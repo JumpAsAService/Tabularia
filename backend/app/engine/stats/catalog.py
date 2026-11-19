@@ -159,6 +159,50 @@ TESTS: dict[str, dict[str, Any]] = {
         "takes": {"alternative": "alternative", "alpha": "alpha", "detail": "detail"},
         "defaults": {"alternative": "two_sided", "alpha": 0.05, "detail": "results"},
     },
+    "spearman": {
+        "family": "correlation",
+        "needs": {"x": "number_column", "y": "number_column"},
+        "takes": {"alternative": "alternative", "alpha": "alpha", "detail": "detail"},
+        "defaults": {"alternative": "two_sided", "alpha": 0.05, "detail": "results"},
+    },
+    "mann_whitney": {
+        "family": "ranks",
+        "needs": {"value": "number_column", "group": "column"},
+        "takes": {"groups": "two_groups", "method": "rank_method", "correction": "boolean", "alternative": "alternative",
+                  "alpha": "alpha", "detail": "detail"},
+        "defaults": {"groups": None, "method": "auto", "correction": True, "alternative": "two_sided", "alpha": 0.05,
+                     "detail": "results"},
+        "applies": {"correction": {"method": ["auto", "asymptotic"]}},
+    },
+    "wilcoxon_signed_rank": {
+        "family": "ranks",
+        "needs": {"x": "number_column"},
+        "takes": {"y": "number_column", "mu": "number", "zeros": "wilcoxon_zeros", "method": "rank_method",
+                  "correction": "boolean", "alternative": "alternative", "alpha": "alpha", "detail": "detail"},
+        "defaults": {"y": None, "mu": 0.0, "zeros": "wilcox", "method": "auto", "correction": True,
+                     "alternative": "two_sided", "alpha": 0.05, "detail": "results"},
+        "applies": {"correction": {"method": ["auto", "asymptotic"]}},
+    },
+    "kruskal_wallis": {
+        "family": "ranks",
+        "needs": {"value": "number_column", "group": "column"},
+        "takes": {"posthoc": "kw_posthoc", "p_adjust": "p_adjust", "alpha": "alpha", "detail": "detail"},
+        "defaults": {"posthoc": "none", "p_adjust": "holm", "alpha": 0.05, "detail": "results"},
+        "applies": {"p_adjust": {"posthoc": ["dunn"]}},
+    },
+    "ks_two_sample": {
+        "family": "distributions",
+        "needs": {"value": "number_column", "group": "column"},
+        "takes": {"groups": "two_groups", "method": "ks_method", "alternative": "alternative", "alpha": "alpha",
+                  "detail": "detail"},
+        "defaults": {"groups": None, "method": "auto", "alternative": "two_sided", "alpha": 0.05, "detail": "results"},
+    },
+    "normality": {
+        "family": "distributions",
+        "needs": {"value": "number_column"},
+        "takes": {"method": "normality_method", "alpha": "alpha", "detail": "detail"},
+        "defaults": {"method": "dagostino", "alpha": 0.05, "detail": "results"},
+    },
 }
 
 # The choices of the tests' own options.
@@ -169,6 +213,11 @@ PROP_METHOD = ("score", "exact")
 CHI2_POSTHOC = ("none", "cells", "pairs")
 G_POSTHOC = ("none", "cells")
 MCNEMAR_METHOD = ("auto", "exact", "asymptotic")
+RANK_METHOD = ("auto", "exact", "asymptotic")
+WILCOXON_ZEROS = ("wilcox", "pratt")
+KW_POSTHOC = ("none", "dunn")
+KS_METHOD = ("auto", "exact", "asymptotic")
+NORMALITY_METHOD = ("dagostino", "jarque_bera")
 
 # Beyond this many groups the column is almost surely the wrong one. It bounds what a test
 # reads back from the engine too: a row per group, never more.
@@ -183,6 +232,11 @@ EXACT_SUPPORT = 1_000_000
 # The most nodes Fisher's exact test of an r × c table creates (the network algorithm): some
 # 10 seconds and 550 MB of a worker (measured: a 3 × 4 table of 127 rows, 1.74 million, 8.9 s).
 EXACT_NETWORK = 2_000_000
+# The largest sample of the exact Mann–Whitney and signed-rank distributions (R's: below 50),
+# and the largest n1·n2 of the exact two-sample Kolmogorov–Smirnov one (R's: below 10,000).
+# Past them, or with ties, the normal (Kolmogorov's) approximation.
+EXACT_MAX_N = 49
+EXACT_KS_PRODUCT = 9_999
 
 # The rows a report's charts draw (`detail = report`): the points of the reference
 # distribution's curve, and the intervals of a histogram, between the two whatever the rows.
@@ -351,6 +405,11 @@ _READERS: dict[str, Callable[..., Any]] = {
     "chi2_posthoc": _one_of(CHI2_POSTHOC),
     "g_posthoc": _one_of(G_POSTHOC),
     "mcnemar_method": _one_of(MCNEMAR_METHOD),
+    "rank_method": _one_of(RANK_METHOD),
+    "wilcoxon_zeros": _one_of(WILCOXON_ZEROS),
+    "kw_posthoc": _one_of(KW_POSTHOC),
+    "ks_method": _one_of(KS_METHOD),
+    "normality_method": _one_of(NORMALITY_METHOD),
     "expected_proportions": _expected_proportions,
     "detail": _one_of(DETAILS),
 }
@@ -387,6 +446,11 @@ KINDS: dict[str, dict[str, Any]] = {
     "chi2_posthoc": {"control": "choice", "choices": list(CHI2_POSTHOC)},
     "g_posthoc": {"control": "choice", "choices": list(G_POSTHOC)},
     "mcnemar_method": {"control": "choice", "choices": list(MCNEMAR_METHOD)},
+    "rank_method": {"control": "choice", "choices": list(RANK_METHOD)},
+    "wilcoxon_zeros": {"control": "choice", "choices": list(WILCOXON_ZEROS)},
+    "kw_posthoc": {"control": "choice", "choices": list(KW_POSTHOC)},
+    "ks_method": {"control": "choice", "choices": list(KS_METHOD)},
+    "normality_method": {"control": "choice", "choices": list(NORMALITY_METHOD)},
     "expected_proportions": {"control": "proportions", "of": "value"},
     "detail": {"control": "choice", "choices": list(DETAILS), "hidden": True},
 }

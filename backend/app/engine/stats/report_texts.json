@@ -199,6 +199,73 @@
         "kpi": {"statistic": "G statistic", "effect": "Cramér's V"},
         "symbols": "x = «{x}», y = «{y}». O, E: observed and expected rows of a cell (table «Observed and expected»); R, C: the totals of its row and of its column; N: rows used; r, c: the categories of x and of y; q: Williams' correction; V: Cramér's, from Pearson's χ².",
         "left_out": "Rows used: {n}. Rows left out: {missing} (no value in one of the two columns)."
+      },
+      "mann_whitney": {
+        "name": "Mann–Whitney U test",
+        "stats": {
+          "test": {"statistic": "U of group 1 (U = R1 − n1·(n1 + 1)/2)"}
+        },
+        "kpi": {"statistic": "Statistic U", "z": "Normal score z", "effect": "Rank-biserial r"},
+        "symbols": "1 = «{g1}», 2 = «{g2}». R1: the sum of the ranks of group 1, all the values ranked together, the average rank for ties; n1, n2: the values of each group, N = n1 + n2 (table «Groups»); t: the rows of a tied value; c: the continuity correction. #(…): how many orders of the values (exact test) give it.",
+        "left_out": "Rows used: {n}. Rows left out: {missing} (no group, or no number in one of the two groups).",
+        "critical": {"low": "z ≤ {x}", "high": "z ≥ {x}"}
+      },
+      "wilcoxon_signed_rank": {
+        "name": "Wilcoxon signed-rank test",
+        "stats": {
+          "test": {
+            "statistic": "Sum of the ranks of the positive differences (V)",
+            "null_value": "Centre of the differences under H0 (mu)",
+            "n": "Differences ranked (n)"
+          }
+        },
+        "kpi": {"statistic": "Statistic V", "z": "Normal score z", "effect": "Rank-biserial r"},
+        "symbols": "x = «{x}», y = «{y}». d: the difference of each row, ranked by |d| with the average rank for ties; V: the sum of the ranks where d > 0, W: where d < 0; n: the differences ranked; t: the rows of a tied |d|; c: the continuity correction. #(…): how many orders of the values (exact test) give it. n₀: the differences equal to 0 (Pratt's rule).",
+        "left_out": "Differences ranked: {n}. Rows left out: {missing} (no number in x, or in y). A difference of 0 is counted apart (table of the numbers).",
+        "critical": {"low": "z ≤ {x}", "high": "z ≥ {x}"}
+      },
+      "kruskal_wallis": {
+        "name": "Kruskal–Wallis test",
+        "stats": {
+          "test": {"statistic": "H statistic (corrected for ties)"},
+          "pair": {"estimate": "Mean rank diff.", "statistic": "z"}
+        },
+        "kpi": {"statistic": "Statistic H", "effect": "Effect size ε²"},
+        "symbols": "N: the values ranked, all the groups together, the average rank for ties; n, R, R̄: the values, the rank sum and the mean rank of each group (table «Groups»); k: groups; t: the rows of a tied value; df: degrees of freedom.",
+        "left_out": "Rows used: {n}. Rows left out: {missing} (no group, or no number in a group)."
+      },
+      "spearman": {
+        "name": "Spearman's rank correlation",
+        "stats": {
+          "test": {
+            "estimate": "Rank correlation (ρ)",
+            "null_value": "Correlation under H0",
+            "statistic": "t statistic",
+            "std_error": "Standard error of ρ, √((1 − ρ²) / (n − 2))"
+          }
+        },
+        "kpi": {"statistic": "t statistic", "estimate": "Rank correlation ρ"},
+        "symbols": "x = «{x}», y = «{y}». rx, ry: the average ranks of each column on the rows with both, less (n + 1)/2; n: those rows (table «Groups»); t: the rows of a tied value; df: degrees of freedom.",
+        "left_out": "Rows used: {n}. Rows left out: {missing} (no number in one of the two columns)."
+      },
+      "ks_two_sample": {
+        "name": "Two-sample Kolmogorov–Smirnov test",
+        "stats": {
+          "test": {"statistic": "Distance of the test (D, D+ or D−)"}
+        },
+        "kpi": {"statistic": "Statistic D", "lambda": "λ (Kolmogorov)", "n": "Rows used"},
+        "symbols": "1 = «{g1}», 2 = «{g2}». F1, F2: the share of each group's values at or below v (its empirical distribution function); n1, n2: the values of each group (table «Groups»); k: the terms of the series. #(…): how many orders of the values (exact test) give it.",
+        "left_out": "Rows used: {n}. Rows left out: {missing} (no group, or no number in one of the two groups)."
+      },
+      "normality": {
+        "name": "Test of normality",
+        "variants": {"dagostino": "D'Agostino–Pearson normality test", "jarque_bera": "Jarque–Bera normality test"},
+        "stats": {
+          "test": {"statistic": "Statistic (K² or JB)"}
+        },
+        "kpi": {"statistic": "Statistic", "skewness": "Skewness g₁", "kurtosis": "Kurtosis b₂ (normal: 3)"},
+        "symbols": "The values of «{column}»: n, their mean m (table «Groups»); m₂, m₃, m₄: the means of (v − m)², (v − m)³, (v − m)⁴ (table of the numbers); df: degrees of freedom.",
+        "left_out": "Rows used: {n}. Rows left out: {missing} (no number: NULL or NaN)."
       }
     },
     "stats": {
@@ -288,7 +355,41 @@
         "variance": "∑ V(a) over the strata",
         "log_sd": "Standard error of ln OR_MH (Robins–Breslow–Greenland)",
         "g": "G without the correction",
-        "williams_q": "Williams' correction (q)"
+        "williams_q": "Williams' correction (q)",
+        "u_2": "U of group 2 (n1·n2 − U)",
+        "tie_sum": "Ties: ∑(t³ − t)",
+        "mean_u": "Mean of U under H0 (n1·n2/2)",
+        "sd_u": "Standard deviation of U under H0 (σ)",
+        "continuity": "Continuity correction (c)",
+        "z": "Normal score (z)",
+        "cles": "Common-language effect size (U / (n1·n2))",
+        "rank_biserial": "Effect size: rank-biserial r",
+        "n_zero": "Differences equal to 0",
+        "w_minus": "Sum of the ranks of the negative differences (W)",
+        "mean_w": "Mean of V under H0 (E)",
+        "sd_w": "Standard deviation of V under H0 (σ)",
+        "tie_correction": "Correction for ties (C)",
+        "statistic_plain": "H without the correction for ties",
+        "epsilon_squared": "Effect size: ε²",
+        "sum_rxy": "∑ rx·ry",
+        "sum_rx2": "∑ rx²",
+        "sum_ry2": "∑ ry²",
+        "tie_sum_x": "Ties of x: ∑(t³ − t)",
+        "tie_sum_y": "Ties of y: ∑(t³ − t)",
+        "rho_squared": "ρ²",
+        "d": "Largest distance |F1 − F2| (D)",
+        "d_plus": "Largest distance F1 − F2 (D+)",
+        "d_minus": "Largest distance F2 − F1 (D−)",
+        "n_tied": "Values held by more than one row",
+        "lambda": "λ = D·√(n1·n2 / (n1 + n2))",
+        "m2": "Second central moment (m₂)",
+        "m3": "Third central moment (m₃)",
+        "m4": "Fourth central moment (m₄)",
+        "skewness": "Skewness (g₁)",
+        "kurtosis": "Kurtosis (b₂)",
+        "excess_kurtosis": "Excess kurtosis (b₂ − 3)",
+        "z_skewness": "z of the skewness (z₁)",
+        "z_kurtosis": "z of the kurtosis (z₂)"
       },
       "group": {
         "n": "n",
@@ -324,7 +425,9 @@
         "d": "d (2, 2)",
         "expected_a": "E(a)",
         "variance_a": "V(a)",
-        "odds_ratio": "Odds ratio (a·d / b·c)"
+        "odds_ratio": "Odds ratio (a·d / b·c)",
+        "rank_sum": "Rank sum",
+        "mean_rank": "Mean rank"
       },
       "hist": {"count": "Rows"},
       "curve": {
@@ -411,7 +514,8 @@
       "observed": "Observed and expected counts",
       "residuals": "Adjusted residuals (row: x, column: y)",
       "too_many_cells": "{chart}: the table has {n} cells, and the chart is drawn up to {most}. The tables above hold every number.",
-      "too_many_rows": "{chart}: x has {n} categories, and the chart is drawn up to {most}. The tables above hold every number."
+      "too_many_rows": "{chart}: x has {n} categories, and the chart is drawn up to {most}. The tables above hold every number.",
+      "exact_note": "An exact test: its p-value counts every arrangement of the values, and it has no curve to draw."
     },
     "engine": "Computed in the engine: {engine}.",
     "sample": {
@@ -432,7 +536,8 @@
         "games_howell": "Games–Howell (no equal variances assumed; Welch's degrees of freedom for each pair)",
         "pairwise_t": "a t test for each pair",
         "cells": "the cells: the adjusted residual of each against the normal distribution",
-        "pairs": "the pairs of categories of x: a chi-square test of each 2 × c table"
+        "pairs": "the pairs of categories of x: a chi-square test of each 2 × c table",
+        "dunn": "Dunn's test: the difference of the mean ranks of each pair against the normal distribution"
       },
       "adjust": {
         "studentized_range": "The adjusted p-values and the intervals come from the studentized range: they hold for all the pairs together.",
@@ -651,6 +756,76 @@
         "kpi": {"statistic": "Statistica G", "effect": "V di Cramér"},
         "symbols": "x = «{x}», y = «{y}». O, E: righe osservate e attese di una cella (tabella «Osservati e attesi»); R, C: i totali della sua riga e della sua colonna; N: righe usate; r, c: le categorie di x e di y; q: la correzione di Williams; V: di Cramér, dal χ² di Pearson.",
         "left_out": "Righe usate: {n}. Righe escluse: {missing} (nessun valore in una delle due colonne)."
+      },
+      "mann_whitney": {
+        "name": "Test U di Mann–Whitney",
+        "stats": {
+          "test": {"statistic": "U del gruppo 1 (U = R1 − n1·(n1 + 1)/2)"}
+        },
+        "kpi": {"statistic": "Statistica U", "z": "Punteggio normale z", "effect": "r rango-biseriale"},
+        "symbols": "1 = «{g1}», 2 = «{g2}». R1: la somma dei ranghi del gruppo 1, con tutti i valori ordinati insieme e il rango medio per i pari merito; n1, n2: i valori di ciascun gruppo, N = n1 + n2 (tabella «Gruppi»); t: le righe di un valore ripetuto; c: la correzione di continuità. #(…): quante disposizioni dei valori (test esatto) lo danno.",
+        "left_out": "Righe usate: {n}. Righe escluse: {missing} (senza gruppo, o senza numero in uno dei due gruppi).",
+        "critical": {"low": "z ≤ {x}", "high": "z ≥ {x}"}
+      },
+      "wilcoxon_signed_rank": {
+        "name": "Test dei ranghi con segno di Wilcoxon",
+        "stats": {
+          "test": {
+            "statistic": "Somma dei ranghi delle differenze positive (V)",
+            "null_value": "Centro delle differenze sotto H0 (mu)",
+            "n": "Differenze ordinate (n)"
+          }
+        },
+        "kpi": {"statistic": "Statistica V", "z": "Punteggio normale z", "effect": "r rango-biseriale"},
+        "symbols": "x = «{x}», y = «{y}». d: la differenza di ogni riga, ordinata per |d| con il rango medio per i pari merito; V: la somma dei ranghi dove d > 0, W: dove d < 0; n: le differenze ordinate; t: le righe di un |d| ripetuto; c: la correzione di continuità. #(…): quante disposizioni dei valori (test esatto) lo danno. n₀: le differenze uguali a 0 (regola di Pratt).",
+        "left_out": "Differenze ordinate: {n}. Righe escluse: {missing} (senza numero in x, o in y). Una differenza 0 è contata a parte (tabella dei numeri).",
+        "critical": {"low": "z ≤ {x}", "high": "z ≥ {x}"}
+      },
+      "kruskal_wallis": {
+        "name": "Test di Kruskal–Wallis",
+        "stats": {
+          "test": {"statistic": "Statistica H (corretta per i pari merito)"},
+          "pair": {"estimate": "Diff. ranghi medi", "statistic": "z"}
+        },
+        "kpi": {"statistic": "Statistica H", "effect": "Dimensione dell'effetto ε²"},
+        "symbols": "N: i valori ordinati, tutti i gruppi insieme, con il rango medio per i pari merito; n, R, R̄: i valori, la somma dei ranghi e il rango medio di ogni gruppo (tabella «Gruppi»); k: gruppi; t: le righe di un valore ripetuto; df: gradi di libertà.",
+        "left_out": "Righe usate: {n}. Righe escluse: {missing} (senza gruppo, o senza numero in un gruppo)."
+      },
+      "spearman": {
+        "name": "Correlazione per ranghi di Spearman",
+        "stats": {
+          "test": {
+            "estimate": "Correlazione per ranghi (ρ)",
+            "null_value": "Correlazione sotto H0",
+            "statistic": "Statistica t",
+            "std_error": "Errore standard di ρ, √((1 − ρ²) / (n − 2))"
+          }
+        },
+        "kpi": {"statistic": "Statistica t", "estimate": "Correlazione per ranghi ρ"},
+        "symbols": "x = «{x}», y = «{y}». rx, ry: i ranghi medi di ciascuna colonna sulle righe con entrambe, meno (n + 1)/2; n: quelle righe (tabella «Gruppi»); t: le righe di un valore ripetuto; df: gradi di libertà.",
+        "left_out": "Righe usate: {n}. Righe escluse: {missing} (senza numero in una delle due colonne)."
+      },
+      "ks_two_sample": {
+        "name": "Test di Kolmogorov–Smirnov a due campioni",
+        "stats": {
+          "test": {"statistic": "Distanza del test (D, D+ o D−)"}
+        },
+        "kpi": {"statistic": "Statistica D", "lambda": "λ (Kolmogorov)", "n": "Righe usate"},
+        "symbols": "1 = «{g1}», 2 = «{g2}». F1, F2: la quota dei valori di ciascun gruppo fino a v compreso (la funzione di distribuzione empirica); n1, n2: i valori di ciascun gruppo (tabella «Gruppi»); k: i termini della serie. #(…): quante disposizioni dei valori (test esatto) lo danno.",
+        "left_out": "Righe usate: {n}. Righe escluse: {missing} (senza gruppo, o senza numero in uno dei due gruppi)."
+      },
+      "normality": {
+        "name": "Test di normalità",
+        "variants": {
+          "dagostino": "Test di normalità di D'Agostino–Pearson",
+          "jarque_bera": "Test di normalità di Jarque–Bera"
+        },
+        "stats": {
+          "test": {"statistic": "Statistica (K² o JB)"}
+        },
+        "kpi": {"statistic": "Statistica", "skewness": "Asimmetria g₁", "kurtosis": "Curtosi b₂ (normale: 3)"},
+        "symbols": "I valori di «{column}»: n, la loro media m (tabella «Gruppi»); m₂, m₃, m₄: le medie di (v − m)², (v − m)³, (v − m)⁴ (tabella dei numeri); df: gradi di libertà.",
+        "left_out": "Righe usate: {n}. Righe escluse: {missing} (senza numero: NULL o NaN)."
       }
     },
     "stats": {
@@ -740,7 +915,41 @@
         "variance": "∑ V(a) sugli strati",
         "log_sd": "Errore standard di ln OR_MH (Robins–Breslow–Greenland)",
         "g": "G senza correzione",
-        "williams_q": "Correzione di Williams (q)"
+        "williams_q": "Correzione di Williams (q)",
+        "u_2": "U del gruppo 2 (n1·n2 − U)",
+        "tie_sum": "Pari merito: ∑(t³ − t)",
+        "mean_u": "Media di U sotto H0 (n1·n2/2)",
+        "sd_u": "Deviazione standard di U sotto H0 (σ)",
+        "continuity": "Correzione di continuità (c)",
+        "z": "Punteggio normale (z)",
+        "cles": "Probabilità di superiorità (U / (n1·n2))",
+        "rank_biserial": "Dimensione dell'effetto: r rango-biseriale",
+        "n_zero": "Differenze uguali a 0",
+        "w_minus": "Somma dei ranghi delle differenze negative (W)",
+        "mean_w": "Media di V sotto H0 (E)",
+        "sd_w": "Deviazione standard di V sotto H0 (σ)",
+        "tie_correction": "Correzione per i pari merito (C)",
+        "statistic_plain": "H senza la correzione per i pari merito",
+        "epsilon_squared": "Dimensione dell'effetto: ε²",
+        "sum_rxy": "∑ rx·ry",
+        "sum_rx2": "∑ rx²",
+        "sum_ry2": "∑ ry²",
+        "tie_sum_x": "Pari merito di x: ∑(t³ − t)",
+        "tie_sum_y": "Pari merito di y: ∑(t³ − t)",
+        "rho_squared": "ρ²",
+        "d": "Distanza massima |F1 − F2| (D)",
+        "d_plus": "Distanza massima F1 − F2 (D+)",
+        "d_minus": "Distanza massima F2 − F1 (D−)",
+        "n_tied": "Valori presenti in più di una riga",
+        "lambda": "λ = D·√(n1·n2 / (n1 + n2))",
+        "m2": "Secondo momento centrale (m₂)",
+        "m3": "Terzo momento centrale (m₃)",
+        "m4": "Quarto momento centrale (m₄)",
+        "skewness": "Asimmetria (g₁)",
+        "kurtosis": "Curtosi (b₂)",
+        "excess_kurtosis": "Eccesso di curtosi (b₂ − 3)",
+        "z_skewness": "z dell'asimmetria (z₁)",
+        "z_kurtosis": "z della curtosi (z₂)"
       },
       "group": {
         "n": "n",
@@ -776,7 +985,9 @@
         "d": "d (2, 2)",
         "expected_a": "E(a)",
         "variance_a": "V(a)",
-        "odds_ratio": "Odds ratio (a·d / b·c)"
+        "odds_ratio": "Odds ratio (a·d / b·c)",
+        "rank_sum": "Somma dei ranghi",
+        "mean_rank": "Rango medio"
       },
       "hist": {"count": "Righe"},
       "curve": {
@@ -863,7 +1074,8 @@
       "observed": "Conteggi osservati e attesi",
       "residuals": "Residui corretti (riga: x, colonna: y)",
       "too_many_cells": "{chart}: la tabella ha {n} celle, e il grafico si disegna fino a {most}. Le tabelle qui sopra hanno ogni numero.",
-      "too_many_rows": "{chart}: x ha {n} categorie, e il grafico si disegna fino a {most}. Le tabelle qui sopra hanno ogni numero."
+      "too_many_rows": "{chart}: x ha {n} categorie, e il grafico si disegna fino a {most}. Le tabelle qui sopra hanno ogni numero.",
+      "exact_note": "Un test esatto: il p-value conta ogni disposizione dei valori, e non ha una curva da disegnare."
     },
     "engine": "Calcolato nel motore: {engine}.",
     "sample": {
@@ -884,7 +1096,8 @@
         "games_howell": "Games–Howell (senza assumere varianze uguali; i gradi di libertà di Welch per ogni coppia)",
         "pairwise_t": "un test t per ogni coppia",
         "cells": "le celle: il residuo corretto di ciascuna contro la distribuzione normale",
-        "pairs": "le coppie di categorie di x: un test chi quadrato per ogni tabella 2 × c"
+        "pairs": "le coppie di categorie di x: un test chi quadrato per ogni tabella 2 × c",
+        "dunn": "il test di Dunn: la differenza dei ranghi medi di ogni coppia contro la distribuzione normale"
       },
       "adjust": {
         "studentized_range": "I p-value corretti e gli intervalli vengono dal range studentizzato: valgono per tutte le coppie insieme.",
@@ -1110,6 +1323,76 @@
         "kpi": {"statistic": "G-Statistik", "effect": "Cramérs V"},
         "symbols": "x = «{x}», y = «{y}». O, E: beobachtete und erwartete Zeilen einer Zelle (Tabelle «Beobachtet und erwartet»); R, C: die Summen ihrer Zeile und ihrer Spalte; N: verwendete Zeilen; r, c: die Kategorien von x und y; q: Williams-Korrektur; V: nach Cramér, aus Pearsons χ².",
         "left_out": "Verwendete Zeilen: {n}. Ausgelassene Zeilen: {missing} (kein Wert in einer der beiden Spalten)."
+      },
+      "mann_whitney": {
+        "name": "Mann-Whitney-U-Test",
+        "stats": {
+          "test": {"statistic": "U der Gruppe 1 (U = R1 − n1·(n1 + 1)/2)"}
+        },
+        "kpi": {"statistic": "Statistik U", "z": "Normalwert z", "effect": "Rang-biseriales r"},
+        "symbols": "1 = «{g1}», 2 = «{g2}». R1: die Rangsumme der Gruppe 1, alle Werte gemeinsam geordnet, bei Bindungen der mittlere Rang; n1, n2: die Werte jeder Gruppe, N = n1 + n2 (Tabelle «Gruppen»); t: die Zeilen eines gebundenen Werts; c: die Stetigkeitskorrektur. #(…): wie viele Anordnungen der Werte (exakter Test) es ergeben.",
+        "left_out": "Verwendete Zeilen: {n}. Ausgelassene Zeilen: {missing} (ohne Gruppe oder ohne Zahl in einer der beiden Gruppen).",
+        "critical": {"low": "z ≤ {x}", "high": "z ≥ {x}"}
+      },
+      "wilcoxon_signed_rank": {
+        "name": "Wilcoxon-Vorzeichen-Rang-Test",
+        "stats": {
+          "test": {
+            "statistic": "Rangsumme der positiven Differenzen (V)",
+            "null_value": "Zentrum der Differenzen unter H0 (mu)",
+            "n": "Gerankte Differenzen (n)"
+          }
+        },
+        "kpi": {"statistic": "Statistik V", "z": "Normalwert z", "effect": "Rang-biseriales r"},
+        "symbols": "x = «{x}», y = «{y}». d: die Differenz jeder Zeile, nach |d| gerankt, bei Bindungen der mittlere Rang; V: die Rangsumme für d > 0, W: für d < 0; n: die gerankten Differenzen; t: die Zeilen eines gebundenen |d|; c: die Stetigkeitskorrektur. #(…): wie viele Anordnungen der Werte (exakter Test) es ergeben. n₀: die Differenzen gleich 0 (Pratts Regel).",
+        "left_out": "Gerankte Differenzen: {n}. Ausgelassene Zeilen: {missing} (ohne Zahl in x oder in y). Eine Differenz 0 wird gesondert gezählt (Tabelle der Zahlen).",
+        "critical": {"low": "z ≤ {x}", "high": "z ≥ {x}"}
+      },
+      "kruskal_wallis": {
+        "name": "Kruskal-Wallis-Test",
+        "stats": {
+          "test": {"statistic": "H-Statistik (bindungskorrigiert)"},
+          "pair": {"estimate": "Diff. mittl. Ränge", "statistic": "z"}
+        },
+        "kpi": {"statistic": "Statistik H", "effect": "Effektstärke ε²"},
+        "symbols": "N: die gerankten Werte, alle Gruppen gemeinsam, bei Bindungen der mittlere Rang; n, R, R̄: Werte, Rangsumme und mittlerer Rang jeder Gruppe (Tabelle «Gruppen»); k: Gruppen; t: die Zeilen eines gebundenen Werts; df: Freiheitsgrade.",
+        "left_out": "Verwendete Zeilen: {n}. Ausgelassene Zeilen: {missing} (ohne Gruppe oder ohne Zahl in einer Gruppe)."
+      },
+      "spearman": {
+        "name": "Spearmans Rangkorrelation",
+        "stats": {
+          "test": {
+            "estimate": "Rangkorrelation (ρ)",
+            "null_value": "Korrelation unter H0",
+            "statistic": "t-Statistik",
+            "std_error": "Standardfehler von ρ, √((1 − ρ²) / (n − 2))"
+          }
+        },
+        "kpi": {"statistic": "t-Statistik", "estimate": "Rangkorrelation ρ"},
+        "symbols": "x = «{x}», y = «{y}». rx, ry: die mittleren Ränge jeder Spalte auf den Zeilen mit beiden, minus (n + 1)/2; n: diese Zeilen (Tabelle «Gruppen»); t: die Zeilen eines gebundenen Werts; df: Freiheitsgrade.",
+        "left_out": "Verwendete Zeilen: {n}. Ausgelassene Zeilen: {missing} (ohne Zahl in einer der beiden Spalten)."
+      },
+      "ks_two_sample": {
+        "name": "Kolmogorov-Smirnov-Test für zwei Stichproben",
+        "stats": {
+          "test": {"statistic": "Abstand des Tests (D, D+ oder D−)"}
+        },
+        "kpi": {"statistic": "Statistik D", "lambda": "λ (Kolmogorov)", "n": "Verwendete Zeilen"},
+        "symbols": "1 = «{g1}», 2 = «{g2}». F1, F2: der Anteil der Werte jeder Gruppe bis einschließlich v (ihre empirische Verteilungsfunktion); n1, n2: die Werte jeder Gruppe (Tabelle «Gruppen»); k: die Glieder der Reihe. #(…): wie viele Anordnungen der Werte (exakter Test) es ergeben.",
+        "left_out": "Verwendete Zeilen: {n}. Ausgelassene Zeilen: {missing} (ohne Gruppe oder ohne Zahl in einer der beiden Gruppen)."
+      },
+      "normality": {
+        "name": "Normalitätstest",
+        "variants": {
+          "dagostino": "Normalitätstest nach D'Agostino-Pearson",
+          "jarque_bera": "Normalitätstest nach Jarque-Bera"
+        },
+        "stats": {
+          "test": {"statistic": "Statistik (K² oder JB)"}
+        },
+        "kpi": {"statistic": "Statistik", "skewness": "Schiefe g₁", "kurtosis": "Kurtosis b₂ (normal: 3)"},
+        "symbols": "Die Werte von «{column}»: n, ihr Mittelwert m (Tabelle «Gruppen»); m₂, m₃, m₄: die Mittelwerte von (v − m)², (v − m)³, (v − m)⁴ (Tabelle der Zahlen); df: Freiheitsgrade.",
+        "left_out": "Verwendete Zeilen: {n}. Ausgelassene Zeilen: {missing} (keine Zahl: NULL oder NaN)."
       }
     },
     "stats": {
@@ -1199,7 +1482,41 @@
         "variance": "∑ V(a) über die Schichten",
         "log_sd": "Standardfehler von ln OR_MH (Robins–Breslow–Greenland)",
         "g": "G ohne Korrektur",
-        "williams_q": "Williams-Korrektur (q)"
+        "williams_q": "Williams-Korrektur (q)",
+        "u_2": "U der Gruppe 2 (n1·n2 − U)",
+        "tie_sum": "Bindungen: ∑(t³ − t)",
+        "mean_u": "Mittelwert von U unter H0 (n1·n2/2)",
+        "sd_u": "Standardabweichung von U unter H0 (σ)",
+        "continuity": "Stetigkeitskorrektur (c)",
+        "z": "Normalwert (z)",
+        "cles": "Überlegenheitswahrscheinlichkeit (U / (n1·n2))",
+        "rank_biserial": "Effektstärke: Rang-biseriales r",
+        "n_zero": "Differenzen gleich 0",
+        "w_minus": "Rangsumme der negativen Differenzen (W)",
+        "mean_w": "Mittelwert von V unter H0 (E)",
+        "sd_w": "Standardabweichung von V unter H0 (σ)",
+        "tie_correction": "Bindungskorrektur (C)",
+        "statistic_plain": "H ohne Bindungskorrektur",
+        "epsilon_squared": "Effektstärke: ε²",
+        "sum_rxy": "∑ rx·ry",
+        "sum_rx2": "∑ rx²",
+        "sum_ry2": "∑ ry²",
+        "tie_sum_x": "Bindungen von x: ∑(t³ − t)",
+        "tie_sum_y": "Bindungen von y: ∑(t³ − t)",
+        "rho_squared": "ρ²",
+        "d": "Größter Abstand |F1 − F2| (D)",
+        "d_plus": "Größter Abstand F1 − F2 (D+)",
+        "d_minus": "Größter Abstand F2 − F1 (D−)",
+        "n_tied": "Werte in mehr als einer Zeile",
+        "lambda": "λ = D·√(n1·n2 / (n1 + n2))",
+        "m2": "Zweites zentrales Moment (m₂)",
+        "m3": "Drittes zentrales Moment (m₃)",
+        "m4": "Viertes zentrales Moment (m₄)",
+        "skewness": "Schiefe (g₁)",
+        "kurtosis": "Kurtosis (b₂)",
+        "excess_kurtosis": "Exzess (b₂ − 3)",
+        "z_skewness": "z der Schiefe (z₁)",
+        "z_kurtosis": "z der Kurtosis (z₂)"
       },
       "group": {
         "n": "n",
@@ -1235,7 +1552,9 @@
         "d": "d (2, 2)",
         "expected_a": "E(a)",
         "variance_a": "V(a)",
-        "odds_ratio": "Odds Ratio (a·d / b·c)"
+        "odds_ratio": "Odds Ratio (a·d / b·c)",
+        "rank_sum": "Rangsumme",
+        "mean_rank": "Mittlerer Rang"
       },
       "hist": {"count": "Zeilen"},
       "curve": {
@@ -1322,7 +1641,8 @@
       "observed": "Beobachtete und erwartete Häufigkeiten",
       "residuals": "Korrigierte Residuen (Zeile: x, Spalte: y)",
       "too_many_cells": "{chart}: Die Tabelle hat {n} Zellen, das Diagramm wird bis {most} gezeichnet. Die Tabellen oben enthalten jede Zahl.",
-      "too_many_rows": "{chart}: x hat {n} Kategorien, das Diagramm wird bis {most} gezeichnet. Die Tabellen oben enthalten jede Zahl."
+      "too_many_rows": "{chart}: x hat {n} Kategorien, das Diagramm wird bis {most} gezeichnet. Die Tabellen oben enthalten jede Zahl.",
+      "exact_note": "Ein exakter Test: sein p-Wert zählt jede Anordnung der Werte, und er hat keine Kurve zu zeichnen."
     },
     "engine": "Berechnet in der Engine: {engine}.",
     "sample": {
@@ -1343,7 +1663,8 @@
         "games_howell": "Games-Howell (ohne gleiche Varianzen; Welch-Freiheitsgrade je Paar)",
         "pairwise_t": "ein t-Test je Paar",
         "cells": "die Zellen: das korrigierte Residuum jeder Zelle gegen die Normalverteilung",
-        "pairs": "die Paare von Kategorien von x: ein Chi-Quadrat-Test je 2 × c-Tabelle"
+        "pairs": "die Paare von Kategorien von x: ein Chi-Quadrat-Test je 2 × c-Tabelle",
+        "dunn": "Dunns Test: die Differenz der mittleren Ränge jedes Paares gegen die Normalverteilung"
       },
       "adjust": {
         "studentized_range": "Die korrigierten p-Werte und die Intervalle stammen aus der studentisierten Spannweite: Sie gelten für alle Paare zusammen.",
@@ -1577,6 +1898,76 @@
         "kpi": {"statistic": "Estadístico G", "effect": "V de Cramér"},
         "symbols": "x = «{x}», y = «{y}». O, E: filas observadas y esperadas de una celda (tabla «Observados y esperados»); R, C: los totales de su fila y de su columna; N: filas usadas; r, c: las categorías de x y de y; q: la corrección de Williams; V: de Cramér, del χ² de Pearson.",
         "left_out": "Filas usadas: {n}. Filas excluidas: {missing} (sin valor en una de las dos columnas)."
+      },
+      "mann_whitney": {
+        "name": "Prueba U de Mann–Whitney",
+        "stats": {
+          "test": {"statistic": "U del grupo 1 (U = R1 − n1·(n1 + 1)/2)"}
+        },
+        "kpi": {"statistic": "Estadístico U", "z": "Puntuación normal z", "effect": "r biserial de rangos"},
+        "symbols": "1 = «{g1}», 2 = «{g2}». R1: la suma de los rangos del grupo 1, todos los valores ordenados juntos, el rango medio en los empates; n1, n2: los valores de cada grupo, N = n1 + n2 (tabla «Grupos»); t: las filas de un valor empatado; c: la corrección de continuidad. #(…): cuántas disposiciones de los valores (prueba exacta) lo dan.",
+        "left_out": "Filas usadas: {n}. Filas excluidas: {missing} (sin grupo, o sin número en uno de los dos grupos).",
+        "critical": {"low": "z ≤ {x}", "high": "z ≥ {x}"}
+      },
+      "wilcoxon_signed_rank": {
+        "name": "Prueba de rangos con signo de Wilcoxon",
+        "stats": {
+          "test": {
+            "statistic": "Suma de los rangos de las diferencias positivas (V)",
+            "null_value": "Centro de las diferencias bajo H0 (mu)",
+            "n": "Diferencias ordenadas (n)"
+          }
+        },
+        "kpi": {"statistic": "Estadístico V", "z": "Puntuación normal z", "effect": "r biserial de rangos"},
+        "symbols": "x = «{x}», y = «{y}». d: la diferencia de cada fila, ordenada por |d| con el rango medio en los empates; V: la suma de los rangos donde d > 0, W: donde d < 0; n: las diferencias ordenadas; t: las filas de un |d| empatado; c: la corrección de continuidad. #(…): cuántas disposiciones de los valores (prueba exacta) lo dan. n₀: las diferencias iguales a 0 (regla de Pratt).",
+        "left_out": "Diferencias ordenadas: {n}. Filas excluidas: {missing} (sin número en x, o en y). Una diferencia 0 se cuenta aparte (tabla de los números).",
+        "critical": {"low": "z ≤ {x}", "high": "z ≥ {x}"}
+      },
+      "kruskal_wallis": {
+        "name": "Prueba de Kruskal–Wallis",
+        "stats": {
+          "test": {"statistic": "Estadístico H (corregido por empates)"},
+          "pair": {"estimate": "Dif. rangos medios", "statistic": "z"}
+        },
+        "kpi": {"statistic": "Estadístico H", "effect": "Tamaño del efecto ε²"},
+        "symbols": "N: los valores ordenados, todos los grupos juntos, el rango medio en los empates; n, R, R̄: los valores, la suma de rangos y el rango medio de cada grupo (tabla «Grupos»); k: grupos; t: las filas de un valor empatado; df: grados de libertad.",
+        "left_out": "Filas usadas: {n}. Filas excluidas: {missing} (sin grupo, o sin número en un grupo)."
+      },
+      "spearman": {
+        "name": "Correlación de rangos de Spearman",
+        "stats": {
+          "test": {
+            "estimate": "Correlación de rangos (ρ)",
+            "null_value": "Correlación bajo H0",
+            "statistic": "Estadístico t",
+            "std_error": "Error estándar de ρ, √((1 − ρ²) / (n − 2))"
+          }
+        },
+        "kpi": {"statistic": "Estadístico t", "estimate": "Correlación de rangos ρ"},
+        "symbols": "x = «{x}», y = «{y}». rx, ry: los rangos medios de cada columna en las filas con ambas, menos (n + 1)/2; n: esas filas (tabla «Grupos»); t: las filas de un valor empatado; df: grados de libertad.",
+        "left_out": "Filas usadas: {n}. Filas excluidas: {missing} (sin número en una de las dos columnas)."
+      },
+      "ks_two_sample": {
+        "name": "Prueba de Kolmogorov–Smirnov de dos muestras",
+        "stats": {
+          "test": {"statistic": "Distancia de la prueba (D, D+ o D−)"}
+        },
+        "kpi": {"statistic": "Estadístico D", "lambda": "λ (Kolmogorov)", "n": "Filas usadas"},
+        "symbols": "1 = «{g1}», 2 = «{g2}». F1, F2: la proporción de valores de cada grupo hasta v inclusive (su función de distribución empírica); n1, n2: los valores de cada grupo (tabla «Grupos»); k: los términos de la serie. #(…): cuántas disposiciones de los valores (prueba exacta) lo dan.",
+        "left_out": "Filas usadas: {n}. Filas excluidas: {missing} (sin grupo, o sin número en uno de los dos grupos)."
+      },
+      "normality": {
+        "name": "Prueba de normalidad",
+        "variants": {
+          "dagostino": "Prueba de normalidad de D'Agostino–Pearson",
+          "jarque_bera": "Prueba de normalidad de Jarque–Bera"
+        },
+        "stats": {
+          "test": {"statistic": "Estadístico (K² o JB)"}
+        },
+        "kpi": {"statistic": "Estadístico", "skewness": "Asimetría g₁", "kurtosis": "Curtosis b₂ (normal: 3)"},
+        "symbols": "Los valores de «{column}»: n, su media m (tabla «Grupos»); m₂, m₃, m₄: las medias de (v − m)², (v − m)³, (v − m)⁴ (tabla de los números); df: grados de libertad.",
+        "left_out": "Filas usadas: {n}. Filas excluidas: {missing} (sin número: NULL o NaN)."
       }
     },
     "stats": {
@@ -1666,7 +2057,41 @@
         "variance": "∑ V(a) sobre los estratos",
         "log_sd": "Error estándar de ln OR_MH (Robins–Breslow–Greenland)",
         "g": "G sin corrección",
-        "williams_q": "Corrección de Williams (q)"
+        "williams_q": "Corrección de Williams (q)",
+        "u_2": "U del grupo 2 (n1·n2 − U)",
+        "tie_sum": "Empates: ∑(t³ − t)",
+        "mean_u": "Media de U bajo H0 (n1·n2/2)",
+        "sd_u": "Desviación típica de U bajo H0 (σ)",
+        "continuity": "Corrección de continuidad (c)",
+        "z": "Puntuación normal (z)",
+        "cles": "Probabilidad de superioridad (U / (n1·n2))",
+        "rank_biserial": "Tamaño del efecto: r biserial de rangos",
+        "n_zero": "Diferencias iguales a 0",
+        "w_minus": "Suma de los rangos de las diferencias negativas (W)",
+        "mean_w": "Media de V bajo H0 (E)",
+        "sd_w": "Desviación típica de V bajo H0 (σ)",
+        "tie_correction": "Corrección por empates (C)",
+        "statistic_plain": "H sin la corrección por empates",
+        "epsilon_squared": "Tamaño del efecto: ε²",
+        "sum_rxy": "∑ rx·ry",
+        "sum_rx2": "∑ rx²",
+        "sum_ry2": "∑ ry²",
+        "tie_sum_x": "Empates de x: ∑(t³ − t)",
+        "tie_sum_y": "Empates de y: ∑(t³ − t)",
+        "rho_squared": "ρ²",
+        "d": "Distancia máxima |F1 − F2| (D)",
+        "d_plus": "Distancia máxima F1 − F2 (D+)",
+        "d_minus": "Distancia máxima F2 − F1 (D−)",
+        "n_tied": "Valores en más de una fila",
+        "lambda": "λ = D·√(n1·n2 / (n1 + n2))",
+        "m2": "Segundo momento central (m₂)",
+        "m3": "Tercer momento central (m₃)",
+        "m4": "Cuarto momento central (m₄)",
+        "skewness": "Asimetría (g₁)",
+        "kurtosis": "Curtosis (b₂)",
+        "excess_kurtosis": "Exceso de curtosis (b₂ − 3)",
+        "z_skewness": "z de la asimetría (z₁)",
+        "z_kurtosis": "z de la curtosis (z₂)"
       },
       "group": {
         "n": "n",
@@ -1702,7 +2127,9 @@
         "d": "d (2, 2)",
         "expected_a": "E(a)",
         "variance_a": "V(a)",
-        "odds_ratio": "Odds ratio (a·d / b·c)"
+        "odds_ratio": "Odds ratio (a·d / b·c)",
+        "rank_sum": "Suma de rangos",
+        "mean_rank": "Rango medio"
       },
       "hist": {"count": "Filas"},
       "curve": {
@@ -1789,7 +2216,8 @@
       "observed": "Frecuencias observadas y esperadas",
       "residuals": "Residuos ajustados (fila: x, columna: y)",
       "too_many_cells": "{chart}: la tabla tiene {n} celdas, y el gráfico se dibuja hasta {most}. Las tablas de arriba tienen cada número.",
-      "too_many_rows": "{chart}: x tiene {n} categorías, y el gráfico se dibuja hasta {most}. Las tablas de arriba tienen cada número."
+      "too_many_rows": "{chart}: x tiene {n} categorías, y el gráfico se dibuja hasta {most}. Las tablas de arriba tienen cada número.",
+      "exact_note": "Una prueba exacta: su p-valor cuenta cada disposición de los valores, y no tiene curva que dibujar."
     },
     "engine": "Calculado en el motor: {engine}.",
     "sample": {
@@ -1810,7 +2238,8 @@
         "games_howell": "Games–Howell (sin suponer varianzas iguales; los grados de libertad de Welch para cada par)",
         "pairwise_t": "una prueba t para cada par",
         "cells": "las celdas: el residuo ajustado de cada una frente a la distribución normal",
-        "pairs": "los pares de categorías de x: una prueba chi cuadrado de cada tabla 2 × c"
+        "pairs": "los pares de categorías de x: una prueba chi cuadrado de cada tabla 2 × c",
+        "dunn": "la prueba de Dunn: la diferencia de los rangos medios de cada par frente a la distribución normal"
       },
       "adjust": {
         "studentized_range": "Los p-valores ajustados y los intervalos vienen del rango studentizado: valen para todos los pares a la vez.",
@@ -2033,6 +2462,76 @@
         "kpi": {"statistic": "Statistique G", "effect": "V de Cramér"},
         "symbols": "x = «{x}», y = «{y}». O, E : lignes observées et attendues d'une cellule (tableau «Observés et attendus») ; R, C : les totaux de sa ligne et de sa colonne ; N : lignes utilisées ; r, c : les catégories de x et de y ; q : la correction de Williams ; V : de Cramér, du χ² de Pearson.",
         "left_out": "Lignes utilisées : {n}. Lignes écartées : {missing} (aucune valeur dans l'une des deux colonnes)."
+      },
+      "mann_whitney": {
+        "name": "Test U de Mann–Whitney",
+        "stats": {
+          "test": {"statistic": "U du groupe 1 (U = R1 − n1·(n1 + 1)/2)"}
+        },
+        "kpi": {"statistic": "Statistique U", "z": "Score normal z", "effect": "r bisérial des rangs"},
+        "symbols": "1 = «{g1}», 2 = «{g2}». R1 : la somme des rangs du groupe 1, toutes les valeurs classées ensemble, le rang moyen pour les ex aequo ; n1, n2 : les valeurs de chaque groupe, N = n1 + n2 (tableau «Groupes») ; t : les lignes d'une valeur ex aequo ; c : la correction de continuité. #(…) : combien de dispositions des valeurs (test exact) le donnent.",
+        "left_out": "Lignes utilisées : {n}. Lignes écartées : {missing} (sans groupe, ou sans nombre dans l'un des deux groupes).",
+        "critical": {"low": "z ≤ {x}", "high": "z ≥ {x}"}
+      },
+      "wilcoxon_signed_rank": {
+        "name": "Test des rangs signés de Wilcoxon",
+        "stats": {
+          "test": {
+            "statistic": "Somme des rangs des différences positives (V)",
+            "null_value": "Centre des différences sous H0 (mu)",
+            "n": "Différences classées (n)"
+          }
+        },
+        "kpi": {"statistic": "Statistique V", "z": "Score normal z", "effect": "r bisérial des rangs"},
+        "symbols": "x = «{x}», y = «{y}». d : la différence de chaque ligne, classée par |d| avec le rang moyen pour les ex aequo ; V : la somme des rangs où d > 0, W : où d < 0 ; n : les différences classées ; t : les lignes d'un |d| ex aequo ; c : la correction de continuité. #(…) : combien de dispositions des valeurs (test exact) le donnent. n₀ : les différences égales à 0 (règle de Pratt).",
+        "left_out": "Différences classées : {n}. Lignes écartées : {missing} (sans nombre dans x, ou dans y). Une différence nulle est comptée à part (tableau des nombres).",
+        "critical": {"low": "z ≤ {x}", "high": "z ≥ {x}"}
+      },
+      "kruskal_wallis": {
+        "name": "Test de Kruskal–Wallis",
+        "stats": {
+          "test": {"statistic": "Statistique H (corrigée des ex aequo)"},
+          "pair": {"estimate": "Diff. rangs moyens", "statistic": "z"}
+        },
+        "kpi": {"statistic": "Statistique H", "effect": "Taille d'effet ε²"},
+        "symbols": "N : les valeurs classées, tous les groupes ensemble, le rang moyen pour les ex aequo ; n, R, R̄ : les valeurs, la somme des rangs et le rang moyen de chaque groupe (tableau «Groupes») ; k : groupes ; t : les lignes d'une valeur ex aequo ; df : degrés de liberté.",
+        "left_out": "Lignes utilisées : {n}. Lignes écartées : {missing} (sans groupe, ou sans nombre dans un groupe)."
+      },
+      "spearman": {
+        "name": "Corrélation des rangs de Spearman",
+        "stats": {
+          "test": {
+            "estimate": "Corrélation des rangs (ρ)",
+            "null_value": "Corrélation sous H0",
+            "statistic": "Statistique t",
+            "std_error": "Erreur type de ρ, √((1 − ρ²) / (n − 2))"
+          }
+        },
+        "kpi": {"statistic": "Statistique t", "estimate": "Corrélation des rangs ρ"},
+        "symbols": "x = «{x}», y = «{y}». rx, ry : les rangs moyens de chaque colonne sur les lignes qui ont les deux, moins (n + 1)/2 ; n : ces lignes (tableau «Groupes») ; t : les lignes d'une valeur ex aequo ; df : degrés de liberté.",
+        "left_out": "Lignes utilisées : {n}. Lignes écartées : {missing} (sans nombre dans l'une des deux colonnes)."
+      },
+      "ks_two_sample": {
+        "name": "Test de Kolmogorov–Smirnov à deux échantillons",
+        "stats": {
+          "test": {"statistic": "Distance du test (D, D+ ou D−)"}
+        },
+        "kpi": {"statistic": "Statistique D", "lambda": "λ (Kolmogorov)", "n": "Lignes utilisées"},
+        "symbols": "1 = «{g1}», 2 = «{g2}». F1, F2 : la part des valeurs de chaque groupe jusqu'à v inclus (sa fonction de répartition empirique) ; n1, n2 : les valeurs de chaque groupe (tableau «Groupes») ; k : les termes de la série. #(…) : combien de dispositions des valeurs (test exact) le donnent.",
+        "left_out": "Lignes utilisées : {n}. Lignes écartées : {missing} (sans groupe, ou sans nombre dans l'un des deux groupes)."
+      },
+      "normality": {
+        "name": "Test de normalité",
+        "variants": {
+          "dagostino": "Test de normalité de D'Agostino–Pearson",
+          "jarque_bera": "Test de normalité de Jarque–Bera"
+        },
+        "stats": {
+          "test": {"statistic": "Statistique (K² ou JB)"}
+        },
+        "kpi": {"statistic": "Statistique", "skewness": "Asymétrie g₁", "kurtosis": "Kurtosis b₂ (normale : 3)"},
+        "symbols": "Les valeurs de «{column}» : n, leur moyenne m (tableau «Groupes») ; m₂, m₃, m₄ : les moyennes de (v − m)², (v − m)³, (v − m)⁴ (tableau des nombres) ; df : degrés de liberté.",
+        "left_out": "Lignes utilisées : {n}. Lignes écartées : {missing} (pas de nombre : NULL ou NaN)."
       }
     },
     "stats": {
@@ -2122,7 +2621,41 @@
         "variance": "∑ V(a) sur les strates",
         "log_sd": "Erreur type de ln OR_MH (Robins–Breslow–Greenland)",
         "g": "G sans correction",
-        "williams_q": "Correction de Williams (q)"
+        "williams_q": "Correction de Williams (q)",
+        "u_2": "U du groupe 2 (n1·n2 − U)",
+        "tie_sum": "Ex aequo : ∑(t³ − t)",
+        "mean_u": "Moyenne de U sous H0 (n1·n2/2)",
+        "sd_u": "Écart type de U sous H0 (σ)",
+        "continuity": "Correction de continuité (c)",
+        "z": "Score normal (z)",
+        "cles": "Probabilité de supériorité (U / (n1·n2))",
+        "rank_biserial": "Taille d'effet : r bisérial des rangs",
+        "n_zero": "Différences égales à 0",
+        "w_minus": "Somme des rangs des différences négatives (W)",
+        "mean_w": "Moyenne de V sous H0 (E)",
+        "sd_w": "Écart type de V sous H0 (σ)",
+        "tie_correction": "Correction des ex aequo (C)",
+        "statistic_plain": "H sans la correction des ex aequo",
+        "epsilon_squared": "Taille d'effet : ε²",
+        "sum_rxy": "∑ rx·ry",
+        "sum_rx2": "∑ rx²",
+        "sum_ry2": "∑ ry²",
+        "tie_sum_x": "Ex aequo de x : ∑(t³ − t)",
+        "tie_sum_y": "Ex aequo de y : ∑(t³ − t)",
+        "rho_squared": "ρ²",
+        "d": "Distance maximale |F1 − F2| (D)",
+        "d_plus": "Distance maximale F1 − F2 (D+)",
+        "d_minus": "Distance maximale F2 − F1 (D−)",
+        "n_tied": "Valeurs présentes dans plus d'une ligne",
+        "lambda": "λ = D·√(n1·n2 / (n1 + n2))",
+        "m2": "Deuxième moment centré (m₂)",
+        "m3": "Troisième moment centré (m₃)",
+        "m4": "Quatrième moment centré (m₄)",
+        "skewness": "Asymétrie (g₁)",
+        "kurtosis": "Kurtosis (b₂)",
+        "excess_kurtosis": "Excès de kurtosis (b₂ − 3)",
+        "z_skewness": "z de l'asymétrie (z₁)",
+        "z_kurtosis": "z de la kurtosis (z₂)"
       },
       "group": {
         "n": "n",
@@ -2158,7 +2691,9 @@
         "d": "d (2, 2)",
         "expected_a": "E(a)",
         "variance_a": "V(a)",
-        "odds_ratio": "Odds ratio (a·d / b·c)"
+        "odds_ratio": "Odds ratio (a·d / b·c)",
+        "rank_sum": "Somme des rangs",
+        "mean_rank": "Rang moyen"
       },
       "hist": {"count": "Lignes"},
       "curve": {
@@ -2245,7 +2780,8 @@
       "observed": "Effectifs observés et attendus",
       "residuals": "Résidus ajustés (ligne : x, colonne : y)",
       "too_many_cells": "{chart} : le tableau a {n} cellules, et le graphique est tracé jusqu'à {most}. Les tableaux ci-dessus contiennent chaque nombre.",
-      "too_many_rows": "{chart} : x a {n} catégories, et le graphique est tracé jusqu'à {most}. Les tableaux ci-dessus contiennent chaque nombre."
+      "too_many_rows": "{chart} : x a {n} catégories, et le graphique est tracé jusqu'à {most}. Les tableaux ci-dessus contiennent chaque nombre.",
+      "exact_note": "Un test exact : sa p-valeur compte chaque disposition des valeurs, et il n'a pas de courbe à tracer."
     },
     "engine": "Calculé dans le moteur : {engine}.",
     "sample": {
@@ -2266,7 +2802,8 @@
         "games_howell": "Games–Howell (sans supposer des variances égales ; les degrés de liberté de Welch pour chaque paire)",
         "pairwise_t": "un test t pour chaque paire",
         "cells": "les cellules : le résidu ajusté de chacune contre la loi normale",
-        "pairs": "les paires de catégories de x : un test du khi-deux de chaque tableau 2 × c"
+        "pairs": "les paires de catégories de x : un test du khi-deux de chaque tableau 2 × c",
+        "dunn": "le test de Dunn : la différence des rangs moyens de chaque paire face à la loi normale"
       },
       "adjust": {
         "studentized_range": "Les p-valeurs ajustées et les intervalles viennent de l'étendue studentisée : ils valent pour toutes les paires ensemble.",

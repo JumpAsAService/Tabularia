@@ -117,6 +117,43 @@
         "asymptotic"
       ]
     },
+    "rank_method": {
+      "control": "choice",
+      "choices": [
+        "auto",
+        "exact",
+        "asymptotic"
+      ]
+    },
+    "wilcoxon_zeros": {
+      "control": "choice",
+      "choices": [
+        "wilcox",
+        "pratt"
+      ]
+    },
+    "kw_posthoc": {
+      "control": "choice",
+      "choices": [
+        "none",
+        "dunn"
+      ]
+    },
+    "ks_method": {
+      "control": "choice",
+      "choices": [
+        "auto",
+        "exact",
+        "asymptotic"
+      ]
+    },
+    "normality_method": {
+      "control": "choice",
+      "choices": [
+        "dagostino",
+        "jarque_bera"
+      ]
+    },
     "expected_proportions": {
       "control": "proportions",
       "of": "value"
@@ -529,6 +566,172 @@
       },
       "defaults": {
         "alternative": "two_sided",
+        "alpha": 0.05,
+        "detail": "results"
+      },
+      "forbids": [],
+      "applies": {}
+    },
+    {
+      "id": "spearman",
+      "operation": "stat_spearman",
+      "family": "correlation",
+      "needs": {
+        "x": "number_column",
+        "y": "number_column"
+      },
+      "takes": {
+        "alternative": "alternative",
+        "alpha": "alpha",
+        "detail": "detail"
+      },
+      "defaults": {
+        "alternative": "two_sided",
+        "alpha": 0.05,
+        "detail": "results"
+      },
+      "forbids": [],
+      "applies": {}
+    },
+    {
+      "id": "mann_whitney",
+      "operation": "stat_mann_whitney",
+      "family": "ranks",
+      "needs": {
+        "value": "number_column",
+        "group": "column"
+      },
+      "takes": {
+        "groups": "two_groups",
+        "method": "rank_method",
+        "correction": "boolean",
+        "alternative": "alternative",
+        "alpha": "alpha",
+        "detail": "detail"
+      },
+      "defaults": {
+        "groups": null,
+        "method": "auto",
+        "correction": true,
+        "alternative": "two_sided",
+        "alpha": 0.05,
+        "detail": "results"
+      },
+      "forbids": [],
+      "applies": {
+        "correction": {
+          "method": [
+            "auto",
+            "asymptotic"
+          ]
+        }
+      }
+    },
+    {
+      "id": "wilcoxon_signed_rank",
+      "operation": "stat_wilcoxon_signed_rank",
+      "family": "ranks",
+      "needs": {
+        "x": "number_column"
+      },
+      "takes": {
+        "y": "number_column",
+        "mu": "number",
+        "zeros": "wilcoxon_zeros",
+        "method": "rank_method",
+        "correction": "boolean",
+        "alternative": "alternative",
+        "alpha": "alpha",
+        "detail": "detail"
+      },
+      "defaults": {
+        "y": null,
+        "mu": 0.0,
+        "zeros": "wilcox",
+        "method": "auto",
+        "correction": true,
+        "alternative": "two_sided",
+        "alpha": 0.05,
+        "detail": "results"
+      },
+      "forbids": [],
+      "applies": {
+        "correction": {
+          "method": [
+            "auto",
+            "asymptotic"
+          ]
+        }
+      }
+    },
+    {
+      "id": "kruskal_wallis",
+      "operation": "stat_kruskal_wallis",
+      "family": "ranks",
+      "needs": {
+        "value": "number_column",
+        "group": "column"
+      },
+      "takes": {
+        "posthoc": "kw_posthoc",
+        "p_adjust": "p_adjust",
+        "alpha": "alpha",
+        "detail": "detail"
+      },
+      "defaults": {
+        "posthoc": "none",
+        "p_adjust": "holm",
+        "alpha": 0.05,
+        "detail": "results"
+      },
+      "forbids": [],
+      "applies": {
+        "p_adjust": {
+          "posthoc": [
+            "dunn"
+          ]
+        }
+      }
+    },
+    {
+      "id": "ks_two_sample",
+      "operation": "stat_ks_two_sample",
+      "family": "distributions",
+      "needs": {
+        "value": "number_column",
+        "group": "column"
+      },
+      "takes": {
+        "groups": "two_groups",
+        "method": "ks_method",
+        "alternative": "alternative",
+        "alpha": "alpha",
+        "detail": "detail"
+      },
+      "defaults": {
+        "groups": null,
+        "method": "auto",
+        "alternative": "two_sided",
+        "alpha": 0.05,
+        "detail": "results"
+      },
+      "forbids": [],
+      "applies": {}
+    },
+    {
+      "id": "normality",
+      "operation": "stat_normality",
+      "family": "distributions",
+      "needs": {
+        "value": "number_column"
+      },
+      "takes": {
+        "method": "normality_method",
+        "alpha": "alpha",
+        "detail": "detail"
+      },
+      "defaults": {
+        "method": "dagostino",
         "alpha": 0.05,
         "detail": "results"
       },

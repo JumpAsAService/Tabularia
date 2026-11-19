@@ -646,3 +646,113 @@ def test_lot_3_tables_refused(name, storage, survey, monkeypatch):
     assert say("fisher_exact", x="answer", y="g") == (
         "stat_fisher_exact: the exact distribution of this 3 × 3 table takes more than 2,000,000 steps to go through: "
         "use the chi-square test of independence, which is as good on so many rows")
+
+
+# ── lot 4: ranks and distributions ───────────────────────────────────────────
+RANK_COLUMNS = {"v": Column("Float64", True), "w": Column("Float64", True), "g": Column("String", False)}
+
+
+@pytest.mark.parametrize("test, params, sentence", [
+    ("mann_whitney", {"value": "v", "group": "g", "method": "permutation"}, "stat_mann_whitney: 'method' must be one of auto, exact, asymptotic"),
+    ("mann_whitney", {"value": "g", "group": "g"}, "stat_mann_whitney: the column «g» ('value') is not a number (String): convert it with a cast step, or choose another column"),
+    ("wilcoxon_signed_rank", {"y": "w"}, "stat_wilcoxon_signed_rank: 'x' is required"),
+    ("wilcoxon_signed_rank", {"x": "v", "zeros": "drop"}, "stat_wilcoxon_signed_rank: 'zeros' must be one of wilcox, pratt"),
+    ("wilcoxon_signed_rank", {"x": "v", "group": "g"},
+     "stat_wilcoxon_signed_rank: there is no parameter 'group' (it takes: x, y, mu, zeros, method, correction, alternative, alpha, detail)"),
+    ("kruskal_wallis", {"value": "v", "group": "g", "posthoc": "tukey"}, "stat_kruskal_wallis: 'posthoc' must be one of none, dunn"),
+    ("kruskal_wallis", {"value": "v", "group": "g", "alternative": "less"},
+     "stat_kruskal_wallis: there is no parameter 'alternative' (it takes: value, group, posthoc, p_adjust, alpha, detail)"),
+    ("spearman", {"x": "v"}, "stat_spearman: 'y' is required"),
+    ("ks_two_sample", {"value": "v", "group": "g", "method": "monte_carlo"}, "stat_ks_two_sample: 'method' must be one of auto, exact, asymptotic"),
+    ("normality", {"value": "v", "method": "shapiro"}, "stat_normality: 'method' must be one of dagostino, jarque_bera"),
+    ("normality", {"value": "v", "alternative": "less"}, "stat_normality: there is no parameter 'alternative' (it takes: value, method, alpha, detail)"),
+])
+def test_lot_4_parameters_refused(test, params, sentence):
+    with pytest.raises(EngineError) as e:
+        check_params(test, params, RANK_COLUMNS)
+    assert str(e.value) == sentence
+
+
+def test_lot_4_defaults():
+    assert check_params("mann_whitney", {"value": "v", "group": "g"}, RANK_COLUMNS) == {
+        "value": "v", "group": "g", "groups": None, "method": "auto", "correction": True, "alternative": "two_sided", "alpha": 0.05,
+        "detail": "results"}
+    assert check_params("wilcoxon_signed_rank", {"x": "v"}, RANK_COLUMNS) == {
+        "x": "v", "y": None, "mu": 0.0, "zeros": "wilcox", "method": "auto", "correction": True, "alternative": "two_sided",
+        "alpha": 0.05, "detail": "results"}
+    assert check_params("kruskal_wallis", {"value": "v", "group": "g"}, RANK_COLUMNS)["posthoc"] == "none"
+    assert check_params("normality", {"value": "v"}, RANK_COLUMNS)["method"] == "dagostino"
+    assert catalog.applies("mann_whitney", "correction", {"method": "auto"})
+    assert not catalog.applies("wilcoxon_signed_rank", "correction", {"method": "exact"})
+    assert catalog.applies("kruskal_wallis", "p_adjust", {"posthoc": "dunn"}) and not catalog.applies("kruskal_wallis", "p_adjust", {})
+    assert (catalog.EXACT_MAX_N, catalog.EXACT_KS_PRODUCT) == (49, 9_999)
+
+
+@pytest.fixture
+def ranked(storage):
+    """30 rows: three groups (the third with no value in «vc»), a date-time of three values, a
+    constant, a column with an infinite value in the group «a», 25 groups, a copy of a column, a
+    column with ten values only."""
+    n = 30
+    v = [float((i * 7) % 11) + i / 100 for i in range(n)]
+    df = pl.DataFrame({
+        "g": ["a", "b", "c"] * 10, "v": v, "vc": [None if i % 3 == 2 else x for i, x in enumerate(v)],
+        "at": [dt.datetime(2024, 1, 1, i % 3) for i in range(n)], "eq": [1.0] * n,
+        "inf": [math.inf if i == 0 else x for i, x in enumerate(v)], "many": [f"k{i % 25:02d}" for i in range(n)],
+        "copy": v, "few": [x if i < 10 else None for i, x in enumerate(v)],
+    }, schema={"g": pl.String, "v": pl.Float64, "vc": pl.Float64, "at": pl.Datetime("us"), "eq": pl.Float64, "inf": pl.Float64,
+               "many": pl.String, "copy": pl.Float64, "few": pl.Float64})
+    return upload_df(storage, df, "datasets/stats_ranked.parquet")
+
+
+@pytest.mark.parametrize("name", ENGINES)
+def test_lot_4_data_refused(name, storage, ranked):
+    def say(test, **params):
+        with pytest.raises(EngineError) as e:
+            _engine(name, storage).preview(ranked, [{"type": f"stat_{test}", "params": params}], limit=100, use_cache=False)
+        return str(e.value)
+
+    assert say("mann_whitney", value="vc", group="g", groups=["a", "c"]) == (
+        "stat_mann_whitney: the group «c» has no usable value of «vc» (a NULL or a NaN is left out)")
+    assert say("mann_whitney", value="v", group="at", groups=["2024-01-01 00:00:00", "2024-01-01 01:00:00"]) == (
+        "stat_mann_whitney: the groups of the column «at» cannot be told apart in a query by their values (a datetime, a decimal…), "
+        "and it holds 3: cast it to text first, or filter the two groups before the test")
+    assert say("mann_whitney", value="eq", group="g", groups=["a", "b"]) == (
+        "stat_mann_whitney: all the values of «eq» in the two groups are equal: their ranks are all the same, and there is nothing to test")
+    assert say("mann_whitney", value="inf", group="g", groups=["a", "b"]) == (
+        "stat_mann_whitney: the column «inf» holds infinite values in the group «a»: the test cannot be computed")
+    assert say("wilcoxon_signed_rank", x="v", y="v") == (
+        "stat_wilcoxon_signed_rank: 'x' and 'y' are both the column «v»: choose two different columns, or leave 'y' empty")
+    assert say("wilcoxon_signed_rank", x="v", y="copy") == "stat_wilcoxon_signed_rank: every difference v − copy is 0: there is nothing to rank"
+    assert say("wilcoxon_signed_rank", x="inf", y="v") == (
+        "stat_wilcoxon_signed_rank: the column «inf» or «v» holds infinite values: the test cannot be computed")
+    assert say("kruskal_wallis", value="vc", group="g") == (
+        "stat_kruskal_wallis: the group «c» has no usable value of «vc» (a NULL or a NaN is left out): filter it out first")
+    assert say("kruskal_wallis", value="eq", group="g") == (
+        "stat_kruskal_wallis: all the values of «eq» are equal: their ranks are all the same, and there is nothing to test")
+    assert say("kruskal_wallis", value="v", group="many", posthoc="dunn") == (
+        "stat_kruskal_wallis: the pairwise comparisons ('posthoc') take 20 groups at most, and the column «many» has 25: "
+        "filter the groups first, or set 'posthoc' to none")
+    assert say("spearman", x="v", y="eq") == (
+        "stat_spearman: all the values of «eq» are equal on the rows used (their ranks are all the same): there is no correlation")
+    assert say("spearman", x="v", y="inf") == "stat_spearman: the column «inf» holds infinite values: the test cannot be computed"
+    assert say("ks_two_sample", value="v", group="at", groups=["2024-01-01 00:00:00", "2024-01-01 01:00:00"]).endswith(
+        "and it holds 3: cast it to text first, or filter the two groups before the test")
+    with pytest.raises(EngineError) as e:  # two groups only: still none of them named by a literal, which the distance needs
+        _engine(name, storage).preview(ranked, [{"type": "filter", "params": {"column": "g", "operator": "ne", "value": "c"}},
+                                                {"type": "stat_ks_two_sample", "params": {"value": "v", "group": "at"}}], limit=100, use_cache=False)
+    assert str(e.value) == ("stat_ks_two_sample: the groups of the column «at» cannot be told apart in a query by their values "
+                            "(a datetime, a decimal…): cast it to text first")
+    assert say("normality", value="few") == (
+        "stat_normality: the column «few» has 10 usable values (a NULL or a NaN is left out): at least 20 are needed "
+        "(or use method = 'jarque_bera')")
+    assert say("normality", value="eq") == "stat_normality: all the values of «eq» are equal (the variance is 0): there is no skewness nor kurtosis"
+    assert say("normality", value="inf") == "stat_normality: the column «inf» holds infinite values: the test cannot be computed"
+    # what is allowed: Jarque–Bera on ten values; a date-time column of two groups ranked whole
+    rows = _engine(name, storage).preview(ranked, [{"type": "stat_normality", "params": {"value": "few", "method": "jarque_bera"}}],
+                                          limit=100, use_cache=False).rows
+    assert {r["key"]: r["value"] for r in rows}["test|||n"] == 10
+    two = [{"type": "filter", "params": {"column": "g", "operator": "ne", "value": "c"}},
+           {"type": "stat_mann_whitney", "params": {"value": "v", "group": "at"}}]
+    rows = _engine(name, storage).preview(ranked, two, limit=100, use_cache=False).rows
+    assert {r["key"]: r["value"] for r in rows}["test|||n"] == 20

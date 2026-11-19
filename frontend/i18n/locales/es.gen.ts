@@ -6249,6 +6249,56 @@ export default {
         "hints": {
           "posthoc": "Qué celdas se apartan de la independencia: sus residuos ajustados."
         }
+      },
+      "spearman": {
+        "name": "Correlación de rangos de Spearman",
+        "hint": "¿Dos columnas de las mismas filas suben y bajan juntas, de cualquier forma monótona? La ρ de Spearman sobre los rangos, robusta a los valores atípicos."
+      },
+      "mann_whitney": {
+        "name": "Prueba U de Mann–Whitney",
+        "hint": "¿Dos grupos tienden a tener valores distintos? La prueba de la suma de rangos, sin suponer una distribución normal: exacta en muestras pequeñas.",
+        "hints": {
+          "method": "Automático: exacto hasta 49 valores por grupo sin empates, si no la aproximación normal.",
+          "correction": "Medio paso hacia la media en la aproximación normal (como wilcox.test de R)."
+        }
+      },
+      "wilcoxon_signed_rank": {
+        "name": "Prueba de rangos con signo de Wilcoxon",
+        "hint": "Dos medidas de las mismas filas (antes y después), o una frente a un valor: ¿las diferencias están centradas en cero? Sin suponer una distribución normal.",
+        "params": {
+          "x": "Primera medida (x)",
+          "y": "Segunda medida (y)",
+          "mu": "Centro bajo H0"
+        },
+        "hints": {
+          "x": "La primera medida de cada fila (antes, por ejemplo): la prueba es sobre x − y.",
+          "y": "Déjala vacía para probar x sola frente al centro de abajo.",
+          "mu": "El centro de las diferencias (o de x) que afirma la hipótesis nula: 0 para «ningún cambio».",
+          "method": "Automático: exacto hasta 49 diferencias sin empates ni ceros, si no la aproximación normal.",
+          "correction": "Medio paso hacia la media en la aproximación normal (como wilcox.test de R)."
+        }
+      },
+      "kruskal_wallis": {
+        "name": "Prueba de Kruskal–Wallis",
+        "hint": "¿Varios grupos tienen la misma distribución? El equivalente por rangos del ANOVA, con las comparaciones de Dunn que dicen qué grupos difieren.",
+        "hints": {
+          "posthoc": "Qué grupos difieren: la prueba de Dunn sobre los rangos medios de cada par, con una corrección."
+        }
+      },
+      "ks_two_sample": {
+        "name": "Prueba de Kolmogorov–Smirnov de dos muestras",
+        "hint": "¿Dos grupos vienen de la misma distribución? La distancia máxima entre sus distribuciones acumuladas: toda la forma, no solo el centro.",
+        "hints": {
+          "method": "Automático: exacto cuando n1·n2 es como mucho 9.999 y ningún valor se repite, si no el límite de Kolmogorov.",
+          "alternative": "Mayor: la función de distribución del primer grupo queda por encima de la del segundo (sus valores tienden a ser menores)."
+        }
+      },
+      "normality": {
+        "name": "Prueba de normalidad",
+        "hint": "¿Los valores de una columna parecen distribuidos normalmente? La K² de D'Agostino–Pearson o Jarque–Bera, a partir de la asimetría y la curtosis.",
+        "hints": {
+          "method": "D'Agostino–Pearson necesita al menos 20 valores; Jarque–Bera está pensada para muestras grandes."
+        }
       }
     },
     "params": {
@@ -6271,7 +6321,8 @@ export default {
       "correction": "Corrección de continuidad",
       "expected": "Proporciones esperadas",
       "strata": "Columna de los estratos",
-      "williams": "Corrección de Williams"
+      "williams": "Corrección de Williams",
+      "zeros": "Diferencias nulas"
     },
     "hints": {
       "value": "La columna que se mide.",
@@ -6292,7 +6343,8 @@ export default {
       "correction": "La corrección de continuidad de Yates de la aproximación normal (como prop.test de R).",
       "expected": "Todas iguales, o una proporción para cada categoría de la columna: mayor que 0, con suma 1.",
       "williams": "Divide G entre q, más cerca del chi cuadrado en tablas pequeñas.",
-      "strata": "La columna que nombra los estratos."
+      "strata": "La columna que nombra los estratos.",
+      "zeros": "Wilcox: excluidas antes de ordenar (como R). Pratt: ordenadas, luego excluidas de las sumas."
     },
     "choices": {
       "alternative": {
@@ -6333,6 +6385,28 @@ export default {
       "g_posthoc": {
         "none": "Ninguna",
         "cells": "Las celdas"
+      },
+      "rank_method": {
+        "auto": "Automático",
+        "exact": "Exacto",
+        "asymptotic": "Aproximación normal"
+      },
+      "wilcoxon_zeros": {
+        "wilcox": "Excluirlas (Wilcox)",
+        "pratt": "Ordenarlas (Pratt)"
+      },
+      "kw_posthoc": {
+        "none": "Ninguna",
+        "dunn": "Dunn"
+      },
+      "ks_method": {
+        "auto": "Automático",
+        "exact": "Exacto",
+        "asymptotic": "Límite de Kolmogorov"
+      },
+      "normality_method": {
+        "dagostino": "D'Agostino–Pearson",
+        "jarque_bera": "Jarque–Bera"
       }
     },
     "reasons": {

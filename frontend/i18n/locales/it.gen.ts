@@ -6249,6 +6249,56 @@ export default {
         "hints": {
           "posthoc": "Quali celle si allontanano dall'indipendenza: i loro residui corretti."
         }
+      },
+      "spearman": {
+        "name": "Correlazione per ranghi di Spearman",
+        "hint": "Due colonne delle stesse righe crescono e calano insieme, in modo monotono qualsiasi? Il ρ di Spearman sui ranghi, robusto ai valori anomali."
+      },
+      "mann_whitney": {
+        "name": "Test U di Mann–Whitney",
+        "hint": "Due gruppi tendono ad avere valori diversi? Il test della somma dei ranghi, senza supporre una distribuzione normale: esatto sui piccoli campioni.",
+        "hints": {
+          "method": "Automatico: esatto fino a 49 valori per gruppo senza pari merito, altrimenti l'approssimazione normale.",
+          "correction": "Mezzo passo verso la media nell'approssimazione normale (come wilcox.test di R)."
+        }
+      },
+      "wilcoxon_signed_rank": {
+        "name": "Test dei ranghi con segno di Wilcoxon",
+        "hint": "Due misure delle stesse righe (prima e dopo), o una contro un valore: le differenze sono centrate sullo zero? Senza supporre una distribuzione normale.",
+        "params": {
+          "x": "Prima misura (x)",
+          "y": "Seconda misura (y)",
+          "mu": "Centro sotto H0"
+        },
+        "hints": {
+          "x": "La prima misura di ogni riga (prima, per esempio): il test è su x − y.",
+          "y": "Lasciala vuota per provare x da sola contro il centro qui sotto.",
+          "mu": "Il centro delle differenze (o di x) che l'ipotesi nulla afferma: 0 per «nessun cambiamento».",
+          "method": "Automatico: esatto fino a 49 differenze senza pari merito né zeri, altrimenti l'approssimazione normale.",
+          "correction": "Mezzo passo verso la media nell'approssimazione normale (come wilcox.test di R)."
+        }
+      },
+      "kruskal_wallis": {
+        "name": "Test di Kruskal–Wallis",
+        "hint": "Più gruppi hanno la stessa distribuzione? Il corrispettivo per ranghi dell'ANOVA, con i confronti di Dunn che dicono quali gruppi differiscono.",
+        "hints": {
+          "posthoc": "Quali gruppi differiscono: il test di Dunn sui ranghi medi di ogni coppia, con una correzione."
+        }
+      },
+      "ks_two_sample": {
+        "name": "Test di Kolmogorov–Smirnov a due campioni",
+        "hint": "Due gruppi vengono dalla stessa distribuzione? La distanza massima fra le loro distribuzioni cumulate: tutta la forma, non solo il centro.",
+        "hints": {
+          "method": "Automatico: esatto quando n1·n2 è al massimo 9.999 e nessun valore è ripetuto, altrimenti il limite di Kolmogorov.",
+          "alternative": "Maggiore: la funzione di distribuzione del primo gruppo sta sopra quella del secondo (i suoi valori tendono a essere più piccoli)."
+        }
+      },
+      "normality": {
+        "name": "Test di normalità",
+        "hint": "I valori di una colonna sembrano distribuiti normalmente? Il K² di D'Agostino–Pearson o Jarque–Bera, da asimmetria e curtosi.",
+        "hints": {
+          "method": "D'Agostino–Pearson richiede almeno 20 valori; Jarque–Bera è pensato per i campioni grandi."
+        }
       }
     },
     "params": {
@@ -6271,7 +6321,8 @@ export default {
       "correction": "Correzione di continuità",
       "expected": "Proporzioni attese",
       "strata": "Colonna degli strati",
-      "williams": "Correzione di Williams"
+      "williams": "Correzione di Williams",
+      "zeros": "Differenze nulle"
     },
     "hints": {
       "value": "La colonna che si misura.",
@@ -6292,7 +6343,8 @@ export default {
       "correction": "La correzione di continuità di Yates dell'approssimazione normale (come prop.test di R).",
       "expected": "Tutte uguali, o una proporzione per ogni categoria della colonna: sopra 0, con somma 1.",
       "williams": "Divide G per q, più vicino al chi quadrato sulle tabelle piccole.",
-      "strata": "La colonna che dà il nome agli strati."
+      "strata": "La colonna che dà il nome agli strati.",
+      "zeros": "Wilcox: escluse prima di ordinare (come R). Pratt: ordinate, poi escluse dalle somme."
     },
     "choices": {
       "alternative": {
@@ -6333,6 +6385,28 @@ export default {
       "g_posthoc": {
         "none": "Nessuno",
         "cells": "Le celle"
+      },
+      "rank_method": {
+        "auto": "Automatico",
+        "exact": "Esatto",
+        "asymptotic": "Approssimazione normale"
+      },
+      "wilcoxon_zeros": {
+        "wilcox": "Escluderle (Wilcox)",
+        "pratt": "Ordinarle (Pratt)"
+      },
+      "kw_posthoc": {
+        "none": "Nessuno",
+        "dunn": "Dunn"
+      },
+      "ks_method": {
+        "auto": "Automatico",
+        "exact": "Esatto",
+        "asymptotic": "Limite di Kolmogorov"
+      },
+      "normality_method": {
+        "dagostino": "D'Agostino–Pearson",
+        "jarque_bera": "Jarque–Bera"
       }
     },
     "reasons": {

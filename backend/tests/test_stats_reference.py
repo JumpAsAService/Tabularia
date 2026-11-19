@@ -943,3 +943,235 @@ def test_g_test(name, storage, tables, more_tables):
     _, _, by_key = result(name, storage, tables["T32"], stat_op("g_test", x="x", y="y", posthoc="cells", p_adjust="bonferroni"))
     for (row, col), (z, p, _, bonferroni) in T32_CELLS.items():
         check_numbers(by_key, {"adj_residual": z, "p_value": p, "p_adjusted": bonferroni}, f"cell|{row}|{col}|")
+
+
+# ── lot 4: ranks and distributions ───────────────────────────────────────────
+# R 4.6.1: wilcox.test, kruskal.test, cor.test(method = "spearman"), ks.test; Dunn's z by its
+# formula in R (base R has no Dunn: scikit-posthocs 0.18.0 gives the same, the spec's table);
+# Pratt's zeros and the normality tests are SciPy 1.18.1's (`wilcoxon(zero_method="pratt")`,
+# `normaltest`, `jarque_bera`): base R has none of them. Where R 4.6 would compute an exact
+# p-value with ties (its newer `wilcox.test` and `ks.test` do), the reference is R's
+# `exact = FALSE`: the node takes the normal (Kolmogorov's) approximation there, as the spec says.
+M1 = [3, 5, 5, 6, 7, 7, 7, 9]
+M2 = [5, 7, 8, 8, 9, 10, 10, 12, 12]
+M3 = [4, 5, 6, 6, 8]
+W1 = [1.83, 0.50, 1.62, 2.48, 1.68, 1.88, 1.55, 3.06, 1.30]
+W2 = [0.878, 0.647, 0.598, 2.05, 1.06, 1.29, 1.06, 3.14, 1.29]
+SX = [86, 97, 99, 100, 101, 103, 106, 110, 112, 113]
+SY = [2, 20, 28, 27, 50, 29, 7, 17, 6, 12]
+ST1 = [1, 2, 2, 3, 4, 4, 4, 5, 6, 7]
+ST2 = [2, 1, 3, 3, 5, 4, 6, 6, 7, 9]
+NV = [4.2, 5.1, 3.9, 6.3, 5.5, 4.8, 5.0, 7.9, 4.4, 5.2, 6.1, 3.5, 5.7, 4.9, 5.3, 9.4, 4.6, 5.8, 5.0, 4.1, 6.6, 5.4, 4.7, 5.9]
+
+
+@pytest.fixture
+def ranks(storage):
+    """The rank tests' samples: M1, M2, M3 as whole numbers with ties (and a NULL value, a row
+    with no group); W1, W2 and SX, SY, ST1, ST2 as columns of the same rows (a row each pair
+    leaves out); NV for the normality tests (and a NULL, a NaN)."""
+    m = [("a", v) for v in M1] + [("b", v) for v in M2] + [("c", v) for v in M3] + [("c", None), (None, 4)]
+    w = pl.DataFrame({"w1": W1 + [None], "w2": W2 + [1.0]}, schema={"w1": pl.Float64, "w2": pl.Float64})
+    sp = pl.DataFrame({"sx": [float(v) for v in SX] + [99.5], "sy": [float(v) for v in SY] + [math.nan], "st1": ST1 + [3], "st2": ST2 + [None]},
+                      schema={"sx": pl.Float64, "sy": pl.Float64, "st1": pl.Int64, "st2": pl.Int64})
+    return {
+        "m": upload_df(storage, pl.DataFrame({"g": [g for g, _ in m], "v": [v for _, v in m]}, schema={"g": pl.String, "v": pl.Int64}),
+                       "datasets/stats_ranks_m.parquet"),
+        "w": upload_df(storage, w, "datasets/stats_ranks_w.parquet"),
+        "s": upload_df(storage, sp, "datasets/stats_ranks_s.parquet"),
+        "nv": upload_df(storage, pl.DataFrame({"v": NV + [None, math.nan]}, schema={"v": pl.Float64}), "datasets/stats_ranks_nv.parquet"),
+    }
+
+
+@pytest.mark.parametrize("name", ENGINES)
+def test_mann_whitney(name, storage, abc):
+    _, rows, by_key = result(name, storage, abc, stat_op("mann_whitney", value="v", group="g", groups=["a", "b"]))
+    check_numbers(by_key, {
+        "alpha": 0.05, "n": 15, "n_missing": 3, "u_2": 54, "tie_sum": 0.0, "mean_u": 28, "statistic": 2, "z": None,
+        "continuity": None, "critical_low": None, "critical_high": None, "p_value": 0.0012432012432012432,
+        "cles": 2 / 56, "rank_biserial": -0.9285714285714286,
+    })
+    check_numbers(by_key, {"n": 8, "rank_sum": 38, "mean_rank": 38 / 8, "min": 4.9, "max": 6.7}, "group|a||")
+    check_numbers(by_key, {"n": 7, "rank_sum": 82, "mean_rank": 82 / 7, "min": 6.4, "max": 8.0}, "group|b||")
+    t = texts_of(rows)
+    assert (t["variant"], t["distribution"], t["h0"], t["h1"], t["significance"]) == (
+        "exact", "exact", "P(v | a > v | b) = 0.5", "P(v | a > v | b) ≠ 0.5", "**")
+    for alternative, exact_p in (("less", 0.0006216006216006216), ("greater", 0.99968919968919967)):
+        _, _, by_key = result(name, storage, abc, stat_op("mann_whitney", value="v", group="g", groups=["a", "b"], alternative=alternative))
+        check_numbers(by_key, {"p_value": exact_p})
+    # the normal approximation, with and without the continuity correction (R: exact = FALSE)
+    for correction, alternative, want in ((True, "two_sided", 0.003166940381656692), (False, "two_sided", 0.0026218217690905953),
+                                          (True, "less", 0.001583470190828346), (False, "greater", 0.99868908911545473)):
+        _, rows, by_key = result(name, storage, abc, stat_op("mann_whitney", value="v", group="g", groups=["a", "b"], method="asymptotic",
+                                                             correction=correction, alternative=alternative))
+        check_numbers(by_key, {"p_value": want, "sd_u": math.sqrt(56 / 12 * 16)})
+        assert texts_of(rows)["variant"] == "asymptotic"
+
+
+@pytest.mark.parametrize("name", ENGINES)
+def test_mann_whitney_with_ties(name, storage, ranks):
+    for correction, alternative, want in ((True, "two_sided", 0.017127751038976256), (False, "two_sided", 0.014990605076582912),
+                                          (True, "less", 0.0085638755194881282), (False, "greater", 0.99250469746170855)):
+        _, rows, by_key = result(name, storage, ranks["m"], stat_op("mann_whitney", value="v", group="g", groups=["a", "b"],
+                                                                    correction=correction, alternative=alternative))
+        check_numbers(by_key, {"statistic": 11, "tie_sum": 108, "p_value": want, "n": 17, "n_missing": 1})
+        check_numbers(by_key, {"rank_sum": 47}, "group|a||")
+        check_numbers(by_key, {"rank_sum": 106}, "group|b||")
+        assert texts_of(rows)["variant"] == "asymptotic" and "note_1" not in texts_of(rows)
+    # asked exact, with ties: the approximation, and a note that says why
+    _, rows, by_key = result(name, storage, ranks["m"], stat_op("mann_whitney", value="v", group="g", groups=["a", "b"], method="exact"))
+    check_numbers(by_key, {"p_value": 0.017127751038976256})
+    assert "ties" in texts_of(rows)["note_1"]
+
+
+@pytest.mark.parametrize("name", ENGINES)
+def test_wilcoxon_signed_rank(name, storage, ranks, pairs):
+    _, rows, by_key = result(name, storage, ranks["w"], stat_op("wilcoxon_signed_rank", x="w1", y="w2"))
+    check_numbers(by_key, {"n": 9, "n_missing": 1, "n_zero": 0, "statistic": 40, "w_minus": 5, "tie_sum": 0.0, "z": None,
+                           "p_value": 0.0390625, "rank_biserial": 35 / 45, "mean_w": 22.5})
+    assert texts_of(rows)["variant"] == "exact" and texts_of(rows)["h0"] == "median(w1 − w2) = 0"
+    assert [r["level"] for r in rows if r["section"] == "group" and r["stat"] == "n"] == ["w1", "w2", "w1 − w2"]
+    check_numbers(by_key, {"n": 9, "min": 0.5, "max": 3.06}, "group|w1||")
+    _, _, by_key = result(name, storage, ranks["w"], stat_op("wilcoxon_signed_rank", x="w1", y="w2", alternative="greater"))
+    check_numbers(by_key, {"p_value": 0.01953125})
+    for correction, alternative, want in ((True, "two_sided", 0.044010984012951448), (False, "two_sided", 0.038151710173415232),
+                                          (True, "less", 0.98351530937788989), (False, "greater", 0.019075855086707578)):
+        _, _, by_key = result(name, storage, ranks["w"], stat_op("wilcoxon_signed_rank", x="w1", y="w2", method="asymptotic",
+                                                                 correction=correction, alternative=alternative))
+        check_numbers(by_key, {"p_value": want})
+    # one sample against mu
+    _, rows, by_key = result(name, storage, ranks["w"], stat_op("wilcoxon_signed_rank", x="w1", mu=1))
+    check_numbers(by_key, {"statistic": 43, "p_value": 0.01171875, "null_value": 1})
+    assert texts_of(rows)["h0"] == "median(w1) = 1" and [r["level"] for r in rows if r["section"] == "group"] == ["w1"] * 3
+    _, _, by_key = result(name, storage, ranks["w"], stat_op("wilcoxon_signed_rank", x="w1", mu=1, alternative="less"))
+    check_numbers(by_key, {"p_value": 0.99609375})
+    # a zero and ties: R leaves the zero out (wilcox); Pratt ranks it (SciPy's zero_method = "pratt")
+    for correction, alternative, want in ((True, "two_sided", 0.0320514161821423), (False, "two_sided", 0.027572347644957071),
+                                          (True, "less", 0.01602570809107115), (False, "greater", 0.98621382617752151)):
+        _, rows, by_key = result(name, storage, pairs, stat_op("wilcoxon_signed_rank", x="before", y="after", correction=correction,
+                                                               alternative=alternative))
+        check_numbers(by_key, {"n": 9, "n_zero": 1, "n_missing": 2, "statistic": 4, "w_minus": 41, "tie_sum": 36, "p_value": want})
+        assert texts_of(rows)["variant"] == "asymptotic"
+    for correction, alternative, want in ((True, "two_sided", 0.035685440357509104), (False, "two_sided", 0.03141900555774588),
+                                          (True, "less", 0.017842720178754552), (False, "greater", 0.984290497221127)):
+        _, _, by_key = result(name, storage, pairs, stat_op("wilcoxon_signed_rank", x="before", y="after", zeros="pratt",
+                                                            correction=correction, alternative=alternative))
+        check_numbers(by_key, {"n": 10, "n_zero": 1, "statistic": 6, "w_minus": 48, "tie_sum": 36, "p_value": want})
+
+
+@pytest.mark.parametrize("name", ENGINES)
+def test_kruskal_wallis(name, storage, abc, ranks):
+    _, rows, by_key = result(name, storage, abc, stat_op("kruskal_wallis", value="v", group="g"))
+    check_numbers(by_key, {"n": 21, "n_missing": 3, "k": 3, "tie_sum": 0.0, "tie_correction": 1.0, "statistic": 11.5227272727272663,
+                           "df": 2, "p_value": 0.0031468175565042031, "epsilon_squared": 0.576136363636363,
+                           "critical_high": 5.99146454710798})
+    for g, rank_sum in (("a", 49), ("b", 119), ("c", 63)):
+        check_numbers(by_key, {"rank_sum": rank_sum}, f"group|{g}||")
+    assert texts_of(rows)["h0"] == "F(v | a) = F(v | b) = F(v | c)" and texts_of(rows)["distribution"] == "chi-square(2)"
+    _, rows, by_key = result(name, storage, ranks["m"], stat_op("kruskal_wallis", value="v", group="g"))
+    check_numbers(by_key, {"statistic": 8.1224137931034530, "p_value": 0.017228213891057428, "n_missing": 2})
+    for g, rank_sum in (("a", 70), ("b", 145.5), ("c", 37.5)):
+        check_numbers(by_key, {"rank_sum": rank_sum}, f"group|{g}||")
+
+
+@pytest.mark.parametrize("name", ENGINES)
+def test_kruskal_wallis_dunn(name, storage, abc, ranks):
+    _, rows, by_key = result(name, storage, abc, stat_op("kruskal_wallis", value="v", group="g", posthoc="dunn"))
+    check_pairs(by_key, "estimate", (-10.875, -4.375, 6.5))
+    check_pairs(by_key, "std_error", (3.2113081446662823, 3.3509948771471834, 3.4520525295346633))
+    check_pairs(by_key, "statistic", (-3.386470407102625, -1.3055824196677337, 1.8829377433825434))
+    check_pairs(by_key, "p_value", (0.00070797911728930183, 0.19169460205188804, 0.059708805474060947))
+    check_pairs(by_key, "p_adjusted", (0.0021239373518679057, 0.19169460205188804, 0.11941761094812189))
+    check_pairs(by_key, "df", (None, None, None))
+    check_pairs(by_key, "ci_low", (None, None, None))
+    assert [r["text"] for r in rows if r["stat"] == "significance" and r["section"] == "pair"] == ["**", "", ""]
+    assert texts_of(rows)["posthoc"] == "dunn" and texts_of(rows)["p_adjust"] == "holm"
+    check_numbers(by_key, {"n_pairs": 3})
+    for adjust, want in (("bonferroni", (0.0021239373518679057, 0.57508380615566412, 0.17912641642218285)),
+                         ("sidak", (0.0021224340034396993, 0.47188751191212186, 0.16864386240615881))):
+        _, _, by_key = result(name, storage, abc, stat_op("kruskal_wallis", value="v", group="g", posthoc="dunn", p_adjust=adjust))
+        check_pairs(by_key, "p_adjusted", want)
+    _, _, by_key = result(name, storage, ranks["m"], stat_op("kruskal_wallis", value="v", group="g", posthoc="dunn"))
+    check_pairs(by_key, "estimate", (-7.4166666666666679, 1.25, 8.6666666666666679))
+    check_pairs(by_key, "std_error", (3.1275783014572203, 3.6693712968689489, 3.5901098714230026))
+    check_pairs(by_key, "p_value", (0.017721953154875951, 0.73336120149800466, 0.015776756388928073))
+    check_pairs(by_key, "p_adjusted", (0.04733026916678422, 0.73336120149800466, 0.04733026916678422))
+
+
+@pytest.mark.parametrize("name", ENGINES)
+def test_spearman(name, storage, ranks):
+    _, rows, by_key = result(name, storage, ranks["s"], stat_op("spearman", x="sx", y="sy"))
+    check_numbers(by_key, {"n": 10, "n_missing": 1, "estimate": -0.17575757575757575, "statistic": -0.50497824917583467, "df": 8,
+                           "p_value": 0.62718834477648444, "tie_sum_x": 0.0, "sum_rx2": 82.5})
+    assert texts_of(rows)["variant"] == "t_approximation" and texts_of(rows)["h0"] == "cor(rank(sx), rank(sy)) = 0"
+    assert "test|||ci_low" not in by_key
+    for alternative, want in (("less", 0.31359417238824222), ("greater", 0.68640582761175772)):
+        _, _, by_key = result(name, storage, ranks["s"], stat_op("spearman", x="sx", y="sy", alternative=alternative))
+        check_numbers(by_key, {"p_value": want})
+    _, _, by_key = result(name, storage, ranks["s"], stat_op("spearman", x="st1", y="st2"))
+    check_numbers(by_key, {"estimate": 0.9505053951109218, "statistic": 8.652608841136896, "p_value": 2.472741083999593e-05,
+                           "tie_sum_x": 30, "tie_sum_y": 12, "n_missing": 1})
+
+
+@pytest.mark.parametrize("name", ENGINES)
+def test_ks_two_sample(name, storage, abc, ranks):
+    _, rows, by_key = result(name, storage, abc, stat_op("ks_two_sample", value="v", group="g", groups=["a", "b"]))
+    check_numbers(by_key, {"n": 15, "n_missing": 3, "d": 0.875, "d_plus": 0.875, "d_minus": 0.0, "n_tied": 0, "statistic": 0.875,
+                           "lambda": None, "critical_high": None, "p_value": 0.0024864024864024864})
+    assert by_key["test|||d_minus"]["value"] == 0.0  # exact: R prints −5.6e-17
+    assert texts_of(rows)["variant"] == "exact" and texts_of(rows)["h0"] == "F(v | a) = F(v | b)"
+    check_numbers(by_key, {"n": 8, "min": 4.9, "max": 6.7}, "group|a||")
+    for alternative, want in (("greater", 0.0012432012432012432), ("less", 1.0)):
+        _, _, by_key = result(name, storage, abc, stat_op("ks_two_sample", value="v", group="g", groups=["a", "b"], alternative=alternative))
+        check_numbers(by_key, {"p_value": want})
+    for alternative, want in (("two_sided", 0.0065813227912815799), ("greater", 0.0032906615128961425)):
+        _, rows, by_key = result(name, storage, abc, stat_op("ks_two_sample", value="v", group="g", groups=["a", "b"], method="asymptotic",
+                                                             alternative=alternative))
+        check_numbers(by_key, {"p_value": want, "lambda": 0.875 * math.sqrt(56 / 15)})
+        assert texts_of(rows)["variant"] == "asymptotic"
+    _, _, by_key = result(name, storage, abc, stat_op("ks_two_sample", value="v", group="g", groups=["a", "c"]))
+    check_numbers(by_key, {"statistic": 0.5, "p_value": 0.30169830169830159})
+    _, _, by_key = result(name, storage, abc, stat_op("ks_two_sample", value="v", group="g", groups=["a", "c"], alternative="greater"))
+    check_numbers(by_key, {"p_value": 0.15118215118215117})
+    # R prints 0.35808760139528173: it stops the series at 1e-6; summed to the end, 0.358081192617015 (the spec)
+    _, _, by_key = result(name, storage, abc, stat_op("ks_two_sample", value="v", group="g", groups=["a", "c"], method="asymptotic"))
+    check_numbers(by_key, {"p_value": 0.358081192617015})
+    _, _, by_key = result(name, storage, abc, stat_op("ks_two_sample", value="v", group="g", groups=["a", "c"], method="asymptotic",
+                                                      alternative="greater"))
+    check_numbers(by_key, {"p_value": 0.1800923121479524})
+    # ties: Kolmogorov's limit whatever the method asked
+    _, rows, by_key = result(name, storage, ranks["m"], stat_op("ks_two_sample", value="v", group="g", groups=["a", "b"]))
+    check_numbers(by_key, {"statistic": 0.65277777777777779, "p_value": 0.054130917330969225, "n_tied": 6})
+    _, rows, by_key = result(name, storage, ranks["m"], stat_op("ks_two_sample", value="v", group="g", groups=["a", "b"], alternative="greater"))
+    check_numbers(by_key, {"p_value": 0.027065995321502001})
+
+
+@pytest.mark.parametrize("name", ENGINES)
+def test_normality(name, storage, ranks):
+    _, rows, by_key = result(name, storage, ranks["nv"], stat_op("normality", value="v"))
+    check_numbers(by_key, {"n": 24, "n_missing": 2, "mean": 5.3875, "m2": 1.5702604166666667, "m3": 2.8140117187500007,
+                           "m4": 13.599882609049482, "skewness": 1.4301064885100976, "kurtosis": 5.51558768833777,
+                           "z_skewness": 2.915792861633707, "z_kurtosis": 2.4392350219427814, "statistic": 14.451715504226284,
+                           "df": 2, "p_value": 0.0007275282324987928})
+    assert texts_of(rows)["variant"] == "dagostino" and texts_of(rows)["distribution"] == "chi-square(2)"
+    _, rows, by_key = result(name, storage, ranks["nv"], stat_op("normality", value="v", method="jarque_bera"))
+    check_numbers(by_key, {"statistic": 14.508999691631296, "p_value": 0.0007069858928409476, "z_skewness": None, "z_kurtosis": None})
+    _, _, by_key = result(name, storage, ranks["m"], stat_op("normality", value="v", method="jarque_bera"))
+    assert by_key["test|||n"]["value"] == 23  # the value of the row with no group counts: the test has no group
+
+
+@pytest.mark.parametrize("name", ENGINES)
+def test_lot_4_report_rows(name, storage, abc, ranks):
+    """The rows the reports draw: quartiles, a histogram whose counts are the values, the curve
+    of the approximation (none for an exact test)."""
+    for src, op in ((abc, stat_op("mann_whitney", value="v", group="g", groups=["a", "b"], method="asymptotic", detail="report")),
+                    (abc, stat_op("kruskal_wallis", value="v", group="g", posthoc="dunn", detail="report")),
+                    (ranks["nv"], stat_op("normality", value="v", detail="report")),
+                    (abc, stat_op("ks_two_sample", value="v", group="g", groups=["a", "c"], method="asymptotic", detail="report"))):
+        _, rows, by_key = result(name, storage, src, op)
+        hist = [r for r in rows if r["section"] == "hist"]
+        assert sum(r["value"] for r in hist) == by_key["test|||n"]["value"], op
+        curve = [r for r in rows if r["stat"] == "density"]
+        assert len(curve) == 201 and len([r for r in rows if r["stat"] == "reject_high"]) > 0, op
+    check_numbers(by_key, {"q1": 5.25, "median": 5.65, "q3": 6.05}, "group|a||")
+    _, rows, _ = result(name, storage, abc, stat_op("mann_whitney", value="v", group="g", groups=["a", "b"], detail="report"))
+    assert not [r for r in rows if r["section"] == "curve"]  # exact: no curve

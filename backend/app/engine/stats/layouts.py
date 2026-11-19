@@ -395,7 +395,7 @@ def _variant(test: str, params: dict[str, Any]) -> str | None:
         return "one_way" if _param(test, params, "var_equal") else "welch"
     if test == "levene":
         return _param(test, params, "center")
-    if test == "prop_one_sample":
+    if test in ("prop_one_sample", "normality"):
         return _param(test, params, "method")
     return None
 
@@ -419,7 +419,7 @@ def subject(test: str, params: dict[str, Any] | None, locale: str | None) -> str
         p = {**p, "value": f"{p['value']} = {p['success'] if isinstance(p['success'], str) else label_of(p['success'])}"}
     if p.get("value") and p.get("group"):
         return texts(locale)["by"].replace("{value}", str(p["value"])).replace("{group}", str(p["group"]))
-    if test == "t_paired" and p.get("x") and p.get("y"):
+    if test in ("t_paired", "wilcoxon_signed_rank") and p.get("x") and p.get("y"):
         return paired_difference_label(str(p["x"]), str(p["y"]))
     return ", ".join(str(p[k]) for k in ("value", "x", "y") if p.get(k))
 
@@ -565,7 +565,7 @@ def _page(test: str, params: dict[str, Any], locale: str, sample: str | None, st
     p.text("symbols", "=" + _join(own["symbols"], **symbols), h=8.5, size=8, color=MUTED, can_grow=True)
     p.y += 0.5
     p.text("distribution", "=" + _join(t["distribution"], distribution=_text("test|||distribution")))
-    c = t["critical"]
+    c = {**t["critical"], **own.get("critical", {})}  # a test whose critical values are of z says so
     c_high = _value("test|||critical_high")
     if not critical:  # an exact test: no critical value of a statistic
         pass
@@ -634,9 +634,18 @@ def _page(test: str, params: dict[str, Any], locale: str, sample: str | None, st
                         # the title is drawn at 10 px, bold, on one line of the chart's width
                         "title": _fit(chart.title, 7.5, width - 4, 700), **chart.more}
             last = j == len(alternatives) - 1
-            p.add(item, (tall + 0.5 if last_row else tall + 3) if right and last else 0.0)
             if chart.kind == "density":
                 caption_x = x
+            if right and last and caption_x is not None and not last_row:
+                # the curve's caption right under its row, the next row a line lower (a curve
+                # that is not on the last row: a histogram drawn after it)
+                p.add(item, tall + 0.5)
+                p.text("c_curve_caption", t["charts"]["density_caption"], h=4, x=caption_x, w=width, size=7, color=MUTED,
+                       visible='=COUNTIF([section] = "curve") > 0')
+                p.y += 2.5
+                caption_x = None
+                continue
+            p.add(item, (tall + 0.5 if last_row else tall + 3) if right and last else 0.0)
     if caption_x is not None:
         p.text("c_curve_caption", t["charts"]["density_caption"], h=4, x=caption_x, w=width, size=7, color=MUTED,
                visible='=COUNTIF([section] = "curve") > 0')
@@ -760,13 +769,19 @@ def _histogram(t: dict, by: str, legend: bool = True, at_most: int | None = None
                    "options": {"legend": legend, "format": "#,##0"}, "visible": visible})
 
 
-def _density(t: dict) -> _Chart:
+def _density(t: dict, target: str = "statistic") -> _Chart:
     # the first value of `split_by` in the rows' order is the line, the others the regions under it
     return _Chart("c_curve", "density", t["charts"]["density"],
                   {"filter": '[section] = "curve"', "category": "[x0]", "split_by": "[stat]",
                    "series": [{"value": "[value]", "name": t["stats"]["curve"]["density"]}],
-                   "options": {"legend": False, "target": _value("test|||statistic"), "format": "0.000"},
+                   "options": {"legend": False, "target": _value(f"test|||{target}"), "format": "0.000"},
                    "visible": '=COUNTIF([section] = "curve") > 0'})
+
+
+def _density_or_exact(t: dict, target: str = "statistic") -> tuple[_Chart, _Chart]:
+    """The curve of an approximation, or, in its place, why an exact test has none."""
+    return (_density(t, target), _Chart("c_curve_exact", "note", t["charts"]["exact_note"],
+                                        {"visible": '=COUNTIF([section] = "curve") = 0'}))
 
 
 def _cards(t: dict, own: dict, fourth: _Card | None = None, two_df: bool = False) -> tuple[_Card, _Card, _Card, _Card]:
@@ -1036,6 +1051,114 @@ def _contingency(test: str, params: dict[str, Any], locale: str, sample: str | N
                  region_low=False, symbols=symbols, tables=table_set, charts=charts, pairs=pairs,
                  groups_heading=t["sections"]["strata" if test == "cmh" else "table"], critical=critical)
 
+# ── ranks and distributions (lot 4) ─────────────────────────────────────────
+def _or_dash(key: str, pattern: str | None = None) -> str:
+    """A number of the test, or «—» where the variant has none (the z of an exact test)."""
+    v = _value(key)
+    return f'=IF(ISNULL({v}), "—", {_shown(v, pattern)})'
+
+
+_NO_Z = f'=NOT ISNULL({_value("test|||z")})'
+
+
+def _ranks_two(test: str, params: dict[str, Any], locale: str, sample: str | None, step: str | None) -> dict:
+    """Two groups compared by their ranks or their distributions: mann_whitney, ks_two_sample.
+    The rank sums (Mann–Whitney) or the extremes (Kolmogorov–Smirnov) and the five numbers of
+    each group; the box plot, the histogram, the curve of the approximation (none for an exact
+    test: a line says why)."""
+    t = texts(locale)
+    own = t["tests"][test]
+    by = subject(test, params, locale)
+    tables = t["tables"]
+    stars = _Card("k_p", t["kpi"]["p_value"], _with_stars(_p_value(), _text("test|||significance")))
+    if test == "mann_whitney":
+        cards = (_Card("k_statistic", own["kpi"]["statistic"], _shown(_value("test|||statistic"))),
+                 _Card("k_df", own["kpi"]["z"], _or_dash("test|||z")), stars,
+                 _Card("k_estimate", own["kpi"]["effect"], _shown(_value("test|||rank_biserial"), P4)))
+        table_set = (_Table("groups", tables["groups"]["title"], ("n", "rank_sum", "mean_rank"), n_first=True),
+                     _Table("quartiles", tables["quartiles"]["title"], ("min", "q1", "median", "q3", "max"), width=30))
+        critical: bool | str = _NO_Z
+        target = "z"
+    else:
+        cards = (_Card("k_statistic", own["kpi"]["statistic"], _shown(_value("test|||statistic"))),
+                 _Card("k_df", own["kpi"]["lambda"], _or_dash("test|||lambda")), stars,
+                 _Card("k_estimate", own["kpi"]["n"], _value("test|||n"), "#,##0"))
+        table_set = (_Table("groups", tables["groups"]["title"], ("n", "min", "q1", "median", "q3", "max"), n_first=True, width=26),)
+        critical = f'=NOT ISNULL({_value("test|||critical_high")})'
+        target = "statistic"
+    return _page(test, params, locale, sample, step, cards=cards, interval=False, alternative=True, region_low=test == "mann_whitney",
+                 symbols={"g1": _FIRST, "g2": _LAST}, tables=table_set, critical=critical,
+                 charts=(_box(t, by), _histogram(t, by), _density_or_exact(t, target)))
+
+
+def _signed_rank(test: str, params: dict[str, Any], locale: str, sample: str | None, step: str | None) -> dict:
+    """Wilcoxon's signed-rank test: two columns of the same rows, their differences ranked (or
+    one column against mu). The columns and the differences (their five numbers); the box plot
+    and the histogram of the differences, the curve of the approximation."""
+    t = texts(locale)
+    own = t["tests"][test]
+    x, y = str(params.get("x") or "x"), params.get("y")
+    measured = paired_difference_label(x, str(y)) if y else x
+    only = f'[section] = "group" AND [level] = {_q(measured)}'
+    cards = (_Card("k_statistic", own["kpi"]["statistic"], _shown(_value("test|||statistic"))),
+             _Card("k_df", own["kpi"]["z"], _or_dash("test|||z")),
+             _Card("k_p", t["kpi"]["p_value"], _with_stars(_p_value(), _text("test|||significance"))),
+             _Card("k_estimate", own["kpi"]["effect"], _shown(_value("test|||rank_biserial"), P4)))
+    tables = t["tables"]
+    table_set = (_Table("groups", tables["groups"]["title"], ("n", "min", "q1", "median", "q3", "max"), n_first=True, width=26),)
+    return _page(test, params, locale, sample, step, cards=cards, interval=False, alternative=True, region_low=True,
+                 symbols={"x": _q(x), "y": _q(str(y) if y else "—")}, tables=table_set, critical=_NO_Z,
+                 charts=(_box(t, measured, only), _histogram(t, measured, legend=False), _density_or_exact(t, "z")))
+
+
+def _kruskal(test: str, params: dict[str, Any], locale: str, sample: str | None, step: str | None) -> dict:
+    """Kruskal–Wallis: several groups by their ranks, with Dunn's comparisons of the pairs."""
+    t = texts(locale)
+    own = t["tests"][test]
+    by = subject(test, params, locale)
+    tables = t["tables"]
+    cards = (_Card("k_statistic", own["kpi"]["statistic"], _shown(_value("test|||statistic"))), _df_card(t, False),
+             _Card("k_p", t["kpi"]["p_value"], _with_stars(_p_value(), _text("test|||significance"))),
+             _Card("k_effect", own["kpi"]["effect"], _shown(_value("test|||epsilon_squared"), P4)))
+    table_set = (_Table("groups", tables["groups"]["title"], ("n", "rank_sum", "mean_rank"), n_first=True),
+                 _Table("quartiles", tables["quartiles"]["title"], ("min", "q1", "median", "q3", "max"), width=30))
+    pairs = None
+    if _param(test, params, "posthoc") == "dunn":
+        pairs = _Comparisons("dunn", _param(test, params, "p_adjust"), ("estimate", "std_error", "statistic"), own_p=True,
+                             intervals=False)
+    return _page(test, params, locale, sample, step, cards=cards, interval=False, alternative=False, region_low=False, symbols={},
+                 tables=table_set, pairs=pairs, charts=(_box(t, by), _density(t), _histogram(t, by, at_most=6)))
+
+
+def _rank_correlation(test: str, params: dict[str, Any], locale: str, sample: str | None, step: str | None) -> dict:
+    """Spearman's ρ: the two columns' extremes, the t curve. No interval (none in the first
+    release), no scatter plot (a later one)."""
+    t = texts(locale)
+    own = t["tests"][test]
+    tables = t["tables"]
+    return _page(test, params, locale, sample, step, cards=_cards(t, own), interval=False, alternative=True, region_low=True,
+                 symbols={"x": _q(str(params.get("x") or "x")), "y": _q(str(params.get("y") or "y"))},
+                 tables=(_Table("groups", tables["groups"]["title"], ("n", "min", "max"), n_first=True),), charts=(_density(t),))
+
+
+def _normality(test: str, params: dict[str, Any], locale: str, sample: str | None, step: str | None) -> dict:
+    """A test of normality: the column's mean, variance and five numbers; its box plot and
+    histogram; the chi-square curve with two degrees of freedom."""
+    t = texts(locale)
+    own = t["tests"][test]
+    by = subject(test, params, locale)
+    tables = t["tables"]
+    cards = (_Card("k_statistic", own["kpi"]["statistic"], _shown(_value("test|||statistic"))),
+             _Card("k_df", own["kpi"]["skewness"], _shown(_value("test|||skewness"), P4)),
+             _Card("k_p", t["kpi"]["p_value"], _with_stars(_p_value(), _text("test|||significance"))),
+             _Card("k_estimate", own["kpi"]["kurtosis"], _shown(_value("test|||kurtosis"), P4)))
+    table_set = (_Table("groups", tables["groups"]["title"], ("n", "mean", "var", "sd"), n_first=True),
+                 _Table("quartiles", tables["quartiles"]["title"], ("min", "q1", "median", "q3", "max"), width=30))
+    return _page(test, params, locale, sample, step, cards=cards, interval=False, alternative=False, region_low=False,
+                 symbols={"column": _FIRST}, tables=table_set,
+                 charts=(_box(t, by), _histogram(t, by, legend=False), _density(t)))
+
+
 LAYOUTS: dict[str, Callable[[str, dict[str, Any], str, str | None, str | None], dict]] = {
     "t_one_sample": _one_sample,
     "t_two_sample": _two_groups,
@@ -1052,6 +1175,12 @@ LAYOUTS: dict[str, Callable[[str, dict[str, Any], str, str | None, str | None], 
     "mcnemar": _contingency,
     "cmh": _contingency,
     "g_test": _contingency,
+    "spearman": _rank_correlation,
+    "mann_whitney": _ranks_two,
+    "wilcoxon_signed_rank": _signed_rank,
+    "kruskal_wallis": _kruskal,
+    "ks_two_sample": _ranks_two,
+    "normality": _normality,
 }
 
 

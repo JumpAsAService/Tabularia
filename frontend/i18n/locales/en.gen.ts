@@ -6249,6 +6249,56 @@ export default {
         "hints": {
           "posthoc": "Which cells depart from independence: their adjusted residuals."
         }
+      },
+      "spearman": {
+        "name": "Spearman's rank correlation",
+        "hint": "Do two columns of the same rows rise and fall together, in any monotonic way? Spearman's ρ on the ranks, robust to outliers."
+      },
+      "mann_whitney": {
+        "name": "Mann–Whitney U test",
+        "hint": "Do two groups tend to have different values? The rank-sum test, without assuming a normal distribution: exact on small samples.",
+        "hints": {
+          "method": "Automatic: exact up to 49 values a group without ties, the normal approximation otherwise.",
+          "correction": "Half a step towards the mean in the normal approximation (as R's wilcox.test)."
+        }
+      },
+      "wilcoxon_signed_rank": {
+        "name": "Wilcoxon signed-rank test",
+        "hint": "Two measures of the same rows (before and after), or one against a value: are the differences centred on zero? Without assuming a normal distribution.",
+        "params": {
+          "x": "First measure (x)",
+          "y": "Second measure (y)",
+          "mu": "Centre under H0"
+        },
+        "hints": {
+          "x": "The first measure of each row (before, say): the test is on x − y.",
+          "y": "Leave it empty to test x alone against the centre below.",
+          "mu": "The centre of the differences (or of x) the null hypothesis states: 0 for «no change».",
+          "method": "Automatic: exact up to 49 differences without ties nor zeros, the normal approximation otherwise.",
+          "correction": "Half a step towards the mean in the normal approximation (as R's wilcox.test)."
+        }
+      },
+      "kruskal_wallis": {
+        "name": "Kruskal–Wallis test",
+        "hint": "Do several groups have the same distribution? The rank-based counterpart of the ANOVA, with Dunn's comparisons that say which groups differ.",
+        "hints": {
+          "posthoc": "Which groups differ: Dunn's test on the mean ranks of each pair, with a correction."
+        }
+      },
+      "ks_two_sample": {
+        "name": "Two-sample Kolmogorov–Smirnov test",
+        "hint": "Do two groups come from the same distribution? The largest distance between their cumulative distributions: the whole shape, not only the centre.",
+        "hints": {
+          "method": "Automatic: exact when n1·n2 is at most 9,999 and no value is tied, Kolmogorov's limit otherwise.",
+          "alternative": "Greater: the first group's distribution function lies above the second's (its values tend to be smaller)."
+        }
+      },
+      "normality": {
+        "name": "Test of normality",
+        "hint": "Do the values of a column look normally distributed? D'Agostino–Pearson's K² or Jarque–Bera, from the skewness and the kurtosis.",
+        "hints": {
+          "method": "D'Agostino–Pearson needs 20 values at least; Jarque–Bera is meant for large samples."
+        }
       }
     },
     "params": {
@@ -6271,7 +6321,8 @@ export default {
       "correction": "Continuity correction",
       "expected": "Expected proportions",
       "strata": "Strata column",
-      "williams": "Williams' correction"
+      "williams": "Williams' correction",
+      "zeros": "Zero differences"
     },
     "hints": {
       "value": "The column that is measured.",
@@ -6292,7 +6343,8 @@ export default {
       "correction": "Yates' continuity correction of the normal approximation (as R's prop.test).",
       "expected": "All equal, or a proportion for each category of the column: above 0, summing to 1.",
       "williams": "Divides G by q, closer to the chi-square on small tables.",
-      "strata": "The column that names the strata."
+      "strata": "The column that names the strata.",
+      "zeros": "Wilcox: left out before ranking (R's). Pratt: ranked, then left out of the sums."
     },
     "choices": {
       "alternative": {
@@ -6333,6 +6385,28 @@ export default {
       "g_posthoc": {
         "none": "None",
         "cells": "The cells"
+      },
+      "rank_method": {
+        "auto": "Automatic",
+        "exact": "Exact",
+        "asymptotic": "Normal approximation"
+      },
+      "wilcoxon_zeros": {
+        "wilcox": "Leave them out (Wilcox)",
+        "pratt": "Rank them (Pratt)"
+      },
+      "kw_posthoc": {
+        "none": "None",
+        "dunn": "Dunn"
+      },
+      "ks_method": {
+        "auto": "Automatic",
+        "exact": "Exact",
+        "asymptotic": "Kolmogorov's limit"
+      },
+      "normality_method": {
+        "dagostino": "D'Agostino–Pearson",
+        "jarque_bera": "Jarque–Bera"
       }
     },
     "reasons": {

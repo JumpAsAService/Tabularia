@@ -6249,6 +6249,56 @@ export default {
         "hints": {
           "posthoc": "Welche Zellen von der Unabhängigkeit abweichen: ihre korrigierten Residuen."
         }
+      },
+      "spearman": {
+        "name": "Spearmans Rangkorrelation",
+        "hint": "Steigen und fallen zwei Spalten derselben Zeilen gemeinsam, auf beliebig monotone Weise? Spearmans ρ auf den Rängen, robust gegen Ausreißer."
+      },
+      "mann_whitney": {
+        "name": "Mann-Whitney-U-Test",
+        "hint": "Haben zwei Gruppen tendenziell verschiedene Werte? Der Rangsummentest, ohne Normalverteilung anzunehmen: exakt bei kleinen Stichproben.",
+        "hints": {
+          "method": "Automatisch: exakt bis 49 Werte je Gruppe ohne Bindungen, sonst die Normalapproximation.",
+          "correction": "Ein halber Schritt zum Mittelwert in der Normalapproximation (wie R's wilcox.test)."
+        }
+      },
+      "wilcoxon_signed_rank": {
+        "name": "Wilcoxon-Vorzeichen-Rang-Test",
+        "hint": "Zwei Messungen derselben Zeilen (vorher und nachher) oder eine gegen einen Wert: sind die Differenzen um null zentriert? Ohne Normalverteilung anzunehmen.",
+        "params": {
+          "x": "Erste Messung (x)",
+          "y": "Zweite Messung (y)",
+          "mu": "Zentrum unter H0"
+        },
+        "hints": {
+          "x": "Die erste Messung jeder Zeile (etwa vorher): der Test gilt x − y.",
+          "y": "Leer lassen, um x allein gegen das Zentrum unten zu testen.",
+          "mu": "Das Zentrum der Differenzen (oder von x) laut Nullhypothese: 0 für «keine Änderung».",
+          "method": "Automatisch: exakt bis 49 Differenzen ohne Bindungen und Nullen, sonst die Normalapproximation.",
+          "correction": "Ein halber Schritt zum Mittelwert in der Normalapproximation (wie R's wilcox.test)."
+        }
+      },
+      "kruskal_wallis": {
+        "name": "Kruskal-Wallis-Test",
+        "hint": "Haben mehrere Gruppen dieselbe Verteilung? Das rangbasierte Gegenstück zur ANOVA, mit Dunns Vergleichen, die sagen, welche Gruppen sich unterscheiden.",
+        "hints": {
+          "posthoc": "Welche Gruppen sich unterscheiden: Dunns Test auf den mittleren Rängen jedes Paares, mit einer Korrektur."
+        }
+      },
+      "ks_two_sample": {
+        "name": "Kolmogorov-Smirnov-Test für zwei Stichproben",
+        "hint": "Stammen zwei Gruppen aus derselben Verteilung? Der größte Abstand ihrer kumulierten Verteilungen: die ganze Form, nicht nur das Zentrum.",
+        "hints": {
+          "method": "Automatisch: exakt, wenn n1·n2 höchstens 9.999 ist und kein Wert gebunden, sonst Kolmogorovs Grenzverteilung.",
+          "alternative": "Größer: die Verteilungsfunktion der ersten Gruppe liegt über der der zweiten (ihre Werte sind eher kleiner)."
+        }
+      },
+      "normality": {
+        "name": "Normalitätstest",
+        "hint": "Sehen die Werte einer Spalte normalverteilt aus? D'Agostino-Pearsons K² oder Jarque-Bera, aus Schiefe und Kurtosis.",
+        "hints": {
+          "method": "D'Agostino-Pearson braucht mindestens 20 Werte; Jarque-Bera ist für große Stichproben gedacht."
+        }
       }
     },
     "params": {
@@ -6271,7 +6321,8 @@ export default {
       "correction": "Stetigkeitskorrektur",
       "expected": "Erwartete Anteile",
       "strata": "Spalte der Schichten",
-      "williams": "Williams-Korrektur"
+      "williams": "Williams-Korrektur",
+      "zeros": "Nulldifferenzen"
     },
     "hints": {
       "value": "Die Spalte, die gemessen wird.",
@@ -6292,7 +6343,8 @@ export default {
       "correction": "Yates' Stetigkeitskorrektur der Normalapproximation (wie prop.test in R).",
       "expected": "Alle gleich oder ein Anteil für jede Kategorie der Spalte: über 0, mit Summe 1.",
       "williams": "Teilt G durch q, näher am Chi-Quadrat bei kleinen Tabellen.",
-      "strata": "Die Spalte, die die Schichten benennt."
+      "strata": "Die Spalte, die die Schichten benennt.",
+      "zeros": "Wilcox: vor dem Ranking ausgelassen (wie R). Pratt: gerankt, dann aus den Summen ausgelassen."
     },
     "choices": {
       "alternative": {
@@ -6333,6 +6385,28 @@ export default {
       "g_posthoc": {
         "none": "Keine",
         "cells": "Die Zellen"
+      },
+      "rank_method": {
+        "auto": "Automatisch",
+        "exact": "Exakt",
+        "asymptotic": "Normalapproximation"
+      },
+      "wilcoxon_zeros": {
+        "wilcox": "Auslassen (Wilcox)",
+        "pratt": "Mitranken (Pratt)"
+      },
+      "kw_posthoc": {
+        "none": "Keine",
+        "dunn": "Dunn"
+      },
+      "ks_method": {
+        "auto": "Automatisch",
+        "exact": "Exakt",
+        "asymptotic": "Kolmogorovs Grenzverteilung"
+      },
+      "normality_method": {
+        "dagostino": "D'Agostino-Pearson",
+        "jarque_bera": "Jarque-Bera"
       }
     },
     "reasons": {

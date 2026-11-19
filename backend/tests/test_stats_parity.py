@@ -92,6 +92,10 @@ def stat(test, **params):
     return [{"type": f"stat_{test}", "params": params}]
 
 
+# a few dozen rows, where the exact distributions apply
+QTY_28 = {"type": "filter", "params": {"column": "qty", "operator": "eq", "value": 28}}
+QTY_29 = {"type": "filter", "params": {"column": "qty", "operator": "eq", "value": 29}}
+
 CASES = {
     "welch": t_two(value="x", group="g", groups=["north", "south"]),
     "welch_less": t_two(value="x", group="g", groups=["north", "south"], alternative="less"),
@@ -217,6 +221,53 @@ CASES = {
     "report_mcnemar": stat("mcnemar", x="g", y="g2", detail="report"),
     "report_cmh": stat("cmh", x="flag", y="day", strata="g", detail="report"),
     "report_g_test": stat("g_test", x="g", y="day", detail="report"),
+    # lot 4: ranks — ties, −0.0 and 0.0 one value, NULL and NaN left out, groups of every type
+    "mann_whitney": stat("mann_whitney", value="x", group="g", groups=["north", "south"]),
+    "mann_whitney_less_plain": stat("mann_whitney", value="x", group="g", groups=["east", "north"], alternative="less", correction=False),
+    "mann_whitney_near_1e9": stat("mann_whitney", value="big", group="g", groups=["north", "south"], alternative="greater"),
+    "mann_whitney_integer_by_boolean": stat("mann_whitney", value="qty", group="flag"),
+    "mann_whitney_number_as_group": stat("mann_whitney", value="price", group="level", groups=[1.5, 0.0]),
+    "mann_whitney_date_as_group": stat("mann_whitney", value="x", group="day"),
+    "mann_whitney_datetime_as_group": stat("mann_whitney", value="qty", group="at", groups=["2024-03-01 20:30:15", "2024-03-01 08:00:00"]),
+    "mann_whitney_exact": [QTY_28, *stat("mann_whitney", value="big", group="g", groups=["north", "south"])],
+    "wilcoxon": stat("wilcoxon_signed_rank", x="x", y="x2"),
+    "wilcoxon_pratt_less": stat("wilcoxon_signed_rank", x="x", y="x2", zeros="pratt", alternative="less"),
+    "wilcoxon_near_1e9": stat("wilcoxon_signed_rank", x="big2", y="big", mu=0.8, correction=False),
+    "wilcoxon_one_sample_integer_pratt": stat("wilcoxon_signed_rank", x="qty", mu=20, zeros="pratt", alternative="greater"),
+    "wilcoxon_one_sample_decimal": stat("wilcoxon_signed_rank", x="price", mu=20),
+    "wilcoxon_exact": [QTY_29, *stat("wilcoxon_signed_rank", x="big", mu=1e9 + 2.1)],
+    "kruskal_wallis": stat("kruskal_wallis", value="x", group="g"),
+    "kruskal_wallis_dunn": stat("kruskal_wallis", value="x", group="g", posthoc="dunn"),
+    "kruskal_wallis_near_1e9_dunn_bonferroni": stat("kruskal_wallis", value="big", group="g", posthoc="dunn", p_adjust="bonferroni"),
+    "kruskal_wallis_integer_by_date": stat("kruskal_wallis", value="qty", group="day", posthoc="dunn", p_adjust="sidak"),
+    "kruskal_wallis_decimal_number_as_group": stat("kruskal_wallis", value="price", group="level"),
+    "kruskal_wallis_boolean_as_group": stat("kruskal_wallis", value="x", group="flag", posthoc="dunn", p_adjust="none"),
+    "kruskal_wallis_datetime_as_group": stat("kruskal_wallis", value="big", group="at"),
+    "spearman": stat("spearman", x="x", y="x2"),
+    "spearman_near_1e9": stat("spearman", x="big", y="big2", alternative="greater"),
+    "spearman_integer_decimal": stat("spearman", x="qty", y="price", alternative="less"),
+    # distributions
+    "ks": stat("ks_two_sample", value="x", group="g", groups=["north", "south"]),
+    "ks_greater": stat("ks_two_sample", value="x", group="g", groups=["south", "east"], alternative="greater"),
+    "ks_near_1e9_less": stat("ks_two_sample", value="big", group="g", groups=["north", "east"], alternative="less"),
+    "ks_integer_by_boolean": stat("ks_two_sample", value="qty", group="flag"),
+    "ks_number_as_group": stat("ks_two_sample", value="price", group="level", groups=[0.0, 1.5]),
+    "ks_exact": [QTY_28, *stat("ks_two_sample", value="big", group="g", groups=["north", "south"])],
+    "ks_exact_greater": [QTY_28, *stat("ks_two_sample", value="big", group="g", groups=["south", "north"], alternative="greater")],
+    "normality": stat("normality", value="x"),
+    "normality_near_1e9": stat("normality", value="big"),
+    "normality_integer_jarque_bera": stat("normality", value="qty", method="jarque_bera"),
+    "normality_decimal": stat("normality", value="price"),
+    # their reports' rows
+    "report_mann_whitney": stat("mann_whitney", value="x", group="g", groups=["north", "south"], detail="report"),
+    "report_mann_whitney_exact": [QTY_28, *stat("mann_whitney", value="big", group="g", groups=["north", "south"], detail="report")],
+    "report_wilcoxon": stat("wilcoxon_signed_rank", x="x", y="x2", detail="report"),
+    "report_wilcoxon_one_sample": stat("wilcoxon_signed_rank", x="big", mu=1e9, detail="report"),
+    "report_kruskal_wallis_dunn": stat("kruskal_wallis", value="x", group="g", posthoc="dunn", detail="report"),
+    "report_spearman": stat("spearman", x="x", y="x2", detail="report"),
+    "report_ks": stat("ks_two_sample", value="x", group="g", groups=["north", "south"], detail="report"),
+    "report_ks_exact": [QTY_28, *stat("ks_two_sample", value="big", group="g", groups=["north", "south"], detail="report")],
+    "report_normality": stat("normality", value="big", detail="report"),
 }
 
 
@@ -298,6 +349,15 @@ def test_the_cases_test_something(storage, src):
     assert by["fisher_rxc"]["test|||rows"]["value"] == 2 and by["mcnemar_bowker"]["test|||variant"]["text"] == "bowker"
     assert by["cmh_generalized"]["test|||variant"]["text"] == "generalized" and by["cmh_2x2_float_strata"]["test|||strata"]["value"] == 2
     assert 0 < by["prop_two"]["test|||p_value"]["value"] <= 1 and by["prop_one_text_exact"]["test|||ci_low"]["value"] > 0
+    # lot 4: the exact distributions on the few rows, the approximations on the many; ties counted
+    for case in ("mann_whitney_exact", "wilcoxon_exact", "ks_exact", "ks_exact_greater", "report_mann_whitney_exact"):
+        assert by[case]["test|||variant"]["text"] == "exact", case
+    for case in ("mann_whitney", "wilcoxon", "ks", "kruskal_wallis"):
+        assert by[case]["test|||tie_sum" if case != "ks" else "test|||n_tied"]["value"] > 0, case
+    assert by["wilcoxon"]["test|||n_zero"]["value"] > 0 and by["wilcoxon_pratt_less"]["test|||n"]["value"] > by["wilcoxon"]["test|||n"]["value"]
+    assert by["mann_whitney_datetime_as_group"]["test|||n"]["value"] > 0 and by["kruskal_wallis_dunn"]["test|||n_pairs"]["value"] == 3
+    assert "group|0.0||rank_sum" in by["kruskal_wallis_decimal_number_as_group"]
+    assert sum(1 for k in by["report_ks"] if k.startswith("curve|||density|")) == 201 and not any(k.startswith("curve") for k in by["report_ks_exact"])
     # the two orders of a pair are the same test, mirrored
     assert by["student"]["test|||p_value"]["value"] == pytest.approx(
         2 * min(by["student_less"]["test|||p_value"]["value"], 1 - by["student_less"]["test|||p_value"]["value"]), rel=1e-9)
@@ -406,3 +466,32 @@ def test_clickhouse_own_cramers_v_agrees(x, y, storage, src):
     rows = {r["key"]: r for r in table_of("chdb", storage, src, stat("chi2_independence", x=x, y=y, correction=False))}
     [v] = _chdb_query(storage, src, f"SELECT cramersV({x}, {y}) FROM file('{{path}}', Parquet) WHERE {x} IS NOT NULL AND {y} IS NOT NULL")
     assert math.isclose(rows["test|||cramers_v"]["value"], v, rel_tol=1e-9)
+
+
+# ── a second witness for the lot 4: ClickHouse's own Mann–Whitney and Kolmogorov–Smirnov, on chDB ──
+@pytest.mark.skipif(importlib.util.find_spec("chdb") is None, reason="chdb assente")
+@pytest.mark.parametrize("value, first, second", [("x", "north", "south"), ("big", "east", "north"), ("qty", "south", "east")])
+def test_clickhouse_own_rank_tests_agree(value, first, second, storage, src):
+    """`mannWhitneyUTest` (the normal approximation with the continuity correction) and
+    `kolmogorovSmirnovTest` (its asymptotic p-value) against the nodes' asymptotic ones. Where
+    ClickHouse's p-value is below its reach (it says 0) the node's is a small positive number."""
+    def same_p(ours: float, theirs: float) -> bool:
+        if theirs > 1e-12:
+            return math.isclose(ours, theirs, rel_tol=1e-6)
+        return theirs == 0.0 and 0.0 < ours < 1e-12
+
+    rows = {r["key"]: r for r in table_of("chdb", storage, src, stat("mann_whitney", value=value, group="g", groups=[first, second],
+                                                                    method="asymptotic"))}
+    read = (f"FROM (SELECT if(isNaN(toFloat64(`{value}`)), NULL, toFloat64(`{value}`)) AS v, g FROM file('{{path}}', Parquet)) "
+            f"WHERE g IN ('{first}', '{second}') AND v IS NOT NULL")
+    _, p_value = _chdb_query(storage, src, (
+        f"SELECT tupleElement(r, 1), tupleElement(r, 2) FROM (SELECT mannWhitneyUTest('two-sided', 1)(assumeNotNull(v), "
+        f"toUInt8(g = '{second}')) AS r {read})"))
+    assert same_p(rows["test|||p_value"]["value"], p_value)
+    rows = {r["key"]: r for r in table_of("chdb", storage, src, stat("ks_two_sample", value=value, group="g", groups=[first, second],
+                                                                    method="asymptotic"))}
+    statistic, p_value = _chdb_query(storage, src, (
+        f"SELECT tupleElement(r, 1), tupleElement(r, 2) FROM (SELECT kolmogorovSmirnovTest('two-sided', 'asymp')(assumeNotNull(v), "
+        f"toUInt8(g = '{second}')) AS r {read})"))
+    assert math.isclose(rows["test|||statistic"]["value"], statistic, rel_tol=1e-9)
+    assert same_p(rows["test|||p_value"]["value"], p_value)

@@ -166,6 +166,99 @@ class Paired(NamedTuple):
     y: str
 
 
+class RankGroup(NamedTuple):
+    """A group's values ranked with the other groups' (A4): its values (`n`: not NULL, not NaN),
+    the sum of their average ranks over every group compared together, the smallest and the
+    largest value."""
+
+    level: Any
+    n: int
+    rank_sum: float
+    min: float | None
+    max: float | None
+
+
+class RankSums(NamedTuple):
+    """A4: the groups' rank sums, and Σ(t³ − t) over the values held by t > 1 rows of the groups
+    compared (the ties' correction)."""
+
+    groups: list[RankGroup]
+    tie_sum: float
+
+
+class SignedRanks(NamedTuple):
+    """A5: the differences d = x − y − mu (or x − mu) of the rows where x (and y) are numbers,
+    ranked by |d|. `rows`: every row; `pairs`: those with a number in x (and y); `nonfinite`:
+    pairs with an infinite value (the test refuses them); `zeros`: finite pairs with d = 0;
+    `ranked`: the differences ranked (without the zeros, or with them by Pratt's rule);
+    `w_plus`, `w_minus`: the sums of the ranks of the positive and of the negative ones;
+    `tie_sum`: Σ(t³ − t) over the values of |d| above 0. The extremes of x, y and x − y (x
+    alone without y: mu is not taken off) over the finite pairs, for the report."""
+
+    rows: int
+    pairs: int
+    nonfinite: int
+    zeros: int
+    ranked: int
+    w_plus: float
+    w_minus: float
+    tie_sum: float
+    min_x: float | None
+    max_x: float | None
+    min_y: float | None
+    max_y: float | None
+    min_d: float | None
+    max_d: float | None
+
+
+class RankCorr(NamedTuple):
+    """A6: the rows where x and y are both numbers (`n`), each ranked among them (average
+    ranks) and centred by (n + 1)/2: Σ rx·ry, Σ rx², Σ ry²; the ties' Σ(t³ − t) of each column;
+    the extremes of each (an infinite one is refused by name)."""
+
+    n: int
+    sxy: float
+    sxx: float
+    syy: float
+    tie_sum_x: float
+    tie_sum_y: float
+    min_x: float | None
+    max_x: float | None
+    min_y: float | None
+    max_y: float | None
+
+
+class KsDistance(NamedTuple):
+    """A9: the values of two groups (`n1`, `n2`), the largest distances between their empirical
+    distribution functions as whole numbers — `d_plus` = max(F1 − F2)·n1·n2, `d_minus` =
+    max(F2 − F1)·n1·n2 — the values held by more than one row (`tied`), the extremes."""
+
+    n1: int
+    n2: int
+    d_plus: int
+    d_minus: int
+    tied: int
+    min: float | None
+    max: float | None
+
+
+class CentralMoments(NamedTuple):
+    """A10: the rows, the values (`n`, an infinite one counted), the finite ones, the mean less
+    the centre and the central moments m₂, m₃, m₄ of the finite values (each the mean of
+    (v − mean)^k), the extremes."""
+
+    rows: int
+    n: int
+    finite: int
+    centre: float
+    mean_centred: float | None
+    m2: float | None
+    m3: float | None
+    m4: float | None
+    min: float | None
+    max: float | None
+
+
 # the kinds of grouping column whose groups an aggregate can pick by a literal written from
 # their labels (`typed_labels`), as each engine names their types (ClickHouse's without their
 # Nullable(…) and LowCardinality(…) wrappers); a column of another type is read whole
@@ -300,6 +393,17 @@ _VAR = {
 # which is the very sum of large numbers the centre is there to avoid (measured: the
 # difference of two means near 1e9 off at the sixth digit, on 24.8 and on chDB).
 _CENTRED = {"duckdb": "({x} - ({c}))", "clickhouse": "({x} - materialize({c}))", "bigquery": "({x} - ({c}))"}
+
+
+# A count made a whole number of 64 bits, for products of counts that must not wrap (ClickHouse's
+# counts are unsigned: a difference of two would)
+_INT = {"duckdb": "CAST({e} AS BIGINT)", "clickhouse": "toInt64({e})", "bigquery": "CAST({e} AS INT64)"}
+# the window that sums the rows up to the current value, and the one over every row
+_RUNNING = "sum({e}) OVER (ORDER BY {by} ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)"
+_RUNNING_PEERS = "sum({e}) OVER (ORDER BY {by} RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)"
+# a whole number for each distinct value, in the values' order: the windows are partitioned by it,
+# not by the value (BigQuery partitions by no FLOAT64)
+_VALUE_ID = "dense_rank() OVER (ORDER BY {by})"
 
 
 def _is_numeric(dialect: str, dtype: str) -> bool:
@@ -579,6 +683,165 @@ class SqlStatSource:
         )
         return [Cell3(r[0], r[1], r[2], int(r[3])) for r in rows]
 
+    # ── ranks (A4, A5, A6, A9): a value is a key, nothing is summed but whole numbers ──
+    # A rank is a property of a value: the rows are counted by value first (a hash
+    # aggregation), and the windows run over those counts — over the distinct values, never
+    # over the rows. The value is the column as a double plus 0.0, so that −0.0 and 0.0 are one
+    # value on every engine (ClickHouse groups a float by its bits). Average ranks are halves of
+    # whole numbers: their sums are exact in doubles while they are below 2^53. Every alias is
+    # a fresh name: ClickHouse resolves an alias inside the SELECT that names it.
+    def _dbl(self, e: str) -> str:
+        return _DOUBLE[self.dialect].format(c=e)
+
+    def _key(self, column: str) -> str:
+        """The column as a double, −0.0 made 0.0; NULL where it is NULL or NaN."""
+        return f"({self._value(column)} + 0.0)"
+
+    def rank_sums(self, value: str, group: str, levels: list | None = None) -> RankSums:
+        """A4: the values of every group (or of the groups `levels` names, typed values A1
+        returned, when they can be told apart in a query: `comparable`) ranked together, the
+        average rank for ties; per group its values, its rank sum, its extremes; Σ(t³ − t) of
+        the ties. The rows with no group, and the values that are NULL or NaN, are not ranked."""
+        g = self._quote(group)
+        lv, xv, c, vid, cum, t, first, rk = (self._fresh(n) for n in ("lv", "xv", "c", "vid", "cum", "t", "first", "rk"))
+        only = self._only(group, levels)
+        keep = f" AND ({only[len(' WHERE '):]})" if only else ""
+        counted = (f"SELECT {g} AS {lv}, {self._key(value)} AS {xv}, count(*) AS {c} FROM {self._source} "
+                   f"WHERE {g} IS NOT NULL AND {self._key(value)} IS NOT NULL{keep} GROUP BY {g}, {self._key(value)}")
+        numbered = f"SELECT {lv}, {xv}, {c}, {_VALUE_ID.format(by=xv)} AS {vid} FROM ({counted}) AS {self._fresh('f')}"
+        ranked = (f"SELECT {lv}, {xv}, {c}, {self._dbl(_RUNNING_PEERS.format(e=c, by=vid))} AS {cum}, "
+                  f"{self._dbl(f'sum({c}) OVER (PARTITION BY {vid})')} AS {t}, "
+                  f"row_number() OVER (PARTITION BY {vid} ORDER BY {lv}) AS {first} FROM ({numbered}) AS {self._fresh('v')}")
+        rank = f"({cum} - ({t} - 1.0) / 2.0)"
+        rows = self._rows(
+            f"SELECT {lv} AS {self._fresh('level')}, sum({c}) AS {self._fresh('n')}, sum({self._dbl(c)} * {rank}) AS {rk}, "
+            f"min({xv}) AS {self._fresh('min')}, max({xv}) AS {self._fresh('max')}, "
+            f"sum(CASE WHEN {first} = 1 THEN {t} * {t} * {t} - {t} ELSE 0.0 END) AS {self._fresh('ties')} "
+            f"FROM ({ranked}) AS {self._fresh('r')} GROUP BY {lv}"
+        )
+        return rank_sums_of(rows)
+
+    def signed_ranks(self, x: str, y: str | None, mu: float, pratt: bool) -> SignedRanks:
+        """A5: the differences d = x − y − mu (x − mu without `y`) of the rows where both are
+        finite numbers, ranked by |d| with the average rank for ties: the zeros left out before
+        ranking, or ranked and left out of the sums (`pratt`). Two queries: the ranks, and the
+        counts (rows, pairs, infinite values, zeros) with the extremes."""
+        fx = self._value(x, finite=True)
+        fy = self._value(y, finite=True) if y is not None else None
+        d = d0 = f"({fx} - {fy})" if fy is not None else f"({fx})"
+        if mu:
+            d = f"({d} - {self._dbl(repr(float(mu)))})"
+        both = f"{fx} IS NOT NULL" + (f" AND {fy} IS NOT NULL" if fy is not None else "")
+        dv, av, cp, cn, t, rk = (self._fresh(n) for n in ("dv", "av", "cp", "cn", "t", "rk"))
+        diffs = f"SELECT {d} AS {dv} FROM {self._source} WHERE {both}"
+        zero_out = "" if pratt else f" WHERE {dv} <> 0"
+        counted = (f"SELECT abs({dv}) + 0.0 AS {av}, sum(CASE WHEN {dv} > 0 THEN 1 ELSE 0 END) AS {cp}, "
+                   f"sum(CASE WHEN {dv} < 0 THEN 1 ELSE 0 END) AS {cn}, count(*) AS {t} "
+                   f"FROM ({diffs}) AS {self._fresh('d')}{zero_out} GROUP BY abs({dv}) + 0.0")
+        ranked = (f"SELECT {av}, {cp}, {cn}, {t}, {self._dbl(_RUNNING.format(e=t, by=av))} - ({self._dbl(t)} - 1.0) / 2.0 AS {rk} "
+                  f"FROM ({counted}) AS {self._fresh('f')}")
+        tf = self._dbl(t)
+        ranks = self._rows(
+            f"SELECT sum({t}) AS {self._fresh('n')}, sum({self._dbl(cp)} * {rk}) AS {self._fresh('wp')}, "
+            f"sum({self._dbl(cn)} * {rk}) AS {self._fresh('wm')}, "
+            f"sum(CASE WHEN {av} > 0 THEN {tf} * {tf} * {tf} - {tf} ELSE 0.0 END) AS {self._fresh('ties')} "
+            f"FROM ({ranked}) AS {self._fresh('r')}"
+        )
+        ok_x = f"{self._value(x)} IS NOT NULL"
+        ok = ok_x + (f" AND {self._value(y)} IS NOT NULL" if y is not None else "")
+        dd = d0  # the extremes of x − y (of x), as the report's groups show them: without mu
+
+        def over_pairs(fn: str, e: str) -> str:
+            return f"{fn}(CASE WHEN {both} THEN {e} END)"
+
+        extremes = [over_pairs("min", fx), over_pairs("max", fx), over_pairs("min", fy) if fy else "NULL",
+                    over_pairs("max", fy) if fy else "NULL", over_pairs("min", dd), over_pairs("max", dd)]
+        names = [self._fresh(n) for n in ("rows", "pairs", "inf", "zeros", "min_x", "max_x", "min_y", "max_y", "min_d", "max_d")]
+        exprs = ["count(*)", f"sum(CASE WHEN {ok} THEN 1 ELSE 0 END)",
+                 f"sum(CASE WHEN {ok} AND NOT ({both}) THEN 1 ELSE 0 END)",
+                 f"sum(CASE WHEN {both} AND {d} = 0 THEN 1 ELSE 0 END)", *extremes]
+        counts = self._rows(f"SELECT {', '.join(f'{e} AS {n}' for e, n in zip(exprs, names))} FROM {self._source}")
+        return signed_ranks_of(counts[0] if counts else [0] * 10, ranks[0] if ranks else [0, 0, 0, 0])
+
+    def rank_corr(self, x: str, y: str) -> RankCorr:
+        """A6: the rows where x and y are both numbers, counted by pair of values; each column
+        ranked among them (the average rank for ties) and centred by (n + 1)/2; Σ rx·ry, Σ rx²,
+        Σ ry², the ties of each, the extremes. One query: the windows run over the distinct
+        pairs."""
+        kx, ky = self._key(x), self._key(y)
+        xv, yv, c, rx, ry, tx, ty, fx, fy, ix, iy = (self._fresh(n) for n in ("xv", "yv", "c", "rx", "ry", "tx", "ty", "fx", "fy", "ix", "iy"))
+        counted = (f"SELECT {kx} AS {xv}, {ky} AS {yv}, count(*) AS {c} FROM {self._source} "
+                   f"WHERE {kx} IS NOT NULL AND {ky} IS NOT NULL GROUP BY {kx}, {ky}")
+        numbered = (f"SELECT {xv}, {yv}, {c}, {_VALUE_ID.format(by=xv)} AS {ix}, {_VALUE_ID.format(by=yv)} AS {iy} "
+                    f"FROM ({counted}) AS {self._fresh('p')}")
+        n = self._dbl(f"sum({c}) OVER ()")
+
+        def rank(v: str) -> str:
+            t = self._dbl(f"sum({c}) OVER (PARTITION BY {v})")
+            return f"{self._dbl(_RUNNING_PEERS.format(e=c, by=v))} - ({t} - 1.0) / 2.0 - ({n} + 1.0) / 2.0"
+
+        ranked = (f"SELECT {xv}, {yv}, {self._dbl(c)} AS {c}, {rank(ix)} AS {rx}, {rank(iy)} AS {ry}, "
+                  f"{self._dbl(f'sum({c}) OVER (PARTITION BY {ix})')} AS {tx}, {self._dbl(f'sum({c}) OVER (PARTITION BY {iy})')} AS {ty}, "
+                  f"row_number() OVER (PARTITION BY {ix} ORDER BY {iy}) AS {fx}, row_number() OVER (PARTITION BY {iy} ORDER BY {ix}) AS {fy} "
+                  f"FROM ({numbered}) AS {self._fresh('q')}")
+        names = [self._fresh(n) for n in ("n", "sxy", "sxx", "syy", "ties_x", "ties_y", "min_x", "max_x", "min_y", "max_y")]
+        exprs = [f"sum({c})", f"sum({c} * {rx} * {ry})", f"sum({c} * {rx} * {rx})", f"sum({c} * {ry} * {ry})",
+                 f"sum(CASE WHEN {fx} = 1 THEN {tx} * {tx} * {tx} - {tx} ELSE 0.0 END)",
+                 f"sum(CASE WHEN {fy} = 1 THEN {ty} * {ty} * {ty} - {ty} ELSE 0.0 END)",
+                 f"min({xv})", f"max({xv})", f"min({yv})", f"max({yv})"]
+        rows = self._rows(f"SELECT {', '.join(f'{e} AS {n}' for e, n in zip(exprs, names))} FROM ({ranked}) AS {self._fresh('r')}")
+        return rank_corr_of(*(rows[0] if rows else [0] * 10))
+
+    def count_rows(self) -> int:
+        """The rows of the step's input."""
+        rows = self._rows(f"SELECT count(*) AS {self._fresh('rows')} FROM {self._source}")
+        return int(rows[0][0] or 0) if rows else 0
+
+    def ks(self, value: str, group: str, levels: list) -> KsDistance:
+        """A9: the values of the two groups `levels` (typed values A1 returned, which a literal
+        names: `comparable`), counted by value; the running counts of each, in the values'
+        order, give the two empirical distribution functions, and their largest distances are
+        returned as whole numbers, max(k1·n2 − k2·n1) and max(k2·n1 − k1·n2): exact on every
+        engine. The values held by more than one row are counted (the exact distribution
+        assumes none)."""
+        g = self._quote(group)
+        a, b = (self._lit(v) for v in levels)
+        k = self._key(value)
+        xv, c1, c2, k1, k2, m1, m2 = (self._fresh(n) for n in ("xv", "c1", "c2", "k1", "k2", "m1", "m2"))
+        counted = (f"SELECT {k} AS {xv}, sum(CASE WHEN {g} = {a} THEN 1 ELSE 0 END) AS {c1}, "
+                   f"sum(CASE WHEN {g} = {b} THEN 1 ELSE 0 END) AS {c2} FROM {self._source} "
+                   f"WHERE {k} IS NOT NULL AND ({g} = {a} OR {g} = {b}) GROUP BY {k}")
+        i = _INT[self.dialect]
+        running = (f"SELECT {xv}, {c1}, {c2}, {i.format(e=_RUNNING.format(e=c1, by=xv))} AS {k1}, "
+                   f"{i.format(e=_RUNNING.format(e=c2, by=xv))} AS {k2}, {i.format(e=f'sum({c1}) OVER ()')} AS {m1}, "
+                   f"{i.format(e=f'sum({c2}) OVER ()')} AS {m2} FROM ({counted}) AS {self._fresh('f')}")
+        names = [self._fresh(n) for n in ("n1", "n2", "dp", "dm", "tied", "min", "max")]
+        exprs = [f"max({m1})", f"max({m2})", f"max({k1} * {m2} - {k2} * {m1})", f"max({k2} * {m1} - {k1} * {m2})",
+                 f"sum(CASE WHEN {c1} + {c2} > 1 THEN 1 ELSE 0 END)", f"min({xv})", f"max({xv})"]
+        rows = self._rows(f"SELECT {', '.join(f'{e} AS {n}' for e, n in zip(exprs, names))} FROM ({running}) AS {self._fresh('w')}")
+        return ks_of(*(rows[0] if rows else [0] * 7))
+
+    def central_moments(self, value: str) -> CentralMoments:
+        """A10: the mean and the central moments m₂, m₃, m₄ of the finite values, each the mean
+        of (v − mean)^k, taken of the values less the column's centre (as A2's). Two passes in
+        one query: the mean, then the powers of the deviations from it, each written as the
+        same products on every engine (e·e, e·e·e, (e·e)·(e·e))."""
+        x, finite = self._value(value), self._value(value, finite=True)
+        centre = self._centre(value)
+        centred = self._centred(finite, centre)
+        xv, cv, d = self._fresh("xv"), self._fresh("cv"), self._fresh("d")
+        s, m = self._fresh("s"), self._fresh("m")
+        e = f"({s}.{cv} - {m}.{d})"
+        names = [self._fresh(n) for n in ("rows", "n", "finite", "mean", "m2", "m3", "m4", "min", "max")]
+        exprs = ["count(*)", f"count({s}.{xv})", f"count({s}.{cv})", f"max({m}.{d})", f"avg({e} * {e})",
+                 f"avg({e} * {e} * {e})", f"avg(({e} * {e}) * ({e} * {e}))", f"min({s}.{xv})", f"max({s}.{xv})"]
+        rows = self._rows(
+            f"SELECT {', '.join(f'{ex} AS {n}' for ex, n in zip(exprs, names))} "
+            f"FROM (SELECT {x} AS {xv}, {centred} AS {cv} FROM {self._source}) AS {s} "
+            f"CROSS JOIN (SELECT avg({centred}) AS {d} FROM {self._source}) AS {m}"
+        )
+        return central_moments_of(centre, *(rows[0] if rows else [0] * 9))
+
     def histogram(self, value: Any, group: str | None, lo: float, hi: float, bins: int) -> list[HistogramBin]:
         """A13: the rows whose `value` falls in each of `bins` equal intervals between `lo`
         and `hi`, for each value of `group` (or over every row without one): the last
@@ -645,3 +908,38 @@ def quartiles_of(level: Any, q1: Any, median: Any, q3: Any) -> Quartiles:
         return v if v is not None and math.isfinite(v) else None
 
     return Quartiles(level, q(q1), q(median), q(q3))
+
+
+def rank_sums_of(rows: list) -> RankSums:
+    """A4's rows as every source answers them: (level, n, rank sum, min, max, ties of the
+    values this group counts first)."""
+    groups = [RankGroup(r[0], int(r[1] or 0), number(r[2]) or 0.0, number(r[3]), number(r[4])) for r in rows]
+    return RankSums(groups, math.fsum(number(r[5]) or 0.0 for r in rows))
+
+
+def signed_ranks_of(counts: list, ranks: list) -> SignedRanks:
+    """A5's two rows as every source answers them: the counts and extremes, then the ranks."""
+    rows, pairs, nonfinite, zeros, *extremes = counts
+    ranked, w_plus, w_minus, ties = ranks
+    return SignedRanks(int(rows or 0), int(pairs or 0), int(nonfinite or 0), int(zeros or 0), int(ranked or 0),
+                       number(w_plus) or 0.0, number(w_minus) or 0.0, number(ties) or 0.0, *(number(v) for v in extremes))
+
+
+def rank_corr_of(n: Any, sxy: Any, sxx: Any, syy: Any, ties_x: Any, ties_y: Any, *extremes: Any) -> RankCorr:
+    return RankCorr(int(n or 0), number(sxy) or 0.0, number(sxx) or 0.0, number(syy) or 0.0, number(ties_x) or 0.0,
+                    number(ties_y) or 0.0, *(number(v) for v in extremes))
+
+
+def ks_of(n1: Any, n2: Any, d_plus: Any, d_minus: Any, tied: Any, lo: Any, hi: Any) -> KsDistance:
+    return KsDistance(int(n1 or 0), int(n2 or 0), int(d_plus or 0), int(d_minus or 0), int(tied or 0), number(lo), number(hi))
+
+
+def central_moments_of(centre: float, rows: Any, n: Any, finite: Any, mean: Any, m2: Any, m3: Any, m4: Any,
+                       lo: Any, hi: Any) -> CentralMoments:
+    finite = int(finite or 0)
+
+    def x(v: Any) -> float | None:
+        return number(v) if finite else None
+
+    return CentralMoments(int(rows or 0), int(n or 0), finite, centre, x(mean), x(m2), x(m3), x(m4),
+                          number(lo) if n else None, number(hi) if n else None)

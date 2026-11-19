@@ -25,9 +25,11 @@ import math
 from typing import Any, Callable, NamedTuple
 
 from app.engine.stats import dist, exact
-from app.engine.stats.aggregates import Difference, Moments, PairMoments, Paired, Quartiles, is_value, typed_value
+from app.engine.stats.aggregates import Difference, Moments, PairMoments, Paired, Quartiles, comparable, is_value, typed_value
 from app.engine.stats.catalog import (
     CURVE_POINTS,
+    EXACT_KS_PRODUCT,
+    EXACT_MAX_N,
     EXACT_NETWORK,
     EXACT_SUPPORT,
     MAX_BINS,
@@ -280,6 +282,13 @@ def _choose_two(source, test: str, p: dict[str, Any]) -> tuple[list[str], list, 
     the values of the grouping column that are those two, typed as the engine gave them, and
     whether an aggregate may keep to them by those values (`chosen`: two named, of a column a
     literal compares with; otherwise the groups were listed)."""
+    wanted, typed, chosen, _ = _choose_two_levels(source, test, p)
+    return wanted, typed, chosen
+
+
+def _choose_two_levels(source, test: str, p: dict[str, Any]) -> tuple[list[str], list, bool, list]:
+    """`_choose_two`, and the levels A1 returned with their rows: the two groups' and the rows
+    with no group (two named), or every group of the column (listed)."""
     group = p["group"]
     wanted = p["groups"]
     # Two groups named: the engine reads those two (and counts the rows with no group),
@@ -297,8 +306,10 @@ def _choose_two(source, test: str, p: dict[str, Any]) -> tuple[list[str], list, 
                 has = f"more than {MAX_STAT_GROUPS} groups" if len(labels) > MAX_STAT_GROUPS else _listed(labels)
                 raise refusal(test, f"the group «{g}» is not in the column «{group}» (it has{'' if len(labels) > MAX_STAT_GROUPS else ':'} {has})")
         typed = [found[g] for g in wanted]
+        seen = list(chosen)
     else:
-        levels = [lv for lv in source.levels(group, MAX_STAT_GROUPS + 2) if lv.value is not None]
+        seen = source.levels(group, MAX_STAT_GROUPS + 2)
+        levels = [lv for lv in seen if lv.value is not None]
         if len(levels) > MAX_STAT_GROUPS:
             raise refusal(test, f"the column «{group}» has more than {MAX_STAT_GROUPS} groups: is it the right column?"
                           + ("" if wanted is None else " (the two groups chosen cannot be read alone from a column of this type)"))
@@ -317,7 +328,7 @@ def _choose_two(source, test: str, p: dict[str, Any]) -> tuple[list[str], list, 
             if g not in labels:
                 raise refusal(test, f"the group «{g}» is not in the column «{group}» (it has: {_listed(labels)})")
         typed = [lv.value for lv in levels if label_of(lv.value) in wanted]
-    return list(wanted), typed, chosen is not None
+    return list(wanted), typed, chosen is not None, seen
 
 
 def _two_groups(source, test: str, p: dict[str, Any]) -> tuple[list[str], list[Moments], int, list]:
@@ -545,7 +556,7 @@ def _pearson(source, p: dict[str, Any], out: Rows, engine_name: str) -> None:
 
 
 # ── several groups of a numeric column ──────────────────────────────────────
-def _several_groups(source, test: str, p: dict[str, Any]) -> tuple[list[str], dict[str, Any], int]:
+def _several_groups(source, test: str, p: dict[str, Any], with_rows: bool = False) -> tuple:
     """The groups of a test that compares them all: their labels in text order, each with
     its typed value, and the rows with no group. Refused: fewer than two groups, more than
     `MAX_STAT_GROUPS`."""
@@ -560,7 +571,13 @@ def _several_groups(source, test: str, p: dict[str, Any]) -> tuple[list[str], di
     if len(labels) < 2:
         raise refusal(test, f"the test compares groups and the column «{group}» has 1 ({labels[0]}): it needs at least two")
     typed = {label_of(lv.value): lv.value for lv in named}
-    return labels, typed, sum(lv.rows for lv in levels if lv.value is None)
+    without_group = sum(lv.rows for lv in levels if lv.value is None)
+    if with_rows:  # the rows of each group (labels merged: −0.0 and 0.0 are one group)
+        rows: dict[str, int] = {}
+        for lv in named:
+            rows[label_of(lv.value)] = rows.get(label_of(lv.value), 0) + lv.rows
+        return labels, typed, without_group, rows
+    return labels, typed, without_group
 
 
 def _list_equal(fn: str, value: str, labels: list[str]) -> str:
@@ -1600,6 +1617,465 @@ def _g_test(source, p: dict[str, Any], out: Rows, engine_name: str) -> None:
         _write_positive_curve(out, lambda v: dist.chi2_pdf(v, df), lambda q_: dist.chi2_isf(q_, df), statistic, None, critical_high)
 
 
+# ── ranks and distributions (lot 4) ─────────────────────────────────────────
+def _continuity(diff: float, alternative: str, correction: bool) -> float:
+    """The continuity correction of a rank statistic's normal approximation (R's): half a
+    step towards the mean two-sided, −0.5 for `less`, +0.5 for `greater`, 0 without it."""
+    if not correction:
+        return 0.0
+    if alternative == "two_sided":
+        return math.copysign(0.5, diff) if diff else 0.0
+    return -0.5 if alternative == "less" else 0.5
+
+
+def _exact_or_not(test: str, method: str, possible: bool, why_not: str, notes: list[str]) -> bool:
+    """Whether an exact distribution is used: `auto` when it is possible, `exact` when it is
+    (otherwise the approximation, and a note says why), never with `asymptotic`."""
+    if method == "asymptotic":
+        return False
+    if method == "exact" and not possible:
+        notes.append(f"The exact distribution was asked, and {why_not}: the p-value is the normal approximation's.")
+    return possible
+
+
+def _refuse_infinite(test: str, value: str, where: str, *extremes: float | None) -> None:
+    if not all(v is None or math.isfinite(v) for v in extremes):
+        raise refusal(test, f"the column «{value}» holds infinite values{where}: the test cannot be computed")
+
+
+def _two_ranked_groups(source, test: str, p: dict[str, Any]):
+    """The two groups of a two-sample test on ranks or distributions: their labels, their
+    values typed as the engine gave them (in the order of the labels), the rows of each and the
+    rows with no group, and whether a query can keep to the two by a literal. A column whose
+    groups no literal names (a datetime, a decimal) is read whole: it may then hold these two
+    groups only, as the ranks are of every value read."""
+    group = p["group"]
+    wanted, _, chosen, seen = _choose_two_levels(source, test, p)
+    by_label = {label_of(lv.value): lv for lv in seen if lv.value is not None}
+    typed = [by_label[g].value for g in wanted]
+    rows = {g: sum(lv.rows for lv in seen if lv.value is not None and label_of(lv.value) == g) for g in wanted}
+    without_group = sum(lv.rows for lv in seen if lv.value is None)
+    named = comparable(typed)
+    if not named and len(by_label) > 2:
+        raise refusal(test, f"the groups of the column «{group}» cannot be told apart in a query by their values "
+                            f"(a datetime, a decimal…), and it holds {len(by_label)}: cast it to text first, "
+                            "or filter the two groups before the test")
+    return wanted, typed, rows, without_group, named
+
+
+def _write_rank_group(out: Rows, label: str, n: int, rank_sum: float | None, lo: float | None, hi: float | None,
+                      quartiles: Quartiles | None) -> None:
+    for stat, number in (("n", n), ("rank_sum", rank_sum), ("mean_rank", None if rank_sum is None else rank_sum / n),
+                         ("min", lo), ("max", hi)):
+        out.number("group", stat, number, level=label)
+    _write_quartiles(out, label, quartiles)
+
+
+def _write_extremes_group(out: Rows, label: str, n: int, lo: float | None, hi: float | None, quartiles: Quartiles | None,
+                          more: tuple = ()) -> None:
+    for stat, number in (("n", n), *more, ("min", lo), ("max", hi)):
+        out.number("group", stat, number, level=label)
+    _write_quartiles(out, label, quartiles)
+
+
+def _stochastic(value: str, g1: str, g2: str) -> str:
+    return f"P({value} | {g1} > {value} | {g2})"
+
+
+def _mann_whitney(source, p: dict[str, Any], out: Rows, engine_name: str) -> None:
+    """The Wilcoxon–Mann–Whitney rank-sum test of two independent samples (R's `wilcox.test`):
+    exact without ties on samples of up to EXACT_MAX_N values, else the normal approximation
+    with the ties' correction and, if asked, the continuity correction.
+    H0: P(X > Y) = 0.5 (the two distributions are the same)."""
+    test = "mann_whitney"
+    value, group, alpha, alternative = p["value"], p["group"], p["alpha"], p["alternative"]
+    (g1, g2), typed, rows, without_group, named = _two_ranked_groups(source, test, p)
+    rs = source.rank_sums(value, group, typed if named else None)
+    found = {label_of(r.level): r for r in rs.groups}
+    pair = []
+    for g in (g1, g2):
+        r = found.get(g)
+        if r is None or r.n == 0:
+            raise refusal(test, f"the group «{g}» has no usable value of «{value}» (a NULL or a NaN is left out)")
+        _refuse_infinite(test, value, f" in the group «{g}»", r.min, r.max)
+        pair.append(r)
+    a, b = pair
+    n1, n2 = a.n, b.n
+    total = n1 + n2
+    u1 = a.rank_sum - n1 * (n1 + 1) / 2.0
+    u2 = n1 * n2 - u1
+    mean_u = n1 * n2 / 2.0
+    var_u = n1 * n2 / 12.0 * ((total + 1) - rs.tie_sum / (total * (total - 1))) if total > 1 else 0.0
+    if var_u <= 0.0:
+        raise refusal(test, f"all the values of «{value}» in the two groups are equal: their ranks are all the same, and there is nothing to test")
+    sd_u = math.sqrt(var_u)
+    notes: list[str] = []
+    small = n1 <= EXACT_MAX_N and n2 <= EXACT_MAX_N
+    why = (f"the values hold ties" if rs.tie_sum > 0 else f"a group has more than {EXACT_MAX_N} values")
+    exact_ = _exact_or_not(test, p["method"], small and rs.tie_sum == 0, why, notes)
+    z = continuity = critical_low = critical_high = None
+    if exact_:
+        p_value = exact.mann_whitney_exact(round(u1), n1, n2, alternative)
+        variant, distribution = "exact", "exact"
+        formula = ("U = R1 − n1·(n1 + 1)/2; p(<) = #(U ≤ u) / C(n1 + n2, n1), p(>) = #(U ≥ u) / C(n1 + n2, n1), p(≠) = 2·min(p(<), p(>)); "
+                   "cles = U / (n1·n2), r = 2·cles − 1")
+    else:
+        continuity = _continuity(u1 - mean_u, alternative, p["correction"])
+        z = (u1 - mean_u - continuity) / sd_u
+        p_value, critical_low, critical_high, _ = _norm_tails(z, alternative, alpha)
+        variant, distribution = "asymptotic", "normal"
+        formula = ("U = R1 − n1·(n1 + 1)/2; z = (U − n1·n2/2 − c) / σ, σ = √(n1·n2/12 · ((N + 1) − ∑(t³ − t) / (N·(N − 1)))), "
+                   + ("c = ±0.5" if p["correction"] else "c = 0") + "; cles = U / (n1·n2), r = 2·cles − 1")
+    cles = u1 / (n1 * n2)
+    shape = _stochastic(value, g1, g2)
+    _write_head(out, test, variant, p, f"{shape} = 0.5", f"{shape} {_RELATION[alternative]} 0.5", formula, distribution,
+                p_value, engine_name, notes)
+    _write_numbers(out, (
+        ("alpha", alpha), ("conf_level", 1.0 - alpha), ("n", total), ("n_missing", without_group + rows[g1] - n1 + rows[g2] - n2),
+        ("u_2", u2), ("tie_sum", rs.tie_sum), ("mean_u", mean_u), ("sd_u", sd_u), ("continuity", continuity),
+        ("statistic", u1), ("z", z), ("critical_low", critical_low), ("critical_high", critical_high), ("p_value", p_value),
+        ("cles", cles), ("rank_biserial", 2.0 * cles - 1.0),
+    ))
+    report = p["detail"] == "report"
+    quartiles = _quartiles_by_label(source, value, group, typed) if report else {}
+    for g, r in ((g1, a), (g2, b)):
+        _write_rank_group(out, g, r.n, r.rank_sum, r.min, r.max, quartiles.get(g))
+    if report:
+        _write_histogram(out, source, value, group, [g1, g2], [a, b])
+        if z is not None:
+            _write_curve(out, dist.norm_pdf, z, critical_low, critical_high)
+
+
+def _wilcoxon_signed_rank(source, p: dict[str, Any], out: Rows, engine_name: str) -> None:
+    """Wilcoxon's signed-rank test of paired values (x − y) or of one sample (x), against mu
+    (R's `wilcox.test`): the zeros left out (R's), or ranked and left out of the sums (Pratt's);
+    exact without ties nor zeros on up to EXACT_MAX_N differences, else the normal approximation.
+    H0: the differences x − y − mu are symmetric about 0."""
+    test = "wilcoxon_signed_rank"
+    x, y, mu, alpha, alternative = p["x"], p["y"], p["mu"], p["alpha"], p["alternative"]
+    if y == x:
+        raise refusal(test, f"'x' and 'y' are both the column «{x}»: choose two different columns, or leave 'y' empty")
+    pratt = p["zeros"] == "pratt"
+    sr = source.signed_ranks(x, y, mu, pratt)
+    if sr.nonfinite:
+        raise refusal(test, f"the column «{x}»" + (f" or «{y}»" if y else "") + " holds infinite values: the test cannot be computed")
+    nonzero = sr.pairs - sr.zeros
+    if sr.pairs == 0:
+        raise refusal(test, f"no row has a number in «{x}»" + (f" and in «{y}»" if y else "") + " (a NULL or a NaN is left out)")
+    difference = f"{x} − {y}" if y else x
+    if nonzero == 0:
+        raise refusal(test, f"every difference {difference}{' − ' + _num(mu) if mu else ''} is 0: there is nothing to rank")
+    n, zeros, ties = sr.ranked, sr.zeros, sr.tie_sum
+    if pratt:
+        mean_w = n * (n + 1) / 4.0 - zeros * (zeros + 1) / 4.0
+        var_w = (n * (n + 1) * (2 * n + 1) - zeros * (zeros + 1) * (2 * zeros + 1) - ties / 2.0) / 24.0
+    else:
+        mean_w = n * (n + 1) / 4.0
+        var_w = n * (n + 1) * (2 * n + 1) / 24.0 - ties / 48.0
+    sd_w = math.sqrt(var_w)
+    notes: list[str] = []
+    why = "the differences hold ties" if ties > 0 else "some differences are 0" if zeros else f"there are more than {EXACT_MAX_N} differences"
+    exact_ = _exact_or_not(test, p["method"], n <= EXACT_MAX_N and ties == 0 and zeros == 0, why, notes)
+    z = continuity = critical_low = critical_high = None
+    if exact_:
+        p_value = exact.signed_rank_exact(round(sr.w_plus), n, alternative)
+        variant, distribution = "exact", "exact"
+        formula = ("d = x − y − mu, V = ∑_(d > 0) rank(|d|), W = ∑_(d < 0) rank(|d|); p(<) = #(V ≤ v) / 2^n, p(>) = #(V ≥ v) / 2^n, "
+                   "p(≠) = 2·min(p(<), p(>)); r = (V − W) / (V + W)")
+    else:
+        continuity = _continuity(sr.w_plus - mean_w, alternative, p["correction"])
+        z = (sr.w_plus - mean_w - continuity) / sd_w
+        p_value, critical_low, critical_high, _ = _norm_tails(z, alternative, alpha)
+        variant, distribution = "asymptotic", "normal"
+        if pratt:
+            moments_ = "E = n·(n + 1)/4 − n₀·(n₀ + 1)/4, σ² = (n·(n + 1)·(2n + 1) − n₀·(n₀ + 1)·(2n₀ + 1) − ∑(t³ − t)/2) / 24"
+        else:
+            moments_ = "E = n·(n + 1)/4, σ² = n·(n + 1)·(2n + 1)/24 − ∑(t³ − t)/48"
+        formula = (f"d = x − y − mu, V = ∑_(d > 0) rank(|d|), W = ∑_(d < 0) rank(|d|); z = (V − E − c) / σ, {moments_}, "
+                   + ("c = ±0.5" if p["correction"] else "c = 0") + "; r = (V − W) / (V + W)")
+    if not y:
+        formula = formula.replace("d = x − y − mu", "d = x − mu")
+    centre = f"median({difference})" if y else f"median({x})"
+    _write_head(out, test, variant, p, f"{centre} = {_num(mu)}", f"{centre} {_RELATION[alternative]} {_num(mu)}", formula,
+                distribution, p_value, engine_name, notes)
+    _write_numbers(out, (
+        ("alpha", alpha), ("conf_level", 1.0 - alpha), ("n", n), ("n_missing", sr.rows - sr.pairs), ("n_zero", zeros),
+        ("w_minus", sr.w_minus), ("tie_sum", ties), ("mean_w", mean_w), ("sd_w", sd_w), ("continuity", continuity),
+        ("null_value", mu), ("statistic", sr.w_plus), ("z", z), ("critical_low", critical_low), ("critical_high", critical_high),
+        ("p_value", p_value), ("rank_biserial", (sr.w_plus - sr.w_minus) / (sr.w_plus + sr.w_minus)),
+    ))
+    report = p["detail"] == "report"
+    if y:
+        label_d = paired_difference_label(x, y)
+        q = source.quartiles_many([Paired(x, y), Paired(y, x), Difference(x, y)]) if report else [None] * 3
+        for label, lo, hi, quartiles in ((x, sr.min_x, sr.max_x, q[0]), (y, sr.min_y, sr.max_y, q[1]), (label_d, sr.min_d, sr.max_d, q[2])):
+            _write_extremes_group(out, label, sr.pairs, lo, hi, quartiles)
+        measure: Any = Difference(x, y)
+    else:
+        label_d = x
+        q = source.quartiles(x) if report else [None]
+        _write_extremes_group(out, x, sr.pairs, sr.min_x, sr.max_x, q[0] if q else None)
+        measure = x
+    if report:
+        _write_histogram(out, source, measure, None, [label_d],
+                         [Moments(label_d, sr.pairs, sr.pairs, None, None, sr.min_d, sr.max_d, 0.0, None)])
+        if z is not None:
+            _write_curve(out, dist.norm_pdf, z, critical_low, critical_high)
+
+
+def _kruskal_wallis(source, p: dict[str, Any], out: Rows, engine_name: str) -> None:
+    """The Kruskal–Wallis test of several groups (R's `kruskal.test`), with the ties'
+    correction, and Dunn's comparisons of the pairs of groups (the mean ranks of the test,
+    adjusted for their number). H0: all the groups have the same distribution."""
+    test = "kruskal_wallis"
+    value, group, alpha, posthoc = p["value"], p["group"], p["alpha"], p["posthoc"]
+    labels, typed, without_group, rows = _several_groups(source, test, p, with_rows=True)
+    if posthoc != "none" and len(labels) > MAX_POSTHOC_GROUPS:
+        raise refusal(test, f"the pairwise comparisons ('posthoc') take {MAX_POSTHOC_GROUPS} groups at most, "
+                            f"and the column «{group}» has {len(labels)}: filter the groups first, or set 'posthoc' to none")
+    rs = source.rank_sums(value, group)
+    found = {label_of(r.level): r for r in rs.groups}
+    groups = []
+    for g in labels:
+        r = found.get(g)
+        if r is None or r.n == 0:
+            raise refusal(test, f"the group «{g}» has no usable value of «{value}» (a NULL or a NaN is left out): filter it out first")
+        _refuse_infinite(test, value, f" in the group «{g}»", r.min, r.max)
+        groups.append(r)
+    total = sum(r.n for r in groups)
+    k = len(groups)
+    tie_correction = 1.0 - rs.tie_sum / (float(total) ** 3 - total) if total > 1 else 0.0
+    if tie_correction <= 0.0:
+        raise refusal(test, f"all the values of «{value}» are equal: their ranks are all the same, and there is nothing to test")
+    middle = (total + 1) / 2.0
+    plain = 12.0 / (total * (total + 1)) * math.fsum(r.n * (r.rank_sum / r.n - middle) ** 2 for r in groups)
+    h = plain / tie_correction
+    df = float(k - 1)
+    p_value, critical_high = dist.chi2_sf(h, df), dist.chi2_isf(alpha, df)
+    notes: list[str] = []
+    pairs_rows: list[list] = []
+    pairs_texts = None
+    extra: tuple = ()
+    if posthoc == "dunn":
+        if p_value >= alpha:
+            notes.append(f"The Kruskal–Wallis test does not reject H0 at α = {_num(alpha)}: the pairwise comparisons are shown "
+                         "all the same, and a difference they find is to be read with care.")
+        spread = total * (total + 1) / 12.0 - rs.tie_sum / (12.0 * (total - 1))
+        for i in range(k):
+            for j in range(i + 1, k):
+                a, b = groups[i], groups[j]
+                estimate = a.rank_sum / a.n - b.rank_sum / b.n
+                se = math.sqrt(spread * (1.0 / a.n + 1.0 / b.n))
+                zz = estimate / se
+                pairs_rows.append([labels[i], labels[j], estimate, se, zz, None, None, min(1.0, 2.0 * dist.norm_sf(abs(zz))), None,
+                                   None, None])
+        for row, adjusted in zip(pairs_rows, p_adjusted([r[7] for r in pairs_rows], p["p_adjust"])):
+            row[8] = adjusted
+        extra = (("n_pairs", len(pairs_rows)),)
+        pairs_texts = ("dunn", p["p_adjust"], "z = (R̄_i − R̄_j) / √((N·(N + 1)/12 − ∑(t³ − t) / (12·(N − 1)))·(1/n_i + 1/n_j)), "
+                                              "p = 2·P(Z ≥ |z|), " + _ADJUST_TEXT[p["p_adjust"]].format(m="n_pairs"))
+    formula = ("H = [12 / (N·(N + 1))·∑ n·(R̄ − (N + 1)/2)²] / C, R̄ = R / n, C = 1 − ∑(t³ − t) / (N³ − N), df = k − 1; "
+               "ε² = H / (N − 1)")
+    _write_head(out, test, "chi_square", p, _list_equal("F", value, labels),
+                f"max P({value} | i > {value} | j) ≠ 0.5", formula, f"chi-square({df:.6g})", p_value, engine_name, notes, pairs_texts)
+    _write_numbers(out, (
+        ("alpha", alpha), ("conf_level", 1.0 - alpha), ("n", total),
+        ("n_missing", without_group + sum(rows[g] - r.n for g, r in zip(labels, groups))), ("k", k), ("tie_sum", rs.tie_sum),
+        ("tie_correction", tie_correction), ("statistic_plain", plain), ("statistic", h), ("df", df), ("critical_high", critical_high),
+        ("p_value", p_value), ("epsilon_squared", h / (total - 1)), *extra,
+    ))
+    report = p["detail"] == "report"
+    quartiles = _quartiles_by_label(source, value, group) if report else {}
+    for g, r in zip(labels, groups):
+        _write_rank_group(out, g, r.n, r.rank_sum, r.min, r.max, quartiles.get(g))
+    for row in pairs_rows:
+        _write_pair(out, row, alpha)
+    if report:
+        _write_histogram(out, source, value, group, labels, groups)
+        _write_positive_curve(out, lambda v: dist.chi2_pdf(v, df), lambda q: dist.chi2_isf(q, df), h, None, critical_high)
+
+
+def _spearman(source, p: dict[str, Any], out: Rows, engine_name: str) -> None:
+    """Spearman's rank correlation: Pearson's r of the average ranks, ties included, by its t
+    (R's `cor.test(method = "spearman", exact = FALSE)`). H0: rank correlation = 0."""
+    test = "spearman"
+    x, y, alpha, alternative = p["x"], p["y"], p["alpha"], p["alternative"]
+    if x == y:
+        raise refusal(test, f"'x' and 'y' are both the column «{x}»: choose two different columns")
+    rc = source.rank_corr(x, y)
+    if rc.n < 3:
+        raise refusal(test, f"the columns «{x}» and «{y}» are both numbers on {rc.n} row{'' if rc.n == 1 else 's'} "
+                            "(a NULL or a NaN in either leaves the row out): at least 3 are needed")
+    for column, lo, hi in ((x, rc.min_x, rc.max_x), (y, rc.min_y, rc.max_y)):
+        _refuse_infinite(test, column, "", lo, hi)
+    for column, ss in ((x, rc.sxx), (y, rc.syy)):
+        if ss == 0.0:
+            raise refusal(test, f"all the values of «{column}» are equal on the rows used (their ranks are all the same): there is no correlation")
+    rows = source.count_rows()
+    n = rc.n
+    rho = max(-1.0, min(1.0, rc.sxy / math.sqrt(rc.sxx * rc.syy)))
+    df = float(n - 2)
+    one_minus = (1.0 - rho) * (1.0 + rho)
+    se = math.sqrt(one_minus / df)
+    t = rho / se if se > 0.0 else math.copysign(math.inf, rho)
+    p_value, critical_low, critical_high, _, _ = _t_tails(t, df, alternative, alpha, 0.0, 0.0)
+    cor = f"cor(rank({x}), rank({y}))"
+    _write_head(out, test, "t_approximation", p, f"{cor} = 0", f"{cor} {_RELATION[alternative]} 0",
+                "ρ = ∑ rx·ry / √(∑ rx² · ∑ ry²), rx = rank(x) − (n + 1)/2, ry = rank(y) − (n + 1)/2; t = ρ·√((n − 2) / (1 − ρ²)), "
+                "df = n − 2",
+                f"t({df:.6g})", p_value, engine_name, [])
+    _write_numbers(out, (
+        ("alpha", alpha), ("conf_level", 1.0 - alpha), ("n", n), ("n_missing", rows - n), ("sum_rxy", rc.sxy),
+        ("sum_rx2", rc.sxx), ("sum_ry2", rc.syy), ("tie_sum_x", rc.tie_sum_x), ("tie_sum_y", rc.tie_sum_y),
+        ("estimate", rho), ("null_value", 0.0), ("std_error", se), ("statistic", t), ("df", df),
+        ("critical_low", critical_low), ("critical_high", critical_high), ("p_value", p_value), ("rho_squared", rho * rho),
+    ))
+    for label, lo, hi in ((x, rc.min_x, rc.max_x), (y, rc.min_y, rc.max_y)):
+        _write_extremes_group(out, label, n, lo, hi, None)
+    if p["detail"] == "report":
+        _write_curve(out, lambda v: dist.t_pdf(v, df), t, critical_low, critical_high)
+
+
+def _ks_two_sample(source, p: dict[str, Any], out: Rows, engine_name: str) -> None:
+    """The two-sample Kolmogorov–Smirnov test (R's `ks.test`): the largest distance between the
+    two empirical distribution functions; exact without ties when n1·n2 ≤ EXACT_KS_PRODUCT, else
+    Kolmogorov's limit. H0: the two groups have the same distribution."""
+    test = "ks_two_sample"
+    value, group, alpha, alternative = p["value"], p["group"], p["alpha"], p["alternative"]
+    (g1, g2), typed, rows, without_group, named = _two_ranked_groups(source, test, p)
+    if not named:
+        raise refusal(test, f"the groups of the column «{group}» cannot be told apart in a query by their values "
+                            "(a datetime, a decimal…): cast it to text first")
+    moments = {label_of(m.level): m for m in source.moments(value, group, typed) if m.level is not None}
+    pair = []
+    for g in (g1, g2):
+        m = moments.get(g)
+        if m is None or m.n == 0:
+            raise refusal(test, f"the group «{g}» has no usable value of «{value}» (a NULL or a NaN is left out)")
+        _refuse_infinite(test, value, f" in the group «{g}»", m.min, m.max)
+        pair.append(m)
+    ks = source.ks(value, group, typed)
+    n1, n2 = ks.n1, ks.n2
+    product = n1 * n2
+    by_alternative = {"two_sided": max(ks.d_plus, ks.d_minus), "greater": ks.d_plus, "less": ks.d_minus}
+    distance = by_alternative[alternative]
+    statistic = distance / product
+    notes: list[str] = []
+    why = "the values hold ties" if ks.tied else f"n1·n2 = {product:,} is more than {EXACT_KS_PRODUCT:,}"
+    exact_ = _exact_or_not(test, p["method"], product <= EXACT_KS_PRODUCT and ks.tied == 0, why, notes)
+    if notes:
+        notes[-1] = notes[-1].replace("the normal approximation's", "Kolmogorov's limit's")
+    scale = math.sqrt(n1 * n2 / (n1 + n2))
+    two = alternative == "two_sided"
+    critical_high = lam = None
+    if exact_:
+        p_value = exact.ks_exact(distance, n1, n2, alternative)
+        variant, distribution = "exact", "exact"
+        formula = ("D = max |F1(v) − F2(v)|, D+ = max (F1(v) − F2(v)), D− = max (F2(v) − F1(v)); p = #(D ≥ d) / C(n1 + n2, n1)")
+    else:
+        lam = statistic * scale
+        p_value = exact.ks_asymptotic(statistic, n1, n2, alternative)
+        critical_high = dist.kolmogorov_isf(alpha, two) / scale
+        variant, distribution = "asymptotic", "kolmogorov" if two else "smirnov"
+        formula = ("D = max |F1(v) − F2(v)|, D+ = max (F1(v) − F2(v)), D− = max (F2(v) − F1(v)); λ = D·√(n1·n2 / (n1 + n2)), "
+                   + ("p = 2·∑ (−1)^(k − 1)·exp(−2k²λ²)" if two else "p = exp(−2λ²)"))
+    f1, f2 = f"F({value} | {g1})", f"F({value} | {g2})"
+    relation = {"two_sided": "≠", "less": "<", "greater": ">"}[alternative]
+    _write_head(out, test, variant, p, f"{f1} = {f2}", f"{f1} {relation} {f2}", formula, distribution, p_value, engine_name, notes)
+    _write_numbers(out, (
+        ("alpha", alpha), ("conf_level", 1.0 - alpha), ("n", n1 + n2),
+        ("n_missing", without_group + rows[g1] - n1 + rows[g2] - n2), ("d", max(ks.d_plus, ks.d_minus) / product),
+        ("d_plus", ks.d_plus / product), ("d_minus", ks.d_minus / product), ("n_tied", ks.tied), ("lambda", lam),
+        ("statistic", statistic), ("critical_high", critical_high), ("p_value", p_value),
+    ))
+    report = p["detail"] == "report"
+    quartiles = _quartiles_by_label(source, value, group, typed) if report else {}
+    for g, m in ((g1, pair[0]), (g2, pair[1])):
+        _write_extremes_group(out, g, m.n, m.min, m.max, quartiles.get(g))
+    if report:
+        _write_histogram(out, source, value, group, [g1, g2], pair)
+        if not exact_:
+            _write_positive_curve(out, lambda v: scale * dist.kolmogorov_pdf(scale * v, two),
+                                  lambda q: dist.kolmogorov_isf(q, two) / scale, statistic, None, critical_high)
+
+
+# D'Agostino's omnibus test needs this many values (its kurtosis test is not to be trusted below)
+DAGOSTINO_MIN_N = 20
+
+
+def _normality(source, p: dict[str, Any], out: Rows, engine_name: str) -> None:
+    """A test of normality from the sample's skewness and kurtosis: D'Agostino and Pearson's K²
+    (the z of D'Agostino's skewness test and of Anscombe and Glynn's kurtosis test, squared and
+    summed; SciPy's `normaltest`) or Jarque and Bera's. H0: the values come from a normal
+    distribution."""
+    test = "normality"
+    value, alpha, method = p["value"], p["alpha"], p["method"]
+    cm = source.central_moments(value)
+    if cm.finite != cm.n:
+        raise refusal(test, f"the column «{value}» holds infinite values: the test cannot be computed")
+    n = cm.n
+    least = DAGOSTINO_MIN_N if method == "dagostino" else 3
+    if n < least:
+        raise refusal(test, f"the column «{value}» has {n} usable value{'' if n == 1 else 's'} (a NULL or a NaN is left out): "
+                            f"at least {least} are needed" + (" (or use method = 'jarque_bera')" if method == "dagostino" and n >= 3 else ""))
+    m2, m3, m4 = cm.m2, cm.m3, cm.m4
+    if not m2:
+        raise refusal(test, f"all the values of «{value}» are equal (the variance is 0): there is no skewness nor kurtosis")
+    g1 = m3 / m2 ** 1.5
+    b2 = m4 / (m2 * m2)
+    z_skew = z_kurt = None
+    if method == "jarque_bera":
+        statistic = n / 6.0 * (g1 * g1 + (b2 - 3.0) ** 2 / 4.0)
+        formula = "JB = n/6·(g₁² + (b₂ − 3)²/4), g₁ = m₃ / m₂^1.5, b₂ = m₄ / m₂², m_k = mean((v − m)^k), df = 2"
+    else:
+        z_skew, z_kurt = _dagostino_z(n, g1, b2)
+        statistic = z_skew * z_skew + z_kurt * z_kurt
+        formula = ("K² = z₁² + z₂², z₁ = z(g₁) (D'Agostino), z₂ = z(b₂) (Anscombe–Glynn), g₁ = m₃ / m₂^1.5, b₂ = m₄ / m₂², "
+                   "m_k = mean((v − m)^k), df = 2")
+    df = 2.0
+    p_value, critical_high = dist.chi2_sf(statistic, df), dist.chi2_isf(alpha, df)
+    shape = f"(skewness({value}), kurtosis({value}))"
+    _write_head(out, test, method, p, f"{shape} = (0, 3)", f"{shape} ≠ (0, 3)", formula, "chi-square(2)",
+                p_value, engine_name, [])
+    mean = cm.centre + cm.mean_centred
+    var = m2 * n / (n - 1)
+    _write_numbers(out, (
+        ("alpha", alpha), ("conf_level", 1.0 - alpha), ("n", n), ("n_missing", cm.rows - n), ("mean", mean),
+        ("m2", m2), ("m3", m3), ("m4", m4), ("skewness", g1), ("kurtosis", b2), ("excess_kurtosis", b2 - 3.0),
+        ("z_skewness", z_skew), ("z_kurtosis", z_kurt), ("statistic", statistic), ("df", df), ("critical_high", critical_high),
+        ("p_value", p_value),
+    ))
+    report = p["detail"] == "report"
+    quartiles = source.quartiles(value) if report else []
+    _write_extremes_group(out, value, n, cm.min, cm.max, quartiles[0] if quartiles else None,
+                          (("mean", mean), ("var", var), ("sd", math.sqrt(var))))
+    if report:
+        _write_histogram(out, source, value, None, [value], [Moments(value, n, n, mean, var, cm.min, cm.max, 0.0, None)])
+        _write_positive_curve(out, lambda v: dist.chi2_pdf(v, df), lambda q: dist.chi2_isf(q, df), statistic, None, critical_high)
+
+
+def _dagostino_z(n: int, g1: float, b2: float) -> tuple[float, float]:
+    """The z of D'Agostino's skewness test and of Anscombe and Glynn's kurtosis test (as SciPy's
+    `skewtest` and `kurtosistest`; the skewness one by asinh, its same formula without the
+    cancellation of a logarithm of numbers near 1)."""
+    y = g1 * math.sqrt((n + 1) * (n + 3) / (6.0 * (n - 2)))
+    beta2 = 3.0 * (n * n + 27 * n - 70) * (n + 1) * (n + 3) / ((n - 2.0) * (n + 5) * (n + 7) * (n + 9))
+    w2 = -1.0 + math.sqrt(2.0 * (beta2 - 1.0))
+    delta = 1.0 / math.sqrt(0.5 * math.log(w2))
+    alpha_ = math.sqrt(2.0 / (w2 - 1.0))
+    z_skew = delta * math.asinh(y / alpha_)
+    e = 3.0 * (n - 1) / (n + 1)
+    var_b2 = 24.0 * n * (n - 2) * (n - 3) / ((n + 1) * (n + 1.0) * (n + 3) * (n + 5))
+    x = (b2 - e) / math.sqrt(var_b2)
+    beta1 = 6.0 * (n * n - 5 * n + 2) / ((n + 7) * (n + 9)) * math.sqrt(6.0 * (n + 3) * (n + 5) / (n * (n - 2) * (n - 3)))
+    a = 6.0 + 8.0 / beta1 * (2.0 / beta1 + math.sqrt(1.0 + 4.0 / (beta1 * beta1)))
+    term1 = 1.0 - 2.0 / (9.0 * a)
+    denom = 1.0 + x * math.sqrt(2.0 / (a - 4.0))
+    term2 = math.copysign(abs((1.0 - 2.0 / a) / denom) ** (1.0 / 3.0), denom) if denom else math.inf
+    z_kurt = (term1 - term2) / math.sqrt(2.0 / (9.0 * a))
+    return z_skew, z_kurt
+
+
 _TESTS: dict[str, Callable[..., None]] = {
     "t_one_sample": _t_one_sample,
     "t_two_sample": _t_two_sample,
@@ -1616,13 +2092,20 @@ _TESTS: dict[str, Callable[..., None]] = {
     "mcnemar": _mcnemar,
     "cmh": _cmh,
     "g_test": _g_test,
+    "spearman": _spearman,
+    "mann_whitney": _mann_whitney,
+    "wilcoxon_signed_rank": _wilcoxon_signed_rank,
+    "kruskal_wallis": _kruskal_wallis,
+    "ks_two_sample": _ks_two_sample,
+    "normality": _normality,
 }
 
 # The tests that write the rows of their report's charts. Until a test is here it refuses
 # `detail = report` with a sentence: it is never answered with the results alone.
 _WITH_REPORT_ROWS = frozenset({"t_one_sample", "t_two_sample", "t_paired", "anova", "var_f", "levene", "pearson",
                                "prop_one_sample", "prop_two_sample", "chi2_independence", "chi2_gof", "fisher_exact",
-                               "mcnemar", "cmh", "g_test"})
+                               "mcnemar", "cmh", "g_test", "spearman", "mann_whitney", "wilcoxon_signed_rank",
+                               "kruskal_wallis", "ks_two_sample", "normality"})
 
 
 def run_hypothesis_test(source, test: str, params: dict[str, Any] | None, engine_name: str) -> list[tuple]:

@@ -10,6 +10,16 @@ from typing import Any
 
 from app.engine.stats.aggregates import (
     CENTRE_ROWS,
+    CentralMoments,
+    KsDistance,
+    RankCorr,
+    RankSums,
+    SignedRanks,
+    central_moments_of,
+    ks_of,
+    rank_corr_of,
+    rank_sums_of,
+    signed_ranks_of,
     Cell,
     Cell3,
     Successes,
@@ -224,6 +234,121 @@ class PolarsStatSource:
                 lf = lf.filter(pl.any_horizontal([pl.col(group) == pl.lit(v) for v in levels]))
             df = lf.group_by(pl.col(group).alias(_LEVEL)).agg(quantiles).collect(engine="streaming")
         return [quartiles_of(*row) for row in df.iter_rows()]
+
+    # ── ranks (A4, A5, A6, A9): as SqlStatSource's, the same arithmetic in the same order ──
+    def rank_sums(self, value: str, group: str, levels: list | None = None) -> RankSums:
+        """A4: the values of the groups ranked together (see SqlStatSource.rank_sums)."""
+        key = (_number(value) + 0.0).alias("__stat_xv__")
+        lf = self.lf.filter(pl.col(group).is_not_null() & _number(value).is_not_null())
+        if comparable(levels):
+            lf = lf.filter(pl.any_horizontal([pl.col(group) == pl.lit(v) for v in levels]))
+        f = lf.group_by(pl.col(group).alias(_LEVEL), key).agg(pl.len().cast(pl.Float64).alias("__stat_c__"))
+        v = (f.group_by("__stat_xv__").agg(pl.col("__stat_c__").sum().alias("__stat_t__")).sort("__stat_xv__")
+             .with_columns((pl.col("__stat_t__").cum_sum() - (pl.col("__stat_t__") - 1.0) / 2.0).alias("__stat_rk__")))
+        t = pl.col("__stat_t__")
+        ties = v.select((t * t * t - t).sum()).collect(engine="streaming").item()
+        df = (f.join(v, on="__stat_xv__").group_by(_LEVEL)
+              .agg(pl.col("__stat_c__").sum().cast(pl.Int64).alias(_N), (pl.col("__stat_c__") * pl.col("__stat_rk__")).sum().alias("__stat_rs__"),
+                   pl.col("__stat_xv__").min().alias(_MIN), pl.col("__stat_xv__").max().alias(_MAX))
+              .collect(engine="streaming"))
+        out = rank_sums_of([[*row, 0.0] for row in df.iter_rows()])
+        return RankSums(out.groups, float(ties or 0.0))
+
+    def signed_ranks(self, x: str, y: str | None, mu: float, pratt: bool) -> SignedRanks:
+        """A5: the differences ranked by their absolute value (see SqlStatSource.signed_ranks)."""
+        fx = _finite(_number(x))
+        fy = _finite(_number(y)) if y is not None else None
+        d = d0 = fx - fy if fy is not None else fx
+        if mu:
+            d = d - float(mu)
+        both = fx.is_not_null() if fy is None else fx.is_not_null() & fy.is_not_null()
+        ok = _number(x).is_not_null() if y is None else _number(x).is_not_null() & _number(y).is_not_null()
+        dv = pl.col("__stat_dv__")
+        diffs = self.lf.filter(both).select(d.alias("__stat_dv__"))
+        if not pratt:
+            diffs = diffs.filter(dv != 0)
+        t = pl.col("__stat_t__")
+        ranked = (diffs.group_by((dv.abs() + 0.0).alias("__stat_av__"))
+                  .agg((dv > 0).sum().cast(pl.Float64).alias("__stat_cp__"), (dv < 0).sum().cast(pl.Float64).alias("__stat_cn__"),
+                       pl.len().cast(pl.Float64).alias("__stat_t__"))
+                  .sort("__stat_av__").with_columns((t.cum_sum() - (t - 1.0) / 2.0).alias("__stat_rk__")))
+        rk = pl.col("__stat_rk__")
+        ranks = ranked.select(t.sum().cast(pl.Int64).alias(_N), (pl.col("__stat_cp__") * rk).sum().alias("__stat_wp__"),
+                              (pl.col("__stat_cn__") * rk).sum().alias("__stat_wm__"),
+                              pl.when(pl.col("__stat_av__") > 0).then(t * t * t - t).otherwise(0.0).sum().alias("__stat_ties__")
+                              ).collect(engine="streaming").row(0)
+
+        def over_pairs(e: pl.Expr) -> pl.Expr:
+            return pl.when(both).then(e)
+
+        none = pl.lit(None, dtype=pl.Float64)
+        exprs = [pl.len(), ok.sum(), (ok & ~both).sum(), (both & (d == 0)).sum(),
+                 over_pairs(fx).min(), over_pairs(fx).max(), over_pairs(fy).min() if fy is not None else none,
+                 over_pairs(fy).max() if fy is not None else none, over_pairs(d0).min(), over_pairs(d0).max()]
+        counts = self.lf.select([e.alias(f"__stat_a5_{i}__") for i, e in enumerate(exprs)]).collect(engine="streaming").row(0)
+        return signed_ranks_of(list(counts), list(ranks))
+
+    def rank_corr(self, x: str, y: str) -> RankCorr:
+        """A6: the pairs ranked column by column (see SqlStatSource.rank_corr)."""
+        xv, yv, c = pl.col("__stat_xv__"), pl.col("__stat_yv__"), pl.col("__stat_c__")
+        p = (self.lf.filter(_number(x).is_not_null() & _number(y).is_not_null())
+             .group_by((_number(x) + 0.0).alias("__stat_xv__"), (_number(y) + 0.0).alias("__stat_yv__"))
+             .agg(pl.len().cast(pl.Float64).alias("__stat_c__")))
+
+        def ranks(v: str, rank: str, ties: str) -> pl.LazyFrame:
+            t = pl.col("__stat_t__")
+            return (p.group_by(v).agg(c.sum().alias("__stat_t__")).sort(v)
+                    .with_columns((t.cum_sum() - (t - 1.0) / 2.0 - (t.sum() + 1.0) / 2.0).alias(rank), (t * t * t - t).alias(ties))
+                    .drop("__stat_t__"))
+
+        rx, ry = pl.col("__stat_rx__"), pl.col("__stat_ry__")
+        tx = ranks("__stat_xv__", "__stat_rx__", "__stat_tx__")
+        ty = ranks("__stat_yv__", "__stat_ry__", "__stat_ty__")
+        sums = (p.join(tx, on="__stat_xv__").join(ty, on="__stat_yv__")
+                .select(c.sum().cast(pl.Int64).alias(_N), (c * rx * ry).sum().alias("__stat_sxy__"), (c * rx * rx).sum().alias("__stat_sxx__"),
+                        (c * ry * ry).sum().alias("__stat_syy__"),
+                        xv.min().alias("__stat_x0__"), xv.max().alias("__stat_x1__"), yv.min().alias("__stat_y0__"),
+                        yv.max().alias("__stat_y1__"))
+                .collect(engine="streaming").row(0))
+        tie_x = tx.select(pl.col("__stat_tx__").sum()).collect(engine="streaming").item()
+        tie_y = ty.select(pl.col("__stat_ty__").sum()).collect(engine="streaming").item()
+        n, sxy, sxx, syy, *extremes = sums
+        return rank_corr_of(n, sxy, sxx, syy, tie_x, tie_y, *extremes)
+
+    def count_rows(self) -> int:
+        return int(self.lf.select(pl.len()).collect(engine="streaming").item())
+
+    def ks(self, value: str, group: str, levels: list) -> KsDistance:
+        """A9: the largest distances between two groups' empirical distribution functions, as
+        whole numbers (see SqlStatSource.ks)."""
+        a, b = levels
+        g = pl.col(group)
+        c1, c2 = pl.col("__stat_c1__"), pl.col("__stat_c2__")
+        f = (self.lf.filter(_number(value).is_not_null() & ((g == pl.lit(a)) | (g == pl.lit(b))))
+             .group_by((_number(value) + 0.0).alias("__stat_xv__"))
+             .agg((g == pl.lit(a)).sum().cast(pl.Int64).alias("__stat_c1__"), (g == pl.lit(b)).sum().cast(pl.Int64).alias("__stat_c2__"))
+             .sort("__stat_xv__")
+             .with_columns(c1.cum_sum().alias("__stat_k1__"), c2.cum_sum().alias("__stat_k2__"), c1.sum().alias("__stat_m1__"),
+                           c2.sum().alias("__stat_m2__")))
+        k1, k2, m1, m2 = (pl.col(f"__stat_{n}__") for n in ("k1", "k2", "m1", "m2"))
+        row = f.select(m1.max(), m2.max(), (k1 * m2 - k2 * m1).max().alias("__stat_dp__"), (k2 * m1 - k1 * m2).max().alias("__stat_dm__"),
+                       ((c1 + c2) > 1).sum().alias("__stat_tied__"),
+                       pl.col("__stat_xv__").min().alias("__stat_lo__"), pl.col("__stat_xv__").max().alias("__stat_hi__")
+                       ).collect(engine="streaming").row(0)
+        return ks_of(*row)
+
+    def central_moments(self, value: str) -> CentralMoments:
+        """A10: the central moments of the finite values, less the column's centre (see
+        SqlStatSource.central_moments)."""
+        x = _number(value)
+        centre = self._centre(value)
+        cv = _finite(x) - centre if centre else _finite(x)
+        e = cv - cv.mean()
+        row = self.lf.select(pl.len().alias("__stat_r__"), x.count().alias("__stat_n__"), cv.count().alias("__stat_f__"),
+                             cv.mean().alias("__stat_d__"), (e * e).mean().alias("__stat_m2__"), (e * e * e).mean().alias("__stat_m3__"),
+                             ((e * e) * (e * e)).mean().alias("__stat_m4__"), x.min().alias("__stat_lo__"), x.max().alias("__stat_hi__")
+                             ).collect(engine="streaming").row(0)
+        return central_moments_of(centre, *row)
 
     def histogram(self, value: Any, group: str | None, lo: float, hi: float, bins: int) -> list[HistogramBin]:
         """A13: the rows per group and interval, `bins` equal intervals between `lo` and

@@ -445,3 +445,53 @@ def test_statistics_of_lot_3_ask_bigquery_in_googlesql():
     assert asked[-1].endswith("GROUP BY `g`, `day`, `ok` LIMIT 100002")
     for q in asked:
         sqlglot.parse_one(q, read="bigquery")
+
+
+def test_statistics_of_lot_4_ask_bigquery_in_googlesql():
+    """The aggregates of the rank and distribution tests — the rank sums (A4), the signed ranks
+    (A5), the rank correlation (A6), the distance of two distribution functions (A9), the
+    central moments (A10) — written from BigQuery's documentation (window functions: no
+    PARTITION BY a FLOAT64, hence a whole number for each value, `DENSE_RANK`), and parsed as
+    GoogleSQL. Not run: that BigQuery answers them is the live suite's to say."""
+    import sqlglot
+
+    from app.engine.stats.aggregates import SqlStatSource
+
+    asked: list[str] = []
+
+    def rows(q):
+        asked.append(q)
+        if "st_level" in q:
+            return [["a", 8, 38.0, 4.9, 6.7, 0.0], ["b", 7, 82.0, 6.4, 8.0, 0.0]]
+        if "st_wp" in q:
+            return [[9, 40.0, 5.0, 0.0]]
+        if "st_pairs" in q:
+            return [[10, 9, 0, 0, 0.5, 3.06, 0.598, 3.14, -0.08, 1.11]]
+        if "st_sxy" in q:
+            return [[10, -14.5, 82.5, 82.5, 0.0, 0.0, 86.0, 113.0, 2.0, 50.0]]
+        if "st_dp" in q:
+            return [[8, 7, 49, 0, 0, 4.9, 8.0]]
+        if "st_m4" in q:
+            return [[26, 24, 24, 0.0, 1.57, 2.81, 13.6, 3.5, 9.4]]
+        return [[5.0]]
+
+    schema = [("v", "FLOAT64"), ("g", "STRING"), ("w", "FLOAT64"), ("n", "INT64")]
+    source = SqlStatSource("bigquery", rows, lambda c: f"`{c}`", _lit, "SELECT * FROM `_src1`", schema)
+    rs = source.rank_sums("v", "g", ["a", "b"])
+    assert [(r.level, r.n, r.rank_sum) for r in rs.groups] == [("a", 8, 38.0), ("b", 7, 82.0)]
+    assert "dense_rank() OVER (ORDER BY st_xv)" in asked[-1] and "PARTITION BY st_vid" in asked[-1]
+    assert "(`g` = 'a' OR `g` = 'b')" in asked[-1] and "CAST(`v` AS FLOAT64)" in asked[-1]
+    sr = source.signed_ranks("v", "w", 0.5, pratt=False)
+    assert (sr.ranked, sr.w_plus, sr.pairs) == (9, 40.0, 9)
+    assert any("CAST(0.5 AS FLOAT64)" in q for q in asked[-2:]) and any("<> 0" in q for q in asked[-2:])
+    source.signed_ranks("v", None, 0.0, pratt=True)
+    rc = source.rank_corr("v", "n")
+    assert rc.sxx == 82.5 and "PARTITION BY st_ix" in asked[-1]
+    ks = source.ks("v", "g", ["a", "b"])
+    assert (ks.n1, ks.d_plus) == (8, 49) and "CAST(sum(st_c1) OVER (ORDER BY st_xv ROWS" in asked[-1]
+    cm = source.central_moments("v")
+    assert cm.n == 24 and "CROSS JOIN (SELECT avg(" in asked[-1]
+    source.count_rows()
+    for q in asked:
+        assert "PARTITION BY st_xv" not in q and "PARTITION BY st_yv" not in q
+        sqlglot.parse_one(q, read="bigquery")

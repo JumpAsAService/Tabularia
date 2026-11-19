@@ -6249,6 +6249,56 @@ export default {
         "hints": {
           "posthoc": "Quelles cellules s'écartent de l'indépendance : leurs résidus ajustés."
         }
+      },
+      "spearman": {
+        "name": "Corrélation des rangs de Spearman",
+        "hint": "Deux colonnes des mêmes lignes montent-elles et descendent-elles ensemble, de façon monotone ? Le ρ de Spearman sur les rangs, robuste aux valeurs aberrantes."
+      },
+      "mann_whitney": {
+        "name": "Test U de Mann–Whitney",
+        "hint": "Deux groupes ont-ils tendance à avoir des valeurs différentes ? Le test de la somme des rangs, sans supposer une loi normale : exact sur les petits échantillons.",
+        "hints": {
+          "method": "Automatique : exact jusqu'à 49 valeurs par groupe sans ex aequo, sinon l'approximation normale.",
+          "correction": "Un demi-pas vers la moyenne dans l'approximation normale (comme wilcox.test de R)."
+        }
+      },
+      "wilcoxon_signed_rank": {
+        "name": "Test des rangs signés de Wilcoxon",
+        "hint": "Deux mesures des mêmes lignes (avant et après), ou une face à une valeur : les différences sont-elles centrées sur zéro ? Sans supposer une loi normale.",
+        "params": {
+          "x": "Première mesure (x)",
+          "y": "Seconde mesure (y)",
+          "mu": "Centre sous H0"
+        },
+        "hints": {
+          "x": "La première mesure de chaque ligne (avant, par exemple) : le test porte sur x − y.",
+          "y": "Laissez-la vide pour tester x seule face au centre ci-dessous.",
+          "mu": "Le centre des différences (ou de x) que pose l'hypothèse nulle : 0 pour «aucun changement».",
+          "method": "Automatique : exact jusqu'à 49 différences sans ex aequo ni zéros, sinon l'approximation normale.",
+          "correction": "Un demi-pas vers la moyenne dans l'approximation normale (comme wilcox.test de R)."
+        }
+      },
+      "kruskal_wallis": {
+        "name": "Test de Kruskal–Wallis",
+        "hint": "Plusieurs groupes ont-ils la même distribution ? L'équivalent par rangs de l'ANOVA, avec les comparaisons de Dunn qui disent quels groupes diffèrent.",
+        "hints": {
+          "posthoc": "Quels groupes diffèrent : le test de Dunn sur les rangs moyens de chaque paire, avec une correction."
+        }
+      },
+      "ks_two_sample": {
+        "name": "Test de Kolmogorov–Smirnov à deux échantillons",
+        "hint": "Deux groupes viennent-ils de la même distribution ? La plus grande distance entre leurs répartitions : toute la forme, pas seulement le centre.",
+        "hints": {
+          "method": "Automatique : exact quand n1·n2 vaut au plus 9 999 et qu'aucune valeur n'est répétée, sinon la limite de Kolmogorov.",
+          "alternative": "Supérieure : la fonction de répartition du premier groupe est au-dessus de celle du second (ses valeurs tendent à être plus petites)."
+        }
+      },
+      "normality": {
+        "name": "Test de normalité",
+        "hint": "Les valeurs d'une colonne semblent-elles suivre une loi normale ? Le K² de D'Agostino–Pearson ou Jarque–Bera, à partir de l'asymétrie et de la kurtosis.",
+        "hints": {
+          "method": "D'Agostino–Pearson demande au moins 20 valeurs ; Jarque–Bera est faite pour les grands échantillons."
+        }
       }
     },
     "params": {
@@ -6271,7 +6321,8 @@ export default {
       "correction": "Correction de continuité",
       "expected": "Proportions attendues",
       "strata": "Colonne des strates",
-      "williams": "Correction de Williams"
+      "williams": "Correction de Williams",
+      "zeros": "Différences nulles"
     },
     "hints": {
       "value": "La colonne mesurée.",
@@ -6292,7 +6343,8 @@ export default {
       "correction": "La correction de continuité de Yates de l'approximation normale (comme prop.test de R).",
       "expected": "Toutes égales, ou une proportion pour chaque catégorie de la colonne : au-dessus de 0, de somme 1.",
       "williams": "Divise G par q, plus proche du khi-deux sur les petits tableaux.",
-      "strata": "La colonne qui nomme les strates."
+      "strata": "La colonne qui nomme les strates.",
+      "zeros": "Wilcox : écartées avant le classement (comme R). Pratt : classées, puis écartées des sommes."
     },
     "choices": {
       "alternative": {
@@ -6333,6 +6385,28 @@ export default {
       "g_posthoc": {
         "none": "Aucune",
         "cells": "Les cellules"
+      },
+      "rank_method": {
+        "auto": "Automatique",
+        "exact": "Exact",
+        "asymptotic": "Approximation normale"
+      },
+      "wilcoxon_zeros": {
+        "wilcox": "Les écarter (Wilcox)",
+        "pratt": "Les classer (Pratt)"
+      },
+      "kw_posthoc": {
+        "none": "Aucune",
+        "dunn": "Dunn"
+      },
+      "ks_method": {
+        "auto": "Automatique",
+        "exact": "Exact",
+        "asymptotic": "Limite de Kolmogorov"
+      },
+      "normality_method": {
+        "dagostino": "D'Agostino–Pearson",
+        "jarque_bera": "Jarque–Bera"
       }
     },
     "reasons": {

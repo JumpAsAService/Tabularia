@@ -404,3 +404,28 @@ test('the tests added on tables: McNemar, Cochran–Mantel–Haenszel, G; Fisher
   assert.ok(WORDS.en['stat.tests.fisher_exact.hints.alternative'].includes('2 × 2'))
   for (const lang of LANGS) assert.ok(WORDS[lang]['stat.tests.fisher_exact.hint'].includes('Freeman'), lang)
 })
+
+test('the tests of ranks and distributions: their fields, the optional second column, Dunn after Kruskal–Wallis', () => {
+  const fields = (op) => s.statFields(s.statTestOf(op)).map((f) => `${f.key}:${f.control}${f.required ? '' : '?'}`)
+  assert.deepEqual(fields('stat_mann_whitney'),
+    ['value:column', 'group:column', 'groups:levels?', 'method:choice?', 'correction:boolean?', 'alternative:choice?', 'alpha:number?'])
+  assert.deepEqual(fields('stat_wilcoxon_signed_rank'),
+    ['x:column', 'y:column?', 'mu:number?', 'zeros:choice?', 'method:choice?', 'correction:boolean?', 'alternative:choice?', 'alpha:number?'])
+  assert.deepEqual(fields('stat_kruskal_wallis'), ['value:column', 'group:column', 'posthoc:choice?', 'p_adjust:choice?', 'alpha:number?'])
+  assert.deepEqual(fields('stat_spearman'), ['x:column', 'y:column', 'alternative:choice?', 'alpha:number?'])
+  assert.deepEqual(fields('stat_ks_two_sample'), ['value:column', 'group:column', 'groups:levels?', 'method:choice?', 'alternative:choice?', 'alpha:number?'])
+  assert.deepEqual(fields('stat_normality'), ['value:column', 'method:choice?', 'alpha:number?'])
+  assert.deepEqual(defaultParams('stat_wilcoxon_signed_rank'),
+    { mu: 0, zeros: 'wilcox', method: 'auto', correction: true, alternative: 'two_sided', alpha: 0.05 })
+  assert.equal(s.statApplies(s.statTestOf('stat_kruskal_wallis'), 'p_adjust', { posthoc: 'dunn' }), true)
+  assert.equal(s.statApplies(s.statTestOf('stat_kruskal_wallis'), 'p_adjust', {}), false)
+  assert.equal(s.statApplies(s.statTestOf('stat_mann_whitney'), 'correction', { method: 'exact' }), false)
+  // the second column of a signed-rank test may be left empty: a one-sample test
+  assert.deepEqual(s.statParams(s.statTestOf('stat_wilcoxon_signed_rank'), { x: 'before', y: '' }).y, undefined)
+  assert.equal(opSummary('stat_wilcoxon_signed_rank', { x: 'before', y: 'after' }), 'before ~ after')
+  assert.equal(opSummary('stat_normality', { value: 'amount' }), 'amount')
+  for (const lang of LANGS) {
+    assert.ok(WORDS[lang]['stat.choices.kw_posthoc.dunn'] && WORDS[lang]['stat.hints.zeros'], lang)
+    assert.ok(WORDS[lang]['stat.tests.wilcoxon_signed_rank.hints.y'], lang)
+  }
+})

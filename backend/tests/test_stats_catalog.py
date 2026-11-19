@@ -140,7 +140,9 @@ def test_the_tests_of_the_first_lots_in_their_families():
     for test, spec in catalog.TESTS.items():
         by_family.setdefault(spec["family"], []).append(test)
     assert by_family["means"] == ["t_one_sample", "t_two_sample", "t_paired", "anova"]
-    assert by_family["variances"] == ["var_f", "levene"] and by_family["correlation"] == ["pearson"]
+    assert by_family["variances"] == ["var_f", "levene"] and by_family["correlation"] == ["pearson", "spearman"]
+    assert by_family["ranks"] == ["mann_whitney", "wilcoxon_signed_rank", "kruskal_wallis"]
+    assert by_family["distributions"] == ["ks_two_sample", "normality"]
     assert by_family["proportions"] == ["prop_one_sample", "prop_two_sample", "chi2_independence", "chi2_gof", "fisher_exact",
                                          "mcnemar", "cmh", "g_test"]
 

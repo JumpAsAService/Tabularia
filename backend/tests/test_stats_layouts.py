@@ -67,6 +67,12 @@ REFERENCE = {
     "mcnemar": {"x": "x", "y": "y"},
     "cmh": {"x": "x", "y": "y", "strata": "z"},
     "g_test": {"x": "x", "y": "y"},
+    "spearman": {"x": "px", "y": "py"},
+    "mann_whitney": WELCH,
+    "wilcoxon_signed_rank": {"x": "before", "y": "after"},
+    "kruskal_wallis": {"value": "v", "group": "g", "posthoc": "dunn"},
+    "ks_two_sample": WELCH,
+    "normality": {"value": "nv"},
 }
 # and the variants of each, together every row it may write
 VARIANTS = {
@@ -87,7 +93,16 @@ VARIANTS = {
     "mcnemar": ({}, {"method": "exact"}, {"correction": False}),
     "cmh": ({}, {"correction": False}),
     "g_test": ({}, {"williams": True}, {"posthoc": "cells", "p_adjust": "sidak"}),
+    "spearman": ({}, {"alternative": "less"}, {"alternative": "greater"}),
+    "mann_whitney": ({}, {"method": "asymptotic"}, {"alternative": "less", "correction": False, "method": "asymptotic"},
+                     {"alternative": "greater"}),
+    "wilcoxon_signed_rank": ({}, {"zeros": "pratt", "alternative": "less"}, {"y": None, "mu": 80.5},
+                             {"y": None, "mu": 80, "method": "asymptotic", "alternative": "greater"}),
+    "kruskal_wallis": ({}, {"posthoc": "none"}, {"p_adjust": "bonferroni"}),
+    "ks_two_sample": ({}, {"method": "asymptotic"}, {"alternative": "greater", "method": "asymptotic"}, {"alternative": "less"}),
+    "normality": ({}, {"method": "jarque_bera"}),
 }
+NV = [4.2, 5.1, 3.9, 6.3, 5.5, 4.8, 5.0, 7.9, 4.4, 5.2, 6.1, 3.5, 5.7, 4.9, 5.3, 9.4, 4.6, 5.8, 5.0, 4.1, 6.6, 5.4, 4.7, 5.9]
 
 
 def strata_table(dims: tuple[int, int, int], values: list[int]) -> pl.DataFrame:
@@ -148,8 +163,10 @@ def frame_of(test: str) -> pl.DataFrame:
         return counts_table(["x1", "x2", "x3"], ["m", "f"], [[30, 15], [20, 25], [10, 20]])
     if test == "chi2_gof":
         return pl.DataFrame({"cat": ["a"] * 18 + ["b"] * 22 + ["c"] * 30 + ["d"] * 30 + [None]})
-    if test in ("t_paired", "pearson"):
+    if test in ("t_paired", "pearson", "spearman", "wilcoxon_signed_rank"):
         return pairs()
+    if test == "normality":
+        return pl.DataFrame({"nv": NV + [None]}, schema={"nv": pl.Float64})
     if test == "t_one_sample":
         return abc().filter(pl.col("g") == "a")
     return abc()
@@ -700,6 +717,15 @@ ON_THE_PAGE = {
                      "Concordant", "P(x = i, y = j) = P(x = j, y = i)", "118"]),
     "cmh": ({}, ["Cochran–Mantel–Haenszel test", "3.9286", "0.0475 *", "7.0000", "95% CI: 1.0267 to 47.7251", "Strata", "s4"]),
     "g_test": ({}, ["G test of independence", "9.0517", "0.0108 *", "Term of G", "P(x, y) = P(x)·P(y)"]),
+    "mann_whitney": ({}, ["Mann–Whitney U test", "2.0000", "—", "0.0012 **", "-0.9286", "P(v | a > v | b) = 0.5", "0.0012432012", "38", "82",
+                          "An exact test: its p-value counts every arrangement of the values, and it has no curve to draw."]),
+    "wilcoxon_signed_rank": ({}, ["Wilcoxon signed-rank test", "4.0000", "0.0321 *", "-0.8222", "median(before − after) = 0", "before − after",
+                                  "Critical region at α = 0.05: z ≤ -1.9600 or z ≥ 1.9600.", "-2.143768803"]),
+    "kruskal_wallis": ({}, ["Kruskal–Wallis test", "11.5227", "0.0031 **", "0.5761", "F(v | a) = F(v | b) = F(v | c)", "a – b", "-10.875",
+                            "3.21130814", "0.00212394", "H0 rejected", "H0 not rejected", "Pairwise comparisons"]),
+    "spearman": ({}, ["Spearman's rank correlation", "cor(rank(px), rank(py)) = 0", "Rank correlation ρ"]),
+    "ks_two_sample": ({}, ["Two-sample Kolmogorov–Smirnov test", "0.8750", "0.0025 **", "F(v | a) = F(v | b)", "0.875"]),
+    "normality": ({}, ["D'Agostino–Pearson normality test", "14.4517", "1.4301", "0.0007 ***", "5.5156", "2.9157928616", "(skewness(nv), kurtosis(nv)) = (0, 3)"]),
     "fisher_exact": ({}, ["Fisher's exact test", "2 × 2", "5.4857142857", "0.0238 *", "5.2297", "95% CI: 1.1694 to 27.3059", "OR(x, y) = 1",
                           "Distribution of the statistic under H0: hypergeometric(19, 21, 17)."]),
 }
