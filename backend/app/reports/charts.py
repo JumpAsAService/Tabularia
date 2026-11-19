@@ -120,10 +120,17 @@ def _base(data: ChartData, theme: rd.Theme, legend: bool, width: int) -> dict:
 
 def _x_axis(categories: list[str], width_px: int) -> dict:
     """A horizontal category axis. When the categories have room (a few regions, the months
-    of a year) every label is written, on more lines if it needs them; when they crowd (the
+    of a year) every label is written, on more lines if it needs them (a label with a number
+    in it is turned instead); when they crowd (the
     days of a year) ECharts writes those that do not overlap, whole — never «20…»."""
     band = (width_px - 60) / max(len(categories), 1)  # the plot is the chart less its value axis
-    if band >= 36:
+    widest = max((len(c) for c in categories), default=0) * 9 * 0.58  # px, at 9 pt
+    if band >= 14 and widest > band - 4 and any(ch.isdigit() for c in categories for ch in c):
+        # a label with a number in it is never wrapped (the line would end inside the number,
+        # «[4,48 – 5,⏎47)»): when it does not fit under its bar it is turned, every one written
+        label = {"fontSize": 9, "interval": 0, "rotate": 40, "hideOverlap": True,
+                 "formatter": {"$fmt": "short", "max": MAX_LABEL_CHARS}}
+    elif band >= 36:
         label = {"fontSize": 9, "interval": 0, "overflow": "break", "width": int(band - 4),
                  "formatter": {"$fmt": "short", "max": MAX_LABEL_CHARS}}
     else:
