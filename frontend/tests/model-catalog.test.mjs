@@ -25,7 +25,9 @@ after(() => rmSync(OUT, { recursive: true, force: true }))
 
 // what Nuxt auto-imports: the API client, asked by the composable that lists the groups
 const asked = []
-globalThis.useApiClient = () => ({ apiFetch: async (path) => { asked.push(path); throw new Error('no gateway here') } })
+// (Reflect.set, not `globalThis.useApiClient = …`: the type check reads this file too, and an assignment to
+// globalThis there declares a global that takes the place of the real useApiClient in every composable)
+Reflect.set(globalThis, 'useApiClient', () => ({ apiFetch: async (path) => { asked.push(path); throw new Error('no gateway here') } }))
 
 const m = await import('../composables/modelCatalog.ts')
 const { opMeta } = await import('../composables/useOpIcons.ts')
