@@ -21,6 +21,7 @@ under a `formatter` key, and measures text with the advance widths of the PDF's 
 from __future__ import annotations
 
 import concurrent.futures
+import math
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -87,11 +88,26 @@ def _palette(theme: rd.Theme) -> list[str]:
     return [theme.accent, *_EXTRA]
 
 
-def _value_formatter(fmt: str | None, loc: formats.Locale) -> dict:
+def _value_formatter(fmt: str | None, loc: formats.Locale, digits: int | None = None) -> dict:
     if fmt and formats.is_number_pattern(fmt) and "%" in fmt:
         sec = formats.number_pattern(fmt)[0]
         return {"$fmt": "percent", "locale": loc.code, "decimals": sec.max_frac}
-    return {"$fmt": "compact", "locale": loc.code}
+    # `digits` only when the default three would write one tick for the whole axis (see _tick_digits)
+    return {"$fmt": "compact", "locale": loc.code, **({"digits": digits} if digits else {})}
+
+
+def _tick_digits(series: list[SeriesData]) -> int | None:
+    """The significant digits the ticks of an axis that does not start from zero need: values
+    around 1e9 that differ by tens give ticks that are all «1B» at three digits. None when the
+    default says it all (the spread is not tiny against the magnitude)."""
+    vals = [v for s in series for v in s.values if v is not None and math.isfinite(v)]
+    if not vals:
+        return None
+    big, spread = max(abs(v) for v in vals), max(vals) - min(vals)
+    if big == 0 or spread <= 0:
+        return None
+    need = math.ceil(math.log10(big / spread)) + 2  # the ticks go by a fraction of the spread
+    return min(need, 15) if need > 3 else None
 
 
 def _points(s: SeriesData, below: str | None = None) -> list[dict | None]:
@@ -165,10 +181,12 @@ def _y_axis(categories: list[str], width_px: int, height_px: int) -> dict:
     return {"type": "category", "data": categories, "axisLabel": label, "axisTick": {"alignWithLabel": True}}
 
 
-def _value_axis(data: ChartData, loc: formats.Locale, o: rd.ChartOptions, side: str = "left") -> dict:
+def _value_axis(data: ChartData, loc: formats.Locale, o: rd.ChartOptions, side: str = "left",
+                scaled: bool = False) -> dict:
     # an axis writes its numbers in the format of the first series on it (a margin in % beside amounts)
     fmt = next((s.fmt for s in data.series if s.axis == side and s.fmt), data.fmt)
-    axis: dict[str, Any] = {"type": "value", "axisLabel": {"fontSize": 9, "formatter": _value_formatter(fmt, loc)},
+    digits = _tick_digits(data.series) if scaled else None  # an axis that does not start from zero
+    axis: dict[str, Any] = {"type": "value", "axisLabel": {"fontSize": 9, "formatter": _value_formatter(fmt, loc, digits)},
                             "splitLine": {"lineStyle": {"color": "#e9ecef"}}}
     if o.min is not None:
         axis["min"] = o.min
@@ -479,7 +497,7 @@ def _boxplot(data: ChartData, it: rd.ChartItem, theme: rd.Theme, loc: formats.Lo
         boxes.append({"value": five, "t": data.series[2].labels[i]} if all(v is not None for v in five) else {"value": _NO_BOX})
     # the value axis does not start from zero: a box is read by where it sits among the others
     return {**base, "xAxis": {**_x_axis(data.categories, width_px), **_AT_THE_EDGE},
-            "yAxis": {**_value_axis(data, loc, it.options), "scale": True},
+            "yAxis": {**_value_axis(data, loc, it.options, scaled=True), "scale": True},
             "series": [{"type": "boxplot", "name": data.series[2].name, "data": boxes, "boxWidth": [8, 44],
                         "itemStyle": {"color": LIGHT, "borderColor": theme.accent, "borderWidth": 1.3}}]}
 
@@ -508,7 +526,7 @@ def _interval(data: ChartData, it: rd.ChartItem, theme: rd.Theme, loc: formats.L
         base["grid"]["right"] = 14 + int(len(formats.display(target, value.fmt, loc)) * 8 * 0.6)  # room for its value
         if data.categories:
             series.append(_unseen([data.categories[0], target]))
-    yaxis = {**_value_axis(data, loc, o), "scale": True}
+    yaxis = {**_value_axis(data, loc, o, scaled=True), "scale": True}
     if o.log:  # odds and hazard ratios: a ratio and its inverse at the same distance from 1, ticks at 0.5, 1, 2…
         yaxis.update(type="log", logBase=2)
         yaxis.pop("scale")

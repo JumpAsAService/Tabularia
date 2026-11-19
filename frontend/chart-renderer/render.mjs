@@ -83,8 +83,14 @@ const FORMATTERS = {
     return (p) => `${name(p.name)}\n${f.format((Number(p.percent) || 0) / 100)}`;
   },
   // three significant digits: the ticks of a small scale (0.05, 0.15) are not all «0.1»
+  // `digits` (above three) is for an axis that does not start from zero, over values far from it
+  // and close to one another (around 1e9, a spread of 50): «1B» on every tick tells nothing,
+  // so the number is written whole, with that many significant digits
   compact: (a) => {
-    const f = new Intl.NumberFormat(locale(a), { notation: 'compact', maximumSignificantDigits: 3 });
+    const digits = Math.min(Math.max(Math.trunc(Number(a.digits)) || 3, 3), 15);
+    const f = new Intl.NumberFormat(locale(a), digits > 3
+      ? { maximumSignificantDigits: digits }
+      : { notation: 'compact', maximumSignificantDigits: 3 });
     return (v) => f.format(Number(valueOf(v)));
   },
   percent: (a) => {

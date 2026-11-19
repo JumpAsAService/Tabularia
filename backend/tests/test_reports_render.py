@@ -632,3 +632,22 @@ def test_check_names_every_mistake_and_lets_empty_images_be():
     out = report_routes.check(report_routes.ReportCheck(definition=d))
     assert out["problems"] == [{"item": "detail", "field": "filter", "pos": 15, "length": 7,
                                 "message": 'there is no parameter «snice»: did you mean "since"?'}]
+
+
+def test_the_ticks_of_an_axis_around_1e9_ask_for_their_digits_and_a_normal_axis_does_not():
+    """A box plot or an interval over values around 1e9 that differ by tens: at three
+    significant digits every tick is «1B» (found in the browser, on a t test of a column
+    offset by 1e9). The formatter is asked for the digits the spread needs; an axis with
+    values that are far apart keeps the default."""
+    from app.reports import charts
+
+    def digits(vals):
+        series = [charts.SeriesData(name="v", values=vals, labels=["" for _ in vals])]
+        return charts._tick_digits(series)
+
+    assert digits([1000000045.3, 1000000045.5, 1000000060.0, 1000000020.0]) == 10
+    assert digits([12.0, 40.0, 3.5, 90.0]) is None       # the default says it all
+    assert digits([5.0, 5.0]) is None and digits([0.0, 0.0]) is None and digits([None, None]) is None
+    en = charts.formats.locale("en")
+    assert charts._value_formatter(None, en, 11) == {"$fmt": "compact", "locale": en.code, "digits": 11}
+    assert charts._value_formatter(None, en) == {"$fmt": "compact", "locale": en.code}

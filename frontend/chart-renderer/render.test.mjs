@@ -55,6 +55,18 @@ test('the named formatters write the engine\'s texts and the locale\'s numbers',
   assert.ok(svg.includes('Mio.'))
 })
 
+test('an axis over values around 1e9 that differ by tens writes whole numbers: its ticks are told apart', () => {
+  const svg = render(chart({
+    xAxis: { type: 'category', data: ['a', 'b'] },
+    yAxis: { type: 'value', scale: true, axisLabel: { formatter: { $fmt: 'compact', locale: 'en', digits: 11 } } },
+    series: [{ type: 'boxplot', data: [[1000000010, 1000000030, 1000000045, 1000000060, 1000000080],
+      [1000000020, 1000000040, 1000000050, 1000000070, 1000000090]] }],
+  }, 600))
+  const ticks = [...svg.matchAll(/>(1,000,000,\d{3})</g)].map((m) => m[1])
+  assert.ok(ticks.length >= 3 && new Set(ticks).size === ticks.length, `whole, distinct ticks: ${ticks}`)
+  assert.ok(!svg.includes('>1B<'))
+})
+
 test('a long name ends in «…», a pie keeps its share on a line of its own, small numbers keep their digits', () => {
   const long = 'Società Cooperativa Agricola Allevatori dell\'Appennino Tosco-Emiliano'
   const svg = render(chart({
