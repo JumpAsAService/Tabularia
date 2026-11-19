@@ -148,10 +148,56 @@
       "fisher_exact": {
         "name": "Fisher's exact test",
         "stats": {
-          "test": {"estimate": "Odds ratio, conditional estimate", "null_value": "Odds ratio under H0"}
+          "test": {"estimate": "Odds ratio, conditional estimate (2 × 2)", "null_value": "Odds ratio under H0"}
         },
-        "kpi": {"sample": "Odds ratio of the sample", "n": "Rows used", "estimate": "Odds ratio"},
-        "symbols": "x = «{x}», y = «{y}»: a, b the first row, c, d the second (table «Observed and expected»); R1: the first row's total; C1, C2: the columns' (tables of the rows and columns); N: rows used; X: the first cell under H0 with the same margins (hypergeometric).",
+        "kpi": {
+          "sample": "Odds ratio of the sample",
+          "n": "Rows used",
+          "estimate": "Odds ratio",
+          "table": "Table",
+          "nodes": "Steps of the exact count"
+        },
+        "symbols": "x = «{x}», y = «{y}». A 2 × 2 table: a, b the first row, c, d the second (table «Observed and expected»); R1: the first row's total; C1, C2: the columns'; X: the first cell under H0 with the same margins. A larger table: T any table with its margins, n_ij its cells, R_i, C_j its totals; N: rows used.",
+        "left_out": "Rows used: {n}. Rows left out: {missing} (no value in one of the two columns)."
+      },
+      "mcnemar": {
+        "name": "McNemar's test",
+        "stats": {
+          "test": {"statistic": "Chi-square statistic (χ²)", "estimate": "Odds ratio of the discordant pairs (b / c)"}
+        },
+        "kpi": {
+          "discordant": "Discordant pairs",
+          "statistic": "Chi-square (χ²)",
+          "estimate": "Odds ratio b / c",
+          "categories": "Categories"
+        },
+        "symbols": "x = «{x}», y = «{y}», two values of the same row; their categories together. b: the rows with x in the first category and y in the second, c: the other way round (2 × 2); n_ij: the rows with x = i and y = j (table «The table of the pairs»); Y: the continuity correction; E = (n_ij + n_ji) / 2 under H0.",
+        "left_out": "Rows used: {n}. Rows left out: {missing} (no value in one of the two columns).",
+        "tables": {
+          "cells": "The table of the pairs",
+          "pair": {"header": "Pair", "discordant": "Discordant", "concordant": "Concordant"}
+        },
+        "charts": {"observed": "Observed and expected under symmetry"}
+      },
+      "cmh": {
+        "name": "Cochran–Mantel–Haenszel test",
+        "stats": {
+          "test": {"statistic": "Chi-square statistic (χ²)", "estimate": "Common odds ratio of Mantel–Haenszel (OR_MH)"}
+        },
+        "kpi": {"statistic": "Chi-square (χ²)", "estimate": "Common odds ratio", "strata": "Strata"},
+        "symbols": "x = «{x}», y = «{y}», strata of «{strata}». In each stratum (2 × 2): a, b the first row, c, d the second, R1, R2 the rows' totals, C1, C2 the columns', N the stratum's rows (table «Strata»); Y: the continuity correction; z: the normal quantile of the interval.",
+        "left_out": "Rows used: {n}. Rows left out: {missing} (no value in one of the three columns).",
+        "tables": {"strata": "Strata", "terms": "Terms of each stratum", "pooled": "The table over every stratum"},
+        "charts": {"observed": "Counts over every stratum"}
+      },
+      "g_test": {
+        "name": "G test of independence",
+        "stats": {
+          "test": {"statistic": "G statistic (likelihood ratio)"},
+          "cell": {"contribution": "Term of G"}
+        },
+        "kpi": {"statistic": "G statistic", "effect": "Cramér's V"},
+        "symbols": "x = «{x}», y = «{y}». O, E: observed and expected rows of a cell (table «Observed and expected»); R, C: the totals of its row and of its column; N: rows used; r, c: the categories of x and of y; q: Williams' correction; V: Cramér's, from Pearson's χ².",
         "left_out": "Rows used: {n}. Rows left out: {missing} (no value in one of the two columns)."
       }
     },
@@ -230,7 +276,19 @@
         "n_cells": "Cells compared",
         "cohen_w": "Effect size: Cohen's w",
         "support": "Possible values of a (support)",
-        "sample_odds_ratio": "Odds ratio of the sample (a·d / b·c)"
+        "sample_odds_ratio": "Odds ratio of the sample (a·d / b·c)",
+        "network_nodes": "Steps of the exact count (network nodes)",
+        "categories": "Categories (k)",
+        "discordant": "Discordant pairs",
+        "b": "x first, y second (b)",
+        "c": "x second, y first (c)",
+        "prop_difference": "Difference of the paired proportions, (b − c) / n",
+        "strata": "Strata (K)",
+        "delta": "∑ (a − E(a)) over the strata",
+        "variance": "∑ V(a) over the strata",
+        "log_sd": "Standard error of ln OR_MH (Robins–Breslow–Greenland)",
+        "g": "G without the correction",
+        "williams_q": "Williams' correction (q)"
       },
       "group": {
         "n": "n",
@@ -259,7 +317,14 @@
         "row_total": "Rows (R)",
         "row_share": "Share",
         "col_total": "Rows (C)",
-        "col_share": "Share"
+        "col_share": "Share",
+        "a": "a (1, 1)",
+        "b": "b (1, 2)",
+        "c": "c (2, 1)",
+        "d": "d (2, 2)",
+        "expected_a": "E(a)",
+        "variance_a": "V(a)",
+        "odds_ratio": "Odds ratio (a·d / b·c)"
       },
       "hist": {"count": "Rows"},
       "curve": {
@@ -291,7 +356,8 @@
         "p_value": "p-value",
         "p_adjusted": "Adjusted p-value",
         "significance": "Significance code",
-        "decision": "Decision"
+        "decision": "Decision",
+        "agreement": "Concordant or discordant"
       }
     },
     "note": "Note {n}",
@@ -304,7 +370,8 @@
       "notes": "Notes",
       "comparisons": "Pairwise comparisons",
       "table": "Table of the counts",
-      "comparisons_cells": "Comparisons of the cells"
+      "comparisons_cells": "Comparisons of the cells",
+      "strata": "Strata"
     },
     "kpi": {"df": "Degrees of freedom", "p_value": "p-value"},
     "decision": {
@@ -533,10 +600,56 @@
       "fisher_exact": {
         "name": "Test esatto di Fisher",
         "stats": {
-          "test": {"estimate": "Odds ratio, stima condizionata", "null_value": "Odds ratio sotto H0"}
+          "test": {"estimate": "Odds ratio, stima condizionata (2 × 2)", "null_value": "Odds ratio sotto H0"}
         },
-        "kpi": {"sample": "Odds ratio del campione", "n": "Righe usate", "estimate": "Odds ratio"},
-        "symbols": "x = «{x}», y = «{y}»: a, b la prima riga, c, d la seconda (tabella «Osservati e attesi»); R1: il totale della prima riga; C1, C2: quelli delle colonne (tabelle delle righe e delle colonne); N: righe usate; X: la prima cella sotto H0 con gli stessi margini (ipergeometrica).",
+        "kpi": {
+          "sample": "Odds ratio del campione",
+          "n": "Righe usate",
+          "estimate": "Odds ratio",
+          "table": "Tabella",
+          "nodes": "Passi del conteggio esatto"
+        },
+        "symbols": "x = «{x}», y = «{y}». Una tabella 2 × 2: a, b la prima riga, c, d la seconda (tabella «Osservati e attesi»); R1: il totale della prima riga; C1, C2: quelli delle colonne; X: la prima cella sotto H0 con gli stessi margini. Una tabella più grande: T ogni tabella con i suoi margini, n_ij le sue celle, R_i, C_j i suoi totali; N: righe usate.",
+        "left_out": "Righe usate: {n}. Righe escluse: {missing} (nessun valore in una delle due colonne)."
+      },
+      "mcnemar": {
+        "name": "Test di McNemar",
+        "stats": {
+          "test": {"statistic": "Statistica chi quadrato (χ²)", "estimate": "Odds ratio delle coppie discordanti (b / c)"}
+        },
+        "kpi": {
+          "discordant": "Coppie discordanti",
+          "statistic": "Chi quadrato (χ²)",
+          "estimate": "Odds ratio b / c",
+          "categories": "Categorie"
+        },
+        "symbols": "x = «{x}», y = «{y}», due valori della stessa riga; le loro categorie insieme. b: le righe con x nella prima categoria e y nella seconda, c: il contrario (2 × 2); n_ij: le righe con x = i e y = j (tabella «La tabella delle coppie»); Y: la correzione di continuità; E = (n_ij + n_ji) / 2 sotto H0.",
+        "left_out": "Righe usate: {n}. Righe escluse: {missing} (nessun valore in una delle due colonne).",
+        "tables": {
+          "cells": "La tabella delle coppie",
+          "pair": {"header": "Coppia", "discordant": "Discorde", "concordant": "Concorde"}
+        },
+        "charts": {"observed": "Osservati e attesi sotto simmetria"}
+      },
+      "cmh": {
+        "name": "Test di Cochran–Mantel–Haenszel",
+        "stats": {
+          "test": {"statistic": "Statistica chi quadrato (χ²)", "estimate": "Odds ratio comune di Mantel–Haenszel (OR_MH)"}
+        },
+        "kpi": {"statistic": "Chi quadrato (χ²)", "estimate": "Odds ratio comune", "strata": "Strati"},
+        "symbols": "x = «{x}», y = «{y}», strati di «{strata}». In ogni strato (2 × 2): a, b la prima riga, c, d la seconda, R1, R2 i totali delle righe, C1, C2 quelli delle colonne, N le righe dello strato (tabella «Strati»); Y: la correzione di continuità; z: il quantile normale dell'intervallo.",
+        "left_out": "Righe usate: {n}. Righe escluse: {missing} (nessun valore in una delle tre colonne).",
+        "tables": {"strata": "Strati", "terms": "Termini di ogni strato", "pooled": "La tabella su tutti gli strati"},
+        "charts": {"observed": "Conteggi su tutti gli strati"}
+      },
+      "g_test": {
+        "name": "Test G di indipendenza",
+        "stats": {
+          "test": {"statistic": "Statistica G (rapporto di verosimiglianza)"},
+          "cell": {"contribution": "Termine di G"}
+        },
+        "kpi": {"statistic": "Statistica G", "effect": "V di Cramér"},
+        "symbols": "x = «{x}», y = «{y}». O, E: righe osservate e attese di una cella (tabella «Osservati e attesi»); R, C: i totali della sua riga e della sua colonna; N: righe usate; r, c: le categorie di x e di y; q: la correzione di Williams; V: di Cramér, dal χ² di Pearson.",
         "left_out": "Righe usate: {n}. Righe escluse: {missing} (nessun valore in una delle due colonne)."
       }
     },
@@ -615,7 +728,19 @@
         "n_cells": "Celle confrontate",
         "cohen_w": "Dimensione dell'effetto: w di Cohen",
         "support": "Valori possibili di a (supporto)",
-        "sample_odds_ratio": "Odds ratio del campione (a·d / b·c)"
+        "sample_odds_ratio": "Odds ratio del campione (a·d / b·c)",
+        "network_nodes": "Passi del conteggio esatto (nodi della rete)",
+        "categories": "Categorie (k)",
+        "discordant": "Coppie discordanti",
+        "b": "x prima, y seconda (b)",
+        "c": "x seconda, y prima (c)",
+        "prop_difference": "Differenza delle proporzioni appaiate, (b − c) / n",
+        "strata": "Strati (K)",
+        "delta": "∑ (a − E(a)) sugli strati",
+        "variance": "∑ V(a) sugli strati",
+        "log_sd": "Errore standard di ln OR_MH (Robins–Breslow–Greenland)",
+        "g": "G senza correzione",
+        "williams_q": "Correzione di Williams (q)"
       },
       "group": {
         "n": "n",
@@ -644,7 +769,14 @@
         "row_total": "Righe (R)",
         "row_share": "Quota",
         "col_total": "Righe (C)",
-        "col_share": "Quota"
+        "col_share": "Quota",
+        "a": "a (1, 1)",
+        "b": "b (1, 2)",
+        "c": "c (2, 1)",
+        "d": "d (2, 2)",
+        "expected_a": "E(a)",
+        "variance_a": "V(a)",
+        "odds_ratio": "Odds ratio (a·d / b·c)"
       },
       "hist": {"count": "Righe"},
       "curve": {
@@ -676,7 +808,8 @@
         "p_value": "p-value",
         "p_adjusted": "p-value corretto",
         "significance": "Codice di significatività",
-        "decision": "Decisione"
+        "decision": "Decisione",
+        "agreement": "Concorde o discorde"
       }
     },
     "note": "Nota {n}",
@@ -689,7 +822,8 @@
       "notes": "Note",
       "comparisons": "Confronti a coppie",
       "table": "Tabella dei conteggi",
-      "comparisons_cells": "Confronti delle celle"
+      "comparisons_cells": "Confronti delle celle",
+      "strata": "Strati"
     },
     "kpi": {"df": "Gradi di libertà", "p_value": "p-value"},
     "decision": {
@@ -922,10 +1056,59 @@
       "fisher_exact": {
         "name": "Exakter Test nach Fisher",
         "stats": {
-          "test": {"estimate": "Odds Ratio, bedingte Schätzung", "null_value": "Odds Ratio unter H0"}
+          "test": {"estimate": "Odds Ratio, bedingte Schätzung (2 × 2)", "null_value": "Odds Ratio unter H0"}
         },
-        "kpi": {"sample": "Odds Ratio der Stichprobe", "n": "Verwendete Zeilen", "estimate": "Odds Ratio"},
-        "symbols": "x = «{x}», y = «{y}»: a, b die erste Zeile, c, d die zweite (Tabelle «Beobachtet und erwartet»); R1: die Summe der ersten Zeile; C1, C2: die der Spalten (Tabellen der Zeilen und Spalten); N: verwendete Zeilen; X: die erste Zelle unter H0 mit denselben Rändern (hypergeometrisch).",
+        "kpi": {
+          "sample": "Odds Ratio der Stichprobe",
+          "n": "Verwendete Zeilen",
+          "estimate": "Odds Ratio",
+          "table": "Tabelle",
+          "nodes": "Schritte der exakten Zählung"
+        },
+        "symbols": "x = «{x}», y = «{y}». Eine 2 × 2-Tabelle: a, b die erste Zeile, c, d die zweite (Tabelle «Beobachtet und erwartet»); R1: die Summe der ersten Zeile; C1, C2: die der Spalten; X: die erste Zelle unter H0 mit denselben Rändern. Eine größere Tabelle: T jede Tabelle mit ihren Rändern, n_ij ihre Zellen, R_i, C_j ihre Summen; N: verwendete Zeilen.",
+        "left_out": "Verwendete Zeilen: {n}. Ausgelassene Zeilen: {missing} (kein Wert in einer der beiden Spalten)."
+      },
+      "mcnemar": {
+        "name": "McNemar-Test",
+        "stats": {
+          "test": {"statistic": "Chi-Quadrat-Statistik (χ²)", "estimate": "Odds Ratio der diskordanten Paare (b / c)"}
+        },
+        "kpi": {
+          "discordant": "Diskordante Paare",
+          "statistic": "Chi-Quadrat (χ²)",
+          "estimate": "Odds Ratio b / c",
+          "categories": "Kategorien"
+        },
+        "symbols": "x = «{x}», y = «{y}», zwei Werte derselben Zeile; ihre Kategorien zusammen. b: die Zeilen mit x in der ersten und y in der zweiten Kategorie, c: umgekehrt (2 × 2); n_ij: die Zeilen mit x = i und y = j (Tabelle «Die Tabelle der Paare»); Y: die Stetigkeitskorrektur; E = (n_ij + n_ji) / 2 unter H0.",
+        "left_out": "Verwendete Zeilen: {n}. Ausgelassene Zeilen: {missing} (kein Wert in einer der beiden Spalten).",
+        "tables": {
+          "cells": "Die Tabelle der Paare",
+          "pair": {"header": "Paar", "discordant": "Diskordant", "concordant": "Konkordant"}
+        },
+        "charts": {"observed": "Beobachtet und erwartet bei Symmetrie"}
+      },
+      "cmh": {
+        "name": "Cochran-Mantel-Haenszel-Test",
+        "stats": {
+          "test": {
+            "statistic": "Chi-Quadrat-Statistik (χ²)",
+            "estimate": "Gemeinsames Odds Ratio nach Mantel-Haenszel (OR_MH)"
+          }
+        },
+        "kpi": {"statistic": "Chi-Quadrat (χ²)", "estimate": "Gemeinsames Odds Ratio", "strata": "Schichten"},
+        "symbols": "x = «{x}», y = «{y}», Schichten von «{strata}». In jeder Schicht (2 × 2): a, b die erste Zeile, c, d die zweite, R1, R2 die Zeilensummen, C1, C2 die Spaltensummen, N die Zeilen der Schicht (Tabelle «Schichten»); Y: die Stetigkeitskorrektur; z: das Normalquantil des Intervalls.",
+        "left_out": "Verwendete Zeilen: {n}. Ausgelassene Zeilen: {missing} (kein Wert in einer der drei Spalten).",
+        "tables": {"strata": "Schichten", "terms": "Summanden jeder Schicht", "pooled": "Die Tabelle über alle Schichten"},
+        "charts": {"observed": "Häufigkeiten über alle Schichten"}
+      },
+      "g_test": {
+        "name": "G-Test auf Unabhängigkeit",
+        "stats": {
+          "test": {"statistic": "G-Statistik (Likelihood-Quotient)"},
+          "cell": {"contribution": "Summand von G"}
+        },
+        "kpi": {"statistic": "G-Statistik", "effect": "Cramérs V"},
+        "symbols": "x = «{x}», y = «{y}». O, E: beobachtete und erwartete Zeilen einer Zelle (Tabelle «Beobachtet und erwartet»); R, C: die Summen ihrer Zeile und ihrer Spalte; N: verwendete Zeilen; r, c: die Kategorien von x und y; q: Williams-Korrektur; V: nach Cramér, aus Pearsons χ².",
         "left_out": "Verwendete Zeilen: {n}. Ausgelassene Zeilen: {missing} (kein Wert in einer der beiden Spalten)."
       }
     },
@@ -1004,7 +1187,19 @@
         "n_cells": "Verglichene Zellen",
         "cohen_w": "Effektstärke: Cohens w",
         "support": "Mögliche Werte von a (Träger)",
-        "sample_odds_ratio": "Odds Ratio der Stichprobe (a·d / b·c)"
+        "sample_odds_ratio": "Odds Ratio der Stichprobe (a·d / b·c)",
+        "network_nodes": "Schritte der exakten Zählung (Netzknoten)",
+        "categories": "Kategorien (k)",
+        "discordant": "Diskordante Paare",
+        "b": "x erste, y zweite (b)",
+        "c": "x zweite, y erste (c)",
+        "prop_difference": "Differenz der gepaarten Anteile, (b − c) / n",
+        "strata": "Schichten (K)",
+        "delta": "∑ (a − E(a)) über die Schichten",
+        "variance": "∑ V(a) über die Schichten",
+        "log_sd": "Standardfehler von ln OR_MH (Robins–Breslow–Greenland)",
+        "g": "G ohne Korrektur",
+        "williams_q": "Williams-Korrektur (q)"
       },
       "group": {
         "n": "n",
@@ -1033,7 +1228,14 @@
         "row_total": "Zeilen (R)",
         "row_share": "Anteil",
         "col_total": "Zeilen (C)",
-        "col_share": "Anteil"
+        "col_share": "Anteil",
+        "a": "a (1, 1)",
+        "b": "b (1, 2)",
+        "c": "c (2, 1)",
+        "d": "d (2, 2)",
+        "expected_a": "E(a)",
+        "variance_a": "V(a)",
+        "odds_ratio": "Odds Ratio (a·d / b·c)"
       },
       "hist": {"count": "Zeilen"},
       "curve": {
@@ -1065,7 +1267,8 @@
         "p_value": "p-Wert",
         "p_adjusted": "Korrigierter p-Wert",
         "significance": "Signifikanzcode",
-        "decision": "Entscheidung"
+        "decision": "Entscheidung",
+        "agreement": "Konkordant oder diskordant"
       }
     },
     "note": "Hinweis {n}",
@@ -1078,7 +1281,8 @@
       "notes": "Hinweise",
       "comparisons": "Paarweise Vergleiche",
       "table": "Tabelle der Häufigkeiten",
-      "comparisons_cells": "Vergleiche der Zellen"
+      "comparisons_cells": "Vergleiche der Zellen",
+      "strata": "Schichten"
     },
     "kpi": {"df": "Freiheitsgrade", "p_value": "p-Wert"},
     "decision": {
@@ -1315,10 +1519,63 @@
       "fisher_exact": {
         "name": "Prueba exacta de Fisher",
         "stats": {
-          "test": {"estimate": "Odds ratio, estimación condicional", "null_value": "Odds ratio bajo H0"}
+          "test": {"estimate": "Odds ratio, estimación condicional (2 × 2)", "null_value": "Odds ratio bajo H0"}
         },
-        "kpi": {"sample": "Odds ratio de la muestra", "n": "Filas usadas", "estimate": "Odds ratio"},
-        "symbols": "x = «{x}», y = «{y}»: a, b la primera fila, c, d la segunda (tabla «Observados y esperados»); R1: el total de la primera fila; C1, C2: los de las columnas (tablas de filas y columnas); N: filas usadas; X: la primera celda bajo H0 con los mismos márgenes (hipergeométrica).",
+        "kpi": {
+          "sample": "Odds ratio de la muestra",
+          "n": "Filas usadas",
+          "estimate": "Odds ratio",
+          "table": "Tabla",
+          "nodes": "Pasos del recuento exacto"
+        },
+        "symbols": "x = «{x}», y = «{y}». Una tabla 2 × 2: a, b la primera fila, c, d la segunda (tabla «Observados y esperados»); R1: el total de la primera fila; C1, C2: los de las columnas; X: la primera celda bajo H0 con los mismos márgenes. Una tabla mayor: T cada tabla con sus márgenes, n_ij sus celdas, R_i, C_j sus totales; N: filas usadas.",
+        "left_out": "Filas usadas: {n}. Filas excluidas: {missing} (sin valor en una de las dos columnas)."
+      },
+      "mcnemar": {
+        "name": "Prueba de McNemar",
+        "stats": {
+          "test": {
+            "statistic": "Estadístico chi cuadrado (χ²)",
+            "estimate": "Odds ratio de los pares discordantes (b / c)"
+          }
+        },
+        "kpi": {
+          "discordant": "Pares discordantes",
+          "statistic": "Chi cuadrado (χ²)",
+          "estimate": "Odds ratio b / c",
+          "categories": "Categorías"
+        },
+        "symbols": "x = «{x}», y = «{y}», dos valores de la misma fila; sus categorías juntas. b: las filas con x en la primera categoría e y en la segunda, c: al revés (2 × 2); n_ij: las filas con x = i e y = j (tabla «La tabla de los pares»); Y: la corrección de continuidad; E = (n_ij + n_ji) / 2 bajo H0.",
+        "left_out": "Filas usadas: {n}. Filas excluidas: {missing} (sin valor en una de las dos columnas).",
+        "tables": {
+          "cells": "La tabla de los pares",
+          "pair": {"header": "Par", "discordant": "Discordante", "concordant": "Concordante"}
+        },
+        "charts": {"observed": "Observados y esperados bajo simetría"}
+      },
+      "cmh": {
+        "name": "Prueba de Cochran–Mantel–Haenszel",
+        "stats": {
+          "test": {"statistic": "Estadístico chi cuadrado (χ²)", "estimate": "Odds ratio común de Mantel–Haenszel (OR_MH)"}
+        },
+        "kpi": {"statistic": "Chi cuadrado (χ²)", "estimate": "Odds ratio común", "strata": "Estratos"},
+        "symbols": "x = «{x}», y = «{y}», estratos de «{strata}». En cada estrato (2 × 2): a, b la primera fila, c, d la segunda, R1, R2 los totales de las filas, C1, C2 los de las columnas, N las filas del estrato (tabla «Estratos»); Y: la corrección de continuidad; z: el cuantil normal del intervalo.",
+        "left_out": "Filas usadas: {n}. Filas excluidas: {missing} (sin valor en una de las tres columnas).",
+        "tables": {
+          "strata": "Estratos",
+          "terms": "Términos de cada estrato",
+          "pooled": "La tabla sobre todos los estratos"
+        },
+        "charts": {"observed": "Frecuencias sobre todos los estratos"}
+      },
+      "g_test": {
+        "name": "Prueba G de independencia",
+        "stats": {
+          "test": {"statistic": "Estadístico G (razón de verosimilitud)"},
+          "cell": {"contribution": "Término de G"}
+        },
+        "kpi": {"statistic": "Estadístico G", "effect": "V de Cramér"},
+        "symbols": "x = «{x}», y = «{y}». O, E: filas observadas y esperadas de una celda (tabla «Observados y esperados»); R, C: los totales de su fila y de su columna; N: filas usadas; r, c: las categorías de x y de y; q: la corrección de Williams; V: de Cramér, del χ² de Pearson.",
         "left_out": "Filas usadas: {n}. Filas excluidas: {missing} (sin valor en una de las dos columnas)."
       }
     },
@@ -1397,7 +1654,19 @@
         "n_cells": "Celdas comparadas",
         "cohen_w": "Tamaño del efecto: w de Cohen",
         "support": "Valores posibles de a (soporte)",
-        "sample_odds_ratio": "Odds ratio de la muestra (a·d / b·c)"
+        "sample_odds_ratio": "Odds ratio de la muestra (a·d / b·c)",
+        "network_nodes": "Pasos del recuento exacto (nodos de la red)",
+        "categories": "Categorías (k)",
+        "discordant": "Pares discordantes",
+        "b": "x primera, y segunda (b)",
+        "c": "x segunda, y primera (c)",
+        "prop_difference": "Diferencia de las proporciones apareadas, (b − c) / n",
+        "strata": "Estratos (K)",
+        "delta": "∑ (a − E(a)) sobre los estratos",
+        "variance": "∑ V(a) sobre los estratos",
+        "log_sd": "Error estándar de ln OR_MH (Robins–Breslow–Greenland)",
+        "g": "G sin corrección",
+        "williams_q": "Corrección de Williams (q)"
       },
       "group": {
         "n": "n",
@@ -1426,7 +1695,14 @@
         "row_total": "Filas (R)",
         "row_share": "Proporción",
         "col_total": "Filas (C)",
-        "col_share": "Proporción"
+        "col_share": "Proporción",
+        "a": "a (1, 1)",
+        "b": "b (1, 2)",
+        "c": "c (2, 1)",
+        "d": "d (2, 2)",
+        "expected_a": "E(a)",
+        "variance_a": "V(a)",
+        "odds_ratio": "Odds ratio (a·d / b·c)"
       },
       "hist": {"count": "Filas"},
       "curve": {
@@ -1458,7 +1734,8 @@
         "p_value": "Valor p",
         "p_adjusted": "p-valor ajustado",
         "significance": "Código de significación",
-        "decision": "Decisión"
+        "decision": "Decisión",
+        "agreement": "Concordante o discordante"
       }
     },
     "note": "Nota {n}",
@@ -1471,7 +1748,8 @@
       "notes": "Notas",
       "comparisons": "Comparaciones por pares",
       "table": "Tabla de frecuencias",
-      "comparisons_cells": "Comparaciones de las celdas"
+      "comparisons_cells": "Comparaciones de las celdas",
+      "strata": "Estratos"
     },
     "kpi": {"df": "Grados de libertad", "p_value": "Valor p"},
     "decision": {
@@ -1704,10 +1982,56 @@
       "fisher_exact": {
         "name": "Test exact de Fisher",
         "stats": {
-          "test": {"estimate": "Odds ratio, estimation conditionnelle", "null_value": "Odds ratio sous H0"}
+          "test": {"estimate": "Odds ratio, estimation conditionnelle (2 × 2)", "null_value": "Odds ratio sous H0"}
         },
-        "kpi": {"sample": "Odds ratio de l'échantillon", "n": "Lignes utilisées", "estimate": "Odds ratio"},
-        "symbols": "x = «{x}», y = «{y}» : a, b la première ligne, c, d la seconde (tableau «Observés et attendus») ; R1 : le total de la première ligne ; C1, C2 : ceux des colonnes (tableaux des lignes et des colonnes) ; N : lignes utilisées ; X : la première cellule sous H0 avec les mêmes marges (hypergéométrique).",
+        "kpi": {
+          "sample": "Odds ratio de l'échantillon",
+          "n": "Lignes utilisées",
+          "estimate": "Odds ratio",
+          "table": "Tableau",
+          "nodes": "Étapes du dénombrement exact"
+        },
+        "symbols": "x = «{x}», y = «{y}». Un tableau 2 × 2 : a, b la première ligne, c, d la seconde (tableau «Observés et attendus») ; R1 : le total de la première ligne ; C1, C2 : ceux des colonnes ; X : la première cellule sous H0 avec les mêmes marges. Un tableau plus grand : T tout tableau de mêmes marges, n_ij ses cellules, R_i, C_j ses totaux ; N : lignes utilisées.",
+        "left_out": "Lignes utilisées : {n}. Lignes écartées : {missing} (aucune valeur dans l'une des deux colonnes)."
+      },
+      "mcnemar": {
+        "name": "Test de McNemar",
+        "stats": {
+          "test": {"statistic": "Statistique du khi-deux (χ²)", "estimate": "Odds ratio des paires discordantes (b / c)"}
+        },
+        "kpi": {
+          "discordant": "Paires discordantes",
+          "statistic": "Khi-deux (χ²)",
+          "estimate": "Odds ratio b / c",
+          "categories": "Catégories"
+        },
+        "symbols": "x = «{x}», y = «{y}», deux valeurs de la même ligne ; leurs catégories ensemble. b : les lignes avec x dans la première catégorie et y dans la seconde, c : l'inverse (2 × 2) ; n_ij : les lignes avec x = i et y = j (tableau «Le tableau des paires») ; Y : la correction de continuité ; E = (n_ij + n_ji) / 2 sous H0.",
+        "left_out": "Lignes utilisées : {n}. Lignes écartées : {missing} (aucune valeur dans l'une des deux colonnes).",
+        "tables": {
+          "cells": "Le tableau des paires",
+          "pair": {"header": "Paire", "discordant": "Discordante", "concordant": "Concordante"}
+        },
+        "charts": {"observed": "Observés et attendus sous symétrie"}
+      },
+      "cmh": {
+        "name": "Test de Cochran–Mantel–Haenszel",
+        "stats": {
+          "test": {"statistic": "Statistique du khi-deux (χ²)", "estimate": "Odds ratio commun de Mantel–Haenszel (OR_MH)"}
+        },
+        "kpi": {"statistic": "Khi-deux (χ²)", "estimate": "Odds ratio commun", "strata": "Strates"},
+        "symbols": "x = «{x}», y = «{y}», strates de «{strata}». Dans chaque strate (2 × 2) : a, b la première ligne, c, d la seconde, R1, R2 les totaux des lignes, C1, C2 ceux des colonnes, N les lignes de la strate (tableau «Strates») ; Y : la correction de continuité ; z : le quantile normal de l'intervalle.",
+        "left_out": "Lignes utilisées : {n}. Lignes écartées : {missing} (aucune valeur dans l'une des trois colonnes).",
+        "tables": {"strata": "Strates", "terms": "Termes de chaque strate", "pooled": "Le tableau sur toutes les strates"},
+        "charts": {"observed": "Effectifs sur toutes les strates"}
+      },
+      "g_test": {
+        "name": "Test G d'indépendance",
+        "stats": {
+          "test": {"statistic": "Statistique G (rapport de vraisemblance)"},
+          "cell": {"contribution": "Terme de G"}
+        },
+        "kpi": {"statistic": "Statistique G", "effect": "V de Cramér"},
+        "symbols": "x = «{x}», y = «{y}». O, E : lignes observées et attendues d'une cellule (tableau «Observés et attendus») ; R, C : les totaux de sa ligne et de sa colonne ; N : lignes utilisées ; r, c : les catégories de x et de y ; q : la correction de Williams ; V : de Cramér, du χ² de Pearson.",
         "left_out": "Lignes utilisées : {n}. Lignes écartées : {missing} (aucune valeur dans l'une des deux colonnes)."
       }
     },
@@ -1786,7 +2110,19 @@
         "n_cells": "Cellules comparées",
         "cohen_w": "Taille d'effet : w de Cohen",
         "support": "Valeurs possibles de a (support)",
-        "sample_odds_ratio": "Odds ratio de l'échantillon (a·d / b·c)"
+        "sample_odds_ratio": "Odds ratio de l'échantillon (a·d / b·c)",
+        "network_nodes": "Étapes du dénombrement exact (nœuds du réseau)",
+        "categories": "Catégories (k)",
+        "discordant": "Paires discordantes",
+        "b": "x première, y seconde (b)",
+        "c": "x seconde, y première (c)",
+        "prop_difference": "Différence des proportions appariées, (b − c) / n",
+        "strata": "Strates (K)",
+        "delta": "∑ (a − E(a)) sur les strates",
+        "variance": "∑ V(a) sur les strates",
+        "log_sd": "Erreur type de ln OR_MH (Robins–Breslow–Greenland)",
+        "g": "G sans correction",
+        "williams_q": "Correction de Williams (q)"
       },
       "group": {
         "n": "n",
@@ -1815,7 +2151,14 @@
         "row_total": "Lignes (R)",
         "row_share": "Part",
         "col_total": "Lignes (C)",
-        "col_share": "Part"
+        "col_share": "Part",
+        "a": "a (1, 1)",
+        "b": "b (1, 2)",
+        "c": "c (2, 1)",
+        "d": "d (2, 2)",
+        "expected_a": "E(a)",
+        "variance_a": "V(a)",
+        "odds_ratio": "Odds ratio (a·d / b·c)"
       },
       "hist": {"count": "Lignes"},
       "curve": {
@@ -1847,7 +2190,8 @@
         "p_value": "Valeur p",
         "p_adjusted": "p-valeur ajustée",
         "significance": "Code de signification",
-        "decision": "Décision"
+        "decision": "Décision",
+        "agreement": "Concordante ou discordante"
       }
     },
     "note": "Note {n}",
@@ -1860,7 +2204,8 @@
       "notes": "Notes",
       "comparisons": "Comparaisons par paires",
       "table": "Tableau des effectifs",
-      "comparisons_cells": "Comparaisons des cellules"
+      "comparisons_cells": "Comparaisons des cellules",
+      "strata": "Strates"
     },
     "kpi": {"df": "Degrés de liberté", "p_value": "Valeur p"},
     "decision": {

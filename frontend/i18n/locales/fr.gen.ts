@@ -6165,14 +6165,53 @@ export default {
       },
       "fisher_exact": {
         "name": "Test exact de Fisher",
-        "hint": "Deux colonnes de deux catégories chacune sont-elles indépendantes ? Exact sur un tableau 2 × 2, avec l'odds ratio et son intervalle.",
+        "hint": "Deux colonnes de catégories sont-elles indépendantes ? Exact : sur un tableau 2 × 2 avec l'odds ratio et son intervalle, sur un plus grand (Freeman–Halton) la p-valeur bilatérale.",
         "params": {
           "x": "Lignes du tableau (x)",
           "y": "Colonnes du tableau (y)"
         },
         "hints": {
           "x": "Une colonne de deux catégories : l'odds ratio est celui de la première (dans l'ordre du texte).",
-          "y": "Aussi de deux catégories ; une ligne sans valeur dans l'une des deux est écartée."
+          "y": "Aussi de deux catégories ; une ligne sans valeur dans l'une des deux est écartée.",
+          "alternative": "Un test unilatéral n'est que d'un tableau 2 × 2 : un tableau plus grand est testé bilatéral."
+        }
+      },
+      "mcnemar": {
+        "name": "Test de McNemar",
+        "hint": "Deux réponses des mêmes lignes (avant et après) : ont-elles changé plus dans un sens que dans l'autre ? Test de McNemar, exact ou du khi-deux ; le test de symétrie de Bowker au-delà de deux catégories.",
+        "params": {
+          "x": "Première réponse (x)",
+          "y": "Seconde réponse (y)"
+        },
+        "hints": {
+          "x": "Une colonne de catégories : avec y, les deux réponses de chaque ligne.",
+          "y": "Les mêmes catégories que x ; une ligne sans valeur dans l'une des deux est écartée.",
+          "method": "Automatique : exact sous 25 paires discordantes, khi-deux au-delà. Exact : la binomiale des paires discordantes (2 × 2 seulement).",
+          "correction": "La correction de continuité du khi-deux (comme mcnemar.test de R), sur un tableau 2 × 2."
+        }
+      },
+      "cmh": {
+        "name": "Test de Cochran–Mantel–Haenszel",
+        "hint": "Deux colonnes de catégories sont-elles indépendantes dans chaque strate d'une troisième ? Avec l'odds ratio commun des tableaux 2 × 2 et son intervalle.",
+        "params": {
+          "x": "Lignes du tableau (x)",
+          "y": "Colonnes du tableau (y)"
+        },
+        "hints": {
+          "strata": "La colonne qui nomme les strates : un tableau de x et y dans chacune.",
+          "correction": "La correction de continuité des tableaux 2 × 2 (comme mantelhaen.test de R)."
+        }
+      },
+      "g_test": {
+        "name": "Test G d'indépendance",
+        "hint": "Deux colonnes de catégories sont-elles indépendantes ? Le rapport de vraisemblance G sur leur tableau d'effectifs, avec la correction de Williams sur demande.",
+        "params": {
+          "x": "Lignes du tableau (x)",
+          "y": "Colonnes du tableau (y)",
+          "posthoc": "Comparaisons"
+        },
+        "hints": {
+          "posthoc": "Quelles cellules s'écartent de l'indépendance : leurs résidus ajustés."
         }
       }
     },
@@ -6194,7 +6233,9 @@ export default {
       "p0": "Proportion sous H0 (p0)",
       "method": "Méthode",
       "correction": "Correction de continuité",
-      "expected": "Proportions attendues"
+      "expected": "Proportions attendues",
+      "strata": "Colonne des strates",
+      "williams": "Correction de Williams"
     },
     "hints": {
       "value": "La colonne mesurée.",
@@ -6213,7 +6254,9 @@ export default {
       "p0": "Entre 0 et 1 : la part de succès que pose l'hypothèse nulle.",
       "method": "Score : l'approximation normale, l'intervalle de Wilson. Exact : la binomiale, l'intervalle de Clopper–Pearson (jusqu'à un million de lignes).",
       "correction": "La correction de continuité de Yates de l'approximation normale (comme prop.test de R).",
-      "expected": "Toutes égales, ou une proportion pour chaque catégorie de la colonne : au-dessus de 0, de somme 1."
+      "expected": "Toutes égales, ou une proportion pour chaque catégorie de la colonne : au-dessus de 0, de somme 1.",
+      "williams": "Divise G par q, plus proche du khi-deux sur les petits tableaux.",
+      "strata": "La colonne qui nomme les strates."
     },
     "choices": {
       "alternative": {
@@ -6245,6 +6288,15 @@ export default {
         "none": "Aucune",
         "cells": "Les cellules",
         "pairs": "Les paires de catégories de x"
+      },
+      "mcnemar_method": {
+        "auto": "Automatique",
+        "exact": "Exact (binomial)",
+        "asymptotic": "Khi-deux"
+      },
+      "g_posthoc": {
+        "none": "Aucune",
+        "cells": "Les cellules"
       }
     },
     "reasons": {

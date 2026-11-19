@@ -133,6 +133,26 @@ TESTS: dict[str, dict[str, Any]] = {
         "takes": {"alternative": "alternative", "alpha": "alpha", "detail": "detail"},
         "defaults": {"alternative": "two_sided", "alpha": 0.05, "detail": "results"},
     },
+    "mcnemar": {
+        "family": "proportions",
+        "needs": {"x": "column", "y": "column"},
+        "takes": {"method": "mcnemar_method", "correction": "boolean", "alpha": "alpha", "detail": "detail"},
+        "defaults": {"method": "auto", "correction": True, "alpha": 0.05, "detail": "results"},
+        "applies": {"correction": {"method": ["auto", "asymptotic"]}},
+    },
+    "cmh": {
+        "family": "proportions",
+        "needs": {"x": "column", "y": "column", "strata": "column"},
+        "takes": {"correction": "boolean", "alpha": "alpha", "detail": "detail"},
+        "defaults": {"correction": True, "alpha": 0.05, "detail": "results"},
+    },
+    "g_test": {
+        "family": "proportions",
+        "needs": {"x": "column", "y": "column"},
+        "takes": {"williams": "boolean", "posthoc": "g_posthoc", "p_adjust": "p_adjust", "alpha": "alpha", "detail": "detail"},
+        "defaults": {"williams": False, "posthoc": "none", "p_adjust": "holm", "alpha": 0.05, "detail": "results"},
+        "applies": {"p_adjust": {"posthoc": ["cells"]}},
+    },
     "pearson": {
         "family": "correlation",
         "needs": {"x": "number_column", "y": "number_column"},
@@ -147,6 +167,8 @@ P_ADJUST = ("holm", "bonferroni", "sidak", "none")
 LEVENE_CENTER = ("median", "mean")
 PROP_METHOD = ("score", "exact")
 CHI2_POSTHOC = ("none", "cells", "pairs")
+G_POSTHOC = ("none", "cells")
+MCNEMAR_METHOD = ("auto", "exact", "asymptotic")
 
 # Beyond this many groups the column is almost surely the wrong one. It bounds what a test
 # reads back from the engine too: a row per group, never more.
@@ -158,6 +180,9 @@ MAX_STAT_LEVELS = 50
 # The most outcomes an exact binomial or Fisher computation goes through (n + 1; the values
 # the first cell of a 2×2 table may take with its margins).
 EXACT_SUPPORT = 1_000_000
+# The most nodes Fisher's exact test of an r × c table creates (the network algorithm): some
+# 10 seconds and 550 MB of a worker (measured: a 3 × 4 table of 127 rows, 1.74 million, 8.9 s).
+EXACT_NETWORK = 2_000_000
 
 # The rows a report's charts draw (`detail = report`): the points of the reference
 # distribution's curve, and the intervals of a histogram, between the two whatever the rows.
@@ -324,6 +349,8 @@ _READERS: dict[str, Callable[..., Any]] = {
     "success": _success,
     "prop_method": _one_of(PROP_METHOD),
     "chi2_posthoc": _one_of(CHI2_POSTHOC),
+    "g_posthoc": _one_of(G_POSTHOC),
+    "mcnemar_method": _one_of(MCNEMAR_METHOD),
     "expected_proportions": _expected_proportions,
     "detail": _one_of(DETAILS),
 }
@@ -358,6 +385,8 @@ KINDS: dict[str, dict[str, Any]] = {
     "success": {"control": "level", "of": "value"},
     "prop_method": {"control": "choice", "choices": list(PROP_METHOD)},
     "chi2_posthoc": {"control": "choice", "choices": list(CHI2_POSTHOC)},
+    "g_posthoc": {"control": "choice", "choices": list(G_POSTHOC)},
+    "mcnemar_method": {"control": "choice", "choices": list(MCNEMAR_METHOD)},
     "expected_proportions": {"control": "proportions", "of": "value"},
     "detail": {"control": "choice", "choices": list(DETAILS), "hidden": True},
 }

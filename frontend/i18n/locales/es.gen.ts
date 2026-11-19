@@ -6165,14 +6165,53 @@ export default {
       },
       "fisher_exact": {
         "name": "Prueba exacta de Fisher",
-        "hint": "¿Dos columnas de dos categorías cada una son independientes? Exacta sobre una tabla 2 × 2, con el odds ratio y su intervalo.",
+        "hint": "¿Dos columnas de categorías son independientes? Exacta: en una tabla 2 × 2 con el odds ratio y su intervalo, en una mayor (Freeman–Halton) el p-valor bilateral.",
         "params": {
           "x": "Filas de la tabla (x)",
           "y": "Columnas de la tabla (y)"
         },
         "hints": {
           "x": "Una columna de dos categorías: el odds ratio es de la primera (en orden de texto).",
-          "y": "También de dos categorías; una fila sin valor en alguna de las dos se deja fuera."
+          "y": "También de dos categorías; una fila sin valor en alguna de las dos se deja fuera.",
+          "alternative": "Una prueba unilateral es solo de una tabla 2 × 2: una tabla mayor se prueba bilateral."
+        }
+      },
+      "mcnemar": {
+        "name": "Prueba de McNemar",
+        "hint": "Dos respuestas de las mismas filas (antes y después): ¿cambiaron más en un sentido que en el otro? Prueba de McNemar, exacta o chi cuadrado; la prueba de simetría de Bowker con más de dos categorías.",
+        "params": {
+          "x": "Primera respuesta (x)",
+          "y": "Segunda respuesta (y)"
+        },
+        "hints": {
+          "x": "Una columna de categorías: con y, las dos respuestas de cada fila.",
+          "y": "Las mismas categorías que x; una fila sin valor en alguna de las dos se deja fuera.",
+          "method": "Automático: exacta por debajo de 25 pares discordantes, chi cuadrado por encima. Exacta: la binomial de los pares discordantes (solo 2 × 2).",
+          "correction": "La corrección de continuidad del chi cuadrado (como mcnemar.test de R), en una tabla 2 × 2."
+        }
+      },
+      "cmh": {
+        "name": "Prueba de Cochran–Mantel–Haenszel",
+        "hint": "¿Dos columnas de categorías son independientes dentro de cada estrato de una tercera? Con el odds ratio común de las tablas 2 × 2 y su intervalo.",
+        "params": {
+          "x": "Filas de la tabla (x)",
+          "y": "Columnas de la tabla (y)"
+        },
+        "hints": {
+          "strata": "La columna que nombra los estratos: una tabla de x e y en cada uno.",
+          "correction": "La corrección de continuidad de las tablas 2 × 2 (como mantelhaen.test de R)."
+        }
+      },
+      "g_test": {
+        "name": "Prueba G de independencia",
+        "hint": "¿Dos columnas de categorías son independientes? La razón de verosimilitud G sobre su tabla de frecuencias, con la corrección de Williams si se pide.",
+        "params": {
+          "x": "Filas de la tabla (x)",
+          "y": "Columnas de la tabla (y)",
+          "posthoc": "Comparaciones"
+        },
+        "hints": {
+          "posthoc": "Qué celdas se apartan de la independencia: sus residuos ajustados."
         }
       }
     },
@@ -6194,7 +6233,9 @@ export default {
       "p0": "Proporción bajo H0 (p0)",
       "method": "Método",
       "correction": "Corrección de continuidad",
-      "expected": "Proporciones esperadas"
+      "expected": "Proporciones esperadas",
+      "strata": "Columna de los estratos",
+      "williams": "Corrección de Williams"
     },
     "hints": {
       "value": "La columna que se mide.",
@@ -6213,7 +6254,9 @@ export default {
       "p0": "Entre 0 y 1: la proporción de éxitos que afirma la hipótesis nula.",
       "method": "Score: la aproximación normal, el intervalo de Wilson. Exacto: la binomial, el intervalo de Clopper–Pearson (hasta un millón de filas).",
       "correction": "La corrección de continuidad de Yates de la aproximación normal (como prop.test de R).",
-      "expected": "Todas iguales, o una proporción para cada categoría de la columna: mayor que 0, con suma 1."
+      "expected": "Todas iguales, o una proporción para cada categoría de la columna: mayor que 0, con suma 1.",
+      "williams": "Divide G entre q, más cerca del chi cuadrado en tablas pequeñas.",
+      "strata": "La columna que nombra los estratos."
     },
     "choices": {
       "alternative": {
@@ -6245,6 +6288,15 @@ export default {
         "none": "Ninguna",
         "cells": "Las celdas",
         "pairs": "Los pares de categorías de x"
+      },
+      "mcnemar_method": {
+        "auto": "Automático",
+        "exact": "Exacto (binomial)",
+        "asymptotic": "Chi cuadrado"
+      },
+      "g_posthoc": {
+        "none": "Ninguna",
+        "cells": "Las celdas"
       }
     },
     "reasons": {

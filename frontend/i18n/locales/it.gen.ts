@@ -6165,14 +6165,53 @@ export default {
       },
       "fisher_exact": {
         "name": "Test esatto di Fisher",
-        "hint": "Due colonne di due categorie ciascuna sono indipendenti? Esatto su una tabella 2 × 2, con l'odds ratio e il suo intervallo.",
+        "hint": "Due colonne di categorie sono indipendenti? Esatto: su una tabella 2 × 2 con l'odds ratio e il suo intervallo, su una più grande (Freeman–Halton) il p-value bilaterale.",
         "params": {
           "x": "Righe della tabella (x)",
           "y": "Colonne della tabella (y)"
         },
         "hints": {
           "x": "Una colonna di due categorie: l'odds ratio è della prima (in ordine di testo).",
-          "y": "Anche questa di due categorie; una riga senza valore in una delle due è lasciata fuori."
+          "y": "Anche questa di due categorie; una riga senza valore in una delle due è lasciata fuori.",
+          "alternative": "Un test unilaterale è solo di una tabella 2 × 2: una tabella più grande si prova bilaterale."
+        }
+      },
+      "mcnemar": {
+        "name": "Test di McNemar",
+        "hint": "Due risposte delle stesse righe (prima e dopo): sono cambiate più in un verso che nell'altro? Test di McNemar, esatto o chi quadrato; il test di simmetria di Bowker oltre due categorie.",
+        "params": {
+          "x": "Prima risposta (x)",
+          "y": "Seconda risposta (y)"
+        },
+        "hints": {
+          "x": "Una colonna di categorie: con y, le due risposte di ogni riga.",
+          "y": "Le stesse categorie di x; una riga senza valore in una delle due è lasciata fuori.",
+          "method": "Automatico: esatto sotto 25 coppie discordanti, chi quadrato sopra. Esatto: la binomiale delle coppie discordanti (solo 2 × 2).",
+          "correction": "La correzione di continuità del chi quadrato (come mcnemar.test di R), su una tabella 2 × 2."
+        }
+      },
+      "cmh": {
+        "name": "Test di Cochran–Mantel–Haenszel",
+        "hint": "Due colonne di categorie sono indipendenti dentro ogni strato di una terza? Con l'odds ratio comune delle tabelle 2 × 2 e il suo intervallo.",
+        "params": {
+          "x": "Righe della tabella (x)",
+          "y": "Colonne della tabella (y)"
+        },
+        "hints": {
+          "strata": "La colonna che dà il nome agli strati: una tabella di x e y in ciascuno.",
+          "correction": "La correzione di continuità delle tabelle 2 × 2 (come mantelhaen.test di R)."
+        }
+      },
+      "g_test": {
+        "name": "Test G di indipendenza",
+        "hint": "Due colonne di categorie sono indipendenti? Il rapporto di verosimiglianza G sulla loro tabella dei conteggi, con la correzione di Williams se richiesta.",
+        "params": {
+          "x": "Righe della tabella (x)",
+          "y": "Colonne della tabella (y)",
+          "posthoc": "Confronti"
+        },
+        "hints": {
+          "posthoc": "Quali celle si allontanano dall'indipendenza: i loro residui corretti."
         }
       }
     },
@@ -6194,7 +6233,9 @@ export default {
       "p0": "Proporzione sotto H0 (p0)",
       "method": "Metodo",
       "correction": "Correzione di continuità",
-      "expected": "Proporzioni attese"
+      "expected": "Proporzioni attese",
+      "strata": "Colonna degli strati",
+      "williams": "Correzione di Williams"
     },
     "hints": {
       "value": "La colonna che si misura.",
@@ -6213,7 +6254,9 @@ export default {
       "p0": "Tra 0 e 1: la quota di successi che afferma l'ipotesi nulla.",
       "method": "Score: l'approssimazione normale, l'intervallo di Wilson. Esatto: la binomiale, l'intervallo di Clopper–Pearson (fino a un milione di righe).",
       "correction": "La correzione di continuità di Yates dell'approssimazione normale (come prop.test di R).",
-      "expected": "Tutte uguali, o una proporzione per ogni categoria della colonna: sopra 0, con somma 1."
+      "expected": "Tutte uguali, o una proporzione per ogni categoria della colonna: sopra 0, con somma 1.",
+      "williams": "Divide G per q, più vicino al chi quadrato sulle tabelle piccole.",
+      "strata": "La colonna che dà il nome agli strati."
     },
     "choices": {
       "alternative": {
@@ -6245,6 +6288,15 @@ export default {
         "none": "Nessuno",
         "cells": "Le celle",
         "pairs": "Le coppie di categorie di x"
+      },
+      "mcnemar_method": {
+        "auto": "Automatico",
+        "exact": "Esatto (binomiale)",
+        "asymptotic": "Chi quadrato"
+      },
+      "g_posthoc": {
+        "none": "Nessuno",
+        "cells": "Le celle"
       }
     },
     "reasons": {

@@ -6165,14 +6165,53 @@ export default {
       },
       "fisher_exact": {
         "name": "Exakter Test nach Fisher",
-        "hint": "Sind zwei Spalten mit je zwei Kategorien unabhängig? Exakt auf einer 2 × 2-Tabelle, mit dem Odds Ratio und seinem Intervall.",
+        "hint": "Sind zwei kategoriale Spalten unabhängig? Exakt: bei einer 2 × 2-Tabelle mit dem Odds Ratio und seinem Intervall, bei einer größeren (Freeman-Halton) der zweiseitige p-Wert.",
         "params": {
           "x": "Zeilen der Tabelle (x)",
           "y": "Spalten der Tabelle (y)"
         },
         "hints": {
           "x": "Eine Spalte mit zwei Kategorien: das Odds Ratio ist das der ersten (in Textreihenfolge).",
-          "y": "Ebenfalls zwei Kategorien; eine Zeile ohne Wert in einer der beiden wird ausgelassen."
+          "y": "Ebenfalls zwei Kategorien; eine Zeile ohne Wert in einer der beiden wird ausgelassen.",
+          "alternative": "Ein einseitiger Test ist nur bei einer 2 × 2-Tabelle möglich: eine größere Tabelle wird zweiseitig getestet."
+        }
+      },
+      "mcnemar": {
+        "name": "McNemar-Test",
+        "hint": "Zwei Antworten derselben Zeilen (vorher und nachher): haben sie sich in eine Richtung öfter geändert? McNemar-Test, exakt oder Chi-Quadrat; Bowkers Symmetrietest bei mehr als zwei Kategorien.",
+        "params": {
+          "x": "Erste Antwort (x)",
+          "y": "Zweite Antwort (y)"
+        },
+        "hints": {
+          "x": "Eine Spalte mit Kategorien: mit y die zwei Antworten jeder Zeile.",
+          "y": "Dieselben Kategorien wie x; eine Zeile ohne Wert in einer der beiden wird ausgelassen.",
+          "method": "Automatisch: exakt unter 25 diskordanten Paaren, darüber Chi-Quadrat. Exakt: die Binomialverteilung der diskordanten Paare (nur 2 × 2).",
+          "correction": "Die Stetigkeitskorrektur des Chi-Quadrats (wie mcnemar.test in R), bei einer 2 × 2-Tabelle."
+        }
+      },
+      "cmh": {
+        "name": "Cochran-Mantel-Haenszel-Test",
+        "hint": "Sind zwei kategoriale Spalten innerhalb jeder Schicht einer dritten unabhängig? Mit dem gemeinsamen Odds Ratio von 2 × 2-Tabellen und seinem Intervall.",
+        "params": {
+          "x": "Zeilen der Tabelle (x)",
+          "y": "Spalten der Tabelle (y)"
+        },
+        "hints": {
+          "strata": "Die Spalte, die die Schichten benennt: eine Tabelle von x und y in jeder.",
+          "correction": "Die Stetigkeitskorrektur von 2 × 2-Tabellen (wie mantelhaen.test in R)."
+        }
+      },
+      "g_test": {
+        "name": "G-Test auf Unabhängigkeit",
+        "hint": "Sind zwei kategoriale Spalten unabhängig? Der Likelihood-Quotient G auf ihrer Häufigkeitstabelle, auf Wunsch mit Williams-Korrektur.",
+        "params": {
+          "x": "Zeilen der Tabelle (x)",
+          "y": "Spalten der Tabelle (y)",
+          "posthoc": "Vergleiche"
+        },
+        "hints": {
+          "posthoc": "Welche Zellen von der Unabhängigkeit abweichen: ihre korrigierten Residuen."
         }
       }
     },
@@ -6194,7 +6233,9 @@ export default {
       "p0": "Anteil unter H0 (p0)",
       "method": "Methode",
       "correction": "Stetigkeitskorrektur",
-      "expected": "Erwartete Anteile"
+      "expected": "Erwartete Anteile",
+      "strata": "Spalte der Schichten",
+      "williams": "Williams-Korrektur"
     },
     "hints": {
       "value": "Die Spalte, die gemessen wird.",
@@ -6213,7 +6254,9 @@ export default {
       "p0": "Zwischen 0 und 1: der Anteil der Erfolge, den die Nullhypothese behauptet.",
       "method": "Score: die Normalapproximation, Wilson-Intervall. Exakt: die Binomialverteilung, Clopper-Pearson-Intervall (bis zu einer Million Zeilen).",
       "correction": "Yates' Stetigkeitskorrektur der Normalapproximation (wie prop.test in R).",
-      "expected": "Alle gleich oder ein Anteil für jede Kategorie der Spalte: über 0, mit Summe 1."
+      "expected": "Alle gleich oder ein Anteil für jede Kategorie der Spalte: über 0, mit Summe 1.",
+      "williams": "Teilt G durch q, näher am Chi-Quadrat bei kleinen Tabellen.",
+      "strata": "Die Spalte, die die Schichten benennt."
     },
     "choices": {
       "alternative": {
@@ -6245,6 +6288,15 @@ export default {
         "none": "Keine",
         "cells": "Die Zellen",
         "pairs": "Die Paare von Kategorien von x"
+      },
+      "mcnemar_method": {
+        "auto": "Automatisch",
+        "exact": "Exakt (binomial)",
+        "asymptotic": "Chi-Quadrat"
+      },
+      "g_posthoc": {
+        "none": "Keine",
+        "cells": "Die Zellen"
       }
     },
     "reasons": {

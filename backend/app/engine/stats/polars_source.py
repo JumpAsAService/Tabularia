@@ -11,6 +11,7 @@ from typing import Any
 from app.engine.stats.aggregates import (
     CENTRE_ROWS,
     Cell,
+    Cell3,
     Successes,
     Deviations,
     Difference,
@@ -111,6 +112,16 @@ class PolarsStatSource:
             .collect(engine="streaming")
         )
         return [Cell(a, b, int(rows)) for a, b, rows in df.iter_rows()]
+
+    def crosstab3(self, x: str, y: str, z: str, limit: int) -> list[Cell3]:
+        """A7 within strata: the rows of each triple of values; `limit` at most."""
+        df = (
+            self.lf.group_by(pl.col(x).alias("__stat_lx__"), pl.col(y).alias("__stat_ly__"), pl.col(z).alias("__stat_lz__"))
+            .agg(pl.len().alias(_ROWS))
+            .head(limit)
+            .collect(engine="streaming")
+        )
+        return [Cell3(a, b, c, int(rows)) for a, b, c, rows in df.iter_rows()]
 
     def levels(self, group: str, limit: int) -> list[Level]:
         """A1: the values of `group` with their rows, the NULL one too; `limit` at most."""

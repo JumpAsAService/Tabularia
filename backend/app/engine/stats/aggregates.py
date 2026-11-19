@@ -142,6 +142,15 @@ class Cell(NamedTuple):
     rows: int
 
 
+class Cell3(NamedTuple):
+    """A triple of values of three columns and its rows (A7 with strata); None where NULL."""
+
+    x: Any
+    y: Any
+    z: Any
+    rows: int
+
+
 class Difference(NamedTuple):
     """A measure that is not a column: the difference x − y of two columns of the same row,
     where both are numbers (NULL elsewhere)."""
@@ -559,6 +568,16 @@ class SqlStatSource:
             f"FROM {self._source} GROUP BY {qx}, {qy} LIMIT {int(limit)}"
         )
         return [Cell(r[0], r[1], int(r[2])) for r in rows]
+
+    def crosstab3(self, x: str, y: str, z: str, limit: int) -> list[Cell3]:
+        """A7 within strata: the rows of each triple of values of `x`, `y` and `z`, NULL ones
+        too; `limit` triples at most, in no order."""
+        qx, qy, qz = self._quote(x), self._quote(y), self._quote(z)
+        rows = self._rows(
+            f"SELECT {qx} AS {self._fresh('lx')}, {qy} AS {self._fresh('ly')}, {qz} AS {self._fresh('lz')}, "
+            f"count(*) AS {self._fresh('rows')} FROM {self._source} GROUP BY {qx}, {qy}, {qz} LIMIT {int(limit)}"
+        )
+        return [Cell3(r[0], r[1], r[2], int(r[3])) for r in rows]
 
     def histogram(self, value: Any, group: str | None, lo: float, hi: float, bins: int) -> list[HistogramBin]:
         """A13: the rows whose `value` falls in each of `bins` equal intervals between `lo`

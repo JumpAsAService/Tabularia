@@ -758,53 +758,109 @@ group\|, from the groups' n, mean and variance of z. Variant `median` or `mean`.
 
 ### Proportions and categories
 
-**`stat_prop_one_sample`** — `value`, `success`, `p0` (default 0.5), `method` (`score`
-default, `exact`), `correction` (default true), `alternative`. H0: proportion = p0. A8.
-p̂ = k/n = estimate. `success` is the value of `value` that counts, compared as the Filter
-node's «equals».
+Built in lot 3 (commits c2e3935c, 91c91444, 14485d24 and the four tests after them). Where
+the build differs from what this section first said, it says what the code does.
+
+**`stat_prop_one_sample`** — `value` (any column), `success`, `p0` (default 0.5), `method`
+(`score` default, `exact`), `correction` (default true; `applies` with `score` only),
+`alternative`. H0: proportion = p0. A8 (`successes`). p̂ = k/n = estimate. `success` is a
+text, a number or true/false, typed as the outcome column holds it (`aggregates.typed_value`:
+a text, a whole or a float number, a date, a boolean) and compared with an equality in the
+engine; a column of another type (a datetime, a decimal) is refused, as a success no value of
+the column can be («yes» in a column of numbers).
 - `score`: Y = min(0.5, \|k − n·p0\|) with the correction, else 0; `chi_square` =
   (\|k − n·p0\| − Y)²/(n·p0·(1 − p0)); statistic z = ±√chi_square with the sign of p̂ − p0;
-  normal p-value. Interval (Wilson, with the correction when asked), z_q = q_norm(1 − α/2):
-  upper with p_c = p̂ + Y/n, lower with p_c = p̂ − Y/n,
-  (p_c + z_q²/(2n) ± z_q·√(p_c(1 − p_c)/n + z_q²/(4n²)))/(1 + z_q²/n), kept inside [0, 1].
-- `exact`: `binomial_test`, `clopper_pearson`; no statistic but `successes`; refused above
+  normal p-value. Interval (Wilson, with the correction when asked) as R's `prop.test`.
+- `exact`: `binomial_test`, `clopper_pearson`; no `statistic` row, the `successes` row is
+  there for every method; distribution `binomial(n, p0)`; refused when n + 1 passes
   `EXACT_SUPPORT`.
+- The open side of a one-sided interval is the bound of the parameter (0 or 1), as R writes
+  it, not NULL: a proportion's interval is never unbounded.
+- Group row: the column, with `n`, `rows`, `successes`, `proportion`, `se`, and its two-sided
+  interval (the test's method).
 - Refused: n = 0; `success` never found is not an error (k = 0), and a note says so.
 
 **`stat_prop_two_sample`** — `value`, `success`, `group`, `groups?`, `correction`,
-`alternative`. H0: proportion₁ = proportion₂. A1, A8. Δ = p̂₁ − p̂₂ = estimate;
-`pooled_proportion` p̄ = (k₁ + k₂)/(n₁ + n₂); I = 1/n₁ + 1/n₂; Y = min(0.5, \|Δ\|/I) with
-the correction, else 0; `chi_square` = (\|Δ\| − Y·I)²/(p̄(1 − p̄)I); statistic
-z = ±√chi_square; interval Δ ± (Y·I + z_q·√(p̂₁(1 − p̂₁)/n₁ + p̂₂(1 − p̂₂)/n₂)), kept
-inside [−1, 1]; effect `cohen_h` = 2·asin√p̂₁ − 2·asin√p̂₂. Refused: p̄ = 0 or 1.
+`alternative`. H0: proportion₁ = proportion₂. A1, A8. As R's `prop.test` of two groups:
+Δ = p̂₁ − p̂₂ = estimate; p̄; I = 1/n₁ + 1/n₂; Y = min(0.5, \|Δ\|/I) with the correction;
+`chi_square` = (\|Δ\| − Y·I)²/(p̄(1 − p̄)I); z = ±√chi_square; interval
+Δ ± (Y·I + z_q·√(p̂₁(1 − p̂₁)/n₁ + p̂₂(1 − p̂₂)/n₂)) inside [−1, 1] (one-sided: −1 or 1 on
+the open side); `cohen_h`. Each group's row has its Wilson interval (Y = 0.5 when corrected).
+Refused: p̄ = 0 or 1.
 
-**`stat_chi2_independence`** — `x`, `y`, `correction` (default true; used for 2×2 only),
-`posthoc`, `p_adjust`. H0: the two variables are independent. A7. E = row total × column
-total / N; statistic Σ(O − E)²/E, for 2×2 with the correction Σ(\|O − E\| − 0.5)²/E;
-df = (r − 1)(c − 1). Effects, from the statistic **without** correction: `cramers_v` =
-√(χ²/(N·min(r − 1, c − 1))), for 2×2 also `phi`. Every cell has `adj_residual` =
-(O − E)/√(E·(1 − row total/N)·(1 − column total/N)). A note when more than 20% of the
-expected counts are below 5 or one is below 1. Refused: a variable with one level; more
-than `MAX_STAT_LEVELS`.
+**`stat_chi2_independence`** — `x`, `y` (any columns), `correction` (default true; 2×2
+only), `posthoc`, `p_adjust`. H0: x and y independent. A7 (`crosstab`, at most
+`MAX_STAT_LEVELS`² + 2·`MAX_STAT_LEVELS` + 2 pairs read; more means a column past 50
+categories). Categories are labels: −0.0 and 0.0 one, on every engine. As R's `chisq.test`:
+the 2 × 2 correction is Y = min(0.5, \|O − E\|), not 0.5 (R since 3.x). Each cell writes
+`observed`, `expected`, `residual`, `adj_residual`, `contribution` — the cell's term of the
+statistic actually used (corrected when the correction applies), so that they add up to it;
+`chi_square_plain` (without the correction) and `yates` are numbers of the test; `phi` is
+signed, (ad − bc)/√(R₁R₂C₁C₂). The margins are groups: `row_total`, `row_share` for each
+category of x, `col_total`, `col_share` for each of y. A note when more than 20% of the
+expected counts are below 5 or one is below 1. Refused: x = y; a column with one category;
+past `MAX_STAT_LEVELS`.
 
 Its post-hoc, `posthoc` = `none` (default), `cells`, `pairs`:
-- `cells`: which cells make the association. Each cell's `p_value` = 2·P(Z ≥ \|adj_residual\|),
-  `p_adjusted` over the r·c cells by `p_adjust`.
-- `pairs`: which categories of `x` differ. For every pair of them, the chi-square of the
-  2 × c table of those two rows (with the correction when it is 2×2 and `correction` is
-  on), `df` = c − 1, `p_value`, `p_adjusted` over the pairs. No estimate, no interval. At
-  most `MAX_POSTHOC_GROUPS` categories.
+- `cells`: each cell's `p_value` = 2·P(Z ≥ \|adj_residual\|), `p_adjusted` over the r·c
+  cells, `significance`, `decision`.
+- `pairs`: for every pair of categories of `x`, the chi-square of their 2 × c table, the
+  columns with no row in either left out (df = c′ − 1; with fewer than two, statistic 0 and
+  p = 1); the pair's eleven rows (`_write_pair`), no estimate, no interval. At most
+  `MAX_POSTHOC_GROUPS` categories; a note when the test itself does not reject.
 
-**`stat_chi2_gof`** — `value`, `expected` (null = all equal, or `{label: proportion}` for
-every category). H0: the categories have the expected proportions. A1. E = N·pᵢ;
-statistic Σ(O − E)²/E; df = k − 1; effect `cohen_w` = √(χ²/N). Refused: `expected` that
-does not list exactly the categories found, has a proportion ≤ 0, or does not sum to 1
-within 1e-9.
+**`stat_chi2_gof`** — `value`, `expected` (null = all equal, or `{label: proportion}`; the
+form: «all equal» or a box per category, with their sum). H0: the categories have the
+expected proportions. A1, NaN and NULL left out, labels merged. E = N·pᵢ; Σ(O − E)²/E;
+df = k − 1; `cohen_w`. Cells (level = the category, level_2 null): `observed`, `proportion`,
+`expected_share`, `expected`, `residual`, `contribution`. Refused: `expected` that does not
+list exactly the categories found, a proportion ≤ 0, a sum not 1 within 1e-9.
 
-**`stat_fisher_exact`** — `x`, `y`, `alternative`. H0: odds ratio = 1. A7, 2×2 only
-(refused otherwise, with the two counts of levels). `fisher_exact`; estimate =
-`odds_ratio` (conditional), its interval; block `sample_odds_ratio` = ad/bc. No statistic,
-no curve. Refused when the support passes `EXACT_SUPPORT` («use the chi-square test»).
+**`stat_fisher_exact`** — `x`, `y`, `alternative`. As R's `fisher.test`:
+- 2 × 2: `exact.fisher_exact`; estimate = the conditional odds ratio, its interval, found to
+  the last digit of their logarithm (R's `uniroot` leaves them up to 1.4e-2 off on some
+  tables); `sample_odds_ratio`; distribution `hypergeometric(C1, C2, R1)`; refused when the
+  support passes `EXACT_SUPPORT`.
+- r × c (Freeman–Halton): the two-sided p-value only, `exact.fisher_rxc` (the network
+  algorithm, standard library, deterministic); a one-sided `alternative` is refused with a
+  sentence; refused past `EXACT_NETWORK` (2,000,000) nodes, «use the chi-square test».
+  `estimate`, `ci_low`, `ci_high`, `sample_odds_ratio` are NULL rows there.
+- Both: `rows`, `cols`, the margins, each cell's `observed` and `expected`. No curve.
+
+**`stat_mcnemar`** — `x`, `y` (two answers of the same row), `method` (`auto` default,
+`exact`, `asymptotic`), `correction` (default true, as R's `mcnemar.test`; `applies` with
+`auto` and `asymptotic`). The categories are those of the two columns together (a square
+table). H0: P(x = i, y = j) = P(x = j, y = i).
+- 2 × 2: b = n₁₂, c = n₂₁; chi-square (\|b − c\| − Y)²/(b + c), Y = 1 with the correction;
+  or exact, the binomial of b in b + c at ½ (`binomial_test`). `auto` takes the exact test
+  below 25 discordant pairs. Estimate: the odds ratio of the discordant pairs b/c, its
+  interval Clopper–Pearson's of b in b + c as odds (the convention of R's
+  `exact2x2::mcnemar.exact`); `prop_difference` = (b − c)/n is a number of the test.
+- k × k: Bowker's test of symmetry, Σ_(i<j) (n_ij − n_ji)²/(n_ij + n_ji) over the pairs with
+  n_ij + n_ji > 0, df = their number (R answers NaN when a pair is empty: a note says they
+  are left out); `exact` refused.
+- Cells: `observed`, `expected` under symmetry ((n_ij + n_ji)/2), `agreement` (a text,
+  `concordant` or `discordant`). Refused: x = y; no discordant pair.
+
+**`stat_cmh`** — `x`, `y`, `strata`, `correction` (default true). As R's
+`mantelhaen.test`. A7 within strata (`crosstab3`, at most 100,000 triples). Strata of fewer
+than 2 rows refused, as R does.
+- 2 × 2 × K: Δ = Σ(a − R₁C₁/N), V = Σ R₁R₂C₁C₂/(N²(N − 1)), Y = 0.5 when \|Δ\| ≥ 0.5 and
+  the correction is on, χ² = (\|Δ\| − Y)²/V, df = 1; the common odds ratio of Mantel and
+  Haenszel and its interval (Robins–Breslow–Greenland). Two-sided only. Each stratum is a
+  group with `n`, `a`, `b`, `c`, `d`, `expected_a`, `variance_a`, `odds_ratio`.
+- I × J × K: the generalized statistic (n − m)·V⁻¹·(n − m), df = (I − 1)(J − 1), solved by
+  Gaussian elimination; refused past 100 equations, or when V is singular.
+- Breslow–Day's homogeneity of the odds ratios is **not** built (no base-R reference).
+
+**`stat_g_test`** — `x`, `y`, `williams` (default false), `posthoc` (`none`, `cells`),
+`p_adjust`. G = 2·ΣO·ln(O/E) (a cell with O = 0 adds 0), df = (r − 1)(c − 1); Williams'
+q = 1 + (N·Σ1/R − 1)(N·Σ1/C − 1)/(6N·df), G/q. Cells as the chi-square's, `contribution` the
+cell's term of G; `cramers_v` from Pearson's χ². The post-hoc of the cells as the
+chi-square's (adjusted residuals).
+
+All of them: R's significance codes (`significance`) after every p-value, of the test and of
+each cell or pair of a post-hoc.
 
 ### Correlation
 

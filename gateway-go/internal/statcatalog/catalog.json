@@ -102,6 +102,21 @@
         "pairs"
       ]
     },
+    "g_posthoc": {
+      "control": "choice",
+      "choices": [
+        "none",
+        "cells"
+      ]
+    },
+    "mcnemar_method": {
+      "control": "choice",
+      "choices": [
+        "auto",
+        "exact",
+        "asymptotic"
+      ]
+    },
     "expected_proportions": {
       "control": "proportions",
       "of": "value"
@@ -415,6 +430,89 @@
       },
       "forbids": [],
       "applies": {}
+    },
+    {
+      "id": "mcnemar",
+      "operation": "stat_mcnemar",
+      "family": "proportions",
+      "needs": {
+        "x": "column",
+        "y": "column"
+      },
+      "takes": {
+        "method": "mcnemar_method",
+        "correction": "boolean",
+        "alpha": "alpha",
+        "detail": "detail"
+      },
+      "defaults": {
+        "method": "auto",
+        "correction": true,
+        "alpha": 0.05,
+        "detail": "results"
+      },
+      "forbids": [],
+      "applies": {
+        "correction": {
+          "method": [
+            "auto",
+            "asymptotic"
+          ]
+        }
+      }
+    },
+    {
+      "id": "cmh",
+      "operation": "stat_cmh",
+      "family": "proportions",
+      "needs": {
+        "x": "column",
+        "y": "column",
+        "strata": "column"
+      },
+      "takes": {
+        "correction": "boolean",
+        "alpha": "alpha",
+        "detail": "detail"
+      },
+      "defaults": {
+        "correction": true,
+        "alpha": 0.05,
+        "detail": "results"
+      },
+      "forbids": [],
+      "applies": {}
+    },
+    {
+      "id": "g_test",
+      "operation": "stat_g_test",
+      "family": "proportions",
+      "needs": {
+        "x": "column",
+        "y": "column"
+      },
+      "takes": {
+        "williams": "boolean",
+        "posthoc": "g_posthoc",
+        "p_adjust": "p_adjust",
+        "alpha": "alpha",
+        "detail": "detail"
+      },
+      "defaults": {
+        "williams": false,
+        "posthoc": "none",
+        "p_adjust": "holm",
+        "alpha": 0.05,
+        "detail": "results"
+      },
+      "forbids": [],
+      "applies": {
+        "p_adjust": {
+          "posthoc": [
+            "cells"
+          ]
+        }
+      }
     },
     {
       "id": "pearson",

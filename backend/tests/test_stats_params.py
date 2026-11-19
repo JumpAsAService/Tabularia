@@ -572,9 +572,9 @@ def test_lot_3_data_refused(name, storage, survey):
         "stat_chi2_gof: 'expected' must give a proportion to exactly the categories of «answer» on the rows used; it lacks maybe")
     assert say("chi2_gof", value="two", expected={"yes": 0.4, "no": 0.4, "perhaps": 0.2}) == (
         "stat_chi2_gof: 'expected' must give a proportion to exactly the categories of «two» on the rows used; perhaps is not in the column")
-    assert say("fisher_exact", x="answer", y="two") == (
-        "stat_fisher_exact: Fisher's exact test takes a 2 × 2 table, and «answer» has 3 categories and «two» 2 on the rows used: "
-        "use the chi-square test of independence")
+    assert say("fisher_exact", x="answer", y="two", alternative="less") == (
+        "stat_fisher_exact: the table of «answer» and «two» is 3 × 2: Fisher's exact test of a table larger than 2 × 2 "
+        "has no direction, and is two-sided only (alternative = 'two_sided')")
 
 
 @pytest.mark.parametrize("name", ENGINES)
@@ -611,3 +611,38 @@ def test_lot_3_exact_limits_and_notes(name, storage, survey, monkeypatch):
                                           limit=1000, use_cache=False).rows
     [note] = [r["text"] for r in rows if r["stat"].startswith("note_")]
     assert note.startswith("6 of the 6 expected counts are below 5: the chi-square distribution is a poor approximation there.")
+
+
+@pytest.mark.parametrize("name", ENGINES)
+def test_lot_3_tables_refused(name, storage, survey, monkeypatch):
+    """The four tests added on tables: what each refuses, with what to do."""
+    from app.engine.stats import compute
+
+    def say(test, *before, **params):
+        with pytest.raises(EngineError) as e:
+            _engine(name, storage).preview(survey, [*before, {"type": f"stat_{test}", "params": params}], limit=100, use_cache=False)
+        return str(e.value)
+
+    assert say("mcnemar", x="two", y="two") == "stat_mcnemar: 'x' and 'y' are both the column «two»: choose two different columns"
+    assert say("mcnemar", x="answer", y="two", method="exact") == (
+        "stat_mcnemar: the table of «answer» and «two» is 3 × 3: the exact test is of a 2 × 2 table only; "
+        "Bowker's test of symmetry (method = 'auto' or 'asymptotic') is the chi-square")
+    # the rows where the two answers agree: no discordant pair
+    agree = [{"type": "filter", "params": {"column": "answer", "operator": "ne", "value": "maybe"}}]
+    assert say("mcnemar", *agree, x="answer", y="two") == (
+        "stat_mcnemar: no row has «answer» and «two» different (no discordant pair): there is nothing to test")
+    assert say("cmh", x="two", y="flag", strata="two") == "stat_cmh: 'x', 'y' and 'strata' must be three different columns"
+    assert say("cmh", x="two", y="flag", strata="one") == (
+        "stat_cmh: the column «one» has 1 category (x) on the rows used: the test needs two at least")
+    assert say("cmh", {"type": "filter", "params": {"column": "many", "operator": "in", "value": ["k00", "k01"]}},
+               {"type": "limit", "params": {"n": 3}}, x="two", y="g", strata="many").startswith("stat_cmh: the stratum «k0")
+    # past the ceiling of the exact count (tests/test_stats_exact.py reaches it on a real table)
+    from app.engine.stats import exact
+
+    def too_much(table, most):
+        raise exact.TooMuchWork(most + 1)
+
+    monkeypatch.setattr(exact, "fisher_rxc", too_much)
+    assert say("fisher_exact", x="answer", y="g") == (
+        "stat_fisher_exact: the exact distribution of this 3 × 3 table takes more than 2,000,000 steps to go through: "
+        "use the chi-square test of independence, which is as good on so many rows")

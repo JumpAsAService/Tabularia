@@ -432,10 +432,14 @@ def title(test: str, params: dict[str, Any] | None, locale: str | None) -> str:
 
 # ── one page, made of the blocks a test has ─────────────────────────────────
 class _Card(NamedTuple):
+    """A card of the result; a place of the cards may hold alternatives, each `visible` when
+    its rows say (a 2 × 2 table's odds ratio, a larger table's size)."""
+
     id: str
     label: str
     value: str
     format: str | None = None
+    visible: str | None = None
 
 
 class _Table(NamedTuple):
@@ -455,6 +459,8 @@ class _Table(NamedTuple):
     labels: tuple[tuple[str, str], ...] | None = None
     two_levels: bool = False
     counts: tuple[str, ...] = ()
+    extra: tuple[dict, ...] = ()  # columns of words after the numbers (a cell concordant or discordant)
+    visible: str | None = None  # a table some variants of a test have no rows for
 
 
 class _Comparisons(NamedTuple):
@@ -491,9 +497,9 @@ def _df_card(t: dict, two: bool) -> _Card:
 
 
 def _page(test: str, params: dict[str, Any], locale: str, sample: str | None, step: str | None, *,
-          cards: tuple[_Card, _Card, _Card, _Card], interval: bool, alternative: bool, region_low: bool,
+          cards: tuple, interval: bool | str, alternative: bool, region_low: bool,
           symbols: dict[str, str], tables: tuple[_Table, ...], charts: tuple, pairs: _Comparisons | None = None,
-          groups_heading: str | None = None, critical: bool = True) -> dict:
+          groups_heading: str | None = None, critical: bool | str = True) -> dict:
     """A test's report: the result (four cards, the decision), the hypotheses, how it is
     computed (the formula, its symbols, the distribution, every number), the groups, the
     comparisons of the pairs, the charts, the notes. `interval`: the estimate's card says its
@@ -509,18 +515,22 @@ def _page(test: str, params: dict[str, Any], locale: str, sample: str | None, st
 
     # the result: four cards and a sentence
     p.heading("s_result", t["sections"]["result"])
-    for (card, x, w) in zip(cards, (0, 44, 88, 132), (40, 40, 40, 54)):
-        item = {"id": card.id, "type": "kpi", "dataset": DATASET, "x": x, "y": p.y, "w": w, "h": 20, "label": card.label,
-                "value": card.value}
-        if card.format:
-            item["format"] = card.format
-        p.add(item)
+    for (place, x, w) in zip(cards, (0, 44, 88, 132), (40, 40, 40, 54)):
+        for card in ((place,) if isinstance(place, _Card) else place):
+            item = {"id": card.id, "type": "kpi", "dataset": DATASET, "x": x, "y": p.y, "w": w, "h": 20, "label": card.label,
+                    "value": card.value}
+            if card.format:
+                item["format"] = card.format
+            if card.visible:
+                item["visible"] = card.visible
+            p.add(item)
     p.y += 14.2
     if interval:
         low, high = _value("test|||ci_low"), _value("test|||ci_high")
         said = _join(t["interval"], level=_shown(_value("test|||conf_level"), "0.##%"),
                      low=f'IF(ISNULL({low}), "−∞", {_shown(low)})', high=f'IF(ISNULL({high}), "+∞", {_shown(high)})')
-        p.text("k_interval", "=" + said, h=4.5, x=134.5, w=49, size=7.5, color=MUTED)
+        p.text("k_interval", "=" + said, h=4.5, x=134.5, w=49, size=7.5, color=MUTED,
+               visible=interval if isinstance(interval, str) else None)
     else:
         p.y += 4.5
     p.y += 3.3
@@ -566,8 +576,9 @@ def _page(test: str, params: dict[str, Any], locale: str, sample: str | None, st
                   f'IF(ISNULL({c_high}), "", {_join(c["high"], x=_shown(c_high))})')
     else:
         region = _join(c["high"], x=_shown(c_high))
-    if critical:
-        p.text("critical", "=" + _join(c["region"], alpha=_shown(_value("test|||alpha"), "0.####"), region=region))
+    if critical:  # (a test whose variant may be exact says when the line is there)
+        p.text("critical", "=" + _join(c["region"], alpha=_shown(_value("test|||alpha"), "0.####"), region=region),
+               visible=critical if isinstance(critical, str) else None)
     p.y += 1.5
     numbers = t["tables"]["numbers"]
     p.add(_table("numbers", numbers["title"], '[section] = "test" AND NOT ISNULL([value])', [
@@ -597,7 +608,8 @@ def _page(test: str, params: dict[str, Any], locale: str, sample: str | None, st
             else:
                 cols.append({"header": words[s_], "value": _group_number(s_, table.section, table.two_levels), "width": table.width,
                              "align": "right", "format": "0.########"})
-        p.add(_table(table.id, table.title, table.rows or one_row_a_group, cols, p.y), 10)
+        cols += list(table.extra)
+        p.add(_table(table.id, table.title, table.rows or one_row_a_group, cols, p.y, visible=table.visible), 10)
 
     if pairs is not None:
         _comparisons(p, t, own, pairs, locale)
@@ -896,10 +908,11 @@ MAX_HEATMAP_ROWS = 24
 
 
 def _contingency(test: str, params: dict[str, Any], locale: str, sample: str | None, step: str | None) -> dict:
-    """Counts of categories: chi2_independence (with its post-hoc), chi2_gof, fisher_exact. The
-    margins and the cells (observed, expected, residuals: every term of the statistic), the
-    comparisons of the cells or of the pairs; the observed against the expected counts, the
-    heatmap of the adjusted residuals, the chi-square curve."""
+    """Counts of categories: chi2_independence and g_test (with the post-hoc), chi2_gof,
+    fisher_exact (2 × 2 or larger), mcnemar (two columns of the same rows), cmh (within
+    strata). The margins and the cells (observed, expected, residuals: every term of the
+    statistic), the strata, the comparisons of the cells or of the pairs; the observed against
+    the expected counts, the heatmap of the adjusted residuals, the chi-square curve."""
     t = texts(locale)
     own = t["tests"][test]
     words = t["tables"]
@@ -907,14 +920,31 @@ def _contingency(test: str, params: dict[str, Any], locale: str, sample: str | N
     x, y = str(params.get("x") or "x"), str(params.get("y") or "y")
     value = str(params.get("value") or "value")
     stars = _Card("k_p", t["kpi"]["p_value"], _with_stars(_p_value(), _text("test|||significance")))
+    shape = f'{_shown(_value("test|||rows"), "#,##0")} & " × " & {_shown(_value("test|||cols"), "#,##0")}'
+    two_by_two = f'={_value("test|||rows")} = 2 AND {_value("test|||cols")} = 2'
+    larger = f'=NOT ({two_by_two[1:]})'
+    interval: bool | str = False
     if test == "fisher_exact":
-        cards = (_Card("k_statistic", own["kpi"]["sample"], _shown(_value("test|||sample_odds_ratio"))),
-                 _Card("k_df", own["kpi"]["n"], _value("test|||n"), "#,##0"), stars,
-                 _Card("k_estimate", own["kpi"]["estimate"], _shown(_value("test|||estimate"))))
+        cards = (_Card("k_statistic", own["kpi"]["table"], "=" + shape), _Card("k_df", own["kpi"]["n"], _value("test|||n"), "#,##0"), stars,
+                 (_Card("k_estimate", own["kpi"]["estimate"], _shown(_value("test|||estimate")), visible=two_by_two),
+                  _Card("k_nodes", own["kpi"]["nodes"], _value("test|||network_nodes"), "#,##0", visible=larger)))
+        interval = two_by_two
+    elif test == "mcnemar":
+        two = f'={_value("test|||categories")} = 2'
+        stat = _value("test|||statistic")
+        cards = (_Card("k_statistic", own["kpi"]["discordant"], _value("test|||discordant"), "#,##0"),
+                 _Card("k_df", own["kpi"]["statistic"], f'=IF(ISNULL({stat}), "—", {_shown(stat)})'), stars,
+                 (_Card("k_estimate", own["kpi"]["estimate"], _shown(_value("test|||estimate")), visible=two),
+                  _Card("k_categories", own["kpi"]["categories"], _value("test|||categories"), "#,##0", visible=f"=NOT ({two[1:]})")))
+        interval = two
+    elif test == "cmh":
+        cards = (_Card("k_statistic", own["kpi"]["statistic"], _shown(_value("test|||statistic"))), _df_card(t, False), stars,
+                 (_Card("k_estimate", own["kpi"]["estimate"], _shown(_value("test|||estimate")), visible=two_by_two),
+                  _Card("k_strata", own["kpi"]["strata"], _value("test|||strata"), "#,##0", visible=larger)))
+        interval = two_by_two
     else:
         effect = "cohen_w" if gof else "cramers_v"
-        cards = (_Card("k_statistic", own["kpi"]["statistic"], _shown(_value("test|||statistic"))), _df_card(t, False), stars,
-                 _Card("k_effect", own["kpi"]["effect"], _shown(_value(f"test|||{effect}"), P4)))
+        cards = (_Card("k_statistic", own["kpi"]["statistic"], _shown(_value("test|||statistic"))), _df_card(t, False), stars, _Card("k_effect", own["kpi"]["effect"], _shown(_value(f"test|||{effect}"), P4)))
     cell_rows = '[section] = "cell" AND [stat] = "observed"'
     if gof:
         labels = ((value, "[level]"),)
@@ -925,59 +955,86 @@ def _contingency(test: str, params: dict[str, Any], locale: str, sample: str | N
         category, symbols = "[level]", {"column": _q(value)}
     else:
         labels = ((x, "[level]"), (y, "[level_2]"))
-        table_set = (_Table("rows", words["rows"]["title"], ("row_total", "row_share"), rows='[section] = "group" AND [stat] = "row_total"',
-                            labels=((x, "[level]"),), counts=("row_total",)),
-                     _Table("cols", words["cols"]["title"], ("col_total", "col_share"), rows='[section] = "group" AND [stat] = "col_total"',
-                            labels=((y, "[level]"),), counts=("col_total",)))
+        table_set = ()
+        if test == "cmh":
+            strata = str(params.get("strata") or "strata")
+            two_rows = '[section] = "group" AND [stat] = "a"'
+            table_set += (_Table("strata", own["tables"]["strata"], ("n", "a", "b", "c", "d"), rows=two_rows, labels=((strata, "[level]"),),
+                                 counts=("n", "a", "b", "c", "d"), visible=two_by_two),
+                          _Table("strata_terms", own["tables"]["terms"], ("expected_a", "variance_a", "odds_ratio"), rows=two_rows,
+                                 labels=((strata, "[level]"),), visible=two_by_two),
+                          _Table("strata_n", own["tables"]["strata"], ("n",), rows='[section] = "group" AND [stat] = "n"',
+                                 labels=((strata, "[level]"),), counts=("n",), visible=larger))
+        else:
+            table_set += (_Table("rows", words["rows"]["title"], ("row_total", "row_share"), rows='[section] = "group" AND [stat] = "row_total"',
+                                 labels=((x, "[level]"),), counts=("row_total",)),
+                          _Table("cols", words["cols"]["title"], ("col_total", "col_share"), rows='[section] = "group" AND [stat] = "col_total"',
+                                 labels=((y, "[level]"),), counts=("col_total",)))
         if test == "fisher_exact":
             table_set += (_Table("cells", words["cells"]["title"], ("observed", "expected"), section="cell", rows=cell_rows,
                                  labels=labels, two_levels=True, counts=("observed",)),)
+        elif test == "mcnemar":
+            agreement = _pair_value("agreement", "text", "cell")
+            pair = own["tables"]["pair"]
+            table_set += (_Table("cells", own["tables"]["cells"], ("observed", "expected"), section="cell", rows=cell_rows,
+                                 labels=labels, two_levels=True, counts=("observed",),
+                                 extra=({"header": pair["header"], "width": 34,
+                                         "value": f'IF({agreement} = "discordant", {_q(pair["discordant"])}, {_q(pair["concordant"])})'},)),)
+        elif test == "cmh":
+            table_set += (_Table("cells", own["tables"]["pooled"], ("observed",), section="cell", rows=cell_rows, labels=labels,
+                                 two_levels=True, counts=("observed",)),)
         else:
             table_set += (_Table("cells", words["cells"]["title"], ("observed", "expected", "residual"), section="cell", rows=cell_rows,
                                  labels=labels, two_levels=True, counts=("observed",)),
                           _Table("terms", words["terms"]["title"], ("adj_residual", "contribution"), section="cell", rows=cell_rows,
                                  labels=labels, two_levels=True))
         category, symbols = '[level] & " – " & [level_2]', {"x": _q(x), "y": _q(y)}
+        if test == "cmh":
+            symbols["strata"] = _q(str(params.get("strata") or "strata"))
     cells = 'COUNTIF([section] = "cell" AND [stat] = "observed")'
     rows_x, cols_y = 'COUNTIF([section] = "group" AND [stat] = "row_total")', 'COUNTIF([section] = "group" AND [stat] = "col_total")'
     cell = {**t["stats"]["cell"], **own.get("stats", {}).get("cell", {})}
     title = t["charts"]["observed"]
 
-    def note(id_: str, words: str, chart_title: str, count: str, most: int) -> _Chart:
-        said = _join(t["charts"][words], chart=_q(chart_title), n=_shown(count, "#,##0"), most=_q(str(most)))
+    def note(id_: str, words_: str, chart_title: str, count: str, most: int) -> _Chart:
+        said = _join(t["charts"][words_], chart=_q(chart_title), n=_shown(count, "#,##0"), most=_q(str(most)))
         return _Chart(id_, "note", "=" + said, {"visible": f"={count} > {most}"})
 
-    observed = (_Chart("c_observed", "column", title,
+    shown = ("observed",) if test == "cmh" else ("observed", "expected")
+    observed = (_Chart("c_observed", "column", own.get("charts", {}).get("observed", title),
                        {"filter": '[section] = "cell"', "category": category,
-                        "series": [{"value": f'SUMIF([stat] = "{s}", [value])', "name": cell[s]} for s in ("observed", "expected")],
+                        "series": [{"value": f'SUMIF([stat] = "{s_}", [value])', "name": cell[s_]} for s_ in shown],
                         "options": {"legend": True, "format": "#,##0.#"}, "visible": f"={cells} <= {MAX_CELLS_CHARTED}"}),
                 note("c_observed_note", "too_many_cells", title, cells, MAX_CELLS_CHARTED))
     charts: tuple = (observed,)
-    if test == "chi2_independence":
+    if test in ("chi2_independence", "g_test"):
         heat = t["charts"]["residuals"]
         labelled = f"{rows_x} <= {MAX_HEATMAP_LABELLED} AND {cols_y} <= {MAX_HEATMAP_LABELLED}"
         plain = f"NOT ({labelled}) AND {rows_x} <= {MAX_HEATMAP_ROWS}"
 
-        def heatmap(id_: str, labels: bool, visible: str) -> _Chart:
+        def heatmap(id_: str, labels_: bool, visible: str) -> _Chart:
             return _Chart(id_, "heatmap", heat, {
                 "filter": '[section] = "cell" AND [stat] = "adj_residual"', "category": "[level_2]", "split_by": "[level]",
                 "series": [{"value": "SUM([value])", "name": cell["adj_residual"]}],
-                "options": {"labels": labels, "format": "0.00"}, "visible": "=" + visible})
+                "options": {"labels": labels_, "format": "0.00"}, "visible": "=" + visible})
 
         charts += ((heatmap("c_residuals", True, labelled), heatmap("c_residuals_many", False, plain),
                     note("c_residuals_note", "too_many_rows", heat, rows_x, MAX_HEATMAP_ROWS)),)
     if test != "fisher_exact":
         charts += (_density(t),)
     pairs = None
-    posthoc = _param(test, params, "posthoc") if test == "chi2_independence" else "none"
+    posthoc = _param(test, params, "posthoc") if test in ("chi2_independence", "g_test") else "none"
     if posthoc == "cells":
         pairs = _Comparisons("cells", _param(test, params, "p_adjust"), (), own_p=True, intervals=False, section="cell")
     elif posthoc == "pairs":
         pairs = _Comparisons("pairs", _param(test, params, "p_adjust"), ("statistic", "df"), own_p=True, intervals=False)
-    return _page(test, params, locale, sample, step, cards=cards, interval=test == "fisher_exact",
-                 alternative=test == "fisher_exact", region_low=False, symbols=symbols, tables=table_set, charts=charts,
-                 pairs=pairs, groups_heading=t["sections"]["table"], critical=test != "fisher_exact")
-
+    exact_test = test == "fisher_exact"
+    critical: bool | str = not exact_test
+    if test == "mcnemar":  # the exact binomial has no critical value of a statistic
+        critical = f'=NOT ISNULL({_value("test|||critical_high")})'
+    return _page(test, params, locale, sample, step, cards=cards, interval=interval, alternative=test == "fisher_exact",
+                 region_low=False, symbols=symbols, tables=table_set, charts=charts, pairs=pairs,
+                 groups_heading=t["sections"]["strata" if test == "cmh" else "table"], critical=critical)
 
 LAYOUTS: dict[str, Callable[[str, dict[str, Any], str, str | None, str | None], dict]] = {
     "t_one_sample": _one_sample,
@@ -992,6 +1049,9 @@ LAYOUTS: dict[str, Callable[[str, dict[str, Any], str, str | None, str | None], 
     "chi2_independence": _contingency,
     "chi2_gof": _contingency,
     "fisher_exact": _contingency,
+    "mcnemar": _contingency,
+    "cmh": _contingency,
+    "g_test": _contingency,
 }
 
 

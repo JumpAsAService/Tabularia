@@ -420,6 +420,8 @@ def test_statistics_of_lot_3_ask_bigquery_in_googlesql():
 
     def rows(q):
         asked.append(q)
+        if "st_lz" in q:
+            return [["m", "x", True, 3]]
         if "st_lx" in q:
             return [["m", "x", 30], ["f", None, 2]]
         if "GROUP BY" in q:
@@ -439,5 +441,7 @@ def test_statistics_of_lot_3_ask_bigquery_in_googlesql():
     cells = source.crosstab("g", "day", 2602)
     assert [(c.x, c.y, c.rows) for c in cells] == [("m", "x", 30), ("f", None, 2)]
     assert asked[-1].endswith("GROUP BY `g`, `day` LIMIT 2602")
+    source.crosstab3("g", "day", "ok", 100_002)
+    assert asked[-1].endswith("GROUP BY `g`, `day`, `ok` LIMIT 100002")
     for q in asked:
         sqlglot.parse_one(q, read="bigquery")

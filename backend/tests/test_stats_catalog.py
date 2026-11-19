@@ -141,7 +141,8 @@ def test_the_tests_of_the_first_lots_in_their_families():
         by_family.setdefault(spec["family"], []).append(test)
     assert by_family["means"] == ["t_one_sample", "t_two_sample", "t_paired", "anova"]
     assert by_family["variances"] == ["var_f", "levene"] and by_family["correlation"] == ["pearson"]
-    assert by_family["proportions"] == ["prop_one_sample", "prop_two_sample", "chi2_independence", "chi2_gof", "fisher_exact"]
+    assert by_family["proportions"] == ["prop_one_sample", "prop_two_sample", "chi2_independence", "chi2_gof", "fisher_exact",
+                                         "mcnemar", "cmh", "g_test"]
 
 
 def test_the_kinds_of_the_proportions_read_what_a_form_writes():

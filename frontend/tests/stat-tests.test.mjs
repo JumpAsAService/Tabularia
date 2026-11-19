@@ -391,3 +391,16 @@ test('the proportions of a goodness of fit: numbers as written, and what is wron
   assert.equal(s.statSharesProblem({ a: 1, b: 0 }, ['a', 'b']), 'missing')
   assert.equal(s.statSharesProblem({}, []), '')
 })
+
+test('the tests added on tables: McNemar, Cochran–Mantel–Haenszel, G; Fisher says it is two-sided past 2 × 2', () => {
+  const fields = (op) => s.statFields(s.statTestOf(op)).map((f) => `${f.key}:${f.control}`)
+  assert.deepEqual(fields('stat_mcnemar'), ['x:column', 'y:column', 'method:choice', 'correction:boolean', 'alpha:number'])
+  assert.deepEqual(fields('stat_cmh'), ['x:column', 'y:column', 'strata:column', 'correction:boolean', 'alpha:number'])
+  assert.deepEqual(fields('stat_g_test'), ['x:column', 'y:column', 'williams:boolean', 'posthoc:choice', 'p_adjust:choice', 'alpha:number'])
+  assert.deepEqual(defaultParams('stat_mcnemar'), { method: 'auto', correction: true, alpha: 0.05 })
+  assert.equal(s.statApplies(s.statTestOf('stat_mcnemar'), 'correction', { method: 'exact' }), false)
+  assert.equal(s.statApplies(s.statTestOf('stat_g_test'), 'p_adjust', { posthoc: 'cells' }), true)
+  assert.equal(opSummary('stat_cmh', { x: 'treatment', y: 'cured', strata: 'clinic' }), 'treatment ~ cured ~ clinic')
+  assert.ok(WORDS.en['stat.tests.fisher_exact.hints.alternative'].includes('2 × 2'))
+  for (const lang of LANGS) assert.ok(WORDS[lang]['stat.tests.fisher_exact.hint'].includes('Freeman'), lang)
+})

@@ -64,6 +64,9 @@ REFERENCE = {
     "chi2_independence": {"x": "x", "y": "y"},
     "chi2_gof": {"value": "cat"},
     "fisher_exact": {"x": "x", "y": "y"},
+    "mcnemar": {"x": "x", "y": "y"},
+    "cmh": {"x": "x", "y": "y", "strata": "z"},
+    "g_test": {"x": "x", "y": "y"},
 }
 # and the variants of each, together every row it may write
 VARIANTS = {
@@ -81,7 +84,24 @@ VARIANTS = {
     "chi2_independence": ({}, {"posthoc": "cells"}, {"posthoc": "pairs", "p_adjust": "bonferroni"}, {"posthoc": "cells", "p_adjust": "none"}),
     "chi2_gof": ({}, {"expected": {"a": 0.1, "b": 0.2, "c": 0.3, "d": 0.4}}),
     "fisher_exact": ({}, {"alternative": "less"}, {"alternative": "greater"}),
+    "mcnemar": ({}, {"method": "exact"}, {"correction": False}),
+    "cmh": ({}, {"correction": False}),
+    "g_test": ({}, {"williams": True}, {"posthoc": "cells", "p_adjust": "sidak"}),
 }
+
+
+def strata_table(dims: tuple[int, int, int], values: list[int]) -> pl.DataFrame:
+    """A table within strata given as R's array(values, dim = c(r, c, K)) (column-major), as the
+    rows (x, y, z) that make it, and a row with no stratum."""
+    r, c, k = dims
+    cells = [(f"r{i}", f"c{j}", f"s{s}") for s in range(k) for j in range(c) for i in range(r)
+             for _ in range(values[s * r * c + j * r + i])]
+    cells.append(("r0", "c0", None))
+    return pl.DataFrame({"x": [a for a, _, _ in cells], "y": [b for _, b, _ in cells], "z": [z for _, _, z in cells]},
+                        schema={"x": pl.String, "y": pl.String, "z": pl.String})
+
+
+RABBITS = ((2, 2, 5), [0, 0, 6, 5, 3, 0, 3, 6, 6, 2, 0, 4, 5, 6, 1, 0, 2, 5, 0, 0])  # R's mantelhaen.test example
 
 
 def abc() -> pl.DataFrame:
@@ -120,6 +140,12 @@ def frame_of(test: str) -> pl.DataFrame:
         return counts_table(["x1", "x2", "x3"], ["m", "f"], [[30, 15], [20, 25], [10, 20]])
     if test == "fisher_exact":
         return counts_table(["a", "b"], ["x", "y"], [[12, 5], [7, 16]])
+    if test == "mcnemar":
+        return counts_table(["a", "b"], ["a", "b"], [[794, 150], [86, 570]])
+    if test == "cmh":
+        return strata_table(*RABBITS)
+    if test == "g_test":
+        return counts_table(["x1", "x2", "x3"], ["m", "f"], [[30, 15], [20, 25], [10, 20]])
     if test == "chi2_gof":
         return pl.DataFrame({"cat": ["a"] * 18 + ["b"] * 22 + ["c"] * 30 + ["d"] * 30 + [None]})
     if test in ("t_paired", "pearson"):
@@ -230,7 +256,9 @@ def test_a_layout_reads_only_rows_the_test_writes(test):
         # (the margins of a contingency table: a category of x has its row's numbers, one of y its column's)
         margin = {kind: {r["level"] for r in rows if r["stat"] == f"{kind}_total"} for kind in ("row", "col")}
         for stat in re.findall(r'\\"group\|\\" & \[level\] & \\"\|\|(\w+)\\"', text):
-            assert {f"group|{g}||{stat}" for g in margin.get(stat.split("_")[0]) or groups} <= written, stat
+            have = {g for g in groups if f"group|{g}||{stat}" in written}
+            # of every group (of its margin), or of none: a table of another variant (CMH's strata of a 2 × 2 table)
+            assert have in (set(), margin.get(stat.split("_")[0]) or groups), stat
         # a cell's key: of every cell (of a contingency table, or of the categories of a goodness of fit)
         cells = {(r["level"], r["level_2"]) for r in rows if r["section"] == "cell"}
         for stat in re.findall(r'\\"cell\|\\" & \[level\] & \\"\|\\" & \[level_2\] & \\"\|(\w+)\\"', text):
@@ -241,7 +269,8 @@ def test_a_layout_reads_only_rows_the_test_writes(test):
         for stat in re.findall(r'\\"pair\|\\" & \[level\] & \\"\|\\" & \[level_2\] & \\"\|(\w+)\\"', text):
             assert {f"pair|{a}|{b}|{stat}" for a, b in pairs_} <= written, stat
         sections = set(re.findall(r'\[section\] = \\"(\w+)\\"', text))
-        assert sections == {r["section"] for r in rows}, (params, sections)
+        # (a variant that may be exact on the data, McNemar's, has no curve: its chart is not drawn then)
+        assert {r["section"] for r in rows} <= sections and sections - {r["section"] for r in rows} <= {"curve"}, (params, sections)
 
 
 def test_the_report_reads_as_many_rows_as_a_test_may_write():
@@ -422,7 +451,7 @@ def test_the_report_renders_in_the_five_languages(tmp_path, chart_service, monke
         said = set(strings(json.loads(page)))
         words = layouts.texts(locale)
         assert layouts.test_name("t_two_sample", params, locale) in said
-        assert {words["sections"][s] for s in words["sections"] if s not in ("comparisons", "comparisons_cells", "table")} <= said  # (no post-hoc, no table of counts)
+        assert {words["sections"][s] for s in words["sections"] if s not in ("comparisons", "comparisons_cells", "table", "strata")} <= said  # (no post-hoc, no table of counts)
         assert words["stats"]["test"]["df"] in said and words["tests"]["t_two_sample"]["stats"]["test"]["estimate"] in said
     svg = draw(tmp_path / "svg", chart_service, monkeypatch, fmt="svg", locale=locale)[0]
     assert len(json.loads(svg.path.read_text())["pages"]) == 2
@@ -667,7 +696,11 @@ ON_THE_PAGE = {
     "chi2_independence": ({"posthoc": "cells"}, ["Chi-square test of independence", "8.8889", "0.0117 *", "0.2722", "Table of the counts",
                                                  "Comparisons of the cells", "x1 – m", "2.82842712", "0.02806641", "Critical region at α = 0.05: statistic ≥ 5.9915."]),
     "chi2_gof": ({}, ["Chi-square goodness-of-fit test", "4.3200", "0.2289", "P(cat = a) = 0.25, P(cat = b) = 0.25, ..., P(cat = d) = 0.25"]),
-    "fisher_exact": ({}, ["Fisher's exact test", "5.4857", "0.0238 *", "5.2297", "95% CI: 1.1694 to 27.3059", "OR(x, y) = 1",
+    "mcnemar": ({}, ["McNemar's test", "236", "16.8178", "< 0.0001 ***", "1.7442", "95% CI: 1.3292 to 2.3010", "Discordant",
+                     "Concordant", "P(x = i, y = j) = P(x = j, y = i)", "118"]),
+    "cmh": ({}, ["Cochran–Mantel–Haenszel test", "3.9286", "0.0475 *", "7.0000", "95% CI: 1.0267 to 47.7251", "Strata", "s4"]),
+    "g_test": ({}, ["G test of independence", "9.0517", "0.0108 *", "Term of G", "P(x, y) = P(x)·P(y)"]),
+    "fisher_exact": ({}, ["Fisher's exact test", "2 × 2", "5.4857142857", "0.0238 *", "5.2297", "95% CI: 1.1694 to 27.3059", "OR(x, y) = 1",
                           "Distribution of the statistic under H0: hypergeometric(19, 21, 17)."]),
 }
 
@@ -699,3 +732,33 @@ def test_the_comparisons_follow_the_method(tmp_path, chart_service, monkeypatch)
     assert pairs["xAxis"]["data"] == ["a – b", "a – c", "b – c"]
     assert [round(v, 6) for v in pairs["series"][0]["data"][0]["value"]] == [-2.195778, -1.441071, -1.441071, -1.441071, -0.686364]
     assert charts["Distribution of the statistic under H0"]["series"][0]["markLine"]["data"][0]["xAxis"] == pytest.approx(11.93129260658611)
+
+
+# the shapes a test of categories takes on its data, not on its parameters
+OTHER_SHAPES = {
+    "fisher_exact": (counts_table(["m", "n"], ["x", "y", "z"], [[30, 20, 10], [15, 25, 20]]), {"x": "x", "y": "y"},
+                     ["2 × 3", "0.0129 *", "0.0128672787", "Distribution of the statistic under H0: hypergeometric(2 × 3)."]),
+    "mcnemar": (counts_table(["a", "b", "c"], ["a", "b", "c"], [[20, 10, 9], [5, 25, 12], [3, 4, 30]]), {"x": "x", "y": "y"},
+                ["8.6667", "0.0341 *", "3", "Distribution of the statistic under H0: chi-square(3)."]),
+    "cmh": (strata_table((3, 3, 2), [10, 6, 3, 4, 9, 7, 2, 5, 12, 8, 7, 2, 5, 10, 6, 3, 4, 11]), {"x": "x", "y": "y", "strata": "z"},
+            ["23.8815", "< 0.0001 ***", "4", "2"]),
+}
+
+
+@pytest.mark.parametrize("test", sorted(OTHER_SHAPES))
+@pytest.mark.parametrize("locale", ("en", "it"))
+def test_a_larger_table_has_its_own_cards(tmp_path, chart_service, monkeypatch, test, locale):  # noqa: F811
+    """Fisher's test of a 2 × 3 table, Bowker's of a 3 × 3, the generalized CMH: the cards and
+    the tables of a 2 × 2 table are not drawn, those of the larger one are; R's numbers."""
+    frame, params, wanted = OTHER_SHAPES[test]
+    rows = [dict(zip(OUTPUT_NAMES, r)) for r in run_hypothesis_test(PolarsStatSource(frame.lazy()), test, {**params, "detail": "report"}, "polars")]
+    handed: list[str] = []
+    run = pdf.run
+    monkeypatch.setattr(pdf, "run", lambda job, *a, **k: (handed.append(job.get("inputs", {}).get("model", "")), run(job, *a, **k))[1])
+    out = render.render(layouts.definition(test, params, locale), {"result": {"rows": layouts.with_labels(test, rows, locale), "columns": layouts.columns()}},
+                        {}, "pdf", tmp_path, title="t", now=NOW, limits=render.Limits(chart_url=chart_service[0], max_rows=layouts.MAX_REPORT_ROWS))
+    assert out.warnings == []
+    said = set(strings(json.loads(handed[0])))
+    if locale == "en":
+        assert [w for w in wanted if w not in said] == []
+    assert not {"95% CI", "IC 95%"} & {s[:6] for s in said}  # no interval of an odds ratio there is not

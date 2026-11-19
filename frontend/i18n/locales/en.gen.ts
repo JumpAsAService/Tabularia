@@ -6165,14 +6165,53 @@ export default {
       },
       "fisher_exact": {
         "name": "Fisher's exact test",
-        "hint": "Are two columns of two categories each independent? Exact on a 2 × 2 table, with the odds ratio and its interval.",
+        "hint": "Are two categorical columns independent? Exact: on a 2 × 2 table with the odds ratio and its interval, on a larger one (Freeman–Halton) the two-sided p-value.",
         "params": {
           "x": "Rows of the table (x)",
           "y": "Columns of the table (y)"
         },
         "hints": {
           "x": "A column of two categories: the odds ratio is of its first (in text order).",
-          "y": "A column of two categories too; a row where either has no value is left out."
+          "y": "A column of two categories too; a row where either has no value is left out.",
+          "alternative": "A one-sided test is of a 2 × 2 table only: a larger table is tested two-sided."
+        }
+      },
+      "mcnemar": {
+        "name": "McNemar's test",
+        "hint": "Two answers of the same rows (before and after): did they change one way more than the other? McNemar's test, exact or chi-square; Bowker's test of symmetry past two categories.",
+        "params": {
+          "x": "First answer (x)",
+          "y": "Second answer (y)"
+        },
+        "hints": {
+          "x": "A column of categories: with y, the two answers of each row.",
+          "y": "The same categories as x; a row where either has no value is left out.",
+          "method": "Auto: exact below 25 discordant pairs, chi-square above. Exact: the binomial of the discordant pairs (2 × 2 only).",
+          "correction": "The continuity correction of the chi-square (as R's mcnemar.test), on a 2 × 2 table."
+        }
+      },
+      "cmh": {
+        "name": "Cochran–Mantel–Haenszel test",
+        "hint": "Are two categorical columns independent within each stratum of a third? With the common odds ratio of 2 × 2 tables and its interval.",
+        "params": {
+          "x": "Rows of the table (x)",
+          "y": "Columns of the table (y)"
+        },
+        "hints": {
+          "strata": "The column that names the strata: a table of x and y in each.",
+          "correction": "The continuity correction of 2 × 2 tables (as R's mantelhaen.test)."
+        }
+      },
+      "g_test": {
+        "name": "G test of independence",
+        "hint": "Are two categorical columns independent? The likelihood ratio G on their table of counts, with Williams' correction if asked.",
+        "params": {
+          "x": "Rows of the table (x)",
+          "y": "Columns of the table (y)",
+          "posthoc": "Comparisons"
+        },
+        "hints": {
+          "posthoc": "Which cells depart from independence: their adjusted residuals."
         }
       }
     },
@@ -6194,7 +6233,9 @@ export default {
       "p0": "Proportion under H0 (p0)",
       "method": "Method",
       "correction": "Continuity correction",
-      "expected": "Expected proportions"
+      "expected": "Expected proportions",
+      "strata": "Strata column",
+      "williams": "Williams' correction"
     },
     "hints": {
       "value": "The column that is measured.",
@@ -6213,7 +6254,9 @@ export default {
       "p0": "Between 0 and 1: the share of successes the null hypothesis states.",
       "method": "Score: the normal approximation, Wilson's interval. Exact: the binomial, Clopper–Pearson's interval (up to a million rows).",
       "correction": "Yates' continuity correction of the normal approximation (as R's prop.test).",
-      "expected": "All equal, or a proportion for each category of the column: above 0, summing to 1."
+      "expected": "All equal, or a proportion for each category of the column: above 0, summing to 1.",
+      "williams": "Divides G by q, closer to the chi-square on small tables.",
+      "strata": "The column that names the strata."
     },
     "choices": {
       "alternative": {
@@ -6245,6 +6288,15 @@ export default {
         "none": "None",
         "cells": "The cells",
         "pairs": "The pairs of categories of x"
+      },
+      "mcnemar_method": {
+        "auto": "Automatic",
+        "exact": "Exact (binomial)",
+        "asymptotic": "Chi-square"
+      },
+      "g_posthoc": {
+        "none": "None",
+        "cells": "The cells"
       }
     },
     "reasons": {

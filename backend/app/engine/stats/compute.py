@@ -28,6 +28,7 @@ from app.engine.stats import dist, exact
 from app.engine.stats.aggregates import Difference, Moments, PairMoments, Paired, Quartiles, is_value, typed_value
 from app.engine.stats.catalog import (
     CURVE_POINTS,
+    EXACT_NETWORK,
     EXACT_SUPPORT,
     MAX_BINS,
     MAX_POSTHOC_GROUPS,
@@ -1023,7 +1024,7 @@ class _Crosstab(NamedTuple):
     missing: int
 
 
-def _contingency(source, test: str, x: str, y: str) -> _Crosstab:
+def _contingency(source, test: str, x: str, y: str, square: bool = False) -> _Crosstab:
     if x == y:
         raise refusal(test, f"'x' and 'y' are both the column «{x}»: choose two different columns")
     limit = MAX_STAT_LEVELS * MAX_STAT_LEVELS + 2 * MAX_STAT_LEVELS + 2
@@ -1038,6 +1039,8 @@ def _contingency(source, test: str, x: str, y: str) -> _Crosstab:
         counts[key] = counts.get(key, 0) + c.rows
     rows = sorted({a for a, _ in counts})
     cols = sorted({b for _, b in counts})
+    if square:  # the same categories on both sides: those of the two columns together
+        rows = cols = sorted(set(rows) | set(cols))
     # at most 50 categories each: with as many, the pairs (NULLs too) are one fewer than the limit
     for column, found in ((x, rows), (y, cols)):
         if len(found) > MAX_STAT_LEVELS or (len(cells) >= limit and len(found) == max(len(rows), len(cols))):
@@ -1234,40 +1237,367 @@ def _chi2_gof(source, p: dict[str, Any], out: Rows, engine_name: str) -> None:
 
 
 def _fisher_exact(source, p: dict[str, Any], out: Rows, engine_name: str) -> None:
-    """Fisher's exact test of a 2 × 2 table, with the conditional odds ratio and its interval
-    (R's `fisher.test`). H0: odds ratio = 1."""
+    """Fisher's exact test (R's `fisher.test`): of a 2 × 2 table with the conditional odds ratio
+    and its interval; of a larger one (Freeman–Halton) the two-sided p-value alone.
+    H0: x and y are independent (for a 2 × 2 table: odds ratio = 1)."""
     test = "fisher_exact"
     x, y, alpha, alternative = p["x"], p["y"], p["alpha"], p["alternative"]
     table = _contingency(source, test, x, y)
-    if len(table.rows) != 2 or len(table.cols) != 2:
-        raise refusal(test, f"Fisher's exact test takes a 2 × 2 table, and «{x}» has {len(table.rows)} categories and «{y}» "
-                            f"{len(table.cols)} on the rows used: use the chi-square test of independence")
-    (a, b), (c, d) = table.counts
-    support = exact.fisher_support(a, b, c, d)
-    if support > EXACT_SUPPORT:
-        raise refusal(test, f"the exact distribution of this table goes through {support:,} outcomes, more than {EXACT_SUPPORT:,}: "
-                            "use the chi-square test of independence, which is as good on so many rows")
-    f = exact.fisher_exact(a, b, c, d, alternative, alpha)
-    row_totals, col_totals, total = [a + b, c + d], [a + c, b + d], a + b + c + d
-    sample = a * d / (b * c) if b * c else None
-    odds = f"OR({x}, {y})"
-    tails = {"two_sided": "p = ∑ P(X = i), P(X = i) ≤ P(X = a)·(1 + 1e-7)", "less": "p = P(X ≤ a)", "greater": "p = P(X ≥ a)"}
-    bounds = {"two_sided": "P(X ≥ a | OR_L) = α/2, P(X ≤ a | OR_U) = α/2", "less": "OR_L = 0, P(X ≤ a | OR_U) = α",
-              "greater": "P(X ≥ a | OR_L) = α, OR_U = ∞"}
-    formula = (f"{tails[alternative]}, P(X = i | OR) = C(C1, i)·C(C2, R1 − i)·OR^i / ∑ C(C1, j)·C(C2, R1 − j)·OR^j, P(X = i) = P(X = i | 1); OR: E(X | OR) = a; "
-               f"CI: {bounds[alternative]}; sample OR = a·d / (b·c)")
-    _write_head(out, test, "exact", p, f"{odds} = 1", f"{odds} {_RELATION[alternative]} 1", formula,
-                f"hypergeometric({col_totals[0]}, {col_totals[1]}, {row_totals[0]})", f.p_value, engine_name, [])
-    _write_numbers(out, (
-        ("alpha", alpha), ("conf_level", 1.0 - alpha), ("n", total), ("n_missing", table.missing), ("support", f.support),
-        ("sample_odds_ratio", sample), ("estimate", f.odds_ratio), ("null_value", 1.0), ("p_value", f.p_value),
-        ("ci_low", f.ci_low), ("ci_high", f.ci_high),
-    ))
+    r, c = len(table.rows), len(table.cols)
+    row_totals = [sum(row) for row in table.counts]
+    col_totals = [sum(col) for col in zip(*table.counts)]
+    total = sum(row_totals)
+    if (r, c) != (2, 2):
+        if alternative != "two_sided":
+            raise refusal(test, f"the table of «{x}» and «{y}» is {r} × {c}: Fisher's exact test of a table larger than 2 × 2 "
+                                "has no direction, and is two-sided only (alternative = 'two_sided')")
+        try:
+            p_value, nodes = exact.fisher_rxc(table.counts, EXACT_NETWORK)
+        except exact.TooMuchWork:
+            raise refusal(test, f"the exact distribution of this {r} × {c} table takes more than {EXACT_NETWORK:,} steps to go "
+                                "through: use the chi-square test of independence, which is as good on so many rows") from None
+        formula = ("p = ∑ P(T), P(T) ≤ P(T₀)·(1 + 1e-7), P(T) = ∏ R_i!·∏ C_j! / (N!·∏ n_ij!), "
+                   "T: the tables with the margins of T₀, the table observed")
+        _write_head(out, test, "freeman_halton", p, f"P({x}, {y}) = P({x})·P({y})", f"P({x}, {y}) ≠ P({x})·P({y})", formula,
+                    f"hypergeometric({r} × {c})", p_value, engine_name, [])
+        _write_numbers(out, (
+            ("alpha", alpha), ("conf_level", 1.0 - alpha), ("n", total), ("n_missing", table.missing), ("rows", r), ("cols", c),
+            ("network_nodes", nodes), ("sample_odds_ratio", None), ("estimate", None), ("null_value", None), ("p_value", p_value),
+            ("ci_low", None), ("ci_high", None),
+        ))
+    else:
+        (a, b), (c_, d) = table.counts
+        support = exact.fisher_support(a, b, c_, d)
+        if support > EXACT_SUPPORT:
+            raise refusal(test, f"the exact distribution of this table goes through {support:,} outcomes, more than {EXACT_SUPPORT:,}: "
+                                "use the chi-square test of independence, which is as good on so many rows")
+        f = exact.fisher_exact(a, b, c_, d, alternative, alpha)
+        sample = a * d / (b * c_) if b * c_ else None
+        odds = f"OR({x}, {y})"
+        tails = {"two_sided": "p = ∑ P(X = i), P(X = i) ≤ P(X = a)·(1 + 1e-7)", "less": "p = P(X ≤ a)", "greater": "p = P(X ≥ a)"}
+        bounds = {"two_sided": "P(X ≥ a | OR_L) = α/2, P(X ≤ a | OR_U) = α/2", "less": "OR_L = 0, P(X ≤ a | OR_U) = α",
+                  "greater": "P(X ≥ a | OR_L) = α, OR_U = ∞"}
+        formula = (f"{tails[alternative]}, P(X = i | OR) = C(C1, i)·C(C2, R1 − i)·OR^i / ∑ C(C1, j)·C(C2, R1 − j)·OR^j, "
+                   f"P(X = i) = P(X = i | 1); OR: E(X | OR) = a; CI: {bounds[alternative]}; sample OR = a·d / (b·c)")
+        _write_head(out, test, "exact", p, f"{odds} = 1", f"{odds} {_RELATION[alternative]} 1", formula,
+                    f"hypergeometric({col_totals[0]}, {col_totals[1]}, {row_totals[0]})", f.p_value, engine_name, [])
+        _write_numbers(out, (
+            ("alpha", alpha), ("conf_level", 1.0 - alpha), ("n", total), ("n_missing", table.missing), ("rows", r), ("cols", c),
+            ("support", f.support), ("network_nodes", None), ("sample_odds_ratio", sample), ("estimate", f.odds_ratio), ("null_value", 1.0), ("p_value", f.p_value),
+            ("ci_low", f.ci_low), ("ci_high", f.ci_high),
+        ))
     _write_margins(out, table, row_totals, col_totals)
     for i, ra in enumerate(table.rows):
         for j, cb in enumerate(table.cols):
             out.number("cell", "observed", table.counts[i][j], level=ra, level_2=cb)
             out.number("cell", "expected", row_totals[i] * col_totals[j] / total, level=ra, level_2=cb)
+
+
+# ── paired categories: McNemar, Bowker ──────────────────────────────────────
+# past this many discordant pairs `method = auto` takes the chi-square: below it the exact binomial
+MCNEMAR_EXACT_BELOW = 25
+
+
+def _mcnemar(source, p: dict[str, Any], out: Rows, engine_name: str) -> None:
+    """McNemar's test of two categorical columns of the same rows (R's `mcnemar.test`): on a
+    2 × 2 table the chi-square of the discordant pairs, with the continuity correction, or the
+    exact binomial on them; on a k × k table Bowker's test of symmetry. The categories are
+    those of the two columns together. H0: P(x = i, y = j) = P(x = j, y = i)."""
+    test = "mcnemar"
+    x, y, alpha, method = p["x"], p["y"], p["alpha"], p["method"]
+    found = _contingency(source, test, x, y, square=True)
+    levels, counts = found.rows, found.counts
+    k = len(levels)
+    total = sum(map(sum, counts))
+    notes: list[str] = []
+    estimate = ci_low = ci_high = prop_difference = None
+    if k == 2:
+        b, c = counts[0][1], counts[1][0]
+        if b + c == 0:
+            raise refusal(test, f"no row has «{x}» and «{y}» different (no discordant pair): there is nothing to test")
+        exact_ = method == "exact" or (method == "auto" and b + c < MCNEMAR_EXACT_BELOW)
+        prop_difference = (b - c) / total
+        if b and c:
+            estimate = b / c
+        # the odds ratio of the discordant pairs, b / c, and its exact interval: Clopper–Pearson's
+        # of b in b + c, as odds (the convention of R's exact2x2::mcnemar.exact)
+        low, high = exact.clopper_pearson(b, b + c, alpha, "two_sided")
+        ci_low = low / (1.0 - low) if low < 1.0 else math.inf
+        ci_high = high / (1.0 - high) if high < 1.0 else math.inf
+        if exact_:
+            variant = "exact"
+            p_value = exact.binomial_test(b, b + c, 0.5, "two_sided")
+            statistic, df, critical_high, yates = None, None, None, None
+            formula = ("p = 2·min(P(X ≤ b), P(X ≥ b)) as R's binom.test, X: binomial(b + c, 0.5); OR = b / c, "
+                       "CI = p_L / (1 − p_L), p_U / (1 − p_U), p_L, p_U: Clopper–Pearson of b in b + c")
+            distribution = f"binomial({b + c}, 0.5)"
+        else:
+            variant = "chi_square"
+            yates = 1.0 if p["correction"] else 0.0
+            statistic = (abs(b - c) - yates) ** 2 / (b + c)
+            df = 1.0
+            p_value, critical_high = dist.chi2_sf(statistic, df), dist.chi2_isf(alpha, df)
+            formula = (f"χ² = (|b − c| − Y)² / (b + c), Y = {'1' if yates else '0'}, df = 1; OR = b / c, "
+                       "CI = p_L / (1 − p_L), p_U / (1 − p_U), p_L, p_U: Clopper–Pearson of b in b + c")
+            distribution = "chi-square(1)"
+        if not exact_ and b + c < MCNEMAR_EXACT_BELOW:
+            notes.append(f"Only {b + c} discordant pairs: the chi-square is a poor approximation there; the exact binomial "
+                         "(method = 'exact') is not.")
+    else:
+        if method == "exact":
+            raise refusal(test, f"the table of «{x}» and «{y}» is {k} × {k}: the exact test is of a 2 × 2 table only; "
+                                "Bowker's test of symmetry (method = 'auto' or 'asymptotic') is the chi-square")
+        variant = "bowker"
+        pairs = [(i, j) for i in range(k) for j in range(i + 1, k) if counts[i][j] + counts[j][i] > 0]
+        if not pairs:
+            raise refusal(test, f"no row has «{x}» and «{y}» different (no discordant pair): there is nothing to test")
+        statistic = math.fsum((counts[i][j] - counts[j][i]) ** 2 / (counts[i][j] + counts[j][i]) for i, j in pairs)
+        df = float(len(pairs))
+        p_value, critical_high = dist.chi2_sf(statistic, df), dist.chi2_isf(alpha, df)
+        yates = None
+        empty = k * (k - 1) // 2 - len(pairs)
+        if empty:
+            notes.append(f"{empty} pair{'' if empty == 1 else 's'} of categories never discordant: left out of the sum and of "
+                         "the degrees of freedom (R's mcnemar.test answers NaN there).")
+        formula = "χ² = ∑_(i<j) (n_ij − n_ji)² / (n_ij + n_ji), df = the pairs i < j with n_ij + n_ji > 0"
+        distribution = f"chi-square({df:.6g})"
+    _write_head(out, test, variant, p, f"P({x} = i, {y} = j) = P({x} = j, {y} = i)", f"P({x} = i, {y} = j) ≠ P({x} = j, {y} = i)",
+                formula, distribution, p_value, engine_name, notes)
+    discordant = sum(counts[i][j] for i in range(k) for j in range(k) if i != j)
+    _write_numbers(out, (
+        ("alpha", alpha), ("conf_level", 1.0 - alpha), ("n", total), ("n_missing", found.missing), ("categories", k),
+        ("discordant", discordant), *((("b", counts[0][1]), ("c", counts[1][0]), ("prop_difference", prop_difference)) if k == 2 else ()),
+        ("yates", yates), ("statistic", statistic), ("df", df), ("critical_high", critical_high), ("p_value", p_value),
+        ("estimate", estimate), ("ci_low", ci_low), ("ci_high", ci_high),
+    ))
+    row_totals = [sum(r) for r in counts]
+    col_totals = [sum(col) for col in zip(*counts)]
+    _write_margins(out, found, row_totals, col_totals)
+    for i, a in enumerate(levels):
+        for j, b_ in enumerate(levels):
+            o = counts[i][j]
+            # under symmetry a cell and its mirror share their rows: E = (n_ij + n_ji) / 2
+            e = (counts[i][j] + counts[j][i]) / 2.0
+            out.number("cell", "observed", o, level=a, level_2=b_)
+            out.number("cell", "expected", e, level=a, level_2=b_)
+            out.text("cell", "agreement", "concordant" if i == j else "discordant", level=a, level_2=b_)
+    if p["detail"] == "report" and statistic is not None:
+        _write_positive_curve(out, lambda v: dist.chi2_pdf(v, df), lambda q: dist.chi2_isf(q, df), statistic, None, critical_high)
+
+
+# ── strata: Cochran–Mantel–Haenszel ─────────────────────────────────────────
+# a generalized CMH solves a system of (r − 1)·(c − 1) equations: past this many, refused
+CMH_MAX_DF = 100
+
+
+def _solve(matrix: list[list[float]], vector: list[float]) -> list[float] | None:
+    """The solution of matrix·x = vector by Gaussian elimination with partial pivoting; None
+    when the matrix is singular (to its rounding)."""
+    n = len(vector)
+    a = [row[:] + [v] for row, v in zip(matrix, vector)]
+    scale = max((abs(v) for row in matrix for v in row), default=0.0) or 1.0
+    for col in range(n):
+        pivot = max(range(col, n), key=lambda r: abs(a[r][col]))
+        if abs(a[pivot][col]) <= 1e-12 * scale:
+            return None
+        a[col], a[pivot] = a[pivot], a[col]
+        for r in range(col + 1, n):
+            f = a[r][col] / a[col][col]
+            if f:
+                for k in range(col, n + 1):
+                    a[r][k] -= f * a[col][k]
+    out = [0.0] * n
+    for r in range(n - 1, -1, -1):
+        out[r] = (a[r][n] - sum(a[r][k] * out[k] for k in range(r + 1, n))) / a[r][r]
+    return out
+
+
+def _cmh(source, p: dict[str, Any], out: Rows, engine_name: str) -> None:
+    """The Cochran–Mantel–Haenszel test of x and y within the strata (R's `mantelhaen.test`):
+    of 2 × 2 tables with the continuity correction, the common odds ratio of Mantel and
+    Haenszel and its interval (Robins, Breslow and Greenland); of larger tables the generalized
+    statistic. H0: within every stratum x and y are independent."""
+    test = "cmh"
+    x, y, strata, alpha = p["x"], p["y"], p["strata"], p["alpha"]
+    if len({x, y, strata}) < 3:
+        raise refusal(test, "'x', 'y' and 'strata' must be three different columns")
+    limit = CMH_MAX_CELLS + 2
+    cells = source.crosstab3(x, y, strata, limit)
+    if len(cells) >= limit:
+        raise refusal(test, f"the columns «{x}», «{y}» and «{strata}» make more than {CMH_MAX_CELLS:,} cells: "
+                            "a column holds too many categories (is it the right one?)")
+    counts: dict[tuple[str, str, str], int] = {}
+    missing = 0
+    for c in cells:
+        if not (is_value(c.x) and is_value(c.y) and is_value(c.z)):
+            missing += c.rows
+            continue
+        key = (label_of(c.x), label_of(c.y), label_of(c.z))
+        counts[key] = counts.get(key, 0) + c.rows
+    if not counts:
+        raise refusal(test, f"no row has a value in each of «{x}», «{y}» and «{strata}» (a NULL or a NaN is left out)")
+    rows = sorted({a for a, _, _ in counts})
+    cols = sorted({b for _, b, _ in counts})
+    layers = sorted({s for _, _, s in counts})
+    for column, found, most in ((x, rows, MAX_STAT_LEVELS), (y, cols, MAX_STAT_LEVELS), (strata, layers, MAX_STAT_GROUPS)):
+        if len(found) > most:
+            raise refusal(test, f"the column «{column}» has more than {most} categories: is it the right column?")
+        if len(found) < 2:
+            raise refusal(test, f"the column «{column}» has 1 category ({found[0]}) on the rows used: the test needs two at least")
+    r, c, k = len(rows), len(cols), len(layers)
+    tables = [[[counts.get((a, b, s), 0) for b in cols] for a in rows] for s in layers]
+    totals = [sum(map(sum, t)) for t in tables]
+    for s, n in zip(layers, totals):
+        if n < 2:
+            raise refusal(test, f"the stratum «{s}» has {n} row{'' if n == 1 else 's'}: each stratum needs two at least")
+    total = sum(totals)
+    if (r, c) == (2, 2):
+        a = [t[0][0] for t in tables]
+        b = [t[0][1] for t in tables]
+        cc = [t[1][0] for t in tables]
+        d = [t[1][1] for t in tables]
+        m = [t[0][0] + t[1][0] for t in tables]  # first column
+        n_ = [t[0][1] + t[1][1] for t in tables]  # second column
+        tr = [t[0][0] + t[0][1] for t in tables]  # first row
+        s_ = totals
+        expected = [mi * ti / si for mi, ti, si in zip(m, tr, s_)]
+        variance = [mi * ni * ti * (si - ti) / (si * si * (si - 1)) for mi, ni, ti, si in zip(m, n_, tr, s_)]
+        delta = sum(a) - math.fsum(expected)
+        var_total = math.fsum(variance)
+        if var_total == 0.0:
+            raise refusal(test, "every stratum has a margin of 0 (a row or a column with no rows): the statistic does not exist")
+        yates = 0.5 if p["correction"] and abs(delta) >= 0.5 else 0.0
+        statistic = (abs(delta) - yates) ** 2 / var_total
+        df = 1.0
+        rr = [ai * di / si for ai, di, si in zip(a, d, s_)]
+        ss_ = [bi * ci / si for bi, ci, si in zip(b, cc, s_)]
+        sum_r, sum_s = math.fsum(rr), math.fsum(ss_)
+        estimate = sum_r / sum_s if sum_s else None
+        ci_low = ci_high = sd = None
+        if estimate is not None and sum_r:
+            pr = [(ai + di) / si for ai, di, si in zip(a, d, s_)]
+            qs = [(bi + ci) / si for bi, ci, si in zip(b, cc, s_)]
+            sd = math.sqrt(math.fsum(pi * ri for pi, ri in zip(pr, rr)) / (2.0 * sum_r ** 2)
+                           + math.fsum(pi * si + qi * ri for pi, qi, ri, si in zip(pr, qs, rr, ss_)) / (2.0 * sum_r * sum_s)
+                           + math.fsum(qi * si for qi, si in zip(qs, ss_)) / (2.0 * sum_s ** 2))
+            z = dist.norm_isf(alpha / 2.0)
+            ci_low, ci_high = estimate * math.exp(-z * sd), estimate * math.exp(z * sd)
+        variant = "two_by_two"
+        formula = ("χ² = (|∑ (a − E(a))| − Y)² / ∑ V(a), E(a) = R1·C1 / N, V(a) = R1·R2·C1·C2 / (N²·(N − 1)) of each stratum, "
+                   f"Y = {'0.5' if yates else '0'}, df = 1; OR_MH = ∑ (a·d / N) / ∑ (b·c / N), "
+                   "CI = OR_MH·exp(± z·√V_RBG) (Robins–Breslow–Greenland)")
+    else:
+        df_ = (r - 1) * (c - 1)
+        if df_ > CMH_MAX_DF:
+            raise refusal(test, f"the generalized test of a {r} × {c} table solves {df_} equations, more than {CMH_MAX_DF}: "
+                                "merge categories first")
+        size = df_
+        dev = [0.0] * size
+        cov = [[0.0] * size for _ in range(size)]
+        for t, n in zip(tables, totals):
+            rs = [sum(row) for row in t][:-1]
+            cs = [sum(col) for col in zip(*t)][:-1]
+            for j in range(c - 1):
+                for i in range(r - 1):
+                    dev[j * (r - 1) + i] += t[i][j] - rs[i] * cs[j] / n
+            for j in range(c - 1):
+                for jj in range(c - 1):
+                    cj = (n * cs[j] if j == jj else 0.0) - cs[j] * cs[jj]
+                    if cj == 0.0:
+                        continue
+                    for i in range(r - 1):
+                        for ii in range(r - 1):
+                            ri = (n * rs[i] if i == ii else 0.0) - rs[i] * rs[ii]
+                            cov[j * (r - 1) + i][jj * (r - 1) + ii] += cj * ri / (n * n * (n - 1))
+        solved = _solve(cov, dev)
+        if solved is None:
+            raise refusal(test, "the covariance of the generalized statistic is singular (a category empty in every stratum): "
+                                "merge or drop categories first")
+        statistic = math.fsum(u * v for u, v in zip(dev, solved))
+        df = float(df_)
+        yates = estimate = ci_low = ci_high = sd = delta = var_total = None
+        variant = "generalized"
+        formula = ("χ² = (n − m)·V^(−1)·(n − m), n, m: the observed and expected counts of the first r − 1 rows and c − 1 columns "
+                   "summed over the strata, V their covariance under H0, df = (r − 1)·(c − 1)")
+    p_value, critical_high = dist.chi2_sf(statistic, df), dist.chi2_isf(alpha, df)
+    _write_head(out, test, variant, p, f"P({x}, {y} | {strata}) = P({x} | {strata})·P({y} | {strata})",
+                f"P({x}, {y} | {strata}) ≠ P({x} | {strata})·P({y} | {strata})", formula, f"chi-square({df:.6g})", p_value,
+                engine_name, [])
+    _write_numbers(out, (
+        ("alpha", alpha), ("conf_level", 1.0 - alpha), ("n", total), ("n_missing", missing), ("rows", r), ("cols", c),
+        ("strata", k), ("delta", delta), ("variance", var_total), ("yates", yates), ("statistic", statistic), ("df", df),
+        ("critical_high", critical_high), ("p_value", p_value), ("estimate", estimate), ("log_sd", sd),
+        ("ci_low", ci_low), ("ci_high", ci_high),
+    ))
+    for idx, (s, t, n) in enumerate(zip(layers, tables, totals)):
+        out.number("group", "n", n, level=s)
+        if (r, c) == (2, 2):
+            for stat, number in (("a", a[idx]), ("b", b[idx]), ("c", cc[idx]), ("d", d[idx]), ("expected_a", expected[idx]),
+                                 ("variance_a", variance[idx]), ("odds_ratio", a[idx] * d[idx] / (b[idx] * cc[idx]) if b[idx] * cc[idx] else None)):
+                out.number("group", stat, number, level=s)
+    pooled = [[sum(t[i][j] for t in tables) for j in range(c)] for i in range(r)]
+    for i, ra in enumerate(rows):
+        for j, cb in enumerate(cols):
+            out.number("cell", "observed", pooled[i][j], level=ra, level_2=cb)
+    if p["detail"] == "report":
+        _write_positive_curve(out, lambda v: dist.chi2_pdf(v, df), lambda q: dist.chi2_isf(q, df), statistic, None, critical_high)
+
+
+# the most cells of three columns a CMH test reads back
+CMH_MAX_CELLS = 100_000
+
+
+# ── the G test ──────────────────────────────────────────────────────────────
+def _g_test(source, p: dict[str, Any], out: Rows, engine_name: str) -> None:
+    """The G test of independence (the likelihood ratio), with Williams' correction when
+    asked: G = 2·∑ O·ln(O/E). H0: x and y are independent."""
+    test = "g_test"
+    x, y, alpha, posthoc = p["x"], p["y"], p["alpha"], p["posthoc"]
+    table = _contingency(source, test, x, y)
+    r, c = len(table.rows), len(table.cols)
+    _, _, _, expected, row_totals, col_totals, total = _chi_square(table.counts, False)
+    df = float((r - 1) * (c - 1))
+    terms = [[2.0 * o * math.log(o / e) if o else 0.0 for o, e in zip(orow, erow)] for orow, erow in zip(table.counts, expected)]
+    g = math.fsum(v for row in terms for v in row)
+    q = None
+    statistic = g
+    if p["williams"]:
+        q = 1.0 + (total * math.fsum(1.0 / n for n in row_totals) - 1.0) * (total * math.fsum(1.0 / n for n in col_totals) - 1.0) / (6.0 * total * df)
+        statistic = g / q
+    p_value, critical_high = dist.chi2_sf(statistic, df), dist.chi2_isf(alpha, df)
+    adjusted = [[(o - e) / math.sqrt(e * (1.0 - rt / total) * (1.0 - ct / total)) for o, e, ct in zip(orow, erow, col_totals)]
+                for orow, erow, rt in zip(table.counts, expected, row_totals)]
+    pairs_texts, extra, cell_p = None, (), None
+    if posthoc == "cells":
+        raw = [min(1.0, 2.0 * dist.norm_sf(abs(z))) for row in adjusted for z in row]
+        cell_p = list(zip(raw, p_adjusted(raw, p["p_adjust"])))
+        extra = (("n_cells", r * c),)
+        pairs_texts = (posthoc, p["p_adjust"], "z = (O − E) / √(E·(1 − R/N)·(1 − C/N)), p = 2·P(Z ≥ |z|), "
+                       + _ADJUST_TEXT[p["p_adjust"]].format(m="n_cells"))
+    formula = ("G = 2·∑ O·ln(O / E), E = R·C / N, df = (r − 1)·(c − 1)"
+               + ("; q = 1 + (N·∑ 1/R − 1)·(N·∑ 1/C − 1) / (6·N·df), G_q = G / q" if q is not None else ""))
+    _write_head(out, test, "williams" if q is not None else "plain", p, f"P({x}, {y}) = P({x})·P({y})", f"P({x}, {y}) ≠ P({x})·P({y})",
+                formula, f"chi-square({df:.6g})", p_value, engine_name, _sparse_note([e for row in expected for e in row]), pairs_texts)
+    _write_numbers(out, (
+        ("alpha", alpha), ("conf_level", 1.0 - alpha), ("n", total), ("n_missing", table.missing), ("rows", r), ("cols", c),
+        ("g", g), ("williams_q", q), ("statistic", statistic), ("df", df), ("critical_high", critical_high), ("p_value", p_value),
+        ("cramers_v", math.sqrt(_chi_square(table.counts, False)[2] / (total * min(r - 1, c - 1)))), *extra,
+    ))
+    _write_margins(out, table, row_totals, col_totals)
+    for i, a in enumerate(table.rows):
+        for j, b in enumerate(table.cols):
+            o, e = table.counts[i][j], expected[i][j]
+            for stat, number in (("observed", o), ("expected", e), ("residual", (o - e) / math.sqrt(e)),
+                                 ("adj_residual", adjusted[i][j]), ("contribution", terms[i][j])):
+                out.number("cell", stat, number, level=a, level_2=b)
+            if cell_p is not None:
+                raw_p, adj = cell_p[i * c + j]
+                out.number("cell", "p_value", raw_p, level=a, level_2=b)
+                out.number("cell", "p_adjusted", adj, level=a, level_2=b)
+                out.text("cell", "significance", significance(adj) or "", level=a, level_2=b)
+                out.text("cell", "decision", "reject_h0" if adj < alpha else "fail_to_reject_h0", level=a, level_2=b)
+    if p["detail"] == "report":
+        _write_positive_curve(out, lambda v: dist.chi2_pdf(v, df), lambda q_: dist.chi2_isf(q_, df), statistic, None, critical_high)
 
 
 _TESTS: dict[str, Callable[..., None]] = {
@@ -1283,12 +1613,16 @@ _TESTS: dict[str, Callable[..., None]] = {
     "chi2_independence": _chi2_independence,
     "chi2_gof": _chi2_gof,
     "fisher_exact": _fisher_exact,
+    "mcnemar": _mcnemar,
+    "cmh": _cmh,
+    "g_test": _g_test,
 }
 
 # The tests that write the rows of their report's charts. Until a test is here it refuses
 # `detail = report` with a sentence: it is never answered with the results alone.
 _WITH_REPORT_ROWS = frozenset({"t_one_sample", "t_two_sample", "t_paired", "anova", "var_f", "levene", "pearson",
-                               "prop_one_sample", "prop_two_sample", "chi2_independence", "chi2_gof", "fisher_exact"})
+                               "prop_one_sample", "prop_two_sample", "chi2_independence", "chi2_gof", "fisher_exact",
+                               "mcnemar", "cmh", "g_test"})
 
 
 def run_hypothesis_test(source, test: str, params: dict[str, Any] | None, engine_name: str) -> list[tuple]:

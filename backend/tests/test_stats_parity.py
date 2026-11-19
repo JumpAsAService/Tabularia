@@ -63,12 +63,16 @@ def _table() -> pl.DataFrame:
     x2 = [None if i % 37 == 5 else math.nan if i % 53 == 7 else
           (v if v is None or math.isnan(v) else round(0.9 * v + ((i * 7) % 11) / 10.0, 1)) for i, v in enumerate(x)]
     big2 = [v + 0.5 + ((i * 3) % 7) / 10.0 + (0.2 if g[i] == "south" else 0.0) for i, v in enumerate(big)]
+    # a second answer of the same rows, for the paired tests of categories (McNemar, Bowker)
+    flag2 = [None if f is None else (not f if i % 5 == 0 else f) for i, f in enumerate(flag)]
+    regions = ["north", "south", "east"]
+    g2 = [None if r is None else (regions[(regions.index(r) + 1) % 3] if i % 4 == 0 else r) for i, r in enumerate(g)]
     return pl.DataFrame(
         {"g": g, "day": day, "flag": flag, "x": x, "big": big, "qty": qty, "price": price, "at": at, "level": level,
-         "x2": x2, "big2": big2},
+         "x2": x2, "big2": big2, "flag2": flag2, "g2": g2},
         schema={"g": pl.String, "day": pl.Date, "flag": pl.Boolean, "x": pl.Float64, "big": pl.Float64,
                 "qty": pl.Int64, "price": pl.Decimal(10, 2), "at": pl.Datetime("us"), "level": pl.Float64,
-                "x2": pl.Float64, "big2": pl.Float64},
+                "x2": pl.Float64, "big2": pl.Float64, "flag2": pl.Boolean, "g2": pl.String},
     )
 
 
@@ -200,6 +204,19 @@ CASES = {
     "report_chi2_cells": stat("chi2_independence", x="g", y="level", posthoc="cells", detail="report"),
     "report_chi2_gof": stat("chi2_gof", value="g", detail="report"),
     "report_fisher": stat("fisher_exact", x="flag", y="day", detail="report"),
+    # the four tests added: Fisher of a larger table, McNemar and Bowker, CMH, G
+    "fisher_rxc": stat("fisher_exact", x="day", y="g"),
+    "mcnemar_2x2": stat("mcnemar", x="flag", y="flag2"),
+    "mcnemar_exact": stat("mcnemar", x="flag", y="flag2", method="exact", alpha=0.1),
+    "mcnemar_bowker": stat("mcnemar", x="g", y="g2"),
+    "cmh_2x2": stat("cmh", x="flag", y="day", strata="g"),
+    "cmh_2x2_float_strata": stat("cmh", x="flag", y="day", strata="level", correction=False),
+    "cmh_generalized": stat("cmh", x="g", y="level", strata="day"),
+    "g_test": stat("g_test", x="g", y="flag"),
+    "g_test_williams_cells": stat("g_test", x="g", y="level", williams=True, posthoc="cells"),
+    "report_mcnemar": stat("mcnemar", x="g", y="g2", detail="report"),
+    "report_cmh": stat("cmh", x="flag", y="day", strata="g", detail="report"),
+    "report_g_test": stat("g_test", x="g", y="day", detail="report"),
 }
 
 
@@ -278,6 +295,8 @@ def test_the_cases_test_something(storage, src):
     assert {k for k in by["chi2_gof_float_given"] if k.endswith("||observed")} == {"cell|0.0||observed", "cell|1.5||observed"}
     assert by["chi2_2x2_yates"]["test|||yates"]["value"] == 0.5 and by["chi2_cells"]["test|||n_cells"]["value"] == 6
     assert by["fisher"]["test|||support"]["value"] > 1000  # an exact distribution of some thousand outcomes
+    assert by["fisher_rxc"]["test|||rows"]["value"] == 2 and by["mcnemar_bowker"]["test|||variant"]["text"] == "bowker"
+    assert by["cmh_generalized"]["test|||variant"]["text"] == "generalized" and by["cmh_2x2_float_strata"]["test|||strata"]["value"] == 2
     assert 0 < by["prop_two"]["test|||p_value"]["value"] <= 1 and by["prop_one_text_exact"]["test|||ci_low"]["value"] > 0
     # the two orders of a pair are the same test, mirrored
     assert by["student"]["test|||p_value"]["value"] == pytest.approx(

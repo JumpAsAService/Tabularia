@@ -14,6 +14,7 @@ import os
 import polars as pl
 import pytest
 
+from app.engine.exceptions import EngineError
 from app.engine.stats.output import OUTPUT_COLUMNS
 from tests.conftest import upload_df
 from tests.test_data_correctness import ENGINES, _engine
@@ -838,3 +839,107 @@ def test_fisher_exact(name, storage, tables):
     _, _, by_key = result(name, storage, tables["T22"], stat_op("fisher_exact", x="x", y="y", alternative="less"))
     close(by_key["test|||p_value"]["value"], 0.997986250989588)
     assert by_key["test|||ci_low"]["value"] == 0.0
+
+
+# ── lot 3, the four tests added: R 4.6.1's fisher.test (r × c), mcnemar.test, mantelhaen.test, and G ──
+def strata_frame(dims: tuple[int, int, int], values: list[int]) -> pl.DataFrame:
+    """R's array(values, dim = c(r, c, K)) (column-major) as the rows (x, y, z) that make it, and
+    a row with no stratum."""
+    r, c, k = dims
+    cells = [(f"r{i}", f"c{j}", f"s{s}") for s in range(k) for j in range(c) for i in range(r) for _ in range(values[s * r * c + j * r + i])]
+    cells.append(("r0", "c0", None))
+    return pl.DataFrame({"x": [a for a, _, _ in cells], "y": [b for _, b, _ in cells], "z": [z for _, _, z in cells]},
+                        schema={"x": pl.String, "y": pl.String, "z": pl.String})
+
+
+@pytest.fixture
+def more_tables(storage):
+    return {
+        "T23": upload_df(storage, counts_frame(["m", "n"], ["x", "y", "z"], [[30, 20, 10], [15, 25, 20]]), "datasets/stats_t23b.parquet"),
+        "T33": upload_df(storage, counts_frame(["a", "b", "c"], ["x", "y", "z"], [[8, 3, 1], [2, 9, 3], [1, 2, 7]]), "datasets/stats_t33.parquet"),
+        "T34": upload_df(storage, counts_frame(["a", "b", "c"], ["w", "x", "y", "z"], [[10, 6, 2, 1], [4, 8, 7, 2], [2, 3, 9, 6]]),
+                         "datasets/stats_t34.parquet"),
+        "PERF": upload_df(storage, counts_frame(["a", "b"], ["a", "b"], [[794, 150], [86, 570]]), "datasets/stats_perf.parquet"),
+        "SMALL": upload_df(storage, counts_frame(["a", "b"], ["a", "b"], [[10, 9], [3, 12]]), "datasets/stats_small.parquet"),
+        "SYM": upload_df(storage, counts_frame(["a", "b", "c"], ["a", "b", "c"], [[20, 10, 9], [5, 25, 12], [3, 4, 30]]), "datasets/stats_sym.parquet"),
+        "RABBITS": upload_df(storage, strata_frame((2, 2, 5), [0, 0, 6, 5, 3, 0, 3, 6, 6, 2, 0, 4, 5, 6, 1, 0, 2, 5, 0, 0]),
+                             "datasets/stats_rabbits.parquet"),
+        "A": upload_df(storage, strata_frame((2, 2, 3), [12, 5, 7, 16, 8, 9, 4, 11, 15, 6, 9, 10]), "datasets/stats_strata_a.parquet"),
+        "G": upload_df(storage, strata_frame((3, 3, 2), [10, 6, 3, 4, 9, 7, 2, 5, 12, 8, 7, 2, 5, 10, 6, 3, 4, 11]), "datasets/stats_strata_g.parquet"),
+        "G2": upload_df(storage, strata_frame((2, 3, 3), [10, 6, 4, 9, 2, 5, 8, 7, 5, 10, 3, 4, 6, 6, 7, 8, 4, 9]), "datasets/stats_strata_g2.parquet"),
+    }
+
+
+@pytest.mark.parametrize("name", ENGINES)
+def test_fisher_exact_larger_tables(name, storage, more_tables):
+    for table, want in (("T23", 0.012867278704384083), ("T33", 0.0018916138067752856), ("T34", 0.0080095433958731511)):
+        _, rows, by_key = result(name, storage, more_tables[table], stat_op("fisher_exact", x="x", y="y"))
+        check_numbers(by_key, {"p_value": want, "estimate": None, "ci_low": None, "sample_odds_ratio": None})
+        assert texts_of(rows)["variant"] == "freeman_halton" and by_key["test|||network_nodes"]["value"] > 0
+    assert texts_of(rows)["distribution"] == "hypergeometric(3 × 4)" and texts_of(rows)["significance"] == "**"
+    with pytest.raises(EngineError) as e:
+        _engine(name, storage).preview(more_tables["T33"], [stat_op("fisher_exact", x="x", y="y", alternative="less")], limit=10, use_cache=False)
+    assert str(e.value) == ("stat_fisher_exact: the table of «x» and «y» is 3 × 3: Fisher's exact test of a table larger than 2 × 2 "
+                            "has no direction, and is two-sided only (alternative = 'two_sided')")
+
+
+@pytest.mark.parametrize("name", ENGINES)
+def test_mcnemar(name, storage, more_tables):
+    _, rows, by_key = result(name, storage, more_tables["PERF"], stat_op("mcnemar", x="x", y="y"))
+    check_numbers(by_key, {"n": 1600, "n_missing": 2, "b": 150, "c": 86, "discordant": 236, "statistic": 16.817796610169491, "df": 1,
+                           "p_value": 4.1145622813459436e-05, "yates": 1.0, "estimate": 150 / 86,
+                           # the odds of R's binom.test(150, 236)$conf.int
+                           "ci_low": 0.57067324815355014 / (1 - 0.57067324815355014), "ci_high": 0.69705957667803187 / (1 - 0.69705957667803187)})
+    assert texts_of(rows)["variant"] == "chi_square" and by_key["cell|a|b|agreement"]["text"] == "discordant"
+    check_numbers(by_key, {"observed": 150, "expected": 118}, "cell|a|b|")
+    _, _, by_key = result(name, storage, more_tables["PERF"], stat_op("mcnemar", x="x", y="y", correction=False))
+    check_numbers(by_key, {"statistic": 17.35593220338983, "p_value": 3.0992934410452182e-05})
+    _, rows, by_key = result(name, storage, more_tables["PERF"], stat_op("mcnemar", x="x", y="y", method="exact"))
+    check_numbers(by_key, {"p_value": 3.71593613957143e-05, "statistic": None})
+    assert texts_of(rows)["distribution"] == "binomial(236, 0.5)"
+    # few discordant pairs: auto takes the exact binomial
+    _, rows, by_key = result(name, storage, more_tables["SMALL"], stat_op("mcnemar", x="x", y="y"))
+    check_numbers(by_key, {"p_value": 0.14599609375000008})
+    assert texts_of(rows)["variant"] == "exact"
+    _, rows, by_key = result(name, storage, more_tables["SMALL"], stat_op("mcnemar", x="x", y="y", method="asymptotic"))
+    check_numbers(by_key, {"statistic": 2.0833333333333335, "p_value": 0.14891467317876608})
+    assert texts_of(rows)["note_1"].startswith("Only 12 discordant pairs")
+    # a 3 × 3 table: Bowker's test of symmetry
+    _, rows, by_key = result(name, storage, more_tables["SYM"], stat_op("mcnemar", x="x", y="y"))
+    check_numbers(by_key, {"statistic": 8.6666666666666661, "df": 3, "p_value": 0.034067273165617709, "estimate": None})
+    assert texts_of(rows)["variant"] == "bowker"
+
+
+@pytest.mark.parametrize("name", ENGINES)
+def test_cmh(name, storage, more_tables):
+    _, rows, by_key = result(name, storage, more_tables["RABBITS"], stat_op("cmh", x="x", y="y", strata="z"))
+    check_numbers(by_key, {"n": 54, "n_missing": 1, "strata": 5, "statistic": 3.9285714285714288, "df": 1, "p_value": 0.047472255142918106,
+                           "estimate": 7.0, "ci_low": 1.026712688461668, "ci_high": 47.725133380222566, "yates": 0.5})
+    assert texts_of(rows)["variant"] == "two_by_two"
+    check_numbers(by_key, {"n": 11, "a": 0, "c": 0, "b": 6, "d": 5}, "group|s0||")
+    _, _, by_key = result(name, storage, more_tables["RABBITS"], stat_op("cmh", x="x", y="y", strata="z", correction=False))
+    check_numbers(by_key, {"statistic": 5.6571428571428575, "p_value": 0.017384420352066179})
+    _, _, by_key = result(name, storage, more_tables["A"], stat_op("cmh", x="x", y="y", strata="z"))
+    check_numbers(by_key, {"statistic": 8.0631779112077435, "p_value": 0.0045173880682216321, "estimate": 3.3731343283582089,
+                           "ci_low": 1.5261174772246235, "ci_high": 7.4555434735211374})
+    _, rows, by_key = result(name, storage, more_tables["G"], stat_op("cmh", x="x", y="y", strata="z"))
+    check_numbers(by_key, {"statistic": 23.881501602154145, "df": 4, "p_value": 8.4364024944325977e-05, "estimate": None})
+    assert texts_of(rows)["variant"] == "generalized"
+    _, _, by_key = result(name, storage, more_tables["G2"], stat_op("cmh", x="x", y="y", strata="z"))
+    check_numbers(by_key, {"statistic": 4.3609917147712176, "df": 2, "p_value": 0.11298549205732214})
+
+
+@pytest.mark.parametrize("name", ENGINES)
+def test_g_test(name, storage, tables, more_tables):
+    """R as a calculator (no package): G = 2·∑ O·ln(O/E), Williams' q, pchisq."""
+    _, rows, by_key = result(name, storage, more_tables["T23"], stat_op("g_test", x="x", y="y"))
+    check_numbers(by_key, {"statistic": 9.0516561964058404, "df": 2, "p_value": 0.010825745942791435, "g": 9.0516561964058404})
+    assert math.isclose(sum(r["value"] for r in rows if r["stat"] == "contribution"), 9.0516561964058404, rel_tol=1e-12)
+    _, rows, by_key = result(name, storage, more_tables["T23"], stat_op("g_test", x="x", y="y", williams=True))
+    check_numbers(by_key, {"statistic": 8.8971910736002791, "p_value": 0.011694980611411847})
+    assert texts_of(rows)["variant"] == "williams"
+    _, _, by_key = result(name, storage, tables["T22"], stat_op("g_test", x="x", y="y", williams=True))
+    check_numbers(by_key, {"statistic": 6.2452729971577359, "df": 1, "p_value": 0.012452518657988559, "g": 6.4874650234545639})
+    _, _, by_key = result(name, storage, tables["T32"], stat_op("g_test", x="x", y="y", posthoc="cells", p_adjust="bonferroni"))
+    for (row, col), (z, p, _, bonferroni) in T32_CELLS.items():
+        check_numbers(by_key, {"adj_residual": z, "p_value": p, "p_adjusted": bonferroni}, f"cell|{row}|{col}|")

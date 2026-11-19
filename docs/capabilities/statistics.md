@@ -40,7 +40,7 @@ test with unequal variances, say).
 |---|---|
 | **Means** | `stat_t_one_sample`, `stat_t_two_sample`, `stat_t_paired`, `stat_anova` |
 | **Variances** | `stat_var_f`, `stat_levene` |
-| **Proportions and categories** | `stat_prop_one_sample`, `stat_prop_two_sample`, `stat_chi2_independence`, `stat_chi2_gof`, `stat_fisher_exact` |
+| **Proportions and categories** | `stat_prop_one_sample`, `stat_prop_two_sample`, `stat_chi2_independence`, `stat_chi2_gof`, `stat_fisher_exact`, `stat_mcnemar`, `stat_cmh`, `stat_g_test` |
 | **Correlation** | `stat_pearson`, `stat_spearman` |
 | **Ranks** | `stat_mann_whitney`, `stat_wilcoxon_signed_rank`, `stat_kruskal_wallis` |
 | **Distributions** | `stat_ks_two_sample`, `stat_normality` |
@@ -139,11 +139,32 @@ column, and **expected**: left empty it means all categories equally likely, or 
 for every category (they must sum to 1). *Example:* `orders`, column `canale`, expected empty:
 are orders spread evenly across channels?
 
-**`stat_fisher_exact`**: the exact test on a 2 × 2 table, for small counts. Two columns with
-two values each (refused otherwise, with the number of values each has), alternative, alpha.
-The results hold the odds ratio and its interval, and the odds ratio of the sample. *Example:*
-`orders` filtered to `canale` in (`Online`, `Negozi`) and `stato` in (`evaso`, `annullato`),
-`x` = `canale`, `y` = `stato`.
+**`stat_fisher_exact`**: the exact test of a table of counts, for small counts. On a 2 × 2
+table (two columns with two values each) it has an alternative, and the results hold the
+odds ratio and its interval, and the odds ratio of the sample. On a larger table it is the
+Freeman–Halton test, as R's `fisher.test`: the two-sided p-value only (a one-sided
+alternative is refused), computed exactly; past some two million steps of the count (a 3 × 4
+table of a few hundred rows) it is refused and the chi-square test is the way out.
+*Example:* `orders` filtered to `canale` in (`Online`, `Negozi`) and `stato` in (`evaso`,
+`annullato`), `x` = `canale`, `y` = `stato`.
+
+**`stat_mcnemar`**: two answers of the same rows (before and after): did they change one way
+more than the other? Two columns, `x` and `y`, with the same categories; method (automatic:
+the exact binomial below 25 discordant pairs, the chi-square above), continuity correction.
+On a 2 × 2 table the results hold the discordant pairs `b` and `c` and their odds ratio b / c
+with an exact interval; on a larger table it is Bowker's test of symmetry. The table of the
+report marks each cell concordant or discordant. *Example:* the `esito` of a customer's first
+and second contact, after a pivot that puts both on the same row.
+
+**`stat_cmh`**: are two categorical columns independent within each stratum of a third (the
+Cochran–Mantel–Haenszel test, as R's `mantelhaen.test`)? `x`, `y`, the **strata** column,
+continuity correction. With 2 × 2 tables it gives the common odds ratio of Mantel and
+Haenszel and its interval; with larger tables the generalized statistic. *Example:*
+`orders`, `x` = `canale`, `y` = `stato`, strata `deposito`: does the channel matter once the
+warehouse is accounted for?
+
+**`stat_g_test`**: the G test of independence (likelihood ratio), an alternative to the
+chi-square: `x`, `y`, Williams' correction (off by default), the post-hoc of the **cells**.
 
 ### Correlation
 
