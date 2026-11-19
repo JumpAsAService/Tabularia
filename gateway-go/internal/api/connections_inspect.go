@@ -321,6 +321,14 @@ func testConnection(d *Deps) authedFunc {
 			return
 		}
 		ctx, lang := r.Context(), requestLanguage(r)
+		if conn.DBType == "mlflow" {
+			var extra *string
+			if body != nil {
+				extra = pyStr(body.Get("extra"))
+			}
+			testSavedMLflow(d, w, r, conn, extra)
+			return
+		}
 		if conn.DBType != "sftp" {
 			payload := connpayload.Payload(conn)
 			if body != nil && body.Get("extra") != nil && dbtls.IsDB(conn.DBType) {

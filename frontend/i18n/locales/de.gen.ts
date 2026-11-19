@@ -3935,6 +3935,41 @@ export default {
     "notAppliedGatewayHint": "Gespeichert, aber nicht in Kraft: Er besteht eine Prüfung nicht mehr (die Umgebung hat sich geändert), oder diese Replik hat ihn noch nicht gelesen (binnen {seconds} Sekunden).",
     "leaveConfirm": "Einige Einstellungen sind geändert und nicht gespeichert. Ohne Speichern verlassen?",
   },
+  "mlflowConn": {
+    "uriLabel": "Tracking-URI",
+    "authLabel": "Authentifizierung",
+    "auth_none": "Keine",
+    "auth_basic": "Benutzer und Passwort (Basic)",
+    "auth_bearer": "Bearer-Token",
+    "secret_basic": "Passwort",
+    "secret_bearer": "Token",
+    "verifyLabel": "Zertifikat des Servers prüfen",
+    "verifyOn": "Geprüft",
+    "verifyOffWarning": "Der Server wird nicht geprüft: Wer zwischen Tabularia und dem Server sitzt, könnte die Zugangsdaten lesen. Nur in einem Netz, dem Sie vertrauen.",
+    "uiUrlLabel": "Adresse für den Browser",
+    "uiUrlHint": "(optional: wenn man MLflow unter einer anderen Adresse erreicht als Tabularia)",
+    "retypeSecret": "Ein neuer Server, Benutzer oder eine andere Authentifizierung erfordert, Passwort oder Token erneut einzugeben.",
+    "note": "Tabularia protokolliert die Modelle eines Flow-Laufs mit diesen Zugangsdaten auf diesem Server: Jeder mit der CONNECT-Berechtigung für diesen Ordner kann ihn in einem Modellknoten wählen. Bevorzugen Sie ein Konto, das nur in die nötigen Experimente schreiben darf.",
+    "testOk": "Der Server antwortet und die Zugangsdaten funktionieren.",
+    "testOkVersion": "Der Server antwortet und die Zugangsdaten funktionieren. MLflow {version}.",
+    "registryOk": "Modell-Registry: verfügbar.",
+    "registryNo": "Modell-Registry: nicht verfügbar. Dieser Server hat keine Datenbank, Modelle können nicht registriert werden; Läufe lassen sich trotzdem protokollieren.",
+    "artifactsOk": "Artefakt-Proxy: verfügbar, Dateien können über den Server hochgeladen werden.",
+    "artifactsNo": "Artefakt-Proxy: nicht verfügbar. Parameter, Metriken und Tags können protokolliert werden, Dateien nicht (Server mit aktiviertem Artefakt-Serving starten).",
+    "err": {
+      "unreachable": "Der Server ist nicht erreichbar: Prüfen Sie Adresse und Port und ob das Netz von Tabularia dorthin kommt.",
+      "timeout": "Der Server hat nicht rechtzeitig geantwortet.",
+      "tls_untrusted": "Das Zertifikat des Servers ist nicht von einer Stelle signiert, der Tabularia vertraut: Fügen Sie unten die Zertifizierungsstelle Ihres Unternehmens ein oder schalten Sie die Prüfung in einem vertrauenswürdigen Netz aus.",
+      "tls_hostname": "Das Zertifikat des Servers gilt nicht für diese Adresse: Verwenden Sie den Namen, für den es ausgestellt wurde.",
+      "tls_other": "Das Zertifikat des Servers kann nicht akzeptiert werden (abgelaufen oder noch nicht gültig).",
+      "unauthorized": "Der Server hat die Zugangsdaten abgelehnt (401): Prüfen Sie Benutzer und Passwort oder Token.",
+      "forbidden": "Die Zugangsdaten sind bekannt, dürfen aber keine Experimente suchen (403): Bitten Sie um Lesezugriff.",
+      "not_found": "Unter dieser Adresse gibt es keine MLflow-API (404): Prüfen Sie die Tracking-URI und ihren Pfad.",
+      "redirect": "Der Server leitet auf eine andere Adresse um ({origin}): Verwenden Sie diese als Tracking-URI. Zugangsdaten gehen nie an einen anderen Server.",
+      "http_error": "Der Server hat mit einem Fehler geantwortet (HTTP {status}).",
+      "bad_answer": "Die Adresse antwortet, sieht aber nicht wie ein MLflow-Tracking-Server aus."
+    }
+  },
   "connectionExamples": {
     "button": "Beispiel für die Felder",
     "title": "Beispiel: {type}",
@@ -3953,7 +3988,8 @@ export default {
       "sharepoint": "Client-ID und Secret stammen aus einer in Entra ID registrierten App mit der Berechtigung Sites.Selected; die Tenant-ID steht auf der Übersichtsseite der App.",
       "sftp": "Bei einem privaten Schlüssel die ganze Datei einfügen, Kopfzeilen eingeschlossen. Der erste Test zeigt den Schlüssel des Servers: vor dem Akzeptieren mit dem Ihres Administrators vergleichen.",
       "api": "Secret und Header gehen nur an den Host der Basis-URL. Der Testpfad ist ein leichter Aufruf, der nur mit 200 antworten muss.",
-      "gsheets": "Legen Sie in Google Cloud ein Dienstkonto an, laden Sie seinen JSON-Schlüssel herunter, aktivieren Sie die Google Sheets API (und Drive, um die Tabellen aufzulisten) und geben Sie jede Tabelle für die E-Mail des Kontos als Betrachter frei."
+      "gsheets": "Legen Sie in Google Cloud ein Dienstkonto an, laden Sie seinen JSON-Schlüssel herunter, aktivieren Sie die Google Sheets API (und Drive, um die Tabellen aufzulisten) und geben Sie jede Tabelle für die E-Mail des Kontos als Betrachter frei.",
+      "mlflow": "Verwenden Sie die Adresse des Tracking-Servers, mit Pfad, falls er einen hat (https://host/mlflow). Bei der Basic-Authentifizierung von MLflow wählen Sie «Benutzer und Passwort»; hinter einem Reverse-Proxy oder Identity-Provider «Bearer-Token». Der Test zeigt, was der Server kann: Läufe protokollieren, Modelle registrieren, Dateien empfangen."
     }
   },
   "engineSettings": {

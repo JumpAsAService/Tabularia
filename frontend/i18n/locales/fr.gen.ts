@@ -3935,6 +3935,41 @@ export default {
     "notAppliedGatewayHint": "Enregistré mais pas en vigueur : il ne passe plus un contrôle (l'environnement a changé), ou cette réplique ne l'a pas encore lu (sous {seconds} secondes).",
     "leaveConfirm": "Des paramètres sont modifiés et non enregistrés. Quitter sans enregistrer ?",
   },
+  "mlflowConn": {
+    "uriLabel": "URI de suivi",
+    "authLabel": "Authentification",
+    "auth_none": "Aucune",
+    "auth_basic": "Utilisateur et mot de passe (basic)",
+    "auth_bearer": "Jeton bearer",
+    "secret_basic": "Mot de passe",
+    "secret_bearer": "Jeton",
+    "verifyLabel": "Vérifier le certificat du serveur",
+    "verifyOn": "Vérifié",
+    "verifyOffWarning": "Le serveur n'est pas vérifié : toute personne placée entre Tabularia et lui pourrait lire les identifiants. Seulement sur un réseau de confiance.",
+    "uiUrlLabel": "Adresse pour le navigateur",
+    "uiUrlHint": "(facultatif : si l'on accède à MLflow à une autre adresse que celle de Tabularia)",
+    "retypeSecret": "Un nouveau serveur, utilisateur ou type d'authentification demande de saisir à nouveau le mot de passe ou le jeton.",
+    "note": "Tabularia enregistre sur ce serveur les modèles d'une exécution de flux, avec ces identifiants : toute personne disposant de la permission CONNECT sur ce dossier peut le choisir dans un nœud de modèle. Préférez un compte qui ne peut écrire que dans les expériences nécessaires.",
+    "testOk": "Le serveur répond et les identifiants fonctionnent.",
+    "testOkVersion": "Le serveur répond et les identifiants fonctionnent. MLflow {version}.",
+    "registryOk": "Registre des modèles : disponible.",
+    "registryNo": "Registre des modèles : indisponible. Ce serveur n'a pas de base de données, les modèles ne peuvent donc pas être enregistrés ; les exécutions peuvent l'être.",
+    "artifactsOk": "Proxy d'artefacts : disponible, des fichiers peuvent être envoyés via le serveur.",
+    "artifactsNo": "Proxy d'artefacts : indisponible. Paramètres, métriques et étiquettes peuvent être enregistrés, pas les fichiers (démarrez le serveur avec les artefacts servis).",
+    "err": {
+      "unreachable": "Le serveur est injoignable : vérifiez l'adresse, le port et que le réseau de Tabularia y accède.",
+      "timeout": "Le serveur n'a pas répondu à temps.",
+      "tls_untrusted": "Le certificat du serveur n'est pas signé par une autorité en laquelle Tabularia a confiance : collez ci-dessous l'autorité de votre entreprise, ou désactivez la vérification sur un réseau de confiance.",
+      "tls_hostname": "Le certificat du serveur n'est pas valable pour cette adresse : utilisez le nom pour lequel il a été émis.",
+      "tls_other": "Le certificat du serveur ne peut pas être accepté (expiré ou pas encore valide).",
+      "unauthorized": "Le serveur a refusé les identifiants (401) : vérifiez l'utilisateur et le mot de passe ou le jeton.",
+      "forbidden": "Les identifiants sont connus mais ne peuvent pas chercher d'expériences (403) : demandez un accès en lecture.",
+      "not_found": "Aucune API MLflow à cette adresse (404) : vérifiez l'URI de suivi et son chemin.",
+      "redirect": "Le serveur redirige vers une autre adresse ({origin}) : utilisez-la comme URI de suivi. Les identifiants ne sont jamais envoyés à un autre serveur.",
+      "http_error": "Le serveur a répondu par une erreur (HTTP {status}).",
+      "bad_answer": "L'adresse répond, mais ne ressemble pas à un serveur de suivi MLflow."
+    }
+  },
   "connectionExamples": {
     "button": "Exemple des champs",
     "title": "Exemple : {type}",
@@ -3953,7 +3988,8 @@ export default {
       "sharepoint": "Le client ID et le secret viennent d'une application inscrite dans Entra ID avec l'autorisation Sites.Selected ; le tenant ID figure sur la page de présentation de l'application.",
       "sftp": "Avec une clé privée, collez le fichier entier, lignes d'en-tête comprises. Le premier test montre la clé du serveur : comparez-la avec celle de votre administrateur avant de l'accepter.",
       "api": "Le secret et les en-têtes ne partent que vers l'hôte de l'URL de base. Le chemin de test est un appel léger qui doit simplement répondre 200.",
-      "gsheets": "Créez un compte de service dans Google Cloud, téléchargez sa clé JSON, activez la Google Sheets API (et Drive, pour lister les feuilles), puis partagez chaque feuille avec l'e-mail du compte en tant que Lecteur."
+      "gsheets": "Créez un compte de service dans Google Cloud, téléchargez sa clé JSON, activez la Google Sheets API (et Drive, pour lister les feuilles), puis partagez chaque feuille avec l'e-mail du compte en tant que Lecteur.",
+      "mlflow": "Utilisez l'adresse du serveur de suivi, avec son chemin s'il en a un (https://host/mlflow). Avec l'authentification basic de MLflow choisissez « Utilisateur et mot de passe » ; derrière un reverse proxy ou un fournisseur d'identité, « Jeton bearer ». Le test dit ce que le serveur sait faire : enregistrer des exécutions, des modèles, recevoir des fichiers."
     }
   },
   "engineSettings": {

@@ -70,6 +70,24 @@ export interface GsheetsTestResult {
   more: boolean
 }
 
+// what the test of an MLflow connection answers (always 200): one check per call, each with
+// a code the dialog words in the person's language. `ok` = the credentials work; `registry`
+// and `artifacts` say whether models can be registered and files uploaded through the server.
+export interface MlflowCheck {
+  id: 'version' | 'experiments' | 'registry' | 'artifacts'
+  ok: boolean
+  code: string
+  status?: number
+  detail?: string
+}
+export interface MlflowTestResult {
+  ok: boolean
+  version: string
+  registry: boolean
+  artifacts: boolean
+  checks: MlflowCheck[]
+}
+
 // a spreadsheet shared with the service account (Drive), a spreadsheet's tabs, the
 // first rows of a tab as the import reads them
 export interface GsheetsSpreadsheet { id: string; name: string; modified_at: string; owner: string }
@@ -140,6 +158,10 @@ export const DB_TYPES = [
   // a Google Cloud service account, read only: password = its JSON key; host = its
   // email and database = its project, both read from the key by the gateway
   { value: 'gsheets', label: 'Google Sheets' },
+  // an MLflow tracking server outside Tabularia: host = tracking URI, username = the basic
+  // user, password = the basic password or the bearer token, extra = {auth, verify_tls,
+  // ca_cert, ui_url}
+  { value: 'mlflow', label: 'MLflow' },
 ]
 
 export function useConnections() {

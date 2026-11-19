@@ -3962,6 +3962,41 @@ export default {
     "notAppliedGatewayHint": "Saved but not in force: it no longer passes a check (the environment changed under it), or this replica has not read it yet (within {seconds} seconds).",
     "leaveConfirm": "Some settings are changed and not saved. Leave without saving?",
   },
+  "mlflowConn": {
+    "uriLabel": "Tracking URI",
+    "authLabel": "Authentication",
+    "auth_none": "None",
+    "auth_basic": "User and password (basic)",
+    "auth_bearer": "Bearer token",
+    "secret_basic": "Password",
+    "secret_bearer": "Token",
+    "verifyLabel": "Verify the server's certificate",
+    "verifyOn": "Verified",
+    "verifyOffWarning": "The server is not checked: anyone between Tabularia and it could read the credentials. Only on a network you trust.",
+    "uiUrlLabel": "Address for the browser",
+    "uiUrlHint": "(optional: if people reach MLflow at another address than Tabularia does)",
+    "retypeSecret": "A new server, user or kind of authentication needs the password or token typed again.",
+    "note": "Tabularia logs the models of a flow run to this server with these credentials: anyone with the CONNECT permission on this folder can choose it in a model node. Prefer an account that can write only to the experiments it needs.",
+    "testOk": "The server answers and the credentials work.",
+    "testOkVersion": "The server answers and the credentials work. MLflow {version}.",
+    "registryOk": "Model registry: available.",
+    "registryNo": "Model registry: not available. This server has no database backend, so models cannot be registered; runs can still be logged.",
+    "artifactsOk": "Artifact proxy: available, files can be uploaded through the server.",
+    "artifactsNo": "Artifact proxy: not available. Parameters, metrics and tags can be logged, files cannot (start the server with artifact serving on).",
+    "err": {
+      "unreachable": "The server cannot be reached: check the address, the port and that Tabularia's network can get there.",
+      "timeout": "The server did not answer in time.",
+      "tls_untrusted": "The server's certificate is not signed by an authority Tabularia trusts: paste your company's authority below, or turn the verification off on a network you trust.",
+      "tls_hostname": "The server's certificate is not valid for this address: use the name it was issued for.",
+      "tls_other": "The server's certificate cannot be accepted (expired or not yet valid).",
+      "unauthorized": "The server refused the credentials (401): check the user and the password or token.",
+      "forbidden": "The credentials are known but not allowed to search experiments (403): ask for read access.",
+      "not_found": "No MLflow API at this address (404): check the tracking URI and its path.",
+      "redirect": "The server redirects to another address ({origin}): use that address as the tracking URI. Credentials are never sent to a different server.",
+      "http_error": "The server answered with an error (HTTP {status}).",
+      "bad_answer": "The address answers, but it does not look like an MLflow tracking server."
+    }
+  },
   "connectionExamples": {
     "button": "Example of the fields",
     "title": "Example: {type}",
@@ -3980,7 +4015,8 @@ export default {
       "sharepoint": "Client ID and secret come from an app registered in Entra ID with the Sites.Selected permission; the tenant ID is on the app's overview page.",
       "sftp": "With a private key, paste the whole file, header lines included. The first test shows the server's key: compare it with your administrator's before accepting it.",
       "api": "The secret and the headers are sent only to the base URL's host. The test path is a light call that only needs to answer 200.",
-      "gsheets": "Create a service account in Google Cloud, download its JSON key, enable the Google Sheets API (and Drive, to list the spreadsheets), then share each spreadsheet with the account's email as Viewer."
+      "gsheets": "Create a service account in Google Cloud, download its JSON key, enable the Google Sheets API (and Drive, to list the spreadsheets), then share each spreadsheet with the account's email as Viewer.",
+      "mlflow": "Use the tracking server's address, with its path if it has one (https://host/mlflow). With MLflow's basic authentication choose «User and password»; behind a reverse proxy or an identity provider, «Bearer token». Test says what the server can do: log runs, register models, receive files."
     }
   },
   "engineSettings": {

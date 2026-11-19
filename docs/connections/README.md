@@ -2,7 +2,7 @@
 
 A **connection** holds the address and the credentials of a system outside Tabularia —
 a database, a bucket, a mail server, an SFTP server, a SharePoint site, an HTTP API, a
-Google account for spreadsheets — so
+Google account for spreadsheets, an MLflow server — so
 that datasources, flows, SQL scripts and flow groups can read from it or write to it
 without anyone typing a password twice. It lives in a folder, it is used by whoever has
 the **CONNECT** permission there, and its secret is encrypted and never shown again.
@@ -24,6 +24,7 @@ This page maps every type and the rules they share; each type has its own page.
 | SharePoint | a datasource from Excel files of a document library | — | HTTPS (Microsoft Graph) | an app registered in Entra ID: client ID and secret | [SharePoint](../sources/sharepoint.md) |
 | Google Sheets | a datasource from one tab of a spreadsheet | — | HTTPS (Google APIs) | a service account's JSON key, read-only | [Google Sheets](../sources/google-sheets.md) |
 | HTTP API (REST/JSON) | a datasource «API call» | — | the base URL's | none, API key, bearer token, basic, OAuth2 client credentials | [HTTP APIs](../api-datasource.md) |
+| MLflow | — | The tracking server of the statistical models (runs, files, registered versions) | the URI's | none, user and password (basic) or bearer token | [MLflow](mlflow.md) |
 
 All the destinations of an Output node, with an example each, are on
 [Writing data out](destinations.md). The sources, connection-based or not (uploaded files,

@@ -56,6 +56,22 @@ func OptionError(dbType string, data pyjson.Object) string {
 	return ""
 }
 
+// CAError is what is wrong with a certificate authority pasted in PEM ("" = nothing): the
+// checks OptionError makes of a database connection's, for the other kinds that verify a
+// server with a company's own authority.
+func CAError(text string) string {
+	if len(text) > caMaxBytes {
+		return fmt.Sprintf("The certificate authority is too long (over %d KiB)", caMaxBytes/1024)
+	}
+	if strings.Contains(text, "PRIVATE KEY") {
+		return "That is a private key: paste only the authority's certificate (-----BEGIN CERTIFICATE-----)"
+	}
+	if !strings.Contains(text, "-----BEGIN CERTIFICATE-----") || !readable(text) {
+		return caUnreadable
+	}
+	return ""
+}
+
 // readable is ssl.create_default_context(cadata=ca) not raising: OpenSSL reads every PEM
 // certificate in the text (what is around them is skipped); one that does not parse, or none
 // at all, is an error.

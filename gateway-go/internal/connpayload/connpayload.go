@@ -18,7 +18,7 @@ import (
 )
 
 // NotDatabases is NOT_DATABASES: the connection types with no table to read, none to write.
-var NotDatabases = map[string]bool{"smtp": true, "sharepoint": true, "sftp": true, "api": true, "gsheets": true}
+var NotDatabases = map[string]bool{"smtp": true, "sharepoint": true, "sftp": true, "api": true, "gsheets": true, "mlflow": true}
 
 // Conn is a `connections` row.
 type Conn struct {
@@ -225,6 +225,34 @@ func API(host, username, secret, extra string) pyjson.Object {
 		{Key: "client_auth", Value: clientAuth}, {Key: "headers", Value: headers}, {Key: "test_path", Value: text("test_path")}}
 }
 
+// MLflow is the payload of an `mlflow` connection for the engine: only what the chosen
+// authentication uses travels, the secret still encrypted.
+func MLflow(host, username, secret, extra string) pyjson.Object {
+	opts := options(extra)
+	auth := "none"
+	if a, ok := opts.Value("auth").(string); ok && in(a, "basic", "bearer") {
+		auth = a
+	}
+	user, sec := "", ""
+	if auth == "basic" {
+		user = pystr.Strip(username)
+	}
+	if auth != "none" {
+		sec = secret
+	}
+	verify := true
+	if v, ok := opts.Value("verify_tls").(bool); ok {
+		verify = v
+	}
+	ca := ""
+	if c, ok := opts.Value("ca_cert").(string); ok && verify {
+		ca = pystr.Strip(c)
+	}
+	return pyjson.Object{{Key: "db_type", Value: "mlflow"}, {Key: "tracking_uri", Value: pystr.Strip(host)}, {Key: "auth", Value: auth},
+		{Key: "username", Value: user}, {Key: "secret_encrypted", Value: sec}, {Key: "verify_tls", Value: verify},
+		{Key: "ca_cert", Value: ca}, {Key: "ui_url", Value: pystr.Strip(pyjson.Str(pyjson.Or(opts.Value("ui_url"), "")))}}
+}
+
 // SFTP is _sftp_payload: only the secret of the chosen method travels.
 func SFTP(host string, port *int64, username, passwordEnc, keyEnc, extra, hostKeyType, hostKeyFingerprint string) pyjson.Object {
 	auth := SFTPAuth(extra)
@@ -277,6 +305,8 @@ func Payload(c *Conn) pyjson.Object {
 		return API(c.Host, c.Username, c.PasswordEncrypted, c.Extra)
 	case "gsheets":
 		return GSheets(c.PasswordEncrypted, c.Host, c.Database)
+	case "mlflow":
+		return MLflow(c.Host, c.Username, c.PasswordEncrypted, c.Extra)
 	}
 	return Database(c.DBType, c.Host, c.Port, c.Username, c.PasswordEncrypted, c.Database, c.DBSchema, c.Extra)
 }

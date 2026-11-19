@@ -18,6 +18,7 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/connpayload"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/dbtls"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/mlflowconn"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/perm"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyd"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyd/gatewaymodels"
@@ -43,7 +44,7 @@ func init() {
 }
 
 // supportedDBTypes is SUPPORTED_DB_TYPES, sorted as the refusal lists it.
-var supportedDBTypes = []string{"api", "clickhouse", "gsheets", "mariadb", "mysql", "oracle", "postgresql", "s3", "sftp",
+var supportedDBTypes = []string{"api", "clickhouse", "gsheets", "mariadb", "mlflow", "mysql", "oracle", "postgresql", "s3", "sftp",
 	"sharepoint", "smtp", "sqlserver", "trino"}
 
 func supported(dbType string) bool {
@@ -99,6 +100,10 @@ func validExtra(extra *string, dbType string) (string, *auth.Refusal) {
 	case "api":
 		if e := apiOptionError(data); e != "" {
 			return "", unprocessable("API: " + e)
+		}
+	case "mlflow":
+		if e := mlflowOptionError(data); e != "" {
+			return "", unprocessable("MLflow: " + e)
 		}
 	}
 	return raw, nil
@@ -535,6 +540,20 @@ func createConnection(d *Deps) authedFunc {
 				return
 			}
 		}
+		if dbType == "mlflow" {
+			if ref := checkMLflow(host, username, extra, password != ""); ref != nil {
+				server.Refuse(w, ref)
+				return
+			}
+			host = pystr.Strip(host)
+			port, database, dbSchema = nil, "", ""
+			if mlflowconn.ParseOptions(extra).Auth == "none" {
+				password = ""
+			}
+			if mlflowconn.ParseOptions(extra).Auth != "basic" {
+				username = ""
+			}
+		}
 		if dbType == "gsheets" {
 			email, gproject, ref := gsheetsIdentity(password)
 			if ref != nil {
@@ -588,9 +607,12 @@ func createConnection(d *Deps) authedFunc {
 			return
 		}
 		kind := "connection"
+		detail := pyjson.Object{{Key: "project_id", Value: project}, {Key: "db_type", Value: dbType}, {Key: "host", Value: host}}
+		if dbType == "mlflow" {
+			detail = mlflowAuditDetail(detail, extra)
+		}
 		audit.Record(ctx, d.DB, d.Log, audit.Event{Actor: &p.User, Action: "connection.create", TargetType: &kind, TargetID: &id,
-			TargetLabel: &name, Detail: pyjson.Object{{Key: "project_id", Value: project}, {Key: "db_type", Value: dbType},
-				{Key: "host", Value: host}}})
+			TargetLabel: &name, Detail: detail})
 		answerConnection(d, w, ctx, id, http.StatusCreated)
 	}
 }
@@ -691,6 +713,17 @@ func testDraftConnection(d *Deps) authedFunc {
 			}
 			raw, ref, err := engineInspect(ctx, d, connpayload.API(host, username, secret, extra), "test", "", "en", nil)
 			inspectAnswer(d, w, raw, ref, err)
+			return
+		case "mlflow":
+			if _, ref := validExtra(&extra, "mlflow"); ref != nil {
+				server.Refuse(w, ref)
+				return
+			}
+			if ref := checkMLflow(host, username, extra, password != ""); ref != nil {
+				server.Refuse(w, ref)
+				return
+			}
+			answerMLflowTest(w, r, mlflowConfig(host, username, password, extra))
 			return
 		case "gsheets":
 			email, gproject, ref := gsheetsIdentity(password)
@@ -856,6 +889,27 @@ func updateConnection(d *Deps) authedFunc {
 				return
 			}
 		}
+		if conn.DBType == "mlflow" {
+			newHost, newUser, newExtra := conn.Host, conn.Username, conn.Extra
+			if host != nil {
+				newHost = *host
+			}
+			if username != nil {
+				newUser = *username
+			}
+			if extra != nil {
+				newExtra = *extra
+			}
+			if mlflowMoved(conn, newHost, newUser, newExtra) && mlflowconn.ParseOptions(newExtra).Auth != "none" &&
+				!truthy(password) && conn.PasswordEncrypted != "" {
+				server.Refuse(w, unprocessable("MLflow: a new server, user or kind of authentication needs the secret typed again"))
+				return
+			}
+			if mlflowconn.ParseOptions(newExtra).Auth == "none" && password == nil {
+				empty := ""
+				password = &empty // no authentication: no stored secret
+			}
+		}
 		// the edit, as the Python code applies it to the row
 		next := *conn
 		next.Name, next.ProjectID = name, target
@@ -928,6 +982,13 @@ func updateConnection(d *Deps) authedFunc {
 				next.PrivateKeyEncrypted = ""
 			}
 		}
+		if conn.DBType == "mlflow" {
+			next.Host = pystr.Strip(next.Host)
+			if ref := checkMLflow(next.Host, next.Username, next.Extra, next.PasswordEncrypted != ""); ref != nil {
+				server.Refuse(w, ref)
+				return
+			}
+		}
 		if conn.DBType == "api" {
 			if ref := checkAPI(next.Host, next.Username, next.Extra, next.PasswordEncrypted != ""); ref != nil {
 				server.Refuse(w, ref)
@@ -959,8 +1020,12 @@ func updateConnection(d *Deps) authedFunc {
 			return
 		}
 		kind := "connection"
+		var updateDetail pyjson.Object
+		if conn.DBType == "mlflow" {
+			updateDetail = mlflowAuditDetail(pyjson.Object{}, next.Extra)
+		}
 		audit.Record(ctx, d.DB, d.Log, audit.Event{Actor: &p.User, Action: "connection.update", TargetType: &kind, TargetID: &conn.ID,
-			TargetLabel: &next.Name})
+			TargetLabel: &next.Name, Detail: updateDetail})
 		answerConnection(d, w, ctx, conn.ID, http.StatusOK)
 	}
 }

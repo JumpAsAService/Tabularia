@@ -14,6 +14,7 @@ import {
   type ConnectionInfo,
   type HostKeyResult,
   type GsheetsTestResult,
+  type MlflowTestResult,
 } from '~/composables/useConnections'
 
 const props = defineProps<{
@@ -131,6 +132,18 @@ const apiHeaders = ref('')
 const testPath = ref('')
 const apiUsesUser = computed(() => apiAuth.value === 'basic' || apiAuth.value === 'oauth2')
 
+// MLflow: a tracking server outside Tabularia. host = the tracking URI; the basic user in
+// `username`; the basic password or the bearer token in the password field (encrypted at
+// rest, never shown again); the rest in `extra`. The secret goes only to the server's
+// address, so a new address, user or kind of authentication needs it typed again.
+type MlAuth = 'none' | 'basic' | 'bearer'
+const ML_AUTHS: MlAuth[] = ['none', 'basic', 'bearer']
+const isMl = computed(() => dbType.value === 'mlflow')
+const mlAuth = ref<MlAuth>('none')
+const mlVerify = ref(true)
+const mlCa = ref('')
+const mlUi = ref('')
+
 // Google Sheets: a service account's JSON key, pasted or read from its file, travels as
 // the password (encrypted at rest, never shown again). The gateway reads the account's
 // email and project from it; here the same two are read only to show, before saving,
@@ -217,6 +230,10 @@ watch(
     clientAuth.value = opts.client_auth === 'basic' ? 'basic' : 'body'
     apiHeaders.value = headersToText(opts.headers)
     testPath.value = opts.test_path ?? ''
+    mlAuth.value = c?.db_type === 'mlflow' && ML_AUTHS.includes(opts.auth) ? opts.auth : 'none'
+    mlVerify.value = opts.verify_tls !== false
+    mlCa.value = typeof opts.ca_cert === 'string' ? opts.ca_cert : ''
+    mlUi.value = typeof opts.ui_url === 'string' ? opts.ui_url : ''
     gsKey.value = '' // never shown, like the password
     privateKey.value = '' // never shown, like the password
     passphrase.value = ''
@@ -327,6 +344,16 @@ const exampleRows = computed<[string, string][]>(() => {
       [L('gsheets.keyLabel'), '{ "type": "service_account", "project_id": "acme-data", "private_key": "-----BEGIN PRIVATE KEY----- …", "client_email": "tabularia-reader@acme-data.iam.gserviceaccount.com", … }'],
       [L('gsheets.accountLabel'), 'tabularia-reader@acme-data.iam.gserviceaccount.com'],
     ]
+    case 'mlflow': {
+      const rows: [string, string][] = [
+        [L('mlflowConn.uriLabel'), 'https://mlflow.example.com'],
+        [L('mlflowConn.authLabel'), L(`mlflowConn.auth_${mlAuth.value}`)],
+      ]
+      if (mlAuth.value === 'basic') rows.push([L('connectionDialog.usernameLabel'), 'tabularia'])
+      if (mlAuth.value !== 'none') rows.push([L(`mlflowConn.secret_${mlAuth.value}`), SECRET])
+      rows.push([L('mlflowConn.verifyLabel'), L('mlflowConn.verifyOn')], [L('mlflowConn.uiUrlLabel'), 'https://mlflow.example.com'])
+      return rows
+    }
     case 'api': {
       const rows: [string, string][] = [[L('apiSource.baseUrlLabel'), 'https://api.example.com/v1']]
       const auth = apiAuth.value
@@ -354,11 +381,11 @@ function draft(): ConnectionDraft {
     description: description.value,
     db_type: dbType.value,
     host: host.value.trim(),
-    port: port.value.trim() && !isApi.value ? Number(port.value) : null,
-    username: isApi.value && !apiUsesUser.value ? '' : username.value,
+    port: port.value.trim() && !isApi.value && !isMl.value ? Number(port.value) : null,
+    username: (isApi.value && !apiUsesUser.value) || (isMl.value && mlAuth.value !== 'basic') ? '' : username.value,
     // SFTP with the key method, or an API without authentication: the password field
     // is hidden, nothing to send
-    password: isGs.value ? gsKey.value.trim() : (isSftp.value && sftpAuth.value === 'key') || (isApi.value && apiAuth.value === 'none') ? '' : password.value,
+    password: isGs.value ? gsKey.value.trim() : (isSftp.value && sftpAuth.value === 'key') || (isApi.value && apiAuth.value === 'none') || (isMl.value && mlAuth.value === 'none') ? '' : password.value,
     database: database.value.trim(),
     db_schema: dbSchema.value.trim(),
     ...(isSftp.value && sftpAuth.value === 'key' && privateKey.value.trim() ? { private_key: privateKey.value } : {}),
@@ -367,7 +394,14 @@ function draft(): ConnectionDraft {
     // always sent: for the other kinds it stays an empty object, and omitting it when
     // editing would mean «do not touch it», which here is never the intention
     extra: JSON.stringify(
-      isApi.value
+      isMl.value
+        ? {
+            auth: mlAuth.value,
+            verify_tls: mlVerify.value,
+            ...(mlVerify.value && mlCa.value.trim() ? { ca_cert: mlCa.value.trim() } : {}),
+            ...(mlUi.value.trim() ? { ui_url: mlUi.value.trim() } : {}),
+          }
+        : isApi.value
         ? {
             auth: apiAuth.value,
             ...(apiAuth.value === 'api_key' ? { key_name: keyName.value.trim(), key_in: keyIn.value } : {}),
@@ -422,6 +456,20 @@ const apiMoved = computed(() => {
 })
 const apiNeedsSecretAgain = computed(() => apiMoved.value && !password.value)
 
+// MLflow: the stored secret does not follow the connection to another server, user or
+// kind of authentication (the gateway refuses it too)
+const mlMoved = computed(() => {
+  const c = props.existing
+  if (!isEdit.value || !isMl.value || !c) return false
+  let before: Record<string, any> = {}
+  try { before = JSON.parse(c.extra || '{}') } catch { /* defaults */ }
+  const beforeAuth = ML_AUTHS.includes(before.auth) ? before.auth : 'none'
+  return originOf(host.value) !== originOf(c.host) || mlAuth.value !== beforeAuth ||
+    (mlAuth.value === 'basic' && username.value.trim() !== c.username.trim())
+})
+const mlNeedsSecret = computed(() =>
+  isMl.value && mlAuth.value !== 'none' && !password.value && !(isEdit.value && props.existing?.has_password && !mlMoved.value))
+
 // for S3 the endpoint may be empty (= AWS): the name is enough. For SMTP the sender is
 // needed too: without it, the connection saves and then every send fails.
 const incomplete = computed(
@@ -445,7 +493,10 @@ const incomplete = computed(
     (isApi.value && apiUsesUser.value && !username.value.trim()) ||
     (isApi.value && apiAuth.value === 'oauth2' && !tokenUrl.value.trim()) ||
     (isApi.value && apiAuth.value !== 'none' && !password.value && !(isEdit.value && props.existing?.has_password)) ||
-    apiNeedsSecretAgain.value,
+    apiNeedsSecretAgain.value ||
+    // MLflow: basic needs its user; the secret is stored, or typed now
+    (isMl.value && mlAuth.value === 'basic' && !username.value.trim()) ||
+    mlNeedsSecret.value,
 )
 
 // changing kind, the fields the other kind does not show must not travel in the draft
@@ -458,7 +509,7 @@ function changeType(fresh: string) {
   dbType.value = fresh
   // «as before» is what THIS connection's driver did: another type has no «before»
   if (fresh !== old && dbTls.value === 'legacy' && !LEGACY_LABELS[fresh]) dbTls.value = 'verify'
-  if (fresh !== old && (['sharepoint', 'sftp', 'api', 'gsheets'].includes(fresh) || ['sharepoint', 'sftp', 'api', 'gsheets'].includes(old))) {
+  if (fresh !== old && (['sharepoint', 'sftp', 'api', 'gsheets', 'mlflow'].includes(fresh) || ['sharepoint', 'sftp', 'api', 'gsheets', 'mlflow'].includes(old))) {
     if (old === 'gsheets') host.value = '' // the account's email, not an address
     port.value = ''
     dbSchema.value = ''
@@ -560,6 +611,15 @@ async function test() {
       testResult.value = { ok: true, message: gsTestMessage(res) }
       return
     }
+    if (isMl.value) {
+      // nothing changed that the stored secret would not follow: the saved connection, with
+      // the options of the form; otherwise the draft, with what is typed
+      const res = (isEdit.value && !password.value && !mlMoved.value
+        ? await connApi.test(props.existing!.id, undefined, draft().extra)
+        : await connApi.testDraft(props.projectId, draft())) as unknown as MlflowTestResult
+      testResult.value = { ok: res.ok, message: mlMessage(res) }
+      return
+    }
     if (isEdit.value && !password.value) {
       // password unchanged: the saved connection is tested, with the encryption chosen in
       // the form (a choice changed and not saved yet is what the test is for)
@@ -573,6 +633,20 @@ async function test() {
   } finally {
     testing.value = false
   }
+}
+
+// the test's lines in the person's language: what failed, or what works and what is missing
+function mlMessage(res: MlflowTestResult): string {
+  const failed = res.checks.find((c) => !c.ok && c.id === 'experiments')
+  if (!res.ok || failed) {
+    const c = failed ?? res.checks[0]
+    const key = `mlflowConn.err.${c?.code ?? 'unreachable'}`
+    return t(key, { status: c?.status ?? '', origin: c?.detail ?? '' })
+  }
+  const lines = [res.version ? t('mlflowConn.testOkVersion', { version: res.version }) : t('mlflowConn.testOk')]
+  lines.push(t(res.registry ? 'mlflowConn.registryOk' : 'mlflowConn.registryNo'))
+  lines.push(t(res.artifacts ? 'mlflowConn.artifactsOk' : 'mlflowConn.artifactsNo'))
+  return lines.join('\n')
 }
 
 function gsTestMessage(res: GsheetsTestResult): string {
@@ -611,7 +685,7 @@ function confirm() {
             <label>{{ $t('connectionDialog.nameLabel') }}</label>
             <input v-model="name" type="text" :placeholder="$t('connectionDialog.namePlaceholder')" />
           </div>
-          <div class="cd-field cd-type" :class="{ 'cd-wide': isS3 || isSp || isApi || isGs }">
+          <div class="cd-field cd-type" :class="{ 'cd-wide': isS3 || isSp || isApi || isGs || isMl }">
             <label>{{ $t('connectionDialog.typeLabel') }}</label>
             <Select :model-value="dbType" :options="typeOptions" @update:model-value="changeType" />
             <button
@@ -642,7 +716,7 @@ function confirm() {
             <p class="cd-example-tip">{{ exampleTip }}</p>
             <p class="cd-example-note">{{ $t('connectionExamples.madeUp') }}</p>
           </section>
-          <div v-if="!isS3 && !isSp && !isApi && !isGs" class="cd-field">
+          <div v-if="!isS3 && !isSp && !isApi && !isGs && !isMl" class="cd-field">
             <label>{{ $t('connectionDialog.portLabel') }} <span class="cd-hint">{{ $t('connectionDialog.portHintDefault') }}</span></label>
             <input v-model="port" type="text" inputmode="numeric" :placeholder="portPlaceholder" />
           </div>
@@ -654,11 +728,22 @@ function confirm() {
             </p>
           </div>
           <div v-if="!isGs" class="cd-field cd-wide">
-            <label>{{ isSp ? $t('sharepoint.siteLabel') : isS3 ? $t('connectionDialog.endpointLabel') : isSmtp ? $t('connectionDialog.smtpHostLabel') : isSftp ? $t('sftp.hostLabel') : isApi ? $t('apiSource.baseUrlLabel') : $t('connectionDialog.hostLabel') }} <span v-if="isS3" class="cd-hint">{{ $t('connectionDialog.hostHintAws') }}</span></label>
+            <label>{{ isSp ? $t('sharepoint.siteLabel') : isS3 ? $t('connectionDialog.endpointLabel') : isSmtp ? $t('connectionDialog.smtpHostLabel') : isSftp ? $t('sftp.hostLabel') : isMl ? $t('mlflowConn.uriLabel') : isApi ? $t('apiSource.baseUrlLabel') : $t('connectionDialog.hostLabel') }} <span v-if="isS3" class="cd-hint">{{ $t('connectionDialog.hostHintAws') }}</span></label>
             <input
               v-model="host"
               type="text"
-              :placeholder="isSp ? 'https://contoso.sharepoint.com/sites/Finance' : isS3 ? 'https://minio.example.com:9000' : isSmtp ? 'smtp.example.com' : isSftp ? 'sftp.example.com' : isApi ? 'https://api.example.com/v1' : 'db.internal.example.com'"
+              :placeholder="isSp ? 'https://contoso.sharepoint.com/sites/Finance' : isS3 ? 'https://minio.example.com:9000' : isSmtp ? 'smtp.example.com' : isSftp ? 'sftp.example.com' : isApi ? 'https://api.example.com/v1' : isMl ? 'https://mlflow.example.com' : 'db.internal.example.com'"
+            />
+          </div>
+          <div v-if="isMl" class="cd-field">
+            <label>{{ $t('mlflowConn.authLabel') }}</label>
+            <Select
+              v-model="mlAuth"
+              :options="[
+                { value: 'none', label: $t('mlflowConn.auth_none') },
+                { value: 'basic', label: $t('mlflowConn.auth_basic') },
+                { value: 'bearer', label: $t('mlflowConn.auth_bearer') },
+              ]"
             />
           </div>
           <div v-if="isApi" class="cd-field">
@@ -674,7 +759,7 @@ function confirm() {
               ]"
             />
           </div>
-          <div v-if="(!isApi || apiUsesUser) && !isGs" class="cd-field">
+          <div v-if="isMl ? mlAuth === 'basic' : (!isApi || apiUsesUser) && !isGs" class="cd-field">
             <label>{{ isSp ? $t('sharepoint.clientIdLabel') : isS3 ? $t('connectionDialog.accessKeyLabel') : isApi && apiAuth === 'oauth2' ? $t('apiSource.clientIdLabel') : $t('connectionDialog.usernameLabel') }}</label>
             <input v-model="username" type="text" autocomplete="off" />
           </div>
@@ -688,9 +773,9 @@ function confirm() {
               ]"
             />
           </div>
-          <div v-if="(!isSftp || sftpAuth === 'password') && !(isApi && apiAuth === 'none') && !isGs" class="cd-field">
+          <div v-if="(!isSftp || sftpAuth === 'password') && !(isApi && apiAuth === 'none') && !(isMl && mlAuth === 'none') && !isGs" class="cd-field">
             <label>
-              {{ isSp ? $t('sharepoint.secretLabel') : isS3 ? $t('connectionDialog.secretKeyLabel') : isApi ? $t(`apiSource.secret_${apiAuth}`) : $t('connectionDialog.passwordLabel') }}
+              {{ isSp ? $t('sharepoint.secretLabel') : isS3 ? $t('connectionDialog.secretKeyLabel') : isMl ? $t(`mlflowConn.secret_${mlAuth}`) : isApi ? $t(`apiSource.secret_${apiAuth}`) : $t('connectionDialog.passwordLabel') }}
               <span v-if="isEdit" class="cd-hint">{{ $t('connectionDialog.passwordHintUnchanged') }}</span>
             </label>
             <input v-model="password" type="password" autocomplete="new-password" />
@@ -755,6 +840,24 @@ function confirm() {
                 {{ $t('gsheets.projectLabel') }} <code>{{ gsAccount?.project ?? existing?.database }}</code>
               </p>
             </div>
+          </template>
+          <template v-else-if="isMl">
+            <label class="cd-field cd-wide cd-check">
+              <span><input v-model="mlVerify" type="checkbox" role="switch" /> {{ $t('mlflowConn.verifyLabel') }}</span>
+            </label>
+            <p v-if="!mlVerify" class="cd-hostkey none cd-wide">
+              <ShieldAlert :size="13" />
+              <span>{{ $t('mlflowConn.verifyOffWarning') }}</span>
+            </p>
+            <div v-if="mlVerify" class="cd-field cd-wide">
+              <label for="cd-ml-ca">{{ $t('connectionDialog.dbCaLabel') }} <span class="cd-hint">{{ $t('connectionDialog.dbCaHint') }}</span></label>
+              <textarea id="cd-ml-ca" v-model="mlCa" rows="3" spellcheck="false" autocomplete="off" class="cd-key" placeholder="-----BEGIN CERTIFICATE-----" />
+            </div>
+            <div class="cd-field cd-wide">
+              <label for="cd-ml-ui">{{ $t('mlflowConn.uiUrlLabel') }} <span class="cd-hint">{{ $t('mlflowConn.uiUrlHint') }}</span></label>
+              <input id="cd-ml-ui" v-model="mlUi" type="text" spellcheck="false" placeholder="https://mlflow.example.com" />
+            </div>
+            <p v-if="isEdit && mlMoved && mlAuth !== 'none'" class="cd-hostkey none cd-wide">{{ $t('mlflowConn.retypeSecret') }}</p>
           </template>
           <template v-else-if="isApi">
             <template v-if="apiAuth === 'api_key'">
@@ -914,6 +1017,9 @@ function confirm() {
           <template v-else-if="isSftp">
             {{ $t('sftp.note') }}
           </template>
+          <template v-else-if="isMl">
+            {{ $t('mlflowConn.note') }}
+          </template>
           <template v-else-if="isApi">
             {{ $t('apiSource.note') }}
           </template>
@@ -988,6 +1094,8 @@ function confirm() {
 .cd-note { font-size: 11.5px; margin: 0; }
 .cd-test { display: flex; align-items: flex-start; gap: 6px; font-size: 12px; margin: 0; overflow-wrap: anywhere; }
 .cd-test svg { flex: none; margin-top: 1px; }
+.cd-test span { white-space: pre-line; }
+.cd-check > span { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text); }
 .cd-gs-actions { display: flex; justify-content: flex-end; margin-top: 3px; }
 .cd-gs-file { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 3px 10px; }
 .cd-gs-account { gap: 2px; }
