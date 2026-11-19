@@ -12,6 +12,7 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyd"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/server"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/statcatalog"
 )
 
 // The flow editor's right-click menu: the transformations a person keeps there, in their
@@ -19,12 +20,24 @@ import (
 // Python twin (server/go_only_routes.go). A preference of the person, not of the data: an
 // observer keeps one as well; a read-only API token cannot change it (auth's level check).
 
-// FlowShortcutOps are the operations a flow holds as transformation nodes: the engine's
-// registry (backend/app/engine/operations.py) without `foreach`, a container.
-var FlowShortcutOps = []any{
+// transformOps are the transformations of the engine's registry
+// (backend/app/engine/operations.py), written by hand: without `foreach`, a container, and
+// without the hypothesis tests, which come from their catalogue.
+var transformOps = []any{
 	"select", "reorder", "drop", "rename", "cast", "compute", "sql", "filter", "sort", "limit",
 	"unique", "sample", "fill_null", "drop_nulls", "group_by", "pivot", "unpivot", "join", "union",
 }
+
+// FlowShortcutOps are the operations a flow holds as nodes of its chain, the ones the menu
+// may offer: the transformations and every hypothesis test of the catalogue (a new test is
+// allowed here by being added there).
+var FlowShortcutOps = func() []any {
+	ops := append([]any{}, transformOps...)
+	for _, op := range statcatalog.Operations() {
+		ops = append(ops, op)
+	}
+	return ops
+}()
 
 // FlowShortcutsMax is how many the menu holds.
 const FlowShortcutsMax = 8

@@ -1,0 +1,87 @@
+{
+  "prefix": "stat_",
+  "families": [
+    "means",
+    "variances",
+    "proportions",
+    "correlation",
+    "ranks",
+    "distributions"
+  ],
+  "controls": [
+    "column",
+    "levels",
+    "boolean",
+    "number",
+    "choice"
+  ],
+  "kinds": {
+    "column": {
+      "control": "column"
+    },
+    "number_column": {
+      "control": "column",
+      "numeric": true
+    },
+    "two_groups": {
+      "control": "levels",
+      "of": "group",
+      "count": 2
+    },
+    "boolean": {
+      "control": "boolean"
+    },
+    "number": {
+      "control": "number"
+    },
+    "alpha": {
+      "control": "number",
+      "above": 0,
+      "below": 1
+    },
+    "alternative": {
+      "control": "choice",
+      "choices": [
+        "two_sided",
+        "less",
+        "greater"
+      ]
+    },
+    "detail": {
+      "control": "choice",
+      "choices": [
+        "results",
+        "report"
+      ],
+      "hidden": true
+    }
+  },
+  "tests": [
+    {
+      "id": "t_two_sample",
+      "operation": "stat_t_two_sample",
+      "family": "means",
+      "needs": {
+        "value": "number_column",
+        "group": "column"
+      },
+      "takes": {
+        "groups": "two_groups",
+        "var_equal": "boolean",
+        "mu": "number",
+        "alternative": "alternative",
+        "alpha": "alpha",
+        "detail": "detail"
+      },
+      "defaults": {
+        "groups": null,
+        "var_equal": false,
+        "mu": 0.0,
+        "alternative": "two_sided",
+        "alpha": 0.05,
+        "detail": "results"
+      },
+      "forbids": []
+    }
+  ]
+}

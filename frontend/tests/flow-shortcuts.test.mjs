@@ -10,9 +10,13 @@ import { readFileSync } from 'node:fs'
 register('./alias-hooks.mjs', import.meta.url)
 const m = await import('../composables/flowShortcuts.ts')
 
-// the engine's operations, as GET /tasks/operations lists them
-const ENGINE = ['cast', 'compute', 'drop', 'drop_nulls', 'fill_null', 'filter', 'foreach', 'group_by', 'join', 'limit',
+// the engine's operations, as GET /tasks/operations lists them: the transformations written
+// by hand, and the hypothesis tests of the catalogue, read from the engine's snapshot
+const TRANSFORMS = ['cast', 'compute', 'drop', 'drop_nulls', 'fill_null', 'filter', 'foreach', 'group_by', 'join', 'limit',
   'pivot', 'rename', 'reorder', 'sample', 'select', 'sort', 'sql', 'union', 'unique', 'unpivot']
+const STATS = JSON.parse(readFileSync(new URL('../../backend/app/engine/stats/catalog.json', import.meta.url), 'utf8'))
+  .tests.map((t) => t.operation)
+const ENGINE = [...TRANSFORMS, ...STATS].sort()
 
 test('the defaults are eight real transformations, each once', () => {
   assert.equal(m.FLOW_SHORTCUTS_DEFAULT.length, m.FLOW_SHORTCUTS_MAX)
@@ -23,8 +27,23 @@ test('the defaults are eight real transformations, each once', () => {
 
 test('the gateway knows the same transformations the editor offers', () => {
   const go = readFileSync(new URL('../../gateway-go/internal/api/flow_shortcuts.go', import.meta.url), 'utf8')
-  const list = go.match(/var FlowShortcutOps = \[\]any\{([^}]*)\}/)[1].match(/"([a-z_]+)"/g).map((s) => s.slice(1, -1))
-  assert.deepEqual([...list].sort(), ENGINE.filter((o) => o !== 'foreach'))
+  const list = go.match(/var transformOps = \[\]any\{([^}]*)\}/)[1].match(/"([a-z_]+)"/g).map((s) => s.slice(1, -1))
+  assert.deepEqual([...list].sort(), TRANSFORMS.filter((o) => o !== 'foreach'))
+  // and the hypothesis tests from the catalogue's copy it embeds: none is written by hand
+  const made = go.match(/var FlowShortcutOps = func\(\) \[\]any \{([\s\S]*?)\n\}\(\)/)[1]
+  assert.ok(made.includes('transformOps...') && made.includes('statcatalog.Operations()'), made)
+  assert.ok(STATS.length > 0 && !list.some((o) => o.startsWith('stat_')))
+  const embedded = readFileSync(new URL('../../gateway-go/internal/statcatalog/catalog.json', import.meta.url), 'utf8')
+  assert.deepEqual(JSON.parse(embedded).tests.map((t) => t.operation), STATS)
+})
+
+test('a hypothesis test may be one of the menu\'s eight', () => {
+  assert.ok(STATS.includes('stat_t_two_sample'))
+  assert.deepEqual(m.flowShortcutsShown(['filter', 'stat_t_two_sample'], ENGINE), ['filter', 'stat_t_two_sample'])
+  assert.equal(m.flowShortcutsProblem(['stat_t_two_sample', 'join'], ENGINE), '')
+  assert.equal(m.flowShortcutsProblem(['stat_nope'], ENGINE), 'unknown')
+  // an engine of before, without the tests: a saved one is not offered
+  assert.deepEqual(m.flowShortcutsShown(['filter', 'stat_t_two_sample'], TRANSFORMS), ['filter'])
 })
 
 test('the menu shows the saved choice, in its order, only what is offered', () => {

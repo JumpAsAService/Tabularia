@@ -6,11 +6,22 @@ the operation says which test it is, and its parameters are that test's alone. A
 is an entry of `TESTS` here and its function in `compute.py`; the four registries pick it
 up by themselves (`stat_operations`).
 
-`TESTS` is kept as plain data (names and texts only) because the editor's form mirrors it.
+`TESTS` is kept as plain data (names and texts only) because the editor's form mirrors it:
+`snapshot()` is the catalogue as the other languages read it (`catalog.json`, beside this
+file, and its copies in the interface, in the Go gateway and in the AI service). After a
+change here, write it again:
+
+    python -m app.engine.stats.catalog            # the snapshot
+    python3 .github/scripts/stat_catalog.py       # its copies (from the repository's root)
+
+(Python warns that the module is found twice when it runs: the engines' registries import
+it too. Nothing is shared between the two, and the one that runs only writes the file.)
 """
 from __future__ import annotations
 
+import json
 import math
+from pathlib import Path
 from typing import Any, Callable, Mapping, NamedTuple
 
 from app.engine.exceptions import EngineError
@@ -20,11 +31,23 @@ OP_PREFIX = "stat_"
 ALTERNATIVES = ("two_sided", "less", "greater")
 DETAILS = ("results", "report")
 
-# Per test: the keys it `needs` and the ones it `takes` besides, each with the kind of value
-# it holds (a reader of `_READERS`), and the `defaults` of the keys it takes. Nothing is
-# shared between tests: a test that has a parameter of its own lists it here, with its kind.
-TESTS: dict[str, dict[str, dict[str, Any]]] = {
+# The families the tests are shown by, in the palette's order.
+FAMILIES = ("means", "variances", "proportions", "correlation", "ranks", "distributions")
+
+# Per test: its `family`, the keys it `needs` and the ones it `takes` besides, each with the
+# kind of value it holds (a reader of `_READERS`, a control of `KINDS`), and the `defaults` of
+# the keys it takes. Nothing is shared between tests: a test that has a parameter of its own
+# lists it here, with its kind. The keys are shown in this order by the node's form.
+#
+# A test whose options exclude each other says so in `forbids`, a list of
+#     {"key": "posthoc", "value": "tukey", "when": {"var_equal": False},
+#      "reason": "tukey_equal_variances", "message": "Tukey's HSD assumes equal variances: …"}
+# — `key` may not be `value` while every key of `when` has that value (the defaults count).
+# The node refuses it with `message`; the form disables the choice and says why in the
+# person's language (`stat.reasons.<reason>` in the interface's catalogues).
+TESTS: dict[str, dict[str, Any]] = {
     "t_two_sample": {
+        "family": "means",
         "needs": {"value": "number_column", "group": "column"},
         "takes": {"groups": "two_groups", "var_equal": "boolean", "mu": "number",
                   "alternative": "alternative", "alpha": "alpha", "detail": "detail"},
@@ -149,6 +172,27 @@ _READERS: dict[str, Callable[..., Any]] = {
     "detail": _one_of(DETAILS),
 }
 
+# The controls a form has to draw: a column of the step's input, some of the values a column
+# holds, a switch, a number, one of a few choices.
+CONTROLS = ("column", "levels", "boolean", "number", "choice")
+
+# How a form asks for each kind of value: its control, and what the control needs to know.
+#   column   `numeric`: only the columns that are numbers
+#   levels   `count` values of the column the key `of` names (its groups)
+#   number   `above`, `below`: the bounds, both excluded
+#   choice   `choices`, in the order shown
+# `hidden`: a key the node sets by itself, never asked in the form.
+KINDS: dict[str, dict[str, Any]] = {
+    "column": {"control": "column"},
+    "number_column": {"control": "column", "numeric": True},
+    "two_groups": {"control": "levels", "of": "group", "count": 2},
+    "boolean": {"control": "boolean"},
+    "number": {"control": "number"},
+    "alpha": {"control": "number", "above": 0, "below": 1},
+    "alternative": {"control": "choice", "choices": list(ALTERNATIVES)},
+    "detail": {"control": "choice", "choices": list(DETAILS), "hidden": True},
+}
+
 
 def check_params(test: str, params: dict[str, Any] | None, columns: Mapping[str, Column]) -> dict[str, Any]:
     """The parameters of a `test` node, checked against the test's keys and the input's
@@ -164,7 +208,48 @@ def check_params(test: str, params: dict[str, Any] | None, columns: Mapping[str,
     for key in spec["needs"]:
         if key not in given:
             raise refusal(test, f"'{key}' is required")
-    return {
+    checked = {
         key: _READERS[kind](test, key, given[key], columns) if key in given else spec["defaults"][key]
         for key, kind in kinds.items()
     }
+    for rule in spec.get("forbids", ()):
+        if checked[rule["key"]] == rule["value"] and all(checked[k] == v for k, v in rule["when"].items()):
+            raise refusal(test, rule["message"])
+    return checked
+
+
+# ── the snapshot: the catalogue as the other languages read it ──────────────
+SNAPSHOT = Path(__file__).with_name("catalog.json")
+
+
+def snapshot() -> dict[str, Any]:
+    """The catalogue as plain data: the families, the controls and the kinds, and every test
+    in its order with its operation, its keys, their defaults and what it forbids."""
+    return {
+        "prefix": OP_PREFIX,
+        "families": list(FAMILIES),
+        "controls": list(CONTROLS),
+        "kinds": KINDS,
+        "tests": [
+            {
+                "id": test,
+                "operation": operation_name(test),
+                "family": spec["family"],
+                "needs": spec["needs"],
+                "takes": spec["takes"],
+                "defaults": spec["defaults"],
+                "forbids": list(spec.get("forbids", ())),
+            }
+            for test, spec in TESTS.items()
+        ],
+    }
+
+
+def snapshot_text() -> str:
+    """The snapshot as it is written: `catalog.json` and its copies hold exactly this."""
+    return json.dumps(snapshot(), indent=2, ensure_ascii=False) + "\n"
+
+
+if __name__ == "__main__":
+    SNAPSHOT.write_text(snapshot_text(), encoding="utf-8")
+    print(f"{SNAPSHOT.name}: {len(TESTS)} test{'' if len(TESTS) == 1 else 's'} written")

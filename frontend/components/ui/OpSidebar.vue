@@ -1,12 +1,16 @@
 <script setup lang="ts">
 // The components' palette: drag an item onto the canvas to create the node. The type
 // travels in the dataTransfer (application/tabularia), read by FlowEditor's drop handler.
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Container, FileCode2, GripVertical, HardDriveDownload, StickyNote, Search } from 'lucide-vue-next'
+import { ChevronRight, Container, FileCode2, GripVertical, HardDriveDownload, StickyNote, Search } from 'lucide-vue-next'
 import { opMeta, SOURCE_META } from '~/composables/useOpIcons'
+import { statHintKey, statIsOp, statNameKey, statPalette } from '~/composables/statTests'
 
 const { t } = useI18n()
+// a statistics item chosen without dragging (Enter or Space on it): the editor adds the
+// step after the selected node
+const emit = defineEmits<{ (e: 'add', opType: string): void }>()
 
 // readOnly: observer — transformations only, no sources, controls, outputs
 // scripting: the person may write Script nodes (an environment is there for them)
@@ -27,10 +31,28 @@ const match = (...texts: string[]) => {
 }
 
 // foreach has a dedicated item in the "Control" group (it is a container, not a normal
-// operation of the chain)
+// operation of the chain); the hypothesis tests have their own group, below
 const transformOps = computed(() =>
-  props.operations.filter((o) => o !== 'foreach' && match(t(opMeta(o).label), o)),
+  props.operations.filter((o) => o !== 'foreach' && !statIsOp(o) && match(t(opMeta(o).label), o)),
 )
+
+// ── Statistics: the hypothesis tests, by family ──────────────────────────────
+// One group for all the tests the engine offers, closed until the person opens it (there
+// are many, and most flows use none) and remembered in this browser. Its title is a button.
+// A search opens it by itself and shows the tests whose name, hint or family matches.
+const STAT_OPEN_KEY = 'tabularia.palette.statistics'
+const statOpenSaved = ref(false)
+onMounted(() => {
+  try { statOpenSaved.value = localStorage.getItem(STAT_OPEN_KEY) === 'open' } catch { /* no storage: closed */ }
+})
+const searching = computed(() => !!query.value.trim())
+const statGroups = computed(() => statPalette(props.operations, query.value, t))
+const statCount = computed(() => statGroups.value.reduce((n, g) => n + g.tests.length, 0))
+const statOpen = computed(() => searching.value || statOpenSaved.value)
+function toggleStat() {
+  statOpenSaved.value = !statOpenSaved.value
+  try { localStorage.setItem(STAT_OPEN_KEY, statOpenSaved.value ? 'open' : 'closed') } catch { /* not remembered */ }
+}
 const hasForeach = computed(() => props.operations.includes('foreach'))
 
 // visibility of the single fixed items and of their groups
@@ -47,6 +69,7 @@ const noResults = computed(
   () =>
     !showSource.value &&
     !transformOps.value.length &&
+    !statGroups.value.length &&
     !showControl.value &&
     !showOutput.value &&
     !showComment.value,
@@ -93,6 +116,45 @@ function onDragStart(ev: DragEvent, kind: string) {
         <component :is="opMeta(op).icon" :size="15" class="item-icon" />
         <span>{{ $t(opMeta(op).label) }}</span>
         <GripVertical :size="13" class="grip" />
+      </div>
+    </template>
+
+    <template v-if="statGroups.length">
+      <!-- while a search has text the group is open by itself: a title, as the others -->
+      <div v-if="searching" class="group-title">{{ $t('opSidebar.statisticsGroup') }}</div>
+      <button
+        v-else
+        type="button"
+        class="group-title group-toggle"
+        :aria-expanded="statOpen"
+        aria-controls="palette-statistics"
+        @click="toggleStat"
+      >
+        <ChevronRight :size="12" class="chev" :class="{ open: statOpen }" aria-hidden="true" />
+        <span>{{ $t('opSidebar.statisticsGroup') }}</span>
+        <span class="group-count" aria-hidden="true">{{ statCount }}</span>
+      </button>
+      <div v-show="statOpen" id="palette-statistics" class="stat-group" role="group" :aria-label="$t('opSidebar.statisticsGroup')">
+        <div v-for="g in statGroups" :key="g.family" class="stat-family" role="group" :aria-labelledby="`palette-stat-${g.family}`">
+          <div :id="`palette-stat-${g.family}`" class="family-title">{{ $t(`stat.families.${g.family}`) }}</div>
+          <div
+            v-for="test in g.tests"
+            :key="test.operation"
+            class="item"
+            draggable="true"
+            role="button"
+            tabindex="0"
+            :title="$t('opSidebar.statisticsItemTitle', { hint: $t(statHintKey(test)) })"
+            :style="{ '--item-color': opMeta(test.operation).color }"
+            @dragstart="onDragStart($event, `op:${test.operation}`)"
+            @keydown.enter.prevent="emit('add', test.operation)"
+            @keydown.space.prevent="emit('add', test.operation)"
+          >
+            <component :is="opMeta(test.operation).icon" :size="15" class="item-icon" aria-hidden="true" />
+            <span>{{ $t(statNameKey(test)) }}</span>
+            <GripVertical :size="13" class="grip" aria-hidden="true" />
+          </div>
+        </div>
       </div>
     </template>
 
@@ -228,6 +290,36 @@ function onDragStart(ev: DragEvent, kind: string) {
   color: var(--muted);
   padding: 8px 6px 4px;
 }
+/* Statistics: the title is the button that opens the group, in the titles' own look */
+.group-toggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 10px;
+  text-align: left;
+  justify-content: flex-start;
+  cursor: pointer;
+}
+.group-toggle:hover { color: var(--text); background: none; box-shadow: none; }
+.group-toggle:active { transform: none; }
+.group-toggle .chev { flex-shrink: 0; transition: transform var(--dur-hover) var(--ease-out); }
+.group-toggle .chev.open { transform: rotate(90deg); }
+.group-count { margin-left: auto; font-variant-numeric: tabular-nums; letter-spacing: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .group-toggle .chev { transition: none; }
+}
+.stat-group, .stat-family { display: flex; flex-direction: column; gap: 3px; }
+.family-title {
+  font-size: 11.5px;
+  color: var(--muted);
+  padding: 6px 6px 2px;
+}
+.item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .item {
   display: flex;
   align-items: center;

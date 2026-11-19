@@ -2366,6 +2366,8 @@ export default {
     "runFlowLabel": "Esegui flusso",
     "searchPlaceholder": "Cerca componente…",
     "sourcesGroup": "Sorgenti",
+    "statisticsGroup": "Statistica",
+    "statisticsItemTitle": "{hint} Trascinalo sul canvas, o premi Invio per aggiungerlo dopo il passo selezionato.",
     "transformsGroup": "Trasformazioni"
   },
   "operationNode": {
@@ -6066,6 +6068,61 @@ export default {
       "next": "Prossimo: {when}",
       "disabled": "I backup automatici sono spenti.",
       "open": "Apri i backup"
+    }
+  },
+  "stat": {
+    "families": {
+      "means": "Medie",
+      "variances": "Varianze",
+      "proportions": "Proporzioni e categorie",
+      "correlation": "Correlazione",
+      "ranks": "Ranghi",
+      "distributions": "Distribuzioni"
+    },
+    "tests": {
+      "t_two_sample": {
+        "name": "Test t a due campioni",
+        "hint": "Due gruppi hanno la stessa media? Test t di Welch, o di Student quando le varianze si assumono uguali."
+      }
+    },
+    "params": {
+      "value": "Colonna dei valori",
+      "group": "Colonna dei gruppi",
+      "groups": "Gruppi da confrontare",
+      "var_equal": "Varianze uguali",
+      "mu": "Valore sotto H0",
+      "alternative": "Ipotesi alternativa",
+      "alpha": "Livello di significatività (α)"
+    },
+    "hints": {
+      "value": "La colonna che si misura.",
+      "group": "La colonna che dà il nome ai gruppi.",
+      "groups": "Il primo meno il secondo. Lasciali su Automatico quando la colonna ha esattamente due gruppi.",
+      "var_equal": "Acceso: il test classico, con la varianza comune. Spento: la versione di Welch, che non la assume.",
+      "mu": "Ciò che afferma l'ipotesi nulla: 0 per «nessuna differenza».",
+      "alpha": "Tra 0 e 1. Gli intervalli di confidenza hanno livello 1 − α."
+    },
+    "choices": {
+      "alternative": {
+        "two_sided": "Bilaterale (≠)",
+        "less": "Minore (<)",
+        "greater": "Maggiore (>)"
+      }
+    },
+    "form": {
+      "level": "Gruppo {n}",
+      "automatic": "Automatico",
+      "chooseColumnFirst": "Scegli prima «{field}».",
+      "levelsFailed": "Non è stato possibile leggere i gruppi della colonna.",
+      "manyLevels": "«{column}» ha {n} gruppi: scegli i {count} da confrontare.",
+      "fewLevels": "Il test confronta {count} gruppi: «{column}» ne ha {n}.",
+      "between": "Un numero tra {above} e {below}, estremi esclusi.",
+      "above": "Un numero maggiore di {above}.",
+      "below": "Un numero minore di {below}.",
+      "notNumeric": "non è un numero",
+      "notInInput": "non è nell'ingresso del passo",
+      "notInData": "non è nei dati",
+      "noNumericColumns": "L'ingresso del passo non ha colonne numeriche: convertine una prima."
     }
   },
 }

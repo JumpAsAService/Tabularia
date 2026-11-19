@@ -10,6 +10,8 @@
 // - where the keyboard moves the grid's one active cell;
 // - how a column's profile is written (a share of nulls, a range of lengths).
 
+import { statColumns, statIsOp } from '~/composables/statTests'
+
 export interface GridColumn { name: string; dtype: string }
 
 // ── types ─────────────────────────────────────────────────────────────────────
@@ -181,9 +183,11 @@ export function columnChanges(
   return { marks, removed }
 }
 
-/** The columns a step reshapes into others: a Pivot's `on` and `values`, an Unpivot's `on`. */
+/** The columns a step reshapes into others: a Pivot's `on` and `values`, an Unpivot's `on`,
+ *  the columns a hypothesis test reads (its results are made of them). */
 export function consumedColumns(opType: string, params: Record<string, any> | null | undefined): string[] {
   const p = params ?? {}
+  if (statIsOp(opType)) return statColumns(opType, p)
   const names = (v: unknown): string[] => (Array.isArray(v) ? v : v == null ? [] : [v]).map(String).filter(Boolean)
   if (opType === 'pivot') return [...names(p.on), ...names(p.values)]
   if (opType === 'unpivot') return names(p.on ?? p.columns ?? p.value_vars)

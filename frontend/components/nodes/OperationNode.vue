@@ -22,7 +22,7 @@ const meta = computed(() => opMeta(props.data?.opType ?? ''))
 const paramCount = computed(() => Object.keys(props.data?.params ?? {}).length)
 // the operation's name as in the palette (translated), not the internal id; and in one
 // line what it does with its parameters, instead of «1 parameters»
-const title = computed(() => (meta.value.label.startsWith('ops.') ? t(meta.value.label) : props.data?.opType) || t('operationNode.operationFallback'))
+const title = computed(() => (meta.value.label !== props.data?.opType ? t(meta.value.label) : props.data?.opType) || t('operationNode.operationFallback'))
 const summary = computed(() => opSummary(props.data?.opType ?? '', props.data?.params))
 </script>
 

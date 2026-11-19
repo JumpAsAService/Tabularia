@@ -37,7 +37,7 @@ def test_every_test_is_an_operation_on_every_registry():
 
 def test_the_table_is_complete_for_every_test():
     for test, spec in catalog.TESTS.items():
-        assert set(spec) == {"needs", "takes", "defaults"}, test
+        assert {"family", "needs", "takes", "defaults"} <= set(spec) <= {"family", "needs", "takes", "defaults", "forbids"}, test
         assert not set(spec["needs"]) & set(spec["takes"]), test
         assert set(spec["defaults"]) == set(spec["takes"]), test  # a default for every key it may lack
         for key, kind in {**spec["needs"], **spec["takes"]}.items():

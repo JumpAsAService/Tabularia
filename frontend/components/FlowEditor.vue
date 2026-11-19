@@ -32,6 +32,7 @@ import { useKeyGroups, useKeyHelp } from '~/composables/useKeyHelp'
 import { SOURCE_ID, buildIncoming, resolveChain, leafNodeId, defaultParams, sampleLabel } from '~/composables/useFlowModel'
 import { Recent, previewKey, columnChanges, consumedColumns, nodeRowsPhrase, rowsPhrase, suggestSample, type RowCount } from '~/composables/previewGrid'
 import { opSubject } from '~/composables/opSummary'
+import { statIsUnset } from '~/composables/statTests'
 import { profileOpen, profileStart } from '~/composables/profileAsk'
 import { usePopover } from '~/composables/usePopover'
 import { computeAutoLayout } from '~/composables/useFlowLayout'
@@ -1398,6 +1399,16 @@ function revealNode(id: string) {
   setCenter(n.computedPosition.x + w / 2, n.computedPosition.y + h / 2, { zoom, duration: reducedMotion() ? 0 : 300 })
 }
 
+// A test of the palette's Statistics group chosen without dragging (Enter on its item): a
+// step after the selected node, or after the flow's last one, as «+ Operation» places it.
+function addFromPalette(opType: string) {
+  if (loadBlocked.value || !operations.value.includes(opType)) return
+  const leaf = leafNodeId(getNodes.value, getEdges.value)
+  for (const parentId of [selectedId.value, leaf]) {
+    if (parentId && findNode(parentId) && addStep(parentId, opType, defaultParams(opType), { reveal: true })) return
+  }
+}
+
 // «+ Operation»: the same menu the right click opens, beside the node the step is for
 // (the selected one, or the flow's last). Before, it always made the first transformation
 // of the list, on top of the next node.
@@ -2208,7 +2219,7 @@ function nodeFullName(id: string | null): string {
     if (given) return given
     const op = String(n.data?.opType ?? '')
     const m = opMeta(op)
-    const name = m.label.startsWith('ops.') ? t(m.label) : op
+    const name = m.label !== op ? t(m.label) : op
     const what = opSubject(op, n.data?.params)
     if (!what) return name
     return op === 'join' ? t('dataGrid.joinOn', { name, keys: what }) : `${name} ${what}`
@@ -2616,7 +2627,7 @@ async function runPreview(nodeId: string) {
       const message = errMessage(e)
       // a node just added and not set yet: not an error in red, the hint to set it, over
       // its input's rows when this page has them
-      if (/required parameter missing: '/.test(message)) showInputInstead(nodeId)
+      if (/required parameter missing: '/.test(message) || statIsUnset(message)) showInputInstead(nodeId)
       else {
         previewNote.value = ''
         previewError.value = message
@@ -3359,6 +3370,7 @@ async function pollTask(id: string) {
         :operations="operations" :read-only="observerOnly" :scripting="scriptingAvailable" :containers="containersAvailable"
         :scripting-off="scriptingEditor.state.value?.disabled_reason === 'kubernetes'"
         :containers-off="registriesEditor.state.value?.disabled_reason === 'kubernetes'"
+        @add="addFromPalette"
       />
     </div>
 

@@ -12,6 +12,7 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pystr"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyval"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/statcatalog"
 )
 
 // Build is _build: the payload for the engine and the project it came from. A refusal is an
@@ -77,6 +78,7 @@ func operations(ops any) []any {
 // knownRefusal is _known_refusal: what the engine would refuse anyway, said earlier.
 func knownRefusal(models []any, target string) *Error {
 	kinds := map[string]bool{}
+	statistics := "" // the first hypothesis test met, in the flow's order
 	for _, m := range models {
 		for _, op := range operations(pyval.Or(get(m.(*pyjson.Object), "operations"), []any{})) {
 			if pyval.IsDict(op) {
@@ -84,12 +86,22 @@ func knownRefusal(models []any, target string) *Error {
 				pyval.Key(k)
 				if s, ok := k.(string); ok {
 					kinds[s] = true
+					if statistics == "" && statcatalog.Is(s) {
+						statistics = s
+					}
 				}
 			}
 		}
 	}
 	if kinds["foreach"] {
 		return &Error{Message: "the «foreach» node cannot be exported: dbt has no loop at runtime", Code: "foreach_not_exportable", Params: pyjson.Object{}}
+	}
+	// A hypothesis test (the catalogue's operations) has no SQL to hand to dbt: its last step
+	// is computed by the engine's worker. The engine's own sentence and code (dbt_export.py,
+	// the last raise), said before anything is sent to it.
+	if statistics != "" {
+		return &Error{Message: "operation '" + statistics + "' cannot be exported to dbt", Code: "op_not_exportable",
+			Params: pyjson.Object{{Key: "op", Value: statistics}}}
 	}
 	if kinds["pivot"] && (target == "native" || target == "clickhouse") {
 		return &Error{Message: "the «pivot» node produces columns decided by the data: it exports only with the federated target (dbt-duckdb), " +

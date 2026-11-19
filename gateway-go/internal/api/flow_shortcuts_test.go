@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyd"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/statcatalog"
 )
 
 // validateShortcuts is the PUT's validation of a raw JSON body: the 422's body, or "".
@@ -60,6 +61,47 @@ func TestFlowShortcutsValidation(t *testing.T) {
 		got, _ := validateShortcuts(t, c.body)
 		if !strings.Contains(got, c.says) {
 			t.Errorf("%s: %s", c.body, got)
+		}
+	}
+}
+
+// The menu may hold a hypothesis test: every operation of the catalogue is allowed, after the
+// transformations written by hand, each once; a name that only looks like one is not.
+func TestFlowShortcutsTakeTheCataloguesTests(t *testing.T) {
+	stats := statcatalog.Operations()
+	if len(stats) == 0 {
+		t.Fatal("the catalogue has no test")
+	}
+	if len(FlowShortcutOps) != len(transformOps)+len(stats) {
+		t.Fatalf("%d operations, want %d transformations and %d tests", len(FlowShortcutOps), len(transformOps), len(stats))
+	}
+	seen := map[any]bool{}
+	for i, op := range FlowShortcutOps {
+		if seen[op] {
+			t.Errorf("%v is listed twice", op)
+		}
+		seen[op] = true
+		name := op.(string)
+		if i < len(transformOps) {
+			if op != transformOps[i] || statcatalog.Is(name) || name == "foreach" {
+				t.Errorf("transformation %d: %v", i, op)
+			}
+		} else if name != stats[i-len(transformOps)] {
+			t.Errorf("test %d: %v, want %s", i, op, stats[i-len(transformOps)])
+		}
+	}
+	for _, op := range stats {
+		bad, got := validateShortcuts(t, `{"shortcuts": ["filter", "`+op+`"]}`)
+		if bad != "" || !reflect.DeepEqual(got, []string{"filter", op}) {
+			t.Errorf("%s: %q %v", op, bad, got)
+		}
+		if bad, _ := validateShortcuts(t, `{"shortcuts": ["`+op+`", "`+op+`"]}`); !strings.Contains(bad, "an operation appears more than once") {
+			t.Errorf("%s twice: %s", op, bad)
+		}
+	}
+	for _, name := range []string{"stat_nope", "stat_", "t_two_sample"} {
+		if bad, _ := validateShortcuts(t, `{"shortcuts": ["`+name+`"]}`); !strings.Contains(bad, `"type":"literal_error"`) {
+			t.Errorf("%s: %s", name, bad)
 		}
 	}
 }

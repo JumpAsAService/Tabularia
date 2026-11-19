@@ -2366,6 +2366,8 @@ export default {
     "runFlowLabel": "Run flow",
     "searchPlaceholder": "Search component…",
     "sourcesGroup": "Sources",
+    "statisticsGroup": "Statistics",
+    "statisticsItemTitle": "{hint} Drag it onto the canvas, or press Enter to add it after the selected step.",
     "transformsGroup": "Transforms"
   },
   "operationNode": {
@@ -6066,6 +6068,61 @@ export default {
       "next": "Next: {when}",
       "disabled": "Automatic backups are off.",
       "open": "Open the backups"
+    }
+  },
+  "stat": {
+    "families": {
+      "means": "Means",
+      "variances": "Variances",
+      "proportions": "Proportions and categories",
+      "correlation": "Correlation",
+      "ranks": "Ranks",
+      "distributions": "Distributions"
+    },
+    "tests": {
+      "t_two_sample": {
+        "name": "Two-sample t test",
+        "hint": "Do two groups have the same mean? Welch's t test, or Student's when the variances are taken as equal."
+      }
+    },
+    "params": {
+      "value": "Value column",
+      "group": "Group column",
+      "groups": "Groups to compare",
+      "var_equal": "Equal variances",
+      "mu": "Value under H0",
+      "alternative": "Alternative hypothesis",
+      "alpha": "Significance level (α)"
+    },
+    "hints": {
+      "value": "The column that is measured.",
+      "group": "The column that names the groups.",
+      "groups": "The first minus the second. Leave them on Automatic when the column holds exactly two groups.",
+      "var_equal": "On: the classic test, with a pooled variance. Off: Welch's version, which does not assume it.",
+      "mu": "What the null hypothesis states: 0 for «no difference».",
+      "alpha": "Between 0 and 1. The confidence intervals have level 1 − α."
+    },
+    "choices": {
+      "alternative": {
+        "two_sided": "Two-sided (≠)",
+        "less": "Less (<)",
+        "greater": "Greater (>)"
+      }
+    },
+    "form": {
+      "level": "Group {n}",
+      "automatic": "Automatic",
+      "chooseColumnFirst": "Choose «{field}» first.",
+      "levelsFailed": "The column's groups could not be read.",
+      "manyLevels": "«{column}» has {n} groups: choose the {count} to compare.",
+      "fewLevels": "The test compares {count} groups: «{column}» has {n}.",
+      "between": "A number between {above} and {below}, both excluded.",
+      "above": "A number above {above}.",
+      "below": "A number below {below}.",
+      "notNumeric": "not a number",
+      "notInInput": "not in the step's input",
+      "notInData": "not in the data",
+      "noNumericColumns": "The step's input has no numeric column: convert one first."
     }
   },
 }

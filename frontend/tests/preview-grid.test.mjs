@@ -4,12 +4,15 @@
 // Run: npm test (Node strips the types of the modules it imports).
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { register } from 'node:module'
 
-import {
+// the modules import the statistics catalogue by the app's alias: the hooks first
+register('./alias-hooks.mjs', import.meta.url)
+const {
   Recent, ariaRowCount, columnChanges, consumedColumns, exactText, gridColumnFormatter, gridColumnFormatters,
   groupsThousands, isNumericDtype, nodeRowsPhrase, previewKey, rowsPhrase, shortDtype, suggestSample, toTsv, visibleWindow,
-} from '../composables/previewGrid.ts'
-import { opSubject } from '../composables/opSummary.ts'
+} = await import('../composables/previewGrid.ts')
+const { opSubject } = await import('../composables/opSummary.ts')
 
 // a stand-in for vue-i18n's t with the English texts
 const EN = {

@@ -1,0 +1,51 @@
+# The hypothesis tests are declared once, in backend/app/engine/stats/catalog.py. What the
+# other components read is its snapshot (backend/app/engine/stats/catalog.json), of which
+# each keeps a copy: the interface (frontend/assets/stat-catalog.json), the Go gateway
+# (gateway-go/internal/statcatalog/catalog.json, embedded) and the AI service
+# (gateway/app/services/stat_catalog.json). This fails when a copy differs from the snapshot
+# by a byte, and when a test is not named in docs/capabilities/statistics.md. That the
+# snapshot is what catalog.py says is checked by the engine's suite (test_stats_catalog.py).
+#
+# Fix locally with:  python3 .github/scripts/stat_catalog.py
+# Standard library only: no dependency is installed.
+
+name: Statistics catalogue
+
+on:
+  push:
+    paths:
+      - "backend/app/engine/stats/catalog.json"
+      - "frontend/assets/stat-catalog.json"
+      - "gateway-go/internal/statcatalog/catalog.json"
+      - "gateway/app/services/stat_catalog.json"
+      - "docs/capabilities/statistics.md"
+      - ".github/scripts/stat_catalog.py"
+      - ".github/scripts/test_stat_catalog.py"
+      - ".github/workflows/stat-catalog.yml"
+  pull_request:
+    paths:
+      - "backend/app/engine/stats/catalog.json"
+      - "frontend/assets/stat-catalog.json"
+      - "gateway-go/internal/statcatalog/catalog.json"
+      - "gateway/app/services/stat_catalog.json"
+      - "docs/capabilities/statistics.md"
+      - ".github/scripts/stat_catalog.py"
+      - ".github/scripts/test_stat_catalog.py"
+      - ".github/workflows/stat-catalog.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: the copies of the catalogue are the snapshot
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: The script's tests and the check of the committed copies
+        run: python3 .github/scripts/test_stat_catalog.py -v

@@ -4,6 +4,8 @@
 // expressions, numbers — and symbols: no words to translate. A shape not known falls back
 // on a generic summary of the values.
 
+import { statIsOp, statSummary } from '~/composables/statTests'
+
 const OPERATORS: Record<string, string> = {
   eq: '=', ne: '≠', neq: '≠', gt: '>', gte: '≥', ge: '≥', lt: '<', lte: '≤', le: '≤',
   contains: '∋', in: '∈', not_in: '∉', is_null: '= ∅', is_not_null: '≠ ∅', not_null: '≠ ∅',
@@ -30,6 +32,8 @@ function summary(o: any): string {
 
 export function opSummary(op: string, params: Record<string, any> | null | undefined): string {
   const p = params ?? {}
+  // a hypothesis test, whichever it is: the columns it reads, «amount ~ channel»
+  if (statIsOp(op)) return statSummary(op, p)
   switch (op) {
     case 'select': case 'reorder': case 'drop': case 'unique': case 'drop_nulls':
       return listing(p.columns ?? p.subset ?? p.by)

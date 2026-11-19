@@ -10,6 +10,7 @@ import (
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyval"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/statcatalog"
 )
 
 // testdata/python_cases.json is what services/dbt_export.py, dbt_messages.py and
@@ -95,6 +96,64 @@ func TestIncompleteStep(t *testing.T) {
 		}
 		if got != want {
 			t.Errorf("%s: %q, want %q", in, got, want)
+		}
+	}
+}
+
+// A hypothesis test has no SQL to hand to dbt: every operation of the catalogue is refused by
+// its name, on every target, wherever it sits in the flow, with the engine's code and words.
+func TestAHypothesisTestIsNotExported(t *testing.T) {
+	model := func(operations string) []any {
+		v, err := pyjson.Loads(`{"name": "m", "operations": ` + operations + `}`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		o := v.(pyjson.Object)
+		return []any{&o}
+	}
+	filter := `{"type": "filter", "params": {"column": "a", "operator": "is_null"}}`
+	if len(statcatalog.Operations()) == 0 {
+		t.Fatal("the catalogue has no test")
+	}
+	for _, op := range statcatalog.Operations() {
+		test := `{"type": "` + op + `", "params": {"value": "v", "group": "g"}}`
+		for name, operations := range map[string]string{
+			"last step":       `[` + filter + `, ` + test + `]`,
+			"in the middle":   `[` + test + `, ` + filter + `]`,
+			"a join's branch": `[{"type": "join", "params": {"on": ["a"], "right": {"source": {"key": "k"}, "operations": [` + test + `]}}}]`,
+		} {
+			for _, target := range []string{"duckdb", "native", "clickhouse"} {
+				e := knownRefusal(model(operations), target)
+				if e == nil || e.Code != "op_not_exportable" || e.Params.Value("op") != op {
+					t.Fatalf("%s, %s, %s: %#v", op, name, target, e)
+				}
+				if e.Message != "operation '"+op+"' cannot be exported to dbt" {
+					t.Errorf("%s: %q", op, e.Message)
+				}
+				if got := ErrorMessage(e, "en"); got != "The operation «"+op+"» cannot be exported to dbt." {
+					t.Errorf("%s: %q", op, got)
+				}
+				if got := ErrorMessage(e, "it"); got != "L'operazione «"+op+"» non si esporta in dbt." {
+					t.Errorf("%s: %q", op, got)
+				}
+			}
+		}
+		// a loop is said first, as before: its sentence tells what to do with the flow
+		if e := knownRefusal(model(`[{"type": "foreach", "params": {}}, `+test+`]`), "duckdb"); e == nil || e.Code != "foreach_not_exportable" {
+			t.Errorf("%s after a foreach: %#v", op, e)
+		}
+	}
+	// two tests: the first of the flow is the one named
+	if ops := statcatalog.Operations(); len(ops) > 1 {
+		both := `[{"type": "` + ops[1] + `", "params": {}}, {"type": "` + ops[0] + `", "params": {}}]`
+		if e := knownRefusal(model(both), "duckdb"); e == nil || e.Params.Value("op") != ops[1] {
+			t.Errorf("two tests: %#v", e)
+		}
+	}
+	// what only looks like one is not the catalogue's business, and the flows of before pass
+	for _, operations := range []string{`[` + filter + `]`, `[{"type": "stat_nope", "params": {}}]`, `[]`} {
+		if e := knownRefusal(model(operations), "duckdb"); e != nil {
+			t.Errorf("%s: %#v", operations, e)
 		}
 	}
 }

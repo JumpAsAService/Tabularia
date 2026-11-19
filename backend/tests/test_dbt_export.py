@@ -105,6 +105,22 @@ def test_foreach_and_native_pivot_are_refused_with_a_clear_message():
         d.compile_model_sql({"key": "k"}, piv, _resolve, native=True)
 
 
+def test_a_statistics_step_is_not_exported():
+    # a hypothesis test is computed by the engine and by one scalar module: there is no SQL
+    # of it to hand to dbt. Every test of the catalogue is refused by its name.
+    from app.engine.stats.catalog import stat_operations
+
+    assert stat_operations()
+    for op in stat_operations():
+        ops = [{"type": "filter", "params": {"column": "id", "operator": "gt", "value": 0}},
+               {"type": op, "params": {"value": "importo", "group": "canale"}}]
+        for native in (False, True):
+            with pytest.raises(d.DbtExportError) as e:
+                d.compile_model_sql({"key": "k"}, ops, _resolve, native=native)
+            assert e.value.code == "op_not_exportable" and e.value.params == {"op": op}
+            assert str(e.value) == f"operation '{op}' cannot be exported to dbt"
+
+
 # ── native dialect ───────────────────────────────────────────────────────────
 def test_the_postgres_translation_expands_stars_and_casts_round():
     raw, _, _ = d.compile_model_sql(

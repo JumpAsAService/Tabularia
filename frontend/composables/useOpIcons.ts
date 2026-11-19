@@ -1,7 +1,17 @@
 // Icon and colour for every kind of operation (sidebar, canvas nodes). One place only:
-// adding an operation to the engine, extending here is enough.
+// adding an operation to the engine, extending here is enough. The hypothesis tests
+// (`stat_*`) have no entry of their own: a test takes its family's icon, and its name from
+// the catalogue's words (`stat.tests.<id>.name`).
 import type { FunctionalComponent } from 'vue'
+import { statNameKey, statTestOf } from '~/composables/statTests'
 import {
+  ChartCandlestick,
+  ChartScatter,
+  ChartSpline,
+  FlaskConical,
+  ListOrdered,
+  Percent,
+  Scale,
   Shuffle,
   Columns3,
   EyeOff,
@@ -55,10 +65,30 @@ const OP_META: Record<string, OpMeta> = {
   foreach:    { icon: Repeat,      label: 'ops.foreach',     color: '#f472b6' },
 }
 
+// The statistics nodes share one colour, as each kind of transformation does; the icon says
+// the family: a balance for the means, a spread for the variances, a share, a cloud of
+// points, an ordered list, a curve.
+const STAT_COLOR = '#22d3ee'
+const STAT_FAMILY_META: Record<string, Omit<OpMeta, 'label'>> = {
+  means:         { icon: Scale,            color: STAT_COLOR },
+  variances:     { icon: ChartCandlestick, color: STAT_COLOR },
+  proportions:   { icon: Percent,          color: STAT_COLOR },
+  correlation:   { icon: ChartScatter,     color: STAT_COLOR },
+  ranks:         { icon: ListOrdered,      color: STAT_COLOR },
+  distributions: { icon: ChartSpline,      color: STAT_COLOR },
+}
+const STAT_DEFAULT_META: Omit<OpMeta, 'label'> = { icon: FlaskConical, color: STAT_COLOR }
+
 const DEFAULT_META: OpMeta = { icon: Settings, label: '', color: '#8b93a7' }
 
 export const SOURCE_META: OpMeta = { icon: FileText, label: 'ops.source', color: '#6ee7b7' }
 
+/** An operation's icon, colour and the key of its name. An operation nobody knows here gets
+ *  a generic icon and its own id as the label: `label !== type` says a name exists. */
 export function opMeta(type: string): OpMeta {
-  return OP_META[type] ?? { ...DEFAULT_META, label: type }
+  const known = OP_META[type]
+  if (known) return known
+  const test = statTestOf(type)
+  if (test) return { ...(STAT_FAMILY_META[test.family] ?? STAT_DEFAULT_META), label: statNameKey(test) }
+  return { ...DEFAULT_META, label: type }
 }

@@ -2339,6 +2339,8 @@ export default {
     "runFlowLabel": "Flow ausführen",
     "searchPlaceholder": "Komponente suchen…",
     "sourcesGroup": "Quellen",
+    "statisticsGroup": "Statistik",
+    "statisticsItemTitle": "{hint} Ziehen Sie ihn auf die Arbeitsfläche oder drücken Sie die Eingabetaste, um ihn nach dem ausgewählten Schritt einzufügen.",
     "transformsGroup": "Transformationen"
   },
   "operationNode": {
@@ -6066,6 +6068,61 @@ export default {
       "next": "Nächstes: {when}",
       "disabled": "Automatische Backups sind aus.",
       "open": "Backups öffnen"
+    }
+  },
+  "stat": {
+    "families": {
+      "means": "Mittelwerte",
+      "variances": "Varianzen",
+      "proportions": "Anteile und Kategorien",
+      "correlation": "Korrelation",
+      "ranks": "Ränge",
+      "distributions": "Verteilungen"
+    },
+    "tests": {
+      "t_two_sample": {
+        "name": "Zweistichproben-t-Test",
+        "hint": "Haben zwei Gruppen denselben Mittelwert? Welch-t-Test, oder Student-t-Test, wenn die Varianzen als gleich gelten."
+      }
+    },
+    "params": {
+      "value": "Wertespalte",
+      "group": "Gruppenspalte",
+      "groups": "Zu vergleichende Gruppen",
+      "var_equal": "Gleiche Varianzen",
+      "mu": "Wert unter H0",
+      "alternative": "Alternativhypothese",
+      "alpha": "Signifikanzniveau (α)"
+    },
+    "hints": {
+      "value": "Die Spalte, die gemessen wird.",
+      "group": "Die Spalte, die die Gruppen benennt.",
+      "groups": "Die erste minus die zweite. Auf «Automatisch» lassen, wenn die Spalte genau zwei Gruppen hat.",
+      "var_equal": "Ein: der klassische Test mit gepoolter Varianz. Aus: die Welch-Variante, die sie nicht voraussetzt.",
+      "mu": "Was die Nullhypothese behauptet: 0 für «kein Unterschied».",
+      "alpha": "Zwischen 0 und 1. Die Konfidenzintervalle haben das Niveau 1 − α."
+    },
+    "choices": {
+      "alternative": {
+        "two_sided": "Zweiseitig (≠)",
+        "less": "Kleiner (<)",
+        "greater": "Größer (>)"
+      }
+    },
+    "form": {
+      "level": "Gruppe {n}",
+      "automatic": "Automatisch",
+      "chooseColumnFirst": "Wählen Sie zuerst «{field}».",
+      "levelsFailed": "Die Gruppen der Spalte konnten nicht gelesen werden.",
+      "manyLevels": "«{column}» hat {n} Gruppen: Wählen Sie die {count}, die verglichen werden.",
+      "fewLevels": "Der Test vergleicht {count} Gruppen: «{column}» hat {n}.",
+      "between": "Eine Zahl zwischen {above} und {below}, beide ausgeschlossen.",
+      "above": "Eine Zahl größer als {above}.",
+      "below": "Eine Zahl kleiner als {below}.",
+      "notNumeric": "keine Zahl",
+      "notInInput": "nicht in der Eingabe des Schritts",
+      "notInData": "nicht in den Daten",
+      "noNumericColumns": "Die Eingabe des Schritts hat keine numerische Spalte: Wandeln Sie zuerst eine um."
     }
   },
 }

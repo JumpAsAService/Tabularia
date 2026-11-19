@@ -7,6 +7,7 @@ import type { ColumnInfo } from '~/composables/useApi'
 import type { DatasourceInfo } from '~/composables/useDatasources'
 import { defaultParams, isCompleteSourceFilter, getDefaultSampleRows, type SourceFilter } from '~/composables/useFlowModel'
 import { opMeta } from '~/composables/useOpIcons'
+import { statIsOp, statSwitch, statTypeOptions } from '~/composables/statTests'
 import { useNodeStats } from '~/composables/useNodeStats'
 import { useFormat } from '~/composables/useFormat'
 import { useFolderPaths } from '~/composables/useFolderPaths'
@@ -81,9 +82,23 @@ const outPreview = usePlaceholderPreview((): PreviewRequest | null => {
 })
 
 function changeType(opType: string) {
+  // a statistics node that becomes another test keeps what the two share (the columns, alpha)
+  if (statIsOp(props.node?.data?.opType) && statIsOp(opType)) {
+    emit('update', { opType, params: statSwitch(props.node!.data.opType, opType, props.node!.data.params) })
+    return
+  }
   // changing operation, it starts again from clean default parameters
   emit('update', { opType, params: defaultParams(opType) })
 }
+
+// The type selector: a statistics node offers the other tests, by family; any other node
+// the transformations, without the tests (they have their own group in the palette).
+const isStatNode = computed(() => props.node?.type === 'operation' && statIsOp(props.node.data?.opType))
+const typeOptions = computed(() =>
+  isStatNode.value
+    ? statTypeOptions(props.operations, t)
+    : props.operations.filter((o) => o !== 'foreach' && !statIsOp(o)).map((op) => ({ value: op, label: opMeta(op).label !== op ? t(opMeta(op).label) : op })),
+)
 
 function onParams(params: Record<string, any>) {
   emit('update', { params })
@@ -822,7 +837,7 @@ function pickDatasource(id: number | null) {
       <label>{{ $t('nodePanel.typeLabel') }}</label>
       <Select
         :model-value="node.data.opType"
-        :options="operations.filter((o) => o !== 'foreach').map((op) => ({ value: op, label: opMeta(op).label ? t(opMeta(op).label) : op }))"
+        :options="typeOptions"
         @update:model-value="changeType"
       />
       <p v-if="nodeStats?.cacheHint" class="muted outhint cachehint"><RefreshCw :size="12" /> {{ nodeStats.cacheHint }}</p>
@@ -845,7 +860,19 @@ function pickDatasource(id: number | null) {
         </ol>
       </div>
 
+      <!-- a hypothesis test: its form is drawn from the catalogue of the tests -->
+      <StatTestForm
+        v-if="isStatNode"
+        :node-id="node.id"
+        :op-type="node.data.opType"
+        :params="node.data.params || {}"
+        :input-columns="inputColumns"
+        :columns-loading="columnsLoading"
+        :fetch-distinct="fetchDistinct"
+        @update="onParams"
+      />
       <ParamForm
+        v-else
         :node-id="node.id"
         :op-type="node.data.opType"
         :params="node.data.params || {}"

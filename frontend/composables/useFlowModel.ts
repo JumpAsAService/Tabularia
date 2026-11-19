@@ -7,6 +7,7 @@
 
 import type { Node, Edge } from '@vue-flow/core'
 import type { Operation } from './useApi'
+import { statDefaults, statIsOp } from '~/composables/statTests'
 
 export const SOURCE_ID = 'source'
 
@@ -315,6 +316,8 @@ export interface FieldSpec {
   optional?: boolean
 }
 
+// The hypothesis tests (`stat_*`) are not listed here: their form is drawn from the
+// catalogue (composables/statTests.ts, components/ui/StatTestForm.vue).
 export const OP_SPECS: Record<string, FieldSpec[]> = {
   select: [{ key: 'columns', label: 'params.select_columns', control: 'columns' }],
   reorder: [{ key: 'columns', label: 'params.reorder_columns', control: 'reorder' }],
@@ -434,6 +437,8 @@ export const NO_VALUE_OPERATORS = new Set(['is_null', 'is_not_null'])
 
 /** Sensible default parameters when an operation is chosen. */
 export function defaultParams(opType: string): Record<string, any> {
+  // a hypothesis test: its catalogue's defaults, whichever test it is
+  if (statIsOp(opType)) return statDefaults(opType)
   switch (opType) {
     case 'filter':
       return { operator: 'eq' }

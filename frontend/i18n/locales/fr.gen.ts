@@ -2339,6 +2339,8 @@ export default {
     "runFlowLabel": "Exécuter le flux",
     "searchPlaceholder": "Rechercher un composant…",
     "sourcesGroup": "Sources",
+    "statisticsGroup": "Statistiques",
+    "statisticsItemTitle": "{hint} Faites-le glisser sur le canevas, ou appuyez sur Entrée pour l'ajouter après l'étape sélectionnée.",
     "transformsGroup": "Transformations"
   },
   "operationNode": {
@@ -6066,6 +6068,61 @@ export default {
       "next": "Prochaine : {when}",
       "disabled": "Les sauvegardes automatiques sont désactivées.",
       "open": "Ouvrir les sauvegardes"
+    }
+  },
+  "stat": {
+    "families": {
+      "means": "Moyennes",
+      "variances": "Variances",
+      "proportions": "Proportions et catégories",
+      "correlation": "Corrélation",
+      "ranks": "Rangs",
+      "distributions": "Distributions"
+    },
+    "tests": {
+      "t_two_sample": {
+        "name": "Test t à deux échantillons",
+        "hint": "Deux groupes ont-ils la même moyenne ? Test t de Welch, ou de Student quand les variances sont supposées égales."
+      }
+    },
+    "params": {
+      "value": "Colonne des valeurs",
+      "group": "Colonne des groupes",
+      "groups": "Groupes à comparer",
+      "var_equal": "Variances égales",
+      "mu": "Valeur sous H0",
+      "alternative": "Hypothèse alternative",
+      "alpha": "Seuil de signification (α)"
+    },
+    "hints": {
+      "value": "La colonne mesurée.",
+      "group": "La colonne qui nomme les groupes.",
+      "groups": "Le premier moins le second. Laissez-les sur Automatique quand la colonne a exactement deux groupes.",
+      "var_equal": "Activé : le test classique, avec la variance commune. Désactivé : la version de Welch, qui ne la suppose pas.",
+      "mu": "Ce qu'affirme l'hypothèse nulle : 0 pour «aucune différence».",
+      "alpha": "Entre 0 et 1. Les intervalles de confiance ont le niveau 1 − α."
+    },
+    "choices": {
+      "alternative": {
+        "two_sided": "Bilatérale (≠)",
+        "less": "Inférieure (<)",
+        "greater": "Supérieure (>)"
+      }
+    },
+    "form": {
+      "level": "Groupe {n}",
+      "automatic": "Automatique",
+      "chooseColumnFirst": "Choisissez d'abord «{field}».",
+      "levelsFailed": "Les groupes de la colonne n'ont pas pu être lus.",
+      "manyLevels": "«{column}» a {n} groupes : choisissez les {count} à comparer.",
+      "fewLevels": "Le test compare {count} groupes : «{column}» en a {n}.",
+      "between": "Un nombre entre {above} et {below}, bornes exclues.",
+      "above": "Un nombre supérieur à {above}.",
+      "below": "Un nombre inférieur à {below}.",
+      "notNumeric": "pas un nombre",
+      "notInInput": "absente de l'entrée de l'étape",
+      "notInData": "absent des données",
+      "noNumericColumns": "L'entrée de l'étape n'a aucune colonne numérique : convertissez-en une d'abord."
     }
   },
 }
