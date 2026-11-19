@@ -4,7 +4,7 @@ Status: specified on 2026-11-19 and revised the same day after the owner's answe
 last step in Python approved; one node per test, with the post-hoc comparisons; the report
 inside the flow editor, on the rows that reach the node). Lots 1, 2, 5 and 6 are built
 (commits in «Pieces»): where the code found a fact different from what this spec said, the
-spec now says what the code does. Lots 3 and 4 are still to be checked against their code.
+spec now says what the code does. Lots 3 and 4 are built too, and their sections say what their code does.
 The points still open are at the end.
 
 Words used below: **verified** = read in this repository's code, run against the versions
@@ -383,13 +383,13 @@ and covariance. Every query returns at most a row per group, cell or interval.
 | A1 | `levels(g)` | per level: rows | `SELECT g AS lv, count(*) AS n_rows FROM {T} GROUP BY g`, at most the limit + 2 rows. A two-group test with `groups` given does not list the column: `levels_of` finds the two |
 | A2 | `moments(v, g?)` (built) | per group: rows, n, mean, variance, min, max, and the centre with the mean less it | The centre, then `SELECT g, count(*), count(X), avg(C), VAR(C), min(X), max(X) FROM {T} GROUP BY g` |
 | A3 | `pair_moments(x, y)` | rows, n, means, variances, covariance, mean and variance of x − y | The two centres, then one `SELECT` of the same aggregates over `Cx`, `Cy` and `Cx − Cy`, each NULL unless `OK(x) AND OK(y)` |
-| A4 | `rank_sums(v, g, levels?)` | per group: n, sum of the average ranks over all groups together; Σ(t³ − t) over the tied values | Below |
-| A5 | `signed_ranks(x, y?, mu, zeros)` | n of the non-zero differences, sum of the ranks of the positive ones, of the negative ones, Σ(t³ − t), number of zeros | Below |
-| A6 | `rank_corr(x, y)` | n, Σc·rx·ry, Σc·rx², Σc·ry² over the centred average ranks, the two Σ(t³ − t) | Below |
+| A4 | `rank_sums(v, g, levels?)` | per group: n, sum of the average ranks over all groups together, min, max; Σ(t³ − t) over the tied values | Below |
+| A5 | `signed_ranks(x, y?, mu, pratt)` | the differences ranked (without the zeros, or with them by Pratt's rule), sum of the ranks of the positive ones, of the negative ones, Σ(t³ − t); rows, pairs, pairs with an infinite value, zeros, the extremes of x, y, x − y | Below |
+| A6 | `rank_corr(x, y)` | n, Σc·rx·ry, Σc·rx², Σc·ry² over the centred average ranks, the two Σ(t³ − t), the extremes | Below |
 | A7 | `crosstab(x, y)` | per pair of values: rows | `SELECT x AS lx, y AS ly, count(*) AS n_obs FROM {T} GROUP BY x, y`, at most `MAX_STAT_LEVELS`² + 2·`MAX_STAT_LEVELS` + 2 rows |
 | A8 | `successes(v, lit, g?)` | per group: rows, n, successes | `SELECT g AS lv, count(*) AS n_rows, sum(CASE WHEN v IS NOT NULL THEN 1 ELSE 0 END) AS n_obs, sum(CASE WHEN v = lit THEN 1 ELSE 0 END) AS k_obs FROM {T} GROUP BY g` |
-| A9 | `ks(v, g, a, b)` | n₁, n₂, D⁺, D⁻, D, number of tied values | Below |
-| A10 | `central_moments(v)` | rows, n, mean, m₂, m₃, m₄ | The centre, then `SELECT count(*), count(X), avg(C), avg(pow(C − m.d, 2)), avg(pow(C − m.d, 3)), avg(pow(C − m.d, 4)) FROM {T} CROSS JOIN (SELECT avg(C) AS d FROM {T}) AS m` |
+| A9 | `ks(v, g, [a, b])` | n₁, n₂, D+·n₁n₂ and D−·n₁n₂ as whole numbers, the values held by more than one row, the extremes | Below |
+| A10 | `central_moments(v)` | rows, n, finite values, mean, m₂, m₃, m₄, the extremes | The centre, then `SELECT count(*), count(X), count(C), max(m.d), avg(e·e), avg(e·e·e), avg((e·e)·(e·e)), min(X), max(X) FROM (SELECT X, C FROM {T}) AS s CROSS JOIN (SELECT avg(C) AS d FROM {T}) AS m`, e = s.C − m.d: the powers written as the same products on every engine, never `pow` |
 | A11 | `abs_dev_moments(v, g, center)` | per group: n, mean and variance of \|v − centre of its group\| | The centre, then `{T}` joined on `g` to its own `SELECT g, CENTER(C) GROUP BY g`, then A2's aggregates over `abs(C − ctr)` (already of the spread's size: not centred again) |
 | A12 | `quartiles(v, g?)` | per group: q1, median, q3 | The engine's exact, linearly interpolated quantile |
 | A13 | `histogram(v, g?, lo, hi, bins)` | per group and interval: rows | `profile.sql_histogram_bin`, `GROUP BY g, b` |
@@ -421,6 +421,18 @@ a centre**, a number near them asked of the engine first.
   the quantiles (A12).
 - A2 is therefore **two queries**, and so is every aggregate above: the centre, then the
   aggregates.
+
+**What the code does (lot 4)**, where the queries below were a first draft: every alias is a
+fresh name (ClickHouse resolves an alias inside its own SELECT); the value is `F(x) + 0.0`, so
+that −0.0 and 0.0 are one value on every engine; and **no window is partitioned by a
+double**, which BigQuery refuses: each distinct value gets a whole number first,
+`dense_rank() OVER (ORDER BY xv)`, and the windows are partitioned and ordered by it (A4,
+A6). The cumulative counts use the `RANGE` frame where several groups share a value (its
+peers count). A4 is one query: the ties' Σ(t³ − t) is summed on each value's first row
+(`row_number() = 1`), the groups' sums beside it. A5 is two (the ranks; the counts and
+extremes). A9 returns its distances as whole numbers (`max(k1·m2 − k2·m1)`, the counts cast
+to signed 64 bits: ClickHouse's are unsigned) and needs no partition at all. Polars does the
+same with `group_by`, `sort`, `cum_sum` and joins, every product in the same order.
 
 **Ranks without sorting the rows twice.** A rank is a property of a *value*: the rows are
 first counted by value (a parallel hash aggregation), and one ordered window runs over the
@@ -547,6 +559,7 @@ incomplete gamma in its place) was not built: it would have been worse than what
 | `chi2_sf(x, df)`, `chi2_cdf` (built, lot 2) | `gammainc_q(df/2, x/2)` |
 | `f_isf`, `chi2_isf` (built, lot 2); `beta_ppf` (lot 3) | The same bisection, by the tail; the lower quantile of F is 1 / the upper one of F(d2, d1), so that a small alpha keeps its digits |
 | `t_pdf`, `f_pdf`, `chi2_pdf`, `norm_pdf` | Closed forms through `lgamma`, for the curve |
+| `kolmogorov_sf`, `kolmogorov_pdf`, `kolmogorov_isf` (lot 4) | Kolmogorov's limit of √(n₁n₂/(n₁ + n₂))·D: for λ ≥ 1 the alternating series 2Σ(−1)^(k−1)e^(−2k²λ²), below 1 the theta form √(2π)/λ·Σe^(−(2k − 1)²π²/(8λ²)), each summed to the end (R's `ks.test` stops at 1e-6). One-sided: e^(−2λ²), 4λe^(−2λ²), √(−ln q/2). Within 1e-14 of mpmath (SciPy's `kstwobign.pdf` is 5e-10 off near λ = 1; its `sf` agrees) |
 | `srange_sf(q, k, df)`, `srange_isf(alpha, k, df)` (built, lot 2); `srange_cdf`, `srange_ppf` | The studentized range, below. The upper tail is what is computed and what the post-hoc reads; `srange_cdf` is 1 − it, `srange_ppf(p)` is `srange_isf(1 − p)` |
 
 **Accuracy contract** (`tests/test_stats_dist.py`, proven for the t in piece 1.1): every
@@ -611,10 +624,10 @@ needs one quantile for all pairs.
 
 | Function | Method |
 |---|---|
-| `mann_whitney_exact(u, n1, n2, alternative)` | The number of arrangements with each U, by the product Π(1 − q^(n2+i))/(1 − q^i) over i = 1…n1 on an integer array; two-sided = min(1, 2·min(lower, upper)) |
-| `signed_rank_exact(v, n, alternative)` | The number of subsets of {1…n} with each sum, by a 0/1 knapsack on an integer array; the same two-sided rule |
-| `ks_exact(d, n1, n2, two_sided)` | P(D ≥ d) by counting the lattice paths that stay inside the band, row by row, with `q = (0.5 + floor(d·n1·n2 − 1e-7))/(n1·n2)` |
-| `ks_asymptotic(d, n1, n2, two_sided)` | λ = d·√(n1·n2/(n1 + n2)); two-sided `2·Σ(−1)^(k−1)·exp(−2k²λ²)` to a term below 1e-17; one-sided `exp(−2λ²)` |
+| `mann_whitney_exact(u, n1, n2, alternative)` (built, lot 4) | The number of arrangements with each U, by the product Π(1 − q^(n2+i))/(1 − q^i) over i = 1…n1 on an array of Python's whole numbers, each division exact; the p-value one fraction, divided once; two-sided = min(1, 2·min(lower, upper)). Within 1e-13 of R's `pwilcox` up to 49 × 49; 0.03 s there |
+| `signed_rank_exact(v, n, alternative)` (built) | The number of subsets of {1…n} with each sum, by a 0/1 knapsack on whole numbers; the same two-sided rule. Within 1e-13 of `psignrank` up to n = 49; 0.006 s there |
+| `ks_exact(distance, n1, n2, alternative)` (built) | P(D ≥ d) with `distance` = d·n1·n2 **a whole number from the engine**: the paths from (0, 0) to (n1, n2) that never reach it (\|i·n2 − j·n1\| < distance two-sided, i·n2 − j·n1 < distance for `greater`, the other sign for `less`) counted row by row in whole numbers, P = 1 − their share as one fraction. No `floor(… − 1e-7)` needed: nothing is rounded. Within 1e-13 of R's `psmirnov`, one-sided too; 0.003 s at 99 × 101, 0.007 s at 1 × 9,999 |
+| `ks_asymptotic(d, n1, n2, alternative)` (built) | `dist.kolmogorov_sf(d·√(n1·n2/(n1 + n2)))`; one-sided `exp(−2·(n1n2/(n1 + n2))·d²)`, R's order of operations |
 | `binomial_test(k, n, p0, alternative)` | Tails by `betainc`; two-sided = the sum of the probabilities not above the observed one times (1 + 1e-7) |
 | `clopper_pearson(k, n, level)` | `beta_ppf` of (k, n − k + 1) and (k + 1, n − k) |
 | `fisher_exact(a, b, c, d, alternative, level)` | The hypergeometric probabilities of the support in logs (`lgamma`); two-sided = the sum of those not above the observed one times (1 + 1e-7); the odds ratio = the conditional maximum-likelihood estimate (the root of «mean of the non-central hypergeometric = a»), its interval from the non-central tails, both by bisection |
@@ -868,63 +881,118 @@ each cell or pair of a post-hoc.
 r = cov/√(var_x·var_y) = estimate; t = r·√((n − 2)/(1 − r²)); df = n − 2; interval
 tanh(atanh(r) ± z_q/√(n − 3)) (n ≥ 4); effect `r_squared`. Refused: n < 3; a variance of 0.
 
-**`stat_spearman`** — `x`, `y`, `alternative`. H0: rank correlation = 0. A6.
-ρ = Σc·rx·ry/√(Σc·rx²·Σc·ry²) = estimate (Pearson's r of the average ranks, ties
-included); t and df as Pearson's; **no interval** in the first release. Variant
-`t_approximation`.
+**`stat_spearman`** (built in lot 4) — `x`, `y`, `alternative`. H0: rank correlation = 0,
+written `cor(rank(x), rank(y)) = 0`. A6, and the input's rows (`count_rows`, for
+`n_missing`). ρ = Σc·rx·ry/√(Σc·rx²·Σc·ry²) = estimate (Pearson's r of the average ranks, ties
+included); t and df as Pearson's (R's `cor.test(method = "spearman", exact = FALSE)`); **no
+interval** in the first release. Variant `t_approximation`. Numbers: `sum_rxy`, `sum_rx2`,
+`sum_ry2`, `tie_sum_x`, `tie_sum_y`, estimate, `std_error`, t, df, the critical values, the
+p-value, `rho_squared`; each column a group with `n`, `min`, `max`. Refused: n < 3; a column
+constant on the rows used; infinite values.
 
 ### Ranks
 
+Built in lot 4. Where the build differs from what this section first said, it says what the
+code does. Every rank test reads its ranks from the engine (A4, A5, A6), sums them there, and
+computes only the last step in Python; the exact distributions (`exact.py`) count whole
+numbers. Infinite values are refused by name, as everywhere (a rank of +∞ exists, but such a
+value is almost always an error upstream).
+
 **`stat_mann_whitney`** — `value`, `group`, `groups?`, `method` (`auto` default, `exact`,
-`asymptotic`), `correction` (default true), `alternative`. H0: the two distributions are
-the same. A1, A4, A12 (medians). `u_1` = R₁ − n₁(n₁ + 1)/2 = statistic; `u_2` = n₁n₂ − u_1.
-- Exact (variant `exact`): when n₁ ≤ `EXACT_MAX_N`, n₂ ≤ `EXACT_MAX_N` and there are no
+`asymptotic`), `correction` (default true; `applies` with `auto` and `asymptotic`),
+`alternative`. H0: P(X > Y) = 0.5, written `P(v | a > v | b) = 0.5`. A1 (the groups and their
+rows), A4 restricted to the two groups (ranked together, without the others). `statistic` =
+U of group 1 = R₁ − n₁(n₁ + 1)/2 (R's W); `u_2` = n₁n₂ − U.
+- Exact (variant `exact`, distribution `exact`): n₁ ≤ `EXACT_MAX_N`, n₂ ≤ `EXACT_MAX_N` and no
   ties. `auto` takes it then; `exact` asked with ties or larger samples falls back to the
-  approximation, and a note says so.
-- Asymptotic (variant `asymptotic`): `mean_u` = n₁n₂/2; `sd_u` =
-  √(n₁n₂/12·((N + 1) − tie_sum/(N(N − 1)))); z = (u_1 − mean_u − c)/sd_u with c = 0.5·sign
-  of (u_1 − mean_u) two-sided, −0.5 for `less`, +0.5 for `greater`, 0 without correction.
-- Effects: `cles` = u_1/(n₁n₂), `rank_biserial` = 2·cles − 1. No interval (a shift estimate
+  approximation, and a note says why. No `z`, no critical value, no curve (the report says
+  why in its place).
+- Asymptotic (variant `asymptotic`, distribution `normal`): `mean_u` = n₁n₂/2; `sd_u` =
+  √(n₁n₂/12·((N + 1) − tie_sum/(N(N − 1)))); z = (U − mean_u − c)/sd_u with `continuity` c =
+  0.5·sign(U − mean_u) two-sided, −0.5 for `less`, +0.5 for `greater`, 0 without the
+  correction. `critical_low` and `critical_high` are **of z** (the report says «z ≤ …»), and
+  the curve is the normal's with z marked.
+- Effects: `cles` = U/(n₁n₂), `rank_biserial` = 2·cles − 1. No interval (a shift estimate
   needs every pair of rows).
+- Numbers: alpha, conf_level, n, n_missing, `u_2`, `tie_sum`, `mean_u`, `sd_u`, `continuity`,
+  `statistic`, `z`, `critical_low`, `critical_high`, p_value, `cles`, `rank_biserial`. Groups:
+  `n`, `rank_sum`, `mean_rank`, `min`, `max`, and the quartiles with `detail = report` (the
+  medians are the report's, as every test's quartiles: A12 is not read for the results).
+- Refused: a group with no usable value; all the values equal (σ = 0); infinite values; a
+  grouping column whose groups no literal names (a datetime, a decimal) holding more than the
+  two groups (the ranks are of every value read: «cast it to text first, or filter the two
+  groups before the test»). Such a column with exactly two groups is ranked whole, which is
+  right.
 
-**`stat_wilcoxon_signed_rank`** — `x`, `y?`, `mu`, `zeros` (`wilcox` default, `pratt`),
-`method`, `correction`, `alternative`. H0: the differences x − y − mu (or x − mu) are
-symmetric about 0. A5. statistic = `w_plus`; `n_zero` is written.
-- `zeros = wilcox`: zeros are left out before ranking. Exact when n ≤ `EXACT_MAX_N`, no
-  ties, no zeros. Asymptotic: mean n(n + 1)/4; sd √(n(n + 1)(2n + 1)/24 − tie_sum/48).
-- `zeros = pratt`: zeros are ranked, then left out of the sums; with n the differences
-  zeros included and z the zeros: mean n(n + 1)/4 − z(z + 1)/4; sd
-  √((n(n + 1)(2n + 1) − z(z + 1)(2z + 1) − tie_sum/2)/24); asymptotic whenever there is a
-  zero.
-- The same correction as Mann–Whitney's. Effect: `rank_biserial` =
-  (w_plus − w_minus)/(w_plus + w_minus).
+**`stat_wilcoxon_signed_rank`** — `x`, `y?` (none: one sample, d = x − mu), `mu`, `zeros`
+(`wilcox` default, `pratt`), `method`, `correction`, `alternative`. H0: the differences
+x − y − mu are symmetric about 0, written `median(x − y) = mu`. A5 (two queries: the ranks of
+|d|, and the counts with the extremes). `statistic` = V = the sum of the ranks of the positive
+differences; `w_minus`, `n_zero` written.
+- `zeros = wilcox` (R's): zeros left out before ranking; `n` = the non-zero differences.
+  Exact when n ≤ `EXACT_MAX_N`, no ties, no zeros. Asymptotic: `mean_w` = n(n + 1)/4; `sd_w` =
+  √(n(n + 1)(2n + 1)/24 − tie_sum/48).
+- `zeros = pratt` (SciPy's `zero_method = "pratt"`; base R has none): zeros ranked (the lowest
+  ranks), then left out of the sums; `n` counts them; with n₀ zeros: mean n(n + 1)/4 −
+  n₀(n₀ + 1)/4; sd √((n(n + 1)(2n + 1) − n₀(n₀ + 1)(2n₀ + 1) − tie_sum/2)/24), tie_sum over the
+  values above zero; asymptotic whenever there is a zero.
+- The same continuity correction and the same z-scale critical values as Mann–Whitney's.
+  Effect: `rank_biserial` = (w_plus − w_minus)/(w_plus + w_minus). `null_value` = mu.
+- Groups: x, y and «x − y» (the extremes of x − y, without mu) with `n` (the pairs), `min`,
+  `max`, and the quartiles for the report; one sample: x alone.
+- Refused: x = y; no pair; every difference 0; an infinite value in x or y (the difference of
+  two infinities would be NaN, which no two engines order alike).
 
-**`stat_kruskal_wallis`** — `value`, `group`, `posthoc`, `p_adjust`. H0: all distributions
-are the same. A1, A4, A12. H = 12/(N(N + 1))·ΣRᵢ²/nᵢ − 3(N + 1), divided by
-1 − tie_sum/(N³ − N); df = k − 1; chi-square p-value; effect `epsilon_squared` =
-H/(N − 1). Refused: fewer than two groups; all values equal.
+**`stat_kruskal_wallis`** — `value`, `group`, `posthoc` (`none`, `dunn`), `p_adjust`
+(`applies` with `dunn`). H0: all the groups have the same distribution, written
+`F(v | a) = F(v | b) = …`. A1, A4 over every group. H is written without the cancellation of
+R's form: H = 12/(N(N + 1))·Σnᵢ(R̄ᵢ − (N + 1)/2)², divided by C = 1 − tie_sum/(N³ − N)
+(`tie_correction`; the uncorrected H is `statistic_plain`); df = k − 1; chi-square p-value;
+`epsilon_squared` = H/(N − 1). Groups: `n`, `rank_sum`, `mean_rank`, `min`, `max`. Refused:
+fewer than two groups; a group with no usable value (named: «filter it out first»); all the
+values equal (C = 0); infinite values; the post-hoc past `MAX_POSTHOC_GROUPS`.
 
 Its post-hoc, `posthoc` = `none` (default), `dunn`: for every pair, `estimate` = the
 difference of the mean ranks R̄ᵢ − R̄ⱼ (ranks over all the groups together, as the test's);
 `std_error` = √((N(N + 1)/12 − tie_sum/(12(N − 1)))·(1/nᵢ + 1/nⱼ)); `statistic` z =
-estimate/se; `p_value` = 2·P(Z ≥ \|z\|); `p_adjusted` by `p_adjust`. No interval. At most
-`MAX_POSTHOC_GROUPS` groups.
+estimate/se; `p_value` = 2·P(Z ≥ |z|); `p_adjusted` by `p_adjust`; `df`, `critical` and the
+interval NULL (the eleven rows of `_write_pair`). `n_pairs` in the test section; a note when
+the test itself does not reject. At most `MAX_POSTHOC_GROUPS` groups.
 
 ### Distributions
 
-**`stat_ks_two_sample`** — `value`, `group`, `groups?`, `method`, `alternative`. H0: the
-two distributions are the same. A1, A9. statistic = D (two-sided), `d_plus` = max(F₁ − F₂)
-for `greater`, `d_minus` = max(F₂ − F₁) for `less`. Exact when n₁·n₂ ≤ `EXACT_KS_PRODUCT`
-and no value is tied; else asymptotic. No interval, no curve when exact.
+Built in lot 4.
 
-**`stat_normality`** — `value`, `method` (`dagostino` default, `jarque_bera`). H0: the
-values come from a normal distribution. A10. `skewness` g₁ = m₃/m₂^1.5; `kurtosis`
-b₂ = m₄/m₂².
-- `jarque_bera`: n/6·(g₁² + (b₂ − 3)²/4), chi-square with 2 df.
-- `dagostino` (the K² omnibus): the two z of D'Agostino's skewness test and of
-  Anscombe–Glynn's kurtosis test, written `z_skewness`, `z_kurtosis`; K² = their squares
-  summed, chi-square with 2 df. Refused below n = 20.
-- Refused: variance 0.
+**`stat_ks_two_sample`** — `value`, `group`, `groups?`, `method` (`auto`, `exact`,
+`asymptotic`), `alternative`. H0: the two distributions are the same, written
+`F(v | a) = F(v | b)`. A1, A2 (the groups' rows, values and extremes), A9. The distances come
+back from the engine **as whole numbers**, max(k₁n₂ − k₂n₁) and max(k₂n₁ − k₁n₂) over the
+running counts, so that the exact distribution reads them exactly and every engine returns
+the same: `d` (two-sided D), `d_plus` = max(F₁ − F₂), `d_minus` = max(F₂ − F₁); `statistic` is
+the one the alternative uses (D, D+ for `greater`, D− for `less`, as R's `ks.test`).
+- Exact (variant `exact`) when n₁·n₂ ≤ `EXACT_KS_PRODUCT` and no value is held by more than
+  one row (`n_tied`); no critical value, no curve.
+- Asymptotic (variant `asymptotic`, distribution `kolmogorov`, or `smirnov` one-sided):
+  `lambda` = D·√(n₁n₂/(n₁ + n₂)); p = `dist.kolmogorov_sf` (two-sided) or exp(−2λ²);
+  `critical_high` = `kolmogorov_isf(α)`/√(n₁n₂/(n₁ + n₂)); the curve is the density of D under
+  Kolmogorov's (Smirnov's) limit.
+- Groups: `n`, `min`, `max` and, for the report, the quartiles.
+- Refused: a group with no usable value; infinite values; a grouping column whose groups no
+  literal names (a datetime, a decimal), whatever it holds: the distance needs each row's
+  group in the query.
+
+**`stat_normality`** — `value`, `method` (`dagostino` default, `jarque_bera`). H0: the values
+come from a normal distribution, written `(skewness(v), kurtosis(v)) = (0, 3)`. A10 centred.
+`skewness` g₁ = m₃/m₂^1.5; `kurtosis` b₂ = m₄/m₂²; `excess_kurtosis` = b₂ − 3; `mean`, `m2`,
+`m3`, `m4` written.
+- `jarque_bera`: n/6·(g₁² + (b₂ − 3)²/4), chi-square with 2 df. Refused below 3 values.
+- `dagostino` (the K² omnibus, SciPy's `normaltest`): the z of D'Agostino's skewness test
+  (written with `asinh`, SciPy's logarithm without its cancellation; 0 for g₁ = 0, where SciPy
+  writes another number) and of Anscombe–Glynn's kurtosis test, `z_skewness`, `z_kurtosis`
+  (NULL rows with Jarque–Bera); K² = their squares summed, chi-square with 2 df. Refused below
+  n = 20 (`DAGOSTINO_MIN_N`), with the way out («or use method = 'jarque_bera'»).
+- Group: the column with `n`, `mean`, `var`, `sd` (of the sample), `min`, `max`, quartiles.
+- Refused: variance 0; infinite values.
 
 ### Options looked at again, now that each test has its node
 
@@ -1293,7 +1361,14 @@ Places where the reference needed care, so that nobody «fixes» the code to mat
 
 - **Kolmogorov–Smirnov, asymptotic, (A, C)**: R prints 0.358087601395282 because it stops
   the series early; the two forms of the series, summed to the end, both give
-  0.358081192617015. The spec's value is the second.
+  0.358081192617015. The spec's value is the second. SciPy's `ks_2samp(method = "asymp")` is
+  another approximation again (0.333 there): not a reference.
+- **Kolmogorov–Smirnov's D− on (A, B)**: R prints −5.6e-17 (a difference of two doubles); the
+  engine's whole numbers give 0.
+- **Dunn**: base R has no function for it; the references are the formula written in R on
+  R's `rank`, equal to the spec's scikit-posthocs values to the last digit.
+- **Normality, Pratt's zeros**: base R has neither; SciPy's `normaltest`, `jarque_bera` and
+  `wilcoxon(zero_method = "pratt")` are the references.
 - **Ties and small samples**: R 4.6 computes an exact p-value in the presence of ties and
   zeros; this spec, as SciPy, uses the normal approximation there. The references with
   ties were taken with R's `exact = FALSE`.
@@ -1445,7 +1520,7 @@ parity passes, the catalogue's checks are green and its report opens in the edit
 |---|---|---|
 | 2 Means and variances (**done**, a10a1aec `dist.py`, 321b3cb2 the tests, eacb760d the significance codes) | `stat_t_one_sample`, `stat_t_paired`, `stat_anova` with `tukey`, `games_howell`, `pairwise_t`, `stat_var_f`, `stat_levene`, `stat_pearson` | `dist.py`: F, chi-square, incomplete gamma, their quantiles and densities, held to the t's contract; **the studentized range**; the adjustments; A3, A11, centred as A2; the `pair` section; the layouts of several groups (with «Comparisons»), one sample, paired, correlation; `compute.significance` (R's stars, every test) |
 | 3 Proportions and categories | `stat_prop_one_sample`, `stat_prop_two_sample`, `stat_chi2_independence` with `cells` and `pairs`, `stat_chi2_gof`, `stat_fisher_exact` | `exact.py`: binomial, Clopper–Pearson, Fisher; A7, A8; the layouts of proportions and contingency |
-| 4 Ranks and distributions | `stat_mann_whitney`, `stat_wilcoxon_signed_rank` (with `pratt`), `stat_kruskal_wallis` with `dunn`, `stat_spearman`, `stat_ks_two_sample`, `stat_normality` | `exact.py`: Mann–Whitney, signed rank, Kolmogorov–Smirnov; A4, A5, A6, A9, and A10 centred |
+| 4 Ranks and distributions (**done**, 9624cb20 the exact distributions, b2b4f46d the six tests) | `stat_mann_whitney`, `stat_wilcoxon_signed_rank` (with `pratt`), `stat_kruskal_wallis` with `dunn`, `stat_spearman`, `stat_ks_two_sample`, `stat_normality` | `exact.py`: Mann–Whitney, signed rank, Kolmogorov–Smirnov (whole numbers); `dist.py`: Kolmogorov's limit; A4, A5, A6, A9 (no window partitioned by a double), and A10 centred; the layouts of two groups by ranks, signed ranks, Kruskal–Wallis with Dunn, rank correlation, normality; references of R 4.6.1 (and SciPy 1.18.1 for Pratt and the normality tests) on Polars, DuckDB, chDB and ClickHouse 24.8, BigQuery's SQL parsed |
 | 5 Assistants and MCP (**done**, 8798900b) | — | `ai_flow_agent.py` from its copy of the catalogue (the operations, a generated reference line each, the generic check), `prompts.json` and `tools.json` written again; accepted when an assistant places a configured test on a draft and the gateway suite is green (`ci_tests.sh gateway`, `go test`) |
 | 6 Documentation (**done**, 0cede891; `README.md`, a725b012) | — | `docs/capabilities/statistics.md` (where the tests are, each family with an example on the sample data, the post-hoc and when to use which, the output's columns, the Report tab and its downloads, what it does not do), the map, `flows.md` (the nodes in a section of their own; the counts become 19 transformations and 18 statistical tests, here, in the map and in `README.md`), `reports.md` (nothing changes for saved reports: said), `engine-differences.md` (the operations in the coverage table; «What is guaranteed identical» gains the statistics rule and its tolerance; what is computed where), `dbt-export.md`, `CHANGELOG.md`; the site (`npm run generate && npm run check-links`) |
 | 7 Regression | — | The three suites whole; the browser checks of «Testing strategy» on kind and Compose, Chrome and Firefox; BigQuery live when the owner provides the run |

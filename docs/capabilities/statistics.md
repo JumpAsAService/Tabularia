@@ -185,14 +185,19 @@ Prefer them with small samples, skewed data or outliers.
 **`stat_mann_whitney`**: do two groups tend to have different values? Options: the two groups,
 method (automatic: exact for samples of up to 49 rows each without ties, a normal
 approximation otherwise; or forced), continuity correction, alternative, alpha. The results
-hold the rank sums, `u_1`, `u_2` and the effect sizes `cles` (the probability that a row of
-the first group is above one of the second) and `rank_biserial`. *Example:* `durata_min`,
-`visita` against `telefonata`, the rank-based answer to the t test above.
+hold each group's rank sum and mean rank, U of the first group (`statistic`, R's W) and of the
+second (`u_2`), the normal score `z` of the approximation (empty for the exact test), and the
+effect sizes `cles` (the probability that a row of the first group is above one of the second)
+and `rank_biserial`. *Example:* `durata_min`, `visita` against `telefonata`, the rank-based
+answer to the t test above.
 
 **`stat_wilcoxon_signed_rank`**: are the differences between two paired columns (or between
 one column and `mu`) symmetric about 0? `x`, optionally `y`, `mu`, how to treat zero
 differences (`wilcox`: leave them out; `pratt`: rank them, then leave them out of the sums),
-method, correction, alternative, alpha. The paired counterpart of the Mann–Whitney test.
+method (exact for up to 49 differences without ties or zeros), correction, alternative,
+alpha. The statistic is V, the sum of the ranks of the positive differences; the results hold
+W (`w_minus`), the zeros (`n_zero`) and `rank_biserial`. Without `y` it is the one-sample test
+of `x` against `mu`. The paired counterpart of the Mann–Whitney test.
 
 **`stat_kruskal_wallis`**: do three or more groups have the same distribution? Value, group,
 and the post-hoc **Dunn** with its correction. The results hold the rank sums, the `H`
@@ -202,8 +207,11 @@ statistic and `epsilon_squared`. *Example:* `durata_min` by `tipo`, Dunn with Ho
 
 **`stat_ks_two_sample`**: do two groups come from the same distribution? Kolmogorov–Smirnov
 compares the whole shape, not only the centre. Value, group and the two groups, method
-(exact for small samples without ties, asymptotic otherwise), alternative, alpha. The
-statistic is the largest distance between the two cumulative distributions.
+(exact when the product of the two sizes is at most 9,999 and no value is repeated,
+Kolmogorov's limit otherwise), alternative, alpha. The statistic is the largest distance
+between the two cumulative distributions, D (two-sided), D+ (`greater`: the first group's
+distribution above the second's) or D− (`less`). The groups must be named by their values in
+a query: a date-time or decimal grouping column is cast to text first.
 
 **`stat_normality`**: do the values of a column look normally distributed? Method:
 D'Agostino's K² (default, from the skewness and the kurtosis; needs at least 20 rows) or
@@ -363,8 +371,13 @@ editor only.
 - **No test on infinite values**, and no filling in of empty ones.
 - **Exact p-values only for small samples**: Mann–Whitney and Wilcoxon up to 49 rows per
   group, Kolmogorov–Smirnov up to a product of the sample sizes of 9,999, Fisher and the
-  exact binomial up to a million possible outcomes. With ties, or beyond these sizes, the
-  normal approximation is used, and a note says so.
+  exact binomial up to a million possible outcomes. With ties (or zero differences), or
+  beyond these sizes, the normal approximation (Kolmogorov's limit for Kolmogorov–Smirnov)
+  is used, and a note says so when the exact one was asked. R 4.6 computes some exact
+  p-values with ties; Tabularia, as SciPy, does not.
+- **Rank tests of two groups of a date-time or decimal column**: such a column must hold the
+  two groups only (filter the others out), or be cast to text: the engine cannot name its
+  groups by a literal that every engine reads the same.
 - **Not included**: one-sample Kolmogorov–Smirnov, Shapiro–Wilk, two-way ANOVA, Dunnett's and
   Scheffé's comparisons, the Benjamini–Hochberg correction, power and sample size, and an
   interval for Spearman's ρ or for the Mann–Whitney shift.
