@@ -269,7 +269,7 @@ def test_statistics_run_their_aggregates_in_bigquery_and_return_typed_literals()
     assert sql.startswith(f"SELECT * FROM UNNEST([{struct}('test', NULL, NULL, 'test', NULL, 't_two_sample', NULL, NULL, 0, 'test|||test'), {struct}(")
     assert f"{struct}('test', NULL, NULL, 'engine', NULL, 'bigquery', NULL, NULL, 8, 'test|||engine')" in sql
     assert f"{struct}('test', NULL, NULL, 'n_missing', 3.0, NULL, NULL, NULL, 12, 'test|||n_missing')" in sql
-    assert f"{struct}('group', 'b', NULL, 'max', 8.0, NULL, NULL, NULL, 43, 'group|b||max')])" in sql
+    assert f"{struct}('group', 'b', NULL, 'max', 8.0, NULL, NULL, NULL, 44, 'group|b||max')])" in sql
     assert "'test|||statistic'" in sql and "-4.60902122168" in sql
     for query in (levels, centre, moments, sql):
         sqlglot.parse_one(query, read="bigquery")  # raises on what is not GoogleSQL
@@ -326,9 +326,9 @@ def test_statistics_report_rows_ask_bigquery_for_quartiles_and_a_histogram():
     )
     for query in (quartiles, histogram, sql):
         sqlglot.parse_one(query, read="bigquery")
-    assert "'group', 'a', NULL, 'median', 5.65, NULL, NULL, NULL, 36, 'group|a||median')" in sql
+    assert "'group', 'a', NULL, 'median', 5.65, NULL, NULL, NULL, 37, 'group|a||median')" in sql
     assert "('hist', 'a', NULL, 'count', 4.0, '[4.9, 5.52)', 4.9, " in sql and "'hist|a||count|0')" in sql
-    assert "'[7.38, 8]', " in sql and ", 8.0, 59, 'hist|b||count|4')" in sql
+    assert "'[7.38, 8]', " in sql and ", 8.0, 60, 'hist|b||count|4')" in sql
     assert sql.count("('curve', NULL, NULL, 'density', ") == 201 and sql.endswith("'curve|||reject_high|200')])")
     # without a group column the quantiles are of every row: one window, one row kept
     from app.engine.stats.aggregates import SqlStatSource
