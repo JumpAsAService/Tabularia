@@ -103,7 +103,7 @@ installation, and the page with the complete one.
 | Area | What is in it |
 |---|---|
 | [Connect your data](#connect-your-data) | Files, seven databases, S3, SFTP, HTTP APIs, SharePoint, Google Sheets; dates that move by themselves |
-| [Build flows](#build-flows) | The canvas, 19 transformations and a loop, SQL steps, samples, versions, an assistant |
+| [Build flows](#build-flows) | The canvas, 19 transformations and a loop, 18 statistical tests, SQL steps, samples, versions, an assistant |
 | [Preview and analysis](#preview-and-analysis) | Every step on the whole table, row counts, column profiles, charts, the Viewer, lineage |
 | [Engines](#engines) | DuckDB, Polars, chDB, ClickHouse, BigQuery; one for design, one for production |
 | [Publish and write](#publish-and-write) | Datasources, database tables, S3, SFTP, email; data contracts |
@@ -206,10 +206,12 @@ Then: [Quickstart](#quickstart) · [How it works](#how-it-works) · [Sample data
   connect them; Undo and Redo, **Arrange the flow**, a minimap, notes. A right-click (or
   Shift+F10) opens a ring of transformations around the pointer, already connected to
   the selected node. [Flows](docs/capabilities/flows.md#the-editor)
-- **19 transformations and a loop.** Select, reorder, drop, rename, change type,
+- **19 transformations, a loop and 18 statistical tests.** Select, reorder, drop, rename, change type,
   computed column, execute SQL, filter, sort, limit, unique, sample, fill nulls, drop
   nulls, group by, join (inner, left, right, full, semi, anti, cross), union, pivot,
   unpivot, and the **Foreach** loop. [The node catalogue](docs/capabilities/flows.md#the-node-catalogue)
+  The statistical tests, one node each in six families, show their report in the node's
+  **Report** tab, to download as PDF and Excel. [Statistics](docs/capabilities/statistics.md)
 - **A declarative definition.** A flow is a JSON list of typed operations, decoupled from
   the engine that runs it. [Concepts](docs/concepts.md), [How it works](docs/how-it-works.md#the-declarative-definition)
   ```json
