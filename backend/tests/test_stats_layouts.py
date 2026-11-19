@@ -788,3 +788,22 @@ def test_a_larger_table_has_its_own_cards(tmp_path, chart_service, monkeypatch, 
     if locale == "en":
         assert [w for w in wanted if w not in said] == []
     assert not {"95% CI", "IC 95%"} & {s[:6] for s in said}  # no interval of an odds ratio there is not
+
+
+def test_numbers_in_the_hypotheses_use_the_decimal_of_the_language():
+    row = {"section": "test", "stat": "h1", "text": "max P(v | i > v | j) ≠ 0.5", "value": None}
+    column = {"section": "test", "stat": "h0", "text": "mean(ab1.5) = 1.5e-07 and m₂^1.5", "value": None}
+    assert layouts.with_labels("kruskal_wallis", [row], "en")[0]["text"] == "max P(v | i > v | j) ≠ 0.5"
+    for loc in ("it", "de", "es", "fr"):
+        assert layouts.with_labels("kruskal_wallis", [row], loc)[0]["text"] == "max P(v | i > v | j) ≠ 0,5"
+    # a name that has a dot in it is not a number
+    assert layouts.with_labels("t_one_sample", [column], "it")[0]["text"] == "mean(ab1.5) = 1,5e-07 and m₂^1,5"
+
+
+def test_a_label_with_a_number_is_turned_never_wrapped():
+    from app.reports.charts import _x_axis
+
+    bins = [f"[{i},48 – {i + 1},47)" for i in range(6)]
+    assert _x_axis(bins, 280)["axisLabel"]["rotate"] == 40  # it would end a line inside a number
+    assert "rotate" not in _x_axis(["North", "South", "East"], 280)["axisLabel"]
+    assert "rotate" not in _x_axis(["1", "2", "3"], 280)["axisLabel"]  # it fits

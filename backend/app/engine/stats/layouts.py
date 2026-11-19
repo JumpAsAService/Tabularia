@@ -110,10 +110,15 @@ def _edges_text(low: float, high: float, last: bool, decimal: str, group: str) -
     return f"[{said(low)} – {said(high)}{']' if last else ')'}"
 
 
+# a decimal number written in a text («0.5», «m₂^1.5», «1.5e-07»), not a name that has a dot in it
+_NUMBER_WITH_POINT = re.compile(r"(?<![\w.])(\d+)\.(\d+(?:e[+-]?\d+)?)(?![\w.])")
+
+
 def _said(test: str, rows: list[dict], locale: str | None) -> list[dict]:
     """The texts of the rows that hold a number written as text, in the language of the page:
-    the histogram's intervals, and the reference distribution («t(12,7279)»; with a decimal
-    comma its parameters are set apart by a semicolon, «F(2; 18,5)»)."""
+    the histogram's intervals, the reference distribution («t(12,7279)»; with a decimal
+    comma its parameters are set apart by a semicolon, «F(2; 18,5)») and the numbers inside
+    the hypotheses, the formula and the notes («max P(v | i > v | j) ≠ 0,5»)."""
     from app.reports import formats
 
     loc = formats.locale(locale if locale in LOCALES else "en")
@@ -124,6 +129,9 @@ def _said(test: str, rows: list[dict], locale: str | None) -> list[dict]:
             r = {**r, "text": _edges_text(r["x0"], r["x1"], str(text or "").endswith("]"), loc.decimal, loc.group)}
         elif r["section"] == "test" and r["stat"] == "distribution" and isinstance(text, str) and loc.decimal != ".":
             r = {**r, "text": text.replace(", ", "; ").replace(".", loc.decimal)}
+        elif r["section"] == "test" and (r["stat"] in ("h0", "h1", "formula") or r["stat"].startswith("note_")) \
+                and isinstance(text, str) and loc.decimal != ".":
+            r = {**r, "text": _NUMBER_WITH_POINT.sub(lambda m: m.group(1) + loc.decimal + m.group(2), text)}
         out.append(r)
     return out
 
