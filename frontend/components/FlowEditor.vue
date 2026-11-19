@@ -2712,6 +2712,9 @@ const previewChanges = computed(() => {
   const upstream = previewInput.value
   if (!preview.value || !node || !upstream) return null
   const op = String(node.data?.opType ?? '')
+  // a hypothesis test answers with a table of results, not with its input reshaped: «new»
+  // on each of its ten columns and «removed» for every column it did not read say nothing
+  if (statIsOp(op)) return null
   const renames = op === 'rename' ? (node.data?.params?.mapping ?? {}) : {}
   return columnChanges(upstream, preview.value.columns, renames, consumedColumns(op, node.data?.params))
 })

@@ -239,4 +239,6 @@ test('the editor shows the tab for a statistics node only, and falls back to Tab
   assert.match(editor, /if \(!id && viewTab\.value === 'report'\) viewTab\.value = 'table'/)
   // the chain is the preview's own, with the flow's engine: no second chain is built
   assert.match(editor, /previewBody\(statNodeId\.value\)\.body/)
+  // a test's table is not its input reshaped: no «new» on its ten columns, no «N columns removed»
+  assert.match(editor, /if \(statIsOp\(op\)\) return null\n\s+const renames = /)
 })
