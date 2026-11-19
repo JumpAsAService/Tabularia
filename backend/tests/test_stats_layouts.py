@@ -557,6 +557,26 @@ def test_a_test_that_runs_out_of_time_says_what_to_do(stack, monkeypatch):
         "The test took longer than the workers allow: give the source a development sample, or filter before the test")}
 
 
+def test_a_minute_that_turns_during_a_report_changes_nothing(stack, monkeypatch):
+    """The task gives the render no instant: the render reads the clock, and the page prints the
+    time to the minute. The two renders tests/reports_both_ways.py compares are drawn at one
+    instant, or a minute turning between them would make them differ (it did, now and then)."""
+    from datetime import timedelta
+
+    from app.reports import render as render_module
+
+    class Ticking(datetime):
+        calls = 0
+
+        @classmethod
+        def now(cls, tz=None):  # a fifth of a second a reading, the minute turning between the first two
+            cls.calls += 1
+            return datetime(2026, 11, 19, 15, 30, 59, 700000, tzinfo=timezone.utc) + timedelta(seconds=0.2 * cls.calls)
+
+    monkeypatch.setattr(render_module, "datetime", Ticking)
+    assert tasks.export_status(ask(format="svg").task_id, owner="u1")["status"] == "ready"
+
+
 def test_every_statistics_operation_has_its_report_route():
     """A test of the catalogue without a layout would be refused with a sentence, not an error."""
     assert all(operation_name(t).startswith("stat_") for t in layouts.LAYOUTS)

@@ -12,6 +12,7 @@ import contextlib
 import hashlib
 import json
 import shutil
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -116,6 +117,11 @@ def both_ways(monkeypatch):
         return sq
 
     def render_both(definition, datasets, params, fmt, workdir, **kw):
+        # One instant for the two renders, as one render has: a caller that gives none (the
+        # statistics report's task) would let each read the clock, and a page that prints the
+        # time to the minute («yyyy-MM-dd HH:mm») differed whenever a minute turned between them.
+        if kw.get("now") is None:
+            kw["now"] = datetime.now(timezone.utc)
         workdir = Path(workdir)
         aside = workdir.parent / (workdir.name + "-interpreter")
         _inside.append({})
