@@ -233,3 +233,53 @@ def test_compute_expressions_are_transpiled_to_googlesql():
     assert to_bigquery_expr("questo non e' sql ((") == "questo non e' sql (("  # falls back on the text
     sql = op("compute", {"columns": [{"name": "resto", "expr": "prezzo % 2"}]})
     assert "(MOD(prezzo, 2)) AS `resto`" in sql
+
+
+def test_statistics_run_their_aggregates_in_bigquery_and_return_typed_literals():
+    """A hypothesis test asks BigQuery for its aggregates (`ctx.rows`: here answered with what
+    R's samples give) and returns the results as an UNNEST of typed STRUCTs. The queries are
+    GoogleSQL a parser reads; that BigQuery answers them is the live suite's to say."""
+    import sqlglot
+
+    class StatCtx(FakeCtx):
+        def rows(self, sql):
+            self.queries.append(sql)
+            if "LIMIT 202" in sql:  # the groups of `nome`, the one without a name too
+                return [["a", 9], ["b", 8], [None, 1]]
+            if "LIMIT 100000" in sql:  # the centre: the mean of the first rows
+                return [[6.5]]
+            return [["a", 9, 8, 5.6875 - 6.5, 0.364107142857143, 4.9, 6.7],
+                    [None, 1, 1, 3.4, None, 9.9, 9.9],
+                    ["b", 8, 7, 7.128571428571429 - 6.5, 0.365714285714286, 6.4, 8.0]]
+
+    ctx = StatCtx(SCHEMA)
+    sql = op("stat_t_two_sample", {"value": "prezzo", "group": "nome"}, ctx)
+    levels, centre, moments = ctx.queries
+    x = "CASE WHEN `prezzo` IS NOT NULL AND NOT IS_NAN(CAST(`prezzo` AS FLOAT64)) THEN CAST(`prezzo` AS FLOAT64) END"
+    finite = ("CASE WHEN `prezzo` IS NOT NULL AND (NOT IS_NAN(CAST(`prezzo` AS FLOAT64)) AND NOT IS_INF(CAST(`prezzo` AS FLOAT64))) "
+              "THEN CAST(`prezzo` AS FLOAT64) END")
+    assert levels == "SELECT `nome` AS st_lv, count(*) AS st_rows FROM (SELECT * FROM `_src1`) AS st_t GROUP BY `nome` LIMIT 202"
+    assert centre == f"SELECT avg({finite}) AS st_centre FROM (SELECT `prezzo` FROM (SELECT * FROM `_src1`) AS st_t LIMIT 100000) AS st_head"
+    assert moments == (
+        f"SELECT `nome` AS st_lv, count(*) AS st_rows, count({x}) AS st_n, avg(({finite} - (6.5))) AS st_mean, "
+        f"VAR_SAMP(({finite} - (6.5))) AS st_var, min({x}) AS st_min, max({x}) AS st_max "
+        "FROM (SELECT * FROM `_src1`) AS st_t GROUP BY `nome`"
+    )
+    struct = "STRUCT<section STRING, level STRING, level_2 STRING, stat STRING, value FLOAT64, text STRING, x0 FLOAT64, x1 FLOAT64, ord INT64, key STRING>"
+    assert sql.startswith(f"SELECT * FROM UNNEST([{struct}('test', NULL, NULL, 'test', NULL, 't_two_sample', NULL, NULL, 0, 'test|||test'), {struct}(")
+    assert f"{struct}('test', NULL, NULL, 'engine', NULL, 'bigquery', NULL, NULL, 8, 'test|||engine')" in sql
+    assert f"{struct}('test', NULL, NULL, 'n_missing', 3.0, NULL, NULL, NULL, 12, 'test|||n_missing')" in sql
+    assert f"{struct}('group', 'b', NULL, 'max', 8.0, NULL, NULL, NULL, 43, 'group|b||max')])" in sql
+    assert "'test|||statistic'" in sql and "-4.60902122168" in sql
+    for query in (levels, centre, moments, sql):
+        sqlglot.parse_one(query, read="bigquery")  # raises on what is not GoogleSQL
+    # an output never takes the name of a column of the input, whatever its case or its safe form
+    ctx = StatCtx([("ST_LV", "STRING"), ("st rows", "INTEGER"), ("prezzo", "NUMERIC"), ("nome", "STRING")])
+    op("stat_t_two_sample", {"value": "prezzo", "group": "nome"}, ctx)
+    assert ctx.queries[0].startswith("SELECT `nome` AS st_lv_, count(*) AS st_rows_ FROM")
+    # the types that are numbers, as a BigQuery job's schema names them
+    with pytest.raises(EngineError, match="the column «quando» \\('value'\\) is not a number \\(TIMESTAMP\\)"):
+        op("stat_t_two_sample", {"value": "quando", "group": "nome"}, StatCtx(SCHEMA))
+    with pytest.raises(EngineError, match="not a number \\(BOOLEAN\\)"):
+        op("stat_t_two_sample", {"value": "ok", "group": "nome"}, StatCtx(SCHEMA))
+    assert op("stat_t_two_sample", {"value": "id", "group": "nome"}, StatCtx(SCHEMA)).startswith("SELECT * FROM UNNEST(")

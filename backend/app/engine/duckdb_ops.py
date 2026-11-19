@@ -48,6 +48,10 @@ from app.engine.operations import (
     sort_keys,
 )
 from app.engine.sql_guard import table_names
+from app.engine.stats.aggregates import SqlStatSource
+from app.engine.stats.catalog import stat_operations
+from app.engine.stats.compute import run_hypothesis_test
+from app.engine.stats.output import to_arrow
 
 DuckOpFn = Callable[..., "duckdb.DuckDBPyRelation"]
 
@@ -624,3 +628,23 @@ def op_foreach(rel, params, a, ctx):
         return parts[0]
     names = [ctx.register(p) for p in parts]  # UNION ALL BY NAME (like diagonal_relaxed)
     return ctx.con.sql(" UNION ALL BY NAME ".join(f"SELECT * FROM {n}" for n in names))
+
+
+# ── statistics: one operation per hypothesis test (`stat_` + the test's id) ────
+# The aggregates are queries DuckDB runs on the relation so far (at most a row per group
+# comes back); the output is the small table of the results, read from Arrow. See
+# app/engine/stats; the operations are those of its catalogue.
+def _stat_operation(test: str) -> DuckOpFn:
+    def op(rel, params, a, ctx):
+        name = ctx.register(rel)
+        source = SqlStatSource(
+            "duckdb", lambda q: ctx.con.sql(q).fetchall(), _qi, _lit,
+            f"SELECT * FROM {name}", list(zip(rel.columns, map(str, rel.types))),
+        )
+        return ctx.con.from_arrow(to_arrow(run_hypothesis_test(source, test, params, "duckdb")))
+
+    return op
+
+
+for _name, _test in stat_operations().items():
+    _register(_name)(_stat_operation(_test))

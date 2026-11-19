@@ -36,6 +36,10 @@ from app.engine.operations import (
     temporal_value_error, TEXT_TRUE, TEXT_FALSE,
 )
 from app.engine.sql_guard import ensure_reads_only_input, table_names
+from app.engine.stats.aggregates import SqlStatSource
+from app.engine.stats.catalog import stat_operations
+from app.engine.stats.compute import run_hypothesis_test
+from app.engine.stats.output import values_sql
 
 BqOpFn = Callable[..., str]
 
@@ -581,3 +585,20 @@ def op_unpivot(sql, params, ctx):
         f"SELECT {keep_sql}{ctx.qi(var)}, {ctx.qi(val)} FROM ({inner}) "
         f"UNPIVOT INCLUDE NULLS ({ctx.qi(val)} FOR {ctx.qi(var)} IN ({', '.join(ctx.qi(c) for c in melt)}))"
     )
+
+
+# ── statistics: one operation per hypothesis test (`stat_` + the test's id) ────
+# The aggregates are queries BigQuery runs on the chain so far (`ctx.rows`, each one billed
+# for the columns it reads; at most a row per group comes back); the output is the small
+# table of the results, an UNNEST of typed STRUCTs. See app/engine/stats; the operations are
+# those of its catalogue.
+def _stat_operation(test: str) -> BqOpFn:
+    def op(sql, params, ctx):
+        source = SqlStatSource("bigquery", ctx.rows, ctx.qi, _lit, sql, ctx.schema_of(sql))
+        return values_sql("bigquery", run_hypothesis_test(source, test, params, "bigquery"), _lit)
+
+    return op
+
+
+for _name, _test in stat_operations().items():
+    _register(_name)(_stat_operation(_test))

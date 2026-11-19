@@ -343,6 +343,10 @@ class BigQueryContext:
         rows = list(self.query(sql).result())
         return int(rows[0][0]) if rows and rows[0] and rows[0][0] is not None else 0
 
+    def rows(self, sql: str) -> list[list]:
+        """Runs a query and returns its rows, values typed (the client's own types)."""
+        return [list(r.values()) for r in self.query(sql).result()]
+
     def distinct_rows(self, base_sql: str, cols: list[str]) -> list[list]:
         sel = ", ".join(_qi(c) for c in cols)
         rows = self.query(f"SELECT DISTINCT {sel} FROM {base_sql} ORDER BY {sel}").result()

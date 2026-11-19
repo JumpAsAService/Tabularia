@@ -28,6 +28,10 @@ from app.engine.operations import (
     temporal_value_error, TEXT_TRUE, TEXT_FALSE,
 )
 from app.engine.sql_guard import ensure_reads_only_input, rename_tables, table_names
+from app.engine.stats.aggregates import SqlStatSource
+from app.engine.stats.catalog import stat_operations
+from app.engine.stats.compute import run_hypothesis_test
+from app.engine.stats.output import values_sql
 
 ChdbOpFn = Callable[..., str]
 
@@ -714,3 +718,23 @@ def op_unpivot(sql, params, ctx):
         f"SELECT {keep_sql}tup.1 AS {_qi(var)}, tup.2 AS {_qi(val)} "
         f"FROM {base} ARRAY JOIN [{tuples}] AS tup"
     )
+
+
+# ── statistics: one operation per hypothesis test (`stat_` + the test's id) ────
+# The aggregates are queries ClickHouse runs on the chain so far (`ctx.rows`: at most a row
+# per group comes back); the output is the small table of the results, written as a
+# `values(…)` of literals, so the chain stays one SELECT. See app/engine/stats; the
+# operations are those of its catalogue.
+def _stat_operation(test: str) -> ChdbOpFn:
+    def op(sql, params, ctx):
+        # the grouping column without its -0.0, which ClickHouse would hold a group apart
+        group = params.get("group")
+        base = _zero_signless(sql, [group], ctx) if isinstance(group, str) and group else sql
+        source = SqlStatSource("clickhouse", ctx.rows, _qi, _lit, base, ctx.schema_of(sql))
+        return values_sql("clickhouse", run_hypothesis_test(source, test, params, ctx.engine_name), _lit)
+
+    return op
+
+
+for _name, _test in stat_operations().items():
+    _register(_name)(_stat_operation(_test))

@@ -50,6 +50,7 @@ from app.engine.chdb_ops import _lit, _qi, get_chdb_operation, temporal_safe_sql
 from app.engine.principal import AI, current_principal
 from app.engine.exceptions import EngineError, OperationError, SourceNotFoundError
 from app.engine.polars_engine import _coerce_ops, _columns_of
+from app.engine.stats.catalog import is_stat_operation
 from app.engine.temporal import naive_utc, rewrite_parquet_naive_utc
 from app.engine.query_tag import current_query_tag, is_safe_tag, was_interrupted
 from app.observability import preview_stats
@@ -88,7 +89,9 @@ _VALIDATE_CLIENT_AFTER = 30.0
 
 
 def _needs_scan_tuning(ops) -> bool:
-    return any((o.type if hasattr(o, "type") else o.get("type")) in _SCAN_HEAVY for o in ops)
+    # a statistics operation aggregates every row it is given: a scan as a group_by's
+    types = [o.type if hasattr(o, "type") else o.get("type") for o in ops]
+    return any(t in _SCAN_HEAVY or is_stat_operation(t) for t in types)
 
 
 def _effective_scan_threads(target: int, server_threads: int) -> int:
@@ -215,6 +218,8 @@ class ClickHouseContext:
     tables and temporary files to clean up. It has the same interface as `ChdbContext`
     (columns_of/scalar/distinct_*/build_right), so `chdb_ops` works unchanged."""
 
+    engine_name = "clickhouse"
+
     def __init__(self, client, storage, cfg: ClickHouseExternalSettings, tmp: list[str],
                  preview_limit: int | None = None, matviews=None, allow_matview: bool = False,
                  sort_keys=None):
@@ -264,6 +269,10 @@ class ClickHouseContext:
             raise
         except Exception as e:
             raise EngineError(_clean_error(e)) from e
+
+    def rows(self, sql: str) -> list[list]:
+        """A query's rows, values typed (the driver's own types): see `ChdbContext.rows`."""
+        return self._rows(sql)
 
     def command(self, sql: str, settings: dict[str, Any] | None = None) -> None:
         try:

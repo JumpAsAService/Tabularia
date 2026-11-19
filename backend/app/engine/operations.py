@@ -22,6 +22,10 @@ from app.engine.context import OperationContext
 from app.engine.dtypes import resolve_dtype as _dtype
 from app.engine.exceptions import EngineError, UnknownOperationError
 from app.engine.sql_guard import table_names
+from app.engine.stats.catalog import stat_operations
+from app.engine.stats.compute import run_hypothesis_test
+from app.engine.stats.output import to_polars
+from app.engine.stats.polars_source import PolarsStatSource
 
 # the type of an operation function
 OperationFn = Callable[[pl.LazyFrame, dict[str, Any], OperationContext], pl.LazyFrame]
@@ -890,3 +894,21 @@ def op_foreach(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) 
             sub = sub.with_columns([pl.lit(v).alias(str(k)) for k, v in item.items()])
         parts.append(sub)
     return pl.concat(parts, how="diagonal_relaxed")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Statistics: one operation per hypothesis test (`stat_` + the test's id)
+# ─────────────────────────────────────────────────────────────────────────────
+# The aggregates run here, while the chain is built, as lazy expressions collected by the
+# streaming engine (what `pivot` does); the node's output is the small table of the test's
+# results, the same on every engine (see app/engine/stats). The operations are those of the
+# catalogue: a new test is registered by being added there.
+def _stat_operation(test: str) -> OperationFn:
+    def op(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -> pl.LazyFrame:
+        return to_polars(run_hypothesis_test(PolarsStatSource(lf), test, params, "polars"))
+
+    return op
+
+
+for _name, _test in stat_operations().items():
+    register(_name)(_stat_operation(_test))

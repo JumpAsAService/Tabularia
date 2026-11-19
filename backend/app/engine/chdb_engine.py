@@ -55,6 +55,9 @@ class ChdbContext:
     multi-input operations (join/union) use `build_right` for the right side, and the
     introspection (`columns_of`) to build the SELECTs."""
 
+    # the engine a chain of `chdb_ops` runs on (the external ClickHouse's context says its own)
+    engine_name = "chdb"
+
     def __init__(self, session, storage, tmp: list[str], preview_limit: int | None = None, direct: bool = False):
         self.session = session
         self.storage = storage
@@ -83,6 +86,24 @@ class ChdbContext:
         if not raw:
             return []
         return json.loads(bytes(raw)).get("data", [])
+
+    def rows(self, sql: str) -> list[list]:
+        """Runs a query and returns its rows with their values TYPED (a date a date, 2.0 a
+        float, a count an integer), read through Arrow as a preview's rows are. `_rows_json`
+        would hand back 2.0 as 2, a datetime as a text with six zeros and NaN as null: the
+        labels the statistics make of a group's value would differ from the other engines'."""
+        try:
+            raw = self.session.query(f"SELECT * FROM ({temporal_safe_sql(self, sql)})", "ArrowStream").bytes()
+        except EngineError:
+            raise
+        except Exception as e:  # SQL/binder error
+            raise EngineError(str(e)) from e
+        if not raw:
+            return []
+        df = pl.from_arrow(pa.ipc.open_stream(bytes(raw)).read_all())
+        if isinstance(df, pl.Series):
+            df = df.to_frame()
+        return [list(r) for r in naive_utc(df).rows()]
 
     def columns_of(self, sql: str) -> list[str]:
         """The column names of the SQL fragment (through DESCRIBE)."""
