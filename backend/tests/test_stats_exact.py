@@ -99,3 +99,26 @@ def test_a_table_at_the_limit_of_the_support_is_computed(table):
     assert time.perf_counter() - start < 30.0  # a guard against a walk over every outcome, not a benchmark
     # far in the tail, the p-value is below a double's reach: 0, never a wrong small number
     assert exact.fisher_exact(500_000, 0, 0, 499_999, "two_sided", 0.05).p_value == 0.0
+
+
+# ── Fisher of an r × c table (Freeman–Halton) ────────────────────────────────
+@pytest.mark.parametrize("table, want", [
+    ([[30, 20, 10], [15, 25, 20]], 0.012867278704384083),
+    ([[8, 3, 1], [2, 9, 3], [1, 2, 7]], 0.0018916138067752856),
+    ([[10, 6, 2, 1], [4, 8, 7, 2], [2, 3, 9, 6]], 0.0080095433958731511),
+    ([[20, 12, 9], [15, 18, 11], [10, 14, 22]], 0.029197683863874373),
+    ([[30, 25, 20], [28, 35, 22], [18, 24, 40]], 0.0086216993802620788),
+    ([[12, 5], [7, 16]], 0.023836895850244),  # a 2 × 2 table: the same p-value as the other algorithm
+])
+def test_fisher_rxc_against_r(table, want):
+    """R 4.6.1's fisher.test; a p-value is the sum of the tables no more likely than the one
+    observed, each of them a product of factorials: within 1e-11."""
+    p_value, nodes = exact.fisher_rxc(table, 2_000_000)
+    assert rel(p_value, want) < 1e-11 and nodes > 0
+    transposed = [list(c) for c in zip(*table)]
+    assert rel(exact.fisher_rxc(transposed, 2_000_000)[0], want) < 1e-11
+
+
+def test_fisher_rxc_has_a_ceiling():
+    with pytest.raises(exact.TooMuchWork):
+        exact.fisher_rxc([[20, 12, 6, 4], [9, 15, 12, 6], [5, 8, 16, 14]], 10_000)

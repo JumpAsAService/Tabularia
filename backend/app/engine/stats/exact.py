@@ -265,3 +265,128 @@ def fisher_exact(a: int, b: int, c: int, d: int, alternative: str, alpha: float)
     else:
         ci = (lower_bound(alpha / 2.0), upper_bound(alpha / 2.0))
     return Fisher(p_value, estimate(), ci[0], ci[1], hi - lo + 1)
+
+
+# ── Fisher's exact test of an r × c table (Freeman–Halton) ──────────────────
+class TooMuchWork(Exception):
+    """The network of an r × c table grew past the nodes allowed: the exact test is refused."""
+
+
+def _column_vectors(total: int, caps: tuple[int, ...]):
+    """Every way of filling a column of `total` rows under the rows' remaining totals."""
+    if len(caps) == 1:
+        if total <= caps[0]:
+            yield (total,)
+        return
+    rest = sum(caps[1:])
+    for x in range(max(0, total - rest), min(total, caps[0]) + 1):
+        for tail in _column_vectors(total - x, caps[1:]):
+            yield (x, *tail)
+
+
+def _spread(total: int, caps: list[int] | tuple[int, ...], even: bool, lf: list[float]) -> float:
+    """−Σ ln x! of one line (a column, or a row) of `total` under `caps` that is the largest
+    (`even`: as even as the caps allow, −ln x! being concave: water-filling) or the smallest
+    (filled one cap after the other, the largest first). `lf`: ln n! by n."""
+    if even:
+        xs = [0] * len(caps)
+        left = total
+        order = sorted(range(len(caps)), key=lambda i: caps[i])
+        for pos, i in enumerate(order):  # the smallest caps fill first, the rest share what is left
+            xs[i] = min(caps[i], left // (len(order) - pos))
+            left -= xs[i]
+        for i in sorted(range(len(caps)), key=lambda i: xs[i]):  # what the division left over, one by one
+            if left == 0:
+                break
+            if xs[i] < caps[i]:
+                xs[i] += 1
+                left -= 1
+        return -sum(lf[x] for x in xs)
+    out, left = 0.0, total
+    for cap in sorted(caps, reverse=True):
+        x = min(cap, left)
+        out -= lf[x]
+        left -= x
+    return out
+
+
+def fisher_rxc(table: list[list[int]], max_nodes: int) -> tuple[float, int]:
+    """The two-sided p-value of Fisher's exact test of an r × c table (Freeman–Halton, R's
+    `fisher.test`): the probability, given the margins, of every table no more likely than the
+    one observed (R's slack of 1e-7). The network algorithm (Mehta and Patel, 1983): the
+    columns are filled one after the other, the nodes of a stage are the row totals left
+    (sorted: the rest does not depend on their order) with the log-weights of the paths that
+    reach them; a node whose every completion is no more likely than the table observed adds
+    the closed mass of its completions, one whose every completion is more likely adds
+    nothing, the others are expanded. The bounds are those of each column alone (valid, if
+    not the tightest). Returns (p-value, nodes visited); TooMuchWork past `max_nodes`."""
+    if len(table) > len(table[0]):  # the shorter side as the rows: smaller nodes
+        table = [list(col) for col in zip(*table)]
+    rows = [sum(r) for r in table]
+    cols = sorted((sum(c) for c in zip(*table)), reverse=True)
+    total = sum(rows)
+    lf = [0.0] * (total + 1)
+    for n in range(2, total + 1):
+        lf[n] = lf[n - 1] + math.log(n)
+    observed = -sum(lf[x] for r in table for x in r)
+    limit = observed + math.log1p(_RELATIVE_SLACK)
+    # the log of the sum of Π 1/x! over every table with these margins: N! / (Π R! Π C!)
+    log_all = lf[total] - sum(lf[r] for r in rows) - sum(lf[c] for c in cols)
+    tail_cols = [cols[j:] for j in range(len(cols))]
+    log_tail = [sum(lf[c] for c in cols[j:]) for j in range(len(cols))]
+    bounds: dict[tuple, tuple[float, float]] = {}
+
+    def bound(left: tuple[int, ...], j: int) -> tuple[float, float]:
+        """The largest and the smallest −Σ ln x! of a completion: each line alone (the columns
+        under the rows' totals, the rows under the columns'), the tighter of the two; exact for
+        the last column, which the rows' totals fill."""
+        key = (left, j)
+        got = bounds.get(key)
+        if got is None:
+            if j == len(cols) - 1:
+                exact_ = -sum(lf[r] for r in left)
+                got = (exact_, exact_)
+            else:
+                rest = tail_cols[j]
+                high = min(sum(_spread(c, left, True, lf) for c in rest), sum(_spread(r, rest, True, lf) for r in left))
+                low = max(sum(_spread(c, left, False, lf) for c in rest), sum(_spread(r, rest, False, lf) for r in left))
+                got = (high, low)
+            bounds[key] = got
+        return got
+
+    p_value = 0.0
+    stage: dict[tuple[int, ...], dict[int, list[float]]] = {tuple(sorted(rows)): {0: [0.0, 1.0]}}
+    nodes = 0
+    for j, c in enumerate(cols):
+        following: dict[tuple[int, ...], dict[int, list[float]]] = {}
+        for left, pasts in stage.items():
+            high, low = bound(left, j)
+            mass = lf[sum(left)] - sum(lf[r] for r in left) - log_tail[j]  # ln Σ Π 1/x! of the completions
+            vectors = None
+            for past, count in pasts.values():
+                if past + high <= limit:  # every completion counts
+                    p_value += count * math.exp(past + mass - log_all)
+                    continue
+                if past + low > limit:  # none does
+                    continue
+                if vectors is None:
+                    vectors = [(xs, -sum(lf[x] for x in xs), tuple(sorted(r - x for r, x in zip(left, xs))))
+                               for xs in _column_vectors(c, left)]
+                for _, weight, after in vectors:
+                    w = past + weight
+                    slot = following.setdefault(after, {})
+                    key = round(w * 1e9)  # paths of the same weight are one, their counts added
+                    if key in slot:
+                        slot[key][1] += count
+                    else:
+                        nodes += 1
+                        if nodes > max_nodes:
+                            raise TooMuchWork(nodes)
+                        slot[key] = [w, count]
+        stage = following
+    # the paths that reached the end: each a whole table
+    for pasts in stage.values():
+        for past, count in pasts.values():
+            if past <= limit:
+                p_value += count * math.exp(past - log_all)
+    return min(1.0, p_value), nodes
