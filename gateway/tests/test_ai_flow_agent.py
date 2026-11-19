@@ -373,3 +373,64 @@ async def test_a_flow_keeps_its_engine_after_the_administrator_disallows_it(sess
     with pytest.raises(HTTPException) as e:  # a new flow cannot pick it
         await _turn(session, world, monkeypatch, world["editor"], ["Hi."], engine="duckdb", flow_id=None)
     assert e.value.status_code == 422
+
+
+# ── the hypothesis tests, from the catalogue's copy ──────────────────────────
+def test_every_test_of_the_catalogue_is_an_operation_with_a_line_of_reference_and_its_defaults_pass():
+    catalogue = ai_flow_agent.STAT_CATALOG["tests"]
+    assert catalogue and all(t["operation"] in ai_flow_agent.OPERATIONS for t in catalogue)
+    reference = ai_flow_agent.context(None, "en")
+    for t in catalogue:
+        assert f"- {t['operation']} {{" in reference
+        needed = {k: ("yes" if kind == "success" else "c") for k, kind in t["needs"].items()}
+        defaults = {k: v for k, v in t["defaults"].items() if k not in needed and v is not None}
+        assert clean_params(t["operation"], {**needed, **defaults}) == {**needed, **defaults}
+    assert "stat_t_two_sample {value, group, groups?: [2 values], var_equal?: bool" in reference
+    assert "detail" not in ai_flow_agent.stat_reference()  # the report's key is the node's, not the assistant's
+
+
+def test_a_configured_test_comes_out_as_given_and_a_null_is_a_key_not_given():
+    assert clean_params("stat_anova", {"value": "amount", "group": "country", "posthoc": "tukey", "p_adjust": None}) == \
+        {"value": "amount", "group": "country", "posthoc": "tukey"}
+    assert clean_params("stat_t_two_sample", {"value": "amount", "group": "country", "groups": ["IT", "FR"],
+                                              "var_equal": False, "alternative": "greater", "alpha": 0.01})["groups"] == ["IT", "FR"]
+
+
+@pytest.mark.parametrize("operation, params, message", [
+    ("stat_anova", {"value": "amount"}, "stat_anova: 'group' is required"),
+    ("stat_anova", {"value": "amount", "group": "c", "group_by": "x"}, "there is no parameter 'group_by'"),
+    ("stat_anova", {"value": "amount", "group": "c", "posthoc": "scheffe"}, "'posthoc' must be one of none, tukey"),
+    ("stat_anova", {"value": "amount", "group": "c", "var_equal": False, "posthoc": "tukey"}, "Games"),
+    ("stat_anova", {"value": "amount", "group": "c", "var_equal": "no"}, "true or false"),
+    ("stat_t_two_sample", {"value": "a", "group": "c", "groups": ["IT"]}, "a list of 2 values"),
+    ("stat_t_two_sample", {"value": "a", "group": "c", "groups": ["IT", "IT"]}, "2 different values"),
+    ("stat_t_two_sample", {"value": "a", "group": "c", "alpha": 1.5}, "a number above 0 and below 1"),
+    ("stat_t_two_sample", {"value": "a", "group": "c", "mu": "zero"}, "must be a number"),
+    ("stat_t_paired", {"x": "a"}, "'y' is required"),
+    ("stat_chi2_gof", {"value": "c", "expected": {"a": 0.5, "b": 0.2}}, "summing to 1"),
+    ("stat_prop_one_sample", {"value": "c", "success": "  "}, "one value of the column 'value'"),
+])
+def test_a_test_with_wrong_parameters_is_refused_with_what_to_fix(operation, params, message):
+    with pytest.raises(ModelRetry) as e:
+        clean_params(operation, params)
+    assert message in str(e.value)
+
+
+@pytest.mark.anyio
+async def test_an_assistant_puts_a_configured_test_on_the_draft_and_a_wrong_one_is_sent_back(session, world, fake_engine, monkeypatch):
+    fake_engine.preview_response = (200, {"columns": [{"name": "statistic", "dtype": "float"}], "rows": [{"statistic": 3.1}],
+                                          "row_count": 1, "truncated": False})
+    anova = {"value": "amount", "group": "country", "posthoc": "tukey", "p_adjust": "holm", "var_equal": True}
+    events = await _turn(session, world, monkeypatch, world["editor"], [
+        ("add_source", {"datasource_id": world["orders"].id}),
+        ("add_step", {"after": "source", "operation": "stat_anova", "params": {**anova, "posthoc": "scheffe"}}),
+        ("add_step", {"after": "source", "operation": "stat_anova", "params": anova}),
+        "Added a one-way ANOVA with Tukey's post-hoc (op-1).",
+    ], message="does the amount differ between countries?")
+    assert "error" not in [n for n, _ in events]
+    steps = [d for n, d in events if n == "tool_result" and d["name"] == "add_step"]
+    assert [s["ok"] for s in steps] == [False, True] and "posthoc" in steps[0]["error"]
+    canvas = json.loads(events[-1][1]["definition"])
+    node = next(n for n in canvas["nodes"] if n["id"] == "op-1")
+    assert node["data"] == {"opType": "stat_anova", "params": anova}
+    assert fake_engine.previews[-1]["operations"][-1]["type"] == "stat_anova"

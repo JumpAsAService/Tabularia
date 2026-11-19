@@ -15,7 +15,9 @@ the audit log like the assistant's queries.
 from __future__ import annotations
 
 import json
+import math
 import re
+from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Any, Literal, Optional
 
@@ -40,8 +42,20 @@ X_STEP, Y_STEP = 230, 150
 
 # the operations the assistant may place: those the editor's parameter form can show
 # and edit (foreach containers and the dev sample are built by hand)
-OPERATIONS = ("select", "reorder", "drop", "rename", "cast", "filter", "sort", "limit", "unique", "fill_null",
-              "drop_nulls", "group_by", "pivot", "unpivot", "compute", "sql", "join", "union")
+BASE_OPERATIONS = ("select", "reorder", "drop", "rename", "cast", "filter", "sort", "limit", "unique", "fill_null",
+                   "drop_nulls", "group_by", "pivot", "unpivot", "compute", "sql", "join", "union")
+
+
+# ── the hypothesis tests: one operation each, all made from the catalogue's copy ──
+# `stat_catalog.json` is written by .github/scripts/stat_catalog.py from the engine's
+# catalogue (backend/app/engine/stats/catalog.py); nothing here names a test.
+def _load_stat_catalog() -> dict:
+    return json.loads((Path(__file__).with_name("stat_catalog.json")).read_text(encoding="utf-8"))
+
+
+STAT_CATALOG = _load_stat_catalog()
+STAT_TESTS: dict[str, dict] = {t["operation"]: t for t in STAT_CATALOG["tests"]}
+OPERATIONS = BASE_OPERATIONS + tuple(STAT_TESTS)
 FILTER_OPERATORS = ("eq", "ne", "gt", "ge", "lt", "le", "in", "not_in", "between", "contains", "starts_with",
                     "ends_with", "is_null", "is_not_null")
 AGG_FUNCS = ("sum", "mean", "min", "max", "count", "median", "std", "var", "first", "last", "n_unique")
@@ -169,6 +183,98 @@ def _columns(value: Any, what: str, allow_empty: bool = False) -> list[str]:
     return list(dict.fromkeys(value))
 
 
+def _stat_value(op: str, key: str, kind: str, value: Any) -> Any:
+    """One value of a test's parameter by the control its kind asks for, or a ModelRetry.
+    Columns and labels are the engine's to judge, on the step's preview."""
+    spec = STAT_CATALOG["kinds"][kind]
+    control = spec["control"]
+    bad = lambda what: ModelRetry(f"{op}: '{key}' must be {what}.")  # noqa: E731
+    if control == "column":
+        if not isinstance(value, str) or not value:
+            raise bad("the name of a column")
+        return value
+    if control == "boolean":
+        if not isinstance(value, bool):
+            raise bad("true or false")
+        return value
+    if control == "number":
+        lo, hi = spec.get("above"), spec.get("below")
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) \
+                or (lo is not None and value <= lo) or (hi is not None and value >= hi):
+            raise bad("a number" + (f" above {lo}" if lo is not None else "") + (" and" if lo is not None and hi is not None else "")
+                      + (f" below {hi}" if hi is not None else ""))
+        return value
+    if control == "choice":
+        if value not in spec["choices"]:
+            raise bad("one of " + ", ".join(spec["choices"]))
+        return value
+    if control == "levels":
+        n = spec.get("count", 2)
+        if not isinstance(value, list) or len(value) != n or any(v is None or isinstance(v, (list, dict)) for v in value):
+            raise bad(f"a list of {n} values of the column '{spec.get('of')}'")
+        if len({str(v) for v in value}) != n:
+            raise bad(f"{n} different values")
+        return value
+    if control == "level":
+        if isinstance(value, str):
+            if value.strip():
+                return value
+        elif isinstance(value, bool) or (isinstance(value, (int, float)) and math.isfinite(value)):
+            return value
+        raise bad(f"one value of the column '{spec.get('of')}': a text, a number, true or false")
+    if control == "proportions":
+        ok = isinstance(value, dict) and value and all(
+            not isinstance(v, bool) and isinstance(v, (int, float)) and math.isfinite(v) and v > 0 for v in value.values())
+        if not ok or abs(math.fsum(value.values()) - 1.0) > 1e-9:
+            raise bad("{value: proportion} for each value of the column '" + str(spec.get("of")) + "', each above 0, summing to 1")
+        return value
+    return value  # a control this version does not know: the engine judges it
+
+
+def clean_stat_params(operation: str, params: dict) -> dict:
+    """The parameters of a hypothesis test, checked against its catalogue entry: the keys it
+    needs, the keys it takes, each value by its kind, and what its options forbid together.
+    A key set to null is a key not given. The engine stays the judge of the columns."""
+    test = STAT_TESTS[operation]
+    kinds = {**test["needs"], **test["takes"]}
+    given = {k: v for k, v in params.items() if v is not None}
+    shown = [k for k in kinds if not STAT_CATALOG["kinds"][kinds[k]].get("hidden")]
+    for key in given:
+        if key not in kinds:
+            raise ModelRetry(f"{operation}: there is no parameter '{key}' (it takes: {', '.join(shown)}).")
+    for key in test["needs"]:
+        if key not in given:
+            raise ModelRetry(f"{operation}: '{key}' is required.")
+    out = {key: _stat_value(operation, key, kinds[key], v) for key, v in given.items()}
+    full = {**test["defaults"], **out}
+    for rule in test.get("forbids") or ():
+        if full.get(rule["key"]) == rule["value"] and all(full.get(k) == v for k, v in rule["when"].items()):
+            raise ModelRetry(f"{operation}: {rule['message']}.")
+    return out
+
+
+def stat_reference() -> str:
+    """One line per test, `stat_anova {value, group, var_equal?: true|false, ...}`, in the
+    catalogue's order under its families: a key with `?` is optional."""
+    kinds = STAT_CATALOG["kinds"]
+
+    def entry(key: str, kind: str, needed: bool) -> str:
+        spec = kinds[kind]
+        what = {"choice": "|".join(spec.get("choices", [])), "boolean": "bool", "number": "number", "level": "value",
+                "levels": f"[{spec.get('count', 2)} values]", "proportions": "{value: proportion}"}.get(spec["control"], "")
+        return key + ("" if needed else "?") + (f": {what}" if what and spec["control"] != "column" else "")
+
+    lines = []
+    for family in STAT_CATALOG["families"]:
+        for t in STAT_CATALOG["tests"]:
+            if t["family"] != family:
+                continue
+            keys = [entry(k, v, True) for k, v in t["needs"].items()]
+            keys += [entry(k, v, False) for k, v in t["takes"].items() if not kinds[v].get("hidden")]
+            lines.append(f"- {t['operation']} {{{', '.join(keys)}}} ({family})")
+    return "\n".join(lines)
+
+
 def clean_params(operation: str, params: Any) -> dict:
     """The parameters of a step in the shape the engine runs and the editor's form
     shows, or a ModelRetry that says what is wrong."""
@@ -177,6 +283,8 @@ def clean_params(operation: str, params: Any) -> dict:
     p = dict(params or {}) if isinstance(params, dict) else None
     if p is None:
         raise ModelRetry("params must be an object.")
+    if operation in STAT_TESTS:
+        return clean_stat_params(operation, p)
     if operation in ("select", "drop", "reorder"):
         return {"columns": _columns(p.get("columns"), "columns")}
     if operation == "rename":
@@ -373,7 +481,11 @@ _REFERENCE = """Operations and their params (column names are case-sensitive):
 - pivot {index: [..], on: [..], values: col, func}; unpivot {index?: [..], on?: [..], variable_name?, value_name?}.
 - compute {columns: [{name, expr}]}: new or replaced columns from SQL expressions ({dialect}), applied in order, each may use those before it; window functions with OVER are allowed.
 - sql {query}: ONE SELECT ... FROM self in {dialect}; use it only when no operation above fits.
-- join {how, on: [..]} or {how, left_on: [..], right_on: [..]}; how: inner left right full semi anti cross. Needs a right input. union {strategy: relaxed|strict} stacks the rows of the right input."""
+- join {how, on: [..]} or {how, left_on: [..], right_on: [..]}; how: inner left right full semi anti cross. Needs a right input. union {strategy: relaxed|strict} stacks the rows of the right input.
+{stat}"""
+
+_STAT_INTRO = """
+Hypothesis tests: each is a step of its own that reads the rows and gives the test's result table (statistic, p-value, effect, interval, a verdict at alpha), not the rows. A key with ? is optional; a key not listed is refused; alpha is the significance level (0.05 by default). Pick the test that fits the question and the column types (a number column where a number is needed), put it after the steps that prepare the data, and read the p-value from the step's first rows. Only the tests below exist:"""
 
 
 # in metadata-only mode, after the administrators' text (services/metadata_only.py)
@@ -402,7 +514,7 @@ def context(engine: Optional[str], locale: str, flow_name: str = "", selected: O
         lines.append(METADATA_ONLY_CONTEXT)
         if history_withheld:
             lines.append(ai_agent.HISTORY_WITHHELD_CONTEXT)
-    return ("\n".join(lines) + "\n\n" + _REFERENCE.replace("{dialect}", dialect)
+    return ("\n".join(lines) + "\n\n" + _REFERENCE.replace("{dialect}", dialect).replace("{stat}", _STAT_INTRO.strip() + "\n" + stat_reference())
             + "\n\n" + ai_prompts.language_line(locale))
 
 
