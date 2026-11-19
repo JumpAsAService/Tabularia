@@ -606,6 +606,8 @@ class _Builder:
     def chart_numbers(self, it: rd.ChartItem) -> charts.ChartData:
         """What a chart draws, before it is an ECharts option."""
         rows = self.rows_of(it.dataset)
+        if it.filter:  # the rows the chart draws: everything below is on them (a LOOKUP still reads the dataset)
+            rows = self.d.where(rows, rd.parse(it.filter), self.ctx.at(scopes=[rows]), it.id)
         base = self.ctx.at(scopes=[rows])
         o = it.options
         fmt = o.format
@@ -615,7 +617,7 @@ class _Builder:
             data.categories = [it.series[0].name or ""]
             data.series = [charts.SeriesData(it.series[0].name, [self._num(v)], [self.show(v, fmt)])]
             data.targets = [self._target(it, base)]
-        elif it.kind == "scatter":
+        elif it.kind in ("scatter", "density"):
             groups = self.partition(it, "split_by", it.split_by, rows) if it.split_by else [(None, rows)]
             data.split_keys = [key for key, _ in groups] if it.split_by else []
             s = it.series[0]
@@ -628,9 +630,15 @@ class _Builder:
                 if not agg:
                     for x, y in self.d.points(sub, rd.parse(it.category), rd.parse(s.value), base.at(), it.id):
                         points.append((self._num(x), self._num(y), self.show(y, fmt)))
+                if it.kind == "density":  # a curve goes from left to right, whatever the order of its rows
+                    points = sorted((p for p in points if p[0] is not None), key=lambda p: p[0])
                 data.points.append((self.name(key) if it.split_by else (s.name or ""), points))
+            if it.kind == "density":
+                data.targets = [self._target(it, base)]
         else:
             self._categories(it, rows, base, data)
+            if it.kind == "interval":
+                data.targets = [self._target(it, base)]
         return data
 
     @staticmethod

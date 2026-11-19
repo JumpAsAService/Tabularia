@@ -171,6 +171,42 @@ def test_hostile_names_are_text(tmp_path, chart_service):
     assert len(pages) == 8 and sizes == {"0 0 595.275590551 841.88976378"}  # A4, every page
 
 
+def test_a_box_plot_an_interval_and_a_density_with_a_filter_render_to_pdf_and_svg(tmp_path, chart_service):
+    """The three kinds a statistics report draws, each on the rows its filter keeps: the
+    options reach the chart service, and the page is laid out as PDF and as SVG."""
+    def chart(kind, y, **over):
+        return samples.chart_item(kind, {
+            "id": kind, "type": "chart", "dataset": "orders", "kind": kind, "x": 0, "y": y, "w": 186, "h": 55,
+            "title": kind, "category": "[region]", "filter": '[region] <> "Isole" AND [amount] > 0',
+            "series": [{"value": "SUM([amount])", "name": "Ricavo"}], "options": {"target": 900, "format": "#,##0"}, **over})
+
+    d = samples.definition()
+    density = chart("density", 120)
+    density.update(split_by="[region]", options={"target": "AVG([qty])", "format": "#,##0.0"})
+    d["sections"]["body"]["items"] = [chart("boxplot", 0), chart("interval", 60), density]
+    del chart_service[1][:]
+    made = {fmt: run(tmp_path / fmt, chart_service, fmt, definition=d) for fmt in ("pdf", "svg")}
+    assert all(r.pages == 1 and r.warnings == [] for r in made.values())
+    assert made["pdf"].path.read_bytes().startswith(b"%PDF-")
+    assert json.loads(made["svg"].path.read_text())["pages"][0].startswith("<svg")
+    # what the chart service was asked: the same three charts at every render (it draws in parallel)
+    asked = {spec["option"]["title"]["text"]: spec["option"] for spec in chart_service[1]}
+    assert sorted(asked) == ["boxplot", "density", "interval"]
+    assert all(spec["option"] == asked[spec["option"]["title"]["text"]] for spec in chart_service[1])
+    box, interval, curve = asked["boxplot"], asked["interval"], asked["density"]
+    # the filter left a region out, and the credit notes with it
+    assert box["xAxis"]["data"] == interval["xAxis"]["data"]
+    assert sorted(box["xAxis"]["data"]) == ["Centro", "Nord-Est", "Nord-Ovest", "Sud"]
+    assert box["series"][0]["type"] == "boxplot" and all(b["value"][0] > 0 for b in box["series"][0]["data"])
+    assert [s["type"] for s in interval["series"]] == ["boxplot", "scatter", "scatter"]
+    assert interval["series"][1]["markLine"]["data"] == [{"yAxis": 900.0}]
+    lines = [s for s in curve["series"] if s["type"] == "line"]
+    assert len(lines) == 4 and "areaStyle" not in lines[0] and all("areaStyle" in s for s in lines[1:])
+    assert all([x for x, _ in s["data"]] == sorted(x for x, _ in s["data"]) for s in lines)  # from left to right
+    [mark] = lines[0]["markLine"]["data"]
+    assert 1 < mark["xAxis"] < 120
+
+
 def test_the_pages_on_screen_are_svg_with_where_to_click(tmp_path, chart_service):
     state = {"items": {"detail": {"sort": {"column": 4, "dir": "desc"}, "collapsed": [["Isole"]]}}}
     r = run(tmp_path, chart_service, "svg", state=state)

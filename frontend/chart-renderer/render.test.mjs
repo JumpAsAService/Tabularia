@@ -15,7 +15,7 @@ const presets = JSON.parse(readFileSync(new URL('./presets.sample.json', import.
 const chart = (option, width = 300, height = 200) => ({ width, height, option })
 
 test('every kind of chart the engine builds is drawn', () => {
-  assert.equal(presets.length, 14)
+  assert.equal(presets.length, 17)
   for (const spec of presets) {
     const svg = render(spec)
     assert.match(svg, /^<svg /, spec.name)

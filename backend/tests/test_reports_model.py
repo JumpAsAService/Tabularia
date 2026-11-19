@@ -546,18 +546,132 @@ def test_a_heatmap_s_scale_says_its_lowest_and_highest_value():
     assert o["visualMap"]["text"] == ["30.0", "1.0"]
 
 
+# the long table of a hypothesis test, as the three kinds below read it: a number a row
+STATS = [
+    *({"section": "group", "level": g, "stat": s, "value": v, "x0": None, "key": f"group|{g}||{s}"}
+      for g, five in (("a", (4.9, 5.25, 5.65, 6.05, 6.7)), ("b", (6.4, 6.7, 7.1, 7.5, 8.0)))
+      for s, v in zip(("min", "q1", "median", "q3", "max"), five)),
+    *({"section": "group", "level": g, "stat": s, "value": v, "x0": None, "key": f"group|{g}||{s}"}
+      for g, three in (("a", (5.6875, 5.183, 6.192)), ("b", (7.1286, 6.569, None)))
+      for s, v in zip(("mean", "ci_low", "ci_high"), three)),
+    {"section": "test", "level": None, "stat": "statistic", "value": -4.609, "x0": None, "key": "test|||statistic"},
+    # a curve whose rows are not in the order of their abscissas, and a region under it
+    *({"section": "curve", "level": None, "stat": "density", "value": y, "x0": x, "key": f"curve|||density|{i}"}
+      for i, (x, y) in enumerate(((1.0, 0.2), (-1.0, 0.2), (0.0, 0.4), (2.0, 0.05), (-2.0, 0.05)))),
+    {"section": "curve", "level": None, "stat": "reject_high", "value": 0.05, "x0": 2.0, "key": "curve|||reject_high|3"},
+]
+
+
+def _stat(name: str) -> dict:
+    return {"value": f'SUMIF([stat] = "{name}", [value])', "name": name}
+
+
+def test_a_boxplot_draws_a_box_from_five_numbers_a_category():
+    o = _chart("boxplot", STATS, filter='[section] = "group"', category="[level]",
+               series=[_stat(s) for s in ("min", "q1", "median", "q3", "max")])
+    [s] = o["series"]
+    assert s["type"] == "boxplot" and o["xAxis"]["data"] == ["a", "b"]
+    assert [b["value"] for b in s["data"]] == [[4.9, 5.25, 5.65, 6.05, 6.7], [6.4, 6.7, 7.1, 7.5, 8.0]]
+    assert o["yAxis"]["scale"] is True and o["legend"]["show"] is False  # not from zero; nothing to name
+    # a category that lacks one of its five numbers keeps its place, without a box
+    o = _chart("boxplot", STATS, filter='[section] = "group"', category="[level]",
+               series=[_stat(s) for s in ("min", "q1", "median", "q3", "ci_high")])
+    assert [b["value"] for b in o["series"][0]["data"]] == [[4.9, 5.25, 5.65, 6.05, 6.192], ["-"] * 5]
+    empty = _chart("boxplot", STATS, filter='[section] = "nothing"', category="[level]",
+                   series=[_stat(s) for s in ("min", "q1", "median", "q3", "max")])
+    assert empty["title"]["text"] == "No data"
+
+
+def test_an_interval_is_a_value_between_its_two_ends_with_a_target_across():
+    o = _chart("interval", STATS, filter='[section] = "group"', category="[level]",
+               series=[_stat("mean"), _stat("ci_low"), _stat("ci_high")],
+               options={"target": 6, "labels": True, "format": "0.00"})
+    line, dot, unseen = o["series"]
+    # a box of no height: its whiskers are the interval; an end that is not there leaves its side open
+    assert line["type"] == "boxplot" and [b["value"] for b in line["data"]] == [
+        [5.183, 5.6875, 5.6875, 5.6875, 6.192], [6.569, 7.1286, 7.1286, 7.1286, 7.1286]]
+    assert dot["type"] == "scatter" and dot["data"] == [{"value": 5.6875, "t": "5.69"}, {"value": 7.1286, "t": "7.13"}]
+    mark = dot["markLine"]
+    assert mark["data"] == [{"yAxis": 6.0}] and mark["lineStyle"]["type"] == "dashed"
+    assert mark["label"]["formatter"] == {"$fmt": "const", "text": "6.00"}
+    # the axis counts the target, which may be far from every interval
+    assert unseen["data"] == [["a", 6.0]] and unseen["symbolSize"] == 0
+    plain = _chart("interval", STATS, filter='[section] = "group"', category="[level]",
+                   series=[_stat("mean"), _stat("ci_low"), _stat("ci_high")])
+    assert len(plain["series"]) == 2 and "markLine" not in plain["series"][1]
+
+
+def test_a_density_is_a_curve_with_regions_under_it_and_a_marked_value():
+    o = _chart("density", STATS, filter='[section] = "curve"', category="[x0]", series=[{"value": "[value]"}],
+               split_by="[stat]", options={"target": 'LOOKUP("test|||statistic", [key], [value])', "format": "0.000"})
+    curve, region, unseen = o["series"]
+    # from left to right, whatever the order of the rows
+    assert curve["type"] == "line" and curve["data"] == [[-2.0, 0.05], [-1.0, 0.2], [0.0, 0.4], [1.0, 0.2], [2.0, 0.05]]
+    assert curve["showSymbol"] is False and curve["lineStyle"]["width"] > 0 and "areaStyle" not in curve
+    assert region["name"] == "reject_high" and region["data"] == [[2.0, 0.05]]
+    assert region["areaStyle"]["color"] == "#c92a2a" and region["lineStyle"]["width"] == 0
+    # the target is read on the whole dataset (LOOKUP), not on the rows the chart draws
+    mark = curve["markLine"]
+    assert mark["data"] == [{"xAxis": -4.609}] and mark["label"]["formatter"] == {"$fmt": "const", "text": "-4.609"}
+    assert unseen["data"] == [[-4.609, 0]]
+    assert o["xAxis"]["type"] == "value" and o["yAxis"]["min"] == 0 and o["legend"]["show"] is True
+    one = _chart("density", STATS, filter='[stat] = "density"', category="[x0]", series=[{"value": "[value]"}])
+    assert len(one["series"]) == 1 and "markLine" not in one["series"][0] and one["legend"]["show"] is False
+
+
+def test_a_chart_draws_the_rows_its_filter_keeps():
+    """Of any kind: the categories, the values and the «No data» are those of the rows kept."""
+    all_rows = _chart("column", ROWS)
+    assert all_rows["xAxis"]["data"] == ["N", "S", "(blank)"]
+    kept = _chart("column", ROWS, filter='[kind] = "x" AND [amount] > 0')
+    assert kept["xAxis"]["data"] == ["N", "(blank)"]
+    assert [p["value"] for p in kept["series"][0]["data"]] == [10.0, 1.0]
+    # an aggregate in the filter is of the dataset's rows, as in a table's
+    above = _chart("column", ROWS, filter="[amount] > AVG([amount])")
+    assert above["xAxis"]["data"] == ["N", "S"] and [p["value"] for p in above["series"][0]["data"]] == [20.0, 30.0]
+    assert _chart("pie", ROWS, filter="[amount] > 1000")["title"]["text"] == "No data"
+    gauge = _chart("gauge", ROWS, category=None, filter='[region] = "S"', options={"format": "#,##0"})
+    assert gauge["series"][0]["detail"]["formatter"] == {"$fmt": "const", "text": "30"}
+    points = _chart("scatter", ROWS, category="[qty]", series=[{"value": "[amount]"}], filter="[qty] >= 4")
+    assert [p["value"] for p in points["series"][0]["data"]] == [[4.0, 30.0], [5.0, 1.0]]
+
+
+def test_the_checks_of_the_three_kinds_and_of_a_chart_s_filter():
+    def said(kind, **item):
+        it = {"id": "c", "type": "chart", "dataset": "d", "kind": kind, "x": 0, "y": 0, "w": 90, "h": 55,
+              "category": "[region]", "series": [{"value": "SUM([amount])"}], **item}
+        return [(p.field, p.message) for p in rd.problems(rd.load(report(it)))]
+
+    five = [{"value": "MIN([amount])"}] * 5
+    assert said("boxplot", series=five) == [] and said("interval", series=five[:3]) == []
+    assert said("density", category="[qty]", series=[{"value": "[amount]"}], split_by="[kind]") == []
+    assert said("boxplot", series=five[:4]) == [("series", (
+        "a chart of kind boxplot reads exactly five series: the minimum, the first quartile, the median, "
+        "the third quartile and the maximum: this one has 4"))]
+    assert said("interval") == [("series", (
+        "a chart of kind interval reads exactly three series: the value, the low end and the high end of its interval: "
+        "this one has 1"))]
+    assert said("density", series=five[:2])[0][0] == "series"
+    assert said("boxplot", series=five, split_by="[kind]") == [("split_by", (
+        "a chart of kind boxplot draws one mark for each category, from its series: it has no «split_by»"))]
+    assert said("density", category="SUM([qty])", series=[{"value": "[amount]"}])[0][0] == "category"
+    # a filter is a condition on the dataset's fields
+    assert said("column", filter="[amount] > 0") == []
+    assert [f for f, _ in said("column", filter="[amount] + 1")] == ["filter"]
+    r = rd.load(report({"id": "c", "type": "chart", "dataset": "d", "kind": "column", "x": 0, "y": 0, "w": 90, "h": 55,
+                        "category": "[region]", "series": [{"value": "SUM([amount])"}], "filter": "[amont] > 0"}))
+    [p] = rd.problems(r, {"d": {"region": "String", "amount": "Float64"}})
+    assert (p.item, p.field) == ("c", "filter") and "amont" in p.message
+    with pytest.raises(ReportError, match="item «c», filter: "):
+        _chart("column", ROWS, filter='[region] > 1')
+
+
 @pytest.mark.parametrize("kind", rd.CHART_KINDS)
 def test_every_kind_of_chart_has_a_preset(kind):
     item = {"id": "c", "type": "chart", "dataset": "d", "kind": kind, "x": 0, "y": 0, "w": 80, "h": 50,
             "category": "[region]", "series": [{"value": "SUM([amount])", "name": "Amount"}],
             "options": {"bands": [10, 40], "target": 35}}
-    if kind in ("heatmap", "treemap", "scatter"):
-        item["split_by"] = "[kind]"
-    if kind == "scatter":
-        item.update(category="[qty]", series=[{"value": "[amount]"}])
-    if kind == "combo":
-        item["series"].append({"value": "SUM([qty])", "name": "Qty", "as": "line", "axis": "right"})
-    option = build(report(item)).charts[0].option
+    option = build(report(samples.chart_item(kind, item))).charts[0].option
     assert option["series"] and option["animation"] is False
 
 

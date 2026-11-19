@@ -39,6 +39,7 @@ FONT = "IBM Plex Sans, Helvetica Neue, Arial, sans-serif"
 SERVICE_TIMEOUT_SECONDS = 30
 _EXTRA = ["#14a38b", "#e0a23b", "#c2477a", "#6b7590", "#8a63d2", "#2f9e44", "#d9480f", "#1c7ed6", "#868e96"]
 GOOD, BAD, MID = "#2b8a3e", "#c92a2a", "#e0a23b"
+LIGHT = "#f1f3ff"  # the inside of a box, the low end of a heatmap
 
 
 @dataclass
@@ -58,7 +59,7 @@ class ChartData:
     title: str = ""
     categories: list[str] = field(default_factory=list)
     series: list[SeriesData] = field(default_factory=list)
-    # scatter: (series name, [(x, y, text)])
+    # scatter, density: (series name, [(x, y, text)])
     points: list[tuple[str, list[tuple[float | None, float | None, str]]]] = field(default_factory=list)
     targets: list[float | None] = field(default_factory=list)
     total_label: str = "Total"
@@ -164,8 +165,10 @@ HIDE_OVERLAP = {"hideOverlap": True}  # the values written on a chart: those tha
 
 def _has_values(data: ChartData) -> bool:
     """Whether the chart has something to draw (a pie, a funnel, a treemap draw sizes: above zero)."""
-    if data.kind == "scatter":
+    if data.kind in ("scatter", "density"):
         return any(x is not None and y is not None for _, pts in data.points for x, y, _ in pts)
+    if data.kind == "boxplot":  # a box is its five numbers, or nothing
+        return any(all(s.values[i] is not None for s in data.series) for i in range(len(data.categories)))
     values = [v for s in data.series for v in s.values if v is not None]
     if data.kind in ("pie", "donut", "funnel", "treemap"):
         return any(v > 0 for v in values)
@@ -190,7 +193,7 @@ def _option(data: ChartData, it: rd.ChartItem, theme: rd.Theme, loc: formats.Loc
     kind = data.kind
     many = len(data.series) > 1 or len(data.points) > 1
     legend = o.legend if o.legend is not None else (many and kind not in ("pie", "donut", "funnel", "treemap", "heatmap",
-                                                                          "gauge", "bullet"))
+                                                                          "gauge", "bullet", "boxplot", "interval"))
     width_px = max(int(it.w * MM_PX), 40)
     height_px = max(int(it.h * MM_PX), 20)
     base = _base(data, theme, bool(legend), width_px)
@@ -310,7 +313,7 @@ def _option(data: ChartData, it: rd.ChartItem, theme: rd.Theme, loc: formats.Loc
                 "visualMap": {"min": lo, "max": hi if hi > lo else lo + 1, "calculable": False, "orient": "horizontal",
                               "left": "center", "bottom": 0, "itemWidth": 8, "itemHeight": 90, "text": ends,
                               "textGap": 4, "textStyle": {"fontSize": 8},
-                              "inRange": {"color": ["#f1f3ff", theme.accent]}},
+                              "inRange": {"color": [LIGHT, theme.accent]}},
                 "series": [{"type": "heatmap", "data": cells, "label": _label(o, "inside"), "labelLayout": HIDE_OVERLAP,
                             "itemStyle": {"borderColor": "#fff", "borderWidth": 1}}]}
     if kind == "scatter":
@@ -319,6 +322,12 @@ def _option(data: ChartData, it: rd.ChartItem, theme: rd.Theme, loc: formats.Loc
                    "label": _label(o, "top"), "labelLayout": HIDE_OVERLAP} for name, pts in data.points]
         return {**base, "xAxis": {**_value_axis(data, loc, rd.ChartOptions()), "scale": True},
                 "yAxis": {**_value_axis(data, loc, o), "scale": True}, "series": series}
+    if kind == "boxplot":
+        return _boxplot(data, it, theme, loc, base, width_px)
+    if kind == "interval":
+        return _interval(data, it, theme, loc, base, width_px)
+    if kind == "density":
+        return _density(data, it, theme, loc, base)
     if kind == "gauge":
         return _gauge(data, it, theme, base)
     if kind == "bullet":
@@ -411,6 +420,92 @@ def _bullet(data: ChartData, it: rd.ChartItem, theme: rd.Theme, loc: formats.Loc
     axis = {**_y_axis(data.categories, max(int(it.w * MM_PX), 40), height_px - base["grid"]["top"]), "inverse": True}
     return {**base, "yAxis": [axis, {**axis, "show": False}],
             "xAxis": {**_value_axis(data, loc, o), "max": hi, "min": lo}, "series": series}
+
+
+_NO_BOX = ["-"] * 5  # ECharts' own word for a value that is not there
+# a category axis under values that may be below zero: its line stays at the plot's edge, not on the zero
+_AT_THE_EDGE = {"axisTick": {"show": False}, "axisLine": {"onZero": False}}
+
+
+def _target_line(target: float, along: str, fmt: str | None, theme: rd.Theme, loc: formats.Locale, dashed: bool) -> dict:
+    """A reference value as a line across the plot, its value written at its end by the server."""
+    return {"silent": True, "symbol": "none", "animation": False,
+            "lineStyle": {"color": theme.color, "width": 1.2, "type": "dashed" if dashed else "solid"},
+            "label": {"show": True, "position": "end", "fontSize": 8, "color": theme.color,
+                      "formatter": {"$fmt": "const", "text": formats.display(target, fmt, loc)}},
+            "data": [{along: target}]}
+
+
+def _unseen(point: list) -> dict:
+    """A point nobody sees, which the axis counts: a reference value outside the data stays
+    on the plot (ECharts does not make room for a `markLine`)."""
+    return {"type": "scatter", "silent": True, "symbolSize": 0, "legendHoverLink": False, "data": [point],
+            "itemStyle": {"opacity": 0}, "label": {"show": False}}
+
+
+def _boxplot(data: ChartData, it: rd.ChartItem, theme: rd.Theme, loc: formats.Locale, base: dict, width_px: int) -> dict:
+    """A box per category from its five numbers (minimum, first quartile, median, third
+    quartile, maximum), as the data gives them: the whiskers reach the minimum and the maximum."""
+    boxes = []
+    for i in range(len(data.categories)):
+        five = [s.values[i] for s in data.series]
+        boxes.append({"value": five, "t": data.series[2].labels[i]} if all(v is not None for v in five) else {"value": _NO_BOX})
+    # the value axis does not start from zero: a box is read by where it sits among the others
+    return {**base, "xAxis": {**_x_axis(data.categories, width_px), **_AT_THE_EDGE},
+            "yAxis": {**_value_axis(data, loc, it.options), "scale": True},
+            "series": [{"type": "boxplot", "name": data.series[2].name, "data": boxes, "boxWidth": [8, 44],
+                        "itemStyle": {"color": LIGHT, "borderColor": theme.accent, "borderWidth": 1.3}}]}
+
+
+def _interval(data: ChartData, it: rd.ChartItem, theme: rd.Theme, loc: formats.Locale, base: dict, width_px: int) -> dict:
+    """A value with its interval per category: a line from the low end to the high end with a
+    cap at each, a dot on the value; `options.target` as a dashed line across."""
+    o = it.options
+    value, low, high = data.series
+    bars, dots = [], []
+    for i in range(len(data.categories)):
+        v, a, b = value.values[i], low.values[i], high.values[i]
+        # a box of no height between its two whiskers: the value's tick, the interval's line and caps.
+        # An end that is not there (a one-sided interval) leaves its side without a line
+        bars.append({"value": _NO_BOX} if v is None else
+                    {"value": [v if a is None else a, v, v, v, v if b is None else b]})
+        dots.append(None if v is None else {"value": v, "t": value.labels[i]})
+    dot: dict[str, Any] = {"type": "scatter", "name": value.name, "data": dots, "symbolSize": 7, "z": 3,
+                           "itemStyle": {"color": theme.accent}, "label": {**_label(o, "right"), "distance": 9},
+                           "labelLayout": HIDE_OVERLAP}
+    series: list[dict] = [{"type": "boxplot", "silent": True, "data": bars, "boxWidth": [6, 14],
+                           "itemStyle": {"color": theme.accent, "borderColor": theme.accent, "borderWidth": 1.3}}, dot]
+    target = data.targets[0] if data.targets else None
+    if target is not None:
+        dot["markLine"] = _target_line(target, "yAxis", value.fmt, theme, loc, dashed=True)
+        base["grid"]["right"] = 14 + int(len(formats.display(target, value.fmt, loc)) * 8 * 0.6)  # room for its value
+        if data.categories:
+            series.append(_unseen([data.categories[0], target]))
+    return {**base, "xAxis": {**_x_axis(data.categories, width_px), **_AT_THE_EDGE},
+            "yAxis": {**_value_axis(data, loc, o), "scale": True}, "series": series}
+
+
+def _density(data: ChartData, it: rd.ChartItem, theme: rd.Theme, loc: formats.Locale, base: dict) -> dict:
+    """A curve on a numeric axis: the first series (the first value of `split_by`) is the
+    line, the others are regions under it, filled and without a line; `options.target` is a
+    value marked on the axis by a vertical line, with its value."""
+    series: list[dict] = []
+    for i, (name, pts) in enumerate(data.points):
+        entry: dict[str, Any] = {"type": "line", "name": name, "showSymbol": False, "smooth": False,
+                                 "data": [[x, y] for x, y, _ in pts if x is not None and y is not None]}
+        if i == 0:
+            entry.update(lineStyle={"width": 1.6, "color": theme.accent}, itemStyle={"color": theme.accent}, z=3)
+        else:
+            entry.update(lineStyle={"width": 0, "opacity": 0}, itemStyle={"color": BAD},
+                         areaStyle={"color": BAD, "opacity": 0.45}, z=2)
+        series.append(entry)
+    target = data.targets[0] if data.targets else None
+    if target is not None and series:
+        series[0]["markLine"] = _target_line(target, "xAxis", data.fmt, theme, loc, dashed=False)
+        base["grid"]["top"] += 10  # the target's value is written above the plot
+        series.append(_unseen([target, 0]))
+    return {**base, "xAxis": {**_value_axis(data, loc, rd.ChartOptions()), "scale": True, "splitLine": {"show": False}},
+            "yAxis": {"min": 0, **_value_axis(data, loc, it.options), "axisLine": {"onZero": False}}, "series": series}
 
 
 def sparkline(categories: list[str], values: list[Any], accent: str) -> dict:

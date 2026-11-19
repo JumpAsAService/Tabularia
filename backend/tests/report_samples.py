@@ -109,6 +109,25 @@ def datasets(n: int = 300, seed: int = 7) -> dict:
     return {"orders": {"rows": orders(n, seed), "columns": COLUMNS}}
 
 
+def chart_item(kind: str, item: dict) -> dict:
+    """`item` made a chart of `kind` the checks accept, on rows with region, customer, kind,
+    qty and amount: what a kind needs besides a category and a series."""
+    if kind in ("heatmap", "treemap", "scatter", "density"):
+        item["split_by"] = "[kind]"
+    if kind in ("scatter", "density"):
+        item.update(category="[qty]", series=[{"value": "[amount]"}])
+    if kind == "combo":
+        item["series"].append({"value": "SUM([qty])", "name": "Qty", "as": "line", "axis": "right"})
+    if kind == "boxplot":  # five numbers a category: its smallest and largest amounts, and three between them
+        item["series"] = [{"value": v, "name": n} for n, v in (
+            ("Min", "MIN([amount])"), ("Q1", "(MIN([amount]) + AVG([amount])) / 2"), ("Median", "AVG([amount])"),
+            ("Q3", "(AVG([amount]) + MAX([amount])) / 2"), ("Max", "MAX([amount])"))]
+    if kind == "interval":
+        item["series"] = [{"value": "AVG([amount])", "name": "Mean"}, {"value": "MIN([amount])", "name": "Low"},
+                          {"value": "MAX([amount])", "name": "High"}]
+    return item
+
+
 def chart_presets() -> list[dict]:
     """One chart of every kind as the engine builds its option: the sample the chart service's
     own test draws (frontend/chart-renderer/presets.sample.json). Written again with
@@ -124,13 +143,9 @@ def chart_presets() -> list[dict]:
                 "title": f"{kind} <script>", "category": "[customer]",
                 "series": [{"value": "SUM([amount])", "name": "Amount"}],
                 "options": {"bands": [10, 40], "target": 35, "labels": True, "format": "#,##0.00"}}
-        if kind in ("heatmap", "treemap", "scatter", "line", "area"):
+        if kind in ("line", "area"):
             item["split_by"] = "[kind]"
-        if kind == "scatter":
-            item.update(category="[qty]", series=[{"value": "[amount]"}])
-        if kind == "combo":
-            item["series"].append({"value": "SUM([qty])", "name": "Qty", "as": "line", "axis": "right"})
-        job = build(report(item)).charts[0]
+        job = build(report(chart_item(kind, item))).charts[0]
         out.append({"name": kind, "width": job.width, "height": job.height, "option": job.option})
     return out
 

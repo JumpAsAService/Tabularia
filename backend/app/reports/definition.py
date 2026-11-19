@@ -28,7 +28,16 @@ MAX_IMAGE_BYTES = 512 * 1024
 MAX_MATRIX_COLUMNS = 60
 MAX_COMMENT_INSTRUCTION, MAX_COMMENT_READS = 1000, 10  # as the gateway's (services/report_definition.py)
 CHART_KINDS = ("bar", "column", "line", "area", "pie", "donut", "combo", "waterfall", "funnel", "treemap", "heatmap",
-               "scatter", "gauge", "bullet")
+               "scatter", "gauge", "bullet", "boxplot", "interval", "density")
+# The kinds whose series are the parts of one drawing, each in its place: how many, and which.
+# (These three are the engine's only: the gateway's validator of saved reports and dashboards
+# does not list them, so only a definition built by the engine names them.)
+SERIES_OF = {
+    "boxplot": "exactly five series: the minimum, the first quartile, the median, the third quartile and the maximum",
+    "interval": "exactly three series: the value, the low end and the high end of its interval",
+    "density": "exactly one series (the height of the curve at each value of its category)",
+}
+_SERIES_COUNT = {"boxplot": 5, "interval": 3, "density": 1}
 _NAME = r"^[A-Za-z_][A-Za-z0-9_]{0,63}$"
 
 Mm = Annotated[float, Field(ge=-1000, le=2000, allow_inf_nan=False)]
@@ -260,6 +269,7 @@ class ChartItem(_Item):
     category: Expr | None = None
     series: list[Series] = Field(default_factory=list, max_length=12)
     split_by: Expr | None = None
+    filter: Expr | None = None  # the rows the chart draws, as a table's
     title: str | None = Field(None, max_length=200)
     options: ChartOptions = Field(default_factory=ChartOptions)
 
@@ -625,14 +635,21 @@ class _Checks:
     def chart(self, it: ChartItem, ds: str | None) -> None:
         if ds is None:
             return
+        self.expr(it.filter, it.id, "filter", self.env(ds, want=ex.BOOL, rownumber=False))
         self.expr(it.category, it.id, "category", self.env(ds, aggregates=False))
         self.expr(it.split_by, it.id, "split_by", self.env(ds, aggregates=False))
         if not it.series:
             self.problems.append(Problem("a chart needs at least one series (its values)", it.id, "series"))
+        elif it.kind in _SERIES_COUNT and len(it.series) != _SERIES_COUNT[it.kind]:
+            self.problems.append(Problem(f"a chart of kind {it.kind} reads {SERIES_OF[it.kind]}: this one has {len(it.series)}",
+                                         it.id, "series"))
+        if it.kind in ("boxplot", "interval") and it.split_by is not None:
+            self.problems.append(Problem(f"a chart of kind {it.kind} draws one mark for each category, from its series: "
+                                         "it has no «split_by»", it.id, "split_by"))
         # along the axis the category before is known, as long as the axis keeps the data's
         # order: `sort` and `top` choose it by the very values PREVIOUS would be part of
         o = it.options
-        along = it.category is not None and it.kind not in ("scatter", "gauge", "bullet") and o.sort == "none" and not o.top
+        along = it.category is not None and it.kind not in ("scatter", "density", "gauge", "bullet") and o.sort == "none" and not o.top
         reason = ("PREVIOUS follows a chart's axis in the order of the data: not with its option «sort» or «top»"
                   if it.category is not None and (o.sort != "none" or o.top) else
                   "PREVIOUS follows the axis of a chart with categories, and this one has none")
