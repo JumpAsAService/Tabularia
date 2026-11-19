@@ -132,6 +132,7 @@ export const DOCS_GROUPS: { title: string, icon: DocsIcon, intro: string, items:
     items: [
       ['/docs/lts', 'Long-term support'],
       ['/docs/release-process', 'Release process'],
+      ['/docs/contributing/adding-a-node', 'Adding a node to the flow editor'],
     ],
   },
 ]

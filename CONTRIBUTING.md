@@ -63,6 +63,11 @@ npx -y -p typescript@5.6.3 -p vue-tsc@2.2.10 vue-tsc --noEmit -p .nuxt/tsconfig.
 
 A change in behaviour comes with a test that fails without it.
 
+Adding a node to the flow editor (a transformation, or a statistical test) touches the
+engine on five engines, the interface, the gateway and the documentation:
+[Adding a node to the flow editor](docs/contributing/adding-a-node.md) lists every file, the
+test for each and the commands that make the checks pass.
+
 ## Pull requests
 
 - One change per pull request, with the reason in its description.
