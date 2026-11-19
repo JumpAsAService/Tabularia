@@ -37,7 +37,9 @@ import { SOURCE_ID, buildIncoming, resolveChain, leafNodeId, defaultParams, samp
 import { Recent, previewKey, columnChanges, consumedColumns, nodeRowsPhrase, rowsPhrase, suggestSample, type RowCount } from '~/composables/previewGrid'
 import { opSubject } from '~/composables/opSummary'
 import { statIsOp, statIsUnset } from '~/composables/statTests'
-import { STAT_REPORT_REMEMBERED, type StatReportChain, type StatReportShown } from '~/composables/statReport'
+import {
+  STAT_REPORT_REMEMBERED, statModelReportRun, type StatModelRuns, type StatReportChain, type StatReportShown,
+} from '~/composables/statReport'
 import StatReportView from '~/components/ui/StatReportView.vue'
 import { profileOpen, profileStart } from '~/composables/profileAsk'
 import { usePopover } from '~/composables/usePopover'
@@ -2737,7 +2739,21 @@ const statReportChain = computed<StatReportChain | null>(() => {
 // up («Two-sample t test amount ~ channel») is the page's own title and subject again
 const statReportStep = computed(() => String((statNodeId.value ? findNode(statNodeId.value)?.data?.label : '') ?? '').trim())
 const statReportMemory = new Recent<StatReportShown>(STAT_REPORT_REMEMBERED)
-watch(statNodeId, (id) => { if (!id && viewTab.value === 'report') viewTab.value = 'table' })
+// a model node's report: the pages of its latest trial or run, drawn from the results the run kept
+// (docs/specs/statistical-models.md, «The report»); its runs are those GET …/outputs gives Script nodes
+const modelReportNodeId = computed(() => {
+  const id = selectedId.value ?? computingNodeId.value ?? inputShownFor.value ?? previewNodeId.value
+  return id && findNode(id)?.type === 'model' ? id : null
+})
+const modelReportRuns = computed<StatModelRuns | null>(() => {
+  const id = modelReportNodeId.value
+  if (!id || flowId.value === null) return null
+  const trial = scriptTrials[id]
+  return { flowId: flowId.value, ...statModelReportRun(scriptOutputs.value[id]),
+    running: !!trial && (trial.status === 'PENDING' || trial.status === 'STARTED') }
+})
+const reportNodeId = computed(() => statNodeId.value ?? modelReportNodeId.value)
+watch(reportNodeId, (id) => { if (!id && viewTab.value === 'report') viewTab.value = 'table' })
 // the step's changes against its input: the selected node's own preview only. Compared with
 // the columns of the node before as this page knows them already (a source's, or that node's
 // own preview), so the marks come with the rows; when they are not known yet the input's
@@ -3687,7 +3703,7 @@ async function pollTask(id: string) {
           @click="viewTab = 'chart'"
         ><BarChart3 :size="13" aria-hidden="true" /><span class="vt-label">{{ $t('flowEditor.chartTab') }}</span></button>
         <button
-          v-if="statNodeId"
+          v-if="reportNodeId"
           role="tab"
           :class="{ active: viewTab === 'report' }"
           :aria-selected="viewTab === 'report'"
@@ -3842,13 +3858,15 @@ async function pollTask(id: string) {
           </template>
         </DataGrid>
         <StatReportView
-          v-else-if="viewTab === 'report' && statNodeId"
-          :node-id="statNodeId"
+          v-else-if="viewTab === 'report' && reportNodeId"
+          :node-id="reportNodeId"
           :chain="statReportChain"
           :step="statReportStep"
           :expanded="gridExpanded"
           :memory="statReportMemory"
+          :model="statNodeId ? null : modelReportRuns"
           @expand="toggleGridExpanded"
+          @run="modelReportNodeId && runScriptNode(modelReportNodeId)"
         />
         <ChartPanel v-else :columns="preview?.columns ?? []" :query="chartQuery" />
       </div>

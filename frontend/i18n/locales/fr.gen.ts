@@ -6474,6 +6474,17 @@ export default {
       "gone": "Les données que cette étape lit n'existent plus."
     }
   },
+  "modelReport": {
+    "region": "Rapport du modèle",
+    "run": "Exécuter",
+    "runTitle": "Exécuter le nœud : sur l'échantillon de développement, sans ce qui suit",
+    "running": "Le modèle s'exécute…",
+    "noRun": "Ce nœud n'a encore ni essai ni exécution : Exécuter ajuste le modèle sur l'échantillon de développement et dessine son rapport.",
+    "failed": "La dernière exécution de ce nœud a échoué : son journal est dans le panneau du nœud. Relancez-le une fois corrigé.",
+    "staleTitle": "Le nœud ou une étape avant lui a changé après cette exécution : relancez-le pour voir le rapport du modèle tel qu'il est",
+    "trial": "Essai",
+    "trialTitle": "Un essai sur l'échantillon de développement : une exécution du flux lit toutes les lignes"
+  },
   "models": {
     "palette": {
       "group": "Modèles",

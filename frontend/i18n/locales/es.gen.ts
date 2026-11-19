@@ -6474,6 +6474,17 @@ export default {
       "gone": "Los datos que lee este paso ya no existen."
     }
   },
+  "modelReport": {
+    "region": "Informe del modelo",
+    "run": "Ejecutar",
+    "runTitle": "Ejecutar el nodo: sobre la muestra de desarrollo, sin lo que viene después",
+    "running": "El modelo se está ejecutando…",
+    "noRun": "Este nodo aún no tiene una prueba ni una ejecución: Ejecutar ajusta el modelo sobre la muestra de desarrollo y dibuja su informe.",
+    "failed": "La última ejecución de este nodo falló: su registro está en el panel del nodo. Ejecútelo de nuevo una vez corregido.",
+    "staleTitle": "El nodo o un paso anterior cambió después de esta ejecución: ejecútelo de nuevo para ver el informe del modelo tal como está",
+    "trial": "Prueba",
+    "trialTitle": "Una prueba sobre la muestra de desarrollo: una ejecución del flujo lee todas las filas"
+  },
   "models": {
     "palette": {
       "group": "Modelos",

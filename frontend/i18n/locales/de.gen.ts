@@ -6474,6 +6474,17 @@ export default {
       "gone": "Die Daten, die dieser Schritt liest, sind nicht mehr vorhanden."
     }
   },
+  "modelReport": {
+    "region": "Bericht des Modells",
+    "run": "Ausführen",
+    "runTitle": "Den Knoten ausführen: auf der Entwicklungsstichprobe, ohne das, was danach kommt",
+    "running": "Das Modell läuft…",
+    "noRun": "Dieser Knoten hat noch keinen Probelauf und keine Ausführung: Ausführen schätzt das Modell auf der Entwicklungsstichprobe und zeichnet seinen Bericht.",
+    "failed": "Die letzte Ausführung dieses Knotens ist fehlgeschlagen: Das Protokoll steht im Bereich des Knotens. Führen Sie ihn nach der Korrektur erneut aus.",
+    "staleTitle": "Der Knoten oder ein Schritt davor hat sich nach dieser Ausführung geändert: Führen Sie ihn erneut aus, um den Bericht des aktuellen Modells zu sehen",
+    "trial": "Probelauf",
+    "trialTitle": "Ein Probelauf auf der Entwicklungsstichprobe: Eine Ausführung des Flows liest alle Zeilen"
+  },
   "models": {
     "palette": {
       "group": "Modelle",

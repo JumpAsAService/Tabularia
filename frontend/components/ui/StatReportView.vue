@@ -4,6 +4,11 @@
 // engine from the layout preset for that test, on the rows that reach the node — the chain
 // its preview reads, sent as it is. Read-only: zoom, the panel at its largest, PDF, Excel.
 //
+// For a model node (`model`; docs/specs/statistical-models.md, «The report») the pages are
+// those of its latest trial or run, drawn from the results the run kept: no run yet, the tab
+// says so and offers Run; the node or its chain changed since, the pages stay, marked «Not up
+// to date», with Run (a new run, not a new drawing: the results are the run's).
+//
 // - It is drawn when the tab is opened for a node. When the node is set differently, or
 //   something before it changes, the pages stay, marked «not up to date», with «Update»:
 //   never a render at each keystroke. A language asked of the interface is drawn at once.
@@ -14,14 +19,18 @@
 //   requests of their own, for the pages on screen.
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { CircleAlert, FileSpreadsheet, FileText, History, LoaderCircle, Maximize2, Minimize2, MoveHorizontal, RefreshCw, ZoomIn, ZoomOut } from 'lucide-vue-next'
+import {
+  CircleAlert, FileSpreadsheet, FileText, FlaskConical, History, LoaderCircle, Maximize2, Minimize2, MoveHorizontal, Play, RefreshCw,
+  ZoomIn, ZoomOut,
+} from 'lucide-vue-next'
 import ReportPages from '~/components/report/ReportPages.vue'
 import { errMessage } from '~/composables/useApi'
 import type { Recent } from '~/composables/previewGrid'
 import {
-  STAT_REPORT_ZOOM_KEY, STAT_REPORT_ZOOMS, statReportKey, statReportProblem, statReportRequest, statReportRetryable,
-  statReportShouldDraw, statReportState, statReportUnset, statReportZoomRead, statReportZoomStep,
-  type StatReportChain, type StatReportProblem, type StatReportShown,
+  STAT_REPORT_ZOOM_KEY, STAT_REPORT_ZOOMS, statModelReportKey, statModelReportRequest, statReportKey, statReportProblem,
+  statReportRequest, statReportRetryable, statReportShouldDraw, statReportState, statReportUnset, statReportZoomRead,
+  statReportZoomStep, type StatModelReportTarget, type StatModelRuns, type StatReportChain, type StatReportProblem,
+  type StatReportShown,
 } from '~/composables/statReport'
 
 const props = withDefaults(defineProps<{
@@ -36,17 +45,23 @@ const props = withDefaults(defineProps<{
   expanded?: boolean
   /** the editor's memory of the pages already drawn */
   memory?: Recent<StatReportShown> | null
-}>(), { step: '', expanded: false, memory: null })
+  /** a model node's runs: its report is its latest trial's or run's (`chain` is then not read) */
+  model?: StatModelRuns | null
+}>(), { step: '', expanded: false, memory: null, model: null })
 
-const emit = defineEmits<{ (e: 'expand'): void }>()
+const emit = defineEmits<{ (e: 'expand'): void; (e: 'run'): void }>()
 
 const { t, locale } = useI18n()
 const { apiFetch } = useApiClient()
 const reports = useReports()
 const toast = useToast()
 
-const key = computed(() => (props.chain ? statReportKey(props.chain, locale.value, props.step) : null))
-const unset = computed(() => statReportUnset(props.chain?.operations))
+// a model node's: the run whose results are drawn
+const target = computed<StatModelReportTarget | null>(() => (props.model && props.nodeId && props.model.runId !== null
+  ? { flowId: props.model.flowId, nodeId: props.nodeId, runId: props.model.runId } : null))
+const key = computed(() => (props.model ? (target.value ? statModelReportKey(target.value, locale.value) : null)
+  : props.chain ? statReportKey(props.chain, locale.value, props.step) : null))
+const unset = computed(() => (props.model ? !target.value : statReportUnset(props.chain?.operations)))
 
 const shown = shallowRef<StatReportShown | null>(null)
 const busy = ref(false)
@@ -75,14 +90,23 @@ function stopClock() {
 
 const isAbort = (e: any) => e?.name === 'AbortError' || e?.cause?.name === 'AbortError'
 
+/** The request of a render: a model node's run, or a statistics node's chain. */
+function ask(of: { chain: StatReportChain | null; model?: StatModelReportTarget; locale: string; step: string },
+  format: 'svg' | 'pdf' | 'xlsx', signal?: AbortSignal) {
+  return of.model
+    ? apiFetch<{ task_id: string }>('/tasks/model-report', { method: 'POST', body: statModelReportRequest(of.model, format, of.locale), signal })
+    : apiFetch<{ task_id: string }>('/tasks/stat-report', { method: 'POST', body: statReportRequest(of.chain!, format, of.locale, of.step), signal })
+}
+
 async function draw() {
   const k = key.value
-  if (!props.chain || !k || unset.value) return
+  if (!k || unset.value || (!props.chain && !target.value)) return
   controller?.abort()
   const mine = new AbortController()
   controller = mine
   // the request as it is now: the node may be set differently before the pages arrive
-  const chain = JSON.parse(JSON.stringify(props.chain)) as StatReportChain
+  const chain = props.model || !props.chain ? null : JSON.parse(JSON.stringify(props.chain)) as StatReportChain
+  const model = target.value ? { ...target.value } : undefined
   const lang = locale.value
   const step = props.step
   busy.value = true
@@ -90,12 +114,10 @@ async function draw() {
   failedKey.value = null
   startClock()
   try {
-    const { task_id } = await apiFetch<{ task_id: string }>('/tasks/stat-report', {
-      method: 'POST', body: statReportRequest(chain, 'svg', lang, step), signal: mine.signal,
-    })
+    const { task_id } = await ask({ chain, model, locale: lang, step }, 'svg', mine.signal)
     const outcome = await reports.followRender(task_id, { signal: mine.signal })
     const screen = await reports.screenOf(outcome)
-    const entry: StatReportShown = { key: k, pages: screen.pages, chain, locale: lang, step }
+    const entry: StatReportShown = { key: k, pages: screen.pages, chain, ...(model ? { model } : {}), locale: lang, step }
     props.memory?.set(k, entry)
     if (controller !== mine) return
     shown.value = entry
@@ -150,10 +172,14 @@ watch(key, (k) => {
     problem.value = null
     failedKey.value = null
     shown.value = hit
-  } else if (!shown.value && !problem.value && !unset.value) {
+  } else if (!unset.value && (props.model || (!shown.value && !problem.value))) {
+    // a model node's new run (its Run pressed on purpose) is drawn at once
     draw()
   }
 })
+
+// a model node's pages are of a run older than the node as it is: they stay, with Run
+const modelStale = computed(() => !!props.model?.stale && state.value === 'ready')
 
 onBeforeUnmount(() => {
   controller?.abort()
@@ -185,9 +211,7 @@ async function download(format: 'pdf' | 'xlsx') {
   if (!of || downloading.value) return
   downloading.value = format
   try {
-    const { task_id } = await apiFetch<{ task_id: string }>('/tasks/stat-report', {
-      method: 'POST', body: statReportRequest(of.chain, format, of.locale, of.step),
-    })
+    const { task_id } = await ask(of, format)
     const outcome = await reports.followRender(task_id)
     // the file as a Blob, saved from here: a link to the gateway is a navigation when the
     // gateway is another origin, and the editor would ask to confirm leaving an unsaved flow
@@ -213,7 +237,7 @@ const problemTitle = computed(() => {
 </script>
 
 <template>
-  <section class="sr" :aria-label="$t('statReport.region')">
+  <section class="sr" :aria-label="model ? $t('modelReport.region') : $t('statReport.region')">
     <div class="sr-tools">
       <div class="sr-group" role="group" :aria-label="$t('statReport.zoomGroup')">
         <button type="button" class="mini sr-icon" :title="$t('statReport.zoomOut')" :aria-label="$t('statReport.zoomOut')" :disabled="scale <= STAT_REPORT_ZOOMS[0] + 0.001" @click="zoomBy(-1)">
@@ -230,13 +254,23 @@ const problemTitle = computed(() => {
       </div>
 
       <div class="sr-mid">
-        <span v-if="busy" class="sr-status"><LoaderCircle :size="12" class="spin" aria-hidden="true" /> {{ $t('statReport.drawing') }}<template v-if="seconds >= 2"> · {{ $t('dataGrid.seconds', { s: seconds }) }}</template></span>
-        <template v-else-if="state === 'stale'">
+        <span v-if="model?.running" class="sr-status"><LoaderCircle :size="12" class="spin" aria-hidden="true" /> {{ $t('modelReport.running') }}</span>
+        <span v-else-if="busy" class="sr-status"><LoaderCircle :size="12" class="spin" aria-hidden="true" /> {{ $t('statReport.drawing') }}<template v-if="seconds >= 2"> · {{ $t('dataGrid.seconds', { s: seconds }) }}</template></span>
+        <template v-else-if="model && modelStale">
+          <span class="sr-stale" :title="$t('modelReport.staleTitle')"><History :size="12" aria-hidden="true" /> {{ $t('statReport.stale') }}</span>
+          <button type="button" class="mini primary sr-update" :title="$t('modelReport.runTitle')" @click="emit('run')">
+            <Play :size="12" aria-hidden="true" /> {{ $t('modelReport.run') }}
+          </button>
+        </template>
+        <template v-else-if="state === 'stale' && !model">
           <span class="sr-stale" :title="$t('statReport.staleTitle')"><History :size="12" aria-hidden="true" /> {{ $t('statReport.stale') }}</span>
           <button type="button" class="mini primary sr-update" :disabled="unset || !chain" :title="unset ? $t('statReport.unset') : $t('statReport.updateTitle')" @click="draw">
             <RefreshCw :size="12" aria-hidden="true" /> {{ $t('statReport.update') }}
           </button>
         </template>
+        <span v-if="model?.trial && shown && !busy" class="sr-trial" :title="$t('modelReport.trialTitle')">
+          <FlaskConical :size="12" aria-hidden="true" /> {{ $t('modelReport.trial') }}
+        </span>
       </div>
 
       <div class="sr-group">
@@ -270,7 +304,14 @@ const problemTitle = computed(() => {
           <RefreshCw :size="13" aria-hidden="true" /> {{ failedKey !== key ? $t('statReport.update') : $t('statReport.tryAgain') }}
         </button>
       </div>
-      <p v-else-if="!chain" class="sr-note muted">{{ $t('statReport.noData') }}</p>
+      <div v-else-if="model && !target && !busy" class="sr-state">
+        <p class="sr-note muted">{{ model.failed ? $t('modelReport.failed') : $t('modelReport.noRun') }}</p>
+        <button type="button" class="sr-again" :disabled="model.running" :title="$t('modelReport.runTitle')" @click="emit('run')">
+          <LoaderCircle v-if="model.running" :size="13" class="spin" aria-hidden="true" /><Play v-else :size="13" aria-hidden="true" />
+          {{ model.running ? $t('modelReport.running') : $t('modelReport.run') }}
+        </button>
+      </div>
+      <p v-else-if="!chain && !model" class="sr-note muted">{{ $t('statReport.noData') }}</p>
       <p v-else-if="state === 'unset'" class="sr-note muted">{{ $t('statReport.unset') }}</p>
       <div v-else-if="state === 'empty' || state === 'failed'" class="sr-state">
         <p class="sr-note muted">{{ $t('statReport.empty') }}</p>
@@ -281,12 +322,12 @@ const problemTitle = computed(() => {
         :pages="shown?.pages ?? []"
         :zoom="zoom"
         :busy="busy"
-        :label="$t('statReport.pagesOf', { name: step || $t('statReport.region') })"
+        :label="$t('statReport.pagesOf', { name: step || (model ? $t('modelReport.region') : $t('statReport.region')) })"
         @page="(n: number) => (currentPage = n)"
         @scale="(s: number) => (scale = s)"
       />
     </div>
-    <span class="sr-only" role="status" aria-live="polite">{{ busy ? $t('statReport.drawing') : state === 'stale' ? $t('statReport.stale') : announce }}</span>
+    <span class="sr-only" role="status" aria-live="polite">{{ busy ? $t('statReport.drawing') : state === 'stale' || modelStale ? $t('statReport.stale') : announce }}</span>
   </section>
 </template>
 
@@ -310,6 +351,8 @@ const problemTitle = computed(() => {
 }
 /* the height of the buttons beside it: a primary button's own padding made it stand a step taller */
 .sr-update { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; font-size: 12px; white-space: nowrap; }
+/* a trial's pages: its rows before the node were the development sample's (the header of the page says it too) */
+.sr-trial { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); white-space: nowrap; }
 .sr-stage { position: relative; flex: 1; min-height: 0; overflow: auto; }
 .sr-state { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; margin: 12px; }
 .sr-state .sr-note { margin: 0; }
@@ -325,7 +368,7 @@ const problemTitle = computed(() => {
 /* a narrow panel (the node's settings open beside it): the words give way, the names stay
    for the screen reader and in the tooltips */
 @container statreport (max-width: 640px) {
-  .sr-long, .sr-pageof { display: none; }
+  .sr-long, .sr-pageof, .sr-trial { display: none; }
   .sr-tools { gap: 6px; padding: 4px 6px; }
 }
 </style>

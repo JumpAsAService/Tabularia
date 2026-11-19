@@ -232,13 +232,77 @@ test('pages this page has drawn already are shown at once, with their downloads'
   assert.equal(asked[0].body.locale, 'it')
 })
 
-test('the editor shows the tab for a statistics node only, and falls back to Table', () => {
+test('the editor shows the tab for a statistics or a model node only, and falls back to Table', () => {
   const editor = readFileSync(join(FRONTEND, 'components/FlowEditor.vue'), 'utf8')
-  assert.match(editor, /<button\s+v-if="statNodeId"\s+role="tab"/)
+  assert.match(editor, /<button\s+v-if="reportNodeId"\s+role="tab"/)
+  assert.match(editor, /const reportNodeId = computed\(\(\) => statNodeId\.value \?\? modelReportNodeId\.value\)/)
+  assert.match(editor, /findNode\(id\)\?\.type === 'model' \? id : null/)
+  // a model node's runs are those the outputs give Script nodes; its Run is theirs
+  assert.match(editor, /statModelReportRun\(scriptOutputs\.value\[id\]\)/)
+  assert.match(editor, /@run="modelReportNodeId && runScriptNode\(modelReportNodeId\)"/)
   assert.match(editor, /statIsOp\(n\.data\?\.opType\) \? id : null/)
   assert.match(editor, /if \(!id && viewTab\.value === 'report'\) viewTab\.value = 'table'/)
   // the chain is the preview's own, with the flow's engine: no second chain is built
   assert.match(editor, /previewBody\(statNodeId\.value\)\.body/)
   // a test's table is not its input reshaped: no «new» on its ten columns, no «N columns removed»
   assert.match(editor, /if \(statIsOp\(op\)\) return null\n\s+const renames = /)
+})
+
+// ── a model node (docs/specs/statistical-models.md, «The report») ─────────────
+const RUNS = { flowId: 42, runId: 9811, stale: false, trial: true, failed: false, running: false }
+
+test('a model node\'s report is its run\'s: the request names the run, the key the run and the language', () => {
+  const target = { flowId: 42, nodeId: 'ctl-7', runId: 9811 }
+  assert.deepEqual(R.statModelReportRequest(target, 'pdf', 'de-CH'), { flow_id: 42, node_id: 'ctl-7', run_id: 9811, format: 'pdf', locale: 'de' })
+  assert.equal(R.statModelReportKey(target, 'en'), R.statModelReportKey({ ...target }, 'en'))
+  assert.notEqual(R.statModelReportKey(target, 'en'), R.statModelReportKey({ ...target, runId: 9812 }, 'en'))
+  assert.notEqual(R.statModelReportKey(target, 'en'), R.statModelReportKey(target, 'it'))
+  // the run drawn: the latest when it succeeded, else the latest that did; none yet
+  const ok = { run_id: 5, status: 'SUCCESS', trial: true, stale: true }
+  assert.deepEqual(R.statModelReportRun({ last: ok, output: null }), { runId: 5, stale: true, trial: true, failed: false })
+  assert.deepEqual(R.statModelReportRun({ last: { run_id: 6, status: 'FAILURE' }, output: { run_id: 5, trial: false, stale: false } }),
+    { runId: 5, stale: false, trial: false, failed: true })
+  assert.deepEqual(R.statModelReportRun({ last: { run_id: 6, status: 'FAILURE' }, output: null }), { runId: null, stale: false, trial: false, failed: true })
+  assert.deepEqual(R.statModelReportRun(undefined), { runId: null, stale: false, trial: false, failed: false })
+  assert.deepEqual(R.statModelReportRun({ last: { run_id: 7, status: 'STARTED' }, output: null }).runId, null)
+})
+
+test('a model node with a run: one request for its pages, nothing of the chain', async () => {
+  const View = await view()
+  asked.length = 0
+  const html = await render(View, { nodeId: 'ctl-7', chain: CHAIN, model: RUNS }, 'it')
+  assert.equal(asked.length, 1)
+  assert.equal(asked[0].url, '/tasks/model-report')
+  assert.deepEqual(asked[0].body, { flow_id: 42, node_id: 'ctl-7', run_id: 9811, format: 'svg', locale: 'it' })
+  assert.ok(html.includes(`aria-label="${en.modelReport.region}"`))
+})
+
+test('a model node with no run yet says so and offers Run; one whose run failed says where the log is', async () => {
+  const View = await view()
+  asked.length = 0
+  const none = await render(View, { nodeId: 'ctl-7', chain: null, model: { ...RUNS, runId: null } })
+  assert.equal(asked.length, 0)
+  assert.ok(text(none).includes(en.modelReport.noRun) && text(none).includes(en.modelReport.run))
+  assert.ok(!text(none).includes(en.statReport.noData) && !none.includes('class="pages"'))
+  const failed = await render(View, { nodeId: 'ctl-7', chain: null, model: { ...RUNS, runId: null, failed: true } })
+  assert.ok(text(failed).replaceAll('&#39;', "'").includes(en.modelReport.failed))
+  const running = await render(View, { nodeId: 'ctl-7', chain: null, model: { ...RUNS, runId: null, running: true } })
+  assert.ok(text(running).includes(en.modelReport.running))
+  assert.equal(asked.length, 0)
+})
+
+test('a model\'s pages of a run older than the node stay, marked, with Run', async () => {
+  const View = await view()
+  asked.length = 0
+  const memory = new Recent(4)
+  const key = R.statModelReportKey({ flowId: 42, nodeId: 'ctl-7', runId: 9811 }, 'en')
+  memory.set(key, { key, pages: ['<svg/>'], chain: null, model: { flowId: 42, nodeId: 'ctl-7', runId: 9811 }, locale: 'en', step: '' })
+  const html = await render(View, { nodeId: 'ctl-7', chain: null, model: { ...RUNS, stale: true }, memory })
+  assert.equal(asked.length, 0)
+  assert.match(html, /class="pages" data-pages="1"/)
+  const page = text(html)
+  assert.ok(page.includes(en.statReport.stale) && page.includes(en.modelReport.run) && page.includes(en.modelReport.trial))
+  assert.ok(!page.includes(en.statReport.update))
+  const fresh = await render(View, { nodeId: 'ctl-7', chain: null, model: RUNS, memory })
+  assert.ok(!text(fresh).includes(en.statReport.stale))
 })

@@ -30,13 +30,61 @@ export interface StatReportRequest extends StatReportChain {
 }
 
 /** A render this page keeps: the pages, and the request they were drawn for (the PDF and
- *  the Excel of the pages on screen are asked with it, whatever the node says now). */
+ *  the Excel of the pages on screen are asked with it, whatever the node says now): a
+ *  statistics node's chain, or a model node's run. */
 export interface StatReportShown {
   key: string
   pages: string[]
-  chain: StatReportChain
+  chain: StatReportChain | null
+  model?: StatModelReportTarget
   locale: string
   step: string
+}
+
+// ── a model node's report (docs/specs/statistical-models.md, «The report») ───
+/** The run whose results a model node's report draws: POST /tasks/model-report. */
+export interface StatModelReportTarget {
+  flowId: number
+  nodeId: string
+  runId: number
+}
+
+/** What the Report tab knows of a model node's runs: the run to draw (none yet: Run), whether
+ *  the node or its chain changed since (`stale`), whether it was a trial, whether the latest
+ *  failed, whether a trial is running now. */
+export interface StatModelRuns {
+  flowId: number
+  runId: number | null
+  stale: boolean
+  trial: boolean
+  failed: boolean
+  running: boolean
+}
+
+type NodeRun = { run_id: number; status?: string; trial?: boolean; stale?: boolean } | null | undefined
+
+/** The run a model node's report draws, from the node's entry of GET /scripting/flows/{id}/outputs
+ *  (C2 gives model nodes theirs, as Script nodes have): its latest run when it succeeded, else
+ *  the latest that did (`output`), with whether the latest failed. */
+export function statModelReportRun(entry: { last?: NodeRun; output?: NodeRun } | null | undefined):
+  { runId: number | null; stale: boolean; trial: boolean; failed: boolean } {
+  const last = entry?.last
+  const failed = !!last && last.status === 'FAILURE'
+  const good = last && last.status === 'SUCCESS' ? last : entry?.output && entry.output.status !== 'FAILURE' ? entry.output : null
+  if (!good) return { runId: null, stale: false, trial: false, failed }
+  return { runId: good.run_id, stale: !!good.stale, trial: !!good.trial, failed }
+}
+
+/** The body of POST /tasks/model-report: the run, the format, the language. Nothing else: the
+ *  gateway reads the model, its parameters and where the results are from the run itself. */
+export function statModelReportRequest(target: StatModelReportTarget, format: StatReportFormat, locale: string) {
+  return { flow_id: target.flowId, node_id: target.nodeId, run_id: target.runId, format, locale: statReportLocale(locale) }
+}
+
+/** The identity of a model report's pages: the run and the language (the step's name is the
+ *  node's, read by the gateway). */
+export function statModelReportKey(target: StatModelReportTarget, locale: string): string {
+  return JSON.stringify(['model', target.flowId, target.nodeId, target.runId, statReportLocale(locale)])
 }
 
 export const STAT_REPORT_LOCALES: readonly string[] = ['en', 'it', 'de', 'es', 'fr']

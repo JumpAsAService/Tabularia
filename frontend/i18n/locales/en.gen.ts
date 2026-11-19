@@ -6474,6 +6474,17 @@ export default {
       "gone": "The data this step reads is no longer there."
     }
   },
+  "modelReport": {
+    "region": "Report of the model",
+    "run": "Run",
+    "runTitle": "Run the node: on the development sample, nothing after it",
+    "running": "Running the model…",
+    "noRun": "This node has no trial or run yet: Run fits the model on the development sample and draws its report.",
+    "failed": "The last run of this node failed: its log is in the node's panel. Run it again once it is set right.",
+    "staleTitle": "The node or a step before it changed after this run: Run it again to see the report of the model as it is",
+    "trial": "Trial",
+    "trialTitle": "A trial on the development sample: a run of the flow reads every row"
+  },
   "models": {
     "palette": {
       "group": "Models",

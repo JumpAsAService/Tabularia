@@ -6474,6 +6474,17 @@ export default {
       "gone": "I dati che questo passo legge non ci sono più."
     }
   },
+  "modelReport": {
+    "region": "Report del modello",
+    "run": "Esegui",
+    "runTitle": "Esegui il nodo: sul campione di sviluppo, senza ciò che viene dopo",
+    "running": "Il modello è in esecuzione…",
+    "noRun": "Questo nodo non ha ancora una prova né un'esecuzione: Esegui stima il modello sul campione di sviluppo e ne disegna il report.",
+    "failed": "L'ultima esecuzione di questo nodo è fallita: il log è nel pannello del nodo. Eseguitelo di nuovo dopo averlo corretto.",
+    "staleTitle": "Il nodo o un passo prima di lui è cambiato dopo questa esecuzione: eseguitelo di nuovo per vedere il report del modello com'è ora",
+    "trial": "Prova",
+    "trialTitle": "Una prova sul campione di sviluppo: un'esecuzione del flusso legge tutte le righe"
+  },
   "models": {
     "palette": {
       "group": "Modelli",
