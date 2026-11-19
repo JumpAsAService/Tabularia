@@ -565,6 +565,35 @@ def srange_ppf(p: float, k: int, df: float) -> float:
     return srange_isf(1.0 - p, k, df)
 
 
+# ── the beta's quantiles (Clopper–Pearson's interval) ───────────────────────
+def beta_ppf(q: float, a: float, b: float) -> float:
+    """The x with I_x(a, b) = q: by bisection on x, until the interval is one double wide. Its
+    complement 1 − x is exact for every x the bisection tries above ½ (both are doubles), and
+    a small x is found to its last digit: the bisection halves its interval down to it."""
+    if math.isnan(q) or q < 0.0 or q > 1.0:
+        return math.nan
+    if q == 0.0:
+        return 0.0
+    if q == 1.0:
+        return 1.0
+    lo, hi = 0.0, 1.0
+    while True:
+        mid = 0.5 * (lo + hi)
+        if mid <= lo or mid >= hi:
+            return hi if betainc(a, b, hi, 1.0 - hi) - q < q - betainc(a, b, lo, 1.0 - lo) else lo
+        if betainc(a, b, mid, 1.0 - mid) < q:
+            lo = mid
+        else:
+            hi = mid
+
+
+def beta_isf(q: float, a: float, b: float) -> float:
+    """The x with 1 − I_x(a, b) = q, asked by its tail: 1 − the y with I_y(b, a) = q (1 − I_x(a, b)
+    is I_(1 − x)(b, a)), so that a small q loses no digit in 1 − q."""
+    y = beta_ppf(q, b, a)
+    return math.nan if math.isnan(y) else 1.0 - y
+
+
 # ── quantiles ───────────────────────────────────────────────────────────────
 def _inverse_positive(sf, q: float) -> float:
     """The x ≥ 0 with sf(x) = q, for a decreasing tail from sf(0) = 1: by bisection, until
