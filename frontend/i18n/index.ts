@@ -2,7 +2,7 @@
 // key missing in another language falls back on English, never broken UI.
 //
 // Every language has two files: the BASE one (nav/settings/login, written by hand) and
-// the *.gen.ts one (namespaces per component/page, produced by the i18n sweep). The
+// the *.gen.ts one (namespaces per component/page; edited by hand, no generator exists). The
 // namespaces are disjoint → shallow merge.
 import enBase from './locales/en'
 import itBase from './locales/it'

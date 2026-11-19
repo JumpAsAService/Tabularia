@@ -1,4 +1,4 @@
-// Code generated from gateway/app/services/dbt_messages.py; DO NOT EDIT.
+// Code from gateway/app/services/dbt_messages.py (MESSAGES), edited by hand: there is no generator in the repository. Keep in step with that file.
 
 package dbtexport
 
