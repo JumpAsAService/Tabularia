@@ -157,27 +157,45 @@ def _two_groups(source, test: str, p: dict[str, Any]) -> tuple[list[str], list[M
     values of the grouping column that are those two groups, typed as the engine gave them
     (what an aggregate of the report keeps to: `quartiles`)."""
     value, group = p["value"], p["group"]
-    levels = [lv for lv in source.levels(group, MAX_STAT_GROUPS + 2) if lv.value is not None]
-    if len(levels) > MAX_STAT_GROUPS:
-        raise refusal(test, f"the column «{group}» has more than {MAX_STAT_GROUPS} groups: is it the right column?")
-    labels = sorted(label_of(lv.value) for lv in levels)
-    if not labels:
-        raise refusal(test, f"the column «{group}» has no group: the step has no rows, or every row is NULL there")
     wanted = p["groups"]
-    if wanted is None:
-        if len(labels) != 2:
-            raise refusal(
-                test,
-                f"the test compares two groups and the column «{group}» has {len(labels)} ({_listed(labels)}): "
-                + ("it needs a second one" if len(labels) == 1 else "choose the two to compare in 'groups'"),
-            )
-        wanted = labels
-    for g in wanted:
-        if g not in labels:
-            raise refusal(test, f"the group «{g}» is not in the column «{group}» (it has: {_listed(labels)})")
+    # Two groups named: the engine reads those two (and counts the rows with no group),
+    # however many the column holds — the limit on the groups is for a column whose groups
+    # are all compared. Only when the column's type cannot be compared with a value written
+    # from a label (a datetime, a decimal) are its groups listed, as without a choice.
+    chosen = source.levels_of(group, wanted) if wanted is not None else None
+    if chosen is not None:
+        found = {label_of(lv.value): lv.value for lv in chosen if lv.value is not None}
+        for g in wanted:
+            if g not in found:
+                labels = sorted(label_of(lv.value) for lv in source.levels(group, MAX_STAT_GROUPS + 2) if lv.value is not None)
+                if not labels:
+                    raise refusal(test, f"the column «{group}» has no group: the step has no rows, or every row is NULL there")
+                has = f"more than {MAX_STAT_GROUPS} groups" if len(labels) > MAX_STAT_GROUPS else _listed(labels)
+                raise refusal(test, f"the group «{g}» is not in the column «{group}» (it has{'' if len(labels) > MAX_STAT_GROUPS else ':'} {has})")
+        typed = [found[g] for g in wanted]
+    else:
+        levels = [lv for lv in source.levels(group, MAX_STAT_GROUPS + 2) if lv.value is not None]
+        if len(levels) > MAX_STAT_GROUPS:
+            raise refusal(test, f"the column «{group}» has more than {MAX_STAT_GROUPS} groups: is it the right column?"
+                          + ("" if wanted is None else " (the two groups chosen cannot be read alone from a column of this type)"))
+        labels = sorted(label_of(lv.value) for lv in levels)
+        if not labels:
+            raise refusal(test, f"the column «{group}» has no group: the step has no rows, or every row is NULL there")
+        if wanted is None:
+            if len(labels) != 2:
+                raise refusal(
+                    test,
+                    f"the test compares two groups and the column «{group}» has {len(labels)} ({_listed(labels)}): "
+                    + ("it needs a second one" if len(labels) == 1 else "choose the two to compare in 'groups'"),
+                )
+            wanted = labels
+        for g in wanted:
+            if g not in labels:
+                raise refusal(test, f"the group «{g}» is not in the column «{group}» (it has: {_listed(labels)})")
+        typed = [lv.value for lv in levels if label_of(lv.value) in wanted]
     by_label: dict[str, Moments] = {}
     without_group = 0
-    for m in source.moments(value, group):
+    for m in source.moments(value, group, typed if chosen is not None else None):
         if m.level is None:
             without_group += m.rows
         else:
@@ -193,7 +211,6 @@ def _two_groups(source, test: str, p: dict[str, Any]) -> tuple[list[str], list[M
         if not all(v is not None and math.isfinite(v) for v in (m.min, m.max, m.mean, m.var)):
             raise refusal(test, f"the column «{value}» holds infinite values in the group «{g}»: the test cannot be computed")
     missing = without_group + sum(m.rows - m.n for m in pair)
-    typed = [lv.value for lv in levels if label_of(lv.value) in wanted]
     return list(wanted), pair, missing, typed
 
 

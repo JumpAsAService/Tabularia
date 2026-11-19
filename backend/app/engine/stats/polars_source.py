@@ -15,6 +15,7 @@ from app.engine.stats.aggregates import (
     comparable,
     moments_of,
     quartiles_of,
+    typed_labels,
     usable_centre,
 )
 from app.engine.stats.catalog import Column
@@ -23,6 +24,21 @@ from app.engine.stats.catalog import Column
 _LEVEL, _ROWS, _N, _MEAN, _VAR, _MIN, _MAX, _Q1, _MEDIAN, _Q3, _BIN = (
     f"__stat_{name}__" for name in ("lv", "rows", "n", "mean", "var", "min", "max", "q1", "median", "q3", "bin")
 )
+
+
+def _kind(dtype: pl.DataType) -> str | None:
+    """The kind of a grouping column, as `aggregates.typed_labels` reads it."""
+    if dtype in (pl.String, pl.Categorical) or isinstance(dtype, (pl.Categorical, pl.Enum)):
+        return "text"
+    if dtype.is_integer():
+        return "integer"
+    if dtype.is_float():
+        return "float"
+    if dtype == pl.Date:
+        return "date"
+    if dtype == pl.Boolean:
+        return "boolean"
+    return None
 
 
 class PolarsStatSource:
@@ -45,10 +61,21 @@ class PolarsStatSource:
         )
         return [Level(value, int(rows)) for value, rows in df.iter_rows()]
 
-    def moments(self, value: str, group: str | None = None) -> list[Moments]:
+    def levels_of(self, group: str, labels: list[str]) -> list[Level] | None:
+        """A1 for the groups named by these labels only, and the rows with no group; None
+        when the column's type cannot be compared with a value written from a label."""
+        typed = typed_labels(labels, _kind(self._schema[group]))
+        if typed is None:
+            return None
+        keep = pl.any_horizontal([pl.col(group).is_null()] + [pl.col(group) == pl.lit(v) for v in typed])
+        df = self.lf.filter(keep).group_by(pl.col(group).alias(_LEVEL)).agg(pl.len().alias(_ROWS)).collect(engine="streaming")
+        return [Level(value, int(rows)) for value, rows in df.iter_rows()]
+
+    def moments(self, value: str, group: str | None = None, levels: list | None = None) -> list[Moments]:
         """A2: rows, values, mean, sample variance, smallest and largest of `value` per
         group. A NULL or a NaN is no value; mean and variance are taken of the finite values
-        less a centre, the mean of the first rows' (see aggregates.py)."""
+        less a centre, the mean of the first rows' (see aggregates.py). `levels`: the groups
+        to answer for, and the rows with no group (every group when they cannot be compared)."""
         x = pl.col(value).cast(pl.Float64).fill_nan(None)
         finite = pl.when(x.is_finite()).then(x)  # an infinite value is counted, and kept out of the mean
         centre = usable_centre(self.lf.head(CENTRE_ROWS).select(finite.mean()).collect(engine="streaming").item())
@@ -60,7 +87,10 @@ class PolarsStatSource:
         if group is None:
             df = self.lf.select(pl.lit(None).alias(_LEVEL), *aggregates).collect(engine="streaming")
         else:
-            df = self.lf.group_by(pl.col(group).alias(_LEVEL)).agg(aggregates).collect(engine="streaming")
+            lf = self.lf
+            if comparable(levels):
+                lf = lf.filter(pl.any_horizontal([pl.col(group).is_null()] + [pl.col(group) == pl.lit(v) for v in levels]))
+            df = lf.group_by(pl.col(group).alias(_LEVEL)).agg(aggregates).collect(engine="streaming")
         return [moments_of(centre, *row) for row in df.iter_rows()]
 
     def quartiles(self, value: str, group: str | None = None, levels: list | None = None) -> list[Quartiles]:

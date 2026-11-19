@@ -228,3 +228,107 @@ def test_a_note_when_student_meets_unequal_variances(name, storage, shops):
     assert notes == ["The two sample variances differ by more than a factor of 4: Welch's test (var_equal = false) does not assume them equal."]
     rows = _engine(name, storage).preview(shops, op(), limit=100, use_cache=False).rows
     assert not [r for r in rows if r["stat"].startswith("note_")]
+
+
+# ── two groups chosen among many ─────────────────────────────────────────────
+@pytest.fixture
+def stores(storage):
+    """300 shops of three rows each, a few rows with no shop: more groups than a test compares
+    all together, of which a two-group test is asked for two. The same shops as numbers, as
+    dates and as datetimes."""
+    shop, amount = [], []
+    for i in range(300):
+        for j in range(3):
+            shop.append(f"s{i:03d}")
+            amount.append(float((i * 7 + j * 3) % 11) + (0.5 if i == 200 else 0.0))
+    shop += [None, None]
+    amount += [1.0, 2.0]
+    n = len(shop)
+    number = [None if s is None else float(int(s[1:])) + 0.5 for s in shop]
+    day = [None if s is None else dt.date(2020, 1, 1) + dt.timedelta(days=int(s[1:])) for s in shop]
+    at = [None if s is None else dt.datetime(2020, 1, 1) + dt.timedelta(hours=int(s[1:])) for s in shop]
+    df = pl.DataFrame({"shop": shop, "amount": amount, "number": number, "day": day, "at": at, "units": [i % 4 for i in range(n)]},
+                      schema={"shop": pl.String, "amount": pl.Float64, "number": pl.Float64, "day": pl.Date,
+                              "at": pl.Datetime("us"), "units": pl.Int64})
+    return upload_df(storage, df, "datasets/stats_stores.parquet")
+
+
+@pytest.mark.parametrize("name", ENGINES)
+def test_two_groups_chosen_among_more_than_the_limit(name, storage, stores):
+    """With `groups` given the column may hold any number of groups: the engine reads the two
+    (and counts the rows with no group), and the numbers are those of a table that held
+    only them."""
+    engine = _engine(name, storage)
+
+    def numbers(ops):
+        res = engine.preview(stores, ops, limit=1000, use_cache=False)
+        return {r["key"]: (r["value"], r["text"]) for r in res.rows if r["stat"] != "engine"}
+
+    for test in ("t_two_sample",):
+        chosen = numbers([{"type": f"stat_{test}", "params": {"value": "amount", "group": "shop", "groups": ["s200", "s017"]}}])
+        alone = numbers([{"type": "filter", "params": {"column": "shop", "operator": "in", "value": ["s200", "s017"]}},
+                         {"type": f"stat_{test}", "params": {"value": "amount", "group": "shop", "groups": ["s200", "s017"]}}])
+        assert chosen["test|||n"] == (6.0, None) and chosen["test|||n_missing"] == (2.0, None)  # the two rows with no shop
+        assert alone["test|||n_missing"] == (0.0, None)
+        for key, (value, text) in alone.items():
+            if key == "test|||n_missing":
+                continue
+            got, said = chosen[key]
+            assert said == text and (value is None and got is None or math.isclose(got, value, rel_tol=1e-12)), (test, key)
+    # a group that is not there: the sentence lists the first ones
+    with pytest.raises(EngineError) as e:
+        engine.preview(stores, [{"type": OP, "params": {"value": "amount", "group": "shop", "groups": ["s200", "s999"]}}], limit=10, use_cache=False)
+    assert str(e.value) == "stat_t_two_sample: the group «s999» is not in the column «shop» (it has more than 200 groups)"
+    # numbers and dates as groups, chosen by their labels
+    by_number = numbers([{"type": OP, "params": {"value": "amount", "group": "number", "groups": [200.5, "17.5"]}}])
+    by_day = numbers([{"type": OP, "params": {"value": "amount", "group": "day", "groups": ["2020-07-19", "2020-01-18"]}}])
+    by_shop = numbers([{"type": OP, "params": {"value": "amount", "group": "shop", "groups": ["s200", "s017"]}}])
+    for key in ("test|||statistic", "test|||p_value", "test|||n_missing"):
+        assert math.isclose(by_number[key][0], by_shop[key][0], rel_tol=1e-12) and math.isclose(by_day[key][0], by_shop[key][0], rel_tol=1e-12)
+    # a label no value of the column has, in a column of numbers
+    with pytest.raises(EngineError) as e:
+        engine.preview(stores, [{"type": OP, "params": {"value": "amount", "group": "number", "groups": ["200.5", "17"]}}], limit=10, use_cache=False)
+    assert str(e.value) == "stat_t_two_sample: the group «17» is not in the column «number» (it has more than 200 groups)"
+    # a datetime cannot be picked by a literal on every engine: its groups are listed, and refused past the limit
+    with pytest.raises(EngineError) as e:
+        engine.preview(stores, [{"type": OP, "params": {"value": "amount", "group": "at", "groups": ["2020-01-09 08:00:00", "2020-01-01 17:00:00"]}}],
+                       limit=10, use_cache=False)
+    assert str(e.value) == ("stat_t_two_sample: the column «at» has more than 200 groups: is it the right column? "
+                            "(the two groups chosen cannot be read alone from a column of this type)")
+    # without a choice, the limit holds
+    with pytest.raises(EngineError) as e:
+        engine.preview(stores, [{"type": OP, "params": {"value": "amount", "group": "shop"}}], limit=10, use_cache=False)
+    assert str(e.value) == "stat_t_two_sample: the column «shop» has more than 200 groups: is it the right column?"
+
+
+def test_two_groups_chosen_are_asked_for_by_themselves(monkeypatch):
+    """The groups of the column are not listed when two are chosen: the aggregates are asked
+    for those two (and the rows with no group) only."""
+    from app.engine.stats.polars_source import PolarsStatSource
+
+    lf = pl.DataFrame({"g": [f"k{i % 250}" for i in range(1000)] + [None], "v": [float(i % 13) for i in range(1001)]}).lazy()
+    asked: list[tuple] = []
+    for method in ("levels", "levels_of", "moments"):
+        def spy(self, *args, _real=getattr(PolarsStatSource, method), _name=method):
+            asked.append((_name, args[1:]))
+            return _real(self, *args)
+
+        monkeypatch.setattr(PolarsStatSource, method, spy)
+    from app.engine.stats.compute import run_hypothesis_test
+
+    rows = run_hypothesis_test(PolarsStatSource(lf), "t_two_sample", {"value": "v", "group": "g", "groups": ["k7", "k200"]}, "polars")
+    assert [name for name, _ in asked] == ["levels_of", "moments"]
+    assert asked[0][1] == (["k7", "k200"],) and asked[1][1] == ("g", ["k7", "k200"])
+    assert {r[9]: r[4] for r in rows}["test|||n"] == 8
+
+
+def test_the_labels_of_two_groups_as_typed_values():
+    from app.engine.stats.aggregates import typed_labels
+
+    assert typed_labels(["web", "1"], "text") == ["web", "1"]
+    assert typed_labels(["3", "-12", "3.0", "x"], "integer") == [3, -12]
+    assert typed_labels(["3.0", "1e+16", "-0.5"], "float") == [3.0, 1e16, -0.5]
+    assert typed_labels(["nan", "1.0"], "float") is None and typed_labels(["inf"], "float") is None
+    assert typed_labels(["2024-03-01", "yesterday"], "date") == [dt.date(2024, 3, 1)]
+    assert typed_labels(["true", "false", "True"], "boolean") == [True, False]
+    assert typed_labels(["a"], None) is None

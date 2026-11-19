@@ -81,6 +81,52 @@ class HistogramBin(NamedTuple):
     rows: int
 
 
+# the kinds of grouping column whose groups an aggregate can pick by a literal written from
+# their labels (`typed_labels`), as each engine names their types (ClickHouse's without their
+# Nullable(…) and LowCardinality(…) wrappers); a column of another type is read whole
+_LITERAL_KINDS = {
+    "duckdb": (("text", r"^VARCHAR\b"), ("integer", r"^U?(TINYINT|SMALLINT|INTEGER|BIGINT|HUGEINT)\b"),
+               ("float", r"^(FLOAT|DOUBLE|REAL)$"), ("date", r"^DATE$"), ("boolean", r"^BOOLEAN$")),
+    "clickhouse": (("text", r"^(String|Enum(8|16)?\(.*\))$"), ("integer", r"^U?Int(8|16|32|64|128|256)$"),
+                   ("float", r"^Float(32|64)$"), ("date", r"^Date(32)?$"), ("boolean", r"^Bool$")),
+    "bigquery": (("text", r"^STRING\b"), ("integer", r"^(INT64|INTEGER)$"), ("float", r"^(FLOAT64|FLOAT)$"),
+                 ("date", r"^DATE$"), ("boolean", r"^(BOOL|BOOLEAN)$")),
+}
+
+
+def typed_labels(labels: list[str], kind: str | None) -> list | None:
+    """The values a grouping column of `kind` holds under these labels (`catalog.label_of`),
+    for an aggregate to keep to those groups by comparing the column with them; None when the
+    column's kind cannot be compared so (a datetime, a decimal…) or a label is a value no
+    literal writes the same on every engine (a NaN). A label that is no value of the kind (a
+    text in a column of numbers) has no value: nothing is kept for it, and the caller says
+    the group is not there."""
+    if kind is None:
+        return None
+    out: list = []
+    for label in labels:
+        try:
+            if kind == "text":
+                v: Any = label
+            elif kind == "integer":
+                v = int(label) if re.fullmatch(r"-?\d+", label) else None
+            elif kind == "float":
+                v = float(label)
+                if not math.isfinite(v):
+                    return None
+            elif kind == "date":
+                v = _dt.date.fromisoformat(label)
+            elif kind == "boolean":
+                v = {"true": True, "false": False}.get(label)
+            else:
+                return None
+        except ValueError:
+            v = None
+        if v is not None:
+            out.append(v)
+    return out
+
+
 # the rows the centre is the mean of: the chain's first ones, which an engine stops at
 CENTRE_ROWS = 100_000
 
@@ -196,6 +242,24 @@ class SqlStatSource:
         )
         return usable_centre(rows[0][0] if rows and rows[0] else None)
 
+    def _kind(self, column: str) -> str | None:
+        """The kind of a grouping column, as `typed_labels` reads it, or None."""
+        dtype = dict(self._schema).get(column, "").strip()
+        if self.dialect == "clickhouse":
+            while (m := _CH_WRAPPER.match(dtype)) is not None:
+                dtype = m.group(1).strip()
+        flags = 0 if self.dialect == "clickhouse" else re.IGNORECASE
+        return next((kind for kind, pattern in _LITERAL_KINDS[self.dialect] if re.match(pattern, dtype, flags)), None)
+
+    def _only(self, group: str, levels: list | None, nulls: bool = False) -> str:
+        """A WHERE that keeps the rows of these groups (typed values; with `nulls`, the rows
+        with no group too), or nothing when they cannot be told apart in a query."""
+        if not comparable(levels):
+            return ""
+        g = self._quote(group)
+        # an equality, not IN: ClickHouse's sets hold a float by its bits (−0.0 is not in (0.0))
+        return " WHERE " + " OR ".join(([f"{g} IS NULL"] if nulls else []) + [f"{g} = {self._lit(v)}" for v in levels])
+
     # ── the aggregates ──────────────────────────────────────────────────────
     def levels(self, group: str, limit: int) -> list[Level]:
         """A1: the values of `group` with their rows, the NULL one too; `limit` of them at
@@ -207,9 +271,27 @@ class SqlStatSource:
         )
         return [Level(r[0], int(r[1])) for r in rows]
 
-    def moments(self, value: str, group: str | None = None) -> list[Moments]:
+    def levels_of(self, group: str, labels: list[str]) -> list[Level] | None:
+        """A1 for the groups named by these labels only, and the rows with no group: the
+        engine compares the column with a literal for each, however many groups it holds.
+        None when the column's type cannot be compared so (`typed_labels`): the caller then
+        lists the groups (`levels`)."""
+        typed = typed_labels(labels, self._kind(group))
+        if typed is None:
+            return None
+        g = self._quote(group)
+        only = " OR ".join([f"{g} IS NULL"] + [f"{g} = {self._lit(v)}" for v in typed])
+        rows = self._rows(
+            f"SELECT {g} AS {self._fresh('lv')}, count(*) AS {self._fresh('rows')} "
+            f"FROM {self._source} WHERE {only} GROUP BY {g}"
+        )
+        return [Level(r[0], int(r[1])) for r in rows]
+
+    def moments(self, value: str, group: str | None = None, levels: list | None = None) -> list[Moments]:
         """A2: rows, values, mean, sample variance, smallest and largest of `value`, for each
-        value of `group` (the NULL one too), or over every row without one."""
+        value of `group` (the NULL one too), or over every row without one. `levels`: the
+        groups to answer for (typed values of `levels` or `levels_of`), and the rows with no
+        group; every group when they cannot be told apart in a query (`comparable`)."""
         x, finite = self._value(value), self._value(value, finite=True)
         centre = self._centre(value)
         centred = _CENTRED[self.dialect].format(x=finite, c=repr(centre)) if centre else finite
@@ -222,7 +304,8 @@ class SqlStatSource:
             rows = [[None, *r] for r in self._rows(f"SELECT {aggregates} FROM {self._source}")]
         else:
             g = self._quote(group)
-            rows = self._rows(f"SELECT {g} AS {self._fresh('lv')}, {aggregates} FROM {self._source} GROUP BY {g}")
+            only = self._only(group, levels, nulls=True)
+            rows = self._rows(f"SELECT {g} AS {self._fresh('lv')}, {aggregates} FROM {self._source}{only} GROUP BY {g}")
         return [moments_of(centre, *r) for r in rows]
 
     def quartiles(self, value: str, group: str | None = None, levels: list | None = None) -> list[Quartiles]:
@@ -237,10 +320,7 @@ class SqlStatSource:
         names = [self._fresh(name) for name in ("q1", "median", "q3")]
         g = None if group is None else self._quote(group)
         over = "" if g is None else f"PARTITION BY {g}"
-        only = ""
-        if g is not None and comparable(levels):
-            # an equality, not IN: ClickHouse's sets hold a float by its bits (−0.0 is not in (0.0))
-            only = " WHERE " + " OR ".join(f"{g} = {self._lit(v)}" for v in levels)
+        only = "" if g is None else self._only(group, levels)
         quantiles = ", ".join(
             f"{_QUANTILE[self.dialect].format(e=x, q=q, over=over)} AS {name}"
             for q, name in zip((0.25, 0.5, 0.75), names)
