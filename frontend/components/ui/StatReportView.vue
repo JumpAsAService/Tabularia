@@ -308,7 +308,8 @@ const problemTitle = computed(() => {
   display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; font-size: 12px; white-space: nowrap;
   border-radius: 999px; color: var(--warning); border: 1px solid color-mix(in srgb, var(--warning) 45%, var(--border));
 }
-.sr-update { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+/* the height of the buttons beside it: a primary button's own padding made it stand a step taller */
+.sr-update { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; font-size: 12px; white-space: nowrap; }
 .sr-stage { position: relative; flex: 1; min-height: 0; overflow: auto; }
 .sr-state { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; margin: 12px; }
 .sr-state .sr-note { margin: 0; }
