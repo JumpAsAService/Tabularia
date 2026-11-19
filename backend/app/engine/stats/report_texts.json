@@ -2,6 +2,16 @@
   "en": {
     "by": "{value} by {group}",
     "tests": {
+      "t_one_sample": {
+        "name": "One-sample t test",
+        "stats": {
+          "test": {"estimate": "Estimate: the mean (m)", "null_value": "Mean under H0 (mu)", "statistic": "t statistic"}
+        },
+        "kpi": {"statistic": "t statistic", "estimate": "Mean"},
+        "symbols": "m: mean, s: standard deviation, n: rows used, of «{column}» (table «Groups»); mu: the mean under H0; df: degrees of freedom.",
+        "left_out": "Rows used: {n}. Rows left out: {missing} (no number: NULL or NaN).",
+        "charts": {"interval": "Mean with its confidence interval (dashed: mu)"}
+      },
       "t_two_sample": {
         "name": "Two-sample t test",
         "variants": {"welch": "Welch's t test", "student": "Student's t test"},
@@ -16,6 +26,65 @@
         "kpi": {"statistic": "t statistic", "estimate": "Difference of the means"},
         "symbols": "1 = «{g1}», 2 = «{g2}». m: mean, s²: variance, n: rows used, of each group (table «Groups»); sp²: pooled variance; mu: the difference under H0; df: degrees of freedom.",
         "left_out": "Rows used: {n}. Rows left out: {missing} (no group, or no value in one of the two groups)."
+      },
+      "t_paired": {
+        "name": "Paired t test",
+        "stats": {
+          "test": {
+            "estimate": "Estimate: the mean of the differences (d)",
+            "null_value": "Mean difference under H0 (mu)",
+            "statistic": "t statistic"
+          }
+        },
+        "kpi": {"statistic": "t statistic", "estimate": "Mean of the differences"},
+        "symbols": "x = «{x}», y = «{y}». d: mean of the differences x − y, s_d: their standard deviation, n: rows with both (table «Groups»); mu: the mean difference under H0; df: degrees of freedom.",
+        "left_out": "Rows used: {n}. Rows left out: {missing} (no number in one of the two columns).",
+        "charts": {"interval": "Mean of the differences with its interval (dashed: mu)"}
+      },
+      "anova": {
+        "name": "One-way ANOVA",
+        "variants": {"one_way": "One-way ANOVA", "welch": "Welch's ANOVA"},
+        "stats": {
+          "test": {"statistic": "F statistic"}
+        },
+        "kpi": {"statistic": "F statistic", "effect": "Effect size η²"},
+        "symbols": "k: groups, N: rows used; n, m, s²: rows, mean and variance of each group (table «Groups»); M: grand mean; w = n / s²: a group's weight in Welch's ANOVA; Λ: Welch's correction; df: degrees of freedom.",
+        "left_out": "Rows used: {n}. Rows left out: {missing} (no group, or no number in a group)."
+      },
+      "var_f": {
+        "name": "F test of two variances",
+        "stats": {
+          "test": {
+            "estimate": "Ratio of the variances (s1² / s2²)",
+            "null_value": "Ratio under H0",
+            "statistic": "F statistic"
+          }
+        },
+        "kpi": {"statistic": "F statistic", "estimate": "Ratio of the variances"},
+        "symbols": "1 = «{g1}», 2 = «{g2}». s²: variance, n: rows used, of each group (table «Groups»); ratio: the ratio under H0; q: the quantile of F at each end of the interval (the critical values); df: degrees of freedom.",
+        "left_out": "Rows used: {n}. Rows left out: {missing} (no group, or no value in one of the two groups)."
+      },
+      "levene": {
+        "name": "Levene's test",
+        "variants": {"median": "Brown–Forsythe test (Levene, median)", "mean": "Levene's test (mean)"},
+        "stats": {
+          "test": {"statistic": "F statistic", "grand_mean": "Mean of all the z (Z)"}
+        },
+        "kpi": {"statistic": "F statistic", "groups": "Groups"},
+        "symbols": "z: the distance of a value from the centre of its group (table «Groups»); n, z̄, s_z²: rows, mean and variance of z in each group; Z: the mean of all the z; k: groups, N: rows used; df: degrees of freedom.",
+        "left_out": "Rows used: {n}. Rows left out: {missing} (no group, or no number in a group).",
+        "tables": {"deviations": "Distances from the centre (z)"},
+        "charts": {"interval": "Mean distance from the centre, with its interval"}
+      },
+      "pearson": {
+        "name": "Pearson's correlation",
+        "stats": {
+          "test": {"estimate": "Correlation (r)", "null_value": "Correlation under H0", "statistic": "t statistic"}
+        },
+        "kpi": {"statistic": "t statistic", "estimate": "Correlation r"},
+        "symbols": "x = «{x}», y = «{y}». r: Pearson's correlation, n: rows with both (table «Groups»); z: the normal quantile of the interval; df: degrees of freedom.",
+        "left_out": "Rows used: {n}. Rows left out: {missing} (no number in one of the two columns).",
+        "tables": {"extremes": "Smallest and largest"}
       }
     },
     "stats": {
@@ -45,7 +114,38 @@
         "ci_low": "Confidence interval of the estimate, lower bound",
         "ci_high": "Confidence interval of the estimate, upper bound",
         "cohen_d": "Effect size: Cohen's d",
-        "hedges_g": "Effect size: Hedges' g"
+        "hedges_g": "Effect size: Hedges' g",
+        "k": "Groups (k)",
+        "grand_mean": "Grand mean (M)",
+        "ss_between": "Sum of squares between the groups",
+        "ss_within": "Sum of squares within the groups",
+        "ms_between": "Mean square between the groups",
+        "ms_within": "Mean square within the groups",
+        "sum_weights": "Sum of the weights (∑ w)",
+        "weighted_mean": "Weighted mean (m_w)",
+        "welch_lambda": "Welch's correction (Λ)",
+        "df_1": "Degrees of freedom, numerator",
+        "df_2": "Degrees of freedom, denominator",
+        "eta_squared": "Effect size: η²",
+        "omega_squared": "Effect size: ω²",
+        "n_pairs": "Pairs compared",
+        "posthoc_critical": "Critical value of the studentized range",
+        "alpha_adjusted": "Level of each pair (α adjusted)",
+        "posthoc": "Pairwise comparisons",
+        "p_adjust": "Correction of the p-values",
+        "mean": "Mean (m)",
+        "var": "Variance (s²)",
+        "sd": "Standard deviation (s)",
+        "mean_diff": "Mean of the differences (d)",
+        "var_diff": "Variance of the differences (s_d²)",
+        "sd_diff": "Standard deviation of the differences (s_d)",
+        "cohen_dz": "Effect size: Cohen's dz",
+        "covariance": "Covariance of x and y",
+        "fisher_z": "Fisher's z = atanh(r)",
+        "fisher_se": "Standard error of z, 1 / √(n − 3)",
+        "z_quantile": "Normal quantile of the interval (z)",
+        "r_squared": "Coefficient of determination (r²)",
+        "posthoc_formula": "Formulas of a pair"
       },
       "group": {
         "n": "n",
@@ -59,13 +159,33 @@
         "max": "Maximum",
         "q1": "1st quartile",
         "median": "Median",
-        "q3": "3rd quartile"
+        "q3": "3rd quartile",
+        "weight": "Weight (w)",
+        "center": "Centre",
+        "dev_mean": "Mean of z",
+        "dev_var": "Variance of z",
+        "dev_sd": "Std. dev. of z",
+        "dev_se": "Std. error of z",
+        "dev_ci_low": "Mean of z, CI low",
+        "dev_ci_high": "Mean of z, CI high"
       },
       "hist": {"count": "Rows"},
       "curve": {
         "density": "Density under H0",
         "reject_low": "Critical region, lower",
         "reject_high": "Critical region, upper"
+      },
+      "pair": {
+        "estimate": "Difference",
+        "std_error": "Std. error",
+        "statistic": "Statistic",
+        "df": "Degrees of freedom",
+        "critical": "Critical value",
+        "p_value": "p-value",
+        "p_adjusted": "Adjusted p-value",
+        "ci_low": "CI low",
+        "ci_high": "CI high",
+        "decision": "Decision"
       }
     },
     "note": "Note {n}",
@@ -75,7 +195,8 @@
       "computed": "How it is computed",
       "groups": "Groups",
       "charts": "Charts",
-      "notes": "Notes"
+      "notes": "Notes",
+      "comparisons": "Pairwise comparisons"
     },
     "kpi": {"df": "Degrees of freedom", "p_value": "p-value"},
     "decision": {
@@ -96,14 +217,18 @@
       "groups": {"title": "Groups", "group": "Group"},
       "quartiles": {"title": "Five-number summary"},
       "intervals": {"title": "Intervals of the means"},
-      "notes": {"title": "Notes", "note": "Notes of the test"}
+      "notes": {"title": "Notes", "note": "Notes of the test"},
+      "pairs": {"title": "Pairwise comparisons"},
+      "pairs_p": {"title": "Comparisons, p-values"},
+      "pairs_ci": {"title": "Comparisons, intervals"}
     },
     "charts": {
       "boxplot": "Box plot: {by}",
       "interval": "Means with their confidence intervals",
       "histogram": "Histogram: {by}",
       "density": "Distribution of the statistic under H0",
-      "density_caption": "Shaded: the critical region. Vertical line: the statistic of the test."
+      "density_caption": "Shaded: the critical region. Vertical line: the statistic of the test.",
+      "pairs": "Differences of the means with their intervals"
     },
     "engine": "Computed in the engine: {engine}.",
     "sample": {
@@ -112,11 +237,40 @@
       "random": "a random {percent}% of the rows",
       "and": "; "
     },
-    "footer": "Computed by Tabularia"
+    "footer": "Computed by Tabularia",
+    "df_pair": "{d1}, {d2}",
+    "posthoc": {
+      "pair": "Pair",
+      "reject": "H0 rejected",
+      "keep": "H0 not rejected",
+      "line": "Method: {method}. {adjust}",
+      "method": {
+        "tukey": "Tukey's HSD (Tukey–Kramer for groups of different sizes)",
+        "games_howell": "Games–Howell (no equal variances assumed; Welch's degrees of freedom for each pair)",
+        "pairwise_t": "a t test for each pair"
+      },
+      "adjust": {
+        "studentized_range": "The adjusted p-values and the intervals come from the studentized range: they hold for all the pairs together.",
+        "holm": "The p-values are adjusted by Holm's method, which has no simultaneous interval.",
+        "bonferroni": "The p-values are adjusted by Bonferroni's method; each interval has level 1 − α/m.",
+        "sidak": "The p-values are adjusted by Šidák's method; each interval has level (1 − α)^(1/m).",
+        "none": "The p-values are not adjusted: each pair at its own level, 1 − α."
+      }
+    }
   },
   "it": {
     "by": "{value} per {group}",
     "tests": {
+      "t_one_sample": {
+        "name": "Test t a un campione",
+        "stats": {
+          "test": {"estimate": "Stima: la media (m)", "null_value": "Media sotto H0 (mu)", "statistic": "Statistica t"}
+        },
+        "kpi": {"statistic": "Statistica t", "estimate": "Media"},
+        "symbols": "m: media, s: deviazione standard, n: righe usate, di «{column}» (tabella «Gruppi»); mu: la media sotto H0; df: gradi di libertà.",
+        "left_out": "Righe usate: {n}. Righe escluse: {missing} (senza numero: NULL o NaN).",
+        "charts": {"interval": "Media con il suo intervallo di confidenza (tratteggio: mu)"}
+      },
       "t_two_sample": {
         "name": "Test t a due campioni",
         "variants": {"welch": "Test t di Welch", "student": "Test t di Student"},
@@ -131,6 +285,65 @@
         "kpi": {"statistic": "Statistica t", "estimate": "Differenza delle medie"},
         "symbols": "1 = «{g1}», 2 = «{g2}». m: media, s²: varianza, n: righe usate, di ciascun gruppo (tabella «Gruppi»); sp²: varianza combinata; mu: la differenza sotto H0; df: gradi di libertà.",
         "left_out": "Righe usate: {n}. Righe escluse: {missing} (senza gruppo, o senza valore in uno dei due gruppi)."
+      },
+      "t_paired": {
+        "name": "Test t per dati appaiati",
+        "stats": {
+          "test": {
+            "estimate": "Stima: la media delle differenze (d)",
+            "null_value": "Differenza media sotto H0 (mu)",
+            "statistic": "Statistica t"
+          }
+        },
+        "kpi": {"statistic": "Statistica t", "estimate": "Media delle differenze"},
+        "symbols": "x = «{x}», y = «{y}». d: media delle differenze x − y, s_d: la loro deviazione standard, n: righe con entrambe (tabella «Gruppi»); mu: la differenza media sotto H0; df: gradi di libertà.",
+        "left_out": "Righe usate: {n}. Righe escluse: {missing} (senza numero in una delle due colonne).",
+        "charts": {"interval": "Media delle differenze con il suo intervallo (tratteggio: mu)"}
+      },
+      "anova": {
+        "name": "ANOVA a una via",
+        "variants": {"one_way": "ANOVA a una via", "welch": "ANOVA di Welch"},
+        "stats": {
+          "test": {"statistic": "Statistica F"}
+        },
+        "kpi": {"statistic": "Statistica F", "effect": "Dimensione effetto η²"},
+        "symbols": "k: gruppi, N: righe usate; n, m, s²: righe, media e varianza di ogni gruppo (tabella «Gruppi»); M: media generale; w = n / s²: il peso di un gruppo nell'ANOVA di Welch; Λ: la correzione di Welch; df: gradi di libertà.",
+        "left_out": "Righe usate: {n}. Righe escluse: {missing} (senza gruppo, o senza numero in un gruppo)."
+      },
+      "var_f": {
+        "name": "Test F di due varianze",
+        "stats": {
+          "test": {
+            "estimate": "Rapporto delle varianze (s1² / s2²)",
+            "null_value": "Rapporto sotto H0",
+            "statistic": "Statistica F"
+          }
+        },
+        "kpi": {"statistic": "Statistica F", "estimate": "Rapporto delle varianze"},
+        "symbols": "1 = «{g1}», 2 = «{g2}». s²: varianza, n: righe usate, di ciascun gruppo (tabella «Gruppi»); ratio: il rapporto sotto H0; q: il quantile di F a ciascun estremo dell'intervallo (i valori critici); df: gradi di libertà.",
+        "left_out": "Righe usate: {n}. Righe escluse: {missing} (senza gruppo, o senza valore in uno dei due gruppi)."
+      },
+      "levene": {
+        "name": "Test di Levene",
+        "variants": {"median": "Test di Brown–Forsythe (Levene, mediana)", "mean": "Test di Levene (media)"},
+        "stats": {
+          "test": {"statistic": "Statistica F", "grand_mean": "Media di tutte le z (Z)"}
+        },
+        "kpi": {"statistic": "Statistica F", "groups": "Gruppi"},
+        "symbols": "z: la distanza di un valore dal centro del suo gruppo (tabella «Gruppi»); n, z̄, s_z²: righe, media e varianza di z in ogni gruppo; Z: la media di tutte le z; k: gruppi, N: righe usate; df: gradi di libertà.",
+        "left_out": "Righe usate: {n}. Righe escluse: {missing} (senza gruppo, o senza numero in un gruppo).",
+        "tables": {"deviations": "Distanze dal centro (z)"},
+        "charts": {"interval": "Distanza media dal centro, con il suo intervallo"}
+      },
+      "pearson": {
+        "name": "Correlazione di Pearson",
+        "stats": {
+          "test": {"estimate": "Correlazione (r)", "null_value": "Correlazione sotto H0", "statistic": "Statistica t"}
+        },
+        "kpi": {"statistic": "Statistica t", "estimate": "Correlazione r"},
+        "symbols": "x = «{x}», y = «{y}». r: correlazione di Pearson, n: righe con entrambe (tabella «Gruppi»); z: il quantile normale dell'intervallo; df: gradi di libertà.",
+        "left_out": "Righe usate: {n}. Righe escluse: {missing} (senza numero in una delle due colonne).",
+        "tables": {"extremes": "Minimo e massimo"}
       }
     },
     "stats": {
@@ -160,7 +373,38 @@
         "ci_low": "Intervallo di confidenza della stima, estremo inferiore",
         "ci_high": "Intervallo di confidenza della stima, estremo superiore",
         "cohen_d": "Dimensione dell'effetto: d di Cohen",
-        "hedges_g": "Dimensione dell'effetto: g di Hedges"
+        "hedges_g": "Dimensione dell'effetto: g di Hedges",
+        "k": "Gruppi (k)",
+        "grand_mean": "Media generale (M)",
+        "ss_between": "Somma dei quadrati tra i gruppi",
+        "ss_within": "Somma dei quadrati entro i gruppi",
+        "ms_between": "Media dei quadrati tra i gruppi",
+        "ms_within": "Media dei quadrati entro i gruppi",
+        "sum_weights": "Somma dei pesi (∑ w)",
+        "weighted_mean": "Media pesata (m_w)",
+        "welch_lambda": "Correzione di Welch (Λ)",
+        "df_1": "Gradi di libertà, numeratore",
+        "df_2": "Gradi di libertà, denominatore",
+        "eta_squared": "Dimensione dell'effetto: η²",
+        "omega_squared": "Dimensione dell'effetto: ω²",
+        "n_pairs": "Coppie confrontate",
+        "posthoc_critical": "Valore critico del range studentizzato",
+        "alpha_adjusted": "Livello di ogni coppia (α corretto)",
+        "posthoc": "Confronti a coppie",
+        "p_adjust": "Correzione dei p-value",
+        "mean": "Media (m)",
+        "var": "Varianza (s²)",
+        "sd": "Deviazione standard (s)",
+        "mean_diff": "Media delle differenze (d)",
+        "var_diff": "Varianza delle differenze (s_d²)",
+        "sd_diff": "Deviazione standard delle differenze (s_d)",
+        "cohen_dz": "Dimensione dell'effetto: dz di Cohen",
+        "covariance": "Covarianza di x e y",
+        "fisher_z": "z di Fisher = atanh(r)",
+        "fisher_se": "Errore standard di z, 1 / √(n − 3)",
+        "z_quantile": "Quantile normale dell'intervallo (z)",
+        "r_squared": "Coefficiente di determinazione (r²)",
+        "posthoc_formula": "Formule di una coppia"
       },
       "group": {
         "n": "n",
@@ -174,13 +418,33 @@
         "max": "Massimo",
         "q1": "1° quartile",
         "median": "Mediana",
-        "q3": "3° quartile"
+        "q3": "3° quartile",
+        "weight": "Peso (w)",
+        "center": "Centro",
+        "dev_mean": "Media di z",
+        "dev_var": "Varianza di z",
+        "dev_sd": "Dev. standard di z",
+        "dev_se": "Err. standard di z",
+        "dev_ci_low": "Media di z, IC inf.",
+        "dev_ci_high": "Media di z, IC sup."
       },
       "hist": {"count": "Righe"},
       "curve": {
         "density": "Densità sotto H0",
         "reject_low": "Regione critica inferiore",
         "reject_high": "Regione critica superiore"
+      },
+      "pair": {
+        "estimate": "Differenza",
+        "std_error": "Err. standard",
+        "statistic": "Statistica",
+        "df": "Gradi di libertà",
+        "critical": "Valore critico",
+        "p_value": "p-value",
+        "p_adjusted": "p-value corretto",
+        "ci_low": "IC inf.",
+        "ci_high": "IC sup.",
+        "decision": "Decisione"
       }
     },
     "note": "Nota {n}",
@@ -190,7 +454,8 @@
       "computed": "Come si calcola",
       "groups": "Gruppi",
       "charts": "Grafici",
-      "notes": "Note"
+      "notes": "Note",
+      "comparisons": "Confronti a coppie"
     },
     "kpi": {"df": "Gradi di libertà", "p_value": "p-value"},
     "decision": {
@@ -211,14 +476,18 @@
       "groups": {"title": "Gruppi", "group": "Gruppo"},
       "quartiles": {"title": "Sintesi a cinque numeri"},
       "intervals": {"title": "Intervalli delle medie"},
-      "notes": {"title": "Note", "note": "Note del test"}
+      "notes": {"title": "Note", "note": "Note del test"},
+      "pairs": {"title": "Confronti a coppie"},
+      "pairs_p": {"title": "Confronti, p-value"},
+      "pairs_ci": {"title": "Confronti, intervalli"}
     },
     "charts": {
       "boxplot": "Box plot: {by}",
       "interval": "Medie con i loro intervalli di confidenza",
       "histogram": "Istogramma: {by}",
       "density": "Distribuzione della statistica sotto H0",
-      "density_caption": "Area colorata: la regione critica. Linea verticale: la statistica del test."
+      "density_caption": "Area colorata: la regione critica. Linea verticale: la statistica del test.",
+      "pairs": "Differenze delle medie con i loro intervalli"
     },
     "engine": "Calcolato nel motore: {engine}.",
     "sample": {
@@ -227,11 +496,44 @@
       "random": "un {percent}% casuale delle righe",
       "and": "; "
     },
-    "footer": "Calcolato da Tabularia"
+    "footer": "Calcolato da Tabularia",
+    "df_pair": "{d1}; {d2}",
+    "posthoc": {
+      "pair": "Coppia",
+      "reject": "H0 rifiutata",
+      "keep": "H0 non rifiutata",
+      "line": "Metodo: {method}. {adjust}",
+      "method": {
+        "tukey": "HSD di Tukey (Tukey–Kramer per gruppi di dimensioni diverse)",
+        "games_howell": "Games–Howell (senza assumere varianze uguali; i gradi di libertà di Welch per ogni coppia)",
+        "pairwise_t": "un test t per ogni coppia"
+      },
+      "adjust": {
+        "studentized_range": "I p-value corretti e gli intervalli vengono dal range studentizzato: valgono per tutte le coppie insieme.",
+        "holm": "I p-value sono corretti con il metodo di Holm, che non ha intervalli simultanei.",
+        "bonferroni": "I p-value sono corretti con il metodo di Bonferroni; ogni intervallo ha livello 1 − α/m.",
+        "sidak": "I p-value sono corretti con il metodo di Šidák; ogni intervallo ha livello (1 − α)^(1/m).",
+        "none": "I p-value non sono corretti: ogni coppia al proprio livello, 1 − α."
+      }
+    }
   },
   "de": {
     "by": "{value} nach {group}",
     "tests": {
+      "t_one_sample": {
+        "name": "Einstichproben-t-Test",
+        "stats": {
+          "test": {
+            "estimate": "Schätzung: der Mittelwert (m)",
+            "null_value": "Mittelwert unter H0 (mu)",
+            "statistic": "t-Statistik"
+          }
+        },
+        "kpi": {"statistic": "t-Statistik", "estimate": "Mittelwert"},
+        "symbols": "m: Mittelwert, s: Standardabweichung, n: verwendete Zeilen von «{column}» (Tabelle «Gruppen»); mu: der Mittelwert unter H0; df: Freiheitsgrade.",
+        "left_out": "Verwendete Zeilen: {n}. Ausgelassene Zeilen: {missing} (keine Zahl: NULL oder NaN).",
+        "charts": {"interval": "Mittelwert mit seinem Konfidenzintervall (gestrichelt: mu)"}
+      },
       "t_two_sample": {
         "name": "Zweistichproben-t-Test",
         "variants": {"welch": "Welch-t-Test", "student": "Student-t-Test"},
@@ -246,6 +548,65 @@
         "kpi": {"statistic": "t-Statistik", "estimate": "Differenz der Mittelwerte"},
         "symbols": "1 = «{g1}», 2 = «{g2}». m: Mittelwert, s²: Varianz, n: verwendete Zeilen, je Gruppe (Tabelle «Gruppen»); sp²: gepoolte Varianz; mu: die Differenz unter H0; df: Freiheitsgrade.",
         "left_out": "Verwendete Zeilen: {n}. Ausgelassene Zeilen: {missing} (ohne Gruppe oder ohne Wert in einer der beiden Gruppen)."
+      },
+      "t_paired": {
+        "name": "t-Test für verbundene Stichproben",
+        "stats": {
+          "test": {
+            "estimate": "Schätzung: der Mittelwert der Differenzen (d)",
+            "null_value": "Mittlere Differenz unter H0 (mu)",
+            "statistic": "t-Statistik"
+          }
+        },
+        "kpi": {"statistic": "t-Statistik", "estimate": "Mittlere Differenz"},
+        "symbols": "x = «{x}», y = «{y}». d: Mittelwert der Differenzen x − y, s_d: ihre Standardabweichung, n: Zeilen mit beiden (Tabelle «Gruppen»); mu: die mittlere Differenz unter H0; df: Freiheitsgrade.",
+        "left_out": "Verwendete Zeilen: {n}. Ausgelassene Zeilen: {missing} (keine Zahl in einer der beiden Spalten).",
+        "charts": {"interval": "Mittlere Differenz mit ihrem Intervall (gestrichelt: mu)"}
+      },
+      "anova": {
+        "name": "Einfaktorielle ANOVA",
+        "variants": {"one_way": "Einfaktorielle ANOVA", "welch": "Welch-ANOVA"},
+        "stats": {
+          "test": {"statistic": "F-Statistik"}
+        },
+        "kpi": {"statistic": "F-Statistik", "effect": "Effektstärke η²"},
+        "symbols": "k: Gruppen, N: verwendete Zeilen; n, m, s²: Zeilen, Mittelwert und Varianz jeder Gruppe (Tabelle «Gruppen»); M: Gesamtmittelwert; w = n / s²: das Gewicht einer Gruppe in der Welch-ANOVA; Λ: die Welch-Korrektur; df: Freiheitsgrade.",
+        "left_out": "Verwendete Zeilen: {n}. Ausgelassene Zeilen: {missing} (ohne Gruppe oder ohne Zahl in einer Gruppe)."
+      },
+      "var_f": {
+        "name": "F-Test zweier Varianzen",
+        "stats": {
+          "test": {
+            "estimate": "Verhältnis der Varianzen (s1² / s2²)",
+            "null_value": "Verhältnis unter H0",
+            "statistic": "F-Statistik"
+          }
+        },
+        "kpi": {"statistic": "F-Statistik", "estimate": "Verhältnis der Varianzen"},
+        "symbols": "1 = «{g1}», 2 = «{g2}». s²: Varianz, n: verwendete Zeilen, je Gruppe (Tabelle «Gruppen»); ratio: das Verhältnis unter H0; q: das Quantil von F an jedem Ende des Intervalls (die kritischen Werte); df: Freiheitsgrade.",
+        "left_out": "Verwendete Zeilen: {n}. Ausgelassene Zeilen: {missing} (ohne Gruppe oder ohne Wert in einer der beiden Gruppen)."
+      },
+      "levene": {
+        "name": "Levene-Test",
+        "variants": {"median": "Brown-Forsythe-Test (Levene, Median)", "mean": "Levene-Test (Mittelwert)"},
+        "stats": {
+          "test": {"statistic": "F-Statistik", "grand_mean": "Mittelwert aller z (Z)"}
+        },
+        "kpi": {"statistic": "F-Statistik", "groups": "Gruppen"},
+        "symbols": "z: der Abstand eines Werts vom Zentrum seiner Gruppe (Tabelle «Gruppen»); n, z̄, s_z²: Zeilen, Mittelwert und Varianz von z je Gruppe; Z: der Mittelwert aller z; k: Gruppen, N: verwendete Zeilen; df: Freiheitsgrade.",
+        "left_out": "Verwendete Zeilen: {n}. Ausgelassene Zeilen: {missing} (ohne Gruppe oder ohne Zahl in einer Gruppe).",
+        "tables": {"deviations": "Abstände vom Zentrum (z)"},
+        "charts": {"interval": "Mittlerer Abstand vom Zentrum, mit seinem Intervall"}
+      },
+      "pearson": {
+        "name": "Pearson-Korrelation",
+        "stats": {
+          "test": {"estimate": "Korrelation (r)", "null_value": "Korrelation unter H0", "statistic": "t-Statistik"}
+        },
+        "kpi": {"statistic": "t-Statistik", "estimate": "Korrelation r"},
+        "symbols": "x = «{x}», y = «{y}». r: Pearson-Korrelation, n: Zeilen mit beiden (Tabelle «Gruppen»); z: das Normalquantil des Intervalls; df: Freiheitsgrade.",
+        "left_out": "Verwendete Zeilen: {n}. Ausgelassene Zeilen: {missing} (keine Zahl in einer der beiden Spalten).",
+        "tables": {"extremes": "Kleinster und größter Wert"}
       }
     },
     "stats": {
@@ -275,7 +636,38 @@
         "ci_low": "Konfidenzintervall des Schätzwerts, untere Grenze",
         "ci_high": "Konfidenzintervall des Schätzwerts, obere Grenze",
         "cohen_d": "Effektstärke: Cohens d",
-        "hedges_g": "Effektstärke: Hedges' g"
+        "hedges_g": "Effektstärke: Hedges' g",
+        "k": "Gruppen (k)",
+        "grand_mean": "Gesamtmittelwert (M)",
+        "ss_between": "Quadratsumme zwischen den Gruppen",
+        "ss_within": "Quadratsumme innerhalb der Gruppen",
+        "ms_between": "Mittleres Quadrat zwischen den Gruppen",
+        "ms_within": "Mittleres Quadrat innerhalb der Gruppen",
+        "sum_weights": "Summe der Gewichte (∑ w)",
+        "weighted_mean": "Gewichteter Mittelwert (m_w)",
+        "welch_lambda": "Welch-Korrektur (Λ)",
+        "df_1": "Freiheitsgrade, Zähler",
+        "df_2": "Freiheitsgrade, Nenner",
+        "eta_squared": "Effektstärke: η²",
+        "omega_squared": "Effektstärke: ω²",
+        "n_pairs": "Verglichene Paare",
+        "posthoc_critical": "Kritischer Wert der studentisierten Spannweite",
+        "alpha_adjusted": "Niveau je Paar (korrigiertes α)",
+        "posthoc": "Paarweise Vergleiche",
+        "p_adjust": "Korrektur der p-Werte",
+        "mean": "Mittelwert (m)",
+        "var": "Varianz (s²)",
+        "sd": "Standardabweichung (s)",
+        "mean_diff": "Mittelwert der Differenzen (d)",
+        "var_diff": "Varianz der Differenzen (s_d²)",
+        "sd_diff": "Standardabweichung der Differenzen (s_d)",
+        "cohen_dz": "Effektstärke: Cohens dz",
+        "covariance": "Kovarianz von x und y",
+        "fisher_z": "Fishers z = atanh(r)",
+        "fisher_se": "Standardfehler von z, 1 / √(n − 3)",
+        "z_quantile": "Normalquantil des Intervalls (z)",
+        "r_squared": "Bestimmtheitsmaß (r²)",
+        "posthoc_formula": "Formeln eines Paars"
       },
       "group": {
         "n": "n",
@@ -289,13 +681,33 @@
         "max": "Maximum",
         "q1": "1. Quartil",
         "median": "Median",
-        "q3": "3. Quartil"
+        "q3": "3. Quartil",
+        "weight": "Gewicht (w)",
+        "center": "Zentrum",
+        "dev_mean": "Mittelwert von z",
+        "dev_var": "Varianz von z",
+        "dev_sd": "Std.-Abw. von z",
+        "dev_se": "Std.-Fehler von z",
+        "dev_ci_low": "Mittel von z, KI unten",
+        "dev_ci_high": "Mittel von z, KI oben"
       },
       "hist": {"count": "Zeilen"},
       "curve": {
         "density": "Dichte unter H0",
         "reject_low": "Unterer kritischer Bereich",
         "reject_high": "Oberer kritischer Bereich"
+      },
+      "pair": {
+        "estimate": "Differenz",
+        "std_error": "Std.-Fehler",
+        "statistic": "Statistik",
+        "df": "Freiheitsgrade",
+        "critical": "Kritischer Wert",
+        "p_value": "p-Wert",
+        "p_adjusted": "Korrigierter p-Wert",
+        "ci_low": "KI unten",
+        "ci_high": "KI oben",
+        "decision": "Entscheidung"
       }
     },
     "note": "Hinweis {n}",
@@ -305,7 +717,8 @@
       "computed": "So wird gerechnet",
       "groups": "Gruppen",
       "charts": "Diagramme",
-      "notes": "Hinweise"
+      "notes": "Hinweise",
+      "comparisons": "Paarweise Vergleiche"
     },
     "kpi": {"df": "Freiheitsgrade", "p_value": "p-Wert"},
     "decision": {
@@ -326,14 +739,18 @@
       "groups": {"title": "Gruppen", "group": "Gruppe"},
       "quartiles": {"title": "Fünf-Punkte-Zusammenfassung"},
       "intervals": {"title": "Intervalle der Mittelwerte"},
-      "notes": {"title": "Hinweise", "note": "Hinweise des Tests"}
+      "notes": {"title": "Hinweise", "note": "Hinweise des Tests"},
+      "pairs": {"title": "Paarweise Vergleiche"},
+      "pairs_p": {"title": "Vergleiche, p-Werte"},
+      "pairs_ci": {"title": "Vergleiche, Intervalle"}
     },
     "charts": {
       "boxplot": "Boxplot: {by}",
       "interval": "Mittelwerte mit ihren Konfidenzintervallen",
       "histogram": "Histogramm: {by}",
       "density": "Verteilung der Statistik unter H0",
-      "density_caption": "Gefüllt: der kritische Bereich. Senkrechte Linie: die Statistik des Tests."
+      "density_caption": "Gefüllt: der kritische Bereich. Senkrechte Linie: die Statistik des Tests.",
+      "pairs": "Differenzen der Mittelwerte mit ihren Intervallen"
     },
     "engine": "Berechnet in der Engine: {engine}.",
     "sample": {
@@ -342,11 +759,44 @@
       "random": "zufällige {percent} % der Zeilen",
       "and": "; "
     },
-    "footer": "Berechnet von Tabularia"
+    "footer": "Berechnet von Tabularia",
+    "df_pair": "{d1}; {d2}",
+    "posthoc": {
+      "pair": "Paar",
+      "reject": "H0 verworfen",
+      "keep": "H0 nicht verworfen",
+      "line": "Methode: {method}. {adjust}",
+      "method": {
+        "tukey": "Tukeys HSD (Tukey-Kramer bei Gruppen unterschiedlicher Größe)",
+        "games_howell": "Games-Howell (ohne gleiche Varianzen; Welch-Freiheitsgrade je Paar)",
+        "pairwise_t": "ein t-Test je Paar"
+      },
+      "adjust": {
+        "studentized_range": "Die korrigierten p-Werte und die Intervalle stammen aus der studentisierten Spannweite: Sie gelten für alle Paare zusammen.",
+        "holm": "Die p-Werte sind nach Holm korrigiert; diese Methode hat keine simultanen Intervalle.",
+        "bonferroni": "Die p-Werte sind nach Bonferroni korrigiert; jedes Intervall hat das Niveau 1 − α/m.",
+        "sidak": "Die p-Werte sind nach Šidák korrigiert; jedes Intervall hat das Niveau (1 − α)^(1/m).",
+        "none": "Die p-Werte sind nicht korrigiert: jedes Paar auf seinem eigenen Niveau, 1 − α."
+      }
+    }
   },
   "es": {
     "by": "{value} por {group}",
     "tests": {
+      "t_one_sample": {
+        "name": "Prueba t para una muestra",
+        "stats": {
+          "test": {
+            "estimate": "Estimación: la media (m)",
+            "null_value": "Media bajo H0 (mu)",
+            "statistic": "Estadístico t"
+          }
+        },
+        "kpi": {"statistic": "Estadístico t", "estimate": "Media"},
+        "symbols": "m: media, s: desviación típica, n: filas usadas, de «{column}» (tabla «Grupos»); mu: la media bajo H0; gl: grados de libertad.",
+        "left_out": "Filas usadas: {n}. Filas excluidas: {missing} (sin número: NULL o NaN).",
+        "charts": {"interval": "Media con su intervalo de confianza (discontinua: mu)"}
+      },
       "t_two_sample": {
         "name": "Prueba t de dos muestras",
         "variants": {"welch": "Prueba t de Welch", "student": "Prueba t de Student"},
@@ -361,6 +811,65 @@
         "kpi": {"statistic": "Estadístico t", "estimate": "Diferencia de las medias"},
         "symbols": "1 = «{g1}», 2 = «{g2}». m: media, s²: varianza, n: filas usadas, de cada grupo (tabla «Grupos»); sp²: varianza combinada; mu: la diferencia bajo H0; df: grados de libertad.",
         "left_out": "Filas usadas: {n}. Filas excluidas: {missing} (sin grupo, o sin valor en uno de los dos grupos)."
+      },
+      "t_paired": {
+        "name": "Prueba t para datos pareados",
+        "stats": {
+          "test": {
+            "estimate": "Estimación: la media de las diferencias (d)",
+            "null_value": "Diferencia media bajo H0 (mu)",
+            "statistic": "Estadístico t"
+          }
+        },
+        "kpi": {"statistic": "Estadístico t", "estimate": "Media de las diferencias"},
+        "symbols": "x = «{x}», y = «{y}». d: media de las diferencias x − y, s_d: su desviación típica, n: filas con ambas (tabla «Grupos»); mu: la diferencia media bajo H0; gl: grados de libertad.",
+        "left_out": "Filas usadas: {n}. Filas excluidas: {missing} (sin número en una de las dos columnas).",
+        "charts": {"interval": "Media de las diferencias con su intervalo (discontinua: mu)"}
+      },
+      "anova": {
+        "name": "ANOVA de un factor",
+        "variants": {"one_way": "ANOVA de un factor", "welch": "ANOVA de Welch"},
+        "stats": {
+          "test": {"statistic": "Estadístico F"}
+        },
+        "kpi": {"statistic": "Estadístico F", "effect": "Tamaño del efecto η²"},
+        "symbols": "k: grupos, N: filas usadas; n, m, s²: filas, media y varianza de cada grupo (tabla «Grupos»); M: media general; w = n / s²: el peso de un grupo en la ANOVA de Welch; Λ: la corrección de Welch; gl: grados de libertad.",
+        "left_out": "Filas usadas: {n}. Filas excluidas: {missing} (sin grupo, o sin número en un grupo)."
+      },
+      "var_f": {
+        "name": "Prueba F de dos varianzas",
+        "stats": {
+          "test": {
+            "estimate": "Cociente de las varianzas (s1² / s2²)",
+            "null_value": "Cociente bajo H0",
+            "statistic": "Estadístico F"
+          }
+        },
+        "kpi": {"statistic": "Estadístico F", "estimate": "Cociente de las varianzas"},
+        "symbols": "1 = «{g1}», 2 = «{g2}». s²: varianza, n: filas usadas, de cada grupo (tabla «Grupos»); ratio: el cociente bajo H0; q: el cuantil de F en cada extremo del intervalo (los valores críticos); gl: grados de libertad.",
+        "left_out": "Filas usadas: {n}. Filas excluidas: {missing} (sin grupo, o sin valor en uno de los dos grupos)."
+      },
+      "levene": {
+        "name": "Prueba de Levene",
+        "variants": {"median": "Prueba de Brown–Forsythe (Levene, mediana)", "mean": "Prueba de Levene (media)"},
+        "stats": {
+          "test": {"statistic": "Estadístico F", "grand_mean": "Media de todas las z (Z)"}
+        },
+        "kpi": {"statistic": "Estadístico F", "groups": "Grupos"},
+        "symbols": "z: la distancia de un valor al centro de su grupo (tabla «Grupos»); n, z̄, s_z²: filas, media y varianza de z en cada grupo; Z: la media de todas las z; k: grupos, N: filas usadas; gl: grados de libertad.",
+        "left_out": "Filas usadas: {n}. Filas excluidas: {missing} (sin grupo, o sin número en un grupo).",
+        "tables": {"deviations": "Distancias al centro (z)"},
+        "charts": {"interval": "Distancia media al centro, con su intervalo"}
+      },
+      "pearson": {
+        "name": "Correlación de Pearson",
+        "stats": {
+          "test": {"estimate": "Correlación (r)", "null_value": "Correlación bajo H0", "statistic": "Estadístico t"}
+        },
+        "kpi": {"statistic": "Estadístico t", "estimate": "Correlación r"},
+        "symbols": "x = «{x}», y = «{y}». r: correlación de Pearson, n: filas con ambas (tabla «Grupos»); z: el cuantil normal del intervalo; gl: grados de libertad.",
+        "left_out": "Filas usadas: {n}. Filas excluidas: {missing} (sin número en una de las dos columnas).",
+        "tables": {"extremes": "Mínimo y máximo"}
       }
     },
     "stats": {
@@ -390,7 +899,38 @@
         "ci_low": "Intervalo de confianza de la estimación, límite inferior",
         "ci_high": "Intervalo de confianza de la estimación, límite superior",
         "cohen_d": "Tamaño del efecto: d de Cohen",
-        "hedges_g": "Tamaño del efecto: g de Hedges"
+        "hedges_g": "Tamaño del efecto: g de Hedges",
+        "k": "Grupos (k)",
+        "grand_mean": "Media general (M)",
+        "ss_between": "Suma de cuadrados entre los grupos",
+        "ss_within": "Suma de cuadrados dentro de los grupos",
+        "ms_between": "Cuadrado medio entre los grupos",
+        "ms_within": "Cuadrado medio dentro de los grupos",
+        "sum_weights": "Suma de los pesos (∑ w)",
+        "weighted_mean": "Media ponderada (m_w)",
+        "welch_lambda": "Corrección de Welch (Λ)",
+        "df_1": "Grados de libertad, numerador",
+        "df_2": "Grados de libertad, denominador",
+        "eta_squared": "Tamaño del efecto: η²",
+        "omega_squared": "Tamaño del efecto: ω²",
+        "n_pairs": "Pares comparados",
+        "posthoc_critical": "Valor crítico del rango studentizado",
+        "alpha_adjusted": "Nivel de cada par (α ajustado)",
+        "posthoc": "Comparaciones por pares",
+        "p_adjust": "Corrección de los p-valores",
+        "mean": "Media (m)",
+        "var": "Varianza (s²)",
+        "sd": "Desviación típica (s)",
+        "mean_diff": "Media de las diferencias (d)",
+        "var_diff": "Varianza de las diferencias (s_d²)",
+        "sd_diff": "Desviación típica de las diferencias (s_d)",
+        "cohen_dz": "Tamaño del efecto: dz de Cohen",
+        "covariance": "Covarianza de x e y",
+        "fisher_z": "z de Fisher = atanh(r)",
+        "fisher_se": "Error estándar de z, 1 / √(n − 3)",
+        "z_quantile": "Cuantil normal del intervalo (z)",
+        "r_squared": "Coeficiente de determinación (r²)",
+        "posthoc_formula": "Fórmulas de un par"
       },
       "group": {
         "n": "n",
@@ -404,13 +944,33 @@
         "max": "Máximo",
         "q1": "1.er cuartil",
         "median": "Mediana",
-        "q3": "3.er cuartil"
+        "q3": "3.er cuartil",
+        "weight": "Peso (w)",
+        "center": "Centro",
+        "dev_mean": "Media de z",
+        "dev_var": "Varianza de z",
+        "dev_sd": "Desv. típica de z",
+        "dev_se": "Error est. de z",
+        "dev_ci_low": "Media de z, IC inf.",
+        "dev_ci_high": "Media de z, IC sup."
       },
       "hist": {"count": "Filas"},
       "curve": {
         "density": "Densidad bajo H0",
         "reject_low": "Región crítica inferior",
         "reject_high": "Región crítica superior"
+      },
+      "pair": {
+        "estimate": "Diferencia",
+        "std_error": "Error est.",
+        "statistic": "Estadístico",
+        "df": "Grados de libertad",
+        "critical": "Valor crítico",
+        "p_value": "p-valor",
+        "p_adjusted": "p-valor ajustado",
+        "ci_low": "IC inf.",
+        "ci_high": "IC sup.",
+        "decision": "Decisión"
       }
     },
     "note": "Nota {n}",
@@ -420,7 +980,8 @@
       "computed": "Cómo se calcula",
       "groups": "Grupos",
       "charts": "Gráficos",
-      "notes": "Notas"
+      "notes": "Notas",
+      "comparisons": "Comparaciones por pares"
     },
     "kpi": {"df": "Grados de libertad", "p_value": "Valor p"},
     "decision": {
@@ -441,14 +1002,18 @@
       "groups": {"title": "Grupos", "group": "Grupo"},
       "quartiles": {"title": "Resumen de cinco números"},
       "intervals": {"title": "Intervalos de las medias"},
-      "notes": {"title": "Notas", "note": "Notas de la prueba"}
+      "notes": {"title": "Notas", "note": "Notas de la prueba"},
+      "pairs": {"title": "Comparaciones por pares"},
+      "pairs_p": {"title": "Comparaciones, p-valores"},
+      "pairs_ci": {"title": "Comparaciones, intervalos"}
     },
     "charts": {
       "boxplot": "Diagrama de caja: {by}",
       "interval": "Medias con sus intervalos de confianza",
       "histogram": "Histograma: {by}",
       "density": "Distribución del estadístico bajo H0",
-      "density_caption": "Área coloreada: la región crítica. Línea vertical: el estadístico de la prueba."
+      "density_caption": "Área coloreada: la región crítica. Línea vertical: el estadístico de la prueba.",
+      "pairs": "Diferencias de las medias con sus intervalos"
     },
     "engine": "Calculado en el motor: {engine}.",
     "sample": {
@@ -457,11 +1022,44 @@
       "random": "un {percent} % aleatorio de las filas",
       "and": "; "
     },
-    "footer": "Calculado por Tabularia"
+    "footer": "Calculado por Tabularia",
+    "df_pair": "{d1}; {d2}",
+    "posthoc": {
+      "pair": "Par",
+      "reject": "H0 rechazada",
+      "keep": "H0 no rechazada",
+      "line": "Método: {method}. {adjust}",
+      "method": {
+        "tukey": "HSD de Tukey (Tukey–Kramer para grupos de distinto tamaño)",
+        "games_howell": "Games–Howell (sin suponer varianzas iguales; los grados de libertad de Welch para cada par)",
+        "pairwise_t": "una prueba t para cada par"
+      },
+      "adjust": {
+        "studentized_range": "Los p-valores ajustados y los intervalos vienen del rango studentizado: valen para todos los pares a la vez.",
+        "holm": "Los p-valores se ajustan con el método de Holm, que no tiene intervalos simultáneos.",
+        "bonferroni": "Los p-valores se ajustan con el método de Bonferroni; cada intervalo tiene nivel 1 − α/m.",
+        "sidak": "Los p-valores se ajustan con el método de Šidák; cada intervalo tiene nivel (1 − α)^(1/m).",
+        "none": "Los p-valores no se ajustan: cada par a su propio nivel, 1 − α."
+      }
+    }
   },
   "fr": {
     "by": "{value} par {group}",
     "tests": {
+      "t_one_sample": {
+        "name": "Test t à un échantillon",
+        "stats": {
+          "test": {
+            "estimate": "Estimation : la moyenne (m)",
+            "null_value": "Moyenne sous H0 (mu)",
+            "statistic": "Statistique t"
+          }
+        },
+        "kpi": {"statistic": "Statistique t", "estimate": "Moyenne"},
+        "symbols": "m : moyenne, s : écart type, n : lignes utilisées, de « {column} » (tableau « Groupes ») ; mu : la moyenne sous H0 ; ddl : degrés de liberté.",
+        "left_out": "Lignes utilisées : {n}. Lignes écartées : {missing} (sans nombre : NULL ou NaN).",
+        "charts": {"interval": "Moyenne avec son intervalle de confiance (tirets : mu)"}
+      },
       "t_two_sample": {
         "name": "Test t à deux échantillons",
         "variants": {"welch": "Test t de Welch", "student": "Test t de Student"},
@@ -476,6 +1074,65 @@
         "kpi": {"statistic": "Statistique t", "estimate": "Différence des moyennes"},
         "symbols": "1 = «{g1}», 2 = «{g2}». m : moyenne, s² : variance, n : lignes utilisées, de chaque groupe (tableau «Groupes») ; sp² : variance commune ; mu : la différence sous H0 ; df : degrés de liberté.",
         "left_out": "Lignes utilisées : {n}. Lignes écartées : {missing} (sans groupe, ou sans valeur dans l'un des deux groupes)."
+      },
+      "t_paired": {
+        "name": "Test t apparié",
+        "stats": {
+          "test": {
+            "estimate": "Estimation : la moyenne des différences (d)",
+            "null_value": "Différence moyenne sous H0 (mu)",
+            "statistic": "Statistique t"
+          }
+        },
+        "kpi": {"statistic": "Statistique t", "estimate": "Moyenne des différences"},
+        "symbols": "x = « {x} », y = « {y} ». d : moyenne des différences x − y, s_d : leur écart type, n : lignes avec les deux (tableau « Groupes ») ; mu : la différence moyenne sous H0 ; ddl : degrés de liberté.",
+        "left_out": "Lignes utilisées : {n}. Lignes écartées : {missing} (sans nombre dans l'une des deux colonnes).",
+        "charts": {"interval": "Moyenne des différences avec son intervalle (tirets : mu)"}
+      },
+      "anova": {
+        "name": "ANOVA à un facteur",
+        "variants": {"one_way": "ANOVA à un facteur", "welch": "ANOVA de Welch"},
+        "stats": {
+          "test": {"statistic": "Statistique F"}
+        },
+        "kpi": {"statistic": "Statistique F", "effect": "Taille d'effet η²"},
+        "symbols": "k : groupes, N : lignes utilisées ; n, m, s² : lignes, moyenne et variance de chaque groupe (tableau « Groupes ») ; M : moyenne générale ; w = n / s² : le poids d'un groupe dans l'ANOVA de Welch ; Λ : la correction de Welch ; ddl : degrés de liberté.",
+        "left_out": "Lignes utilisées : {n}. Lignes écartées : {missing} (sans groupe, ou sans nombre dans un groupe)."
+      },
+      "var_f": {
+        "name": "Test F de deux variances",
+        "stats": {
+          "test": {
+            "estimate": "Rapport des variances (s1² / s2²)",
+            "null_value": "Rapport sous H0",
+            "statistic": "Statistique F"
+          }
+        },
+        "kpi": {"statistic": "Statistique F", "estimate": "Rapport des variances"},
+        "symbols": "1 = « {g1} », 2 = « {g2} ». s² : variance, n : lignes utilisées, de chaque groupe (tableau « Groupes ») ; ratio : le rapport sous H0 ; q : le quantile de F à chaque bout de l'intervalle (les valeurs critiques) ; ddl : degrés de liberté.",
+        "left_out": "Lignes utilisées : {n}. Lignes écartées : {missing} (sans groupe, ou sans valeur dans l'un des deux groupes)."
+      },
+      "levene": {
+        "name": "Test de Levene",
+        "variants": {"median": "Test de Brown–Forsythe (Levene, médiane)", "mean": "Test de Levene (moyenne)"},
+        "stats": {
+          "test": {"statistic": "Statistique F", "grand_mean": "Moyenne de tous les z (Z)"}
+        },
+        "kpi": {"statistic": "Statistique F", "groups": "Groupes"},
+        "symbols": "z : la distance d'une valeur au centre de son groupe (tableau « Groupes ») ; n, z̄, s_z² : lignes, moyenne et variance de z dans chaque groupe ; Z : la moyenne de tous les z ; k : groupes, N : lignes utilisées ; ddl : degrés de liberté.",
+        "left_out": "Lignes utilisées : {n}. Lignes écartées : {missing} (sans groupe, ou sans nombre dans un groupe).",
+        "tables": {"deviations": "Distances au centre (z)"},
+        "charts": {"interval": "Distance moyenne au centre, avec son intervalle"}
+      },
+      "pearson": {
+        "name": "Corrélation de Pearson",
+        "stats": {
+          "test": {"estimate": "Corrélation (r)", "null_value": "Corrélation sous H0", "statistic": "Statistique t"}
+        },
+        "kpi": {"statistic": "Statistique t", "estimate": "Corrélation r"},
+        "symbols": "x = « {x} », y = « {y} ». r : corrélation de Pearson, n : lignes avec les deux (tableau « Groupes ») ; z : le quantile normal de l'intervalle ; ddl : degrés de liberté.",
+        "left_out": "Lignes utilisées : {n}. Lignes écartées : {missing} (sans nombre dans l'une des deux colonnes).",
+        "tables": {"extremes": "Plus petite et plus grande valeur"}
       }
     },
     "stats": {
@@ -505,7 +1162,38 @@
         "ci_low": "Intervalle de confiance de l'estimation, borne inférieure",
         "ci_high": "Intervalle de confiance de l'estimation, borne supérieure",
         "cohen_d": "Taille d'effet : d de Cohen",
-        "hedges_g": "Taille d'effet : g de Hedges"
+        "hedges_g": "Taille d'effet : g de Hedges",
+        "k": "Groupes (k)",
+        "grand_mean": "Moyenne générale (M)",
+        "ss_between": "Somme des carrés entre les groupes",
+        "ss_within": "Somme des carrés intra-groupes",
+        "ms_between": "Carré moyen entre les groupes",
+        "ms_within": "Carré moyen intra-groupes",
+        "sum_weights": "Somme des poids (∑ w)",
+        "weighted_mean": "Moyenne pondérée (m_w)",
+        "welch_lambda": "Correction de Welch (Λ)",
+        "df_1": "Degrés de liberté, numérateur",
+        "df_2": "Degrés de liberté, dénominateur",
+        "eta_squared": "Taille d'effet : η²",
+        "omega_squared": "Taille d'effet : ω²",
+        "n_pairs": "Paires comparées",
+        "posthoc_critical": "Valeur critique de l'étendue studentisée",
+        "alpha_adjusted": "Niveau de chaque paire (α ajusté)",
+        "posthoc": "Comparaisons par paires",
+        "p_adjust": "Correction des p-valeurs",
+        "mean": "Moyenne (m)",
+        "var": "Variance (s²)",
+        "sd": "Écart type (s)",
+        "mean_diff": "Moyenne des différences (d)",
+        "var_diff": "Variance des différences (s_d²)",
+        "sd_diff": "Écart type des différences (s_d)",
+        "cohen_dz": "Taille d'effet : dz de Cohen",
+        "covariance": "Covariance de x et y",
+        "fisher_z": "z de Fisher = atanh(r)",
+        "fisher_se": "Erreur type de z, 1 / √(n − 3)",
+        "z_quantile": "Quantile normal de l'intervalle (z)",
+        "r_squared": "Coefficient de détermination (r²)",
+        "posthoc_formula": "Formules d'une paire"
       },
       "group": {
         "n": "n",
@@ -519,13 +1207,33 @@
         "max": "Maximum",
         "q1": "1er quartile",
         "median": "Médiane",
-        "q3": "3e quartile"
+        "q3": "3e quartile",
+        "weight": "Poids (w)",
+        "center": "Centre",
+        "dev_mean": "Moyenne de z",
+        "dev_var": "Variance de z",
+        "dev_sd": "Écart type de z",
+        "dev_se": "Erreur type de z",
+        "dev_ci_low": "Moyenne de z, IC inf.",
+        "dev_ci_high": "Moyenne de z, IC sup."
       },
       "hist": {"count": "Lignes"},
       "curve": {
         "density": "Densité sous H0",
         "reject_low": "Région critique inférieure",
         "reject_high": "Région critique supérieure"
+      },
+      "pair": {
+        "estimate": "Différence",
+        "std_error": "Erreur type",
+        "statistic": "Statistique",
+        "df": "Degrés de liberté",
+        "critical": "Valeur critique",
+        "p_value": "p-valeur",
+        "p_adjusted": "p-valeur ajustée",
+        "ci_low": "IC inf.",
+        "ci_high": "IC sup.",
+        "decision": "Décision"
       }
     },
     "note": "Note {n}",
@@ -535,7 +1243,8 @@
       "computed": "Comment c'est calculé",
       "groups": "Groupes",
       "charts": "Graphiques",
-      "notes": "Notes"
+      "notes": "Notes",
+      "comparisons": "Comparaisons par paires"
     },
     "kpi": {"df": "Degrés de liberté", "p_value": "Valeur p"},
     "decision": {
@@ -556,14 +1265,18 @@
       "groups": {"title": "Groupes", "group": "Groupe"},
       "quartiles": {"title": "Résumé en cinq nombres"},
       "intervals": {"title": "Intervalles des moyennes"},
-      "notes": {"title": "Notes", "note": "Notes du test"}
+      "notes": {"title": "Notes", "note": "Notes du test"},
+      "pairs": {"title": "Comparaisons par paires"},
+      "pairs_p": {"title": "Comparaisons, p-valeurs"},
+      "pairs_ci": {"title": "Comparaisons, intervalles"}
     },
     "charts": {
       "boxplot": "Boîte à moustaches : {by}",
       "interval": "Moyennes avec leurs intervalles de confiance",
       "histogram": "Histogramme : {by}",
       "density": "Loi de la statistique sous H0",
-      "density_caption": "Zone colorée : la région critique. Ligne verticale : la statistique du test."
+      "density_caption": "Zone colorée : la région critique. Ligne verticale : la statistique du test.",
+      "pairs": "Différences des moyennes avec leurs intervalles"
     },
     "engine": "Calculé dans le moteur : {engine}.",
     "sample": {
@@ -572,6 +1285,25 @@
       "random": "{percent} % des lignes, au hasard",
       "and": " ; "
     },
-    "footer": "Calculé par Tabularia"
+    "footer": "Calculé par Tabularia",
+    "df_pair": "{d1} ; {d2}",
+    "posthoc": {
+      "pair": "Paire",
+      "reject": "H0 rejetée",
+      "keep": "H0 non rejetée",
+      "line": "Méthode : {method}. {adjust}",
+      "method": {
+        "tukey": "HSD de Tukey (Tukey–Kramer pour des groupes de tailles différentes)",
+        "games_howell": "Games–Howell (sans supposer des variances égales ; les degrés de liberté de Welch pour chaque paire)",
+        "pairwise_t": "un test t pour chaque paire"
+      },
+      "adjust": {
+        "studentized_range": "Les p-valeurs ajustées et les intervalles viennent de l'étendue studentisée : ils valent pour toutes les paires ensemble.",
+        "holm": "Les p-valeurs sont ajustées par la méthode de Holm, qui n'a pas d'intervalle simultané.",
+        "bonferroni": "Les p-valeurs sont ajustées par la méthode de Bonferroni ; chaque intervalle a le niveau 1 − α/m.",
+        "sidak": "Les p-valeurs sont ajustées par la méthode de Šidák ; chaque intervalle a le niveau (1 − α)^(1/m).",
+        "none": "Les p-valeurs ne sont pas ajustées : chaque paire à son propre niveau, 1 − α."
+      }
+    }
   }
 }

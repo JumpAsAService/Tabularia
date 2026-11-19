@@ -14,8 +14,8 @@ import type { ColumnInfo } from '~/composables/useApi'
 import { isSuperseded } from '~/composables/usePreviewSlots'
 import { isNumericDtype } from '~/composables/previewGrid'
 import {
-  STAT_LEVELS_SHOWN, statFields, statForbidden, statHintKey, statLevelLabels, statNumberProblem, statReasonKey, statSet, statTestOf,
-  type StatField,
+  STAT_LEVELS_SHOWN, statApplies, statFieldWordKey, statFields, statForbidden, statHintKey, statLevelLabels, statNumberProblem,
+  statReasonKey, statSet, statTestOf, type StatField,
 } from '~/composables/statTests'
 
 const props = defineProps<{
@@ -32,9 +32,20 @@ const emit = defineEmits<{ (e: 'update', params: Record<string, any>): void }>()
 const { t, te } = useI18n()
 
 const test = computed(() => statTestOf(props.opType))
-const fields = computed<StatField[]>(() => (test.value ? statFields(test.value) : []))
+// a key that matters only with some values of another (the correction of pairwise t tests)
+// is shown only then
+const fields = computed<StatField[]>(() => {
+  const now = test.value
+  return now ? statFields(now).filter((f) => statApplies(now, f.key, props.params)) : []
+})
 const idOf = (key: string, part = '') => `stat-${props.nodeId}-${key}${part ? `-${part}` : ''}`
-const hintOf = (f: StatField) => (te(`stat.hints.${f.key}`) ? t(`stat.hints.${f.key}`) : '')
+const has = (key: string) => te(key)
+// the test's own words for a key when it has some, else the shared ones
+const labelOf = (f: StatField) => (test.value ? t(statFieldWordKey(test.value, f.key, 'params', has)) : f.key)
+const hintOf = (f: StatField) => {
+  const key = test.value ? statFieldWordKey(test.value, f.key, 'hints', has) : ''
+  return key && te(key) ? t(key) : ''
+}
 const dtypeOf = (column: unknown) => props.inputColumns.find((c) => c.name === column)?.dtype ?? ''
 
 function set(key: string, value: unknown) {
@@ -147,7 +158,7 @@ function setLevel(f: StatField, place: number, value: unknown) {
 function levelNote(f: StatField): string {
   const column = columnFor(f)
   const got = levels[f.key]
-  if (!column) return t('stat.form.chooseColumnFirst', { field: t(`stat.params.${f.of}`) })
+  if (!column) return t('stat.form.chooseColumnFirst', { field: test.value ? t(statFieldWordKey(test.value, f.of ?? '', 'params', has)) : '' })
   if (!got || got.state === 'loading') return ''
   if (got.state === 'failed') return t('stat.form.levelsFailed')
   const count = f.count ?? 2
@@ -196,7 +207,7 @@ function forbidden(f: StatField, value: unknown): string {
     <template v-for="f in fields" :key="f.key">
       <!-- a column of the step's input -->
       <div v-if="f.control === 'column'" class="field">
-        <span :id="idOf(f.key, 'label')" class="lbl">{{ $t(`stat.params.${f.key}`) }}</span>
+        <span :id="idOf(f.key, 'label')" class="lbl">{{ labelOf(f) }}</span>
         <Select
           :id="idOf(f.key)"
           :model-value="params[f.key]"
@@ -213,7 +224,7 @@ function forbidden(f: StatField, value: unknown): string {
 
       <!-- some of a column's values: the groups to compare, in their order -->
       <div v-else-if="f.control === 'levels'" class="field" role="group" :aria-labelledby="idOf(f.key, 'label')">
-        <span :id="idOf(f.key, 'label')" class="lbl">{{ $t(`stat.params.${f.key}`) }}</span>
+        <span :id="idOf(f.key, 'label')" class="lbl">{{ labelOf(f) }}</span>
         <span v-if="levels[f.key]?.state === 'loading'" class="sk" style="width: 130px" aria-busy="true" />
         <template v-else-if="levels[f.key]?.state === 'done'">
           <div v-for="(_, place) in (draft[f.key] ?? [])" :key="place" class="place">
@@ -222,7 +233,7 @@ function forbidden(f: StatField, value: unknown): string {
               :model-value="draft[f.key]?.[place] ?? ''"
               :options="levelOptions(f, place)"
               searchable
-              :aria-label="`${$t(`stat.params.${f.key}`)}: ${$t('stat.form.level', { n: place + 1 })}`"
+              :aria-label="`${labelOf(f)}: ${$t('stat.form.level', { n: place + 1 })}`"
               :aria-describedby="hintOf(f) ? idOf(f.key, 'hint') : undefined"
               @update:model-value="(v: any) => setLevel(f, place, v)"
             />
@@ -242,14 +253,14 @@ function forbidden(f: StatField, value: unknown): string {
             :aria-describedby="hintOf(f) ? idOf(f.key, 'hint') : undefined"
             @change="set(f.key, ($event.target as HTMLInputElement).checked)"
           />
-          {{ $t(`stat.params.${f.key}`) }}
+          {{ labelOf(f) }}
         </label>
         <p v-if="hintOf(f)" :id="idOf(f.key, 'hint')" class="hint">{{ hintOf(f) }}</p>
       </div>
 
       <!-- a number: written when the box is left, as every field of the panel -->
       <div v-else-if="f.control === 'number'" class="field">
-        <label :for="idOf(f.key)" class="lbl">{{ $t(`stat.params.${f.key}`) }}</label>
+        <label :for="idOf(f.key)" class="lbl">{{ labelOf(f) }}</label>
         <input
           :id="idOf(f.key)"
           type="number"
@@ -266,7 +277,7 @@ function forbidden(f: StatField, value: unknown): string {
 
       <!-- one of a few choices: native radio buttons, the arrows move among them -->
       <fieldset v-else-if="f.control === 'choice'" class="field choices">
-        <legend class="lbl">{{ $t(`stat.params.${f.key}`) }}</legend>
+        <legend class="lbl">{{ labelOf(f) }}</legend>
         <label v-for="c in f.choices" :key="c" class="chk" :class="{ off: !!forbidden(f, c) && chosen(f) !== c }">
           <input
             type="radio"

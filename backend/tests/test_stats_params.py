@@ -37,7 +37,7 @@ def test_every_test_is_an_operation_on_every_registry():
 
 def test_the_table_is_complete_for_every_test():
     for test, spec in catalog.TESTS.items():
-        assert {"family", "needs", "takes", "defaults"} <= set(spec) <= {"family", "needs", "takes", "defaults", "forbids"}, test
+        assert {"family", "needs", "takes", "defaults"} <= set(spec) <= {"family", "needs", "takes", "defaults", "forbids", "applies"}, test
         assert not set(spec["needs"]) & set(spec["takes"]), test
         assert set(spec["defaults"]) == set(spec["takes"]), test  # a default for every key it may lack
         for key, kind in {**spec["needs"], **spec["takes"]}.items():
@@ -230,6 +230,7 @@ def test_a_note_when_student_meets_unequal_variances(name, storage, shops):
     assert not [r for r in rows if r["stat"].startswith("note_")]
 
 
+
 # ── two groups chosen among many ─────────────────────────────────────────────
 @pytest.fixture
 def stores(storage):
@@ -264,7 +265,7 @@ def test_two_groups_chosen_among_more_than_the_limit(name, storage, stores):
         res = engine.preview(stores, ops, limit=1000, use_cache=False)
         return {r["key"]: (r["value"], r["text"]) for r in res.rows if r["stat"] != "engine"}
 
-    for test in ("t_two_sample",):
+    for test in ("t_two_sample", "var_f"):
         chosen = numbers([{"type": f"stat_{test}", "params": {"value": "amount", "group": "shop", "groups": ["s200", "s017"]}}])
         alone = numbers([{"type": "filter", "params": {"column": "shop", "operator": "in", "value": ["s200", "s017"]}},
                          {"type": f"stat_{test}", "params": {"value": "amount", "group": "shop", "groups": ["s200", "s017"]}}])
@@ -332,3 +333,144 @@ def test_the_labels_of_two_groups_as_typed_values():
     assert typed_labels(["2024-03-01", "yesterday"], "date") == [dt.date(2024, 3, 1)]
     assert typed_labels(["true", "false", "True"], "boolean") == [True, False]
     assert typed_labels(["a"], None) is None
+
+
+# ── lot 2: what each test refuses ────────────────────────────────────────────
+NUMBERS = {"amount": Column("Float64", True), "units": Column("Int64", True), "channel": Column("String", False)}
+
+
+@pytest.mark.parametrize("test, params, sentence", [
+    ("t_one_sample", {}, "stat_t_one_sample: 'value' is required"),
+    ("t_one_sample", {"value": "amount", "group": "channel"},
+     "stat_t_one_sample: there is no parameter 'group' (it takes: value, mu, alternative, alpha, detail)"),
+    ("t_paired", {"x": "amount"}, "stat_t_paired: 'y' is required"),
+    ("t_paired", {"x": "amount", "y": "channel"},
+     "stat_t_paired: the column «channel» ('y') is not a number (String): convert it with a cast step, or choose another column"),
+    ("t_paired", {"x": "amount", "y": "units", "group": "channel"},
+     "stat_t_paired: there is no parameter 'group' (it takes: x, y, mu, alternative, alpha, detail)"),
+    ("pearson", {"x": "amount", "y": "units", "mu": 1}, "stat_pearson: there is no parameter 'mu' (it takes: x, y, alternative, alpha, detail)"),
+    ("anova", {"value": "amount"}, "stat_anova: 'group' is required"),
+    ("anova", {"value": "amount", "group": "channel", "posthoc": "scheffe"},
+     "stat_anova: 'posthoc' must be one of none, tukey, games_howell, pairwise_t"),
+    ("anova", {"value": "amount", "group": "channel", "p_adjust": "fdr"}, "stat_anova: 'p_adjust' must be one of holm, bonferroni, sidak, none"),
+    ("anova", {"value": "amount", "group": "channel", "var_equal": False, "posthoc": "tukey"},
+     "stat_anova: Tukey's HSD assumes equal variances: with Welch's ANOVA (var_equal = false) use Games–Howell"),
+    ("anova", {"value": "amount", "group": "channel", "posthoc": "games_howell"},
+     "stat_anova: Games–Howell is for unequal variances: with the classic ANOVA (var_equal = true) use Tukey's HSD"),
+    ("anova", {"value": "amount", "group": "channel", "alternative": "less"},
+     "stat_anova: there is no parameter 'alternative' (it takes: value, group, var_equal, posthoc, p_adjust, alpha, detail)"),
+    ("var_f", {"value": "amount", "group": "channel", "ratio": 0}, "stat_var_f: 'ratio' must be a number above 0"),
+    ("var_f", {"value": "amount", "group": "channel", "ratio": -1.5}, "stat_var_f: 'ratio' must be a number above 0"),
+    ("var_f", {"value": "amount", "group": "channel", "ratio": "2"}, "stat_var_f: 'ratio' must be a number above 0"),
+    ("levene", {"value": "amount", "group": "channel", "center": "trimmed"}, "stat_levene: 'center' must be one of median, mean"),
+])
+def test_lot_2_parameters_refused(test, params, sentence):
+    with pytest.raises(EngineError) as e:
+        check_params(test, params, NUMBERS)
+    assert str(e.value) == sentence
+
+
+def test_lot_2_defaults():
+    assert check_params("anova", {"value": "amount", "group": "channel"}, NUMBERS) == {
+        "value": "amount", "group": "channel", "var_equal": True, "posthoc": "none", "p_adjust": "holm", "alpha": 0.05, "detail": "results"}
+    assert check_params("var_f", {"value": "amount", "group": "channel", "ratio": 2}, NUMBERS)["ratio"] == 2.0
+    assert check_params("levene", {"value": "amount", "group": "channel"}, NUMBERS)["center"] == "median"
+    # the correction matters with pairwise t tests only: another post-hoc keeps its own
+    assert check_params("anova", {"value": "amount", "group": "channel", "posthoc": "tukey", "p_adjust": "sidak"}, NUMBERS)["p_adjust"] == "sidak"
+    assert catalog.applies("anova", "p_adjust", {"posthoc": "pairwise_t"})
+    assert not catalog.applies("anova", "p_adjust", {"posthoc": "tukey"})
+    assert catalog.applies("anova", "alpha", {"posthoc": "tukey"})
+
+
+@pytest.fixture
+def plants(storage):
+    """Five plants: «p1»…«p3» with spread values, «p4» constant, «p5» one usable value; a
+    column that is constant inside every plant; two columns of the same rows, one of them a
+    copy of the other; 25 lines for the limit of the pairwise comparisons."""
+    plant = ["p1"] * 6 + ["p2"] * 6 + ["p3"] * 6 + ["p4"] * 4 + ["p5"] * 3 + [None]
+    amount = [1.0, 2.5, 3.0, 4.5, 2.0, 3.5, 4.0, 5.5, 6.0, 4.5, 5.0, 6.5, 2.0, 2.5, 3.0, 1.5, 2.2, 2.8, 7.0, 7.0, 7.0, 7.0,
+              9.0, None, math.nan, 3.0]
+    n = len(plant)
+    df = pl.DataFrame({
+        "plant": plant, "amount": amount,
+        "flat": [{"p1": 1.0, "p2": 2.0, "p3": 3.0, "p4": 4.0, "p5": 5.0}.get(p, 0.0) for p in plant],
+        "a": [float(i % 7) for i in range(n)], "b": [float((i * 3) % 7) + 0.5 for i in range(n)],
+        "shifted": [float(i % 7) + 2.0 for i in range(n)],
+        "same": [5.0] * n, "wide": [math.inf if i == 2 else float(i) for i in range(n)],
+        "line": [f"l{i % 25:02d}" for i in range(n)], "one": ["x"] * n,
+    }, schema={"plant": pl.String, "amount": pl.Float64, "flat": pl.Float64, "a": pl.Float64, "b": pl.Float64, "same": pl.Float64,
+               "wide": pl.Float64, "line": pl.String, "one": pl.String, "shifted": pl.Float64})
+    return upload_df(storage, df, "datasets/stats_plants.parquet")
+
+
+@pytest.mark.parametrize("name", ENGINES)
+def test_lot_2_data_refused(name, storage, plants):
+    def say(test, **params):
+        with pytest.raises(EngineError) as e:
+            _engine(name, storage).preview(plants, [{"type": f"stat_{test}", "params": params}], limit=100, use_cache=False)
+        return str(e.value)
+
+    first_three = [{"type": "filter", "params": {"column": "plant", "operator": "in", "value": ["p1", "p2", "p3"]}}]
+
+    def say_on_three(test, **params):
+        with pytest.raises(EngineError) as e:
+            _engine(name, storage).preview(plants, first_three + [{"type": f"stat_{test}", "params": params}], limit=100, use_cache=False)
+        return str(e.value)
+
+    # one sample
+    assert say("t_one_sample", value="same") == "stat_t_one_sample: all the values of «same» are equal (the variance is 0): there is no t statistic"
+    assert say("t_one_sample", value="wide") == "stat_t_one_sample: the column «wide» holds infinite values: the test cannot be computed"
+    # two columns
+    assert say("t_paired", x="a", y="a") == "stat_t_paired: 'x' and 'y' are both the column «a»: choose two different columns"
+    assert say("t_paired", x="shifted", y="a") == (
+        "stat_t_paired: the differences «shifted» − «a» are all equal (their variance is 0): there is no t statistic")
+    one_row = [{"type": "limit", "params": {"n": 1}}]
+    with pytest.raises(EngineError) as e:
+        _engine(name, storage).preview(plants, one_row + [{"type": "stat_t_paired", "params": {"x": "a", "y": "b"}}], limit=100, use_cache=False)
+    assert str(e.value) == ("stat_t_paired: the columns «a» and «b» are both numbers on 1 row (a NULL or a NaN in either leaves the row out): "
+                            "at least 2 are needed")
+    assert say("pearson", x="a", y="same") == ("stat_pearson: all the values of «same» are equal on the rows used (the variance is 0): "
+                                               "there is no correlation")
+    assert say("pearson", x="wide", y="a") == "stat_pearson: the column «wide» holds infinite values: the test cannot be computed"
+    # several groups
+    assert say("anova", value="amount", group="one") == "stat_anova: the test compares groups and the column «one» has 1 (x): it needs at least two"
+    assert say("anova", value="amount", group="plant") == (
+        "stat_anova: the group «p5» has 1 usable value of «amount» (a NULL or a NaN is left out): at least 2 are needed")
+    assert say_on_three("anova", value="flat", group="plant") == (
+        "stat_anova: all the values of «flat» are equal inside every group (the variance within the groups is 0): there is no F statistic")
+    assert say("anova", value="a", group="line", posthoc="tukey") == (
+        "stat_anova: the pairwise comparisons ('posthoc') take 20 groups at most, and the column «line» has 25: "
+        "filter the groups first, or set 'posthoc' to none")
+    four = [{"type": "filter", "params": {"column": "plant", "operator": "in", "value": ["p1", "p2", "p4"]}}]
+    with pytest.raises(EngineError) as e:
+        _engine(name, storage).preview(plants, four + [{"type": "stat_anova", "params": {"value": "amount", "group": "plant", "var_equal": False}}],
+                                       limit=100, use_cache=False)
+    assert str(e.value) == ("stat_anova: all the values of «amount» are equal in the group «p4» (its variance is 0): Welch's ANOVA weighs "
+                            "each group by 1 / variance; use the classic ANOVA (var_equal = true)")
+    # variances
+    assert say("var_f", value="amount", group="plant", groups=["p1", "p4"]) == (
+        "stat_var_f: all the values of «amount» are equal in the group «p4» (its variance is 0): there is no F statistic")
+    assert say("levene", value="amount", group="plant") == (
+        "stat_levene: the group «p5» has 1 usable value of «amount» (a NULL or a NaN is left out): at least 2 are needed")
+    assert say_on_three("levene", value="flat", group="plant") == (
+        "stat_levene: every value of «flat» is as far from the median of its group as the others of the group "
+        "(the variance within the groups is 0): there is no F statistic")
+    assert say("levene", value="wide", group="plant") == (
+        "stat_levene: the column «wide» holds infinite values in the group «p1»: the test cannot be computed")
+
+
+@pytest.mark.parametrize("name", ENGINES)
+def test_lot_2_notes(name, storage, plants):
+    """The assumptions the numbers put in doubt, and a post-hoc read with care."""
+    three = [{"type": "filter", "params": {"column": "plant", "operator": "in", "value": ["p1", "p2", "p3"]}},
+             {"type": "compute", "params": {"columns": [{"name": "spread", "expr": "CASE WHEN plant = 'p1' THEN amount * 4 ELSE amount END"}]}}]
+
+    def notes(*ops, **params):
+        rows = _engine(name, storage).preview(plants, [*ops, {"type": "stat_anova", "params": params}], limit=1000, use_cache=False).rows
+        return [r["text"] for r in sorted(rows, key=lambda r: r["ord"]) if r["stat"].startswith("note_")]
+
+    assert notes(*three, value="spread", group="plant") == [
+        "The largest variance of a group is more than 4 times the smallest: Welch's ANOVA (var_equal = false) does not assume them equal."]
+    assert notes(*three, value="spread", group="plant", var_equal=False) == []
+    assert notes(*three, value="a", group="plant", posthoc="tukey") == [
+        "The ANOVA does not reject H0 at α = 0.05: the pairwise comparisons are shown all the same, and a difference they find is to be read with care."]

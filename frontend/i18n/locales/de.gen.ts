@@ -6080,9 +6080,46 @@ export default {
       "distributions": "Verteilungen"
     },
     "tests": {
+      "t_one_sample": {
+        "name": "Einstichproben-t-Test",
+        "hint": "Ist der Mittelwert einer Spalte gleich einem gegebenen Wert? Student-t-Test für eine Stichprobe.",
+        "hints": {
+          "mu": "Der Mittelwert, den die Nullhypothese behauptet."
+        }
+      },
       "t_two_sample": {
         "name": "Zweistichproben-t-Test",
         "hint": "Haben zwei Gruppen denselben Mittelwert? Welch-t-Test, oder Student-t-Test, wenn die Varianzen als gleich gelten."
+      },
+      "t_paired": {
+        "name": "t-Test für verbundene Stichproben",
+        "hint": "Zwei Messungen derselben Zeilen (vorher und nachher): Ist ihr mittlerer Unterschied null?",
+        "hints": {
+          "x": "Die erste Messung jeder Zeile (etwa vorher): getestet wird x − y.",
+          "mu": "Der mittlere Unterschied x − y, den die Nullhypothese behauptet: 0 für «keine Veränderung»."
+        }
+      },
+      "anova": {
+        "name": "Einfaktorielle ANOVA",
+        "hint": "Haben mehrere Gruppen denselben Mittelwert? Klassische oder Welch-ANOVA, mit paarweisen Vergleichen, die sagen, welche Gruppen sich unterscheiden.",
+        "hints": {
+          "var_equal": "Ein: die klassische ANOVA mit gepoolter Varianz innerhalb der Gruppen. Aus: die Welch-ANOVA, die keine gleichen Varianzen voraussetzt."
+        }
+      },
+      "var_f": {
+        "name": "F-Test zweier Varianzen",
+        "hint": "Haben zwei Gruppen dieselbe Varianz? Das Verhältnis ihrer Varianzen gegen eine F-Verteilung.",
+        "hints": {
+          "groups": "Die Varianz der ersten Gruppe durch die der zweiten. Auf «Automatisch» lassen, wenn die Spalte genau zwei Gruppen hat."
+        }
+      },
+      "levene": {
+        "name": "Levene-Test",
+        "hint": "Haben mehrere Gruppen dieselbe Varianz? Levene-Test, oder Brown-Forsythe mit dem Median: robust, wenn die Werte nicht normalverteilt sind."
+      },
+      "pearson": {
+        "name": "Pearson-Korrelation",
+        "hint": "Bewegen sich zwei Spalten derselben Zeilen gemeinsam? Pearsons r, sein Test und sein Konfidenzintervall."
       }
     },
     "params": {
@@ -6092,7 +6129,13 @@ export default {
       "var_equal": "Gleiche Varianzen",
       "mu": "Wert unter H0",
       "alternative": "Alternativhypothese",
-      "alpha": "Signifikanzniveau (α)"
+      "alpha": "Signifikanzniveau (α)",
+      "x": "Erste Spalte (x)",
+      "y": "Zweite Spalte (y)",
+      "posthoc": "Paarweise Vergleiche",
+      "p_adjust": "Korrektur für multiple Vergleiche",
+      "ratio": "Verhältnis unter H0",
+      "center": "Zentrum jeder Gruppe"
     },
     "hints": {
       "value": "Die Spalte, die gemessen wird.",
@@ -6100,14 +6143,40 @@ export default {
       "groups": "Die erste minus die zweite. Auf «Automatisch» lassen, wenn die Spalte genau zwei Gruppen hat.",
       "var_equal": "Ein: der klassische Test mit gepoolter Varianz. Aus: die Welch-Variante, die sie nicht voraussetzt.",
       "mu": "Was die Nullhypothese behauptet: 0 für «kein Unterschied».",
-      "alpha": "Zwischen 0 und 1. Die Konfidenzintervalle haben das Niveau 1 − α."
+      "alpha": "Zwischen 0 und 1. Die Konfidenzintervalle haben das Niveau 1 − α.",
+      "x": "Eine Zahl in jeder Zeile: mit der zweiten Spalte das Paar, das der Test liest.",
+      "y": "Eine Zeile, in der eine der beiden Spalten keine Zahl hat, wird ausgelassen.",
+      "posthoc": "Welche Gruppen sich unterscheiden: Tukeys HSD (gleiche Varianzen), Games-Howell (ungleiche Varianzen) oder ein t-Test je Paar mit Korrektur.",
+      "p_adjust": "Wie die p-Werte der Paare für ihre Anzahl korrigiert werden. Holm ist nie schwächer als Bonferroni.",
+      "ratio": "Das Verhältnis der ersten zur zweiten Varianz, das die Nullhypothese behauptet: 1 für «gleiche Varianzen».",
+      "center": "Der Median (Brown-Forsythe, robust bei schiefen Werten) oder der Mittelwert (Levenes Original)."
     },
     "choices": {
       "alternative": {
         "two_sided": "Zweiseitig (≠)",
         "less": "Kleiner (<)",
         "greater": "Größer (>)"
+      },
+      "anova_posthoc": {
+        "none": "Keine",
+        "tukey": "Tukeys HSD",
+        "games_howell": "Games-Howell",
+        "pairwise_t": "t-Test je Paar"
+      },
+      "p_adjust": {
+        "holm": "Holm",
+        "bonferroni": "Bonferroni",
+        "sidak": "Šidák",
+        "none": "Keine"
+      },
+      "levene_center": {
+        "median": "Median (Brown-Forsythe)",
+        "mean": "Mittelwert (Levene)"
       }
+    },
+    "reasons": {
+      "tukey_equal_variances": "Tukeys HSD setzt gleiche Varianzen voraus: bei ungleichen Games-Howell verwenden.",
+      "games_howell_unequal_variances": "Games-Howell ist für ungleiche Varianzen: bei gleichen Tukeys HSD verwenden."
     },
     "form": {
       "level": "Gruppe {n}",

@@ -6080,9 +6080,46 @@ export default {
       "distributions": "Distributions"
     },
     "tests": {
+      "t_one_sample": {
+        "name": "One-sample t test",
+        "hint": "Is the mean of a column equal to a given value? Student's t test on one sample.",
+        "hints": {
+          "mu": "The mean the null hypothesis states."
+        }
+      },
       "t_two_sample": {
         "name": "Two-sample t test",
         "hint": "Do two groups have the same mean? Welch's t test, or Student's when the variances are taken as equal."
+      },
+      "t_paired": {
+        "name": "Paired t test",
+        "hint": "Two measures of the same rows (before and after): is their mean difference zero?",
+        "hints": {
+          "x": "The first measure of each row (before, say): the test is on x − y.",
+          "mu": "The mean difference x − y the null hypothesis states: 0 for «no change»."
+        }
+      },
+      "anova": {
+        "name": "One-way ANOVA",
+        "hint": "Do several groups have the same mean? Classic or Welch's ANOVA, with the pairwise comparisons that say which groups differ.",
+        "hints": {
+          "var_equal": "On: the classic ANOVA, with the variance within the groups pooled. Off: Welch's ANOVA, which does not assume equal variances."
+        }
+      },
+      "var_f": {
+        "name": "F test of two variances",
+        "hint": "Do two groups have the same variance? The ratio of their variances against an F distribution.",
+        "hints": {
+          "groups": "The first group's variance over the second's. Leave them on Automatic when the column holds exactly two groups."
+        }
+      },
+      "levene": {
+        "name": "Levene's test",
+        "hint": "Do several groups have the same variance? Levene's test, or Brown–Forsythe's with the median: robust when the values are not normal."
+      },
+      "pearson": {
+        "name": "Pearson's correlation",
+        "hint": "Do two columns of the same rows move together? Pearson's r, its test and its confidence interval."
       }
     },
     "params": {
@@ -6092,7 +6129,13 @@ export default {
       "var_equal": "Equal variances",
       "mu": "Value under H0",
       "alternative": "Alternative hypothesis",
-      "alpha": "Significance level (α)"
+      "alpha": "Significance level (α)",
+      "x": "First column (x)",
+      "y": "Second column (y)",
+      "posthoc": "Pairwise comparisons",
+      "p_adjust": "Correction for multiple comparisons",
+      "ratio": "Ratio under H0",
+      "center": "Centre of each group"
     },
     "hints": {
       "value": "The column that is measured.",
@@ -6100,14 +6143,40 @@ export default {
       "groups": "The first minus the second. Leave them on Automatic when the column holds exactly two groups.",
       "var_equal": "On: the classic test, with a pooled variance. Off: Welch's version, which does not assume it.",
       "mu": "What the null hypothesis states: 0 for «no difference».",
-      "alpha": "Between 0 and 1. The confidence intervals have level 1 − α."
+      "alpha": "Between 0 and 1. The confidence intervals have level 1 − α.",
+      "x": "A number on every row: with the second column, the pair the test reads.",
+      "y": "A row where either column has no number is left out.",
+      "posthoc": "Which groups differ: Tukey's HSD (equal variances), Games–Howell (unequal variances), or a t test per pair with a correction.",
+      "p_adjust": "How the p-values of the pairs are adjusted for their number. Holm is never less powerful than Bonferroni.",
+      "ratio": "The ratio of the first variance to the second that the null hypothesis states: 1 for «equal variances».",
+      "center": "The median (Brown–Forsythe's form, robust to skewed values) or the mean (Levene's original)."
     },
     "choices": {
       "alternative": {
         "two_sided": "Two-sided (≠)",
         "less": "Less (<)",
         "greater": "Greater (>)"
+      },
+      "anova_posthoc": {
+        "none": "None",
+        "tukey": "Tukey's HSD",
+        "games_howell": "Games–Howell",
+        "pairwise_t": "t test per pair"
+      },
+      "p_adjust": {
+        "holm": "Holm",
+        "bonferroni": "Bonferroni",
+        "sidak": "Šidák",
+        "none": "None"
+      },
+      "levene_center": {
+        "median": "Median (Brown–Forsythe)",
+        "mean": "Mean (Levene)"
       }
+    },
+    "reasons": {
+      "tukey_equal_variances": "Tukey's HSD assumes equal variances: with unequal ones use Games–Howell.",
+      "games_howell_unequal_variances": "Games–Howell is for unequal variances: with equal ones use Tukey's HSD."
     },
     "form": {
       "level": "Group {n}",

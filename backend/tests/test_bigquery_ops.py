@@ -339,3 +339,69 @@ def test_statistics_report_rows_ask_bigquery_for_quartiles_and_a_histogram():
     assert source.quartiles("prezzo") == [(None, 1.0, 2.0, 3.0)]
     assert asked[0].startswith(f"SELECT DISTINCT PERCENTILE_CONT({finite}, 0.25) OVER () AS st_q1, ")
     sqlglot.parse_one(asked[0], read="bigquery")
+
+
+def test_statistics_of_lot_2_ask_bigquery_in_googlesql():
+    """The aggregates the means-and-variances tests add — two columns of the same rows (A3),
+    the deviations from a group's median or mean (A11), the quartiles of several measures in
+    one pass, two groups picked by their labels — written from BigQuery's documentation and
+    the models above, and parsed as GoogleSQL. Not run: that BigQuery answers them is the live
+    suite's to say."""
+    import sqlglot
+
+    from app.engine.stats.aggregates import Difference, Paired, SqlStatSource
+
+    asked: list[str] = []
+
+    def rows(q):
+        asked.append(q)
+        if "LIMIT 100000" in q:
+            return [[10.0]]
+        if "COVAR_SAMP" in q:
+            return [[12, 10, -1.0, 1.5, -2.5, 105.1, 84.3, 8.9, 89.0, 65.0, 95.0, 70.0, 97.0, -6.0, 2.0]]
+        if " JOIN " in q:
+            return [["a", 8, 8, -4.35, 0.43, 0.06, 4.9, 6.7], ["b", 7, 7, -2.9, 0.5, 0.07, 6.4, 8.0]]
+        if "PERCENTILE_CONT" in q:
+            return [[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]]
+        return [["a", 9], [None, 2]]
+
+    schema = [("a", "FLOAT64"), ("b", "INT64"), ("g", "STRING"), ("day", "DATE"), ("at", "TIMESTAMP"), ("n", "NUMERIC")]
+    source = SqlStatSource("bigquery", rows, lambda c: f"`{c}`", _lit, "SELECT * FROM `_src1`", schema)
+    pm = source.pair_moments("a", "b")
+    assert (pm.n, pm.rows, pm.centre_x, pm.mean_cx, pm.cov, pm.max_d) == (10, 12, 10.0, -1.0, 89.0, 2.0)
+    pair_query = asked[-1]
+    assert "COVAR_SAMP(" in pair_query and "VAR_SAMP(" in pair_query and pair_query.count(" - (10.0))") >= 2
+    for center in ("median", "mean"):
+        devs = source.abs_dev_moments("a", "g", center)
+        assert [d.level for d in devs] == ["a", "b"] and devs[0].center == 10.0 - 4.35
+        dev_query = asked[-1]
+        assert (" OVER (PARTITION BY `g`)" in dev_query) == (center == "median") and " JOIN (" in dev_query
+        sqlglot.parse_one(dev_query, read="bigquery")
+    many = source.quartiles_many([Paired("a", "b"), Paired("b", "a"), Difference("a", "b")])
+    assert [q.median for q in many] == [2.0, 5.0, 8.0] and asked[-1].startswith("SELECT DISTINCT PERCENTILE_CONT(")
+    for q in (pair_query, asked[-1]):
+        sqlglot.parse_one(q, read="bigquery")
+    # two groups by their labels: a text, a date (a string literal BigQuery coerces); a timestamp is listed instead
+    assert source.levels_of("g", ["web", "shop"]) == [("a", 9), (None, 2)]
+    assert asked[-1].endswith("WHERE `g` IS NULL OR `g` = 'web' OR `g` = 'shop' GROUP BY `g`")
+    source.levels_of("day", ["2024-03-01", "2024-11-30"])
+    assert asked[-1].endswith("WHERE `day` IS NULL OR `day` = '2024-03-01' OR `day` = '2024-11-30' GROUP BY `day`")
+    sqlglot.parse_one(asked[-1], read="bigquery")
+    assert source.levels_of("at", ["2024-03-01 08:00:00"]) is None and source.levels_of("n", ["1.5"]) is None
+    # a whole test: the output an UNNEST of typed STRUCTs, the pairs among its rows
+    sql = op("stat_anova", {"value": "prezzo", "group": "nome", "posthoc": "tukey"}, _AnovaCtx(SCHEMA))
+    sqlglot.parse_one(sql, read="bigquery")
+    assert "'pair|a|b|p_adjusted')" in sql and "'test|||posthoc_critical')" in sql
+
+
+class _AnovaCtx(FakeCtx):
+    """Three groups of A, B and C (their n, mean less the centre 6, variance)."""
+
+    def rows(self, sql):
+        self.queries.append(sql)
+        if "LIMIT 202" in sql:
+            return [["a", 8], ["b", 7], ["c", 6]]
+        if "LIMIT 100000" in sql:
+            return [[6.0]]
+        return [["a", 8, 8, 5.6875 - 6, 0.364107142857143, 4.9, 6.7], ["b", 7, 7, 7.128571428571429 - 6, 0.365714285714286, 6.4, 8.0],
+                ["c", 6, 6, 6.266666666666667 - 6, 0.226666666666667, 5.7, 7.0]]

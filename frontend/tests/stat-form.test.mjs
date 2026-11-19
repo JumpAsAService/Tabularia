@@ -157,3 +157,32 @@ test('the palette: the Statistics group between Transforms and Control, closed, 
   // an engine without tests: no group at all
   assert.ok(!text(await render(Sidebar, { operations: ['cast', 'filter'] })).includes('Statistics'))
 })
+
+test('an ANOVA: the correction shows with pairwise t tests only, a post-hoc its variances exclude is disabled with why', async () => {
+  const Form = await component('components/ui/StatTestForm.vue')
+  const base = { value: 'amount', group: 'channel', var_equal: true, posthoc: 'none', p_adjust: 'holm', alpha: 0.05 }
+  let page = text(await render(Form, { nodeId: 'op-9', opType: 'stat_anova', params: base, inputColumns: COLUMNS }))
+  assert.ok(page.includes('Pairwise comparisons') && !page.includes('Correction for multiple comparisons'))
+  // the test's own hint for a shared key
+  assert.ok(page.includes('On: the classic ANOVA, with the variance within the groups pooled.'))
+  let html = await render(Form, { nodeId: 'op-9', opType: 'stat_anova', params: { ...base, posthoc: 'pairwise_t' }, inputColumns: COLUMNS })
+  page = text(html)
+  assert.ok(page.includes('Correction for multiple comparisons') && page.includes('Šidák'))
+  assert.match(html, /value="holm"[^>]*checked/)
+  // classic ANOVA: Games–Howell disabled, with the reason; Welch's: Tukey disabled
+  assert.match(html, /<input type="radio"[^>]*value="games_howell"[^>]*disabled/)
+  assert.ok(page.includes('Games–Howell is for unequal variances: with equal ones use Tukey\'s HSD.'))
+  html = await render(Form, { nodeId: 'op-9', opType: 'stat_anova', params: { ...base, var_equal: false }, inputColumns: COLUMNS })
+  assert.match(html, /<input type="radio"[^>]*value="tukey"[^>]*disabled/)
+  assert.ok(!/value="games_howell"[^>]*disabled/.test(html))
+})
+
+test('a paired test asks for two numeric columns; the F test of variances for a ratio above 0', async () => {
+  const Form = await component('components/ui/StatTestForm.vue')
+  let html = await render(Form, { nodeId: 'op-10', opType: 'stat_t_paired', params: { mu: 0, alternative: 'two_sided', alpha: 0.05 }, inputColumns: COLUMNS })
+  const selects = [...html.matchAll(/<div class="select"[^>]*>(.*?)<\/div>/g)].map((m) => text(m[1]))
+  assert.deepEqual(selects, ['amount qty', 'amount qty'])
+  assert.ok(text(html).includes('First column (x)') && text(html).includes('the test is on x − y'))
+  html = await render(Form, { nodeId: 'op-11', opType: 'stat_var_f', params: { value: 'amount', group: 'channel', ratio: 0 }, inputColumns: COLUMNS })
+  assert.ok(text(html).includes('A number above 0.') && text(html).includes('Ratio under H0'))
+})

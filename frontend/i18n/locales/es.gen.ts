@@ -6080,9 +6080,46 @@ export default {
       "distributions": "Distribuciones"
     },
     "tests": {
+      "t_one_sample": {
+        "name": "Prueba t para una muestra",
+        "hint": "¿La media de una columna es igual a un valor dado? Prueba t de Student para una muestra.",
+        "hints": {
+          "mu": "La media que afirma la hipótesis nula."
+        }
+      },
       "t_two_sample": {
         "name": "Prueba t de dos muestras",
         "hint": "¿Tienen dos grupos la misma media? Prueba t de Welch, o de Student cuando las varianzas se suponen iguales."
+      },
+      "t_paired": {
+        "name": "Prueba t para datos pareados",
+        "hint": "Dos medidas de las mismas filas (antes y después): ¿su diferencia media es cero?",
+        "hints": {
+          "x": "La primera medida de cada fila (el antes, por ejemplo): la prueba es sobre x − y.",
+          "mu": "La diferencia media x − y que afirma la hipótesis nula: 0 para «ningún cambio»."
+        }
+      },
+      "anova": {
+        "name": "ANOVA de un factor",
+        "hint": "¿Varios grupos tienen la misma media? ANOVA clásica o de Welch, con las comparaciones por pares que dicen qué grupos difieren.",
+        "hints": {
+          "var_equal": "Activado: la ANOVA clásica, con la varianza dentro de los grupos combinada. Desactivado: la ANOVA de Welch, que no supone varianzas iguales."
+        }
+      },
+      "var_f": {
+        "name": "Prueba F de dos varianzas",
+        "hint": "¿Dos grupos tienen la misma varianza? El cociente de sus varianzas frente a una distribución F.",
+        "hints": {
+          "groups": "La varianza del primer grupo sobre la del segundo. Déjalos en Automático cuando la columna tiene exactamente dos grupos."
+        }
+      },
+      "levene": {
+        "name": "Prueba de Levene",
+        "hint": "¿Varios grupos tienen la misma varianza? Prueba de Levene, o de Brown–Forsythe con la mediana: robusta cuando los valores no son normales."
+      },
+      "pearson": {
+        "name": "Correlación de Pearson",
+        "hint": "¿Dos columnas de las mismas filas varían juntas? La r de Pearson, su prueba y su intervalo de confianza."
       }
     },
     "params": {
@@ -6092,7 +6129,13 @@ export default {
       "var_equal": "Varianzas iguales",
       "mu": "Valor bajo H0",
       "alternative": "Hipótesis alternativa",
-      "alpha": "Nivel de significación (α)"
+      "alpha": "Nivel de significación (α)",
+      "x": "Primera columna (x)",
+      "y": "Segunda columna (y)",
+      "posthoc": "Comparaciones por pares",
+      "p_adjust": "Corrección por comparaciones múltiples",
+      "ratio": "Cociente bajo H0",
+      "center": "Centro de cada grupo"
     },
     "hints": {
       "value": "La columna que se mide.",
@@ -6100,14 +6143,40 @@ export default {
       "groups": "El primero menos el segundo. Déjalos en Automático cuando la columna tiene exactamente dos grupos.",
       "var_equal": "Activado: la prueba clásica, con la varianza común. Desactivado: la versión de Welch, que no la supone.",
       "mu": "Lo que afirma la hipótesis nula: 0 para «ninguna diferencia».",
-      "alpha": "Entre 0 y 1. Los intervalos de confianza tienen nivel 1 − α."
+      "alpha": "Entre 0 y 1. Los intervalos de confianza tienen nivel 1 − α.",
+      "x": "Un número en cada fila: con la segunda columna, el par que lee la prueba.",
+      "y": "Una fila en la que alguna de las dos columnas no tiene número se deja fuera.",
+      "posthoc": "Qué grupos difieren: HSD de Tukey (varianzas iguales), Games–Howell (varianzas distintas) o una prueba t por par con una corrección.",
+      "p_adjust": "Cómo se ajustan los p-valores de los pares por su número. Holm nunca es menos potente que Bonferroni.",
+      "ratio": "El cociente entre la primera varianza y la segunda que afirma la hipótesis nula: 1 para «varianzas iguales».",
+      "center": "La mediana (forma de Brown–Forsythe, robusta ante valores asimétricos) o la media (la original de Levene)."
     },
     "choices": {
       "alternative": {
         "two_sided": "Bilateral (≠)",
         "less": "Menor (<)",
         "greater": "Mayor (>)"
+      },
+      "anova_posthoc": {
+        "none": "Ninguna",
+        "tukey": "HSD de Tukey",
+        "games_howell": "Games–Howell",
+        "pairwise_t": "Prueba t por par"
+      },
+      "p_adjust": {
+        "holm": "Holm",
+        "bonferroni": "Bonferroni",
+        "sidak": "Šidák",
+        "none": "Ninguna"
+      },
+      "levene_center": {
+        "median": "Mediana (Brown–Forsythe)",
+        "mean": "Media (Levene)"
       }
+    },
+    "reasons": {
+      "tukey_equal_variances": "El HSD de Tukey supone varianzas iguales: con varianzas distintas usa Games–Howell.",
+      "games_howell_unequal_variances": "Games–Howell es para varianzas distintas: con varianzas iguales usa el HSD de Tukey."
     },
     "form": {
       "level": "Grupo {n}",

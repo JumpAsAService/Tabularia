@@ -387,3 +387,253 @@ def test_a_run_writes_the_table(name, storage, abc):
     out = _engine(name, storage).run(abc, [stat_op("t_two_sample", value="v", group="g", groups=["a", "b"])], dest, use_cache=False)
     assert out.rows_written == 44
     assert [(c.name, c.dtype) for c in out.columns] == [(n, t) for n, t, _ in OUTPUT_COLUMNS]
+
+
+# ── lot 2: means and variances ───────────────────────────────────────────────
+BEFORE = [72, 80, 65, 90, 85, 77, 68, 95, 88, 70]
+AFTER = [75, 78, 70, 94, 85, 83, 71, 97, 86, 76]
+PX = [1.2, 2.3, 2.9, 4.1, 5.0, 6.2, 6.8, 8.1, 9.3, 10.0]
+PY = [2.1, 2.9, 3.2, 4.8, 4.9, 6.9, 6.5, 8.8, 8.9, 10.9]
+
+
+@pytest.fixture
+def pairs(storage):
+    """Two pairs of columns of the same rows, and two rows every engine leaves out of both:
+    a NULL in one column of each pair, a NaN in the other."""
+    before = [float(v) for v in BEFORE] + [None, math.nan]
+    after = [float(v) for v in AFTER] + [80.0, 81.0]
+    px = PX + [math.nan, 4.0]
+    py = PY + [3.0, None]
+    df = pl.DataFrame({"before": before, "after": after, "px": px, "py": py}, schema={k: pl.Float64 for k in ("before", "after", "px", "py")})
+    return upload_df(storage, df, "datasets/stats_pairs.parquet")
+
+
+def texts_of(rows) -> dict[str, str]:
+    return {r["stat"]: r["text"] for r in rows if r["section"] == "test" and r["text"] is not None}
+
+
+ONLY_A = {"type": "filter", "params": {"column": "g", "operator": "eq", "value": "a"}}
+
+
+@pytest.mark.parametrize("name", ENGINES)
+def test_t_one_sample(name, storage, abc):
+    engine = _engine(name, storage)
+
+    def run(**params):
+        res = engine.preview(abc, [ONLY_A, stat_op("t_one_sample", value="v", **params)], limit=1000, use_cache=False)
+        rows = sorted(res.rows, key=lambda r: r["ord"])
+        return rows, {r["key"]: r for r in rows}
+
+    rows, by_key = run(mu=5)
+    check_numbers(by_key, {
+        "alpha": 0.05, "conf_level": 0.95, "n": 8, "n_missing": 1, "mean": 5.6875, "var": 0.364107142857143,
+        "sd": math.sqrt(0.364107142857143), "estimate": 5.6875, "null_value": 5.0, "std_error": 0.213338681108567,
+        "statistic": 3.2225754674565299, "df": 7, "critical_low": -2.36462425159278, "critical_high": 2.36462425159278,
+        "p_value": 0.0146011836135197, "ci_low": 5.18303418084786, "ci_high": 6.19196581915214, "cohen_d": 1.13935248296196,
+    })
+    check_numbers(by_key, GROUP_A, "group|v||")
+    assert texts_of(rows) == {
+        "test": "t_one_sample", "variant": "one_sample", "alternative": "two_sided", "h0": "mean(v) = 5", "h1": "mean(v) ≠ 5",
+        "formula": "t = (m − mu) / (s / √n), df = n − 1", "distribution": "t(7)", "decision": "reject_h0", "engine": name,
+    }
+    assert [r["stat"] for r in rows if r["section"] == "test" and r["text"] is None] == [
+        "alpha", "conf_level", "n", "n_missing", "mean", "var", "sd", "estimate", "null_value", "std_error", "statistic", "df",
+        "critical_low", "critical_high", "p_value", "ci_low", "ci_high", "cohen_d"]
+    _, by_key = run(mu=5, alternative="greater")
+    check_numbers(by_key, {"p_value": 0.00730059180675986, "ci_low": 5.28331309913358904, "ci_high": None, "critical_low": None})
+    _, by_key = run(mu=5, alternative="less")
+    check_numbers(by_key, {"p_value": 0.99269940819324, "ci_high": 6.09168690086641, "ci_low": None, "critical_high": None})
+
+
+@pytest.mark.parametrize("name", ENGINES)
+def test_t_paired(name, storage, pairs):
+    _, rows, by_key = result(name, storage, pairs, stat_op("t_paired", x="before", y="after"))
+    check_numbers(by_key, {
+        "n": 10, "n_missing": 2, "mean_diff": -2.5, "var_diff": 2.990726407487727**2, "sd_diff": 2.990726407487727,
+        "estimate": -2.5, "null_value": 0.0, "std_error": 0.945750730607407, "statistic": -2.6434026631884051, "df": 9,
+        "p_value": 0.0267640719920123, "ci_low": -4.639436789465182, "ci_high": -0.360563210534818, "cohen_dz": -0.835917318863029,
+    })
+    assert [r["level"] for r in rows if r["section"] == "group" and r["stat"] == "n"] == ["before", "after", "before − after"]
+    check_numbers(by_key, {"n": 10, "mean": 79.0, "min": 65.0, "max": 95.0}, "group|before||")
+    check_numbers(by_key, {"n": 10, "mean": 81.5, "min": 70.0, "max": 97.0}, "group|after||")
+    check_numbers(by_key, {"n": 10, "mean": -2.5, "sd": 2.990726407487727, "min": -6.0, "max": 2.0}, "group|before − after||")
+    assert texts_of(rows)["h0"] == "mean(before − after) = 0" and texts_of(rows)["distribution"] == "t(9)"
+    # H0: the difference is −1, one-sided: the same t on (d − mu)
+    _, _, by_key = result(name, storage, pairs, stat_op("t_paired", x="before", y="after", mu=-1, alternative="less"))
+    check_numbers(by_key, {"statistic": -1.5860415979130429, "p_value": 0.07359571717441846, "ci_low": None,
+                           "ci_high": -2.5 + 1.8331129326562376 * 0.945750730607407})  # SciPy: ttest_1samp of the differences
+    check_numbers(by_key, {"var": 105.11111111111111}, "group|before||")
+
+
+@pytest.mark.parametrize("name", ENGINES)
+def test_pearson(name, storage, pairs):
+    _, rows, by_key = result(name, storage, pairs, stat_op("pearson", x="px", y="py"))
+    check_numbers(by_key, {
+        "n": 10, "n_missing": 2, "estimate": 0.986487659099871, "statistic": 17.0305399622590, "df": 8,
+        "p_value": 1.43496376008138e-07, "ci_low": 0.941881378531566, "ci_high": 0.996912862657782,
+        "r_squared": 0.986487659099871**2, "fisher_z": math.atanh(0.986487659099871), "fisher_se": 1 / math.sqrt(7),
+    })
+    assert texts_of(rows)["h1"] == "cor(px, py) ≠ 0" and texts_of(rows)["variant"] == "t"
+    check_numbers(by_key, {"n": 10, "mean": sum(PX) / 10}, "group|px||")
+
+
+ANOVA = {"value": "v", "group": "g"}
+DIFFS = (-1.44107142857143, -0.579166666666667, 0.861904761904762)  # a−b, a−c, b−c
+
+
+def check_pairs(by_key, stat, values, tol=TOL):
+    for (first, second), want in zip((("a", "b"), ("a", "c"), ("b", "c")), values):
+        got = by_key[f"pair|{first}|{second}|{stat}"]["value"]
+        if want is None:
+            assert got is None, (stat, first, second, got)
+        else:
+            assert got is not None and abs(got - want) <= tol * abs(want), (stat, first, second, got, want)
+
+
+@pytest.mark.parametrize("name", ENGINES)
+def test_anova(name, storage, abc):
+    _, rows, by_key = result(name, storage, abc, stat_op("anova", **ANOVA))
+    check_numbers(by_key, {
+        "n": 21, "n_missing": 3, "k": 3, "statistic": 11.93129260658611024, "df_1": 2, "df_2": 18, "p_value": 0.00050236357775741,
+        "ss_between": 7.790297619047622, "ss_within": 5.876369047619047, "ms_between": 3.895148809523811,
+        "ms_within": 0.326464947089947, "grand_mean": 6.333333333333333, "eta_squared": 0.570021777003484,
+        "omega_squared": 0.510062216369851, "critical_high": 3.55455714566179,
+    })
+    assert "test|||critical_low" not in by_key and "test|||estimate" not in by_key and "test|||posthoc" not in by_key
+    assert texts_of(rows) == {
+        "test": "anova", "variant": "one_way", "alternative": "two_sided",
+        "h0": "mean(v | a) = mean(v | b) = mean(v | c)", "h1": "max |mean(v | i) − mean(v | j)| > 0",
+        "formula": "F = ms_between / ms_within, ms_between = ss_between / (k − 1), ms_within = ss_within / (N − k), "
+                   "ss_between = ∑ n·(m − M)², ss_within = ∑ (n − 1)·s², M = ∑ n·m / N, df = k − 1, N − k",
+        "distribution": "F(2, 18)", "decision": "reject_h0", "engine": name,
+    }
+    assert [r["level"] for r in rows if r["section"] == "group" and r["stat"] == "n"] == ["a", "b", "c"]
+    check_numbers(by_key, GROUP_A, "group|a||")
+    _, rows, by_key = result(name, storage, abc, stat_op("anova", **ANOVA, var_equal=False))
+    check_numbers(by_key, {"statistic": 10.12076202914818346, "df_1": 2, "df_2": 11.86715469755575469, "p_value": 0.00272306443987334})
+    assert texts_of(rows)["variant"] == "welch" and texts_of(rows)["distribution"] == "F(2, 11.8672)"
+    check_numbers(by_key, {"weight": 8 / 0.364107142857143}, "group|a||")
+
+
+@pytest.mark.parametrize("name", ENGINES)
+def test_anova_tukey(name, storage, abc):
+    _, rows, by_key = result(name, storage, abc, stat_op("anova", **ANOVA, posthoc="tukey"))
+    check_pairs(by_key, "estimate", DIFFS)
+    check_pairs(by_key, "std_error", (0.209100416033208, 0.218195947374412, 0.224776193244824))
+    check_pairs(by_key, "statistic", (6.891767390565908, 2.654341996888002, 3.834501997130909))
+    check_pairs(by_key, "df", (18, 18, 18))
+    check_pairs(by_key, "p_value", (None, None, None))
+    # the studentized range: an absolute 1e-10 on the probability (SciPy's references)
+    for pair, want in zip(("a|b", "a|c", "b|c"), (0.00034310104135326647, 0.17408361204612266, 0.03631708245403065)):
+        assert abs(by_key[f"pair|{pair}|p_adjusted"]["value"] - want) < 1e-10
+    check_numbers(by_key, {"posthoc_critical": 3.609303828706538, "n_pairs": 3})
+    check_pairs(by_key, "critical", (3.609303828706538,) * 3)
+    check_pairs(by_key, "ci_low", (-2.1957783607442165, -1.366702134933383, 0.050619187024135925))
+    check_pairs(by_key, "ci_high", (-0.6863644963986396, 0.20836880160004978, 1.673190336785387))
+    assert [r["text"] for r in rows if r["stat"] == "decision" and r["section"] == "pair"] == ["reject_h0", "fail_to_reject_h0", "reject_h0"]
+    assert texts_of(rows)["posthoc"] == "tukey" and texts_of(rows)["p_adjust"] == "studentized_range"
+    assert texts_of(rows)["posthoc_formula"] == ("se = √(ms_within / 2 · (1/n_i + 1/n_j)), q = |m_i − m_j| / se, df = N − k, "
+                                                 "p_adj = P(Q(k, df) ≥ q), CI = (m_i − m_j) ± q(1 − α; k, df) · se")
+    assert [r["stat"] for r in rows if r["section"] == "test" and r["text"] is not None][-3:] == ["posthoc", "p_adjust", "posthoc_formula"]
+    # the order of the rows of a pair, the same for every method
+    assert [r["stat"] for r in rows if r["section"] == "pair" and r["level"] == "a" and r["level_2"] == "b"] == [
+        "estimate", "std_error", "statistic", "df", "critical", "p_value", "p_adjusted", "ci_low", "ci_high", "decision"]
+    assert [(r["level"], r["level_2"]) for r in rows if r["section"] == "pair" and r["stat"] == "estimate"] == [("a", "b"), ("a", "c"), ("b", "c")]
+
+
+@pytest.mark.parametrize("name", ENGINES)
+def test_anova_games_howell(name, storage, abc):
+    _, rows, by_key = result(name, storage, abc, stat_op("anova", **ANOVA, var_equal=False, posthoc="games_howell"))
+    check_pairs(by_key, "std_error", (0.312663222679493, 0.288602097419476, 0.300037790514731))
+    check_pairs(by_key, "df", (12.727892707548936, 11.933163746175635, 10.946230961174214))
+    check_pairs(by_key, "statistic", (6.518140320977861, 2.838043667035194, 4.062546260151267))
+    for pair, want in zip(("a|b", "a|c", "b|c"), (0.001392913400370, 0.153135474005365, 0.037430036650937)):
+        assert abs(by_key[f"pair|{pair}|p_adjusted"]["value"] - want) < 1e-10
+    check_pairs(by_key, "ci_low", (-2.268825694185579, -1.3496990802928008, 0.05095619508955207))
+    check_pairs(by_key, "ci_high", (-0.613317162957279, 0.19136574695946762, 1.6728533287199727))
+    assert "test|||posthoc_critical" not in by_key and texts_of(rows)["posthoc"] == "games_howell"
+
+
+@pytest.mark.parametrize("name", ENGINES)
+def test_anova_pairwise_t(name, storage, abc):
+    p_values = (0.000122248091448915, 0.076838117463392711, 0.014300940338429397)
+    for adjust, adjusted, low, high in (
+        ("holm", (0.000366744274346744, 0.076838117463392711, 0.028601880676858794), None, None),
+        ("bonferroni", (0.000366744274346744, 0.230514352390178145, 0.042902821015288195),
+         (-2.221499921684951, -1.393542542350462, 0.0229693398251015), (-0.660642935457907, 0.235209209017129, 1.7008401839844232)),
+        ("sidak", (0.000366699442385987, 0.213255723148878640, 0.042292195115505637),
+         (-2.219117495130157, -1.39105648407743, 0.0255303714185868), (-0.663025362012701, 0.23272315074410, 1.6982791523909380)),
+        ("none", p_values, None, None),
+    ):
+        _, rows, by_key = result(name, storage, abc, stat_op("anova", **ANOVA, posthoc="pairwise_t", p_adjust=adjust))
+        check_pairs(by_key, "std_error", (0.29571264425202, 0.308575668031740, 0.317881540985426))
+        check_pairs(by_key, "statistic", (-4.87321545622947, -1.876903225587748, 2.711402364644625))
+        check_pairs(by_key, "p_value", p_values)
+        check_pairs(by_key, "p_adjusted", adjusted)
+        if low is not None:
+            check_pairs(by_key, "ci_low", low)
+            check_pairs(by_key, "ci_high", high)
+        assert texts_of(rows)["p_adjust"] == adjust
+    # none: 95% each (SciPy: d ± t.isf(0.025, 18)·se)
+    check_pairs(by_key, "ci_low", (-2.0623406404584537, -1.2274600887166511, 0.19406042626269415))
+    check_pairs(by_key, "ci_high", (-0.8198022166844027, 0.0691267553833178, 1.5297490975468289))
+    # Holm has no simultaneous interval
+    _, _, by_key = result(name, storage, abc, stat_op("anova", **ANOVA, posthoc="pairwise_t"))
+    check_pairs(by_key, "ci_low", (None, None, None))
+    check_pairs(by_key, "critical", (None, None, None))
+    _, _, by_key = result(name, storage, abc, stat_op("anova", **ANOVA, var_equal=False, posthoc="pairwise_t", p_adjust="holm"))
+    check_pairs(by_key, "p_value", (0.000516870272598936, 0.067972380652348618, 0.015238130785358911))
+    check_pairs(by_key, "p_adjusted", (0.00155061081779681, 0.06797238065234862, 0.03047626157071782))
+    _, _, by_key = result(name, storage, abc, stat_op("anova", **ANOVA, var_equal=False, posthoc="pairwise_t", p_adjust="bonferroni"))
+    check_pairs(by_key, "p_adjusted", (0.00155061081779681, 0.20391714195704586, 0.04571439235607673))
+
+
+@pytest.mark.parametrize("name", ENGINES)
+def test_var_f(name, storage, abc):
+    _, rows, by_key = result(name, storage, abc, stat_op("var_f", value="v", group="g", groups=["a", "b"]))
+    check_numbers(by_key, {
+        "n": 15, "n_missing": 3, "estimate": 0.995605468750001, "null_value": 1.0, "statistic": 0.995605468750001,
+        "df_1": 7, "df_2": 6, "p_value": 0.979311049486517, "ci_low": 0.174806536764672, "ci_high": 5.096102780610449,
+    })
+    assert texts_of(rows)["h0"] == "var(v | a) / var(v | b) = 1" and texts_of(rows)["distribution"] == "F(7, 6)"
+    _, _, by_key = result(name, storage, abc, stat_op("var_f", value="v", group="g", groups=["a", "b"], ratio=2))
+    check_numbers(by_key, {"statistic": 0.497802734375, "p_value": 0.382685554750232, "estimate": 0.995605468750001,
+                           "ci_low": 0.174806536764672, "ci_high": 5.096102780610449})
+    # one-sided: the one bound with α (R: var.test)
+    # (SciPy: f.cdf, f.sf, and the bounds of var.test)
+    _, _, by_key = result(name, storage, abc, stat_op("var_f", value="v", group="g", groups=["a", "b"], alternative="less"))
+    check_numbers(by_key, {"p_value": 0.4896555247432588, "ci_low": None, "ci_high": 3.8489797321872703, "critical_high": None})
+    _, _, by_key = result(name, storage, abc, stat_op("var_f", value="v", group="g", groups=["a", "b"], alternative="greater"))
+    check_numbers(by_key, {"p_value": 0.5103444752567413, "ci_low": 0.23667370945871657, "ci_high": None, "critical_low": None})
+
+
+@pytest.mark.parametrize("name", ENGINES)
+def test_levene(name, storage, abc):
+    _, rows, by_key = result(name, storage, abc, stat_op("levene", value="v", group="g"))
+    check_numbers(by_key, {"n": 21, "n_missing": 3, "k": 3, "statistic": 0.268588151223331, "df_1": 2, "df_2": 18,
+                           "p_value": 0.767468080882170})
+    assert texts_of(rows)["variant"] == "median" and texts_of(rows)["h0"] == "var(v | a) = var(v | b) = var(v | c)"
+    check_numbers(by_key, {"n": 8, "center": 5.65, "min": 4.9, "max": 6.7}, "group|a||")
+    _, rows, by_key = result(name, storage, abc, stat_op("levene", value="v", group="g", center="mean"))
+    check_numbers(by_key, {"statistic": 0.284554333406152, "p_value": 0.755671470681428})
+    check_numbers(by_key, {"center": 5.6875}, "group|a||")
+
+
+# ── adjusting for many comparisons ───────────────────────────────────────────
+def test_p_adjusted_against_r():
+    """R's p.adjust on the pairwise t tests of A, B and C (classic, df 18): no engine, only the
+    scalar step."""
+    from app.engine.stats.compute import p_adjusted
+
+    def rel(got, want):
+        return abs(got - want) / abs(want)
+
+    ps = [0.000122248091448915, 0.076838117463392711, 0.014300940338429397]
+    for method, want in (("holm", [0.000366744274346744, 0.076838117463392711, 0.028601880676858794]),
+                         ("bonferroni", [0.000366744274346744, 0.230514352390178145, 0.042902821015288195]),
+                         ("sidak", [0.000366699442385987, 0.213255723148878640, 0.042292195115505637]),
+                         ("none", ps)):
+        assert all(rel(g, w) < 1e-12 for g, w in zip(p_adjusted(ps, method), want)), method
+    # Holm keeps the order of the p-values, and never passes 1
+    assert p_adjusted([0.04, 0.01, 0.03, 0.5], "holm") == [0.09, 0.04, 0.09, 0.5]
+    assert p_adjusted([0.6, 0.7], "bonferroni") == [1.0, 1.0] and p_adjusted([1.0], "sidak") == [1.0]

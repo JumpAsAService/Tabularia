@@ -44,6 +44,9 @@ export interface StatTest {
   takes: Record<string, string>
   defaults: Record<string, unknown>
   forbids: StatForbid[]
+  /** A key that matters only while other keys have one of some values (the defaults count):
+   *  {p_adjust: {posthoc: ['pairwise_t']}}. */
+  applies?: Record<string, Record<string, unknown[]>>
 }
 
 export interface StatCatalog {
@@ -179,6 +182,16 @@ export function statForbidden(test: StatTest, key: string, value: unknown, param
   return test.forbids.find((r) => r.key === key && r.value === value && Object.entries(r.when).every(([k, v]) => now[k] === v)) ?? null
 }
 
+/** Whether `key` matters with the other parameters as they are (the catalogue's `applies`,
+ *  the defaults counting): the form shows it only then, the node reads it only then. */
+export function statApplies(test: StatTest, key: string, params: Params | null | undefined): boolean {
+  const rule = test.applies?.[key]
+  if (!rule) return true
+  const now: Params = { ...test.defaults }
+  for (const [k, v] of Object.entries(params ?? {})) if (!isEmpty(v)) now[k] = v
+  return Object.entries(rule).every(([k, values]) => values.includes(now[k]))
+}
+
 /** What is wrong with a number against its field's bounds, both excluded: '' when nothing. */
 export function statNumberProblem(field: Pick<StatField, 'above' | 'below'>, value: unknown): '' | 'between' | 'above' | 'below' {
   if (isEmpty(value)) return ''
@@ -249,6 +262,15 @@ export function statNameKey(test: StatTest): string {
 
 export function statHintKey(test: StatTest): string {
   return `stat.tests.${test.id}.hint`
+}
+
+/** The words of a key of a test's form, its label (`params`) or its hint (`hints`): the
+ *  test's own when it has some (`stat.tests.<id>.params.<key>`: «mu» is a mean under H0 for
+ *  one sample, a difference for two), else the words every test shares (`stat.params.<key>`).
+ *  `has` says whether the interface's catalogue holds a key. */
+export function statFieldWordKey(test: StatTest, key: string, part: 'params' | 'hints', has: (k: string) => boolean): string {
+  const own = `stat.tests.${test.id}.${part}.${key}`
+  return has(own) ? own : `stat.${part}.${key}`
 }
 
 /** The words of a reason something is forbidden. No test forbids anything yet: the form

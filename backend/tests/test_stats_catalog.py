@@ -34,7 +34,7 @@ def test_the_snapshot_lists_every_test_in_the_catalogue_s_order():
     assert [t["id"] for t in snap["tests"]] == list(catalog.TESTS)
     assert [t["operation"] for t in snap["tests"]] == list(catalog.stat_operations())
     for entry in snap["tests"]:
-        assert set(entry) == {"id", "operation", "family", "needs", "takes", "defaults", "forbids"}
+        assert set(entry) == {"id", "operation", "family", "needs", "takes", "defaults", "forbids", "applies"}
         spec = catalog.TESTS[entry["id"]]
         # the keys in the order the form shows them
         assert list(entry["needs"]) == list(spec["needs"]) and list(entry["takes"]) == list(spec["takes"])
@@ -51,6 +51,11 @@ def test_every_kind_of_value_has_a_reader_and_a_control_a_form_can_draw():
     for kind, how in catalog.KINDS.items():
         assert how["control"] in catalog.CONTROLS, kind
         assert set(how) <= {"control", "numeric", "of", "count", "above", "below", "choices", "hidden"}, kind
+        if how["control"] == "number" and "above" in how:
+            # the bounds the form shows are the ones the node checks
+            catalog._READERS[kind]("t_two_sample", "k", how["above"] + 0.5 if "below" not in how else (how["above"] + how["below"]) / 2, {})
+            with pytest.raises(EngineError):
+                catalog._READERS[kind]("t_two_sample", "k", how["above"], {})
         if how["control"] == "choice":
             # the form offers exactly what the node accepts
             assert how["choices"] and all(isinstance(c, str) for c in how["choices"]), kind
@@ -99,7 +104,7 @@ def test_what_a_test_forbids_is_refused_with_its_sentence(monkeypatch):
     with pytest.raises(EngineError) as e:
         check_params("t_two_sample", {**base, "var_equal": True, "alternative": "less"}, COLUMNS)
     assert str(e.value) == "stat_t_two_sample: 'less' is only there for unequal variances"
-    assert catalog.snapshot()["tests"][0]["forbids"] == spec["forbids"]
+    assert next(t for t in catalog.snapshot()["tests"] if t["id"] == "t_two_sample")["forbids"] == spec["forbids"]
 
 
 def test_a_default_counts_for_what_a_test_forbids(monkeypatch):
@@ -112,3 +117,27 @@ def test_a_default_counts_for_what_a_test_forbids(monkeypatch):
     monkeypatch.setitem(catalog.TESTS, "t_two_sample", spec)
     with pytest.raises(EngineError, match="'greater' needs equal variances"):
         check_params("t_two_sample", {"value": "amount", "group": "channel", "alternative": "greater"}, COLUMNS)
+
+
+def test_a_key_that_matters_only_with_another_says_so():
+    """`applies`: the form shows the key only with those values of the other (the defaults
+    counting), and the node reads it only then."""
+    for test, spec in catalog.TESTS.items():
+        kinds = {**spec["needs"], **spec["takes"]}
+        for key, rule in spec.get("applies", {}).items():
+            assert key in spec["takes"], (test, key)
+            for other, values in rule.items():
+                assert other in kinds and other != key and values, (test, key)
+                choices = catalog.KINDS[kinds[other]].get("choices")
+                assert choices and set(values) <= set(choices), (test, key)
+    anova = next(t for t in catalog.snapshot()["tests"] if t["id"] == "anova")
+    assert anova["applies"] == {"p_adjust": {"posthoc": ["pairwise_t"]}}
+    assert [r["reason"] for r in anova["forbids"]] == ["tukey_equal_variances", "games_howell_unequal_variances"]
+
+
+def test_the_tests_of_the_first_lots_in_their_families():
+    by_family = {}
+    for test, spec in catalog.TESTS.items():
+        by_family.setdefault(spec["family"], []).append(test)
+    assert by_family["means"] == ["t_one_sample", "t_two_sample", "t_paired", "anova"]
+    assert by_family["variances"] == ["var_f", "levene"] and by_family["correlation"] == ["pearson"]

@@ -45,9 +45,32 @@ GOLDEN_PDF_SHA256 = "ee2bd2ace67183fcf5d2cba882db10983626863650c2ef6b9677e14a279
 A = [5.1, 4.9, 6.2, 5.8, 6.0, 5.5, 5.3, 6.7]
 B = [6.9, 7.2, 6.5, 7.8, 7.1, 6.4, 8.0]
 C = [5.9, 6.1, 7.0, 6.6, 5.7, 6.3]
+BEFORE = [72, 80, 65, 90, 85, 77, 68, 95, 88, 70]
+AFTER = [75, 78, 70, 94, 85, 83, 71, 97, 86, 76]
+PX = [1.2, 2.3, 2.9, 4.1, 5.0, 6.2, 6.8, 8.1, 9.3, 10.0]
+PY = [2.1, 2.9, 3.2, 4.8, 4.9, 6.9, 6.5, 8.8, 8.9, 10.9]
 WELCH = {"value": "v", "group": "g", "groups": ["a", "b"]}
 # what each test of the catalogue is asked on the reference data
-REFERENCE = {"t_two_sample": WELCH}
+REFERENCE = {
+    "t_one_sample": {"value": "v", "mu": 5},
+    "t_two_sample": WELCH,
+    "t_paired": {"x": "before", "y": "after"},
+    "anova": {"value": "v", "group": "g", "posthoc": "tukey"},
+    "var_f": WELCH,
+    "levene": {"value": "v", "group": "g"},
+    "pearson": {"x": "px", "y": "py"},
+}
+# and the variants of each, together every row it may write
+VARIANTS = {
+    "t_one_sample": ({}, {"alternative": "less"}, {"alternative": "greater", "mu": 6}),
+    "t_two_sample": ({}, {"alternative": "less"}, {"alternative": "greater", "var_equal": True}),
+    "t_paired": ({}, {"alternative": "less"}, {"alternative": "greater", "mu": -1}),
+    "anova": ({}, {"var_equal": False, "posthoc": "games_howell"}, {"posthoc": "pairwise_t"},
+              {"posthoc": "pairwise_t", "p_adjust": "bonferroni", "var_equal": False}, {"posthoc": "none"}),
+    "var_f": ({}, {"alternative": "less"}, {"alternative": "greater", "ratio": 2}),
+    "levene": ({}, {"center": "mean"}),
+    "pearson": ({}, {"alternative": "less"}, {"alternative": "greater"}),
+}
 
 
 def abc() -> pl.DataFrame:
@@ -57,8 +80,22 @@ def abc() -> pl.DataFrame:
     return pl.DataFrame({"g": [g for g, _ in rows], "v": [v for _, v in rows]}, schema={"g": pl.String, "v": pl.Float64})
 
 
+def pairs() -> pl.DataFrame:
+    """Two pairs of columns of the same rows, and a row each pair leaves out."""
+    return pl.DataFrame({"before": [float(v) for v in BEFORE] + [None], "after": [float(v) for v in AFTER] + [80.0],
+                         "px": PX + [math.nan], "py": PY + [3.0]})
+
+
+def frame_of(test: str) -> pl.DataFrame:
+    if test in ("t_paired", "pearson"):
+        return pairs()
+    if test == "t_one_sample":
+        return abc().filter(pl.col("g") == "a")
+    return abc()
+
+
 def rows_of(test: str = "t_two_sample", **params) -> list[dict]:
-    out = run_hypothesis_test(PolarsStatSource(abc().lazy()), test, {**REFERENCE[test], **params, "detail": "report"}, "polars")
+    out = run_hypothesis_test(PolarsStatSource(frame_of(test).lazy()), test, {**REFERENCE[test], **params, "detail": "report"}, "polars")
     return [dict(zip(OUTPUT_NAMES, r)) for r in out]
 
 
@@ -111,7 +148,7 @@ def test_the_words_are_complete_in_the_five_languages():
         assert all(isinstance(s, str) and s.strip() for s in strings(words[code])), code
     # every test has its name, and every number it writes a name of its own in each language
     for test in TESTS:
-        written = {(r["section"], r["stat"]) for r in rows_of(test)} | {(r["section"], r["stat"]) for r in rows_of(test, var_equal=True)}
+        written = {(r["section"], r["stat"]) for params in VARIANTS[test] for r in rows_of(test, **params)}
         for code in layouts.LOCALES:
             assert words[code]["tests"][test]["name"]
             unnamed = sorted(s for s in written if layouts.stat_label(test, *s, code) == s[1] and s != ("group", "n"))
@@ -125,7 +162,7 @@ def test_the_words_are_complete_in_the_five_languages():
 def test_the_words_and_the_formulas_use_only_characters_the_pdf_font_has():
     for code, words in layouts.all_texts().items():
         assert glyphs.missing(set("".join(strings(words)))) == set(), code
-    engine_texts = "".join(r["text"] for p in ({}, {"var_equal": True}, {"alternative": "less"}) for r in rows_of(**p) if r["text"])
+    engine_texts = "".join(r["text"] for test in TESTS for p in VARIANTS[test] for r in rows_of(test, **p) if r["text"])
     assert glyphs.missing(set(engine_texts) | set("−∞+∞ · —")) == set()
 
 
@@ -147,16 +184,21 @@ def test_a_layout_is_a_definition_the_report_engine_accepts(test, locale):
 def test_a_layout_reads_only_rows_the_test_writes(test):
     """Every row a layout names by its key is a row of the test, in every variant (the side a
     one-sided alternative leaves open is a row too, with no number)."""
-    for params in ({}, {"alternative": "less"}, {"alternative": "greater", "var_equal": True}):
-        written = {r["key"] for r in rows_of(test, **params)}
+    for params in VARIANTS[test]:
+        rows = rows_of(test, **params)
+        written = {r["key"] for r in rows}
         text = json.dumps(layouts.definition(test, {**REFERENCE[test], **params}, "en"), ensure_ascii=False)
         named = set(re.findall(r'LOOKUP\(\\"([^"\\]+)\\", \[key\]', text))
         assert named and named <= written, sorted(named - written)
-        # a key made of a group's label is a row of that group
+        # a key made of a group's label is a row of every group; of a pair's, of every pair
+        groups = {r["level"] for r in rows if r["section"] == "group"}
         for stat in re.findall(r'\\"group\|\\" & \[level\] & \\"\|\|(\w+)\\"', text):
-            assert {f"group|{g}||{stat}" for g in ("a", "b")} <= written
+            assert {f"group|{g}||{stat}" for g in groups} <= written, stat
+        pairs_ = {(r["level"], r["level_2"]) for r in rows if r["section"] == "pair"}
+        for stat in re.findall(r'\\"pair\|\\" & \[level\] & \\"\|\\" & \[level_2\] & \\"\|(\w+)\\"', text):
+            assert {f"pair|{a}|{b}|{stat}" for a, b in pairs_} <= written, stat
         sections = set(re.findall(r'\[section\] = \\"(\w+)\\"', text))
-        assert sections == {"test", "group", "hist", "curve"} == {r["section"] for r in rows_of(test, **params)}
+        assert sections == {r["section"] for r in rows}, (params, sections)
 
 
 def test_the_report_reads_as_many_rows_as_a_test_may_write():
@@ -333,7 +375,7 @@ def test_the_report_renders_in_the_five_languages(tmp_path, chart_service, monke
         said = set(strings(json.loads(page)))
         words = layouts.texts(locale)
         assert layouts.test_name("t_two_sample", params, locale) in said
-        assert {words["sections"][s] for s in words["sections"]} <= said
+        assert {words["sections"][s] for s in words["sections"] if s != "comparisons"} <= said  # (no post-hoc here)
         assert words["stats"]["test"]["df"] in said and words["tests"]["t_two_sample"]["stats"]["test"]["estimate"] in said
     svg = draw(tmp_path / "svg", chart_service, monkeypatch, fmt="svg", locale=locale)[0]
     assert len(json.loads(svg.path.read_text())["pages"]) == 2
@@ -519,3 +561,65 @@ def test_every_statistics_operation_has_its_report_route():
     """A test of the catalogue without a layout would be refused with a sentence, not an error."""
     assert all(operation_name(t).startswith("stat_") for t in layouts.LAYOUTS)
     assert "app.tasks.report_jobs.render_stat_report_task" in __import__("app.core.export_slots", fromlist=["TASKS"]).TASKS
+
+
+# ── lot 2: every test's report ───────────────────────────────────────────────
+@pytest.mark.parametrize("test", sorted(t for t in TESTS if t != "t_two_sample"))
+@pytest.mark.parametrize("locale", layouts.LOCALES)
+def test_every_report_renders_in_the_five_languages(tmp_path, chart_service, monkeypatch, test, locale):  # noqa: F811
+    """Every variant of every test, in each language: no character the font lacks, no value
+    wider than its place (the render would warn), the test's name in the header."""
+    for i, params in enumerate(VARIANTS[test]):
+        out, page = draw(tmp_path / str(i), chart_service, monkeypatch, locale=locale, test=test, sample=[{"first": 500}], **params)
+        assert out.warnings == [], (params, out.warnings)
+        said = set(strings(json.loads(page)))
+        assert layouts.test_name(test, {**REFERENCE[test], **params}, locale) in said
+        words = layouts.texts(locale)
+        assert words["sections"]["computed"] in said and words["tests"][test]["left_out"].split("{")[0] in "".join(said)
+
+
+# what each report says, in English, of the reference data: R's and SciPy's numbers
+ON_THE_PAGE = {
+    "t_one_sample": ({}, ["One-sample t test", "3.2226", "0.0146", "5.6875", "95% CI: 5.1830 to 6.1920", "mean(v) = 5", "mean(v) ≠ 5",
+                          "t = (m − mu) / (s / √n), df = n − 1", "3.2225754675", "0.0146011836", "1.139352483",
+                          "Rows used: 8. Rows left out: 1 (no number: NULL or NaN)."]),
+    "t_paired": ({}, ["Paired t test", "-2.6434", "0.0268", "-2.5000", "95% CI: -4.6394 to -0.3606", "mean(before − after) = 0",
+                      "-2.6434026632", "-0.8359173189", "2.9907264075", "before − after", "79", "81.5"]),
+    "anova": ({}, ["One-way ANOVA", "11.9313", "2, 18", "0.0005", "0.5700", "Distribution of the statistic under H0: F(2, 18).",
+                   "11.9312926066", "7.790297619", "5.8763690476",
+                   "Pairwise comparisons", "a – b", "a – c", "b – c", "6.89176739", "0.0003431", "3.60930383", "H0 rejected",
+                   "H0 not rejected", "Critical region at α = 0.05: statistic ≥ 3.5546."]),
+    "var_f": ({}, ["F test of two variances", "0.9956", "7, 6", "0.9793", "95% CI: 0.1748 to 5.0961", "var(v | a) / var(v | b) = 1"]),
+    "levene": ({}, ["Brown–Forsythe test (Levene, median)", "0.2686", "2, 18", "0.7675", "3", "5.65", "var(v | a) = var(v | b) = var(v | c)"]),
+    "pearson": ({}, ["Pearson's correlation", "17.0305", "< 0.0001", "0.9865", "95% CI: 0.9419 to 0.9969", "cor(px, py) = 0",
+                     "1.43496376e-7"]),
+}
+
+
+@pytest.mark.parametrize("test", sorted(ON_THE_PAGE))
+def test_each_report_holds_the_reference_numbers(tmp_path, chart_service, monkeypatch, test):  # noqa: F811
+    params, wanted = ON_THE_PAGE[test]
+    out, page = draw(tmp_path, chart_service, monkeypatch, test=test, **params)
+    said = set(strings(json.loads(page)))
+    missing = [w for w in wanted if w not in said]
+    assert missing == [], (missing, sorted(s for s in said if any(c.isdigit() for c in s))[:200])
+
+
+def test_the_comparisons_follow_the_method(tmp_path, chart_service, monkeypatch):  # noqa: F811
+    """Holm's correction has no simultaneous interval: no table nor chart of intervals; the
+    others do; no post-hoc, no comparisons at all."""
+    def items(**params):
+        d = layouts.definition("anova", {**REFERENCE["anova"], **params}, "en")
+        return {it["id"] for it in d["sections"]["body"]["items"]}
+
+    assert {"pairs", "pairs_p", "pairs_ci", "c_pairs"} <= items()
+    assert {"pairs", "pairs_p"} <= items(posthoc="pairwise_t") and not {"pairs_ci", "c_pairs"} & items(posthoc="pairwise_t")
+    assert {"pairs_ci", "c_pairs"} <= items(posthoc="pairwise_t", p_adjust="sidak")
+    assert not {"pairs", "pairs_p", "s_pairs"} & items(posthoc="none")
+    del chart_service[1][:]
+    draw(tmp_path, chart_service, monkeypatch, test="anova")
+    charts = {spec["option"]["title"]["text"]: spec["option"] for spec in chart_service[1] if "title" in spec["option"]}
+    pairs = charts["Differences of the means with their intervals"]
+    assert pairs["xAxis"]["data"] == ["a – b", "a – c", "b – c"]
+    assert [round(v, 6) for v in pairs["series"][0]["data"][0]["value"]] == [-2.195778, -1.441071, -1.441071, -1.441071, -0.686364]
+    assert charts["Distribution of the statistic under H0"]["series"][0]["markLine"]["data"][0]["xAxis"] == pytest.approx(11.93129260658611)

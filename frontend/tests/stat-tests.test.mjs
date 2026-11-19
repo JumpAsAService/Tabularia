@@ -299,3 +299,53 @@ test('every export of the module starts with stat, as auto-imports ask', () => {
   assert.ok(names.length > 15)
   assert.deepEqual(names.filter((n) => !/^(stat[A-Z]|STAT_|Stat[A-Z])/.test(n)), [])
 })
+
+test('a key that matters only with another is known as such (the defaults counting)', () => {
+  const anova = s.statTestOf('stat_anova')
+  assert.deepEqual(anova.applies, { p_adjust: { posthoc: ['pairwise_t'] } })
+  assert.equal(s.statApplies(anova, 'p_adjust', {}), false) // no post-hoc until one is chosen
+  assert.equal(s.statApplies(anova, 'p_adjust', { posthoc: 'tukey' }), false)
+  assert.equal(s.statApplies(anova, 'p_adjust', { posthoc: 'pairwise_t' }), true)
+  assert.equal(s.statApplies(anova, 'posthoc', {}), true)
+  assert.equal(s.statApplies(T, 'alpha', {}), true) // a test without the rule
+  assert.ok(read('../components/ui/StatTestForm.vue').includes('statApplies(now, f.key, props.params)'))
+})
+
+test('a test may say a key in words of its own; the rest are shared', () => {
+  const has = (k) => k in WORDS.en
+  const one = s.statTestOf('stat_t_one_sample')
+  assert.equal(s.statFieldWordKey(one, 'mu', 'hints', has), 'stat.tests.t_one_sample.hints.mu')
+  assert.equal(s.statFieldWordKey(one, 'mu', 'params', has), 'stat.params.mu')
+  assert.equal(s.statFieldWordKey(T, 'mu', 'hints', has), 'stat.hints.mu')
+  assert.equal(en('stat.tests.t_one_sample.hints.mu'), 'The mean the null hypothesis states.')
+  // a test's own words are in the five languages, as the shared ones
+  const own = Object.keys(WORDS.en).filter((k) => /^stat\.tests\.\w+\.(params|hints)\./.test(k))
+  assert.ok(own.length >= 5)
+  const missing = []
+  for (const lang of LANGS) for (const key of own) if (!WORDS[lang][key]?.trim()) missing.push(`${lang} ${key}`)
+  assert.deepEqual(missing, [])
+  for (const key of own) {
+    const [, id, , field] = key.split('.').slice(1)
+    const test = s.STAT_CATALOG.tests.find((t) => t.id === id)
+    assert.ok(test && field in { ...test.needs, ...test.takes }, `${key}: no such key of the test`)
+  }
+})
+
+test('the tests of the means and variances: their fields, their defaults', () => {
+  const fields = (op) => s.statFields(s.statTestOf(op)).map((f) => `${f.key}:${f.control}`)
+  assert.deepEqual(fields('stat_t_one_sample'), ['value:column', 'mu:number', 'alternative:choice', 'alpha:number'])
+  assert.deepEqual(fields('stat_t_paired'), ['x:column', 'y:column', 'mu:number', 'alternative:choice', 'alpha:number'])
+  assert.deepEqual(fields('stat_anova'), ['value:column', 'group:column', 'var_equal:boolean', 'posthoc:choice', 'p_adjust:choice', 'alpha:number'])
+  assert.deepEqual(fields('stat_var_f'), ['value:column', 'group:column', 'groups:levels', 'ratio:number', 'alternative:choice', 'alpha:number'])
+  assert.deepEqual(fields('stat_levene'), ['value:column', 'group:column', 'center:choice', 'alpha:number'])
+  assert.deepEqual(fields('stat_pearson'), ['x:column', 'y:column', 'alternative:choice', 'alpha:number'])
+  assert.deepEqual(defaultParams('stat_anova'), { var_equal: true, posthoc: 'none', p_adjust: 'holm', alpha: 0.05 })
+  assert.equal(s.statFields(s.statTestOf('stat_var_f')).find((f) => f.key === 'ratio').above, 0)
+  assert.equal(opSummary('stat_t_paired', { x: 'before', y: 'after' }), 'before ~ after')
+  // a two-sample t test that becomes an ANOVA keeps its columns and its level
+  assert.deepEqual(s.statSwitch(OP, 'stat_anova', { value: 'amount', group: 'channel', groups: ['a', 'b'], alpha: 0.01 }),
+    { value: 'amount', group: 'channel', var_equal: true, posthoc: 'none', p_adjust: 'holm', alpha: 0.01 })
+  const anova = s.statTestOf('stat_anova')
+  assert.equal(s.statForbidden(anova, 'posthoc', 'tukey', { var_equal: false })?.reason, 'tukey_equal_variances')
+  assert.equal(s.statForbidden(anova, 'posthoc', 'games_howell', {})?.reason, 'games_howell_unequal_variances')
+})

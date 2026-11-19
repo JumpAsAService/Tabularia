@@ -25,9 +25,10 @@ import math
 import re
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, NamedTuple
 
 from app.engine.stats.catalog import CURVE_POINTS, MAX_BINS, MAX_STAT_GROUPS, TESTS
+from app.engine.stats.compute import paired_difference_label
 from app.engine.stats.output import OUTPUT_COLUMNS
 
 LOCALES = ("en", "it", "de", "es", "fr")
@@ -37,10 +38,10 @@ DATASET = "result"
 DEV_SAMPLE_MARK = "_dev_sample"
 
 # The most rows a test writes for its report, which the route reads whole: the test's own
-# (some 40), then for each of at most MAX_STAT_GROUPS groups its 12 numbers and up to
-# MAX_BINS intervals, the three series of the curve, and 9 numbers for each of the 190 pairs
+# (some 45), then for each of at most MAX_STAT_GROUPS groups its 13 numbers and up to
+# MAX_BINS intervals, the three series of the curve, and the 10 rows of each of the 190 pairs
 # of a post-hoc.
-MAX_REPORT_ROWS = 64 + MAX_STAT_GROUPS * (12 + MAX_BINS) + 3 * CURVE_POINTS + 190 * 9
+MAX_REPORT_ROWS = 64 + MAX_STAT_GROUPS * (13 + MAX_BINS) + 3 * CURVE_POINTS + 190 * 10
 
 WIDTH = 186.0  # the body of an A4 page between its side margins, mm
 ACCENT, INK, MUTED, RULE, PANEL, SAMPLE = "#3b5bdb", "#1f2933", "#6b7590", "#d9dde5", "#f1f3f5", "#8a5a00"
@@ -307,10 +308,6 @@ def _group_number(stat: str) -> str:
             f"ABS({x}) >= 10, ROUND({x}, 6), {x})")
 
 
-def _series(t: dict, *stats: str) -> list[dict]:
-    return [{"value": f'SUMIF([stat] = "{s}", [value])', "name": t["stats"]["group"][s]} for s in stats]
-
-
 def _bands(name: str, subtitle: str, t: dict, loc_texts: dict, sample: str | None) -> tuple[dict, dict]:
     """The page header (the test, what it is about and the step's name, the sample line, the
     date, the page) and the page footer (who computed it, the sample line again, the time)."""
@@ -354,11 +351,15 @@ def _document(header: dict, body: list[dict], footer: dict, locale: str) -> dict
     }
 
 
-# ── two groups: t_two_sample (and, with their lots, var_f, mann_whitney, ks_two_sample) ──
+# ── the tests' names, what they are about ───────────────────────────────────
 def _variant(test: str, params: dict[str, Any]) -> str | None:
     """The variant a test's parameters choose, as its `variant` row will say."""
     if test == "t_two_sample":
         return "student" if _param(test, params, "var_equal") else "welch"
+    if test == "anova":
+        return "one_way" if _param(test, params, "var_equal") else "welch"
+    if test == "levene":
+        return _param(test, params, "center")
     return None
 
 
@@ -375,10 +376,12 @@ def test_name(test: str, params: dict[str, Any] | None, locale: str | None) -> s
 
 
 def subject(test: str, params: dict[str, Any] | None, locale: str | None) -> str:
-    """What the test is about, from its columns: «amount by channel»."""
+    """What the test is about, from its columns: «amount by channel», «before − after»."""
     p = params or {}
     if p.get("value") and p.get("group"):
         return texts(locale)["by"].replace("{value}", str(p["value"])).replace("{group}", str(p["group"]))
+    if test == "t_paired" and p.get("x") and p.get("y"):
+        return paired_difference_label(str(p["x"]), str(p["y"]))
     return ", ".join(str(p[k]) for k in ("value", "x", "y") if p.get(k))
 
 
@@ -388,7 +391,48 @@ def title(test: str, params: dict[str, Any] | None, locale: str | None) -> str:
     return test_name(test, params, locale) + (" — " + about if about else "")
 
 
-def _two_groups(test: str, params: dict[str, Any], locale: str, sample: str | None, step: str | None) -> dict:
+# ── one page, made of the blocks a test has ─────────────────────────────────
+class _Card(NamedTuple):
+    id: str
+    label: str
+    value: str
+    format: str | None = None
+
+
+class _Table(NamedTuple):
+    """A table of the groups: one row a group, a column for each stat (its header the stat's
+    name on the page), `width` mm each."""
+
+    id: str
+    title: str
+    stats: tuple[str, ...]
+    width: float = 40.0
+    n_first: bool = False  # the rows' count first, narrower
+
+
+class _Chart(NamedTuple):
+    id: str
+    kind: str
+    title: str
+    more: dict
+
+
+def _df_card(t: dict, two: bool) -> _Card:
+    """The degrees of freedom: one number, or the F's two («2, 18»; «2; 18» where the decimal
+    mark is a comma)."""
+    if not two:
+        return _Card("k_df", t["kpi"]["df"], _value("test|||df"), "0.####")
+    return _Card("k_df", t["kpi"]["df"], "=" + _join(t["df_pair"], d1=_shown(_value("test|||df_1"), "0.####"),
+                                                    d2=_shown(_value("test|||df_2"), "0.####")))
+
+
+def _page(test: str, params: dict[str, Any], locale: str, sample: str | None, step: str | None, *,
+          cards: tuple[_Card, _Card, _Card, _Card], interval: bool, alternative: bool, region_low: bool,
+          symbols: dict[str, str], tables: tuple[_Table, ...], charts: tuple, pairs: bool = False) -> dict:
+    """A test's report: the result (four cards, the decision), the hypotheses, how it is
+    computed (the formula, its symbols, the distribution, every number), the groups, the
+    comparisons of the pairs, the charts, the notes. `interval`: the estimate's card says its
+    interval; `alternative`: the test has one; `region_low`: it writes a lower critical value."""
     from app.reports import formats
 
     t = texts(locale)
@@ -400,22 +444,20 @@ def _two_groups(test: str, params: dict[str, Any], locale: str, sample: str | No
 
     # the result: four cards and a sentence
     p.heading("s_result", t["sections"]["result"])
-    cards = (
-        ("k_statistic", own["kpi"]["statistic"], _shown(_value("test|||statistic")), None, 0, 40),
-        ("k_df", t["kpi"]["df"], _value("test|||df"), "0.####", 44, 40),
-        ("k_p", t["kpi"]["p_value"], _p_value(), None, 88, 40),
-        ("k_estimate", own["kpi"]["estimate"], _shown(_value("test|||estimate")), None, 132, 54),
-    )
-    for id_, label, value, fmt, x, w in cards:
-        card = {"id": id_, "type": "kpi", "dataset": DATASET, "x": x, "y": p.y, "w": w, "h": 20, "label": label, "value": value}
-        if fmt:
-            card["format"] = fmt
-        p.add(card)
-    low, high = _value("test|||ci_low"), _value("test|||ci_high")
-    interval = _join(t["interval"], level=_shown(_value("test|||conf_level"), "0.##%"),
-                     low=f'IF(ISNULL({low}), "−∞", {_shown(low)})', high=f'IF(ISNULL({high}), "+∞", {_shown(high)})')
+    for (card, x, w) in zip(cards, (0, 44, 88, 132), (40, 40, 40, 54)):
+        item = {"id": card.id, "type": "kpi", "dataset": DATASET, "x": x, "y": p.y, "w": w, "h": 20, "label": card.label,
+                "value": card.value}
+        if card.format:
+            item["format"] = card.format
+        p.add(item)
     p.y += 14.2
-    p.text("k_interval", "=" + interval, h=4.5, x=134.5, w=49, size=7.5, color=MUTED)
+    if interval:
+        low, high = _value("test|||ci_low"), _value("test|||ci_high")
+        said = _join(t["interval"], level=_shown(_value("test|||conf_level"), "0.##%"),
+                     low=f'IF(ISNULL({low}), "−∞", {_shown(low)})', high=f'IF(ISNULL({high}), "+∞", {_shown(high)})')
+        p.text("k_interval", "=" + said, h=4.5, x=134.5, w=49, size=7.5, color=MUTED)
+    else:
+        p.y += 4.5
     p.y += 3.3
     p.keep()
     said = {d: _join(t["decision"][d], alpha=_shown(_value("test|||alpha"), "0.####"), p=_p_value("= "))
@@ -425,15 +467,14 @@ def _two_groups(test: str, params: dict[str, Any], locale: str, sample: str | No
 
     # the hypotheses
     p.heading("s_hypotheses", t["sections"]["hypotheses"])
-    alternative = _text("test|||alternative")
     names = t["alternatives"]
-    rows = (
-        ("h0", t["stats"]["test"]["h0"], "=" + _text("test|||h0")),
-        ("h1", t["stats"]["test"]["h1"], "=" + _text("test|||h1")),
-        ("alternative", t["stats"]["test"]["alternative"],
-         f'=IFS({alternative} = "less", {_q(names["less"])}, {alternative} = "greater", {_q(names["greater"])}, {_q(names["two_sided"])})'),
-        ("alpha", t["stats"]["test"]["alpha"], "=" + _shown(_value("test|||alpha"), "0.####")),
-    )
+    rows = [("h0", t["stats"]["test"]["h0"], "=" + _text("test|||h0")),
+            ("h1", t["stats"]["test"]["h1"], "=" + _text("test|||h1"))]
+    if alternative:
+        chosen = _text("test|||alternative")
+        rows.append(("alternative", t["stats"]["test"]["alternative"],
+                     f'=IFS({chosen} = "less", {_q(names["less"])}, {chosen} = "greater", {_q(names["greater"])}, {_q(names["two_sided"])})'))
+    rows.append(("alpha", t["stats"]["test"]["alpha"], "=" + _shown(_value("test|||alpha"), "0.####")))
     for id_, label, value in rows:
         p.text(f"hy_{id_}_label", label, x=0, w=58, advance=False, color=MUTED)
         p.text(f"hy_{id_}", value, x=60, w=WIDTH - 60, can_grow=True)
@@ -446,15 +487,18 @@ def _two_groups(test: str, params: dict[str, Any], locale: str, sample: str | No
            can_grow=True)
     p.keep()
     p.y += 1.5
-    first, last = 'LOOKUP("group", [section], [level])', 'LOOKUP("group", [section], LAST([level]))'
-    p.text("symbols", "=" + _join(own["symbols"], g1=first, g2=last), h=8.5, size=8, color=MUTED, can_grow=True)
+    p.text("symbols", "=" + _join(own["symbols"], **symbols), h=8.5, size=8, color=MUTED, can_grow=True)
     p.y += 0.5
     p.text("distribution", "=" + _join(t["distribution"], distribution=_text("test|||distribution")))
-    c_low, c_high = _value("test|||critical_low"), _value("test|||critical_high")
     c = t["critical"]
-    region = (f'IF(ISNULL({c_low}), "", {_join(c["low"], x=_shown(c_low))}) & '
-              f'IF(ISNULL({c_low}) OR ISNULL({c_high}), "", {_q(c["or"])}) & '
-              f'IF(ISNULL({c_high}), "", {_join(c["high"], x=_shown(c_high))})')
+    c_high = _value("test|||critical_high")
+    if region_low:
+        c_low = _value("test|||critical_low")
+        region = (f'IF(ISNULL({c_low}), "", {_join(c["low"], x=_shown(c_low))}) & '
+                  f'IF(ISNULL({c_low}) OR ISNULL({c_high}), "", {_q(c["or"])}) & '
+                  f'IF(ISNULL({c_high}), "", {_join(c["high"], x=_shown(c_high))})')
+    else:
+        region = _join(c["high"], x=_shown(c_high))
     p.text("critical", "=" + _join(c["region"], alpha=_shown(_value("test|||alpha"), "0.####"), region=region))
     p.y += 1.5
     numbers = t["tables"]["numbers"]
@@ -466,50 +510,43 @@ def _two_groups(test: str, params: dict[str, Any], locale: str, sample: str | No
 
     # the groups: the numbers of the formula, then what the box plot draws
     p.heading("s_groups", t["sections"]["groups"])
-    g = t["stats"]["group"]
+    g = {**t["stats"]["group"], **own.get("stats", {}).get("group", {})}
     one_row_a_group = '[section] = "group" AND [stat] = "n"'
-    # two tables, not one of eight columns: a variance of eleven digits ran into the mean
-    # beside it, and a header of two words («Mean, CI low») broke on two lines
-    p.add(_table("groups", t["tables"]["groups"]["title"], one_row_a_group, [
-        {"header": t["tables"]["groups"]["group"], "value": "[level]"},
-        {"header": g["n"], "value": "[value]", "width": 20, "align": "right", "format": "#,##0"},
-        *({"header": g[s], "value": _group_number(s), "width": 40, "align": "right", "format": "0.########"}
-          for s in ("mean", "var", "sd")),
-    ], p.y), 10)
-    p.add(_table("intervals", t["tables"]["intervals"]["title"], one_row_a_group, [
-        {"header": t["tables"]["groups"]["group"], "value": "[level]"},
-        *({"header": g[s], "value": _group_number(s), "width": 40, "align": "right", "format": "0.########"}
-          for s in ("se", "ci_low", "ci_high")),
-    ], p.y), 10)
-    p.add(_table("quartiles", t["tables"]["quartiles"]["title"], one_row_a_group, [
-        {"header": t["tables"]["groups"]["group"], "value": "[level]"},
-        *({"header": g[s], "value": _group_number(s), "width": 30, "align": "right", "format": "0.########"}
-          for s in ("min", "q1", "median", "q3", "max")),
-    ], p.y), 10)
+    for table in tables:
+        cols = [{"header": t["tables"]["groups"]["group"], "value": "[level]"}]
+        stats = table.stats
+        if table.n_first:
+            cols.append({"header": g["n"], "value": "[value]", "width": 20, "align": "right", "format": "#,##0"})
+            stats = stats[1:]
+        cols += [{"header": g[s], "value": _group_number(s), "width": table.width, "align": "right", "format": "0.########"}
+                 for s in stats]
+        p.add(_table(table.id, table.title, one_row_a_group, cols, p.y), 10)
 
-    # the charts
+    if pairs:
+        _comparisons(p, t, params)
+
+    # the charts, two by two (one alone across the page); a place may hold alternatives, of
+    # which the rows make one visible
     p.heading("s_charts", t["sections"]["charts"])
     half, gap, tall = 91.0, 4.0, 60.0
-    ch = t["charts"]
-
-    def chart(id_: str, kind: str, x: float, text: str, **more: Any) -> dict:
-        # the title is drawn at 10 px, bold, on one line of the chart's width
-        return {"id": id_, "type": "chart", "dataset": DATASET, "kind": kind, "x": x, "y": p.y, "w": half, "h": tall,
-                "title": _fit(text, 7.5, half - 4, 700), **more}
-
-    p.add(chart("c_box", "boxplot", 0, ch["boxplot"].replace("{by}", by), filter='[section] = "group"', category="[level]",
-                series=_series(t, "min", "q1", "median", "q3", "max"), options={"format": "0.###"}))
-    p.add(chart("c_means", "interval", half + gap, ch["interval"], filter='[section] = "group"', category="[level]",
-                series=_series(t, "mean", "ci_low", "ci_high"), options={"labels": True, "format": "0.###"}), tall + 3)
-    p.add(chart("c_hist", "column", 0, ch["histogram"].replace("{by}", by), filter='[section] = "hist"', category="[text]",
-                split_by="[level]", series=[{"value": "SUM([value])", "name": t["stats"]["hist"]["count"]}],
-                options={"legend": True, "format": "#,##0"}, visible='=COUNTIF([section] = "hist") > 0'))
-    curve = '=COUNTIF([section] = "curve") > 0'
-    # the first value of `split_by` in the rows' order is the line, the others the regions under it
-    p.add(chart("c_curve", "density", half + gap, ch["density"], filter='[section] = "curve"', category="[x0]",
-                split_by="[stat]", series=[{"value": "[value]", "name": t["stats"]["curve"]["density"]}],
-                options={"legend": False, "target": _value("test|||statistic"), "format": "0.000"}, visible=curve), tall + 0.5)
-    p.text("c_curve_caption", ch["density_caption"], h=4, x=half + gap, w=half, size=7, color=MUTED, visible=curve)
+    width = WIDTH if len(charts) == 1 else half
+    caption_x = None
+    for i, place in enumerate(charts):
+        x = 0.0 if i % 2 == 0 else half + gap
+        last_row = i >= len(charts) - (2 if len(charts) % 2 == 0 else 1)
+        right = i % 2 == 1 or i == len(charts) - 1
+        alternatives = (place,) if isinstance(place, _Chart) else place
+        for j, chart in enumerate(alternatives):
+            item = {"id": chart.id, "type": "chart", "dataset": DATASET, "kind": chart.kind, "x": x, "y": p.y, "w": width, "h": tall,
+                    # the title is drawn at 10 px, bold, on one line of the chart's width
+                    "title": _fit(chart.title, 7.5, width - 4, 700), **chart.more}
+            last = j == len(alternatives) - 1
+            p.add(item, (tall + 0.5 if last_row else tall + 3) if right and last else 0.0)
+            if chart.kind == "density":
+                caption_x = x
+    if caption_x is not None:
+        p.text("c_curve_caption", t["charts"]["density_caption"], h=4, x=caption_x, w=width, size=7, color=MUTED,
+               visible='=COUNTIF([section] = "curve") > 0')
     p.keep()
 
     # the notes, the rows left out, the engine
@@ -526,8 +563,226 @@ def _two_groups(test: str, params: dict[str, Any], locale: str, sample: str | No
     return _document(header, p.items, footer, locale)
 
 
+def _pair_value(stat: str, column: str = "value") -> str:
+    return f'LOOKUP("pair|" & [level] & "|" & [level_2] & "|{stat}", [key], [{column}])'
+
+
+def _pair_number(stat: str) -> str:
+    """A number of the pair of the row at hand: eight decimals, fewer for a large one (as a
+    group's), by its exponent when it is very small (a p-value)."""
+    x = _pair_value(stat)
+    rounded = (f"IFS(ABS({x}) >= 1000000000, ROUND({x}, 1), ABS({x}) >= 1000000, ROUND({x}, 2), ABS({x}) >= 1000, ROUND({x}, 4), "
+               f"ABS({x}) >= 10, ROUND({x}, 6), {x})")
+    return f"IF(ISNULL({_pair_value(stat, 'tiny')}), {rounded}, {_pair_value(stat, 'tiny')})"
+
+
+def _comparisons(p: _Page, t: dict, params: dict[str, Any]) -> None:
+    """The pairwise comparisons: what method and correction, then the pairs in three tables
+    (the difference and its statistic; the p-values and the decision; the simultaneous
+    intervals, when the method has them) and a chart of the intervals, with a line at 0."""
+    w = t["posthoc"]
+    posthoc, adjust = _param("anova", params, "posthoc"), _param("anova", params, "p_adjust")
+    intervals = not (posthoc == "pairwise_t" and adjust == "holm")
+    p.heading("s_pairs", t["sections"]["comparisons"])
+    method, how = _text("test|||posthoc"), _text("test|||p_adjust")
+    said_method = "IFS(" + ", ".join(f'{method} = {_q(k)}, {_q(v)}' for k, v in w["method"].items()) + ', TRUE, "")'
+    said_adjust = "IFS(" + ", ".join(f'{how} = {_q(k)}, {_q(v)}' for k, v in w["adjust"].items()) + ', TRUE, "")'
+    # (kept with its heading: a text that grows is the last of what is kept, or what is under it
+    # would not move)
+    p.text("pairs_method", "=" + _join(w["line"], method=said_method, adjust=said_adjust), h=5, can_grow=True)
+    p.keep()
+    p.y += 1.5
+    p.text("pairs_formula", "=" + _text("test|||posthoc_formula"), h=6.5, size=9, weight="semibold", background=PANEL, padding=1.5,
+           can_grow=True)
+    p.y += 1.5
+    ps = {**t["stats"]["pair"]}
+    one_row_a_pair = '[section] = "pair" AND [stat] = "estimate"'
+    pair = {"header": w["pair"], "value": '[level] & " – " & [level_2]'}
+
+    def numeric(stat: str) -> dict:
+        return {"header": ps[stat], "value": _pair_number(stat), "width": 36, "align": "right", "format": "0.########"}
+
+    tables = t["tables"]
+    p.add(_table("pairs", tables["pairs"]["title"], one_row_a_pair,
+                 [pair, *(numeric(s) for s in ("estimate", "std_error", "statistic", "df"))], p.y), 10)
+    decision = _pair_value("decision", "text")
+    # the studentized range gives a pair no p-value of its own: only the adjusted one
+    own_p = [numeric("p_value")] if posthoc == "pairwise_t" else []
+    p.add(_table("pairs_p", tables["pairs_p"]["title"], one_row_a_pair, [
+        pair, *own_p, numeric("p_adjusted"),
+        {"header": ps["decision"], "value": f'IF({decision} = "reject_h0", {_q(w["reject"])}, {_q(w["keep"])})', "width": 50},
+    ], p.y), 10)
+    if intervals:
+        p.add(_table("pairs_ci", tables["pairs_ci"]["title"], one_row_a_pair,
+                     [pair, *(numeric(s) for s in ("critical", "ci_low", "ci_high"))], p.y), 10)
+        # the differences with their intervals, while they are few enough to be read on one chart
+        p.y += 2.0
+        p.add({"id": "c_pairs", "type": "chart", "dataset": DATASET, "kind": "interval", "x": 0, "y": p.y, "w": WIDTH, "h": 62,
+               "title": _fit(t["charts"]["pairs"], 7.5, WIDTH - 4, 700), "filter": '[section] = "pair"',
+               "category": '[level] & " – " & [level_2]',
+               "series": [{"value": f'SUMIF([stat] = "{s}", [value])', "name": ps[s]} for s in ("estimate", "ci_low", "ci_high")],
+               "options": {"labels": True, "format": "0.###", "target": 0},
+               "visible": f'=COUNTIF({one_row_a_pair}) <= {MAX_PAIRS_CHARTED}'}, 62.5)
+
+
+# past this many pairs the chart of the intervals is not drawn: the tables say them
+MAX_PAIRS_CHARTED = 15
+
+
+def _series(t: dict, *stats: str, own: dict | None = None) -> list[dict]:
+    names = {**t["stats"]["group"], **((own or {}).get("stats", {}).get("group", {}))}
+    return [{"value": f'SUMIF([stat] = "{s}", [value])', "name": names[s]} for s in stats]
+
+
+def _box(t: dict, by: str, filter_: str = '[section] = "group"') -> _Chart:
+    return _Chart("c_box", "boxplot", t["charts"]["boxplot"].replace("{by}", by),
+                  {"filter": filter_, "category": "[level]", "series": _series(t, "min", "q1", "median", "q3", "max"),
+                   "options": {"format": "0.###"}})
+
+
+def _means(t: dict, own: dict, stats: tuple[str, str, str] = ("mean", "ci_low", "ci_high"), filter_: str = '[section] = "group"',
+           target: str | None = None, labels: bool = True, id_: str = "c_means", visible: str | None = None) -> _Chart:
+    options: dict[str, Any] = {"labels": labels, "format": "0.###"}
+    if target is not None:
+        options["target"] = target
+    more = {"filter": filter_, "category": "[level]", "series": _series(t, *stats, own=own), "options": options}
+    if visible:
+        more["visible"] = visible
+    return _Chart(id_, "interval", own.get("charts", {}).get("interval", t["charts"]["interval"]), more)
+
+
+# past this many groups the values are not written beside the means: they would run into each other
+MAX_GROUPS_LABELLED = 8
+_GROUPS = 'COUNTIF([section] = "group" AND [stat] = "n")'
+
+
+def _means_of_groups(t: dict, own: dict, stats: tuple[str, str, str] = ("mean", "ci_low", "ci_high")) -> tuple[_Chart, _Chart]:
+    """The interval chart of several groups: its values written while the groups are few."""
+    return (_means(t, own, stats, visible=f"={_GROUPS} <= {MAX_GROUPS_LABELLED}"),
+            _means(t, own, stats, labels=False, id_="c_means_many", visible=f"={_GROUPS} > {MAX_GROUPS_LABELLED}"))
+
+
+def _histogram(t: dict, by: str, legend: bool = True, at_most: int | None = None) -> _Chart:
+    visible = '=COUNTIF([section] = "hist") > 0'
+    if at_most is not None:
+        visible += f' AND COUNTIF([section] = "group" AND [stat] = "n") <= {at_most}'
+    return _Chart("c_hist", "column", t["charts"]["histogram"].replace("{by}", by),
+                  {"filter": '[section] = "hist"', "category": "[text]", "split_by": "[level]",
+                   "series": [{"value": "SUM([value])", "name": t["stats"]["hist"]["count"]}],
+                   "options": {"legend": legend, "format": "#,##0"}, "visible": visible})
+
+
+def _density(t: dict) -> _Chart:
+    # the first value of `split_by` in the rows' order is the line, the others the regions under it
+    return _Chart("c_curve", "density", t["charts"]["density"],
+                  {"filter": '[section] = "curve"', "category": "[x0]", "split_by": "[stat]",
+                   "series": [{"value": "[value]", "name": t["stats"]["curve"]["density"]}],
+                   "options": {"legend": False, "target": _value("test|||statistic"), "format": "0.000"},
+                   "visible": '=COUNTIF([section] = "curve") > 0'})
+
+
+def _cards(t: dict, own: dict, fourth: _Card | None = None, two_df: bool = False) -> tuple[_Card, _Card, _Card, _Card]:
+    return (_Card("k_statistic", own["kpi"]["statistic"], _shown(_value("test|||statistic"))),
+            _df_card(t, two_df),
+            _Card("k_p", t["kpi"]["p_value"], _p_value()),
+            fourth or _Card("k_estimate", own["kpi"]["estimate"], _shown(_value("test|||estimate"))))
+
+
+_FIRST, _LAST = 'LOOKUP("group", [section], [level])', 'LOOKUP("group", [section], LAST([level]))'
+
+
+def _tables_of_means(t: dict, own: dict, welch_weight: bool = False) -> tuple[_Table, ...]:
+    # three tables, not one of eight columns: a variance of eleven digits ran into the mean
+    # beside it, and a header of two words («Mean, CI low») broke on two lines
+    tables = t["tables"]
+    return (_Table("groups", tables["groups"]["title"], ("n", "mean", "var", "sd"), n_first=True),
+            _Table("intervals", tables["intervals"]["title"], ("se", "ci_low", "ci_high") + (("weight",) if welch_weight else ())),
+            _Table("quartiles", tables["quartiles"]["title"], ("min", "q1", "median", "q3", "max"), width=30))
+
+
+# ── the layouts ─────────────────────────────────────────────────────────────
+def _two_groups(test: str, params: dict[str, Any], locale: str, sample: str | None, step: str | None) -> dict:
+    """Two groups of a column: t_two_sample, var_f (and, with their lots, mann_whitney,
+    ks_two_sample)."""
+    t = texts(locale)
+    own = t["tests"][test]
+    by = subject(test, params, locale)
+    return _page(test, params, locale, sample, step, cards=_cards(t, own, two_df=test == "var_f"), interval=True,
+                 alternative=True, region_low=True, symbols={"g1": _FIRST, "g2": _LAST}, tables=_tables_of_means(t, own),
+                 charts=(_box(t, by), _means(t, own), _histogram(t, by), _density(t)))
+
+
+def _one_sample(test: str, params: dict[str, Any], locale: str, sample: str | None, step: str | None) -> dict:
+    """One column against a value: t_one_sample (and, with its lot, normality)."""
+    t = texts(locale)
+    own = t["tests"][test]
+    by = subject(test, params, locale)
+    return _page(test, params, locale, sample, step, cards=_cards(t, own), interval=True, alternative=True, region_low=True,
+                 symbols={"column": _FIRST}, tables=_tables_of_means(t, own),
+                 charts=(_box(t, by), _means(t, own, target=_value("test|||null_value")), _histogram(t, by, legend=False),
+                         _density(t)))
+
+
+def _paired(test: str, params: dict[str, Any], locale: str, sample: str | None, step: str | None) -> dict:
+    """Two columns of the same rows, their differences tested: t_paired (and, with its lot,
+    wilcoxon_signed_rank). The tables have the two columns and the differences; the charts
+    the differences."""
+    t = texts(locale)
+    own = t["tests"][test]
+    x, y = str(params.get("x") or "x"), str(params.get("y") or "y")
+    difference = paired_difference_label(x, y)
+    only = f'[section] = "group" AND [level] = {_q(difference)}'
+    return _page(test, params, locale, sample, step, cards=_cards(t, own), interval=True, alternative=True, region_low=True,
+                 symbols={"x": _q(x), "y": _q(y)}, tables=_tables_of_means(t, own),
+                 charts=(_box(t, difference, only), _means(t, own, filter_=only, target=_value("test|||null_value")),
+                         _histogram(t, difference, legend=False), _density(t)))
+
+
+def _several_groups(test: str, params: dict[str, Any], locale: str, sample: str | None, step: str | None) -> dict:
+    """Several groups of a column: anova (with its pairwise comparisons), levene (and, with
+    its lot, kruskal_wallis)."""
+    t = texts(locale)
+    own = t["tests"][test]
+    by = subject(test, params, locale)
+    tables = t["tables"]
+    if test == "levene":
+        fourth = _Card("k_groups", own["kpi"]["groups"], _value("test|||k"), "#,##0")
+        table_set = (_Table("groups", tables["groups"]["title"], ("n", "center", "dev_mean", "dev_var"), n_first=True),
+                     _Table("intervals", own["tables"]["deviations"], ("dev_sd", "dev_se", "dev_ci_low", "dev_ci_high")),
+                     _Table("quartiles", tables["quartiles"]["title"], ("min", "q1", "median", "q3", "max"), width=30))
+        means = _means_of_groups(t, own, ("dev_mean", "dev_ci_low", "dev_ci_high"))
+    else:
+        fourth = _Card("k_effect", own["kpi"]["effect"], _shown(_value("test|||eta_squared"), P4))
+        table_set = _tables_of_means(t, own, welch_weight=_variant(test, params) == "welch")
+        means = _means_of_groups(t, own)
+    pairs = test == "anova" and _param(test, params, "posthoc") != "none"
+    # the histogram last: past six groups it is not drawn, and leaves no hole between the others
+    return _page(test, params, locale, sample, step, cards=_cards(t, own, fourth, two_df=True), interval=False,
+                 alternative=False, region_low=False, symbols={}, tables=table_set, pairs=pairs,
+                 charts=(_box(t, by), means, _density(t), _histogram(t, by, at_most=6)))
+
+
+def _correlation(test: str, params: dict[str, Any], locale: str, sample: str | None, step: str | None) -> dict:
+    """Two columns of the same rows, how they move together: pearson (and, with its lot,
+    spearman). No box plot nor histogram: a scatter plot is for a later release."""
+    t = texts(locale)
+    own = t["tests"][test]
+    tables = t["tables"]
+    return _page(test, params, locale, sample, step, cards=_cards(t, own), interval=True, alternative=True, region_low=True,
+                 symbols={"x": _q(str(params.get("x") or "x")), "y": _q(str(params.get("y") or "y"))},
+                 tables=(_Table("groups", tables["groups"]["title"], ("n", "mean", "var", "sd"), n_first=True),
+                         _Table("extremes", own["tables"]["extremes"], ("min", "max"))),
+                 charts=(_density(t),))
+
+
 LAYOUTS: dict[str, Callable[[str, dict[str, Any], str, str | None, str | None], dict]] = {
+    "t_one_sample": _one_sample,
     "t_two_sample": _two_groups,
+    "t_paired": _paired,
+    "anova": _several_groups,
+    "var_f": _two_groups,
+    "levene": _several_groups,
+    "pearson": _correlation,
 }
 
 

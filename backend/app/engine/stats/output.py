@@ -11,6 +11,7 @@ names the columns without quotes.
 from __future__ import annotations
 
 import math
+import sys
 from typing import Any, Callable
 
 import polars as pl
@@ -39,7 +40,11 @@ def _finite(v: Any) -> float | None:
     if v is None:
         return None
     v = float(v)
-    return v + 0.0 if math.isfinite(v) else None  # + 0.0: a −0.0 is written 0.0
+    if not math.isfinite(v):
+        return None
+    # below the smallest normal double a number is written 0: ClickHouse 24.8's parser refuses
+    # the literal of a subnormal one (a density far in the tail of a curve, 1e-310)
+    return 0.0 if abs(v) < sys.float_info.min else v + 0.0  # + 0.0: a −0.0 is written 0.0
 
 
 class Rows:

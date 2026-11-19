@@ -57,10 +57,18 @@ def _table() -> pl.DataFrame:
         price.append(decimal.Decimal(round(z * 250.0) + 1999) / 100)
         at.append(dt.datetime(2024, 3, 1, 8, 0) if i % 3 else dt.datetime(2024, 3, 1, 20, 30, 15))
         level.append(rnd.choice([-0.0, 0.0, 1.5, 1.5]))  # a number as a group, its zero with both signs
+    # a second measure of the same rows, for the paired tests and the correlation: made from the
+    # first without drawing again (the columns above stay what they were), with values of its own
+    # that are no values — a NULL every 37 rows, a NaN every 53 — and a partner near 1e9
+    x2 = [None if i % 37 == 5 else math.nan if i % 53 == 7 else
+          (v if v is None or math.isnan(v) else round(0.9 * v + ((i * 7) % 11) / 10.0, 1)) for i, v in enumerate(x)]
+    big2 = [v + 0.5 + ((i * 3) % 7) / 10.0 + (0.2 if g[i] == "south" else 0.0) for i, v in enumerate(big)]
     return pl.DataFrame(
-        {"g": g, "day": day, "flag": flag, "x": x, "big": big, "qty": qty, "price": price, "at": at, "level": level},
+        {"g": g, "day": day, "flag": flag, "x": x, "big": big, "qty": qty, "price": price, "at": at, "level": level,
+         "x2": x2, "big2": big2},
         schema={"g": pl.String, "day": pl.Date, "flag": pl.Boolean, "x": pl.Float64, "big": pl.Float64,
-                "qty": pl.Int64, "price": pl.Decimal(10, 2), "at": pl.Datetime("us"), "level": pl.Float64},
+                "qty": pl.Int64, "price": pl.Decimal(10, 2), "at": pl.Datetime("us"), "level": pl.Float64,
+                "x2": pl.Float64, "big2": pl.Float64},
     )
 
 
@@ -74,6 +82,10 @@ def src(storage):
 
 def t_two(**params):
     return [{"type": "stat_t_two_sample", "params": params}]
+
+
+def stat(test, **params):
+    return [{"type": f"stat_{test}", "params": params}]
 
 
 CASES = {
@@ -107,6 +119,58 @@ CASES = {
         {"type": "filter", "params": {"column": "g", "operator": "ne", "value": "east"}},
         *t_two(value="x", group="g"),
     ],
+    # lot 2: one sample, paired, correlation
+    "one_sample": stat("t_one_sample", value="x", mu=10),
+    "one_sample_less": stat("t_one_sample", value="x", mu=10.1, alternative="less", alpha=0.1),
+    "one_sample_near_1e9": stat("t_one_sample", value="big", mu=1e9),
+    "one_sample_integer": stat("t_one_sample", value="qty", mu=20, alternative="greater"),
+    "one_sample_decimal": stat("t_one_sample", value="price", mu=20),
+    "paired": stat("t_paired", x="x", y="x2"),
+    "paired_near_1e9": stat("t_paired", x="big2", y="big", mu=0.8, alternative="greater"),
+    "paired_integer_decimal": stat("t_paired", x="qty", y="price", alternative="less"),
+    "pearson": stat("pearson", x="x", y="x2"),
+    "pearson_near_1e9": stat("pearson", x="big", y="big2", alternative="greater"),
+    "pearson_integer_decimal": stat("pearson", x="qty", y="price", alternative="less", alpha=0.01),
+    # the ANOVA, with each post-hoc
+    "anova": stat("anova", value="x", group="g"),
+    "anova_welch": stat("anova", value="x", group="g", var_equal=False),
+    "anova_tukey": stat("anova", value="x", group="g", posthoc="tukey"),
+    "anova_games_howell": stat("anova", value="x", group="g", var_equal=False, posthoc="games_howell"),
+    "anova_pairwise_holm": stat("anova", value="x", group="g", posthoc="pairwise_t"),
+    "anova_pairwise_bonferroni_welch": stat("anova", value="x", group="g", var_equal=False, posthoc="pairwise_t", p_adjust="bonferroni"),
+    "anova_pairwise_sidak": stat("anova", value="qty", group="g", posthoc="pairwise_t", p_adjust="sidak", alpha=0.01),
+    "anova_pairwise_none": stat("anova", value="price", group="g", posthoc="pairwise_t", p_adjust="none"),
+    "anova_near_1e9_tukey": stat("anova", value="big", group="g", posthoc="tukey"),
+    "anova_near_1e9_games_howell": stat("anova", value="big", group="g", var_equal=False, posthoc="games_howell"),
+    "anova_date_as_group": stat("anova", value="x", group="day", posthoc="tukey"),
+    "anova_boolean_as_group": stat("anova", value="qty", group="flag", var_equal=False, posthoc="games_howell"),
+    "anova_number_as_group": stat("anova", value="x", group="level", posthoc="pairwise_t", p_adjust="bonferroni"),
+    "anova_datetime_as_group": stat("anova", value="big", group="at"),
+    # variances
+    "var_f": stat("var_f", value="x", group="g", groups=["north", "south"]),
+    "var_f_near_1e9": stat("var_f", value="big", group="g", groups=["east", "north"], ratio=1.2, alternative="less"),
+    "var_f_integer": stat("var_f", value="qty", group="flag", alternative="greater"),
+    "var_f_number_as_group": stat("var_f", value="price", group="level", groups=[0.0, 1.5]),
+    "levene": stat("levene", value="x", group="g"),
+    "levene_mean": stat("levene", value="x", group="g", center="mean"),
+    "levene_near_1e9": stat("levene", value="big", group="g"),
+    "levene_near_1e9_mean": stat("levene", value="big", group="g", center="mean"),
+    "levene_integer": stat("levene", value="qty", group="day"),
+    "levene_decimal_number_as_group": stat("levene", value="price", group="level", center="mean"),
+    "levene_boolean_as_group": stat("levene", value="x", group="flag"),
+    # their reports' rows
+    "report_one_sample": stat("t_one_sample", value="x", mu=10, detail="report"),
+    "report_one_sample_near_1e9": stat("t_one_sample", value="big", mu=1e9, alternative="less", detail="report"),
+    "report_paired": stat("t_paired", x="x", y="x2", detail="report"),
+    "report_paired_near_1e9": stat("t_paired", x="big2", y="big", mu=0.8, detail="report"),
+    "report_pearson": stat("pearson", x="x", y="x2", detail="report"),
+    "report_anova_tukey": stat("anova", value="x", group="g", posthoc="tukey", detail="report"),
+    "report_anova_near_1e9": stat("anova", value="big", group="g", var_equal=False, posthoc="games_howell", detail="report"),
+    "report_anova_number_as_group": stat("anova", value="qty", group="level", detail="report"),
+    "report_var_f": stat("var_f", value="x", group="g", groups=["north", "south"], detail="report"),
+    "report_var_f_less": stat("var_f", value="big", group="g", groups=["east", "north"], alternative="less", detail="report"),
+    "report_levene": stat("levene", value="x", group="g", detail="report"),
+    "report_levene_near_1e9": stat("levene", value="big", group="g", center="mean", detail="report"),
 }
 
 
@@ -157,7 +221,7 @@ def test_the_cases_test_something(storage, src):
     assert by["welch"]["group|north||min"]["value"] == 0.0 and math.copysign(1.0, by["welch"]["group|north||min"]["value"]) == 1.0
     # the report's rows: every usable row of the two groups in an interval (14 of them: Sturges
     # on some 1,600 rows), a zero with a sign on the first edge, quartiles between the extremes
-    for case in [c for c in CASES if c.startswith("report_")]:
+    for case in [c for c in CASES if c.startswith("report_") and CASES[c][-1]["type"] == "stat_t_two_sample"]:
         rows = by[case]
         hist = [r for r in rows.values() if r["section"] == "hist"]
         assert sum(r["value"] for r in hist) == rows["test|||n"]["value"], case
@@ -168,6 +232,17 @@ def test_the_cases_test_something(storage, src):
         assert sum(1 for r in rows.values() if r["stat"] == "density") == 201, case
     assert not [k for k in by["report_student_less"] if "reject_high" in k]
     assert "group|0.0||q1" in by["report_number_as_group"] and by["report_near_1e9"]["hist|north||count|0"]["x0"] > 9e8
+    # lot 2: what the cases claim to test is there
+    assert by["paired"]["test|||n_missing"]["value"] > 150  # the rows where x or x2 is no number
+    assert by["anova_tukey"]["test|||k"]["value"] == 3 and len([k for k in by["anova_tukey"] if k.endswith("|p_adjusted")]) == 3
+    assert 0 < by["anova_near_1e9_tukey"]["pair|east|north|p_adjusted"]["value"] < 1e-6  # small, and still a number
+    assert [k for k in by["anova_date_as_group"] if k.startswith("group|") and k.endswith("||n")] == ["group|2024-03-01||n", "group|2024-11-30||n"]
+    assert {"group|0.0||n", "group|1.5||n"} <= set(by["anova_number_as_group"])
+    assert by["pearson_near_1e9"]["test|||estimate"]["value"] > 0.5  # big2 follows big
+    assert by["levene_near_1e9"]["group|east||center"]["value"] > 9e8
+    for case in ("report_one_sample", "report_paired", "report_anova_tukey", "report_var_f", "report_levene"):
+        assert sum(1 for k in by[case] if k.startswith("curve|||density|")) == 201, case
+    assert sum(r["value"] for r in by["report_paired"].values() if r["section"] == "hist") == by["report_paired"]["test|||n"]["value"]
     # the two orders of a pair are the same test, mirrored
     assert by["student"]["test|||p_value"]["value"] == pytest.approx(
         2 * min(by["student_less"]["test|||p_value"]["value"], 1 - by["student_less"]["test|||p_value"]["value"]), rel=1e-9)
@@ -201,3 +276,52 @@ def test_clickhouse_own_t_tests_agree(function, var_equal, value, first, second,
     statistic, p_value = (float(v) for v in bytes(out).decode().split())
     assert math.isclose(rows["test|||statistic"]["value"], statistic, rel_tol=1e-6)
     assert math.isclose(rows["test|||p_value"]["value"], p_value, rel_tol=1e-6)
+
+
+# ── a second witness for the lot 2: ClickHouse's own one-sample t and ANOVA, on chDB ──
+def _chdb_query(storage, src, sql_of_path: str) -> list[float]:
+    from chdb import session as chdb_session
+
+    path = tempfile.mkstemp(suffix=".parquet")[1]
+    state = tempfile.mkdtemp(prefix="chdb_witness_")
+    sess = chdb_session.Session(state)
+    try:
+        storage.download_file(src.bucket, src.key, path)
+        out = sess.query(sql_of_path.format(path=path), "TSV").bytes()
+    finally:
+        sess.close()
+        os.remove(path)
+        import shutil
+
+        shutil.rmtree(state, ignore_errors=True)
+    return [float(v) for v in bytes(out).decode().split()]
+
+
+@pytest.mark.skipif(importlib.util.find_spec("chdb") is None, reason="chdb assente")
+@pytest.mark.parametrize("value, mu", [("x", 10.0), ("qty", 20.0)])
+def test_clickhouse_own_one_sample_t_agrees(value, mu, storage, src):
+    rows = {r["key"]: r for r in table_of("chdb", storage, src, stat("t_one_sample", value=value, mu=mu))}
+    statistic, p_value = _chdb_query(storage, src, (
+        f"SELECT tupleElement(r, 1), tupleElement(r, 2) FROM (SELECT studentTTestOneSample(assumeNotNull(v), {mu}) AS r "
+        f"FROM (SELECT if(isNaN(toFloat64(`{value}`)), NULL, toFloat64(`{value}`)) AS v FROM file('{{path}}', Parquet)) WHERE v IS NOT NULL)"))
+    assert math.isclose(rows["test|||statistic"]["value"], statistic, rel_tol=1e-6)
+    assert math.isclose(rows["test|||p_value"]["value"], p_value, rel_tol=1e-6)
+
+
+@pytest.mark.skipif(importlib.util.find_spec("chdb") is None, reason="chdb assente")
+@pytest.mark.parametrize("value, group, index", [
+    ("x", "level", "multiIf(level = 0, 0, 1)"),  # a group of −0.0 and 0.0, and one of 1.5
+    ("qty", "flag", "toUInt8(flag)"),
+    ("x", "g", "multiIf(g = 'east', 0, g = 'north', 1, 2)"),  # three groups that differ: its p-value is below a double's reach
+])
+def test_clickhouse_own_anova_agrees(value, group, index, storage, src):
+    rows = {r["key"]: r for r in table_of("chdb", storage, src, stat("anova", value=value, group=group))}
+    statistic, p_value = _chdb_query(storage, src, (
+        f"SELECT tupleElement(r, 1), tupleElement(r, 2) FROM (SELECT analysisOfVariance(assumeNotNull(v), toUInt8({index})) AS r "
+        f"FROM (SELECT if(isNaN(toFloat64(`{value}`)), NULL, toFloat64(`{value}`)) AS v, {group} FROM file('{{path}}', Parquet)) "
+        f"WHERE {group} IS NOT NULL AND v IS NOT NULL)"))
+    assert math.isclose(rows["test|||statistic"]["value"], statistic, rel_tol=1e-6)
+    if p_value > 1e-12:  # ClickHouse's own p-value: 0 where ours is 1.2e-93
+        assert math.isclose(rows["test|||p_value"]["value"], p_value, rel_tol=1e-6)
+    else:
+        assert p_value == 0.0 and 0.0 < rows["test|||p_value"]["value"] < 1e-12

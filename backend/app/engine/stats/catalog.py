@@ -45,7 +45,17 @@ FAMILIES = ("means", "variances", "proportions", "correlation", "ranks", "distri
 # — `key` may not be `value` while every key of `when` has that value (the defaults count).
 # The node refuses it with `message`; the form disables the choice and says why in the
 # person's language (`stat.reasons.<reason>` in the interface's catalogues).
+#
+# A key that matters only with some values of another says so in `applies`, as
+#     {"p_adjust": {"posthoc": ["pairwise_t"]}}
+# — the form shows the key only then (the defaults count); the node ignores it otherwise.
 TESTS: dict[str, dict[str, Any]] = {
+    "t_one_sample": {
+        "family": "means",
+        "needs": {"value": "number_column"},
+        "takes": {"mu": "number", "alternative": "alternative", "alpha": "alpha", "detail": "detail"},
+        "defaults": {"mu": 0.0, "alternative": "two_sided", "alpha": 0.05, "detail": "results"},
+    },
     "t_two_sample": {
         "family": "means",
         "needs": {"value": "number_column", "group": "column"},
@@ -54,11 +64,57 @@ TESTS: dict[str, dict[str, Any]] = {
         "defaults": {"groups": None, "var_equal": False, "mu": 0.0,
                      "alternative": "two_sided", "alpha": 0.05, "detail": "results"},
     },
+    "t_paired": {
+        "family": "means",
+        "needs": {"x": "number_column", "y": "number_column"},
+        "takes": {"mu": "number", "alternative": "alternative", "alpha": "alpha", "detail": "detail"},
+        "defaults": {"mu": 0.0, "alternative": "two_sided", "alpha": 0.05, "detail": "results"},
+    },
+    "anova": {
+        "family": "means",
+        "needs": {"value": "number_column", "group": "column"},
+        "takes": {"var_equal": "boolean", "posthoc": "anova_posthoc", "p_adjust": "p_adjust",
+                  "alpha": "alpha", "detail": "detail"},
+        "defaults": {"var_equal": True, "posthoc": "none", "p_adjust": "holm", "alpha": 0.05, "detail": "results"},
+        "forbids": [
+            {"key": "posthoc", "value": "tukey", "when": {"var_equal": False}, "reason": "tukey_equal_variances",
+             "message": "Tukey's HSD assumes equal variances: with Welch's ANOVA (var_equal = false) use Games–Howell"},
+            {"key": "posthoc", "value": "games_howell", "when": {"var_equal": True}, "reason": "games_howell_unequal_variances",
+             "message": "Games–Howell is for unequal variances: with the classic ANOVA (var_equal = true) use Tukey's HSD"},
+        ],
+        "applies": {"p_adjust": {"posthoc": ["pairwise_t"]}},
+    },
+    "var_f": {
+        "family": "variances",
+        "needs": {"value": "number_column", "group": "column"},
+        "takes": {"groups": "two_groups", "ratio": "positive", "alternative": "alternative", "alpha": "alpha",
+                  "detail": "detail"},
+        "defaults": {"groups": None, "ratio": 1.0, "alternative": "two_sided", "alpha": 0.05, "detail": "results"},
+    },
+    "levene": {
+        "family": "variances",
+        "needs": {"value": "number_column", "group": "column"},
+        "takes": {"center": "levene_center", "alpha": "alpha", "detail": "detail"},
+        "defaults": {"center": "median", "alpha": 0.05, "detail": "results"},
+    },
+    "pearson": {
+        "family": "correlation",
+        "needs": {"x": "number_column", "y": "number_column"},
+        "takes": {"alternative": "alternative", "alpha": "alpha", "detail": "detail"},
+        "defaults": {"alternative": "two_sided", "alpha": 0.05, "detail": "results"},
+    },
 }
+
+# The choices of the tests' own options.
+ANOVA_POSTHOC = ("none", "tukey", "games_howell", "pairwise_t")
+P_ADJUST = ("holm", "bonferroni", "sidak", "none")
+LEVENE_CENTER = ("median", "mean")
 
 # Beyond this many groups the column is almost surely the wrong one. It bounds what a test
 # reads back from the engine too: a row per group, never more.
 MAX_STAT_GROUPS = 200
+# Groups compared two by two: 190 pairs at most.
+MAX_POSTHOC_GROUPS = 20
 
 # The rows a report's charts draw (`detail = report`): the points of the reference
 # distribution's curve, and the intervals of a histogram, between the two whatever the rows.
@@ -152,6 +208,12 @@ def _number(test: str, key: str, v: Any, columns: Mapping[str, Column]) -> float
     return float(v)
 
 
+def _positive(test: str, key: str, v: Any, columns: Mapping[str, Column]) -> float:
+    if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) or v <= 0:
+        raise refusal(test, f"'{key}' must be a number above 0")
+    return float(v)
+
+
 def _alpha(test: str, key: str, v: Any, columns: Mapping[str, Column]) -> float:
     if isinstance(v, bool) or not isinstance(v, (int, float)) or not 0.0 < v < 1.0:
         raise refusal(test, f"'{key}' must be a number between 0 and 1, both excluded (0.05 is the usual choice)")
@@ -173,8 +235,12 @@ _READERS: dict[str, Callable[..., Any]] = {
     "two_groups": _two_groups,
     "boolean": _boolean,
     "number": _number,
+    "positive": _positive,
     "alpha": _alpha,
     "alternative": _one_of(ALTERNATIVES),
+    "anova_posthoc": _one_of(ANOVA_POSTHOC),
+    "p_adjust": _one_of(P_ADJUST),
+    "levene_center": _one_of(LEVENE_CENTER),
     "detail": _one_of(DETAILS),
 }
 
@@ -194,8 +260,12 @@ KINDS: dict[str, dict[str, Any]] = {
     "two_groups": {"control": "levels", "of": "group", "count": 2},
     "boolean": {"control": "boolean"},
     "number": {"control": "number"},
+    "positive": {"control": "number", "above": 0},
     "alpha": {"control": "number", "above": 0, "below": 1},
     "alternative": {"control": "choice", "choices": list(ALTERNATIVES)},
+    "anova_posthoc": {"control": "choice", "choices": list(ANOVA_POSTHOC)},
+    "p_adjust": {"control": "choice", "choices": list(P_ADJUST)},
+    "levene_center": {"control": "choice", "choices": list(LEVENE_CENTER)},
     "detail": {"control": "choice", "choices": list(DETAILS), "hidden": True},
 }
 
@@ -224,13 +294,20 @@ def check_params(test: str, params: dict[str, Any] | None, columns: Mapping[str,
     return checked
 
 
+def applies(test: str, key: str, checked: Mapping[str, Any]) -> bool:
+    """Whether the key `key` matters with the other parameters as they are (`applies`)."""
+    rule = TESTS[test].get("applies", {}).get(key)
+    return rule is None or all(checked.get(k) in values for k, values in rule.items())
+
+
 # ── the snapshot: the catalogue as the other languages read it ──────────────
 SNAPSHOT = Path(__file__).with_name("catalog.json")
 
 
 def snapshot() -> dict[str, Any]:
     """The catalogue as plain data: the families, the controls and the kinds, and every test
-    in its order with its operation, its keys, their defaults and what it forbids."""
+    in its order with its operation, its keys, their defaults, what it forbids and the keys
+    that matter only with some values of another."""
     return {
         "prefix": OP_PREFIX,
         "families": list(FAMILIES),
@@ -245,6 +322,7 @@ def snapshot() -> dict[str, Any]:
                 "takes": spec["takes"],
                 "defaults": spec["defaults"],
                 "forbids": list(spec.get("forbids", ())),
+                "applies": dict(spec.get("applies", {})),
             }
             for test, spec in TESTS.items()
         ],

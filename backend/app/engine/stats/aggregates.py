@@ -81,6 +81,64 @@ class HistogramBin(NamedTuple):
     rows: int
 
 
+class PairMoments(NamedTuple):
+    """Two columns of the same rows (A3), over the rows where both are numbers (a pair): the
+    rows, the pairs (`n`), and of x, of y and of their difference x − y the mean, the sample
+    variance, the smallest and the largest; the sample covariance of x and y. Means and
+    variances as A2's, taken less a centre: `mean_cx` and `mean_cy` are the two means less
+    their centres, `mean_cd` the difference's less `centre_x − centre_y` — a difference of
+    means is taken between the centred ones. None where there is none."""
+
+    rows: int
+    n: int
+    centre_x: float
+    centre_y: float
+    mean_cx: float | None
+    mean_cy: float | None
+    mean_cd: float | None
+    var_x: float | None
+    var_y: float | None
+    var_d: float | None
+    cov: float | None
+    min_x: float | None
+    max_x: float | None
+    min_y: float | None
+    max_y: float | None
+    min_d: float | None
+    max_d: float | None
+
+
+class Deviations(NamedTuple):
+    """A group's values as Levene's test reads them (A11): its rows, its values that are
+    numbers (`n`), the centre of the group (its median or its mean, `center`), and the mean
+    and the sample variance of the absolute deviations |value − center|; the smallest and
+    the largest value, as they are (an infinite one is refused by name)."""
+
+    level: Any
+    rows: int
+    n: int
+    center: float | None
+    mean: float | None
+    var: float | None
+    min: float | None
+    max: float | None
+
+
+class Difference(NamedTuple):
+    """A measure that is not a column: the difference x − y of two columns of the same row,
+    where both are numbers (NULL elsewhere)."""
+
+    x: str
+    y: str
+
+
+class Paired(NamedTuple):
+    """The column `x` on the rows where `y` is a number too (the rows a paired test uses)."""
+
+    x: str
+    y: str
+
+
 # the kinds of grouping column whose groups an aggregate can pick by a literal written from
 # their labels (`typed_labels`), as each engine names their types (ClickHouse's without their
 # Nullable(…) and LowCardinality(…) wrappers); a column of another type is read whole
@@ -233,6 +291,15 @@ class SqlStatSource:
         keep = _IS_FINITE[self.dialect].format(e=f) if finite else f"NOT {_IS_NAN[self.dialect].format(e=f)}"
         return f"CASE WHEN {self._quote(column)} IS NOT NULL AND {keep} THEN {f} END"
 
+    def _measure(self, m: Any, finite: bool = False) -> str:
+        """A measure as a double, NULL where it has no value: a column (`_value`), the
+        difference of two (`Difference`), a column where another is a number too (`Paired`)."""
+        if isinstance(m, Difference):
+            return f"({self._value(m.x, finite)} - {self._value(m.y, finite)})"
+        if isinstance(m, Paired):
+            return f"CASE WHEN {self._value(m.y, finite)} IS NOT NULL THEN {self._value(m.x, finite)} END"
+        return self._value(m, finite)
+
     def _centre(self, column: str) -> float:
         """A number near the column's values: the mean of those in the first `CENTRE_ROWS`
         rows (an aggregate of a prefix: the engine does not read the rest)."""
@@ -241,6 +308,9 @@ class SqlStatSource:
             f"FROM (SELECT {self._quote(column)} FROM {self._source} LIMIT {CENTRE_ROWS}) AS {self._fresh('head')}"
         )
         return usable_centre(rows[0][0] if rows and rows[0] else None)
+
+    def _centred(self, expr: str, centre: float) -> str:
+        return _CENTRED[self.dialect].format(x=expr, c=repr(centre)) if centre else expr
 
     def _kind(self, column: str) -> str | None:
         """The kind of a grouping column, as `typed_labels` reads it, or None."""
@@ -294,7 +364,7 @@ class SqlStatSource:
         group; every group when they cannot be told apart in a query (`comparable`)."""
         x, finite = self._value(value), self._value(value, finite=True)
         centre = self._centre(value)
-        centred = _CENTRED[self.dialect].format(x=finite, c=repr(centre)) if centre else finite
+        centred = self._centred(finite, centre)
         aggregates = (
             f"count(*) AS {self._fresh('rows')}, count({x}) AS {self._fresh('n')}, "
             f"avg({centred}) AS {self._fresh('mean')}, {_VAR[self.dialect].format(e=centred)} AS {self._fresh('var')}, "
@@ -308,15 +378,66 @@ class SqlStatSource:
             rows = self._rows(f"SELECT {g} AS {self._fresh('lv')}, {aggregates} FROM {self._source}{only} GROUP BY {g}")
         return [moments_of(centre, *r) for r in rows]
 
-    def quartiles(self, value: str, group: str | None = None, levels: list | None = None) -> list[Quartiles]:
+    def pair_moments(self, x: str, y: str) -> PairMoments:
+        """A3: two columns of the same rows, over the rows where both are numbers. Each is
+        less its own centre, and the difference is that of the two centred values: one pass."""
+        cx, cy = self._centre(x), self._centre(y)
+        px, py = self._measure(Paired(x, y)), self._measure(Paired(y, x))
+        both = f"{self._value(x, finite=True)} IS NOT NULL AND {self._value(y, finite=True)} IS NOT NULL"
+        ex = self._centred(f"CASE WHEN {both} THEN {_DOUBLE[self.dialect].format(c=self._quote(x))} END", cx)
+        ey = self._centred(f"CASE WHEN {both} THEN {_DOUBLE[self.dialect].format(c=self._quote(y))} END", cy)
+        ed = f"({ex} - {ey})"
+        d = f"({px} - {py})"
+        var = _VAR[self.dialect]
+        cov = {"duckdb": "covar_samp({a}, {b})", "clickhouse": "if(count({a}) > 1, covarSampStable({a}, {b}), NULL)",
+               "bigquery": "COVAR_SAMP({a}, {b})"}[self.dialect].format(a=ex, b=ey)
+        names = [self._fresh(n) for n in ("rows", "n", "mean_x", "mean_y", "mean_d", "var_x", "var_y", "var_d", "cov",
+                                         "min_x", "max_x", "min_y", "max_y", "min_d", "max_d")]
+        exprs = ["count(*)", f"count({px})", f"avg({ex})", f"avg({ey})", f"avg({ed})", var.format(e=ex), var.format(e=ey),
+                 var.format(e=ed), cov, f"min({px})", f"max({px})", f"min({py})", f"max({py})", f"min({d})", f"max({d})"]
+        rows = self._rows(f"SELECT {', '.join(f'{e} AS {n}' for e, n in zip(exprs, names))} FROM {self._source}")
+        return pair_moments_of(cx, cy, *(rows[0] if rows else [0] * 15))
+
+    def abs_dev_moments(self, value: str, group: str, center: str) -> list[Deviations]:
+        """A11: for each group, the mean and the sample variance of |value − the group's
+        centre| (`center`: «median» or «mean»), with the group's rows, values, centre, smallest
+        and largest. The values are taken less the column's centre first, as A2's; the
+        deviations are of the spread's size already, and are not centred again. The rows with
+        no group are not answered (A1 counts them)."""
+        x, finite = self._value(value), self._value(value, finite=True)
+        c = self._centre(value)
+        centred = self._centred(finite, c)
+        g = self._quote(group)
+        lv, ctr, key = self._fresh("lv"), self._fresh("ctr"), self._fresh("k")
+        if center == "median":
+            if self.dialect == "bigquery":
+                inner = (f"SELECT DISTINCT {g} AS {key}, PERCENTILE_CONT({centred}, 0.5) OVER (PARTITION BY {g}) AS {ctr} "
+                         f"FROM {self._source}")
+            else:
+                inner = f"SELECT {g} AS {key}, {_QUANTILE[self.dialect].format(e=centred, q=0.5, over='')} AS {ctr} FROM {self._source} GROUP BY {g}"
+        else:
+            inner = f"SELECT {g} AS {key}, avg({centred}) AS {ctr} FROM {self._source} GROUP BY {g}"
+        t, m = self._fresh("d"), self._fresh("m")
+        z = f"abs({centred} - {m}.{ctr})"
+        var = _VAR[self.dialect].format(e=z)
+        rows = self._rows(
+            f"SELECT {t}.{g} AS {lv}, count(*) AS {self._fresh('rows')}, count({x}) AS {self._fresh('n')}, "
+            f"max({m}.{ctr}) AS {self._fresh('center')}, avg({z}) AS {self._fresh('mean')}, {var} AS {self._fresh('var')}, "
+            f"min({x}) AS {self._fresh('min')}, max({x}) AS {self._fresh('max')} "
+            f"FROM (SELECT * FROM {self._source}) AS {t} JOIN ({inner}) AS {m} ON {t}.{g} = {m}.{key} GROUP BY {t}.{g}"
+        )
+        return [deviations_of(c, *r) for r in rows]
+
+    def quartiles(self, value: Any, group: str | None = None, levels: list | None = None) -> list[Quartiles]:
         """A12: the first quartile, the median and the third quartile of `value`, for each
         value of `group` (the NULL one too), or over every row without one. Exact: the
         engine keeps the column's values to find them, which is why only a report asks —
         and why a test of two groups names them in `levels` (the typed values A1 returned):
         the values of the other groups are then never kept (`comparable` says when they can
         be told apart in the query; otherwise every group is answered, as without `levels`).
-        Nothing is summed, so nothing is centred."""
-        x = self._value(value, finite=True)
+        Nothing is summed, so nothing is centred. `value`: a column, or a measure made of
+        two (`Difference`, `Paired`)."""
+        x = self._measure(value, finite=True)
         names = [self._fresh(name) for name in ("q1", "median", "q3")]
         g = None if group is None else self._quote(group)
         over = "" if g is None else f"PARTITION BY {g}"
@@ -337,12 +458,27 @@ class SqlStatSource:
             rows = [[None, *r] for r in rows]
         return [quartiles_of(*r) for r in rows]
 
-    def histogram(self, value: str, group: str | None, lo: float, hi: float, bins: int) -> list[HistogramBin]:
+    def quartiles_many(self, measures: list) -> list[Quartiles]:
+        """A12 of several measures over every row, in one pass: a Quartiles for each, its
+        `level` the measure's place in the list (a paired test's x, y and difference)."""
+        names = [[self._fresh(f"{q}_{i}") for q in ("q1", "median", "q3")] for i in range(len(measures))]
+        over = ""
+        quantiles = ", ".join(
+            f"{_QUANTILE[self.dialect].format(e=self._measure(m, finite=True), q=q, over=over)} AS {name}"
+            for m, three in zip(measures, names) for q, name in zip((0.25, 0.5, 0.75), three)
+        )
+        distinct = "DISTINCT " if self.dialect == "bigquery" else ""
+        rows = self._rows(f"SELECT {distinct}{quantiles} FROM {self._source}")
+        row = list(rows[0]) if rows else [None] * (3 * len(measures))
+        return [quartiles_of(i, *row[3 * i:3 * i + 3]) for i in range(len(measures))]
+
+    def histogram(self, value: Any, group: str | None, lo: float, hi: float, bins: int) -> list[HistogramBin]:
         """A13: the rows whose `value` falls in each of `bins` equal intervals between `lo`
         and `hi`, for each value of `group` (or over every row without one): the last
         interval holds its upper edge, a NULL, a NaN and what is outside are left out. The
         intervals are the column profile's (`profile.sql_histogram_bin`)."""
-        b, inside = sql_histogram_bin(self.dialect, self._quote(value), float(lo), float(hi), int(bins))
+        q = self._quote(value) if isinstance(value, str) else self._measure(value)
+        b, inside = sql_histogram_bin(self.dialect, q, float(lo), float(hi), int(bins))
         count = f"count(*) AS {self._fresh('rows')}"
         if group is None:
             rows = self._rows(f"SELECT {b} AS {self._fresh('bin')}, {count} FROM {self._source} WHERE {inside} GROUP BY {b}")
@@ -371,6 +507,27 @@ def moments_of(centre: float, level: Any, rows: Any, n: Any, mean_centred: Any, 
     return Moments(level, int(rows or 0), n, None if centred is None else centre + centred,
                    number(var) if n > 1 else None, number(lo) if n else None, number(hi) if n else None,
                    centre, centred)
+
+
+def pair_moments_of(centre_x: float, centre_y: float, rows: Any, n: Any, mean_x: Any, mean_y: Any, mean_d: Any,
+                    var_x: Any, var_y: Any, var_d: Any, cov: Any, *extremes: Any) -> PairMoments:
+    """A row of A3 as every source answers it: counts as integers, the rest as floats, no
+    variance or covariance of fewer than two pairs."""
+    n = int(n or 0)
+
+    def x(v: Any, at_least: int = 1) -> float | None:
+        return number(v) if n >= at_least else None
+
+    return PairMoments(int(rows or 0), n, centre_x, centre_y, x(mean_x), x(mean_y), x(mean_d),
+                       x(var_x, 2), x(var_y, 2), x(var_d, 2), x(cov, 2), *(x(v) for v in extremes))
+
+
+def deviations_of(centre: float, level: Any, rows: Any, n: Any, center: Any, mean: Any, var: Any, lo: Any, hi: Any) -> Deviations:
+    """A row of A11 as every source answers it: the group's centre put back where it is."""
+    n = int(n or 0)
+    c = number(center) if n else None
+    return Deviations(level, int(rows or 0), n, None if c is None else centre + c, number(mean) if n else None,
+                      number(var) if n > 1 else None, number(lo) if n else None, number(hi) if n else None)
 
 
 def quartiles_of(level: Any, q1: Any, median: Any, q3: Any) -> Quartiles:

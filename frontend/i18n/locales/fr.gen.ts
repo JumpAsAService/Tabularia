@@ -6080,9 +6080,46 @@ export default {
       "distributions": "Distributions"
     },
     "tests": {
+      "t_one_sample": {
+        "name": "Test t à un échantillon",
+        "hint": "La moyenne d'une colonne est-elle égale à une valeur donnée ? Test t de Student sur un échantillon.",
+        "hints": {
+          "mu": "La moyenne qu'affirme l'hypothèse nulle."
+        }
+      },
       "t_two_sample": {
         "name": "Test t à deux échantillons",
         "hint": "Deux groupes ont-ils la même moyenne ? Test t de Welch, ou de Student quand les variances sont supposées égales."
+      },
+      "t_paired": {
+        "name": "Test t apparié",
+        "hint": "Deux mesures des mêmes lignes (avant et après) : leur différence moyenne est-elle nulle ?",
+        "hints": {
+          "x": "La première mesure de chaque ligne (l'avant, par exemple) : le test porte sur x − y.",
+          "mu": "La différence moyenne x − y qu'affirme l'hypothèse nulle : 0 pour « aucun changement »."
+        }
+      },
+      "anova": {
+        "name": "ANOVA à un facteur",
+        "hint": "Plusieurs groupes ont-ils la même moyenne ? ANOVA classique ou de Welch, avec les comparaisons par paires qui disent quels groupes diffèrent.",
+        "hints": {
+          "var_equal": "Activé : l'ANOVA classique, avec la variance intra-groupes commune. Désactivé : l'ANOVA de Welch, qui ne suppose pas des variances égales."
+        }
+      },
+      "var_f": {
+        "name": "Test F de deux variances",
+        "hint": "Deux groupes ont-ils la même variance ? Le rapport de leurs variances face à une loi F.",
+        "hints": {
+          "groups": "La variance du premier groupe sur celle du second. Laissez-les sur Automatique quand la colonne a exactement deux groupes."
+        }
+      },
+      "levene": {
+        "name": "Test de Levene",
+        "hint": "Plusieurs groupes ont-ils la même variance ? Test de Levene, ou de Brown–Forsythe avec la médiane : robuste quand les valeurs ne sont pas normales."
+      },
+      "pearson": {
+        "name": "Corrélation de Pearson",
+        "hint": "Deux colonnes des mêmes lignes varient-elles ensemble ? Le r de Pearson, son test et son intervalle de confiance."
       }
     },
     "params": {
@@ -6092,7 +6129,13 @@ export default {
       "var_equal": "Variances égales",
       "mu": "Valeur sous H0",
       "alternative": "Hypothèse alternative",
-      "alpha": "Seuil de signification (α)"
+      "alpha": "Seuil de signification (α)",
+      "x": "Première colonne (x)",
+      "y": "Deuxième colonne (y)",
+      "posthoc": "Comparaisons par paires",
+      "p_adjust": "Correction des comparaisons multiples",
+      "ratio": "Rapport sous H0",
+      "center": "Centre de chaque groupe"
     },
     "hints": {
       "value": "La colonne mesurée.",
@@ -6100,14 +6143,40 @@ export default {
       "groups": "Le premier moins le second. Laissez-les sur Automatique quand la colonne a exactement deux groupes.",
       "var_equal": "Activé : le test classique, avec la variance commune. Désactivé : la version de Welch, qui ne la suppose pas.",
       "mu": "Ce qu'affirme l'hypothèse nulle : 0 pour «aucune différence».",
-      "alpha": "Entre 0 et 1. Les intervalles de confiance ont le niveau 1 − α."
+      "alpha": "Entre 0 et 1. Les intervalles de confiance ont le niveau 1 − α.",
+      "x": "Un nombre sur chaque ligne : avec la deuxième colonne, la paire que lit le test.",
+      "y": "Une ligne où l'une des deux colonnes n'a pas de nombre est laissée de côté.",
+      "posthoc": "Quels groupes diffèrent : HSD de Tukey (variances égales), Games–Howell (variances inégales) ou un test t par paire avec une correction.",
+      "p_adjust": "Comment les p-valeurs des paires sont ajustées à leur nombre. Holm n'est jamais moins puissant que Bonferroni.",
+      "ratio": "Le rapport de la première variance à la seconde qu'affirme l'hypothèse nulle : 1 pour « variances égales ».",
+      "center": "La médiane (forme de Brown–Forsythe, robuste aux valeurs asymétriques) ou la moyenne (l'originale de Levene)."
     },
     "choices": {
       "alternative": {
         "two_sided": "Bilatérale (≠)",
         "less": "Inférieure (<)",
         "greater": "Supérieure (>)"
+      },
+      "anova_posthoc": {
+        "none": "Aucune",
+        "tukey": "HSD de Tukey",
+        "games_howell": "Games–Howell",
+        "pairwise_t": "Test t par paire"
+      },
+      "p_adjust": {
+        "holm": "Holm",
+        "bonferroni": "Bonferroni",
+        "sidak": "Šidák",
+        "none": "Aucune"
+      },
+      "levene_center": {
+        "median": "Médiane (Brown–Forsythe)",
+        "mean": "Moyenne (Levene)"
       }
+    },
+    "reasons": {
+      "tukey_equal_variances": "Le HSD de Tukey suppose des variances égales : avec des variances inégales, utilisez Games–Howell.",
+      "games_howell_unequal_variances": "Games–Howell est pour des variances inégales : avec des variances égales, utilisez le HSD de Tukey."
     },
     "form": {
       "level": "Groupe {n}",

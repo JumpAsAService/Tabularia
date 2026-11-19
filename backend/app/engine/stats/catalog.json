@@ -34,6 +34,10 @@
     "number": {
       "control": "number"
     },
+    "positive": {
+      "control": "number",
+      "above": 0
+    },
     "alpha": {
       "control": "number",
       "above": 0,
@@ -47,6 +51,31 @@
         "greater"
       ]
     },
+    "anova_posthoc": {
+      "control": "choice",
+      "choices": [
+        "none",
+        "tukey",
+        "games_howell",
+        "pairwise_t"
+      ]
+    },
+    "p_adjust": {
+      "control": "choice",
+      "choices": [
+        "holm",
+        "bonferroni",
+        "sidak",
+        "none"
+      ]
+    },
+    "levene_center": {
+      "control": "choice",
+      "choices": [
+        "median",
+        "mean"
+      ]
+    },
     "detail": {
       "control": "choice",
       "choices": [
@@ -57,6 +86,28 @@
     }
   },
   "tests": [
+    {
+      "id": "t_one_sample",
+      "operation": "stat_t_one_sample",
+      "family": "means",
+      "needs": {
+        "value": "number_column"
+      },
+      "takes": {
+        "mu": "number",
+        "alternative": "alternative",
+        "alpha": "alpha",
+        "detail": "detail"
+      },
+      "defaults": {
+        "mu": 0.0,
+        "alternative": "two_sided",
+        "alpha": 0.05,
+        "detail": "results"
+      },
+      "forbids": [],
+      "applies": {}
+    },
     {
       "id": "t_two_sample",
       "operation": "stat_t_two_sample",
@@ -81,7 +132,148 @@
         "alpha": 0.05,
         "detail": "results"
       },
-      "forbids": []
+      "forbids": [],
+      "applies": {}
+    },
+    {
+      "id": "t_paired",
+      "operation": "stat_t_paired",
+      "family": "means",
+      "needs": {
+        "x": "number_column",
+        "y": "number_column"
+      },
+      "takes": {
+        "mu": "number",
+        "alternative": "alternative",
+        "alpha": "alpha",
+        "detail": "detail"
+      },
+      "defaults": {
+        "mu": 0.0,
+        "alternative": "two_sided",
+        "alpha": 0.05,
+        "detail": "results"
+      },
+      "forbids": [],
+      "applies": {}
+    },
+    {
+      "id": "anova",
+      "operation": "stat_anova",
+      "family": "means",
+      "needs": {
+        "value": "number_column",
+        "group": "column"
+      },
+      "takes": {
+        "var_equal": "boolean",
+        "posthoc": "anova_posthoc",
+        "p_adjust": "p_adjust",
+        "alpha": "alpha",
+        "detail": "detail"
+      },
+      "defaults": {
+        "var_equal": true,
+        "posthoc": "none",
+        "p_adjust": "holm",
+        "alpha": 0.05,
+        "detail": "results"
+      },
+      "forbids": [
+        {
+          "key": "posthoc",
+          "value": "tukey",
+          "when": {
+            "var_equal": false
+          },
+          "reason": "tukey_equal_variances",
+          "message": "Tukey's HSD assumes equal variances: with Welch's ANOVA (var_equal = false) use Games–Howell"
+        },
+        {
+          "key": "posthoc",
+          "value": "games_howell",
+          "when": {
+            "var_equal": true
+          },
+          "reason": "games_howell_unequal_variances",
+          "message": "Games–Howell is for unequal variances: with the classic ANOVA (var_equal = true) use Tukey's HSD"
+        }
+      ],
+      "applies": {
+        "p_adjust": {
+          "posthoc": [
+            "pairwise_t"
+          ]
+        }
+      }
+    },
+    {
+      "id": "var_f",
+      "operation": "stat_var_f",
+      "family": "variances",
+      "needs": {
+        "value": "number_column",
+        "group": "column"
+      },
+      "takes": {
+        "groups": "two_groups",
+        "ratio": "positive",
+        "alternative": "alternative",
+        "alpha": "alpha",
+        "detail": "detail"
+      },
+      "defaults": {
+        "groups": null,
+        "ratio": 1.0,
+        "alternative": "two_sided",
+        "alpha": 0.05,
+        "detail": "results"
+      },
+      "forbids": [],
+      "applies": {}
+    },
+    {
+      "id": "levene",
+      "operation": "stat_levene",
+      "family": "variances",
+      "needs": {
+        "value": "number_column",
+        "group": "column"
+      },
+      "takes": {
+        "center": "levene_center",
+        "alpha": "alpha",
+        "detail": "detail"
+      },
+      "defaults": {
+        "center": "median",
+        "alpha": 0.05,
+        "detail": "results"
+      },
+      "forbids": [],
+      "applies": {}
+    },
+    {
+      "id": "pearson",
+      "operation": "stat_pearson",
+      "family": "correlation",
+      "needs": {
+        "x": "number_column",
+        "y": "number_column"
+      },
+      "takes": {
+        "alternative": "alternative",
+        "alpha": "alpha",
+        "detail": "detail"
+      },
+      "defaults": {
+        "alternative": "two_sided",
+        "alpha": 0.05,
+        "detail": "results"
+      },
+      "forbids": [],
+      "applies": {}
     }
   ]
 }
