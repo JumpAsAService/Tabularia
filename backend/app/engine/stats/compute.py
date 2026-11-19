@@ -91,9 +91,26 @@ def _write_head(out: Rows, test: str, variant: str, p: dict[str, Any], h0: str, 
         out.text("test", f"note_{i}", note)
 
 
+# R's significance codes: the thresholds of a p-value, from the smallest (`summary.lm`'s stars)
+SIGNIFICANCE = ((0.001, "***"), (0.01, "**"), (0.05, "*"), (0.1, "."))
+
+
+def significance(p_value: float | None) -> str | None:
+    """R's significance code of a p-value: «***» below 0.001, «**» below 0.01, «*» below 0.05,
+    «.» below 0.1, nothing (an empty text) above. It says R's threshold, not the decision:
+    that one is the node's alpha's. None for a p-value there is not."""
+    if p_value is None or not math.isfinite(p_value):
+        return None
+    return next((code for threshold, code in SIGNIFICANCE if p_value < threshold), "")
+
+
 def _write_numbers(out: Rows, numbers) -> None:
+    """The numbers of the `test` section, in their order; after the p-value its significance
+    code (a text, R's stars)."""
     for stat, number in numbers:
         out.number("test", stat, number)
+        if stat == "p_value" and (code := significance(number)) is not None:
+            out.text("test", "significance", code)
 
 
 def _write_group(out: Rows, label: str, m: Moments, alpha: float, quartiles: Quartiles | None = None,
@@ -350,14 +367,13 @@ def _t_two_sample(source, p: dict[str, Any], out: Rows, engine_name: str) -> Non
     difference = f"mean({value} | {g1}) − mean({value} | {g2})"
     _write_head(out, test, variant, p, f"{difference} = {_num(mu)}", f"{difference} {_RELATION[alternative]} {_num(mu)}",
                 formula, f"t({df:.6g})", p_value, engine_name, notes)
-    for stat, number in (
+    _write_numbers(out, (
         ("alpha", alpha), ("conf_level", 1.0 - alpha), ("n", a.n + b.n), ("n_missing", missing),
         ("pooled_var", pooled_var), ("estimate", estimate), ("null_value", mu), ("std_error", se),
         ("statistic", t), ("df", df), ("critical_low", critical_low), ("critical_high", critical_high),
         ("p_value", p_value), ("ci_low", ci_low), ("ci_high", ci_high),
         ("cohen_d", cohen_d), ("hedges_g", hedges_g),
-    ):
-        out.number("test", stat, number)
+    ))
     report = p["detail"] == "report"
     quartiles = _quartiles_by_label(source, value, p["group"], typed) if report else {}
     _write_group(out, g1, a, alpha, quartiles.get(g1))
@@ -706,11 +722,14 @@ def _posthoc_formula(posthoc: str, adjust: str, var_equal: bool) -> str:
 
 
 def _write_pair(out: Rows, row: list, alpha: float) -> None:
-    """A pair's rows: the same ten for every method, NULL where the method has none."""
+    """A pair's rows: the same eleven for every method, NULL where the method has none; the
+    significance code of the adjusted p-value after it."""
     first, second, estimate, se, statistic, df, critical, p_value, adjusted, ci_low, ci_high = row
     for stat, number in (("estimate", estimate), ("std_error", se), ("statistic", statistic), ("df", df),
-                         ("critical", critical), ("p_value", p_value), ("p_adjusted", adjusted),
-                         ("ci_low", ci_low), ("ci_high", ci_high)):
+                         ("critical", critical), ("p_value", p_value), ("p_adjusted", adjusted)):
+        out.number("pair", stat, number, level=first, level_2=second)
+    out.text("pair", "significance", significance(adjusted) or "", level=first, level_2=second)
+    for stat, number in (("ci_low", ci_low), ("ci_high", ci_high)):
         out.number("pair", stat, number, level=first, level_2=second)
     out.text("pair", "decision", "reject_h0" if adjusted < alpha else "fail_to_reject_h0", level=first, level_2=second)
 

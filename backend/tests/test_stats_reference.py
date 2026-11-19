@@ -91,7 +91,7 @@ def test_welch(name, storage, abc):
         "test": "t_two_sample", "variant": "welch", "alternative": "two_sided",
         "h0": "mean(v | a) − mean(v | b) = 0", "h1": "mean(v | a) − mean(v | b) ≠ 0",
         "formula": "t = (m1 − m2 − mu) / √(s1²/n1 + s2²/n2), df = (s1²/n1 + s2²/n2)² / ((s1²/n1)²/(n1 − 1) + (s2²/n2)²/(n2 − 1))",
-        "distribution": "t(12.7279)", "decision": "reject_h0", "engine": name,
+        "distribution": "t(12.7279)", "decision": "reject_h0", "engine": name, "significance": "***",
     }
 
 
@@ -181,7 +181,7 @@ def test_schema_of_the_output(name, storage, abc):
     assert [r["stat"] for r in rows if r["section"] == "test"] == [
         "test", "variant", "alternative", "h0", "h1", "formula", "distribution", "decision", "engine",
         "alpha", "conf_level", "n", "n_missing", "pooled_var", "estimate", "null_value", "std_error", "statistic", "df",
-        "critical_low", "critical_high", "p_value", "ci_low", "ci_high", "cohen_d", "hedges_g",
+        "critical_low", "critical_high", "p_value", "significance", "ci_low", "ci_high", "cohen_d", "hedges_g",
     ]
     assert [(r["level"], r["stat"]) for r in rows if r["section"] == "group"] == [
         (g, s) for g in ("a", "b") for s in ("n", "mean", "var", "sd", "se", "ci_low", "ci_high", "min", "max")
@@ -353,7 +353,7 @@ def test_report_rows_downstream(name, storage, abc):
         {"type": "sort", "params": {"by": ["ord"]}},
     ], limit=100, use_cache=False)
     assert [r["value"] for r in res.rows] == HIST["b"]
-    assert engine.count_rows(abc, [report_op()], at_most=1000) == 44 + 6 + 10 + 201 + 60 + 60
+    assert engine.count_rows(abc, [report_op()], at_most=1000) == 45 + 6 + 10 + 201 + 60 + 60
 
 
 @pytest.mark.parametrize("name", ENGINES)
@@ -375,7 +375,7 @@ def test_the_result_is_data_for_the_next_steps(name, storage, abc):
     assert [r["level"] for r in res.rows] == ["a", "b"]
     close(res.rows[0]["mean"], 5.6875)
     close(res.rows[1]["var"], 0.365714285714286)
-    assert engine.count_rows(abc, [op], at_most=1000) == 44
+    assert engine.count_rows(abc, [op], at_most=1000) == 45
 
 
 @pytest.mark.parametrize("name", ENGINES)
@@ -385,7 +385,7 @@ def test_a_run_writes_the_table(name, storage, abc):
 
     dest = DataSource(bucket=BUCKET, key=f"datasets/stats_out_{name}.parquet")
     out = _engine(name, storage).run(abc, [stat_op("t_two_sample", value="v", group="g", groups=["a", "b"])], dest, use_cache=False)
-    assert out.rows_written == 44
+    assert out.rows_written == 45
     assert [(c.name, c.dtype) for c in out.columns] == [(n, t) for n, t, _ in OUTPUT_COLUMNS]
 
 
@@ -435,10 +435,13 @@ def test_t_one_sample(name, storage, abc):
     assert texts_of(rows) == {
         "test": "t_one_sample", "variant": "one_sample", "alternative": "two_sided", "h0": "mean(v) = 5", "h1": "mean(v) ≠ 5",
         "formula": "t = (m − mu) / (s / √n), df = n − 1", "distribution": "t(7)", "decision": "reject_h0", "engine": name,
+        "significance": "*",
     }
     assert [r["stat"] for r in rows if r["section"] == "test" and r["text"] is None] == [
         "alpha", "conf_level", "n", "n_missing", "mean", "var", "sd", "estimate", "null_value", "std_error", "statistic", "df",
         "critical_low", "critical_high", "p_value", "ci_low", "ci_high", "cohen_d"]
+    assert [r["stat"] for r in rows if r["section"] == "test"][-5:] == ["p_value", "significance", "ci_low", "ci_high", "cohen_d"]
+    assert by_key["test|||significance"]["text"] == "*"  # p = 0.0146
     _, by_key = run(mu=5, alternative="greater")
     check_numbers(by_key, {"p_value": 0.00730059180675986, "ci_low": 5.28331309913358904, "ci_high": None, "critical_low": None})
     _, by_key = run(mu=5, alternative="less")
@@ -505,7 +508,7 @@ def test_anova(name, storage, abc):
         "h0": "mean(v | a) = mean(v | b) = mean(v | c)", "h1": "max |mean(v | i) − mean(v | j)| > 0",
         "formula": "F = ms_between / ms_within, ms_between = ss_between / (k − 1), ms_within = ss_within / (N − k), "
                    "ss_between = ∑ n·(m − M)², ss_within = ∑ (n − 1)·s², M = ∑ n·m / N, df = k − 1, N − k",
-        "distribution": "F(2, 18)", "decision": "reject_h0", "engine": name,
+        "distribution": "F(2, 18)", "decision": "reject_h0", "engine": name, "significance": "***",
     }
     assert [r["level"] for r in rows if r["section"] == "group" and r["stat"] == "n"] == ["a", "b", "c"]
     check_numbers(by_key, GROUP_A, "group|a||")
@@ -534,10 +537,12 @@ def test_anova_tukey(name, storage, abc):
     assert texts_of(rows)["posthoc"] == "tukey" and texts_of(rows)["p_adjust"] == "studentized_range"
     assert texts_of(rows)["posthoc_formula"] == ("se = √(ms_within / 2 · (1/n_i + 1/n_j)), q = |m_i − m_j| / se, df = N − k, "
                                                  "p_adj = P(Q(k, df) ≥ q), CI = (m_i − m_j) ± q(1 − α; k, df) · se")
-    assert [r["stat"] for r in rows if r["section"] == "test" and r["text"] is not None][-3:] == ["posthoc", "p_adjust", "posthoc_formula"]
+    assert [r["stat"] for r in rows if r["section"] == "test" and r["text"] is not None][-4:] == ["posthoc", "p_adjust", "posthoc_formula", "significance"]
     # the order of the rows of a pair, the same for every method
     assert [r["stat"] for r in rows if r["section"] == "pair" and r["level"] == "a" and r["level_2"] == "b"] == [
-        "estimate", "std_error", "statistic", "df", "critical", "p_value", "p_adjusted", "ci_low", "ci_high", "decision"]
+        "estimate", "std_error", "statistic", "df", "critical", "p_value", "p_adjusted", "significance", "ci_low", "ci_high", "decision"]
+    # R's codes of the adjusted p-values: 0.00034, 0.174, 0.036
+    assert [r["text"] for r in rows if r["section"] == "pair" and r["stat"] == "significance"] == ["***", "", "*"]
     assert [(r["level"], r["level_2"]) for r in rows if r["section"] == "pair" and r["stat"] == "estimate"] == [("a", "b"), ("a", "c"), ("b", "c")]
 
 

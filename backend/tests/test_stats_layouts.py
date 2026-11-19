@@ -40,7 +40,7 @@ NOW = datetime(2026, 11, 19, 15, 30, tzinfo=timezone.utc)
 # The reference test's report (Welch, two-sided, English), byte for byte. It changes with the
 # layout, its words, the template, the fonts or Typst's version: look at the new PDF with the
 # real chart service, then update the hash.
-GOLDEN_PDF_SHA256 = "ee2bd2ace67183fcf5d2cba882db10983626863650c2ef6b9677e14a279f8b2b"
+GOLDEN_PDF_SHA256 = "c2e65aa885cd1016f8a08e8db072959ef5d3d902e0beb3465b157a586577b7cd"
 
 A = [5.1, 4.9, 6.2, 5.8, 6.0, 5.5, 5.3, 6.7]
 B = [6.9, 7.2, 6.5, 7.8, 7.1, 6.4, 8.0]
@@ -202,7 +202,7 @@ def test_a_layout_reads_only_rows_the_test_writes(test):
 
 
 def test_the_report_reads_as_many_rows_as_a_test_may_write():
-    assert len(rows_of()) == 381  # the reference test: 26 of the test, 24 of its groups, 10 intervals, 321 of the curve
+    assert len(rows_of()) == 382  # the reference test: 27 of the test (its significance code too), 24 of its groups, 10 intervals, 321 of the curve
     assert layouts.MAX_REPORT_ROWS >= 64 + 200 * (12 + 30) + 603  # 200 groups, each with 30 intervals, and the curve
     assert layouts.MAX_REPORT_ROWS < 20_000
 
@@ -260,7 +260,7 @@ def test_the_reference_report_holds_the_welch_numbers(tmp_path, chart_service, m
     assert out.pages == 2 and out.warnings == []
     said = set(strings(json.loads(page)))
     for text in (
-        "Welch's t test", "v by g", "-4.6090", "12.7279", "0.0005", "-1.4411", "95% CI: -2.1180 to -0.7641",
+        "Welch's t test", "v by g", "-4.6090", "12.7279", "0.0005 ***", "-1.4411", "95% CI: -2.1180 to -0.7641",
         "At α = 0.05 the null hypothesis is rejected (p = 0.0005).",  # (the sentence's «p {p}»: «= 0.0005», or «< 0.0001»)
         "mean(v | a) − mean(v | b) = 0", "mean(v | a) − mean(v | b) ≠ 0", "two-sided",
         "t = (m1 − m2 − mu) / √(s1²/n1 + s2²/n2), df = (s1²/n1 + s2²/n2)² / ((s1²/n1)²/(n1 − 1) + (s2²/n2)²/(n2 − 1))",
@@ -275,6 +275,8 @@ def test_the_reference_report_holds_the_welch_numbers(tmp_path, chart_service, m
         "4.9", "5.25", "5.65", "6.05", "6.7", "6.4", "7.1", "7.5",
         "Rows used: 15. Rows left out: 3 (no group, or no value in one of the two groups).",
         "Computed in the engine: polars.", "Computed by Tabularia",
+        # R's significance codes: beside the p-value in its card and in the table of the numbers, with their legend
+        "Signif.", "***", "Signif. codes: 0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1",
     ):
         assert text in said, text
     assert any(s.startswith("1 = «a», 2 = «b». m: mean, s²: variance, n: rows used") for s in said)
@@ -304,7 +306,7 @@ def test_a_one_sided_report_leaves_its_open_side_open(tmp_path, chart_service, m
     out, page = draw(tmp_path, chart_service, monkeypatch, alternative="less")
     said = set(strings(json.loads(page)))
     assert out.warnings == []
-    for text in ("0.0003", "95% CI: −∞ to -0.8865", "mean(v | a) − mean(v | b) < 0", "one-sided, less",
+    for text in ("0.0003 ***", "95% CI: −∞ to -0.8865", "mean(v | a) − mean(v | b) < 0", "one-sided, less",
                  "Critical region at α = 0.05: statistic ≤ -1.7738.", "0.0002584351", "-1.7738331494", "-0.8864590396"):
         assert text in said, text
     assert "critical_high" not in said and "ci_low" not in said  # no row for a number that is not there
@@ -323,11 +325,12 @@ def test_a_very_small_p_value_is_never_printed_as_zero(tmp_path, chart_service, 
     assert 0 < p_value < 1e-15
     _, page = draw(tmp_path / "en", chart_service, monkeypatch, mu=40.0)
     said = set(strings(json.loads(page)))
-    assert {"< 0.0001", "At α = 0.05 the null hypothesis is rejected (p < 0.0001).", layouts.tiny(p_value, "en")} <= said
+    assert {"< 0.0001 ***", "At α = 0.05 the null hypothesis is rejected (p < 0.0001).", layouts.tiny(p_value, "en")} <= said
     assert re.fullmatch(r"\d\.\d{1,9}e-\d+", layouts.tiny(p_value, "en")) and "0.0000" not in said
     _, page = draw(tmp_path / "it", chart_service, monkeypatch, locale="it", mu=40.0)
     said = set(strings(json.loads(page)))
-    assert {"< 0,0001", "Con α = 0,05 l'ipotesi nulla è rifiutata (p < 0,0001).", layouts.tiny(p_value, "it")} <= said
+    assert {"< 0,0001 ***", "Con α = 0,05 l'ipotesi nulla è rifiutata (p < 0,0001).", layouts.tiny(p_value, "it")} <= said
+    assert "Codici di significatività: 0 ‘***’ 0,001 ‘**’ 0,01 ‘*’ 0,05 ‘.’ 0,1 ‘ ’ 1" in said  # the language's decimal mark
     assert layouts.tiny(5.168702726e-12, "en") == "5.168702726e-12" and layouts.tiny(-2.5e-7, "it") == "-2,5e-7"
     assert layouts.tiny(1e-300, "de") == "1e-300" and layouts.tiny(3.0e-9, "fr") == "3e-9"
     for plain in (0, 0.0, 1e-6, 0.000516870272598936, -4.6, 15, None, "text", True):
@@ -466,7 +469,7 @@ def test_a_report_of_a_step_is_followed_and_taken_as_an_export(stack, monkeypatc
     assert files.keys("exports/") == []
     # the pages hold the Welch numbers: what the template was handed
     said = set(strings(json.loads(handed[0])))
-    assert {"-4.6090", "12.7279", "0.0005", "-1.4411", "-4.6090212217", "0.0005168703", "Computed in the engine: polars."} <= said
+    assert {"-4.6090", "12.7279", "0.0005 ***", "-1.4411", "-4.6090212217", "0.0005168703", "Computed in the engine: polars."} <= said
     # the chain was read once, as it came but for the rows of the report, with room for every row
     [(operations, kwargs)] = reads
     assert operations == [{"type": "stat_t_two_sample", "params": {**WELCH, "detail": "report"}}]
@@ -486,7 +489,7 @@ def test_the_pdf_and_the_excel_asked_after_the_pages_read_no_data(stack):
     assert len(reads) == 1  # another format, another language: the rows are remembered
     [key] = [k for k in rowcount._client.strings if k.startswith("dataprep:statreport:")]
     remembered = json.loads(rowcount._client.strings[key])["rows"]
-    assert len(remembered) == 381 and [r[8] for r in remembered] == list(range(381))
+    assert len(remembered) == 382 and [r[8] for r in remembered] == list(range(382))
     # other parameters are another test: read again
     ask(format="svg", operations=[{"type": "stat_t_two_sample", "params": {**WELCH, "alternative": "less"}}])
     assert len(reads) == 2
@@ -600,18 +603,18 @@ def test_every_report_renders_in_the_five_languages(tmp_path, chart_service, mon
 
 # what each report says, in English, of the reference data: R's and SciPy's numbers
 ON_THE_PAGE = {
-    "t_one_sample": ({}, ["One-sample t test", "3.2226", "0.0146", "5.6875", "95% CI: 5.1830 to 6.1920", "mean(v) = 5", "mean(v) ≠ 5",
+    "t_one_sample": ({}, ["One-sample t test", "3.2226", "0.0146 *", "5.6875", "95% CI: 5.1830 to 6.1920", "mean(v) = 5", "mean(v) ≠ 5",
                           "t = (m − mu) / (s / √n), df = n − 1", "3.2225754675", "0.0146011836", "1.139352483",
                           "Rows used: 8. Rows left out: 1 (no number: NULL or NaN)."]),
-    "t_paired": ({}, ["Paired t test", "-2.6434", "0.0268", "-2.5000", "95% CI: -4.6394 to -0.3606", "mean(before − after) = 0",
+    "t_paired": ({}, ["Paired t test", "-2.6434", "0.0268 *", "-2.5000", "95% CI: -4.6394 to -0.3606", "mean(before − after) = 0",
                       "-2.6434026632", "-0.8359173189", "2.9907264075", "before − after", "79", "81.5"]),
-    "anova": ({}, ["One-way ANOVA", "11.9313", "2, 18", "0.0005", "0.5700", "Distribution of the statistic under H0: F(2, 18).",
+    "anova": ({}, ["One-way ANOVA", "11.9313", "2, 18", "0.0005 ***", "0.5700", "Distribution of the statistic under H0: F(2, 18).",
                    "11.9312926066", "7.790297619", "5.8763690476",
                    "Pairwise comparisons", "a – b", "a – c", "b – c", "6.89176739", "0.0003431", "3.60930383", "H0 rejected",
-                   "H0 not rejected", "Critical region at α = 0.05: statistic ≥ 3.5546."]),
+                   "H0 not rejected", "Critical region at α = 0.05: statistic ≥ 3.5546.", "Signif. codes: 0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1"]),
     "var_f": ({}, ["F test of two variances", "0.9956", "7, 6", "0.9793", "95% CI: 0.1748 to 5.0961", "var(v | a) / var(v | b) = 1"]),
     "levene": ({}, ["Brown–Forsythe test (Levene, median)", "0.2686", "2, 18", "0.7675", "3", "5.65", "var(v | a) = var(v | b) = var(v | c)"]),
-    "pearson": ({}, ["Pearson's correlation", "17.0305", "< 0.0001", "0.9865", "95% CI: 0.9419 to 0.9969", "cor(px, py) = 0",
+    "pearson": ({}, ["Pearson's correlation", "17.0305", "< 0.0001 ***", "0.9865", "95% CI: 0.9419 to 0.9969", "cor(px, py) = 0",
                      "1.43496376e-7"]),
 }
 

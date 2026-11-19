@@ -255,6 +255,22 @@ def _p_value(equal: str = "") -> str:
     return f'IF({p} < 0.0001, "< " & {_shown("0.0001", P4)}, {_q(equal)} & {_shown(p, P4)})'
 
 
+def _with_stars(said: str, code: str) -> str:
+    """A p-value as written, its significance code after it («0.0005 ***»): `code` the
+    expression of the row's code, nothing when it is empty (p ≥ 0.1)."""
+    return f'{said} & IF(ISNULL({code}) OR {code} = "", "", " " & {code})'
+
+
+def _signif_legend(t: dict, locale: str) -> str:
+    """R's legend of the significance codes, with the language's decimal mark:
+    «Signif. codes: 0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1»."""
+    from app.reports import formats
+
+    d = formats.locale(locale if locale in LOCALES else "en").decimal
+    codes = f"0 ‘***’ 0{d}001 ‘**’ 0{d}01 ‘*’ 0{d}05 ‘.’ 0{d}1 ‘ ’ 1"
+    return t["signif"]["legend"].replace("{codes}", codes)
+
+
 # ── the pieces of a page ────────────────────────────────────────────────────
 class _Page:
     """The items of a body, written from the top: `y` is where the next one goes."""
@@ -300,12 +316,29 @@ def _table(id: str, title: str, filter_: str, cols: list[dict], y: float, visibl
     return item
 
 
-def _group_number(stat: str) -> str:
-    """A number of the group of the row at hand, with the decimals its column has room for
-    (some twelve characters): eight, fewer for a large number (a mean near a billion keeps one)."""
-    x = f'LOOKUP("group|" & [level] & "||{stat}", [key], [value])'
+def _row_key(section: str, stat: str, two_levels: bool = False) -> str:
+    """The key of the row `stat` of the group (or cell, pair) of the row at hand: its section,
+    its `level` (and `level_2` for a pair or a cell of a contingency table)."""
+    second = '"|" & [level_2] & "|' if two_levels else '"||'
+    return f'"{section}|" & [level] & {second}{stat}"'
+
+
+def _rounded(x: str) -> str:
+    """A number with the decimals a column of some twelve characters has room for: eight,
+    fewer for a large one (a mean near a billion keeps one)."""
     return (f"IFS(ABS({x}) >= 1000000000, ROUND({x}, 1), ABS({x}) >= 1000000, ROUND({x}, 2), ABS({x}) >= 1000, ROUND({x}, 4), "
             f"ABS({x}) >= 10, ROUND({x}, 6), {x})")
+
+
+def _group_number(stat: str, section: str = "group", two_levels: bool = False) -> str:
+    """A number of the group (or cell) of the row at hand, rounded to its column (`_rounded`);
+    a very small one by its exponent, as the table of the numbers writes it."""
+    key = _row_key(section, stat, two_levels)
+    x = f"LOOKUP({key}, [key], [value])"
+    if section == "group":
+        return _rounded(x)
+    tiny_ = f"LOOKUP({key}, [key], [tiny])"
+    return f"IF(ISNULL({tiny_}), {_rounded(x)}, {tiny_})"
 
 
 def _bands(name: str, subtitle: str, t: dict, loc_texts: dict, sample: str | None) -> tuple[dict, dict]:
@@ -401,13 +434,36 @@ class _Card(NamedTuple):
 
 class _Table(NamedTuple):
     """A table of the groups: one row a group, a column for each stat (its header the stat's
-    name on the page), `width` mm each."""
+    name on the page), `width` mm each. A table of other rows says which: `section` (a
+    contingency table's cells), `rows` (the filter that gives one row each), `labels` (the
+    columns that name a row: (header, expression)), `two_levels` (a cell of two categories);
+    `counts`: the stats that are whole numbers, narrower."""
 
     id: str
     title: str
     stats: tuple[str, ...]
     width: float = 40.0
     n_first: bool = False  # the rows' count first, narrower
+    section: str = "group"
+    rows: str | None = None
+    labels: tuple[tuple[str, str], ...] | None = None
+    two_levels: bool = False
+    counts: tuple[str, ...] = ()
+
+
+class _Comparisons(NamedTuple):
+    """The comparisons of a post-hoc: of the pairs of groups (`section` «pair») or of the cells
+    of a table («cell»). `numbers`: the stats of the first table (none: no such table);
+    `own_p`: each row has a p-value of its own besides the adjusted one; `intervals`: the
+    simultaneous intervals, a table and a chart; `method`, `adjust`: the keys of the words
+    that say how (`posthoc.method`, `posthoc.adjust` or, without intervals, `posthoc.adjust_only`)."""
+
+    method: str
+    adjust: str
+    numbers: tuple[str, ...]
+    own_p: bool
+    intervals: bool
+    section: str = "pair"
 
 
 class _Chart(NamedTuple):
@@ -428,7 +484,8 @@ def _df_card(t: dict, two: bool) -> _Card:
 
 def _page(test: str, params: dict[str, Any], locale: str, sample: str | None, step: str | None, *,
           cards: tuple[_Card, _Card, _Card, _Card], interval: bool, alternative: bool, region_low: bool,
-          symbols: dict[str, str], tables: tuple[_Table, ...], charts: tuple, pairs: bool = False) -> dict:
+          symbols: dict[str, str], tables: tuple[_Table, ...], charts: tuple, pairs: _Comparisons | None = None,
+          groups_heading: str | None = None) -> dict:
     """A test's report: the result (four cards, the decision), the hypotheses, how it is
     computed (the formula, its symbols, the distribution, every number), the groups, the
     comparisons of the pairs, the charts, the notes. `interval`: the estimate's card says its
@@ -506,24 +563,33 @@ def _page(test: str, params: dict[str, Any], locale: str, sample: str | None, st
         {"header": numbers["quantity"], "value": "[label]"},
         {"header": numbers["name"], "value": "[stat]", "width": 34, "style": {"color": MUTED}},
         {"header": numbers["value"], "value": "IF(ISNULL([tiny]), [value], [tiny])", "width": 40, "align": "right", "format": EXACT},
+        # R's stars beside the p-value: a column of their own, so that the value stays a number in Excel
+        {"header": t["signif"]["column"], "value": f'IF([stat] = "p_value", {_text("test|||significance")}, "")', "width": 14},
     ], p.y), 10)
+    p.text("signif_legend", _static(_signif_legend(t, locale)), h=4.5, size=7, color=MUTED)
 
     # the groups: the numbers of the formula, then what the box plot draws
-    p.heading("s_groups", t["sections"]["groups"])
-    g = {**t["stats"]["group"], **own.get("stats", {}).get("group", {})}
+    p.heading("s_groups", groups_heading or t["sections"]["groups"])
     one_row_a_group = '[section] = "group" AND [stat] = "n"'
     for table in tables:
-        cols = [{"header": t["tables"]["groups"]["group"], "value": "[level]"}]
+        words = {**t["stats"].get(table.section, {}), **own.get("stats", {}).get(table.section, {})}
+        labels = table.labels or ((t["tables"]["groups"]["group"], "[level]"),)
+        cols = [{"header": header, "value": value} for header, value in labels]
         stats = table.stats
         if table.n_first:
-            cols.append({"header": g["n"], "value": "[value]", "width": 20, "align": "right", "format": "#,##0"})
+            cols.append({"header": words["n"], "value": "[value]", "width": 20, "align": "right", "format": "#,##0"})
             stats = stats[1:]
-        cols += [{"header": g[s], "value": _group_number(s), "width": table.width, "align": "right", "format": "0.########"}
-                 for s in stats]
-        p.add(_table(table.id, table.title, one_row_a_group, cols, p.y), 10)
+        for s_ in stats:
+            if s_ in table.counts:
+                cols.append({"header": words[s_], "value": f"LOOKUP({_row_key(table.section, s_, table.two_levels)}, [key], [value])",
+                             "width": 24, "align": "right", "format": "#,##0"})
+            else:
+                cols.append({"header": words[s_], "value": _group_number(s_, table.section, table.two_levels), "width": table.width,
+                             "align": "right", "format": "0.########"})
+        p.add(_table(table.id, table.title, table.rows or one_row_a_group, cols, p.y), 10)
 
-    if pairs:
-        _comparisons(p, t, params)
+    if pairs is not None:
+        _comparisons(p, t, own, pairs, locale)
 
     # the charts, two by two (one alone across the page); a place may hold alternatives, of
     # which the rows make one visible
@@ -563,57 +629,52 @@ def _page(test: str, params: dict[str, Any], locale: str, sample: str | None, st
     return _document(header, p.items, footer, locale)
 
 
-def _pair_value(stat: str, column: str = "value") -> str:
-    return f'LOOKUP("pair|" & [level] & "|" & [level_2] & "|{stat}", [key], [{column}])'
+def _pair_value(stat: str, column: str = "value", section: str = "pair") -> str:
+    return f'LOOKUP({_row_key(section, stat, True)}, [key], [{column}])'
 
 
-def _pair_number(stat: str) -> str:
-    """A number of the pair of the row at hand: eight decimals, fewer for a large one (as a
-    group's), by its exponent when it is very small (a p-value)."""
-    x = _pair_value(stat)
-    rounded = (f"IFS(ABS({x}) >= 1000000000, ROUND({x}, 1), ABS({x}) >= 1000000, ROUND({x}, 2), ABS({x}) >= 1000, ROUND({x}, 4), "
-               f"ABS({x}) >= 10, ROUND({x}, 6), {x})")
-    return f"IF(ISNULL({_pair_value(stat, 'tiny')}), {rounded}, {_pair_value(stat, 'tiny')})"
+def _pair_number(stat: str, section: str = "pair") -> str:
+    """A number of the pair (or cell) of the row at hand: eight decimals, fewer for a large
+    one (as a group's), by its exponent when it is very small (a p-value)."""
+    return _group_number(stat, section, two_levels=True)
 
 
-def _comparisons(p: _Page, t: dict, params: dict[str, Any]) -> None:
-    """The pairwise comparisons: what method and correction, then the pairs in three tables
-    (the difference and its statistic; the p-values and the decision; the simultaneous
-    intervals, when the method has them) and a chart of the intervals, with a line at 0."""
+def _comparisons(p: _Page, t: dict, own: dict, c: _Comparisons, locale: str) -> None:
+    """The comparisons of a post-hoc: what method and correction, the formulas of a pair,
+    then the pairs (or cells) in up to three tables (the differences and their statistics;
+    the p-values, their significance codes and the decision; the simultaneous intervals, when
+    the method has them) and a chart of the intervals, with a line at 0."""
     w = t["posthoc"]
-    posthoc, adjust = _param("anova", params, "posthoc"), _param("anova", params, "p_adjust")
-    intervals = not (posthoc == "pairwise_t" and adjust == "holm")
     p.heading("s_pairs", t["sections"]["comparisons"])
-    method, how = _text("test|||posthoc"), _text("test|||p_adjust")
-    said_method = "IFS(" + ", ".join(f'{method} = {_q(k)}, {_q(v)}' for k, v in w["method"].items()) + ', TRUE, "")'
-    said_adjust = "IFS(" + ", ".join(f'{how} = {_q(k)}, {_q(v)}' for k, v in w["adjust"].items()) + ', TRUE, "")'
+    adjust_words = w["adjust"] if c.intervals or c.adjust == "studentized_range" else w["adjust_only"]
     # (kept with its heading: a text that grows is the last of what is kept, or what is under it
     # would not move)
-    p.text("pairs_method", "=" + _join(w["line"], method=said_method, adjust=said_adjust), h=5, can_grow=True)
+    p.text("pairs_method", _static(w["line"].replace("{method}", w["method"][c.method]).replace("{adjust}", adjust_words[c.adjust])),
+           h=5, can_grow=True)
     p.keep()
     p.y += 1.5
     p.text("pairs_formula", "=" + _text("test|||posthoc_formula"), h=6.5, size=9, weight="semibold", background=PANEL, padding=1.5,
            can_grow=True)
     p.y += 1.5
-    ps = {**t["stats"]["pair"]}
-    one_row_a_pair = '[section] = "pair" AND [stat] = "estimate"'
-    pair = {"header": w["pair"], "value": '[level] & " – " & [level_2]'}
+    ps = {**t["stats"][c.section], **own.get("stats", {}).get(c.section, {})}
+    one_row = f'[section] = "{c.section}" AND [stat] = "p_adjusted"'
+    pair = {"header": w["cell"] if c.section == "cell" else w["pair"], "value": '[level] & " – " & [level_2]'}
 
     def numeric(stat: str) -> dict:
-        return {"header": ps[stat], "value": _pair_number(stat), "width": 36, "align": "right", "format": "0.########"}
+        return {"header": ps[stat], "value": _pair_number(stat, c.section), "width": 36, "align": "right", "format": "0.########"}
 
     tables = t["tables"]
-    p.add(_table("pairs", tables["pairs"]["title"], one_row_a_pair,
-                 [pair, *(numeric(s) for s in ("estimate", "std_error", "statistic", "df"))], p.y), 10)
-    decision = _pair_value("decision", "text")
-    # the studentized range gives a pair no p-value of its own: only the adjusted one
-    own_p = [numeric("p_value")] if posthoc == "pairwise_t" else []
-    p.add(_table("pairs_p", tables["pairs_p"]["title"], one_row_a_pair, [
-        pair, *own_p, numeric("p_adjusted"),
+    if c.numbers:
+        p.add(_table("pairs", tables["pairs"]["title"], one_row, [pair, *(numeric(s) for s in c.numbers)], p.y), 10)
+    decision = _pair_value("decision", "text", c.section)
+    p.add(_table("pairs_p", tables["pairs_p"]["title"], one_row, [
+        pair, *([numeric("p_value")] if c.own_p else []), numeric("p_adjusted"),
+        {"header": t["signif"]["column"], "value": _pair_value("significance", "text", c.section), "width": 14},
         {"header": ps["decision"], "value": f'IF({decision} = "reject_h0", {_q(w["reject"])}, {_q(w["keep"])})', "width": 50},
     ], p.y), 10)
-    if intervals:
-        p.add(_table("pairs_ci", tables["pairs_ci"]["title"], one_row_a_pair,
+    p.text("pairs_signif_legend", _static(_signif_legend(t, locale)), h=4.5, size=7, color=MUTED)
+    if c.intervals:
+        p.add(_table("pairs_ci", tables["pairs_ci"]["title"], one_row,
                      [pair, *(numeric(s) for s in ("critical", "ci_low", "ci_high"))], p.y), 10)
         # the differences with their intervals, while they are few enough to be read on one chart
         p.y += 2.0
@@ -622,7 +683,7 @@ def _comparisons(p: _Page, t: dict, params: dict[str, Any]) -> None:
                "category": '[level] & " – " & [level_2]',
                "series": [{"value": f'SUMIF([stat] = "{s}", [value])', "name": ps[s]} for s in ("estimate", "ci_low", "ci_high")],
                "options": {"labels": True, "format": "0.###", "target": 0},
-               "visible": f'=COUNTIF({one_row_a_pair}) <= {MAX_PAIRS_CHARTED}'}, 62.5)
+               "visible": f'=COUNTIF({one_row}) <= {MAX_PAIRS_CHARTED}'}, 62.5)
 
 
 # past this many pairs the chart of the intervals is not drawn: the tables say them
@@ -684,7 +745,7 @@ def _density(t: dict) -> _Chart:
 def _cards(t: dict, own: dict, fourth: _Card | None = None, two_df: bool = False) -> tuple[_Card, _Card, _Card, _Card]:
     return (_Card("k_statistic", own["kpi"]["statistic"], _shown(_value("test|||statistic"))),
             _df_card(t, two_df),
-            _Card("k_p", t["kpi"]["p_value"], _p_value()),
+            _Card("k_p", t["kpi"]["p_value"], _with_stars(_p_value(), _text("test|||significance"))),
             fourth or _Card("k_estimate", own["kpi"]["estimate"], _shown(_value("test|||estimate"))))
 
 
@@ -755,7 +816,12 @@ def _several_groups(test: str, params: dict[str, Any], locale: str, sample: str 
         fourth = _Card("k_effect", own["kpi"]["effect"], _shown(_value("test|||eta_squared"), P4))
         table_set = _tables_of_means(t, own, welch_weight=_variant(test, params) == "welch")
         means = _means_of_groups(t, own)
-    pairs = test == "anova" and _param(test, params, "posthoc") != "none"
+    pairs = None
+    posthoc = _param(test, params, "posthoc") if test == "anova" else "none"
+    if posthoc != "none":
+        adjust = "studentized_range" if posthoc in ("tukey", "games_howell") else _param(test, params, "p_adjust")
+        pairs = _Comparisons(posthoc, adjust, ("estimate", "std_error", "statistic", "df"), own_p=posthoc == "pairwise_t",
+                             intervals=not (posthoc == "pairwise_t" and adjust == "holm"))
     # the histogram last: past six groups it is not drawn, and leaves no hole between the others
     return _page(test, params, locale, sample, step, cards=_cards(t, own, fourth, two_df=True), interval=False,
                  alternative=False, region_low=False, symbols={}, tables=table_set, pairs=pairs,

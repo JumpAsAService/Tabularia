@@ -145,7 +145,8 @@
         "fisher_se": "Standard error of z, 1 / √(n − 3)",
         "z_quantile": "Normal quantile of the interval (z)",
         "r_squared": "Coefficient of determination (r²)",
-        "posthoc_formula": "Formulas of a pair"
+        "posthoc_formula": "Formulas of a pair",
+        "significance": "Significance code (R)"
       },
       "group": {
         "n": "n",
@@ -185,7 +186,8 @@
         "p_adjusted": "Adjusted p-value",
         "ci_low": "CI low",
         "ci_high": "CI high",
-        "decision": "Decision"
+        "decision": "Decision",
+        "significance": "Significance code"
       }
     },
     "note": "Note {n}",
@@ -255,8 +257,16 @@
         "bonferroni": "The p-values are adjusted by Bonferroni's method; each interval has level 1 − α/m.",
         "sidak": "The p-values are adjusted by Šidák's method; each interval has level (1 − α)^(1/m).",
         "none": "The p-values are not adjusted: each pair at its own level, 1 − α."
+      },
+      "cell": "Cell",
+      "adjust_only": {
+        "holm": "The p-values are adjusted by Holm's method.",
+        "bonferroni": "The p-values are adjusted by Bonferroni's method (p × m).",
+        "sidak": "The p-values are adjusted by Šidák's method (1 − (1 − p)^m).",
+        "none": "The p-values are not adjusted: each at its own level."
       }
-    }
+    },
+    "signif": {"column": "Signif.", "legend": "Signif. codes: {codes}"}
   },
   "it": {
     "by": "{value} per {group}",
@@ -404,7 +414,8 @@
         "fisher_se": "Errore standard di z, 1 / √(n − 3)",
         "z_quantile": "Quantile normale dell'intervallo (z)",
         "r_squared": "Coefficiente di determinazione (r²)",
-        "posthoc_formula": "Formule di una coppia"
+        "posthoc_formula": "Formule di una coppia",
+        "significance": "Codice di significatività (R)"
       },
       "group": {
         "n": "n",
@@ -444,7 +455,8 @@
         "p_adjusted": "p-value corretto",
         "ci_low": "IC inf.",
         "ci_high": "IC sup.",
-        "decision": "Decisione"
+        "decision": "Decisione",
+        "significance": "Codice di significatività"
       }
     },
     "note": "Nota {n}",
@@ -514,8 +526,16 @@
         "bonferroni": "I p-value sono corretti con il metodo di Bonferroni; ogni intervallo ha livello 1 − α/m.",
         "sidak": "I p-value sono corretti con il metodo di Šidák; ogni intervallo ha livello (1 − α)^(1/m).",
         "none": "I p-value non sono corretti: ogni coppia al proprio livello, 1 − α."
+      },
+      "cell": "Cella",
+      "adjust_only": {
+        "holm": "I p-value sono corretti con il metodo di Holm.",
+        "bonferroni": "I p-value sono corretti con il metodo di Bonferroni (p × m).",
+        "sidak": "I p-value sono corretti con il metodo di Šidák (1 − (1 − p)^m).",
+        "none": "I p-value non sono corretti: ciascuno al proprio livello."
       }
-    }
+    },
+    "signif": {"column": "Signif.", "legend": "Codici di significatività: {codes}"}
   },
   "de": {
     "by": "{value} nach {group}",
@@ -667,7 +687,8 @@
         "fisher_se": "Standardfehler von z, 1 / √(n − 3)",
         "z_quantile": "Normalquantil des Intervalls (z)",
         "r_squared": "Bestimmtheitsmaß (r²)",
-        "posthoc_formula": "Formeln eines Paars"
+        "posthoc_formula": "Formeln eines Paars",
+        "significance": "Signifikanzcode (R)"
       },
       "group": {
         "n": "n",
@@ -707,7 +728,8 @@
         "p_adjusted": "Korrigierter p-Wert",
         "ci_low": "KI unten",
         "ci_high": "KI oben",
-        "decision": "Entscheidung"
+        "decision": "Entscheidung",
+        "significance": "Signifikanzcode"
       }
     },
     "note": "Hinweis {n}",
@@ -777,8 +799,16 @@
         "bonferroni": "Die p-Werte sind nach Bonferroni korrigiert; jedes Intervall hat das Niveau 1 − α/m.",
         "sidak": "Die p-Werte sind nach Šidák korrigiert; jedes Intervall hat das Niveau (1 − α)^(1/m).",
         "none": "Die p-Werte sind nicht korrigiert: jedes Paar auf seinem eigenen Niveau, 1 − α."
+      },
+      "cell": "Zelle",
+      "adjust_only": {
+        "holm": "Die p-Werte sind nach Holm korrigiert.",
+        "bonferroni": "Die p-Werte sind nach Bonferroni korrigiert (p × m).",
+        "sidak": "Die p-Werte sind nach Šidák korrigiert (1 − (1 − p)^m).",
+        "none": "Die p-Werte sind nicht korrigiert: jeder auf seinem eigenen Niveau."
       }
-    }
+    },
+    "signif": {"column": "Signif.", "legend": "Signifikanzcodes: {codes}"}
   },
   "es": {
     "by": "{value} por {group}",
@@ -930,7 +960,8 @@
         "fisher_se": "Error estándar de z, 1 / √(n − 3)",
         "z_quantile": "Cuantil normal del intervalo (z)",
         "r_squared": "Coeficiente de determinación (r²)",
-        "posthoc_formula": "Fórmulas de un par"
+        "posthoc_formula": "Fórmulas de un par",
+        "significance": "Código de significación (R)"
       },
       "group": {
         "n": "n",
@@ -970,7 +1001,8 @@
         "p_adjusted": "p-valor ajustado",
         "ci_low": "IC inf.",
         "ci_high": "IC sup.",
-        "decision": "Decisión"
+        "decision": "Decisión",
+        "significance": "Código de significación"
       }
     },
     "note": "Nota {n}",
@@ -1040,8 +1072,16 @@
         "bonferroni": "Los p-valores se ajustan con el método de Bonferroni; cada intervalo tiene nivel 1 − α/m.",
         "sidak": "Los p-valores se ajustan con el método de Šidák; cada intervalo tiene nivel (1 − α)^(1/m).",
         "none": "Los p-valores no se ajustan: cada par a su propio nivel, 1 − α."
+      },
+      "cell": "Celda",
+      "adjust_only": {
+        "holm": "Los p-valores se ajustan con el método de Holm.",
+        "bonferroni": "Los p-valores se ajustan con el método de Bonferroni (p × m).",
+        "sidak": "Los p-valores se ajustan con el método de Šidák (1 − (1 − p)^m).",
+        "none": "Los p-valores no se ajustan: cada uno a su propio nivel."
       }
-    }
+    },
+    "signif": {"column": "Signif.", "legend": "Códigos de significación: {codes}"}
   },
   "fr": {
     "by": "{value} par {group}",
@@ -1193,7 +1233,8 @@
         "fisher_se": "Erreur type de z, 1 / √(n − 3)",
         "z_quantile": "Quantile normal de l'intervalle (z)",
         "r_squared": "Coefficient de détermination (r²)",
-        "posthoc_formula": "Formules d'une paire"
+        "posthoc_formula": "Formules d'une paire",
+        "significance": "Code de signification (R)"
       },
       "group": {
         "n": "n",
@@ -1233,7 +1274,8 @@
         "p_adjusted": "p-valeur ajustée",
         "ci_low": "IC inf.",
         "ci_high": "IC sup.",
-        "decision": "Décision"
+        "decision": "Décision",
+        "significance": "Code de signification"
       }
     },
     "note": "Note {n}",
@@ -1303,7 +1345,15 @@
         "bonferroni": "Les p-valeurs sont ajustées par la méthode de Bonferroni ; chaque intervalle a le niveau 1 − α/m.",
         "sidak": "Les p-valeurs sont ajustées par la méthode de Šidák ; chaque intervalle a le niveau (1 − α)^(1/m).",
         "none": "Les p-valeurs ne sont pas ajustées : chaque paire à son propre niveau, 1 − α."
+      },
+      "cell": "Cellule",
+      "adjust_only": {
+        "holm": "Les p-valeurs sont ajustées par la méthode de Holm.",
+        "bonferroni": "Les p-valeurs sont ajustées par la méthode de Bonferroni (p × m).",
+        "sidak": "Les p-valeurs sont ajustées par la méthode de Šidák (1 − (1 − p)^m).",
+        "none": "Les p-valeurs ne sont pas ajustées : chacune à son propre niveau."
       }
-    }
+    },
+    "signif": {"column": "Signif.", "legend": "Codes de signification : {codes}"}
   }
 }
