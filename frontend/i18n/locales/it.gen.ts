@@ -6234,6 +6234,8 @@ export default {
           "y": "Colonne della tabella (y)"
         },
         "hints": {
+          "x": "Una colonna di categorie (di qualsiasi tipo): 50 al massimo.",
+          "y": "Una riga in cui x, y o la colonna degli strati non ha un valore è lasciata fuori.",
           "strata": "La colonna che dà il nome agli strati: una tabella di x e y in ciascuno.",
           "correction": "La correzione di continuità delle tabelle 2 × 2 (come mantelhaen.test di R)."
         }
@@ -6247,6 +6249,8 @@ export default {
           "posthoc": "Confronti"
         },
         "hints": {
+          "x": "Una colonna di categorie (di qualsiasi tipo): 50 al massimo.",
+          "y": "Una riga in cui una delle due colonne non ha un valore è lasciata fuori.",
           "posthoc": "Quali celle si allontanano dall'indipendenza: i loro residui corretti."
         }
       },

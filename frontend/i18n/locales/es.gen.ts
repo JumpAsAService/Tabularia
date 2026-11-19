@@ -6234,6 +6234,8 @@ export default {
           "y": "Columnas de la tabla (y)"
         },
         "hints": {
+          "x": "Una columna de categorías (de cualquier tipo): 50 como máximo.",
+          "y": "Una fila en la que x, y o la columna de estratos no tiene valor se deja fuera.",
           "strata": "La columna que nombra los estratos: una tabla de x e y en cada uno.",
           "correction": "La corrección de continuidad de las tablas 2 × 2 (como mantelhaen.test de R)."
         }
@@ -6247,6 +6249,8 @@ export default {
           "posthoc": "Comparaciones"
         },
         "hints": {
+          "x": "Una columna de categorías (de cualquier tipo): 50 como máximo.",
+          "y": "Una fila en la que alguna de las dos columnas no tiene valor se deja fuera.",
           "posthoc": "Qué celdas se apartan de la independencia: sus residuos ajustados."
         }
       },

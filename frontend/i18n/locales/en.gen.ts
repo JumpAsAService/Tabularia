@@ -6234,6 +6234,8 @@ export default {
           "y": "Columns of the table (y)"
         },
         "hints": {
+          "x": "A column of categories (any type): 50 at most.",
+          "y": "A row where x, y or the strata column has no value is left out.",
           "strata": "The column that names the strata: a table of x and y in each.",
           "correction": "The continuity correction of 2 × 2 tables (as R's mantelhaen.test)."
         }
@@ -6247,6 +6249,8 @@ export default {
           "posthoc": "Comparisons"
         },
         "hints": {
+          "x": "A column of categories (any type): 50 at most.",
+          "y": "A row where either column has no value is left out.",
           "posthoc": "Which cells depart from independence: their adjusted residuals."
         }
       },

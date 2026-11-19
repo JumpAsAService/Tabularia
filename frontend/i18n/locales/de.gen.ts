@@ -6234,6 +6234,8 @@ export default {
           "y": "Spalten der Tabelle (y)"
         },
         "hints": {
+          "x": "Eine Spalte mit Kategorien (beliebiger Typ): höchstens 50.",
+          "y": "Eine Zeile, in der x, y oder die Schichtspalte keinen Wert hat, wird ausgelassen.",
           "strata": "Die Spalte, die die Schichten benennt: eine Tabelle von x und y in jeder.",
           "correction": "Die Stetigkeitskorrektur von 2 × 2-Tabellen (wie mantelhaen.test in R)."
         }
@@ -6247,6 +6249,8 @@ export default {
           "posthoc": "Vergleiche"
         },
         "hints": {
+          "x": "Eine Spalte mit Kategorien (beliebiger Typ): höchstens 50.",
+          "y": "Eine Zeile, in der eine der beiden Spalten keinen Wert hat, wird ausgelassen.",
           "posthoc": "Welche Zellen von der Unabhängigkeit abweichen: ihre korrigierten Residuen."
         }
       },

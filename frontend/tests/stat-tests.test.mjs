@@ -429,3 +429,17 @@ test('the tests of ranks and distributions: their fields, the optional second co
     assert.ok(WORDS[lang]['stat.tests.wilcoxon_signed_rank.hints.y'], lang)
   }
 })
+
+test('a test that reads categories says so in its own words: no «number» hint on a column of categories', () => {
+  // the generic hints of x and y speak of numbers (the t, the correlations): a test whose x
+  // or y is a column of any type must have its own, or its form says «a number on every row»
+  // under a column of categories (found in the browser on the G test and the CMH test)
+  for (const t of s.STAT_CATALOG.tests) {
+    for (const key of ['x', 'y']) {
+      if (t.needs[key] !== 'column') continue
+      for (const lang of LANGS) {
+        assert.ok(WORDS[lang][`stat.tests.${t.id}.hints.${key}`], `${t.id}.${key} in ${lang}`)
+      }
+    }
+  }
+})

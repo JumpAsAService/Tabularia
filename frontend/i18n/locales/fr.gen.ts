@@ -6234,6 +6234,8 @@ export default {
           "y": "Colonnes du tableau (y)"
         },
         "hints": {
+          "x": "Une colonne de catégories (de tout type) : 50 au plus.",
+          "y": "Une ligne où x, y ou la colonne des strates n'a pas de valeur est écartée.",
           "strata": "La colonne qui nomme les strates : un tableau de x et y dans chacune.",
           "correction": "La correction de continuité des tableaux 2 × 2 (comme mantelhaen.test de R)."
         }
@@ -6247,6 +6249,8 @@ export default {
           "posthoc": "Comparaisons"
         },
         "hints": {
+          "x": "Une colonne de catégories (de tout type) : 50 au plus.",
+          "y": "Une ligne où l'une des deux colonnes n'a pas de valeur est écartée.",
           "posthoc": "Quelles cellules s'écartent de l'indépendance : leurs résidus ajustés."
         }
       },
