@@ -178,3 +178,169 @@ def test_the_density_is_the_slope_of_the_tail(df):
     h = (b - a) / n
     area = dist.t_pdf(a, df) + dist.t_pdf(b, df) + sum((4 if i % 2 else 2) * dist.t_pdf(a + i * h, df) for i in range(1, n))
     assert rel(area * h / 3.0, dist.t_cdf(b, df) - dist.t_cdf(a, df)) < 1e-10
+
+
+# ── lot 2: F, chi-square, the incomplete gamma ───────────────────────────────
+# (f, d1, d2, P(F ≥ f), P(F ≤ f)), 22 digits: I_x(a, b) by its continued fraction in 60-digit
+# arithmetic (mpmath, outside Tabularia), on the side where it converges, with y = 1 − x exact
+F_ACCURACY = [
+    (9.1, 2, 18, 0.001858127073281917747706, 0.9981418729267180822523),
+    (0.3, 1, 1, 0.680994279960022896267, 0.319005720039977103733),
+    (40, 4.5, 7, 0.00005846903573304164243268, 0.9999415309642669583576),
+    (1.2, 199, 1e9, 0.02816097759139650750764, 0.9718390224086034924924),
+    (3, 2, 1e9, 0.04978706881594755851416, 0.9502129311840524414858),
+    (9.1, 199, 1e10, 1.251857436410541609593e-257, 1.0),
+    (0.01, 19, 2.5, 0.9999999999774882235952, 2.251177640484010929704e-11),
+    (300, 3, 100, 7.63430134696628343782e-50, 1.0),
+    (1.0, 1, 1e6, 0.3173107498335781292817, 0.6826892501664218707183),
+    (1.2, 7, 6, 0.4200382517897833260456, 0.5799617482102166739544),
+    (0.4978, 7, 6, 0.8086590330557826344379, 0.1913409669442173655621),
+]
+
+
+@pytest.mark.parametrize("f, d1, d2, sf, cdf", F_ACCURACY)
+def test_f_accuracy_contract(f, d1, d2, sf, cdf):
+    """The t's contract for the F: within a relative 1e-12 of the 60-digit value, both tails,
+    up to 1e10 degrees of freedom (measured on a grid of 432 points: 4.6e-13 at worst)."""
+    assert rel(dist.f_sf(f, d1, d2), sf) < 1e-12
+    assert rel(dist.f_cdf(f, d1, d2), cdf) < 1e-12
+
+
+# (x, df, P(X ≥ x), P(X ≤ x)): the incomplete gamma by its series and its continued fraction
+# in 50-digit arithmetic (mpmath)
+CHI2_ACCURACY = [
+    (200, 3, 4.218541107192042337657e-43, 1.0),
+    (5.99146454710798, 2, 0.05000000000000005136801, 0.949999999999999948632),
+    (0.5, 0.5, 0.2563220552685389583291, 0.7436779447314610416709),
+    (50, 0.7, 6.566681496366442100421e-13, 0.9999999999993433318504),
+    (0.001, 1, 0.9747728793699603882798, 0.02522712063003961172023),
+    (2955.371716450253, 2401, 4.154740452111646281888e-14, 0.9999999999999584525955),
+    (179.05006265674, 199, 0.8417812774757455872319, 0.1582187225242544127681),
+    (100894.42719099992, 1e5, 0.02299104517063033456323, 0.9770089548293696654368),
+    (99957573.5931288, 1e8, 0.9986517728355051893628, 0.00134822716449481063721),
+    (1e10, 1e10, 0.4999981193680548387228, 0.5000018806319451612772),
+    (10001131370.8499, 1e10, 6.235981885872548576213e-16, 0.9999999999999993764018),
+]
+
+
+@pytest.mark.parametrize("x, df, sf, cdf", CHI2_ACCURACY)
+def test_chi_square_accuracy_contract(x, df, sf, cdf):
+    """The same contract for the chi-square (measured on 178 points up to df 1e10: 6.1e-13 at
+    worst). Far from zero the front factor of the incomplete gamma is taken with its large
+    terms cancelled (Stirling), or a billion degrees of freedom would leave five digits."""
+    assert rel(dist.chi2_sf(x, df), sf) < 1e-12
+    assert rel(dist.chi2_cdf(x, df), cdf) < 1e-12
+
+
+def test_quantiles_of_f_and_chi_square():
+    assert rel(dist.f_isf(0.05, 2, 18), 3.55455714566179) < 1e-12
+    assert rel(dist.chi2_isf(0.05, 2), 5.99146454710798) < 1e-12
+    # the lower quantile of F as 1 / the upper one of F(d2, d1): a small p keeps its digits
+    assert rel(dist.f_cdf(dist.f_ppf(1e-9, 7, 6), 7, 6), 1e-9) < 1e-10
+    assert rel(dist.f_ppf(0.025, 7, 6) * dist.f_isf(0.025, 6, 7), 1.0) < 1e-15
+    assert dist.f_isf(0.0, 2, 3) == math.inf and dist.f_isf(1.0, 2, 3) == 0.0 and dist.f_ppf(0.0, 2, 3) == 0.0
+    assert math.isnan(dist.chi2_isf(-0.1, 3))
+
+
+@pytest.mark.parametrize("q", [0.4, 0.05, 1e-3, 1e-12, 1e-100])
+@pytest.mark.parametrize("d1, d2", [(1, 1), (2, 18), (7, 6), (199, 1e9), (3, 2.5)])
+def test_the_f_quantile_inverts_the_tail(q, d1, d2):
+    assert rel(dist.f_sf(dist.f_isf(q, d1, d2), d1, d2), q) < 1e-10
+    assert rel(dist.f_cdf(dist.f_ppf(q, d1, d2), d1, d2), q) < 1e-10
+
+
+@pytest.mark.parametrize("q", [0.4, 0.05, 1e-3, 1e-12, 1e-100])
+@pytest.mark.parametrize("df", [1, 2, 7, 199, 2401, 1e5])
+def test_the_chi_square_quantile_inverts_the_tail(q, df):
+    assert rel(dist.chi2_sf(dist.chi2_isf(q, df), df), q) < 1e-10
+
+
+def test_densities_closed_forms():
+    assert rel(dist.norm_pdf(0.0), 1 / math.sqrt(2 * math.pi)) < 1e-15
+    assert rel(dist.chi2_pdf(3.0, 2), 0.5 * math.exp(-1.5)) < 1e-14  # an exponential of mean 2
+    assert rel(dist.chi2_pdf(2.0, 1), math.exp(-1.0) / math.sqrt(4 * math.pi)) < 1e-14
+    assert dist.chi2_pdf(0.0, 1) == math.inf and dist.chi2_pdf(0.0, 2) == 0.5 and dist.chi2_pdf(0.0, 3) == 0.0
+    # F(2, 2): 1 / (1 + f)²
+    assert rel(dist.f_pdf(3.0, 2, 2), 1 / 16) < 1e-14
+    assert dist.f_pdf(0.0, 1, 5) == math.inf and dist.f_pdf(0.0, 2, 5) == 1.0 and dist.f_pdf(-1.0, 3, 5) == 0.0
+
+
+@pytest.mark.parametrize("d1, d2", [(1, 1), (2, 18), (7, 6), (5, 1e6)])
+def test_the_f_density_is_the_slope_of_the_tail(d1, d2):
+    a, b, n = 0.5, 4.0, 4000
+    h = (b - a) / n
+    area = dist.f_pdf(a, d1, d2) + dist.f_pdf(b, d1, d2) + sum((4 if i % 2 else 2) * dist.f_pdf(a + i * h, d1, d2) for i in range(1, n))
+    assert rel(area * h / 3.0, dist.f_cdf(b, d1, d2) - dist.f_cdf(a, d1, d2)) < 1e-10
+
+
+@pytest.mark.parametrize("df", [1, 3, 20, 2401])
+def test_the_chi_square_density_is_the_slope_of_the_tail(df):
+    a, b, n = df * 0.5, df * 1.5 + 2, 4000
+    h = (b - a) / n
+    area = dist.chi2_pdf(a, df) + dist.chi2_pdf(b, df) + sum((4 if i % 2 else 2) * dist.chi2_pdf(a + i * h, df) for i in range(1, n))
+    assert rel(area * h / 3.0, dist.chi2_cdf(b, df) - dist.chi2_cdf(a, df)) < 1e-10
+
+
+def test_incomplete_gamma_closed_forms():
+    # Q(1, x) = e^(−x); Q(½, x) = erfc(√x); P + Q = 1
+    for x in (1e-3, 0.5, 2.0, 30.0, 700.0):
+        assert rel(dist.gammainc_q(1.0, x), math.exp(-x)) < 1e-12  # e^(−700) itself is known to 700 ulp
+        assert rel(dist.gammainc_q(0.5, x), math.erfc(math.sqrt(x))) < 1e-12
+    for a, x in ((3.3, 1.0), (3.3, 9.0), (50, 49), (1e4, 1.01e4)):
+        assert dist.gammainc_p(a, x) + dist.gammainc_q(a, x) == pytest.approx(1.0, abs=1e-15)
+    assert dist.gammainc_q(2.0, 0.0) == 1.0 and dist.gammainc_p(2.0, math.inf) == 1.0
+
+
+# ── the studentized range ────────────────────────────────────────────────────
+# P(Q ≤ q; k, df), SciPy 1.18.1's studentized_range (the spec's references)
+SRANGE = [
+    (3.5, 3, 18, 0.94177531240136), (1, 2, 5, 0.48891591956972), (4.2, 5, 10, 0.91785442462170),
+    (2, 10, 3, 0.13287846948945), (6, 20, 60, 0.98966494238124), (3.3, 3, 11.867, 0.91040711139581),
+    (0.3, 3, 2, 0.02420479824609), (12, 8, 4, 0.99135198682789), (4, 12, 30, 0.78158394507050),
+    (3.9, 20, 1000, 0.61295939541927), (50, 3, 1, 0.97300040851523), (7, 30, 15, 0.97610409142616),
+]
+
+
+@pytest.mark.parametrize("q, k, df, want", SRANGE)
+def test_studentized_range_against_scipy(q, k, df, want):
+    """Within an absolute 2e-10 (measured on 880 points, k from 2 to 20, df from 1 to 20,000,
+    q from 0.2 to 40: 3e-11 at worst, where SciPy itself is the one off — see below)."""
+    assert abs(dist.srange_cdf(q, k, df) - want) < 2e-10
+    assert abs(dist.srange_sf(q, k, df) - (1.0 - want)) < 2e-10
+
+
+@pytest.mark.parametrize("p, k, df, want", [
+    (0.95, 3, 18, 3.609303828706538), (0.95, 5, 10, 4.6542929978545375), (0.99, 3, 11.867, 5.058114579318116),
+    (0.95, 20, 4.4, 8.752534417194683),
+])
+def test_studentized_range_quantiles(p, k, df, want):
+    assert rel(dist.srange_ppf(p, k, df), want) < 1e-9
+    assert rel(dist.srange_isf(1.0 - p, k, df), want) < 1e-9
+
+
+@pytest.mark.parametrize("df", [1, 2.5, 7, 19.5, 20, 60, 1000, 20000, 1e6, 1e9])
+@pytest.mark.parametrize("q", [0.2, 1.0, 2.5, 4.0, 8.0, 12.0])
+def test_the_range_of_two_is_a_t(df, q):
+    """Two means: Q = √2·|T|, so P(Q > q) = 2·P(T ≥ q/√2), to a relative 5e-12 even far in the
+    tail (1.8e-12 at worst, at df 1e9) — the tail is a sum of small numbers, never 1 less one
+    near 1. (SciPy's own is 8e-4 off at q = 8, df = 20,000, and returns the infinite-df value
+    past 1e5.)"""
+    want = 2.0 * dist.t_sf(q / math.sqrt(2.0), df)
+    assert rel(dist.srange_sf(q, 2, df), want) < 5e-12
+    assert rel(dist.srange_isf(want, 2, df), q) < 1e-10
+
+
+def test_studentized_range_small_q_against_sixty_digits():
+    """A small q, where the probability is the difference of the tail from 1: 9.27e-5 for
+    k = 5, df = 60 (mpmath, a double integral at 30 digits; SciPy agrees to 2e-11)."""
+    assert abs(dist.srange_cdf(0.2, 5, 60) - 0.0000927184584636183038469134044867) < 1e-10
+
+
+def test_studentized_range_far_in_the_tail_is_a_number():
+    tail = dist.srange_sf(20.0, 3, 1500.0)
+    assert 0.0 < tail < 1e-40
+    # smooth in q: two engines whose means differ in the last digit give the same p-value
+    assert rel(dist.srange_sf(20.0 * (1 + 1e-14), 3, 1500.0), tail) < 1e-11
+    assert dist.srange_sf(0.0, 4, 10) == 1.0 and dist.srange_sf(math.inf, 4, 10) == 0.0
+    assert math.isnan(dist.srange_sf(math.nan, 4, 10))
+
