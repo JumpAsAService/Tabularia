@@ -144,6 +144,15 @@ func GroupOf(model string) string {
 // Limit is one of the catalogue's limits (max_terms, max_chart_points…), 0 for none.
 func Limit(name string) int { return data.limits[name] }
 
+// Limits are all the catalogue's limits, a copy (what a model Job's task.json carries).
+func Limits() map[string]int {
+	out := make(map[string]int, len(data.limits))
+	for k, v := range data.limits {
+		out[k] = v
+	}
+	return out
+}
+
 // KindOf is the kind of a model's parameter, "" when the model does not take it.
 func KindOf(model, key string) string {
 	if m, ok := data.byID[model]; ok {

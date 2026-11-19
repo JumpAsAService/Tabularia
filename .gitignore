@@ -18,6 +18,10 @@ backend/app/config/secrets.toml
 *.csv
 *.xlsx
 *.parquet
+# … but the small synthetic tables of the statistical models' self-test and reference cases
+# (docs/specs/statistical-models.md, «Reference values»: tens to hundreds of rows)
+!gateway-go/internal/modelgroups/common/selftest/*.csv
+!gateway-go/internal/modelgroups/groups/*/reference/data/*.csv
 
 # ── Python ───────────────────────────────────────────────────────────────────
 __pycache__/

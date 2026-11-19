@@ -1,0 +1,151 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tabularia.org/schemas/model-card/1",
+  "title": "Tabularia model card",
+  "description": "model.json: everything needed to apply a fitted model to new rows, as data, never as code (docs/specs/statistical-models.md, «The model card»). Written by a group's runner (common/R/card.R) in fit mode; read by Tabularia to log and register the model, and by the runner in predict mode. A card is at most 1 MiB: vcov is written up to 200 terms, Cox's baseline hazard at most 5,000 times per stratum.",
+  "type": "object",
+  "required": ["format", "format_version", "model", "variant", "group", "group_version", "recipe_hash", "runner_hash",
+               "software", "created_at", "params", "inputs"],
+  "properties": {
+    "format": {"const": "tabularia-model"},
+    "format_version": {"const": 1},
+    "model": {"enum": ["linear", "logistic", "kaplan_meier", "cox", "arima"]},
+    "variant": {"type": "string", "minLength": 1},
+    "group": {"enum": ["regression", "survival", "timeseries"]},
+    "group_version": {"type": ["integer", "string"]},
+    "recipe_hash": {"type": "string"},
+    "runner_hash": {"type": "string"},
+    "software": {"type": "object", "required": ["R"], "additionalProperties": {"type": "string"}},
+    "created_at": {"type": "string", "description": "UTC, ISO 8601"},
+    "params": {"type": "object", "description": "the node's parameters, as the catalogue's check answered them"},
+    "formula": {"type": "string", "description": "in symbols, with the columns' names: for people, never parsed"},
+    "outcome": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": {"type": "string"},
+        "event_value": {"description": "logistic and survival: the value that is the event"}
+      }
+    },
+    "inputs": {
+      "type": "array",
+      "description": "the columns Predict needs, of the same kind",
+      "items": {
+        "type": "object",
+        "required": ["name", "type"],
+        "properties": {
+          "name": {"type": "string", "minLength": 1},
+          "type": {"enum": ["number", "category", "time"]},
+          "levels": {"type": "array", "items": {"type": "string"}, "description": "a category's levels, the reference first"},
+          "reference": {"type": "string"}
+        },
+        "allOf": [{"if": {"properties": {"type": {"const": "category"}}}, "then": {"required": ["levels", "reference"]}}]
+      }
+    },
+    "terms": {
+      "type": "array",
+      "description": "the columns of the design, in the order of `coefficients`: as the results' coef rows name them (level, level_2)",
+      "items": {
+        "type": "object",
+        "required": ["term", "level", "variables"],
+        "properties": {
+          "term": {"type": "string"},
+          "level": {"type": ["string", "null"]},
+          "variables": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    },
+    "coefficients": {"type": "array", "items": {"type": ["number", "null"]}},
+    "vcov": {"type": ["array", "null"], "items": {"type": "array", "items": {"type": ["number", "null"]}}},
+    "link": {"enum": ["identity", "logit", "probit", "log"]},
+    "threshold": {"type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1},
+    "alpha": {"type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1},
+    "linear": {
+      "type": "object",
+      "required": ["sigma", "df_residual"],
+      "properties": {"sigma": {"type": "number"}, "df_residual": {"type": "number"}}
+    },
+    "penalty": {
+      "type": "object",
+      "required": ["penalty", "lambda", "mixing"],
+      "properties": {
+        "penalty": {"enum": ["ridge", "lasso", "elastic_net"]},
+        "lambda": {"type": "number"},
+        "mixing": {"type": "number"},
+        "standardize": {"type": "boolean"}
+      }
+    },
+    "cox": {
+      "type": "object",
+      "required": ["centring", "baseline"],
+      "properties": {
+        "centring": {"type": "array", "items": {"type": "number"}, "description": "the means the linear predictor is centred on, per term"},
+        "strata": {"type": ["string", "null"], "description": "the strata column"},
+        "baseline": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["stratum", "time", "cumhaz"],
+            "properties": {
+              "stratum": {"type": ["string", "null"]},
+              "time": {"type": "array", "items": {"type": "number"}, "maxItems": 5000},
+              "cumhaz": {"type": "array", "items": {"type": "number"}, "maxItems": 5000}
+            }
+          }
+        }
+      }
+    },
+    "kaplan_meier": {
+      "type": "object",
+      "required": ["strata"],
+      "properties": {
+        "strata_column": {"type": ["string", "null"]},
+        "strata": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["stratum", "time", "surv"],
+            "properties": {
+              "stratum": {"type": ["string", "null"]},
+              "time": {"type": "array", "items": {"type": "number"}},
+              "surv": {"type": "array", "items": {"type": "number"}},
+              "lower": {"type": "array", "items": {"type": ["number", "null"]}},
+              "upper": {"type": "array", "items": {"type": ["number", "null"]}}
+            }
+          }
+        }
+      }
+    },
+    "arima": {
+      "type": "object",
+      "required": ["orders", "frequency", "coefficients", "last"],
+      "properties": {
+        "orders": {
+          "type": "object",
+          "required": ["p", "d", "q", "P", "D", "Q", "s"],
+          "additionalProperties": {"type": "integer", "minimum": 0}
+        },
+        "frequency": {"type": "string"},
+        "coefficients": {"type": "object", "additionalProperties": {"type": "number"}},
+        "sigma2": {"type": "number"},
+        "transform": {"enum": ["none", "log", "box_cox"]},
+        "box_cox_lambda": {"type": ["number", "null"]},
+        "drift": {"type": "boolean"},
+        "mean": {"type": "boolean"},
+        "exog": {"type": "array", "items": {"type": "string"}},
+        "last": {"type": "object", "description": "the last observations, residuals and times the filter needs to forecast"}
+      }
+    }
+  },
+  "allOf": [
+    {"if": {"properties": {"model": {"enum": ["linear", "logistic", "cox"]}}},
+     "then": {"required": ["terms", "coefficients"]}},
+    {"if": {"properties": {"model": {"enum": ["linear", "logistic"]}}}, "then": {"required": ["link"]}},
+    {"if": {"properties": {"model": {"const": "linear"}, "variant": {"const": "unpenalized"}}}, "then": {"required": ["linear"]}},
+    {"if": {"properties": {"variant": {"const": "penalized"}}}, "then": {"required": ["penalty"]}},
+    {"if": {"properties": {"model": {"const": "logistic"}}}, "then": {"required": ["threshold", "outcome"]}},
+    {"if": {"properties": {"model": {"const": "cox"}}}, "then": {"required": ["cox", "outcome"]}},
+    {"if": {"properties": {"model": {"const": "kaplan_meier"}}}, "then": {"required": ["kaplan_meier", "outcome"]}},
+    {"if": {"properties": {"model": {"const": "arima"}}}, "then": {"required": ["arima"]}}
+  ]
+}

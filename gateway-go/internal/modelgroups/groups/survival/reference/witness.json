@@ -1,0 +1,11 @@
+{
+  "about": "The witnesses of the reference values: packages that compute the same numbers outside Tabularia, run by hand by make_reference.R and make_witness.py (docs/specs/statistical-models.md, \u00abReference values\u00bb). Never installed in the group's image; not part of the recipe, so changing them builds nothing.",
+  "checked_on": "2026-11-19",
+  "r": [],
+  "python": [
+    "lifelines==0.30.3",
+    "numpy==2.5.5",
+    "pandas==3.1.1",
+    "scipy==1.18.1"
+  ]
+}
