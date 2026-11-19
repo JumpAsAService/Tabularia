@@ -283,3 +283,57 @@ def test_statistics_run_their_aggregates_in_bigquery_and_return_typed_literals()
     with pytest.raises(EngineError, match="not a number \\(BOOLEAN\\)"):
         op("stat_t_two_sample", {"value": "ok", "group": "nome"}, StatCtx(SCHEMA))
     assert op("stat_t_two_sample", {"value": "id", "group": "nome"}, StatCtx(SCHEMA)).startswith("SELECT * FROM UNNEST(")
+
+
+def test_statistics_report_rows_ask_bigquery_for_quartiles_and_a_histogram():
+    """`detail = report`: the quartiles through a window function (BigQuery has no exact
+    quantile aggregate), the histogram as a count per group and interval. GoogleSQL a parser
+    reads, written from the documentation; that BigQuery answers it is the live suite's to say."""
+    import sqlglot
+
+    class StatCtx(FakeCtx):
+        def rows(self, sql):
+            self.queries.append(sql)
+            if "LIMIT 202" in sql:
+                return [["a", 9], ["b", 8], [None, 1]]
+            if "LIMIT 100000" in sql:
+                return [[6.5]]
+            if "PERCENTILE_CONT" in sql:
+                return [["b", 6.7, 7.1, 7.5], [None, 9.9, 9.9, 9.9], ["a", 5.25, 5.65, 6.05]]
+            if "LEAST(" in sql:  # an interval with no rows is not answered
+                return [["a", 0, 4], ["a", 1, 2], ["a", 2, 2], ["b", 2, 2], ["b", 3, 3], ["b", 4, 2], [None, 4, 1]]
+            return [["a", 9, 8, 5.6875 - 6.5, 0.364107142857143, 4.9, 6.7],
+                    [None, 1, 1, 3.4, None, 9.9, 9.9],
+                    ["b", 8, 7, 7.128571428571429 - 6.5, 0.365714285714286, 6.4, 8.0]]
+
+    ctx = StatCtx(SCHEMA)
+    sql = op("stat_t_two_sample", {"value": "prezzo", "group": "nome", "detail": "report"}, ctx)
+    _, _, _, quartiles, histogram = ctx.queries
+    finite = ("CASE WHEN `prezzo` IS NOT NULL AND (NOT IS_NAN(CAST(`prezzo` AS FLOAT64)) AND NOT IS_INF(CAST(`prezzo` AS FLOAT64))) "
+              "THEN CAST(`prezzo` AS FLOAT64) END")
+    assert quartiles == (
+        f"SELECT DISTINCT `nome` AS st_lv, PERCENTILE_CONT({finite}, 0.25) OVER (PARTITION BY `nome`) AS st_q1, "
+        f"PERCENTILE_CONT({finite}, 0.5) OVER (PARTITION BY `nome`) AS st_median, "
+        f"PERCENTILE_CONT({finite}, 0.75) OVER (PARTITION BY `nome`) AS st_q3 FROM (SELECT * FROM `_src1`) AS st_t"
+    )
+    width = repr((8.0 - 4.9) / 5)
+    b = f"LEAST(4, GREATEST(0, CAST(floor((CAST(`prezzo` AS FLOAT64) - (4.9)) / {width}) AS INT64)))"
+    assert histogram == (
+        f"SELECT `nome` AS st_lv, {b} AS st_bin, count(*) AS st_rows FROM (SELECT * FROM `_src1`) AS st_t "
+        f"WHERE CAST(`prezzo` AS FLOAT64) BETWEEN 4.9 AND 8.0 GROUP BY `nome`, {b}"
+    )
+    for query in (quartiles, histogram, sql):
+        sqlglot.parse_one(query, read="bigquery")
+    assert "'group', 'a', NULL, 'median', 5.65, NULL, NULL, NULL, 36, 'group|a||median')" in sql
+    assert "('hist', 'a', NULL, 'count', 4.0, '[4.9, 5.52)', 4.9, " in sql and "'hist|a||count|0')" in sql
+    assert "'[7.38, 8]', " in sql and ", 8.0, 59, 'hist|b||count|4')" in sql
+    assert sql.count("('curve', NULL, NULL, 'density', ") == 201 and sql.endswith("'curve|||reject_high|200')])")
+    # without a group column the quantiles are of every row: one window, one row kept
+    from app.engine.stats.aggregates import SqlStatSource
+
+    asked: list[str] = []
+    source = SqlStatSource("bigquery", lambda q: asked.append(q) or [[1.0, 2.0, 3.0]], lambda c: f"`{c}`", repr,
+                           "SELECT 1 AS prezzo", [("prezzo", "FLOAT64")])
+    assert source.quartiles("prezzo") == [(None, 1.0, 2.0, 3.0)]
+    assert asked[0].startswith(f"SELECT DISTINCT PERCENTILE_CONT({finite}, 0.25) OVER () AS st_q1, ")
+    sqlglot.parse_one(asked[0], read="bigquery")

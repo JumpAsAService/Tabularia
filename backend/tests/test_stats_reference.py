@@ -189,6 +189,114 @@ def test_schema_of_the_output(name, storage, abc):
     assert {r["section"] for r in rows} == {"test", "group"}
 
 
+# ── the rows of the report's charts (detail = report) ────────────────────────
+QUARTILES = {"a": (5.25, 5.65, 6.05), "b": (6.7, 7.1, 7.5)}  # R: quantile(x, c(.25, .5, .75)), type 7
+HIST = {"a": [4, 2, 2, 0, 0], "b": [0, 0, 2, 3, 2]}  # five intervals from 4.9 to 8.0
+
+
+def report_op(**params):
+    return stat_op("t_two_sample", value="v", group="g", groups=["a", "b"], detail="report", **params)
+
+
+@pytest.mark.parametrize("name", ENGINES)
+def test_report_quartiles_and_histogram(name, storage, abc):
+    _, rows, by_key = result(name, storage, abc, report_op())
+    for g, (q1, median, q3) in QUARTILES.items():
+        check_numbers(by_key, {"q1": q1, "median": median, "q3": q3}, f"group|{g}||")
+    assert [(r["level"], r["stat"]) for r in rows if r["section"] == "group"] == [
+        (g, s) for g in ("a", "b")
+        for s in ("n", "mean", "var", "sd", "se", "ci_low", "ci_high", "min", "max", "q1", "median", "q3")
+    ]
+    hist = [r for r in rows if r["section"] == "hist"]
+    assert [(r["level"], r["stat"]) for r in hist] == [(g, "count") for g in ("a", "b") for _ in range(5)]
+    for g, counts in HIST.items():
+        mine = [r for r in hist if r["level"] == g]
+        assert [r["value"] for r in mine] == counts
+        assert [r["key"] for r in mine] == [f"hist|{g}||count|{i}" for i in range(5)]
+        assert mine[0]["x0"] == 4.9 and mine[-1]["x1"] == 8.0
+        for i, r in enumerate(mine):
+            close(r["x0"], 4.9 + i * 0.62)
+            close(r["x1"], 4.9 + (i + 1) * 0.62)
+            assert r["level_2"] is None
+        assert [r["x1"] for r in mine[:-1]] == [r["x0"] for r in mine[1:]]  # no gap between two intervals
+        # the edges to six digits; the last interval holds its upper edge, and says so
+        assert [r["text"] for r in mine] == ["[4.9, 5.52)", "[5.52, 6.14)", "[6.14, 6.76)", "[6.76, 7.38)", "[7.38, 8]"]
+    # every usable row of the two groups is in an interval; the rest of the table is the test's
+    assert sum(r["value"] for r in hist) == by_key["test|||n"]["value"] == 15
+    _, plain, _ = result(name, storage, abc, stat_op("t_two_sample", value="v", group="g", groups=["a", "b"]))
+    assert [(r["key"], r["value"], r["text"]) for r in rows if r["section"] == "test"] == [
+        (r["key"], r["value"], r["text"]) for r in plain if r["section"] == "test"]
+
+
+@pytest.mark.parametrize("name", ENGINES)
+def test_report_curve_and_critical_region(name, storage, abc):
+    _, rows, by_key = result(name, storage, abc, report_op())
+    t, low, high = (by_key[f"test|||{s}"]["value"] for s in ("statistic", "critical_low", "critical_high"))
+    curve = [r for r in rows if r["stat"] == "density"]
+    assert len(curve) == 201 and {r["section"] for r in curve} == {"curve"}
+    assert [r["key"] for r in curve] == [f"curve|||density|{i}" for i in range(201)]
+    xs, ys = [r["x0"] for r in curve], [r["value"] for r in curve]
+    # equally spaced, past the statistic (1.15 times it: it is beyond 4 and beyond the critical values)
+    close(xs[-1], 1.15 * abs(t))
+    assert xs[0] == -xs[-1] and xs[100] == 0.0 and xs == sorted(xs)
+    step = (xs[-1] - xs[0]) / 200
+    assert all(abs((b - a) - step) < 1e-12 for a, b in zip(xs, xs[1:]))
+    assert all(r["x1"] is None and r["text"] is None and r["level"] is None for r in curve)
+    # the density of t(12.7279): its height at 0 (Γ((df + 1)/2) / (√(df·π)·Γ(df/2)), by `lgamma`), its area over the range
+    close(ys[100], 0.3911905988407201)
+    area = sum((a + b) / 2 * step for a, b in zip(ys, ys[1:]))
+    assert abs(area - 1.0) < 1e-3
+    # the critical region: the same density again, on the points beyond the critical values
+    by_x = dict(zip(xs, ys))
+    for stat, inside in (("reject_low", lambda x: x <= low), ("reject_high", lambda x: x >= high)):
+        region = [r for r in rows if r["stat"] == stat]
+        assert [r["x0"] for r in region] == [x for x in xs if inside(x)] and region
+        assert all(r["value"] == by_x[r["x0"]] and r["section"] == "curve" for r in region)
+        assert all(r["key"] == f"curve|||{stat}|{xs.index(r['x0'])}" for r in region)
+    assert sorted({r["section"] for r in rows}) == ["curve", "group", "hist", "test"]
+    assert [r["section"] for r in rows] == sorted((r["section"] for r in rows), key=["test", "group", "hist", "curve"].index)
+
+
+@pytest.mark.parametrize("name", ENGINES)
+def test_report_one_sided_and_schema(name, storage, abc):
+    """A one-sided test has one critical region; a statistic inside ±4 leaves the curve
+    there. The ten columns, `ord` and `key` hold with the report's rows too."""
+    res, rows, by_key = result(name, storage, abc, report_op(alternative="less"))
+    assert not [r for r in rows if r["stat"] == "reject_high"]
+    low = by_key["test|||critical_low"]["value"]
+    assert [r["x0"] <= low for r in rows if r["stat"] == "reject_low"].count(True) == sum(
+        1 for r in rows if r["stat"] == "density" and r["x0"] <= low) > 0
+    assert [(c.name, c.dtype) for c in res.columns] == [(n, t) for n, t, _ in OUTPUT_COLUMNS]
+    assert [r["ord"] for r in rows] == list(range(len(rows)))
+    assert len(by_key) == len(rows)
+    for r in rows:
+        parts = [r["section"], r["level"] or "", r["level_2"] or "", r["stat"]]
+        if r["section"] in ("hist", "curve"):
+            assert r["key"].rsplit("|", 1)[0] == "|".join(parts) and r["key"].rsplit("|", 1)[1].isdigit()
+            assert r["x0"] is not None and r["value"] is not None
+        else:
+            assert r["key"] == "|".join(parts) and r["x0"] is None and r["x1"] is None
+    # H0: the difference is −1.4: the statistic is small, the curve stays between −4 and 4
+    _, rows, by_key = result(name, storage, abc, report_op(mu=-1.4))
+    xs = [r["x0"] for r in rows if r["stat"] == "density"]
+    assert (xs[0], xs[100], xs[-1]) == (-4.0, 0.0, 4.0)
+    assert abs(by_key["test|||statistic"]["value"]) < 1
+
+
+@pytest.mark.parametrize("name", ENGINES)
+def test_report_rows_downstream(name, storage, abc):
+    """The report's rows are data as the rest: a filter keeps a group's histogram."""
+    engine = _engine(name, storage)
+    res = engine.preview(abc, [
+        report_op(),
+        {"type": "filter", "params": {"column": "section", "operator": "eq", "value": "hist"}},
+        {"type": "filter", "params": {"column": "level", "operator": "eq", "value": "b"}},
+        {"type": "sort", "params": {"by": ["ord"]}},
+    ], limit=100, use_cache=False)
+    assert [r["value"] for r in res.rows] == HIST["b"]
+    assert engine.count_rows(abc, [report_op()], at_most=1000) == 44 + 6 + 10 + 201 + 60 + 60
+
+
 @pytest.mark.parametrize("name", ENGINES)
 def test_the_result_is_data_for_the_next_steps(name, storage, abc):
     """The table is read downstream as any other: a filter gives the p-value's row, a pivot

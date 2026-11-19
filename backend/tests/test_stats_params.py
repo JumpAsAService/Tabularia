@@ -169,8 +169,28 @@ def test_data_refused(name, storage, shops):
         "stat_t_two_sample: the column «many» has more than 200 groups: is it the right column?")
     assert say(value="wide", group="channel", groups=["web", "shop"]) == (
         "stat_t_two_sample: the column «wide» holds infinite values in the group «web»: the test cannot be computed")
-    # the rows of the report's charts come with a later piece
-    assert "detail = 'report'" in say(value="amount", group="channel", groups=["web", "shop"], detail="report")
+    # the report's rows are refused as the results are: nothing is drawn of a wrong setup
+    assert say(value="amount", group="channel", detail="report") == say(value="amount", group="channel")
+    assert say(value="wide", group="channel", groups=["web", "shop"], detail="report") == (
+        "stat_t_two_sample: the column «wide» holds infinite values in the group «web»: the test cannot be computed")
+
+
+def test_a_test_without_report_rows_refuses_them(monkeypatch):
+    """`detail = report` is never answered with the results alone: a test says so until
+    the rows of its charts exist."""
+    from app.engine.stats import compute
+
+    monkeypatch.setattr(compute, "_WITH_REPORT_ROWS", frozenset())
+    with pytest.raises(EngineError) as e:
+        compute.run_hypothesis_test(_Columns(), "t_two_sample", {"value": "amount", "group": "channel", "detail": "report"}, "polars")
+    assert str(e.value) == ("stat_t_two_sample: the rows of the report's charts (detail = 'report') are not available yet: "
+                            "use detail = 'results'")
+    assert compute._WITH_REPORT_ROWS <= set(compute._TESTS)
+
+
+class _Columns:
+    def columns(self):
+        return COLUMNS
 
 
 @pytest.mark.parametrize("name", ENGINES)

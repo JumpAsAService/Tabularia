@@ -8,7 +8,8 @@ number within a relative 1e-9.
 One table of 5,000 rows from a fixed seed, with what trips an engine: three groups, ties,
 NULLs, NaN, −0.0, a column of values near 1e9 (where an unstable variance loses every
 digit), an integer and a decimal measure, a date, a datetime, a boolean and a number as
-groups.
+groups. The rows of the report's charts (`detail = report`: quartiles, histogram, curve) are
+compared the same way.
 
 A second witness, on chDB only: ClickHouse's own `welchTTest` and `studentTTest` on the same
 rows must agree with the node's statistic and p-value. They are used here and nowhere else,
@@ -33,7 +34,7 @@ from tests.test_reshape_parity import OTHER_ENGINES, _engine
 
 TOL = 1e-9
 ROWS = 5000
-COUNTS = {"n", "n_missing"}
+COUNTS = {"n", "n_missing", "count"}
 
 
 def _table() -> pl.DataFrame:
@@ -91,6 +92,15 @@ CASES = {
     "number_as_group": t_two(value="x", group="level", groups=[1.5, 0.0]),
     "boolean_as_group": t_two(value="x", group="flag"),
     "boolean_as_group_chosen": t_two(value="qty", group="flag", groups=[True, False], alternative="greater"),
+    # the rows of the report's charts: quartiles, histogram, curve
+    "report_welch": t_two(value="x", group="g", groups=["north", "south"], detail="report"),
+    "report_student_less": t_two(value="x", group="g", groups=["east", "north"], var_equal=True, alternative="less", detail="report"),
+    "report_near_1e9": t_two(value="big", group="g", groups=["north", "south"], detail="report"),
+    "report_integer_measure": t_two(value="qty", group="g", groups=["south", "east"], alternative="greater", detail="report"),
+    "report_decimal_measure": t_two(value="price", group="g", groups=["south", "east"], detail="report"),
+    "report_boolean_as_group": t_two(value="x", group="flag", detail="report"),
+    "report_number_as_group": t_two(value="qty", group="level", groups=[1.5, 0.0], detail="report"),
+    "report_date_as_group": t_two(value="price", group="day", detail="report"),
     "after_a_filter": [
         {"type": "filter", "params": {"column": "g", "operator": "ne", "value": "east"}},
         *t_two(value="x", group="g"),
@@ -107,8 +117,12 @@ def assert_same(got: list[dict], want: list[dict], name: str) -> None:
     assert [r["key"] for r in got] == [r["key"] for r in want], f"[{name}] keys differ"
     for g, w in zip(got, want):
         key = w["key"]
-        for column in ("section", "level", "level_2", "stat", "ord", "x0", "x1"):
+        for column in ("section", "level", "level_2", "stat", "ord"):
             assert g[column] == w[column], f"[{name}] {key}: {column} {g[column]!r} != {w[column]!r}"
+        for column in ("x0", "x1"):  # an edge of an interval, an abscissa of the curve
+            a, b = g[column], w[column]
+            same = a == b if a is None or b is None else math.isclose(a, b, rel_tol=TOL, abs_tol=0.0)
+            assert same, f"[{name}] {key}: {column} {a!r} != {b!r}"
         if w["stat"] == "engine":
             assert (g["text"], w["text"]) == (name, "polars")
         else:
@@ -139,6 +153,19 @@ def test_the_cases_test_something(storage, src):
     assert "group|2024-03-01 08:00:00||n" in by["datetime_as_group"] and "group|0.0||n" in by["number_as_group"]
     assert by["number_as_group"]["test|||n"]["value"] + by["number_as_group"]["test|||n_missing"]["value"] == ROWS  # −0.0 is in the group of 0.0
     assert by["welch"]["group|north||min"]["value"] == 0.0 and math.copysign(1.0, by["welch"]["group|north||min"]["value"]) == 1.0
+    # the report's rows: every usable row of the two groups in an interval (14 of them: Sturges
+    # on some 1,600 rows), a zero with a sign on the first edge, quartiles between the extremes
+    for case in [c for c in CASES if c.startswith("report_")]:
+        rows = by[case]
+        hist = [r for r in rows.values() if r["section"] == "hist"]
+        assert sum(r["value"] for r in hist) == rows["test|||n"]["value"], case
+        assert len(hist) in (2 * 12, 2 * 13), case
+        for g in {r["level"] for r in hist}:
+            assert rows[f"group|{g}||min"]["value"] <= rows[f"group|{g}||q1"]["value"] <= rows[f"group|{g}||median"]["value"] \
+                <= rows[f"group|{g}||q3"]["value"] <= rows[f"group|{g}||max"]["value"], case
+        assert sum(1 for r in rows.values() if r["stat"] == "density") == 201, case
+    assert not [k for k in by["report_student_less"] if "reject_high" in k]
+    assert "group|0.0||q1" in by["report_number_as_group"] and by["report_near_1e9"]["hist|north||count|0"]["x0"] > 9e8
     # the two orders of a pair are the same test, mirrored
     assert by["student"]["test|||p_value"]["value"] == pytest.approx(
         2 * min(by["student_less"]["test|||p_value"]["value"], 1 - by["student_less"]["test|||p_value"]["value"]), rel=1e-9)

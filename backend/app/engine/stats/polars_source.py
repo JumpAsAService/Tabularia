@@ -6,12 +6,21 @@ from __future__ import annotations
 
 import polars as pl
 
-from app.engine.stats.aggregates import CENTRE_ROWS, Level, Moments, moments_of, usable_centre
+from app.engine.stats.aggregates import (
+    CENTRE_ROWS,
+    HistogramBin,
+    Level,
+    Moments,
+    Quartiles,
+    moments_of,
+    quartiles_of,
+    usable_centre,
+)
 from app.engine.stats.catalog import Column
 
 # the names of what a query returns (as `pivot`'s: names no column of a flow has)
-_LEVEL, _ROWS, _N, _MEAN, _VAR, _MIN, _MAX = (
-    f"__stat_{name}__" for name in ("lv", "rows", "n", "mean", "var", "min", "max")
+_LEVEL, _ROWS, _N, _MEAN, _VAR, _MIN, _MAX, _Q1, _MEDIAN, _Q3, _BIN = (
+    f"__stat_{name}__" for name in ("lv", "rows", "n", "mean", "var", "min", "max", "q1", "median", "q3", "bin")
 )
 
 
@@ -52,3 +61,32 @@ class PolarsStatSource:
         else:
             df = self.lf.group_by(pl.col(group).alias(_LEVEL)).agg(aggregates).collect(engine="streaming")
         return [moments_of(centre, *row) for row in df.iter_rows()]
+
+    def quartiles(self, value: str, group: str | None = None) -> list[Quartiles]:
+        """A12: the first quartile, the median and the third quartile of `value` per group,
+        linearly interpolated (R's type 7), of the values that are numbers."""
+        x = pl.col(value).cast(pl.Float64).fill_nan(None)
+        finite = pl.when(x.is_finite()).then(x)
+        quantiles = [finite.quantile(q, "linear").alias(name) for q, name in ((0.25, _Q1), (0.5, _MEDIAN), (0.75, _Q3))]
+        if group is None:
+            df = self.lf.select(pl.lit(None).alias(_LEVEL), *quantiles).collect(engine="streaming")
+        else:
+            df = self.lf.group_by(pl.col(group).alias(_LEVEL)).agg(quantiles).collect(engine="streaming")
+        return [quartiles_of(*row) for row in df.iter_rows()]
+
+    def histogram(self, value: str, group: str | None, lo: float, hi: float, bins: int) -> list[HistogramBin]:
+        """A13: the rows per group and interval, `bins` equal intervals between `lo` and
+        `hi`, the last with its upper edge; the same arithmetic as the SQL engines'
+        (`profile.sql_histogram_bin`), so that a value on an edge falls on the same side."""
+        lo, hi, bins = float(lo), float(hi), int(bins)
+        width = (hi - lo) / bins if hi > lo else 1.0
+        x = pl.col(value).cast(pl.Float64).fill_nan(None)
+        b = ((x - lo) / width).floor().cast(pl.Int64).clip(0, bins - 1).alias(_BIN)
+        keys = [b] if group is None else [pl.col(group).alias(_LEVEL), b]
+        df = (
+            self.lf.filter(x.is_between(lo, hi))
+            .group_by(keys)
+            .agg(pl.len().alias(_ROWS))
+            .collect(engine="streaming")
+        )
+        return [HistogramBin(row[0] if group is not None else None, int(row[-2]), int(row[-1])) for row in df.iter_rows()]

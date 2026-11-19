@@ -165,6 +165,17 @@ def t_ppf(p: float, df: float) -> float:
     return -t_isf(p, df)
 
 
+def t_pdf(t: float, df: float) -> float:
+    """The density of T at t, for the curve a report draws:
+    (1 + t²/df)^(−(df + 1)/2) / (√df · B(½, df/2)). The constant goes through `lbeta`, not
+    through a difference of two `lgamma`, which loses a digit for every digit of `df`."""
+    if math.isnan(t) or math.isnan(df):
+        return math.nan
+    if math.isinf(t):
+        return 0.0
+    return math.exp(-0.5 * math.log(df) - lbeta(0.5, df / 2.0) - 0.5 * (df + 1.0) * math.log1p(t / df * t))
+
+
 # ── quantiles ───────────────────────────────────────────────────────────────
 def _inverse_sf(sf, q: float) -> float:
     """The x with sf(x) = q, for a distribution symmetric about 0: by bisection on `sf`,

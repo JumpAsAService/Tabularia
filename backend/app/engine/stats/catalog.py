@@ -60,6 +60,12 @@ TESTS: dict[str, dict[str, Any]] = {
 # reads back from the engine too: a row per group, never more.
 MAX_STAT_GROUPS = 200
 
+# The rows a report's charts draw (`detail = report`): the points of the reference
+# distribution's curve, and the intervals of a histogram, between the two whatever the rows.
+CURVE_POINTS = 201
+MIN_BINS = 5
+MAX_BINS = 30
+
 
 def operation_name(test: str) -> str:
     """The operation that runs the test `test`."""

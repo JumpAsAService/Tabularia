@@ -150,3 +150,31 @@ def test_betainc_reads_y_from_the_caller():
     assert rel(exact, 0.006209665405201246972337408) < 1e-12
     off = 0.5 * dist.betainc(df / 2, 0.5, df / (df + t * t), y * (1 + 1e-9))
     assert rel(off, 0.006209665405201246972337408) > 1e-10
+
+
+# ── the density, for the report's curve ──────────────────────────────────────
+def test_t_density_closed_forms():
+    assert rel(dist.t_pdf(0.0, 1), 1.0 / math.pi) < 1e-14
+    assert rel(dist.t_pdf(-2.0, 1), 1.0 / (5.0 * math.pi)) < 1e-14
+    assert rel(dist.t_pdf(1.0, 2), 3.0 ** -1.5) < 1e-14
+    assert rel(dist.t_pdf(2.0, 3), 6.0 * math.sqrt(3.0) / (49.0 * math.pi)) < 1e-14
+    assert dist.t_pdf(-1.3, 12.7) == dist.t_pdf(1.3, 12.7)
+    assert dist.t_pdf(math.inf, 5) == 0.0 and dist.t_pdf(1e200, 5) == 0.0
+    assert math.isnan(dist.t_pdf(math.nan, 5))
+
+
+def test_t_density_with_many_degrees_of_freedom():
+    """A billion rows: the density is the normal's less (1 + 2t² − t⁴)/(4·df) of it, and two
+    `lgamma` subtracted would have lost that and more."""
+    for t in (0.0, 1.0, 2.5):
+        normal = math.exp(-0.5 * t * t) / math.sqrt(2.0 * math.pi)
+        assert rel(dist.t_pdf(t, 1e9), normal * (1.0 - (1.0 + 2.0 * t * t - t**4) / 4e9)) < 1e-13
+
+
+@pytest.mark.parametrize("df", [1, 2.5, 12.727892707548934, 300, 1e6])
+def test_the_density_is_the_slope_of_the_tail(df):
+    """Simpson's rule on the density between two points gives the tail's difference."""
+    a, b, n = -1.5, 2.25, 2000
+    h = (b - a) / n
+    area = dist.t_pdf(a, df) + dist.t_pdf(b, df) + sum((4 if i % 2 else 2) * dist.t_pdf(a + i * h, df) for i in range(1, n))
+    assert rel(area * h / 3.0, dist.t_cdf(b, df) - dist.t_cdf(a, df)) < 1e-10

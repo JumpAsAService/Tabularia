@@ -7,6 +7,10 @@ A test is a function `(source, p, out)` named in `_TESTS`: `p` its checked param
 (`catalog.check_params`), `out` the rows it writes (`output.Rows`). Sections and the order of
 the rows inside them are the output's contract: texts first, then numbers.
 
+With `detail = report` a test adds what its report's charts draw: the groups' quartiles (a
+pass of the engine), the `hist` section (another), and the `curve` section, 201 points of a
+formula. Only then: the exact quartiles are the expensive part on a very large table.
+
 Critical values and one-sided results follow one rule, for a statistic T with quantile q:
 
     two_sided   p = 2·P(T ≥ |t|)   critical ∓q(1 − α/2)        estimate ± q(1 − α/2)·se
@@ -21,8 +25,16 @@ import math
 from typing import Any, Callable
 
 from app.engine.stats import dist
-from app.engine.stats.aggregates import Moments
-from app.engine.stats.catalog import MAX_STAT_GROUPS, check_params, label_of, refusal
+from app.engine.stats.aggregates import Moments, Quartiles
+from app.engine.stats.catalog import (
+    CURVE_POINTS,
+    MAX_BINS,
+    MAX_STAT_GROUPS,
+    MIN_BINS,
+    check_params,
+    label_of,
+    refusal,
+)
 from app.engine.stats.output import Rows
 
 _RELATION = {"two_sided": "≠", "less": "<", "greater": ">"}
@@ -64,14 +76,75 @@ def _write_head(out: Rows, test: str, variant: str, p: dict[str, Any], h0: str, 
         out.text("test", f"note_{i}", note)
 
 
-def _write_group(out: Rows, label: str, m: Moments, alpha: float) -> None:
-    """A numeric group's rows: its numbers, and the two-sided interval of its mean."""
+def _write_group(out: Rows, label: str, m: Moments, alpha: float, quartiles: Quartiles | None = None) -> None:
+    """A numeric group's rows: its numbers, and the two-sided interval of its mean; for a
+    report its quartiles too, which a box plot draws between `min` and `max`."""
     sd = math.sqrt(m.var)
     se = sd / math.sqrt(m.n)
     q = dist.t_isf(alpha / 2.0, m.n - 1)
     for stat, value in (("n", m.n), ("mean", m.mean), ("var", m.var), ("sd", sd), ("se", se),
                         ("ci_low", m.mean - q * se), ("ci_high", m.mean + q * se), ("min", m.min), ("max", m.max)):
         out.number("group", stat, value, level=label)
+    if quartiles is not None:
+        for stat, value in (("q1", quartiles.q1), ("median", quartiles.median), ("q3", quartiles.q3)):
+            out.number("group", stat, value, level=label)
+
+
+# ── the rows of a report's charts (detail = report) ─────────────────────────
+def _edge(x: float) -> str:
+    """An interval's edge as its label shows it: six significant digits."""
+    return format(x + 0.0, ".6g")
+
+
+def _quartiles_by_label(source, value: str, group: str | None) -> dict[str, Quartiles]:
+    """A12 for every group, by label (the rows with no group left out)."""
+    return {label_of(q.level): q for q in source.quartiles(value, group) if q.level is not None}
+
+
+def _write_histogram(out: Rows, source, value: str, group: str, labels: list[str], groups: list[Moments]) -> None:
+    """The `hist` section: for each group the rows in each of the same equal intervals,
+    between the smallest and the largest value of the groups together. Their number is
+    Sturges' for the largest group, between `MIN_BINS` and `MAX_BINS`; the last interval
+    holds its upper edge (its label closes with a square bracket); an empty one is written
+    with 0."""
+    lo, hi = min(m.min for m in groups), max(m.max for m in groups)
+    n_max = max(m.n for m in groups)
+    bins = min(MAX_BINS, max(MIN_BINS, (n_max - 1).bit_length() + 1))  # ceil(log2(n)) + 1
+    counts = {label: [0] * bins for label in labels}
+    for b in source.histogram(value, group, lo, hi, bins):
+        label = None if b.level is None else label_of(b.level)
+        if label in counts and 0 <= b.bin < bins:
+            counts[label][b.bin] += b.rows
+    width = (hi - lo) / bins
+    edges = [lo + i * width for i in range(bins)] + [hi]
+    for label in labels:
+        for i, rows in enumerate(counts[label]):
+            last = i == bins - 1
+            out.point("hist", "count", i, rows, edges[i], edges[i + 1],
+                      text=f"[{_edge(edges[i])}, {_edge(edges[i + 1])}{']' if last else ')'}", level=label)
+
+
+def _write_curve(out: Rows, pdf: Callable[[float], float], statistic: float,
+                 critical_low: float | None, critical_high: float | None) -> None:
+    """The `curve` section of a statistic whose distribution is symmetric about 0 (t,
+    normal): its density at `CURVE_POINTS` equally spaced abscissas that reach past the
+    statistic and the critical values, then the same density again on the points inside
+    the critical region, as `reject_low` and `reject_high`."""
+    reach = max([4.0, 1.15 * abs(statistic)] + [1.15 * abs(c) for c in (critical_low, critical_high) if c is not None])
+    step = 2.0 * reach / (CURVE_POINTS - 1)
+    # the middle point is 0 exactly, and the two halves mirror each other
+    xs = [(i - (CURVE_POINTS - 1) / 2.0) * step for i in range(CURVE_POINTS)]
+    ys = [pdf(x) for x in xs]
+    for i, (x, y) in enumerate(zip(xs, ys)):
+        out.point("curve", "density", i, y, x)
+    if critical_low is not None:
+        for i, (x, y) in enumerate(zip(xs, ys)):
+            if x <= critical_low:
+                out.point("curve", "reject_low", i, y, x)
+    if critical_high is not None:
+        for i, (x, y) in enumerate(zip(xs, ys)):
+            if x >= critical_high:
+                out.point("curve", "reject_high", i, y, x)
 
 
 # ── two groups of a numeric column ──────────────────────────────────────────
@@ -158,19 +231,28 @@ def _t_two_sample(source, p: dict[str, Any], out: Rows, engine_name: str) -> Non
         ("cohen_d", cohen_d), ("hedges_g", hedges_g),
     ):
         out.number("test", stat, number)
-    _write_group(out, g1, a, alpha)
-    _write_group(out, g2, b, alpha)
+    report = p["detail"] == "report"
+    quartiles = _quartiles_by_label(source, value, p["group"]) if report else {}
+    _write_group(out, g1, a, alpha, quartiles.get(g1))
+    _write_group(out, g2, b, alpha, quartiles.get(g2))
+    if report:
+        _write_histogram(out, source, value, p["group"], [g1, g2], [a, b])
+        _write_curve(out, lambda x: dist.t_pdf(x, df), t, critical_low, critical_high)
 
 
 _TESTS: dict[str, Callable[..., None]] = {
     "t_two_sample": _t_two_sample,
 }
 
+# The tests that write the rows of their report's charts. Until a test is here it refuses
+# `detail = report` with a sentence: it is never answered with the results alone.
+_WITH_REPORT_ROWS = frozenset({"t_two_sample"})
+
 
 def run_hypothesis_test(source, test: str, params: dict[str, Any] | None, engine_name: str) -> list[tuple]:
     """The rows of the test `test` on `source`, as `output.OUTPUT_COLUMNS` orders them."""
     p = check_params(test, params, source.columns())
-    if p.get("detail") == "report":
+    if p.get("detail") == "report" and test not in _WITH_REPORT_ROWS:
         raise refusal(test, "the rows of the report's charts (detail = 'report') are not available yet: use detail = 'results'")
     out = Rows()
     _TESTS[test](source, p, out, engine_name)

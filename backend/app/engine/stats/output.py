@@ -44,7 +44,8 @@ def _finite(v: Any) -> float | None:
 
 class Rows:
     """The rows of an output, in the order they are added: `ord` is their place, `key` their
-    section, level, level_2 and stat joined by a bar, nothing for a part that is null."""
+    section, level, level_2 and stat joined by a bar, nothing for a part that is null (and
+    the index after one more bar, for the rows of a report's charts: `point`)."""
 
     def __init__(self) -> None:
         self.rows: list[tuple] = []
@@ -58,6 +59,14 @@ class Rows:
 
     def text(self, section: str, stat: str, text: str, level: str | None = None, level_2: str | None = None) -> None:
         self._add(section, level, level_2, stat, None, text)
+
+    def point(self, section: str, stat: str, index: int, value: Any, x0: Any, x1: Any = None,
+              text: str | None = None, level: str | None = None) -> None:
+        """A row of a report's chart, one of many with the same stat: an interval of a
+        histogram (`x0`, `x1` its edges), a point of a curve (`x0` its abscissa). Its key
+        ends with its index."""
+        key = "|".join((section, level or "", "", stat, str(index)))
+        self.rows.append((section, level, None, stat, _finite(value), text, _finite(x0), _finite(x1), len(self.rows), key))
 
 
 def to_polars(rows: list[tuple]) -> pl.LazyFrame:

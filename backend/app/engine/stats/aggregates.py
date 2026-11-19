@@ -33,6 +33,7 @@ import math
 import re
 from typing import Any, Callable, NamedTuple
 
+from app.engine.profile import sql_histogram_bin
 from app.engine.stats.catalog import Column
 
 
@@ -60,6 +61,25 @@ class Moments(NamedTuple):
     mean_centred: float | None
 
 
+class Quartiles(NamedTuple):
+    """A group's first quartile, median and third quartile (R's type 7: the engines' linear
+    interpolation between the two nearest values); None where the group has no value."""
+
+    level: Any
+    q1: float | None
+    median: float | None
+    q3: float | None
+
+
+class HistogramBin(NamedTuple):
+    """The rows of a group whose value falls in an interval, 0 to bins − 1. An interval
+    with no rows is not answered."""
+
+    level: Any
+    bin: int
+    rows: int
+
+
 # the rows the centre is the mean of: the chain's first ones, which an engine stops at
 CENTRE_ROWS = 100_000
 
@@ -76,6 +96,13 @@ _CH_WRAPPER = re.compile(r"^(?:Nullable|LowCardinality)\((.*)\)$")
 _DOUBLE = {"duckdb": "CAST({c} AS DOUBLE)", "clickhouse": "toFloat64({c})", "bigquery": "CAST({c} AS FLOAT64)"}
 _IS_NAN = {"duckdb": "isnan({e})", "clickhouse": "isNaN({e})", "bigquery": "IS_NAN({e})"}
 _IS_FINITE = {"duckdb": "isfinite({e})", "clickhouse": "isFinite({e})", "bigquery": "(NOT IS_NAN({e}) AND NOT IS_INF({e}))"}
+# The exact quantile, linearly interpolated, of the values that are not NULL. BigQuery has
+# no such aggregate: there it is a window function (`quartiles`).
+_QUANTILE = {
+    "duckdb": "quantile_cont({e}, {q})",
+    "clickhouse": "quantileExactInclusive({q})({e})",
+    "bigquery": "PERCENTILE_CONT({e}, {q}) OVER ({over})",
+}
 _VAR = {
     "duckdb": "var_samp({e})",
     "clickhouse": "if(count({e}) > 1, varSampStable({e}), NULL)",
@@ -179,6 +206,49 @@ class SqlStatSource:
             rows = self._rows(f"SELECT {g} AS {self._fresh('lv')}, {aggregates} FROM {self._source} GROUP BY {g}")
         return [moments_of(centre, *r) for r in rows]
 
+    def quartiles(self, value: str, group: str | None = None) -> list[Quartiles]:
+        """A12: the first quartile, the median and the third quartile of `value`, for each
+        value of `group` (the NULL one too), or over every row without one. Exact: the
+        engine keeps the column's values to find them, which is why only a report asks.
+        Nothing is summed, so nothing is centred."""
+        x = self._value(value, finite=True)
+        names = [self._fresh(name) for name in ("q1", "median", "q3")]
+        g = None if group is None else self._quote(group)
+        over = "" if g is None else f"PARTITION BY {g}"
+        quantiles = ", ".join(
+            f"{_QUANTILE[self.dialect].format(e=x, q=q, over=over)} AS {name}"
+            for q, name in zip((0.25, 0.5, 0.75), names)
+        )
+        if self.dialect == "bigquery":
+            # a window function: every row carries its group's quantiles, one is kept
+            lv = "" if g is None else f"{g} AS {self._fresh('lv')}, "
+            rows = self._rows(f"SELECT DISTINCT {lv}{quantiles} FROM {self._source}")
+        elif g is None:
+            rows = self._rows(f"SELECT {quantiles} FROM {self._source}")
+        else:
+            rows = self._rows(f"SELECT {g} AS {self._fresh('lv')}, {quantiles} FROM {self._source} GROUP BY {g}")
+        if g is None:
+            rows = [[None, *r] for r in rows]
+        return [quartiles_of(*r) for r in rows]
+
+    def histogram(self, value: str, group: str | None, lo: float, hi: float, bins: int) -> list[HistogramBin]:
+        """A13: the rows whose `value` falls in each of `bins` equal intervals between `lo`
+        and `hi`, for each value of `group` (or over every row without one): the last
+        interval holds its upper edge, a NULL, a NaN and what is outside are left out. The
+        intervals are the column profile's (`profile.sql_histogram_bin`)."""
+        b, inside = sql_histogram_bin(self.dialect, self._quote(value), float(lo), float(hi), int(bins))
+        count = f"count(*) AS {self._fresh('rows')}"
+        if group is None:
+            rows = self._rows(f"SELECT {b} AS {self._fresh('bin')}, {count} FROM {self._source} WHERE {inside} GROUP BY {b}")
+            rows = [[None, *r] for r in rows]
+        else:
+            g = self._quote(group)
+            rows = self._rows(
+                f"SELECT {g} AS {self._fresh('lv')}, {b} AS {self._fresh('bin')}, {count} "
+                f"FROM {self._source} WHERE {inside} GROUP BY {g}, {b}"
+            )
+        return [HistogramBin(r[0], int(r[1]), int(r[2])) for r in rows]
+
 
 def usable_centre(v: Any) -> float:
     """The centre an engine answered, or 0 (no centring) when it has none to give: no value
@@ -195,3 +265,13 @@ def moments_of(centre: float, level: Any, rows: Any, n: Any, mean_centred: Any, 
     return Moments(level, int(rows or 0), n, None if centred is None else centre + centred,
                    number(var) if n > 1 else None, number(lo) if n else None, number(hi) if n else None,
                    centre, centred)
+
+
+def quartiles_of(level: Any, q1: Any, median: Any, q3: Any) -> Quartiles:
+    """A row of A12 as every source answers it: floats, and None for a quantile an engine
+    could not give (no value: ClickHouse says NaN)."""
+    def q(v: Any) -> float | None:
+        v = number(v)
+        return v if v is not None and math.isfinite(v) else None
+
+    return Quartiles(level, q(q1), q(median), q(q3))
