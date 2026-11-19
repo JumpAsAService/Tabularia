@@ -254,7 +254,7 @@ func nullable(s string) *string {
 var readingPosts = map[string]bool{
 	"/tasks/export": true, "/tasks/exports": true, "/tasks/preview": true,
 	"/tasks/count": true, "/tasks/profile": true, "/tasks/preview/cancel": true, "/tasks/stat-report": true,
-	"/reports/{report_id}/render": true, "/dashboards/{dashboard_id}/data": true,
+	"/tasks/model-report": true, "/reports/{report_id}/render": true, "/dashboards/{dashboard_id}/data": true,
 	"/dashboards/{dashboard_id}/render": true,
 }
 

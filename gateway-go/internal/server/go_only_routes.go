@@ -17,6 +17,8 @@ var goOnlyRoutes = []struct {
 	{after: "/tasks/preview/cancel", route: pyRoute{path: "/tasks/profile", methods: []string{"POST"}, regex: `^/tasks/profile$`}},
 	// the report of a statistics step, drawn from the rows the test writes (api/proxy.go)
 	{after: "/tasks/profile", route: pyRoute{path: "/tasks/stat-report", methods: []string{"POST"}, regex: `^/tasks/stat\-report$`}},
+	// the report of a model step's run, drawn from the results it kept (api/proxy_model_report.go)
+	{after: "/tasks/stat-report", route: pyRoute{path: "/tasks/model-report", methods: []string{"POST"}, regex: `^/tasks/model\-report$`}},
 	// the flow editor's right-click menu (api/flow_shortcuts.go)
 	{after: "/users/me/locale", route: pyRoute{path: "/users/me/flow-shortcuts", methods: []string{"GET", "PUT"}, regex: `^/users/me/flow\-shortcuts$`}},
 	// Explore's top level, the objects one changed last (api/explore_recent.go)
