@@ -3,9 +3,13 @@ quantiles under Clopper–Pearson's interval (dist.beta_ppf, beta_isf): no engin
 scalar step.
 
 References: R 4.6.1 (`binom.test`, `fisher.test`), the spec's «Reference values», and mpmath
-at 40 digits outside Tabularia (none of them is a dependency). R finds the odds ratio and its
-interval by a root search of tolerance 1e-4: those within 1e-4; everything else within 1e-12
-(measured: 2e-14 at worst on 120 binomial cases with n up to 999,999 and 36 tables).
+at 40 digits and SciPy 1.18.1 outside Tabularia (none of them is a dependency). Measured on
+2026-11-19: on 300 binomial cases with n up to 999,999 the p-values within 1.5e-13 of R's
+`pbinom` and `binom.test`, Clopper–Pearson's bounds within 6.1e-13 of R's `qbeta`; on 48 tables
+Fisher's p-values within 2.5e-14 of R's, the odds ratio and its bounds within 1.5e-14 of
+mpmath's (and of SciPy's `odds_ratio`). R finds the odds ratio and its interval by `uniroot`,
+whose tolerance leaves them up to 1.4e-2 off on some tables: R's within 1e-4 only on the
+spec's table, and nowhere else compared with R.
 """
 from __future__ import annotations
 

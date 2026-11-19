@@ -118,13 +118,31 @@ def _beta_fraction(a: float, b: float, x: float, y: float) -> float:
     return r
 
 
+def _log_front(a: float, b: float, x: float, y: float) -> float:
+    """ln of x^a·y^b / B(a, b), the factor in front of the fraction. When both parameters are
+    large its three terms are each some a·ln 2 and cancel to a small number, which would keep
+    the rounding of the large ones (1e-10 relative at a = b = 5e5, a binomial of a million rows
+    near its mean): there it is written with Stirling's remainders and ln(1 + u) − u, every term
+    small, from λ = a − (a + b)·x read from whichever of x and y is small (as the fraction does),
+    while |λ| is below half of each parameter:
+    ½·ln(a·b / (2π·(a + b))) − [Δ(a) + Δ(b) − Δ(a + b)] + a·φ(−λ/a) + b·φ(λ/b), φ(u) = ln(1 + u) − u."""
+    lam = a - (a + b) * x if x <= 0.5 else (a + b) * y - b
+    # near the mean only: far from it the result is itself large, and 1 + λ/a would be read from
+    # the rounding of a difference near −1
+    if a >= 10.0 and b >= 10.0 and abs(lam) <= 0.5 * min(a, b):
+        return (0.5 * (math.log(a) + math.log(b) - math.log(a + b)) - _HALF_LOG_2PI
+                - (_stirling_remainder(a) + _stirling_remainder(b) - _stirling_remainder(a + b))
+                + a * _log1pmx(-lam / a) + b * _log1pmx(lam / b))
+    return a * _log_of(x, y) + b * _log_of(y, x) - lbeta(a, b)
+
+
 def betainc(a: float, b: float, x: float, y: float) -> float:
     """The regularized incomplete beta I_x(a, b), with `y` = 1 − x given by the caller."""
     if x <= 0.0:
         return 0.0
     if y <= 0.0:
         return 1.0
-    front = math.exp(a * _log_of(x, y) + b * _log_of(y, x) - lbeta(a, b))
+    front = math.exp(_log_front(a, b, x, y))
     # the fraction converges fast on this side of the mean, slowly on the other: there the
     # mirrored form is taken, I_x(a, b) = 1 − I_y(b, a) (the comparison is made on the
     # smaller of x and y)

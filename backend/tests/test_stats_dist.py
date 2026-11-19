@@ -344,3 +344,17 @@ def test_studentized_range_far_in_the_tail_is_a_number():
     assert dist.srange_sf(0.0, 4, 10) == 1.0 and dist.srange_sf(math.inf, 4, 10) == 0.0
     assert math.isnan(dist.srange_sf(math.nan, 4, 10))
 
+
+
+def test_the_incomplete_beta_near_its_mean_with_both_parameters_large():
+    """A binomial of a million rows near its mean is the incomplete beta with both parameters
+    near 5e5: the factor in front, three terms of some 3.5e5 each that cancel, kept their
+    rounding (1e-10 off R's `pbinom`) until it was written without them. R 4.6.1's values, which
+    SciPy 1.18.1's agree with to 1e-15."""
+    from app.engine.stats import exact
+
+    for got, want in ((exact.binom_cdf(499_589, 999_999, 0.5), 0.20610794310168432),
+                      (exact.binom_sf(250_018, 999_999, 0.25), 0.48357459987329365),
+                      (exact.binom_sf(10_177, 999_999, 0.01), 0.03832182139119924),
+                      (exact.binom_sf(12, 37, 1e-4), 1.848212795360916e-39)):  # far from the mean: the plain form
+        assert abs(got - want) / want < 2e-13, (got, want)
