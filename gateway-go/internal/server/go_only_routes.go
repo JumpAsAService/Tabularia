@@ -81,6 +81,15 @@ var goOnlyRoutes = []struct {
 	{after: "/admin/scripting/environments/{environment_id}/versions/{version_id}/current", route: pyRoute{
 		path: "/admin/scripting/environments/{environment_id}/versions/{version_id}", methods: []string{"PATCH"},
 		regex: `^/admin/scripting/environments/(?P<environment_id>[^/]+)/versions/(?P<version_id>[^/]+)$`}},
+	// the statistical models' groups: the palette's list, and the section of Administration (api/models_admin.go)
+	{after: "/admin/scripting/environments/{environment_id}/versions/{version_id}", route: pyRoute{path: "/models/groups", methods: []string{"GET"}, regex: `^/models/groups$`}},
+	{after: "/models/groups", route: pyRoute{path: "/admin/models", methods: []string{"GET"}, regex: `^/admin/models$`}},
+	{after: "/admin/models", route: pyRoute{path: "/admin/models/{group_id}", methods: []string{"GET"}, regex: `^/admin/models/(?P<group_id>[^/]+)$`}},
+	{after: "/admin/models/{group_id}", route: pyRoute{path: "/admin/models/{group_id}/enable", methods: []string{"POST"}, regex: `^/admin/models/(?P<group_id>[^/]+)/enable$`}},
+	{after: "/admin/models/{group_id}/enable", route: pyRoute{path: "/admin/models/{group_id}/disable", methods: []string{"POST"}, regex: `^/admin/models/(?P<group_id>[^/]+)/disable$`}},
+	{after: "/admin/models/{group_id}/disable", route: pyRoute{path: "/admin/models/{group_id}/rebuild", methods: []string{"POST"}, regex: `^/admin/models/(?P<group_id>[^/]+)/rebuild$`}},
+	{after: "/admin/models/{group_id}/rebuild", route: pyRoute{path: "/admin/models/{group_id}/settings", methods: []string{"PUT"}, regex: `^/admin/models/(?P<group_id>[^/]+)/settings$`}},
+	{after: "/admin/models/{group_id}/settings", route: pyRoute{path: "/admin/models/{group_id}/access", methods: []string{"PUT"}, regex: `^/admin/models/(?P<group_id>[^/]+)/access$`}},
 }
 
 // mainRoutes is the main application's table: FastAPI's, with the Go-only routes in place.

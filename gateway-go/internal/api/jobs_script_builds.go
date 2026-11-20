@@ -97,6 +97,7 @@ type sbVersion struct {
 	JobName, ImageRef, Arch   *string
 	Lock, Completions         *string
 	BuildLog, Error           *string
+	Selftest                  *string // a managed (model group) version's self-test, the end of its log
 	StartedAt, FinishedAt     *time.Time
 }
 
@@ -106,6 +107,7 @@ type sbEnvironment struct {
 	Language                                      string
 	CurrentVersionID                              *int64
 	CPURequest, CPULimit, MemoryRequest, MemLimit string
+	ManagedBy                                     *string // model_group:<id>: the environment of a statistical model group
 }
 
 func sbStr(s string) *string { return &s }
@@ -447,9 +449,9 @@ func (b *scriptBuilds) fail(v *sbVersion, message string, log *string) {
 
 func sbEnvironmentOf(ctx context.Context, tx pgx.Tx, id int64) (*sbEnvironment, error) {
 	var e sbEnvironment
-	err := tx.QueryRow(ctx, `SELECT id, language, current_version_id, cpu_request, cpu_limit, memory_request, memory_limit
+	err := tx.QueryRow(ctx, `SELECT id, language, current_version_id, cpu_request, cpu_limit, memory_request, memory_limit, managed_by
 		FROM script_environments WHERE id = $1`, id).Scan(&e.ID, &e.Language, &e.CurrentVersionID, &e.CPURequest, &e.CPULimit,
-		&e.MemoryRequest, &e.MemLimit)
+		&e.MemoryRequest, &e.MemLimit, &e.ManagedBy)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -552,10 +554,23 @@ func (b *scriptBuilds) advance(ctx context.Context, tx pgx.Tx, v *sbVersion) err
 		v.ImageRef, v.BuildLog = sbStr(repo+"@"+digest), sbStr(sbStripDigest(log))
 		v.Arch = sbArchFromLog(log)
 		manifest := b.checkJob(v, env)
+		group := mgGroupOfManaged(env.ManagedBy)
+		var code pyjson.Object
+		if group != "" { // a model group's check also runs its self-test, on the code in a ConfigMap
+			if manifest, code, err = b.managedCheckJob(v, env, group); err != nil {
+				return err
+			}
+		}
 		// the check's Job first, then the build's goes: when the API server fails in
 		// between, the build's Job is still there and the next round reads it again
-		if _, err := kube.CreateJob(ctx, k, b.s.Scripts.Namespace, manifest); err != nil {
+		checkJob, err := kube.CreateJob(ctx, k, b.s.Scripts.Namespace, manifest)
+		if err != nil {
 			return err
+		}
+		if code != nil {
+			if err := b.createSelftestCode(ctx, k, v, manifest, checkJob, code); err != nil {
+				return err
+			}
 		}
 		if err := kube.DeleteJob(ctx, k, stageNS, name); err != nil {
 			return err
@@ -600,6 +615,10 @@ func (b *scriptBuilds) advance(ctx context.Context, tx pgx.Tx, v *sbVersion) err
 		return nil
 	}
 	// checking
+	if group := mgGroupOfManaged(env.ManagedBy); group != "" {
+		b.finishManagedCheck(v, env, outcome, kube.JobFailure(job), log, exitCode)
+		return b.makeCurrent(ctx, tx, v, env)
+	}
 	if outcome == "failed" {
 		reason := kube.JobFailure(job)
 		if reason == "" {
@@ -612,6 +631,14 @@ func (b *scriptBuilds) advance(ctx context.Context, tx pgx.Tx, v *sbVersion) err
 	lock, completions := sbSplitCheckOutput(log)
 	now := jobs.NaiveNow()
 	v.Status, v.Lock, v.Completions, v.FinishedAt, v.JobName, v.Error = "ready", &lock, completions, &now, nil, nil
+	return b.makeCurrent(ctx, tx, v, env)
+}
+
+// makeCurrent puts a version that has just become ready in use, unless a newer one already is.
+func (b *scriptBuilds) makeCurrent(ctx context.Context, tx pgx.Tx, v *sbVersion, env *sbEnvironment) error {
+	if v.Status != "ready" {
+		return nil
+	}
 	var currentNumber *int64
 	if env.CurrentVersionID != nil && *env.CurrentVersionID != 0 {
 		var n int64
@@ -662,7 +689,7 @@ func (b *scriptBuilds) oneRound(ctx context.Context) (int64, error) {
 		return 0, nil
 	}
 	rows, err := tx.Query(ctx, `SELECT id, environment_id, number, base_image, packages, status, job_name, image_ref, arch, lock,
-		completions, build_log, error, started_at, finished_at FROM script_environment_versions
+		completions, build_log, error, selftest, started_at, finished_at FROM script_environment_versions
 		WHERE status IN ('queued', 'building', 'checking') ORDER BY id`)
 	if err != nil {
 		return 0, err
@@ -671,7 +698,7 @@ func (b *scriptBuilds) oneRound(ctx context.Context) (int64, error) {
 	for rows.Next() {
 		var v sbVersion
 		if err := rows.Scan(&v.ID, &v.EnvironmentID, &v.Number, &v.BaseImage, &v.Packages, &v.Status, &v.JobName, &v.ImageRef, &v.Arch,
-			&v.Lock, &v.Completions, &v.BuildLog, &v.Error, &v.StartedAt, &v.FinishedAt); err != nil {
+			&v.Lock, &v.Completions, &v.BuildLog, &v.Error, &v.Selftest, &v.StartedAt, &v.FinishedAt); err != nil {
 			rows.Close()
 			return 0, err
 		}
@@ -696,8 +723,8 @@ func (b *scriptBuilds) oneRound(ctx context.Context) (int64, error) {
 			return 0, err
 		}
 		if _, err := tx.Exec(ctx, `UPDATE script_environment_versions SET status = $2, job_name = $3, image_ref = $4, arch = $5,
-			lock = $6, completions = $7, build_log = $8, error = $9, started_at = $10, finished_at = $11 WHERE id = $1`,
-			v.ID, v.Status, v.JobName, v.ImageRef, v.Arch, v.Lock, v.Completions, v.BuildLog, v.Error, v.StartedAt, v.FinishedAt); err != nil {
+			lock = $6, completions = $7, build_log = $8, error = $9, started_at = $10, finished_at = $11, selftest = $12 WHERE id = $1`,
+			v.ID, v.Status, v.JobName, v.ImageRef, v.Arch, v.Lock, v.Completions, v.BuildLog, v.Error, v.StartedAt, v.FinishedAt, v.Selftest); err != nil {
 			return 0, err
 		}
 		if errors.As(err, &ke) && (ke.Status == 0 || ke.Status == 429 || ke.Status >= 500) {
@@ -707,7 +734,12 @@ func (b *scriptBuilds) oneRound(ctx context.Context) (int64, error) {
 			changed++
 		}
 	}
-	return changed, tx.Commit(ctx) // releases the lock
+	// the model groups enabled whose shipped recipe changed since their version was built
+	queued, err := mgQueueStale(ctx, tx, b.log)
+	if err != nil {
+		return 0, err
+	}
+	return changed + queued, tx.Commit(ctx) // releases the lock
 }
 
 // loop is build_loop.

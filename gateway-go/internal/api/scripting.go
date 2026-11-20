@@ -669,7 +669,7 @@ func readScripting(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Prin
 		fail(d, w, "scripting: the bucket", err)
 		return
 	}
-	rows, err := d.DB.Query(ctx, `SELECT `+scEnvColumns+` FROM script_environments ORDER BY lower(name)`)
+	rows, err := d.DB.Query(ctx, `SELECT `+scEnvColumns+` FROM script_environments WHERE managed_by IS NULL ORDER BY lower(name)`)
 	if err != nil {
 		fail(d, w, "scripting: the environments", err)
 		return
@@ -1628,7 +1628,7 @@ func editorEnvironments(d *Deps, w http.ResponseWriter, r *http.Request, p *auth
 		fail(d, w, "scripting: the bucket", err)
 		return
 	}
-	rows, err := d.DB.Query(ctx, `SELECT `+scEnvColumns+` FROM script_environments ORDER BY lower(name)`)
+	rows, err := d.DB.Query(ctx, `SELECT `+scEnvColumns+` FROM script_environments WHERE managed_by IS NULL ORDER BY lower(name)`)
 	if err != nil {
 		fail(d, w, "scripting: the environments", err)
 		return

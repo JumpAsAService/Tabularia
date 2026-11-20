@@ -332,7 +332,7 @@ type Environment struct {
 
 func (a *Access) environment(ctx context.Context, id int64) (*Environment, error) {
 	var e Environment
-	err := a.Q.QueryRow(ctx, `SELECT id, name, language, max_timeout_seconds FROM script_environments WHERE id = $1`, id).
+	err := a.Q.QueryRow(ctx, `SELECT id, name, language, max_timeout_seconds FROM script_environments WHERE id = $1 AND managed_by IS NULL`, id).
 		Scan(&e.ID, &e.Name, &e.Language, &e.MaxTimeoutSeconds)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil

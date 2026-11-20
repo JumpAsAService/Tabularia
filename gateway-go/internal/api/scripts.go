@@ -124,7 +124,8 @@ func scScanEnv(row pgx.Row) (*scEnvironment, error) {
 
 // scGetEnv is session.get(ScriptEnvironment, id): nil when there is none.
 func scGetEnv(ctx context.Context, q perm.Querier, id int64) (*scEnvironment, error) {
-	e, err := scScanEnv(q.QueryRow(ctx, `SELECT `+scEnvColumns+` FROM script_environments WHERE id = $1`, id))
+	// a model group's managed environment is no scripting environment: nobody picks it, edits it or sees it
+	e, err := scScanEnv(q.QueryRow(ctx, `SELECT `+scEnvColumns+` FROM script_environments WHERE id = $1 AND managed_by IS NULL`, id))
 	if scNoRows(err) {
 		return nil, nil
 	}
