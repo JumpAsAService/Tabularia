@@ -52,7 +52,8 @@
     "test_df": "Test df",
     "test_p_value": "Test p-value",
     "conf_type": "Confidence interval",
-    "test": "Test"
+    "test": "Test",
+    "note_card_thinned": "Note: the model card"
    },
    "stratum": {
     "n": "Rows",
@@ -87,6 +88,9 @@
    "test": {
     "logrank": "log-rank",
     "peto": "Peto"
+   },
+   "note_card_thinned": {
+    "The curves have more steps than the model card keeps: the card keeps a step wherever the survival or an end of its interval has moved by 0.001 or more, so that a survival predicted from it differs from the fitted curve by less than 0.001.": "The curves have more steps than the model card keeps: the card keeps a step wherever the survival or an end of its interval has moved by 0.001 or more, so that a survival predicted from it differs from the fitted curve by less than 0.001."
    }
   },
   "checks": {
@@ -172,7 +176,8 @@
     "test_df": "Gdl del test",
     "test_p_value": "p-value del test",
     "conf_type": "Intervallo di confidenza",
-    "test": "Test"
+    "test": "Test",
+    "note_card_thinned": "Nota: la scheda del modello"
    },
    "stratum": {
     "n": "Righe",
@@ -207,6 +212,9 @@
    "test": {
     "logrank": "log-rank",
     "peto": "Peto"
+   },
+   "note_card_thinned": {
+    "The curves have more steps than the model card keeps: the card keeps a step wherever the survival or an end of its interval has moved by 0.001 or more, so that a survival predicted from it differs from the fitted curve by less than 0.001.": "Le curve hanno più gradini di quanti la scheda del modello ne conservi: la scheda tiene un gradino dove la sopravvivenza o un estremo del suo intervallo si è spostato di 0,001 o più, così una sopravvivenza prevista dalla scheda differisce dalla curva stimata di meno di 0,001."
    }
   },
   "checks": {
@@ -292,7 +300,8 @@
     "test_df": "FG des Tests",
     "test_p_value": "p-Wert des Tests",
     "conf_type": "Konfidenzintervall",
-    "test": "Test"
+    "test": "Test",
+    "note_card_thinned": "Hinweis: die Modellkarte"
    },
    "stratum": {
     "n": "Zeilen",
@@ -327,6 +336,9 @@
    "test": {
     "logrank": "Log-Rank",
     "peto": "Peto"
+   },
+   "note_card_thinned": {
+    "The curves have more steps than the model card keeps: the card keeps a step wherever the survival or an end of its interval has moved by 0.001 or more, so that a survival predicted from it differs from the fitted curve by less than 0.001.": "Die Kurven haben mehr Stufen, als die Modellkarte behält: Die Karte behält eine Stufe, wo sich das Überleben oder ein Ende seines Intervalls um 0,001 oder mehr bewegt hat, sodass ein daraus vorhergesagtes Überleben um weniger als 0,001 von der geschätzten Kurve abweicht."
    }
   },
   "checks": {
@@ -412,7 +424,8 @@
     "test_df": "Gl de la prueba",
     "test_p_value": "p-valor de la prueba",
     "conf_type": "Intervalo de confianza",
-    "test": "Prueba"
+    "test": "Prueba",
+    "note_card_thinned": "Nota: la ficha del modelo"
    },
    "stratum": {
     "n": "Filas",
@@ -447,6 +460,9 @@
    "test": {
     "logrank": "log-rank",
     "peto": "Peto"
+   },
+   "note_card_thinned": {
+    "The curves have more steps than the model card keeps: the card keeps a step wherever the survival or an end of its interval has moved by 0.001 or more, so that a survival predicted from it differs from the fitted curve by less than 0.001.": "Las curvas tienen más escalones de los que guarda la ficha del modelo: la ficha guarda un escalón donde la supervivencia o un extremo de su intervalo se ha movido 0,001 o más, de modo que una supervivencia predicha con ella difiere de la curva estimada en menos de 0,001."
    }
   },
   "checks": {
@@ -532,7 +548,8 @@
     "test_df": "Ddl du test",
     "test_p_value": "p-valeur du test",
     "conf_type": "Intervalle de confiance",
-    "test": "Test"
+    "test": "Test",
+    "note_card_thinned": "Note : la fiche du modèle"
    },
    "stratum": {
     "n": "Lignes",
@@ -567,6 +584,9 @@
    "test": {
     "logrank": "log-rank",
     "peto": "Peto"
+   },
+   "note_card_thinned": {
+    "The curves have more steps than the model card keeps: the card keeps a step wherever the survival or an end of its interval has moved by 0.001 or more, so that a survival predicted from it differs from the fitted curve by less than 0.001.": "Les courbes ont plus de marches que la fiche du modèle n'en garde : la fiche garde une marche là où la survie ou une borne de son intervalle a bougé de 0,001 ou plus, de sorte qu'une survie prédite à partir d'elle diffère de la courbe estimée de moins de 0,001."
    }
   },
   "checks": {

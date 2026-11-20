@@ -100,6 +100,7 @@
       "required": ["strata"],
       "properties": {
         "strata_column": {"type": ["string", "null"]},
+        "tolerance": {"type": "number", "minimum": 0, "description": "0: every event time; above, the most the card's curve and interval differ from the fit's"},
         "strata": {
           "type": "array",
           "items": {

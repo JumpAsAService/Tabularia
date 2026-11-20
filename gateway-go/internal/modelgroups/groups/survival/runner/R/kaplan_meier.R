@@ -33,6 +33,13 @@
 KM_MIN_AT_RISK <- 10
 KM_CROSS_GAP <- 0.05
 KM_ALL <- "all" # the stratum's name without strata
+KM_CARD_TOLERANCE <- 0.001 # the most a thinned card's curve or interval differs from the fit's
+
+# The note of a thinned card: no number or name in it, so that report_texts/kaplan_meier.json
+# says it in the page's language.
+KM_NOTE_CARD_THINNED <- paste0(
+  "The curves have more steps than the model card keeps: the card keeps a step wherever the survival or an end of its ",
+  "interval has moved by 0.001 or more, so that a survival predicted from it differs from the fitted curve by less than 0.001.")
 
 fit_kaplan_meier <- function(task) {
   p <- task$params
@@ -175,8 +182,9 @@ fit_kaplan_meier <- function(task) {
   km_charts(rows, curves, names_, max_points)
 
   output <- if (identical(p$output, "table")) km_table(curves, if (is.null(strata_col)) NA_character_ else levels) else NULL
-  list(rows = rows, output = output, card = km_card(task, curves, levels, strata_col, time_col, event_col, value_label, conf_type, alpha),
-       native = fit)
+  card <- km_card(task, curves, levels, strata_col, time_col, event_col, value_label, conf_type, alpha)
+  if (card$kaplan_meier$tolerance > 0) tab_text(rows, "model", "note_card_thinned", KM_NOTE_CARD_THINNED)
+  list(rows = rows, output = output, card = card, native = fit)
 }
 
 # Each stratum's curve, a survfit of its own (fit[i] keeps the interval's type and level).
@@ -382,6 +390,9 @@ km_table <- function(curves, labels) {
 }
 
 # ── the card: each stratum's curve at its event times, and where its follow-up ends ──
+# Every event time while the strata have at most max_baseline_times of them together (the
+# card is then exact); above, a stratum keeps only the steps km_card_steps picks, within
+# KM_CARD_TOLERANCE (the card's `tolerance`, 0 when exact), as Cox's card thins its baseline.
 km_card <- function(task, curves, levels, strata_col, time_col, event_col, value_label, conf_type, alpha) {
   card <- tab_card(task, NULL, packages = "survival")
   card$inputs <- list(list(name = time_col, type = "number"))
@@ -391,15 +402,46 @@ km_card <- function(task, curves, levels, strata_col, time_col, event_col, value
   card$formula <- paste0("Surv(", time_col, ", ", event_col, " = ", value_label, ") ~ ", if (is.null(strata_col)) "1" else strata_col)
   card$outcome <- list(name = event_col, event_value = value_label)
   card$alpha <- alpha
+  steps <- sum(vapply(curves, function(s) sum(s$n.event > 0), numeric(1)))
+  tolerance <- if (steps > tab_limit(task, "max_baseline_times")) KM_CARD_TOLERANCE else 0
   card$kaplan_meier <- list(
-    time_column = time_col, strata_column = strata_col %||% NULL, conf_type = conf_type,
+    time_column = time_col, strata_column = strata_col %||% NULL, conf_type = conf_type, tolerance = tolerance,
     strata = lapply(seq_along(curves), function(i) {
       s <- curves[[i]]
-      e <- s$n.event > 0
+      e <- which(s$n.event > 0)
+      lower <- tab_finite(s$lower[e])
+      upper <- tab_finite(s$upper[e])
+      if (tolerance > 0) {
+        keep <- km_card_steps(s$surv[e], lower, upper, tolerance)
+        e <- e[keep]
+        lower <- lower[keep]
+        upper <- upper[keep]
+      }
       list(stratum = if (is.null(strata_col)) NULL else levels[[i]], last_time = max(s$time), time = as.list(s$time[e]),
-           surv = as.list(s$surv[e]), lower = as.list(tab_finite(s$lower[e])), upper = as.list(tab_finite(s$upper[e])))
+           surv = as.list(s$surv[e]), lower = as.list(lower), upper = as.list(upper))
     }))
   card
+}
+
+# The steps of a curve a thinned card keeps: a step whenever the survival or an end of its
+# interval has moved by `tolerance` or more since the last step kept (from 1, the curve before
+# its first event; an end that becomes empty or stops being so counts as a move), and the last
+# step. Predict reads a time at the last step kept before it: between two kept steps the fit
+# moved by less than `tolerance` on each of the three, so the card differs from the fit by less
+# than `tolerance` at every time, and is exact past the last step.
+km_card_steps <- function(surv, lower, upper, tolerance) {
+  n <- length(surv)
+  keep <- logical(n)
+  last <- c(1, 1, 1)
+  for (i in seq_len(n)) {
+    now <- c(surv[[i]], lower[[i]], upper[[i]])
+    moved <- ifelse(is.na(now) & is.na(last), 0, ifelse(is.na(now) | is.na(last), Inf, abs(now - last)))
+    if (i == n || any(moved >= tolerance)) {
+      keep[[i]] <- TRUE
+      last <- now
+    }
+  }
+  keep
 }
 
 # ── Predict: survival at each row's time, in its stratum ──
@@ -485,4 +527,47 @@ TAB_COMMON_TESTS[["kaplan_meier: column names that look like code, and predictin
   .tab_expect(isTRUE(all.equal(out$prediction_low, low, tolerance = 1e-9)), "predicted lower end differs from the fit")
   late <- predict_kaplan_meier(list(params = list(), .frame = data.frame(days = c(0, 1e6), line = c("A", "Z"), stringsAsFactors = FALSE)), card)$output
   .tab_expect(late$prediction[[1L]] == 1 && is.na(late$prediction[[2L]]) && is.null(late$prediction_low), "time 0, an unseen stratum")
+}
+
+TAB_COMMON_TESTS[["kaplan_meier: a card on many rows is thinned within its tolerance, and predicts the fit"]] <- function(code) {
+  # 20 000 rows of continuous times in two strata, drawn here from a seed: no large file in the repository
+  set.seed(20261120)
+  n <- 20000L
+  line <- sample(c("A", "B"), n, replace = TRUE)
+  event <- stats::rexp(n, ifelse(line == "A", 1 / 300, 1 / 200))
+  censor <- stats::runif(n, 0, 900)
+  df <- data.frame(days = pmin(event, censor), status = ifelse(event <= censor, "failed", "running"), line = line,
+                   stringsAsFactors = FALSE)
+  task <- list(model = "kaplan_meier", variant = "default", group = "survival", group_version = "selftest", rows_from = "run",
+               params = list(time = "days", event = "status", event_value = "failed", strata = "line"),
+               limits = tab_catalog()$limits, .frame = df)
+  fit <- fit_kaplan_meier(task)
+  text <- tab_card_fits(task, fit$card, tab_rows())
+  .tab_expect(!is.null(text), "the card is over max_card_bytes: ", nchar(tab_card_text(fit$card), type = "bytes"), " bytes")
+  card <- jsonlite::fromJSON(text, simplifyVector = FALSE)
+  .tab_expect(identical(card$kaplan_meier$tolerance, KM_CARD_TOLERANCE), "the card does not say its tolerance")
+  kept <- sum(vapply(card$kaplan_meier$strata, function(s) length(s$time), numeric(1)))
+  .tab_expect(kept < sum(df$status == "failed") / 2, "the card was not thinned: ", kept, " steps")
+  rows <- tab_results_frame(fit$rows)
+  .tab_expect(identical(rows$text[rows$key == "model|||note_card_thinned"], KM_NOTE_CARD_THINNED), "no note of the thinned card")
+  # survival and its interval predicted at the fitted rows' times and between them, against survfit's own
+  ref <- survival::survfit(survival::Surv(days, status == "failed") ~ line, data = df)
+  at <- data.frame(days = c(df$days[1:4000], stats::runif(2000, 0, max(df$days))), line = rep(c("A", "B"), 3000),
+                   stringsAsFactors = FALSE)
+  got <- predict_kaplan_meier(list(params = list(interval = TRUE), .frame = at), card)$output
+  for (g in c("A", "B")) {
+    last <- max(df$days[df$line == g])
+    past <- which(at$line == g & at$days > last)
+    .tab_expect(all(is.na(got$prediction[past])), "survival of ", g, " past its follow-up is not empty")
+    i <- which(at$line == g & at$days <= last)
+    s <- summary(ref[paste0("line=", g)], times = sort(unique(at$days[i])), extend = TRUE)
+    j <- match(at$days[i], s$time)
+    for (k in list(c("prediction", "surv"), c("prediction_low", "lower"), c("prediction_high", "upper"))) {
+      gap <- max(abs(got[[k[[1L]]]][i] - s[[k[[2L]]]][j]), na.rm = TRUE)
+      .tab_expect(gap < KM_CARD_TOLERANCE, k[[1L]], " of ", g, " differs from the fit by ", gap)
+      .tab_expect(identical(is.na(got[[k[[1L]]]][i]), is.na(s[[k[[2L]]]][j])), k[[1L]], " of ", g, ": not empty where the fit is")
+    }
+  }
+  # the same fit as a step: results and report whatever the card's size
+  .tab_expect(!length(tab_check_declared(fit$rows, "kaplan_meier", "default")), "the results do not match the catalogue")
 }

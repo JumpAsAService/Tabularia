@@ -153,6 +153,15 @@ def test_a_card_too_large_is_a_note_in_the_page_s_language():
         for code, starts in (("en", "The model card"), ("it", "La scheda del modello"), ("de", "Die Modellkarte")):
             [said] = [r for r in layouts.with_labels(model, params, [*rows, note], code) if r["stat"] == "note_card_too_large"]
             assert said["text"].startswith(starts) and said["label"] != "note_card_too_large", (case, code, said)
+    # a Kaplan–Meier's card thinned within its tolerance (kaplan_meier.R, km_card_steps)
+    english = ("The curves have more steps than the model card keeps: the card keeps a step wherever the survival or an end of "
+               "its interval has moved by 0.001 or more, so that a survival predicted from it differs from the fitted curve by "
+               "less than 0.001.")
+    model, params, rows = fixture("kaplan_meier-default")
+    note = dict(zip(OUTPUT_NAMES, ["model", None, None, "note_card_thinned", None, english, None, None, len(rows),
+                                    "model|||note_card_thinned"]))
+    [said] = [r for r in layouts.with_labels(model, params, [*rows, note], "it") if r["stat"] == "note_card_thinned"]
+    assert said["text"].startswith("Le curve hanno più gradini") and "0,001" in said["text"]
 
 
 # ── the definition ───────────────────────────────────────────────────────────
