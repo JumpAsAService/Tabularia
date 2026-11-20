@@ -191,7 +191,7 @@
    null,
    "note_auto_close",
    null,
-   "Weibull is within 2 of the AIC of the generalized gamma (ΔAIC 0.30, weight 0.40): it describes these times about as well, with one parameter fewer.",
+   "@auto_close distribution=weibull other=gengamma margin=2 delta_aic=0.30 weight=0.47",
    null,
    null,
    13,

@@ -25,6 +25,7 @@ from app.engine.models.layouts import register
 from app.engine.stats import layouts as stats
 from app.engine.stats.catalog import label_of
 
+SMALL = "0.#####"  # the tables' numbers: five decimals at most, as many as they have below
 ALL = "all"  # the runner's name of the one stratum without strata
 MAX_TIMES_DRAWN = 4  # the vertical lines of the profile's survival: the node's first four times (MAX_XY_TARGETS_X)
 DISTRIBUTIONS = ("exponential", "weibull", "gompertz", "loglogistic", "lognormal", "gengamma")
@@ -81,7 +82,7 @@ def _parameters(p: stats.Page, w: dict) -> None:
     names = "IFS(" + ", ".join(f'[level] = "{k}", {c.q(v)}' for k, v in w["parameters"].items()) + ", [level])"
     cols = [{"header": t["parameter"], "value": f'{names} & IF(ISNULL([level_2]) OR [level_2] = "", "", " — " & [level_2])'},
             *({"header": c.stat_label(w, "parameter", s), "value": c.number_of_row("parameter", s), "width": 26,
-               "align": "right", "format": c.NUMBER} for s in ("estimate", "std_error", "ci_low", "ci_high"))]
+               "align": "right", "format": SMALL} for s in ("estimate", "std_error", "ci_low", "ci_high"))]
     p.add(stats.table("parameters", t["parameters"], one, cols, p.y, visible=c.exists(one)), 10)
     p.text("parameters_note", w["parameters_note"], h=4.5, size=7, color=c.MUTED, can_grow=True, visible=c.exists(one))
     p.y += 1.5
@@ -132,10 +133,10 @@ def _candidates(params: dict[str, Any]):
         table = stats.table("candidates", t["candidates"], one, [
             {"header": t["distribution"], "value": _distribution(w, "[level]"),
              "rules": [{"when": f"{chosen_row} = 1", "style": {"weight": "bold", "color": c.ACCENT}}]},
-            number("n_parameters", "#,##0", 14), number("log_lik"), number("aic"), number("bic"), number("delta_aic", "0.##", 16),
-            number("akaike_weight", "0.###", 18),
-            {"header": t["status"], "value": status, "width": 28},
-            {"header": c.stat_label(w, "candidate", "chosen"), "value": mark, "width": 14, "align": "center"},
+            number("n_parameters", "#,##0", 18), number("log_lik", "0.##", 30), number("aic", "0.##", 15), number("bic", "0.##", 15),
+            number("delta_aic", "0.##", 14), number("akaike_weight", "0.###", 20),
+            {"header": t["status"], "value": status, "width": 22},
+            {"header": c.stat_label(w, "candidate", "chosen"), "value": mark, "width": 12, "align": "center"},
         ], p.y, visible=c.exists(one))
         aic = c.of_row("candidate", "aic")  # a candidate with no AIC (it did not converge) goes last
         table["sort"] = [{"by": f"IF(ISNULL({aic}), 1E+300, {aic})"}, {"by": "[ord]"}]
@@ -295,17 +296,17 @@ def layout(model: str, params: dict[str, Any], locale: str, sample: list[dict] |
     dist = c.txt(c.model_key("distribution"))
     note = ("=" + c.join(w["coef_scale"], scale=c.txt(c.model_key("coefficient_scale")))
             + f' & IF({dist} = {weibull} AND {strata} > 1, " " & {c.q(w["coef_no_hr"])}, IF({dist} = {gompertz}, " " & {c.q(w["coef_no_tr"])}, ""))')
-    estimates = c.CoefTable("coef", ct["estimates"], ("estimate", "std_error", "statistic", "p_value"))
-    ratios = c.CoefTable("coef_tr", ct["time_ratios"], ("time_ratio", "tr_ci_low", "tr_ci_high", "vif"), width=26)
+    estimates = c.CoefTable("coef", ct["estimates"], ("estimate", "std_error", "statistic", "p_value"), fmt=SMALL)
+    ratios = c.CoefTable("coef_tr", ct["time_ratios"], ("time_ratio", "tr_ci_low", "tr_ci_high", "vif"), width=26, fmt=SMALL)
     hazards = c.CoefTable("coef_hr", ct["hazard_ratios"], ("hazard_ratio", "hr_ci_low", "hr_ci_high", *(("vif",) if variant == "ph" else ())),
-                          width=26)
-    cox = c.CoefTable("coef_cox", ct["cox"], ("cox_hazard_ratio", "cox_hr_ci_low", "cox_hr_ci_high"), width=30)
+                          width=26, fmt=SMALL)
+    cox = c.CoefTable("coef_cox", ct["cox"], ("cox_hazard_ratio", "cox_hr_ci_low", "cox_hr_ci_high"), width=30, fmt=SMALL)
     tables = (estimates, *(() if variant == "ph" else (ratios,)), *(() if variant == "aft" else (hazards, cox)))
     loglog = variant in ("ph_aft", "auto")
     alpha_note = c.alpha_said(w["alpha_note"], checked.get("alpha", 0.05), locale)
     blocks = (*((_candidates(checked),) if variant == "auto" else ()), _fit_to_the_data(loglog), _profile(checked), _influence)
     return c.page(model, params, locale, sample, step, name=name(params, locale), about=about(params, locale), cards=cards,
-                  coef_tables=tables, coef_note=note, assumptions_note=alpha_note,
+                  coef_tables=tables, coef_note=note, assumptions_note=alpha_note, fit_format=SMALL, room=12.0,
                   after_assumptions=(c.measures(MEASURES),), coef_first=(_ratio_charts(variant),), after_coefficients=(_parameters,),
                   blocks=blocks)
 

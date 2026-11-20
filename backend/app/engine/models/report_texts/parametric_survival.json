@@ -164,8 +164,23 @@
     "parsimony": "Chosen by parsimony"
    }
   },
+  "formula_kinds": {
+   "accelerated failure time": "accelerated failure time",
+   "proportional hazards": "proportional hazards"
+  },
+  "profile_words": {
+   "mean": "mean",
+   "reference": "reference",
+   "stratum of reference": "stratum of reference"
+  },
   "note_texts": {
    "strata_no_hr": "With a shape for each stratum the Weibull has no hazard ratio: its time ratios are common to the strata, its hazard ratios are not.",
+   "auto_close": "{distribution} is within {margin} of the AIC of {other} (ΔAIC {delta_aic}, weight {weight}): it describes these times about as well, with fewer parameters.",
+   "auto_not_converged": "{names}: did not converge, or the Hessian is not positive definite; out of the choice and of the weights.",
+   "auto_time": "The time budget ran out before {names} were fitted.",
+   "quantile_infinite": "The fitted distribution leaves {share} % of the profile without the event for ever: a quantile beyond that is infinite and left empty.",
+   "second_start": "The first fit did not reach a maximum: a second start from other estimates did.",
+   "weights_counts": "The weights are not whole numbers: they are read as case weights, each multiplying its row's log-likelihood.",
    "hr_interval_scale": "The interval of a hazard ratio is Wald's on its own scale: near the edge it can exclude 1 while the p-value of the coefficient is just above alpha.",
    "zero_weights": "Rows of weight 0 were left out of the fit.",
    "zero_times": "{n_zero_time} rows have a time of 0 and were left out of the fit."
@@ -430,8 +445,23 @@
     "parsimony": "Scelta per parsimonia"
    }
   },
+  "formula_kinds": {
+   "accelerated failure time": "tempo di guasto accelerato",
+   "proportional hazards": "rischi proporzionali"
+  },
+  "profile_words": {
+   "mean": "media",
+   "reference": "riferimento",
+   "stratum of reference": "strato di riferimento"
+  },
   "note_texts": {
    "strata_no_hr": "Con una forma per ogni strato la Weibull non ha hazard ratio: i suoi rapporti dei tempi sono comuni agli strati, i suoi hazard ratio no.",
+   "auto_close": "{distribution} dista meno di {margin} dall'AIC di {other} (ΔAIC {delta_aic}, peso {weight}): descrive questi tempi quasi altrettanto bene, con meno parametri.",
+   "auto_not_converged": "{names}: non convergente, o con hessiana non definita positiva; fuori dalla scelta e dai pesi.",
+   "auto_time": "Il budget di tempo è finito prima di adattare {names}.",
+   "quantile_infinite": "La distribuzione adattata lascia il {share} % del profilo senza l'evento per sempre: un quantile oltre quel punto è infinito e lasciato vuoto.",
+   "second_start": "Il primo adattamento non ha raggiunto un massimo: l'ha raggiunto un secondo avvio da altre stime.",
+   "weights_counts": "I pesi non sono numeri interi: sono letti come pesi dei casi, ognuno moltiplica la log-verosimiglianza della sua riga.",
    "hr_interval_scale": "L'intervallo di un hazard ratio è quello di Wald sulla sua scala: vicino al limite può escludere 1 mentre il p-value del coefficiente è appena sopra alpha.",
    "zero_weights": "Le righe di peso 0 sono state escluse dall'adattamento.",
    "zero_times": "{n_zero_time} righe hanno tempo 0 e sono state escluse dall'adattamento."
@@ -696,8 +726,23 @@
     "parsimony": "Aus Sparsamkeit gewählt"
    }
   },
+  "formula_kinds": {
+   "accelerated failure time": "beschleunigte Ausfallzeit",
+   "proportional hazards": "proportionale Hazards"
+  },
+  "profile_words": {
+   "mean": "Mittelwert",
+   "reference": "Referenz",
+   "stratum of reference": "Referenzschicht"
+  },
   "note_texts": {
    "strata_no_hr": "Mit einer Form je Schicht hat die Weibull-Verteilung kein Hazard Ratio: Ihre Zeitverhältnisse sind den Schichten gemeinsam, ihre Hazard Ratios nicht.",
+   "auto_close": "{distribution} liegt höchstens {margin} über dem AIC von {other} (ΔAIC {delta_aic}, Gewicht {weight}): Sie beschreibt diese Zeiten fast ebenso gut, mit weniger Parametern.",
+   "auto_not_converged": "{names}: nicht konvergiert oder Hesse-Matrix nicht positiv definit; außerhalb der Wahl und der Gewichte.",
+   "auto_time": "Das Zeitbudget war aufgebraucht, bevor {names} angepasst wurden.",
+   "quantile_infinite": "Die angepasste Verteilung lässt {share} % des Profils für immer ohne Ereignis: Ein Quantil darüber ist unendlich und bleibt leer.",
+   "second_start": "Die erste Anpassung erreichte kein Maximum: Ein zweiter Start von anderen Schätzwerten erreichte es.",
+   "weights_counts": "Die Gewichte sind keine ganzen Zahlen: Sie werden als Fallgewichte gelesen, jedes multipliziert die Log-Likelihood seiner Zeile.",
    "hr_interval_scale": "Das Intervall eines Hazard Ratios ist das Wald-Intervall auf seiner eigenen Skala: Nahe der Grenze kann es 1 ausschließen, obwohl der p-Wert des Koeffizienten knapp über alpha liegt.",
    "zero_weights": "Zeilen mit Gewicht 0 wurden aus der Anpassung ausgeschlossen.",
    "zero_times": "{n_zero_time} Zeilen haben die Zeit 0 und wurden aus der Anpassung ausgeschlossen."
@@ -962,8 +1007,23 @@
     "parsimony": "Elegida por parsimonia"
    }
   },
+  "formula_kinds": {
+   "accelerated failure time": "tiempo de fallo acelerado",
+   "proportional hazards": "riesgos proporcionales"
+  },
+  "profile_words": {
+   "mean": "media",
+   "reference": "referencia",
+   "stratum of reference": "estrato de referencia"
+  },
   "note_texts": {
    "strata_no_hr": "Con una forma por estrato la Weibull no tiene hazard ratio: sus razones de tiempos son comunes a los estratos, sus hazard ratios no.",
+   "auto_close": "{distribution} está a menos de {margin} del AIC de {other} (ΔAIC {delta_aic}, peso {weight}): describe estos tiempos casi igual de bien, con menos parámetros.",
+   "auto_not_converged": "{names}: no convergió, o la hessiana no es definida positiva; fuera de la elección y de los pesos.",
+   "auto_time": "El presupuesto de tiempo se agotó antes de ajustar {names}.",
+   "quantile_infinite": "La distribución ajustada deja el {share} % del perfil sin el evento para siempre: un cuantil más allá es infinito y se deja vacío.",
+   "second_start": "El primer ajuste no alcanzó un máximo: lo alcanzó un segundo arranque desde otras estimaciones.",
+   "weights_counts": "Los pesos no son números enteros: se leen como pesos de los casos, cada uno multiplica la log-verosimilitud de su fila.",
    "hr_interval_scale": "El intervalo de un hazard ratio es el de Wald en su propia escala: cerca del límite puede excluir 1 mientras el valor p del coeficiente está justo por encima de alpha.",
    "zero_weights": "Las filas de peso 0 se dejaron fuera del ajuste.",
    "zero_times": "{n_zero_time} filas tienen tiempo 0 y se dejaron fuera del ajuste."
@@ -1228,8 +1288,23 @@
     "parsimony": "Choisie par parcimonie"
    }
   },
+  "formula_kinds": {
+   "accelerated failure time": "temps de défaillance accéléré",
+   "proportional hazards": "risques proportionnels"
+  },
+  "profile_words": {
+   "mean": "moyenne",
+   "reference": "référence",
+   "stratum of reference": "strate de référence"
+  },
   "note_texts": {
    "strata_no_hr": "Avec une forme par strate la Weibull n'a pas de hazard ratio : ses rapports des temps sont communs aux strates, ses hazard ratios non.",
+   "auto_close": "{distribution} est à moins de {margin} de l'AIC de {other} (ΔAIC {delta_aic}, poids {weight}) : elle décrit ces temps presque aussi bien, avec moins de paramètres.",
+   "auto_not_converged": "{names} : non convergée, ou hessienne non définie positive ; hors du choix et des poids.",
+   "auto_time": "Le budget de temps était épuisé avant d'ajuster {names}.",
+   "quantile_infinite": "La distribution ajustée laisse {share} % du profil sans l'événement pour toujours : un quantile au-delà est infini et laissé vide.",
+   "second_start": "Le premier ajustement n'a pas atteint de maximum : un second départ depuis d'autres estimations l'a atteint.",
+   "weights_counts": "Les poids ne sont pas des entiers : ils sont lus comme des poids de cas, chacun multiplie la log-vraisemblance de sa ligne.",
    "hr_interval_scale": "L'intervalle d'un hazard ratio est celui de Wald sur sa propre échelle : près de la limite il peut exclure 1 alors que la valeur p du coefficient est juste au-dessus d'alpha.",
    "zero_weights": "Les lignes de poids 0 ont été écartées de l'ajustement.",
    "zero_times": "{n_zero_time} lignes ont un temps de 0 et ont été écartées de l'ajustement."
