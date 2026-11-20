@@ -182,7 +182,15 @@ function onKeydown(ev: KeyboardEvent) {
     ev.preventDefault()
     hi.value = Math.max(hi.value - 1, 0)
     scrollHiIntoView()
-  } else if (ev.key === 'Enter') { ev.preventDefault(); if (flat[hi.value]) pick(flat[hi.value]) }
+  } else if (ev.key === 'Enter') {
+    ev.preventDefault()
+    if (flat[hi.value]) {
+      pick(flat[hi.value])
+      // the search box that had the focus is gone with the panel: without this the focus falls to
+      // the page and the next Tab starts again from the top (Escape and Tab already return it)
+      triggerEl.value?.focus()
+    }
+  }
 }
 
 // the search text changed: brings the highlight back to the top of the results
