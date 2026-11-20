@@ -22,8 +22,8 @@ import { statLevelLabels } from '~/composables/statTests'
 import { vDraft } from '~/composables/draftField'
 import {
   modelApplies, modelChoiceWordKey, modelColumnFits, modelFieldWordKey, modelFields, modelForbidden, modelGiven, modelGroupKey,
-  modelHintKey, modelIsCategorical, modelMlflow, modelMlflowProblem, modelNumber, modelNumberProblem, modelNumbers, modelOf,
-  modelOverlaps, modelReasonKey, modelRequiredReason, modelSeason, modelSet, modelTaken, modelUnset,
+  modelHintKey, modelIsCategorical, modelMlflow, modelMlflowProblem, modelNumber, modelNumberProblem, modelOf,
+  modelNumbersProblem, modelOverlaps, modelReasonKey, modelRequiredReason, modelSeason, modelSet, modelTaken, modelUnset,
   MODEL_RETRIES_MAX, MODEL_TIMEOUT_MIN, MODEL_TIMEOUT_SECONDS, type ModelField, type ModelOff,
 } from '~/composables/modelCatalog'
 
@@ -264,11 +264,9 @@ const numberOr = (f: ModelField): number => {
 // ── a list of numbers (the times to report survival at) ──────────────────────
 const timesText = (f: ModelField) => (Array.isArray(params.value[f.key]) ? params.value[f.key].join(', ') : '')
 const timesProblem = (f: ModelField): string => {
-  const list = modelNumbers(params.value[f.key])
-  const bad = list.find((n) => (f.min !== undefined && n < f.min))
-  if (bad !== undefined) return t('models.form.atLeast', { min: f.min })
-  if (f.max_count !== undefined && list.length > f.max_count) return t('models.form.tooMany', { n: f.max_count })
-  return ''
+  const problem = modelNumbersProblem(f, params.value[f.key])
+  if (!problem) return ''
+  return t(`models.form.${problem}`, { above: f.above ?? '', below: f.below ?? '', min: f.min ?? '', max: f.max ?? '', n: f.max_count ?? '' })
 }
 
 // ── a choice ─────────────────────────────────────────────────────────────────
@@ -496,10 +494,11 @@ function limit(key: 'timeoutSeconds' | 'retries', raw: string, min: number, max:
           v-draft="params[f.key] ?? ''"
           :placeholder="defaultOf(f)"
           :aria-invalid="numberProblem(f) ? 'true' : undefined"
-          :aria-describedby="numberProblem(f) ? idOf(f.key, 'problem') : hintOf(f) ? idOf(f.key, 'hint') : undefined"
+          :aria-describedby="numberProblem(f) ? idOf(f.key, 'problem') : requiredNote(f) ? idOf(f.key, 'required') : hintOf(f) ? idOf(f.key, 'hint') : undefined"
           @change="setNumber(f, ($event.target as HTMLInputElement).value)"
         />
         <p v-if="numberProblem(f)" :id="idOf(f.key, 'problem')" class="note warn" role="alert"><TriangleAlert :size="13" aria-hidden="true" /> {{ numberProblem(f) }}</p>
+        <p v-else-if="requiredNote(f)" :id="idOf(f.key, 'required')" class="note warn"><TriangleAlert :size="13" aria-hidden="true" /> {{ requiredNote(f) }}</p>
         <p v-else-if="hintOf(f)" :id="idOf(f.key, 'hint')" class="hint">{{ hintOf(f) }}</p>
       </div>
 

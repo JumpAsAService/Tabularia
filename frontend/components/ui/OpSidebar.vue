@@ -3,10 +3,11 @@
 // travels in the dataTransfer (application/tabularia), read by FlowEditor's drop handler.
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ChartScatter, ChartSpline, ChevronRight, Container, FileCode2, GripVertical, HardDriveDownload, HeartPulse, Sparkles, StickyNote, Search } from 'lucide-vue-next'
+import { ChevronRight, Container, FileCode2, GripVertical, HardDriveDownload, Sparkles, StickyNote, Search } from 'lucide-vue-next'
 import { opMeta, SOURCE_META } from '~/composables/useOpIcons'
 import { statHintKey, statIsOp, statNameKey, statPalette } from '~/composables/statTests'
-import { MODEL_COLOR, modelGroupKey, modelOf, modelPalette, modelShownGroups, predictAvailable } from '~/composables/modelCatalog'
+import { MODEL_COLOR, modelGroupKey, modelPalette, modelShownGroups, predictAvailable } from '~/composables/modelCatalog'
+import { modelIconOf } from '~/composables/modelIcons'
 import { useModelGroups } from '~/composables/useModelGroups'
 
 const { t } = useI18n()
@@ -82,7 +83,6 @@ function toggleModels() {
   modelOpenSaved.value = !modelOpenSaved.value
   try { localStorage.setItem(MODEL_OPEN_KEY, modelOpenSaved.value ? 'open' : 'closed') } catch { /* not remembered */ }
 }
-const familyIcon = (model: string) => (modelOf(model)?.family === 'survival' ? HeartPulse : modelOf(model)?.family === 'timeseries' ? ChartSpline : ChartScatter)
 const hasForeach = computed(() => props.operations.includes('foreach'))
 
 // visibility of the single fixed items and of their groups
@@ -243,7 +243,7 @@ function onDragStart(ev: DragEvent, kind: string) {
             @keydown.enter.prevent="!modelsOff && emit('add', item.kind)"
             @keydown.space.prevent="!modelsOff && emit('add', item.kind)"
           >
-            <component :is="familyIcon(item.model)" :size="15" class="item-icon" aria-hidden="true" />
+            <component :is="modelIconOf(item.model)" :size="15" class="item-icon" aria-hidden="true" />
             <span>{{ $t(item.nameKey) }}</span>
             <GripVertical :size="13" class="grip" aria-hidden="true" />
           </div>

@@ -6535,6 +6535,20 @@ export default {
         "event_value": "Value that means the event happened"
       }
     },
+    "parametric_survival": {
+      "name": "Parametric survival",
+      "hint": "The time to an event with a named distribution (Weibull, log-normal, Gompertz…), chosen or searched for: time ratios, medians, quantiles, and predictions of how long.",
+      "params": {
+        "time": "Follow-up time (a number)",
+        "event": "Event column",
+        "event_value": "Value that means the event happened",
+        "predictors": "Predictors (optional)"
+      },
+      "hints": {
+        "predictors": "None: the distribution of the times alone. With predictors: how much each one lengthens or shortens the time to the event.",
+        "strata": "Each value of this column gets its own baseline and shape; at most 20. Empty: one for all the rows."
+      }
+    },
     "arima": {
       "name": "ARIMA",
       "hint": "A time series modelled on its own past, and forecast: from AR to SARIMAX, with the orders chosen or searched for.",
@@ -6557,6 +6571,38 @@ export default {
       "hints": {
         "order_by": "The column that puts the rows in time order: needed when the validation part is the last rows.",
         "seed": "Every random choice (the validation rows, the share of rows and predictors of each tree) uses it: the same data give the same numbers."
+      }
+    },
+    "clv": {
+      "name": "Customer lifetime value",
+      "hint": "Customers who leave without saying so: the purchases to expect, the probability of still being active and the discounted value (CLV), from one row per customer.",
+      "params": {
+        "frequency": "Repeat purchases (a number)",
+        "recency": "Time of the last purchase (a number)",
+        "horizon": "Periods ahead",
+        "holdout_length": "Length of the holdout"
+      },
+      "hints": {
+        "frequency": "Purchases after the first one, in the calibration period. A whole number, 0 or more.",
+        "recency": "Time from the first purchase to the last one, in the unit below: 0 for a customer with no repeat purchase.",
+        "horizon": "How many periods ahead the expected purchases and the value are computed, in the unit of time. Empty: one year.",
+        "holdout_length": "How long the holdout period is, in the unit of time: the same for every customer."
+      }
+    },
+    "bg_bb": {
+      "name": "BG/BB",
+      "hint": "The same for purchases at fixed occasions (a yearly campaign, a monthly renewal): purchases to expect and the probability of still being active.",
+      "params": {
+        "frequency": "Repeat transactions (a number)",
+        "recency": "Opportunity of the last transaction (a number)",
+        "horizon": "Opportunities ahead",
+        "holdout_length": "Opportunities in the holdout"
+      },
+      "hints": {
+        "frequency": "Transactions after the first one, among the opportunities. A whole number, 0 or more.",
+        "recency": "Which opportunity (1, 2, 3…) had the last transaction: 0 for a customer with no repeat transaction.",
+        "horizon": "How many opportunities ahead the expected transactions and the value are computed. Empty: one year's worth.",
+        "holdout_length": "How many opportunities the holdout holds, from 1 to 1000."
       }
     },
     "presets": {
@@ -6667,7 +6713,22 @@ export default {
       "gamma": "Least gain to split (γ)",
       "l2_leaf_reg": "L2 penalty on the leaves (λ)",
       "rsm": "Share of predictors per split",
-      "random_strength": "Randomness of the splits"
+      "random_strength": "Randomness of the splits",
+      "distribution": "Distribution",
+      "quantiles": "Quantiles of the time",
+      "customer": "Customer column",
+      "recency": "Recency (a number)",
+      "age": "Age of the customer (a number)",
+      "opportunities": "Opportunities (a number)",
+      "time_unit": "Unit of time",
+      "period_unit": "Length of an opportunity",
+      "spend": "Average spend (a number)",
+      "purchase_model": "Purchase model",
+      "compare": "Compare with the other models",
+      "discount_rate": "Yearly discount rate",
+      "margin": "Margin",
+      "holdout_transactions": "Purchases in the holdout",
+      "holdout_length": "Length of the holdout"
     },
     "hints": {
       "outcome": "The column to explain.",
@@ -6729,7 +6790,20 @@ export default {
       "gamma": "A split is made only if it lowers the loss by at least this.",
       "l2_leaf_reg": "The L2 penalty on each leaf's value: larger values shrink the trees' answers.",
       "rsm": "Each split is chosen among this share of the predictors, drawn at random.",
-      "random_strength": "Noise added to the scores of the splits: 0 for none, larger for more variety."
+      "random_strength": "Noise added to the scores of the splits: 0 for none, larger for more variety.",
+      "distribution": "How the times are spread. Automatic fits all six and keeps the lowest AIC (the simpler one when it is within 2). Gompertz gives hazard ratios only.",
+      "quantiles": "Up to 9 numbers between 0 and 1, separated by commas, e.g. 0.25, 0.75. The median is always given.",
+      "customer": "One row per customer: group the transactions by customer first.",
+      "age": "Time from the first purchase to the end of the calibration period, in the unit below.",
+      "opportunities": "How many occasions to buy came after the first purchase (a campaign, a year): 1 to 1000.",
+      "time_unit": "The unit of recency, age, the horizon, the holdout and the discounting.",
+      "period_unit": "How long one opportunity lasts: the unit of the discounting.",
+      "spend": "The average value of the repeat purchases, the first not counted. With it the node gives the customer lifetime value; without, only the purchases to expect.",
+      "purchase_model": "Automatic fits the three and keeps the one with the highest log-likelihood.",
+      "compare": "Fits the other two as well, for the comparison table only: the node's model stays the one chosen.",
+      "discount_rate": "From 0 to 1: 0.1 is 10 % a year. Purchases in the future weigh less.",
+      "margin": "The share of the spend that is value, above 0 and up to 1. With 1 the value is of the revenue.",
+      "holdout_transactions": "The purchases of each customer in the period after the calibration, to test the forecast. Empty: no holdout."
     },
     "choice": {
       "ols": "Ordinary least squares",
@@ -6797,7 +6871,16 @@ export default {
       "random": "Random rows",
       "time": "The last rows, in order",
       "loss": "The model's own loss",
-      "error": "Error rate (wrong categories)"
+      "error": "Error rate (wrong categories)",
+      "weibull": "Weibull",
+      "exponential": "Exponential",
+      "lognormal": "Log-normal",
+      "loglogistic": "Log-logistic",
+      "gengamma": "Generalized gamma",
+      "gompertz": "Gompertz",
+      "pareto_nbd": "Pareto/NBD",
+      "bg_nbd": "BG/NBD",
+      "mbg_nbd": "MBG/NBD"
     },
     "choices": {
       "penalty": {
@@ -6808,6 +6891,19 @@ export default {
       },
       "conf_type": {
         "log": "Log (R's default)"
+      },
+      "distribution": {
+        "auto": "Automatic: the lowest AIC"
+      },
+      "purchase_model": {
+        "auto": "Automatic: the best log-likelihood"
+      },
+      "time_unit": {
+        "day": "Days",
+        "week": "Weeks",
+        "month": "Months",
+        "quarter": "Quarters",
+        "year": "Years"
       }
     },
     "reasons": {
@@ -6819,7 +6915,8 @@ export default {
       "time_needs_order": "Validation by time needs the column that orders the rows.",
       "mae_needs_regression": "The absolute error measures a number: choose another measure.",
       "auc_needs_binary": "The area under the ROC curve is for yes/no outcomes: choose another measure.",
-      "error_needs_classes": "The error rate counts wrong categories: a number needs another measure."
+      "error_needs_classes": "The error rate counts wrong categories: a number needs another measure.",
+      "holdout_needs_length": "The holdout's purchases need the holdout's length."
     },
     "form": {
       "notUsable": "not usable here",
@@ -6936,13 +7033,15 @@ export default {
       "interval": "Prediction interval",
       "threshold": "Class threshold",
       "horizon": "Forecast steps",
-      "at_times": "Survival at times"
+      "at_times": "Survival at times",
+      "quantiles": "Quantiles of the time"
     },
     "hints": {
       "interval": "Adds the lower and upper bounds of each prediction.",
       "threshold": "Adds the predicted class: the event from this probability up. 0.5 when empty.",
       "horizon": "How many steps after the series ends. Empty: the model's own.",
-      "at_times": "A survival column for each time, e.g. 12, 24."
+      "at_times": "A survival column for each time, e.g. 12, 24.",
+      "quantiles": "A column for each quantile, e.g. 0.25, 0.75. Empty: the quantiles the model was fitted with."
     }
   },
   "modelsAdmin": {
@@ -6955,7 +7054,7 @@ export default {
     "readOnly": "You can read this section; only an administrator changes it.",
     "group": {
       "regression": { "name": "Regression", "description": "Linear and logistic regression, with ridge, lasso and elastic-net penalties." },
-      "survival": { "name": "Survival analysis", "description": "Kaplan–Meier curves and Cox proportional hazards." },
+      "survival": { "name": "Survival analysis", "description": "Kaplan–Meier curves, Cox proportional hazards and parametric survival (Weibull and other distributions)." },
       "timeseries": { "name": "Time series", "description": "ARIMA, from AR to SARIMAX, with automatic orders too." },
       "boosting": { "name": "Boosting", "description": "Gradient boosting: XGBoost and CatBoost, with importances by gain and SHAP." },
       "customer_lifetime": { "name": "Customer lifetime", "description": "Customers who leave without saying so: purchases to expect, probability of still being active and the discounted value (CLV), from Pareto/NBD, BG/NBD, MBG/NBD, BG/BB and Gamma–Gamma." },

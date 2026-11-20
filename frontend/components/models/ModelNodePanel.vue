@@ -6,10 +6,11 @@
 // «not up to date»); the editor runs it (the panel's `run`, as a Script node's).
 import { computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ChartScatter, ChartSpline, HeartPulse, Sparkles, Trash2 } from 'lucide-vue-next'
+import { Sparkles, Trash2 } from 'lucide-vue-next'
 import type { Node } from '@vue-flow/core'
 import type { ColumnInfo } from '~/composables/useApi'
 import { modelArimaTitle, modelNameKey, modelOff, modelOf, modelUnset } from '~/composables/modelCatalog'
+import { modelIconOf } from '~/composables/modelIcons'
 import { useModelGroups } from '~/composables/useModelGroups'
 import type { ScriptOutputs } from '~/composables/useScripting'
 import ModelForm from '~/components/ui/ModelForm.vue'
@@ -50,7 +51,7 @@ const title = computed(() => {
 const lacking = computed(() => (model.value ? modelUnset(model.value, props.node.data?.params) : []))
 // a Predict node runs once it names its connection and its version; the gateway checks the rest
 const predictReady = computed(() => typeof props.node.data?.connectionId === 'number' && !!props.node.data?.registeredModel && !!props.node.data?.version)
-const icon = computed(() => (isPredict.value ? Sparkles : model.value?.family === 'survival' ? HeartPulse : model.value?.family === 'timeseries' ? ChartSpline : ChartScatter))
+const icon = computed(() => (isPredict.value ? Sparkles : modelIconOf(props.node.data?.model)))
 </script>
 
 <template>

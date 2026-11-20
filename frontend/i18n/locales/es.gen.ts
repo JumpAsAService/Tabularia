@@ -6535,6 +6535,20 @@ export default {
         "event_value": "Valor que significa que el evento ocurrió"
       }
     },
+    "parametric_survival": {
+      "name": "Supervivencia paramétrica",
+      "hint": "El tiempo hasta un evento con una distribución con nombre (Weibull, log-normal, Gompertz…), elegida o buscada: razones de tiempos, medianas, cuantiles y predicciones de cuánto falta.",
+      "params": {
+        "time": "Tiempo de seguimiento (un número)",
+        "event": "Columna del evento",
+        "event_value": "Valor que significa que el evento ocurrió",
+        "predictors": "Predictores (opcionales)"
+      },
+      "hints": {
+        "predictors": "Ninguno: solo la distribución de los tiempos. Con predictores: cuánto alarga o acorta cada uno el tiempo hasta el evento.",
+        "strata": "Cada valor de esta columna tiene su propia línea base y forma; como máximo 20. Vacío: una para todas las filas."
+      }
+    },
     "arima": {
       "name": "ARIMA",
       "hint": "Una serie temporal modelada con su propio pasado y pronosticada: de AR a SARIMAX, con los órdenes elegidos o buscados.",
@@ -6557,6 +6571,38 @@ export default {
       "hints": {
         "order_by": "La columna que pone las filas en orden temporal: hace falta cuando la validación son las últimas filas.",
         "seed": "Cada elección aleatoria (las filas de validación, la proporción de filas y de predictores de cada árbol) la usa: los mismos datos dan los mismos números."
+      }
+    },
+    "clv": {
+      "name": "Valor del ciclo de vida del cliente",
+      "hint": "Clientes que se van sin avisar: las compras esperadas, la probabilidad de seguir activos y el valor descontado (CLV), a partir de una fila por cliente.",
+      "params": {
+        "frequency": "Compras repetidas (un número)",
+        "recency": "Tiempo de la última compra (un número)",
+        "horizon": "Periodos por delante",
+        "holdout_length": "Duración del periodo de prueba"
+      },
+      "hints": {
+        "frequency": "Compras después de la primera, en el periodo de calibración. Un número entero, 0 o más.",
+        "recency": "Tiempo desde la primera hasta la última compra, en la unidad de abajo: 0 para un cliente sin compras repetidas.",
+        "horizon": "A cuántos periodos por delante se calculan las compras esperadas y el valor, en la unidad de tiempo. Vacío: un año.",
+        "holdout_length": "Cuánto dura el periodo de prueba, en la unidad de tiempo: igual para todos los clientes."
+      }
+    },
+    "bg_bb": {
+      "name": "BG/BB",
+      "hint": "Lo mismo para compras en ocasiones fijas (una campaña anual, una renovación mensual): compras esperadas y probabilidad de seguir activo.",
+      "params": {
+        "frequency": "Transacciones repetidas (un número)",
+        "recency": "Ocasión de la última transacción (un número)",
+        "horizon": "Ocasiones por delante",
+        "holdout_length": "Ocasiones en el periodo de prueba"
+      },
+      "hints": {
+        "frequency": "Transacciones después de la primera, entre las ocasiones. Un número entero, 0 o más.",
+        "recency": "En qué ocasión (1, 2, 3…) fue la última transacción: 0 para un cliente sin transacciones repetidas.",
+        "horizon": "A cuántas ocasiones por delante se calculan las transacciones esperadas y el valor. Vacío: las de un año.",
+        "holdout_length": "Cuántas ocasiones tiene el periodo de prueba, de 1 a 1000."
       }
     },
     "presets": {
@@ -6667,7 +6713,22 @@ export default {
       "gamma": "Ganancia mínima para dividir (γ)",
       "l2_leaf_reg": "Penalización L2 en las hojas (λ)",
       "rsm": "Proporción de predictores por división",
-      "random_strength": "Aleatoriedad de las divisiones"
+      "random_strength": "Aleatoriedad de las divisiones",
+      "distribution": "Distribución",
+      "quantiles": "Cuantiles del tiempo",
+      "customer": "Columna del cliente",
+      "recency": "Recencia (un número)",
+      "age": "Antigüedad del cliente (un número)",
+      "opportunities": "Ocasiones (un número)",
+      "time_unit": "Unidad de tiempo",
+      "period_unit": "Duración de una ocasión",
+      "spend": "Gasto medio (un número)",
+      "purchase_model": "Modelo de compras",
+      "compare": "Comparar con los otros modelos",
+      "discount_rate": "Tasa de descuento anual",
+      "margin": "Margen",
+      "holdout_transactions": "Compras en el periodo de prueba",
+      "holdout_length": "Duración del periodo de prueba"
     },
     "hints": {
       "outcome": "La columna a explicar.",
@@ -6729,7 +6790,20 @@ export default {
       "gamma": "Una división solo se hace si baja la pérdida al menos en esto.",
       "l2_leaf_reg": "La penalización L2 sobre el valor de cada hoja: valores mayores encogen las respuestas de los árboles.",
       "rsm": "Cada división se elige entre esta proporción de predictores, tomados al azar.",
-      "random_strength": "Ruido añadido a las puntuaciones de las divisiones: 0 ninguno, más grande más variedad."
+      "random_strength": "Ruido añadido a las puntuaciones de las divisiones: 0 ninguno, más grande más variedad.",
+      "distribution": "Cómo se reparten los tiempos. Automática ajusta las seis y se queda con la de menor AIC (la más simple si está a menos de 2). Gompertz da solo hazard ratios.",
+      "quantiles": "Hasta 9 números entre 0 y 1, separados por comas, p. ej. 0.25, 0.75. La mediana siempre se da.",
+      "customer": "Una fila por cliente: agrupa antes las transacciones por cliente.",
+      "age": "Tiempo desde la primera compra hasta el final del periodo de calibración, en la unidad de abajo.",
+      "opportunities": "Cuántas ocasiones de compra hubo después de la primera (una campaña, un año): de 1 a 1000.",
+      "time_unit": "La unidad de la recencia, la antigüedad, el horizonte, el periodo de prueba y el descuento.",
+      "period_unit": "Cuánto dura una ocasión: la unidad del descuento.",
+      "spend": "El valor medio de las compras repetidas, sin contar la primera. Con él el nodo da el valor del ciclo de vida; sin él, solo las compras esperadas.",
+      "purchase_model": "Automático ajusta los tres y se queda con el de mayor log-verosimilitud.",
+      "compare": "Ajusta también los otros dos, solo para la tabla de comparación: el modelo del nodo sigue siendo el elegido.",
+      "discount_rate": "De 0 a 1: 0,1 es el 10 % al año. Las compras futuras pesan menos.",
+      "margin": "La parte del gasto que es valor, por encima de 0 y hasta 1. Con 1 el valor es el de los ingresos.",
+      "holdout_transactions": "Las compras de cada cliente en el periodo posterior a la calibración, para probar la previsión. Vacío: sin periodo de prueba."
     },
     "choice": {
       "ols": "Mínimos cuadrados ordinarios",
@@ -6797,7 +6871,16 @@ export default {
       "random": "Filas al azar",
       "time": "Las últimas filas, en orden",
       "loss": "La pérdida del modelo",
-      "error": "Tasa de error (categorías erróneas)"
+      "error": "Tasa de error (categorías erróneas)",
+      "weibull": "Weibull",
+      "exponential": "Exponencial",
+      "lognormal": "Log-normal",
+      "loglogistic": "Log-logística",
+      "gengamma": "Gamma generalizada",
+      "gompertz": "Gompertz",
+      "pareto_nbd": "Pareto/NBD",
+      "bg_nbd": "BG/NBD",
+      "mbg_nbd": "MBG/NBD"
     },
     "choices": {
       "penalty": {
@@ -6808,6 +6891,19 @@ export default {
       },
       "conf_type": {
         "log": "Log (por defecto de R)"
+      },
+      "distribution": {
+        "auto": "Automática: el AIC más bajo"
+      },
+      "purchase_model": {
+        "auto": "Automático: la mejor log-verosimilitud"
+      },
+      "time_unit": {
+        "day": "Días",
+        "week": "Semanas",
+        "month": "Meses",
+        "quarter": "Trimestres",
+        "year": "Años"
       }
     },
     "reasons": {
@@ -6819,7 +6915,8 @@ export default {
       "time_needs_order": "La validación por tiempo necesita la columna que ordena las filas.",
       "mae_needs_regression": "El error absoluto mide un número: elige otra medida.",
       "auc_needs_binary": "El área bajo la curva ROC es para resultados sí/no: elige otra medida.",
-      "error_needs_classes": "La tasa de error cuenta categorías erróneas: para un número hace falta otra medida."
+      "error_needs_classes": "La tasa de error cuenta categorías erróneas: para un número hace falta otra medida.",
+      "holdout_needs_length": "Las compras del periodo de prueba necesitan su duración."
     },
     "form": {
       "notUsable": "no utilizable aquí",
@@ -6936,13 +7033,15 @@ export default {
       "interval": "Intervalo de predicción",
       "threshold": "Umbral de clase",
       "horizon": "Pasos de pronóstico",
-      "at_times": "Supervivencia en ciertos tiempos"
+      "at_times": "Supervivencia en ciertos tiempos",
+      "quantiles": "Cuantiles del tiempo"
     },
     "hints": {
       "interval": "Añade los límites inferior y superior de cada predicción.",
       "threshold": "Añade la clase prevista: el evento desde esta probabilidad. 0,5 si está vacío.",
       "horizon": "Cuántos pasos tras el final de la serie. Vacío: el del modelo.",
-      "at_times": "Una columna de supervivencia por cada tiempo, p. ej. 12, 24."
+      "at_times": "Una columna de supervivencia por cada tiempo, p. ej. 12, 24.",
+      "quantiles": "Una columna por cuantil, p. ej. 0.25, 0.75. Vacío: los cuantiles con que se ajustó el modelo."
     }
   },
   "modelsAdmin": {
@@ -6955,7 +7054,7 @@ export default {
     "readOnly": "Puedes leer esta sección; solo un administrador la modifica.",
     "group": {
       "regression": { "name": "Regresión", "description": "Regresión lineal y logística, con penalizaciones ridge, lasso y elastic net." },
-      "survival": { "name": "Análisis de supervivencia", "description": "Curvas de Kaplan–Meier y riesgos proporcionales de Cox." },
+      "survival": { "name": "Análisis de supervivencia", "description": "Curvas de Kaplan–Meier, riesgos proporcionales de Cox y supervivencia paramétrica (Weibull y otras distribuciones)." },
       "timeseries": { "name": "Series temporales", "description": "ARIMA, de AR a SARIMAX, también con órdenes automáticos." },
       "boosting": { "name": "Boosting", "description": "Gradient boosting: XGBoost y CatBoost, con importancias por ganancia y SHAP." },
       "customer_lifetime": { "name": "Ciclo de vida del cliente", "description": "Clientes que se van sin avisar: compras esperadas, probabilidad de seguir activo y valor descontado (CLV), con Pareto/NBD, BG/NBD, MBG/NBD, BG/BB y Gamma–Gamma." },

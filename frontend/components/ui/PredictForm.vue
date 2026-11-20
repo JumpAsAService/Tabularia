@@ -17,7 +17,7 @@ import { useFormat } from '~/composables/useFormat'
 import { useModelGroups, type MlflowExperiment, type MlflowVersion } from '~/composables/useModelGroups'
 import { vDraft } from '~/composables/draftField'
 import {
-  MODEL_RETRIES_MAX, MODEL_TIMEOUT_MIN, versionHeld, MODEL_TIMEOUT_SECONDS, modelNumber, modelNumberProblem, predictColumns,
+  MODEL_RETRIES_MAX, MODEL_TIMEOUT_MIN, versionHeld, MODEL_TIMEOUT_SECONDS, modelNumber, modelNumberProblem, modelNumbersProblem, predictColumns,
   predictFields, predictParams, type ModelField, type ModelOff,
 } from '~/composables/modelCatalog'
 
@@ -148,6 +148,10 @@ function numberProblem(f: ModelField): string {
   const problem = modelNumberProblem(f, params.value[f.key])
   return problem ? t(`models.form.${problem}`, { above: f.above ?? '', below: f.below ?? '', min: f.min ?? '', max: f.max ?? '' }) : ''
 }
+function numbersProblem(f: ModelField): string {
+  const problem = modelNumbersProblem(f, params.value[f.key])
+  return problem ? t(`models.form.${problem}`, { above: f.above ?? '', below: f.below ?? '', min: f.min ?? '', max: f.max ?? '', n: f.max_count ?? '' }) : ''
+}
 const timesText = (f: ModelField) => (Array.isArray(params.value[f.key]) ? params.value[f.key].join(', ') : '')
 
 // the columns the step adds, and the ones of its input they would overwrite (the form refuses)
@@ -243,9 +247,11 @@ const offText = computed(() => {
         <input
           :id="idOf(f.key)" type="text" inputmode="decimal" autocomplete="off"
           :value="timesText(f)" v-draft="timesText(f)" :placeholder="$t('models.form.numbersPlaceholder')"
+          :aria-invalid="numbersProblem(f) ? 'true' : undefined"
           @change="set(f.key, ($event.target as HTMLInputElement).value)"
         />
-        <p v-if="hintOf(f)" class="hint">{{ hintOf(f) }}</p>
+        <p v-if="numbersProblem(f)" class="note warn" role="alert"><TriangleAlert :size="13" aria-hidden="true" /> {{ numbersProblem(f) }}</p>
+        <p v-else-if="hintOf(f)" class="hint">{{ hintOf(f) }}</p>
       </div>
       <div v-else class="field">
         <label :for="idOf(f.key)" class="lbl">{{ labelOf(f) }}</label>

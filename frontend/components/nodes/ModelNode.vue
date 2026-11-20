@@ -8,8 +8,8 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Handle, Position } from '@vue-flow/core'
-import { ChartSpline, ChartScatter, HeartPulse } from 'lucide-vue-next'
 import { modelArimaTitle, modelGroupOf, modelNameKey, modelOff, modelOf, modelSummary } from '~/composables/modelCatalog'
+import { modelIconOf } from '~/composables/modelIcons'
 import { useModelGroups } from '~/composables/useModelGroups'
 
 const props = defineProps<{ id: string; data: any }>()
@@ -31,7 +31,7 @@ const reason = computed(() => {
   }
 })
 const greyed = computed(() => !!reason.value)
-const icon = computed(() => (model.value?.family === 'survival' ? HeartPulse : model.value?.family === 'timeseries' ? ChartSpline : ChartScatter))
+const icon = computed(() => modelIconOf(props.data?.model))
 // an ARIMA node is named by what its orders make: «SARIMA(1,1,1)(0,1,1)[12]»
 const title = computed(() => {
   if (props.data?.label) return props.data.label as string

@@ -417,6 +417,17 @@ export function modelNumberProblem(field: Pick<ModelField, 'control' | 'above' |
   return ''
 }
 
+/** What is wrong with a list of numbers against its field's bounds (the quantiles in (0, 1), the times from 0,
+ *  at most `max_count` of them): '' when nothing, else the first number's problem or 'tooMany'. */
+export function modelNumbersProblem(field: Pick<ModelField, 'above' | 'below' | 'min' | 'max' | 'max_count'>, value: unknown): ReturnType<typeof modelNumberProblem> | 'tooMany' {
+  const list = modelNumbers(value)
+  for (const n of list) {
+    const problem = modelNumberProblem({ control: 'number', above: field.above, below: field.below, min: field.min, max: field.max }, n)
+    if (problem) return problem
+  }
+  return field.max_count !== undefined && list.length > field.max_count ? 'tooMany' : ''
+}
+
 // ── what the node says ───────────────────────────────────────────────────────
 
 const TEMPORAL = /^(Date|Datetime|Time|Duration)/i
@@ -477,6 +488,13 @@ export function modelArimaTitle(params: Params | null | undefined, catalog: Mode
   return `ARIMA${x}(${p},${d},${q})`
 }
 
+// The distributions of a parametric survival node as its one line names them: the names of the
+// distributions, not words of a language («auto» as ARIMA's «(auto)»).
+const DISTRIBUTION_NAMES: Record<string, string> = {
+  weibull: 'Weibull', exponential: 'exponential', lognormal: 'log-normal', loglogistic: 'log-logistic',
+  gengamma: 'generalized gamma', gompertz: 'Gompertz', auto: 'auto',
+}
+
 /** What a model node does, in one line: «amount ~ price + channel», «time, event ~ arm», an
  *  ARIMA's orders. */
 export function modelSummary(id: string, params: Params | null | undefined, catalog: ModelCatalog = MODEL_CATALOG): string {
@@ -488,6 +506,16 @@ export function modelSummary(id: string, params: Params | null | undefined, cata
   if (id === 'kaplan_meier') {
     const left = [p.time, p.event].filter((x) => typeof x === 'string').join(', ')
     return [left, p.strata].filter((x) => typeof x === 'string' && x).join(' ~ ')
+  }
+  if (id === 'parametric_survival') {
+    const left = [p.time, p.event].filter((x) => typeof x === 'string').join(', ')
+    const shape = DISTRIBUTION_NAMES[typeof p.distribution === 'string' ? p.distribution : 'weibull'] ?? ''
+    return [[left, list(p.predictors)].filter(Boolean).join(' ~ '), shape].filter(Boolean).join(' · ')
+  }
+  if (id === 'clv' || id === 'bg_bb') {
+    const columns = [p.frequency, p.recency, p.age ?? p.opportunities].filter((x) => typeof x === 'string').join(', ')
+    const unit = p.time_unit ?? p.period_unit
+    return [columns, typeof unit === 'string' ? unit : '', p.spend ? '+ spend' : ''].filter(Boolean).join(' · ')
   }
   if (id === 'cox') {
     const left = [p.time, p.event].filter((x) => typeof x === 'string').join(', ')
@@ -601,12 +629,6 @@ export const modelGroupKey = (group: string): string => `models.groups.${group}`
 /** The palette's Models group: the shown groups in the catalogue's order, each with its models
  *  and, after ARIMA, the six presets of that same node. With a search, only the items whose
  *  name, hint or group holds it. */
-// Models the catalogue declares and the engine's contract holds, whose form and words the editor
-// does not have yet: the palette leaves them out. Lot P6 of docs/specs/statistical-models.md
-// («The parametric survival lots») takes parametric_survival away with the node's words; lot B6 of
-// docs/specs/customer-lifetime-models.md takes clv and bg_bb away with theirs.
-const NOT_IN_THE_PALETTE_YET = new Set(['parametric_survival', 'clv', 'bg_bb'])
-
 export function modelPalette(shown: readonly ModelGroupDef[], query: string, text: Text, catalog: ModelCatalog = MODEL_CATALOG): ModelPaletteGroup[] {
   const q = query.trim().toLowerCase()
   const has = (s: string) => s.toLowerCase().includes(q)
@@ -616,7 +638,7 @@ export function modelPalette(shown: readonly ModelGroupDef[], query: string, tex
     const items: ModelPaletteItem[] = []
     for (const id of group.models) {
       const model = modelOf(id, catalog)
-      if (!model || NOT_IN_THE_PALETTE_YET.has(id)) continue
+      if (!model) continue
       items.push({ kind: modelKindOf(id), model: id, nameKey: modelNameKey(id), hintKey: modelHintKey(id) })
       for (const preset of Object.keys(model.presets)) {
         items.push({ kind: modelKindOf(id, preset), model: id, preset, nameKey: modelPresetNameKey(preset), hintKey: modelPresetHintKey(preset) })
@@ -721,7 +743,8 @@ export function predictColumns(modelId: string | null | undefined, params: Param
   if (!rows) return []
   const given = predictParams(modelId, params, catalog, variant)
   const out = [...(rows.always ?? [])]
-  for (const [option, names] of Object.entries(rows)) {
+  // the options in alphabetical order, as the gateway lists them (`PredictColumns`)
+  for (const [option, names] of Object.entries(rows).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
     if (option === 'always' || given[option] === undefined) continue
     for (const name of names) {
       if (name.endsWith('*') && Array.isArray(given[option])) out.push(...given[option].map((t: number) => `${name.slice(0, -1)}${t}`))

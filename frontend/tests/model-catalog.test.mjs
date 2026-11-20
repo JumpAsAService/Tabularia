@@ -100,14 +100,7 @@ test('the fields of a model in the catalogue\'s order, what it needs first', () 
   assert.equal(m.modelFields(ARIMA).find((f) => f.key === 'time').types.length, 3)
 })
 
-// The parametric survival node's words and form come with lot P6 of docs/specs/statistical-models.md:
-// until then the palette leaves it out and its words are not asked for. P6 takes this away. The same for the
-// customer lifetime nodes clv and bg_bb, whose words and form are lot B6 of docs/specs/customer-lifetime-models.md.
-const WORDED = {
-  ...m.MODEL_CATALOG,
-  models: m.MODEL_CATALOG.models.filter((x) => !['parametric_survival', 'clv', 'bg_bb'].includes(x.id)),
-  predict: { ...m.MODEL_CATALOG.predict, takes: Object.fromEntries(Object.entries(m.MODEL_CATALOG.predict.takes).filter(([k]) => k !== 'quantiles')) },
-}
+const WORDED = m.MODEL_CATALOG
 
 test('every model, group, preset, field, choice and reason has its words in the five languages', () => {
   const wanted = m.modelWordKeys(WORDED)
@@ -182,16 +175,17 @@ test('the palette shows the groups the person may use: not a disabled one, not o
 
 test('the palette\'s entries: the models by group, the six presets after ARIMA, a search, the drag\'s kinds', () => {
   const all = m.modelPalette(m.MODEL_CATALOG.groups, '', en)
-  assert.deepEqual(all.map((g) => g.group), ['regression', 'survival', 'timeseries', 'boosting'])
+  assert.deepEqual(all.map((g) => g.group), ['regression', 'survival', 'timeseries', 'boosting', 'customer_lifetime'])
   assert.deepEqual(all[0].items.map((i) => i.kind), ['model:linear', 'model:logistic'])
-  assert.deepEqual(all[1].items.map((i) => i.kind), ['model:kaplan_meier', 'model:cox'])
+  assert.deepEqual(all[1].items.map((i) => i.kind), ['model:kaplan_meier', 'model:cox', 'model:parametric_survival'])
+  assert.deepEqual(all[4].items.map((i) => i.kind), ['model:clv', 'model:bg_bb'])
   assert.deepEqual(all[2].items.map((i) => i.kind), ['model:arima', 'model:arima:ar', 'model:arima:ma', 'model:arima:arma', 'model:arima:arima', 'model:arima:sarima', 'model:arima:sarimax'])
   assert.deepEqual(m.modelPalette(m.modelShownGroups(STATE), '', en).map((g) => g.group), ['regression', 'timeseries'])
   // a search by name, by hint, by group
   assert.deepEqual(m.modelPalette(m.MODEL_CATALOG.groups, 'cox', en).flatMap((g) => g.items.map((i) => i.model)), ['cox'])
   // SARIMAX is a preset of the ARIMA node, and ARIMA's hint says it
   assert.deepEqual(m.modelPalette(m.MODEL_CATALOG.groups, 'sarimax', en).flatMap((g) => g.items.map((i) => i.kind)), ['model:arima', 'model:arima:sarimax'])
-  assert.ok(m.modelPalette(m.MODEL_CATALOG.groups, 'survival', en).some((g) => g.group === 'survival' && g.items.length === 2))
+  assert.ok(m.modelPalette(m.MODEL_CATALOG.groups, 'survival', en).some((g) => g.group === 'survival' && g.items.length === 3))
   assert.deepEqual(m.modelPalette(m.MODEL_CATALOG.groups, 'zzzz', en), [])
   // what a drag carries is read back, and nothing else is a model
   assert.deepEqual(m.modelFromKind('model:arima:sarima'), { model: 'arima', preset: 'sarima' })
@@ -439,6 +433,8 @@ test('Predict: the options of the model the version holds, and the columns it ad
   assert.deepEqual(m.predictFields('linear').map((f) => f.key), ['interval'])
   assert.deepEqual(m.predictFields('logistic').map((f) => f.key), ['threshold'])
   assert.deepEqual(m.predictFields('cox').map((f) => f.key), ['at_times'])
+  // the parametric survival node: the median always, the quantiles and the times of the card, an interval
+  assert.deepEqual(m.predictFields('parametric_survival').map((f) => f.key), ['interval', 'at_times', 'quantiles'])
   assert.deepEqual(m.predictFields('arima').map((f) => f.key), ['interval', 'horizon'])
   assert.deepEqual(m.predictFields('kaplan_meier').map((f) => f.key), ['interval'])
   assert.deepEqual(m.predictFields(null), [])
@@ -451,6 +447,11 @@ test('Predict: the options of the model the version holds, and the columns it ad
   assert.deepEqual(m.predictColumns('cox', { at_times: [12, 24] }), ['prediction', 'survival_at_12', 'survival_at_24'])
   assert.deepEqual(m.predictColumns('arima', { interval: true }), ['prediction', 'lower_80', 'upper_80', 'lower', 'upper'])
   assert.deepEqual(m.predictColumns('nope', {}), [])
+  assert.deepEqual(m.predictParams('parametric_survival', { quantiles: '0.9, 0.1', at_times: '30, 90', interval: true, threshold: 0.4 }), { interval: true, at_times: [30, 90], quantiles: [0.1, 0.9] })
+  assert.deepEqual(m.predictColumns('parametric_survival', { quantiles: [0.1, 0.9], at_times: [30] }), ['prediction', 'survival_at_30', 'quantile_0.1', 'quantile_0.9'])
+  assert.deepEqual(m.predictColumns('parametric_survival', { interval: true }), ['prediction', 'prediction_low', 'prediction_high'])
+  // a Cox version offers no quantiles
+  assert.ok(!m.predictFields('cox').some((f) => f.key === 'quantiles'))
   // the boosting models: an entry of the catalogue may be `model:variant`, the variant being the version's tag
   assert.deepEqual(m.predictFields('xgboost').map((f) => f.key), [])
   assert.deepEqual(m.predictFields('xgboost', undefined, 'regression').map((f) => f.key), [])
@@ -802,4 +803,189 @@ test('an empty list of columns is not given, once or twice (an empty exog is non
   const first = m.modelParams(ARIMA, { time: 't', value: 'v', frequency: 'month', exog: [] })
   assert.ok(!('exog' in first))
   assert.deepEqual(m.modelParams(ARIMA, first), first)
+})
+
+// ── parametric survival and the customer lifetime nodes (lots P6 and B6) ─────
+
+const PS = m.modelOf('parametric_survival')
+const CLV = m.modelOf('clv')
+const BGBB = m.modelOf('bg_bb')
+
+test('parametric survival: no predictor is allowed, and with none the reference levels and the interactions are gone', () => {
+  const base = { time: 'amount', event: 'vip', event_value: 'true' }
+  assert.deepEqual(m.modelUnset(PS, {}), ['time', 'event', 'event_value'])
+  assert.deepEqual(m.modelUnset(PS, base), [])
+  assert.deepEqual(m.modelDefaults('parametric_survival'), { distribution: 'weibull', quantiles: [0.25, 0.75], alpha: 0.05, seed: 1, output: 'results' })
+  assert.equal(m.modelApplies(PS, 'reference', base), false)
+  assert.equal(m.modelApplies(PS, 'interactions', base), false)
+  const withX = { ...base, predictors: ['channel', 'qty'] }
+  assert.equal(m.modelApplies(PS, 'reference', withX), true)
+  assert.deepEqual(m.modelParams(PS, { ...base, reference: { channel: 'shop' }, interactions: [['channel', 'qty']] }), base)
+  assert.deepEqual(m.modelParams(PS, { ...withX, reference: { channel: 'shop' }, distribution: 'gompertz', quantiles: '0.9 0.1' }),
+    { ...withX, reference: { channel: 'shop' }, distribution: 'gompertz', quantiles: [0.1, 0.9] })
+  // the distribution is one of the seven; any other word is not kept
+  for (const d of ['weibull', 'exponential', 'lognormal', 'loglogistic', 'gengamma', 'gompertz', 'auto']) assert.equal(m.modelParams(PS, { ...base, distribution: d }).distribution, d)
+  assert.ok(!('distribution' in m.modelParams(PS, { ...base, distribution: 'gamma' })))
+  // the kinds of P0 are drawn by existing controls
+  const by = Object.fromEntries(m.modelFields(PS).map((f) => [f.key, f]))
+  assert.deepEqual([by.distribution.control, by.quantiles.control, by.predictors.control], ['choice', 'numbers', 'columns'])
+  assert.equal(by.predictors.min, 0)
+  assert.equal(by.predictors.required, false)
+  // the predictors do not take the columns the time, the event, the strata and the weights have
+  assert.deepEqual([...m.modelTaken(PS, { time: 'amount', event: 'vip', strata: 'channel' }, 'predictors')].sort(), ['amount', 'channel', 'vip'])
+})
+
+test('parametric survival: the quantiles are numbers in (0, 1), at most nine; its line names the distribution', () => {
+  const q = m.modelFields(PS).find((f) => f.key === 'quantiles')
+  assert.equal(m.modelNumbersProblem(q, '0.25, 0.75'), '')
+  assert.equal(m.modelNumbersProblem(q, '0, 0.5'), 'between')
+  assert.equal(m.modelNumbersProblem(q, '0.5 1'), 'between')
+  assert.equal(m.modelNumbersProblem(q, '0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9'), '')
+  assert.equal(m.modelNumbersProblem(q, '0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 0.95'), 'tooMany')
+  assert.equal(m.modelNumbersProblem(q, ''), '')
+  const times = m.modelFields(PS).find((f) => f.key === 'times')
+  assert.equal(m.modelNumbersProblem(times, '-1, 5'), 'atLeast')
+  assert.equal(m.modelNumbersProblem(times, '10, 20'), '')
+  assert.equal(m.modelSummary('parametric_survival', { time: 'days', event: 'status', predictors: ['load', 'line'], distribution: 'weibull' }), 'days, status ~ load + line · Weibull')
+  assert.equal(m.modelSummary('parametric_survival', { time: 'days', event: 'status', distribution: 'auto' }), 'days, status · auto')
+  assert.equal(m.modelSummary('parametric_survival', { time: 'days', event: 'status' }), 'days, status · Weibull')
+  assert.equal(m.modelSummary('parametric_survival', {}), 'Weibull')
+  assert.deepEqual(m.modelColumns('parametric_survival', { time: 'days', event: 'status', predictors: ['load'], strata: 'line', weights: 'w' }), ['days', 'status', 'load', 'line', 'w'])
+})
+
+test('customer lifetime value: the purchase models compared only when one is chosen, the discount only with a spend, the holdout in pairs', () => {
+  const base = { customer: 'id', frequency: 'qty', recency: 'amount', age: 'amount2', time_unit: 'week' }
+  assert.deepEqual(m.modelUnset(CLV, {}), ['customer', 'frequency', 'recency', 'age', 'time_unit'])
+  assert.deepEqual(m.modelUnset(CLV, base), [])
+  // the defaults: the automatic model, a yearly 10 % rate, a margin of 1 — the rows, as the contract says
+  assert.deepEqual(m.modelDefaults('clv'), { purchase_model: 'auto', compare: false, discount_rate: 0.1, margin: 1, alpha: 0.05, seed: 1, output: 'rows' }
+    && m.modelDefaults('clv'))
+  assert.equal(m.modelDefaults('clv').output, 'rows')
+  assert.equal(m.modelDefaults('clv').purchase_model, 'auto')
+  // «compare» (and its false) is gone with auto and back with a chosen model
+  assert.equal(m.modelApplies(CLV, 'compare', base), false)
+  assert.ok(!('compare' in m.modelParams(CLV, { ...base, compare: true })))
+  for (const model of ['pareto_nbd', 'bg_nbd', 'mbg_nbd']) {
+    assert.equal(m.modelApplies(CLV, 'compare', { ...base, purchase_model: model }), true, model)
+    assert.equal(m.modelParams(CLV, { ...base, purchase_model: model, compare: true }).compare, true, model)
+  }
+  assert.ok(!('compare' in m.modelSet(CLV, { ...base, purchase_model: 'bg_nbd', compare: true }, 'purchase_model', 'auto')))
+  // the discount and the margin are for the value variant (a spend column)
+  assert.equal(m.modelVariant(CLV, base), 'purchases')
+  assert.equal(m.modelVariant(CLV, { ...base, spend: 'amount3' }), 'value')
+  assert.ok(!('discount_rate' in m.modelParams(CLV, { ...base, discount_rate: 0.2, margin: 0.4 })))
+  assert.deepEqual([0.2, 0.4], [m.modelParams(CLV, { ...base, spend: 's', discount_rate: 0.2, margin: 0.4 }).discount_rate, m.modelParams(CLV, { ...base, spend: 's', discount_rate: 0.2, margin: 0.4 }).margin])
+  // the holdout: the purchases ask for the length, the length is only with the purchases
+  const held = { ...base, holdout_transactions: 'next' }
+  assert.deepEqual(m.modelUnset(CLV, held), ['holdout_length'])
+  assert.equal(m.modelRequiredReason(CLV, 'holdout_length', held).reason, 'holdout_needs_length')
+  assert.equal(m.modelRequiredReason(CLV, 'holdout_length', base), null)
+  assert.deepEqual(m.modelUnset(CLV, { ...held, holdout_length: 12 }), [])
+  assert.ok(!('holdout_length' in m.modelParams(CLV, { ...base, holdout_length: 12 })))
+  assert.equal(m.modelParams(CLV, { ...held, holdout_length: '12,5' }).holdout_length, 12.5)
+  assert.equal(m.modelNumberProblem(m.modelFields(CLV).find((f) => f.key === 'holdout_length'), 0), 'above')
+  assert.equal(m.modelNumberProblem(m.modelFields(CLV).find((f) => f.key === 'margin'), 0), 'above')
+  assert.equal(m.modelNumberProblem(m.modelFields(CLV).find((f) => f.key === 'margin'), 1.5), 'atMost')
+  assert.equal(m.modelNumberProblem(m.modelFields(CLV).find((f) => f.key === 'discount_rate'), 1.5), 'range')
+  assert.equal(m.modelNumberProblem(m.modelFields(CLV).find((f) => f.key === 'horizon'), 0.5), 'whole')
+  // the customer, the counts and the spend are four different columns
+  assert.deepEqual(m.modelOverlaps(CLV, { customer: 'id', frequency: 'id', recency: 'x' }), [{ column: 'id', keys: ['customer', 'frequency'] }])
+  assert.equal(m.modelSummary('clv', base), 'qty, amount, amount2 · week')
+  assert.equal(m.modelSummary('clv', { ...base, spend: 'amount3' }), 'qty, amount, amount2 · week · + spend')
+})
+
+test('BG/BB: the opportunities and their unit, a whole holdout, no purchase model', () => {
+  const base = { customer: 'id', frequency: 'qty', recency: 'r', opportunities: 'n', period_unit: 'year' }
+  assert.deepEqual(m.modelUnset(BGBB, {}), ['customer', 'frequency', 'recency', 'opportunities', 'period_unit'])
+  assert.deepEqual(m.modelUnset(BGBB, base), [])
+  for (const key of ['purchase_model', 'compare', 'age', 'time_unit']) assert.ok(!m.modelFields(BGBB).some((f) => f.key === key), key)
+  assert.equal(m.modelDefaults('bg_bb').output, 'rows')
+  assert.deepEqual(m.modelUnset(BGBB, { ...base, holdout_transactions: 'next' }), ['holdout_length'])
+  assert.equal(m.modelNumberProblem(m.modelFields(BGBB).find((f) => f.key === 'holdout_length'), 2.5), 'whole')
+  assert.equal(m.modelNumberProblem(m.modelFields(BGBB).find((f) => f.key === 'holdout_length'), 0), 'range')
+  assert.equal(m.modelSummary('bg_bb', base), 'qty, r, n · year')
+  assert.equal(m.modelVariant(BGBB, { ...base, spend: 's' }), 'value')
+})
+
+test('the three nodes have an icon of their own, the others their family\'s', async () => {
+  const { modelIconOf } = await import('../composables/modelIcons.ts')
+  const icons = new Set(['parametric_survival', 'clv', 'bg_bb'].map((id) => modelIconOf(id)))
+  assert.equal(icons.size, 3)
+  assert.notEqual(modelIconOf('parametric_survival'), modelIconOf('cox'))
+  assert.equal(modelIconOf('cox'), modelIconOf('kaplan_meier'))
+  assert.equal(modelIconOf('nope'), modelIconOf('linear'))
+})
+
+test('a parametric survival node in the editor: the form, with its words, only what applies', async () => {
+  const Form = await component('components/ui/ModelForm.vue')
+  const base = { time: 'amount', event: 'vip', event_value: 'true' }
+  let html = await render(Form, node('parametric_survival', m.modelDefaults('parametric_survival')))
+  let page = text(html)
+  for (const words of ['The time to an event with a named distribution', 'Follow-up time (a number)', 'Event column', 'Predictors (optional)', 'Strata column', 'Weights column', 'Distribution',
+    'Quantiles of the time', 'Survival at times', 'Significance level', 'Seed', 'Output', 'Still to set: Follow-up time (a number), Event column, Value that means the event happened.']) {
+    assert.ok(page.includes(words), `«${words}» is not on the page: ${page}`)
+  }
+  // no predictor: no reference levels, no interactions; the order is the catalogue's
+  assert.ok(!page.includes('Reference levels') && !page.includes('Interactions'))
+  const order = ['Follow-up time', 'Event column', 'Value that means', 'Predictors (optional)', 'Strata column', 'Weights column', 'Distribution', 'Quantiles of the time', 'Survival at times', 'Significance level']
+  assert.deepEqual([...order].sort((a, b) => page.indexOf(a) - page.indexOf(b)), order)
+  // the distribution is a list of seven, the words of each in the language; the quantiles one box with the default
+  assert.ok(selectsOf(html).includes('Weibull Exponential Log-normal Log-logistic Generalized gamma Gompertz Automatic: the lowest AIC'), selectsOf(html).join(' | '))
+  assert.match(html, /id="model-ctl-1-quantiles"[^>]*value="0.25, 0.75"/)
+  // with predictors the reference levels and the interactions come
+  html = await render(Form, node('parametric_survival', { ...base, predictors: ['channel', 'qty'] }))
+  page = text(html)
+  assert.ok(page.includes('Reference levels') && page.includes('Interactions'))
+  assert.ok(page.includes('Add an interaction'))
+  // a quantile outside (0, 1) is said, and its box is marked
+  html = await render(Form, node('parametric_survival', { ...base, quantiles: [0.5, 1.5] }))
+  assert.ok(text(html).includes('A number between 0 and 1, both excluded.'))
+  assert.match(html, /id="model-ctl-1-quantiles"[^>]*aria-invalid="true"/)
+})
+
+test('the customer lifetime nodes in the editor: their own words for the same keys, the unit asked, the holdout pair said', async () => {
+  const Form = await component('components/ui/ModelForm.vue')
+  let html = await render(Form, node('clv', m.modelDefaults('clv')))
+  let page = text(html)
+  for (const words of ['Customers who leave without saying so', 'Customer column', 'Repeat purchases (a number)', 'Time of the last purchase (a number)', "Age of the customer (a number)", 'Unit of time',
+    'Average spend (a number)', 'Purchase model', 'Periods ahead', 'Purchases in the holdout', 'Significance level', 'Output', 'Still to set: Customer column, Repeat purchases (a number), Time of the last purchase (a number), Age of the customer (a number), Unit of time.']) {
+    assert.ok(page.includes(words), `«${words}» is not on the page: ${page}`)
+  }
+  // the automatic model: nothing to compare; no spend: no discount, no margin; no holdout: no length
+  for (const gone of ['Compare with the other models', 'Yearly discount rate', 'Margin', 'Length of the holdout']) assert.ok(!page.includes(gone), gone)
+  assert.ok(selectsOf(html).includes('Days Weeks Months Quarters Years'), selectsOf(html).join(' | '))
+  assert.match(html, /<input type="radio" name="model-ctl-1-purchase_model"[^>]*value="auto"[^>]*checked/)
+  assert.ok(page.includes('Automatic: the best log-likelihood') && page.includes('Pareto/NBD') && page.includes('BG/NBD') && page.includes('MBG/NBD'))
+  // a model chosen, a spend, a holdout: the rest comes, and the holdout asks for its length
+  const set = { customer: 'channel', frequency: 'qty', recency: 'amount', age: 'amount', time_unit: 'week', purchase_model: 'bg_nbd', spend: 'amount', holdout_transactions: 'qty' }
+  html = await render(Form, node('clv', set))
+  page = text(html)
+  for (const words of ['Compare with the other models', 'Yearly discount rate', 'Margin', 'Length of the holdout', 'The holdout\'s purchases need the holdout\'s length.']) assert.ok(page.includes(words), words)
+  assert.match(html, /id="model-ctl-1-holdout_length"[^>]*aria-describedby="model-ctl-1-holdout_length-required"/)
+  assert.ok(page.includes('Still to set: Length of the holdout.'))
+  // the same key has the other node's words: opportunities, not periods
+  html = await render(Form, node('bg_bb', { ...set, opportunities: 'qty', period_unit: 'year', purchase_model: undefined }))
+  page = text(html)
+  for (const words of ['The same for purchases at fixed occasions', 'Repeat transactions (a number)', 'Opportunity of the last transaction (a number)', 'Opportunities (a number)', 'Length of an opportunity', 'Opportunities ahead', 'Opportunities in the holdout']) {
+    assert.ok(page.includes(words), `«${words}» is not on the page: ${page}`)
+  }
+  for (const gone of ['Purchase model', 'Compare with the other models', 'Age of the customer', 'Unit of time']) assert.ok(!page.includes(gone), gone)
+})
+
+test('the palette lists the three nodes under their groups, searchable, with an icon each', async () => {
+  const Sidebar = await component('components/ui/OpSidebar.vue')
+  const { useModelGroups } = await import('../composables/useModelGroups.ts')
+  const groups = useModelGroups()
+  groups.state.value = { disabled_reason: null, groups: m.MODEL_CATALOG.groups.map((g) => group(g.id)) }
+  const html = await render(Sidebar, { operations: ['cast'], mlflowConnections: 1 })
+  const inside = text('<' + html.slice(html.indexOf('id="palette-models"'), html.indexOf('Control')))
+  assert.ok(inside.includes('Survival Kaplan–Meier Cox proportional hazards Parametric survival'), inside)
+  assert.ok(inside.includes('Customer lifetime Customer lifetime value BG/BB'), inside)
+  // 1 Predict + 2 + 3 + 7 + 2 + 2
+  assert.match(html, /class="group-count"[^>]*>17</)
+  // every item is a button reached with Tab, Enter and Space add it (not a mouse-only control)
+  const items = [...html.slice(html.indexOf('id="palette-models"'), html.indexOf('Control')).matchAll(/<div class="item[^"]*"[^>]*>/g)].map((x) => x[0]).filter((x) => x.includes('role="button"'))
+  assert.equal(items.length, 17)
+  assert.ok( items.every((x) => x.includes('tabindex="0"') && x.includes('role="button"')))
+  groups.state.value = null
 })
