@@ -281,6 +281,8 @@ const offText = computed(() => {
           />
         </label>
       </div>
+      <!-- Run on the sample, and what the latest run left (ModelRun, given by the node's panel) -->
+      <slot name="run" />
     </section>
   </fieldset>
 </template>

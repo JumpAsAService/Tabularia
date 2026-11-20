@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // The node panel of a Model node and of a Predict node: the title (an ARIMA node says what its orders
 // make), the delete button, and the form drawn from the catalogue (ui/ModelForm.vue, ui/PredictForm.vue).
-// What the node reads and writes comes from its edges, as on a Script node. The form's slot `run`
+// What the node reads and writes comes from its edges, as on a Script node. The forms' slot `run`
 // holds the trial's button and its outcome (ModelRun.vue: Run on the sample, the latest output,
 // «not up to date»); the editor runs it (the panel's `run`, as a Script node's).
 import { computed, onMounted } from 'vue'
@@ -48,6 +48,8 @@ const title = computed(() => {
 })
 // Run waits for the group (the form says why it is off) and for what the node still lacks
 const lacking = computed(() => (model.value ? modelUnset(model.value, props.node.data?.params) : []))
+// a Predict node runs once it names its connection and its version; the gateway checks the rest
+const predictReady = computed(() => typeof props.node.data?.connectionId === 'number' && !!props.node.data?.registeredModel && !!props.node.data?.version)
 const icon = computed(() => (isPredict.value ? Sparkles : model.value?.family === 'survival' ? HeartPulse : model.value?.family === 'timeseries' ? ChartSpline : ChartScatter))
 </script>
 
@@ -65,7 +67,19 @@ const icon = computed(() => (isPredict.value ? Sparkles : model.value?.family ==
       :connections="connections"
       :read-only="readOnly"
       @update="emit('update', $event)"
-    />
+    >
+      <template #run>
+        <ModelRun
+          :outputs="outputs"
+          :trial="trial"
+          :flow-dirty="flowDirty"
+          :disabled="!predictReady"
+          :why="predictReady ? '' : $t('models.predict.chooseModel')"
+          :read-only="readOnly"
+          @run="emit('run')"
+        />
+      </template>
+    </PredictForm>
     <p v-else-if="!model" class="muted unknown">{{ $t('models.node.unknownModel', { model: String(node.data?.model ?? '') }) }}</p>
     <ModelForm
       v-else

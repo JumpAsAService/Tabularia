@@ -119,3 +119,16 @@ test('the panels hand the button what the editor knows, and the editor runs it a
   assert.ok(editor.includes('@script-run="runScriptNode"'))
   assert.match(editor, /STEP_TYPES = new Set\(\[[^\]]*'model'/)
 })
+
+test('a Predict node has Run too, once it names its connection and its version; its runs show on the run page', () => {
+  const panel = read('components/models/ModelNodePanel.vue')
+  const predict = panel.slice(panel.indexOf('<PredictForm'), panel.indexOf('</PredictForm>'))
+  assert.ok(predict.includes('<template #run>') && predict.includes('<ModelRun') && predict.includes(':disabled="!predictReady"'), predict)
+  assert.match(panel, /predictReady = computed\(\(\) => typeof props\.node\.data\?\.connectionId === 'number' && !!props\.node\.data\?\.registeredModel && !!props\.node\.data\?\.version\)/)
+  assert.ok(read('components/ui/PredictForm.vue').includes('<slot name="run" />'))
+  assert.match(read('components/FlowEditor.vue'), /STEP_TYPES = new Set\(\[[^\]]*'model_predict'/)
+  const runs = read('pages/runs.vue')
+  assert.ok(runs.includes(`(r.kind === 'model' || r.kind === 'model_predict') && r.script`))
+  assert.ok(runs.includes(`r.kind === 'model_predict' ? t('models.predict.title')`))
+  for (const lang of LANGS) assert.ok(MESSAGES[lang].models.predict.chooseModel && MESSAGES[lang].models.predict.title, lang)
+})

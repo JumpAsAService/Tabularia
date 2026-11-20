@@ -30,7 +30,7 @@ export interface RunGroup<R> {
 // what a run ran, as far as the row says: two runs of the same thing have the same source
 function sourceOf(r: GroupableRun): string {
   // a Script, Container or model node's run, a Pushmail cell's: the node or the cell is part of it
-  const part = r.kind === 'script' || r.kind === 'container' || r.kind === 'model' ? r.script ?? '' : r.kind === 'pushmail' ? r.email ?? '' : ''
+  const part = r.kind === 'script' || r.kind === 'container' || r.kind === 'model' || r.kind === 'model_predict' ? r.script ?? '' : r.kind === 'pushmail' ? r.email ?? '' : ''
   let label = ''
   if (part) {
     try {
