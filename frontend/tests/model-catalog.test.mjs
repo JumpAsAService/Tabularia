@@ -451,6 +451,10 @@ test('Predict: the options of the model the version holds, and the columns it ad
   assert.deepEqual(m.predictParams('parametric_survival', { quantiles: '0.9, 0.1', at_times: '30, 90', interval: true, threshold: 0.4 }), { interval: true, at_times: [30, 90], quantiles: [0.1, 0.9] })
   assert.deepEqual(m.predictColumns('parametric_survival', { quantiles: [0.1, 0.9], at_times: [30] }), ['prediction', 'survival_at_30', 'quantile_0.1', 'quantile_0.9'])
   assert.deepEqual(m.predictColumns('parametric_survival', { interval: true }), ['prediction', 'prediction_low', 'prediction_high'])
+  // the interval of each quantile and of each time is a column of its own, once both options are given
+  assert.deepEqual(m.predictColumns('parametric_survival', { quantiles: [0.1, 0.9], at_times: [30], interval: true }), [
+    'prediction', 'survival_at_30', 'survival_at_30_low', 'survival_at_30_high', 'prediction_low', 'prediction_high',
+    'quantile_0.1', 'quantile_0.9', 'quantile_0.1_low', 'quantile_0.9_low', 'quantile_0.1_high', 'quantile_0.9_high'])
   // a Cox version offers no quantiles, nor conditional survival (its curve stops at the last time observed)
   assert.ok(!m.predictFields('cox').some((f) => f.key === 'quantiles' || f.key === 'alive_at'))
   assert.ok(!m.predictFields('kaplan_meier').some((f) => f.key === 'alive_at'))

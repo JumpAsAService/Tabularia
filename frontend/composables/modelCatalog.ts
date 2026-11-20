@@ -735,7 +735,8 @@ export function predictParams(modelId: string | null | undefined, params: Params
   return out
 }
 
-/** The columns a Predict step adds for a model with the options given (`survival_at_*` is one per time). */
+/** The columns a Predict step adds for a model with the options given (`survival_at_*` is one per time, `quantile_*_low` the
+ *  interval of each quantile, under a key `a+b` given when both options are). */
 export function predictColumns(modelId: string | null | undefined, params: Params | null | undefined, catalog: ModelCatalog = MODEL_CATALOG,
   variant?: string | null): string[] {
   // `model:variant` comes first (the boosting models), then the model
@@ -745,10 +746,14 @@ export function predictColumns(modelId: string | null | undefined, params: Param
   const out = [...(rows.always ?? [])]
   // the options in alphabetical order, as the gateway lists them (`PredictColumns`)
   for (const [option, names] of Object.entries(rows).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
-    if (option === 'always' || given[option] === undefined) continue
+    // a key `a+b` is given when both options are; its `*` is one per entry of the first (the interval of each quantile, of each time)
+    const parts = option.split('+')
+    if (option === 'always' || parts.some((part) => given[part] === undefined)) continue
+    const list = given[parts[0]]
     for (const name of names) {
-      if (name.endsWith('*') && Array.isArray(given[option])) out.push(...given[option].map((t: number) => `${name.slice(0, -1)}${t}`))
-      else if (!name.endsWith('*')) out.push(name)
+      const at = name.indexOf('*')
+      if (at >= 0 && Array.isArray(list)) out.push(...list.map((t: number) => `${name.slice(0, at)}${t}${name.slice(at + 1)}`))
+      else if (at < 0) out.push(name)
     }
   }
   return out

@@ -2143,6 +2143,7 @@
               "numbers": [
                 "n",
                 "events",
+                "alpha",
                 "censored",
                 "n_missing",
                 "n_zero_time",
@@ -2231,7 +2232,8 @@
                 "p_value",
                 "threshold",
                 "value",
-                "count"
+                "count",
+                "at"
               ],
               "texts": [
                 "h0",
@@ -2239,7 +2241,8 @@
                 "advice",
                 "significance",
                 "rows",
-                "advice_id"
+                "advice_id",
+                "description"
               ]
             },
             "point": {
@@ -2309,8 +2312,14 @@
             "rows": [
               "pred_linear",
               "pred_median",
+              "pred_median_low",
+              "pred_median_high",
               "pred_quantile_*",
+              "pred_quantile_*_low",
+              "pred_quantile_*_high",
               "pred_surv_at_*",
+              "pred_surv_at_*_low",
+              "pred_surv_at_*_high",
               "pred_cox_snell",
               "pred_martingale",
               "pred_deviance"
@@ -2347,6 +2356,7 @@
               "numbers": [
                 "n",
                 "events",
+                "alpha",
                 "censored",
                 "n_missing",
                 "n_zero_time",
@@ -2423,7 +2433,8 @@
                 "p_value",
                 "threshold",
                 "value",
-                "count"
+                "count",
+                "at"
               ],
               "texts": [
                 "h0",
@@ -2431,7 +2442,8 @@
                 "advice",
                 "significance",
                 "rows",
-                "advice_id"
+                "advice_id",
+                "description"
               ]
             },
             "point": {
@@ -2491,8 +2503,14 @@
             "rows": [
               "pred_linear",
               "pred_median",
+              "pred_median_low",
+              "pred_median_high",
               "pred_quantile_*",
+              "pred_quantile_*_low",
+              "pred_quantile_*_high",
               "pred_surv_at_*",
+              "pred_surv_at_*_low",
+              "pred_surv_at_*_high",
               "pred_cox_snell",
               "pred_martingale",
               "pred_deviance"
@@ -2528,6 +2546,7 @@
               "numbers": [
                 "n",
                 "events",
+                "alpha",
                 "censored",
                 "n_missing",
                 "n_zero_time",
@@ -2611,7 +2630,8 @@
                 "p_value",
                 "threshold",
                 "value",
-                "count"
+                "count",
+                "at"
               ],
               "texts": [
                 "h0",
@@ -2619,7 +2639,8 @@
                 "advice",
                 "significance",
                 "rows",
-                "advice_id"
+                "advice_id",
+                "description"
               ]
             },
             "point": {
@@ -2679,8 +2700,14 @@
             "rows": [
               "pred_linear",
               "pred_median",
+              "pred_median_low",
+              "pred_median_high",
               "pred_quantile_*",
+              "pred_quantile_*_low",
+              "pred_quantile_*_high",
               "pred_surv_at_*",
+              "pred_surv_at_*_low",
+              "pred_surv_at_*_high",
               "pred_cox_snell",
               "pred_martingale",
               "pred_deviance"
@@ -2716,6 +2743,7 @@
               "numbers": [
                 "n",
                 "events",
+                "alpha",
                 "censored",
                 "n_missing",
                 "n_zero_time",
@@ -2823,7 +2851,8 @@
                 "p_value",
                 "threshold",
                 "value",
-                "count"
+                "count",
+                "at"
               ],
               "texts": [
                 "h0",
@@ -2831,7 +2860,8 @@
                 "advice",
                 "significance",
                 "rows",
-                "advice_id"
+                "advice_id",
+                "description"
               ]
             },
             "point": {
@@ -2906,8 +2936,14 @@
             "rows": [
               "pred_linear",
               "pred_median",
+              "pred_median_low",
+              "pred_median_high",
               "pred_quantile_*",
+              "pred_quantile_*_low",
+              "pred_quantile_*_high",
               "pred_surv_at_*",
+              "pred_surv_at_*_low",
+              "pred_surv_at_*_high",
               "pred_cox_snell",
               "pred_martingale",
               "pred_deviance"
@@ -5968,6 +6004,14 @@
         "interval": [
           "prediction_low",
           "prediction_high"
+        ],
+        "quantiles+interval": [
+          "quantile_*_low",
+          "quantile_*_high"
+        ],
+        "at_times+interval": [
+          "survival_at_*_low",
+          "survival_at_*_high"
         ]
       },
       "arima": {

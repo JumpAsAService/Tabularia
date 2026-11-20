@@ -94,7 +94,8 @@ def test_the_parametric_survival_node_and_its_four_variants():
     assert [v for v, s in sections.items() if "candidate" in s] == ["auto"]
     assert all("parameter" in s and "advice_id" in s["assumption"]["texts"] for s in sections.values())
     # a parametric model is predicted beyond the data: the median, the quantiles, S(t), the interval
-    assert set(catalog.PREDICT["columns"]["parametric_survival"]) == {"always", "quantiles", "at_times", "interval"}
+    assert set(catalog.PREDICT["columns"]["parametric_survival"]) == {"always", "quantiles", "at_times", "interval", "quantiles+interval",
+                                                                         "at_times+interval"}
     assert all("parametric_survival" in catalog.PREDICT["applies_to"][k] for k in ("quantiles", "at_times", "interval"))
     base = {"time": "days", "event": "status", "event_value": "failed"}
     assert catalog.check_params("parametric_survival", base)["quantiles"] == [0.25, 0.75]
@@ -361,3 +362,24 @@ def test_conditional_survival_is_a_column_of_the_parametric_node_and_of_its_pred
     assert catalog.check_params("parametric_survival", {**base, "alive_at": "age_days"})["alive_at"] == "age_days"
     # the columns Predict adds are the same ones: they now mean the time left
     assert "alive_at" not in catalog.PREDICT["columns"]["parametric_survival"]
+
+
+def test_the_intervals_of_the_quantiles_and_the_times_are_columns_of_predict_and_of_the_rows_output():
+    # a key `a+b` is given when both options are; its `*` is one per entry of `a`
+    columns = catalog.PREDICT["columns"]["parametric_survival"]
+    assert columns["quantiles+interval"] == ["quantile_*_low", "quantile_*_high"]
+    assert columns["at_times+interval"] == ["survival_at_*_low", "survival_at_*_high"]
+    assert all(set(key.split("+")) <= set(catalog.PREDICT["takes"]) for key in columns if key != "always")
+    rows = catalog.variant_spec("parametric_survival", {})["outputs"]["rows"]
+    assert {"pred_median_low", "pred_median_high", "pred_quantile_*_low", "pred_surv_at_*_high"} <= set(rows)
+    # the rows output's names are the node's own numbers: a column the input already has is refused, intervals included
+    base = {"time": "t", "event": "e", "event_value": 1, "output": "rows", "quantiles": [0.1, 0.125], "times": [30]}
+    columns_in = {"t": "Float64", "e": "Int64"}
+    for taken in ("pred_median_low", "pred_quantile_0.1_high", "pred_quantile_0.125_low", "pred_surv_at_30_low", "pred_surv_at_30"):
+        with pytest.raises(Exception, match=taken):
+            catalog.check_params("parametric_survival", base, {**columns_in, taken: "Float64"})
+    catalog.check_params("parametric_survival", base, {**columns_in, "pred_surv_at_31_low": "Float64"})  # not one of the times
+    # the checks' measures: a number and a sentence, no verdict; `at` is the time it is read at
+    assertion = catalog.variant_spec("parametric_survival", {})["sections"]["assumption"]
+    assert "at" in assertion["numbers"] and "description" in assertion["texts"]
+    assert "alpha" in catalog.variant_spec("parametric_survival", {})["sections"]["model"]["numbers"]

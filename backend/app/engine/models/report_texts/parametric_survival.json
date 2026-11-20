@@ -126,7 +126,8 @@
     "note_second_start": "Note: a second start",
     "note_zero_times": "Note: rows with a time of 0",
     "note_zero_weights": "Note: rows of weight 0",
-    "note_weights_counts": "Note: weights that are not whole numbers"
+    "note_weights_counts": "Note: weights that are not whole numbers",
+    "alpha": "Significance level of the tests (alpha)"
    },
    "coef": {
     "time_ratio": "Time ratio",
@@ -407,7 +408,8 @@
     "note_second_start": "Nota: un secondo avvio",
     "note_zero_times": "Nota: righe con tempo 0",
     "note_zero_weights": "Nota: righe di peso 0",
-    "note_weights_counts": "Nota: pesi che non sono numeri interi"
+    "note_weights_counts": "Nota: pesi che non sono numeri interi",
+    "alpha": "Livello di significatività dei test (alfa)"
    },
    "coef": {
     "time_ratio": "Rapporto dei tempi",
@@ -688,7 +690,8 @@
     "note_second_start": "Hinweis: ein zweiter Start",
     "note_zero_times": "Hinweis: Zeilen mit Zeit 0",
     "note_zero_weights": "Hinweis: Zeilen mit Gewicht 0",
-    "note_weights_counts": "Hinweis: Gewichte, die keine ganzen Zahlen sind"
+    "note_weights_counts": "Hinweis: Gewichte, die keine ganzen Zahlen sind",
+    "alpha": "Signifikanzniveau der Tests (alpha)"
    },
    "coef": {
     "time_ratio": "Zeitverhältnis",
@@ -969,7 +972,8 @@
     "note_second_start": "Nota: un segundo arranque",
     "note_zero_times": "Nota: filas con tiempo 0",
     "note_zero_weights": "Nota: filas de peso 0",
-    "note_weights_counts": "Nota: pesos que no son números enteros"
+    "note_weights_counts": "Nota: pesos que no son números enteros",
+    "alpha": "Nivel de significación de las pruebas (alfa)"
    },
    "coef": {
     "time_ratio": "Razón de tiempos",
@@ -1250,7 +1254,8 @@
     "note_second_start": "Note : un second départ",
     "note_zero_times": "Note : lignes de temps 0",
     "note_zero_weights": "Note : lignes de poids 0",
-    "note_weights_counts": "Note : poids qui ne sont pas des entiers"
+    "note_weights_counts": "Note : poids qui ne sont pas des entiers",
+    "alpha": "Seuil de signification des tests (alpha)"
    },
    "coef": {
     "time_ratio": "Rapport des temps",

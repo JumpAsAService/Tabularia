@@ -620,7 +620,7 @@ _PS_CHECKS_COMMON = ["convergence", "epv", "separation", "km_agreement", "distri
 _PS_PH_CHECKS = ["ph_cox", "ph_cox_global"]
 _PS_MODEL_TEXTS = [*_MODEL_TEXTS, "event_value", "distribution", "selection", "coefficient_scale", "profile",
                    "lr_significance"]
-_PS_MODEL_NUMBERS = ["n", "events", "censored", "n_missing", "n_zero_time", "n_strata", "n_parameters", "log_lik", "aic",
+_PS_MODEL_NUMBERS = ["n", "events", "alpha", "censored", "n_missing", "n_zero_time", "n_strata", "n_parameters", "log_lik", "aic",
                      "bic", "lr_statistic", "lr_df", "lr_p_value", "concordance", "concordance_se", "last_time",
                      "last_event_time"]
 _PS_SHAPE_LR = ["exponential_lr_statistic", "exponential_lr_df", "exponential_lr_p_value"]  # the shape against a constant hazard
@@ -635,9 +635,10 @@ _PS_CHARTS = [
 
 
 def _ps_assumptions(*checks: str) -> dict[str, Any]:
-    """The checks' rows: an assumption's, and `advice_id` (the report picks the sentence by it)."""
+    """The checks' rows: an assumption's, `advice_id` (the report picks the sentence by it), and for a
+    measure, which has a number and no verdict, `description` and `at` (the time the number is read at)."""
     shape = _assumptions(*checks)
-    return {**shape, "texts": [*shape["texts"], "advice_id"]}
+    return {**shape, "numbers": [*shape["numbers"], "at"], "texts": [*shape["texts"], "advice_id", "description"]}
 
 
 def _ps_variant(id_: str, distributions: list[str], model_numbers: list[str], model_texts: list[str],
@@ -663,8 +664,10 @@ def _ps_variant(id_: str, distributions: list[str], model_numbers: list[str], mo
         "when": {"distribution": distributions},
         "sections": sections,
         "charts": charts,
-        "outputs": {"rows": ["pred_linear", "pred_median", "pred_quantile_*", "pred_surv_at_*", "pred_cox_snell",
-                             "pred_martingale", "pred_deviance"]},
+        # the intervals of the median, of each quantile and of each time are columns of their own (`_low`, `_high`)
+        "outputs": {"rows": ["pred_linear", "pred_median", "pred_median_low", "pred_median_high", "pred_quantile_*",
+                             "pred_quantile_*_low", "pred_quantile_*_high", "pred_surv_at_*", "pred_surv_at_*_low",
+                             "pred_surv_at_*_high", "pred_cox_snell", "pred_martingale", "pred_deviance"]},
     }
 
 
@@ -980,8 +983,11 @@ PREDICT: dict[str, Any] = {
         "kaplan_meier": {"always": ["prediction"], "interval": ["prediction_low", "prediction_high"]},
         "cox": {"always": ["prediction"], "at_times": ["survival_at_*"]},
         # the median time; a time past the fit's last one is predicted (the distribution's shape gives it)
+        # a key `a+b` is given when both options are: its `*` is one per entry of `a` (the interval of each quantile, of each time)
         "parametric_survival": {"always": ["prediction"], "quantiles": ["quantile_*"], "at_times": ["survival_at_*"],
-                                "interval": ["prediction_low", "prediction_high"]},
+                                "interval": ["prediction_low", "prediction_high"],
+                                "quantiles+interval": ["quantile_*_low", "quantile_*_high"],
+                                "at_times+interval": ["survival_at_*_low", "survival_at_*_high"]},
         "arima": {"always": ["prediction"], "interval": ["lower_80", "upper_80", "lower", "upper"]},
         # the expected transactions over the horizon, P(alive); with a spend part the expected spend and the CLV
         **{f"{m}:{v}": cols for m in ("clv", "bg_bb") for v, cols in (
@@ -1269,9 +1275,32 @@ def _check_columns(model: str, spec: Mapping[str, Any], kinds: Mapping[str, str]
     output = full.get("output")
     variant_outputs = variant_spec(model, full)["outputs"]
     if output == "rows":
-        clash = [c for c in variant_outputs["rows"] if c in columns]
+        clash = [c for c in _rows_columns(variant_outputs["rows"], full) if c in columns]
         if clash:
             raise refusal(model, f"the input already has a column «{clash[0]}», which the model's rows add: rename it first")
+
+
+# The rows output's names with a `*` that the node's own numbers fill, as the runner writes them
+# (`km_time_label`: a whole number without decimals, else its shortest form). Others (`pred_prob_*`:
+# one per class of the data) are not known here, and stay as they are.
+_ROWS_WILDCARDS = {"pred_quantile_": "quantiles", "pred_surv_at_": "times"}
+
+
+def _number_label(t: float) -> str:
+    return str(int(t)) if float(t).is_integer() and abs(t) < 1e15 else repr(float(t))
+
+
+def _rows_columns(names: list[str], full: Mapping[str, Any]) -> list[str]:
+    """The columns the rows output adds, the `*` of a quantile's or a time's name made one per number."""
+    out: list[str] = []
+    for name in names:
+        pre, star, post = name.partition("*")
+        key = _ROWS_WILDCARDS.get(pre)
+        if not star or key is None:
+            out.append(name)
+        else:
+            out.extend(f"{pre}{_number_label(v)}{post}" for v in (full.get(key) or []))
+    return out
 
 
 def variant_spec(model: str, checked: Mapping[str, Any]) -> dict[str, Any]:

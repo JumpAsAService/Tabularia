@@ -128,7 +128,8 @@ func contains(list []string, s string) bool {
 // catalogue keys them `model:variant`) with its checked options, in the catalogue's order:
 // `survival_at_<t>` once per time, t written as the runner writes it. A name ending in «*»
 // whose option is not a list of times (`prediction_prob_*`: one per class of the card) is
-// written as it is: the card's classes are not the catalogue's.
+// written as it is: the card's classes are not the catalogue's. A `*` inside a name
+// (`quantile_*_low`) is filled the same way, under a key `a+b` given when both options are.
 func PredictColumns(model, variant string, checked map[string]any) []string {
 	spec := predictData.Columns[model+":"+variant]
 	if spec == nil {
@@ -146,12 +147,20 @@ func PredictColumns(model, variant string, checked map[string]any) []string {
 	}
 	sort.Strings(options)
 	for _, option := range options {
-		v, given := checked[option]
+		// a key `a+b` is given when both options are; its `*` is one per entry of the first (the
+		// interval of each quantile, of each time)
+		given := true
+		for _, part := range strings.Split(option, "+") {
+			if _, has := checked[part]; !has {
+				given = false
+			}
+		}
 		if !given {
 			continue
 		}
+		v := checked[strings.SplitN(option, "+", 2)[0]]
 		for _, name := range spec[option] {
-			prefix, isPattern := strings.CutSuffix(name, "*")
+			prefix, suffix, isPattern := strings.Cut(name, "*")
 			if !isPattern {
 				out = append(out, name)
 				continue
@@ -163,7 +172,7 @@ func PredictColumns(model, variant string, checked map[string]any) []string {
 					label := timeLabel(f)
 					if !seen[label] {
 						seen[label] = true
-						out = append(out, prefix+label)
+						out = append(out, prefix+label+suffix)
 					}
 				}
 			}
