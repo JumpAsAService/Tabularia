@@ -65,10 +65,8 @@ func TestEveryGroupOfTheCatalogueHasARecipeAndARunner(t *testing.T) {
 			t.Fatal(err)
 		}
 		paths := map[string]bool{}
-		size := 0
 		for _, f := range code {
 			paths[f.Path] = true
-			size += len(f.Content)
 		}
 		wanted := map[string][]string{
 			"r": {"runner/run.R", "common/R/protocol.R", "common/R/main.R", "common/R/selftest.R"},
@@ -110,13 +108,18 @@ func TestEveryGroupOfTheCatalogueHasARecipeAndARunner(t *testing.T) {
 				}
 			}
 		}
-		withRef, _ := CodeFiles(g.ID, []byte("{}"), true)
-		for _, f := range withRef {
-			size += len(f.Content)
+		withRef, err := CodeFiles(g.ID, []byte("{}"), true)
+		if err != nil {
+			t.Fatal(err)
 		}
-		// a ConfigMap holds at most 1 MiB: the code and the small reference tables, twice over
-		if size > 900<<10 {
-			t.Errorf("%s: %d bytes of code", g.ID, size)
+		// a ConfigMap holds at most 1 MiB, and a Job's receives either the code with its task or the
+		// self-test's (the code with the reference cases, no task), never both: measure each one as
+		// ConfigMap() makes it (the keys and the data, and the items that map them), the biggest of
+		// the two against the limit, with room for the metadata
+		for what, code := range map[string][]File{"job": mustCode(t, g.ID, []byte("{}"), false), "self-test": mustCode(t, g.ID, nil, true)} {
+			if size := configMapSize(code); size > 900<<10 {
+				t.Errorf("%s: the %s ConfigMap is %d bytes", g.ID, what, size)
+			}
 		}
 		if string(mustFile(t, withRef, "task.json")) != "{}" || len(mustFile(t, withRef, "reference/expected.json")) == 0 {
 			t.Errorf("%s: task.json or the reference cases are missing", g.ID)
@@ -124,6 +127,35 @@ func TestEveryGroupOfTheCatalogueHasARecipeAndARunner(t *testing.T) {
 	}
 	if _, err := CodeFiles("nope", nil, false); err == nil {
 		t.Error("files of no group")
+	}
+}
+
+func mustCode(t *testing.T, group string, task []byte, withReference bool) []File {
+	t.Helper()
+	code, err := CodeFiles(group, task, withReference)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return code
+}
+
+// configMapSize is the size of the ConfigMap ConfigMap(code) makes: its keys and values, and the
+// items (key and path) of the volume that mounts it.
+func configMapSize(code []File) int {
+	data, items := ConfigMap(code)
+	size := 0
+	for k, v := range data {
+		size += len(k) + len(v)
+	}
+	for _, it := range items {
+		size += len(it["key"]) + len(it["path"])
+	}
+	return size
+}
+
+func TestTheBiggestConfigMapOfEachGroup(t *testing.T) {
+	for _, g := range Groups() {
+		t.Logf("%s: job %d bytes, self-test %d bytes", g.ID, configMapSize(mustCode(t, g.ID, []byte("{}"), false)), configMapSize(mustCode(t, g.ID, nil, true)))
 	}
 }
 

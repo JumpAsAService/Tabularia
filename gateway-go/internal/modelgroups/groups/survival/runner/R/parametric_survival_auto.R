@@ -38,9 +38,10 @@
 # process's clock. The reference cases are made by reference/make_reference_auto.R.
 
 PS_AUTO_ORDER <- c("exponential", "weibull", "lognormal", "loglogistic", "gompertz", "gengamma")
-# The distributions nested in each (the owner's rule): the exponential in the Weibull, the Weibull
-# and the log-normal in the generalized gamma, and through them the exponential.
-PS_AUTO_NESTED <- list(weibull = "exponential", gengamma = c("exponential", "weibull", "lognormal"))
+# The distributions nested in each (the owner's rule): the exponential in the Weibull and in the
+# Gompertz (shape 0), the Weibull and the log-normal in the generalized gamma, and through them
+# the exponential.
+PS_AUTO_NESTED <- list(weibull = "exponential", gompertz = "exponential", gengamma = c("exponential", "weibull", "lognormal"))
 PS_AUTO_TIME_SHARE <- 0.5      # of the step's time budget, after which no candidate is started
 PS_AUTO_CURVE_ROWS <- 5000L    # rows the mean fitted curves are taken over, at most (equally spaced)
 PS_AUTO_CURVE_TIMES <- 100L    # the curves' times, from 0 to the last observed time
@@ -259,7 +260,11 @@ TAB_COMMON_TESTS[["parametric survival, auto: the lowest AIC, the parsimony rule
   r <- choose(c(lognormal = 101, gengamma = 100))
   .tab_expect(r$chosen == "lognormal" && r$parsimony, "the log-normal: ", r$chosen)
   r <- choose(c(exponential = 101, gompertz = 100))
-  .tab_expect(r$chosen == "gompertz" && !r$parsimony, "Gompertz: ", r$chosen)
+  .tab_expect(r$lowest == "gompertz" && r$chosen == "exponential" && r$parsimony, "Gompertz, the exponential nested in it (shape 0): ", r$chosen)
+  r <- choose(c(exponential = 102.01, gompertz = 100))
+  .tab_expect(r$chosen == "gompertz" && !r$parsimony, "Gompertz, the exponential 2.01 away: ", r$chosen)
+  r <- choose(c(weibull = 100.5, gompertz = 100))
+  .tab_expect(r$chosen == "gompertz" && !r$parsimony, "Gompertz: the Weibull is not nested in it: ", r$chosen)
   r <- choose(c(weibull = 100.3, gengamma = 100), out = "weibull")
   .tab_expect(r$chosen == "gengamma", "a distribution out: ", r$chosen)
   r <- choose(c(weibull = 100, lognormal = 100))

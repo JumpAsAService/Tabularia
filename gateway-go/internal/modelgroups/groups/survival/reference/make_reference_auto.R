@@ -15,8 +15,8 @@
 #   ΔAIC, the Akaike weights                                0.05 and 0.005 absolute (derived from the AICs);
 #   the choice, the marks, the statuses, the sentences      exact.
 # The choice is written here by the rule of the spec, independently of the runner: the lowest AIC,
-# then, if a simpler nested distribution (exponential in the Weibull; exponential, Weibull and
-# log-normal in the generalized gamma) is within 2, the simplest.
+# then, if a simpler nested distribution (exponential in the Weibull and in the Gompertz, whose shape
+# 0 it is; exponential, Weibull and log-normal in the generalized gamma) is within 2, the simplest.
 #
 # The tables (fixed seeds):
 #   ps_auto           240 rows drawn from a Weibull AFT (a number, a category of three levels,
@@ -56,7 +56,7 @@ PS_AUTO_FLEXSURV <- c(exponential = "exp", weibull = "weibull", gompertz = "gomp
 PS_AUTO_ANC <- c(weibull = "shape", gompertz = "shape", loglogistic = "shape", lognormal = "sdlog", gengamma = "sigma")
 PS_AUTO_LABEL <- c(exponential = "exponential", weibull = "Weibull", gompertz = "Gompertz", loglogistic = "log-logistic",
                    lognormal = "log-normal", gengamma = "generalized gamma")
-PS_AUTO_NESTED_REF <- list(weibull = "exponential", gengamma = c("exponential", "weibull", "lognormal"))
+PS_AUTO_NESTED_REF <- list(weibull = "exponential", gompertz = "exponential", gengamma = c("exponential", "weibull", "lognormal"))
 
 # Every candidate by flexsurvreg on `x` (columns time, event, w and the predictors), polished; NULL
 # when flexsurv itself does not reach a maximum. `rhs`: the location's formula after the «~»;
