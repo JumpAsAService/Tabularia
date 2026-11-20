@@ -8,6 +8,7 @@ import asyncio
 import io
 from pathlib import Path
 
+import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 from botocore.exceptions import ClientError
@@ -92,8 +93,21 @@ def test_the_sections_asked_in_their_order(bucket):
     every = sorted(table.to_pylist(), key=lambda r: r["ord"])
     want = [r for r in every if r["section"] in ("model", "coef")]
     assert [(r["section"], r["stat"]) for r in got] == [(r["section"], r["stat"]) for r in want]
-    assert set(got[0]) == {"section", "level", "level_2", "stat", "value", "text"}
+    assert set(got[0]) == {"section", "level", "level_2", "stat", "value", "text", "x0"}
     assert {r["section"] for r in got} == {"model", "coef"}
+
+
+def test_a_chart_point_comes_with_its_x(bucket):
+    """The learning curves are logged to MLflow as metric histories: the round is the point's x0."""
+    table = pa.table({"section": ["curve", "model"], "level": ["learning_loss", None], "level_2": ["train", None],
+                      "stat": ["y", "n"], "value": [0.5, 10.0], "text": [None, None], "x0": [7.0, None], "x1": [None, None],
+                      "ord": [0, 1], "key": ["k0", "k1"]})
+    buf = io.BytesIO()
+    pq.write_table(table, buf)
+    bucket({"step/results.parquet": buf.getvalue()})
+    got = routes.results_rows(routes.ResultsRowsRequest(connection=_conn(), key="step/results.parquet",
+                                                        sections=["curve"]))["rows"]
+    assert got == [{"section": "curve", "level": "learning_loss", "level_2": "train", "stat": "y", "value": 0.5, "text": None, "x0": 7.0}]
 
 
 def test_results_gone_are_404(bucket):

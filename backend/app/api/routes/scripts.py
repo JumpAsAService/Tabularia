@@ -414,7 +414,7 @@ class ResultsRowsRequest(BaseModel):
 
 @router.post("/results/rows")
 def results_rows(request: ResultsRowsRequest):
-    """{rows: [{section, level, level_2, stat, value, text}]} of the sections asked, in their
+    """{rows: [{section, level, level_2, stat, value, text, x0}]} of the sections asked, in their
     order. A model's results are small by construction (the caps on points)."""
     import pyarrow.parquet as pq
 
@@ -430,9 +430,9 @@ def results_rows(request: ResultsRowsRequest):
             raise HTTPException(status_code=502, detail=f"The scripts bucket answered: {_reason(e)}")
         except BotoCoreError as e:
             raise HTTPException(status_code=502, detail=f"The scripts bucket answered: {_reason(e)}")
-        table = pq.read_table(path, columns=["section", "level", "level_2", "stat", "value", "text", "ord"])
+        table = pq.read_table(path, columns=["section", "level", "level_2", "stat", "value", "text", "x0", "ord"])
     finally:
         os.unlink(path)
     wanted = set(request.sections)
     rows = sorted((r for r in table.to_pylist() if r["section"] in wanted), key=lambda r: r["ord"])
-    return {"rows": [{k: r[k] for k in ("section", "level", "level_2", "stat", "value", "text")} for r in rows]}
+    return {"rows": [{k: r[k] for k in ("section", "level", "level_2", "stat", "value", "text", "x0")} for r in rows]}

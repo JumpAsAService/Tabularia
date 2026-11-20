@@ -531,6 +531,7 @@ type resultRow struct {
 	Stat    string   `json:"stat"`
 	Value   *float64 `json:"value"`
 	Text    *string  `json:"text"`
+	X0      *float64 `json:"x0"` // a chart point's x (a learning curve's round)
 }
 
 // flattenParams are the node's checked parameters as MLflow's: one per key, a nested object's
@@ -603,9 +604,43 @@ func metricKey(s string) string {
 	return b.String()
 }
 
+// maxImportanceMetrics is how many predictors' importance a run logs (the first by rank).
+const maxImportanceMetrics = 20
+
+// learningMetricName is the name a learning curve's metric history carries: the library's own
+// name of the loss (`learning_loss`) or the text of the stop metric (`learning_stop`).
+func learningMetricName(level string, rows []resultRow) string {
+	text := func(stat string) string {
+		for _, r := range rows {
+			if r.Section == "model" && r.Stat == stat && r.Text != nil {
+				return *r.Text
+			}
+		}
+		return ""
+	}
+	if level == "learning_stop" {
+		if m := text("stop_metric"); m != "" {
+			return m
+		}
+		return "stop"
+	}
+	losses := map[string]map[string]string{
+		"xgboost":  {"regression": "rmse", "binary": "logloss", "multiclass": "mlogloss"},
+		"catboost": {"regression": "RMSE", "binary": "Logloss", "multiclass": "MultiClass"},
+	}
+	if m := losses[text("library")][text("task")]; m != "" {
+		return m
+	}
+	return "loss"
+}
+
 // modelMetrics are every number of the `model` section and, per assumption, its statistic
 // and p-value (`assumption.<check>.statistic`, with the term or stratum between when the
-// check has one: `assumption.<check>.<term>.p_value`). Each key once.
+// check has one: `assumption.<check>.<term>.p_value`). Each key once. A boosting model's
+// results (they carry a `library` text) add what the spec lists for it: the diagnostics' value
+// (`assumption.<check>[.<level_2>].value`), `importance.<predictor>.gain_share` and
+// `.mean_abs_shap_share` for the first 20 predictors, and each learning curve as a metric
+// history (`learning.train.<metric>`, `learning.validation.<metric>`, step = the round).
 func modelMetrics(rows []resultRow, at time.Time) []mlflowconn.Metric {
 	seen := map[string]bool{}
 	var out []mlflowconn.Metric
@@ -616,6 +651,13 @@ func modelMetrics(rows []resultRow, at time.Time) []mlflowconn.Metric {
 			out = append(out, mlflowconn.Metric{Key: key, Value: v, Timestamp: at.UnixMilli()})
 		}
 	}
+	boosting := false
+	for _, r := range rows {
+		if r.Section == "model" && r.Stat == "library" {
+			boosting = true
+		}
+	}
+	predictors := map[string]bool{}
 	for _, r := range rows {
 		if r.Value == nil {
 			continue
@@ -623,12 +665,22 @@ func modelMetrics(rows []resultRow, at time.Time) []mlflowconn.Metric {
 		switch {
 		case r.Section == "model":
 			add(r.Stat, *r.Value)
-		case r.Section == "assumption" && (r.Stat == "statistic" || r.Stat == "p_value") && r.Level != nil:
+		case r.Section == "assumption" && (r.Stat == "statistic" || r.Stat == "p_value" || (boosting && r.Stat == "value")) && r.Level != nil:
 			key := "assumption." + *r.Level
 			if r.Level2 != nil && *r.Level2 != "" {
 				key += "." + *r.Level2
 			}
 			add(key+"."+r.Stat, *r.Value)
+		case boosting && r.Section == "importance" && (r.Stat == "gain_share" || r.Stat == "mean_abs_shap_share") && r.Level != nil:
+			if !predictors[*r.Level] && len(predictors) >= maxImportanceMetrics {
+				continue
+			}
+			predictors[*r.Level] = true
+			add("importance."+*r.Level+"."+r.Stat, *r.Value)
+		case boosting && r.Section == "curve" && r.Stat == "y" && r.Level != nil && r.Level2 != nil && r.X0 != nil &&
+			strings.HasPrefix(*r.Level, "learning_") && (*r.Level2 == "train" || *r.Level2 == "validation"):
+			out = append(out, mlflowconn.Metric{Key: metricKey("learning." + *r.Level2 + "." + learningMetricName(*r.Level, rows)),
+				Value: *r.Value, Timestamp: at.UnixMilli(), Step: int64(*r.X0)})
 		}
 	}
 	return out
@@ -694,7 +746,7 @@ func (d *Deps) modelResultRows(ctx context.Context, storage *scriptStorage, key 
 	cctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
 	res, raw, err := d.Engine.JSON(cctx, http.MethodPost, "/scripts/results/rows", pyjson.Object{{Key: "connection", Value: storage.payload()},
-		{Key: "key", Value: key}, {Key: "sections", Value: []any{"model", "assumption", "coef"}}})
+		{Key: "key", Value: key}, {Key: "sections", Value: []any{"model", "assumption", "coef", "importance", "curve"}}})
 	if err != nil {
 		return nil, err
 	}

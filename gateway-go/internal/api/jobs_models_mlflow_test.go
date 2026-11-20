@@ -24,6 +24,53 @@ import (
 // not answer, with and without «Continue without MLflow»; a trial logs nothing; a failed step
 // is a FAILED run; the secret never reaches the Job.
 
+// A boosting model's results also give the diagnostics' value, the importance of the first 20
+// predictors and the learning curves as metric histories (step = the round).
+func TestABoostingRunLogsTheDiagnosticsTheImportanceAndTheLearningCurves(t *testing.T) {
+	rows := []resultRow{
+		{Section: "model", Stat: "library", Text: ptr("xgboost")},
+		{Section: "model", Stat: "task", Text: ptr("binary")},
+		{Section: "model", Stat: "stop_metric", Text: ptr("auc")},
+		{Section: "model", Stat: "trees", Value: ptr(3.0)},
+		{Section: "assumption", Level: ptr("overfitting"), Stat: "value", Value: ptr(0.02)},
+		{Section: "assumption", Level: ptr("zero_importance"), Level2: ptr("noise"), Stat: "value", Value: ptr(0.0)},
+		{Section: "importance", Level: ptr("price"), Stat: "gain_share", Value: ptr(0.7)},
+		{Section: "importance", Level: ptr("price"), Stat: "mean_abs_shap_share", Value: ptr(0.6)},
+		{Section: "importance", Level: ptr("price"), Stat: "rank", Value: ptr(1.0)},
+		{Section: "importance", Level: ptr("price"), Stat: "mean_abs_shap", Level2: ptr("a"), Value: ptr(0.3)},
+		{Section: "curve", Level: ptr("learning_loss"), Level2: ptr("train"), Stat: "y", X0: ptr(1.0), Value: ptr(0.6)},
+		{Section: "curve", Level: ptr("learning_loss"), Level2: ptr("train"), Stat: "y", X0: ptr(2.0), Value: ptr(0.5)},
+		{Section: "curve", Level: ptr("learning_loss"), Level2: ptr("validation"), Stat: "y", X0: ptr(2.0), Value: ptr(0.55)},
+		{Section: "curve", Level: ptr("learning_stop"), Level2: ptr("validation"), Stat: "y", X0: ptr(3.0), Value: ptr(0.8)},
+		{Section: "curve", Level: ptr("roc"), Level2: ptr("validation"), Stat: "y", X0: ptr(0.1), Value: ptr(0.2)},
+	}
+	for i := 0; i < 25; i++ { // only the first 20 predictors
+		rows = append(rows, resultRow{Section: "importance", Level: ptr(fmt.Sprintf("q%02d", i)), Stat: "gain_share", Value: ptr(0.01)})
+	}
+	got := []string{}
+	for _, m := range modelMetrics(rows, time.UnixMilli(1700000000000)) {
+		if strings.HasPrefix(m.Key, "importance.q") {
+			continue
+		}
+		got = append(got, fmt.Sprintf("%s@%d=%g", m.Key, m.Step, m.Value))
+	}
+	want := "trees@0=3 assumption.overfitting.value@0=0.02 assumption.zero_importance.noise.value@0=0 " +
+		"importance.price.gain_share@0=0.7 importance.price.mean_abs_shap_share@0=0.6 " +
+		"learning.train.logloss@1=0.6 learning.train.logloss@2=0.5 learning.validation.logloss@2=0.55 learning.validation.auc@3=0.8"
+	if strings.Join(got, " ") != want {
+		t.Errorf("metrics:\n got %s\nwant %s", strings.Join(got, " "), want)
+	}
+	n := 0
+	for _, m := range modelMetrics(rows, time.Now()) {
+		if strings.HasPrefix(m.Key, "importance.q") {
+			n++
+		}
+	}
+	if n != 19 { // price + q00..q18 are the 20 predictors
+		t.Errorf("predictors beyond the 20th are logged: %d keys", n)
+	}
+}
+
 func TestTheContentOfAnMLflowRun(t *testing.T) {
 	params := flattenParams(map[string]any{"outcome": "quantity", "predictors": []any{"price", "channel"}, "alpha": 0.05,
 		"robust": true, "reference": map[string]any{"channel": "shop"}, "weights": nil})
