@@ -583,8 +583,12 @@ class SqlStatSource:
         lv, ctr, key = self._fresh("lv"), self._fresh("ctr"), self._fresh("k")
         if center == "median":
             if self.dialect == "bigquery":
-                inner = (f"SELECT DISTINCT {g} AS {key}, PERCENTILE_CONT({centred}, 0.5) OVER (PARTITION BY {g}) AS {ctr} "
-                         f"FROM {self._source}")
+                # a window partitioned by a whole number for each group, not by the group (a
+                # FLOAT64 column partitions nothing)
+                cv, gid = self._fresh("cv"), self._fresh("gid")
+                inner = (f"SELECT DISTINCT {key}, PERCENTILE_CONT({cv}, 0.5) OVER (PARTITION BY {gid}) AS {ctr} "
+                         f"FROM (SELECT {g} AS {key}, {centred} AS {cv}, {_VALUE_ID.format(by=g)} AS {gid} "
+                         f"FROM {self._source}) AS {self._fresh('gv')}")
             else:
                 inner = f"SELECT {g} AS {key}, {_QUANTILE[self.dialect].format(e=centred, q=0.5, over='')} AS {ctr} FROM {self._source} GROUP BY {g}"
         else:
@@ -612,17 +616,29 @@ class SqlStatSource:
         x = self._measure(value, finite=True)
         names = [self._fresh(name) for name in ("q1", "median", "q3")]
         g = None if group is None else self._quote(group)
-        over = "" if g is None else f"PARTITION BY {g}"
         only = "" if g is None else self._only(group, levels)
+        if self.dialect == "bigquery":
+            # a window function: every row carries its group's quantiles, one is kept. The
+            # window is partitioned by a whole number for each group (`_VALUE_ID`), not by the
+            # group: GoogleSQL partitions by no FLOAT64
+            if g is None:
+                quantiles = ", ".join(f"{_QUANTILE['bigquery'].format(e=x, q=q, over='')} AS {name}"
+                                      for q, name in zip((0.25, 0.5, 0.75), names))
+                rows = self._rows(f"SELECT DISTINCT {quantiles} FROM {self._source}")
+            else:
+                lv, xv, gid = self._fresh("lv"), self._fresh("xv"), self._fresh("gid")
+                quantiles = ", ".join(f"{_QUANTILE['bigquery'].format(e=xv, q=q, over=f'PARTITION BY {gid}')} AS {name}"
+                                      for q, name in zip((0.25, 0.5, 0.75), names))
+                rows = self._rows(f"SELECT DISTINCT {lv}, {quantiles} FROM (SELECT {g} AS {lv}, {x} AS {xv}, "
+                                  f"{_VALUE_ID.format(by=g)} AS {gid} FROM {self._source}{only}) AS {self._fresh('gv')}")
+            if g is None:
+                rows = [[None, *r] for r in rows]
+            return [quartiles_of(*r) for r in rows]
         quantiles = ", ".join(
-            f"{_QUANTILE[self.dialect].format(e=x, q=q, over=over)} AS {name}"
+            f"{_QUANTILE[self.dialect].format(e=x, q=q, over='')} AS {name}"
             for q, name in zip((0.25, 0.5, 0.75), names)
         )
-        if self.dialect == "bigquery":
-            # a window function: every row carries its group's quantiles, one is kept
-            lv = "" if g is None else f"{g} AS {self._fresh('lv')}, "
-            rows = self._rows(f"SELECT DISTINCT {lv}{quantiles} FROM {self._source}{only}")
-        elif g is None:
+        if g is None:
             rows = self._rows(f"SELECT {quantiles} FROM {self._source}")
         else:
             rows = self._rows(f"SELECT {g} AS {self._fresh('lv')}, {quantiles} FROM {self._source}{only} GROUP BY {g}")

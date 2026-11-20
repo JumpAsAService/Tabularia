@@ -496,7 +496,7 @@ names (`columns()`), and `PolarsStatSource(lf)` answers the same methods:
 | NaN | `isnan(e)` | `isNaN(e)` | `IS_NAN(e)` |
 | `VAR(e)` | `var_samp(e)` | `if(count(e) > 1, varSampStable(e), NULL)` | `VAR_SAMP(e)` |
 | `COVAR(a, b)` | `covar_samp(a, b)` | `if(count() > 1, covarSampStable(a, b), NULL)` over rows with both | `COVAR_SAMP(a, b)` |
-| Exact quantile | `quantile_cont(e, q)` | `quantileExactInclusive(q)(e)` | `SELECT DISTINCT g, PERCENTILE_CONT(e, q) OVER (PARTITION BY g)` |
+| Exact quantile | `quantile_cont(e, q)` | `quantileExactInclusive(q)(e)` | `SELECT DISTINCT g, PERCENTILE_CONT(e, q) OVER (PARTITION BY gid)`, gid = `dense_rank() OVER (ORDER BY g)` (GoogleSQL partitions by no FLOAT64; A11's medians too) |
 | Finite | `isfinite(e)` | `isFinite(e)` | `NOT IS_NAN(e) AND NOT IS_INF(e)` |
 | A value less the centre | `(e - (c))` | `(e - materialize(c))` | `(e - (c))` |
 | Rows of a query, values typed | `ctx.con.sql(q).fetchall()` | `ctx.rows(q)`: on chDB read **through Arrow**, as a preview's rows (its JSON gives 2.0 as 2, a NaN as null, a datetime as a text: the labels would differ); on the server the driver's own types | `ctx.rows(q)`, the client's own types |

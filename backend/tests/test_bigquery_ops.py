@@ -312,11 +312,14 @@ def test_statistics_report_rows_ask_bigquery_for_quartiles_and_a_histogram():
     finite = ("CASE WHEN `prezzo` IS NOT NULL AND (NOT IS_NAN(CAST(`prezzo` AS FLOAT64)) AND NOT IS_INF(CAST(`prezzo` AS FLOAT64))) "
               "THEN CAST(`prezzo` AS FLOAT64) END")
     assert quartiles == (
-        f"SELECT DISTINCT `nome` AS st_lv, PERCENTILE_CONT({finite}, 0.25) OVER (PARTITION BY `nome`) AS st_q1, "
-        f"PERCENTILE_CONT({finite}, 0.5) OVER (PARTITION BY `nome`) AS st_median, "
-        f"PERCENTILE_CONT({finite}, 0.75) OVER (PARTITION BY `nome`) AS st_q3 FROM (SELECT * FROM `_src1`) AS st_t "
+        # partitioned by a whole number for each group, never by the group (GoogleSQL partitions by no FLOAT64)
+        "SELECT DISTINCT st_lv, PERCENTILE_CONT(st_xv, 0.25) OVER (PARTITION BY st_gid) AS st_q1, "
+        "PERCENTILE_CONT(st_xv, 0.5) OVER (PARTITION BY st_gid) AS st_median, "
+        "PERCENTILE_CONT(st_xv, 0.75) OVER (PARTITION BY st_gid) AS st_q3 "
+        f"FROM (SELECT `nome` AS st_lv, {finite} AS st_xv, dense_rank() OVER (ORDER BY `nome`) AS st_gid "
+        "FROM (SELECT * FROM `_src1`) AS st_t "
         # the two groups compared, as A1 gave them: the values of any other group are never partitioned
-        "WHERE `nome` = 'a' OR `nome` = 'b'"
+        "WHERE `nome` = 'a' OR `nome` = 'b') AS st_gv"
     )
     width = repr((8.0 - 4.9) / 5)
     b = f"LEAST(4, GREATEST(0, CAST(floor((CAST(`prezzo` AS FLOAT64) - (4.9)) / {width}) AS INT64)))"
@@ -339,6 +342,38 @@ def test_statistics_report_rows_ask_bigquery_for_quartiles_and_a_histogram():
     assert source.quartiles("prezzo") == [(None, 1.0, 2.0, 3.0)]
     assert asked[0].startswith(f"SELECT DISTINCT PERCENTILE_CONT({finite}, 0.25) OVER () AS st_q1, ")
     sqlglot.parse_one(asked[0], read="bigquery")
+
+
+def test_statistics_never_partition_bigquery_by_a_column():
+    """GoogleSQL partitions a window by no FLOAT64: the quartiles of a report and Levene's
+    medians are partitioned by `dense_rank()` of the group, as the ranks are. A group column
+    of FLOAT64, every query parsed as GoogleSQL, no PARTITION BY a column."""
+    import re
+
+    import sqlglot
+
+    from app.engine.stats.aggregates import SqlStatSource
+
+    asked: list[str] = []
+
+    def rows(q):
+        asked.append(q)
+        if "LIMIT 100000" in q:
+            return [[0.0]]
+        if " JOIN " in q:
+            return [[1.5, 3, 3, 0.2, 0.1, 0.01, 1.0, 2.0]]
+        if "PERCENTILE_CONT" in q:
+            return [[1.5, 1.0, 2.0, 3.0]]
+        return [[1.5, 3, 6.0, 1.0, 2.0, 0.0]]
+
+    source = SqlStatSource("bigquery", rows, lambda c: f"`{c}`", _lit, "SELECT * FROM `_src1`", [("v", "FLOAT64"), ("g", "FLOAT64")])
+    assert source.quartiles("v", "g", [1.5, 2.5])[0].median == 2.0
+    source.abs_dev_moments("v", "g", "median")
+    source.rank_sums("v", "g")
+    for q in asked:
+        sqlglot.parse_one(q, read="bigquery")
+        assert not re.search(r"PARTITION BY `", q), q
+    assert sum("dense_rank() OVER (ORDER BY `g`)" in q for q in asked) == 2
 
 
 def test_statistics_of_lot_2_ask_bigquery_in_googlesql():
@@ -375,7 +410,8 @@ def test_statistics_of_lot_2_ask_bigquery_in_googlesql():
         devs = source.abs_dev_moments("a", "g", center)
         assert [d.level for d in devs] == ["a", "b"] and devs[0].center == 10.0 - 4.35
         dev_query = asked[-1]
-        assert (" OVER (PARTITION BY `g`)" in dev_query) == (center == "median") and " JOIN (" in dev_query
+        assert (" OVER (PARTITION BY st_gid)" in dev_query) == (center == "median") and " JOIN (" in dev_query
+        assert "PARTITION BY `" not in dev_query
         sqlglot.parse_one(dev_query, read="bigquery")
     many = source.quartiles_many([Paired("a", "b"), Paired("b", "a"), Difference("a", "b")])
     assert [q.median for q in many] == [2.0, 5.0, 8.0] and asked[-1].startswith("SELECT DISTINCT PERCENTILE_CONT(")
