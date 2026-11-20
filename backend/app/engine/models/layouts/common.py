@@ -557,14 +557,19 @@ def alpha_said(sentence: str, alpha: Any, locale: str) -> str:
     return sentence.replace("{alpha}", text)
 
 
-def measures(ids: tuple[str, ...]):
+def measures(ids: tuple[str, ...], counted: tuple[str, ...] = ()):
     """A table of the checks that are numbers, with no verdict and no colour: those of `ids` whose
     rows have a `value` and no `verdict`; each says in a sentence of the model's words
-    (`measures.<id>`) what the number is."""
+    (`measures.<id>`) what the number is. Those of `counted` add what their `count` row counts, in
+    the check's words («· 174 repeat customers»)."""
     def block(p: stats.Page, w: dict) -> None:
         m = w["measures"]
         one = ('[section] = "assumption" AND [stat] = "value" AND ISNULL(' + of_row("assumption", "verdict", "text") + ')')
         said = "IFS(" + ", ".join(f'[level] = "{i}", {q(w["measure_texts"][i])}' for i in ids) + ', "")'
+        if counted:
+            n = of_row("assumption", "count", "text")
+            which = " OR ".join(f'[level] = "{i}"' for i in counted)
+            said = f'{said} & IF(({which}) AND NOT ISNULL({n}), " · " & {n}, "")'
         names = "IFS(" + ", ".join(f'[level] = "{i}", {q(check_name(w, i))}' for i in ids) + ", [level])"
         p.add(stats.table("measures", m["title"], one, [
             {"header": m["measure"], "value": names, "width": 52},

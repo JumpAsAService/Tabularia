@@ -37,11 +37,19 @@ PARAMS: dict[tuple[str, str], dict[str, Any]] = {
     ("arima", "manual"): {"time": "month", "value": "boxes", "frequency": "month", "p": 1, "d": 1, "q": 1,
                           "P": 0, "D": 1, "Q": 1, "holdout": 12},
     ("arima", "auto"): {"time": "month", "value": "boxes", "frequency": "month", "orders": "auto"},
+    # the customer lifetime value node on its reference table clv_bgnbd.csv (gateway-go/…/customer_lifetime/reference)
+    ("clv", "value"): {"customer": "customer", "frequency": "frequency", "recency": "recency", "age": "age", "time_unit": "week",
+                       "spend": "avg_spend", "holdout_transactions": "holdout_purchases", "holdout_length": 26, "horizon": 52,
+                       "purchase_model": "auto", "output": "rows"},
+    ("clv", "purchases"): {"customer": "customer", "frequency": "frequency", "recency": "recency", "age": "age", "time_unit": "week",
+                           "holdout_transactions": "holdout_purchases", "holdout_length": 26, "horizon": 52, "purchase_model": "auto",
+                           "output": "rows"},
 }
 
 # Fixtures that are a runner's real output (`from_results`): main() leaves them alone.
 FROM_RUNNER: set[tuple[str, str]] = {("linear", "unpenalized"), ("logistic", "unpenalized"), ("kaplan_meier", "default"),
-                                      ("cox", "default"), ("linear", "penalized"), ("logistic", "penalized")}
+                                      ("cox", "default"), ("linear", "penalized"), ("logistic", "penalized"), ("clv", "value"),
+                                      ("clv", "purchases")}
 
 # The example a declared stat ending in «*» is written as.
 WILDCARDS = {"note_*": ["note_1"], "surv_at_*": ["surv_at_30", "surv_at_30_low", "surv_at_30_high"],
