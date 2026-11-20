@@ -1728,6 +1728,368 @@
    "refuses": null
   },
   {
+   "id": "xgboost_binary_balanced",
+   "model": "xgboost",
+   "data": "data/binary.csv",
+   "types": {
+    "price": "number",
+    "visits": "number",
+    "first_order": "date"
+   },
+   "params": {
+    "task": "binary",
+    "outcome": "reordered",
+    "event_value": "yes",
+    "predictors": [
+     "price",
+     "visits",
+     "channel"
+    ],
+    "class_weight": "balanced"
+   },
+   "expect": [
+    {
+     "key": "model|||task",
+     "text": "binary"
+    },
+    {
+     "key": "model|||library",
+     "text": "xgboost"
+    },
+    {
+     "key": "model|||objective",
+     "text": "binary:logistic"
+    },
+    {
+     "key": "model|||stop_metric",
+     "text": "logloss"
+    },
+    {
+     "key": "model|||validation",
+     "text": "random"
+    },
+    {
+     "key": "model|||importance_type",
+     "text": "total_gain"
+    },
+    {
+     "key": "model|||n",
+     "value": 400.0
+    },
+    {
+     "key": "model|||n_missing",
+     "value": 0.0
+    },
+    {
+     "key": "model|||n_train",
+     "value": 320.0
+    },
+    {
+     "key": "model|||n_validation",
+     "value": 80.0
+    },
+    {
+     "key": "model|||n_predictors",
+     "value": 3.0
+    },
+    {
+     "key": "model|||n_categorical",
+     "value": 1.0
+    },
+    {
+     "key": "model|||trees",
+     "value": 67.0
+    },
+    {
+     "key": "model|||best_iteration",
+     "value": 66.0
+    },
+    {
+     "key": "model|||max_trees",
+     "value": 1000.0
+    },
+    {
+     "key": "model|||stopped_early",
+     "value": 1.0
+    },
+    {
+     "key": "model|||stopped_by_time",
+     "value": 0.0
+    },
+    {
+     "key": "model|||threads",
+     "value": 2.0
+    },
+    {
+     "key": "model|||shap_rows",
+     "value": 400.0
+    },
+    {
+     "key": "model|||seed",
+     "value": 1.0
+    },
+    {
+     "key": "model|||event_value",
+     "text": "yes"
+    },
+    {
+     "key": "model|||events",
+     "value": 74.0
+    },
+    {
+     "key": "model|||validation_events",
+     "value": 15.0
+    },
+    {
+     "key": "model|||train_auc",
+     "value": 0.9621079290863043
+    },
+    {
+     "key": "model|||train_logloss",
+     "value": 0.34823399294569846
+    },
+    {
+     "key": "model|||train_brier",
+     "value": 0.10152646968517506
+    },
+    {
+     "key": "model|||validation_auc",
+     "value": 0.8297435897435897
+    },
+    {
+     "key": "model|||validation_logloss",
+     "value": 0.47349947588611646
+    },
+    {
+     "key": "model|||validation_brier",
+     "value": 0.15498058468480075
+    },
+    {
+     "key": "model|||baseline_logloss",
+     "value": 0.4826098941117614
+    },
+    {
+     "key": "model|||threshold",
+     "value": 0.5
+    },
+    {
+     "key": "model|||validation_accuracy",
+     "value": 0.775
+    },
+    {
+     "key": "model|||validation_sensitivity",
+     "value": 0.7333333333333333
+    },
+    {
+     "key": "model|||validation_specificity",
+     "value": 0.7846153846153846
+    },
+    {
+     "key": "model|||validation_precision",
+     "value": 0.44
+    },
+    {
+     "key": "model|||validation_f1",
+     "value": 0.55
+    },
+    {
+     "key": "cell|no|no|observed",
+     "value": 51.0
+    },
+    {
+     "key": "cell|no|yes|observed",
+     "value": 14.0
+    },
+    {
+     "key": "cell|yes|no|observed",
+     "value": 4.0
+    },
+    {
+     "key": "cell|yes|yes|observed",
+     "value": 11.0
+    },
+    {
+     "key": "assumption|calibration||value",
+     "value": 0.17711522079762407
+    },
+    {
+     "key": "assumption|calibration||threshold",
+     "value": 0.16030897983929784,
+     "rel": 1e-09
+    },
+    {
+     "key": "assumption|calibration||verdict",
+     "text": "doubtful"
+    },
+    {
+     "key": "assumption|calibration_slope||value",
+     "value": 1.1325461319445138,
+     "rel": 1e-06
+    },
+    {
+     "key": "assumption|calibration_slope||verdict",
+     "text": "ok"
+    },
+    {
+     "key": "importance|price||gain",
+     "value": 1460.2921142578125
+    },
+    {
+     "key": "importance|price||gain_share",
+     "value": 0.65600947861295
+    },
+    {
+     "key": "importance|price||mean_abs_shap",
+     "value": 0.9458098629349843
+    },
+    {
+     "key": "importance|price||mean_abs_shap_share",
+     "value": 0.5002809274147731
+    },
+    {
+     "key": "importance|price||rank",
+     "value": 1.0
+    },
+    {
+     "key": "importance|price||mean_abs_shap_train",
+     "value": 0.9635065842303447
+    },
+    {
+     "key": "importance|price||mean_abs_shap_validation",
+     "value": 0.8750229777535423
+    },
+    {
+     "key": "importance|price||missing_share",
+     "value": 0.0
+    },
+    {
+     "key": "importance|visits||gain",
+     "value": 532.9561157226562
+    },
+    {
+     "key": "importance|visits||gain_share",
+     "value": 0.23942077080687235
+    },
+    {
+     "key": "importance|visits||mean_abs_shap",
+     "value": 0.597310751817422
+    },
+    {
+     "key": "importance|visits||mean_abs_shap_share",
+     "value": 0.31594423846114683
+    },
+    {
+     "key": "importance|visits||rank",
+     "value": 2.0
+    },
+    {
+     "key": "importance|visits||mean_abs_shap_train",
+     "value": 0.5960998614973505
+    },
+    {
+     "key": "importance|visits||mean_abs_shap_validation",
+     "value": 0.602154313097708
+    },
+    {
+     "key": "importance|visits||missing_share",
+     "value": 0.0475
+    },
+    {
+     "key": "importance|channel||gain",
+     "value": 232.774658203125
+    },
+    {
+     "key": "importance|channel||gain_share",
+     "value": 0.10456975058017762
+    },
+    {
+     "key": "importance|channel||mean_abs_shap",
+     "value": 0.3474368922517169
+    },
+    {
+     "key": "importance|channel||mean_abs_shap_share",
+     "value": 0.18377483412407997
+    },
+    {
+     "key": "importance|channel||rank",
+     "value": 3.0
+    },
+    {
+     "key": "importance|channel||mean_abs_shap_train",
+     "value": 0.3504544420648017
+    },
+    {
+     "key": "importance|channel||mean_abs_shap_validation",
+     "value": 0.3353666929993778
+    },
+    {
+     "key": "importance|channel||missing_share",
+     "value": 0.0
+    },
+    {
+     "key": "assumption|validation_size||value",
+     "value": 15.0
+    },
+    {
+     "key": "assumption|validation_size||verdict",
+     "text": "doubtful"
+    },
+    {
+     "key": "assumption|beats_baseline||value",
+     "value": 0.2597067683339973
+    },
+    {
+     "key": "assumption|beats_baseline||verdict",
+     "text": "ok"
+    },
+    {
+     "key": "assumption|overfitting||value",
+     "value": 1.359716413325425
+    },
+    {
+     "key": "assumption|overfitting||verdict",
+     "text": "not_computed"
+    },
+    {
+     "key": "assumption|trees_limit||value",
+     "value": 67.0
+    },
+    {
+     "key": "assumption|trees_limit||verdict",
+     "text": "ok"
+    },
+    {
+     "key": "assumption|class_imbalance||value",
+     "value": 4.423728813559322
+    },
+    {
+     "key": "assumption|class_imbalance||verdict",
+     "text": "doubtful"
+    },
+    {
+     "key": "assumption|importance_stability||value",
+     "value": 1.0
+    },
+    {
+     "key": "assumption|importance_stability||verdict",
+     "text": "ok"
+    },
+    {
+     "key": "assumption|zero_importance||verdict",
+     "text": "ok"
+    },
+    {
+     "key": "assumption|leakage|price|value",
+     "value": 0.5002809274147731
+    },
+    {
+     "key": "assumption|leakage|price|verdict",
+     "text": "ok"
+    }
+   ],
+   "refuses": null
+  },
+  {
    "id": "xgboost_refuses_few_rows",
    "model": "xgboost",
    "data": "data/tiny.csv",
@@ -3520,6 +3882,653 @@
     },
     {
      "key": "assumption|leakage|temp|verdict",
+     "text": "ok"
+    }
+   ],
+   "refuses": null
+  },
+  {
+   "id": "catboost_binary_balanced",
+   "model": "catboost",
+   "data": "data/binary.csv",
+   "types": {
+    "price": "number",
+    "visits": "number",
+    "first_order": "date"
+   },
+   "params": {
+    "task": "binary",
+    "outcome": "reordered",
+    "event_value": "yes",
+    "predictors": [
+     "price",
+     "visits",
+     "channel"
+    ],
+    "class_weight": "balanced",
+    "max_depth": 4
+   },
+   "expect": [
+    {
+     "key": "model|||task",
+     "text": "binary"
+    },
+    {
+     "key": "model|||library",
+     "text": "catboost"
+    },
+    {
+     "key": "model|||objective",
+     "text": "Logloss"
+    },
+    {
+     "key": "model|||stop_metric",
+     "text": "Logloss"
+    },
+    {
+     "key": "model|||validation",
+     "text": "random"
+    },
+    {
+     "key": "model|||importance_type",
+     "text": "PredictionValuesChange"
+    },
+    {
+     "key": "model|||n",
+     "value": 400.0
+    },
+    {
+     "key": "model|||n_missing",
+     "value": 0.0
+    },
+    {
+     "key": "model|||n_train",
+     "value": 320.0
+    },
+    {
+     "key": "model|||n_validation",
+     "value": 80.0
+    },
+    {
+     "key": "model|||n_predictors",
+     "value": 3.0
+    },
+    {
+     "key": "model|||n_categorical",
+     "value": 1.0
+    },
+    {
+     "key": "model|||trees",
+     "value": 83.0
+    },
+    {
+     "key": "model|||best_iteration",
+     "value": 82.0
+    },
+    {
+     "key": "model|||max_trees",
+     "value": 1000.0
+    },
+    {
+     "key": "model|||stopped_early",
+     "value": 1.0
+    },
+    {
+     "key": "model|||stopped_by_time",
+     "value": 0.0
+    },
+    {
+     "key": "model|||threads",
+     "value": 2.0
+    },
+    {
+     "key": "model|||shap_rows",
+     "value": 400.0
+    },
+    {
+     "key": "model|||seed",
+     "value": 1.0
+    },
+    {
+     "key": "model|||event_value",
+     "text": "yes"
+    },
+    {
+     "key": "model|||events",
+     "value": 74.0
+    },
+    {
+     "key": "model|||validation_events",
+     "value": 15.0
+    },
+    {
+     "key": "model|||train_auc",
+     "value": 0.8653159296058186
+    },
+    {
+     "key": "model|||train_logloss",
+     "value": 0.49925591560650834
+    },
+    {
+     "key": "model|||train_brier",
+     "value": 0.1688546455547101
+    },
+    {
+     "key": "model|||validation_auc",
+     "value": 0.8251282051282052
+    },
+    {
+     "key": "model|||validation_logloss",
+     "value": 0.5496158432969109
+    },
+    {
+     "key": "model|||validation_brier",
+     "value": 0.1931736173052861
+    },
+    {
+     "key": "model|||baseline_logloss",
+     "value": 0.4826098941117614
+    },
+    {
+     "key": "model|||threshold",
+     "value": 0.5
+    },
+    {
+     "key": "model|||validation_accuracy",
+     "value": 0.6625
+    },
+    {
+     "key": "model|||validation_sensitivity",
+     "value": 0.8666666666666667
+    },
+    {
+     "key": "model|||validation_specificity",
+     "value": 0.6153846153846154
+    },
+    {
+     "key": "model|||validation_precision",
+     "value": 0.34210526315789475
+    },
+    {
+     "key": "model|||validation_f1",
+     "value": 0.49056603773584906
+    },
+    {
+     "key": "cell|no|no|observed",
+     "value": 40.0
+    },
+    {
+     "key": "cell|no|yes|observed",
+     "value": 25.0
+    },
+    {
+     "key": "cell|yes|no|observed",
+     "value": 2.0
+    },
+    {
+     "key": "cell|yes|yes|observed",
+     "value": 13.0
+    },
+    {
+     "key": "assumption|calibration||value",
+     "value": 0.24255567586307278
+    },
+    {
+     "key": "assumption|calibration||threshold",
+     "value": 0.16132001508455435,
+     "rel": 1e-09
+    },
+    {
+     "key": "assumption|calibration||verdict",
+     "text": "failed"
+    },
+    {
+     "key": "assumption|calibration_slope||value",
+     "value": 1.3047806921358243,
+     "rel": 1e-06
+    },
+    {
+     "key": "assumption|calibration_slope||verdict",
+     "text": "ok"
+    },
+    {
+     "key": "importance|price||gain",
+     "value": 44.044375013082394
+    },
+    {
+     "key": "importance|price||gain_share",
+     "value": 0.440443750130824
+    },
+    {
+     "key": "importance|price||mean_abs_shap",
+     "value": 0.8827472406650356
+    },
+    {
+     "key": "importance|price||mean_abs_shap_share",
+     "value": 0.44437999477744317
+    },
+    {
+     "key": "importance|price||rank",
+     "value": 1.0
+    },
+    {
+     "key": "importance|price||mean_abs_shap_train",
+     "value": 0.8668658890398179
+    },
+    {
+     "key": "importance|price||mean_abs_shap_validation",
+     "value": 0.9462726471659012
+    },
+    {
+     "key": "importance|price||missing_share",
+     "value": 0.0
+    },
+    {
+     "key": "importance|visits||gain",
+     "value": 27.393467221421936
+    },
+    {
+     "key": "importance|visits||gain_share",
+     "value": 0.2739346722142194
+    },
+    {
+     "key": "importance|visits||mean_abs_shap",
+     "value": 0.5995215447478712
+    },
+    {
+     "key": "importance|visits||mean_abs_shap_share",
+     "value": 0.30180256437087727
+    },
+    {
+     "key": "importance|visits||rank",
+     "value": 2.0
+    },
+    {
+     "key": "importance|visits||mean_abs_shap_train",
+     "value": 0.6099675468964199
+    },
+    {
+     "key": "importance|visits||mean_abs_shap_validation",
+     "value": 0.5577375361536786
+    },
+    {
+     "key": "importance|visits||missing_share",
+     "value": 0.0475
+    },
+    {
+     "key": "importance|channel||gain",
+     "value": 28.562157765495655
+    },
+    {
+     "key": "importance|channel||gain_share",
+     "value": 0.2856215776549566
+    },
+    {
+     "key": "importance|channel||mean_abs_shap",
+     "value": 0.5042005674821035
+    },
+    {
+     "key": "importance|channel||mean_abs_shap_share",
+     "value": 0.25381744085167957
+    },
+    {
+     "key": "importance|channel||rank",
+     "value": 3.0
+    },
+    {
+     "key": "importance|channel||mean_abs_shap_train",
+     "value": 0.504617219152807
+    },
+    {
+     "key": "importance|channel||mean_abs_shap_validation",
+     "value": 0.5025339607992885
+    },
+    {
+     "key": "importance|channel||missing_share",
+     "value": 0.0
+    },
+    {
+     "key": "assumption|validation_size||value",
+     "value": 15.0
+    },
+    {
+     "key": "assumption|validation_size||verdict",
+     "text": "doubtful"
+    },
+    {
+     "key": "assumption|beats_baseline||value",
+     "value": 0.26654531512843693
+    },
+    {
+     "key": "assumption|beats_baseline||verdict",
+     "text": "ok"
+    },
+    {
+     "key": "assumption|overfitting||value",
+     "value": 1.1008699669171154
+    },
+    {
+     "key": "assumption|overfitting||verdict",
+     "text": "not_computed"
+    },
+    {
+     "key": "assumption|trees_limit||value",
+     "value": 83.0
+    },
+    {
+     "key": "assumption|trees_limit||verdict",
+     "text": "ok"
+    },
+    {
+     "key": "assumption|class_imbalance||value",
+     "value": 4.423728813559322
+    },
+    {
+     "key": "assumption|class_imbalance||verdict",
+     "text": "doubtful"
+    },
+    {
+     "key": "assumption|importance_stability||value",
+     "value": 1.0
+    },
+    {
+     "key": "assumption|importance_stability||verdict",
+     "text": "ok"
+    },
+    {
+     "key": "assumption|zero_importance||verdict",
+     "text": "ok"
+    },
+    {
+     "key": "assumption|leakage|price|value",
+     "value": 0.44437999477744317
+    },
+    {
+     "key": "assumption|leakage|price|verdict",
+     "text": "ok"
+    }
+   ],
+   "refuses": null
+  },
+  {
+   "id": "catboost_regression_grouped",
+   "model": "catboost",
+   "data": "data/multiclass.csv",
+   "types": {
+    "spend": "number",
+    "orders": "number",
+    "member": "boolean"
+   },
+   "params": {
+    "task": "regression",
+    "outcome": "spend",
+    "predictors": [
+     "orders",
+     "member",
+     "segment"
+    ],
+    "split_by": "store",
+    "max_depth": 4
+   },
+   "expect": [
+    {
+     "key": "model|||task",
+     "text": "regression"
+    },
+    {
+     "key": "model|||library",
+     "text": "catboost"
+    },
+    {
+     "key": "model|||objective",
+     "text": "RMSE"
+    },
+    {
+     "key": "model|||stop_metric",
+     "text": "RMSE"
+    },
+    {
+     "key": "model|||validation",
+     "text": "grouped"
+    },
+    {
+     "key": "model|||importance_type",
+     "text": "PredictionValuesChange"
+    },
+    {
+     "key": "model|||n",
+     "value": 450.0
+    },
+    {
+     "key": "model|||n_missing",
+     "value": 0.0
+    },
+    {
+     "key": "model|||n_train",
+     "value": 359.0
+    },
+    {
+     "key": "model|||n_validation",
+     "value": 91.0
+    },
+    {
+     "key": "model|||n_predictors",
+     "value": 3.0
+    },
+    {
+     "key": "model|||n_categorical",
+     "value": 2.0
+    },
+    {
+     "key": "model|||trees",
+     "value": 186.0
+    },
+    {
+     "key": "model|||best_iteration",
+     "value": 185.0
+    },
+    {
+     "key": "model|||max_trees",
+     "value": 1000.0
+    },
+    {
+     "key": "model|||stopped_early",
+     "value": 1.0
+    },
+    {
+     "key": "model|||stopped_by_time",
+     "value": 0.0
+    },
+    {
+     "key": "model|||threads",
+     "value": 2.0
+    },
+    {
+     "key": "model|||shap_rows",
+     "value": 450.0
+    },
+    {
+     "key": "model|||seed",
+     "value": 1.0
+    },
+    {
+     "key": "model|||train_rmse",
+     "value": 52.404348417831606
+    },
+    {
+     "key": "model|||train_mae",
+     "value": 39.68924846895876
+    },
+    {
+     "key": "model|||train_r_squared",
+     "value": 0.4140682856175183
+    },
+    {
+     "key": "model|||validation_rmse",
+     "value": 46.81079342122788
+    },
+    {
+     "key": "model|||validation_mae",
+     "value": 36.938345342183595
+    },
+    {
+     "key": "model|||validation_r_squared",
+     "value": 0.40697959319807175
+    },
+    {
+     "key": "model|||baseline_rmse",
+     "value": 61.279880001500494
+    },
+    {
+     "key": "model|||validation_mean",
+     "value": 92.06535131868132
+    },
+    {
+     "key": "importance|orders||gain",
+     "value": 16.420208138811862
+    },
+    {
+     "key": "importance|orders||gain_share",
+     "value": 0.16420208138811862
+    },
+    {
+     "key": "importance|orders||mean_abs_shap",
+     "value": 9.62417985704401
+    },
+    {
+     "key": "importance|orders||mean_abs_shap_share",
+     "value": 0.18402795054533472
+    },
+    {
+     "key": "importance|orders||rank",
+     "value": 3.0
+    },
+    {
+     "key": "importance|orders||mean_abs_shap_train",
+     "value": 9.564783544758573
+    },
+    {
+     "key": "importance|orders||mean_abs_shap_validation",
+     "value": 9.858501572543659
+    },
+    {
+     "key": "importance|orders||missing_share",
+     "value": 0.0
+    },
+    {
+     "key": "importance|member||gain",
+     "value": 16.296601777257507
+    },
+    {
+     "key": "importance|member||gain_share",
+     "value": 0.16296601777257508
+    },
+    {
+     "key": "importance|member||mean_abs_shap",
+     "value": 10.36920133047811
+    },
+    {
+     "key": "importance|member||mean_abs_shap_share",
+     "value": 0.19827381636505906
+    },
+    {
+     "key": "importance|member||rank",
+     "value": 2.0
+    },
+    {
+     "key": "importance|member||mean_abs_shap_train",
+     "value": 10.587094848557857
+    },
+    {
+     "key": "importance|member||mean_abs_shap_validation",
+     "value": 9.509599429482146
+    },
+    {
+     "key": "importance|member||missing_share",
+     "value": 0.0
+    },
+    {
+     "key": "importance|segment||gain",
+     "value": 67.28319008393063
+    },
+    {
+     "key": "importance|segment||gain_share",
+     "value": 0.6728319008393063
+    },
+    {
+     "key": "importance|segment||mean_abs_shap",
+     "value": 32.30399988162761
+    },
+    {
+     "key": "importance|segment||mean_abs_shap_share",
+     "value": 0.6176982330896063
+    },
+    {
+     "key": "importance|segment||rank",
+     "value": 1.0
+    },
+    {
+     "key": "importance|segment||mean_abs_shap_train",
+     "value": 32.43387856342535
+    },
+    {
+     "key": "importance|segment||mean_abs_shap_validation",
+     "value": 31.79162134574405
+    },
+    {
+     "key": "importance|segment||missing_share",
+     "value": 0.0
+    },
+    {
+     "key": "assumption|validation_size||value",
+     "value": 91.0
+    },
+    {
+     "key": "assumption|validation_size||verdict",
+     "text": "doubtful"
+    },
+    {
+     "key": "assumption|beats_baseline||value",
+     "value": 0.23611479950545478
+    },
+    {
+     "key": "assumption|beats_baseline||verdict",
+     "text": "ok"
+    },
+    {
+     "key": "assumption|overfitting||value",
+     "value": 0.8932616249322468
+    },
+    {
+     "key": "assumption|overfitting||verdict",
+     "text": "not_computed"
+    },
+    {
+     "key": "assumption|trees_limit||value",
+     "value": 186.0
+    },
+    {
+     "key": "assumption|trees_limit||verdict",
+     "text": "ok"
+    },
+    {
+     "key": "assumption|importance_stability||value",
+     "value": 0.5
+    },
+    {
+     "key": "assumption|importance_stability||verdict",
+     "text": "doubtful"
+    },
+    {
+     "key": "assumption|zero_importance||verdict",
+     "text": "ok"
+    },
+    {
+     "key": "assumption|leakage|segment|value",
+     "value": 0.6176982330896063
+    },
+    {
+     "key": "assumption|leakage|segment|verdict",
      "text": "ok"
     }
    ],

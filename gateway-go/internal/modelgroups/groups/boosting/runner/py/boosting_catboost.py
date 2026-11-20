@@ -465,12 +465,13 @@ def _test_options(code: Any) -> None:
         for part in ("train", "validation"):
             _expect(f"curve|learning_stop|{part}|y|0" in at and f"curve|learning_loss|{part}|y|0" in at,
                     f"{what} {metric}: no {part} curve")
-    for what, metric in (("binary", "mae"), ("regression", "auc"), ("regression", "error"), ("multiclass", "auc")):
+    for what, metric, code_ in (("binary", "mae", "mae_needs_regression"), ("regression", "auc", "auc_needs_binary"),
+                                ("regression", "error", "error_needs_classes"), ("multiclass", "auc", "auc_needs_binary")):
         try:
             fit_catboost(_task(what, synthetic(300, what, seed=7), stop_metric=metric))
             raise AssertionError(f"{what} with stop_metric {metric} was not refused")
-        except Refusal:
-            pass
+        except Refusal as e:
+            _expect(e.code == code_, f"{what} with stop_metric {metric}: refused with {e.code}, expected {code_}")
     task = _task("regression", synthetic(300, "regression", seed=5), max_trees=5000, learning_rate=0.001,
                  early_stopping_rounds=1000)
     task["limits"]["time_budget_seconds"] = 0.5

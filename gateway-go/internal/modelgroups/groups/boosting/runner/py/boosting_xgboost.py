@@ -338,7 +338,18 @@ def _test_walker(code: Any) -> None:
         _expect(np.all(gap <= bound), f"{what}: the walker differs by {gap.max():.3g}")
         split_types = {s for t in model["learner"]["gradient_booster"]["model"]["trees"] for s in t["split_type"]}
         _expect(1 in split_types, f"{what}: no categorical split to walk")
-        _expect(P.n == 300, "rows")
+        _expect(X["v1"].isna().any() and (X["v3"].cat.codes < 0).any(), f"{what}: no missing number or category to walk")
+        # the walker's margins are what the runner wrote for every input row: the rows output, through the link
+        o = out["output"]
+        if what == "regression":
+            mine, said = walked, o["pred_value"].to_numpy(dtype=float)
+        elif what == "binary":
+            mine, said = B.sigmoid(walked), o["pred_prob"].to_numpy(dtype=float)
+        else:
+            mine = B.softmax(walked)
+            said = np.column_stack([o[f"pred_prob_{c}"].to_numpy(dtype=float) for c in P.classes])
+        _expect(len(said) == len(df) and np.allclose(mine, said, rtol=1e-6, atol=1e-7),
+                f"{what}: the walker against the rows output differs by {np.abs(mine - said).max():.3g}")
 
 
 @register("xgboost: the gain is the sum of the trees' loss_changes, SHAP adds up to the margin")

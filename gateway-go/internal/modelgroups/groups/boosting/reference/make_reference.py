@@ -677,6 +677,11 @@ def xgboost_cases() -> list[dict[str, Any]]:
          "types": {"sales": "number", "temp": "number", "day": "date"},
          "params": {"task": "regression", "outcome": "sales", "predictors": ["temp", "promo"], "validation": "time",
                     "order_by": "day", "validation_share": 0.25, "stop_metric": "mae"}},
+        # balanced class weights: the validation part weighted as the fit, beats_baseline on the losses the fit weighs
+        {"id": "xgboost_binary_balanced", "model": "xgboost", "data": "data/binary.csv",
+         "types": {"price": "number", "visits": "number", "first_order": "date"},
+         "params": {"task": "binary", "outcome": "reordered", "event_value": "yes", "predictors": ["price", "visits", "channel"],
+                    "class_weight": "balanced"}},
     ]
     out = []
     for c in cases:
@@ -719,6 +724,15 @@ def catboost_cases() -> list[dict[str, Any]]:
          "types": {"sales": "number", "temp": "number", "day": "date"},
          "params": {"task": "regression", "outcome": "sales", "predictors": ["temp", "promo"], "validation": "time",
                     "order_by": "day", "validation_share": 0.25, "stop_metric": "mae", "rsm": 0.5, "random_strength": 2.0}},
+        # balanced class weights on a binary outcome, and a regression split by groups (whole stores on one side)
+        {"id": "catboost_binary_balanced", "model": "catboost", "data": "data/binary.csv",
+         "types": {"price": "number", "visits": "number", "first_order": "date"},
+         "params": {"task": "binary", "outcome": "reordered", "event_value": "yes", "predictors": ["price", "visits", "channel"],
+                    "class_weight": "balanced", "max_depth": 4}},
+        {"id": "catboost_regression_grouped", "model": "catboost", "data": "data/multiclass.csv",
+         "types": {"spend": "number", "orders": "number", "member": "boolean"},
+         "params": {"task": "regression", "outcome": "spend", "predictors": ["orders", "member", "segment"], "split_by": "store",
+                    "max_depth": 4}},
     ]
     out = [{**c, "expect": case_values(c, catboost_fit), "refuses": None} for c in cases]
     out.append({"id": "catboost_refuses_few_rows", "model": "catboost", "data": "data/tiny.csv",
