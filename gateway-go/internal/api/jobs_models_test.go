@@ -787,6 +787,41 @@ func TestAPythonGroupsJob(t *testing.T) {
 	}
 }
 
+// the Job's /tmp is an emptyDir with a size: twice the model file, the input (as large as the memory)
+// and a margin
+func TestAModelJobsTmpHasASizeLimit(t *testing.T) {
+	prev := maxModelFileBytes
+	t.Cleanup(func() { maxModelFileBytes = prev })
+	maxModelFileBytes = func() int64 { return 64 << 20 }
+	tmpOf := func(img *ModelGroupImage) any {
+		m := modelJobManifest(jobSettings{jobTTL: 60}, "tabularia-model-9-a1", img, pyjson.Object{{Key: modelgroups.EnvInput, Value: "s3://b/in"}},
+			pyjson.Object{{Key: labelModelGroup, Value: "boosting"}}, 900, []any{pyjson.Object{{Key: "key", Value: "f0"}, {Key: "path", Value: "runner/run.py"}}}, "code", "env", nil)
+		pod := pyjson.Obj(pyjson.Obj(pyjson.Obj(m.Value("spec")).Value("template")).Value("spec"))
+		for _, v := range objectList(pod.Value("volumes")) {
+			if v.Value("name") == "tmp" {
+				return pyjson.Obj(v.Value("emptyDir")).Value("sizeLimit")
+			}
+		}
+		return nil
+	}
+	// 2 × 64 MiB + 4 GiB + 256 MiB
+	if got := tmpOf(&ModelGroupImage{Group: "boosting", MemoryLimit: "4Gi"}); got != "4480Mi" {
+		t.Errorf("4Gi group: %v", got)
+	}
+	// it follows the group's memory, and the file's limit
+	if got := tmpOf(&ModelGroupImage{Group: "boosting", MemoryLimit: "8Gi"}); got != "8576Mi" {
+		t.Errorf("8Gi group: %v", got)
+	}
+	maxModelFileBytes = func() int64 { return 128 << 20 }
+	if got := tmpOf(&ModelGroupImage{Group: "boosting", MemoryLimit: "4Gi"}); got != "4608Mi" {
+		t.Errorf("a larger file: %v", got)
+	}
+	// a memory nobody can read: 1 GiB of input
+	if got := tmpOf(&ModelGroupImage{Group: "boosting"}); got != "1536Mi" {
+		t.Errorf("no memory: %v", got)
+	}
+}
+
 // rows × predictors: the boosting group's limit, said before the Job; the R groups have none.
 func TestTheCellsAModelMayRead(t *testing.T) {
 	predictors := make([]any, 120)

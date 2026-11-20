@@ -666,6 +666,21 @@ func pyjsonOf(v any) any {
 	return out
 }
 
+// modelTmpLimit is the size of a model Job's /tmp (an emptyDir: the node's disk, which the kubelet
+// evicts the pod over when it is exceeded): twice the largest model file (the one downloaded and
+// the one the library writes), the input (a parquet the runner reads whole, so it is no larger than
+// the group's memory) and a margin for the calculations' scratch files. It follows the group's
+// memory limit, which the administrator sets in Administration -> Statistical models.
+func modelTmpLimit(img *ModelGroupImage) string {
+	const margin = 256 << 20
+	input := mgBytes(img.MemoryLimit)
+	if input <= 0 {
+		input = 1 << 30
+	}
+	mi := int64((2*float64(maxModelFileBytes()) + input + margin + (1 << 20) - 1) / (1 << 20))
+	return fmt.Sprintf("%dMi", mi)
+}
+
 // modelJobManifest is a model step's Job: the group's image by digest, Tabularia's runner,
 // the Script node's isolation (user 10001, read-only root, no capability, no ServiceAccount
 // token), internet access off (the label the chart's policy selects, and the egress proxy
@@ -701,7 +716,7 @@ func modelJobManifest(js jobSettings, name string, img *ModelGroupImage, environ
 	}
 	pod = append(pod, pyjson.KV{Key: "volumes", Value: []any{pyjson.Object{{Key: "name", Value: "code"}, {Key: "configMap",
 		Value: pyjson.Object{{Key: "name", Value: codeName}, {Key: "items", Value: items}}}},
-		pyjson.Object{{Key: "name", Value: "tmp"}, {Key: "emptyDir", Value: pyjson.Object{}}}}})
+		pyjson.Object{{Key: "name", Value: "tmp"}, {Key: "emptyDir", Value: pyjson.Object{{Key: "sizeLimit", Value: modelTmpLimit(img)}}}}}})
 	if js.registryPullSecret != "" {
 		pod = append(pod, pyjson.KV{Key: "imagePullSecrets", Value: []any{pyjson.Object{{Key: "name", Value: js.registryPullSecret}}}})
 	}
