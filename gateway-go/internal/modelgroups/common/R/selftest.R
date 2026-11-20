@@ -234,6 +234,16 @@ TAB_COMMON_TESTS <- list(
     .tab_expect(identical(got, c("true", "2026-11-19", "2.0", "0.1", "3", "1e-05")), paste(got, collapse = " "))
     .tab_expect(identical(tab_sort_labels(c("b", "B", "à", "a")), c("B", "a", "b", "à")), "text order")
   },
+  "a text is written to an address and read back whole" = function(code) {
+    if (identical(Sys.getenv("TABULARIA_SELFTEST_NO_ARROW"), "1") || !requireNamespace("arrow", quietly = TRUE)) return("skipped")
+    path <- tempfile(fileext = ".json")
+    text <- paste0('{"a": "', paste(rep("à", 3000L), collapse = ""), '"}')
+    tab_write_text(paste0("file://", path), text)
+    back <- tab_read_text(paste0("file://", path))
+    .tab_expect(identical(charToRaw(back), charToRaw(enc2utf8(text))), "read back ", nchar(back), " characters, wrote ", nchar(text))
+    tab_write_text(paste0("file://", path), "")
+    .tab_expect(identical(tab_read_text(paste0("file://", path)), ""), "an empty file")
+  },
   "the model card" = function(code) {
     df <- .tab_selftest_table(code)
     d <- tab_design(df, c(TAB_A, TAB_X), outcome = "y")

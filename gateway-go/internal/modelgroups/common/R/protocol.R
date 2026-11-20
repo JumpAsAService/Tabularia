@@ -77,7 +77,16 @@ tab_read_text <- function(path) {
     fs <- arrow::FileSystem$from_uri(path)
     stream <- fs$fs$OpenInputStream(fs$path)
     on.exit(stream$close())
-    return(rawToChar(stream$Read()$data()))
+    # Read() needs a size and may return less: read until the stream gives nothing more
+    chunks <- list()
+    repeat {
+      part <- stream$Read(1048576L)$data()
+      if (!length(part)) break
+      chunks[[length(chunks) + 1L]] <- part
+    }
+    out <- rawToChar(do.call(c, c(list(raw(0)), chunks)))
+    Encoding(out) <- "UTF-8"
+    return(out)
   }
   paste(readLines(path, encoding = "UTF-8", warn = FALSE), collapse = "\n")
 }
