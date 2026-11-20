@@ -8,6 +8,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -33,12 +34,24 @@ const mgCheckScript = "set -e\n" +
 	"cd " + modelgroups.CodeDir + "\n" +
 	"Rscript " + modelgroups.CodeDir + "/runner/run.R --selftest\n"
 
-func mgCodeName(v *sbVersion) string {
+func mgCodeName(v *sbVersion, recheck bool) string {
+	if recheck {
+		return fmt.Sprintf("tabularia-reselftest-e%d-v%d", v.EnvironmentID, v.Number)
+	}
 	return fmt.Sprintf("tabularia-selftest-e%d-v%d", v.EnvironmentID, v.Number)
 }
 
+// mgCheckStage is the stage of a check Job: the one of a new version, or the one that runs the
+// self-test again on the image in use (recheck).
+func mgCheckStage(recheck bool) string {
+	if recheck {
+		return "recheck"
+	}
+	return "check"
+}
+
 // managedCheckJob is the check Job of a model group's version, and the ConfigMap's data of its code.
-func (b *scriptBuilds) managedCheckJob(v *sbVersion, env *sbEnvironment, group string) (pyjson.Object, pyjson.Object, error) {
+func (b *scriptBuilds) managedCheckJob(v *sbVersion, env *sbEnvironment, group string, recheck bool) (pyjson.Object, pyjson.Object, error) {
 	files, err := modelgroups.CodeFiles(group, nil, true)
 	if err != nil {
 		return nil, nil, err
@@ -75,7 +88,7 @@ func (b *scriptBuilds) managedCheckJob(v *sbVersion, env *sbEnvironment, group s
 			{Key: "runAsGroup", Value: int64(sbScriptUID)}, {Key: "seccompProfile", Value: pyjson.Object{{Key: "type", Value: "RuntimeDefault"}}}}},
 		{Key: "containers", Value: []any{container}},
 		{Key: "volumes", Value: []any{
-			pyjson.Object{{Key: "name", Value: "code"}, {Key: "configMap", Value: pyjson.Object{{Key: "name", Value: mgCodeName(v)}, {Key: "items", Value: itemList}}}},
+			pyjson.Object{{Key: "name", Value: "code"}, {Key: "configMap", Value: pyjson.Object{{Key: "name", Value: mgCodeName(v, recheck)}, {Key: "items", Value: itemList}}}},
 			pyjson.Object{{Key: "name", Value: "tmp"}, {Key: "emptyDir", Value: pyjson.Object{}}}}},
 	}
 	pod = append(pod, sbNodeSelector(v)...)
@@ -83,14 +96,14 @@ func (b *scriptBuilds) managedCheckJob(v *sbVersion, env *sbEnvironment, group s
 		pod = append(pod, pyjson.KV{Key: "imagePullSecrets", Value: []any{pyjson.Object{{Key: "name", Value: b.cfg.RegistryPullSecret}}}})
 	}
 	// the self-test fits models: longer than a plain import of the packages
-	return b.job(sbJobName("check", v), sbLabels("check", v), max(b.panel.CheckTimeout(), 900), pod), code, nil
+	return b.job(sbJobName(mgCheckStage(recheck), v), sbLabels(mgCheckStage(recheck), v), max(b.panel.CheckTimeout(), 900), pod), code, nil
 }
 
 // createSelftestCode makes the ConfigMap of the check's code, owned by its Job (it goes with it).
-func (b *scriptBuilds) createSelftestCode(ctx context.Context, k scriptcfg.Kubernetes, v *sbVersion, manifest pyjson.Object, job any, code pyjson.Object) error {
+func (b *scriptBuilds) createSelftestCode(ctx context.Context, k scriptcfg.Kubernetes, v *sbVersion, manifest pyjson.Object, job any, code pyjson.Object, recheck bool) error {
 	labels := pyjson.Obj(pyjson.Obj(manifest.Value("metadata")).Value("labels"))
 	return kube.CreateObject(ctx, k, b.s.Scripts.Namespace, "configmaps", pyjson.Object{{Key: "apiVersion", Value: "v1"}, {Key: "kind", Value: "ConfigMap"},
-		{Key: "metadata", Value: pyjson.Object{{Key: "name", Value: mgCodeName(v)}, {Key: "labels", Value: labels}, {Key: "ownerReferences", Value: kube.OwnedBy(job)}}},
+		{Key: "metadata", Value: pyjson.Object{{Key: "name", Value: mgCodeName(v, recheck)}, {Key: "labels", Value: labels}, {Key: "ownerReferences", Value: kube.OwnedBy(job)}}},
 		{Key: "data", Value: code}})
 }
 
@@ -221,4 +234,119 @@ func mgQueueStale(ctx context.Context, tx pgx.Tx, log *slog.Logger) (int64, erro
 		queued++
 	}
 	return queued, nil
+}
+
+// recheckRunners starts, for each enabled group, the self-test again on the image in use when the
+// runner this Tabularia ships is not the one the version was self-tested with (RunnerHash): an
+// upgrade changed the runner's files, the common library, the schema or the catalogue, and the
+// image does not need to be built again for it. Only the check Job runs, on the same image; the
+// version stays ready, and so usable, until the check says otherwise (stopping every flow that
+// uses the group for a check that nearly always passes would cost more than it protects), and
+// the card says it is being checked (`rechecking`). No Job while a version is being built: that
+// one is self-tested with the new runner anyway.
+func (b *scriptBuilds) recheckRunners(ctx context.Context, tx pgx.Tx) error {
+	for _, g := range modelgroups.Groups() {
+		var env int64
+		if err := tx.QueryRow(ctx, `SELECT environment_id FROM model_groups WHERE id = $1 AND enabled AND environment_id IS NOT NULL`, g.ID).Scan(&env); err != nil {
+			if scNoRows(err) {
+				continue
+			}
+			return err
+		}
+		if err := mgLockEnvironment(ctx, tx, env); err != nil {
+			return err
+		}
+		if n, err := mgInFlight(ctx, tx, env); err != nil {
+			return err
+		} else if n != 0 {
+			continue
+		}
+		var v sbVersion
+		err := tx.QueryRow(ctx, `SELECT v.id, v.environment_id, v.number, v.image_ref, v.arch FROM script_environments e
+			JOIN script_environment_versions v ON v.id = e.current_version_id WHERE e.id = $1 AND v.status = 'ready' AND v.job_name IS NULL
+			AND v.image_ref IS NOT NULL AND v.recipe_hash = $2 AND v.runner_hash IS DISTINCT FROM $3`, env, g.RecipeHash, g.RunnerHash).Scan(
+			&v.ID, &v.EnvironmentID, &v.Number, &v.ImageRef, &v.Arch)
+		if scNoRows(err) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		e, err := sbEnvironmentOf(ctx, tx, env)
+		if err != nil || e == nil {
+			return err
+		}
+		manifest, code, err := b.managedCheckJob(&v, e, g.ID, true)
+		if err != nil {
+			return err
+		}
+		k := kubeAPI()
+		job, err := kube.CreateJob(ctx, k, b.s.Scripts.Namespace, manifest)
+		var ke *kube.Error
+		switch {
+		case errors.As(err, &ke) && ke.Status == 409: // an old one of the name is still going away: next round
+			_ = kube.DeleteJob(ctx, k, b.s.Scripts.Namespace, sbJobName("recheck", &v))
+			continue
+		case errors.As(err, &ke):
+			b.log.Warn(fmt.Sprintf("models: the self-test of the group %s cannot start again (%s)", g.ID, ke.Message))
+			continue
+		case err != nil:
+			return err
+		}
+		if err := b.createSelftestCode(ctx, k, &v, manifest, job, code, true); err != nil {
+			b.log.Warn(fmt.Sprintf("models: the code of the self-test of the group %s not made (%v)", g.ID, err))
+			_ = kube.DeleteJob(ctx, k, b.s.Scripts.Namespace, sbJobName("recheck", &v))
+			continue
+		}
+		if _, err := tx.Exec(ctx, `UPDATE script_environment_versions SET job_name = $2 WHERE id = $1`, v.ID, sbJobName("recheck", &v)); err != nil {
+			return err
+		}
+		b.log.Info(fmt.Sprintf("models: the runner of the group %s changed: version %d is self-tested again, and serves meanwhile", g.ID, v.Number))
+	}
+	return nil
+}
+
+// advanceRecheck follows the Job that runs the self-test again on a version in use. It passes: the
+// version records the runner it was checked with. It fails: the version is failed (the group says
+// so, with the values that differ), as a build whose self-test fails. A Job that is gone is asked
+// again at the next round.
+func (b *scriptBuilds) advanceRecheck(ctx context.Context, tx pgx.Tx, v *sbVersion, env *sbEnvironment) error {
+	group := mgGroupOfManaged(env.ManagedBy)
+	g, known := modelgroups.Get(group)
+	if !known || v.JobName == nil {
+		v.JobName = nil
+		return nil
+	}
+	k, ns, name := kubeAPI(), b.s.Scripts.Namespace, *v.JobName
+	job, err := kube.GetJob(ctx, k, ns, name)
+	if err != nil {
+		return err
+	}
+	if job == nil {
+		v.JobName = nil
+		return nil
+	}
+	outcome := kube.JobOutcome(job)
+	if outcome == "" {
+		return nil // still running: its own deadline ends it
+	}
+	log, exitCode, _, err := kube.JobResult(ctx, k, ns, name, 8<<20)
+	var unavailable *kube.LogUnavailable
+	if errors.As(err, &unavailable) {
+		log, exitCode = fmt.Sprintf("(the cluster did not give the log: %s)", unavailable.Kube.Message), unavailable.ExitCode
+	} else if err != nil {
+		return err
+	}
+	if err := kube.DeleteJob(ctx, k, ns, name); err != nil {
+		return err
+	}
+	b.finishManagedCheck(v, env, outcome, kube.JobFailure(job), log, exitCode)
+	if v.Status == "ready" {
+		_, err = tx.Exec(ctx, `UPDATE script_environment_versions SET runner_hash = $2 WHERE id = $1`, v.ID, g.RunnerHash)
+		b.log.Info(fmt.Sprintf("models: the group %s passed its self-test again with the new runner (version %d)", group, v.Number))
+		return err
+	}
+	msg := "The runner of the statistical models changed with this version of Tabularia, and the image in use no longer passes its self-test. " + deref(v.Error)
+	v.Error = &msg
+	return nil
 }

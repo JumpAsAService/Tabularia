@@ -101,6 +101,7 @@ type mgVersion struct {
 	Packages              int // the installed packages, from the lock
 	Lock, BuildLog        *string
 	Selftest              *string
+	JobName               *string // a ready version with a Job: its self-test is being run again (a new runner)
 	CreatedAt             time.Time
 	CreatedBy             *string
 	StartedAt, FinishedAt *time.Time
@@ -165,7 +166,7 @@ func mgLoad(ctx context.Context, q perm.Querier, g modelgroups.Group, withText b
 		limit = fmt.Sprintf(" LIMIT %d", keep)
 	}
 	rows, err := q.Query(ctx, `SELECT id, number, status, recipe_hash, runner_hash, image_ref, arch, error,
-		coalesce(array_length(regexp_split_to_array(nullif(lock, ''), E'\n'), 1), 0), `+text+`, created_at, created_by, started_at, finished_at
+		coalesce(array_length(regexp_split_to_array(nullif(lock, ''), E'\n'), 1), 0), `+text+`, job_name, created_at, created_by, started_at, finished_at
 		FROM script_environment_versions WHERE environment_id = $1 ORDER BY number DESC`+limit, s.EnvID)
 	if err != nil {
 		return nil, err
@@ -174,7 +175,7 @@ func mgLoad(ctx context.Context, q perm.Querier, g modelgroups.Group, withText b
 	for rows.Next() {
 		var v mgVersion
 		if err := rows.Scan(&v.ID, &v.Number, &v.Status, &v.RecipeHash, &v.RunnerHash, &v.ImageRef, &v.Arch, &v.Error, &v.Packages,
-			&v.Lock, &v.BuildLog, &v.Selftest, &v.CreatedAt, &v.CreatedBy, &v.StartedAt, &v.FinishedAt); err != nil {
+			&v.Lock, &v.BuildLog, &v.Selftest, &v.JobName, &v.CreatedAt, &v.CreatedBy, &v.StartedAt, &v.FinishedAt); err != nil {
 			return nil, err
 		}
 		s.Versions = append(s.Versions, v)
@@ -245,10 +246,12 @@ func mgDefaultSeconds(g modelgroups.Group) int64 {
 // ── the answers ──────────────────────────────────────────────────────────────
 
 type mgVersionOut struct {
-	Number     int64   `json:"number"`
-	Status     string  `json:"status"`
-	Current    bool    `json:"current"`
-	Stale      bool    `json:"stale"` // built from another recipe than the one shipped
+	Number  int64  `json:"number"`
+	Status  string `json:"status"`
+	Current bool   `json:"current"`
+	Stale   bool   `json:"stale"` // built from another recipe than the one shipped
+	// Rechecking: the runner changed and the version in use, still serving, is being self-tested again on the same image
+	Rechecking bool    `json:"rechecking"`
 	Error      *string `json:"error"`
 	ImageRef   *string `json:"image_ref"`
 	Packages   int     `json:"packages"`
@@ -314,7 +317,7 @@ func mgOut(ctx context.Context, q perm.Querier, s *mgState) (mgGroupOut, error) 
 	}
 	for _, v := range s.Versions {
 		out.Versions = append(out.Versions, mgVersionOut{Number: v.Number, Status: v.Status, Current: s.CurrentID != nil && *s.CurrentID == v.ID,
-			Stale: v.RecipeHash == nil || *v.RecipeHash != g.RecipeHash, Error: v.Error, ImageRef: v.ImageRef, Packages: v.Packages,
+			Stale: v.RecipeHash == nil || *v.RecipeHash != g.RecipeHash, Rechecking: v.Status == "ready" && v.JobName != nil, Error: v.Error, ImageRef: v.ImageRef, Packages: v.Packages,
 			CreatedAt: pyjson.Isoformat(v.CreatedAt), CreatedBy: v.CreatedBy, StartedAt: isoPtr(v.StartedAt), FinishedAt: isoPtr(v.FinishedAt),
 			Lock: v.Lock, BuildLog: v.BuildLog, Selftest: v.Selftest})
 	}

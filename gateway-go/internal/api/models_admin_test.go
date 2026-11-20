@@ -1042,3 +1042,131 @@ func TestAChangedRecipeQueuesANewVersionByItself(t *testing.T) {
 		t.Errorf("a disabled group was queued: %v", err)
 	}
 }
+
+// ── a new runner: the self-test again, on the image in use ─────────────────────
+
+func (f *modelsFixture) envOf(group string) int64 {
+	var id int64
+	if err := f.db.QueryRow(f.ctx, `SELECT id FROM script_environments WHERE managed_by = $1`, mgManagedBy(group)).Scan(&id); err != nil {
+		f.t.Fatal(err)
+	}
+	return id
+}
+
+func TestANewRunnerSelftestsTheImageInUseAgainAndItKeepsServing(t *testing.T) {
+	f := newModelsFixture(t)
+	f.enable(f.admin, "survival")
+	f.buildTo(t, "survival", true)
+	b := f.builds()
+	env := f.envOf("survival")
+	recheck := fmt.Sprintf("tabularia-recheck-e%d-v1", env)
+	g, _ := modelgroups.Get("survival")
+	// the same runner: nothing runs
+	if n, err := b.oneRound(f.ctx); err != nil || n != 0 || f.kube.job("scripts", recheck) != nil {
+		t.Fatalf("the same runner: %d %v", n, err)
+	}
+	image, err := ReadyModelGroupImage(f.ctx, f.db, "survival")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// an upgrade changed the runner: the version was self-tested with another one
+	if _, err := f.db.Exec(f.ctx, `UPDATE script_environment_versions SET runner_hash = 'of-the-old-runner'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.oneRound(f.ctx); err != nil {
+		t.Fatal(err)
+	}
+	job := f.kube.job("scripts", recheck)
+	if job == nil {
+		t.Fatal("the self-test was not started again")
+	}
+	text, _ := json.Marshal(job)
+	if !strings.Contains(string(text), "--selftest") || !strings.Contains(string(text), strings.TrimPrefix(image.Image, "")) {
+		t.Errorf("the Job is not the self-test on the same image: %.300s", text)
+	}
+	if f.kube.configmaps["scripts/"+fmt.Sprintf("tabularia-reselftest-e%d-v1", env)] == nil {
+		t.Error("no ConfigMap of the code")
+	}
+	if len(f.versions("survival")) != 1 {
+		t.Error("a version was built: the image does not change")
+	}
+	// meanwhile the version serves, and the card says it is being checked
+	still, err := ReadyModelGroupImage(f.ctx, f.db, "survival")
+	if err != nil || still.Image != image.Image {
+		t.Fatalf("the version in use stopped serving: %v", err)
+	}
+	if d := answerOf(t, f.call(f.admin, "GET", "survival", "", "", false, mgDetail)).Group; d.State != "ready" || !d.Ready || !d.Versions[0].Rechecking {
+		t.Errorf("the card: %+v", d)
+	}
+	// a Job that runs is not started twice
+	if _, err := b.oneRound(f.ctx); err != nil || len(f.kube.jobs) != 1 {
+		t.Errorf("a second round: %v, %d Jobs", err, len(f.kube.jobs))
+	}
+	// it passes: the version records the new runner and nothing runs again
+	f.kube.end(recheck, true, 0, selftestLog(passed))
+	if _, err := b.oneRound(f.ctx); err != nil {
+		t.Fatal(err)
+	}
+	v := f.versions("survival")[0]
+	if v.Status != "ready" || v.JobName != nil || v.RunnerHash == nil || *v.RunnerHash != g.RunnerHash || v.Error != nil {
+		t.Errorf("the version after the check: %+v", v)
+	}
+	if f.kube.job("scripts", recheck) != nil {
+		t.Error("the Job is still there")
+	}
+	if _, err := b.oneRound(f.ctx); err != nil || f.kube.job("scripts", recheck) != nil {
+		t.Errorf("run again: %v", err)
+	}
+	if d := answerOf(t, f.call(f.admin, "GET", "survival", "", "", false, mgDetail)).Group; d.Versions[0].Rechecking {
+		t.Error("still said to be checked")
+	}
+}
+
+func TestANewRunnerThatTheImageDoesNotPassFailsTheGroupWithTheDifference(t *testing.T) {
+	f := newModelsFixture(t)
+	f.enable(f.admin, "survival")
+	f.buildTo(t, "survival", true)
+	b := f.builds()
+	recheck := fmt.Sprintf("tabularia-recheck-e%d-v1", f.envOf("survival"))
+	if _, err := f.db.Exec(f.ctx, `UPDATE script_environment_versions SET runner_hash = NULL`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.oneRound(f.ctx); err != nil || f.kube.job("scripts", recheck) == nil {
+		t.Fatalf("not started: %v", err)
+	}
+	f.kube.end(recheck, false, 4, selftestLog(notPassed))
+	if _, err := b.oneRound(f.ctx); err != nil {
+		t.Fatal(err)
+	}
+	v := f.versions("survival")[0]
+	if v.Status != "failed" || v.JobName != nil || v.Error == nil || !strings.Contains(*v.Error, "runner of the statistical models changed") ||
+		!strings.Contains(*v.Error, "linear/coef/x: got 1.5, expected 2") {
+		t.Errorf("the version: %+v", v)
+	}
+	if g := answerOf(t, f.call(f.admin, "GET", "survival", "", "", false, mgDetail)).Group; g.State != "failed" || g.Ready {
+		t.Errorf("the group: %+v", g)
+	}
+	if _, err := ReadyModelGroupImage(f.ctx, f.db, "survival"); err == nil {
+		t.Error("a group whose self-test fails runs")
+	}
+	// it is not tried again by itself
+	if _, err := b.oneRound(f.ctx); err != nil || f.kube.job("scripts", recheck) != nil {
+		t.Errorf("tried again: %v", err)
+	}
+}
+
+func TestNoSelftestAgainWhileAVersionIsBeingBuilt(t *testing.T) {
+	f := newModelsFixture(t)
+	f.enable(f.admin, "survival")
+	f.buildTo(t, "survival", true)
+	if _, err := f.db.Exec(f.ctx, `UPDATE script_environment_versions SET runner_hash = 'old'`); err != nil {
+		t.Fatal(err)
+	}
+	f.call(f.admin, "POST", "survival", "", "", true, mgRebuild) // version 2 queued
+	if _, err := f.builds().oneRound(f.ctx); err != nil {
+		t.Fatal(err)
+	}
+	if f.kube.job("scripts", fmt.Sprintf("tabularia-recheck-e%d-v1", f.envOf("survival"))) != nil {
+		t.Error("a self-test again beside a build that will have it")
+	}
+}

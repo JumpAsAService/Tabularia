@@ -486,6 +486,9 @@ func (b *scriptBuilds) advance(ctx context.Context, tx pgx.Tx, v *sbVersion) err
 		v.Status, v.JobName, v.StartedAt = "building", sbStr(sbJobName("build", v)), &now
 		return nil
 	}
+	if v.Status == "ready" { // a version in use whose self-test runs again (a new runner)
+		return b.advanceRecheck(ctx, tx, v, env)
+	}
 	building := v.Status == "building"
 	stageNS, stageJob, stage := b.s.Scripts.Namespace, "check", "check of the new image"
 	if building {
@@ -557,7 +560,7 @@ func (b *scriptBuilds) advance(ctx context.Context, tx pgx.Tx, v *sbVersion) err
 		group := mgGroupOfManaged(env.ManagedBy)
 		var code pyjson.Object
 		if group != "" { // a model group's check also runs its self-test, on the code in a ConfigMap
-			if manifest, code, err = b.managedCheckJob(v, env, group); err != nil {
+			if manifest, code, err = b.managedCheckJob(v, env, group, false); err != nil {
 				return err
 			}
 		}
@@ -568,7 +571,7 @@ func (b *scriptBuilds) advance(ctx context.Context, tx pgx.Tx, v *sbVersion) err
 			return err
 		}
 		if code != nil {
-			if err := b.createSelftestCode(ctx, k, v, manifest, checkJob, code); err != nil {
+			if err := b.createSelftestCode(ctx, k, v, manifest, checkJob, code, false); err != nil {
 				return err
 			}
 		}
@@ -690,7 +693,7 @@ func (b *scriptBuilds) oneRound(ctx context.Context) (int64, error) {
 	}
 	rows, err := tx.Query(ctx, `SELECT id, environment_id, number, base_image, packages, status, job_name, image_ref, arch, lock,
 		completions, build_log, error, selftest, started_at, finished_at FROM script_environment_versions
-		WHERE status IN ('queued', 'building', 'checking') ORDER BY id`)
+		WHERE status IN ('queued', 'building', 'checking') OR (status = 'ready' AND job_name IS NOT NULL) ORDER BY id`)
 	if err != nil {
 		return 0, err
 	}
@@ -737,6 +740,10 @@ func (b *scriptBuilds) oneRound(ctx context.Context) (int64, error) {
 	// the model groups enabled whose shipped recipe changed since their version was built
 	queued, err := mgQueueStale(ctx, tx, b.log)
 	if err != nil {
+		return 0, err
+	}
+	// the version in use of a group whose runner changed: its self-test run again, on the same image
+	if err := b.recheckRunners(ctx, tx); err != nil {
 		return 0, err
 	}
 	return changed + queued, tx.Commit(ctx) // releases the lock
