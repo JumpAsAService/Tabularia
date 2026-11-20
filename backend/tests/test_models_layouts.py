@@ -432,19 +432,30 @@ def test_a_boosting_advice_and_note_are_said_in_the_page_language_whatever_the_r
     assert said["note_time_budget"].startswith("Il boosting si è fermato al 60 % del budget di tempo")
     assert said["note_model_file_too_large"].startswith("Il file del modello sarebbe più grande")
     assert said["note_validation_chose_trees"].startswith("La parte di validazione ha scelto anche il numero di alberi")
-    # the advice: one of several the check can give, chosen by what the runner's sentence says; its words in the language
-    base = next(r for r in rows if r["level"] == "trees_limit" and r["stat"] == "verdict")
-    for runner, start in (("The validation loss was still falling at the last tree: raise max_trees or learning_rate",
-                           "La perdita in validazione scendeva ancora"),
-                          ("Stopped after very few trees: lower learning_rate", "Si è fermato dopo pochissimi alberi"),
-                          ("Without early stopping the last tree is worse by 3 %: turn early stopping on", "L'ultimo albero è peggiore")):
-        changed = [{**r, "text": "doubtful"} if r is base else r for r in rows if not (r["level"] == "trees_limit" and r["stat"] == "advice")]
-        changed.append({**base, "stat": "advice", "text": runner, "key": "assumption|trees_limit||advice"})
-        [one] = [r for r in layouts.with_labels(model, params, changed, "it") if r["level"] == "trees_limit" and r["stat"] == "advice"]
-        assert one["text"].startswith(start), (runner, one["text"])
-    # an advice the words have one of for the check, and the leakage's two
-    [calibration] = [r for r in layouts.with_labels(model, params, rows, "de") if r["level"] == "calibration" and r["stat"] == "advice"]
-    assert calibration["text"].startswith("Die vorhergesagten Wahrscheinlichkeiten stimmen nicht")
+    # the advice: one of several the check can give, chosen by the id the runner wrote next to its sentence (`advice_id`),
+    # whatever the sentence says; its words in the language; an id the words do not have yet: the check's general advice
+    def advised(check: str, advice_id: str | None, locale: str, verdict: str = "doubtful") -> str:
+        base = next(r for r in rows if r["level"] == check and r["stat"] == "verdict")
+        changed = [{**r, "text": verdict} if r is base else r for r in rows
+                   if not (r["level"] == check and r["stat"] in ("advice", "advice_id"))]
+        changed.append({**base, "stat": "advice", "text": "Whatever the runner says: still falling, few trees, balanced",
+                        "key": f"assumption|{check}|{base['level_2'] or ''}|advice"})
+        if advice_id:
+            changed.append({**base, "stat": "advice_id", "text": advice_id, "key": f"assumption|{check}|{base['level_2'] or ''}|advice_id"})
+        [one] = [r for r in layouts.with_labels(model, params, changed, locale) if r["level"] == check and r["stat"] == "advice"]
+        return one["text"]
+
+    for advice_id, start in (("trees_more", "La perdita in validazione scendeva ancora"), ("trees_few", "Si è fermato dopo pochissimi alberi"),
+                             ("trees_no_stop", "L'ultimo albero è peggiore"), ("newer_than_the_words", "Il numero di alberi potrebbe"),
+                             (None, "Il numero di alberi potrebbe")):
+        assert advised("trees_limit", advice_id, "it").startswith(start), advice_id
+    # an advice the words have one of for the check, and the calibration's two
+    assert advised("calibration", "calibration", "de").startswith("Die vorhergesagten Wahrscheinlichkeiten stimmen nicht")
+    assert advised("calibration", "calibration_balanced", "de").startswith("Erwartet: ausgewogene Gewichte")
+    assert advised("beats_baseline", "beats_baseline", "fr").startswith("Le modèle ne prédit pas")
+    # a check not computed for one of several reasons: the words of that reason
+    assert advised("importance_stability", "importance_few_predictors", "it", "not_computed") == "Non calcolato: servono almeno 3 predittori."
+    assert advised("calibration_slope", "slope_separated", "es", "not_computed").startswith("No calculado: la regresión logística")
 
 
 def test_excel_holds_the_tables_one_sheet_each(tmp_path, chart_service, monkeypatch):  # noqa: F811

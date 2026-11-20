@@ -215,20 +215,22 @@
    "beats_baseline": {
     "name": "Better than the baseline",
     "h0": "1 − validation loss / the baseline's",
-    "advice": "The model predicts the validation part no better than the average (the class shares): check the predictors and the outcome."
+    "advice": "The model predicts the validation part no better than the average (the class shares): check the predictors and the outcome.",
+    "not_computed": "Not computed: the outcome does not vary in the validation part, the baseline's loss is 0."
    },
    "overfitting": {
     "name": "Overfitting",
-    "h0": "the share of the training part's gain over the baseline that holds on validation",
-    "advice": "The model learns the training rows more than the pattern: lower max_depth, raise min_child_weight (XGBoost) or l2_leaf_reg (CatBoost), lower subsample, or add rows."
+    "h0": "the share of the validation gain over the baseline given back between the best tree and the tree kept",
+    "advice": "The validation loss of the tree kept is worse than at the best tree before it: the trees after it learn the training rows, not the pattern. Turn early stopping on with stop_metric = loss, or lower max_trees, max_depth or learning_rate.",
+    "not_computed": "Not computed: the validation loss never goes below the baseline's, so there is no gain to give back (with class_weight = balanced the probabilities move away from the class shares, and the loss with them)."
    },
    "trees_limit": {
     "name": "Number of trees",
     "h0": "whether early stopping stopped, and the trees kept",
     "advice": {
-     "still falling": "The validation loss was still falling at the last tree: raise max_trees or learning_rate.",
-     "few trees": "It stopped after very few trees: lower learning_rate.",
-     "turn early stopping on": "The last tree is more than 1 % worse than the best: turn early stopping on.",
+     "trees_more": "The validation loss was still falling at the last tree: raise max_trees or learning_rate.",
+     "trees_few": "It stopped after very few trees with a learning rate above 0.05: lower learning_rate.",
+     "trees_no_stop": "The last tree is more than 1 % worse than the best: turn early stopping on.",
      "": "The number of trees may not be the right one: read the learning curves."
     }
    },
@@ -236,7 +238,12 @@
     "name": "Stability of the importance",
     "h0": "Spearman's ρ between the importance in the training and in the validation part",
     "advice": "The model leans on different predictors in the two parts: the ranking is not reliable; use more rows, or fewer correlated predictors.",
-    "not_computed": "Not computed: it needs at least 3 predictors and 50 validation rows in the SHAP sample."
+    "not_computed": {
+     "importance_few_predictors": "Not computed: it needs at least 3 predictors.",
+     "importance_few_rows": "Not computed: it needs 50 validation rows in the SHAP sample; add rows, or raise validation_share.",
+     "importance_flat": "Not computed: the importance does not vary between the predictors.",
+     "": "Not computed: it needs at least 3 predictors and 50 validation rows in the SHAP sample."
+    }
    },
    "zero_importance": {
     "name": "Predictor the model never uses",
@@ -245,9 +252,9 @@
    },
    "leakage": {
     "name": "Leakage",
-    "h0": "the first predictor's share of |SHAP|, and the fit on the validation part",
+    "h0": "the first predictor's share of |SHAP| (with one predictor: the validation fit), and how nearly perfect the validation fit is",
     "advice": {
-     "validation = time": "One predictor explains nearly everything, or the fit is nearly perfect: check that no predictor is computed from the outcome or recorded after it (an id, a status, a later date). With a time in the data, try validation = time.",
+     "leakage_time": "One predictor explains nearly everything, or the fit is nearly perfect: check that no predictor is computed from the outcome or recorded after it (an id, a status, a later date). With a time in the data, try validation = time.",
      "": "One predictor explains nearly everything, or the fit is nearly perfect: check that no predictor is computed from the outcome or recorded after it (an id, a status, a later date)."
     }
    },
@@ -258,18 +265,22 @@
    },
    "calibration": {
     "name": "Calibration",
-    "h0": "the expected calibration error, in 10 bins",
+    "h0": "the expected calibration error in 10 bins, against the one well calibrated probabilities reach with these rows",
     "advice": {
-     "balanced": "Expected: balanced weights move the probabilities; turn it off if they are used as probabilities.",
+     "calibration_balanced": "Expected: balanced weights move the probabilities; turn it off if they are used as probabilities.",
      "": "The predicted probabilities do not match the observed rates: do not read them as probabilities, or recalibrate."
     },
-    "not_computed": "Not computed: the validation part has too few rows."
+    "not_computed": "Not computed: the validation part has fewer than 10 rows of a class; raise validation_share, or add rows."
    },
    "calibration_slope": {
     "name": "Calibration slope",
-    "h0": "the slope of a logistic regression of the outcome on logit(p)",
-    "advice": "Below 1: the probabilities are too extreme (overfitting); above 1: too timid.",
-    "not_computed": "Not computed: the validation part has too few rows of one class."
+    "h0": "the slope of a logistic regression of the outcome on logit(p), read with its 95 % interval",
+    "advice": "Its 95 % interval misses 0.8–1.25: below 1 the probabilities are too extreme (overfitting), above 1 too timid.",
+    "not_computed": {
+     "calibration_few_rows": "Not computed: the validation part has fewer than 10 rows of a class; raise validation_share, or add rows.",
+     "slope_separated": "Not computed: the logistic regression on logit(p) does not converge, the validation part is separated.",
+     "": "Not computed: the validation part has fewer than 10 rows of a class; raise validation_share, or add rows."
+    }
    }
   }
  },
@@ -489,20 +500,22 @@
    "beats_baseline": {
     "name": "Meglio del riferimento",
     "h0": "1 − perdita in validazione / quella del riferimento",
-    "advice": "Il modello prevede la parte di validazione non meglio della media (le quote delle classi): controllate i predittori e l'esito."
+    "advice": "Il modello prevede la parte di validazione non meglio della media (le quote delle classi): controllate i predittori e l'esito.",
+    "not_computed": "Non calcolato: l'esito non varia nella parte di validazione, la perdita del riferimento è 0."
    },
    "overfitting": {
     "name": "Sovradattamento",
-    "h0": "la quota del miglioramento sul riferimento nella parte di addestramento che regge in validazione",
-    "advice": "Il modello impara le righe di addestramento più dello schema: abbassate max_depth, alzate min_child_weight (XGBoost) o l2_leaf_reg (CatBoost), abbassate subsample o aggiungete righe."
+    "h0": "la quota del guadagno in validazione sul riferimento restituita tra l'albero migliore e quello tenuto",
+    "advice": "La perdita in validazione dell'albero tenuto è peggiore di quella dell'albero migliore prima di esso: gli alberi successivi imparano le righe di addestramento, non lo schema. Attivate l'arresto anticipato con stop_metric = loss, oppure abbassate max_trees, max_depth o learning_rate.",
+    "not_computed": "Non calcolato: la perdita in validazione non scende mai sotto quella del riferimento, quindi non c'è guadagno da restituire (con class_weight = balanced le probabilità si allontanano dalle quote delle classi, e la perdita con loro)."
    },
    "trees_limit": {
     "name": "Numero di alberi",
     "h0": "se l'arresto anticipato è intervenuto, e gli alberi tenuti",
     "advice": {
-     "still falling": "La perdita in validazione scendeva ancora all'ultimo albero: alzate max_trees o learning_rate.",
-     "few trees": "Si è fermato dopo pochissimi alberi: abbassate learning_rate.",
-     "turn early stopping on": "L'ultimo albero è peggiore del migliore di oltre l'1 %: attivate l'arresto anticipato.",
+     "trees_more": "La perdita in validazione scendeva ancora all'ultimo albero: alzate max_trees o learning_rate.",
+     "trees_few": "Si è fermato dopo pochissimi alberi con un learning rate sopra 0,05: abbassate learning_rate.",
+     "trees_no_stop": "L'ultimo albero è peggiore del migliore di oltre l'1 %: attivate l'arresto anticipato.",
      "": "Il numero di alberi potrebbe non essere quello giusto: leggete le curve di apprendimento."
     }
    },
@@ -510,7 +523,12 @@
     "name": "Stabilità dell'importanza",
     "h0": "ρ di Spearman tra l'importanza nella parte di addestramento e in quella di validazione",
     "advice": "Il modello si appoggia a predittori diversi nelle due parti: la graduatoria non è affidabile; servono più righe o meno predittori correlati.",
-    "not_computed": "Non calcolato: servono almeno 3 predittori e 50 righe di validazione nel campione SHAP."
+    "not_computed": {
+     "importance_few_predictors": "Non calcolato: servono almeno 3 predittori.",
+     "importance_few_rows": "Non calcolato: servono 50 righe di validazione nel campione SHAP; aggiungete righe o aumentate validation_share.",
+     "importance_flat": "Non calcolato: l'importanza non varia tra i predittori.",
+     "": "Non calcolato: servono almeno 3 predittori e 50 righe di validazione nel campione SHAP."
+    }
    },
    "zero_importance": {
     "name": "Predittore che il modello non usa mai",
@@ -519,9 +537,9 @@
    },
    "leakage": {
     "name": "Fuga di informazione",
-    "h0": "la quota di |SHAP| del primo predittore, e l'adattamento sulla parte di validazione",
+    "h0": "la quota di |SHAP| del primo predittore (con un solo predittore: l'adattamento in validazione), e quanto è quasi perfetto l'adattamento in validazione",
     "advice": {
-     "validation = time": "Un predittore spiega quasi tutto, o l'adattamento è quasi perfetto: verificate che nessun predittore sia calcolato dall'esito o registrato dopo di esso (un id, uno stato, una data successiva). Con un tempo nei dati, provate validation = time.",
+     "leakage_time": "Un predittore spiega quasi tutto, o l'adattamento è quasi perfetto: verificate che nessun predittore sia calcolato dall'esito o registrato dopo di esso (un id, uno stato, una data successiva). Con un tempo nei dati, provate validation = time.",
      "": "Un predittore spiega quasi tutto, o l'adattamento è quasi perfetto: verificate che nessun predittore sia calcolato dall'esito o registrato dopo di esso (un id, uno stato, una data successiva)."
     }
    },
@@ -532,18 +550,22 @@
    },
    "calibration": {
     "name": "Calibrazione",
-    "h0": "l'errore di calibrazione atteso, in 10 classi",
+    "h0": "l'errore di calibrazione atteso in 10 classi, confrontato con quello che probabilità ben calibrate raggiungono con queste righe",
     "advice": {
-     "balanced": "Previsto: i pesi bilanciati spostano le probabilità; disattivateli se le usate come probabilità.",
+     "calibration_balanced": "Previsto: i pesi bilanciati spostano le probabilità; disattivateli se le usate come probabilità.",
      "": "Le probabilità previste non corrispondono alle frequenze osservate: non leggetele come probabilità, oppure ricalibratele."
     },
-    "not_computed": "Non calcolato: la parte di validazione ha troppe poche righe."
+    "not_computed": "Non calcolato: la parte di validazione ha meno di 10 righe di una classe; aumentate validation_share o aggiungete righe."
    },
    "calibration_slope": {
     "name": "Pendenza di calibrazione",
-    "h0": "la pendenza di una regressione logistica dell'esito su logit(p)",
-    "advice": "Sotto 1: le probabilità sono troppo estreme (sovradattamento); sopra 1: troppo caute.",
-    "not_computed": "Non calcolato: la parte di validazione ha troppe poche righe di una classe."
+    "h0": "la pendenza di una regressione logistica dell'esito su logit(p), letta con il suo intervallo al 95 %",
+    "advice": "Il suo intervallo al 95 % non tocca 0,8–1,25: sotto 1 le probabilità sono troppo estreme (sovradattamento), sopra 1 troppo caute.",
+    "not_computed": {
+     "calibration_few_rows": "Non calcolato: la parte di validazione ha meno di 10 righe di una classe; aumentate validation_share o aggiungete righe.",
+     "slope_separated": "Non calcolato: la regressione logistica su logit(p) non converge, la parte di validazione è separata.",
+     "": "Non calcolato: la parte di validazione ha meno di 10 righe di una classe; aumentate validation_share o aggiungete righe."
+    }
    }
   }
  },
@@ -763,20 +785,22 @@
    "beats_baseline": {
     "name": "Besser als die Referenz",
     "h0": "1 − Verlust in der Validierung / der der Referenz",
-    "advice": "Das Modell sagt den Validierungsteil nicht besser voraus als der Durchschnitt (die Klassenanteile): prüfen Sie die Prädiktoren und das Ergebnis."
+    "advice": "Das Modell sagt den Validierungsteil nicht besser voraus als der Durchschnitt (die Klassenanteile): prüfen Sie die Prädiktoren und das Ergebnis.",
+    "not_computed": "Nicht berechnet: das Ergebnis variiert im Validierungsteil nicht, der Verlust der Referenz ist 0."
    },
    "overfitting": {
     "name": "Überanpassung",
-    "h0": "der Anteil des Gewinns des Trainingsteils gegenüber der Referenz, der in der Validierung hält",
-    "advice": "Das Modell lernt die Trainingszeilen mehr als das Muster: senken Sie max_depth, erhöhen Sie min_child_weight (XGBoost) oder l2_leaf_reg (CatBoost), senken Sie subsample oder fügen Sie Zeilen hinzu."
+    "h0": "der Anteil des Validierungsgewinns gegenüber der Referenz, der zwischen dem besten und dem behaltenen Baum verloren geht",
+    "advice": "Der Validierungsverlust des behaltenen Baums ist schlechter als beim besten Baum davor: die Bäume danach lernen die Trainingszeilen, nicht das Muster. Schalten Sie das vorzeitige Stoppen mit stop_metric = loss ein oder senken Sie max_trees, max_depth oder learning_rate.",
+    "not_computed": "Nicht berechnet: der Validierungsverlust fällt nie unter den der Referenz, es gibt also keinen Gewinn, der verloren gehen könnte (mit class_weight = balanced entfernen sich die Wahrscheinlichkeiten von den Klassenanteilen, und der Verlust mit ihnen)."
    },
    "trees_limit": {
     "name": "Anzahl der Bäume",
     "h0": "ob das vorzeitige Stoppen eingegriffen hat, und die behaltenen Bäume",
     "advice": {
-     "still falling": "Der Validierungsverlust fiel beim letzten Baum noch: erhöhen Sie max_trees oder learning_rate.",
-     "few trees": "Es stoppte nach sehr wenigen Bäumen: senken Sie learning_rate.",
-     "turn early stopping on": "Der letzte Baum ist mehr als 1 % schlechter als der beste: schalten Sie das vorzeitige Stoppen ein.",
+     "trees_more": "Der Validierungsverlust fiel beim letzten Baum noch: erhöhen Sie max_trees oder learning_rate.",
+     "trees_few": "Es stoppte nach sehr wenigen Bäumen mit einer Lernrate über 0,05: senken Sie learning_rate.",
+     "trees_no_stop": "Der letzte Baum ist mehr als 1 % schlechter als der beste: schalten Sie das vorzeitige Stoppen ein.",
      "": "Die Anzahl der Bäume ist vielleicht nicht die richtige: lesen Sie die Lernkurven."
     }
    },
@@ -784,7 +808,12 @@
     "name": "Stabilität der Wichtigkeit",
     "h0": "Spearmans ρ zwischen der Wichtigkeit im Trainings- und im Validierungsteil",
     "advice": "Das Modell stützt sich in den beiden Teilen auf verschiedene Prädiktoren: die Rangfolge ist nicht verlässlich; mehr Zeilen oder weniger korrelierte Prädiktoren.",
-    "not_computed": "Nicht berechnet: es braucht mindestens 3 Prädiktoren und 50 Validierungszeilen in der SHAP-Stichprobe."
+    "not_computed": {
+     "importance_few_predictors": "Nicht berechnet: es braucht mindestens 3 Prädiktoren.",
+     "importance_few_rows": "Nicht berechnet: es braucht 50 Validierungszeilen in der SHAP-Stichprobe; fügen Sie Zeilen hinzu oder erhöhen Sie validation_share.",
+     "importance_flat": "Nicht berechnet: die Wichtigkeit variiert zwischen den Prädiktoren nicht.",
+     "": "Nicht berechnet: es braucht mindestens 3 Prädiktoren und 50 Validierungszeilen in der SHAP-Stichprobe."
+    }
    },
    "zero_importance": {
     "name": "Prädiktor, den das Modell nie nutzt",
@@ -793,9 +822,9 @@
    },
    "leakage": {
     "name": "Datenleck",
-    "h0": "der Anteil des ersten Prädiktors an |SHAP| und die Anpassung im Validierungsteil",
+    "h0": "der Anteil des ersten Prädiktors an |SHAP| (bei einem Prädiktor: die Anpassung in der Validierung) und wie nahezu perfekt die Anpassung in der Validierung ist",
     "advice": {
-     "validation = time": "Ein Prädiktor erklärt fast alles, oder die Anpassung ist fast perfekt: prüfen Sie, dass kein Prädiktor aus dem Ergebnis berechnet oder nach ihm erfasst wurde (eine ID, ein Status, ein späteres Datum). Bei einer Zeit in den Daten versuchen Sie validation = time.",
+     "leakage_time": "Ein Prädiktor erklärt fast alles, oder die Anpassung ist fast perfekt: prüfen Sie, dass kein Prädiktor aus dem Ergebnis berechnet oder nach ihm erfasst wurde (eine ID, ein Status, ein späteres Datum). Bei einer Zeit in den Daten versuchen Sie validation = time.",
      "": "Ein Prädiktor erklärt fast alles, oder die Anpassung ist fast perfekt: prüfen Sie, dass kein Prädiktor aus dem Ergebnis berechnet oder nach ihm erfasst wurde (eine ID, ein Status, ein späteres Datum)."
     }
    },
@@ -806,18 +835,22 @@
    },
    "calibration": {
     "name": "Kalibrierung",
-    "h0": "der erwartete Kalibrierungsfehler, in 10 Klassen",
+    "h0": "der erwartete Kalibrierungsfehler in 10 Klassen, verglichen mit dem, den gut kalibrierte Wahrscheinlichkeiten mit diesen Zeilen erreichen",
     "advice": {
-     "balanced": "Erwartet: ausgewogene Gewichte verschieben die Wahrscheinlichkeiten; schalten Sie sie aus, wenn diese als Wahrscheinlichkeiten genutzt werden.",
+     "calibration_balanced": "Erwartet: ausgewogene Gewichte verschieben die Wahrscheinlichkeiten; schalten Sie sie aus, wenn diese als Wahrscheinlichkeiten genutzt werden.",
      "": "Die vorhergesagten Wahrscheinlichkeiten stimmen nicht mit den beobachteten Raten überein: lesen Sie sie nicht als Wahrscheinlichkeiten oder kalibrieren Sie neu."
     },
-    "not_computed": "Nicht berechnet: der Validierungsteil hat zu wenige Zeilen."
+    "not_computed": "Nicht berechnet: der Validierungsteil hat weniger als 10 Zeilen einer Klasse; erhöhen Sie validation_share oder fügen Sie Zeilen hinzu."
    },
    "calibration_slope": {
     "name": "Steigung der Kalibrierung",
-    "h0": "die Steigung einer logistischen Regression des Ergebnisses auf logit(p)",
-    "advice": "Unter 1: die Wahrscheinlichkeiten sind zu extrem (Überanpassung); über 1: zu zaghaft.",
-    "not_computed": "Nicht berechnet: der Validierungsteil hat zu wenige Zeilen einer Klasse."
+    "h0": "die Steigung einer logistischen Regression des Ergebnisses auf logit(p), gelesen mit ihrem 95-%-Intervall",
+    "advice": "Ihr 95-%-Intervall verfehlt 0,8–1,25: unter 1 sind die Wahrscheinlichkeiten zu extrem (Überanpassung), über 1 zu zaghaft.",
+    "not_computed": {
+     "calibration_few_rows": "Nicht berechnet: der Validierungsteil hat weniger als 10 Zeilen einer Klasse; erhöhen Sie validation_share oder fügen Sie Zeilen hinzu.",
+     "slope_separated": "Nicht berechnet: die logistische Regression auf logit(p) konvergiert nicht, der Validierungsteil ist getrennt.",
+     "": "Nicht berechnet: der Validierungsteil hat weniger als 10 Zeilen einer Klasse; erhöhen Sie validation_share oder fügen Sie Zeilen hinzu."
+    }
    }
   }
  },
@@ -1037,20 +1070,22 @@
    "beats_baseline": {
     "name": "Mejor que la referencia",
     "h0": "1 − pérdida en validación / la de la referencia",
-    "advice": "El modelo no predice la parte de validación mejor que el promedio (las proporciones de clase): revise los predictores y el resultado."
+    "advice": "El modelo no predice la parte de validación mejor que el promedio (las proporciones de clase): revise los predictores y el resultado.",
+    "not_computed": "No calculado: el resultado no varía en la parte de validación, la pérdida de la referencia es 0."
    },
    "overfitting": {
     "name": "Sobreajuste",
-    "h0": "la parte de la mejora sobre la referencia en entrenamiento que se mantiene en validación",
-    "advice": "El modelo aprende las filas de entrenamiento más que el patrón: baje max_depth, suba min_child_weight (XGBoost) o l2_leaf_reg (CatBoost), baje subsample o añada filas."
+    "h0": "la parte de la ganancia en validación sobre la referencia que se devuelve entre el mejor árbol y el conservado",
+    "advice": "La pérdida de validación del árbol conservado es peor que la del mejor árbol anterior: los árboles siguientes aprenden las filas de entrenamiento, no el patrón. Active la parada temprana con stop_metric = loss, o baje max_trees, max_depth o learning_rate.",
+    "not_computed": "No calculado: la pérdida de validación nunca baja de la de la referencia, así que no hay ganancia que devolver (con class_weight = balanced las probabilidades se alejan de las proporciones de clase, y la pérdida con ellas)."
    },
    "trees_limit": {
     "name": "Número de árboles",
     "h0": "si la parada temprana actuó, y los árboles conservados",
     "advice": {
-     "still falling": "La pérdida de validación seguía bajando en el último árbol: suba max_trees o learning_rate.",
-     "few trees": "Se detuvo tras muy pocos árboles: baje learning_rate.",
-     "turn early stopping on": "El último árbol es más de un 1 % peor que el mejor: active la parada temprana.",
+     "trees_more": "La pérdida de validación seguía bajando en el último árbol: suba max_trees o learning_rate.",
+     "trees_few": "Se detuvo tras muy pocos árboles con una tasa de aprendizaje superior a 0,05: baje learning_rate.",
+     "trees_no_stop": "El último árbol es más de un 1 % peor que el mejor: active la parada temprana.",
      "": "El número de árboles puede no ser el adecuado: lea las curvas de aprendizaje."
     }
    },
@@ -1058,7 +1093,12 @@
     "name": "Estabilidad de la importancia",
     "h0": "ρ de Spearman entre la importancia en la parte de entrenamiento y en la de validación",
     "advice": "El modelo se apoya en predictores distintos en las dos partes: la clasificación no es fiable; más filas, o menos predictores correlacionados.",
-    "not_computed": "No calculado: necesita al menos 3 predictores y 50 filas de validación en la muestra SHAP."
+    "not_computed": {
+     "importance_few_predictors": "No calculado: necesita al menos 3 predictores.",
+     "importance_few_rows": "No calculado: necesita 50 filas de validación en la muestra SHAP; añada filas o suba validation_share.",
+     "importance_flat": "No calculado: la importancia no varía entre los predictores.",
+     "": "No calculado: necesita al menos 3 predictores y 50 filas de validación en la muestra SHAP."
+    }
    },
    "zero_importance": {
     "name": "Predictor que el modelo nunca usa",
@@ -1067,9 +1107,9 @@
    },
    "leakage": {
     "name": "Fuga de información",
-    "h0": "la parte de |SHAP| del primer predictor, y el ajuste en la parte de validación",
+    "h0": "la parte de |SHAP| del primer predictor (con un solo predictor: el ajuste en validación), y cuán casi perfecto es el ajuste en validación",
     "advice": {
-     "validation = time": "Un predictor explica casi todo, o el ajuste es casi perfecto: compruebe que ningún predictor se calcula a partir del resultado ni se registra después (un id, un estado, una fecha posterior). Con un tiempo en los datos, pruebe validation = time.",
+     "leakage_time": "Un predictor explica casi todo, o el ajuste es casi perfecto: compruebe que ningún predictor se calcula a partir del resultado ni se registra después (un id, un estado, una fecha posterior). Con un tiempo en los datos, pruebe validation = time.",
      "": "Un predictor explica casi todo, o el ajuste es casi perfecto: compruebe que ningún predictor se calcula a partir del resultado ni se registra después (un id, un estado, una fecha posterior)."
     }
    },
@@ -1080,18 +1120,22 @@
    },
    "calibration": {
     "name": "Calibración",
-    "h0": "el error de calibración esperado, en 10 intervalos",
+    "h0": "el error de calibración esperado en 10 intervalos, frente al que alcanzan con estas filas unas probabilidades bien calibradas",
     "advice": {
-     "balanced": "Previsto: los pesos equilibrados desplazan las probabilidades; desactívelos si se usan como probabilidades.",
+     "calibration_balanced": "Previsto: los pesos equilibrados desplazan las probabilidades; desactívelos si se usan como probabilidades.",
      "": "Las probabilidades previstas no coinciden con las tasas observadas: no las lea como probabilidades, o recalibre."
     },
-    "not_computed": "No calculado: la parte de validación tiene muy pocas filas."
+    "not_computed": "No calculado: la parte de validación tiene menos de 10 filas de una clase; suba validation_share o añada filas."
    },
    "calibration_slope": {
     "name": "Pendiente de calibración",
-    "h0": "la pendiente de una regresión logística del resultado sobre logit(p)",
-    "advice": "Por debajo de 1: las probabilidades son demasiado extremas (sobreajuste); por encima de 1: demasiado tímidas.",
-    "not_computed": "No calculado: la parte de validación tiene muy pocas filas de una clase."
+    "h0": "la pendiente de una regresión logística del resultado sobre logit(p), leída con su intervalo al 95 %",
+    "advice": "Su intervalo al 95 % no toca 0,8–1,25: por debajo de 1 las probabilidades son demasiado extremas (sobreajuste), por encima de 1 demasiado tímidas.",
+    "not_computed": {
+     "calibration_few_rows": "No calculado: la parte de validación tiene menos de 10 filas de una clase; suba validation_share o añada filas.",
+     "slope_separated": "No calculado: la regresión logística sobre logit(p) no converge, la parte de validación está separada.",
+     "": "No calculado: la parte de validación tiene menos de 10 filas de una clase; suba validation_share o añada filas."
+    }
    }
   }
  },
@@ -1311,20 +1355,22 @@
    "beats_baseline": {
     "name": "Mieux que la référence",
     "h0": "1 − perte en validation / celle de la référence",
-    "advice": "Le modèle ne prédit pas la partie de validation mieux que la moyenne (les parts des classes) : vérifiez les prédicteurs et le résultat."
+    "advice": "Le modèle ne prédit pas la partie de validation mieux que la moyenne (les parts des classes) : vérifiez les prédicteurs et le résultat.",
+    "not_computed": "Non calculé : le résultat ne varie pas dans la partie de validation, la perte de la référence est 0."
    },
    "overfitting": {
     "name": "Surapprentissage",
-    "h0": "la part du gain de la partie d'entraînement sur la référence qui tient en validation",
-    "advice": "Le modèle apprend les lignes d'entraînement plus que la structure : baissez max_depth, relevez min_child_weight (XGBoost) ou l2_leaf_reg (CatBoost), baissez subsample ou ajoutez des lignes."
+    "h0": "la part du gain de validation sur la référence rendue entre le meilleur arbre et l'arbre conservé",
+    "advice": "La perte de validation de l'arbre conservé est moins bonne qu'au meilleur arbre avant lui : les arbres suivants apprennent les lignes d'entraînement, pas la structure. Activez l'arrêt anticipé avec stop_metric = loss, ou baissez max_trees, max_depth ou learning_rate.",
+    "not_computed": "Non calculé : la perte de validation ne descend jamais sous celle de la référence, il n'y a donc pas de gain à rendre (avec class_weight = balanced les probabilités s'éloignent des parts des classes, et la perte avec elles)."
    },
    "trees_limit": {
     "name": "Nombre d'arbres",
     "h0": "si l'arrêt anticipé est intervenu, et les arbres conservés",
     "advice": {
-     "still falling": "La perte de validation baissait encore au dernier arbre : relevez max_trees ou learning_rate.",
-     "few trees": "Il s'est arrêté après très peu d'arbres : baissez learning_rate.",
-     "turn early stopping on": "Le dernier arbre est plus de 1 % moins bon que le meilleur : activez l'arrêt anticipé.",
+     "trees_more": "La perte de validation baissait encore au dernier arbre : relevez max_trees ou learning_rate.",
+     "trees_few": "Il s'est arrêté après très peu d'arbres avec un taux d'apprentissage au-dessus de 0,05 : baissez learning_rate.",
+     "trees_no_stop": "Le dernier arbre est plus de 1 % moins bon que le meilleur : activez l'arrêt anticipé.",
      "": "Le nombre d'arbres n'est peut-être pas le bon : lisez les courbes d'apprentissage."
     }
    },
@@ -1332,7 +1378,12 @@
     "name": "Stabilité de l'importance",
     "h0": "ρ de Spearman entre l'importance dans la partie d'entraînement et celle de validation",
     "advice": "Le modèle s'appuie sur des prédicteurs différents dans les deux parties : le classement n'est pas fiable ; plus de lignes, ou moins de prédicteurs corrélés.",
-    "not_computed": "Non calculé : il faut au moins 3 prédicteurs et 50 lignes de validation dans l'échantillon SHAP."
+    "not_computed": {
+     "importance_few_predictors": "Non calculé : il faut au moins 3 prédicteurs.",
+     "importance_few_rows": "Non calculé : il faut 50 lignes de validation dans l'échantillon SHAP ; ajoutez des lignes ou relevez validation_share.",
+     "importance_flat": "Non calculé : l'importance ne varie pas entre les prédicteurs.",
+     "": "Non calculé : il faut au moins 3 prédicteurs et 50 lignes de validation dans l'échantillon SHAP."
+    }
    },
    "zero_importance": {
     "name": "Prédicteur que le modèle n'utilise jamais",
@@ -1341,9 +1392,9 @@
    },
    "leakage": {
     "name": "Fuite d'information",
-    "h0": "la part de |SHAP| du premier prédicteur, et l'ajustement sur la partie de validation",
+    "h0": "la part de |SHAP| du premier prédicteur (avec un seul prédicteur : l'ajustement en validation), et à quel point l'ajustement en validation est presque parfait",
     "advice": {
-     "validation = time": "Un prédicteur explique presque tout, ou l'ajustement est presque parfait : vérifiez qu'aucun prédicteur n'est calculé à partir du résultat ni enregistré après lui (un id, un statut, une date postérieure). Avec un temps dans les données, essayez validation = time.",
+     "leakage_time": "Un prédicteur explique presque tout, ou l'ajustement est presque parfait : vérifiez qu'aucun prédicteur n'est calculé à partir du résultat ni enregistré après lui (un id, un statut, une date postérieure). Avec un temps dans les données, essayez validation = time.",
      "": "Un prédicteur explique presque tout, ou l'ajustement est presque parfait : vérifiez qu'aucun prédicteur n'est calculé à partir du résultat ni enregistré après lui (un id, un statut, une date postérieure)."
     }
    },
@@ -1354,18 +1405,22 @@
    },
    "calibration": {
     "name": "Calibration",
-    "h0": "l'erreur de calibration attendue, en 10 classes",
+    "h0": "l'erreur de calibration attendue en 10 classes, face à celle qu'atteignent avec ces lignes des probabilités bien calibrées",
     "advice": {
-     "balanced": "Attendu : les poids équilibrés déplacent les probabilités ; désactivez-les si elles servent de probabilités.",
+     "calibration_balanced": "Attendu : les poids équilibrés déplacent les probabilités ; désactivez-les si elles servent de probabilités.",
      "": "Les probabilités prédites ne correspondent pas aux taux observés : ne les lisez pas comme des probabilités, ou recalibrez."
     },
-    "not_computed": "Non calculé : la partie de validation a trop peu de lignes."
+    "not_computed": "Non calculé : la partie de validation a moins de 10 lignes d'une classe ; relevez validation_share ou ajoutez des lignes."
    },
    "calibration_slope": {
     "name": "Pente de calibration",
-    "h0": "la pente d'une régression logistique du résultat sur logit(p)",
-    "advice": "Sous 1 : les probabilités sont trop extrêmes (surapprentissage) ; au-dessus de 1 : trop timides.",
-    "not_computed": "Non calculé : la partie de validation a trop peu de lignes d'une classe."
+    "h0": "la pente d'une régression logistique du résultat sur logit(p), lue avec son intervalle à 95 %",
+    "advice": "Son intervalle à 95 % manque 0,8–1,25 : sous 1 les probabilités sont trop extrêmes (surapprentissage), au-dessus de 1 trop timides.",
+    "not_computed": {
+     "calibration_few_rows": "Non calculé : la partie de validation a moins de 10 lignes d'une classe ; relevez validation_share ou ajoutez des lignes.",
+     "slope_separated": "Non calculé : la régression logistique sur logit(p) ne converge pas, la partie de validation est séparée.",
+     "": "Non calculé : la partie de validation a moins de 10 lignes d'une classe ; relevez validation_share ou ajoutez des lignes."
+    }
    }
   }
  }

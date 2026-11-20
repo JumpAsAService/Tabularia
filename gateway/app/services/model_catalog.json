@@ -2847,7 +2847,8 @@
                 "verdict",
                 "advice",
                 "significance",
-                "rows"
+                "rows",
+                "advice_id"
               ]
             },
             "curve": {
@@ -3029,7 +3030,8 @@
                 "verdict",
                 "advice",
                 "significance",
-                "rows"
+                "rows",
+                "advice_id"
               ]
             },
             "curve": {
@@ -3226,7 +3228,8 @@
                 "verdict",
                 "advice",
                 "significance",
-                "rows"
+                "rows",
+                "advice_id"
               ]
             },
             "curve": {
@@ -3536,7 +3539,8 @@
                 "verdict",
                 "advice",
                 "significance",
-                "rows"
+                "rows",
+                "advice_id"
               ]
             },
             "curve": {
@@ -3718,7 +3722,8 @@
                 "verdict",
                 "advice",
                 "significance",
-                "rows"
+                "rows",
+                "advice_id"
               ]
             },
             "curve": {
@@ -3915,7 +3920,8 @@
                 "verdict",
                 "advice",
                 "significance",
-                "rows"
+                "rows",
+                "advice_id"
               ]
             },
             "curve": {

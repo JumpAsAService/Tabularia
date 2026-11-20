@@ -127,6 +127,8 @@ def with_labels(model: str, params: Mapping[str, Any] | None, rows: list[dict], 
     model_numbers = {r["stat"]: r["value"] for r in rows if r["section"] == "model" and isinstance(r.get("value"), (int, float))}
     verdicts = {(r["level"], r["level_2"]): r.get("text") for r in rows
                 if r["section"] == "assumption" and r["stat"] == "verdict"}
+    advice_ids = {(r["level"], r["level_2"]): r.get("text") for r in rows
+                  if r["section"] == "assumption" and r["stat"] == "advice_id"}
     out = []
     for r in rows:
         section, stat, text = r["section"], r["stat"], r.get("text")
@@ -140,8 +142,8 @@ def with_labels(model: str, params: Mapping[str, Any] | None, rows: list[dict], 
                 text = check["h0"]
             elif stat == "advice":
                 said = check.get("not_computed") if verdict == "not_computed" else check.get("advice")
-                if isinstance(said, dict):  # the advice the runner's sentence says: the first whose marker is in it
-                    said = next((v for k, v in said.items() if k.lower() in (text or "").lower()), None)
+                if isinstance(said, dict):  # several advices: the one of the id the runner wrote (`advice_id`), else the general one
+                    said = said.get(advice_ids.get((r["level"], r["level_2"])) or "") or said.get("")
                 text = (said or text) if verdict in ("failed", "doubtful", "not_computed") else None
             elif stat == "count" and isinstance(r.get("value"), (int, float)):
                 text = count_said(w, r["level"], r["value"], loc.group)

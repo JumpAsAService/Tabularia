@@ -637,6 +637,13 @@ _BOOSTING_IMPORTANCE = {"levels": None, "numbers": ["gain", "gain_share", "mean_
                         "texts": []}
 _BOOSTING_CHECKS = ["validation_size", "beats_baseline", "overfitting", "trees_limit", "importance_stability",
                     "zero_importance", "leakage"]
+
+
+def _boosting_assumptions(*checks: str) -> dict[str, Any]:
+    """The diagnostics' rows: an assumption's, and `advice_id`, the id of the advice the report
+    says in its own words (its sentence may change, the id does not)."""
+    shape = _assumptions(*checks)
+    return {**shape, "texts": [*shape["texts"], "advice_id"]}
 _BEESWARM_BINS = ["low", "mid_low", "mid", "mid_high", "high", "category", "missing"]
 _BOOSTING_SHARED_CHARTS = [
     {"id": "importance_gain", "under": None}, {"id": "importance_shap", "under": "importance_stability"},
@@ -652,7 +659,7 @@ _BOOSTING_VARIANTS: list[dict[str, Any]] = [
                                   "validation_rmse", "validation_mae", "validation_r_squared", "baseline_rmse",
                                   "validation_mean"]},
             "importance": _BOOSTING_IMPORTANCE,
-            "assumption": _assumptions(*_BOOSTING_CHECKS),
+            "assumption": _boosting_assumptions(*_BOOSTING_CHECKS),
             "curve": _chart("learning_loss", "learning_stop", stats=["y"]),
             "point": {"levels": ["shap_beeswarm", "observed_predicted", "resid_predicted"],
                       "numbers": [*_BEESWARM_BINS, "y"], "texts": []},
@@ -674,7 +681,7 @@ _BOOSTING_VARIANTS: list[dict[str, Any]] = [
                                   "validation_sensitivity", "validation_specificity", "validation_precision",
                                   "validation_f1"]},
             "importance": _BOOSTING_IMPORTANCE,
-            "assumption": _assumptions(*_BOOSTING_CHECKS, "class_imbalance", "calibration", "calibration_slope"),
+            "assumption": _boosting_assumptions(*_BOOSTING_CHECKS, "class_imbalance", "calibration", "calibration_slope"),
             "curve": _chart("learning_loss", "learning_stop", "roc", stats=["y"]),
             "point": {"levels": ["shap_beeswarm", "calibration"], "numbers": [*_BEESWARM_BINS, "y"], "texts": []},
             "hist": _chart("probability", stats=["count"]),
@@ -696,7 +703,7 @@ _BOOSTING_VARIANTS: list[dict[str, Any]] = [
             "importance": _BOOSTING_IMPORTANCE,
             "class": {"levels": None, "numbers": ["support", "share_train", "share_validation", "precision", "recall",
                                                   "f1", "auc_ovr"], "texts": []},
-            "assumption": _assumptions(*_BOOSTING_CHECKS, "class_imbalance"),
+            "assumption": _boosting_assumptions(*_BOOSTING_CHECKS, "class_imbalance"),
             "curve": _chart("learning_loss", "learning_stop", "roc_ovr", stats=["y"]),
             "cell": {"levels": None, "numbers": ["observed"], "texts": []},
         },
