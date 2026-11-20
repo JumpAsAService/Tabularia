@@ -335,7 +335,8 @@ def test_a_boosting_first_page_holds_the_four_cards_the_diagnostics_and_the_sent
     w = common.words(*case.split("-"), "en")
     for text in (w["sections"]["assumptions"], w["sections"]["summary"], "Size of the validation part", "Leakage",
                  "Better than the baseline", "✓ ok"):
-        assert text in first or text in said, text
+        # the leakage row names its first predictor: «Leakage — price»
+        assert text in first or text in said or any(s.startswith(text + " — ") for s in said), text
     assert any(s.startswith("These are diagnostics read against rules of thumb, not statistical tests: they have no p-value")
                for s in said)
     # no p-value, statistic, df or stars: a boosting model has no test
@@ -345,7 +346,9 @@ def test_a_boosting_first_page_holds_the_four_cards_the_diagnostics_and_the_sent
     expected = {"xgboost-regression": ("RMSE, validation", "R², validation", "Trees"),
                 "xgboost-binary": ("Rows / events", "AUC, validation", "Log-loss, validation"),
                 "catboost-multiclass": ("Rows / classes", "Accuracy, validation", "Log-loss, validation")}[case]
-    assert set(expected) <= said and "best round 212" in said
+    _, _, rows = fixture(case)
+    best = int(next(r["value"] for r in rows if r["key"] == "model|||best_iteration")) + 1
+    assert set(expected) <= said and f"best round {best}" in said
 
 
 def test_the_boosting_charts_of_each_task(tmp_path, chart_service, monkeypatch):  # noqa: F811
@@ -365,7 +368,7 @@ def test_the_boosting_charts_of_each_task(tmp_path, chart_service, monkeypatch):
     # the gain and the SHAP bars; a multiclass model stacks the SHAP bars by class
     asked = asked_options(chart_service)
     gain = asked["Importance by PredictionValuesChange (share of the total)"]
-    assert gain["yAxis"]["data"] == ["price", "channel", "region", "discount"]
+    assert gain["yAxis"]["data"] == ["spend", "orders", "member", "store"]  # catboost-multiclass: the runner's, by gain share
     stacked = asked["Mean |SHAP| by class"]
     assert [s["name"] for s in stacked["series"]] == ["bronze", "gold", "silver"] and all(s["stack"] == "total" for s in stacked["series"])
     assert (asked["ROC curves, one class against the rest"]["legend"]["data"]) == ["bronze", "gold", "silver"]

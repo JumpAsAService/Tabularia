@@ -1,18 +1,440 @@
-"""CatBoost (lot X3 of docs/specs/statistical-models.md): fit_catboost(task) with native
-categories, early stopping on the validation part, SHAP from the library, the model file
-catboost.cbm; predict_catboost(task, card) from that file. Not built yet: both refuse with «not
-built yet».
+"""CatBoost (lot X3 of docs/specs/statistical-models.md, «Group `boosting` — Python»):
+fit_catboost(task) and predict_catboost(task, card).
+
+The fit: CatBoostRegressor or CatBoostClassifier on the positional frame boosting_shared
+prepared, with native categories (`cat_features`: a category's value is its label, a missing one
+the sentinel «␟missing», which a column may not hold), numbers with nan_mode = Min, the training
+rows in time order with has_time = true for a validation part in time (the ordered target
+statistics then never read later rows), early stopping on the validation part with
+use_best_model (the model keeps the trees up to the best round), a callback that stops at 60 % of
+the step's time, allow_writing_files = False and train_dir under /tmp (the code folder and the
+root are read-only: CatBoost writes nothing). The importance is PredictionValuesChange (it sums
+to 100); the SHAP values are CatBoost's ShapValues (exact TreeSHAP; n × (p + 1), or n × k × (p + 1)
+for a multiclass model, the last column the expected value). The model file is CatBoost's binary
+format, catboost.cbm, data the library parses, never code; its random model_guid and its
+train_finish_time are taken out of the metadata before it is written, so that the same fit writes
+the same bytes.
+
+Predict: the model file's sha256 checked against the card's, the file copied to /tmp under the
+card's name and read by CatBoost().load_model(path, format = "cbm"), the card's frame (a level the
+fit did not see takes the path of a missing value, the sentinel), the raw scores,
+boosting_shared.predict.
+
+The module's own tests (registered in the self-test): SHAP's additivity, the model file read back
+bit for bit, determinism (rows, predictions, SHAP and the file's bytes), the time budget, the
+sentinel, has_time, the stop metrics and the training AUC, nothing written outside /tmp.
 """
 from __future__ import annotations
 
+import hashlib
+import os
+import tempfile
+import time
 from typing import Any
 
-from tab_protocol import not_built
+import numpy as np
+import pandas as pd
+
+import boosting_shared as B
+from tab_protocol import ENV_MODEL_FILE_IN, Refusal, read_bytes
+
+PACKAGES = ["catboost", "numpy", "pandas"]
+LOSS = {"regression": "RMSE", "binary": "Logloss", "multiclass": "MultiClass"}
+MODEL_NAME = "catboost.cbm"
+MODEL_FORMAT = "catboost-cbm"
+SENTINEL = "␟missing"  # U+241F then «missing»: a categorical value must be a string
+TRAIN_DIR = "/tmp/catboost"
+NOT_IN_FILE = ("model_guid", "train_finish_time")  # metadata that changes on every fit
+
+# the stop metric: (CatBoost's eval_metric, the key of its curves in get_evals_result)
+STOP = {("regression", "loss"): ("RMSE", "RMSE"), ("regression", "mae"): ("MAE", "MAE"),
+        ("binary", "loss"): ("Logloss", "Logloss"), ("binary", "auc"): ("AUC:hints=skip_train~false", "AUC"),
+        ("binary", "error"): ("ZeroOneLoss", "ZeroOneLoss"), ("multiclass", "loss"): ("MultiClass", "MultiClass"),
+        ("multiclass", "error"): ("ZeroOneLoss", "ZeroOneLoss")}
+STOP_REFUSED = {
+    "mae": ("mae_needs_regression", "the mean absolute error is a regression's metric: use stop_metric = loss, auc or error"),
+    "auc": ("auc_needs_binary", "the AUC is a binary task's metric: use stop_metric = loss (or mae for a regression, error for "
+                                "a multiclass task)"),
+    "error": ("error_needs_classes", "the error rate is a classification's metric: use stop_metric = loss or mae"),
+}
+
+
+def _cb():
+    import catboost
+
+    return catboost
+
+
+def stop_metric(what: str, choice: str) -> tuple[str, str]:
+    """CatBoost's eval_metric and the curves' key of the metric early stopping watches."""
+    got = STOP.get((what, choice or "loss"))
+    if got is None:
+        code, message = STOP_REFUSED.get(choice, ("stop_metric", f"unknown stop_metric «{choice}»"))
+        raise Refusal(code, message)
+    return got
+
+
+def cat_frame(X: pd.DataFrame) -> pd.DataFrame:
+    """The frame CatBoost reads, from a positional frame: numbers as float64 (NaN missing), a
+    category as its labels (object), the sentinel where it is missing or a level the card does
+    not hold."""
+    out: dict[str, Any] = {}
+    for name in X.columns:
+        x = X[name]
+        if isinstance(x.dtype, pd.CategoricalDtype):
+            levels = np.asarray(list(x.cat.categories) + [SENTINEL], dtype=object)
+            codes = x.cat.codes.to_numpy()
+            out[name] = levels[np.where(codes < 0, len(levels) - 1, codes)]
+        else:
+            out[name] = x.to_numpy(dtype=float)
+    return pd.DataFrame(out, index=pd.RangeIndex(len(X)))
+
+
+def _cat_features(X: pd.DataFrame) -> list[int]:
+    return [j for j, c in enumerate(X.columns) if isinstance(X[c].dtype, pd.CategoricalDtype)]
+
+
+def pool(X: pd.DataFrame, label: Any = None, weight: Any = None):
+    """A Pool of a positional frame (its categories as cat_features)."""
+    return _cb().Pool(cat_frame(X), label=label, weight=weight, cat_features=_cat_features(X))
+
+
+def raw_scores(model: Any, X: pd.DataFrame, threads: int) -> np.ndarray:
+    """The raw scores (RawFormulaVal: n, or n × k for a multiclass model) as float64."""
+    return np.asarray(model.predict(pool(X), prediction_type="RawFormulaVal", thread_count=threads), dtype=np.float64)
+
+
+def model_params(P: B.Prepared) -> dict[str, Any]:
+    """The parameters of the CatBoost model, every one written (the node's, then the spec's fixed ones)."""
+    p = P.params
+    loss = LOSS[P.task]
+    eval_metric, key = stop_metric(P.task, p.get("stop_metric", "loss"))
+    early = bool(p.get("early_stopping", True))
+    params = {"iterations": int(p["max_trees"]), "learning_rate": float(p["learning_rate"]), "depth": int(p["max_depth"]),
+              "l2_leaf_reg": float(p["l2_leaf_reg"]), "rsm": float(p["rsm"]), "random_strength": float(p["random_strength"]),
+              "bootstrap_type": "Bernoulli", "subsample": float(p["subsample"]), "loss_function": loss,
+              "eval_metric": eval_metric, "nan_mode": "Min", "random_seed": int(p["seed"]), "thread_count": int(P.threads),
+              "use_best_model": early, "has_time": P.split == "time", "allow_writing_files": False, "train_dir": TRAIN_DIR,
+              "verbose": False}
+    if key != loss:
+        params["custom_metric"] = [loss]
+    if early:
+        params["early_stopping_rounds"] = int(p["early_stopping_rounds"])
+    return params
+
+
+def model_bytes(model: Any) -> bytes:
+    """catboost.cbm's bytes: written under /tmp and read back, without the metadata that changes
+    on every fit."""
+    meta = model.get_metadata()
+    for k in NOT_IN_FILE:
+        if k in meta:
+            del meta[k]
+    with tempfile.TemporaryDirectory(dir="/tmp" if os.path.isdir("/tmp") else None) as tmp:
+        path = os.path.join(tmp, MODEL_NAME)
+        model.save_model(path, format="cbm")
+        with open(path, "rb") as f:
+            return f.read()
+
+
+class TimeBudget:
+    """CatBoost's callback: after_iteration returns False (stop) once the deadline has passed."""
+
+    def __init__(self, until: float | None):
+        self.until = until
+        self.stopped = False
+
+    def after_iteration(self, info: Any) -> bool:
+        if self.until is not None and time.monotonic() > self.until:
+            self.stopped = True
+        return not self.stopped
 
 
 def fit_catboost(task: dict[str, Any]) -> dict[str, Any]:
-    raise not_built("the CatBoost node")
+    cb = _cb()
+    P = B.prepare(task)
+    p = P.params
+    for name, lv in zip(P.predictors, P.levels):
+        if lv and SENTINEL in lv:
+            raise Refusal("missing_sentinel", f"the column «{name}» holds the value «{SENTINEL}», which the CatBoost node keeps "
+                                              "for a missing value: replace it before the node", {"column": name})
+    params = model_params(P)
+    loss = LOSS[P.task]
+    _, stop = stop_metric(P.task, p.get("stop_metric", "loss"))
+    early = bool(params["use_best_model"])
+    weighted = P.weighted or p.get("class_weight") == "balanced"
+    tr_rows, va = P.train_order, P.valid
+    train_pool = pool(P.X.iloc[tr_rows], P.y[tr_rows], P.fit_w[tr_rows] if weighted else None)
+    valid_pool = pool(P.X.iloc[va], P.y[va], P.w[va] if P.weighted else None)
+    model = (cb.CatBoostRegressor if P.task == "regression" else cb.CatBoostClassifier)(**params)
+    budget = TimeBudget(B.deadline(task))
+    model.fit(train_pool, eval_set=valid_pool, callbacks=[budget] if budget.until is not None else None)
+
+    log = model.get_evals_result()
+    curves = {m: {"train": [float(v) for v in log.get("learn", {}).get(m, [])], "validation": [float(v) for v in vals]}
+              for m, vals in log.get("validation", {}).items() if m in (loss, stop)}
+    rounds = len(curves[stop]["validation"])
+    trees = int(model.tree_count_)
+    best = int(model.get_best_iteration()) if early else trees - 1
+    stopped_by_time = budget.stopped
+    stopped_early = early and not stopped_by_time and rounds < int(params["iterations"])
+    threads = P.threads
+    p_count = len(P.predictors)
+    pvc = np.asarray(model.get_feature_importance(type="PredictionValuesChange", thread_count=threads), dtype=np.float64)
+    gain = {j: float(v) for j, v in enumerate(pvc)}
+
+    def shap(rows: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        sv = np.asarray(model.get_feature_importance(data=pool(P.X.iloc[rows]), type="ShapValues", thread_count=threads),
+                        dtype=np.float64)
+        return sv[..., :p_count], sv[..., p_count]
+
+    fitted = B.Fitted(
+        library="catboost", library_version=cb.__version__, packages=PACKAGES, objective=loss, loss_metric_name=loss,
+        stop_metric_name=stop, importance_type="PredictionValuesChange",
+        raw_train=raw_scores(model, P.X.iloc[P.train], threads), raw_validation=raw_scores(model, P.X.iloc[va], threads),
+        curves=curves, best_iteration=best, trees=trees, stopped_early=bool(stopped_early), stopped_by_time=bool(stopped_by_time),
+        gain=gain, shap=shap, predict_raw=lambda X: raw_scores(model, X, threads), model_bytes=model_bytes(model),
+        model_name=MODEL_NAME, model_format=MODEL_FORMAT,
+        missing_level=SENTINEL if any(t == "category" for t in P.types) else None, lower_is_better={"AUC": False})
+    return B.finish(task, P, fitted)
+
+
+def load_model_file(card: dict[str, Any], data: bytes):
+    """A CatBoost model from the model file's bytes, once their sha256 matched the card's: written
+    to /tmp under the card's name, then read by CatBoost's own reader, in its cbm format."""
+    entry = (card.get("boosting") or {}).get("model_file") or {}
+    if entry.get("name") != MODEL_NAME:
+        raise Refusal("model_file", "the model card names no CatBoost model file: it was not made by a CatBoost node")
+    if hashlib.sha256(data).hexdigest() != entry.get("sha256") or len(data) != entry.get("bytes"):
+        raise Refusal("model_file_mismatch", f"the model file of {card.get('model') or 'the model'} does not match the "
+                                             "fingerprint its card keeps: it is not applied")
+    with tempfile.TemporaryDirectory(dir="/tmp" if os.path.isdir("/tmp") else None) as tmp:
+        path = os.path.join(tmp, MODEL_NAME)
+        with open(path, "wb") as f:
+            f.write(data)
+        model = _cb().CatBoost()
+        model.load_model(path, format="cbm")
+        return model
 
 
 def predict_catboost(task: dict[str, Any], card: dict[str, Any]) -> dict[str, Any]:
-    raise not_built("Predict for a CatBoost model")
+    where = os.environ.get(ENV_MODEL_FILE_IN, "")
+    if not where:
+        raise Refusal("no_model_file", f"{card.get('model') or 'the model'} has no model file among its files")
+    model = load_model_file(card, read_bytes(where))
+    threads = B.run_threads(task)
+    return B.predict(task, card, lambda X: raw_scores(model, X, threads))
+
+
+# ── the module's own tests ──────────────────────────────────────────────────────
+from tab_selftest import register  # noqa: E402
+
+
+def synthetic(n: int, what: str, seed: int = 1, unseen: bool = False) -> pd.DataFrame:
+    """A small table of the tests: two numbers (one with missing values), a category of five
+    levels (with missing values), a boolean, and an outcome of each kind."""
+    gen = np.random.Generator(np.random.PCG64(seed))
+    a = gen.normal(size=n)
+    b = gen.uniform(size=n)
+    c = gen.choice(["n", "s", "e", "w", "c"], size=n)
+    d = gen.uniform(size=n) < 0.4
+    effect = {"n": 1.0, "s": -1.0, "e": 0.5, "w": 0.0, "c": 2.0}
+    score = 1.5 * a + np.array([effect[x] for x in c]) + 0.8 * d - b + gen.normal(scale=0.7, size=n)
+    df = pd.DataFrame({"a": a, "b": b, "c": pd.Series(c, dtype=object), "d": pd.Series(d.tolist(), dtype=object)})
+    df.loc[gen.uniform(size=n) < 0.08, "a"] = np.nan
+    df.loc[gen.uniform(size=n) < 0.05, "c"] = None
+    if what == "regression":
+        df["y"] = score
+    elif what == "binary":
+        df["y"] = pd.Series(np.where(score > np.quantile(score, 0.7), "yes", "no"), dtype=object)
+    else:
+        df["y"] = pd.Series(np.where(score > 1, "gold", np.where(score > -0.5, "silver", "bronze")), dtype=object)
+    if unseen:
+        df.loc[:9, "c"] = "z"
+    return df
+
+
+def _task(what: str, df: pd.DataFrame, **params: Any) -> dict[str, Any]:
+    from tab_protocol import catalog
+
+    return {"model": "catboost", "variant": what, "group": "boosting", "group_version": "selftest", "mode": "fit",
+            "output": "rows", "_frame": df, "limits": dict(catalog()["limits"]),
+            "params": {"task": what, "outcome": "y", "predictors": ["a", "b", "c", "d"], "event_value": "yes",
+                       "max_trees": 60, "max_depth": 3, "learning_rate": 0.2, "early_stopping_rounds": 10, **params}}
+
+
+def _expect(ok: Any, message: str) -> None:
+    if not ok:
+        raise AssertionError(message)
+
+
+def _at(rows: Any) -> dict[str, int]:
+    return {k: i for i, k in enumerate(rows.key)}
+
+
+@register("catboost: SHAP adds up to the raw score on every row and class; the importance sums to 100")
+def _test_shap(code: Any) -> None:
+    for what in ("regression", "binary", "multiclass"):
+        df = synthetic(300, what, seed=2)
+        out = fit_catboost(_task(what, df))
+        model = load_model_file(out["card"], out["model_file"]["data"])
+        X, _ = B.card_frame(out["card"], df)
+        sv = np.asarray(model.get_feature_importance(data=pool(X), type="ShapValues", thread_count=2), dtype=np.float64)
+        raw = raw_scores(model, X, 2)
+        _expect(sv.shape == ((300, 5) if what != "multiclass" else (300, 3, 5)), f"{what}: ShapValues' shape {sv.shape}")
+        gap = np.abs(sv.sum(axis=-1) - raw).max()
+        _expect(gap <= 1e-6, f"{what}: Σφ + φ0 − the raw score up to {gap:.3g}")
+        rows = out["rows"]
+        at = _at(rows)
+        g = [rows.value[at[f"importance|{c}||gain"]] for c in "abcd"]
+        _expect(abs(sum(g) - 100) <= 1e-9, f"{what}: PredictionValuesChange sums to {sum(g)}")
+        _expect(rows.text[at["model|||importance_type"]] == "PredictionValuesChange" and rows.text[at["model|||library"]] == "catboost",
+                f"{what}: the texts")
+        _expect(rows.value[at["model|||n_categorical"]] == 2, f"{what}: the category and the boolean are native categories")
+
+
+@register("catboost: the model file read back predicts bit for bit; Predict checks its fingerprint")
+def _test_model_file(code: Any) -> None:
+    import json
+    import warnings
+
+    for what in ("regression", "binary", "multiclass"):
+        df = synthetic(250, what, seed=3)
+        out = fit_catboost(_task(what, df))
+        o = out["output"]
+        card = json.loads(json.dumps(out["card"]))
+        b = card["boosting"]
+        _expect(b["library"] == "catboost" and b["model_file"]["name"] == MODEL_NAME and b["missing_level"] == SENTINEL
+                and b["trees"] == b["best_iteration"] + 1, f"{what}: the card's boosting object {b}")
+        old = os.environ.get(ENV_MODEL_FILE_IN)
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                path = os.path.join(tmp, "model_file")  # the Job's name: no extension
+                with open(path, "wb") as f:
+                    f.write(out["model_file"]["data"])
+                os.environ[ENV_MODEL_FILE_IN] = path
+                new = synthetic(250, what, seed=3, unseen=True)
+                with warnings.catch_warnings(record=True) as said:
+                    warnings.simplefilter("always")
+                    pred = predict_catboost({"_frame": df, "params": {}, "group_version": "selftest"}, card)["output"]
+                    unseen = predict_catboost({"_frame": new, "params": {}, "group_version": "selftest"}, card)["output"]
+                col = {"regression": "pred_value", "binary": "pred_prob", "multiclass": "pred_prob"}[what]
+                mine = "prediction" if what != "multiclass" else "prediction_probability"
+                _expect(np.array_equal(pred[mine].to_numpy(dtype=float), o[col].to_numpy(dtype=float)),
+                        f"{what}: Predict from the file differs from the fit")
+                if what == "multiclass":
+                    _expect(list(pred["prediction"]) == list(o["pred_class"]), f"{what}: the classes differ")
+                _expect(any("did not see" in str(w.message) and "«c»" in str(w.message) for w in said), f"{what}: no warning")
+                missing = new.copy()
+                missing.loc[:9, "c"] = None
+                again = predict_catboost({"_frame": missing, "params": {}, "group_version": "selftest"}, card)["output"]
+                _expect(np.array_equal(unseen[mine].to_numpy(dtype=float)[:10], again[mine].to_numpy(dtype=float)[:10]),
+                        f"{what}: an unseen level does not take the missing value's path")
+                bad = dict(card, boosting=dict(b, model_file=dict(b["model_file"], sha256="0" * 64)))
+                for wrong, code_ in ((bad, "model_file_mismatch"),
+                                     (dict(card, boosting=dict(b, model_file=dict(b["model_file"], name="../x.cbm"))), "model_file")):
+                    try:
+                        predict_catboost({"_frame": df, "params": {}}, wrong)
+                        raise AssertionError(f"{code_}: applied")
+                    except Refusal as e:
+                        _expect(e.code == code_, e.code)
+        finally:
+            if old is None:
+                os.environ.pop(ENV_MODEL_FILE_IN, None)
+            else:
+                os.environ[ENV_MODEL_FILE_IN] = old
+
+
+@register("catboost: two fits of one seed are the same bit for bit, the model file too; 1 and 4 threads give the same numbers")
+def _test_determinism(code: Any) -> None:
+    for what in ("regression", "binary", "multiclass"):
+        df = synthetic(300, what, seed=4)
+        one, two = fit_catboost(_task(what, df)), fit_catboost(_task(what, df))
+        r1, r2 = one["rows"], two["rows"]
+        _expect(r1.key == r2.key and r1.text == r2.text, f"{what}: the rows differ")
+        for col in ("value", "x0", "x1"):
+            _expect(np.array_equal(np.asarray(getattr(r1, col), dtype=float), np.asarray(getattr(r2, col), dtype=float),
+                                   equal_nan=True), f"{what}: the numbers differ ({col})")
+        _expect(one["model_file"]["data"] == two["model_file"]["data"], f"{what}: the model files differ")
+        _expect(one["output"].equals(two["output"]), f"{what}: the rows output differs")
+    df = synthetic(300, "binary", seed=4)
+    t1, t4 = _task("binary", df), _task("binary", df)
+    t1["group_version"] = t4["group_version"] = 1
+    t1["mode"] = t4["mode"] = "fit"
+    old = os.environ.get("OMP_NUM_THREADS")
+    try:
+        os.environ["OMP_NUM_THREADS"] = "1"
+        a = fit_catboost(t1)
+        os.environ["OMP_NUM_THREADS"] = "4"
+        b = fit_catboost(t4)
+    finally:
+        if old is None:
+            os.environ.pop("OMP_NUM_THREADS", None)
+        else:
+            os.environ["OMP_NUM_THREADS"] = old
+    at = _at(a["rows"])
+    _expect(a["rows"].value[at["model|||threads"]] == 1 and _at(b["rows"]) == at and b["rows"].value[at["model|||threads"]] == 4,
+            "the threads")
+    keep = [i for i, k in enumerate(a["rows"].key) if k != "model|||threads"]
+    va, vb = np.asarray(a["rows"].value, dtype=float)[keep], np.asarray(b["rows"].value, dtype=float)[keep]
+    _expect(np.array_equal(va, vb, equal_nan=True), "1 and 4 threads: the numbers differ")
+
+
+@register("catboost: categories native with the missing sentinel, has_time in time order, the stop metrics, the time budget")
+def _test_options(code: Any) -> None:
+    df = synthetic(300, "binary", seed=6)
+    bad = df.copy()
+    bad.loc[5, "c"] = SENTINEL
+    try:
+        fit_catboost(_task("binary", bad))
+        raise AssertionError("a column holding the sentinel was not refused")
+    except Refusal as e:
+        _expect(e.code == "missing_sentinel" and "«c»" in e.message, e.code)
+    P = B.prepare(_task("binary", df))
+    _expect(list(cat_frame(P.X)["v3"][df["c"].isna().to_numpy()]) == [SENTINEL] * int(df["c"].isna().sum()), "the sentinel")
+    _expect(model_params(P)["has_time"] is False and model_params(P)["nan_mode"] == "Min", "has_time without time")
+    timed = df.assign(t=np.arange(300)[::-1] * 1.0)
+    T = _task("binary", timed, validation="time", order_by="t")
+    PT = B.prepare(T)
+    _expect(model_params(PT)["has_time"] is True and np.all(np.diff(timed["t"].to_numpy()[PT.train_order]) > 0),
+            "has_time: the training rows in time order")
+    rows = fit_catboost(T)["rows"]
+    at = _at(rows)
+    _expect(rows.text[at["model|||validation"]] == "time" and "model|||note_time_split" in at, "the split in time")
+    for what, metric, key in (("binary", "auc", "AUC"), ("binary", "error", "ZeroOneLoss"), ("regression", "mae", "MAE"),
+                              ("multiclass", "error", "ZeroOneLoss")):
+        rows = fit_catboost(_task(what, synthetic(300, what, seed=7), stop_metric=metric))["rows"]
+        at = _at(rows)
+        _expect(rows.text[at["model|||stop_metric"]] == key, f"{what} {metric}: {rows.text[at['model|||stop_metric']]}")
+        for part in ("train", "validation"):
+            _expect(f"curve|learning_stop|{part}|y|0" in at and f"curve|learning_loss|{part}|y|0" in at,
+                    f"{what} {metric}: no {part} curve")
+    for what, metric in (("binary", "mae"), ("regression", "auc"), ("regression", "error"), ("multiclass", "auc")):
+        try:
+            fit_catboost(_task(what, synthetic(300, what, seed=7), stop_metric=metric))
+            raise AssertionError(f"{what} with stop_metric {metric} was not refused")
+        except Refusal:
+            pass
+    task = _task("regression", synthetic(300, "regression", seed=5), max_trees=5000, learning_rate=0.001,
+                 early_stopping_rounds=1000)
+    task["limits"]["time_budget_seconds"] = 0.5
+    rows = fit_catboost(task)["rows"]
+    at = _at(rows)
+    _expect(rows.value[at["model|||stopped_by_time"]] == 1 and "model|||note_time_budget" in at, "the time budget")
+    _expect(rows.text[at["assumption|trees_limit||verdict"]] == "doubtful", "trees_limit after the time budget")
+    _expect(rows.value[at["model|||trees"]] < 5000, "the time budget kept every tree")
+    off = fit_catboost(_task("regression", synthetic(300, "regression", seed=5), early_stopping=False, max_trees=40))["rows"]
+    at = _at(off)
+    _expect(off.value[at["model|||trees"]] == 40 and off.value[at["model|||best_iteration"]] == 39
+            and off.value[at["model|||stopped_early"]] == 0, "without early stopping every tree is kept")
+
+
+@register("catboost: a fit writes nothing outside /tmp, and nothing left in it")
+def _test_no_files(code: Any) -> None:
+    tmp = tempfile.gettempdir()
+    before = set(os.listdir(tmp))
+    here = set(os.listdir("."))
+    fit_catboost(_task("multiclass", synthetic(200, "multiclass", seed=8)))
+    _expect(set(os.listdir(tmp)) == before, f"left in {tmp}: {sorted(set(os.listdir(tmp)) - before)}")
+    _expect(set(os.listdir(".")) == here, f"written in the working folder: {sorted(set(os.listdir('.')) - here)}")
+    _expect(not os.path.exists(TRAIN_DIR), f"{TRAIN_DIR} was made")
