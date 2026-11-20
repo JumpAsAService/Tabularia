@@ -150,6 +150,7 @@
         "time_column": {"type": "string"},
         "event_column": {"type": "string"},
         "event_value": {"description": "the value of the event column that is an event"},
+        "start_column": {"type": ["string", "null"], "description": "the column of the delayed entry the model was fitted with (left truncation), or null: Predict does not read it, the parameters already hold it"},
         "last_time": {"type": "number", "description": "the last time observed when fitting: a prediction beyond it is an extrapolation"},
         "last_time_by_stratum": {"type": "object", "additionalProperties": {"type": "number"}},
         "quantiles": {"type": "array", "maxItems": 9, "items": {"type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1}},

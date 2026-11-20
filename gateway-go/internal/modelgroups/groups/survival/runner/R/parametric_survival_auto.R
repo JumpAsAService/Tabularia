@@ -212,18 +212,29 @@ ps_auto <- function(task, prepared) {
 # choice: a table of a million rows costs as much as one of 5,000).
 .psa_curves <- function(rows, prepared, fits, adm, max_points) {
   time <- prepared$time
-  km <- survival::survfit(survival::Surv(time, prepared$status) ~ 1, weights = prepared$w)
-  steps <- tab_thin_steps(c(0, km$time), c(1, km$surv), max = max_points)
+  # delayed entry: Kaplan–Meier by survfit(Surv(start, time, status)), read from the first time with
+  # enough rows at risk (psc_entry_floor, as the checks' chart), and the fitted curves conditional on lasting until then
+  t0 <- 0
+  if (is.null(prepared$start)) {
+    km <- survival::survfit(survival::Surv(time, prepared$status) ~ 1, weights = prepared$w)
+  } else {
+    t0 <- psc_entry_floor(prepared$start, time, prepared$status, prepared$w, PS_CHECK_LIMITS$km_min_at_risk)
+    late <- time > t0
+    km <- survival::survfit(survival::Surv(pmax(prepared$start[late], t0), time[late], prepared$status[late]) ~ 1,
+                            weights = prepared$w[late])
+  }
+  steps <- tab_thin_steps(c(t0, km$time), c(1, km$surv), max = max_points)
   tab_points(rows, "curve", "candidates", "surv", steps$x, steps$y, level_2 = "km")
   at <- unique(round(seq(1, length(time), length.out = min(length(time), PS_AUTO_CURVE_ROWS))))
   w <- prepared$w[at]
-  grid <- seq(0, max(time), length.out = PS_AUTO_CURVE_TIMES)
+  grid <- seq(t0, max(time), length.out = PS_AUTO_CURVE_TIMES)
   for (d in adm) {
     f <- fits[[d]]
     pars <- ps_natural(f$spec, f$par, prepared$X[at, , drop = FALSE], prepared$S[at, , drop = FALSE])
+    base <- if (t0 > 0) sum(w * exp(ps_log_survival(f$spec, rep(t0, length(at)), pars))) else sum(w) # Σ w S(t0): the rows' chance of lasting until t0
     s <- vapply(grid, function(t) {
-      if (t <= 0) return(1)
-      sum(w * exp(ps_log_survival(f$spec, t, pars))) / sum(w)
+      if (t <= t0) return(1)
+      sum(w * exp(ps_log_survival(f$spec, t, pars))) / base
     }, numeric(1))
     tab_points(rows, "curve", "candidates", "surv", grid, s, level_2 = d)
   }

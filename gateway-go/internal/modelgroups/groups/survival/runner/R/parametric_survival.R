@@ -32,6 +32,12 @@
 #                                       `model` is ps_model(card): the card's numbers, never a row;
 #   ps_write(task, prepared, fitted, rows, …)
 #                                       the sections model, coef, parameter and stratum.
+# Delayed entry (lot P8): `start` (a number column, Cox's key) puts each row's observation at
+# (start, time]: the subject was not seen before `start`. Each row's log-likelihood then loses
+# log S(start), the likelihood conditional on lasting until the start (Surv(start, time, status)
+# is flexsurv's left truncation); with several rows of one subject (start–stop rows) they are
+# taken as independent. Predict needs no start: the card holds the distribution's parameters, and
+# the time already survived of one unit is Predict's `alive_at`, a different thing (below).
 # Not here yet: the checks (`assumption`) and the charts' points (P2: ps_checks), the automatic
 # choice (P3: ps_auto). Conditional survival (P9) is ps_predict's alive_at. Their hooks are below,
 # found by name, so that a lot adds its file without touching this one.
@@ -42,6 +48,7 @@
 
 PS_PACKAGES <- c("survival", "flexsurv", "numDeriv")
 PS_RELTOL <- 1e-15           # flexsurv's default (1e-8) leaves a Gompertz coefficient 7.5e-6 away
+PS_RELTOL_START <- 1e-10     # with a start BFGS runs on numerical gradients (flexsurv has no analytic ones for left truncation; a fit costs 5.8 s on 88,000 rows at 1e-10, 10.7 s at 1e-15): it stops sooner, the Newton steps do the rest
 PS_MAXIT <- 2000L
 PS_MAXIT_SECOND <- 5000L
 PS_LOGLIK_CHECK <- 1e-10     # the runner's log-likelihood against flexsurv's, relative
@@ -49,6 +56,7 @@ PS_CARD_CHECK <- 1e-9        # the card's predictions against flexsurv's own, in
 PS_CHUNK <- 100000L          # rows a delta-method jacobian takes at once
 PS_NEWTON_STEPS <- 4L        # Newton steps after flexsurv's BFGS, at most
 PS_NEWTON_DONE <- 1e-8       # a step below this many standard errors ends them
+PS_NEWTON_STALE <- 3L        # with a start: steps after one with a Hessian that reuse it
 PS_ALL <- "all"              # the stratum's name without strata
 
 # The six distributions: flexsurv's name, the parameter the strata's shape is (none for the
@@ -118,6 +126,7 @@ ps_prepare <- function(task) {
   event_col <- p$event
   strata_col <- p$strata
   weights_col <- p$weights
+  start_col <- p$start
   predictors <- unlist(p$predictors)
   interactions <- p$interactions %||% list()
   alpha <- as.numeric(p$alpha %||% 0.05)
@@ -125,7 +134,7 @@ ps_prepare <- function(task) {
   times <- sort(unique(as.numeric(unlist(p$times %||% list()))))
 
   df <- tab_input(task)
-  for (column in c(time_col, event_col, strata_col, weights_col, predictors)) {
+  for (column in c(time_col, event_col, strata_col, weights_col, start_col, predictors)) {
     if (!column %in% names(df)) {
       tab_refuse("missing_column", paste0("the rows reaching the node have no column «", column, "»"), list(column = column))
     }
@@ -135,22 +144,44 @@ ps_prepare <- function(task) {
     tab_refuse("time_type", paste0("the column «", time_col, "» is a ", kind, ": a time must be a number, the time from the ",
                                    "start (compute it from the dates first)"), list(column = time_col))
   }
+  if (!is.null(start_col)) {
+    kind <- tab_kind(df[[start_col]])
+    if (!kind %in% c("number", "integer")) {
+      tab_refuse("time_type", paste0("the column «", start_col, "» is a ", kind, ": a time must be a number, the time from the ",
+                                     "start (compute it from the dates first)"), list(column = start_col))
+    }
+  }
   if (!is.null(weights_col) && !tab_kind(df[[weights_col]]) %in% c("number", "integer")) {
     tab_refuse("weights_type", paste0("the column «", weights_col, "» is a ", tab_kind(df[[weights_col]]), ": weights must be ",
                                       "numbers, 0 or more"), list(column = weights_col))
   }
   ps_alive_column(df, p$alive_at)
   design <- tab_design(df, predictors, reference = p$reference %||% list(), interactions = interactions, intercept = FALSE,
-                       also = c(time_col, event_col, strata_col, weights_col),
+                       also = c(time_col, event_col, strata_col, weights_col, start_col),
                        max_levels = tab_limit(task, "max_levels"), max_terms = tab_limit(task, "max_terms"))
   d <- design$data
   time <- as.numeric(d[[time_col]])
   status <- km_is_event(d[[event_col]], p$event_value)
   value_label <- km_value_label(p$event_value)
   w <- if (is.null(weights_col)) rep(1, nrow(d)) else as.numeric(d[[weights_col]])
+  start <- if (is.null(start_col)) NULL else as.numeric(d[[start_col]])
   if (any(time < 0)) {
     tab_refuse("negative_time", paste0("the column «", time_col, "» holds a negative time (", tab_number_label(min(time)),
                                        "): a time is counted from the start, 0 or more"), list(column = time_col))
+  }
+  if (!is.null(start)) {
+    if (any(start < 0)) {
+      tab_refuse("negative_start", paste0("the column «", start_col, "» holds a negative start (", tab_number_label(min(start)),
+                                          "): a time is counted from the start, 0 or more"), list(column = start_col))
+    }
+    # as Cox's: each row is an interval (start, time]
+    if (any(start >= time)) {
+      i <- which(start >= time)[[1L]]
+      tab_refuse("start_not_before_time", paste0("in row ", design$rows[[i]], " the start «", start_col, "» (",
+                                                 tab_number_label(start[[i]]), ") is not before the time «", time_col, "» (",
+                                                 tab_number_label(time[[i]]), "): each row is an interval (start, time]"),
+                 list(row = design$rows[[i]], start = start_col, time = time_col))
+    }
   }
   if (any(w < 0)) {
     tab_refuse("negative_weight", paste0("the column «", weights_col, "» holds a negative weight (", tab_number_label(min(w)),
@@ -165,6 +196,7 @@ ps_prepare <- function(task) {
   time <- time[keep]
   status <- status[keep]
   w <- w[keep]
+  if (!is.null(start)) start <- start[keep]
   d <- d[keep, , drop = FALSE]
   if (!length(time)) tab_refuse("no_rows", "no row has a value in every column the model uses and a time above 0: nothing to fit")
   if (!any(status)) {
@@ -209,6 +241,7 @@ ps_prepare <- function(task) {
                list(terms = as.list(design$terms$label[bad])))
   }
   frame <- data.frame(time = time, status = as.integer(status), w = w)
+  if (!is.null(start)) frame$start <- start
   for (j in seq_len(ncol(X))) frame[[paste0("d", j)]] <- X[, j]
   for (j in seq_len(ncol(S))) frame[[paste0("s", j)]] <- S[, j]
 
@@ -228,7 +261,7 @@ ps_prepare <- function(task) {
   }
 
   list(p = p, task = task, distribution = distribution, input = df, design = design, X = X, S = S, frame = frame,
-       time = time, status = status, w = w, rows = rows_used, stratum = stratum, strata_col = strata_col,
+       time = time, status = status, w = w, start = start, start_col = start_col, rows = rows_used, stratum = stratum, strata_col = strata_col,
        strata_levels = levels, strata_names = names_, time_col = time_col, event_col = event_col, weights_col = weights_col,
        value_label = value_label, predictors = predictors, interactions = interactions, alpha = alpha,
        quantiles = quantiles, times = times, n_missing = design$n_missing, n_zero_time = sum(zero_time),
@@ -310,11 +343,21 @@ ps_log_survival <- function(m, t, pars) do.call(m$p, c(list(q = t, lower.tail = 
 ps_quantile <- function(m, prob, pars) do.call(m$q, c(list(p = prob), pars))
 
 # Each row's log-likelihood, δ log f(t) + (1 − δ) log S(t): the sum weighted by w is the model's.
-ps_loglik_rows <- function(m, par, time, status, X, S) {
+# With a start (delayed entry) the row's likelihood is conditional on lasting until it: minus
+# log S(start), exactly 0 where the start is 0 (the row is observed from the origin).
+ps_loglik_rows <- function(m, par, time, status, X, S, start = NULL) {
   pars <- ps_natural(m, par, X, S)
   ld <- ps_log_density(m, time, pars)
   ls <- ps_log_survival(m, time, pars)
-  ifelse(status == 1L, ld, ls)
+  out <- ifelse(status == 1L, ld, ls)
+  if (!is.null(start)) {
+    late <- which(start > 0) # only these rows have a log S(start) other than 0: the others are not computed
+    if (length(late)) {
+      here <- lapply(pars, function(p) p[late])
+      out[late] <- out[late] - ps_log_survival(m, start[late], here)
+    }
+  }
+  out
 }
 
 # ── the fit ──────────────────────────────────────────────────────────────────
@@ -328,12 +371,12 @@ ps_fit <- function(prepared, distribution, starts = NULL, hessian = FALSE, fail_
   frame <- prepared$frame
   form <- ps_formula(prepared)
   anc <- ps_anc_formula(prepared, m)
-  loglik_rows <- function(par) ps_loglik_rows(m, par, prepared$time, prepared$status, prepared$X, prepared$S)
+  loglik_rows <- function(par) ps_loglik_rows(m, par, prepared$time, prepared$status, prepared$X, prepared$S, prepared$start)
   loglik <- function(par) sum(prepared$w * loglik_rows(par))
   inits <- ps_starts(prepared, m, distribution, starts, loglik)
   fit_once <- function(init, maxit) {
     tryCatch(suppressWarnings(ps_flexsurvreg(form, anc, frame, m$flexsurv, init = if (is.null(init)) NULL else ps_to_natural(m, init),
-                                             control = list(reltol = PS_RELTOL, maxit = maxit), hessian = hessian)),
+                                             control = list(reltol = if (is.null(prepared$start)) PS_RELTOL else PS_RELTOL_START, maxit = maxit), hessian = hessian)),
              error = function(e) e)
   }
   failed <- function(f) inherits(f, "error") || !identical(as.integer(f$opt$convergence %||% 1L), 0L) || !is.finite(f$loglik)
@@ -356,7 +399,7 @@ ps_fit <- function(prepared, distribution, starts = NULL, hessian = FALSE, fail_
   if (!is.finite(own) || abs(own - fit$loglik) > PS_LOGLIK_CHECK * max(1, abs(fit$loglik))) {
     stop("the runner's log-likelihood (", format(own, digits = 17), ") is not flexsurv's (", format(fit$loglik, digits = 17), ")")
   }
-  list(distribution = distribution, spec = m, converged = TRUE, status = "ok", attempts = attempts, fit = fit,
+  list(distribution = distribution, spec = m, converged = TRUE, status = "ok", attempts = attempts, fit = fit, delayed = !is.null(prepared$start),
        par = unname(par), names = names(par), loglik = fit$loglik, n_parameters = length(par),
        loglik_rows = loglik_rows, loglik_fn = loglik, centring = ps_centring(m, prepared$X, prepared$S))
 }
@@ -416,9 +459,12 @@ ps_starts <- function(prepared, m, distribution, starts, loglik) {
 
 ps_formula <- function(prepared) {
   rhs <- c(.ps_cols("d", ncol(prepared$X)), .ps_cols("s", ncol(prepared$S)))
-  stats::as.formula(paste("survival::Surv(time, status) ~", if (length(rhs)) paste(rhs, collapse = " + ") else "1"),
+  stats::as.formula(paste(ps_surv(prepared$start), "~", if (length(rhs)) paste(rhs, collapse = " + ") else "1"),
                     env = new.env(parent = asNamespace("survival")))
 }
+
+# The response on the positional frame: left truncated at `start` when there is one.
+ps_surv <- function(start) if (is.null(start)) "survival::Surv(time, status)" else "survival::Surv(start, time, status)"
 
 ps_anc_formula <- function(prepared, m) {
   if (is.na(m$anc)) return(NULL)
@@ -427,11 +473,12 @@ ps_anc_formula <- function(prepared, m) {
 }
 
 # The second start on the optimiser's scale: survreg's estimates for the four it fits (the strata
-# with a scale each), the exponential's rate and a flat shape for Gompertz.
+# with a scale each), the exponential's rate and a flat shape for Gompertz. survreg takes no
+# start–stop rows: with a start its estimates are those of the rows observed from 0, a start only.
 ps_second_start <- function(prepared, m, distribution, form, frame) {
   n_t <- length(m$i_terms) + length(m$i_strata)
   if (distribution == "gompertz") {
-    rate <- sum(prepared$w * prepared$status) / sum(prepared$w * prepared$time)
+    rate <- sum(prepared$w * prepared$status) / sum(prepared$w * (prepared$time - (prepared$start %||% 0)))
     return(c(0, log(rate), rep(0, n_t + length(m$i_anc))))
   }
   if (distribution == "gengamma") return(NULL)
@@ -512,6 +559,7 @@ ps_centring <- function(m, X, S) {
 # the steps bring them to the maximum within the gradient's precision, which the closed forms and
 # a second optimiser of the reference values check.
 ps_newton <- function(fitted) {
+  if (isTRUE(fitted$delayed)) return(ps_newton_stale(fitted))
   par <- fitted$par
   ll <- fitted$loglik_fn(par)
   V <- ps_covariance(fitted, par)
@@ -530,6 +578,56 @@ ps_newton <- function(fitted) {
     if (small) break # V at the point before differs by less than the step: kept
     V <- ps_covariance(fitted, par)
   }
+  fitted$par <- par
+  fitted$loglik <- ll
+  fitted$vcov <- V
+  fitted$newton_steps <- steps
+  fitted
+}
+
+# With a start (lot P8) the same, but the steps after a Richardson Hessian reuse it: a Hessian costs
+# 2 s on 88,000 rows, a gradient 0.7 s, and four exact steps were needed. A round: V at the point, one
+# step, then up to PS_NEWTON_STALE more steps with that V and the gradient of each new point, until
+# one is below PS_NEWTON_DONE standard errors; a step that does not raise the log-likelihood ends the
+# round. At most PS_NEWTON_STEPS rounds; V at the end is the Hessian of the point kept, taken once
+# more only when the last round did not start there.
+ps_newton_stale <- function(fitted) {
+  par <- fitted$par
+  ll <- fitted$loglik_fn(par)
+  V <- ps_covariance(fitted, par)
+  steps <- 0L
+  rounds <- 0L
+  fresh <- TRUE # V is the covariance at `par`
+  done <- FALSE
+  while (!is.null(V) && rounds < PS_NEWTON_STEPS && !done) {
+    rounds <- rounds + 1L
+    for (k in seq_len(1L + PS_NEWTON_STALE)) {
+      g <- tryCatch(numDeriv::grad(fitted$loglik_fn, par), error = function(e) NULL)
+      if (is.null(g) || !all(is.finite(g))) {
+        done <- TRUE
+        break
+      }
+      step <- drop(V %*% g)
+      small <- max(abs(step) / sqrt(diag(V))) < PS_NEWTON_DONE
+      ll_new <- fitted$loglik_fn(par + step)
+      if (!is.finite(ll_new) || ll_new < ll - 1e-12 * max(1, abs(ll))) {
+        done <- k == 1L && fresh # not even a step with the Hessian of here: the maximum, as far as the gradient tells
+        break
+      }
+      par <- par + step
+      ll <- ll_new
+      steps <- steps + 1L
+      fresh <- fresh && small && k == 1L # a first step below the criterion leaves V (at the point before) as it is: kept
+      if (small) {
+        done <- TRUE
+        break
+      }
+    }
+    if (done) break
+    V <- ps_covariance(fitted, par)
+    fresh <- TRUE
+  }
+  if (!fresh) V <- ps_covariance(fitted, par)
   fitted$par <- par
   fitted$loglik <- ll
   fitted$vcov <- V
@@ -601,6 +699,7 @@ ps_write <- function(task, prepared, fitted, rows, model) {
   tab_number(rows, "model", "censored", n - events)
   tab_number(rows, "model", "n_missing", prepared$n_missing)
   tab_number(rows, "model", "n_zero_time", prepared$n_zero_time)
+  if (!is.null(prepared$start)) tab_number(rows, "model", "n_delayed", sum(prepared$start > 0))
   tab_number(rows, "model", "n_strata", length(prepared$strata_levels))
   tab_number(rows, "model", "n_parameters", k)
   tab_number(rows, "model", "log_lik", ll)
@@ -632,7 +731,9 @@ ps_write <- function(task, prepared, fitted, rows, model) {
     lp <- ps_linear(m, par, prepared$X, prepared$S)
     score <- if (m$aft > 0) lp else -lp
     cf <- data.frame(time = prepared$time, status = prepared$status, score = score, g = prepared$stratum, w = prepared$w)
-    form <- stats::as.formula("Surv(time, status) ~ score + strata(g)", env = new.env(parent = asNamespace("survival")))
+    if (!is.null(prepared$start)) cf$start <- prepared$start
+    form <- stats::as.formula(paste(sub("survival::", "", ps_surv(prepared$start)), "~ score + strata(g)"),
+                              env = new.env(parent = asNamespace("survival")))
     cc <- tryCatch(survival::concordance(form, data = cf, weights = w), error = function(e) NULL)
     if (!is.null(cc)) {
       tab_number(rows, "model", "concordance", cc$concordance)
@@ -749,7 +850,11 @@ ps_write <- function(task, prepared, fitted, rows, model) {
       tab_add(rows, "stratum", paste0(stat, "_low"), value = profile$surv_low[s, k_], level = name, x0 = x0)
       tab_add(rows, "stratum", paste0(stat, "_high"), value = profile$surv_high[s, k_], level = name, x0 = x0)
     }
-    km <- survival::survfit(survival::Surv(prepared$time[in_s], prepared$status[in_s]) ~ 1, weights = prepared$w[in_s])
+    km <- if (is.null(prepared$start)) {
+      survival::survfit(survival::Surv(prepared$time[in_s], prepared$status[in_s]) ~ 1, weights = prepared$w[in_s])
+    } else {
+      survival::survfit(survival::Surv(prepared$start[in_s], prepared$time[in_s], prepared$status[in_s]) ~ 1, weights = prepared$w[in_s])
+    }
     tab_number(rows, "stratum", "km_median", unname(summary(km)$table[["median"]]), level = name)
     if (!is.finite(profile$median[[s]]) || any(!is.finite(profile$quantile[s, ]))) infinite <- max(infinite, profile$cured[[s]])
   }
@@ -767,6 +872,8 @@ ps_write <- function(task, prepared, fitted, rows, model) {
   if (fitted$attempts > 1L) {
     tab_text(rows, "model", "note_second_start", "@second_start")
   }
+  # delayed entry: said whenever there is a start column, with the rows that enter after 0
+  if (!is.null(prepared$start)) tab_text(rows, "model", "note_start_rows", paste0("@start_rows delayed=", sum(prepared$start > 0), " rows=", n))
   if (distribution == "weibull" && has_strata && has_predictors) tab_text(rows, "model", "note_strata_no_hr", PS_NOTE_STRATA_NO_HR)
   if (interval_disagrees) tab_text(rows, "model", "note_hr_interval_scale", PS_NOTE_HR_INTERVAL)
   if (infinite > 0) {
@@ -795,7 +902,7 @@ ps_cox <- function(prepared, alpha) {
   frame <- prepared$frame
   frame$g <- factor(prepared$stratum)
   rhs <- c(.ps_cols("d", ncol(prepared$X)), if (length(prepared$strata_levels) > 1L) "survival::strata(g)")
-  f <- stats::as.formula(paste("survival::Surv(time, status) ~", paste(rhs, collapse = " + ")),
+  f <- stats::as.formula(paste(ps_surv(prepared$start), "~", paste(rhs, collapse = " + ")),
                          env = new.env(parent = asNamespace("survival")))
   fit <- tryCatch(suppressWarnings(survival::coxph(f, data = frame, weights = w, ties = "efron")), error = function(e) NULL)
   if (is.null(fit)) return(NULL)
@@ -807,7 +914,8 @@ ps_cox <- function(prepared, alpha) {
 ps_formula_text <- function(prepared) {
   rhs <- c(prepared$predictors, vapply(prepared$interactions, function(x) paste(x[[1L]], x[[2L]], sep = " × "), ""),
            if (!is.null(prepared$strata_col)) paste0("strata(", prepared$strata_col, ")"))
-  paste0("Surv(", prepared$time_col, ", ", prepared$event_col, " = ", prepared$value_label, ") ~ ",
+  paste0("Surv(", if (!is.null(prepared$start_col)) paste0(prepared$start_col, ", ") else "", prepared$time_col, ", ",
+         prepared$event_col, " = ", prepared$value_label, ") ~ ",
          if (length(rhs)) paste(rhs, collapse = " + ") else "1")
 }
 
@@ -856,6 +964,7 @@ ps_card <- function(task, prepared, fitted, selection = "manual") {
     parameters = as.list(m$pars), location = m$location,
     transforms = as.list(ifelse(m$log, "log", "identity")), order = order, strata = strata,
     time_column = prepared$time_col, event_column = prepared$event_col, event_value = prepared$value_label,
+    start_column = prepared$start_col %||% NULL,
     last_time = max(prepared$time), last_time_by_stratum = last_by,
     quantiles = as.list(prepared$quantiles), times = as.list(prepared$times), alpha = prepared$alpha,
     flexsurv = as.character(utils::packageVersion("flexsurv")))
@@ -1106,7 +1215,9 @@ ps_rows_output <- function(df, model, prepared, fitted) {
   m <- fitted$spec
   pars <- ps_natural(m, fitted$par, prepared$X, prepared$S)
   r <- -ps_log_survival(m, prepared$time, pars)
-  mart <- prepared$status - r
+  # with a start the hazard that counts is the one accrued while the row was observed, H(time) − H(start)
+  accrued <- if (is.null(prepared$start)) r else r + ifelse(prepared$start == 0, 0, ps_log_survival(m, prepared$start, pars))
+  mart <- prepared$status - accrued
   dev <- sign(mart) * sqrt(-2 * (mart + ifelse(prepared$status == 1L, log(prepared$status - mart), 0)))
   for (name in c("pred_cox_snell", "pred_martingale", "pred_deviance")) out[[name]] <- NA_real_
   out$pred_cox_snell[prepared$rows] <- r

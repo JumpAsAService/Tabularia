@@ -22,6 +22,13 @@
 # Charts (level = id, level_2 = the group or stratum): curve fit_km (surv/lower/upper Kaplan–Meier,
 # fitted: the mean fitted survival), point cox_snell, point/curve loglog (Weibull, exponential),
 # curve profile_survival and hazard (with bands), point deviance_linear.
+# Delayed entry (`start`, lot P8): Kaplan–Meier's curves and the Nelson–Aalen estimate of Cox–Snell
+# are those of survfit(Surv(start, stop, status)): a row is at risk from its start; the dfbetas, the
+# LR checks and the Schoenfeld test follow the conditional likelihood (the row log-likelihood, a
+# Cox fit of start–stop rows). Every check still makes sense, but the estimates' first times rest on
+# the few rows that have entered (one early event with one row at risk drops Kaplan–Meier's curve to
+# 0 for good): they are read from the first time with at least `km_min_at_risk` rows at risk, as
+# the curve conditional on lasting until then (psc_entry_floor). Without a start nothing changes.
 # Names here start with `psc_` or `PS_CHECK`: the files of the group share one environment.
 
 # What the measures read and draw: not thresholds of a verdict.
@@ -210,20 +217,46 @@ psc_groups <- function(ctx) {
 }
 
 # Kaplan–Meier's curve of a group (weights as counts), with its log-log band at 1 − alpha.
+# With a start: the rows at risk are those that have entered (survfit's counting-process form),
+# from `t0` on (psc_entry_floor), each row entering at the later of its start and t0; `km$t0`.
 psc_km <- function(ctx, group) {
   p <- ctx$prepared
   frame <- data.frame(time = p$time[group$idx], status = as.integer(p$status[group$idx]), w = p$w[group$idx])
-  form <- stats::as.formula("survival::Surv(time, status) ~ 1", env = new.env(parent = asNamespace("survival")))
-  survival::survfit(form, data = frame, weights = w, conf.type = "log-log", conf.int = min(1 - ctx$alpha, 1 - 1e-12)) # alpha below 1e-12 is not a level survfit takes
+  t0 <- 0
+  if (!is.null(p$start)) {
+    frame$start <- p$start[group$idx]
+    t0 <- psc_entry_floor(frame$start, frame$time, frame$status, frame$w, ctx$lim$km_min_at_risk)
+    frame <- frame[frame$time > t0, , drop = FALSE]
+    frame$start <- pmax(frame$start, t0)
+  }
+  form <- stats::as.formula(if (is.null(p$start)) "survival::Surv(time, status) ~ 1" else "survival::Surv(start, time, status) ~ 1",
+                            env = new.env(parent = asNamespace("survival")))
+  km <- survival::survfit(form, data = frame, weights = w, conf.type = "log-log", conf.int = min(1 - ctx$alpha, 1 - 1e-12)) # alpha below 1e-12 is not a level survfit takes
+  km$t0 <- t0
+  km
+}
+
+# The time from which an estimate with delayed entry is read: the last time before the first one
+# with at least `min_risk` rows (weights) at risk; 0 without a start, or when the first time has
+# them. NULL start: 0. A table with no such time gives 0 (the readers then find no time to read).
+psc_entry_floor <- function(start, time, status, w, min_risk) {
+  if (is.null(start)) return(0)
+  km <- survival::survfit(survival::Surv(start, time, status) ~ 1, weights = w)
+  i <- which(km$n.risk >= min_risk)
+  if (!length(i) || i[[1L]] == 1L) return(0)
+  km$time[[i[[1L]] - 1L]]
 }
 
 # The fitted survival of the rows `idx` at each time, averaged with the rows' weights: the curve
 # Kaplan–Meier's estimates for the group when the model is right.
-psc_mean_surv <- function(ctx, idx, times) {
+# With `t0` (delayed entry): the survival conditional on lasting until t0, the rows weighed by
+# their own chance of that, Σ w S(t) / Σ w S(t0): what survfit from t0 on estimates.
+psc_mean_surv <- function(ctx, idx, times, t0 = 0) {
   p <- ctx$prepared
   pars <- ps_natural(ctx$m, ctx$fitted$par, p$X[idx, , drop = FALSE], p$S[idx, , drop = FALSE])
   w <- p$w[idx]
-  vapply(times, function(t) sum(w * exp(ps_log_survival(ctx$m, rep(t, length(idx)), pars))) / sum(w), numeric(1))
+  base <- if (t0 > 0) sum(w * exp(ps_log_survival(ctx$m, rep(t0, length(idx)), pars))) else sum(w)
+  vapply(times, function(t) sum(w * exp(ps_log_survival(ctx$m, rep(t, length(idx)), pars))) / base, numeric(1))
 }
 
 # ── agreement with Kaplan–Meier (a measure) ──────────────────────────────────
@@ -240,7 +273,9 @@ psc_km_agreement <- function(ctx, rows) {
     }
     psc_check(rows, "km_agreement", level_2 = level_2, value = a$gap, at = a$time, statistic = a$d, count = length(group$idx),
               description = paste0("The mean fitted curve of ", label, " departs from Kaplan–Meier's by at most ", psc_num(a$gap),
-                                   " in survival, at t = ", psc_num(a$time), " (", psc_num(a$d), " standard errors of Kaplan–Meier's curve)."))
+                                   " in survival, at t = ", psc_num(a$time), " (", psc_num(a$d), " standard errors of Kaplan–Meier's curve)",
+                                   if (a$t0 > 0) paste0(", the rows at risk counted from their start, from t = ", psc_num(a$t0),
+                                                        " on: the first time with ", ctx$lim$km_min_at_risk, " rows at risk") else "", "."))
   }
   invisible()
 }
@@ -255,9 +290,9 @@ psc_agreement <- function(ctx, group) {
   at <- which(km$n.event > 0 & km$n.risk >= lim$km_min_at_risk & is.finite(se) & se > 0)
   if (!length(at)) return(NULL)
   if (length(at) > lim$km_max_times) at <- at[unique(round(seq(1, length(at), length.out = lim$km_max_times)))]
-  gap <- abs(psc_mean_surv(ctx, group$idx, km$time[at]) - km$surv[at])
+  gap <- abs(psc_mean_surv(ctx, group$idx, km$time[at], km$t0) - km$surv[at])
   j <- which.max(gap)
-  list(gap = gap[[j]], time = km$time[at][[j]], d = gap[[j]] / se[at][[j]])
+  list(gap = gap[[j]], time = km$time[at][[j]], d = gap[[j]] / se[at][[j]], t0 = km$t0)
 }
 
 # ── the generalized gamma against the distribution fitted ────────────────────
@@ -366,8 +401,9 @@ psc_zph <- function(ctx, groups) {
   frame <- data.frame(time = p$time, status = as.integer(p$status), w = p$w)
   for (j in seq_along(groups$columns)) frame[[paste0("t", j)]] <- p$X[, groups$columns[[j]], drop = FALSE]
   frame$g <- factor(p$stratum)
+  if (!is.null(p$start)) frame$start <- p$start # start–stop rows: cox.zph reads the counting process
   rhs <- c(paste0("t", seq_along(groups$columns)), if (nlevels(frame$g) > 1L) "survival::strata(g)")
-  fit <- suppressWarnings(survival::coxph(cox_formula(rhs, FALSE), data = frame, weights = w, ties = "efron", model = TRUE, x = TRUE))
+  fit <- suppressWarnings(survival::coxph(cox_formula(rhs, !is.null(p$start)), data = frame, weights = w, ties = "efron", model = TRUE, x = TRUE))
   if (anyNA(stats::coef(fit))) stop("the Cox fit has a coefficient that is not estimable")
   survival::cox.zph(fit, transform = "km", terms = TRUE)
 }
@@ -463,7 +499,7 @@ psc_chart_fit <- function(ctx, rows) {
     level_2 <- group$name
     km <- psc_km(ctx, group)
     # the steps from time 0 (S = 1), the band where it exists (log-log: from the first event on)
-    x <- c(0, km$time)
+    x <- c(km$t0, km$time) # from 0 (S = 1); with delayed entry from t0, the first time with enough rows at risk
     steps <- tab_thin_steps(x, c(1, km$surv), max = ctx$most)
     tab_points(rows, "curve", "fit_km", "surv", x = steps$x, y = steps$y, level_2 = level_2)
     for (side in c("lower", "upper")) {
@@ -472,8 +508,8 @@ psc_chart_fit <- function(ctx, rows) {
       band <- tab_thin_steps(x[ok], y[ok], max = ctx$most)
       tab_points(rows, "curve", "fit_km", side, x = band$x, y = band$y, level_2 = level_2)
     }
-    grid <- seq(0, max(p$time[group$idx]), length.out = min(ctx$lim$curve_points, ctx$most))
-    fitted_s <- psc_mean_surv(ctx, group$idx, grid)
+    grid <- seq(km$t0, max(p$time[group$idx]), length.out = min(ctx$lim$curve_points, ctx$most))
+    fitted_s <- psc_mean_surv(ctx, group$idx, grid, km$t0)
     tab_points(rows, "curve", "fit_km", "fitted", x = grid, y = fitted_s, level_2 = level_2)
     if (loglog) {
       ev <- which(km$n.event > 0 & km$surv > 0 & km$surv < 1)
@@ -494,22 +530,38 @@ psc_residuals <- function(ctx) {
   pars <- ps_natural(ctx$m, ctx$fitted$par, p$X, p$S)
   r <- -ps_log_survival(ctx$m, p$time, pars)
   status <- as.integer(p$status)
-  mart <- status - r
+  # the entry's cumulative hazard H(start), 0 without delayed entry; the hazard accrued while observed is r − r0
+  r0 <- if (is.null(p$start)) rep(0, length(r)) else ifelse(p$start == 0, 0, -ps_log_survival(ctx$m, p$start, pars))
+  mart <- status - (r - r0)
   dev <- sign(mart) * sqrt(pmax(-2 * (mart + ifelse(status == 1L, log(status - mart), 0)), 0))
-  list(cox_snell = r, martingale = mart, deviance = dev)
+  list(cox_snell = r, entry = r0, martingale = mart, deviance = dev)
 }
 
 # Cox–Snell: if the model is right the residuals are a censored sample of the unit exponential, so
 # the Nelson–Aalen cumulative hazard of (r, δ) lies on the diagonal.
 psc_chart_cox_snell <- function(ctx, rows) {
   p <- ctx$prepared
-  r <- psc_residuals(ctx)$cox_snell
+  res <- psc_residuals(ctx)
+  r <- res$cox_snell
   ok <- is.finite(r) & r > 0
   frame <- data.frame(r = r[ok], status = as.integer(p$status[ok]), w = p$w[ok])
-  form <- stats::as.formula("survival::Surv(r, status) ~ 1", env = new.env(parent = asNamespace("survival")))
+  base <- 0 # the Nelson–Aalen estimate starts at 0 at r = 0
+  if (!is.null(p$start)) {
+    # delayed entry: the pairs (H(start), H(time)) are the entry and the exit of a unit exponential;
+    # from c0, the first value with enough rows at risk, the estimate conditional on lasting until
+    # there, set back on the diagonal (c0 + the hazard accrued since)
+    frame$r0 <- res$entry[ok]
+    frame <- frame[frame$r > frame$r0, , drop = FALSE] # an interval that rounds to nothing is not one
+    c0 <- psc_entry_floor(frame$r0, frame$r, frame$status, frame$w, ctx$lim$km_min_at_risk)
+    frame <- frame[frame$r > c0, , drop = FALSE]
+    frame$r0 <- pmax(frame$r0, c0)
+    base <- c0
+  }
+  form <- stats::as.formula(if (is.null(p$start)) "survival::Surv(r, status) ~ 1" else "survival::Surv(r0, r, status) ~ 1",
+                            env = new.env(parent = asNamespace("survival")))
   na <- survival::survfit(form, data = frame, weights = w, ctype = 1)
   x <- sort(frame$r)
-  y <- stats::approx(c(0, na$time), c(0, na$cumhaz), xout = x, method = "constant", f = 0, rule = 2)$y
+  y <- base + stats::approx(c(0, na$time), c(0, na$cumhaz), xout = x, method = "constant", f = 0, rule = 2)$y
   i <- tab_cap(length(x), max = ctx$most, score = y - x, keep = ctx$keep)
   tab_points(rows, "point", "cox_snell", "y", x = x[i], y = y[i])
   invisible()
@@ -757,4 +809,101 @@ TAB_COMMON_TESTS[["parametric survival checks: the charts' points, exact on a ta
   fitted_ <- ps_newton(ps_fit(prepared, "weibull"))
   worst <- which.max(abs(psc_residuals(psc_context(task, prepared, fitted_, NULL))$deviance))
   .tab_expect(nrow(dev) == 50L && as.character(worst) %in% dev$text, "the largest deviance residual is kept and named")
+}
+
+# ── delayed entry (`start`, lot P8) ──────────────────────────────────────────
+TAB_COMMON_TESTS[["parametric survival, delayed entry: the refusals, the closed forms of the exponential, the rows output and Predict without a start"]] <- function(code) {
+  # seven rows (start, time, event); the exponential's rate is d / Σ (time − start) = 4 / 17.5
+  df <- data.frame(s = c(0, 1, 1, 1, 2, 4, 4), t = c(0.5, 2, 3, 3, 5, 8, 9), e = c(0, 1, 1, 0, 1, 0, 1))
+  params <- list(time = "t", event = "e", event_value = 1, start = "s", distribution = "exponential", quantiles = list(0.25))
+  fit <- fit_parametric_survival(.ps_test_task(df, params, "rows"))
+  f <- tab_results_frame(fit$rows)
+  .tab_expect(!length(tab_check_declared(f, "parametric_survival", "ph_aft")), paste(tab_check_declared(f, "parametric_survival", "ph_aft"), collapse = "; "))
+  lambda <- 4 / 17.5
+  get <- function(key) f$value[match(key, f$key)]
+  .tab_expect(abs(get("model|||log_lik") - (4 * log(lambda) - lambda * 17.5)) < 1e-10, "the log-likelihood d log λ − λ Σ (t − s)")
+  .tab_expect(abs(get("coef|(Intercept)||estimate") + log(lambda)) < 1e-10 && abs(get("coef|(Intercept)||std_error") - 0.5) < 1e-9, "the rate")
+  .tab_expect(abs(get("stratum|all||median") - log(2) / lambda) < 1e-9, "the median")
+  .tab_expect(get("model|||n_delayed") == 6 && get("model|||n") == 7, "the rows that enter after 0")
+  .tab_expect(identical(f$text[match("model|||note_start_rows", f$key)], "@start_rows delayed=6 rows=7") &&
+              identical(f$text[match("model|||formula", f$key)], "Surv(s, t, e = 1) ~ 1"), "the note and the formula")
+  # the rows output: Cox–Snell is H(time), the martingale the hazard accrued while observed, H(time) − H(start)
+  out <- fit$output
+  .tab_expect(max(abs(out$pred_cox_snell - lambda * df$t)) < 1e-9 && max(abs(out$pred_martingale - (df$e - lambda * (df$t - df$s)))) < 1e-9,
+              "the residuals of the rows output")
+  # Predict reads the card, which holds the parameters and the start's column, never a start
+  card <- jsonlite::fromJSON(tab_card_text(fit$card), simplifyVector = FALSE)
+  .tab_expect(identical(card$parametric_survival$start_column, "s"), "the card names the start's column")
+  p_ <- predict_parametric_survival(list(params = list(), .frame = data.frame(z = 1:2)), card)$output
+  .tab_expect(all(abs(p_$prediction - log(2) / lambda) < 1e-9), "Predict without a start")
+  # a start of 0 for every row is the fit without a start
+  zero <- df[df$t > 0.5, ]
+  zero$s <- 0
+  a <- tab_results_frame(fit_parametric_survival(.ps_test_task(zero, utils::modifyList(params, list(distribution = "weibull"))))$rows)
+  b <- tab_results_frame(fit_parametric_survival(.ps_test_task(zero, utils::modifyList(params, list(distribution = "weibull", start = NULL))))$rows)
+  for (key in c("model|||log_lik", "coef|(Intercept)||estimate", "parameter|shape||estimate", "stratum|all||median")) {
+    .tab_expect(abs(a$value[match(key, a$key)] / b$value[match(key, b$key)] - 1) < 1e-9, key, " with a start of 0 is not the fit without")
+  }
+  # the refusals: Cox's sentence for a start that is not before the time, a negative start, a start that is not a number
+  bad <- df
+  bad$s[[3L]] <- 3
+  said <- .tab_refused_with("start_not_before_time", fit_parametric_survival(.ps_test_task(bad, params)))
+  .tab_expect(identical(said, "in row 3 the start «s» (3.0) is not before the time «t» (3.0): each row is an interval (start, time]"), said)
+  neg <- df
+  neg$s[[2L]] <- -1
+  .tab_refused_with("negative_start", fit_parametric_survival(.ps_test_task(neg, params)))
+  text <- df
+  text$s <- as.character(text$s)
+  .tab_refused_with("time_type", fit_parametric_survival(.ps_test_task(text, params)))
+  .tab_refused_with("missing_column", fit_parametric_survival(.ps_test_task(df, utils::modifyList(params, list(start = "nowhere")))))
+}
+
+TAB_COMMON_TESTS[["parametric survival, delayed entry: Kaplan–Meier with the rows at risk, from the first time with enough of them; Cox–Snell's pairs"]] <- function(code) {
+  df <- data.frame(s = c(0, 1, 1, 1, 2, 4, 4), t = c(0.5, 2, 3, 3, 5, 8, 9), e = c(0, 1, 1, 0, 1, 0, 1))
+  params <- list(time = "t", event = "e", event_value = 1, start = "s", distribution = "exponential", quantiles = list(0.25))
+  old <- get("PS_CHECK_LIMITS", envir = globalenv())
+  assign("PS_CHECK_LIMITS", utils::modifyList(old, list(km_min_at_risk = 2L)), envir = globalenv()) # seven rows: two at risk are enough
+  f <- tryCatch(.psc_run(df, params), finally = assign("PS_CHECK_LIMITS", old, envir = globalenv()))
+  lambda <- 4 / 17.5
+  pts <- function(section, level, stat) {
+    at <- f$section == section & f$level == level & f$stat == stat
+    f[at, ][order(as.integer(sub(".*[|]", "", f$key[at]))), ]
+  }
+  # the first time, 0.5, has one row at risk (the others enter later): the curve is read from there, the rows that enter later at their start
+  km <- pts("curve", "fit_km", "surv")
+  .tab_expect(isTRUE(all.equal(km$x0, c(0.5, 2, 3, 5, 8, 9))) && isTRUE(all.equal(km$value, c(1, 2 / 3, 4 / 9, 8 / 27, 8 / 27, 0))),
+              "Kaplan–Meier's steps with entry: ", paste(round(km$value, 4), collapse = ", "))
+  fitted <- pts("curve", "fit_km", "fitted")
+  .tab_expect(fitted$x0[[1L]] == 0.5 && fitted$x0[[nrow(fitted)]] == 9 && max(abs(fitted$value - exp(-lambda * (fitted$x0 - 0.5)))) < 1e-9,
+              "the fitted curve conditional on lasting until t0: exp(−λ (t − t0))")
+  # Cox–Snell: the pairs (λ s, λ t); Nelson–Aalen with entry from λ · 0.5, set back on the diagonal
+  cs <- pts("point", "cox_snell", "y")
+  c0 <- lambda * 0.5
+  .tab_expect(isTRUE(all.equal(cs$x0, lambda * c(2, 3, 3, 5, 8, 9), tolerance = 1e-9)) &&
+              isTRUE(all.equal(cs$value, c0 + c(1 / 3, 2 / 3, 2 / 3, 1, 1, 2), tolerance = 1e-9)), "the Cox–Snell points: ", paste(round(cs$value, 4), collapse = ", "))
+  ag <- .psc_stat(f, "km_agreement", "value")
+  .tab_expect(length(ag) == 1L && is.finite(ag), "the agreement is read")
+  # without enough rows at risk anywhere nothing is read, and it is said
+  old <- get("PS_CHECK_LIMITS", envir = globalenv())
+  assign("PS_CHECK_LIMITS", utils::modifyList(old, list(km_min_at_risk = 50L)), envir = globalenv())
+  g <- tryCatch(.psc_run(df, params), finally = assign("PS_CHECK_LIMITS", old, envir = globalenv()))
+  .tab_expect(!"value" %in% g$stat[g$level == "km_agreement"] && grepl("rows at risk", .psc_stat(g, "km_agreement", "description")), "no time with rows at risk")
+  # the Weibull's p-value checks and dfbetas follow the conditional likelihood: a table with entries and predictors
+  set.seed(5)
+  n <- 120
+  x <- round(stats::rnorm(n), 2)
+  t <- stats::rweibull(n, 1.5, exp(2 + 0.3 * x))
+  entry <- ifelse(stats::runif(n) < 0.5, 0, round(stats::runif(n, 0, 5), 2))
+  tt <- data.frame(s = entry, t = pmax(round(pmin(t, entry + stats::runif(n, 3, 20)), 2), entry + 0.01), x = x)
+  tt$e <- as.integer(t <= tt$t)
+  tt <- tt[t > entry, ]
+  w <- .psc_run(tt, list(time = "t", event = "e", event_value = 1, start = "s", predictors = list("x"), distribution = "weibull"))
+  .tab_expect(all(.psc_stat(w, "ph_cox", "verdict") %in% c("ok", "failed")) && all(.psc_stat(w, "distribution_vs_gengamma", "verdict") %in% c("ok", "failed")) &&
+              is.finite(.psc_stat(w, "dfbeta", "value", "x")), "the checks with entry give verdicts from their p-values")
+  # the dfbetas of the row log-likelihood with entry: one outlier far from the rest is named first
+  tt$x[[1L]] <- 8
+  tt$t[[1L]] <- tt$s[[1L]] + 0.05
+  tt$e[[1L]] <- 1L
+  o <- .psc_run(tt, list(time = "t", event = "e", event_value = 1, start = "s", predictors = list("x"), distribution = "weibull"))
+  .tab_expect(.psc_stat(o, "dfbeta", "value", "x") > 1 && grepl("^1(,|$)", .psc_stat(o, "dfbeta", "rows", "x")), "dfbeta names the outlier first")
 }

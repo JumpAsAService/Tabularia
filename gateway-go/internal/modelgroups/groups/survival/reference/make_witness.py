@@ -26,7 +26,8 @@ uses them (the intervals, the Wald test) where times are tied: R's score residua
 correction for ties, lifelines' do not (on the same rows with the ties broken the two agree to
 1e-9). lifelines' CoxTimeVaryingFitter has no robust errors: on start–stop rows the classical
 ones are compared.
-Parametric survival (lot P1), per case of expected.json fitted with Weibull, log-normal,
+Parametric survival (lot P8 adds delayed entry: the case's `start` is lifelines' `entry_col`, the same left
+truncation as flexsurv's Surv(start, stop, event)). Parametric survival (lot P1), per case of expected.json fitted with Weibull, log-normal,
 log-logistic or the generalized gamma without strata: lifelines' WeibullAFTFitter,
 LogNormalAFTFitter, LogLogisticAFTFitter and GeneralizedGammaRegressionFitter on the same design
 (numbers, treatment dummies, products for the interactions; case weights as weights_col): the
@@ -235,7 +236,7 @@ def ps_case(case: dict) -> tuple[dict[str, float], dict[str, float], dict[str, f
     p, types = case["params"], case["types"]
     df = pd.read_csv(HERE / case["data"], keep_default_na=False, na_values=[""], dtype=str)
     predictors = list(p.get("predictors", []))
-    used = [p["time"], p["event"], *predictors, *([p["weights"]] if p.get("weights") else [])]
+    used = [p["time"], p["event"], *predictors, *([p["weights"]] if p.get("weights") else []), *([p["start"]] if p.get("start") else [])]
     df = df.dropna(subset=used).reset_index(drop=True)
     df = df[pd.to_numeric(df[p["time"]]) > 0].reset_index(drop=True)
     frame = pd.DataFrame({"T": pd.to_numeric(df[p["time"]]),
@@ -265,6 +266,9 @@ def ps_case(case: dict) -> tuple[dict[str, float], dict[str, float], dict[str, f
     if p.get("weights"):
         frame["W"] = pd.to_numeric(df[p["weights"]])
         kw["weights_col"] = "W"
+    if p.get("start"):  # delayed entry (lot P8): lifelines' entry_col is the left truncation, Surv(start, stop, event)
+        frame["S"] = pd.to_numeric(df[p["start"]])
+        kw["entry_col"] = "S"
     dist = p.get("distribution", "weibull")
     columns = [c for _, _, c in names]
 

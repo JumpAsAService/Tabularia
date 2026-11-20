@@ -35,7 +35,8 @@
 #
 # Parametric survival (lot P1): make_reference_parametric.R, sourced at the end (its own tables,
 # flexsurv, survreg and coxph called directly; the header of that file says what each case
-# checks and at which tolerance); its checks (lot P2): make_reference_checks.R, after it.
+# checks and at which tolerance); its checks (lot P2): make_reference_checks.R, after it; its
+# delayed entry (lot P8, `start`): make_reference_delayed.R, the last.
 
 suppressPackageStartupMessages(library(survival))
 
@@ -518,6 +519,7 @@ cases[[length(cases) + 1L]] <- list(
 
 source(file.path(here, "make_reference_parametric.R"), local = TRUE)
 source(file.path(here, "make_reference_checks.R"), local = TRUE)
+source(file.path(here, "make_reference_delayed.R"), local = TRUE)
 
 # The file travels in the ConfigMap, whose limit the group's code must stay under: compact, 13 digits
 # (the tightest tolerance is 1e-10), and the default relative tolerance (1e-9) left unwritten.
