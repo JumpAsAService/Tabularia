@@ -133,6 +133,59 @@ def test_the_shared_cases(case):
         assert check_params(case["model"], case["params"]) == case["checked"]
 
 
+def _twice(what, model, params):
+    """check(check(x)) == check(x), in the shape and in the values (an ARIMA was once refused for
+    its own default). A combination the check refuses has nothing to repeat."""
+    try:
+        first = check_params(model, params)
+    except EngineError:
+        return
+    second = check_params(model, first)
+    assert json.dumps(second, sort_keys=True) == json.dumps(first, sort_keys=True), (what, model)
+
+
+def _sample(model):
+    """The parameters a model needs, a column or a level each."""
+    spec = catalog.MODELS[model]
+    out = {}
+    for i, (key, kind) in enumerate(spec["needs"].items()):
+        control = catalog.KINDS[kind]["control"]
+        out[key] = (f"col{i}" if control == "column" else [f"col{i}"] if control == "columns"
+                    else "yes" if control == "level" else catalog.KINDS[kind]["choices"][0])
+    return out
+
+
+def test_checking_twice_is_checking_once():
+    for model, spec in catalog.MODELS.items():
+        base = _sample(model)
+        _twice("the defaults", model, base)
+        picks = []
+        for key, kind in spec["takes"].items():
+            control = catalog.KINDS[kind]["control"]
+            if control == "choice":
+                picks += [(key, c) for c in catalog.KINDS[kind]["choices"]]
+            elif control == "boolean":
+                picks += [(key, True), (key, False)]
+        for i, a in enumerate(picks):
+            _twice(a, model, {**base, a[0]: a[1]})
+            for b in picks[i + 1:]:
+                if a[0] != b[0]:
+                    _twice((a, b), model, {**base, a[0]: a[1], b[0]: b[1]})
+
+
+@pytest.mark.parametrize("case", [c for c in json.loads(CASES.read_text(encoding="utf-8"))["cases"] if "checked" in c],
+                         ids=lambda c: c["what"])
+def test_every_shared_case_that_passes_is_its_own_answer_too(case):
+    _twice(case["what"], case["model"], case["params"])
+    assert check_params(case["model"], case["checked"]) == case["checked"]
+    assert json.dumps(check_params(case["model"], case["checked"]), sort_keys=True) == json.dumps(case["checked"], sort_keys=True)
+
+
+def test_an_empty_list_of_columns_stays_an_empty_list():
+    out = check_params("arima", {"time": "t", "value": "v", "frequency": "month", "exog": []})
+    assert out["exog"] == [] and out["exog"] is not None
+
+
 def test_the_shared_cases_cover_every_control_and_model():
     cases = json.loads(CASES.read_text(encoding="utf-8"))["cases"]
     assert {c["model"] for c in cases} >= set(catalog.MODELS)

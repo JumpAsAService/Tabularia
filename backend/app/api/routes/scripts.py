@@ -200,8 +200,13 @@ def results_import(request: ResultsImportRequest):
     if request.model not in catalog.MODELS:
         raise HTTPException(status_code=422, detail=f"there is no model {request.model!r}")
     # the parameters as the gateway checked them (catalogue.Check, the same contract as
-    # check_params): checking them again would refuse the defaults it filled in
-    params = request.params
+    # check_params): the check is idempotent (what it answers is answered again as it is, in
+    # tests/test_models_catalog.py), so the engine checks them again and the variant is read
+    # from the engine's own answer
+    try:
+        params = catalog.check_params(request.model, request.params)
+    except EngineError as e:
+        raise HTTPException(status_code=422, detail=str(e))
     fd, path = tempfile.mkstemp(suffix=".parquet")
     os.close(fd)
     try:

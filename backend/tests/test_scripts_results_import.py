@@ -127,3 +127,12 @@ def test_an_unknown_model_is_refused(world):
     with pytest.raises(HTTPException) as e:
         _call("nope", params)
     assert e.value.status_code == 422
+
+
+def test_the_parameters_are_checked_again_and_what_the_gateway_checked_passes(world):
+    model, params, table = read_fixture(FIXTURES / "arima-manual.json")
+    world({"step/results.parquet": _parquet(table)})
+    assert _call(model, params)["found"] is True  # an ARIMA's own defaults, given back
+    with pytest.raises(HTTPException) as e:
+        _call(model, {**params, "nope": 1})
+    assert e.value.status_code == 422 and "there is no parameter 'nope'" in e.value.detail
