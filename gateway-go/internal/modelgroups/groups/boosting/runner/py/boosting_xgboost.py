@@ -367,6 +367,13 @@ def _test_model_file(code: Any) -> None:
                     raise AssertionError("a wrong fingerprint was applied")
                 except Refusal as e:
                     _expect(e.code == "model_file_mismatch", e.code)
+                infinite = df.copy()
+                infinite.loc[3, "b"] = np.inf  # XGBoost would stop on it: refused with the column, as CatBoost's Predict
+                try:
+                    predict_xgboost({"_frame": infinite, "params": {}}, card)
+                    raise AssertionError("an infinite value was predicted")
+                except Refusal as e:
+                    _expect(e.code == "infinite" and e.params == {"column": "b"}, f"{e.code}: {e.message}")
         finally:
             if old is None:
                 os.environ.pop(ENV_MODEL_FILE_IN, None)

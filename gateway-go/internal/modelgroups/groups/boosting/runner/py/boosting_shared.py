@@ -177,37 +177,58 @@ def _sortable(df: pd.DataFrame, name: str) -> np.ndarray:
                                    "time can", {"column": name})
 
 
+def _distinct(values: Any) -> tuple[np.ndarray, list[str | None]]:
+    """The values as codes of their distinct values (pandas' factorize: −1 for a missing one) and
+    the label of each distinct value, so that label() runs once per distinct value, not per row."""
+    arr = values.to_numpy(dtype=object) if hasattr(values, "to_numpy") else np.asarray(list(values), dtype=object)
+    codes, uniques = pd.factorize(arr, use_na_sentinel=True)
+    return np.asarray(codes, dtype=np.int64), [label(u) for u in uniques]
+
+
+def factor_labels(values: Any) -> tuple[np.ndarray, list[str]]:
+    """A column's labels in text order (sort_labels) and each value's code among them, −1 for a
+    missing value: what `[label(v) for v in values]` then sort_labels give, without a loop per row."""
+    codes, labs = _distinct(values)
+    levels = sort_labels(labs)
+    at = {lv: i for i, lv in enumerate(levels)}
+    to = np.array([at[lv] if lv is not None else -1 for lv in labs] + [-1], dtype=np.int64)
+    return to[codes], levels
+
+
 def category_codes(values: Any, levels: list[str]) -> tuple[np.ndarray, int]:
     """The codes of a column's values among `levels` (labels, catalog.label_of), −1 for a missing
-    value or a level not among them; and how many values were unseen (present, not a level)."""
+    value or a level not among them; and how many values were unseen (present, not a level).
+    label() runs once per distinct value (factorize), not once per row."""
+    codes, labs = _distinct(values)
     at = {lv: i for i, lv in enumerate(levels)}
-    codes = np.full(len(values), -1, dtype=np.int64)
-    unseen = 0
-    for i, v in enumerate(values):
-        lv = label(v)
-        if lv is None:
-            continue
-        j = at.get(lv)
-        if j is None:
-            unseen += 1
-        else:
-            codes[i] = j
-    return codes, unseen
+    to = np.array([at.get(lv, -1) if lv is not None else -1 for lv in labs] + [-1], dtype=np.int64)
+    new = np.array([lv is not None and lv not in at for lv in labs] + [False], dtype=bool)
+    return to[codes], int(new[codes].sum())
+
+
+def _refuse_infinite(x: np.ndarray, column: str) -> None:
+    """XGBoost stops on an infinite value, CatBoost takes it silently: both refuse it, the same way
+    in the fit, the rows output and Predict."""
+    if np.isinf(x).any():
+        raise Refusal("infinite", f"the column «{column}» holds an infinite value: filter it out or replace it before the node",
+                      {"column": column})
 
 
 def positional_frame(df: pd.DataFrame, columns: list[str], types: list[str], levels: list[list[str] | None],
                      names: list[str] | None = None) -> tuple[pd.DataFrame, dict[str, int]]:
-    """The frame a library reads: positional names, numbers as float64 (NaN missing), categories as
-    a pandas category whose categories are the card's levels in their order (a missing or unseen
-    value is missing). The unseen values are counted per input column."""
+    """The frame a library reads: positional names, numbers as float64 (NaN missing; an infinite
+    value is refused), categories as a pandas category whose categories are the card's levels in
+    their order (a missing or unseen value is missing). The unseen values are counted per input
+    column."""
     names = names or [f"v{i}" for i in range(1, len(columns) + 1)]
     out: dict[str, Any] = {}
     unseen: dict[str, int] = {}
     for col, name, t, lv in zip(columns, names, types, levels):
         if t == "number":
             out[name] = pd.Series(df[col]).to_numpy(dtype=float, na_value=np.nan)
+            _refuse_infinite(out[name], col)
         else:
-            codes, u = category_codes(df[col].tolist(), lv or [])
+            codes, u = category_codes(df[col], lv or [])
             out[name] = pd.Categorical.from_codes(codes, categories=list(lv or []))
             if u:
                 unseen[col] = u
@@ -221,9 +242,7 @@ def _check_predictor(df: pd.DataFrame, p: str, max_levels: int) -> tuple[str, li
                                         "first: the month, the days since a start", {"column": p})
     if k in ("number", "integer"):
         x = df[p].to_numpy(dtype=float, na_value=np.nan)
-        if np.isinf(x).any():
-            raise Refusal("infinite", f"the column «{p}» holds an infinite value: filter it out or replace it before the node",
-                          {"column": p})
+        _refuse_infinite(x, p)
         if np.isnan(x).all():
             raise Refusal("empty_predictor", f"the column «{p}» is empty in the rows the model uses: leave it out",
                           {"column": p})
@@ -231,7 +250,7 @@ def _check_predictor(df: pd.DataFrame, p: str, max_levels: int) -> tuple[str, li
     if k not in ("text", "boolean"):
         raise Refusal("predictor_type", f"the column «{p}» cannot be a predictor: numbers, texts and true or false can",
                       {"column": p})
-    levels = sort_labels(label(v) for v in df[p])
+    _, levels = factor_labels(df[p])
     if not levels:
         raise Refusal("empty_predictor", f"the column «{p}» is empty in the rows the model uses: leave it out", {"column": p})
     if len(levels) > max_levels:
@@ -304,6 +323,9 @@ def prepare(task: dict[str, Any]) -> Prepared:
         t, lv = _check_predictor(used, c, max_levels)
         types.append(t)
         levels.append(lv)
+        if t == "number" and (task.get("output") or p.get("output")) == "rows":
+            # the rows output predicts every input row, those the fit leaves out too: refused before the fit
+            _refuse_infinite(df[c].to_numpy(dtype=float, na_value=np.nan), c)
     names = [f"v{i}" for i in range(1, len(predictors) + 1)]
     X, _ = positional_frame(used, predictors, types, levels, names)
     missing_share = np.array([float(X[nm].isna().mean()) if n else math.nan for nm in names])
@@ -316,8 +338,7 @@ def prepare(task: dict[str, Any]) -> Prepared:
     if what == "regression":
         y = used[outcome].to_numpy(dtype=float)
     else:
-        labels = [label(v) for v in used[outcome]]
-        found = sort_labels(labels)
+        codes, found = factor_labels(used[outcome])
         if len(found) < 2:
             raise Refusal("one_outcome_value", f"the outcome «{outcome}» holds one value only in the rows the model uses: there "
                                                "is nothing to predict", {"column": outcome})
@@ -345,7 +366,7 @@ def prepare(task: dict[str, Any]) -> Prepared:
                                                   "is it the right column?", {"column": outcome, "classes": len(found)})
             classes = found
         at = {c: i for i, c in enumerate(classes)}
-        y = np.array([at[v] for v in labels], dtype=np.int64)
+        y = np.array([at[v] for v in found], dtype=np.int64)[codes]  # the outcome is never missing here
 
     gen = run_rng(task)
     share = float(p.get("validation_share", 0.2))
@@ -353,7 +374,8 @@ def prepare(task: dict[str, Any]) -> Prepared:
         validation, train_order = split_time(_sortable(used, order_by), share)
         notes.append("time_split")
     elif split == "grouped":
-        validation = split_grouped([label(v) for v in used[split_by]], share, gen)
+        g_codes, g_levels = factor_labels(used[split_by])
+        validation = split_grouped(np.asarray(g_levels, dtype=object)[g_codes].tolist(), share, gen)
         train_order = np.flatnonzero(~validation)
         notes.append("grouped_split")
     else:
@@ -1378,6 +1400,26 @@ def _test_prepare(code: Any) -> None:
         raise AssertionError("21 rows were not refused")
     except Refusal as e:
         _expect(e.code == "too_few_rows", e.code)
+    # an infinite value: in a row the fit uses, refused; in a row it leaves out (the outcome missing), refused only
+    # when the rows output must predict that row too, as Predict refuses it (XGBoost would stop on it)
+    inf_used, inf_left = df.copy(), df.copy()
+    inf_used.loc[11, "x"] = np.inf
+    inf_left.loc[9, "x"] = -np.inf  # row 9's outcome is missing
+    for frame, output, refused in ((inf_used, "results", True), (inf_left, "results", False), (inf_left, "rows", True)):
+        try:
+            prepare({**task, "_frame": frame, "output": output})
+            _expect(not refused, f"an infinite value was not refused ({output})")
+        except Refusal as e:
+            _expect(refused and e.code == "infinite" and e.params == {"column": "x"} and "«x»" in e.message,
+                    f"{output}: {e.code} {e.message}")
+    # the labels once per distinct value give what label() of each value gives
+    mixed = pd.Series([True, None, False, True, np.nan, "a", 2, 2.5, "a"], dtype=object)
+    codes, levels = factor_labels(mixed)
+    by_hand = [label(v) for v in mixed]
+    _expect(levels == sort_labels(by_hand) and [levels[c] if c >= 0 else None for c in codes] == by_hand,
+            f"factor_labels: {levels} {codes}")
+    codes, unseen = category_codes(mixed, ["2", "a", "true"])
+    _expect(codes.tolist() == [2, -1, -1, 2, -1, 1, 0, -1, 1] and unseen == 2, f"category_codes: {codes} {unseen}")
 
 
 @register("boosting: each diagnostic on both sides of its thresholds")
