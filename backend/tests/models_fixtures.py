@@ -7,7 +7,8 @@ can be built before the runners exist (docs/specs/statistical-models.md, piece 0
 The numbers are placeholders: plausible (a p-value between 0 and 1, counts whole, curves
 that go down), never computed. A runner's lane replaces its fixture with the runner's real
 output on the reference table; `test_models_results.py` checks every fixture there is,
-whoever wrote it. Run this again only for a fixture whose model has no runner yet.
+whoever wrote it. Run this again only for a fixture whose model has no runner yet; a runner's
+output is written with `--from-results` and listed in FROM_RUNNER, which `main` skips.
 """
 from __future__ import annotations
 
@@ -36,6 +37,9 @@ PARAMS: dict[tuple[str, str], dict[str, Any]] = {
                           "P": 0, "D": 1, "Q": 1, "holdout": 12},
     ("arima", "auto"): {"time": "month", "value": "boxes", "frequency": "month", "orders": "auto"},
 }
+
+# Fixtures that are a runner's real output (`from_results`): main() leaves them alone.
+FROM_RUNNER: set[tuple[str, str]] = {("linear", "unpenalized")}
 
 # The example a declared stat ending in «*» is written as.
 WILDCARDS = {"note_*": ["note_1"], "surv_at_*": ["surv_at_30", "surv_at_30_low", "surv_at_30_high"],
@@ -263,11 +267,29 @@ def _curve_y(stat: str, x: float, i: int, chart: str = "") -> float:
     return round(math.sin(i * 1.3) * (1 + i / 12), 6)  # (i / 12 = x / 6 where x is i / 2)
 
 
+def from_results(model: str, variant: str, results: str, source: str) -> Path:
+    """The fixture of `model` and `variant` from a runner's results.parquet, run on a reference
+    table with the fixture's PARAMS (`source` says how):
+
+        python -m tests.models_fixtures --from-results linear unpenalized results.parquet "how it was made"
+    """
+    import pyarrow.parquet as pq
+
+    table = pq.read_table(results)
+    rows = [[None if isinstance(v, float) and not math.isfinite(v) else v for v in r.values()] for r in table.to_pylist()]
+    data = {"model": model, "variant": variant, "params": PARAMS[(model, variant)], "fixture": source,
+            "columns": list(OUTPUT_NAMES), "rows": rows}
+    path = HERE / f"{model}-{variant}.json"
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    return path
+
+
 def main(only: list[str] | None = None) -> None:
-    """Every fixture, or those of the models named (`python -m tests.models_fixtures arima`)."""
+    """Every fixture, or those of the models named (`python -m tests.models_fixtures arima`);
+    not those that are a runner's output (FROM_RUNNER)."""
     HERE.mkdir(parents=True, exist_ok=True)
     for model, variant in PARAMS:
-        if only and model not in only:
+        if only and model not in only or (model, variant) in FROM_RUNNER:
             continue
         path = HERE / f"{model}-{variant}.json"
         path.write_text(json.dumps(build(model, variant), ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
@@ -277,4 +299,7 @@ def main(only: list[str] | None = None) -> None:
 if __name__ == "__main__":
     import sys
 
-    main(sys.argv[1:])
+    if sys.argv[1:2] == ["--from-results"]:
+        print(f"{from_results(*sys.argv[2:6]).name} written")
+    else:
+        main(sys.argv[1:])

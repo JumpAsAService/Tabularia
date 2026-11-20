@@ -18,7 +18,7 @@
    "resid_leverage": "Standardized residuals against leverage",
    "residual": "Histogram of the residuals",
    "observed_fitted": "Observed against fitted values",
-   "coef_interval": "Coefficients with their intervals"
+   "coef_interval": "Coefficients with their intervals (the intercept left out)"
   },
   "stats": {
    "model": {
@@ -43,12 +43,12 @@
    "breusch_pagan": {
     "name": "Homoscedasticity: Breusch–Pagan",
     "h0": "The residuals' variance does not change with the predictors.",
-    "advice": "Use robust standard errors (se = hc3)."
+    "advice": "Use robust standard errors (se = hc3); with robust ones already chosen, the inference does not rely on this assumption."
    },
    "white": {
     "name": "Homoscedasticity: White",
     "h0": "The residuals' variance does not change with the fitted values or their squares.",
-    "advice": "Use robust standard errors (se = hc3)."
+    "advice": "Use robust standard errors (se = hc3); with robust ones already chosen, the inference does not rely on this assumption."
    },
    "shapiro_wilk": {
     "name": "Normality of residuals: Shapiro–Wilk",
@@ -66,19 +66,19 @@
    "durbin_watson": {
     "name": "Independence: Durbin–Watson",
     "h0": "Residuals next to each other in the order of the rows are not correlated.",
-    "advice": "Use se = hac, or model the time.",
+    "advice": "Use se = hac, or model the time; with se = hac already chosen, the inference allows for this correlation.",
     "not_computed": "It depends on the order of the rows: choose the column that orders them (order_by)."
    },
    "breusch_godfrey_1": {
     "name": "Independence: Breusch–Godfrey, order 1",
     "h0": "No autocorrelation of order 1 in the residuals.",
-    "advice": "Use se = hac, or model the time.",
+    "advice": "Use se = hac, or model the time; with se = hac already chosen, the inference allows for this correlation.",
     "not_computed": "It depends on the order of the rows: choose the column that orders them (order_by)."
    },
    "breusch_godfrey_4": {
     "name": "Independence: Breusch–Godfrey, order 4",
     "h0": "No autocorrelation up to order 4 in the residuals.",
-    "advice": "Use se = hac, or model the time.",
+    "advice": "Use se = hac, or model the time; with se = hac already chosen, the inference allows for this correlation.",
     "not_computed": "It depends on the order of the rows: choose the column that orders them (order_by)."
    },
    "condition_number": {
@@ -112,7 +112,7 @@
    "resid_leverage": "Residui standardizzati rispetto alla leva",
    "residual": "Istogramma dei residui",
    "observed_fitted": "Valori osservati rispetto a quelli stimati",
-   "coef_interval": "Coefficienti con i loro intervalli"
+   "coef_interval": "Coefficienti con i loro intervalli (senza l'intercetta)"
   },
   "stats": {
    "model": {
@@ -137,12 +137,12 @@
    "breusch_pagan": {
     "name": "Omoschedasticità: Breusch–Pagan",
     "h0": "La varianza dei residui non cambia con i predittori.",
-    "advice": "Usate errori standard robusti (se = hc3)."
+    "advice": "Usate errori standard robusti (se = hc3); se sono già robusti, l'inferenza non dipende da questa ipotesi."
    },
    "white": {
     "name": "Omoschedasticità: White",
     "h0": "La varianza dei residui non cambia con i valori stimati né con i loro quadrati.",
-    "advice": "Usate errori standard robusti (se = hc3)."
+    "advice": "Usate errori standard robusti (se = hc3); se sono già robusti, l'inferenza non dipende da questa ipotesi."
    },
    "shapiro_wilk": {
     "name": "Normalità dei residui: Shapiro–Wilk",
@@ -160,19 +160,19 @@
    "durbin_watson": {
     "name": "Indipendenza: Durbin–Watson",
     "h0": "Residui vicini nell'ordine delle righe non sono correlati.",
-    "advice": "Usate se = hac, oppure modellate il tempo.",
+    "advice": "Usate se = hac, oppure modellate il tempo; con se = hac già scelto, l'inferenza tiene conto di questa correlazione.",
     "not_computed": "Dipende dall'ordine delle righe: scegliete la colonna che le ordina (order_by)."
    },
    "breusch_godfrey_1": {
     "name": "Indipendenza: Breusch–Godfrey, ordine 1",
     "h0": "Nessuna autocorrelazione di ordine 1 nei residui.",
-    "advice": "Usate se = hac, oppure modellate il tempo.",
+    "advice": "Usate se = hac, oppure modellate il tempo; con se = hac già scelto, l'inferenza tiene conto di questa correlazione.",
     "not_computed": "Dipende dall'ordine delle righe: scegliete la colonna che le ordina (order_by)."
    },
    "breusch_godfrey_4": {
     "name": "Indipendenza: Breusch–Godfrey, ordine 4",
     "h0": "Nessuna autocorrelazione fino all'ordine 4 nei residui.",
-    "advice": "Usate se = hac, oppure modellate il tempo.",
+    "advice": "Usate se = hac, oppure modellate il tempo; con se = hac già scelto, l'inferenza tiene conto di questa correlazione.",
     "not_computed": "Dipende dall'ordine delle righe: scegliete la colonna che le ordina (order_by)."
    },
    "condition_number": {
@@ -206,7 +206,7 @@
    "resid_leverage": "Standardisierte Residuen gegen Hebelwerte",
    "residual": "Histogramm der Residuen",
    "observed_fitted": "Beobachtete gegen angepasste Werte",
-   "coef_interval": "Koeffizienten mit ihren Intervallen"
+   "coef_interval": "Koeffizienten mit ihren Intervallen (ohne den Achsenabschnitt)"
   },
   "stats": {
    "model": {
@@ -231,12 +231,12 @@
    "breusch_pagan": {
     "name": "Homoskedastizität: Breusch–Pagan",
     "h0": "Die Varianz der Residuen ändert sich nicht mit den Prädiktoren.",
-    "advice": "Verwenden Sie robuste Standardfehler (se = hc3)."
+    "advice": "Verwenden Sie robuste Standardfehler (se = hc3); sind sie bereits robust, hängt die Inferenz nicht von dieser Annahme ab."
    },
    "white": {
     "name": "Homoskedastizität: White",
     "h0": "Die Varianz der Residuen ändert sich weder mit den angepassten Werten noch mit ihren Quadraten.",
-    "advice": "Verwenden Sie robuste Standardfehler (se = hc3)."
+    "advice": "Verwenden Sie robuste Standardfehler (se = hc3); sind sie bereits robust, hängt die Inferenz nicht von dieser Annahme ab."
    },
    "shapiro_wilk": {
     "name": "Normalverteilung der Residuen: Shapiro–Wilk",
@@ -254,19 +254,19 @@
    "durbin_watson": {
     "name": "Unabhängigkeit: Durbin–Watson",
     "h0": "Benachbarte Residuen in der Reihenfolge der Zeilen sind nicht korreliert.",
-    "advice": "Verwenden Sie se = hac, oder modellieren Sie die Zeit.",
+    "advice": "Verwenden Sie se = hac, oder modellieren Sie die Zeit; mit se = hac berücksichtigt die Inferenz diese Korrelation bereits.",
     "not_computed": "Hängt von der Reihenfolge der Zeilen ab: Wählen Sie die Spalte, die sie ordnet (order_by)."
    },
    "breusch_godfrey_1": {
     "name": "Unabhängigkeit: Breusch–Godfrey, Ordnung 1",
     "h0": "Keine Autokorrelation der Ordnung 1 in den Residuen.",
-    "advice": "Verwenden Sie se = hac, oder modellieren Sie die Zeit.",
+    "advice": "Verwenden Sie se = hac, oder modellieren Sie die Zeit; mit se = hac berücksichtigt die Inferenz diese Korrelation bereits.",
     "not_computed": "Hängt von der Reihenfolge der Zeilen ab: Wählen Sie die Spalte, die sie ordnet (order_by)."
    },
    "breusch_godfrey_4": {
     "name": "Unabhängigkeit: Breusch–Godfrey, Ordnung 4",
     "h0": "Keine Autokorrelation bis zur Ordnung 4 in den Residuen.",
-    "advice": "Verwenden Sie se = hac, oder modellieren Sie die Zeit.",
+    "advice": "Verwenden Sie se = hac, oder modellieren Sie die Zeit; mit se = hac berücksichtigt die Inferenz diese Korrelation bereits.",
     "not_computed": "Hängt von der Reihenfolge der Zeilen ab: Wählen Sie die Spalte, die sie ordnet (order_by)."
    },
    "condition_number": {
@@ -300,7 +300,7 @@
    "resid_leverage": "Residuos estandarizados frente al apalancamiento",
    "residual": "Histograma de los residuos",
    "observed_fitted": "Valores observados frente a ajustados",
-   "coef_interval": "Coeficientes con sus intervalos"
+   "coef_interval": "Coeficientes con sus intervalos (sin el intercepto)"
   },
   "stats": {
    "model": {
@@ -325,12 +325,12 @@
    "breusch_pagan": {
     "name": "Homocedasticidad: Breusch–Pagan",
     "h0": "La varianza de los residuos no cambia con los predictores.",
-    "advice": "Use errores estándar robustos (se = hc3)."
+    "advice": "Use errores estándar robustos (se = hc3); si ya son robustos, la inferencia no depende de este supuesto."
    },
    "white": {
     "name": "Homocedasticidad: White",
     "h0": "La varianza de los residuos no cambia con los ajustados ni con sus cuadrados.",
-    "advice": "Use errores estándar robustos (se = hc3)."
+    "advice": "Use errores estándar robustos (se = hc3); si ya son robustos, la inferencia no depende de este supuesto."
    },
    "shapiro_wilk": {
     "name": "Normalidad de los residuos: Shapiro–Wilk",
@@ -348,19 +348,19 @@
    "durbin_watson": {
     "name": "Independencia: Durbin–Watson",
     "h0": "Los residuos contiguos en el orden de las filas no están correlacionados.",
-    "advice": "Use se = hac, o modele el tiempo.",
+    "advice": "Use se = hac, o modele el tiempo; con se = hac ya elegido, la inferencia tiene en cuenta esta correlación.",
     "not_computed": "Depende del orden de las filas: elija la columna que las ordena (order_by)."
    },
    "breusch_godfrey_1": {
     "name": "Independencia: Breusch–Godfrey, orden 1",
     "h0": "Sin autocorrelación de orden 1 en los residuos.",
-    "advice": "Use se = hac, o modele el tiempo.",
+    "advice": "Use se = hac, o modele el tiempo; con se = hac ya elegido, la inferencia tiene en cuenta esta correlación.",
     "not_computed": "Depende del orden de las filas: elija la columna que las ordena (order_by)."
    },
    "breusch_godfrey_4": {
     "name": "Independencia: Breusch–Godfrey, orden 4",
     "h0": "Sin autocorrelación hasta el orden 4 en los residuos.",
-    "advice": "Use se = hac, o modele el tiempo.",
+    "advice": "Use se = hac, o modele el tiempo; con se = hac ya elegido, la inferencia tiene en cuenta esta correlación.",
     "not_computed": "Depende del orden de las filas: elija la columna que las ordena (order_by)."
    },
    "condition_number": {
@@ -394,7 +394,7 @@
    "resid_leverage": "Résidus standardisés selon l'effet de levier",
    "residual": "Histogramme des résidus",
    "observed_fitted": "Valeurs observées selon les valeurs ajustées",
-   "coef_interval": "Coefficients avec leurs intervalles"
+   "coef_interval": "Coefficients avec leurs intervalles (sans l'ordonnée à l'origine)"
   },
   "stats": {
    "model": {
@@ -419,12 +419,12 @@
    "breusch_pagan": {
     "name": "Homoscédasticité : Breusch–Pagan",
     "h0": "La variance des résidus ne change pas avec les prédicteurs.",
-    "advice": "Utilisez des erreurs types robustes (se = hc3)."
+    "advice": "Utilisez des erreurs types robustes (se = hc3) ; si elles le sont déjà, l'inférence ne dépend pas de cette hypothèse."
    },
    "white": {
     "name": "Homoscédasticité : White",
     "h0": "La variance des résidus ne change ni avec les valeurs ajustées ni avec leurs carrés.",
-    "advice": "Utilisez des erreurs types robustes (se = hc3)."
+    "advice": "Utilisez des erreurs types robustes (se = hc3) ; si elles le sont déjà, l'inférence ne dépend pas de cette hypothèse."
    },
    "shapiro_wilk": {
     "name": "Normalité des résidus : Shapiro–Wilk",
@@ -442,19 +442,19 @@
    "durbin_watson": {
     "name": "Indépendance : Durbin–Watson",
     "h0": "Des résidus voisins dans l'ordre des lignes ne sont pas corrélés.",
-    "advice": "Utilisez se = hac, ou modélisez le temps.",
+    "advice": "Utilisez se = hac, ou modélisez le temps ; avec se = hac déjà choisi, l'inférence tient compte de cette corrélation.",
     "not_computed": "Il dépend de l'ordre des lignes : choisissez la colonne qui les ordonne (order_by)."
    },
    "breusch_godfrey_1": {
     "name": "Indépendance : Breusch–Godfrey, ordre 1",
     "h0": "Pas d'autocorrélation d'ordre 1 dans les résidus.",
-    "advice": "Utilisez se = hac, ou modélisez le temps.",
+    "advice": "Utilisez se = hac, ou modélisez le temps ; avec se = hac déjà choisi, l'inférence tient compte de cette corrélation.",
     "not_computed": "Il dépend de l'ordre des lignes : choisissez la colonne qui les ordonne (order_by)."
    },
    "breusch_godfrey_4": {
     "name": "Indépendance : Breusch–Godfrey, ordre 4",
     "h0": "Pas d'autocorrélation jusqu'à l'ordre 4 dans les résidus.",
-    "advice": "Utilisez se = hac, ou modélisez le temps.",
+    "advice": "Utilisez se = hac, ou modélisez le temps ; avec se = hac déjà choisi, l'inférence tient compte de cette corrélation.",
     "not_computed": "Il dépend de l'ordre des lignes : choisissez la colonne qui les ordonne (order_by)."
    },
    "condition_number": {

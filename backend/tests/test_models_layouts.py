@@ -129,12 +129,13 @@ def test_the_runner_s_english_is_said_in_the_page_s_language():
     assert said[("assumption", "breusch_pagan", None, "verdict")]["label"] == "Omoschedasticità: Breusch–Pagan"
     assert said[("assumption", "breusch_pagan", None, "verdict")]["text"] == "failed"
     # the advice of a check that failed, none for one that holds
-    assert said[("assumption", "breusch_pagan", None, "advice")]["text"] == "Usate errori standard robusti (se = hc3)."
-    assert said[("assumption", "white", None, "advice")]["text"] is None
+    assert said[("assumption", "breusch_pagan", None, "advice")]["text"] == \
+        "Usate errori standard robusti (se = hc3); se sono già robusti, l'inferenza non dipende da questa ipotesi."
+    assert said[("assumption", "reset", None, "advice")]["text"] is None
     # a setting's value, a histogram's interval with the language's decimal
     assert said[("model", None, None, "se_type")]["text"] == "HC3 (robusti all'eteroschedasticità)"
     first = next(r for r in layouts.with_labels(model, params, rows, "it") if r["section"] == "hist")
-    assert first["text"] == "[-2 – -1,5)"
+    assert first["text"] == "[-10,7 – -8,2)"
     km = layouts.with_labels(*fixture("kaplan_meier-default")[:2], fixture("kaplan_meier-default")[2], "en")
     [informative] = [r for r in km if r["level"] == "censoring_informative" and r["stat"] == "advice"]
     assert informative["text"].startswith("It cannot be tested from the data")
@@ -192,19 +193,19 @@ def test_the_first_page_holds_the_assumptions_with_r_s_stars_and_the_verdicts(tm
     out, page = draw(tmp_path, chart_service, monkeypatch, "linear-unpenalized", fmt="svg")
     pages = json.loads(out.path.read_text())["pages"]
     first = pages[0]
-    for text in ("Linear regression", "quantity ~ price + channel", "Breusch–Pagan", "× failed", "✓ ok", "0.0004", "***",
+    for text in ("Linear regression", "quantity ~ price + channel", "Breusch–Pagan", "× failed", "✓ ok", "0.0022", "***",
                  "Signif. codes:"):
         assert text in first or text in page, text
     said = set(strings(json.loads(page)))
-    assert {"0.6555", "120", "F test: p 0.0004 ***", "HC3 (heteroscedasticity-consistent)"} <= said
+    assert {"0.7463", "117", "F test: p < 0.0001 ***", "HC3 (heteroscedasticity-consistent)"} <= said
     # the charts the variant declares, with their marks
     asked = {spec["option"]["title"]["text"]: spec["option"] for spec in chart_service[1] if "title" in spec["option"]}
     resid = asked["Residuals against fitted values"]
     assert [s["type"] for s in resid["series"]][:2] == ["scatter", "line"]
-    assert any(p.get("t") == "17" for p in resid["series"][0]["data"])  # the point the runner named
+    assert any(p.get("t") == "76" for p in resid["series"][0]["data"])  # the point the runner named
     observed = asked["Observed against fitted values"]
     assert any(isinstance(m, list) for s in observed["series"] for m in s.get("markLine", {}).get("data", []))  # the diagonal
-    assert asked["Coefficients with their intervals"]["series"][0]["type"] == "boxplot"
+    assert asked["Coefficients with their intervals (the intercept left out)"]["series"][0]["type"] == "boxplot"
 
 
 def test_a_survival_curve_is_a_step_with_its_band_and_the_number_at_risk_under_it(tmp_path, chart_service, monkeypatch):  # noqa: F811

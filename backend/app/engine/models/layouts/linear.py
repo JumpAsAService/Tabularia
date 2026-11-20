@@ -72,8 +72,10 @@ def layout(model: str, params: dict[str, Any], locale: str, sample: list[dict] |
               points_and_line("resid_leverage", ch["resid_leverage"], s["lowess"], w, under="cooks_distance"),
               c.histogram("c_residual", ch["residual"], "residual", s["count"], under="jarque_bera"),
               points_and_line("observed_fitted", ch["observed_fitted"], s["lowess"], w, target=None, diagonal=True, label=False),
+              # the intercept is left out: on the outcome's scale, it would flatten the slopes to a line
               c.coef_interval("coef_interval", ch["coef_interval"], ("estimate", "ci_low", "ci_high"),
-                              (s["estimate"], s["ci_low"], s["ci_high"]), 0.0))
+                              (s["estimate"], s["ci_low"], s["ci_high"]), 0.0,
+                              filter_='[section] = "coef" AND [level] <> "(Intercept)"'))
     charts = tuple(ch_._replace(wide=True) if ch_.id == "coef_interval" else ch_ for ch_ in charts)
     return c.page(model, params, locale, sample, step, name=name(params, locale), about=about(params, locale), cards=cards,
                   coef_tables=tables, charts=charts)

@@ -118,3 +118,57 @@ tab_refuse_aliased <- function(design) {
   }
   invisible(NULL)
 }
+
+# The design of a card's model on new rows (Predict, and a fit's rows output): the same columns
+# in the same order as tab_design made when fitting, from the card's `inputs` (a category's
+# levels, the reference first) and its parameters (`predictors`, `interactions`, `intercept`),
+# never from the rows' own levels. A row with an empty or infinite value, or with a level the
+# fit did not see, is not ok (its prediction is empty); `unseen` counts the rows of the latter.
+tab_design_rows <- function(card, df) {
+  params <- card$params %||% list()
+  predictors <- unlist(params$predictors)
+  interactions <- params$interactions %||% list()
+  intercept <- !isFALSE(params$intercept)
+  inputs <- list()
+  for (i in card$inputs) inputs[[i$name]] <- i
+  n <- nrow(df)
+  ok <- rep(TRUE, n)
+  unseen <- rep(FALSE, n)
+  parts <- list()
+  for (p in predictors) {
+    spec <- inputs[[p]]
+    if (is.null(spec)) stop("the card has no input ", p)
+    if (!p %in% names(df)) {
+      tab_refuse("missing_column", paste0("the rows have no column «", p, "», which the model needs"), list(column = p))
+    }
+    x <- df[[p]]
+    if (identical(spec$type, "number")) {
+      if (!tab_kind(x) %in% c("number", "integer")) {
+        tab_refuse("column_kind", paste0("the column «", p, "» must hold numbers, as when the model was fitted"), list(column = p))
+      }
+      v <- as.numeric(x)
+      ok <- ok & is.finite(v)
+      parts[[p]] <- matrix(v, ncol = 1L)
+      next
+    }
+    labels <- tab_label(x)
+    levels <- vapply(spec$levels, as.character, "")
+    known <- !is.na(labels) & labels %in% levels
+    unseen <- unseen | (!is.na(labels) & !known)
+    ok <- ok & known
+    others <- levels[-1L]
+    parts[[p]] <- matrix(vapply(others, function(l) as.numeric(labels == l), numeric(n)), nrow = n)
+  }
+  columns <- list()
+  if (intercept) columns[[1L]] <- rep(1, n)
+  for (p in predictors) for (j in seq_len(ncol(parts[[p]]))) columns[[length(columns) + 1L]] <- parts[[p]][, j]
+  for (pair in interactions) {
+    pa <- parts[[pair[[1L]]]]
+    pb <- parts[[pair[[2L]]]]
+    for (i in seq_len(ncol(pa))) for (j in seq_len(ncol(pb))) columns[[length(columns) + 1L]] <- pa[, i] * pb[, j]
+  }
+  X <- if (length(columns)) do.call(cbind, columns) else matrix(numeric(), nrow = n, ncol = 0L)
+  if (length(card$terms) && ncol(X) != length(card$terms)) stop("the card's terms and its design differ")
+  X[!ok, ] <- NA_real_
+  list(X = X, ok = ok, unseen = sum(unseen))
+}
