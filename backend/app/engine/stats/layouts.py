@@ -48,7 +48,14 @@ MAX_REPORT_ROWS = max(64 + MAX_STAT_GROUPS * (13 + MAX_BINS) + 3 * CURVE_POINTS 
 WIDTH = 186.0  # the body of an A4 page between its side margins, mm
 ACCENT, INK, MUTED, RULE, PANEL, SAMPLE = "#3b5bdb", "#1f2933", "#6b7590", "#d9dde5", "#f1f3f5", "#8a5a00"
 P4 = "0.0000"  # a number of the result: four decimals
+P4_TINY = "0.0000e+0"  # one the four decimals would write 0.0000: by its exponent
 EXACT = "0.##########"  # a number of the computation: ten decimals at most, none it does not have
+# a number of the tables: as it is (twelve significant digits), by its exponent when very small
+# or very large; in Excel a number in its General format
+GENERAL = "General"
+# what a p-value below the smallest double is written (it is 0 in the rows): R writes «< 2.2e-16»
+# below its precision, the same idea at the double's own limit
+UNDERFLOW = "< 2.2e-308"
 
 
 @lru_cache(maxsize=1)
@@ -114,11 +121,26 @@ def _edges_text(low: float, high: float, last: bool, decimal: str, group: str) -
 _NUMBER_WITH_POINT = re.compile(r"(?<![\w.])(\d+)\.(\d+(?:e[+-]?\d+)?)(?![\w.])")
 
 
+def _arguments_apart(text: str) -> str:
+    """The arguments inside brackets set apart by «; », not «, »: where the decimal mark is a
+    comma, «min(0,5, |O − E|)» and «F(2, 18,5)» say what they mean only as «min(0,5; |O − E|)»
+    and «F(2; 18,5)». The commas of the sentence outside brackets stay."""
+    out, depth = [], 0
+    for i, ch in enumerate(text):
+        if ch in "([":
+            depth += 1
+        elif ch in ")]":
+            depth = max(0, depth - 1)
+        out.append(";" if ch == "," and depth and text[i + 1:i + 2] == " " else ch)
+    return "".join(out)
+
+
 def _said(test: str, rows: list[dict], locale: str | None) -> list[dict]:
     """The texts of the rows that hold a number written as text, in the language of the page:
     the histogram's intervals, the reference distribution («t(12,7279)»; with a decimal
     comma its parameters are set apart by a semicolon, «F(2; 18,5)») and the numbers inside
-    the hypotheses, the formula and the notes («max P(v | i > v | j) ≠ 0,5»)."""
+    the hypotheses, the formula and the notes («max P(v | i > v | j) ≠ 0,5»), the arguments of a
+    function in the formulas and hypotheses then set apart by «; » (`_arguments_apart`)."""
     from app.reports import formats
 
     loc = formats.locale(locale if locale in LOCALES else "en")
@@ -129,19 +151,36 @@ def _said(test: str, rows: list[dict], locale: str | None) -> list[dict]:
             r = {**r, "text": _edges_text(r["x0"], r["x1"], str(text or "").endswith("]"), loc.decimal, loc.group)}
         elif r["section"] == "test" and r["stat"] == "distribution" and isinstance(text, str) and loc.decimal != ".":
             r = {**r, "text": text.replace(", ", "; ").replace(".", loc.decimal)}
-        elif r["section"] == "test" and (r["stat"] in ("h0", "h1", "formula") or r["stat"].startswith("note_")) \
+        elif r["section"] == "test" and (r["stat"] in ("h0", "h1", "formula", "posthoc_formula") or r["stat"].startswith("note_")) \
                 and isinstance(text, str) and loc.decimal != ".":
+            if not r["stat"].startswith("note_"):  # «min(0,5, |O − E|)» would read as three arguments: «min(0,5; |O − E|)»
+                text = _arguments_apart(text)
             r = {**r, "text": _NUMBER_WITH_POINT.sub(lambda m: m.group(1) + loc.decimal + m.group(2), text)}
         out.append(r)
     return out
 
 
+def underflow(row: dict, locale: str | None) -> str | None:
+    """«< 2.2e-308» for a p-value that is 0 in the rows: no p-value is 0, it is below the
+    smallest double (2.2250738585072014e-308), the tail of a statistic far from H0 (a
+    chi-square of 1500 on one degree of freedom). Written so, not computed in logarithms: the
+    decision and every comparison with α are the same, and a reader is told the bound, as R
+    tells «< 2.2e-16». Nothing for any other row."""
+    if row.get("stat") not in ("p_value", "p_adjusted") or row.get("value") != 0:
+        return None
+    from app.reports import formats
+
+    return UNDERFLOW.replace(".", formats.locale(locale if locale in LOCALES else "en").decimal)
+
+
 def with_labels(test: str, rows: list[dict], locale: str | None) -> list[dict]:
     """The rows as the page reads them, with two more columns: `label`, the translated name
-    of each `stat`, and `tiny`, a very small number written by its exponent (nothing for the
-    others); the numbers written as text are in the page's language (`_said`). None of it is
-    a computation: it is how a row is said."""
-    return [{**r, "label": stat_label(test, r["section"], r["stat"], locale), "tiny": tiny(r.get("value"), locale)}
+    of each `stat`, and `tiny`, what a number's cell writes in its place — «< 2.2e-308» for a
+    p-value below the smallest double (`underflow`), nothing for the others, which the tables
+    write in the General format (a very small one by its exponent, a number in Excel); the
+    numbers written as text are in the page's language (`_said`). None of it is a
+    computation: it is how a row is said."""
+    return [{**r, "label": stat_label(test, r["section"], r["stat"], locale), "tiny": underflow(r, locale)}
             for r in _said(test, rows, locale)]
 
 
@@ -222,11 +261,15 @@ def _text(key: str) -> str:
 
 def _shown(expr: str, pattern: str | None = None) -> str:
     """A number as a text: with `pattern`, or as a result is written — four decimals, fewer
-    for a large one, so that a difference of millions still fits its card."""
+    for a large one, so that a difference of millions still fits its card; by its exponent
+    («1.2346e-7») one the four decimals would write 0.0000 (with `pattern` P4 too)."""
+    small = f"ABS({expr}) > 0 AND ABS({expr}) < 0.00005, FORMAT({expr}, {_q(P4_TINY)})"
+    if pattern == P4:
+        return f"IFS({small}, FORMAT({expr}, {_q(P4)}))"
     if pattern:
         return f"FORMAT({expr}, {_q(pattern)})"
     return (f'IFS(ABS({expr}) >= 1000000, FORMAT({expr}, "#,##0"), ABS({expr}) >= 1000, FORMAT({expr}, "#,##0.00"), '
-            f"FORMAT({expr}, {_q(P4)}))")
+            f"{small}, FORMAT({expr}, {_q(P4)}))")
 
 
 def _static(text: str) -> str:
@@ -347,14 +390,13 @@ def _rounded(x: str) -> str:
 
 
 def _group_number(stat: str, section: str = "group", two_levels: bool = False) -> str:
-    """A number of the group (or cell) of the row at hand, rounded to its column (`_rounded`);
-    a very small one by its exponent, as the table of the numbers writes it."""
+    """A number of the group (or cell, pair) of the row at hand, as it is: its column writes
+    it in the General format (`GENERAL`: a very small one by its exponent), and Excel gets the
+    number whole; «< 2.2e-308» for a p-value below the smallest double (`underflow`)."""
     key = _row_key(section, stat, two_levels)
     x = f"LOOKUP({key}, [key], [value])"
-    if section == "group":
-        return _rounded(x)
     tiny_ = f"LOOKUP({key}, [key], [tiny])"
-    return f"IF(ISNULL({tiny_}), {_rounded(x)}, {tiny_})"
+    return f"IF(ISNULL({tiny_}), {x}, {tiny_})"
 
 
 def _bands(name: str, subtitle: str, t: dict, loc_texts: dict, sample: str | None) -> tuple[dict, dict]:
@@ -576,7 +618,7 @@ def _page(test: str, params: dict[str, Any], locale: str, sample: str | None, st
            can_grow=True)
     p.keep()
     p.y += 1.5
-    p.text("symbols", "=" + _join(own["symbols"], **symbols), h=8.5, size=8, color=MUTED, can_grow=True)
+    p.text("symbols", "=" + _legend(own["symbols"], symbols), h=8.5, size=8, color=MUTED, can_grow=True)
     p.y += 0.5
     p.text("distribution", "=" + _join(t["distribution"], distribution=_text("test|||distribution")))
     c = {**t["critical"], **own.get("critical", {})}  # a test whose critical values are of z says so
@@ -598,7 +640,7 @@ def _page(test: str, params: dict[str, Any], locale: str, sample: str | None, st
     p.add(_table("numbers", numbers["title"], '[section] = "test" AND NOT ISNULL([value])', [
         {"header": numbers["quantity"], "value": "[label]"},
         {"header": numbers["name"], "value": "[stat]", "width": 34, "style": {"color": MUTED}},
-        {"header": numbers["value"], "value": "IF(ISNULL([tiny]), [value], [tiny])", "width": 40, "align": "right", "format": EXACT},
+        {"header": numbers["value"], "value": "IF(ISNULL([tiny]), [value], [tiny])", "width": 40, "align": "right", "format": GENERAL},
         # R's stars beside the p-value: a column of their own, so that the value stays a number in Excel
         {"header": t["signif"]["column"], "value": f'IF([stat] = "p_value", {_text("test|||significance")}, "")', "width": 14},
     ], p.y), 10)
@@ -621,7 +663,7 @@ def _page(test: str, params: dict[str, Any], locale: str, sample: str | None, st
                              "width": 24, "align": "right", "format": "#,##0"})
             else:
                 cols.append({"header": words[s_], "value": _group_number(s_, table.section, table.two_levels), "width": table.width,
-                             "align": "right", "format": "0.########"})
+                             "align": "right", "format": GENERAL})
         cols += list(table.extra)
         p.add(_table(table.id, table.title, table.rows or one_row_a_group, cols, p.y, visible=table.visible), 10)
 
@@ -679,6 +721,21 @@ def _page(test: str, params: dict[str, Any], locale: str, sample: str | None, st
     return _document(header, p.items, footer, locale)
 
 
+def _legend(words: str | dict[str, str], symbols: dict[str, str]) -> str:
+    """What the symbols of the formula are, as an expression: one sentence, or one for each
+    variant (`{variant: sentence}`, the last for any other), chosen by the `variant` row — a
+    variant's legend names only its own symbols (Welch's t has no sp², the classic ANOVA no w
+    nor Λ, the generalized CMH no a, b, c, d)."""
+    if isinstance(words, str):
+        return _join(words, **symbols)
+    options = list(words.items())
+    expr = _join(options[-1][1], **symbols)
+    variant = _text("test|||variant")
+    for name, sentence in reversed(options[:-1]):
+        expr = f"IF({variant} = {_q(name)}, {_join(sentence, **symbols)}, {expr})"
+    return expr
+
+
 def _pair_value(stat: str, column: str = "value", section: str = "pair") -> str:
     return f'LOOKUP({_row_key(section, stat, True)}, [key], [{column}])'
 
@@ -711,7 +768,7 @@ def _comparisons(p: _Page, t: dict, own: dict, c: _Comparisons, locale: str) -> 
     pair = {"header": w["cell"] if c.section == "cell" else w["pair"], "value": '[level] & " – " & [level_2]'}
 
     def numeric(stat: str) -> dict:
-        return {"header": ps[stat], "value": _pair_number(stat, c.section), "width": 36, "align": "right", "format": "0.########"}
+        return {"header": ps[stat], "value": _pair_number(stat, c.section), "width": 36, "align": "right", "format": GENERAL}
 
     tables = t["tables"]
     if c.numbers:
@@ -733,7 +790,11 @@ def _comparisons(p: _Page, t: dict, own: dict, c: _Comparisons, locale: str) -> 
                "category": '[level] & " – " & [level_2]',
                "series": [{"value": f'SUMIF([stat] = "{s}", [value])', "name": ps[s]} for s in ("estimate", "ci_low", "ci_high")],
                "options": {"labels": True, "format": "0.###", "target": 0},
-               "visible": f'=COUNTIF({one_row}) <= {MAX_PAIRS_CHARTED}'}, 62.5)
+               "visible": f'=COUNTIF({one_row}) <= {MAX_PAIRS_CHARTED}'})
+        said = _join(t["charts"]["too_many_pairs"], chart=_q(t["charts"]["pairs"]), n=_shown(f"COUNTIF({one_row})", "#,##0"),
+                     most=_q(str(MAX_PAIRS_CHARTED)))
+        p.add({"id": "c_pairs_note", "type": "text", "x": 0, "y": p.y + 6, "w": WIDTH, "h": 9, "value": "=" + said,
+               "style": {"size": 8, "color": MUTED}, "visible": f'=COUNTIF({one_row}) > {MAX_PAIRS_CHARTED}'}, 62.5)
 
 
 # past this many pairs the chart of the intervals is not drawn: the tables say them
@@ -773,14 +834,21 @@ def _means_of_groups(t: dict, own: dict, stats: tuple[str, str, str] = ("mean", 
             _means(t, own, stats, labels=False, id_="c_means_many", visible=f"={_GROUPS} > {MAX_GROUPS_LABELLED}"))
 
 
-def _histogram(t: dict, by: str, legend: bool = True, at_most: int | None = None) -> _Chart:
+def _histogram(t: dict, by: str, legend: bool = True, at_most: int | None = None) -> _Chart | tuple[_Chart, _Chart]:
+    """The histogram of the groups; with `at_most`, past that many groups a line in its place
+    that says why it is not drawn."""
     visible = '=COUNTIF([section] = "hist") > 0'
     if at_most is not None:
-        visible += f' AND COUNTIF([section] = "group" AND [stat] = "n") <= {at_most}'
-    return _Chart("c_hist", "column", t["charts"]["histogram"].replace("{by}", by),
-                  {"filter": '[section] = "hist"', "category": "[text]", "split_by": "[level]",
-                   "series": [{"value": "SUM([value])", "name": t["stats"]["hist"]["count"]}],
-                   "options": {"legend": legend, "format": "#,##0"}, "visible": visible})
+        visible += f' AND {_GROUPS} <= {at_most}'
+    title = t["charts"]["histogram"].replace("{by}", by)
+    chart = _Chart("c_hist", "column", title,
+                   {"filter": '[section] = "hist"', "category": "[text]", "split_by": "[level]",
+                    "series": [{"value": "SUM([value])", "name": t["stats"]["hist"]["count"]}],
+                    "options": {"legend": legend, "format": "#,##0"}, "visible": visible})
+    if at_most is None:
+        return chart
+    said = _join(t["charts"]["too_many_groups"], chart=_q(title), n=_shown(_GROUPS, "#,##0"), most=_q(str(at_most)))
+    return chart, _Chart("c_hist_note", "note", "=" + said, {"visible": f"={_GROUPS} > {at_most}"})
 
 
 def _density(t: dict, target: str = "statistic") -> _Chart:
@@ -993,7 +1061,14 @@ def _contingency(test: str, params: dict[str, Any], locale: str, sample: str | N
                           _Table("strata_terms", own["tables"]["terms"], ("expected_a", "variance_a", "odds_ratio"), rows=two_rows,
                                  labels=((strata, "[level]"),), visible=two_by_two),
                           _Table("strata_n", own["tables"]["strata"], ("n",), rows='[section] = "group" AND [stat] = "n"',
-                                 labels=((strata, "[level]"),), counts=("n",), visible=larger))
+                                 labels=((strata, "[level]"),), counts=("n",), visible=larger),
+                          # the generalized statistic: each stratum's margins, from which m and V come
+                          _Table("strata_rows", own["tables"]["margins_x"], ("row_total",), section="stratum",
+                                 rows='[section] = "stratum" AND [stat] = "row_total"', labels=((strata, "[level]"), (x, "[level_2]")),
+                                 two_levels=True, counts=("row_total",), visible=larger),
+                          _Table("strata_cols", own["tables"]["margins_y"], ("col_total",), section="stratum",
+                                 rows='[section] = "stratum" AND [stat] = "col_total"', labels=((strata, "[level]"), (y, "[level_2]")),
+                                 two_levels=True, counts=("col_total",), visible=larger))
         else:
             table_set += (_Table("rows", words["rows"]["title"], ("row_total", "row_share"), rows='[section] = "group" AND [stat] = "row_total"',
                                  labels=((x, "[level]"),), counts=("row_total",)),
@@ -1011,7 +1086,15 @@ def _contingency(test: str, params: dict[str, Any], locale: str, sample: str | N
                                          "value": f'IF({agreement} = "discordant", {_q(pair["discordant"])}, {_q(pair["concordant"])})'},)),)
         elif test == "cmh":
             table_set += (_Table("cells", own["tables"]["pooled"], ("observed",), section="cell", rows=cell_rows, labels=labels,
-                                 two_levels=True, counts=("observed",)),)
+                                 two_levels=True, counts=("observed",), visible=two_by_two),
+                          # the generalized statistic: n, m and n − m of each cell, the index of its place in the vector,
+                          # then V: (n − m)'·V^(−1)·(n − m) is the statistic
+                          _Table("cells_generalized", own["tables"]["pooled"], ("index", "observed", "expected", "deviation"),
+                                 section="cell", rows=cell_rows, labels=labels, two_levels=True, counts=("index", "observed"),
+                                 width=34, visible=larger),
+                          _Table("covariance", own["tables"]["covariance"], ("v",), section="covariance",
+                                 rows='[section] = "covariance" AND [stat] = "v"',
+                                 labels=(("k", "[level]"), ("k'", "[level_2]")), two_levels=True, visible=larger))
         else:
             table_set += (_Table("cells", words["cells"]["title"], ("observed", "expected", "residual"), section="cell", rows=cell_rows,
                                  labels=labels, two_levels=True, counts=("observed",)),
@@ -1049,7 +1132,9 @@ def _contingency(test: str, params: dict[str, Any], locale: str, sample: str | N
 
         charts += ((heatmap("c_residuals", True, labelled), heatmap("c_residuals_many", False, plain),
                     note("c_residuals_note", "too_many_rows", heat, rows_x, MAX_HEATMAP_ROWS)),)
-    if test != "fisher_exact":
+    if test == "mcnemar":  # the exact binomial has no curve: a line says why in its place
+        charts += (_density_or_exact(t),)
+    elif test != "fisher_exact":
         charts += (_density(t),)
     pairs = None
     posthoc = _param(test, params, "posthoc") if test in ("chi2_independence", "g_test") else "none"

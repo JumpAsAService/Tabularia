@@ -40,7 +40,7 @@ NOW = datetime(2026, 11, 19, 15, 30, tzinfo=timezone.utc)
 # The reference test's report (Welch, two-sided, English), byte for byte. It changes with the
 # layout, its words, the template, the fonts or Typst's version: look at the new PDF with the
 # real chart service, then update the hash.
-GOLDEN_PDF_SHA256 = "c2e65aa885cd1016f8a08e8db072959ef5d3d902e0beb3465b157a586577b7cd"
+GOLDEN_PDF_SHA256 = "b4d047242b5b2f66ebc151980cad51816ea35be762b4a86fbc0cf28d1fa59c5a"
 
 A = [5.1, 4.9, 6.2, 5.8, 6.0, 5.5, 5.3, 6.7]
 B = [6.9, 7.2, 6.5, 7.8, 7.1, 6.4, 8.0]
@@ -282,6 +282,8 @@ def test_a_layout_reads_only_rows_the_test_writes(test):
         # a cell's key: of every cell (of a contingency table, or of the categories of a goodness of fit)
         cells = {(r["level"], r["level_2"]) for r in rows if r["section"] == "cell"}
         for stat in re.findall(r'\\"cell\|\\" & \[level\] & \\"\|\\" & \[level_2\] & \\"\|(\w+)\\"', text):
+            if test == "cmh" and stat in ("index", "expected", "deviation"):
+                continue  # the generalized statistic's (a table larger than 2 × 2), n − m of the first r − 1 rows and c − 1 columns
             assert {f"cell|{a}|{b}|{stat}" for a, b in cells} <= written, stat
         for stat in re.findall(r'\\"cell\|\\" & \[level\] & \\"\|\|(\w+)\\"', text):
             assert {f"cell|{a}||{stat}" for a, _ in cells} <= written, stat
@@ -290,7 +292,9 @@ def test_a_layout_reads_only_rows_the_test_writes(test):
             assert {f"pair|{a}|{b}|{stat}" for a, b in pairs_} <= written, stat
         sections = set(re.findall(r'\[section\] = \\"(\w+)\\"', text))
         # (a variant that may be exact on the data, McNemar's, has no curve: its chart is not drawn then)
-        assert {r["section"] for r in rows} <= sections and sections - {r["section"] for r in rows} <= {"curve"}, (params, sections)
+        # (and CMH's generalized statistic, whose tables are drawn for a table larger than 2 × 2: its margins of each stratum, V)
+        larger = {"stratum", "covariance"} if test == "cmh" else set()
+        assert {r["section"] for r in rows} <= sections and sections - {r["section"] for r in rows} <= {"curve"} | larger, (params, sections)
 
 
 def test_a_label_with_a_bar_has_a_key_of_its_own(tmp_path, chart_service, monkeypatch):  # noqa: F811
@@ -390,8 +394,8 @@ def test_the_reference_report_holds_the_welch_numbers(tmp_path, chart_service, m
         "0.05", "0.95", "15", "3", "0.3648489011", "-1.4410714286", "0.3126632227", "-4.6090212217", "12.7278927075",
         "-2.1650730211", "2.1650730211", "0.0005168703", "-2.1180101367", "-0.7641327205", "-2.3857722701", "-2.2454327248",
         # the groups: n, mean, variance, standard deviation, standard error, the interval of the mean; the quartiles
-        "8", "5.6875", "0.36410714", "0.60341291", "0.21333868", "5.18303418", "6.19196582",
-        "7", "7.12857143", "0.36571429", "0.60474316", "0.22857143", "6.56927729", "7.68786557",
+        "8", "5.6875", "0.3641071429", "0.6034129124", "0.2133386811", "5.1830341808", "6.1919658192",
+        "7", "7.1285714286", "0.3657142857", "0.6047431568", "0.2285714286", "6.5692772912", "7.687865566",
         "4.9", "5.25", "5.65", "6.05", "6.7", "6.4", "7.1", "7.5",
         "Rows used: 15. Rows left out: 3 (no group, or no value in one of the two groups).",
         "Computed in the engine: polars.", "Computed by Tabularia",
@@ -478,8 +482,13 @@ def test_large_numbers_and_long_names_fit_the_page(tmp_path, chart_service, monk
     assert done.warnings == []
     model = json.loads(handed[0])
     said = set(strings(model))
-    assert {"-2,500,001", "95% CI: -2,500,002 to -2,500,001", "1000000005.7", "1002500007.1", "1000000004.9", "1002500008"} <= said
-    assert any(re.fullmatch(r"0\.3641\d{4}", x) for x in said)  # a variance keeps its eight decimals
+    assert {"-2,500,001", "95% CI: -2,500,002 to -2,500,001", "1000000004.9", "1002500008"} <= said
+    # the groups' numbers as they are, never rounded to fit (the data whole in Excel): ten decimals at most
+    from app.reports import formats
+
+    means = [r["value"] for r in rows if r["section"] == "group" and r["stat"] == "mean"]
+    assert {formats.format_general(v, formats.locale("en")) for v in means} <= said and all(abs(v - 1e9) > 5 for v in means)
+    assert any(re.fullmatch(r"0\.3641\d{6}", x) for x in said)  # a variance keeps its ten decimals
     [subtitle] = [s for s in strings(model["header"]) if s.startswith("net amount")]
     assert subtitle.endswith("…") and glyphs.width_mm(subtitle, 9) <= 136
     titles = [spec["option"]["title"]["text"] for spec in chart_service[1] if "title" in spec["option"]]
@@ -730,7 +739,7 @@ ON_THE_PAGE = {
                       "-2.6434026632", "-0.8359173189", "2.9907264075", "before − after", "79", "81.5"]),
     "anova": ({}, ["One-way ANOVA", "11.9313", "2, 18", "0.0005 ***", "0.5700", "Distribution of the statistic under H0: F(2, 18).",
                    "11.9312926066", "7.790297619", "5.8763690476",
-                   "Pairwise comparisons", "a – b", "a – c", "b – c", "6.89176739", "0.0003431", "3.60930383", "H0 rejected",
+                   "Pairwise comparisons", "a – b", "a – c", "b – c", "6.8917673906", "0.000343101", "3.6093038287", "H0 rejected",
                    "H0 not rejected", "Critical region at α = 0.05: statistic ≥ 3.5546.", "Signif. codes: 0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1"]),
     "var_f": ({}, ["F test of two variances", "0.9956", "7, 6", "0.9793", "95% CI: 0.1748 to 5.0961", "var(v | a) / var(v | b) = 1"]),
     "levene": ({}, ["Brown–Forsythe test (Levene, median)", "0.2686", "2, 18", "0.7675", "3", "5.65", "var(v | a) = var(v | b) = var(v | c)"]),
@@ -741,7 +750,7 @@ ON_THE_PAGE = {
     "prop_two_sample": ({}, ["Test of two proportions", "-2.4215", "0.0155 *", "-0.1644", "95% CI: -0.2977 to -0.0311",
                              "P(answer = yes | a) − P(answer = yes | b) = 0", "0.3869565217"]),
     "chi2_independence": ({"posthoc": "cells"}, ["Chi-square test of independence", "8.8889", "0.0117 *", "0.2722", "Table of the counts",
-                                                 "Comparisons of the cells", "x1 – m", "2.82842712", "0.02806641", "Critical region at α = 0.05: statistic ≥ 5.9915."]),
+                                                 "Comparisons of the cells", "x1 – m", "2.8284271247", "0.0280664099", "Critical region at α = 0.05: statistic ≥ 5.9915."]),
     "chi2_gof": ({}, ["Chi-square goodness-of-fit test", "4.3200", "0.2289", "P(cat = a) = 0.25, P(cat = b) = 0.25, ..., P(cat = d) = 0.25"]),
     "mcnemar": ({}, ["McNemar's test", "236", "16.8178", "< 0.0001 ***", "1.7442", "95% CI: 1.3292 to 2.3010", "Discordant",
                      "Concordant", "P(x = i, y = j) = P(x = j, y = i)", "118"]),
@@ -752,7 +761,7 @@ ON_THE_PAGE = {
     "wilcoxon_signed_rank": ({}, ["Wilcoxon signed-rank test", "4.0000", "0.0321 *", "-0.8222", "median(before − after) = 0", "before − after",
                                   "Critical region at α = 0.05: z ≤ -1.9600 or z ≥ 1.9600.", "-2.143768803"]),
     "kruskal_wallis": ({}, ["Kruskal–Wallis test", "11.5227", "0.0031 **", "0.5761", "F(v | a) = F(v | b) = F(v | c)", "a – b", "-10.875",
-                            "3.21130814", "0.00212394", "H0 rejected", "H0 not rejected", "Pairwise comparisons"]),
+                            "3.2113081447", "0.0021239374", "H0 rejected", "H0 not rejected", "Pairwise comparisons"]),
     "spearman": ({}, ["Spearman's rank correlation", "cor(rank(px), rank(py)) = 0", "Rank correlation ρ"]),
     "ks_two_sample": ({}, ["Two-sample Kolmogorov–Smirnov test", "0.8750", "0.0025 **", "F(v | a) = F(v | b)", "0.875"]),
     "normality": ({}, ["D'Agostino–Pearson normality test", "14.4517", "1.4301", "0.0007 ***", "5.5156", "2.9157928616", "(skewness(nv), kurtosis(nv)) = (0, 3)"]),
@@ -828,6 +837,226 @@ def test_numbers_in_the_hypotheses_use_the_decimal_of_the_language():
         assert layouts.with_labels("kruskal_wallis", [row], loc)[0]["text"] == "max P(v | i > v | j) ≠ 0,5"
     # a name that has a dot in it is not a number
     assert layouts.with_labels("t_one_sample", [column], "it")[0]["text"] == "mean(ab1.5) = 1,5e-07 and m₂^1,5"
+
+
+def test_the_arguments_of_a_function_are_set_apart_by_a_semicolon_where_the_decimal_is_a_comma():
+    """«min(0,5, |O − E|)» reads as three arguments: in the languages with a decimal comma the
+    arguments inside brackets are set apart by «; », the sentence's own commas stay."""
+    formula = {"section": "test", "stat": "formula", "text": "χ² = (|k − n·p0| − Y)², Y = min(0.5, |k − n·p0|), df = 1", "value": None}
+    assert layouts.with_labels("prop_one_sample", [formula], "en")[0]["text"] == formula["text"]
+    for loc in ("it", "de", "es", "fr"):
+        assert layouts.with_labels("prop_one_sample", [formula], loc)[0]["text"] == \
+            "χ² = (|k − n·p0| − Y)², Y = min(0,5; |k − n·p0|), df = 1"
+    note = {"section": "test", "stat": "note_1", "text": "Ties (two values, or more) at 0.5", "value": None}
+    assert layouts.with_labels("t_one_sample", [note], "it")[0]["text"] == "Ties (two values, or more) at 0,5"
+    [said] = [r["text"] for r in layouts.with_labels("prop_one_sample", rows_of("prop_one_sample"), "it") if r["stat"] == "formula"]
+    assert "min(0,5; |k − n·p0|)" in said
+
+
+def test_a_p_value_below_the_smallest_double_is_said_so():
+    """M3: a chi-square of 1500 on one degree of freedom has a tail below the smallest double:
+    the rows hold 0 (the double nearest), the page and the Excel file «< 2.2e-308», never «0»."""
+    from app.engine.stats import dist
+
+    assert dist.chi2_sf(1500.0, 1.0) == 0.0
+    row = {"section": "test", "stat": "p_value", "value": 0.0, "text": None, "level": None, "level_2": None}
+    assert layouts.with_labels("chi2_gof", [row], "en")[0]["tiny"] == "< 2.2e-308"
+    assert layouts.with_labels("chi2_gof", [row], "it")[0]["tiny"] == "< 2,2e-308"
+    pair = {**row, "section": "pair", "stat": "p_adjusted"}
+    assert layouts.with_labels("anova", [pair], "en")[0]["tiny"] == "< 2.2e-308"
+    for other in ({**row, "value": 1e-300}, {**row, "stat": "estimate"}, {**row, "value": None}):
+        assert layouts.with_labels("chi2_gof", [other], "en")[0]["tiny"] is None
+    # on a page: 1500 rows of one category among two expected even: χ² = 1500, df = 1
+    frame = pl.DataFrame({"cat": ["a"] * 1500 + ["b"] * 0 + ["a", "b"]})
+    rows = [dict(zip(OUTPUT_NAMES, r)) for r in run_hypothesis_test(PolarsStatSource(frame.lazy()), "chi2_gof", {"value": "cat", "detail": "report"}, "polars")]
+    assert [r["value"] for r in rows if r["key"] == "test|||p_value"] == [0.0]
+    d = layouts.definition("chi2_gof", {"value": "cat"}, "en")
+    [numbers] = [it for it in d["sections"]["body"]["items"] if it["id"] == "numbers"]
+    assert numbers["columns"][2]["value"] == "IF(ISNULL([tiny]), [value], [tiny])" and numbers["columns"][2]["format"] == "General"
+
+
+def _sheet(path, title: str) -> str:
+    with zipfile.ZipFile(path) as z:
+        names = re.findall(r'<sheet name="([^"]+)"', z.read("xl/workbook.xml").decode())
+        return z.read(f"xl/worksheets/sheet{names.index(title) + 1}.xml").decode()
+
+
+def test_the_tables_write_the_numbers_whole_and_excel_gets_numbers(tmp_path, chart_service, monkeypatch):  # noqa: F811
+    """M4 and the Excel file: a group's numbers are never rounded in the data (a variance of
+    1e-12 is not 0), the tables write them in the General
+    format (a very small one by its exponent); Excel gets numbers, a tiny p-value too, with
+    the General format, not a text."""
+    frame = pl.DataFrame({"g": ["a"] * 4 + ["b"] * 4,
+                          "v": [1.0, 1.000001, 1.000002, 1.000003, 2.0, 2.0001, 2.0002, 2.0003]})
+    params = {"value": "v", "group": "g"}
+    rows = [dict(zip(OUTPUT_NAMES, r)) for r in run_hypothesis_test(PolarsStatSource(frame.lazy()), "t_two_sample", {**params, "detail": "report"}, "polars")]
+    [var_a] = [r["value"] for r in rows if r["key"] == "group|a||var"]
+    [mean_b] = [r["value"] for r in rows if r["key"] == "group|b||mean"]
+    [p_value] = [r["value"] for r in rows if r["key"] == "test|||p_value"]
+    assert 1e-13 < var_a < 1e-11 and p_value < 1e-6
+    labelled = layouts.with_labels("t_two_sample", rows, "en")
+    handed: list[str] = []
+    run = pdf.run
+    monkeypatch.setattr(pdf, "run", lambda job, *a, **k: (handed.append(job.get("inputs", {}).get("model", "")), run(job, *a, **k))[1])
+    out = render.render(layouts.definition("t_two_sample", params, "en"), {"result": {"rows": labelled, "columns": layouts.columns()}}, {},
+                        "pdf", tmp_path / "pdf", title="t", now=NOW, limits=render.Limits(chart_url=chart_service[0]))
+    assert out.warnings == []
+    said = set(strings(json.loads(handed[0])))
+    from app.reports import formats
+
+    en = formats.locale("en")
+    assert {formats.format_general(var_a, en), formats.format_general(mean_b, en), formats.format_general(p_value, en)} <= said
+    assert re.fullmatch(r"\d(\.\d+)?e-1[23]", formats.format_general(var_a, en)) and "2.00015" in said
+    xlsx = render.render(layouts.definition("t_two_sample", params, "en"), {"result": {"rows": labelled, "columns": layouts.columns()}}, {},
+                         "xlsx", tmp_path / "xlsx", title="t", now=NOW, limits=render.Limits(chart_url=chart_service[0]))
+    numbers = _sheet(xlsx.path, "Numbers of the test")
+    # the p-value a number of its own: <v>, not an inline string
+    assert re.search(r"<t>p_value</t></is></c><c [^>]*><v>([^<]+)</v>", numbers)
+    [written] = re.findall(r"<t>p_value</t></is></c><c [^>]*><v>([^<]+)</v>", numbers)
+    assert math.isclose(float(written), p_value, rel_tol=1e-12)
+    groups = _sheet(xlsx.path, "Groups")
+    assert any(math.isclose(float(v), var_a, rel_tol=1e-9) for v in re.findall(r"<v>([^<]+)</v>", groups))
+    assert any(float(v) == mean_b for v in re.findall(r"<v>([^<]+)</v>", groups))
+    with zipfile.ZipFile(xlsx.path) as z:
+        assert 'formatCode="General"' in z.read("xl/styles.xml").decode() or "numFmtId=\"0\"" in z.read("xl/styles.xml").decode()
+
+
+def test_a_card_writes_a_tiny_number_by_its_exponent():
+    """A card writes four decimals: a number they would write 0.0000 is written by its exponent."""
+    from app.reports import formats
+
+    expr = layouts._shown("[value]")
+    assert "0.0000e+0" in expr and "0.0000e+0" in layouts._shown("[value]", layouts.P4)
+    assert formats.display(1.23456e-7, layouts.P4_TINY, formats.locale("en")) == "1.2346e-7"
+    assert formats.display(-4.2e-5, layouts.P4_TINY, formats.locale("it")) == "-4,2000e-5"
+
+
+def test_a_chart_left_out_says_why():
+    """The histogram past six groups, the intervals of the pairs past fifteen, the curve of
+    McNemar's exact test: a line in their place says why they are not drawn."""
+    def items(test, **params):
+        return {it["id"]: it for it in layouts.definition(test, {**REFERENCE[test], **params}, "en")["sections"]["body"]["items"]}
+
+    anova = items("anova")
+    assert anova["c_hist_note"]["visible"].endswith("> 6") and anova["c_hist"]["visible"].endswith("<= 6")
+    assert "6" in anova["c_hist_note"]["value"] and anova["c_pairs_note"]["visible"].endswith("> 15")
+    assert "c_hist_note" in items("kruskal_wallis")
+    mcnemar = items("mcnemar", method="exact")
+    assert mcnemar["c_curve_exact"]["visible"] == '=COUNTIF([section] = "curve") = 0'
+
+
+def test_a_legend_names_only_the_symbols_of_its_variant():
+    """Welch's t has no sp², the classic ANOVA no w nor Λ, the generalized CMH no a, b, c, d:
+    the legend is chosen by the variant row."""
+    words = layouts.texts("en")["tests"]
+    assert "sp²" not in words["t_two_sample"]["symbols"]["welch"] and "sp²" in words["t_two_sample"]["symbols"]["student"]
+    assert "Λ" not in words["anova"]["symbols"]["one_way"] and "Λ" in words["anova"]["symbols"]["welch"]
+    assert "a, b" not in words["cmh"]["symbols"]["generalized"] and "V^(−1)" in words["cmh"]["symbols"]["generalized"]
+    d = layouts.definition("t_two_sample", WELCH, "en")
+    [legend] = [it["value"] for it in d["sections"]["body"]["items"] if it["id"] == "symbols"]
+    assert legend.startswith('=IF(LOOKUP("test|||variant", [key], [text]) = "student"')
+
+
+def test_the_generalized_cmh_can_be_redone_from_its_rows(tmp_path, chart_service, monkeypatch):  # noqa: F811
+    """M1: the margins of each stratum give m and V; n − m and V are rows too, and
+    (n − m)'·V^(−1)·(n − m) is the statistic. Redone here from the rows alone (R's
+    mantelhaen.test gives 23.8815 on this table)."""
+    frame, params, _ = OTHER_SHAPES["cmh"]
+    rows = [dict(zip(OUTPUT_NAMES, r)) for r in run_hypothesis_test(PolarsStatSource(frame.lazy()), "cmh", {**params, "detail": "report"}, "polars")]
+    by = {r["key"]: r["value"] for r in rows}
+    strata = sorted({r["level"] for r in rows if r["section"] == "stratum"})
+    xs = sorted({r["level_2"] for r in rows if r["stat"] == "row_total"})
+    ys = sorted({r["level_2"] for r in rows if r["stat"] == "col_total"})
+    r_, c_ = len(xs), len(ys)
+    size = (r_ - 1) * (c_ - 1)
+    dev, V = [0.0] * size, [[0.0] * size for _ in range(size)]
+    for s_ in strata:
+        R = [by[f"stratum|{s_}|{a}|row_total"] for a in xs]
+        C = [by[f"stratum|{s_}|{b}|col_total"] for b in ys]
+        N = sum(R)
+        for j in range(c_ - 1):
+            for i in range(r_ - 1):
+                k = j * (r_ - 1) + i
+                for jj in range(c_ - 1):
+                    for ii in range(r_ - 1):
+                        V[k][jj * (r_ - 1) + ii] += ((N * C[j] if j == jj else 0) - C[j] * C[jj]) * \
+                            ((N * R[i] if i == ii else 0) - R[i] * R[ii]) / (N * N * (N - 1))
+    for j, b in enumerate(ys[:-1]):
+        for i, a in enumerate(xs[:-1]):
+            k = j * (r_ - 1) + i
+            m = sum(by[f"stratum|{s_}|{a}|row_total"] * by[f"stratum|{s_}|{b}|col_total"]
+                    / sum(by[f"stratum|{s_}|{x}|row_total"] for x in xs) for s_ in strata)
+            assert by[f"cell|{a}|{b}|index"] == k + 1
+            assert math.isclose(by[f"cell|{a}|{b}|expected"], m, rel_tol=1e-12)
+            dev[k] = by[f"cell|{a}|{b}|observed"] - m
+            assert math.isclose(by[f"cell|{a}|{b}|deviation"], dev[k], rel_tol=1e-9, abs_tol=1e-12)
+    for k1 in range(size):
+        for k2 in range(size):
+            assert math.isclose(by[f"covariance|{k1 + 1}|{k2 + 1}|v"], V[k1][k2], rel_tol=1e-12, abs_tol=1e-15)
+    # (n − m)'·V^(−1)·(n − m), by Gaussian elimination
+    a = [row[:] + [d] for row, d in zip(V, dev)]
+    for col in range(size):
+        piv = max(range(col, size), key=lambda q: abs(a[q][col]))
+        a[col], a[piv] = a[piv], a[col]
+        for q in range(col + 1, size):
+            f = a[q][col] / a[col][col]
+            for k in range(col, size + 1):
+                a[q][k] -= f * a[col][k]
+    x = [0.0] * size
+    for q in range(size - 1, -1, -1):
+        x[q] = (a[q][size] - sum(a[q][k] * x[k] for k in range(q + 1, size))) / a[q][q]
+    assert math.isclose(sum(d * v for d, v in zip(dev, x)), by["test|||statistic"], rel_tol=1e-10)
+    assert math.isclose(by["test|||statistic"], 23.8815, rel_tol=1e-5)
+    # the page: its own legend and tables, the words of each language
+    handed: list[str] = []
+    run = pdf.run
+    monkeypatch.setattr(pdf, "run", lambda job, *a, **k: (handed.append(job.get("inputs", {}).get("model", "")), run(job, *a, **k))[1])
+    out = render.render(layouts.definition("cmh", params, "en"), {"result": {"rows": layouts.with_labels("cmh", rows, "en"), "columns": layouts.columns()}},
+                        {}, "pdf", tmp_path, title="t", now=NOW, limits=render.Limits(chart_url=chart_service[0], max_rows=layouts.MAX_REPORT_ROWS))
+    assert out.warnings == []
+    said = set(strings(json.loads(handed[0])))
+    words = layouts.texts("en")["tests"]["cmh"]
+    assert {"Rows (R_i)", "Rows (C_j)", "V(k, k')", "n − m", "Index (k)", "Expected (m)"} <= said
+    assert {words["tables"]["margins_x"], words["tables"]["margins_y"], words["tables"]["covariance"]} <= {
+        it["title"] for it in layouts.definition("cmh", params, "en")["sections"]["body"]["items"] if it["type"] == "table"}
+    assert any(x.startswith("x = «x», y = «y», strata of «z». R_i, C_j") for x in said)
+    assert not any("a, b the first row" in x for x in said)
+
+
+def test_ks_and_dagostino_write_what_their_statistic_is_made_of():
+    """M2: the point where each distance of Kolmogorov–Smirnov is reached (found by the
+    engine, with F1 and F2 there), and every number on the way of D'Agostino's K²."""
+    rows = {r["key"]: r["value"] for r in rows_of("ks_two_sample")}
+    a, b = sorted(A), sorted(B)
+
+    def F(sample, v):
+        return sum(x <= v for x in sample) / len(sample)
+
+    points = sorted(set(a + b))
+    d_plus = max(F(a, v) - F(b, v) for v in points)
+    d_minus = max(F(b, v) - F(a, v) for v in points)
+    v_plus = min(v for v in points if math.isclose(F(a, v) - F(b, v), d_plus))
+    v_minus = min(v for v in points if math.isclose(F(b, v) - F(a, v), d_minus))
+    assert rows["test|||v_plus"] == v_plus and rows["test|||v_minus"] == v_minus
+    assert math.isclose(rows["test|||f1_minus"], F(a, v_minus)) and math.isclose(rows["test|||f2_minus"], F(b, v_minus))
+    assert math.isclose(abs(rows["test|||f1_d"] - rows["test|||f2_d"]), rows["test|||d"])
+    assert rows["test|||v_d"] == (v_plus if d_plus >= d_minus else v_minus)
+    dag = {r["key"]: r["value"] for r in rows_of("normality")}
+    n, g1, b2 = dag["test|||n"], dag["test|||skewness"], dag["test|||kurtosis"]
+    y = g1 * math.sqrt((n + 1) * (n + 3) / (6 * (n - 2)))
+    assert math.isclose(dag["test|||dag_y"], y, rel_tol=1e-12)
+    w2 = dag["test|||dag_w2"]
+    assert math.isclose(w2, math.sqrt(2 * (dag["test|||dag_beta2"] - 1)) - 1, rel_tol=1e-12)
+    assert math.isclose(dag["test|||dag_delta"], 1 / math.sqrt(math.log(w2) / 2), rel_tol=1e-12)
+    assert math.isclose(dag["test|||dag_alpha"], math.sqrt(2 / (w2 - 1)), rel_tol=1e-12)
+    assert math.isclose(dag["test|||z_skewness"], dag["test|||dag_delta"] * math.asinh(y / dag["test|||dag_alpha"]), rel_tol=1e-12)
+    x = (b2 - dag["test|||dag_mean_b2"]) / math.sqrt(dag["test|||dag_var_b2"])
+    assert math.isclose(dag["test|||dag_x"], x, rel_tol=1e-12)
+    A_ = dag["test|||dag_a"]
+    z2 = (1 - 2 / (9 * A_) - ((1 - 2 / A_) / (1 + x * math.sqrt(2 / (A_ - 4)))) ** (1 / 3)) / math.sqrt(2 / (9 * A_))
+    assert math.isclose(dag["test|||z_kurtosis"], z2, rel_tol=1e-10)
+    assert math.isclose(A_, 6 + 8 / dag["test|||dag_sqrt_beta1"] * (2 / dag["test|||dag_sqrt_beta1"]
+                                                                  + math.sqrt(1 + 4 / dag["test|||dag_sqrt_beta1"] ** 2)), rel_tol=1e-12)
 
 
 def test_a_label_with_a_number_is_turned_never_wrapped():

@@ -871,8 +871,16 @@ than 2 rows refused, as R does.
   the correction is on, χ² = (\|Δ\| − Y)²/V, df = 1; the common odds ratio of Mantel and
   Haenszel and its interval (Robins–Breslow–Greenland). Two-sided only. Each stratum is a
   group with `n`, `a`, `b`, `c`, `d`, `expected_a`, `variance_a`, `odds_ratio`.
-- I × J × K: the generalized statistic (n − m)·V⁻¹·(n − m), df = (I − 1)(J − 1), solved by
-  Gaussian elimination; refused past 100 equations, or when V is singular.
+- I × J × K: the generalized statistic (n − m)'·V⁻¹·(n − m), df = (I − 1)(J − 1), solved by
+  Gaussian elimination; refused past 100 equations, or when V is singular. What it is made
+  of is written, so that a reader may redo it: each stratum's margins, section `stratum`
+  (level = the stratum, level_2 = the category; `row_total` for the categories of x,
+  `col_total` for those of y: m and V come from them alone); each cell of the table over the
+  strata, `observed` (n), `expected` (m = Σ R_i·C_j/N), and for the first I − 1 rows and
+  J − 1 columns `index` (its place k in the vector, column after column) and `deviation`
+  (n − m); then V, section `covariance` (level and level_2 = k and k', stat `v`). The report
+  has a legend of its own for this variant (R_i, C_j, N, n, m, k, V), the tables of the
+  margins, of the cells with n, m, n − m, k, and of V.
 - Breslow–Day's homogeneity of the odds ratios is **not** built (no base-R reference).
 
 **`stat_g_test`** — `x`, `y`, `williams` (default false), `posthoc` (`none`, `cells`),
@@ -912,7 +920,8 @@ value is almost always an error upstream).
 `alternative`. H0: P(X > Y) = 0.5, written `P(v | a > v | b) = 0.5`. A1 (the groups and their
 rows), A4 restricted to the two groups (ranked together, without the others). `statistic` =
 U of group 1 = R₁ − n₁(n₁ + 1)/2 (R's W); `u_2` = n₁n₂ − U.
-- Exact (variant `exact`, distribution `exact`): n₁ ≤ `EXACT_MAX_N`, n₂ ≤ `EXACT_MAX_N` and no
+- Exact (variant `exact`, distribution `mann-whitney(n₁, n₂)`; the signed rank's
+  `signed-rank(n)`): n₁ ≤ `EXACT_MAX_N`, n₂ ≤ `EXACT_MAX_N` and no
   ties. `auto` takes it then; `exact` asked with ties or larger samples falls back to the
   approximation, and a note says why. No `z`, no critical value, no curve (the report says
   why in its place).
@@ -978,9 +987,15 @@ Built in lot 4.
 back from the engine **as whole numbers**, max(k₁n₂ − k₂n₁) and max(k₂n₁ − k₁n₂) over the
 running counts, so that the exact distribution reads them exactly and every engine returns
 the same: `d` (two-sided D), `d_plus` = max(F₁ − F₂), `d_minus` = max(F₂ − F₁); `statistic` is
-the one the alternative uses (D, D+ for `greater`, D− for `less`, as R's `ks.test`).
-- Exact (variant `exact`) when n₁·n₂ ≤ `EXACT_KS_PRODUCT` and no value is held by more than
-  one row (`n_tied`); no critical value, no curve.
+the one the alternative uses (D, D+ for `greater`, D− for `less`, as R's `ks.test`). Where
+each is reached comes back from the same query: the smallest value v* whose distance is the
+largest (a window `max(...) OVER ()` beside each point, then `min(CASE WHEN …)`), with the
+running counts there; written `v_d`, `f1_d`, `f2_d` (of D), `v_plus`, `f1_plus`, `f2_plus`,
+`v_minus`, `f1_minus`, `f2_minus`, F1(v*) = k₁/n₁ and F2(v*) = k₂/n₂ (a division of the
+engine's two whole numbers).
+- Exact (variant `exact`, distribution `kolmogorov-smirnov(n₁, n₂)`) when n₁·n₂ ≤
+  `EXACT_KS_PRODUCT` and no value is held by more than one row (`n_tied`); no critical value,
+  no curve.
 - Asymptotic (variant `asymptotic`, distribution `kolmogorov`, or `smirnov` one-sided):
   `lambda` = D·√(n₁n₂/(n₁ + n₂)); p = `dist.kolmogorov_sf` (two-sided) or exp(−2λ²);
   `critical_high` = `kolmogorov_isf(α)`/√(n₁n₂/(n₁ + n₂)); the curve is the density of D under
@@ -998,7 +1013,11 @@ come from a normal distribution, written `(skewness(v), kurtosis(v)) = (0, 3)`. 
 - `dagostino` (the K² omnibus, SciPy's `normaltest`): the z of D'Agostino's skewness test
   (written with `asinh`, SciPy's logarithm without its cancellation; 0 for g₁ = 0, where SciPy
   writes another number) and of Anscombe–Glynn's kurtosis test, `z_skewness`, `z_kurtosis`
-  (NULL rows with Jarque–Bera); K² = their squares summed, chi-square with 2 df. Refused below
+  (NULL rows with Jarque–Bera); K² = their squares summed, chi-square with 2 df. Every number
+  on the way is a row, in the formula's order (NULL with Jarque–Bera): `dag_y` (Y),
+  `dag_beta2` (β₂ of √b₁), `dag_w2` (W²), `dag_delta` (δ), `dag_alpha` (α), then
+  `dag_mean_b2` (E(b₂)), `dag_var_b2` (Var(b₂)), `dag_x` (x), `dag_sqrt_beta1` (√β₁ of b₂),
+  `dag_a` (A); the `formula` row writes each. Refused below
   n = 20 (`DAGOSTINO_MIN_N`), with the way out («or use method = 'jarque_bera'»).
 - Group: the column with `n`, `mean`, `var`, `sd` (of the sample), `min`, `max`, quartiles.
 - Refused: variance 0; infinite values.
@@ -1202,14 +1221,24 @@ rows may be missing carries a `visible` expression
    sample when the rows come from one, the date, «Page x of y».
 2. **Result**: four KPI cards — statistic, degrees of freedom, p-value, estimate with its
    interval — and one sentence: «At α = 0.05 the null hypothesis is rejected» (or «is not
-   rejected»), from `decision`. A p-value below 0.0001 prints as «< 0.0001», a number below
-   1e-6 by its exponent (on a very large table a p-value is that small more often than
-   not), a large one with fewer decimals. R's stars stand beside the p-value in its card
+   rejected»), from `decision`. A p-value below 0.0001 prints as «< 0.0001», a number that
+   four decimals would print 0.0000 by its exponent («1.2346e-7», the format `0.0000e+0`), a
+   large one with fewer decimals. R's stars stand beside the p-value in its card
    («0.0005 ***»); the sentence keeps to the node's alpha.
 3. **Hypotheses**: H0, H1, the alternative, alpha, from the `text` rows.
 4. **How it is computed**: the `formula` row, then a table of every number of the `test`
    section in the order of the output (`[label]`, `[value]`), so that the page holds every
-   piece of the formula; the `distribution` and the critical values. A column «Signif.»
+   piece of the formula; the `distribution` and the critical values. The numbers of this
+   table, of the groups, the cells and the pairs are written as they are, never rounded in
+   the data: the report format `General` (ten decimals at most, by its exponent below 1e-6
+   or from 1e15; in Excel the cell is a number with Excel's General format). A p-value that
+   is 0 in the rows (below the smallest double, 2.2e-308: a chi-square of 1500 on one degree
+   of freedom) is written «< 2.2e-308», as R writes «< 2.2e-16» below its precision: the
+   decision is the same, and logarithms of every tail would be a second implementation of
+   every distribution for a number no reader uses. In the languages with a decimal comma the
+   arguments inside the formula's brackets are set apart by «; » («min(0,5; |O − E|)»). The
+   legend of the symbols is the variant's (`symbols` may be `{variant: sentence}`): Welch's t
+   has no sp², the classic ANOVA no w nor Λ, the generalized CMH its own. A column «Signif.»
    beside the value holds the stars of the p-value, with R's legend under the table («Signif.
    codes: 0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1»), in the five languages with their
    decimal mark; in Excel it is a column of its own, so that the p-value stays a number.
@@ -1243,7 +1272,9 @@ rows may be missing carries a `visible` expression
    time.
 
 Excel holds the tables of blocks 4, 5, 6 and of the cells, one sheet each: the numbers, not
-the charts.
+the charts. A chart left out — the histogram past six groups, the intervals of the pairs past
+fifteen, the curve of an exact test (McNemar's, the exact rank tests) — has a line in its
+place that says why.
 
 ### Three chart kinds and a filter
 

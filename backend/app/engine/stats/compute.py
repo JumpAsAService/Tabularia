@@ -1549,8 +1549,10 @@ def _cmh(source, p: dict[str, Any], out: Rows, engine_name: str) -> None:
         df = float(df_)
         yates = estimate = ci_low = ci_high = sd = delta = var_total = None
         variant = "generalized"
-        formula = ("χ² = (n − m)·V^(−1)·(n − m), n, m: the observed and expected counts of the first r − 1 rows and c − 1 columns "
-                   "summed over the strata, V their covariance under H0, df = (r − 1)·(c − 1)")
+        formula = ("χ² = (n − m)'·V^(−1)·(n − m); n, m: the observed and expected counts of the cells of the first r − 1 rows "
+                   "and c − 1 columns, summed over the strata, m = ∑ R_i·C_j / N; the cells taken column after column, index "
+                   "k = (j − 1)·(r − 1) + i; V(k, k') = ∑ (N·[j = j']·C_j − C_j·C_j')·(N·[i = i']·R_i − R_i·R_i') / (N²·(N − 1)), "
+                   "R, C, N: the margins and the rows of each stratum, [·] 1 when it holds; df = (r − 1)·(c − 1)")
     p_value, critical_high = dist.chi2_sf(statistic, df), dist.chi2_isf(alpha, df)
     _write_head(out, test, variant, p, f"P({x}, {y} | {strata}) = P({x} | {strata})·P({y} | {strata})",
                 f"P({x}, {y} | {strata}) ≠ P({x} | {strata})·P({y} | {strata})", formula, f"chi-square({df:.6g})", p_value,
@@ -1567,10 +1569,29 @@ def _cmh(source, p: dict[str, Any], out: Rows, engine_name: str) -> None:
             for stat, number in (("a", a[idx]), ("b", b[idx]), ("c", cc[idx]), ("d", d[idx]), ("expected_a", expected[idx]),
                                  ("variance_a", variance[idx]), ("odds_ratio", a[idx] * d[idx] / (b[idx] * cc[idx]) if b[idx] * cc[idx] else None)):
                 out.number("group", stat, number, level=s)
+    if (r, c) != (2, 2):
+        # what the statistic is made of, so that a reader may redo it: each stratum's margins
+        # (m and V come from them alone), then n − m and V
+        for s, t in zip(layers, tables):
+            for ra, row in zip(rows, t):
+                out.number("stratum", "row_total", sum(row), level=s, level_2=ra)
+            for cb, col in zip(cols, zip(*t)):
+                out.number("stratum", "col_total", sum(col), level=s, level_2=cb)
     pooled = [[sum(t[i][j] for t in tables) for j in range(c)] for i in range(r)]
     for i, ra in enumerate(rows):
         for j, cb in enumerate(cols):
             out.number("cell", "observed", pooled[i][j], level=ra, level_2=cb)
+            if (r, c) != (2, 2):
+                out.number("cell", "expected", math.fsum(sum(t[i]) * sum(row[j] for row in t) / n for t, n in zip(tables, totals)),
+                           level=ra, level_2=cb)
+                if i < r - 1 and j < c - 1:
+                    k = j * (r - 1) + i
+                    out.number("cell", "index", k + 1, level=ra, level_2=cb)
+                    out.number("cell", "deviation", dev[k], level=ra, level_2=cb)
+    if (r, c) != (2, 2):
+        for k1 in range(size):
+            for k2 in range(size):
+                out.number("covariance", "v", cov[k1][k2], level=str(k1 + 1), level_2=str(k2 + 1))
     if p["detail"] == "report":
         _write_positive_curve(out, lambda v: dist.chi2_pdf(v, df), lambda q: dist.chi2_isf(q, df), statistic, None, critical_high)
 
@@ -1731,7 +1752,7 @@ def _mann_whitney(source, p: dict[str, Any], out: Rows, engine_name: str) -> Non
     z = continuity = critical_low = critical_high = None
     if exact_:
         p_value = exact.mann_whitney_exact(round(u1), n1, n2, alternative)
-        variant, distribution = "exact", "exact"
+        variant, distribution = "exact", f"mann-whitney({n1}, {n2})"
         formula = ("U = R1 − n1·(n1 + 1)/2; p(<) = #(U ≤ u) / C(n1 + n2, n1), p(>) = #(U ≥ u) / C(n1 + n2, n1), p(≠) = 2·min(p(<), p(>)); "
                    "cles = U / (n1·n2), r = 2·cles − 1")
     else:
@@ -1794,7 +1815,7 @@ def _wilcoxon_signed_rank(source, p: dict[str, Any], out: Rows, engine_name: str
     z = continuity = critical_low = critical_high = None
     if exact_:
         p_value = exact.signed_rank_exact(round(sr.w_plus), n, alternative)
-        variant, distribution = "exact", "exact"
+        variant, distribution = "exact", f"signed-rank({n})"
         formula = ("d = x − y − mu, V = ∑_(d > 0) rank(|d|), W = ∑_(d < 0) rank(|d|); p(<) = #(V ≤ v) / 2^n, p(>) = #(V ≥ v) / 2^n, "
                    "p(≠) = 2·min(p(<), p(>)); r = (V − W) / (V + W)")
     else:
@@ -1985,7 +2006,7 @@ def _ks_two_sample(source, p: dict[str, Any], out: Rows, engine_name: str) -> No
     critical_high = lam = None
     if exact_:
         p_value = exact.ks_exact(distance, n1, n2, alternative)
-        variant, distribution = "exact", "exact"
+        variant, distribution = "exact", f"kolmogorov-smirnov({n1}, {n2})"
         formula = ("D = max |F1(v) − F2(v)|, D+ = max (F1(v) − F2(v)), D− = max (F2(v) − F1(v)); p = #(D ≥ d) / C(n1 + n2, n1)")
     else:
         lam = statistic * scale
@@ -1996,12 +2017,23 @@ def _ks_two_sample(source, p: dict[str, Any], out: Rows, engine_name: str) -> No
                    + ("p = 2·∑ (−1)^(k − 1)·exp(−2k²λ²)" if two else "p = exp(−2λ²)"))
     f1, f2 = f"F({value} | {g1})", f"F({value} | {g2})"
     relation = {"two_sided": "≠", "less": "<", "greater": ">"}[alternative]
+    formula += "; v*: the smallest value where a distance is reached, F1(v*) = k1/n1, F2(v*) = k2/n2 (k: the values at or below v*)"
     _write_head(out, test, variant, p, f"{f1} = {f2}", f"{f1} {relation} {f2}", formula, distribution, p_value, engine_name, notes)
+
+    def reached(v: float | None, k1: int | None, k2: int | None) -> tuple:
+        """Where a distance is reached, as the engine found it: v*, F1(v*), F2(v*)."""
+        return v, None if k1 is None else k1 / n1, None if k2 is None else k2 / n2
+
+    plus = reached(ks.v_plus, ks.k1_plus, ks.k2_plus)
+    minus = reached(ks.v_minus, ks.k1_minus, ks.k2_minus)
+    at_d = plus if ks.d_plus >= ks.d_minus else minus
     _write_numbers(out, (
         ("alpha", alpha), ("conf_level", 1.0 - alpha), ("n", n1 + n2),
         ("n_missing", without_group + rows[g1] - n1 + rows[g2] - n2), ("d", max(ks.d_plus, ks.d_minus) / product),
-        ("d_plus", ks.d_plus / product), ("d_minus", ks.d_minus / product), ("n_tied", ks.tied), ("lambda", lam),
-        ("statistic", statistic), ("critical_high", critical_high), ("p_value", p_value),
+        ("v_d", at_d[0]), ("f1_d", at_d[1]), ("f2_d", at_d[2]),
+        ("d_plus", ks.d_plus / product), ("v_plus", plus[0]), ("f1_plus", plus[1]), ("f2_plus", plus[2]),
+        ("d_minus", ks.d_minus / product), ("v_minus", minus[0]), ("f1_minus", minus[1]), ("f2_minus", minus[2]),
+        ("n_tied", ks.tied), ("lambda", lam), ("statistic", statistic), ("critical_high", critical_high), ("p_value", p_value),
     ))
     report = p["detail"] == "report"
     quartiles = _quartiles_by_label(source, value, group, typed) if report else {}
@@ -2039,14 +2071,22 @@ def _normality(source, p: dict[str, Any], out: Rows, engine_name: str) -> None:
     g1 = m3 / m2 ** 1.5
     b2 = m4 / (m2 * m2)
     z_skew = z_kurt = None
+    steps: dict[str, float | None] = dict.fromkeys(_DAGOSTINO_STEPS)
     if method == "jarque_bera":
         statistic = n / 6.0 * (g1 * g1 + (b2 - 3.0) ** 2 / 4.0)
         formula = "JB = n/6·(g₁² + (b₂ − 3)²/4), g₁ = m₃ / m₂^1.5, b₂ = m₄ / m₂², m_k = mean((v − m)^k), df = 2"
     else:
-        z_skew, z_kurt = _dagostino_z(n, g1, b2)
+        steps = _dagostino_steps(n, g1, b2)
+        z_skew, z_kurt = steps["z_skewness"], steps["z_kurtosis"]
         statistic = z_skew * z_skew + z_kurt * z_kurt
-        formula = ("K² = z₁² + z₂², z₁ = z(g₁) (D'Agostino), z₂ = z(b₂) (Anscombe–Glynn), g₁ = m₃ / m₂^1.5, b₂ = m₄ / m₂², "
-                   "m_k = mean((v − m)^k), df = 2")
+        formula = ("K² = z₁² + z₂², g₁ = m₃ / m₂^1.5, b₂ = m₄ / m₂², m_k = mean((v − m)^k), df = 2; "
+                   "z₁ (D'Agostino) = δ·asinh(Y / α), Y = g₁·√((n + 1)(n + 3) / (6(n − 2))), "
+                   "β₂ = 3(n² + 27n − 70)(n + 1)(n + 3) / ((n − 2)(n + 5)(n + 7)(n + 9)), W² = √(2(β₂ − 1)) − 1, "
+                   "δ = 1 / √(ln(W²) / 2), α = √(2 / (W² − 1)); "
+                   "z₂ (Anscombe–Glynn) = (1 − 2/(9A) − ((1 − 2/A) / (1 + x·√(2/(A − 4))))^(1/3)) / √(2/(9A)), "
+                   "x = (b₂ − E(b₂)) / √Var(b₂), E(b₂) = 3(n − 1)/(n + 1), Var(b₂) = 24n(n − 2)(n − 3) / ((n + 1)²(n + 3)(n + 5)), "
+                   "√β₁ = 6(n² − 5n + 2) / ((n + 7)(n + 9))·√(6(n + 3)(n + 5) / (n(n − 2)(n − 3))), "
+                   "A = 6 + 8/√β₁·(2/√β₁ + √(1 + 4/β₁))")
     df = 2.0
     p_value, critical_high = dist.chi2_sf(statistic, df), dist.chi2_isf(alpha, df)
     shape = f"(skewness({value}), kurtosis({value}))"
@@ -2057,6 +2097,7 @@ def _normality(source, p: dict[str, Any], out: Rows, engine_name: str) -> None:
     _write_numbers(out, (
         ("alpha", alpha), ("conf_level", 1.0 - alpha), ("n", n), ("n_missing", cm.rows - n), ("mean", mean),
         ("m2", m2), ("m3", m3), ("m4", m4), ("skewness", g1), ("kurtosis", b2), ("excess_kurtosis", b2 - 3.0),
+        *((k, steps[k]) for k in _DAGOSTINO_STEPS if k not in ("z_skewness", "z_kurtosis")),
         ("z_skewness", z_skew), ("z_kurtosis", z_kurt), ("statistic", statistic), ("df", df), ("critical_high", critical_high),
         ("p_value", p_value),
     ))
@@ -2069,10 +2110,24 @@ def _normality(source, p: dict[str, Any], out: Rows, engine_name: str) -> None:
         _write_positive_curve(out, lambda v: dist.chi2_pdf(v, df), lambda q: dist.chi2_isf(q, df), statistic, None, critical_high)
 
 
-def _dagostino_z(n: int, g1: float, b2: float) -> tuple[float, float]:
+# the intermediate numbers of D'Agostino's K², in the order the formula computes them: those of
+# the skewness test (Y, β₂ of √b₁, W², δ, α), its z; those of the kurtosis test (E(b₂), Var(b₂),
+# x, √β₁ of b₂, A), its z. Each is a row of the test: the report has them all.
+_DAGOSTINO_STEPS = ("dag_y", "dag_beta2", "dag_w2", "dag_delta", "dag_alpha", "z_skewness",
+                    "dag_mean_b2", "dag_var_b2", "dag_x", "dag_sqrt_beta1", "dag_a", "z_kurtosis")
+
+
+def _dagostino_steps(n: int, g1: float, b2: float) -> dict[str, float]:
+    """D'Agostino's skewness test and Anscombe and Glynn's kurtosis test, every number on the
+    way (`_DAGOSTINO_STEPS`)."""
+    z_skew, z_kurt, steps = _dagostino_z(n, g1, b2, with_steps=True)
+    return {**steps, "z_skewness": z_skew, "z_kurtosis": z_kurt}
+
+
+def _dagostino_z(n: int, g1: float, b2: float, with_steps: bool = False):
     """The z of D'Agostino's skewness test and of Anscombe and Glynn's kurtosis test (as SciPy's
     `skewtest` and `kurtosistest`; the skewness one by asinh, its same formula without the
-    cancellation of a logarithm of numbers near 1)."""
+    cancellation of a logarithm of numbers near 1); `with_steps`: the numbers on the way too."""
     y = g1 * math.sqrt((n + 1) * (n + 3) / (6.0 * (n - 2)))
     beta2 = 3.0 * (n * n + 27 * n - 70) * (n + 1) * (n + 3) / ((n - 2.0) * (n + 5) * (n + 7) * (n + 9))
     w2 = -1.0 + math.sqrt(2.0 * (beta2 - 1.0))
@@ -2088,6 +2143,9 @@ def _dagostino_z(n: int, g1: float, b2: float) -> tuple[float, float]:
     denom = 1.0 + x * math.sqrt(2.0 / (a - 4.0))
     term2 = math.copysign(abs((1.0 - 2.0 / a) / denom) ** (1.0 / 3.0), denom) if denom else math.inf
     z_kurt = (term1 - term2) / math.sqrt(2.0 / (9.0 * a))
+    if with_steps:
+        return z_skew, z_kurt, {"dag_y": y, "dag_beta2": beta2, "dag_w2": w2, "dag_delta": delta, "dag_alpha": alpha_,
+                                "dag_mean_b2": e, "dag_var_b2": var_b2, "dag_x": x, "dag_sqrt_beta1": beta1, "dag_a": a}
     return z_skew, z_kurt
 
 

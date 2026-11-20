@@ -331,9 +331,15 @@ class PolarsStatSource:
              .with_columns(c1.cum_sum().alias("__stat_k1__"), c2.cum_sum().alias("__stat_k2__"), c1.sum().alias("__stat_m1__"),
                            c2.sum().alias("__stat_m2__")))
         k1, k2, m1, m2 = (pl.col(f"__stat_{n}__") for n in ("k1", "k2", "m1", "m2"))
-        row = f.select(m1.max(), m2.max(), (k1 * m2 - k2 * m1).max().alias("__stat_dp__"), (k2 * m1 - k1 * m2).max().alias("__stat_dm__"),
-                       ((c1 + c2) > 1).sum().alias("__stat_tied__"),
-                       pl.col("__stat_xv__").min().alias("__stat_lo__"), pl.col("__stat_xv__").max().alias("__stat_hi__")
+        dp, dm, xv = k1 * m2 - k2 * m1, k2 * m1 - k1 * m2, pl.col("__stat_xv__")
+
+        def at(d: pl.Expr, e: pl.Expr, name: str) -> pl.Expr:  # at the smallest value where the distance is the largest
+            return e.filter(d == d.max()).min().alias(name)
+
+        row = f.select(m1.max(), m2.max(), dp.max().alias("__stat_dp__"), dm.max().alias("__stat_dm__"),
+                       ((c1 + c2) > 1).sum().alias("__stat_tied__"), xv.min().alias("__stat_lo__"), xv.max().alias("__stat_hi__"),
+                       at(dp, xv, "__stat_vp__"), at(dp, k1, "__stat_k1p__"), at(dp, k2, "__stat_k2p__"),
+                       at(dm, xv, "__stat_vm__"), at(dm, k1, "__stat_k1m__"), at(dm, k2, "__stat_k2m__"),
                        ).collect(engine="streaming").row(0)
         return ks_of(*row)
 

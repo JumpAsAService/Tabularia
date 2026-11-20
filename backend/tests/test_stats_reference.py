@@ -1021,7 +1021,7 @@ def test_mann_whitney(name, storage, abc):
     check_numbers(by_key, {"n": 7, "rank_sum": 82, "mean_rank": 82 / 7, "min": 6.4, "max": 8.0}, "group|b||")
     t = texts_of(rows)
     assert (t["variant"], t["distribution"], t["h0"], t["h1"], t["significance"]) == (
-        "exact", "exact", "P(v | a > v | b) = 0.5", "P(v | a > v | b) ≠ 0.5", "**")
+        "exact", "mann-whitney(8, 7)", "P(v | a > v | b) = 0.5", "P(v | a > v | b) ≠ 0.5", "**")
     for alternative, exact_p in (("less", 0.0006216006216006216), ("greater", 0.99968919968919967)):
         _, _, by_key = result(name, storage, abc, stat_op("mann_whitney", value="v", group="g", groups=["a", "b"], alternative=alternative))
         check_numbers(by_key, {"p_value": exact_p})
@@ -1145,6 +1145,10 @@ def test_ks_two_sample(name, storage, abc, ranks):
     check_numbers(by_key, {"n": 15, "n_missing": 3, "d": 0.875, "d_plus": 0.875, "d_minus": 0.0, "n_tied": 0, "statistic": 0.875,
                            "lambda": None, "critical_high": None, "p_value": 0.0024864024864024864})
     assert by_key["test|||d_minus"]["value"] == 0.0  # exact: R prints −5.6e-17
+    # where each distance is reached, found by the engine: D+ at 6.2 (F1 = 7/8, F2 = 0), D− = 0 first at 8.0 (both 1)
+    check_numbers(by_key, {"v_plus": 6.2, "f1_plus": 0.875, "v_d": 6.2, "f1_d": 0.875, "v_minus": 8.0, "f1_minus": 1.0, "f2_minus": 1.0})
+    assert by_key["test|||f2_plus"]["value"] == 0.0 and by_key["test|||f2_d"]["value"] == 0.0
+    assert texts_of(rows)["distribution"] == "kolmogorov-smirnov(8, 7)"
     assert texts_of(rows)["variant"] == "exact" and texts_of(rows)["h0"] == "F(v | a) = F(v | b)"
     check_numbers(by_key, {"n": 8, "min": 4.9, "max": 6.7}, "group|a||")
     for alternative, want in (("greater", 0.0012432012432012432), ("less", 1.0)):
@@ -1168,6 +1172,9 @@ def test_ks_two_sample(name, storage, abc, ranks):
     # ties: Kolmogorov's limit whatever the method asked
     _, rows, by_key = result(name, storage, ranks["m"], stat_op("ks_two_sample", value="v", group="g", groups=["a", "b"]))
     check_numbers(by_key, {"statistic": 0.65277777777777779, "p_value": 0.054130917330969225, "n_tied": 6})
+    # with ties too, the point is one where the distance is |F1 − F2| = D
+    assert math.isclose(abs(by_key["test|||f1_d"]["value"] - by_key["test|||f2_d"]["value"]), by_key["test|||d"]["value"])
+    assert by_key["test|||v_d"]["value"] is not None
     _, rows, by_key = result(name, storage, ranks["m"], stat_op("ks_two_sample", value="v", group="g", groups=["a", "b"], alternative="greater"))
     check_numbers(by_key, {"p_value": 0.027065995321502001})
 
@@ -1180,8 +1187,12 @@ def test_normality(name, storage, ranks):
                            "z_skewness": 2.915792861633707, "z_kurtosis": 2.4392350219427814, "statistic": 14.451715504226284,
                            "df": 2, "p_value": 0.0007275282324987928})
     assert texts_of(rows)["variant"] == "dagostino" and texts_of(rows)["distribution"] == "chi-square(2)"
+    # the numbers on the way: SciPy's skewtest and kurtosistest compute the same (n = 24)
+    check_numbers(by_key, {"dag_mean_b2": 3 * 23 / 25, "dag_var_b2": 24 * 24 * 22 * 21 / (25 * 25 * 27 * 29),
+                           "dag_beta2": 3 * (24 * 24 + 27 * 24 - 70) * 25 * 27 / (22 * 29 * 31 * 33)})
     _, rows, by_key = result(name, storage, ranks["nv"], stat_op("normality", value="v", method="jarque_bera"))
-    check_numbers(by_key, {"statistic": 14.508999691631296, "p_value": 0.0007069858928409476, "z_skewness": None, "z_kurtosis": None})
+    check_numbers(by_key, {"statistic": 14.508999691631296, "p_value": 0.0007069858928409476, "z_skewness": None, "z_kurtosis": None,
+                           "dag_y": None, "dag_a": None})
     _, _, by_key = result(name, storage, ranks["m"], stat_op("normality", value="v", method="jarque_bera"))
     assert by_key["test|||n"]["value"] == 23  # the value of the row with no group counts: the test has no group
 

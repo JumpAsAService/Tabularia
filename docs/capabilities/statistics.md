@@ -363,6 +363,20 @@ development sample of the source — the first 100,000 rows»). To test every ro
 source's sample. In a run the node is computed on the run's rows; the report is drawn in the
 editor only.
 
+## Where Tabularia and R differ in the last digits
+
+Every number is checked against R 4.6. Two differences are R's, not Tabularia's:
+
+- **Fisher's odds ratio on a 2 × 2 table.** The conditional estimate and its interval differ
+  from R's `fisher.test` by some 1e-4, relatively. R finds them with `uniroot` at its
+  default tolerance, about 1e-4; Tabularia finds them to the last digit. Asked for a
+  tolerance of 1e-14 (its `uniroot` calls changed to `tol = 1e-14`), R gives exactly
+  Tabularia's numbers: on the table of counts 9, 5 (first row) and 7, 12 (second row) the
+  estimate is 2.97678052390209 and the 95% interval 0.599265965836366 to 16.647372273873344.
+- **The studentized range** (Tukey's HSD, Games–Howell) is computed more precisely than R's
+  `qtukey` and `ptukey` with few degrees of freedom: R's `qtukey(0.999, 3, 2)` gives 42.41,
+  the right value is 60.418. With the usual degrees of freedom the two agree to many digits.
+
 ## What it does not do
 
 - **Only the rows that reach the node.** No sampling on the node, no second table: what

@@ -231,7 +231,10 @@ class RankCorr(NamedTuple):
 class KsDistance(NamedTuple):
     """A9: the values of two groups (`n1`, `n2`), the largest distances between their empirical
     distribution functions as whole numbers — `d_plus` = max(F1 − F2)·n1·n2, `d_minus` =
-    max(F2 − F1)·n1·n2 — the values held by more than one row (`tied`), the extremes."""
+    max(F2 − F1)·n1·n2 — the values held by more than one row (`tied`), the extremes; and
+    where each distance is reached: the smallest value v where it is (`v_plus`, `v_minus`),
+    and the values of each group at or below it there (`k1_plus`, `k2_plus`, …: F1(v) =
+    k1/n1, F2(v) = k2/n2)."""
 
     n1: int
     n2: int
@@ -240,6 +243,12 @@ class KsDistance(NamedTuple):
     tied: int
     min: float | None
     max: float | None
+    v_plus: float | None = None
+    k1_plus: int | None = None
+    k2_plus: int | None = None
+    v_minus: float | None = None
+    k1_minus: int | None = None
+    k2_minus: int | None = None
 
 
 class CentralMoments(NamedTuple):
@@ -831,10 +840,22 @@ class SqlStatSource:
         running = (f"SELECT {xv}, {c1}, {c2}, {i.format(e=_RUNNING.format(e=c1, by=xv))} AS {k1}, "
                    f"{i.format(e=_RUNNING.format(e=c2, by=xv))} AS {k2}, {i.format(e=f'sum({c1}) OVER ()')} AS {m1}, "
                    f"{i.format(e=f'sum({c2}) OVER ()')} AS {m2} FROM ({counted}) AS {self._fresh('f')}")
-        names = [self._fresh(n) for n in ("n1", "n2", "dp", "dm", "tied", "min", "max")]
-        exprs = [f"max({m1})", f"max({m2})", f"max({k1} * {m2} - {k2} * {m1})", f"max({k2} * {m1} - {k1} * {m2})",
-                 f"sum(CASE WHEN {c1} + {c2} > 1 THEN 1 ELSE 0 END)", f"min({xv})", f"max({xv})"]
-        rows = self._rows(f"SELECT {', '.join(f'{e} AS {n}' for e, n in zip(exprs, names))} FROM ({running}) AS {self._fresh('w')}")
+        # each point's two distances, then the largest of each over every point beside them: the
+        # point where a distance is reached is the smallest value whose distance is the largest
+        dp, dm, dpx, dmx = (self._fresh(n) for n in ("dp", "dm", "dpx", "dmx"))
+        both = (f"SELECT {xv}, {c1}, {c2}, {k1}, {k2}, {m1}, {m2}, {k1} * {m2} - {k2} * {m1} AS {dp}, "
+                f"{k2} * {m1} - {k1} * {m2} AS {dm} FROM ({running}) AS {self._fresh('w')}")
+        widest = (f"SELECT {xv}, {c1}, {c2}, {k1}, {k2}, {m1}, {m2}, {dp}, {dm}, max({dp}) OVER () AS {dpx}, "
+                  f"max({dm}) OVER () AS {dmx} FROM ({both}) AS {self._fresh('w2')}")
+
+        def at(top: str, e: str) -> str:
+            return f"min(CASE WHEN {dp if top == dpx else dm} = {top} THEN {e} END)"
+
+        names = [self._fresh(n) for n in ("n1", "n2", "dpm", "dmm", "tied", "min", "max", "vp", "k1p", "k2p", "vm", "k1m", "k2m")]
+        exprs = [f"max({m1})", f"max({m2})", f"max({dp})", f"max({dm})",
+                 f"sum(CASE WHEN {c1} + {c2} > 1 THEN 1 ELSE 0 END)", f"min({xv})", f"max({xv})",
+                 at(dpx, xv), at(dpx, k1), at(dpx, k2), at(dmx, xv), at(dmx, k1), at(dmx, k2)]
+        rows = self._rows(f"SELECT {', '.join(f'{e} AS {n}' for e, n in zip(exprs, names))} FROM ({widest}) AS {self._fresh('w3')}")
         return ks_of(*(rows[0] if rows else [0] * 7))
 
     def central_moments(self, value: str) -> CentralMoments:
@@ -946,8 +967,13 @@ def rank_corr_of(n: Any, sxy: Any, sxx: Any, syy: Any, ties_x: Any, ties_y: Any,
                     number(ties_y) or 0.0, *(number(v) for v in extremes))
 
 
-def ks_of(n1: Any, n2: Any, d_plus: Any, d_minus: Any, tied: Any, lo: Any, hi: Any) -> KsDistance:
-    return KsDistance(int(n1 or 0), int(n2 or 0), int(d_plus or 0), int(d_minus or 0), int(tied or 0), number(lo), number(hi))
+def ks_of(n1: Any, n2: Any, d_plus: Any, d_minus: Any, tied: Any, lo: Any, hi: Any, v_plus: Any = None, k1_plus: Any = None,
+          k2_plus: Any = None, v_minus: Any = None, k1_minus: Any = None, k2_minus: Any = None) -> KsDistance:
+    def whole(v: Any) -> int | None:
+        return None if v is None else int(v)
+
+    return KsDistance(int(n1 or 0), int(n2 or 0), int(d_plus or 0), int(d_minus or 0), int(tied or 0), number(lo), number(hi),
+                      number(v_plus), whole(k1_plus), whole(k2_plus), number(v_minus), whole(k1_minus), whole(k2_minus))
 
 
 def central_moments_of(centre: float, rows: Any, n: Any, finite: Any, mean: Any, m2: Any, m3: Any, m4: Any,

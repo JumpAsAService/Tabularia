@@ -24,7 +24,10 @@
           }
         },
         "kpi": {"statistic": "t statistic", "estimate": "Difference of the means"},
-        "symbols": "1 = «{g1}», 2 = «{g2}». m: mean, s²: variance, n: rows used, of each group (table «Groups»); sp²: pooled variance; mu: the difference under H0; df: degrees of freedom.",
+        "symbols": {
+          "student": "1 = «{g1}», 2 = «{g2}». m: mean, s²: variance, n: rows used, of each group (table «Groups»); sp²: pooled variance; mu: the difference under H0; df: degrees of freedom.",
+          "welch": "1 = «{g1}», 2 = «{g2}». m: mean, s²: variance, n: rows used, of each group (table «Groups»); mu: the difference under H0; df: degrees of freedom."
+        },
         "left_out": "Rows used: {n}. Rows left out: {missing} (no group, or no value in one of the two groups)."
       },
       "t_paired": {
@@ -48,7 +51,10 @@
           "test": {"statistic": "F statistic"}
         },
         "kpi": {"statistic": "F statistic", "effect": "Effect size η²"},
-        "symbols": "k: groups, N: rows used; n, m, s²: rows, mean and variance of each group (table «Groups»); M: grand mean; w = n / s²: a group's weight in Welch's ANOVA; Λ: Welch's correction; df: degrees of freedom.",
+        "symbols": {
+          "one_way": "k: groups, N: rows used; n, m, s²: rows, mean and variance of each group (table «Groups»); M: grand mean; df: degrees of freedom.",
+          "welch": "k: groups, N: rows used; n, m, s²: rows, mean and variance of each group (table «Groups»); w = n / s²: a group's weight in Welch's ANOVA; Λ: Welch's correction; df: degrees of freedom."
+        },
         "left_out": "Rows used: {n}. Rows left out: {missing} (no group, or no number in a group)."
       },
       "var_f": {
@@ -157,7 +163,10 @@
           "table": "Table",
           "nodes": "Steps of the exact count"
         },
-        "symbols": "x = «{x}», y = «{y}». A 2 × 2 table: a, b the first row, c, d the second (table «Observed and expected»); R1: the first row's total; C1, C2: the columns'; X: the first cell under H0 with the same margins. A larger table: T any table with its margins, n_ij its cells, R_i, C_j its totals; N: rows used.",
+        "symbols": {
+          "exact": "x = «{x}», y = «{y}». A 2 × 2 table: a, b the first row, c, d the second (table «Observed and expected»); R1: the first row's total; C1, C2: the columns'; X: the first cell under H0 with the same margins.",
+          "freeman_halton": "x = «{x}», y = «{y}». T any table with its margins, n_ij its cells, R_i, C_j its totals; N: rows used."
+        },
         "left_out": "Rows used: {n}. Rows left out: {missing} (no value in one of the two columns)."
       },
       "mcnemar": {
@@ -171,7 +180,11 @@
           "estimate": "Odds ratio b / c",
           "categories": "Categories"
         },
-        "symbols": "x = «{x}», y = «{y}», two values of the same row; their categories together. b: the rows with x in the first category and y in the second, c: the other way round (2 × 2); n_ij: the rows with x = i and y = j (table «The table of the pairs»); Y: the continuity correction; E = (n_ij + n_ji) / 2 under H0.",
+        "symbols": {
+          "chi_square": "x = «{x}», y = «{y}», two values of the same row; their categories together. b: the rows with x in the first category and y in the second, c: the other way round (table «The table of the pairs»); Y: the continuity correction.",
+          "exact": "x = «{x}», y = «{y}», two values of the same row; their categories together. b: the rows with x in the first category and y in the second, c: the other way round (table «The table of the pairs»). The exact test: b among the b + c discordant pairs, binomial with p = 1/2.",
+          "bowker": "x = «{x}», y = «{y}», two values of the same row; their categories together. n_ij: the rows with x = i and y = j (table «The table of the pairs»); E = (n_ij + n_ji) / 2 under H0; k: categories."
+        },
         "left_out": "Rows used: {n}. Rows left out: {missing} (no value in one of the two columns).",
         "tables": {
           "cells": "The table of the pairs",
@@ -182,12 +195,18 @@
       "cmh": {
         "name": "Cochran–Mantel–Haenszel test",
         "stats": {
+          "stratum": {"row_total": "Rows (R_i)", "col_total": "Rows (C_j)"},
+          "cell": {"index": "Index (k)", "observed": "Observed (n)", "expected": "Expected (m)", "deviation": "n − m"},
+          "covariance": {"v": "V(k, k')"},
           "test": {"statistic": "Chi-square statistic (χ²)", "estimate": "Common odds ratio of Mantel–Haenszel (OR_MH)"}
         },
         "kpi": {"statistic": "Chi-square (χ²)", "estimate": "Common odds ratio", "strata": "Strata"},
-        "symbols": "x = «{x}», y = «{y}», strata of «{strata}». In each stratum (2 × 2): a, b the first row, c, d the second, R1, R2 the rows' totals, C1, C2 the columns', N the stratum's rows (table «Strata»); Y: the continuity correction; z: the normal quantile of the interval.",
+        "symbols": {
+          "two_by_two": "x = «{x}», y = «{y}», strata of «{strata}». In each stratum (2 × 2): a, b the first row, c, d the second, R1, R2 the rows' totals, C1, C2 the columns', N the stratum's rows (table «Strata»); Y: the continuity correction; z: the normal quantile of the interval.",
+          "generalized": "x = «{x}», y = «{y}», strata of «{strata}». R_i, C_j: the totals of row i and of column j of a stratum, N its rows (tables «Rows of each stratum (x)» and «Columns of each stratum (y)»); n, m: the observed and expected counts of a cell over every stratum, k its place in the vector n − m (table «The table over every stratum»); V: the covariance of n − m under H0 (table «Covariance V of n − m»), V^(−1) its inverse; df: degrees of freedom."
+        },
         "left_out": "Rows used: {n}. Rows left out: {missing} (no value in one of the three columns).",
-        "tables": {"strata": "Strata", "terms": "Terms of each stratum", "pooled": "The table over every stratum"},
+        "tables": {"strata": "Strata", "terms": "Terms of each stratum", "pooled": "The table over every stratum", "margins_x": "Rows of each stratum (x)", "margins_y": "Columns of each stratum (y)", "covariance": "Covariance V of n − m"},
         "charts": {"observed": "Counts over every stratum"}
       },
       "g_test": {
@@ -254,7 +273,10 @@
           "test": {"statistic": "Distance of the test (D, D+ or D−)"}
         },
         "kpi": {"statistic": "Statistic D", "lambda": "λ (Kolmogorov)", "n": "Rows used"},
-        "symbols": "1 = «{g1}», 2 = «{g2}». F1, F2: the share of each group's values at or below v (its empirical distribution function); n1, n2: the values of each group (table «Groups»); k: the terms of the series. #(…): how many orders of the values (exact test) give it.",
+        "symbols": {
+          "exact": "1 = «{g1}», 2 = «{g2}». F1, F2: the share of each group's values at or below v (its empirical distribution function); n1, n2: the values of each group (table «Groups»); #(…): how many orders of the values (exact test) give it. v*: the smallest value where a distance is reached, F1(v*) and F2(v*) there (table of the numbers).",
+          "asymptotic": "1 = «{g1}», 2 = «{g2}». F1, F2: the share of each group's values at or below v (its empirical distribution function); n1, n2: the values of each group (table «Groups»); k: the terms of the series. v*: the smallest value where a distance is reached, F1(v*) and F2(v*) there (table of the numbers)."
+        },
         "left_out": "Rows used: {n}. Rows left out: {missing} (no group, or no number in one of the two groups)."
       },
       "normality": {
@@ -264,7 +286,10 @@
           "test": {"statistic": "Statistic (K² or JB)"}
         },
         "kpi": {"statistic": "Statistic", "skewness": "Skewness g₁", "kurtosis": "Kurtosis b₂ (normal: 3)"},
-        "symbols": "The values of «{column}»: n, their mean m (table «Groups»); m₂, m₃, m₄: the means of (v − m)², (v − m)³, (v − m)⁴ (table of the numbers); df: degrees of freedom.",
+        "symbols": {
+          "jarque_bera": "The values of «{column}»: n, their mean m (table «Groups»); m₂, m₃, m₄: the means of (v − m)², (v − m)³, (v − m)⁴ (table of the numbers); df: degrees of freedom.",
+          "dagostino": "The values of «{column}»: n, their mean m (table «Groups»); m₂, m₃, m₄: the means of (v − m)², (v − m)³, (v − m)⁴ (table of the numbers); df: degrees of freedom. The numbers on the way to z₁ (Y, β₂, W², δ, α) and to z₂ (E(b₂), Var(b₂), x, √β₁, A): table of the numbers, in the formula's order."
+        },
         "left_out": "Rows used: {n}. Rows left out: {missing} (no number: NULL or NaN)."
       }
     },
@@ -380,6 +405,15 @@
         "d": "Largest distance |F1 − F2| (D)",
         "d_plus": "Largest distance F1 − F2 (D+)",
         "d_minus": "Largest distance F2 − F1 (D−)",
+        "v_d": "Value where D is reached (v*)",
+        "f1_d": "F1(v*) where D is reached",
+        "f2_d": "F2(v*) where D is reached",
+        "v_plus": "Value where D+ is reached (v*)",
+        "f1_plus": "F1(v*) where D+ is reached",
+        "f2_plus": "F2(v*) where D+ is reached",
+        "v_minus": "Value where D− is reached (v*)",
+        "f1_minus": "F1(v*) where D− is reached",
+        "f2_minus": "F2(v*) where D− is reached",
         "n_tied": "Values held by more than one row",
         "lambda": "λ = D·√(n1·n2 / (n1 + n2))",
         "m2": "Second central moment (m₂)",
@@ -388,6 +422,16 @@
         "skewness": "Skewness (g₁)",
         "kurtosis": "Kurtosis (b₂)",
         "excess_kurtosis": "Excess kurtosis (b₂ − 3)",
+        "dag_y": "Skewness test: Y",
+        "dag_beta2": "Skewness test: β₂ of √b₁",
+        "dag_w2": "Skewness test: W²",
+        "dag_delta": "Skewness test: δ",
+        "dag_alpha": "Skewness test: α",
+        "dag_mean_b2": "Kurtosis test: E(b₂)",
+        "dag_var_b2": "Kurtosis test: Var(b₂)",
+        "dag_x": "Kurtosis test: x",
+        "dag_sqrt_beta1": "Kurtosis test: √β₁ of b₂",
+        "dag_a": "Kurtosis test: A",
         "z_skewness": "z of the skewness (z₁)",
         "z_kurtosis": "z of the kurtosis (z₂)"
       },
@@ -515,6 +559,8 @@
       "residuals": "Adjusted residuals (row: x, column: y)",
       "too_many_cells": "{chart}: the table has {n} cells, and the chart is drawn up to {most}. The tables above hold every number.",
       "too_many_rows": "{chart}: x has {n} categories, and the chart is drawn up to {most}. The tables above hold every number.",
+      "too_many_groups": "{chart}: there are {n} groups, and the chart is drawn up to {most}. The tables above hold every number.",
+      "too_many_pairs": "{chart}: there are {n} pairs, and the chart is drawn up to {most}. The tables above hold every number.",
       "exact_note": "An exact test: its p-value counts every arrangement of the values, and it has no curve to draw."
     },
     "engine": "Computed in the engine: {engine}.",
@@ -581,7 +627,10 @@
           }
         },
         "kpi": {"statistic": "Statistica t", "estimate": "Differenza delle medie"},
-        "symbols": "1 = «{g1}», 2 = «{g2}». m: media, s²: varianza, n: righe usate, di ciascun gruppo (tabella «Gruppi»); sp²: varianza combinata; mu: la differenza sotto H0; df: gradi di libertà.",
+        "symbols": {
+          "student": "1 = «{g1}», 2 = «{g2}». m: media, s²: varianza, n: righe usate, di ciascun gruppo (tabella «Gruppi»); sp²: varianza combinata; mu: la differenza sotto H0; df: gradi di libertà.",
+          "welch": "1 = «{g1}», 2 = «{g2}». m: media, s²: varianza, n: righe usate, di ciascun gruppo (tabella «Gruppi»); mu: la differenza sotto H0; df: gradi di libertà."
+        },
         "left_out": "Righe usate: {n}. Righe escluse: {missing} (senza gruppo, o senza valore in uno dei due gruppi)."
       },
       "t_paired": {
@@ -605,7 +654,10 @@
           "test": {"statistic": "Statistica F"}
         },
         "kpi": {"statistic": "Statistica F", "effect": "Dimensione effetto η²"},
-        "symbols": "k: gruppi, N: righe usate; n, m, s²: righe, media e varianza di ogni gruppo (tabella «Gruppi»); M: media generale; w = n / s²: il peso di un gruppo nell'ANOVA di Welch; Λ: la correzione di Welch; df: gradi di libertà.",
+        "symbols": {
+          "one_way": "k: gruppi, N: righe usate; n, m, s²: righe, media e varianza di ogni gruppo (tabella «Gruppi»); M: media generale; df: gradi di libertà.",
+          "welch": "k: gruppi, N: righe usate; n, m, s²: righe, media e varianza di ogni gruppo (tabella «Gruppi»); w = n / s²: il peso di un gruppo nell'ANOVA di Welch; Λ: la correzione di Welch; df: gradi di libertà."
+        },
         "left_out": "Righe usate: {n}. Righe escluse: {missing} (senza gruppo, o senza numero in un gruppo)."
       },
       "var_f": {
@@ -714,7 +766,10 @@
           "table": "Tabella",
           "nodes": "Passi del conteggio esatto"
         },
-        "symbols": "x = «{x}», y = «{y}». Una tabella 2 × 2: a, b la prima riga, c, d la seconda (tabella «Osservati e attesi»); R1: il totale della prima riga; C1, C2: quelli delle colonne; X: la prima cella sotto H0 con gli stessi margini. Una tabella più grande: T ogni tabella con i suoi margini, n_ij le sue celle, R_i, C_j i suoi totali; N: righe usate.",
+        "symbols": {
+          "exact": "x = «{x}», y = «{y}». Una tabella 2 × 2: a, b la prima riga, c, d la seconda (tabella «Osservati e attesi»); R1: il totale della prima riga; C1, C2: quelli delle colonne; X: la prima cella sotto H0 con gli stessi margini.",
+          "freeman_halton": "x = «{x}», y = «{y}». T ogni tabella con i suoi margini, n_ij le sue celle, R_i, C_j i suoi totali; N: righe usate."
+        },
         "left_out": "Righe usate: {n}. Righe escluse: {missing} (nessun valore in una delle due colonne)."
       },
       "mcnemar": {
@@ -728,7 +783,11 @@
           "estimate": "Odds ratio b / c",
           "categories": "Categorie"
         },
-        "symbols": "x = «{x}», y = «{y}», due valori della stessa riga; le loro categorie insieme. b: le righe con x nella prima categoria e y nella seconda, c: il contrario (2 × 2); n_ij: le righe con x = i e y = j (tabella «La tabella delle coppie»); Y: la correzione di continuità; E = (n_ij + n_ji) / 2 sotto H0.",
+        "symbols": {
+          "chi_square": "x = «{x}», y = «{y}», due valori della stessa riga; le loro categorie insieme. b: le righe con x nella prima categoria e y nella seconda, c: il contrario (tabella «La tabella delle coppie»); Y: la correzione di continuità.",
+          "exact": "x = «{x}», y = «{y}», due valori della stessa riga; le loro categorie insieme. b: le righe con x nella prima categoria e y nella seconda, c: il contrario (tabella «La tabella delle coppie»). Il test esatto: b tra le b + c coppie discordanti, binomiale con p = 1/2.",
+          "bowker": "x = «{x}», y = «{y}», due valori della stessa riga; le loro categorie insieme. n_ij: le righe con x = i e y = j (tabella «La tabella delle coppie»); E = (n_ij + n_ji) / 2 sotto H0; k: categorie."
+        },
         "left_out": "Righe usate: {n}. Righe escluse: {missing} (nessun valore in una delle due colonne).",
         "tables": {
           "cells": "La tabella delle coppie",
@@ -739,12 +798,18 @@
       "cmh": {
         "name": "Test di Cochran–Mantel–Haenszel",
         "stats": {
+          "stratum": {"row_total": "Righe (R_i)", "col_total": "Righe (C_j)"},
+          "cell": {"index": "Indice (k)", "observed": "Osservati (n)", "expected": "Attesi (m)", "deviation": "n − m"},
+          "covariance": {"v": "V(k, k')"},
           "test": {"statistic": "Statistica chi quadrato (χ²)", "estimate": "Odds ratio comune di Mantel–Haenszel (OR_MH)"}
         },
         "kpi": {"statistic": "Chi quadrato (χ²)", "estimate": "Odds ratio comune", "strata": "Strati"},
-        "symbols": "x = «{x}», y = «{y}», strati di «{strata}». In ogni strato (2 × 2): a, b la prima riga, c, d la seconda, R1, R2 i totali delle righe, C1, C2 quelli delle colonne, N le righe dello strato (tabella «Strati»); Y: la correzione di continuità; z: il quantile normale dell'intervallo.",
+        "symbols": {
+          "two_by_two": "x = «{x}», y = «{y}», strati di «{strata}». In ogni strato (2 × 2): a, b la prima riga, c, d la seconda, R1, R2 i totali delle righe, C1, C2 quelli delle colonne, N le righe dello strato (tabella «Strati»); Y: la correzione di continuità; z: il quantile normale dell'intervallo.",
+          "generalized": "x = «{x}», y = «{y}», strati di «{strata}». R_i, C_j: i totali della riga i e della colonna j di uno strato, N le sue righe (tabelle «Righe di ogni strato (x)» e «Colonne di ogni strato (y)»); n, m: i conteggi osservati e attesi di una cella su tutti gli strati, k il suo posto nel vettore n − m (tabella «La tabella su tutti gli strati»); V: la covarianza di n − m sotto H0 (tabella «Covarianza V di n − m»), V^(−1) la sua inversa; df: gradi di libertà."
+        },
         "left_out": "Righe usate: {n}. Righe escluse: {missing} (nessun valore in una delle tre colonne).",
-        "tables": {"strata": "Strati", "terms": "Termini di ogni strato", "pooled": "La tabella su tutti gli strati"},
+        "tables": {"strata": "Strati", "terms": "Termini di ogni strato", "pooled": "La tabella su tutti gli strati", "margins_x": "Righe di ogni strato (x)", "margins_y": "Colonne di ogni strato (y)", "covariance": "Covarianza V di n − m"},
         "charts": {"observed": "Conteggi su tutti gli strati"}
       },
       "g_test": {
@@ -811,7 +876,10 @@
           "test": {"statistic": "Distanza del test (D, D+ o D−)"}
         },
         "kpi": {"statistic": "Statistica D", "lambda": "λ (Kolmogorov)", "n": "Righe usate"},
-        "symbols": "1 = «{g1}», 2 = «{g2}». F1, F2: la quota dei valori di ciascun gruppo fino a v compreso (la funzione di distribuzione empirica); n1, n2: i valori di ciascun gruppo (tabella «Gruppi»); k: i termini della serie. #(…): quante disposizioni dei valori (test esatto) lo danno.",
+        "symbols": {
+          "exact": "1 = «{g1}», 2 = «{g2}». F1, F2: la quota dei valori di ciascun gruppo fino a v compreso (la funzione di distribuzione empirica); n1, n2: i valori di ciascun gruppo (tabella «Gruppi»); #(…): quante disposizioni dei valori (test esatto) lo danno. v*: il valore più piccolo in cui si raggiunge una distanza, con F1(v*) e F2(v*) (tabella dei numeri).",
+          "asymptotic": "1 = «{g1}», 2 = «{g2}». F1, F2: la quota dei valori di ciascun gruppo fino a v compreso (la funzione di distribuzione empirica); n1, n2: i valori di ciascun gruppo (tabella «Gruppi»); k: i termini della serie. v*: il valore più piccolo in cui si raggiunge una distanza, con F1(v*) e F2(v*) (tabella dei numeri)."
+        },
         "left_out": "Righe usate: {n}. Righe escluse: {missing} (senza gruppo, o senza numero in uno dei due gruppi)."
       },
       "normality": {
@@ -824,7 +892,10 @@
           "test": {"statistic": "Statistica (K² o JB)"}
         },
         "kpi": {"statistic": "Statistica", "skewness": "Asimmetria g₁", "kurtosis": "Curtosi b₂ (normale: 3)"},
-        "symbols": "I valori di «{column}»: n, la loro media m (tabella «Gruppi»); m₂, m₃, m₄: le medie di (v − m)², (v − m)³, (v − m)⁴ (tabella dei numeri); df: gradi di libertà.",
+        "symbols": {
+          "jarque_bera": "I valori di «{column}»: n, la loro media m (tabella «Gruppi»); m₂, m₃, m₄: le medie di (v − m)², (v − m)³, (v − m)⁴ (tabella dei numeri); df: gradi di libertà.",
+          "dagostino": "I valori di «{column}»: n, la loro media m (tabella «Gruppi»); m₂, m₃, m₄: le medie di (v − m)², (v − m)³, (v − m)⁴ (tabella dei numeri); df: gradi di libertà. I numeri intermedi di z₁ (Y, β₂, W², δ, α) e di z₂ (E(b₂), Var(b₂), x, √β₁, A): tabella dei numeri, nell'ordine della formula."
+        },
         "left_out": "Righe usate: {n}. Righe escluse: {missing} (senza numero: NULL o NaN)."
       }
     },
@@ -940,6 +1011,15 @@
         "d": "Distanza massima |F1 − F2| (D)",
         "d_plus": "Distanza massima F1 − F2 (D+)",
         "d_minus": "Distanza massima F2 − F1 (D−)",
+        "v_d": "Valore dove si raggiunge D (v*)",
+        "f1_d": "F1(v*) dove si raggiunge D",
+        "f2_d": "F2(v*) dove si raggiunge D",
+        "v_plus": "Valore dove si raggiunge D+ (v*)",
+        "f1_plus": "F1(v*) dove si raggiunge D+",
+        "f2_plus": "F2(v*) dove si raggiunge D+",
+        "v_minus": "Valore dove si raggiunge D− (v*)",
+        "f1_minus": "F1(v*) dove si raggiunge D−",
+        "f2_minus": "F2(v*) dove si raggiunge D−",
         "n_tied": "Valori presenti in più di una riga",
         "lambda": "λ = D·√(n1·n2 / (n1 + n2))",
         "m2": "Secondo momento centrale (m₂)",
@@ -948,6 +1028,16 @@
         "skewness": "Asimmetria (g₁)",
         "kurtosis": "Curtosi (b₂)",
         "excess_kurtosis": "Eccesso di curtosi (b₂ − 3)",
+        "dag_y": "Test dell'asimmetria: Y",
+        "dag_beta2": "Test dell'asimmetria: β₂ di √b₁",
+        "dag_w2": "Test dell'asimmetria: W²",
+        "dag_delta": "Test dell'asimmetria: δ",
+        "dag_alpha": "Test dell'asimmetria: α",
+        "dag_mean_b2": "Test della curtosi: E(b₂)",
+        "dag_var_b2": "Test della curtosi: Var(b₂)",
+        "dag_x": "Test della curtosi: x",
+        "dag_sqrt_beta1": "Test della curtosi: √β₁ di b₂",
+        "dag_a": "Test della curtosi: A",
         "z_skewness": "z dell'asimmetria (z₁)",
         "z_kurtosis": "z della curtosi (z₂)"
       },
@@ -1075,6 +1165,8 @@
       "residuals": "Residui corretti (riga: x, colonna: y)",
       "too_many_cells": "{chart}: la tabella ha {n} celle, e il grafico si disegna fino a {most}. Le tabelle qui sopra hanno ogni numero.",
       "too_many_rows": "{chart}: x ha {n} categorie, e il grafico si disegna fino a {most}. Le tabelle qui sopra hanno ogni numero.",
+      "too_many_groups": "{chart}: ci sono {n} gruppi, e il grafico si disegna fino a {most}. Le tabelle qui sopra hanno ogni numero.",
+      "too_many_pairs": "{chart}: ci sono {n} coppie, e il grafico si disegna fino a {most}. Le tabelle qui sopra hanno ogni numero.",
       "exact_note": "Un test esatto: il p-value conta ogni disposizione dei valori, e non ha una curva da disegnare."
     },
     "engine": "Calcolato nel motore: {engine}.",
@@ -1145,7 +1237,10 @@
           }
         },
         "kpi": {"statistic": "t-Statistik", "estimate": "Differenz der Mittelwerte"},
-        "symbols": "1 = «{g1}», 2 = «{g2}». m: Mittelwert, s²: Varianz, n: verwendete Zeilen, je Gruppe (Tabelle «Gruppen»); sp²: gepoolte Varianz; mu: die Differenz unter H0; df: Freiheitsgrade.",
+        "symbols": {
+          "student": "1 = «{g1}», 2 = «{g2}». m: Mittelwert, s²: Varianz, n: verwendete Zeilen, je Gruppe (Tabelle «Gruppen»); sp²: gepoolte Varianz; mu: die Differenz unter H0; df: Freiheitsgrade.",
+          "welch": "1 = «{g1}», 2 = «{g2}». m: Mittelwert, s²: Varianz, n: verwendete Zeilen, je Gruppe (Tabelle «Gruppen»); mu: die Differenz unter H0; df: Freiheitsgrade."
+        },
         "left_out": "Verwendete Zeilen: {n}. Ausgelassene Zeilen: {missing} (ohne Gruppe oder ohne Wert in einer der beiden Gruppen)."
       },
       "t_paired": {
@@ -1169,7 +1264,10 @@
           "test": {"statistic": "F-Statistik"}
         },
         "kpi": {"statistic": "F-Statistik", "effect": "Effektstärke η²"},
-        "symbols": "k: Gruppen, N: verwendete Zeilen; n, m, s²: Zeilen, Mittelwert und Varianz jeder Gruppe (Tabelle «Gruppen»); M: Gesamtmittelwert; w = n / s²: das Gewicht einer Gruppe in der Welch-ANOVA; Λ: die Welch-Korrektur; df: Freiheitsgrade.",
+        "symbols": {
+          "one_way": "k: Gruppen, N: verwendete Zeilen; n, m, s²: Zeilen, Mittelwert und Varianz jeder Gruppe (Tabelle «Gruppen»); M: Gesamtmittelwert; df: Freiheitsgrade.",
+          "welch": "k: Gruppen, N: verwendete Zeilen; n, m, s²: Zeilen, Mittelwert und Varianz jeder Gruppe (Tabelle «Gruppen»); w = n / s²: das Gewicht einer Gruppe in der Welch-ANOVA; Λ: die Welch-Korrektur; df: Freiheitsgrade."
+        },
         "left_out": "Verwendete Zeilen: {n}. Ausgelassene Zeilen: {missing} (ohne Gruppe oder ohne Zahl in einer Gruppe)."
       },
       "var_f": {
@@ -1278,7 +1376,10 @@
           "table": "Tabelle",
           "nodes": "Schritte der exakten Zählung"
         },
-        "symbols": "x = «{x}», y = «{y}». Eine 2 × 2-Tabelle: a, b die erste Zeile, c, d die zweite (Tabelle «Beobachtet und erwartet»); R1: die Summe der ersten Zeile; C1, C2: die der Spalten; X: die erste Zelle unter H0 mit denselben Rändern. Eine größere Tabelle: T jede Tabelle mit ihren Rändern, n_ij ihre Zellen, R_i, C_j ihre Summen; N: verwendete Zeilen.",
+        "symbols": {
+          "exact": "x = «{x}», y = «{y}». Eine 2 × 2-Tabelle: a, b die erste Zeile, c, d die zweite (Tabelle «Beobachtet und erwartet»); R1: die Summe der ersten Zeile; C1, C2: die der Spalten; X: die erste Zelle unter H0 mit denselben Rändern.",
+          "freeman_halton": "x = «{x}», y = «{y}». T jede Tabelle mit ihren Rändern, n_ij ihre Zellen, R_i, C_j ihre Summen; N: verwendete Zeilen."
+        },
         "left_out": "Verwendete Zeilen: {n}. Ausgelassene Zeilen: {missing} (kein Wert in einer der beiden Spalten)."
       },
       "mcnemar": {
@@ -1292,7 +1393,11 @@
           "estimate": "Odds Ratio b / c",
           "categories": "Kategorien"
         },
-        "symbols": "x = «{x}», y = «{y}», zwei Werte derselben Zeile; ihre Kategorien zusammen. b: die Zeilen mit x in der ersten und y in der zweiten Kategorie, c: umgekehrt (2 × 2); n_ij: die Zeilen mit x = i und y = j (Tabelle «Die Tabelle der Paare»); Y: die Stetigkeitskorrektur; E = (n_ij + n_ji) / 2 unter H0.",
+        "symbols": {
+          "chi_square": "x = «{x}», y = «{y}», zwei Werte derselben Zeile; ihre Kategorien zusammen. b: die Zeilen mit x in der ersten und y in der zweiten Kategorie, c: umgekehrt (Tabelle «Die Tabelle der Paare»); Y: die Stetigkeitskorrektur.",
+          "exact": "x = «{x}», y = «{y}», zwei Werte derselben Zeile; ihre Kategorien zusammen. b: die Zeilen mit x in der ersten und y in der zweiten Kategorie, c: umgekehrt (Tabelle «Die Tabelle der Paare»). Der exakte Test: b unter den b + c diskordanten Paaren, binomial mit p = 1/2.",
+          "bowker": "x = «{x}», y = «{y}», zwei Werte derselben Zeile; ihre Kategorien zusammen. n_ij: die Zeilen mit x = i und y = j (Tabelle «Die Tabelle der Paare»); E = (n_ij + n_ji) / 2 unter H0; k: Kategorien."
+        },
         "left_out": "Verwendete Zeilen: {n}. Ausgelassene Zeilen: {missing} (kein Wert in einer der beiden Spalten).",
         "tables": {
           "cells": "Die Tabelle der Paare",
@@ -1303,15 +1408,21 @@
       "cmh": {
         "name": "Cochran-Mantel-Haenszel-Test",
         "stats": {
+          "stratum": {"row_total": "Zeilen (R_i)", "col_total": "Zeilen (C_j)"},
+          "cell": {"index": "Index (k)", "observed": "Beobachtet (n)", "expected": "Erwartet (m)", "deviation": "n − m"},
+          "covariance": {"v": "V(k, k')"},
           "test": {
             "statistic": "Chi-Quadrat-Statistik (χ²)",
             "estimate": "Gemeinsames Odds Ratio nach Mantel-Haenszel (OR_MH)"
           }
         },
         "kpi": {"statistic": "Chi-Quadrat (χ²)", "estimate": "Gemeinsames Odds Ratio", "strata": "Schichten"},
-        "symbols": "x = «{x}», y = «{y}», Schichten von «{strata}». In jeder Schicht (2 × 2): a, b die erste Zeile, c, d die zweite, R1, R2 die Zeilensummen, C1, C2 die Spaltensummen, N die Zeilen der Schicht (Tabelle «Schichten»); Y: die Stetigkeitskorrektur; z: das Normalquantil des Intervalls.",
+        "symbols": {
+          "two_by_two": "x = «{x}», y = «{y}», Schichten von «{strata}». In jeder Schicht (2 × 2): a, b die erste Zeile, c, d die zweite, R1, R2 die Zeilensummen, C1, C2 die Spaltensummen, N die Zeilen der Schicht (Tabelle «Schichten»); Y: die Stetigkeitskorrektur; z: das Normalquantil des Intervalls.",
+          "generalized": "x = «{x}», y = «{y}», Schichten von «{strata}». R_i, C_j: die Summen der Zeile i und der Spalte j einer Schicht, N ihre Zeilen (Tabellen «Zeilen jeder Schicht (x)» und «Spalten jeder Schicht (y)»); n, m: die beobachteten und erwarteten Häufigkeiten einer Zelle über alle Schichten, k ihr Platz im Vektor n − m (Tabelle «Die Tabelle über alle Schichten»); V: die Kovarianz von n − m unter H0 (Tabelle «Kovarianz V von n − m»), V^(−1) ihre Inverse; df: Freiheitsgrade."
+        },
         "left_out": "Verwendete Zeilen: {n}. Ausgelassene Zeilen: {missing} (kein Wert in einer der drei Spalten).",
-        "tables": {"strata": "Schichten", "terms": "Summanden jeder Schicht", "pooled": "Die Tabelle über alle Schichten"},
+        "tables": {"strata": "Schichten", "terms": "Summanden jeder Schicht", "pooled": "Die Tabelle über alle Schichten", "margins_x": "Zeilen jeder Schicht (x)", "margins_y": "Spalten jeder Schicht (y)", "covariance": "Kovarianz V von n − m"},
         "charts": {"observed": "Häufigkeiten über alle Schichten"}
       },
       "g_test": {
@@ -1378,7 +1489,10 @@
           "test": {"statistic": "Abstand des Tests (D, D+ oder D−)"}
         },
         "kpi": {"statistic": "Statistik D", "lambda": "λ (Kolmogorov)", "n": "Verwendete Zeilen"},
-        "symbols": "1 = «{g1}», 2 = «{g2}». F1, F2: der Anteil der Werte jeder Gruppe bis einschließlich v (ihre empirische Verteilungsfunktion); n1, n2: die Werte jeder Gruppe (Tabelle «Gruppen»); k: die Glieder der Reihe. #(…): wie viele Anordnungen der Werte (exakter Test) es ergeben.",
+        "symbols": {
+          "exact": "1 = «{g1}», 2 = «{g2}». F1, F2: der Anteil der Werte jeder Gruppe bis einschließlich v (ihre empirische Verteilungsfunktion); n1, n2: die Werte jeder Gruppe (Tabelle «Gruppen»); #(…): wie viele Anordnungen der Werte (exakter Test) es ergeben. v*: der kleinste Wert, an dem ein Abstand erreicht wird, mit F1(v*) und F2(v*) (Tabelle der Zahlen).",
+          "asymptotic": "1 = «{g1}», 2 = «{g2}». F1, F2: der Anteil der Werte jeder Gruppe bis einschließlich v (ihre empirische Verteilungsfunktion); n1, n2: die Werte jeder Gruppe (Tabelle «Gruppen»); k: die Glieder der Reihe. v*: der kleinste Wert, an dem ein Abstand erreicht wird, mit F1(v*) und F2(v*) (Tabelle der Zahlen)."
+        },
         "left_out": "Verwendete Zeilen: {n}. Ausgelassene Zeilen: {missing} (ohne Gruppe oder ohne Zahl in einer der beiden Gruppen)."
       },
       "normality": {
@@ -1391,7 +1505,10 @@
           "test": {"statistic": "Statistik (K² oder JB)"}
         },
         "kpi": {"statistic": "Statistik", "skewness": "Schiefe g₁", "kurtosis": "Kurtosis b₂ (normal: 3)"},
-        "symbols": "Die Werte von «{column}»: n, ihr Mittelwert m (Tabelle «Gruppen»); m₂, m₃, m₄: die Mittelwerte von (v − m)², (v − m)³, (v − m)⁴ (Tabelle der Zahlen); df: Freiheitsgrade.",
+        "symbols": {
+          "jarque_bera": "Die Werte von «{column}»: n, ihr Mittelwert m (Tabelle «Gruppen»); m₂, m₃, m₄: die Mittelwerte von (v − m)², (v − m)³, (v − m)⁴ (Tabelle der Zahlen); df: Freiheitsgrade.",
+          "dagostino": "Die Werte von «{column}»: n, ihr Mittelwert m (Tabelle «Gruppen»); m₂, m₃, m₄: die Mittelwerte von (v − m)², (v − m)³, (v − m)⁴ (Tabelle der Zahlen); df: Freiheitsgrade. Die Zwischenwerte von z₁ (Y, β₂, W², δ, α) und von z₂ (E(b₂), Var(b₂), x, √β₁, A): Tabelle der Zahlen, in der Reihenfolge der Formel."
+        },
         "left_out": "Verwendete Zeilen: {n}. Ausgelassene Zeilen: {missing} (keine Zahl: NULL oder NaN)."
       }
     },
@@ -1507,6 +1624,15 @@
         "d": "Größter Abstand |F1 − F2| (D)",
         "d_plus": "Größter Abstand F1 − F2 (D+)",
         "d_minus": "Größter Abstand F2 − F1 (D−)",
+        "v_d": "Wert, an dem D erreicht wird (v*)",
+        "f1_d": "F1(v*), wo D erreicht wird",
+        "f2_d": "F2(v*), wo D erreicht wird",
+        "v_plus": "Wert, an dem D+ erreicht wird (v*)",
+        "f1_plus": "F1(v*), wo D+ erreicht wird",
+        "f2_plus": "F2(v*), wo D+ erreicht wird",
+        "v_minus": "Wert, an dem D− erreicht wird (v*)",
+        "f1_minus": "F1(v*), wo D− erreicht wird",
+        "f2_minus": "F2(v*), wo D− erreicht wird",
         "n_tied": "Werte in mehr als einer Zeile",
         "lambda": "λ = D·√(n1·n2 / (n1 + n2))",
         "m2": "Zweites zentrales Moment (m₂)",
@@ -1515,6 +1641,16 @@
         "skewness": "Schiefe (g₁)",
         "kurtosis": "Kurtosis (b₂)",
         "excess_kurtosis": "Exzess (b₂ − 3)",
+        "dag_y": "Schiefetest: Y",
+        "dag_beta2": "Schiefetest: β₂ von √b₁",
+        "dag_w2": "Schiefetest: W²",
+        "dag_delta": "Schiefetest: δ",
+        "dag_alpha": "Schiefetest: α",
+        "dag_mean_b2": "Kurtosistest: E(b₂)",
+        "dag_var_b2": "Kurtosistest: Var(b₂)",
+        "dag_x": "Kurtosistest: x",
+        "dag_sqrt_beta1": "Kurtosistest: √β₁ von b₂",
+        "dag_a": "Kurtosistest: A",
         "z_skewness": "z der Schiefe (z₁)",
         "z_kurtosis": "z der Kurtosis (z₂)"
       },
@@ -1642,6 +1778,8 @@
       "residuals": "Korrigierte Residuen (Zeile: x, Spalte: y)",
       "too_many_cells": "{chart}: Die Tabelle hat {n} Zellen, das Diagramm wird bis {most} gezeichnet. Die Tabellen oben enthalten jede Zahl.",
       "too_many_rows": "{chart}: x hat {n} Kategorien, das Diagramm wird bis {most} gezeichnet. Die Tabellen oben enthalten jede Zahl.",
+      "too_many_groups": "{chart}: Es gibt {n} Gruppen, das Diagramm wird bis {most} gezeichnet. Die Tabellen oben enthalten jede Zahl.",
+      "too_many_pairs": "{chart}: Es gibt {n} Paare, das Diagramm wird bis {most} gezeichnet. Die Tabellen oben enthalten jede Zahl.",
       "exact_note": "Ein exakter Test: sein p-Wert zählt jede Anordnung der Werte, und er hat keine Kurve zu zeichnen."
     },
     "engine": "Berechnet in der Engine: {engine}.",
@@ -1712,7 +1850,10 @@
           }
         },
         "kpi": {"statistic": "Estadístico t", "estimate": "Diferencia de las medias"},
-        "symbols": "1 = «{g1}», 2 = «{g2}». m: media, s²: varianza, n: filas usadas, de cada grupo (tabla «Grupos»); sp²: varianza combinada; mu: la diferencia bajo H0; df: grados de libertad.",
+        "symbols": {
+          "student": "1 = «{g1}», 2 = «{g2}». m: media, s²: varianza, n: filas usadas, de cada grupo (tabla «Grupos»); sp²: varianza combinada; mu: la diferencia bajo H0; df: grados de libertad.",
+          "welch": "1 = «{g1}», 2 = «{g2}». m: media, s²: varianza, n: filas usadas, de cada grupo (tabla «Grupos»); mu: la diferencia bajo H0; df: grados de libertad."
+        },
         "left_out": "Filas usadas: {n}. Filas excluidas: {missing} (sin grupo, o sin valor en uno de los dos grupos)."
       },
       "t_paired": {
@@ -1736,7 +1877,10 @@
           "test": {"statistic": "Estadístico F"}
         },
         "kpi": {"statistic": "Estadístico F", "effect": "Tamaño del efecto η²"},
-        "symbols": "k: grupos, N: filas usadas; n, m, s²: filas, media y varianza de cada grupo (tabla «Grupos»); M: media general; w = n / s²: el peso de un grupo en la ANOVA de Welch; Λ: la corrección de Welch; gl: grados de libertad.",
+        "symbols": {
+          "one_way": "k: grupos, N: filas usadas; n, m, s²: filas, media y varianza de cada grupo (tabla «Grupos»); M: media general; gl: grados de libertad.",
+          "welch": "k: grupos, N: filas usadas; n, m, s²: filas, media y varianza de cada grupo (tabla «Grupos»); w = n / s²: el peso de un grupo en la ANOVA de Welch; Λ: la corrección de Welch; gl: grados de libertad."
+        },
         "left_out": "Filas usadas: {n}. Filas excluidas: {missing} (sin grupo, o sin número en un grupo)."
       },
       "var_f": {
@@ -1849,7 +1993,10 @@
           "table": "Tabla",
           "nodes": "Pasos del recuento exacto"
         },
-        "symbols": "x = «{x}», y = «{y}». Una tabla 2 × 2: a, b la primera fila, c, d la segunda (tabla «Observados y esperados»); R1: el total de la primera fila; C1, C2: los de las columnas; X: la primera celda bajo H0 con los mismos márgenes. Una tabla mayor: T cada tabla con sus márgenes, n_ij sus celdas, R_i, C_j sus totales; N: filas usadas.",
+        "symbols": {
+          "exact": "x = «{x}», y = «{y}». Una tabla 2 × 2: a, b la primera fila, c, d la segunda (tabla «Observados y esperados»); R1: el total de la primera fila; C1, C2: los de las columnas; X: la primera celda bajo H0 con los mismos márgenes.",
+          "freeman_halton": "x = «{x}», y = «{y}». T cada tabla con sus márgenes, n_ij sus celdas, R_i, C_j sus totales; N: filas usadas."
+        },
         "left_out": "Filas usadas: {n}. Filas excluidas: {missing} (sin valor en una de las dos columnas)."
       },
       "mcnemar": {
@@ -1866,7 +2013,11 @@
           "estimate": "Odds ratio b / c",
           "categories": "Categorías"
         },
-        "symbols": "x = «{x}», y = «{y}», dos valores de la misma fila; sus categorías juntas. b: las filas con x en la primera categoría e y en la segunda, c: al revés (2 × 2); n_ij: las filas con x = i e y = j (tabla «La tabla de los pares»); Y: la corrección de continuidad; E = (n_ij + n_ji) / 2 bajo H0.",
+        "symbols": {
+          "chi_square": "x = «{x}», y = «{y}», dos valores de la misma fila; sus categorías juntas. b: las filas con x en la primera categoría e y en la segunda, c: al revés (tabla «La tabla de los pares»); Y: la corrección de continuidad.",
+          "exact": "x = «{x}», y = «{y}», dos valores de la misma fila; sus categorías juntas. b: las filas con x en la primera categoría e y en la segunda, c: al revés (tabla «La tabla de los pares»). La prueba exacta: b entre los b + c pares discordantes, binomial con p = 1/2.",
+          "bowker": "x = «{x}», y = «{y}», dos valores de la misma fila; sus categorías juntas. n_ij: las filas con x = i e y = j (tabla «La tabla de los pares»); E = (n_ij + n_ji) / 2 bajo H0; k: categorías."
+        },
         "left_out": "Filas usadas: {n}. Filas excluidas: {missing} (sin valor en una de las dos columnas).",
         "tables": {
           "cells": "La tabla de los pares",
@@ -1877,15 +2028,21 @@
       "cmh": {
         "name": "Prueba de Cochran–Mantel–Haenszel",
         "stats": {
+          "stratum": {"row_total": "Filas (R_i)", "col_total": "Filas (C_j)"},
+          "cell": {"index": "Índice (k)", "observed": "Observados (n)", "expected": "Esperados (m)", "deviation": "n − m"},
+          "covariance": {"v": "V(k, k')"},
           "test": {"statistic": "Estadístico chi cuadrado (χ²)", "estimate": "Odds ratio común de Mantel–Haenszel (OR_MH)"}
         },
         "kpi": {"statistic": "Chi cuadrado (χ²)", "estimate": "Odds ratio común", "strata": "Estratos"},
-        "symbols": "x = «{x}», y = «{y}», estratos de «{strata}». En cada estrato (2 × 2): a, b la primera fila, c, d la segunda, R1, R2 los totales de las filas, C1, C2 los de las columnas, N las filas del estrato (tabla «Estratos»); Y: la corrección de continuidad; z: el cuantil normal del intervalo.",
+        "symbols": {
+          "two_by_two": "x = «{x}», y = «{y}», estratos de «{strata}». En cada estrato (2 × 2): a, b la primera fila, c, d la segunda, R1, R2 los totales de las filas, C1, C2 los de las columnas, N las filas del estrato (tabla «Estratos»); Y: la corrección de continuidad; z: el cuantil normal del intervalo.",
+          "generalized": "x = «{x}», y = «{y}», estratos de «{strata}». R_i, C_j: los totales de la fila i y de la columna j de un estrato, N sus filas (tablas «Filas de cada estrato (x)» y «Columnas de cada estrato (y)»); n, m: los recuentos observados y esperados de una celda sobre todos los estratos, k su lugar en el vector n − m (tabla «La tabla sobre todos los estratos»); V: la covarianza de n − m bajo H0 (tabla «Covarianza V de n − m»), V^(−1) su inversa; gl: grados de libertad."
+        },
         "left_out": "Filas usadas: {n}. Filas excluidas: {missing} (sin valor en una de las tres columnas).",
         "tables": {
           "strata": "Estratos",
           "terms": "Términos de cada estrato",
-          "pooled": "La tabla sobre todos los estratos"
+          "pooled": "La tabla sobre todos los estratos", "margins_x": "Filas de cada estrato (x)", "margins_y": "Columnas de cada estrato (y)", "covariance": "Covarianza V de n − m"
         },
         "charts": {"observed": "Frecuencias sobre todos los estratos"}
       },
@@ -1953,7 +2110,10 @@
           "test": {"statistic": "Distancia de la prueba (D, D+ o D−)"}
         },
         "kpi": {"statistic": "Estadístico D", "lambda": "λ (Kolmogorov)", "n": "Filas usadas"},
-        "symbols": "1 = «{g1}», 2 = «{g2}». F1, F2: la proporción de valores de cada grupo hasta v inclusive (su función de distribución empírica); n1, n2: los valores de cada grupo (tabla «Grupos»); k: los términos de la serie. #(…): cuántas disposiciones de los valores (prueba exacta) lo dan.",
+        "symbols": {
+          "exact": "1 = «{g1}», 2 = «{g2}». F1, F2: la proporción de valores de cada grupo hasta v inclusive (su función de distribución empírica); n1, n2: los valores de cada grupo (tabla «Grupos»); #(…): cuántas disposiciones de los valores (prueba exacta) lo dan. v*: el valor más pequeño donde se alcanza una distancia, con F1(v*) y F2(v*) (tabla de los números).",
+          "asymptotic": "1 = «{g1}», 2 = «{g2}». F1, F2: la proporción de valores de cada grupo hasta v inclusive (su función de distribución empírica); n1, n2: los valores de cada grupo (tabla «Grupos»); k: los términos de la serie. v*: el valor más pequeño donde se alcanza una distancia, con F1(v*) y F2(v*) (tabla de los números)."
+        },
         "left_out": "Filas usadas: {n}. Filas excluidas: {missing} (sin grupo, o sin número en uno de los dos grupos)."
       },
       "normality": {
@@ -1966,7 +2126,10 @@
           "test": {"statistic": "Estadístico (K² o JB)"}
         },
         "kpi": {"statistic": "Estadístico", "skewness": "Asimetría g₁", "kurtosis": "Curtosis b₂ (normal: 3)"},
-        "symbols": "Los valores de «{column}»: n, su media m (tabla «Grupos»); m₂, m₃, m₄: las medias de (v − m)², (v − m)³, (v − m)⁴ (tabla de los números); df: grados de libertad.",
+        "symbols": {
+          "jarque_bera": "Los valores de «{column}»: n, su media m (tabla «Grupos»); m₂, m₃, m₄: las medias de (v − m)², (v − m)³, (v − m)⁴ (tabla de los números); df: grados de libertad.",
+          "dagostino": "Los valores de «{column}»: n, su media m (tabla «Grupos»); m₂, m₃, m₄: las medias de (v − m)², (v − m)³, (v − m)⁴ (tabla de los números); df: grados de libertad. Los números intermedios de z₁ (Y, β₂, W², δ, α) y de z₂ (E(b₂), Var(b₂), x, √β₁, A): tabla de los números, en el orden de la fórmula."
+        },
         "left_out": "Filas usadas: {n}. Filas excluidas: {missing} (sin número: NULL o NaN)."
       }
     },
@@ -2082,6 +2245,15 @@
         "d": "Distancia máxima |F1 − F2| (D)",
         "d_plus": "Distancia máxima F1 − F2 (D+)",
         "d_minus": "Distancia máxima F2 − F1 (D−)",
+        "v_d": "Valor donde se alcanza D (v*)",
+        "f1_d": "F1(v*) donde se alcanza D",
+        "f2_d": "F2(v*) donde se alcanza D",
+        "v_plus": "Valor donde se alcanza D+ (v*)",
+        "f1_plus": "F1(v*) donde se alcanza D+",
+        "f2_plus": "F2(v*) donde se alcanza D+",
+        "v_minus": "Valor donde se alcanza D− (v*)",
+        "f1_minus": "F1(v*) donde se alcanza D−",
+        "f2_minus": "F2(v*) donde se alcanza D−",
         "n_tied": "Valores en más de una fila",
         "lambda": "λ = D·√(n1·n2 / (n1 + n2))",
         "m2": "Segundo momento central (m₂)",
@@ -2090,6 +2262,16 @@
         "skewness": "Asimetría (g₁)",
         "kurtosis": "Curtosis (b₂)",
         "excess_kurtosis": "Exceso de curtosis (b₂ − 3)",
+        "dag_y": "Prueba de asimetría: Y",
+        "dag_beta2": "Prueba de asimetría: β₂ de √b₁",
+        "dag_w2": "Prueba de asimetría: W²",
+        "dag_delta": "Prueba de asimetría: δ",
+        "dag_alpha": "Prueba de asimetría: α",
+        "dag_mean_b2": "Prueba de curtosis: E(b₂)",
+        "dag_var_b2": "Prueba de curtosis: Var(b₂)",
+        "dag_x": "Prueba de curtosis: x",
+        "dag_sqrt_beta1": "Prueba de curtosis: √β₁ de b₂",
+        "dag_a": "Prueba de curtosis: A",
         "z_skewness": "z de la asimetría (z₁)",
         "z_kurtosis": "z de la curtosis (z₂)"
       },
@@ -2217,6 +2399,8 @@
       "residuals": "Residuos ajustados (fila: x, columna: y)",
       "too_many_cells": "{chart}: la tabla tiene {n} celdas, y el gráfico se dibuja hasta {most}. Las tablas de arriba tienen cada número.",
       "too_many_rows": "{chart}: x tiene {n} categorías, y el gráfico se dibuja hasta {most}. Las tablas de arriba tienen cada número.",
+      "too_many_groups": "{chart}: hay {n} grupos, y el gráfico se dibuja hasta {most}. Las tablas de arriba tienen cada número.",
+      "too_many_pairs": "{chart}: hay {n} pares, y el gráfico se dibuja hasta {most}. Las tablas de arriba tienen cada número.",
       "exact_note": "Una prueba exacta: su p-valor cuenta cada disposición de los valores, y no tiene curva que dibujar."
     },
     "engine": "Calculado en el motor: {engine}.",
@@ -2287,7 +2471,10 @@
           }
         },
         "kpi": {"statistic": "Statistique t", "estimate": "Différence des moyennes"},
-        "symbols": "1 = «{g1}», 2 = «{g2}». m : moyenne, s² : variance, n : lignes utilisées, de chaque groupe (tableau «Groupes») ; sp² : variance commune ; mu : la différence sous H0 ; df : degrés de liberté.",
+        "symbols": {
+          "student": "1 = «{g1}», 2 = «{g2}». m : moyenne, s² : variance, n : lignes utilisées, de chaque groupe (tableau «Groupes») ; sp² : variance commune ; mu : la différence sous H0 ; df : degrés de liberté.",
+          "welch": "1 = «{g1}», 2 = «{g2}». m : moyenne, s² : variance, n : lignes utilisées, de chaque groupe (tableau «Groupes») ; mu : la différence sous H0 ; df : degrés de liberté."
+        },
         "left_out": "Lignes utilisées : {n}. Lignes écartées : {missing} (sans groupe, ou sans valeur dans l'un des deux groupes)."
       },
       "t_paired": {
@@ -2311,7 +2498,10 @@
           "test": {"statistic": "Statistique F"}
         },
         "kpi": {"statistic": "Statistique F", "effect": "Taille d'effet η²"},
-        "symbols": "k : groupes, N : lignes utilisées ; n, m, s² : lignes, moyenne et variance de chaque groupe (tableau « Groupes ») ; M : moyenne générale ; w = n / s² : le poids d'un groupe dans l'ANOVA de Welch ; Λ : la correction de Welch ; ddl : degrés de liberté.",
+        "symbols": {
+          "one_way": "k : groupes, N : lignes utilisées ; n, m, s² : lignes, moyenne et variance de chaque groupe (tableau « Groupes ») ; M : moyenne générale ; ddl : degrés de liberté.",
+          "welch": "k : groupes, N : lignes utilisées ; n, m, s² : lignes, moyenne et variance de chaque groupe (tableau « Groupes ») ; w = n / s² : le poids d'un groupe dans l'ANOVA de Welch ; Λ : la correction de Welch ; ddl : degrés de liberté."
+        },
         "left_out": "Lignes utilisées : {n}. Lignes écartées : {missing} (sans groupe, ou sans nombre dans un groupe)."
       },
       "var_f": {
@@ -2420,7 +2610,10 @@
           "table": "Tableau",
           "nodes": "Étapes du dénombrement exact"
         },
-        "symbols": "x = «{x}», y = «{y}». Un tableau 2 × 2 : a, b la première ligne, c, d la seconde (tableau «Observés et attendus») ; R1 : le total de la première ligne ; C1, C2 : ceux des colonnes ; X : la première cellule sous H0 avec les mêmes marges. Un tableau plus grand : T tout tableau de mêmes marges, n_ij ses cellules, R_i, C_j ses totaux ; N : lignes utilisées.",
+        "symbols": {
+          "exact": "x = «{x}», y = «{y}». Un tableau 2 × 2 : a, b la première ligne, c, d la seconde (tableau «Observés et attendus») ; R1 : le total de la première ligne ; C1, C2 : ceux des colonnes ; X : la première cellule sous H0 avec les mêmes marges.",
+          "freeman_halton": "x = «{x}», y = «{y}». T tout tableau de mêmes marges, n_ij ses cellules, R_i, C_j ses totaux ; N : lignes utilisées."
+        },
         "left_out": "Lignes utilisées : {n}. Lignes écartées : {missing} (aucune valeur dans l'une des deux colonnes)."
       },
       "mcnemar": {
@@ -2434,7 +2627,11 @@
           "estimate": "Odds ratio b / c",
           "categories": "Catégories"
         },
-        "symbols": "x = «{x}», y = «{y}», deux valeurs de la même ligne ; leurs catégories ensemble. b : les lignes avec x dans la première catégorie et y dans la seconde, c : l'inverse (2 × 2) ; n_ij : les lignes avec x = i et y = j (tableau «Le tableau des paires») ; Y : la correction de continuité ; E = (n_ij + n_ji) / 2 sous H0.",
+        "symbols": {
+          "chi_square": "x = «{x}», y = «{y}», deux valeurs de la même ligne ; leurs catégories ensemble. b : les lignes avec x dans la première catégorie et y dans la seconde, c : l'inverse (tableau «Le tableau des paires») ; Y : la correction de continuité.",
+          "exact": "x = «{x}», y = «{y}», deux valeurs de la même ligne ; leurs catégories ensemble. b : les lignes avec x dans la première catégorie et y dans la seconde, c : l'inverse (tableau «Le tableau des paires»). Le test exact : b parmi les b + c paires discordantes, binomiale avec p = 1/2.",
+          "bowker": "x = «{x}», y = «{y}», deux valeurs de la même ligne ; leurs catégories ensemble. n_ij : les lignes avec x = i et y = j (tableau «Le tableau des paires») ; E = (n_ij + n_ji) / 2 sous H0 ; k : catégories."
+        },
         "left_out": "Lignes utilisées : {n}. Lignes écartées : {missing} (aucune valeur dans l'une des deux colonnes).",
         "tables": {
           "cells": "Le tableau des paires",
@@ -2445,12 +2642,18 @@
       "cmh": {
         "name": "Test de Cochran–Mantel–Haenszel",
         "stats": {
+          "stratum": {"row_total": "Lignes (R_i)", "col_total": "Lignes (C_j)"},
+          "cell": {"index": "Indice (k)", "observed": "Observés (n)", "expected": "Attendus (m)", "deviation": "n − m"},
+          "covariance": {"v": "V(k, k')"},
           "test": {"statistic": "Statistique du khi-deux (χ²)", "estimate": "Odds ratio commun de Mantel–Haenszel (OR_MH)"}
         },
         "kpi": {"statistic": "Khi-deux (χ²)", "estimate": "Odds ratio commun", "strata": "Strates"},
-        "symbols": "x = «{x}», y = «{y}», strates de «{strata}». Dans chaque strate (2 × 2) : a, b la première ligne, c, d la seconde, R1, R2 les totaux des lignes, C1, C2 ceux des colonnes, N les lignes de la strate (tableau «Strates») ; Y : la correction de continuité ; z : le quantile normal de l'intervalle.",
+        "symbols": {
+          "two_by_two": "x = «{x}», y = «{y}», strates de «{strata}». Dans chaque strate (2 × 2) : a, b la première ligne, c, d la seconde, R1, R2 les totaux des lignes, C1, C2 ceux des colonnes, N les lignes de la strate (tableau «Strates») ; Y : la correction de continuité ; z : le quantile normal de l'intervalle.",
+          "generalized": "x = «{x}», y = «{y}», strates de «{strata}». R_i, C_j : les totaux de la ligne i et de la colonne j d'une strate, N ses lignes (tableaux «Lignes de chaque strate (x)» et «Colonnes de chaque strate (y)») ; n, m : les effectifs observés et attendus d'une cellule sur toutes les strates, k sa place dans le vecteur n − m (tableau «Le tableau sur toutes les strates») ; V : la covariance de n − m sous H0 (tableau «Covariance V de n − m»), V^(−1) son inverse ; ddl : degrés de liberté."
+        },
         "left_out": "Lignes utilisées : {n}. Lignes écartées : {missing} (aucune valeur dans l'une des trois colonnes).",
-        "tables": {"strata": "Strates", "terms": "Termes de chaque strate", "pooled": "Le tableau sur toutes les strates"},
+        "tables": {"strata": "Strates", "terms": "Termes de chaque strate", "pooled": "Le tableau sur toutes les strates", "margins_x": "Lignes de chaque strate (x)", "margins_y": "Colonnes de chaque strate (y)", "covariance": "Covariance V de n − m"},
         "charts": {"observed": "Effectifs sur toutes les strates"}
       },
       "g_test": {
@@ -2517,7 +2720,10 @@
           "test": {"statistic": "Distance du test (D, D+ ou D−)"}
         },
         "kpi": {"statistic": "Statistique D", "lambda": "λ (Kolmogorov)", "n": "Lignes utilisées"},
-        "symbols": "1 = «{g1}», 2 = «{g2}». F1, F2 : la part des valeurs de chaque groupe jusqu'à v inclus (sa fonction de répartition empirique) ; n1, n2 : les valeurs de chaque groupe (tableau «Groupes») ; k : les termes de la série. #(…) : combien de dispositions des valeurs (test exact) le donnent.",
+        "symbols": {
+          "exact": "1 = «{g1}», 2 = «{g2}». F1, F2 : la part des valeurs de chaque groupe jusqu'à v inclus (sa fonction de répartition empirique) ; n1, n2 : les valeurs de chaque groupe (tableau «Groupes») ; #(…) : combien de dispositions des valeurs (test exact) le donnent. v* : la plus petite valeur où une distance est atteinte, avec F1(v*) et F2(v*) (tableau des nombres).",
+          "asymptotic": "1 = «{g1}», 2 = «{g2}». F1, F2 : la part des valeurs de chaque groupe jusqu'à v inclus (sa fonction de répartition empirique) ; n1, n2 : les valeurs de chaque groupe (tableau «Groupes») ; k : les termes de la série. v* : la plus petite valeur où une distance est atteinte, avec F1(v*) et F2(v*) (tableau des nombres)."
+        },
         "left_out": "Lignes utilisées : {n}. Lignes écartées : {missing} (sans groupe, ou sans nombre dans l'un des deux groupes)."
       },
       "normality": {
@@ -2530,7 +2736,10 @@
           "test": {"statistic": "Statistique (K² ou JB)"}
         },
         "kpi": {"statistic": "Statistique", "skewness": "Asymétrie g₁", "kurtosis": "Kurtosis b₂ (normale : 3)"},
-        "symbols": "Les valeurs de «{column}» : n, leur moyenne m (tableau «Groupes») ; m₂, m₃, m₄ : les moyennes de (v − m)², (v − m)³, (v − m)⁴ (tableau des nombres) ; df : degrés de liberté.",
+        "symbols": {
+          "jarque_bera": "Les valeurs de «{column}» : n, leur moyenne m (tableau «Groupes») ; m₂, m₃, m₄ : les moyennes de (v − m)², (v − m)³, (v − m)⁴ (tableau des nombres) ; df : degrés de liberté.",
+          "dagostino": "Les valeurs de «{column}» : n, leur moyenne m (tableau «Groupes») ; m₂, m₃, m₄ : les moyennes de (v − m)², (v − m)³, (v − m)⁴ (tableau des nombres) ; df : degrés de liberté. Les nombres intermédiaires de z₁ (Y, β₂, W², δ, α) et de z₂ (E(b₂), Var(b₂), x, √β₁, A) : tableau des nombres, dans l'ordre de la formule."
+        },
         "left_out": "Lignes utilisées : {n}. Lignes écartées : {missing} (pas de nombre : NULL ou NaN)."
       }
     },
@@ -2646,6 +2855,15 @@
         "d": "Distance maximale |F1 − F2| (D)",
         "d_plus": "Distance maximale F1 − F2 (D+)",
         "d_minus": "Distance maximale F2 − F1 (D−)",
+        "v_d": "Valeur où D est atteinte (v*)",
+        "f1_d": "F1(v*) là où D est atteinte",
+        "f2_d": "F2(v*) là où D est atteinte",
+        "v_plus": "Valeur où D+ est atteinte (v*)",
+        "f1_plus": "F1(v*) là où D+ est atteinte",
+        "f2_plus": "F2(v*) là où D+ est atteinte",
+        "v_minus": "Valeur où D− est atteinte (v*)",
+        "f1_minus": "F1(v*) là où D− est atteinte",
+        "f2_minus": "F2(v*) là où D− est atteinte",
         "n_tied": "Valeurs présentes dans plus d'une ligne",
         "lambda": "λ = D·√(n1·n2 / (n1 + n2))",
         "m2": "Deuxième moment centré (m₂)",
@@ -2654,6 +2872,16 @@
         "skewness": "Asymétrie (g₁)",
         "kurtosis": "Kurtosis (b₂)",
         "excess_kurtosis": "Excès de kurtosis (b₂ − 3)",
+        "dag_y": "Test d'asymétrie : Y",
+        "dag_beta2": "Test d'asymétrie : β₂ de √b₁",
+        "dag_w2": "Test d'asymétrie : W²",
+        "dag_delta": "Test d'asymétrie : δ",
+        "dag_alpha": "Test d'asymétrie : α",
+        "dag_mean_b2": "Test de kurtosis : E(b₂)",
+        "dag_var_b2": "Test de kurtosis : Var(b₂)",
+        "dag_x": "Test de kurtosis : x",
+        "dag_sqrt_beta1": "Test de kurtosis : √β₁ de b₂",
+        "dag_a": "Test de kurtosis : A",
         "z_skewness": "z de l'asymétrie (z₁)",
         "z_kurtosis": "z de la kurtosis (z₂)"
       },
@@ -2781,6 +3009,8 @@
       "residuals": "Résidus ajustés (ligne : x, colonne : y)",
       "too_many_cells": "{chart} : le tableau a {n} cellules, et le graphique est tracé jusqu'à {most}. Les tableaux ci-dessus contiennent chaque nombre.",
       "too_many_rows": "{chart} : x a {n} catégories, et le graphique est tracé jusqu'à {most}. Les tableaux ci-dessus contiennent chaque nombre.",
+      "too_many_groups": "{chart} : il y a {n} groupes, et le graphique est tracé jusqu'à {most}. Les tableaux ci-dessus contiennent chaque nombre.",
+      "too_many_pairs": "{chart} : il y a {n} paires, et le graphique est tracé jusqu'à {most}. Les tableaux ci-dessus contiennent chaque nombre.",
       "exact_note": "Un test exact : sa p-valeur compte chaque disposition des valeurs, et il n'a pas de courbe à tracer."
     },
     "engine": "Calculé dans le moteur : {engine}.",
