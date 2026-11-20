@@ -72,6 +72,8 @@ case "$SUITE" in
   gateway)
     ENV=(-e DB__HOST="$ID-postgres" -e DB__PORT=5432 -e DB__USER=tab -e DB__PASSWORD="$PW" -e DB__NAME=tab)
     SRC=$ROOT/gateway
+    # the assistant's tests check the engine's shared model cases, which the gateway's tree does not hold
+    EXTRA=(-v "$ROOT/backend/tests/fixtures:/backend/tests/fixtures:ro")
     ALLOWED=()
     ;;
   *) echo "unknown suite: $SUITE"; exit 2 ;;
@@ -80,7 +82,7 @@ wait_for postgres pg_isready -h 127.0.0.1 -U tab
 
 status=0
 # the sample reports are checked by the code that takes them: tests/test_sample_reports.py of both suites
-docker run --rm --network "$NET" "${ENV[@]}" -v "$SRC:/app" -v "$OUT:/out" -v "$ROOT/infrastructure/sampledb:/sampledb:ro" \
+docker run --rm --network "$NET" "${ENV[@]}" ${EXTRA[@]+"${EXTRA[@]}"} -v "$SRC:/app" -v "$OUT:/out" -v "$ROOT/infrastructure/sampledb:/sampledb:ro" \
   -w /app "$IMAGE" \
   python -m pytest tests -q -p no:cacheprovider --junitxml=/out/junit.xml || status=$?
 if [[ -f "$OUT/junit.xml" ]]; then
