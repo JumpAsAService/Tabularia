@@ -65,6 +65,20 @@ Development on `main` for the next minor version. The stable line stays 1.4.x
   `/admin/models…`, `POST /tasks/model-report`; migration 0044; an Output that reads a model
   cannot be exported to dbt (`model_not_exportable`).
   [Statistical models](docs/capabilities/models.md).
+- **Boosting models: XGBoost and CatBoost.** A fourth group of statistical models, written in
+  Python, with a node each for gradient-boosted trees: a regression, a binary or a multiclass
+  outcome. Categorical predictors are native and missing values are kept. A validation part
+  (random, stratified, by group, or the last rows in time) sets the trees by early stopping, and
+  the report warns that its numbers are slightly optimistic. The report gives the importance of
+  each predictor as gain and as SHAP, with the SHAP beeswarm, the learning curves, and by task
+  the ROC, calibration, confusion matrix, or observed against predicted. Where the regressions
+  have tests, these have diagnostics (against the average, overfitting, trees, class imbalance,
+  calibration, stability of the importance, unused predictors, leakage): rules of thumb with
+  advice, with no p-value. The model is logged to MLflow as the library's own file,
+  `xgboost.json` or `catboost.cbm`, with its sha256 in the card, never a pickle, and **Predict**
+  checks the fingerprint before applying it. The image is built from wheels in minutes. New
+  route `POST /scripts/objects/upload` of the engine; the assistants and the MCP tools know the
+  two nodes. [Boosting](docs/capabilities/models.md#boosting-python-xgboost-and-catboost).
 
 ## 1.4.7 «Romulus» — 2026-11-18 · long-term support
 

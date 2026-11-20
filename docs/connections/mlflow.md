@@ -62,7 +62,9 @@ A run of a flow whose model node names this connection writes to the experiment 
 (created when missing): the node's parameters and the model's formula, every number of the fit
 and the statistic and p-value of each assumption as metrics, tags that say which flow, node and
 version of the model made it, and, when the server has an artifact proxy, the results, the
-coefficients, the report as PDF and the model with its card. With **Register the model as**, each
+coefficients, the report as PDF and the model with its card (for XGBoost and CatBoost, also the
+model's own file, `xgboost.json` or `catboost.cbm`, never a pickle; the learning curves are
+recorded as metric histories, one point a tree). With **Register the model as**, each
 run adds a version of that registered model, which the **Predict** node can apply. The editor's
 **Run** logs nothing. The connection's secret is used only by the gateway: it never reaches the
 Job that fits the model. The details, and **Continue without MLflow**, are in

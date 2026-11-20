@@ -7,13 +7,14 @@ the model after any step, choose its columns and options in the panel, press **R
 the answer in the same place as any other step, as a **table of results** the next nodes can
 use and a **Report** of a few pages whose first page says whether the model's assumptions hold.
 
-Six models are in the first release, in three groups: **regression** (linear, logistic, both
-with ridge, lasso and elastic-net penalties), **survival** (Kaplan–Meier, Cox) and **time
-series** (ARIMA, from AR to SARIMAX, with the orders given or searched for). A seventh node,
-**Predict**, applies a model you registered in MLflow to new rows.
+Seven models are in the first release, in four groups: **regression** (linear, logistic, both
+with ridge, lasso and elastic-net penalties), **survival** (Kaplan–Meier, Cox), **time
+series** (ARIMA, from AR to SARIMAX, with the orders given or searched for) and **boosting**
+(XGBoost and CatBoost: gradient-boosted trees to predict a number or a class, with the importance
+of each predictor). An eighth node, **Predict**, applies a model you registered in MLflow to new rows.
 
 **They need Kubernetes.** A model is not computed by an engine: it runs as a Job in your
-cluster, in an image built from a recipe Tabularia ships, with R. On Docker Compose the
+cluster, in an image built from a recipe Tabularia ships, with R (or Python, for boosting). On Docker Compose the
 models are in the palette greyed out («Kubernetes only»), the section in Administration says
 «Requires Kubernetes», and a flow with a model step cannot run it. The [hypothesis tests](statistics.md), which run on every engine, are the part of
 statistics that works everywhere.
@@ -33,7 +34,7 @@ statistics that works everywhere.
 
 ## Turning a group on (administrators)
 
-**Administration → Statistical models** lists the three groups Tabularia ships, each with its
+**Administration → Statistical models** lists the four groups Tabularia ships, each with its
 models, the number of packages its image pins and its state. Only an administrator acts, and
 not with an API token; an observer reads the section. Every action is in the
 [audit log](../governance/audit-log.md) (`models.group_enable`, `models.group_disable`,
@@ -47,7 +48,7 @@ reads its input from it. Without the bucket the section says so and the models d
 | State | Meaning |
 |---|---|
 | **Not enabled** | Nothing is built; the nodes are not in the palette |
-| **Building** | A Job in the build namespace builds the image from the group's recipe: R 4.6 and its packages at pinned versions, without internet access at run time |
+| **Building** | A Job in the build namespace builds the image from the group's recipe: R 4.6 (Python 3.14 for boosting) and its packages at pinned versions, without internet access at run time |
 | **Checking** | The image is built and its **self-test** runs: the models are fitted on small reference tables and compared with values computed outside Tabularia |
 | **Ready** | Every value matched; the version is in use |
 | **Failed** | The build or the self-test failed; the version in use, if any, is kept. The section shows the build log and the self-test's output |
@@ -71,10 +72,10 @@ next run, without building again.
 
 | Setting | Default | Meaning |
 |---|---|---|
-| CPU (limit) | regression 2, survival 2, time series 1 | The Job asks for half and may use up to this |
-| Memory (limit) | 4 GiB, 4 GiB, 2 GiB | At least 256 MiB; the Job asks for half. A Job over it is stopped by the cluster and the step says so |
-| Longest run | 30 minutes | 1 to 1,440 minutes. A node's own timeout (900 seconds unless you change it) must be within it |
-| Most input rows | 2,000,000 (regression), 1,000,000 (survival), 20,000 (time series) | 1 to 1,000,000,000. Empty follows the recipe's number |
+| CPU (limit) | regression 2, survival 2, time series 1, boosting 2 | The Job asks for half and may use up to this |
+| Memory (limit) | 4 GiB, 4 GiB, 2 GiB, 4 GiB | At least 256 MiB; the Job asks for half. A Job over it is stopped by the cluster and the step says so |
+| Longest run | 30 minutes (boosting 60) | 1 to 1,440 minutes. A node's own timeout (900 seconds unless you change it) must be within it |
+| Most input rows | 2,000,000 (regression), 1,000,000 (survival), 20,000 (time series), 1,000,000 (boosting) | 1 to 1,000,000,000. Empty follows the recipe's number |
 
 **Who may use it:** *everyone who can edit flows* (the default), or only the user groups you
 tick. Administrators always can. With a list and none ticked, only administrators.
@@ -271,14 +272,179 @@ are «not computed» when there are too few.
 per day. ARIMA with the time `data_ordine`, the series the count, daily frequency, seasonal
 period 7 and automatic orders: what a week looks like, and the next two.
 
-### Boosting (Python): being built
+### Boosting (Python): XGBoost and CatBoost
 
-Model ids in the catalogue: `xgboost` and `catboost`. A fourth group, **Boosting**, written in
-Python, is being built: gradient-boosted trees for a regression, a binary or a multiclass
-outcome, with a validation part, early stopping, the importance of each predictor (gain and
-SHAP) and diagnostics in the report. In this version its nodes do not fit a model yet: they stop
-with «… is not built yet in this version of Tabularia». This section will describe them when
-they do.
+Model ids in the catalogue: `xgboost` and `catboost`.
+
+The **Boosting** group holds two nodes, **XGBoost** and **CatBoost**. Both fit gradient-boosted
+trees: many small decision trees, each one correcting the mistakes of those before it. They are
+the models to reach for when you want to **predict** and not to explain: many predictors, effects
+that bend, interactions nobody wrote down. They give no coefficient and no p-value. They give how
+well the model predicts rows it did not learn from, which predictors it leans on, and a few
+diagnostics. When the question is «how much does the price move the quantity», use a
+[regression](#linear-regression); when it is «which orders will be late», use these.
+
+**They are written in Python**, unlike the three groups above, and run as a Job like the others: an
+image built from a recipe with pinned packages (`xgboost-cpu`, `catboost` and what they need),
+without internet access at run time.
+
+**Turning it on.** The group is in **Administration → Statistical models** beside the others
+(**Enable**, **Build again**, **Disable**, the limits and who may use it: everything above holds).
+The image is a download of wheels, not a compilation, so it builds in minutes. The build needs
+PyPI, or your mirror of it (`SCRIPTS__PYPI_INDEX_URL`), as a Python environment of
+[scripting](../scripting.md) does. The defaults are 2 CPUs, 4 GiB, a longest run of 60 minutes and
+1,000,000 input rows. The group must be **Ready**, its self-test passed, before a node of it runs.
+
+**Tasks.** The first choice in the form is the **task**:
+
+| Task | The outcome column | What the model predicts |
+|---|---|---|
+| `regression` | A number | The value, in the outcome's units |
+| `binary` | Two distinct values (text, boolean or integer); `event_value` names the one whose probability is predicted | The probability of the event, and the class at the **threshold** (0.5 unless you change it) |
+| `multiclass` | 3 to 20 distinct values | The probability of every class, and the likeliest |
+
+The report changes with the task: RMSE, MAE and R² for a regression; AUC, log-loss, the ROC curve,
+calibration and the confusion matrix for a binary outcome; accuracy, log-loss, a table per class and
+the confusion matrix for a multiclass one.
+
+**Main parameters** (the rest of the form is the same for both nodes, and the report writes every
+value used):
+
+| Parameter | Default | Meaning |
+|---|---|---|
+| `outcome`, `predictors` | needed | Numbers, texts and booleans as predictors, at most 200; a date is refused (compute a number from it first). A predictor may have **missing values**: both libraries handle them, unlike the regressions, which leave the row out |
+| `weights` | none | Case weights, used in the fit and in every metric |
+| `class_weight` | none | `balanced` weights the classes against each other in the fit only; the probabilities are then no longer calibrated, and a diagnostic says so |
+| `validation`, `validation_share` | random, 20 % | How the validation part is drawn (below) |
+| `early_stopping`, `early_stopping_rounds` | on, 50 | Stop when the validation measure has not improved for that many trees |
+| `stop_metric` | loss | What early stopping watches: the loss (RMSE or log-loss), `mae` (regression), `auc` (binary), `error` (classification) |
+| `max_trees` | 1,000 | The most trees. A multiclass round grows one tree per class |
+| `learning_rate` | 0.05 | How much each tree counts |
+| `max_depth` | 6 | The depth of a tree: up to 12 for XGBoost, 10 for CatBoost |
+| `subsample` | 0.8 | The share of rows each tree sees |
+| `seed` | 1 | The split, the libraries' randomness and the samples |
+| `output` | results | `rows` adds the model's columns to the input rows (`pred_value` and `pred_residual`, or `pred_prob` and `pred_class`, with `pred_part`: `train` or `validation`) |
+
+XGBoost has also `min_child_weight`, `colsample_bytree`, `reg_lambda`, `reg_alpha` and `gamma`;
+CatBoost `l2_leaf_reg`, `rsm` and `random_strength`. The defaults are not the libraries' own: with
+early stopping on, a small learning rate with some sampling of rows is the safe start, and a
+written value makes the fit reproducible from its parameters. Turn them only when a diagnostic
+asks you to.
+
+**Categories** (text and boolean predictors) are used as they are, not expanded into one column per
+level: XGBoost with its native categorical splits, CatBoost with its own encoding. So an
+importance is one number per predictor, and a level not seen when the model was fitted follows the
+missing-value path. A column with more than 1,000 distinct values is refused, with the question
+«is it an identifier?».
+
+**The validation part, and early stopping.** Every run sets some rows aside, never used to fit the
+trees. They are used to choose how many trees to keep (early stopping), to compute every metric
+that says «on rows the model did not learn», and to run the diagnostics. How they are chosen:
+
+- **random** (the default): a random share of the rows; a classification keeps each class's share
+  in both parts (`stratify`). With `split_by`, rows with one value of that column (a customer's
+  rows) all fall on the same side;
+- **time**: with `order_by`, the last rows in time are the validation part, and no instant falls on
+  both sides. Choose it when the goal is to predict later rows: a random split lets the model peek
+  at the future.
+
+> **The validation numbers are slightly optimistic.** The same part chooses the number of trees, so
+> the model has been tuned a little to it. Read them as «about this good», not as a promise; the
+> report says so in a note. A third part kept for testing only is not in this version.
+
+A run fails with a sentence when the training part has fewer than 20 rows or the validation part
+fewer than 10, when a binary outcome has a class missing from one part, or when a multiclass class
+is missing from the training part.
+
+**Importance, gain and SHAP.** Two answers to «which predictors does the model use»:
+
+- **Gain**: how much the splits on a predictor improved the fit, summed over the trees. It is
+  cheap and comes from the trees themselves.
+- **SHAP**: for each row, how much each predictor pushed the prediction up or down from the
+  average. The report shows the mean of its absolute value, in the model's own scale (the
+  outcome's units, or log-odds for a classification), and the ranking follows it. It is computed
+  on a **sample** of at most 5,000 rows, fewer for a very large model, drawn with the seed: the
+  report says «SHAP on 5,000 of 812,340 rows».
+
+The **Report** draws two bar charts (the first 20 predictors, the rest summed), and for a
+regression or a binary outcome the **beeswarm**: one line per predictor, one point per sampled row.
+A point to the right of 0 raised the prediction, to the left lowered it; its colour is the
+predictor's value, from low (blue) to high (red), grey for a category or a missing value. A
+predictor whose red points sit on the right pushes the prediction up as it grows. A multiclass
+model shows the bars by class instead. Then the learning curves (training against validation, with
+the best round marked) and, by task, observed against predicted, residuals, ROC, calibration and
+the confusion matrix.
+
+> **Importance is not cause.** It says what the model uses, not what changes the outcome. Two
+> correlated predictors share it unpredictably.
+
+**Diagnostics, not tests.** Where the regressions have tests of assumptions, these models have
+**diagnostics**: checks read against rules of thumb. They have **no p-value and no level of
+significance**, and the report says so under the table. A **doubtful** or **failed** verdict says
+where to look, not that the model is wrong; each comes with advice. They look at:
+
+| Diagnostic | What it looks at |
+|---|---|
+| `validation_size` | Whether the validation part has enough rows (the rarest class, for a classification) for its numbers to mean something |
+| `beats_baseline` | Whether the model predicts the validation part better than the plain average (or the class shares) |
+| `overfitting` | Whether the improvement over that baseline seen on the training part holds on the validation part |
+| `trees_limit` | Whether early stopping stopped by itself, or the trees ran out, the time ran out or very few were kept |
+| `class_imbalance` | How uneven the classes are (classification) |
+| `calibration`, `calibration_slope` | Whether a binary model's probabilities match the rates observed, and whether they are too extreme or too timid |
+| `importance_stability` | Whether the importance ranking is the same on the training and the validation rows |
+| `zero_importance` | The predictors no split uses |
+| `leakage` | Whether one predictor explains nearly everything, or the fit is nearly perfect: a sign that a column was computed from the outcome, or recorded after it |
+
+Each row of the `assumption` section has its verdict, its advice, the number looked at in `value`
+and the limit it was read against in `threshold`. The rules of thumb are Tabularia's choice, written
+in the report beside the number. Read an **ok** as «nothing here», and a **failed** `leakage` first:
+a model that is too good is usually a column that should not be there.
+
+**Output.** The ten columns, with two sections of their own: `importance` (gain, its share, the
+mean absolute SHAP, its share and rank, the same on the training and validation rows, the share of
+missing values; per class for multiclass) and `class` (multiclass: support, precision, recall, F1
+and AUC per class). The `model` section holds the sizes of the two parts, the trees kept, the
+best round, whether it stopped early or by time, the threads, and the metrics of the task for the
+training part, the validation part and the baseline.
+
+**The saved model, and Predict.** With an MLflow block, the run writes, besides the card
+(`model/model.json`), the model itself as a file of its own: **`model/xgboost.json`** (XGBoost's
+JSON format) or **`model/catboost.cbm`** (CatBoost's binary format). Both are model data the library
+parses; **no pickle, joblib or any format that runs code is ever written or read.** Its size and
+sha256 are in the card, the card's sha256 is the version's tag `tabularia.card_sha256`, and the
+version carries `tabularia.variant` (the task) and `tabularia.model_file_sha256`. The model file
+may be 64 MiB at most; a larger one gets a note, the fit goes on with its results and report, and
+the model is not logged.
+
+**Predict** applies such a version like the others (see [Predict](#predict)), with one more check:
+the gateway streams the file from MLflow to the scripts bucket and compares its **fingerprint** with
+the card's; if it differs, the file is not applied. The Job checks it again before reading. Rows
+with a missing value, or a category the model never saw, get a prediction through the model's
+missing-value path (the run page counts them), where a regression leaves them empty. It adds
+`prediction` (a regression's value, a binary model's probability, a multiclass model's likeliest
+class), `prediction_class` (binary, at the node's threshold or the card's), and for multiclass
+`prediction_probability` and `prediction_prob_<class>`.
+
+**Limits.**
+
+| Limit | Value |
+|---|---|
+| Input rows | 1,000,000, unless an administrator changed it |
+| Cells (rows × predictors) | 50 million: «1,000,000 rows × 120 predictors make 120 million values; this group allows 50 million: fewer predictors, or sample before the node» |
+| Predictors, classes | 200; 20 |
+| Levels of a categorical predictor | 1,000 |
+| Trees | 5,000 at most |
+| SHAP sample | 5,000 rows at most |
+| Points in a chart | 2,000 (the beeswarm splits them among its predictors) |
+| Model file | 64 MiB |
+| Time | The group's longest run (60 minutes) and the node's timeout. Boosting stops at 60 % of the timeout so that SHAP and the files still fit: the note `time_budget` says so, and `trees_limit` is doubtful |
+
+SHAP is the long part: it can take several times as long as the training itself.
+
+*Example:* from `order_rows` (after a **Change type** to *decimal* of `quantita`, `prezzo_unitario`
+and `sconto_pct`), an **XGBoost** with the task `regression`, the outcome `quantita` and the
+predictors `prezzo_unitario` and `sconto_pct`. Read the first page's diagnostics, then the
+beeswarm: whether a higher price pushes the quantity down.
 
 ## The output
 
@@ -377,7 +543,8 @@ scripts bucket, the gateway:
      `mlflow.source.name`. Values are cut at 250 characters, the limit of MLflow's batches;
    - **files**, through the server's artifact proxy: `tabularia/results.parquet`,
      `tabularia/coefficients.csv`, `tabularia/report.pdf` (the Report tab's layout, in the
-     flow owner's language), and `model/MLmodel`, `model/model.json` and `model/native.rds`.
+     flow owner's language), and `model/MLmodel`, `model/model.json` and `model/native.rds` (for boosting, the model file
+     instead of `native.rds`).
      A server that keeps its runs' files elsewhere gets none of them, and the run page says
      so; a PDF that cannot be drawn is a warning, not a failure;
 3. with **Register the model as**, adds a version of that registered model from the run's
@@ -399,7 +566,9 @@ any case.
 baseline hazard, the orders and the coefficients of an ARIMA…), at most 1 MB, in a format of
 Tabularia's own (`tabularia-model`). Its sha256 is the tag `tabularia.card_sha256`.
 `native.rds` is R's own object, kept for people who want to open the fit in R; Tabularia
-never loads it. It holds **no row of the input**: before it is written the runner removes the
+never loads it. The boosting models write no R object: they write the library's own model file
+(`model/xgboost.json` or `model/catboost.cbm`, see [Boosting](#boosting-python-xgboost-and-catboost)),
+with its size and sha256 in the card, and never a pickle. It holds **no row of the input**: before it is written the runner removes the
 model frame, the design and the outcome, every value that has one number per row (residuals,
 fitted values, linear predictors, weights, a Cox model's stratum of each row, the
 cross-validation's out-of-fold predictions and folds), the QR decomposition of the design
@@ -457,8 +626,9 @@ exists:
   is already there.
 
 **The Job never sees MLflow.** The gateway reads the version and gives the Job its card;
-nothing is run from the server, and no serialized object is ever loaded: only the card's
-numbers. Predicting the rows a model was fitted on gives its fitted values to within 1e-9,
+nothing is run from the server, and no serialized object that runs code is ever loaded: the
+card's numbers, and for boosting the library's model file (JSON or CatBoost's binary format) after
+its sha256 matched the card's. Predicting the rows a model was fitted on gives its fitted values to within 1e-9,
 which each group's self-test checks.
 
 **Columns added**, always `prediction`, and with options for the model:
@@ -470,6 +640,7 @@ which each group's self-test checks.
 | Kaplan–Meier | The survival at the row's time, in the row's stratum (empty past the stratum's last time) | **Prediction interval**: `prediction_low`, `prediction_high` |
 | Cox | The risk score, relative to the means of the fit | **Survival at times**: `survival_at_<t>` for each time |
 | ARIMA | The forecast, with the fitted coefficients, no re-estimation | **Forecast steps**; **Prediction interval**: `lower_80`, `upper_80`, `lower`, `upper` |
+| XGBoost, CatBoost | A regression's value, a binary model's probability of the event, a multiclass model's likeliest class | Binary: **Class threshold** gives `prediction_class`; multiclass adds `prediction_probability` and `prediction_prob_<class>` |
 
 An option that does not belong to the model of the card is refused. A level of a category the
 model did not see gives an empty prediction on its rows, and the run page counts them. A
@@ -481,7 +652,7 @@ and needs its connection and version chosen first.
 
 | Limit | Value |
 |---|---|
-| Input rows | The group's: 2,000,000, 1,000,000 or 20,000 unless an administrator changed it. Beyond it the step fails before the Job, with «the model would read 3,400,000 rows; the group allows 2,000,000: filter or sample before the node» |
+| Input rows | The group's: 2,000,000, 1,000,000, 20,000 or 1,000,000 unless an administrator changed it. Beyond it the step fails before the Job, with «the model would read 3,400,000 rows; the group allows 2,000,000: filter or sample before the node» |
 | Terms of the design, after encoding categories | 200 |
 | Levels of a categorical predictor | 50 |
 | Strata (Kaplan–Meier, Cox) | 20 |
@@ -490,8 +661,9 @@ and needs its connection and version chosen first.
 | Seasonal period | 60 |
 | Forecast steps | 1,000 |
 | Rows | More than terms plus one; with a penalty, 3 per fold, at least 2 terms, and with the AUC measure 10 per fold; at least one event; for ARIMA enough observations for its orders and season |
-| Run time | The group's longest run (30 minutes by default); the node's timeout, 900 seconds unless you change it, must be within it |
+| Run time | The group's longest run (30 minutes by default, 60 for boosting); the node's timeout, 900 seconds unless you change it, must be within it |
 | Model card | 1 MB: the covariance (above 200 terms) and the baseline hazard (above 5,000 times) are dropped first, then the card is refused |
+| Model file (boosting) | 64 MiB: above it the fit goes on, with a note, and the model is not logged to MLflow |
 
 Every refusal is a sentence that says what to do. A model started on an installation without
 Kubernetes, or without the scripting machinery or the scripts bucket, says so before anything.
@@ -500,7 +672,7 @@ it, and an R image with its packages is more than a gigabyte.
 
 **What it does not do.**
 
-- **No model beyond the six**: no multinomial or ordinal logistic, mixed models, additive
+- **No model beyond the seven**: no multinomial or ordinal logistic, mixed models, additive
   models, Poisson or negative binomial, quantile regression, parametric survival, competing
   risks, exponential smoothing; no inference after a penalized selection.
 - **No code of yours**: the runners are Tabularia's. For another model, write it in a

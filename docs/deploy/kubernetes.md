@@ -157,10 +157,12 @@ registry and push and pull secrets (the three namespaces, the builder image, the
 policies), and the **scripts bucket** set in **Administration → Scripting environments**,
 where a model reads its input. There is no `models` block in the chart. An administrator then
 enables each group in **Administration → Statistical models**: the cluster builds its image
-(R 4.6 with its packages, built by the same rootless BuildKit as the environments, so with the
-resources of `SCRIPTS__BUILD_CPU` and `SCRIPTS__BUILD_MEMORY`) and runs its self-test.
-The build needs the registries of R packages (CRAN) or your mirror of them, as an
-environment does; a model Job at run time has no internet and reaches the scripts bucket
+(R 4.6 with its packages; for the boosting group, Python 3.14 with `xgboost-cpu` and `catboost`,
+wheels from PyPI or your mirror (`SCRIPTS__PYPI_INDEX_URL`), about 1 GB and no compilation),
+built by the same rootless BuildKit as the environments, so with the resources of
+`SCRIPTS__BUILD_CPU` and `SCRIPTS__BUILD_MEMORY`, and runs its self-test.
+The build needs the registries of R packages (CRAN) or your mirror of them, and for boosting
+of Python packages, as an environment does; a model Job at run time has no internet and reaches the scripts bucket
 through the egress proxy only. The images are large (an R image with compiled packages
 weighs more than a gigabyte): on a big cluster pre-pull them, because the first run on a node
 pulls the image. Two variables are read from the gateway's environment (`extraEnv`), and are in

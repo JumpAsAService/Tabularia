@@ -517,6 +517,71 @@ def test_a_model_with_wrong_parameters_is_refused_with_what_to_fix(operation, pa
     assert message in str(e.value)
 
 
+_BOOST = {"outcome": "churned", "predictors": ["quantity", "price"]}
+
+
+@pytest.mark.parametrize("model_id", ["xgboost", "catboost"])
+def test_a_boosted_model_has_its_line_of_reference_with_the_variants_by_task_and_its_defaults_pass(model_id):
+    reference = ai_flow_agent.context(None, "en")
+    line = next(l for l in reference.splitlines() if l.startswith(f"- model_{model_id} {{task: regression|binary|multiclass"))
+    assert line.endswith("(boosting)") and "stop_metric?: loss|mae|auc|error" in line and "validation?: random|time" in line
+    assert ("min_child_weight?: number" in line) == (model_id == "xgboost") and ("l2_leaf_reg?: number" in line) == (model_id == "catboost")
+    assert "  variants: regression (task = regression); binary (task = binary); multiclass (task = multiclass)." in reference
+    assert "event_value, threshold only when task = binary" in reference
+    for task, extra in (("regression", {}), ("binary", {"event_value": "yes", "threshold": 0.3}), ("multiclass", {"class_weight": "balanced"})):
+        given = {**_BOOST, "task": task, **extra}
+        assert clean_params(f"model_{model_id}", given) == given
+        defaults = {k: v for k, v in ai_flow_agent.MODELS[model_id]["defaults"].items() if ai_flow_agent._given(v) and k not in given
+                    and ai_flow_agent.model_applies(model_id, k, {**ai_flow_agent.MODELS[model_id]["defaults"], **given})}
+        assert clean_params(f"model_{model_id}", {**given, **defaults}) == {**given, **defaults}
+    assert "never put in `predictors` a column computed from the outcome" in reference
+
+
+@pytest.mark.parametrize("operation, params, message", [
+    ("model_xgboost", _BOOST, "'task' is required"),
+    ("model_xgboost", {**_BOOST, "task": "tree"}, "'task' must be one of regression, binary, multiclass"),
+    ("model_xgboost", {**_BOOST, "task": "binary"}, "a binary task needs the outcome's value whose probability is predicted ('event_value')"),
+    ("model_xgboost", {**_BOOST, "task": "regression", "threshold": 0.3}, "'threshold' only applies when task = binary"),
+    ("model_xgboost", {**_BOOST, "task": "regression", "class_weight": "balanced"}, "'class_weight' only applies when task = binary or multiclass"),
+    ("model_xgboost", {**_BOOST, "task": "regression", "validation": "time"}, "a validation part in time needs the column of the time ('order_by')"),
+    ("model_xgboost", {**_BOOST, "task": "regression", "stop_metric": "auc"}, "the AUC is a binary task's metric"),
+    ("model_xgboost", {**_BOOST, "task": "binary", "event_value": "yes", "stop_metric": "mae"}, "the mean absolute error is a regression's metric"),
+    ("model_xgboost", {**_BOOST, "task": "regression", "early_stopping": False, "early_stopping_rounds": 10}, "'early_stopping_rounds' only applies when early_stopping = true"),
+    ("model_xgboost", {**_BOOST, "task": "regression", "max_depth": 13}, "'max_depth' must be a whole number from 1 to 12"),
+    ("model_catboost", {**_BOOST, "task": "regression", "max_depth": 11}, "'max_depth' must be a whole number from 1 to 10"),
+    ("model_xgboost", {**_BOOST, "task": "regression", "learning_rate": 0}, "'learning_rate' must be a number above 0 and at most 1"),
+    ("model_xgboost", {**_BOOST, "task": "regression", "l2_leaf_reg": 1}, "there is no parameter 'l2_leaf_reg'"),
+    ("model_catboost", {**_BOOST, "task": "regression", "reg_lambda": 1}, "there is no parameter 'reg_lambda'"),
+    ("model_xgboost", {**_BOOST, "task": "regression", "outcome": "quantity"}, "the column «quantity» is both 'outcome' and 'predictors'"),
+])
+def test_a_boosted_model_with_wrong_parameters_is_refused_with_what_to_fix(operation, params, message):
+    with pytest.raises(ModelRetry) as e:
+        clean_params(operation, params)
+    assert message in str(e.value)
+
+
+@pytest.mark.anyio
+async def test_an_assistant_puts_a_binary_xgboost_on_the_draft_and_a_binary_without_its_event_is_sent_back(session, world, fake_engine, monkeypatch):
+    churn = {"task": "binary", "event_value": "yes", "outcome": "churned", "predictors": ["quantity", "price"],
+             "validation": "time", "order_by": "ordered_on", "threshold": 0.3}
+    events = await _turn(session, world, monkeypatch, world["editor"], [
+        ("add_source", {"datasource_id": world["orders"].id}),
+        ("add_step", {"after": "source", "operation": "model_xgboost", "params": {k: v for k, v in churn.items() if k != "event_value"}}),
+        ("add_step", {"after": "source", "operation": "model_xgboost", "params": churn}),
+        "Added an XGBoost model of the churn (ctl-1); it runs with the flow.",
+    ], message="predict which customers will leave, on the later orders")
+    assert "error" not in [n for n, _ in events]
+    steps = [d for n, d in events if n == "tool_result" and d["name"] == "add_step"]
+    assert [s["ok"] for s in steps] == [False, True]
+    assert "a binary task needs the outcome's value" in steps[0]["error"]
+    canvas = json.loads(events[-1][1]["definition"])
+    node = next(n for n in canvas["nodes"] if n["id"] == "ctl-1")
+    assert node["type"] == "model"
+    assert node["data"] == {"model": "xgboost", "params": churn, "timeoutSeconds": 900, "retries": 0}
+    assert any(e["source"] == "source" and e["target"] == "ctl-1" and e["targetHandle"] == "left" for e in canvas["edges"])
+    assert fake_engine.previews == []
+
+
 def test_the_reference_tells_the_assistant_what_a_model_needs_to_run():
     reference = ai_flow_agent.context(None, "en")
     for sentence in ("Kubernetes", "group of models an administrator has enabled", "there is no preview",
