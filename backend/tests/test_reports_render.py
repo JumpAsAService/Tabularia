@@ -231,6 +231,26 @@ def test_an_xy_chart_with_each_mark_and_a_logarithmic_interval_render_to_pdf_and
     assert asked["xy"]["xAxis"]["type"] == "value" and asked["ratios"]["yAxis"]["type"] == "log"
 
 
+def test_a_beeswarm_renders_to_pdf_and_svg_with_the_names_on_the_y_axis(tmp_path, chart_service):
+    """The SHAP summary of a boosting model's report: `xy` points in fixed colours, the names of the
+    predictors at the whole numbers of the y axis (`Series.color`, `options.y_categories`)."""
+    d = samples.definition()
+    swarm = {**samples.beeswarm_item(), "dataset": "orders", "x": 0, "y": 0, "w": 186, "h": 70,
+             "category": "[amount]",
+             "series": [{"value": f'IF({when}, IF([region] = "Nord-Ovest", 1, IF([region] = "Nord-Est", 2, 3)) + ([qty] - 60) / 400, NULL)',
+                         "name": n, "as": "point", "color": c} for n, c, when in (
+                 ("Low", "#2c5aa0", "[qty] < 40"), ("Middle", "#8c8c8c", "[qty] >= 40 AND [qty] < 80"), ("High", "#b2182b", "[qty] >= 80"))]}
+    d["sections"]["body"]["items"] = [swarm]
+    del chart_service[1][:]
+    made = {fmt: run(tmp_path / fmt, chart_service, fmt, definition=d) for fmt in ("pdf", "svg")}
+    assert all(r.pages == 1 and r.warnings == [] for r in made.values())
+    assert made["pdf"].path.read_bytes().startswith(b"%PDF-")
+    option = {spec["option"]["title"]["text"]: spec["option"] for spec in chart_service[1]}["beeswarm"]
+    assert [s["itemStyle"]["color"] for s in option["series"] if s["type"] == "scatter" and s.get("name")] == ["#2c5aa0", "#8c8c8c", "#b2182b"]
+    assert option["yAxis"]["axisLabel"]["formatter"]["names"] == {"1": "Nord-Ovest", "2": "Nord-Est", "3": "Centro"}
+    assert (option["yAxis"]["min"], option["yAxis"]["max"]) == (0.5, 3.5)
+
+
 def test_the_pages_on_screen_are_svg_with_where_to_click(tmp_path, chart_service):
     state = {"items": {"detail": {"sort": {"column": 4, "dir": "desc"}, "collapsed": [["Isole"]]}}}
     r = run(tmp_path, chart_service, "svg", state=state)

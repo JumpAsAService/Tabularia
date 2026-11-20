@@ -3100,5 +3100,230 @@
     }
    ]
   }
+ },
+ {
+  "name": "xy_beeswarm",
+  "width": 340,
+  "height": 208,
+  "option": {
+   "animation": false,
+   "color": [
+    "#3b5bdb",
+    "#14a38b",
+    "#e0a23b",
+    "#c2477a",
+    "#6b7590",
+    "#8a63d2",
+    "#2f9e44",
+    "#d9480f",
+    "#1c7ed6",
+    "#868e96"
+   ],
+   "textStyle": {
+    "fontFamily": "IBM Plex Sans, Helvetica Neue, Arial, sans-serif",
+    "fontSize": 9,
+    "color": "#1f2933"
+   },
+   "grid": {
+    "left": 6,
+    "right": 10,
+    "top": 22,
+    "bottom": 6,
+    "containLabel": true
+   },
+   "legend": {
+    "show": false,
+    "top": 20,
+    "left": "center",
+    "itemWidth": 10,
+    "itemHeight": 7,
+    "itemGap": 8,
+    "textStyle": {
+     "fontSize": 9,
+     "overflow": "truncate",
+     "width": 120
+    },
+    "data": [
+     "Low",
+     "Middle",
+     "High"
+    ]
+   },
+   "title": {
+    "text": "beeswarm",
+    "left": 0,
+    "top": 0,
+    "textStyle": {
+     "fontSize": 10,
+     "fontWeight": "bold",
+     "color": "#1f2933"
+    }
+   },
+   "xAxis": {
+    "type": "value",
+    "axisLabel": {
+     "fontSize": 9,
+     "formatter": {
+      "$fmt": "compact",
+      "locale": "en"
+     }
+    },
+    "splitLine": {
+     "show": false
+    },
+    "scale": true,
+    "axisLine": {
+     "onZero": false
+    }
+   },
+   "yAxis": {
+    "type": "value",
+    "axisLabel": {
+     "fontSize": 9,
+     "interval": 0,
+     "customValues": [
+      1,
+      2
+     ],
+     "formatter": {
+      "$fmt": "names",
+      "max": 24,
+      "names": {
+       "1": "N",
+       "2": "S"
+      }
+     }
+    },
+    "splitLine": {
+     "show": true,
+     "customValues": [
+      1,
+      2
+     ],
+     "lineStyle": {
+      "color": "#e6e8ec",
+      "width": 0.6
+     }
+    },
+    "scale": false,
+    "min": 0.5,
+    "max": 2.5,
+    "interval": 1,
+    "axisTick": {
+     "customValues": [
+      1,
+      2
+     ]
+    }
+   },
+   "series": [
+    {
+     "name": "Low",
+     "itemStyle": {
+      "color": "#2c5aa0"
+     },
+     "z": 3,
+     "type": "scatter",
+     "symbolSize": 4.5,
+     "data": [
+      {
+       "value": [
+        10.0,
+        0.8
+       ]
+      },
+      {
+       "value": [
+        20.0,
+        0.9
+       ]
+      }
+     ]
+    },
+    {
+     "name": "Middle",
+     "itemStyle": {
+      "color": "#8c8c8c"
+     },
+     "z": 3,
+     "type": "scatter",
+     "symbolSize": 4.5,
+     "data": [
+      {
+       "value": [
+        -5.0,
+        1.0
+       ]
+      },
+      {
+       "value": [
+        30.0,
+        2.1
+       ]
+      }
+     ]
+    },
+    {
+     "name": "High",
+     "itemStyle": {
+      "color": "#b2182b"
+     },
+     "z": 3,
+     "type": "scatter",
+     "symbolSize": 4.5,
+     "data": [
+      {
+       "value": [
+        1.0,
+        2.2
+       ]
+      }
+     ]
+    },
+    {
+     "type": "line",
+     "name": "",
+     "data": [],
+     "silent": true,
+     "legendHoverLink": false,
+     "markLine": {
+      "silent": true,
+      "symbol": "none",
+      "animation": false,
+      "label": {
+       "show": false
+      },
+      "lineStyle": {
+       "color": "#1f2933",
+       "width": 1,
+       "type": "dashed"
+      },
+      "data": [
+       {
+        "xAxis": 0.0
+       }
+      ]
+     }
+    },
+    {
+     "type": "scatter",
+     "silent": true,
+     "symbolSize": 0,
+     "legendHoverLink": false,
+     "data": [
+      [
+       0.0,
+       1.4
+      ]
+     ],
+     "itemStyle": {
+      "opacity": 0
+     },
+     "label": {
+      "show": false
+     }
+    }
+   ]
+  }
  }
 ]

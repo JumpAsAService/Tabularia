@@ -155,7 +155,28 @@ def chart_presets() -> list[dict]:
             item["split_by"] = "[kind]"
         job = build(report(chart_item(kind, item))).charts[0]
         out.append({"name": kind, "width": job.width, "height": job.height, "option": job.option})
+    out.append({"name": "xy_beeswarm", **_beeswarm_job()})
     return out
+
+
+def beeswarm_item() -> dict:
+    """A beeswarm as the models' report draws one (docs/specs/statistical-models.md, «Group `boosting`»):
+    `xy` points coloured by a fixed ramp, a row of them for each region, the regions' names on the
+    y axis (`options.y_categories`); x is the amount, the colour the quantity's bin."""
+    row = 'IF([region] = "N", 1, 2) + ([qty] - 3) / 10'  # the sample's rows are in two regions, N and S
+    bins = (("Low", "#2c5aa0", "[qty] < 3"), ("Middle", "#8c8c8c", "[qty] >= 3 AND [qty] < 5"), ("High", "#b2182b", "[qty] >= 5"))
+    return {"id": "beeswarm", "type": "chart", "dataset": "d", "kind": "xy", "x": 0, "y": 0, "w": 90, "h": 55,
+            "title": "beeswarm", "category": "[amount]",
+            "series": [{"value": f"IF({when}, {row}, NULL)", "name": name, "as": "point", "color": color}
+                       for name, color, when in bins],
+            "options": {"legend": False, "target_x": [0], "y_categories": "[region]", "format": "#,##0"}}
+
+
+def _beeswarm_job() -> dict:
+    from tests.test_reports_model import build, report
+
+    job = build(report(beeswarm_item())).charts[0]
+    return {"width": job.width, "height": job.height, "option": job.option}
 
 
 if __name__ == "__main__":

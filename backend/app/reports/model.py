@@ -681,14 +681,23 @@ class _Builder:
                     low = {a: b for a, b, _ in read(sub, s)}
                     high = {a: b for a, b, _ in read(sub, it.series[i + 1])}
                     points = [(a, min(low[a], high[a]), max(low[a], high[a])) for a in sorted(low) if a in high]
-                    data.xy.append(charts.XYSeries(name, "band", points, own, legend))  # type: ignore[arg-type]
+                    data.xy.append(charts.XYSeries(name, "band", points, own, legend, s.color))  # type: ignore[arg-type]
                     continue
                 before = own
                 points = read(sub, s)
                 if mark != "point":  # a line goes from left to right, whatever the order of its rows
                     points = sorted(points, key=lambda p: p[0])
-                data.xy.append(charts.XYSeries(name, mark, points, own, legend))
+                data.xy.append(charts.XYSeries(name, mark, points, own, legend, s.color))
         o = it.options
+        if o.y_categories:  # the names of the y axis: the first drawn row of each whole number's
+            names = rd.parse(o.y_categories)
+            for s in it.series:
+                for _, sub in groups:
+                    pairs = self.d.points(sub, x, rd.parse(s.value), ctx, it.id)
+                    said = self.d.points(sub, x, names, ctx, it.id)
+                    for (a, b), (_, t) in zip(pairs, said):
+                        if self._num(a) is not None and self._num(b) is not None and t is not None:
+                            data.y_names.setdefault(round(self._num(b)), self.name(t))  # type: ignore[arg-type]
         data.targets = [self._target(it, base)]
         data.targets_x = [self._num(self.value(it, f"options.target_x[{i}]", t, base)) if isinstance(t, str) else t
                           for i, t in enumerate(o.targets_x())]

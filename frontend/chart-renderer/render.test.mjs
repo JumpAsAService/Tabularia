@@ -15,7 +15,7 @@ const presets = JSON.parse(readFileSync(new URL('./presets.sample.json', import.
 const chart = (option, width = 300, height = 200) => ({ width, height, option })
 
 test('every kind of chart the engine builds is drawn', () => {
-  assert.equal(presets.length, 18)
+  assert.equal(presets.length, 19)
   for (const spec of presets) {
     const svg = render(spec)
     assert.match(svg, /^<svg /, spec.name)
@@ -43,6 +43,27 @@ test('an xy chart: a band filled between its two edges, below zero too, and date
     yAxis: { type: 'value' }, series: [{ type: 'line', data: [[Date.UTC(2023, 0, 1), 1], [Date.UTC(2025, 6, 1), 2]] }] }, 400))
   assert.match(dated, />2024</)
   assert.ok(!/>(Jan|Feb|Mar|Apr|Jul)</.test(dated))
+})
+
+test('a beeswarm: points in their own colours, the names of the rows at the whole numbers of the y axis', () => {
+  const beeswarm = presets.find((p) => p.name === 'xy_beeswarm')
+  assert.ok(beeswarm.option.series.some((s) => s.itemStyle && s.itemStyle.color === '#2c5aa0'))
+  const svg = render(beeswarm)
+  assert.match(svg, />N</)
+  assert.match(svg, />S</)
+  // the ticks 0.5 and 1.5, which the axis starts from, say nothing; a name is cut at its `max`
+  const axis = (names, max) => render(chart({ grid: { left: 90, right: 10, top: 10, bottom: 20, containLabel: false },
+    xAxis: { type: 'value' },
+    yAxis: { type: 'value', min: 0.5, max: 2.5, interval: 1,
+      axisLabel: { customValues: [1, 2], formatter: { $fmt: 'names', names, max } } },
+    series: [{ type: 'scatter', data: [[0, 1], [1, 2]] }] }, 300, 120))
+  const cutShort = axis({ 1: 'price', 2: 'a very long name of a predictor' }, 12)
+  assert.match(cutShort, />price</)
+  assert.match(cutShort, />a very long…</)
+  assert.ok(!cutShort.includes('predictor'))
+  // a name is a text, never code; a number without a name says nothing
+  const odd = axis({ 1: '<script>alert(1)</script>' }, 40)
+  assert.ok(!odd.includes('<script>') && odd.includes('&lt;script&gt;'))
 })
 
 test('the named formatters write the engine\'s texts and the locale\'s numbers', () => {

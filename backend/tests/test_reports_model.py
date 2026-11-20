@@ -722,6 +722,29 @@ def test_an_interval_on_a_log_axis():
     assert o["series"][1]["markLine"]["data"] == [{"yAxis": 1.0}]
 
 
+def test_an_xy_series_has_a_fixed_colour_and_the_y_axis_can_say_names():
+    """A beeswarm: points in a ramp of fixed colours, a row of them for each name; the axis says the names at
+    the whole numbers, from 0.5 to the largest + 0.5 (docs/specs/statistical-models.md, «Group `boosting`»)."""
+    rows = [_row("point", "swarm", f"name {j}" if j != 3 else "x" * 40, bin_, j + off, x, None, i)
+            for i, (j, off, x, bin_) in enumerate(((1, 0.1, 0.5, "low"), (1, -0.2, 1.5, "high"), (3, 0.3, -1.0, "low"),
+                                                   (3, 0.0, 2.0, "missing")))]
+    series = [{"value": f'IF([stat] = "{b}", [value], NULL)', "as": "point", "name": b, "color": c}
+              for b, c in (("low", "#2c5aa0"), ("high", "#b2182b"), ("missing", "#c4c8cf"))]
+    o = _chart("xy", rows, category="[x0]", series=series, options={"legend": False, "target_x": [0], "y_categories": "[level_2]"})
+    points = [s for s in o["series"] if s["type"] == "scatter" and s.get("name")]   # not the one that keeps the lines in range (no name)
+    assert [s["itemStyle"]["color"] for s in points] == ["#2c5aa0", "#b2182b", "#c4c8cf"]
+    y = o["yAxis"]
+    assert (y["min"], y["max"], y["interval"]) == (0.5, 3.5, 1) and y["axisLabel"]["customValues"] == [1, 2, 3]
+    names = y["axisLabel"]["formatter"]
+    # the first row of each whole number gives its name; 2 has no point, so no name
+    assert names["$fmt"] == "names" and names["names"] == {"1": "name 1", "3": "x" * 40} and names["max"] == 24
+    assert o["grid"]["containLabel"] is False and o["grid"]["left"] > 40
+    # without the option the axis is the usual one, and a series without a colour takes the palette's
+    plain = _chart("xy", rows, category="[x0]", series=[{"value": "[value]", "as": "point"}])
+    assert "customValues" not in plain["yAxis"].get("axisLabel", {}) and plain["grid"]["containLabel"] is True
+    assert plain["series"][0]["itemStyle"]["color"] != "#2c5aa0"
+
+
 def test_the_checks_of_an_xy_chart():
     def said(kind="xy", **item):
         it = {"id": "c", "type": "chart", "dataset": "d", "kind": kind, "x": 0, "y": 0, "w": 90, "h": 55,
@@ -741,9 +764,15 @@ def test_the_checks_of_an_xy_chart():
     assert said(options={"target_x": [1, 2, 3, 4, 5]})[0][0] == "options.target_x"
     assert said(options={"x_time": True, "log_x": True})[0][0] == "options.log_x"
     assert said(series=[{"value": "[amount]", "as": "point", "label": "[nope"}])[0][0] == "series[0].label"
+    assert said(series=[{"value": "[amount]", "as": "point", "color": "#2c5aa0"}], options={"y_categories": "[region]"}) == []
+    with pytest.raises(rd.DefinitionError, match="color"):  # #rrggbb only
+        said(series=[{"value": "[amount]", "as": "point", "color": "blue"}])
+    assert said(options={"y_categories": "[nope"})[0][0] == "options.y_categories"
     # what only an xy chart reads is refused elsewhere, never ignored
     column = {"category": "[region]", "series": [{"value": "SUM([amount])", "as": "stem", "label": "[region]"}]}
     assert [f for f, _ in said("column", **column)] == ["series[0].as", "series[0].label"]
+    assert [f for f, _ in said("column", category="[region]", series=[{"value": "SUM([amount])", "color": "#2c5aa0"}],
+                               options={"y_categories": "[region]"})] == ["series[0].color", "options.y_categories"]
     assert [f for f, _ in said("scatter", series=[{"value": "[amount]"}], options={"diagonal": True, "target_x": 1, "log": True})] == [
         "options.diagonal", "options.target_x", "options.log"]
     assert said("combo", category="[region]", series=[{"value": "SUM([amount])"}, {"value": "SUM([qty])", "as": "line"}]) == []

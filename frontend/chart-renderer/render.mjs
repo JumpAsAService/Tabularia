@@ -71,6 +71,16 @@ const FORMATTERS = {
     const name = cut(a);
     return (v) => name(valueOf(v));
   },
+  // an axis that shows a name at each whole number (a beeswarm's predictors: the engine's
+  // `options.y_categories`); every other tick, the ends 0.5 and top + 0.5 too, is written as nothing
+  names: (a) => {
+    const names = a.names && typeof a.names === 'object' ? a.names : {};
+    const name = cut(a);
+    return (v) => {
+      const n = Number(valueOf(v));
+      return Number.isInteger(n) && Object.hasOwn(names, String(n)) ? name(names[String(n)]) : '';
+    };
+  },
   nameLabel: (a) => {
     const sep = a.sep === ' ' ? ' ' : '\n';
     const name = cut(a);

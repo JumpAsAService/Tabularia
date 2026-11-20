@@ -63,6 +63,7 @@ class XYSeries:
     points: list[tuple[float, float, Any]]
     colour: int = 0
     legend: bool = True
+    color: str | None = None  # a fixed colour (#rrggbb) instead of the palette's `colour`
 
 
 @dataclass
@@ -82,6 +83,7 @@ class ChartData:
     split_keys: list[Any] = field(default_factory=list)
     xy: list[XYSeries] = field(default_factory=list)  # an `xy` chart's marks
     targets_x: list[float | None] = field(default_factory=list)  # its vertical lines
+    y_names: dict[int, str] = field(default_factory=dict)  # its y axis' names: at each whole number, a name
 
 
 def _palette(theme: rd.Theme) -> list[str]:
@@ -556,6 +558,7 @@ def _density(data: ChartData, it: rd.ChartItem, theme: rd.Theme, loc: formats.Lo
             "yAxis": {"min": 0, **_value_axis(data, loc, it.options), "axisLine": {"onZero": False}}, "series": series}
 
 
+MAX_Y_NAME = 24  # the characters of a name on an `xy` chart's y axis, then «…»
 MAX_XY_POINTS = 2000  # the points of a mark of an `xy` chart: beyond, thinned evenly (a runner caps them already)
 _DAY_MS = 86_400_000
 _TIME_LABELS = {"year": "{yyyy}", "month": "{yyyy}-{MM}", "day": "{yyyy}-{MM}-{dd}", "hour": "{HH}:{mm}",
@@ -610,7 +613,7 @@ def _xy(data: ChartData, it: rd.ChartItem, theme: rd.Theme, loc: formats.Locale,
     for k, s in enumerate(data.xy):
         pts = [p for p in s.points if not (o.log_x and p[0] <= 0)]
         pts = _thinned(pts) if s.mark == "point" else _thinned(pts, keep_labelled=False)
-        c = colour(s.colour)
+        c = s.color or colour(s.colour)
         xs += [p[0] for p in pts]
         ys += [v for p in pts for v in ((p[1], p[2]) if s.mark == "band" else (p[1],))]
         if s.mark == "band":
@@ -675,7 +678,17 @@ def _xy(data: ChartData, it: rd.ChartItem, theme: rd.Theme, loc: formats.Locale,
         x_axis.update(type="log", logBase=10)
         x_axis.pop("scale")
     y_axis = {**_value_axis(data, loc, o), "scale": True}
-    if any(s.mark == "stem" for s in data.xy):
+    if data.y_names:  # names at the whole numbers; ECharts draws the ends 0.5 and top + 0.5 too, written as nothing
+        whole = list(range(1, max(data.y_names) + 1))  # a tick at each whole number: the axis itself starts at 0.5
+        y_axis.update(min=0.5, max=whole[-1] + 0.5, interval=1, scale=False,
+                      axisLabel={"fontSize": 9, "interval": 0, "customValues": whole, "formatter": {
+                          "$fmt": "names", "max": MAX_Y_NAME, "names": {str(j): n for j, n in data.y_names.items()}}},
+                      axisTick={"customValues": whole},
+                      splitLine={"show": True, "customValues": whole, "lineStyle": {"color": "#e6e8ec", "width": 0.6}})
+        # the grid's own room for the names (containLabel measures the ticks ECharts would have chosen, not these)
+        longest = max(min(len(n), MAX_Y_NAME) for n in data.y_names.values())
+        base["grid"].update(containLabel=False, left=10 + int(longest * 9 * 0.58))
+    elif any(s.mark == "stem" for s in data.xy):
         y_axis.pop("scale")  # a stem stands on zero: the axis has it
     elif bands and ys and o.min is None and o.max is None:
         # a band's stack counts zero (the low edge stands on it): the axis is the marks' own, rounded

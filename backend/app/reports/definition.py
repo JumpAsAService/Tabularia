@@ -253,6 +253,7 @@ class Series(_Model):
     axis: Literal["left", "right"] = "left"
     format: Pattern | None = None  # its values', and its axis's; none: the chart's
     label: Expr | None = None  # `xy` only: the text written beside a point (a row's number), none for most
+    color: Color | None = None  # `xy` only: the series' fixed colour (a beeswarm's ramp), none: the palette's
 
 
 class ChartOptions(_Model):
@@ -273,6 +274,9 @@ class ChartOptions(_Model):
     diagonal: bool = False
     x_time: bool = False
     log_x: bool = False
+    # `xy` only: the y axis shows names: at each whole number j, this expression's value on the first
+    # drawn row whose ROUND(y) is j (a beeswarm's predictors); the axis runs from 0.5 to the largest j + 0.5
+    y_categories: Expr | None = None
     # `interval`: its value axis on a logarithmic scale (odds and hazard ratios, a line at 1)
     log: bool = False
 
@@ -705,6 +709,8 @@ class _Checks:
                                              "this band_high has no band_low before it", it.id, f"series[{i}].as"))
             if s.label is not None:
                 self.expr(s.label, it.id, f"series[{i}].label", self.env(ds))
+        if it.options.y_categories is not None:
+            self.expr(it.options.y_categories, it.id, "options.y_categories", self.env(ds))
         if it.category and _parses(it.category) and ex.is_aggregate(parse(it.category)):
             self.problems.append(Problem("the x of an xy chart is read on each row (a column, not a total)", it.id, "category"))
         targets = it.options.targets_x()
@@ -725,12 +731,16 @@ class _Checks:
                                              it.id, f"series[{i}].as"))
             if s.label is not None:
                 self.problems.append(Problem("a series' label is an xy chart's", it.id, f"series[{i}].label"))
+            if s.color is not None:
+                self.problems.append(Problem("a series' color is an xy chart's", it.id, f"series[{i}].color"))
         o = it.options
         for name in ("mirror", "diagonal", "x_time", "log_x"):
             if getattr(o, name):
                 self.problems.append(Problem(f"the option «{name}» is an xy chart's", it.id, f"options.{name}"))
         if o.target_x is not None:
             self.problems.append(Problem("the option «target_x» is an xy chart's", it.id, "options.target_x"))
+        if o.y_categories is not None:
+            self.problems.append(Problem("the option «y_categories» is an xy chart's", it.id, "options.y_categories"))
         if o.log and it.kind != "interval":
             self.problems.append(Problem("the option «log» is an interval chart's", it.id, "options.log"))
 
