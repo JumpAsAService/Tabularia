@@ -75,7 +75,14 @@ Development on `main` for the next minor version. The stable line stays 1.4.x
   the ROC, calibration, confusion matrix, or observed against predicted. Where the regressions
   have tests, these have diagnostics (against the average, overfitting, trees, class imbalance,
   calibration, stability of the importance, unused predictors, leakage): rules of thumb with
-  advice, with no p-value. The model is logged to MLflow as the library's own file,
+  advice, with no p-value; their thresholds were tuned on clean data so they no longer cry wolf
+  (overfitting, calibration and leakage in particular), and when early stopping reads a metric
+  other than the loss, the report says if the loss kept falling after the kept tree (advice
+  *stop_on_loss*). With balanced class weights, validation and the baseline are weighted as the
+  fit. The run stops before the model file passes the group's size limit, and its time budget
+  counts from the runner's start, with the SHAP sample sized on the time left. An infinite number
+  in a predictor or the outcome is refused with the column's name, by both nodes and by Predict.
+  The model is logged to MLflow as the library's own file,
   `xgboost.json` or `catboost.cbm`, with its sha256 in the card, never a pickle, and **Predict**
   checks the fingerprint before applying it. The image is built from wheels in minutes. New
   route `POST /scripts/objects/upload` of the engine; the assistants and the MCP tools know the
