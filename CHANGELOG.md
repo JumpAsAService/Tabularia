@@ -43,13 +43,14 @@ Development on `main` for the next minor version. The stable line stays 1.4.x
   numbers, equal within a relative 1e-9. New operations `stat_<test>` (21); new route
   `POST /tasks/stat-report`; saved reports and dashboards do not change; a flow with a test
   cannot be exported to dbt (`op_not_exportable`). [Statistics](docs/capabilities/statistics.md).
-- **Statistical models in the flow editor.** A **Models** group in the palette holds six models
-  and a Predict node, for Kubernetes: linear regression (ordinary or weighted least squares,
+- **Statistical models in the flow editor.** A **Models** group in the palette holds seven models
+  and a Predict node, for Kubernetes: five in R, namely linear regression (ordinary or weighted least squares,
   classical, robust HC0 to HC3, HAC or clustered errors), logistic regression (maximum
   likelihood or Firth, logit or probit), both with ridge, lasso or elastic-net penalties and
   the penalty chosen by cross-validation; Kaplan–Meier (log-rank and Peto–Peto tests, strata,
   restricted mean); Cox (Efron, Breslow or exact ties, strata, start–stop rows, robust errors);
-  and ARIMA from AR to SARIMAX, with the orders given or searched for. A model runs in R as a
+  and ARIMA from AR to SARIMAX, with the orders given or searched for; then XGBoost and
+  CatBoost, in Python (next entry). A model runs as a
   Job, in an image built per group from a recipe with pinned packages, and writes the ten-column
   table of the statistics. Its **Report** tab opens on the checks of its assumptions, each with
   its verdict and advice, then the coefficients, the fit and the diagnostic charts, as PDF or
