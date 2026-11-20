@@ -28,18 +28,27 @@
   Predict step applies, which the gateway read from MLflow and checked
   (docs/specs/statistical-models.md, «Predict»). The Job reads it from the bucket and never
   sees MLflow.
+- POST /scripts/objects/upload: a Predict step's model file (a boosting model's xgboost.json
+  or catboost.cbm) as raw bytes, which the gateway streams from MLflow's artifact proxy:
+  hashed while it is received, written to the bucket only when its size and sha256 are the
+  ones the model card keeps (a file that does not match leaves no object).
 
 The secret arrives encrypted (Fernet shared with the gateway). See
 docs/specs/script-node.md.
 """
+import base64
+import hashlib
+import json
 import logging
 import os
+import re
 import tempfile
 import uuid
 from typing import Any
 
 from botocore.exceptions import BotoCoreError, ClientError
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Header, HTTPException, Query, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
@@ -339,6 +348,62 @@ def objects_write(request: ObjectWriteRequest):
     except (ClientError, BotoCoreError) as e:
         raise HTTPException(status_code=502, detail=f"The scripts bucket answered: {_reason(e)}")
     return {"bytes": len(body)}
+
+
+_SHA256 = re.compile(r"^[0-9a-f]{64}$")
+UPLOAD_CONNECTION_HEADER = "X-Tabularia-Scripts-Connection"
+
+
+def _upload_limit() -> int:
+    from app.engine.models import catalog
+
+    return int(catalog.LIMITS["max_model_file_bytes"])
+
+
+@router.post("/objects/upload")
+async def objects_upload(request: Request, key: str = Query(...), sha256: str = Query(...),
+                         size: int = Query(..., alias="bytes"),
+                         connection: str = Header(..., alias=UPLOAD_CONNECTION_HEADER)):
+    """{bytes}: the request's body (raw bytes) written at the key, only when it is `bytes` long
+    and its sha256 is the one given. The connection is the header's value: the same JSON as
+    the other routes' `connection` (its secret still encrypted), in base64, so that the body
+    can be the file. The body is spooled to a temporary file while it is hashed, never held
+    in memory; past the limit (the catalogue's max_model_file_bytes) it is refused, 413, as
+    soon as it is seen; a size or a hash other than the declared ones is a 409 and leaves no
+    object."""
+    most = _upload_limit()
+    if not key or key.startswith("/") or ".." in key.split("/"):
+        raise HTTPException(status_code=422, detail="Not a key of a step")
+    if not _SHA256.match(sha256):
+        raise HTTPException(status_code=422, detail="The sha256 is 64 lowercase hexadecimal digits")
+    if size < 1 or size > most:
+        raise HTTPException(status_code=413, detail=f"A model file is at most {most} bytes")
+    try:
+        conn = S3ConnectionSpec.model_validate(json.loads(base64.b64decode(connection, validate=True)))
+    except Exception:  # noqa: BLE001 — what the header holds is the gateway's to get right
+        raise HTTPException(status_code=422, detail="The connection header is not the bucket's connection")
+    digest, got = hashlib.sha256(), 0
+    fd, path = tempfile.mkstemp(suffix=".model")
+    try:
+        with os.fdopen(fd, "wb") as out:
+            async for chunk in request.stream():
+                got += len(chunk)
+                if got > min(size, most):
+                    raise HTTPException(status_code=413 if got > most else 409,
+                                        detail=f"The file is longer than the {min(size, most)} bytes declared")
+                digest.update(chunk)
+                out.write(chunk)
+        if got != size:
+            raise HTTPException(status_code=409, detail=f"The file has {got} bytes, not the {size} declared")
+        if digest.hexdigest() != sha256:
+            raise HTTPException(status_code=409, detail="The file's sha256 is not the declared one")
+        try:
+            await run_in_threadpool(lambda: conn.client().upload_file(path, conn.bucket, key))
+        except (ClientError, BotoCoreError) as e:
+            raise HTTPException(status_code=502, detail=f"The scripts bucket answered: {_reason(e)}")
+    finally:
+        os.unlink(path)
+    return {"bytes": got}
 
 
 class ResultsRowsRequest(BaseModel):

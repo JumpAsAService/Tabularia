@@ -1,10 +1,15 @@
 package mlflowconn_test
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -214,5 +219,110 @@ func TestTheRunEnds(t *testing.T) {
 	}
 	if r := s.OnlyRun(); r.Status != "FAILED" || !r.Ended {
 		t.Fatalf("%+v", r)
+	}
+}
+
+// ── a model file as a stream (lot X5) ────────────────────────────────────────
+
+func TestABinaryFileGoesUpAndComesBackByteForByte(t *testing.T) {
+	s := mlflowtest.New(t)
+	tr := tracker(s, "none", "")
+	ctx := context.Background()
+	binary := append([]byte{0x00, 0xff, 0xfe, '\r', '\n', 0x1a}, mlflowtest.Pattern(5000)...) // not UTF-8
+	if err := tr.Upload(ctx, "1/run1/artifacts", "model/catboost.cbm", bytes.NewReader(binary), int64(len(binary))); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.ContentType["1/run1/artifacts/model/catboost.cbm"]; got != "application/octet-stream" {
+		t.Errorf("content type %q", got)
+	}
+	rc, length, err := tr.Open(ctx, "1/run1/artifacts", "model/catboost.cbm", 1<<20)
+	if err != nil || length != int64(len(binary)) {
+		t.Fatalf("open: %v %d", err, length)
+	}
+	got, err := io.ReadAll(rc)
+	rc.Close()
+	if err != nil || !bytes.Equal(got, binary) {
+		t.Fatalf("read back: %v, %d bytes", err, len(got))
+	}
+	// Download (the small files' way) reads the same bytes
+	if b, err := tr.Download(ctx, "1/run1/artifacts", "model/catboost.cbm", 1<<20); err != nil || !bytes.Equal(b, binary) {
+		t.Errorf("download: %v", err)
+	}
+}
+
+func TestOpenSaysMissingAndTooLarge(t *testing.T) {
+	s := mlflowtest.New(t)
+	tr := tracker(s, "none", "")
+	ctx := context.Background()
+	if _, _, err := tr.Open(ctx, "1/run1/artifacts", "model/xgboost.json", 1<<20); err == nil {
+		t.Fatal("a missing file opened")
+	} else if nf := new(mlflowconn.NotFound); !errors.As(err, &nf) {
+		t.Errorf("missing: %T %v", err, err)
+	}
+	s.Artifacts["1/run1/artifacts/model/xgboost.json"] = bytes.Repeat([]byte("x"), 1000)
+	// the server says its length: refused before a byte is read
+	_, _, err := tr.Open(ctx, "1/run1/artifacts", "model/xgboost.json", 999)
+	if tl := new(mlflowconn.TooLarge); !errors.As(err, &tl) || tl.Limit != 999 {
+		t.Errorf("over the limit by its length: %v", err)
+	}
+	// exactly the limit is fine
+	rc, _, err := tr.Open(ctx, "1/run1/artifacts", "model/xgboost.json", 1000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b, err := io.ReadAll(rc); err != nil || len(b) != 1000 {
+		t.Errorf("exactly the limit: %v %d", err, len(b))
+	}
+	rc.Close()
+	// no length given: the read itself stops past the limit
+	s.NoLength = true
+	rc, length, err := tr.Open(ctx, "1/run1/artifacts", "model/xgboost.json", 999)
+	if err != nil || length != -1 {
+		t.Fatalf("no length: %v %d", err, length)
+	}
+	defer rc.Close()
+	n, err := io.Copy(io.Discard, rc)
+	if tl := new(mlflowconn.TooLarge); !errors.As(err, &tl) || n > 1000 {
+		t.Errorf("past the limit while reading: %d bytes, %v", n, err)
+	}
+}
+
+func TestAnUnreadableOpenIsSaidWithoutTheSecret(t *testing.T) {
+	s := mlflowtest.New(t)
+	s.Authorization = "Bearer right"
+	_, _, err := tracker(s, "bearer", "wrong").Open(context.Background(), "1/run1/artifacts", "model/xgboost.json", 1<<20)
+	if err == nil || !strings.Contains(err.Error(), "401") || strings.Contains(err.Error(), mlflowtest.Leak) || strings.Contains(err.Error(), "wrong") {
+		t.Errorf("%v", err)
+	}
+}
+
+// A model file of a few megabytes passes through Open without being held: made up by the fake
+// while it is sent, hashed and discarded by the reader. What the process allocates stays far
+// below the file's size (reading it whole would allocate at least its size, twice with the
+// doubling of a growing buffer).
+func TestAModelFileIsStreamedNotHeld(t *testing.T) {
+	const size = 24 << 20
+	s := mlflowtest.New(t)
+	s.Stream("1/run1/artifacts/model/xgboost.json", size)
+	tr := tracker(s, "none", "")
+	want := mlflowtest.PatternSHA256(size)
+	var before, after runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&before)
+	rc, length, err := tr.Open(context.Background(), "1/run1/artifacts", "model/xgboost.json", 64<<20)
+	if err != nil || length != size {
+		t.Fatalf("open: %v %d", err, length)
+	}
+	h := sha256.New()
+	n, err := io.Copy(h, rc) // io.Copy's own buffer is 32 KiB
+	rc.Close()
+	runtime.ReadMemStats(&after)
+	if err != nil || n != size || hex.EncodeToString(h.Sum(nil)) != want {
+		t.Fatalf("read: %v, %d bytes, %x", err, n, h.Sum(nil))
+	}
+	t.Logf("allocated while streaming %d MiB: %d KiB", size>>20, (after.TotalAlloc-before.TotalAlloc)>>10)
+	// the fake's own chunks and the HTTP buffers are in this count too (same process)
+	if grown := after.TotalAlloc - before.TotalAlloc; grown > size/3 {
+		t.Errorf("%d bytes allocated to stream %d: the file was held", grown, size)
 	}
 }

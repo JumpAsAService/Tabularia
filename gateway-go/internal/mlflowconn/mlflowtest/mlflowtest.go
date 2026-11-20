@@ -4,6 +4,8 @@
 package mlflowtest
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -52,7 +54,10 @@ type Server struct {
 	ExpTags     map[string]map[string]string
 	Deleted     map[string]bool // experiments in the trash, by name
 	Runs        map[string]*Run
-	Artifacts   map[string][]byte // by path after mlflow-artifacts/artifacts/
+	Artifacts   map[string][]byte // by path after mlflow-artifacts/artifacts/: binary files as well as text
+	ContentType map[string]string // the Content-Type of each file as it was PUT
+	Streams     map[string]int64  // files made up on the fly, by path: their size (Stream)
+	NoLength    bool              // a file is answered without its Content-Length (chunked)
 	Models      map[string][]Version
 	clock       int64 // the creation timestamps given, in order
 }
@@ -60,7 +65,7 @@ type Server struct {
 // New starts a fake; it stops with the test.
 func New(t interface{ Cleanup(func()) }) *Server {
 	s := &Server{Experiments: map[string]string{}, ExpTags: map[string]map[string]string{}, Deleted: map[string]bool{},
-		Runs: map[string]*Run{}, Artifacts: map[string][]byte{}, Models: map[string][]Version{}}
+		Runs: map[string]*Run{}, Artifacts: map[string][]byte{}, ContentType: map[string]string{}, Streams: map[string]int64{}, Models: map[string][]Version{}}
 	s.Server = httptest.NewServer(http.HandlerFunc(s.serve))
 	t.Cleanup(s.Close)
 	return s
@@ -190,12 +195,33 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 		}
 		refuse(w, http.StatusNotFound, "RESOURCE_DOES_NOT_EXIST")
 	case strings.HasPrefix(path, "/api/2.0/mlflow-artifacts/artifacts/") && r.Method == http.MethodGet && !s.NoProxy:
-		b, ok := s.Artifacts[strings.TrimPrefix(path, "/api/2.0/mlflow-artifacts/artifacts/")]
+		key := strings.TrimPrefix(path, "/api/2.0/mlflow-artifacts/artifacts/")
+		w.Header().Set("Content-Type", "application/octet-stream")
+		if size, ok := s.Streams[key]; ok { // made up while it is sent, never held
+			if !s.NoLength {
+				w.Header().Set("Content-Length", fmt.Sprint(size))
+			}
+			chunk := make([]byte, 64<<10)
+			for off := int64(0); off < size; {
+				n := min(int64(len(chunk)), size-off)
+				fill(chunk[:n], off)
+				if _, err := w.Write(chunk[:n]); err != nil {
+					return
+				}
+				off += n
+			}
+			return
+		}
+		b, ok := s.Artifacts[key]
 		if !ok {
 			refuse(w, http.StatusNotFound, "RESOURCE_DOES_NOT_EXIST")
 			return
 		}
-		w.Header().Set("Content-Type", "application/octet-stream")
+		if !s.NoLength {
+			w.Header().Set("Content-Length", fmt.Sprint(len(b)))
+		} else if f, ok := w.(http.Flusher); ok {
+			f.Flush() // the headers go out before the body: chunked, no length
+		}
 		_, _ = w.Write(b)
 	case path == "/api/2.0/mlflow/runs/create":
 		id := fmt.Sprintf("run%d", len(s.Runs)+1)
@@ -253,7 +279,9 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 			refuse(w, http.StatusBadRequest, "INVALID_PARAMETER_VALUE")
 			return
 		}
-		s.Artifacts[strings.TrimPrefix(path, "/api/2.0/mlflow-artifacts/artifacts/")] = b
+		key := strings.TrimPrefix(path, "/api/2.0/mlflow-artifacts/artifacts/")
+		s.Artifacts[key] = b
+		s.ContentType[key] = r.Header.Get("Content-Type")
 		answer(w, 200, map[string]any{})
 	case strings.HasPrefix(path, "/api/2.0/mlflow/registered-models/") || strings.HasPrefix(path, "/api/2.0/mlflow/model-versions/"):
 		if s.NoRegistry {
@@ -371,4 +399,41 @@ func (s *Server) Register(experiment, model string, runTags map[string]string, m
 	s.Models[model] = append(s.Models[model], Version{Version: version, RunID: runID, Tags: tags, Created: 1_700_000_000_000 + s.clock,
 		Source: fmt.Sprintf("mlflow-artifacts:/%s/%s/artifacts/model", exp, runID)})
 	return runID, version
+}
+
+// fill is the bytes of a made-up file: a function of the offset only, so that a reader can
+// check what it got without the file ever being held.
+func fill(p []byte, off int64) {
+	for i := range p {
+		p[i] = byte((off+int64(i))*31 + 7)
+	}
+}
+
+// Stream makes a file of that size under the path (after mlflow-artifacts/artifacts/) that the
+// fake sends in chunks, never holding it: a model file of some megabytes for a test of
+// streaming. PatternSHA256 is its hash.
+func (s *Server) Stream(path string, size int64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.Streams[path] = size
+}
+
+// Pattern is the first size bytes of a made-up file, for a test that needs them whole (small).
+func Pattern(size int64) []byte {
+	b := make([]byte, size)
+	fill(b, 0)
+	return b
+}
+
+// PatternSHA256 is the hash of a made-up file of that size, computed in chunks.
+func PatternSHA256(size int64) string {
+	h := sha256.New()
+	chunk := make([]byte, 64<<10)
+	for off := int64(0); off < size; {
+		n := min(int64(len(chunk)), size-off)
+		fill(chunk[:n], off)
+		h.Write(chunk[:n])
+		off += n
+	}
+	return hex.EncodeToString(h.Sum(nil))
 }

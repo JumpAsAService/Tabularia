@@ -325,10 +325,9 @@ func (e *TooLarge) Error() string {
 	return fmt.Sprintf("%s is larger than Tabularia reads (%d bytes)", e.Name, e.Limit)
 }
 
-// Download is one file under artifactPath (from ArtifactPath) through the artifact proxy, at
-// most limit bytes: a *NotFound when it is not there, a *TooLarge when it is longer. Its
-// bytes are data, never shown: they are not scrubbed.
-func (t *Tracker) Download(ctx context.Context, artifactPath, name string, limit int64) ([]byte, error) {
+// artifactGet starts the GET of one artifact through the proxy: the response with its body open
+// for the caller to close, a *NotFound when it is not there, an *Error otherwise.
+func (t *Tracker) artifactGet(ctx context.Context, artifactPath, name string) (*http.Response, error) {
 	parts := strings.Split(strings.Trim(artifactPath, "/")+"/"+name, "/")
 	for i, p := range parts {
 		parts[i] = url.PathEscape(p)
@@ -349,35 +348,92 @@ func (t *Tracker) Download(ctx context.Context, artifactPath, name string, limit
 		code, _ := classify(err)
 		return nil, &Error{Action: action, Code: code}
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		e := &Error{Action: action, Status: resp.StatusCode, Code: "http_error"}
-		raw, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
-		var answer struct {
-			ErrorCode string `json:"error_code"`
-		}
-		if json.Unmarshal(raw, &answer) == nil && errorCodeText.MatchString(answer.ErrorCode) {
-			e.ErrorCode = answer.ErrorCode
-		}
-		switch {
-		case resp.StatusCode >= 300 && resp.StatusCode < 400:
-			e.Code = "redirect"
-		case resp.StatusCode == http.StatusUnauthorized:
-			e.Code = "unauthorized"
-		case resp.StatusCode == http.StatusForbidden:
-			e.Code = "forbidden"
-		case resp.StatusCode == http.StatusNotFound || e.ErrorCode == "RESOURCE_DOES_NOT_EXIST":
-			return nil, &NotFound{What: name}
-		}
-		return nil, e
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		return resp, nil
 	}
+	defer resp.Body.Close()
+	e := &Error{Action: action, Status: resp.StatusCode, Code: "http_error"}
+	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
+	var answer struct {
+		ErrorCode string `json:"error_code"`
+	}
+	if json.Unmarshal(raw, &answer) == nil && errorCodeText.MatchString(answer.ErrorCode) {
+		e.ErrorCode = answer.ErrorCode
+	}
+	switch {
+	case resp.StatusCode >= 300 && resp.StatusCode < 400:
+		e.Code = "redirect"
+	case resp.StatusCode == http.StatusUnauthorized:
+		e.Code = "unauthorized"
+	case resp.StatusCode == http.StatusForbidden:
+		e.Code = "forbidden"
+	case resp.StatusCode == http.StatusNotFound || e.ErrorCode == "RESOURCE_DOES_NOT_EXIST":
+		return nil, &NotFound{What: name}
+	}
+	return nil, e
+}
+
+// Download is one file under artifactPath (from ArtifactPath) through the artifact proxy, at
+// most limit bytes: a *NotFound when it is not there, a *TooLarge when it is longer. Its
+// bytes are data, never shown: they are not scrubbed. For a file that is not small, Open.
+func (t *Tracker) Download(ctx context.Context, artifactPath, name string, limit int64) ([]byte, error) {
+	resp, err := t.artifactGet(ctx, artifactPath, name)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
 	b, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
 	if err != nil {
 		code, _ := classify(err)
-		return nil, &Error{Action: action, Code: code}
+		return nil, &Error{Action: "reading " + name, Code: code}
 	}
 	if int64(len(b)) > limit {
 		return nil, &TooLarge{Name: name, Limit: limit}
 	}
 	return b, nil
 }
+
+// Open is one file under artifactPath as a stream, never held whole in memory: the body, and
+// its length (-1 when the server did not say). A *NotFound when it is not there, a *TooLarge
+// at once when the server says it is longer than limit, and a read that goes past limit
+// fails with a *TooLarge. The caller closes it.
+func (t *Tracker) Open(ctx context.Context, artifactPath, name string, limit int64) (io.ReadCloser, int64, error) {
+	resp, err := t.artifactGet(ctx, artifactPath, name)
+	if err != nil {
+		return nil, 0, err
+	}
+	if resp.ContentLength > limit {
+		resp.Body.Close()
+		return nil, 0, &TooLarge{Name: name, Limit: limit}
+	}
+	return &limitedBody{rc: resp.Body, name: name, limit: limit, left: limit + 1, action: "reading " + name}, resp.ContentLength, nil
+}
+
+// limitedBody reads at most limit bytes of a body: one more is a *TooLarge, a failure of the
+// connection an *Error.
+type limitedBody struct {
+	rc           io.ReadCloser
+	name, action string
+	limit, left  int64
+}
+
+func (l *limitedBody) Read(p []byte) (int, error) {
+	if l.left <= 0 {
+		return 0, &TooLarge{Name: l.name, Limit: l.limit}
+	}
+	if int64(len(p)) > l.left {
+		p = p[:l.left]
+	}
+	n, err := l.rc.Read(p)
+	l.left -= int64(n)
+	if l.left <= 0 {
+		return n, &TooLarge{Name: l.name, Limit: l.limit}
+	}
+	if err != nil && err != io.EOF {
+		code, _ := classify(err)
+		return n, &Error{Action: l.action, Code: code}
+	}
+	return n, err
+}
+
+func (l *limitedBody) Close() error { return l.rc.Close() }

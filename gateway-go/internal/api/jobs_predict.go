@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -42,6 +43,13 @@ import (
 //  3. The card, as the gateway checked it, written by the engine beside the input
 //     (<step>/model.json): the Job reads TABULARIA_MODEL_IN, never MLflow, and holds no MLflow
 //     variable or secret. No serialized object (native.rds) is ever read.
+//     A boosting model also keeps a model file (xgboost.json or catboost.cbm) beside its card:
+//     the card must declare it (boosting.model_file: the name of its library's file, its size at
+//     most max_model_file_bytes, its sha256), and MLflow must have it. At the run the gateway
+//     streams it from the artifact proxy into the engine's POST /scripts/objects/upload, which
+//     hashes it while it is received and writes it to <step>/model_file only when its size
+//     and sha256 are the card's; the Job gets TABULARIA_MODEL_FILE_IN, and never a pickle or an
+//     MLflow credential. The file leaves the bucket with the step's other files.
 //  4. The Job: the group's image by digest, its runner in mode predict, internet access off —
 //     the machine of a model step (modelAttempts: attempts, timeout, the trials' quota, the
 //     runner's refusal with its sentence).
@@ -81,7 +89,8 @@ type predictStep struct {
 	card         []byte
 	cardSHA      string
 	variant      string
-	groupVersion any // the card's group_version: the group's version it was fitted with
+	file         *cardModelFile // the model file the card declares (a boosting model), nil for the others
+	groupVersion any            // the card's group_version: the group's version it was fitted with
 	known        int64
 	notes        []string
 }
@@ -228,6 +237,11 @@ func (q *queue) planPredict(ctx context.Context, user *auth.User, node pyjson.Ob
 		return refuse("the model card of %s %s", name, why)
 	}
 	s.variant, s.groupVersion = card.Variant, card.GroupVersion
+	if refusal, err := checkModelFile(ctx, tr, where, name, s, &card); err != nil {
+		return mlflowFailed(err)
+	} else if refusal != "" {
+		return refuse("%s", refusal)
+	}
 	// the group: enabled, ready, usable by the person
 	if s.img, err = checkModelGroup(ctx, q.d, user, s.group); err != nil {
 		if errors.As(err, &sf) {
@@ -307,8 +321,12 @@ type predictCard struct {
 	Inputs        []struct {
 		Name string `json:"name"`
 	} `json:"inputs"`
-	Params map[string]any `json:"params"`
-	KM     struct {
+	Params   map[string]any `json:"params"`
+	Boosting *struct {
+		Library   string         `json:"library"`
+		ModelFile *cardModelFile `json:"model_file"`
+	} `json:"boosting"`
+	KM struct {
 		Time   string `json:"time_column"`
 		Strata string `json:"strata_column"`
 	} `json:"kaplan_meier"`
@@ -441,8 +459,9 @@ func (q *queue) runPredict(ctx context.Context, r *scriptNodeRun) (*flowresolver
 	stepID := newUUIDText()
 	prefix := fmt.Sprintf("env-%d/%s", s.img.EnvironmentID, stepID)
 	inKey, outKey, artifacts, cardKey := prefix+"/input.parquet", prefix+"/output.parquet", prefix+"/artifacts/", prefix+"/model.json"
-	// model_file: a boosting model's xgboost.json or catboost.cbm, beside its card (lot X5 writes it)
-	written := []string{inKey, outKey, cardKey, prefix + "/model_file", artifacts + "run.json", artifacts + "error.json"}
+	// fileKey: a boosting model's xgboost.json or catboost.cbm, beside its card; deleted with the rest
+	fileKey := prefix + "/model_file"
+	written := []string{inKey, outKey, cardKey, fileKey, artifacts + "run.json", artifacts + "error.json"}
 	bucket := d.Config.EngineBucket
 	engineOutKey := "out/" + newHex() + ".parquet"
 	modelURL := fmt.Sprintf("%s/#/models/%s/versions/%s", s.conn.ui, url.PathEscape(s.version.Name), url.PathEscape(s.version.Version))
@@ -460,6 +479,9 @@ func (q *queue) runPredict(ctx context.Context, r *scriptNodeRun) (*flowresolver
 		{Key: "attempts", Value: int64(0)}, {Key: "exit_code", Value: nil}, {Key: "log", Value: ""}, {Key: "trial", Value: trial},
 		{Key: "fingerprint", Value: predictFingerprint(r.definition, r.node, s.known)}, {Key: "budget_seconds", Value: s.budget},
 		{Key: "namespace", Value: ns}, {Key: "internet_access", Value: false}, {Key: "input_rows", Value: nil}, {Key: "mlflow", Value: ml}}
+	if s.file != nil {
+		info = append(info, pyjson.KV{Key: "model_file_sha256", Value: s.file.SHA256})
+	}
 	childID, err := r.startChild(ctx, d, "model_predict", r.flow.ID, fmt.Sprintf("%s v%d", s.group, s.img.Version), bucket, engineOutKey, info)
 	if err != nil {
 		return nil, err
@@ -489,6 +511,11 @@ func (q *queue) runPredict(ctx context.Context, r *scriptNodeRun) (*flowresolver
 		}
 		if err := d.writeScriptText(ctx, storage, cardKey, s.card); err != nil {
 			return nil, err
+		}
+		if s.file != nil {
+			if err := q.stageModelFile(ctx, s, storage, fileKey); err != nil {
+				return nil, err
+			}
 		}
 		runID := r.orchestrationOf(childID)
 		task.GroupVersion = s.img.Version
@@ -522,6 +549,9 @@ func (q *queue) runPredict(ctx context.Context, r *scriptNodeRun) (*flowresolver
 			{Key: "TABULARIA_FLOW_ID", Value: fmt.Sprint(r.flow.ID)}, {Key: "TABULARIA_NODE_ID", Value: pyjson.Str(nodeID)},
 			{Key: "OMP_NUM_THREADS", Value: threads}, {Key: "OPENBLAS_NUM_THREADS", Value: threads},
 			{Key: "HOME", Value: "/tmp"}, {Key: "TMPDIR", Value: "/tmp"}}, storage.env())
+		if s.file != nil { // the model file, beside the card: the Job reads it from the bucket
+			base = base.Set(modelgroups.EnvModelFileIn, s3(fileKey))
+		}
 		key, err := d.Fernet.Decrypt(storage.SecretEnc)
 		if err != nil {
 			return nil, err
@@ -655,4 +685,132 @@ func predictTrialStatus(qq *queue, msg string) int {
 		return http.StatusBadGateway
 	}
 	return http.StatusUnprocessableEntity
+}
+
+var sha256Text = regexp.MustCompile(`^[0-9a-f]{64}$`)
+
+// checkModelFile is the checks of a boosting model's file before anything runs, in the editor's
+// trial as in a flow run: the refusal's sentence ("" when the version can be applied), or the
+// error of MLflow's. The card must declare the file of its library, by that name and no other
+// (a path is refused), of a size within the limit and with a sha256; MLflow must have it, with
+// the size the card says. Its bytes are not read here: the run streams them, and the engine
+// checks the sha256 as they arrive. A model of another group declares none, and none is read.
+func checkModelFile(ctx context.Context, tr *mlflowconn.Tracker, where, what string, s *predictStep, card *predictCard) (string, error) {
+	want, needs := modelFileNames[s.model]
+	if !needs {
+		return "", nil
+	}
+	limit := maxModelFileBytes()
+	var mf *cardModelFile
+	library := ""
+	if card.Boosting != nil {
+		mf, library = card.Boosting.ModelFile, card.Boosting.Library
+	}
+	switch {
+	case mf == nil:
+		return fmt.Sprintf("the model card of %s declares no model file: it is not applied", what), nil
+	case mf.Name != want || library != s.model:
+		return fmt.Sprintf("the model card of %s names a model file (%s) that is not the one of its library (%s): it is not applied",
+			what, runes(mf.Name, 60), want), nil
+	case !sha256Text.MatchString(mf.SHA256):
+		return fmt.Sprintf("the model card of %s keeps no valid fingerprint of its model file: it is not applied", what), nil
+	case mf.Bytes < 1:
+		return fmt.Sprintf("the model card of %s declares an empty model file: it is not applied", what), nil
+	case mf.Bytes > limit:
+		return fmt.Sprintf("the model file of %s is larger than a model file may be (%d bytes)", what, limit), nil
+	}
+	rc, length, err := tr.Open(ctx, where, mf.Name, limit)
+	var nf *mlflowconn.NotFound
+	var tl *mlflowconn.TooLarge
+	switch {
+	case errors.As(err, &nf):
+		return fmt.Sprintf("%s has no model file among its files (%s): it is not applied", what, mf.Name), nil
+	case errors.As(err, &tl):
+		return fmt.Sprintf("the model file of %s is larger than a model file may be (%d bytes)", what, limit), nil
+	case err != nil:
+		return "", err
+	}
+	rc.Close() // only its existence and its length are asked here
+	if length >= 0 && length != mf.Bytes {
+		return fmt.Sprintf("the model file of %s does not match the fingerprint its card keeps: it is not applied", what), nil
+	}
+	s.file = mf
+	return "", nil
+}
+
+// countingReader counts the bytes read and keeps the first error: what was read from MLflow
+// is told apart from what the engine answered.
+type countingReader struct {
+	r   io.Reader
+	n   int64
+	err error
+}
+
+func (c *countingReader) Read(p []byte) (int, error) {
+	n, err := c.r.Read(p)
+	c.n += int64(n)
+	if err != nil && err != io.EOF && c.err == nil {
+		c.err = err
+	}
+	return n, err
+}
+
+// stageModelFile streams the model file from MLflow's artifact proxy into the scripts bucket by
+// the engine's POST /scripts/objects/upload, never holding it: the engine hashes it while it
+// receives it and writes it only when its size and sha256 are the card's. The gateway holds
+// the MLflow credentials, the engine the bucket's; the Job gets neither's other.
+func (q *queue) stageModelFile(ctx context.Context, s *predictStep, storage *scriptStorage, key string) error {
+	d := q.d
+	mf := s.file
+	name := fmt.Sprintf("the version %s of «%s»", s.version.Version, s.version.Name)
+	mismatch := &scriptFailed{fmt.Sprintf("%s: the model file of %s does not match the fingerprint its card keeps: it is not applied", s.what(), name)}
+	tooLarge := &scriptFailed{fmt.Sprintf("%s: the model file of %s is larger than a model file may be (%d bytes)", s.what(), name, maxModelFileBytes())}
+	tr := mlflowconn.NewTracker(s.conn.cfg)
+	rc, _, err := tr.Open(ctx, mlflowconn.ArtifactPath(s.version.Source), mf.Name, maxModelFileBytes())
+	var nf *mlflowconn.NotFound
+	var tl *mlflowconn.TooLarge
+	switch {
+	case errors.As(err, &nf):
+		return &scriptFailed{fmt.Sprintf("%s: %s has no model file among its files (%s): it is not applied", s.what(), name, mf.Name)}
+	case errors.As(err, &tl):
+		return tooLarge
+	case err != nil:
+		return &scriptFailed{fmt.Sprintf("%s: MLflow could not be read: %s", s.what(), mlflowWhy(err))}
+	}
+	defer rc.Close()
+	body := &countingReader{r: rc}
+	conn := base64.StdEncoding.EncodeToString([]byte(pyDumps(storage.payload())))
+	query := url.Values{"key": {key}, "sha256": {mf.SHA256}, "bytes": {fmt.Sprint(mf.Bytes)}}
+	cctx, cancel := context.WithTimeout(ctx, 15*time.Minute)
+	defer cancel()
+	req, err := d.Engine.Request(cctx, http.MethodPost, "/scripts/objects/upload?"+query.Encode(), body)
+	if err != nil {
+		return err
+	}
+	req.ContentLength = mf.Bytes
+	req.Header.Set("Content-Type", "application/octet-stream")
+	req.Header.Set("X-Tabularia-Scripts-Connection", conn)
+	res, err := d.Engine.Do(req)
+	if err != nil {
+		switch {
+		case errors.As(body.err, &tl):
+			return tooLarge
+		case body.err != nil:
+			return &scriptFailed{fmt.Sprintf("%s: MLflow could not be read: %s", s.what(), mlflowWhy(body.err))}
+		case body.n != mf.Bytes:
+			return mismatch // the file is shorter than its card says
+		}
+		return err
+	}
+	defer res.Body.Close()
+	raw, _ := io.ReadAll(io.LimitReader(res.Body, 64<<10))
+	switch {
+	case res.StatusCode == http.StatusConflict:
+		return mismatch
+	case res.StatusCode == http.StatusRequestEntityTooLarge:
+		return tooLarge
+	case res.StatusCode >= 400:
+		return &scriptFailed{fmt.Sprintf("%s: the model file could not be written to the scripts bucket: %s", s.what(), engineDetail(raw))}
+	}
+	return nil
 }

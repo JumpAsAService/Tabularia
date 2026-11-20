@@ -127,3 +127,120 @@ def test_writing_refuses_what_is_not_a_card(bucket):
     with pytest.raises(HTTPException) as refused:
         routes.objects_write(routes.ObjectWriteRequest(connection=_conn(), key="refused", text="{}"))
     assert refused.value.status_code == 502 and "AccessDenied" in refused.value.detail
+
+
+# ── a Predict step's model file uploaded as raw bytes ───────────────────────────
+
+
+def _b64_conn() -> str:
+    import base64
+    import json
+
+    return base64.b64encode(json.dumps(_conn().model_dump()).encode()).decode()
+
+
+class FakeRequest:
+    """What the route reads of a request: its body in chunks."""
+
+    def __init__(self, body: bytes, chunk: int = 7000):
+        self.body, self.chunk, self.served = body, chunk, 0
+
+    async def stream(self):
+        for i in range(0, len(self.body), self.chunk):
+            self.served += 1
+            yield self.body[i:i + self.chunk]
+
+
+def _upload(body: bytes, *, sha: str | None = None, size: int | None = None, key: str = "env-4/step/model_file",
+            connection: str | None = None):
+    import hashlib
+
+    return asyncio.run(routes.objects_upload(
+        FakeRequest(body), key=key, sha256=sha if sha is not None else hashlib.sha256(body).hexdigest(),
+        size=len(body) if size is None else size, connection=_b64_conn() if connection is None else connection))
+
+
+@pytest.fixture
+def uploads(bucket, monkeypatch):
+    objects: dict[str, bytes] = {}
+    bucket(objects)
+
+    def upload_file(self, path, bucket_name, key):
+        objects[key] = Path(path).read_bytes()
+
+    monkeypatch.setattr(FakeS3, "upload_file", upload_file, raising=False)
+    return objects
+
+
+def test_a_model_file_is_written_at_its_key(uploads):
+    body = bytes(range(256)) * 200  # binary, not UTF-8 text
+    assert _upload(body) == {"bytes": len(body)}
+    assert uploads["env-4/step/model_file"] == body
+
+
+def test_a_wrong_hash_is_409_and_leaves_no_object(uploads):
+    body = b"\x00\xffxgboost" * 100
+    with pytest.raises(HTTPException) as e:
+        _upload(body, sha="0" * 64)
+    assert e.value.status_code == 409 and "sha256" in e.value.detail
+    assert uploads == {}
+
+
+def test_a_size_other_than_declared_is_409_and_leaves_no_object(uploads):
+    body = b"abc" * 1000
+    for declared in (len(body) - 1, len(body) + 1):
+        with pytest.raises(HTTPException) as e:
+            _upload(body, size=declared)
+        assert e.value.status_code == 409
+    assert uploads == {}
+
+
+def test_a_file_over_the_limit_is_413_and_is_not_read_to_its_end(uploads, monkeypatch):
+    monkeypatch.setattr(routes, "_upload_limit", lambda: 20_000)
+    body = b"x" * 100_000
+    req = FakeRequest(body)
+    import hashlib
+
+    with pytest.raises(HTTPException) as declared:  # declares more than the limit: refused before reading
+        asyncio.run(routes.objects_upload(req, key="k", sha256=hashlib.sha256(body).hexdigest(), size=len(body),
+                                          connection=_b64_conn()))
+    assert declared.value.status_code == 413 and req.served == 0
+    req = FakeRequest(body)
+    with pytest.raises(HTTPException) as lied:  # declares 20 000, sends 100 000: stops at the first chunk past it
+        asyncio.run(routes.objects_upload(req, key="k", sha256="0" * 64, size=20_000, connection=_b64_conn()))
+    assert lied.value.status_code == 413 and req.served <= 4
+    req = FakeRequest(body)
+    with pytest.raises(HTTPException) as longer:  # declares 10 000 (within the limit), sends more
+        asyncio.run(routes.objects_upload(req, key="k", sha256="0" * 64, size=10_000, connection=_b64_conn()))
+    assert longer.value.status_code == 409 and req.served <= 2
+    assert uploads == {}
+
+
+def test_a_bad_request_is_refused_before_anything_is_read(uploads):
+    body = b"abc"
+    for key in ("", "/abs", "env-4/../other"):
+        with pytest.raises(HTTPException) as e:
+            _upload(body, key=key)
+        assert e.value.status_code == 422
+    for sha in ("abc", "G" * 64, "A" * 64):
+        with pytest.raises(HTTPException) as e:
+            _upload(body, sha=sha)
+        assert e.value.status_code == 422
+    with pytest.raises(HTTPException) as e:
+        _upload(body, connection="not base64 json")
+    assert e.value.status_code == 422
+    assert uploads == {}
+
+
+def test_a_bucket_that_refuses_is_502_and_no_temporary_file_stays(uploads, monkeypatch):
+    import tempfile
+
+    def refuse(self, path, bucket_name, key):
+        raise ClientError({"Error": {"Code": "AccessDenied", "Message": "Access Denied"}}, "PutObject")
+
+    monkeypatch.setattr(FakeS3, "upload_file", refuse, raising=False)
+    before = set(Path(tempfile.gettempdir()).glob("*.model"))
+    with pytest.raises(HTTPException) as e:
+        _upload(b"abc" * 10)
+    assert e.value.status_code == 502 and "AccessDenied" in e.value.detail
+    assert set(Path(tempfile.gettempdir()).glob("*.model")) == before

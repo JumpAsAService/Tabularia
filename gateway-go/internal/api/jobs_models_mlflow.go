@@ -21,6 +21,7 @@ import (
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/mlflowconn"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/modelcatalog"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/sharelinks"
 )
@@ -37,10 +38,13 @@ import (
 //     in batches (mlflowconn.Batches).
 //  3. The artifacts through the server's artifact proxy: tabularia/results.parquet,
 //     tabularia/coefficients.csv, tabularia/report.pdf (the Report tab's layout, in the flow's
-//     owner's language), model/MLmodel, model/model.json, model/native.rds. A server whose runs
+//     owner's language), model/MLmodel, model/model.json, model/native.rds and, for a boosting
+//     model, its model file model/xgboost.json or model/catboost.cbm (hashed while it goes up,
+//     which must be what the card declares; never a pickle). A server whose runs
 //     keep their artifacts elsewhere gets none, and the run page says so.
 //  4. With registerAs, a version of that registered model from the run's `model` folder, with
-//     the tags tabularia.model, tabularia.group and tabularia.card_sha256 (what Predict checks).
+//     the tags tabularia.model, tabularia.group, tabularia.variant and tabularia.card_sha256
+//     (what Predict checks), and tabularia.model_file_sha256 when there is a model file.
 //  5. The run FINISHED; its ids and link kept on Tabularia's run (`mlflow_*` columns and the
 //     `mlflow` object of its script, which the run page reads).
 //
@@ -245,10 +249,11 @@ func (q *queue) mlflowLog(ctx context.Context, r *scriptNodeRun, s *modelStep, c
 	if err := tr.LogBatch(ctx, run.ID, params, modelMetrics(rows, started), tags); err != nil {
 		return err
 	}
-	card, err := q.mlflowArtifacts(ctx, tr, r, s, child, f, rows, run, rec)
+	up, err := q.mlflowArtifacts(ctx, tr, r, s, child, f, rows, run, rec)
 	if err != nil {
 		return err
 	}
+	card := up.card
 	if s.mlflow.registerAs != "" {
 		switch {
 		case !rec.artifacts:
@@ -257,12 +262,21 @@ func (q *queue) mlflowLog(ctx context.Context, r *scriptNodeRun, s *modelStep, c
 		case card == nil:
 			rec.warnings = append(rec.warnings, fmt.Sprintf("The model was not registered as «%s»: the runner wrote no model card.",
 				s.mlflow.registerAs))
+		case up.notRegistered != "":
+			rec.warnings = append(rec.warnings, fmt.Sprintf("The model was not registered as «%s»: %s", s.mlflow.registerAs, up.notRegistered))
 		default:
 			sum := sha256.Sum256(card)
-			version, err := tr.Register(ctx, s.mlflow.registerAs, strings.TrimRight(run.ArtifactURI, "/")+"/model", run.ID, []mlflowconn.Tag{
+			tags := []mlflowconn.Tag{
 				{Key: "tabularia.model", Value: s.model}, {Key: "tabularia.group", Value: s.group},
 				{Key: "tabularia.group_version", Value: strconv.FormatInt(s.img.Version, 10)},
-				{Key: "tabularia.card_sha256", Value: hex.EncodeToString(sum[:])}})
+				{Key: "tabularia.card_sha256", Value: hex.EncodeToString(sum[:])}}
+			if c := parseCardFile(card); c.variant != "" {
+				tags = append(tags, mlflowconn.Tag{Key: "tabularia.variant", Value: c.variant})
+			}
+			if up.fileSHA != "" {
+				tags = append(tags, mlflowconn.Tag{Key: "tabularia.model_file_sha256", Value: up.fileSHA})
+			}
+			version, err := tr.Register(ctx, s.mlflow.registerAs, strings.TrimRight(run.ArtifactURI, "/")+"/model", run.ID, tags)
 			switch {
 			case err == nil:
 				rec.model, rec.version = s.mlflow.registerAs, version
@@ -286,47 +300,109 @@ func mlflowRunName(flow, node string, at time.Time) string {
 	return fmt.Sprintf("%s · %s · %s", flow, node, at.UTC().Format("2006-01-02 15:04"))
 }
 
-// mlflowArtifacts uploads the step's files through the artifact proxy; the model card's bytes
-// when it was uploaded (what a registration names).
+// uploadedFiles is what the upload of a step's files leaves for the registration.
+type uploadedFiles struct {
+	card          []byte // model.json's bytes when it was uploaded (what a registration names)
+	fileSHA       string // the model file's sha256, computed while it was uploaded ("" when there is none)
+	notRegistered string // why the version is not registered, when the files are logged all the same
+}
+
+// modelFileNames are the model files a boosting model keeps beside its card (docs/specs/
+// statistical-models.md, «The saved model, MLflow and Predict»): data a library parses, never
+// code (no pickle).
+var modelFileNames = map[string]string{"xgboost": "xgboost.json", "catboost": "catboost.cbm"}
+
+func isModelFile(name string) bool { return name == "xgboost.json" || name == "catboost.cbm" }
+
+// cardModelFile is the card's `boosting.model_file`.
+type cardModelFile struct {
+	Name   string `json:"name"`
+	Bytes  int64  `json:"bytes"`
+	SHA256 string `json:"sha256"`
+}
+
+// cardFile is what the gateway reads of a card besides what decides whether it is applied: its
+// variant and the model file it declares.
+type cardFile struct {
+	variant string
+	library string
+	file    *cardModelFile
+}
+
+func parseCardFile(card []byte) cardFile {
+	var c struct {
+		Variant  string `json:"variant"`
+		Boosting *struct {
+			Library   string         `json:"library"`
+			ModelFile *cardModelFile `json:"model_file"`
+		} `json:"boosting"`
+	}
+	if json.Unmarshal(card, &c) != nil {
+		return cardFile{}
+	}
+	out := cardFile{variant: c.Variant}
+	if c.Boosting != nil {
+		out.library, out.file = c.Boosting.Library, c.Boosting.ModelFile
+	}
+	return out
+}
+
+// maxModelFileBytes is the catalogue's limit of a model file (64 MiB); a variable for the tests.
+var maxModelFileBytes = func() int64 {
+	if n := int64(modelcatalog.Limit("max_model_file_bytes")); n > 0 {
+		return n
+	}
+	return 64 << 20
+}
+
+// mlflowArtifacts uploads the step's files through the artifact proxy.
 func (q *queue) mlflowArtifacts(ctx context.Context, tr *mlflowconn.Tracker, r *scriptNodeRun, s *modelStep, child *childRun, f modelFiles,
-	rows []resultRow, run *mlflowconn.Run, rec *mlflowRecord) ([]byte, error) {
+	rows []resultRow, run *mlflowconn.Run, rec *mlflowRecord) (uploadedFiles, error) {
+	var up uploadedFiles
 	where := mlflowconn.ArtifactPath(run.ArtifactURI)
 	noProxy := "This MLflow server keeps the runs' files where Tabularia does not write (no artifact proxy): parameters, metrics and tags were logged, no file."
 	if where == "" {
 		rec.warnings = append(rec.warnings, noProxy)
-		return nil, nil
+		return up, nil
 	}
 	upload := func(name string, body io.Reader, size int64) error { return tr.Upload(ctx, where, name, body, size) }
 	// the results first: always there, and the call that tells a server without the proxy
 	in, size, err := q.d.openScriptObject(ctx, f.storage, f.results)
 	if err != nil {
-		return nil, err
+		return up, err
 	}
 	if in == nil {
-		return nil, &scriptFailed{"the step's results are no longer in the scripts bucket"}
+		return up, &scriptFailed{"the step's results are no longer in the scripts bucket"}
 	}
 	err = upload("tabularia/results.parquet", in, size)
 	in.Close()
 	if mlflowconn.Unsupported(err) {
 		rec.warnings = append(rec.warnings, noProxy)
-		return nil, nil
+		return up, nil
 	}
 	if err != nil {
-		return nil, err
+		return up, err
 	}
 	rec.artifacts = true
 	if text := coefficientsCSV(rows); text != nil {
 		if err := upload("tabularia/coefficients.csv", bytes.NewReader(text), int64(len(text))); err != nil {
-			return nil, err
+			return up, err
 		}
 	}
-	var card []byte
-	for _, name := range []string{"MLmodel", "model.json", "native.rds", "native.pkl"} {
+	for _, name := range []string{"MLmodel", "model.json", "native.rds", "native.pkl", "xgboost.json", "catboost.cbm"} {
 		in, size, err := q.d.openScriptObject(ctx, f.storage, f.artifacts+name)
 		if err != nil {
-			return nil, err
+			return up, err
 		}
 		if in == nil {
+			continue
+		}
+		if isModelFile(name) {
+			err := q.uploadModelFile(name, in, size, upload, &up)
+			in.Close()
+			if err != nil {
+				return up, err
+			}
 			continue
 		}
 		var body io.Reader = in
@@ -335,10 +411,10 @@ func (q *queue) mlflowArtifacts(ctx context.Context, tr *mlflowconn.Tracker, r *
 			b, err := io.ReadAll(io.LimitReader(in, 4<<20))
 			in.Close()
 			if err != nil {
-				return nil, err
+				return up, err
 			}
 			if name == "model.json" {
-				card = b
+				up.card = b
 			} else {
 				b = withRunID(b, run.ID)
 			}
@@ -349,22 +425,51 @@ func (q *queue) mlflowArtifacts(ctx context.Context, tr *mlflowconn.Tracker, r *
 			c.Close()
 		}
 		if err != nil {
-			return nil, err
+			return up, err
 		}
 	}
-	if card == nil {
+	if up.card == nil {
 		rec.warnings = append(rec.warnings, "The runner wrote no model card: the model's files are not in the MLflow run.")
+	} else if c := parseCardFile(up.card); c.file != nil && up.fileSHA == "" && up.notRegistered == "" {
+		return up, &scriptFailed{"the model card declares a model file (" + c.file.Name + ") that the step did not leave"}
 	}
 	pdf, err := q.modelReportPDF(ctx, r, s, child, f)
 	if err != nil {
 		if ctx.Err() != nil {
-			return nil, ctx.Err()
+			return up, ctx.Err()
 		}
 		rec.warnings = append(rec.warnings, "The report could not be rendered for MLflow: "+runes(mlflowWhy(err), 300))
 	} else if err := upload("tabularia/report.pdf", bytes.NewReader(pdf), int64(len(pdf))); err != nil {
-		return nil, err
+		return up, err
 	}
-	return card, nil
+	return up, nil
+}
+
+// uploadModelFile streams a boosting model's file from the scripts bucket to the run's
+// artifacts (model/<name>), hashing it on the way: never held whole. The card (uploaded just
+// before) must declare it, and its name, size and sha256 must be the ones the card keeps: the
+// card fixes the file, as the MLflow tag fixes the card. A file above the limit is not
+// uploaded and the version is not registered (the runner writes none, and says so in a note;
+// this is the gateway's own check).
+func (q *queue) uploadModelFile(name string, in io.Reader, size int64, upload func(string, io.Reader, int64) error, up *uploadedFiles) error {
+	if size > maxModelFileBytes() {
+		up.notRegistered = fmt.Sprintf("its model file is larger than a model file may be (%d bytes).", maxModelFileBytes())
+		return nil
+	}
+	c := parseCardFile(up.card)
+	if c.file == nil || c.file.Name != name {
+		return &scriptFailed{"the step left a model file (" + name + ") that its model card does not declare"}
+	}
+	h := sha256.New()
+	if err := upload("model/"+name, io.TeeReader(in, h), size); err != nil {
+		return err
+	}
+	sum := hex.EncodeToString(h.Sum(nil))
+	if sum != strings.ToLower(c.file.SHA256) || size != c.file.Bytes {
+		return &scriptFailed{"the model file (" + name + ") is not the one its model card describes (size or sha256): it was not registered"}
+	}
+	up.fileSHA = sum
+	return nil
 }
 
 // withRunID adds the MLflow run's id to an MLmodel the runner wrote (it cannot know it).
