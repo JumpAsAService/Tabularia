@@ -13,6 +13,7 @@ HERE = Path(__file__).resolve().parent
 sys.path[:0] = [str(HERE.parent / "common" / "py"), str(HERE / "py")]
 
 import boosting_catboost  # noqa: E402
+import boosting_shared  # noqa: E402,F401 — the shared module's own tests register themselves
 import boosting_xgboost  # noqa: E402
 import tab_main  # noqa: E402
 
