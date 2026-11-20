@@ -516,14 +516,21 @@ func (q *queue) orchestrate(ctx context.Context, user *auth.User, flow *jobFlow,
 				}
 				errs = append(errs, "output: "+pyStrOfError(err))
 			}
-		case "script", "container":
+		case "script", "container", "model", "model_predict":
 			run := &scriptNodeRun{q: q, user: user, flow: flow, definition: definition, node: node, parent: parent, trigger: trigger,
 				mode: mode, outputs: outputs, resolveDS: resolveDS}
 			var out *flowresolver.Source
 			var err error
-			if node.Value("type") == "script" {
+			switch node.Value("type") {
+			case "script":
 				out, err = q.runScript(ctx, run)
-			} else {
+			case "model":
+				out, err = q.runModel(ctx, run)
+			case "model_predict":
+				// lot H (docs/specs/statistical-models.md, «Predict»): until then a flow with a
+				// Predict node stops there, saying so, rather than skipping it
+				err = &scriptFailed{fmt.Sprintf("Predict «%s» does not run in this version of Tabularia yet", modelLabel(node))}
+			default:
 				out, err = q.runContainer(ctx, run)
 			}
 			var sf *scriptFailed
@@ -756,7 +763,7 @@ func (q *queue) stopSteps(ctx context.Context, id int64) int64 {
 				return err
 			}
 			switch {
-			case run.Kind == "script" || run.Kind == "container":
+			case run.Kind == "script" || run.Kind == "container" || run.Kind == "model":
 				_, err := req.closeIfOrphaned(run, q.sc)
 				return err
 			case run.Kind == "orchestration":

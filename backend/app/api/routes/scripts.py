@@ -9,6 +9,11 @@
   after the script read it like any other step. With a `contract` (the datasource a
   saved script's output is about to replace has one), the copy is evaluated on a
   worker and the report comes back with the answer: the gateway decides.
+- POST /scripts/results/import: the results a statistical model's runner wrote
+  (`results.parquet`), checked against the catalogue (app/engine/models/results.py) before
+  they are copied into Tabularia's storage, and the model card it wrote with them
+  (docs/specs/statistical-models.md, «A run»). A table of another shape is refused: the
+  runner's fault, never the data's.
 - POST /scripts/input/export: a declared input of a saved script, the datasource's
   current parquet file copied from Tabularia's storage to the scripts bucket, where
   the script reads it (docs/specs/saved-scripts.md).
@@ -147,6 +152,78 @@ def _columns(path: str) -> list[dict]:
     import polars as pl
 
     return [{"name": n, "dtype": str(t)} for n, t in pl.read_parquet_schema(path).items()]
+
+
+class ResultsImportRequest(BaseModel):
+    connection: S3ConnectionSpec
+    key: str  # results.parquet in the scripts bucket
+    bucket: str  # Tabularia's
+    output_key: str
+    model: str
+    params: dict[str, Any]  # the node's, checked by the gateway, with the defaults of the keys that apply
+    card_key: str | None = None  # artifacts/model.json in the scripts bucket
+
+
+# a model card is at most 1 MiB (the catalogue's max_card_bytes); a little more is read, to say it is too big
+CARD_READ_LIMIT = 1024 * 1024 + 1
+
+
+@router.post("/results/import")
+def results_import(request: ResultsImportRequest):
+    """{found: false} when the runner wrote no results; 422 when what it wrote is not the
+    ten columns its model's variant declares; else {found, rows, card} with the model card's
+    text (null when the runner wrote none, or one over the limit)."""
+    from app.engine.exceptions import EngineError
+    from app.engine.models import catalog
+    from app.engine.models.results import check_file
+    from app.utils import get_storage_service
+
+    conn = request.connection
+    client = conn.client()
+    try:
+        client.head_object(Bucket=conn.bucket, Key=request.key)
+    except ClientError as e:
+        if (e.response.get("Error") or {}).get("Code") in ("404", "NoSuchKey", "NotFound", "403", "Forbidden",
+                                                           "AccessDenied"):
+            return {"found": False}
+        raise HTTPException(status_code=502, detail=f"The scripts bucket answered: {_reason(e)}")
+    if request.model not in catalog.MODELS:
+        raise HTTPException(status_code=422, detail=f"there is no model {request.model!r}")
+    # the parameters as the gateway checked them (catalogue.Check, the same contract as
+    # check_params): checking them again would refuse the defaults it filled in
+    params = request.params
+    fd, path = tempfile.mkstemp(suffix=".parquet")
+    os.close(fd)
+    try:
+        client.download_file(conn.bucket, request.key, path)
+        try:
+            check_file(request.model, params, path)
+        except EngineError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+        import pyarrow.parquet as pq
+
+        rows = pq.ParquetFile(path).metadata.num_rows
+        get_storage_service().upload_file(path, request.bucket, request.output_key)
+    finally:
+        os.unlink(path)
+    return {"found": True, "rows": rows, "card": _card(client, conn.bucket, request.card_key)}
+
+
+def _card(client: Any, bucket: str, key: str | None) -> str | None:
+    """The model card's text, None when there is none or it is over 1 MiB (the run says so)."""
+    if not key:
+        return None
+    try:
+        body = client.get_object(Bucket=bucket, Key=key, Range=f"bytes=0-{CARD_READ_LIMIT - 1}")["Body"].read()
+    except (ClientError, BotoCoreError):
+        return None
+    if len(body) >= CARD_READ_LIMIT:
+        logger.warning("model card %s over 1 MiB: not kept", key)
+        return None
+    try:
+        return body.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
 
 
 class InputExportRequest(BaseModel):

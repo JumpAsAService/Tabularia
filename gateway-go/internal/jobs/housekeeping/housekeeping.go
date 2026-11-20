@@ -306,7 +306,7 @@ func (h *housekeeping) emptyLogs(ctx context.Context, cutoff time.Time) (int64, 
 	var n int64
 	err := pgx.BeginFunc(ctx, h.db, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `SELECT id, script FROM runs WHERE finished_at IS NOT NULL AND finished_at < $1
-			AND kind IN ('script', 'container') AND script LIKE '%"log": "_%' AND script NOT LIKE '%"log_expired": %'
+			AND kind IN ('script', 'container', 'model') AND script LIKE '%"log": "_%' AND script NOT LIKE '%"log_expired": %'
 			LIMIT $2`, cutoff, logBatch)
 		if err != nil {
 			return err

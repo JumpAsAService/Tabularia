@@ -36,8 +36,10 @@ type Source struct {
 type DsResolver func(dsID any) (*Source, error)
 
 // StepNodeTypes is STEP_NODE_TYPES: the nodes that run outside the engine and hand their
-// output to the nodes after them.
-var StepNodeTypes = []string{"script", "container"}
+// output to the nodes after them. A model node (docs/specs/statistical-models.md) is one: a
+// Kubernetes Job, the chain before it ends at its input, the chain after it starts from its
+// output.
+var StepNodeTypes = []string{"script", "container", "model", "model_predict"}
 
 // Error is FlowResolveError: the definition cannot run. Code and Params say it in the
 // reader's language: "no_outputs", "output_no_source" {output}, "flow_loop" {node},
@@ -740,9 +742,9 @@ func BuildOutputRunRequests(definition any, resolveDS DsResolver, defaultBucket 
 
 // ── the order of the action nodes ───────────────────────────────────────────
 
-var actionTypes = []string{"refresh", "script", "container", "output", "runflow"}
+var actionTypes = []string{"refresh", "script", "container", "model", "model_predict", "output", "runflow"}
 
-var defaultPriority = map[string]int{"refresh": 0, "script": 1, "container": 1, "output": 1, "runflow": 2}
+var defaultPriority = map[string]int{"refresh": 0, "script": 1, "container": 1, "model": 1, "model_predict": 1, "output": 1, "runflow": 2}
 
 // ScriptsUpstream is _scripts_upstream: the Script and Container nodes a node reads data
 // from, however far up, sorted (Python's is a set: its callers sort it or only test it).

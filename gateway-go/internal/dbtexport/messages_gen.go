@@ -144,6 +144,13 @@ var messages = map[string]map[string]string{
 		"es": "La salida «{output}» del flujo «{flow}» lee lo que escribe el nodo Script «{script}»: el código Python o R se ejecuta en el clúster de Tabularia, no en dbt, así que no se puede exportar. Exporta las salidas anteriores al script, o escribe su lógica con nodos sql.",
 		"fr": "La sortie «{output}» du flux «{flow}» lit ce qu'écrit le nœud Script «{script}» : le code Python ou R s'exécute sur le cluster de Tabularia, pas dans dbt, il ne peut donc pas être exporté. Exportez les sorties avant le script, ou écrivez sa logique avec des nœuds sql.",
 	},
+	"model_not_exportable": {
+		"en": "The output «{output}» of the flow «{flow}» reads what the model node «{model}» writes: a statistical model runs on Tabularia's cluster, not in dbt, so it cannot be exported. Export the outputs before the model.",
+		"it": "L'output «{output}» del flusso «{flow}» legge quello che scrive il nodo modello «{model}»: un modello statistico gira sul cluster di Tabularia, non in dbt, quindi non si può esportare. Esporta gli output prima del modello.",
+		"de": "Die Ausgabe «{output}» des Flows «{flow}» liest, was der Modell-Knoten «{model}» schreibt: ein statistisches Modell läuft im Cluster von Tabularia, nicht in dbt, und lässt sich daher nicht exportieren. Exportieren Sie die Ausgaben vor dem Modell.",
+		"es": "La salida «{output}» del flujo «{flow}» lee lo que escribe el nodo de modelo «{model}»: un modelo estadístico se ejecuta en el clúster de Tabularia, no en dbt, así que no se puede exportar. Exporta las salidas anteriores al modelo.",
+		"fr": "La sortie «{output}» du flux «{flow}» lit ce qu'écrit le nœud de modèle «{model}» : un modèle statistique s'exécute sur le cluster de Tabularia, pas dans dbt, il ne peut donc pas être exporté. Exportez les sorties avant le modèle.",
+	},
 	"container_not_exportable": {
 		"en": "The output «{output}» of the flow «{flow}» reads what the Container node «{container}» writes: an image runs on Tabularia's cluster, not in dbt, so it cannot be exported. Export the outputs before the container, or write its logic with sql nodes.",
 		"it": "L'output «{output}» del flusso «{flow}» legge quello che scrive il nodo Container «{container}»: un'immagine gira sul cluster di Tabularia, non in dbt, quindi non si può esportare. Esporta gli output prima del container, o scrivi la sua logica con nodi sql.",

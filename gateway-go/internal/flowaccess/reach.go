@@ -79,6 +79,12 @@ func ReachOf(definition string) map[Ref]bool {
 	for _, n := range ContainerNodes(obj) {
 		found[Ref{"container", ContainerFingerprint(n)}] = true
 	}
+	// a statistical model reaches the cluster with its group's image: a schedule set by
+	// someone else stops when a model node is added (docs/specs/statistical-models.md,
+	// «Security»); its MLflow connection is a connectionId, above
+	for _, n := range ModelNodes(obj) {
+		found[Ref{"model", pyjson.Str(pyjson.Or(data(n).Value("model"), ""))}] = true
+	}
 	return found
 }
 
@@ -89,6 +95,32 @@ func Widens(before, after string) []Ref {
 	for r := range ReachOf(after) {
 		if !old[r] {
 			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// ModelNodes are a definition's (text or parsed) model and Predict nodes
+// (docs/specs/statistical-models.md).
+func ModelNodes(definition any) []pyjson.Object {
+	if text, isText := definition.(string); isText {
+		definition = parse(text, "{}")
+	}
+	var out []pyjson.Object
+	for _, n := range objectsOf(pyjson.Obj(definition).Value("nodes")) {
+		if t := n.Value("type"); t == "model" || t == "model_predict" {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
+func objectsOf(v any) []pyjson.Object {
+	list, _ := v.([]any)
+	var out []pyjson.Object
+	for _, x := range list {
+		if o, ok := x.(pyjson.Object); ok {
+			out = append(out, o)
 		}
 	}
 	return out

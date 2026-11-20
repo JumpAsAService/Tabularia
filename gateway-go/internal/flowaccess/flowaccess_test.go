@@ -30,3 +30,23 @@ func TestDigits(t *testing.T) {
 		}
 	}
 }
+
+// A model node added reaches further (the group's image), and so does its MLflow connection.
+func TestAModelNodeWidens(t *testing.T) {
+	before := `{"nodes": [{"id": "s", "type": "source", "data": {"datasourceId": 1}}]}`
+	after := `{"nodes": [{"id": "s", "type": "source", "data": {"datasourceId": 1}},
+		{"id": "m", "type": "model", "data": {"model": "linear", "mlflow": {"connectionId": 12}}}]}`
+	got := map[Ref]bool{}
+	for _, r := range Widens(before, after) {
+		got[r] = true
+	}
+	if len(got) != 2 || !got[Ref{"model", "linear"}] || !got[Ref{"connection", "12"}] {
+		t.Errorf("%v", got)
+	}
+	if n := len(Widens(after, after)); n != 0 {
+		t.Errorf("the same flow widens nothing: %d", n)
+	}
+	if n := len(ModelNodes(after)); n != 1 {
+		t.Errorf("model nodes of a text: %d", n)
+	}
+}

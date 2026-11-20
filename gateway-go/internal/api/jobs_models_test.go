@@ -1,0 +1,643 @@
+package api
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/config"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/engine"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/flowresolver"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/modelgroups"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/scriptcfg"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/secret"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/settings"
+)
+
+// A model node as a step of a run (docs/specs/statistical-models.md, «A run», «The trial»):
+// the Job's spec, the fingerprint that says «not up to date», and — on a real database, with
+// the cluster and the engine played by the test — success, refusal, crash, timeout, a full
+// quota, a group off or not allowed, results the engine refuses, the row limit.
+
+func mustDef(t *testing.T, s string) pyjson.Object {
+	t.Helper()
+	v, err := pyjson.Loads(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return v.(pyjson.Object)
+}
+
+func TestAModelJobIsTheGroupsImageOfflineAndIsolated(t *testing.T) {
+	img := &ModelGroupImage{Group: "regression", EnvironmentID: 4, Image: "registry:5000/envs@sha256:0123", Arch: "amd64",
+		CPURequest: "1", CPULimit: "2", MemoryRequest: "2Gi", MemoryLimit: "4Gi"}
+	labels := pyjson.Object{{Key: labelModelGroup, Value: "regression"}, {Key: labelModel, Value: "linear"}}
+	env := pyjson.Object{{Key: modelgroups.EnvInput, Value: "s3://b/in"}, {Key: modelgroups.EnvResults, Value: "s3://b/r"}}
+	m := modelJobManifest(jobSettings{jobTTL: 60, registryPullSecret: "pull"}, "tabularia-model-9-a1", img, env, labels, 900,
+		[]any{pyjson.Object{{Key: "key", Value: "f0"}, {Key: "path", Value: "runner/run.R"}}}, "code", "env", nil)
+	job, podLabels := podLabels(t, m)
+	for what, l := range map[string]pyjson.Object{"job": job, "pod": podLabels} {
+		if l.Value(labelInternet) != "off" || l.Value(labelModelGroup) != "regression" || l.Value(labelModel) != "linear" {
+			t.Errorf("%s labels: %v", what, l)
+		}
+	}
+	spec := pyjson.Obj(m.Value("spec"))
+	if spec.Value("activeDeadlineSeconds") != int64(900) || spec.Value("backoffLimit") != int64(0) {
+		t.Errorf("spec %v", spec)
+	}
+	pod := pyjson.Obj(pyjson.Obj(spec.Value("template")).Value("spec"))
+	if pod.Value("automountServiceAccountToken") != false || pyjson.Obj(pod.Value("nodeSelector")).Value("kubernetes.io/arch") != "amd64" {
+		t.Errorf("pod %v", pod)
+	}
+	c := objectList(pod.Value("containers"))[0]
+	if c.Value("image") != img.Image || c.Value("workingDir") != modelgroups.CodeDir {
+		t.Errorf("container %v", c)
+	}
+	cmd, _ := c.Value("command").([]any)
+	if len(cmd) != len(modelgroups.RunCommand) || cmd[0] != "Rscript" {
+		t.Errorf("command %v", cmd)
+	}
+	sec := pyjson.Obj(c.Value("securityContext"))
+	if sec.Value("readOnlyRootFilesystem") != true || sec.Value("allowPrivilegeEscalation") != false {
+		t.Errorf("security %v", sec)
+	}
+	limits := pyjson.Obj(pyjson.Obj(c.Value("resources")).Value("limits"))
+	if limits.Value("cpu") != "2" || limits.Value("memory") != "4Gi" {
+		t.Errorf("limits %v", limits)
+	}
+	for _, e := range c.Value("env").([]any) {
+		if name := pyjson.Str(pyjson.Obj(e).Value("name")); strings.Contains(strings.ToUpper(name), "MLFLOW") {
+			t.Errorf("a model Job holds an MLflow variable: %s", name)
+		}
+	}
+}
+
+func TestTheSamplesAChainRead(t *testing.T) {
+	ops := mustDef(t, `{"ops": [{"type": "limit", "params": {"n": 100, "_dev_sample": true}},
+		{"type": "join", "params": {"right": {"operations": [{"type": "sample", "params": {"fraction": 0.1, "_dev_sample": true}},
+			{"type": "limit", "params": {"n": 100, "_dev_sample": true}}]}}}, {"type": "limit", "params": {"n": 5}}]}`).Value("ops")
+	got := pyDumps(samplesOf(ops))
+	if got != `[{"first": 100}, {"fraction": 0.1}]` {
+		t.Errorf("%s", got)
+	}
+	if pyDumps(samplesOf([]any{})) != "[]" {
+		t.Error("a chain without samples")
+	}
+}
+
+func TestAModelsFingerprintFollowsItsChain(t *testing.T) {
+	base := `{"nodes": [{"id": "s", "type": "source", "position": {"x": 1}, "data": {"datasourceId": 1, "label": "Sales"}},
+		{"id": "f", "type": "operation", "data": {"opType": "filter", "params": {"column": "x"}}},
+		{"id": "m", "type": "model", "data": {"model": "linear", "label": "M", "timeoutSeconds": 900, "params": {"outcome": "y", "predictors": ["x"]}}},
+		{"id": "o", "type": "output", "data": {"name": "out"}},
+		{"id": "z", "type": "source", "data": {"datasourceId": 9}}],
+		"edges": [{"source": "s", "target": "f"}, {"source": "f", "target": "m"}, {"source": "m", "target": "o"}]}`
+	fp := func(text string) string {
+		d := mustDef(t, text)
+		for _, n := range objectList(d.Value("nodes")) {
+			if n.Value("id") == "m" {
+				return modelFingerprint(d, n)
+			}
+		}
+		t.Fatal("no model node")
+		return ""
+	}
+	ref := fp(base)
+	same := map[string]string{
+		"a name":                 strings.Replace(base, `"label": "M"`, `"label": "Prices"`, 1),
+		"a source's name":        strings.Replace(base, `"label": "Sales"`, `"label": "Orders"`, 1),
+		"a position":             strings.Replace(base, `{"x": 1}`, `{"x": 300}`, 1),
+		"the timeout":            strings.Replace(base, `"timeoutSeconds": 900`, `"timeoutSeconds": 60`, 1),
+		"a node after it":        strings.Replace(base, `"name": "out"`, `"name": "elsewhere"`, 1),
+		"a node not in its path": strings.Replace(base, `"datasourceId": 9`, `"datasourceId": 10`, 1),
+	}
+	for what, text := range same {
+		if fp(text) != ref {
+			t.Errorf("%s changed the fingerprint", what)
+		}
+	}
+	changed := map[string]string{
+		"a parameter":   strings.Replace(base, `"predictors": ["x"]`, `"predictors": ["x", "z"]`, 1),
+		"the filter":    strings.Replace(base, `"column": "x"`, `"column": "w"`, 1),
+		"the source":    strings.Replace(base, `"datasourceId": 1,`, `"datasourceId": 2,`, 1),
+		"an edge":       strings.Replace(base, `{"source": "s", "target": "f"}, `, `{"source": "z", "target": "f"}, `, 1),
+		"another model": strings.Replace(base, `"model": "linear"`, `"model": "logistic"`, 1),
+	}
+	for what, text := range changed {
+		if fp(text) == ref {
+			t.Errorf("%s did not change the fingerprint", what)
+		}
+	}
+}
+
+func TestTheModelsSmallHelpers(t *testing.T) {
+	for in, want := range map[string]int64{"2": 2, "500m": 1, "2500m": 3, "": 1, "1.5": 2} {
+		if got := threadsOf(in); got != want {
+			t.Errorf("threadsOf(%q) = %d, want %d", in, got, want)
+		}
+	}
+	if thousands(3400000) != "3,400,000" || thousands(51) != "51" || thousands(1000) != "1,000" {
+		t.Error("thousands")
+	}
+	if upperFirst("the model") != "The model" || upperFirst("") != "" || upperFirst("«x»") != "«x»" {
+		t.Error("upperFirst")
+	}
+	t.Setenv("MODELS__ENABLED", "false")
+	if modelsOff(&scriptcfg.Settings{}) == "" {
+		t.Error("MODELS__ENABLED=false: off")
+	}
+}
+
+// ── on a real database, the cluster and the engine played by the test ─────────
+
+const modelsTestFernetKey = "Vd3m7oIM2w3o2r6Y-ZbM6O1t3Qk3c7HnS0WBu6Mxx2E="
+
+type modelRunFixture struct {
+	t        *testing.T
+	ctx      context.Context
+	db       *pgxpool.Pool
+	d        *Deps
+	q        *queue
+	admin    *auth.User
+	ann      *auth.User // may edit the folder, in no user group
+	folder   int64
+	env      int64
+	version  int64
+	engine   *fakeModelEngine
+	attempts []modelAttemptSeen
+	script   []modelAttemptResult // what each attempt of the Job answers, in turn
+	rows     int64                // the input's rows the engine says it wrote
+	columns  []string             // the columns the input was asked for
+	mu       sync.Mutex
+}
+
+type modelAttemptSeen struct {
+	name     string
+	ns       string
+	manifest pyjson.Object
+	code     pyjson.Object
+	secret   pyjson.Object
+}
+
+type modelAttemptResult struct {
+	ok     bool
+	log    string
+	exit   any
+	reason string
+}
+
+type fakeModelEngine struct {
+	mu            sync.Mutex
+	calls         []string
+	resultsStatus int
+	resultsBody   string
+	outputBody    string
+}
+
+func (e *fakeModelEngine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	b, _ := io.ReadAll(r.Body)
+	e.mu.Lock()
+	e.calls = append(e.calls, r.URL.Path+" "+string(b))
+	status, body := http.StatusOK, `{}`
+	switch r.URL.Path {
+	case "/scripts/results/import":
+		status, body = e.resultsStatus, e.resultsBody
+	case "/scripts/output/import":
+		body = e.outputBody
+	case "/scripts/objects/delete":
+		body = `{"deleted": 9, "failed": []}`
+	}
+	e.mu.Unlock()
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_, _ = w.Write([]byte(body))
+}
+
+func (e *fakeModelEngine) paths() []string {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	var out []string
+	for _, c := range e.calls {
+		p, _, _ := strings.Cut(c, " ")
+		out = append(out, p)
+	}
+	return out
+}
+
+func newModelRunFixture(t *testing.T) *modelRunFixture {
+	t.Helper()
+	dsn := os.Getenv("TEST_DATABASE_URL")
+	if dsn == "" {
+		t.Skip("TEST_DATABASE_URL not set: run gateway-go/scripts/test.sh")
+	}
+	t.Cleanup(scriptcfg.Reload)
+	t.Setenv("SCRIPTS__ENABLED", "true")
+	t.Setenv("SCRIPTS__NAMESPACE", "scripts")
+	t.Setenv("SCRIPTS__TRIAL_NAMESPACE", "script-trials")
+	t.Setenv("SCRIPTS__REGISTRY", "registry:5000/envs")
+	t.Setenv("MODELS__ENABLED", "")
+	scriptcfg.Reload()
+	ctx := context.Background()
+	db, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lock, err := db.Acquire(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := lock.Exec(ctx, `SELECT pg_advisory_lock(7101)`); err != nil {
+		t.Fatal(err)
+	}
+	f := &modelRunFixture{t: t, ctx: ctx, db: db, rows: 120, engine: &fakeModelEngine{resultsStatus: http.StatusOK,
+		resultsBody: `{"found": true, "rows": 42, "card": "{\"format_version\": 1}"}`, outputBody: `{"found": true, "rows": 120}`}}
+	srv := httptest.NewServer(f.engine)
+	e, err := engine.New(srv.URL, modelsTestFernetKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fernet, err := secret.NewFernet(modelsTestFernetKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.Config{EngineBucket: "data-prep", ScriptsEnabled: true, ScriptsNamespace: "scripts"}
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	f.d = &Deps{DB: db, Config: cfg, Log: log, Engine: e, Panel: settings.New(cfg, false, log), Fernet: fernet}
+	f.q = &queue{d: f.d, sc: scriptcfg.Load(config.FromOS()), alive: map[int64]bool{}, wake: make(chan struct{}, 1)}
+	one := func(sql string, args ...any) int64 {
+		t.Helper()
+		var id int64
+		if err := db.QueryRow(ctx, sql, args...).Scan(&id); err != nil {
+			t.Fatalf("%s: %v", sql, err)
+		}
+		return id
+	}
+	stamp := time.Now().UnixNano()
+	user := func(name string, super bool) *auth.User {
+		email := fmt.Sprintf("model-%s-%d@x.test", name, stamp)
+		id := one(`INSERT INTO users (email, full_name, hashed_password, is_active, is_superuser, is_observer, is_service, created_at)
+			VALUES ($1, $2, 'x', true, $3, false, false, now()) RETURNING id`, email, name, super)
+		return &auth.User{ID: id, Email: email, FullName: name, IsActive: true, IsSuperuser: super}
+	}
+	f.admin, f.ann = user("admin", true), user("ann", false)
+	f.folder = one(`INSERT INTO projects (name, description, created_at) VALUES ($1, '', now()) RETURNING id`, fmt.Sprintf("models-%d", stamp))
+	one(`INSERT INTO permissions (project_id, user_id, capability) VALUES ($1, $2, 'manage') RETURNING id`, f.folder, f.ann.ID)
+	enc, err := fernet.Encrypt("scripts-s3cret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(ctx, `INSERT INTO script_storage (id, endpoint, region, bucket, access_key, secret_key_enc, updated_at, updated_by)
+		VALUES (1, '', '', 'scripts', 'scripts-key', $1, now(), 'test') ON CONFLICT (id) DO UPDATE SET bucket = 'scripts',
+		access_key = 'scripts-key', secret_key_enc = $1`, enc); err != nil {
+		t.Fatal(err)
+	}
+	shipped, _ := modelgroups.Get("regression")
+	_, _ = db.Exec(ctx, `DELETE FROM model_groups WHERE id = 'regression'`)
+	_, _ = db.Exec(ctx, `DELETE FROM script_environments WHERE managed_by = 'model_group:regression'`)
+	f.env = one(`INSERT INTO script_environments (name, description, language, enabled, cpu_request, cpu_limit, memory_request,
+		memory_limit, max_timeout_seconds, created_at, updated_at, managed_by) VALUES ($1, '', 'r', true, '1', '2', '2Gi', '4Gi', 3600,
+		now(), now(), 'model_group:regression') RETURNING id`, fmt.Sprintf("Regression %d", stamp))
+	f.version = one(`INSERT INTO script_environment_versions (environment_id, number, language_version, base_image, packages, status,
+		image_ref, arch, recipe_hash, created_at) VALUES ($1, 3, '4.6', 'rocker/r-ver:4.6.0', '', 'ready',
+		'registry:5000/envs@sha256:0123456789abcdef', 'amd64', $2, now()) RETURNING id`, f.env, shipped.RecipeHash)
+	if _, err := db.Exec(ctx, `UPDATE script_environments SET current_version_id = $1 WHERE id = $2`, f.version, f.env); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(ctx, `INSERT INTO model_groups (id, environment_id, enabled, everyone, updated_at) VALUES ('regression', $1, true, true, now())`,
+		f.env); err != nil {
+		t.Fatal(err)
+	}
+	// the cluster and the input, played
+	prevAttempt, prevInput := modelAttemptJob, modelPrepareInput
+	modelAttemptJob = func(_ context.Context, _ scriptcfg.Kubernetes, name string, manifest pyjson.Object, code, secret pyjson.Object,
+		_ int64, ns string, _ float64, _ int) (bool, string, any, string, error) {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		f.attempts = append(f.attempts, modelAttemptSeen{name, ns, manifest, code, secret})
+		if len(f.script) == 0 {
+			return true, "fitted\n", int64(0), "", nil
+		}
+		r := f.script[0]
+		if len(f.script) > 1 {
+			f.script = f.script[1:]
+		}
+		return r.ok, r.log, r.exit, r.reason, nil
+	}
+	modelPrepareInput = func(_ *queue, ctx context.Context, _ *scriptNodeRun, child *childRun, _ *scriptStorage, _ string,
+		columns []string, _ string) (*modelInput, error) {
+		f.columns = columns
+		rows := f.rows
+		return &modelInput{rows: &rows, sample: []any{pyjson.Object{{Key: "first", Value: int64(100)}}}}, nil
+	}
+	t.Cleanup(func() {
+		modelAttemptJob, modelPrepareInput = prevAttempt, prevInput
+		srv.Close()
+		ids := []int64{f.admin.ID, f.ann.ID}
+		_, _ = db.Exec(ctx, `DELETE FROM runs WHERE launched_by = ANY($1)`, ids)
+		_, _ = db.Exec(ctx, `DELETE FROM flows WHERE project_id = $1`, f.folder)
+		_, _ = db.Exec(ctx, `DELETE FROM permissions WHERE project_id = $1`, f.folder)
+		_, _ = db.Exec(ctx, `DELETE FROM projects WHERE id = $1`, f.folder)
+		_, _ = db.Exec(ctx, `DELETE FROM model_groups WHERE id = 'regression'`)
+		_, _ = db.Exec(ctx, `UPDATE script_environments SET current_version_id = NULL WHERE id = $1`, f.env)
+		_, _ = db.Exec(ctx, `DELETE FROM script_environment_groups WHERE environment_id = $1`, f.env)
+		_, _ = db.Exec(ctx, `DELETE FROM script_environment_versions WHERE environment_id = $1`, f.env)
+		_, _ = db.Exec(ctx, `DELETE FROM script_environments WHERE id = $1`, f.env)
+		_, _ = db.Exec(ctx, `DELETE FROM script_storage WHERE id = 1`)
+		_, _ = db.Exec(ctx, `DELETE FROM audit_logs WHERE actor_id = ANY($1)`, ids)
+		_, _ = db.Exec(ctx, `DELETE FROM users WHERE id = ANY($1)`, ids)
+		_, _ = lock.Exec(ctx, `SELECT pg_advisory_unlock(7101)`)
+		lock.Release()
+		db.Close()
+	})
+	return f
+}
+
+// flow saves a flow source → model (→ output when next) and gives its run of the model node.
+func (f *modelRunFixture) flow(params string, next bool) (*jobFlow, pyjson.Object, pyjson.Object) {
+	f.t.Helper()
+	nodes := `{"id": "s", "type": "source", "data": {"datasourceId": 1}},
+		{"id": "m", "type": "model", "data": {"model": "linear", "label": "Elasticity", "params": ` + params + `, "timeoutSeconds": 600, "retries": 2, "retryDelaySeconds": 0}}`
+	edges := `{"source": "s", "target": "m"}`
+	if next {
+		nodes += `, {"id": "o", "type": "output", "data": {"name": "coefficients"}}`
+		edges += `, {"source": "m", "target": "o"}`
+	}
+	text := `{"nodes": [` + nodes + `], "edges": [` + edges + `]}`
+	var id int64
+	if err := f.db.QueryRow(f.ctx, `INSERT INTO flows (name, description, project_id, owner_id, definition, engine, created_at, updated_at)
+		VALUES ('Pricing', '', $1, $2, $3, 'duckdb', now(), now()) RETURNING id`, f.folder, f.ann.ID, text).Scan(&id); err != nil {
+		f.t.Fatal(err)
+	}
+	definition := mustDef(f.t, text)
+	var node pyjson.Object
+	for _, n := range objectList(definition.Value("nodes")) {
+		if n.Value("id") == "m" {
+			node = n
+		}
+	}
+	return &jobFlow{ID: id, ProjectID: f.folder, Name: "Pricing", Definition: text, Engine: "duckdb"}, definition, node
+}
+
+func (f *modelRunFixture) run(user *auth.User, params string, next bool) (int64, error) {
+	f.t.Helper()
+	flow, definition, node := f.flow(params, next)
+	r := &scriptNodeRun{q: f.q, user: user, flow: flow, definition: definition, node: node, trigger: "manual", mode: "development",
+		outputs: flowresolver.ScriptOutputs{}}
+	_, err := f.q.runModel(f.ctx, r)
+	var id int64
+	_ = f.db.QueryRow(f.ctx, `SELECT coalesce(max(id), 0) FROM runs WHERE flow_id = $1 AND kind = 'model'`, flow.ID).Scan(&id)
+	return id, err
+}
+
+type modelRunRow struct {
+	status, script, outputKey, resultsKey, card, errText string
+	rows                                                 *int64
+}
+
+func (f *modelRunFixture) row(id int64) modelRunRow {
+	f.t.Helper()
+	var r modelRunRow
+	var script, results, card, errText *string
+	if err := f.db.QueryRow(f.ctx, `SELECT status, script, output_key, model_results_key, model_card, error, rows_written FROM runs WHERE id = $1`, id).
+		Scan(&r.status, &script, &r.outputKey, &results, &card, &errText, &r.rows); err != nil {
+		f.t.Fatal(err)
+	}
+	r.script, r.resultsKey, r.card, r.errText = deref(script), deref(results), deref(card), deref(errText)
+	return r
+}
+
+const linearParams = `{"outcome": "quantity", "predictors": ["price", "channel"]}`
+
+func TestAModelStepRunsItsGroupsJobAndKeepsItsResults(t *testing.T) {
+	f := newModelRunFixture(t)
+	id, err := f.run(f.ann, linearParams, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := f.row(id)
+	if r.status != "SUCCESS" || r.resultsKey == "" || r.outputKey != r.resultsKey || r.card != `{"format_version": 1}` {
+		t.Fatalf("the run: %+v", r)
+	}
+	if r.rows == nil || *r.rows != 42 {
+		t.Errorf("the rows the next nodes read: the results' 42, got %v", r.rows)
+	}
+	// what the report and the outputs read of the run (lot E's contract)
+	if !strings.HasPrefix(r.script, `{"node_id": "m",`) {
+		t.Errorf("the script starts with the node: %s", r.script)
+	}
+	var info map[string]any
+	if err := json.Unmarshal([]byte(r.script), &info); err != nil {
+		t.Fatal(err)
+	}
+	if info["model"] != "linear" || info["trial"] != false || info["fingerprint"] == "" || info["group"] != "regression" ||
+		info["version"] != float64(3) || info["namespace"] != "scripts" || fmt.Sprint(info["sample"]) != "[map[first:100]]" {
+		t.Errorf("the run's script: %s", r.script)
+	}
+	if p, _ := info["params"].(map[string]any); p["outcome"] != "quantity" || p["output"] != "results" {
+		t.Errorf("the checked parameters, with their defaults: %v", info["params"])
+	}
+	// the input asked for the columns the model reads only
+	if strings.Join(f.columns, ",") != "quantity,price,channel" {
+		t.Errorf("the input's columns: %v", f.columns)
+	}
+	// one Job: the group's image by digest, in the scripts namespace, offline, the runner and task.json in its ConfigMap
+	if len(f.attempts) != 1 {
+		t.Fatalf("%d attempts", len(f.attempts))
+	}
+	a := f.attempts[0]
+	if a.ns != "scripts" || a.secret.Value("AWS_SECRET_ACCESS_KEY") != "scripts-s3cret" {
+		t.Errorf("namespace %s, secret %v", a.ns, a.secret.Value("AWS_ACCESS_KEY_ID"))
+	}
+	job, _ := podLabels(t, a.manifest)
+	if job.Value(labelInternet) != "off" || job.Value(labelModelGroup) != "regression" || job.Value(labelScriptRun) != fmt.Sprint(id) {
+		t.Errorf("labels %v", job)
+	}
+	var task modelgroups.Task
+	found := false
+	for _, kv := range a.code {
+		if s, _ := kv.Value.(string); strings.HasPrefix(s, `{"protocol":`) {
+			found = json.Unmarshal([]byte(s), &task) == nil
+		}
+	}
+	if !found || task.Mode != "fit" || task.GroupVersion != 3 || task.IDs.StepRunID != id || task.InputRows != 120 || task.RowsFrom != "run" ||
+		task.WriteOutput || task.MLflow {
+		t.Errorf("task.json: %+v", task)
+	}
+	paths := strings.Join(f.engine.paths(), " ")
+	if paths != "/scripts/results/import /scripts/objects/delete" {
+		t.Errorf("the engine was asked: %s", paths)
+	}
+}
+
+func TestAModelsRowsGoToTheNodesAfterIt(t *testing.T) {
+	f := newModelRunFixture(t)
+	id, err := f.run(f.ann, `{"outcome": "quantity", "predictors": ["price"], "output": "rows"}`, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := f.row(id)
+	if r.status != "SUCCESS" || r.outputKey == r.resultsKey || r.outputKey == "" || r.rows == nil || *r.rows != 120 {
+		t.Errorf("the rows: %+v", r)
+	}
+	if f.columns != nil {
+		t.Errorf("the rows output gives every input column back: %v", f.columns)
+	}
+	if paths := strings.Join(f.engine.paths(), " "); paths != "/scripts/results/import /scripts/output/import /scripts/objects/delete" {
+		t.Errorf("the engine was asked: %s", paths)
+	}
+}
+
+func TestARefusalOfTheRunnerIsItsSentenceAndIsNotTriedAgain(t *testing.T) {
+	f := newModelRunFixture(t)
+	f.script = []modelAttemptResult{{log: "reading\nTABULARIA_ERROR {\"code\":\"separation\",\"message\":\"the outcome is separated by price: use Firth\",\"params\":{}}\n",
+		exit: int64(modelgroups.ExitRefused), reason: "it ended with exit code 3"}}
+	id, err := f.run(f.ann, linearParams, false)
+	if err == nil || err.Error() != "model «Elasticity»: the outcome is separated by price: use Firth" {
+		t.Fatalf("%v", err)
+	}
+	r := f.row(id)
+	if r.status != "FAILURE" || r.errText != err.Error() || len(f.attempts) != 1 || r.resultsKey != "" {
+		t.Errorf("%+v, %d attempts", r, len(f.attempts))
+	}
+}
+
+func TestACrashIsTriedAgainThenFails(t *testing.T) {
+	f := newModelRunFixture(t)
+	f.script = []modelAttemptResult{{log: "Error in fit: object 'x' not found\n", exit: int64(1), reason: "it ended with exit code 1"}}
+	id, err := f.run(f.ann, linearParams, false)
+	if err == nil || err.Error() != "model «Elasticity» failed: it ended with exit code 1" {
+		t.Fatalf("%v", err)
+	}
+	r := f.row(id)
+	if r.status != "FAILURE" || len(f.attempts) != 3 || !strings.Contains(r.script, "attempt 3") {
+		t.Errorf("%+v, %d attempts", r, len(f.attempts))
+	}
+	if strings.Contains(strings.Join(f.engine.paths(), " "), "/scripts/results/import") {
+		t.Error("a crash imports nothing")
+	}
+}
+
+func TestATimeoutAndAFullQuotaSayWhy(t *testing.T) {
+	f := newModelRunFixture(t)
+	f.script = []modelAttemptResult{{log: "", exit: nil, reason: "it ran longer than its timeout (600 s)"}}
+	if _, err := f.run(f.ann, linearParams, false); err == nil || !strings.HasSuffix(err.Error(), "failed: it ran longer than its timeout (600 s)") {
+		t.Errorf("timeout: %v", err)
+	}
+	// a trial: the trials' namespace, whose quota is full
+	f.attempts = nil
+	quota := "its Pod never started within its timeout (600 s): exceeded quota: script-trials-quota, requested: limits.memory=4Gi"
+	f.script = []modelAttemptResult{{reason: quota}}
+	flow, definition, node := f.flow(linearParams, false)
+	var trial int64
+	if err := f.db.QueryRow(f.ctx, `INSERT INTO runs (kind, flow_id, task_id, status, launched_by, trigger_type, input_key, output_bucket,
+		output_key, publish_description, publish_overwrite, publish_sort_keys, script, started_at) VALUES ('model', $1, '', 'PENDING', $2, 'trial',
+		'', '', '', '', false, '[]', '{"node_id": "m", "trial": true}', now()) RETURNING id`, flow.ID, f.ann.ID).Scan(&trial); err != nil {
+		t.Fatal(err)
+	}
+	r := &scriptNodeRun{q: f.q, user: f.ann, flow: flow, definition: definition, node: node, trigger: "trial", mode: "development",
+		outputs: flowresolver.ScriptOutputs{}, trial: trial}
+	_, err := f.q.runModel(f.ctx, r)
+	if err == nil || !strings.Contains(err.Error(), "exceeded quota") {
+		t.Errorf("quota: %v", err)
+	}
+	if len(f.attempts) == 0 || f.attempts[0].ns != "script-trials" {
+		t.Errorf("a trial runs in the trials' namespace: %+v", f.attempts)
+	}
+	if row := f.row(trial); row.status != "FAILURE" || !strings.Contains(row.script, `"trial": true`) {
+		t.Errorf("the trial's row: %+v", row)
+	}
+}
+
+func TestAGroupOffOrNotAllowedCreatesNothing(t *testing.T) {
+	f := newModelRunFixture(t)
+	count := func() int64 {
+		var n int64
+		_ = f.db.QueryRow(f.ctx, `SELECT count(*) FROM runs WHERE launched_by = $1`, f.ann.ID).Scan(&n)
+		return n
+	}
+	// not for everyone, and ann in none of its user groups; an administrator may
+	if _, err := f.db.Exec(f.ctx, `UPDATE model_groups SET everyone = false WHERE id = 'regression'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.run(f.ann, linearParams, false); err == nil || !strings.Contains(err.Error(), "may not use the model group regression") {
+		t.Errorf("not allowed: %v", err)
+	}
+	if _, err := f.run(f.admin, linearParams, false); err != nil {
+		t.Errorf("an administrator: %v", err)
+	}
+	// disabled
+	if _, err := f.db.Exec(f.ctx, `UPDATE model_groups SET enabled = false, everyone = true WHERE id = 'regression'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.run(f.ann, linearParams, false); err == nil || !strings.Contains(err.Error(), "the model group regression is disabled") {
+		t.Errorf("disabled: %v", err)
+	}
+	// enabled, but its version built from another recipe: being rebuilt
+	if _, err := f.db.Exec(f.ctx, `UPDATE model_groups SET enabled = true WHERE id = 'regression'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.db.Exec(f.ctx, `UPDATE script_environment_versions SET recipe_hash = 'older' WHERE id = $1`, f.version); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.run(f.ann, linearParams, false); err == nil || !strings.Contains(err.Error(), "is being rebuilt for this version of Tabularia") {
+		t.Errorf("rebuilding: %v", err)
+	}
+	// parameters the catalogue refuses
+	if _, err := f.run(f.ann, `{"outcome": "quantity"}`, false); err == nil || err.Error() != "model «Elasticity»: linear: 'predictors' is required" {
+		t.Errorf("parameters: %v", err)
+	}
+	if n := count(); n != 0 {
+		t.Errorf("%d runs created by refusals", n)
+	}
+	if len(f.attempts) != 1 {
+		t.Errorf("only the administrator's run reached the cluster: %d", len(f.attempts))
+	}
+}
+
+func TestResultsTheEngineRefusesFailTheStep(t *testing.T) {
+	f := newModelRunFixture(t)
+	f.engine.resultsStatus = http.StatusUnprocessableEntity
+	f.engine.resultsBody = `{"detail": "results.parquet: the row 'model|||n' is missing"}`
+	id, err := f.run(f.ann, linearParams, false)
+	if err == nil || !strings.Contains(err.Error(), "its results were not accepted, a fault of the runner and not of the data: results.parquet: the row 'model|||n' is missing") {
+		t.Fatalf("%v", err)
+	}
+	if r := f.row(id); r.status != "FAILURE" || r.resultsKey != "" {
+		t.Errorf("%+v", r)
+	}
+	if paths := f.engine.paths(); paths[len(paths)-1] != "/scripts/objects/delete" {
+		t.Errorf("the step's files are deleted anyway: %v", paths)
+	}
+}
+
+func TestTheRowLimitStopsTheStepBeforeAnyJob(t *testing.T) {
+	f := newModelRunFixture(t)
+	if _, err := f.db.Exec(f.ctx, `UPDATE model_groups SET max_rows = 50 WHERE id = 'regression'`); err != nil {
+		t.Fatal(err)
+	}
+	f.rows = 51
+	id, err := f.run(f.ann, linearParams, false)
+	want := "model «Elasticity»: the model would read 51 rows; the group «regression» allows 50: filter or sample before the node, or ask an administrator"
+	if err == nil || err.Error() != want {
+		t.Fatalf("%v", err)
+	}
+	if len(f.attempts) != 0 {
+		t.Error("a Job was created")
+	}
+	if r := f.row(id); r.status != "FAILURE" || r.errText != want {
+		t.Errorf("%+v", r)
+	}
+}

@@ -1148,7 +1148,7 @@ func inList(v any, list []any) bool {
 
 func inAny(v any, options ...any) bool { return inList(v, options) }
 
-// withoutScript is _without_script: an Output that reads what a Script or Container node
+// withoutScript is _without_script: an Output that reads what a Script, Container or model node
 // writes refuses the export; one no exported Output reads from is left out, with a note.
 func (p *Project) withoutScript(f *Flow, definition any, only []any) {
 	nodes := pyval.NewDict()
@@ -1161,7 +1161,7 @@ func (p *Project) withoutScript(f *Flow, definition any, only []any) {
 	}
 	var scripts []any
 	for i, k := range nodes.Keys() {
-		if inAny(pyval.Get(nodes.Values()[i], "type"), "script", "container") {
+		if inAny(pyval.Get(nodes.Values()[i], "type"), "script", "container", "model", "model_predict") {
 			scripts = append(scripts, k)
 		}
 	}
@@ -1190,6 +1190,10 @@ func (p *Project) withoutScript(f *Flow, definition any, only []any) {
 				refuse("the output «"+name+"» of the flow «"+f.Name+"» reads what the Container node «"+label+"» writes: an image runs on Tabularia's cluster, not in dbt",
 					"container_not_exportable", "flow", f.Name, "output", name, "container", label)
 			}
+			if typ := pyval.Get(script, "type"); pyval.Eq(typ, "model") || pyval.Eq(typ, "model_predict") {
+				refuse("the output «"+name+"» of the flow «"+f.Name+"» reads what the model node «"+label+"» writes: a statistical model runs on Tabularia's cluster, not in dbt",
+					"model_not_exportable", "flow", f.Name, "output", name, "model", label)
+			}
 			refuse("the output «"+name+"» of the flow «"+f.Name+"» reads what the Script node «"+label+"» writes: Python or R runs on Tabularia's cluster, not in dbt",
 				"script_not_exportable", "flow", f.Name, "output", name, "script", label)
 		}
@@ -1211,6 +1215,8 @@ func (p *Project) withoutScript(f *Flow, definition any, only []any) {
 			what, runs := "Script node", "Python or R"
 			if pyval.Eq(pyval.Get(n, "type"), "container") {
 				what, runs = "Container node", "an image"
+			} else if typ := pyval.Get(n, "type"); pyval.Eq(typ, "model") || pyval.Eq(typ, "model_predict") {
+				what, runs = "model node", "a statistical model"
 			}
 			p.note = append(p.note, "The flow «"+f.Name+"» also runs the "+what+" «"+label+"» ("+runs+"): it is not "+
 				"part of this dbt project, and Tabularia keeps running it with the flow.")

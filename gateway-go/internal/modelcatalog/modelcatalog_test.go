@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -144,5 +145,25 @@ func TestABrokenSnapshotIsRefused(t *testing.T) {
 		if _, err := parse([]byte(broken)); err == nil {
 			t.Errorf("accepted: %s", broken)
 		}
+	}
+}
+
+func TestColumnsAreWhatTheModelReads(t *testing.T) {
+	checked, err := Check("linear", map[string]any{"outcome": "y", "predictors": []any{"x", "c"}, "weights": "w", "se": "cluster", "cluster": "c"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(Columns("linear", checked), ","); got != "y,x,c,w" {
+		t.Errorf("linear: %s", got)
+	}
+	checked, err = Check("arima", map[string]any{"value": "sales", "time": "month", "frequency": "month", "exog": []any{"price"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(Columns("arima", checked), ","); got != "month,sales,price" {
+		t.Errorf("arima, the time first: %s", got)
+	}
+	if Columns("nope", nil) != nil {
+		t.Error("no model, no columns")
 	}
 }

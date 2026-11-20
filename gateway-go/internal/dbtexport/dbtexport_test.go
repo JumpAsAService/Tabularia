@@ -200,3 +200,32 @@ func (emptyCatalog) QueryRow(context.Context, string, ...any) pgx.Row { return n
 func (emptyCatalog) Query(context.Context, string, ...any) (pgx.Rows, error) {
 	return nil, pgx.ErrNoRows
 }
+
+// A model node runs on the cluster, not in dbt (docs/specs/statistical-models.md, «What
+// exists and is reused»): an Output that reads it refuses the export, one that does not
+// leaves it out with a note.
+func TestAModelIsNotExported(t *testing.T) {
+	for _, typ := range []string{"model", "model_predict"} {
+		def, err := pyjson.Loads(`{"nodes": [{"id": "s", "type": "source", "data": {"datasourceId": 1}},
+			{"id": "m", "type": "` + typ + `", "data": {"label": "Elasticity"}},
+			{"id": "o", "type": "output", "data": {"name": "coefficients"}}, {"id": "o2", "type": "output", "data": {"name": "rows"}}],
+			"edges": [{"source": "s", "target": "m"}, {"source": "m", "target": "o"}, {"source": "s", "target": "o2"}]}`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		p := &Project{}
+		err = pyval.Catch(func() { p.withoutScript(&Flow{Name: "Pricing"}, def, nil) })
+		e, ok := err.(*Error)
+		if !ok || e.Code != "model_not_exportable" || e.Params.Value("model") != "Elasticity" || e.Params.Value("output") != "coefficients" {
+			t.Fatalf("%s: %#v", typ, err)
+		}
+		if got := ErrorMessage(e, "en"); got == "" || got == e.Message {
+			t.Errorf("%s: the sentence %q", typ, got)
+		}
+		// only the output that does not read it: exported, the model left out with a note
+		p = &Project{}
+		if err := pyval.Catch(func() { p.withoutScript(&Flow{Name: "Pricing"}, def, []any{"o2"}) }); err != nil {
+			t.Fatalf("%s: %v", typ, err)
+		}
+	}
+}

@@ -307,6 +307,33 @@ func VariantOf(model string, checked map[string]any) *Variant {
 	return nil
 }
 
+// Columns are the columns a model reads with these checked parameters, each once, in the
+// form's order, a series' time column first: what its input keeps («Only the columns the
+// model reads», docs/specs/statistical-models.md). Nil for no model.
+func Columns(model string, checked map[string]any) []string {
+	m, ok := data.byID[model]
+	if !ok {
+		return nil
+	}
+	var out []string
+	seen := map[string]bool{}
+	for _, timeFirst := range []bool{true, false} {
+		for _, k := range m.Keys {
+			kindName := m.KindOf[k]
+			if (kindName == "time_column") != timeFirst {
+				continue
+			}
+			for _, c := range columnNames(data.kinds[kindName], checked[k]) {
+				if !seen[c] {
+					seen[c] = true
+					out = append(out, c)
+				}
+			}
+		}
+	}
+	return out
+}
+
 // ── reading values ──────────────────────────────────────────────────────────
 
 func (m *Model) applies(key string, full map[string]any) bool {

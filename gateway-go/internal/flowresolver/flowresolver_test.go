@@ -98,3 +98,70 @@ func TestStripAndSequence(t *testing.T) {
 		}
 	}
 }
+
+// A model node is a step boundary (docs/specs/statistical-models.md, «What a model node is»):
+// the chain before it ends at its input, the nodes after it read what it wrote, and a run
+// orders it after the steps it reads and before the outputs that read it.
+func TestAModelNodeIsAStep(t *testing.T) {
+	d := def(t, `{"nodes": [
+		{"id": "s", "type": "source", "data": {"datasourceId": 1, "sample": {"mode": "first", "rows": 5}}},
+		{"id": "f", "type": "operation", "data": {"opType": "filter", "params": {"column": "x"}}},
+		{"id": "m", "type": "model", "data": {"model": "linear", "params": {"outcome": "y", "predictors": ["x"]}}},
+		{"id": "g", "type": "operation", "data": {"opType": "sort", "params": {"by": ["stat"]}}},
+		{"id": "o", "type": "output", "data": {"name": "coefficients"}},
+		{"id": "p", "type": "model_predict", "data": {}},
+		{"id": "o2", "type": "output", "data": {"name": "predicted"}}],
+		"edges": [{"source": "s", "target": "f"}, {"source": "f", "target": "m"}, {"source": "m", "target": "g"}, {"source": "g", "target": "o"},
+			{"source": "s", "target": "p"}, {"source": "p", "target": "o2"}]}`)
+	// the input: the source (and its development sample), the filter; the model itself is not an operation
+	body, err := ResolveScriptInput(d, def(t, `{"id": "m", "type": "model"}`), resolveDS, "b", Mode{Development: true, DefaultSampleRows: 100}, nil)
+	if err != nil || body == nil {
+		t.Fatal(err, body)
+	}
+	ops := body.Value("operations").([]any)
+	if body.Value("input_key") != "datasets/1.parquet" || len(ops) != 2 || ops[1].(pyjson.Object).Value("type") != "filter" {
+		t.Errorf("the model's input: %v", body)
+	}
+	// after it: what it wrote, then the sort; nothing of the chain before it
+	if _, err := ResolveOutputRequest(d, def(t, `{"id": "o", "type": "output", "data": {"name": "coefficients"}}`), resolveDS, "b", Mode{}, nil); err == nil {
+		t.Error("before the model ran, the output after it has no source")
+	}
+	out := ScriptOutputs{ScriptOutputKey("m"): {Bucket: "b", Key: "out/results.parquet"}}
+	req, err := ResolveOutputRequest(d, def(t, `{"id": "o", "type": "output", "data": {"name": "coefficients"}}`), resolveDS, "b", Mode{}, out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	after := req.Value("operations").([]any)
+	if req.Value("input_key") != "out/results.parquet" || len(after) != 1 || after[0].(pyjson.Object).Value("type") != "sort" {
+		t.Errorf("after the model: %v", req)
+	}
+	// the order of a run: the model and Predict before the outputs that read them
+	order, err := SequenceOrder(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ids []any
+	for _, n := range order {
+		ids = append(ids, n.(pyjson.Object).Value("id"))
+	}
+	at := map[any]int{}
+	for i, id := range ids {
+		at[id] = i
+	}
+	if len(ids) != 4 || at["m"] > at["o"] || at["p"] > at["o2"] {
+		t.Fatalf("order %v: each step before the output that reads it", ids)
+	}
+	up, err := ScriptsUpstream("o", mustNodes(t, d), d.(pyjson.Object).Value("edges").([]any))
+	if err != nil || len(up) != 1 || up[0] != "m" {
+		t.Errorf("the steps an output reads: %v %v", up, err)
+	}
+}
+
+func mustNodes(t *testing.T, d any) *pyval.Dict {
+	t.Helper()
+	n, err := NodesByID(d.(pyjson.Object).Value("nodes"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return n
+}
