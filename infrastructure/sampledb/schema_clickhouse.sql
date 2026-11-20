@@ -36,8 +36,9 @@ CREATE TABLE analytics.clienti (
     provincia         LowCardinality(String),
     regione           LowCardinality(String),
     agente_id         UInt32,                    -- the customer's agent
-    data_acquisizione Date,
-    attivo            UInt8
+    data_acquisizione Date,                      -- the day the customer was acquired (before the data's window for the first ones)
+    stato             LowCardinality(String),    -- the CRM's status: attivo | inattivo | nuovo (see README)
+    attivo            UInt8                      -- 0 only when stato = inattivo
 ) ENGINE = MergeTree ORDER BY id;
 
 -- CRM activities (visits, calls, reminders…): the CRM's big table.
