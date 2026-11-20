@@ -278,7 +278,8 @@ cases[[length(cases) + 1L]] <- list(
   types = list(days = "number", status = "text", line = "text"),
   params = list(time = "days", event = "status", event_value = "failed", strata = "line", test = "peto", conf_type = "log-log",
                 alpha = 0.1, times = list(60)),
-  expect = c(km_expect(x, "line", "log-log", 0.1, 1, 60, max(x$time), FALSE, sum(!ok)), list(txt("model|||test", "peto"))))
+  expect = c(km_expect(x, "line", "log-log", 0.1, 1, 60, min(tapply(x$time, x$line, max)), FALSE, sum(!ok)),
+             list(txt("model|||test", "peto"))))
 
 # two strata whose curves cross; the event a 0/1 number
 d <- read_table("kaplan_meier_crossing.csv")
@@ -287,7 +288,7 @@ cases[[length(cases) + 1L]] <- list(
   id = "kaplan_meier_crossing", model = "kaplan_meier", data = "data/kaplan_meier_crossing.csv",
   types = list(months = "number", churned = "integer", plan = "text"),
   params = list(time = "months", event = "churned", event_value = 1, strata = "plan", times = as.list(c(6, 24))),
-  expect = c(km_expect(x, "plan", "log", 0.05, 0, c(6, 24), max(x$time), FALSE, 0),
+  expect = c(km_expect(x, "plan", "log", 0.05, 0, c(6, 24), min(tapply(x$time, x$plan, max)), FALSE, 0),
              list(txt("assumption|proportional_hazards||verdict", "failed"), num("assumption|proportional_hazards||count", 1))))
 
 # no strata, a boolean event, plain intervals, a time past the follow-up
@@ -394,7 +395,7 @@ cox_expect <- function(fit, data, keys, labels, numeric = character(), alpha = 0
   e <- c(e, list(num(paste0("curve|adjusted_survival|", strata_names[[1L]], "|surv|0"), 1),
                  num(paste0("curve|adjusted_survival|", strata_names[[1L]], "|surv|1"), sf$surv[[1L]]),
                  num(paste0("curve|adjusted_survival|", strata_names[[1L]], "|surv|5"), sf$surv[[5L]])))
-  # influence: the largest |dfbetas| of each term and the rows above 2/√n
+  # influence: the largest |dfbetas| of each term, failed above 1, the rows above 2/√n named
   if (fit$method == "exact") { # survival gives no dfbetas for the exact partial likelihood
     return(c(e, lapply(labels, function(l) txt(paste0("assumption|dfbeta|", l, "|verdict"), "not_computed"))))
   }
@@ -402,8 +403,8 @@ cox_expect <- function(fit, data, keys, labels, numeric = character(), alpha = 0
   for (t in seq_along(terms_)) {
     score <- apply(abs(dfb[, which(assign == terms_[[t]]), drop = FALSE]), 1L, max)
     k <- paste0("assumption|dfbeta|", labels[[t]], "|")
-    e <- c(e, list(num(paste0(k, "value"), max(score)), num(paste0(k, "count"), sum(score > 2 / sqrt(fit$n))),
-                   num(paste0(k, "threshold"), 2 / sqrt(fit$n))))
+    e <- c(e, list(num(paste0(k, "value"), max(score)), num(paste0(k, "count"), sum(score > 1)), num(paste0(k, "threshold"), 1),
+                   txt(paste0(k, "verdict"), if (any(score > 1)) "failed" else "ok")))
   }
   e
 }

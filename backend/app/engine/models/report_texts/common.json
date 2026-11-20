@@ -171,12 +171,12 @@
    },
    "cooks_distance": {
     "name": "Influence: Cook's distance",
-    "h0": "No row moves the fit much (Cook's distance under 4/n).",
+    "h0": "No row moves the fit much (Cook's distance under the median of F(p, n − p)).",
     "advice": "Look at the rows named: a mistake in the data, or a case the model does not describe."
    },
    "leverage": {
     "name": "Influence: leverage",
-    "h0": "No row has an unusual combination of predictors (leverage under 2p/n).",
+    "h0": "No row has an unusual combination of predictors (leverage under 3p/n and under 0.5).",
     "advice": "Look at the rows named: their predictors are far from the others'."
    },
    "jarque_bera": {
@@ -358,12 +358,12 @@
    },
    "cooks_distance": {
     "name": "Influenza: distanza di Cook",
-    "h0": "Nessuna riga sposta di molto la stima (distanza di Cook sotto 4/n).",
+    "h0": "Nessuna riga sposta di molto la stima (distanza di Cook sotto la mediana di F(p, n − p)).",
     "advice": "Guardate le righe indicate: un errore nei dati, o un caso che il modello non descrive."
    },
    "leverage": {
     "name": "Influenza: leva",
-    "h0": "Nessuna riga ha una combinazione insolita di predittori (leva sotto 2p/n).",
+    "h0": "Nessuna riga ha una combinazione insolita di predittori (leva sotto 3p/n e sotto 0,5).",
     "advice": "Guardate le righe indicate: i loro predittori sono lontani da quelli delle altre."
    },
    "jarque_bera": {
@@ -545,12 +545,12 @@
    },
    "cooks_distance": {
     "name": "Einfluss: Cook-Distanz",
-    "h0": "Keine Zeile verschiebt die Schätzung stark (Cook-Distanz unter 4/n).",
+    "h0": "Keine Zeile verschiebt die Schätzung stark (Cook-Distanz unter dem Median von F(p, n − p)).",
     "advice": "Prüfen Sie die genannten Zeilen: ein Fehler in den Daten oder ein Fall, den das Modell nicht beschreibt."
    },
    "leverage": {
     "name": "Einfluss: Hebelwert",
-    "h0": "Keine Zeile hat eine ungewöhnliche Kombination von Prädiktoren (Hebelwert unter 2p/n).",
+    "h0": "Keine Zeile hat eine ungewöhnliche Kombination von Prädiktoren (Hebelwert unter 3p/n und unter 0,5).",
     "advice": "Prüfen Sie die genannten Zeilen: Ihre Prädiktoren liegen weit von denen der anderen."
    },
    "jarque_bera": {
@@ -732,12 +732,12 @@
    },
    "cooks_distance": {
     "name": "Influencia: distancia de Cook",
-    "h0": "Ninguna fila mueve mucho el ajuste (distancia de Cook por debajo de 4/n).",
+    "h0": "Ninguna fila mueve mucho el ajuste (distancia de Cook por debajo de la mediana de F(p, n − p)).",
     "advice": "Revise las filas indicadas: un error en los datos, o un caso que el modelo no describe."
    },
    "leverage": {
     "name": "Influencia: apalancamiento",
-    "h0": "Ninguna fila tiene una combinación inusual de predictores (apalancamiento por debajo de 2p/n).",
+    "h0": "Ninguna fila tiene una combinación inusual de predictores (apalancamiento por debajo de 3p/n y de 0,5).",
     "advice": "Revise las filas indicadas: sus predictores están lejos de los de las demás."
    },
    "jarque_bera": {
@@ -919,12 +919,12 @@
    },
    "cooks_distance": {
     "name": "Influence : distance de Cook",
-    "h0": "Aucune ligne ne déplace beaucoup l'ajustement (distance de Cook sous 4/n).",
+    "h0": "Aucune ligne ne déplace beaucoup l'ajustement (distance de Cook sous la médiane de F(p, n − p)).",
     "advice": "Examinez les lignes indiquées : une erreur dans les données, ou un cas que le modèle ne décrit pas."
    },
    "leverage": {
     "name": "Influence : effet de levier",
-    "h0": "Aucune ligne n'a une combinaison inhabituelle de prédicteurs (levier sous 2p/n).",
+    "h0": "Aucune ligne n'a une combinaison inhabituelle de prédicteurs (levier sous 3p/n et sous 0,5).",
     "advice": "Examinez les lignes indiquées : leurs prédicteurs sont loin de ceux des autres."
    },
    "jarque_bera": {

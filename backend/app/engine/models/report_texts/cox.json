@@ -67,7 +67,7 @@
    },
    "dfbeta": {
     "name": "Influence: dfbeta",
-    "h0": "No row moves a coefficient by more than 2/√n of its standard error (dfbetas).",
+    "h0": "No row moves a coefficient by more than its standard error (|dfbetas| under 1).",
     "advice": "Look at the rows named: each moves a coefficient by much."
    },
    "vif": {
@@ -151,7 +151,7 @@
    },
    "dfbeta": {
     "name": "Influenza: dfbeta",
-    "h0": "Nessuna riga sposta un coefficiente di più di 2/√n del suo errore standard (dfbetas).",
+    "h0": "Nessuna riga sposta un coefficiente di più del suo errore standard (|dfbetas| sotto 1).",
     "advice": "Guardate le righe indicate: ognuna sposta molto un coefficiente."
    },
    "vif": {
@@ -235,7 +235,7 @@
    },
    "dfbeta": {
     "name": "Einfluss: dfbeta",
-    "h0": "Keine Zeile verschiebt einen Koeffizienten um mehr als 2/√n seines Standardfehlers (dfbetas).",
+    "h0": "Keine Zeile verschiebt einen Koeffizienten um mehr als seinen Standardfehler (|dfbetas| unter 1).",
     "advice": "Prüfen Sie die genannten Zeilen: Jede verschiebt einen Koeffizienten stark."
    },
    "vif": {
@@ -319,7 +319,7 @@
    },
    "dfbeta": {
     "name": "Influencia: dfbeta",
-    "h0": "Ninguna fila mueve un coeficiente más de 2/√n de su error estándar (dfbetas).",
+    "h0": "Ninguna fila mueve un coeficiente más que su error estándar (|dfbetas| por debajo de 1).",
     "advice": "Revise las filas indicadas: cada una mueve mucho un coeficiente."
    },
    "vif": {
@@ -403,7 +403,7 @@
    },
    "dfbeta": {
     "name": "Influence : dfbeta",
-    "h0": "Aucune ligne ne déplace un coefficient de plus de 2/√n de son erreur type (dfbetas).",
+    "h0": "Aucune ligne ne déplace un coefficient de plus que son erreur type (|dfbetas| sous 1).",
     "advice": "Examinez les lignes indiquées : chacune déplace beaucoup un coefficient."
    },
    "vif": {

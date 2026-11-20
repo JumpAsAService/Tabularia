@@ -253,21 +253,34 @@ linear_case <- function(id, data, file, types, params, formula, map, term_names,
   }
   i <- which.max(abs(t))
   p_bonf <- min(1, n * 2 * stats::pt(abs(t[[i]]), m$df.residual - 1, lower.tail = FALSE))
-  expect <- c(expect, list(
-    num("assumption|cooks_distance||count", sum(cooks > 4 / n)), num("assumption|cooks_distance||threshold", 4 / n),
-    num("assumption|leverage||count", sum(h > 2 * length(stats::coef(m)) / n)),
-    num("assumption|leverage||threshold", 2 * length(stats::coef(m)) / n),
+  expect <- c(expect, influence_expect(cooks, h, length(stats::coef(m)), named), list(
     num("assumption|outlier_test||statistic", unname(t[[i]])), num("assumption|outlier_test||p_value", p_bonf),
     num("assumption|outlier_test||df", m$df.residual - 1),
     txt("assumption|outlier_test||rows", as.character(row_numbers[[i]]))))
-  if (sum(cooks > 4 / n) > 0) expect <- c(expect, list(txt("assumption|cooks_distance||rows", named(cooks, 4 / n))))
-  if (sum(h > 2 * length(stats::coef(m)) / n) > 0) {
-    expect <- c(expect, list(txt("assumption|leverage||rows", named(h, 2 * length(stats::coef(m)) / n))))
-  }
   list(id = id, model = "linear", data = file, types = types, params = params, expect = expect)
 }
 
 `%||%` <- function(a, b) if (is.null(a)) b else a
+
+# Cook's distance and leverage, the linear and the logistic regression's alike: the verdict by
+# the classical thresholds (Cook: above the median of F(p, n − p) doubtful, above 1 failed;
+# leverage: above 3p/n and above 0.5 doubtful), the largest value, how many rows pass the verdict's
+# threshold, and the rows named above the wide ones (4/n, 2p/n), at most five.
+influence_expect <- function(cooks, h, p, named) {
+  n <- length(cooks)
+  cook_limit <- min(1, stats::qf(0.5, p, n - p))
+  lev_limit <- max(3 * p / n, 0.5)
+  e <- list(
+    num("assumption|cooks_distance||threshold", cook_limit), num("assumption|cooks_distance||value", max(cooks)),
+    num("assumption|cooks_distance||count", sum(cooks > cook_limit)),
+    txt("assumption|cooks_distance||verdict", if (any(cooks > 1)) "failed" else if (any(cooks > cook_limit)) "doubtful" else "ok"),
+    num("assumption|leverage||threshold", lev_limit), num("assumption|leverage||value", max(h)),
+    num("assumption|leverage||count", sum(h > lev_limit)),
+    txt("assumption|leverage||verdict", if (any(h > lev_limit)) "doubtful" else "ok"))
+  if (sum(cooks > 4 / n) > 0) e <- c(e, list(txt("assumption|cooks_distance||rows", named(cooks, 4 / n))))
+  if (sum(h > 2 * p / n) > 0) e <- c(e, list(txt("assumption|leverage||rows", named(h, 2 * p / n))))
+  e
+}
 
 linear_cases <- function() {
   cases <- list()
@@ -575,13 +588,7 @@ logistic_case <- function(id, data, file, types, params, formula, map, term_name
     top <- head(order(-score), 5L)
     paste(row_numbers[top[score[top] > above]], collapse = ", ")
   }
-  limit_h <- 2 * ncol(X) / rows_n
-  expect <- c(expect, list(
-    num("assumption|cooks_distance||count", sum(cooks > 4 / rows_n)), num("assumption|cooks_distance||threshold", 4 / rows_n),
-    num("assumption|leverage||count", sum(h > limit_h)), num("assumption|leverage||threshold", limit_h),
-    num("assumption|deviance_residuals||count", sum(dr > 3))))
-  if (sum(cooks > 4 / rows_n) > 0) expect <- c(expect, list(txt("assumption|cooks_distance||rows", named(cooks, 4 / rows_n))))
-  if (sum(h > limit_h) > 0) expect <- c(expect, list(txt("assumption|leverage||rows", named(h, limit_h))))
+  expect <- c(expect, influence_expect(cooks, h, ncol(X), named), list(num("assumption|deviance_residuals||count", sum(dr > 3))))
   if (sum(dr > 3) > 0) expect <- c(expect, list(txt("assumption|deviance_residuals||rows", named(dr, 3))))
   list(id = id, model = "logistic", data = file, types = types, params = params, expect = expect)
 }

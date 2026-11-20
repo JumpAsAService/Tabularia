@@ -466,24 +466,50 @@
           "rel": 1e-09
         },
         {
-          "key": "assumption|cooks_distance||count",
-          "value": 9,
+          "key": "assumption|cooks_distance||threshold",
+          "value": 0.844231036737143,
           "rel": 1e-09
         },
         {
-          "key": "assumption|cooks_distance||threshold",
-          "value": 0.0341880341880342,
+          "key": "assumption|cooks_distance||value",
+          "value": 0.083871509594689,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|cooks_distance||count",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|cooks_distance||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|leverage||threshold",
+          "value": 0.5,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|leverage||value",
+          "value": 0.0825888062786207,
           "rel": 1e-09
         },
         {
           "key": "assumption|leverage||count",
-          "value": 5,
+          "value": 0,
           "rel": 1e-09
         },
         {
-          "key": "assumption|leverage||threshold",
-          "value": 0.0683760683760684,
-          "rel": 1e-09
+          "key": "assumption|leverage||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|cooks_distance||rows",
+          "text": "32, 76, 82, 116, 99"
+        },
+        {
+          "key": "assumption|leverage||rows",
+          "text": "84, 29, 111, 24, 59"
         },
         {
           "key": "assumption|outlier_test||statistic",
@@ -503,14 +529,6 @@
         {
           "key": "assumption|outlier_test||rows",
           "text": "116"
-        },
-        {
-          "key": "assumption|cooks_distance||rows",
-          "text": "32, 76, 82, 116, 99"
-        },
-        {
-          "key": "assumption|leverage||rows",
-          "text": "84, 29, 111, 24, 59"
         }
       ]
     },
@@ -923,24 +941,50 @@
           "rel": 1e-09
         },
         {
-          "key": "assumption|cooks_distance||count",
-          "value": 9,
+          "key": "assumption|cooks_distance||threshold",
+          "value": 0.844231036737143,
           "rel": 1e-09
         },
         {
-          "key": "assumption|cooks_distance||threshold",
-          "value": 0.0341880341880342,
+          "key": "assumption|cooks_distance||value",
+          "value": 0.083871509594689,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|cooks_distance||count",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|cooks_distance||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|leverage||threshold",
+          "value": 0.5,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|leverage||value",
+          "value": 0.0825888062786207,
           "rel": 1e-09
         },
         {
           "key": "assumption|leverage||count",
-          "value": 5,
+          "value": 0,
           "rel": 1e-09
         },
         {
-          "key": "assumption|leverage||threshold",
-          "value": 0.0683760683760684,
-          "rel": 1e-09
+          "key": "assumption|leverage||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|cooks_distance||rows",
+          "text": "32, 76, 82, 116, 99"
+        },
+        {
+          "key": "assumption|leverage||rows",
+          "text": "84, 29, 111, 24, 59"
         },
         {
           "key": "assumption|outlier_test||statistic",
@@ -960,14 +1004,6 @@
         {
           "key": "assumption|outlier_test||rows",
           "text": "116"
-        },
-        {
-          "key": "assumption|cooks_distance||rows",
-          "text": "32, 76, 82, 116, 99"
-        },
-        {
-          "key": "assumption|leverage||rows",
-          "text": "84, 29, 111, 24, 59"
         }
       ]
     },
@@ -2019,24 +2055,50 @@
           "rel": 1e-09
         },
         {
-          "key": "assumption|cooks_distance||count",
-          "value": 9,
+          "key": "assumption|cooks_distance||threshold",
+          "value": 0.844231036737143,
           "rel": 1e-09
         },
         {
-          "key": "assumption|cooks_distance||threshold",
-          "value": 0.0341880341880342,
+          "key": "assumption|cooks_distance||value",
+          "value": 0.083871509594689,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|cooks_distance||count",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|cooks_distance||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|leverage||threshold",
+          "value": 0.5,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|leverage||value",
+          "value": 0.0825888062786207,
           "rel": 1e-09
         },
         {
           "key": "assumption|leverage||count",
-          "value": 5,
+          "value": 0,
           "rel": 1e-09
         },
         {
-          "key": "assumption|leverage||threshold",
-          "value": 0.0683760683760684,
-          "rel": 1e-09
+          "key": "assumption|leverage||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|cooks_distance||rows",
+          "text": "32, 76, 82, 116, 99"
+        },
+        {
+          "key": "assumption|leverage||rows",
+          "text": "84, 29, 111, 24, 59"
         },
         {
           "key": "assumption|outlier_test||statistic",
@@ -2056,14 +2118,6 @@
         {
           "key": "assumption|outlier_test||rows",
           "text": "116"
-        },
-        {
-          "key": "assumption|cooks_distance||rows",
-          "text": "32, 76, 82, 116, 99"
-        },
-        {
-          "key": "assumption|leverage||rows",
-          "text": "84, 29, 111, 24, 59"
         }
       ]
     },
@@ -2919,24 +2973,50 @@
           "rel": 1e-09
         },
         {
-          "key": "assumption|cooks_distance||count",
-          "value": 2,
+          "key": "assumption|cooks_distance||threshold",
+          "value": 0.844231036737143,
           "rel": 1e-09
         },
         {
-          "key": "assumption|cooks_distance||threshold",
-          "value": 0.0341880341880342,
+          "key": "assumption|cooks_distance||value",
+          "value": 0.0451187649581282,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|cooks_distance||count",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|cooks_distance||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|leverage||threshold",
+          "value": 0.5,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|leverage||value",
+          "value": 0.168594607856996,
           "rel": 1e-09
         },
         {
           "key": "assumption|leverage||count",
-          "value": 11,
+          "value": 0,
           "rel": 1e-09
         },
         {
-          "key": "assumption|leverage||threshold",
-          "value": 0.0683760683760684,
-          "rel": 1e-09
+          "key": "assumption|leverage||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|cooks_distance||rows",
+          "text": "76, 32"
+        },
+        {
+          "key": "assumption|leverage||rows",
+          "text": "84, 29, 111, 92, 120"
         },
         {
           "key": "assumption|outlier_test||statistic",
@@ -2956,14 +3036,6 @@
         {
           "key": "assumption|outlier_test||rows",
           "text": "44"
-        },
-        {
-          "key": "assumption|cooks_distance||rows",
-          "text": "76, 32"
-        },
-        {
-          "key": "assumption|leverage||rows",
-          "text": "84, 29, 111, 92, 120"
         }
       ]
     },
@@ -3756,13 +3828,32 @@
           "rel": 1e-09
         },
         {
-          "key": "assumption|cooks_distance||count",
-          "value": 4,
+          "key": "assumption|cooks_distance||threshold",
+          "value": 0.929982696154645,
           "rel": 1e-09
         },
         {
-          "key": "assumption|cooks_distance||threshold",
-          "value": 0.0666666666666667,
+          "key": "assumption|cooks_distance||value",
+          "value": 0.0919789834274348,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|cooks_distance||count",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|cooks_distance||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|leverage||threshold",
+          "value": 0.5,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|leverage||value",
+          "value": 0.244046496441238,
           "rel": 1e-09
         },
         {
@@ -3771,9 +3862,12 @@
           "rel": 1e-09
         },
         {
-          "key": "assumption|leverage||threshold",
-          "value": 0.266666666666667,
-          "rel": 1e-09
+          "key": "assumption|leverage||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|cooks_distance||rows",
+          "text": "1, 7, 5, 58"
         },
         {
           "key": "assumption|outlier_test||statistic",
@@ -3793,10 +3887,6 @@
         {
           "key": "assumption|outlier_test||rows",
           "text": "8"
-        },
-        {
-          "key": "assumption|cooks_distance||rows",
-          "text": "1, 7, 5, 58"
         }
       ]
     },
@@ -4094,24 +4184,50 @@
           "text": "not_computed"
         },
         {
-          "key": "assumption|cooks_distance||count",
-          "value": 1,
+          "key": "assumption|cooks_distance||threshold",
+          "value": 0.701497247220919,
           "rel": 1e-09
         },
         {
-          "key": "assumption|cooks_distance||threshold",
-          "value": 0.0666666666666667,
+          "key": "assumption|cooks_distance||value",
+          "value": 0.129433172995578,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|cooks_distance||count",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|cooks_distance||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|leverage||threshold",
+          "value": 0.5,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|leverage||value",
+          "value": 0.0905683346055386,
           "rel": 1e-09
         },
         {
           "key": "assumption|leverage||count",
-          "value": 7,
+          "value": 0,
           "rel": 1e-09
         },
         {
-          "key": "assumption|leverage||threshold",
-          "value": 0.0666666666666667,
-          "rel": 1e-09
+          "key": "assumption|leverage||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|cooks_distance||rows",
+          "text": "1"
+        },
+        {
+          "key": "assumption|leverage||rows",
+          "text": "56, 58, 18, 10, 17"
         },
         {
           "key": "assumption|outlier_test||statistic",
@@ -4131,14 +4247,6 @@
         {
           "key": "assumption|outlier_test||rows",
           "text": "1"
-        },
-        {
-          "key": "assumption|cooks_distance||rows",
-          "text": "1"
-        },
-        {
-          "key": "assumption|leverage||rows",
-          "text": "56, 58, 18, 10, 17"
         }
       ]
     },
@@ -4583,24 +4691,50 @@
           "rel": 1e-09
         },
         {
-          "key": "assumption|cooks_distance||count",
-          "value": 2,
+          "key": "assumption|cooks_distance||threshold",
+          "value": 0.894246843780808,
           "rel": 1e-09
         },
         {
-          "key": "assumption|cooks_distance||threshold",
-          "value": 0.133333333333333,
+          "key": "assumption|cooks_distance||value",
+          "value": 0.219003935014281,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|cooks_distance||count",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|cooks_distance||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|leverage||threshold",
+          "value": 0.5,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|leverage||value",
+          "value": 0.371596184966826,
           "rel": 1e-09
         },
         {
           "key": "assumption|leverage||count",
-          "value": 1,
+          "value": 0,
           "rel": 1e-09
         },
         {
-          "key": "assumption|leverage||threshold",
-          "value": 0.333333333333333,
-          "rel": 1e-09
+          "key": "assumption|leverage||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|cooks_distance||rows",
+          "text": "27, 16"
+        },
+        {
+          "key": "assumption|leverage||rows",
+          "text": "20"
         },
         {
           "key": "assumption|outlier_test||statistic",
@@ -4620,14 +4754,6 @@
         {
           "key": "assumption|outlier_test||rows",
           "text": "27"
-        },
-        {
-          "key": "assumption|cooks_distance||rows",
-          "text": "27, 16"
-        },
-        {
-          "key": "assumption|leverage||rows",
-          "text": "20"
         },
         {
           "key": "model|||formula",
@@ -5292,29 +5418,42 @@
           "text": "ok"
         },
         {
-          "key": "assumption|cooks_distance||count",
-          "value": 7,
+          "key": "assumption|cooks_distance||threshold",
+          "value": 0.894506395571731,
           "rel": 1e-09
         },
         {
-          "key": "assumption|cooks_distance||threshold",
-          "value": 0.0203045685279188,
+          "key": "assumption|cooks_distance||value",
+          "value": 0.0330399423696515,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|cooks_distance||count",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|cooks_distance||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|leverage||threshold",
+          "value": 0.5,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|leverage||value",
+          "value": 0.0824603663427102,
           "rel": 1e-09
         },
         {
           "key": "assumption|leverage||count",
-          "value": 6,
-          "rel": 1e-09
-        },
-        {
-          "key": "assumption|leverage||threshold",
-          "value": 0.0609137055837563,
-          "rel": 1e-09
-        },
-        {
-          "key": "assumption|deviance_residuals||count",
           "value": 0,
           "rel": 1e-09
+        },
+        {
+          "key": "assumption|leverage||verdict",
+          "text": "ok"
         },
         {
           "key": "assumption|cooks_distance||rows",
@@ -5323,6 +5462,11 @@
         {
           "key": "assumption|leverage||rows",
           "text": "47, 111, 175, 161, 86"
+        },
+        {
+          "key": "assumption|deviance_residuals||count",
+          "value": 0,
+          "rel": 1e-09
         }
       ]
     },
@@ -5822,29 +5966,42 @@
           "text": "ok"
         },
         {
-          "key": "assumption|cooks_distance||count",
-          "value": 8,
+          "key": "assumption|cooks_distance||threshold",
+          "value": 0.894506395571731,
           "rel": 1e-09
         },
         {
-          "key": "assumption|cooks_distance||threshold",
-          "value": 0.0203045685279188,
+          "key": "assumption|cooks_distance||value",
+          "value": 0.0363561119486451,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|cooks_distance||count",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|cooks_distance||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|leverage||threshold",
+          "value": 0.5,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|leverage||value",
+          "value": 0.0755306915744027,
           "rel": 1e-09
         },
         {
           "key": "assumption|leverage||count",
-          "value": 4,
-          "rel": 1e-09
-        },
-        {
-          "key": "assumption|leverage||threshold",
-          "value": 0.0609137055837563,
-          "rel": 1e-09
-        },
-        {
-          "key": "assumption|deviance_residuals||count",
           "value": 0,
           "rel": 1e-09
+        },
+        {
+          "key": "assumption|leverage||verdict",
+          "text": "ok"
         },
         {
           "key": "assumption|cooks_distance||rows",
@@ -5853,6 +6010,11 @@
         {
           "key": "assumption|leverage||rows",
           "text": "47, 111, 175, 39"
+        },
+        {
+          "key": "assumption|deviance_residuals||count",
+          "value": 0,
+          "rel": 1e-09
         }
       ]
     },
@@ -6445,29 +6607,42 @@
           "text": "ok"
         },
         {
-          "key": "assumption|cooks_distance||count",
-          "value": 6,
+          "key": "assumption|cooks_distance||threshold",
+          "value": 0.894506395571731,
           "rel": 1e-09
         },
         {
-          "key": "assumption|cooks_distance||threshold",
-          "value": 0.0203045685279188,
+          "key": "assumption|cooks_distance||value",
+          "value": 0.0316586814062335,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|cooks_distance||count",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|cooks_distance||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|leverage||threshold",
+          "value": 0.5,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|leverage||value",
+          "value": 0.0812152452201927,
           "rel": 1e-09
         },
         {
           "key": "assumption|leverage||count",
-          "value": 6,
-          "rel": 1e-09
-        },
-        {
-          "key": "assumption|leverage||threshold",
-          "value": 0.0609137055837563,
-          "rel": 1e-09
-        },
-        {
-          "key": "assumption|deviance_residuals||count",
           "value": 0,
           "rel": 1e-09
+        },
+        {
+          "key": "assumption|leverage||verdict",
+          "text": "ok"
         },
         {
           "key": "assumption|cooks_distance||rows",
@@ -6476,6 +6651,11 @@
         {
           "key": "assumption|leverage||rows",
           "text": "47, 111, 175, 161, 86"
+        },
+        {
+          "key": "assumption|deviance_residuals||count",
+          "value": 0,
+          "rel": 1e-09
         }
       ]
     },
@@ -9486,29 +9666,42 @@
           "text": "ok"
         },
         {
-          "key": "assumption|cooks_distance||count",
-          "value": 38,
+          "key": "assumption|cooks_distance||threshold",
+          "value": 0.894506395571731,
           "rel": 1e-09
         },
         {
-          "key": "assumption|cooks_distance||threshold",
-          "value": 0.0203045685279188,
+          "key": "assumption|cooks_distance||value",
+          "value": 0.13800900246463,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|cooks_distance||count",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|cooks_distance||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|leverage||threshold",
+          "value": 0.5,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|leverage||value",
+          "value": 0.114497216940753,
           "rel": 1e-09
         },
         {
           "key": "assumption|leverage||count",
-          "value": 17,
+          "value": 0,
           "rel": 1e-09
         },
         {
-          "key": "assumption|leverage||threshold",
-          "value": 0.0609137055837563,
-          "rel": 1e-09
-        },
-        {
-          "key": "assumption|deviance_residuals||count",
-          "value": 5,
-          "rel": 1e-09
+          "key": "assumption|leverage||verdict",
+          "text": "ok"
         },
         {
           "key": "assumption|cooks_distance||rows",
@@ -9517,6 +9710,11 @@
         {
           "key": "assumption|leverage||rows",
           "text": "39, 161, 86, 11, 5"
+        },
+        {
+          "key": "assumption|deviance_residuals||count",
+          "value": 5,
+          "rel": 1e-09
         },
         {
           "key": "assumption|deviance_residuals||rows",
@@ -9930,29 +10128,42 @@
           "text": "doubtful"
         },
         {
-          "key": "assumption|cooks_distance||count",
-          "value": 2,
+          "key": "assumption|cooks_distance||threshold",
+          "value": 0.803395466470505,
           "rel": 1e-09
         },
         {
-          "key": "assumption|cooks_distance||threshold",
-          "value": 0.1,
+          "key": "assumption|cooks_distance||value",
+          "value": 0.162395186466135,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|cooks_distance||count",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|cooks_distance||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|leverage||threshold",
+          "value": 0.5,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|leverage||value",
+          "value": 0.474448769182773,
           "rel": 1e-09
         },
         {
           "key": "assumption|leverage||count",
-          "value": 10,
-          "rel": 1e-09
-        },
-        {
-          "key": "assumption|leverage||threshold",
-          "value": 0.15,
-          "rel": 1e-09
-        },
-        {
-          "key": "assumption|deviance_residuals||count",
           "value": 0,
           "rel": 1e-09
+        },
+        {
+          "key": "assumption|leverage||verdict",
+          "text": "ok"
         },
         {
           "key": "assumption|cooks_distance||rows",
@@ -9961,6 +10172,11 @@
         {
           "key": "assumption|leverage||rows",
           "text": "40, 34, 35, 36, 33"
+        },
+        {
+          "key": "assumption|deviance_residuals||count",
+          "value": 0,
+          "rel": 1e-09
         }
       ]
     },
@@ -10408,13 +10624,32 @@
           "text": "doubtful"
         },
         {
-          "key": "assumption|cooks_distance||count",
-          "value": 2,
+          "key": "assumption|cooks_distance||threshold",
+          "value": 0.861452991206032,
           "rel": 1e-09
         },
         {
-          "key": "assumption|cooks_distance||threshold",
-          "value": 0.133333333333333,
+          "key": "assumption|cooks_distance||value",
+          "value": 0.382077479523504,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|cooks_distance||count",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|cooks_distance||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|leverage||threshold",
+          "value": 0.5,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|leverage||value",
+          "value": 0.251455472742667,
           "rel": 1e-09
         },
         {
@@ -10423,18 +10658,17 @@
           "rel": 1e-09
         },
         {
-          "key": "assumption|leverage||threshold",
-          "value": 0.266666666666667,
-          "rel": 1e-09
+          "key": "assumption|leverage||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|cooks_distance||rows",
+          "text": "15, 16"
         },
         {
           "key": "assumption|deviance_residuals||count",
           "value": 0,
           "rel": 1e-09
-        },
-        {
-          "key": "assumption|cooks_distance||rows",
-          "text": "15, 16"
         }
       ]
     },

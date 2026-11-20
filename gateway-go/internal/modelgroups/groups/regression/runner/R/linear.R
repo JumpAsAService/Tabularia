@@ -362,23 +362,7 @@ linear_assumptions <- function(rows, m, p, alpha, w, X, y, order_by, vif, kappa_
                "Drop or combine the correlated predictors, centre them, or turn on a penalty.",
                threshold = LINEAR_KAPPA_DOUBTFUL, value = kappa_)
 
-  named <- function(score, above) {
-    top <- head(order(-score), 5L)
-    row_numbers[top[score[top] > above]]
-  }
-  cooks <- infl$cooks
-  limit <- 4 / n
-  over <- sum(cooks > limit, na.rm = TRUE)
-  linear_check(rows, "cooks_distance", "No row moves the fit much (Cook's distance under 4/n).",
-               if (any(cooks > 1, na.rm = TRUE)) "failed" else if (over > 0L) "doubtful" else "ok",
-               "Look at the rows named: a mistake in the data, or a case the model does not describe.",
-               threshold = limit, count = over, at_rows = named(cooks, limit))
-  h <- infl$h
-  limit <- 2 * k / n
-  over <- sum(h > limit, na.rm = TRUE)
-  linear_check(rows, "leverage", "No row has an unusual combination of predictors (leverage under 2p/n).",
-               if (over > 0L) "doubtful" else "ok", "Look at the rows named: their predictors are far from the others'.",
-               threshold = limit, count = over, at_rows = named(h, limit))
+  linear_influence_checks(rows, infl$cooks, infl$h, k, row_numbers)
   t <- infl$student
   if (any(is.finite(t))) {  # car::outlierTest: the largest |studentized residual|, Bonferroni-adjusted
     i <- which.max(abs(t))
@@ -392,6 +376,39 @@ linear_assumptions <- function(rows, m, p, alpha, w, X, y, order_by, vif, kappa_
                  "It could not be computed on these rows: the studentized residuals are not finite.")
   }
   invisible(rows)
+}
+
+# Influence, Cook's distance and leverage (linear.R and logistic.R): the verdict by the classical
+# thresholds, which a clean fit seldom passes — Cook's distance above the median of F(p, n − p)
+# doubtful (Cook and Weisberg), above 1 failed; leverage above 3p/n and above 0.5 doubtful
+# (3p/n alone is passed by the largest of a few hundred rows of a normal design nearly always:
+# 99% of clean fits at n = 200; Huber's 0.5 is a row that weighs as much as all the others on
+# its own fitted value). The wide thresholds 4/n and 2p/n, which a fit of a few hundred rows
+# passes nearly always, only name the rows to look at (at most 5, the largest first): they no
+# longer make the verdict. Each check writes the largest value, the threshold of its verdict
+# and how many rows pass it.
+LINEAR_COOKS_FAILED <- 1
+LINEAR_LEVERAGE_TIMES <- 3
+LINEAR_LEVERAGE_HIGH <- 0.5
+
+linear_influence_checks <- function(rows, cooks, h, k, row_numbers) {
+  n <- length(cooks)
+  named <- function(score, above) {
+    top <- head(order(-score), 5L)
+    row_numbers[top[!is.na(score[top]) & score[top] > above]]
+  }
+  limit <- if (n > k) min(LINEAR_COOKS_FAILED, stats::qf(0.5, k, n - k)) else LINEAR_COOKS_FAILED
+  biggest <- if (any(is.finite(cooks))) max(cooks, na.rm = TRUE) else NULL
+  linear_check(rows, "cooks_distance", "No row moves the fit much (Cook's distance under the median of F(p, n − p)).",
+               if (any(cooks > LINEAR_COOKS_FAILED, na.rm = TRUE)) "failed" else if (any(cooks > limit, na.rm = TRUE)) "doubtful" else "ok",
+               "Look at the rows named: a mistake in the data, or a case the model does not describe.",
+               threshold = limit, value = biggest, count = sum(cooks > limit, na.rm = TRUE), at_rows = named(cooks, 4 / n))
+  limit <- max(LINEAR_LEVERAGE_TIMES * k / n, LINEAR_LEVERAGE_HIGH)
+  linear_check(rows, "leverage", "No row has an unusual combination of predictors (leverage under 3p/n and under 0.5).",
+               if (any(h > limit, na.rm = TRUE)) "doubtful" else "ok",
+               "Look at the rows named: their predictors are far from the others'.",
+               threshold = limit, value = if (any(is.finite(h))) max(h, na.rm = TRUE) else NULL, count = sum(h > limit, na.rm = TRUE),
+               at_rows = named(h, 2 * k / n))
 }
 
 # Jarque–Bera on the moments (as tseries::jarque.bera.test): n/6·(S² + (K − 3)²/4), χ² with 2 df.

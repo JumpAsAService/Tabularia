@@ -13,8 +13,9 @@
 #   martingale_form    the linear form of each numeric predictor: the likelihood-ratio test of
 #                      a natural spline of it (splines::ns, 3 df) added to the model, with the
 #                      martingale residuals of the null model against it on its chart;
-#   dfbeta             influence per term: the rows whose removal moves a coefficient by more
-#                      than 2/√n of its standard error (dfbetas), the five largest named;
+#   dfbeta             influence per term: failed when a row's removal moves a coefficient by
+#                      more than its standard error (|dfbetas| above 1); the five largest rows
+#                      above 2/√n named, whatever the verdict;
 #   vif                the variance inflation of each term on the design (GVIF^(1/df) for a
 #                      term of several columns, read against 5 and 10);
 #   epv                events per coefficient, at least 10.
@@ -42,6 +43,7 @@ COX_PACKAGES <- c("survival", "splines")
 COX_EPV <- 10
 COX_VIF_DOUBTFUL <- 5
 COX_VIF_FAILED <- 10
+COX_DFBETAS_FAILED <- 1   # |dfbetas| above which a row moves a coefficient by more than its standard error
 COX_FORM_DF <- 3          # the spline of the linear-form test
 COX_FORM_MIN_VALUES <- 5  # a predictor with fewer distinct values has no curve to tell from a line
 COX_SMOOTH_DF <- 4        # plot.cox.zph's smooth
@@ -377,13 +379,15 @@ cox_assumptions <- function(rows, fit, frame, form_rhs, start, ties, alpha, desi
     }
   }
 
-  # influence: dfbetas of each term's columns, the largest above 2/√n named
+  # influence: dfbetas of each term's columns. The verdict by the classical threshold, |dfbetas|
+  # above 1 (a row that moves a coefficient by more than its standard error): failed. The wide
+  # one, 2/√n, which nearly every fit passes, only names the rows to look at (the largest first).
   n <- fit$n
   limit <- 2 / sqrt(n)
   dfb <- if (identical(fit$method, "exact")) {
     simpleError("survival gives no dfbeta for the exact partial likelihood; fit with ties = efron to see the influence")
   } else tryCatch(as.matrix(stats::residuals(fit, type = "dfbetas")), error = function(e) e)
-  h0 <- "No row moves a coefficient by much (|dfbetas| under 2/√n)."
+  h0 <- "No row moves a coefficient by more than its standard error (|dfbetas| under 1)."
   for (j in seq_along(labels)) {
     if (inherits(dfb, "error")) {
       cox_check(rows, "dfbeta", h0, "not_computed", paste0("It was not computed: ", conditionMessage(dfb), "."),
@@ -391,11 +395,11 @@ cox_assumptions <- function(rows, fit, frame, form_rhs, start, ties, alpha, desi
       next
     }
     score <- apply(abs(dfb[, groups$columns[[j]], drop = FALSE]), 1L, max)
-    over <- sum(score > limit)
     top <- head(order(-score), 5L)
-    cox_check(rows, "dfbeta", h0, if (any(score > 1)) "failed" else if (over > 0L) "doubtful" else "ok",
+    cox_check(rows, "dfbeta", h0, if (any(score > COX_DFBETAS_FAILED)) "failed" else "ok",
               "Look at the rows named: each moves a coefficient by much; a mistake in the data, or a case the model does not describe.",
-              level_2 = labels[[j]], threshold = limit, value = max(score), count = over, at_rows = design$rows[top[score[top] > limit]])
+              level_2 = labels[[j]], threshold = COX_DFBETAS_FAILED, value = max(score), count = sum(score > COX_DFBETAS_FAILED),
+              at_rows = design$rows[top[score[top] > limit]])
   }
 
   # multicollinearity

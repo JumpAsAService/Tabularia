@@ -137,7 +137,7 @@
    null,
    null,
    "n",
-   147.0,
+   147,
    null,
    null,
    null,
@@ -149,7 +149,7 @@
    null,
    null,
    "events",
-   106.0,
+   106,
    null,
    null,
    null,
@@ -161,7 +161,7 @@
    null,
    null,
    "n_missing",
-   3.0,
+   3,
    null,
    null,
    null,
@@ -185,7 +185,7 @@
    null,
    null,
    "lr_df",
-   3.0,
+   3,
    null,
    null,
    null,
@@ -233,7 +233,7 @@
    null,
    null,
    "wald_df",
-   3.0,
+   3,
    null,
    null,
    null,
@@ -281,7 +281,7 @@
    null,
    null,
    "score_df",
-   3.0,
+   3,
    null,
    null,
    null,
@@ -713,7 +713,7 @@
    "schoenfeld",
    "load",
    "df",
-   1.0,
+   1,
    null,
    null,
    null,
@@ -797,7 +797,7 @@
    "schoenfeld",
    "line",
    "df",
-   2.0,
+   2,
    null,
    null,
    null,
@@ -881,7 +881,7 @@
    "schoenfeld_global",
    null,
    "df",
-   3.0,
+   3,
    null,
    null,
    null,
@@ -965,7 +965,7 @@
    "martingale_form",
    "load",
    "df",
-   2.0,
+   2,
    null,
    null,
    null,
@@ -1026,7 +1026,7 @@
    "load",
    "h0",
    null,
-   "No row moves a coefficient by much (|dfbetas| under 2/√n).",
+   "No row moves a coefficient by more than its standard error (|dfbetas| under 1).",
    null,
    null,
    83,
@@ -1037,7 +1037,7 @@
    "dfbeta",
    "load",
    "threshold",
-   0.1649572197684645,
+   1,
    null,
    null,
    null,
@@ -1061,7 +1061,7 @@
    "dfbeta",
    "load",
    "count",
-   5.0,
+   0,
    null,
    null,
    null,
@@ -1074,7 +1074,7 @@
    "load",
    "verdict",
    null,
-   "doubtful",
+   "ok",
    null,
    null,
    87,
@@ -1110,7 +1110,7 @@
    "line",
    "h0",
    null,
-   "No row moves a coefficient by much (|dfbetas| under 2/√n).",
+   "No row moves a coefficient by more than its standard error (|dfbetas| under 1).",
    null,
    null,
    90,
@@ -1121,7 +1121,7 @@
    "dfbeta",
    "line",
    "threshold",
-   0.1649572197684645,
+   1,
    null,
    null,
    null,
@@ -1145,7 +1145,7 @@
    "dfbeta",
    "line",
    "count",
-   14.0,
+   0,
    null,
    null,
    null,
@@ -1158,7 +1158,7 @@
    "line",
    "verdict",
    null,
-   "doubtful",
+   "ok",
    null,
    null,
    94,
@@ -1205,7 +1205,7 @@
    "vif",
    "load",
    "threshold",
-   5.0,
+   5,
    null,
    null,
    null,
@@ -1277,7 +1277,7 @@
    "vif",
    "line",
    "df",
-   2.0,
+   2,
    null,
    null,
    null,
@@ -1289,7 +1289,7 @@
    "vif",
    "line",
    "threshold",
-   5.0,
+   5,
    null,
    null,
    null,
@@ -1349,7 +1349,7 @@
    "epv",
    null,
    "threshold",
-   10.0,
+   10,
    null,
    null,
    null,
@@ -1373,7 +1373,7 @@
    "epv",
    null,
    "count",
-   106.0,
+   106,
    null,
    null,
    null,
@@ -1411,7 +1411,7 @@
    "y",
    -0.002529143652899,
    null,
-   3.0,
+   3,
    null,
    115,
    "point|schoenfeld|load|y|0"
@@ -1423,7 +1423,7 @@
    "y",
    0.00443047094594318,
    null,
-   3.0,
+   3,
    null,
    116,
    "point|schoenfeld|load|y|1"
@@ -1435,7 +1435,7 @@
    "y",
    -0.0046288233506641754,
    null,
-   3.0,
+   3,
    null,
    117,
    "point|schoenfeld|load|y|2"
@@ -1447,7 +1447,7 @@
    "y",
    0.09382880477465207,
    null,
-   3.0,
+   3,
    null,
    118,
    "point|schoenfeld|load|y|3"
@@ -1459,7 +1459,7 @@
    "y",
    0.04731088829347439,
    null,
-   9.0,
+   9,
    null,
    119,
    "point|schoenfeld|load|y|4"
@@ -1471,7 +1471,7 @@
    "y",
    -0.01188979787987661,
    null,
-   9.0,
+   9,
    null,
    120,
    "point|schoenfeld|load|y|5"
@@ -1483,7 +1483,7 @@
    "y",
    0.06844924165222492,
    null,
-   9.0,
+   9,
    null,
    121,
    "point|schoenfeld|load|y|6"
@@ -1495,7 +1495,7 @@
    "y",
    -0.047523261238044553,
    null,
-   12.0,
+   12,
    null,
    122,
    "point|schoenfeld|load|y|7"
@@ -1507,7 +1507,7 @@
    "y",
    0.07261479765581565,
    null,
-   12.0,
+   12,
    null,
    123,
    "point|schoenfeld|load|y|8"
@@ -1519,7 +1519,7 @@
    "y",
    0.07386566650533635,
    null,
-   15.0,
+   15,
    null,
    124,
    "point|schoenfeld|load|y|9"
@@ -1531,7 +1531,7 @@
    "y",
    -0.07859170497841203,
    null,
-   15.0,
+   15,
    null,
    125,
    "point|schoenfeld|load|y|10"
@@ -1543,7 +1543,7 @@
    "y",
    0.020786008214674846,
    null,
-   15.0,
+   15,
    null,
    126,
    "point|schoenfeld|load|y|11"
@@ -1555,7 +1555,7 @@
    "y",
    0.08502464049970888,
    null,
-   15.0,
+   15,
    null,
    127,
    "point|schoenfeld|load|y|12"
@@ -1567,7 +1567,7 @@
    "y",
    -0.03851119081766427,
    null,
-   15.0,
+   15,
    null,
    128,
    "point|schoenfeld|load|y|13"
@@ -1579,7 +1579,7 @@
    "y",
    0.02854315829970787,
    null,
-   18.0,
+   18,
    null,
    129,
    "point|schoenfeld|load|y|14"
@@ -1591,7 +1591,7 @@
    "y",
    0.07713391861787465,
    null,
-   18.0,
+   18,
    null,
    130,
    "point|schoenfeld|load|y|15"
@@ -1603,7 +1603,7 @@
    "y",
    0.08482059256651119,
    null,
-   18.0,
+   18,
    null,
    131,
    "point|schoenfeld|load|y|16"
@@ -1615,7 +1615,7 @@
    "y",
    -0.07275622338053814,
    null,
-   18.0,
+   18,
    null,
    132,
    "point|schoenfeld|load|y|17"
@@ -1627,7 +1627,7 @@
    "y",
    0.07484195380625246,
    null,
-   21.0,
+   21,
    null,
    133,
    "point|schoenfeld|load|y|18"
@@ -1639,7 +1639,7 @@
    "y",
    0.019937139887419943,
    null,
-   21.0,
+   21,
    null,
    134,
    "point|schoenfeld|load|y|19"
@@ -1651,7 +1651,7 @@
    "y",
    -0.00504455044564886,
    null,
-   21.0,
+   21,
    null,
    135,
    "point|schoenfeld|load|y|20"
@@ -1663,7 +1663,7 @@
    "y",
    0.024796295054622438,
    null,
-   24.0,
+   24,
    null,
    136,
    "point|schoenfeld|load|y|21"
@@ -1675,7 +1675,7 @@
    "y",
    0.0715618997446182,
    null,
-   24.0,
+   24,
    null,
    137,
    "point|schoenfeld|load|y|22"
@@ -1687,7 +1687,7 @@
    "y",
    0.02579090774461607,
    null,
-   24.0,
+   24,
    null,
    138,
    "point|schoenfeld|load|y|23"
@@ -1699,7 +1699,7 @@
    "y",
    0.10073597874382245,
    null,
-   24.0,
+   24,
    null,
    139,
    "point|schoenfeld|load|y|24"
@@ -1711,7 +1711,7 @@
    "y",
    -0.015574018820560687,
    null,
-   27.0,
+   27,
    null,
    140,
    "point|schoenfeld|load|y|25"
@@ -1723,7 +1723,7 @@
    "y",
    0.08599988692927947,
    null,
-   27.0,
+   27,
    null,
    141,
    "point|schoenfeld|load|y|26"
@@ -1735,7 +1735,7 @@
    "y",
    0.027155223177140565,
    null,
-   27.0,
+   27,
    null,
    142,
    "point|schoenfeld|load|y|27"
@@ -1747,7 +1747,7 @@
    "y",
    -0.013103302194213226,
    null,
-   27.0,
+   27,
    null,
    143,
    "point|schoenfeld|load|y|28"
@@ -1759,7 +1759,7 @@
    "y",
    -0.03913486330006105,
    null,
-   30.0,
+   30,
    null,
    144,
    "point|schoenfeld|load|y|29"
@@ -1771,7 +1771,7 @@
    "y",
    0.0021402599980514594,
    null,
-   30.0,
+   30,
    null,
    145,
    "point|schoenfeld|load|y|30"
@@ -1783,7 +1783,7 @@
    "y",
    0.05228165187479508,
    null,
-   30.0,
+   30,
    null,
    146,
    "point|schoenfeld|load|y|31"
@@ -1795,7 +1795,7 @@
    "y",
    -0.07921537746080878,
    null,
-   30.0,
+   30,
    null,
    147,
    "point|schoenfeld|load|y|32"
@@ -1807,7 +1807,7 @@
    "y",
    -0.001624470844912667,
    null,
-   33.0,
+   33,
    null,
    148,
    "point|schoenfeld|load|y|33"
@@ -1819,7 +1819,7 @@
    "y",
    -0.053638148126253365,
    null,
-   36.0,
+   36,
    null,
    149,
    "point|schoenfeld|load|y|34"
@@ -1831,7 +1831,7 @@
    "y",
    0.03997455960535609,
    null,
-   36.0,
+   36,
    null,
    150,
    "point|schoenfeld|load|y|35"
@@ -1843,7 +1843,7 @@
    "y",
    0.09680104201134776,
    null,
-   36.0,
+   36,
    null,
    151,
    "point|schoenfeld|load|y|36"
@@ -1855,7 +1855,7 @@
    "y",
    0.04384928600309191,
    null,
-   39.0,
+   39,
    null,
    152,
    "point|schoenfeld|load|y|37"
@@ -1867,7 +1867,7 @@
    "y",
    0.0215383087437417,
    null,
-   39.0,
+   39,
    null,
    153,
    "point|schoenfeld|load|y|38"
@@ -1879,7 +1879,7 @@
    "y",
    0.011106394099163528,
    null,
-   39.0,
+   39,
    null,
    154,
    "point|schoenfeld|load|y|39"
@@ -1891,7 +1891,7 @@
    "y",
    -0.007928067486977153,
    null,
-   42.0,
+   42,
    null,
    155,
    "point|schoenfeld|load|y|40"
@@ -1903,7 +1903,7 @@
    "y",
    0.08365948816909011,
    null,
-   42.0,
+   42,
    null,
    156,
    "point|schoenfeld|load|y|41"
@@ -1915,7 +1915,7 @@
    "y",
    -0.0445432523313838,
    null,
-   42.0,
+   42,
    null,
    157,
    "point|schoenfeld|load|y|42"
@@ -1927,7 +1927,7 @@
    "y",
    0.02201373421447656,
    null,
-   45.0,
+   45,
    null,
    158,
    "point|schoenfeld|load|y|43"
@@ -1939,7 +1939,7 @@
    "y",
    -0.0018698598402155722,
    null,
-   45.0,
+   45,
    null,
    159,
    "point|schoenfeld|load|y|44"
@@ -1951,7 +1951,7 @@
    "y",
    0.014052536196245871,
    null,
-   45.0,
+   45,
    null,
    160,
    "point|schoenfeld|load|y|45"
@@ -1963,7 +1963,7 @@
    "y",
    -0.017792255876676998,
    null,
-   45.0,
+   45,
    null,
    161,
    "point|schoenfeld|load|y|46"
@@ -1975,7 +1975,7 @@
    "y",
    0.02201373421447656,
    null,
-   45.0,
+   45,
    null,
    162,
    "point|schoenfeld|load|y|47"
@@ -1987,7 +1987,7 @@
    "y",
    -0.03151845935638513,
    null,
-   45.0,
+   45,
    null,
    163,
    "point|schoenfeld|load|y|48"
@@ -1999,7 +1999,7 @@
    "y",
    0.10202414867709506,
    null,
-   48.0,
+   48,
    null,
    164,
    "point|schoenfeld|load|y|49"
@@ -2011,7 +2011,7 @@
    "y",
    0.016469151822704458,
    null,
-   48.0,
+   48,
    null,
    165,
    "point|schoenfeld|load|y|50"
@@ -2023,7 +2023,7 @@
    "y",
    -0.017022784667783373,
    null,
-   48.0,
+   48,
    null,
    166,
    "point|schoenfeld|load|y|51"
@@ -2035,7 +2035,7 @@
    "y",
    0.06798316404741891,
    null,
-   48.0,
+   48,
    null,
    167,
    "point|schoenfeld|load|y|52"
@@ -2047,7 +2047,7 @@
    "y",
    0.053643440814719986,
    null,
-   51.0,
+   51,
    null,
    168,
    "point|schoenfeld|load|y|53"
@@ -2059,7 +2059,7 @@
    "y",
    0.059408446276197416,
    null,
-   51.0,
+   51,
    null,
    169,
    "point|schoenfeld|load|y|54"
@@ -2071,7 +2071,7 @@
    "y",
    -0.05708627209071565,
    null,
-   51.0,
+   51,
    null,
    170,
    "point|schoenfeld|load|y|55"
@@ -2083,7 +2083,7 @@
    "y",
    -0.024321394950022186,
    null,
-   51.0,
+   51,
    null,
    171,
    "point|schoenfeld|load|y|56"
@@ -2095,7 +2095,7 @@
    "y",
    -0.005750271076607236,
    null,
-   51.0,
+   51,
    null,
    172,
    "point|schoenfeld|load|y|57"
@@ -2107,7 +2107,7 @@
    "y",
    0.0821939440525129,
    null,
-   51.0,
+   51,
    null,
    173,
    "point|schoenfeld|load|y|58"
@@ -2119,7 +2119,7 @@
    "y",
    -0.03539887059277681,
    null,
-   51.0,
+   51,
    null,
    174,
    "point|schoenfeld|load|y|59"
@@ -2131,7 +2131,7 @@
    "y",
    -0.09046474058891626,
    null,
-   54.0,
+   54,
    null,
    175,
    "point|schoenfeld|load|y|60"
@@ -2143,7 +2143,7 @@
    "y",
    0.0330710907284569,
    null,
-   54.0,
+   54,
    null,
    176,
    "point|schoenfeld|load|y|61"
@@ -2155,7 +2155,7 @@
    "y",
    -0.058070900376805096,
    null,
-   54.0,
+   54,
    null,
    177,
    "point|schoenfeld|load|y|62"
@@ -2167,7 +2167,7 @@
    "y",
    0.10517440817273353,
    null,
-   54.0,
+   54,
    null,
    178,
    "point|schoenfeld|load|y|63"
@@ -2179,7 +2179,7 @@
    "y",
    -0.02495000081489952,
    null,
-   54.0,
+   54,
    null,
    179,
    "point|schoenfeld|load|y|64"
@@ -2191,7 +2191,7 @@
    "y",
    0.07946343625121981,
    null,
-   57.0,
+   57,
    null,
    180,
    "point|schoenfeld|load|y|65"
@@ -2203,7 +2203,7 @@
    "y",
    -0.06953855557747933,
    null,
-   60.0,
+   60,
    null,
    181,
    "point|schoenfeld|load|y|66"
@@ -2215,7 +2215,7 @@
    "y",
    -0.07804880173489838,
    null,
-   60.0,
+   60,
    null,
    182,
    "point|schoenfeld|load|y|67"
@@ -2227,7 +2227,7 @@
    "y",
    -0.0019666616901532485,
    null,
-   63.0,
+   63,
    null,
    183,
    "point|schoenfeld|load|y|68"
@@ -2239,7 +2239,7 @@
    "y",
    0.09411676266780365,
    null,
-   63.0,
+   63,
    null,
    184,
    "point|schoenfeld|load|y|69"
@@ -2251,7 +2251,7 @@
    "y",
    0.012034065859149047,
    null,
-   63.0,
+   63,
    null,
    185,
    "point|schoenfeld|load|y|70"
@@ -2263,7 +2263,7 @@
    "y",
    0.005116900716139681,
    null,
-   66.0,
+   66,
    null,
    186,
    "point|schoenfeld|load|y|71"
@@ -2275,7 +2275,7 @@
    "y",
    0.02790239849245519,
    null,
-   66.0,
+   66,
    null,
    187,
    "point|schoenfeld|load|y|72"
@@ -2287,7 +2287,7 @@
    "y",
    -0.0501654078679029,
    null,
-   69.0,
+   69,
    null,
    188,
    "point|schoenfeld|load|y|73"
@@ -2299,7 +2299,7 @@
    "y",
    0.015616885246313099,
    null,
-   69.0,
+   69,
    null,
    189,
    "point|schoenfeld|load|y|74"
@@ -2311,7 +2311,7 @@
    "y",
    -0.0839301424184328,
    null,
-   72.0,
+   72,
    null,
    190,
    "point|schoenfeld|load|y|75"
@@ -2323,7 +2323,7 @@
    "y",
    0.0766664382941523,
    null,
-   72.0,
+   72,
    null,
    191,
    "point|schoenfeld|load|y|76"
@@ -2335,7 +2335,7 @@
    "y",
    0.04554870557102382,
    null,
-   72.0,
+   72,
    null,
    192,
    "point|schoenfeld|load|y|77"
@@ -2347,7 +2347,7 @@
    "y",
    0.07656693444561115,
    null,
-   75.0,
+   75,
    null,
    193,
    "point|schoenfeld|load|y|78"
@@ -2359,7 +2359,7 @@
    "y",
    0.029757846303542574,
    null,
-   78.0,
+   78,
    null,
    194,
    "point|schoenfeld|load|y|79"
@@ -2371,7 +2371,7 @@
    "y",
    0.0019274316861491343,
    null,
-   78.0,
+   78,
    null,
    195,
    "point|schoenfeld|load|y|80"
@@ -2383,7 +2383,7 @@
    "y",
    0.07479259139930602,
    null,
-   84.0,
+   84,
    null,
    196,
    "point|schoenfeld|load|y|81"
@@ -2395,7 +2395,7 @@
    "y",
    0.06611130476067582,
    null,
-   84.0,
+   84,
    null,
    197,
    "point|schoenfeld|load|y|82"
@@ -2407,7 +2407,7 @@
    "y",
    -0.016524225576298363,
    null,
-   87.0,
+   87,
    null,
    198,
    "point|schoenfeld|load|y|83"
@@ -2419,7 +2419,7 @@
    "y",
    0.12336287868358747,
    null,
-   90.0,
+   90,
    null,
    199,
    "point|schoenfeld|load|y|84"
@@ -2431,7 +2431,7 @@
    "y",
    -0.044014520274353305,
    null,
-   96.0,
+   96,
    null,
    200,
    "point|schoenfeld|load|y|85"
@@ -2443,7 +2443,7 @@
    "y",
    -0.006549482816827334,
    null,
-   102.0,
+   102,
    null,
    201,
    "point|schoenfeld|load|y|86"
@@ -2455,7 +2455,7 @@
    "y",
    0.06325359623224813,
    null,
-   105.0,
+   105,
    null,
    202,
    "point|schoenfeld|load|y|87"
@@ -2467,7 +2467,7 @@
    "y",
    0.01548640812286384,
    null,
-   105.0,
+   105,
    null,
    203,
    "point|schoenfeld|load|y|88"
@@ -2479,7 +2479,7 @@
    "y",
    0.107006406886103,
    null,
-   105.0,
+   105,
    null,
    204,
    "point|schoenfeld|load|y|89"
@@ -2491,7 +2491,7 @@
    "y",
    0.05087919431250579,
    null,
-   114.0,
+   114,
    null,
    205,
    "point|schoenfeld|load|y|90"
@@ -2503,7 +2503,7 @@
    "y",
    -0.04836489812510836,
    null,
-   123.0,
+   123,
    null,
    206,
    "point|schoenfeld|load|y|91"
@@ -2515,7 +2515,7 @@
    "y",
    0.08612387759425509,
    null,
-   126.0,
+   126,
    null,
    207,
    "point|schoenfeld|load|y|92"
@@ -2527,7 +2527,7 @@
    "y",
    -0.052881814479379285,
    null,
-   126.0,
+   126,
    null,
    208,
    "point|schoenfeld|load|y|93"
@@ -2539,7 +2539,7 @@
    "y",
    -0.008647161626521578,
    null,
-   129.0,
+   129,
    null,
    209,
    "point|schoenfeld|load|y|94"
@@ -2551,7 +2551,7 @@
    "y",
    0.13046099909577089,
    null,
-   132.0,
+   132,
    null,
    210,
    "point|schoenfeld|load|y|95"
@@ -2563,7 +2563,7 @@
    "y",
    -0.002841752114256909,
    null,
-   135.0,
+   135,
    null,
    211,
    "point|schoenfeld|load|y|96"
@@ -2575,7 +2575,7 @@
    "y",
    0.007822208741104852,
    null,
-   138.0,
+   138,
    null,
    212,
    "point|schoenfeld|load|y|97"
@@ -2587,7 +2587,7 @@
    "y",
    0.020214370581636318,
    null,
-   147.0,
+   147,
    null,
    213,
    "point|schoenfeld|load|y|98"
@@ -2599,7 +2599,7 @@
    "y",
    -0.04008634255170347,
    null,
-   156.0,
+   156,
    null,
    214,
    "point|schoenfeld|load|y|99"
@@ -2611,7 +2611,7 @@
    "y",
    -0.03691091785669931,
    null,
-   168.0,
+   168,
    null,
    215,
    "point|schoenfeld|load|y|100"
@@ -2623,7 +2623,7 @@
    "y",
    0.06283402505743486,
    null,
-   186.0,
+   186,
    null,
    216,
    "point|schoenfeld|load|y|101"
@@ -2635,7 +2635,7 @@
    "y",
    0.012596120321703118,
    null,
-   186.0,
+   186,
    null,
    217,
    "point|schoenfeld|load|y|102"
@@ -2647,7 +2647,7 @@
    "y",
    0.017599706294339955,
    null,
-   204.0,
+   204,
    null,
    218,
    "point|schoenfeld|load|y|103"
@@ -2659,7 +2659,7 @@
    "y",
    -0.024506197374435778,
    null,
-   210.0,
+   210,
    null,
    219,
    "point|schoenfeld|load|y|104"
@@ -2671,7 +2671,7 @@
    "y",
    0.03453725658157128,
    null,
-   216.0,
+   216,
    null,
    220,
    "point|schoenfeld|load|y|105"
@@ -2683,7 +2683,7 @@
    "smooth",
    0.03096926069006945,
    null,
-   3.0,
+   3,
    null,
    221,
    "curve|schoenfeld|load|smooth|0"
@@ -3151,7 +3151,7 @@
    "smooth",
    0.013209790589675939,
    null,
-   216.0,
+   216,
    null,
    260,
    "curve|schoenfeld|load|smooth|39"
@@ -3163,7 +3163,7 @@
    "upper",
    0.061978399994316966,
    null,
-   3.0,
+   3,
    null,
    261,
    "curve|schoenfeld|load|upper|0"
@@ -3631,7 +3631,7 @@
    "upper",
    0.06101784650009409,
    null,
-   216.0,
+   216,
    null,
    300,
    "curve|schoenfeld|load|upper|39"
@@ -3643,7 +3643,7 @@
    "lower",
    -3.987861417805924e-05,
    null,
-   3.0,
+   3,
    null,
    301,
    "curve|schoenfeld|load|lower|0"
@@ -4111,7 +4111,7 @@
    "lower",
    -0.034598265320742214,
    null,
-   216.0,
+   216,
    null,
    340,
    "curve|schoenfeld|load|lower|39"
@@ -4123,7 +4123,7 @@
    "y",
    -0.7040610302735495,
    null,
-   3.0,
+   3,
    null,
    341,
    "point|schoenfeld|line|y|0"
@@ -4135,7 +4135,7 @@
    "y",
    2.571846064202549,
    null,
-   3.0,
+   3,
    null,
    342,
    "point|schoenfeld|line|y|1"
@@ -4147,7 +4147,7 @@
    "y",
    2.6178736060717345,
    null,
-   3.0,
+   3,
    null,
    343,
    "point|schoenfeld|line|y|2"
@@ -4159,7 +4159,7 @@
    "y",
    -1.1936267028821619,
    null,
-   3.0,
+   3,
    null,
    344,
    "point|schoenfeld|line|y|3"
@@ -4171,7 +4171,7 @@
    "y",
    -0.9519093135096084,
    null,
-   9.0,
+   9,
    null,
    345,
    "point|schoenfeld|line|y|4"
@@ -4183,7 +4183,7 @@
    "y",
    2.6601383140111494,
    null,
-   9.0,
+   9,
    null,
    346,
    "point|schoenfeld|line|y|5"
@@ -4195,7 +4195,7 @@
    "y",
    -1.0593069112043754,
    null,
-   9.0,
+   9,
    null,
    347,
    "point|schoenfeld|line|y|6"
@@ -4207,7 +4207,7 @@
    "y",
    -0.48113378074759083,
    null,
-   12.0,
+   12,
    null,
    348,
    "point|schoenfeld|line|y|7"
@@ -4219,7 +4219,7 @@
    "y",
    -3.140129815495512,
    null,
-   12.0,
+   12,
    null,
    349,
    "point|schoenfeld|line|y|8"
@@ -4231,7 +4231,7 @@
    "y",
    2.1929353046778375,
    null,
-   15.0,
+   15,
    null,
    350,
    "point|schoenfeld|line|y|9"
@@ -4243,7 +4243,7 @@
    "y",
    -0.3437415718992163,
    null,
-   15.0,
+   15,
    null,
    351,
    "point|schoenfeld|line|y|10"
@@ -4255,7 +4255,7 @@
    "y",
    -0.8486497584642239,
    null,
-   15.0,
+   15,
    null,
    352,
    "point|schoenfeld|line|y|11"
@@ -4267,7 +4267,7 @@
    "y",
    -1.1750268735366318,
    null,
-   15.0,
+   15,
    null,
    353,
    "point|schoenfeld|line|y|12"
@@ -4279,7 +4279,7 @@
    "y",
    -0.5473785753204625,
    null,
-   15.0,
+   15,
    null,
    354,
    "point|schoenfeld|line|y|13"
@@ -4291,7 +4291,7 @@
    "y",
    2.457755779393067,
    null,
-   18.0,
+   18,
    null,
    355,
    "point|schoenfeld|line|y|14"
@@ -4303,7 +4303,7 @@
    "y",
    2.2108807820947067,
    null,
-   18.0,
+   18,
    null,
    356,
    "point|schoenfeld|line|y|15"
@@ -4315,7 +4315,7 @@
    "y",
    2.171827110205701,
    null,
-   18.0,
+   18,
    null,
    357,
    "point|schoenfeld|line|y|16"
@@ -4327,7 +4327,7 @@
    "y",
    2.9724273839303255,
    null,
-   18.0,
+   18,
    null,
    358,
    "point|schoenfeld|line|y|17"
@@ -4339,7 +4339,7 @@
    "y",
    2.3193152498325977,
    null,
-   21.0,
+   21,
    null,
    359,
    "point|schoenfeld|line|y|18"
@@ -4351,7 +4351,7 @@
    "y",
    2.598270049039784,
    null,
-   21.0,
+   21,
    null,
    360,
    "point|schoenfeld|line|y|19"
@@ -4363,7 +4363,7 @@
    "y",
    2.725194482679054,
    null,
-   21.0,
+   21,
    null,
    361,
    "point|schoenfeld|line|y|20"
@@ -4375,7 +4375,7 @@
    "y",
    -0.6822820916022718,
    null,
-   24.0,
+   24,
    null,
    362,
    "point|schoenfeld|line|y|21"
@@ -4387,7 +4387,7 @@
    "y",
    2.3913827734486164,
    null,
-   24.0,
+   24,
    null,
    363,
    "point|schoenfeld|line|y|22"
@@ -4399,7 +4399,7 @@
    "y",
    -2.735946212070599,
    null,
-   24.0,
+   24,
    null,
    364,
    "point|schoenfeld|line|y|23"
@@ -4411,7 +4411,7 @@
    "y",
    -3.116719512988408,
    null,
-   24.0,
+   24,
    null,
    365,
    "point|schoenfeld|line|y|24"
@@ -4423,7 +4423,7 @@
    "y",
    2.859214812689345,
    null,
-   27.0,
+   27,
    null,
    366,
    "point|schoenfeld|line|y|25"
@@ -4435,7 +4435,7 @@
    "y",
    2.34314843415605,
    null,
-   27.0,
+   27,
    null,
    367,
    "point|schoenfeld|line|y|26"
@@ -4447,7 +4447,7 @@
    "y",
    -0.6691463750692572,
    null,
-   27.0,
+   27,
    null,
    368,
    "point|schoenfeld|line|y|27"
@@ -4459,7 +4459,7 @@
    "y",
    2.8466618467250213,
    null,
-   27.0,
+   27,
    null,
    369,
    "point|schoenfeld|line|y|28"
@@ -4471,7 +4471,7 @@
    "y",
    -0.2795800845996348,
    null,
-   30.0,
+   30,
    null,
    370,
    "point|schoenfeld|line|y|29"
@@ -4483,7 +4483,7 @@
    "y",
    2.821980260371972,
    null,
-   30.0,
+   30,
    null,
    371,
    "point|schoenfeld|line|y|30"
@@ -4495,7 +4495,7 @@
    "y",
    -0.7440398252795999,
    null,
-   30.0,
+   30,
    null,
    372,
    "point|schoenfeld|line|y|31"
@@ -4507,7 +4507,7 @@
    "y",
    -0.07594308117838877,
    null,
-   30.0,
+   30,
    null,
    373,
    "point|schoenfeld|line|y|32"
@@ -4519,7 +4519,7 @@
    "y",
    -0.46918985566837335,
    null,
-   33.0,
+   33,
    null,
    374,
    "point|schoenfeld|line|y|33"
@@ -4531,7 +4531,7 @@
    "y",
    -0.22787845514142813,
    null,
-   36.0,
+   36,
    null,
    375,
    "point|schoenfeld|line|y|34"
@@ -4543,7 +4543,7 @@
    "y",
    -0.7034963877896807,
    null,
-   36.0,
+   36,
    null,
    376,
    "point|schoenfeld|line|y|35"
@@ -4555,7 +4555,7 @@
    "y",
    -0.9922146049691185,
    null,
-   36.0,
+   36,
    null,
    377,
    "point|schoenfeld|line|y|36"
@@ -4567,7 +4567,7 @@
    "y",
    -2.772517226140151,
    null,
-   39.0,
+   39,
    null,
    378,
    "point|schoenfeld|line|y|37"
@@ -4579,7 +4579,7 @@
    "y",
    2.7007157103959756,
    null,
-   39.0,
+   39,
    null,
    379,
    "point|schoenfeld|line|y|38"
@@ -4591,7 +4591,7 @@
    "y",
    2.753717122245341,
    null,
-   39.0,
+   39,
    null,
    380,
    "point|schoenfeld|line|y|39"
@@ -4603,7 +4603,7 @@
    "y",
    -0.45009500412484527,
    null,
-   42.0,
+   42,
    null,
    381,
    "point|schoenfeld|line|y|40"
@@ -4615,7 +4615,7 @@
    "y",
    -2.96403454328503,
    null,
-   42.0,
+   42,
    null,
    382,
    "point|schoenfeld|line|y|41"
@@ -4627,7 +4627,7 @@
    "y",
    -2.31267508713625,
    null,
-   42.0,
+   42,
    null,
    383,
    "point|schoenfeld|line|y|42"
@@ -4639,7 +4639,7 @@
    "y",
    2.7644609965862523,
    null,
-   45.0,
+   45,
    null,
    384,
    "point|schoenfeld|line|y|43"
@@ -4651,7 +4651,7 @@
    "y",
    2.8858063342413787,
    null,
-   45.0,
+   45,
    null,
    385,
    "point|schoenfeld|line|y|44"
@@ -4663,7 +4663,7 @@
    "y",
    2.8049094424712946,
    null,
-   45.0,
+   45,
    null,
    386,
    "point|schoenfeld|line|y|45"
@@ -4675,7 +4675,7 @@
    "y",
    2.9667032260114627,
    null,
-   45.0,
+   45,
    null,
    387,
    "point|schoenfeld|line|y|46"
@@ -4687,7 +4687,7 @@
    "y",
    2.7644609965862523,
    null,
-   45.0,
+   45,
    null,
    388,
    "point|schoenfeld|line|y|47"
@@ -4699,7 +4699,7 @@
    "y",
    3.036441925813259,
    null,
-   45.0,
+   45,
    null,
    389,
    "point|schoenfeld|line|y|48"
@@ -4711,7 +4711,7 @@
    "y",
    -0.8284217173076824,
    null,
-   48.0,
+   48,
    null,
    390,
    "point|schoenfeld|line|y|49"
@@ -4723,7 +4723,7 @@
    "y",
    2.917524213832525,
    null,
-   48.0,
+   48,
    null,
    391,
    "point|schoenfeld|line|y|50"
@@ -4735,7 +4735,7 @@
    "y",
    3.0876866413489084,
    null,
-   48.0,
+   48,
    null,
    392,
    "point|schoenfeld|line|y|51"
@@ -4747,7 +4747,7 @@
    "y",
    -0.655469741799227,
    null,
-   48.0,
+   48,
    null,
    393,
    "point|schoenfeld|line|y|52"
@@ -4759,7 +4759,7 @@
    "y",
    2.8484838236661014,
    null,
-   51.0,
+   51,
    null,
    394,
    "point|schoenfeld|line|y|53"
@@ -4771,7 +4771,7 @@
    "y",
    2.8191935697493467,
    null,
-   51.0,
+   51,
    null,
    395,
    "point|schoenfeld|line|y|54"
@@ -4783,7 +4783,7 @@
    "y",
    0.09980129969158524,
    null,
-   51.0,
+   51,
    null,
    396,
    "point|schoenfeld|line|y|55"
@@ -4795,7 +4795,7 @@
    "y",
    3.244599638540306,
    null,
-   51.0,
+   51,
    null,
    397,
    "point|schoenfeld|line|y|56"
@@ -4807,7 +4807,7 @@
    "y",
    -0.16102143756713394,
    null,
-   51.0,
+   51,
    null,
    398,
    "point|schoenfeld|line|y|57"
@@ -4819,7 +4819,7 @@
    "y",
    2.703427328078364,
    null,
-   51.0,
+   51,
    null,
    399,
    "point|schoenfeld|line|y|58"
@@ -4831,7 +4831,7 @@
    "y",
    -0.010385845995253273,
    null,
-   51.0,
+   51,
    null,
    400,
    "point|schoenfeld|line|y|59"
@@ -4843,7 +4843,7 @@
    "y",
    3.7745708838102856,
    null,
-   54.0,
+   54,
    null,
    401,
    "point|schoenfeld|line|y|60"
@@ -4855,7 +4855,7 @@
    "y",
    3.1469225855941163,
    null,
-   54.0,
+   54,
    null,
    402,
    "point|schoenfeld|line|y|61"
@@ -4867,7 +4867,7 @@
    "y",
    3.609987552278046,
    null,
-   54.0,
+   54,
    null,
    403,
    "point|schoenfeld|line|y|62"
@@ -4879,7 +4879,7 @@
    "y",
    -0.53067941974033,
    null,
-   54.0,
+   54,
    null,
    404,
    "point|schoenfeld|line|y|63"
@@ -4891,7 +4891,7 @@
    "y",
    0.13044345438070148,
    null,
-   54.0,
+   54,
    null,
    405,
    "point|schoenfeld|line|y|64"
@@ -4903,7 +4903,7 @@
    "y",
    -0.4102187473720533,
    null,
-   57.0,
+   57,
    null,
    406,
    "point|schoenfeld|line|y|65"
@@ -4915,7 +4915,7 @@
    "y",
    0.3043054342130831,
    null,
-   60.0,
+   60,
    null,
    407,
    "point|schoenfeld|line|y|66"
@@ -4927,7 +4927,7 @@
    "y",
    0.3475434280901971,
    null,
-   60.0,
+   60,
    null,
    408,
    "point|schoenfeld|line|y|67"
@@ -4939,7 +4939,7 @@
    "y",
    3.3547337683983063,
    null,
-   63.0,
+   63,
    null,
    409,
    "point|schoenfeld|line|y|68"
@@ -4951,7 +4951,7 @@
    "y",
    2.86656286978573,
    null,
-   63.0,
+   63,
    null,
    410,
    "point|schoenfeld|line|y|69"
@@ -4963,7 +4963,7 @@
    "y",
    3.2836002946004736,
    null,
-   63.0,
+   63,
    null,
    411,
    "point|schoenfeld|line|y|70"
@@ -4975,7 +4975,7 @@
    "y",
    3.577127881628778,
    null,
-   66.0,
+   66,
    null,
    412,
    "point|schoenfeld|line|y|71"
@@ -4987,7 +4987,7 @@
    "y",
    3.4613616399577953,
    null,
-   66.0,
+   66,
    null,
    413,
    "point|schoenfeld|line|y|72"
@@ -4999,7 +4999,7 @@
    "y",
    0.6622380461022432,
    null,
-   69.0,
+   69,
    null,
    414,
    "point|schoenfeld|line|y|73"
@@ -5011,7 +5011,7 @@
    "y",
    -1.7205927374305636,
    null,
-   69.0,
+   69,
    null,
    415,
    "point|schoenfeld|line|y|74"
@@ -5023,7 +5023,7 @@
    "y",
    4.189958526337344,
    null,
-   72.0,
+   72,
    null,
    416,
    "point|schoenfeld|line|y|75"
@@ -5035,7 +5035,7 @@
    "y",
    3.374015738656324,
    null,
-   72.0,
+   72,
    null,
    417,
    "point|schoenfeld|line|y|76"
@@ -5047,7 +5047,7 @@
    "y",
    0.22084875583138774,
    null,
-   72.0,
+   72,
    null,
    418,
    "point|schoenfeld|line|y|77"
@@ -5059,7 +5059,7 @@
    "y",
    3.540615593703139,
    null,
-   75.0,
+   75,
    null,
    419,
    "point|schoenfeld|line|y|78"
@@ -5071,7 +5071,7 @@
    "y",
    0.6767380527308167,
    null,
-   78.0,
+   78,
    null,
    420,
    "point|schoenfeld|line|y|79"
@@ -5083,7 +5083,7 @@
    "y",
    -1.2304747981537378,
    null,
-   78.0,
+   78,
    null,
    421,
    "point|schoenfeld|line|y|80"
@@ -5095,7 +5095,7 @@
    "y",
    -1.635437068785658,
    null,
-   84.0,
+   84,
    null,
    422,
    "point|schoenfeld|line|y|81"
@@ -5107,7 +5107,7 @@
    "y",
    0.45728072357167515,
    null,
-   84.0,
+   84,
    null,
    423,
    "point|schoenfeld|line|y|82"
@@ -5119,7 +5119,7 @@
    "y",
    0.834990578603278,
    null,
-   87.0,
+   87,
    null,
    424,
    "point|schoenfeld|line|y|83"
@@ -5131,7 +5131,7 @@
    "y",
    -1.9819444351076743,
    null,
-   90.0,
+   90,
    null,
    425,
    "point|schoenfeld|line|y|84"
@@ -5143,7 +5143,7 @@
    "y",
    4.101843903697009,
    null,
-   96.0,
+   96,
    null,
    426,
    "point|schoenfeld|line|y|85"
@@ -5155,7 +5155,7 @@
    "y",
    -1.438429193003791,
    null,
-   102.0,
+   102,
    null,
    427,
    "point|schoenfeld|line|y|86"
@@ -5167,7 +5167,7 @@
    "y",
    -1.8808885346192676,
    null,
-   105.0,
+   105,
    null,
    428,
    "point|schoenfeld|line|y|87"
@@ -5179,7 +5179,7 @@
    "y",
    -1.6381978593090154,
    null,
-   105.0,
+   105,
    null,
    429,
    "point|schoenfeld|line|y|88"
@@ -5191,7 +5191,7 @@
    "y",
    -0.054572575504797216,
    null,
-   105.0,
+   105,
    null,
    430,
    "point|schoenfeld|line|y|89"
@@ -5203,7 +5203,7 @@
    "y",
    3.4124380947835653,
    null,
-   114.0,
+   114,
    null,
    431,
    "point|schoenfeld|line|y|90"
@@ -5215,7 +5215,7 @@
    "y",
    4.175955769514691,
    null,
-   123.0,
+   123,
    null,
    432,
    "point|schoenfeld|line|y|91"
@@ -5227,7 +5227,7 @@
    "y",
    3.6927895068846737,
    null,
-   126.0,
+   126,
    null,
    433,
    "point|schoenfeld|line|y|92"
@@ -5239,7 +5239,7 @@
    "y",
    1.0877687045018585,
    null,
-   126.0,
+   126,
    null,
    434,
    "point|schoenfeld|line|y|93"
@@ -5251,7 +5251,7 @@
    "y",
    1.296435484213188,
    null,
-   129.0,
+   129,
    null,
    435,
    "point|schoenfeld|line|y|94"
@@ -5263,7 +5263,7 @@
    "y",
    -1.4468817636600648,
    null,
-   132.0,
+   132,
    null,
    436,
    "point|schoenfeld|line|y|95"
@@ -5275,7 +5275,7 @@
    "y",
    1.1643198191664281,
    null,
-   135.0,
+   135,
    null,
    437,
    "point|schoenfeld|line|y|96"
@@ -5287,7 +5287,7 @@
    "y",
    4.424100071019117,
    null,
-   138.0,
+   138,
    null,
    438,
    "point|schoenfeld|line|y|97"
@@ -5299,7 +5299,7 @@
    "y",
    1.4699917943726115,
    null,
-   147.0,
+   147,
    null,
    439,
    "point|schoenfeld|line|y|98"
@@ -5311,7 +5311,7 @@
    "y",
    1.8693177697386534,
    null,
-   156.0,
+   156,
    null,
    440,
    "point|schoenfeld|line|y|99"
@@ -5323,7 +5323,7 @@
    "y",
    -0.06720954274799085,
    null,
-   168.0,
+   168,
    null,
    441,
    "point|schoenfeld|line|y|100"
@@ -5335,7 +5335,7 @@
    "y",
    -0.7353903393395098,
    null,
-   186.0,
+   186,
    null,
    442,
    "point|schoenfeld|line|y|101"
@@ -5347,7 +5347,7 @@
    "y",
    -0.4801466980649345,
    null,
-   186.0,
+   186,
    null,
    443,
    "point|schoenfeld|line|y|102"
@@ -5359,7 +5359,7 @@
    "y",
    1.574571478526103,
    null,
-   204.0,
+   204,
    null,
    444,
    "point|schoenfeld|line|y|103"
@@ -5371,7 +5371,7 @@
    "y",
    1.9322066139323621,
    null,
-   210.0,
+   210,
    null,
    445,
    "point|schoenfeld|line|y|104"
@@ -5383,7 +5383,7 @@
    "y",
    -0.6272842021308016,
    null,
-   216.0,
+   216,
    null,
    446,
    "point|schoenfeld|line|y|105"
@@ -5395,7 +5395,7 @@
    "smooth",
    0.25397133483070683,
    null,
-   3.0,
+   3,
    null,
    447,
    "curve|schoenfeld|line|smooth|0"
@@ -5863,7 +5863,7 @@
    "smooth",
    0.38220480036078924,
    null,
-   216.0,
+   216,
    null,
    486,
    "curve|schoenfeld|line|smooth|39"
@@ -5875,7 +5875,7 @@
    "upper",
    1.4135523456683496,
    null,
-   3.0,
+   3,
    null,
    487,
    "curve|schoenfeld|line|upper|0"
@@ -6343,7 +6343,7 @@
    "upper",
    2.169978180810328,
    null,
-   216.0,
+   216,
    null,
    526,
    "curve|schoenfeld|line|upper|39"
@@ -6355,7 +6355,7 @@
    "lower",
    -0.9056096760069359,
    null,
-   3.0,
+   3,
    null,
    527,
    "curve|schoenfeld|line|lower|0"
@@ -6823,7 +6823,7 @@
    "lower",
    -1.4055685800887494,
    null,
-   216.0,
+   216,
    null,
    566,
    "curve|schoenfeld|line|lower|39"
@@ -6859,7 +6859,7 @@
    "y",
    -0.7057548303129821,
    null,
-   54.0,
+   54,
    null,
    569,
    "point|martingale|load|y|2"
@@ -6871,7 +6871,7 @@
    "y",
    -0.9135496020166158,
    null,
-   79.0,
+   79,
    null,
    570,
    "point|martingale|load|y|3"
@@ -6991,7 +6991,7 @@
    "y",
    0.663793976122583,
    null,
-   49.0,
+   49,
    null,
    580,
    "point|martingale|load|y|13"
@@ -7195,7 +7195,7 @@
    "y",
    0.8813332388054862,
    null,
-   86.0,
+   86,
    null,
    597,
    "point|martingale|load|y|30"
@@ -7411,7 +7411,7 @@
    "y",
    0.5028366482006832,
    null,
-   31.0,
+   31,
    null,
    615,
    "point|martingale|load|y|48"
@@ -7483,7 +7483,7 @@
    "y",
    0.6925543994771702,
    null,
-   65.0,
+   65,
    null,
    621,
    "point|martingale|load|y|54"
@@ -7963,7 +7963,7 @@
    "y",
    -0.3782855890279515,
    null,
-   46.0,
+   46,
    null,
    661,
    "point|martingale|load|y|94"
@@ -7999,7 +7999,7 @@
    "y",
    0.2183837923902079,
    null,
-   82.0,
+   82,
    null,
    664,
    "point|martingale|load|y|97"
@@ -8491,7 +8491,7 @@
    "y",
    0.9150893489793549,
    null,
-   85.0,
+   85,
    null,
    705,
    "point|martingale|load|y|138"
@@ -8515,7 +8515,7 @@
    "y",
    -0.036146537239531096,
    null,
-   84.0,
+   84,
    null,
    707,
    "point|martingale|load|y|140"
@@ -8527,7 +8527,7 @@
    "y",
    0.9150893489793549,
    null,
-   40.0,
+   40,
    null,
    708,
    "point|martingale|load|y|141"
@@ -8863,7 +8863,7 @@
    "lowess",
    -0.29527402181866025,
    null,
-   31.0,
+   31,
    null,
    736,
    "curve|martingale|load|lowess|22"
@@ -9139,7 +9139,7 @@
    "lowess",
    -0.11453038403974641,
    null,
-   40.0,
+   40,
    null,
    759,
    "curve|martingale|load|lowess|45"
@@ -9259,7 +9259,7 @@
    "lowess",
    0.027585263676595168,
    null,
-   46.0,
+   46,
    null,
    769,
    "curve|martingale|load|lowess|55"
@@ -9319,7 +9319,7 @@
    "lowess",
    0.09295158358803499,
    null,
-   49.0,
+   49,
    null,
    774,
    "curve|martingale|load|lowess|60"
@@ -9463,7 +9463,7 @@
    "lowess",
    0.18046638993571998,
    null,
-   54.0,
+   54,
    null,
    786,
    "curve|martingale|load|lowess|72"
@@ -9787,7 +9787,7 @@
    "lowess",
    0.2569580786987968,
    null,
-   65.0,
+   65,
    null,
    813,
    "curve|martingale|load|lowess|99"
@@ -10075,7 +10075,7 @@
    "lowess",
    0.3591372923933236,
    null,
-   79.0,
+   79,
    null,
    837,
    "curve|martingale|load|lowess|123"
@@ -10135,7 +10135,7 @@
    "lowess",
    0.37896740955949876,
    null,
-   82.0,
+   82,
    null,
    842,
    "curve|martingale|load|lowess|128"
@@ -10159,7 +10159,7 @@
    "lowess",
    0.39327533637845624,
    null,
-   84.0,
+   84,
    null,
    844,
    "curve|martingale|load|lowess|130"
@@ -10183,7 +10183,7 @@
    "lowess",
    0.40084293374573843,
    null,
-   85.0,
+   85,
    null,
    846,
    "curve|martingale|load|lowess|132"
@@ -10219,7 +10219,7 @@
    "lowess",
    0.4087244559795471,
    null,
-   86.0,
+   86,
    null,
    849,
    "curve|martingale|load|lowess|135"
@@ -12125,9 +12125,9 @@
    "adjusted_survival",
    "all",
    "surv",
-   1.0,
+   1,
    null,
-   0.0,
+   0,
    null,
    1008,
    "curve|adjusted_survival|all|surv|0"
@@ -12139,7 +12139,7 @@
    "surv",
    0.9817252250884198,
    null,
-   3.0,
+   3,
    null,
    1009,
    "curve|adjusted_survival|all|surv|1"
@@ -12151,7 +12151,7 @@
    "surv",
    0.9678054823142447,
    null,
-   9.0,
+   9,
    null,
    1010,
    "curve|adjusted_survival|all|surv|2"
@@ -12163,7 +12163,7 @@
    "surv",
    0.9584604736318159,
    null,
-   12.0,
+   12,
    null,
    1011,
    "curve|adjusted_survival|all|surv|3"
@@ -12175,7 +12175,7 @@
    "surv",
    0.9349703854412759,
    null,
-   15.0,
+   15,
    null,
    1012,
    "curve|adjusted_survival|all|surv|4"
@@ -12187,7 +12187,7 @@
    "surv",
    0.9156286286928799,
    null,
-   18.0,
+   18,
    null,
    1013,
    "curve|adjusted_survival|all|surv|5"
@@ -12199,7 +12199,7 @@
    "surv",
    0.9004807116447787,
    null,
-   21.0,
+   21,
    null,
    1014,
    "curve|adjusted_survival|all|surv|6"
@@ -12211,7 +12211,7 @@
    "surv",
    0.8796573872660115,
    null,
-   24.0,
+   24,
    null,
    1015,
    "curve|adjusted_survival|all|surv|7"
@@ -12223,7 +12223,7 @@
    "surv",
    0.8583224517899589,
    null,
-   27.0,
+   27,
    null,
    1016,
    "curve|adjusted_survival|all|surv|8"
@@ -12235,7 +12235,7 @@
    "surv",
    0.8364190581289092,
    null,
-   30.0,
+   30,
    null,
    1017,
    "curve|adjusted_survival|all|surv|9"
@@ -12247,7 +12247,7 @@
    "surv",
    0.8309173433731919,
    null,
-   33.0,
+   33,
    null,
    1018,
    "curve|adjusted_survival|all|surv|10"
@@ -12259,7 +12259,7 @@
    "surv",
    0.8143924530878501,
    null,
-   36.0,
+   36,
    null,
    1019,
    "curve|adjusted_survival|all|surv|11"
@@ -12271,7 +12271,7 @@
    "surv",
    0.797434326496182,
    null,
-   39.0,
+   39,
    null,
    1020,
    "curve|adjusted_survival|all|surv|12"
@@ -12283,7 +12283,7 @@
    "surv",
    0.7801618180056213,
    null,
-   42.0,
+   42,
    null,
    1021,
    "curve|adjusted_survival|all|surv|13"
@@ -12295,7 +12295,7 @@
    "surv",
    0.7447078749097289,
    null,
-   45.0,
+   45,
    null,
    1022,
    "curve|adjusted_survival|all|surv|14"
@@ -12307,7 +12307,7 @@
    "surv",
    0.7192997013866156,
    null,
-   48.0,
+   48,
    null,
    1023,
    "curve|adjusted_survival|all|surv|15"
@@ -12319,7 +12319,7 @@
    "surv",
    0.6717583647070606,
    null,
-   51.0,
+   51,
    null,
    1024,
    "curve|adjusted_survival|all|surv|16"
@@ -12331,7 +12331,7 @@
    "surv",
    0.6354048223858194,
    null,
-   54.0,
+   54,
    null,
    1025,
    "curve|adjusted_survival|all|surv|17"
@@ -12343,7 +12343,7 @@
    "surv",
    0.6275861405217595,
    null,
-   57.0,
+   57,
    null,
    1026,
    "curve|adjusted_survival|all|surv|18"
@@ -12355,7 +12355,7 @@
    "surv",
    0.6117962907828647,
    null,
-   60.0,
+   60,
    null,
    1027,
    "curve|adjusted_survival|all|surv|19"
@@ -12367,7 +12367,7 @@
    "surv",
    0.5876006311893702,
    null,
-   63.0,
+   63,
    null,
    1028,
    "curve|adjusted_survival|all|surv|20"
@@ -12379,7 +12379,7 @@
    "surv",
    0.5702423489437596,
    null,
-   66.0,
+   66,
    null,
    1029,
    "curve|adjusted_survival|all|surv|21"
@@ -12391,7 +12391,7 @@
    "surv",
    0.5520175536218342,
    null,
-   69.0,
+   69,
    null,
    1030,
    "curve|adjusted_survival|all|surv|22"
@@ -12403,7 +12403,7 @@
    "surv",
    0.524088175268581,
    null,
-   72.0,
+   72,
    null,
    1031,
    "curve|adjusted_survival|all|surv|23"
@@ -12415,7 +12415,7 @@
    "surv",
    0.5143739619902389,
    null,
-   75.0,
+   75,
    null,
    1032,
    "curve|adjusted_survival|all|surv|24"
@@ -12427,7 +12427,7 @@
    "surv",
    0.49323442722186206,
    null,
-   78.0,
+   78,
    null,
    1033,
    "curve|adjusted_survival|all|surv|25"
@@ -12439,7 +12439,7 @@
    "surv",
    0.4722336096152046,
    null,
-   84.0,
+   84,
    null,
    1034,
    "curve|adjusted_survival|all|surv|26"
@@ -12451,7 +12451,7 @@
    "surv",
    0.46157260963567714,
    null,
-   87.0,
+   87,
    null,
    1035,
    "curve|adjusted_survival|all|surv|27"
@@ -12463,7 +12463,7 @@
    "surv",
    0.45074184036978365,
    null,
-   90.0,
+   90,
    null,
    1036,
    "curve|adjusted_survival|all|surv|28"
@@ -12475,7 +12475,7 @@
    "surv",
    0.45074184036978365,
    null,
-   93.0,
+   93,
    null,
    1037,
    "curve|adjusted_survival|all|surv|29"
@@ -12487,7 +12487,7 @@
    "surv",
    0.4396252461556537,
    null,
-   96.0,
+   96,
    null,
    1038,
    "curve|adjusted_survival|all|surv|30"
@@ -12499,7 +12499,7 @@
    "surv",
    0.4396252461556537,
    null,
-   99.0,
+   99,
    null,
    1039,
    "curve|adjusted_survival|all|surv|31"
@@ -12511,7 +12511,7 @@
    "surv",
    0.42782716676763904,
    null,
-   102.0,
+   102,
    null,
    1040,
    "curve|adjusted_survival|all|surv|32"
@@ -12523,7 +12523,7 @@
    "surv",
    0.3920489508154999,
    null,
-   105.0,
+   105,
    null,
    1041,
    "curve|adjusted_survival|all|surv|33"
@@ -12535,7 +12535,7 @@
    "surv",
    0.3920489508154999,
    null,
-   108.0,
+   108,
    null,
    1042,
    "curve|adjusted_survival|all|surv|34"
@@ -12547,7 +12547,7 @@
    "surv",
    0.3920489508154999,
    null,
-   111.0,
+   111,
    null,
    1043,
    "curve|adjusted_survival|all|surv|35"
@@ -12559,7 +12559,7 @@
    "surv",
    0.37941935108300234,
    null,
-   114.0,
+   114,
    null,
    1044,
    "curve|adjusted_survival|all|surv|36"
@@ -12571,7 +12571,7 @@
    "surv",
    0.37941935108300234,
    null,
-   117.0,
+   117,
    null,
    1045,
    "curve|adjusted_survival|all|surv|37"
@@ -12583,7 +12583,7 @@
    "surv",
    0.3652611749116951,
    null,
-   123.0,
+   123,
    null,
    1046,
    "curve|adjusted_survival|all|surv|38"
@@ -12595,7 +12595,7 @@
    "surv",
    0.33377987753551924,
    null,
-   126.0,
+   126,
    null,
    1047,
    "curve|adjusted_survival|all|surv|39"
@@ -12607,7 +12607,7 @@
    "surv",
    0.316681258530791,
    null,
-   129.0,
+   129,
    null,
    1048,
    "curve|adjusted_survival|all|surv|40"
@@ -12619,7 +12619,7 @@
    "surv",
    0.29927722851385935,
    null,
-   132.0,
+   132,
    null,
    1049,
    "curve|adjusted_survival|all|surv|41"
@@ -12631,7 +12631,7 @@
    "surv",
    0.28185384991995366,
    null,
-   135.0,
+   135,
    null,
    1050,
    "curve|adjusted_survival|all|surv|42"
@@ -12643,7 +12643,7 @@
    "surv",
    0.26471096061513455,
    null,
-   138.0,
+   138,
    null,
    1051,
    "curve|adjusted_survival|all|surv|43"
@@ -12655,7 +12655,7 @@
    "surv",
    0.26471096061513455,
    null,
-   141.0,
+   141,
    null,
    1052,
    "curve|adjusted_survival|all|surv|44"
@@ -12667,7 +12667,7 @@
    "surv",
    0.24528946476864075,
    null,
-   147.0,
+   147,
    null,
    1053,
    "curve|adjusted_survival|all|surv|45"
@@ -12679,7 +12679,7 @@
    "surv",
    0.24528946476864075,
    null,
-   153.0,
+   153,
    null,
    1054,
    "curve|adjusted_survival|all|surv|46"
@@ -12691,7 +12691,7 @@
    "surv",
    0.2239715132883045,
    null,
-   156.0,
+   156,
    null,
    1055,
    "curve|adjusted_survival|all|surv|47"
@@ -12703,7 +12703,7 @@
    "surv",
    0.2239715132883045,
    null,
-   162.0,
+   162,
    null,
    1056,
    "curve|adjusted_survival|all|surv|48"
@@ -12715,7 +12715,7 @@
    "surv",
    0.20039576302605389,
    null,
-   168.0,
+   168,
    null,
    1057,
    "curve|adjusted_survival|all|surv|49"
@@ -12727,7 +12727,7 @@
    "surv",
    0.20039576302605389,
    null,
-   171.0,
+   171,
    null,
    1058,
    "curve|adjusted_survival|all|surv|50"
@@ -12739,7 +12739,7 @@
    "surv",
    0.20039576302605389,
    null,
-   183.0,
+   183,
    null,
    1059,
    "curve|adjusted_survival|all|surv|51"
@@ -12751,7 +12751,7 @@
    "surv",
    0.14941005344404784,
    null,
-   186.0,
+   186,
    null,
    1060,
    "curve|adjusted_survival|all|surv|52"
@@ -12763,7 +12763,7 @@
    "surv",
    0.14941005344404784,
    null,
-   189.0,
+   189,
    null,
    1061,
    "curve|adjusted_survival|all|surv|53"
@@ -12775,7 +12775,7 @@
    "surv",
    0.14941005344404784,
    null,
-   195.0,
+   195,
    null,
    1062,
    "curve|adjusted_survival|all|surv|54"
@@ -12787,7 +12787,7 @@
    "surv",
    0.11489513391627233,
    null,
-   204.0,
+   204,
    null,
    1063,
    "curve|adjusted_survival|all|surv|55"
@@ -12799,7 +12799,7 @@
    "surv",
    0.08271540418596837,
    null,
-   210.0,
+   210,
    null,
    1064,
    "curve|adjusted_survival|all|surv|56"
@@ -12811,7 +12811,7 @@
    "surv",
    0.04828134854978802,
    null,
-   216.0,
+   216,
    null,
    1065,
    "curve|adjusted_survival|all|surv|57"
@@ -12823,7 +12823,7 @@
    "surv",
    0.04828134854978802,
    null,
-   219.0,
+   219,
    null,
    1066,
    "curve|adjusted_survival|all|surv|58"
@@ -12835,7 +12835,7 @@
    "surv",
    0.04828134854978802,
    null,
-   246.0,
+   246,
    null,
    1067,
    "curve|adjusted_survival|all|surv|59"

@@ -140,7 +140,7 @@
    null,
    null,
    "n",
-   147.0,
+   147,
    null,
    null,
    null,
@@ -152,7 +152,7 @@
    null,
    null,
    "events",
-   106.0,
+   106,
    null,
    null,
    null,
@@ -164,7 +164,7 @@
    null,
    null,
    "censored",
-   41.0,
+   41,
    null,
    null,
    null,
@@ -176,7 +176,7 @@
    null,
    null,
    "n_missing",
-   3.0,
+   3,
    null,
    null,
    null,
@@ -188,7 +188,7 @@
    null,
    null,
    "n_strata",
-   3.0,
+   3,
    null,
    null,
    null,
@@ -200,7 +200,7 @@
    null,
    null,
    "rmst_tau",
-   180.0,
+   180,
    null,
    null,
    null,
@@ -224,7 +224,7 @@
    null,
    null,
    "test_df",
-   2.0,
+   2,
    null,
    null,
    null,
@@ -260,7 +260,7 @@
    "line=A",
    null,
    "n",
-   59.0,
+   59,
    null,
    null,
    null,
@@ -272,7 +272,7 @@
    "line=A",
    null,
    "events",
-   33.0,
+   33,
    null,
    null,
    null,
@@ -284,7 +284,7 @@
    "line=A",
    null,
    "censored",
-   26.0,
+   26,
    null,
    null,
    null,
@@ -296,7 +296,7 @@
    "line=A",
    null,
    "q25",
-   50.0,
+   50,
    null,
    null,
    null,
@@ -308,7 +308,7 @@
    "line=A",
    null,
    "q25_ci_low",
-   44.0,
+   44,
    null,
    null,
    null,
@@ -320,7 +320,7 @@
    "line=A",
    null,
    "q25_ci_high",
-   84.0,
+   84,
    null,
    null,
    null,
@@ -332,7 +332,7 @@
    "line=A",
    null,
    "median",
-   146.0,
+   146,
    null,
    null,
    null,
@@ -344,7 +344,7 @@
    "line=A",
    null,
    "median_ci_low",
-   84.0,
+   84,
    null,
    null,
    null,
@@ -356,7 +356,7 @@
    "line=A",
    null,
    "median_ci_high",
-   196.0,
+   196,
    null,
    null,
    null,
@@ -368,7 +368,7 @@
    "line=A",
    null,
    "q75",
-   188.0,
+   188,
    null,
    null,
    null,
@@ -380,7 +380,7 @@
    "line=A",
    null,
    "q75_ci_low",
-   160.0,
+   160,
    null,
    null,
    null,
@@ -406,7 +406,7 @@
    "surv_at_30",
    0.8979852894147745,
    null,
-   30.0,
+   30,
    null,
    31,
    "stratum|line=A||surv_at_30"
@@ -418,7 +418,7 @@
    "surv_at_30_low",
    0.8238592561349729,
    null,
-   30.0,
+   30,
    null,
    32,
    "stratum|line=A||surv_at_30_low"
@@ -430,7 +430,7 @@
    "surv_at_30_high",
    0.9787807492609241,
    null,
-   30.0,
+   30,
    null,
    33,
    "stratum|line=A||surv_at_30_high"
@@ -442,7 +442,7 @@
    "surv_at_90",
    0.5600088399999681,
    null,
-   90.0,
+   90,
    null,
    34,
    "stratum|line=A||surv_at_90"
@@ -454,7 +454,7 @@
    "surv_at_90_low",
    0.43797004573391857,
    null,
-   90.0,
+   90,
    null,
    35,
    "stratum|line=A||surv_at_90_low"
@@ -466,7 +466,7 @@
    "surv_at_90_high",
    0.7160533098846635,
    null,
-   90.0,
+   90,
    null,
    36,
    "stratum|line=A||surv_at_90_high"
@@ -500,7 +500,7 @@
    "line=A",
    null,
    "observed",
-   33.0,
+   33,
    null,
    null,
    null,
@@ -524,7 +524,7 @@
    "line=B",
    null,
    "n",
-   49.0,
+   49,
    null,
    null,
    null,
@@ -536,7 +536,7 @@
    "line=B",
    null,
    "events",
-   37.0,
+   37,
    null,
    null,
    null,
@@ -548,7 +548,7 @@
    "line=B",
    null,
    "censored",
-   12.0,
+   12,
    null,
    null,
    null,
@@ -560,7 +560,7 @@
    "line=B",
    null,
    "q25",
-   26.0,
+   26,
    null,
    null,
    null,
@@ -572,7 +572,7 @@
    "line=B",
    null,
    "q25_ci_low",
-   14.0,
+   14,
    null,
    null,
    null,
@@ -584,7 +584,7 @@
    "line=B",
    null,
    "q25_ci_high",
-   52.0,
+   52,
    null,
    null,
    null,
@@ -596,7 +596,7 @@
    "line=B",
    null,
    "median",
-   58.0,
+   58,
    null,
    null,
    null,
@@ -608,7 +608,7 @@
    "line=B",
    null,
    "median_ci_low",
-   48.0,
+   48,
    null,
    null,
    null,
@@ -620,7 +620,7 @@
    "line=B",
    null,
    "median_ci_high",
-   92.0,
+   92,
    null,
    null,
    null,
@@ -632,7 +632,7 @@
    "line=B",
    null,
    "q75",
-   102.0,
+   102,
    null,
    null,
    null,
@@ -644,7 +644,7 @@
    "line=B",
    null,
    "q75_ci_low",
-   70.0,
+   70,
    null,
    null,
    null,
@@ -670,7 +670,7 @@
    "surv_at_30",
    0.7126309983452839,
    null,
-   30.0,
+   30,
    null,
    53,
    "stratum|line=B||surv_at_30"
@@ -682,7 +682,7 @@
    "surv_at_30_low",
    0.5961454577148926,
    null,
-   30.0,
+   30,
    null,
    54,
    "stratum|line=B||surv_at_30_low"
@@ -694,7 +694,7 @@
    "surv_at_30_high",
    0.8518775631525026,
    null,
-   30.0,
+   30,
    null,
    55,
    "stratum|line=B||surv_at_30_high"
@@ -706,7 +706,7 @@
    "surv_at_90",
    0.34046737343440625,
    null,
-   90.0,
+   90,
    null,
    56,
    "stratum|line=B||surv_at_90"
@@ -718,7 +718,7 @@
    "surv_at_90_low",
    0.2218822771623721,
    null,
-   90.0,
+   90,
    null,
    57,
    "stratum|line=B||surv_at_90_low"
@@ -730,7 +730,7 @@
    "surv_at_90_high",
    0.5224303349315969,
    null,
-   90.0,
+   90,
    null,
    58,
    "stratum|line=B||surv_at_90_high"
@@ -764,7 +764,7 @@
    "line=B",
    null,
    "observed",
-   37.0,
+   37,
    null,
    null,
    null,
@@ -788,7 +788,7 @@
    "line=C",
    null,
    "n",
-   39.0,
+   39,
    null,
    null,
    null,
@@ -800,7 +800,7 @@
    "line=C",
    null,
    "events",
-   36.0,
+   36,
    null,
    null,
    null,
@@ -812,7 +812,7 @@
    "line=C",
    null,
    "censored",
-   3.0,
+   3,
    null,
    null,
    null,
@@ -824,7 +824,7 @@
    "line=C",
    null,
    "q25",
-   14.0,
+   14,
    null,
    null,
    null,
@@ -836,7 +836,7 @@
    "line=C",
    null,
    "q25_ci_low",
-   10.0,
+   10,
    null,
    null,
    null,
@@ -848,7 +848,7 @@
    "line=C",
    null,
    "q25_ci_high",
-   32.0,
+   32,
    null,
    null,
    null,
@@ -860,7 +860,7 @@
    "line=C",
    null,
    "median",
-   44.0,
+   44,
    null,
    null,
    null,
@@ -872,7 +872,7 @@
    "line=C",
    null,
    "median_ci_low",
-   30.0,
+   30,
    null,
    null,
    null,
@@ -884,7 +884,7 @@
    "line=C",
    null,
    "median_ci_high",
-   56.0,
+   56,
    null,
    null,
    null,
@@ -896,7 +896,7 @@
    "line=C",
    null,
    "q75",
-   68.0,
+   68,
    null,
    null,
    null,
@@ -908,7 +908,7 @@
    "line=C",
    null,
    "q75_ci_low",
-   52.0,
+   52,
    null,
    null,
    null,
@@ -920,7 +920,7 @@
    "line=C",
    null,
    "q75_ci_high",
-   90.0,
+   90,
    null,
    null,
    null,
@@ -934,7 +934,7 @@
    "surv_at_30",
    0.6124260355029585,
    null,
-   30.0,
+   30,
    null,
    75,
    "stratum|line=C||surv_at_30"
@@ -946,7 +946,7 @@
    "surv_at_30_low",
    0.4764357582517159,
    null,
-   30.0,
+   30,
    null,
    76,
    "stratum|line=C||surv_at_30_low"
@@ -958,7 +958,7 @@
    "surv_at_30_high",
    0.7872323654676484,
    null,
-   30.0,
+   30,
    null,
    77,
    "stratum|line=C||surv_at_30_high"
@@ -970,7 +970,7 @@
    "surv_at_90",
    0.08408595453129863,
    null,
-   90.0,
+   90,
    null,
    78,
    "stratum|line=C||surv_at_90"
@@ -982,7 +982,7 @@
    "surv_at_90_low",
    0.028555133766180525,
    null,
-   90.0,
+   90,
    null,
    79,
    "stratum|line=C||surv_at_90_low"
@@ -994,7 +994,7 @@
    "surv_at_90_high",
    0.24760688593984295,
    null,
-   90.0,
+   90,
    null,
    80,
    "stratum|line=C||surv_at_90_high"
@@ -1028,7 +1028,7 @@
    "line=C",
    null,
    "observed",
-   36.0,
+   36,
    null,
    null,
    null,
@@ -1220,7 +1220,7 @@
    "censoring_informative",
    null,
    "count",
-   41.0,
+   41,
    null,
    null,
    null,
@@ -1280,7 +1280,7 @@
    "censoring_by_stratum",
    null,
    "df",
-   2.0,
+   2,
    null,
    null,
    null,
@@ -1376,7 +1376,7 @@
    "follow_up_by_stratum",
    null,
    "df",
-   2.0,
+   2,
    null,
    null,
    null,
@@ -1460,7 +1460,7 @@
    "proportional_hazards",
    null,
    "df",
-   2.0,
+   2,
    null,
    null,
    null,
@@ -1532,7 +1532,7 @@
    "few_at_risk",
    null,
    "threshold",
-   10.0,
+   10,
    null,
    null,
    null,
@@ -1544,7 +1544,7 @@
    "few_at_risk",
    null,
    "value",
-   0.0,
+   0,
    null,
    null,
    null,
@@ -1556,7 +1556,7 @@
    "few_at_risk",
    null,
    "count",
-   3.0,
+   3,
    null,
    null,
    null,
@@ -1604,9 +1604,9 @@
    "km",
    "line=A",
    "surv",
-   1.0,
+   1,
    null,
-   0.0,
+   0,
    null,
    131,
    "curve|km|line=A|surv|0"
@@ -1618,7 +1618,7 @@
    "surv",
    0.9661016949152542,
    null,
-   6.0,
+   6,
    null,
    132,
    "curve|km|line=A|surv|1"
@@ -1630,7 +1630,7 @@
    "surv",
    0.9322033898305084,
    null,
-   8.0,
+   8,
    null,
    133,
    "curve|km|line=A|surv|2"
@@ -1642,7 +1642,7 @@
    "surv",
    0.9152542372881356,
    null,
-   14.0,
+   14,
    null,
    134,
    "curve|km|line=A|surv|3"
@@ -1654,7 +1654,7 @@
    "surv",
    0.9152542372881356,
    null,
-   24.0,
+   24,
    null,
    135,
    "curve|km|line=A|surv|4"
@@ -1666,7 +1666,7 @@
    "surv",
    0.8979852894147745,
    null,
-   26.0,
+   26,
    null,
    136,
    "curve|km|line=A|surv|5"
@@ -1678,7 +1678,7 @@
    "surv",
    0.8807163415414134,
    null,
-   32.0,
+   32,
    null,
    137,
    "curve|km|line=A|surv|6"
@@ -1690,7 +1690,7 @@
    "surv",
    0.8807163415414134,
    null,
-   34.0,
+   34,
    null,
    138,
    "curve|km|line=A|surv|7"
@@ -1702,7 +1702,7 @@
    "surv",
    0.8623680844259672,
    null,
-   36.0,
+   36,
    null,
    139,
    "curve|km|line=A|surv|8"
@@ -1714,7 +1714,7 @@
    "surv",
    0.844019827310521,
    null,
-   42.0,
+   42,
    null,
    140,
    "curve|km|line=A|surv|9"
@@ -1726,7 +1726,7 @@
    "surv",
    0.825671570195075,
    null,
-   44.0,
+   44,
    null,
    141,
    "curve|km|line=A|surv|10"
@@ -1738,7 +1738,7 @@
    "surv",
    0.769375781318138,
    null,
-   46.0,
+   46,
    null,
    142,
    "curve|km|line=A|surv|11"
@@ -1750,7 +1750,7 @@
    "surv",
    0.769375781318138,
    null,
-   48.0,
+   48,
    null,
    143,
    "curve|km|line=A|surv|12"
@@ -1762,7 +1762,7 @@
    "surv",
    0.7299206130454129,
    null,
-   50.0,
+   50,
    null,
    144,
    "curve|km|line=A|surv|13"
@@ -1774,7 +1774,7 @@
    "surv",
    0.7101930289090505,
    null,
-   52.0,
+   52,
    null,
    145,
    "curve|km|line=A|surv|14"
@@ -1786,7 +1786,7 @@
    "surv",
    0.6707378606363255,
    null,
-   54.0,
+   54,
    null,
    146,
    "curve|km|line=A|surv|15"
@@ -1798,7 +1798,7 @@
    "surv",
    0.6510102764999629,
    null,
-   64.0,
+   64,
    null,
    147,
    "curve|km|line=A|surv|16"
@@ -1810,7 +1810,7 @@
    "surv",
    0.6510102764999629,
    null,
-   72.0,
+   72,
    null,
    148,
    "curve|km|line=A|surv|17"
@@ -1822,7 +1822,7 @@
    "surv",
    0.6510102764999629,
    null,
-   74.0,
+   74,
    null,
    149,
    "curve|km|line=A|surv|18"
@@ -1834,7 +1834,7 @@
    "surv",
    0.6300099449999641,
    null,
-   76.0,
+   76,
    null,
    150,
    "curve|km|line=A|surv|19"
@@ -1846,7 +1846,7 @@
    "surv",
    0.6300099449999641,
    null,
-   78.0,
+   78,
    null,
    151,
    "curve|km|line=A|surv|20"
@@ -1858,7 +1858,7 @@
    "surv",
    0.6300099449999641,
    null,
-   80.0,
+   80,
    null,
    152,
    "curve|km|line=A|surv|21"
@@ -1870,7 +1870,7 @@
    "surv",
    0.5833425416666335,
    null,
-   84.0,
+   84,
    null,
    153,
    "curve|km|line=A|surv|22"
@@ -1882,7 +1882,7 @@
    "surv",
    0.5600088399999681,
    null,
-   86.0,
+   86,
    null,
    154,
    "curve|km|line=A|surv|23"
@@ -1894,7 +1894,7 @@
    "surv",
    0.5600088399999681,
    null,
-   92.0,
+   92,
    null,
    155,
    "curve|km|line=A|surv|24"
@@ -1906,7 +1906,7 @@
    "surv",
    0.533341752380922,
    null,
-   100.0,
+   100,
    null,
    156,
    "curve|km|line=A|surv|25"
@@ -1918,7 +1918,7 @@
    "surv",
    0.533341752380922,
    null,
-   106.0,
+   106,
    null,
    157,
    "curve|km|line=A|surv|26"
@@ -1930,7 +1930,7 @@
    "surv",
    0.533341752380922,
    null,
-   108.0,
+   108,
    null,
    158,
    "curve|km|line=A|surv|27"
@@ -1942,7 +1942,7 @@
    "surv",
    0.533341752380922,
    null,
-   116.0,
+   116,
    null,
    159,
    "curve|km|line=A|surv|28"
@@ -1954,7 +1954,7 @@
    "surv",
    0.533341752380922,
    null,
-   130.0,
+   130,
    null,
    160,
    "curve|km|line=A|surv|29"
@@ -1966,7 +1966,7 @@
    "surv",
    0.533341752380922,
    null,
-   132.0,
+   132,
    null,
    161,
    "curve|km|line=A|surv|30"
@@ -1978,7 +1978,7 @@
    "surv",
    0.533341752380922,
    null,
-   136.0,
+   136,
    null,
    162,
    "curve|km|line=A|surv|31"
@@ -1990,7 +1990,7 @@
    "surv",
    0.533341752380922,
    null,
-   144.0,
+   144,
    null,
    163,
    "curve|km|line=A|surv|32"
@@ -2002,7 +2002,7 @@
    "surv",
    0.4888966063491784,
    null,
-   146.0,
+   146,
    null,
    164,
    "curve|km|line=A|surv|33"
@@ -2014,7 +2014,7 @@
    "surv",
    0.4888966063491784,
    null,
-   152.0,
+   152,
    null,
    165,
    "curve|km|line=A|surv|34"
@@ -2026,7 +2026,7 @@
    "surv",
    0.4400069457142606,
    null,
-   158.0,
+   158,
    null,
    166,
    "curve|km|line=A|surv|35"
@@ -2038,7 +2038,7 @@
    "surv",
    0.385006077499978,
    null,
-   160.0,
+   160,
    null,
    167,
    "curve|km|line=A|surv|36"
@@ -2050,7 +2050,7 @@
    "surv",
    0.33000520928569543,
    null,
-   166.0,
+   166,
    null,
    168,
    "curve|km|line=A|surv|37"
@@ -2062,7 +2062,7 @@
    "surv",
    0.27500434107141286,
    null,
-   184.0,
+   184,
    null,
    169,
    "curve|km|line=A|surv|38"
@@ -2074,7 +2074,7 @@
    "surv",
    0.16500260464284772,
    null,
-   188.0,
+   188,
    null,
    170,
    "curve|km|line=A|surv|39"
@@ -2086,7 +2086,7 @@
    "surv",
    0.16500260464284772,
    null,
-   192.0,
+   192,
    null,
    171,
    "curve|km|line=A|surv|40"
@@ -2098,7 +2098,7 @@
    "surv",
    0.08250130232142386,
    null,
-   196.0,
+   196,
    null,
    172,
    "curve|km|line=A|surv|41"
@@ -2108,9 +2108,9 @@
    "km",
    "line=A",
    "surv",
-   0.0,
+   0,
    null,
-   240.0,
+   240,
    null,
    173,
    "curve|km|line=A|surv|42"
@@ -2120,9 +2120,9 @@
    "km",
    "line=A",
    "lower",
-   1.0,
+   1,
    null,
-   0.0,
+   0,
    null,
    174,
    "curve|km|line=A|lower|0"
@@ -2134,7 +2134,7 @@
    "lower",
    0.9210112131564427,
    null,
-   6.0,
+   6,
    null,
    175,
    "curve|km|line=A|lower|1"
@@ -2146,7 +2146,7 @@
    "lower",
    0.8702129759389899,
    null,
-   8.0,
+   8,
    null,
    176,
    "curve|km|line=A|lower|2"
@@ -2158,7 +2158,7 @@
    "lower",
    0.8468786967907918,
    null,
-   14.0,
+   14,
    null,
    177,
    "curve|km|line=A|lower|3"
@@ -2170,7 +2170,7 @@
    "lower",
    0.8468786967907918,
    null,
-   24.0,
+   24,
    null,
    178,
    "curve|km|line=A|lower|4"
@@ -2182,7 +2182,7 @@
    "lower",
    0.8238592561349729,
    null,
-   26.0,
+   26,
    null,
    179,
    "curve|km|line=A|lower|5"
@@ -2194,7 +2194,7 @@
    "lower",
    0.8015517205971915,
    null,
-   32.0,
+   32,
    null,
    180,
    "curve|km|line=A|lower|6"
@@ -2206,7 +2206,7 @@
    "lower",
    0.8015517205971915,
    null,
-   34.0,
+   34,
    null,
    181,
    "curve|km|line=A|lower|7"
@@ -2218,7 +2218,7 @@
    "lower",
    0.7780985811346594,
    null,
-   36.0,
+   36,
    null,
    182,
    "curve|km|line=A|lower|8"
@@ -2230,7 +2230,7 @@
    "lower",
    0.7552453893739418,
    null,
-   42.0,
+   42,
    null,
    183,
    "curve|km|line=A|lower|9"
@@ -2242,7 +2242,7 @@
    "lower",
    0.7328980126131828,
    null,
-   44.0,
+   44,
    null,
    184,
    "curve|km|line=A|lower|10"
@@ -2254,7 +2254,7 @@
    "lower",
    0.6665207469869726,
    null,
-   46.0,
+   46,
    null,
    185,
    "curve|km|line=A|lower|11"
@@ -2266,7 +2266,7 @@
    "lower",
    0.6665207469869726,
    null,
-   48.0,
+   48,
    null,
    186,
    "curve|km|line=A|lower|12"
@@ -2278,7 +2278,7 @@
    "lower",
    0.6213797145185679,
    null,
-   50.0,
+   50,
    null,
    187,
    "curve|km|line=A|lower|13"
@@ -2290,7 +2290,7 @@
    "lower",
    0.5993362219186081,
    null,
-   52.0,
+   52,
    null,
    188,
    "curve|km|line=A|lower|14"
@@ -2302,7 +2302,7 @@
    "lower",
    0.5561747191982829,
    null,
-   54.0,
+   54,
    null,
    189,
    "curve|km|line=A|lower|15"
@@ -2314,7 +2314,7 @@
    "lower",
    0.5350190219991592,
    null,
-   64.0,
+   64,
    null,
    190,
    "curve|km|line=A|lower|16"
@@ -2326,7 +2326,7 @@
    "lower",
    0.5350190219991592,
    null,
-   72.0,
+   72,
    null,
    191,
    "curve|km|line=A|lower|17"
@@ -2338,7 +2338,7 @@
    "lower",
    0.5350190219991592,
    null,
-   74.0,
+   74,
    null,
    192,
    "curve|km|line=A|lower|18"
@@ -2350,7 +2350,7 @@
    "lower",
    0.5124767275429635,
    null,
-   76.0,
+   76,
    null,
    193,
    "curve|km|line=A|lower|19"
@@ -2362,7 +2362,7 @@
    "lower",
    0.5124767275429635,
    null,
-   78.0,
+   78,
    null,
    194,
    "curve|km|line=A|lower|20"
@@ -2374,7 +2374,7 @@
    "lower",
    0.5124767275429635,
    null,
-   80.0,
+   80,
    null,
    195,
    "curve|km|line=A|lower|21"
@@ -2386,7 +2386,7 @@
    "lower",
    0.46236779779948256,
    null,
-   84.0,
+   84,
    null,
    196,
    "curve|km|line=A|lower|22"
@@ -2398,7 +2398,7 @@
    "lower",
    0.43797004573391857,
    null,
-   86.0,
+   86,
    null,
    197,
    "curve|km|line=A|lower|23"
@@ -2410,7 +2410,7 @@
    "lower",
    0.43797004573391857,
    null,
-   92.0,
+   92,
    null,
    198,
    "curve|km|line=A|lower|24"
@@ -2422,7 +2422,7 @@
    "lower",
    0.4096940530243703,
    null,
-   100.0,
+   100,
    null,
    199,
    "curve|km|line=A|lower|25"
@@ -2434,7 +2434,7 @@
    "lower",
    0.4096940530243703,
    null,
-   106.0,
+   106,
    null,
    200,
    "curve|km|line=A|lower|26"
@@ -2446,7 +2446,7 @@
    "lower",
    0.4096940530243703,
    null,
-   108.0,
+   108,
    null,
    201,
    "curve|km|line=A|lower|27"
@@ -2458,7 +2458,7 @@
    "lower",
    0.4096940530243703,
    null,
-   116.0,
+   116,
    null,
    202,
    "curve|km|line=A|lower|28"
@@ -2470,7 +2470,7 @@
    "lower",
    0.4096940530243703,
    null,
-   130.0,
+   130,
    null,
    203,
    "curve|km|line=A|lower|29"
@@ -2482,7 +2482,7 @@
    "lower",
    0.4096940530243703,
    null,
-   132.0,
+   132,
    null,
    204,
    "curve|km|line=A|lower|30"
@@ -2494,7 +2494,7 @@
    "lower",
    0.4096940530243703,
    null,
-   136.0,
+   136,
    null,
    205,
    "curve|km|line=A|lower|31"
@@ -2506,7 +2506,7 @@
    "lower",
    0.4096940530243703,
    null,
-   144.0,
+   144,
    null,
    206,
    "curve|km|line=A|lower|32"
@@ -2518,7 +2518,7 @@
    "lower",
    0.3571079396894189,
    null,
-   146.0,
+   146,
    null,
    207,
    "curve|km|line=A|lower|33"
@@ -2530,7 +2530,7 @@
    "lower",
    0.3571079396894189,
    null,
-   152.0,
+   152,
    null,
    208,
    "curve|km|line=A|lower|34"
@@ -2542,7 +2542,7 @@
    "lower",
    0.3021203158140755,
    null,
-   158.0,
+   158,
    null,
    209,
    "curve|km|line=A|lower|35"
@@ -2554,7 +2554,7 @@
    "lower",
    0.2434859062965212,
    null,
-   160.0,
+   160,
    null,
    210,
    "curve|km|line=A|lower|36"
@@ -2566,7 +2566,7 @@
    "lower",
    0.19058526844441512,
    null,
-   166.0,
+   166,
    null,
    211,
    "curve|km|line=A|lower|37"
@@ -2578,7 +2578,7 @@
    "lower",
    0.14280149178690701,
    null,
-   184.0,
+   184,
    null,
    212,
    "curve|km|line=A|lower|38"
@@ -2590,7 +2590,7 @@
    "lower",
    0.06252539621430633,
    null,
-   188.0,
+   188,
    null,
    213,
    "curve|km|line=A|lower|39"
@@ -2602,7 +2602,7 @@
    "lower",
    0.06252539621430633,
    null,
-   192.0,
+   192,
    null,
    214,
    "curve|km|line=A|lower|40"
@@ -2614,7 +2614,7 @@
    "lower",
    0.015194844325104633,
    null,
-   196.0,
+   196,
    null,
    215,
    "curve|km|line=A|lower|41"
@@ -2626,7 +2626,7 @@
    "lower",
    null,
    null,
-   240.0,
+   240,
    null,
    216,
    "curve|km|line=A|lower|42"
@@ -2636,9 +2636,9 @@
    "km",
    "line=A",
    "upper",
-   1.0,
+   1,
    null,
-   0.0,
+   0,
    null,
    217,
    "curve|km|line=A|upper|0"
@@ -2648,9 +2648,9 @@
    "km",
    "line=A",
    "upper",
-   1.0,
+   1,
    null,
-   6.0,
+   6,
    null,
    218,
    "curve|km|line=A|upper|1"
@@ -2662,7 +2662,7 @@
    "upper",
    0.9986097473136463,
    null,
-   8.0,
+   8,
    null,
    219,
    "curve|km|line=A|upper|2"
@@ -2674,7 +2674,7 @@
    "upper",
    0.9891503022195223,
    null,
-   14.0,
+   14,
    null,
    220,
    "curve|km|line=A|upper|3"
@@ -2686,7 +2686,7 @@
    "upper",
    0.9891503022195223,
    null,
-   24.0,
+   24,
    null,
    221,
    "curve|km|line=A|upper|4"
@@ -2698,7 +2698,7 @@
    "upper",
    0.9787807492609241,
    null,
-   26.0,
+   26,
    null,
    222,
    "curve|km|line=A|upper|5"
@@ -2710,7 +2710,7 @@
    "upper",
    0.9676995935835427,
    null,
-   32.0,
+   32,
    null,
    223,
    "curve|km|line=A|upper|6"
@@ -2722,7 +2722,7 @@
    "upper",
    0.9676995935835427,
    null,
-   34.0,
+   34,
    null,
    224,
    "curve|km|line=A|upper|7"
@@ -2734,7 +2734,7 @@
    "upper",
    0.9557641294655048,
    null,
-   36.0,
+   36,
    null,
    225,
    "curve|km|line=A|upper|8"
@@ -2746,7 +2746,7 @@
    "upper",
    0.9432291529562307,
    null,
-   42.0,
+   42,
    null,
    226,
    "curve|km|line=A|upper|9"
@@ -2758,7 +2758,7 @@
    "upper",
    0.9301888258608414,
    null,
-   44.0,
+   44,
    null,
    227,
    "curve|km|line=A|upper|10"
@@ -2770,7 +2770,7 @@
    "upper",
    0.8881030268821699,
    null,
-   46.0,
+   46,
    null,
    228,
    "curve|km|line=A|upper|11"
@@ -2782,7 +2782,7 @@
    "upper",
    0.8881030268821699,
    null,
-   48.0,
+   48,
    null,
    229,
    "curve|km|line=A|upper|12"
@@ -2794,7 +2794,7 @@
    "upper",
    0.8574211370279144,
    null,
-   50.0,
+   50,
    null,
    230,
    "curve|km|line=A|upper|13"
@@ -2806,7 +2806,7 @@
    "upper",
    0.8415545729847563,
    null,
-   52.0,
+   52,
    null,
    231,
    "curve|km|line=A|upper|14"
@@ -2818,7 +2818,7 @@
    "upper",
    0.8088991861037897,
    null,
-   54.0,
+   54,
    null,
    232,
    "curve|km|line=A|upper|15"
@@ -2830,7 +2830,7 @@
    "upper",
    0.7921482464771584,
    null,
-   64.0,
+   64,
    null,
    233,
    "curve|km|line=A|upper|16"
@@ -2842,7 +2842,7 @@
    "upper",
    0.7921482464771584,
    null,
-   72.0,
+   72,
    null,
    234,
    "curve|km|line=A|upper|17"
@@ -2854,7 +2854,7 @@
    "upper",
    0.7921482464771584,
    null,
-   74.0,
+   74,
    null,
    235,
    "curve|km|line=A|upper|18"
@@ -2866,7 +2866,7 @@
    "upper",
    0.7744986444590943,
    null,
-   76.0,
+   76,
    null,
    236,
    "curve|km|line=A|upper|19"
@@ -2878,7 +2878,7 @@
    "upper",
    0.7744986444590943,
    null,
-   78.0,
+   78,
    null,
    237,
    "curve|km|line=A|upper|20"
@@ -2890,7 +2890,7 @@
    "upper",
    0.7744986444590943,
    null,
-   80.0,
+   80,
    null,
    238,
    "curve|km|line=A|upper|21"
@@ -2902,7 +2902,7 @@
    "upper",
    0.7359693355324515,
    null,
-   84.0,
+   84,
    null,
    239,
    "curve|km|line=A|upper|22"
@@ -2914,7 +2914,7 @@
    "upper",
    0.7160533098846635,
    null,
-   86.0,
+   86,
    null,
    240,
    "curve|km|line=A|upper|23"
@@ -2926,7 +2926,7 @@
    "upper",
    0.7160533098846635,
    null,
-   92.0,
+   92,
    null,
    241,
    "curve|km|line=A|upper|24"
@@ -2938,7 +2938,7 @@
    "upper",
    0.6943069413209966,
    null,
-   100.0,
+   100,
    null,
    242,
    "curve|km|line=A|upper|25"
@@ -2950,7 +2950,7 @@
    "upper",
    0.6943069413209966,
    null,
-   106.0,
+   106,
    null,
    243,
    "curve|km|line=A|upper|26"
@@ -2962,7 +2962,7 @@
    "upper",
    0.6943069413209966,
    null,
-   108.0,
+   108,
    null,
    244,
    "curve|km|line=A|upper|27"
@@ -2974,7 +2974,7 @@
    "upper",
    0.6943069413209966,
    null,
-   116.0,
+   116,
    null,
    245,
    "curve|km|line=A|upper|28"
@@ -2986,7 +2986,7 @@
    "upper",
    0.6943069413209966,
    null,
-   130.0,
+   130,
    null,
    246,
    "curve|km|line=A|upper|29"
@@ -2998,7 +2998,7 @@
    "upper",
    0.6943069413209966,
    null,
-   132.0,
+   132,
    null,
    247,
    "curve|km|line=A|upper|30"
@@ -3010,7 +3010,7 @@
    "upper",
    0.6943069413209966,
    null,
-   136.0,
+   136,
    null,
    248,
    "curve|km|line=A|upper|31"
@@ -3022,7 +3022,7 @@
    "upper",
    0.6943069413209966,
    null,
-   144.0,
+   144,
    null,
    249,
    "curve|km|line=A|upper|32"
@@ -3034,7 +3034,7 @@
    "upper",
    0.6693211355301201,
    null,
-   146.0,
+   146,
    null,
    250,
    "curve|km|line=A|upper|33"
@@ -3046,7 +3046,7 @@
    "upper",
    0.6693211355301201,
    null,
-   152.0,
+   152,
    null,
    251,
    "curve|km|line=A|upper|34"
@@ -3058,7 +3058,7 @@
    "upper",
    0.6408245395716363,
    null,
-   158.0,
+   158,
    null,
    252,
    "curve|km|line=A|upper|35"
@@ -3070,7 +3070,7 @@
    "upper",
    0.6087813539868813,
    null,
-   160.0,
+   160,
    null,
    253,
    "curve|km|line=A|upper|36"
@@ -3082,7 +3082,7 @@
    "upper",
    0.5714158237128265,
    null,
-   166.0,
+   166,
    null,
    254,
    "curve|km|line=A|upper|37"
@@ -3094,7 +3094,7 @@
    "upper",
    0.5295980221339397,
    null,
-   184.0,
+   184,
    null,
    255,
    "curve|km|line=A|upper|38"
@@ -3106,7 +3106,7 @@
    "upper",
    0.43543681747504714,
    null,
-   188.0,
+   188,
    null,
    256,
    "curve|km|line=A|upper|39"
@@ -3118,7 +3118,7 @@
    "upper",
    0.43543681747504714,
    null,
-   192.0,
+   192,
    null,
    257,
    "curve|km|line=A|upper|40"
@@ -3130,7 +3130,7 @@
    "upper",
    0.44794568072576235,
    null,
-   196.0,
+   196,
    null,
    258,
    "curve|km|line=A|upper|41"
@@ -3142,7 +3142,7 @@
    "upper",
    null,
    null,
-   240.0,
+   240,
    null,
    259,
    "curve|km|line=A|upper|42"
@@ -3152,9 +3152,9 @@
    "cumhaz",
    "line=A",
    "cumhaz",
-   0.0,
+   0,
    null,
-   0.0,
+   0,
    null,
    260,
    "curve|cumhaz|line=A|cumhaz|0"
@@ -3166,7 +3166,7 @@
    "cumhaz",
    0.03389830508474576,
    null,
-   6.0,
+   6,
    null,
    261,
    "curve|cumhaz|line=A|cumhaz|1"
@@ -3178,7 +3178,7 @@
    "cumhaz",
    0.06898602438299137,
    null,
-   8.0,
+   8,
    null,
    262,
    "curve|cumhaz|line=A|cumhaz|2"
@@ -3190,7 +3190,7 @@
    "cumhaz",
    0.08716784256480956,
    null,
-   14.0,
+   14,
    null,
    263,
    "curve|cumhaz|line=A|cumhaz|3"
@@ -3202,7 +3202,7 @@
    "cumhaz",
    0.08716784256480956,
    null,
-   24.0,
+   24,
    null,
    264,
    "curve|cumhaz|line=A|cumhaz|4"
@@ -3214,7 +3214,7 @@
    "cumhaz",
    0.10603576709311144,
    null,
-   26.0,
+   26,
    null,
    265,
    "curve|cumhaz|line=A|cumhaz|5"
@@ -3226,7 +3226,7 @@
    "cumhaz",
    0.12526653632388068,
    null,
-   32.0,
+   32,
    null,
    266,
    "curve|cumhaz|line=A|cumhaz|6"
@@ -3238,7 +3238,7 @@
    "cumhaz",
    0.12526653632388068,
    null,
-   34.0,
+   34,
    null,
    267,
    "curve|cumhaz|line=A|cumhaz|7"
@@ -3250,7 +3250,7 @@
    "cumhaz",
    0.14609986965721403,
    null,
-   36.0,
+   36,
    null,
    268,
    "curve|cumhaz|line=A|cumhaz|8"
@@ -3262,7 +3262,7 @@
    "cumhaz",
    0.16737646540189488,
    null,
-   42.0,
+   42,
    null,
    269,
    "curve|cumhaz|line=A|cumhaz|9"
@@ -3274,7 +3274,7 @@
    "cumhaz",
    0.18911559583667747,
    null,
-   44.0,
+   44,
    null,
    270,
    "curve|cumhaz|line=A|cumhaz|10"
@@ -3286,7 +3286,7 @@
    "cumhaz",
    0.25729741401849565,
    null,
-   46.0,
+   46,
    null,
    271,
    "curve|cumhaz|line=A|cumhaz|11"
@@ -3298,7 +3298,7 @@
    "cumhaz",
    0.25729741401849565,
    null,
-   48.0,
+   48,
    null,
    272,
    "curve|cumhaz|line=A|cumhaz|12"
@@ -3310,7 +3310,7 @@
    "cumhaz",
    0.3085794653005469,
    null,
-   50.0,
+   50,
    null,
    273,
    "curve|cumhaz|line=A|cumhaz|13"
@@ -3322,7 +3322,7 @@
    "cumhaz",
    0.33560649232757395,
    null,
-   52.0,
+   52,
    null,
    274,
    "curve|cumhaz|line=A|cumhaz|14"
@@ -3334,7 +3334,7 @@
    "cumhaz",
    0.39116204788312947,
    null,
-   54.0,
+   54,
    null,
    275,
    "curve|cumhaz|line=A|cumhaz|15"
@@ -3346,7 +3346,7 @@
    "cumhaz",
    0.42057381258901183,
    null,
-   64.0,
+   64,
    null,
    276,
    "curve|cumhaz|line=A|cumhaz|16"
@@ -3358,7 +3358,7 @@
    "cumhaz",
    0.42057381258901183,
    null,
-   72.0,
+   72,
    null,
    277,
    "curve|cumhaz|line=A|cumhaz|17"
@@ -3370,7 +3370,7 @@
    "cumhaz",
    0.42057381258901183,
    null,
-   74.0,
+   74,
    null,
    278,
    "curve|cumhaz|line=A|cumhaz|18"
@@ -3382,7 +3382,7 @@
    "cumhaz",
    0.45283187710514083,
    null,
-   76.0,
+   76,
    null,
    279,
    "curve|cumhaz|line=A|cumhaz|19"
@@ -3394,7 +3394,7 @@
    "cumhaz",
    0.45283187710514083,
    null,
-   78.0,
+   78,
    null,
    280,
    "curve|cumhaz|line=A|cumhaz|20"
@@ -3406,7 +3406,7 @@
    "cumhaz",
    0.45283187710514083,
    null,
-   80.0,
+   80,
    null,
    281,
    "curve|cumhaz|line=A|cumhaz|21"
@@ -3418,7 +3418,7 @@
    "cumhaz",
    0.5269059511792149,
    null,
-   84.0,
+   84,
    null,
    282,
    "curve|cumhaz|line=A|cumhaz|22"
@@ -3430,7 +3430,7 @@
    "cumhaz",
    0.5669059511792149,
    null,
-   86.0,
+   86,
    null,
    283,
    "curve|cumhaz|line=A|cumhaz|23"
@@ -3442,7 +3442,7 @@
    "cumhaz",
    0.5669059511792149,
    null,
-   92.0,
+   92,
    null,
    284,
    "curve|cumhaz|line=A|cumhaz|24"
@@ -3454,7 +3454,7 @@
    "cumhaz",
    0.6145249987982626,
    null,
-   100.0,
+   100,
    null,
    285,
    "curve|cumhaz|line=A|cumhaz|25"
@@ -3466,7 +3466,7 @@
    "cumhaz",
    0.6145249987982626,
    null,
-   106.0,
+   106,
    null,
    286,
    "curve|cumhaz|line=A|cumhaz|26"
@@ -3478,7 +3478,7 @@
    "cumhaz",
    0.6145249987982626,
    null,
-   108.0,
+   108,
    null,
    287,
    "curve|cumhaz|line=A|cumhaz|27"
@@ -3490,7 +3490,7 @@
    "cumhaz",
    0.6145249987982626,
    null,
-   116.0,
+   116,
    null,
    288,
    "curve|cumhaz|line=A|cumhaz|28"
@@ -3502,7 +3502,7 @@
    "cumhaz",
    0.6145249987982626,
    null,
-   130.0,
+   130,
    null,
    289,
    "curve|cumhaz|line=A|cumhaz|29"
@@ -3514,7 +3514,7 @@
    "cumhaz",
    0.6145249987982626,
    null,
-   132.0,
+   132,
    null,
    290,
    "curve|cumhaz|line=A|cumhaz|30"
@@ -3526,7 +3526,7 @@
    "cumhaz",
    0.6145249987982626,
    null,
-   136.0,
+   136,
    null,
    291,
    "curve|cumhaz|line=A|cumhaz|31"
@@ -3538,7 +3538,7 @@
    "cumhaz",
    0.6145249987982626,
    null,
-   144.0,
+   144,
    null,
    292,
    "curve|cumhaz|line=A|cumhaz|32"
@@ -3550,7 +3550,7 @@
    "cumhaz",
    0.697858332131596,
    null,
-   146.0,
+   146,
    null,
    293,
    "curve|cumhaz|line=A|cumhaz|33"
@@ -3562,7 +3562,7 @@
    "cumhaz",
    0.697858332131596,
    null,
-   152.0,
+   152,
    null,
    294,
    "curve|cumhaz|line=A|cumhaz|34"
@@ -3574,7 +3574,7 @@
    "cumhaz",
    0.797858332131596,
    null,
-   158.0,
+   158,
    null,
    295,
    "curve|cumhaz|line=A|cumhaz|35"
@@ -3586,7 +3586,7 @@
    "cumhaz",
    0.922858332131596,
    null,
-   160.0,
+   160,
    null,
    296,
    "curve|cumhaz|line=A|cumhaz|36"
@@ -3598,7 +3598,7 @@
    "cumhaz",
    1.0657154749887388,
    null,
-   166.0,
+   166,
    null,
    297,
    "curve|cumhaz|line=A|cumhaz|37"
@@ -3610,7 +3610,7 @@
    "cumhaz",
    1.2323821416554055,
    null,
-   184.0,
+   184,
    null,
    298,
    "curve|cumhaz|line=A|cumhaz|38"
@@ -3622,7 +3622,7 @@
    "cumhaz",
    1.6323821416554054,
    null,
-   188.0,
+   188,
    null,
    299,
    "curve|cumhaz|line=A|cumhaz|39"
@@ -3634,7 +3634,7 @@
    "cumhaz",
    1.6323821416554054,
    null,
-   192.0,
+   192,
    null,
    300,
    "curve|cumhaz|line=A|cumhaz|40"
@@ -3646,7 +3646,7 @@
    "cumhaz",
    2.1323821416554054,
    null,
-   196.0,
+   196,
    null,
    301,
    "curve|cumhaz|line=A|cumhaz|41"
@@ -3658,7 +3658,7 @@
    "cumhaz",
    3.1323821416554054,
    null,
-   240.0,
+   240,
    null,
    302,
    "curve|cumhaz|line=A|cumhaz|42"
@@ -4162,7 +4162,7 @@
    "surv",
    0.9152542372881356,
    null,
-   24.0,
+   24,
    null,
    344,
    "point|censored|line=A|surv|0"
@@ -4174,7 +4174,7 @@
    "surv",
    0.8807163415414134,
    null,
-   32.0,
+   32,
    null,
    345,
    "point|censored|line=A|surv|1"
@@ -4186,7 +4186,7 @@
    "surv",
    0.8807163415414134,
    null,
-   34.0,
+   34,
    null,
    346,
    "point|censored|line=A|surv|2"
@@ -4198,7 +4198,7 @@
    "surv",
    0.825671570195075,
    null,
-   44.0,
+   44,
    null,
    347,
    "point|censored|line=A|surv|3"
@@ -4210,7 +4210,7 @@
    "surv",
    0.769375781318138,
    null,
-   46.0,
+   46,
    null,
    348,
    "point|censored|line=A|surv|4"
@@ -4222,7 +4222,7 @@
    "surv",
    0.769375781318138,
    null,
-   48.0,
+   48,
    null,
    349,
    "point|censored|line=A|surv|5"
@@ -4234,7 +4234,7 @@
    "surv",
    0.6510102764999629,
    null,
-   72.0,
+   72,
    null,
    350,
    "point|censored|line=A|surv|6"
@@ -4246,7 +4246,7 @@
    "surv",
    0.6510102764999629,
    null,
-   74.0,
+   74,
    null,
    351,
    "point|censored|line=A|surv|7"
@@ -4258,7 +4258,7 @@
    "surv",
    0.6300099449999641,
    null,
-   78.0,
+   78,
    null,
    352,
    "point|censored|line=A|surv|8"
@@ -4270,7 +4270,7 @@
    "surv",
    0.6300099449999641,
    null,
-   80.0,
+   80,
    null,
    353,
    "point|censored|line=A|surv|9"
@@ -4282,7 +4282,7 @@
    "surv",
    0.5600088399999681,
    null,
-   86.0,
+   86,
    null,
    354,
    "point|censored|line=A|surv|10"
@@ -4294,7 +4294,7 @@
    "surv",
    0.5600088399999681,
    null,
-   92.0,
+   92,
    null,
    355,
    "point|censored|line=A|surv|11"
@@ -4306,7 +4306,7 @@
    "surv",
    0.533341752380922,
    null,
-   100.0,
+   100,
    null,
    356,
    "point|censored|line=A|surv|12"
@@ -4318,7 +4318,7 @@
    "surv",
    0.533341752380922,
    null,
-   106.0,
+   106,
    null,
    357,
    "point|censored|line=A|surv|13"
@@ -4330,7 +4330,7 @@
    "surv",
    0.533341752380922,
    null,
-   108.0,
+   108,
    null,
    358,
    "point|censored|line=A|surv|14"
@@ -4342,7 +4342,7 @@
    "surv",
    0.533341752380922,
    null,
-   116.0,
+   116,
    null,
    359,
    "point|censored|line=A|surv|15"
@@ -4354,7 +4354,7 @@
    "surv",
    0.533341752380922,
    null,
-   130.0,
+   130,
    null,
    360,
    "point|censored|line=A|surv|16"
@@ -4366,7 +4366,7 @@
    "surv",
    0.533341752380922,
    null,
-   132.0,
+   132,
    null,
    361,
    "point|censored|line=A|surv|17"
@@ -4378,7 +4378,7 @@
    "surv",
    0.533341752380922,
    null,
-   136.0,
+   136,
    null,
    362,
    "point|censored|line=A|surv|18"
@@ -4390,7 +4390,7 @@
    "surv",
    0.533341752380922,
    null,
-   144.0,
+   144,
    null,
    363,
    "point|censored|line=A|surv|19"
@@ -4402,7 +4402,7 @@
    "surv",
    0.4888966063491784,
    null,
-   152.0,
+   152,
    null,
    364,
    "point|censored|line=A|surv|20"
@@ -4414,7 +4414,7 @@
    "surv",
    0.4400069457142606,
    null,
-   158.0,
+   158,
    null,
    365,
    "point|censored|line=A|surv|21"
@@ -4426,7 +4426,7 @@
    "surv",
    0.16500260464284772,
    null,
-   192.0,
+   192,
    null,
    366,
    "point|censored|line=A|surv|22"
@@ -4436,9 +4436,9 @@
    "at_risk",
    "line=A",
    "n_risk",
-   59.0,
+   59,
    null,
-   0.0,
+   0,
    null,
    367,
    "point|at_risk|line=A|n_risk|0"
@@ -4448,9 +4448,9 @@
    "at_risk",
    "line=A",
    "n_risk",
-   39.0,
+   39,
    null,
-   50.0,
+   50,
    null,
    368,
    "point|at_risk|line=A|n_risk|1"
@@ -4460,9 +4460,9 @@
    "at_risk",
    "line=A",
    "n_risk",
-   21.0,
+   21,
    null,
-   100.0,
+   100,
    null,
    369,
    "point|at_risk|line=A|n_risk|2"
@@ -4472,9 +4472,9 @@
    "at_risk",
    "line=A",
    "n_risk",
-   11.0,
+   11,
    null,
-   150.0,
+   150,
    null,
    370,
    "point|at_risk|line=A|n_risk|3"
@@ -4484,9 +4484,9 @@
    "at_risk",
    "line=A",
    "n_risk",
-   1.0,
+   1,
    null,
-   200.0,
+   200,
    null,
    371,
    "point|at_risk|line=A|n_risk|4"
@@ -4496,9 +4496,9 @@
    "km",
    "line=B",
    "surv",
-   1.0,
+   1,
    null,
-   0.0,
+   0,
    null,
    372,
    "curve|km|line=B|surv|0"
@@ -4510,7 +4510,7 @@
    "surv",
    0.9591836734693877,
    null,
-   2.0,
+   2,
    null,
    373,
    "curve|km|line=B|surv|1"
@@ -4522,7 +4522,7 @@
    "surv",
    0.8979591836734694,
    null,
-   4.0,
+   4,
    null,
    374,
    "curve|km|line=B|surv|2"
@@ -4534,7 +4534,7 @@
    "surv",
    0.8775510204081632,
    null,
-   6.0,
+   6,
    null,
    375,
    "curve|km|line=B|surv|3"
@@ -4546,7 +4546,7 @@
    "surv",
    0.8571428571428571,
    null,
-   10.0,
+   10,
    null,
    376,
    "curve|km|line=B|surv|4"
@@ -4558,7 +4558,7 @@
    "surv",
    0.836734693877551,
    null,
-   14.0,
+   14,
    null,
    377,
    "curve|km|line=B|surv|5"
@@ -4570,7 +4570,7 @@
    "surv",
    0.8163265306122448,
    null,
-   16.0,
+   16,
    null,
    378,
    "curve|km|line=B|surv|6"
@@ -4582,7 +4582,7 @@
    "surv",
    0.7755102040816325,
    null,
-   22.0,
+   22,
    null,
    379,
    "curve|km|line=B|surv|7"
@@ -4594,7 +4594,7 @@
    "surv",
    0.754550468836183,
    null,
-   24.0,
+   24,
    null,
    380,
    "curve|km|line=B|surv|8"
@@ -4606,7 +4606,7 @@
    "surv",
    0.7335907335907335,
    null,
-   26.0,
+   26,
    null,
    381,
    "curve|km|line=B|surv|9"
@@ -4618,7 +4618,7 @@
    "surv",
    0.7126309983452839,
    null,
-   28.0,
+   28,
    null,
    382,
    "curve|km|line=B|surv|10"
@@ -4630,7 +4630,7 @@
    "surv",
    0.7126309983452839,
    null,
-   30.0,
+   30,
    null,
    383,
    "curve|km|line=B|surv|11"
@@ -4642,7 +4642,7 @@
    "surv",
    0.6910361196075481,
    null,
-   32.0,
+   32,
    null,
    384,
    "curve|km|line=B|surv|12"
@@ -4654,7 +4654,7 @@
    "surv",
    0.6694412408698122,
    null,
-   34.0,
+   34,
    null,
    385,
    "curve|km|line=B|surv|13"
@@ -4666,7 +4666,7 @@
    "surv",
    0.6478463621320762,
    null,
-   36.0,
+   36,
    null,
    386,
    "curve|km|line=B|surv|14"
@@ -4678,7 +4678,7 @@
    "surv",
    0.6478463621320762,
    null,
-   38.0,
+   38,
    null,
    387,
    "curve|km|line=B|surv|15"
@@ -4690,7 +4690,7 @@
    "surv",
    0.6478463621320762,
    null,
-   40.0,
+   40,
    null,
    388,
    "curve|km|line=B|surv|16"
@@ -4702,7 +4702,7 @@
    "surv",
    0.6247089920559307,
    null,
-   44.0,
+   44,
    null,
    389,
    "curve|km|line=B|surv|17"
@@ -4714,7 +4714,7 @@
    "surv",
    0.6247089920559307,
    null,
-   46.0,
+   46,
    null,
    390,
    "curve|km|line=B|surv|18"
@@ -4726,7 +4726,7 @@
    "surv",
    0.6006817231307026,
    null,
-   48.0,
+   48,
    null,
    391,
    "curve|km|line=B|surv|19"
@@ -4738,7 +4738,7 @@
    "surv",
    0.5506249128698106,
    null,
-   52.0,
+   52,
    null,
    392,
    "curve|km|line=B|surv|20"
@@ -4750,7 +4750,7 @@
    "surv",
    0.5255965077393647,
    null,
-   54.0,
+   54,
    null,
    393,
    "curve|km|line=B|surv|21"
@@ -4762,7 +4762,7 @@
    "surv",
    0.5005681026089187,
    null,
-   56.0,
+   56,
    null,
    394,
    "curve|km|line=B|surv|22"
@@ -4774,7 +4774,7 @@
    "surv",
    0.47422241299792295,
    null,
-   58.0,
+   58,
    null,
    395,
    "curve|km|line=B|surv|23"
@@ -4786,7 +4786,7 @@
    "surv",
    0.44787672338692724,
    null,
-   60.0,
+   60,
    null,
    396,
    "curve|km|line=B|surv|24"
@@ -4798,7 +4798,7 @@
    "surv",
    0.3951853441649358,
    null,
-   62.0,
+   62,
    null,
    397,
    "curve|km|line=B|surv|25"
@@ -4810,7 +4810,7 @@
    "surv",
    0.3688396545539401,
    null,
-   70.0,
+   70,
    null,
    398,
    "curve|km|line=B|surv|26"
@@ -4822,7 +4822,7 @@
    "surv",
    0.3688396545539401,
    null,
-   72.0,
+   72,
    null,
    399,
    "curve|km|line=B|surv|27"
@@ -4834,7 +4834,7 @@
    "surv",
    0.34046737343440625,
    null,
-   82.0,
+   82,
    null,
    400,
    "curve|km|line=B|surv|28"
@@ -4846,7 +4846,7 @@
    "surv",
    0.31209509231487237,
    null,
-   92.0,
+   92,
    null,
    401,
    "curve|km|line=B|surv|29"
@@ -4858,7 +4858,7 @@
    "surv",
    0.31209509231487237,
    null,
-   98.0,
+   98,
    null,
    402,
    "curve|km|line=B|surv|30"
@@ -4870,7 +4870,7 @@
    "surv",
    0.2496760738518979,
    null,
-   102.0,
+   102,
    null,
    403,
    "curve|km|line=B|surv|31"
@@ -4882,7 +4882,7 @@
    "surv",
    0.2496760738518979,
    null,
-   108.0,
+   108,
    null,
    404,
    "curve|km|line=B|surv|32"
@@ -4894,7 +4894,7 @@
    "surv",
    0.21400806330162678,
    null,
-   112.0,
+   112,
    null,
    405,
    "curve|km|line=B|surv|33"
@@ -4906,7 +4906,7 @@
    "surv",
    0.21400806330162678,
    null,
-   120.0,
+   120,
    null,
    406,
    "curve|km|line=B|surv|34"
@@ -4918,7 +4918,7 @@
    "surv",
    0.16050604747622008,
    null,
-   122.0,
+   122,
    null,
    407,
    "curve|km|line=B|surv|35"
@@ -4930,7 +4930,7 @@
    "surv",
    0.10700403165081337,
    null,
-   152.0,
+   152,
    null,
    408,
    "curve|km|line=B|surv|36"
@@ -4942,7 +4942,7 @@
    "surv",
    0.05350201582540669,
    null,
-   190.0,
+   190,
    null,
    409,
    "curve|km|line=B|surv|37"
@@ -4952,9 +4952,9 @@
    "km",
    "line=B",
    "surv",
-   0.0,
+   0,
    null,
-   216.0,
+   216,
    null,
    410,
    "curve|km|line=B|surv|38"
@@ -4964,9 +4964,9 @@
    "km",
    "line=B",
    "lower",
-   1.0,
+   1,
    null,
-   0.0,
+   0,
    null,
    411,
    "curve|km|line=B|lower|0"
@@ -4978,7 +4978,7 @@
    "lower",
    0.9053522134661601,
    null,
-   2.0,
+   2,
    null,
    412,
    "curve|km|line=B|lower|1"
@@ -4990,7 +4990,7 @@
    "lower",
    0.8170811105459349,
    null,
-   4.0,
+   4,
    null,
    413,
    "curve|km|line=B|lower|2"
@@ -5002,7 +5002,7 @@
    "lower",
    0.7904044583182673,
    null,
-   6.0,
+   6,
    null,
    414,
    "curve|km|line=B|lower|3"
@@ -5014,7 +5014,7 @@
    "lower",
    0.764557456566449,
    null,
-   10.0,
+   10,
    null,
    415,
    "curve|km|line=B|lower|4"
@@ -5026,7 +5026,7 @@
    "lower",
    0.7393903616727466,
    null,
-   14.0,
+   14,
    null,
    416,
    "curve|km|line=B|lower|5"
@@ -5038,7 +5038,7 @@
    "lower",
    0.7147988781166001,
    null,
-   16.0,
+   16,
    null,
    417,
    "curve|km|line=B|lower|6"
@@ -5050,7 +5050,7 @@
    "lower",
    0.6670574568886729,
    null,
-   22.0,
+   22,
    null,
    418,
    "curve|km|line=B|lower|7"
@@ -5062,7 +5062,7 @@
    "lower",
    0.6430299511831902,
    null,
-   24.0,
+   24,
    null,
    419,
    "curve|km|line=B|lower|8"
@@ -5074,7 +5074,7 @@
    "lower",
    0.6194036419209915,
    null,
-   26.0,
+   26,
    null,
    420,
    "curve|km|line=B|lower|9"
@@ -5086,7 +5086,7 @@
    "lower",
    0.5961454577148926,
    null,
-   28.0,
+   28,
    null,
    421,
    "curve|km|line=B|lower|10"
@@ -5098,7 +5098,7 @@
    "lower",
    0.5961454577148926,
    null,
-   30.0,
+   30,
    null,
    422,
    "curve|km|line=B|lower|11"
@@ -5110,7 +5110,7 @@
    "lower",
    0.5723767963206445,
    null,
-   32.0,
+   32,
    null,
    423,
    "curve|km|line=B|lower|12"
@@ -5122,7 +5122,7 @@
    "lower",
    0.5489664633135742,
    null,
-   34.0,
+   34,
    null,
    424,
    "curve|km|line=B|lower|13"
@@ -5134,7 +5134,7 @@
    "lower",
    0.5258929548213712,
    null,
-   36.0,
+   36,
    null,
    425,
    "curve|km|line=B|lower|14"
@@ -5146,7 +5146,7 @@
    "lower",
    0.5258929548213712,
    null,
-   38.0,
+   38,
    null,
    426,
    "curve|km|line=B|lower|15"
@@ -5158,7 +5158,7 @@
    "lower",
    0.5258929548213712,
    null,
-   40.0,
+   40,
    null,
    427,
    "curve|km|line=B|lower|16"
@@ -5170,7 +5170,7 @@
    "lower",
    0.5011394248384893,
    null,
-   44.0,
+   44,
    null,
    428,
    "curve|km|line=B|lower|17"
@@ -5182,7 +5182,7 @@
    "lower",
    0.5011394248384893,
    null,
-   46.0,
+   46,
    null,
    429,
    "curve|km|line=B|lower|18"
@@ -5194,7 +5194,7 @@
    "lower",
    0.47563043664598975,
    null,
-   48.0,
+   48,
    null,
    430,
    "curve|km|line=B|lower|19"
@@ -5206,7 +5206,7 @@
    "lower",
    0.4233941080050867,
    null,
-   52.0,
+   52,
    null,
    431,
    "curve|km|line=B|lower|20"
@@ -5218,7 +5218,7 @@
    "lower",
    0.39798345712311345,
    null,
-   54.0,
+   54,
    null,
    432,
    "curve|km|line=B|lower|21"
@@ -5230,7 +5230,7 @@
    "lower",
    0.37302171142883933,
    null,
-   56.0,
+   56,
    null,
    433,
    "curve|km|line=B|lower|22"
@@ -5242,7 +5242,7 @@
    "lower",
    0.3469068874892496,
    null,
-   58.0,
+   58,
    null,
    434,
    "curve|km|line=B|lower|23"
@@ -5254,7 +5254,7 @@
    "lower",
    0.3213163217407025,
    null,
-   60.0,
+   60,
    null,
    435,
    "curve|km|line=B|lower|24"
@@ -5266,7 +5266,7 @@
    "lower",
    0.27168304418735645,
    null,
-   62.0,
+   62,
    null,
    436,
    "curve|km|line=B|lower|25"
@@ -5278,7 +5278,7 @@
    "lower",
    0.24764140798182516,
    null,
-   70.0,
+   70,
    null,
    437,
    "curve|km|line=B|lower|26"
@@ -5290,7 +5290,7 @@
    "lower",
    0.24764140798182516,
    null,
-   72.0,
+   72,
    null,
    438,
    "curve|km|line=B|lower|27"
@@ -5302,7 +5302,7 @@
    "lower",
    0.2218822771623721,
    null,
-   82.0,
+   82,
    null,
    439,
    "curve|km|line=B|lower|28"
@@ -5314,7 +5314,7 @@
    "lower",
    0.19684228393219827,
    null,
-   92.0,
+   92,
    null,
    440,
    "curve|km|line=B|lower|29"
@@ -5326,7 +5326,7 @@
    "lower",
    0.19684228393219827,
    null,
-   98.0,
+   98,
    null,
    441,
    "curve|km|line=B|lower|30"
@@ -5338,7 +5338,7 @@
    "lower",
    0.14327468026030263,
    null,
-   102.0,
+   102,
    null,
    442,
    "curve|km|line=B|lower|31"
@@ -5350,7 +5350,7 @@
    "lower",
    0.14327468026030263,
    null,
-   108.0,
+   108,
    null,
    443,
    "curve|km|line=B|lower|32"
@@ -5362,7 +5362,7 @@
    "lower",
    0.11370540087332386,
    null,
-   112.0,
+   112,
    null,
    444,
    "curve|km|line=B|lower|33"
@@ -5374,7 +5374,7 @@
    "lower",
    0.11370540087332386,
    null,
-   120.0,
+   120,
    null,
    445,
    "curve|km|line=B|lower|34"
@@ -5386,7 +5386,7 @@
    "lower",
    0.06870150852922641,
    null,
-   122.0,
+   122,
    null,
    446,
    "curve|km|line=B|lower|35"
@@ -5398,7 +5398,7 @@
    "lower",
    0.033333015940855644,
    null,
-   152.0,
+   152,
    null,
    447,
    "curve|km|line=B|lower|36"
@@ -5410,7 +5410,7 @@
    "lower",
    0.008743920695868592,
    null,
-   190.0,
+   190,
    null,
    448,
    "curve|km|line=B|lower|37"
@@ -5422,7 +5422,7 @@
    "lower",
    null,
    null,
-   216.0,
+   216,
    null,
    449,
    "curve|km|line=B|lower|38"
@@ -5432,9 +5432,9 @@
    "km",
    "line=B",
    "upper",
-   1.0,
+   1,
    null,
-   0.0,
+   0,
    null,
    450,
    "curve|km|line=B|upper|0"
@@ -5444,9 +5444,9 @@
    "km",
    "line=B",
    "upper",
-   1.0,
+   1,
    null,
-   2.0,
+   2,
    null,
    451,
    "curve|km|line=B|upper|1"
@@ -5458,7 +5458,7 @@
    "upper",
    0.9868429035212569,
    null,
-   4.0,
+   4,
    null,
    452,
    "curve|km|line=B|upper|2"
@@ -5470,7 +5470,7 @@
    "upper",
    0.9743059838730297,
    null,
-   6.0,
+   6,
    null,
    453,
    "curve|km|line=B|upper|3"
@@ -5482,7 +5482,7 @@
    "upper",
    0.9609400460894816,
    null,
-   10.0,
+   10,
    null,
    454,
    "curve|km|line=B|upper|4"
@@ -5494,7 +5494,7 @@
    "upper",
    0.9468948802016349,
    null,
-   14.0,
+   14,
    null,
    455,
    "curve|km|line=B|upper|5"
@@ -5506,7 +5506,7 @@
    "upper",
    0.932274832799501,
    null,
-   16.0,
+   16,
    null,
    456,
    "curve|km|line=B|upper|6"
@@ -5518,7 +5518,7 @@
    "upper",
    0.9015956128275577,
    null,
-   22.0,
+   22,
    null,
    457,
    "curve|km|line=B|upper|7"
@@ -5530,7 +5530,7 @@
    "upper",
    0.8854119609409996,
    null,
-   24.0,
+   24,
    null,
    458,
    "curve|km|line=B|upper|8"
@@ -5542,7 +5542,7 @@
    "upper",
    0.868828221192208,
    null,
-   26.0,
+   26,
    null,
    459,
    "curve|km|line=B|upper|9"
@@ -5554,7 +5554,7 @@
    "upper",
    0.8518775631525026,
    null,
-   28.0,
+   28,
    null,
    460,
    "curve|km|line=B|upper|10"
@@ -5566,7 +5566,7 @@
    "upper",
    0.8518775631525026,
    null,
-   30.0,
+   30,
    null,
    461,
    "curve|km|line=B|upper|11"
@@ -5578,7 +5578,7 @@
    "upper",
    0.8342946843266957,
    null,
-   32.0,
+   32,
    null,
    462,
    "curve|km|line=B|upper|12"
@@ -5590,7 +5590,7 @@
    "upper",
    0.8163551053233026,
    null,
-   34.0,
+   34,
    null,
    463,
    "curve|km|line=B|upper|13"
@@ -5602,7 +5602,7 @@
    "upper",
    0.7980804935299531,
    null,
-   36.0,
+   36,
    null,
    464,
    "curve|km|line=B|upper|14"
@@ -5614,7 +5614,7 @@
    "upper",
    0.7980804935299531,
    null,
-   38.0,
+   38,
    null,
    465,
    "curve|km|line=B|upper|15"
@@ -5626,7 +5626,7 @@
    "upper",
    0.7980804935299531,
    null,
-   40.0,
+   40,
    null,
    466,
    "curve|km|line=B|upper|16"
@@ -5638,7 +5638,7 @@
    "upper",
    0.7787479998830925,
    null,
-   44.0,
+   44,
    null,
    467,
    "curve|km|line=B|upper|17"
@@ -5650,7 +5650,7 @@
    "upper",
    0.7787479998830925,
    null,
-   46.0,
+   46,
    null,
    468,
    "curve|km|line=B|upper|18"
@@ -5662,7 +5662,7 @@
    "upper",
    0.75861110791744,
    null,
-   48.0,
+   48,
    null,
    469,
    "curve|km|line=B|upper|19"
@@ -5674,7 +5674,7 @@
    "upper",
    0.7160888376586573,
    null,
-   52.0,
+   52,
    null,
    470,
    "curve|km|line=B|upper|20"
@@ -5686,7 +5686,7 @@
    "upper",
    0.6941285724405362,
    null,
-   54.0,
+   54,
    null,
    471,
    "curve|km|line=B|upper|21"
@@ -5698,7 +5698,7 @@
    "upper",
    0.6717261158598632,
    null,
-   56.0,
+   56,
    null,
    472,
    "curve|km|line=B|upper|22"
@@ -5710,7 +5710,7 @@
    "upper",
    0.6482629924623268,
    null,
-   58.0,
+   58,
    null,
    473,
    "curve|km|line=B|upper|23"
@@ -5722,7 +5722,7 @@
    "upper",
    0.6242868655570076,
    null,
-   60.0,
+   60,
    null,
    474,
    "curve|km|line=B|upper|24"
@@ -5734,7 +5734,7 @@
    "upper",
    0.574829602303266,
    null,
-   62.0,
+   62,
    null,
    475,
    "curve|km|line=B|upper|25"
@@ -5746,7 +5746,7 @@
    "upper",
    0.5493535668374744,
    null,
-   70.0,
+   70,
    null,
    476,
    "curve|km|line=B|upper|26"
@@ -5758,7 +5758,7 @@
    "upper",
    0.5493535668374744,
    null,
-   72.0,
+   72,
    null,
    477,
    "curve|km|line=B|upper|27"
@@ -5770,7 +5770,7 @@
    "upper",
    0.5224303349315969,
    null,
-   82.0,
+   82,
    null,
    478,
    "curve|km|line=B|upper|28"
@@ -5782,7 +5782,7 @@
    "upper",
    0.49482938676214,
    null,
-   92.0,
+   92,
    null,
    479,
    "curve|km|line=B|upper|29"
@@ -5794,7 +5794,7 @@
    "upper",
    0.49482938676214,
    null,
-   98.0,
+   98,
    null,
    480,
    "curve|km|line=B|upper|30"
@@ -5806,7 +5806,7 @@
    "upper",
    0.4350953130088438,
    null,
-   102.0,
+   102,
    null,
    481,
    "curve|km|line=B|upper|31"
@@ -5818,7 +5818,7 @@
    "upper",
    0.4350953130088438,
    null,
-   108.0,
+   108,
    null,
    482,
    "curve|km|line=B|upper|32"
@@ -5830,7 +5830,7 @@
    "upper",
    0.4027904638332618,
    null,
-   112.0,
+   112,
    null,
    483,
    "curve|km|line=B|upper|33"
@@ -5842,7 +5842,7 @@
    "upper",
    0.4027904638332618,
    null,
-   120.0,
+   120,
    null,
    484,
    "curve|km|line=B|upper|34"
@@ -5854,7 +5854,7 @@
    "upper",
    0.3749872721569,
    null,
-   122.0,
+   122,
    null,
    485,
    "curve|km|line=B|upper|35"
@@ -5866,7 +5866,7 @@
    "upper",
    0.34349915440727913,
    null,
-   152.0,
+   152,
    null,
    486,
    "curve|km|line=B|upper|36"
@@ -5878,7 +5878,7 @@
    "upper",
    0.3273663836789543,
    null,
-   190.0,
+   190,
    null,
    487,
    "curve|km|line=B|upper|37"
@@ -5890,7 +5890,7 @@
    "upper",
    null,
    null,
-   216.0,
+   216,
    null,
    488,
    "curve|km|line=B|upper|38"
@@ -5900,9 +5900,9 @@
    "cumhaz",
    "line=B",
    "cumhaz",
-   0.0,
+   0,
    null,
-   0.0,
+   0,
    null,
    489,
    "curve|cumhaz|line=B|cumhaz|0"
@@ -5914,7 +5914,7 @@
    "cumhaz",
    0.04081632653061224,
    null,
-   2.0,
+   2,
    null,
    490,
    "curve|cumhaz|line=B|cumhaz|1"
@@ -5926,7 +5926,7 @@
    "cumhaz",
    0.1046461137646548,
    null,
-   4.0,
+   4,
    null,
    491,
    "curve|cumhaz|line=B|cumhaz|2"
@@ -5938,7 +5938,7 @@
    "cumhaz",
    0.12737338649192753,
    null,
-   6.0,
+   6,
    null,
    492,
    "curve|cumhaz|line=B|cumhaz|3"
@@ -5950,7 +5950,7 @@
    "cumhaz",
    0.1506292004454159,
    null,
-   10.0,
+   10,
    null,
    493,
    "curve|cumhaz|line=B|cumhaz|4"
@@ -5962,7 +5962,7 @@
    "cumhaz",
    0.1744387242549397,
    null,
-   14.0,
+   14,
    null,
    494,
    "curve|cumhaz|line=B|cumhaz|5"
@@ -5974,7 +5974,7 @@
    "cumhaz",
    0.19882896815737872,
    null,
-   16.0,
+   16,
    null,
    495,
    "curve|cumhaz|line=B|cumhaz|6"
@@ -5986,7 +5986,7 @@
    "cumhaz",
    0.2488289681573787,
    null,
-   22.0,
+   22,
    null,
    496,
    "curve|cumhaz|line=B|cumhaz|7"
@@ -5998,7 +5998,7 @@
    "cumhaz",
    0.27585599518440573,
    null,
-   24.0,
+   24,
    null,
    497,
    "curve|cumhaz|line=B|cumhaz|8"
@@ -6010,7 +6010,7 @@
    "cumhaz",
    0.3036337729621835,
    null,
-   26.0,
+   26,
    null,
    498,
    "curve|cumhaz|line=B|cumhaz|9"
@@ -6022,7 +6022,7 @@
    "cumhaz",
    0.3322052015336121,
    null,
-   28.0,
+   28,
    null,
    499,
    "curve|cumhaz|line=B|cumhaz|10"
@@ -6034,7 +6034,7 @@
    "cumhaz",
    0.3322052015336121,
    null,
-   30.0,
+   30,
    null,
    500,
    "curve|cumhaz|line=B|cumhaz|11"
@@ -6046,7 +6046,7 @@
    "cumhaz",
    0.3625082318366424,
    null,
-   32.0,
+   32,
    null,
    501,
    "curve|cumhaz|line=B|cumhaz|12"
@@ -6058,7 +6058,7 @@
    "cumhaz",
    0.3937582318366424,
    null,
-   34.0,
+   34,
    null,
    502,
    "curve|cumhaz|line=B|cumhaz|13"
@@ -6070,7 +6070,7 @@
    "cumhaz",
    0.4260162963527714,
    null,
-   36.0,
+   36,
    null,
    503,
    "curve|cumhaz|line=B|cumhaz|14"
@@ -6082,7 +6082,7 @@
    "cumhaz",
    0.4260162963527714,
    null,
-   38.0,
+   38,
    null,
    504,
    "curve|cumhaz|line=B|cumhaz|15"
@@ -6094,7 +6094,7 @@
    "cumhaz",
    0.4260162963527714,
    null,
-   40.0,
+   40,
    null,
    505,
    "curve|cumhaz|line=B|cumhaz|16"
@@ -6106,7 +6106,7 @@
    "cumhaz",
    0.4617305820670571,
    null,
-   44.0,
+   44,
    null,
    506,
    "curve|cumhaz|line=B|cumhaz|17"
@@ -6118,7 +6118,7 @@
    "cumhaz",
    0.4617305820670571,
    null,
-   46.0,
+   46,
    null,
    507,
    "curve|cumhaz|line=B|cumhaz|18"
@@ -6130,7 +6130,7 @@
    "cumhaz",
    0.5001921205285955,
    null,
-   48.0,
+   48,
    null,
    508,
    "curve|cumhaz|line=B|cumhaz|19"
@@ -6142,7 +6142,7 @@
    "cumhaz",
    0.5835254538619289,
    null,
-   52.0,
+   52,
    null,
    509,
    "curve|cumhaz|line=B|cumhaz|20"
@@ -6154,7 +6154,7 @@
    "cumhaz",
    0.6289799993164743,
    null,
-   54.0,
+   54,
    null,
    510,
    "curve|cumhaz|line=B|cumhaz|21"
@@ -6166,7 +6166,7 @@
    "cumhaz",
    0.6765990469355219,
    null,
-   56.0,
+   56,
    null,
    511,
    "curve|cumhaz|line=B|cumhaz|22"
@@ -6178,7 +6178,7 @@
    "cumhaz",
    0.7292306258828902,
    null,
-   58.0,
+   58,
    null,
    512,
    "curve|cumhaz|line=B|cumhaz|23"
@@ -6190,7 +6190,7 @@
    "cumhaz",
    0.7847861814384458,
    null,
-   60.0,
+   60,
    null,
    513,
    "curve|cumhaz|line=B|cumhaz|24"
@@ -6202,7 +6202,7 @@
    "cumhaz",
    0.9024332402619752,
    null,
-   62.0,
+   62,
    null,
    514,
    "curve|cumhaz|line=B|cumhaz|25"
@@ -6214,7 +6214,7 @@
    "cumhaz",
    0.9690999069286419,
    null,
-   70.0,
+   70,
    null,
    515,
    "curve|cumhaz|line=B|cumhaz|26"
@@ -6226,7 +6226,7 @@
    "cumhaz",
    0.9690999069286419,
    null,
-   72.0,
+   72,
    null,
    516,
    "curve|cumhaz|line=B|cumhaz|27"
@@ -6238,7 +6238,7 @@
    "cumhaz",
    1.0460229838517188,
    null,
-   82.0,
+   82,
    null,
    517,
    "curve|cumhaz|line=B|cumhaz|28"
@@ -6250,7 +6250,7 @@
    "cumhaz",
    1.129356317185052,
    null,
-   92.0,
+   92,
    null,
    518,
    "curve|cumhaz|line=B|cumhaz|29"
@@ -6262,7 +6262,7 @@
    "cumhaz",
    1.129356317185052,
    null,
-   98.0,
+   98,
    null,
    519,
    "curve|cumhaz|line=B|cumhaz|30"
@@ -6274,7 +6274,7 @@
    "cumhaz",
    1.329356317185052,
    null,
-   102.0,
+   102,
    null,
    520,
    "curve|cumhaz|line=B|cumhaz|31"
@@ -6286,7 +6286,7 @@
    "cumhaz",
    1.329356317185052,
    null,
-   108.0,
+   108,
    null,
    521,
    "curve|cumhaz|line=B|cumhaz|32"
@@ -6298,7 +6298,7 @@
    "cumhaz",
    1.4722134600421948,
    null,
-   112.0,
+   112,
    null,
    522,
    "curve|cumhaz|line=B|cumhaz|33"
@@ -6310,7 +6310,7 @@
    "cumhaz",
    1.4722134600421948,
    null,
-   120.0,
+   120,
    null,
    523,
    "curve|cumhaz|line=B|cumhaz|34"
@@ -6322,7 +6322,7 @@
    "cumhaz",
    1.7222134600421948,
    null,
-   122.0,
+   122,
    null,
    524,
    "curve|cumhaz|line=B|cumhaz|35"
@@ -6334,7 +6334,7 @@
    "cumhaz",
    2.055546793375528,
    null,
-   152.0,
+   152,
    null,
    525,
    "curve|cumhaz|line=B|cumhaz|36"
@@ -6346,7 +6346,7 @@
    "cumhaz",
    2.555546793375528,
    null,
-   190.0,
+   190,
    null,
    526,
    "curve|cumhaz|line=B|cumhaz|37"
@@ -6358,7 +6358,7 @@
    "cumhaz",
    3.555546793375528,
    null,
-   216.0,
+   216,
    null,
    527,
    "curve|cumhaz|line=B|cumhaz|38"
@@ -6814,7 +6814,7 @@
    "surv",
    0.7755102040816325,
    null,
-   22.0,
+   22,
    null,
    565,
    "point|censored|line=B|surv|0"
@@ -6826,7 +6826,7 @@
    "surv",
    0.7126309983452839,
    null,
-   30.0,
+   30,
    null,
    566,
    "point|censored|line=B|surv|1"
@@ -6838,7 +6838,7 @@
    "surv",
    0.6478463621320762,
    null,
-   38.0,
+   38,
    null,
    567,
    "point|censored|line=B|surv|2"
@@ -6850,7 +6850,7 @@
    "surv",
    0.6478463621320762,
    null,
-   40.0,
+   40,
    null,
    568,
    "point|censored|line=B|surv|3"
@@ -6862,7 +6862,7 @@
    "surv",
    0.6247089920559307,
    null,
-   46.0,
+   46,
    null,
    569,
    "point|censored|line=B|surv|4"
@@ -6874,7 +6874,7 @@
    "surv",
    0.6006817231307026,
    null,
-   48.0,
+   48,
    null,
    570,
    "point|censored|line=B|surv|5"
@@ -6886,7 +6886,7 @@
    "surv",
    0.5005681026089187,
    null,
-   56.0,
+   56,
    null,
    571,
    "point|censored|line=B|surv|6"
@@ -6898,7 +6898,7 @@
    "surv",
    0.3688396545539401,
    null,
-   72.0,
+   72,
    null,
    572,
    "point|censored|line=B|surv|7"
@@ -6910,7 +6910,7 @@
    "surv",
    0.31209509231487237,
    null,
-   98.0,
+   98,
    null,
    573,
    "point|censored|line=B|surv|8"
@@ -6922,7 +6922,7 @@
    "surv",
    0.2496760738518979,
    null,
-   108.0,
+   108,
    null,
    574,
    "point|censored|line=B|surv|9"
@@ -6934,7 +6934,7 @@
    "surv",
    0.21400806330162678,
    null,
-   112.0,
+   112,
    null,
    575,
    "point|censored|line=B|surv|10"
@@ -6946,7 +6946,7 @@
    "surv",
    0.21400806330162678,
    null,
-   120.0,
+   120,
    null,
    576,
    "point|censored|line=B|surv|11"
@@ -6956,9 +6956,9 @@
    "at_risk",
    "line=B",
    "n_risk",
-   49.0,
+   49,
    null,
-   0.0,
+   0,
    null,
    577,
    "point|at_risk|line=B|n_risk|0"
@@ -6968,9 +6968,9 @@
    "at_risk",
    "line=B",
    "n_risk",
-   24.0,
+   24,
    null,
-   50.0,
+   50,
    null,
    578,
    "point|at_risk|line=B|n_risk|1"
@@ -6980,9 +6980,9 @@
    "at_risk",
    "line=B",
    "n_risk",
-   10.0,
+   10,
    null,
-   100.0,
+   100,
    null,
    579,
    "point|at_risk|line=B|n_risk|2"
@@ -6992,9 +6992,9 @@
    "at_risk",
    "line=B",
    "n_risk",
-   3.0,
+   3,
    null,
-   150.0,
+   150,
    null,
    580,
    "point|at_risk|line=B|n_risk|3"
@@ -7004,9 +7004,9 @@
    "at_risk",
    "line=B",
    "n_risk",
-   1.0,
+   1,
    null,
-   200.0,
+   200,
    null,
    581,
    "point|at_risk|line=B|n_risk|4"
@@ -7016,9 +7016,9 @@
    "km",
    "line=C",
    "surv",
-   1.0,
+   1,
    null,
-   0.0,
+   0,
    null,
    582,
    "curve|km|line=C|surv|0"
@@ -7030,7 +7030,7 @@
    "surv",
    0.9487179487179487,
    null,
-   2.0,
+   2,
    null,
    583,
    "curve|km|line=C|surv|1"
@@ -7042,7 +7042,7 @@
    "surv",
    0.8974358974358974,
    null,
-   4.0,
+   4,
    null,
    584,
    "curve|km|line=C|surv|2"
@@ -7054,7 +7054,7 @@
    "surv",
    0.846153846153846,
    null,
-   10.0,
+   10,
    null,
    585,
    "curve|km|line=C|surv|3"
@@ -7066,7 +7066,7 @@
    "surv",
    0.8205128205128204,
    null,
-   12.0,
+   12,
    null,
    586,
    "curve|km|line=C|surv|4"
@@ -7078,7 +7078,7 @@
    "surv",
    0.7435897435897435,
    null,
-   14.0,
+   14,
    null,
    587,
    "curve|km|line=C|surv|5"
@@ -7090,7 +7090,7 @@
    "surv",
    0.7179487179487178,
    null,
-   16.0,
+   16,
    null,
    588,
    "curve|km|line=C|surv|6"
@@ -7102,7 +7102,7 @@
    "surv",
    0.6923076923076922,
    null,
-   24.0,
+   24,
    null,
    589,
    "curve|km|line=C|surv|7"
@@ -7114,7 +7114,7 @@
    "surv",
    0.6656804733727809,
    null,
-   26.0,
+   26,
    null,
    590,
    "curve|km|line=C|surv|8"
@@ -7126,7 +7126,7 @@
    "surv",
    0.6124260355029585,
    null,
-   30.0,
+   30,
    null,
    591,
    "curve|km|line=C|surv|9"
@@ -7138,7 +7138,7 @@
    "surv",
    0.559171597633136,
    null,
-   32.0,
+   32,
    null,
    592,
    "curve|km|line=C|surv|10"
@@ -7150,7 +7150,7 @@
    "surv",
    0.5325443786982247,
    null,
-   36.0,
+   36,
    null,
    593,
    "curve|km|line=C|surv|11"
@@ -7162,7 +7162,7 @@
    "surv",
    0.5045157271877918,
    null,
-   40.0,
+   40,
    null,
    594,
    "curve|km|line=C|surv|12"
@@ -7174,7 +7174,7 @@
    "surv",
    0.47648707567735893,
    null,
-   44.0,
+   44,
    null,
    595,
    "curve|km|line=C|surv|13"
@@ -7186,7 +7186,7 @@
    "surv",
    0.4204297726564932,
    null,
-   48.0,
+   48,
    null,
    596,
    "curve|km|line=C|surv|14"
@@ -7198,7 +7198,7 @@
    "surv",
    0.3924011211460603,
    null,
-   50.0,
+   50,
    null,
    597,
    "curve|km|line=C|surv|15"
@@ -7210,7 +7210,7 @@
    "surv",
    0.33634381812519454,
    null,
-   52.0,
+   52,
    null,
    598,
    "curve|km|line=C|surv|16"
@@ -7222,7 +7222,7 @@
    "surv",
    0.2802865151043288,
    null,
-   56.0,
+   56,
    null,
    599,
    "curve|km|line=C|surv|17"
@@ -7234,7 +7234,7 @@
    "surv",
    0.2522578635938959,
    null,
-   62.0,
+   62,
    null,
    600,
    "curve|km|line=C|surv|18"
@@ -7246,7 +7246,7 @@
    "surv",
    0.22422921208346303,
    null,
-   68.0,
+   68,
    null,
    601,
    "curve|km|line=C|surv|19"
@@ -7258,7 +7258,7 @@
    "surv",
    0.19620056057303015,
    null,
-   72.0,
+   72,
    null,
    602,
    "curve|km|line=C|surv|20"
@@ -7270,7 +7270,7 @@
    "surv",
    0.16817190906259727,
    null,
-   78.0,
+   78,
    null,
    603,
    "curve|km|line=C|surv|21"
@@ -7282,7 +7282,7 @@
    "surv",
    0.1401432575521644,
    null,
-   80.0,
+   80,
    null,
    604,
    "curve|km|line=C|surv|22"
@@ -7294,7 +7294,7 @@
    "surv",
    0.11211460604173151,
    null,
-   88.0,
+   88,
    null,
    605,
    "curve|km|line=C|surv|23"
@@ -7306,7 +7306,7 @@
    "surv",
    0.08408595453129863,
    null,
-   90.0,
+   90,
    null,
    606,
    "curve|km|line=C|surv|24"
@@ -7318,7 +7318,7 @@
    "surv",
    0.056057303020865756,
    null,
-   160.0,
+   160,
    null,
    607,
    "curve|km|line=C|surv|25"
@@ -7330,7 +7330,7 @@
    "surv",
    0.056057303020865756,
    null,
-   170.0,
+   170,
    null,
    608,
    "curve|km|line=C|surv|26"
@@ -7340,9 +7340,9 @@
    "km",
    "line=C",
    "surv",
-   0.0,
+   0,
    null,
-   176.0,
+   176,
    null,
    609,
    "curve|km|line=C|surv|27"
@@ -7352,9 +7352,9 @@
    "km",
    "line=C",
    "lower",
-   1.0,
+   1,
    null,
-   0.0,
+   0,
    null,
    610,
    "curve|km|line=C|lower|0"
@@ -7366,7 +7366,7 @@
    "lower",
    0.8819575880987702,
    null,
-   2.0,
+   2,
    null,
    611,
    "curve|km|line=C|lower|1"
@@ -7378,7 +7378,7 @@
    "lower",
    0.807095967011462,
    null,
-   4.0,
+   4,
    null,
    612,
    "curve|km|line=C|lower|2"
@@ -7390,7 +7390,7 @@
    "lower",
    0.7401679056461538,
    null,
-   10.0,
+   10,
    null,
    613,
    "curve|km|line=C|lower|3"
@@ -7402,7 +7402,7 @@
    "lower",
    0.7084941371153304,
    null,
-   12.0,
+   12,
    null,
    614,
    "curve|km|line=C|lower|4"
@@ -7414,7 +7414,7 @@
    "lower",
    0.6184356161944475,
    null,
-   14.0,
+   14,
    null,
    615,
    "curve|km|line=C|lower|5"
@@ -7426,7 +7426,7 @@
    "lower",
    0.5897419799653263,
    null,
-   16.0,
+   16,
    null,
    616,
    "curve|km|line=C|lower|6"
@@ -7438,7 +7438,7 @@
    "lower",
    0.5616058237656487,
    null,
-   24.0,
+   24,
    null,
    617,
    "curve|km|line=C|lower|7"
@@ -7450,7 +7450,7 @@
    "lower",
    0.5326707087998659,
    null,
-   26.0,
+   26,
    null,
    618,
    "curve|km|line=C|lower|8"
@@ -7462,7 +7462,7 @@
    "lower",
    0.4764357582517159,
    null,
-   30.0,
+   30,
    null,
    619,
    "curve|km|line=C|lower|9"
@@ -7474,7 +7474,7 @@
    "lower",
    0.42219453033396803,
    null,
-   32.0,
+   32,
    null,
    620,
    "curve|km|line=C|lower|10"
@@ -7486,7 +7486,7 @@
    "lower",
    0.3957753310628992,
    null,
-   36.0,
+   36,
    null,
    621,
    "curve|km|line=C|lower|11"
@@ -7498,7 +7498,7 @@
    "lower",
    0.36812618613286885,
    null,
-   40.0,
+   40,
    null,
    622,
    "curve|km|line=C|lower|12"
@@ -7510,7 +7510,7 @@
    "lower",
    0.3410209894997184,
    null,
-   44.0,
+   44,
    null,
    623,
    "curve|km|line=C|lower|13"
@@ -7522,7 +7522,7 @@
    "lower",
    0.28842236968184415,
    null,
-   48.0,
+   48,
    null,
    624,
    "curve|km|line=C|lower|14"
@@ -7534,7 +7534,7 @@
    "lower",
    0.2629325773942984,
    null,
-   50.0,
+   50,
    null,
    625,
    "curve|km|line=C|lower|15"
@@ -7546,7 +7546,7 @@
    "lower",
    0.21362371296880656,
    null,
-   52.0,
+   52,
    null,
    626,
    "curve|km|line=C|lower|16"
@@ -7558,7 +7558,7 @@
    "lower",
    0.16668968607359408,
    null,
-   56.0,
+   56,
    null,
    627,
    "curve|km|line=C|lower|17"
@@ -7570,7 +7570,7 @@
    "lower",
    0.14420163659542234,
    null,
-   62.0,
+   62,
    null,
    628,
    "curve|km|line=C|lower|18"
@@ -7582,7 +7582,7 @@
    "lower",
    0.12243803263153188,
    null,
-   68.0,
+   68,
    null,
    629,
    "curve|km|line=C|lower|19"
@@ -7594,7 +7594,7 @@
    "lower",
    0.10147575083423603,
    null,
-   72.0,
+   72,
    null,
    630,
    "curve|km|line=C|lower|20"
@@ -7606,7 +7606,7 @@
    "lower",
    0.08141958411972708,
    null,
-   78.0,
+   78,
    null,
    631,
    "curve|km|line=C|lower|21"
@@ -7618,7 +7618,7 @@
    "lower",
    0.06241662804150998,
    null,
-   80.0,
+   80,
    null,
    632,
    "curve|km|line=C|lower|22"
@@ -7630,7 +7630,7 @@
    "lower",
    0.0446826102175062,
    null,
-   88.0,
+   88,
    null,
    633,
    "curve|km|line=C|lower|23"
@@ -7642,7 +7642,7 @@
    "lower",
    0.028555133766180525,
    null,
-   90.0,
+   90,
    null,
    634,
    "curve|km|line=C|lower|24"
@@ -7654,7 +7654,7 @@
    "lower",
    0.014618062517373458,
    null,
-   160.0,
+   160,
    null,
    635,
    "curve|km|line=C|lower|25"
@@ -7666,7 +7666,7 @@
    "lower",
    0.014618062517373458,
    null,
-   170.0,
+   170,
    null,
    636,
    "curve|km|line=C|lower|26"
@@ -7678,7 +7678,7 @@
    "lower",
    null,
    null,
-   176.0,
+   176,
    null,
    637,
    "curve|km|line=C|lower|27"
@@ -7688,9 +7688,9 @@
    "km",
    "line=C",
    "upper",
-   1.0,
+   1,
    null,
-   0.0,
+   0,
    null,
    638,
    "curve|km|line=C|upper|0"
@@ -7700,9 +7700,9 @@
    "km",
    "line=C",
    "upper",
-   1.0,
+   1,
    null,
-   2.0,
+   2,
    null,
    639,
    "curve|km|line=C|upper|1"
@@ -7714,7 +7714,7 @@
    "upper",
    0.9978877641884396,
    null,
-   4.0,
+   4,
    null,
    640,
    "curve|km|line=C|upper|2"
@@ -7726,7 +7726,7 @@
    "upper",
    0.9673160993597953,
    null,
-   10.0,
+   10,
    null,
    641,
    "curve|km|line=C|upper|3"
@@ -7738,7 +7738,7 @@
    "upper",
    0.950242568508809,
    null,
-   12.0,
+   12,
    null,
    642,
    "curve|km|line=C|upper|4"
@@ -7750,7 +7750,7 @@
    "upper",
    0.894071577206851,
    null,
-   14.0,
+   14,
    null,
    643,
    "curve|km|line=C|upper|5"
@@ -7762,7 +7762,7 @@
    "upper",
    0.874026911963285,
    null,
-   16.0,
+   16,
    null,
    644,
    "curve|km|line=C|upper|6"
@@ -7774,7 +7774,7 @@
    "upper",
    0.853427654319347,
    null,
-   24.0,
+   24,
    null,
    645,
    "curve|km|line=C|upper|7"
@@ -7786,7 +7786,7 @@
    "upper",
    0.8319032477460704,
    null,
-   26.0,
+   26,
    null,
    646,
    "curve|km|line=C|upper|8"
@@ -7798,7 +7798,7 @@
    "upper",
    0.7872323654676484,
    null,
-   30.0,
+   30,
    null,
    647,
    "curve|km|line=C|upper|9"
@@ -7810,7 +7810,7 @@
    "upper",
    0.7405895935038772,
    null,
-   32.0,
+   32,
    null,
    648,
    "curve|km|line=C|upper|10"
@@ -7822,7 +7822,7 @@
    "upper",
    0.7165770401137156,
    null,
-   36.0,
+   36,
    null,
    649,
    "curve|km|line=C|upper|11"
@@ -7834,7 +7834,7 @@
    "upper",
    0.6914371445663903,
    null,
-   40.0,
+   40,
    null,
    650,
    "curve|km|line=C|upper|12"
@@ -7846,7 +7846,7 @@
    "upper",
    0.6657652762682769,
    null,
-   44.0,
+   44,
    null,
    651,
    "curve|km|line=C|upper|13"
@@ -7858,7 +7858,7 @@
    "upper",
    0.6128553549122214,
    null,
-   48.0,
+   48,
    null,
    652,
    "curve|km|line=C|upper|14"
@@ -7870,7 +7870,7 @@
    "upper",
    0.5856202430396291,
    null,
-   50.0,
+   50,
    null,
    653,
    "curve|km|line=C|upper|15"
@@ -7882,7 +7882,7 @@
    "upper",
    0.5295627644462525,
    null,
-   52.0,
+   52,
    null,
    654,
    "curve|km|line=C|upper|16"
@@ -7894,7 +7894,7 @@
    "upper",
    0.47129808928096706,
    null,
-   56.0,
+   56,
    null,
    655,
    "curve|km|line=C|upper|17"
@@ -7906,7 +7906,7 @@
    "upper",
    0.44128507309172005,
    null,
-   62.0,
+   62,
    null,
    656,
    "curve|km|line=C|upper|18"
@@ -7918,7 +7918,7 @@
    "upper",
    0.4106464181998151,
    null,
-   68.0,
+   68,
    null,
    657,
    "curve|km|line=C|upper|19"
@@ -7930,7 +7930,7 @@
    "upper",
    0.37934836305920566,
    null,
-   72.0,
+   72,
    null,
    658,
    "curve|km|line=C|upper|20"
@@ -7942,7 +7942,7 @@
    "upper",
    0.3473585784492617,
    null,
-   78.0,
+   78,
    null,
    659,
    "curve|km|line=C|upper|21"
@@ -7954,7 +7954,7 @@
    "upper",
    0.31466186581355654,
    null,
-   80.0,
+   80,
    null,
    660,
    "curve|km|line=C|upper|22"
@@ -7966,7 +7966,7 @@
    "upper",
    0.2813104432956334,
    null,
-   88.0,
+   88,
    null,
    661,
    "curve|km|line=C|upper|23"
@@ -7978,7 +7978,7 @@
    "upper",
    0.24760688593984295,
    null,
-   90.0,
+   90,
    null,
    662,
    "curve|km|line=C|upper|24"
@@ -7990,7 +7990,7 @@
    "upper",
    0.2149683802650605,
    null,
-   160.0,
+   160,
    null,
    663,
    "curve|km|line=C|upper|25"
@@ -8002,7 +8002,7 @@
    "upper",
    0.2149683802650605,
    null,
-   170.0,
+   170,
    null,
    664,
    "curve|km|line=C|upper|26"
@@ -8014,7 +8014,7 @@
    "upper",
    null,
    null,
-   176.0,
+   176,
    null,
    665,
    "curve|km|line=C|upper|27"
@@ -8024,9 +8024,9 @@
    "cumhaz",
    "line=C",
    "cumhaz",
-   0.0,
+   0,
    null,
-   0.0,
+   0,
    null,
    666,
    "curve|cumhaz|line=C|cumhaz|0"
@@ -8038,7 +8038,7 @@
    "cumhaz",
    0.05128205128205128,
    null,
-   2.0,
+   2,
    null,
    667,
    "curve|cumhaz|line=C|cumhaz|1"
@@ -8050,7 +8050,7 @@
    "cumhaz",
    0.10533610533610534,
    null,
-   4.0,
+   4,
    null,
    668,
    "curve|cumhaz|line=C|cumhaz|2"
@@ -8062,7 +8062,7 @@
    "cumhaz",
    0.16247896247896249,
    null,
-   10.0,
+   10,
    null,
    669,
    "curve|cumhaz|line=C|cumhaz|3"
@@ -8074,7 +8074,7 @@
    "cumhaz",
    0.1927819927819928,
    null,
-   12.0,
+   12,
    null,
    670,
    "curve|cumhaz|line=C|cumhaz|4"
@@ -8086,7 +8086,7 @@
    "cumhaz",
    0.2865319927819928,
    null,
-   14.0,
+   14,
    null,
    671,
    "curve|cumhaz|line=C|cumhaz|5"
@@ -8098,7 +8098,7 @@
    "cumhaz",
    0.3210147514026825,
    null,
-   16.0,
+   16,
    null,
    672,
    "curve|cumhaz|line=C|cumhaz|6"
@@ -8110,7 +8110,7 @@
    "cumhaz",
    0.3567290371169682,
    null,
-   24.0,
+   24,
    null,
    673,
    "curve|cumhaz|line=C|cumhaz|7"
@@ -8122,7 +8122,7 @@
    "cumhaz",
    0.3951905755785067,
    null,
-   26.0,
+   26,
    null,
    674,
    "curve|cumhaz|line=C|cumhaz|8"
@@ -8134,7 +8134,7 @@
    "cumhaz",
    0.4751905755785067,
    null,
-   30.0,
+   30,
    null,
    675,
    "curve|cumhaz|line=C|cumhaz|9"
@@ -8146,7 +8146,7 @@
    "cumhaz",
    0.5621470973176371,
    null,
-   32.0,
+   32,
    null,
    676,
    "curve|cumhaz|line=C|cumhaz|10"
@@ -8158,7 +8158,7 @@
    "cumhaz",
    0.6097661449366847,
    null,
-   36.0,
+   36,
    null,
    677,
    "curve|cumhaz|line=C|cumhaz|11"
@@ -8170,7 +8170,7 @@
    "cumhaz",
    0.662397723884053,
    null,
-   40.0,
+   40,
    null,
    678,
    "curve|cumhaz|line=C|cumhaz|12"
@@ -8182,7 +8182,7 @@
    "cumhaz",
    0.7179532794396086,
    null,
-   44.0,
+   44,
    null,
    679,
    "curve|cumhaz|line=C|cumhaz|13"
@@ -8194,7 +8194,7 @@
    "cumhaz",
    0.8356003382631381,
    null,
-   48.0,
+   48,
    null,
    680,
    "curve|cumhaz|line=C|cumhaz|14"
@@ -8206,7 +8206,7 @@
    "cumhaz",
    0.9022670049298047,
    null,
-   50.0,
+   50,
    null,
    681,
    "curve|cumhaz|line=C|cumhaz|15"
@@ -8218,7 +8218,7 @@
    "cumhaz",
    1.0451241477869475,
    null,
-   52.0,
+   52,
    null,
    682,
    "curve|cumhaz|line=C|cumhaz|16"
@@ -8230,7 +8230,7 @@
    "cumhaz",
    1.2117908144536143,
    null,
-   56.0,
+   56,
    null,
    683,
    "curve|cumhaz|line=C|cumhaz|17"
@@ -8242,7 +8242,7 @@
    "cumhaz",
    1.3117908144536143,
    null,
-   62.0,
+   62,
    null,
    684,
    "curve|cumhaz|line=C|cumhaz|18"
@@ -8254,7 +8254,7 @@
    "cumhaz",
    1.4229019255647255,
    null,
-   68.0,
+   68,
    null,
    685,
    "curve|cumhaz|line=C|cumhaz|19"
@@ -8266,7 +8266,7 @@
    "cumhaz",
    1.5479019255647255,
    null,
-   72.0,
+   72,
    null,
    686,
    "curve|cumhaz|line=C|cumhaz|20"
@@ -8278,7 +8278,7 @@
    "cumhaz",
    1.6907590684218683,
    null,
-   78.0,
+   78,
    null,
    687,
    "curve|cumhaz|line=C|cumhaz|21"
@@ -8290,7 +8290,7 @@
    "cumhaz",
    1.857425735088535,
    null,
-   80.0,
+   80,
    null,
    688,
    "curve|cumhaz|line=C|cumhaz|22"
@@ -8302,7 +8302,7 @@
    "cumhaz",
    2.057425735088535,
    null,
-   88.0,
+   88,
    null,
    689,
    "curve|cumhaz|line=C|cumhaz|23"
@@ -8314,7 +8314,7 @@
    "cumhaz",
    2.307425735088535,
    null,
-   90.0,
+   90,
    null,
    690,
    "curve|cumhaz|line=C|cumhaz|24"
@@ -8326,7 +8326,7 @@
    "cumhaz",
    2.6407590684218687,
    null,
-   160.0,
+   160,
    null,
    691,
    "curve|cumhaz|line=C|cumhaz|25"
@@ -8338,7 +8338,7 @@
    "cumhaz",
    2.6407590684218687,
    null,
-   170.0,
+   170,
    null,
    692,
    "curve|cumhaz|line=C|cumhaz|26"
@@ -8350,7 +8350,7 @@
    "cumhaz",
    3.6407590684218687,
    null,
-   176.0,
+   176,
    null,
    693,
    "curve|cumhaz|line=C|cumhaz|27"
@@ -8674,7 +8674,7 @@
    "surv",
    0.6923076923076922,
    null,
-   24.0,
+   24,
    null,
    720,
    "point|censored|line=C|surv|0"
@@ -8686,7 +8686,7 @@
    "surv",
    0.5325443786982247,
    null,
-   36.0,
+   36,
    null,
    721,
    "point|censored|line=C|surv|1"
@@ -8698,7 +8698,7 @@
    "surv",
    0.056057303020865756,
    null,
-   170.0,
+   170,
    null,
    722,
    "point|censored|line=C|surv|2"
@@ -8708,9 +8708,9 @@
    "at_risk",
    "line=C",
    "n_risk",
-   39.0,
+   39,
    null,
-   0.0,
+   0,
    null,
    723,
    "point|at_risk|line=C|n_risk|0"
@@ -8720,9 +8720,9 @@
    "at_risk",
    "line=C",
    "n_risk",
-   15.0,
+   15,
    null,
-   50.0,
+   50,
    null,
    724,
    "point|at_risk|line=C|n_risk|1"
@@ -8732,9 +8732,9 @@
    "at_risk",
    "line=C",
    "n_risk",
-   3.0,
+   3,
    null,
-   100.0,
+   100,
    null,
    725,
    "point|at_risk|line=C|n_risk|2"
@@ -8744,9 +8744,9 @@
    "at_risk",
    "line=C",
    "n_risk",
-   3.0,
+   3,
    null,
-   150.0,
+   150,
    null,
    726,
    "point|at_risk|line=C|n_risk|3"
@@ -8756,9 +8756,9 @@
    "at_risk",
    "line=C",
    "n_risk",
-   0.0,
+   0,
    null,
-   200.0,
+   200,
    null,
    727,
    "point|at_risk|line=C|n_risk|4"

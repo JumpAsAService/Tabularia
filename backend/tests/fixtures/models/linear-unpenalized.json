@@ -143,7 +143,7 @@
    null,
    null,
    "n",
-   117.0,
+   117,
    null,
    null,
    null,
@@ -155,7 +155,7 @@
    null,
    null,
    "n_missing",
-   3.0,
+   3,
    null,
    null,
    null,
@@ -167,7 +167,7 @@
    null,
    null,
    "df_model",
-   3.0,
+   3,
    null,
    null,
    null,
@@ -179,7 +179,7 @@
    null,
    null,
    "df_residual",
-   113.0,
+   113,
    null,
    null,
    null,
@@ -239,7 +239,7 @@
    null,
    null,
    "f_df_1",
-   3.0,
+   3,
    null,
    null,
    null,
@@ -251,7 +251,7 @@
    null,
    null,
    "f_df_2",
-   113.0,
+   113,
    null,
    null,
    null,
@@ -395,7 +395,7 @@
    "(Intercept)",
    null,
    "df",
-   113.0,
+   113,
    null,
    null,
    null,
@@ -491,7 +491,7 @@
    "price",
    null,
    "df",
-   113.0,
+   113,
    null,
    null,
    null,
@@ -599,7 +599,7 @@
    "channel",
    "web",
    "df",
-   113.0,
+   113,
    null,
    null,
    null,
@@ -707,7 +707,7 @@
    "price × channel",
    "web",
    "df",
-   113.0,
+   113,
    null,
    null,
    null,
@@ -803,7 +803,7 @@
    "reset",
    null,
    "df",
-   2.0,
+   2,
    null,
    null,
    null,
@@ -815,7 +815,7 @@
    "reset",
    null,
    "df_2",
-   111.0,
+   111,
    null,
    null,
    null,
@@ -899,7 +899,7 @@
    "breusch_pagan",
    null,
    "df",
-   3.0,
+   3,
    null,
    null,
    null,
@@ -983,7 +983,7 @@
    "white",
    null,
    "df",
-   2.0,
+   2,
    null,
    null,
    null,
@@ -1139,7 +1139,7 @@
    "jarque_bera",
    null,
    "df",
-   2.0,
+   2,
    null,
    null,
    null,
@@ -1295,7 +1295,7 @@
    "breusch_godfrey_1",
    null,
    "df",
-   1.0,
+   1,
    null,
    null,
    null,
@@ -1379,7 +1379,7 @@
    "breusch_godfrey_4",
    null,
    "df",
-   4.0,
+   4,
    null,
    null,
    null,
@@ -1451,7 +1451,7 @@
    "vif",
    "price",
    "threshold",
-   5.0,
+   5,
    null,
    null,
    null,
@@ -1511,7 +1511,7 @@
    "vif",
    "channel",
    "threshold",
-   5.0,
+   5,
    null,
    null,
    null,
@@ -1571,7 +1571,7 @@
    "vif",
    "price × channel",
    "threshold",
-   5.0,
+   5,
    null,
    null,
    null,
@@ -1631,7 +1631,7 @@
    "condition_number",
    null,
    "threshold",
-   30.0,
+   30,
    null,
    null,
    null,
@@ -1680,7 +1680,7 @@
    null,
    "h0",
    null,
-   "No row moves the fit much (Cook's distance under 4/n).",
+   "No row moves the fit much (Cook's distance under the median of F(p, n − p)).",
    null,
    null,
    137,
@@ -1691,7 +1691,7 @@
    "cooks_distance",
    null,
    "threshold",
-   0.03418803418803419,
+   0.8442310367371434,
    null,
    null,
    null,
@@ -1702,12 +1702,24 @@
    "assumption",
    "cooks_distance",
    null,
-   "count",
-   9.0,
+   "value",
+   0.083871509594689,
    null,
    null,
    null,
    139,
+   "assumption|cooks_distance||value"
+  ],
+  [
+   "assumption",
+   "cooks_distance",
+   null,
+   "count",
+   0,
+   null,
+   null,
+   null,
+   140,
    "assumption|cooks_distance||count"
   ],
   [
@@ -1716,10 +1728,10 @@
    null,
    "verdict",
    null,
-   "doubtful",
+   "ok",
    null,
    null,
-   140,
+   141,
    "assumption|cooks_distance||verdict"
   ],
   [
@@ -1731,7 +1743,7 @@
    "Look at the rows named: a mistake in the data, or a case the model does not describe.",
    null,
    null,
-   141,
+   142,
    "assumption|cooks_distance||advice"
   ],
   [
@@ -1743,7 +1755,7 @@
    "32, 76, 82, 116, 99",
    null,
    null,
-   142,
+   143,
    "assumption|cooks_distance||rows"
   ],
   [
@@ -1752,10 +1764,10 @@
    null,
    "h0",
    null,
-   "No row has an unusual combination of predictors (leverage under 2p/n).",
+   "No row has an unusual combination of predictors (leverage under 3p/n and under 0.5).",
    null,
    null,
-   143,
+   144,
    "assumption|leverage||h0"
   ],
   [
@@ -1763,23 +1775,35 @@
    "leverage",
    null,
    "threshold",
-   0.06837606837606838,
+   0.5,
    null,
    null,
    null,
-   144,
+   145,
    "assumption|leverage||threshold"
   ],
   [
    "assumption",
    "leverage",
    null,
+   "value",
+   0.0825888062786207,
+   null,
+   null,
+   null,
+   146,
+   "assumption|leverage||value"
+  ],
+  [
+   "assumption",
+   "leverage",
+   null,
    "count",
-   5.0,
+   0,
    null,
    null,
    null,
-   145,
+   147,
    "assumption|leverage||count"
   ],
   [
@@ -1788,10 +1812,10 @@
    null,
    "verdict",
    null,
-   "doubtful",
+   "ok",
    null,
    null,
-   146,
+   148,
    "assumption|leverage||verdict"
   ],
   [
@@ -1803,7 +1827,7 @@
    "Look at the rows named: their predictors are far from the others'.",
    null,
    null,
-   147,
+   149,
    "assumption|leverage||advice"
   ],
   [
@@ -1815,7 +1839,7 @@
    "84, 29, 111, 24, 59",
    null,
    null,
-   148,
+   150,
    "assumption|leverage||rows"
   ],
   [
@@ -1827,7 +1851,7 @@
    "No studentized residual is larger than chance allows.",
    null,
    null,
-   149,
+   151,
    "assumption|outlier_test||h0"
   ],
   [
@@ -1839,7 +1863,7 @@
    null,
    null,
    null,
-   150,
+   152,
    "assumption|outlier_test||statistic"
   ],
   [
@@ -1847,11 +1871,11 @@
    "outlier_test",
    null,
    "df",
-   112.0,
+   112,
    null,
    null,
    null,
-   151,
+   153,
    "assumption|outlier_test||df"
   ],
   [
@@ -1863,7 +1887,7 @@
    null,
    null,
    null,
-   152,
+   154,
    "assumption|outlier_test||p_value"
   ],
   [
@@ -1875,7 +1899,7 @@
    "",
    null,
    null,
-   153,
+   155,
    "assumption|outlier_test||significance"
   ],
   [
@@ -1887,7 +1911,7 @@
    "ok",
    null,
    null,
-   154,
+   156,
    "assumption|outlier_test||verdict"
   ],
   [
@@ -1899,7 +1923,7 @@
    "Look at the rows named: an outlier pulls the fit towards itself.",
    null,
    null,
-   155,
+   157,
    "assumption|outlier_test||advice"
   ],
   [
@@ -1911,7 +1935,7 @@
    "116",
    null,
    null,
-   156,
+   158,
    "assumption|outlier_test||rows"
   ],
   [
@@ -1923,7 +1947,7 @@
    null,
    53.06253564856114,
    null,
-   157,
+   159,
    "point|resid_fitted||y|0"
   ],
   [
@@ -1935,7 +1959,7 @@
    null,
    32.90526261967064,
    null,
-   158,
+   160,
    "point|resid_fitted||y|1"
   ],
   [
@@ -1947,7 +1971,7 @@
    null,
    46.299026306454586,
    null,
-   159,
+   161,
    "point|resid_fitted||y|2"
   ],
   [
@@ -1959,7 +1983,7 @@
    null,
    32.22190732952859,
    null,
-   160,
+   162,
    "point|resid_fitted||y|3"
   ],
   [
@@ -1971,7 +1995,7 @@
    null,
    35.861929458039825,
    null,
-   161,
+   163,
    "point|resid_fitted||y|4"
   ],
   [
@@ -1983,7 +2007,7 @@
    null,
    33.37936773982027,
    null,
-   162,
+   164,
    "point|resid_fitted||y|5"
   ],
   [
@@ -1995,7 +2019,7 @@
    null,
    43.56560514588643,
    null,
-   163,
+   165,
    "point|resid_fitted||y|6"
   ],
   [
@@ -2007,7 +2031,7 @@
    null,
    44.658973610113684,
    null,
-   164,
+   166,
    "point|resid_fitted||y|7"
   ],
   [
@@ -2019,7 +2043,7 @@
    null,
    41.720545862502924,
    null,
-   165,
+   167,
    "point|resid_fitted||y|8"
   ],
   [
@@ -2031,7 +2055,7 @@
    null,
    35.68460362102414,
    null,
-   166,
+   168,
    "point|resid_fitted||y|9"
   ],
   [
@@ -2043,7 +2067,7 @@
    null,
    46.640703951525595,
    null,
-   167,
+   169,
    "point|resid_fitted||y|10"
   ],
   [
@@ -2055,7 +2079,7 @@
    null,
    43.48694044971417,
    null,
-   168,
+   170,
    "point|resid_fitted||y|11"
   ],
   [
@@ -2067,7 +2091,7 @@
    null,
    33.17860473572744,
    null,
-   169,
+   171,
    "point|resid_fitted||y|12"
   ],
   [
@@ -2079,7 +2103,7 @@
    null,
    41.720545862502924,
    null,
-   170,
+   172,
    "point|resid_fitted||y|13"
   ],
   [
@@ -2091,7 +2115,7 @@
    null,
    34.35465984340652,
    null,
-   171,
+   173,
    "point|resid_fitted||y|14"
   ],
   [
@@ -2103,7 +2127,7 @@
    null,
    45.54733548729834,
    null,
-   172,
+   174,
    "point|resid_fitted||y|15"
   ],
   [
@@ -2115,7 +2139,7 @@
    null,
    38.64544705686375,
    null,
-   173,
+   175,
    "point|resid_fitted||y|16"
   ],
   [
@@ -2127,7 +2151,7 @@
    null,
    36.595381186437635,
    null,
-   174,
+   176,
    "point|resid_fitted||y|17"
   ],
   [
@@ -2139,7 +2163,7 @@
    null,
    53.41718732259238,
    null,
-   175,
+   177,
    "point|resid_fitted||y|18"
   ],
   [
@@ -2151,7 +2175,7 @@
    null,
    35.5959407025163,
    null,
-   176,
+   178,
    "point|resid_fitted||y|19"
   ],
   [
@@ -2163,7 +2187,7 @@
    null,
    39.05546023094897,
    null,
-   177,
+   179,
    "point|resid_fitted||y|20"
   ],
   [
@@ -2175,7 +2199,7 @@
    null,
    51.014177808434646,
    null,
-   178,
+   180,
    "point|resid_fitted||y|21"
   ],
   [
@@ -2187,7 +2211,7 @@
    null,
    30.63081726607719,
    null,
-   179,
+   181,
    "point|resid_fitted||y|22"
   ],
   [
@@ -2199,7 +2223,7 @@
    null,
    36.659895724610394,
    null,
-   180,
+   182,
    "point|resid_fitted||y|23"
   ],
   [
@@ -2211,7 +2235,7 @@
    null,
    54.74713110021,
    null,
-   181,
+   183,
    "point|resid_fitted||y|24"
   ],
   [
@@ -2223,7 +2247,7 @@
    null,
    50.53582910533522,
    null,
-   182,
+   184,
    "point|resid_fitted||y|25"
   ],
   [
@@ -2235,7 +2259,7 @@
    null,
    52.175906463482605,
    null,
-   183,
+   185,
    "point|resid_fitted||y|26"
   ],
   [
@@ -2247,7 +2271,7 @@
    null,
    55.36777152976489,
    null,
-   184,
+   186,
    "point|resid_fitted||y|27"
   ],
   [
@@ -2259,7 +2283,7 @@
    null,
    34.40864425798311,
    null,
-   185,
+   187,
    "point|resid_fitted||y|28"
   ],
   [
@@ -2271,7 +2295,7 @@
    null,
    42.06222350757394,
    null,
-   186,
+   188,
    "point|resid_fitted||y|29"
   ],
   [
@@ -2283,7 +2307,7 @@
    null,
    32.13808688071049,
    null,
-   187,
+   189,
    "point|resid_fitted||y|30"
   ],
   [
@@ -2295,7 +2319,7 @@
    null,
    42.47223668165917,
    null,
-   188,
+   190,
    "point|resid_fitted||y|31"
   ],
   [
@@ -2307,7 +2331,7 @@
    null,
    43.702276203914835,
    null,
-   189,
+   191,
    "point|resid_fitted||y|32"
   ],
   [
@@ -2319,7 +2343,7 @@
    null,
    42.6889741831436,
    null,
-   190,
+   192,
    "point|resid_fitted||y|33"
   ],
   [
@@ -2331,7 +2355,7 @@
    null,
    48.622434292937506,
    null,
-   191,
+   193,
    "point|resid_fitted||y|34"
   ],
   [
@@ -2343,7 +2367,7 @@
    null,
    39.32880234700579,
    null,
-   192,
+   194,
    "point|resid_fitted||y|35"
   ],
   [
@@ -2355,7 +2379,7 @@
    null,
    44.52230255208528,
    null,
-   193,
+   195,
    "point|resid_fitted||y|36"
   ],
   [
@@ -2367,7 +2391,7 @@
    null,
    39.31978327984562,
    null,
-   194,
+   196,
    "point|resid_fitted||y|37"
   ],
   [
@@ -2379,7 +2403,7 @@
    null,
    52.08724354497476,
    null,
-   195,
+   197,
    "point|resid_fitted||y|38"
   ],
   [
@@ -2391,7 +2415,7 @@
    null,
    35.77326653953198,
    null,
-   196,
+   198,
    "point|resid_fitted||y|39"
   ],
   [
@@ -2403,7 +2427,7 @@
    null,
    46.02568419039776,
    null,
-   197,
+   199,
    "point|resid_fitted||y|40"
   ],
   [
@@ -2415,7 +2439,7 @@
    null,
    39.260466817991585,
    null,
-   198,
+   200,
    "point|resid_fitted||y|41"
   ],
   [
@@ -2427,7 +2451,7 @@
    null,
    44.385631494056874,
    null,
-   199,
+   201,
    "point|resid_fitted||y|42"
   ],
   [
@@ -2439,7 +2463,7 @@
    null,
    33.86196002586948,
    null,
-   200,
+   202,
    "point|resid_fitted||y|43"
   ],
   [
@@ -2451,7 +2475,7 @@
    null,
    51.35585545350566,
    null,
-   201,
+   203,
    "point|resid_fitted||y|44"
   ],
   [
@@ -2463,7 +2487,7 @@
    null,
    41.242197159403496,
    null,
-   202,
+   204,
    "point|resid_fitted||y|45"
   ],
   [
@@ -2475,7 +2499,7 @@
    null,
    52.175906463482605,
    null,
-   203,
+   205,
    "point|resid_fitted||y|46"
   ],
   [
@@ -2487,7 +2511,7 @@
    null,
    41.18170456851029,
    null,
-   204,
+   206,
    "point|resid_fitted||y|47"
   ],
   [
@@ -2499,7 +2523,7 @@
    null,
    36.595381186437635,
    null,
-   205,
+   207,
    "point|resid_fitted||y|48"
   ],
   [
@@ -2511,7 +2535,7 @@
    null,
    44.385631494056874,
    null,
-   206,
+   208,
    "point|resid_fitted||y|49"
   ],
   [
@@ -2523,7 +2547,7 @@
    null,
    34.5319856804222,
    null,
-   207,
+   209,
    "point|resid_fitted||y|50"
   ],
   [
@@ -2535,7 +2559,7 @@
    null,
    38.787805768798584,
    null,
-   208,
+   210,
    "point|resid_fitted||y|51"
   ],
   [
@@ -2547,7 +2571,7 @@
    null,
    37.81251366521233,
    null,
-   209,
+   211,
    "point|resid_fitted||y|52"
   ],
   [
@@ -2559,7 +2583,7 @@
    null,
    38.91878917292056,
    null,
-   210,
+   212,
    "point|resid_fitted||y|53"
   ],
   [
@@ -2571,7 +2595,7 @@
    null,
    44.55089547180826,
    null,
-   211,
+   213,
    "point|resid_fitted||y|54"
   ],
   [
@@ -2583,7 +2607,7 @@
    null,
    30.63081726607719,
    null,
-   212,
+   214,
    "point|resid_fitted||y|55"
   ],
   [
@@ -2595,7 +2619,7 @@
    null,
    50.13665933780226,
    null,
-   213,
+   215,
    "point|resid_fitted||y|56"
   ],
   [
@@ -2607,7 +2631,7 @@
    null,
    46.572368422511396,
    null,
-   214,
+   216,
    "point|resid_fitted||y|57"
   ],
   [
@@ -2619,7 +2643,7 @@
    null,
    43.48694044971417,
    null,
-   215,
+   217,
    "point|resid_fitted||y|58"
   ],
   [
@@ -2631,7 +2655,7 @@
    null,
    50.94584227942044,
    null,
-   216,
+   218,
    "point|resid_fitted||y|59"
   ],
   [
@@ -2643,7 +2667,7 @@
    null,
    44.46223255330042,
    null,
-   217,
+   219,
    "point|resid_fitted||y|60"
   ],
   [
@@ -2655,7 +2679,7 @@
    null,
    44.18062490701426,
    null,
-   218,
+   220,
    "point|resid_fitted||y|61"
   ],
   [
@@ -2667,7 +2691,7 @@
    null,
    39.5338089340484,
    null,
-   219,
+   221,
    "point|resid_fitted||y|62"
   ],
   [
@@ -2679,7 +2703,7 @@
    null,
    47.92008637510623,
    null,
-   220,
+   222,
    "point|resid_fitted||y|63"
   ],
   [
@@ -2691,7 +2715,7 @@
    null,
    53.59451315960806,
    null,
-   221,
+   223,
    "point|resid_fitted||y|64"
   ],
   [
@@ -2703,7 +2727,7 @@
    null,
    44.9323157261705,
    null,
-   222,
+   224,
    "point|resid_fitted||y|65"
   ],
   [
@@ -2715,7 +2739,7 @@
    null,
    47.74276053809054,
    null,
-   223,
+   225,
    "point|resid_fitted||y|66"
   ],
   [
@@ -2727,7 +2751,7 @@
    null,
    39.12379575996317,
    null,
-   224,
+   226,
    "point|resid_fitted||y|67"
   ],
   [
@@ -2739,7 +2763,7 @@
    null,
    48.008749293614066,
    null,
-   225,
+   227,
    "point|resid_fitted||y|68"
   ],
   [
@@ -2751,7 +2775,7 @@
    null,
    37.00539436052286,
    null,
-   226,
+   228,
    "point|resid_fitted||y|69"
   ],
   [
@@ -2763,7 +2787,7 @@
    null,
    44.18062490701426,
    null,
-   227,
+   229,
    "point|resid_fitted||y|70"
   ],
   [
@@ -2775,7 +2799,7 @@
    null,
    43.83894726194324,
    null,
-   228,
+   230,
    "point|resid_fitted||y|71"
   ],
   [
@@ -2787,7 +2811,7 @@
    "76",
    34.620648598930046,
    null,
-   229,
+   231,
    "point|resid_fitted||y|72"
   ],
   [
@@ -2799,7 +2823,7 @@
    null,
    43.497269616872224,
    null,
-   230,
+   232,
    "point|resid_fitted||y|73"
   ],
   [
@@ -2811,7 +2835,7 @@
    null,
    34.2036376709405,
    null,
-   231,
+   233,
    "point|resid_fitted||y|74"
   ],
   [
@@ -2823,7 +2847,7 @@
    null,
    33.46803065832811,
    null,
-   232,
+   234,
    "point|resid_fitted||y|75"
   ],
   [
@@ -2835,7 +2859,7 @@
    null,
    39.465473405034196,
    null,
-   233,
+   235,
    "point|resid_fitted||y|76"
   ],
   [
@@ -2847,7 +2871,7 @@
    null,
    43.702276203914835,
    null,
-   234,
+   236,
    "point|resid_fitted||y|77"
   ],
   [
@@ -2859,7 +2883,7 @@
    null,
    33.11026920671324,
    null,
-   235,
+   237,
    "point|resid_fitted||y|78"
   ],
   [
@@ -2871,7 +2895,7 @@
    null,
    35.241289028484935,
    null,
-   236,
+   238,
    "point|resid_fitted||y|79"
   ],
   [
@@ -2883,7 +2907,7 @@
    null,
    56.52038947036682,
    null,
-   237,
+   239,
    "point|resid_fitted||y|80"
   ],
   [
@@ -2895,7 +2919,7 @@
    null,
    35.023664019110946,
    null,
-   238,
+   240,
    "point|resid_fitted||y|81"
   ],
   [
@@ -2907,7 +2931,7 @@
    null,
    34.2036376709405,
    null,
-   239,
+   241,
    "point|resid_fitted||y|82"
   ],
   [
@@ -2919,7 +2943,7 @@
    null,
    46.162355248426174,
    null,
-   240,
+   242,
    "point|resid_fitted||y|83"
   ],
   [
@@ -2931,7 +2955,7 @@
    null,
    49.10078299603693,
    null,
-   241,
+   243,
    "point|resid_fitted||y|84"
   ],
   [
@@ -2943,7 +2967,7 @@
    null,
    45.06898678419891,
    null,
-   242,
+   244,
    "point|resid_fitted||y|85"
   ],
   [
@@ -2955,7 +2979,7 @@
    null,
    33.20204190280459,
    null,
-   243,
+   245,
    "point|resid_fitted||y|86"
   ],
   [
@@ -2967,7 +2991,7 @@
    null,
    49.85247381519318,
    null,
-   244,
+   246,
    "point|resid_fitted||y|87"
   ],
   [
@@ -2979,7 +3003,7 @@
    null,
    51.492526511534074,
    null,
-   245,
+   247,
    "point|resid_fitted||y|88"
   ],
   [
@@ -2991,7 +3015,7 @@
    null,
    47.66573688673866,
    null,
-   246,
+   248,
    "point|resid_fitted||y|89"
   ],
   [
@@ -3003,7 +3027,7 @@
    null,
    48.80671556018464,
    null,
-   247,
+   249,
    "point|resid_fitted||y|90"
   ],
   [
@@ -3015,7 +3039,7 @@
    null,
    35.95059237654766,
    null,
-   248,
+   250,
    "point|resid_fitted||y|91"
   ],
   [
@@ -3027,7 +3051,7 @@
    null,
    32.358578387556996,
    null,
-   249,
+   251,
    "point|resid_fitted||y|92"
   ],
   [
@@ -3039,7 +3063,7 @@
    null,
    35.707019309252985,
    null,
-   250,
+   252,
    "point|resid_fitted||y|93"
   ],
   [
@@ -3051,7 +3075,7 @@
    null,
    44.28490671628474,
    null,
-   251,
+   253,
    "point|resid_fitted||y|94"
   ],
   [
@@ -3063,7 +3087,7 @@
    "99",
    34.47697978699732,
    null,
-   252,
+   254,
    "point|resid_fitted||y|95"
   ],
   [
@@ -3075,7 +3099,7 @@
    null,
    41.3788682174319,
    null,
-   253,
+   255,
    "point|resid_fitted||y|96"
   ],
   [
@@ -3087,7 +3111,7 @@
    null,
    47.2107830270435,
    null,
-   254,
+   256,
    "point|resid_fitted||y|97"
   ],
   [
@@ -3099,7 +3123,7 @@
    null,
    50.757299767357146,
    null,
-   255,
+   257,
    "point|resid_fitted||y|98"
   ],
   [
@@ -3111,7 +3135,7 @@
    null,
    32.153571800514385,
    null,
-   256,
+   258,
    "point|resid_fitted||y|99"
   ],
   [
@@ -3123,7 +3147,7 @@
    null,
    37.89375623770751,
    null,
-   257,
+   259,
    "point|resid_fitted||y|100"
   ],
   [
@@ -3135,7 +3159,7 @@
    null,
    46.91404606758241,
    null,
-   258,
+   260,
    "point|resid_fitted||y|101"
   ],
   [
@@ -3147,7 +3171,7 @@
    null,
    43.42893408785802,
    null,
-   259,
+   261,
    "point|resid_fitted||y|102"
   ],
   [
@@ -3159,7 +3183,7 @@
    null,
    54.56980526319432,
    null,
-   260,
+   262,
    "point|resid_fitted||y|103"
   ],
   [
@@ -3171,7 +3195,7 @@
    null,
    50.809171221392035,
    null,
-   261,
+   263,
    "point|resid_fitted||y|104"
   ],
   [
@@ -3183,7 +3207,7 @@
    null,
    31.517446451155603,
    null,
-   262,
+   264,
    "point|resid_fitted||y|105"
   ],
   [
@@ -3195,7 +3219,7 @@
    null,
    36.659895724610394,
    null,
-   263,
+   265,
    "point|resid_fitted||y|106"
   ],
   [
@@ -3207,7 +3231,7 @@
    null,
    55.19044569274921,
    null,
-   264,
+   266,
    "point|resid_fitted||y|107"
   ],
   [
@@ -3219,7 +3243,7 @@
    null,
    40.42217081123305,
    null,
-   265,
+   267,
    "point|resid_fitted||y|108"
   ],
   [
@@ -3231,7 +3255,7 @@
    null,
    39.76309787238483,
    null,
-   266,
+   268,
    "point|resid_fitted||y|109"
   ],
   [
@@ -3243,7 +3267,7 @@
    null,
    32.4952494455854,
    null,
-   267,
+   269,
    "point|resid_fitted||y|110"
   ],
   [
@@ -3255,7 +3279,7 @@
    null,
    38.44044046982114,
    null,
-   268,
+   270,
    "point|resid_fitted||y|111"
   ],
   [
@@ -3267,7 +3291,7 @@
    "116",
    34.95532849009675,
    null,
-   269,
+   271,
    "point|resid_fitted||y|112"
   ],
   [
@@ -3279,7 +3303,7 @@
    null,
    50.53582910533522,
    null,
-   270,
+   272,
    "point|resid_fitted||y|113"
   ],
   [
@@ -3291,7 +3315,7 @@
    null,
    34.545315316011525,
    null,
-   271,
+   273,
    "point|resid_fitted||y|114"
   ],
   [
@@ -3303,7 +3327,7 @@
    null,
    48.00741453180968,
    null,
-   272,
+   274,
    "point|resid_fitted||y|115"
   ],
   [
@@ -3315,7 +3339,7 @@
    null,
    51.42419098251987,
    null,
-   273,
+   275,
    "point|resid_fitted||y|116"
   ],
   [
@@ -3327,7 +3351,7 @@
    null,
    30.63081726607719,
    null,
-   274,
+   276,
    "curve|resid_fitted|lowess|y|0"
   ],
   [
@@ -3339,7 +3363,7 @@
    null,
    30.63081726607719,
    null,
-   275,
+   277,
    "curve|resid_fitted|lowess|y|1"
   ],
   [
@@ -3351,7 +3375,7 @@
    null,
    31.517446451155603,
    null,
-   276,
+   278,
    "curve|resid_fitted|lowess|y|2"
   ],
   [
@@ -3363,7 +3387,7 @@
    null,
    32.13808688071049,
    null,
-   277,
+   279,
    "curve|resid_fitted|lowess|y|3"
   ],
   [
@@ -3375,7 +3399,7 @@
    null,
    32.153571800514385,
    null,
-   278,
+   280,
    "curve|resid_fitted|lowess|y|4"
   ],
   [
@@ -3387,7 +3411,7 @@
    null,
    32.22190732952859,
    null,
-   279,
+   281,
    "curve|resid_fitted|lowess|y|5"
   ],
   [
@@ -3399,7 +3423,7 @@
    null,
    32.358578387556996,
    null,
-   280,
+   282,
    "curve|resid_fitted|lowess|y|6"
   ],
   [
@@ -3411,7 +3435,7 @@
    null,
    32.4952494455854,
    null,
-   281,
+   283,
    "curve|resid_fitted|lowess|y|7"
   ],
   [
@@ -3423,7 +3447,7 @@
    null,
    32.90526261967064,
    null,
-   282,
+   284,
    "curve|resid_fitted|lowess|y|8"
   ],
   [
@@ -3435,7 +3459,7 @@
    null,
    33.11026920671324,
    null,
-   283,
+   285,
    "curve|resid_fitted|lowess|y|9"
   ],
   [
@@ -3447,7 +3471,7 @@
    null,
    33.17860473572744,
    null,
-   284,
+   286,
    "curve|resid_fitted|lowess|y|10"
   ],
   [
@@ -3459,7 +3483,7 @@
    null,
    33.20204190280459,
    null,
-   285,
+   287,
    "curve|resid_fitted|lowess|y|11"
   ],
   [
@@ -3471,7 +3495,7 @@
    null,
    33.37936773982027,
    null,
-   286,
+   288,
    "curve|resid_fitted|lowess|y|12"
   ],
   [
@@ -3483,7 +3507,7 @@
    null,
    33.46803065832811,
    null,
-   287,
+   289,
    "curve|resid_fitted|lowess|y|13"
   ],
   [
@@ -3495,7 +3519,7 @@
    null,
    33.86196002586948,
    null,
-   288,
+   290,
    "curve|resid_fitted|lowess|y|14"
   ],
   [
@@ -3507,7 +3531,7 @@
    null,
    34.2036376709405,
    null,
-   289,
+   291,
    "curve|resid_fitted|lowess|y|15"
   ],
   [
@@ -3519,7 +3543,7 @@
    null,
    34.2036376709405,
    null,
-   290,
+   292,
    "curve|resid_fitted|lowess|y|16"
   ],
   [
@@ -3531,7 +3555,7 @@
    null,
    34.35465984340652,
    null,
-   291,
+   293,
    "curve|resid_fitted|lowess|y|17"
   ],
   [
@@ -3543,7 +3567,7 @@
    null,
    34.40864425798311,
    null,
-   292,
+   294,
    "curve|resid_fitted|lowess|y|18"
   ],
   [
@@ -3555,7 +3579,7 @@
    null,
    34.47697978699732,
    null,
-   293,
+   295,
    "curve|resid_fitted|lowess|y|19"
   ],
   [
@@ -3567,7 +3591,7 @@
    null,
    34.5319856804222,
    null,
-   294,
+   296,
    "curve|resid_fitted|lowess|y|20"
   ],
   [
@@ -3579,7 +3603,7 @@
    null,
    34.545315316011525,
    null,
-   295,
+   297,
    "curve|resid_fitted|lowess|y|21"
   ],
   [
@@ -3591,7 +3615,7 @@
    null,
    34.620648598930046,
    null,
-   296,
+   298,
    "curve|resid_fitted|lowess|y|22"
   ],
   [
@@ -3603,7 +3627,7 @@
    null,
    34.95532849009675,
    null,
-   297,
+   299,
    "curve|resid_fitted|lowess|y|23"
   ],
   [
@@ -3615,7 +3639,7 @@
    null,
    35.023664019110946,
    null,
-   298,
+   300,
    "curve|resid_fitted|lowess|y|24"
   ],
   [
@@ -3627,7 +3651,7 @@
    null,
    35.241289028484935,
    null,
-   299,
+   301,
    "curve|resid_fitted|lowess|y|25"
   ],
   [
@@ -3639,7 +3663,7 @@
    null,
    35.5959407025163,
    null,
-   300,
+   302,
    "curve|resid_fitted|lowess|y|26"
   ],
   [
@@ -3651,7 +3675,7 @@
    null,
    35.68460362102414,
    null,
-   301,
+   303,
    "curve|resid_fitted|lowess|y|27"
   ],
   [
@@ -3663,7 +3687,7 @@
    null,
    35.707019309252985,
    null,
-   302,
+   304,
    "curve|resid_fitted|lowess|y|28"
   ],
   [
@@ -3675,7 +3699,7 @@
    null,
    35.77326653953198,
    null,
-   303,
+   305,
    "curve|resid_fitted|lowess|y|29"
   ],
   [
@@ -3687,7 +3711,7 @@
    null,
    35.861929458039825,
    null,
-   304,
+   306,
    "curve|resid_fitted|lowess|y|30"
   ],
   [
@@ -3699,7 +3723,7 @@
    null,
    35.95059237654766,
    null,
-   305,
+   307,
    "curve|resid_fitted|lowess|y|31"
   ],
   [
@@ -3711,7 +3735,7 @@
    null,
    36.595381186437635,
    null,
-   306,
+   308,
    "curve|resid_fitted|lowess|y|32"
   ],
   [
@@ -3723,7 +3747,7 @@
    null,
    36.595381186437635,
    null,
-   307,
+   309,
    "curve|resid_fitted|lowess|y|33"
   ],
   [
@@ -3735,7 +3759,7 @@
    null,
    36.659895724610394,
    null,
-   308,
+   310,
    "curve|resid_fitted|lowess|y|34"
   ],
   [
@@ -3747,7 +3771,7 @@
    null,
    36.659895724610394,
    null,
-   309,
+   311,
    "curve|resid_fitted|lowess|y|35"
   ],
   [
@@ -3759,7 +3783,7 @@
    null,
    37.00539436052286,
    null,
-   310,
+   312,
    "curve|resid_fitted|lowess|y|36"
   ],
   [
@@ -3771,7 +3795,7 @@
    null,
    37.81251366521233,
    null,
-   311,
+   313,
    "curve|resid_fitted|lowess|y|37"
   ],
   [
@@ -3783,7 +3807,7 @@
    null,
    37.89375623770751,
    null,
-   312,
+   314,
    "curve|resid_fitted|lowess|y|38"
   ],
   [
@@ -3795,7 +3819,7 @@
    null,
    38.44044046982114,
    null,
-   313,
+   315,
    "curve|resid_fitted|lowess|y|39"
   ],
   [
@@ -3807,7 +3831,7 @@
    null,
    38.64544705686375,
    null,
-   314,
+   316,
    "curve|resid_fitted|lowess|y|40"
   ],
   [
@@ -3819,7 +3843,7 @@
    null,
    38.787805768798584,
    null,
-   315,
+   317,
    "curve|resid_fitted|lowess|y|41"
   ],
   [
@@ -3831,7 +3855,7 @@
    null,
    38.91878917292056,
    null,
-   316,
+   318,
    "curve|resid_fitted|lowess|y|42"
   ],
   [
@@ -3843,7 +3867,7 @@
    null,
    39.05546023094897,
    null,
-   317,
+   319,
    "curve|resid_fitted|lowess|y|43"
   ],
   [
@@ -3855,7 +3879,7 @@
    null,
    39.12379575996317,
    null,
-   318,
+   320,
    "curve|resid_fitted|lowess|y|44"
   ],
   [
@@ -3867,7 +3891,7 @@
    null,
    39.260466817991585,
    null,
-   319,
+   321,
    "curve|resid_fitted|lowess|y|45"
   ],
   [
@@ -3879,7 +3903,7 @@
    null,
    39.31978327984562,
    null,
-   320,
+   322,
    "curve|resid_fitted|lowess|y|46"
   ],
   [
@@ -3891,7 +3915,7 @@
    null,
    39.32880234700579,
    null,
-   321,
+   323,
    "curve|resid_fitted|lowess|y|47"
   ],
   [
@@ -3903,7 +3927,7 @@
    null,
    39.465473405034196,
    null,
-   322,
+   324,
    "curve|resid_fitted|lowess|y|48"
   ],
   [
@@ -3915,7 +3939,7 @@
    null,
    39.5338089340484,
    null,
-   323,
+   325,
    "curve|resid_fitted|lowess|y|49"
   ],
   [
@@ -3927,7 +3951,7 @@
    null,
    39.76309787238483,
    null,
-   324,
+   326,
    "curve|resid_fitted|lowess|y|50"
   ],
   [
@@ -3939,7 +3963,7 @@
    null,
    40.42217081123305,
    null,
-   325,
+   327,
    "curve|resid_fitted|lowess|y|51"
   ],
   [
@@ -3951,7 +3975,7 @@
    null,
    41.18170456851029,
    null,
-   326,
+   328,
    "curve|resid_fitted|lowess|y|52"
   ],
   [
@@ -3963,7 +3987,7 @@
    null,
    41.242197159403496,
    null,
-   327,
+   329,
    "curve|resid_fitted|lowess|y|53"
   ],
   [
@@ -3975,7 +3999,7 @@
    null,
    41.3788682174319,
    null,
-   328,
+   330,
    "curve|resid_fitted|lowess|y|54"
   ],
   [
@@ -3987,7 +4011,7 @@
    null,
    41.720545862502924,
    null,
-   329,
+   331,
    "curve|resid_fitted|lowess|y|55"
   ],
   [
@@ -3999,7 +4023,7 @@
    null,
    41.720545862502924,
    null,
-   330,
+   332,
    "curve|resid_fitted|lowess|y|56"
   ],
   [
@@ -4011,7 +4035,7 @@
    null,
    42.06222350757394,
    null,
-   331,
+   333,
    "curve|resid_fitted|lowess|y|57"
   ],
   [
@@ -4023,7 +4047,7 @@
    null,
    42.47223668165917,
    null,
-   332,
+   334,
    "curve|resid_fitted|lowess|y|58"
   ],
   [
@@ -4035,7 +4059,7 @@
    null,
    42.6889741831436,
    null,
-   333,
+   335,
    "curve|resid_fitted|lowess|y|59"
   ],
   [
@@ -4047,7 +4071,7 @@
    null,
    43.42893408785802,
    null,
-   334,
+   336,
    "curve|resid_fitted|lowess|y|60"
   ],
   [
@@ -4059,7 +4083,7 @@
    null,
    43.48694044971417,
    null,
-   335,
+   337,
    "curve|resid_fitted|lowess|y|61"
   ],
   [
@@ -4071,7 +4095,7 @@
    null,
    43.48694044971417,
    null,
-   336,
+   338,
    "curve|resid_fitted|lowess|y|62"
   ],
   [
@@ -4083,7 +4107,7 @@
    null,
    43.497269616872224,
    null,
-   337,
+   339,
    "curve|resid_fitted|lowess|y|63"
   ],
   [
@@ -4095,7 +4119,7 @@
    null,
    43.56560514588643,
    null,
-   338,
+   340,
    "curve|resid_fitted|lowess|y|64"
   ],
   [
@@ -4107,7 +4131,7 @@
    null,
    43.702276203914835,
    null,
-   339,
+   341,
    "curve|resid_fitted|lowess|y|65"
   ],
   [
@@ -4119,7 +4143,7 @@
    null,
    43.702276203914835,
    null,
-   340,
+   342,
    "curve|resid_fitted|lowess|y|66"
   ],
   [
@@ -4131,7 +4155,7 @@
    null,
    43.83894726194324,
    null,
-   341,
+   343,
    "curve|resid_fitted|lowess|y|67"
   ],
   [
@@ -4143,7 +4167,7 @@
    null,
    44.18062490701426,
    null,
-   342,
+   344,
    "curve|resid_fitted|lowess|y|68"
   ],
   [
@@ -4155,7 +4179,7 @@
    null,
    44.18062490701426,
    null,
-   343,
+   345,
    "curve|resid_fitted|lowess|y|69"
   ],
   [
@@ -4167,7 +4191,7 @@
    null,
    44.28490671628474,
    null,
-   344,
+   346,
    "curve|resid_fitted|lowess|y|70"
   ],
   [
@@ -4179,7 +4203,7 @@
    null,
    44.385631494056874,
    null,
-   345,
+   347,
    "curve|resid_fitted|lowess|y|71"
   ],
   [
@@ -4191,7 +4215,7 @@
    null,
    44.385631494056874,
    null,
-   346,
+   348,
    "curve|resid_fitted|lowess|y|72"
   ],
   [
@@ -4203,7 +4227,7 @@
    null,
    44.46223255330042,
    null,
-   347,
+   349,
    "curve|resid_fitted|lowess|y|73"
   ],
   [
@@ -4215,7 +4239,7 @@
    null,
    44.52230255208528,
    null,
-   348,
+   350,
    "curve|resid_fitted|lowess|y|74"
   ],
   [
@@ -4227,7 +4251,7 @@
    null,
    44.55089547180826,
    null,
-   349,
+   351,
    "curve|resid_fitted|lowess|y|75"
   ],
   [
@@ -4239,7 +4263,7 @@
    null,
    44.658973610113684,
    null,
-   350,
+   352,
    "curve|resid_fitted|lowess|y|76"
   ],
   [
@@ -4251,7 +4275,7 @@
    null,
    44.9323157261705,
    null,
-   351,
+   353,
    "curve|resid_fitted|lowess|y|77"
   ],
   [
@@ -4263,7 +4287,7 @@
    null,
    45.06898678419891,
    null,
-   352,
+   354,
    "curve|resid_fitted|lowess|y|78"
   ],
   [
@@ -4275,7 +4299,7 @@
    null,
    45.54733548729834,
    null,
-   353,
+   355,
    "curve|resid_fitted|lowess|y|79"
   ],
   [
@@ -4287,7 +4311,7 @@
    null,
    46.02568419039776,
    null,
-   354,
+   356,
    "curve|resid_fitted|lowess|y|80"
   ],
   [
@@ -4299,7 +4323,7 @@
    null,
    46.162355248426174,
    null,
-   355,
+   357,
    "curve|resid_fitted|lowess|y|81"
   ],
   [
@@ -4311,7 +4335,7 @@
    null,
    46.299026306454586,
    null,
-   356,
+   358,
    "curve|resid_fitted|lowess|y|82"
   ],
   [
@@ -4323,7 +4347,7 @@
    null,
    46.572368422511396,
    null,
-   357,
+   359,
    "curve|resid_fitted|lowess|y|83"
   ],
   [
@@ -4335,7 +4359,7 @@
    null,
    46.640703951525595,
    null,
-   358,
+   360,
    "curve|resid_fitted|lowess|y|84"
   ],
   [
@@ -4347,7 +4371,7 @@
    null,
    46.91404606758241,
    null,
-   359,
+   361,
    "curve|resid_fitted|lowess|y|85"
   ],
   [
@@ -4359,7 +4383,7 @@
    null,
    47.2107830270435,
    null,
-   360,
+   362,
    "curve|resid_fitted|lowess|y|86"
   ],
   [
@@ -4371,7 +4395,7 @@
    null,
    47.66573688673866,
    null,
-   361,
+   363,
    "curve|resid_fitted|lowess|y|87"
   ],
   [
@@ -4383,7 +4407,7 @@
    null,
    47.74276053809054,
    null,
-   362,
+   364,
    "curve|resid_fitted|lowess|y|88"
   ],
   [
@@ -4395,7 +4419,7 @@
    null,
    47.92008637510623,
    null,
-   363,
+   365,
    "curve|resid_fitted|lowess|y|89"
   ],
   [
@@ -4407,7 +4431,7 @@
    null,
    48.00741453180968,
    null,
-   364,
+   366,
    "curve|resid_fitted|lowess|y|90"
   ],
   [
@@ -4419,7 +4443,7 @@
    null,
    48.008749293614066,
    null,
-   365,
+   367,
    "curve|resid_fitted|lowess|y|91"
   ],
   [
@@ -4431,7 +4455,7 @@
    null,
    48.622434292937506,
    null,
-   366,
+   368,
    "curve|resid_fitted|lowess|y|92"
   ],
   [
@@ -4443,7 +4467,7 @@
    null,
    48.80671556018464,
    null,
-   367,
+   369,
    "curve|resid_fitted|lowess|y|93"
   ],
   [
@@ -4455,7 +4479,7 @@
    null,
    49.10078299603693,
    null,
-   368,
+   370,
    "curve|resid_fitted|lowess|y|94"
   ],
   [
@@ -4467,7 +4491,7 @@
    null,
    49.85247381519318,
    null,
-   369,
+   371,
    "curve|resid_fitted|lowess|y|95"
   ],
   [
@@ -4479,7 +4503,7 @@
    null,
    50.13665933780226,
    null,
-   370,
+   372,
    "curve|resid_fitted|lowess|y|96"
   ],
   [
@@ -4491,7 +4515,7 @@
    null,
    50.53582910533522,
    null,
-   371,
+   373,
    "curve|resid_fitted|lowess|y|97"
   ],
   [
@@ -4503,7 +4527,7 @@
    null,
    50.53582910533522,
    null,
-   372,
+   374,
    "curve|resid_fitted|lowess|y|98"
   ],
   [
@@ -4515,7 +4539,7 @@
    null,
    50.757299767357146,
    null,
-   373,
+   375,
    "curve|resid_fitted|lowess|y|99"
   ],
   [
@@ -4527,7 +4551,7 @@
    null,
    50.809171221392035,
    null,
-   374,
+   376,
    "curve|resid_fitted|lowess|y|100"
   ],
   [
@@ -4539,7 +4563,7 @@
    null,
    50.94584227942044,
    null,
-   375,
+   377,
    "curve|resid_fitted|lowess|y|101"
   ],
   [
@@ -4551,7 +4575,7 @@
    null,
    51.014177808434646,
    null,
-   376,
+   378,
    "curve|resid_fitted|lowess|y|102"
   ],
   [
@@ -4563,7 +4587,7 @@
    null,
    51.35585545350566,
    null,
-   377,
+   379,
    "curve|resid_fitted|lowess|y|103"
   ],
   [
@@ -4575,7 +4599,7 @@
    null,
    51.42419098251987,
    null,
-   378,
+   380,
    "curve|resid_fitted|lowess|y|104"
   ],
   [
@@ -4587,7 +4611,7 @@
    null,
    51.492526511534074,
    null,
-   379,
+   381,
    "curve|resid_fitted|lowess|y|105"
   ],
   [
@@ -4599,7 +4623,7 @@
    null,
    52.08724354497476,
    null,
-   380,
+   382,
    "curve|resid_fitted|lowess|y|106"
   ],
   [
@@ -4611,7 +4635,7 @@
    null,
    52.175906463482605,
    null,
-   381,
+   383,
    "curve|resid_fitted|lowess|y|107"
   ],
   [
@@ -4623,7 +4647,7 @@
    null,
    52.175906463482605,
    null,
-   382,
+   384,
    "curve|resid_fitted|lowess|y|108"
   ],
   [
@@ -4635,7 +4659,7 @@
    null,
    53.06253564856114,
    null,
-   383,
+   385,
    "curve|resid_fitted|lowess|y|109"
   ],
   [
@@ -4647,7 +4671,7 @@
    null,
    53.41718732259238,
    null,
-   384,
+   386,
    "curve|resid_fitted|lowess|y|110"
   ],
   [
@@ -4659,7 +4683,7 @@
    null,
    53.59451315960806,
    null,
-   385,
+   387,
    "curve|resid_fitted|lowess|y|111"
   ],
   [
@@ -4671,7 +4695,7 @@
    null,
    54.56980526319432,
    null,
-   386,
+   388,
    "curve|resid_fitted|lowess|y|112"
   ],
   [
@@ -4683,7 +4707,7 @@
    null,
    54.74713110021,
    null,
-   387,
+   389,
    "curve|resid_fitted|lowess|y|113"
   ],
   [
@@ -4695,7 +4719,7 @@
    null,
    55.19044569274921,
    null,
-   388,
+   390,
    "curve|resid_fitted|lowess|y|114"
   ],
   [
@@ -4707,7 +4731,7 @@
    null,
    55.36777152976489,
    null,
-   389,
+   391,
    "curve|resid_fitted|lowess|y|115"
   ],
   [
@@ -4719,7 +4743,7 @@
    null,
    56.52038947036682,
    null,
-   390,
+   392,
    "curve|resid_fitted|lowess|y|116"
   ],
   [
@@ -4731,7 +4755,7 @@
    null,
    -2.6296608594567186,
    null,
-   391,
+   393,
    "point|qq||y|0"
   ],
   [
@@ -4743,7 +4767,7 @@
    null,
    -2.231605835260923,
    null,
-   392,
+   394,
    "point|qq||y|1"
   ],
   [
@@ -4755,7 +4779,7 @@
    null,
    -2.026290319072762,
    null,
-   393,
+   395,
    "point|qq||y|2"
   ],
   [
@@ -4767,7 +4791,7 @@
    null,
    -1.8820512327292758,
    null,
-   394,
+   396,
    "point|qq||y|3"
   ],
   [
@@ -4779,7 +4803,7 @@
    null,
    -1.7688250385187059,
    null,
-   395,
+   397,
    "point|qq||y|4"
   ],
   [
@@ -4791,7 +4815,7 @@
    null,
    -1.6745778202585604,
    null,
-   396,
+   398,
    "point|qq||y|5"
   ],
   [
@@ -4803,7 +4827,7 @@
    null,
    -1.5932188180230502,
    null,
-   397,
+   399,
    "point|qq||y|6"
   ],
   [
@@ -4815,7 +4839,7 @@
    null,
    -1.521218046425934,
    null,
-   398,
+   400,
    "point|qq||y|7"
   ],
   [
@@ -4827,7 +4851,7 @@
    null,
    -1.456338218532774,
    null,
-   399,
+   401,
    "point|qq||y|8"
   ],
   [
@@ -4839,7 +4863,7 @@
    null,
    -1.39706787079583,
    null,
-   400,
+   402,
    "point|qq||y|9"
   ],
   [
@@ -4851,7 +4875,7 @@
    null,
    -1.342335680077261,
    null,
-   401,
+   403,
    "point|qq||y|10"
   ],
   [
@@ -4863,7 +4887,7 @@
    null,
    -1.2913532991985726,
    null,
-   402,
+   404,
    "point|qq||y|11"
   ],
   [
@@ -4875,7 +4899,7 @@
    null,
    -1.2435228837190517,
    null,
-   403,
+   405,
    "point|qq||y|12"
   ],
   [
@@ -4887,7 +4911,7 @@
    null,
    -1.1983797023069245,
    null,
-   404,
+   406,
    "point|qq||y|13"
   ],
   [
@@ -4899,7 +4923,7 @@
    null,
    -1.1555549404847567,
    null,
-   405,
+   407,
    "point|qq||y|14"
   ],
   [
@@ -4911,7 +4935,7 @@
    null,
    -1.1147507073494778,
    null,
-   406,
+   408,
    "point|qq||y|15"
   ],
   [
@@ -4923,7 +4947,7 @@
    null,
    -1.0757227225615087,
    null,
-   407,
+   409,
    "point|qq||y|16"
   ],
   [
@@ -4935,7 +4959,7 @@
    null,
    -1.0382680066555765,
    null,
-   408,
+   410,
    "point|qq||y|17"
   ],
   [
@@ -4947,7 +4971,7 @@
    null,
    -1.0022159287727126,
    null,
-   409,
+   411,
    "point|qq||y|18"
   ],
   [
@@ -4959,7 +4983,7 @@
    null,
    -0.9674215661017014,
    null,
-   410,
+   412,
    "point|qq||y|19"
   ],
   [
@@ -4971,7 +4995,7 @@
    null,
    -0.9337606913772682,
    null,
-   411,
+   413,
    "point|qq||y|20"
   ],
   [
@@ -4983,7 +5007,7 @@
    null,
    -0.9011259301022144,
    null,
-   412,
+   414,
    "point|qq||y|21"
   ],
   [
@@ -4995,7 +5019,7 @@
    null,
    -0.869423773288886,
    null,
-   413,
+   415,
    "point|qq||y|22"
   ],
   [
@@ -5007,7 +5031,7 @@
    null,
    -0.8385722259868226,
    null,
-   414,
+   416,
    "point|qq||y|23"
   ],
   [
@@ -5019,7 +5043,7 @@
    null,
    -0.808498935154048,
    null,
-   415,
+   417,
    "point|qq||y|24"
   ],
   [
@@ -5031,7 +5055,7 @@
    null,
    -0.7791396836729912,
    null,
-   416,
+   418,
    "point|qq||y|25"
   ],
   [
@@ -5043,7 +5067,7 @@
    null,
    -0.7504371673890734,
    null,
-   417,
+   419,
    "point|qq||y|26"
   ],
   [
@@ -5055,7 +5079,7 @@
    null,
    -0.7223399933110458,
    null,
-   418,
+   420,
    "point|qq||y|27"
   ],
   [
@@ -5067,7 +5091,7 @@
    null,
    -0.6948018523653643,
    null,
-   419,
+   421,
    "point|qq||y|28"
   ],
   [
@@ -5079,7 +5103,7 @@
    null,
    -0.6677808311895094,
    null,
-   420,
+   422,
    "point|qq||y|29"
   ],
   [
@@ -5091,7 +5115,7 @@
    null,
    -0.6412388356175345,
    null,
-   421,
+   423,
    "point|qq||y|30"
   ],
   [
@@ -5103,7 +5127,7 @@
    null,
    -0.6151411045959736,
    null,
-   422,
+   424,
    "point|qq||y|31"
   ],
   [
@@ -5115,7 +5139,7 @@
    null,
    -0.5894557978497785,
    null,
-   423,
+   425,
    "point|qq||y|32"
   ],
   [
@@ -5127,7 +5151,7 @@
    null,
    -0.5641536441020104,
    null,
-   424,
+   426,
    "point|qq||y|33"
   ],
   [
@@ -5139,7 +5163,7 @@
    null,
    -0.5392076393250992,
    null,
-   425,
+   427,
    "point|qq||y|34"
   ],
   [
@@ -5151,7 +5175,7 @@
    null,
    -0.5145927865717232,
    null,
-   426,
+   428,
    "point|qq||y|35"
   ],
   [
@@ -5163,7 +5187,7 @@
    null,
    -0.49028587054905076,
    null,
-   427,
+   429,
    "point|qq||y|36"
   ],
   [
@@ -5175,7 +5199,7 @@
    null,
    -0.4662652613706356,
    null,
-   428,
+   430,
    "point|qq||y|37"
   ],
   [
@@ -5187,7 +5211,7 @@
    null,
    -0.4425107429264462,
    null,
-   429,
+   431,
    "point|qq||y|38"
   ],
   [
@@ -5199,7 +5223,7 @@
    null,
    -0.4190033621136766,
    null,
-   430,
+   432,
    "point|qq||y|39"
   ],
   [
@@ -5211,7 +5235,7 @@
    null,
    -0.3957252958144873,
    null,
-   431,
+   433,
    "point|qq||y|40"
   ],
   [
@@ -5223,7 +5247,7 @@
    null,
    -0.37265973302603583,
    null,
-   432,
+   434,
    "point|qq||y|41"
   ],
   [
@@ -5235,7 +5259,7 @@
    null,
    -0.3497907699694086,
    null,
-   433,
+   435,
    "point|qq||y|42"
   ],
   [
@@ -5247,7 +5271,7 @@
    null,
    -0.3271033163475285,
    null,
-   434,
+   436,
    "point|qq||y|43"
   ],
   [
@@ -5259,7 +5283,7 @@
    null,
    -0.3045830112035196,
    null,
-   435,
+   437,
    "point|qq||y|44"
   ],
   [
@@ -5271,7 +5295,7 @@
    null,
    -0.2822161470625081,
    null,
-   436,
+   438,
    "point|qq||y|45"
   ],
   [
@@ -5283,7 +5307,7 @@
    null,
    -0.2599896012310703,
    null,
-   437,
+   439,
    "point|qq||y|46"
   ],
   [
@@ -5295,7 +5319,7 @@
    null,
    -0.23789077328699887,
    null,
-   438,
+   440,
    "point|qq||y|47"
   ],
   [
@@ -5307,7 +5331,7 @@
    null,
    -0.21590752792378567,
    null,
-   439,
+   441,
    "point|qq||y|48"
   ],
   [
@@ -5319,7 +5343,7 @@
    null,
    -0.1940281424239263,
    null,
-   440,
+   442,
    "point|qq||y|49"
   ],
   [
@@ -5331,7 +5355,7 @@
    null,
    -0.17224125812669208,
    null,
-   441,
+   443,
    "point|qq||y|50"
   ],
   [
@@ -5343,7 +5367,7 @@
    null,
    -0.15053583533241371,
    null,
-   442,
+   444,
    "point|qq||y|51"
   ],
   [
@@ -5355,7 +5379,7 @@
    null,
    -0.1289011111490417,
    null,
-   443,
+   445,
    "point|qq||y|52"
   ],
   [
@@ -5367,7 +5391,7 @@
    null,
    -0.10732655983978326,
    null,
-   444,
+   446,
    "point|qq||y|53"
   ],
   [
@@ -5379,7 +5403,7 @@
    null,
    -0.08580185527452716,
    null,
-   445,
+   447,
    "point|qq||y|54"
   ],
   [
@@ -5391,7 +5415,7 @@
    null,
    -0.06431683512387443,
    null,
-   446,
+   448,
    "point|qq||y|55"
   ],
   [
@@ -5403,7 +5427,7 @@
    null,
    -0.042861466463878194,
    null,
-   447,
+   449,
    "point|qq||y|56"
   ],
   [
@@ -5415,7 +5439,7 @@
    null,
    -0.02142581248290932,
    null,
-   448,
+   450,
    "point|qq||y|57"
   ],
   [
@@ -5425,9 +5449,9 @@
    "y",
    -0.0781731784760156,
    null,
-   0.0,
+   0,
    null,
-   449,
+   451,
    "point|qq||y|58"
   ],
   [
@@ -5439,7 +5463,7 @@
    null,
    0.021425812482909177,
    null,
-   450,
+   452,
    "point|qq||y|59"
   ],
   [
@@ -5451,7 +5475,7 @@
    null,
    0.04286146646387833,
    null,
-   451,
+   453,
    "point|qq||y|60"
   ],
   [
@@ -5463,7 +5487,7 @@
    null,
    0.06431683512387443,
    null,
-   452,
+   454,
    "point|qq||y|61"
   ],
   [
@@ -5475,7 +5499,7 @@
    null,
    0.08580185527452716,
    null,
-   453,
+   455,
    "point|qq||y|62"
   ],
   [
@@ -5487,7 +5511,7 @@
    null,
    0.10732655983978312,
    null,
-   454,
+   456,
    "point|qq||y|63"
   ],
   [
@@ -5499,7 +5523,7 @@
    null,
    0.12890111114904185,
    null,
-   455,
+   457,
    "point|qq||y|64"
   ],
   [
@@ -5511,7 +5535,7 @@
    null,
    0.15053583533241371,
    null,
-   456,
+   458,
    "point|qq||y|65"
   ],
   [
@@ -5523,7 +5547,7 @@
    null,
    0.17224125812669208,
    null,
-   457,
+   459,
    "point|qq||y|66"
   ],
   [
@@ -5535,7 +5559,7 @@
    null,
    0.1940281424239262,
    null,
-   458,
+   460,
    "point|qq||y|67"
   ],
   [
@@ -5547,7 +5571,7 @@
    null,
    0.21590752792378579,
    null,
-   459,
+   461,
    "point|qq||y|68"
   ],
   [
@@ -5559,7 +5583,7 @@
    null,
    0.23789077328699887,
    null,
-   460,
+   462,
    "point|qq||y|69"
   ],
   [
@@ -5571,7 +5595,7 @@
    null,
    0.2599896012310702,
    null,
-   461,
+   463,
    "point|qq||y|70"
   ],
   [
@@ -5583,7 +5607,7 @@
    null,
    0.2822161470625082,
    null,
-   462,
+   464,
    "point|qq||y|71"
   ],
   [
@@ -5595,7 +5619,7 @@
    null,
    0.3045830112035196,
    null,
-   463,
+   465,
    "point|qq||y|72"
   ],
   [
@@ -5607,7 +5631,7 @@
    null,
    0.3271033163475285,
    null,
-   464,
+   466,
    "point|qq||y|73"
   ],
   [
@@ -5619,7 +5643,7 @@
    null,
    0.34979076996940844,
    null,
-   465,
+   467,
    "point|qq||y|74"
   ],
   [
@@ -5631,7 +5655,7 @@
    null,
    0.37265973302603594,
    null,
-   466,
+   468,
    "point|qq||y|75"
   ],
   [
@@ -5643,7 +5667,7 @@
    null,
    0.3957252958144873,
    null,
-   467,
+   469,
    "point|qq||y|76"
   ],
   [
@@ -5655,7 +5679,7 @@
    null,
    0.4190033621136766,
    null,
-   468,
+   470,
    "point|qq||y|77"
   ],
   [
@@ -5667,7 +5691,7 @@
    null,
    0.4425107429264461,
    null,
-   469,
+   471,
    "point|qq||y|78"
   ],
   [
@@ -5679,7 +5703,7 @@
    null,
    0.4662652613706358,
    null,
-   470,
+   472,
    "point|qq||y|79"
   ],
   [
@@ -5691,7 +5715,7 @@
    null,
    0.49028587054905076,
    null,
-   471,
+   473,
    "point|qq||y|80"
   ],
   [
@@ -5703,7 +5727,7 @@
    null,
    0.5145927865717231,
    null,
-   472,
+   474,
    "point|qq||y|81"
   ],
   [
@@ -5715,7 +5739,7 @@
    null,
    0.5392076393250994,
    null,
-   473,
+   475,
    "point|qq||y|82"
   ],
   [
@@ -5727,7 +5751,7 @@
    null,
    0.5641536441020104,
    null,
-   474,
+   476,
    "point|qq||y|83"
   ],
   [
@@ -5739,7 +5763,7 @@
    null,
    0.5894557978497785,
    null,
-   475,
+   477,
    "point|qq||y|84"
   ],
   [
@@ -5751,7 +5775,7 @@
    null,
    0.6151411045959734,
    null,
-   476,
+   478,
    "point|qq||y|85"
   ],
   [
@@ -5763,7 +5787,7 @@
    null,
    0.6412388356175345,
    null,
-   477,
+   479,
    "point|qq||y|86"
   ],
   [
@@ -5775,7 +5799,7 @@
    null,
    0.6677808311895094,
    null,
-   478,
+   480,
    "point|qq||y|87"
   ],
   [
@@ -5787,7 +5811,7 @@
    null,
    0.6948018523653643,
    null,
-   479,
+   481,
    "point|qq||y|88"
   ],
   [
@@ -5799,7 +5823,7 @@
    null,
    0.7223399933110457,
    null,
-   480,
+   482,
    "point|qq||y|89"
   ],
   [
@@ -5811,7 +5835,7 @@
    null,
    0.7504371673890734,
    null,
-   481,
+   483,
    "point|qq||y|90"
   ],
   [
@@ -5823,7 +5847,7 @@
    null,
    0.7791396836729912,
    null,
-   482,
+   484,
    "point|qq||y|91"
   ],
   [
@@ -5835,7 +5859,7 @@
    null,
    0.808498935154048,
    null,
-   483,
+   485,
    "point|qq||y|92"
   ],
   [
@@ -5847,7 +5871,7 @@
    null,
    0.8385722259868228,
    null,
-   484,
+   486,
    "point|qq||y|93"
   ],
   [
@@ -5859,7 +5883,7 @@
    null,
    0.869423773288886,
    null,
-   485,
+   487,
    "point|qq||y|94"
   ],
   [
@@ -5871,7 +5895,7 @@
    null,
    0.9011259301022144,
    null,
-   486,
+   488,
    "point|qq||y|95"
   ],
   [
@@ -5883,7 +5907,7 @@
    null,
    0.9337606913772681,
    null,
-   487,
+   489,
    "point|qq||y|96"
   ],
   [
@@ -5895,7 +5919,7 @@
    null,
    0.9674215661017014,
    null,
-   488,
+   490,
    "point|qq||y|97"
   ],
   [
@@ -5907,7 +5931,7 @@
    null,
    1.0022159287727126,
    null,
-   489,
+   491,
    "point|qq||y|98"
   ],
   [
@@ -5919,7 +5943,7 @@
    null,
    1.0382680066555765,
    null,
-   490,
+   492,
    "point|qq||y|99"
   ],
   [
@@ -5931,7 +5955,7 @@
    null,
    1.0757227225615082,
    null,
-   491,
+   493,
    "point|qq||y|100"
   ],
   [
@@ -5943,7 +5967,7 @@
    null,
    1.1147507073494778,
    null,
-   492,
+   494,
    "point|qq||y|101"
   ],
   [
@@ -5955,7 +5979,7 @@
    null,
    1.1555549404847567,
    null,
-   493,
+   495,
    "point|qq||y|102"
   ],
   [
@@ -5967,7 +5991,7 @@
    null,
    1.1983797023069245,
    null,
-   494,
+   496,
    "point|qq||y|103"
   ],
   [
@@ -5979,7 +6003,7 @@
    null,
    1.2435228837190522,
    null,
-   495,
+   497,
    "point|qq||y|104"
   ],
   [
@@ -5991,7 +6015,7 @@
    null,
    1.2913532991985726,
    null,
-   496,
+   498,
    "point|qq||y|105"
   ],
   [
@@ -6003,7 +6027,7 @@
    null,
    1.342335680077261,
    null,
-   497,
+   499,
    "point|qq||y|106"
   ],
   [
@@ -6015,7 +6039,7 @@
    null,
    1.3970678707958295,
    null,
-   498,
+   500,
    "point|qq||y|107"
   ],
   [
@@ -6027,7 +6051,7 @@
    null,
    1.4563382185327742,
    null,
-   499,
+   501,
    "point|qq||y|108"
   ],
   [
@@ -6039,7 +6063,7 @@
    null,
    1.521218046425934,
    null,
-   500,
+   502,
    "point|qq||y|109"
   ],
   [
@@ -6051,7 +6075,7 @@
    null,
    1.59321881802305,
    null,
-   501,
+   503,
    "point|qq||y|110"
   ],
   [
@@ -6063,7 +6087,7 @@
    null,
    1.6745778202585604,
    null,
-   502,
+   504,
    "point|qq||y|111"
   ],
   [
@@ -6075,7 +6099,7 @@
    null,
    1.7688250385187059,
    null,
-   503,
+   505,
    "point|qq||y|112"
   ],
   [
@@ -6087,7 +6111,7 @@
    null,
    1.8820512327292758,
    null,
-   504,
+   506,
    "point|qq||y|113"
   ],
   [
@@ -6099,7 +6123,7 @@
    null,
    2.0262903190727615,
    null,
-   505,
+   507,
    "point|qq||y|114"
   ],
   [
@@ -6111,7 +6135,7 @@
    null,
    2.2316058352609245,
    null,
-   506,
+   508,
    "point|qq||y|115"
   ],
   [
@@ -6123,7 +6147,7 @@
    null,
    2.6296608594567203,
    null,
-   507,
+   509,
    "point|qq||y|116"
   ],
   [
@@ -6135,7 +6159,7 @@
    null,
    -2.6296608594567186,
    null,
-   508,
+   510,
    "curve|qq|line|y|0"
   ],
   [
@@ -6147,7 +6171,7 @@
    null,
    2.6296608594567203,
    null,
-   509,
+   511,
    "curve|qq|line|y|1"
   ],
   [
@@ -6159,7 +6183,7 @@
    null,
    53.06253564856114,
    null,
-   510,
+   512,
    "point|scale_location||y|0"
   ],
   [
@@ -6171,7 +6195,7 @@
    null,
    32.90526261967064,
    null,
-   511,
+   513,
    "point|scale_location||y|1"
   ],
   [
@@ -6183,7 +6207,7 @@
    null,
    46.299026306454586,
    null,
-   512,
+   514,
    "point|scale_location||y|2"
   ],
   [
@@ -6195,7 +6219,7 @@
    null,
    32.22190732952859,
    null,
-   513,
+   515,
    "point|scale_location||y|3"
   ],
   [
@@ -6207,7 +6231,7 @@
    null,
    35.861929458039825,
    null,
-   514,
+   516,
    "point|scale_location||y|4"
   ],
   [
@@ -6219,7 +6243,7 @@
    null,
    33.37936773982027,
    null,
-   515,
+   517,
    "point|scale_location||y|5"
   ],
   [
@@ -6231,7 +6255,7 @@
    null,
    43.56560514588643,
    null,
-   516,
+   518,
    "point|scale_location||y|6"
   ],
   [
@@ -6243,7 +6267,7 @@
    null,
    44.658973610113684,
    null,
-   517,
+   519,
    "point|scale_location||y|7"
   ],
   [
@@ -6255,7 +6279,7 @@
    null,
    41.720545862502924,
    null,
-   518,
+   520,
    "point|scale_location||y|8"
   ],
   [
@@ -6267,7 +6291,7 @@
    null,
    35.68460362102414,
    null,
-   519,
+   521,
    "point|scale_location||y|9"
   ],
   [
@@ -6279,7 +6303,7 @@
    null,
    46.640703951525595,
    null,
-   520,
+   522,
    "point|scale_location||y|10"
   ],
   [
@@ -6291,7 +6315,7 @@
    null,
    43.48694044971417,
    null,
-   521,
+   523,
    "point|scale_location||y|11"
   ],
   [
@@ -6303,7 +6327,7 @@
    null,
    33.17860473572744,
    null,
-   522,
+   524,
    "point|scale_location||y|12"
   ],
   [
@@ -6315,7 +6339,7 @@
    null,
    41.720545862502924,
    null,
-   523,
+   525,
    "point|scale_location||y|13"
   ],
   [
@@ -6327,7 +6351,7 @@
    null,
    34.35465984340652,
    null,
-   524,
+   526,
    "point|scale_location||y|14"
   ],
   [
@@ -6339,7 +6363,7 @@
    null,
    45.54733548729834,
    null,
-   525,
+   527,
    "point|scale_location||y|15"
   ],
   [
@@ -6351,7 +6375,7 @@
    null,
    38.64544705686375,
    null,
-   526,
+   528,
    "point|scale_location||y|16"
   ],
   [
@@ -6363,7 +6387,7 @@
    null,
    36.595381186437635,
    null,
-   527,
+   529,
    "point|scale_location||y|17"
   ],
   [
@@ -6375,7 +6399,7 @@
    null,
    53.41718732259238,
    null,
-   528,
+   530,
    "point|scale_location||y|18"
   ],
   [
@@ -6387,7 +6411,7 @@
    null,
    35.5959407025163,
    null,
-   529,
+   531,
    "point|scale_location||y|19"
   ],
   [
@@ -6399,7 +6423,7 @@
    null,
    39.05546023094897,
    null,
-   530,
+   532,
    "point|scale_location||y|20"
   ],
   [
@@ -6411,7 +6435,7 @@
    null,
    51.014177808434646,
    null,
-   531,
+   533,
    "point|scale_location||y|21"
   ],
   [
@@ -6423,7 +6447,7 @@
    null,
    30.63081726607719,
    null,
-   532,
+   534,
    "point|scale_location||y|22"
   ],
   [
@@ -6435,7 +6459,7 @@
    null,
    36.659895724610394,
    null,
-   533,
+   535,
    "point|scale_location||y|23"
   ],
   [
@@ -6447,7 +6471,7 @@
    null,
    54.74713110021,
    null,
-   534,
+   536,
    "point|scale_location||y|24"
   ],
   [
@@ -6459,7 +6483,7 @@
    null,
    50.53582910533522,
    null,
-   535,
+   537,
    "point|scale_location||y|25"
   ],
   [
@@ -6471,7 +6495,7 @@
    null,
    52.175906463482605,
    null,
-   536,
+   538,
    "point|scale_location||y|26"
   ],
   [
@@ -6483,7 +6507,7 @@
    null,
    55.36777152976489,
    null,
-   537,
+   539,
    "point|scale_location||y|27"
   ],
   [
@@ -6495,7 +6519,7 @@
    null,
    34.40864425798311,
    null,
-   538,
+   540,
    "point|scale_location||y|28"
   ],
   [
@@ -6507,7 +6531,7 @@
    null,
    42.06222350757394,
    null,
-   539,
+   541,
    "point|scale_location||y|29"
   ],
   [
@@ -6519,7 +6543,7 @@
    null,
    32.13808688071049,
    null,
-   540,
+   542,
    "point|scale_location||y|30"
   ],
   [
@@ -6531,7 +6555,7 @@
    null,
    42.47223668165917,
    null,
-   541,
+   543,
    "point|scale_location||y|31"
   ],
   [
@@ -6543,7 +6567,7 @@
    null,
    43.702276203914835,
    null,
-   542,
+   544,
    "point|scale_location||y|32"
   ],
   [
@@ -6555,7 +6579,7 @@
    null,
    42.6889741831436,
    null,
-   543,
+   545,
    "point|scale_location||y|33"
   ],
   [
@@ -6567,7 +6591,7 @@
    null,
    48.622434292937506,
    null,
-   544,
+   546,
    "point|scale_location||y|34"
   ],
   [
@@ -6579,7 +6603,7 @@
    null,
    39.32880234700579,
    null,
-   545,
+   547,
    "point|scale_location||y|35"
   ],
   [
@@ -6591,7 +6615,7 @@
    null,
    44.52230255208528,
    null,
-   546,
+   548,
    "point|scale_location||y|36"
   ],
   [
@@ -6603,7 +6627,7 @@
    null,
    39.31978327984562,
    null,
-   547,
+   549,
    "point|scale_location||y|37"
   ],
   [
@@ -6615,7 +6639,7 @@
    null,
    52.08724354497476,
    null,
-   548,
+   550,
    "point|scale_location||y|38"
   ],
   [
@@ -6627,7 +6651,7 @@
    null,
    35.77326653953198,
    null,
-   549,
+   551,
    "point|scale_location||y|39"
   ],
   [
@@ -6639,7 +6663,7 @@
    null,
    46.02568419039776,
    null,
-   550,
+   552,
    "point|scale_location||y|40"
   ],
   [
@@ -6651,7 +6675,7 @@
    null,
    39.260466817991585,
    null,
-   551,
+   553,
    "point|scale_location||y|41"
   ],
   [
@@ -6663,7 +6687,7 @@
    null,
    44.385631494056874,
    null,
-   552,
+   554,
    "point|scale_location||y|42"
   ],
   [
@@ -6675,7 +6699,7 @@
    null,
    33.86196002586948,
    null,
-   553,
+   555,
    "point|scale_location||y|43"
   ],
   [
@@ -6687,7 +6711,7 @@
    null,
    51.35585545350566,
    null,
-   554,
+   556,
    "point|scale_location||y|44"
   ],
   [
@@ -6699,7 +6723,7 @@
    null,
    41.242197159403496,
    null,
-   555,
+   557,
    "point|scale_location||y|45"
   ],
   [
@@ -6711,7 +6735,7 @@
    null,
    52.175906463482605,
    null,
-   556,
+   558,
    "point|scale_location||y|46"
   ],
   [
@@ -6723,7 +6747,7 @@
    null,
    41.18170456851029,
    null,
-   557,
+   559,
    "point|scale_location||y|47"
   ],
   [
@@ -6735,7 +6759,7 @@
    null,
    36.595381186437635,
    null,
-   558,
+   560,
    "point|scale_location||y|48"
   ],
   [
@@ -6747,7 +6771,7 @@
    null,
    44.385631494056874,
    null,
-   559,
+   561,
    "point|scale_location||y|49"
   ],
   [
@@ -6759,7 +6783,7 @@
    null,
    34.5319856804222,
    null,
-   560,
+   562,
    "point|scale_location||y|50"
   ],
   [
@@ -6771,7 +6795,7 @@
    null,
    38.787805768798584,
    null,
-   561,
+   563,
    "point|scale_location||y|51"
   ],
   [
@@ -6783,7 +6807,7 @@
    null,
    37.81251366521233,
    null,
-   562,
+   564,
    "point|scale_location||y|52"
   ],
   [
@@ -6795,7 +6819,7 @@
    null,
    38.91878917292056,
    null,
-   563,
+   565,
    "point|scale_location||y|53"
   ],
   [
@@ -6807,7 +6831,7 @@
    null,
    44.55089547180826,
    null,
-   564,
+   566,
    "point|scale_location||y|54"
   ],
   [
@@ -6819,7 +6843,7 @@
    null,
    30.63081726607719,
    null,
-   565,
+   567,
    "point|scale_location||y|55"
   ],
   [
@@ -6831,7 +6855,7 @@
    null,
    50.13665933780226,
    null,
-   566,
+   568,
    "point|scale_location||y|56"
   ],
   [
@@ -6843,7 +6867,7 @@
    null,
    46.572368422511396,
    null,
-   567,
+   569,
    "point|scale_location||y|57"
   ],
   [
@@ -6855,7 +6879,7 @@
    null,
    43.48694044971417,
    null,
-   568,
+   570,
    "point|scale_location||y|58"
   ],
   [
@@ -6867,7 +6891,7 @@
    null,
    50.94584227942044,
    null,
-   569,
+   571,
    "point|scale_location||y|59"
   ],
   [
@@ -6879,7 +6903,7 @@
    null,
    44.46223255330042,
    null,
-   570,
+   572,
    "point|scale_location||y|60"
   ],
   [
@@ -6891,7 +6915,7 @@
    null,
    44.18062490701426,
    null,
-   571,
+   573,
    "point|scale_location||y|61"
   ],
   [
@@ -6903,7 +6927,7 @@
    null,
    39.5338089340484,
    null,
-   572,
+   574,
    "point|scale_location||y|62"
   ],
   [
@@ -6915,7 +6939,7 @@
    null,
    47.92008637510623,
    null,
-   573,
+   575,
    "point|scale_location||y|63"
   ],
   [
@@ -6927,7 +6951,7 @@
    null,
    53.59451315960806,
    null,
-   574,
+   576,
    "point|scale_location||y|64"
   ],
   [
@@ -6939,7 +6963,7 @@
    null,
    44.9323157261705,
    null,
-   575,
+   577,
    "point|scale_location||y|65"
   ],
   [
@@ -6951,7 +6975,7 @@
    null,
    47.74276053809054,
    null,
-   576,
+   578,
    "point|scale_location||y|66"
   ],
   [
@@ -6963,7 +6987,7 @@
    null,
    39.12379575996317,
    null,
-   577,
+   579,
    "point|scale_location||y|67"
   ],
   [
@@ -6975,7 +6999,7 @@
    null,
    48.008749293614066,
    null,
-   578,
+   580,
    "point|scale_location||y|68"
   ],
   [
@@ -6987,7 +7011,7 @@
    null,
    37.00539436052286,
    null,
-   579,
+   581,
    "point|scale_location||y|69"
   ],
   [
@@ -6999,7 +7023,7 @@
    null,
    44.18062490701426,
    null,
-   580,
+   582,
    "point|scale_location||y|70"
   ],
   [
@@ -7011,7 +7035,7 @@
    null,
    43.83894726194324,
    null,
-   581,
+   583,
    "point|scale_location||y|71"
   ],
   [
@@ -7023,7 +7047,7 @@
    "76",
    34.620648598930046,
    null,
-   582,
+   584,
    "point|scale_location||y|72"
   ],
   [
@@ -7035,7 +7059,7 @@
    null,
    43.497269616872224,
    null,
-   583,
+   585,
    "point|scale_location||y|73"
   ],
   [
@@ -7047,7 +7071,7 @@
    null,
    34.2036376709405,
    null,
-   584,
+   586,
    "point|scale_location||y|74"
   ],
   [
@@ -7059,7 +7083,7 @@
    null,
    33.46803065832811,
    null,
-   585,
+   587,
    "point|scale_location||y|75"
   ],
   [
@@ -7071,7 +7095,7 @@
    null,
    39.465473405034196,
    null,
-   586,
+   588,
    "point|scale_location||y|76"
   ],
   [
@@ -7083,7 +7107,7 @@
    null,
    43.702276203914835,
    null,
-   587,
+   589,
    "point|scale_location||y|77"
   ],
   [
@@ -7095,7 +7119,7 @@
    null,
    33.11026920671324,
    null,
-   588,
+   590,
    "point|scale_location||y|78"
   ],
   [
@@ -7107,7 +7131,7 @@
    null,
    35.241289028484935,
    null,
-   589,
+   591,
    "point|scale_location||y|79"
   ],
   [
@@ -7119,7 +7143,7 @@
    null,
    56.52038947036682,
    null,
-   590,
+   592,
    "point|scale_location||y|80"
   ],
   [
@@ -7131,7 +7155,7 @@
    null,
    35.023664019110946,
    null,
-   591,
+   593,
    "point|scale_location||y|81"
   ],
   [
@@ -7143,7 +7167,7 @@
    null,
    34.2036376709405,
    null,
-   592,
+   594,
    "point|scale_location||y|82"
   ],
   [
@@ -7155,7 +7179,7 @@
    null,
    46.162355248426174,
    null,
-   593,
+   595,
    "point|scale_location||y|83"
   ],
   [
@@ -7167,7 +7191,7 @@
    null,
    49.10078299603693,
    null,
-   594,
+   596,
    "point|scale_location||y|84"
   ],
   [
@@ -7179,7 +7203,7 @@
    null,
    45.06898678419891,
    null,
-   595,
+   597,
    "point|scale_location||y|85"
   ],
   [
@@ -7191,7 +7215,7 @@
    null,
    33.20204190280459,
    null,
-   596,
+   598,
    "point|scale_location||y|86"
   ],
   [
@@ -7203,7 +7227,7 @@
    null,
    49.85247381519318,
    null,
-   597,
+   599,
    "point|scale_location||y|87"
   ],
   [
@@ -7215,7 +7239,7 @@
    null,
    51.492526511534074,
    null,
-   598,
+   600,
    "point|scale_location||y|88"
   ],
   [
@@ -7227,7 +7251,7 @@
    null,
    47.66573688673866,
    null,
-   599,
+   601,
    "point|scale_location||y|89"
   ],
   [
@@ -7239,7 +7263,7 @@
    null,
    48.80671556018464,
    null,
-   600,
+   602,
    "point|scale_location||y|90"
   ],
   [
@@ -7251,7 +7275,7 @@
    null,
    35.95059237654766,
    null,
-   601,
+   603,
    "point|scale_location||y|91"
   ],
   [
@@ -7263,7 +7287,7 @@
    null,
    32.358578387556996,
    null,
-   602,
+   604,
    "point|scale_location||y|92"
   ],
   [
@@ -7275,7 +7299,7 @@
    null,
    35.707019309252985,
    null,
-   603,
+   605,
    "point|scale_location||y|93"
   ],
   [
@@ -7287,7 +7311,7 @@
    null,
    44.28490671628474,
    null,
-   604,
+   606,
    "point|scale_location||y|94"
   ],
   [
@@ -7299,7 +7323,7 @@
    "99",
    34.47697978699732,
    null,
-   605,
+   607,
    "point|scale_location||y|95"
   ],
   [
@@ -7311,7 +7335,7 @@
    null,
    41.3788682174319,
    null,
-   606,
+   608,
    "point|scale_location||y|96"
   ],
   [
@@ -7323,7 +7347,7 @@
    null,
    47.2107830270435,
    null,
-   607,
+   609,
    "point|scale_location||y|97"
   ],
   [
@@ -7335,7 +7359,7 @@
    null,
    50.757299767357146,
    null,
-   608,
+   610,
    "point|scale_location||y|98"
   ],
   [
@@ -7347,7 +7371,7 @@
    null,
    32.153571800514385,
    null,
-   609,
+   611,
    "point|scale_location||y|99"
   ],
   [
@@ -7359,7 +7383,7 @@
    null,
    37.89375623770751,
    null,
-   610,
+   612,
    "point|scale_location||y|100"
   ],
   [
@@ -7371,7 +7395,7 @@
    null,
    46.91404606758241,
    null,
-   611,
+   613,
    "point|scale_location||y|101"
   ],
   [
@@ -7383,7 +7407,7 @@
    null,
    43.42893408785802,
    null,
-   612,
+   614,
    "point|scale_location||y|102"
   ],
   [
@@ -7395,7 +7419,7 @@
    null,
    54.56980526319432,
    null,
-   613,
+   615,
    "point|scale_location||y|103"
   ],
   [
@@ -7407,7 +7431,7 @@
    null,
    50.809171221392035,
    null,
-   614,
+   616,
    "point|scale_location||y|104"
   ],
   [
@@ -7419,7 +7443,7 @@
    null,
    31.517446451155603,
    null,
-   615,
+   617,
    "point|scale_location||y|105"
   ],
   [
@@ -7431,7 +7455,7 @@
    null,
    36.659895724610394,
    null,
-   616,
+   618,
    "point|scale_location||y|106"
   ],
   [
@@ -7443,7 +7467,7 @@
    null,
    55.19044569274921,
    null,
-   617,
+   619,
    "point|scale_location||y|107"
   ],
   [
@@ -7455,7 +7479,7 @@
    null,
    40.42217081123305,
    null,
-   618,
+   620,
    "point|scale_location||y|108"
   ],
   [
@@ -7467,7 +7491,7 @@
    null,
    39.76309787238483,
    null,
-   619,
+   621,
    "point|scale_location||y|109"
   ],
   [
@@ -7479,7 +7503,7 @@
    null,
    32.4952494455854,
    null,
-   620,
+   622,
    "point|scale_location||y|110"
   ],
   [
@@ -7491,7 +7515,7 @@
    null,
    38.44044046982114,
    null,
-   621,
+   623,
    "point|scale_location||y|111"
   ],
   [
@@ -7503,7 +7527,7 @@
    "116",
    34.95532849009675,
    null,
-   622,
+   624,
    "point|scale_location||y|112"
   ],
   [
@@ -7515,7 +7539,7 @@
    null,
    50.53582910533522,
    null,
-   623,
+   625,
    "point|scale_location||y|113"
   ],
   [
@@ -7527,7 +7551,7 @@
    null,
    34.545315316011525,
    null,
-   624,
+   626,
    "point|scale_location||y|114"
   ],
   [
@@ -7539,7 +7563,7 @@
    null,
    48.00741453180968,
    null,
-   625,
+   627,
    "point|scale_location||y|115"
   ],
   [
@@ -7551,7 +7575,7 @@
    null,
    51.42419098251987,
    null,
-   626,
+   628,
    "point|scale_location||y|116"
   ],
   [
@@ -7563,7 +7587,7 @@
    null,
    30.63081726607719,
    null,
-   627,
+   629,
    "curve|scale_location|lowess|y|0"
   ],
   [
@@ -7575,7 +7599,7 @@
    null,
    30.63081726607719,
    null,
-   628,
+   630,
    "curve|scale_location|lowess|y|1"
   ],
   [
@@ -7587,7 +7611,7 @@
    null,
    31.517446451155603,
    null,
-   629,
+   631,
    "curve|scale_location|lowess|y|2"
   ],
   [
@@ -7599,7 +7623,7 @@
    null,
    32.13808688071049,
    null,
-   630,
+   632,
    "curve|scale_location|lowess|y|3"
   ],
   [
@@ -7611,7 +7635,7 @@
    null,
    32.153571800514385,
    null,
-   631,
+   633,
    "curve|scale_location|lowess|y|4"
   ],
   [
@@ -7623,7 +7647,7 @@
    null,
    32.22190732952859,
    null,
-   632,
+   634,
    "curve|scale_location|lowess|y|5"
   ],
   [
@@ -7635,7 +7659,7 @@
    null,
    32.358578387556996,
    null,
-   633,
+   635,
    "curve|scale_location|lowess|y|6"
   ],
   [
@@ -7647,7 +7671,7 @@
    null,
    32.4952494455854,
    null,
-   634,
+   636,
    "curve|scale_location|lowess|y|7"
   ],
   [
@@ -7659,7 +7683,7 @@
    null,
    32.90526261967064,
    null,
-   635,
+   637,
    "curve|scale_location|lowess|y|8"
   ],
   [
@@ -7671,7 +7695,7 @@
    null,
    33.11026920671324,
    null,
-   636,
+   638,
    "curve|scale_location|lowess|y|9"
   ],
   [
@@ -7683,7 +7707,7 @@
    null,
    33.17860473572744,
    null,
-   637,
+   639,
    "curve|scale_location|lowess|y|10"
   ],
   [
@@ -7695,7 +7719,7 @@
    null,
    33.20204190280459,
    null,
-   638,
+   640,
    "curve|scale_location|lowess|y|11"
   ],
   [
@@ -7707,7 +7731,7 @@
    null,
    33.37936773982027,
    null,
-   639,
+   641,
    "curve|scale_location|lowess|y|12"
   ],
   [
@@ -7719,7 +7743,7 @@
    null,
    33.46803065832811,
    null,
-   640,
+   642,
    "curve|scale_location|lowess|y|13"
   ],
   [
@@ -7731,7 +7755,7 @@
    null,
    33.86196002586948,
    null,
-   641,
+   643,
    "curve|scale_location|lowess|y|14"
   ],
   [
@@ -7743,7 +7767,7 @@
    null,
    34.2036376709405,
    null,
-   642,
+   644,
    "curve|scale_location|lowess|y|15"
   ],
   [
@@ -7755,7 +7779,7 @@
    null,
    34.2036376709405,
    null,
-   643,
+   645,
    "curve|scale_location|lowess|y|16"
   ],
   [
@@ -7767,7 +7791,7 @@
    null,
    34.35465984340652,
    null,
-   644,
+   646,
    "curve|scale_location|lowess|y|17"
   ],
   [
@@ -7779,7 +7803,7 @@
    null,
    34.40864425798311,
    null,
-   645,
+   647,
    "curve|scale_location|lowess|y|18"
   ],
   [
@@ -7791,7 +7815,7 @@
    null,
    34.47697978699732,
    null,
-   646,
+   648,
    "curve|scale_location|lowess|y|19"
   ],
   [
@@ -7803,7 +7827,7 @@
    null,
    34.5319856804222,
    null,
-   647,
+   649,
    "curve|scale_location|lowess|y|20"
   ],
   [
@@ -7815,7 +7839,7 @@
    null,
    34.545315316011525,
    null,
-   648,
+   650,
    "curve|scale_location|lowess|y|21"
   ],
   [
@@ -7827,7 +7851,7 @@
    null,
    34.620648598930046,
    null,
-   649,
+   651,
    "curve|scale_location|lowess|y|22"
   ],
   [
@@ -7839,7 +7863,7 @@
    null,
    34.95532849009675,
    null,
-   650,
+   652,
    "curve|scale_location|lowess|y|23"
   ],
   [
@@ -7851,7 +7875,7 @@
    null,
    35.023664019110946,
    null,
-   651,
+   653,
    "curve|scale_location|lowess|y|24"
   ],
   [
@@ -7863,7 +7887,7 @@
    null,
    35.241289028484935,
    null,
-   652,
+   654,
    "curve|scale_location|lowess|y|25"
   ],
   [
@@ -7875,7 +7899,7 @@
    null,
    35.5959407025163,
    null,
-   653,
+   655,
    "curve|scale_location|lowess|y|26"
   ],
   [
@@ -7887,7 +7911,7 @@
    null,
    35.68460362102414,
    null,
-   654,
+   656,
    "curve|scale_location|lowess|y|27"
   ],
   [
@@ -7899,7 +7923,7 @@
    null,
    35.707019309252985,
    null,
-   655,
+   657,
    "curve|scale_location|lowess|y|28"
   ],
   [
@@ -7911,7 +7935,7 @@
    null,
    35.77326653953198,
    null,
-   656,
+   658,
    "curve|scale_location|lowess|y|29"
   ],
   [
@@ -7923,7 +7947,7 @@
    null,
    35.861929458039825,
    null,
-   657,
+   659,
    "curve|scale_location|lowess|y|30"
   ],
   [
@@ -7935,7 +7959,7 @@
    null,
    35.95059237654766,
    null,
-   658,
+   660,
    "curve|scale_location|lowess|y|31"
   ],
   [
@@ -7947,7 +7971,7 @@
    null,
    36.595381186437635,
    null,
-   659,
+   661,
    "curve|scale_location|lowess|y|32"
   ],
   [
@@ -7959,7 +7983,7 @@
    null,
    36.595381186437635,
    null,
-   660,
+   662,
    "curve|scale_location|lowess|y|33"
   ],
   [
@@ -7971,7 +7995,7 @@
    null,
    36.659895724610394,
    null,
-   661,
+   663,
    "curve|scale_location|lowess|y|34"
   ],
   [
@@ -7983,7 +8007,7 @@
    null,
    36.659895724610394,
    null,
-   662,
+   664,
    "curve|scale_location|lowess|y|35"
   ],
   [
@@ -7995,7 +8019,7 @@
    null,
    37.00539436052286,
    null,
-   663,
+   665,
    "curve|scale_location|lowess|y|36"
   ],
   [
@@ -8007,7 +8031,7 @@
    null,
    37.81251366521233,
    null,
-   664,
+   666,
    "curve|scale_location|lowess|y|37"
   ],
   [
@@ -8019,7 +8043,7 @@
    null,
    37.89375623770751,
    null,
-   665,
+   667,
    "curve|scale_location|lowess|y|38"
   ],
   [
@@ -8031,7 +8055,7 @@
    null,
    38.44044046982114,
    null,
-   666,
+   668,
    "curve|scale_location|lowess|y|39"
   ],
   [
@@ -8043,7 +8067,7 @@
    null,
    38.64544705686375,
    null,
-   667,
+   669,
    "curve|scale_location|lowess|y|40"
   ],
   [
@@ -8055,7 +8079,7 @@
    null,
    38.787805768798584,
    null,
-   668,
+   670,
    "curve|scale_location|lowess|y|41"
   ],
   [
@@ -8067,7 +8091,7 @@
    null,
    38.91878917292056,
    null,
-   669,
+   671,
    "curve|scale_location|lowess|y|42"
   ],
   [
@@ -8079,7 +8103,7 @@
    null,
    39.05546023094897,
    null,
-   670,
+   672,
    "curve|scale_location|lowess|y|43"
   ],
   [
@@ -8091,7 +8115,7 @@
    null,
    39.12379575996317,
    null,
-   671,
+   673,
    "curve|scale_location|lowess|y|44"
   ],
   [
@@ -8103,7 +8127,7 @@
    null,
    39.260466817991585,
    null,
-   672,
+   674,
    "curve|scale_location|lowess|y|45"
   ],
   [
@@ -8115,7 +8139,7 @@
    null,
    39.31978327984562,
    null,
-   673,
+   675,
    "curve|scale_location|lowess|y|46"
   ],
   [
@@ -8127,7 +8151,7 @@
    null,
    39.32880234700579,
    null,
-   674,
+   676,
    "curve|scale_location|lowess|y|47"
   ],
   [
@@ -8139,7 +8163,7 @@
    null,
    39.465473405034196,
    null,
-   675,
+   677,
    "curve|scale_location|lowess|y|48"
   ],
   [
@@ -8151,7 +8175,7 @@
    null,
    39.5338089340484,
    null,
-   676,
+   678,
    "curve|scale_location|lowess|y|49"
   ],
   [
@@ -8163,7 +8187,7 @@
    null,
    39.76309787238483,
    null,
-   677,
+   679,
    "curve|scale_location|lowess|y|50"
   ],
   [
@@ -8175,7 +8199,7 @@
    null,
    40.42217081123305,
    null,
-   678,
+   680,
    "curve|scale_location|lowess|y|51"
   ],
   [
@@ -8187,7 +8211,7 @@
    null,
    41.18170456851029,
    null,
-   679,
+   681,
    "curve|scale_location|lowess|y|52"
   ],
   [
@@ -8199,7 +8223,7 @@
    null,
    41.242197159403496,
    null,
-   680,
+   682,
    "curve|scale_location|lowess|y|53"
   ],
   [
@@ -8211,7 +8235,7 @@
    null,
    41.3788682174319,
    null,
-   681,
+   683,
    "curve|scale_location|lowess|y|54"
   ],
   [
@@ -8223,7 +8247,7 @@
    null,
    41.720545862502924,
    null,
-   682,
+   684,
    "curve|scale_location|lowess|y|55"
   ],
   [
@@ -8235,7 +8259,7 @@
    null,
    41.720545862502924,
    null,
-   683,
+   685,
    "curve|scale_location|lowess|y|56"
   ],
   [
@@ -8247,7 +8271,7 @@
    null,
    42.06222350757394,
    null,
-   684,
+   686,
    "curve|scale_location|lowess|y|57"
   ],
   [
@@ -8259,7 +8283,7 @@
    null,
    42.47223668165917,
    null,
-   685,
+   687,
    "curve|scale_location|lowess|y|58"
   ],
   [
@@ -8271,7 +8295,7 @@
    null,
    42.6889741831436,
    null,
-   686,
+   688,
    "curve|scale_location|lowess|y|59"
   ],
   [
@@ -8283,7 +8307,7 @@
    null,
    43.42893408785802,
    null,
-   687,
+   689,
    "curve|scale_location|lowess|y|60"
   ],
   [
@@ -8295,7 +8319,7 @@
    null,
    43.48694044971417,
    null,
-   688,
+   690,
    "curve|scale_location|lowess|y|61"
   ],
   [
@@ -8307,7 +8331,7 @@
    null,
    43.48694044971417,
    null,
-   689,
+   691,
    "curve|scale_location|lowess|y|62"
   ],
   [
@@ -8319,7 +8343,7 @@
    null,
    43.497269616872224,
    null,
-   690,
+   692,
    "curve|scale_location|lowess|y|63"
   ],
   [
@@ -8331,7 +8355,7 @@
    null,
    43.56560514588643,
    null,
-   691,
+   693,
    "curve|scale_location|lowess|y|64"
   ],
   [
@@ -8343,7 +8367,7 @@
    null,
    43.702276203914835,
    null,
-   692,
+   694,
    "curve|scale_location|lowess|y|65"
   ],
   [
@@ -8355,7 +8379,7 @@
    null,
    43.702276203914835,
    null,
-   693,
+   695,
    "curve|scale_location|lowess|y|66"
   ],
   [
@@ -8367,7 +8391,7 @@
    null,
    43.83894726194324,
    null,
-   694,
+   696,
    "curve|scale_location|lowess|y|67"
   ],
   [
@@ -8379,7 +8403,7 @@
    null,
    44.18062490701426,
    null,
-   695,
+   697,
    "curve|scale_location|lowess|y|68"
   ],
   [
@@ -8391,7 +8415,7 @@
    null,
    44.18062490701426,
    null,
-   696,
+   698,
    "curve|scale_location|lowess|y|69"
   ],
   [
@@ -8403,7 +8427,7 @@
    null,
    44.28490671628474,
    null,
-   697,
+   699,
    "curve|scale_location|lowess|y|70"
   ],
   [
@@ -8415,7 +8439,7 @@
    null,
    44.385631494056874,
    null,
-   698,
+   700,
    "curve|scale_location|lowess|y|71"
   ],
   [
@@ -8427,7 +8451,7 @@
    null,
    44.385631494056874,
    null,
-   699,
+   701,
    "curve|scale_location|lowess|y|72"
   ],
   [
@@ -8439,7 +8463,7 @@
    null,
    44.46223255330042,
    null,
-   700,
+   702,
    "curve|scale_location|lowess|y|73"
   ],
   [
@@ -8451,7 +8475,7 @@
    null,
    44.52230255208528,
    null,
-   701,
+   703,
    "curve|scale_location|lowess|y|74"
   ],
   [
@@ -8463,7 +8487,7 @@
    null,
    44.55089547180826,
    null,
-   702,
+   704,
    "curve|scale_location|lowess|y|75"
   ],
   [
@@ -8475,7 +8499,7 @@
    null,
    44.658973610113684,
    null,
-   703,
+   705,
    "curve|scale_location|lowess|y|76"
   ],
   [
@@ -8487,7 +8511,7 @@
    null,
    44.9323157261705,
    null,
-   704,
+   706,
    "curve|scale_location|lowess|y|77"
   ],
   [
@@ -8499,7 +8523,7 @@
    null,
    45.06898678419891,
    null,
-   705,
+   707,
    "curve|scale_location|lowess|y|78"
   ],
   [
@@ -8511,7 +8535,7 @@
    null,
    45.54733548729834,
    null,
-   706,
+   708,
    "curve|scale_location|lowess|y|79"
   ],
   [
@@ -8523,7 +8547,7 @@
    null,
    46.02568419039776,
    null,
-   707,
+   709,
    "curve|scale_location|lowess|y|80"
   ],
   [
@@ -8535,7 +8559,7 @@
    null,
    46.162355248426174,
    null,
-   708,
+   710,
    "curve|scale_location|lowess|y|81"
   ],
   [
@@ -8547,7 +8571,7 @@
    null,
    46.299026306454586,
    null,
-   709,
+   711,
    "curve|scale_location|lowess|y|82"
   ],
   [
@@ -8559,7 +8583,7 @@
    null,
    46.572368422511396,
    null,
-   710,
+   712,
    "curve|scale_location|lowess|y|83"
   ],
   [
@@ -8571,7 +8595,7 @@
    null,
    46.640703951525595,
    null,
-   711,
+   713,
    "curve|scale_location|lowess|y|84"
   ],
   [
@@ -8583,7 +8607,7 @@
    null,
    46.91404606758241,
    null,
-   712,
+   714,
    "curve|scale_location|lowess|y|85"
   ],
   [
@@ -8595,7 +8619,7 @@
    null,
    47.2107830270435,
    null,
-   713,
+   715,
    "curve|scale_location|lowess|y|86"
   ],
   [
@@ -8607,7 +8631,7 @@
    null,
    47.66573688673866,
    null,
-   714,
+   716,
    "curve|scale_location|lowess|y|87"
   ],
   [
@@ -8619,7 +8643,7 @@
    null,
    47.74276053809054,
    null,
-   715,
+   717,
    "curve|scale_location|lowess|y|88"
   ],
   [
@@ -8631,7 +8655,7 @@
    null,
    47.92008637510623,
    null,
-   716,
+   718,
    "curve|scale_location|lowess|y|89"
   ],
   [
@@ -8643,7 +8667,7 @@
    null,
    48.00741453180968,
    null,
-   717,
+   719,
    "curve|scale_location|lowess|y|90"
   ],
   [
@@ -8655,7 +8679,7 @@
    null,
    48.008749293614066,
    null,
-   718,
+   720,
    "curve|scale_location|lowess|y|91"
   ],
   [
@@ -8667,7 +8691,7 @@
    null,
    48.622434292937506,
    null,
-   719,
+   721,
    "curve|scale_location|lowess|y|92"
   ],
   [
@@ -8679,7 +8703,7 @@
    null,
    48.80671556018464,
    null,
-   720,
+   722,
    "curve|scale_location|lowess|y|93"
   ],
   [
@@ -8691,7 +8715,7 @@
    null,
    49.10078299603693,
    null,
-   721,
+   723,
    "curve|scale_location|lowess|y|94"
   ],
   [
@@ -8703,7 +8727,7 @@
    null,
    49.85247381519318,
    null,
-   722,
+   724,
    "curve|scale_location|lowess|y|95"
   ],
   [
@@ -8715,7 +8739,7 @@
    null,
    50.13665933780226,
    null,
-   723,
+   725,
    "curve|scale_location|lowess|y|96"
   ],
   [
@@ -8727,7 +8751,7 @@
    null,
    50.53582910533522,
    null,
-   724,
+   726,
    "curve|scale_location|lowess|y|97"
   ],
   [
@@ -8739,7 +8763,7 @@
    null,
    50.53582910533522,
    null,
-   725,
+   727,
    "curve|scale_location|lowess|y|98"
   ],
   [
@@ -8751,7 +8775,7 @@
    null,
    50.757299767357146,
    null,
-   726,
+   728,
    "curve|scale_location|lowess|y|99"
   ],
   [
@@ -8763,7 +8787,7 @@
    null,
    50.809171221392035,
    null,
-   727,
+   729,
    "curve|scale_location|lowess|y|100"
   ],
   [
@@ -8775,7 +8799,7 @@
    null,
    50.94584227942044,
    null,
-   728,
+   730,
    "curve|scale_location|lowess|y|101"
   ],
   [
@@ -8787,7 +8811,7 @@
    null,
    51.014177808434646,
    null,
-   729,
+   731,
    "curve|scale_location|lowess|y|102"
   ],
   [
@@ -8799,7 +8823,7 @@
    null,
    51.35585545350566,
    null,
-   730,
+   732,
    "curve|scale_location|lowess|y|103"
   ],
   [
@@ -8811,7 +8835,7 @@
    null,
    51.42419098251987,
    null,
-   731,
+   733,
    "curve|scale_location|lowess|y|104"
   ],
   [
@@ -8823,7 +8847,7 @@
    null,
    51.492526511534074,
    null,
-   732,
+   734,
    "curve|scale_location|lowess|y|105"
   ],
   [
@@ -8835,7 +8859,7 @@
    null,
    52.08724354497476,
    null,
-   733,
+   735,
    "curve|scale_location|lowess|y|106"
   ],
   [
@@ -8847,7 +8871,7 @@
    null,
    52.175906463482605,
    null,
-   734,
+   736,
    "curve|scale_location|lowess|y|107"
   ],
   [
@@ -8859,7 +8883,7 @@
    null,
    52.175906463482605,
    null,
-   735,
+   737,
    "curve|scale_location|lowess|y|108"
   ],
   [
@@ -8871,7 +8895,7 @@
    null,
    53.06253564856114,
    null,
-   736,
+   738,
    "curve|scale_location|lowess|y|109"
   ],
   [
@@ -8883,7 +8907,7 @@
    null,
    53.41718732259238,
    null,
-   737,
+   739,
    "curve|scale_location|lowess|y|110"
   ],
   [
@@ -8895,7 +8919,7 @@
    null,
    53.59451315960806,
    null,
-   738,
+   740,
    "curve|scale_location|lowess|y|111"
   ],
   [
@@ -8907,7 +8931,7 @@
    null,
    54.56980526319432,
    null,
-   739,
+   741,
    "curve|scale_location|lowess|y|112"
   ],
   [
@@ -8919,7 +8943,7 @@
    null,
    54.74713110021,
    null,
-   740,
+   742,
    "curve|scale_location|lowess|y|113"
   ],
   [
@@ -8931,7 +8955,7 @@
    null,
    55.19044569274921,
    null,
-   741,
+   743,
    "curve|scale_location|lowess|y|114"
   ],
   [
@@ -8943,7 +8967,7 @@
    null,
    55.36777152976489,
    null,
-   742,
+   744,
    "curve|scale_location|lowess|y|115"
   ],
   [
@@ -8955,7 +8979,7 @@
    null,
    56.52038947036682,
    null,
-   743,
+   745,
    "curve|scale_location|lowess|y|116"
   ],
   [
@@ -8967,7 +8991,7 @@
    null,
    0.05566400060910444,
    null,
-   744,
+   746,
    "point|resid_leverage||y|0"
   ],
   [
@@ -8979,7 +9003,7 @@
    null,
    0.04757268411176409,
    null,
-   745,
+   747,
    "point|resid_leverage||y|1"
   ],
   [
@@ -8991,7 +9015,7 @@
    null,
    0.022944178299597967,
    null,
-   746,
+   748,
    "point|resid_leverage||y|2"
   ],
   [
@@ -9003,7 +9027,7 @@
    null,
    0.05289921886898409,
    null,
-   747,
+   749,
    "point|resid_leverage||y|3"
   ],
   [
@@ -9015,7 +9039,7 @@
    null,
    0.036613048461654425,
    null,
-   748,
+   750,
    "point|resid_leverage||y|4"
   ],
   [
@@ -9027,7 +9051,7 @@
    null,
    0.049661639896858914,
    null,
-   749,
+   751,
    "point|resid_leverage||y|5"
   ],
   [
@@ -9039,7 +9063,7 @@
    null,
    0.01564192590245984,
    null,
-   750,
+   752,
    "point|resid_leverage||y|6"
   ],
   [
@@ -9051,7 +9075,7 @@
    null,
    0.017804151287586476,
    null,
-   751,
+   753,
    "point|resid_leverage||y|7"
   ],
   [
@@ -9063,7 +9087,7 @@
    null,
    0.014286978745003837,
    null,
-   752,
+   754,
    "point|resid_leverage||y|8"
   ],
   [
@@ -9075,7 +9099,7 @@
    null,
    0.037412930620713304,
    null,
-   753,
+   755,
    "point|resid_leverage||y|9"
   ],
   [
@@ -9087,7 +9111,7 @@
    null,
    0.024301496318221955,
    null,
-   754,
+   756,
    "point|resid_leverage||y|10"
   ],
   [
@@ -9099,7 +9123,7 @@
    null,
    0.021452491260887253,
    null,
-   755,
+   757,
    "point|resid_leverage||y|11"
   ],
   [
@@ -9111,7 +9135,7 @@
    null,
    0.045552710396711674,
    null,
-   756,
+   758,
    "point|resid_leverage||y|12"
   ],
   [
@@ -9123,7 +9147,7 @@
    null,
    0.014286978745003837,
    null,
-   757,
+   759,
    "point|resid_leverage||y|13"
   ],
   [
@@ -9135,7 +9159,7 @@
    null,
    0.04406013954461222,
    null,
-   758,
+   760,
    "point|resid_leverage||y|14"
   ],
   [
@@ -9147,7 +9171,7 @@
    null,
    0.020305804963251097,
    null,
-   759,
+   761,
    "point|resid_leverage||y|15"
   ],
   [
@@ -9159,7 +9183,7 @@
    null,
    0.01843005863591261,
    null,
-   760,
+   762,
    "point|resid_leverage||y|16"
   ],
   [
@@ -9171,7 +9195,7 @@
    null,
    0.025637476586334734,
    null,
-   761,
+   763,
    "point|resid_leverage||y|17"
   ],
   [
@@ -9183,7 +9207,7 @@
    null,
    0.05806970352231504,
    null,
-   762,
+   764,
    "point|resid_leverage||y|18"
   ],
   [
@@ -9195,7 +9219,7 @@
    null,
    0.03782049632060696,
    null,
-   763,
+   765,
    "point|resid_leverage||y|19"
   ],
   [
@@ -9207,7 +9231,7 @@
    null,
    0.017415330056050546,
    null,
-   764,
+   766,
    "point|resid_leverage||y|20"
   ],
   [
@@ -9219,7 +9243,7 @@
    null,
    0.05039993605448737,
    null,
-   765,
+   767,
    "point|resid_leverage||y|21"
   ],
   [
@@ -9231,7 +9255,7 @@
    null,
    0.0687567715821639,
    null,
-   766,
+   768,
    "point|resid_leverage||y|22"
   ],
   [
@@ -9243,7 +9267,7 @@
    null,
    0.03326519121790818,
    null,
-   767,
+   769,
    "point|resid_leverage||y|23"
   ],
   [
@@ -9255,7 +9279,7 @@
    null,
    0.06781542838145424,
    null,
-   768,
+   770,
    "point|resid_leverage||y|24"
   ],
   [
@@ -9267,7 +9291,7 @@
    null,
    0.04675710787000592,
    null,
-   769,
+   771,
    "point|resid_leverage||y|25"
   ],
   [
@@ -9279,7 +9303,7 @@
    null,
    0.05000555894307404,
    null,
-   770,
+   772,
    "point|resid_leverage||y|26"
   ],
   [
@@ -9291,7 +9315,7 @@
    null,
    0.07275483049441497,
    null,
-   771,
+   773,
    "point|resid_leverage||y|27"
   ],
   [
@@ -9303,7 +9327,7 @@
    null,
    0.03724521286438302,
    null,
-   772,
+   774,
    "point|resid_leverage||y|28"
   ],
   [
@@ -9315,7 +9339,7 @@
    null,
    0.014320565944882443,
    null,
-   773,
+   775,
    "point|resid_leverage||y|29"
   ],
   [
@@ -9327,7 +9351,7 @@
    "32",
    0.057680361205845035,
    null,
-   774,
+   776,
    "point|resid_leverage||y|30"
   ],
   [
@@ -9339,7 +9363,7 @@
    null,
    0.014491267948971393,
    null,
-   775,
+   777,
    "point|resid_leverage||y|31"
   ],
   [
@@ -9351,7 +9375,7 @@
    null,
    0.015856883981682956,
    null,
-   776,
+   778,
    "point|resid_leverage||y|32"
   ],
   [
@@ -9363,7 +9387,7 @@
    null,
    0.021277773896371345,
    null,
-   777,
+   779,
    "point|resid_leverage||y|33"
   ],
   [
@@ -9375,7 +9399,7 @@
    null,
    0.0341219984192001,
    null,
-   778,
+   780,
    "point|resid_leverage||y|34"
   ],
   [
@@ -9387,7 +9411,7 @@
    null,
    0.016817873041739238,
    null,
-   779,
+   781,
    "point|resid_leverage||y|35"
   ],
   [
@@ -9399,7 +9423,7 @@
    null,
    0.01747855302052793,
    null,
-   780,
+   782,
    "point|resid_leverage||y|36"
   ],
   [
@@ -9411,7 +9435,7 @@
    null,
    0.02507926901412685,
    null,
-   781,
+   783,
    "point|resid_leverage||y|37"
   ],
   [
@@ -9423,7 +9447,7 @@
    null,
    0.04946767171780641,
    null,
-   782,
+   784,
    "point|resid_leverage||y|38"
   ],
   [
@@ -9435,7 +9459,7 @@
    null,
    0.03701044800106247,
    null,
-   783,
+   785,
    "point|resid_leverage||y|39"
   ],
   [
@@ -9447,7 +9471,7 @@
    null,
    0.021929449719735986,
    null,
-   784,
+   786,
    "point|resid_leverage||y|40"
   ],
   [
@@ -9459,7 +9483,7 @@
    null,
    0.016961310142397313,
    null,
-   785,
+   787,
    "point|resid_leverage||y|41"
   ],
   [
@@ -9471,7 +9495,7 @@
    null,
    0.017168760494588736,
    null,
-   786,
+   788,
    "point|resid_leverage||y|42"
   ],
   [
@@ -9483,7 +9507,7 @@
    null,
    0.040779376578668966,
    null,
-   787,
+   789,
    "point|resid_leverage||y|43"
   ],
   [
@@ -9495,7 +9519,7 @@
    null,
    0.05312049924465495,
    null,
-   788,
+   790,
    "point|resid_leverage||y|44"
   ],
   [
@@ -9507,7 +9531,7 @@
    null,
    0.014405916946926918,
    null,
-   789,
+   791,
    "point|resid_leverage||y|45"
   ],
   [
@@ -9519,7 +9543,7 @@
    null,
    0.05000555894307404,
    null,
-   790,
+   792,
    "point|resid_leverage||y|46"
   ],
   [
@@ -9531,7 +9555,7 @@
    null,
    0.022071112941500666,
    null,
-   791,
+   793,
    "point|resid_leverage||y|47"
   ],
   [
@@ -9543,7 +9567,7 @@
    null,
    0.025637476586334734,
    null,
-   792,
+   794,
    "point|resid_leverage||y|48"
   ],
   [
@@ -9555,7 +9579,7 @@
    null,
    0.017168760494588736,
    null,
-   793,
+   795,
    "point|resid_leverage||y|49"
   ],
   [
@@ -9567,7 +9591,7 @@
    null,
    0.04310776497826929,
    null,
-   794,
+   796,
    "point|resid_leverage||y|50"
   ],
   [
@@ -9579,7 +9603,7 @@
    null,
    0.026350471677401333,
    null,
-   795,
+   797,
    "point|resid_leverage||y|51"
   ],
   [
@@ -9591,7 +9615,7 @@
    null,
    0.0291562778961066,
    null,
-   796,
+   798,
    "point|resid_leverage||y|52"
   ],
   [
@@ -9603,7 +9627,7 @@
    null,
    0.017737767174885222,
    null,
-   797,
+   799,
    "point|resid_leverage||y|53"
   ],
   [
@@ -9615,7 +9639,7 @@
    null,
    0.02232591585750157,
    null,
-   798,
+   800,
    "point|resid_leverage||y|54"
   ],
   [
@@ -9627,7 +9651,7 @@
    null,
    0.0687567715821639,
    null,
-   799,
+   801,
    "point|resid_leverage||y|55"
   ],
   [
@@ -9639,7 +9663,7 @@
    null,
    0.03892017206334773,
    null,
-   800,
+   802,
    "point|resid_leverage||y|56"
   ],
   [
@@ -9651,7 +9675,7 @@
    null,
    0.0240221298439375,
    null,
-   801,
+   803,
    "point|resid_leverage||y|57"
   ],
   [
@@ -9663,7 +9687,7 @@
    null,
    0.021452491260887253,
    null,
-   802,
+   804,
    "point|resid_leverage||y|58"
   ],
   [
@@ -9675,7 +9699,7 @@
    null,
    0.04986767772229337,
    null,
-   803,
+   805,
    "point|resid_leverage||y|59"
   ],
   [
@@ -9687,7 +9711,7 @@
    null,
    0.022225173533114966,
    null,
-   804,
+   806,
    "point|resid_leverage||y|60"
   ],
   [
@@ -9699,7 +9723,7 @@
    null,
    0.01673370747027872,
    null,
-   805,
+   807,
    "point|resid_leverage||y|61"
   ],
   [
@@ -9711,7 +9735,7 @@
    null,
    0.016411270351444043,
    null,
-   806,
+   808,
    "point|resid_leverage||y|62"
   ],
   [
@@ -9723,7 +9747,7 @@
    null,
    0.029920686644109327,
    null,
-   807,
+   809,
    "point|resid_leverage||y|63"
   ],
   [
@@ -9735,7 +9759,7 @@
    null,
    0.059303053460377175,
    null,
-   808,
+   810,
    "point|resid_leverage||y|64"
   ],
   [
@@ -9747,7 +9771,7 @@
    null,
    0.018502765045061605,
    null,
-   809,
+   811,
    "point|resid_leverage||y|65"
   ],
   [
@@ -9759,7 +9783,7 @@
    null,
    0.02933797097712592,
    null,
-   810,
+   812,
    "point|resid_leverage||y|66"
   ],
   [
@@ -9771,7 +9795,7 @@
    null,
    0.01726003864955297,
    null,
-   811,
+   813,
    "point|resid_leverage||y|67"
   ],
   [
@@ -9783,7 +9807,7 @@
    null,
    0.030219669097965227,
    null,
-   812,
+   814,
    "point|resid_leverage||y|68"
   ],
   [
@@ -9795,7 +9819,7 @@
    null,
    0.02391148965610207,
    null,
-   813,
+   815,
    "point|resid_leverage||y|69"
   ],
   [
@@ -9807,7 +9831,7 @@
    null,
    0.01673370747027872,
    null,
-   814,
+   816,
    "point|resid_leverage||y|70"
   ],
   [
@@ -9819,7 +9843,7 @@
    null,
    0.01608764780202542,
    null,
-   815,
+   817,
    "point|resid_leverage||y|71"
   ],
   [
@@ -9831,7 +9855,7 @@
    "76",
    0.04263920231546201,
    null,
-   816,
+   818,
    "point|resid_leverage||y|72"
   ],
   [
@@ -9843,7 +9867,7 @@
    null,
    0.015540374015768034,
    null,
-   817,
+   819,
    "point|resid_leverage||y|73"
   ],
   [
@@ -9855,7 +9879,7 @@
    null,
    0.038540888492641465,
    null,
-   818,
+   820,
    "point|resid_leverage||y|74"
   ],
   [
@@ -9867,7 +9891,7 @@
    null,
    0.04912699719089518,
    null,
-   819,
+   821,
    "point|resid_leverage||y|75"
   ],
   [
@@ -9879,7 +9903,7 @@
    null,
    0.016542853146262602,
    null,
-   820,
+   822,
    "point|resid_leverage||y|76"
   ],
   [
@@ -9891,7 +9915,7 @@
    null,
    0.015856883981682956,
    null,
-   821,
+   823,
    "point|resid_leverage||y|77"
   ],
   [
@@ -9903,7 +9927,7 @@
    "82",
    0.04605177667255507,
    null,
-   822,
+   824,
    "point|resid_leverage||y|78"
   ],
   [
@@ -9915,7 +9939,7 @@
    null,
    0.03950158992260956,
    null,
-   823,
+   825,
    "point|resid_leverage||y|79"
   ],
   [
@@ -9927,7 +9951,7 @@
    null,
    0.0825888062786207,
    null,
-   824,
+   826,
    "point|resid_leverage||y|80"
   ],
   [
@@ -9939,7 +9963,7 @@
    null,
    0.03357156348471883,
    null,
-   825,
+   827,
    "point|resid_leverage||y|81"
   ],
   [
@@ -9951,7 +9975,7 @@
    null,
    0.038540888492641465,
    null,
-   826,
+   828,
    "point|resid_leverage||y|82"
   ],
   [
@@ -9963,7 +9987,7 @@
    null,
    0.022428911139107346,
    null,
-   827,
+   829,
    "point|resid_leverage||y|83"
   ],
   [
@@ -9975,7 +9999,7 @@
    null,
    0.03699034528883356,
    null,
-   828,
+   830,
    "point|resid_leverage||y|84"
   ],
   [
@@ -9987,7 +10011,7 @@
    null,
    0.018875780535478188,
    null,
-   829,
+   831,
    "point|resid_leverage||y|85"
   ],
   [
@@ -9999,7 +10023,7 @@
    null,
    0.05074617454951473,
    null,
-   830,
+   832,
    "point|resid_leverage||y|86"
   ],
   [
@@ -10011,7 +10035,7 @@
    null,
    0.04188893960524711,
    null,
-   831,
+   833,
    "point|resid_leverage||y|87"
   ],
   [
@@ -10023,7 +10047,7 @@
    null,
    0.05423638456768083,
    null,
-   832,
+   834,
    "point|resid_leverage||y|88"
   ],
   [
@@ -10035,7 +10059,7 @@
    null,
    0.028966165666069167,
    null,
-   833,
+   835,
    "point|resid_leverage||y|89"
   ],
   [
@@ -10047,7 +10071,7 @@
    null,
    0.033139249793594505,
    null,
-   834,
+   836,
    "point|resid_leverage||y|90"
   ],
   [
@@ -10059,7 +10083,7 @@
    null,
    0.0362207320024892,
    null,
-   835,
+   837,
    "point|resid_leverage||y|91"
   ],
   [
@@ -10071,7 +10095,7 @@
    null,
    0.0518023004353014,
    null,
-   836,
+   838,
    "point|resid_leverage||y|92"
   ],
   [
@@ -10083,7 +10107,7 @@
    null,
    0.02986511719223203,
    null,
-   837,
+   839,
    "point|resid_leverage||y|93"
   ],
   [
@@ -10095,7 +10119,7 @@
    null,
    0.022038938125070157,
    null,
-   838,
+   840,
    "point|resid_leverage||y|94"
   ],
   [
@@ -10107,7 +10131,7 @@
    null,
    0.03682122385885654,
    null,
-   839,
+   841,
    "point|resid_leverage||y|95"
   ],
   [
@@ -10119,7 +10143,7 @@
    null,
    0.01435217742712114,
    null,
-   840,
+   842,
    "point|resid_leverage||y|96"
   ],
   [
@@ -10131,7 +10155,7 @@
    null,
    0.027711817902002965,
    null,
-   841,
+   843,
    "point|resid_leverage||y|97"
   ],
   [
@@ -10143,7 +10167,7 @@
    null,
    0.042009332967928366,
    null,
-   842,
+   844,
    "point|resid_leverage||y|98"
   ],
   [
@@ -10155,7 +10179,7 @@
    null,
    0.053453605238745164,
    null,
-   843,
+   845,
    "point|resid_leverage||y|99"
   ],
   [
@@ -10167,7 +10191,7 @@
    null,
    0.02065985356432445,
    null,
-   844,
+   846,
    "point|resid_leverage||y|100"
   ],
   [
@@ -10179,7 +10203,7 @@
    null,
    0.02545847656815814,
    null,
-   845,
+   847,
    "point|resid_leverage||y|101"
   ],
   [
@@ -10191,7 +10215,7 @@
    null,
    0.015442773564356069,
    null,
-   846,
+   848,
    "point|resid_leverage||y|102"
   ],
   [
@@ -10203,7 +10227,7 @@
    null,
    0.06644991835707924,
    null,
-   847,
+   849,
    "point|resid_leverage||y|103"
   ],
   [
@@ -10215,7 +10239,7 @@
    null,
    0.04881501536374486,
    null,
-   848,
+   850,
    "point|resid_leverage||y|104"
   ],
   [
@@ -10227,7 +10251,7 @@
    null,
    0.06206332825818414,
    null,
-   849,
+   851,
    "point|resid_leverage||y|105"
   ],
   [
@@ -10239,7 +10263,7 @@
    null,
    0.03326519121790818,
    null,
-   850,
+   852,
    "point|resid_leverage||y|106"
   ],
   [
@@ -10251,7 +10275,7 @@
    null,
    0.07131815734664075,
    null,
-   851,
+   853,
    "point|resid_leverage||y|107"
   ],
   [
@@ -10263,7 +10287,7 @@
    null,
    0.015060274629267874,
    null,
-   852,
+   854,
    "point|resid_leverage||y|108"
   ],
   [
@@ -10275,7 +10299,7 @@
    null,
    0.024159718168075182,
    null,
-   853,
+   855,
    "point|resid_leverage||y|109"
   ],
   [
@@ -10287,7 +10311,7 @@
    null,
    0.05072118774273809,
    null,
-   854,
+   856,
    "point|resid_leverage||y|110"
   ],
   [
@@ -10299,7 +10323,7 @@
    null,
    0.018990767302121438,
    null,
-   855,
+   857,
    "point|resid_leverage||y|111"
   ],
   [
@@ -10311,7 +10335,7 @@
    null,
    0.03396394100800664,
    null,
-   856,
+   858,
    "point|resid_leverage||y|112"
   ],
   [
@@ -10323,7 +10347,7 @@
    null,
    0.046757107870005914,
    null,
-   857,
+   859,
    "point|resid_leverage||y|113"
   ],
   [
@@ -10335,7 +10359,7 @@
    null,
    0.036401186288609916,
    null,
-   858,
+   860,
    "point|resid_leverage||y|114"
   ],
   [
@@ -10347,7 +10371,7 @@
    null,
    0.030718627212676753,
    null,
-   859,
+   861,
    "point|resid_leverage||y|115"
   ],
   [
@@ -10359,7 +10383,7 @@
    null,
    0.05367646618852795,
    null,
-   860,
+   862,
    "point|resid_leverage||y|116"
   ],
   [
@@ -10367,11 +10391,11 @@
    "residual",
    null,
    "count",
-   5.0,
+   5,
    null,
    -10.746328490096746,
    -8.1725957810836,
-   861,
+   863,
    "hist|residual||count|0"
   ],
   [
@@ -10379,11 +10403,11 @@
    "residual",
    null,
    "count",
-   4.0,
+   4,
    null,
    -8.1725957810836,
    -5.598863072070454,
-   862,
+   864,
    "hist|residual||count|1"
   ],
   [
@@ -10391,11 +10415,11 @@
    "residual",
    null,
    "count",
-   11.0,
+   11,
    null,
    -5.598863072070454,
    -3.0251303630573085,
-   863,
+   865,
    "hist|residual||count|2"
   ],
   [
@@ -10403,11 +10427,11 @@
    "residual",
    null,
    "count",
-   33.0,
+   33,
    null,
    -3.0251303630573085,
    -0.4513976540441629,
-   864,
+   866,
    "hist|residual||count|3"
   ],
   [
@@ -10415,11 +10439,11 @@
    "residual",
    null,
    "count",
-   32.0,
+   32,
    null,
    -0.4513976540441629,
    2.1223350549689837,
-   865,
+   867,
    "hist|residual||count|4"
   ],
   [
@@ -10427,11 +10451,11 @@
    "residual",
    null,
    "count",
-   19.0,
+   19,
    null,
    2.1223350549689837,
    4.696067763982128,
-   866,
+   868,
    "hist|residual||count|5"
   ],
   [
@@ -10439,11 +10463,11 @@
    "residual",
    null,
    "count",
-   8.0,
+   8,
    null,
    4.696067763982128,
    7.269800472995273,
-   867,
+   869,
    "hist|residual||count|6"
   ],
   [
@@ -10451,11 +10475,11 @@
    "residual",
    null,
    "count",
-   5.0,
+   5,
    null,
    7.269800472995273,
    9.843533182008418,
-   868,
+   870,
    "hist|residual||count|7"
   ],
   [
@@ -10467,7 +10491,7 @@
    null,
    53.06253564856114,
    null,
-   869,
+   871,
    "point|observed_fitted||y|0"
   ],
   [
@@ -10479,7 +10503,7 @@
    null,
    32.90526261967064,
    null,
-   870,
+   872,
    "point|observed_fitted||y|1"
   ],
   [
@@ -10491,7 +10515,7 @@
    null,
    46.299026306454586,
    null,
-   871,
+   873,
    "point|observed_fitted||y|2"
   ],
   [
@@ -10503,7 +10527,7 @@
    null,
    32.22190732952859,
    null,
-   872,
+   874,
    "point|observed_fitted||y|3"
   ],
   [
@@ -10515,7 +10539,7 @@
    null,
    35.861929458039825,
    null,
-   873,
+   875,
    "point|observed_fitted||y|4"
   ],
   [
@@ -10527,7 +10551,7 @@
    null,
    33.37936773982027,
    null,
-   874,
+   876,
    "point|observed_fitted||y|5"
   ],
   [
@@ -10539,7 +10563,7 @@
    null,
    43.56560514588643,
    null,
-   875,
+   877,
    "point|observed_fitted||y|6"
   ],
   [
@@ -10551,7 +10575,7 @@
    null,
    44.658973610113684,
    null,
-   876,
+   878,
    "point|observed_fitted||y|7"
   ],
   [
@@ -10563,7 +10587,7 @@
    null,
    41.720545862502924,
    null,
-   877,
+   879,
    "point|observed_fitted||y|8"
   ],
   [
@@ -10575,7 +10599,7 @@
    null,
    35.68460362102414,
    null,
-   878,
+   880,
    "point|observed_fitted||y|9"
   ],
   [
@@ -10587,7 +10611,7 @@
    null,
    46.640703951525595,
    null,
-   879,
+   881,
    "point|observed_fitted||y|10"
   ],
   [
@@ -10599,7 +10623,7 @@
    null,
    43.48694044971417,
    null,
-   880,
+   882,
    "point|observed_fitted||y|11"
   ],
   [
@@ -10611,7 +10635,7 @@
    null,
    33.17860473572744,
    null,
-   881,
+   883,
    "point|observed_fitted||y|12"
   ],
   [
@@ -10623,7 +10647,7 @@
    null,
    41.720545862502924,
    null,
-   882,
+   884,
    "point|observed_fitted||y|13"
   ],
   [
@@ -10635,7 +10659,7 @@
    null,
    34.35465984340652,
    null,
-   883,
+   885,
    "point|observed_fitted||y|14"
   ],
   [
@@ -10647,7 +10671,7 @@
    null,
    45.54733548729834,
    null,
-   884,
+   886,
    "point|observed_fitted||y|15"
   ],
   [
@@ -10659,7 +10683,7 @@
    null,
    38.64544705686375,
    null,
-   885,
+   887,
    "point|observed_fitted||y|16"
   ],
   [
@@ -10671,7 +10695,7 @@
    null,
    36.595381186437635,
    null,
-   886,
+   888,
    "point|observed_fitted||y|17"
   ],
   [
@@ -10683,7 +10707,7 @@
    null,
    53.41718732259238,
    null,
-   887,
+   889,
    "point|observed_fitted||y|18"
   ],
   [
@@ -10695,7 +10719,7 @@
    null,
    35.5959407025163,
    null,
-   888,
+   890,
    "point|observed_fitted||y|19"
   ],
   [
@@ -10707,7 +10731,7 @@
    null,
    39.05546023094897,
    null,
-   889,
+   891,
    "point|observed_fitted||y|20"
   ],
   [
@@ -10719,7 +10743,7 @@
    null,
    51.014177808434646,
    null,
-   890,
+   892,
    "point|observed_fitted||y|21"
   ],
   [
@@ -10731,7 +10755,7 @@
    null,
    30.63081726607719,
    null,
-   891,
+   893,
    "point|observed_fitted||y|22"
   ],
   [
@@ -10743,7 +10767,7 @@
    null,
    36.659895724610394,
    null,
-   892,
+   894,
    "point|observed_fitted||y|23"
   ],
   [
@@ -10755,7 +10779,7 @@
    null,
    54.74713110021,
    null,
-   893,
+   895,
    "point|observed_fitted||y|24"
   ],
   [
@@ -10767,7 +10791,7 @@
    null,
    50.53582910533522,
    null,
-   894,
+   896,
    "point|observed_fitted||y|25"
   ],
   [
@@ -10779,7 +10803,7 @@
    null,
    52.175906463482605,
    null,
-   895,
+   897,
    "point|observed_fitted||y|26"
   ],
   [
@@ -10791,7 +10815,7 @@
    null,
    55.36777152976489,
    null,
-   896,
+   898,
    "point|observed_fitted||y|27"
   ],
   [
@@ -10803,7 +10827,7 @@
    null,
    34.40864425798311,
    null,
-   897,
+   899,
    "point|observed_fitted||y|28"
   ],
   [
@@ -10815,7 +10839,7 @@
    null,
    42.06222350757394,
    null,
-   898,
+   900,
    "point|observed_fitted||y|29"
   ],
   [
@@ -10827,7 +10851,7 @@
    null,
    32.13808688071049,
    null,
-   899,
+   901,
    "point|observed_fitted||y|30"
   ],
   [
@@ -10839,7 +10863,7 @@
    null,
    42.47223668165917,
    null,
-   900,
+   902,
    "point|observed_fitted||y|31"
   ],
   [
@@ -10851,7 +10875,7 @@
    null,
    43.702276203914835,
    null,
-   901,
+   903,
    "point|observed_fitted||y|32"
   ],
   [
@@ -10863,7 +10887,7 @@
    null,
    42.6889741831436,
    null,
-   902,
+   904,
    "point|observed_fitted||y|33"
   ],
   [
@@ -10875,7 +10899,7 @@
    null,
    48.622434292937506,
    null,
-   903,
+   905,
    "point|observed_fitted||y|34"
   ],
   [
@@ -10887,7 +10911,7 @@
    null,
    39.32880234700579,
    null,
-   904,
+   906,
    "point|observed_fitted||y|35"
   ],
   [
@@ -10899,7 +10923,7 @@
    null,
    44.52230255208528,
    null,
-   905,
+   907,
    "point|observed_fitted||y|36"
   ],
   [
@@ -10911,7 +10935,7 @@
    null,
    39.31978327984562,
    null,
-   906,
+   908,
    "point|observed_fitted||y|37"
   ],
   [
@@ -10923,7 +10947,7 @@
    null,
    52.08724354497476,
    null,
-   907,
+   909,
    "point|observed_fitted||y|38"
   ],
   [
@@ -10935,7 +10959,7 @@
    null,
    35.77326653953198,
    null,
-   908,
+   910,
    "point|observed_fitted||y|39"
   ],
   [
@@ -10947,7 +10971,7 @@
    null,
    46.02568419039776,
    null,
-   909,
+   911,
    "point|observed_fitted||y|40"
   ],
   [
@@ -10959,7 +10983,7 @@
    null,
    39.260466817991585,
    null,
-   910,
+   912,
    "point|observed_fitted||y|41"
   ],
   [
@@ -10971,7 +10995,7 @@
    null,
    44.385631494056874,
    null,
-   911,
+   913,
    "point|observed_fitted||y|42"
   ],
   [
@@ -10983,7 +11007,7 @@
    null,
    33.86196002586948,
    null,
-   912,
+   914,
    "point|observed_fitted||y|43"
   ],
   [
@@ -10995,7 +11019,7 @@
    null,
    51.35585545350566,
    null,
-   913,
+   915,
    "point|observed_fitted||y|44"
   ],
   [
@@ -11007,7 +11031,7 @@
    null,
    41.242197159403496,
    null,
-   914,
+   916,
    "point|observed_fitted||y|45"
   ],
   [
@@ -11019,7 +11043,7 @@
    null,
    52.175906463482605,
    null,
-   915,
+   917,
    "point|observed_fitted||y|46"
   ],
   [
@@ -11031,7 +11055,7 @@
    null,
    41.18170456851029,
    null,
-   916,
+   918,
    "point|observed_fitted||y|47"
   ],
   [
@@ -11043,7 +11067,7 @@
    null,
    36.595381186437635,
    null,
-   917,
+   919,
    "point|observed_fitted||y|48"
   ],
   [
@@ -11055,7 +11079,7 @@
    null,
    44.385631494056874,
    null,
-   918,
+   920,
    "point|observed_fitted||y|49"
   ],
   [
@@ -11067,7 +11091,7 @@
    null,
    34.5319856804222,
    null,
-   919,
+   921,
    "point|observed_fitted||y|50"
   ],
   [
@@ -11079,7 +11103,7 @@
    null,
    38.787805768798584,
    null,
-   920,
+   922,
    "point|observed_fitted||y|51"
   ],
   [
@@ -11091,7 +11115,7 @@
    null,
    37.81251366521233,
    null,
-   921,
+   923,
    "point|observed_fitted||y|52"
   ],
   [
@@ -11103,7 +11127,7 @@
    null,
    38.91878917292056,
    null,
-   922,
+   924,
    "point|observed_fitted||y|53"
   ],
   [
@@ -11115,7 +11139,7 @@
    null,
    44.55089547180826,
    null,
-   923,
+   925,
    "point|observed_fitted||y|54"
   ],
   [
@@ -11127,7 +11151,7 @@
    null,
    30.63081726607719,
    null,
-   924,
+   926,
    "point|observed_fitted||y|55"
   ],
   [
@@ -11139,7 +11163,7 @@
    null,
    50.13665933780226,
    null,
-   925,
+   927,
    "point|observed_fitted||y|56"
   ],
   [
@@ -11151,7 +11175,7 @@
    null,
    46.572368422511396,
    null,
-   926,
+   928,
    "point|observed_fitted||y|57"
   ],
   [
@@ -11163,7 +11187,7 @@
    null,
    43.48694044971417,
    null,
-   927,
+   929,
    "point|observed_fitted||y|58"
   ],
   [
@@ -11175,7 +11199,7 @@
    null,
    50.94584227942044,
    null,
-   928,
+   930,
    "point|observed_fitted||y|59"
   ],
   [
@@ -11187,7 +11211,7 @@
    null,
    44.46223255330042,
    null,
-   929,
+   931,
    "point|observed_fitted||y|60"
   ],
   [
@@ -11199,7 +11223,7 @@
    null,
    44.18062490701426,
    null,
-   930,
+   932,
    "point|observed_fitted||y|61"
   ],
   [
@@ -11211,7 +11235,7 @@
    null,
    39.5338089340484,
    null,
-   931,
+   933,
    "point|observed_fitted||y|62"
   ],
   [
@@ -11223,7 +11247,7 @@
    null,
    47.92008637510623,
    null,
-   932,
+   934,
    "point|observed_fitted||y|63"
   ],
   [
@@ -11235,7 +11259,7 @@
    null,
    53.59451315960806,
    null,
-   933,
+   935,
    "point|observed_fitted||y|64"
   ],
   [
@@ -11247,7 +11271,7 @@
    null,
    44.9323157261705,
    null,
-   934,
+   936,
    "point|observed_fitted||y|65"
   ],
   [
@@ -11259,7 +11283,7 @@
    null,
    47.74276053809054,
    null,
-   935,
+   937,
    "point|observed_fitted||y|66"
   ],
   [
@@ -11271,7 +11295,7 @@
    null,
    39.12379575996317,
    null,
-   936,
+   938,
    "point|observed_fitted||y|67"
   ],
   [
@@ -11283,7 +11307,7 @@
    null,
    48.008749293614066,
    null,
-   937,
+   939,
    "point|observed_fitted||y|68"
   ],
   [
@@ -11295,7 +11319,7 @@
    null,
    37.00539436052286,
    null,
-   938,
+   940,
    "point|observed_fitted||y|69"
   ],
   [
@@ -11307,7 +11331,7 @@
    null,
    44.18062490701426,
    null,
-   939,
+   941,
    "point|observed_fitted||y|70"
   ],
   [
@@ -11319,7 +11343,7 @@
    null,
    43.83894726194324,
    null,
-   940,
+   942,
    "point|observed_fitted||y|71"
   ],
   [
@@ -11331,7 +11355,7 @@
    null,
    34.620648598930046,
    null,
-   941,
+   943,
    "point|observed_fitted||y|72"
   ],
   [
@@ -11343,7 +11367,7 @@
    null,
    43.497269616872224,
    null,
-   942,
+   944,
    "point|observed_fitted||y|73"
   ],
   [
@@ -11355,7 +11379,7 @@
    null,
    34.2036376709405,
    null,
-   943,
+   945,
    "point|observed_fitted||y|74"
   ],
   [
@@ -11367,7 +11391,7 @@
    null,
    33.46803065832811,
    null,
-   944,
+   946,
    "point|observed_fitted||y|75"
   ],
   [
@@ -11379,7 +11403,7 @@
    null,
    39.465473405034196,
    null,
-   945,
+   947,
    "point|observed_fitted||y|76"
   ],
   [
@@ -11391,7 +11415,7 @@
    null,
    43.702276203914835,
    null,
-   946,
+   948,
    "point|observed_fitted||y|77"
   ],
   [
@@ -11403,7 +11427,7 @@
    null,
    33.11026920671324,
    null,
-   947,
+   949,
    "point|observed_fitted||y|78"
   ],
   [
@@ -11415,7 +11439,7 @@
    null,
    35.241289028484935,
    null,
-   948,
+   950,
    "point|observed_fitted||y|79"
   ],
   [
@@ -11427,7 +11451,7 @@
    null,
    56.52038947036682,
    null,
-   949,
+   951,
    "point|observed_fitted||y|80"
   ],
   [
@@ -11439,7 +11463,7 @@
    null,
    35.023664019110946,
    null,
-   950,
+   952,
    "point|observed_fitted||y|81"
   ],
   [
@@ -11451,7 +11475,7 @@
    null,
    34.2036376709405,
    null,
-   951,
+   953,
    "point|observed_fitted||y|82"
   ],
   [
@@ -11463,7 +11487,7 @@
    null,
    46.162355248426174,
    null,
-   952,
+   954,
    "point|observed_fitted||y|83"
   ],
   [
@@ -11475,7 +11499,7 @@
    null,
    49.10078299603693,
    null,
-   953,
+   955,
    "point|observed_fitted||y|84"
   ],
   [
@@ -11487,7 +11511,7 @@
    null,
    45.06898678419891,
    null,
-   954,
+   956,
    "point|observed_fitted||y|85"
   ],
   [
@@ -11499,7 +11523,7 @@
    null,
    33.20204190280459,
    null,
-   955,
+   957,
    "point|observed_fitted||y|86"
   ],
   [
@@ -11511,7 +11535,7 @@
    null,
    49.85247381519318,
    null,
-   956,
+   958,
    "point|observed_fitted||y|87"
   ],
   [
@@ -11523,7 +11547,7 @@
    null,
    51.492526511534074,
    null,
-   957,
+   959,
    "point|observed_fitted||y|88"
   ],
   [
@@ -11535,7 +11559,7 @@
    null,
    47.66573688673866,
    null,
-   958,
+   960,
    "point|observed_fitted||y|89"
   ],
   [
@@ -11547,7 +11571,7 @@
    null,
    48.80671556018464,
    null,
-   959,
+   961,
    "point|observed_fitted||y|90"
   ],
   [
@@ -11559,7 +11583,7 @@
    null,
    35.95059237654766,
    null,
-   960,
+   962,
    "point|observed_fitted||y|91"
   ],
   [
@@ -11571,7 +11595,7 @@
    null,
    32.358578387556996,
    null,
-   961,
+   963,
    "point|observed_fitted||y|92"
   ],
   [
@@ -11583,7 +11607,7 @@
    null,
    35.707019309252985,
    null,
-   962,
+   964,
    "point|observed_fitted||y|93"
   ],
   [
@@ -11595,7 +11619,7 @@
    null,
    44.28490671628474,
    null,
-   963,
+   965,
    "point|observed_fitted||y|94"
   ],
   [
@@ -11607,7 +11631,7 @@
    null,
    34.47697978699732,
    null,
-   964,
+   966,
    "point|observed_fitted||y|95"
   ],
   [
@@ -11619,7 +11643,7 @@
    null,
    41.3788682174319,
    null,
-   965,
+   967,
    "point|observed_fitted||y|96"
   ],
   [
@@ -11631,7 +11655,7 @@
    null,
    47.2107830270435,
    null,
-   966,
+   968,
    "point|observed_fitted||y|97"
   ],
   [
@@ -11643,7 +11667,7 @@
    null,
    50.757299767357146,
    null,
-   967,
+   969,
    "point|observed_fitted||y|98"
   ],
   [
@@ -11655,7 +11679,7 @@
    null,
    32.153571800514385,
    null,
-   968,
+   970,
    "point|observed_fitted||y|99"
   ],
   [
@@ -11667,7 +11691,7 @@
    null,
    37.89375623770751,
    null,
-   969,
+   971,
    "point|observed_fitted||y|100"
   ],
   [
@@ -11679,7 +11703,7 @@
    null,
    46.91404606758241,
    null,
-   970,
+   972,
    "point|observed_fitted||y|101"
   ],
   [
@@ -11691,7 +11715,7 @@
    null,
    43.42893408785802,
    null,
-   971,
+   973,
    "point|observed_fitted||y|102"
   ],
   [
@@ -11703,7 +11727,7 @@
    null,
    54.56980526319432,
    null,
-   972,
+   974,
    "point|observed_fitted||y|103"
   ],
   [
@@ -11715,7 +11739,7 @@
    null,
    50.809171221392035,
    null,
-   973,
+   975,
    "point|observed_fitted||y|104"
   ],
   [
@@ -11727,7 +11751,7 @@
    null,
    31.517446451155603,
    null,
-   974,
+   976,
    "point|observed_fitted||y|105"
   ],
   [
@@ -11739,7 +11763,7 @@
    null,
    36.659895724610394,
    null,
-   975,
+   977,
    "point|observed_fitted||y|106"
   ],
   [
@@ -11751,7 +11775,7 @@
    null,
    55.19044569274921,
    null,
-   976,
+   978,
    "point|observed_fitted||y|107"
   ],
   [
@@ -11763,7 +11787,7 @@
    null,
    40.42217081123305,
    null,
-   977,
+   979,
    "point|observed_fitted||y|108"
   ],
   [
@@ -11775,7 +11799,7 @@
    null,
    39.76309787238483,
    null,
-   978,
+   980,
    "point|observed_fitted||y|109"
   ],
   [
@@ -11787,7 +11811,7 @@
    null,
    32.4952494455854,
    null,
-   979,
+   981,
    "point|observed_fitted||y|110"
   ],
   [
@@ -11799,7 +11823,7 @@
    null,
    38.44044046982114,
    null,
-   980,
+   982,
    "point|observed_fitted||y|111"
   ],
   [
@@ -11811,7 +11835,7 @@
    null,
    34.95532849009675,
    null,
-   981,
+   983,
    "point|observed_fitted||y|112"
   ],
   [
@@ -11823,7 +11847,7 @@
    null,
    50.53582910533522,
    null,
-   982,
+   984,
    "point|observed_fitted||y|113"
   ],
   [
@@ -11835,7 +11859,7 @@
    null,
    34.545315316011525,
    null,
-   983,
+   985,
    "point|observed_fitted||y|114"
   ],
   [
@@ -11847,7 +11871,7 @@
    null,
    48.00741453180968,
    null,
-   984,
+   986,
    "point|observed_fitted||y|115"
   ],
   [
@@ -11859,7 +11883,7 @@
    null,
    51.42419098251987,
    null,
-   985,
+   987,
    "point|observed_fitted||y|116"
   ],
   [
@@ -11871,7 +11895,7 @@
    "The terms of an interaction are correlated with their parts by construction: their VIFs are large for that reason; centre the predictors to read them.",
    null,
    null,
-   986,
+   988,
    "model|||note_1"
   ]
  ]

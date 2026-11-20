@@ -13,11 +13,19 @@
 #                          strata by the log-rank test: rows of one stratum followed less long;
 #   proportional_hazards   the log-rank test's power needs it: the Grambsch–Therneau test
 #                          (survival::cox.zph on the strata, transform = "km") and the curves
-#                          that cross (each above the other by at least KM_CROSS_GAP while
-#                          both strata keep KM_MIN_AT_RISK rows at risk);
-#   few_at_risk            a number reported (a quartile, the median, survival at a time,
-#                          the restricted mean's horizon) read where fewer than KM_MIN_AT_RISK
-#                          rows are still at risk: the tail of a curve is uncertain.
+#                          that cross (each above the other by at least KM_CROSS_GAP and by
+#                          KM_CROSS_Z standard errors of the difference, while both strata keep
+#                          KM_MIN_AT_RISK rows at risk: two samples of one curve wander across
+#                          each other by less);
+#   few_at_risk            a number reported (a quartile, the median, survival at a time, the
+#                          restricted mean's horizon when the node gives it) read where fewer
+#                          than KM_MIN_AT_RISK rows are still at risk: the tail of a curve is
+#                          uncertain.
+#
+# The restricted mean's horizon, `rmst_tau`, is by default the shortest of the strata's
+# follow-ups (the least of their largest times, as survRM2 does): every stratum's mean is then
+# read over the same span, inside each one's follow-up; the default is not a number of the
+# few_at_risk check (at the end of a follow-up few rows are at risk by construction).
 #
 # Charts (level = the chart's id, level_2 = the series, the stratum): curve `km` (stats
 # surv, lower, upper), `cumhaz` (cumhaz), `loglog` (y = log(−log S) against x = log t);
@@ -32,6 +40,7 @@
 
 KM_MIN_AT_RISK <- 10
 KM_CROSS_GAP <- 0.05
+KM_CROSS_Z <- 2   # standard errors of the difference of two curves that a crossing must pass, both ways
 KM_ALL <- "all" # the stratum's name without strata
 KM_CARD_TOLERANCE <- 0.001 # the most a thinned card's curve or interval differs from the fit's
 
@@ -94,7 +103,7 @@ fit_kaplan_meier <- function(task) {
   frame <- data.frame(time = time, status = as.integer(status), g = factor(labels, levels = levels))
   fit <- survival::survfit(survival::Surv(time, status) ~ g, data = frame, conf.type = conf_type, conf.int = 1 - alpha)
   curves <- km_curves(fit, length(levels))
-  tau <- if (is.null(p$rmst_tau)) max(time) else as.numeric(p$rmst_tau)
+  tau <- if (is.null(p$rmst_tau)) min(vapply(curves, function(s) max(s$time), numeric(1))) else as.numeric(p$rmst_tau)
   compare <- length(levels) >= 2L
 
   rows <- tab_rows_start(task)
@@ -151,7 +160,8 @@ fit_kaplan_meier <- function(task) {
       tab_number(rows, "stratum", "expected", oe$exp[[i]], level = name)
     }
     reported[[name]] <- c(q25 = q$quantile[[1L]], median = q$quantile[[2L]], q75 = q$quantile[[3L]],
-                          if (length(times)) stats::setNames(times, paste0("surv_at_", vapply(times, km_time_label, ""))), rmst_tau = tau)
+                          if (length(times)) stats::setNames(times, paste0("surv_at_", vapply(times, km_time_label, ""))),
+                          if (!is.null(p$rmst_tau)) c(rmst_tau = tau))
     km_notes(rows, s, name, at, times, q)
   }
 
@@ -330,16 +340,21 @@ km_check_proportional <- function(rows, frame, curves, names_, alpha) {
     sb <- summary(b, times = grid, extend = TRUE)
     keep <- sa$n.risk >= KM_MIN_AT_RISK & sb$n.risk >= KM_MIN_AT_RISK
     gap <- (sa$surv - sb$surv)[keep]
-    if (any(gap >= KM_CROSS_GAP) && any(gap <= -KM_CROSS_GAP)) crossing <- c(crossing, paste(names_[pairs[, k]], collapse = " × "))
+    beyond <- pmax(KM_CROSS_GAP, KM_CROSS_Z * sqrt(sa$std.err^2 + sb$std.err^2)[keep])
+    if (any(gap >= beyond, na.rm = TRUE) && any(gap <= -beyond, na.rm = TRUE)) {
+      crossing <- c(crossing, paste(names_[pairs[, k]], collapse = " × "))
+    }
   }
   p <- if (is.null(zph)) NULL else zph[["p"]]
   verdict <- if (length(crossing)) "failed" else if (!is.null(p) && p < alpha) "doubtful" else "ok"
   km_check(rows, "proportional_hazards", "The strata's hazards keep the same ratio over time (the curves do not cross).", verdict,
-           advice = "The hazards' ratio changes over time, or the curves cross: the log-rank test loses power; compare with test = peto, or with the restricted mean.",
+           advice = paste0("The hazards' ratio changes over time, or the curves cross: the log-rank test loses power, and so does ",
+                           "Peto's; compare the restricted means (rmst_tau), and read the curves themselves."),
            statistic = if (is.null(zph)) NULL else zph[["chisq"]], df = if (is.null(zph)) NULL else zph[["df"]], p = p,
            threshold = alpha, count = if (length(crossing)) length(crossing) else NULL, look_at = paste(crossing, collapse = "; "))
   if (length(crossing)) {
-    tab_note(rows, paste0("The curves cross (", paste(crossing, collapse = "; "), "): compare with test = peto, or with the restricted mean."))
+    tab_note(rows, paste0("The curves cross (", paste(crossing, collapse = "; "), "): the log-rank and Peto's tests lose power ",
+                          "there; compare the restricted means, and read the curves themselves."))
   }
 }
 

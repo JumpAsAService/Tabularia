@@ -102,7 +102,7 @@
    "proportional_hazards": {
     "name": "Proportional hazards",
     "h0": "The strata's hazards keep the same ratio over time (the curves do not cross).",
-    "advice": "The hazards' ratio changes over time, or the curves cross: the log-rank test loses power; compare with test = peto, or with the restricted mean."
+    "advice": "The hazards' ratio changes over time, or the curves cross: the log-rank test loses power, and so does Peto's; compare the restricted means (rmst_tau), and read the curves themselves."
    },
    "censoring_by_stratum": {
     "name": "Censoring by stratum",
@@ -226,7 +226,7 @@
    "proportional_hazards": {
     "name": "Rischi proporzionali",
     "h0": "I rischi degli strati mantengono lo stesso rapporto nel tempo (le curve non si incrociano).",
-    "advice": "Il rapporto dei rischi cambia nel tempo, o le curve si incrociano: il test log-rank perde potenza; confrontate con test = peto, oppure con la media ristretta."
+    "advice": "Il rapporto dei rischi cambia nel tempo, o le curve si incrociano: il test log-rank perde potenza, e così quello di Peto; confrontate le medie ristrette (rmst_tau) e leggete le curve stesse."
    },
    "censoring_by_stratum": {
     "name": "Censura per strato",
@@ -350,7 +350,7 @@
    "proportional_hazards": {
     "name": "Proportionale Hazards",
     "h0": "Die Hazards der Schichten behalten über die Zeit dasselbe Verhältnis (die Kurven kreuzen sich nicht).",
-    "advice": "Das Hazard-Verhältnis ändert sich mit der Zeit, oder die Kurven kreuzen sich: Der Log-Rank-Test verliert an Trennschärfe; vergleichen Sie mit test = peto oder mit dem eingeschränkten Mittel."
+    "advice": "Das Hazard-Verhältnis ändert sich mit der Zeit, oder die Kurven kreuzen sich: Der Log-Rank-Test verliert an Trennschärfe, ebenso der von Peto; vergleichen Sie die eingeschränkten Mittel (rmst_tau) und lesen Sie die Kurven selbst."
    },
    "censoring_by_stratum": {
     "name": "Zensierung je Schicht",
@@ -474,7 +474,7 @@
    "proportional_hazards": {
     "name": "Riesgos proporcionales",
     "h0": "Los riesgos de los estratos mantienen la misma razón en el tiempo (las curvas no se cruzan).",
-    "advice": "La razón de riesgos cambia con el tiempo, o las curvas se cruzan: la prueba log-rank pierde potencia; compare con test = peto, o con la media restringida."
+    "advice": "La razón de riesgos cambia con el tiempo, o las curvas se cruzan: la prueba log-rank pierde potencia, y también la de Peto; compare las medias restringidas (rmst_tau) y lea las curvas mismas."
    },
    "censoring_by_stratum": {
     "name": "Censura por estrato",
@@ -598,7 +598,7 @@
    "proportional_hazards": {
     "name": "Risques proportionnels",
     "h0": "Les risques des strates gardent le même rapport dans le temps (les courbes ne se croisent pas).",
-    "advice": "Le rapport des risques change dans le temps, ou les courbes se croisent : le test du log-rank perd de la puissance ; comparez avec test = peto, ou avec la moyenne restreinte."
+    "advice": "Le rapport des risques change dans le temps, ou les courbes se croisent : le test du log-rank perd de la puissance, celui de Peto aussi ; comparez les moyennes restreintes (rmst_tau) et lisez les courbes elles-mêmes."
    },
    "censoring_by_stratum": {
     "name": "Censure par strate",

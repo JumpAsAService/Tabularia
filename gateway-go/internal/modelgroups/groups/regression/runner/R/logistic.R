@@ -469,24 +469,11 @@ logistic_assumptions <- function(rows, m, p, alpha, design, separated, hl, vif, 
                value = epv)
 
   row_numbers <- design$rows
-  n_rows <- length(row_numbers)
   named <- function(score, above) {
     top <- head(order(-score), 5L)
     row_numbers[top[score[top] > above]]
   }
-  cooks <- infl$cooks
-  limit <- 4 / n_rows
-  over <- sum(cooks > limit, na.rm = TRUE)
-  linear_check(rows, "cooks_distance", "No row moves the fit much (Cook's distance under 4/n).",
-               if (any(cooks > 1, na.rm = TRUE)) "failed" else if (over > 0L) "doubtful" else "ok",
-               "Look at the rows named: a mistake in the data, or a case the model does not describe.",
-               threshold = limit, count = over, at_rows = named(cooks, limit))
-  h <- infl$h
-  limit <- 2 * ncol(design$X) / n_rows
-  over <- sum(h > limit, na.rm = TRUE)
-  linear_check(rows, "leverage", "No row has an unusual combination of predictors (leverage under 2p/n).",
-               if (over > 0L) "doubtful" else "ok", "Look at the rows named: their predictors are far from the others'.",
-               threshold = limit, count = over, at_rows = named(h, limit))
+  linear_influence_checks(rows, infl$cooks, infl$h, ncol(design$X), row_numbers)
   d <- abs(infl$dev)
   over <- sum(d > LOGISTIC_DEV_RESIDUAL, na.rm = TRUE)
   linear_check(rows, "deviance_residuals", "No row is far from what the model predicts for it (|deviance residual| under 3).",
