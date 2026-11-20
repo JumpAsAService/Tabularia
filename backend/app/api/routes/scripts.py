@@ -351,6 +351,8 @@ def objects_write(request: ObjectWriteRequest):
 
 
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
+# where a model file goes: a step's prefix in a scripts environment (env-<n>/<step>/model_file), nowhere else
+_MODEL_FILE_KEY = re.compile(r"^env-[A-Za-z0-9_.-]+(/[A-Za-z0-9_-][A-Za-z0-9_.-]*)+/model_file$")
 UPLOAD_CONNECTION_HEADER = "X-Tabularia-Scripts-Connection"
 
 
@@ -358,6 +360,11 @@ def _upload_limit() -> int:
     from app.engine.models import catalog
 
     return int(catalog.LIMITS["max_model_file_bytes"])
+
+
+def _spool(digest, out, chunk: bytes) -> None:
+    digest.update(chunk)
+    out.write(chunk)
 
 
 @router.post("/objects/upload")
@@ -372,8 +379,8 @@ async def objects_upload(request: Request, key: str = Query(...), sha256: str = 
     soon as it is seen; a size or a hash other than the declared ones is a 409 and leaves no
     object."""
     most = _upload_limit()
-    if not key or key.startswith("/") or ".." in key.split("/"):
-        raise HTTPException(status_code=422, detail="Not a key of a step")
+    if not _MODEL_FILE_KEY.match(key) or ".." in key.split("/"):
+        raise HTTPException(status_code=422, detail="Not the key of a step's model file (env-…/…/model_file)")
     if not _SHA256.match(sha256):
         raise HTTPException(status_code=422, detail="The sha256 is 64 lowercase hexadecimal digits")
     if size < 1 or size > most:
@@ -391,8 +398,8 @@ async def objects_upload(request: Request, key: str = Query(...), sha256: str = 
                 if got > min(size, most):
                     raise HTTPException(status_code=413 if got > most else 409,
                                         detail=f"The file is longer than the {min(size, most)} bytes declared")
-                digest.update(chunk)
-                out.write(chunk)
+                # the disk and the hash are not the loop's: a thread, as the other routes do
+                await run_in_threadpool(_spool, digest, out, chunk)
         if got != size:
             raise HTTPException(status_code=409, detail=f"The file has {got} bytes, not the {size} declared")
         if digest.hexdigest() != sha256:
@@ -402,7 +409,7 @@ async def objects_upload(request: Request, key: str = Query(...), sha256: str = 
         except (ClientError, BotoCoreError) as e:
             raise HTTPException(status_code=502, detail=f"The scripts bucket answered: {_reason(e)}")
     finally:
-        os.unlink(path)
+        await run_in_threadpool(os.unlink, path)
     return {"bytes": got}
 
 

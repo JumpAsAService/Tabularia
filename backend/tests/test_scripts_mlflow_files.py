@@ -132,7 +132,7 @@ def test_a_card_is_written_at_its_key(bucket):
 def test_writing_refuses_what_is_not_a_card(bucket):
     bucket({})
     with pytest.raises(HTTPException) as big:
-        routes.objects_write(routes.ObjectWriteRequest(connection=_conn(), key="k", text="x" * (routes.OBJECT_WRITE_MAX + 1)))
+        routes.objects_write(routes.ObjectWriteRequest(connection=_conn(), key=_KEY, text="x" * (routes.OBJECT_WRITE_MAX + 1)))
     assert big.value.status_code == 413
     for key in ("", "/abs", "env-4/../other"):
         with pytest.raises(HTTPException) as bad:
@@ -163,6 +163,9 @@ class FakeRequest:
         for i in range(0, len(self.body), self.chunk):
             self.served += 1
             yield self.body[i:i + self.chunk]
+
+
+_KEY = "env-4/step/model_file"
 
 
 def _upload(body: bytes, *, sha: str | None = None, size: int | None = None, key: str = "env-4/step/model_file",
@@ -216,26 +219,27 @@ def test_a_file_over_the_limit_is_413_and_is_not_read_to_its_end(uploads, monkey
     import hashlib
 
     with pytest.raises(HTTPException) as declared:  # declares more than the limit: refused before reading
-        asyncio.run(routes.objects_upload(req, key="k", sha256=hashlib.sha256(body).hexdigest(), size=len(body),
+        asyncio.run(routes.objects_upload(req, key=_KEY, sha256=hashlib.sha256(body).hexdigest(), size=len(body),
                                           connection=_b64_conn()))
     assert declared.value.status_code == 413 and req.served == 0
     req = FakeRequest(body)
     with pytest.raises(HTTPException) as lied:  # declares 20 000, sends 100 000: stops at the first chunk past it
-        asyncio.run(routes.objects_upload(req, key="k", sha256="0" * 64, size=20_000, connection=_b64_conn()))
+        asyncio.run(routes.objects_upload(req, key=_KEY, sha256="0" * 64, size=20_000, connection=_b64_conn()))
     assert lied.value.status_code == 413 and req.served <= 4
     req = FakeRequest(body)
     with pytest.raises(HTTPException) as longer:  # declares 10 000 (within the limit), sends more
-        asyncio.run(routes.objects_upload(req, key="k", sha256="0" * 64, size=10_000, connection=_b64_conn()))
+        asyncio.run(routes.objects_upload(req, key=_KEY, sha256="0" * 64, size=10_000, connection=_b64_conn()))
     assert longer.value.status_code == 409 and req.served <= 2
     assert uploads == {}
 
 
 def test_a_bad_request_is_refused_before_anything_is_read(uploads):
     body = b"abc"
-    for key in ("", "/abs", "env-4/../other"):
+    for key in ("", "/abs", "env-4/../other", "env-4/step/../model_file", "k", "other-4/step/model_file", "env-4/model_file",
+                "env-4/step/model_file/extra", "env-4/step/model.json", "env-4/step/artifacts/xgboost.json", "env-4//model_file"):
         with pytest.raises(HTTPException) as e:
             _upload(body, key=key)
-        assert e.value.status_code == 422
+        assert e.value.status_code == 422, key
     for sha in ("abc", "G" * 64, "A" * 64):
         with pytest.raises(HTTPException) as e:
             _upload(body, sha=sha)
@@ -258,3 +262,24 @@ def test_a_bucket_that_refuses_is_502_and_no_temporary_file_stays(uploads, monke
         _upload(b"abc" * 10)
     assert e.value.status_code == 502 and "AccessDenied" in e.value.detail
     assert set(Path(tempfile.gettempdir()).glob("*.model")) == before
+
+
+def test_the_body_is_written_and_hashed_in_a_thread_not_in_the_loop(uploads, monkeypatch):
+    import threading
+
+    seen: list[tuple[str, int]] = []
+    loop_thread = threading.get_ident()
+    real = routes.run_in_threadpool
+
+    async def spy(fn, *args, **kwargs):
+        def run():
+            seen.append((getattr(fn, "__name__", "?"), threading.get_ident()))
+            return fn(*args, **kwargs)
+        return await real(run)
+
+    monkeypatch.setattr(routes, "run_in_threadpool", spy)
+    body = bytes(range(256)) * 400
+    assert _upload(body) == {"bytes": len(body)}
+    spooled = [t for name, t in seen if name == "_spool"]
+    assert len(spooled) >= 2 and all(t != loop_thread for t in spooled)
+    assert uploads[_KEY] == body
