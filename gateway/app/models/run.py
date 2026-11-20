@@ -169,6 +169,16 @@ class Run(SQLModel, table=True):
     # kind="sql": what the write read, for its lineage — {"version", "connection_id",
     # "datasources": [ids]} (services/sql_script_runs.py).
     script: Optional[str] = Field(default=None, sa_column=Column("script", Text))
+    # kind="model": the key of its results (the ten columns), its model card (JSON, at most
+    # 1 MiB) and, when the node logs to MLflow, where (docs/specs/statistical-models.md)
+    model_results_key: Optional[str] = None
+    model_card: Optional[str] = Field(default=None, sa_column=Column("model_card", Text))
+    mlflow_connection_id: Optional[int] = None
+    mlflow_experiment_id: Optional[str] = Field(default=None, max_length=64)
+    mlflow_run_id: Optional[str] = Field(default=None, max_length=64)
+    mlflow_model_name: Optional[str] = Field(default=None, max_length=256)
+    mlflow_model_version: Optional[str] = Field(default=None, max_length=32)
+    mlflow_error: Optional[str] = Field(default=None, sa_column=Column("mlflow_error", Text))
 
     # ── only for kind="orchestration" ───────────────────────────────────────
     # Born PENDING = queued; whoever runs it brings it to STARTED signing it.

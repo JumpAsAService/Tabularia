@@ -43,6 +43,7 @@ from app.models.dbt_ai_text import DbtAiText
 from app.models.share_link import ShareLink, ShareLinkSession, ShareLinkSettings
 from app.models.data_api import DataApi, DataApiKey, DataApiPod, DataApiResource, DataApiStatus, DataApiUsage, DataApiVersion
 from app.models.home import UserFavourite, UserHome
+from app.models.model_group import ModelGroup
 
 __all__ = [
     "User", "Group", "UserGroupLink", "UserSession", "ApiToken", "Webhook", "WebhookDelivery", "Project", "Permission", "Capability",
@@ -54,5 +55,5 @@ __all__ = [
     "DataContract", "DataContractResult", "DataContractVersion", "DbtAiText",
     "ShareLink", "ShareLinkSession", "ShareLinkSettings",
     "DataApi", "DataApiVersion", "DataApiResource", "DataApiKey", "DataApiUsage", "DataApiStatus", "DataApiPod",
-    "UserHome", "UserFavourite",
+    "UserHome", "UserFavourite", "ModelGroup",
 ]

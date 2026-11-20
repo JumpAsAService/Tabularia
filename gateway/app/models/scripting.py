@@ -47,6 +47,7 @@ class ScriptStorage(SQLModel, table=True):
 
 class ScriptEnvironment(SQLModel, table=True):
     __tablename__ = "script_environments"
+    __table_args__ = (UniqueConstraint("managed_by", name="uq_script_environment_managed_by"),)
 
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(max_length=120, sa_column_kwargs={"unique": True})
@@ -65,6 +66,10 @@ class ScriptEnvironment(SQLModel, table=True):
     created_by: Optional[str] = Field(default=None, max_length=320)
     updated_at: datetime = Field(default_factory=now_utc)
     updated_by: Optional[str] = Field(default=None, max_length=320)
+    # `model_group:<id>`: the environment a group of statistical models is built as
+    # (docs/specs/statistical-models.md). Hidden from the Scripting section, the Script node
+    # and the notebooks; its packages are its recipe's. NULL for the administrators' own.
+    managed_by: Optional[str] = Field(default=None, max_length=64)
 
 
 class ScriptEnvironmentVersion(SQLModel, table=True):
@@ -97,6 +102,11 @@ class ScriptEnvironmentVersion(SQLModel, table=True):
     # label tabularia.io/internet=off, which the chart's NetworkPolicy confines to the
     # cluster's DNS, the storage and what the administrators allow (docs/scripting.md)
     internet_access: bool = Field(default=True, sa_column_kwargs={"server_default": "true"})
+    # a model group's version: the hashes of the recipe it was built from and of the runner
+    # it was self-tested with, and the self-test's report (the check Job's last line)
+    recipe_hash: Optional[str] = Field(default=None, max_length=64)
+    runner_hash: Optional[str] = Field(default=None, max_length=64)
+    selftest: Optional[str] = Field(default=None, sa_column=Column(Text))
 
 
 class ScriptEnvironmentVariable(SQLModel, table=True):

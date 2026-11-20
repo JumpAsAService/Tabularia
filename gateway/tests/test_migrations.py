@@ -446,3 +446,39 @@ def test_0043_adds_the_home_page_tables_empty_and_they_go_with_the_account(tempo
         c.execute(text("DELETE FROM users WHERE id = 1"))
     with temporary_database.connect() as c:
         assert [c.execute(text(f"SELECT count(*) FROM {t}")).scalar() for t in ("user_home", "user_favourites")] == [0, 0]
+
+
+def test_0044_adds_the_model_groups_and_leaves_what_was_there(temporary_database):
+    """Only additions: an environment an administrator made is managed by nobody, its versions
+    have no hashes, the runs have no model columns; model_groups is empty; a managed
+    environment is one per group, a group's environment one per group."""
+    with temporary_database.begin() as c:
+        command.upgrade(m._config(c), "0043")
+        c.execute(text(
+            "INSERT INTO script_environments (id, name, description, language, enabled, cpu_request, cpu_limit, memory_request, "
+            "memory_limit, max_timeout_seconds, created_at, updated_at) "
+            "VALUES (1, 'R', '', 'r', true, '500m', '2', '1Gi', '4Gi', 3600, now(), now())"))
+        c.execute(text(
+            "INSERT INTO script_environment_versions (id, environment_id, number, language_version, base_image, packages, status, "
+            "created_at) VALUES (1, 1, 1, '4.6', 'rocker/r-ver:4.6.0', 'zoo', 'ready', now())"))
+    m.migra(temporary_database)  # stops if the database and the models differ
+    with temporary_database.connect() as c:
+        assert c.execute(text("SELECT managed_by FROM script_environments")).scalar() is None
+        assert c.execute(text("SELECT recipe_hash, runner_hash, selftest FROM script_environment_versions")).one() == (None, None, None)
+        assert c.execute(text("SELECT count(*) FROM model_groups")).scalar() == 0
+    with temporary_database.begin() as c:
+        # the previous version's insert, without the new columns
+        c.execute(text(
+            "INSERT INTO script_environments (id, name, description, language, enabled, cpu_request, cpu_limit, memory_request, "
+            "memory_limit, max_timeout_seconds, created_at, updated_at) "
+            "VALUES (2, 'Models: regression', '', 'r', true, '1', '2', '2Gi', '4Gi', 1800, now(), now())"))
+        c.execute(text("UPDATE script_environments SET managed_by = 'model_group:regression' WHERE id = 2"))
+        c.execute(text("INSERT INTO model_groups (id, environment_id, updated_at) VALUES ('regression', 2, now())"))
+    with temporary_database.connect() as c:
+        assert c.execute(text("SELECT enabled, everyone, max_rows FROM model_groups")).one() == (False, True, None)
+    with pytest.raises(Exception, match="uq_script_environment_managed_by"):
+        with temporary_database.begin() as c:
+            c.execute(text("UPDATE script_environments SET managed_by = 'model_group:regression' WHERE id = 1"))
+    with pytest.raises(Exception, match="uq_model_group_environment"):
+        with temporary_database.begin() as c:
+            c.execute(text("INSERT INTO model_groups (id, environment_id, updated_at) VALUES ('survival', 2, now())"))
