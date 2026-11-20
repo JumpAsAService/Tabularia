@@ -761,7 +761,7 @@ func (q *queue) stopSteps(ctx context.Context, id int64) int64 {
 				return err
 			}
 			switch {
-			case run.Kind == "script" || run.Kind == "container" || run.Kind == "model":
+			case run.Kind == "script" || run.Kind == "container" || run.Kind == "model" || run.Kind == "model_predict":
 				_, err := req.closeIfOrphaned(run, q.sc)
 				return err
 			case run.Kind == "orchestration":

@@ -240,7 +240,7 @@ func (q *request) reconcile(run *runRow, progress progressOf) (*runRow, error) {
 		}
 		return run, nil
 	}
-	if run.Kind == "script" || run.Kind == "container" || run.Kind == "model" {
+	if run.Kind == "script" || run.Kind == "container" || run.Kind == "model" || run.Kind == "model_predict" {
 		// a Kubernetes Job the orchestration follows: here only an orphan is closed
 		return q.closeIfOrphaned(run, scriptcfg.Load(config.FromOS()))
 	}

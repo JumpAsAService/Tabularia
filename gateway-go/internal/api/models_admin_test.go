@@ -152,6 +152,7 @@ type fakeKube struct {
 	configmaps map[string]map[string]any
 	ends       map[string]fakeEnd // by Job name: how it ends (absent: it runs)
 	deleted    []string
+	selectors  []string // the label selectors of the Jobs deleted by a collection delete
 }
 
 type fakeEnd struct {
@@ -201,6 +202,11 @@ func (k *fakeKube) serve(w http.ResponseWriter, r *http.Request) {
 			meta["uid"], meta["creationTimestamp"] = "uid-"+name, time.Now().UTC().Format(time.RFC3339)
 			k.jobs[ns+"/"+name] = job
 			k.reply(w, 201, job)
+			return
+		}
+		if len(parts) == 6 && r.Method == http.MethodDelete {
+			k.selectors = append(k.selectors, r.URL.Query().Get("labelSelector"))
+			k.reply(w, 200, map[string]any{})
 			return
 		}
 		if len(parts) == 7 {
