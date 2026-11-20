@@ -1065,11 +1065,35 @@
    null,
    "verdict",
    null,
-   "ok",
+   "doubtful",
    null,
    null,
    86,
    "assumption|trees_limit||verdict"
+  ],
+  [
+   "assumption",
+   "trees_limit",
+   null,
+   "advice",
+   null,
+   "early stopping on a metric that is not the loss (auc, error, mae) stopped while the validation loss still fell well below the tree kept a few trees later: the metric's noise stopped it; use stop_metric = loss, or more early_stopping_rounds",
+   null,
+   null,
+   87,
+   "assumption|trees_limit||advice"
+  ],
+  [
+   "assumption",
+   "trees_limit",
+   null,
+   "advice_id",
+   null,
+   "stop_on_loss",
+   null,
+   null,
+   88,
+   "assumption|trees_limit||advice_id"
   ],
   [
    "assumption",
@@ -1080,7 +1104,7 @@
    "the largest class share over the smallest",
    null,
    null,
-   87,
+   89,
    "assumption|class_imbalance||h0"
   ],
   [
@@ -1092,7 +1116,7 @@
    null,
    null,
    null,
-   88,
+   90,
    "assumption|class_imbalance||value"
   ],
   [
@@ -1104,7 +1128,7 @@
    null,
    null,
    null,
-   89,
+   91,
    "assumption|class_imbalance||threshold"
   ],
   [
@@ -1116,7 +1140,7 @@
    "ok",
    null,
    null,
-   90,
+   92,
    "assumption|class_imbalance||verdict"
   ],
   [
@@ -1125,10 +1149,10 @@
    null,
    "h0",
    null,
-   "Spearman's ρ of the importance in the two parts",
+   "Spearman's ρ between the mean |SHAP| on the training and on the validation rows: whether the predictors weigh the same on rows the model did not learn (a shift between the parts shows here; it does not say that another sample would rank them the same)",
    null,
    null,
-   91,
+   93,
    "assumption|importance_stability||h0"
   ],
   [
@@ -1140,7 +1164,7 @@
    null,
    null,
    null,
-   92,
+   94,
    "assumption|importance_stability||value"
   ],
   [
@@ -1152,7 +1176,7 @@
    null,
    null,
    null,
-   93,
+   95,
    "assumption|importance_stability||threshold"
   ],
   [
@@ -1164,7 +1188,7 @@
    "ok",
    null,
    null,
-   94,
+   96,
    "assumption|importance_stability||verdict"
   ],
   [
@@ -1176,7 +1200,7 @@
    "the predictors no split uses",
    null,
    null,
-   95,
+   97,
    "assumption|zero_importance||h0"
   ],
   [
@@ -1188,7 +1212,7 @@
    null,
    null,
    null,
-   96,
+   98,
    "assumption|zero_importance||value"
   ],
   [
@@ -1200,7 +1224,7 @@
    "ok",
    null,
    null,
-   97,
+   99,
    "assumption|zero_importance||verdict"
   ],
   [
@@ -1212,7 +1236,7 @@
    "the first predictor's share of |SHAP| (with one predictor: the validation fit), and how nearly perfect the validation fit is",
    null,
    null,
-   98,
+   100,
    "assumption|leakage|spend|h0"
   ],
   [
@@ -1224,7 +1248,7 @@
    null,
    null,
    null,
-   99,
+   101,
    "assumption|leakage|spend|value"
   ],
   [
@@ -1236,7 +1260,7 @@
    null,
    null,
    null,
-   100,
+   102,
    "assumption|leakage|spend|threshold"
   ],
   [
@@ -1248,7 +1272,7 @@
    "ok",
    null,
    null,
-   101,
+   103,
    "assumption|leakage|spend|verdict"
   ],
   [
@@ -1260,7 +1284,7 @@
    null,
    null,
    null,
-   102,
+   104,
    "class|bronze||support"
   ],
   [
@@ -1272,7 +1296,7 @@
    null,
    null,
    null,
-   103,
+   105,
    "class|bronze||share_train"
   ],
   [
@@ -1284,7 +1308,7 @@
    null,
    null,
    null,
-   104,
+   106,
    "class|bronze||share_validation"
   ],
   [
@@ -1296,7 +1320,7 @@
    null,
    null,
    null,
-   105,
+   107,
    "class|bronze||precision"
   ],
   [
@@ -1308,7 +1332,7 @@
    null,
    null,
    null,
-   106,
+   108,
    "class|bronze||recall"
   ],
   [
@@ -1320,7 +1344,7 @@
    null,
    null,
    null,
-   107,
+   109,
    "class|bronze||f1"
   ],
   [
@@ -1332,7 +1356,7 @@
    null,
    null,
    null,
-   108,
+   110,
    "class|bronze||auc_ovr"
   ],
   [
@@ -1344,7 +1368,7 @@
    null,
    null,
    null,
-   109,
+   111,
    "class|gold||support"
   ],
   [
@@ -1356,7 +1380,7 @@
    null,
    null,
    null,
-   110,
+   112,
    "class|gold||share_train"
   ],
   [
@@ -1368,7 +1392,7 @@
    null,
    null,
    null,
-   111,
+   113,
    "class|gold||share_validation"
   ],
   [
@@ -1380,7 +1404,7 @@
    null,
    null,
    null,
-   112,
+   114,
    "class|gold||precision"
   ],
   [
@@ -1392,7 +1416,7 @@
    null,
    null,
    null,
-   113,
+   115,
    "class|gold||recall"
   ],
   [
@@ -1404,7 +1428,7 @@
    null,
    null,
    null,
-   114,
+   116,
    "class|gold||f1"
   ],
   [
@@ -1416,7 +1440,7 @@
    null,
    null,
    null,
-   115,
+   117,
    "class|gold||auc_ovr"
   ],
   [
@@ -1428,7 +1452,7 @@
    null,
    null,
    null,
-   116,
+   118,
    "class|silver||support"
   ],
   [
@@ -1440,7 +1464,7 @@
    null,
    null,
    null,
-   117,
+   119,
    "class|silver||share_train"
   ],
   [
@@ -1452,7 +1476,7 @@
    null,
    null,
    null,
-   118,
+   120,
    "class|silver||share_validation"
   ],
   [
@@ -1464,7 +1488,7 @@
    null,
    null,
    null,
-   119,
+   121,
    "class|silver||precision"
   ],
   [
@@ -1476,7 +1500,7 @@
    null,
    null,
    null,
-   120,
+   122,
    "class|silver||recall"
   ],
   [
@@ -1488,7 +1512,7 @@
    null,
    null,
    null,
-   121,
+   123,
    "class|silver||f1"
   ],
   [
@@ -1500,7 +1524,7 @@
    null,
    null,
    null,
-   122,
+   124,
    "class|silver||auc_ovr"
   ],
   [
@@ -1512,7 +1536,7 @@
    null,
    null,
    null,
-   123,
+   125,
    "cell|bronze|bronze|observed"
   ],
   [
@@ -1524,7 +1548,7 @@
    null,
    null,
    null,
-   124,
+   126,
    "cell|bronze|gold|observed"
   ],
   [
@@ -1536,7 +1560,7 @@
    null,
    null,
    null,
-   125,
+   127,
    "cell|bronze|silver|observed"
   ],
   [
@@ -1548,7 +1572,7 @@
    null,
    null,
    null,
-   126,
+   128,
    "cell|gold|bronze|observed"
   ],
   [
@@ -1560,7 +1584,7 @@
    null,
    null,
    null,
-   127,
+   129,
    "cell|gold|gold|observed"
   ],
   [
@@ -1572,7 +1596,7 @@
    null,
    null,
    null,
-   128,
+   130,
    "cell|gold|silver|observed"
   ],
   [
@@ -1584,7 +1608,7 @@
    null,
    null,
    null,
-   129,
+   131,
    "cell|silver|bronze|observed"
   ],
   [
@@ -1596,7 +1620,7 @@
    null,
    null,
    null,
-   130,
+   132,
    "cell|silver|gold|observed"
   ],
   [
@@ -1608,7 +1632,7 @@
    null,
    null,
    null,
-   131,
+   133,
    "cell|silver|silver|observed"
   ],
   [
@@ -1620,7 +1644,7 @@
    null,
    1.0,
    null,
-   132,
+   134,
    "curve|learning_loss|train|y|0"
   ],
   [
@@ -1632,7 +1656,7 @@
    null,
    2.0,
    null,
-   133,
+   135,
    "curve|learning_loss|train|y|1"
   ],
   [
@@ -1644,7 +1668,7 @@
    null,
    3.0,
    null,
-   134,
+   136,
    "curve|learning_loss|train|y|2"
   ],
   [
@@ -1656,7 +1680,7 @@
    null,
    4.0,
    null,
-   135,
+   137,
    "curve|learning_loss|train|y|3"
   ],
   [
@@ -1668,7 +1692,7 @@
    null,
    5.0,
    null,
-   136,
+   138,
    "curve|learning_loss|train|y|4"
   ],
   [
@@ -1680,7 +1704,7 @@
    null,
    6.0,
    null,
-   137,
+   139,
    "curve|learning_loss|train|y|5"
   ],
   [
@@ -1692,7 +1716,7 @@
    null,
    7.0,
    null,
-   138,
+   140,
    "curve|learning_loss|train|y|6"
   ],
   [
@@ -1704,7 +1728,7 @@
    null,
    8.0,
    null,
-   139,
+   141,
    "curve|learning_loss|train|y|7"
   ],
   [
@@ -1716,7 +1740,7 @@
    null,
    9.0,
    null,
-   140,
+   142,
    "curve|learning_loss|train|y|8"
   ],
   [
@@ -1728,7 +1752,7 @@
    null,
    10.0,
    null,
-   141,
+   143,
    "curve|learning_loss|train|y|9"
   ],
   [
@@ -1740,7 +1764,7 @@
    null,
    11.0,
    null,
-   142,
+   144,
    "curve|learning_loss|train|y|10"
   ],
   [
@@ -1752,7 +1776,7 @@
    null,
    12.0,
    null,
-   143,
+   145,
    "curve|learning_loss|train|y|11"
   ],
   [
@@ -1764,7 +1788,7 @@
    null,
    13.0,
    null,
-   144,
+   146,
    "curve|learning_loss|train|y|12"
   ],
   [
@@ -1776,7 +1800,7 @@
    null,
    14.0,
    null,
-   145,
+   147,
    "curve|learning_loss|train|y|13"
   ],
   [
@@ -1788,7 +1812,7 @@
    null,
    15.0,
    null,
-   146,
+   148,
    "curve|learning_loss|train|y|14"
   ],
   [
@@ -1800,7 +1824,7 @@
    null,
    16.0,
    null,
-   147,
+   149,
    "curve|learning_loss|train|y|15"
   ],
   [
@@ -1812,7 +1836,7 @@
    null,
    17.0,
    null,
-   148,
+   150,
    "curve|learning_loss|train|y|16"
   ],
   [
@@ -1824,7 +1848,7 @@
    null,
    18.0,
    null,
-   149,
+   151,
    "curve|learning_loss|train|y|17"
   ],
   [
@@ -1836,7 +1860,7 @@
    null,
    19.0,
    null,
-   150,
+   152,
    "curve|learning_loss|train|y|18"
   ],
   [
@@ -1848,7 +1872,7 @@
    null,
    20.0,
    null,
-   151,
+   153,
    "curve|learning_loss|train|y|19"
   ],
   [
@@ -1860,7 +1884,7 @@
    null,
    21.0,
    null,
-   152,
+   154,
    "curve|learning_loss|train|y|20"
   ],
   [
@@ -1872,7 +1896,7 @@
    null,
    22.0,
    null,
-   153,
+   155,
    "curve|learning_loss|train|y|21"
   ],
   [
@@ -1884,7 +1908,7 @@
    null,
    23.0,
    null,
-   154,
+   156,
    "curve|learning_loss|train|y|22"
   ],
   [
@@ -1896,7 +1920,7 @@
    null,
    24.0,
    null,
-   155,
+   157,
    "curve|learning_loss|train|y|23"
   ],
   [
@@ -1908,7 +1932,7 @@
    null,
    25.0,
    null,
-   156,
+   158,
    "curve|learning_loss|train|y|24"
   ],
   [
@@ -1920,7 +1944,7 @@
    null,
    26.0,
    null,
-   157,
+   159,
    "curve|learning_loss|train|y|25"
   ],
   [
@@ -1932,7 +1956,7 @@
    null,
    27.0,
    null,
-   158,
+   160,
    "curve|learning_loss|train|y|26"
   ],
   [
@@ -1944,7 +1968,7 @@
    null,
    28.0,
    null,
-   159,
+   161,
    "curve|learning_loss|train|y|27"
   ],
   [
@@ -1956,7 +1980,7 @@
    null,
    29.0,
    null,
-   160,
+   162,
    "curve|learning_loss|train|y|28"
   ],
   [
@@ -1968,7 +1992,7 @@
    null,
    30.0,
    null,
-   161,
+   163,
    "curve|learning_loss|train|y|29"
   ],
   [
@@ -1980,7 +2004,7 @@
    null,
    31.0,
    null,
-   162,
+   164,
    "curve|learning_loss|train|y|30"
   ],
   [
@@ -1992,7 +2016,7 @@
    null,
    32.0,
    null,
-   163,
+   165,
    "curve|learning_loss|train|y|31"
   ],
   [
@@ -2004,7 +2028,7 @@
    null,
    33.0,
    null,
-   164,
+   166,
    "curve|learning_loss|train|y|32"
   ],
   [
@@ -2016,7 +2040,7 @@
    null,
    34.0,
    null,
-   165,
+   167,
    "curve|learning_loss|train|y|33"
   ],
   [
@@ -2028,7 +2052,7 @@
    null,
    35.0,
    null,
-   166,
+   168,
    "curve|learning_loss|train|y|34"
   ],
   [
@@ -2040,7 +2064,7 @@
    null,
    36.0,
    null,
-   167,
+   169,
    "curve|learning_loss|train|y|35"
   ],
   [
@@ -2052,7 +2076,7 @@
    null,
    37.0,
    null,
-   168,
+   170,
    "curve|learning_loss|train|y|36"
   ],
   [
@@ -2064,7 +2088,7 @@
    null,
    38.0,
    null,
-   169,
+   171,
    "curve|learning_loss|train|y|37"
   ],
   [
@@ -2076,7 +2100,7 @@
    null,
    39.0,
    null,
-   170,
+   172,
    "curve|learning_loss|train|y|38"
   ],
   [
@@ -2088,7 +2112,7 @@
    null,
    40.0,
    null,
-   171,
+   173,
    "curve|learning_loss|train|y|39"
   ],
   [
@@ -2100,7 +2124,7 @@
    null,
    41.0,
    null,
-   172,
+   174,
    "curve|learning_loss|train|y|40"
   ],
   [
@@ -2112,7 +2136,7 @@
    null,
    42.0,
    null,
-   173,
+   175,
    "curve|learning_loss|train|y|41"
   ],
   [
@@ -2124,7 +2148,7 @@
    null,
    43.0,
    null,
-   174,
+   176,
    "curve|learning_loss|train|y|42"
   ],
   [
@@ -2136,7 +2160,7 @@
    null,
    44.0,
    null,
-   175,
+   177,
    "curve|learning_loss|train|y|43"
   ],
   [
@@ -2148,7 +2172,7 @@
    null,
    45.0,
    null,
-   176,
+   178,
    "curve|learning_loss|train|y|44"
   ],
   [
@@ -2160,7 +2184,7 @@
    null,
    46.0,
    null,
-   177,
+   179,
    "curve|learning_loss|train|y|45"
   ],
   [
@@ -2172,7 +2196,7 @@
    null,
    47.0,
    null,
-   178,
+   180,
    "curve|learning_loss|train|y|46"
   ],
   [
@@ -2184,7 +2208,7 @@
    null,
    48.0,
    null,
-   179,
+   181,
    "curve|learning_loss|train|y|47"
   ],
   [
@@ -2196,7 +2220,7 @@
    null,
    49.0,
    null,
-   180,
+   182,
    "curve|learning_loss|train|y|48"
   ],
   [
@@ -2208,7 +2232,7 @@
    null,
    50.0,
    null,
-   181,
+   183,
    "curve|learning_loss|train|y|49"
   ],
   [
@@ -2220,7 +2244,7 @@
    null,
    51.0,
    null,
-   182,
+   184,
    "curve|learning_loss|train|y|50"
   ],
   [
@@ -2232,7 +2256,7 @@
    null,
    52.0,
    null,
-   183,
+   185,
    "curve|learning_loss|train|y|51"
   ],
   [
@@ -2244,7 +2268,7 @@
    null,
    53.0,
    null,
-   184,
+   186,
    "curve|learning_loss|train|y|52"
   ],
   [
@@ -2256,7 +2280,7 @@
    null,
    54.0,
    null,
-   185,
+   187,
    "curve|learning_loss|train|y|53"
   ],
   [
@@ -2268,7 +2292,7 @@
    null,
    55.0,
    null,
-   186,
+   188,
    "curve|learning_loss|train|y|54"
   ],
   [
@@ -2280,7 +2304,7 @@
    null,
    56.0,
    null,
-   187,
+   189,
    "curve|learning_loss|train|y|55"
   ],
   [
@@ -2292,7 +2316,7 @@
    null,
    57.0,
    null,
-   188,
+   190,
    "curve|learning_loss|train|y|56"
   ],
   [
@@ -2304,7 +2328,7 @@
    null,
    58.0,
    null,
-   189,
+   191,
    "curve|learning_loss|train|y|57"
   ],
   [
@@ -2316,7 +2340,7 @@
    null,
    59.0,
    null,
-   190,
+   192,
    "curve|learning_loss|train|y|58"
   ],
   [
@@ -2328,7 +2352,7 @@
    null,
    60.0,
    null,
-   191,
+   193,
    "curve|learning_loss|train|y|59"
   ],
   [
@@ -2340,7 +2364,7 @@
    null,
    61.0,
    null,
-   192,
+   194,
    "curve|learning_loss|train|y|60"
   ],
   [
@@ -2352,7 +2376,7 @@
    null,
    62.0,
    null,
-   193,
+   195,
    "curve|learning_loss|train|y|61"
   ],
   [
@@ -2364,7 +2388,7 @@
    null,
    63.0,
    null,
-   194,
+   196,
    "curve|learning_loss|train|y|62"
   ],
   [
@@ -2376,7 +2400,7 @@
    null,
    64.0,
    null,
-   195,
+   197,
    "curve|learning_loss|train|y|63"
   ],
   [
@@ -2388,7 +2412,7 @@
    null,
    65.0,
    null,
-   196,
+   198,
    "curve|learning_loss|train|y|64"
   ],
   [
@@ -2400,7 +2424,7 @@
    null,
    66.0,
    null,
-   197,
+   199,
    "curve|learning_loss|train|y|65"
   ],
   [
@@ -2412,7 +2436,7 @@
    null,
    67.0,
    null,
-   198,
+   200,
    "curve|learning_loss|train|y|66"
   ],
   [
@@ -2424,7 +2448,7 @@
    null,
    68.0,
    null,
-   199,
+   201,
    "curve|learning_loss|train|y|67"
   ],
   [
@@ -2436,7 +2460,7 @@
    null,
    69.0,
    null,
-   200,
+   202,
    "curve|learning_loss|train|y|68"
   ],
   [
@@ -2448,7 +2472,7 @@
    null,
    70.0,
    null,
-   201,
+   203,
    "curve|learning_loss|train|y|69"
   ],
   [
@@ -2460,7 +2484,7 @@
    null,
    71.0,
    null,
-   202,
+   204,
    "curve|learning_loss|train|y|70"
   ],
   [
@@ -2472,7 +2496,7 @@
    null,
    72.0,
    null,
-   203,
+   205,
    "curve|learning_loss|train|y|71"
   ],
   [
@@ -2484,7 +2508,7 @@
    null,
    73.0,
    null,
-   204,
+   206,
    "curve|learning_loss|train|y|72"
   ],
   [
@@ -2496,7 +2520,7 @@
    null,
    1.0,
    null,
-   205,
+   207,
    "curve|learning_loss|validation|y|0"
   ],
   [
@@ -2508,7 +2532,7 @@
    null,
    2.0,
    null,
-   206,
+   208,
    "curve|learning_loss|validation|y|1"
   ],
   [
@@ -2520,7 +2544,7 @@
    null,
    3.0,
    null,
-   207,
+   209,
    "curve|learning_loss|validation|y|2"
   ],
   [
@@ -2532,7 +2556,7 @@
    null,
    4.0,
    null,
-   208,
+   210,
    "curve|learning_loss|validation|y|3"
   ],
   [
@@ -2544,7 +2568,7 @@
    null,
    5.0,
    null,
-   209,
+   211,
    "curve|learning_loss|validation|y|4"
   ],
   [
@@ -2556,7 +2580,7 @@
    null,
    6.0,
    null,
-   210,
+   212,
    "curve|learning_loss|validation|y|5"
   ],
   [
@@ -2568,7 +2592,7 @@
    null,
    7.0,
    null,
-   211,
+   213,
    "curve|learning_loss|validation|y|6"
   ],
   [
@@ -2580,7 +2604,7 @@
    null,
    8.0,
    null,
-   212,
+   214,
    "curve|learning_loss|validation|y|7"
   ],
   [
@@ -2592,7 +2616,7 @@
    null,
    9.0,
    null,
-   213,
+   215,
    "curve|learning_loss|validation|y|8"
   ],
   [
@@ -2604,7 +2628,7 @@
    null,
    10.0,
    null,
-   214,
+   216,
    "curve|learning_loss|validation|y|9"
   ],
   [
@@ -2616,7 +2640,7 @@
    null,
    11.0,
    null,
-   215,
+   217,
    "curve|learning_loss|validation|y|10"
   ],
   [
@@ -2628,7 +2652,7 @@
    null,
    12.0,
    null,
-   216,
+   218,
    "curve|learning_loss|validation|y|11"
   ],
   [
@@ -2640,7 +2664,7 @@
    null,
    13.0,
    null,
-   217,
+   219,
    "curve|learning_loss|validation|y|12"
   ],
   [
@@ -2652,7 +2676,7 @@
    null,
    14.0,
    null,
-   218,
+   220,
    "curve|learning_loss|validation|y|13"
   ],
   [
@@ -2664,7 +2688,7 @@
    null,
    15.0,
    null,
-   219,
+   221,
    "curve|learning_loss|validation|y|14"
   ],
   [
@@ -2676,7 +2700,7 @@
    null,
    16.0,
    null,
-   220,
+   222,
    "curve|learning_loss|validation|y|15"
   ],
   [
@@ -2688,7 +2712,7 @@
    null,
    17.0,
    null,
-   221,
+   223,
    "curve|learning_loss|validation|y|16"
   ],
   [
@@ -2700,7 +2724,7 @@
    null,
    18.0,
    null,
-   222,
+   224,
    "curve|learning_loss|validation|y|17"
   ],
   [
@@ -2712,7 +2736,7 @@
    null,
    19.0,
    null,
-   223,
+   225,
    "curve|learning_loss|validation|y|18"
   ],
   [
@@ -2724,7 +2748,7 @@
    null,
    20.0,
    null,
-   224,
+   226,
    "curve|learning_loss|validation|y|19"
   ],
   [
@@ -2736,7 +2760,7 @@
    null,
    21.0,
    null,
-   225,
+   227,
    "curve|learning_loss|validation|y|20"
   ],
   [
@@ -2748,7 +2772,7 @@
    null,
    22.0,
    null,
-   226,
+   228,
    "curve|learning_loss|validation|y|21"
   ],
   [
@@ -2760,7 +2784,7 @@
    null,
    23.0,
    null,
-   227,
+   229,
    "curve|learning_loss|validation|y|22"
   ],
   [
@@ -2772,7 +2796,7 @@
    null,
    24.0,
    null,
-   228,
+   230,
    "curve|learning_loss|validation|y|23"
   ],
   [
@@ -2784,7 +2808,7 @@
    null,
    25.0,
    null,
-   229,
+   231,
    "curve|learning_loss|validation|y|24"
   ],
   [
@@ -2796,7 +2820,7 @@
    null,
    26.0,
    null,
-   230,
+   232,
    "curve|learning_loss|validation|y|25"
   ],
   [
@@ -2808,7 +2832,7 @@
    null,
    27.0,
    null,
-   231,
+   233,
    "curve|learning_loss|validation|y|26"
   ],
   [
@@ -2820,7 +2844,7 @@
    null,
    28.0,
    null,
-   232,
+   234,
    "curve|learning_loss|validation|y|27"
   ],
   [
@@ -2832,7 +2856,7 @@
    null,
    29.0,
    null,
-   233,
+   235,
    "curve|learning_loss|validation|y|28"
   ],
   [
@@ -2844,7 +2868,7 @@
    null,
    30.0,
    null,
-   234,
+   236,
    "curve|learning_loss|validation|y|29"
   ],
   [
@@ -2856,7 +2880,7 @@
    null,
    31.0,
    null,
-   235,
+   237,
    "curve|learning_loss|validation|y|30"
   ],
   [
@@ -2868,7 +2892,7 @@
    null,
    32.0,
    null,
-   236,
+   238,
    "curve|learning_loss|validation|y|31"
   ],
   [
@@ -2880,7 +2904,7 @@
    null,
    33.0,
    null,
-   237,
+   239,
    "curve|learning_loss|validation|y|32"
   ],
   [
@@ -2892,7 +2916,7 @@
    null,
    34.0,
    null,
-   238,
+   240,
    "curve|learning_loss|validation|y|33"
   ],
   [
@@ -2904,7 +2928,7 @@
    null,
    35.0,
    null,
-   239,
+   241,
    "curve|learning_loss|validation|y|34"
   ],
   [
@@ -2916,7 +2940,7 @@
    null,
    36.0,
    null,
-   240,
+   242,
    "curve|learning_loss|validation|y|35"
   ],
   [
@@ -2928,7 +2952,7 @@
    null,
    37.0,
    null,
-   241,
+   243,
    "curve|learning_loss|validation|y|36"
   ],
   [
@@ -2940,7 +2964,7 @@
    null,
    38.0,
    null,
-   242,
+   244,
    "curve|learning_loss|validation|y|37"
   ],
   [
@@ -2952,7 +2976,7 @@
    null,
    39.0,
    null,
-   243,
+   245,
    "curve|learning_loss|validation|y|38"
   ],
   [
@@ -2964,7 +2988,7 @@
    null,
    40.0,
    null,
-   244,
+   246,
    "curve|learning_loss|validation|y|39"
   ],
   [
@@ -2976,7 +3000,7 @@
    null,
    41.0,
    null,
-   245,
+   247,
    "curve|learning_loss|validation|y|40"
   ],
   [
@@ -2988,7 +3012,7 @@
    null,
    42.0,
    null,
-   246,
+   248,
    "curve|learning_loss|validation|y|41"
   ],
   [
@@ -3000,7 +3024,7 @@
    null,
    43.0,
    null,
-   247,
+   249,
    "curve|learning_loss|validation|y|42"
   ],
   [
@@ -3012,7 +3036,7 @@
    null,
    44.0,
    null,
-   248,
+   250,
    "curve|learning_loss|validation|y|43"
   ],
   [
@@ -3024,7 +3048,7 @@
    null,
    45.0,
    null,
-   249,
+   251,
    "curve|learning_loss|validation|y|44"
   ],
   [
@@ -3036,7 +3060,7 @@
    null,
    46.0,
    null,
-   250,
+   252,
    "curve|learning_loss|validation|y|45"
   ],
   [
@@ -3048,7 +3072,7 @@
    null,
    47.0,
    null,
-   251,
+   253,
    "curve|learning_loss|validation|y|46"
   ],
   [
@@ -3060,7 +3084,7 @@
    null,
    48.0,
    null,
-   252,
+   254,
    "curve|learning_loss|validation|y|47"
   ],
   [
@@ -3072,7 +3096,7 @@
    null,
    49.0,
    null,
-   253,
+   255,
    "curve|learning_loss|validation|y|48"
   ],
   [
@@ -3084,7 +3108,7 @@
    null,
    50.0,
    null,
-   254,
+   256,
    "curve|learning_loss|validation|y|49"
   ],
   [
@@ -3096,7 +3120,7 @@
    null,
    51.0,
    null,
-   255,
+   257,
    "curve|learning_loss|validation|y|50"
   ],
   [
@@ -3108,7 +3132,7 @@
    null,
    52.0,
    null,
-   256,
+   258,
    "curve|learning_loss|validation|y|51"
   ],
   [
@@ -3120,7 +3144,7 @@
    null,
    53.0,
    null,
-   257,
+   259,
    "curve|learning_loss|validation|y|52"
   ],
   [
@@ -3132,7 +3156,7 @@
    null,
    54.0,
    null,
-   258,
+   260,
    "curve|learning_loss|validation|y|53"
   ],
   [
@@ -3144,7 +3168,7 @@
    null,
    55.0,
    null,
-   259,
+   261,
    "curve|learning_loss|validation|y|54"
   ],
   [
@@ -3156,7 +3180,7 @@
    null,
    56.0,
    null,
-   260,
+   262,
    "curve|learning_loss|validation|y|55"
   ],
   [
@@ -3168,7 +3192,7 @@
    null,
    57.0,
    null,
-   261,
+   263,
    "curve|learning_loss|validation|y|56"
   ],
   [
@@ -3180,7 +3204,7 @@
    null,
    58.0,
    null,
-   262,
+   264,
    "curve|learning_loss|validation|y|57"
   ],
   [
@@ -3192,7 +3216,7 @@
    null,
    59.0,
    null,
-   263,
+   265,
    "curve|learning_loss|validation|y|58"
   ],
   [
@@ -3204,7 +3228,7 @@
    null,
    60.0,
    null,
-   264,
+   266,
    "curve|learning_loss|validation|y|59"
   ],
   [
@@ -3216,7 +3240,7 @@
    null,
    61.0,
    null,
-   265,
+   267,
    "curve|learning_loss|validation|y|60"
   ],
   [
@@ -3228,7 +3252,7 @@
    null,
    62.0,
    null,
-   266,
+   268,
    "curve|learning_loss|validation|y|61"
   ],
   [
@@ -3240,7 +3264,7 @@
    null,
    63.0,
    null,
-   267,
+   269,
    "curve|learning_loss|validation|y|62"
   ],
   [
@@ -3252,7 +3276,7 @@
    null,
    64.0,
    null,
-   268,
+   270,
    "curve|learning_loss|validation|y|63"
   ],
   [
@@ -3264,7 +3288,7 @@
    null,
    65.0,
    null,
-   269,
+   271,
    "curve|learning_loss|validation|y|64"
   ],
   [
@@ -3276,7 +3300,7 @@
    null,
    66.0,
    null,
-   270,
+   272,
    "curve|learning_loss|validation|y|65"
   ],
   [
@@ -3288,7 +3312,7 @@
    null,
    67.0,
    null,
-   271,
+   273,
    "curve|learning_loss|validation|y|66"
   ],
   [
@@ -3300,7 +3324,7 @@
    null,
    68.0,
    null,
-   272,
+   274,
    "curve|learning_loss|validation|y|67"
   ],
   [
@@ -3312,7 +3336,7 @@
    null,
    69.0,
    null,
-   273,
+   275,
    "curve|learning_loss|validation|y|68"
   ],
   [
@@ -3324,7 +3348,7 @@
    null,
    70.0,
    null,
-   274,
+   276,
    "curve|learning_loss|validation|y|69"
   ],
   [
@@ -3336,7 +3360,7 @@
    null,
    71.0,
    null,
-   275,
+   277,
    "curve|learning_loss|validation|y|70"
   ],
   [
@@ -3348,7 +3372,7 @@
    null,
    72.0,
    null,
-   276,
+   278,
    "curve|learning_loss|validation|y|71"
   ],
   [
@@ -3360,7 +3384,7 @@
    null,
    73.0,
    null,
-   277,
+   279,
    "curve|learning_loss|validation|y|72"
   ],
   [
@@ -3372,7 +3396,7 @@
    null,
    1.0,
    null,
-   278,
+   280,
    "curve|learning_stop|train|y|0"
   ],
   [
@@ -3384,7 +3408,7 @@
    null,
    2.0,
    null,
-   279,
+   281,
    "curve|learning_stop|train|y|1"
   ],
   [
@@ -3396,7 +3420,7 @@
    null,
    3.0,
    null,
-   280,
+   282,
    "curve|learning_stop|train|y|2"
   ],
   [
@@ -3408,7 +3432,7 @@
    null,
    4.0,
    null,
-   281,
+   283,
    "curve|learning_stop|train|y|3"
   ],
   [
@@ -3420,7 +3444,7 @@
    null,
    5.0,
    null,
-   282,
+   284,
    "curve|learning_stop|train|y|4"
   ],
   [
@@ -3432,7 +3456,7 @@
    null,
    6.0,
    null,
-   283,
+   285,
    "curve|learning_stop|train|y|5"
   ],
   [
@@ -3444,7 +3468,7 @@
    null,
    7.0,
    null,
-   284,
+   286,
    "curve|learning_stop|train|y|6"
   ],
   [
@@ -3456,7 +3480,7 @@
    null,
    8.0,
    null,
-   285,
+   287,
    "curve|learning_stop|train|y|7"
   ],
   [
@@ -3468,7 +3492,7 @@
    null,
    9.0,
    null,
-   286,
+   288,
    "curve|learning_stop|train|y|8"
   ],
   [
@@ -3480,7 +3504,7 @@
    null,
    10.0,
    null,
-   287,
+   289,
    "curve|learning_stop|train|y|9"
   ],
   [
@@ -3492,7 +3516,7 @@
    null,
    11.0,
    null,
-   288,
+   290,
    "curve|learning_stop|train|y|10"
   ],
   [
@@ -3504,7 +3528,7 @@
    null,
    12.0,
    null,
-   289,
+   291,
    "curve|learning_stop|train|y|11"
   ],
   [
@@ -3516,7 +3540,7 @@
    null,
    13.0,
    null,
-   290,
+   292,
    "curve|learning_stop|train|y|12"
   ],
   [
@@ -3528,7 +3552,7 @@
    null,
    14.0,
    null,
-   291,
+   293,
    "curve|learning_stop|train|y|13"
   ],
   [
@@ -3540,7 +3564,7 @@
    null,
    15.0,
    null,
-   292,
+   294,
    "curve|learning_stop|train|y|14"
   ],
   [
@@ -3552,7 +3576,7 @@
    null,
    16.0,
    null,
-   293,
+   295,
    "curve|learning_stop|train|y|15"
   ],
   [
@@ -3564,7 +3588,7 @@
    null,
    17.0,
    null,
-   294,
+   296,
    "curve|learning_stop|train|y|16"
   ],
   [
@@ -3576,7 +3600,7 @@
    null,
    18.0,
    null,
-   295,
+   297,
    "curve|learning_stop|train|y|17"
   ],
   [
@@ -3588,7 +3612,7 @@
    null,
    19.0,
    null,
-   296,
+   298,
    "curve|learning_stop|train|y|18"
   ],
   [
@@ -3600,7 +3624,7 @@
    null,
    20.0,
    null,
-   297,
+   299,
    "curve|learning_stop|train|y|19"
   ],
   [
@@ -3612,7 +3636,7 @@
    null,
    21.0,
    null,
-   298,
+   300,
    "curve|learning_stop|train|y|20"
   ],
   [
@@ -3624,7 +3648,7 @@
    null,
    22.0,
    null,
-   299,
+   301,
    "curve|learning_stop|train|y|21"
   ],
   [
@@ -3636,7 +3660,7 @@
    null,
    23.0,
    null,
-   300,
+   302,
    "curve|learning_stop|train|y|22"
   ],
   [
@@ -3648,7 +3672,7 @@
    null,
    24.0,
    null,
-   301,
+   303,
    "curve|learning_stop|train|y|23"
   ],
   [
@@ -3660,7 +3684,7 @@
    null,
    25.0,
    null,
-   302,
+   304,
    "curve|learning_stop|train|y|24"
   ],
   [
@@ -3672,7 +3696,7 @@
    null,
    26.0,
    null,
-   303,
+   305,
    "curve|learning_stop|train|y|25"
   ],
   [
@@ -3684,7 +3708,7 @@
    null,
    27.0,
    null,
-   304,
+   306,
    "curve|learning_stop|train|y|26"
   ],
   [
@@ -3696,7 +3720,7 @@
    null,
    28.0,
    null,
-   305,
+   307,
    "curve|learning_stop|train|y|27"
   ],
   [
@@ -3708,7 +3732,7 @@
    null,
    29.0,
    null,
-   306,
+   308,
    "curve|learning_stop|train|y|28"
   ],
   [
@@ -3720,7 +3744,7 @@
    null,
    30.0,
    null,
-   307,
+   309,
    "curve|learning_stop|train|y|29"
   ],
   [
@@ -3732,7 +3756,7 @@
    null,
    31.0,
    null,
-   308,
+   310,
    "curve|learning_stop|train|y|30"
   ],
   [
@@ -3744,7 +3768,7 @@
    null,
    32.0,
    null,
-   309,
+   311,
    "curve|learning_stop|train|y|31"
   ],
   [
@@ -3756,7 +3780,7 @@
    null,
    33.0,
    null,
-   310,
+   312,
    "curve|learning_stop|train|y|32"
   ],
   [
@@ -3768,7 +3792,7 @@
    null,
    34.0,
    null,
-   311,
+   313,
    "curve|learning_stop|train|y|33"
   ],
   [
@@ -3780,7 +3804,7 @@
    null,
    35.0,
    null,
-   312,
+   314,
    "curve|learning_stop|train|y|34"
   ],
   [
@@ -3792,7 +3816,7 @@
    null,
    36.0,
    null,
-   313,
+   315,
    "curve|learning_stop|train|y|35"
   ],
   [
@@ -3804,7 +3828,7 @@
    null,
    37.0,
    null,
-   314,
+   316,
    "curve|learning_stop|train|y|36"
   ],
   [
@@ -3816,7 +3840,7 @@
    null,
    38.0,
    null,
-   315,
+   317,
    "curve|learning_stop|train|y|37"
   ],
   [
@@ -3828,7 +3852,7 @@
    null,
    39.0,
    null,
-   316,
+   318,
    "curve|learning_stop|train|y|38"
   ],
   [
@@ -3840,7 +3864,7 @@
    null,
    40.0,
    null,
-   317,
+   319,
    "curve|learning_stop|train|y|39"
   ],
   [
@@ -3852,7 +3876,7 @@
    null,
    41.0,
    null,
-   318,
+   320,
    "curve|learning_stop|train|y|40"
   ],
   [
@@ -3864,7 +3888,7 @@
    null,
    42.0,
    null,
-   319,
+   321,
    "curve|learning_stop|train|y|41"
   ],
   [
@@ -3876,7 +3900,7 @@
    null,
    43.0,
    null,
-   320,
+   322,
    "curve|learning_stop|train|y|42"
   ],
   [
@@ -3888,7 +3912,7 @@
    null,
    44.0,
    null,
-   321,
+   323,
    "curve|learning_stop|train|y|43"
   ],
   [
@@ -3900,7 +3924,7 @@
    null,
    45.0,
    null,
-   322,
+   324,
    "curve|learning_stop|train|y|44"
   ],
   [
@@ -3912,7 +3936,7 @@
    null,
    46.0,
    null,
-   323,
+   325,
    "curve|learning_stop|train|y|45"
   ],
   [
@@ -3924,7 +3948,7 @@
    null,
    47.0,
    null,
-   324,
+   326,
    "curve|learning_stop|train|y|46"
   ],
   [
@@ -3936,7 +3960,7 @@
    null,
    48.0,
    null,
-   325,
+   327,
    "curve|learning_stop|train|y|47"
   ],
   [
@@ -3948,7 +3972,7 @@
    null,
    49.0,
    null,
-   326,
+   328,
    "curve|learning_stop|train|y|48"
   ],
   [
@@ -3960,7 +3984,7 @@
    null,
    50.0,
    null,
-   327,
+   329,
    "curve|learning_stop|train|y|49"
   ],
   [
@@ -3972,7 +3996,7 @@
    null,
    51.0,
    null,
-   328,
+   330,
    "curve|learning_stop|train|y|50"
   ],
   [
@@ -3984,7 +4008,7 @@
    null,
    52.0,
    null,
-   329,
+   331,
    "curve|learning_stop|train|y|51"
   ],
   [
@@ -3996,7 +4020,7 @@
    null,
    53.0,
    null,
-   330,
+   332,
    "curve|learning_stop|train|y|52"
   ],
   [
@@ -4008,7 +4032,7 @@
    null,
    54.0,
    null,
-   331,
+   333,
    "curve|learning_stop|train|y|53"
   ],
   [
@@ -4020,7 +4044,7 @@
    null,
    55.0,
    null,
-   332,
+   334,
    "curve|learning_stop|train|y|54"
   ],
   [
@@ -4032,7 +4056,7 @@
    null,
    56.0,
    null,
-   333,
+   335,
    "curve|learning_stop|train|y|55"
   ],
   [
@@ -4044,7 +4068,7 @@
    null,
    57.0,
    null,
-   334,
+   336,
    "curve|learning_stop|train|y|56"
   ],
   [
@@ -4056,7 +4080,7 @@
    null,
    58.0,
    null,
-   335,
+   337,
    "curve|learning_stop|train|y|57"
   ],
   [
@@ -4068,7 +4092,7 @@
    null,
    59.0,
    null,
-   336,
+   338,
    "curve|learning_stop|train|y|58"
   ],
   [
@@ -4080,7 +4104,7 @@
    null,
    60.0,
    null,
-   337,
+   339,
    "curve|learning_stop|train|y|59"
   ],
   [
@@ -4092,7 +4116,7 @@
    null,
    61.0,
    null,
-   338,
+   340,
    "curve|learning_stop|train|y|60"
   ],
   [
@@ -4104,7 +4128,7 @@
    null,
    62.0,
    null,
-   339,
+   341,
    "curve|learning_stop|train|y|61"
   ],
   [
@@ -4116,7 +4140,7 @@
    null,
    63.0,
    null,
-   340,
+   342,
    "curve|learning_stop|train|y|62"
   ],
   [
@@ -4128,7 +4152,7 @@
    null,
    64.0,
    null,
-   341,
+   343,
    "curve|learning_stop|train|y|63"
   ],
   [
@@ -4140,7 +4164,7 @@
    null,
    65.0,
    null,
-   342,
+   344,
    "curve|learning_stop|train|y|64"
   ],
   [
@@ -4152,7 +4176,7 @@
    null,
    66.0,
    null,
-   343,
+   345,
    "curve|learning_stop|train|y|65"
   ],
   [
@@ -4164,7 +4188,7 @@
    null,
    67.0,
    null,
-   344,
+   346,
    "curve|learning_stop|train|y|66"
   ],
   [
@@ -4176,7 +4200,7 @@
    null,
    68.0,
    null,
-   345,
+   347,
    "curve|learning_stop|train|y|67"
   ],
   [
@@ -4188,7 +4212,7 @@
    null,
    69.0,
    null,
-   346,
+   348,
    "curve|learning_stop|train|y|68"
   ],
   [
@@ -4200,7 +4224,7 @@
    null,
    70.0,
    null,
-   347,
+   349,
    "curve|learning_stop|train|y|69"
   ],
   [
@@ -4212,7 +4236,7 @@
    null,
    71.0,
    null,
-   348,
+   350,
    "curve|learning_stop|train|y|70"
   ],
   [
@@ -4224,7 +4248,7 @@
    null,
    72.0,
    null,
-   349,
+   351,
    "curve|learning_stop|train|y|71"
   ],
   [
@@ -4236,7 +4260,7 @@
    null,
    73.0,
    null,
-   350,
+   352,
    "curve|learning_stop|train|y|72"
   ],
   [
@@ -4248,7 +4272,7 @@
    null,
    1.0,
    null,
-   351,
+   353,
    "curve|learning_stop|validation|y|0"
   ],
   [
@@ -4260,7 +4284,7 @@
    null,
    2.0,
    null,
-   352,
+   354,
    "curve|learning_stop|validation|y|1"
   ],
   [
@@ -4272,7 +4296,7 @@
    null,
    3.0,
    null,
-   353,
+   355,
    "curve|learning_stop|validation|y|2"
   ],
   [
@@ -4284,7 +4308,7 @@
    null,
    4.0,
    null,
-   354,
+   356,
    "curve|learning_stop|validation|y|3"
   ],
   [
@@ -4296,7 +4320,7 @@
    null,
    5.0,
    null,
-   355,
+   357,
    "curve|learning_stop|validation|y|4"
   ],
   [
@@ -4308,7 +4332,7 @@
    null,
    6.0,
    null,
-   356,
+   358,
    "curve|learning_stop|validation|y|5"
   ],
   [
@@ -4320,7 +4344,7 @@
    null,
    7.0,
    null,
-   357,
+   359,
    "curve|learning_stop|validation|y|6"
   ],
   [
@@ -4332,7 +4356,7 @@
    null,
    8.0,
    null,
-   358,
+   360,
    "curve|learning_stop|validation|y|7"
   ],
   [
@@ -4344,7 +4368,7 @@
    null,
    9.0,
    null,
-   359,
+   361,
    "curve|learning_stop|validation|y|8"
   ],
   [
@@ -4356,7 +4380,7 @@
    null,
    10.0,
    null,
-   360,
+   362,
    "curve|learning_stop|validation|y|9"
   ],
   [
@@ -4368,7 +4392,7 @@
    null,
    11.0,
    null,
-   361,
+   363,
    "curve|learning_stop|validation|y|10"
   ],
   [
@@ -4380,7 +4404,7 @@
    null,
    12.0,
    null,
-   362,
+   364,
    "curve|learning_stop|validation|y|11"
   ],
   [
@@ -4392,7 +4416,7 @@
    null,
    13.0,
    null,
-   363,
+   365,
    "curve|learning_stop|validation|y|12"
   ],
   [
@@ -4404,7 +4428,7 @@
    null,
    14.0,
    null,
-   364,
+   366,
    "curve|learning_stop|validation|y|13"
   ],
   [
@@ -4416,7 +4440,7 @@
    null,
    15.0,
    null,
-   365,
+   367,
    "curve|learning_stop|validation|y|14"
   ],
   [
@@ -4428,7 +4452,7 @@
    null,
    16.0,
    null,
-   366,
+   368,
    "curve|learning_stop|validation|y|15"
   ],
   [
@@ -4440,7 +4464,7 @@
    null,
    17.0,
    null,
-   367,
+   369,
    "curve|learning_stop|validation|y|16"
   ],
   [
@@ -4452,7 +4476,7 @@
    null,
    18.0,
    null,
-   368,
+   370,
    "curve|learning_stop|validation|y|17"
   ],
   [
@@ -4464,7 +4488,7 @@
    null,
    19.0,
    null,
-   369,
+   371,
    "curve|learning_stop|validation|y|18"
   ],
   [
@@ -4476,7 +4500,7 @@
    null,
    20.0,
    null,
-   370,
+   372,
    "curve|learning_stop|validation|y|19"
   ],
   [
@@ -4488,7 +4512,7 @@
    null,
    21.0,
    null,
-   371,
+   373,
    "curve|learning_stop|validation|y|20"
   ],
   [
@@ -4500,7 +4524,7 @@
    null,
    22.0,
    null,
-   372,
+   374,
    "curve|learning_stop|validation|y|21"
   ],
   [
@@ -4512,7 +4536,7 @@
    null,
    23.0,
    null,
-   373,
+   375,
    "curve|learning_stop|validation|y|22"
   ],
   [
@@ -4524,7 +4548,7 @@
    null,
    24.0,
    null,
-   374,
+   376,
    "curve|learning_stop|validation|y|23"
   ],
   [
@@ -4536,7 +4560,7 @@
    null,
    25.0,
    null,
-   375,
+   377,
    "curve|learning_stop|validation|y|24"
   ],
   [
@@ -4548,7 +4572,7 @@
    null,
    26.0,
    null,
-   376,
+   378,
    "curve|learning_stop|validation|y|25"
   ],
   [
@@ -4560,7 +4584,7 @@
    null,
    27.0,
    null,
-   377,
+   379,
    "curve|learning_stop|validation|y|26"
   ],
   [
@@ -4572,7 +4596,7 @@
    null,
    28.0,
    null,
-   378,
+   380,
    "curve|learning_stop|validation|y|27"
   ],
   [
@@ -4584,7 +4608,7 @@
    null,
    29.0,
    null,
-   379,
+   381,
    "curve|learning_stop|validation|y|28"
   ],
   [
@@ -4596,7 +4620,7 @@
    null,
    30.0,
    null,
-   380,
+   382,
    "curve|learning_stop|validation|y|29"
   ],
   [
@@ -4608,7 +4632,7 @@
    null,
    31.0,
    null,
-   381,
+   383,
    "curve|learning_stop|validation|y|30"
   ],
   [
@@ -4620,7 +4644,7 @@
    null,
    32.0,
    null,
-   382,
+   384,
    "curve|learning_stop|validation|y|31"
   ],
   [
@@ -4632,7 +4656,7 @@
    null,
    33.0,
    null,
-   383,
+   385,
    "curve|learning_stop|validation|y|32"
   ],
   [
@@ -4644,7 +4668,7 @@
    null,
    34.0,
    null,
-   384,
+   386,
    "curve|learning_stop|validation|y|33"
   ],
   [
@@ -4656,7 +4680,7 @@
    null,
    35.0,
    null,
-   385,
+   387,
    "curve|learning_stop|validation|y|34"
   ],
   [
@@ -4668,7 +4692,7 @@
    null,
    36.0,
    null,
-   386,
+   388,
    "curve|learning_stop|validation|y|35"
   ],
   [
@@ -4680,7 +4704,7 @@
    null,
    37.0,
    null,
-   387,
+   389,
    "curve|learning_stop|validation|y|36"
   ],
   [
@@ -4692,7 +4716,7 @@
    null,
    38.0,
    null,
-   388,
+   390,
    "curve|learning_stop|validation|y|37"
   ],
   [
@@ -4704,7 +4728,7 @@
    null,
    39.0,
    null,
-   389,
+   391,
    "curve|learning_stop|validation|y|38"
   ],
   [
@@ -4716,7 +4740,7 @@
    null,
    40.0,
    null,
-   390,
+   392,
    "curve|learning_stop|validation|y|39"
   ],
   [
@@ -4728,7 +4752,7 @@
    null,
    41.0,
    null,
-   391,
+   393,
    "curve|learning_stop|validation|y|40"
   ],
   [
@@ -4740,7 +4764,7 @@
    null,
    42.0,
    null,
-   392,
+   394,
    "curve|learning_stop|validation|y|41"
   ],
   [
@@ -4752,7 +4776,7 @@
    null,
    43.0,
    null,
-   393,
+   395,
    "curve|learning_stop|validation|y|42"
   ],
   [
@@ -4764,7 +4788,7 @@
    null,
    44.0,
    null,
-   394,
+   396,
    "curve|learning_stop|validation|y|43"
   ],
   [
@@ -4776,7 +4800,7 @@
    null,
    45.0,
    null,
-   395,
+   397,
    "curve|learning_stop|validation|y|44"
   ],
   [
@@ -4788,7 +4812,7 @@
    null,
    46.0,
    null,
-   396,
+   398,
    "curve|learning_stop|validation|y|45"
   ],
   [
@@ -4800,7 +4824,7 @@
    null,
    47.0,
    null,
-   397,
+   399,
    "curve|learning_stop|validation|y|46"
   ],
   [
@@ -4812,7 +4836,7 @@
    null,
    48.0,
    null,
-   398,
+   400,
    "curve|learning_stop|validation|y|47"
   ],
   [
@@ -4824,7 +4848,7 @@
    null,
    49.0,
    null,
-   399,
+   401,
    "curve|learning_stop|validation|y|48"
   ],
   [
@@ -4836,7 +4860,7 @@
    null,
    50.0,
    null,
-   400,
+   402,
    "curve|learning_stop|validation|y|49"
   ],
   [
@@ -4848,7 +4872,7 @@
    null,
    51.0,
    null,
-   401,
+   403,
    "curve|learning_stop|validation|y|50"
   ],
   [
@@ -4860,7 +4884,7 @@
    null,
    52.0,
    null,
-   402,
+   404,
    "curve|learning_stop|validation|y|51"
   ],
   [
@@ -4872,7 +4896,7 @@
    null,
    53.0,
    null,
-   403,
+   405,
    "curve|learning_stop|validation|y|52"
   ],
   [
@@ -4884,7 +4908,7 @@
    null,
    54.0,
    null,
-   404,
+   406,
    "curve|learning_stop|validation|y|53"
   ],
   [
@@ -4896,7 +4920,7 @@
    null,
    55.0,
    null,
-   405,
+   407,
    "curve|learning_stop|validation|y|54"
   ],
   [
@@ -4908,7 +4932,7 @@
    null,
    56.0,
    null,
-   406,
+   408,
    "curve|learning_stop|validation|y|55"
   ],
   [
@@ -4920,7 +4944,7 @@
    null,
    57.0,
    null,
-   407,
+   409,
    "curve|learning_stop|validation|y|56"
   ],
   [
@@ -4932,7 +4956,7 @@
    null,
    58.0,
    null,
-   408,
+   410,
    "curve|learning_stop|validation|y|57"
   ],
   [
@@ -4944,7 +4968,7 @@
    null,
    59.0,
    null,
-   409,
+   411,
    "curve|learning_stop|validation|y|58"
   ],
   [
@@ -4956,7 +4980,7 @@
    null,
    60.0,
    null,
-   410,
+   412,
    "curve|learning_stop|validation|y|59"
   ],
   [
@@ -4968,7 +4992,7 @@
    null,
    61.0,
    null,
-   411,
+   413,
    "curve|learning_stop|validation|y|60"
   ],
   [
@@ -4980,7 +5004,7 @@
    null,
    62.0,
    null,
-   412,
+   414,
    "curve|learning_stop|validation|y|61"
   ],
   [
@@ -4992,7 +5016,7 @@
    null,
    63.0,
    null,
-   413,
+   415,
    "curve|learning_stop|validation|y|62"
   ],
   [
@@ -5004,7 +5028,7 @@
    null,
    64.0,
    null,
-   414,
+   416,
    "curve|learning_stop|validation|y|63"
   ],
   [
@@ -5016,7 +5040,7 @@
    null,
    65.0,
    null,
-   415,
+   417,
    "curve|learning_stop|validation|y|64"
   ],
   [
@@ -5028,7 +5052,7 @@
    null,
    66.0,
    null,
-   416,
+   418,
    "curve|learning_stop|validation|y|65"
   ],
   [
@@ -5040,7 +5064,7 @@
    null,
    67.0,
    null,
-   417,
+   419,
    "curve|learning_stop|validation|y|66"
   ],
   [
@@ -5052,7 +5076,7 @@
    null,
    68.0,
    null,
-   418,
+   420,
    "curve|learning_stop|validation|y|67"
   ],
   [
@@ -5064,7 +5088,7 @@
    null,
    69.0,
    null,
-   419,
+   421,
    "curve|learning_stop|validation|y|68"
   ],
   [
@@ -5076,7 +5100,7 @@
    null,
    70.0,
    null,
-   420,
+   422,
    "curve|learning_stop|validation|y|69"
   ],
   [
@@ -5088,7 +5112,7 @@
    null,
    71.0,
    null,
-   421,
+   423,
    "curve|learning_stop|validation|y|70"
   ],
   [
@@ -5100,7 +5124,7 @@
    null,
    72.0,
    null,
-   422,
+   424,
    "curve|learning_stop|validation|y|71"
   ],
   [
@@ -5112,7 +5136,7 @@
    null,
    73.0,
    null,
-   423,
+   425,
    "curve|learning_stop|validation|y|72"
   ],
   [
@@ -5124,7 +5148,7 @@
    null,
    0.0,
    null,
-   424,
+   426,
    "curve|roc_ovr|bronze|y|0"
   ],
   [
@@ -5136,7 +5160,7 @@
    null,
    0.0,
    null,
-   425,
+   427,
    "curve|roc_ovr|bronze|y|1"
   ],
   [
@@ -5148,7 +5172,7 @@
    null,
    0.0,
    null,
-   426,
+   428,
    "curve|roc_ovr|bronze|y|2"
   ],
   [
@@ -5160,7 +5184,7 @@
    null,
    0.0,
    null,
-   427,
+   429,
    "curve|roc_ovr|bronze|y|3"
   ],
   [
@@ -5172,7 +5196,7 @@
    null,
    0.0,
    null,
-   428,
+   430,
    "curve|roc_ovr|bronze|y|4"
   ],
   [
@@ -5184,7 +5208,7 @@
    null,
    0.0,
    null,
-   429,
+   431,
    "curve|roc_ovr|bronze|y|5"
   ],
   [
@@ -5196,7 +5220,7 @@
    null,
    0.017857142857142856,
    null,
-   430,
+   432,
    "curve|roc_ovr|bronze|y|6"
   ],
   [
@@ -5208,7 +5232,7 @@
    null,
    0.017857142857142856,
    null,
-   431,
+   433,
    "curve|roc_ovr|bronze|y|7"
   ],
   [
@@ -5220,7 +5244,7 @@
    null,
    0.017857142857142856,
    null,
-   432,
+   434,
    "curve|roc_ovr|bronze|y|8"
   ],
   [
@@ -5232,7 +5256,7 @@
    null,
    0.03571428571428571,
    null,
-   433,
+   435,
    "curve|roc_ovr|bronze|y|9"
   ],
   [
@@ -5244,7 +5268,7 @@
    null,
    0.05357142857142857,
    null,
-   434,
+   436,
    "curve|roc_ovr|bronze|y|10"
   ],
   [
@@ -5256,7 +5280,7 @@
    null,
    0.05357142857142857,
    null,
-   435,
+   437,
    "curve|roc_ovr|bronze|y|11"
   ],
   [
@@ -5268,7 +5292,7 @@
    null,
    0.05357142857142857,
    null,
-   436,
+   438,
    "curve|roc_ovr|bronze|y|12"
   ],
   [
@@ -5280,7 +5304,7 @@
    null,
    0.07142857142857142,
    null,
-   437,
+   439,
    "curve|roc_ovr|bronze|y|13"
   ],
   [
@@ -5292,7 +5316,7 @@
    null,
    0.07142857142857142,
    null,
-   438,
+   440,
    "curve|roc_ovr|bronze|y|14"
   ],
   [
@@ -5304,7 +5328,7 @@
    null,
    0.07142857142857142,
    null,
-   439,
+   441,
    "curve|roc_ovr|bronze|y|15"
   ],
   [
@@ -5316,7 +5340,7 @@
    null,
    0.07142857142857142,
    null,
-   440,
+   442,
    "curve|roc_ovr|bronze|y|16"
   ],
   [
@@ -5328,7 +5352,7 @@
    null,
    0.07142857142857142,
    null,
-   441,
+   443,
    "curve|roc_ovr|bronze|y|17"
   ],
   [
@@ -5340,7 +5364,7 @@
    null,
    0.08928571428571429,
    null,
-   442,
+   444,
    "curve|roc_ovr|bronze|y|18"
   ],
   [
@@ -5352,7 +5376,7 @@
    null,
    0.10714285714285714,
    null,
-   443,
+   445,
    "curve|roc_ovr|bronze|y|19"
   ],
   [
@@ -5364,7 +5388,7 @@
    null,
    0.10714285714285714,
    null,
-   444,
+   446,
    "curve|roc_ovr|bronze|y|20"
   ],
   [
@@ -5376,7 +5400,7 @@
    null,
    0.125,
    null,
-   445,
+   447,
    "curve|roc_ovr|bronze|y|21"
   ],
   [
@@ -5388,7 +5412,7 @@
    null,
    0.125,
    null,
-   446,
+   448,
    "curve|roc_ovr|bronze|y|22"
   ],
   [
@@ -5400,7 +5424,7 @@
    null,
    0.125,
    null,
-   447,
+   449,
    "curve|roc_ovr|bronze|y|23"
   ],
   [
@@ -5412,7 +5436,7 @@
    null,
    0.125,
    null,
-   448,
+   450,
    "curve|roc_ovr|bronze|y|24"
   ],
   [
@@ -5424,7 +5448,7 @@
    null,
    0.125,
    null,
-   449,
+   451,
    "curve|roc_ovr|bronze|y|25"
   ],
   [
@@ -5436,7 +5460,7 @@
    null,
    0.16071428571428573,
    null,
-   450,
+   452,
    "curve|roc_ovr|bronze|y|26"
   ],
   [
@@ -5448,7 +5472,7 @@
    null,
    0.17857142857142858,
    null,
-   451,
+   453,
    "curve|roc_ovr|bronze|y|27"
   ],
   [
@@ -5460,7 +5484,7 @@
    null,
    0.19642857142857142,
    null,
-   452,
+   454,
    "curve|roc_ovr|bronze|y|28"
   ],
   [
@@ -5472,7 +5496,7 @@
    null,
    0.19642857142857142,
    null,
-   453,
+   455,
    "curve|roc_ovr|bronze|y|29"
   ],
   [
@@ -5484,7 +5508,7 @@
    null,
    0.21428571428571427,
    null,
-   454,
+   456,
    "curve|roc_ovr|bronze|y|30"
   ],
   [
@@ -5496,7 +5520,7 @@
    null,
    0.21428571428571427,
    null,
-   455,
+   457,
    "curve|roc_ovr|bronze|y|31"
   ],
   [
@@ -5508,7 +5532,7 @@
    null,
    0.21428571428571427,
    null,
-   456,
+   458,
    "curve|roc_ovr|bronze|y|32"
   ],
   [
@@ -5520,7 +5544,7 @@
    null,
    0.23214285714285715,
    null,
-   457,
+   459,
    "curve|roc_ovr|bronze|y|33"
   ],
   [
@@ -5532,7 +5556,7 @@
    null,
    0.25,
    null,
-   458,
+   460,
    "curve|roc_ovr|bronze|y|34"
   ],
   [
@@ -5544,7 +5568,7 @@
    null,
    0.26785714285714285,
    null,
-   459,
+   461,
    "curve|roc_ovr|bronze|y|35"
   ],
   [
@@ -5556,7 +5580,7 @@
    null,
    0.2857142857142857,
    null,
-   460,
+   462,
    "curve|roc_ovr|bronze|y|36"
   ],
   [
@@ -5568,7 +5592,7 @@
    null,
    0.30357142857142855,
    null,
-   461,
+   463,
    "curve|roc_ovr|bronze|y|37"
   ],
   [
@@ -5580,7 +5604,7 @@
    null,
    0.32142857142857145,
    null,
-   462,
+   464,
    "curve|roc_ovr|bronze|y|38"
   ],
   [
@@ -5592,7 +5616,7 @@
    null,
    0.3392857142857143,
    null,
-   463,
+   465,
    "curve|roc_ovr|bronze|y|39"
   ],
   [
@@ -5604,7 +5628,7 @@
    null,
    0.3392857142857143,
    null,
-   464,
+   466,
    "curve|roc_ovr|bronze|y|40"
   ],
   [
@@ -5616,7 +5640,7 @@
    null,
    0.35714285714285715,
    null,
-   465,
+   467,
    "curve|roc_ovr|bronze|y|41"
   ],
   [
@@ -5628,7 +5652,7 @@
    null,
    0.375,
    null,
-   466,
+   468,
    "curve|roc_ovr|bronze|y|42"
   ],
   [
@@ -5640,7 +5664,7 @@
    null,
    0.39285714285714285,
    null,
-   467,
+   469,
    "curve|roc_ovr|bronze|y|43"
   ],
   [
@@ -5652,7 +5676,7 @@
    null,
    0.4107142857142857,
    null,
-   468,
+   470,
    "curve|roc_ovr|bronze|y|44"
   ],
   [
@@ -5664,7 +5688,7 @@
    null,
    0.42857142857142855,
    null,
-   469,
+   471,
    "curve|roc_ovr|bronze|y|45"
   ],
   [
@@ -5676,7 +5700,7 @@
    null,
    0.44642857142857145,
    null,
-   470,
+   472,
    "curve|roc_ovr|bronze|y|46"
   ],
   [
@@ -5688,7 +5712,7 @@
    null,
    0.4642857142857143,
    null,
-   471,
+   473,
    "curve|roc_ovr|bronze|y|47"
   ],
   [
@@ -5700,7 +5724,7 @@
    null,
    0.4642857142857143,
    null,
-   472,
+   474,
    "curve|roc_ovr|bronze|y|48"
   ],
   [
@@ -5712,7 +5736,7 @@
    null,
    0.48214285714285715,
    null,
-   473,
+   475,
    "curve|roc_ovr|bronze|y|49"
   ],
   [
@@ -5724,7 +5748,7 @@
    null,
    0.48214285714285715,
    null,
-   474,
+   476,
    "curve|roc_ovr|bronze|y|50"
   ],
   [
@@ -5736,7 +5760,7 @@
    null,
    0.5,
    null,
-   475,
+   477,
    "curve|roc_ovr|bronze|y|51"
   ],
   [
@@ -5748,7 +5772,7 @@
    null,
    0.5178571428571429,
    null,
-   476,
+   478,
    "curve|roc_ovr|bronze|y|52"
   ],
   [
@@ -5760,7 +5784,7 @@
    null,
    0.5357142857142857,
    null,
-   477,
+   479,
    "curve|roc_ovr|bronze|y|53"
   ],
   [
@@ -5772,7 +5796,7 @@
    null,
    0.5535714285714286,
    null,
-   478,
+   480,
    "curve|roc_ovr|bronze|y|54"
   ],
   [
@@ -5784,7 +5808,7 @@
    null,
    0.5535714285714286,
    null,
-   479,
+   481,
    "curve|roc_ovr|bronze|y|55"
   ],
   [
@@ -5796,7 +5820,7 @@
    null,
    0.5714285714285714,
    null,
-   480,
+   482,
    "curve|roc_ovr|bronze|y|56"
   ],
   [
@@ -5808,7 +5832,7 @@
    null,
    0.5892857142857143,
    null,
-   481,
+   483,
    "curve|roc_ovr|bronze|y|57"
   ],
   [
@@ -5820,7 +5844,7 @@
    null,
    0.6071428571428571,
    null,
-   482,
+   484,
    "curve|roc_ovr|bronze|y|58"
   ],
   [
@@ -5832,7 +5856,7 @@
    null,
    0.625,
    null,
-   483,
+   485,
    "curve|roc_ovr|bronze|y|59"
   ],
   [
@@ -5844,7 +5868,7 @@
    null,
    0.6428571428571429,
    null,
-   484,
+   486,
    "curve|roc_ovr|bronze|y|60"
   ],
   [
@@ -5856,7 +5880,7 @@
    null,
    0.6607142857142857,
    null,
-   485,
+   487,
    "curve|roc_ovr|bronze|y|61"
   ],
   [
@@ -5868,7 +5892,7 @@
    null,
    0.6785714285714286,
    null,
-   486,
+   488,
    "curve|roc_ovr|bronze|y|62"
   ],
   [
@@ -5880,7 +5904,7 @@
    null,
    0.6964285714285714,
    null,
-   487,
+   489,
    "curve|roc_ovr|bronze|y|63"
   ],
   [
@@ -5892,7 +5916,7 @@
    null,
    0.7142857142857143,
    null,
-   488,
+   490,
    "curve|roc_ovr|bronze|y|64"
   ],
   [
@@ -5904,7 +5928,7 @@
    null,
    0.7321428571428571,
    null,
-   489,
+   491,
    "curve|roc_ovr|bronze|y|65"
   ],
   [
@@ -5916,7 +5940,7 @@
    null,
    0.75,
    null,
-   490,
+   492,
    "curve|roc_ovr|bronze|y|66"
   ],
   [
@@ -5928,7 +5952,7 @@
    null,
    0.7678571428571429,
    null,
-   491,
+   493,
    "curve|roc_ovr|bronze|y|67"
   ],
   [
@@ -5940,7 +5964,7 @@
    null,
    0.7857142857142857,
    null,
-   492,
+   494,
    "curve|roc_ovr|bronze|y|68"
   ],
   [
@@ -5952,7 +5976,7 @@
    null,
    0.8035714285714286,
    null,
-   493,
+   495,
    "curve|roc_ovr|bronze|y|69"
   ],
   [
@@ -5964,7 +5988,7 @@
    null,
    0.8214285714285714,
    null,
-   494,
+   496,
    "curve|roc_ovr|bronze|y|70"
   ],
   [
@@ -5976,7 +6000,7 @@
    null,
    0.8392857142857143,
    null,
-   495,
+   497,
    "curve|roc_ovr|bronze|y|71"
   ],
   [
@@ -5988,7 +6012,7 @@
    null,
    0.8571428571428571,
    null,
-   496,
+   498,
    "curve|roc_ovr|bronze|y|72"
   ],
   [
@@ -6000,7 +6024,7 @@
    null,
    0.875,
    null,
-   497,
+   499,
    "curve|roc_ovr|bronze|y|73"
   ],
   [
@@ -6012,7 +6036,7 @@
    null,
    0.8928571428571429,
    null,
-   498,
+   500,
    "curve|roc_ovr|bronze|y|74"
   ],
   [
@@ -6024,7 +6048,7 @@
    null,
    0.9107142857142857,
    null,
-   499,
+   501,
    "curve|roc_ovr|bronze|y|75"
   ],
   [
@@ -6036,7 +6060,7 @@
    null,
    0.9285714285714286,
    null,
-   500,
+   502,
    "curve|roc_ovr|bronze|y|76"
   ],
   [
@@ -6048,7 +6072,7 @@
    null,
    0.9464285714285714,
    null,
-   501,
+   503,
    "curve|roc_ovr|bronze|y|77"
   ],
   [
@@ -6060,7 +6084,7 @@
    null,
    0.9642857142857143,
    null,
-   502,
+   504,
    "curve|roc_ovr|bronze|y|78"
   ],
   [
@@ -6072,7 +6096,7 @@
    null,
    0.9821428571428571,
    null,
-   503,
+   505,
    "curve|roc_ovr|bronze|y|79"
   ],
   [
@@ -6084,7 +6108,7 @@
    null,
    1.0,
    null,
-   504,
+   506,
    "curve|roc_ovr|bronze|y|80"
   ],
   [
@@ -6096,7 +6120,7 @@
    null,
    0.0,
    null,
-   505,
+   507,
    "curve|roc_ovr|gold|y|0"
   ],
   [
@@ -6108,7 +6132,7 @@
    null,
    0.0,
    null,
-   506,
+   508,
    "curve|roc_ovr|gold|y|1"
   ],
   [
@@ -6120,7 +6144,7 @@
    null,
    0.014285714285714285,
    null,
-   507,
+   509,
    "curve|roc_ovr|gold|y|2"
   ],
   [
@@ -6132,7 +6156,7 @@
    null,
    0.014285714285714285,
    null,
-   508,
+   510,
    "curve|roc_ovr|gold|y|3"
   ],
   [
@@ -6144,7 +6168,7 @@
    null,
    0.014285714285714285,
    null,
-   509,
+   511,
    "curve|roc_ovr|gold|y|4"
   ],
   [
@@ -6156,7 +6180,7 @@
    null,
    0.014285714285714285,
    null,
-   510,
+   512,
    "curve|roc_ovr|gold|y|5"
   ],
   [
@@ -6168,7 +6192,7 @@
    null,
    0.014285714285714285,
    null,
-   511,
+   513,
    "curve|roc_ovr|gold|y|6"
   ],
   [
@@ -6180,7 +6204,7 @@
    null,
    0.014285714285714285,
    null,
-   512,
+   514,
    "curve|roc_ovr|gold|y|7"
   ],
   [
@@ -6192,7 +6216,7 @@
    null,
    0.014285714285714285,
    null,
-   513,
+   515,
    "curve|roc_ovr|gold|y|8"
   ],
   [
@@ -6204,7 +6228,7 @@
    null,
    0.014285714285714285,
    null,
-   514,
+   516,
    "curve|roc_ovr|gold|y|9"
   ],
   [
@@ -6216,7 +6240,7 @@
    null,
    0.014285714285714285,
    null,
-   515,
+   517,
    "curve|roc_ovr|gold|y|10"
   ],
   [
@@ -6228,7 +6252,7 @@
    null,
    0.014285714285714285,
    null,
-   516,
+   518,
    "curve|roc_ovr|gold|y|11"
   ],
   [
@@ -6240,7 +6264,7 @@
    null,
    0.014285714285714285,
    null,
-   517,
+   519,
    "curve|roc_ovr|gold|y|12"
   ],
   [
@@ -6252,7 +6276,7 @@
    null,
    0.02857142857142857,
    null,
-   518,
+   520,
    "curve|roc_ovr|gold|y|13"
   ],
   [
@@ -6264,7 +6288,7 @@
    null,
    0.04285714285714286,
    null,
-   519,
+   521,
    "curve|roc_ovr|gold|y|14"
   ],
   [
@@ -6276,7 +6300,7 @@
    null,
    0.04285714285714286,
    null,
-   520,
+   522,
    "curve|roc_ovr|gold|y|15"
   ],
   [
@@ -6288,7 +6312,7 @@
    null,
    0.05714285714285714,
    null,
-   521,
+   523,
    "curve|roc_ovr|gold|y|16"
   ],
   [
@@ -6300,7 +6324,7 @@
    null,
    0.05714285714285714,
    null,
-   522,
+   524,
    "curve|roc_ovr|gold|y|17"
   ],
   [
@@ -6312,7 +6336,7 @@
    null,
    0.07142857142857142,
    null,
-   523,
+   525,
    "curve|roc_ovr|gold|y|18"
   ],
   [
@@ -6324,7 +6348,7 @@
    null,
    0.08571428571428572,
    null,
-   524,
+   526,
    "curve|roc_ovr|gold|y|19"
   ],
   [
@@ -6336,7 +6360,7 @@
    null,
    0.1,
    null,
-   525,
+   527,
    "curve|roc_ovr|gold|y|20"
   ],
   [
@@ -6348,7 +6372,7 @@
    null,
    0.11428571428571428,
    null,
-   526,
+   528,
    "curve|roc_ovr|gold|y|21"
   ],
   [
@@ -6360,7 +6384,7 @@
    null,
    0.11428571428571428,
    null,
-   527,
+   529,
    "curve|roc_ovr|gold|y|22"
   ],
   [
@@ -6372,7 +6396,7 @@
    null,
    0.11428571428571428,
    null,
-   528,
+   530,
    "curve|roc_ovr|gold|y|23"
   ],
   [
@@ -6384,7 +6408,7 @@
    null,
    0.12857142857142856,
    null,
-   529,
+   531,
    "curve|roc_ovr|gold|y|24"
   ],
   [
@@ -6396,7 +6420,7 @@
    null,
    0.12857142857142856,
    null,
-   530,
+   532,
    "curve|roc_ovr|gold|y|25"
   ],
   [
@@ -6408,7 +6432,7 @@
    null,
    0.12857142857142856,
    null,
-   531,
+   533,
    "curve|roc_ovr|gold|y|26"
   ],
   [
@@ -6420,7 +6444,7 @@
    null,
    0.14285714285714285,
    null,
-   532,
+   534,
    "curve|roc_ovr|gold|y|27"
   ],
   [
@@ -6432,7 +6456,7 @@
    null,
    0.15714285714285714,
    null,
-   533,
+   535,
    "curve|roc_ovr|gold|y|28"
   ],
   [
@@ -6444,7 +6468,7 @@
    null,
    0.17142857142857143,
    null,
-   534,
+   536,
    "curve|roc_ovr|gold|y|29"
   ],
   [
@@ -6456,7 +6480,7 @@
    null,
    0.18571428571428572,
    null,
-   535,
+   537,
    "curve|roc_ovr|gold|y|30"
   ],
   [
@@ -6468,7 +6492,7 @@
    null,
    0.2,
    null,
-   536,
+   538,
    "curve|roc_ovr|gold|y|31"
   ],
   [
@@ -6480,7 +6504,7 @@
    null,
    0.21428571428571427,
    null,
-   537,
+   539,
    "curve|roc_ovr|gold|y|32"
   ],
   [
@@ -6492,7 +6516,7 @@
    null,
    0.21428571428571427,
    null,
-   538,
+   540,
    "curve|roc_ovr|gold|y|33"
   ],
   [
@@ -6504,7 +6528,7 @@
    null,
    0.21428571428571427,
    null,
-   539,
+   541,
    "curve|roc_ovr|gold|y|34"
   ],
   [
@@ -6516,7 +6540,7 @@
    null,
    0.22857142857142856,
    null,
-   540,
+   542,
    "curve|roc_ovr|gold|y|35"
   ],
   [
@@ -6528,7 +6552,7 @@
    null,
    0.24285714285714285,
    null,
-   541,
+   543,
    "curve|roc_ovr|gold|y|36"
   ],
   [
@@ -6540,7 +6564,7 @@
    null,
    0.2571428571428571,
    null,
-   542,
+   544,
    "curve|roc_ovr|gold|y|37"
   ],
   [
@@ -6552,7 +6576,7 @@
    null,
    0.2714285714285714,
    null,
-   543,
+   545,
    "curve|roc_ovr|gold|y|38"
   ],
   [
@@ -6564,7 +6588,7 @@
    null,
    0.2857142857142857,
    null,
-   544,
+   546,
    "curve|roc_ovr|gold|y|39"
   ],
   [
@@ -6576,7 +6600,7 @@
    null,
    0.3,
    null,
-   545,
+   547,
    "curve|roc_ovr|gold|y|40"
   ],
   [
@@ -6588,7 +6612,7 @@
    null,
    0.3142857142857143,
    null,
-   546,
+   548,
    "curve|roc_ovr|gold|y|41"
   ],
   [
@@ -6600,7 +6624,7 @@
    null,
    0.32857142857142857,
    null,
-   547,
+   549,
    "curve|roc_ovr|gold|y|42"
   ],
   [
@@ -6612,7 +6636,7 @@
    null,
    0.34285714285714286,
    null,
-   548,
+   550,
    "curve|roc_ovr|gold|y|43"
   ],
   [
@@ -6624,7 +6648,7 @@
    null,
    0.35714285714285715,
    null,
-   549,
+   551,
    "curve|roc_ovr|gold|y|44"
   ],
   [
@@ -6636,7 +6660,7 @@
    null,
    0.37142857142857144,
    null,
-   550,
+   552,
    "curve|roc_ovr|gold|y|45"
   ],
   [
@@ -6648,7 +6672,7 @@
    null,
    0.37142857142857144,
    null,
-   551,
+   553,
    "curve|roc_ovr|gold|y|46"
   ],
   [
@@ -6660,7 +6684,7 @@
    null,
    0.38571428571428573,
    null,
-   552,
+   554,
    "curve|roc_ovr|gold|y|47"
   ],
   [
@@ -6672,7 +6696,7 @@
    null,
    0.4,
    null,
-   553,
+   555,
    "curve|roc_ovr|gold|y|48"
   ],
   [
@@ -6684,7 +6708,7 @@
    null,
    0.4142857142857143,
    null,
-   554,
+   556,
    "curve|roc_ovr|gold|y|49"
   ],
   [
@@ -6696,7 +6720,7 @@
    null,
    0.42857142857142855,
    null,
-   555,
+   557,
    "curve|roc_ovr|gold|y|50"
   ],
   [
@@ -6708,7 +6732,7 @@
    null,
    0.44285714285714284,
    null,
-   556,
+   558,
    "curve|roc_ovr|gold|y|51"
   ],
   [
@@ -6720,7 +6744,7 @@
    null,
    0.44285714285714284,
    null,
-   557,
+   559,
    "curve|roc_ovr|gold|y|52"
   ],
   [
@@ -6732,7 +6756,7 @@
    null,
    0.4714285714285714,
    null,
-   558,
+   560,
    "curve|roc_ovr|gold|y|53"
   ],
   [
@@ -6744,7 +6768,7 @@
    null,
    0.4857142857142857,
    null,
-   559,
+   561,
    "curve|roc_ovr|gold|y|54"
   ],
   [
@@ -6756,7 +6780,7 @@
    null,
    0.5,
    null,
-   560,
+   562,
    "curve|roc_ovr|gold|y|55"
   ],
   [
@@ -6768,7 +6792,7 @@
    null,
    0.5142857142857142,
    null,
-   561,
+   563,
    "curve|roc_ovr|gold|y|56"
   ],
   [
@@ -6780,7 +6804,7 @@
    null,
    0.5285714285714286,
    null,
-   562,
+   564,
    "curve|roc_ovr|gold|y|57"
   ],
   [
@@ -6792,7 +6816,7 @@
    null,
    0.5428571428571428,
    null,
-   563,
+   565,
    "curve|roc_ovr|gold|y|58"
   ],
   [
@@ -6804,7 +6828,7 @@
    null,
    0.5571428571428572,
    null,
-   564,
+   566,
    "curve|roc_ovr|gold|y|59"
   ],
   [
@@ -6816,7 +6840,7 @@
    null,
    0.6,
    null,
-   565,
+   567,
    "curve|roc_ovr|gold|y|60"
   ],
   [
@@ -6828,7 +6852,7 @@
    null,
    0.6285714285714286,
    null,
-   566,
+   568,
    "curve|roc_ovr|gold|y|61"
   ],
   [
@@ -6840,7 +6864,7 @@
    null,
    0.6428571428571429,
    null,
-   567,
+   569,
    "curve|roc_ovr|gold|y|62"
   ],
   [
@@ -6852,7 +6876,7 @@
    null,
    0.6571428571428571,
    null,
-   568,
+   570,
    "curve|roc_ovr|gold|y|63"
   ],
   [
@@ -6864,7 +6888,7 @@
    null,
    0.6714285714285714,
    null,
-   569,
+   571,
    "curve|roc_ovr|gold|y|64"
   ],
   [
@@ -6876,7 +6900,7 @@
    null,
    0.6857142857142857,
    null,
-   570,
+   572,
    "curve|roc_ovr|gold|y|65"
   ],
   [
@@ -6888,7 +6912,7 @@
    null,
    0.7285714285714285,
    null,
-   571,
+   573,
    "curve|roc_ovr|gold|y|66"
   ],
   [
@@ -6900,7 +6924,7 @@
    null,
    0.7428571428571429,
    null,
-   572,
+   574,
    "curve|roc_ovr|gold|y|67"
   ],
   [
@@ -6912,7 +6936,7 @@
    null,
    0.7571428571428571,
    null,
-   573,
+   575,
    "curve|roc_ovr|gold|y|68"
   ],
   [
@@ -6924,7 +6948,7 @@
    null,
    0.7857142857142857,
    null,
-   574,
+   576,
    "curve|roc_ovr|gold|y|69"
   ],
   [
@@ -6936,7 +6960,7 @@
    null,
    0.8,
    null,
-   575,
+   577,
    "curve|roc_ovr|gold|y|70"
   ],
   [
@@ -6948,7 +6972,7 @@
    null,
    0.8142857142857143,
    null,
-   576,
+   578,
    "curve|roc_ovr|gold|y|71"
   ],
   [
@@ -6960,7 +6984,7 @@
    null,
    0.8428571428571429,
    null,
-   577,
+   579,
    "curve|roc_ovr|gold|y|72"
   ],
   [
@@ -6972,7 +6996,7 @@
    null,
    0.8714285714285714,
    null,
-   578,
+   580,
    "curve|roc_ovr|gold|y|73"
   ],
   [
@@ -6984,7 +7008,7 @@
    null,
    0.8857142857142857,
    null,
-   579,
+   581,
    "curve|roc_ovr|gold|y|74"
   ],
   [
@@ -6996,7 +7020,7 @@
    null,
    0.9,
    null,
-   580,
+   582,
    "curve|roc_ovr|gold|y|75"
   ],
   [
@@ -7008,7 +7032,7 @@
    null,
    0.9142857142857143,
    null,
-   581,
+   583,
    "curve|roc_ovr|gold|y|76"
   ],
   [
@@ -7020,7 +7044,7 @@
    null,
    0.9285714285714286,
    null,
-   582,
+   584,
    "curve|roc_ovr|gold|y|77"
   ],
   [
@@ -7032,7 +7056,7 @@
    null,
    0.9428571428571428,
    null,
-   583,
+   585,
    "curve|roc_ovr|gold|y|78"
   ],
   [
@@ -7044,7 +7068,7 @@
    null,
    0.9714285714285714,
    null,
-   584,
+   586,
    "curve|roc_ovr|gold|y|79"
   ],
   [
@@ -7056,7 +7080,7 @@
    null,
    1.0,
    null,
-   585,
+   587,
    "curve|roc_ovr|gold|y|80"
   ],
   [
@@ -7068,7 +7092,7 @@
    null,
    0.0,
    null,
-   586,
+   588,
    "curve|roc_ovr|silver|y|0"
   ],
   [
@@ -7080,7 +7104,7 @@
    null,
    0.0,
    null,
-   587,
+   589,
    "curve|roc_ovr|silver|y|1"
   ],
   [
@@ -7092,7 +7116,7 @@
    null,
    0.017857142857142856,
    null,
-   588,
+   590,
    "curve|roc_ovr|silver|y|2"
   ],
   [
@@ -7104,7 +7128,7 @@
    null,
    0.03571428571428571,
    null,
-   589,
+   591,
    "curve|roc_ovr|silver|y|3"
   ],
   [
@@ -7116,7 +7140,7 @@
    null,
    0.03571428571428571,
    null,
-   590,
+   592,
    "curve|roc_ovr|silver|y|4"
   ],
   [
@@ -7128,7 +7152,7 @@
    null,
    0.03571428571428571,
    null,
-   591,
+   593,
    "curve|roc_ovr|silver|y|5"
   ],
   [
@@ -7140,7 +7164,7 @@
    null,
    0.03571428571428571,
    null,
-   592,
+   594,
    "curve|roc_ovr|silver|y|6"
   ],
   [
@@ -7152,7 +7176,7 @@
    null,
    0.03571428571428571,
    null,
-   593,
+   595,
    "curve|roc_ovr|silver|y|7"
   ],
   [
@@ -7164,7 +7188,7 @@
    null,
    0.05357142857142857,
    null,
-   594,
+   596,
    "curve|roc_ovr|silver|y|8"
   ],
   [
@@ -7176,7 +7200,7 @@
    null,
    0.07142857142857142,
    null,
-   595,
+   597,
    "curve|roc_ovr|silver|y|9"
   ],
   [
@@ -7188,7 +7212,7 @@
    null,
    0.08928571428571429,
    null,
-   596,
+   598,
    "curve|roc_ovr|silver|y|10"
   ],
   [
@@ -7200,7 +7224,7 @@
    null,
    0.10714285714285714,
    null,
-   597,
+   599,
    "curve|roc_ovr|silver|y|11"
   ],
   [
@@ -7212,7 +7236,7 @@
    null,
    0.10714285714285714,
    null,
-   598,
+   600,
    "curve|roc_ovr|silver|y|12"
   ],
   [
@@ -7224,7 +7248,7 @@
    null,
    0.125,
    null,
-   599,
+   601,
    "curve|roc_ovr|silver|y|13"
   ],
   [
@@ -7236,7 +7260,7 @@
    null,
    0.125,
    null,
-   600,
+   602,
    "curve|roc_ovr|silver|y|14"
   ],
   [
@@ -7248,7 +7272,7 @@
    null,
    0.14285714285714285,
    null,
-   601,
+   603,
    "curve|roc_ovr|silver|y|15"
   ],
   [
@@ -7260,7 +7284,7 @@
    null,
    0.16071428571428573,
    null,
-   602,
+   604,
    "curve|roc_ovr|silver|y|16"
   ],
   [
@@ -7272,7 +7296,7 @@
    null,
    0.17857142857142858,
    null,
-   603,
+   605,
    "curve|roc_ovr|silver|y|17"
   ],
   [
@@ -7284,7 +7308,7 @@
    null,
    0.17857142857142858,
    null,
-   604,
+   606,
    "curve|roc_ovr|silver|y|18"
   ],
   [
@@ -7296,7 +7320,7 @@
    null,
    0.19642857142857142,
    null,
-   605,
+   607,
    "curve|roc_ovr|silver|y|19"
   ],
   [
@@ -7308,7 +7332,7 @@
    null,
    0.19642857142857142,
    null,
-   606,
+   608,
    "curve|roc_ovr|silver|y|20"
   ],
   [
@@ -7320,7 +7344,7 @@
    null,
    0.21428571428571427,
    null,
-   607,
+   609,
    "curve|roc_ovr|silver|y|21"
   ],
   [
@@ -7332,7 +7356,7 @@
    null,
    0.23214285714285715,
    null,
-   608,
+   610,
    "curve|roc_ovr|silver|y|22"
   ],
   [
@@ -7344,7 +7368,7 @@
    null,
    0.25,
    null,
-   609,
+   611,
    "curve|roc_ovr|silver|y|23"
   ],
   [
@@ -7356,7 +7380,7 @@
    null,
    0.25,
    null,
-   610,
+   612,
    "curve|roc_ovr|silver|y|24"
   ],
   [
@@ -7368,7 +7392,7 @@
    null,
    0.30357142857142855,
    null,
-   611,
+   613,
    "curve|roc_ovr|silver|y|25"
   ],
   [
@@ -7380,7 +7404,7 @@
    null,
    0.32142857142857145,
    null,
-   612,
+   614,
    "curve|roc_ovr|silver|y|26"
   ],
   [
@@ -7392,7 +7416,7 @@
    null,
    0.32142857142857145,
    null,
-   613,
+   615,
    "curve|roc_ovr|silver|y|27"
   ],
   [
@@ -7404,7 +7428,7 @@
    null,
    0.32142857142857145,
    null,
-   614,
+   616,
    "curve|roc_ovr|silver|y|28"
   ],
   [
@@ -7416,7 +7440,7 @@
    null,
    0.32142857142857145,
    null,
-   615,
+   617,
    "curve|roc_ovr|silver|y|29"
   ],
   [
@@ -7428,7 +7452,7 @@
    null,
    0.32142857142857145,
    null,
-   616,
+   618,
    "curve|roc_ovr|silver|y|30"
   ],
   [
@@ -7440,7 +7464,7 @@
    null,
    0.32142857142857145,
    null,
-   617,
+   619,
    "curve|roc_ovr|silver|y|31"
   ],
   [
@@ -7452,7 +7476,7 @@
    null,
    0.32142857142857145,
    null,
-   618,
+   620,
    "curve|roc_ovr|silver|y|32"
   ],
   [
@@ -7464,7 +7488,7 @@
    null,
    0.32142857142857145,
    null,
-   619,
+   621,
    "curve|roc_ovr|silver|y|33"
   ],
   [
@@ -7476,7 +7500,7 @@
    null,
    0.3392857142857143,
    null,
-   620,
+   622,
    "curve|roc_ovr|silver|y|34"
   ],
   [
@@ -7488,7 +7512,7 @@
    null,
    0.35714285714285715,
    null,
-   621,
+   623,
    "curve|roc_ovr|silver|y|35"
   ],
   [
@@ -7500,7 +7524,7 @@
    null,
    0.35714285714285715,
    null,
-   622,
+   624,
    "curve|roc_ovr|silver|y|36"
   ],
   [
@@ -7512,7 +7536,7 @@
    null,
    0.35714285714285715,
    null,
-   623,
+   625,
    "curve|roc_ovr|silver|y|37"
   ],
   [
@@ -7524,7 +7548,7 @@
    null,
    0.35714285714285715,
    null,
-   624,
+   626,
    "curve|roc_ovr|silver|y|38"
   ],
   [
@@ -7536,7 +7560,7 @@
    null,
    0.375,
    null,
-   625,
+   627,
    "curve|roc_ovr|silver|y|39"
   ],
   [
@@ -7548,7 +7572,7 @@
    null,
    0.375,
    null,
-   626,
+   628,
    "curve|roc_ovr|silver|y|40"
   ],
   [
@@ -7560,7 +7584,7 @@
    null,
    0.375,
    null,
-   627,
+   629,
    "curve|roc_ovr|silver|y|41"
   ],
   [
@@ -7572,7 +7596,7 @@
    null,
    0.39285714285714285,
    null,
-   628,
+   630,
    "curve|roc_ovr|silver|y|42"
   ],
   [
@@ -7584,7 +7608,7 @@
    null,
    0.4107142857142857,
    null,
-   629,
+   631,
    "curve|roc_ovr|silver|y|43"
   ],
   [
@@ -7596,7 +7620,7 @@
    null,
    0.42857142857142855,
    null,
-   630,
+   632,
    "curve|roc_ovr|silver|y|44"
   ],
   [
@@ -7608,7 +7632,7 @@
    null,
    0.44642857142857145,
    null,
-   631,
+   633,
    "curve|roc_ovr|silver|y|45"
   ],
   [
@@ -7620,7 +7644,7 @@
    null,
    0.48214285714285715,
    null,
-   632,
+   634,
    "curve|roc_ovr|silver|y|46"
   ],
   [
@@ -7632,7 +7656,7 @@
    null,
    0.5,
    null,
-   633,
+   635,
    "curve|roc_ovr|silver|y|47"
   ],
   [
@@ -7644,7 +7668,7 @@
    null,
    0.5178571428571429,
    null,
-   634,
+   636,
    "curve|roc_ovr|silver|y|48"
   ],
   [
@@ -7656,7 +7680,7 @@
    null,
    0.5357142857142857,
    null,
-   635,
+   637,
    "curve|roc_ovr|silver|y|49"
   ],
   [
@@ -7668,7 +7692,7 @@
    null,
    0.5535714285714286,
    null,
-   636,
+   638,
    "curve|roc_ovr|silver|y|50"
   ],
   [
@@ -7680,7 +7704,7 @@
    null,
    0.5535714285714286,
    null,
-   637,
+   639,
    "curve|roc_ovr|silver|y|51"
   ],
   [
@@ -7692,7 +7716,7 @@
    null,
    0.5892857142857143,
    null,
-   638,
+   640,
    "curve|roc_ovr|silver|y|52"
   ],
   [
@@ -7704,7 +7728,7 @@
    null,
    0.5892857142857143,
    null,
-   639,
+   641,
    "curve|roc_ovr|silver|y|53"
   ],
   [
@@ -7716,7 +7740,7 @@
    null,
    0.6071428571428571,
    null,
-   640,
+   642,
    "curve|roc_ovr|silver|y|54"
   ],
   [
@@ -7728,7 +7752,7 @@
    null,
    0.625,
    null,
-   641,
+   643,
    "curve|roc_ovr|silver|y|55"
   ],
   [
@@ -7740,7 +7764,7 @@
    null,
    0.6428571428571429,
    null,
-   642,
+   644,
    "curve|roc_ovr|silver|y|56"
   ],
   [
@@ -7752,7 +7776,7 @@
    null,
    0.6428571428571429,
    null,
-   643,
+   645,
    "curve|roc_ovr|silver|y|57"
   ],
   [
@@ -7764,7 +7788,7 @@
    null,
    0.6607142857142857,
    null,
-   644,
+   646,
    "curve|roc_ovr|silver|y|58"
   ],
   [
@@ -7776,7 +7800,7 @@
    null,
    0.6607142857142857,
    null,
-   645,
+   647,
    "curve|roc_ovr|silver|y|59"
   ],
   [
@@ -7788,7 +7812,7 @@
    null,
    0.6785714285714286,
    null,
-   646,
+   648,
    "curve|roc_ovr|silver|y|60"
   ],
   [
@@ -7800,7 +7824,7 @@
    null,
    0.6964285714285714,
    null,
-   647,
+   649,
    "curve|roc_ovr|silver|y|61"
   ],
   [
@@ -7812,7 +7836,7 @@
    null,
    0.6964285714285714,
    null,
-   648,
+   650,
    "curve|roc_ovr|silver|y|62"
   ],
   [
@@ -7824,7 +7848,7 @@
    null,
    0.6964285714285714,
    null,
-   649,
+   651,
    "curve|roc_ovr|silver|y|63"
   ],
   [
@@ -7836,7 +7860,7 @@
    null,
    0.7142857142857143,
    null,
-   650,
+   652,
    "curve|roc_ovr|silver|y|64"
   ],
   [
@@ -7848,7 +7872,7 @@
    null,
    0.7321428571428571,
    null,
-   651,
+   653,
    "curve|roc_ovr|silver|y|65"
   ],
   [
@@ -7860,7 +7884,7 @@
    null,
    0.7321428571428571,
    null,
-   652,
+   654,
    "curve|roc_ovr|silver|y|66"
   ],
   [
@@ -7872,7 +7896,7 @@
    null,
    0.75,
    null,
-   653,
+   655,
    "curve|roc_ovr|silver|y|67"
   ],
   [
@@ -7884,7 +7908,7 @@
    null,
    0.7678571428571429,
    null,
-   654,
+   656,
    "curve|roc_ovr|silver|y|68"
   ],
   [
@@ -7896,7 +7920,7 @@
    null,
    0.7857142857142857,
    null,
-   655,
+   657,
    "curve|roc_ovr|silver|y|69"
   ],
   [
@@ -7908,7 +7932,7 @@
    null,
    0.8035714285714286,
    null,
-   656,
+   658,
    "curve|roc_ovr|silver|y|70"
   ],
   [
@@ -7920,7 +7944,7 @@
    null,
    0.8392857142857143,
    null,
-   657,
+   659,
    "curve|roc_ovr|silver|y|71"
   ],
   [
@@ -7932,7 +7956,7 @@
    null,
    0.8571428571428571,
    null,
-   658,
+   660,
    "curve|roc_ovr|silver|y|72"
   ],
   [
@@ -7944,7 +7968,7 @@
    null,
    0.875,
    null,
-   659,
+   661,
    "curve|roc_ovr|silver|y|73"
   ],
   [
@@ -7956,7 +7980,7 @@
    null,
    0.9107142857142857,
    null,
-   660,
+   662,
    "curve|roc_ovr|silver|y|74"
   ],
   [
@@ -7968,7 +7992,7 @@
    null,
    0.9285714285714286,
    null,
-   661,
+   663,
    "curve|roc_ovr|silver|y|75"
   ],
   [
@@ -7980,7 +8004,7 @@
    null,
    0.9464285714285714,
    null,
-   662,
+   664,
    "curve|roc_ovr|silver|y|76"
   ],
   [
@@ -7992,7 +8016,7 @@
    null,
    0.9464285714285714,
    null,
-   663,
+   665,
    "curve|roc_ovr|silver|y|77"
   ],
   [
@@ -8004,7 +8028,7 @@
    null,
    0.9642857142857143,
    null,
-   664,
+   666,
    "curve|roc_ovr|silver|y|78"
   ],
   [
@@ -8016,7 +8040,7 @@
    null,
    0.9821428571428571,
    null,
-   665,
+   667,
    "curve|roc_ovr|silver|y|79"
   ],
   [
@@ -8028,7 +8052,7 @@
    null,
    1.0,
    null,
-   666,
+   668,
    "curve|roc_ovr|silver|y|80"
   ]
  ]
