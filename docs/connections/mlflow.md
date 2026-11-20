@@ -30,6 +30,12 @@ The secret goes **only to the tracking server's address**: a redirect to another
 not followed, and a new address, user or kind of authentication needs the secret typed
 again before the connection can be saved.
 
+Tabularia never calls the loopback, a link-local address (the clouds' metadata service),
+a multicast or an unspecified address, whatever name leads to it: the check is made on the
+address the name resolves to, at the moment of connecting. A tracking server on a private
+network or in the cluster (`mlflow.mlflow.svc`, `10.x`, `192.168.x`) is the ordinary case and
+is allowed.
+
 ## Test connection
 
 The test only **reads**, with the connection's credentials, before or after saving:

@@ -397,6 +397,14 @@ registered model that carries the tag `tabularia.model`, in any experiment (the 
 filters the lists only). A version registered by something other than Tabularia is not offered
 and is refused.
 
+> **Pin a version in production.** With **latest**, whoever has CONNECT on the MLflow
+> connection can register a new version of the same model name, with the tags Tabularia reads
+> (`tabularia.model` and the others), and the flows that use **latest** predict with it at
+> their next run: the predictions change without anyone editing or approving the flow. The
+> card's fingerprint only says the card was not changed after registration, not who registered
+> it. For the flows that run in production choose a **fixed version**, and give CONNECT on the
+> connection only to those who may change what those flows predict.
+
 **What it checks before reading a row,** and a step that fails any of it stops before any Job
 exists:
 
