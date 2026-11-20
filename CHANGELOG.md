@@ -87,6 +87,41 @@ Development on `main` for the next minor version. The stable line stays 1.4.x
   checks the fingerprint before applying it. The image is built from wheels in minutes. New
   route `POST /scripts/objects/upload` of the engine; the assistants and the MCP tools know the
   two nodes. [Boosting](docs/capabilities/models.md#boosting-python-xgboost-and-catboost).
+- **Parametric survival.** A third node in the **Survival** group, for the time to an event described
+  by a distribution: Weibull, exponential, log-normal, log-logistic, generalized gamma or Gompertz,
+  or **auto**, which fits all six and keeps the one with the lowest AIC, preferring a simpler
+  distribution nested in it when it is within a margin you set (the **AIC margin**, 2 by default),
+  with the candidates, their Akaike weights and a chart of each against Kaplan–Meier. The
+  predictors come as **time ratios** (Gompertz: hazard ratios only; the Weibull and the exponential
+  also as hazard ratios, with Cox's beside) and the node answers how long: the median, quantiles
+  and survival at times, with intervals, for the profile in the report and for every row in the
+  **rows** output and in **Predict**, also beyond the last time observed. Strata give each value a
+  baseline and a shape, weights count rows, a **start time column** gives delayed entry, and **Time
+  already survived** turns the answers into the time left (S(a + t)/S(a)). The checks speak only
+  from tests with a p-value against the node's significance level (the shape against the
+  exponential, the distribution against the generalized gamma, proportional hazards); the agreement
+  with Kaplan–Meier, the influential rows, the events per parameter and the extrapolation are
+  measures with no verdict. The survival image gains `flexsurv` (51 packages), so the group
+  builds again; MLflow records the candidates, the parameters and the distribution chosen.
+  [Parametric survival](docs/capabilities/models.md#parametric-survival).
+- **Customer lifetime value and BG/BB.** A fifth group of statistical models, **Customer lifetime**,
+  for customers who leave without saying so (a shop, a web store, a donor). From one row per
+  customer (the repeat purchases, the time of the last one, how long the customer has been known,
+  optionally the average spend) the nodes give the purchases to expect over a horizon, the
+  probability that the customer is still active, the expected spend (Gamma–Gamma) and the
+  discounted value (the CLV, of revenue unless a margin is set). **Customer lifetime value** fits
+  Pareto/NBD, BG/NBD and MBG/NBD, chosen by *auto* or compared; **BG/BB** is for purchases at fixed
+  occasions. A holdout, if the summary has one, checks the model on purchases it did not see.
+  The report has the frequency fit, the P(alive) map, the spend model, the distribution and
+  concentration of the CLV and the top customers; the verdicts come from tests against the
+  significance level and the rest (the holdout's error, the customers counted, the horizon, the
+  estimates at an edge) are measures. The node writes the scores as rows, MLflow records the
+  model with the purchase model chosen, and **Predict** scores other customers. The image
+  installs the GNU Scientific Library from Debian and the Administration card shows its version
+  (the recipe's new `system_libraries` field). [Customer lifetime
+  value](docs/capabilities/models.md#customer-lifetime-value-r), [how to read a
+  verdict](docs/capabilities/models.md#how-a-check-speaks-verdicts-facts-and-measures); the
+  assistants and the MCP tools know the three nodes.
 - **The sample data has customers with a life.** The pasta and bakery company's customers
   are no longer all there from the start and ordering at random: about 30% are in the
   portfolio when the data opens and the others are acquired over the three years, faster each

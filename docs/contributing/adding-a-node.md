@@ -6,16 +6,19 @@ checks pass at the first push. It is written for someone who has not read the co
 every step names the file, shows a few lines of the real code to copy the shape of, the
 test to write and the command that runs it.
 
-There are two ways to add a node, and the code treats them differently. Choose first.
+There are three ways to add a node, and the code treats them differently. Choose first.
 
 | You want to add | Follow |
 |---|---|
 | A transformation of the rows or columns: a new `filter`, `reorder`, `pivot`… | [Path 1: a transformation](#path-1-a-transformation) |
 | A hypothesis test (`stat_<id>`): a new member of the **Statistics** group | [Path 2: a statistical test](#path-2-a-statistical-test) |
+| A statistical model (`model_<id>`): a new member of the **Models** group, fitted in a Job on Kubernetes | [Path 3: a statistical model](#path-3-a-statistical-model) |
 
 A statistical test is not a transformation: it has its own catalogue, one function for
 its final computation, a report and a generic form. If your node reads the data and writes
-a table of results of a test, it is Path 2; everything else is Path 1.
+a table of results of a test, it is Path 2. A model is neither: no engine fits it. It is
+code in R or Python, in an image Tabularia builds per group, that runs as a Job; its path is
+the longest, and it is described below from what the models already added. Everything else is Path 1.
 
 Before you start, read [Engine differences](../engines/engine-differences.md): a node must
 give the same result on the five engines (Polars, DuckDB, chDB, the external ClickHouse and
@@ -728,6 +731,133 @@ catalogue (`test_every_test_of_the_catalogue_is_an_operation_with_a_line_of_refe
   the operation counts in the table "Operation coverage" move with it (`all 41`, `40`).
 - `CHANGELOG.md`, under `## Unreleased`.
 
+## Path 3: a statistical model
+
+A model is declared once, in `backend/app/engine/models/catalog.py`, and everything else reads
+that: the palette, the form, the Go gateway's check of the parameters, the Jobs' ConfigMap, the
+assistants, MLflow and Predict. What the catalogue cannot say is code: the runner, in the
+group's image, and the layout of the report. The design, with the rules every model follows
+(Kubernetes only, the ten columns, the report drawn from the results, MLflow logged by the
+gateway, Predict from the card alone), is in `docs/specs/statistical-models.md` (kept in the
+repository, not published); the user's page is [Statistical models](../capabilities/models.md).
+Read, as models to copy, the **parametric survival** node (an R model in an existing group, with
+variants, an automatic choice and Predict) and the **customer lifetime** group (a new group, with
+a system library); the history is `git log --oneline -- backend/app/engine/models/catalog.py`.
+
+### The whole list, at a glance
+
+| # | Where | File |
+|---|---|---|
+| 1 | The catalogue: group, model, kinds, variants, `PREDICT`, `LIMITS` | `backend/app/engine/models/catalog.py` |
+| 2 | The snapshot and its three copies | `backend/app/engine/models/catalog.json`, `.github/scripts/model_catalog.py` |
+| 3 | The group: recipe, runner, reference values | `gateway-go/internal/modelgroups/groups/<group>/` (`recipe.json`, `runner/`, `reference/`) |
+| 4 | The card's schema | `gateway-go/internal/modelgroups/card.schema.json` |
+| 5 | The report | `backend/app/engine/models/layouts/<model>.py`, `report_texts/<model>.json` |
+| 6 | The editor and its words | `frontend/composables/modelCatalog.ts`, `modelIcons.ts`, `OpSidebar.vue`, `frontend/i18n/locales/*.gen.ts` (namespace `models`) |
+| 7 | Tests | `backend/tests/test_models_{catalog,results,layouts}.py`, `frontend/tests/model-*.test.mjs`, `gateway-go/internal/modelgroups/`, the group's own self-test |
+| 8 | The assistants and MCP | `gateway/app/services/ai_flow_agent.py` (a paragraph), then `prompts.json` and `tools.json` |
+| 9 | Documentation and changelog | `docs/capabilities/models.md`, `CHANGELOG.md` and the counts |
+
+### Step 1. The catalogue
+
+An entry of `MODELS` says which keys the node `needs` and `takes` (their kinds, from `kinds`:
+plain data drawn by the form's existing controls), their `defaults`, when a key `applies` or is
+`required` or `forbids` another, which columns must be `disjoint`, and its **variants**: what the
+runner **may** write for each combination of options. `results.py` refuses a section or a key
+that the variant does not declare, in the engine and in the Go gateway, so the catalogue is
+also the list of what a run can contain. A check that does not apply to the options chosen is
+simply not written; it is never written as «not computed». `PREDICT` says which options Predict
+takes for the model and which columns it adds. A new group is an entry of `GROUPS`, with its
+language. Then write the snapshot, in the engine's image, and its copies, and check them:
+
+```bash
+docker run --rm --user "$(id -u)" -v "$PWD/backend:/app" -w /app tabularia-backend:ci python -m app.engine.models.catalog
+python3 .github/scripts/model_catalog.py
+python3 .github/scripts/model_catalog.py --check
+```
+
+`--check` also fails when `docs/capabilities/models.md` does not name the model's id in
+backticks (step 6). `backend/tests/fixtures/models/params_cases.json` holds the cases of parameters that the
+engine, the Go gateway and the assistants all run: add the defaults of your model, one with its
+options and its refusals.
+
+### Step 2. The group, the runner and the reference values
+
+A group is a folder, `gateway-go/internal/modelgroups/groups/<group>/`:
+
+- **`recipe.json`**: `language`, `base` (R 4.6 or Python 3.14), the **packages pinned by version, in
+  the order they are installed** (each after its dependencies), the default `resources`,
+  `max_rows` and `max_seconds`. A new package or version changes the recipe's hash, and
+  every installation builds the group again by itself; say so in the changelog. A package that
+  needs a **system library** is listed in `system_libraries` (the Debian packages, for example
+  `libgsl-dev`): the group's Dockerfile installs them with `apt-get` and records the versions that
+  were installed, which the group's card in Administration shows. Only a group with the field has the step,
+  and the Dockerfiles of the others do not change by a byte (a test holds it).
+- **`runner/`**: `run.R` (or `run.py`) routes each model to its fit and its predict function, in a file
+  of its own (`runner/R/<model>.R`), over the common library in `common/R`. The rules are the common
+  library's: a refusal is `tab_refuse(code, sentence, params)` with a sentence that says what to do;
+  every row the runner writes is checked against the catalogue (`tab_check_declared`); the column
+  names are renamed to positional ones before any formula is built, so that a name that looks like
+  code is a label; a run that is slow stops by the node's `time_budget_seconds`, never by the
+  Job's deadline. **The card** is what Predict reads, and holds no row of the input.
+- **`reference/`**: small data (`data/*.csv`), `expected.json` and the scripts that write it
+  (`make_reference*.R`). The expected values are computed **outside Tabularia's code**, with the library called
+  directly or a second construction, never with the runner itself; the tolerance of each case says what was measured.
+  The group's **self-test** fits them in the image before a version can be used. A second tool
+  (a *witness*, for example `make_witness.py` with lifelines) is run by hand, in a scratch library, not by CI.
+
+`cmd/modelgroup` builds and checks a group on a laptop as the cluster does
+(`dockerfile <group>`, `code <group> <dir>`, `task`, `groups`): its usage is at the top of
+`gateway-go/cmd/modelgroup/main.go`.
+
+**The ConfigMap limit.** A Job receives the group's code in a ConfigMap, which Kubernetes limits to 1 MiB.
+`TestEveryGroupOfTheCatalogueHasARecipeAndARunner` measures, for the Job and for the self-test (the code
+with the reference cases), the ConfigMap that `ConfigMap()` makes, keys and data together, against 900 KiB. When a
+group's runner or its `expected.json` grow, write `expected.json` compact and look at comment-only lines: the test
+fails before the Job does. The catalogue copy the Job gets is its compact form, without indentation.
+
+### Step 3. How a check speaks, and the notes
+
+**No constant of ours makes a verdict.** A check's verdict (`ok`, `failed`, `not_computed`, with its `h0`,
+`advice`, `advice_id` and `threshold`) comes only from a test with a **p-value read against the node's `alpha`**, with `threshold`
+carrying alpha; or from a **fact** (the Hessian is positive definite, a level has no event), the only case in which
+`doubtful` is still written. Any other quantity is a **measure**: a number with a `description` and no verdict
+and no advice, which the report lists by its id in `MEASURES`. A rule of thumb with a threshold belongs to the models
+that already have them (the boosting group's diagnostics); a new one needs a reason, and the simulation that shows it does not
+cry wolf. See [How a check speaks](../capabilities/models.md#how-a-check-speaks-verdicts-facts-and-measures).
+
+The runner's **notes** (`note_<id>` rows of the `model` section) that carry numbers are written as an id and its
+parameters, `@auto_close distribution=weibull other=gengamma margin=2 delta_aic=0.30 weight=0.47`, which the layout turns into a sentence in the
+report's language (`note_texts.<id>` in the words file). A note sent as plain English is shown as it is, in English, in every
+language: send an id.
+
+### Step 4. The report, the editor and the words
+
+`layouts/<model>.py` builds the pages from the results rows with `common.page`: the blocks that models share (the
+checks and their advice, the measures, the coefficient tables, the charts' grid) are in `common.py`. Its words are in
+`report_texts/<model>.json` in the five languages (the catalogue's test fails when one is missing), and the tests of
+`test_models_layouts.py` render every fixture (`backend/tests/fixtures/models/<model>-<variant>.json`, written
+from the runner's own output with `tests.models_fixtures --from-results`) in five languages. The editor draws the node from
+the catalogue: a palette entry, an icon in `modelIcons.ts`, the form with the existing controls (a new kind of key needs one of
+them, not a component), and the words `models.<id>` and `models.params.<key>` in `*.gen.ts`; `model-catalog.test.mjs` asks for the words of
+every model of the catalogue.
+
+### Step 5. The assistants and MCP
+
+`ai_flow_agent.py` reads its copy of the catalogue (`MODELS`, `models_reference()`, `clean_model_operation`): the node, its keys, its
+variants and the refusals of the form come with the snapshot. What you write is a paragraph of `_MODELS_INTRO` on **when to choose it** and what
+to set (and, for a model that takes a prepared table, how to prepare it with the steps that exist), and tests in `test_ai_flow_agent.py`: the line
+of reference, the defaults pass, the wrong parameters are sent back with what to fix, a turn that places the node on a draft. Then write
+`prompts.json` and `tools.json` again with the commands of Path 1 step 11 and commit them; `go test ./internal/aiprompts ./internal/mcp` in `gateway-go/`.
+
+### Step 6. Documentation and changelog
+
+- `docs/capabilities/models.md`: a section with the line `Model id in the catalogue: `<id>`.`, the tables of
+  its options (as the form says them), what it gives, the checks (verdicts, facts and measures), Predict, MLflow, what it refuses and an
+  *Example* on the sample data; an example that cites a number must come from a real run, otherwise it describes the nodes and gives no number.
+- The counts («Ten models in five groups») in `models.md`, `flows.md`, `docs/capabilities/README.md` and the README, `CHANGELOG.md` under `## Unreleased`
+  and, when you add a package or a system library, `docs/deploy/kubernetes.md`.
+
 ## What CI runs
 
 Five workflows in `.github/workflows/`. A pull request is green when these pass:
@@ -738,6 +868,7 @@ Five workflows in `.github/workflows/`. A pull request is green when these pass:
 | `ci.yml` | `gateway tests` | builds the gateway image, runs `ci_tests.sh gateway tabularia-gateway:ci`, then `gateway-go/scripts/test.sh`: `gofmt -l .`, `go vet ./...` and `go test ./...` on the gateway and on `dataapi/`, with a PostgreSQL whose schema is made by the migrations | every push and pull request |
 | `ci.yml` | `interface type check` | in `frontend/`: `npm ci`, `vue-tsc --noEmit` (pinned: typescript 5.6.3, vue-tsc 2.2.10) and `npm test`; then the unit tests of the sample data's seed | every push and pull request |
 | `stat-catalog.yml` | `check` | `python3 .github/scripts/test_stat_catalog.py -v`: the script's tests and the check that the three copies are the snapshot and every test is named in the statistics page | when the catalogue, its copies, the page or the script change |
+| `model-catalog.yml` | `check` | `python3 .github/scripts/model_catalog.py --check` and its tests: the three copies of the models' catalogue are the snapshot, and every model's id is named in `docs/capabilities/models.md` | when the catalogue, its copies or the page change |
 | `config-reference.yml` | | `docs/configuration.md` against the settings of the code (`python3 .github/scripts/config_reference.py` writes it) | when code that reads a setting changes |
 | `website.yml` | `Generate and check the site` | the site's unit tests, `npm run generate` and `npm run check-links` (every internal link and anchor, and every link to a file of the repository) | when `docs/`, `website/` or `README.md` change |
 | `release-images.yml` | | calls `ci.yml` on the tag and publishes nothing unless it is green | a version tag |
@@ -776,7 +907,19 @@ Path 2, a statistical test:
 - [ ] The test named in backticks in `docs/capabilities/statistics.md`, the counts,
       `CHANGELOG.md`, `prompts.json` and `tools.json` written again
 
-For both: no name of another product in any text; code, comments, messages and
+Path 3, a statistical model:
+
+- [ ] The entry of `MODELS` (and its kinds, variants, `PREDICT` and `LIMITS`), the snapshot and its three copies, `--check` green
+- [ ] `params_cases.json`: defaults, options and refusals
+- [ ] The group's `recipe.json` (packages pinned, `system_libraries` if needed), the runner, the card's schema, reference values computed outside the runner
+- [ ] Verdicts only from a p-value against `alpha` or from a fact; the rest a measure; notes as `@id name=value`
+- [ ] The group's ConfigMap under 900 KiB (`go test ./internal/modelgroups/`)
+- [ ] The layout, its words in five languages, its fixtures from the runner's output
+- [ ] The palette entry, the icon, the words `models.*` in the five `*.gen.ts`
+- [ ] `_MODELS_INTRO` and its tests, `prompts.json` and `tools.json` written again
+- [ ] The model's id in backticks in `models.md` with its section and an example, the counts, `CHANGELOG.md`
+
+For all: no name of another product in any text; code, comments, messages and
 documentation in English; one change per pull request, with the reason in its description.
 
 ## The commands
@@ -801,6 +944,11 @@ docker build --build-arg WITH_DEV=true -t tabularia-gateway:ci gateway
 # the catalogue of the statistical tests (Path 2)
 python3 .github/scripts/stat_catalog.py --check
 python3 .github/scripts/test_stat_catalog.py -v
+
+# the catalogue of the statistical models (Path 3)
+python3 .github/scripts/model_catalog.py --check
+python3 .github/scripts/test_model_catalog.py -v
+cd gateway-go && go test ./internal/modelgroups/ ./internal/modelcatalog/
 
 # the configuration reference, when you touched a setting
 python3 .github/scripts/config_reference.py

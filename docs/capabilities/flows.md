@@ -147,12 +147,16 @@ flow with a statistics node cannot be exported to dbt.
 
 ### Models
 
-Seven statistical models, in the palette's **Models** group, under one subtitle for each group an
+Ten statistical models, in the palette's **Models** group, under one subtitle for each group an
 administrator enabled and you may use: **Regression** (**Linear regression**, **Logistic
 regression**, both with ridge, lasso or elastic-net penalties), **Survival** (**Kaplan–Meier**,
-**Cox**) and **Time series** (**ARIMA**, also dropped as AR, MA, ARMA, ARIMA, SARIMA or
-SARIMAX with the orders set) and **Boosting** (**XGBoost** and **CatBoost**, for a number, a
-yes-or-no or a class, with the importance of each predictor). **Predict** applies a model registered in MLflow to the rows
+**Cox**, and **Parametric survival**, which describes the time to an event with a Weibull or
+another distribution and predicts how long), **Time series** (**ARIMA**, also dropped as AR, MA,
+ARMA, ARIMA, SARIMA or SARIMAX with the orders set), **Boosting** (**XGBoost** and **CatBoost**,
+for a number, a yes-or-no or a class, with the importance of each predictor) and **Customer
+lifetime** (**Customer lifetime value** and **BG/BB**, which read one row per customer and give the
+purchases to expect, the probability that the customer is still active and the discounted value).
+**Predict** applies a model registered in MLflow to the rows
 that reach it. A model is a step node like **Script**: it is not an operation of the engine
 but a Job on Kubernetes, with one input and one output. Choose its columns and options in the
 panel, press **Run** to fit it on the development sample, and read its **Table** and its

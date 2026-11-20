@@ -65,7 +65,8 @@ and the statistic and p-value of each assumption as metrics, tags that say which
 version of the model made it, and, when the server has an artifact proxy, the results, the
 coefficients, the report as PDF and the model with its card (for XGBoost and CatBoost, also the
 model's own file, `xgboost.json` or `catboost.cbm`, never a pickle; the learning curves are
-recorded as metric histories, one point a tree). With **Register the model as**, each
+recorded as metric histories, one point a tree; the distributions of an automatic parametric
+survival fit and the purchase models of a customer lifetime fit are recorded as `candidate.*` metrics). With **Register the model as**, each
 run adds a version of that registered model, which the **Predict** node can apply. The editor's
 **Run** logs nothing. The connection's secret is used only by the gateway: it never reaches the
 Job that fits the model. The details, and **Continue without MLflow**, are in

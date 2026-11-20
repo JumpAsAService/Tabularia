@@ -157,7 +157,9 @@ registry and push and pull secrets (the three namespaces, the builder image, the
 policies), and the **scripts bucket** set in **Administration → Scripting environments**,
 where a model reads its input. There is no `models` block in the chart. An administrator then
 enables each group in **Administration → Statistical models**: the cluster builds its image
-(R 4.6 with its packages; for the boosting group, Python 3.14 with `xgboost-cpu` and `catboost`,
+(R 4.6 with its packages, which includes compiling the survival group's `flexsurv` and `rstpm2`
+and, for the customer lifetime group, installing the GNU Scientific Library from Debian's
+repositories (or your mirror of them); for the boosting group, Python 3.14 with `xgboost-cpu` and `catboost`,
 wheels from PyPI or your mirror (`SCRIPTS__PYPI_INDEX_URL`), about 1 GB and no compilation),
 built by the same rootless BuildKit as the environments, so with the resources of
 `SCRIPTS__BUILD_CPU` and `SCRIPTS__BUILD_MEMORY`, and runs its self-test.

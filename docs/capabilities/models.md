@@ -7,11 +7,15 @@ the model after any step, choose its columns and options in the panel, press **R
 the answer in the same place as any other step, as a **table of results** the next nodes can
 use and a **Report** of a few pages whose first page says whether the model's assumptions hold.
 
-Seven models are in the first release, in four groups: **regression** (linear, logistic, both
-with ridge, lasso and elastic-net penalties), **survival** (Kaplan–Meier, Cox), **time
-series** (ARIMA, from AR to SARIMAX, with the orders given or searched for) and **boosting**
-(XGBoost and CatBoost: gradient-boosted trees to predict a number or a class, with the importance
-of each predictor). An eighth node, **Predict**, applies a model you registered in MLflow to new rows.
+Ten models are in the first release, in five groups: **regression** (linear, logistic, both
+with ridge, lasso and elastic-net penalties), **survival** (Kaplan–Meier, Cox, and parametric
+survival: the time to an event described by a Weibull, log-normal or another distribution, chosen
+or searched for), **time series** (ARIMA, from AR to SARIMAX, with the orders given or searched
+for), **boosting** (XGBoost and CatBoost: gradient-boosted trees to predict a number or a class,
+with the importance of each predictor) and **customer lifetime** (customer lifetime value and
+BG/BB: for customers who leave without saying so, the purchases to expect, the probability of
+still being active and the discounted value of each customer). An eleventh node, **Predict**,
+applies a model you registered in MLflow to new rows.
 
 **They need Kubernetes.** A model is not computed by an engine: it runs as a Job in your
 cluster, in an image built from a recipe Tabularia ships, with R (or Python, for boosting). On Docker Compose the
@@ -24,7 +28,7 @@ statistics that works everywhere.
 | | |
 |---|---|
 | Where | The flow editor's palette, group **Models** (after **Statistics**), with a subtitle for each group an administrator enabled and you may use. **Predict** is in the same group. |
-| What a model node does | Reads the rows that reach it, fits one model in a Job of its group, and outputs a table (the ten columns of the statistics, or the rows with the fitted values added, or the survival table, or the forecast) |
+| What a model node does | Reads the rows that reach it, fits one model in a Job of its group, and outputs a table (the ten columns of the statistics, or the rows with the fitted values added, or the survival table, or the forecast, or the scores of each customer) |
 | What you see | **Table** and **Report** tabs under the canvas, filled by **Run** in the node's panel or by a run of the flow |
 | Downloads | The report as **PDF** or **Excel**, from the Report tab |
 | Who turns it on | An administrator, group by group, in **Administration → Statistical models** (below) |
@@ -48,7 +52,7 @@ reads its input from it. Without the bucket the section says so and the models d
 | State | Meaning |
 |---|---|
 | **Not enabled** | Nothing is built; the nodes are not in the palette |
-| **Building** | A Job in the build namespace builds the image from the group's recipe: R 4.6 (Python 3.14 for boosting) and its packages at pinned versions, without internet access at run time |
+| **Building** | A Job in the build namespace builds the image from the group's recipe: R 4.6 (Python 3.14 for boosting) and its packages at pinned versions, without internet access at run time. The customer lifetime recipe also installs a system library, the GNU Scientific Library, from Debian, and records its version |
 | **Checking** | The image is built and its **self-test** runs: the models are fitted on small reference tables and compared with values computed outside Tabularia |
 | **Ready** | Every value matched; the version is in use |
 | **Failed** | The build or the self-test failed; the version in use, if any, is kept. The section shows the build log and the self-test's output |
@@ -72,10 +76,10 @@ next run, without building again.
 
 | Setting | Default | Meaning |
 |---|---|---|
-| CPU (limit) | regression 2, survival 2, time series 1, boosting 2 | The Job asks for half and may use up to this |
-| Memory (limit) | 4 GiB, 4 GiB, 2 GiB, 4 GiB | At least 256 MiB; the Job asks for half. A Job over it is stopped by the cluster and the step says so |
+| CPU (limit) | regression 2, survival 2, time series 1, boosting 2, customer lifetime 2 | The Job asks for half and may use up to this |
+| Memory (limit) | 4 GiB, 4 GiB, 2 GiB, 4 GiB, 2 GiB | At least 256 MiB; the Job asks for half. A Job over it is stopped by the cluster and the step says so |
 | Longest run | 30 minutes (boosting 60) | 1 to 1,440 minutes. A node's own timeout (900 seconds unless you change it) must be within it |
-| Most input rows | 2,000,000 (regression), 1,000,000 (survival), 20,000 (time series), 1,000,000 (boosting) | 1 to 1,000,000,000. Empty follows the recipe's number |
+| Most input rows | 2,000,000 (regression), 1,000,000 (survival), 20,000 (time series), 1,000,000 (boosting), 1,000,000 (customer lifetime) | 1 to 1,000,000,000. Empty follows the recipe's number |
 
 **Who may use it:** *everyone who can edit flows* (the default), or only the user groups you
 tick. Administrators always can. With a list and none ticked, only administrators.
@@ -122,8 +126,10 @@ numbers.
 The examples use the sample databases of the Docker Compose stack, which a Kubernetes install
 can load too ([Flows](flows.md#example-revenue-by-region-and-channel-on-the-sample-data) says
 how to reach them): `order_rows` (`quantita`, `prezzo_unitario` and `sconto_pct`, stored as
-text: put a **Change type** to *decimal* first), `orders` (`data_ordine`, `canale`, `stato`)
-and `crm_activities` (`tipo`, `esito`, `durata_min`). They show how a node is filled in; run
+text: put a **Change type** to *decimal* first), `orders` (`data_ordine`, `cliente_id`, `canale`, `stato`),
+`crm_activities` (`tipo`, `esito`, `durata_min`) and `customers` (`canale`, `regione`, `agente_id`, and the
+customers' lives: `data_acquisizione`, the day the customer was acquired, and `stato`, the CRM's
+status `attivo`, `inattivo` or `nuovo`). They show how a node is filled in; run
 them on your own data to read numbers that mean something.
 
 ### Linear regression
@@ -237,14 +243,164 @@ numeric predictor (a test against a natural spline with 3 degrees of freedom, an
 martingale residuals' chart), influence (dfbeta: over 2/√n doubtful, over 1 failed; not
 computed with exact ties), VIF and **events per coefficient** (at least 10).
 
-### Parametric survival: being built
+### Parametric survival
 
-Model id in the catalogue: `parametric_survival`. A node of the **Survival** group is being
-built: the time to an event described by a distribution (Weibull, exponential, log-normal,
-log-logistic, generalized gamma or Gompertz, or the one with the lowest AIC), with time ratios,
-hazard ratios and the prediction of a median, quantiles and the survival at a time. In this
-version its node does not fit a model yet: it stops with «… is not built yet in this version of
-Tabularia». This section will describe it when it does.
+Model id in the catalogue: `parametric_survival`.
+
+The time to an event, described by a named distribution. Kaplan–Meier draws the curve and Cox
+compares rates, and neither says anything beyond the last time observed. This node fits a
+distribution to the times (Weibull, exponential, log-normal, log-logistic, generalized gamma or
+Gompertz, or the one that suits best) and then answers **how long**: the median time, any quantile
+and the probability of lasting past a time, for each row of a table, with intervals, also beyond
+the follow-up. It gives each predictor as a **time ratio** (the factor by which it lengthens or
+shortens the time) or as a **hazard ratio** (the factor on the rate, comparable with Cox's).
+Use it when you need a time (the months a customer stays, the days until a part fails) or when
+the shape of the hazard matters; use Cox when only the effects are asked and no distribution
+should be assumed.
+
+**Follow-up time**, **Event column** and **Value that means the event happened** are as in
+Kaplan–Meier: every other value is censored at its time. A time of 0 has no density under any of
+the distributions, so such rows are left out and counted, with a note that says to count the time
+from a moment before them; a negative time is refused.
+
+| Option | Default | Meaning |
+|---|---|---|
+| **Predictors (optional)** | none | Numbers, texts and booleans (a text is a category compared with its **reference level**); a date is refused. With none, the node fits the distribution of the times alone, per stratum |
+| **Reference levels**, **Interactions** | | Only with predictors: the level each category is compared with, and products of two predictors (at most 20) |
+| **Strata column** | none | A baseline of its own for each value, at most 20: the column enters the typical time **and** the shape (one shape per value; the exponential has no shape, so its strata change the rate only) |
+| **Weights column** | none | Case weights, 0 or more, each multiplying its row's likelihood. Rows of weight 0 are left out; weights that are not whole numbers get a note, because the standard errors read them as counts of rows |
+| **Start time column** | none | **Delayed entry**: the subject was not observed before this time (it entered the study, or the machine was bought second-hand, already that old). The likelihood of the row is conditional on having lasted until its start. A start of 0 is no start. Refused when it is not before the time, or negative |
+| **Distribution** | Weibull | Weibull, exponential, log-normal, log-logistic, generalized gamma, Gompertz, or **auto** |
+| **AIC margin for the simplest model** | 2 | Only with **auto**: from 0 to 10 (below) |
+| **Quantiles of the time** | 0.25, 0.75 | At most 9, between 0 and 1: reported for the profile and written in the rows and by Predict, besides the median, which is always there |
+| **Survival at times** | none | Up to 10 times at which S(t) is reported |
+| **Time already survived** | none | A number column: how long each row's unit has already lasted. The answers become the **time left** (below) |
+| **Significance level** | 0.05 | The level of every interval (1 − alpha) and of the verdicts of the checks ([How a check speaks](#how-a-check-speaks-verdicts-facts-and-measures)) |
+| **Seed** | 1 | Only the sample of points drawn in the charts: the fit has no random choice |
+| **Output** | The results table | **The results table**, or **the rows** |
+
+**The distributions.**
+
+| Distribution | The hazard | The predictors act on | The coefficients, as reported |
+|---|---|---|---|
+| Weibull | constant, rising or falling | the time (accelerated failure time) | time ratios; also hazard ratios, except with strata |
+| Exponential | constant | the rate | time ratios and hazard ratios |
+| Log-normal | rises, then falls | the time | time ratios |
+| Log-logistic | falling, or rises and then falls | the time | time ratios |
+| Generalized gamma | rising, falling, an arc or a bathtub; the Weibull and the log-normal are special cases | the time | time ratios |
+| Gompertz | rising or falling exponentially (falling: a share of the rows never has the event) | the rate | **hazard ratios only** |
+
+A **time ratio** above 1 says the predictor lengthens the time to the event (1.5: half as long
+again); a **hazard ratio** above 1 says it makes the event come sooner. For the same Weibull
+they are one the inverse of the other, raised to its shape. **Gompertz has hazard ratios only**:
+scaling its time changes its shape too, so «the time ratio of x» is not a constant of that
+model; the report says so where a time ratio would stand. A **Weibull with strata has no hazard
+ratio** either, since each stratum has its own shape: its time ratios are common to all. Beside
+every hazard ratio the report gives **Cox's** on the same rows, for comparison.
+
+**Auto.** With *auto* the node fits all six distributions in order of cost and keeps the one
+with the **lowest AIC**, with the same predictors, strata and weights. It then applies a rule of
+parsimony: when a simpler distribution **nested** in the winner (the exponential in the Weibull,
+the Gompertz and the generalized gamma; the Weibull and the log-normal in the generalized gamma)
+has an AIC within the **AIC margin** of the lowest, the simplest such distribution is chosen
+instead, and the report says it in a sentence. A margin of 0 always takes the lowest AIC; the rule
+does not chain. The report lists every candidate with its log-likelihood, AIC, BIC, ΔAIC and
+**Akaike weight** (the share of support among the candidates: two weights close to each other mean the two
+distributions describe the times about equally well), marks the chosen one, and draws Kaplan–Meier's curve
+with that of each candidate. A candidate that does not converge from two starting points stays in
+the table marked, out of the choice and of the weights, and a note names it; if none can be
+fitted the step refuses. When more than half of the step's timeout has passed, the candidates not
+yet fitted are left out (status *time*, with a note).
+
+**What the node gives.**
+
+- **The results table**: the `model` section (rows, events, the distribution used, log-likelihood,
+  AIC, BIC, the test of the predictors, the concordance, the last observed times, `alpha`), the
+  `coef` section (estimates on the log scale, time ratios or hazard ratios with their intervals,
+  Cox's beside, VIF), `parameter` (the distribution's own parameters, per stratum, with their
+  intervals), `stratum` (the **profile**: a row with every number at its mean and every category at
+  its reference level, per stratum, with the median, the quantiles and the survival at the times
+  asked, each with its interval, and Kaplan–Meier's median beside), `candidate` (with *auto*), the
+  checks and the points of the charts.
+- **The rows** output: the input's columns with `pred_linear`, `pred_median`, `pred_quantile_<p>`
+  and `pred_surv_at_<t>`, each with `_low` and `_high` columns, and on the rows of the fit
+  `pred_cox_snell`, `pred_martingale` and `pred_deviance` (residuals). The input must not already
+  have one of those names.
+- The **intervals** of what is predicted come from the delta method, computed from a covariance
+  Tabularia builds itself (a Richardson Hessian of the log-likelihood), the same for every
+  distribution; a median or quantile the distribution never reaches (a Gompertz whose hazard
+  falls, so that part of the rows never has the event) is left empty, with a note.
+
+**The time left, and delayed entry.** They are two different things. **Start time column** acts
+on the **fit**: where each row begins to be observed. **Time already survived** acts on the
+**prediction**: how long each unit to be predicted has already lasted. With it, the median and
+the quantiles are the time **left** (the `q` such that S(a + q) = ½ S(a)), and the survival at
+`t` is the probability of lasting `t` more, S(a + t) / S(a), with intervals that follow the
+conditioning. A row with no value, a negative one or an infinite one gets an empty prediction and a
+warning that counts them. Predict takes the same option and no start: the card holds the
+parameters of the fit in which the entry is already.
+
+**Assumptions checked.** Verdicts come only from tests with a p-value, read against the node's
+significance level:
+
+- for the exponential, the **constant hazard** (a likelihood-ratio test against the Weibull; for the
+  distributions that have a shape, the same test is a number of the fit, not a check), and the
+  distribution against the **generalized gamma** (the Weibull, the log-normal, the exponential),
+  which is **not computed** above 5,000 rows, when half the step's timeout has passed, or when the
+  generalized gamma does not converge (fit it, or *auto*, to see it);
+- **proportional hazards**, for each term and globally (Grambsch–Therneau, as in Cox), for the
+  Weibull, the exponential and the Gompertz with predictors, which are the distributions that assume it;
+- two facts: **convergence** (a positive definite Hessian: without it the intervals are empty) and
+  **separation** (a level of a category among whose rows no event happens, which leaves its
+  coefficient with no limit).
+
+**Measures, with no verdict:** the **agreement with Kaplan–Meier** (the largest gap in survival
+between the fitted mean curve and Kaplan–Meier's, where it happens and how many standard errors
+it is; points with fewer than 10 rows still at risk are not read), the **influential rows**
+(the largest change one row makes to each coefficient, with the five rows that make it), **events
+per parameter**, the **VIF** and the **extrapolation** (how far beyond the last time observed the
+medians, quantiles and times asked go). Cox–Snell's residuals are a chart. With a start time
+column every check is still written, read on the rows from their entry.
+
+**The report** (four or five pages): the first has the checks, the measures and the significance
+level; then the coefficients with their interval charts and the distribution's parameters, the fit,
+the choice of the distribution with *auto*, the fit to the data (Kaplan–Meier against the fitted
+curve, Cox–Snell, log(−log S) for the Weibull and the exponential), the profile with its survival
+and hazard curves and bands, the influence, and the notes.
+
+**What it refuses**, with a sentence that says what to do: no event, a negative time or start,
+a start not before the time, a stratum with no event (its shape cannot be estimated), fewer rows
+than the parameters plus 2, a design with a term that repeats another, more than 20 strata, a date as
+predictor, a fit that does not converge from two starting points, and with *auto* none of the six
+fitting.
+
+**Limits.** Strata 20; quantiles 9; times 10; the rows of the group (1,000,000 unless an
+administrator changed it).
+
+*Example:* how long does a customer last? From **Sample / Private tables**, drop `customers`,
+**Select columns** `id`, `canale`, `data_acquisizione` and `stato`, **Rename** `id` to
+`cliente_id`, and keep the customers acquired inside the data's window with a **Filter**
+`data_acquisizione` *greater than or equal to* 2023-07-01 (the first orders of the older ones are
+not in the data). On a second branch drop `orders`, a **Filter** `stato` *not equal to*
+`annullato`, and a **Group by** `cliente_id` with the *maximum* of `data_ordine` as `last_order`.
+**Join** the branch into the customers, type *left* so that those who never ordered stay, on
+`cliente_id`. The CRM calls a customer `inattivo` after six months with no order, so the time of
+those is the days from the acquisition to the last order plus those 183 days, and the others are
+censored at the end of the data, 2026-07-15. Two **Computed columns**, in the engine's dialect (here
+Polars; DuckDB spells the difference `date_diff('day', a, b)` and ClickHouse `dateDiff('day', a, b)`):
+
+| Name | Expression |
+|---|---|
+| `days_to_end` | `CAST(DATE '2026-07-15' AS INTEGER) - CAST(data_acquisizione AS INTEGER)` |
+| `days` | `CASE WHEN stato = 'inattivo' THEN CAST(COALESCE(last_order, data_acquisizione) AS INTEGER) - CAST(data_acquisizione AS INTEGER) + 183 ELSE days_to_end END` |
+
+Then **Parametric survival** with the time `days`, the event column `stato`, the event value
+`inattivo`, the predictor `canale` and the distribution *auto*. Read the first page (the checks
+and the measures), then the candidates, then the time ratio of each channel against the reference
+channel, and the profile's median. The sample data are built so that the channels differ in how
+long their customers stay. For the customers still active, a second **Parametric survival** is not
+needed: register the model in MLflow, and a **Predict** with **Time already survived** set to a
+column that holds each customer's days since acquisition gives the median time left.
 
 ### ARIMA
 
@@ -459,18 +615,225 @@ and `sconto_pct`), an **XGBoost** with the task `regression`, the outcome `quant
 predictors `prezzo_unitario` and `sconto_pct`. Read the first page's diagnostics, then the
 beeswarm: whether a higher price pushes the quantity down.
 
-### Customer lifetime value (R): being built
+### Customer lifetime value (R)
 
-Model ids in the catalogue: `clv` and `bg_bb`. A group of two nodes, **Customer lifetime
-value** and **BG/BB**, is being built for customers who leave without saying so (a shop, a web
-store, a donor): from one row per customer (the number of repeat purchases, the time of the
-last one, how long the customer has been known, optionally the average spend) they will give,
-for each customer, the expected purchases over a horizon, the probability that the customer is
-still active, the expected spend and the discounted value (the CLV). The nodes take no
-transactions: the row per customer is built first with Group by. In this version the nodes do
-not fit a model yet: they stop with «… is not built yet in this version of Tabularia». This
-section will describe them when they do. The group's image needs the GNU Scientific Library,
-which the build installs from Debian.
+Model id in the catalogue: `clv`.
+
+For a shop, a web store or a donor, a customer who leaves does not say so: there is no churn column.
+The «buy till you die» models estimate, from three numbers per customer, **how many purchases to expect**, **the
+probability that the customer is still active** (P(alive)), the **expected spend** and the **discounted value** over a
+horizon, the **customer lifetime value (CLV)**. They fit a population of customers who buy at
+different rates and may leave at any moment, without any other column about the customer.
+They are for **non-contractual** customers; where a contract ends (a subscription) there is a
+date, and [Kaplan–Meier or parametric survival](#parametric-survival) are the tools.
+
+The group **Customer lifetime** has two nodes. **Customer lifetime value** (this section) is for
+customers who may buy at any moment, and has the purchase model inside; **[BG/BB](#bgbb-r)** is for
+purchases at fixed occasions (a yearly campaign, a monthly renewal). In both, the spend model
+(Gamma–Gamma) and the CLV are part of the node. The image of this group installs the GNU
+Scientific Library from Debian, which the build records: the group's card in Administration says
+which version.
+
+#### The input: one row per customer
+
+The node takes **no transactions**: its input is one row per customer, which you build first with
+the nodes of Tabularia ([below](#building-the-summary-per-customer)).
+
+| Option | Meaning, and what is refused |
+|---|---|
+| **Customer column** | The customer's id. A repeated id is refused («the customer 4812 appears on 3 rows: one row per customer; group the transactions by customer first»); an empty one leaves the row out |
+| **Repeat purchases** (x) | The purchases after the first one, in the calibration period: a whole number, 0 or more |
+| **Time of the last purchase** (t_x) | The time from the first purchase to the last one, in the unit below. 0 for a customer with no repeat purchase, and above 0 for every other (purchases of the same day must be one purchase); not more than the age |
+| **Age of the customer** (T) | The time from the first purchase to the end of the calibration period: more than 0 |
+| **Unit of time** | Days, weeks, months, quarters or years: the unit of the last two columns, the horizon, the holdout and the discounting. **Required**; a note asks whether the unit is right when the largest age passes 30 years in it |
+| **Average spend** | Optional. The **average value of the repeat purchases** (the first one left out, as the spend model assumes), above 0 for a customer who bought again; empty leaves that customer out of the spend fit only. With it the node gives the expected spend and the CLV; without it, only the purchases and P(alive). Returns and refunds: leave those customers out, or net them before averaging |
+| **Purchases in the holdout**, **Length of the holdout** | Optional, both or neither: the purchases each customer made in the period that follows the calibration end, and its length in the unit (the same for every customer). They give the holdout check; an empty cell leaves the customer out of it |
+
+A row with an empty `frequency`, `recency` or `age` is left out; an infinite value stops the node
+and names the column. Every refusal names one customer and says how many break the same rule. At least **20
+customers, 5 repeat customers** and, with a spend, 5 of those with a spend are needed.
+
+| Option | Default | Meaning |
+|---|---|---|
+| **Purchase model** | auto | **auto** fits Pareto/NBD, BG/NBD and MBG/NBD and keeps the one with the **highest log-likelihood** (the three have four parameters, so AIC and BIC rank them the same way); or one of the three. The holdout is never used to choose, so it stays an honest check |
+| **Compare with the other models** | off | With a purchase model chosen: fits the two others for the comparison table only |
+| **Periods ahead** | one year | 1 to 1,000, in the unit (365 days, 52 weeks, 12 months, 4 quarters, 1 year when empty) |
+| **Yearly discount rate** | 0.10 | Only with a spend; 0 to 1, annual: the node derives the rate of one period |
+| **Margin** | 1 | Only with a spend; above 0 and up to 1. **With 1 the CLV is of revenue**, and the report says so; set the margin to have a CLV of profit |
+| **Significance level** | 0.05 | The intervals and the verdicts ([How a check speaks](#how-a-check-speaks-verdicts-facts-and-measures)) |
+| **Seed** | 1 | The samples drawn for the charts |
+| **Output** | **The rows** | Unlike the other models, the default is the per-customer scores; **the results table** keeps only the tables |
+
+**The models, in plain words.** Customers buy at their own rate (a gamma distribution across
+customers). **Pareto/NBD** lets a customer leave at any moment, at a rate that also varies;
+**BG/NBD** lets a customer leave right after a purchase with a probability that varies (a beta
+distribution), and **MBG/NBD** also after the first. They differ little when the data are good, and *auto*
+lets the likelihood choose. **Gamma–Gamma** models the average value of a repeat customer's
+purchases, assuming it does not depend on how often the customer buys (a check tests that). The
+parameters are estimated by maximum likelihood on one row per distinct summary, so large
+tables are cheap; Pareto/NBD and BG/NBD use the compiled likelihoods of the CLVTools package, the
+other two are written in the runner and checked against independent implementations
+([Where Tabularia and R differ](#where-tabularia-and-r-differ)).
+
+**The CLV.** For each customer, the expected purchases of each period of the horizon, discounted at
+the end of the period, times the expected spend, times the margin: the sum over the horizon. It is
+a finite horizon you choose, not an infinite one: the far periods rest on the form of the model,
+and a measure says when the horizon is more than twice the longest age the model learned from.
+
+**What the node gives.**
+
+- **The rows** (default): the input's columns with `pred_p_alive`, `pred_transactions` (the
+  expected purchases over the horizon), with a holdout `pred_holdout_transactions`, and with a
+  spend `pred_spend`, `pred_discounted_transactions` and `pred_clv`. P(alive) is a **probability
+  from the model**, not an observed churn: a customer with a low value has not been seen to leave. A
+  column of the input with one of those names is refused.
+- **The results table**: the parameters with their intervals (`coef`, with the purchases' and the
+  spend's apart), the `model` section (customers, repeat customers, log-likelihood, AIC, BIC, the mean
+  purchase rate and dropout, the expected purchases, the total CLV, the holdout's numbers), the
+  `candidate` section with *auto* or *compare*, the checks, the histograms, the P(alive) map and
+  curves, and the **top 20 customers** by CLV (by expected purchases without a spend).
+
+**Assumptions checked.** A verdict comes from two tests with a p-value, read against the significance level:
+**frequency fit** (a χ² of the observed against the expected number of customers by number of
+repeat purchases, the classes pooled until each expects at least 5; with the share gap beside it as a
+number) and, with a spend, **spend independence** (the slope of the average spend on the
+frequency, with robust errors; Pearson's r is its value). Two facts: **convergence** (the optimizer
+converged and the Hessian is positive definite; **doubtful** when it is not because an estimate sits at an edge, where the
+likelihood is flat) and **spend tail** (the spend model's q must be above 2 for its variance to be finite; at 1 or
+below the average spend does not exist and the node refuses: *look for extreme amounts, or leave out the spend column*).
+**Measures with no verdict**: **customers and repeat customers**, the **holdout** (the expected against the
+observed purchases: the relative error of the total, and by frequency class in a chart; without a holdout the
+page says how to add one), the **horizon** against the longest age, and the **estimates at an edge** (one row for each
+parameter far out, with what it means: *almost nobody leaves*, or *the customers look alike*; no row when
+there is none).
+
+**The report** (four pages): the first has the cards (customers and repeat customers, the purchase model and
+its log-likelihood, expected purchases, the total CLV), the formula with the unit, horizon, discount and
+margin («CLV of revenue»), the checks and measures and the parameters; then the comparison of the
+purchase models, the fit (the repeat purchases observed and expected, the holdout by frequency class), the
+P(alive) map and curves, the spend against its model and against the frequency, the distribution
+of the CLV, the concentration curve («the top 10 % of the customers hold…») and the top customers, and the
+notes.
+
+**Predict** applies a registered version to the summaries of other customers and gives
+`prediction` (the expected purchases over the horizon), `prediction_p_alive` and, with a spend,
+`prediction_spend` and `prediction_clv`; its option is the horizon, in periods of the fit's unit.
+Customers must come with a history (a frequency, recency and age of their own); a row that breaks
+a rule of the summary gets empty predictions and a warning that counts them. Predicting the rows of
+the fit gives the fit's own numbers.
+
+**MLflow** records the parameters, `log_lik`, the CLV total, the holdout's error, the number of
+every candidate, and the statistic, p-value and value of each check; the model chosen by *auto*
+is the parameter `purchase_model_chosen`, and the registered version has the tags `tabularia.variant`
+(`purchases` or `value`) and `tabularia.purchase_model`. No `native.rds` is written for this
+group: the card holds every parameter.
+
+**Limits.** At least 20 customers and 5 repeat customers; periods ahead 1,000 (above 520 steps the
+sum is made in coarser steps, with a note); the rows of the group (1,000,000), 2 GiB of memory.
+
+#### Building the summary per customer
+
+You need a table of purchases, one row per purchase, with the customer, the date and, for the spend,
+the amount. The nodes below exist in every flow; the expressions are written in the engine's
+dialect (here Polars; DuckDB spells a difference of dates `date_diff('day', a, b)` and ClickHouse
+`dateDiff('day', a, b)`). Purchases of the same day count as one purchase.
+
+1. **Computed column** `day` = `CAST(ts AS DATE)` (skip it when the column is already a date), and a
+   **Filter** `day` *less than or equal to* the calibration end.
+2. **Group by** `customer`, `day`: the *sum* of `amount` as `day_amount`.
+3. **Computed columns**, in this order: `first_day` = `MIN(day) OVER (PARTITION BY customer)`, then
+   `repeat_amount` = `CASE WHEN day = first_day THEN 0 ELSE day_amount END`.
+4. **Group by** `customer`: the *count* of `day` as `days`, the *minimum* of `day` as `first_day`,
+   the *maximum* of `day` as `last_day`, the *sum* of `repeat_amount` as `repeat_total`.
+5. **Computed columns**, with a week as the unit and `2025-07-15` as the calibration end:
+
+   | Name | Expression |
+   |---|---|
+   | `frequency` | `days - 1` |
+   | `recency` | `(CAST(last_day AS INTEGER) - CAST(first_day AS INTEGER)) / 7.0` |
+   | `age` | `(CAST(DATE '2025-07-15' AS INTEGER) - CAST(first_day AS INTEGER)) / 7.0` |
+   | `avg_spend` | `CASE WHEN days > 1 THEN repeat_total / (days - 1) END` |
+
+   A **Filter** `age` *greater than* 0 leaves out customers whose first purchase is the calibration end.
+6. For a **holdout**, a second chain from the same purchases: a **Filter** on the days after the
+   calibration end, a **Group by** `customer` with the *distinct count* of `day` as
+   `holdout_purchases`, then a **Join**, type *left*, on `customer` into the summary and a **Fill nulls**
+   of `holdout_purchases` with 0.
+
+A customer whose first purchase is after the calibration end is not in the summary, as the models
+assume. The summary is what the node reads: Customer column `customer`, Repeat purchases `frequency`,
+Time of the last purchase `recency`, Age `age`, Average spend `avg_spend`, Unit of time *Weeks*.
+
+*Example:* the customers of the pasta and bakery company in **Sample / Private tables**, who buy
+when they like and leave without a word (their `stato` is the CRM's guess, not a fact), with the
+spend, a holdout of the following year and the calibration ending on 2025-07-15.
+
+1. The amount of each order: drop `order_rows`, **Change type** `quantita`, `prezzo_unitario` and
+   `sconto_pct` to *decimal*, a **Computed column** `ricavo_netto` =
+   `quantita * prezzo_unitario * (1 - sconto_pct / 100)`, and a **Group by** `ordine_id` with the
+   *sum* of `ricavo_netto` as `amount`.
+2. Drop `orders`, **Select columns** `id`, `data_ordine`, `cliente_id` and `stato`, **Filter** `stato`
+   *not equal to* `annullato`, **Rename** `id` to `ordine_id`, and **Join** step 1 into it, type *inner*,
+   on `ordine_id`.
+3. Drop `customers`, **Select columns** `id` and `data_acquisizione`, **Rename** `id` to `cliente_id`,
+   **Filter** `data_acquisizione` *greater than or equal to* 2023-07-01 (the customers acquired inside the data's
+   window, whose first order is in the data), and **Join** step 2 into it, type *inner*, on `cliente_id`.
+4. The summary, from this table, as in the steps above with `cliente_id` as the customer,
+   `data_ordine` as the day and `amount` as the amount: a **Filter** `data_ordine` *less than or equal to*
+   2025-07-15, the **Group by** by customer and day, the two computed columns, the second **Group by** and
+   the four columns of step 5.
+5. The holdout, from the table of step 3: a **Filter** `data_ordine` *greater than* 2025-07-15, a **Group by**
+   `cliente_id` with the *distinct count* of `data_ordine` as `holdout_purchases`, a **Join** (*left*, on
+   `cliente_id`) into the summary and a **Fill nulls** of `holdout_purchases` with 0.
+
+The node: Customer column `cliente_id`, Repeat purchases `frequency`, Time of the last purchase
+`recency`, Age `age`, Average spend `avg_spend`, Unit of time *Weeks*, Purchases in the holdout
+`holdout_purchases`, Length of the holdout 52.14 (the 365 days that follow the calibration end, in
+weeks), Periods ahead 52, Purchase model *auto*, Output *the rows*. On the first page read the
+frequency fit and the holdout: whether the model's expected purchases of the next year are near what
+the customers did. Without `avg_spend` the same flow gives the purchases and P(alive) alone. These
+data were built to suit the models, so they are a good place to learn to read the report; the
+numbers are those of your run.
+
+### BG/BB (R)
+
+Model id in the catalogue: `bg_bb`.
+
+The same questions for customers who can buy only at **fixed occasions**: a yearly campaign, a
+monthly renewal, a weekly newsletter. Time is not continuous but counted in **opportunities**: a
+customer who bought or not at each one, and who may leave after any. The node reads the same kind
+of row per customer, and gives the same outputs and the same Predict, the same checks and a report of
+the same pages, with these differences:
+
+| Option | Meaning |
+|---|---|
+| **Repeat transactions** | The transactions after the first one, among the opportunities: a whole number, 0 or more, at most one per opportunity |
+| **Opportunity of the last transaction** | 1, 2, 3…: which opportunity had the last transaction, 0 for a customer with none; it is not less than the repeat transactions nor more than the opportunities |
+| **Opportunities** | How many opportunities the customer has had after the first transaction, from 1 to 1,000 |
+| **Length of an opportunity** | Days, weeks, months, quarters or years: it discounts the CLV. Required |
+| **Opportunities ahead** | The horizon, in opportunities: one year's worth when empty |
+| **Opportunities in the holdout** | An integer from 1 to 1,000, with **Purchases in the holdout** (0 up to that number) |
+
+There is no purchase model to choose and no comparison; the average spend, the discount rate, the
+margin, the significance level and the output are as above. With the spend, the node fits
+Gamma–Gamma and gives the CLV in the same way.
+
+To build the summary from purchases by month: a **Computed column** `month` =
+`(EXTRACT(YEAR FROM day) - 2023) * 12 + EXTRACT(MONTH FROM day)` (the months counted from a fixed one),
+a **Filter** `month` up to the calibration end's, **Unique rows** on `customer` and `month`, and a **Group by**
+`customer` with the *count* of `month` as `months`, the *minimum* as `first_month` and the *maximum* as `last_month`.
+Then `frequency` = `months - 1`, `recency` = `last_month - first_month` and `opportunities` = the
+calibration end's month minus `first_month`, the first month itself not being an opportunity.
+Set the length of an opportunity to *Months*. A customer who bought twice in one month counts once, as the
+model has one purchase or none at each opportunity.
+
+*Example:* the same customers of the sample data, with a month as the opportunity: did the customer
+order in each month? Build the summary as above, from the table of step 3 of the previous example, with
+the month expression of the page (July 2023 is 7, June 2025 is 30) and the calibration end in June 2025.
+In the node, **Opportunities** `opportunities`, **Opportunity of the last transaction** `recency`,
+Length of an opportunity *Months*, Opportunities ahead 12. These customers buy at a rhythm of their own
+in continuous time, so for them *Customer lifetime value* is the natural choice; BG/BB is for data that
+really come in occasions.
 
 ## The output
 
@@ -484,9 +847,11 @@ other table, and a **Filter** on `section` is how you take the coefficients out.
 | `model` | The fit: rows used, rows left out, the model's numbers (R², AIC, AUC, concordance…), and texts: the model, the variant, the formula in symbols, the software, the group's version, whether the rows came from a trial or a run, and a `note_…` row for every doubt the numbers raised (few events for the terms, a boundary λ, so many rows that every test rejects) |
 | `coef` | One row per term and statistic: estimate, standard error, statistic, p-value, interval, odds or hazard ratio, VIF, and `significance` with R's codes. For a category, the level is in `level_2` |
 | `assumption` | One row per check and statistic: `h0`, `verdict`, `advice`, the statistic, its degrees of freedom, the p-value, its stars and the numbers of the rows the check names |
-| `cv`, `candidate` | The path of a penalty (λ against the error, with its band and the terms kept), and the candidates of an automatic ARIMA |
-| `stratum`, `pair` | Kaplan–Meier: each stratum, and each pair of strata |
-| `cell` | The confusion matrix |
+| `cv`, `candidate` | The path of a penalty (λ against the error, with its band and the terms kept), and the candidates of an automatic choice: the orders of ARIMA, the distributions of parametric survival (log-likelihood, AIC, BIC, ΔAIC, Akaike weight, status), the purchase models of customer lifetime |
+| `parameter` | Parametric survival: the distribution's own parameters (shape, σ, Q…), per stratum, with their intervals |
+| `customer` | Customer lifetime: the twenty customers of highest value, with their frequency, recency, age, P(alive), expected purchases and spend |
+| `stratum`, `pair` | Kaplan–Meier: each stratum, and each pair of strata; for parametric survival, the **profile** of each stratum: its median, quantiles and survival at the times asked |
+| `cell` | The confusion matrix; for customer lifetime, the map of P(alive) by frequency and recency |
 | `point`, `curve`, `lag`, `hist` | What the charts draw: points, lines with their bands, the correlogram's lags, the histogram's bins. At most 2,000 points a chart; above that a sample with the seed, keeping the ten most extreme points, labelled |
 
 What the node hands to the step after it is the **Output** option:
@@ -495,7 +860,9 @@ What the node hands to the step after it is the **Output** option:
 |---|---|
 | Linear, logistic, Cox | **The results table** (the default), or **the rows**, the input's columns with the fitted values added (`pred_fitted`, `pred_residual`, `pred_prob`, `pred_class`, `pred_risk`…). The input must not already have a column with one of those names |
 | Kaplan–Meier | **The results table**, or **the survival table** |
+| Parametric survival | **The results table** (the default), or **the rows**: the input's columns with the median time, the quantiles and the survival at the times asked, each with its interval, and the residuals (`pred_median`, `pred_quantile_<p>`, `pred_surv_at_<t>`, `_low`, `_high`, `pred_cox_snell`…) |
 | ARIMA | **The results table**, or **the series and its forecast** |
+| Customer lifetime value, BG/BB | **The rows** (the default, unlike the others): the input's columns with `pred_p_alive`, `pred_transactions`, `pred_clv` and the rest, or **the results table** |
 
 The model's own results are kept with the run whatever the output is, so the report can always
 be drawn.
@@ -511,7 +878,9 @@ language of the interface (English, Italian, German, Spanish or French).
    the formula.
 3. **The assumptions, on the first page**: one row per check, with what it checks, the null
    hypothesis, the statistic, the degrees of freedom, the p-value with R's stars, the verdict
-   in words and with a mark, and the advice. Above 5,000 rows a sentence says that the tests
+   in words and with a mark, and the advice. Parametric survival and customer lifetime also
+   list, under the checks, the **measures** that have no verdict, and write the significance level
+   ([How a check speaks](#how-a-check-speaks-verdicts-facts-and-measures)). Above 5,000 rows a sentence says that the tests
    reject very small departures and to read the charts.
 4. The coefficients with their stars, and an interval chart (the odds ratios and hazard ratios
    on a log scale).
@@ -528,6 +897,35 @@ the forecast, one sheet each, with the numbers and not the charts. As for the st
 report is drawn from the results the run kept: **no query reaches your data to draw it**, and
 no Job starts. It is not an object in a folder, so it cannot be saved, scheduled or put on a
 dashboard; a run of the flow can send its PDF to MLflow (below).
+
+## How a check speaks: verdicts, facts and measures
+
+The checks that open a report do not all say the same kind of thing. For **parametric survival and the
+customer lifetime nodes** one rule holds: **no number of Tabularia's decides a verdict.** A check
+speaks in one of three ways, and the report marks which.
+
+| It is | What you see | Where it comes from |
+|---|---|---|
+| A **verdict from a test** | **ok** or **failed**, with the statistic, the degrees of freedom, the p-value, its stars and the advice | A test with a p-value against the node's **significance level** (`alpha`): **p ≥ alpha is ok, p < alpha is failed**. The level is written under the checks. When the test cannot be made, **not computed**, with the reason |
+| A **fact** | **ok**, **failed**, or **doubtful** | Something true or false of the fit, whatever the size of the table: the optimizer converged and the Hessian is positive definite; a category has a level with no event; the spend model's variance is finite. They are warnings, not tests |
+| A **measure** | A number and a sentence that says what it reads, **with no colour and no advice** | A quantity a test cannot judge, such as the largest gap between the fitted curve and Kaplan–Meier's, the influence of the most influential row, the events per parameter, the number of customers, the holdout's error, the horizon against the longest age. You read it; the report never calls it good or bad |
+
+**Where to set alpha.** In the node's panel, the option **Significance level**, 0.05 unless you change it. It is
+also the level of every interval of that node (an interval at 1 − alpha: 95 % by default), so a stricter
+level, 0.01, widens the intervals and makes fewer checks fail. The p-values themselves do not change with
+alpha, only the line between ok and failed, so you can see how close a check came.
+
+**What a verdict means.** *Failed* says that the data are unlikely under the assumption the check
+tests; it does not say how much it matters. With many rows a test rejects very small departures, so the
+report says once that on a large table you should read the **measure and the chart** beside it (the share gap
+next to the frequency fit, the gap in survival next to the agreement with Kaplan–Meier) before concluding the model is
+wrong. With few rows a test rejects nothing, and *ok* means only that no departure was found. A failed
+check never stops a model: it is a row with its advice, and the numbers are still there to use.
+
+**Older models.** Linear and logistic regression, Kaplan–Meier, Cox and ARIMA have tests with p-values and,
+where a quantity has no test, the classical thresholds of the literature (a VIF above 5 or 10, Cook's
+distance), which give a **doubtful** verdict between ok and failed. The boosting models have diagnostics that are rules of thumb with advice
+and no p-value, as their sections say. They are read as they always were.
 
 ## Trying a model: Run, and «not up to date»
 
@@ -561,9 +959,15 @@ scripts bucket, the gateway:
 1. finds the experiment by name and creates it when missing (tag `tabularia.created = true`;
    one in MLflow's trash gets a sentence of its own);
 2. opens a run named after the flow, the node and the date, with
-   - **parameters**: the node's, flattened, and the model's formula;
+   - **parameters**: the node's, flattened, and the model's formula; with *auto*, the distribution
+     or the purchase model that was chosen (`distribution_chosen`, `purchase_model_chosen`), beside
+     the node's own `auto`;
    - **metrics**: every number of the `model` section, and for each assumption its statistic
-     and p-value, as `assumption.<check>[.<level_2>].<statistic>`;
+     and p-value, as `assumption.<check>[.<level_2>].<statistic>`; for the measures with no verdict
+     (the holdout's error, the share gap of the frequency fit) the `value` too. The candidates of
+     an automatic choice are metrics of their own, `candidate.<name>.<number>` (`aic`, `bic`,
+     `log_lik`, `akaike_weight`, `chosen`…, also ARIMA's orders), and the distribution's parameters
+     `parameter.<name>[.<stratum>].estimate`;
    - **tags**: `tabularia.url` (the run's page), the flow's id and name, the node, the model
      and its group, the group's version, the image digest, whether the rows were a development
      sample (`tabularia.dev_sample`), who launched it, the number of rows and
@@ -571,12 +975,14 @@ scripts bucket, the gateway:
    - **files**, through the server's artifact proxy: `tabularia/results.parquet`,
      `tabularia/coefficients.csv`, `tabularia/report.pdf` (the Report tab's layout, in the
      flow owner's language), and `model/MLmodel`, `model/model.json` and `model/native.rds` (for boosting, the model file
-     instead of `native.rds`).
+     instead of `native.rds`; the customer lifetime models write none, their card holds every
+     parameter).
      A server that keeps its runs' files elsewhere gets none of them, and the run page says
      so; a PDF that cannot be drawn is a warning, not a failure;
 3. with **Register the model as**, adds a version of that registered model from the run's
    `model` folder, with the tags `tabularia.model`, `tabularia.group`,
-   `tabularia.group_version` and `tabularia.card_sha256`: what Predict checks;
+   `tabularia.group_version` and `tabularia.card_sha256`: what Predict checks (the customer
+   lifetime models add `tabularia.variant`, *purchases* or *value*, and `tabularia.purchase_model`);
 4. ends the run as finished.
 
 **When MLflow cannot be reached,** the step fails with «the model was fitted but MLflow could
@@ -604,7 +1010,8 @@ same predictions as the fit: `predict(fit, newdata)` for a linear or logistic re
 (with `se.fit` when you pass the residual scale, which the report gives), the linear
 predictor and the risk of a Cox model (`reference = "sample"`), and `predict(fit, newx, s =)`
 for a penalized fit. What needs the rows does not work on it (`summary()`, `residuals()`, a
-Cox model's `survfit()`): the report and `coefficients.csv` have those numbers. Two objects
+Cox model's `survfit()`): the report and `coefficients.csv` have those numbers. A parametric survival model's `flexsurv`
+object is kept without the rows too. Two objects
 are kept whole, and they are data: a Kaplan–Meier's `survfit` is the curve itself (one step
 per event time), and an ARIMA's `forecast::Arima` keeps the series, which `forecast()` needs
 to go on from its last values. The columns inside are named by position (`d1`, `d2`…), as
@@ -666,9 +1073,17 @@ which each group's self-test checks.
 | Logistic | The probability of the event | **Class threshold**: `prediction_class` (0.5 when empty, or the card's) |
 | Kaplan–Meier | The survival at the row's time, in the row's stratum (empty past the stratum's last time) | **Prediction interval**: `prediction_low`, `prediction_high` |
 | Cox | The risk score, relative to the means of the fit | **Survival at times**: `survival_at_<t>` for each time |
+| Parametric survival | The **median time** | **Survival at times**: `survival_at_<t>`; **Quantiles**: `quantile_<p>`; **Prediction interval**: `prediction_low`, `prediction_high`, and `_low`, `_high` for each quantile and time; **Time already survived**: a column of the rows, and then every answer is the time left |
 | ARIMA | The forecast, with the fitted coefficients, no re-estimation | **Forecast steps**; **Prediction interval**: `lower_80`, `upper_80`, `lower`, `upper` |
+| Customer lifetime value, BG/BB | The expected purchases over the horizon | **Periods ahead** (the card's when empty, in the fit's unit); also `prediction_p_alive`, and with a spend `prediction_spend` and `prediction_clv` |
 | XGBoost, CatBoost | A regression's value, a binary model's probability of the event, a multiclass model's likeliest class | Binary: **Class threshold** gives `prediction_class`; multiclass adds `prediction_probability` and `prediction_prob_<class>` |
 
+A parametric survival model predicts **beyond the last time observed** (the shape of the distribution
+gives it), unlike Kaplan–Meier and Cox, and the run page counts the rows that go beyond as an
+extrapolation; a median the distribution never reaches is empty. **Time already survived** is refused
+for the other models, and a row with no value, a negative one or an infinite one gets an empty
+prediction. For the customer lifetime models a row that breaks a rule of the summary (a recency above
+the age, a repeated purchase at the first moment) gets empty predictions and a warning that counts them.
 An option that does not belong to the model of the card is refused. A level of a category the
 model did not see gives an empty prediction on its rows, and the run page counts them. A
 Predict step logs nothing to MLflow: its run records the registered model, the version it
@@ -679,12 +1094,16 @@ and needs its connection and version chosen first.
 
 | Limit | Value |
 |---|---|
-| Input rows | The group's: 2,000,000, 1,000,000, 20,000 or 1,000,000 unless an administrator changed it. Beyond it the step fails before the Job, with «the model would read 3,400,000 rows; the group allows 2,000,000: filter or sample before the node» |
+| Input rows | The group's: 2,000,000, 1,000,000, 20,000, 1,000,000 or 1,000,000 unless an administrator changed it. Beyond it the step fails before the Job, with «the model would read 3,400,000 rows; the group allows 2,000,000: filter or sample before the node» |
 | Terms of the design, after encoding categories | 200 |
 | Levels of a categorical predictor | 50 |
-| Strata (Kaplan–Meier, Cox) | 20 |
+| Strata (Kaplan–Meier, Cox, parametric survival) | 20 |
 | Interactions | 20 pairs |
 | Times of «survival at» | 10 |
+| Quantiles (parametric survival) | 9 |
+| AIC margin of the automatic choice | 0 to 10 |
+| Customers and repeat customers (customer lifetime) | At least 20 and 5 (5 with a spend); 1,000,000 customers unless an administrator changed it |
+| Periods ahead; opportunities of BG/BB | 1,000 each; above 520 steps the CLV is summed in coarser steps, with a note |
 | Seasonal period | 60 |
 | Forecast steps | 1,000 |
 | Rows | More than terms plus one; with a penalty, 3 per fold, at least 2 terms, and with the AUC measure 10 per fold; at least one event; for ARIMA enough observations for its orders and season |
@@ -699,9 +1118,13 @@ it, and an R image with its packages is more than a gigabyte.
 
 **What it does not do.**
 
-- **No model beyond the seven**: no multinomial or ordinal logistic, mixed models, additive
-  models, Poisson or negative binomial, quantile regression, parametric survival, competing
-  risks, exponential smoothing; no inference after a penalized selection.
+- **No model beyond the ten**: no multinomial or ordinal logistic, mixed models, additive
+  models, Poisson or negative binomial, quantile regression, competing risks, exponential
+  smoothing; no inference after a penalized selection. In parametric survival no left or
+  interval censoring, no cure models or splines, no robust errors for rows of one subject (rows
+  with a start are taken as independent), no gamma or generalized F distribution. The customer
+  lifetime models take one row per customer and no column about the customer (no covariates), not
+  a log of transactions, and a customer with no purchase yet has no row.
 - **No code of yours**: the runners are Tabularia's. For another model, write it in a
   [Script node](../scripting.md) in R or Python.
 - **No fit in an engine.** A model is not an operation of the five engines; the rows that
@@ -719,7 +1142,9 @@ it, and an R image with its packages is more than a gigabyte.
 
 Every number is checked against values computed outside Tabularia: R 4.6 with its own
 packages, and for some models a second tool (statsmodels for the linear regression and ARIMA,
-lifelines for Kaplan–Meier and Cox). The self-test of each group repeats the comparison, on
+lifelines for Kaplan–Meier, Cox and four of the parametric distributions; BTYD, BTYDplus and
+hypergeo for the customer lifetime models, whose published estimates for two textbook data sets
+are also reproduced). The self-test of each group repeats the comparison, on
 the cluster, before the group can be used. A few conventions are Tabularia's own and the
 report says so:
 
@@ -728,7 +1153,18 @@ report says so:
 - the Cook's distance verdict: over 1 failed, over 4/n doubtful; leverage over 2p/n is doubtful;
 - Hosmer–Lemeshow's degrees of freedom are the groups made minus 2;
 - Cox's risk score is relative to the means of the fit, and its survival curve is for a row at
-  the means, not for each stratum's.
+  the means, not for each stratum's;
+- parametric survival fits with `flexsurv` but takes the covariance from its own Richardson
+  Hessian of the log-likelihood, for every distribution, because flexsurv's is a finite difference
+  for the distributions with no analytic derivatives; the exponential's coefficients are reported
+  as time ratios, the opposite sign of its rate's, so that every distribution reads the same way;
+  a time of 0 is left out, since no distribution gives it a density;
+- customer lifetime: Pareto/NBD and BG/NBD are computed with CLVTools' compiled likelihoods;
+  MBG/NBD and BG/BB, which CLVTools does not have, are written in the runner and agree with
+  independent implementations to better than 1e-13 on likelihoods, P(alive) and expected purchases. Where
+  the Gauss hypergeometric function fails in the GNU Scientific Library the runner uses a
+  quadrature, and says how many customers needed it; the CLV is a discrete sum over the horizon
+  you choose, not CLVTools' infinite-horizon expectation.
 
 ## Related
 
