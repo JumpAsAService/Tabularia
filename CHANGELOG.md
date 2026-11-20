@@ -87,6 +87,18 @@ Development on `main` for the next minor version. The stable line stays 1.4.x
   checks the fingerprint before applying it. The image is built from wheels in minutes. New
   route `POST /scripts/objects/upload` of the engine; the assistants and the MCP tools know the
   two nodes. [Boosting](docs/capabilities/models.md#boosting-python-xgboost-and-catboost).
+- **The sample data has customers with a life.** The pasta and bakery company's customers
+  are no longer all there from the start and ordering at random: about 30% are in the
+  portfolio when the data opens and the others are acquired over the three years, faster each
+  year and with a season; each one orders at a rate of its own (a supermarket more often
+  than a shop), has an order size of its own, and churns at a hazard that depends on channel,
+  macro-area and agent. Nobody writes the churn down: `clienti` has the acquisition date
+  (`data_acquisizione`, now meaningful) and a new `stato` computed as a CRM would
+  (`attivo`, `inattivo` after six months with no order, `nuovo`), so «inactive» and «lost»
+  are not the same thing. The CRM contacts follow the lives too. Same sizes at every
+  `SAMPLES_SCALE`, same seasons and anomalies; a customer table made before this has no
+  `stato`: remove the sample volumes to get the new data. See
+  [the sample data](infrastructure/sampledb/README.md#the-customers-lives).
 
 ## 1.4.7 «Romulus» — 2026-11-18 · long-term support
 

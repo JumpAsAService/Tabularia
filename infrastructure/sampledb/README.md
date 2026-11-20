@@ -25,7 +25,7 @@ are in Italian, as a real Italian ERP and CRM would have them.
 | table | description |
 |---|---|
 | `agenti` | a hierarchical sales network: `agent → supervisor → area manager` (self-reference `responsabile_id`) |
-| `clienti` | customer records (company name, VAT number, channel, geography), each assigned to an agent |
+| `clienti` | customer records (company name, VAT number, channel, geography), each assigned to an agent, with the acquisition date `data_acquisizione` and the commercial status `stato` (`attivo`, `inattivo`, `nuovo`) |
 | `attivita_crm` | visits, calls and reminders (the big table) |
 
 `ordini.cliente_id` and `ordini.agente_id` are **logical** keys into the CRM on
@@ -43,6 +43,26 @@ margin     = revenue - cost_prod - cost_comm
 Joining `clienti`/`agenti` from the CRM then gives the margin by agent, supervisor,
 area manager, region and channel.
 
+## The customers' lives
+
+The customers are not a fixed list that orders at random: each one is simulated, in the
+process behind the «buy till you die» models (Pareto/NBD, with BG/NBD and Gamma–Gamma
+fitting it too), so that the data suits those models and survival analysis alike.
+
+| what | how it is generated | what you can find in it |
+|---|---|---|
+| **acquisition** | about 30% of the customers are in the portfolio when the window opens (1 July 2023; their `data_acquisizione` lies before it, and what they ordered before is not in the data); the others arrive over the three years, at a rate that grows every year, with a season (a push in January, almost nothing in August, a quiet December) and a pace of its own for each channel (`Online` takes off, `Negozi` stays flat) | new customers per month; cohorts by acquisition date; the company's growth coming from the base, not from every customer ordering more |
+| **frequency** | each customer orders at a Poisson rate of its own: a gamma across customers (shape 1.5, so a few order a lot and many order rarely) whose mean depends on the channel (`Supermercati` and `Ristorazione` often, `Ingrosso` and `Online` rarely), modulated by the month, weekday and channel seasons above. The first order follows the acquisition by a few days | orders per customer a long-tailed count; the intervals between a customer's orders are exponential, with its own mean |
+| **churn** | the lifetime of a customer is exponential, with a hazard a year equal to a base (0.25) × the channel's (`Supermercati` 0.55 … `Online` 1.6) × the macro-area's (`Nord-Ovest` 0.75 … `Isole` 1.7) × the agent's (a lognormal factor: some agents lose more customers) × a gamma frailty that nothing explains. **Nobody writes it down**: the database holds no churn flag, no end date | a Kaplan–Meier by channel that separates (about 65% of the supermarkets still there after two years, about 30% of the online ones); a Cox model with channel, area and agent as covariates; a Weibull fit; the hazard of the whole base falling over time (the frail leave first) |
+| **spend** | each customer has an average order size of its own (a gamma across customers, a CV of 0.5), independent of how often it orders, and the order's own noise on top (the lines, the quantities, the products); the basket still grows 5% a year | a correlation of frequency and spend close to 0 inside a channel (the Gamma–Gamma assumption); the channels differ in size (`Supermercati` and `Ingrosso` order in bulk) |
+| **status** | `clienti.stato` is computed like a CRM would, at the end of the window, from the last order that was not cancelled: `attivo` (an order in the last six months), `inattivo` (none), `nuovo` (acquired in the last six months and nothing delivered yet). `attivo` is 0 for `inattivo`, 1 otherwise | an `inattivo` customer is **not** necessarily lost: a slow one looks the same. The difference between «inactive» and «lost» is what the buy till you die models estimate |
+| **CRM activity** | none before the acquisition; while the customer buys, the usual contacts; after it has churned a small fraction, mostly reminders and calls that end badly (the attempts to win it back) | contacts that follow the customer's life; the `ordine` outcome among the active ones |
+
+The orders of the preset are the total of these lives: the rate of every customer is scaled
+so that the orders add up to the preset's number (30,000 at `small`), and the same random
+seed gives the same data at every run. At `medium`, `robust` and `massive` the same customers
+simply order more often in the time they are alive.
+
 ## Seasons and anomalies (the data is NOT flat)
 
 The facts follow realistic trends and seasons (all in `generate.py`), so the pivots
@@ -50,17 +70,34 @@ tell a story:
 
 | signal | where | effect |
 |---|---|---|
-| company growth +18%/year · basket +5%/year | `GROWTH_ANNUO`, `BASKET_GROWTH_ANNUO` | volumes rising over time |
+| company growth: new customers arrive faster each year (0% to +60% a year, by channel) · basket +5%/year | `ACQ_GROWTH`, `ANNUAL_BASKET_GROWTH` | volumes rising over time (about +25% orders a year at `small`), mostly because the customer base grows |
 | monthly **volume** season | `MONTH_MULT` | Christmas ×1.8, Easter up, August down |
-| weekly B2B season | `build_day_weights` | full weekdays, quiet weekends |
-| prices and costs +6% from 2025 | `gen_catalogo` | two price-list and cost regimes |
+| weekly B2B season | `build_day_intensity` | full weekdays, quiet weekends |
+| prices and costs +6% from 2025 | `gen_catalogue` | two price-list and cost regimes |
 | **product mix × season** | `CATEGORY_SEASON`, `PRODUCT_SEASON` | panettone and pandoro peak in December, grissini and cracker in summer, taralli in the warm months, fresh pasta at Christmas and Easter, biscuits low in summer |
 | **channel mix × season** | `CHANNEL_SEASON` | Ristorazione peaks in summer (tourism), Supermercati, Negozi and Online at Christmas |
 | **fulfilment anomalies by depot** | `CANCEL_CHRONIC`, `CANCEL_INCIDENT` | **Bari**: a chronic cancelled share, growing (~4% → ~24%); **Torino**: a one-off incident (spring 2025, ~32%), then back to normal |
+| **acquisition, frequency, churn, spend** | `INITIAL_SHARE`, `ACQ_GROWTH`, `ACQ_SEASON`, `CHANNEL_RATE`, `BASE_CHURN`, `CHANNEL_CHURN`, `AREA_CHURN`, `SPEND_SHAPE` | the customers' lives, above |
 
 Good analyses to try: *category share by month* (product mix), *channel share by
 month* (channel mix), *% fulfilled / cancelled by depot over time* (anomalies), and
-the line margin by sales network.
+the line margin by sales network. On the customers:
+
+- **new customers per month** and **customers who ordered per month** (`data_acquisizione`
+  against the orders): both grow, the first with a season;
+- **retention by acquisition cohort**: the share of a half-year cohort with an order in each
+  three-month window after the acquisition (customers with `data_acquisizione` from 1 July 2023
+  on: the earlier ones are the portfolio of the start and their first orders are not in the data);
+- **Kaplan–Meier and Cox** on the time to the last order: build a table with one row per
+  customer (the first and the last order date, the number of orders), take as the event «`stato` is
+  `inattivo`», as its time the days from `data_acquisizione` to the last order plus 183 (the
+  six months the CRM waits), and as the censoring time the end of the window for the others; the
+  strata or predictors are `canale`, the macro-area of `regione` and `agente_id`;
+- **buy till you die** (BG/NBD, Pareto/NBD, Gamma–Gamma) on the same one-row-per-customer
+  summary: frequency (orders after the first), recency (days from the first to the last order),
+  age (days from the first order to the end of the window) and the average order value, for
+  the customers acquired in the window. The «Customer Segments by Region (RFM)» flow already
+  builds the recency, frequency and monetary value per customer.
 
 ## Turning them on and off
 
@@ -84,7 +121,7 @@ Scales (approximate):
 
 | preset | customers | orders | lines (~) | CRM activities | notes |
 |---|---:|---:|---:|---:|---|
-| `small`   | 3,000 | 30,000 | ~100 k | 60 k | a smoke test, seconds |
+| `small`   | 3,000 | 30,000 | ~105 k | 60 k | a smoke test, seconds |
 | `medium`  | 30,000 | 1 M | ~3.5 M | 2 M | a few minutes |
 | `robust`  | 150,000 | 12 M | ~42 M | 60 M | ~10–20 GB, longer |
 | `massive` | 500,000 | 12 M | ~42 M | **1 billion** | about 50 GB free, a couple of hours |
