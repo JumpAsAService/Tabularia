@@ -62,7 +62,7 @@ const ARIMA = m.modelOf('arima')
 test('the catalogue the editor reads is the engine\'s snapshot, byte for byte', () => {
   assert.equal(read('../assets/model-catalog.json'), read('../../backend/app/engine/models/catalog.json'),
     'run python3 .github/scripts/model_catalog.py')
-  assert.deepEqual(m.MODEL_CATALOG.models.map((x) => x.id), ['linear', 'logistic', 'kaplan_meier', 'cox', 'arima', 'xgboost', 'catboost'])
+  assert.deepEqual(m.MODEL_CATALOG.models.map((x) => x.id), ['linear', 'logistic', 'kaplan_meier', 'cox', 'parametric_survival', 'arima', 'xgboost', 'catboost'])
   assert.deepEqual(m.MODEL_CATALOG.groups.map((g) => g.id), ['regression', 'survival', 'timeseries', 'boosting'])
 })
 
@@ -100,8 +100,16 @@ test('the fields of a model in the catalogue\'s order, what it needs first', () 
   assert.equal(m.modelFields(ARIMA).find((f) => f.key === 'time').types.length, 3)
 })
 
+// The parametric survival node's words and form come with lot P6 of docs/specs/statistical-models.md:
+// until then the palette leaves it out and its words are not asked for. P6 takes this away.
+const WORDED = {
+  ...m.MODEL_CATALOG,
+  models: m.MODEL_CATALOG.models.filter((x) => x.id !== 'parametric_survival'),
+  predict: { ...m.MODEL_CATALOG.predict, takes: Object.fromEntries(Object.entries(m.MODEL_CATALOG.predict.takes).filter(([k]) => k !== 'quantiles')) },
+}
+
 test('every model, group, preset, field, choice and reason has its words in the five languages', () => {
-  const wanted = m.modelWordKeys(m.MODEL_CATALOG)
+  const wanted = m.modelWordKeys(WORDED)
   for (const key of ['models.groups.regression', 'models.linear.name', 'models.arima.hint', 'models.presets.sarimax.name',
     'models.params.outcome', 'models.choice.firth', 'models.reasons.firth_needs_logit', 'predict.params.at_times']) assert.ok(wanted.includes(key), key)
   const missing = []
@@ -129,10 +137,10 @@ test('every model, group, preset, field, choice and reason has its words in the 
 
 test('a model added to the catalogue is asked for its words by name', () => {
   const TWO = {
-    ...m.MODEL_CATALOG,
-    groups: [...m.MODEL_CATALOG.groups, { id: 'zz_group', language: 'r', label: 'models.groups.zz_group', models: ['zz_poisson'] }],
+    ...WORDED,
+    groups: [...WORDED.groups, { id: 'zz_group', language: 'r', label: 'models.groups.zz_group', models: ['zz_poisson'] }],
     kinds: { ...m.MODEL_CATALOG.kinds, zz_offset: { control: 'choice', choices: ['none', 'exposure'] } },
-    models: [...m.MODEL_CATALOG.models, {
+    models: [...WORDED.models, {
       id: 'zz_poisson', group: 'zz_group', family: 'regression', label: 'models.zz_poisson.name',
       needs: { outcome: 'number_column' }, takes: { zz_offset: 'zz_offset' }, defaults: { zz_offset: 'none' },
       applies: {}, requires: [], forbids: [{ key: 'zz_offset', value: 'exposure', when: { zz_offset: 'none' }, reason: 'zz_nope', message: 'no' }],

@@ -237,6 +237,15 @@ numeric predictor (a test against a natural spline with 3 degrees of freedom, an
 martingale residuals' chart), influence (dfbeta: over 2/√n doubtful, over 1 failed; not
 computed with exact ties), VIF and **events per coefficient** (at least 10).
 
+### Parametric survival: being built
+
+Model id in the catalogue: `parametric_survival`. A node of the **Survival** group is being
+built: the time to an event described by a distribution (Weibull, exponential, log-normal,
+log-logistic, generalized gamma or Gompertz, or the one with the lowest AIC), with time ratios,
+hazard ratios and the prediction of a median, quantiles and the survival at a time. In this
+version its node does not fit a model yet: it stops with «… is not built yet in this version of
+Tabularia». This section will describe it when it does.
+
 ### ARIMA
 
 Model id in the catalogue: `arima`.

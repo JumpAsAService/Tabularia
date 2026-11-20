@@ -45,6 +45,7 @@
     "max_vcov_terms": 200,
     "max_baseline_times": 5000,
     "max_paths_terms": 20,
+    "max_quantiles": 9,
     "max_predictors": 200,
     "max_levels_trees": 1000,
     "max_classes": 20,
@@ -97,6 +98,11 @@
     "predictors": {
       "control": "columns",
       "min": 1,
+      "predictor": true
+    },
+    "predictors_optional": {
+      "control": "columns",
+      "min": 0,
       "predictor": true
     },
     "number_columns": {
@@ -186,6 +192,12 @@
       "control": "numbers",
       "min": 0,
       "max_count": 10
+    },
+    "quantiles": {
+      "control": "numbers",
+      "above": 0,
+      "below": 1,
+      "max_count": 9
     },
     "mixing": {
       "control": "number_or_choice",
@@ -314,6 +326,18 @@
         "efron",
         "breslow",
         "exact"
+      ]
+    },
+    "distribution": {
+      "control": "choice",
+      "choices": [
+        "weibull",
+        "exponential",
+        "lognormal",
+        "loglogistic",
+        "gengamma",
+        "gompertz",
+        "auto"
       ]
     },
     "frequency": {
@@ -493,6 +517,11 @@
       "level_2": "optional",
       "indexed": false
     },
+    "parameter": {
+      "level": "required",
+      "level_2": "optional",
+      "indexed": false
+    },
     "cv": {
       "level": "optional",
       "level_2": "null",
@@ -579,7 +608,8 @@
       "label": "models.groups.survival",
       "models": [
         "kaplan_meier",
-        "cox"
+        "cox",
+        "parametric_survival"
       ]
     },
     {
@@ -1950,6 +1980,866 @@
             "rows": [
               "pred_linear",
               "pred_risk",
+              "pred_martingale",
+              "pred_deviance"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "parametric_survival",
+      "group": "survival",
+      "family": "survival",
+      "label": "models.parametric_survival.name",
+      "needs": {
+        "time": "number_column",
+        "event": "column",
+        "event_value": "event_level"
+      },
+      "takes": {
+        "predictors": "predictors_optional",
+        "reference": "reference",
+        "interactions": "interactions",
+        "strata": "column",
+        "weights": "number_column",
+        "distribution": "distribution",
+        "quantiles": "quantiles",
+        "times": "times",
+        "alpha": "alpha",
+        "seed": "seed",
+        "output": "output_rows"
+      },
+      "defaults": {
+        "predictors": [],
+        "reference": {},
+        "interactions": [],
+        "strata": null,
+        "weights": null,
+        "distribution": "weibull",
+        "quantiles": [
+          0.25,
+          0.75
+        ],
+        "times": [],
+        "alpha": 0.05,
+        "seed": 1,
+        "output": "results"
+      },
+      "applies": {
+        "reference": {
+          "predictors": true
+        },
+        "interactions": {
+          "predictors": true
+        }
+      },
+      "requires": [],
+      "forbids": [],
+      "disjoint": [
+        "time",
+        "event",
+        "predictors",
+        "strata",
+        "weights"
+      ],
+      "presets": {},
+      "variants": [
+        {
+          "id": "ph_aft",
+          "when": {
+            "distribution": [
+              "weibull",
+              "exponential"
+            ]
+          },
+          "sections": {
+            "model": {
+              "levels": null,
+              "texts": [
+                "model",
+                "variant",
+                "formula",
+                "software",
+                "group_version",
+                "rows_from",
+                "note_*",
+                "event_value",
+                "distribution",
+                "selection",
+                "coefficient_scale",
+                "profile",
+                "lr_significance",
+                "exponential_lr_significance"
+              ],
+              "numbers": [
+                "n",
+                "events",
+                "censored",
+                "n_missing",
+                "n_zero_time",
+                "n_strata",
+                "n_parameters",
+                "log_lik",
+                "aic",
+                "bic",
+                "lr_statistic",
+                "lr_df",
+                "lr_p_value",
+                "concordance",
+                "concordance_se",
+                "last_time",
+                "last_event_time",
+                "exponential_lr_statistic",
+                "exponential_lr_df",
+                "exponential_lr_p_value"
+              ]
+            },
+            "coef": {
+              "levels": null,
+              "numbers": [
+                "estimate",
+                "std_error",
+                "statistic",
+                "p_value",
+                "vif",
+                "time_ratio",
+                "tr_ci_low",
+                "tr_ci_high",
+                "hazard_ratio",
+                "hr_ci_low",
+                "hr_ci_high",
+                "cox_hazard_ratio",
+                "cox_hr_ci_low",
+                "cox_hr_ci_high"
+              ],
+              "texts": [
+                "significance"
+              ]
+            },
+            "parameter": {
+              "levels": null,
+              "numbers": [
+                "estimate",
+                "std_error",
+                "ci_low",
+                "ci_high"
+              ],
+              "texts": []
+            },
+            "stratum": {
+              "levels": null,
+              "numbers": [
+                "n",
+                "events",
+                "last_time",
+                "median",
+                "median_ci_low",
+                "median_ci_high",
+                "quantile_*",
+                "surv_at_*",
+                "km_median"
+              ],
+              "texts": []
+            },
+            "assumption": {
+              "levels": [
+                "convergence",
+                "epv",
+                "separation",
+                "km_agreement",
+                "distribution_vs_gengamma",
+                "dfbeta",
+                "vif",
+                "extrapolation",
+                "constant_hazard",
+                "ph_cox",
+                "ph_cox_global"
+              ],
+              "numbers": [
+                "statistic",
+                "df",
+                "df_2",
+                "p_value",
+                "threshold",
+                "value",
+                "count"
+              ],
+              "texts": [
+                "h0",
+                "verdict",
+                "advice",
+                "significance",
+                "rows",
+                "advice_id"
+              ]
+            },
+            "point": {
+              "levels": [
+                "cox_snell",
+                "loglog",
+                "deviance_linear"
+              ],
+              "numbers": [
+                "y"
+              ],
+              "texts": []
+            },
+            "curve": {
+              "levels": [
+                "fit_km",
+                "loglog",
+                "profile_survival",
+                "hazard"
+              ],
+              "numbers": [
+                "surv",
+                "lower",
+                "upper",
+                "fitted",
+                "hazard",
+                "y"
+              ],
+              "texts": []
+            }
+          },
+          "charts": [
+            {
+              "id": "time_ratio_interval",
+              "under": null
+            },
+            {
+              "id": "hazard_ratio_interval",
+              "under": null
+            },
+            {
+              "id": "fit_km",
+              "under": "km_agreement"
+            },
+            {
+              "id": "cox_snell",
+              "under": "km_agreement"
+            },
+            {
+              "id": "profile_survival",
+              "under": null
+            },
+            {
+              "id": "hazard",
+              "under": null
+            },
+            {
+              "id": "deviance_linear",
+              "under": "dfbeta"
+            },
+            {
+              "id": "loglog",
+              "under": "km_agreement"
+            }
+          ],
+          "outputs": {
+            "rows": [
+              "pred_linear",
+              "pred_median",
+              "pred_quantile_*",
+              "pred_surv_at_*",
+              "pred_cox_snell",
+              "pred_martingale",
+              "pred_deviance"
+            ]
+          }
+        },
+        {
+          "id": "aft",
+          "when": {
+            "distribution": [
+              "lognormal",
+              "loglogistic",
+              "gengamma"
+            ]
+          },
+          "sections": {
+            "model": {
+              "levels": null,
+              "texts": [
+                "model",
+                "variant",
+                "formula",
+                "software",
+                "group_version",
+                "rows_from",
+                "note_*",
+                "event_value",
+                "distribution",
+                "selection",
+                "coefficient_scale",
+                "profile",
+                "lr_significance"
+              ],
+              "numbers": [
+                "n",
+                "events",
+                "censored",
+                "n_missing",
+                "n_zero_time",
+                "n_strata",
+                "n_parameters",
+                "log_lik",
+                "aic",
+                "bic",
+                "lr_statistic",
+                "lr_df",
+                "lr_p_value",
+                "concordance",
+                "concordance_se",
+                "last_time",
+                "last_event_time"
+              ]
+            },
+            "coef": {
+              "levels": null,
+              "numbers": [
+                "estimate",
+                "std_error",
+                "statistic",
+                "p_value",
+                "vif",
+                "time_ratio",
+                "tr_ci_low",
+                "tr_ci_high"
+              ],
+              "texts": [
+                "significance"
+              ]
+            },
+            "parameter": {
+              "levels": null,
+              "numbers": [
+                "estimate",
+                "std_error",
+                "ci_low",
+                "ci_high"
+              ],
+              "texts": []
+            },
+            "stratum": {
+              "levels": null,
+              "numbers": [
+                "n",
+                "events",
+                "last_time",
+                "median",
+                "median_ci_low",
+                "median_ci_high",
+                "quantile_*",
+                "surv_at_*",
+                "km_median"
+              ],
+              "texts": []
+            },
+            "assumption": {
+              "levels": [
+                "convergence",
+                "epv",
+                "separation",
+                "km_agreement",
+                "distribution_vs_gengamma",
+                "dfbeta",
+                "vif",
+                "extrapolation"
+              ],
+              "numbers": [
+                "statistic",
+                "df",
+                "df_2",
+                "p_value",
+                "threshold",
+                "value",
+                "count"
+              ],
+              "texts": [
+                "h0",
+                "verdict",
+                "advice",
+                "significance",
+                "rows",
+                "advice_id"
+              ]
+            },
+            "point": {
+              "levels": [
+                "cox_snell",
+                "deviance_linear"
+              ],
+              "numbers": [
+                "y"
+              ],
+              "texts": []
+            },
+            "curve": {
+              "levels": [
+                "fit_km",
+                "profile_survival",
+                "hazard"
+              ],
+              "numbers": [
+                "surv",
+                "lower",
+                "upper",
+                "fitted",
+                "hazard",
+                "y"
+              ],
+              "texts": []
+            }
+          },
+          "charts": [
+            {
+              "id": "time_ratio_interval",
+              "under": null
+            },
+            {
+              "id": "fit_km",
+              "under": "km_agreement"
+            },
+            {
+              "id": "cox_snell",
+              "under": "km_agreement"
+            },
+            {
+              "id": "profile_survival",
+              "under": null
+            },
+            {
+              "id": "hazard",
+              "under": null
+            },
+            {
+              "id": "deviance_linear",
+              "under": "dfbeta"
+            }
+          ],
+          "outputs": {
+            "rows": [
+              "pred_linear",
+              "pred_median",
+              "pred_quantile_*",
+              "pred_surv_at_*",
+              "pred_cox_snell",
+              "pred_martingale",
+              "pred_deviance"
+            ]
+          }
+        },
+        {
+          "id": "ph",
+          "when": {
+            "distribution": [
+              "gompertz"
+            ]
+          },
+          "sections": {
+            "model": {
+              "levels": null,
+              "texts": [
+                "model",
+                "variant",
+                "formula",
+                "software",
+                "group_version",
+                "rows_from",
+                "note_*",
+                "event_value",
+                "distribution",
+                "selection",
+                "coefficient_scale",
+                "profile",
+                "lr_significance",
+                "exponential_lr_significance"
+              ],
+              "numbers": [
+                "n",
+                "events",
+                "censored",
+                "n_missing",
+                "n_zero_time",
+                "n_strata",
+                "n_parameters",
+                "log_lik",
+                "aic",
+                "bic",
+                "lr_statistic",
+                "lr_df",
+                "lr_p_value",
+                "concordance",
+                "concordance_se",
+                "last_time",
+                "last_event_time",
+                "exponential_lr_statistic",
+                "exponential_lr_df",
+                "exponential_lr_p_value"
+              ]
+            },
+            "coef": {
+              "levels": null,
+              "numbers": [
+                "estimate",
+                "std_error",
+                "statistic",
+                "p_value",
+                "vif",
+                "hazard_ratio",
+                "hr_ci_low",
+                "hr_ci_high",
+                "cox_hazard_ratio",
+                "cox_hr_ci_low",
+                "cox_hr_ci_high"
+              ],
+              "texts": [
+                "significance"
+              ]
+            },
+            "parameter": {
+              "levels": null,
+              "numbers": [
+                "estimate",
+                "std_error",
+                "ci_low",
+                "ci_high"
+              ],
+              "texts": []
+            },
+            "stratum": {
+              "levels": null,
+              "numbers": [
+                "n",
+                "events",
+                "last_time",
+                "median",
+                "median_ci_low",
+                "median_ci_high",
+                "quantile_*",
+                "surv_at_*",
+                "km_median"
+              ],
+              "texts": []
+            },
+            "assumption": {
+              "levels": [
+                "convergence",
+                "epv",
+                "separation",
+                "km_agreement",
+                "dfbeta",
+                "vif",
+                "extrapolation",
+                "ph_cox",
+                "ph_cox_global"
+              ],
+              "numbers": [
+                "statistic",
+                "df",
+                "df_2",
+                "p_value",
+                "threshold",
+                "value",
+                "count"
+              ],
+              "texts": [
+                "h0",
+                "verdict",
+                "advice",
+                "significance",
+                "rows",
+                "advice_id"
+              ]
+            },
+            "point": {
+              "levels": [
+                "cox_snell",
+                "deviance_linear"
+              ],
+              "numbers": [
+                "y"
+              ],
+              "texts": []
+            },
+            "curve": {
+              "levels": [
+                "fit_km",
+                "profile_survival",
+                "hazard"
+              ],
+              "numbers": [
+                "surv",
+                "lower",
+                "upper",
+                "fitted",
+                "hazard",
+                "y"
+              ],
+              "texts": []
+            }
+          },
+          "charts": [
+            {
+              "id": "hazard_ratio_interval",
+              "under": null
+            },
+            {
+              "id": "fit_km",
+              "under": "km_agreement"
+            },
+            {
+              "id": "cox_snell",
+              "under": "km_agreement"
+            },
+            {
+              "id": "profile_survival",
+              "under": null
+            },
+            {
+              "id": "hazard",
+              "under": null
+            },
+            {
+              "id": "deviance_linear",
+              "under": "dfbeta"
+            }
+          ],
+          "outputs": {
+            "rows": [
+              "pred_linear",
+              "pred_median",
+              "pred_quantile_*",
+              "pred_surv_at_*",
+              "pred_cox_snell",
+              "pred_martingale",
+              "pred_deviance"
+            ]
+          }
+        },
+        {
+          "id": "auto",
+          "when": {
+            "distribution": [
+              "auto"
+            ]
+          },
+          "sections": {
+            "model": {
+              "levels": null,
+              "texts": [
+                "model",
+                "variant",
+                "formula",
+                "software",
+                "group_version",
+                "rows_from",
+                "note_*",
+                "event_value",
+                "distribution",
+                "selection",
+                "coefficient_scale",
+                "profile",
+                "lr_significance",
+                "exponential_lr_significance"
+              ],
+              "numbers": [
+                "n",
+                "events",
+                "censored",
+                "n_missing",
+                "n_zero_time",
+                "n_strata",
+                "n_parameters",
+                "log_lik",
+                "aic",
+                "bic",
+                "lr_statistic",
+                "lr_df",
+                "lr_p_value",
+                "concordance",
+                "concordance_se",
+                "last_time",
+                "last_event_time",
+                "exponential_lr_statistic",
+                "exponential_lr_df",
+                "exponential_lr_p_value"
+              ]
+            },
+            "coef": {
+              "levels": null,
+              "numbers": [
+                "estimate",
+                "std_error",
+                "statistic",
+                "p_value",
+                "vif",
+                "time_ratio",
+                "tr_ci_low",
+                "tr_ci_high",
+                "hazard_ratio",
+                "hr_ci_low",
+                "hr_ci_high",
+                "cox_hazard_ratio",
+                "cox_hr_ci_low",
+                "cox_hr_ci_high"
+              ],
+              "texts": [
+                "significance"
+              ]
+            },
+            "parameter": {
+              "levels": null,
+              "numbers": [
+                "estimate",
+                "std_error",
+                "ci_low",
+                "ci_high"
+              ],
+              "texts": []
+            },
+            "stratum": {
+              "levels": null,
+              "numbers": [
+                "n",
+                "events",
+                "last_time",
+                "median",
+                "median_ci_low",
+                "median_ci_high",
+                "quantile_*",
+                "surv_at_*",
+                "km_median"
+              ],
+              "texts": []
+            },
+            "candidate": {
+              "levels": null,
+              "texts": [
+                "status"
+              ],
+              "numbers": [
+                "n_parameters",
+                "log_lik",
+                "aic",
+                "bic",
+                "delta_aic",
+                "akaike_weight",
+                "converged",
+                "admissible",
+                "chosen",
+                "parsimony"
+              ]
+            },
+            "assumption": {
+              "levels": [
+                "convergence",
+                "epv",
+                "separation",
+                "km_agreement",
+                "distribution_vs_gengamma",
+                "dfbeta",
+                "vif",
+                "extrapolation",
+                "constant_hazard",
+                "ph_cox",
+                "ph_cox_global"
+              ],
+              "numbers": [
+                "statistic",
+                "df",
+                "df_2",
+                "p_value",
+                "threshold",
+                "value",
+                "count"
+              ],
+              "texts": [
+                "h0",
+                "verdict",
+                "advice",
+                "significance",
+                "rows",
+                "advice_id"
+              ]
+            },
+            "point": {
+              "levels": [
+                "cox_snell",
+                "loglog",
+                "deviance_linear"
+              ],
+              "numbers": [
+                "y"
+              ],
+              "texts": []
+            },
+            "curve": {
+              "levels": [
+                "fit_km",
+                "loglog",
+                "profile_survival",
+                "hazard",
+                "candidates"
+              ],
+              "numbers": [
+                "surv",
+                "lower",
+                "upper",
+                "fitted",
+                "hazard",
+                "y"
+              ],
+              "texts": []
+            }
+          },
+          "charts": [
+            {
+              "id": "time_ratio_interval",
+              "under": null
+            },
+            {
+              "id": "hazard_ratio_interval",
+              "under": null
+            },
+            {
+              "id": "fit_km",
+              "under": "km_agreement"
+            },
+            {
+              "id": "cox_snell",
+              "under": "km_agreement"
+            },
+            {
+              "id": "profile_survival",
+              "under": null
+            },
+            {
+              "id": "hazard",
+              "under": null
+            },
+            {
+              "id": "deviance_linear",
+              "under": "dfbeta"
+            },
+            {
+              "id": "loglog",
+              "under": "km_agreement"
+            },
+            {
+              "id": "candidates",
+              "under": null
+            }
+          ],
+          "outputs": {
+            "rows": [
+              "pred_linear",
+              "pred_median",
+              "pred_quantile_*",
+              "pred_surv_at_*",
+              "pred_cox_snell",
               "pred_martingale",
               "pred_deviance"
             ]
@@ -3986,19 +4876,22 @@
       "interval": "boolean",
       "threshold": "proportion",
       "horizon": "horizon",
-      "at_times": "times"
+      "at_times": "times",
+      "quantiles": "quantiles"
     },
     "defaults": {
       "interval": false,
       "threshold": null,
       "horizon": null,
-      "at_times": []
+      "at_times": [],
+      "quantiles": []
     },
     "applies_to": {
       "interval": [
         "linear",
         "kaplan_meier",
-        "arima"
+        "arima",
+        "parametric_survival"
       ],
       "threshold": [
         "logistic",
@@ -4009,7 +4902,11 @@
         "arima"
       ],
       "at_times": [
-        "cox"
+        "cox",
+        "parametric_survival"
+      ],
+      "quantiles": [
+        "parametric_survival"
       ]
     },
     "columns": {
@@ -4045,6 +4942,21 @@
         ],
         "at_times": [
           "survival_at_*"
+        ]
+      },
+      "parametric_survival": {
+        "always": [
+          "prediction"
+        ],
+        "quantiles": [
+          "quantile_*"
+        ],
+        "at_times": [
+          "survival_at_*"
+        ],
+        "interval": [
+          "prediction_low",
+          "prediction_high"
         ]
       },
       "arima": {

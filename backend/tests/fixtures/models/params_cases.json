@@ -1168,7 +1168,7 @@
    "what": "a model that does not exist",
    "model": "survival_forest",
    "params": {},
-   "error": "there is no model 'survival_forest' (the models: linear, logistic, kaplan_meier, cox, arima, xgboost, catboost)"
+   "error": "there is no model 'survival_forest' (the models: linear, logistic, kaplan_meier, cox, parametric_survival, arima, xgboost, catboost)"
   },
   {
    "what": "the answer given back to the check: an empty exog is none, not an error",
@@ -1540,6 +1540,273 @@
     ]
    },
    "error": "catboost: 'task' must be one of regression, binary, multiclass"
+  },
+  {
+   "what": "the smallest parametric survival: no predictor, a Weibull",
+   "model": "parametric_survival",
+   "params": {
+    "time": "days",
+    "event": "status",
+    "event_value": "failed"
+   },
+   "checked": {
+    "time": "days",
+    "event": "status",
+    "event_value": "failed",
+    "predictors": [],
+    "strata": null,
+    "weights": null,
+    "distribution": "weibull",
+    "quantiles": [
+     0.25,
+     0.75
+    ],
+    "times": [],
+    "alpha": 0.05,
+    "seed": 1,
+    "output": "results"
+   }
+  },
+  {
+   "what": "a full parametric survival: a log-normal with predictors, strata, weights, quantiles and times",
+   "model": "parametric_survival",
+   "params": {
+    "time": "days",
+    "event": "status",
+    "event_value": "failed",
+    "predictors": [
+     "load",
+     "line"
+    ],
+    "reference": {
+     "line": "B"
+    },
+    "interactions": [
+     [
+      "load",
+      "line"
+     ]
+    ],
+    "strata": "plant",
+    "weights": "w",
+    "distribution": "lognormal",
+    "quantiles": [
+     0.9,
+     0.1,
+     0.5
+    ],
+    "times": [
+     30,
+     10
+    ],
+    "alpha": 0.1,
+    "seed": 7,
+    "output": "rows"
+   },
+   "checked": {
+    "time": "days",
+    "event": "status",
+    "event_value": "failed",
+    "predictors": [
+     "load",
+     "line"
+    ],
+    "reference": {
+     "line": "B"
+    },
+    "interactions": [
+     [
+      "load",
+      "line"
+     ]
+    ],
+    "strata": "plant",
+    "weights": "w",
+    "distribution": "lognormal",
+    "quantiles": [
+     0.1,
+     0.5,
+     0.9
+    ],
+    "times": [
+     10.0,
+     30.0
+    ],
+    "alpha": 0.1,
+    "seed": 7,
+    "output": "rows"
+   }
+  },
+  {
+   "what": "the distribution is chosen by the lowest AIC",
+   "model": "parametric_survival",
+   "params": {
+    "time": "days",
+    "event": "status",
+    "event_value": "failed",
+    "predictors": [
+     "load"
+    ],
+    "distribution": "auto"
+   },
+   "checked": {
+    "time": "days",
+    "event": "status",
+    "event_value": "failed",
+    "predictors": [
+     "load"
+    ],
+    "reference": {},
+    "interactions": [],
+    "strata": null,
+    "weights": null,
+    "distribution": "auto",
+    "quantiles": [
+     0.25,
+     0.75
+    ],
+    "times": [],
+    "alpha": 0.05,
+    "seed": 1,
+    "output": "results"
+   }
+  },
+  {
+   "what": "a distribution the node does not know",
+   "model": "parametric_survival",
+   "params": {
+    "time": "days",
+    "event": "status",
+    "event_value": "failed",
+    "distribution": "gamma"
+   },
+   "error": "parametric_survival: 'distribution' must be one of weibull, exponential, lognormal, loglogistic, gengamma, gompertz, auto"
+  },
+  {
+   "what": "a reference level needs predictors",
+   "model": "parametric_survival",
+   "params": {
+    "time": "days",
+    "event": "status",
+    "event_value": "failed",
+    "reference": {
+     "line": "B"
+    }
+   },
+   "error": "parametric_survival: 'reference' only applies when 'predictors' is given"
+  },
+  {
+   "what": "interactions need predictors",
+   "model": "parametric_survival",
+   "params": {
+    "time": "days",
+    "event": "status",
+    "event_value": "failed",
+    "interactions": [
+     [
+      "load",
+      "line"
+     ]
+    ]
+   },
+   "error": "parametric_survival: 'interactions' only applies when 'predictors' is given"
+  },
+  {
+   "what": "a quantile of 1 is no quantile",
+   "model": "parametric_survival",
+   "params": {
+    "time": "days",
+    "event": "status",
+    "event_value": "failed",
+    "quantiles": [
+     0.5,
+     1
+    ]
+   },
+   "error": "parametric_survival: 'quantiles' must be a list of numbers, each above 0 and below 1"
+  },
+  {
+   "what": "a quantile of 0 is no quantile",
+   "model": "parametric_survival",
+   "params": {
+    "time": "days",
+    "event": "status",
+    "event_value": "failed",
+    "quantiles": [
+     0
+    ]
+   },
+   "error": "parametric_survival: 'quantiles' must be a list of numbers, each above 0 and below 1"
+  },
+  {
+   "what": "at most nine quantiles",
+   "model": "parametric_survival",
+   "params": {
+    "time": "days",
+    "event": "status",
+    "event_value": "failed",
+    "quantiles": [
+     0.1,
+     0.2,
+     0.3,
+     0.4,
+     0.5,
+     0.6,
+     0.7,
+     0.8,
+     0.85,
+     0.9
+    ]
+   },
+   "error": "parametric_survival: 'quantiles' may hold at most 9 numbers"
+  },
+  {
+   "what": "a quantile twice",
+   "model": "parametric_survival",
+   "params": {
+    "time": "days",
+    "event": "status",
+    "event_value": "failed",
+    "quantiles": [
+     0.25,
+     0.25
+    ]
+   },
+   "error": "parametric_survival: 'quantiles' holds a number twice"
+  },
+  {
+   "what": "the weights are not the time",
+   "model": "parametric_survival",
+   "params": {
+    "time": "days",
+    "event": "status",
+    "event_value": "failed",
+    "weights": "days"
+   },
+   "error": "parametric_survival: the column «days» is both 'time' and 'weights': choose another"
+  },
+  {
+   "what": "a predictor that is also the stratum",
+   "model": "parametric_survival",
+   "params": {
+    "time": "days",
+    "event": "status",
+    "event_value": "failed",
+    "predictors": [
+     "plant"
+    ],
+    "strata": "plant"
+   },
+   "error": "parametric_survival: the column «plant» is both 'predictors' and 'strata': choose another"
+  },
+  {
+   "what": "the event's value is needed",
+   "model": "parametric_survival",
+   "params": {
+    "time": "days",
+    "event": "status"
+   },
+   "error": "parametric_survival: 'event_value' is required"
   }
  ]
 }

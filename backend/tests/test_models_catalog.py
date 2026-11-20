@@ -36,7 +36,7 @@ def test_the_snapshot_is_what_the_catalogue_says():
 def test_groups_and_models_point_at_each_other():
     snap = catalog.snapshot()
     assert [g["id"] for g in snap["groups"]] == ["regression", "survival", "timeseries", "boosting"]
-    assert [m["id"] for m in snap["models"]] == ["linear", "logistic", "kaplan_meier", "cox", "arima", "xgboost", "catboost"]
+    assert [m["id"] for m in snap["models"]] == ["linear", "logistic", "kaplan_meier", "cox", "parametric_survival", "arima", "xgboost", "catboost"]
     listed = [m for g in catalog.GROUPS.values() for m in g["models"]]
     assert sorted(listed) == sorted(catalog.MODELS) and len(listed) == len(set(listed))
     for model, spec in catalog.MODELS.items():
@@ -73,6 +73,33 @@ def test_the_boosting_nodes_take_the_same_keys_but_for_their_own_hyperparameters
     for limit in ("max_predictors", "max_levels_trees", "max_classes", "max_cells", "max_shap_rows", "shap_cost_budget",
                   "max_model_file_bytes", "max_importance_bars", "max_beeswarm_predictors", "max_roc_classes"):
         assert catalog.LIMITS[limit] > 0, limit
+
+
+def test_the_parametric_survival_node_and_its_four_variants():
+    spec = catalog.MODELS["parametric_survival"]
+    assert catalog.GROUPS["survival"]["models"] == ["kaplan_meier", "cox", "parametric_survival"]
+    assert list(spec["needs"]) == ["time", "event", "event_value"] and list(spec["takes"])[-2:] == ["seed", "output"]
+    assert spec["takes"]["predictors"] == "predictors_optional" and catalog.KINDS["predictors_optional"]["min"] == 0
+    assert catalog.LIMITS["max_quantiles"] == 9 and catalog.KINDS["quantiles"]["max_count"] == 9
+    by = {d: catalog.variant("parametric_survival", {"distribution": d}) for d in catalog.KINDS["distribution"]["choices"]}
+    assert by == {"weibull": "ph_aft", "exponential": "ph_aft", "lognormal": "aft", "loglogistic": "aft", "gengamma": "aft",
+                  "gompertz": "ph", "auto": "auto"}
+    sections = {v["id"]: v["sections"] for v in spec["variants"]}
+    coef = {v: set(s["coef"]["numbers"]) for v, s in sections.items()}
+    assert {"time_ratio", "hazard_ratio", "cox_hazard_ratio"} <= coef["ph_aft"] <= coef["auto"]
+    assert "hazard_ratio" not in coef["aft"] and "time_ratio" not in coef["ph"]  # Gompertz has no time ratio
+    checks = {v: set(s["assumption"]["levels"]) for v, s in sections.items()}
+    assert "ph_cox" not in checks["aft"] and "constant_hazard" not in checks["ph"] and "distribution_vs_gengamma" not in checks["ph"]
+    assert checks["auto"] == checks["ph_aft"] | checks["aft"] | checks["ph"]
+    assert [v for v, s in sections.items() if "candidate" in s] == ["auto"]
+    assert all("parameter" in s and "advice_id" in s["assumption"]["texts"] for s in sections.values())
+    # a parametric model is predicted beyond the data: the median, the quantiles, S(t), the interval
+    assert set(catalog.PREDICT["columns"]["parametric_survival"]) == {"always", "quantiles", "at_times", "interval"}
+    assert all("parametric_survival" in catalog.PREDICT["applies_to"][k] for k in ("quantiles", "at_times", "interval"))
+    base = {"time": "days", "event": "status", "event_value": "failed"}
+    assert catalog.check_params("parametric_survival", base)["quantiles"] == [0.25, 0.75]
+    assert "reference" not in catalog.check_params("parametric_survival", base)  # no predictor, no reference level
+    assert catalog.check_params("parametric_survival", {**base, "predictors": ["x"]})["reference"] == {}
 
 
 def test_every_kind_has_a_control_and_only_the_control_s_options():

@@ -66,7 +66,7 @@ func TestTheSharedCases(t *testing.T) {
 }
 
 func TestGroupsModelsAndVariants(t *testing.T) {
-	if got := Models(); !reflect.DeepEqual(got, []string{"linear", "logistic", "kaplan_meier", "cox", "arima", "xgboost", "catboost"}) {
+	if got := Models(); !reflect.DeepEqual(got, []string{"linear", "logistic", "kaplan_meier", "cox", "parametric_survival", "arima", "xgboost", "catboost"}) {
 		t.Fatalf("models: %v", got)
 	}
 	groups := map[string]string{}
@@ -87,7 +87,7 @@ func TestGroupsModelsAndVariants(t *testing.T) {
 		t.Error("GroupOf or KindOf")
 	}
 	if Limit("max_chart_points") != 2000 || Limit("max_terms") != 200 || Limit("max_cells") != 50_000_000 ||
-		Limit("shap_cost_budget") != 20_000_000_000 || Limit("max_model_file_bytes") != 64<<20 {
+		Limit("max_quantiles") != 9 || Limit("shap_cost_budget") != 20_000_000_000 || Limit("max_model_file_bytes") != 64<<20 {
 		t.Error("limits")
 	}
 	cases := []struct {
@@ -98,6 +98,11 @@ func TestGroupsModelsAndVariants(t *testing.T) {
 		{"linear", map[string]any{"outcome": "y", "predictors": []any{"x"}}, "unpenalized"},
 		{"linear", map[string]any{"outcome": "y", "predictors": []any{"x"}, "penalty": "lasso"}, "penalized"},
 		{"logistic", map[string]any{"outcome": "y", "event_value": "1", "predictors": []any{"x"}, "penalty": "ridge"}, "penalized"},
+		{"parametric_survival", map[string]any{"time": "t", "event": "e", "event_value": "1"}, "ph_aft"},
+		{"parametric_survival", map[string]any{"time": "t", "event": "e", "event_value": "1", "distribution": "exponential"}, "ph_aft"},
+		{"parametric_survival", map[string]any{"time": "t", "event": "e", "event_value": "1", "distribution": "gengamma"}, "aft"},
+		{"parametric_survival", map[string]any{"time": "t", "event": "e", "event_value": "1", "distribution": "gompertz"}, "ph"},
+		{"parametric_survival", map[string]any{"time": "t", "event": "e", "event_value": "1", "distribution": "auto"}, "auto"},
 		{"kaplan_meier", map[string]any{"time": "t", "event": "e", "event_value": "1"}, "default"},
 		{"cox", map[string]any{"time": "t", "event": "e", "event_value": "1", "predictors": []any{"x"}}, "default"},
 		{"arima", map[string]any{"time": "t", "value": "v", "frequency": "month"}, "manual"},

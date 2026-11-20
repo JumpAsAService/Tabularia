@@ -601,6 +601,11 @@ export const modelGroupKey = (group: string): string => `models.groups.${group}`
 /** The palette's Models group: the shown groups in the catalogue's order, each with its models
  *  and, after ARIMA, the six presets of that same node. With a search, only the items whose
  *  name, hint or group holds it. */
+// Models the catalogue declares and the engine's contract holds, whose form and words the editor
+// does not have yet: the palette leaves them out. Lot P6 of docs/specs/statistical-models.md
+// («The parametric survival lots») takes this away with the node's words.
+const NOT_IN_THE_PALETTE_YET = new Set(['parametric_survival'])
+
 export function modelPalette(shown: readonly ModelGroupDef[], query: string, text: Text, catalog: ModelCatalog = MODEL_CATALOG): ModelPaletteGroup[] {
   const q = query.trim().toLowerCase()
   const has = (s: string) => s.toLowerCase().includes(q)
@@ -610,7 +615,7 @@ export function modelPalette(shown: readonly ModelGroupDef[], query: string, tex
     const items: ModelPaletteItem[] = []
     for (const id of group.models) {
       const model = modelOf(id, catalog)
-      if (!model) continue
+      if (!model || NOT_IN_THE_PALETTE_YET.has(id)) continue
       items.push({ kind: modelKindOf(id), model: id, nameKey: modelNameKey(id), hintKey: modelHintKey(id) })
       for (const preset of Object.keys(model.presets)) {
         items.push({ kind: modelKindOf(id, preset), model: id, preset, nameKey: modelPresetNameKey(preset), hintKey: modelPresetHintKey(preset) })

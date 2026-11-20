@@ -63,6 +63,7 @@ LIMITS: dict[str, int] = {
     "max_vcov_terms": 200,       # terms whose covariance the card keeps
     "max_baseline_times": 5000,  # times of Cox's baseline hazard in the card
     "max_paths_terms": 20,       # coefficient paths drawn, the rest summed up as «others»
+    "max_quantiles": 9,          # quantiles of a parametric survival node's time (besides the median)
     # the boosting group's (docs: «Group `boosting` — Python», «Performance and limits»); the R
     # groups read none of them
     "max_predictors": 200,       # predictors of a boosting node
@@ -80,7 +81,7 @@ LIMITS: dict[str, int] = {
 # ── groups: one image each, built when an administrator enables it ─────────
 GROUPS: dict[str, dict[str, Any]] = {
     "regression": {"language": "r", "label": "models.groups.regression", "models": ["linear", "logistic"]},
-    "survival": {"language": "r", "label": "models.groups.survival", "models": ["kaplan_meier", "cox"]},
+    "survival": {"language": "r", "label": "models.groups.survival", "models": ["kaplan_meier", "cox", "parametric_survival"]},
     "timeseries": {"language": "r", "label": "models.groups.timeseries", "models": ["arima"]},
     "boosting": {"language": "python", "label": "models.groups.boosting", "models": ["xgboost", "catboost"]},
 }
@@ -119,6 +120,7 @@ KINDS: dict[str, dict[str, Any]] = {
     "number_column": {"control": "column", "numeric": True},
     "time_column": {"control": "column", "types": ["date", "datetime", "integer"]},
     "predictors": {"control": "columns", "min": 1, "predictor": True},
+    "predictors_optional": {"control": "columns", "min": 0, "predictor": True},  # none or more
     "number_columns": {"control": "columns", "numeric": True},  # optional (exog): an empty list is none
     "outcome_level": {"control": "level", "of": "outcome"},
     "event_level": {"control": "level", "of": "event"},
@@ -138,6 +140,7 @@ KINDS: dict[str, dict[str, Any]] = {
     "horizon": _int(1, LIMITS["max_horizon"]),
     "holdout": _int(0, 1000),
     "times": {"control": "numbers", "min": 0, "max_count": LIMITS["max_times"]},
+    "quantiles": {"control": "numbers", "above": 0, "below": 1, "max_count": LIMITS["max_quantiles"]},
     "mixing": {"control": "number_or_choice", "choices": ["cv"], "above": 0, "below": 1},
     "lambda": {"control": "number_or_choice", "choices": ["cv_1se", "cv_min"], "above": 0},
     "box_cox_lambda": {"control": "number_or_choice", "choices": ["auto"], "min": -5, "max": 5},
@@ -154,6 +157,7 @@ KINDS: dict[str, dict[str, Any]] = {
     "conf_type": _choice("log", "log-log", "plain"),
     "km_test": _choice("logrank", "peto"),
     "ties": _choice("efron", "breslow", "exact"),
+    "distribution": _choice("weibull", "exponential", "lognormal", "loglogistic", "gengamma", "gompertz", "auto"),
     "frequency": _choice("hour", "day", "week", "month", "quarter", "year", "index"),
     "orders": _choice("manual", "auto"),
     "criterion": _choice("aicc", "aic", "bic"),
@@ -189,6 +193,8 @@ SEASON_OF_FREQUENCY = {"hour": 24, "day": 7, "week": 52, "month": 12, "quarter":
 SECTION_SHAPES: dict[str, dict[str, Any]] = {
     "model": {"level": "null", "level_2": "null", "indexed": False},
     "coef": {"level": "required", "level_2": "optional", "indexed": False},
+    # a distribution's own parameter (`shape`, `sdlog`…), per stratum when there are strata
+    "parameter": {"level": "required", "level_2": "optional", "indexed": False},
     "cv": {"level": "optional", "level_2": "null", "indexed": True},
     "candidate": {"level": "required", "level_2": "null", "indexed": False},
     "assumption": {"level": "required", "level_2": "optional", "indexed": False},
@@ -586,6 +592,101 @@ for _variant in MODELS["arima"]["variants"]:
     for _field in ("sections", "charts", "outputs"):
         _variant[_field] = _SHARED_DECLARATIONS[(_field, _variant[_field])]
 
+# ── parametric survival (docs: «The node «Parametric survival»») ────────────
+# One node, four variants keyed on `distribution`, because what the runner writes differs: the
+# Weibull and the exponential have time ratios and hazard ratios, the other AFT distributions time
+# ratios only, Gompertz hazard ratios only, `auto` the union (the chosen one decides at run time).
+# A variant declares what the runner MAY write: a check that does not apply to the distribution
+# fitted is not written at all.
+_PS_CHECKS_COMMON = ["convergence", "epv", "separation", "km_agreement", "distribution_vs_gengamma", "dfbeta", "vif",
+                     "extrapolation"]
+_PS_PH_CHECKS = ["ph_cox", "ph_cox_global"]
+_PS_MODEL_TEXTS = [*_MODEL_TEXTS, "event_value", "distribution", "selection", "coefficient_scale", "profile",
+                   "lr_significance"]
+_PS_MODEL_NUMBERS = ["n", "events", "censored", "n_missing", "n_zero_time", "n_strata", "n_parameters", "log_lik", "aic",
+                     "bic", "lr_statistic", "lr_df", "lr_p_value", "concordance", "concordance_se", "last_time",
+                     "last_event_time"]
+_PS_SHAPE_LR = ["exponential_lr_statistic", "exponential_lr_df", "exponential_lr_p_value"]  # the shape against a constant hazard
+_PS_COEF_BASE = ["estimate", "std_error", "statistic", "p_value", "vif"]
+_PS_TIME_RATIO = ["time_ratio", "tr_ci_low", "tr_ci_high"]
+_PS_HAZARD_RATIO = ["hazard_ratio", "hr_ci_low", "hr_ci_high", "cox_hazard_ratio", "cox_hr_ci_low", "cox_hr_ci_high"]
+_PS_CHARTS = [
+    {"id": "fit_km", "under": "km_agreement"}, {"id": "cox_snell", "under": "km_agreement"},
+    {"id": "profile_survival", "under": None}, {"id": "hazard", "under": None},
+    {"id": "deviance_linear", "under": "dfbeta"},
+]
+
+
+def _ps_assumptions(*checks: str) -> dict[str, Any]:
+    """The checks' rows: an assumption's, and `advice_id` (the report picks the sentence by it)."""
+    shape = _assumptions(*checks)
+    return {**shape, "texts": [*shape["texts"], "advice_id"]}
+
+
+def _ps_variant(id_: str, distributions: list[str], model_numbers: list[str], model_texts: list[str],
+                coef: list[str], checks: list[str], charts: list[dict[str, Any]], candidates: bool = False) -> dict[str, Any]:
+    sections: dict[str, Any] = {
+        "model": {"levels": None, "texts": [*_PS_MODEL_TEXTS, *model_texts], "numbers": [*_PS_MODEL_NUMBERS, *model_numbers]},
+        "coef": {"levels": None, "numbers": coef, "texts": ["significance"]},
+        "parameter": {"levels": None, "numbers": ["estimate", "std_error", "ci_low", "ci_high"], "texts": []},
+        "stratum": {"levels": None, "numbers": ["n", "events", "last_time", "median", "median_ci_low", "median_ci_high",
+                                                "quantile_*", "surv_at_*", "km_median"], "texts": []},
+    }
+    if candidates:
+        sections["candidate"] = {"levels": None, "texts": ["status"],
+                                 "numbers": ["n_parameters", "log_lik", "aic", "bic", "delta_aic", "akaike_weight",
+                                             "converged", "admissible", "chosen", "parsimony"]}
+    sections["assumption"] = _ps_assumptions(*checks)
+    loglog = any(c["id"] == "loglog" for c in charts)  # the Weibull's and the exponential's chart
+    curve = ["fit_km", *(["loglog"] if loglog else []), "profile_survival", "hazard", *(["candidates"] if candidates else [])]
+    sections["point"] = _chart("cox_snell", *(["loglog"] if loglog else []), "deviance_linear", stats=["y"])
+    sections["curve"] = _chart(*curve, stats=["surv", "lower", "upper", "fitted", "hazard", "y"])
+    return {
+        "id": id_,
+        "when": {"distribution": distributions},
+        "sections": sections,
+        "charts": charts,
+        "outputs": {"rows": ["pred_linear", "pred_median", "pred_quantile_*", "pred_surv_at_*", "pred_cox_snell",
+                             "pred_martingale", "pred_deviance"]},
+    }
+
+
+MODELS["parametric_survival"] = {
+    "group": "survival",
+    "family": "survival",
+    "needs": {"time": "number_column", "event": "column", "event_value": "event_level"},
+    "takes": {"predictors": "predictors_optional", "reference": "reference", "interactions": "interactions",
+              "strata": "column", "weights": "number_column", "distribution": "distribution", "quantiles": "quantiles",
+              "times": "times", "alpha": "alpha", "seed": "seed", "output": "output_rows"},
+    "defaults": {"predictors": [], "reference": {}, "interactions": [], "strata": None, "weights": None,
+                 "distribution": "weibull", "quantiles": [0.25, 0.75], "times": [], "alpha": 0.05, "seed": 1,
+                 "output": "results"},
+    "applies": {"reference": {"predictors": True}, "interactions": {"predictors": True}},
+    "requires": [],
+    "forbids": [],
+    "disjoint": ["time", "event", "predictors", "strata", "weights"],
+    "variants": [
+        _ps_variant("ph_aft", ["weibull", "exponential"], [*_PS_SHAPE_LR], ["exponential_lr_significance"],
+                    [*_PS_COEF_BASE, *_PS_TIME_RATIO, *_PS_HAZARD_RATIO],
+                    [*_PS_CHECKS_COMMON, "constant_hazard", *_PS_PH_CHECKS],
+                    [{"id": "time_ratio_interval", "under": None}, {"id": "hazard_ratio_interval", "under": None},
+                     *_PS_CHARTS, {"id": "loglog", "under": "km_agreement"}]),
+        _ps_variant("aft", ["lognormal", "loglogistic", "gengamma"], [], [],
+                    [*_PS_COEF_BASE, *_PS_TIME_RATIO], _PS_CHECKS_COMMON,
+                    [{"id": "time_ratio_interval", "under": None}, *_PS_CHARTS]),
+        _ps_variant("ph", ["gompertz"], [*_PS_SHAPE_LR], ["exponential_lr_significance"],
+                    [*_PS_COEF_BASE, *_PS_HAZARD_RATIO],
+                    [*[c for c in _PS_CHECKS_COMMON if c != "distribution_vs_gengamma"], *_PS_PH_CHECKS],
+                    [{"id": "hazard_ratio_interval", "under": None}, *_PS_CHARTS]),
+        _ps_variant("auto", ["auto"], [*_PS_SHAPE_LR], ["exponential_lr_significance"],
+                    [*_PS_COEF_BASE, *_PS_TIME_RATIO, *_PS_HAZARD_RATIO],
+                    [*_PS_CHECKS_COMMON, "constant_hazard", *_PS_PH_CHECKS],
+                    [{"id": "time_ratio_interval", "under": None}, {"id": "hazard_ratio_interval", "under": None},
+                     *_PS_CHARTS, {"id": "loglog", "under": "km_agreement"}, {"id": "candidates", "under": None}],
+                    candidates=True),
+    ],
+}
+
 # ── boosting (docs: «Group `boosting` — Python») ────────────────────────────
 # Both nodes take the same keys but for their own hyperparameters; `task` is the variant.
 _CLASSIFICATION = ["binary", "multiclass"]
@@ -742,16 +843,21 @@ MODELS["catboost"] = _boosting(
     {"l2_leaf_reg": 3.0, "rsm": 1.0, "random_strength": 1.0},
     "depth_catboost")
 
+# the models in the order of their groups: the palette, the sentences and the snapshot list them so
+MODELS = {m: MODELS[m] for g in GROUPS.values() for m in g["models"]}
+
 # ── Predict: a registered model applied to new rows ─────────────────────────
 PREDICT: dict[str, Any] = {
-    "takes": {"interval": "boolean", "threshold": "proportion", "horizon": "horizon", "at_times": "times"},
-    # None: the card's own (its threshold, its horizon)
-    "defaults": {"interval": False, "threshold": None, "horizon": None, "at_times": []},
+    "takes": {"interval": "boolean", "threshold": "proportion", "horizon": "horizon", "at_times": "times",
+              "quantiles": "quantiles"},
+    # None: the card's own (its threshold, its horizon); an empty list: the card's times, quantiles
+    "defaults": {"interval": False, "threshold": None, "horizon": None, "at_times": [], "quantiles": []},
     # which models each key means something for; given for another model it is refused. An
     # entry is a model, or `model:variant` for one variant of it (the card's variant)
-    "applies_to": {"interval": ["linear", "kaplan_meier", "arima"],
+    "applies_to": {"interval": ["linear", "kaplan_meier", "arima", "parametric_survival"],
                    "threshold": ["logistic", "xgboost:binary", "catboost:binary"],
-                   "horizon": ["arima"], "at_times": ["cox"]},
+                   "horizon": ["arima"], "at_times": ["cox", "parametric_survival"],
+                   "quantiles": ["parametric_survival"]},
     # the columns Predict adds, per model of the card (or `model:variant`, which comes first):
     # always, and with each key given. `prediction_prob_*`: one column per class of the card
     "columns": {
@@ -759,6 +865,9 @@ PREDICT: dict[str, Any] = {
         "logistic": {"always": ["prediction"], "threshold": ["prediction_class"]},
         "kaplan_meier": {"always": ["prediction"], "interval": ["prediction_low", "prediction_high"]},
         "cox": {"always": ["prediction"], "at_times": ["survival_at_*"]},
+        # the median time; a time past the fit's last one is predicted (the distribution's shape gives it)
+        "parametric_survival": {"always": ["prediction"], "quantiles": ["quantile_*"], "at_times": ["survival_at_*"],
+                                "interval": ["prediction_low", "prediction_high"]},
         "arima": {"always": ["prediction"], "interval": ["lower_80", "upper_80", "lower", "upper"]},
         **{f"{m}:{v}": cols for m in ("xgboost", "catboost") for v, cols in (
             ("regression", {"always": ["prediction"]}),

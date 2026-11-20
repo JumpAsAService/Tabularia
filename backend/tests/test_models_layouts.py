@@ -32,8 +32,11 @@ from tests.test_reports_render import chart_service  # noqa: F401 — the fake c
 
 NOW = datetime(2026, 11, 19, 23, 30, tzinfo=timezone.utc)
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "models"
-CASES = sorted(p.stem for p in FIXTURES.glob("*-*.json"))
-DRAWN = dict(catalog.MODELS)
+# The parametric survival node's layout is lot P5's (docs/specs/statistical-models.md, «The parametric
+# survival lots»): its fixtures exist (results.py checks them), its report not yet. P5 takes this away.
+PENDING = {"parametric_survival"}
+CASES = sorted(p.stem for p in FIXTURES.glob("*-*.json") if p.stem.split("-")[0] not in PENDING)
+DRAWN = {m: spec for m, spec in catalog.MODELS.items() if m not in PENDING}
 
 
 def fixture(case: str) -> tuple[str, dict, list[dict]]:
