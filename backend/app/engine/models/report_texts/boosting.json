@@ -1,0 +1,1372 @@
+{
+ "en": {
+  "tasks": {
+   "regression": "regression",
+   "binary": "binary classification",
+   "multiclass": "multiclass classification"
+  },
+  "sections": {
+   "assumptions": "Diagnostics",
+   "importance": "Importance of the predictors",
+   "classes": "By class",
+   "confusion": "Classification",
+   "diagnostics": "Charts"
+  },
+  "assumptions": {
+   "title": "Diagnostics of the fit",
+   "none": "No diagnostic was computed.",
+   "check": "Diagnostic",
+   "h0": "What is looked at"
+  },
+  "diagnostics_note": "These are diagnostics read against rules of thumb, not statistical tests: they have no p-value and no level of significance. A doubtful or failed verdict says where to look, not that the model is wrong.",
+  "kpi": {
+   "n_split": "Rows (training · validation)",
+   "n_events": "Rows / events",
+   "n_classes": "Rows / classes",
+   "rmse": "RMSE, validation",
+   "r_squared": "R², validation",
+   "auc": "AUC, validation",
+   "logloss": "Log-loss, validation",
+   "accuracy": "Accuracy, validation",
+   "trees": "Trees",
+   "best_round": "best round {x}"
+  },
+  "fit": {
+   "setup": "{task}: {outcome}",
+   "validation": "validation: {how} {share}, seed {seed}",
+   "hyperparameters": "Hyperparameters"
+  },
+  "metrics": {
+   "title": "Training and validation",
+   "metric": "Metric",
+   "train": "Training",
+   "validation": "Validation",
+   "baseline": "Baseline",
+   "names": {
+    "rmse": "RMSE",
+    "mae": "MAE",
+    "r_squared": "R²",
+    "auc": "AUC",
+    "logloss": "Log-loss",
+    "mlogloss": "Log-loss",
+    "brier": "Brier score",
+    "accuracy": "Accuracy",
+    "sensitivity": "Sensitivity",
+    "specificity": "Specificity",
+    "precision": "Precision",
+    "f1": "F1",
+    "balanced_accuracy": "Balanced accuracy",
+    "macro_auc": "Macro AUC",
+    "macro_f1": "Macro F1"
+   },
+   "note": "Baseline: the validation part predicted by the training part's mean (regression), prevalence or class shares (classification).",
+   "note_binary": " The accuracy, sensitivity, specificity, precision and F1 are at the node's threshold."
+  },
+  "importance": {
+   "title": "Importance of the predictors",
+   "predictor": "Predictor",
+   "multiclass_note": "A multiclass model has one SHAP summary for each class, so the bars show the mean |SHAP| stacked by class instead."
+  },
+  "classes": {
+   "title": "By class, on the validation part",
+   "class": "Class"
+  },
+  "confusion": {
+   "title": "Confusion matrix (validation)",
+   "observed_predicted": "Observed \\ predicted",
+   "line_binary": "On the validation part, at the threshold {threshold}: accuracy {accuracy}, sensitivity {sensitivity}, specificity {specificity}.",
+   "line_multiclass": "On the validation part: accuracy {accuracy}, balanced accuracy {balanced}, macro F1 {f1}."
+  },
+  "charts": {
+   "importance_shap": "Mean |SHAP| (on the outcome's own scale)",
+   "importance_shap_class": "Mean |SHAP| by class",
+   "shap_beeswarm": "SHAP summary: the effect of each predictor on each row",
+   "beeswarm_note": "Each point is a row of the SHAP sample. Right of 0 the predictor raises the prediction, left of 0 it lowers it (log-odds for a classification). Colour: the predictor's value, from low (blue) to high (red); grey for a category or a missing value.",
+   "learning_loss_regression": "Learning curve: RMSE by tree (line: best round)",
+   "learning_loss_binary": "Learning curve: log-loss by tree (line: best round)",
+   "learning_loss_multiclass": "Learning curve: log-loss by tree (line: best round)",
+   "learning_stop": "Learning curve: the metric that stops the boosting",
+   "observed_predicted": "Observed against predicted (validation)",
+   "resid_predicted": "Residuals against predicted (validation)",
+   "residual": "Histogram of the residuals (validation)",
+   "roc": "ROC curve (validation)",
+   "calibration": "Calibration by deciles (validation)",
+   "probability": "Predicted probabilities by observed class",
+   "confusion": "Confusion matrix (validation)",
+   "roc_ovr": "ROC curves, one class against the rest"
+  },
+  "series": {
+   "train": "Training",
+   "validation": "Validation",
+   "roc": "ROC",
+   "deciles": "Deciles",
+   "points": "Points",
+   "count": "Count",
+   "observed": "Rows",
+   "importance": "Importance"
+  },
+  "values": {
+   "task": {
+    "regression": "regression",
+    "binary": "binary classification",
+    "multiclass": "multiclass classification"
+   },
+   "validation": {
+    "random": "random",
+    "grouped": "grouped",
+    "time": "in time"
+   }
+  },
+  "note_texts": {
+   "validation_chose_trees": "The validation part also chose the number of trees (early stopping): its numbers are slightly optimistic.",
+   "time_split": "The validation part is the latest rows in time: no row of the training part is later than a row of the validation part.",
+   "grouped_split": "The split is grouped: all the rows of a value of split_by fall in the same part.",
+   "time_budget": "The boosting stopped at 60 % of the time budget, so that the SHAP values, the points and the files still fit: the trees kept are the best so far.",
+   "shap_sampled": "The SHAP values, and the importance by SHAP, are computed on {shap_rows} of {n} rows, drawn with seed {seed}.",
+   "class_absent_validation": "A class of the outcome is absent from the validation part: the numbers that need it (its AUC, precision and recall) are not computed.",
+   "zero_weights": "Rows of weight 0 were left out of the fit.",
+   "model_file_too_large": "The model file would be larger than a model file can be (64 MiB): the results and the report are complete, but the model is not logged to MLflow and no Predict node can apply it."
+  },
+  "stats": {
+   "model": {
+    "task": "Task",
+    "library": "Library",
+    "objective": "Objective",
+    "stop_metric": "Metric that stops the boosting",
+    "validation": "Validation part",
+    "importance_type": "Native importance",
+    "n_train": "Rows in training",
+    "n_validation": "Rows in validation",
+    "n_predictors": "Predictors",
+    "n_categorical": "Categorical predictors",
+    "trees": "Trees kept",
+    "best_iteration": "Best round (counted from 0)",
+    "max_trees": "Trees at most",
+    "stopped_early": "Stopped early (1 = yes)",
+    "stopped_by_time": "Stopped by time (1 = yes)",
+    "threads": "Threads",
+    "shap_rows": "Rows of the SHAP sample",
+    "seed": "Seed",
+    "events": "Events",
+    "validation_events": "Events in validation",
+    "validation_mean": "Mean of the outcome in validation",
+    "n_classes": "Classes",
+    "train_rmse": "RMSE, training",
+    "validation_rmse": "RMSE, validation",
+    "baseline_rmse": "RMSE, baseline",
+    "train_mae": "MAE, training",
+    "validation_mae": "MAE, validation",
+    "train_r_squared": "R², training",
+    "validation_r_squared": "R², validation",
+    "train_auc": "AUC, training",
+    "validation_auc": "AUC, validation",
+    "train_logloss": "Log-loss, training",
+    "validation_logloss": "Log-loss, validation",
+    "baseline_logloss": "Log-loss, baseline",
+    "train_brier": "Brier score, training",
+    "validation_brier": "Brier score, validation",
+    "train_mlogloss": "Log-loss, training",
+    "validation_mlogloss": "Log-loss, validation",
+    "baseline_mlogloss": "Log-loss, baseline",
+    "train_accuracy": "Accuracy, training",
+    "validation_accuracy": "Accuracy, validation",
+    "validation_sensitivity": "Sensitivity, validation",
+    "validation_specificity": "Specificity, validation",
+    "validation_precision": "Precision, validation",
+    "validation_f1": "F1, validation",
+    "validation_balanced_accuracy": "Balanced accuracy, validation",
+    "validation_macro_auc": "Macro AUC, validation",
+    "validation_macro_f1": "Macro F1, validation",
+    "note_validation_chose_trees": "Note: the validation part chose the trees",
+    "note_time_split": "Note: validation in time",
+    "note_grouped_split": "Note: grouped split",
+    "note_time_budget": "Note: the time budget",
+    "note_shap_sampled": "Note: the SHAP sample",
+    "note_class_absent_validation": "Note: a class absent from validation",
+    "note_zero_weights": "Note: rows of weight 0",
+    "note_model_file_too_large": "Note: the model file"
+   },
+   "importance": {
+    "gain": "Native importance",
+    "gain_share": "Share of the native importance",
+    "mean_abs_shap": "Mean |SHAP|",
+    "mean_abs_shap_share": "Share of |SHAP|",
+    "rank": "Rank",
+    "mean_abs_shap_train": "Mean |SHAP|, training part",
+    "mean_abs_shap_validation": "Mean |SHAP|, validation part",
+    "missing_share": "Share missing"
+   },
+   "class": {
+    "support": "Rows in validation",
+    "share_train": "Share in training",
+    "share_validation": "Share in validation",
+    "precision": "Precision",
+    "recall": "Recall",
+    "f1": "F1",
+    "auc_ovr": "AUC, class against the rest"
+   }
+  },
+  "checks": {
+   "validation_size": {
+    "name": "Size of the validation part",
+    "h0": "the rows of the validation part (of its smallest class, for a classification)",
+    "advice": "The validation numbers rest on few rows: raise validation_share, or add rows."
+   },
+   "beats_baseline": {
+    "name": "Better than the baseline",
+    "h0": "1 − validation loss / the baseline's",
+    "advice": "The model predicts the validation part no better than the average (the class shares): check the predictors and the outcome."
+   },
+   "overfitting": {
+    "name": "Overfitting",
+    "h0": "the share of the training part's gain over the baseline that holds on validation",
+    "advice": "The model learns the training rows more than the pattern: lower max_depth, raise min_child_weight (XGBoost) or l2_leaf_reg (CatBoost), lower subsample, or add rows."
+   },
+   "trees_limit": {
+    "name": "Number of trees",
+    "h0": "whether early stopping stopped, and the trees kept",
+    "advice": {
+     "still falling": "The validation loss was still falling at the last tree: raise max_trees or learning_rate.",
+     "few trees": "It stopped after very few trees: lower learning_rate.",
+     "turn early stopping on": "The last tree is more than 1 % worse than the best: turn early stopping on.",
+     "": "The number of trees may not be the right one: read the learning curves."
+    }
+   },
+   "importance_stability": {
+    "name": "Stability of the importance",
+    "h0": "Spearman's ρ between the importance in the training and in the validation part",
+    "advice": "The model leans on different predictors in the two parts: the ranking is not reliable; use more rows, or fewer correlated predictors.",
+    "not_computed": "Not computed: it needs at least 3 predictors and 50 validation rows in the SHAP sample."
+   },
+   "zero_importance": {
+    "name": "Predictor the model never uses",
+    "h0": "the predictors no split uses",
+    "advice": "The model never uses it: drop it, or check that it varies."
+   },
+   "leakage": {
+    "name": "Leakage",
+    "h0": "the first predictor's share of |SHAP|, and the fit on the validation part",
+    "advice": {
+     "validation = time": "One predictor explains nearly everything, or the fit is nearly perfect: check that no predictor is computed from the outcome or recorded after it (an id, a status, a later date). With a time in the data, try validation = time.",
+     "": "One predictor explains nearly everything, or the fit is nearly perfect: check that no predictor is computed from the outcome or recorded after it (an id, a status, a later date)."
+    }
+   },
+   "class_imbalance": {
+    "name": "Class imbalance",
+    "h0": "the largest class share over the smallest",
+    "advice": "Read the AUC and the log-loss, not the accuracy; choose a threshold; class_weight = balanced trades calibrated probabilities for balance."
+   },
+   "calibration": {
+    "name": "Calibration",
+    "h0": "the expected calibration error, in 10 bins",
+    "advice": {
+     "balanced": "Expected: balanced weights move the probabilities; turn it off if they are used as probabilities.",
+     "": "The predicted probabilities do not match the observed rates: do not read them as probabilities, or recalibrate."
+    },
+    "not_computed": "Not computed: the validation part has too few rows."
+   },
+   "calibration_slope": {
+    "name": "Calibration slope",
+    "h0": "the slope of a logistic regression of the outcome on logit(p)",
+    "advice": "Below 1: the probabilities are too extreme (overfitting); above 1: too timid.",
+    "not_computed": "Not computed: the validation part has too few rows of one class."
+   }
+  }
+ },
+ "it": {
+  "tasks": {
+   "regression": "regressione",
+   "binary": "classificazione binaria",
+   "multiclass": "classificazione multiclasse"
+  },
+  "sections": {
+   "assumptions": "Diagnostiche",
+   "importance": "Importanza dei predittori",
+   "classes": "Per classe",
+   "confusion": "Classificazione",
+   "diagnostics": "Grafici"
+  },
+  "assumptions": {
+   "title": "Diagnostiche dell'adattamento",
+   "none": "Nessuna diagnostica è stata calcolata.",
+   "check": "Diagnostica",
+   "h0": "Cosa si guarda"
+  },
+  "diagnostics_note": "Sono diagnostiche lette rispetto a regole empiriche, non test statistici: non hanno valore p né livello di significatività. Un verdetto dubbio o negativo dice dove guardare, non che il modello sia sbagliato.",
+  "kpi": {
+   "n_split": "Righe (addestramento · validazione)",
+   "n_events": "Righe / eventi",
+   "n_classes": "Righe / classi",
+   "rmse": "RMSE, validazione",
+   "r_squared": "R², validazione",
+   "auc": "AUC, validazione",
+   "logloss": "Log-loss, validazione",
+   "accuracy": "Accuratezza, validazione",
+   "trees": "Alberi",
+   "best_round": "round migliore {x}"
+  },
+  "fit": {
+   "setup": "{task}: {outcome}",
+   "validation": "validazione: {how} {share}, seed {seed}",
+   "hyperparameters": "Iperparametri"
+  },
+  "metrics": {
+   "title": "Addestramento e validazione",
+   "metric": "Metrica",
+   "train": "Addestramento",
+   "validation": "Validazione",
+   "baseline": "Riferimento",
+   "names": {
+    "rmse": "RMSE",
+    "mae": "MAE",
+    "r_squared": "R²",
+    "auc": "AUC",
+    "logloss": "Log-loss",
+    "mlogloss": "Log-loss",
+    "brier": "Punteggio di Brier",
+    "accuracy": "Accuratezza",
+    "sensitivity": "Sensibilità",
+    "specificity": "Specificità",
+    "precision": "Precisione",
+    "f1": "F1",
+    "balanced_accuracy": "Accuratezza bilanciata",
+    "macro_auc": "AUC macro",
+    "macro_f1": "F1 macro"
+   },
+   "note": "Riferimento: la parte di validazione prevista dalla media della parte di addestramento (regressione), dalla prevalenza o dalle quote delle classi (classificazione).",
+   "note_binary": " Accuratezza, sensibilità, specificità, precisione e F1 sono alla soglia del nodo."
+  },
+  "importance": {
+   "title": "Importanza dei predittori",
+   "predictor": "Predittore",
+   "multiclass_note": "Un modello multiclasse ha un riepilogo SHAP per ciascuna classe: le barre mostrano invece il |SHAP| medio impilato per classe."
+  },
+  "classes": {
+   "title": "Per classe, sulla parte di validazione",
+   "class": "Classe"
+  },
+  "confusion": {
+   "title": "Matrice di confusione (validazione)",
+   "observed_predicted": "Osservato \\ previsto",
+   "line_binary": "Sulla parte di validazione, alla soglia {threshold}: accuratezza {accuracy}, sensibilità {sensitivity}, specificità {specificity}.",
+   "line_multiclass": "Sulla parte di validazione: accuratezza {accuracy}, accuratezza bilanciata {balanced}, F1 macro {f1}."
+  },
+  "charts": {
+   "importance_shap": "|SHAP| medio (sulla scala dell'esito)",
+   "importance_shap_class": "|SHAP| medio per classe",
+   "shap_beeswarm": "Riepilogo SHAP: l'effetto di ogni predittore su ogni riga",
+   "beeswarm_note": "Ogni punto è una riga del campione SHAP. A destra dello 0 il predittore alza la previsione, a sinistra la abbassa (log-odds in una classificazione). Colore: il valore del predittore, da basso (blu) ad alto (rosso); grigio per una categoria o un valore mancante.",
+   "learning_loss_regression": "Curva di apprendimento: RMSE per albero (linea: round migliore)",
+   "learning_loss_binary": "Curva di apprendimento: log-loss per albero (linea: round migliore)",
+   "learning_loss_multiclass": "Curva di apprendimento: log-loss per albero (linea: round migliore)",
+   "learning_stop": "Curva di apprendimento: la metrica che ferma il boosting",
+   "observed_predicted": "Osservato contro previsto (validazione)",
+   "resid_predicted": "Residui contro previsto (validazione)",
+   "residual": "Istogramma dei residui (validazione)",
+   "roc": "Curva ROC (validazione)",
+   "calibration": "Calibrazione per decili (validazione)",
+   "probability": "Probabilità previste per classe osservata",
+   "confusion": "Matrice di confusione (validazione)",
+   "roc_ovr": "Curve ROC, una classe contro le altre"
+  },
+  "series": {
+   "train": "Addestramento",
+   "validation": "Validazione",
+   "roc": "ROC",
+   "deciles": "Decili",
+   "points": "Punti",
+   "count": "Conteggio",
+   "observed": "Righe",
+   "importance": "Importanza"
+  },
+  "values": {
+   "task": {
+    "regression": "regressione",
+    "binary": "classificazione binaria",
+    "multiclass": "classificazione multiclasse"
+   },
+   "validation": {
+    "random": "casuale",
+    "grouped": "per gruppi",
+    "time": "nel tempo"
+   }
+  },
+  "note_texts": {
+   "validation_chose_trees": "La parte di validazione ha scelto anche il numero di alberi (arresto anticipato): i suoi numeri sono un po' ottimisti.",
+   "time_split": "La parte di validazione sono le righe più recenti nel tempo: nessuna riga di addestramento è successiva a una di validazione.",
+   "grouped_split": "La divisione è per gruppi: tutte le righe di un valore di split_by finiscono nella stessa parte.",
+   "time_budget": "Il boosting si è fermato al 60 % del budget di tempo, perché i valori SHAP, i punti e i file ci stessero ancora: gli alberi tenuti sono i migliori finora.",
+   "shap_sampled": "I valori SHAP, e l'importanza secondo SHAP, sono calcolati su {shap_rows} righe di {n}, estratte con seed {seed}.",
+   "class_absent_validation": "Una classe dell'esito manca nella parte di validazione: i numeri che la richiedono (AUC, precisione e richiamo) non sono calcolati.",
+   "zero_weights": "Le righe di peso 0 sono state escluse dall'adattamento.",
+   "model_file_too_large": "Il file del modello sarebbe più grande di quanto un file di modello possa essere (64 MiB): i risultati e il report sono completi, ma il modello non è registrato in MLflow e nessun nodo Predict può applicarlo."
+  },
+  "stats": {
+   "model": {
+    "task": "Compito",
+    "library": "Libreria",
+    "objective": "Obiettivo",
+    "stop_metric": "Metrica che ferma il boosting",
+    "validation": "Parte di validazione",
+    "importance_type": "Importanza nativa",
+    "n_train": "Righe in addestramento",
+    "n_validation": "Righe in validazione",
+    "n_predictors": "Predittori",
+    "n_categorical": "Predittori categoriali",
+    "trees": "Alberi tenuti",
+    "best_iteration": "Round migliore (da 0)",
+    "max_trees": "Alberi al massimo",
+    "stopped_early": "Fermato in anticipo (1 = sì)",
+    "stopped_by_time": "Fermato dal tempo (1 = sì)",
+    "threads": "Thread",
+    "shap_rows": "Righe del campione SHAP",
+    "seed": "Seed",
+    "events": "Eventi",
+    "validation_events": "Eventi in validazione",
+    "validation_mean": "Media dell'esito in validazione",
+    "n_classes": "Classi",
+    "train_rmse": "RMSE, addestramento",
+    "validation_rmse": "RMSE, validazione",
+    "baseline_rmse": "RMSE, riferimento",
+    "train_mae": "MAE, addestramento",
+    "validation_mae": "MAE, validazione",
+    "train_r_squared": "R², addestramento",
+    "validation_r_squared": "R², validazione",
+    "train_auc": "AUC, addestramento",
+    "validation_auc": "AUC, validazione",
+    "train_logloss": "Log-loss, addestramento",
+    "validation_logloss": "Log-loss, validazione",
+    "baseline_logloss": "Log-loss, riferimento",
+    "train_brier": "Punteggio di Brier, addestramento",
+    "validation_brier": "Punteggio di Brier, validazione",
+    "train_mlogloss": "Log-loss, addestramento",
+    "validation_mlogloss": "Log-loss, validazione",
+    "baseline_mlogloss": "Log-loss, riferimento",
+    "train_accuracy": "Accuratezza, addestramento",
+    "validation_accuracy": "Accuratezza, validazione",
+    "validation_sensitivity": "Sensibilità, validazione",
+    "validation_specificity": "Specificità, validazione",
+    "validation_precision": "Precisione, validazione",
+    "validation_f1": "F1, validazione",
+    "validation_balanced_accuracy": "Accuratezza bilanciata, validazione",
+    "validation_macro_auc": "AUC macro, validazione",
+    "validation_macro_f1": "F1 macro, validazione",
+    "note_validation_chose_trees": "Nota: la validazione ha scelto gli alberi",
+    "note_time_split": "Nota: validazione nel tempo",
+    "note_grouped_split": "Nota: divisione per gruppi",
+    "note_time_budget": "Nota: il budget di tempo",
+    "note_shap_sampled": "Nota: il campione SHAP",
+    "note_class_absent_validation": "Nota: una classe assente dalla validazione",
+    "note_zero_weights": "Nota: righe di peso 0",
+    "note_model_file_too_large": "Nota: il file del modello"
+   },
+   "importance": {
+    "gain": "Importanza nativa",
+    "gain_share": "Quota dell'importanza nativa",
+    "mean_abs_shap": "|SHAP| medio",
+    "mean_abs_shap_share": "Quota di |SHAP|",
+    "rank": "Posizione",
+    "mean_abs_shap_train": "|SHAP| medio, parte di addestramento",
+    "mean_abs_shap_validation": "|SHAP| medio, parte di validazione",
+    "missing_share": "Quota mancante"
+   },
+   "class": {
+    "support": "Righe in validazione",
+    "share_train": "Quota in addestramento",
+    "share_validation": "Quota in validazione",
+    "precision": "Precisione",
+    "recall": "Richiamo",
+    "f1": "F1",
+    "auc_ovr": "AUC, classe contro le altre"
+   }
+  },
+  "checks": {
+   "validation_size": {
+    "name": "Dimensione della parte di validazione",
+    "h0": "le righe della parte di validazione (della sua classe più piccola, in una classificazione)",
+    "advice": "I numeri di validazione poggiano su poche righe: aumentate validation_share o aggiungete righe."
+   },
+   "beats_baseline": {
+    "name": "Meglio del riferimento",
+    "h0": "1 − perdita in validazione / quella del riferimento",
+    "advice": "Il modello prevede la parte di validazione non meglio della media (le quote delle classi): controllate i predittori e l'esito."
+   },
+   "overfitting": {
+    "name": "Sovradattamento",
+    "h0": "la quota del miglioramento sul riferimento nella parte di addestramento che regge in validazione",
+    "advice": "Il modello impara le righe di addestramento più dello schema: abbassate max_depth, alzate min_child_weight (XGBoost) o l2_leaf_reg (CatBoost), abbassate subsample o aggiungete righe."
+   },
+   "trees_limit": {
+    "name": "Numero di alberi",
+    "h0": "se l'arresto anticipato è intervenuto, e gli alberi tenuti",
+    "advice": {
+     "still falling": "La perdita in validazione scendeva ancora all'ultimo albero: alzate max_trees o learning_rate.",
+     "few trees": "Si è fermato dopo pochissimi alberi: abbassate learning_rate.",
+     "turn early stopping on": "L'ultimo albero è peggiore del migliore di oltre l'1 %: attivate l'arresto anticipato.",
+     "": "Il numero di alberi potrebbe non essere quello giusto: leggete le curve di apprendimento."
+    }
+   },
+   "importance_stability": {
+    "name": "Stabilità dell'importanza",
+    "h0": "ρ di Spearman tra l'importanza nella parte di addestramento e in quella di validazione",
+    "advice": "Il modello si appoggia a predittori diversi nelle due parti: la graduatoria non è affidabile; servono più righe o meno predittori correlati.",
+    "not_computed": "Non calcolato: servono almeno 3 predittori e 50 righe di validazione nel campione SHAP."
+   },
+   "zero_importance": {
+    "name": "Predittore che il modello non usa mai",
+    "h0": "i predittori che nessuna divisione usa",
+    "advice": "Il modello non lo usa mai: toglietelo, o verificate che vari."
+   },
+   "leakage": {
+    "name": "Fuga di informazione",
+    "h0": "la quota di |SHAP| del primo predittore, e l'adattamento sulla parte di validazione",
+    "advice": {
+     "validation = time": "Un predittore spiega quasi tutto, o l'adattamento è quasi perfetto: verificate che nessun predittore sia calcolato dall'esito o registrato dopo di esso (un id, uno stato, una data successiva). Con un tempo nei dati, provate validation = time.",
+     "": "Un predittore spiega quasi tutto, o l'adattamento è quasi perfetto: verificate che nessun predittore sia calcolato dall'esito o registrato dopo di esso (un id, uno stato, una data successiva)."
+    }
+   },
+   "class_imbalance": {
+    "name": "Squilibrio tra le classi",
+    "h0": "la quota della classe maggiore sulla minore",
+    "advice": "Leggete l'AUC e la log-loss, non l'accuratezza; scegliete una soglia; class_weight = balanced scambia probabilità calibrate con equilibrio."
+   },
+   "calibration": {
+    "name": "Calibrazione",
+    "h0": "l'errore di calibrazione atteso, in 10 classi",
+    "advice": {
+     "balanced": "Previsto: i pesi bilanciati spostano le probabilità; disattivateli se le usate come probabilità.",
+     "": "Le probabilità previste non corrispondono alle frequenze osservate: non leggetele come probabilità, oppure ricalibratele."
+    },
+    "not_computed": "Non calcolato: la parte di validazione ha troppe poche righe."
+   },
+   "calibration_slope": {
+    "name": "Pendenza di calibrazione",
+    "h0": "la pendenza di una regressione logistica dell'esito su logit(p)",
+    "advice": "Sotto 1: le probabilità sono troppo estreme (sovradattamento); sopra 1: troppo caute.",
+    "not_computed": "Non calcolato: la parte di validazione ha troppe poche righe di una classe."
+   }
+  }
+ },
+ "de": {
+  "tasks": {
+   "regression": "Regression",
+   "binary": "binäre Klassifikation",
+   "multiclass": "Mehrklassen-Klassifikation"
+  },
+  "sections": {
+   "assumptions": "Diagnostik",
+   "importance": "Wichtigkeit der Prädiktoren",
+   "classes": "Nach Klasse",
+   "confusion": "Klassifikation",
+   "diagnostics": "Diagramme"
+  },
+  "assumptions": {
+   "title": "Diagnostik der Anpassung",
+   "none": "Es wurde keine Diagnostik berechnet.",
+   "check": "Diagnostik",
+   "h0": "Was betrachtet wird"
+  },
+  "diagnostics_note": "Dies sind an Faustregeln gemessene Diagnosen, keine statistischen Tests: sie haben weder einen p-Wert noch ein Signifikanzniveau. Ein fragliches oder negatives Urteil sagt, wohin man schauen soll, nicht dass das Modell falsch ist.",
+  "kpi": {
+   "n_split": "Zeilen (Training · Validierung)",
+   "n_events": "Zeilen / Ereignisse",
+   "n_classes": "Zeilen / Klassen",
+   "rmse": "RMSE, Validierung",
+   "r_squared": "R², Validierung",
+   "auc": "AUC, Validierung",
+   "logloss": "Log-Loss, Validierung",
+   "accuracy": "Genauigkeit, Validierung",
+   "trees": "Bäume",
+   "best_round": "beste Runde {x}"
+  },
+  "fit": {
+   "setup": "{task}: {outcome}",
+   "validation": "Validierung: {how} {share}, Seed {seed}",
+   "hyperparameters": "Hyperparameter"
+  },
+  "metrics": {
+   "title": "Training und Validierung",
+   "metric": "Maß",
+   "train": "Training",
+   "validation": "Validierung",
+   "baseline": "Referenz",
+   "names": {
+    "rmse": "RMSE",
+    "mae": "MAE",
+    "r_squared": "R²",
+    "auc": "AUC",
+    "logloss": "Log-Loss",
+    "mlogloss": "Log-Loss",
+    "brier": "Brier-Score",
+    "accuracy": "Genauigkeit",
+    "sensitivity": "Sensitivität",
+    "specificity": "Spezifität",
+    "precision": "Präzision",
+    "f1": "F1",
+    "balanced_accuracy": "Ausgewogene Genauigkeit",
+    "macro_auc": "Makro-AUC",
+    "macro_f1": "Makro-F1"
+   },
+   "note": "Referenz: der Validierungsteil, vorhergesagt durch den Mittelwert des Trainingsteils (Regression), die Prävalenz oder die Klassenanteile (Klassifikation).",
+   "note_binary": " Genauigkeit, Sensitivität, Spezifität, Präzision und F1 gelten bei der Schwelle des Knotens."
+  },
+  "importance": {
+   "title": "Wichtigkeit der Prädiktoren",
+   "predictor": "Prädiktor",
+   "multiclass_note": "Ein Mehrklassen-Modell hat für jede Klasse eine eigene SHAP-Übersicht, daher zeigen die Balken stattdessen das mittlere |SHAP| gestapelt nach Klasse."
+  },
+  "classes": {
+   "title": "Nach Klasse, im Validierungsteil",
+   "class": "Klasse"
+  },
+  "confusion": {
+   "title": "Konfusionsmatrix (Validierung)",
+   "observed_predicted": "Beobachtet \\ vorhergesagt",
+   "line_binary": "Im Validierungsteil bei der Schwelle {threshold}: Genauigkeit {accuracy}, Sensitivität {sensitivity}, Spezifität {specificity}.",
+   "line_multiclass": "Im Validierungsteil: Genauigkeit {accuracy}, ausgewogene Genauigkeit {balanced}, Makro-F1 {f1}."
+  },
+  "charts": {
+   "importance_shap": "Mittleres |SHAP| (auf der Skala des Ergebnisses)",
+   "importance_shap_class": "Mittleres |SHAP| nach Klasse",
+   "shap_beeswarm": "SHAP-Übersicht: die Wirkung jedes Prädiktors auf jede Zeile",
+   "beeswarm_note": "Jeder Punkt ist eine Zeile der SHAP-Stichprobe. Rechts von 0 erhöht der Prädiktor die Vorhersage, links davon senkt er sie (Log-Odds bei einer Klassifikation). Farbe: der Wert des Prädiktors, von niedrig (blau) bis hoch (rot); grau für eine Kategorie oder einen fehlenden Wert.",
+   "learning_loss_regression": "Lernkurve: RMSE je Baum (Linie: beste Runde)",
+   "learning_loss_binary": "Lernkurve: Log-Loss je Baum (Linie: beste Runde)",
+   "learning_loss_multiclass": "Lernkurve: Log-Loss je Baum (Linie: beste Runde)",
+   "learning_stop": "Lernkurve: die Metrik, die das Boosting stoppt",
+   "observed_predicted": "Beobachtet gegen vorhergesagt (Validierung)",
+   "resid_predicted": "Residuen gegen vorhergesagt (Validierung)",
+   "residual": "Histogramm der Residuen (Validierung)",
+   "roc": "ROC-Kurve (Validierung)",
+   "calibration": "Kalibrierung nach Dezilen (Validierung)",
+   "probability": "Vorhergesagte Wahrscheinlichkeiten je beobachteter Klasse",
+   "confusion": "Konfusionsmatrix (Validierung)",
+   "roc_ovr": "ROC-Kurven, eine Klasse gegen den Rest"
+  },
+  "series": {
+   "train": "Training",
+   "validation": "Validierung",
+   "roc": "ROC",
+   "deciles": "Dezile",
+   "points": "Punkte",
+   "count": "Anzahl",
+   "observed": "Zeilen",
+   "importance": "Wichtigkeit"
+  },
+  "values": {
+   "task": {
+    "regression": "Regression",
+    "binary": "binäre Klassifikation",
+    "multiclass": "Mehrklassen-Klassifikation"
+   },
+   "validation": {
+    "random": "zufällig",
+    "grouped": "gruppiert",
+    "time": "nach Zeit"
+   }
+  },
+  "note_texts": {
+   "validation_chose_trees": "Der Validierungsteil hat auch die Anzahl der Bäume gewählt (vorzeitiges Stoppen): seine Zahlen sind leicht optimistisch.",
+   "time_split": "Der Validierungsteil sind die zeitlich letzten Zeilen: keine Trainingszeile liegt nach einer Validierungszeile.",
+   "grouped_split": "Die Aufteilung ist gruppiert: alle Zeilen eines Wertes von split_by landen im selben Teil.",
+   "time_budget": "Das Boosting stoppte bei 60 % des Zeitbudgets, damit SHAP-Werte, Punkte und Dateien noch Platz haben: die behaltenen Bäume sind die bisher besten.",
+   "shap_sampled": "Die SHAP-Werte und die Wichtigkeit nach SHAP sind auf {shap_rows} von {n} Zeilen berechnet, gezogen mit Seed {seed}.",
+   "class_absent_validation": "Eine Klasse des Ergebnisses fehlt im Validierungsteil: die Zahlen, die sie brauchen (AUC, Präzision und Trefferquote), werden nicht berechnet.",
+   "zero_weights": "Zeilen mit Gewicht 0 wurden von der Anpassung ausgeschlossen.",
+   "model_file_too_large": "Die Modelldatei wäre größer, als eine Modelldatei sein darf (64 MiB): die Ergebnisse und der Bericht sind vollständig, aber das Modell wird nicht in MLflow protokolliert und kein Predict-Knoten kann es anwenden."
+  },
+  "stats": {
+   "model": {
+    "task": "Aufgabe",
+    "library": "Bibliothek",
+    "objective": "Zielfunktion",
+    "stop_metric": "Metrik, die das Boosting stoppt",
+    "validation": "Validierungsteil",
+    "importance_type": "Native Wichtigkeit",
+    "n_train": "Zeilen im Training",
+    "n_validation": "Zeilen in der Validierung",
+    "n_predictors": "Prädiktoren",
+    "n_categorical": "Kategoriale Prädiktoren",
+    "trees": "Behaltene Bäume",
+    "best_iteration": "Beste Runde (ab 0)",
+    "max_trees": "Höchstzahl der Bäume",
+    "stopped_early": "Vorzeitig gestoppt (1 = ja)",
+    "stopped_by_time": "Durch die Zeit gestoppt (1 = ja)",
+    "threads": "Threads",
+    "shap_rows": "Zeilen der SHAP-Stichprobe",
+    "seed": "Seed",
+    "events": "Ereignisse",
+    "validation_events": "Ereignisse in der Validierung",
+    "validation_mean": "Mittelwert des Ergebnisses in der Validierung",
+    "n_classes": "Klassen",
+    "train_rmse": "RMSE, Training",
+    "validation_rmse": "RMSE, Validierung",
+    "baseline_rmse": "RMSE, Referenz",
+    "train_mae": "MAE, Training",
+    "validation_mae": "MAE, Validierung",
+    "train_r_squared": "R², Training",
+    "validation_r_squared": "R², Validierung",
+    "train_auc": "AUC, Training",
+    "validation_auc": "AUC, Validierung",
+    "train_logloss": "Log-Loss, Training",
+    "validation_logloss": "Log-Loss, Validierung",
+    "baseline_logloss": "Log-Loss, Referenz",
+    "train_brier": "Brier-Score, Training",
+    "validation_brier": "Brier-Score, Validierung",
+    "train_mlogloss": "Log-Loss, Training",
+    "validation_mlogloss": "Log-Loss, Validierung",
+    "baseline_mlogloss": "Log-Loss, Referenz",
+    "train_accuracy": "Genauigkeit, Training",
+    "validation_accuracy": "Genauigkeit, Validierung",
+    "validation_sensitivity": "Sensitivität, Validierung",
+    "validation_specificity": "Spezifität, Validierung",
+    "validation_precision": "Präzision, Validierung",
+    "validation_f1": "F1, Validierung",
+    "validation_balanced_accuracy": "Ausgewogene Genauigkeit, Validierung",
+    "validation_macro_auc": "Makro-AUC, Validierung",
+    "validation_macro_f1": "Makro-F1, Validierung",
+    "note_validation_chose_trees": "Hinweis: Der Validierungsteil wählte die Bäume",
+    "note_time_split": "Hinweis: Validierung nach Zeit",
+    "note_grouped_split": "Hinweis: gruppierte Aufteilung",
+    "note_time_budget": "Hinweis: das Zeitbudget",
+    "note_shap_sampled": "Hinweis: die SHAP-Stichprobe",
+    "note_class_absent_validation": "Hinweis: eine Klasse fehlt in der Validierung",
+    "note_zero_weights": "Hinweis: Zeilen mit Gewicht 0",
+    "note_model_file_too_large": "Hinweis: die Modelldatei"
+   },
+   "importance": {
+    "gain": "Native Wichtigkeit",
+    "gain_share": "Anteil der nativen Wichtigkeit",
+    "mean_abs_shap": "Mittleres |SHAP|",
+    "mean_abs_shap_share": "Anteil an |SHAP|",
+    "rank": "Rang",
+    "mean_abs_shap_train": "Mittleres |SHAP|, Trainingsteil",
+    "mean_abs_shap_validation": "Mittleres |SHAP|, Validierungsteil",
+    "missing_share": "Anteil fehlend"
+   },
+   "class": {
+    "support": "Zeilen in der Validierung",
+    "share_train": "Anteil im Training",
+    "share_validation": "Anteil in der Validierung",
+    "precision": "Präzision",
+    "recall": "Trefferquote",
+    "f1": "F1",
+    "auc_ovr": "AUC, Klasse gegen den Rest"
+   }
+  },
+  "checks": {
+   "validation_size": {
+    "name": "Größe des Validierungsteils",
+    "h0": "die Zeilen des Validierungsteils (der kleinsten Klasse bei einer Klassifikation)",
+    "advice": "Die Validierungszahlen beruhen auf wenigen Zeilen: erhöhen Sie validation_share oder fügen Sie Zeilen hinzu."
+   },
+   "beats_baseline": {
+    "name": "Besser als die Referenz",
+    "h0": "1 − Verlust in der Validierung / der der Referenz",
+    "advice": "Das Modell sagt den Validierungsteil nicht besser voraus als der Durchschnitt (die Klassenanteile): prüfen Sie die Prädiktoren und das Ergebnis."
+   },
+   "overfitting": {
+    "name": "Überanpassung",
+    "h0": "der Anteil des Gewinns des Trainingsteils gegenüber der Referenz, der in der Validierung hält",
+    "advice": "Das Modell lernt die Trainingszeilen mehr als das Muster: senken Sie max_depth, erhöhen Sie min_child_weight (XGBoost) oder l2_leaf_reg (CatBoost), senken Sie subsample oder fügen Sie Zeilen hinzu."
+   },
+   "trees_limit": {
+    "name": "Anzahl der Bäume",
+    "h0": "ob das vorzeitige Stoppen eingegriffen hat, und die behaltenen Bäume",
+    "advice": {
+     "still falling": "Der Validierungsverlust fiel beim letzten Baum noch: erhöhen Sie max_trees oder learning_rate.",
+     "few trees": "Es stoppte nach sehr wenigen Bäumen: senken Sie learning_rate.",
+     "turn early stopping on": "Der letzte Baum ist mehr als 1 % schlechter als der beste: schalten Sie das vorzeitige Stoppen ein.",
+     "": "Die Anzahl der Bäume ist vielleicht nicht die richtige: lesen Sie die Lernkurven."
+    }
+   },
+   "importance_stability": {
+    "name": "Stabilität der Wichtigkeit",
+    "h0": "Spearmans ρ zwischen der Wichtigkeit im Trainings- und im Validierungsteil",
+    "advice": "Das Modell stützt sich in den beiden Teilen auf verschiedene Prädiktoren: die Rangfolge ist nicht verlässlich; mehr Zeilen oder weniger korrelierte Prädiktoren.",
+    "not_computed": "Nicht berechnet: es braucht mindestens 3 Prädiktoren und 50 Validierungszeilen in der SHAP-Stichprobe."
+   },
+   "zero_importance": {
+    "name": "Prädiktor, den das Modell nie nutzt",
+    "h0": "die Prädiktoren, die keine Teilung nutzt",
+    "advice": "Das Modell nutzt ihn nie: lassen Sie ihn weg oder prüfen Sie, ob er variiert."
+   },
+   "leakage": {
+    "name": "Datenleck",
+    "h0": "der Anteil des ersten Prädiktors an |SHAP| und die Anpassung im Validierungsteil",
+    "advice": {
+     "validation = time": "Ein Prädiktor erklärt fast alles, oder die Anpassung ist fast perfekt: prüfen Sie, dass kein Prädiktor aus dem Ergebnis berechnet oder nach ihm erfasst wurde (eine ID, ein Status, ein späteres Datum). Bei einer Zeit in den Daten versuchen Sie validation = time.",
+     "": "Ein Prädiktor erklärt fast alles, oder die Anpassung ist fast perfekt: prüfen Sie, dass kein Prädiktor aus dem Ergebnis berechnet oder nach ihm erfasst wurde (eine ID, ein Status, ein späteres Datum)."
+    }
+   },
+   "class_imbalance": {
+    "name": "Klassenverhältnis",
+    "h0": "der Anteil der größten Klasse über dem der kleinsten",
+    "advice": "Lesen Sie die AUC und den Log-Loss, nicht die Genauigkeit; wählen Sie eine Schwelle; class_weight = balanced tauscht kalibrierte Wahrscheinlichkeiten gegen Ausgewogenheit."
+   },
+   "calibration": {
+    "name": "Kalibrierung",
+    "h0": "der erwartete Kalibrierungsfehler, in 10 Klassen",
+    "advice": {
+     "balanced": "Erwartet: ausgewogene Gewichte verschieben die Wahrscheinlichkeiten; schalten Sie sie aus, wenn diese als Wahrscheinlichkeiten genutzt werden.",
+     "": "Die vorhergesagten Wahrscheinlichkeiten stimmen nicht mit den beobachteten Raten überein: lesen Sie sie nicht als Wahrscheinlichkeiten oder kalibrieren Sie neu."
+    },
+    "not_computed": "Nicht berechnet: der Validierungsteil hat zu wenige Zeilen."
+   },
+   "calibration_slope": {
+    "name": "Steigung der Kalibrierung",
+    "h0": "die Steigung einer logistischen Regression des Ergebnisses auf logit(p)",
+    "advice": "Unter 1: die Wahrscheinlichkeiten sind zu extrem (Überanpassung); über 1: zu zaghaft.",
+    "not_computed": "Nicht berechnet: der Validierungsteil hat zu wenige Zeilen einer Klasse."
+   }
+  }
+ },
+ "es": {
+  "tasks": {
+   "regression": "regresión",
+   "binary": "clasificación binaria",
+   "multiclass": "clasificación multiclase"
+  },
+  "sections": {
+   "assumptions": "Diagnósticos",
+   "importance": "Importancia de los predictores",
+   "classes": "Por clase",
+   "confusion": "Clasificación",
+   "diagnostics": "Gráficos"
+  },
+  "assumptions": {
+   "title": "Diagnósticos del ajuste",
+   "none": "No se calculó ningún diagnóstico.",
+   "check": "Diagnóstico",
+   "h0": "Qué se mira"
+  },
+  "diagnostics_note": "Son diagnósticos leídos frente a reglas empíricas, no pruebas estadísticas: no tienen valor p ni nivel de significación. Un veredicto dudoso o fallido dice dónde mirar, no que el modelo esté equivocado.",
+  "kpi": {
+   "n_split": "Filas (entrenamiento · validación)",
+   "n_events": "Filas / eventos",
+   "n_classes": "Filas / clases",
+   "rmse": "RMSE, validación",
+   "r_squared": "R², validación",
+   "auc": "AUC, validación",
+   "logloss": "Log-loss, validación",
+   "accuracy": "Exactitud, validación",
+   "trees": "Árboles",
+   "best_round": "mejor ronda {x}"
+  },
+  "fit": {
+   "setup": "{task}: {outcome}",
+   "validation": "validación: {how} {share}, semilla {seed}",
+   "hyperparameters": "Hiperparámetros"
+  },
+  "metrics": {
+   "title": "Entrenamiento y validación",
+   "metric": "Métrica",
+   "train": "Entrenamiento",
+   "validation": "Validación",
+   "baseline": "Referencia",
+   "names": {
+    "rmse": "RMSE",
+    "mae": "MAE",
+    "r_squared": "R²",
+    "auc": "AUC",
+    "logloss": "Log-loss",
+    "mlogloss": "Log-loss",
+    "brier": "Puntuación de Brier",
+    "accuracy": "Exactitud",
+    "sensitivity": "Sensibilidad",
+    "specificity": "Especificidad",
+    "precision": "Precisión",
+    "f1": "F1",
+    "balanced_accuracy": "Exactitud equilibrada",
+    "macro_auc": "AUC macro",
+    "macro_f1": "F1 macro"
+   },
+   "note": "Referencia: la parte de validación prevista con la media de la parte de entrenamiento (regresión), la prevalencia o las proporciones de clase (clasificación).",
+   "note_binary": " La exactitud, sensibilidad, especificidad, precisión y F1 están en el umbral del nodo."
+  },
+  "importance": {
+   "title": "Importancia de los predictores",
+   "predictor": "Predictor",
+   "multiclass_note": "Un modelo multiclase tiene un resumen SHAP por clase, así que las barras muestran en su lugar el |SHAP| medio apilado por clase."
+  },
+  "classes": {
+   "title": "Por clase, en la parte de validación",
+   "class": "Clase"
+  },
+  "confusion": {
+   "title": "Matriz de confusión (validación)",
+   "observed_predicted": "Observado \\ previsto",
+   "line_binary": "En la parte de validación, con el umbral {threshold}: exactitud {accuracy}, sensibilidad {sensitivity}, especificidad {specificity}.",
+   "line_multiclass": "En la parte de validación: exactitud {accuracy}, exactitud equilibrada {balanced}, F1 macro {f1}."
+  },
+  "charts": {
+   "importance_shap": "|SHAP| medio (en la escala del resultado)",
+   "importance_shap_class": "|SHAP| medio por clase",
+   "shap_beeswarm": "Resumen SHAP: el efecto de cada predictor en cada fila",
+   "beeswarm_note": "Cada punto es una fila de la muestra SHAP. A la derecha de 0 el predictor sube la predicción, a la izquierda la baja (log-odds en una clasificación). Color: el valor del predictor, de bajo (azul) a alto (rojo); gris para una categoría o un valor ausente.",
+   "learning_loss_regression": "Curva de aprendizaje: RMSE por árbol (línea: mejor ronda)",
+   "learning_loss_binary": "Curva de aprendizaje: log-loss por árbol (línea: mejor ronda)",
+   "learning_loss_multiclass": "Curva de aprendizaje: log-loss por árbol (línea: mejor ronda)",
+   "learning_stop": "Curva de aprendizaje: la métrica que detiene el boosting",
+   "observed_predicted": "Observado frente a previsto (validación)",
+   "resid_predicted": "Residuos frente a previsto (validación)",
+   "residual": "Histograma de los residuos (validación)",
+   "roc": "Curva ROC (validación)",
+   "calibration": "Calibración por deciles (validación)",
+   "probability": "Probabilidades previstas por clase observada",
+   "confusion": "Matriz de confusión (validación)",
+   "roc_ovr": "Curvas ROC, una clase contra el resto"
+  },
+  "series": {
+   "train": "Entrenamiento",
+   "validation": "Validación",
+   "roc": "ROC",
+   "deciles": "Deciles",
+   "points": "Puntos",
+   "count": "Conteo",
+   "observed": "Filas",
+   "importance": "Importancia"
+  },
+  "values": {
+   "task": {
+    "regression": "regresión",
+    "binary": "clasificación binaria",
+    "multiclass": "clasificación multiclase"
+   },
+   "validation": {
+    "random": "aleatoria",
+    "grouped": "por grupos",
+    "time": "en el tiempo"
+   }
+  },
+  "note_texts": {
+   "validation_chose_trees": "La parte de validación también eligió el número de árboles (parada temprana): sus números son algo optimistas.",
+   "time_split": "La parte de validación son las filas más recientes en el tiempo: ninguna fila de entrenamiento es posterior a una de validación.",
+   "grouped_split": "La división es por grupos: todas las filas de un valor de split_by caen en la misma parte.",
+   "time_budget": "El boosting se detuvo al 60 % del presupuesto de tiempo, para que los valores SHAP, los puntos y los archivos aún cupieran: los árboles conservados son los mejores hasta ahora.",
+   "shap_sampled": "Los valores SHAP, y la importancia según SHAP, se calculan sobre {shap_rows} de {n} filas, extraídas con semilla {seed}.",
+   "class_absent_validation": "Una clase del resultado falta en la parte de validación: los números que la necesitan (su AUC, precisión y exhaustividad) no se calculan.",
+   "zero_weights": "Las filas de peso 0 se dejaron fuera del ajuste.",
+   "model_file_too_large": "El archivo del modelo sería más grande de lo que puede ser un archivo de modelo (64 MiB): los resultados y el informe están completos, pero el modelo no se registra en MLflow y ningún nodo Predict puede aplicarlo."
+  },
+  "stats": {
+   "model": {
+    "task": "Tarea",
+    "library": "Biblioteca",
+    "objective": "Objetivo",
+    "stop_metric": "Métrica que detiene el boosting",
+    "validation": "Parte de validación",
+    "importance_type": "Importancia nativa",
+    "n_train": "Filas de entrenamiento",
+    "n_validation": "Filas de validación",
+    "n_predictors": "Predictores",
+    "n_categorical": "Predictores categóricos",
+    "trees": "Árboles conservados",
+    "best_iteration": "Mejor ronda (desde 0)",
+    "max_trees": "Máximo de árboles",
+    "stopped_early": "Detenido antes (1 = sí)",
+    "stopped_by_time": "Detenido por el tiempo (1 = sí)",
+    "threads": "Hilos",
+    "shap_rows": "Filas de la muestra SHAP",
+    "seed": "Semilla",
+    "events": "Eventos",
+    "validation_events": "Eventos en validación",
+    "validation_mean": "Media del resultado en validación",
+    "n_classes": "Clases",
+    "train_rmse": "RMSE, entrenamiento",
+    "validation_rmse": "RMSE, validación",
+    "baseline_rmse": "RMSE, referencia",
+    "train_mae": "MAE, entrenamiento",
+    "validation_mae": "MAE, validación",
+    "train_r_squared": "R², entrenamiento",
+    "validation_r_squared": "R², validación",
+    "train_auc": "AUC, entrenamiento",
+    "validation_auc": "AUC, validación",
+    "train_logloss": "Log-loss, entrenamiento",
+    "validation_logloss": "Log-loss, validación",
+    "baseline_logloss": "Log-loss, referencia",
+    "train_brier": "Puntuación de Brier, entrenamiento",
+    "validation_brier": "Puntuación de Brier, validación",
+    "train_mlogloss": "Log-loss, entrenamiento",
+    "validation_mlogloss": "Log-loss, validación",
+    "baseline_mlogloss": "Log-loss, referencia",
+    "train_accuracy": "Exactitud, entrenamiento",
+    "validation_accuracy": "Exactitud, validación",
+    "validation_sensitivity": "Sensibilidad, validación",
+    "validation_specificity": "Especificidad, validación",
+    "validation_precision": "Precisión, validación",
+    "validation_f1": "F1, validación",
+    "validation_balanced_accuracy": "Exactitud equilibrada, validación",
+    "validation_macro_auc": "AUC macro, validación",
+    "validation_macro_f1": "F1 macro, validación",
+    "note_validation_chose_trees": "Nota: la validación eligió los árboles",
+    "note_time_split": "Nota: validación en el tiempo",
+    "note_grouped_split": "Nota: división por grupos",
+    "note_time_budget": "Nota: el presupuesto de tiempo",
+    "note_shap_sampled": "Nota: la muestra SHAP",
+    "note_class_absent_validation": "Nota: una clase ausente de la validación",
+    "note_zero_weights": "Nota: filas de peso 0",
+    "note_model_file_too_large": "Nota: el archivo del modelo"
+   },
+   "importance": {
+    "gain": "Importancia nativa",
+    "gain_share": "Parte de la importancia nativa",
+    "mean_abs_shap": "|SHAP| medio",
+    "mean_abs_shap_share": "Parte de |SHAP|",
+    "rank": "Posición",
+    "mean_abs_shap_train": "|SHAP| medio, parte de entrenamiento",
+    "mean_abs_shap_validation": "|SHAP| medio, parte de validación",
+    "missing_share": "Parte ausente"
+   },
+   "class": {
+    "support": "Filas de validación",
+    "share_train": "Parte en entrenamiento",
+    "share_validation": "Parte en validación",
+    "precision": "Precisión",
+    "recall": "Exhaustividad",
+    "f1": "F1",
+    "auc_ovr": "AUC, clase contra el resto"
+   }
+  },
+  "checks": {
+   "validation_size": {
+    "name": "Tamaño de la parte de validación",
+    "h0": "las filas de la parte de validación (de su clase menor, en una clasificación)",
+    "advice": "Los números de validación se apoyan en pocas filas: suba validation_share o añada filas."
+   },
+   "beats_baseline": {
+    "name": "Mejor que la referencia",
+    "h0": "1 − pérdida en validación / la de la referencia",
+    "advice": "El modelo no predice la parte de validación mejor que el promedio (las proporciones de clase): revise los predictores y el resultado."
+   },
+   "overfitting": {
+    "name": "Sobreajuste",
+    "h0": "la parte de la mejora sobre la referencia en entrenamiento que se mantiene en validación",
+    "advice": "El modelo aprende las filas de entrenamiento más que el patrón: baje max_depth, suba min_child_weight (XGBoost) o l2_leaf_reg (CatBoost), baje subsample o añada filas."
+   },
+   "trees_limit": {
+    "name": "Número de árboles",
+    "h0": "si la parada temprana actuó, y los árboles conservados",
+    "advice": {
+     "still falling": "La pérdida de validación seguía bajando en el último árbol: suba max_trees o learning_rate.",
+     "few trees": "Se detuvo tras muy pocos árboles: baje learning_rate.",
+     "turn early stopping on": "El último árbol es más de un 1 % peor que el mejor: active la parada temprana.",
+     "": "El número de árboles puede no ser el adecuado: lea las curvas de aprendizaje."
+    }
+   },
+   "importance_stability": {
+    "name": "Estabilidad de la importancia",
+    "h0": "ρ de Spearman entre la importancia en la parte de entrenamiento y en la de validación",
+    "advice": "El modelo se apoya en predictores distintos en las dos partes: la clasificación no es fiable; más filas, o menos predictores correlacionados.",
+    "not_computed": "No calculado: necesita al menos 3 predictores y 50 filas de validación en la muestra SHAP."
+   },
+   "zero_importance": {
+    "name": "Predictor que el modelo nunca usa",
+    "h0": "los predictores que ninguna división usa",
+    "advice": "El modelo nunca lo usa: quítelo, o compruebe que varía."
+   },
+   "leakage": {
+    "name": "Fuga de información",
+    "h0": "la parte de |SHAP| del primer predictor, y el ajuste en la parte de validación",
+    "advice": {
+     "validation = time": "Un predictor explica casi todo, o el ajuste es casi perfecto: compruebe que ningún predictor se calcula a partir del resultado ni se registra después (un id, un estado, una fecha posterior). Con un tiempo en los datos, pruebe validation = time.",
+     "": "Un predictor explica casi todo, o el ajuste es casi perfecto: compruebe que ningún predictor se calcula a partir del resultado ni se registra después (un id, un estado, una fecha posterior)."
+    }
+   },
+   "class_imbalance": {
+    "name": "Desequilibrio de clases",
+    "h0": "la proporción de la clase mayor sobre la menor",
+    "advice": "Lea el AUC y la log-loss, no la exactitud; elija un umbral; class_weight = balanced cambia probabilidades calibradas por equilibrio."
+   },
+   "calibration": {
+    "name": "Calibración",
+    "h0": "el error de calibración esperado, en 10 intervalos",
+    "advice": {
+     "balanced": "Previsto: los pesos equilibrados desplazan las probabilidades; desactívelos si se usan como probabilidades.",
+     "": "Las probabilidades previstas no coinciden con las tasas observadas: no las lea como probabilidades, o recalibre."
+    },
+    "not_computed": "No calculado: la parte de validación tiene muy pocas filas."
+   },
+   "calibration_slope": {
+    "name": "Pendiente de calibración",
+    "h0": "la pendiente de una regresión logística del resultado sobre logit(p)",
+    "advice": "Por debajo de 1: las probabilidades son demasiado extremas (sobreajuste); por encima de 1: demasiado tímidas.",
+    "not_computed": "No calculado: la parte de validación tiene muy pocas filas de una clase."
+   }
+  }
+ },
+ "fr": {
+  "tasks": {
+   "regression": "régression",
+   "binary": "classification binaire",
+   "multiclass": "classification multiclasse"
+  },
+  "sections": {
+   "assumptions": "Diagnostics",
+   "importance": "Importance des prédicteurs",
+   "classes": "Par classe",
+   "confusion": "Classification",
+   "diagnostics": "Graphiques"
+  },
+  "assumptions": {
+   "title": "Diagnostics de l'ajustement",
+   "none": "Aucun diagnostic n'a été calculé.",
+   "check": "Diagnostic",
+   "h0": "Ce qu'on regarde"
+  },
+  "diagnostics_note": "Ce sont des diagnostics lus d'après des règles empiriques, pas des tests statistiques : ils n'ont ni valeur p ni niveau de signification. Un verdict douteux ou négatif dit où regarder, pas que le modèle est faux.",
+  "kpi": {
+   "n_split": "Lignes (entraînement · validation)",
+   "n_events": "Lignes / événements",
+   "n_classes": "Lignes / classes",
+   "rmse": "RMSE, validation",
+   "r_squared": "R², validation",
+   "auc": "AUC, validation",
+   "logloss": "Log-loss, validation",
+   "accuracy": "Exactitude, validation",
+   "trees": "Arbres",
+   "best_round": "meilleur tour {x}"
+  },
+  "fit": {
+   "setup": "{task} : {outcome}",
+   "validation": "validation : {how} {share}, graine {seed}",
+   "hyperparameters": "Hyperparamètres"
+  },
+  "metrics": {
+   "title": "Entraînement et validation",
+   "metric": "Mesure",
+   "train": "Entraînement",
+   "validation": "Validation",
+   "baseline": "Référence",
+   "names": {
+    "rmse": "RMSE",
+    "mae": "MAE",
+    "r_squared": "R²",
+    "auc": "AUC",
+    "logloss": "Log-loss",
+    "mlogloss": "Log-loss",
+    "brier": "Score de Brier",
+    "accuracy": "Exactitude",
+    "sensitivity": "Sensibilité",
+    "specificity": "Spécificité",
+    "precision": "Précision",
+    "f1": "F1",
+    "balanced_accuracy": "Exactitude équilibrée",
+    "macro_auc": "AUC macro",
+    "macro_f1": "F1 macro"
+   },
+   "note": "Référence : la partie de validation prédite par la moyenne de la partie d'entraînement (régression), la prévalence ou les parts des classes (classification).",
+   "note_binary": " L'exactitude, la sensibilité, la spécificité, la précision et le F1 sont au seuil du nœud."
+  },
+  "importance": {
+   "title": "Importance des prédicteurs",
+   "predictor": "Prédicteur",
+   "multiclass_note": "Un modèle multiclasse a un résumé SHAP par classe : les barres montrent donc le |SHAP| moyen empilé par classe."
+  },
+  "classes": {
+   "title": "Par classe, sur la partie de validation",
+   "class": "Classe"
+  },
+  "confusion": {
+   "title": "Matrice de confusion (validation)",
+   "observed_predicted": "Observé \\ prédit",
+   "line_binary": "Sur la partie de validation, au seuil {threshold} : exactitude {accuracy}, sensibilité {sensitivity}, spécificité {specificity}.",
+   "line_multiclass": "Sur la partie de validation : exactitude {accuracy}, exactitude équilibrée {balanced}, F1 macro {f1}."
+  },
+  "charts": {
+   "importance_shap": "|SHAP| moyen (sur l'échelle du résultat)",
+   "importance_shap_class": "|SHAP| moyen par classe",
+   "shap_beeswarm": "Résumé SHAP : l'effet de chaque prédicteur sur chaque ligne",
+   "beeswarm_note": "Chaque point est une ligne de l'échantillon SHAP. À droite de 0 le prédicteur relève la prédiction, à gauche il l'abaisse (log-odds pour une classification). Couleur : la valeur du prédicteur, de basse (bleu) à haute (rouge) ; gris pour une catégorie ou une valeur manquante.",
+   "learning_loss_regression": "Courbe d'apprentissage : RMSE par arbre (trait : meilleur tour)",
+   "learning_loss_binary": "Courbe d'apprentissage : log-loss par arbre (trait : meilleur tour)",
+   "learning_loss_multiclass": "Courbe d'apprentissage : log-loss par arbre (trait : meilleur tour)",
+   "learning_stop": "Courbe d'apprentissage : la mesure qui arrête le boosting",
+   "observed_predicted": "Observé contre prédit (validation)",
+   "resid_predicted": "Résidus contre prédit (validation)",
+   "residual": "Histogramme des résidus (validation)",
+   "roc": "Courbe ROC (validation)",
+   "calibration": "Calibration par déciles (validation)",
+   "probability": "Probabilités prédites par classe observée",
+   "confusion": "Matrice de confusion (validation)",
+   "roc_ovr": "Courbes ROC, une classe contre les autres"
+  },
+  "series": {
+   "train": "Entraînement",
+   "validation": "Validation",
+   "roc": "ROC",
+   "deciles": "Déciles",
+   "points": "Points",
+   "count": "Effectif",
+   "observed": "Lignes",
+   "importance": "Importance"
+  },
+  "values": {
+   "task": {
+    "regression": "régression",
+    "binary": "classification binaire",
+    "multiclass": "classification multiclasse"
+   },
+   "validation": {
+    "random": "aléatoire",
+    "grouped": "par groupes",
+    "time": "dans le temps"
+   }
+  },
+  "note_texts": {
+   "validation_chose_trees": "La partie de validation a aussi choisi le nombre d'arbres (arrêt anticipé) : ses chiffres sont un peu optimistes.",
+   "time_split": "La partie de validation est faite des lignes les plus récentes : aucune ligne d'entraînement n'est postérieure à une ligne de validation.",
+   "grouped_split": "Le découpage est par groupes : toutes les lignes d'une valeur de split_by tombent dans la même partie.",
+   "time_budget": "Le boosting s'est arrêté à 60 % du budget de temps, pour que les valeurs SHAP, les points et les fichiers tiennent encore : les arbres conservés sont les meilleurs jusque-là.",
+   "shap_sampled": "Les valeurs SHAP, et l'importance selon SHAP, sont calculées sur {shap_rows} lignes sur {n}, tirées avec la graine {seed}.",
+   "class_absent_validation": "Une classe du résultat est absente de la partie de validation : les chiffres qui en ont besoin (son AUC, sa précision et son rappel) ne sont pas calculés.",
+   "zero_weights": "Les lignes de poids 0 ont été laissées hors de l'ajustement.",
+   "model_file_too_large": "Le fichier du modèle serait plus grand que ce qu'un fichier de modèle peut être (64 Mio) : les résultats et le rapport sont complets, mais le modèle n'est pas enregistré dans MLflow et aucun nœud Predict ne peut l'appliquer."
+  },
+  "stats": {
+   "model": {
+    "task": "Tâche",
+    "library": "Bibliothèque",
+    "objective": "Objectif",
+    "stop_metric": "Métrique qui arrête le boosting",
+    "validation": "Partie de validation",
+    "importance_type": "Importance native",
+    "n_train": "Lignes d'entraînement",
+    "n_validation": "Lignes de validation",
+    "n_predictors": "Prédicteurs",
+    "n_categorical": "Prédicteurs catégoriels",
+    "trees": "Arbres conservés",
+    "best_iteration": "Meilleur tour (depuis 0)",
+    "max_trees": "Arbres au plus",
+    "stopped_early": "Arrêté tôt (1 = oui)",
+    "stopped_by_time": "Arrêté par le temps (1 = oui)",
+    "threads": "Threads",
+    "shap_rows": "Lignes de l'échantillon SHAP",
+    "seed": "Graine",
+    "events": "Événements",
+    "validation_events": "Événements en validation",
+    "validation_mean": "Moyenne du résultat en validation",
+    "n_classes": "Classes",
+    "train_rmse": "RMSE, entraînement",
+    "validation_rmse": "RMSE, validation",
+    "baseline_rmse": "RMSE, référence",
+    "train_mae": "MAE, entraînement",
+    "validation_mae": "MAE, validation",
+    "train_r_squared": "R², entraînement",
+    "validation_r_squared": "R², validation",
+    "train_auc": "AUC, entraînement",
+    "validation_auc": "AUC, validation",
+    "train_logloss": "Log-loss, entraînement",
+    "validation_logloss": "Log-loss, validation",
+    "baseline_logloss": "Log-loss, référence",
+    "train_brier": "Score de Brier, entraînement",
+    "validation_brier": "Score de Brier, validation",
+    "train_mlogloss": "Log-loss, entraînement",
+    "validation_mlogloss": "Log-loss, validation",
+    "baseline_mlogloss": "Log-loss, référence",
+    "train_accuracy": "Exactitude, entraînement",
+    "validation_accuracy": "Exactitude, validation",
+    "validation_sensitivity": "Sensibilité, validation",
+    "validation_specificity": "Spécificité, validation",
+    "validation_precision": "Précision, validation",
+    "validation_f1": "F1, validation",
+    "validation_balanced_accuracy": "Exactitude équilibrée, validation",
+    "validation_macro_auc": "AUC macro, validation",
+    "validation_macro_f1": "F1 macro, validation",
+    "note_validation_chose_trees": "Note : la validation a choisi les arbres",
+    "note_time_split": "Note : validation dans le temps",
+    "note_grouped_split": "Note : découpage par groupes",
+    "note_time_budget": "Note : le budget de temps",
+    "note_shap_sampled": "Note : l'échantillon SHAP",
+    "note_class_absent_validation": "Note : une classe absente de la validation",
+    "note_zero_weights": "Note : lignes de poids 0",
+    "note_model_file_too_large": "Note : le fichier du modèle"
+   },
+   "importance": {
+    "gain": "Importance native",
+    "gain_share": "Part de l'importance native",
+    "mean_abs_shap": "|SHAP| moyen",
+    "mean_abs_shap_share": "Part de |SHAP|",
+    "rank": "Rang",
+    "mean_abs_shap_train": "|SHAP| moyen, partie d'entraînement",
+    "mean_abs_shap_validation": "|SHAP| moyen, partie de validation",
+    "missing_share": "Part manquante"
+   },
+   "class": {
+    "support": "Lignes de validation",
+    "share_train": "Part à l'entraînement",
+    "share_validation": "Part en validation",
+    "precision": "Précision",
+    "recall": "Rappel",
+    "f1": "F1",
+    "auc_ovr": "AUC, classe contre les autres"
+   }
+  },
+  "checks": {
+   "validation_size": {
+    "name": "Taille de la partie de validation",
+    "h0": "les lignes de la partie de validation (de sa plus petite classe, pour une classification)",
+    "advice": "Les chiffres de validation reposent sur peu de lignes : augmentez validation_share ou ajoutez des lignes."
+   },
+   "beats_baseline": {
+    "name": "Mieux que la référence",
+    "h0": "1 − perte en validation / celle de la référence",
+    "advice": "Le modèle ne prédit pas la partie de validation mieux que la moyenne (les parts des classes) : vérifiez les prédicteurs et le résultat."
+   },
+   "overfitting": {
+    "name": "Surapprentissage",
+    "h0": "la part du gain de la partie d'entraînement sur la référence qui tient en validation",
+    "advice": "Le modèle apprend les lignes d'entraînement plus que la structure : baissez max_depth, relevez min_child_weight (XGBoost) ou l2_leaf_reg (CatBoost), baissez subsample ou ajoutez des lignes."
+   },
+   "trees_limit": {
+    "name": "Nombre d'arbres",
+    "h0": "si l'arrêt anticipé est intervenu, et les arbres conservés",
+    "advice": {
+     "still falling": "La perte de validation baissait encore au dernier arbre : relevez max_trees ou learning_rate.",
+     "few trees": "Il s'est arrêté après très peu d'arbres : baissez learning_rate.",
+     "turn early stopping on": "Le dernier arbre est plus de 1 % moins bon que le meilleur : activez l'arrêt anticipé.",
+     "": "Le nombre d'arbres n'est peut-être pas le bon : lisez les courbes d'apprentissage."
+    }
+   },
+   "importance_stability": {
+    "name": "Stabilité de l'importance",
+    "h0": "ρ de Spearman entre l'importance dans la partie d'entraînement et celle de validation",
+    "advice": "Le modèle s'appuie sur des prédicteurs différents dans les deux parties : le classement n'est pas fiable ; plus de lignes, ou moins de prédicteurs corrélés.",
+    "not_computed": "Non calculé : il faut au moins 3 prédicteurs et 50 lignes de validation dans l'échantillon SHAP."
+   },
+   "zero_importance": {
+    "name": "Prédicteur que le modèle n'utilise jamais",
+    "h0": "les prédicteurs qu'aucune coupure n'utilise",
+    "advice": "Le modèle ne l'utilise jamais : retirez-le, ou vérifiez qu'il varie."
+   },
+   "leakage": {
+    "name": "Fuite d'information",
+    "h0": "la part de |SHAP| du premier prédicteur, et l'ajustement sur la partie de validation",
+    "advice": {
+     "validation = time": "Un prédicteur explique presque tout, ou l'ajustement est presque parfait : vérifiez qu'aucun prédicteur n'est calculé à partir du résultat ni enregistré après lui (un id, un statut, une date postérieure). Avec un temps dans les données, essayez validation = time.",
+     "": "Un prédicteur explique presque tout, ou l'ajustement est presque parfait : vérifiez qu'aucun prédicteur n'est calculé à partir du résultat ni enregistré après lui (un id, un statut, une date postérieure)."
+    }
+   },
+   "class_imbalance": {
+    "name": "Déséquilibre des classes",
+    "h0": "la part de la plus grande classe sur la plus petite",
+    "advice": "Lisez l'AUC et la log-loss, pas l'exactitude ; choisissez un seuil ; class_weight = balanced échange des probabilités calibrées contre l'équilibre."
+   },
+   "calibration": {
+    "name": "Calibration",
+    "h0": "l'erreur de calibration attendue, en 10 classes",
+    "advice": {
+     "balanced": "Attendu : les poids équilibrés déplacent les probabilités ; désactivez-les si elles servent de probabilités.",
+     "": "Les probabilités prédites ne correspondent pas aux taux observés : ne les lisez pas comme des probabilités, ou recalibrez."
+    },
+    "not_computed": "Non calculé : la partie de validation a trop peu de lignes."
+   },
+   "calibration_slope": {
+    "name": "Pente de calibration",
+    "h0": "la pente d'une régression logistique du résultat sur logit(p)",
+    "advice": "Sous 1 : les probabilités sont trop extrêmes (surapprentissage) ; au-dessus de 1 : trop timides.",
+    "not_computed": "Non calculé : la partie de validation a trop peu de lignes d'une classe."
+   }
+  }
+ }
+}

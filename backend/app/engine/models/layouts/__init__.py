@@ -8,7 +8,7 @@ engine (docs/specs/reports.md), drawn from the rows the model's runner wrote
 
 `common.py` holds the blocks every model has; each model has a file of its own
 (`linear.py`, `logistic.py`, `kaplan_meier.py`, `cox.py`, `arima.py`, and `penalized.py`
-for the blocks both regressions draw with a penalty), which registers itself in `LAYOUTS`,
+for the blocks both regressions draw with a penalty, `boosting.py` for those XGBoost and CatBoost share), which registers itself in `LAYOUTS`,
 so the models can be built in parallel without touching each other's files. A new model is
 its file here, its words in `report_texts/<model>.json` and its import below.
 """
@@ -54,4 +54,4 @@ def definition(model: str, params: dict[str, Any] | None, locale: str | None = "
 
 
 # the models' own files, each registering its layout
-from app.engine.models.layouts import arima, cox, kaplan_meier, linear, logistic  # noqa: E402, F401
+from app.engine.models.layouts import arima, catboost, cox, kaplan_meier, linear, logistic, xgboost  # noqa: E402, F401

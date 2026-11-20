@@ -1,0 +1,52 @@
+{
+ "en": {
+  "name": "CatBoost",
+  "charts": {
+   "importance_gain": "Importance by PredictionValuesChange (share of the total)"
+  },
+  "importance": {
+   "gain_note": "PredictionValuesChange: how much a prediction changes, on average, when the predictor's value changes, as a share of all the predictors'. Mean |SHAP|: how far, on average, the predictor moves a prediction (exact for trees), on the SHAP sample.",
+   "gain_share": "Share of the importance"
+  }
+ },
+ "it": {
+  "name": "CatBoost",
+  "charts": {
+   "importance_gain": "Importanza per PredictionValuesChange (quota del totale)"
+  },
+  "importance": {
+   "gain_note": "PredictionValuesChange: di quanto cambia in media una previsione quando cambia il valore del predittore, come quota di quella di tutti i predittori. |SHAP| medio: di quanto, in media, il predittore sposta una previsione (esatto per gli alberi), sul campione SHAP.",
+   "gain_share": "Quota dell'importanza"
+  }
+ },
+ "de": {
+  "name": "CatBoost",
+  "charts": {
+   "importance_gain": "Wichtigkeit nach PredictionValuesChange (Anteil am Ganzen)"
+  },
+  "importance": {
+   "gain_note": "PredictionValuesChange: wie stark sich eine Vorhersage im Mittel ändert, wenn sich der Wert des Prädiktors ändert, als Anteil an der Summe aller Prädiktoren. Mittleres |SHAP|: wie weit der Prädiktor eine Vorhersage im Mittel verschiebt (exakt für Bäume), in der SHAP-Stichprobe.",
+   "gain_share": "Anteil an der Wichtigkeit"
+  }
+ },
+ "es": {
+  "name": "CatBoost",
+  "charts": {
+   "importance_gain": "Importancia por PredictionValuesChange (parte del total)"
+  },
+  "importance": {
+   "gain_note": "PredictionValuesChange: cuánto cambia, en promedio, una predicción cuando cambia el valor del predictor, como parte de la de todos los predictores. |SHAP| medio: cuánto desplaza, en promedio, el predictor una predicción (exacto para árboles), en la muestra SHAP.",
+   "gain_share": "Parte de la importancia"
+  }
+ },
+ "fr": {
+  "name": "CatBoost",
+  "charts": {
+   "importance_gain": "Importance par PredictionValuesChange (part du total)"
+  },
+  "importance": {
+   "gain_note": "PredictionValuesChange : de combien une prédiction change, en moyenne, quand la valeur du prédicteur change, en part de celle de tous les prédicteurs. |SHAP| moyen : de combien, en moyenne, le prédicteur déplace une prédiction (exact pour les arbres), sur l'échantillon SHAP.",
+   "gain_share": "Part de l'importance"
+  }
+ }
+}

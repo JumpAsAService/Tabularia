@@ -1,0 +1,52 @@
+{
+ "en": {
+  "name": "XGBoost",
+  "charts": {
+   "importance_gain": "Importance by gain (share of the total gain)"
+  },
+  "importance": {
+   "gain_note": "Gain: the loss a predictor's splits remove, summed over all the trees, as a share of all the predictors'. Mean |SHAP|: how far, on average, the predictor moves a prediction (exact for trees), on the SHAP sample.",
+   "gain_share": "Share of the gain"
+  }
+ },
+ "it": {
+  "name": "XGBoost",
+  "charts": {
+   "importance_gain": "Importanza per guadagno (quota del guadagno totale)"
+  },
+  "importance": {
+   "gain_note": "Guadagno: la perdita che le divisioni di un predittore eliminano, sommata su tutti gli alberi, come quota di quella di tutti i predittori. |SHAP| medio: di quanto, in media, il predittore sposta una previsione (esatto per gli alberi), sul campione SHAP.",
+   "gain_share": "Quota del guadagno"
+  }
+ },
+ "de": {
+  "name": "XGBoost",
+  "charts": {
+   "importance_gain": "Wichtigkeit nach Gain (Anteil am Gesamtgewinn)"
+  },
+  "importance": {
+   "gain_note": "Gain: der Verlust, den die Teilungen eines Prädiktors beseitigen, über alle Bäume summiert, als Anteil an der Summe aller Prädiktoren. Mittleres |SHAP|: wie weit der Prädiktor eine Vorhersage im Mittel verschiebt (exakt für Bäume), in der SHAP-Stichprobe.",
+   "gain_share": "Anteil am Gain"
+  }
+ },
+ "es": {
+  "name": "XGBoost",
+  "charts": {
+   "importance_gain": "Importancia por ganancia (parte de la ganancia total)"
+  },
+  "importance": {
+   "gain_note": "Ganancia: la pérdida que eliminan las divisiones de un predictor, sumada en todos los árboles, como parte de la de todos los predictores. |SHAP| medio: cuánto desplaza, en promedio, el predictor una predicción (exacto para árboles), en la muestra SHAP.",
+   "gain_share": "Parte de la ganancia"
+  }
+ },
+ "fr": {
+  "name": "XGBoost",
+  "charts": {
+   "importance_gain": "Importance par gain (part du gain total)"
+  },
+  "importance": {
+   "gain_note": "Gain : la perte que suppriment les coupures d'un prédicteur, sommée sur tous les arbres, en part de celle de tous les prédicteurs. |SHAP| moyen : de combien, en moyenne, le prédicteur déplace une prédiction (exact pour les arbres), sur l'échantillon SHAP.",
+   "gain_share": "Part du gain"
+  }
+ }
+}

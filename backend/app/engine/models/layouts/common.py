@@ -23,6 +23,7 @@ from typing import Any, Callable, Mapping, NamedTuple
 
 from app.engine.models import catalog
 from app.engine.stats import layouts as stats
+from app.reports import glyphs
 from app.engine.stats.layouts import ACCENT, DATASET, EXACT, LOCALES, MUTED, P4, PANEL, WIDTH
 
 TEXTS = Path(__file__).resolve().parent.parent / "report_texts"
@@ -64,6 +65,8 @@ def _words(model: str, variant: str, locale: str) -> dict:
     own = _lang(model, locale)
     if variant == "penalized":  # the blocks both regressions share when a penalty is on
         own = _merged(own, _lang("penalized", locale))
+    if catalog.MODELS.get(model, {}).get("family") == "boosting":  # the words XGBoost and CatBoost share
+        own = _merged(_lang("boosting", locale), own)
     return _merged(_lang("common", locale), own)
 
 
@@ -121,6 +124,7 @@ def with_labels(model: str, params: Mapping[str, Any] | None, rows: list[dict], 
     checked = catalog.check_params(model, dict(params or {}))
     w = words(model, catalog.variant(model, checked), locale)
     loc = formats.locale(code(locale))
+    model_numbers = {r["stat"]: r["value"] for r in rows if r["section"] == "model" and isinstance(r.get("value"), (int, float))}
     verdicts = {(r["level"], r["level_2"]): r.get("text") for r in rows
                 if r["section"] == "assumption" and r["stat"] == "verdict"}
     out = []
@@ -136,15 +140,31 @@ def with_labels(model: str, params: Mapping[str, Any] | None, rows: list[dict], 
                 text = check["h0"]
             elif stat == "advice":
                 said = check.get("not_computed") if verdict == "not_computed" else check.get("advice")
+                if isinstance(said, dict):  # the advice the runner's sentence says: the first whose marker is in it
+                    said = next((v for k, v in said.items() if k.lower() in (text or "").lower()), None)
                 text = (said or text) if verdict in ("failed", "doubtful", "not_computed") else None
             elif stat == "count" and isinstance(r.get("value"), (int, float)):
                 text = count_said(w, r["level"], r["value"], loc.group)
         elif section == "model" and isinstance(text, str):
             text = w.get("values", {}).get(stat, {}).get(text, text)
+            if stat.startswith("note_") and stat[5:] in w.get("note_texts", {}):  # a note by its id: the runner's wording may change, the page's does not
+                text = note_said(w["note_texts"][stat[5:]], model_numbers, loc.group)
         elif section == "hist" and isinstance(r.get("x0"), (int, float)) and isinstance(r.get("x1"), (int, float)):
             text = stats.edges_text(r["x0"], r["x1"], False, loc.decimal, loc.group)
         out.append({**r, "text": text, "label": label, "tiny": stats.tiny(r.get("value"), code(locale))})
     return out
+
+
+def note_said(template: str, numbers: Mapping[str, float], group: str) -> str:
+    """A note's sentence, each `{stat}` in it replaced by that number of the model section
+    («SHAP on {shap_rows} of {n} rows»), with the language's group separator."""
+    def number(m: re.Match) -> str:
+        x = numbers.get(m.group(1))
+        if x is None:
+            return m.group(0)
+        return f"{int(x):,}".replace(",", group) if float(x).is_integer() else str(x)
+
+    return re.sub(r"\{(\w+)\}", number, template)
 
 
 def count_said(w: dict, check: str, n: float, group: str) -> str:
@@ -236,7 +256,7 @@ class Chart(NamedTuple):
     """A chart of the diagnostics: its kind (`xy`, `column`, `interval`, `heatmap`…), its
     title, the rest of its item (`more`: filter, category, series, options, visible), the
     check it illustrates (`under`, a caption under it says its verdict), `wide`: across the
-    page."""
+    page, `caption`: a sentence under it (how to read it), a few lines long at most."""
 
     id: str
     kind: str
@@ -244,6 +264,7 @@ class Chart(NamedTuple):
     more: dict
     under: str | None = None
     wide: bool = False
+    caption: str | None = None
 
 
 class CoefTable(NamedTuple):
@@ -306,13 +327,14 @@ def subject(params: Mapping[str, Any], outcome: str = "outcome", predictors: str
 def page(model: str, params: Mapping[str, Any], locale: str, sample: list[dict] | None, step: str | None, *,
          name: str, about: str, cards: tuple[Card | tuple[Card, ...], ...], coef_tables: tuple[CoefTable, ...] = (),
          coef_note: str | None = None, blocks: tuple[Block, ...] = (), charts: tuple[Chart, ...] = (),
-         assumptions_note: str | None = None, p_values: bool = True) -> dict:
+         assumptions_note: str | None = None, p_values: bool = True, fit_skip: tuple[str, ...] = ()) -> dict:
     """A model's report: the summary (four cards, the formula), the assumptions (first page),
     the coefficients, the fit, the model's own blocks (strata, forecast…), the diagnostics,
     the notes. `name`: the model as the header says it; `about`: what it is about;
     `assumptions_note`: a sentence under the checks (a penalized fit's: diagnostics, not tests);
     `p_values`: False for a variant with no p-value (no statistic, df, p or R's codes in the
-    checks and the fit, no warning about the tests on many rows)."""
+    checks and the fit, no warning about the tests on many rows); `fit_skip`: numbers of the
+    `model` section the fit's table leaves out (the model's own block says them)."""
     from app.reports import formats
 
     lang = code(locale)
@@ -326,7 +348,7 @@ def page(model: str, params: Mapping[str, Any], locale: str, sample: list[dict] 
     _assumptions(p, w, lang, assumptions_note, p_values)
     if coef_tables:
         _coefficients(p, w, lang, coef_tables, coef_note)
-    _fit(p, w, p_values)
+    _fit(p, w, p_values, fit_skip)
     for block in blocks:
         block(p, w)
     if charts:
@@ -448,12 +470,12 @@ def _coefficients(p: stats.Page, w: dict, lang: str, tables: tuple[CoefTable, ..
         p.text("coef_signif_legend", stats.static(stats.signif_legend(w, lang)), h=4.5, size=7, color=MUTED)
 
 
-def _fit(p: stats.Page, w: dict, p_values: bool = True) -> None:
+def _fit(p: stats.Page, w: dict, p_values: bool = True, skip: tuple[str, ...] = ()) -> None:
     """Every number of the `model` section, then how it was fitted (its settings in words)."""
     f = w["fit"]
     p.heading("s_fit", w["sections"]["fit"])
     sig = f'LOOKUP("model|||" & LEFT([stat], LEN([stat]) - 7) & "significance", [key], [text])'
-    numbers = '[section] = "model" AND NOT ISNULL([value])'
+    numbers = '[section] = "model" AND NOT ISNULL([value])' + "".join(f' AND [stat] <> "{s}"' for s in skip)
     cols = [
         {"header": f["quantity"], "value": "[label]"},
         {"header": f["name"], "value": "[stat]", "width": 50, "style": {"color": MUTED}},
@@ -478,17 +500,19 @@ def _diagnostics(p: stats.Page, w: dict, charts: tuple[Chart, ...]) -> None:
     p.heading("s_diagnostics", w["sections"]["diagnostics"])
     half, gap, tall, caption = 91.0, 4.0, 62.0, 4.5
     column, top, first = 0, p.y, True
+    room = 0.0  # what the captions of the row at hand need under its charts (caption: a few lines of 7 pt)
 
     def close_row() -> None:
-        nonlocal column, first, top
-        p.y = top + tall + caption + 3
+        nonlocal column, first, top, room
+        below = max(caption, room)
+        p.y = top + tall + below + 3
         if first:
             p.keep()
             first = False
         else:
             p.items.append({"id": f"row_{len(p.items)}_keep", "type": "rect", "x": 0, "y": top, "w": 0.1,
-                            "h": round(tall + caption, 2), "style": {}})
-        column, top = 0, p.y
+                            "h": round(tall + below, 2), "style": {}})
+        column, top, room = 0, p.y, 0.0
 
     for chart in charts:
         if chart.wide and column == 1:  # a wide chart starts a row of its own
@@ -498,6 +522,13 @@ def _diagnostics(p: stats.Page, w: dict, charts: tuple[Chart, ...]) -> None:
         item: dict[str, Any] = {"id": chart.id, "type": "chart", "dataset": DATASET, "kind": chart.kind, "x": x, "y": top,
                                 "w": width, "h": tall, "title": stats.fit(chart.title, 7.5, width - 4, 700), **chart.more}
         p.add(item)
+        if chart.caption:  # how to read it: static words, as many lines of 7 pt as the width needs
+            lines = -(-int(glyphs.width_mm(chart.caption, 7)) // int(width - 2)) or 1
+            height = round(3.1 * lines + 1.4, 2)
+            room = max(room, height)
+            p.items.append({"id": chart.id + "_how", "type": "text", "x": x, "y": top + tall + 0.3, "w": width, "h": height,
+                            "value": stats.static(chart.caption), "style": {"size": 7, "color": MUTED},
+                            "visible": chart.more.get("visible")})
         if chart.under:  # «check», or «check|term» for a check of each term
             key = f"assumption|{chart.under}|verdict" if "|" in chart.under else f"assumption|{chart.under}||verdict"
             said = "IFS(" + ", ".join(f'{txt(key)} = "{v}", {q(w["verdicts"][v])}' for v in catalog.VERDICTS) + ', "")'
