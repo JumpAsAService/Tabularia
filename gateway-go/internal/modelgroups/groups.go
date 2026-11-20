@@ -192,7 +192,7 @@ func codeFiles(group, language string, task []byte, withReference bool) ([]File,
 	if err := add("common/selftest", "common/selftest/"); err != nil {
 		return nil, err
 	}
-	out = append(out, File{Path: "card.schema.json", Content: CardSchema()}, File{Path: "catalog.json", Content: modelcatalog.Raw()})
+	out = append(out, File{Path: "card.schema.json", Content: CardSchema()}, File{Path: "catalog.json", Content: modelcatalog.Compact()})
 	if task != nil {
 		out = append(out, File{Path: "task.json", Content: task})
 	}

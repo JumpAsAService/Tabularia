@@ -33,8 +33,19 @@ const (
 	NodePredict = "model_predict"
 )
 
-// Raw is the snapshot, byte for byte: what a model Job receives as catalog.json.
+// Raw is the snapshot, byte for byte.
 func Raw() []byte { return append([]byte(nil), raw...) }
+
+// Compact is the snapshot without its indentation (the same JSON, half the bytes): what a model
+// Job receives as catalog.json. A Job's ConfigMap holds at most 1 MiB with the runner, the
+// library and the reference cases, and the catalogue grows with every model.
+func Compact() []byte {
+	var out bytes.Buffer
+	if err := json.Compact(&out, raw); err != nil {
+		panic("modelcatalog: catalog.json: " + err.Error())
+	}
+	return out.Bytes()
+}
 
 // Group is a group of models: one image, enabled by an administrator.
 type Group struct {

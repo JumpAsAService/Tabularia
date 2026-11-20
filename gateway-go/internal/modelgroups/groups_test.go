@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
@@ -137,10 +138,13 @@ func mustFile(t *testing.T, code []File, path string) []byte {
 	return nil
 }
 
-func TestTheJobReceivesTheCataloguesBytes(t *testing.T) {
+func TestTheJobReceivesTheCatalogue(t *testing.T) {
 	code, _ := CodeFiles("survival", nil, false)
-	if string(mustFile(t, code, "catalog.json")) != string(modelcatalog.Raw()) || len(CardSchema()) == 0 {
-		t.Error("catalog.json is not the catalogue")
+	sent := mustFile(t, code, "catalog.json")
+	var got, want any
+	if json.Unmarshal(sent, &got) != nil || json.Unmarshal(modelcatalog.Raw(), &want) != nil || !reflect.DeepEqual(got, want) ||
+		len(sent) >= len(modelcatalog.Raw()) || len(CardSchema()) == 0 {
+		t.Error("catalog.json is not the catalogue, without its indentation")
 	}
 	var schema map[string]any
 	if err := json.Unmarshal(CardSchema(), &schema); err != nil || schema["title"] != "Tabularia model card" {
