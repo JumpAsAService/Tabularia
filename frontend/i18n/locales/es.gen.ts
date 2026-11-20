@@ -6830,7 +6830,15 @@ export default {
       "inputRows": "Filas leídas",
       "refusal": "Rechazado",
       "log": "Log",
-      "noLog": "El runner no imprimió nada."
+      "noLog": "El runner no imprimió nada.",
+      "mlflow": "MLflow",
+      "mlflowExperiment": "Experimento",
+      "mlflowRun": "Ejecución en MLflow",
+      "mlflowFailedStep": "registrada como fallida",
+      "mlflowVersion": "Modelo registrado",
+      "mlflowNotLogged": "No registrado",
+      "mlflowContinued": "No registrado, el paso siguió adelante",
+      "mlflowOpens": "Abre MLflow en una pestaña nueva"
     },
     "predict": {
       "title": "Predicción",

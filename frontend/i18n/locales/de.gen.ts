@@ -6830,7 +6830,15 @@ export default {
       "inputRows": "Gelesene Zeilen",
       "refusal": "Abgelehnt",
       "log": "Log",
-      "noLog": "Der Runner hat nichts ausgegeben."
+      "noLog": "Der Runner hat nichts ausgegeben.",
+      "mlflow": "MLflow",
+      "mlflowExperiment": "Experiment",
+      "mlflowRun": "Lauf in MLflow",
+      "mlflowFailedStep": "als fehlgeschlagen protokolliert",
+      "mlflowVersion": "Registriertes Modell",
+      "mlflowNotLogged": "Nicht protokolliert",
+      "mlflowContinued": "Nicht protokolliert, der Schritt lief weiter",
+      "mlflowOpens": "Öffnet MLflow in einem neuen Tab"
     },
     "predict": {
       "title": "Vorhersage",

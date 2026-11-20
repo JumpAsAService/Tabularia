@@ -44,7 +44,7 @@ import (
 //     output.parquet when the node has nodes after it (or is tried) and its output is not
 //     `results`. The run keeps both keys: output_key is what the nodes after it read (the
 //     results themselves when the output is `results`), model_results_key what the report reads.
-//  5. MLflow: lot G's (modelAfterImport).
+//  5. MLflow, for a flow run of a node that names a connection: jobs_models_mlflow.go.
 //  6. The step's files leave the scripts bucket, by exact key.
 
 const (
@@ -84,6 +84,7 @@ type modelStep struct {
 	retries int64
 	delay   int64
 	budget  int64
+	mlflow  *mlflowPlan // a flow run's MLflow block, nil when it logs nothing (always for a trial)
 }
 
 // modelLabel is the node's name, else its id.
@@ -435,18 +436,17 @@ func modelStepKeys(prefix string) (in, out, results, artifacts string, all []str
 // play the cluster.
 var modelAttemptJob = kjAttempt
 
-// modelAfterImport is lot G's hook (docs/specs/statistical-models.md, «MLflow»): a flow run of a
-// node with an MLflow connection is logged here, after its results are imported and before its
-// files leave the scripts bucket. Nil until then: nothing is logged, and task.json's `mlflow` is
-// false (no MLmodel, no native.rds).
-var modelAfterImport func(ctx context.Context, q *queue, r *scriptNodeRun, s *modelStep, child *childRun, artifacts string) error
-
 // runModel is a flow's model node as a step: where the nodes after it read, nil when it failed.
 func (q *queue) runModel(ctx context.Context, r *scriptNodeRun) (*flowresolver.Source, error) {
 	d := q.d
 	s, err := q.planModel(ctx, r.user, r.node)
 	if err != nil {
 		return nil, err
+	}
+	if r.trial == 0 { // a trial logs nothing to MLflow (docs/specs/statistical-models.md, «The trial»)
+		if s.mlflow, err = q.planMLflow(ctx, r.user, r.node, s.label); err != nil {
+			return nil, err
+		}
 	}
 	storage, err := loadScriptStorage(ctx, d.DB)
 	if err != nil {
@@ -529,7 +529,7 @@ func (q *queue) runModel(ctx context.Context, r *scriptNodeRun) (*flowresolver.S
 		if trial {
 			task.RowsFrom = "trial"
 		}
-		task.MLflow = false // lot G: true when the node logs to MLflow (a flow run)
+		task.MLflow = s.mlflow != nil // the runner writes MLmodel and native.rds; the gateway logs them
 		code, err := modelgroups.CodeFiles(s.group, task.JSON(), false)
 		if err != nil {
 			return nil, err
@@ -586,6 +586,9 @@ func (q *queue) runModel(ctx context.Context, r *scriptNodeRun) (*flowresolver.S
 		}
 		return q.importModel(ctx, r, s, child, storage, resultsKey, outKey, artifacts, engineResultsKey, engineOutKey, task.WriteOutput)
 	}()
+	if err != nil {
+		q.logFailedModel(ctx, r, s, child, err)
+	}
 	return q.closeChild(ctx, child, out, err, "model «"+s.label+"»")
 }
 
@@ -764,8 +767,9 @@ func (q *queue) importModel(ctx context.Context, r *scriptNodeRun, s *modelStep,
 		"rows_written", dataRows); err != nil {
 		return nil, err
 	}
-	if modelAfterImport != nil && r.trial == 0 {
-		if err := modelAfterImport(ctx, q, r, s, child, artifacts); err != nil {
+	if s.mlflow != nil && r.trial == 0 {
+		if err := q.logModelMLflow(ctx, r, s, child, modelFiles{storage: storage, results: resultsKey, artifacts: artifacts,
+			engineBucket: bucket, engineResultsKey: engineResultsKey}); err != nil {
 			return nil, err
 		}
 	}

@@ -6830,7 +6830,15 @@ export default {
       "inputRows": "Lignes lues",
       "refusal": "Refusé",
       "log": "Log",
-      "noLog": "Le runner n'a rien affiché."
+      "noLog": "Le runner n'a rien affiché.",
+      "mlflow": "MLflow",
+      "mlflowExperiment": "Expérience",
+      "mlflowRun": "Exécution dans MLflow",
+      "mlflowFailedStep": "enregistrée comme échouée",
+      "mlflowVersion": "Modèle enregistré",
+      "mlflowNotLogged": "Non enregistré",
+      "mlflowContinued": "Non enregistré, l'étape a continué",
+      "mlflowOpens": "Ouvre MLflow dans un nouvel onglet"
     },
     "predict": {
       "title": "Prédiction",

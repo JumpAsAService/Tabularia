@@ -19,6 +19,11 @@
   the script reads it (docs/specs/saved-scripts.md).
 - POST /scripts/objects/delete: a step's files removed from the scripts bucket when
   the run ends (by exact key: the key needs no listing right).
+- POST /scripts/objects/read: one file of a step, streamed to the gateway, which uploads a
+  model step's files to MLflow (docs/specs/statistical-models.md, «What is logged»): the
+  gateway holds the MLflow credentials, the engine the bucket's.
+- POST /scripts/results/rows: some sections of a model step's results, read back for the
+  gateway (the metrics and the coefficients it logs to MLflow).
 
 The secret arrives encrypted (Fernet shared with the gateway). See
 docs/specs/script-node.md.
@@ -31,6 +36,7 @@ from typing import Any
 
 from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from app.ingest.s3_destination import S3ConnectionSpec
@@ -274,3 +280,59 @@ def objects_delete(request: ObjectsDeleteRequest):
         except (ClientError, BotoCoreError) as e:
             failed.append(f"{key}: {_reason(e)}")
     return {"deleted": deleted, "failed": failed}
+
+
+class ObjectReadRequest(BaseModel):
+    connection: S3ConnectionSpec
+    key: str
+
+
+_MISSING = ("404", "NoSuchKey", "NotFound")
+
+
+@router.post("/objects/read")
+def objects_read(request: ObjectReadRequest):
+    """The object's bytes, with its length; 404 when it is not there."""
+    conn = request.connection
+    try:
+        obj = conn.client().get_object(Bucket=conn.bucket, Key=request.key)
+    except ClientError as e:
+        if (e.response.get("Error") or {}).get("Code") in _MISSING:
+            raise HTTPException(status_code=404, detail="Not in the scripts bucket")
+        raise HTTPException(status_code=502, detail=f"The scripts bucket answered: {_reason(e)}")
+    except BotoCoreError as e:
+        raise HTTPException(status_code=502, detail=f"The scripts bucket answered: {_reason(e)}")
+    return StreamingResponse(obj["Body"].iter_chunks(1024 * 1024), media_type="application/octet-stream",
+                             headers={"Content-Length": str(obj["ContentLength"])})
+
+
+class ResultsRowsRequest(BaseModel):
+    connection: S3ConnectionSpec
+    key: str  # results.parquet in the scripts bucket, already checked by /results/import
+    sections: list[str]
+
+
+@router.post("/results/rows")
+def results_rows(request: ResultsRowsRequest):
+    """{rows: [{section, level, level_2, stat, value, text}]} of the sections asked, in their
+    order. A model's results are small by construction (the caps on points)."""
+    import pyarrow.parquet as pq
+
+    conn = request.connection
+    fd, path = tempfile.mkstemp(suffix=".parquet")
+    os.close(fd)
+    try:
+        try:
+            conn.client().download_file(conn.bucket, request.key, path)
+        except ClientError as e:
+            if (e.response.get("Error") or {}).get("Code") in _MISSING:
+                raise HTTPException(status_code=404, detail="The step's results are not in the scripts bucket")
+            raise HTTPException(status_code=502, detail=f"The scripts bucket answered: {_reason(e)}")
+        except BotoCoreError as e:
+            raise HTTPException(status_code=502, detail=f"The scripts bucket answered: {_reason(e)}")
+        table = pq.read_table(path, columns=["section", "level", "level_2", "stat", "value", "text", "ord"])
+    finally:
+        os.unlink(path)
+    wanted = set(request.sections)
+    rows = sorted((r for r in table.to_pylist() if r["section"] in wanted), key=lambda r: r["ord"])
+    return {"rows": [{k: r[k] for k in ("section", "level", "level_2", "stat", "value", "text")} for r in rows]}
