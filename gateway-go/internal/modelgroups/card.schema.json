@@ -126,7 +126,7 @@
         "distribution": {"enum": ["weibull", "exponential", "lognormal", "loglogistic", "gengamma", "gompertz"], "description": "the one fitted (with selection auto, the one chosen)"},
         "selection": {"enum": ["manual", "auto"]},
         "coefficient_scale": {"enum": ["log_time_ratio", "log_hazard_ratio"]},
-        "parameters": {"type": "array", "items": {"type": "string"}, "description": "flexsurv's names of the distribution's parameters, the location last"},
+        "parameters": {"type": "array", "items": {"type": "string"}, "description": "flexsurv's names of the distribution's parameters, in flexsurv's order (that of the first elements of `coefficients`: shape, scale for the Weibull; meanlog, sdlog for the log-normal)"},
         "location": {"type": "string", "description": "the parameter the predictors act on"},
         "transforms": {"type": "array", "items": {"enum": ["identity", "log"]}, "description": "the scale on which the optimiser moves each parameter, in the order of `parameters`"},
         "order": {

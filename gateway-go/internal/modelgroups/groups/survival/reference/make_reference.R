@@ -32,6 +32,10 @@
 # the columns' own names and R's formula interface (factor, relevel, strata, cluster); the VIF of
 # a term of one column is 1/(1 − R²) of its regression on the others, the linear form the
 # likelihood-ratio test of ns(x, df = 3) added.
+#
+# Parametric survival (lot P1): make_reference_parametric.R, sourced at the end (its own tables,
+# flexsurv, survreg and coxph called directly; the header of that file says what each case
+# checks and at which tolerance).
 
 suppressPackageStartupMessages(library(survival))
 
@@ -512,10 +516,14 @@ cases[[length(cases) + 1L]] <- list(
   params = list(time = "start", event = "event", event_value = 1, start = "stop", predictors = list("dose")),
   expect = list(), refuses = list(code = "start_not_before_time"))
 
+source(file.path(here, "make_reference_parametric.R"), local = TRUE)
+
 out <- list(format_version = 1L,
             generated = list(by = "make_reference.R", R = paste(R.version$major, R.version$minor, sep = "."),
                              packages = list(survival = as.character(packageVersion("survival")),
                                              splines = as.character(packageVersion("splines")),
+                                             flexsurv = as.character(packageVersion("flexsurv")),
+                                             numDeriv = as.character(packageVersion("numDeriv")),
                                              jsonlite = as.character(packageVersion("jsonlite")))),
             cases = cases)
 writeLines(jsonlite::toJSON(out, auto_unbox = TRUE, null = "null", na = "null", digits = NA, pretty = TRUE),

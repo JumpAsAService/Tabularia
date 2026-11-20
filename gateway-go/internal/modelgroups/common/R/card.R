@@ -94,16 +94,29 @@ tab_card_fits <- function(task, card, rows) {
 # model) does not work on it: the report and coefficients.csv have those numbers.
 # Kept whole: a survfit (Kaplan–Meier: the estimate is the curve, per event time) and an ARIMA
 # (forecast::Arima keeps the series, which forecast() needs to go on from its last values).
+# A flexsurvreg (parametric survival) keeps its rows in `data` (the outcome Y, the model frame
+# m, the design matrices mml) and in `logliki` (each row's log-likelihood): Y and logliki are
+# removed, the frame and the matrices emptied (their columns and attributes kept), and
+# summary(fit, newdata = …) still answers as the fit does.
 TAB_NATIVE_ROWS <- c("model", "x", "y", "residuals", "fitted.values", "effects", "linear.predictors", "weights", "prior.weights",
                      "data", "offset", "na.action", "strata", "fit.preval", "foldid")
 
 tab_native_lean <- function(fit) {
+  if (inherits(fit, "flexsurvreg")) return(tab_native_lean_flexsurv(fit))
   if (is.null(fit) || !inherits(fit, c("lm", "coxph", "cv.glmnet"))) return(fit)
   for (k in intersect(TAB_NATIVE_ROWS, names(fit))) fit[[k]] <- NULL
   if (is.list(fit$qr) && is.matrix(fit$qr$qr)) fit$qr$qr <- fit$qr$qr[seq_len(fit$rank), , drop = FALSE]
   for (k in c("terms", "formula")) {
     if (!is.null(fit[[k]]) && !is.null(attr(fit[[k]], ".Environment"))) attr(fit[[k]], ".Environment") <- globalenv()
   }
+  fit
+}
+
+tab_native_lean_flexsurv <- function(fit) {
+  fit$data$Y <- NULL
+  if (is.data.frame(fit$data$m)) fit$data$m <- fit$data$m[0L, , drop = FALSE]
+  fit$data$mml <- lapply(fit$data$mml, function(m) if (is.matrix(m)) m[0L, , drop = FALSE] else m)
+  fit$logliki <- NULL
   fit
 }
 

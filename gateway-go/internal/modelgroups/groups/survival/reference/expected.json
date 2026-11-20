@@ -6,6 +6,8 @@
     "packages": {
       "survival": "3.8.12",
       "splines": "4.6.0",
+      "flexsurv": "2.3.2",
+      "numDeriv": "2016.8.1.1",
       "jsonlite": "2.0.0"
     }
   },
@@ -5375,6 +5377,3665 @@
       "expect": [],
       "refuses": {
         "code": "start_not_before_time"
+      }
+    },
+    {
+      "id": "ps_exponential_exact",
+      "model": "parametric_survival",
+      "data": "data/ps_exponential.csv",
+      "types": {
+        "hours": "number",
+        "broke": "boolean",
+        "shift": "text"
+      },
+      "params": {
+        "time": "hours",
+        "event": "broke",
+        "event_value": true,
+        "distribution": "exponential",
+        "quantiles": [
+          0.25
+        ]
+      },
+      "expect": [
+        {
+          "key": "model|||log_lik",
+          "value": -445.431587032949,
+          "rel": 1e-10
+        },
+        {
+          "key": "coef|(Intercept)||estimate",
+          "value": 5.74896343989317,
+          "rel": 1e-10
+        },
+        {
+          "key": "coef|(Intercept)||std_error",
+          "value": 0.123091490979333,
+          "rel": 1e-10
+        },
+        {
+          "key": "stratum|all||median",
+          "value": 217.554744848747,
+          "rel": 1e-10
+        },
+        {
+          "key": "stratum|all||quantile_0.25",
+          "value": 90.293377258271,
+          "rel": 1e-10
+        },
+        {
+          "key": "model|||n",
+          "value": 90,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||events",
+          "value": 66,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n_parameters",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||formula",
+          "text": "Surv(hours, broke = true) ~ 1"
+        },
+        {
+          "key": "model|||distribution",
+          "text": "exponential"
+        },
+        {
+          "key": "model|||variant",
+          "text": "ph_aft"
+        },
+        {
+          "key": "model|||coefficient_scale",
+          "text": "log_time_ratio"
+        }
+      ]
+    },
+    {
+      "id": "ps_exponential_groups",
+      "model": "parametric_survival",
+      "data": "data/ps_exponential.csv",
+      "types": {
+        "hours": "number",
+        "broke": "boolean",
+        "shift": "text"
+      },
+      "params": {
+        "time": "hours",
+        "event": "broke",
+        "event_value": true,
+        "distribution": "exponential",
+        "predictors": [
+          "shift"
+        ]
+      },
+      "expect": [
+        {
+          "key": "coef|(Intercept)||estimate",
+          "value": 6.30337418500808,
+          "rel": 1e-09,
+          "abs": 2.5e-07
+        },
+        {
+          "key": "coef|(Intercept)||std_error",
+          "value": 0.25,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|shift|evening|hazard_ratio",
+          "value": 1.52187450804684,
+          "rel": 3.25543024605912e-07
+        },
+        {
+          "key": "coef|shift|evening|estimate",
+          "value": -0.419942804034122,
+          "rel": 1e-09,
+          "abs": 3.25543024605912e-07
+        },
+        {
+          "key": "coef|shift|evening|time_ratio",
+          "value": 0.657084401317288,
+          "rel": 3.25543024605912e-07
+        },
+        {
+          "key": "coef|shift|evening|std_error",
+          "value": 0.325543024605912,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|shift|evening|hr_ci_low",
+          "value": 0.804037153852378,
+          "rel": 3.25543024605912e-07
+        },
+        {
+          "key": "coef|shift|evening|hr_ci_high",
+          "value": 2.88059078755961,
+          "rel": 3.25543024605912e-07
+        },
+        {
+          "key": "coef|shift|night|hazard_ratio",
+          "value": 3.97166249394282,
+          "rel": 3.15494908100015e-07
+        },
+        {
+          "key": "coef|shift|night|estimate",
+          "value": -1.37918477125917,
+          "rel": 1e-09,
+          "abs": 3.15494908100015e-07
+        },
+        {
+          "key": "coef|shift|night|time_ratio",
+          "value": 0.251783730748798,
+          "rel": 3.15494908100015e-07
+        },
+        {
+          "key": "coef|shift|night|std_error",
+          "value": 0.315494908100015,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|shift|night|hr_ci_low",
+          "value": 2.14004341043361,
+          "rel": 3.15494908100015e-07
+        },
+        {
+          "key": "coef|shift|night|hr_ci_high",
+          "value": 7.37092663115465,
+          "rel": 3.15494908100015e-07
+        },
+        {
+          "key": "model|||log_lik",
+          "value": -435.126022893751,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|all||median",
+          "value": 378.744283797711,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|shift|evening|cox_hazard_ratio",
+          "value": 1.57689008029924,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|shift|evening|cox_hr_ci_low",
+          "value": 0.830004832212319,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|shift|evening|cox_hr_ci_high",
+          "value": 2.99586487794092,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|shift|night|cox_hazard_ratio",
+          "value": 3.81377679380315,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|shift|night|cox_hr_ci_low",
+          "value": 2.00486200089173,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|shift|night|cox_hr_ci_high",
+          "value": 7.25481026947597,
+          "rel": 1e-09
+        }
+      ]
+    },
+    {
+      "id": "ps_weibull",
+      "model": "parametric_survival",
+      "data": "data/ps_weibull.csv",
+      "types": {
+        "days": "number",
+        "status": "text",
+        "load": "number",
+        "line": "text",
+        "plant": "text",
+        "w": "integer"
+      },
+      "params": {
+        "time": "days",
+        "event": "status",
+        "event_value": "failed",
+        "predictors": [
+          "load",
+          "line"
+        ],
+        "interactions": [
+          [
+            "load",
+            "line"
+          ]
+        ],
+        "weights": "w",
+        "quantiles": [
+          0.25,
+          0.75
+        ],
+        "times": [
+          10,
+          30
+        ],
+        "distribution": "weibull"
+      },
+      "expect": [
+        {
+          "key": "model|||log_lik",
+          "value": -1246.65723728511,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||aic",
+          "value": 2507.31447457023,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||bic",
+          "value": 2531.56129720541,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n_parameters",
+          "value": 7,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n",
+          "value": 236,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|(Intercept)||estimate",
+          "value": 2.13996058121042,
+          "rel": 1e-09,
+          "abs": 3.84080164313706e-07
+        },
+        {
+          "key": "coef|(Intercept)||std_error",
+          "value": 0.384080164313706,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|(Intercept)||statistic",
+          "value": 5.57165086886017,
+          "rel": 1e-07,
+          "abs": 1e-06
+        },
+        {
+          "key": "coef|(Intercept)||p_value",
+          "value": 2.52336711531112e-08,
+          "rel": 0.000310432934044703
+        },
+        {
+          "key": "coef|(Intercept)||significance",
+          "text": "***"
+        },
+        {
+          "key": "coef|load||estimate",
+          "value": 0.0185676557938885,
+          "rel": 1e-09,
+          "abs": 7.57906597379492e-09
+        },
+        {
+          "key": "coef|load||std_error",
+          "value": 0.00757906597379492,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|load||statistic",
+          "value": 2.449860689706,
+          "rel": 1e-07,
+          "abs": 1e-06
+        },
+        {
+          "key": "coef|load||p_value",
+          "value": 0.0142911495092043,
+          "rel": 6.00181739896676e-05
+        },
+        {
+          "key": "coef|load||significance",
+          "text": "*"
+        },
+        {
+          "key": "coef|load||time_ratio",
+          "value": 1.01874110657641,
+          "rel": 7.57906597379492e-09
+        },
+        {
+          "key": "coef|load||tr_ci_low",
+          "value": 1.00371986102184,
+          "rel": 7.57906597379492e-09
+        },
+        {
+          "key": "coef|load||tr_ci_high",
+          "value": 1.03398715371834,
+          "rel": 7.57906597379492e-09
+        },
+        {
+          "key": "coef|load||hazard_ratio",
+          "value": 0.970219267957468,
+          "rel": 1.23139966007233e-08
+        },
+        {
+          "key": "coef|load||hr_ci_low",
+          "value": 0.947083351376201,
+          "rel": 1.23139966007233e-08
+        },
+        {
+          "key": "coef|load||hr_ci_high",
+          "value": 0.993920362498285,
+          "rel": 1.23139966007233e-08
+        },
+        {
+          "key": "coef|line|B|estimate",
+          "value": -0.121425511030427,
+          "rel": 1e-09,
+          "abs": 5.35062118683836e-07
+        },
+        {
+          "key": "coef|line|B|std_error",
+          "value": 0.535062118683836,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|line|B|statistic",
+          "value": -0.22693722240908,
+          "rel": 1e-07,
+          "abs": 1e-06
+        },
+        {
+          "key": "coef|line|B|p_value",
+          "value": 0.820472557744845,
+          "rel": 1e-05
+        },
+        {
+          "key": "coef|line|B|significance",
+          "text": ""
+        },
+        {
+          "key": "coef|line|B|time_ratio",
+          "value": 0.885657022570853,
+          "rel": 5.35062118683836e-07
+        },
+        {
+          "key": "coef|line|B|tr_ci_low",
+          "value": 0.310327218967507,
+          "rel": 5.35062118683836e-07
+        },
+        {
+          "key": "coef|line|B|tr_ci_high",
+          "value": 2.52761702385893,
+          "rel": 5.35062118683836e-07
+        },
+        {
+          "key": "coef|line|B|hazard_ratio",
+          "value": 1.21861344434538,
+          "rel": 8.717905669008e-07
+        },
+        {
+          "key": "coef|line|B|hr_ci_low",
+          "value": 0.220697030262932,
+          "rel": 8.717905669008e-07
+        },
+        {
+          "key": "coef|line|B|hr_ci_high",
+          "value": 6.72876624107763,
+          "rel": 8.717905669008e-07
+        },
+        {
+          "key": "coef|line|C|estimate",
+          "value": -0.614333758022618,
+          "rel": 1e-09,
+          "abs": 4.78263624951188e-07
+        },
+        {
+          "key": "coef|line|C|std_error",
+          "value": 0.478263624951188,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|line|C|statistic",
+          "value": -1.28450863911157,
+          "rel": 1e-07,
+          "abs": 1e-06
+        },
+        {
+          "key": "coef|line|C|p_value",
+          "value": 0.198964042747909,
+          "rel": 1.64996244395226e-05
+        },
+        {
+          "key": "coef|line|C|significance",
+          "text": ""
+        },
+        {
+          "key": "coef|line|C|time_ratio",
+          "value": 0.541001212984513,
+          "rel": 4.78263624951188e-07
+        },
+        {
+          "key": "coef|line|C|tr_ci_low",
+          "value": 0.211884653839215,
+          "rel": 4.78263624951188e-07
+        },
+        {
+          "key": "coef|line|C|tr_ci_high",
+          "value": 1.38132850656004,
+          "rel": 4.78263624951188e-07
+        },
+        {
+          "key": "coef|line|C|hazard_ratio",
+          "value": 2.71910317601962,
+          "rel": 7.81105671707478e-07
+        },
+        {
+          "key": "coef|line|C|hr_ci_low",
+          "value": 0.588230222161243,
+          "rel": 7.81105671707478e-07
+        },
+        {
+          "key": "coef|line|C|hr_ci_high",
+          "value": 12.569095913969,
+          "rel": 7.81105671707478e-07
+        },
+        {
+          "key": "coef|load × line|B|estimate",
+          "value": 0.00997559490445382,
+          "rel": 1e-09,
+          "abs": 1.0606973551984e-08
+        },
+        {
+          "key": "coef|load × line|B|std_error",
+          "value": 0.010606973551984,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|load × line|B|statistic",
+          "value": 0.94047513699965,
+          "rel": 1e-07,
+          "abs": 1e-06
+        },
+        {
+          "key": "coef|load × line|B|p_value",
+          "value": 0.346973897101392,
+          "rel": 1e-05
+        },
+        {
+          "key": "coef|load × line|B|significance",
+          "text": ""
+        },
+        {
+          "key": "coef|load × line|B|time_ratio",
+          "value": 1.01002551701413,
+          "rel": 1.0606973551984e-08
+        },
+        {
+          "key": "coef|load × line|B|tr_ci_low",
+          "value": 0.989244566533774,
+          "rel": 1.0606973551984e-08
+        },
+        {
+          "key": "coef|load × line|B|tr_ci_high",
+          "value": 1.03124301060776,
+          "rel": 1.0606973551984e-08
+        },
+        {
+          "key": "coef|load × line|B|hazard_ratio",
+          "value": 0.983888229533079,
+          "rel": 1.73179439036998e-08
+        },
+        {
+          "key": "coef|load × line|B|hr_ci_low",
+          "value": 0.951052966321386,
+          "rel": 1.73179439036998e-08
+        },
+        {
+          "key": "coef|load × line|B|hr_ci_high",
+          "value": 1.01785713571563,
+          "rel": 1.73179439036998e-08
+        },
+        {
+          "key": "coef|load × line|C|estimate",
+          "value": 0.00410309947560138,
+          "rel": 1e-09,
+          "abs": 9.45558816234115e-09
+        },
+        {
+          "key": "coef|load × line|C|std_error",
+          "value": 0.00945558816234116,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|load × line|C|statistic",
+          "value": 0.433933818304696,
+          "rel": 1e-07,
+          "abs": 1e-06
+        },
+        {
+          "key": "coef|load × line|C|p_value",
+          "value": 0.664336500989989,
+          "rel": 1e-05
+        },
+        {
+          "key": "coef|load × line|C|significance",
+          "text": ""
+        },
+        {
+          "key": "coef|load × line|C|time_ratio",
+          "value": 1.00411152871298,
+          "rel": 9.45558816234115e-09
+        },
+        {
+          "key": "coef|load × line|C|tr_ci_low",
+          "value": 0.985674093715197,
+          "rel": 9.45558816234115e-09
+        },
+        {
+          "key": "coef|load × line|C|tr_ci_high",
+          "value": 1.02289384343466,
+          "rel": 9.45558816234115e-09
+        },
+        {
+          "key": "coef|load × line|C|hazard_ratio",
+          "value": 0.993341308311929,
+          "rel": 1.5408892456882e-08
+        },
+        {
+          "key": "coef|load × line|C|hr_ci_low",
+          "value": 0.963790015891071,
+          "rel": 1.5408892456882e-08
+        },
+        {
+          "key": "coef|load × line|C|hr_ci_high",
+          "value": 1.02379868906048,
+          "rel": 1.5408892456882e-08
+        },
+        {
+          "key": "parameter|shape||estimate",
+          "value": 1.62827143743673,
+          "rel": 4.31557337641653e-08
+        },
+        {
+          "key": "parameter|shape||std_error",
+          "value": 0.0702692486498141,
+          "rel": 1e-06
+        },
+        {
+          "key": "parameter|shape||ci_low",
+          "value": 1.49621008432362,
+          "rel": 4.31557337641653e-08
+        },
+        {
+          "key": "parameter|shape||ci_high",
+          "value": 1.77198904201398,
+          "rel": 4.31557337641653e-08
+        },
+        {
+          "key": "stratum|all||median",
+          "value": 17.1800302766763,
+          "rel": 1e-08
+        },
+        {
+          "key": "stratum|all||quantile_0.25",
+          "value": 10.0108958756834,
+          "rel": 1e-08
+        },
+        {
+          "key": "stratum|all||quantile_0.75",
+          "value": 26.2966823251871,
+          "rel": 1e-08
+        },
+        {
+          "key": "stratum|all||surv_at_10",
+          "value": 0.750382342173533,
+          "rel": 1e-08
+        },
+        {
+          "key": "stratum|all||surv_at_30",
+          "value": 0.179422886261162,
+          "rel": 1e-08
+        },
+        {
+          "key": "model|||n_missing",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n_zero_time",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||events",
+          "value": 170,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||censored",
+          "value": 66,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||last_time",
+          "value": 54.79,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||last_event_time",
+          "value": 46.73,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n_strata",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lr_statistic",
+          "value": 114.790746978055,
+          "rel": 1e-08
+        },
+        {
+          "key": "model|||lr_df",
+          "value": 5,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lr_p_value",
+          "value": 3.97635325445477e-23,
+          "rel": 1e-06
+        },
+        {
+          "key": "model|||distribution",
+          "text": "weibull"
+        },
+        {
+          "key": "model|||selection",
+          "text": "manual"
+        },
+        {
+          "key": "model|||coefficient_scale",
+          "text": "log_time_ratio"
+        },
+        {
+          "key": "model|||formula",
+          "text": "Surv(days, status = failed) ~ load + line + load × line"
+        },
+        {
+          "key": "model|||profile",
+          "text": "load = 50.03 (mean); line = A (reference)"
+        },
+        {
+          "key": "model|||note_zero_times",
+          "text": "2 rows have a time of 0 and are left out: a parametric distribution gives an event at 0 no density; if those events are real, count time from a moment before them."
+        },
+        {
+          "key": "model|||concordance",
+          "value": 0.677678329614774,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||log_lik",
+          "value": -1246.65723728511,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|(Intercept)||estimate",
+          "value": 2.13996058263333,
+          "rel": 1e-09,
+          "abs": 3.84080168607734e-07
+        },
+        {
+          "key": "coef|(Intercept)||std_error",
+          "value": 0.384080168607734,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|load||estimate",
+          "value": 0.0185676557661907,
+          "rel": 1e-09,
+          "abs": 7.57906605745368e-09
+        },
+        {
+          "key": "coef|load||std_error",
+          "value": 0.00757906605745368,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|load||hazard_ratio",
+          "value": 0.97021926799945,
+          "rel": 1.2313996736122e-08
+        },
+        {
+          "key": "coef|load||hr_ci_low",
+          "value": 0.947083351165848,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|load||hr_ci_high",
+          "value": 0.993920362805056,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|line|B|estimate",
+          "value": -0.121425513086101,
+          "rel": 1e-09,
+          "abs": 5.35062127635731e-07
+        },
+        {
+          "key": "coef|line|B|std_error",
+          "value": 0.535062127635731,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|line|B|hazard_ratio",
+          "value": 1.21861344843889,
+          "rel": 8.71790581545571e-07
+        },
+        {
+          "key": "coef|line|B|hr_ci_low",
+          "value": 0.220697024669571,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|line|B|hr_ci_high",
+          "value": 6.7287664568179,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|line|C|estimate",
+          "value": -0.614333758956651,
+          "rel": 1e-09,
+          "abs": 4.7826363012807e-07
+        },
+        {
+          "key": "coef|line|C|std_error",
+          "value": 0.47826363012807,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|line|C|hazard_ratio",
+          "value": 2.71910318031953,
+          "rel": 7.81105680223312e-07
+        },
+        {
+          "key": "coef|line|C|hr_ci_low",
+          "value": 0.588230213273464,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|line|C|hr_ci_high",
+          "value": 12.5690961436328,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|load × line|B|estimate",
+          "value": 0.00997559494335441,
+          "rel": 1e-09,
+          "abs": 1.06069737262323e-08
+        },
+        {
+          "key": "coef|load × line|B|std_error",
+          "value": 0.0106069737262323,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|load × line|B|hazard_ratio",
+          "value": 0.983888229469792,
+          "rel": 1.73179441891801e-08
+        },
+        {
+          "key": "coef|load × line|B|hr_ci_low",
+          "value": 0.951052965728068,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|load × line|B|hr_ci_high",
+          "value": 1.01785713621968,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|load × line|C|estimate",
+          "value": 0.00410309949400187,
+          "rel": 1e-09,
+          "abs": 9.45558826411216e-09
+        },
+        {
+          "key": "coef|load × line|C|std_error",
+          "value": 0.00945558826411216,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|load × line|C|hazard_ratio",
+          "value": 0.993341308281766,
+          "rel": 1.54088926238543e-08
+        },
+        {
+          "key": "coef|load × line|C|hr_ci_low",
+          "value": 0.963790015546396,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|load × line|C|hr_ci_high",
+          "value": 1.02379868936444,
+          "rel": 1e-06
+        },
+        {
+          "key": "parameter|shape||estimate",
+          "value": 1.62827143753523,
+          "rel": 4.31557337647763e-08
+        },
+        {
+          "key": "stratum|all||median",
+          "value": 17.1800302775507,
+          "rel": 1e-08
+        },
+        {
+          "key": "stratum|all||median_ci_low",
+          "value": 15.2305018816325,
+          "rel": 1e-06
+        },
+        {
+          "key": "stratum|all||median_ci_high",
+          "value": 19.3791014000336,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|load||cox_hazard_ratio",
+          "value": 0.969803493990318,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|load||cox_hr_ci_low",
+          "value": 0.946608728236319,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|load||cox_hr_ci_high",
+          "value": 0.993566601385731,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|line|B|cox_hazard_ratio",
+          "value": 1.29138876957142,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|line|B|cox_hr_ci_low",
+          "value": 0.229120011433931,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|line|B|cox_hr_ci_high",
+          "value": 7.27865254430685,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|line|C|cox_hazard_ratio",
+          "value": 2.74647457630064,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|line|C|cox_hr_ci_low",
+          "value": 0.589771820772369,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|line|C|cox_hr_ci_high",
+          "value": 12.7898999792619,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|load × line|B|cox_hazard_ratio",
+          "value": 0.982502039189025,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|load × line|B|cox_hr_ci_low",
+          "value": 0.949140205178261,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|load × line|B|cox_hr_ci_high",
+          "value": 1.0170365260518,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|load × line|C|cox_hazard_ratio",
+          "value": 0.992829470525222,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|load × line|C|cox_hr_ci_low",
+          "value": 0.963159177191877,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|load × line|C|cox_hr_ci_high",
+          "value": 1.02341376263191,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||exponential_lr_statistic",
+          "value": 100.046467160412,
+          "rel": 1e-08
+        },
+        {
+          "key": "model|||exponential_lr_df",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||variant",
+          "text": "ph_aft"
+        }
+      ]
+    },
+    {
+      "id": "ps_lognormal",
+      "model": "parametric_survival",
+      "data": "data/ps_weibull.csv",
+      "types": {
+        "days": "number",
+        "status": "text",
+        "load": "number",
+        "line": "text",
+        "plant": "text",
+        "w": "integer"
+      },
+      "params": {
+        "time": "days",
+        "event": "status",
+        "event_value": "failed",
+        "predictors": [
+          "load",
+          "line"
+        ],
+        "interactions": [
+          [
+            "load",
+            "line"
+          ]
+        ],
+        "weights": "w",
+        "quantiles": [
+          0.25,
+          0.75
+        ],
+        "times": [
+          10,
+          30
+        ],
+        "distribution": "lognormal"
+      },
+      "expect": [
+        {
+          "key": "model|||log_lik",
+          "value": -1278.19256495707,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||aic",
+          "value": 2570.38512991415,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||bic",
+          "value": 2594.63195254933,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n_parameters",
+          "value": 7,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n",
+          "value": 236,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|(Intercept)||estimate",
+          "value": 1.18327864857038,
+          "rel": 1e-09,
+          "abs": 4.93222408490499e-07
+        },
+        {
+          "key": "coef|(Intercept)||std_error",
+          "value": 0.493222408490499,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|(Intercept)||statistic",
+          "value": 2.39907722804362,
+          "rel": 1e-07,
+          "abs": 1e-06
+        },
+        {
+          "key": "coef|(Intercept)||p_value",
+          "value": 0.0164364477320824,
+          "rel": 5.75557154611745e-05
+        },
+        {
+          "key": "coef|(Intercept)||significance",
+          "text": "*"
+        },
+        {
+          "key": "coef|load||estimate",
+          "value": 0.0309872882556234,
+          "rel": 1e-09,
+          "abs": 9.72928483696351e-09
+        },
+        {
+          "key": "coef|load||std_error",
+          "value": 0.00972928483696351,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|load||statistic",
+          "value": 3.18495025840917,
+          "rel": 1e-07,
+          "abs": 1e-06
+        },
+        {
+          "key": "coef|load||p_value",
+          "value": 0.00144778891293283,
+          "rel": 0.000101439081485407
+        },
+        {
+          "key": "coef|load||significance",
+          "text": "**"
+        },
+        {
+          "key": "coef|load||time_ratio",
+          "value": 1.03147239198981,
+          "rel": 9.72928483696351e-09
+        },
+        {
+          "key": "coef|load||tr_ci_low",
+          "value": 1.01198954560274,
+          "rel": 9.72928483696351e-09
+        },
+        {
+          "key": "coef|load||tr_ci_high",
+          "value": 1.05133032259092,
+          "rel": 9.72928483696351e-09
+        },
+        {
+          "key": "coef|line|B|estimate",
+          "value": 0.161652840246349,
+          "rel": 1e-09,
+          "abs": 6.5073812013261e-07
+        },
+        {
+          "key": "coef|line|B|std_error",
+          "value": 0.65073812013261,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|line|B|statistic",
+          "value": 0.248414585291863,
+          "rel": 1e-07,
+          "abs": 1e-06
+        },
+        {
+          "key": "coef|line|B|p_value",
+          "value": 0.803813649767999,
+          "rel": 1e-05
+        },
+        {
+          "key": "coef|line|B|significance",
+          "text": ""
+        },
+        {
+          "key": "coef|line|B|time_ratio",
+          "value": 1.17545210081837,
+          "rel": 6.5073812013261e-07
+        },
+        {
+          "key": "coef|line|B|tr_ci_low",
+          "value": 0.328318718851541,
+          "rel": 6.5073812013261e-07
+        },
+        {
+          "key": "coef|line|B|tr_ci_high",
+          "value": 4.20837302896243,
+          "rel": 6.5073812013261e-07
+        },
+        {
+          "key": "coef|line|C|estimate",
+          "value": -0.0383049402611461,
+          "rel": 1e-09,
+          "abs": 6.07622527058707e-07
+        },
+        {
+          "key": "coef|line|C|std_error",
+          "value": 0.607622527058707,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|line|C|statistic",
+          "value": -0.0630406848912717,
+          "rel": 1e-07,
+          "abs": 1e-06
+        },
+        {
+          "key": "coef|line|C|p_value",
+          "value": 0.949734106874235,
+          "rel": 1e-05
+        },
+        {
+          "key": "coef|line|C|significance",
+          "text": ""
+        },
+        {
+          "key": "coef|line|C|time_ratio",
+          "value": 0.962419415711692,
+          "rel": 6.07622527058707e-07
+        },
+        {
+          "key": "coef|line|C|tr_ci_low",
+          "value": 0.292519715988948,
+          "rel": 6.07622527058707e-07
+        },
+        {
+          "key": "coef|line|C|tr_ci_high",
+          "value": 3.16645710053209,
+          "rel": 6.07622527058707e-07
+        },
+        {
+          "key": "coef|load × line|B|estimate",
+          "value": 0.00530200156548848,
+          "rel": 1e-09,
+          "abs": 1.28960518726394e-08
+        },
+        {
+          "key": "coef|load × line|B|std_error",
+          "value": 0.0128960518726394,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|load × line|B|statistic",
+          "value": 0.411133703388503,
+          "rel": 1e-07,
+          "abs": 1e-06
+        },
+        {
+          "key": "coef|load × line|B|p_value",
+          "value": 0.68097449774723,
+          "rel": 1e-05
+        },
+        {
+          "key": "coef|load × line|B|significance",
+          "text": ""
+        },
+        {
+          "key": "coef|load × line|B|time_ratio",
+          "value": 1.00531608204971,
+          "rel": 1.28960518726394e-08
+        },
+        {
+          "key": "coef|load × line|B|tr_ci_low",
+          "value": 0.980224359114707,
+          "rel": 1.28960518726394e-08
+        },
+        {
+          "key": "coef|load × line|B|tr_ci_high",
+          "value": 1.03105010136715,
+          "rel": 1.28960518726394e-08
+        },
+        {
+          "key": "coef|load × line|C|estimate",
+          "value": -0.00648766272305024,
+          "rel": 1e-09,
+          "abs": 1.19539662692128e-08
+        },
+        {
+          "key": "coef|load × line|C|std_error",
+          "value": 0.0119539662692128,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|load × line|C|statistic",
+          "value": -0.542720514425334,
+          "rel": 1e-07,
+          "abs": 1e-06
+        },
+        {
+          "key": "coef|load × line|C|p_value",
+          "value": 0.587322247490431,
+          "rel": 1e-05
+        },
+        {
+          "key": "coef|load × line|C|significance",
+          "text": ""
+        },
+        {
+          "key": "coef|load × line|C|time_ratio",
+          "value": 0.99353333672377,
+          "rel": 1.19539662692128e-08
+        },
+        {
+          "key": "coef|load × line|C|tr_ci_low",
+          "value": 0.970526077966764,
+          "rel": 1.19539662692128e-08
+        },
+        {
+          "key": "coef|load × line|C|tr_ci_high",
+          "value": 1.01708600478768,
+          "rel": 1.19539662692128e-08
+        },
+        {
+          "key": "parameter|sdlog||estimate",
+          "value": 0.869259802718794,
+          "rel": 3.97303968627655e-08
+        },
+        {
+          "key": "parameter|sdlog||std_error",
+          "value": 0.0345360369388669,
+          "rel": 1e-06
+        },
+        {
+          "key": "parameter|sdlog||ci_low",
+          "value": 0.804138808042688,
+          "rel": 3.97303968627655e-08
+        },
+        {
+          "key": "parameter|sdlog||ci_high",
+          "value": 0.939654444065339,
+          "rel": 3.97303968627655e-08
+        },
+        {
+          "key": "stratum|all||median",
+          "value": 15.3862374790121,
+          "rel": 1e-08
+        },
+        {
+          "key": "stratum|all||quantile_0.25",
+          "value": 8.56056859393701,
+          "rel": 1e-08
+        },
+        {
+          "key": "stratum|all||quantile_0.75",
+          "value": 27.6542733304214,
+          "rel": 1e-08
+        },
+        {
+          "key": "stratum|all||surv_at_10",
+          "value": 0.689945439439479,
+          "rel": 1e-08
+        },
+        {
+          "key": "stratum|all||surv_at_30",
+          "value": 0.221198345560011,
+          "rel": 1e-08
+        },
+        {
+          "key": "model|||n_missing",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n_zero_time",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||events",
+          "value": 170,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||censored",
+          "value": 66,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||last_time",
+          "value": 54.79,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||last_event_time",
+          "value": 46.73,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n_strata",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lr_statistic",
+          "value": 85.1567515265151,
+          "rel": 1e-08
+        },
+        {
+          "key": "model|||lr_df",
+          "value": 5,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lr_p_value",
+          "value": 6.97913878167544e-17,
+          "rel": 1e-06
+        },
+        {
+          "key": "model|||distribution",
+          "text": "lognormal"
+        },
+        {
+          "key": "model|||selection",
+          "text": "manual"
+        },
+        {
+          "key": "model|||coefficient_scale",
+          "text": "log_time_ratio"
+        },
+        {
+          "key": "model|||formula",
+          "text": "Surv(days, status = failed) ~ load + line + load × line"
+        },
+        {
+          "key": "model|||profile",
+          "text": "load = 50.03 (mean); line = A (reference)"
+        },
+        {
+          "key": "model|||note_zero_times",
+          "text": "2 rows have a time of 0 and are left out: a parametric distribution gives an event at 0 no density; if those events are real, count time from a moment before them."
+        },
+        {
+          "key": "model|||concordance",
+          "value": 0.677820193708972,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||log_lik",
+          "value": -1278.19256495707,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|(Intercept)||estimate",
+          "value": 1.18327866739252,
+          "rel": 1e-09,
+          "abs": 4.9322246817616e-07
+        },
+        {
+          "key": "coef|(Intercept)||std_error",
+          "value": 0.49322246817616,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|load||estimate",
+          "value": 0.0309872878890571,
+          "rel": 1e-09,
+          "abs": 9.72928599784993e-09
+        },
+        {
+          "key": "coef|load||std_error",
+          "value": 0.00972928599784993,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|line|B|estimate",
+          "value": 0.161652814380971,
+          "rel": 1e-09,
+          "abs": 6.50738176259413e-07
+        },
+        {
+          "key": "coef|line|B|std_error",
+          "value": 0.650738176259413,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|line|C|estimate",
+          "value": -0.0383049652208607,
+          "rel": 1e-09,
+          "abs": 6.07622628081943e-07
+        },
+        {
+          "key": "coef|line|C|std_error",
+          "value": 0.607622628081943,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|load × line|B|estimate",
+          "value": 0.00530200207028459,
+          "rel": 1e-09,
+          "abs": 1.28960529692534e-08
+        },
+        {
+          "key": "coef|load × line|B|std_error",
+          "value": 0.0128960529692534,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|load × line|C|estimate",
+          "value": -0.00648766223908559,
+          "rel": 1e-09,
+          "abs": 1.19539682212925e-08
+        },
+        {
+          "key": "coef|load × line|C|std_error",
+          "value": 0.0119539682212925,
+          "rel": 1e-06
+        },
+        {
+          "key": "parameter|sdlog||estimate",
+          "value": 0.869259802709825,
+          "rel": 3.97303968659493e-08
+        },
+        {
+          "key": "stratum|all||median",
+          "value": 15.3862374864589,
+          "rel": 1e-08
+        },
+        {
+          "key": "stratum|all||median_ci_low",
+          "value": 13.2342898737925,
+          "rel": 1e-06
+        },
+        {
+          "key": "stratum|all||median_ci_high",
+          "value": 17.8881002492258,
+          "rel": 1e-06
+        }
+      ]
+    },
+    {
+      "id": "ps_loglogistic",
+      "model": "parametric_survival",
+      "data": "data/ps_weibull.csv",
+      "types": {
+        "days": "number",
+        "status": "text",
+        "load": "number",
+        "line": "text",
+        "plant": "text",
+        "w": "integer"
+      },
+      "params": {
+        "time": "days",
+        "event": "status",
+        "event_value": "failed",
+        "predictors": [
+          "load",
+          "line"
+        ],
+        "interactions": [
+          [
+            "load",
+            "line"
+          ]
+        ],
+        "weights": "w",
+        "quantiles": [
+          0.25,
+          0.75
+        ],
+        "times": [
+          10,
+          30
+        ],
+        "distribution": "loglogistic"
+      },
+      "expect": [
+        {
+          "key": "model|||log_lik",
+          "value": -1254.03491059373,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||aic",
+          "value": 2522.06982118745,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||bic",
+          "value": 2546.31664382263,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n_parameters",
+          "value": 7,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n",
+          "value": 236,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|(Intercept)||estimate",
+          "value": 1.33788277771122,
+          "rel": 1e-09,
+          "abs": 4.36142079453009e-07
+        },
+        {
+          "key": "coef|(Intercept)||std_error",
+          "value": 0.436142079453009,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|(Intercept)||statistic",
+          "value": 3.06753886116455,
+          "rel": 1e-07,
+          "abs": 1e-06
+        },
+        {
+          "key": "coef|(Intercept)||p_value",
+          "value": 0.00215829395300418,
+          "rel": 9.40979466475468e-05
+        },
+        {
+          "key": "coef|(Intercept)||significance",
+          "text": "**"
+        },
+        {
+          "key": "coef|load||estimate",
+          "value": 0.0285937373065442,
+          "rel": 1e-09,
+          "abs": 8.49500564401918e-09
+        },
+        {
+          "key": "coef|load||std_error",
+          "value": 0.00849500564401918,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|load||statistic",
+          "value": 3.36594682861397,
+          "rel": 1e-07,
+          "abs": 1e-06
+        },
+        {
+          "key": "coef|load||p_value",
+          "value": 0.000762814107710941,
+          "rel": 0.000113295980530565
+        },
+        {
+          "key": "coef|load||significance",
+          "text": "***"
+        },
+        {
+          "key": "coef|load||time_ratio",
+          "value": 1.02900646260811,
+          "rel": 8.49500564401918e-09
+        },
+        {
+          "key": "coef|load||tr_ci_low",
+          "value": 1.01201544458435,
+          "rel": 8.49500564401918e-09
+        },
+        {
+          "key": "coef|load||tr_ci_high",
+          "value": 1.04628274771453,
+          "rel": 8.49500564401918e-09
+        },
+        {
+          "key": "coef|line|B|estimate",
+          "value": 0.361995359986406,
+          "rel": 1e-09,
+          "abs": 5.70837848793339e-07
+        },
+        {
+          "key": "coef|line|B|std_error",
+          "value": 0.570837848793339,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|line|B|statistic",
+          "value": 0.634147439157385,
+          "rel": 1e-07,
+          "abs": 1e-06
+        },
+        {
+          "key": "coef|line|B|p_value",
+          "value": 0.525984605743624,
+          "rel": 1e-05
+        },
+        {
+          "key": "coef|line|B|significance",
+          "text": ""
+        },
+        {
+          "key": "coef|line|B|time_ratio",
+          "value": 1.4361922779932,
+          "rel": 5.70837848793339e-07
+        },
+        {
+          "key": "coef|line|B|tr_ci_low",
+          "value": 0.469153034277418,
+          "rel": 5.70837848793339e-07
+        },
+        {
+          "key": "coef|line|B|tr_ci_high",
+          "value": 4.39653611650226,
+          "rel": 5.70837848793339e-07
+        },
+        {
+          "key": "coef|line|C|estimate",
+          "value": -0.134765539460974,
+          "rel": 1e-09,
+          "abs": 5.36155806351171e-07
+        },
+        {
+          "key": "coef|line|C|std_error",
+          "value": 0.536155806351171,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|line|C|statistic",
+          "value": -0.251355180461676,
+          "rel": 1e-07,
+          "abs": 1e-06
+        },
+        {
+          "key": "coef|line|C|p_value",
+          "value": 0.801539516311077,
+          "rel": 1e-05
+        },
+        {
+          "key": "coef|line|C|significance",
+          "text": ""
+        },
+        {
+          "key": "coef|line|C|time_ratio",
+          "value": 0.873920787608365,
+          "rel": 5.36155806351171e-07
+        },
+        {
+          "key": "coef|line|C|tr_ci_low",
+          "value": 0.305559239247505,
+          "rel": 5.36155806351171e-07
+        },
+        {
+          "key": "coef|line|C|tr_ci_high",
+          "value": 2.49947455326459,
+          "rel": 5.36155806351171e-07
+        },
+        {
+          "key": "coef|load × line|B|estimate",
+          "value": 0.00127366484624526,
+          "rel": 1e-09,
+          "abs": 1.11958901364835e-08
+        },
+        {
+          "key": "coef|load × line|B|std_error",
+          "value": 0.0111958901364835,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|load × line|B|statistic",
+          "value": 0.113761820696581,
+          "rel": 1e-07,
+          "abs": 1e-06
+        },
+        {
+          "key": "coef|load × line|B|p_value",
+          "value": 0.909426604721214,
+          "rel": 1e-05
+        },
+        {
+          "key": "coef|load × line|B|significance",
+          "text": ""
+        },
+        {
+          "key": "coef|load × line|B|time_ratio",
+          "value": 1.00127447630179,
+          "rel": 1.11958901364835e-08
+        },
+        {
+          "key": "coef|load × line|B|tr_ci_low",
+          "value": 0.979542281031407,
+          "rel": 1.11958901364835e-08
+        },
+        {
+          "key": "coef|load × line|B|tr_ci_high",
+          "value": 1.02348882361442,
+          "rel": 1.11958901364835e-08
+        },
+        {
+          "key": "coef|load × line|C|estimate",
+          "value": -0.0049689804964588,
+          "rel": 1e-09,
+          "abs": 1.04305283458716e-08
+        },
+        {
+          "key": "coef|load × line|C|std_error",
+          "value": 0.0104305283458716,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|load × line|C|statistic",
+          "value": -0.476388187797363,
+          "rel": 1e-07,
+          "abs": 1e-06
+        },
+        {
+          "key": "coef|load × line|C|p_value",
+          "value": 0.633797848412663,
+          "rel": 1e-05
+        },
+        {
+          "key": "coef|load × line|C|significance",
+          "text": ""
+        },
+        {
+          "key": "coef|load × line|C|time_ratio",
+          "value": 0.995043344464514,
+          "rel": 1.04305283458716e-08
+        },
+        {
+          "key": "coef|load × line|C|tr_ci_low",
+          "value": 0.974907737766011,
+          "rel": 1.04305283458716e-08
+        },
+        {
+          "key": "coef|load × line|C|tr_ci_high",
+          "value": 1.01559482913937,
+          "rel": 1.04305283458716e-08
+        },
+        {
+          "key": "parameter|shape||estimate",
+          "value": 2.22536966521078,
+          "rel": 4.61193887256098e-08
+        },
+        {
+          "key": "parameter|shape||std_error",
+          "value": 0.102632688648036,
+          "rel": 1e-06
+        },
+        {
+          "key": "parameter|shape||ci_low",
+          "value": 2.03303693577495,
+          "rel": 4.61193887256098e-08
+        },
+        {
+          "key": "parameter|shape||ci_high",
+          "value": 2.4358977742589,
+          "rel": 4.61193887256098e-08
+        },
+        {
+          "key": "stratum|all||median",
+          "value": 15.9320990196629,
+          "rel": 1e-08
+        },
+        {
+          "key": "stratum|all||quantile_0.25",
+          "value": 9.72460788772621,
+          "rel": 1e-08
+        },
+        {
+          "key": "stratum|all||quantile_0.75",
+          "value": 26.1020065901798,
+          "rel": 1e-08
+        },
+        {
+          "key": "stratum|all||surv_at_10",
+          "value": 0.738167866578489,
+          "rel": 1e-08
+        },
+        {
+          "key": "stratum|all||surv_at_30",
+          "value": 0.19649431085759,
+          "rel": 1e-08
+        },
+        {
+          "key": "model|||n_missing",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n_zero_time",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||events",
+          "value": 170,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||censored",
+          "value": 66,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||last_time",
+          "value": 54.79,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||last_event_time",
+          "value": 46.73,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n_strata",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lr_statistic",
+          "value": 102.628734078545,
+          "rel": 1e-08
+        },
+        {
+          "key": "model|||lr_df",
+          "value": 5,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lr_p_value",
+          "value": 1.47505410874095e-20,
+          "rel": 1e-06
+        },
+        {
+          "key": "model|||distribution",
+          "text": "loglogistic"
+        },
+        {
+          "key": "model|||selection",
+          "text": "manual"
+        },
+        {
+          "key": "model|||coefficient_scale",
+          "text": "log_time_ratio"
+        },
+        {
+          "key": "model|||formula",
+          "text": "Surv(days, status = failed) ~ load + line + load × line"
+        },
+        {
+          "key": "model|||profile",
+          "text": "load = 50.03 (mean); line = A (reference)"
+        },
+        {
+          "key": "model|||note_zero_times",
+          "text": "2 rows have a time of 0 and are left out: a parametric distribution gives an event at 0 no density; if those events are real, count time from a moment before them."
+        },
+        {
+          "key": "model|||concordance",
+          "value": 0.678400546821599,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||log_lik",
+          "value": -1254.03491059373,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|(Intercept)||estimate",
+          "value": 1.33788276117554,
+          "rel": 1e-09,
+          "abs": 4.36142063785007e-07
+        },
+        {
+          "key": "coef|(Intercept)||std_error",
+          "value": 0.436142063785007,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|load||estimate",
+          "value": 0.0285937376290844,
+          "rel": 1e-09,
+          "abs": 8.49500533681539e-09
+        },
+        {
+          "key": "coef|load||std_error",
+          "value": 0.00849500533681539,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|line|B|estimate",
+          "value": 0.361995383929461,
+          "rel": 1e-09,
+          "abs": 5.70837815844873e-07
+        },
+        {
+          "key": "coef|line|B|std_error",
+          "value": 0.570837815844873,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|line|C|estimate",
+          "value": -0.13476551905295,
+          "rel": 1e-09,
+          "abs": 5.36155790515724e-07
+        },
+        {
+          "key": "coef|line|C|std_error",
+          "value": 0.536155790515724,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|load × line|B|estimate",
+          "value": 0.00127366437360759,
+          "rel": 1e-09,
+          "abs": 1.11958894765944e-08
+        },
+        {
+          "key": "coef|load × line|B|std_error",
+          "value": 0.0111958894765944,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|load × line|C|estimate",
+          "value": -0.00496898089235264,
+          "rel": 1e-09,
+          "abs": 1.04305280388107e-08
+        },
+        {
+          "key": "coef|load × line|C|std_error",
+          "value": 0.0104305280388107,
+          "rel": 1e-06
+        },
+        {
+          "key": "parameter|shape||estimate",
+          "value": 2.22536966527257,
+          "rel": 4.61193887242646e-08
+        },
+        {
+          "key": "stratum|all||median",
+          "value": 15.9320990132896,
+          "rel": 1e-08
+        },
+        {
+          "key": "stratum|all||median_ci_low",
+          "value": 13.9079267275325,
+          "rel": 1e-06
+        },
+        {
+          "key": "stratum|all||median_ci_high",
+          "value": 18.250871171673,
+          "rel": 1e-06
+        }
+      ]
+    },
+    {
+      "id": "ps_gengamma",
+      "model": "parametric_survival",
+      "data": "data/ps_weibull.csv",
+      "types": {
+        "days": "number",
+        "status": "text",
+        "load": "number",
+        "line": "text",
+        "plant": "text",
+        "w": "integer"
+      },
+      "params": {
+        "time": "days",
+        "event": "status",
+        "event_value": "failed",
+        "predictors": [
+          "load",
+          "line"
+        ],
+        "interactions": [
+          [
+            "load",
+            "line"
+          ]
+        ],
+        "weights": "w",
+        "quantiles": [
+          0.25,
+          0.75
+        ],
+        "times": [
+          10,
+          30
+        ],
+        "distribution": "gengamma"
+      },
+      "expect": [
+        {
+          "key": "model|||log_lik",
+          "value": -1246.39913473074,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||aic",
+          "value": 2508.79826946148,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||bic",
+          "value": 2536.50892390168,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n_parameters",
+          "value": 8,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n",
+          "value": 236,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|(Intercept)||estimate",
+          "value": 2.05064443456785,
+          "rel": 1e-09,
+          "abs": 4.09573215682813e-07
+        },
+        {
+          "key": "coef|(Intercept)||std_error",
+          "value": 0.409573215682813,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|(Intercept)||statistic",
+          "value": 5.00678353966372,
+          "rel": 1e-07,
+          "abs": 1e-06
+        },
+        {
+          "key": "coef|(Intercept)||p_value",
+          "value": 5.53471085644164e-07,
+          "rel": 0.000250678814130476
+        },
+        {
+          "key": "coef|(Intercept)||significance",
+          "text": "***"
+        },
+        {
+          "key": "coef|load||estimate",
+          "value": 0.0197560668494815,
+          "rel": 1e-09,
+          "abs": 7.87895220676344e-09
+        },
+        {
+          "key": "coef|load||std_error",
+          "value": 0.00787895220676344,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|load||statistic",
+          "value": 2.50744849455014,
+          "rel": 1e-07,
+          "abs": 1e-06
+        },
+        {
+          "key": "coef|load||p_value",
+          "value": 0.0121606302890121,
+          "rel": 6.28729795282176e-05
+        },
+        {
+          "key": "coef|load||significance",
+          "text": "*"
+        },
+        {
+          "key": "coef|load||time_ratio",
+          "value": 1.01995250944997,
+          "rel": 7.87895220676344e-09
+        },
+        {
+          "key": "coef|load||tr_ci_low",
+          "value": 1.00432292127107,
+          "rel": 7.87895220676344e-09
+        },
+        {
+          "key": "coef|load||tr_ci_high",
+          "value": 1.03582533018034,
+          "rel": 7.87895220676344e-09
+        },
+        {
+          "key": "coef|line|B|estimate",
+          "value": -0.0644989631676312,
+          "rel": 1e-09,
+          "abs": 5.45399227133658e-07
+        },
+        {
+          "key": "coef|line|B|std_error",
+          "value": 0.545399227133658,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|line|B|statistic",
+          "value": -0.118260092715212,
+          "rel": 1e-07,
+          "abs": 1e-06
+        },
+        {
+          "key": "coef|line|B|p_value",
+          "value": 0.905861576850409,
+          "rel": 1e-05
+        },
+        {
+          "key": "coef|line|B|significance",
+          "text": ""
+        },
+        {
+          "key": "coef|line|B|time_ratio",
+          "value": 0.937537086330344,
+          "rel": 5.45399227133658e-07
+        },
+        {
+          "key": "coef|line|B|tr_ci_low",
+          "value": 0.321916911503144,
+          "rel": 5.45399227133658e-07
+        },
+        {
+          "key": "coef|line|B|tr_ci_high",
+          "value": 2.73044303308124,
+          "rel": 5.45399227133658e-07
+        },
+        {
+          "key": "coef|line|C|estimate",
+          "value": -0.558064264461084,
+          "rel": 1e-09,
+          "abs": 4.91857302157229e-07
+        },
+        {
+          "key": "coef|line|C|std_error",
+          "value": 0.491857302157229,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|line|C|statistic",
+          "value": -1.13460603718493,
+          "rel": 1e-07,
+          "abs": 1e-06
+        },
+        {
+          "key": "coef|line|C|p_value",
+          "value": 0.256540422485074,
+          "rel": 1.28733085961649e-05
+        },
+        {
+          "key": "coef|line|C|significance",
+          "text": ""
+        },
+        {
+          "key": "coef|line|C|time_ratio",
+          "value": 0.572315844405488,
+          "rel": 4.91857302157229e-07
+        },
+        {
+          "key": "coef|line|C|tr_ci_low",
+          "value": 0.218255941291127,
+          "rel": 4.91857302157229e-07
+        },
+        {
+          "key": "coef|line|C|tr_ci_high",
+          "value": 1.50074002027125,
+          "rel": 4.91857302157229e-07
+        },
+        {
+          "key": "coef|load × line|B|estimate",
+          "value": 0.00898045463192644,
+          "rel": 1e-09,
+          "abs": 1.0783909108315e-08
+        },
+        {
+          "key": "coef|load × line|B|std_error",
+          "value": 0.010783909108315,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|load × line|B|statistic",
+          "value": 0.832764310392974,
+          "rel": 1e-07,
+          "abs": 1e-06
+        },
+        {
+          "key": "coef|load × line|B|p_value",
+          "value": 0.404977666636719,
+          "rel": 1e-05
+        },
+        {
+          "key": "coef|load × line|B|significance",
+          "text": ""
+        },
+        {
+          "key": "coef|load × line|B|time_ratio",
+          "value": 1.00902089989625,
+          "rel": 1.0783909108315e-08
+        },
+        {
+          "key": "coef|load × line|B|tr_ci_low",
+          "value": 0.987917962258684,
+          "rel": 1.0783909108315e-08
+        },
+        {
+          "key": "coef|load × line|B|tr_ci_high",
+          "value": 1.03057461785561,
+          "rel": 1.0783909108315e-08
+        },
+        {
+          "key": "coef|load × line|C|estimate",
+          "value": 0.0029952344084274,
+          "rel": 1e-09,
+          "abs": 9.71259028284322e-09
+        },
+        {
+          "key": "coef|load × line|C|std_error",
+          "value": 0.00971259028284322,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|load × line|C|statistic",
+          "value": 0.308386776462539,
+          "rel": 1e-07,
+          "abs": 1e-06
+        },
+        {
+          "key": "coef|load × line|C|p_value",
+          "value": 0.757788042840846,
+          "rel": 1e-05
+        },
+        {
+          "key": "coef|load × line|C|significance",
+          "text": ""
+        },
+        {
+          "key": "coef|load × line|C|time_ratio",
+          "value": 1.00299972460495,
+          "rel": 9.71259028284322e-09
+        },
+        {
+          "key": "coef|load × line|C|tr_ci_low",
+          "value": 0.98408688039559,
+          "rel": 9.71259028284322e-09
+        },
+        {
+          "key": "coef|load × line|C|tr_ci_high",
+          "value": 1.02227604858751,
+          "rel": 9.71259028284322e-09
+        },
+        {
+          "key": "parameter|sigma||estimate",
+          "value": 0.631414036465418,
+          "rel": 5.74885430924447e-08
+        },
+        {
+          "key": "parameter|sigma||std_error",
+          "value": 0.0362990730445166,
+          "rel": 1e-06
+        },
+        {
+          "key": "parameter|sigma||ci_low",
+          "value": 0.56413090892838,
+          "rel": 5.74885430924447e-08
+        },
+        {
+          "key": "parameter|sigma||ci_high",
+          "value": 0.706721931267496,
+          "rel": 5.74885430924447e-08
+        },
+        {
+          "key": "parameter|Q||estimate",
+          "value": 0.904794410909934,
+          "rel": 1e-09,
+          "abs": 1.29790867323627e-07
+        },
+        {
+          "key": "parameter|Q||std_error",
+          "value": 0.129790867323627,
+          "rel": 1e-06
+        },
+        {
+          "key": "parameter|Q||ci_low",
+          "value": 0.650408985433408,
+          "rel": 1e-09,
+          "abs": 1.29790867323627e-07
+        },
+        {
+          "key": "parameter|Q||ci_high",
+          "value": 1.15917983638646,
+          "rel": 1e-09,
+          "abs": 1.29790867323627e-07
+        },
+        {
+          "key": "stratum|all||median",
+          "value": 16.9923607757543,
+          "rel": 1e-08
+        },
+        {
+          "key": "stratum|all||quantile_0.25",
+          "value": 9.95751978206279,
+          "rel": 1e-08
+        },
+        {
+          "key": "stratum|all||quantile_0.75",
+          "value": 26.160953129629,
+          "rel": 1e-08
+        },
+        {
+          "key": "stratum|all||surv_at_10",
+          "value": 0.748466711394234,
+          "rel": 1e-08
+        },
+        {
+          "key": "stratum|all||surv_at_30",
+          "value": 0.178768070993884,
+          "rel": 1e-08
+        },
+        {
+          "key": "model|||n_missing",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n_zero_time",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||events",
+          "value": 170,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||censored",
+          "value": 66,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||last_time",
+          "value": 54.79,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||last_event_time",
+          "value": 46.73,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n_strata",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lr_statistic",
+          "value": 112.165461683304,
+          "rel": 1e-08
+        },
+        {
+          "key": "model|||lr_df",
+          "value": 5,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lr_p_value",
+          "value": 1.42807189710433e-22,
+          "rel": 1e-06
+        },
+        {
+          "key": "model|||distribution",
+          "text": "gengamma"
+        },
+        {
+          "key": "model|||selection",
+          "text": "manual"
+        },
+        {
+          "key": "model|||coefficient_scale",
+          "text": "log_time_ratio"
+        },
+        {
+          "key": "model|||formula",
+          "text": "Surv(days, status = failed) ~ load + line + load × line"
+        },
+        {
+          "key": "model|||profile",
+          "text": "load = 50.03 (mean); line = A (reference)"
+        },
+        {
+          "key": "model|||note_zero_times",
+          "text": "2 rows have a time of 0 and are left out: a parametric distribution gives an event at 0 no density; if those events are real, count time from a moment before them."
+        },
+        {
+          "key": "model|||concordance",
+          "value": 0.678078128425695,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||variant",
+          "text": "aft"
+        }
+      ]
+    },
+    {
+      "id": "ps_weibull_strata",
+      "model": "parametric_survival",
+      "data": "data/ps_weibull.csv",
+      "types": {
+        "days": "number",
+        "status": "text",
+        "load": "number",
+        "line": "text",
+        "plant": "text",
+        "w": "integer"
+      },
+      "params": {
+        "time": "days",
+        "event": "status",
+        "event_value": "failed",
+        "predictors": [
+          "load",
+          "line"
+        ],
+        "strata": "plant",
+        "times": [
+          20
+        ]
+      },
+      "expect": [
+        {
+          "key": "model|||log_lik",
+          "value": -636.629926844859,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||aic",
+          "value": 1291.25985368972,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||bic",
+          "value": 1322.43433993495,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n_parameters",
+          "value": 9,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n",
+          "value": 236,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|(Intercept)||estimate",
+          "value": 1.83349894801048,
+          "rel": 1e-09,
+          "abs": 2.47675768170733e-07
+        },
+        {
+          "key": "coef|(Intercept)||std_error",
+          "value": 0.247675768170733,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|(Intercept)||statistic",
+          "value": 7.40281926468709,
+          "rel": 1e-07,
+          "abs": 1e-06
+        },
+        {
+          "key": "coef|(Intercept)||p_value",
+          "value": 1.33323153931123e-13,
+          "rel": 0.000548017330656223
+        },
+        {
+          "key": "coef|(Intercept)||significance",
+          "text": "***"
+        },
+        {
+          "key": "coef|load||estimate",
+          "value": 0.023736377452568,
+          "rel": 1e-09,
+          "abs": 4.40084324714714e-09
+        },
+        {
+          "key": "coef|load||std_error",
+          "value": 0.00440084324714714,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|load||statistic",
+          "value": 5.39359757200058,
+          "rel": 1e-07,
+          "abs": 1e-06
+        },
+        {
+          "key": "coef|load||p_value",
+          "value": 6.9060796365818e-08,
+          "rel": 0.000290908947686906
+        },
+        {
+          "key": "coef|load||significance",
+          "text": "***"
+        },
+        {
+          "key": "coef|load||time_ratio",
+          "value": 1.02402032745706,
+          "rel": 4.40084324714714e-09
+        },
+        {
+          "key": "coef|load||tr_ci_low",
+          "value": 1.01522562982771,
+          "rel": 4.40084324714714e-09
+        },
+        {
+          "key": "coef|load||tr_ci_high",
+          "value": 1.03289121180206,
+          "rel": 4.40084324714714e-09
+        },
+        {
+          "key": "coef|line|B|estimate",
+          "value": 0.329971305460976,
+          "rel": 1e-09,
+          "abs": 1.05043588794154e-07
+        },
+        {
+          "key": "coef|line|B|std_error",
+          "value": 0.105043588794154,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|line|B|statistic",
+          "value": 3.14127981772973,
+          "rel": 1e-07,
+          "abs": 1e-06
+        },
+        {
+          "key": "coef|line|B|p_value",
+          "value": 0.00168211236265252,
+          "rel": 9.8676388932761e-05
+        },
+        {
+          "key": "coef|line|B|significance",
+          "text": "**"
+        },
+        {
+          "key": "coef|line|B|time_ratio",
+          "value": 1.39092821584718,
+          "rel": 1.05043588794154e-07
+        },
+        {
+          "key": "coef|line|B|tr_ci_low",
+          "value": 1.13211736599889,
+          "rel": 1.05043588794154e-07
+        },
+        {
+          "key": "coef|line|B|tr_ci_high",
+          "value": 1.70890524228714,
+          "rel": 1.05043588794154e-07
+        },
+        {
+          "key": "coef|line|C|estimate",
+          "value": -0.409359173288139,
+          "rel": 1e-09,
+          "abs": 9.65752049925246e-08
+        },
+        {
+          "key": "coef|line|C|std_error",
+          "value": 0.0965752049925246,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|line|C|statistic",
+          "value": -4.2387605940865,
+          "rel": 1e-07,
+          "abs": 1e-06
+        },
+        {
+          "key": "coef|line|C|p_value",
+          "value": 2.24757183193602e-05,
+          "rel": 0.000179670913739805
+        },
+        {
+          "key": "coef|line|C|significance",
+          "text": "***"
+        },
+        {
+          "key": "coef|line|C|time_ratio",
+          "value": 0.664075671239985,
+          "rel": 9.65752049925246e-08
+        },
+        {
+          "key": "coef|line|C|tr_ci_low",
+          "value": 0.549556825779915,
+          "rel": 9.65752049925246e-08
+        },
+        {
+          "key": "coef|line|C|tr_ci_high",
+          "value": 0.802458410933187,
+          "rel": 9.65752049925246e-08
+        },
+        {
+          "key": "parameter|shape|plant=P|estimate",
+          "value": 1.71304019099557,
+          "rel": 1.13970217876108e-07
+        },
+        {
+          "key": "parameter|shape|plant=P|std_error",
+          "value": 0.195235563798294,
+          "rel": 1e-06
+        },
+        {
+          "key": "parameter|shape|plant=P|ci_low",
+          "value": 1.37011154887729,
+          "rel": 1.13970217876108e-07
+        },
+        {
+          "key": "parameter|shape|plant=P|ci_high",
+          "value": 2.14180129958817,
+          "rel": 1.13970217876108e-07
+        },
+        {
+          "key": "parameter|shape|plant=Q|estimate",
+          "value": 1.25205036569391,
+          "rel": 1.10198653454118e-07
+        },
+        {
+          "key": "parameter|shape|plant=Q|std_error",
+          "value": 0.137974264356204,
+          "rel": 1e-06
+        },
+        {
+          "key": "parameter|shape|plant=Q|ci_low",
+          "value": 1.00883591641648,
+          "rel": 1.10198653454118e-07
+        },
+        {
+          "key": "parameter|shape|plant=Q|ci_high",
+          "value": 1.55389998782228,
+          "rel": 1.10198653454118e-07
+        },
+        {
+          "key": "parameter|shape|plant=R|estimate",
+          "value": 2.44142531604055,
+          "rel": 9.14701143258568e-08
+        },
+        {
+          "key": "parameter|shape|plant=R|std_error",
+          "value": 0.22331745277627,
+          "rel": 1e-06
+        },
+        {
+          "key": "parameter|shape|plant=R|ci_low",
+          "value": 2.04072244513626,
+          "rel": 9.14701143258568e-08
+        },
+        {
+          "key": "parameter|shape|plant=R|ci_high",
+          "value": 2.92080757381276,
+          "rel": 9.14701143258568e-08
+        },
+        {
+          "key": "stratum|plant=P||median",
+          "value": 16.6001324885219,
+          "rel": 1e-08
+        },
+        {
+          "key": "stratum|plant=P||quantile_0.25",
+          "value": 9.93498433032761,
+          "rel": 1e-08
+        },
+        {
+          "key": "stratum|plant=P||quantile_0.75",
+          "value": 24.879409105999,
+          "rel": 1e-08
+        },
+        {
+          "key": "stratum|plant=Q||median",
+          "value": 19.8750008338503,
+          "rel": 1e-08
+        },
+        {
+          "key": "stratum|plant=Q||quantile_0.25",
+          "value": 9.84639748810123,
+          "rel": 1e-08
+        },
+        {
+          "key": "stratum|plant=Q||quantile_0.75",
+          "value": 34.5729769924094,
+          "rel": 1e-08
+        },
+        {
+          "key": "stratum|plant=R||median",
+          "value": 16.0813395119747,
+          "rel": 1e-08
+        },
+        {
+          "key": "stratum|plant=R||quantile_0.25",
+          "value": 11.217395078643,
+          "rel": 1e-08
+        },
+        {
+          "key": "stratum|plant=R||quantile_0.75",
+          "value": 21.3610769373094,
+          "rel": 1e-08
+        },
+        {
+          "key": "stratum|plant=P||surv_at_20",
+          "value": 0.38528715468333,
+          "rel": 1e-08
+        },
+        {
+          "key": "stratum|plant=Q||surv_at_20",
+          "value": 0.497276200409084,
+          "rel": 1e-08
+        },
+        {
+          "key": "stratum|plant=R||surv_at_20",
+          "value": 0.307140641714969,
+          "rel": 1e-08
+        },
+        {
+          "key": "model|||log_lik",
+          "value": -636.629926844859,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|(Intercept)||estimate",
+          "value": 1.83349894867403,
+          "rel": 1e-09,
+          "abs": 2.4767576815494e-07
+        },
+        {
+          "key": "coef|(Intercept)||std_error",
+          "value": 0.24767576815494,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|load||estimate",
+          "value": 0.0237363774518388,
+          "rel": 1e-09,
+          "abs": 4.40084324722782e-09
+        },
+        {
+          "key": "coef|load||std_error",
+          "value": 0.00440084324722782,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|line|B|estimate",
+          "value": 0.329971305434651,
+          "rel": 1e-09,
+          "abs": 1.0504358879676e-07
+        },
+        {
+          "key": "coef|line|B|std_error",
+          "value": 0.10504358879676,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|line|C|estimate",
+          "value": -0.409359173225049,
+          "rel": 1e-09,
+          "abs": 9.65752049985907e-08
+        },
+        {
+          "key": "coef|line|C|std_error",
+          "value": 0.0965752049985907,
+          "rel": 1e-06
+        },
+        {
+          "key": "parameter|shape|plant=P|estimate",
+          "value": 1.71304019107121,
+          "rel": 1.139702178947e-07
+        },
+        {
+          "key": "parameter|shape|plant=Q|estimate",
+          "value": 1.25205036572,
+          "rel": 1.1019865345862e-07
+        },
+        {
+          "key": "parameter|shape|plant=R|estimate",
+          "value": 2.44142531579948,
+          "rel": 9.14701143304517e-08
+        },
+        {
+          "key": "stratum|plant=P||median",
+          "value": 16.6001324990871,
+          "rel": 1e-08
+        },
+        {
+          "key": "stratum|plant=P||median_ci_low",
+          "value": 13.3753226674355,
+          "rel": 1e-06
+        },
+        {
+          "key": "stratum|plant=P||median_ci_high",
+          "value": 20.6024486914365,
+          "rel": 1e-06
+        },
+        {
+          "key": "stratum|plant=Q||median",
+          "value": 19.8750008294503,
+          "rel": 1e-08
+        },
+        {
+          "key": "stratum|plant=Q||median_ci_low",
+          "value": 15.5226466977956,
+          "rel": 1e-06
+        },
+        {
+          "key": "stratum|plant=Q||median_ci_high",
+          "value": 25.4477001030208,
+          "rel": 1e-06
+        },
+        {
+          "key": "stratum|plant=R||median",
+          "value": 16.0813395087048,
+          "rel": 1e-08
+        },
+        {
+          "key": "stratum|plant=R||median_ci_low",
+          "value": 13.6251176808787,
+          "rel": 1e-06
+        },
+        {
+          "key": "stratum|plant=R||median_ci_high",
+          "value": 18.9803483868003,
+          "rel": 1e-06
+        },
+        {
+          "key": "model|||n_strata",
+          "value": 3,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||formula",
+          "text": "Surv(days, status = failed) ~ load + line + strata(plant)"
+        },
+        {
+          "key": "model|||note_strata_no_hr",
+          "text": "With strata, a Weibull model has a shape per stratum: the hazard ratio of a predictor differs in each stratum while its time ratio is common, so only the time ratios are given."
+        },
+        {
+          "key": "stratum|plant=P||n",
+          "value": 64,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|plant=P||events",
+          "value": 46,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|plant=P||km_median",
+          "value": 15.69,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|plant=Q||n",
+          "value": 82,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|plant=Q||events",
+          "value": 54,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|plant=Q||km_median",
+          "value": 17.03,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|plant=R||n",
+          "value": 90,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|plant=R||events",
+          "value": 70,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|plant=R||km_median",
+          "value": 16.37,
+          "rel": 1e-09
+        }
+      ]
+    },
+    {
+      "id": "ps_gompertz",
+      "model": "parametric_survival",
+      "data": "data/ps_gompertz.csv",
+      "types": {
+        "years": "number",
+        "died": "integer",
+        "age": "number",
+        "smoker": "boolean"
+      },
+      "params": {
+        "time": "years",
+        "event": "died",
+        "event_value": 1,
+        "predictors": [
+          "age",
+          "smoker"
+        ],
+        "distribution": "gompertz",
+        "times": [
+          10,
+          20
+        ]
+      },
+      "expect": [
+        {
+          "key": "model|||log_lik",
+          "value": -414.173847953913,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||aic",
+          "value": 836.347695907827,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||bic",
+          "value": 849.540965374019,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n_parameters",
+          "value": 4,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n",
+          "value": 200,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|(Intercept)||estimate",
+          "value": -6.01415720375233,
+          "rel": 1e-09,
+          "abs": 5.55015123719869e-07
+        },
+        {
+          "key": "coef|(Intercept)||std_error",
+          "value": 0.555015123719869,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|(Intercept)||statistic",
+          "value": -10.8360240049744,
+          "rel": 1e-07,
+          "abs": 1e-06
+        },
+        {
+          "key": "coef|(Intercept)||p_value",
+          "value": 2.32351136290986e-27,
+          "rel": 0.00117419416236381
+        },
+        {
+          "key": "coef|(Intercept)||significance",
+          "text": "***"
+        },
+        {
+          "key": "coef|age||estimate",
+          "value": 0.0246758933487069,
+          "rel": 1e-09,
+          "abs": 9.21006955166953e-09
+        },
+        {
+          "key": "coef|age||std_error",
+          "value": 0.00921006955166953,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|age||statistic",
+          "value": 2.67922985926136,
+          "rel": 1e-07,
+          "abs": 1e-06
+        },
+        {
+          "key": "coef|age||p_value",
+          "value": 0.00737917188671508,
+          "rel": 7.17827263875766e-05
+        },
+        {
+          "key": "coef|age||significance",
+          "text": "**"
+        },
+        {
+          "key": "coef|age||hazard_ratio",
+          "value": 1.02498286292055,
+          "rel": 9.21006955166953e-09
+        },
+        {
+          "key": "coef|age||hr_ci_low",
+          "value": 1.0066464791895,
+          "rel": 9.21006955166953e-09
+        },
+        {
+          "key": "coef|age||hr_ci_high",
+          "value": 1.04365324967579,
+          "rel": 9.21006955166953e-09
+        },
+        {
+          "key": "coef|smoker|true|estimate",
+          "value": 0.608389675371972,
+          "rel": 1e-09,
+          "abs": 2.05892171907585e-07
+        },
+        {
+          "key": "coef|smoker|true|std_error",
+          "value": 0.205892171907585,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|smoker|true|statistic",
+          "value": 2.95489464089508,
+          "rel": 1e-07,
+          "abs": 1e-06
+        },
+        {
+          "key": "coef|smoker|true|p_value",
+          "value": 0.00312775844376816,
+          "rel": 8.73140233879046e-05
+        },
+        {
+          "key": "coef|smoker|true|significance",
+          "text": "**"
+        },
+        {
+          "key": "coef|smoker|true|hazard_ratio",
+          "value": 1.83747009174673,
+          "rel": 2.05892171907585e-07
+        },
+        {
+          "key": "coef|smoker|true|hr_ci_low",
+          "value": 1.22733902767197,
+          "rel": 2.05892171907585e-07
+        },
+        {
+          "key": "coef|smoker|true|hr_ci_high",
+          "value": 2.75090766441931,
+          "rel": 2.05892171907585e-07
+        },
+        {
+          "key": "parameter|shape||estimate",
+          "value": 0.0812395757463721,
+          "rel": 1e-09,
+          "abs": 1.14270979853151e-08
+        },
+        {
+          "key": "parameter|shape||std_error",
+          "value": 0.0114270979853151,
+          "rel": 1e-06
+        },
+        {
+          "key": "parameter|shape||ci_low",
+          "value": 0.0588428752473443,
+          "rel": 1e-09,
+          "abs": 1.14270979853151e-08
+        },
+        {
+          "key": "parameter|shape||ci_high",
+          "value": 0.1036362762454,
+          "rel": 1e-09,
+          "abs": 1.14270979853151e-08
+        },
+        {
+          "key": "stratum|all||median",
+          "value": 24.8821699972279,
+          "rel": 1e-08
+        },
+        {
+          "key": "stratum|all||quantile_0.25",
+          "value": 16.1646474988668,
+          "rel": 1e-08
+        },
+        {
+          "key": "stratum|all||quantile_0.75",
+          "value": 32.570762204485,
+          "rel": 1e-08
+        },
+        {
+          "key": "stratum|all||surv_at_10",
+          "value": 0.875772280733569,
+          "rel": 1e-08
+        },
+        {
+          "key": "stratum|all||surv_at_20",
+          "value": 0.649503179931218,
+          "rel": 1e-08
+        },
+        {
+          "key": "model|||log_lik",
+          "value": -414.173847953913,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|(Intercept)||estimate",
+          "value": -6.01415720363044,
+          "rel": 1e-06,
+          "abs": 5.55015123719869e-07
+        },
+        {
+          "key": "coef|age||estimate",
+          "value": 0.0246758933458876,
+          "rel": 1e-06,
+          "abs": 9.2100695515078e-09
+        },
+        {
+          "key": "coef|smoker|true|estimate",
+          "value": 0.608389675453822,
+          "rel": 1e-06,
+          "abs": 2.05892171909503e-07
+        },
+        {
+          "key": "parameter|shape||estimate",
+          "value": 0.0812395757459058,
+          "rel": 1e-06,
+          "abs": 1.14270979852221e-08
+        },
+        {
+          "key": "model|||variant",
+          "text": "ph"
+        },
+        {
+          "key": "model|||coefficient_scale",
+          "text": "log_hazard_ratio"
+        },
+        {
+          "key": "coef|age||cox_hazard_ratio",
+          "value": 1.02359179568408,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|age||cox_hr_ci_low",
+          "value": 1.00526898298088,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|age||cox_hr_ci_high",
+          "value": 1.04224857419248,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|smoker|true|cox_hazard_ratio",
+          "value": 1.78490642004065,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|smoker|true|cox_hr_ci_low",
+          "value": 1.19202044858942,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|smoker|true|cox_hr_ci_high",
+          "value": 2.67268143937663,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||exponential_lr_statistic",
+          "value": 46.299215023153,
+          "rel": 1e-08
+        }
+      ]
+    },
+    {
+      "id": "ps_gompertz_cure",
+      "model": "parametric_survival",
+      "data": "data/ps_gompertz_cure.csv",
+      "types": {
+        "months": "number",
+        "left": "integer"
+      },
+      "params": {
+        "time": "months",
+        "event": "left",
+        "event_value": 1,
+        "distribution": "gompertz",
+        "quantiles": [
+          0.25,
+          0.75
+        ],
+        "times": [
+          12,
+          120
+        ]
+      },
+      "expect": [
+        {
+          "key": "model|||log_lik",
+          "value": -576.956124189173,
+          "rel": 1e-09
+        },
+        {
+          "key": "parameter|shape||estimate",
+          "value": -0.0746136834029819,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|(Intercept)||estimate",
+          "value": -3.19736914190671,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|all||median",
+          "value": null,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|all||quantile_0.75",
+          "value": null,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|all||median_ci_low",
+          "value": null,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|all||quantile_0.25",
+          "value": 9.98312536013562,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|all||surv_at_120",
+          "value": 0.578290821074963,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||note_quantile_infinite",
+          "text": "The fitted distribution leaves 57.8% of the profile without the event for ever: a quantile beyond that is infinite and left empty."
+        }
+      ]
+    },
+    {
+      "id": "ps_all_events",
+      "model": "parametric_survival",
+      "data": "data/ps_all_events.csv",
+      "types": {
+        "cycles": "number",
+        "failed": "integer",
+        "temp": "number"
+      },
+      "params": {
+        "time": "cycles",
+        "event": "failed",
+        "event_value": 1,
+        "predictors": [
+          "temp"
+        ]
+      },
+      "expect": [
+        {
+          "key": "model|||log_lik",
+          "value": -548.547535735957,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||aic",
+          "value": 1103.09507147191,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||bic",
+          "value": 1110.24115137594,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n_parameters",
+          "value": 3,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n",
+          "value": 80,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|(Intercept)||estimate",
+          "value": 7.2747174559724,
+          "rel": 1e-09,
+          "abs": 2.40121775419004e-07
+        },
+        {
+          "key": "coef|(Intercept)||std_error",
+          "value": 0.240121775419004,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|(Intercept)||statistic",
+          "value": 30.295950641204,
+          "rel": 1e-07,
+          "abs": 1e-06
+        },
+        {
+          "key": "coef|(Intercept)||p_value",
+          "value": 1.29615098688411e-201,
+          "rel": 0.00917844625254269
+        },
+        {
+          "key": "coef|(Intercept)||significance",
+          "text": "***"
+        },
+        {
+          "key": "coef|temp||estimate",
+          "value": -0.0488041752690924,
+          "rel": 1e-09,
+          "abs": 1.17941601354994e-08
+        },
+        {
+          "key": "coef|temp||std_error",
+          "value": 0.0117941601354994,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|temp||statistic",
+          "value": -4.13799496601677,
+          "rel": 1e-07,
+          "abs": 1e-06
+        },
+        {
+          "key": "coef|temp||p_value",
+          "value": 3.50354056211525e-05,
+          "rel": 0.000171230023387801
+        },
+        {
+          "key": "coef|temp||significance",
+          "text": "***"
+        },
+        {
+          "key": "coef|temp||time_ratio",
+          "value": 0.952367608569995,
+          "rel": 1.17941601354994e-08
+        },
+        {
+          "key": "coef|temp||tr_ci_low",
+          "value": 0.930605058019259,
+          "rel": 1.17941601354994e-08
+        },
+        {
+          "key": "coef|temp||tr_ci_high",
+          "value": 0.974639084579917,
+          "rel": 1.17941601354994e-08
+        },
+        {
+          "key": "coef|temp||hazard_ratio",
+          "value": 1.10758603216733,
+          "rel": 2.57353627129341e-08
+        },
+        {
+          "key": "coef|temp||hr_ci_low",
+          "value": 1.05310455138636,
+          "rel": 2.57353627129341e-08
+        },
+        {
+          "key": "coef|temp||hr_ci_high",
+          "value": 1.16488606666566,
+          "rel": 2.57353627129341e-08
+        },
+        {
+          "key": "parameter|shape||estimate",
+          "value": 2.09373277535983,
+          "rel": 8.5493921312391e-08
+        },
+        {
+          "key": "parameter|shape||std_error",
+          "value": 0.179001425145787,
+          "rel": 1e-06
+        },
+        {
+          "key": "parameter|shape||ci_low",
+          "value": 1.77071511221726,
+          "rel": 8.5493921312391e-08
+        },
+        {
+          "key": "parameter|shape||ci_high",
+          "value": 2.47567601607396,
+          "rel": 8.5493921312391e-08
+        },
+        {
+          "key": "stratum|all||median",
+          "value": 459.290122364394,
+          "rel": 1e-08
+        },
+        {
+          "key": "stratum|all||quantile_0.25",
+          "value": 301.772428016605,
+          "rel": 1e-08
+        },
+        {
+          "key": "stratum|all||quantile_0.75",
+          "value": 639.534250981714,
+          "rel": 1e-08
+        },
+        {
+          "key": "model|||log_lik",
+          "value": -548.547535735957,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|(Intercept)||estimate",
+          "value": 7.27471745611517,
+          "rel": 1e-09,
+          "abs": 2.4012177547786e-07
+        },
+        {
+          "key": "coef|(Intercept)||std_error",
+          "value": 0.24012177547786,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|temp||estimate",
+          "value": -0.0488041752761105,
+          "rel": 1e-09,
+          "abs": 1.17941601354372e-08
+        },
+        {
+          "key": "coef|temp||std_error",
+          "value": 0.0117941601354372,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|temp||hazard_ratio",
+          "value": 1.1075860321855,
+          "rel": 2.57353627213373e-08
+        },
+        {
+          "key": "coef|temp||hr_ci_low",
+          "value": 1.0531045513863,
+          "rel": 1e-06
+        },
+        {
+          "key": "coef|temp||hr_ci_high",
+          "value": 1.16488606670396,
+          "rel": 1e-06
+        },
+        {
+          "key": "parameter|shape||estimate",
+          "value": 2.09373277539494,
+          "rel": 8.54939215476707e-08
+        },
+        {
+          "key": "stratum|all||median",
+          "value": 459.290122367246,
+          "rel": 1e-08
+        },
+        {
+          "key": "stratum|all||median_ci_low",
+          "value": 406.100069096139,
+          "rel": 1e-06
+        },
+        {
+          "key": "stratum|all||median_ci_high",
+          "value": 519.446886511563,
+          "rel": 1e-06
+        },
+        {
+          "key": "model|||censored",
+          "value": 0,
+          "rel": 1e-09
+        }
+      ]
+    },
+    {
+      "id": "ps_no_events",
+      "model": "parametric_survival",
+      "data": "data/ps_small.csv",
+      "types": {
+        "t": "number",
+        "t_neg": "number",
+        "e": "integer",
+        "plant": "text",
+        "kind": "text",
+        "same": "text",
+        "x": "number",
+        "x2": "number"
+      },
+      "params": {
+        "event": "e",
+        "event_value": 7,
+        "time": "t"
+      },
+      "expect": [],
+      "refuses": {
+        "code": "no_events",
+        "message": "the column «e» is never «7» in the rows the model uses: with no event there is nothing to fit; check event_value"
+      }
+    },
+    {
+      "id": "ps_negative_time",
+      "model": "parametric_survival",
+      "data": "data/ps_small.csv",
+      "types": {
+        "t": "number",
+        "t_neg": "number",
+        "e": "integer",
+        "plant": "text",
+        "kind": "text",
+        "same": "text",
+        "x": "number",
+        "x2": "number"
+      },
+      "params": {
+        "event": "e",
+        "event_value": 1,
+        "time": "t_neg"
+      },
+      "expect": [],
+      "refuses": {
+        "code": "negative_time",
+        "message": "the column «t_neg» holds a negative time (-1.0): a time is counted from the start, 0 or more"
+      }
+    },
+    {
+      "id": "ps_stratum_no_events",
+      "model": "parametric_survival",
+      "data": "data/ps_small.csv",
+      "types": {
+        "t": "number",
+        "t_neg": "number",
+        "e": "integer",
+        "plant": "text",
+        "kind": "text",
+        "same": "text",
+        "x": "number",
+        "x2": "number"
+      },
+      "params": {
+        "event": "e",
+        "event_value": 1,
+        "time": "t",
+        "strata": "plant"
+      },
+      "expect": [],
+      "refuses": {
+        "code": "stratum_no_events",
+        "message": "the stratum «plant=Z» has no event: its shape cannot be estimated; merge it with another, or leave its rows out"
+      }
+    },
+    {
+      "id": "ps_too_few_rows",
+      "model": "parametric_survival",
+      "data": "data/ps_small.csv",
+      "types": {
+        "t": "number",
+        "t_neg": "number",
+        "e": "integer",
+        "plant": "text",
+        "kind": "text",
+        "same": "text",
+        "x": "number",
+        "x2": "number"
+      },
+      "params": {
+        "event": "e",
+        "event_value": 1,
+        "time": "t",
+        "predictors": [
+          "kind"
+        ]
+      },
+      "expect": [],
+      "refuses": {
+        "code": "too_few_rows",
+        "message": "the model has 7 parameters and 8 rows it can use: it needs at least 9 rows (the parameters + 2)"
+      }
+    },
+    {
+      "id": "ps_one_level",
+      "model": "parametric_survival",
+      "data": "data/ps_small.csv",
+      "types": {
+        "t": "number",
+        "t_neg": "number",
+        "e": "integer",
+        "plant": "text",
+        "kind": "text",
+        "same": "text",
+        "x": "number",
+        "x2": "number"
+      },
+      "params": {
+        "event": "e",
+        "event_value": 1,
+        "time": "t",
+        "predictors": [
+          "same"
+        ]
+      },
+      "expect": [],
+      "refuses": {
+        "code": "one_level",
+        "message": null
+      }
+    },
+    {
+      "id": "ps_aliased",
+      "model": "parametric_survival",
+      "data": "data/ps_small.csv",
+      "types": {
+        "t": "number",
+        "t_neg": "number",
+        "e": "integer",
+        "plant": "text",
+        "kind": "text",
+        "same": "text",
+        "x": "number",
+        "x2": "number"
+      },
+      "params": {
+        "event": "e",
+        "event_value": 1,
+        "time": "t",
+        "predictors": [
+          "x",
+          "x2"
+        ],
+        "distribution": "exponential"
+      },
+      "expect": [],
+      "refuses": {
+        "code": "aliased",
+        "message": null
       }
     }
   ]
