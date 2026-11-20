@@ -1169,6 +1169,54 @@
    "model": "survival_forest",
    "params": {},
    "error": "there is no model 'survival_forest' (the models: linear, logistic, kaplan_meier, cox, arima)"
+  },
+  {
+   "what": "the answer given back to the check: an empty exog is none, not an error",
+   "model": "arima",
+   "params": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "s": null,
+    "orders": "manual",
+    "p": 1,
+    "d": 0,
+    "q": 0,
+    "P": 0,
+    "D": 0,
+    "Q": 0,
+    "drift": false,
+    "mean": true,
+    "exog": [],
+    "transform": "none",
+    "horizon": 12,
+    "holdout": 0,
+    "alpha": 0.05,
+    "seed": 1,
+    "output": "results"
+   },
+   "checked": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "s": null,
+    "orders": "manual",
+    "p": 1,
+    "d": 0,
+    "q": 0,
+    "P": 0,
+    "D": 0,
+    "Q": 0,
+    "drift": false,
+    "mean": true,
+    "exog": [],
+    "transform": "none",
+    "horizon": 12,
+    "holdout": 0,
+    "alpha": 0.05,
+    "seed": 1,
+    "output": "results"
+   }
   }
  ]
 }

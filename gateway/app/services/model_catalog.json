@@ -91,7 +91,6 @@
     },
     "number_columns": {
       "control": "columns",
-      "min": 1,
       "numeric": true
     },
     "outcome_level": {

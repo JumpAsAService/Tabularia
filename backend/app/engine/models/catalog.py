@@ -106,7 +106,7 @@ KINDS: dict[str, dict[str, Any]] = {
     "number_column": {"control": "column", "numeric": True},
     "time_column": {"control": "column", "types": ["date", "datetime", "integer"]},
     "predictors": {"control": "columns", "min": 1, "predictor": True},
-    "number_columns": {"control": "columns", "min": 1, "numeric": True},
+    "number_columns": {"control": "columns", "numeric": True},  # optional (exog): an empty list is none
     "outcome_level": {"control": "level", "of": "outcome"},
     "event_level": {"control": "level", "of": "event"},
     "reference": {"control": "reference", "of": "predictors"},
