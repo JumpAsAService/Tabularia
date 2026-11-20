@@ -154,7 +154,7 @@
    null,
    "note_clv_steps",
    null,
-   "The horizon has more than 520 periods: the sum uses steps of 2 periods, each discounted at its end.",
+   "@clv_steps max=520 step=2",
    null,
    null,
    10,

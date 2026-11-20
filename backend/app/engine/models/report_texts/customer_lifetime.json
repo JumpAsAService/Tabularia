@@ -31,6 +31,15 @@
    "holdout": "Relative error of the total of purchases in the holdout: (expected − observed) / observed.",
    "horizon_length": "The horizon over the longest age: above 1 the far periods rest on the model's form."
   },
+  "formula_in": "in {unit}",
+  "note_texts": {
+   "optimizer_fallback": "The first optimizer did not converge: the Nelder–Mead method was used, as the convergence check says.",
+   "cet_quadrature": "{n} customers needed numerical integration for their expected purchases, where the closed form gave no number.",
+   "spend_missing": "{n} customers have no average spend: they are left out of the spend fit and get the population's expected spend.",
+   "clv_steps": "The horizon has more than {max} periods: the CLV sums steps of {step} periods, each discounted at its end.",
+   "t_x_clamped": "{n} recencies above the age by a rounding error were set to the age.",
+   "unit_check": "The largest age is {age} {unit}, more than 30 years: is the unit of time right?"
+  },
   "assumptions_note": "A doubtful verdict says where to look, not that the numbers are wrong.",
   "tables": {
    "part": "Part",
@@ -263,6 +272,15 @@
   "measure_texts": {
    "holdout": "Errore relativo del totale degli acquisti nell'holdout: (atteso − osservato) / osservato.",
    "horizon_length": "L'orizzonte rispetto all'età massima: sopra 1 i periodi lontani poggiano sulla forma del modello."
+  },
+  "formula_in": "in {unit}",
+  "note_texts": {
+   "optimizer_fallback": "Il primo ottimizzatore non è convergito: è stato usato il metodo Nelder–Mead, come dice la verifica di convergenza.",
+   "cet_quadrature": "{n} clienti hanno richiesto l'integrazione numerica per gli acquisti attesi, dove la forma chiusa non dava un numero.",
+   "spend_missing": "{n} clienti non hanno la spesa media: sono esclusi dall'adattamento della spesa e ricevono la spesa attesa della popolazione.",
+   "clv_steps": "L'orizzonte ha più di {max} periodi: il CLV somma passi di {step} periodi, ognuno scontato alla sua fine.",
+   "t_x_clamped": "{n} recency sopra l'età per un errore di arrotondamento sono state portate all'età.",
+   "unit_check": "L'età massima è {age} {unit}, più di 30 anni: l'unità di tempo è giusta?"
   },
   "assumptions_note": "Un verdetto dubbio dice dove guardare, non che i numeri siano sbagliati.",
   "tables": {
@@ -497,6 +515,15 @@
    "holdout": "Relativer Fehler der Summe der Käufe im Holdout: (erwartet − beobachtet) / beobachtet.",
    "horizon_length": "Der Horizont im Verhältnis zum höchsten Alter: über 1 beruhen die fernen Perioden auf der Form des Modells."
   },
+  "formula_in": "in {unit}",
+  "note_texts": {
+   "optimizer_fallback": "Der erste Optimierer konvergierte nicht: Es wurde das Nelder–Mead-Verfahren verwendet, wie die Konvergenzprüfung sagt.",
+   "cet_quadrature": "{n} Kunden brauchten numerische Integration für ihre erwarteten Käufe, wo die geschlossene Form keine Zahl lieferte.",
+   "spend_missing": "{n} Kunden haben keine durchschnittliche Ausgabe: Sie bleiben außerhalb der Anpassung der Ausgaben und erhalten die erwartete Ausgabe der Population.",
+   "clv_steps": "Der Horizont hat mehr als {max} Perioden: Der CLV summiert Schritte von {step} Perioden, jeder an seinem Ende diskontiert.",
+   "t_x_clamped": "{n} Recency-Werte über dem Alter durch einen Rundungsfehler wurden auf das Alter gesetzt.",
+   "unit_check": "Das höchste Alter ist {age} {unit}, mehr als 30 Jahre: Stimmt die Zeiteinheit?"
+  },
   "assumptions_note": "Ein fragliches Urteil sagt, wo man hinsehen soll, nicht dass die Zahlen falsch sind.",
   "tables": {
    "part": "Teil",
@@ -730,6 +757,15 @@
    "holdout": "Error relativo del total de compras del holdout: (esperado − observado) / observado.",
    "horizon_length": "El horizonte sobre la edad máxima: por encima de 1 los periodos lejanos se apoyan en la forma del modelo."
   },
+  "formula_in": "en {unit}",
+  "note_texts": {
+   "optimizer_fallback": "El primer optimizador no convergió: se usó el método de Nelder–Mead, como dice la comprobación de convergencia.",
+   "cet_quadrature": "{n} clientes necesitaron integración numérica para sus compras esperadas, donde la forma cerrada no daba un número.",
+   "spend_missing": "{n} clientes no tienen gasto medio: quedan fuera del ajuste del gasto y reciben el gasto esperado de la población.",
+   "clv_steps": "El horizonte tiene más de {max} periodos: el CLV suma pasos de {step} periodos, cada uno descontado en su final.",
+   "t_x_clamped": "{n} recencias por encima de la edad por un error de redondeo se llevaron a la edad.",
+   "unit_check": "La edad máxima es {age} {unit}, más de 30 años: ¿es correcta la unidad de tiempo?"
+  },
   "assumptions_note": "Un veredicto dudoso dice dónde mirar, no que los números estén mal.",
   "tables": {
    "part": "Parte",
@@ -962,6 +998,15 @@
   "measure_texts": {
    "holdout": "Erreur relative du total des achats du holdout : (attendu − observé) / observé.",
    "horizon_length": "L'horizon sur l'âge maximal : au-dessus de 1 les périodes lointaines reposent sur la forme du modèle."
+  },
+  "formula_in": "en {unit}",
+  "note_texts": {
+   "optimizer_fallback": "Le premier optimiseur n'a pas convergé : la méthode de Nelder–Mead a été utilisée, comme le dit la vérification de convergence.",
+   "cet_quadrature": "{n} clients ont eu besoin de l'intégration numérique pour leurs achats attendus, là où la forme fermée ne donnait pas de nombre.",
+   "spend_missing": "{n} clients n'ont pas de dépense moyenne : ils sont écartés de l'ajustement de la dépense et reçoivent la dépense attendue de la population.",
+   "clv_steps": "L'horizon a plus de {max} périodes : la CLV additionne des pas de {step} périodes, chacun actualisé à sa fin.",
+   "t_x_clamped": "{n} récences au-dessus de l'âge par une erreur d'arrondi ont été ramenées à l'âge.",
+   "unit_check": "L'âge maximal est {age} {unit}, plus de 30 ans : l'unité de temps est-elle bonne ?"
   },
   "assumptions_note": "Un verdict douteux dit où regarder, pas que les chiffres sont faux.",
   "tables": {

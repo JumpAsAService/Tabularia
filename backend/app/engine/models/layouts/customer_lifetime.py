@@ -26,6 +26,7 @@ from app.engine.models.layouts import common as c
 from app.engine.stats import layouts as stats
 
 MEASURES = ("holdout", "horizon_length")  # numbers with no p-value: no verdict, no colour
+SMALL = "0.#####"  # the tables' numbers: five decimals at most
 PURCHASE_MODELS = ("pareto_nbd", "bg_nbd", "mbg_nbd")
 # the numbers the blocks below say apart from the fit's table: its rows leave them out (a name ending
 # in «_» stands for every number that starts with it)
@@ -86,7 +87,7 @@ def _parameters(variant_has_spend: bool):
         cols = [{"header": t["part"], "value": parts, "width": 26},
                 {"header": t["parameter"], "value": "IFS(" + ", ".join(pairs) + ", [level])"},
                 *({"header": c.stat_label(w, "coef", s), "value": c.number_of_row("coef", s), "width": 22, "align": "right",
-                   "format": c.NUMBER} for s in ("estimate", "std_error", "ci_low", "ci_high"))]
+                   "format": SMALL} for s in ("estimate", "std_error", "ci_low", "ci_high"))]
         p.add(stats.table("parameters", t["parameters"], one, cols, p.y, visible=c.exists(one)), 10)
         p.text("parameters_note", w["parameters_note"], h=4.5, size=7, color=c.MUTED, can_grow=True, visible=c.exists(one))
         p.y += 1.5
@@ -250,6 +251,6 @@ def build(model: str, params: dict[str, Any], locale: str, sample: list[dict] | 
     blocks = (_fit_to_the_data, _p_alive, *((_spend,) if value else ()), _clv(value))
     doc = c.page(model, params, locale, sample, step, name=name, about=about, cards=cards,
                  assumptions_note=c.alpha_said(w["alpha_note"], checked.get("alpha", 0.05), locale) + " " + w["assumptions_note"],
-                 after_assumptions=(c.measures(MEASURES),), fit_skip=FIT_SKIP, summary_lines=(("business", line),),
+                 after_assumptions=(c.measures(MEASURES),), fit_skip=FIT_SKIP, fit_format=SMALL, room=12.0, summary_lines=(("business", line),),
                  after_coefficients=(_parameters(value), *((_comparison,) if model == "clv" else ())), blocks=blocks)
     return doc
