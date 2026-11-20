@@ -19,6 +19,7 @@ import time
 import pytest
 
 from app.engine.stats import dist, exact
+from app.engine.stats.catalog import EXACT_NETWORK
 
 
 def rel(got: float, want: float) -> float:
@@ -113,15 +114,79 @@ def test_a_table_at_the_limit_of_the_support_is_computed(table):
 def test_fisher_rxc_against_r(table, want):
     """R 4.6.1's fisher.test; a p-value is the sum of the tables no more likely than the one
     observed, each of them a product of factorials: within 1e-11."""
-    p_value, nodes = exact.fisher_rxc(table, 2_000_000)
+    p_value, nodes = exact.fisher_rxc(table, EXACT_NETWORK)
     assert rel(p_value, want) < 1e-11 and nodes > 0
     transposed = [list(c) for c in zip(*table)]
-    assert rel(exact.fisher_rxc(transposed, 2_000_000)[0], want) < 1e-11
+    assert rel(exact.fisher_rxc(transposed, EXACT_NETWORK)[0], want) < 1e-11
 
 
 def test_fisher_rxc_has_a_ceiling():
     with pytest.raises(exact.TooMuchWork):
         exact.fisher_rxc([[20, 12, 6, 4], [9, 15, 12, 6], [5, 8, 16, 14]], 10_000)
+
+
+def test_count_vectors_counts_what_is_gone_through():
+    for total, caps in ((7, (3, 5, 2)), (0, (4, 4)), (12, (12, 1, 6, 3)), (5, (1, 1)), (18, (18,) * 5)):
+        assert exact._count_vectors(total, caps) == sum(1 for _ in exact._column_vectors(total, caps))
+
+
+def _diagonal(k: int) -> list[list[int]]:
+    """A k × k table with 2 in every cell and 4 on the diagonal: small counts, many cells."""
+    return [[4 if i == j else 2 for j in range(k)] for i in range(k)]
+
+
+def _sparse(k: int) -> list[list[int]]:
+    """A k × k table of a few ones a row, and one more on the diagonal."""
+    return [[(1 if (i + j) % 7 == 0 else 0) + (1 if i == j else 0) for j in range(k)] for i in range(k)]
+
+
+_REFUSE = """
+import resource, sys, time
+from app.engine.stats import exact
+from app.engine.stats.catalog import EXACT_NETWORK
+table = eval(sys.argv[1])
+start = time.perf_counter()
+try:
+    exact.fisher_rxc(table, EXACT_NETWORK)
+    print("computed")
+except exact.TooMuchWork as e:
+    print("refused", e.args[0] > EXACT_NETWORK, time.perf_counter() - start,
+          resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024)
+"""
+
+
+@pytest.mark.parametrize("table, most_seconds", [
+    (_diagonal(7), 15.0),  # 112 rows: 121 million steps (66 s) to the end; refused when the 4 million run out
+    (_diagonal(8), 1.0),   # 144 rows: its own path costs 4.3 million, refused before the count
+    (_diagonal(10), 1.0),
+    (_sparse(50), 1.0),    # the largest table the node takes
+])
+def test_fisher_rxc_refuses_large_tables_in_seconds(table, most_seconds):
+    """Every cell of a way of filling a column is a step, counted as it is gone through, and so
+    is every path extended, node remembered and line bounded: the count stops at the ceiling
+    whatever the table, and a table whose own path is past it is refused before the count.
+    Measured on the development machine in the backend's image (2026-11-20, in a process of
+    its own: the peak memory is the whole process's, 139 MB of it Python and the engine's
+    modules): the 7 × 7 table refused after 2.4 s at a peak of 157 MB, the others at once at
+    138 MB. Before, the 7 × 7 table
+    computed in 74 s through 57 million ways of filling a column, the 8 × 8 one ran past 240 s
+    and 434 MB with no refusal. The bounds here are guards against a count that does not stop
+    (a busy machine is slower), not benchmarks."""
+    import subprocess
+    import sys
+
+    got = subprocess.run([sys.executable, "-c", _REFUSE, repr(table)], capture_output=True, text=True, check=True,
+                         cwd=str(__import__("pathlib").Path(__file__).resolve().parents[1])).stdout.split()
+    assert got[:2] == ["refused", "True"], got
+    seconds, megabytes = float(got[2]), float(got[3])
+    assert seconds < most_seconds and megabytes < 400.0, (seconds, megabytes)
+
+
+def test_fisher_rxc_is_not_refused_by_its_size_alone():
+    """A 50 × 50 table of zeros and ones: no table with its margins is more likely (Π 1/x! is 1
+    at most), the root of the network closes at once. Only the steps refuse, never the shape."""
+    table = [[1 if (i + j) % 7 == 0 else 0 for j in range(50)] for i in range(50)]
+    assert exact.fisher_rxc(table, EXACT_NETWORK)[0] == 1.0
 
 
 # ── ranks: Mann–Whitney's U, the signed rank (lot 4) ─────────────────────────

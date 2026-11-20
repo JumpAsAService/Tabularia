@@ -143,8 +143,9 @@ are orders spread evenly across channels?
 table (two columns with two values each) it has an alternative, and the results hold the
 odds ratio and its interval, and the odds ratio of the sample. On a larger table it is the
 Freeman–Halton test, as R's `fisher.test`: the two-sided p-value only (a one-sided
-alternative is refused), computed exactly; past some two million steps of the count (a 3 × 4
-table of a few hundred rows) it is refused and the chi-square test is the way out.
+alternative is refused), computed exactly; past four million steps of the count (some four
+seconds: a 3 × 3 table of a few hundred rows, a 6 × 6 one of a hundred) it is refused and the
+chi-square test is the way out.
 *Example:* `orders` filtered to `canale` in (`Online`, `Negozi`) and `stato` in (`evaso`,
 `annullato`), `x` = `canale`, `y` = `stato`.
 

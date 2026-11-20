@@ -644,7 +644,7 @@ def test_lot_3_tables_refused(name, storage, survey, monkeypatch):
 
     monkeypatch.setattr(exact, "fisher_rxc", too_much)
     assert say("fisher_exact", x="answer", y="g") == (
-        "stat_fisher_exact: the exact distribution of this 3 × 3 table takes more than 2,000,000 steps to go through: "
+        "stat_fisher_exact: the exact distribution of this 3 × 3 table takes more than 4,000,000 steps to go through: "
         "use the chi-square test of independence, which is as good on so many rows")
 
 

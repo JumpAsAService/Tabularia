@@ -272,7 +272,22 @@ def fisher_exact(a: int, b: int, c: int, d: int, alternative: str, alpha: float)
 
 # ── Fisher's exact test of an r × c table (Freeman–Halton) ──────────────────
 class TooMuchWork(Exception):
-    """The network of an r × c table grew past the nodes allowed: the exact test is refused."""
+    """The count of an r × c table would take more steps than allowed: the exact test is
+    refused (before it starts, when the table's own path through the network is already too
+    long, or as soon as the steps run out)."""
+
+
+def _count_vectors(total: int, caps: tuple[int, ...] | list[int]) -> int:
+    """How many ways there are to fill a column of `total` rows under the rows' remaining
+    totals `caps` (what `_column_vectors` goes through), counted without going through them:
+    ways[s] = the fillings of the rows seen so far that sum to s."""
+    ways = [1] + [0] * total
+    for cap in caps:
+        prefix = [0] * (total + 2)
+        for s in range(total + 1):
+            prefix[s + 1] = prefix[s] + ways[s]
+        ways = [prefix[s + 1] - prefix[max(0, s - cap)] for s in range(total + 1)]
+    return ways[total]
 
 
 def _column_vectors(total: int, caps: tuple[int, ...]):
@@ -313,7 +328,7 @@ def _spread(total: int, caps: list[int] | tuple[int, ...], even: bool, lf: list[
     return out
 
 
-def fisher_rxc(table: list[list[int]], max_nodes: int) -> tuple[float, int]:
+def fisher_rxc(table: list[list[int]], max_steps: int) -> tuple[float, int]:
     """The two-sided p-value of Fisher's exact test of an r × c table (Freeman–Halton, R's
     `fisher.test`): the probability, given the margins, of every table no more likely than the
     one observed (R's slack of 1e-7). The network algorithm (Mehta and Patel, 1983): the
@@ -322,11 +337,22 @@ def fisher_rxc(table: list[list[int]], max_nodes: int) -> tuple[float, int]:
     reach them; a node whose every completion is no more likely than the table observed adds
     the closed mass of its completions, one whose every completion is more likely adds
     nothing, the others are expanded. The bounds are those of each column alone (valid, if
-    not the tightest). Returns (p-value, nodes visited); TooMuchWork past `max_nodes`."""
+    not the tightest). Returns (p-value, nodes created).
+
+    What it costs is counted in steps, every one as it is taken: each cell of a way of filling
+    a column gone through (r steps a way: it takes some r times as long as the rest), a path
+    extended by one, a node remembered, a line bounded. Time and memory follow the steps (the
+    nodes, the ways remembered, the bounds are each fewer than them: some 1 µs and at most
+    250 bytes a step), and past
+    `max_steps` the count stops with TooMuchWork. Before it starts, the steps the table
+    observed's own path surely costs (`_observed_path_steps`, counted without going through
+    them) are compared with `max_steps`: a table far too large is refused at once."""
     if len(table) > len(table[0]):  # the shorter side as the rows: smaller nodes
         table = [list(col) for col in zip(*table)]
     rows = [sum(r) for r in table]
-    cols = sorted((sum(c) for c in zip(*table)), reverse=True)
+    # the columns from the largest total, the observed table's columns in that order
+    observed_cols = sorted(zip(*table), key=sum, reverse=True)
+    cols = [sum(col) for col in observed_cols]
     total = sum(rows)
     lf = [0.0] * (total + 1)
     for n in range(2, total + 1):
@@ -338,24 +364,45 @@ def fisher_rxc(table: list[list[int]], max_nodes: int) -> tuple[float, int]:
     tail_cols = [cols[j:] for j in range(len(cols))]
     log_tail = [sum(lf[c] for c in cols[j:]) for j in range(len(cols))]
     bounds: dict[tuple, tuple[float, float]] = {}
+    width, steps = len(rows), 0
 
     def bound(left: tuple[int, ...], j: int) -> tuple[float, float]:
         """The largest and the smallest −Σ ln x! of a completion: each line alone (the columns
         under the rows' totals, the rows under the columns'), the tighter of the two; exact for
         the last column, which the rows' totals fill."""
+        nonlocal steps
         key = (left, j)
         got = bounds.get(key)
         if got is None:
             if j == len(cols) - 1:
                 exact_ = -sum(lf[r] for r in left)
                 got = (exact_, exact_)
+                steps += 1
             else:
                 rest = tail_cols[j]
+                steps += 2 * (len(rest) + len(left))  # a step per line bounded
+                if steps > max_steps:
+                    raise TooMuchWork(steps)
                 high = min(sum(_spread(c, left, True, lf) for c in rest), sum(_spread(r, rest, True, lf) for r in left))
                 low = max(sum(_spread(c, left, False, lf) for c in rest), sum(_spread(r, rest, False, lf) for r in left))
                 got = (high, low)
             bounds[key] = got
         return got
+
+    # Before the count: the observed table's path is a path of the network, and every node of
+    # it that is not closed has every way of filling its next column gone through (r steps
+    # each), and each extends at least that path (one more). Those steps are a floor of the
+    # count's, found without going through them.
+    floor, past, left = 0, 0.0, tuple(rows)
+    for j, col in enumerate(observed_cols[:-1]):
+        high, _ = bound(tuple(sorted(left)), j)
+        if past + high <= limit:  # closed: every completion counts
+            break
+        floor += (width + 1) * _count_vectors(cols[j], left)
+        if floor > max_steps:
+            raise TooMuchWork(floor)
+        past -= sum(lf[x] for x in col)
+        left = tuple(r - x for r, x in zip(left, col))
 
     p_value = 0.0
     stage: dict[tuple[int, ...], dict[int, list[float]]] = {tuple(sorted(rows)): {0: [0.0, 1.0]}}
@@ -373,18 +420,26 @@ def fisher_rxc(table: list[list[int]], max_nodes: int) -> tuple[float, int]:
                 if past + low > limit:  # none does
                     continue
                 if vectors is None:
-                    vectors = [(xs, -sum(lf[x] for x in xs), tuple(sorted(r - x for r, x in zip(left, xs))))
-                               for xs in _column_vectors(c, left)]
-                for _, weight, after in vectors:
+                    vectors = []
+                    for xs in _column_vectors(c, left):  # a step per cell, counted as it is gone through
+                        steps += width
+                        if steps > max_steps:
+                            raise TooMuchWork(steps)
+                        vectors.append((-sum(lf[x] for x in xs), tuple(sorted(r - x for r, x in zip(left, xs)))))
+                steps += len(vectors)  # a step per path extended, counted before they are
+                if steps > max_steps:
+                    raise TooMuchWork(steps)
+                for weight, after in vectors:
                     w = past + weight
                     slot = following.setdefault(after, {})
                     key = round(w * 1e9)  # paths of the same weight are one, their counts added
                     if key in slot:
                         slot[key][1] += count
-                    else:
+                    else:  # a node remembered: a step more
                         nodes += 1
-                        if nodes > max_nodes:
-                            raise TooMuchWork(nodes)
+                        steps += 1
+                        if steps > max_steps:
+                            raise TooMuchWork(steps)
                         slot[key] = [w, count]
         stage = following
     # the paths that reached the end: each a whole table

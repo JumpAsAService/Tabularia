@@ -229,9 +229,14 @@ MAX_STAT_LEVELS = 50
 # The most outcomes an exact binomial or Fisher computation goes through (n + 1; the values
 # the first cell of a 2×2 table may take with its margins).
 EXACT_SUPPORT = 1_000_000
-# The most nodes Fisher's exact test of an r × c table creates (the network algorithm): some
-# 10 seconds and 550 MB of a worker (measured: a 3 × 4 table of 127 rows, 1.74 million, 8.9 s).
-EXACT_NETWORK = 2_000_000
+# The most steps Fisher's exact test of an r × c table takes (the network algorithm,
+# `exact.fisher_rxc`: each cell of a way of filling a column, each path extended, each node
+# remembered, each line bounded), counted as they are taken; a table whose own path through
+# the network already costs more is refused before the count. Measured on the development
+# machine in the backend's image (2026-11-20) on tables that reach it — 3 × 3, 3 × 4, 3 × 5,
+# 4 × 4, 6 × 6, 7 × 7: refused after 4.2 s at most, and 235 MB above the process's own; a 3 × 3
+# table of 242 rows takes 2.6 million steps (2.7 s), an 8 × 8 one of 144 rows is refused at once.
+EXACT_NETWORK = 4_000_000
 # The largest sample of the exact Mann–Whitney and signed-rank distributions (R's: below 50),
 # and the largest n1·n2 of the exact two-sample Kolmogorov–Smirnov one (R's: below 10,000).
 # Past them, or with ties, the normal (Kolmogorov's) approximation.

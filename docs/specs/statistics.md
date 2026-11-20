@@ -836,7 +836,12 @@ list exactly the categories found, a proportion ≤ 0, a sum not 1 within 1e-9.
   support passes `EXACT_SUPPORT`.
 - r × c (Freeman–Halton): the two-sided p-value only, `exact.fisher_rxc` (the network
   algorithm, standard library, deterministic); a one-sided `alternative` is refused with a
-  sentence; refused past `EXACT_NETWORK` (2,000,000) nodes, «use the chi-square test».
+  sentence; refused past `EXACT_NETWORK` (4,000,000) steps, «use the chi-square test». A step
+  is a cell of a way of filling a column gone through, a path extended, a node remembered, a
+  line bounded, each counted as it is taken; a table whose own path through the network
+  already costs more is refused before the count (`_count_vectors` counts the ways without
+  going through them). Measured in the backend's image: refused after 4.2 s and 235 MB at
+  most (3 × 3 to 7 × 7 tables), an 8 × 8 table of 144 rows at once.
   `estimate`, `ci_low`, `ci_high`, `sample_odds_ratio` are NULL rows there.
 - Both: `rows`, `cols`, the margins, each cell's `observed` and `expected`. No curve.
 
