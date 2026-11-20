@@ -2060,6 +2060,7 @@
         "distribution": "distribution",
         "quantiles": "quantiles",
         "times": "times",
+        "alive_at": "number_column",
         "alpha": "alpha",
         "seed": "seed",
         "output": "output_rows"
@@ -2078,7 +2079,8 @@
         "times": [],
         "alpha": 0.05,
         "seed": 1,
-        "output": "results"
+        "output": "results",
+        "alive_at": null
       },
       "applies": {
         "reference": {
@@ -5866,14 +5868,16 @@
       "threshold": "proportion",
       "horizon": "horizon",
       "at_times": "times",
-      "quantiles": "quantiles"
+      "quantiles": "quantiles",
+      "alive_at": "number_column"
     },
     "defaults": {
       "interval": false,
       "threshold": null,
       "horizon": null,
       "at_times": [],
-      "quantiles": []
+      "quantiles": [],
+      "alive_at": null
     },
     "applies_to": {
       "interval": [
@@ -5897,6 +5901,9 @@
         "parametric_survival"
       ],
       "quantiles": [
+        "parametric_survival"
+      ],
+      "alive_at": [
         "parametric_survival"
       ]
     },

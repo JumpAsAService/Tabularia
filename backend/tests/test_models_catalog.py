@@ -348,3 +348,16 @@ def test_the_name_an_arima_node_s_orders_make():
     for preset, params in catalog.MODELS["arima"]["presets"].items():
         made = name({**params, "frequency": "month", "exog": ["x"] if preset == "sarimax" else []})
         assert made.lower().startswith(preset + "(") or (preset == "arima" and made.startswith("ARIMA(")), (preset, made)
+
+
+def test_conditional_survival_is_a_column_of_the_parametric_node_and_of_its_predict():
+    # alive_at: the time each unit has already survived, a number column; the answers are about the time left
+    spec = catalog.MODELS["parametric_survival"]
+    assert spec["takes"]["alive_at"] == "number_column" and spec["defaults"]["alive_at"] is None
+    assert catalog.PREDICT["takes"]["alive_at"] == "number_column"
+    assert catalog.PREDICT["applies_to"]["alive_at"] == ["parametric_survival"]  # Kaplan–Meier's and Cox's curves stop
+    base = {"time": "days", "event": "status", "event_value": "failed"}
+    assert catalog.check_params("parametric_survival", base)["alive_at"] is None
+    assert catalog.check_params("parametric_survival", {**base, "alive_at": "age_days"})["alive_at"] == "age_days"
+    # the columns Predict adds are the same ones: they now mean the time left
+    assert "alive_at" not in catalog.PREDICT["columns"]["parametric_survival"]

@@ -24,6 +24,24 @@ func TestPredictsOptionsAreTheModels(t *testing.T) {
 		!strings.Contains(err.Error(), "Predict: 'quantiles'") {
 		t.Errorf("a quantile of 1: %v", err)
 	}
+	// conditional survival: a column of the rows, a parametric model's alone (the curves of the other two stop at the last time observed)
+	if got, err := CheckPredict("parametric_survival", "aft", map[string]any{"alive_at": "age_days", "interval": true}); err != nil ||
+		fmt.Sprint(got) != "map[alive_at:age_days interval:true]" {
+		t.Errorf("alive_at: %v %v", got, err)
+	}
+	for _, model := range []string{"cox", "kaplan_meier"} {
+		if _, err := CheckPredict(model, "default", map[string]any{"alive_at": "age_days"}); err == nil ||
+			!strings.Contains(err.Error(), "Predict's option 'alive_at' applies to parametric_survival, not to "+model) {
+			t.Errorf("alive_at is not %s's: %v", model, err)
+		}
+	}
+	if _, err := CheckPredict("parametric_survival", "aft", map[string]any{"alive_at": 300.0}); err == nil ||
+		!strings.Contains(err.Error(), "'alive_at' must be the name of a column") {
+		t.Errorf("alive_at is a column, not a number: %v", err)
+	}
+	if got, err := CheckPredict("parametric_survival", "aft", map[string]any{"alive_at": nil}); err != nil || len(got) != 0 {
+		t.Errorf("an empty alive_at is not given: %v %v", got, err)
+	}
 	// a customer lifetime model takes a horizon (in the card's unit) and nothing else
 	if got, err := CheckPredict("clv", "value", map[string]any{"horizon": 26.0}); err != nil || fmt.Sprint(got) != "map[horizon:26]" {
 		t.Errorf("clv: %v %v", got, err)
@@ -52,7 +70,7 @@ func TestPredictsOptionsAreTheModels(t *testing.T) {
 		want   string
 	}{
 		{"linear", map[string]any{"threshold": 0.4}, "Predict's option 'threshold' applies to logistic, xgboost (binary), catboost (binary), not to linear"},
-		{"linear", map[string]any{"colour": "red"}, "Predict has no option 'colour' (it takes: at_times, horizon, interval, quantiles, threshold)"},
+		{"linear", map[string]any{"colour": "red"}, "Predict has no option 'colour' (it takes: alive_at, at_times, horizon, interval, quantiles, threshold)"},
 		{"logistic", map[string]any{"threshold": 1.5}, "Predict: 'threshold'"},
 		{"arima", map[string]any{"horizon": 5000.0}, "Predict: 'horizon'"},
 		{"cox", map[string]any{"at_times": []any{3.0, 3.0}}, "holds a number twice"},
@@ -78,6 +96,8 @@ func TestTheColumnsAPredictAdds(t *testing.T) {
 		{"parametric_survival", nil, "prediction"},
 		{"parametric_survival", map[string]any{"quantiles": []any{0.25, 0.75}, "at_times": []any{30.0}, "interval": true},
 			"prediction survival_at_30 prediction_low prediction_high quantile_0.25 quantile_0.75"},
+		// the same columns, now about the time left
+		{"parametric_survival", map[string]any{"alive_at": "age_days", "at_times": []any{30.0}}, "prediction survival_at_30"},
 		{"arima", map[string]any{"interval": true, "horizon": 6.0}, "prediction lower_80 upper_80 lower upper"},
 		{"nothing", nil, ""},
 	} {

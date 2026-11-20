@@ -673,10 +673,11 @@ MODELS["parametric_survival"] = {
     "needs": {"time": "number_column", "event": "column", "event_value": "event_level"},
     "takes": {"predictors": "predictors_optional", "reference": "reference", "interactions": "interactions",
               "strata": "column", "weights": "number_column", "distribution": "distribution", "quantiles": "quantiles",
-              "times": "times", "alpha": "alpha", "seed": "seed", "output": "output_rows"},
+              "times": "times", "alive_at": "number_column", "alpha": "alpha", "seed": "seed",
+              "output": "output_rows"},
     "defaults": {"predictors": [], "reference": {}, "interactions": [], "strata": None, "weights": None,
                  "distribution": "weibull", "quantiles": [0.25, 0.75], "times": [], "alpha": 0.05, "seed": 1,
-                 "output": "results"},
+                 "output": "results", "alive_at": None},
     "applies": {"reference": {"predictors": True}, "interactions": {"predictors": True}},
     "requires": [],
     "forbids": [],
@@ -960,15 +961,15 @@ MODELS = {m: MODELS[m] for g in GROUPS.values() for m in g["models"]}
 # ── Predict: a registered model applied to new rows ─────────────────────────
 PREDICT: dict[str, Any] = {
     "takes": {"interval": "boolean", "threshold": "proportion", "horizon": "horizon", "at_times": "times",
-              "quantiles": "quantiles"},
+              "quantiles": "quantiles", "alive_at": "number_column"},
     # None: the card's own (its threshold, its horizon); an empty list: the card's times, quantiles
-    "defaults": {"interval": False, "threshold": None, "horizon": None, "at_times": [], "quantiles": []},
+    "defaults": {"interval": False, "threshold": None, "horizon": None, "at_times": [], "quantiles": [], "alive_at": None},
     # which models each key means something for; given for another model it is refused. An
     # entry is a model, or `model:variant` for one variant of it (the card's variant)
     "applies_to": {"interval": ["linear", "kaplan_meier", "arima", "parametric_survival"],
                    "threshold": ["logistic", "xgboost:binary", "catboost:binary"],
                    "horizon": ["arima", "clv", "bg_bb"], "at_times": ["cox", "parametric_survival"],
-                   "quantiles": ["parametric_survival"]},
+                   "quantiles": ["parametric_survival"], "alive_at": ["parametric_survival"]},
     # the columns Predict adds, per model of the card (or `model:variant`, which comes first):
     # always, and with each key given. `prediction_prob_*`: one column per class of the card
     "columns": {

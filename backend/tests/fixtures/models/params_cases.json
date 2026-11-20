@@ -1564,7 +1564,8 @@
     "times": [],
     "alpha": 0.05,
     "seed": 1,
-    "output": "results"
+    "output": "results",
+    "alive_at": null
    }
   },
   {
@@ -1634,7 +1635,8 @@
     ],
     "alpha": 0.1,
     "seed": 7,
-    "output": "rows"
+    "output": "rows",
+    "alive_at": null
    }
   },
   {
@@ -1668,7 +1670,8 @@
     "times": [],
     "alpha": 0.05,
     "seed": 1,
-    "output": "results"
+    "output": "results",
+    "alive_at": null
    }
   },
   {

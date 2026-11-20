@@ -6664,6 +6664,7 @@ export default {
       "test": "Prueba entre estratos",
       "pairwise": "Comparar cada par de estratos",
       "times": "Supervivencia en ciertos tiempos",
+      "alive_at": "Tiempo ya sobrevivido (un número)",
       "rmst_tau": "Media restringida hasta",
       "start": "Columna del tiempo de inicio",
       "ties": "Tiempos empatados",
@@ -6753,6 +6754,7 @@ export default {
       "output": "Lo que el nodo pasa al paso siguiente.",
       "strata": "Una curva por valor de esta columna; déjala vacía para una sola curva.",
       "times": "Hasta 10 tiempos, separados por comas: se informa la supervivencia en cada uno.",
+      "alive_at": "La columna con el tiempo que cada unidad ya ha sobrevivido sin el evento (la edad de una máquina). Las predicciones dicen entonces cuánto queda: el tiempo restante mediano, sus cuantiles y la probabilidad de durar t más.",
       "rmst_tau": "El tiempo hasta el que se calcula el tiempo medio de supervivencia.",
       "start": "Para filas que dan un intervalo (inicio, fin) en vez de un solo tiempo de seguimiento.",
       "ties": "Cómo se tratan los eventos al mismo tiempo. Efron es la elección habitual.",
@@ -7034,6 +7036,7 @@ export default {
       "threshold": "Umbral de clase",
       "horizon": "Pasos de pronóstico",
       "at_times": "Supervivencia en ciertos tiempos",
+      "alive_at": "Tiempo ya sobrevivido (un número)",
       "quantiles": "Cuantiles del tiempo"
     },
     "hints": {
@@ -7041,6 +7044,7 @@ export default {
       "threshold": "Añade la clase prevista: el evento desde esta probabilidad. 0,5 si está vacío.",
       "horizon": "Cuántos pasos tras el final de la serie. Vacío: el del modelo.",
       "at_times": "Una columna de supervivencia por cada tiempo, p. ej. 12, 24.",
+      "alive_at": "Una columna de las filas: el tiempo que cada unidad ya ha sobrevivido. La mediana, los cuantiles y las columnas de supervivencia hablan entonces del tiempo restante. Vacío: desde el inicio.",
       "quantiles": "Una columna por cuantil, p. ej. 0.25, 0.75. Vacío: los cuantiles con que se ajustó el modelo."
     }
   },

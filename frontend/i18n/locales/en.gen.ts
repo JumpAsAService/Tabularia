@@ -6664,6 +6664,7 @@ export default {
       "test": "Test between strata",
       "pairwise": "Compare each pair of strata",
       "times": "Survival at times",
+      "alive_at": "Time already survived (a number)",
       "rmst_tau": "Restricted mean up to",
       "start": "Start time column",
       "ties": "Tied times",
@@ -6753,6 +6754,7 @@ export default {
       "output": "What the node hands to the step after it.",
       "strata": "One curve per value of this column; leave empty for a single curve.",
       "times": "Up to 10 times, separated by commas: the survival at each is reported.",
+      "alive_at": "The column holding the time each unit has already survived without the event (a machine's age). The predictions then say how long is left: the median remaining time, the quantiles of it, and the chance of lasting t more.",
       "rmst_tau": "The time up to which the average survival time is computed.",
       "start": "For rows that give an interval (start, stop) instead of a single follow-up time.",
       "ties": "How events at the same time are handled. Efron is the usual choice.",
@@ -7034,6 +7036,7 @@ export default {
       "threshold": "Class threshold",
       "horizon": "Forecast steps",
       "at_times": "Survival at times",
+      "alive_at": "Time already survived (a number)",
       "quantiles": "Quantiles of the time"
     },
     "hints": {
@@ -7041,6 +7044,7 @@ export default {
       "threshold": "Adds the predicted class: the event from this probability up. 0.5 when empty.",
       "horizon": "How many steps after the series ends. Empty: the model's own.",
       "at_times": "A survival column for each time, e.g. 12, 24.",
+      "alive_at": "A column of the rows: the time each unit has already survived. The median, the quantiles and the survival columns then speak of the time left. Empty: from the start.",
       "quantiles": "A column for each quantile, e.g. 0.25, 0.75. Empty: the quantiles the model was fitted with."
     }
   },

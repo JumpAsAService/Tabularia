@@ -6664,6 +6664,7 @@ export default {
       "test": "Test zwischen den Schichten",
       "pairwise": "Jedes Schichtenpaar vergleichen",
       "times": "Überleben zu Zeitpunkten",
+      "alive_at": "Bereits überlebte Zeit (eine Zahl)",
       "rmst_tau": "Eingeschränkter Mittelwert bis",
       "start": "Startzeit-Spalte",
       "ties": "Gleiche Zeiten",
@@ -6753,6 +6754,7 @@ export default {
       "output": "Was der Knoten an den nächsten Schritt weitergibt.",
       "strata": "Eine Kurve je Wert dieser Spalte; leer lassen für eine einzige Kurve.",
       "times": "Bis zu 10 Zeiten, durch Kommas getrennt: das Überleben zu jeder wird berichtet.",
+      "alive_at": "Die Spalte mit der Zeit, die jede Einheit schon ohne das Ereignis überlebt hat (das Alter einer Maschine). Die Vorhersagen sagen dann, wie lange noch bleibt: die mediane Restzeit, ihre Quantile und die Wahrscheinlichkeit, noch t durchzuhalten.",
       "rmst_tau": "Die Zeit, bis zu der die mittlere Überlebenszeit berechnet wird.",
       "start": "Für Zeilen mit einem Intervall (Start, Ende) statt einer einzigen Beobachtungszeit.",
       "ties": "Wie Ereignisse zur gleichen Zeit behandelt werden. Efron ist die übliche Wahl.",
@@ -7034,6 +7036,7 @@ export default {
       "threshold": "Klassenschwelle",
       "horizon": "Prognoseschritte",
       "at_times": "Überleben zu Zeitpunkten",
+      "alive_at": "Bereits überlebte Zeit (eine Zahl)",
       "quantiles": "Quantile der Zeit"
     },
     "hints": {
@@ -7041,6 +7044,7 @@ export default {
       "threshold": "Fügt die vorhergesagte Klasse hinzu: das Ereignis ab dieser Wahrscheinlichkeit. 0,5, wenn leer.",
       "horizon": "Wie viele Schritte nach Ende der Reihe. Leer: der des Modells.",
       "at_times": "Eine Überlebensspalte je Zeitpunkt, z. B. 12, 24.",
+      "alive_at": "Eine Spalte der Zeilen: die Zeit, die jede Einheit schon überlebt hat. Median, Quantile und Überlebensspalten sprechen dann von der Restzeit. Leer: vom Anfang an.",
       "quantiles": "Eine Spalte je Quantil, z. B. 0.25, 0.75. Leer: die Quantile, mit denen das Modell angepasst wurde."
     }
   },

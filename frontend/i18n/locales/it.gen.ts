@@ -6664,6 +6664,7 @@ export default {
       "test": "Test tra gli strati",
       "pairwise": "Confronta ogni coppia di strati",
       "times": "Sopravvivenza a certi tempi",
+      "alive_at": "Tempo già sopravvissuto (un numero)",
       "rmst_tau": "Media ristretta fino a",
       "start": "Colonna del tempo di inizio",
       "ties": "Tempi uguali",
@@ -6753,6 +6754,7 @@ export default {
       "output": "Ciò che il nodo passa al passo successivo.",
       "strata": "Una curva per ogni valore di questa colonna; lascia vuoto per una curva sola.",
       "times": "Fino a 10 tempi, separati da virgole: si riporta la sopravvivenza a ciascuno.",
+      "alive_at": "La colonna con il tempo che ogni unità è già sopravvissuta senza l'evento (l'età di una macchina). Le previsioni dicono allora quanto resta: il tempo residuo mediano, i suoi quantili e la probabilità di durare ancora t.",
       "rmst_tau": "Il tempo fino al quale si calcola il tempo medio di sopravvivenza.",
       "start": "Per righe che danno un intervallo (inizio, fine) invece di un solo tempo di osservazione.",
       "ties": "Come si trattano gli eventi allo stesso tempo. Efron è la scelta abituale.",
@@ -7034,6 +7036,7 @@ export default {
       "threshold": "Soglia della classe",
       "horizon": "Passi di previsione",
       "at_times": "Sopravvivenza a certi tempi",
+      "alive_at": "Tempo già sopravvissuto (un numero)",
       "quantiles": "Quantili del tempo"
     },
     "hints": {
@@ -7041,6 +7044,7 @@ export default {
       "threshold": "Aggiunge la classe prevista: l'evento da questa probabilità in su. 0,5 se vuoto.",
       "horizon": "Quanti passi dopo la fine della serie. Vuoto: quello del modello.",
       "at_times": "Una colonna di sopravvivenza per ogni tempo, es. 12, 24.",
+      "alive_at": "Una colonna delle righe: il tempo che ogni unità è già sopravvissuta. La mediana, i quantili e le colonne di sopravvivenza parlano allora del tempo che resta. Vuoto: dall'inizio.",
       "quantiles": "Una colonna per ogni quantile, es. 0.25, 0.75. Vuoto: i quantili con cui il modello è stato adattato."
     }
   },

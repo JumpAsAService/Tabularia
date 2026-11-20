@@ -3,7 +3,8 @@
 // rows reaching the node are given the predictions of. The MLflow connection, the experiment
 // (read from the server), then the version: one that Tabularia registered from that experiment,
 // or «latest version» of a registered model, which is read again at each run. Below, the options
-// the chosen model has (an interval, a threshold, a horizon, the times to give the survival at).
+// the chosen model has (an interval, a threshold, a horizon, the times to give the survival at, the column of the time
+// already survived).
 // The lists come from the gateway's browse routes (composables/useModelGroups.ts); with no
 // answer the experiment is written.
 //
@@ -17,7 +18,7 @@ import { useFormat } from '~/composables/useFormat'
 import { useModelGroups, type MlflowExperiment, type MlflowVersion } from '~/composables/useModelGroups'
 import { vDraft } from '~/composables/draftField'
 import {
-  MODEL_RETRIES_MAX, MODEL_TIMEOUT_MIN, versionHeld, MODEL_TIMEOUT_SECONDS, modelNumber, modelNumberProblem, modelNumbersProblem, predictColumns,
+  MODEL_RETRIES_MAX, MODEL_TIMEOUT_MIN, modelColumnFits, versionHeld, MODEL_TIMEOUT_SECONDS, modelNumber, modelNumberProblem, modelNumbersProblem, predictColumns,
   predictFields, predictParams, type ModelField, type ModelOff,
 } from '~/composables/modelCatalog'
 
@@ -154,6 +155,20 @@ function numbersProblem(f: ModelField): string {
 }
 const timesText = (f: ModelField) => (Array.isArray(params.value[f.key]) ? params.value[f.key].join(', ') : '')
 
+// one column of the rows (conditional survival's `alive_at`): only the numeric ones; the one already chosen stays listed
+// whatever it is (a column dropped upstream), with what is wrong, so that the box never hides a value the node still has
+function columnOptions(f: ModelField) {
+  const usable = props.inputColumns.filter((c) => modelColumnFits(f, c.dtype))
+  const options: { value: string | undefined; label: string; hint?: string }[] = usable.map((c) => ({ value: c.name, label: c.name }))
+  const current = params.value[f.key]
+  if (typeof current === 'string' && current && !usable.some((c) => c.name === current) && props.inputColumns.length) {
+    const known = props.inputColumns.some((c) => c.name === current)
+    options.unshift({ value: current, label: current, hint: t(known ? 'models.form.notUsable' : 'models.form.notInInput') })
+  }
+  return [{ value: undefined, label: '—' }, ...options]
+}
+const noNumericColumn = (f: ModelField) => props.inputColumns.length > 0 && !props.inputColumns.some((c) => modelColumnFits(f, c.dtype))
+
 // the columns the step adds, and the ones of its input they would overwrite (the form refuses)
 const added = computed(() => predictColumns(kind.value, params.value, undefined, variant.value))
 const clash = computed(() => added.value.filter((c) => props.inputColumns.some((x) => x.name === c)))
@@ -241,6 +256,21 @@ const offText = computed(() => {
           {{ labelOf(f) }}
         </label>
         <p v-if="hintOf(f)" class="hint">{{ hintOf(f) }}</p>
+      </div>
+      <div v-else-if="f.control === 'column'" class="field">
+        <span :id="idOf(f.key, 'label')" class="lbl">{{ labelOf(f) }}</span>
+        <Select
+          :id="idOf(f.key)"
+          :model-value="params[f.key]"
+          :options="columnOptions(f)"
+          searchable
+          placeholder="—"
+          :aria-labelledby="idOf(f.key, 'label')"
+          :aria-describedby="hintOf(f) ? idOf(f.key, 'hint') : undefined"
+          @update:model-value="(v: any) => set(f.key, v)"
+        />
+        <p v-if="noNumericColumn(f)" class="note warn"><TriangleAlert :size="13" aria-hidden="true" /> {{ $t('models.form.noNumericColumns') }}</p>
+        <p v-else-if="hintOf(f)" :id="idOf(f.key, 'hint')" class="hint">{{ hintOf(f) }}</p>
       </div>
       <div v-else-if="f.control === 'numbers'" class="field">
         <label :for="idOf(f.key)" class="lbl">{{ labelOf(f) }}</label>

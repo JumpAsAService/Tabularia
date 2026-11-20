@@ -73,7 +73,7 @@ test('every key of every model has a control the form draws', () => {
   for (const control of m.MODEL_CATALOG.controls) {
     assert.ok(form.includes(`f.control === '${control}'`), `ModelForm.vue does not draw «${control}»`)
   }
-  for (const control of ['boolean', 'numbers', 'number', 'integer']) assert.ok(predict.includes(control) || control === 'integer', `PredictForm.vue: ${control}`)
+  for (const control of ['boolean', 'numbers', 'number', 'integer', 'column']) assert.ok(predict.includes(control) || control === 'integer', `PredictForm.vue: ${control}`)
   for (const model of m.MODEL_CATALOG.models) {
     for (const f of m.modelFields(model)) {
       assert.ok(m.MODEL_CONTROLS.includes(f.control), `${model.id}.${f.key}`)
@@ -84,7 +84,7 @@ test('every key of every model has a control the form draws', () => {
   }
   for (const key of Object.keys(m.MODEL_CATALOG.predict.takes)) {
     const kind = m.MODEL_CATALOG.kinds[m.MODEL_CATALOG.predict.takes[key]]
-    assert.ok(['boolean', 'number', 'integer', 'numbers'].includes(kind.control), `predict.${key}`)
+    assert.ok(['boolean', 'number', 'integer', 'numbers', 'column'].includes(kind.control), `predict.${key}`)
   }
 })
 
@@ -434,7 +434,8 @@ test('Predict: the options of the model the version holds, and the columns it ad
   assert.deepEqual(m.predictFields('logistic').map((f) => f.key), ['threshold'])
   assert.deepEqual(m.predictFields('cox').map((f) => f.key), ['at_times'])
   // the parametric survival node: the median always, the quantiles and the times of the card, an interval
-  assert.deepEqual(m.predictFields('parametric_survival').map((f) => f.key), ['interval', 'at_times', 'quantiles'])
+  // and conditional survival, the column of the time already survived
+  assert.deepEqual(m.predictFields('parametric_survival').map((f) => f.key), ['interval', 'at_times', 'quantiles', 'alive_at'])
   assert.deepEqual(m.predictFields('arima').map((f) => f.key), ['interval', 'horizon'])
   assert.deepEqual(m.predictFields('kaplan_meier').map((f) => f.key), ['interval'])
   assert.deepEqual(m.predictFields(null), [])
@@ -450,8 +451,23 @@ test('Predict: the options of the model the version holds, and the columns it ad
   assert.deepEqual(m.predictParams('parametric_survival', { quantiles: '0.9, 0.1', at_times: '30, 90', interval: true, threshold: 0.4 }), { interval: true, at_times: [30, 90], quantiles: [0.1, 0.9] })
   assert.deepEqual(m.predictColumns('parametric_survival', { quantiles: [0.1, 0.9], at_times: [30] }), ['prediction', 'survival_at_30', 'quantile_0.1', 'quantile_0.9'])
   assert.deepEqual(m.predictColumns('parametric_survival', { interval: true }), ['prediction', 'prediction_low', 'prediction_high'])
-  // a Cox version offers no quantiles
-  assert.ok(!m.predictFields('cox').some((f) => f.key === 'quantiles'))
+  // a Cox version offers no quantiles, nor conditional survival (its curve stops at the last time observed)
+  assert.ok(!m.predictFields('cox').some((f) => f.key === 'quantiles' || f.key === 'alive_at'))
+  assert.ok(!m.predictFields('kaplan_meier').some((f) => f.key === 'alive_at'))
+  // alive_at is a numeric column of the rows: written as a name, left out when empty, and it adds no column of its own
+  const alive = m.predictFields('parametric_survival').find((f) => f.key === 'alive_at')
+  assert.equal(alive.control, 'column')
+  assert.equal(alive.numeric, true)
+  assert.equal(alive.required, false)
+  assert.ok(m.modelColumnFits(alive, 'Int64') && m.modelColumnFits(alive, 'Float64') && !m.modelColumnFits(alive, 'String') && !m.modelColumnFits(alive, 'Date'))
+  assert.deepEqual(m.predictParams('parametric_survival', { alive_at: 'age_days', interval: true }), { interval: true, alive_at: 'age_days' })
+  assert.deepEqual(m.predictParams('parametric_survival', { alive_at: '' }), {})
+  assert.deepEqual(m.predictParams('cox', { alive_at: 'age_days' }), {})
+  assert.deepEqual(m.predictColumns('parametric_survival', { alive_at: 'age_days', at_times: [30] }), ['prediction', 'survival_at_30'])
+  // the form draws it as the app's Select over the numeric columns, with its words in the five languages
+  const form = read('../components/ui/PredictForm.vue')
+  assert.match(form, /f\.control === 'column'/)
+  assert.match(form, /modelColumnFits\(f, c\.dtype\)/)
   // the boosting models: an entry of the catalogue may be `model:variant`, the variant being the version's tag
   assert.deepEqual(m.predictFields('xgboost').map((f) => f.key), [])
   assert.deepEqual(m.predictFields('xgboost', undefined, 'regression').map((f) => f.key), [])
@@ -922,13 +938,16 @@ test('a parametric survival node in the editor: the form, with its words, only w
   let html = await render(Form, node('parametric_survival', m.modelDefaults('parametric_survival')))
   let page = text(html)
   for (const words of ['The time to an event with a named distribution', 'Follow-up time (a number)', 'Event column', 'Predictors (optional)', 'Strata column', 'Weights column', 'Distribution',
-    'Quantiles of the time', 'Survival at times', 'Significance level', 'Seed', 'Output', 'Still to set: Follow-up time (a number), Event column, Value that means the event happened.']) {
+    'Quantiles of the time', 'Survival at times', 'Time already survived (a number)', 'Significance level', 'Seed', 'Output', 'Still to set: Follow-up time (a number), Event column, Value that means the event happened.']) {
     assert.ok(page.includes(words), `«${words}» is not on the page: ${page}`)
   }
   // no predictor: no reference levels, no interactions; the order is the catalogue's
   assert.ok(!page.includes('Reference levels') && !page.includes('Interactions'))
-  const order = ['Follow-up time', 'Event column', 'Value that means', 'Predictors (optional)', 'Strata column', 'Weights column', 'Distribution', 'Quantiles of the time', 'Survival at times', 'Significance level']
+  const order = ['Follow-up time', 'Event column', 'Value that means', 'Predictors (optional)', 'Strata column', 'Weights column', 'Distribution', 'Quantiles of the time', 'Survival at times', 'Time already survived', 'Significance level']
   assert.deepEqual([...order].sort((a, b) => page.indexOf(a) - page.indexOf(b)), order)
+  // conditional survival: an optional numeric column (a text column is not offered), the time left then being what is predicted
+  assert.ok(!page.includes('Still to set: Follow-up time (a number), Event column, Value that means the event happened, Time already survived'))
+  assert.ok(selectsOf(html).some((x) => x.includes('amount') && x.includes('qty') && !x.includes('channel')))
   // the distribution is a list of seven, the words of each in the language; the quantiles one box with the default
   assert.ok(selectsOf(html).includes('Weibull Exponential Log-normal Log-logistic Generalized gamma Gompertz Automatic: the lowest AIC'), selectsOf(html).join(' | '))
   assert.match(html, /id="model-ctl-1-quantiles"[^>]*value="0.25, 0.75"/)

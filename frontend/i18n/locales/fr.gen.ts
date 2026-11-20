@@ -6664,6 +6664,7 @@ export default {
       "test": "Test entre les strates",
       "pairwise": "Comparer chaque paire de strates",
       "times": "Survie à certains temps",
+      "alive_at": "Temps déjà survécu (un nombre)",
       "rmst_tau": "Moyenne restreinte jusqu'à",
       "start": "Colonne du temps de début",
       "ties": "Temps ex æquo",
@@ -6753,6 +6754,7 @@ export default {
       "output": "Ce que le nœud transmet à l'étape suivante.",
       "strata": "Une courbe par valeur de cette colonne ; laissez vide pour une seule courbe.",
       "times": "Jusqu'à 10 temps, séparés par des virgules : la survie à chacun est rapportée.",
+      "alive_at": "La colonne du temps que chaque unité a déjà survécu sans l'événement (l'âge d'une machine). Les prévisions disent alors combien il reste : le temps restant médian, ses quantiles et la probabilité de durer encore t.",
       "rmst_tau": "Le temps jusqu'auquel la durée moyenne de survie est calculée.",
       "start": "Pour des lignes qui donnent un intervalle (début, fin) au lieu d'une seule durée.",
       "ties": "Comment les événements simultanés sont traités. Efron est le choix habituel.",
@@ -7034,6 +7036,7 @@ export default {
       "threshold": "Seuil de classe",
       "horizon": "Pas de prévision",
       "at_times": "Survie à certains temps",
+      "alive_at": "Temps déjà survécu (un nombre)",
       "quantiles": "Quantiles du temps"
     },
     "hints": {
@@ -7041,6 +7044,7 @@ export default {
       "threshold": "Ajoute la classe prédite : l'événement à partir de cette probabilité. 0,5 si vide.",
       "horizon": "Combien de pas après la fin de la série. Vide : celui du modèle.",
       "at_times": "Une colonne de survie par temps, p. ex. 12, 24.",
+      "alive_at": "Une colonne des lignes : le temps que chaque unité a déjà survécu. La médiane, les quantiles et les colonnes de survie parlent alors du temps restant. Vide : depuis le début.",
       "quantiles": "Une colonne par quantile, p. ex. 0.25, 0.75. Vide : les quantiles avec lesquels le modèle a été ajusté."
     }
   },
