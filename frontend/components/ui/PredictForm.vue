@@ -53,31 +53,34 @@ const experiments = ref<MlflowExperiment[]>([])
 const experimentsState = ref<'idle' | 'loading' | 'done' | 'failed'>('idle')
 const versions = ref<MlflowVersion[]>([])
 const versionsState = ref<'idle' | 'loading' | 'done' | 'failed'>('idle')
-let asked = 0 // only the last question writes its answer
+// only the last question of each list writes its answer; one counter apiece, or the second
+// watcher (immediate, as the first) would cancel the first's answer and leave its skeleton on
+let askedExperiments = 0
+let askedVersions = 0
 
 watch(() => props.data?.connectionId, async (id) => {
-  const seq = ++asked
+  const seq = ++askedExperiments
   experiments.value = []
   if (typeof id !== 'number') { experimentsState.value = 'idle'; return }
   experimentsState.value = 'loading'
   try {
     const list = await models.experiments(id)
-    if (seq === asked) { experiments.value = list; experimentsState.value = 'done' }
+    if (seq === askedExperiments) { experiments.value = list; experimentsState.value = 'done' }
   } catch {
-    if (seq === asked) experimentsState.value = 'failed'
+    if (seq === askedExperiments) experimentsState.value = 'failed'
   }
 }, { immediate: true })
 
 watch(() => [props.data?.connectionId, props.data?.experiment] as const, async ([id, experiment]) => {
-  const seq = ++asked
+  const seq = ++askedVersions
   versions.value = []
   if (typeof id !== 'number' || typeof experiment !== 'string' || !experiment) { versionsState.value = 'idle'; return }
   versionsState.value = 'loading'
   try {
     const list = await models.versions(id, experiment)
-    if (seq === asked) { versions.value = list; versionsState.value = 'done' }
+    if (seq === askedVersions) { versions.value = list; versionsState.value = 'done' }
   } catch {
-    if (seq === asked) versionsState.value = 'failed'
+    if (seq === askedVersions) versionsState.value = 'failed'
   }
 }, { immediate: true })
 
