@@ -353,7 +353,8 @@ def xgboost_fit(c: Case) -> Fit:
     to, va = c.train_order, c.va
     dtrain = xgb.QuantileDMatrix(X.iloc[to], label=c.y[to], weight=c.fw[to] if c.weighted else None,
                                  enable_categorical=True, max_bin=256, nthread=THREADS)
-    dvalid = xgb.QuantileDMatrix(X.iloc[va], label=c.y[va], weight=c.w[va] if c.weights else None, ref=dtrain,
+    # the validation part weighted as the fit (balanced class weights too): early stopping reads the loss the fit weighs
+    dvalid = xgb.QuantileDMatrix(X.iloc[va], label=c.y[va], weight=c.fw[va] if c.weighted else None, ref=dtrain,
                                  enable_categorical=True, max_bin=256, nthread=THREADS)
     log: dict = {}
     callbacks = []
@@ -417,7 +418,7 @@ def catboost_fit(c: Case) -> Fit:
         kw["boost_from_average"] = True
     train = Pool(X.iloc[to], label=c.y[to], weight=c.fw[to] if c.weighted else None, cat_features=cats,
                  baseline=None if start is None else np.tile(start, (len(to), 1)))
-    valid = Pool(X.iloc[va], label=c.y[va], weight=c.w[va] if c.weights else None, cat_features=cats,
+    valid = Pool(X.iloc[va], label=c.y[va], weight=c.fw[va] if c.weighted else None, cat_features=cats,
                  baseline=None if start is None else np.tile(start, (len(va), 1)))
     model = (CatBoostRegressor if what == "regression" else CatBoostClassifier)(**kw)
     model.fit(train, eval_set=valid)
@@ -445,6 +446,7 @@ def case_values(case: dict[str, Any], fit_with: Any) -> list[dict[str, Any]]:
     tr, va = c.tr, c.va
     order_by, split_by = c.order_by, c.split_by
     raw, phi, gain, rounds, best = f.raw, f.phi, f.gain, f.rounds, f.best
+    fw = c.fw  # the fit's weights (balanced class weights times w)
 
     E: list[dict[str, Any]] = []
 
@@ -507,6 +509,8 @@ def case_values(case: dict[str, Any], fit_with: Any) -> list[dict[str, Any]]:
             for b, lb in enumerate(classes):
                 num(f"cell|{la}|{lb}|observed", float(w[va][(y[va] == a) & ((pr[va] >= thr) == bool(b))].sum()))
         L_va, B_va = ll(yf[va], pr[va], w[va]), ll(yf[va], np.full(len(va), prev), w[va])
+        if p["class_weight"] == "balanced":  # the losses the fit weighs; the baseline their best constant
+            L_va, B_va = ll(yf[va], pr[va], fw[va]), ll(yf[va], np.full(len(va), wavg(yf[tr], fw[tr])), fw[va])
         metric = auc_pairs(pr[va], y[va], w[va])
         size, size_ok = int(min(np.sum(y[va] == 0), np.sum(y[va] == 1))), (30, 10)
         smallest = int(min(np.sum(y[va] == 0), np.sum(y[va] == 1)))
@@ -529,8 +533,8 @@ def case_values(case: dict[str, Any], fit_with: Any) -> list[dict[str, Any]]:
         sh_tr = np.array([w[tr][y[tr] == c].sum() for c in range(k)]) / w[tr].sum()
         sh_va = np.array([w[va][y[va] == c].sum() for c in range(k)]) / w[va].sum()
 
-        def mll(idx, probs):
-            return wavg(-np.log(np.clip(probs[np.arange(len(idx)), y[idx]], EPS, 1 - EPS)), w[idx])
+        def mll(idx, probs, weights=w):
+            return wavg(-np.log(np.clip(probs[np.arange(len(idx)), y[idx]], EPS, 1 - EPS)), weights[idx])
         num("model|||n_classes", k)
         num("model|||train_mlogloss", mll(tr, P[tr]))
         num("model|||validation_mlogloss", mll(va, P[va]))
@@ -559,6 +563,9 @@ def case_values(case: dict[str, Any], fit_with: Any) -> list[dict[str, Any]]:
         num("model|||validation_macro_auc", float(np.mean(aucs)))
         num("model|||validation_macro_f1", float(np.mean(f1s)))
         L_va, B_va = mll(va, P[va]), mll(va, np.tile(sh_tr, (len(va), 1)))
+        if p["class_weight"] == "balanced":  # the losses the fit weighs; the baseline their best constant
+            even = np.array([fw[tr][y[tr] == j].sum() for j in range(k)]) / fw[tr].sum()
+            L_va, B_va = mll(va, P[va], fw), mll(va, np.tile(even, (len(va), 1)), fw)
         metric = float(np.mean(aucs))
         size, size_ok = int(np.bincount(y[va], minlength=k).min()), (30, 10)
 

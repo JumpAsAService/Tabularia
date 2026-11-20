@@ -203,7 +203,8 @@ def fit_catboost(task: dict[str, Any]) -> dict[str, Any]:
     tr_rows, va = P.train_order, P.valid
     start = class_start(P)
     train_pool = pool(P.X.iloc[tr_rows], P.y[tr_rows], P.fit_w[tr_rows] if weighted else None, start)
-    valid_pool = pool(P.X.iloc[va], P.y[va], P.w[va] if P.weighted else None, start)
+    # the validation part weighted as the fit (class_weight = balanced too): early stopping and the diagnostics read one loss
+    valid_pool = pool(P.X.iloc[va], P.y[va], P.fit_w[va] if weighted else None, start)
     model = (cb.CatBoostRegressor if P.task == "regression" else cb.CatBoostClassifier)(**params)
     budget = TimeBudget(B.deadline(task))
     model.fit(train_pool, eval_set=valid_pool, callbacks=[budget] if budget.until is not None else None)
@@ -523,3 +524,22 @@ def _test_model_size(code: Any) -> None:
     _expect(len(data) <= 100_000 and rows.value[at["model|||trees"]] == want and "model|||note_model_size" in at,
             f"a model file of {len(data)} bytes, {rows.value[at['model|||trees']]} trees ({want} expected)")
     _expect(rows.text[at["assumption|trees_limit||advice_id"]] == "trees_size", "trees_limit")
+
+
+@register("catboost: with class_weight = balanced early stopping and beats_baseline read one loss, weighted as the fit")
+def _test_balanced(code: Any) -> None:
+    task = _task("binary", synthetic(400, "binary", seed=8), class_weight="balanced")
+    out = fit_catboost(task)
+    P = B.prepare(task)
+    rows = out["rows"]
+    at = {k: i for i, k in enumerate(rows.key)}
+    best = rows.value[at["model|||best_iteration"]] + 1
+    [curve] = [rows.value[i] for i, k in enumerate(rows.key) if k.startswith("curve|learning_loss|validation|y|") and rows.x0[i] == best]
+    va = P.valid
+    prob = out["output"]["pred_prob"].to_numpy(dtype=float)[np.flatnonzero(P.keep)][va]
+    mine = B.logloss(P.y[va].astype(float), prob, P.fit_w[va])
+    _expect(abs(curve - mine) <= 1e-5 * mine, f"the validation curve {curve} is not the loss weighted as the fit {mine}")
+    even = B.logloss(P.y[va].astype(float), np.full(len(va), 0.5), P.fit_w[va])  # the best constant of balanced weights
+    u = rows.value[at["assumption|beats_baseline||value"]]
+    _expect(abs(u - (1 - mine / even)) <= 1e-9, f"beats_baseline {u}, by hand {1 - mine / even}")
+    _expect(rows.text[at["assumption|beats_baseline||h0"]] == B.H0["beats_baseline_balanced"], "the h0 of balanced weights")

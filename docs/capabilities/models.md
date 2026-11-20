@@ -314,7 +314,7 @@ value used):
 |---|---|---|
 | `outcome`, `predictors` | needed | Numbers, texts and booleans as predictors, at most 200; a date is refused (compute a number from it first). A predictor may have **missing values**: both libraries handle them, unlike the regressions, which leave the row out |
 | `weights` | none | Case weights, used in the fit and in every metric |
-| `class_weight` | none | `balanced` weights the classes against each other in the fit only; the probabilities are then no longer calibrated, and a diagnostic says so |
+| `class_weight` | none | `balanced` weights the classes against each other in the fit, and in the losses early stopping and the diagnostics read (the validation part weighted the same way, the baseline one share per class); the metrics table stays unweighted. The probabilities are then no longer calibrated, and a diagnostic says so |
 | `validation`, `validation_share` | random, 20 % | How the validation part is drawn (below) |
 | `early_stopping`, `early_stopping_rounds` | on, 50 | Stop when the validation measure has not improved for that many trees |
 | `stop_metric` | loss | What early stopping watches: the loss (RMSE or log-loss), `mae` (regression), `auc` (binary), `error` (classification) |

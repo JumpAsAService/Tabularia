@@ -139,7 +139,7 @@ def with_labels(model: str, params: Mapping[str, Any] | None, rows: list[dict], 
             if stat == "verdict":
                 label = check_name(w, r["level"])
             elif stat == "h0" and check.get("h0"):
-                text = check["h0"]
+                text = by_params(check["h0"], checked)
             elif stat == "advice":
                 said = check.get("not_computed") if verdict == "not_computed" else check.get("advice")
                 if isinstance(said, dict):  # several advices: the one of the id the runner wrote (`advice_id`), else the general one
@@ -155,6 +155,26 @@ def with_labels(model: str, params: Mapping[str, Any] | None, rows: list[dict], 
             text = stats.edges_text(r["x0"], r["x1"], False, loc.decimal, loc.group)
         out.append({**r, "text": text, "label": label, "tiny": stats.tiny(r.get("value"), code(locale))})
     return out
+
+
+def by_params(said: str | dict, params: Mapping[str, Any]) -> str | None:
+    """A text that may change with the node's settings: a string, or a dict whose keys are
+    conditions on the parameters («early_stopping=false», «class_weight=balanced», several joined
+    by «&»; a boolean said true or false) and whose "" is the text of every other case. The first
+    key whose conditions all hold wins: what the check reads is decided by the settings, which the
+    page knows as the runner did."""
+    if not isinstance(said, dict):
+        return said
+
+    def holds(condition: str) -> bool:
+        key, _, want = condition.partition("=")
+        v = params.get(key.strip())
+        return (("true" if v else "false") if isinstance(v, bool) else str(v)) == want.strip()
+
+    for key, text in said.items():
+        if key and all(holds(c) for c in key.split("&")):
+            return text
+    return said.get("")
 
 
 def note_said(template: str, numbers: Mapping[str, float], group: str) -> str:

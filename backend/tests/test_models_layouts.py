@@ -458,6 +458,29 @@ def test_a_boosting_advice_and_note_are_said_in_the_page_language_whatever_the_r
     assert advised("calibration_slope", "slope_separated", "es", "not_computed").startswith("No calculado: la regresión logística")
 
 
+def test_what_a_boosting_check_reads_follows_the_nodes_settings():
+    """A check's H0 may change with the node's settings (the runner reads them too): with
+    class_weight = balanced the losses of beats_baseline are weighted as the fit, and the learning
+    curve says that it is not the table's log-loss."""
+    model, params, rows = fixture("xgboost-binary")
+
+    def h0(p: dict, check: str, locale: str) -> str:
+        [row] = [r for r in layouts.with_labels(model, p, rows, locale) if r["level"] == check and r["stat"] == "h0"]
+        return row["text"]
+
+    assert h0(params, "beats_baseline", "en") == "1 − validation loss / the baseline's"
+    assert h0({**params, "class_weight": "balanced"}, "beats_baseline", "it").startswith(
+        "1 − perdita in validazione / quella del riferimento, entrambe pesate come l'adattamento")
+    assert common.by_params({"a=1&b=true": "both", "b=false": "not b", "": "else"}, {"a": 1, "b": True}) == "both"
+    assert common.by_params({"a=1&b=true": "both", "b=false": "not b", "": "else"}, {"a": 2, "b": False}) == "not b"
+    assert common.by_params({"a=1": "a", "": "else"}, {}) == "else" and common.by_params("plain", {}) == "plain"
+
+    def caption(p: dict) -> list[str]:
+        return [s for s in strings(layouts.definition(model, p, "en")) if s.startswith("With class_weight = balanced the curves")]
+
+    assert not caption(params) and len(caption({**params, "class_weight": "balanced"})) == 1
+
+
 def test_excel_holds_the_tables_one_sheet_each(tmp_path, chart_service, monkeypatch):  # noqa: F811
     out, _ = draw(tmp_path, chart_service, monkeypatch, "logistic-unpenalized", fmt="xlsx")
     with zipfile.ZipFile(out.path) as z:

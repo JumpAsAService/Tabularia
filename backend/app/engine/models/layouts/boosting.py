@@ -210,16 +210,20 @@ def beeswarm(w: dict) -> c.Chart:
                 {"legend": False, "target_x": [0], "y_categories": "[level_2]"}, wide=True)._replace(caption=w["charts"]["beeswarm_note"])
 
 
-def learning_charts(task: str, w: dict, stop_metric: str) -> tuple[c.Chart, ...]:
+def learning_charts(task: str, w: dict, checked: dict[str, Any]) -> tuple[c.Chart, ...]:
     ch, s = w["charts"], w["series"]
+    stop_metric = checked["stop_metric"]
     part = f'IF([level_2] = "train", {c.q(s["train"])}, {c.q(s["validation"])})'
     best = c.num(c.model_key("best_iteration")) + " + 1"
 
-    def curve(level: str, title: str, under: str) -> c.Chart:
-        return c.xy(level, title, f'[section] = "curve" AND [level] = "{level}"', [c.mark("y", "line")],
-                    {"target_x": [best], "legend": True}, under=under, split_by=part)
+    def curve(level: str, title: str, under: str, caption: str | None = None) -> c.Chart:
+        chart = c.xy(level, title, f'[section] = "curve" AND [level] = "{level}"', [c.mark("y", "line")],
+                     {"target_x": [best], "legend": True}, under=under, split_by=part)
+        return chart._replace(caption=caption) if caption else chart
 
-    out = [curve("learning_loss", ch["learning_loss_" + task], "overfitting")]
+    # with balanced weights the curves are the losses the fit weighs (as early stopping reads them), not the table's
+    balanced = task != "regression" and checked.get("class_weight") == "balanced"
+    out = [curve("learning_loss", ch["learning_loss_" + task], "overfitting", ch["learning_balanced_note"] if balanced else None)]
     if stop_metric != "loss":  # the stop metric is another number than the loss: its curve too
         out.append(curve("learning_stop", ch["learning_stop"], "trees_limit"))
     return tuple(out)
@@ -268,7 +272,7 @@ def report(model: str, params: dict[str, Any], locale: str, sample: list[dict] |
     charts = [gain, shap]
     if task != "multiclass":
         charts.append(beeswarm(w))
-    charts += [*learning_charts(task, w, checked["stop_metric"]), *task_charts(task, w)]
+    charts += [*learning_charts(task, w, checked), *task_charts(task, w)]
     blocks = (fit_block(model, checked, keys), importance_block(task), *((confusion_block(task),) if task != "regression" else ()))
     return c.page(model, params, locale, sample, step, name=name(model, params, locale), about=about(params, locale),
                   cards=cards(task, w), blocks=blocks, charts=tuple(charts), assumptions_note=w["diagnostics_note"],

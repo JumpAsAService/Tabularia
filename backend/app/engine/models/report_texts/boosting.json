@@ -93,7 +93,8 @@
    "calibration": "Calibration by deciles (validation)",
    "probability": "Predicted probabilities by observed class",
    "confusion": "Confusion matrix (validation)",
-   "roc_ovr": "ROC curves, one class against the rest"
+   "roc_ovr": "ROC curves, one class against the rest",
+   "learning_balanced_note": "With class_weight = balanced the curves weigh the classes as the fit does (each class the same), as early stopping and the diagnostics read them: they are not the log-loss of the table, which weighs every row the same."
   },
   "series": {
    "train": "Training",
@@ -216,15 +217,21 @@
    },
    "beats_baseline": {
     "name": "Better than the baseline",
-    "h0": "1 − validation loss / the baseline's",
-    "advice": "The model predicts the validation part no better than the average (the class shares): check the predictors and the outcome.",
+    "h0": {
+     "class_weight=balanced": "1 − validation loss / the baseline's, both weighted as the fit (class_weight = balanced: each class counts the same)",
+     "": "1 − validation loss / the baseline's"
+    },
+    "advice": {
+     "beats_baseline_balanced": "With class_weight = balanced both losses weigh the classes as the fit does: the model separates the classes no better than one probability for every row. Check the predictors and the outcome.",
+     "": "The model predicts the validation part no better than the average (the class shares): check the predictors and the outcome."
+    },
     "not_computed": "Not computed: the outcome does not vary in the validation part, the baseline's loss is 0."
    },
    "overfitting": {
     "name": "Overfitting",
     "h0": "the share of the validation gain over the baseline given back between the best tree and the tree kept",
     "advice": "The validation loss of the tree kept is worse than at the best tree before it: the trees after it learn the training rows, not the pattern. Turn early stopping on with stop_metric = loss, or lower max_trees, max_depth or learning_rate.",
-    "not_computed": "Not computed: the validation loss never goes below the baseline's, so there is no gain to give back (with class_weight = balanced the probabilities move away from the class shares, and the loss with them)."
+    "not_computed": "Not computed: the validation loss never goes below the baseline's, so there is no gain to give back."
    },
    "trees_limit": {
     "name": "Number of trees",
@@ -381,7 +388,8 @@
    "calibration": "Calibrazione per decili (validazione)",
    "probability": "Probabilità previste per classe osservata",
    "confusion": "Matrice di confusione (validazione)",
-   "roc_ovr": "Curve ROC, una classe contro le altre"
+   "roc_ovr": "Curve ROC, una classe contro le altre",
+   "learning_balanced_note": "Con class_weight = balanced le curve pesano le classi come l'adattamento (ogni classe uguale), come le leggono l'arresto anticipato e le diagnostiche: non sono la log-loss della tabella, che pesa ogni riga uguale."
   },
   "series": {
    "train": "Addestramento",
@@ -504,15 +512,21 @@
    },
    "beats_baseline": {
     "name": "Meglio del riferimento",
-    "h0": "1 − perdita in validazione / quella del riferimento",
-    "advice": "Il modello prevede la parte di validazione non meglio della media (le quote delle classi): controllate i predittori e l'esito.",
+    "h0": {
+     "class_weight=balanced": "1 − perdita in validazione / quella del riferimento, entrambe pesate come l'adattamento (class_weight = balanced: ogni classe conta uguale)",
+     "": "1 − perdita in validazione / quella del riferimento"
+    },
+    "advice": {
+     "beats_baseline_balanced": "Con class_weight = balanced entrambe le perdite pesano le classi come l'adattamento: il modello non separa le classi meglio di una sola probabilità per ogni riga. Controllate i predittori e l'esito.",
+     "": "Il modello prevede la parte di validazione non meglio della media (le quote delle classi): controllate i predittori e l'esito."
+    },
     "not_computed": "Non calcolato: l'esito non varia nella parte di validazione, la perdita del riferimento è 0."
    },
    "overfitting": {
     "name": "Sovradattamento",
     "h0": "la quota del guadagno in validazione sul riferimento restituita tra l'albero migliore e quello tenuto",
     "advice": "La perdita in validazione dell'albero tenuto è peggiore di quella dell'albero migliore prima di esso: gli alberi successivi imparano le righe di addestramento, non lo schema. Attivate l'arresto anticipato con stop_metric = loss, oppure abbassate max_trees, max_depth o learning_rate.",
-    "not_computed": "Non calcolato: la perdita in validazione non scende mai sotto quella del riferimento, quindi non c'è guadagno da restituire (con class_weight = balanced le probabilità si allontanano dalle quote delle classi, e la perdita con loro)."
+    "not_computed": "Non calcolato: la perdita in validazione non scende mai sotto quella del riferimento, quindi non c'è guadagno da restituire."
    },
    "trees_limit": {
     "name": "Numero di alberi",
@@ -669,7 +683,8 @@
    "calibration": "Kalibrierung nach Dezilen (Validierung)",
    "probability": "Vorhergesagte Wahrscheinlichkeiten je beobachteter Klasse",
    "confusion": "Konfusionsmatrix (Validierung)",
-   "roc_ovr": "ROC-Kurven, eine Klasse gegen den Rest"
+   "roc_ovr": "ROC-Kurven, eine Klasse gegen den Rest",
+   "learning_balanced_note": "Mit class_weight = balanced gewichten die Kurven die Klassen wie die Anpassung (jede Klasse gleich), so wie das vorzeitige Stoppen und die Diagnosen sie lesen: sie sind nicht der Log-Loss der Tabelle, der jede Zeile gleich gewichtet."
   },
   "series": {
    "train": "Training",
@@ -792,15 +807,21 @@
    },
    "beats_baseline": {
     "name": "Besser als die Referenz",
-    "h0": "1 − Verlust in der Validierung / der der Referenz",
-    "advice": "Das Modell sagt den Validierungsteil nicht besser voraus als der Durchschnitt (die Klassenanteile): prüfen Sie die Prädiktoren und das Ergebnis.",
+    "h0": {
+     "class_weight=balanced": "1 − Verlust in der Validierung / der der Referenz, beide gewichtet wie die Anpassung (class_weight = balanced: jede Klasse zählt gleich)",
+     "": "1 − Verlust in der Validierung / der der Referenz"
+    },
+    "advice": {
+     "beats_baseline_balanced": "Mit class_weight = balanced gewichten beide Verluste die Klassen wie die Anpassung: das Modell trennt die Klassen nicht besser als eine einzige Wahrscheinlichkeit für jede Zeile. Prüfen Sie die Prädiktoren und das Ergebnis.",
+     "": "Das Modell sagt den Validierungsteil nicht besser voraus als der Durchschnitt (die Klassenanteile): prüfen Sie die Prädiktoren und das Ergebnis."
+    },
     "not_computed": "Nicht berechnet: das Ergebnis variiert im Validierungsteil nicht, der Verlust der Referenz ist 0."
    },
    "overfitting": {
     "name": "Überanpassung",
     "h0": "der Anteil des Validierungsgewinns gegenüber der Referenz, der zwischen dem besten und dem behaltenen Baum verloren geht",
     "advice": "Der Validierungsverlust des behaltenen Baums ist schlechter als beim besten Baum davor: die Bäume danach lernen die Trainingszeilen, nicht das Muster. Schalten Sie das vorzeitige Stoppen mit stop_metric = loss ein oder senken Sie max_trees, max_depth oder learning_rate.",
-    "not_computed": "Nicht berechnet: der Validierungsverlust fällt nie unter den der Referenz, es gibt also keinen Gewinn, der verloren gehen könnte (mit class_weight = balanced entfernen sich die Wahrscheinlichkeiten von den Klassenanteilen, und der Verlust mit ihnen)."
+    "not_computed": "Nicht berechnet: der Validierungsverlust fällt nie unter den der Referenz, es gibt also keinen Gewinn, der verloren gehen könnte."
    },
    "trees_limit": {
     "name": "Anzahl der Bäume",
@@ -957,7 +978,8 @@
    "calibration": "Calibración por deciles (validación)",
    "probability": "Probabilidades previstas por clase observada",
    "confusion": "Matriz de confusión (validación)",
-   "roc_ovr": "Curvas ROC, una clase contra el resto"
+   "roc_ovr": "Curvas ROC, una clase contra el resto",
+   "learning_balanced_note": "Con class_weight = balanced las curvas ponderan las clases como el ajuste (cada clase igual), como las leen la parada temprana y los diagnósticos: no son la log-loss de la tabla, que pondera cada fila igual."
   },
   "series": {
    "train": "Entrenamiento",
@@ -1080,15 +1102,21 @@
    },
    "beats_baseline": {
     "name": "Mejor que la referencia",
-    "h0": "1 − pérdida en validación / la de la referencia",
-    "advice": "El modelo no predice la parte de validación mejor que el promedio (las proporciones de clase): revise los predictores y el resultado.",
+    "h0": {
+     "class_weight=balanced": "1 − pérdida en validación / la de la referencia, ambas ponderadas como el ajuste (class_weight = balanced: cada clase cuenta igual)",
+     "": "1 − pérdida en validación / la de la referencia"
+    },
+    "advice": {
+     "beats_baseline_balanced": "Con class_weight = balanced ambas pérdidas ponderan las clases como el ajuste: el modelo no separa las clases mejor que una sola probabilidad para cada fila. Revise los predictores y el resultado.",
+     "": "El modelo no predice la parte de validación mejor que el promedio (las proporciones de clase): revise los predictores y el resultado."
+    },
     "not_computed": "No calculado: el resultado no varía en la parte de validación, la pérdida de la referencia es 0."
    },
    "overfitting": {
     "name": "Sobreajuste",
     "h0": "la parte de la ganancia en validación sobre la referencia que se devuelve entre el mejor árbol y el conservado",
     "advice": "La pérdida de validación del árbol conservado es peor que la del mejor árbol anterior: los árboles siguientes aprenden las filas de entrenamiento, no el patrón. Active la parada temprana con stop_metric = loss, o baje max_trees, max_depth o learning_rate.",
-    "not_computed": "No calculado: la pérdida de validación nunca baja de la de la referencia, así que no hay ganancia que devolver (con class_weight = balanced las probabilidades se alejan de las proporciones de clase, y la pérdida con ellas)."
+    "not_computed": "No calculado: la pérdida de validación nunca baja de la de la referencia, así que no hay ganancia que devolver."
    },
    "trees_limit": {
     "name": "Número de árboles",
@@ -1245,7 +1273,8 @@
    "calibration": "Calibration par déciles (validation)",
    "probability": "Probabilités prédites par classe observée",
    "confusion": "Matrice de confusion (validation)",
-   "roc_ovr": "Courbes ROC, une classe contre les autres"
+   "roc_ovr": "Courbes ROC, une classe contre les autres",
+   "learning_balanced_note": "Avec class_weight = balanced les courbes pondèrent les classes comme l'ajustement (chaque classe autant), comme les lisent l'arrêt anticipé et les diagnostics : ce n'est pas la log-loss du tableau, qui pondère chaque ligne autant."
   },
   "series": {
    "train": "Entraînement",
@@ -1368,15 +1397,21 @@
    },
    "beats_baseline": {
     "name": "Mieux que la référence",
-    "h0": "1 − perte en validation / celle de la référence",
-    "advice": "Le modèle ne prédit pas la partie de validation mieux que la moyenne (les parts des classes) : vérifiez les prédicteurs et le résultat.",
+    "h0": {
+     "class_weight=balanced": "1 − perte en validation / celle de la référence, toutes deux pondérées comme l'ajustement (class_weight = balanced : chaque classe compte autant)",
+     "": "1 − perte en validation / celle de la référence"
+    },
+    "advice": {
+     "beats_baseline_balanced": "Avec class_weight = balanced les deux pertes pondèrent les classes comme l'ajustement : le modèle ne sépare pas les classes mieux qu'une seule probabilité pour chaque ligne. Vérifiez les prédicteurs et le résultat.",
+     "": "Le modèle ne prédit pas la partie de validation mieux que la moyenne (les parts des classes) : vérifiez les prédicteurs et le résultat."
+    },
     "not_computed": "Non calculé : le résultat ne varie pas dans la partie de validation, la perte de la référence est 0."
    },
    "overfitting": {
     "name": "Surapprentissage",
     "h0": "la part du gain de validation sur la référence rendue entre le meilleur arbre et l'arbre conservé",
     "advice": "La perte de validation de l'arbre conservé est moins bonne qu'au meilleur arbre avant lui : les arbres suivants apprennent les lignes d'entraînement, pas la structure. Activez l'arrêt anticipé avec stop_metric = loss, ou baissez max_trees, max_depth ou learning_rate.",
-    "not_computed": "Non calculé : la perte de validation ne descend jamais sous celle de la référence, il n'y a donc pas de gain à rendre (avec class_weight = balanced les probabilités s'éloignent des parts des classes, et la perte avec elles)."
+    "not_computed": "Non calculé : la perte de validation ne descend jamais sous celle de la référence, il n'y a donc pas de gain à rendre."
    },
    "trees_limit": {
     "name": "Nombre d'arbres",

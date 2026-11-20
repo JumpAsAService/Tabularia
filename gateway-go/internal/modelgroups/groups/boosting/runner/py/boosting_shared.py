@@ -723,11 +723,13 @@ ADVICE = {
     "beats_baseline": "the model predicts the validation part no better than the average (the class shares): check the "
                       "predictors and the outcome",
     "beats_baseline_constant": "the baseline's loss is 0: the outcome does not vary in the validation part",
+    "beats_baseline_balanced": "with class_weight = balanced both losses weigh the classes as the fit does (each class the same): "
+                               "the model separates the classes no better than one probability for every row; check the "
+                               "predictors and the outcome",
     "overfitting": "the validation loss of the tree kept is worse than at the best tree before it: the trees after it learn "
                    "the training rows, not the pattern; turn early stopping on with stop_metric = loss, or lower max_trees, "
                    "max_depth or learning_rate",
-    "overfitting_no_gain": "the validation loss never goes below the baseline's, so there is no gain to give back (with "
-                           "class_weight = balanced the probabilities move away from the class shares, and the loss with them)",
+    "overfitting_no_gain": "the validation loss never goes below the baseline's, so there is no gain to give back",
     "trees_more": "the validation loss was still falling at the last tree: raise max_trees or learning_rate",
     "trees_few": "stopped after very few trees: lower learning_rate",
     "trees_no_stop": "the validation loss at the last tree is more than 1 % worse than at the best: turn early stopping on",
@@ -758,6 +760,8 @@ H0 = {
     "validation_size_regression": "the rows of the validation part",
     "validation_size": "the smallest number of rows of a class in the validation part",
     "beats_baseline": "1 − validation loss / the baseline's",
+    "beats_baseline_balanced": "1 − validation loss / the baseline's, both weighted as the fit (class_weight = balanced: each "
+                               "class the same)",
     "overfitting": "the share of the validation gain over the baseline given back between the best tree and the tree kept",
     "trees_limit": "whether early stopping stopped, and the trees kept",
     "trees_limit_no_stop": "how much worse the validation loss is at the last tree than at the best",
@@ -799,12 +803,17 @@ def check_validation_size(what: str, n_valid: int, smallest_class: int | None) -
     return _check("validation_size", verdict, v, ok, "validation_size", h0=h0)
 
 
-def check_beats_baseline(loss_valid: float, base_valid: float) -> dict[str, Any]:
+def check_beats_baseline(loss_valid: float, base_valid: float, balanced: bool = False) -> dict[str, Any]:
+    """u = 1 − L / B on the validation part. With class_weight = balanced both losses are weighted
+    as the fit (the baseline then the best constant of balanced weights, one share per class), as
+    early stopping reads them: a balanced fit moves its probabilities away from the class shares,
+    and an unweighted loss against the prevalence would call a model that ranks well «failed»."""
+    h0 = H0["beats_baseline_balanced"] if balanced else None
     if not (base_valid > 0) or not math.isfinite(loss_valid):
-        return _check("beats_baseline", "not_computed", advice="beats_baseline_constant")
+        return _check("beats_baseline", "not_computed", advice="beats_baseline_constant", h0=h0)
     u = 1 - loss_valid / base_valid
     verdict = "ok" if u >= 0.05 else "doubtful" if u > 0 else "failed"
-    return _check("beats_baseline", verdict, u, 0.05, "beats_baseline")
+    return _check("beats_baseline", verdict, u, 0.05, "beats_baseline_balanced" if balanced else "beats_baseline", h0=h0)
 
 
 def check_overfitting(curve: list[float] | np.ndarray, kept: int, base_valid: float) -> dict[str, Any]:
@@ -1145,6 +1154,18 @@ def finish(task: dict[str, Any], prepared: Prepared, fitted: Fitted) -> dict[str
     for k_, v in m.items():
         number(rows, "model", k_, v)
 
+    # with class_weight = balanced the diagnostics read the losses weighted as the fit (and as early
+    # stopping reads them): the best constant of those weights, one share per class, is the baseline
+    balanced = what != "regression" and p.get("class_weight") == "balanced"
+    if balanced:
+        fw = P.fit_w
+        if what == "binary":
+            even = wmean(y[tr].astype(float), fw[tr])
+            loss = (logloss(y[va], prob[va], fw[va]), logloss(y[va], np.full(len(va), even), fw[va]))
+        else:
+            even_k = np.array([float(fw[tr][y[tr] == c].sum()) for c in range(P.k)]) / float(fw[tr].sum())
+            loss = (mlogloss(y[va], Pr[va], fw[va]), mlogloss(y[va], np.tile(even_k, (len(va), 1)), fw[va]))
+
     # ── notes ──
     notes = list(P.notes)
     if bool(p.get("early_stopping", True)):
@@ -1187,7 +1208,7 @@ def finish(task: dict[str, Any], prepared: Prepared, fitted: Fitted) -> dict[str
 
     # ── the diagnostics ──
     L_va, B_va = loss
-    checks.append(check_beats_baseline(L_va, B_va))
+    checks.append(check_beats_baseline(L_va, B_va, balanced))
     curve = _loss_curve(fitted)
     checks.append(check_overfitting(curve, fitted.best_iteration, B_va))
     last, best = (curve[-1], min(curve)) if curve else (math.nan, math.nan)
@@ -1198,7 +1219,6 @@ def finish(task: dict[str, Any], prepared: Prepared, fitted: Fitted) -> dict[str
         shares = np.array([float(w[tr][y[tr] == c].sum()) for c in range(len(P.classes))]) / float(w[tr].sum())
         checks.append(check_class_imbalance(shares))
     if what == "binary":
-        balanced = p.get("class_weight") == "balanced"
         smallest = int(np.bincount(y[va], minlength=2).min())
         pv, yv = prob[va], y[va].astype(float)
         checks.append(check_calibration(ece(pv, yv, w[va]), ece_noise(pv, w[va]), balanced, smallest))
@@ -1497,6 +1517,8 @@ def _test_checks(code: Any) -> None:
             "validation_size, classes")
     _expect([v(check_beats_baseline(L, 1.0)) for L in (0.95, 0.96, 0.999, 1.0, 1.2)] == ["ok", "doubtful", "doubtful", "failed",
                                                                                          "failed"], "beats_baseline")
+    _expect(check_beats_baseline(0.99, 1.0, True)["advice_id"] == "beats_baseline_balanced"
+            and check_beats_baseline(0.9, 1.0, True)["h0"] == H0["beats_baseline_balanced"], "beats_baseline with balanced weights")
     up = lambda r: [1.0, 0.6, 0.5, 0.5 + 0.5 * r]  # noqa: E731 — a curve from 1 down to 0.5, back up by r of the gain
     _expect([v(check_overfitting(up(r), 3, 1.0)) for r in (0.0, 0.049, 0.051, 0.249, 0.251, 3.0)]
             == ["ok", "ok", "doubtful", "doubtful", "failed", "failed"], "overfitting")
