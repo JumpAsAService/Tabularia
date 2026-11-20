@@ -3,7 +3,7 @@
 # which each keeps a copy: the interface (frontend/assets/model-catalog.json), the Go gateway
 # (gateway-go/internal/modelcatalog/catalog.json, embedded) and the AI service
 # (gateway/app/services/model_catalog.json). This fails when a copy differs from the snapshot
-# by a byte, and when a model is not named in docs/capabilities/statistical-models.md. That
+# by a byte, and when a model is not named in docs/capabilities/models.md. That
 # the snapshot is what catalog.py says is checked by the engine's suite
 # (test_models_catalog.py).
 #
@@ -19,7 +19,7 @@ on:
       - "frontend/assets/model-catalog.json"
       - "gateway-go/internal/modelcatalog/catalog.json"
       - "gateway/app/services/model_catalog.json"
-      - "docs/capabilities/statistical-models.md"
+      - "docs/capabilities/models.md"
       - ".github/scripts/model_catalog.py"
       - ".github/scripts/test_model_catalog.py"
       - ".github/workflows/model-catalog.yml"
@@ -29,7 +29,7 @@ on:
       - "frontend/assets/model-catalog.json"
       - "gateway-go/internal/modelcatalog/catalog.json"
       - "gateway/app/services/model_catalog.json"
-      - "docs/capabilities/statistical-models.md"
+      - "docs/capabilities/models.md"
       - ".github/scripts/model_catalog.py"
       - ".github/scripts/test_model_catalog.py"
       - ".github/workflows/model-catalog.yml"
