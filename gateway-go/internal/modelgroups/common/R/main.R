@@ -128,18 +128,28 @@ tab_penalized <- function(task) !identical(task$params$penalty %||% "none", "non
 tab_auto_orders <- function(task) identical(task$params$orders %||% "manual", "auto")
 
 # The variant a model's parameters make, as the catalogue says (the gateway writes it in
-# task.json; this is for a task written by hand).
+# task.json; this is for a task written by hand, and for the self-test's reference cases).
+# A rule of `when` is read as the engine's `_holds` and the gateway's `holds` read it: `true`
+# is «given» (a column's name, any value but null or an empty list), `false` «not given», a
+# list one of its values, anything else that value.
 tab_variant_of <- function(model, params) {
   spec <- tab_model_spec(model)
   for (v in spec$variants) {
     ok <- TRUE
     for (k in names(v$when)) {
-      value <- params[[k]] %||% spec$defaults[[k]]
-      if (!any(vapply(v$when[[k]], identical, logical(1), value))) ok <- FALSE
+      if (!tab_holds(v$when[[k]], params[[k]] %||% spec$defaults[[k]])) ok <- FALSE
     }
     if (ok) return(v$id)
   }
   NULL
+}
+
+tab_given <- function(value) !is.null(value) && length(value) > 0L
+
+tab_holds <- function(rule, value) {
+  if (is.logical(rule) && length(rule) == 1L && !is.na(rule)) return(if (rule) tab_given(value) else !tab_given(value))
+  if (is.list(rule)) return(any(vapply(rule, identical, logical(1), value)))
+  identical(rule, value)
 }
 
 # The step's input: the frame a self-test hands over, or the Parquet file of TABULARIA_INPUT.

@@ -210,6 +210,11 @@ TAB_COMMON_TESTS <- list(
     .tab_expect(any(grepl("is not one of", tab_check_declared(rows, "linear", "unpenalized"), fixed = TRUE)), "a verdict «fine» passed")
     .tab_expect(identical(tab_variant_of("linear", list(penalty = "lasso")), "penalized") &&
                 identical(tab_variant_of("arima", list()), "manual"), "variants")
+    # a rule `true` is «given» (a column's name), `false` «not given», as the engine's _holds reads them
+    .tab_expect(identical(tab_variant_of("clv", list(spend = "avg_spend")), "value") &&
+                identical(tab_variant_of("clv", list()), "purchases") && identical(tab_variant_of("bg_bb", list(spend = NULL)), "purchases") &&
+                tab_holds(TRUE, "x") && !tab_holds(TRUE, list()) && tab_holds(FALSE, NULL) && !tab_holds(FALSE, "x") &&
+                tab_holds(list("a", "b"), "b") && !tab_holds(list("a"), "c") && tab_holds("a", "a"), "variants of a column given or not")
   },
   "charts are capped and keep their extremes" = function(code) {
     set.seed(1)
