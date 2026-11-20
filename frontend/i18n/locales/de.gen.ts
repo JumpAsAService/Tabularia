@@ -6498,7 +6498,8 @@ export default {
     "groups": {
       "regression": "Regression",
       "survival": "Überleben",
-      "timeseries": "Zeitreihen"
+      "timeseries": "Zeitreihen",
+      "boosting": "Boosting"
     },
     "linear": {
       "name": "Lineare Regression",
@@ -6539,6 +6540,22 @@ export default {
       "params": {
         "time": "Zeitspalte",
         "value": "Reihe (eine Zahl)"
+      }
+    },
+    "xgboost": {
+      "name": "XGBoost",
+      "hint": "Gradient Boosting mit kleinen Bäumen: viele kleine Bäume, jeder korrigiert die Fehler der vorherigen. Zahl, Ja/Nein oder mehrere Kategorien, mit Wichtigkeit nach Gewinn und SHAP.",
+      "hints": {
+        "order_by": "Die Spalte, die die Zeilen in zeitliche Ordnung bringt: nötig, wenn die Validierung die letzten Zeilen sind.",
+        "seed": "Jede Zufallsauswahl (die Validierungszeilen, der Anteil der Zeilen und Prädiktoren je Baum) nutzt ihn: gleiche Daten, gleiche Zahlen."
+      }
+    },
+    "catboost": {
+      "name": "CatBoost",
+      "hint": "Gradient Boosting mit symmetrischen Bäumen: dieselben Aufgaben wie XGBoost, mit Wichtigkeit nach Gewinn und SHAP.",
+      "hints": {
+        "order_by": "Die Spalte, die die Zeilen in zeitliche Ordnung bringt: nötig, wenn die Validierung die letzten Zeilen sind.",
+        "seed": "Jede Zufallsauswahl (die Validierungszeilen, der Anteil der Zeilen und Prädiktoren je Baum) nutzt ihn: gleiche Daten, gleiche Zahlen."
       }
     },
     "presets": {
@@ -6628,7 +6645,28 @@ export default {
       "transform": "Reihe transformieren",
       "box_cox_lambda": "Box-Cox-λ",
       "horizon": "Prognoseschritte",
-      "holdout": "Zeilen zum Testen der Prognose zurückgehalten"
+      "holdout": "Zeilen zum Testen der Prognose zurückgehalten",
+      "task": "Aufgabe",
+      "class_weight": "Klassengewichte",
+      "validation": "Auswahl der Validierung",
+      "validation_share": "Anteil für die Validierung",
+      "split_by": "In der Validierung zusammenhalten nach",
+      "stratify": "Geschichtete Validierung",
+      "early_stopping": "Frühzeitig stoppen",
+      "early_stopping_rounds": "Bäume ohne Verbesserung vor dem Stopp",
+      "stop_metric": "Maß für den Stopp",
+      "max_trees": "Höchstzahl der Bäume",
+      "learning_rate": "Lernrate",
+      "max_depth": "Tiefe jedes Baums",
+      "subsample": "Anteil der Zeilen je Baum",
+      "min_child_weight": "Kleinstes Gewicht in einem Blatt",
+      "colsample_bytree": "Anteil der Prädiktoren je Baum",
+      "reg_lambda": "L2-Strafe auf die Blätter (λ)",
+      "reg_alpha": "L1-Strafe auf die Blätter (α)",
+      "gamma": "Mindestgewinn für eine Teilung (γ)",
+      "l2_leaf_reg": "L2-Strafe auf die Blätter (λ)",
+      "rsm": "Anteil der Prädiktoren je Teilung",
+      "random_strength": "Zufälligkeit der Teilungen"
     },
     "hints": {
       "outcome": "Die zu erklärende Spalte.",
@@ -6669,7 +6707,28 @@ export default {
       "exog": "Weitere Spalten, die die Reihe erklären. Ihre künftigen Werte müssen in den Zeilen nach der letzten beobachteten stehen.",
       "transform": "Log oder Box-Cox, wenn die Schwankungen mit dem Niveau wachsen.",
       "horizon": "Wie viele Perioden nach Ende der Reihe. Mit exogenen Spalten: die Zeilen nach dem letzten beobachteten Wert.",
-      "holdout": "Die letzten Zeilen bleiben außerhalb der Anpassung und werden prognostiziert, um die Prognosegüte zu messen. 0: keine."
+      "holdout": "Die letzten Zeilen bleiben außerhalb der Anpassung und werden prognostiziert, um die Prognosegüte zu messen. 0: keine.",
+      "task": "Was das Modell vorhersagt: eine Zahl, ein Ja/Nein oder eine von mehreren Kategorien.",
+      "class_weight": "Ausgeglichen gibt jeder Klasse dasselbe Gewicht beim Anpassen, damit eine seltene Klasse nicht von einer häufigen überdeckt wird.",
+      "validation": "Zufällig: die Validierungszeilen werden zufällig gewählt. Zeit: die letzten Zeilen, in der Reihenfolge der Spalte unten, bilden die Validierung.",
+      "validation_share": "Der Anteil der Zeilen, der zur Prüfung des Modells zurückgehalten wird: 0,2 ist jede fünfte Zeile.",
+      "split_by": "Zeilen mit demselben Wert kommen gemeinsam in den Validierungsteil (ein Kunde, ein Patient).",
+      "stratify": "Der Validierungsteil behält jede Klasse im gleichen Anteil wie die Zeilen.",
+      "early_stopping": "Hört auf, Bäume hinzuzufügen, wenn das Validierungsmaß sich nicht mehr verbessert, und behält die beste Anzahl.",
+      "early_stopping_rounds": "Wie viele Bäume ohne Verbesserung vergehen dürfen, bevor gestoppt wird.",
+      "stop_metric": "Das Maß, mit dem der Validierungsteil zum Stoppen beobachtet wird. Verlust ist das des Modells.",
+      "max_trees": "Die meisten Bäume, die das Modell wachsen lassen darf; der frühe Stopp kann eher abbrechen.",
+      "learning_rate": "Wie viel jeder Baum beiträgt: kleinere Werte lernen langsamer und brauchen mehr Bäume.",
+      "max_depth": "Wie viele Teilungen ein Baum auf einem Pfad machen darf: tiefere Bäume passen mehr an und überanpassen früher.",
+      "subsample": "Jeder Baum wächst auf diesem Anteil der Zeilen, zufällig gezogen. Unter 1 verringert es die Überanpassung.",
+      "min_child_weight": "Eine Teilung wird abgelehnt, wenn ein Blatt weniger Gewicht als dieser Wert hätte.",
+      "colsample_bytree": "Jeder Baum sieht diesen Anteil der Prädiktoren, zufällig gezogen.",
+      "reg_lambda": "Die L2-Strafe auf den Wert jedes Blatts: größere Werte schrumpfen die Antworten der Bäume.",
+      "reg_alpha": "Die L1-Strafe: drückt kleine Blattwerte auf null. 0 bedeutet keine.",
+      "gamma": "Eine Teilung erfolgt nur, wenn sie den Verlust um mindestens diesen Wert senkt.",
+      "l2_leaf_reg": "Die L2-Strafe auf den Wert jedes Blatts: größere Werte schrumpfen die Antworten der Bäume.",
+      "rsm": "Jede Teilung wird unter diesem Anteil der Prädiktoren gewählt, zufällig gezogen.",
+      "random_strength": "Rauschen auf die Bewertungen der Teilungen: 0 für keins, größere Werte für mehr Abwechslung."
     },
     "choice": {
       "ols": "Gewöhnliche kleinste Quadrate",
@@ -6729,7 +6788,15 @@ export default {
       "forecast": "Die Reihe und ihre Prognose",
       "cv": "Per Kreuzvalidierung wählen",
       "cv_1se": "Größtes innerhalb eines Fehlers vom besten",
-      "cv_min": "Das mit dem kleinsten Fehler"
+      "cv_min": "Das mit dem kleinsten Fehler",
+      "regression": "Regression (eine Zahl)",
+      "binary": "Ja/Nein (binär)",
+      "multiclass": "Mehrere Kategorien",
+      "balanced": "Ausgeglichen: jede Klasse zählt gleich",
+      "random": "Zufällige Zeilen",
+      "time": "Die letzten Zeilen, der Reihe nach",
+      "loss": "Der Verlust des Modells",
+      "error": "Fehlerrate (falsche Kategorien)"
     },
     "choices": {
       "penalty": {
@@ -6746,7 +6813,12 @@ export default {
       "wls_needs_weights": "Gewichtete kleinste Quadrate brauchen die Gewichtsspalte.",
       "cluster_needs_column": "Clusterrobuste Standardfehler brauchen die Cluster-Spalte.",
       "firth_needs_logit": "Die Firth-Korrektur gilt für den Logit-Link: Logit oder Maximum Likelihood wählen.",
-      "profile_needs_classical_se": "Profil-Likelihood-Intervalle gehören zu klassischen Standardfehlern: bei robusten Wald verwenden."
+      "profile_needs_classical_se": "Profil-Likelihood-Intervalle gehören zu klassischen Standardfehlern: bei robusten Wald verwenden.",
+      "binary_needs_event": "Eine Ja/Nein-Aufgabe braucht den Wert, der das Ereignis ist.",
+      "time_needs_order": "Validierung nach Zeit braucht die Spalte, die die Zeilen ordnet.",
+      "mae_needs_regression": "Der absolute Fehler misst eine Zahl: wähle ein anderes Maß.",
+      "auc_needs_binary": "Die Fläche unter der ROC-Kurve gilt für Ja/Nein-Ergebnisse: wähle ein anderes Maß.",
+      "error_needs_classes": "Die Fehlerrate zählt falsche Kategorien: für eine Zahl braucht es ein anderes Maß."
     },
     "form": {
       "notUsable": "hier nicht verwendbar",
@@ -6777,7 +6849,8 @@ export default {
       "atLeast": "Mindestens {min}.",
       "atMost": "Höchstens {max}.",
       "whole": "Eine ganze Zahl.",
-      "tooMany": "Höchstens {n} Zahlen."
+      "tooMany": "Höchstens {n} Zahlen.",
+      "noOrderColumns": "Die Eingabe des Schritts hat keine Datums-, Zeitstempel-, Ganzzahl- oder Zahlenspalte, nach der sich die Zeilen ordnen lassen."
     },
     "mlflow": {
       "title": "MLflow",

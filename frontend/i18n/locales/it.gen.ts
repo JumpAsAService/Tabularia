@@ -6498,7 +6498,8 @@ export default {
     "groups": {
       "regression": "Regressione",
       "survival": "Sopravvivenza",
-      "timeseries": "Serie storiche"
+      "timeseries": "Serie storiche",
+      "boosting": "Boosting"
     },
     "linear": {
       "name": "Regressione lineare",
@@ -6539,6 +6540,22 @@ export default {
       "params": {
         "time": "Colonna del tempo",
         "value": "Serie (un numero)"
+      }
+    },
+    "xgboost": {
+      "name": "XGBoost",
+      "hint": "Boosting con alberi di gradiente: molti alberi piccoli, ciascuno corregge gli errori dei precedenti. Numero, sì/no o più categorie, con importanza per guadagno e SHAP.",
+      "hints": {
+        "order_by": "La colonna che mette le righe in ordine di tempo: serve quando la convalida sono le ultime righe.",
+        "seed": "Ogni scelta casuale (le righe di convalida, la quota di righe e di predittori di ogni albero) lo usa: gli stessi dati danno gli stessi numeri."
+      }
+    },
+    "catboost": {
+      "name": "CatBoost",
+      "hint": "Boosting di gradiente con alberi simmetrici: gli stessi compiti di XGBoost, con importanza per guadagno e SHAP.",
+      "hints": {
+        "order_by": "La colonna che mette le righe in ordine di tempo: serve quando la convalida sono le ultime righe.",
+        "seed": "Ogni scelta casuale (le righe di convalida, la quota di righe e di predittori di ogni albero) lo usa: gli stessi dati danno gli stessi numeri."
       }
     },
     "presets": {
@@ -6628,7 +6645,28 @@ export default {
       "transform": "Trasforma la serie",
       "box_cox_lambda": "λ di Box–Cox",
       "horizon": "Passi di previsione",
-      "holdout": "Righe tenute fuori per provare la previsione"
+      "holdout": "Righe tenute fuori per provare la previsione",
+      "task": "Compito",
+      "class_weight": "Pesi delle classi",
+      "validation": "Scelta della convalida",
+      "validation_share": "Quota tenuta per la convalida",
+      "split_by": "Tenere insieme nella convalida per",
+      "stratify": "Convalida stratificata",
+      "early_stopping": "Arresto anticipato",
+      "early_stopping_rounds": "Alberi senza miglioramento prima di fermarsi",
+      "stop_metric": "Misura per fermarsi",
+      "max_trees": "Numero massimo di alberi",
+      "learning_rate": "Tasso di apprendimento",
+      "max_depth": "Profondità di ogni albero",
+      "subsample": "Quota di righe per albero",
+      "min_child_weight": "Peso minimo in una foglia",
+      "colsample_bytree": "Quota di predittori per albero",
+      "reg_lambda": "Penalità L2 sulle foglie (λ)",
+      "reg_alpha": "Penalità L1 sulle foglie (α)",
+      "gamma": "Guadagno minimo per dividere (γ)",
+      "l2_leaf_reg": "Penalità L2 sulle foglie (λ)",
+      "rsm": "Quota di predittori per divisione",
+      "random_strength": "Casualità delle divisioni"
     },
     "hints": {
       "outcome": "La colonna da spiegare.",
@@ -6669,7 +6707,28 @@ export default {
       "exog": "Altre colonne che spiegano la serie. I loro valori futuri devono essere nelle righe dopo l'ultima osservata.",
       "transform": "Log o Box–Cox quando le oscillazioni crescono con il livello.",
       "horizon": "Quanti periodi dopo la fine della serie. Con colonne esogene: le righe dopo l'ultimo valore osservato.",
-      "holdout": "Le ultime righe restano fuori dall'adattamento e vengono previste, per misurare la bontà della previsione. 0: nessuna."
+      "holdout": "Le ultime righe restano fuori dall'adattamento e vengono previste, per misurare la bontà della previsione. 0: nessuna.",
+      "task": "Ciò che il modello prevede: un numero, un sì/no, o una di più categorie.",
+      "class_weight": "Bilanciato dà a ogni classe lo stesso peso nell'adattamento: una classe rara non è sommersa da una comune.",
+      "validation": "Casuale: le righe di convalida sono scelte a caso. Tempo: le ultime righe, nell'ordine della colonna sotto, sono la convalida.",
+      "validation_share": "La quota di righe tenuta per verificare il modello: 0,2 è una riga su cinque.",
+      "split_by": "Le righe con lo stesso valore vanno insieme nella parte di convalida (un cliente, un paziente).",
+      "stratify": "La parte di convalida mantiene ogni classe nella stessa quota delle righe.",
+      "early_stopping": "Smette di aggiungere alberi quando la misura di convalida non migliora più, e tiene il numero migliore di alberi.",
+      "early_stopping_rounds": "Quanti alberi possono passare senza miglioramento prima di fermarsi.",
+      "stop_metric": "La misura con cui si guarda la convalida per fermarsi. La perdita è quella del modello.",
+      "max_trees": "Il massimo di alberi che il modello può far crescere; l'arresto anticipato può fermarlo prima.",
+      "learning_rate": "Quanto aggiunge ogni albero: valori più piccoli imparano più lentamente e servono più alberi.",
+      "max_depth": "Quante divisioni può fare un albero lungo un percorso: alberi più profondi adattano di più, e sovra-adattano prima.",
+      "subsample": "Ogni albero cresce su questa quota di righe, estratte a caso. Sotto 1 riduce il sovra-adattamento.",
+      "min_child_weight": "Una divisione è rifiutata quando una foglia avrebbe un peso inferiore a questo.",
+      "colsample_bytree": "Ogni albero vede questa quota di predittori, estratti a caso.",
+      "reg_lambda": "La penalità L2 sul valore di ogni foglia: valori più grandi restringono le risposte degli alberi.",
+      "reg_alpha": "La penalità L1: spinge a zero i valori piccoli delle foglie. 0 è nessuna.",
+      "gamma": "Una divisione si fa solo se abbassa la perdita di almeno questo.",
+      "l2_leaf_reg": "La penalità L2 sul valore di ogni foglia: valori più grandi restringono le risposte degli alberi.",
+      "rsm": "Ogni divisione è scelta tra questa quota di predittori, estratti a caso.",
+      "random_strength": "Rumore aggiunto ai punteggi delle divisioni: 0 nessuno, valori più grandi più varietà."
     },
     "choice": {
       "ols": "Minimi quadrati ordinari",
@@ -6729,7 +6788,15 @@ export default {
       "forecast": "La serie e la sua previsione",
       "cv": "Scegli con la convalida incrociata",
       "cv_1se": "La più grande entro un errore dalla migliore",
-      "cv_min": "Quella con l'errore minimo"
+      "cv_min": "Quella con l'errore minimo",
+      "regression": "Regressione (un numero)",
+      "binary": "Sì/no (binario)",
+      "multiclass": "Più categorie",
+      "balanced": "Bilanciato: ogni classe conta allo stesso modo",
+      "random": "Righe a caso",
+      "time": "Le ultime righe, in ordine",
+      "loss": "La perdita del modello",
+      "error": "Tasso di errore (categorie sbagliate)"
     },
     "choices": {
       "penalty": {
@@ -6746,7 +6813,12 @@ export default {
       "wls_needs_weights": "I minimi quadrati pesati richiedono la colonna dei pesi.",
       "cluster_needs_column": "Gli errori standard per cluster richiedono la colonna dei cluster.",
       "firth_needs_logit": "La correzione di Firth è per il legame logit: scegli logit, o la massima verosimiglianza.",
-      "profile_needs_classical_se": "Gli intervalli di verosimiglianza profilo vanno con gli errori standard classici: con quelli robusti usa Wald."
+      "profile_needs_classical_se": "Gli intervalli di verosimiglianza profilo vanno con gli errori standard classici: con quelli robusti usa Wald.",
+      "binary_needs_event": "Un compito sì/no richiede il valore che è l'evento.",
+      "time_needs_order": "La convalida per tempo richiede la colonna che ordina le righe.",
+      "mae_needs_regression": "L'errore assoluto misura un numero: scegli un'altra misura.",
+      "auc_needs_binary": "L'area sotto la curva ROC è per gli esiti sì/no: scegli un'altra misura.",
+      "error_needs_classes": "Il tasso di errore conta le categorie sbagliate: per un numero serve un'altra misura."
     },
     "form": {
       "notUsable": "non utilizzabile qui",
@@ -6777,7 +6849,8 @@ export default {
       "atLeast": "Almeno {min}.",
       "atMost": "Al massimo {max}.",
       "whole": "Un numero intero.",
-      "tooMany": "Al massimo {n} numeri."
+      "tooMany": "Al massimo {n} numeri.",
+      "noOrderColumns": "L'ingresso del passo non ha una colonna di data, data e ora, intera o numerica per ordinare le righe."
     },
     "mlflow": {
       "title": "MLflow",

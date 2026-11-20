@@ -107,7 +107,7 @@ function columnOptions(f: ModelField) {
   return f.required ? options : [{ value: undefined, label: '—' }, ...options]
 }
 const noUsableColumn = (f: ModelField) => props.inputColumns.length > 0 && !!(f.numeric || f.types) && !props.inputColumns.some((c) => modelColumnFits(f, c.dtype))
-const noUsableText = (f: ModelField) => t(f.types ? 'models.form.noTimeColumns' : 'models.form.noNumericColumns')
+const noUsableText = (f: ModelField) => t(f.types ? (f.types.includes('number') ? 'models.form.noOrderColumns' : 'models.form.noTimeColumns') : 'models.form.noNumericColumns')
 
 // ── some columns (the predictors, the exogenous series) ──────────────────────
 // A list of boxes in the order they were ticked (the order of the terms); past a dozen a filter.

@@ -427,7 +427,7 @@ const WHOLE = /^U?Int/i
  *  for a predictor (the model refuses a date there: compute a number from it first). */
 export function modelColumnFits(kind: Pick<ModelKind, 'numeric' | 'types' | 'predictor'>, dtype: string): boolean {
   if (kind.numeric && !isNumericDtype(dtype)) return false
-  if (kind.types && !(TEMPORAL.test(dtype) || WHOLE.test(dtype))) return false
+  if (kind.types && !(TEMPORAL.test(dtype) || WHOLE.test(dtype) || (kind.types.includes('number') && isNumericDtype(dtype)))) return false
   if (kind.predictor && TEMPORAL.test(dtype)) return false
   return true
 }

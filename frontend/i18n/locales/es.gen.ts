@@ -6498,7 +6498,8 @@ export default {
     "groups": {
       "regression": "Regresión",
       "survival": "Supervivencia",
-      "timeseries": "Series temporales"
+      "timeseries": "Series temporales",
+      "boosting": "Boosting"
     },
     "linear": {
       "name": "Regresión lineal",
@@ -6539,6 +6540,22 @@ export default {
       "params": {
         "time": "Columna de tiempo",
         "value": "Serie (un número)"
+      }
+    },
+    "xgboost": {
+      "name": "XGBoost",
+      "hint": "Boosting de gradiente con árboles pequeños: muchos árboles, cada uno corrige los errores de los anteriores. Número, sí/no o varias categorías, con importancia por ganancia y SHAP.",
+      "hints": {
+        "order_by": "La columna que pone las filas en orden temporal: hace falta cuando la validación son las últimas filas.",
+        "seed": "Cada elección aleatoria (las filas de validación, la proporción de filas y de predictores de cada árbol) la usa: los mismos datos dan los mismos números."
+      }
+    },
+    "catboost": {
+      "name": "CatBoost",
+      "hint": "Boosting de gradiente con árboles simétricos: las mismas tareas que XGBoost, con importancia por ganancia y SHAP.",
+      "hints": {
+        "order_by": "La columna que pone las filas en orden temporal: hace falta cuando la validación son las últimas filas.",
+        "seed": "Cada elección aleatoria (las filas de validación, la proporción de filas y de predictores de cada árbol) la usa: los mismos datos dan los mismos números."
       }
     },
     "presets": {
@@ -6628,7 +6645,28 @@ export default {
       "transform": "Transformar la serie",
       "box_cox_lambda": "λ de Box–Cox",
       "horizon": "Pasos de pronóstico",
-      "holdout": "Filas apartadas para probar el pronóstico"
+      "holdout": "Filas apartadas para probar el pronóstico",
+      "task": "Tarea",
+      "class_weight": "Pesos de las clases",
+      "validation": "Selección de la validación",
+      "validation_share": "Proporción reservada para validación",
+      "split_by": "Mantener juntas en la validación por",
+      "stratify": "Validación estratificada",
+      "early_stopping": "Parar antes",
+      "early_stopping_rounds": "Árboles sin mejora antes de parar",
+      "stop_metric": "Medida para parar",
+      "max_trees": "Número máximo de árboles",
+      "learning_rate": "Tasa de aprendizaje",
+      "max_depth": "Profundidad de cada árbol",
+      "subsample": "Proporción de filas por árbol",
+      "min_child_weight": "Peso mínimo en una hoja",
+      "colsample_bytree": "Proporción de predictores por árbol",
+      "reg_lambda": "Penalización L2 en las hojas (λ)",
+      "reg_alpha": "Penalización L1 en las hojas (α)",
+      "gamma": "Ganancia mínima para dividir (γ)",
+      "l2_leaf_reg": "Penalización L2 en las hojas (λ)",
+      "rsm": "Proporción de predictores por división",
+      "random_strength": "Aleatoriedad de las divisiones"
     },
     "hints": {
       "outcome": "La columna a explicar.",
@@ -6669,7 +6707,28 @@ export default {
       "exog": "Otras columnas que explican la serie. Sus valores futuros deben estar en las filas posteriores a la última observada.",
       "transform": "Log o Box–Cox cuando las oscilaciones crecen con el nivel.",
       "horizon": "Cuántos periodos tras el final de la serie. Con columnas exógenas: las filas posteriores al último valor observado.",
-      "holdout": "Las últimas filas quedan fuera del ajuste y se pronostican, para medir lo buena que es la previsión. 0: ninguna."
+      "holdout": "Las últimas filas quedan fuera del ajuste y se pronostican, para medir lo buena que es la previsión. 0: ninguna.",
+      "task": "Lo que predice el modelo: un número, un sí/no o una de varias categorías.",
+      "class_weight": "Equilibrado da a cada clase el mismo peso en el ajuste: una clase rara no queda ahogada por una común.",
+      "validation": "Aleatoria: las filas de validación se eligen al azar. Tiempo: las últimas filas, en el orden de la columna de abajo, son la validación.",
+      "validation_share": "La proporción de filas reservada para comprobar el modelo: 0,2 es una fila de cada cinco.",
+      "split_by": "Las filas con el mismo valor van juntas a la parte de validación (un cliente, un paciente).",
+      "stratify": "La parte de validación mantiene cada clase en la misma proporción que las filas.",
+      "early_stopping": "Deja de añadir árboles cuando la medida de validación ya no mejora, y se queda con el mejor número.",
+      "early_stopping_rounds": "Cuántos árboles pueden pasar sin mejora antes de parar.",
+      "stop_metric": "La medida con la que se vigila la validación para parar. La pérdida es la del propio modelo.",
+      "max_trees": "El máximo de árboles que puede crecer el modelo; la parada anticipada puede detenerlo antes.",
+      "learning_rate": "Cuánto aporta cada árbol: valores más pequeños aprenden más despacio y necesitan más árboles.",
+      "max_depth": "Cuántas divisiones puede hacer un árbol en un camino: los árboles más profundos ajustan más y sobreajustan antes.",
+      "subsample": "Cada árbol crece sobre esta proporción de filas, tomadas al azar. Por debajo de 1 reduce el sobreajuste.",
+      "min_child_weight": "Una división se rechaza cuando una hoja tendría menos peso que este valor.",
+      "colsample_bytree": "Cada árbol ve esta proporción de predictores, tomados al azar.",
+      "reg_lambda": "La penalización L2 sobre el valor de cada hoja: valores mayores encogen las respuestas de los árboles.",
+      "reg_alpha": "La penalización L1: lleva a cero los valores pequeños de las hojas. 0 es ninguna.",
+      "gamma": "Una división solo se hace si baja la pérdida al menos en esto.",
+      "l2_leaf_reg": "La penalización L2 sobre el valor de cada hoja: valores mayores encogen las respuestas de los árboles.",
+      "rsm": "Cada división se elige entre esta proporción de predictores, tomados al azar.",
+      "random_strength": "Ruido añadido a las puntuaciones de las divisiones: 0 ninguno, más grande más variedad."
     },
     "choice": {
       "ols": "Mínimos cuadrados ordinarios",
@@ -6729,7 +6788,15 @@ export default {
       "forecast": "La serie y su pronóstico",
       "cv": "Elegir por validación cruzada",
       "cv_1se": "La mayor dentro de un error de la mejor",
-      "cv_min": "La del menor error"
+      "cv_min": "La del menor error",
+      "regression": "Regresión (un número)",
+      "binary": "Sí/no (binario)",
+      "multiclass": "Varias categorías",
+      "balanced": "Equilibrado: cada clase cuenta igual",
+      "random": "Filas al azar",
+      "time": "Las últimas filas, en orden",
+      "loss": "La pérdida del modelo",
+      "error": "Tasa de error (categorías erróneas)"
     },
     "choices": {
       "penalty": {
@@ -6746,7 +6813,12 @@ export default {
       "wls_needs_weights": "Los mínimos cuadrados ponderados necesitan la columna de pesos.",
       "cluster_needs_column": "Los errores estándar por clústeres necesitan la columna de clústeres.",
       "firth_needs_logit": "La corrección de Firth es para el enlace logit: elige logit, o la máxima verosimilitud.",
-      "profile_needs_classical_se": "Los intervalos de verosimilitud perfil van con errores estándar clásicos: con los robustos usa Wald."
+      "profile_needs_classical_se": "Los intervalos de verosimilitud perfil van con errores estándar clásicos: con los robustos usa Wald.",
+      "binary_needs_event": "Una tarea sí/no necesita el valor que es el evento.",
+      "time_needs_order": "La validación por tiempo necesita la columna que ordena las filas.",
+      "mae_needs_regression": "El error absoluto mide un número: elige otra medida.",
+      "auc_needs_binary": "El área bajo la curva ROC es para resultados sí/no: elige otra medida.",
+      "error_needs_classes": "La tasa de error cuenta categorías erróneas: para un número hace falta otra medida."
     },
     "form": {
       "notUsable": "no utilizable aquí",
@@ -6777,7 +6849,8 @@ export default {
       "atLeast": "Al menos {min}.",
       "atMost": "Como máximo {max}.",
       "whole": "Un número entero.",
-      "tooMany": "Como máximo {n} números."
+      "tooMany": "Como máximo {n} números.",
+      "noOrderColumns": "La entrada del paso no tiene una columna de fecha, fecha y hora, entera o numérica para ordenar las filas."
     },
     "mlflow": {
       "title": "MLflow",

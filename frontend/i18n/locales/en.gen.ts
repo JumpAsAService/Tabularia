@@ -6498,7 +6498,8 @@ export default {
     "groups": {
       "regression": "Regression",
       "survival": "Survival",
-      "timeseries": "Time series"
+      "timeseries": "Time series",
+      "boosting": "Boosting"
     },
     "linear": {
       "name": "Linear regression",
@@ -6539,6 +6540,22 @@ export default {
       "params": {
         "time": "Time column",
         "value": "Series (a number)"
+      }
+    },
+    "xgboost": {
+      "name": "XGBoost",
+      "hint": "Gradient boosting: many small trees, each one correcting the errors of those before. Number, yes/no or several categories, with importances by gain and SHAP.",
+      "hints": {
+        "order_by": "The column that puts the rows in time order: needed when the validation part is the last rows.",
+        "seed": "Every random choice (the validation rows, the share of rows and predictors of each tree) uses it: the same data give the same numbers."
+      }
+    },
+    "catboost": {
+      "name": "CatBoost",
+      "hint": "Gradient boosting with symmetric trees: the same tasks as XGBoost, with importances by gain and SHAP.",
+      "hints": {
+        "order_by": "The column that puts the rows in time order: needed when the validation part is the last rows.",
+        "seed": "Every random choice (the validation rows, the share of rows and predictors of each tree) uses it: the same data give the same numbers."
       }
     },
     "presets": {
@@ -6628,7 +6645,28 @@ export default {
       "transform": "Transform the series",
       "box_cox_lambda": "Box–Cox λ",
       "horizon": "Forecast steps",
-      "holdout": "Rows kept out to test the forecast"
+      "holdout": "Rows kept out to test the forecast",
+      "task": "Task",
+      "class_weight": "Class weights",
+      "validation": "Validation split",
+      "validation_share": "Share kept for validation",
+      "split_by": "Keep together in validation by",
+      "stratify": "Stratified validation",
+      "early_stopping": "Stop early",
+      "early_stopping_rounds": "Trees without improvement before stopping",
+      "stop_metric": "Measure to stop on",
+      "max_trees": "Largest number of trees",
+      "learning_rate": "Learning rate",
+      "max_depth": "Depth of each tree",
+      "subsample": "Share of rows per tree",
+      "min_child_weight": "Smallest weight in a leaf",
+      "colsample_bytree": "Share of predictors per tree",
+      "reg_lambda": "L2 penalty on the leaves (λ)",
+      "reg_alpha": "L1 penalty on the leaves (α)",
+      "gamma": "Least gain to split (γ)",
+      "l2_leaf_reg": "L2 penalty on the leaves (λ)",
+      "rsm": "Share of predictors per split",
+      "random_strength": "Randomness of the splits"
     },
     "hints": {
       "outcome": "The column to explain.",
@@ -6669,7 +6707,28 @@ export default {
       "exog": "Other columns that explain the series. Their future values must be in the rows after the last observed one.",
       "transform": "Log or Box–Cox when the swings grow with the level.",
       "horizon": "How many periods after the series ends. With exogenous columns: the rows after the last observed value.",
-      "holdout": "The last rows are left out of the fit and forecast, to measure how good the forecast is. 0: none."
+      "holdout": "The last rows are left out of the fit and forecast, to measure how good the forecast is. 0: none.",
+      "task": "What the model predicts: a number, a yes/no, or one of several categories.",
+      "class_weight": "Balanced gives each class the same weight in the fit, so a rare class is not drowned by a common one.",
+      "validation": "Random: the validation rows are picked at random. Time: the last rows, in the order of the column below, are the validation.",
+      "validation_share": "The share of the rows kept to check the model: 0.2 is one row in five.",
+      "split_by": "Rows with the same value go to the validation part together (a customer, a patient).",
+      "stratify": "The validation part keeps each class in the same share as the rows.",
+      "early_stopping": "Stops adding trees when the validation measure no longer improves, and keeps the best number of trees.",
+      "early_stopping_rounds": "How many trees may pass without improvement before stopping.",
+      "stop_metric": "The measure the validation part is watched with to stop. Loss is the model's own.",
+      "max_trees": "The most trees the model may grow; early stopping may stop it sooner.",
+      "learning_rate": "How much each tree adds: smaller values learn more slowly and need more trees.",
+      "max_depth": "How many splits a tree may make along one path: deeper trees fit more, and overfit sooner.",
+      "subsample": "Each tree is grown on this share of the rows, drawn at random. Below 1 reduces overfitting.",
+      "min_child_weight": "A split is refused when a leaf would hold less weight than this.",
+      "colsample_bytree": "Each tree sees this share of the predictors, drawn at random.",
+      "reg_lambda": "The L2 penalty on each leaf's value: larger values shrink the trees' answers.",
+      "reg_alpha": "The L1 penalty: pushes small leaf values to zero. 0 is none.",
+      "gamma": "A split is made only if it lowers the loss by at least this.",
+      "l2_leaf_reg": "The L2 penalty on each leaf's value: larger values shrink the trees' answers.",
+      "rsm": "Each split is chosen among this share of the predictors, drawn at random.",
+      "random_strength": "Noise added to the scores of the splits: 0 for none, larger for more variety."
     },
     "choice": {
       "ols": "Ordinary least squares",
@@ -6729,7 +6788,15 @@ export default {
       "forecast": "The series and its forecast",
       "cv": "Choose by cross-validation",
       "cv_1se": "Largest within one error of the best",
-      "cv_min": "The one with the smallest error"
+      "cv_min": "The one with the smallest error",
+      "regression": "Regression (a number)",
+      "binary": "Yes/no (binary)",
+      "multiclass": "Several categories",
+      "balanced": "Balanced: each class counts alike",
+      "random": "Random rows",
+      "time": "The last rows, in order",
+      "loss": "The model's own loss",
+      "error": "Error rate (wrong categories)"
     },
     "choices": {
       "penalty": {
@@ -6746,7 +6813,12 @@ export default {
       "wls_needs_weights": "Weighted least squares need the column of the weights.",
       "cluster_needs_column": "Clustered standard errors need the column of the clusters.",
       "firth_needs_logit": "Firth's correction is for the logit link: choose logit, or maximum likelihood.",
-      "profile_needs_classical_se": "Profile likelihood intervals go with classical standard errors: use Wald with robust ones."
+      "profile_needs_classical_se": "Profile likelihood intervals go with classical standard errors: use Wald with robust ones.",
+      "binary_needs_event": "A yes/no task needs the value that is the event.",
+      "time_needs_order": "Validation by time needs the column that orders the rows.",
+      "mae_needs_regression": "The absolute error measures a number: choose another measure.",
+      "auc_needs_binary": "The area under the ROC curve is for yes/no outcomes: choose another measure.",
+      "error_needs_classes": "The error rate counts wrong categories: a number needs another measure."
     },
     "form": {
       "notUsable": "not usable here",
@@ -6777,7 +6849,8 @@ export default {
       "atLeast": "At least {min}.",
       "atMost": "At most {max}.",
       "whole": "A whole number.",
-      "tooMany": "At most {n} numbers."
+      "tooMany": "At most {n} numbers.",
+      "noOrderColumns": "The step's input has no date, datetime, integer or number column to order the rows by."
     },
     "mlflow": {
       "title": "MLflow",

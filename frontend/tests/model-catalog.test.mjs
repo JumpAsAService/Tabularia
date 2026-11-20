@@ -100,17 +100,8 @@ test('the fields of a model in the catalogue\'s order, what it needs first', () 
   assert.equal(m.modelFields(ARIMA).find((f) => f.key === 'time').types.length, 3)
 })
 
-// The boosting group's words come with its nodes in the editor (lot X6 of docs/specs/statistical-models.md):
-// until then they are not asked for. X6 takes this away.
-const WORDS_PENDING = new Set(['boosting'])
-const WORDED = {
-  ...m.MODEL_CATALOG,
-  groups: m.MODEL_CATALOG.groups.filter((g) => !WORDS_PENDING.has(g.id)),
-  models: m.MODEL_CATALOG.models.filter((x) => !WORDS_PENDING.has(x.group)),
-}
-
 test('every model, group, preset, field, choice and reason has its words in the five languages', () => {
-  const wanted = m.modelWordKeys(WORDED)
+  const wanted = m.modelWordKeys(m.MODEL_CATALOG)
   for (const key of ['models.groups.regression', 'models.linear.name', 'models.arima.hint', 'models.presets.sarimax.name',
     'models.params.outcome', 'models.choice.firth', 'models.reasons.firth_needs_logit', 'predict.params.at_times']) assert.ok(wanted.includes(key), key)
   const missing = []
@@ -138,10 +129,10 @@ test('every model, group, preset, field, choice and reason has its words in the 
 
 test('a model added to the catalogue is asked for its words by name', () => {
   const TWO = {
-    ...WORDED,
-    groups: [...WORDED.groups, { id: 'zz_group', language: 'r', label: 'models.groups.zz_group', models: ['zz_poisson'] }],
+    ...m.MODEL_CATALOG,
+    groups: [...m.MODEL_CATALOG.groups, { id: 'zz_group', language: 'r', label: 'models.groups.zz_group', models: ['zz_poisson'] }],
     kinds: { ...m.MODEL_CATALOG.kinds, zz_offset: { control: 'choice', choices: ['none', 'exposure'] } },
-    models: [...WORDED.models, {
+    models: [...m.MODEL_CATALOG.models, {
       id: 'zz_poisson', group: 'zz_group', family: 'regression', label: 'models.zz_poisson.name',
       needs: { outcome: 'number_column' }, takes: { zz_offset: 'zz_offset' }, defaults: { zz_offset: 'none' },
       applies: {}, requires: [], forbids: [{ key: 'zz_offset', value: 'exposure', when: { zz_offset: 'none' }, reason: 'zz_nope', message: 'no' }],
@@ -411,6 +402,11 @@ test('the columns a model reads, what it says it does, and which columns can be 
   assert.equal(m.modelColumnFits(by(LINEAR, 'predictors'), 'Date'), false)
   assert.equal(m.modelColumnFits(by(ARIMA, 'time'), 'Datetime(time_unit=\'us\', time_zone=None)'), true)
   assert.equal(m.modelColumnFits(by(ARIMA, 'time'), 'Int64'), true)
+  // the boosting order: a date, an integer or a number (a float too), never a text
+  const XGB = m.modelOf('xgboost')
+  assert.equal(m.modelColumnFits(by(XGB, 'order_by'), 'Float64'), true)
+  assert.equal(m.modelColumnFits(by(XGB, 'order_by'), 'Date'), true)
+  assert.equal(m.modelColumnFits(by(XGB, 'order_by'), 'String'), false)
   assert.equal(m.modelColumnFits(by(ARIMA, 'time'), 'Float64'), false)
   assert.equal(m.modelColumnFits(by(ARIMA, 'exog'), 'Float64'), true)
   assert.equal(m.modelIsCategorical('String') && m.modelIsCategorical('Boolean'), true)
