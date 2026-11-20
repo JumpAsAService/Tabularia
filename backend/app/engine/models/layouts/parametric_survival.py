@@ -39,6 +39,8 @@ def name(params: dict[str, Any], locale: str) -> str:
 
 def about(params: dict[str, Any], locale: str) -> str:
     time, event, value = params.get("time"), params.get("event"), params.get("event_value")
+    if params.get("start") and time:  # delayed entry: the interval (start, time], as Cox's
+        time = f"{params['start']}–{time}"
     left = f"{time}, {event} = {label_of(value)}" if time and event and value is not None else str(time or "")
     said = c.subject({**params, "outcome": left})
     if params.get("strata"):
