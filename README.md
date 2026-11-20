@@ -212,6 +212,10 @@ Then: [Quickstart](#quickstart) · [How it works](#how-it-works) · [Sample data
   unpivot, and the **Foreach** loop. [The node catalogue](docs/capabilities/flows.md#the-node-catalogue)
   The statistical tests, one node each in six families, show their report in the node's
   **Report** tab, to download as PDF and Excel. [Statistics](docs/capabilities/statistics.md)
+- **Statistical models.** Linear and logistic regression (ridge, lasso, elastic net),
+  Kaplan–Meier, Cox and ARIMA as nodes of a flow, run in R on Kubernetes, with a report that
+  opens on the checks of its assumptions, optional MLflow recording and a Predict node.
+  [Statistical models](docs/capabilities/models.md)
 - **A declarative definition.** A flow is a JSON list of typed operations, decoupled from
   the engine that runs it. [Concepts](docs/concepts.md), [How it works](docs/how-it-works.md#the-declarative-definition)
   ```json
