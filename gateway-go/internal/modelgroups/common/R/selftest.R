@@ -251,6 +251,10 @@ TAB_COMMON_TESTS <- list(
     .tab_expect(!length(missing), "missing: ", paste(missing, collapse = ", "))
     .tab_expect(is.list(back$params) && identical(back$format, "tabularia-model"), "params is an object")
     .tab_expect(length(back$terms) == length(back$coefficients) && is.null(back$terms[[1L]]$level), "terms")
+    .tab_expect(identical(as.numeric(unlist(back$coefficients)), unname(as.numeric(unlist(card$coefficients)))) &&
+                identical(as.numeric(jsonlite::fromJSON(tab_json(c(0.1, 1 / 3, pi * 1e10, -1.2345678901234567e-5)))),
+                          c(0.1, 1 / 3, pi * 1e10, -1.2345678901234567e-5)),
+                "a number read back from the card is not the same double")
     .tab_expect(identical(back$inputs[[2L]]$levels, list("east", "north", "south")), "levels")
     .tab_expect(grepl("tabularia:\n    card: model.json", tab_mlmodel(card), fixed = TRUE), "MLmodel")
     small <- task

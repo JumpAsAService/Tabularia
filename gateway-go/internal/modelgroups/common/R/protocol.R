@@ -47,8 +47,11 @@ tab_not_built <- function(what) {
   tab_refuse("not_built", paste0(what, " is not built yet in this version of Tabularia"), list(what = what))
 }
 
+# Numbers keep 17 significant digits (I(17): significant, not decimal, digits), so that a double
+# read back is the same double to the last bit: a card's coefficients give the fit's own
+# predictions within 1e-9 (jsonlite's digits = NA keeps 15, and loses the last bits).
 tab_json <- function(x, pretty = FALSE) {
-  as.character(jsonlite::toJSON(x, auto_unbox = TRUE, null = "null", na = "null", digits = NA, pretty = pretty))
+  as.character(jsonlite::toJSON(x, auto_unbox = TRUE, null = "null", na = "null", digits = I(17), pretty = pretty))
 }
 
 tab_is_uri <- function(path) grepl("^[a-z][a-z0-9+.-]*://", path)
