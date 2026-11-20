@@ -60,9 +60,9 @@ function toggleStat() {
 // A group of its own, after Statistics, closed until opened and remembered in this browser, with
 // one subtitle per group the administrator turned on and this person may use; a group not turned on
 // does not appear, and none turned on hides the whole thing. On Compose (no Kubernetes) the groups
-// are shown greyed out, not dragged, with the reason. Predict is above the subtitles. Enter or
-// Space on an item adds it after the selected node, as on a statistics item: nothing needs a
-// pointer, nor a key a laptop may lack.
+// are shown greyed out, not dragged, with the reason. Predict is above the subtitles. Enter,
+// Space or a click on an item adds it after the selected node, as on a statistics item: nothing
+// needs a pointer (a screen reader or voice control clicks), nor a key a laptop may lack.
 const MODEL_OPEN_KEY = 'tabularia.palette.models'
 const modelOpenSaved = ref(false)
 onMounted(() => {
@@ -178,6 +178,7 @@ function onDragStart(ev: DragEvent, kind: string) {
             :title="$t('opSidebar.statisticsItemTitle', { hint: $t(statHintKey(test)) })"
             :style="{ '--item-color': opMeta(test.operation).color }"
             @dragstart="onDragStart($event, `op:${test.operation}`)"
+            @click="emit('add', test.operation)"
             @keydown.enter.prevent="emit('add', test.operation)"
             @keydown.space.prevent="emit('add', test.operation)"
           >
@@ -216,6 +217,7 @@ function onDragStart(ev: DragEvent, kind: string) {
           :aria-disabled="modelsOff ? 'true' : undefined"
           :style="{ '--item-color': MODEL_COLOR }"
           @dragstart="!modelsOff && onDragStart($event, 'model_predict')"
+          @click="!modelsOff && emit('add', 'model_predict')"
           @keydown.enter.prevent="!modelsOff && emit('add', 'model_predict')"
           @keydown.space.prevent="!modelsOff && emit('add', 'model_predict')"
         >
@@ -237,6 +239,7 @@ function onDragStart(ev: DragEvent, kind: string) {
             :aria-disabled="modelsOff ? 'true' : undefined"
             :style="{ '--item-color': MODEL_COLOR }"
             @dragstart="!modelsOff && onDragStart($event, item.kind)"
+            @click="!modelsOff && emit('add', item.kind)"
             @keydown.enter.prevent="!modelsOff && emit('add', item.kind)"
             @keydown.space.prevent="!modelsOff && emit('add', item.kind)"
           >

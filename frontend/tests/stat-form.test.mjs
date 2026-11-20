@@ -221,3 +221,22 @@ test('a goodness of fit: all equal until proportions are given, a box for each c
   assert.ok(html.includes('id="stat-op-21-expected-share-0"') && html.includes('aria-label="Proportion of «web»"'))
   assert.ok(page.includes('The proportions sum to 1.1: they must sum to 1.'), page)
 })
+
+test('every palette item that says it is a button does on a click what Enter does (screen reader, voice, touch)', () => {
+  const src = readFileSync(join(FRONTEND, 'components/ui/OpSidebar.vue'), 'utf8')
+  const { descriptor } = parse(src, { filename: 'OpSidebar.vue' })
+  const items = []
+  const walk = (node) => {
+    if (node.type === 1 && node.props?.some((p) => p.type === 6 && p.name === 'role' && p.value?.content === 'button') && node.props.some((p) => p.type === 6 && p.name === 'tabindex')) items.push(node)
+    for (const c of node.children ?? []) if (c && typeof c === 'object') walk(c)
+  }
+  walk(descriptor.template.ast)
+  assert.ok(items.length >= 3, `${items.length} items found`)
+  for (const el of items) {
+    const handler = (arg, mods = []) => el.props.find((p) => p.type === 7 && p.name === 'on' && p.arg?.content === arg && mods.every((m) => p.modifiers.some((x) => (x.content ?? x) === m)))?.exp?.content
+    const click = handler('click')
+    const enter = handler('keydown', ['enter'])
+    assert.ok(click, `an item without @click: ${el.loc.start.line}`)
+    assert.equal(click, enter, `click and Enter differ at line ${el.loc.start.line}`)
+  }
+})
