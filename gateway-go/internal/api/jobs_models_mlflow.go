@@ -245,7 +245,7 @@ func (q *queue) mlflowLog(ctx context.Context, r *scriptNodeRun, s *modelStep, c
 	if err != nil {
 		return err
 	}
-	params := append(flattenParams(s.checked), modelFormula(rows)...)
+	params := append(append(flattenParams(s.checked), modelFormula(rows)...), modelDistribution(rows)...)
 	metrics, metricWarnings := modelMetricsChecked(rows, started)
 	rec.warnings = append(rec.warnings, metricWarnings...)
 	if err := tr.LogBatch(ctx, run.ID, params, metrics, tags); err != nil {
@@ -592,6 +592,18 @@ func modelFormula(rows []resultRow) []mlflowconn.Tag {
 	return nil
 }
 
+// modelDistribution is the distribution the fit used, the `distribution` text of the results'
+// model section, as the parameter `distribution_chosen`. The node's own parameter `distribution`
+// may say only `auto`; this is the one the automatic choice picked (the same text otherwise).
+func modelDistribution(rows []resultRow) []mlflowconn.Tag {
+	for _, r := range rows {
+		if r.Section == "model" && r.Stat == "distribution" && r.Text != nil && *r.Text != "" {
+			return []mlflowconn.Tag{{Key: "distribution_chosen", Value: *r.Text}}
+		}
+	}
+	return nil
+}
+
 // metricKey keeps the characters MLflow allows in a key (letters, digits, _ - . space /).
 func metricKey(s string) string {
 	var b strings.Builder
@@ -705,7 +717,12 @@ func learningMetricName(level string, rows []resultRow) string {
 
 // modelMetrics are every number of the `model` section and, per assumption, its statistic
 // and p-value (`assumption.<check>.statistic`, with the term or stratum between when the
-// check has one: `assumption.<check>.<term>.p_value`). Each key once. A boosting model's
+// check has one: `assumption.<check>.<term>.p_value`), every number of an automatic choice's
+// candidates (`candidate.<level>.<stat>`: aic, bic, log_lik, akaike_weight, chosen, parsimony…
+// for the parametric survival distributions, aicc, aic, bic, converged, chosen for the ARIMA
+// orders; a candidate's text `status` is not a metric) and each parameter's estimate
+// (`parameter.<level>[.<level_2>].estimate`: the shape and the scale of a distribution). Each key
+// once. A boosting model's
 // results (they carry a `library` text) add what the spec lists for it: the diagnostics' value
 // (`assumption.<check>[.<level_2>].value`), `importance.<predictor>.gain_share` and
 // `.mean_abs_shap_share` for the first 20 predictors, and each learning curve as a metric
@@ -746,6 +763,14 @@ func modelMetricsChecked(rows []resultRow, at time.Time) ([]mlflowconn.Metric, [
 				key += "." + *r.Level2
 			}
 			add(key+"."+r.Stat, *r.Value)
+		case r.Section == "candidate" && r.Level != nil && r.Stat != "":
+			add("candidate."+*r.Level+"."+r.Stat, *r.Value)
+		case r.Section == "parameter" && r.Stat == "estimate" && r.Level != nil:
+			key := "parameter." + *r.Level
+			if r.Level2 != nil && *r.Level2 != "" {
+				key += "." + *r.Level2
+			}
+			add(key+".estimate", *r.Value)
 		case boosting && r.Section == "importance" && (r.Stat == "gain_share" || r.Stat == "mean_abs_shap_share") && r.Level != nil:
 			if !predictors[*r.Level] && len(predictors) >= maxImportanceMetrics {
 				continue
@@ -822,7 +847,7 @@ func (d *Deps) modelResultRows(ctx context.Context, storage *scriptStorage, key 
 	cctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
 	res, raw, err := d.Engine.JSON(cctx, http.MethodPost, "/scripts/results/rows", pyjson.Object{{Key: "connection", Value: storage.payload()},
-		{Key: "key", Value: key}, {Key: "sections", Value: []any{"model", "assumption", "coef", "importance", "curve"}}})
+		{Key: "key", Value: key}, {Key: "sections", Value: []any{"model", "assumption", "coef", "importance", "curve", "candidate", "parameter"}}})
 	if err != nil {
 		return nil, err
 	}

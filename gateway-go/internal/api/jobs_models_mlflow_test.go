@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -244,7 +245,12 @@ func (w *mlflowWorld) serveEngine(rw http.ResponseWriter, r *http.Request) {
 			{"section": "model", "level": null, "level_2": null, "stat": "formula", "value": null, "text": "quantity ~ price + channel"},
 			{"section": "model", "level": null, "level_2": null, "stat": "r_squared", "value": 0.81, "text": null},
 			{"section": "assumption", "level": "breusch_pagan", "level_2": null, "stat": "p_value", "value": 0.07, "text": null},
-			{"section": "coef", "level": "price", "level_2": null, "stat": "estimate", "value": -1.5, "text": null}]}`))
+			{"section": "coef", "level": "price", "level_2": null, "stat": "estimate", "value": -1.5, "text": null},
+			{"section": "model", "level": null, "level_2": null, "stat": "distribution", "value": null, "text": "weibull"},
+			{"section": "candidate", "level": "weibull", "level_2": null, "stat": "aic", "value": 1234.8, "text": null},
+			{"section": "candidate", "level": "weibull", "level_2": null, "stat": "parsimony", "value": 1, "text": null},
+			{"section": "candidate", "level": "weibull", "level_2": null, "stat": "status", "value": null, "text": "ok"},
+			{"section": "parameter", "level": "shape", "level_2": null, "stat": "estimate", "value": 1.42, "text": null}]}`))
 	case r.URL.Path == "/scripts/objects/read":
 		var in struct {
 			Key string `json:"key"`
@@ -361,7 +367,13 @@ func TestAFlowRunLogsItsModelToMLflow(t *testing.T) {
 		run.Params["formula"] != "quantity ~ price + channel" {
 		t.Errorf("params: %v", run.Params)
 	}
-	if run.Metrics["r_squared"] != 0.81 || run.Metrics["assumption.breusch_pagan.p_value"] != 0.07 || len(run.Metrics) != 2 {
+	if run.Params["distribution_chosen"] != "weibull" {
+		t.Errorf("the distribution chosen: %v", run.Params)
+	}
+	if run.Metrics["candidate.weibull.aic"] != 1234.8 || run.Metrics["candidate.weibull.parsimony"] != 1 || run.Metrics["parameter.shape.estimate"] != 1.42 {
+		t.Errorf("the candidates and parameters: %v", run.Metrics)
+	}
+	if run.Metrics["r_squared"] != 0.81 || run.Metrics["assumption.breusch_pagan.p_value"] != 0.07 || len(run.Metrics) != 5 {
 		t.Errorf("metrics: %v", run.Metrics)
 	}
 	tags := run.Tags
@@ -607,4 +619,162 @@ func TestAConnectionThePersonMayNotUseStopsTheStepBeforeAnything(t *testing.T) {
 	if n != 0 {
 		t.Errorf("%d runs created by refusals", n)
 	}
+}
+
+// ── the candidates, the parameters and the distribution chosen (parametric survival, ARIMA) ──
+
+// An automatic choice's candidates, a distribution's parameters and the distribution chosen are
+// logged: `candidate.<level>.<stat>` for every number, `parameter.<level>[.<level_2>].estimate`,
+// and the parameter `distribution_chosen`.
+func TestTheCandidatesTheParametersAndTheDistributionChosenAreLogged(t *testing.T) {
+	rows := []resultRow{
+		{Section: "model", Stat: "distribution", Text: ptr("weibull")},
+		{Section: "model", Stat: "selection", Text: ptr("auto")},
+		{Section: "model", Stat: "aic", Value: ptr(1234.8)},
+		{Section: "candidate", Level: ptr("weibull"), Stat: "aic", Value: ptr(1234.8)},
+		{Section: "candidate", Level: ptr("weibull"), Stat: "akaike_weight", Value: ptr(0.4)},
+		{Section: "candidate", Level: ptr("weibull"), Stat: "chosen", Value: ptr(1.0)},
+		{Section: "candidate", Level: ptr("weibull"), Stat: "parsimony", Value: ptr(1.0)},
+		{Section: "candidate", Level: ptr("weibull"), Stat: "status", Text: ptr("ok")},
+		{Section: "candidate", Level: ptr("gengamma"), Stat: "aic", Value: ptr(1234.5)},
+		{Section: "candidate", Level: ptr("gengamma"), Stat: "parsimony", Value: ptr(0.0)},
+		{Section: "candidate", Level: ptr("gompertz"), Stat: "aic"}, // not finite: no metric
+		{Section: "candidate", Level: ptr("ARIMA(1,1,0)(0,1,1)[12]"), Stat: "aicc", Value: ptr(-582.6)},
+		{Section: "parameter", Level: ptr("shape"), Stat: "estimate", Value: ptr(1.42)},
+		{Section: "parameter", Level: ptr("shape"), Stat: "std_error", Value: ptr(0.09)}, // only the estimate
+		{Section: "parameter", Level: ptr("scale"), Level2: ptr("line=B"), Stat: "estimate", Value: ptr(3.5)},
+	}
+	got := map[string]float64{}
+	for _, m := range modelMetrics(rows, time.Now()) {
+		got[m.Key] = m.Value
+	}
+	want := map[string]float64{"aic": 1234.8,
+		"candidate.weibull.aic": 1234.8, "candidate.weibull.akaike_weight": 0.4, "candidate.weibull.chosen": 1, "candidate.weibull.parsimony": 1,
+		"candidate.gengamma.aic": 1234.5, "candidate.gengamma.parsimony": 0,
+		"candidate.ARIMA_1_1_0__0_1_1__12_.aicc": -582.6,
+		"parameter.shape.estimate":               1.42, "parameter.scale.line_B.estimate": 3.5}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Errorf("metrics:\n got %v\nwant %v", got, want)
+	}
+	if d := modelDistribution(rows); len(d) != 1 || d[0].Key != "distribution_chosen" || d[0].Value != "weibull" {
+		t.Errorf("distribution_chosen: %v", d)
+	}
+	if d := modelDistribution([]resultRow{{Section: "model", Stat: "n", Value: ptr(3.0)}}); len(d) != 0 {
+		t.Errorf("a model without a distribution logs one: %v", d)
+	}
+}
+
+// Candidates' names are kept apart and within MLflow's limit whatever the level says.
+func TestCandidateKeysStayWithinTheLimitAndApart(t *testing.T) {
+	long := strings.Repeat("o", 300)
+	rows := []resultRow{
+		{Section: "candidate", Level: ptr(long + "1"), Stat: "aic", Value: ptr(1.0)},
+		{Section: "candidate", Level: ptr(long + "2"), Stat: "aic", Value: ptr(2.0)},
+		{Section: "candidate", Level: ptr("ARIMA(1,0,0)"), Stat: "aic", Value: ptr(3.0)},
+		{Section: "candidate", Level: ptr("ARIMA[1,0,0]"), Stat: "aic", Value: ptr(4.0)}, // the same key once cleaned
+	}
+	metrics, warnings := modelMetricsChecked(rows, time.Now())
+	seen := map[string]bool{}
+	for _, m := range metrics {
+		if len(m.Key) > 250 || seen[m.Key] {
+			t.Errorf("key %q (%d characters) too long or twice", m.Key, len(m.Key))
+		}
+		seen[m.Key] = true
+	}
+	if len(metrics) != 4 || len(warnings) != 1 {
+		t.Errorf("%d metrics, warnings %q", len(metrics), warnings)
+	}
+}
+
+// The catalogue's fixtures (backend/tests/fixtures/models, not mounted when the gateway's tests
+// run alone: then it is skipped) as the engine returns them: whatever numbers they hold, every
+// finite number of the candidate section is a metric of the same value, every parameter's estimate
+// too, and the distribution is the parameter. It holds when lot P5 puts the runner's output there.
+func TestTheCatalogueFixturesLogTheirCandidatesAndParameters(t *testing.T) {
+	dir := "../../../backend/tests/fixtures/models"
+	for _, name := range []string{"parametric_survival-auto", "parametric_survival-ph_aft", "parametric_survival-aft",
+		"parametric_survival-ph", "arima-auto", "arima-manual"} {
+		raw, err := os.ReadFile(dir + "/" + name + ".json")
+		if err != nil {
+			t.Skipf("no fixtures here: %v", err)
+		}
+		var fx struct {
+			Columns []string `json:"columns"`
+			Rows    [][]any  `json:"rows"`
+		}
+		if err := json.Unmarshal(raw, &fx); err != nil {
+			t.Fatal(err)
+		}
+		idx := map[string]int{}
+		for i, c := range fx.Columns {
+			idx[c] = i
+		}
+		str := func(row []any, c string) *string {
+			if s, ok := row[idx[c]].(string); ok {
+				return &s
+			}
+			return nil
+		}
+		num := func(row []any, c string) *float64 {
+			if f, ok := row[idx[c]].(float64); ok {
+				return &f
+			}
+			return nil
+		}
+		var rows []resultRow
+		for _, r := range fx.Rows {
+			rows = append(rows, resultRow{Section: *str(r, "section"), Level: str(r, "level"), Level2: str(r, "level_2"),
+				Stat: *str(r, "stat"), Value: num(r, "value"), Text: str(r, "text"), X0: num(r, "x0")})
+		}
+		metrics, warnings := modelMetricsChecked(rows, time.Now())
+		got := map[string]float64{}
+		for _, m := range metrics {
+			if len(m.Key) > 250 {
+				t.Errorf("%s: a key of %d characters", name, len(m.Key))
+			}
+			got[m.Key] = m.Value
+		}
+		if len(got) != len(metrics) {
+			t.Errorf("%s: a key twice", name)
+		}
+		for _, w := range warnings {
+			t.Errorf("%s: a warning: %s", name, w)
+		}
+		candidates, parameters := 0, 0
+		for _, r := range rows {
+			if r.Value == nil {
+				continue
+			}
+			switch {
+			case r.Section == "candidate":
+				candidates++
+				if v, ok := got[metricKey("candidate."+*r.Level+"."+r.Stat)]; !ok || v != *r.Value {
+					t.Errorf("%s: candidate %s %s is not logged as %g", name, *r.Level, r.Stat, *r.Value)
+				}
+			case r.Section == "parameter" && r.Stat == "estimate":
+				parameters++
+			}
+		}
+		if parameters > 0 && !hasMetricPrefix(got, "parameter.") {
+			t.Errorf("%s: the parameters' estimates are not logged", name)
+		}
+		if strings.HasPrefix(name, "parametric_survival") {
+			d := modelDistribution(rows)
+			if len(d) != 1 || d[0].Value == "" {
+				t.Errorf("%s: distribution_chosen: %v", name, d)
+			}
+		}
+		if strings.HasSuffix(name, "-auto") && candidates == 0 {
+			t.Errorf("%s: an automatic choice without candidates", name)
+		}
+	}
+}
+
+func hasMetricPrefix(m map[string]float64, prefix string) bool {
+	for k := range m {
+		if strings.HasPrefix(k, prefix) {
+			return true
+		}
+	}
+	return false
 }
