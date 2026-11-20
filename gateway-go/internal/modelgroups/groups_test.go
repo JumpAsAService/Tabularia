@@ -278,6 +278,20 @@ func TestAFitTask(t *testing.T) {
 	}
 }
 
+// R writes an empty list as [] : a refusal with nothing to name still says why.
+func TestARefusalWithEmptyParamsIsRead(t *testing.T) {
+	for _, params := range []string{`[]`, `{}`, `null`} {
+		log := "TABULARIA_ERROR {\"code\":\"no_repeaters\",\"message\":\"no customer bought again\",\"params\":" + params + "}\n"
+		e, ok := ErrorFromLog(log)
+		if !ok || e.Code != "no_repeaters" || e.Message != "no customer bought again" || len(e.Params) != 0 {
+			t.Errorf("params %s: %+v %v", params, e, ok)
+		}
+	}
+	if e, ok := ErrorFromLog("TABULARIA_ERROR {\"code\":\"x\",\"message\":\"m\",\"params\":5}\n"); !ok || e.Message != "m" {
+		t.Error("odd params must not hide the sentence")
+	}
+}
+
 func TestTheLogsLines(t *testing.T) {
 	log := "Loading…\nTABULARIA_ERROR {\"code\":\"x\",\"message\":\"first\"}\nmore\n" +
 		"TABULARIA_ERROR {\"code\":\"separation\",\"message\":\"price separates the outcome\",\"params\":{\"column\":\"price\"}}\n"

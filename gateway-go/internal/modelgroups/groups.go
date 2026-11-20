@@ -21,6 +21,7 @@ package modelgroups
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/sha256"
 	"embed"
 	"encoding/hex"
@@ -351,6 +352,27 @@ type RunnerError struct {
 	Code    string         `json:"code"`
 	Message string         `json:"message"`
 	Params  map[string]any `json:"params"`
+}
+
+// UnmarshalJSON reads a refusal whose params are an empty list: R's jsonlite writes an empty
+// list as [], not {}, and a refusal with nothing to name (no_repeaters) must still say why.
+func (e *RunnerError) UnmarshalJSON(b []byte) error {
+	type plain RunnerError
+	var raw struct {
+		plain
+		Params json.RawMessage `json:"params"`
+	}
+	if err := json.Unmarshal(b, &raw); err != nil {
+		return err
+	}
+	*e = RunnerError(raw.plain)
+	e.Params = nil
+	if p := bytes.TrimSpace(raw.Params); len(p) > 0 && p[0] == '{' {
+		if err := json.Unmarshal(p, &e.Params); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // SelftestReport is the self-test's last line.
