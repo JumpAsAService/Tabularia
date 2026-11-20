@@ -97,27 +97,47 @@
    "censoring_informative": {
     "name": "Non-informative censoring",
     "h0": "Being censored says nothing of the time to the event.",
-    "not_computed": "It cannot be tested from the data: ask how the rows came to be censored."
+    "not_computed": "It cannot be tested from the data: ask how the rows came to be censored.",
+    "count": {
+     "one": "{n} row censored",
+     "other": "{n} rows censored"
+    }
    },
    "proportional_hazards": {
     "name": "Proportional hazards",
     "h0": "The strata's hazards keep the same ratio over time (the curves do not cross).",
-    "advice": "The hazards' ratio changes over time, or the curves cross: the log-rank test loses power, and so does Peto's; compare the restricted means (rmst_tau), and read the curves themselves."
+    "advice": "The hazards' ratio changes over time, or the curves cross: the log-rank test loses power, and so does Peto's; compare the restricted means (rmst_tau), and read the curves themselves.",
+    "count": {
+     "one": "{n} pair of curves that cross",
+     "other": "{n} pairs of curves that cross"
+    }
    },
    "censoring_by_stratum": {
     "name": "Censoring by stratum",
     "h0": "The share censored is the same in every stratum.",
-    "advice": "The share censored differs between strata: expected when their survival differs; the follow-up check says whether censoring itself differs."
+    "advice": "The share censored differs between strata: expected when their survival differs; the follow-up check says whether censoring itself differs.",
+    "count": {
+     "one": "{n} row censored",
+     "other": "{n} rows censored"
+    }
    },
    "follow_up_by_stratum": {
     "name": "Follow-up by stratum",
     "h0": "The rows of every stratum are followed as long (the reverse Kaplan–Meier).",
-    "advice": "The follow-up differs between strata: the rows of one are censored sooner; ask why before comparing."
+    "advice": "The follow-up differs between strata: the rows of one are censored sooner; ask why before comparing.",
+    "count": {
+     "one": "{n} row censored",
+     "other": "{n} rows censored"
+    }
    },
    "few_at_risk": {
     "name": "Rows still at risk",
     "h0": "Every number reported is read where at least 10 rows are still at risk.",
-    "advice": "Few rows are left at risk where these numbers are read: the end of a curve is uncertain; read them with their intervals, or report at an earlier time."
+    "advice": "Few rows are left at risk where these numbers are read: the end of a curve is uncertain; read them with their intervals, or report at an earlier time.",
+    "count": {
+     "one": "{n} stratum read where few are at risk",
+     "other": "{n} strata read where few are at risk"
+    }
    }
   },
   "all": "All rows",
@@ -221,27 +241,47 @@
    "censoring_informative": {
     "name": "Censura non informativa",
     "h0": "Essere censurati non dice nulla del tempo all'evento.",
-    "not_computed": "Non si può verificare dai dati: chiedetevi perché le righe sono state censurate."
+    "not_computed": "Non si può verificare dai dati: chiedetevi perché le righe sono state censurate.",
+    "count": {
+     "one": "{n} riga censurata",
+     "other": "{n} righe censurate"
+    }
    },
    "proportional_hazards": {
     "name": "Rischi proporzionali",
     "h0": "I rischi degli strati mantengono lo stesso rapporto nel tempo (le curve non si incrociano).",
-    "advice": "Il rapporto dei rischi cambia nel tempo, o le curve si incrociano: il test log-rank perde potenza, e così quello di Peto; confrontate le medie ristrette (rmst_tau) e leggete le curve stesse."
+    "advice": "Il rapporto dei rischi cambia nel tempo, o le curve si incrociano: il test log-rank perde potenza, e così quello di Peto; confrontate le medie ristrette (rmst_tau) e leggete le curve stesse.",
+    "count": {
+     "one": "{n} coppia di curve che si incrociano",
+     "other": "{n} coppie di curve che si incrociano"
+    }
    },
    "censoring_by_stratum": {
     "name": "Censura per strato",
     "h0": "La quota di censurati è la stessa in ogni strato.",
-    "advice": "La quota di censurati cambia tra gli strati: è atteso quando la loro sopravvivenza è diversa; la verifica del follow-up dice se cambia la censura stessa."
+    "advice": "La quota di censurati cambia tra gli strati: è atteso quando la loro sopravvivenza è diversa; la verifica del follow-up dice se cambia la censura stessa.",
+    "count": {
+     "one": "{n} riga censurata",
+     "other": "{n} righe censurate"
+    }
    },
    "follow_up_by_stratum": {
     "name": "Follow-up per strato",
     "h0": "Le righe di ogni strato sono seguite per lo stesso tempo (Kaplan–Meier inverso).",
-    "advice": "Il follow-up cambia tra gli strati: le righe di uno sono censurate prima; chiedetevi perché prima di confrontarli."
+    "advice": "Il follow-up cambia tra gli strati: le righe di uno sono censurate prima; chiedetevi perché prima di confrontarli.",
+    "count": {
+     "one": "{n} riga censurata",
+     "other": "{n} righe censurate"
+    }
    },
    "few_at_risk": {
     "name": "Righe ancora a rischio",
     "h0": "Ogni numero riportato è letto dove almeno 10 righe sono ancora a rischio.",
-    "advice": "Restano poche righe a rischio dove questi numeri sono letti: la coda della curva è incerta; leggeteli con i loro intervalli, oppure riportateli a un tempo più breve."
+    "advice": "Restano poche righe a rischio dove questi numeri sono letti: la coda della curva è incerta; leggeteli con i loro intervalli, oppure riportateli a un tempo più breve.",
+    "count": {
+     "one": "{n} strato letto dove pochi sono a rischio",
+     "other": "{n} strati letti dove pochi sono a rischio"
+    }
    }
   },
   "all": "Tutte le righe",
@@ -345,27 +385,47 @@
    "censoring_informative": {
     "name": "Nicht-informative Zensierung",
     "h0": "Zensiert zu sein sagt nichts über die Zeit bis zum Ereignis.",
-    "not_computed": "Aus den Daten nicht prüfbar: Klären Sie, warum Zeilen zensiert wurden."
+    "not_computed": "Aus den Daten nicht prüfbar: Klären Sie, warum Zeilen zensiert wurden.",
+    "count": {
+     "one": "{n} Zeile zensiert",
+     "other": "{n} Zeilen zensiert"
+    }
    },
    "proportional_hazards": {
     "name": "Proportionale Hazards",
     "h0": "Die Hazards der Schichten behalten über die Zeit dasselbe Verhältnis (die Kurven kreuzen sich nicht).",
-    "advice": "Das Hazard-Verhältnis ändert sich mit der Zeit, oder die Kurven kreuzen sich: Der Log-Rank-Test verliert an Trennschärfe, ebenso der von Peto; vergleichen Sie die eingeschränkten Mittel (rmst_tau) und lesen Sie die Kurven selbst."
+    "advice": "Das Hazard-Verhältnis ändert sich mit der Zeit, oder die Kurven kreuzen sich: Der Log-Rank-Test verliert an Trennschärfe, ebenso der von Peto; vergleichen Sie die eingeschränkten Mittel (rmst_tau) und lesen Sie die Kurven selbst.",
+    "count": {
+     "one": "{n} Paar sich kreuzender Kurven",
+     "other": "{n} Paare sich kreuzender Kurven"
+    }
    },
    "censoring_by_stratum": {
     "name": "Zensierung je Schicht",
     "h0": "Der Anteil zensierter Zeilen ist in jeder Schicht gleich.",
-    "advice": "Der Anteil zensierter Zeilen unterscheidet sich zwischen den Schichten: erwartet, wenn ihr Überleben verschieden ist; die Prüfung der Nachbeobachtung zeigt, ob sich die Zensierung selbst unterscheidet."
+    "advice": "Der Anteil zensierter Zeilen unterscheidet sich zwischen den Schichten: erwartet, wenn ihr Überleben verschieden ist; die Prüfung der Nachbeobachtung zeigt, ob sich die Zensierung selbst unterscheidet.",
+    "count": {
+     "one": "{n} Zeile zensiert",
+     "other": "{n} Zeilen zensiert"
+    }
    },
    "follow_up_by_stratum": {
     "name": "Nachbeobachtung je Schicht",
     "h0": "Die Zeilen jeder Schicht werden gleich lange beobachtet (umgekehrter Kaplan–Meier).",
-    "advice": "Die Nachbeobachtung unterscheidet sich zwischen den Schichten: Die Zeilen einer Schicht werden früher zensiert; klären Sie den Grund, bevor Sie vergleichen."
+    "advice": "Die Nachbeobachtung unterscheidet sich zwischen den Schichten: Die Zeilen einer Schicht werden früher zensiert; klären Sie den Grund, bevor Sie vergleichen.",
+    "count": {
+     "one": "{n} Zeile zensiert",
+     "other": "{n} Zeilen zensiert"
+    }
    },
    "few_at_risk": {
     "name": "Zeilen noch unter Risiko",
     "h0": "Jede berichtete Zahl wird dort abgelesen, wo noch mindestens 10 Zeilen unter Risiko stehen.",
-    "advice": "Wo diese Zahlen abgelesen werden, stehen nur noch wenige Zeilen unter Risiko: Das Ende einer Kurve ist unsicher; lesen Sie sie mit ihren Intervallen oder berichten Sie zu einer früheren Zeit."
+    "advice": "Wo diese Zahlen abgelesen werden, stehen nur noch wenige Zeilen unter Risiko: Das Ende einer Kurve ist unsicher; lesen Sie sie mit ihren Intervallen oder berichten Sie zu einer früheren Zeit.",
+    "count": {
+     "one": "{n} Stratum, gelesen wo wenige unter Risiko sind",
+     "other": "{n} Strata, gelesen wo wenige unter Risiko sind"
+    }
    }
   },
   "all": "Alle Zeilen",
@@ -469,27 +529,47 @@
    "censoring_informative": {
     "name": "Censura no informativa",
     "h0": "Estar censurado no dice nada del tiempo hasta el evento.",
-    "not_computed": "No se puede comprobar con los datos: pregúntese por qué se censuraron las filas."
+    "not_computed": "No se puede comprobar con los datos: pregúntese por qué se censuraron las filas.",
+    "count": {
+     "one": "{n} fila censurada",
+     "other": "{n} filas censuradas"
+    }
    },
    "proportional_hazards": {
     "name": "Riesgos proporcionales",
     "h0": "Los riesgos de los estratos mantienen la misma razón en el tiempo (las curvas no se cruzan).",
-    "advice": "La razón de riesgos cambia con el tiempo, o las curvas se cruzan: la prueba log-rank pierde potencia, y también la de Peto; compare las medias restringidas (rmst_tau) y lea las curvas mismas."
+    "advice": "La razón de riesgos cambia con el tiempo, o las curvas se cruzan: la prueba log-rank pierde potencia, y también la de Peto; compare las medias restringidas (rmst_tau) y lea las curvas mismas.",
+    "count": {
+     "one": "{n} par de curvas que se cruzan",
+     "other": "{n} pares de curvas que se cruzan"
+    }
    },
    "censoring_by_stratum": {
     "name": "Censura por estrato",
     "h0": "La proporción de censurados es la misma en cada estrato.",
-    "advice": "La proporción de censurados difiere entre estratos: es lo esperado cuando su supervivencia difiere; la comprobación del seguimiento dice si difiere la censura misma."
+    "advice": "La proporción de censurados difiere entre estratos: es lo esperado cuando su supervivencia difiere; la comprobación del seguimiento dice si difiere la censura misma.",
+    "count": {
+     "one": "{n} fila censurada",
+     "other": "{n} filas censuradas"
+    }
    },
    "follow_up_by_stratum": {
     "name": "Seguimiento por estrato",
     "h0": "Las filas de cada estrato se siguen durante el mismo tiempo (Kaplan–Meier inverso).",
-    "advice": "El seguimiento difiere entre estratos: las filas de uno se censuran antes; pregúntese por qué antes de comparar."
+    "advice": "El seguimiento difiere entre estratos: las filas de uno se censuran antes; pregúntese por qué antes de comparar.",
+    "count": {
+     "one": "{n} fila censurada",
+     "other": "{n} filas censuradas"
+    }
    },
    "few_at_risk": {
     "name": "Filas aún en riesgo",
     "h0": "Cada número informado se lee donde al menos 10 filas siguen en riesgo.",
-    "advice": "Quedan pocas filas en riesgo donde se leen estos números: el final de una curva es incierto; léalos con sus intervalos, o infórmelos en un tiempo anterior."
+    "advice": "Quedan pocas filas en riesgo donde se leen estos números: el final de una curva es incierto; léalos con sus intervalos, o infórmelos en un tiempo anterior.",
+    "count": {
+     "one": "{n} estrato leído donde pocos están en riesgo",
+     "other": "{n} estratos leídos donde pocos están en riesgo"
+    }
    }
   },
   "all": "Todas las filas",
@@ -593,27 +673,47 @@
    "censoring_informative": {
     "name": "Censure non informative",
     "h0": "Être censuré ne dit rien du temps jusqu'à l'événement.",
-    "not_computed": "Cela ne se vérifie pas sur les données : demandez-vous pourquoi les lignes ont été censurées."
+    "not_computed": "Cela ne se vérifie pas sur les données : demandez-vous pourquoi les lignes ont été censurées.",
+    "count": {
+     "one": "{n} ligne censurée",
+     "other": "{n} lignes censurées"
+    }
    },
    "proportional_hazards": {
     "name": "Risques proportionnels",
     "h0": "Les risques des strates gardent le même rapport dans le temps (les courbes ne se croisent pas).",
-    "advice": "Le rapport des risques change dans le temps, ou les courbes se croisent : le test du log-rank perd de la puissance, celui de Peto aussi ; comparez les moyennes restreintes (rmst_tau) et lisez les courbes elles-mêmes."
+    "advice": "Le rapport des risques change dans le temps, ou les courbes se croisent : le test du log-rank perd de la puissance, celui de Peto aussi ; comparez les moyennes restreintes (rmst_tau) et lisez les courbes elles-mêmes.",
+    "count": {
+     "one": "{n} paire de courbes qui se croisent",
+     "other": "{n} paires de courbes qui se croisent"
+    }
    },
    "censoring_by_stratum": {
     "name": "Censure par strate",
     "h0": "La part de censurés est la même dans chaque strate.",
-    "advice": "La part de censurés diffère entre les strates : c'est attendu quand leur survie diffère ; le contrôle du suivi dit si la censure elle-même diffère."
+    "advice": "La part de censurés diffère entre les strates : c'est attendu quand leur survie diffère ; le contrôle du suivi dit si la censure elle-même diffère.",
+    "count": {
+     "one": "{n} ligne censurée",
+     "other": "{n} lignes censurées"
+    }
    },
    "follow_up_by_stratum": {
     "name": "Suivi par strate",
     "h0": "Les lignes de chaque strate sont suivies aussi longtemps (Kaplan–Meier inverse).",
-    "advice": "Le suivi diffère entre les strates : les lignes de l'une sont censurées plus tôt ; demandez-vous pourquoi avant de comparer."
+    "advice": "Le suivi diffère entre les strates : les lignes de l'une sont censurées plus tôt ; demandez-vous pourquoi avant de comparer.",
+    "count": {
+     "one": "{n} ligne censurée",
+     "other": "{n} lignes censurées"
+    }
    },
    "few_at_risk": {
     "name": "Lignes encore à risque",
     "h0": "Chaque nombre rapporté est lu là où au moins 10 lignes sont encore à risque.",
-    "advice": "Il reste peu de lignes à risque là où ces nombres sont lus : la fin d'une courbe est incertaine ; lisez-les avec leurs intervalles, ou rapportez-les à un temps plus court."
+    "advice": "Il reste peu de lignes à risque là où ces nombres sont lus : la fin d'une courbe est incertaine ; lisez-les avec leurs intervalles, ou rapportez-les à un temps plus court.",
+    "count": {
+     "one": "{n} strate lue là où peu sont à risque",
+     "other": "{n} strates lues là où peu sont à risque"
+    }
    }
   },
   "all": "Toutes les lignes",

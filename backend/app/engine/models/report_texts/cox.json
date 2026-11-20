@@ -78,7 +78,11 @@
    "epv": {
     "name": "Enough events: events per coefficient",
     "h0": "At least 10 events for each coefficient of the model.",
-    "advice": "Few events for the number of coefficients: the estimates are unstable; fewer terms, or merge rare levels."
+    "advice": "Few events for the number of coefficients: the estimates are unstable; fewer terms, or merge rare levels.",
+    "count": {
+     "one": "{n} event",
+     "other": "{n} events"
+    }
    }
   },
   "all": "All rows"
@@ -162,7 +166,11 @@
    "epv": {
     "name": "Eventi sufficienti: eventi per coefficiente",
     "h0": "Almeno 10 eventi per ogni coefficiente del modello.",
-    "advice": "Pochi eventi per il numero di coefficienti: le stime sono instabili; meno termini, oppure unite i livelli rari."
+    "advice": "Pochi eventi per il numero di coefficienti: le stime sono instabili; meno termini, oppure unite i livelli rari.",
+    "count": {
+     "one": "{n} evento",
+     "other": "{n} eventi"
+    }
    }
   },
   "all": "Tutte le righe"
@@ -246,7 +254,11 @@
    "epv": {
     "name": "Genug Ereignisse: Ereignisse pro Koeffizient",
     "h0": "Mindestens 10 Ereignisse für jeden Koeffizienten des Modells.",
-    "advice": "Wenige Ereignisse für die Zahl der Koeffizienten: Die Schätzungen sind instabil; weniger Terme, oder seltene Stufen zusammenfassen."
+    "advice": "Wenige Ereignisse für die Zahl der Koeffizienten: Die Schätzungen sind instabil; weniger Terme, oder seltene Stufen zusammenfassen.",
+    "count": {
+     "one": "{n} Ereignis",
+     "other": "{n} Ereignisse"
+    }
    }
   },
   "all": "Alle Zeilen"
@@ -330,7 +342,11 @@
    "epv": {
     "name": "Eventos suficientes: eventos por coeficiente",
     "h0": "Al menos 10 eventos por cada coeficiente del modelo.",
-    "advice": "Pocos eventos para el número de coeficientes: las estimaciones son inestables; menos términos, o una los niveles raros."
+    "advice": "Pocos eventos para el número de coeficientes: las estimaciones son inestables; menos términos, o una los niveles raros.",
+    "count": {
+     "one": "{n} evento",
+     "other": "{n} eventos"
+    }
    }
   },
   "all": "Todas las filas"
@@ -414,7 +430,11 @@
    "epv": {
     "name": "Assez d'événements : événements par coefficient",
     "h0": "Au moins 10 événements pour chaque coefficient du modèle.",
-    "advice": "Peu d'événements pour le nombre de coefficients : les estimations sont instables ; moins de termes, ou regroupez les niveaux rares."
+    "advice": "Peu d'événements pour le nombre de coefficients : les estimations sont instables ; moins de termes, ou regroupez les niveaux rares.",
+    "count": {
+     "one": "{n} événement",
+     "other": "{n} événements"
+    }
    }
   },
   "all": "Toutes les lignes"

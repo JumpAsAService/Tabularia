@@ -31,8 +31,12 @@ MAX_REPORT_ROWS = catalog.LIMITS["max_result_rows"]
 # above this many rows every test rejects very small departures: the assumptions say so
 MANY_ROWS = 5000
 GOOD, BAD, MID = "#2b8a3e", "#c92a2a", "#b06f00"
+# p-values read from a table that stops at its ends (tseries' adf.test: 0.01 to 0.99; kpss.test:
+# 0.01 to 0.1): at an end the table says «at most» or «at least», and so does the page
+BOUNDED_P = {"adf": (0.01, 0.99), "kpss": (0.01, 0.1)}
 VERDICT_COLOURS = {"ok": GOOD, "doubtful": MID, "failed": BAD, "not_computed": MUTED}
 NUMBER = "0.######"  # a number of a table: six decimals at most, none it does not have
+CHECK_NUMBER = "#,##0.####"  # a check's value and threshold: four decimals at most, none it does not have
 
 
 # ── words ───────────────────────────────────────────────────────────────────
@@ -133,12 +137,22 @@ def with_labels(model: str, params: Mapping[str, Any] | None, rows: list[dict], 
             elif stat == "advice":
                 said = check.get("not_computed") if verdict == "not_computed" else check.get("advice")
                 text = (said or text) if verdict in ("failed", "doubtful", "not_computed") else None
+            elif stat == "count" and isinstance(r.get("value"), (int, float)):
+                text = count_said(w, r["level"], r["value"], loc.group)
         elif section == "model" and isinstance(text, str):
             text = w.get("values", {}).get(stat, {}).get(text, text)
         elif section == "hist" and isinstance(r.get("x0"), (int, float)) and isinstance(r.get("x1"), (int, float)):
             text = stats.edges_text(r["x0"], r["x1"], False, loc.decimal, loc.group)
         out.append({**r, "text": text, "label": label, "tiny": stats.tiny(r.get("value"), code(locale))})
     return out
+
+
+def count_said(w: dict, check: str, n: float, group: str) -> str:
+    """What an assumption's `count` counts, with its number: «9 rows over the threshold», «1 pair
+    of curves that cross» — the check's words, else the common ones (singular for 1)."""
+    said = w.get("checks", {}).get(check, {}).get("count") or w["assumptions"]["count"]
+    number = f"{int(n):,}".replace(",", group) if float(n).is_integer() else str(n)
+    return said["one" if n == 1 else "other"].replace("{n}", number)
 
 
 def columns() -> list[dict[str, str]]:
@@ -178,6 +192,16 @@ def number_of_row(section: str, stat: str) -> str:
 def p_said(x: str) -> str:
     """A p-value as a result is written: four decimals, «< 0.0001» below; nothing when there is none."""
     return f'IF(ISNULL({x}), "", IF({x} < 0.0001, "< " & {shown("0.0001", P4)}, {shown(x, P4)}))'
+
+
+def p_of_check(x: str) -> str:
+    """An assumption's p-value: as p_said, or «≤ 0.01», «≥ 0.1» at the ends of a check whose
+    p-value is read from a table (BOUNDED_P)."""
+    out = p_said(x)
+    for check, (low, high) in BOUNDED_P.items():
+        out = (f'IF([level] = "{check}" AND NOT ISNULL({x}) AND {x} <= {low}, "≤ " & {shown(str(low), "0.##")}, '
+               f'IF([level] = "{check}" AND NOT ISNULL({x}) AND {x} >= {high}, "≥ " & {shown(str(high), "0.##")}, {out}))')
+    return out
 
 
 def p_with_stars(stat: str) -> str:
@@ -334,31 +358,45 @@ def _summary(p: stats.Page, w: dict, cards: tuple[Card | tuple[Card, ...], ...])
            can_grow=True, visible=exists('[key] = "model|||formula"'))
 
 
+def value_of_check(w: dict) -> str:
+    """The column «Value» of the assumptions: the number the check reads (a VIF, an EPV, the
+    largest Cook's distance), then what it counts in words («9 rows over the threshold»: the
+    count row's text, with_labels), then the threshold of its verdict when it has no p-value —
+    «0.31 · 2 rows over the threshold (threshold 0.79)». Never a bare count."""
+    value, count, threshold = (of_row("assumption", s) for s in ("value", "count", "threshold"))
+    counted = of_row("assumption", "count", "text")
+    pv = of_row("assumption", "p_value")
+    has_value, has_count = f"NOT ISNULL({value})", f"NOT ISNULL({count})"
+    main = (f'IF({has_value}, {shown(value, CHECK_NUMBER)} & IF({has_count} AND {count} > 0, " · " & {counted}, ""), '
+            f'IF({has_count}, {counted}, ""))')
+    limit = (f'IF(NOT ISNULL({threshold}) AND ISNULL({pv}) AND ({has_value} OR {has_count}), '
+             f'" (" & {q(w["assumptions"]["threshold"])} & " " & {shown(threshold, CHECK_NUMBER)} & ")", "")')
+    return f"{main} & {limit}"
+
+
 def _assumptions(p: stats.Page, w: dict, lang: str, note: str | None = None, p_values: bool = True) -> None:
     """One row a check: what it checks, H0, the statistic, df, p with R's stars, the value it
-    reads (a VIF, an EPV, a count), the verdict in words and with a mark; then what to do
-    about those that failed, are doubtful or were not computed."""
+    reads (a VIF, an EPV, the largest Cook's distance) with what it counts and its threshold,
+    the verdict in words and with a mark; then what to do about those that failed, are
+    doubtful or were not computed."""
     a = w["assumptions"]
     p.heading("s_assumptions", w["sections"]["assumptions"])
     verdict = "LOOKUP(" + row_key("assumption", "verdict") + ", [key], [text])"
     said = "IFS(" + ", ".join(f'[text] = "{v}", {q(w["verdicts"][v])}' for v in catalog.VERDICTS) + ', "")'
     df = of_row("assumption", "df")
     df2 = of_row("assumption", "df_2")
-    count = of_row("assumption", "count")
-    value = of_row("assumption", "value")
     one_row = '[section] = "assumption" AND [stat] = "verdict"'
     cols = [
-        {"header": a["check"], "value": '[label] & IF(ISNULL([level_2]) OR [level_2] = "", "", " — " & [level_2])', "width": 42},
+        {"header": a["check"], "value": '[label] & IF(ISNULL([level_2]) OR [level_2] = "", "", " — " & [level_2])', "width": 36},
         {"header": a["h0"], "value": of_row("assumption", "h0", "text"), "style": {"size": 7}},
         {"header": a["statistic"], "value": number_of_row("assumption", "statistic"), "width": 17, "align": "right",
          "format": "0.####"},
         {"header": a["df"], "value": f'IF(ISNULL({df}), "", FORMAT({df}, "0.##") & IF(ISNULL({df2}), "", "; " & FORMAT({df2}, "0.##")))',
          "width": 12, "align": "right"},
-        {"header": a["p_value"], "value": p_said(of_row("assumption", "p_value")), "width": 17, "align": "right"},
+        {"header": a["p_value"], "value": p_of_check(of_row("assumption", "p_value")), "width": 17, "align": "right"},
         {"header": w["signif"]["column"], "value": of_row("assumption", "significance", "text"), "width": 10},
-        {"header": a["value"], "value": f"IF(ISNULL({value}), {stats.rounded(count)}, {stats.rounded(value)})", "width": 14,
-         "align": "right", "format": "0.##"},
-        {"header": a["verdict"], "value": said, "width": 30,
+        {"header": a["value"], "value": value_of_check(w), "width": 34, "style": {"size": 7}},
+        {"header": a["verdict"], "value": said, "width": 24,
          "rules": [{"when": f'[text] = "{v}"', "style": {"color": c, "weight": "semibold"}} for v, c in VERDICT_COLOURS.items()]},
     ]
     if not p_values:  # no statistic, df or p to show: the checks are read by their value and verdict

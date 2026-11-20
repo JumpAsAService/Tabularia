@@ -231,6 +231,30 @@ def test_the_first_page_holds_the_assumptions_with_r_s_stars_and_the_verdicts(tm
     assert asked["Coefficients with their intervals (the intercept left out)"]["series"][0]["type"] == "boxplot"
 
 
+def test_a_check_s_value_says_what_it_counts_and_its_threshold_and_a_table_p_value_its_bound(tmp_path, chart_service, monkeypatch):  # noqa: F811
+    """The column «Value» of the assumptions: the number read, what is counted in words, the
+    threshold of the verdict (never a bare count: «9» could be Cook's distance or nine rows);
+    a p-value read from tseries' tables at its end says «≥ 0.1» (KPSS) rather than 0.1."""
+    model, params, rows = fixture("cox-default")
+    said = {(r["level"], r["level_2"], r["stat"]): r for r in layouts.with_labels(model, params, rows, "it")}
+    assert said[("epv", None, "count")]["text"] == "106 eventi"
+    assert said[("dfbeta", "load", "count")]["text"] == "0 righe oltre la soglia"
+    km = layouts.with_labels(*fixture("kaplan_meier-default")[:2], fixture("kaplan_meier-default")[2], "en")
+    [few] = [r for r in km if r["level"] == "few_at_risk" and r["stat"] == "count"]
+    assert few["text"] == "3 strata read where few are at risk"
+    one = common.count_said(common.words("linear", "unpenalized", "en"), "cooks_distance", 1, ",")
+    assert one == "1 row over the threshold"
+    _, page = draw(tmp_path, chart_service, monkeypatch, "cox-default", fmt="svg")
+    texts = set(strings(json.loads(page)))
+    assert any("106 events (threshold 10)" in t for t in texts), sorted(t for t in texts if "event" in t or "threshold" in t)
+    assert any(t.endswith("(threshold 1)") for t in texts)
+    _, page = draw(tmp_path, chart_service, monkeypatch, "kaplan_meier-default", fmt="svg")
+    assert any("3 strata read where few are at risk (threshold 10)" in t for t in set(strings(json.loads(page))))
+    _, page = draw(tmp_path, chart_service, monkeypatch, "arima-manual", fmt="svg")
+    texts = set(strings(json.loads(page)))
+    assert "≥ 0.1" in texts and "0.2001" in texts  # KPSS at the end of its table; ADF inside it
+
+
 def test_a_penalized_logistic_says_its_auc_out_of_fold_fold_by_fold(tmp_path, chart_service, monkeypatch):  # noqa: F811
     """The folds' fits have different intercepts: the AUC of all the out-of-fold predictions
     together mixes their scales (0.45 for a ridge where the cross-validation said 0.75). The

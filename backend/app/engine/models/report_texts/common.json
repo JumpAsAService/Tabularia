@@ -31,7 +31,12 @@
    "many_rows": "With {n} rows the tests reject very small departures: read the charts as well.",
    "advice_title": "What to do",
    "advice": "Advice",
-   "rows": "Rows to look at"
+   "rows": "Rows to look at",
+   "threshold": "threshold",
+   "count": {
+    "one": "{n} row over the threshold",
+    "other": "{n} rows over the threshold"
+   }
   },
   "verdicts": {
    "ok": "✓ ok",
@@ -218,7 +223,12 @@
    "many_rows": "Con {n} righe i test rifiutano anche scostamenti minimi: leggete anche i grafici.",
    "advice_title": "Cosa fare",
    "advice": "Consiglio",
-   "rows": "Righe da guardare"
+   "rows": "Righe da guardare",
+   "threshold": "soglia",
+   "count": {
+    "one": "{n} riga oltre la soglia",
+    "other": "{n} righe oltre la soglia"
+   }
   },
   "verdicts": {
    "ok": "✓ ok",
@@ -405,7 +415,12 @@
    "many_rows": "Bei {n} Zeilen verwerfen die Tests schon kleinste Abweichungen: Lesen Sie auch die Diagramme.",
    "advice_title": "Was zu tun ist",
    "advice": "Rat",
-   "rows": "Zu prüfende Zeilen"
+   "rows": "Zu prüfende Zeilen",
+   "threshold": "Schwelle",
+   "count": {
+    "one": "{n} Zeile über der Schwelle",
+    "other": "{n} Zeilen über der Schwelle"
+   }
   },
   "verdicts": {
    "ok": "✓ erfüllt",
@@ -592,7 +607,12 @@
    "many_rows": "Con {n} filas las pruebas rechazan desviaciones mínimas: lea también los gráficos.",
    "advice_title": "Qué hacer",
    "advice": "Consejo",
-   "rows": "Filas que revisar"
+   "rows": "Filas que revisar",
+   "threshold": "umbral",
+   "count": {
+    "one": "{n} fila por encima del umbral",
+    "other": "{n} filas por encima del umbral"
+   }
   },
   "verdicts": {
    "ok": "✓ se cumple",
@@ -779,7 +799,12 @@
    "many_rows": "Avec {n} lignes, les tests rejettent des écarts minimes : lisez aussi les graphiques.",
    "advice_title": "Que faire",
    "advice": "Conseil",
-   "rows": "Lignes à examiner"
+   "rows": "Lignes à examiner",
+   "threshold": "seuil",
+   "count": {
+    "one": "{n} ligne au-delà du seuil",
+    "other": "{n} lignes au-delà du seuil"
+   }
   },
   "verdicts": {
    "ok": "✓ respectée",
