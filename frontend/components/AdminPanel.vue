@@ -9,7 +9,7 @@ import { useFormat } from '~/composables/useFormat'
 import {
   CheckCircle2, Cpu, Eye, Plus, Search, Shield, ShieldCheck, Trash2, TriangleAlert,
   User as UserIcon, Users as UsersIcon, X, XCircle, Sparkles, Bot, Webhook as WebhookIcon,
-  SlidersHorizontal, Radar, Server, KeyRound, Code2, Boxes, DatabaseBackup, Link2, Braces,
+  SlidersHorizontal, Radar, Server, KeyRound, Code2, Boxes, DatabaseBackup, Link2, Braces, Sigma,
 } from 'lucide-vue-next'
 // explicit imports: in the container new components are not scanned
 import ServiceAccountsSection from '~/components/admin/ServiceAccountsSection.vue'
@@ -24,7 +24,9 @@ import AiPromptsSection from '~/components/admin/AiPromptsSection.vue'
 import AiProvidersSection from '~/components/admin/AiProvidersSection.vue'
 import ShareLinksSection from '~/components/admin/ShareLinksSection.vue'
 import DataApisSection from '~/components/admin/DataApisSection.vue'
+import ModelsSection from '~/components/admin/ModelsSection.vue'
 import { useDataApis } from '~/composables/useDataApis'
+import { useModelsAdmin } from '~/composables/useModelsAdmin'
 import PasswordDialog from '~/components/ui/PasswordDialog.vue'
 import { passwordProblem, usePasswordRules } from '~/composables/usePasswordRules'
 import { useSiem } from '~/composables/useSiem'
@@ -66,7 +68,7 @@ const canWrite = computed(() => !!me.value?.is_superuser)
 const { t } = useI18n()
 const fmtx = useFormat()
 
-type Section = 'users' | 'groups' | 'service' | 'webhooks' | 'banners' | 'privacy' | 'engines' | 'settings' | 'workers' | 'scripting' | 'registries' | 'siem' | 'backups' | 'ai' | 'share' | 'dataapis'
+type Section = 'users' | 'groups' | 'service' | 'webhooks' | 'banners' | 'privacy' | 'engines' | 'settings' | 'workers' | 'scripting' | 'registries' | 'siem' | 'backups' | 'ai' | 'share' | 'dataapis' | 'models'
 const section = ref<Section>('users')
 // the Settings section with changes not saved: asked before going to another section
 const settingsToSave = ref(false)
@@ -111,6 +113,8 @@ const nShare = ref(0)
 // the data APIs active now; greyed out without Kubernetes, as the scripting
 const nDataApis = ref(0)
 const dataApisOff = ref(false)
+// the statistical model groups enabled
+const nModelGroups = ref(0)
 // how many engine settings were changed from the panel (the others hold from the environment)
 const nSettings = ref(0)
 const nWorker = ref(0)
@@ -151,6 +155,8 @@ const sections = computed(() => [
   { id: 'scripting' as Section, label: t('scripting.navTitle'), icon: Code2, badge: nEnvironments.value, off: scriptingOff.value },
   { id: 'registries' as Section, label: t('registries.navTitle'), icon: Boxes, badge: nRegistries.value, off: registriesOff.value },
   { id: 'dataapis' as Section, label: t('dataApiAdmin.navTitle'), icon: Braces, badge: nDataApis.value, off: dataApisOff.value },
+  // the groups of statistical models enabled; the section itself says «requires Kubernetes» on Compose
+  { id: 'models' as Section, label: t('modelsAdmin.navTitle'), icon: Sigma, badge: nModelGroups.value },
   { id: 'siem' as Section, label: t('siem.navTitle'), icon: Radar, badge: siemOn.value ? 1 : 0 },
   // how many models are ENABLED: zero = the assistant cannot be used by anyone
   { id: 'ai' as Section, label: t('adminPanel.aiTitle'), icon: Sparkles, badge: nAiModels.value },
@@ -210,6 +216,7 @@ async function loadAll() {
       nRegistries.value = rg.registries.length
       registriesOff.value = rg.disabled_reason === 'kubernetes'
     }),
+    useModelsAdmin().get().then((m) => { nModelGroups.value = m.groups.filter((g) => g.enabled).length }),
     useDataApis().adminList().then((da) => {
       nDataApis.value = da.apis.filter((a) => a.state === 'active').length
       dataApisOff.value = da.reason === 'kubernetes' && !da.apis.length
@@ -827,6 +834,10 @@ async function toggleEngine(m: EnginePolicy) {
 
         <template v-else-if="section === 'dataapis'">
           <DataApisSection :can-write="canWrite" @count="nDataApis = $event" />
+        </template>
+
+        <template v-else-if="section === 'models'">
+          <ModelsSection :groups="groups" @count="nModelGroups = $event" />
         </template>
 
         <template v-else-if="section === 'ai'">
