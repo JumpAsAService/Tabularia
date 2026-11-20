@@ -141,17 +141,24 @@ def _sparse(k: int) -> list[list[int]]:
 
 
 _REFUSE = """
-import resource, sys, time
+import re, sys, time
 from app.engine.stats import exact
 from app.engine.stats.catalog import EXACT_NETWORK
 table = eval(sys.argv[1])
+
+
+def hwm():  # the peak resident memory, MB (VmHWM: a forked process starts with its parent's, reset below)
+    return int(re.search(r"VmHWM:\\s+(\\d+)", open("/proc/self/status").read()).group(1)) / 1024
+
+
+with open("/proc/self/clear_refs", "w") as f:
+    f.write("5")  # the peak back to what the process holds now
 start = time.perf_counter()
 try:
     exact.fisher_rxc(table, EXACT_NETWORK)
     print("computed")
 except exact.TooMuchWork as e:
-    print("refused", e.args[0] > EXACT_NETWORK, time.perf_counter() - start,
-          resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024)
+    print("refused", e.args[0] > EXACT_NETWORK, time.perf_counter() - start, hwm())
 """
 
 
