@@ -504,9 +504,7 @@ cases[[length(cases) + 1L]] <- list(
                 num("stratum|all||median", NA), num("stratum|all||quantile_0.75", NA), num("stratum|all||median_ci_low", NA),
                 num("stratum|all||quantile_0.25", qgompertz(0.25, shape, rate)),
                 num("stratum|all||surv_at_120", pgompertz(120, shape, rate, lower.tail = FALSE)),
-                txt("model|||note_quantile_infinite", paste0("The fitted distribution leaves ", format(round(100 * cured, 1), nsmall = 1),
-                                                             "% of the profile without the event for ever: a quantile beyond that is ",
-                                                             "infinite and left empty."))))
+                txt("model|||note_quantile_infinite", paste0("@quantile_infinite share=", format(round(100 * cured, 1), nsmall = 1)))))
 
 # no censoring
 d <- read_table("ps_all_events.csv")
@@ -543,3 +541,4 @@ cases[[length(cases) + 1L]] <- refusal("ps_too_few_rows", list(time = "t", predi
                                        "the model has 7 parameters and 8 rows it can use: it needs at least 9 rows (the parameters + 2)")
 cases[[length(cases) + 1L]] <- refusal("ps_one_level", list(time = "t", predictors = list("same")), "one_level")
 cases[[length(cases) + 1L]] <- refusal("ps_aliased", list(time = "t", predictors = list("x", "x2"), distribution = "exponential"), "aliased")
+source(file.path(here, "make_reference_auto.R"), local = TRUE)

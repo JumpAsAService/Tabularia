@@ -8643,7 +8643,7 @@
         },
         {
           "key": "model|||note_quantile_infinite",
-          "text": "The fitted distribution leaves 57.8% of the profile without the event for ever: a quantile beyond that is infinite and left empty."
+          "text": "@quantile_infinite share=57.8"
         }
       ]
     },
@@ -9037,6 +9037,1644 @@
         "code": "aliased",
         "message": null
       }
+    },
+    {
+      "id": "ps_auto_parsimony",
+      "model": "parametric_survival",
+      "data": "data/ps_auto.csv",
+      "types": {
+        "days": "number",
+        "status": "text",
+        "load": "number",
+        "line": "text"
+      },
+      "params": {
+        "time": "days",
+        "event": "status",
+        "event_value": "failed",
+        "predictors": [
+          "load",
+          "line"
+        ],
+        "distribution": "auto"
+      },
+      "expect": [
+        {
+          "key": "candidate|exponential||n_parameters",
+          "value": 4,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|exponential||status",
+          "text": "ok"
+        },
+        {
+          "key": "candidate|exponential||admissible",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|exponential||chosen",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|exponential||parsimony",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|exponential||converged",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|exponential||log_lik",
+          "value": -655.148813009587,
+          "rel": 1e-07
+        },
+        {
+          "key": "candidate|exponential||aic",
+          "value": 1318.29762601917,
+          "rel": 1e-07
+        },
+        {
+          "key": "candidate|exponential||bic",
+          "value": 1332.22018171254,
+          "rel": 1e-07
+        },
+        {
+          "key": "candidate|exponential||delta_aic",
+          "value": 41.3260748998925,
+          "rel": 1e-09,
+          "abs": 0.05
+        },
+        {
+          "key": "candidate|exponential||akaike_weight",
+          "value": 5.72546179021783e-10,
+          "rel": 1e-09,
+          "abs": 0.005
+        },
+        {
+          "key": "candidate|weibull||n_parameters",
+          "value": 5,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|weibull||status",
+          "text": "ok"
+        },
+        {
+          "key": "candidate|weibull||admissible",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|weibull||chosen",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|weibull||parsimony",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|weibull||converged",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|weibull||log_lik",
+          "value": -633.644773884636,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|weibull||aic",
+          "value": 1277.28954776927,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|weibull||bic",
+          "value": 1294.69274238598,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|weibull||delta_aic",
+          "value": 0.317996649991301,
+          "rel": 1e-09,
+          "abs": 0.05
+        },
+        {
+          "key": "candidate|weibull||akaike_weight",
+          "value": 0.45983451843441,
+          "rel": 1e-09,
+          "abs": 0.005
+        },
+        {
+          "key": "candidate|lognormal||n_parameters",
+          "value": 5,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|lognormal||status",
+          "text": "ok"
+        },
+        {
+          "key": "candidate|lognormal||admissible",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|lognormal||chosen",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|lognormal||parsimony",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|lognormal||converged",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|lognormal||log_lik",
+          "value": -647.254481845846,
+          "rel": 1e-07
+        },
+        {
+          "key": "candidate|lognormal||aic",
+          "value": 1304.50896369169,
+          "rel": 1e-07
+        },
+        {
+          "key": "candidate|lognormal||bic",
+          "value": 1321.9121583084,
+          "rel": 1e-07
+        },
+        {
+          "key": "candidate|lognormal||delta_aic",
+          "value": 27.5374125724113,
+          "rel": 1e-09,
+          "abs": 0.05
+        },
+        {
+          "key": "candidate|lognormal||akaike_weight",
+          "value": 5.64911611440799e-07,
+          "rel": 1e-09,
+          "abs": 0.005
+        },
+        {
+          "key": "candidate|loglogistic||n_parameters",
+          "value": 5,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|loglogistic||status",
+          "text": "ok"
+        },
+        {
+          "key": "candidate|loglogistic||admissible",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|loglogistic||chosen",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|loglogistic||parsimony",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|loglogistic||converged",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|loglogistic||log_lik",
+          "value": -642.956853012563,
+          "rel": 1e-07
+        },
+        {
+          "key": "candidate|loglogistic||aic",
+          "value": 1295.91370602513,
+          "rel": 1e-07
+        },
+        {
+          "key": "candidate|loglogistic||bic",
+          "value": 1313.31690064184,
+          "rel": 1e-07
+        },
+        {
+          "key": "candidate|loglogistic||delta_aic",
+          "value": 18.9421549058443,
+          "rel": 1e-09,
+          "abs": 0.05
+        },
+        {
+          "key": "candidate|loglogistic||akaike_weight",
+          "value": 4.15352653260532e-05,
+          "rel": 1e-09,
+          "abs": 0.005
+        },
+        {
+          "key": "candidate|gompertz||n_parameters",
+          "value": 5,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|gompertz||status",
+          "text": "ok"
+        },
+        {
+          "key": "candidate|gompertz||admissible",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|gompertz||chosen",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|gompertz||parsimony",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|gompertz||converged",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|gompertz||log_lik",
+          "value": -639.733703714201,
+          "rel": 1e-07
+        },
+        {
+          "key": "candidate|gompertz||aic",
+          "value": 1289.4674074284,
+          "rel": 1e-07
+        },
+        {
+          "key": "candidate|gompertz||bic",
+          "value": 1306.87060204511,
+          "rel": 1e-07
+        },
+        {
+          "key": "candidate|gompertz||delta_aic",
+          "value": 12.4958563091216,
+          "rel": 1e-09,
+          "abs": 0.05
+        },
+        {
+          "key": "candidate|gompertz||akaike_weight",
+          "value": 0.00104282862481911,
+          "rel": 1e-09,
+          "abs": 0.005
+        },
+        {
+          "key": "candidate|gengamma||n_parameters",
+          "value": 6,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|gengamma||status",
+          "text": "ok"
+        },
+        {
+          "key": "candidate|gengamma||admissible",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|gengamma||chosen",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|gengamma||parsimony",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|gengamma||converged",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|gengamma||log_lik",
+          "value": -632.485775559641,
+          "rel": 0.0001
+        },
+        {
+          "key": "candidate|gengamma||aic",
+          "value": 1276.97155111928,
+          "rel": 0.0001
+        },
+        {
+          "key": "candidate|gengamma||bic",
+          "value": 1297.85538465933,
+          "rel": 0.0001
+        },
+        {
+          "key": "candidate|gengamma||delta_aic",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 0.05
+        },
+        {
+          "key": "candidate|gengamma||akaike_weight",
+          "value": 0.539080552191287,
+          "rel": 1e-09,
+          "abs": 0.005
+        },
+        {
+          "key": "model|||distribution",
+          "text": "weibull"
+        },
+        {
+          "key": "model|||selection",
+          "text": "auto"
+        },
+        {
+          "key": "model|||variant",
+          "text": "auto"
+        },
+        {
+          "key": "model|||log_lik",
+          "value": -633.644773884636,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n_parameters",
+          "value": 5,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||aic",
+          "value": 1277.28954776927,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n",
+          "value": 240,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||aic_margin",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|load||estimate",
+          "value": 0.0245561269612681,
+          "rel": 1e-09,
+          "abs": 5.92943150117345e-09
+        },
+        {
+          "key": "coef|line|B|estimate",
+          "value": 0.513780247492933,
+          "rel": 1e-09,
+          "abs": 1.2938031801229e-07
+        },
+        {
+          "key": "model|||note_auto_close",
+          "text": "@auto_close distribution=weibull other=gengamma margin=2 delta_aic=0.32 weight=0.46"
+        }
+      ]
+    },
+    {
+      "id": "ps_auto",
+      "model": "parametric_survival",
+      "data": "data/ps_weibull.csv",
+      "types": {
+        "days": "number",
+        "status": "text",
+        "load": "number",
+        "line": "text",
+        "plant": "text",
+        "w": "integer"
+      },
+      "params": {
+        "time": "days",
+        "event": "status",
+        "event_value": "failed",
+        "predictors": [
+          "load",
+          "line"
+        ],
+        "weights": "w",
+        "distribution": "auto"
+      },
+      "expect": [
+        {
+          "key": "candidate|exponential||n_parameters",
+          "value": 4,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|exponential||status",
+          "text": "ok"
+        },
+        {
+          "key": "candidate|exponential||admissible",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|exponential||chosen",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|exponential||parsimony",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|exponential||converged",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|exponential||log_lik",
+          "value": -1296.74038956032,
+          "rel": 1e-07
+        },
+        {
+          "key": "candidate|exponential||aic",
+          "value": 2601.48077912065,
+          "rel": 1e-07
+        },
+        {
+          "key": "candidate|exponential||bic",
+          "value": 2615.33610634075,
+          "rel": 1e-07
+        },
+        {
+          "key": "candidate|exponential||delta_aic",
+          "value": 97.2724246131434,
+          "rel": 1e-09,
+          "abs": 0.05
+        },
+        {
+          "key": "candidate|exponential||akaike_weight",
+          "value": 4.97672113839096e-22,
+          "rel": 1e-09,
+          "abs": 0.005
+        },
+        {
+          "key": "candidate|weibull||n_parameters",
+          "value": 5,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|weibull||status",
+          "text": "ok"
+        },
+        {
+          "key": "candidate|weibull||admissible",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|weibull||chosen",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|weibull||parsimony",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|weibull||converged",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|weibull||log_lik",
+          "value": -1247.10417725375,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|weibull||aic",
+          "value": 2504.20835450751,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|weibull||bic",
+          "value": 2521.52751353263,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|weibull||delta_aic",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 0.05
+        },
+        {
+          "key": "candidate|weibull||akaike_weight",
+          "value": 0.659753848034743,
+          "rel": 1e-09,
+          "abs": 0.005
+        },
+        {
+          "key": "candidate|lognormal||n_parameters",
+          "value": 5,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|lognormal||status",
+          "text": "ok"
+        },
+        {
+          "key": "candidate|lognormal||admissible",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|lognormal||chosen",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|lognormal||parsimony",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|lognormal||converged",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|lognormal||log_lik",
+          "value": -1278.78259041907,
+          "rel": 1e-07
+        },
+        {
+          "key": "candidate|lognormal||aic",
+          "value": 2567.56518083814,
+          "rel": 1e-07
+        },
+        {
+          "key": "candidate|lognormal||bic",
+          "value": 2584.88433986327,
+          "rel": 1e-07
+        },
+        {
+          "key": "candidate|lognormal||delta_aic",
+          "value": 63.3568263306306,
+          "rel": 1e-09,
+          "abs": 0.05
+        },
+        {
+          "key": "candidate|lognormal||akaike_weight",
+          "value": 1.15244948664239e-14,
+          "rel": 1e-09,
+          "abs": 0.005
+        },
+        {
+          "key": "candidate|loglogistic||n_parameters",
+          "value": 5,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|loglogistic||status",
+          "text": "ok"
+        },
+        {
+          "key": "candidate|loglogistic||admissible",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|loglogistic||chosen",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|loglogistic||parsimony",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|loglogistic||converged",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|loglogistic||log_lik",
+          "value": -1254.28248076288,
+          "rel": 1e-07
+        },
+        {
+          "key": "candidate|loglogistic||aic",
+          "value": 2518.56496152576,
+          "rel": 1e-07
+        },
+        {
+          "key": "candidate|loglogistic||bic",
+          "value": 2535.88412055089,
+          "rel": 1e-07
+        },
+        {
+          "key": "candidate|loglogistic||delta_aic",
+          "value": 14.3566070182519,
+          "rel": 1e-09,
+          "abs": 0.05
+        },
+        {
+          "key": "candidate|loglogistic||akaike_weight",
+          "value": 0.000503366522539698,
+          "rel": 1e-09,
+          "abs": 0.005
+        },
+        {
+          "key": "candidate|gompertz||n_parameters",
+          "value": 5,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|gompertz||status",
+          "text": "ok"
+        },
+        {
+          "key": "candidate|gompertz||admissible",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|gompertz||chosen",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|gompertz||parsimony",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|gompertz||converged",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|gompertz||log_lik",
+          "value": -1261.29097181947,
+          "rel": 1e-07
+        },
+        {
+          "key": "candidate|gompertz||aic",
+          "value": 2532.58194363894,
+          "rel": 1e-07
+        },
+        {
+          "key": "candidate|gompertz||bic",
+          "value": 2549.90110266407,
+          "rel": 1e-07
+        },
+        {
+          "key": "candidate|gompertz||delta_aic",
+          "value": 28.3735891314327,
+          "rel": 1e-09,
+          "abs": 0.05
+        },
+        {
+          "key": "candidate|gompertz||akaike_weight",
+          "value": 4.55129866988827e-07,
+          "rel": 1e-09,
+          "abs": 0.005
+        },
+        {
+          "key": "candidate|gengamma||n_parameters",
+          "value": 6,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|gengamma||status",
+          "text": "ok"
+        },
+        {
+          "key": "candidate|gengamma||admissible",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|gengamma||chosen",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|gengamma||parsimony",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|gengamma||converged",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|gengamma||log_lik",
+          "value": -1246.76785658341,
+          "rel": 0.0001
+        },
+        {
+          "key": "candidate|gengamma||aic",
+          "value": 2505.53571316682,
+          "rel": 0.0001
+        },
+        {
+          "key": "candidate|gengamma||bic",
+          "value": 2526.31870399697,
+          "rel": 0.0001
+        },
+        {
+          "key": "candidate|gengamma||delta_aic",
+          "value": 1.32735865931454,
+          "rel": 1e-09,
+          "abs": 0.05
+        },
+        {
+          "key": "candidate|gengamma||akaike_weight",
+          "value": 0.339742330312838,
+          "rel": 1e-09,
+          "abs": 0.005
+        },
+        {
+          "key": "model|||distribution",
+          "text": "weibull"
+        },
+        {
+          "key": "model|||selection",
+          "text": "auto"
+        },
+        {
+          "key": "model|||log_lik",
+          "value": -1247.10417725375,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n",
+          "value": 236,
+          "rel": 1e-09
+        }
+      ]
+    },
+    {
+      "id": "ps_auto_strata",
+      "model": "parametric_survival",
+      "data": "data/ps_weibull.csv",
+      "types": {
+        "days": "number",
+        "status": "text",
+        "load": "number",
+        "line": "text",
+        "plant": "text",
+        "w": "integer"
+      },
+      "params": {
+        "time": "days",
+        "event": "status",
+        "event_value": "failed",
+        "predictors": [
+          "load",
+          "line"
+        ],
+        "strata": "plant",
+        "weights": "w",
+        "distribution": "auto"
+      },
+      "expect": [
+        {
+          "key": "candidate|exponential||n_parameters",
+          "value": 6,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|exponential||status",
+          "text": "ok"
+        },
+        {
+          "key": "candidate|exponential||admissible",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|exponential||chosen",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|exponential||parsimony",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|exponential||converged",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|exponential||log_lik",
+          "value": -1291.99004815978,
+          "rel": 1e-07
+        },
+        {
+          "key": "candidate|exponential||aic",
+          "value": 2595.98009631957,
+          "rel": 1e-07
+        },
+        {
+          "key": "candidate|exponential||bic",
+          "value": 2616.76308714972,
+          "rel": 1e-07
+        },
+        {
+          "key": "candidate|exponential||delta_aic",
+          "value": 160.31426688173,
+          "rel": 1e-09,
+          "abs": 0.05
+        },
+        {
+          "key": "candidate|exponential||akaike_weight",
+          "value": 1.08139257625705e-35,
+          "rel": 1e-09,
+          "abs": 0.005
+        },
+        {
+          "key": "candidate|weibull||n_parameters",
+          "value": 9,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|weibull||status",
+          "text": "ok"
+        },
+        {
+          "key": "candidate|weibull||admissible",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|weibull||chosen",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|weibull||parsimony",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|weibull||converged",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|weibull||log_lik",
+          "value": -1208.83291471892,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|weibull||aic",
+          "value": 2435.66582943784,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|weibull||bic",
+          "value": 2466.84031568307,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|weibull||delta_aic",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 0.05
+        },
+        {
+          "key": "candidate|weibull||akaike_weight",
+          "value": 0.701106708049973,
+          "rel": 1e-09,
+          "abs": 0.005
+        },
+        {
+          "key": "candidate|lognormal||n_parameters",
+          "value": 9,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|lognormal||status",
+          "text": "ok"
+        },
+        {
+          "key": "candidate|lognormal||admissible",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|lognormal||chosen",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|lognormal||parsimony",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|lognormal||converged",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|lognormal||log_lik",
+          "value": -1234.92237115628,
+          "rel": 1e-07
+        },
+        {
+          "key": "candidate|lognormal||aic",
+          "value": 2487.84474231256,
+          "rel": 1e-07
+        },
+        {
+          "key": "candidate|lognormal||bic",
+          "value": 2519.0192285578,
+          "rel": 1e-07
+        },
+        {
+          "key": "candidate|lognormal||delta_aic",
+          "value": 52.1789128747255,
+          "rel": 1e-09,
+          "abs": 0.05
+        },
+        {
+          "key": "candidate|lognormal||akaike_weight",
+          "value": 3.27549662117379e-12,
+          "rel": 1e-09,
+          "abs": 0.005
+        },
+        {
+          "key": "candidate|loglogistic||n_parameters",
+          "value": 9,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|loglogistic||status",
+          "text": "ok"
+        },
+        {
+          "key": "candidate|loglogistic||admissible",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|loglogistic||chosen",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|loglogistic||parsimony",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|loglogistic||converged",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|loglogistic||log_lik",
+          "value": -1225.20221714603,
+          "rel": 1e-07
+        },
+        {
+          "key": "candidate|loglogistic||aic",
+          "value": 2468.40443429207,
+          "rel": 1e-07
+        },
+        {
+          "key": "candidate|loglogistic||bic",
+          "value": 2499.5789205373,
+          "rel": 1e-07
+        },
+        {
+          "key": "candidate|loglogistic||delta_aic",
+          "value": 32.7386048542262,
+          "rel": 1e-09,
+          "abs": 0.05
+        },
+        {
+          "key": "candidate|loglogistic||akaike_weight",
+          "value": 5.45363923798119e-08,
+          "rel": 1e-09,
+          "abs": 0.005
+        },
+        {
+          "key": "candidate|gompertz||n_parameters",
+          "value": 9,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|gompertz||status",
+          "text": "ok"
+        },
+        {
+          "key": "candidate|gompertz||admissible",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|gompertz||chosen",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|gompertz||parsimony",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|gompertz||converged",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|gompertz||log_lik",
+          "value": -1231.44458106564,
+          "rel": 1e-07
+        },
+        {
+          "key": "candidate|gompertz||aic",
+          "value": 2480.88916213127,
+          "rel": 1e-07
+        },
+        {
+          "key": "candidate|gompertz||bic",
+          "value": 2512.0636483765,
+          "rel": 1e-07
+        },
+        {
+          "key": "candidate|gompertz||delta_aic",
+          "value": 45.2233326934333,
+          "rel": 1e-09,
+          "abs": 0.05
+        },
+        {
+          "key": "candidate|gompertz||akaike_weight",
+          "value": 1.06087008072805e-10,
+          "rel": 1e-09,
+          "abs": 0.005
+        },
+        {
+          "key": "candidate|gengamma||n_parameters",
+          "value": 10,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|gengamma||status",
+          "text": "ok"
+        },
+        {
+          "key": "candidate|gengamma||admissible",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|gengamma||chosen",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|gengamma||parsimony",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|gengamma||converged",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|gengamma||log_lik",
+          "value": -1208.68548837322,
+          "rel": 0.0001
+        },
+        {
+          "key": "candidate|gengamma||aic",
+          "value": 2437.37097674645,
+          "rel": 0.0001
+        },
+        {
+          "key": "candidate|gengamma||bic",
+          "value": 2472.00929479671,
+          "rel": 0.0001
+        },
+        {
+          "key": "candidate|gengamma||delta_aic",
+          "value": 1.70514730860987,
+          "rel": 1e-09,
+          "abs": 0.05
+        },
+        {
+          "key": "candidate|gengamma||akaike_weight",
+          "value": 0.298893237304272,
+          "rel": 1e-09,
+          "abs": 0.005
+        },
+        {
+          "key": "model|||distribution",
+          "text": "weibull"
+        },
+        {
+          "key": "model|||selection",
+          "text": "auto"
+        },
+        {
+          "key": "model|||log_lik",
+          "value": -1208.83291471892,
+          "rel": 1e-09
+        }
+      ]
+    },
+    {
+      "id": "ps_auto_failing",
+      "model": "parametric_survival",
+      "data": "data/ps_auto_failing.csv",
+      "types": {
+        "t": "number",
+        "e": "integer",
+        "x": "number",
+        "g": "text"
+      },
+      "params": {
+        "time": "t",
+        "event": "e",
+        "event_value": 1,
+        "distribution": "auto"
+      },
+      "expect": [
+        {
+          "key": "candidate|exponential||n_parameters",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|exponential||status",
+          "text": "ok"
+        },
+        {
+          "key": "candidate|exponential||admissible",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|exponential||chosen",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|exponential||parsimony",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|exponential||converged",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|exponential||log_lik",
+          "value": -29.0464162628473,
+          "rel": 1e-07
+        },
+        {
+          "key": "candidate|exponential||aic",
+          "value": 60.0928325256945,
+          "rel": 1e-07
+        },
+        {
+          "key": "candidate|exponential||bic",
+          "value": 60.9832042835907,
+          "rel": 1e-07
+        },
+        {
+          "key": "candidate|exponential||delta_aic",
+          "value": 0.573368723684439,
+          "rel": 1e-09,
+          "abs": 0.05
+        },
+        {
+          "key": "candidate|exponential||akaike_weight",
+          "value": 0.221396623407259,
+          "rel": 1e-09,
+          "abs": 0.005
+        },
+        {
+          "key": "candidate|weibull||n_parameters",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|weibull||status",
+          "text": "ok"
+        },
+        {
+          "key": "candidate|weibull||admissible",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|weibull||chosen",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|weibull||parsimony",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|weibull||converged",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|weibull||log_lik",
+          "value": -28.5236676077513,
+          "rel": 1e-07
+        },
+        {
+          "key": "candidate|weibull||aic",
+          "value": 61.0473352155026,
+          "rel": 1e-07
+        },
+        {
+          "key": "candidate|weibull||bic",
+          "value": 62.8280787312949,
+          "rel": 1e-07
+        },
+        {
+          "key": "candidate|weibull||delta_aic",
+          "value": 1.52787141349248,
+          "rel": 1e-09,
+          "abs": 0.05
+        },
+        {
+          "key": "candidate|weibull||akaike_weight",
+          "value": 0.137373627827604,
+          "rel": 1e-09,
+          "abs": 0.005
+        },
+        {
+          "key": "candidate|lognormal||n_parameters",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|lognormal||status",
+          "text": "ok"
+        },
+        {
+          "key": "candidate|lognormal||admissible",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|lognormal||chosen",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|lognormal||parsimony",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|lognormal||converged",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|lognormal||log_lik",
+          "value": -27.7597319010051,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|lognormal||aic",
+          "value": 59.5194638020101,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|lognormal||bic",
+          "value": 61.3002073178024,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|lognormal||delta_aic",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 0.05
+        },
+        {
+          "key": "candidate|lognormal||akaike_weight",
+          "value": 0.294901125070074,
+          "rel": 1e-09,
+          "abs": 0.005
+        },
+        {
+          "key": "candidate|loglogistic||n_parameters",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|loglogistic||status",
+          "text": "ok"
+        },
+        {
+          "key": "candidate|loglogistic||admissible",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|loglogistic||chosen",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|loglogistic||parsimony",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|loglogistic||converged",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|loglogistic||log_lik",
+          "value": -28.2014087473162,
+          "rel": 1e-07
+        },
+        {
+          "key": "candidate|loglogistic||aic",
+          "value": 60.4028174946325,
+          "rel": 1e-07
+        },
+        {
+          "key": "candidate|loglogistic||bic",
+          "value": 62.1835610104248,
+          "rel": 1e-07
+        },
+        {
+          "key": "candidate|loglogistic||delta_aic",
+          "value": 0.883353692622364,
+          "rel": 1e-09,
+          "abs": 0.05
+        },
+        {
+          "key": "candidate|loglogistic||akaike_weight",
+          "value": 0.189608853535469,
+          "rel": 1e-09,
+          "abs": 0.005
+        },
+        {
+          "key": "candidate|gompertz||n_parameters",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|gompertz||status",
+          "text": "ok"
+        },
+        {
+          "key": "candidate|gompertz||admissible",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|gompertz||chosen",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|gompertz||parsimony",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|gompertz||converged",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|gompertz||log_lik",
+          "value": -28.3919127248411,
+          "rel": 1e-07
+        },
+        {
+          "key": "candidate|gompertz||aic",
+          "value": 60.7838254496822,
+          "rel": 1e-07
+        },
+        {
+          "key": "candidate|gompertz||bic",
+          "value": 62.5645689654745,
+          "rel": 1e-07
+        },
+        {
+          "key": "candidate|gompertz||delta_aic",
+          "value": 1.26436164767205,
+          "rel": 1e-09,
+          "abs": 0.05
+        },
+        {
+          "key": "candidate|gompertz||akaike_weight",
+          "value": 0.156719770159593,
+          "rel": 1e-09,
+          "abs": 0.005
+        },
+        {
+          "key": "candidate|gengamma||n_parameters",
+          "value": 3,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|gengamma||status",
+          "text": "not_converged"
+        },
+        {
+          "key": "candidate|gengamma||admissible",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|gengamma||chosen",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|gengamma||parsimony",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|gengamma||converged",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||distribution",
+          "text": "lognormal"
+        },
+        {
+          "key": "model|||log_lik",
+          "value": -27.7597319010051,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||note_auto_not_converged",
+          "text": "@auto_not_converged names=gengamma"
+        }
+      ]
+    },
+    {
+      "id": "ps_not_converged",
+      "model": "parametric_survival",
+      "data": "data/ps_auto_failing.csv",
+      "types": {
+        "t": "number",
+        "e": "integer",
+        "x": "number",
+        "g": "text"
+      },
+      "params": {
+        "time": "t",
+        "event": "e",
+        "event_value": 1,
+        "distribution": "gengamma"
+      },
+      "expect": [],
+      "refuses": {
+        "code": "not_converged",
+        "message": "the fit of the generalized gamma distribution did not converge from two starting points: fewer predictors, merge rare levels, or another distribution"
+      }
+    },
+    {
+      "id": "ps_auto_too_few_rows",
+      "model": "parametric_survival",
+      "data": "data/ps_small.csv",
+      "types": {
+        "t": "number",
+        "t_neg": "number",
+        "e": "integer",
+        "plant": "text",
+        "kind": "text",
+        "same": "text",
+        "x": "number",
+        "x2": "number"
+      },
+      "params": {
+        "time": "t",
+        "event": "e",
+        "event_value": 1,
+        "predictors": [
+          "kind"
+        ],
+        "distribution": "auto"
+      },
+      "expect": [
+        {
+          "key": "candidate|weibull||status",
+          "text": "too_few_rows"
+        },
+        {
+          "key": "candidate|gengamma||status",
+          "text": "too_few_rows"
+        },
+        {
+          "key": "candidate|exponential||n_parameters",
+          "value": 6,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|weibull||admissible",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|weibull||n_parameters",
+          "value": 7,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|gengamma||n_parameters",
+          "value": 8,
+          "rel": 1e-09
+        }
+      ]
+    },
+    {
+      "id": "ps_auto_margin",
+      "model": "parametric_survival",
+      "data": "data/ps_auto.csv",
+      "types": {
+        "days": "number",
+        "status": "text",
+        "load": "number",
+        "line": "text"
+      },
+      "params": {
+        "time": "days",
+        "event": "status",
+        "event_value": "failed",
+        "predictors": [
+          "load",
+          "line"
+        ],
+        "distribution": "auto",
+        "aic_margin": 0.1
+      },
+      "expect": [
+        {
+          "key": "model|||distribution",
+          "text": "gengamma"
+        },
+        {
+          "key": "model|||aic_margin",
+          "value": 0.1,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|gengamma||chosen",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|gengamma||parsimony",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|weibull||chosen",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "candidate|gengamma||log_lik",
+          "value": -632.485775559641,
+          "rel": 1e-09
+        }
+      ]
     }
   ]
 }

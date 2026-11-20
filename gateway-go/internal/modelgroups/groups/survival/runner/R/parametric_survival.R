@@ -69,8 +69,7 @@ PS_NOTE_HR_INTERVAL <- paste0(
 PS_NOTE_STRATA_NO_HR <- paste0(
   "With strata, a Weibull model has a shape per stratum: the hazard ratio of a predictor differs in each stratum while its ",
   "time ratio is common, so only the time ratios are given.")
-PS_NOTE_WEIGHTS_COUNTS <- paste0(
-  "Some weights are not whole numbers: the standard errors read each weight as a count of rows.")
+PS_NOTE_WEIGHTS_COUNTS <- "@weights_counts" # the report words it (a note is `@id name=value …`)
 
 ps_params <- function(params) {
   p <- tab_model_spec("parametric_survival")$defaults
@@ -766,16 +765,12 @@ ps_write <- function(task, prepared, fitted, rows, model) {
   }
   if (!is.null(prepared$weights_col) && any(prepared$w != round(prepared$w))) tab_text(rows, "model", "note_weights_counts", PS_NOTE_WEIGHTS_COUNTS)
   if (fitted$attempts > 1L) {
-    tab_text(rows, "model", "note_second_start", paste0(
-      "The first fit did not converge: the estimates come from a second start", if (distribution == "gengamma") "" else
-        if (distribution == "gompertz") " (the exponential's rate, a flat shape)" else " (survreg's estimates)", "."))
+    tab_text(rows, "model", "note_second_start", "@second_start")
   }
   if (distribution == "weibull" && has_strata && has_predictors) tab_text(rows, "model", "note_strata_no_hr", PS_NOTE_STRATA_NO_HR)
   if (interval_disagrees) tab_text(rows, "model", "note_hr_interval_scale", PS_NOTE_HR_INTERVAL)
   if (infinite > 0) {
-    tab_text(rows, "model", "note_quantile_infinite", paste0(
-      "The fitted distribution leaves ", format(round(100 * infinite, 1), nsmall = 1), "% of the profile without the event for ever: ",
-      "a quantile beyond that is infinite and left empty."))
+    tab_text(rows, "model", "note_quantile_infinite", paste0("@quantile_infinite share=", format(round(100 * infinite, 1), nsmall = 1)))
   }
   invisible(rows)
 }
