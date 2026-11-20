@@ -183,7 +183,64 @@ ratio <- sum(comp$n * disc$discounted) / sum(comp$n * dert)
 witness(sprintf("the discounted transactions over 100 years against DERT × e^(−δ/2) (ratio %.6f, e^(−δ/2) %.6f)", ratio, exp(-log(1 + d) / 2)),
         abs(ratio / exp(-log(1 + d) / 2) - 1), 1e-4)
 
-# ── BG/BB (lot B3 adds its block here) ───────────────────────────────────────────
+# ── BG/BB (lot B3): the donations, BTYD's bgbb.* ─────────────────────────────────
+# The donations (Fader, Hardie, Shang 2010; BTYD's donationsSummary: 11,104 donors, 6 opportunities, the 22 rows of
+# the recency-frequency matrix with their counts) are loaded from the installed package, expanded to one row a donor,
+# and never written to the repository. The published values (read on 2026-11-20 in the source named): Fader & Hardie,
+# «Implementing the BG/BB model for customer-base analysis in Excel» (brucehardie.com/notes/010), quoting the article:
+# α 1.204, β 0.750, γ 0.657, δ 2.783, LL −33,225.6.
+data(donationsSummary, package = "BTYD", envir = environment())
+rf <- donationsSummary$rf.matrix
+Dn <- list(x = rep(rf[, "x"], rf[, "custs"]), tx = rep(rf[, "t.x"], rf[, "custs"]), T = rep(rf[, "n.cal"], rf[, "custs"]), n = sum(rf[, "custs"]))
+bbfit <- clv_fit_purchases("bg_bb", Dn, clv_compress(Dn$x, Dn$tx, Dn$T))
+for (k in seq_along(bbfit$par)) published(paste("BG/BB, the donations,", names(bbfit$par)[[k]]), bbfit$par[[k]], c("1.204", "0.750", "0.657", "2.783")[[k]])
+published("BG/BB, the donations, log-likelihood", bbfit$log_lik, "-33225.6", relative = 0)
+cat(sprintf("WITNESS note: %d donors, the runner's estimates %s, log-likelihood %.3f\n", Dn$n, paste(sprintf("%.6f", bbfit$par), collapse = " "), bbfit$log_lik))
+
+# the runner's likelihood, P(alive), CET and PMF against BTYD's, on the 22 rows of the matrix
+rx <- rf[, "x"]; rt <- rf[, "t.x"]; rn <- rf[, "n.cal"]
+set.seed(3)
+worst <- list(ll = 0, alive = 0, cet = 0, pmf = 0)
+for (i in 1:20) {
+  p <- exp(stats::runif(4, -2, 2))
+  worst$ll <- max(worst$ll, max(abs(clv_bgbb_ll_ind(p, rx, rt, rn) - BTYD::bgbb.LL(p, rx, rt, rn))))
+  worst$alive <- max(worst$alive, rel(clv_palive("bg_bb", p, rx, rt, rn), BTYD::bgbb.PAlive(p, rx, rt, rn)))
+  worst$cet <- max(worst$cet, rel(as.vector(clv_cet("bg_bb", p, 5, rx, rt, rn)), BTYD::bgbb.ConditionalExpectedTransactions(p, rn, 5, rx, rt)))
+  worst$pmf <- max(worst$pmf, max(vapply(0:6, function(k) abs(clv_pmf("bg_bb", p, k, 6) - BTYD::bgbb.pmf(p, 6, k)), 0)))
+}
+witness("BG/BB log-likelihood, 20 random parameter sets on the donations' 22 rows, against BTYD (absolute)", worst$ll, 1e-10)
+witness("BG/BB P(alive), the same sets, against BTYD", worst$alive, 1e-12)
+witness("BG/BB CET(5), the same sets, against BTYD", worst$cet, 1e-12)
+witness("BG/BB PMF x = 0…6 at n = 6, the same sets, against BTYD (absolute)", worst$pmf, 1e-12)
+# at γ = 1 the closed form divides by 0: BTYD has no value there, the runner's limit form is the mean of BTYD's on both sides
+at1 <- c(1.2, 0.75, 1, 2.78)
+side <- function(g) BTYD::bgbb.ConditionalExpectedTransactions(c(1.2, 0.75, g, 2.78), rn, 5, rx, rt)
+witness("BG/BB CET(5) at γ = 1 (the limit form) against the mean of BTYD's at γ = 1 ± 1e-6",
+        rel(as.vector(clv_cet("bg_bb", at1, 5, rx, rt, rn)), (side(1 + 1e-6) + side(1 - 1e-6)) / 2), 1e-6)
+# the fit against BTYD's own estimation, and the log-likelihood at the same parameters
+theirs <- BTYD::bgbb.EstimateParameters(rf[, c("x", "t.x", "n.cal", "custs")])
+witness("BG/BB fit on the donations, the parameters against BTYD's bgbb.EstimateParameters", rel(unname(bbfit$par), unname(theirs)), 1e-3)
+witness("BG/BB fit on the donations, the log-likelihood against BTYD's at the runner's estimates (absolute)",
+        abs(bbfit$log_lik - BTYD::bgbb.rf.matrix.LL(unname(bbfit$par), rf[, c("x", "t.x", "n.cal", "custs")])), 1e-6)
+
+# the BG/BB reference cases of expected.json: this script's own likelihood, written from the article's definitions in
+# make_reference_bgbb.R, against BTYD's at the case's parameters; and the case's parameters against BTYD's fit
+for (case in ref$cases) {
+  if (!identical(case$model, "bg_bb") || !is.null(case$refuses)) next
+  keys <- vapply(case$expect, function(e) e$key, "")
+  names_ <- c("alpha", "beta", "gamma", "delta")
+  at <- match(paste0("model|||param_", names_), keys)
+  ll <- match("model|||log_lik", keys)
+  if (anyNA(at) || is.na(ll)) next
+  d <- utils::read.csv(file.path(here, case$data), check.names = FALSE)
+  fx <- d[[case$params$frequency]]; ft <- d[[case$params$recency]]; fn <- d[[case$params$opportunities]]
+  m <- stats::aggregate(list(custs = rep(1L, length(fx))), list(x = fx, t.x = ft, n.cal = fn), sum)
+  want <- vapply(case$expect[at], function(e) e$value, 0)
+  witness(paste0("BG/BB reference case «", case$id, "»: the likelihood at its parameters, against BTYD's (absolute)"),
+          abs(case$expect[[ll]]$value - BTYD::bgbb.rf.matrix.LL(want, as.matrix(m[, c("x", "t.x", "n.cal", "custs")]))), 1e-6)
+  fit <- BTYD::bgbb.EstimateParameters(as.matrix(m[, c("x", "t.x", "n.cal", "custs")]))
+  witness(paste0("BG/BB reference case «", case$id, "»: the parameters against BTYD's fit on the same donors"), rel(want, unname(fit)), 5e-3)
+}
 
 cat(sprintf("WITNESS_REPORT %d failed\n", failed))
 quit(save = "no", status = if (failed) 1L else 0L)

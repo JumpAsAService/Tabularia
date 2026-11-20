@@ -25,8 +25,9 @@ from app.engine.models import catalog
 from app.engine.models.layouts import common as c
 from app.engine.stats import layouts as stats
 
-MEASURES = ("sample_size", "holdout", "horizon_length")  # numbers with no p-value: no verdict, no colour
+MEASURES = ("sample_size", "holdout", "horizon_length", "boundary")  # numbers with no p-value: no verdict, no colour
 COUNTED = ("sample_size",)  # the measures that say what their count counts (the repeat customers)
+SCIENTIFIC = ("boundary",)  # the measures written by their exponent: an estimate far from 1 on the log scale
 SMALL = "0.#####"  # the tables' numbers: five decimals at most
 PURCHASE_MODELS = ("pareto_nbd", "bg_nbd", "mbg_nbd")
 # the numbers the blocks below say apart from the fit's table: its rows leave them out (a name ending
@@ -139,7 +140,7 @@ def _fit_to_the_data(p: stats.Page, w: dict) -> None:
     ch = w["charts"]
     frequency = _column("frequency", ch["frequency"], '[section] = "hist" AND [level] = "frequency"', _class(), "count", w,
                         under="frequency_fit")
-    holdout_filter = '[section] = "hist" AND [level] = "holdout"'
+    holdout_filter = '[section] = "hist" AND [level] = "holdout" AND [stat] = "mean"'
     holdout = _column("holdout", ch["holdout"], holdout_filter, _class(), "mean", w, "0.##", under="holdout")
     top = p.y + 10.5  # under the heading, which the grid writes
     c.grid(p, w, (frequency, holdout), ("s_fit_data", w["sections"]["fit_data"]))
@@ -252,6 +253,6 @@ def build(model: str, params: dict[str, Any], locale: str, sample: list[dict] | 
     blocks = (_fit_to_the_data, _p_alive, *((_spend,) if value else ()), _clv(value))
     doc = c.page(model, params, locale, sample, step, name=name, about=about, cards=cards,
                  assumptions_note=c.alpha_said(w["alpha_note"], checked.get("alpha", 0.05), locale) + " " + w["assumptions_note"],
-                 after_assumptions=(c.measures(MEASURES, COUNTED),), fit_skip=FIT_SKIP, fit_format=SMALL, room=12.0, summary_lines=(("business", line),),
+                 after_assumptions=(c.measures(MEASURES, COUNTED, SCIENTIFIC),), fit_skip=FIT_SKIP, fit_format=SMALL, room=12.0, summary_lines=(("business", line),),
                  after_coefficients=(_parameters(value), *((_comparison,) if model == "clv" else ())), blocks=blocks)
     return doc

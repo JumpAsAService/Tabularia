@@ -557,25 +557,42 @@ def alpha_said(sentence: str, alpha: Any, locale: str) -> str:
     return sentence.replace("{alpha}", text)
 
 
-def measures(ids: tuple[str, ...], counted: tuple[str, ...] = ()):
+def measures(ids: tuple[str, ...], counted: tuple[str, ...] = (), scientific: tuple[str, ...] = ()):
     """A table of the checks that are numbers, with no verdict and no colour: those of `ids` whose
     rows have a `value` and no `verdict`; each says in a sentence of the model's words
-    (`measures.<id>`) what the number is. Those of `counted` add what their `count` row counts, in
-    the check's words («· 174 repeat customers»)."""
+    (`measure_texts.<id>`) what the number is. Those of `counted` add what their `count` row counts,
+    in the check's words («· 174 repeat customers»). A check whose `measure_texts` entry is a
+    dictionary says the sentence of the reading the runner wrote in the row's `advice_id` (the key
+    of that id, else the general one under the key ""). Those of `scientific` write their value by
+    its exponent («5E-5», «3E+5»): numbers far from 1, which a fixed number of decimals would round."""
     def block(p: stats.Page, w: dict) -> None:
         m = w["measures"]
         one = ('[section] = "assumption" AND [stat] = "value" AND ISNULL(' + of_row("assumption", "verdict", "text") + ')')
-        said = "IFS(" + ", ".join(f'[level] = "{i}", {q(w["measure_texts"][i])}' for i in ids) + ', "")'
+        reading = of_row("assumption", "advice_id", "text")
+
+        def sentence(i: str) -> str:
+            said = w["measure_texts"][i]
+            if not isinstance(said, dict):
+                return q(said)
+            specific = [f"{reading} = {q(k)}, {q(v)}" for k, v in said.items() if k]
+            return "IFS(" + ", ".join(specific) + f", TRUE, {q(said[''])})"
+
+        what = "IFS(" + ", ".join(f'[level] = "{i}", {sentence(i)}' for i in ids) + ', "")'
         if counted:
             n = of_row("assumption", "count", "text")
             which = " OR ".join(f'[level] = "{i}"' for i in counted)
-            said = f'{said} & IF(({which}) AND NOT ISNULL({n}), " · " & {n}, "")'
+            what = f'{what} & IF(({which}) AND NOT ISNULL({n}), " · " & {n}, "")'
         names = "IFS(" + ", ".join(f'[level] = "{i}", {q(check_name(w, i))}' for i in ids) + ", [level])"
+        value = {"value": number_of_row("assumption", "value"), "format": "0.####"}
+        if scientific:
+            far = " OR ".join(f'[level] = "{i}"' for i in scientific)
+            raw = of_row("assumption", "value")
+            value = {"value": f'IF({far}, {shown(raw, "0.###E+0")}, {shown(number_of_row("assumption", "value"), "0.####")})'}
         p.add(stats.table("measures", m["title"], one, [
             {"header": m["measure"], "value": names, "width": 52},
             {"header": m["group"], "value": 'IF(ISNULL([level_2]), "", IF([level_2] = "all", ' + q(w["all"]) + ", [level_2]))", "width": 24},
-            {"header": m["value"], "value": number_of_row("assumption", "value"), "width": 22, "align": "right", "format": "0.####"},
-            {"header": m["what"], "value": said, "style": {"size": 7.5}},
+            {"header": m["value"], "width": 22, "align": "right", **value},
+            {"header": m["what"], "value": what, "style": {"size": 7.5}},
         ], p.y, visible=exists(one)), 10)
     return block
 

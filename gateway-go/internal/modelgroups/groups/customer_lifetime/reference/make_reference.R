@@ -298,7 +298,7 @@ fitted[[length(fitted) + 1L]] <- fitted_case(
          num_("assumption|spend_independence||value", hA$r, from = "cor()"), num_("assumption|spend_independence||p_value", hA$p, rel = 1e-8, from = "lm(), HC3"),
          num_("assumption|sample_size||value", 400), num_("assumption|sample_size||count", sum(A$summary$frequency > 0)),
          num_("assumption|horizon_length||value", 52 / max(A$summary$age))),
-    checks_(c(convergence = "ok", boundary = "ok", frequency_fit = "ok", spend_independence = "ok", spend_tail = "ok"))),
+    checks_(c(convergence = "ok", frequency_fit = "ok", spend_independence = "ok", spend_tail = "ok"))),
   "value")
 
 # B. Pareto/NBD customers (r 0.55, α 10, s 0.6, β 12), no spend, no holdout: the `purchases` variant; P(alive)
@@ -316,7 +316,7 @@ fitted[[length(fitted) + 1L]] <- fitted_case(
          num_("model|||expected_transactions", sum(prB$CET), rel = REL_PREDICT, from = "CLVTools predict()"),
          num_("model|||mean_p_alive", mean(prB$PAlive), rel = REL_PREDICT, from = "CLVTools predict()")),
     params_of("model|||param_", coef(pnB), REL_A, "CLVTools pnbd()"),
-    checks_(c(convergence = "ok", boundary = "ok", frequency_fit = "ok"))),
+    checks_(c(convergence = "ok", frequency_fit = "ok"))),
   "purchases")
 
 # C. MBG/NBD customers (r 0.5, α 6, a 0.9, b 1.6) with a spend, the model asked for: against the likelihood
@@ -332,7 +332,7 @@ fitted[[length(fitted) + 1L]] <- fitted_case(
          num_("model|||horizon", 52), num_("model|||margin", 0.4), num_("model|||discount_per_period", 1.08^(7 / 365.25) - 1, rel = 1e-12)),
     params_of("model|||param_", mbC$par, REL_MBG, "MBG/NBD maximized here"),
     params_of("model|||spend_param_", stats::setNames(coef(ggC), c("p", "q", "gamma")), REL_A, "CLVTools gg()"),
-    checks_(c(convergence = "ok", boundary = "ok", spend_independence = "ok"))),
+    checks_(c(convergence = "ok", spend_independence = "ok"))),
   "value")
 
 # D. One cohort: every customer known for 39 weeks (BG/NBD customers), a 13-week holdout; BG/NBD asked for,
@@ -356,7 +356,7 @@ fitted[[length(fitted) + 1L]] <- fitted_case(
          num_("model|||expected_transactions", sum(prD52$CET), rel = REL_PREDICT, from = "CLVTools predict()"),
          num_("model|||mean_p_alive", mean(prD52$PAlive), rel = REL_PREDICT, from = "CLVTools predict()")),
     params_of("model|||param_", coef(bgD), REL_A, "CLVTools bgnbd()"),
-    checks_(c(convergence = "ok", boundary = "ok"))),
+    checks_(c(convergence = "ok"))),
   "purchases")
 
 # E. The average spend rises with the frequency (m̄ = 10 + 4x, times a log-normal noise): Gamma–Gamma's
@@ -377,14 +377,15 @@ fitted[[length(fitted) + 1L]] <- fitted_case(
   "value")
 
 # F. Customers who never drop out (Poisson purchases, rate ~ Gamma(0.6, 6)): MBG/NBD's a goes to its edge,
-#    the reading is «no dropout», and the Hessian is not positive definite there.
+#    the boundary measure reads it «no dropout» (a value and no verdict), and the Hessian is not positive
+#    definite there: the convergence check is the verdict, doubtful.
 F <- draw_customers(606, 300, "poisson", c(0.6, 6), 140:364)
 F$summary$avg_spend <- NULL
 F$file <- "clv_no_dropout.csv"
 write_exact(F$summary, F$file)
 fitted[[length(fitted) + 1L]] <- fitted_case(
   "clv customers who never drop out", F, clv_params(purchase_model = "mbg_nbd"),
-  c(list(txt_("assumption|boundary|a|verdict", "doubtful"), txt_("assumption|boundary|a|advice_id", "boundary_no_dropout"),
+  c(list(txt_("assumption|boundary|a|advice_id", "boundary_no_dropout"),
          txt_("assumption|convergence||verdict", "doubtful"), txt_("assumption|convergence||advice_id", "convergence_edge"))),
   "purchases")
 

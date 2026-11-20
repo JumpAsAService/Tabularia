@@ -76,26 +76,33 @@ TAB_COMMON_TESTS[["customer_lifetime: a verdict is a p-value against the node's 
   .tab_expect(identical(g(a, "convergence", "verdict"), "doubtful") && identical(g(a, "convergence", "advice_id"), "convergence_edge"), "no Hessian at an edge")
 }
 
-TAB_COMMON_TESTS[["customer_lifetime: the edges of the parameters and what each means"]] <- function(code) {
+TAB_COMMON_TESTS[["customer_lifetime: the edges of the parameters are a measure, with the reading of each and no verdict"]] <- function(code) {
   g <- .clv_check_get
   a <- .clv_check_frame(.clv_check_fit())
-  .tab_expect(identical(g(a, "boundary", "verdict"), "ok") && g(a, "boundary", "count") == 0, "no edge")
+  .tab_expect(!any(a$level == "boundary"), "no estimate far out: no row")
   # BG/NBD: a → 0 or b → ∞ is no dropout; r and α both large, a rate with no spread
   a <- .clv_check_frame(.clv_check_fit(par = c(r = 0.25, alpha = 4, a = 5e-5, b = 2.5)))
-  .tab_expect(identical(g(a, "boundary", "verdict", "a"), "doubtful") && identical(g(a, "boundary", "advice_id", "a"), "boundary_no_dropout") &&
-              g(a, "boundary", "value", "a") == 5e-5 && is.null(g(a, "boundary", "verdict")), "BG/NBD a at 0")
+  .tab_expect(g(a, "boundary", "value", "a") == 5e-5 && identical(g(a, "boundary", "advice_id", "a"), "boundary_no_dropout") &&
+              !any(a$level == "boundary" & a$stat %in% c("verdict", "advice", "h0", "count")) && sum(a$level == "boundary" & a$stat == "value") == 1,
+              "BG/NBD a at 0: a value and its reading, no verdict")
   a <- .clv_check_frame(.clv_check_fit(par = c(r = 0.25, alpha = 4, a = 0.8, b = 2e4)))
-  .tab_expect(identical(g(a, "boundary", "advice_id", "b"), "boundary_no_dropout"), "BG/NBD b at infinity")
+  .tab_expect(identical(g(a, "boundary", "advice_id", "b"), "boundary_no_dropout") && g(a, "boundary", "value", "b") == 2e4, "BG/NBD b at infinity")
   a <- .clv_check_frame(.clv_check_fit(par = c(r = 3e4, alpha = 5e5, a = 0.8, b = 2.5)))
-  .tab_expect(identical(g(a, "boundary", "advice_id", "r"), "boundary_homogeneous") && identical(g(a, "boundary", "advice_id", "alpha"), "boundary_homogeneous") &&
-              g(a, "boundary", "count", "r") == 2, "a purchase rate with no spread")
+  .tab_expect(identical(g(a, "boundary", "advice_id", "r"), "boundary_homogeneous") && identical(g(a, "boundary", "advice_id", "alpha"), "boundary_homogeneous"),
+              "a purchase rate with no spread")
   # Pareto/NBD: s and β both large, the same dropout rate for everyone; β alone large, no dropout
   a <- .clv_check_frame(.clv_check_fit(model = "pareto_nbd", par = c(r = 0.5, alpha = 10, s = 2e4, beta = 3e5)))
   .tab_expect(identical(g(a, "boundary", "advice_id", "s"), "boundary_homogeneous") && identical(g(a, "boundary", "advice_id", "beta"), "boundary_homogeneous"),
               "Pareto/NBD s and beta")
   a <- .clv_check_frame(.clv_check_fit(model = "pareto_nbd", par = c(r = 0.5, alpha = 10, s = 0.6, beta = 3e5)))
   .tab_expect(identical(g(a, "boundary", "advice_id", "beta"), "boundary_no_dropout"), "Pareto/NBD beta alone")
+  # BG/BB: γ → 0 or δ → ∞ is no dropout; α and β both large, a transaction probability with no spread
+  a <- .clv_check_frame(.clv_check_fit(model = "bg_bb", par = c(alpha = 1.2, beta = 0.75, gamma = 2e-5, delta = 2.7)))
+  .tab_expect(identical(g(a, "boundary", "advice_id", "gamma"), "boundary_no_dropout"), "BG/BB gamma at 0")
+  a <- .clv_check_frame(.clv_check_fit(model = "bg_bb", par = c(alpha = 2e4, beta = 3e4, gamma = 0.6, delta = 2.7)))
+  .tab_expect(identical(g(a, "boundary", "advice_id", "alpha"), "boundary_homogeneous") && identical(g(a, "boundary", "advice_id", "beta"), "boundary_homogeneous"),
+              "BG/BB alpha and beta")
   # the spend's parameters are named as the model section names them, with no reading of their own
   a <- .clv_check_frame(.clv_check_fit(spend = c(p = 6, q = 2e4, gamma = 15)))
-  .tab_expect(identical(g(a, "boundary", "verdict", "spend_q"), "doubtful") && identical(g(a, "boundary", "advice_id", "spend_q"), "boundary"), "the spend's q")
+  .tab_expect(g(a, "boundary", "value", "spend_q") == 2e4 && identical(g(a, "boundary", "advice_id", "spend_q"), "boundary"), "the spend's q")
 }

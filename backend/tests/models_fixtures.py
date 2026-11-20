@@ -44,12 +44,17 @@ PARAMS: dict[tuple[str, str], dict[str, Any]] = {
     ("clv", "purchases"): {"customer": "customer", "frequency": "frequency", "recency": "recency", "age": "age", "time_unit": "week",
                            "holdout_transactions": "holdout_purchases", "holdout_length": 26, "horizon": 52, "purchase_model": "auto",
                            "output": "rows"},
+    # the BG/BB node on its reference table bgbb_donations_like.csv (donors with 6 opportunities a year)
+    ("bg_bb", "value"): {"customer": "donor", "frequency": "x", "recency": "t_x", "opportunities": "n", "period_unit": "year",
+                         "spend": "avg_gift", "holdout_transactions": "later_gifts", "holdout_length": 5, "horizon": 5, "output": "rows"},
+    ("bg_bb", "purchases"): {"customer": "donor", "frequency": "x", "recency": "t_x", "opportunities": "n", "period_unit": "year",
+                             "output": "rows"},
 }
 
 # Fixtures that are a runner's real output (`from_results`): main() leaves them alone.
 FROM_RUNNER: set[tuple[str, str]] = {("linear", "unpenalized"), ("logistic", "unpenalized"), ("kaplan_meier", "default"),
                                       ("cox", "default"), ("linear", "penalized"), ("logistic", "penalized"), ("clv", "value"),
-                                      ("clv", "purchases")}
+                                      ("clv", "purchases"), ("bg_bb", "value"), ("bg_bb", "purchases")}
 
 # The example a declared stat ending in «*» is written as.
 WILDCARDS = {"note_*": ["note_1"], "surv_at_*": ["surv_at_30", "surv_at_30_low", "surv_at_30_high"],

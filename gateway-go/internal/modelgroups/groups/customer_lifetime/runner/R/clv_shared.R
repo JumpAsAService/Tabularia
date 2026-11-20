@@ -821,7 +821,7 @@ clv_holdout_by_class <- function(x, observed, expected, classes) {
   k <- length(classes$x0)
   n <- tabulate(cls[use], k)
   avg <- function(v) vapply(seq_len(k), function(j) if (n[[j]]) mean(v[use & cls == j]) else NA_real_, 0)
-  list(x0 = classes$x0, n = n, observed = avg(observed), expected = avg(expected))
+  list(x0 = classes$x0, x1 = classes$x1, n = n, observed = avg(observed), expected = avg(expected))
 }
 
 # Pearson's r between the frequency and the average spend of the repeaters, and the test of the slope of
@@ -1233,7 +1233,12 @@ clv_rows_charts <- function(rows, task, fit) {
   }
   if (!is.null(fit$holdout_classes)) {
     hc <- fit$holdout_classes
-    for (which in c("observed", "expected")) tab_points(rows, "hist", "holdout", "mean", x = hc$x0, y = hc[[which]], level_2 = which, x1 = hc$n)
+    # the classes of the frequency chart (x1: the upper end, NA for the open last class, which the page prints «k+»); the customers
+    # of each class are the rows of the stat `count`, so that the means are read against how many they average
+    for (which in c("observed", "expected")) {
+      tab_points(rows, "hist", "holdout", "mean", x = hc$x0, y = hc[[which]], level_2 = which, x1 = ifelse(is.na(hc$x1), NA_real_, hc$x1))
+    }
+    tab_points(rows, "hist", "holdout", "count", x = hc$x0, y = hc$n, level_2 = "customers", x1 = ifelse(is.na(hc$x1), NA_real_, hc$x1))
   }
   ph <- clv_palive_hist(ev$p_alive)
   tab_points(rows, "hist", "p_alive", "count", x = ph$x0, y = ph$count, x1 = ph$x1)

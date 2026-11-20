@@ -30,7 +30,12 @@
   "measure_texts": {
    "sample_size": "The customers the estimates rest on; beside it, how many of them bought again (the repeat purchases teach the purchase rate and the dropout).",
    "holdout": "Relative error of the total of purchases in the holdout: (expected − observed) / observed.",
-   "horizon_length": "The horizon over the longest age: above 1 the far periods rest on the model's form."
+   "horizon_length": "The horizon over the longest age: above 1 the far periods rest on the model's form.",
+   "boundary": {
+    "": "A parameter lies at an edge of its range: read the table of parameters.",
+    "boundary_no_dropout": "The data show almost no dropout: P(alive) is close to 1 for everyone and the model reduces to a plain purchase-rate model.",
+    "boundary_homogeneous": "The customers look alike on this process: the spread of the rate is not identified."
+   }
   },
   "formula_in": "in {unit}",
   "note_texts": {
@@ -185,21 +190,11 @@
     "h0": "The optimizer found a maximum: it converged and the Hessian is positive definite.",
     "advice": {
      "": "The estimates may not be the best ones: the data may hold too few repeat customers for this model; try another purchase model.",
-     "convergence_edge": "The optimizer stopped at an edge of a parameter's range, where the likelihood is flat: there are no standard errors; read the check of the edges."
+     "convergence_edge": "The optimizer stopped at an edge of a parameter's range, where the likelihood is flat: there are no standard errors; read the measure of the estimates at an edge."
     }
    },
    "boundary": {
-    "name": "Parameters at an edge",
-    "h0": "No parameter lies at an edge of its range.",
-    "advice": {
-     "": "A parameter lies at an edge of its range: read the table of parameters.",
-     "boundary_no_dropout": "The data show almost no dropout: P(alive) is close to 1 for everyone and the model reduces to a plain purchase-rate model.",
-     "boundary_homogeneous": "The customers look alike on this process: the spread of the rate is not identified."
-    },
-    "count": {
-     "one": "{n} parameter at an edge",
-     "other": "{n} parameters at an edge"
-    }
+    "name": "Parameters at an edge"
    },
    "sample_size": {
     "name": "Customers and repeat customers",
@@ -277,7 +272,12 @@
   "measure_texts": {
    "sample_size": "I clienti su cui poggiano le stime; accanto, quanti di loro hanno riacquistato (i riacquisti insegnano il tasso di acquisto e l'abbandono).",
    "holdout": "Errore relativo del totale degli acquisti nell'holdout: (atteso − osservato) / osservato.",
-   "horizon_length": "L'orizzonte rispetto all'età massima: sopra 1 i periodi lontani poggiano sulla forma del modello."
+   "horizon_length": "L'orizzonte rispetto all'età massima: sopra 1 i periodi lontani poggiano sulla forma del modello.",
+   "boundary": {
+    "": "Un parametro sta a un bordo del suo intervallo: leggete la tabella dei parametri.",
+    "boundary_no_dropout": "I dati mostrano quasi nessun abbandono: P(vivo) è vicina a 1 per tutti e il modello si riduce a un semplice modello del tasso di acquisto.",
+    "boundary_homogeneous": "I clienti si somigliano su questo processo: la dispersione del tasso non è identificata."
+   }
   },
   "formula_in": "in {unit}",
   "note_texts": {
@@ -432,21 +432,11 @@
     "h0": "L'ottimizzatore ha trovato un massimo: è convergito e l'Hessiana è definita positiva.",
     "advice": {
      "": "Le stime potrebbero non essere le migliori: i dati potrebbero contenere troppi pochi clienti con riacquisti per questo modello; provate un altro modello degli acquisti.",
-     "convergence_edge": "L'ottimizzatore si è fermato a un bordo dell'intervallo di un parametro, dove la verosimiglianza è piatta: non ci sono errori standard; leggete la verifica dei bordi."
+     "convergence_edge": "L'ottimizzatore si è fermato a un bordo dell'intervallo di un parametro, dove la verosimiglianza è piatta: non ci sono errori standard; leggete la misura delle stime ai bordi."
     }
    },
    "boundary": {
-    "name": "Parametri ai bordi",
-    "h0": "Nessun parametro sta ai bordi del suo intervallo.",
-    "advice": {
-     "": "Un parametro sta a un bordo del suo intervallo: leggete la tabella dei parametri.",
-     "boundary_no_dropout": "I dati mostrano quasi nessun abbandono: P(vivo) è vicina a 1 per tutti e il modello si riduce a un semplice modello del tasso di acquisto.",
-     "boundary_homogeneous": "I clienti si somigliano su questo processo: la dispersione del tasso non è identificata."
-    },
-    "count": {
-     "one": "{n} parametro ai bordi",
-     "other": "{n} parametri ai bordi"
-    }
+    "name": "Parametri ai bordi"
    },
    "sample_size": {
     "name": "Clienti e clienti con riacquisti",
@@ -524,7 +514,12 @@
   "measure_texts": {
    "sample_size": "Die Kunden, auf denen die Schätzungen beruhen; daneben, wie viele von ihnen wieder gekauft haben (die Wiederkäufe lehren die Kaufrate und die Abwanderung).",
    "holdout": "Relativer Fehler der Summe der Käufe im Holdout: (erwartet − beobachtet) / beobachtet.",
-   "horizon_length": "Der Horizont im Verhältnis zum höchsten Alter: über 1 beruhen die fernen Perioden auf der Form des Modells."
+   "horizon_length": "Der Horizont im Verhältnis zum höchsten Alter: über 1 beruhen die fernen Perioden auf der Form des Modells.",
+   "boundary": {
+    "": "Ein Parameter liegt am Rand seines Bereichs: die Parametertabelle lesen.",
+    "boundary_no_dropout": "Die Daten zeigen fast keine Abwanderung: P(aktiv) liegt für alle nahe 1, und das Modell wird zu einem reinen Kaufratenmodell.",
+    "boundary_homogeneous": "Die Kunden gleichen sich bei diesem Prozess: Die Streuung der Rate ist nicht identifiziert."
+   }
   },
   "formula_in": "in {unit}",
   "note_texts": {
@@ -679,21 +674,11 @@
     "h0": "Der Optimierer hat ein Maximum gefunden: Er ist konvergiert, und die Hesse-Matrix ist positiv definit.",
     "advice": {
      "": "Die Schätzungen sind vielleicht nicht die besten: Die Daten enthalten möglicherweise zu wenige Wiederkäufer für dieses Modell; ein anderes Kaufmodell versuchen.",
-     "convergence_edge": "Der Optimierer hat am Rand des Bereichs eines Parameters angehalten, wo die Likelihood flach ist: Es gibt keine Standardfehler; die Prüfung der Ränder lesen."
+     "convergence_edge": "Der Optimierer hat am Rand des Bereichs eines Parameters angehalten, wo die Likelihood flach ist: Es gibt keine Standardfehler; die Messung der Schätzwerte am Rand lesen."
     }
    },
    "boundary": {
-    "name": "Parameter am Rand",
-    "h0": "Kein Parameter liegt am Rand seines Bereichs.",
-    "advice": {
-     "": "Ein Parameter liegt am Rand seines Bereichs: die Parametertabelle lesen.",
-     "boundary_no_dropout": "Die Daten zeigen fast keine Abwanderung: P(aktiv) liegt für alle nahe 1, und das Modell wird zu einem reinen Kaufratenmodell.",
-     "boundary_homogeneous": "Die Kunden gleichen sich bei diesem Prozess: Die Streuung der Rate ist nicht identifiziert."
-    },
-    "count": {
-     "one": "{n} Parameter am Rand",
-     "other": "{n} Parameter am Rand"
-    }
+    "name": "Parameter am Rand"
    },
    "sample_size": {
     "name": "Kunden und Wiederkäufer",
@@ -771,7 +756,12 @@
   "measure_texts": {
    "sample_size": "Los clientes en que se apoyan las estimaciones; al lado, cuántos de ellos volvieron a comprar (las recompras enseñan la tasa de compra y el abandono).",
    "holdout": "Error relativo del total de compras del holdout: (esperado − observado) / observado.",
-   "horizon_length": "El horizonte sobre la edad máxima: por encima de 1 los periodos lejanos se apoyan en la forma del modelo."
+   "horizon_length": "El horizonte sobre la edad máxima: por encima de 1 los periodos lejanos se apoyan en la forma del modelo.",
+   "boundary": {
+    "": "Un parámetro está en un borde de su rango: lean la tabla de parámetros.",
+    "boundary_no_dropout": "Los datos muestran casi ningún abandono: P(vivo) es cercana a 1 para todos y el modelo se reduce a un simple modelo de tasa de compra.",
+    "boundary_homogeneous": "Los clientes se parecen en este proceso: la dispersión de la tasa no está identificada."
+   }
   },
   "formula_in": "en {unit}",
   "note_texts": {
@@ -926,21 +916,11 @@
     "h0": "El optimizador encontró un máximo: convergió y la hessiana es definida positiva.",
     "advice": {
      "": "Puede que las estimaciones no sean las mejores: los datos quizá tengan muy pocos clientes con recompras para este modelo; prueben otro modelo de compras.",
-     "convergence_edge": "El optimizador se detuvo en un borde del rango de un parámetro, donde la verosimilitud es plana: no hay errores estándar; lean la verificación de los bordes."
+     "convergence_edge": "El optimizador se detuvo en un borde del rango de un parámetro, donde la verosimilitud es plana: no hay errores estándar; lean la medida de las estimaciones en el borde."
     }
    },
    "boundary": {
-    "name": "Parámetros en un borde",
-    "h0": "Ningún parámetro está en un borde de su rango.",
-    "advice": {
-     "": "Un parámetro está en un borde de su rango: lean la tabla de parámetros.",
-     "boundary_no_dropout": "Los datos muestran casi ningún abandono: P(vivo) es cercana a 1 para todos y el modelo se reduce a un simple modelo de tasa de compra.",
-     "boundary_homogeneous": "Los clientes se parecen en este proceso: la dispersión de la tasa no está identificada."
-    },
-    "count": {
-     "one": "{n} parámetro en un borde",
-     "other": "{n} parámetros en un borde"
-    }
+    "name": "Parámetros en un borde"
    },
    "sample_size": {
     "name": "Clientes y clientes con recompras",
@@ -1018,7 +998,12 @@
   "measure_texts": {
    "sample_size": "Les clients sur lesquels reposent les estimations ; à côté, combien d'entre eux ont racheté (les rachats apprennent le taux d'achat et l'abandon).",
    "holdout": "Erreur relative du total des achats du holdout : (attendu − observé) / observé.",
-   "horizon_length": "L'horizon sur l'âge maximal : au-dessus de 1 les périodes lointaines reposent sur la forme du modèle."
+   "horizon_length": "L'horizon sur l'âge maximal : au-dessus de 1 les périodes lointaines reposent sur la forme du modèle.",
+   "boundary": {
+    "": "Un paramètre est à une borne de son domaine : lisez le tableau des paramètres.",
+    "boundary_no_dropout": "Les données ne montrent presque aucun abandon : P(actif) est proche de 1 pour tous et le modèle se réduit à un simple modèle de taux d'achat.",
+    "boundary_homogeneous": "Les clients se ressemblent sur ce processus : la dispersion du taux n'est pas identifiée."
+   }
   },
   "formula_in": "en {unit}",
   "note_texts": {
@@ -1173,21 +1158,11 @@
     "h0": "L'optimiseur a trouvé un maximum : il a convergé et la hessienne est définie positive.",
     "advice": {
      "": "Les estimations ne sont peut-être pas les meilleures : les données ont peut-être trop peu de clients avec rachats pour ce modèle ; essayez un autre modèle d'achats.",
-     "convergence_edge": "L'optimiseur s'est arrêté à une borne du domaine d'un paramètre, où la vraisemblance est plate : il n'y a pas d'erreurs standard ; lisez la vérification des bornes."
+     "convergence_edge": "L'optimiseur s'est arrêté à une borne du domaine d'un paramètre, où la vraisemblance est plate : il n'y a pas d'erreurs standard ; lisez la mesure des estimations aux bornes."
     }
    },
    "boundary": {
-    "name": "Paramètres à une borne",
-    "h0": "Aucun paramètre n'est à une borne de son domaine.",
-    "advice": {
-     "": "Un paramètre est à une borne de son domaine : lisez le tableau des paramètres.",
-     "boundary_no_dropout": "Les données ne montrent presque aucun abandon : P(actif) est proche de 1 pour tous et le modèle se réduit à un simple modèle de taux d'achat.",
-     "boundary_homogeneous": "Les clients se ressemblent sur ce processus : la dispersion du taux n'est pas identifiée."
-    },
-    "count": {
-     "one": "{n} paramètre à une borne",
-     "other": "{n} paramètres à une borne"
-    }
+    "name": "Paramètres à une borne"
    },
    "sample_size": {
     "name": "Clients et clients avec rachats",

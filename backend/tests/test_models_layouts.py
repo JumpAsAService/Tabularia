@@ -58,8 +58,8 @@ def _keys(node, prefix=""):
     return {prefix.rstrip(".")}
 
 
-def draw(tmp_path, chart_service, monkeypatch, case, fmt="pdf", locale="en", sample=None, step=None):  # noqa: F811
-    """The report of a fixture, and what the template was handed (the page's texts)."""
+def draw(tmp_path, chart_service, monkeypatch, case, fmt="pdf", locale="en", sample=None, step=None, rows=None):  # noqa: F811
+    """The report of a fixture (or of `rows` in its place), and what the template was handed (the page's texts)."""
     handed: list[str] = []
     run = pdf.run
 
@@ -69,8 +69,8 @@ def draw(tmp_path, chart_service, monkeypatch, case, fmt="pdf", locale="en", sam
         return run(job, *args, **kwargs)
 
     monkeypatch.setattr(pdf, "run", spy)
-    model, params, rows = fixture(case)
-    datasets = {"result": {"rows": layouts.with_labels(model, params, rows, locale), "columns": layouts.columns()}}
+    model, params, fixed = fixture(case)
+    datasets = {"result": {"rows": layouts.with_labels(model, params, rows if rows is not None else fixed, locale), "columns": layouts.columns()}}
     out = render.render(layouts.definition(model, params, locale, sample, step), datasets, {}, fmt, tmp_path,
                         title=layouts.title(model, params, locale), now=NOW,
                         limits=render.Limits(chart_url=chart_service[0], max_rows=layouts.MAX_REPORT_ROWS))
@@ -113,7 +113,9 @@ def test_every_number_and_check_a_variant_writes_has_its_name_in_each_language(c
                 assert w["stats"].get(section, {}).get(stat), f"{code}: no word for {section}.{stat}"
         for check in spec["sections"].get("assumption", {}).get("levels", []):
             said = w["checks"].get(check, {})
-            assert said.get("name") and said.get("h0") and (said.get("advice") or said.get("not_computed")), f"{code}: {check}"
+            # a check that is a measure has no H0 and no advice: its sentence is in `measure_texts`
+            assert said.get("name") and ((said.get("h0") and (said.get("advice") or said.get("not_computed")))
+                                         or w.get("measure_texts", {}).get(check)), f"{code}: {check}"
         for row in layouts.with_labels(model, params, rows, code):  # the numbered ones too (note_1, surv_at_30)
             if row["section"] in ("model", "stratum") and row["stat"].startswith(("note_", "surv_at_", "quantile_", "ar_root", "ma_root")):
                 assert row["label"] != row["stat"], (code, row["stat"])
@@ -199,6 +201,22 @@ def test_the_name_of_a_report_is_its_model_and_its_columns():
         "ARIMA (automatische Ordnungen) — boxes über month"
     assert layouts.title("kaplan_meier", {"time": "days", "event": "status", "event_value": "failed", "strata": "line"}, "fr") == \
         "Kaplan–Meier — days, status = failed par line"
+
+
+def test_a_parametric_survival_with_delayed_entry_names_its_start_and_says_so_in_each_language():
+    # the report's subject is the interval (start–time), as Cox's; the runner's note is a sentence of the page
+    title = layouts.title("parametric_survival", {"time": "days", "event": "status", "event_value": "failed", "start": "entered"}, "en")
+    assert "entered–days" in title and "status = failed" in title
+    assert "entered" not in layouts.title("parametric_survival", {"time": "days", "event": "status", "event_value": "failed"}, "en")
+    model, params, rows = fixture("parametric_survival-ph_aft")
+    rows = [*rows, {"section": "model", "level": None, "level_2": None, "stat": "note_start_rows", "value": None,
+                    "text": "@start_rows delayed=41 rows=106", "x0": None, "x1": None}]
+    for locale, words in (("en", "41 of 106 rows enter the study after time 0"), ("it", "41 righe su 106 entrano nello studio dopo il tempo 0"),
+                          ("de", "41 von 106 Zeilen treten nach dem Zeitpunkt 0"), ("es", "41 de 106 filas entran en el estudio después del tiempo 0"),
+                          ("fr", "41 lignes sur 106 entrent dans l'étude après l'instant 0")):
+        said = {(r["section"], r["stat"]): r for r in layouts.with_labels(model, params, rows, locale)}
+        assert words in said[("model", "note_start_rows")]["text"], (locale, said[("model", "note_start_rows")]["text"])
+        assert "Kaplan" in said[("model", "note_start_rows")]["text"]
 
 
 # ── drawn ───────────────────────────────────────────────────────────────────
@@ -586,3 +604,82 @@ def test_what_has_no_report_is_refused_before_the_queue_and_results_of_another_s
     gone = ask(results_key="runs/7/nothing/results.parquet")
     status = tasks.export_status(gone.task_id, owner="u1")
     assert status["status"] == "failed" and status["code"] == 404 and "run the node again" in status["detail"]
+
+
+# ── the customer lifetime report: the holdout's classes, the edges as a measure ─────
+HOLDOUT_CASES = ("clv-value", "clv-purchases", "bg_bb-value")
+
+
+def _classes(rows, level, stat, level_2):
+    return [r for r in rows if r["section"] == "hist" and r["level"] == level and r["stat"] == stat and r["level_2"] == level_2]
+
+
+@pytest.mark.parametrize("case", HOLDOUT_CASES)
+def test_the_holdout_classes_are_the_frequency_s_with_the_last_one_open_and_the_customers_apart(case):
+    """The holdout chart's classes carry the bounds of the frequency chart (the upper end, none for the open last
+    class, which the page prints «10+»), and the customers of each class are the rows of the stat `count`."""
+    _, _, rows = fixture(case)
+    frequency = _classes(rows, "frequency", "count", "observed")
+    for which in ("observed", "expected"):
+        holdout = _classes(rows, "holdout", "mean", which)
+        assert [(r["x0"], r["x1"]) for r in holdout] == [(r["x0"], r["x1"]) for r in frequency]
+    holdout = _classes(rows, "holdout", "mean", "observed")
+    assert len(holdout) > 2 and holdout[-1]["x1"] is None and all(r["x1"] == r["x0"] for r in holdout[:-1])
+    customers = _classes(rows, "holdout", "count", "customers")
+    assert [(r["x0"], r["x1"]) for r in customers] == [(r["x0"], r["x1"]) for r in frequency]
+    n = next(r["value"] for r in rows if r["section"] == "model" and r["stat"] == "n")
+    assert sum(r["value"] for r in customers) == n
+
+
+@pytest.mark.parametrize("case", HOLDOUT_CASES)
+def test_the_holdout_chart_names_its_last_class_with_a_plus_and_its_means_only(tmp_path, chart_service, monkeypatch, case):  # noqa: F811
+    del chart_service[1][:]
+    out, page = draw(tmp_path, chart_service, monkeypatch, case, fmt="svg")
+    model, params, rows = fixture(case)
+    title = common.words(model, case.split("-")[1], "en")["charts"]["holdout"]
+    [spec] = [s for s in chart_service[1] if s["option"].get("title", {}).get("text") == title]
+    categories = spec["option"]["xAxis"]["data"]
+    classes = _classes(rows, "holdout", "mean", "observed")
+    assert categories == [str(int(r["x0"])) for r in classes[:-1]] + [f"{int(classes[-1]['x0'])}+"]
+    # the means only: the customers' rows are not a series
+    assert all(len(s["data"]) == len(classes) for s in spec["option"]["series"])
+
+
+def _boundary(level_2: str, value: float, reading: str) -> list[dict]:
+    row = {"section": "assumption", "level": "boundary", "level_2": level_2, "x0": None, "x1": None, "index": None}
+    return [{**row, "stat": "value", "value": value, "text": None, "key": f"assumption|boundary|{level_2}|value"},
+            {**row, "stat": "advice_id", "value": None, "text": reading, "key": f"assumption|boundary|{level_2}|advice_id"}]
+
+
+@pytest.mark.parametrize("locale", LOCALES)
+def test_an_estimate_at_an_edge_is_a_measure_with_the_sentence_of_its_reading_and_no_verdict(tmp_path, chart_service, monkeypatch, locale):  # noqa: F811
+    """«boundary» is no verdict (no fixed threshold decides one): the table of measures says, in the page's language, what such
+    an edge means for the model, by the reading the runner wrote (`advice_id`), and writes the value by its exponent; the
+    convergence check says when the flat likelihood left no standard errors."""
+    model, params, rows = fixture("clv-value")
+    assert not [r for r in rows if r["level"] == "boundary"]  # a clean fit writes no row for it
+    rows = [*rows, *_boundary("b", 20000.0, "boundary_no_dropout"), *_boundary("r", 3e5, "boundary_homogeneous"),
+            *_boundary("spend_q", 5e-5, "boundary")]
+    out, page = draw(tmp_path, chart_service, monkeypatch, "clv-value", locale=locale, rows=rows)
+    assert out.warnings == []
+    w = common.words(model, "value", locale)
+    [table] = [i for i in _items(layouts.definition(model, params, locale, None, None)) if i.get("id") == "measures"]
+    said = json.dumps(table, ensure_ascii=False)
+    assert set(w["measure_texts"]["boundary"]) == {"", "boundary_no_dropout", "boundary_homogeneous"}
+    for reading, sentence in w["measure_texts"]["boundary"].items():
+        assert sentence in said, (locale, reading)
+    assert w["checks"]["boundary"]["name"] in said and "0.###E+0" in said
+    # no verdict row, so the check is not in the table of the verdicts
+    assert not any(r["stat"] in ("verdict", "advice", "h0") and r["level"] == "boundary" for r in layouts.with_labels(model, params, rows, locale))
+
+
+def _items(node):
+    """Every block of a page definition, whatever its depth."""
+    if isinstance(node, dict):
+        if "id" in node and "type" in node:
+            yield node
+        for v in node.values():
+            yield from _items(v)
+    elif isinstance(node, list):
+        for v in node:
+            yield from _items(v)

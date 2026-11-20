@@ -676,10 +676,6 @@
           "text": "ok"
         },
         {
-          "key": "assumption|boundary||verdict",
-          "text": "ok"
-        },
-        {
           "key": "assumption|frequency_fit||verdict",
           "text": "ok"
         },
@@ -781,10 +777,6 @@
         },
         {
           "key": "assumption|convergence||verdict",
-          "text": "ok"
-        },
-        {
-          "key": "assumption|boundary||verdict",
           "text": "ok"
         },
         {
@@ -901,10 +893,6 @@
         },
         {
           "key": "assumption|convergence||verdict",
-          "text": "ok"
-        },
-        {
-          "key": "assumption|boundary||verdict",
           "text": "ok"
         },
         {
@@ -1026,10 +1014,6 @@
         {
           "key": "assumption|convergence||verdict",
           "text": "ok"
-        },
-        {
-          "key": "assumption|boundary||verdict",
-          "text": "ok"
         }
       ],
       "refuses": null,
@@ -1126,10 +1110,6 @@
         "purchase_model": "mbg_nbd"
       },
       "expect": [
-        {
-          "key": "assumption|boundary|a|verdict",
-          "text": "doubtful"
-        },
         {
           "key": "assumption|boundary|a|advice_id",
           "text": "boundary_no_dropout"
@@ -1266,6 +1246,416 @@
         "message": "the spend model's q is 0.86, at most 1: the average spend has no finite mean, and the CLV cannot be computed; look for extreme amounts, or leave out the spend column"
       },
       "by": "make_reference.R"
+    },
+    {
+      "id": "bg_bb donors like the donations, value with a holdout",
+      "model": "bg_bb",
+      "variant": "value",
+      "data": "data/bgbb_donations_like.csv",
+      "types": {
+        "donor": "text",
+        "x": "number",
+        "t_x": "number",
+        "n": "number",
+        "avg_gift": "number",
+        "later_gifts": "number"
+      },
+      "params": {
+        "customer": "donor",
+        "frequency": "x",
+        "recency": "t_x",
+        "opportunities": "n",
+        "period_unit": "year",
+        "alpha": 0.05,
+        "seed": 1,
+        "spend": "avg_gift",
+        "holdout_transactions": "later_gifts",
+        "holdout_length": 5,
+        "horizon": 5
+      },
+      "expect": [
+        {
+          "key": "model|||purchase_model",
+          "text": "bg_bb"
+        },
+        {
+          "key": "model|||purchase_model_asked",
+          "text": "bg_bb"
+        },
+        {
+          "key": "model|||optimizer",
+          "text": "L-BFGS-B"
+        },
+        {
+          "key": "model|||time_unit",
+          "text": "year"
+        },
+        {
+          "key": "model|||formula",
+          "text": "x: transactions, t_x: opportunity of the last, n: opportunities, one opportunity is a year"
+        },
+        {
+          "key": "model|||n",
+          "value": 1000,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||n_repeaters",
+          "value": 734,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||horizon",
+          "value": 5,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||log_lik",
+          "value": -3098.94080142256,
+          "rel": 1e-09,
+          "abs": 5e-05,
+          "from": "BG/BB maximized here"
+        },
+        {
+          "key": "model|||aic",
+          "value": 6205.88160284512,
+          "rel": 1e-09,
+          "abs": 2e-06,
+          "from": "BG/BB maximized here"
+        },
+        {
+          "key": "model|||expected_transactions",
+          "value": 1177.20442112711,
+          "rel": 0.001,
+          "abs": 1e-12,
+          "from": "the sum over the opportunities, here"
+        },
+        {
+          "key": "model|||mean_p_alive",
+          "value": 0.4428588594281,
+          "rel": 0.001,
+          "abs": 1e-12,
+          "from": "BG/BB definitions, here"
+        },
+        {
+          "key": "model|||holdout_observed",
+          "value": 1172,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||holdout_expected",
+          "value": 1177.20442112711,
+          "rel": 0.001,
+          "abs": 1e-12,
+          "from": "the sum over the opportunities, here"
+        },
+        {
+          "key": "assumption|holdout||value",
+          "value": 0.00444063236101767,
+          "rel": 0.01,
+          "abs": 1e-12,
+          "from": "the sum over the opportunities, here"
+        },
+        {
+          "key": "model|||spend_n",
+          "value": 734,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||discount_per_period",
+          "value": 0.1,
+          "rel": 1e-12,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||margin",
+          "value": 1,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||clv_total",
+          "value": 26683.5966675126,
+          "rel": 0.001,
+          "abs": 1e-12,
+          "from": "the CLV's definition, here"
+        },
+        {
+          "key": "model|||discounted_transactions",
+          "value": 904.614562405127,
+          "rel": 0.001,
+          "abs": 1e-12,
+          "from": "the CLV's definition, here"
+        },
+        {
+          "key": "model|||spend_log_lik",
+          "value": -2994.59230459215,
+          "rel": 1e-09,
+          "abs": 5e-05,
+          "from": "Gamma-Gamma maximized here"
+        },
+        {
+          "key": "assumption|spend_independence||value",
+          "value": -0.0219717374879727,
+          "rel": 1e-09,
+          "abs": 1e-12,
+          "from": "cor()"
+        },
+        {
+          "key": "assumption|spend_independence||p_value",
+          "value": 0.549133281329554,
+          "rel": 1e-08,
+          "abs": 1e-12,
+          "from": "lm(), HC3"
+        },
+        {
+          "key": "assumption|sample_size||value",
+          "value": 1000,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|sample_size||count",
+          "value": 734,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|horizon_length||value",
+          "value": 0.833333333333333,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||param_alpha",
+          "value": 1.17538389188545,
+          "rel": 0.005,
+          "abs": 1e-12,
+          "from": "BG/BB maximized here"
+        },
+        {
+          "key": "model|||param_beta",
+          "value": 0.734188334742724,
+          "rel": 0.005,
+          "abs": 1e-12,
+          "from": "BG/BB maximized here"
+        },
+        {
+          "key": "model|||param_gamma",
+          "value": 1.06975582583882,
+          "rel": 0.005,
+          "abs": 1e-12,
+          "from": "BG/BB maximized here"
+        },
+        {
+          "key": "model|||param_delta",
+          "value": 6.09844061682158,
+          "rel": 0.005,
+          "abs": 1e-12,
+          "from": "BG/BB maximized here"
+        },
+        {
+          "key": "model|||spend_param_p",
+          "value": 8.29701707434767,
+          "rel": 0.005,
+          "abs": 1e-12,
+          "from": "Gamma-Gamma maximized here"
+        },
+        {
+          "key": "model|||spend_param_q",
+          "value": 3.83905487316535,
+          "rel": 0.005,
+          "abs": 1e-12,
+          "from": "Gamma-Gamma maximized here"
+        },
+        {
+          "key": "model|||spend_param_gamma",
+          "value": 10.1123017212367,
+          "rel": 0.005,
+          "abs": 1e-12,
+          "from": "Gamma-Gamma maximized here"
+        },
+        {
+          "key": "assumption|convergence||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|frequency_fit||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|spend_independence||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|spend_tail||verdict",
+          "text": "ok"
+        }
+      ],
+      "refuses": null,
+      "by": "make_reference_bgbb.R"
+    },
+    {
+      "id": "bg_bb cohorts of different lengths, the purchases variant",
+      "model": "bg_bb",
+      "variant": "purchases",
+      "data": "data/bgbb_cohorts.csv",
+      "types": {
+        "donor": "text",
+        "x": "number",
+        "t_x": "number",
+        "n": "number"
+      },
+      "params": {
+        "customer": "donor",
+        "frequency": "x",
+        "recency": "t_x",
+        "opportunities": "n",
+        "period_unit": "month",
+        "alpha": 0.05,
+        "seed": 1
+      },
+      "expect": [
+        {
+          "key": "model|||variant",
+          "text": "purchases"
+        },
+        {
+          "key": "model|||time_unit",
+          "text": "month"
+        },
+        {
+          "key": "model|||n",
+          "value": 800,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||horizon",
+          "value": 12,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||max_age",
+          "value": 12,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||median_age",
+          "value": 7.5,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||log_lik",
+          "value": -3046.87974111343,
+          "rel": 1e-09,
+          "abs": 5e-05,
+          "from": "BG/BB maximized here"
+        },
+        {
+          "key": "model|||expected_transactions",
+          "value": 2017.34034714164,
+          "rel": 0.001,
+          "abs": 1e-12,
+          "from": "the sum over the opportunities, here"
+        },
+        {
+          "key": "model|||mean_p_alive",
+          "value": 0.622803041447938,
+          "rel": 0.001,
+          "abs": 1e-12,
+          "from": "BG/BB definitions, here"
+        },
+        {
+          "key": "assumption|horizon_length||value",
+          "value": 1,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||param_alpha",
+          "value": 1.22661075841747,
+          "rel": 0.005,
+          "abs": 1e-12,
+          "from": "BG/BB maximized here"
+        },
+        {
+          "key": "model|||param_beta",
+          "value": 1.93013019265349,
+          "rel": 0.005,
+          "abs": 1e-12,
+          "from": "BG/BB maximized here"
+        },
+        {
+          "key": "model|||param_gamma",
+          "value": 0.386030387868993,
+          "rel": 0.005,
+          "abs": 1e-12,
+          "from": "BG/BB maximized here"
+        },
+        {
+          "key": "model|||param_delta",
+          "value": 3.56946029259356,
+          "rel": 0.005,
+          "abs": 1e-12,
+          "from": "BG/BB maximized here"
+        },
+        {
+          "key": "assumption|convergence||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|frequency_fit||verdict",
+          "text": "ok"
+        }
+      ],
+      "refuses": null,
+      "by": "make_reference_bgbb.R"
+    },
+    {
+      "id": "bg_bb donors who never drop out",
+      "model": "bg_bb",
+      "variant": "purchases",
+      "data": "data/bgbb_no_dropout.csv",
+      "types": {
+        "donor": "text",
+        "x": "number",
+        "t_x": "number",
+        "n": "number"
+      },
+      "params": {
+        "customer": "donor",
+        "frequency": "x",
+        "recency": "t_x",
+        "opportunities": "n",
+        "period_unit": "year",
+        "alpha": 0.05,
+        "seed": 1
+      },
+      "expect": [
+        {
+          "key": "assumption|convergence||verdict",
+          "text": "doubtful"
+        },
+        {
+          "key": "assumption|convergence||advice_id",
+          "text": "convergence_edge"
+        },
+        {
+          "key": "assumption|boundary|gamma|advice_id",
+          "text": "boundary_no_dropout"
+        }
+      ],
+      "refuses": null,
+      "by": "make_reference_bgbb.R"
     }
   ]
 }

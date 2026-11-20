@@ -505,6 +505,15 @@ TAB_COMMON_TESTS[["customer_lifetime: a fit gives its rows, its output, its card
   .tab_expect(sum(df$section == "customer") == 20L * 8L && num("model|||clv_total") > 0 && num("model|||margin") == 0.5 &&
               abs(num("model|||discount_per_period") - clv_period_rate(0.08, "week")) < 1e-15, "the top customers and the CLV")
   .tab_expect(!anyDuplicated(df$key), "no key twice")
+  # the holdout's classes are the frequency chart's: the same bounds (the last one open, its x1 NULL, which the page prints «k+»), and the
+  # customers of each class are the rows of the stat `count`, not the bound
+  hm <- df[df$section == "hist" & df$level == "holdout" & df$stat == "mean" & df$level_2 == "observed", ]
+  hf <- df[df$section == "hist" & df$level == "frequency" & df$level_2 == "observed", ]
+  hn <- df[df$section == "hist" & df$level == "holdout" & df$stat == "count", ]
+  k <- nrow(hm)
+  .tab_expect(k > 2L && identical(hm$x0, hf$x0) && identical(hm$x1, hf$x1) && is.na(hm$x1[[k]]) && !anyNA(hm$x1[-k]) && identical(hm$x1[-k], hm$x0[-k]),
+              "the holdout's classes carry the frequency's bounds, the last open")
+  .tab_expect(nrow(hn) == k && identical(hn$x1, hm$x1) && all(hn$level_2 == "customers") && sum(hn$value) == sum(!is.na(S$h[!is.na(S$id)])), "the holdout's customers by class")
   # the output: the input's columns and the predictions, NULL on the row left out
   out <- res$output
   .tab_expect(identical(names(out)[1:ncol(S)], names(S)) && all(c("pred_p_alive", "pred_transactions", "pred_holdout_transactions", "pred_spend", "pred_discounted_transactions", "pred_clv") %in% names(out)) &&
