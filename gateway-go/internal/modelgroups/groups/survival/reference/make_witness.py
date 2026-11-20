@@ -13,6 +13,19 @@ Fleming–Harrington with p = 1, q = 0, which is survdiff's ρ = 1) and its pair
 intervals only where both use the same transformation: lifelines' is log(−log) (R's
 conf_type = "log-log"). Where a curve is exactly at a quartile over a step, R takes the
 middle of the step and lifelines its start: the witness applies R's rule and prints both.
+
+Cox (lane M5), per case of expected.json whose ties are Efron's (lifelines knows no other):
+the coefficients, the hazard ratios and their intervals, the standard errors (the robust ones
+with `cluster_col` or `robust`), the log partial likelihood, the AIC, the likelihood-ratio and
+the Wald tests, the concordance, by CoxPHFitter (strata, clusters) and CoxTimeVaryingFitter
+(start–stop rows).
+What the two define differently is printed beside, not compared: the test of proportional
+hazards (lifelines' proportional_hazard_test is the approximation R's cox.zph used before
+survival 3.0, which now computes the score test exactly); the robust standard errors and what
+uses them (the intervals, the Wald test) where times are tied: R's score residuals carry Efron's
+correction for ties, lifelines' do not (on the same rows with the ties broken the two agree to
+1e-9). lifelines' CoxTimeVaryingFitter has no robust errors: on start–stop rows the classical
+ones are compared.
 Exit 1 when a value differs.
 """
 from __future__ import annotations
@@ -24,8 +37,8 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from lifelines import KaplanMeierFitter, NelsonAalenFitter
-from lifelines.statistics import multivariate_logrank_test, pairwise_logrank_test
+from lifelines import CoxPHFitter, CoxTimeVaryingFitter, KaplanMeierFitter, NelsonAalenFitter
+from lifelines.statistics import multivariate_logrank_test, pairwise_logrank_test, proportional_hazard_test
 from lifelines.utils import restricted_mean_survival_time
 
 HERE = Path(__file__).resolve().parent
@@ -106,14 +119,101 @@ def km_case(case: dict) -> dict[str, float]:
     return out
 
 
+def cox_case(case: dict) -> tuple[dict[str, float], dict[str, float]]:
+    """What lifelines says of the keys of a Cox case (Efron's ties only), and what it defines
+    differently (said, not compared)."""
+    p, types = case["params"], case["types"]
+    df = pd.read_csv(HERE / case["data"], keep_default_na=False, na_values=[""], dtype=str)
+    predictors = list(p["predictors"])
+    used = [p["time"], p["event"], *predictors, *[p[k] for k in ("start", "strata", "cluster") if p.get(k)]]
+    df = df.dropna(subset=used).reset_index(drop=True)
+    frame = pd.DataFrame({"T": pd.to_numeric(df[p["time"]]),
+                          "E": is_event(df[p["event"]], p["event_value"], types[p["event"]]).astype(int)})
+    names: list[tuple[str, str | None, str]] = []  # (term, level, the frame's column) in the runner's order
+    for name in predictors:
+        kind = types[name]
+        if kind in ("number", "integer"):
+            frame[f"x{len(names)}"] = pd.to_numeric(df[name])
+            names.append((name, None, f"x{len(names)}"))
+            continue
+        labels = df[name].str.lower() if kind == "boolean" else df[name]
+        levels = sorted(labels.unique())
+        reference = str(p.get("reference", {}).get(name, levels[0]))
+        for level in [lv for lv in levels if lv != reference]:
+            frame[f"x{len(names)}"] = (labels == level).astype(float)
+            names.append((name, level, f"x{len(names)}"))
+    robust = p.get("se") == "robust"
+    alpha = p.get("alpha", 0.05)
+    options = {"precision": 1e-12, "max_steps": 500}
+    if p.get("start"):
+        frame["S"] = pd.to_numeric(df[p["start"]])
+        frame["id"] = df[p["cluster"]] if p.get("cluster") else np.arange(len(df))
+        fit = CoxTimeVaryingFitter(alpha=alpha).fit(frame, event_col="E", start_col="S", stop_col="T", id_col="id",
+                                                     fit_options=options)
+        robust = False  # not in lifelines for start–stop rows: the classical errors are compared
+    else:
+        kw: dict = {}
+        if p.get("strata"):
+            frame["G"] = df[p["strata"]]
+            kw["strata"] = ["G"]
+        if p.get("cluster"):
+            frame["C"] = df[p["cluster"]]
+            kw["cluster_col"] = "C"
+        fit = CoxPHFitter(alpha=alpha).fit(frame, duration_col="T", event_col="E", robust=robust, fit_options=options, **kw)
+    # the robust errors (and the intervals and the Wald test that use them) are compared only
+    # where no event time is tied; on start–stop rows lifelines has none: R's are not witnessed
+    tied = bool(frame.loc[frame["E"] == 1, "T"].duplicated().any())
+    out: dict[str, float] = {}
+    beside: dict[str, float] = {}
+    uses_robust = out if not tied else beside
+    if p.get("start") and p.get("se") == "robust":
+        uses_robust = {}
+    by_se = uses_robust if robust or p.get("se") == "robust" else out
+    se = fit.standard_errors_
+    ci = fit.confidence_intervals_
+    for term, level, column in names:
+        key = f"coef|{term}|{level or ''}|"
+        b = float(fit.params_[column])
+        out[key + "estimate"] = b
+        out[key + "hazard_ratio"] = math.exp(b)
+        by_se[key + "hr_ci_low"] = math.exp(float(ci.loc[column].iloc[0]))
+        by_se[key + "hr_ci_high"] = math.exp(float(ci.loc[column].iloc[1]))
+        if robust:
+            by_se[key + "robust_se"] = float(se[column])
+        else:
+            out[key + "std_error"] = float(se[column])
+    out["model|||log_lik"] = float(fit.log_likelihood_)
+    test = fit.log_likelihood_ratio_test()
+    out["model|||lr_statistic"] = float(test.test_statistic)
+    out["model|||lr_p_value"] = float(test.p_value)
+    b = fit.params_.to_numpy()
+    by_se["model|||wald_statistic"] = float(b @ np.linalg.solve(fit.variance_matrix_.to_numpy(), b))
+    if not p.get("start"):
+        out["model|||aic"] = float(fit.AIC_partial_)
+        out["model|||concordance"] = float(fit.concordance_index_)
+        zph = proportional_hazard_test(fit, frame, time_transform="km")
+        for (term, level, column) in names:
+            if level is None or sum(1 for n in names if n[0] == term) == 1:
+                beside[f"assumption|schoenfeld|{term}||p_value".replace("||", "|", 1)] = float(zph.summary.loc[column, "p"])
+    return out, beside
+
+
 def main() -> int:
     expected = json.loads((HERE / "expected.json").read_text(encoding="utf-8"))
     bad = compared = 0
     worst = 0.0
+    per_model: dict[str, list[float]] = {}  # model → [values compared, the largest relative difference]
     for case in expected["cases"]:
-        if case["model"] != "kaplan_meier" or case.get("refuses"):
+        if case.get("refuses") or case["model"] == "cox" and case["params"].get("ties", "efron") != "efron":
             continue
-        said = km_case(case)
+        beside: dict[str, float] = {}
+        if case["model"] == "kaplan_meier":
+            said = km_case(case)
+        else:
+            said, beside = cox_case(case)
+        want_of = {e["key"]: e.get("value") for e in case["expect"]}
+        for key, value in beside.items():
+            print(f"DEFINED APART {case['id']} {key}: R {want_of.get(key)!r}, lifelines {value!r}")
         for e in case["expect"]:
             if "text" in e or e["key"] not in said:
                 continue
@@ -123,14 +223,19 @@ def main() -> int:
                       f"the step's middle {said[e['key']]!r}")
             want, got = e["value"], said[e["key"]]
             compared += 1
+            mine = per_model.setdefault(case["model"], [0, 0.0])
+            mine[0] += 1
             if want is None or math.isnan(got):
                 ok = want is None and math.isnan(got)
             else:
                 ok = abs(got - want) <= max(1e-12, TOL * abs(want))
                 worst = max(worst, abs(got - want) / max(abs(want), 1e-12))
+                mine[1] = max(mine[1], abs(got - want) / max(abs(want), 1e-12))
             if not ok:
                 bad += 1
                 print(f"DIFFERS {case['id']} {e['key']}: R {want!r}, lifelines {got!r}")
+    for model, (n, w) in per_model.items():
+        print(f"  {model}: {n} values, the largest relative difference {w:.3g}")
     print(f"{compared} values compared with lifelines, {bad} differ by more than {TOL:g}; the largest relative difference "
           f"{worst:.3g}")
     return 1 if bad else 0

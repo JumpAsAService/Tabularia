@@ -5,6 +5,7 @@
     "R": "4.6.0",
     "packages": {
       "survival": "3.8.12",
+      "splines": "4.6.0",
       "jsonlite": "2.0.0"
     }
   },
@@ -1688,6 +1689,3464 @@
       "expect": [],
       "refuses": {
         "code": "no_events"
+      }
+    },
+    {
+      "id": "cox_categorical",
+      "model": "cox",
+      "data": "data/cox_categorical.csv",
+      "types": {
+        "days": "number",
+        "status": "text",
+        "load": "number",
+        "line": "text",
+        "night": "boolean"
+      },
+      "params": {
+        "time": "days",
+        "event": "status",
+        "event_value": "failed",
+        "predictors": [
+          "load",
+          "line"
+        ]
+      },
+      "expect": [
+        {
+          "key": "model|||n",
+          "value": 147,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||events",
+          "value": 106,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n_missing",
+          "value": 3,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||se_type",
+          "text": "classical"
+        },
+        {
+          "key": "model|||ties",
+          "text": "efron"
+        },
+        {
+          "key": "model|||lr_statistic",
+          "value": 45.5621881859857,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lr_df",
+          "value": 3,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lr_p_value",
+          "value": 7.02708383607624e-10,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lr_significance",
+          "text": "***"
+        },
+        {
+          "key": "model|||wald_statistic",
+          "value": 46.0446228381169,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||wald_df",
+          "value": 3,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||wald_p_value",
+          "value": 5.54892782773082e-10,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||wald_significance",
+          "text": "***"
+        },
+        {
+          "key": "model|||score_statistic",
+          "value": 50.7971999542768,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||score_df",
+          "value": 3,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||score_p_value",
+          "value": 5.40378989121819e-11,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||score_significance",
+          "text": "***"
+        },
+        {
+          "key": "model|||concordance",
+          "value": 0.690416713977518,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||concordance_se",
+          "value": 0.0252593558934526,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||log_lik",
+          "value": -426.945414117688,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||aic",
+          "value": 859.890828235376,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|load||estimate",
+          "value": 0.0180128879664691,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|load||hazard_ratio",
+          "value": 1.01817609852465,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|load||hr_ci_low",
+          "value": 1.00778137875027,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|load||hr_ci_high",
+          "value": 1.0286780342106,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|load||std_error",
+          "value": 0.00523562069603455,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|load||statistic",
+          "value": 3.44044937787645,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|load||p_value",
+          "value": 0.000580749063931429,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|load||significance",
+          "text": "***"
+        },
+        {
+          "key": "coef|line|B|estimate",
+          "value": 0.878785402336497,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|line|B|hazard_ratio",
+          "value": 2.40797321088395,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|line|B|hr_ci_low",
+          "value": 1.52022814020378,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|line|B|hr_ci_high",
+          "value": 3.81412159858949,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|line|B|std_error",
+          "value": 0.234659917289056,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|line|B|statistic",
+          "value": 3.74493186773777,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|line|B|p_value",
+          "value": 0.000180442737025605,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|line|B|significance",
+          "text": "***"
+        },
+        {
+          "key": "coef|line|C|estimate",
+          "value": -0.543685957854506,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|line|C|hazard_ratio",
+          "value": 0.580604220708582,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|line|C|hr_ci_low",
+          "value": 0.331066830072943,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|line|C|hr_ci_high",
+          "value": 1.01822722931907,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|line|C|std_error",
+          "value": 0.286611931146549,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|line|C|statistic",
+          "value": -1.89694112062806,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|line|C|p_value",
+          "value": 0.0578357094965927,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|line|C|significance",
+          "text": "."
+        },
+        {
+          "key": "assumption|vif|load|value",
+          "value": 1.06628651664973,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|vif|load|verdict",
+          "text": "ok"
+        },
+        {
+          "key": "coef|load||vif",
+          "value": 1.06628651664973,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|vif|line|value",
+          "value": 1.03261150325267,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|vif|line|verdict",
+          "text": "ok"
+        },
+        {
+          "key": "coef|line|B|vif",
+          "value": 1.03261150325267,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|line|C|vif",
+          "value": 1.03261150325267,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|epv||value",
+          "value": 35.3333333333333,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|epv||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|schoenfeld|load|statistic",
+          "value": 0.0396682419818895,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld|load|df",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld|load|p_value",
+          "value": 0.842130643409811,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld|load|verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|schoenfeld|line|statistic",
+          "value": 8.99596599220868,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld|line|df",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld|line|p_value",
+          "value": 0.011131426040129,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld|line|verdict",
+          "text": "failed"
+        },
+        {
+          "key": "assumption|schoenfeld_global||statistic",
+          "value": 10.2228276198484,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld_global||df",
+          "value": 3,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld_global||p_value",
+          "value": 0.0167639586588574,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld_global||verdict",
+          "text": "failed"
+        },
+        {
+          "key": "point|schoenfeld|load|y|0",
+          "value": -0.002529143652899,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|schoenfeld|load|smooth|0",
+          "value": 0.0309692606900695,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|schoenfeld|load|upper|39",
+          "value": 0.0610178465000941,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|martingale_form|load|statistic",
+          "value": 0.262859752173085,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|martingale_form|load|df",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|martingale_form|load|p_value",
+          "value": 0.876840760487579,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|martingale_form|load|verdict",
+          "text": "ok"
+        },
+        {
+          "key": "point|deviance_linear||y|0",
+          "value": 0.219479560551943,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|adjusted_survival|all|surv|0",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|adjusted_survival|all|surv|1",
+          "value": 0.98172522508842,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|adjusted_survival|all|surv|5",
+          "value": 0.91562862869288,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|dfbeta|load|value",
+          "value": 0.286686597573223,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|dfbeta|load|count",
+          "value": 5,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|dfbeta|load|threshold",
+          "value": 0.164957219768465,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|dfbeta|line|value",
+          "value": 0.288496453946324,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|dfbeta|line|count",
+          "value": 14,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|dfbeta|line|threshold",
+          "value": 0.164957219768465,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||formula",
+          "text": "Surv(days, status = failed) ~ load + line"
+        },
+        {
+          "key": "model|||event_value",
+          "text": "failed"
+        },
+        {
+          "key": "point|martingale|load|y|0",
+          "value": 0.618778874244846,
+          "rel": 1e-09
+        }
+      ]
+    },
+    {
+      "id": "cox_breslow",
+      "model": "cox",
+      "data": "data/cox_categorical.csv",
+      "types": {
+        "days": "number",
+        "status": "text",
+        "load": "number",
+        "line": "text",
+        "night": "boolean"
+      },
+      "params": {
+        "time": "days",
+        "event": "status",
+        "event_value": "failed",
+        "predictors": [
+          "load",
+          "line",
+          "night"
+        ],
+        "reference": {
+          "line": "C"
+        },
+        "interactions": [
+          [
+            "load",
+            "night"
+          ]
+        ],
+        "ties": "breslow",
+        "alpha": 0.1
+      },
+      "expect": [
+        {
+          "key": "model|||n",
+          "value": 147,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||events",
+          "value": 106,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n_missing",
+          "value": 3,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||se_type",
+          "text": "classical"
+        },
+        {
+          "key": "model|||ties",
+          "text": "breslow"
+        },
+        {
+          "key": "model|||lr_statistic",
+          "value": 56.5389839321934,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lr_df",
+          "value": 5,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lr_p_value",
+          "value": 6.2934707917261e-11,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lr_significance",
+          "text": "***"
+        },
+        {
+          "key": "model|||wald_statistic",
+          "value": 55.8289864583578,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||wald_df",
+          "value": 5,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||wald_p_value",
+          "value": 8.81291200799091e-11,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||wald_significance",
+          "text": "***"
+        },
+        {
+          "key": "model|||score_statistic",
+          "value": 63.8540650253456,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||score_df",
+          "value": 5,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||score_p_value",
+          "value": 1.93690083216381e-12,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||score_significance",
+          "text": "***"
+        },
+        {
+          "key": "model|||concordance",
+          "value": 0.710968547746111,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||concordance_se",
+          "value": 0.0246077197082081,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||log_lik",
+          "value": -422.882989130163,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||aic",
+          "value": 855.765978260326,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|load||estimate",
+          "value": 0.0164594656025881,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|load||hazard_ratio",
+          "value": 1.01659566885804,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|load||hr_ci_low",
+          "value": 1.0053753938773,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|load||hr_ci_high",
+          "value": 1.02794116529478,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|load||std_error",
+          "value": 0.00674738919450934,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|load||statistic",
+          "value": 2.43938286767006,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|load||p_value",
+          "value": 0.0147123713803962,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|load||significance",
+          "text": "*"
+        },
+        {
+          "key": "coef|line|A|estimate",
+          "value": 0.42287935578448,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|line|A|hazard_ratio",
+          "value": 1.52635013954278,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|line|A|hr_ci_low",
+          "value": 0.946736507410476,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|line|A|hr_ci_high",
+          "value": 2.46081642595004,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|line|A|std_error",
+          "value": 0.290368584621322,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|line|A|statistic",
+          "value": 1.45635367660716,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|line|A|p_value",
+          "value": 0.145294874212114,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|line|A|significance",
+          "text": ""
+        },
+        {
+          "key": "coef|line|B|estimate",
+          "value": 1.33841906498927,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|line|B|hazard_ratio",
+          "value": 3.81301061584084,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|line|B|hr_ci_low",
+          "value": 2.35140251399201,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|line|B|hr_ci_high",
+          "value": 6.18313958159032,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|line|B|std_error",
+          "value": 0.293890649277633,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|line|B|statistic",
+          "value": 4.55413967160583,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|line|B|p_value",
+          "value": 5.26004005076004e-06,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|line|B|significance",
+          "text": "***"
+        },
+        {
+          "key": "coef|night|true|estimate",
+          "value": -0.091728991369817,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|night|true|hazard_ratio",
+          "value": 0.912352371410368,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|night|true|hr_ci_low",
+          "value": 0.336142812622641,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|night|true|hr_ci_high",
+          "value": 2.47628929836014,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|night|true|std_error",
+          "value": 0.60703892676164,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|night|true|statistic",
+          "value": -0.151108911349659,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|night|true|p_value",
+          "value": 0.879889802983025,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|night|true|significance",
+          "text": ""
+        },
+        {
+          "key": "coef|load × night|true|estimate",
+          "value": 0.0143298192861861,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|load × night|true|hazard_ratio",
+          "value": 1.01443298333161,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|load × night|true|hr_ci_low",
+          "value": 0.997518307922372,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|load × night|true|hr_ci_high",
+          "value": 1.0316344767791,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|load × night|true|std_error",
+          "value": 0.0102225484324754,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|load × night|true|statistic",
+          "value": 1.40178541396416,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|load × night|true|p_value",
+          "value": 0.160979335380113,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|load × night|true|significance",
+          "text": ""
+        },
+        {
+          "key": "assumption|vif|load|value",
+          "value": 1.64947759436862,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|vif|load|verdict",
+          "text": "ok"
+        },
+        {
+          "key": "coef|load||vif",
+          "value": 1.64947759436862,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|vif|line|value",
+          "value": 1.06331126974409,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|vif|line|verdict",
+          "text": "ok"
+        },
+        {
+          "key": "coef|line|A|vif",
+          "value": 1.06331126974409,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|line|B|vif",
+          "value": 1.06331126974409,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|vif|night|value",
+          "value": 8.18340084314113,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|vif|night|verdict",
+          "text": "doubtful"
+        },
+        {
+          "key": "coef|night|true|vif",
+          "value": 8.18340084314113,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|vif|load × night|value",
+          "value": 8.34088117631986,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|vif|load × night|verdict",
+          "text": "doubtful"
+        },
+        {
+          "key": "coef|load × night|true|vif",
+          "value": 8.34088117631986,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|epv||value",
+          "value": 21.2,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|epv||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|schoenfeld|load|statistic",
+          "value": 0.0498762640619367,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld|load|df",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld|load|p_value",
+          "value": 0.823278723477574,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld|load|verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|schoenfeld|line|statistic",
+          "value": 10.3942253846475,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld|line|df",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld|line|p_value",
+          "value": 0.00553251545625157,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld|line|verdict",
+          "text": "failed"
+        },
+        {
+          "key": "assumption|schoenfeld|night|statistic",
+          "value": 0.0376306723717914,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld|night|df",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld|night|p_value",
+          "value": 0.846186633813665,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld|night|verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|schoenfeld|load × night|statistic",
+          "value": 0.0172131383173937,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld|load × night|df",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld|load × night|p_value",
+          "value": 0.895618005433064,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld|load × night|verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|schoenfeld_global||statistic",
+          "value": 11.6164959026632,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld_global||df",
+          "value": 5,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld_global||p_value",
+          "value": 0.040437801286917,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld_global||verdict",
+          "text": "failed"
+        },
+        {
+          "key": "point|schoenfeld|load|y|0",
+          "value": -0.016002925661542,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|schoenfeld|load|smooth|0",
+          "value": 0.0322207951173213,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|schoenfeld|load|upper|39",
+          "value": 0.0703505324389528,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|martingale_form|load|statistic",
+          "value": 0.513728110199736,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|martingale_form|load|df",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|martingale_form|load|p_value",
+          "value": 0.773473356376674,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|martingale_form|load|verdict",
+          "text": "ok"
+        },
+        {
+          "key": "point|deviance_linear||y|0",
+          "value": 0.4637371560018,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|adjusted_survival|all|surv|0",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|adjusted_survival|all|surv|1",
+          "value": 0.989610559756564,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|adjusted_survival|all|surv|5",
+          "value": 0.950775099504164,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|dfbeta|load|value",
+          "value": 0.221364544882096,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|dfbeta|load|count",
+          "value": 7,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|dfbeta|load|threshold",
+          "value": 0.164957219768465,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|dfbeta|line|value",
+          "value": 0.254403708720529,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|dfbeta|line|count",
+          "value": 11,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|dfbeta|line|threshold",
+          "value": 0.164957219768465,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|dfbeta|night|value",
+          "value": 0.384375666986242,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|dfbeta|night|count",
+          "value": 5,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|dfbeta|night|threshold",
+          "value": 0.164957219768465,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|dfbeta|load × night|value",
+          "value": 0.344521487240438,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|dfbeta|load × night|count",
+          "value": 3,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|dfbeta|load × night|threshold",
+          "value": 0.164957219768465,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||formula",
+          "text": "Surv(days, status = failed) ~ load + line + night + load × night"
+        }
+      ]
+    },
+    {
+      "id": "cox_exact",
+      "model": "cox",
+      "data": "data/cox_categorical.csv",
+      "types": {
+        "days": "number",
+        "status": "text",
+        "load": "number",
+        "line": "text",
+        "night": "boolean"
+      },
+      "params": {
+        "time": "days",
+        "event": "status",
+        "event_value": "failed",
+        "predictors": [
+          "load",
+          "line"
+        ],
+        "ties": "exact"
+      },
+      "expect": [
+        {
+          "key": "model|||n",
+          "value": 147,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||events",
+          "value": 106,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n_missing",
+          "value": 3,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||se_type",
+          "text": "classical"
+        },
+        {
+          "key": "model|||ties",
+          "text": "exact"
+        },
+        {
+          "key": "model|||lr_statistic",
+          "value": 45.4974663332418,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lr_df",
+          "value": 3,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lr_p_value",
+          "value": 7.25326203749749e-10,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lr_significance",
+          "text": "***"
+        },
+        {
+          "key": "model|||wald_statistic",
+          "value": 45.3329130904976,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||wald_df",
+          "value": 3,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||wald_p_value",
+          "value": 7.86160847741382e-10,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||wald_significance",
+          "text": "***"
+        },
+        {
+          "key": "model|||score_statistic",
+          "value": 50.0947402195572,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||score_df",
+          "value": 3,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||score_p_value",
+          "value": 7.62649748657571e-11,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||score_significance",
+          "text": "***"
+        },
+        {
+          "key": "model|||concordance",
+          "value": 0.690416713977518,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||concordance_se",
+          "value": 0.0252572275953949,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||log_lik",
+          "value": -363.350802805029,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||aic",
+          "value": 732.701605610057,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|load||estimate",
+          "value": 0.0184384514151956,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|load||hazard_ratio",
+          "value": 1.01860948926764,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|load||hr_ci_low",
+          "value": 1.00800807185966,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|load||hr_ci_high",
+          "value": 1.0293224038493,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|load||std_error",
+          "value": 0.00533799298524114,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|load||statistic",
+          "value": 3.45419176573957,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|load||p_value",
+          "value": 0.000551944752812569,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|load||significance",
+          "text": "***"
+        },
+        {
+          "key": "coef|line|B|estimate",
+          "value": 0.895186328161613,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|line|B|hazard_ratio",
+          "value": 2.44779183952698,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|line|B|hr_ci_low",
+          "value": 1.53175545896226,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|line|B|hr_ci_high",
+          "value": 3.91164585351904,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|line|B|std_error",
+          "value": 0.239173727358813,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|line|B|statistic",
+          "value": 3.74282885518876,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|line|B|p_value",
+          "value": 0.000181960165499142,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|line|B|significance",
+          "text": "***"
+        },
+        {
+          "key": "coef|line|C|estimate",
+          "value": -0.553567594559479,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|line|C|hazard_ratio",
+          "value": 0.574895154644452,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|line|C|hr_ci_low",
+          "value": 0.326048086279407,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|line|C|hr_ci_high",
+          "value": 1.01366777706047,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|line|C|std_error",
+          "value": 0.289363893664666,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|line|C|statistic",
+          "value": -1.91304999234282,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|line|C|p_value",
+          "value": 0.0557416527834269,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|line|C|significance",
+          "text": "."
+        },
+        {
+          "key": "assumption|vif|load|value",
+          "value": 1.06628651664973,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|vif|load|verdict",
+          "text": "ok"
+        },
+        {
+          "key": "coef|load||vif",
+          "value": 1.06628651664973,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|vif|line|value",
+          "value": 1.03261150325267,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|vif|line|verdict",
+          "text": "ok"
+        },
+        {
+          "key": "coef|line|B|vif",
+          "value": 1.03261150325267,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|line|C|vif",
+          "value": 1.03261150325267,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|epv||value",
+          "value": 35.3333333333333,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|epv||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|schoenfeld|load|statistic",
+          "value": 0.0389131406385064,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld|load|df",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld|load|p_value",
+          "value": 0.843620840651208,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld|load|verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|schoenfeld|line|statistic",
+          "value": 8.96804205700979,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld|line|df",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld|line|p_value",
+          "value": 0.0112879326777417,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld|line|verdict",
+          "text": "failed"
+        },
+        {
+          "key": "assumption|schoenfeld_global||statistic",
+          "value": 10.1799163018411,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld_global||df",
+          "value": 3,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld_global||p_value",
+          "value": 0.0170970919635646,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld_global||verdict",
+          "text": "failed"
+        },
+        {
+          "key": "point|schoenfeld|load|y|0",
+          "value": -0.00255374989237464,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|schoenfeld|load|smooth|0",
+          "value": 0.0306613055087787,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|schoenfeld|load|upper|39",
+          "value": 0.0613987960759025,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|martingale_form|load|statistic",
+          "value": 0.249858311364392,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|martingale_form|load|df",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|martingale_form|load|p_value",
+          "value": 0.882559424690265,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|martingale_form|load|verdict",
+          "text": "ok"
+        },
+        {
+          "key": "point|deviance_linear||y|0",
+          "value": 0.163795095973381,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|adjusted_survival|all|surv|0",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|adjusted_survival|all|surv|1",
+          "value": 0.982205071039434,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|adjusted_survival|all|surv|5",
+          "value": 0.917886720848358,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|dfbeta|load|verdict",
+          "text": "not_computed"
+        },
+        {
+          "key": "assumption|dfbeta|line|verdict",
+          "text": "not_computed"
+        }
+      ]
+    },
+    {
+      "id": "cox_no_events",
+      "model": "cox",
+      "data": "data/cox_categorical.csv",
+      "types": {
+        "days": "number",
+        "status": "text",
+        "load": "number",
+        "line": "text",
+        "night": "boolean"
+      },
+      "params": {
+        "time": "days",
+        "event": "status",
+        "event_value": "lost",
+        "predictors": [
+          "load"
+        ]
+      },
+      "expect": [],
+      "refuses": {
+        "code": "no_events"
+      }
+    },
+    {
+      "id": "cox_strata",
+      "model": "cox",
+      "data": "data/cox_strata.csv",
+      "types": {
+        "months": "number",
+        "churned": "integer",
+        "price": "number",
+        "premium": "boolean",
+        "region": "text",
+        "customer": "text"
+      },
+      "params": {
+        "time": "months",
+        "event": "churned",
+        "event_value": 1,
+        "predictors": [
+          "price",
+          "premium"
+        ],
+        "strata": "region"
+      },
+      "expect": [
+        {
+          "key": "model|||n",
+          "value": 180,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||events",
+          "value": 125,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n_missing",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||se_type",
+          "text": "classical"
+        },
+        {
+          "key": "model|||ties",
+          "text": "efron"
+        },
+        {
+          "key": "model|||lr_statistic",
+          "value": 17.7157107203897,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lr_df",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lr_p_value",
+          "value": 0.000142259833337397,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lr_significance",
+          "text": "***"
+        },
+        {
+          "key": "model|||wald_statistic",
+          "value": 17.6112088250086,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||wald_df",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||wald_p_value",
+          "value": 0.000149890667569197,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||wald_significance",
+          "text": "***"
+        },
+        {
+          "key": "model|||score_statistic",
+          "value": 18.0116738741205,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||score_df",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||score_p_value",
+          "value": 0.000122691567019072,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||score_significance",
+          "text": "***"
+        },
+        {
+          "key": "model|||concordance",
+          "value": 0.617688679245283,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||concordance_se",
+          "value": 0.0279870245328245,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||log_lik",
+          "value": -411.263630387185,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||aic",
+          "value": 826.527260774369,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|price||estimate",
+          "value": 0.0228570059081459,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|price||hazard_ratio",
+          "value": 1.0231202289387,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|price||hr_ci_low",
+          "value": 1.0049140709324,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|price||hr_ci_high",
+          "value": 1.04165623026089,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|price||std_error",
+          "value": 0.00916086711490779,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|price||statistic",
+          "value": 2.49507013052836,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|price||p_value",
+          "value": 0.0125932238033586,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|price||significance",
+          "text": "*"
+        },
+        {
+          "key": "coef|premium|true|estimate",
+          "value": -0.654951680990586,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|premium|true|hazard_ratio",
+          "value": 0.519467162119348,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|premium|true|hr_ci_low",
+          "value": 0.359019647109028,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|premium|true|hr_ci_high",
+          "value": 0.751619402150381,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|premium|true|std_error",
+          "value": 0.188486363316647,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|premium|true|statistic",
+          "value": -3.47479610442854,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|premium|true|p_value",
+          "value": 0.000511241781326533,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|premium|true|significance",
+          "text": "***"
+        },
+        {
+          "key": "assumption|vif|price|value",
+          "value": 1.00100052014529,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|vif|price|verdict",
+          "text": "ok"
+        },
+        {
+          "key": "coef|price||vif",
+          "value": 1.00100052014529,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|vif|premium|value",
+          "value": 1.00100052014529,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|vif|premium|verdict",
+          "text": "ok"
+        },
+        {
+          "key": "coef|premium|true|vif",
+          "value": 1.00100052014529,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|epv||value",
+          "value": 62.5,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|epv||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|schoenfeld|price|statistic",
+          "value": 0.56428261514234,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld|price|df",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld|price|p_value",
+          "value": 0.452539839943124,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld|price|verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|schoenfeld|premium|statistic",
+          "value": 0.7142538708983,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld|premium|df",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld|premium|p_value",
+          "value": 0.398035236618236,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld|premium|verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|schoenfeld_global||statistic",
+          "value": 1.2814160744956,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld_global||df",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld_global||p_value",
+          "value": 0.526919213505415,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld_global||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "point|schoenfeld|price|y|0",
+          "value": 0.0433801692061113,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|schoenfeld|price|smooth|0",
+          "value": 0.0360713368855249,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|schoenfeld|price|upper|39",
+          "value": 0.120553346560937,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|martingale_form|price|statistic",
+          "value": 7.01461104712052,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|martingale_form|price|df",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|martingale_form|price|p_value",
+          "value": 0.0299775795948775,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|martingale_form|price|verdict",
+          "text": "failed"
+        },
+        {
+          "key": "point|deviance_linear||y|0",
+          "value": 1.29090135550292,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|adjusted_survival|region=east|surv|0",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|adjusted_survival|region=east|surv|1",
+          "value": 0.935581594993837,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|adjusted_survival|region=east|surv|5",
+          "value": 0.828337804443149,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|dfbeta|price|value",
+          "value": 0.488110486146238,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|dfbeta|price|count",
+          "value": 8,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|dfbeta|price|threshold",
+          "value": 0.149071198499986,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|dfbeta|premium|value",
+          "value": 0.344259882299844,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|dfbeta|premium|count",
+          "value": 3,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|dfbeta|premium|threshold",
+          "value": 0.149071198499986,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||formula",
+          "text": "Surv(months, churned = 1) ~ price + premium + strata(region)"
+        }
+      ]
+    },
+    {
+      "id": "cox_robust",
+      "model": "cox",
+      "data": "data/cox_strata.csv",
+      "types": {
+        "months": "number",
+        "churned": "integer",
+        "price": "number",
+        "premium": "boolean",
+        "region": "text",
+        "customer": "text"
+      },
+      "params": {
+        "time": "months",
+        "event": "churned",
+        "event_value": 1,
+        "predictors": [
+          "price",
+          "premium"
+        ],
+        "strata": "region",
+        "se": "robust",
+        "cluster": "customer"
+      },
+      "expect": [
+        {
+          "key": "model|||n",
+          "value": 180,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||events",
+          "value": 125,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n_missing",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||se_type",
+          "text": "robust"
+        },
+        {
+          "key": "model|||ties",
+          "text": "efron"
+        },
+        {
+          "key": "model|||lr_statistic",
+          "value": 17.7157107203897,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lr_df",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lr_p_value",
+          "value": 0.000142259833337397,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lr_significance",
+          "text": "***"
+        },
+        {
+          "key": "model|||wald_statistic",
+          "value": 20.1901618360927,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||wald_df",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||wald_p_value",
+          "value": 4.12821267485603e-05,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||wald_significance",
+          "text": "***"
+        },
+        {
+          "key": "model|||score_statistic",
+          "value": 18.0116738741205,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||score_df",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||score_p_value",
+          "value": 0.000122691567019072,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||score_significance",
+          "text": "***"
+        },
+        {
+          "key": "model|||concordance",
+          "value": 0.617688679245283,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||concordance_se",
+          "value": 0.0246347417891769,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||log_lik",
+          "value": -411.263630387185,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||aic",
+          "value": 826.527260774369,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|price||estimate",
+          "value": 0.0228570059081459,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|price||hazard_ratio",
+          "value": 1.0231202289387,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|price||hr_ci_low",
+          "value": 1.00681074213013,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|price||hr_ci_high",
+          "value": 1.03969391570941,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|price||std_error",
+          "value": 0.00916086711490779,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|price||statistic",
+          "value": 2.78784782799062,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|price||p_value",
+          "value": 0.00530594606824369,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|price||significance",
+          "text": "**"
+        },
+        {
+          "key": "coef|price||robust_se",
+          "value": 0.00819879969008939,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|premium|true|estimate",
+          "value": -0.654951680990586,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|premium|true|hazard_ratio",
+          "value": 0.519467162119348,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|premium|true|hr_ci_low",
+          "value": 0.366874301835506,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|premium|true|hr_ci_high",
+          "value": 0.735527484945836,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|premium|true|std_error",
+          "value": 0.188486363316647,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|premium|true|statistic",
+          "value": -3.69102822615753,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|premium|true|p_value",
+          "value": 0.000223349348078585,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|premium|true|significance",
+          "text": "***"
+        },
+        {
+          "key": "coef|premium|true|robust_se",
+          "value": 0.177444235280858,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|vif|price|value",
+          "value": 1.00100052014529,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|vif|price|verdict",
+          "text": "ok"
+        },
+        {
+          "key": "coef|price||vif",
+          "value": 1.00100052014529,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|vif|premium|value",
+          "value": 1.00100052014529,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|vif|premium|verdict",
+          "text": "ok"
+        },
+        {
+          "key": "coef|premium|true|vif",
+          "value": 1.00100052014529,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|epv||value",
+          "value": 62.5,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|epv||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|schoenfeld|price|statistic",
+          "value": 0.56428261514234,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld|price|df",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld|price|p_value",
+          "value": 0.452539839943124,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld|price|verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|schoenfeld|premium|statistic",
+          "value": 0.7142538708983,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld|premium|df",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld|premium|p_value",
+          "value": 0.398035236618236,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld|premium|verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|schoenfeld_global||statistic",
+          "value": 1.2814160744956,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld_global||df",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld_global||p_value",
+          "value": 0.526919213505415,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld_global||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "point|schoenfeld|price|y|0",
+          "value": 0.0433801692061113,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|schoenfeld|price|smooth|0",
+          "value": 0.0360713368855249,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|schoenfeld|price|upper|39",
+          "value": 0.120553346560937,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|martingale_form|price|statistic",
+          "value": 7.01461104712052,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|martingale_form|price|df",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|martingale_form|price|p_value",
+          "value": 0.0299775795948775,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|martingale_form|price|verdict",
+          "text": "failed"
+        },
+        {
+          "key": "point|deviance_linear||y|0",
+          "value": 1.29090135550292,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|adjusted_survival|region=east|surv|0",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|adjusted_survival|region=east|surv|1",
+          "value": 0.935581594993837,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|adjusted_survival|region=east|surv|5",
+          "value": 0.828337804443149,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|dfbeta|price|value",
+          "value": 0.488110486146238,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|dfbeta|price|count",
+          "value": 8,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|dfbeta|price|threshold",
+          "value": 0.149071198499986,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|dfbeta|premium|value",
+          "value": 0.344259882299844,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|dfbeta|premium|count",
+          "value": 3,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|dfbeta|premium|threshold",
+          "value": 0.149071198499986,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||formula",
+          "text": "Surv(months, churned = 1) ~ price + premium + strata(region) + cluster(customer)"
+        }
+      ]
+    },
+    {
+      "id": "cox_robust_rows",
+      "model": "cox",
+      "data": "data/cox_strata.csv",
+      "types": {
+        "months": "number",
+        "churned": "integer",
+        "price": "number",
+        "premium": "boolean",
+        "region": "text",
+        "customer": "text"
+      },
+      "params": {
+        "time": "months",
+        "event": "churned",
+        "event_value": 1,
+        "predictors": [
+          "price",
+          "premium"
+        ],
+        "se": "robust",
+        "ties": "breslow"
+      },
+      "expect": [
+        {
+          "key": "model|||n",
+          "value": 180,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||events",
+          "value": 125,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n_missing",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||se_type",
+          "text": "robust"
+        },
+        {
+          "key": "model|||ties",
+          "text": "breslow"
+        },
+        {
+          "key": "model|||lr_statistic",
+          "value": 19.0548977109847,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lr_df",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lr_p_value",
+          "value": 7.28251747530029e-05,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lr_significance",
+          "text": "***"
+        },
+        {
+          "key": "model|||wald_statistic",
+          "value": 18.6026500963631,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||wald_df",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||wald_p_value",
+          "value": 9.13031701902343e-05,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||wald_significance",
+          "text": "***"
+        },
+        {
+          "key": "model|||score_statistic",
+          "value": 19.2570783671129,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||score_df",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||score_p_value",
+          "value": 6.58231351400157e-05,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||score_significance",
+          "text": "***"
+        },
+        {
+          "key": "model|||concordance",
+          "value": 0.624144559784698,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||concordance_se",
+          "value": 0.0271512567045845,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||log_lik",
+          "value": -551.31806593624,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||aic",
+          "value": 1106.63613187248,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|price||estimate",
+          "value": 0.0309204696164581,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|price||hazard_ratio",
+          "value": 1.03140347271081,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|price||hr_ci_low",
+          "value": 1.01270179676623,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|price||hr_ci_high",
+          "value": 1.05045051457085,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|price||std_error",
+          "value": 0.00905007531733481,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|price||statistic",
+          "value": 3.31188149796414,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|price||p_value",
+          "value": 0.000926707912834736,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|price||significance",
+          "text": "***"
+        },
+        {
+          "key": "coef|price||robust_se",
+          "value": 0.00933622463106403,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|premium|true|estimate",
+          "value": -0.569110913417626,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|premium|true|hazard_ratio",
+          "value": 0.566028463362179,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|premium|true|hr_ci_low",
+          "value": 0.39610016407512,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|premium|true|hr_ci_high",
+          "value": 0.808856573145445,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|premium|true|std_error",
+          "value": 0.182870688716136,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|premium|true|statistic",
+          "value": -3.12467224112106,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|premium|true|p_value",
+          "value": 0.00178003275692865,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|premium|true|significance",
+          "text": "**"
+        },
+        {
+          "key": "coef|premium|true|robust_se",
+          "value": 0.182134595087465,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|vif|price|value",
+          "value": 1.00100052014529,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|vif|price|verdict",
+          "text": "ok"
+        },
+        {
+          "key": "coef|price||vif",
+          "value": 1.00100052014529,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|vif|premium|value",
+          "value": 1.00100052014529,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|vif|premium|verdict",
+          "text": "ok"
+        },
+        {
+          "key": "coef|premium|true|vif",
+          "value": 1.00100052014529,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|epv||value",
+          "value": 62.5,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|epv||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|schoenfeld|price|statistic",
+          "value": 0.000738116147186968,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld|price|df",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld|price|p_value",
+          "value": 0.978325504848244,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld|price|verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|schoenfeld|premium|statistic",
+          "value": 1.66957138042066,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld|premium|df",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld|premium|p_value",
+          "value": 0.19631595435173,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld|premium|verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|schoenfeld_global||statistic",
+          "value": 1.70781933805914,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld_global||df",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld_global||p_value",
+          "value": 0.425747143401543,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld_global||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "point|schoenfeld|price|y|0",
+          "value": 0.0192421593344212,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|schoenfeld|price|smooth|0",
+          "value": 0.0300506760554137,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|schoenfeld|price|upper|39",
+          "value": 0.12902880981464,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|martingale_form|price|statistic",
+          "value": 6.30219021239418,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|martingale_form|price|df",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|martingale_form|price|p_value",
+          "value": 0.0428052249233415,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|martingale_form|price|verdict",
+          "text": "failed"
+        },
+        {
+          "key": "point|deviance_linear||y|0",
+          "value": 1.2473867334223,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|adjusted_survival|all|surv|0",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|adjusted_survival|all|surv|1",
+          "value": 0.979864694764209,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|adjusted_survival|all|surv|5",
+          "value": 0.939487137095167,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|dfbeta|price|value",
+          "value": 0.343875856895397,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|dfbeta|price|count",
+          "value": 8,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|dfbeta|price|threshold",
+          "value": 0.149071198499986,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|dfbeta|premium|value",
+          "value": 0.22506229266212,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|dfbeta|premium|count",
+          "value": 7,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|dfbeta|premium|threshold",
+          "value": 0.149071198499986,
+          "rel": 1e-09
+        }
+      ]
+    },
+    {
+      "id": "cox_nonph",
+      "model": "cox",
+      "data": "data/cox_nonph.csv",
+      "types": {
+        "weeks": "number",
+        "dead": "boolean",
+        "treatment": "text",
+        "dose": "number"
+      },
+      "params": {
+        "time": "weeks",
+        "event": "dead",
+        "event_value": true,
+        "predictors": [
+          "treatment",
+          "dose"
+        ]
+      },
+      "expect": [
+        {
+          "key": "model|||n",
+          "value": 160,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||events",
+          "value": 134,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n_missing",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||se_type",
+          "text": "classical"
+        },
+        {
+          "key": "model|||ties",
+          "text": "efron"
+        },
+        {
+          "key": "model|||lr_statistic",
+          "value": 0.373848843486712,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lr_df",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lr_p_value",
+          "value": 0.829506426665965,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lr_significance",
+          "text": ""
+        },
+        {
+          "key": "model|||wald_statistic",
+          "value": 0.372847283782535,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||wald_df",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||wald_p_value",
+          "value": 0.829921930800984,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||wald_significance",
+          "text": ""
+        },
+        {
+          "key": "model|||score_statistic",
+          "value": 0.373006189569586,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||score_df",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||score_p_value",
+          "value": 0.829855993721662,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||score_significance",
+          "text": ""
+        },
+        {
+          "key": "model|||concordance",
+          "value": 0.50396163469558,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||concordance_se",
+          "value": 0.0283705718343629,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||log_lik",
+          "value": -580.453151830297,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||aic",
+          "value": 1164.90630366059,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|treatment|placebo|estimate",
+          "value": -0.0612296965443559,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|treatment|placebo|hazard_ratio",
+          "value": 0.940607160746237,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|treatment|placebo|hr_ci_low",
+          "value": 0.66716073157788,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|treatment|placebo|hr_ci_high",
+          "value": 1.32612995485304,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|treatment|placebo|std_error",
+          "value": 0.175255561522295,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|treatment|placebo|statistic",
+          "value": -0.349373771722313,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|treatment|placebo|p_value",
+          "value": 0.726808721358372,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|treatment|placebo|significance",
+          "text": ""
+        },
+        {
+          "key": "coef|dose||estimate",
+          "value": -0.0199056812430556,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|dose||hazard_ratio",
+          "value": 0.980291128787255,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|dose||hr_ci_low",
+          "value": 0.905255660720396,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|dose||hr_ci_high",
+          "value": 1.06154618951983,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|dose||std_error",
+          "value": 0.0406294179529589,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|dose||statistic",
+          "value": -0.489932719836217,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|dose||p_value",
+          "value": 0.624181508727996,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|dose||significance",
+          "text": ""
+        },
+        {
+          "key": "assumption|vif|treatment|value",
+          "value": 1.00187819580159,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|vif|treatment|verdict",
+          "text": "ok"
+        },
+        {
+          "key": "coef|treatment|placebo|vif",
+          "value": 1.00187819580159,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|vif|dose|value",
+          "value": 1.00187819580159,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|vif|dose|verdict",
+          "text": "ok"
+        },
+        {
+          "key": "coef|dose||vif",
+          "value": 1.00187819580159,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|epv||value",
+          "value": 67,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|epv||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|schoenfeld|treatment|statistic",
+          "value": 9.6622500232015,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld|treatment|df",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld|treatment|p_value",
+          "value": 0.00188093106880438,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld|treatment|verdict",
+          "text": "failed"
+        },
+        {
+          "key": "assumption|schoenfeld|dose|statistic",
+          "value": 0.000890819747890254,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld|dose|df",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld|dose|p_value",
+          "value": 0.976189390988573,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld|dose|verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|schoenfeld_global||statistic",
+          "value": 9.68330827696513,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld_global||df",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld_global||p_value",
+          "value": 0.00789398550077919,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld_global||verdict",
+          "text": "failed"
+        },
+        {
+          "key": "point|schoenfeld|treatment|y|0",
+          "value": 1.97338040559589,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|schoenfeld|treatment|smooth|0",
+          "value": 0.617087419047915,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|schoenfeld|treatment|upper|39",
+          "value": 1.67350495195968,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|martingale_form|dose|statistic",
+          "value": 73.0792057656663,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|martingale_form|dose|df",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|martingale_form|dose|p_value",
+          "value": 1.3522347646937e-16,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|martingale_form|dose|verdict",
+          "text": "failed"
+        },
+        {
+          "key": "point|deviance_linear||y|0",
+          "value": 0.439601255281904,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|adjusted_survival|all|surv|0",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|adjusted_survival|all|surv|1",
+          "value": 0.993588736170323,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|adjusted_survival|all|surv|5",
+          "value": 0.961567466770437,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|dfbeta|treatment|value",
+          "value": 0.247203805131411,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|dfbeta|treatment|count",
+          "value": 11,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|dfbeta|treatment|threshold",
+          "value": 0.158113883008419,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|dfbeta|dose|value",
+          "value": 0.249406763332422,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|dfbeta|dose|count",
+          "value": 13,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|dfbeta|dose|threshold",
+          "value": 0.158113883008419,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld|treatment|verdict",
+          "text": "failed"
+        },
+        {
+          "key": "assumption|martingale_form|dose|verdict",
+          "text": "failed"
+        }
+      ]
+    },
+    {
+      "id": "cox_start_stop",
+      "model": "cox",
+      "data": "data/cox_start_stop.csv",
+      "types": {
+        "patient": "text",
+        "start": "number",
+        "stop": "number",
+        "event": "integer",
+        "dose": "number",
+        "group": "text"
+      },
+      "params": {
+        "time": "stop",
+        "event": "event",
+        "event_value": 1,
+        "start": "start",
+        "predictors": [
+          "dose",
+          "group"
+        ],
+        "se": "robust",
+        "cluster": "patient"
+      },
+      "expect": [
+        {
+          "key": "model|||n",
+          "value": 155,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||events",
+          "value": 84,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n_missing",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||se_type",
+          "text": "robust"
+        },
+        {
+          "key": "model|||ties",
+          "text": "efron"
+        },
+        {
+          "key": "model|||lr_statistic",
+          "value": 6.77433405185729,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lr_df",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lr_p_value",
+          "value": 0.0338043081036099,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lr_significance",
+          "text": "*"
+        },
+        {
+          "key": "model|||wald_statistic",
+          "value": 8.97441101853318,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||wald_df",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||wald_p_value",
+          "value": 0.0112520436475821,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||wald_significance",
+          "text": "*"
+        },
+        {
+          "key": "model|||score_statistic",
+          "value": 6.76795827194556,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||score_df",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||score_p_value",
+          "value": 0.0339122444710995,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||score_significance",
+          "text": "*"
+        },
+        {
+          "key": "model|||concordance",
+          "value": 0.603030303030303,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||concordance_se",
+          "value": 0.0302991115216937,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||log_lik",
+          "value": -303.947295591237,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||aic",
+          "value": 611.894591182475,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|dose||estimate",
+          "value": 0.196011825269213,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|dose||hazard_ratio",
+          "value": 1.21654129117753,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|dose||hr_ci_low",
+          "value": 1.02657915381699,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|dose||hr_ci_high",
+          "value": 1.44165474979413,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|dose||std_error",
+          "value": 0.0955685902601195,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|dose||statistic",
+          "value": 2.26279102542161,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|dose||p_value",
+          "value": 0.0236485744078363,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|dose||significance",
+          "text": "*"
+        },
+        {
+          "key": "coef|dose||robust_se",
+          "value": 0.0866239184560542,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|group|b|estimate",
+          "value": 0.390705466030506,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|group|b|hazard_ratio",
+          "value": 1.47802312128049,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|group|b|hr_ci_low",
+          "value": 0.962076920279379,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|group|b|hr_ci_high",
+          "value": 2.27066287631696,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|group|b|std_error",
+          "value": 0.229915875659576,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|group|b|statistic",
+          "value": 1.78348550578952,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|group|b|p_value",
+          "value": 0.0745073053262715,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|group|b|significance",
+          "text": "."
+        },
+        {
+          "key": "coef|group|b|robust_se",
+          "value": 0.219068484023114,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|vif|dose|value",
+          "value": 1.00010519969369,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|vif|dose|verdict",
+          "text": "ok"
+        },
+        {
+          "key": "coef|dose||vif",
+          "value": 1.00010519969369,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|vif|group|value",
+          "value": 1.00010519969369,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|vif|group|verdict",
+          "text": "ok"
+        },
+        {
+          "key": "coef|group|b|vif",
+          "value": 1.00010519969369,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|epv||value",
+          "value": 42,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|epv||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|schoenfeld|dose|statistic",
+          "value": 0.00113023853116374,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld|dose|df",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld|dose|p_value",
+          "value": 0.973180954772745,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld|dose|verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|schoenfeld|group|statistic",
+          "value": 3.84964478044767,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld|group|df",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld|group|p_value",
+          "value": 0.0497565275102329,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld|group|verdict",
+          "text": "failed"
+        },
+        {
+          "key": "assumption|schoenfeld_global||statistic",
+          "value": 3.87232774288084,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld_global||df",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld_global||p_value",
+          "value": 0.144256275322138,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|schoenfeld_global||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "point|schoenfeld|dose|y|0",
+          "value": 0.828373622217389,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|schoenfeld|dose|smooth|0",
+          "value": 0.631432576899019,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|schoenfeld|dose|upper|39",
+          "value": 1.01493346966379,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|martingale_form|dose|statistic",
+          "value": 1.06496162359542,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|martingale_form|dose|df",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|martingale_form|dose|p_value",
+          "value": 0.587146561291724,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|martingale_form|dose|verdict",
+          "text": "ok"
+        },
+        {
+          "key": "point|deviance_linear||y|0",
+          "value": 1.24194368632437,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|adjusted_survival|all|surv|0",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|adjusted_survival|all|surv|1",
+          "value": 0.991355709572376,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|adjusted_survival|all|surv|5",
+          "value": 0.956268451004613,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|dfbeta|dose|value",
+          "value": 0.268344693257941,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|dfbeta|dose|count",
+          "value": 6,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|dfbeta|dose|threshold",
+          "value": 0.1606438657805,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|dfbeta|group|value",
+          "value": 0.253697569162933,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|dfbeta|group|count",
+          "value": 3,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|dfbeta|group|threshold",
+          "value": 0.1606438657805,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||formula",
+          "text": "Surv(start, stop, event = 1) ~ dose + group + cluster(patient)"
+        }
+      ]
+    },
+    {
+      "id": "cox_start_after_time",
+      "model": "cox",
+      "data": "data/cox_start_stop.csv",
+      "types": {
+        "patient": "text",
+        "start": "number",
+        "stop": "number",
+        "event": "integer",
+        "dose": "number",
+        "group": "text"
+      },
+      "params": {
+        "time": "start",
+        "event": "event",
+        "event_value": 1,
+        "start": "stop",
+        "predictors": [
+          "dose"
+        ]
+      },
+      "expect": [],
+      "refuses": {
+        "code": "start_not_before_time"
       }
     }
   ]

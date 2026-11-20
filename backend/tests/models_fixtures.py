@@ -39,7 +39,8 @@ PARAMS: dict[tuple[str, str], dict[str, Any]] = {
 }
 
 # Fixtures that are a runner's real output (`from_results`): main() leaves them alone.
-FROM_RUNNER: set[tuple[str, str]] = {("linear", "unpenalized"), ("logistic", "unpenalized")}
+FROM_RUNNER: set[tuple[str, str]] = {("linear", "unpenalized"), ("logistic", "unpenalized"), ("kaplan_meier", "default"),
+                                      ("cox", "default")}
 
 # The example a declared stat ending in «*» is written as.
 WILDCARDS = {"note_*": ["note_1"], "surv_at_*": ["surv_at_30", "surv_at_30_low", "surv_at_30_high"],

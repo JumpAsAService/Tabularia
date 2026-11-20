@@ -13,7 +13,7 @@
    "schoenfeld": "Scaled Schoenfeld residuals of {term} against time",
    "martingale": "Martingale residuals against {term}",
    "deviance_linear": "Deviance residuals against the linear predictor",
-   "adjusted_survival": "Adjusted survival at the predictors' means"
+   "adjusted_survival": "Survival at the predictors' means (a category at its reference level)"
   },
   "series": {
    "smooth": "Smooth",
@@ -61,16 +61,27 @@
     "advice": "Some effect changes over time: look at the terms' tests and charts."
    },
    "martingale_form": {
-    "name": "Linear form: martingale residuals",
-    "h0": "The numeric predictor acts linearly on the log hazard.",
-    "advice": "Read its chart: a curved smooth asks for a transformation or a spline."
+    "name": "Linear form: spline test and martingale residuals",
+    "h0": "The numeric predictor acts linearly on the log hazard (a natural spline of it adds nothing).",
+    "advice": "The effect is not linear on the log hazard: read its chart; use a log, a square or a spline of the predictor."
    },
    "dfbeta": {
     "name": "Influence: dfbeta",
-    "h0": "No row moves a coefficient much.",
+    "h0": "No row moves a coefficient by more than 2/√n of its standard error (dfbetas).",
     "advice": "Look at the rows named: each moves a coefficient by much."
+   },
+   "vif": {
+    "name": "Multicollinearity: VIF",
+    "h0": "Each term is not explained by the other terms (VIF 1).",
+    "advice": "Drop or combine the correlated predictors."
+   },
+   "epv": {
+    "name": "Enough events: events per coefficient",
+    "h0": "At least 10 events for each coefficient of the model.",
+    "advice": "Few events for the number of coefficients: the estimates are unstable; fewer terms, or merge rare levels."
    }
-  }
+  },
+  "all": "All rows"
  },
  "it": {
   "name": "Rischi proporzionali di Cox",
@@ -86,7 +97,7 @@
    "schoenfeld": "Residui di Schoenfeld scalati di {term} rispetto al tempo",
    "martingale": "Residui martingala rispetto a {term}",
    "deviance_linear": "Residui di devianza rispetto al predittore lineare",
-   "adjusted_survival": "Sopravvivenza aggiustata alle medie dei predittori"
+   "adjusted_survival": "Sopravvivenza alle medie dei predittori (una categoria al suo livello di riferimento)"
   },
   "series": {
    "smooth": "Smussamento",
@@ -134,16 +145,27 @@
     "advice": "Qualche effetto cambia nel tempo: guardate i test e i grafici dei termini."
    },
    "martingale_form": {
-    "name": "Forma lineare: residui martingala",
-    "h0": "Il predittore numerico agisce in modo lineare sul log del rischio.",
-    "advice": "Leggete il suo grafico: uno smussamento curvo chiede una trasformazione o una spline."
+    "name": "Forma lineare: test con spline e residui martingala",
+    "h0": "Il predittore numerico agisce in modo lineare sul log del rischio (una sua spline naturale non aggiunge nulla).",
+    "advice": "L'effetto non è lineare sul log del rischio: leggete il suo grafico; usate un logaritmo, un quadrato o una spline del predittore."
    },
    "dfbeta": {
     "name": "Influenza: dfbeta",
-    "h0": "Nessuna riga sposta di molto un coefficiente.",
+    "h0": "Nessuna riga sposta un coefficiente di più di 2/√n del suo errore standard (dfbetas).",
     "advice": "Guardate le righe indicate: ognuna sposta molto un coefficiente."
+   },
+   "vif": {
+    "name": "Multicollinearità: VIF",
+    "h0": "Nessun termine è spiegato dagli altri termini (VIF 1).",
+    "advice": "Togliete o combinate i predittori correlati."
+   },
+   "epv": {
+    "name": "Eventi sufficienti: eventi per coefficiente",
+    "h0": "Almeno 10 eventi per ogni coefficiente del modello.",
+    "advice": "Pochi eventi per il numero di coefficienti: le stime sono instabili; meno termini, oppure unite i livelli rari."
    }
-  }
+  },
+  "all": "Tutte le righe"
  },
  "de": {
   "name": "Cox-Modell der proportionalen Hazards",
@@ -159,7 +181,7 @@
    "schoenfeld": "Skalierte Schoenfeld-Residuen von {term} gegen die Zeit",
    "martingale": "Martingal-Residuen gegen {term}",
    "deviance_linear": "Devianzresiduen gegen den linearen Prädiktor",
-   "adjusted_survival": "Adjustiertes Überleben bei den Mittelwerten der Prädiktoren"
+   "adjusted_survival": "Überleben bei den Mittelwerten der Prädiktoren (eine Kategorie bei ihrer Referenzstufe)"
   },
   "series": {
    "smooth": "Glättung",
@@ -207,16 +229,27 @@
     "advice": "Ein Effekt ändert sich über die Zeit: Lesen Sie die Tests und Diagramme der Terme."
    },
    "martingale_form": {
-    "name": "Lineare Form: Martingal-Residuen",
-    "h0": "Der numerische Prädiktor wirkt linear auf das log-Hazard.",
-    "advice": "Lesen Sie sein Diagramm: Eine gekrümmte Glättung verlangt eine Transformation oder einen Spline."
+    "name": "Lineare Form: Spline-Test und Martingal-Residuen",
+    "h0": "Der numerische Prädiktor wirkt linear auf das log-Hazard (ein natürlicher Spline von ihm fügt nichts hinzu).",
+    "advice": "Der Effekt ist auf dem log-Hazard nicht linear: Lesen Sie sein Diagramm; verwenden Sie einen Logarithmus, ein Quadrat oder einen Spline des Prädiktors."
    },
    "dfbeta": {
     "name": "Einfluss: dfbeta",
-    "h0": "Keine Zeile verschiebt einen Koeffizienten stark.",
+    "h0": "Keine Zeile verschiebt einen Koeffizienten um mehr als 2/√n seines Standardfehlers (dfbetas).",
     "advice": "Prüfen Sie die genannten Zeilen: Jede verschiebt einen Koeffizienten stark."
+   },
+   "vif": {
+    "name": "Multikollinearität: VIF",
+    "h0": "Kein Term wird durch die anderen Terme erklärt (VIF 1).",
+    "advice": "Entfernen oder kombinieren Sie die korrelierten Prädiktoren."
+   },
+   "epv": {
+    "name": "Genug Ereignisse: Ereignisse pro Koeffizient",
+    "h0": "Mindestens 10 Ereignisse für jeden Koeffizienten des Modells.",
+    "advice": "Wenige Ereignisse für die Zahl der Koeffizienten: Die Schätzungen sind instabil; weniger Terme, oder seltene Stufen zusammenfassen."
    }
-  }
+  },
+  "all": "Alle Zeilen"
  },
  "es": {
   "name": "Riesgos proporcionales de Cox",
@@ -232,7 +265,7 @@
    "schoenfeld": "Residuos de Schoenfeld escalados de {term} frente al tiempo",
    "martingale": "Residuos martingala frente a {term}",
    "deviance_linear": "Residuos de devianza frente al predictor lineal",
-   "adjusted_survival": "Supervivencia ajustada en las medias de los predictores"
+   "adjusted_survival": "Supervivencia en las medias de los predictores (una categoría en su nivel de referencia)"
   },
   "series": {
    "smooth": "Suavizado",
@@ -280,16 +313,27 @@
     "advice": "Algún efecto cambia en el tiempo: mire las pruebas y los gráficos de los términos."
    },
    "martingale_form": {
-    "name": "Forma lineal: residuos martingala",
-    "h0": "El predictor numérico actúa de forma lineal sobre el log del riesgo.",
-    "advice": "Lea su gráfico: un suavizado curvo pide una transformación o un spline."
+    "name": "Forma lineal: prueba con spline y residuos martingala",
+    "h0": "El predictor numérico actúa de forma lineal sobre el log del riesgo (un spline natural suyo no añade nada).",
+    "advice": "El efecto no es lineal sobre el log del riesgo: lea su gráfico; use un logaritmo, un cuadrado o un spline del predictor."
    },
    "dfbeta": {
     "name": "Influencia: dfbeta",
-    "h0": "Ninguna fila mueve mucho un coeficiente.",
+    "h0": "Ninguna fila mueve un coeficiente más de 2/√n de su error estándar (dfbetas).",
     "advice": "Revise las filas indicadas: cada una mueve mucho un coeficiente."
+   },
+   "vif": {
+    "name": "Multicolinealidad: VIF",
+    "h0": "Ningún término se explica por los demás términos (VIF 1).",
+    "advice": "Elimine o combine los predictores correlacionados."
+   },
+   "epv": {
+    "name": "Eventos suficientes: eventos por coeficiente",
+    "h0": "Al menos 10 eventos por cada coeficiente del modelo.",
+    "advice": "Pocos eventos para el número de coeficientes: las estimaciones son inestables; menos términos, o una los niveles raros."
    }
-  }
+  },
+  "all": "Todas las filas"
  },
  "fr": {
   "name": "Risques proportionnels de Cox",
@@ -305,7 +349,7 @@
    "schoenfeld": "Résidus de Schoenfeld mis à l'échelle de {term} selon le temps",
    "martingale": "Résidus de martingale selon {term}",
    "deviance_linear": "Résidus de déviance selon le prédicteur linéaire",
-   "adjusted_survival": "Survie ajustée aux moyennes des prédicteurs"
+   "adjusted_survival": "Survie aux moyennes des prédicteurs (une catégorie à son niveau de référence)"
   },
   "series": {
    "smooth": "Lissage",
@@ -353,15 +397,26 @@
     "advice": "Un effet change dans le temps : regardez les tests et les graphiques des termes."
    },
    "martingale_form": {
-    "name": "Forme linéaire : résidus de martingale",
-    "h0": "Le prédicteur numérique agit linéairement sur le log du risque.",
-    "advice": "Lisez son graphique : un lissage courbé demande une transformation ou une spline."
+    "name": "Forme linéaire : test par spline et résidus de martingale",
+    "h0": "Le prédicteur numérique agit linéairement sur le log du risque (une spline naturelle de lui n'ajoute rien).",
+    "advice": "L'effet n'est pas linéaire sur le log du risque : lisez son graphique ; utilisez un logarithme, un carré ou une spline du prédicteur."
    },
    "dfbeta": {
     "name": "Influence : dfbeta",
-    "h0": "Aucune ligne ne déplace beaucoup un coefficient.",
+    "h0": "Aucune ligne ne déplace un coefficient de plus de 2/√n de son erreur type (dfbetas).",
     "advice": "Examinez les lignes indiquées : chacune déplace beaucoup un coefficient."
+   },
+   "vif": {
+    "name": "Multicolinéarité : VIF",
+    "h0": "Aucun terme n'est expliqué par les autres termes (VIF 1).",
+    "advice": "Retirez ou combinez les prédicteurs corrélés."
+   },
+   "epv": {
+    "name": "Assez d'événements : événements par coefficient",
+    "h0": "Au moins 10 événements pour chaque coefficient du modèle.",
+    "advice": "Peu d'événements pour le nombre de coefficients : les estimations sont instables ; moins de termes, ou regroupez les niveaux rares."
    }
-  }
+  },
+  "all": "Toutes les lignes"
  }
 }

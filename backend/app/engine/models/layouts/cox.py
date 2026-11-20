@@ -1,11 +1,15 @@
 """The report of a Cox proportional hazards model (docs/specs/statistical-models.md, `cox`).
 
 Cards: rows and events, the concordance, the likelihood-ratio test's p-value, the AIC.
-Coefficients: log hazard ratios with their tests, the hazard ratios with their intervals,
-the VIF. Diagnostics: the hazard ratios on a logarithmic axis; the scaled Schoenfeld
-residuals of each predictor against time with their smooth and its band (proportional
-hazards); the martingale residuals against each numeric predictor (its form); deviance
-residuals against the linear predictor (influence); the adjusted survival curves.
+Coefficients: log hazard ratios with their tests (the robust standard errors when chosen), the
+hazard ratios with their intervals, the VIF. Diagnostics: the hazard ratios on a logarithmic
+axis; the scaled Schoenfeld residuals of each predictor against time with their smooth and its
+band (proportional hazards; a category's columns are one series, as cox.zph tests them); the
+martingale residuals of the null model against each numeric predictor (its form); deviance
+residuals against the linear predictor (influence); the survival at the fit's means, a curve a
+stratum.
+
+Without strata the runner names the one curve «all»: the page says it in its language.
 """
 from __future__ import annotations
 
@@ -16,6 +20,7 @@ from app.engine.models.layouts import register
 from app.engine.stats.catalog import label_of
 
 MAX_TERMS_CHARTED = 12  # the Schoenfeld and martingale charts drawn, one a predictor
+ALL = "all"  # the runner's name of the one stratum without strata
 
 
 def name(params: dict[str, Any], locale: str) -> str:
@@ -24,6 +29,8 @@ def name(params: dict[str, Any], locale: str) -> str:
 
 def about(params: dict[str, Any], locale: str) -> str:
     time, event, value = params.get("time"), params.get("event"), params.get("event_value")
+    if params.get("start") and time:  # start–stop rows: the interval
+        time = f"{params['start']}–{time}"
     left = f"{time}, {event} = {label_of(value)}" if time and event and value is not None else str(time or "")
     return c.subject({**params, "outcome": left})
 
@@ -46,7 +53,7 @@ def _schoenfeld(w: dict, params: dict[str, Any]) -> tuple[c.Chart, ...]:
 
 def _martingale(w: dict, params: dict[str, Any]) -> tuple[c.Chart, ...]:
     """A martingale chart for each numeric predictor (a categorical one has none: its place,
-    the last of the page, stays empty)."""
+    beside its Schoenfeld chart, stays empty)."""
     ch, s = w["charts"], w["series"]
     out = []
     for i, term in enumerate(list(params.get("predictors") or [])[:MAX_TERMS_CHARTED]):
@@ -68,7 +75,9 @@ def layout(model: str, params: dict[str, Any], locale: str, sample: list[dict] |
                     under=c.join(k["se"], se=c.shown(c.num(c.model_key("concordance_se")), "0.000"))),
              c.Card("k_lr", k["lr_p"], c.p_with_stars("lr_p_value")),
              c.Card("k_aic", k["aic"], c.shown(c.num(c.model_key("aic")))))
-    tables = (c.CoefTable("coef", ct["estimates"], ("estimate", "std_error", "robust_se", "statistic", "p_value"), width=22),
+    robust = params.get("se") == "robust"
+    estimates = ("estimate", "std_error", *(("robust_se",) if robust else ()), "statistic", "p_value")
+    tables = (c.CoefTable("coef", ct["estimates"], estimates, width=22 if robust else 26),
               c.CoefTable("coef_hr", ct["hazard_ratios"], ("hazard_ratio", "hr_ci_low", "hr_ci_high", "vif"), width=28))
     hr = c.coef_interval("hazard_ratio_interval", ch["hazard_ratio_interval"], ("hazard_ratio", "hr_ci_low", "hr_ci_high"),
                          (s["hazard_ratio"], s["ci_low"], s["ci_high"]), 1.0, log=True)._replace(wide=True)
@@ -76,9 +85,16 @@ def layout(model: str, params: dict[str, Any], locale: str, sample: list[dict] |
                     [{"value": "[value]", "as": "point", "name": s["residuals"], "label": "[text]"}], {"target": 0, "legend": False},
                     under="dfbeta")
     adjusted = c.xy("adjusted_survival", ch["adjusted_survival"], '[section] = "curve" AND [level] = "adjusted_survival"',
-                    [c.mark("surv", "step")], {"min": 0}, split_by="[level_2]")
+                    [c.mark("surv", "step")], {"min": 0, "max": 1},
+                    split_by=f'IF([level_2] = "{ALL}", {c.q(w["all"])}, [level_2])', wide=True)
     return c.page(model, params, locale, sample, step, name=name(params, locale), about=about(params, locale), cards=cards,
-                  coef_tables=tables, charts=(hr, *_schoenfeld(w, params), deviance, adjusted, *_martingale(w, params)))
+                  coef_tables=tables, charts=(hr, adjusted, *_by_predictor(w, params), deviance))
+
+
+def _by_predictor(w: dict, params: dict[str, Any]) -> tuple[c.Chart, ...]:
+    """Each predictor's row: its Schoenfeld chart, and beside it its martingale chart (none for
+    a category), so that a category leaves half a row empty, not a whole one."""
+    return tuple(chart for pair in zip(_schoenfeld(w, params), _martingale(w, params)) for chart in pair)
 
 
 register("cox", layout, name, about)
