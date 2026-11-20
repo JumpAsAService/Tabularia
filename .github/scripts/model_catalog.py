@@ -23,7 +23,7 @@ from its own folder alone:
 
 --check fails when a copy is missing or differs from the snapshot by a byte, when the
 snapshot cannot be read as a catalogue, and when a model's id is not in the documentation
-(docs/capabilities/statistical-models.md, once that page exists).
+(docs/capabilities/models.md, once that page exists).
 
 Standard library only: this runs where nothing of Tabularia is installed (a bare Python
 3.11+, in CI and on a laptop).
@@ -43,7 +43,7 @@ COPIES = [
     "gateway-go/internal/modelcatalog/catalog.json",
     "gateway/app/services/model_catalog.json",
 ]
-PAGE = "docs/capabilities/statistical-models.md"
+PAGE = "docs/capabilities/models.md"
 THIS = ".github/scripts/model_catalog.py"
 
 

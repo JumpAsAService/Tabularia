@@ -127,6 +127,8 @@ them on your own data to read numbers that mean something.
 
 ### Linear regression
 
+Model id in the catalogue: `linear`.
+
 Explains a number with other columns. **Outcome** is a numeric column, **Predictors** are
 numbers and categories, with **Interactions** (pairs of predictors), **Reference levels** and
 an **Intercept** that is on unless you turn it off.
@@ -163,6 +165,8 @@ move with the price, and does the spread grow with it?
 
 ### Logistic regression
 
+Model id in the catalogue: `logistic`.
+
 Explains a yes-or-no outcome. **Outcome** is any column with the **Value that is the event**
 named; the other values are «no event». Options: **Estimation** (maximum likelihood, or
 **Firth's correction**, which keeps estimates finite with few events or separation; logit
@@ -188,6 +192,8 @@ for it, and the calibration chart is read out of fold.
 
 ### Kaplan–Meier
 
+Model id in the catalogue: `kaplan_meier`.
+
 The survival curve: the probability of still waiting for an event over time. **Follow-up
 time** is a numeric column, **Event column** and its **Value that means the event
 happened**; the rest are censored (their time is the last moment known). Options: a
@@ -210,6 +216,8 @@ where at least 10 rows are still at risk. Stratum names are `column=value`, or `
 
 ### Cox proportional hazards
 
+Model id in the catalogue: `cox`.
+
 How columns change the rate of an event over time. The time, event and event value are as in
 Kaplan–Meier, with **Predictors**, **Interactions**, **Reference levels**, a **Strata
 column** (a baseline hazard of its own for each value), **Tied times** (Efron, the usual
@@ -229,6 +237,8 @@ martingale residuals' chart), influence (dfbeta: over 2/√n doubtful, over 1 fa
 computed with exact ties), VIF and **events per coefficient** (at least 10).
 
 ### ARIMA
+
+Model id in the catalogue: `arima`.
 
 A time series modelled on its own past, and forecast. **Time column** (a date, a datetime or
 a whole number), **Series** (a number), **Frequency of the series** (hourly, daily, weekly,

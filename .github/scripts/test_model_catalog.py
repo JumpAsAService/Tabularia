@@ -22,7 +22,7 @@ COPIES = [
     "gateway-go/internal/modelcatalog/catalog.json",
     "gateway/app/services/model_catalog.json",
 ]
-PAGE = "docs/capabilities/statistical-models.md"
+PAGE = "docs/capabilities/models.md"
 
 
 def run(*args, root=None):
