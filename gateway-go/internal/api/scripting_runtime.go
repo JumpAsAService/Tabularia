@@ -308,7 +308,19 @@ func editorLint(d *Deps) authedFunc {
 	}
 }
 
-// ── the outputs of a flow's Script and Container nodes ──────────────────────
+// ── the outputs of a flow's Script, Container and model nodes ───────────────
+
+// parsedDefinition is a flow's definition parsed, nil when it is not JSON.
+func parsedDefinition(text string) any {
+	if text == "" {
+		text = "{}"
+	}
+	v, err := pyjson.Loads(text)
+	if err != nil {
+		return nil
+	}
+	return v
+}
 
 // utcIso writes a timestamp column (naive, in UTC) with its offset, «+00:00», as the rest
 // of the API does: without it, the browser reads it as local time, an hour or more off.
@@ -354,7 +366,7 @@ func runsOfNode(ctx context.Context, q perm.Querier, flowID int64, nodeID any, s
 	}
 	var r stepRun
 	err := q.QueryRow(ctx, `SELECT id, status, script, output_bucket, output_key, error, started_at, finished_at, rows_written
-		FROM runs WHERE flow_id = $1 AND kind IN ('script', 'container') AND starts_with(script, $2)`+extra+`
+		FROM runs WHERE flow_id = $1 AND kind IN ('script', 'container', 'model', 'model_predict') AND starts_with(script, $2)`+extra+`
 		ORDER BY started_at DESC, id DESC LIMIT 1`, flowID, prefix).
 		Scan(&r.id, &r.status, &r.script, &r.outputBucket, &r.outputKey, &r.errText, &r.started, &r.finished, &r.rows)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -498,6 +510,18 @@ func nodeOutputs(d *Deps) authedFunc {
 		}
 		for _, n := range flowaccess.ContainerNodes(f.Definition) {
 			put(n.Value("id"), flowaccess.ContainerFingerprint(n))
+		}
+		// a model node's output is up to date with its parameters and the chain before it
+		// (docs/specs/statistical-models.md, «The trial»); a Predict node's with its settings
+		if models := flowaccess.ModelNodes(f.Definition); len(models) > 0 {
+			definition := pyjson.Obj(pyjson.Or(parsedDefinition(f.Definition), pyjson.Object{}))
+			for _, n := range models {
+				if n.Value("type") == "model" {
+					put(n.Value("id"), modelFingerprint(definition, n))
+				} else {
+					put(n.Value("id"), predictFingerprint(n))
+				}
+			}
 		}
 		found, err := latestOutputs(q.ctx, d.DB, f.ID, saved)
 		if err != nil {

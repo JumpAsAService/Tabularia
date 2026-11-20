@@ -641,3 +641,119 @@ func TestTheRowLimitStopsTheStepBeforeAnyJob(t *testing.T) {
 		t.Errorf("%+v", r)
 	}
 }
+
+// ── the editor's «Run» of a model node and its outputs ────────────────────────
+
+func (f *modelRunFixture) trial(u *auth.User, flow int64, node string) *httptest.ResponseRecorder {
+	f.t.Helper()
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPost, "/x", nil)
+	r.SetPathValue("flow_id", fmt.Sprint(flow))
+	r.SetPathValue("node_id", node)
+	f.d.trialNode(w, r, &auth.Principal{User: *u})
+	return w
+}
+
+func (f *modelRunFixture) outputs(u *auth.User, flow int64) map[string]map[string]map[string]any {
+	f.t.Helper()
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/x", nil)
+	r.SetPathValue("flow_id", fmt.Sprint(flow))
+	nodeOutputs(f.d)(w, r, &auth.Principal{User: *u})
+	if w.Code != http.StatusOK {
+		f.t.Fatalf("outputs: %d %s", w.Code, w.Body)
+	}
+	out := map[string]map[string]map[string]any{}
+	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+		f.t.Fatalf("%v: %s", err, w.Body)
+	}
+	return out
+}
+
+// waitRun is the trial followed to its end, as the editor follows it.
+func (f *modelRunFixture) waitRun(id int64) modelRunRow {
+	f.t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		r := f.row(id)
+		if r.status == "SUCCESS" || r.status == "FAILURE" || time.Now().After(deadline) {
+			return r
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+func TestTheEditorsRunOfAModelNodeAndItsOutputs(t *testing.T) {
+	f := newModelRunFixture(t)
+	flow, _, _ := f.flow(linearParams, true)
+	// refused before any run: a group the person may not use, parameters the catalogue refuses
+	if _, err := f.db.Exec(f.ctx, `UPDATE model_groups SET everyone = false WHERE id = 'regression'`); err != nil {
+		t.Fatal(err)
+	}
+	if w := f.trial(f.ann, flow.ID, "m"); w.Code != http.StatusForbidden || !strings.Contains(w.Body.String(), "may not use the model group") {
+		t.Errorf("not allowed: %d %s", w.Code, w.Body)
+	}
+	if _, err := f.db.Exec(f.ctx, `UPDATE model_groups SET everyone = true WHERE id = 'regression'`); err != nil {
+		t.Fatal(err)
+	}
+	bad, _, _ := f.flow(`{"outcome": "quantity"}`, false)
+	if w := f.trial(f.ann, bad.ID, "m"); w.Code != http.StatusUnprocessableEntity || !strings.Contains(w.Body.String(), "'predictors' is required") {
+		t.Errorf("parameters: %d %s", w.Code, w.Body)
+	}
+	if w := f.trial(f.ann, flow.ID, "nope"); w.Code != http.StatusNotFound {
+		t.Errorf("no such node: %d", w.Code)
+	}
+	var n int64
+	_ = f.db.QueryRow(f.ctx, `SELECT count(*) FROM runs WHERE launched_by = $1`, f.ann.ID).Scan(&n)
+	if n != 0 {
+		t.Fatalf("%d runs made by refusals", n)
+	}
+	// the trial: a run of its own, in the trials' namespace, followed to its end
+	w := f.trial(f.ann, flow.ID, "m")
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("%d %s", w.Code, w.Body)
+	}
+	var started struct {
+		RunID int64 `json:"run_id"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &started); err != nil || started.RunID == 0 {
+		t.Fatalf("%v %s", err, w.Body)
+	}
+	r := f.waitRun(started.RunID)
+	if r.status != "SUCCESS" || r.resultsKey == "" || !strings.Contains(r.script, `"trial": true`) {
+		t.Fatalf("the trial: %+v", r)
+	}
+	f.mu.Lock()
+	ns := f.attempts[len(f.attempts)-1].ns
+	f.mu.Unlock()
+	if ns != "script-trials" {
+		t.Errorf("a trial runs in the trials' namespace, not %s", ns)
+	}
+	var kind, trigger string
+	_ = f.db.QueryRow(f.ctx, `SELECT kind, trigger_type FROM runs WHERE id = $1`, started.RunID).Scan(&kind, &trigger)
+	if kind != "model" || trigger != "trial" {
+		t.Errorf("kind %s, trigger %s", kind, trigger)
+	}
+	// its outputs: the latest run, up to date, with the data the nodes after it preview
+	out := f.outputs(f.ann, flow.ID)["m"]
+	if out == nil || out["last"]["run_id"] != float64(started.RunID) || out["last"]["stale"] != false || out["last"]["trial"] != true ||
+		out["output"]["key"] != r.outputKey || out["output"]["stale"] != false {
+		t.Fatalf("outputs: %v", out)
+	}
+	// a parameter changed in the saved flow: not up to date any more
+	changed := strings.Replace(flow.Definition, `"predictors": ["price", "channel"]`, `"predictors": ["price"]`, 1)
+	if _, err := f.db.Exec(f.ctx, `UPDATE flows SET definition = $2 WHERE id = $1`, flow.ID, changed); err != nil {
+		t.Fatal(err)
+	}
+	if out := f.outputs(f.ann, flow.ID)["m"]; out["last"]["stale"] != true || out["output"]["stale"] != true {
+		t.Errorf("after a change: %v", out)
+	}
+	// and so does a change before it, in its chain
+	before := strings.Replace(flow.Definition, `"datasourceId": 1`, `"datasourceId": 2`, 1)
+	if _, err := f.db.Exec(f.ctx, `UPDATE flows SET definition = $2 WHERE id = $1`, flow.ID, before); err != nil {
+		t.Fatal(err)
+	}
+	if out := f.outputs(f.ann, flow.ID)["m"]; out["output"]["stale"] != true {
+		t.Errorf("after a change of its chain: %v", out)
+	}
+}

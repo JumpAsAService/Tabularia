@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/flowaccess"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/flowresolver"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/jobs"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/modelcatalog"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/perm"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/scriptcfg"
@@ -21,7 +23,7 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/server"
 )
 
-// routes/scripting.py trial_node: the editor's «Run» of a Script or Container node of the saved
+// routes/scripting.py trial_node: the editor's «Run» of a Script, Container or model node of the saved
 // flow (script_runs.run_trial): the chain before it on the sources' development sample, the
 // node as saved, the nodes after it not run. It answers at once with the run to follow; the
 // trial goes on in this process, beating while it runs.
@@ -77,7 +79,7 @@ func (d *Deps) trialNode(w http.ResponseWriter, r *http.Request, p *auth.Princip
 		}
 	}
 	kind, _ := node.Value("type").(string)
-	if node == nil || (kind != "script" && kind != "container") {
+	if node == nil || (kind != "script" && kind != "container" && kind != "model") {
 		q.refuse(http.StatusNotFound, "The node is not in the saved flow: save the flow first")
 		return
 	}
@@ -115,6 +117,28 @@ func (d *Deps) trialNode(w http.ResponseWriter, r *http.Request, p *auth.Princip
 			return
 		}
 		label, detail = scriptnodes.Label(node), pyjson.Object{{Key: "environment", Value: env.Name}}
+	} else if kind == "model" {
+		// a statistical model (docs/specs/statistical-models.md, «The trial»): its parameters
+		// and its group refused here, with their sentence, before any run exists
+		qq := newQueue(d)
+		if _, err := qq.planModel(q.ctx, &p.User, node); err != nil {
+			var sf *scriptFailed
+			if !errors.As(err, &sf) {
+				q.fail(err)
+				return
+			}
+			status := http.StatusUnprocessableEntity
+			if modelsOff(qq.sc) != "" {
+				status = http.StatusConflict
+			} else if strings.Contains(sf.msg, " may not use the model group ") {
+				status = http.StatusForbidden
+			}
+			q.refuse(status, upperFirst(sf.msg))
+			return
+		}
+		data := nodeData(node)
+		model, _ := data.Value("model").(string)
+		label, detail = modelLabel(node), pyjson.Object{{Key: "model", Value: model}, {Key: "group", Value: modelcatalog.GroupOf(model)}}
 	} else {
 		if !scriptcfg.Load(config.FromOS()).Containers.Enabled {
 			q.refuse(http.StatusConflict, "Containers are off on this installation")
@@ -177,8 +201,11 @@ func (d *Deps) trialNode(w http.ResponseWriter, r *http.Request, p *auth.Princip
 		return
 	}
 	action := "scripting.trial"
-	if kind == "container" {
+	switch kind {
+	case "container":
 		action = "container.trial"
+	case "model":
+		action = "models.trial"
 	}
 	q.audit(audit.Event{Action: action, TargetType: strp("flow"), TargetID: &flow.ID, TargetLabel: &flow.Name,
 		Detail: append(pyjson.Object{{Key: "run_id", Value: runID}, {Key: "node", Value: nodeID}}, detail...)})
@@ -261,9 +288,10 @@ func (d *Deps) trialRun(ctx context.Context, runID int64, user *auth.User, nodeI
 	if node == nil || node.Value("type") != run.Kind {
 		return &scriptFailed{"the node is no longer in the saved flow"}
 	}
-	// the Script and Container nodes before this one: their latest output stands in for them
+	// the Script, Container and model nodes before this one: their latest output stands in for them
 	var nodes []savedNode
-	for _, n := range append(flowaccess.ScriptNodes(definition), flowaccess.ContainerNodes(definition)...) {
+	steps := append(flowaccess.ScriptNodes(definition), flowaccess.ContainerNodes(definition)...)
+	for _, n := range append(steps, flowaccess.ModelNodes(definition)...) {
 		if id := n.Value("id"); pyjson.Truthy(id) {
 			nodes = append(nodes, savedNode{id: id})
 		}
@@ -281,9 +309,12 @@ func (d *Deps) trialRun(ctx context.Context, runID int64, user *auth.User, nodeI
 	resolveDS := d.flowDsResolver(ctx)
 	r := &scriptNodeRun{q: q, user: current, flow: flow, definition: definition, node: node, trigger: "trial", mode: "development",
 		outputs: upstream, resolveDS: resolveDS, trial: runID, firstIO: firstIO}
-	if run.Kind == "container" {
+	switch run.Kind {
+	case "container":
 		_, err = q.runContainer(ctx, r)
-	} else {
+	case "model":
+		_, err = q.runModel(ctx, r)
+	default:
 		_, err = q.runScript(ctx, r)
 	}
 	return err
