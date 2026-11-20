@@ -364,6 +364,18 @@ NUMBERS = {"amount": Column("Float64", True), "units": Column("Int64", True), "c
     ("var_f", {"value": "amount", "group": "channel", "ratio": -1.5}, "stat_var_f: 'ratio' must be a number above 0"),
     ("var_f", {"value": "amount", "group": "channel", "ratio": "2"}, "stat_var_f: 'ratio' must be a number above 0"),
     ("levene", {"value": "amount", "group": "channel", "center": "trimmed"}, "stat_levene: 'center' must be one of median, mean"),
+    # a whole number past a double's reach: refused with its sentence, never an OverflowError
+    ("t_one_sample", {"value": "amount", "mu": 10 ** 400}, "stat_t_one_sample: 'mu' must be a number"),
+    ("t_one_sample", {"value": "amount", "mu": -(10 ** 400)}, "stat_t_one_sample: 'mu' must be a number"),
+    ("var_f", {"value": "amount", "group": "channel", "ratio": 10 ** 400}, "stat_var_f: 'ratio' must be a number above 0"),
+    ("t_one_sample", {"value": "amount", "alpha": 10 ** 400},
+     "stat_t_one_sample: 'alpha' must be a number between 0 and 1, both excluded (0.05 is the usual choice)"),
+    ("prop_one_sample", {"value": "channel", "success": 10 ** 400},
+     "stat_prop_one_sample: 'success' must be the value that counts as a success: a text, a number, true or false"),
+    ("prop_one_sample", {"value": "channel", "success": "web", "p0": 10 ** 400},
+     "stat_prop_one_sample: 'p0' must be a proportion between 0 and 1, both excluded"),
+    ("chi2_gof", {"value": "channel", "expected": {"web": 10 ** 400, "shop": 0.5}},
+     "stat_chi2_gof: 'expected': the proportion of «web» must be a number above 0"),
 ])
 def test_lot_2_parameters_refused(test, params, sentence):
     with pytest.raises(EngineError) as e:

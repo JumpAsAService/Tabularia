@@ -329,14 +329,25 @@ def _boolean(test: str, key: str, v: Any, columns: Mapping[str, Column]) -> bool
     return v
 
 
+def _finite(v: Any) -> bool:
+    """Whether `v` is a number a double holds, not infinite nor NaN: a whole number of 400
+    digits is not (`math.isfinite` raises on it, it does not answer)."""
+    if isinstance(v, bool) or not isinstance(v, (int, float)):
+        return False
+    try:
+        return math.isfinite(v)
+    except OverflowError:
+        return False
+
+
 def _number(test: str, key: str, v: Any, columns: Mapping[str, Column]) -> float:
-    if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v):
+    if not _finite(v):
         raise refusal(test, f"'{key}' must be a number")
     return float(v)
 
 
 def _positive(test: str, key: str, v: Any, columns: Mapping[str, Column]) -> float:
-    if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) or v <= 0:
+    if not _finite(v) or v <= 0:
         raise refusal(test, f"'{key}' must be a number above 0")
     return float(v)
 
@@ -361,7 +372,7 @@ def _success(test: str, key: str, v: Any, columns: Mapping[str, Column]) -> Any:
         if not v.strip():
             raise refusal(test, f"'{key}' must be the value that counts as a success")
         return v
-    if isinstance(v, bool) or (isinstance(v, (int, float)) and math.isfinite(v)):
+    if isinstance(v, bool) or _finite(v):
         return v
     raise refusal(test, f"'{key}' must be the value that counts as a success: a text, a number, true or false")
 
@@ -374,7 +385,7 @@ def _expected_proportions(test: str, key: str, v: Any, columns: Mapping[str, Col
         raise refusal(test, f"'{key}' must give each category its expected proportion, as {{category: proportion}}")
     out: dict[str, float] = {}
     for label, share in v.items():
-        if isinstance(share, bool) or not isinstance(share, (int, float)) or not math.isfinite(share) or share <= 0:
+        if not _finite(share) or share <= 0:
             raise refusal(test, f"'{key}': the proportion of «{label}» must be a number above 0")
         out[str(label)] = float(share)
     total = math.fsum(out.values())
