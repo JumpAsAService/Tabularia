@@ -33,7 +33,7 @@
 #   ps_write(task, prepared, fitted, rows, …)
 #                                       the sections model, coef, parameter and stratum.
 # Not here yet: the checks (`assumption`) and the charts' points (P2: ps_checks), the automatic
-# choice (P3: ps_auto), conditional survival (P9: ps_predict's alive_at). Their hooks are below,
+# choice (P3: ps_auto). Conditional survival (P9) is ps_predict's alive_at. Their hooks are below,
 # found by name, so that a lot adds its file without touching this one.
 #
 # Columns never become code: the design has positional columns, copied with the strata's dummies
@@ -140,6 +140,7 @@ ps_prepare <- function(task) {
     tab_refuse("weights_type", paste0("the column «", weights_col, "» is a ", tab_kind(df[[weights_col]]), ": weights must be ",
                                       "numbers, 0 or more"), list(column = weights_col))
   }
+  ps_alive_column(df, p$alive_at)
   design <- tab_design(df, predictors, reference = p$reference %||% list(), interactions = interactions, intercept = FALSE,
                        also = c(time_col, event_col, strata_col, weights_col),
                        max_levels = tab_limit(task, "max_levels"), max_terms = tab_limit(task, "max_terms"))
@@ -915,19 +916,60 @@ ps_design <- function(model, df) {
   d
 }
 
+# ── conditional survival's column ────────────────────────────────────────────
+# The time each row has already survived (`alive_at`, lot P9): a numeric column of the rows, empty
+# where it is unknown. NULL when the node or Predict does not name one. A negative, empty or
+# infinite value is the row's, not the table's: ps_predict gives NA there and Predict counts them.
+ps_alive_column <- function(df, column) {
+  if (is.null(column) || !length(column) || (is.character(column) && !nzchar(column))) return(NULL)
+  if (!column %in% names(df)) {
+    tab_refuse("missing_column", paste0("the rows have no column «", column, "», the time already survived (alive_at)"),
+               list(column = column))
+  }
+  kind <- tab_kind(df[[column]])
+  if (!kind %in% c("number", "integer")) {
+    tab_refuse("alive_at_type", paste0("the column «", column, "» is a ", kind, ": the time already survived (alive_at) must be a number, ",
+                                       "in the unit of the model's times"), list(column = column))
+  }
+  as.numeric(df[[column]])
+}
+
 # ── predictions ──────────────────────────────────────────────────────────────
 # For rows of the design X (the location's columns, as the card's terms) in strata `strata`
 # (indices of model$strata_levels, NA unknown): the median, the quantiles and the survival at the
 # times, with their intervals at the card's 1 − alpha when `interval` and the card has a vcov; the
 # hazard at `hazard_times` (the hazard chart, P2) likewise. A row with an empty value or an
-# unknown stratum gets NA everywhere. alive_at: conditional survival (lot P9).
+# unknown stratum gets NA everywhere.
+#
+# alive_at (lot P9, conditional survival): for each row the time a ≥ 0 it has already survived
+# without the event (NULL: from the start). The answers are then about the time left: the median
+# and the quantiles q of S(a + q) = (1 − p) S(a), i.e. Q(1 − (1 − p) S(a)) − a, and the survival at t
+# as S(a + t) / S(a), the chance of lasting t more; the intervals by the same delta method, on
+# log q and on log(−log S) as ever (the gradient goes through S(a) too, as it depends on the
+# parameters). A row whose a is empty, negative or not finite, or whose S(a) is 0 (no one lasts
+# that long under the model: the condition has no meaning), gets NA, counted in `alive_empty` and
+# `alive_dead`. The hazard at `hazard_times` is the unconditional one.
 ps_predict <- function(model, X, strata, quantiles = numeric(), times = numeric(), interval = FALSE, alive_at = NULL,
                        hazard_times = numeric()) {
-  if (!is.null(alive_at)) tab_not_built("Conditional survival (alive_at)")
   m <- model$spec
   par <- model$par
   n <- nrow(X)
   ok <- !is.na(strata) & apply(is.finite(cbind(X, 0)), 1L, all)
+  alive_empty <- alive_dead <- rep(FALSE, n)
+  usable <- ok # the rows the design and the stratum allow: the linear predictor does not depend on alive_at
+  if (!is.null(alive_at)) {
+    alive_at <- as.numeric(alive_at)
+    if (length(alive_at) != n) stop("alive_at has ", length(alive_at), " values for ", n, " rows")
+    alive_empty <- ok & (!is.finite(alive_at) | alive_at < 0)
+    ok <- ok & !alive_empty
+    rows_ <- which(ok)
+    if (length(rows_)) {
+      S0 <- ps_strata_dummies(strata, length(model$strata_levels))
+      ls_a <- ps_log_survival(m, alive_at[rows_], ps_natural(m, par, X[rows_, , drop = FALSE], S0[rows_, , drop = FALSE]))
+      alive_dead[rows_] <- !is.finite(ls_a) | exp(ls_a) == 0
+      ok <- ok & !alive_dead
+    }
+  }
   S <- ps_strata_dummies(strata, length(model$strata_levels))
   V <- if (isTRUE(interval)) model$vcov else NULL
   z <- stats::qnorm(1 - model$alpha / 2)
@@ -937,15 +979,31 @@ ps_predict <- function(model, X, strata, quantiles = numeric(), times = numeric(
               quantile_all_high = na_matrix(length(probs)), surv = na_matrix(length(times)), surv_low = na_matrix(length(times)),
               surv_high = na_matrix(length(times)), hazard = na_matrix(length(hazard_times)),
               hazard_low = na_matrix(length(hazard_times)), hazard_high = na_matrix(length(hazard_times)))
+  out$linear[usable] <- ps_linear(m, par, X[usable, , drop = FALSE], S[usable, , drop = FALSE])
   idx <- which(ok)
   for (start in seq.int(1L, max(length(idx), 1L), by = PS_CHUNK)) {
     rows_ <- idx[seq.int(start, min(start + PS_CHUNK - 1L, length(idx)))]
     if (!length(rows_) || anyNA(rows_)) break
     Xc <- X[rows_, , drop = FALSE]
     Sc <- S[rows_, , drop = FALSE]
-    out$linear[rows_] <- ps_linear(m, par, Xc, Sc)
-    log_q <- function(p_) function(b) log(ps_quantile(m, p_, ps_natural(m, b, Xc, Sc)))
-    log_cumhaz <- function(t) function(b) log(-ps_log_survival(m, rep(t, length(rows_)), ps_natural(m, b, Xc, Sc)))
+    if (is.null(alive_at)) {
+      log_q <- function(p_) function(b) log(ps_quantile(m, p_, ps_natural(m, b, Xc, Sc)))
+      log_cumhaz <- function(t) function(b) log(-ps_log_survival(m, rep(t, length(rows_)), ps_natural(m, b, Xc, Sc)))
+    } else {
+      a_c <- alive_at[rows_]
+      # the time left at probability p: the unconditional quantile at 1 − (1 − p) S(a), less a
+      log_q <- function(p_) function(b) {
+        pars <- ps_natural(m, b, Xc, Sc)
+        up_to <- -expm1(log1p(-p_) + ps_log_survival(m, a_c, pars))
+        log(ps_quantile(m, up_to, pars) - a_c)
+      }
+      # the cumulative hazard accrued between a and a + t: S(a + t) / S(a) = exp(−that)
+      log_cumhaz <- function(t) function(b) {
+        pars <- ps_natural(m, b, Xc, Sc)
+        # (a difference below rounding, a cure far on: no hazard accrued, S stays at 1)
+        log(pmax(ps_log_survival(m, a_c, pars) - ps_log_survival(m, a_c + t, pars), 0))
+      }
+    }
     log_hazard <- function(t) function(b) {
       pars <- ps_natural(m, b, Xc, Sc)
       tt <- rep(t, length(rows_))
@@ -984,6 +1042,8 @@ ps_predict <- function(model, X, strata, quantiles = numeric(), times = numeric(
       }
     }
   }
+  # a quantile the distribution never reaches (a share of the units never has the event) is empty, not infinite
+  for (k in c("quantile_all", "quantile_all_low", "quantile_all_high")) out[[k]][!is.finite(out[[k]])] <- NA_real_
   out$median <- out$quantile_all[, 1L]
   out$median_low <- out$quantile_all_low[, 1L]
   out$median_high <- out$quantile_all_high[, 1L]
@@ -992,6 +1052,8 @@ ps_predict <- function(model, X, strata, quantiles = numeric(), times = numeric(
   out$quantile_low <- out$quantile_all_low[, keep, drop = FALSE]
   out$quantile_high <- out$quantile_all_high[, keep, drop = FALSE]
   out$intervals <- !is.null(V)
+  out$alive_empty <- alive_empty
+  out$alive_dead <- alive_dead
   out
 }
 
@@ -1019,6 +1081,7 @@ ps_delta_se <- function(f, par, V, value) {
 # survival at the node's times with their intervals, and on the rows of the fit the Cox–Snell,
 # martingale and deviance residuals.
 ps_rows_output <- function(df, model, prepared, fitted) {
+  alive_at <- ps_alive_column(df, prepared$p$alive_at)
   q_names <- .ps_names("pred_quantile_", model$quantiles)
   s_names <- .ps_names("pred_surv_at_", model$times)
   with_bounds <- function(x) c(x, if (length(x) && !is.null(model$vcov)) c(paste0(x, "_low"), paste0(x, "_high")))
@@ -1030,7 +1093,8 @@ ps_rows_output <- function(df, model, prepared, fitted) {
                list(column = clash[[1L]]))
   }
   d <- ps_design(model, df)
-  pr <- ps_predict(model, d$X, ifelse(d$ok, d$stratum, NA_integer_), model$quantiles, model$times, interval = TRUE)
+  pr <- ps_predict(model, d$X, ifelse(d$ok, d$stratum, NA_integer_), model$quantiles, model$times, interval = TRUE,
+                   alive_at = alive_at)
   out <- df
   out$pred_linear <- pr$linear
   put <- function(name, v, lo, hi) {
@@ -1079,7 +1143,8 @@ predict_parametric_survival <- function(task, card) {
                list(column = clash[[1L]]))
   }
   d <- ps_design(model, df)
-  pr <- ps_predict(model, d$X, ifelse(d$ok, d$stratum, NA_integer_), quantiles, times, interval = interval)
+  alive_at <- ps_alive_column(df, task$params$alive_at)
+  pr <- ps_predict(model, d$X, ifelse(d$ok, d$stratum, NA_integer_), quantiles, times, interval = interval, alive_at = alive_at)
   if (d$unseen > 0L) warning(d$unseen, " rows hold a value the model did not see when fitted: their prediction is empty")
   empty <- sum(!d$ok) - d$unseen
   if (empty > 0L) warning(empty, " rows have an empty value in a column the model needs: their prediction is empty")
@@ -1088,7 +1153,15 @@ predict_parametric_survival <- function(task, card) {
     .ps_num(model$last_time_by_stratum[model$strata_levels])[ifelse(d$ok, d$stratum, 1L)]
   furthest <- pmax(pr$median, if (length(quantiles)) apply(pr$quantile, 1L, max) else -Inf, if (length(times)) max(times) else -Inf,
                    na.rm = TRUE)
-  beyond <- sum(d$ok & is.finite(furthest) & furthest > last)
+  # with alive_at the numbers are the time left: the time on the model's scale is a more
+  if (!is.null(alive_at)) furthest <- alive_at + furthest
+  beyond <- sum(d$ok & !pr$alive_empty & !pr$alive_dead & is.finite(furthest) & furthest > last)
+  if (sum(pr$alive_empty) > 0L) {
+    warning(sum(pr$alive_empty), " rows have an empty, negative or infinite time already survived (alive_at): their prediction is empty")
+  }
+  if (sum(pr$alive_dead) > 0L) {
+    warning(sum(pr$alive_dead), " rows have survived beyond what the model allows (the probability of lasting that long is 0): their prediction is empty")
+  }
   if (beyond > 0L) {
     warning(beyond, " rows are predicted beyond the last time observed when fitting (", tab_number_label(model$last_time),
             if (!is.null(model$strata_col)) ", or their stratum's" else "", "): an extrapolation")
@@ -1309,4 +1382,155 @@ TAB_COMMON_TESTS[["parametric survival: Predict's options, its warnings and the 
   bad$w[[3L]] <- -1
   .tab_refused_with("negative_weight", fit_parametric_survival(.ps_test_task(bad, utils::modifyList(params, list(weights = "w")))))
   .tab_refused_with("time_type", fit_parametric_survival(.ps_test_task(df, utils::modifyList(params, list(time = "line")))))
+}
+
+# ── conditional survival (alive_at, lot P9) ──────────────────────────────────
+TAB_COMMON_TESTS[["parametric survival: alive_at on the exponential, which has no memory: the time left does not depend on it"]] <- function(code) {
+  d <- tab_read_csv(file.path(code, "reference", "data", "ps_exponential.csv"), list(hours = "number", broke = "boolean", shift = "text"))
+  params <- list(time = "hours", event = "broke", event_value = TRUE, distribution = "exponential", quantiles = list(0.25))
+  card <- jsonlite::fromJSON(tab_card_text(fit_parametric_survival(.ps_test_task(d, params))$card), simplifyVector = FALSE)
+  events <- sum(d$broke)
+  lambda <- events / sum(d$hours)
+  z <- stats::qnorm(0.975)
+  se <- 1 / sqrt(events) # the exponential's standard error on log rate, in closed form
+  rows_ <- d[1:7, ]
+  rows_$age <- c(0, 7.5, 40, 120, 250, 400, 600) # S(a) from 1 to 5e-5 (the rate is about 1/200)
+  got <- predict_parametric_survival(list(params = list(interval = TRUE, alive_at = "age", quantiles = list(0.25, 0.9),
+                                                         at_times = list(10, 50)), .frame = rows_), card)$output
+  near <- function(x, want, tol, what) .tab_expect(max(abs(x / want - 1)) < tol, "alive_at, ", what, ": off by ", format(max(abs(x / want - 1)), digits = 3))
+  # the median and the quantiles of the time left are the same whatever has been survived (closed forms, 1e-10)
+  near(got$prediction, rep(log(2) / lambda, 7L), 1e-10, "the median time left")
+  near(got$quantile_0.25, rep(-log(0.75) / lambda, 7L), 1e-10, "quantile 0.25")
+  near(got$quantile_0.9, rep(-log(0.1) / lambda, 7L), 1e-10, "quantile 0.9")
+  near(got$survival_at_10, rep(exp(-lambda * 10), 7L), 1e-10, "S(a + 10) / S(a)")
+  near(got$survival_at_50, rep(exp(-lambda * 50), 7L), 1e-10, "S(a + 50) / S(a)")
+  # and so are the intervals, by the delta method (1e-6: the gradient is numerical)
+  near(got$prediction_low, rep(log(2) / lambda * exp(-z * se), 7L), 1e-6, "the median's lower bound")
+  near(got$prediction_high, rep(log(2) / lambda * exp(z * se), 7L), 1e-6, "the median's upper bound")
+  near(got$survival_at_50_low, rep(exp(-exp(log(lambda * 50) + z * se)), 7L), 1e-6, "S's lower bound")
+  near(got$survival_at_50_high, rep(exp(-exp(log(lambda * 50) - z * se)), 7L), 1e-6, "S's upper bound")
+  # without alive_at the same rows give the same numbers again, and the survival of the first time unchanged
+  plain <- predict_parametric_survival(list(params = list(quantiles = list(0.25, 0.9), at_times = list(10, 50)), .frame = rows_), card)$output
+  near(plain$prediction, got$prediction, 1e-10, "the median from the start")
+}
+
+TAB_COMMON_TESTS[["parametric survival: alive_at against flexsurv's survival and quantiles and a root of S, six distributions"]] <- function(code) {
+  df <- .ps_test_table(code)
+  gompertz <- tab_read_csv(file.path(code, "reference", "data", "ps_gompertz.csv"),
+                           list(years = "number", died = "integer", age = "number", smoker = "boolean"))
+  for (dist in c("weibull", "exponential", "lognormal", "loglogistic", "gengamma", "gompertz")) {
+    if (dist == "gompertz") {
+      frame <- gompertz
+      params <- list(time = "years", event = "died", event_value = 1, predictors = list("age", "smoker"), distribution = dist)
+    } else {
+      frame <- df
+      params <- list(time = "days", event = "status", event_value = "failed", predictors = list("load", "line"), strata = "plant",
+                     distribution = dist)
+    }
+    task <- .ps_test_task(frame, params)
+    prepared <- ps_prepare(task)
+    fit <- fit_parametric_survival(task)
+    model <- ps_model(fit$card)
+    pick <- c(1L, 17L, 40L, 63L)
+    last <- max(prepared$time)
+    ages <- c(0, 0.2, 0.6, 1.1) * last
+    # the card's, with the intervals
+    got <- ps_predict(model, prepared$X[pick, , drop = FALSE], prepared$stratum[pick], c(0.1, 0.9), c(last / 20, last / 3), interval = TRUE,
+                      alive_at = ages)
+    native <- fit$native
+    for (k in seq_along(pick)) {
+      nd <- prepared$frame[pick[[k]], ]
+      a <- ages[[k]]
+      surv <- function(t) summary(native, newdata = nd, type = "survival", t = t, ci = FALSE, tidy = TRUE)$est
+      s_a <- if (a > 0) surv(a) else 1
+      # S(a + t) / S(a): flexsurv's own survival, to 1e-9
+      want_s <- vapply(c(last / 20, last / 3), function(t) surv(a + t) / s_a, 0)
+      .tab_expect(max(abs(got$surv[k, ] - want_s)) < 1e-9, dist, ": S(a + t) / S(a) off by ", format(max(abs(got$surv[k, ] - want_s)), digits = 3))
+      # the remaining median and quantiles: flexsurv's quantile at 1 − (1 − p) S(a), less a, to 1e-9 relative
+      probs <- c(0.5, 0.1, 0.9)
+      up_to <- 1 - (1 - probs) * s_a
+      want_q <- summary(native, newdata = nd, type = "quantile", quantiles = up_to, ci = FALSE, tidy = TRUE)$est - a
+      mine <- c(got$median[[k]], got$quantile[k, ])
+      fin <- is.finite(want_q)
+      .tab_expect(identical(is.finite(mine), fin), dist, ": the quantiles that exist differ")
+      .tab_expect(!any(fin) || max(abs(mine[fin] / want_q[fin] - 1)) < 1e-9, dist, ": the time left off by ",
+                  format(max(abs(mine[fin] / want_q[fin] - 1)), digits = 3))
+      # a root of S(a + q) = ½ S(a), found numerically from the survival alone, for the median
+      if (is.finite(mine[[1L]]) && s_a > 1e-6) {
+        root <- stats::uniroot(function(q) surv(a + q) - 0.5 * s_a, c(0, 1000 * last), tol = 1e-12)$root
+        .tab_expect(abs(root / mine[[1L]] - 1) < 1e-7, dist, ": the median against a root of S: ", format(abs(root / mine[[1L]] - 1), digits = 3))
+      }
+      # the interval holds the estimate, and is not wider than the unconditional one is at a = 0 ... only the order
+      ok_ <- is.finite(got$median_low[[k]])
+      .tab_expect(!ok_ || (got$median_low[[k]] < got$median[[k]] && got$median[[k]] < got$median_high[[k]]), dist, ": the interval around the median")
+      .tab_expect(all(got$surv_low[k, ] <= got$surv[k, ] & got$surv[k, ] <= got$surv_high[k, ]), dist, ": the interval around S")
+    }
+  }
+}
+
+TAB_COMMON_TESTS[["parametric survival: alive_at, what has no meaning is empty and counted, a cure never reaches the median, the column is checked"]] <- function(code) {
+  df <- .ps_test_table(code)
+  gompertz <- tab_read_csv(file.path(code, "reference", "data", "ps_gompertz.csv"),
+                           list(years = "number", died = "integer", age = "number", smoker = "boolean"))
+  fitted <- fit_parametric_survival(.ps_test_task(gompertz, list(time = "years", event = "died", event_value = 1,
+                                                                 predictors = list("age", "smoker"), distribution = "gompertz")))
+  card <- jsonlite::fromJSON(tab_card_text(fitted$card), simplifyVector = FALSE)
+  rows_ <- gompertz[1:5, ]
+  # empty, negative, infinite, and so old that nobody lasts (S(a) = 0 in double precision)
+  rows_$years_lived <- c(2, NA, -1, Inf, 1e6)
+  run <- .ps_with_warnings(predict_parametric_survival(list(params = list(alive_at = "years_lived", interval = TRUE, at_times = list(3)),
+                                                            .frame = rows_), card))
+  out <- run$value$output
+  .tab_expect(is.finite(out$prediction[[1L]]) && is.finite(out$survival_at_3[[1L]]) && all(is.na(out$prediction[2:5])) &&
+              all(is.na(out$survival_at_3[2:5])) && all(is.na(out$prediction_low[2:5])), "the empty rows: ", paste(out$prediction, collapse = " "))
+  .tab_expect(any(grepl("^3 rows have an empty, negative or infinite time already survived", run$warnings)) &&
+              any(grepl("^1 rows have survived beyond what the model allows", run$warnings)), "the warnings: ", paste(run$warnings, collapse = " | "))
+  # the conditional answer is not the unconditional one
+  plain <- predict_parametric_survival(list(params = list(at_times = list(3)), .frame = rows_[1, ]), card)$output
+  .tab_expect(abs(out$prediction[[1L]] - plain$prediction[[1L]]) > 1e-3, "alive_at changed nothing")
+  # beyond the last time observed: the extrapolation warning counts the row by the time already survived plus what is left
+  late <- rows_[1, ]
+  late$years_lived <- 1.05 * card$parametric_survival$last_time
+  run <- .ps_with_warnings(predict_parametric_survival(list(params = list(alive_at = "years_lived"), .frame = late), card))
+  .tab_expect(any(grepl("^1 rows are predicted beyond the last time observed", run$warnings)), "the extrapolation: ", paste(run$warnings, collapse = " | "))
+  # a column that is not there, or is not a number
+  .tab_refused_with("missing_column", predict_parametric_survival(list(params = list(alive_at = "nope"), .frame = rows_), card))
+  .tab_refused_with("alive_at_type", predict_parametric_survival(list(params = list(alive_at = "smoker"), .frame = rows_), card))
+  .tab_refused_with("missing_column", fit_parametric_survival(.ps_test_task(df, list(time = "days", event = "status", event_value = "failed",
+                                                                                    alive_at = "nope"))))
+  .tab_refused_with("alive_at_type", fit_parametric_survival(.ps_test_task(df, list(time = "days", event = "status", event_value = "failed",
+                                                                                   alive_at = "line"))))
+  # a falling hazard: a share never has the event. The time left has a median only while ½ S(a) is above that share
+  cure <- tab_read_csv(file.path(code, "reference", "data", "ps_gompertz_cure.csv"), list(months = "number", left = "integer"))
+  cured <- fit_parametric_survival(.ps_test_task(cure, list(time = "months", event = "left", event_value = 1, distribution = "gompertz")))
+  cmodel <- ps_model(cured$card)
+  share <- exp(exp(cmodel$par[[2L]]) / cmodel$par[[1L]]) # S(∞) = exp(rate / shape); flexsurv's order: shape, log rate
+  x <- matrix(0, 3L, 0L)
+  a_ok <- 0
+  a_gone <- 1e3 # long past the point where ½ S(a) is below the share
+  pr <- ps_predict(cmodel, x, rep(1L, 3L), c(0.1), c(12), alive_at = c(a_ok, a_gone, a_gone))
+  .tab_expect(is.na(pr$median[[1L]]) == (0.5 > 1 - share) && is.na(pr$median[[2L]]) && is.finite(pr$surv[[2L]]) && pr$surv[[2L]] > 0.99 &&
+              !any(pr$alive_dead), "the cure: ", paste(pr$median, collapse = " "), " ", share)
+}
+
+TAB_COMMON_TESTS[["parametric survival: the rows output with alive_at and Predict give the same numbers to the bit"]] <- function(code) {
+  df <- .ps_test_table(code)
+  df$age <- rep(c(0, 3, 8.5, NA, 15, 30, -2, 1), length.out = nrow(df))
+  params <- list(time = "days", event = "status", event_value = "failed", predictors = list("load", "line"), strata = "plant",
+                 distribution = "lognormal", quantiles = list(0.25), times = list(10, 30), alive_at = "age", output = "rows")
+  fit <- fit_parametric_survival(.ps_test_task(df, params, "rows"))
+  out <- fit$output
+  card <- jsonlite::fromJSON(tab_card_text(fit$card), simplifyVector = FALSE)
+  got <- predict_parametric_survival(list(params = list(interval = TRUE, alive_at = "age"), .frame = df), card)$output
+  same <- c(prediction = "pred_median", prediction_low = "pred_median_low", prediction_high = "pred_median_high",
+            quantile_0.25 = "pred_quantile_0.25", quantile_0.25_low = "pred_quantile_0.25_low", quantile_0.25_high = "pred_quantile_0.25_high",
+            survival_at_10 = "pred_surv_at_10", survival_at_10_low = "pred_surv_at_10_low", survival_at_30_high = "pred_surv_at_30_high")
+  for (k in names(same)) .tab_expect(identical(got[[k]], out[[same[[k]]]]), k, " differs from the rows output's ", same[[k]])
+  # the empty and negative ages are empty rows, the others are not; the node's own estimates do not depend on alive_at
+  bad <- is.na(df$age) | df$age < 0
+  .tab_expect(all(is.na(out$pred_median[bad])) && any(is.finite(out$pred_median[!bad])), "the rows output's empty ages")
+  without <- fit_parametric_survival(.ps_test_task(df, utils::modifyList(params, list(alive_at = NULL)), "rows"))
+  .tab_expect(identical(tab_results_frame(fit$rows)$value, tab_results_frame(without$rows)$value), "alive_at changed the fit")
+  .tab_expect(identical(out$pred_cox_snell, without$output$pred_cox_snell) && identical(out$pred_linear, without$output$pred_linear),
+              "alive_at changed the residuals or the linear predictor")
 }
