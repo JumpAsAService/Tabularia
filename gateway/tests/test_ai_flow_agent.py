@@ -434,3 +434,112 @@ async def test_an_assistant_puts_a_configured_test_on_the_draft_and_a_wrong_one_
     node = next(n for n in canvas["nodes"] if n["id"] == "op-1")
     assert node["data"] == {"opType": "stat_anova", "params": anova}
     assert fake_engine.previews[-1]["operations"][-1]["type"] == "stat_anova"
+
+
+# ── the statistical models, from the catalogue's copy ────────────────────────
+def _sample(kind: dict, key: str):
+    """A value of that kind for a key: the columns differ from key to key."""
+    control = kind["control"]
+    return {"column": f"col_{key}", "columns": [f"col_{key}"], "level": "yes", "choice": (kind.get("choices") or [None])[0]}[control]
+
+
+def test_every_model_of_the_catalogue_is_an_operation_with_a_line_of_reference_and_its_defaults_pass():
+    catalogue = ai_flow_agent.MODEL_CATALOG
+    assert ai_flow_agent.MODELS and len(ai_flow_agent.MODEL_OPERATIONS) == len(catalogue["models"])
+    reference = ai_flow_agent.context(None, "en")
+    assert f"- {ai_flow_agent.PREDICT_OPERATION} {{connectionId, experiment, registeredModel, version: number|latest" in reference
+    for operation, model_id in ai_flow_agent.MODEL_OPERATIONS.items():
+        m = ai_flow_agent.MODELS[model_id]
+        assert operation in ai_flow_agent.OPERATIONS and f"- {operation} {{" in reference
+        needed = {k: _sample(catalogue["kinds"][kind], k) for k, kind in m["needs"].items()}
+        full = {**m["defaults"], **needed}
+        defaults = {k: v for k, v in m["defaults"].items()
+                    if k not in needed and ai_flow_agent._given(v) and ai_flow_agent.model_applies(model_id, k, full)}
+        assert clean_params(operation, {**needed, **defaults}) == {**needed, **defaults}
+    assert "penalty?: none|ridge|lasso|elastic_net" in reference  # the penalties of a regression
+    assert "variants: unpenalized (penalty = none); penalized (penalty = ridge or lasso or elastic_net)" in reference
+    assert "Kubernetes" in reference and "registerAs" in reference
+
+
+def test_a_configured_model_comes_out_as_given_with_its_mlflow_block_apart():
+    lasso = {"outcome": "amount", "predictors": ["quantity", "price"], "penalty": "lasso", "lambda": "cv_min", "folds": 5, "se": None}
+    assert clean_params("model_linear", lasso) == {k: v for k, v in lasso.items() if v is not None}
+    clean = clean_params("model_cox", {"time": "t", "event": "e", "event_value": 1, "predictors": ["age"], "se": "robust", "cluster": "site",
+                                       "mlflow": {"connectionId": 3, "experiment": " Pasta ", "registerAs": "cox"}})
+    assert clean["mlflow"] == {"connectionId": 3, "experiment": "Pasta", "registerAs": "cox"}
+    data = ai_flow_agent.model_node_data("model_cox", clean)
+    assert data["model"] == "cox" and "mlflow" not in data["params"] and data["mlflow"]["connectionId"] == 3
+    assert clean_params("model_predict", {"connectionId": 3, "experiment": "Pasta", "registeredModel": "cox", "version": 7,
+                                          "interval": False, "at_times": [24, 12]}) == \
+        {"connectionId": 3, "experiment": "Pasta", "registeredModel": "cox", "version": "7", "at_times": [12, 24]}
+
+
+_BASE = {"outcome": "amount", "predictors": ["quantity", "price"]}
+
+
+@pytest.mark.parametrize("operation, params, message", [
+    ("model_linear", {"outcome": "amount"}, "linear: 'predictors' is required"),
+    ("model_linear", {**_BASE, "family": "gamma"}, "there is no parameter 'family'"),
+    ("model_linear", {**_BASE, "penalty": "scad"}, "'penalty' must be one of none, ridge, lasso, elastic_net"),
+    ("model_linear", {**_BASE, "penalty": "lasso", "se": "hc3"}, "'se' only applies when penalty = none"),
+    ("model_linear", {**_BASE, "penalty": "ridge", "mixing": 0.3}, "'mixing' only applies when penalty = elastic_net"),
+    ("model_linear", {**_BASE, "cluster": "site"}, "'cluster' only applies when se = cluster and penalty = none"),
+    ("model_linear", {**_BASE, "order_by": "t", "penalty": "lasso"}, "only applies when penalty = none"),
+    ("model_linear", {**_BASE, "estimation": "wls"}, "weighted least squares need the column of the weights"),
+    ("model_linear", {**_BASE, "se": "cluster"}, "clustered standard errors need the column of the clusters"),
+    ("model_linear", {**_BASE, "outcome": "quantity"}, "the column «quantity» is both 'outcome' and 'predictors'"),
+    ("model_linear", {**_BASE, "alpha": 1.5}, "'alpha' must be a number above 0 and below 1"),
+    ("model_linear", {**_BASE, "folds": 2, "penalty": "lasso"}, "'folds' must be a whole number from 3 to 20"),
+    ("model_linear", {**_BASE, "predictors": []}, "'predictors' must name at least 1 column"),
+    ("model_linear", {**_BASE, "predictors": ["a", "a"]}, "names a column twice"),
+    ("model_linear", {**_BASE, "reference": {"month": "may"}}, "'reference' names «month», which is not one of the 'predictors'"),
+    ("model_linear", {**_BASE, "lambda": "best", "penalty": "ridge"}, "'lambda' must be one of cv_1se, cv_min, or a number above 0"),
+    ("model_logistic", {**_BASE, "event_value": 1, "link": "probit", "estimation": "firth"}, "Firth's penalized likelihood is for the logit link"),
+    ("model_logistic", {**_BASE, "event_value": 1, "se": "hc1", "ci": "profile"}, "profile likelihood intervals go with the classical standard errors"),
+    ("model_kaplan_meier", {"time": "t", "event": "e", "event_value": 1, "pairwise": True}, "'pairwise' only applies when 'strata' is given"),
+    ("model_kaplan_meier", {"time": "t", "event": "e", "event_value": 1, "times": [3, 3]}, "holds a number twice"),
+    ("model_arima", {"time": "t", "value": "v", "frequency": "month", "criterion": "bic"}, "'criterion' only applies when orders = auto"),
+    ("model_arima", {"time": "t", "value": "v", "frequency": "month", "p": 9}, "'p' must be a whole number from 0 to 5"),
+    ("model_arima", {"time": "t", "value": "v", "frequency": "month", "horizon": 6, "exog": ["promo"]}, "'horizon' only applies when 'exog' is not given"),
+    ("model_arima", {"time": "t", "value": "v"}, "'frequency' is required"),
+    ("model_linear", {**_BASE, "mlflow": {"experiment": "Pasta"}}, "'connectionId' must be the id of an MLflow connection"),
+    ("model_linear", {**_BASE, "mlflow": {"connectionId": 3}}, "'experiment' is required with a connection"),
+    ("model_predict", {"connectionId": 3, "experiment": "Pasta", "registeredModel": "x"}, "'version' must be a version number"),
+    ("model_predict", {"connectionId": 3, "experiment": "Pasta", "registeredModel": "x", "version": "7.1"}, "'version' must be a version number"),
+    ("model_predict", {"experiment": "Pasta", "registeredModel": "x", "version": "7"}, "'connectionId' must be the id"),
+    ("model_predict", {"connectionId": 3, "experiment": "Pasta", "registeredModel": "x", "version": "7", "penalty": "lasso"}, "Predict has no option 'penalty'"),
+    ("model_predict", {"connectionId": 3, "experiment": "Pasta", "registeredModel": "x", "version": "7", "threshold": 1}, "'threshold' must be a number above 0 and below 1"),
+])
+def test_a_model_with_wrong_parameters_is_refused_with_what_to_fix(operation, params, message):
+    with pytest.raises(ModelRetry) as e:
+        clean_params(operation, params)
+    assert message in str(e.value)
+
+
+def test_the_reference_tells_the_assistant_what_a_model_needs_to_run():
+    reference = ai_flow_agent.context(None, "en")
+    for sentence in ("Kubernetes", "group of models an administrator has enabled", "there is no preview",
+                     "only when it has `mlflow:", "needs that registered version"):
+        assert sentence in reference
+
+
+@pytest.mark.anyio
+async def test_an_assistant_puts_a_lasso_regression_on_the_draft_and_a_wrong_one_is_sent_back(session, world, fake_engine, monkeypatch):
+    lasso = {"outcome": "amount", "predictors": ["quantity", "price"], "penalty": "lasso", "lambda": "cv_1se", "folds": 5}
+    events = await _turn(session, world, monkeypatch, world["editor"], [
+        ("add_source", {"datasource_id": world["orders"].id}),
+        ("add_step", {"after": "source", "operation": "model_linear", "params": {**lasso, "se": "hc3"}}),
+        ("add_step", {"after": "source", "operation": "model_linear", "params": lasso}),
+        ("add_step", {"after": "ctl-1", "operation": "limit", "params": {"n": 5}}),
+        "Added a lasso regression of the amount (ctl-1); it runs with the flow.",
+    ], message="fit the amount on quantity and price with a lasso")
+    assert "error" not in [n for n, _ in events]
+    steps = [d for n, d in events if n == "tool_result" and d["name"] == "add_step"]
+    assert [s["ok"] for s in steps] == [False, True, False]
+    assert "'se' only applies when penalty = none" in steps[0]["error"] and "must be a source or a step" in steps[2]["error"]
+    canvas = json.loads(events[-1][1]["definition"])
+    node = next(n for n in canvas["nodes"] if n["id"] == "ctl-1")
+    assert node["type"] == "model"
+    assert node["data"] == {"model": "linear", "params": lasso, "timeoutSeconds": 900, "retries": 0}
+    assert any(e["source"] == "source" and e["target"] == "ctl-1" and e["targetHandle"] == "left" for e in canvas["edges"])
+    assert fake_engine.previews == []  # a model runs as a Job: nothing to preview

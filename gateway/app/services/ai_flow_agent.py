@@ -55,7 +55,24 @@ def _load_stat_catalog() -> dict:
 
 STAT_CATALOG = _load_stat_catalog()
 STAT_TESTS: dict[str, dict] = {t["operation"]: t for t in STAT_CATALOG["tests"]}
-OPERATIONS = BASE_OPERATIONS + tuple(STAT_TESTS)
+
+
+# ── the statistical models: a `model` node each, and the Predict node, from the catalogue's copy ──
+# `model_catalog.json` is written by .github/scripts/model_catalog.py from the engine's catalogue
+# (backend/app/engine/models/catalog.py); nothing here names a model. The assistant's operation for
+# a model is `model_<id>`; it makes a node of the editor's `model` type. A model runs as a
+# Kubernetes Job, so there is no preview of it and no step can follow it.
+def _load_model_catalog() -> dict:
+    return json.loads((Path(__file__).with_name("model_catalog.json")).read_text(encoding="utf-8"))
+
+
+MODEL_CATALOG = _load_model_catalog()
+MODELS: dict[str, dict] = {m["id"]: m for m in MODEL_CATALOG["models"]}
+MODEL_NODE, PREDICT_NODE = tuple(MODEL_CATALOG["nodes"])  # the node types: `model`, `model_predict`
+MODEL_OPERATIONS: dict[str, str] = {f"{MODEL_NODE}_{i}": i for i in MODELS}  # operation -> model id
+PREDICT_OPERATION = PREDICT_NODE
+MODEL_TIMEOUT_SECONDS = 900  # what the editor gives a new model node
+OPERATIONS = BASE_OPERATIONS + tuple(STAT_TESTS) + tuple(MODEL_OPERATIONS) + (PREDICT_OPERATION,)
 FILTER_OPERATORS = ("eq", "ne", "gt", "ge", "lt", "le", "in", "not_in", "between", "contains", "starts_with",
                     "ends_with", "is_null", "is_not_null")
 AGG_FUNCS = ("sum", "mean", "min", "max", "count", "median", "std", "var", "first", "last", "n_unique")
@@ -132,11 +149,13 @@ class FlowDraft:
 
     def next_id(self, prefix: str) -> str:
         """The next free id with the editor's prefixes, so its own counters go on from there."""
+        shared = prefix in ("out-", "ctl-")  # the editor numbers Outputs and control nodes (Script, models) together
         used = [int(n["id"][len(prefix):]) for n in self.nodes if n["id"].startswith(prefix) and n["id"][len(prefix):].isdigit()]
-        if prefix == "out-":  # the editor numbers Outputs and control nodes together
-            used += [int(n["id"][4:]) for n in self.nodes if n["id"].startswith("ctl-") and n["id"][4:].isdigit()]
-        n = max(max(used, default=0), self.floors.get(prefix, 0)) + 1
-        self.floors[prefix] = n
+        if shared:
+            used += [int(n["id"][4:]) for n in self.nodes if n["id"][:4] in ("out-", "ctl-") and n["id"][4:].isdigit()]
+        floor_key = "out-" if shared else prefix
+        n = max(max(used, default=0), self.floors.get(floor_key, 0)) + 1
+        self.floors[floor_key] = n
         return f"{prefix}{n}"
 
     def free_position(self, x: float, y: float) -> dict:
@@ -275,6 +294,356 @@ def stat_reference() -> str:
     return "\n".join(lines)
 
 
+# the checks below are gateway-go/internal/modelcatalog's (Check, CheckPredict, readValue): the same
+# rules, and the same sentences where a person reads them
+def _is_number(v: Any) -> bool:
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+
+
+def _same(a: Any, b: Any) -> bool:
+    """Two JSON values: a text, a number, a boolean or null, each only equal to its own kind."""
+    if isinstance(a, bool) or isinstance(b, bool):
+        return isinstance(a, bool) and isinstance(b, bool) and a == b
+    if _is_number(a) and _is_number(b):
+        return a == b
+    if isinstance(a, str) or isinstance(b, str):
+        return isinstance(a, str) and isinstance(b, str) and a == b
+    return a is None and b is None
+
+
+def _given(v: Any) -> bool:
+    """A key that says something: not null, not an empty list or object."""
+    return not (v is None or (isinstance(v, (list, dict)) and not v))
+
+
+def _holds(rule: Any, value: Any) -> bool:
+    """A condition of `applies`, `requires` or `forbids`: true = given, false = not given, a list = one of
+    its values, anything else = that value."""
+    if isinstance(rule, bool):
+        return _given(value) if rule else not _given(value)
+    if isinstance(rule, list):
+        return any(_same(x, value) for x in rule)
+    return _same(rule, value)
+
+
+def _holds_all(when: dict, full: dict) -> bool:
+    return all(_holds(rule, full.get(key)) for key, rule in when.items())
+
+
+def _fmt(v: Any) -> str:
+    if isinstance(v, bool):
+        return "true" if v else "false"
+    if isinstance(v, float) and v == int(v) and abs(v) < 1e15:
+        return str(int(v))
+    return str(v)
+
+
+def _when_text(when: dict) -> str:
+    parts = []
+    for key, rule in when.items():
+        if isinstance(rule, bool):
+            parts.append(f"'{key}' is " + ("given" if rule else "not given"))
+        elif isinstance(rule, list):
+            parts.append(f"{key} = " + " or ".join(_fmt(x) for x in rule))
+        else:
+            parts.append(f"{key} = {_fmt(rule)}")
+    return " and ".join(parts)
+
+
+def _bounds_text(spec: dict) -> str:
+    parts = []
+    for bound, word in (("above", "above"), ("min", "at least"), ("below", "below"), ("max", "at most")):
+        if spec.get(bound) is not None:
+            parts.append(f"{word} {_fmt(spec[bound])}")
+    return " and ".join(parts)
+
+
+def _within(spec: dict, v: float) -> bool:
+    return ((spec.get("above") is None or v > spec["above"]) and (spec.get("below") is None or v < spec["below"])
+            and (spec.get("min") is None or v >= spec["min"]) and (spec.get("max") is None or v <= spec["max"]))
+
+
+def _model_level(who: str, key: str, value: Any) -> Any:
+    if isinstance(value, str):
+        if value.strip():
+            return value
+        raise ModelRetry(f"{who}: '{key}' must be a value of the column.")
+    if isinstance(value, bool) or _is_number(value):
+        return value
+    raise ModelRetry(f"{who}: '{key}' must be a value of the column: a text, a number, true or false.")
+
+
+def _model_value(who: str, key: str, spec: dict, value: Any) -> Any:
+    """One value of a model's (or Predict's) parameter by the control its kind asks for, or a ModelRetry.
+    The columns and the levels are the runner's to judge, on the data."""
+    control = spec["control"]
+    bad = lambda what: ModelRetry(f"{who}: '{key}' {what}.")  # noqa: E731
+    if control == "column":
+        if isinstance(value, str) and value:
+            return value
+        raise bad("must be the name of a column")
+    if control == "columns":
+        if not isinstance(value, list) or not all(isinstance(c, str) and c for c in value):
+            raise bad("must be a list of column names")
+        if len(set(value)) != len(value):
+            raise bad("names a column twice")
+        if spec.get("min") is not None and len(value) < spec["min"]:
+            raise bad(f"must name at least {_fmt(spec['min'])} column" + ("" if spec["min"] == 1 else "s"))
+        if spec.get("max") is not None and len(value) > spec["max"]:
+            raise bad(f"may name at most {_fmt(spec['max'])} columns")
+        return list(value)
+    if control == "level":
+        return _model_level(who, key, value)
+    if control == "reference":
+        if not isinstance(value, dict):
+            raise bad("must give a column its reference level, as {column: level}")
+        return {c: _model_level(who, f"{key}.{c}", level) for c, level in sorted(value.items())}
+    if control == "pairs":
+        out, seen = [], set()
+        if not isinstance(value, list):
+            raise bad("must be a list of pairs of columns")
+        for pair in value:
+            if not (isinstance(pair, list) and len(pair) == 2 and all(isinstance(c, str) and c for c in pair) and pair[0] != pair[1]):
+                raise bad("must be a list of pairs of two different columns")
+            ident = tuple(sorted(pair))
+            if ident in seen:
+                raise bad(f"names the pair «{pair[0]}», «{pair[1]}» twice")
+            seen.add(ident)
+            out.append(list(pair))
+        if spec.get("max") is not None and len(out) > spec["max"]:
+            raise bad(f"may hold at most {_fmt(spec['max'])} pairs")
+        return out
+    if control == "choice":
+        if isinstance(value, str) and value in spec["choices"]:
+            return value
+        raise bad("must be one of " + ", ".join(spec["choices"]))
+    if control == "number":
+        if _is_number(value) and _within(spec, value):
+            return value
+        b = _bounds_text(spec)
+        raise ModelRetry(f"{who}: '{key}' must be a number" + (f" {b}" if b else "") + ".")
+    if control == "integer":
+        if _is_number(value) and value == math.floor(value) and _within(spec, value):
+            return int(value)
+        raise bad(f"must be a whole number from {_fmt(spec['min'])} to {_fmt(spec['max'])}")
+    if control == "boolean":
+        if isinstance(value, bool):
+            return value
+        raise bad("must be true or false")
+    if control == "numbers":
+        ok = isinstance(value, list) and all(_is_number(x) and _within(spec, x) for x in value)
+        if not ok:
+            raise bad("must be a list of numbers, each " + _bounds_text(spec))
+        if len(set(value)) != len(value):
+            raise bad("holds a number twice")
+        if spec.get("max_count") is not None and len(value) > spec["max_count"]:
+            raise bad(f"may hold at most {spec['max_count']} numbers")
+        return sorted(value)
+    if control == "number_or_choice":
+        if isinstance(value, str) and value in spec["choices"]:
+            return value
+        if _is_number(value) and _within(spec, value):
+            return value
+        b = _bounds_text(spec)
+        raise ModelRetry(f"{who}: '{key}' must be one of " + ", ".join(spec["choices"]) + ", or a number" + (f" {b}" if b else "") + ".")
+    return value  # a control this version does not know: the runner judges it
+
+
+def model_applies(model: str, key: str, full: dict) -> bool:
+    """Whether the model's key applies with these values (`applies`: no entry means always)."""
+    rule = MODELS[model]["applies"].get(key)
+    return rule is None or _holds_all(rule, full)
+
+
+def _model_keys(model: dict) -> dict[str, str]:
+    return {**model["needs"], **model["takes"]}
+
+
+def clean_model_params(model_id: str, params: dict) -> dict:
+    """The parameters of a model node, checked against its catalogue entry as the gateway checks them
+    (`modelcatalog.Check`): the keys it needs, the keys it takes, each value by its kind, a key given while
+    it does not apply, what `requires` and `forbids` say, and the columns that must differ. A key set to
+    null is a key not given. The answer holds what was given."""
+    model = MODELS[model_id]
+    kinds = _model_keys(model)
+    given = {k: v for k, v in params.items() if v is not None}
+    for key in sorted(given):
+        if key not in kinds:
+            raise ModelRetry(f"{model_id}: there is no parameter '{key}' (it takes: {', '.join(kinds)}).")
+    for key in model["needs"]:
+        if key not in given:
+            raise ModelRetry(f"{model_id}: '{key}' is required.")
+    read = {key: _model_value(model_id, key, MODEL_CATALOG["kinds"][kinds[key]], given[key]) for key in kinds if key in given}
+    full = {key: read[key] if key in read else model["defaults"].get(key) for key in kinds}
+    for key in kinds:
+        if key in read and not model_applies(model_id, key, full):
+            raise ModelRetry(f"{model_id}: '{key}' only applies when {_when_text(model['applies'][key])}.")
+    for rule in model["requires"]:
+        if _holds_all(rule["when"], full) and not _given(full.get(rule["key"])):
+            raise ModelRetry(f"{model_id}: {rule['message']}.")
+    for rule in model["forbids"]:
+        if _same(full.get(rule["key"]), rule["value"]) and _holds_all(rule["when"], full):
+            raise ModelRetry(f"{model_id}: {rule['message']}.")
+    for key in kinds:
+        spec = MODEL_CATALOG["kinds"][kinds[key]]
+        if key not in read or spec["control"] not in ("reference", "pairs"):
+            continue
+        of = full.get(spec["of"])
+        allowed = set([of] if isinstance(of, str) else of if isinstance(of, list) else [])
+        named = list(read[key]) if spec["control"] == "reference" else [c for pair in read[key] for c in pair]
+        for column in named:
+            if column not in allowed:
+                raise ModelRetry(f"{model_id}: '{key}' names «{column}», which is not one of the '{spec['of']}'.")
+    owner: dict[str, str] = {}
+    for key in model["disjoint"]:
+        value = full.get(key)
+        for column in ([value] if isinstance(value, str) else value if isinstance(value, list) else []):
+            if column in owner:
+                raise ModelRetry(f"{model_id}: the column «{column}» is both '{owner[column]}' and '{key}': choose another.")
+            owner[column] = key
+    return read
+
+
+def clean_mlflow(block: Any) -> dict:
+    """The MLflow block of a model node: a connection and, with it, the experiment; what is optional."""
+    if not isinstance(block, dict):
+        raise ModelRetry("mlflow must be an object: {connectionId, experiment, registerAs?, continueWithout?}.")
+    for key in block:
+        if key not in ("connectionId", "experiment", "registerAs", "continueWithout"):
+            raise ModelRetry(f"mlflow: there is no key '{key}' (it takes: connectionId, experiment, registerAs, continueWithout).")
+    cid = block.get("connectionId")
+    if isinstance(cid, bool) or not isinstance(cid, int) or cid < 1:
+        raise ModelRetry("mlflow: 'connectionId' must be the id of an MLflow connection.")
+    experiment = block.get("experiment")
+    if not isinstance(experiment, str) or not experiment.strip():
+        raise ModelRetry("mlflow: 'experiment' is required with a connection.")
+    out: dict[str, Any] = {"connectionId": cid, "experiment": experiment.strip()}
+    if block.get("registerAs") is not None:
+        if not isinstance(block["registerAs"], str) or not block["registerAs"].strip():
+            raise ModelRetry("mlflow: 'registerAs' must be a name.")
+        out["registerAs"] = block["registerAs"].strip()
+    if block.get("continueWithout") is not None:
+        if not isinstance(block["continueWithout"], bool):
+            raise ModelRetry("mlflow: 'continueWithout' must be true or false.")
+        if block["continueWithout"]:
+            out["continueWithout"] = True
+    return out
+
+
+def clean_model_operation(operation: str, params: dict) -> dict:
+    """What a `model_<id>` operation keeps: the model's parameters, and `mlflow` when the person gave a
+    connection and an experiment (a model node logs and registers only then)."""
+    rest = {k: v for k, v in params.items() if k != "mlflow"}
+    out = clean_model_params(MODEL_OPERATIONS[operation], rest)
+    if params.get("mlflow") is not None:
+        out["mlflow"] = clean_mlflow(params["mlflow"])
+    return out
+
+
+_PREDICT_VERSION = re.compile(r"^[1-9][0-9]{0,17}$")
+
+
+def clean_predict_params(params: dict) -> dict:
+    """What a Predict step keeps: the registered version it applies (connection, experiment, registered
+    model, version) and its options, checked as `modelcatalog.CheckPredict` does. A null, a false and an
+    empty list are an option not given. Which options a model takes is known only once the version is,
+    so the run judges that."""
+    predict = MODEL_CATALOG["predict"]
+    head = ("connectionId", "experiment", "registeredModel", "version")
+    for key in params:
+        if key not in head and key not in predict["takes"]:
+            raise ModelRetry(f"Predict has no option '{key}' (it takes: {', '.join(head + tuple(sorted(predict['takes'])))}).")
+    cid = params.get("connectionId")
+    if isinstance(cid, bool) or not isinstance(cid, int) or cid < 1:
+        raise ModelRetry("Predict: 'connectionId' must be the id of the MLflow connection the model is read from.")
+    out: dict[str, Any] = {"connectionId": cid}
+    for key in ("experiment", "registeredModel"):
+        if not isinstance(params.get(key), str) or not params[key].strip():
+            raise ModelRetry(f"Predict: '{key}' is required: a version is a registered model of an experiment.")
+        out[key] = params[key].strip()
+    version = params.get("version")
+    version = str(version) if isinstance(version, int) and not isinstance(version, bool) else version
+    if not isinstance(version, str) or not (version.strip() == "latest" or _PREDICT_VERSION.match(version.strip())):
+        raise ModelRetry("Predict: 'version' must be a version number, or \"latest\".")
+    out["version"] = version.strip()
+    for key, kind in predict["takes"].items():
+        value = params.get(key)
+        if value is None or value is False or (isinstance(value, list) and not value):
+            continue
+        read = _model_value("Predict", key, MODEL_CATALOG["kinds"][kind], value)
+        if read is not False:
+            out[key] = read
+    return out
+
+
+def model_node_data(operation: str, clean: dict) -> dict:
+    """The data of the editor's node for a checked `model_<id>` or `model_predict` operation."""
+    tail = {"timeoutSeconds": MODEL_TIMEOUT_SECONDS, "retries": 0}
+    if operation == PREDICT_OPERATION:
+        head = ("connectionId", "experiment", "registeredModel", "version")
+        return {**{k: clean[k] for k in head}, "params": {k: v for k, v in clean.items() if k not in head}, **tail}
+    data = {"model": MODEL_OPERATIONS[operation], "params": {k: v for k, v in clean.items() if k != "mlflow"}, **tail}
+    if "mlflow" in clean:
+        data["mlflow"] = clean["mlflow"]
+    return data
+
+
+def model_params_of(node: dict) -> dict:
+    """A model or Predict node's data as the parameters of its operation (what change_step replaces)."""
+    d = node.get("data") or {}
+    if node.get("type") == PREDICT_NODE:
+        return {**{k: d.get(k) for k in ("connectionId", "experiment", "registeredModel", "version")}, **(d.get("params") or {})}
+    return {**(d.get("params") or {}), **({"mlflow": d["mlflow"]} if d.get("mlflow") else {})}
+
+
+def operation_of(node: dict) -> Optional[str]:
+    """The operation a step node of the assistant's kinds stands for."""
+    d = node.get("data") or {}
+    if node.get("type") == PREDICT_NODE:
+        return PREDICT_OPERATION
+    if node.get("type") == MODEL_NODE:
+        return f"{MODEL_NODE}_{d.get('model')}"
+    return d.get("opType")
+
+
+def models_reference() -> str:
+    """One line per model, `model_linear {outcome, predictors: [..], penalty?: none|ridge|..., ...}`, then
+    what applies only with some value (`applies`), the variants and the presets, all from the catalogue's
+    copy; then the Predict step: a key with `?` is optional."""
+    kinds = MODEL_CATALOG["kinds"]
+
+    def entry(key: str, kind: str, needed: bool) -> str:
+        spec = kinds[kind]
+        control = spec["control"]
+        what = {"choice": "|".join(spec.get("choices", [])), "boolean": "bool", "number": "number", "integer": "int",
+                "numbers": "[numbers]", "level": "value", "columns": "[..]", "pairs": "[[a, b], ..]", "reference": "{column: level}",
+                "number_or_choice": "|".join([*spec.get("choices", []), "number"])}.get(control, "")
+        return key + ("" if needed else "?") + (f": {what}" if what and control != "column" else "")
+
+    lines = []
+    for group in MODEL_CATALOG["groups"]:
+        for model_id in group["models"]:
+            m = MODELS[model_id]
+            keys = [entry(k, v, True) for k, v in m["needs"].items()] + [entry(k, v, False) for k, v in m["takes"].items()]
+            lines.append(f"- {MODEL_NODE}_{model_id} {{{', '.join(keys)}}} ({group['id']})")
+            by_when: dict[str, list[str]] = {}
+            for key, when in m["applies"].items():
+                by_when.setdefault(_when_text(when), []).append(key)
+            if by_when:
+                lines.append("  " + "; ".join(f"{', '.join(ks)} only when {w}" for w, ks in by_when.items()) + ".")
+            if len(m["variants"]) > 1:
+                lines.append("  variants: " + "; ".join(f"{v['id']} ({_when_text(v['when'])})" for v in m["variants"]) + ".")
+            if m["presets"]:
+                lines.append("  presets: " + "; ".join(
+                    f"{name} = " + ", ".join(f"{k} {_fmt(v)}" for k, v in values.items()) for name, values in m["presets"].items()) + ".")
+    predict = MODEL_CATALOG["predict"]
+    options = [entry(k, v, False) for k, v in predict["takes"].items()]
+    lines.append(f"- {PREDICT_OPERATION} {{connectionId, experiment, registeredModel, version: number|latest, {', '.join(options)}}}")
+    lines.append("  options for: " + "; ".join(f"{k} for {', '.join(MODEL_NODE + '_' + x for x in models)}"
+                                            for k, models in predict["applies_to"].items()) + ".")
+    return "\n".join(lines)
+
+
 def clean_params(operation: str, params: Any) -> dict:
     """The parameters of a step in the shape the engine runs and the editor's form
     shows, or a ModelRetry that says what is wrong."""
@@ -285,6 +654,10 @@ def clean_params(operation: str, params: Any) -> dict:
         raise ModelRetry("params must be an object.")
     if operation in STAT_TESTS:
         return clean_stat_params(operation, p)
+    if operation in MODEL_OPERATIONS:
+        return clean_model_operation(operation, p)
+    if operation == PREDICT_OPERATION:
+        return clean_predict_params(p)
     if operation in ("select", "drop", "reorder"):
         return {"columns": _columns(p.get("columns"), "columns")}
     if operation == "rename":
@@ -482,10 +855,20 @@ _REFERENCE = """Operations and their params (column names are case-sensitive):
 - compute {columns: [{name, expr}]}: new or replaced columns from SQL expressions ({dialect}), applied in order, each may use those before it; window functions with OVER are allowed.
 - sql {query}: ONE SELECT ... FROM self in {dialect}; use it only when no operation above fits.
 - join {how, on: [..]} or {how, left_on: [..], right_on: [..]}; how: inner left right full semi anti cross. Needs a right input. union {strategy: relaxed|strict} stacks the rows of the right input.
-{stat}"""
+{stat}
+{models}"""
 
 _STAT_INTRO = """
 Hypothesis tests: each is a step of its own that reads the rows and gives the test's result table (statistic, p-value, effect, interval, a verdict at alpha), not the rows. A key with ? is optional; a key not listed is refused; alpha is the significance level (0.05 by default). Pick the test that fits the question and the column types (a number column where a number is needed), put it after the steps that prepare the data, and read the p-value from the step's first rows. Only the tests below exist:"""
+
+
+_MODELS_INTRO = """
+Statistical models: each is a step of its own, a model_<id> operation, that fits a model on the rows that reach it and writes its results table (the coefficients or the estimates, the fit's statistics, the tests of its assumptions) when the flow runs. Differences from the steps above:
+- A model runs as a Job on Kubernetes, in a group of models an administrator has enabled and the person may use; there is no preview of it (add_step returns no rows and no columns), and no step can be added after it: put it at the end of a chain, after the steps that prepare the data.
+- The model's keys are those below; a key not listed is refused; a key described as "only when" a condition is refused unless its condition holds. Choose the variant with the keys it names (the penalty of a regression, the orders of ARIMA).
+- A model step logs its fit to MLflow and registers a version only when it has `mlflow: {connectionId, experiment, registerAs?, continueWithout?}`: a connection and an experiment, given by the user; never invent them. Without it the model runs and its results stay with the run.
+- model_predict applies a version a model step registered in MLflow (Tabularia's own, with `registerAs`) to the rows that reach it and adds the predicted columns. It needs that registered version: its connection, experiment, registered model and a version number (or "latest"), given by the user; if no version is registered yet, add the model step first and tell the user to run the flow and then add the prediction. Its options apply to the model the version holds.
+Only the models below exist:"""
 
 
 # in metadata-only mode, after the administrators' text (services/metadata_only.py)
@@ -495,6 +878,12 @@ METADATA_ONLY_CONTEXT = (
     "without being checked and returns no rows and no columns, so reason from the columns of its sources and from the "
     "settings of the steps. Never state a value or a figure of the data, and do not write a value into a filter unless the "
     "user gave it to you. When you are done, ask the user to check the result on the canvas.")
+
+
+def reference(dialect: str) -> str:
+    """The list of the operations with their params, as the flow assistant and the MCP add_step tool read it."""
+    return (_REFERENCE.replace("{dialect}", dialect).replace("{stat}", _STAT_INTRO.strip() + "\n" + stat_reference())
+            .replace("{models}", _MODELS_INTRO.strip() + "\n" + models_reference()))
 
 
 def context(engine: Optional[str], locale: str, flow_name: str = "", selected: Optional[str] = None,
@@ -514,8 +903,7 @@ def context(engine: Optional[str], locale: str, flow_name: str = "", selected: O
         lines.append(METADATA_ONLY_CONTEXT)
         if history_withheld:
             lines.append(ai_agent.HISTORY_WITHHELD_CONTEXT)
-    return ("\n".join(lines) + "\n\n" + _REFERENCE.replace("{dialect}", dialect).replace("{stat}", _STAT_INTRO.strip() + "\n" + stat_reference())
-            + "\n\n" + ai_prompts.language_line(locale))
+    return "\n".join(lines) + "\n\n" + reference(dialect) + "\n\n" + ai_prompts.language_line(locale)
 
 
 def _instructions(ctx: RunContext[FlowDeps]) -> str:
@@ -587,6 +975,12 @@ def _summary(draft: FlowDraft, node: dict) -> dict[str, Any]:
         if node.get("parentNode"):
             out["inside_loop"] = node["parentNode"]
         return out
+    if kind in (MODEL_NODE, PREDICT_NODE):
+        out = {"id": node["id"], "kind": "step", "operation": operation_of(node), "params": model_params_of(node),
+               "input": inputs.get("left"), "runs_as_a_job": True}
+        if node.get("parentNode"):
+            out["inside_loop"] = node["parentNode"]
+        return out
     if kind == "output":
         dest = d.get("destType") or "datasource"
         writes = ({"datasource": d.get("name"), "folder_id": d.get("projectId"), "overwrite": bool(d.get("overwrite"))}
@@ -643,6 +1037,12 @@ def _data_node(draft: FlowDraft, node_id: str, role: str) -> dict:
     return node
 
 
+def _model_result(node_id: str) -> dict[str, Any]:
+    """What a model or Predict step returns: no preview, it runs as a Job when the flow runs."""
+    return {"node": node_id, "note": "A model step runs as a Kubernetes Job when the flow runs: there is no preview "
+            "of it, and no step can come after it."}
+
+
 @flow_tool(reads_data=False)
 async def add_step(ctx: RunContext[FlowDeps], after: str, operation: str, params: dict[str, Any],
                    right: Optional[str] = None) -> dict[str, Any]:
@@ -660,13 +1060,20 @@ async def add_step(ctx: RunContext[FlowDeps], after: str, operation: str, params
             raise ModelRetry("right must be another node than after.")
     elif right:
         raise ModelRetry("Only join and union take a right input.")
-    node_id = draft.next_id("op-")
+    is_model = operation in MODEL_OPERATIONS or operation == PREDICT_OPERATION
+    node_id = draft.next_id("ctl-" if is_model else "op-")
     pos = parent.get("position") or {"x": 60, "y": 140}
-    draft.add({"id": node_id, "type": "operation", "position": draft.free_position(pos.get("x", 60) + X_STEP, pos.get("y", 140)),
-               "data": {"opType": operation, "params": clean}})
+    node = {"id": node_id, "type": "operation", "position": draft.free_position(pos.get("x", 60) + X_STEP, pos.get("y", 140)),
+            "data": {"opType": operation, "params": clean}}
+    if is_model:
+        node["type"] = PREDICT_NODE if operation == PREDICT_OPERATION else MODEL_NODE
+        node["data"] = model_node_data(operation, clean)
+    draft.add(node)
     draft.link(after, node_id, "left")
     if right:
         draft.link(right, node_id, "right")
+    if is_model:
+        return _model_result(node_id)
     return await _step_result(ctx.deps, node_id)
 
 
@@ -675,6 +1082,23 @@ async def change_step(ctx: RunContext[FlowDeps], node: str, params: dict[str, An
     """Replace the settings of a step (all its params; `operation` changes its kind too). Returns its columns and first rows, or the error."""
     draft = ctx.deps.draft
     target = draft.get(node)
+    if target.get("type") in (MODEL_NODE, PREDICT_NODE):
+        if target.get("parentNode"):
+            raise ModelRetry("Steps inside a loop container are edited by hand.")
+        current = operation_of(target)
+        if operation and operation != current:
+            raise ModelRetry(f"'{node}' is a {current} step: to use another model, remove it and add another step.")
+        p = dict(params or {}) if isinstance(params, dict) else None
+        if p is None:
+            raise ModelRetry("params must be an object.")
+        if current != PREDICT_OPERATION and "mlflow" not in p and (target.get("data") or {}).get("mlflow"):
+            p["mlflow"] = target["data"]["mlflow"]  # a model keeps the tracking it had unless it is given again
+        clean = clean_params(current, p)
+        target["data"] = {**(target.get("data") or {}), **model_node_data(current, clean)}
+        if current != PREDICT_OPERATION and "mlflow" not in clean:
+            target["data"].pop("mlflow", None)
+        draft._touch(node)
+        return _model_result(node)
     if target.get("type") != "operation":
         raise ModelRetry(f"'{node}' is not a step: only operation nodes have params.")
     if target.get("parentNode"):

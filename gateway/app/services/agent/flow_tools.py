@@ -207,7 +207,7 @@ async def flow_add_step(ctx: ToolContext, a: AddStepArgs) -> dict:
 flow_add_step.__doc__ = (
     "Add an operation that reads the result of node `after` (and, for join or union, of node `right`). Returns the new "
     "node id with its columns and first rows, or the error the preview gave.\n\n"
-    + ai_flow_agent._REFERENCE.replace("{dialect}", "the SQL dialect of the draft's engine (DuckDB, ClickHouse, Polars SQL…)")
+    + ai_flow_agent.reference("the SQL dialect of the draft's engine (DuckDB, ClickHouse, Polars SQL…)")
 )
 tool("flow_add_step", title="Add a step", args=AddStepArgs, level="write", reads_data=False,
      withholds="it runs no preview, so it returns neither rows, nor columns, nor the preview's error")(flow_add_step)
