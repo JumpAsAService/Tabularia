@@ -606,6 +606,24 @@ def operation_of(node: dict) -> Optional[str]:
     return d.get("opType")
 
 
+def _applies_text(models: list[str]) -> str:
+    """Where a Predict option applies, in words: «for model_logistic», and an entry `model:variant` of the
+    catalogue as «for the binary task of model_xgboost and model_catboost» (never `model_x:binary`, which
+    is the name of no operation)."""
+    plain = [MODEL_NODE + "_" + m for m in models if ":" not in m]
+    by_task: dict[str, list[str]] = {}
+    for m in models:
+        if ":" in m:
+            model, task = m.split(":", 1)
+            by_task.setdefault(task, []).append(MODEL_NODE + "_" + model)
+    parts = []
+    if plain:
+        parts.append("for " + ", ".join(plain))
+    for task, names in by_task.items():
+        parts.append(f"for the {task} task of " + (", ".join(names[:-1]) + " and " + names[-1] if len(names) > 1 else names[0]))
+    return ", and ".join(parts)
+
+
 def models_reference() -> str:
     """One line per model, `model_linear {outcome, predictors: [..], penalty?: none|ridge|..., ...}`, then
     what applies only with some value (`applies`), the variants and the presets, all from the catalogue's
@@ -639,8 +657,7 @@ def models_reference() -> str:
     predict = MODEL_CATALOG["predict"]
     options = [entry(k, v, False) for k, v in predict["takes"].items()]
     lines.append(f"- {PREDICT_OPERATION} {{connectionId, experiment, registeredModel, version: number|latest, {', '.join(options)}}}")
-    lines.append("  options for: " + "; ".join(f"{k} for {', '.join(MODEL_NODE + '_' + x for x in models)}"
-                                            for k, models in predict["applies_to"].items()) + ".")
+    lines.append("  options for: " + "; ".join(f"{k} {_applies_text(models)}" for k, models in predict["applies_to"].items()) + ".")
     return "\n".join(lines)
 
 

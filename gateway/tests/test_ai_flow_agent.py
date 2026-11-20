@@ -589,6 +589,12 @@ def test_the_reference_tells_the_assistant_what_a_model_needs_to_run():
         assert sentence in reference
 
 
+def test_the_reference_names_the_task_of_a_boosted_model_not_an_operation_that_does_not_exist():
+    reference = ai_flow_agent.context(None, "en")
+    assert "threshold for model_logistic, and for the binary task of model_xgboost and model_catboost" in reference
+    assert "model_xgboost:binary" not in reference and "model_catboost:binary" not in reference
+
+
 @pytest.mark.anyio
 async def test_an_assistant_puts_a_lasso_regression_on_the_draft_and_a_wrong_one_is_sent_back(session, world, fake_engine, monkeypatch):
     lasso = {"outcome": "amount", "predictors": ["quantity", "price"], "penalty": "lasso", "lambda": "cv_1se", "folds": 5}
