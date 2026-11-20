@@ -64,7 +64,8 @@ refuses some of them when `APP__ENV_NAME=production`).
 **Not in the environment.** Some things are set in the administration panel instead: the
 engine parameters marked *Also adjustable in Administration → Settings* (the variable is
 the starting value, see [engine settings](engine-settings.md)), the processes per worker
-(Administration → Workers), the AI models people may use, the engines allowed, the
+(Administration → Workers), the AI models people may use, the engines allowed, the statistical model groups
+(Administration → Statistical models, [models](capabilities/models.md#turning-a-group-on-administrators)), the
 forwarding of the audit log to a SIEM ([Splunk](siem-splunk.md)), webhook receivers and
 service accounts ([API](api.md)), and the banners. Connection credentials (databases,
 SFTP, S3, APIs, SharePoint) belong to each connection, encrypted with
