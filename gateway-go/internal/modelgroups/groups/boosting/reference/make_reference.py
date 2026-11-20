@@ -15,7 +15,9 @@ common/py/tab_selftest.py reads. The cases of a model this file does not compute
 are kept as they are. Threads: 2, the self-test's (tab_protocol.SELFTEST_THREADS), so that
 XGBoost's sums are the runner's.
 
-Lot X2 writes the XGBoost cases (xgboost_cases below); lot X3 adds CatBoost's beside them.
+Lot X2 wrote the XGBoost cases (xgboost_cases), lot X3 CatBoost's (catboost_cases): the same tables,
+the same preparation (Case) and the same values (case_values), each library called directly
+(xgboost_fit, catboost_fit).
 """
 from __future__ import annotations
 
@@ -40,7 +42,8 @@ EPS = float(np.finfo(np.float64).eps)
 DEFAULTS = {"class_weight": "none", "threshold": 0.5, "validation": "random", "validation_share": 0.2, "stratify": True,
             "early_stopping": True, "early_stopping_rounds": 50, "stop_metric": "loss", "max_trees": 1000,
             "learning_rate": 0.05, "max_depth": 6, "subsample": 0.8, "seed": 1, "min_child_weight": 1.0,
-            "colsample_bytree": 0.8, "reg_lambda": 1.0, "reg_alpha": 0.0, "gamma": 0.0}
+            "colsample_bytree": 0.8, "reg_lambda": 1.0, "reg_alpha": 0.0, "gamma": 0.0,
+            "l2_leaf_reg": 3.0, "rsm": 1.0, "random_strength": 1.0}
 
 
 # ── the tables ──────────────────────────────────────────────────────────────────
@@ -245,52 +248,70 @@ def verdict(x: float, ok: Any, doubtful: Any) -> str:
     return "ok" if ok(x) else "doubtful" if doubtful(x) else "failed"
 
 
-# ── XGBoost, called directly ────────────────────────────────────────────────────
-def xgboost_case(case: dict[str, Any]) -> list[dict[str, Any]]:
-    import xgboost as xgb
-    from scipy.stats import spearmanr
+# ── a case: its rows, its kinds and its validation part, from the spec ─────────────
+class Case:
+    """What both libraries are handed, built again from the spec (never by the runner's code)."""
 
-    p = {**DEFAULTS, **case["params"]}
-    what = p["task"]
-    df = read(case)
-    outcome, predictors = p["outcome"], list(p["predictors"])
-    weights = p.get("weights")
-    order_by = p.get("order_by") if p["validation"] == "time" else None
-    split_by = p.get("split_by") if p["validation"] == "random" else None
-    keep = np.array([not missing(df[outcome][i]) and (not weights or not missing(df[weights][i]))
-                     and (not order_by or not missing(df[order_by][i])) and (not split_by or not missing(df[split_by][i]))
-                     for i in range(len(df))])
-    n_missing = int((~keep).sum())
-    if weights:
-        keep &= ~(df[weights].to_numpy(dtype=float) == 0)
-    d = df[keep].reset_index(drop=True)
-    n = len(d)
-    w = d[weights].to_numpy(dtype=float) if weights else np.ones(n)
-    numbers = [c for c in predictors if case["types"].get(c) in ("number", "integer")]
-    cols = {}
-    levels = {}
-    for j, c in enumerate(predictors):
-        if c in numbers:
-            cols[f"v{j + 1}"] = d[c].to_numpy(dtype=float)
+    def __init__(self, case: dict[str, Any]):
+        p = self.p = {**DEFAULTS, **case["params"]}
+        self.what = what = p["task"]
+        df = read(case)
+        self.outcome, self.predictors = outcome, predictors = p["outcome"], list(p["predictors"])
+        self.weights = weights = p.get("weights")
+        self.order_by = order_by = p.get("order_by") if p["validation"] == "time" else None
+        self.split_by = split_by = p.get("split_by") if p["validation"] == "random" else None
+        keep = np.array([not missing(df[outcome][i]) and (not weights or not missing(df[weights][i]))
+                         and (not order_by or not missing(df[order_by][i])) and (not split_by or not missing(df[split_by][i]))
+                         for i in range(len(df))])
+        self.n_missing = int((~keep).sum())
+        if weights:
+            keep &= ~(df[weights].to_numpy(dtype=float) == 0)
+        self.d = d = df[keep].reset_index(drop=True)
+        self.n = n = len(d)
+        self.w = w = d[weights].to_numpy(dtype=float) if weights else np.ones(n)
+        self.numbers = [c for c in predictors if case["types"].get(c) in ("number", "integer")]
+        self.levels = {c: sorted({v for v in d[c] if not missing(v)}) for c in predictors if c not in self.numbers}
+        self.classes = classes = []
+        if what == "regression":
+            self.y = y = d[outcome].to_numpy(dtype=float)
         else:
-            levels[c] = sorted({v for v in d[c] if not missing(v)})
-            cols[f"v{j + 1}"] = pd.Categorical([None if missing(v) else v for v in d[c]], categories=levels[c])
-    X = pd.DataFrame(cols)
-    classes: list[str] = []
-    if what == "regression":
-        y = d[outcome].to_numpy(dtype=float)
-    else:
-        found = sorted(set(d[outcome]))
-        classes = [v for v in found if v != p["event_value"]] + [p["event_value"]] if what == "binary" else found
-        y = np.array([classes.index(v) for v in d[outcome]], dtype=np.int64)
-    k = len(classes) if what == "multiclass" else 1
-    t = None
-    if order_by:
-        t = np.array([(v - dt.date(1970, 1, 1)).days if isinstance(v, dt.date) else float(v) for v in d[order_by]], dtype=float)
-    strat = y if what != "regression" and p["stratify"] else None
-    val, train_order = draw_validation(n, p, strat, len(classes), list(d[split_by]) if split_by else None, t)
-    tr, va = np.flatnonzero(~val), np.flatnonzero(val)
+            found = sorted(set(d[outcome]))
+            self.classes = classes = [v for v in found if v != p["event_value"]] + [p["event_value"]] if what == "binary" else found
+            self.y = y = np.array([classes.index(v) for v in d[outcome]], dtype=np.int64)
+        self.k = len(classes) if what == "multiclass" else 1
+        t = None
+        if order_by:
+            t = np.array([(v - dt.date(1970, 1, 1)).days if isinstance(v, dt.date) else float(v) for v in d[order_by]], dtype=float)
+        strat = y if what != "regression" and p["stratify"] else None
+        self.val, self.train_order = draw_validation(n, p, strat, len(classes), list(d[split_by]) if split_by else None, t)
+        self.tr, self.va = np.flatnonzero(~self.val), np.flatnonzero(self.val)
+        self.fw = w.copy()
+        if what != "regression" and p["class_weight"] == "balanced":
+            W = w[self.tr].sum()
+            self.fw = w * np.array([W / (len(classes) * w[self.tr][y[self.tr] == c].sum()) for c in range(len(classes))])[y]
+        self.weighted = bool(weights) or p["class_weight"] == "balanced"
 
+
+class Fit:
+    """What a library called directly gave: the raw scores and the SHAP values of every row, the
+    native importance, the rounds run, the round kept, the validation loss per round, the names."""
+
+    def __init__(self, **kw: Any):
+        self.__dict__.update(kw)
+
+
+# ── XGBoost, called directly ────────────────────────────────────────────────────
+def xgboost_fit(c: Case) -> Fit:
+    import xgboost as xgb
+
+    p, what = c.p, c.what
+    cols = {}
+    for j, name in enumerate(c.predictors):
+        if name in c.numbers:
+            cols[f"v{j + 1}"] = c.d[name].to_numpy(dtype=float)
+        else:
+            cols[f"v{j + 1}"] = pd.Categorical([None if missing(v) else v for v in c.d[name]], categories=c.levels[name])
+    X = pd.DataFrame(cols)
     loss = {"regression": "rmse", "binary": "logloss", "multiclass": "mlogloss"}[what]
     stop = {"loss": loss, "mae": "mae", "auc": "auc", "error": "merror" if what == "multiclass" else "error"}[p["stop_metric"]]
     params = {"objective": {"regression": "reg:squarederror", "binary": "binary:logistic", "multiclass": "multi:softprob"}[what],
@@ -300,15 +321,11 @@ def xgboost_case(case: dict[str, Any]) -> list[dict[str, Any]]:
               "alpha": p["reg_alpha"], "gamma": p["gamma"], "max_cat_to_onehot": 4, "max_cat_threshold": 64, "seed": p["seed"],
               "nthread": THREADS, "validate_parameters": True}
     if what == "multiclass":
-        params["num_class"] = k
-    fw = w.copy()
-    if what != "regression" and p["class_weight"] == "balanced":
-        W = w[tr].sum()
-        fw = w * np.array([W / (len(classes) * w[tr][y[tr] == c].sum()) for c in range(len(classes))])[y]
-    weighted = bool(weights) or p["class_weight"] == "balanced"
-    dtrain = xgb.QuantileDMatrix(X.iloc[train_order], label=y[train_order], weight=fw[train_order] if weighted else None,
+        params["num_class"] = c.k
+    to, va = c.train_order, c.va
+    dtrain = xgb.QuantileDMatrix(X.iloc[to], label=c.y[to], weight=c.fw[to] if c.weighted else None,
                                  enable_categorical=True, max_bin=256, nthread=THREADS)
-    dvalid = xgb.QuantileDMatrix(X.iloc[va], label=y[va], weight=w[va] if weights else None, ref=dtrain,
+    dvalid = xgb.QuantileDMatrix(X.iloc[va], label=c.y[va], weight=c.w[va] if c.weights else None, ref=dtrain,
                                  enable_categorical=True, max_bin=256, nthread=THREADS)
     log: dict = {}
     callbacks = []
@@ -325,9 +342,70 @@ def xgboost_case(case: dict[str, Any]) -> list[dict[str, Any]]:
         best = rounds - 1
     raw = np.asarray(bst.predict(xgb.DMatrix(X, enable_categorical=True, nthread=THREADS), output_margin=True), dtype=float)
     contribs = np.asarray(bst.predict(xgb.DMatrix(X, enable_categorical=True, nthread=THREADS), pred_contribs=True), dtype=float)
-    phi = contribs[..., : len(predictors)]
     score = bst.get_score(importance_type="total_gain")
-    gain = np.array([score.get(f"v{j + 1}", 0.0) for j in range(len(predictors))])
+    return Fit(library="xgboost", objective=params["objective"], stop=stop, importance_type="total_gain", raw=raw,
+               phi=contribs[..., : len(c.predictors)], gain=np.array([score.get(f"v{j + 1}", 0.0) for j in range(len(c.predictors))]),
+               rounds=rounds, best=best, vloss=log["validation"][loss])
+
+
+# ── CatBoost, called directly ───────────────────────────────────────────────────
+CATBOOST_MISSING = "\u241fmissing"
+
+
+def catboost_fit(c: Case) -> Fit:
+    """CatBoost with the parameters of the spec's «The fit»: native categories (their labels, the
+    sentinel for a missing value), Bernoulli rows, nan_mode Min, the training rows in time order with
+    has_time for a split in time, use_best_model with early stopping."""
+    from catboost import CatBoostClassifier, CatBoostRegressor, Pool
+
+    p, what = c.p, c.what
+    cols = {}
+    for j, name in enumerate(c.predictors):
+        if name in c.numbers:
+            cols[f"v{j + 1}"] = c.d[name].to_numpy(dtype=float)
+        else:
+            cols[f"v{j + 1}"] = np.array([CATBOOST_MISSING if missing(v) else str(v) for v in c.d[name]], dtype=object)
+    X = pd.DataFrame(cols)
+    cats = [j for j, name in enumerate(c.predictors) if name not in c.numbers]
+    loss = {"regression": "RMSE", "binary": "Logloss", "multiclass": "MultiClass"}[what]
+    stop, key = {"loss": (loss, loss), "mae": ("MAE", "MAE"), "auc": ("AUC:hints=skip_train~false", "AUC"),
+                 "error": ("ZeroOneLoss", "ZeroOneLoss")}[p["stop_metric"]]
+    kw = {"iterations": p["max_trees"], "learning_rate": p["learning_rate"], "depth": p["max_depth"], "l2_leaf_reg": p["l2_leaf_reg"],
+          "rsm": p["rsm"], "random_strength": p["random_strength"], "bootstrap_type": "Bernoulli", "subsample": p["subsample"],
+          "loss_function": loss, "eval_metric": stop, "nan_mode": "Min", "random_seed": p["seed"], "thread_count": THREADS,
+          "use_best_model": p["early_stopping"], "has_time": c.order_by is not None, "allow_writing_files": False,
+          "train_dir": "/tmp/catboost", "verbose": False}
+    if key != loss:
+        kw["custom_metric"] = [loss]
+    if p["early_stopping"]:
+        kw["early_stopping_rounds"] = p["early_stopping_rounds"]
+    to, va = c.train_order, c.va
+    train = Pool(X.iloc[to], label=c.y[to], weight=c.fw[to] if c.weighted else None, cat_features=cats)
+    valid = Pool(X.iloc[va], label=c.y[va], weight=c.w[va] if c.weights else None, cat_features=cats)
+    model = (CatBoostRegressor if what == "regression" else CatBoostClassifier)(**kw)
+    model.fit(train, eval_set=valid)
+    log = model.get_evals_result()
+    rounds = len(log["validation"][key])
+    best = model.get_best_iteration() if p["early_stopping"] else model.tree_count_ - 1
+    whole = Pool(X, cat_features=cats)
+    raw = np.asarray(model.predict(whole, prediction_type="RawFormulaVal", thread_count=THREADS), dtype=float)
+    sv = np.asarray(model.get_feature_importance(data=whole, type="ShapValues", thread_count=THREADS), dtype=float)
+    gain = np.asarray(model.get_feature_importance(type="PredictionValuesChange"), dtype=float)
+    return Fit(library="catboost", objective=loss, stop=key, importance_type="PredictionValuesChange", raw=raw,
+               phi=sv[..., : len(c.predictors)], gain=gain, rounds=rounds, best=best, vloss=log["validation"][loss])
+
+
+# ── the values a case expects, from a library's numbers ─────────────────────────
+def case_values(case: dict[str, Any], fit_with: Any) -> list[dict[str, Any]]:
+    from scipy.stats import spearmanr
+
+    c = Case(case)
+    f = fit_with(c)
+    p, what, d, n, w, y, k = c.p, c.what, c.d, c.n, c.w, c.y, c.k
+    predictors, levels, classes = c.predictors, c.levels, c.classes
+    tr, va = c.tr, c.va
+    order_by, split_by = c.order_by, c.split_by
+    raw, phi, gain, rounds, best = f.raw, f.phi, f.gain, f.rounds, f.best
 
     E: list[dict[str, Any]] = []
 
@@ -338,12 +416,12 @@ def xgboost_case(case: dict[str, Any]) -> list[dict[str, Any]]:
         E.append({"key": key, "text": value})
 
     txt("model|||task", what)
-    txt("model|||library", "xgboost")
-    txt("model|||objective", params["objective"])
-    txt("model|||stop_metric", stop)
+    txt("model|||library", f.library)
+    txt("model|||objective", f.objective)
+    txt("model|||stop_metric", f.stop)
     txt("model|||validation", "time" if order_by else "grouped" if split_by else "random")
-    txt("model|||importance_type", "total_gain")
-    for key, v in (("n", n), ("n_missing", n_missing), ("n_train", len(tr)), ("n_validation", len(va)),
+    txt("model|||importance_type", f.importance_type)
+    for key, v in (("n", n), ("n_missing", c.n_missing), ("n_train", len(tr)), ("n_validation", len(va)),
                    ("n_predictors", len(predictors)), ("n_categorical", len(levels)), ("trees", best + 1), ("best_iteration", best),
                    ("max_trees", p["max_trees"]), ("stopped_early", int(p["early_stopping"] and rounds < p["max_trees"])),
                    ("stopped_by_time", 0), ("threads", THREADS), ("shap_rows", n), ("seed", p["seed"])):
@@ -460,10 +538,13 @@ def xgboost_case(case: dict[str, Any]) -> list[dict[str, Any]]:
     u = 1 - L_va / B_va
     num("assumption|beats_baseline||value", u)
     txt("assumption|beats_baseline||verdict", verdict(u, lambda x: x >= 0.05, lambda x: x > 0))
-    s_ = (B_va - L_va) / (B_tr - L_tr)
-    num("assumption|overfitting||value", s_)
-    txt("assumption|overfitting||verdict", verdict(s_, lambda x: x >= 0.6, lambda x: x >= 0.3))
-    vloss = log["validation"][loss]
+    if B_tr - L_tr > 0:
+        s_ = (B_va - L_va) / (B_tr - L_tr)
+        num("assumption|overfitting||value", s_)
+        txt("assumption|overfitting||verdict", verdict(s_, lambda x: x >= 0.6, lambda x: x >= 0.3))
+    else:  # the training part does not beat its baseline: there is no gain to share
+        txt("assumption|overfitting||verdict", "not_computed")
+    vloss = f.vloss
     if p["early_stopping"]:
         stopped = rounds < p["max_trees"]
         num("assumption|trees_limit||value", best + 1)
@@ -525,7 +606,7 @@ def xgboost_cases() -> list[dict[str, Any]]:
     ]
     out = []
     for c in cases:
-        c = {**c, "expect": xgboost_case(c), "refuses": None}
+        c = {**c, "expect": case_values(c, xgboost_fit), "refuses": None}
         out.append(c)
     out.append({"id": "xgboost_refuses_few_rows", "model": "xgboost", "data": "data/tiny.csv", "types": {"y": "number", "x": "number"},
                 "params": {"task": "regression", "outcome": "y", "predictors": ["x"]}, "expect": [],
@@ -538,7 +619,46 @@ def xgboost_cases() -> list[dict[str, Any]]:
     return out
 
 
-COMPUTED = {"xgboost": xgboost_cases}
+def catboost_cases() -> list[dict[str, Any]]:
+    """CatBoost on the same tables: native categories with missing values (regression, the sentinel),
+    the AUC as stop metric with the training AUC (binary), balanced class weights by groups
+    (multiclass), a table of numbers only (leakage: the witness walks its trees), has_time (in time)."""
+    reg = {"boxes": "number", "price": "number", "discount": "number", "visits": "number", "tenure": "number",
+           "noise": "number", "w": "number"}
+    cases = [
+        {"id": "catboost_regression", "model": "catboost", "data": "data/regression.csv", "types": reg,
+         "params": {"task": "regression", "outcome": "boxes", "weights": "w",
+                    "predictors": ["price", "discount", "visits", "tenure", "noise", "region"]}},
+        {"id": "catboost_binary", "model": "catboost", "data": "data/binary.csv",
+         "types": {"price": "number", "visits": "number", "first_order": "date"},
+         "params": {"task": "binary", "outcome": "reordered", "event_value": "yes", "predictors": ["price", "visits", "channel"],
+                    "stop_metric": "auc", "threshold": 0.3, "max_depth": 4}},
+        {"id": "catboost_multiclass", "model": "catboost", "data": "data/multiclass.csv",
+         "types": {"spend": "number", "orders": "number", "member": "boolean"},
+         "params": {"task": "multiclass", "outcome": "segment", "predictors": ["spend", "orders", "member", "store"],
+                    "class_weight": "balanced", "stop_metric": "error", "max_depth": 4, "l2_leaf_reg": 5.0}},
+        {"id": "catboost_leakage", "model": "catboost", "data": "data/leakage.csv",
+         "types": {"y": "number", "x1": "number", "x2": "number", "echo": "number"},
+         "params": {"task": "regression", "outcome": "y", "predictors": ["x1", "x2", "echo"], "early_stopping": False,
+                    "max_trees": 150, "learning_rate": 0.1, "max_depth": 3}},
+        {"id": "catboost_time", "model": "catboost", "data": "data/time.csv",
+         "types": {"sales": "number", "temp": "number", "day": "date"},
+         "params": {"task": "regression", "outcome": "sales", "predictors": ["temp", "promo"], "validation": "time",
+                    "order_by": "day", "validation_share": 0.25, "stop_metric": "mae", "rsm": 0.5, "random_strength": 2.0}},
+    ]
+    out = [{**c, "expect": case_values(c, catboost_fit), "refuses": None} for c in cases]
+    out.append({"id": "catboost_refuses_few_rows", "model": "catboost", "data": "data/tiny.csv",
+                "types": {"y": "number", "x": "number"}, "params": {"task": "regression", "outcome": "y", "predictors": ["x"]},
+                "expect": [], "refuses": {"code": "too_few_rows", "message": None}})
+    out.append({"id": "catboost_refuses_events_all_in_training", "model": "catboost", "data": "data/time.csv",
+                "types": {"sales": "number", "temp": "number", "day": "date"},
+                "params": {"task": "binary", "outcome": "early_event", "event_value": "yes", "predictors": ["temp", "promo"],
+                           "validation": "time", "order_by": "day"}, "expect": [],
+                "refuses": {"code": "class_absent", "message": None}})
+    return out
+
+
+COMPUTED = {"xgboost": xgboost_cases, "catboost": catboost_cases}
 
 
 def main() -> None:

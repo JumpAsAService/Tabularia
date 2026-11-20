@@ -17,6 +17,14 @@ hand in a scratch environment:
    against the exact Shapley values by every coalition, computed here from xgboost.json alone,
    relative 1e-5. shap.TreeExplainer is printed beside, not compared: on an XGBoost model shap
    0.54.1 calls XGBoost's own pred_contribs (its «short circuit»), so it witnesses nothing.
+3. CatBoost (lot X3): each CatBoost case of numbers only (catboost_leakage) fitted by the runner,
+   its catboost.cbm read back and exported to CatBoost's JSON (the witness's only use of it: that
+   JSON is complete only without categorical features): the raw scores by an oblivious-tree walker
+   in numpy against CatBoost's and against the runner's pred_value (relative 1e-9);
+   PredictionValuesChange recomputed from the leaves' values and weights by its documented
+   formula, normalized to 100, against the runner's gain (1e-6); CatBoost's ShapValues against
+   shap's own TreeSHAP on the oblivious trees rewritten as binary trees (1e-5; shap.TreeExplainer
+   on a CatBoost model calls CatBoost's ShapValues, so it is printed beside, not compared).
 
 Exit 1 when a value differs.
 """
@@ -216,10 +224,144 @@ def xgboost_shap() -> None:
         print(f"said   {case['id']}: shap.TreeExplainer's largest gap {np.abs(theirs.reshape(-1) - np.moveaxis(ours[rows, :, :p], 1, -1).reshape(-1) if theirs.ndim == 3 else theirs.reshape(-1) - ours[rows, 0, :p].reshape(-1)).max():.3g} (XGBoost's own numbers)")
 
 
+def catboost_walk(j: dict[str, Any], V: np.ndarray) -> np.ndarray:
+    """The raw scores of CatBoost's JSON (numbers only): in each oblivious tree, split i sets bit i
+    of the leaf's index when the value (in float32, as CatBoost compares) is above its border, a
+    missing value as its feature's nan_value_treatment says; the leaves summed, then scale and bias."""
+    treat = {f["feature_index"]: f.get("nan_value_treatment", "AsIs") for f in j["features_info"]["float_features"]}
+    scale, bias = j["scale_and_bias"]
+    bias = np.atleast_1d(np.asarray(bias, dtype=float))
+    k = len(bias)
+    V32 = V.astype(np.float32)
+    out = np.zeros((len(V), k))
+    for t in j["oblivious_trees"]:
+        idx = np.zeros(len(V), dtype=np.int64)
+        for i, s in enumerate(t["splits"]):
+            x = V32[:, s["float_feature_index"]]
+            bit = x > np.float32(s["border"])
+            bit[np.isnan(x)] = treat[s["float_feature_index"]] == "AsTrue"
+            idx |= bit.astype(np.int64) << i
+        out += np.asarray(t["leaf_values"], dtype=float).reshape(-1, k)[idx]
+    out = scale * out + bias
+    return out[:, 0] if k == 1 else out
+
+
+def catboost_pvc(j: dict[str, Any], p: int) -> np.ndarray:
+    """PredictionValuesChange by its documented formula: for every split, every pair of leaves that
+    differ only by it, Σ (v1 − avr)² c1 + (v2 − avr)² c2 with avr = (v1 c1 + v2 c2) / (c1 + c2),
+    c the leaves' weights; per feature, normalized to 100."""
+    F = np.zeros(p)
+    for t in j["oblivious_trees"]:
+        c = np.asarray(t["leaf_weights"], dtype=float)
+        v = np.asarray(t["leaf_values"], dtype=float).reshape(len(c), -1)
+        for i, s in enumerate(t["splits"]):
+            for lo in range(len(c)):
+                hi = lo | 1 << i
+                if lo >> i & 1 or c[lo] + c[hi] == 0:
+                    continue
+                avr = (v[lo] * c[lo] + v[hi] * c[hi]) / (c[lo] + c[hi])
+                F[s["float_feature_index"]] += float(np.sum((v[lo] - avr) ** 2 * c[lo] + (v[hi] - avr) ** 2 * c[hi]))
+    return 100 * F / F.sum()
+
+
+def catboost_as_binary_trees(j: dict[str, Any]) -> dict[str, Any]:
+    """The oblivious trees as binary trees in shap's own format: the LAST split of a tree at its root
+    (the leaf index's highest bit), down to the first; x <= border goes left, as shap's TreeSHAP
+    reads; a node's cover is its leaves' weights (a leaf no training row reached gets 1e-12, which
+    shap needs to walk it and which changes nothing at 1e-5)."""
+    scale, bias = j["scale_and_bias"]
+    trees = []
+    for t in j["oblivious_trees"]:
+        sp = t["splits"]
+        vals = np.asarray(t["leaf_values"], dtype=float) * scale
+        w = np.maximum(np.asarray(t["leaf_weights"], dtype=float), 1e-12)
+        left: list[int] = []
+        right: list[int] = []
+        feat: list[int] = []
+        thr: list[float] = []
+        value: list[float] = []
+        cover: list[float] = []
+
+        def node(level: int, leaf: int) -> int:
+            me = len(left)
+            left.append(-1), right.append(-1), feat.append(-1), thr.append(0.0), value.append(0.0), cover.append(0.0)
+            if level < 0:
+                value[me], cover[me] = vals[leaf], w[leaf]
+                return me
+            lo, hi = node(level - 1, leaf), node(level - 1, leaf | 1 << level)
+            left[me], right[me] = lo, hi
+            feat[me], thr[me] = sp[level]["float_feature_index"], float(np.float32(sp[level]["border"]))
+            cover[me] = cover[lo] + cover[hi]
+            return me
+        node(len(sp) - 1, 0)
+        trees.append({"children_left": np.array(left), "children_right": np.array(right),
+                      "children_default": np.array(left), "features": np.array(feat), "thresholds": np.array(thr),
+                      "values": np.array(value)[:, None], "node_sample_weight": np.array(cover)})
+    return {"trees": trees, "base_offset": float(np.atleast_1d(bias)[0])}
+
+
+def catboost_trees() -> None:
+    """Lot X3's part: the CatBoost cases of numbers only, fitted by the runner."""
+    import os
+    import tempfile
+
+    import shap
+
+    import boosting_catboost as C
+    from tab_columns import read_csv
+    from tab_protocol import catalog, variant_of
+
+    cases = [c for c in json.loads((HERE / "expected.json").read_text(encoding="utf-8")).get("cases", [])
+             if c["model"] == "catboost" and not c.get("refuses")
+             and all((c.get("types") or {}).get(x) in ("number", "integer") for x in c["params"]["predictors"])]
+    if not cases:
+        print("skipped: no CatBoost case of numbers only in expected.json")
+        return
+    for case in cases:
+        df = read_csv(str(HERE / case["data"]), case.get("types") or {})
+        params = case["params"]
+        task = {"protocol": 1, "mode": "fit", "group": "boosting", "group_version": "selftest", "model": "catboost",
+                "variant": variant_of("catboost", params), "params": params, "output": "rows",
+                "limits": dict(catalog()["limits"]), "_frame": df}
+        out = C.fit_catboost(task)
+        model = C.load_model_file(out["card"], out["model_file"]["data"])
+        frame, _ = B.card_frame(out["card"], df)
+        with tempfile.TemporaryDirectory() as tmp:
+            model.save_model(os.path.join(tmp, "model.json"), format="json")
+            j = json.loads(Path(tmp, "model.json").read_text(encoding="utf-8"))
+        V = frame.to_numpy(dtype=float)
+        walked = catboost_walk(j, V)
+        raw = C.raw_scores(model, frame, 2)
+        same(f"{case['id']}: the walker against CatBoost's raw scores, largest relative gap over {walked.size}",
+             float((np.abs(walked - raw) / np.maximum(1, np.abs(raw))).max()), 0.0, 1e-9)
+        if params["task"] == "regression":
+            mine = out["output"]["pred_value"].to_numpy(dtype=float)
+            same(f"{case['id']}: the runner's pred_value against the walker, largest gap",
+                 float((np.abs(mine - walked) / np.maximum(1, np.abs(walked))).max()), 0.0, 1e-9)
+        rows = out["rows"]
+        at = {k: i for i, k in enumerate(rows.key)}
+        pvc = catboost_pvc(j, len(params["predictors"]))
+        for f, name in enumerate(params["predictors"]):
+            same(f"{case['id']}: PredictionValuesChange of {name}", rows.value[at[f"importance|{name}||gain"]], pvc[f], 1e-6)
+        p = len(params["predictors"])
+        sv = np.asarray(model.get_feature_importance(data=C.pool(frame), type="ShapValues"), dtype=float)
+        if sv.ndim == 2:
+            ex = shap.TreeExplainer(catboost_as_binary_trees(j), feature_perturbation="tree_path_dependent")
+            theirs = np.asarray(ex.shap_values(V.astype(np.float32).astype(np.float64)), dtype=float)
+            same(f"{case['id']}: SHAP values against shap's TreeSHAP, largest gap over {theirs.size}",
+                 float(np.abs(sv[:, :p] - theirs).max()), 0.0, 1e-5)
+            same(f"{case['id']}: the base value", float(np.atleast_1d(ex.expected_value)[0]), float(sv[0, p]), 1e-5)
+        beside = np.asarray(shap.TreeExplainer(model).shap_values(C.cat_frame(frame)), dtype=float)
+        print(f"   beside: shap.TreeExplainer on the CatBoost model, largest gap {float(np.abs(sv[..., :p] - beside).max()):.3g} "
+              "(it calls CatBoost's own ShapValues)")
+
+
 if __name__ == "__main__":
     print("== the metrics against scikit-learn")
     metrics()
     print("== XGBoost's contributions against the exact Shapley values")
     xgboost_shap()
+    print("== CatBoost: an oblivious-tree walker, PredictionValuesChange by hand, shap's TreeSHAP")
+    catboost_trees()
     print(f"{len(failed)} differ" if failed else "every value agrees")
     sys.exit(1 if failed else 0)
