@@ -71,6 +71,48 @@ func TestABoostingRunLogsTheDiagnosticsTheImportanceAndTheLearningCurves(t *test
 	}
 }
 
+// MLflow's keys: at most 250 characters (MAX_ENTITY_KEY_LENGTH), and two names that are one once
+// cleaned do not lose the second without a word
+func TestMetricKeysAreWithinMLflowsLimitAndStayApart(t *testing.T) {
+	long := strings.Repeat("x", 300)
+	rows := []resultRow{
+		{Section: "model", Stat: "library", Text: ptr("xgboost")},
+		{Section: "model", Stat: "a#b", Value: ptr(1.0)},
+		{Section: "model", Stat: "a_b", Value: ptr(2.0)}, // the same key once cleaned
+		{Section: "model", Stat: "a?b", Value: ptr(3.0)},
+		{Section: "model", Stat: "a_b", Value: ptr(2.0)}, // the same name again: not a collision
+		{Section: "model", Stat: long + "1", Value: ptr(4.0)},
+		{Section: "model", Stat: long + "2", Value: ptr(5.0)}, // alike in its first 250 characters
+		{Section: "importance", Level: ptr(long), Stat: "gain_share", Value: ptr(0.5)},
+	}
+	metrics, warnings := modelMetricsChecked(rows, time.UnixMilli(1700000000000))
+	got := map[string]float64{}
+	for _, m := range metrics {
+		if len(m.Key) > 250 {
+			t.Errorf("a key of %d characters", len(m.Key))
+		}
+		if _, dup := got[m.Key]; dup {
+			t.Errorf("key twice: %s", m.Key)
+		}
+		got[m.Key] = m.Value
+	}
+	if len(metrics) != 6 {
+		t.Fatalf("%d metrics, want the 6 distinct names: %v", len(metrics), got)
+	}
+	// the first keeps its name; the others are kept, apart
+	if got["a_b"] != 1 || got["a_b_2"] != 2 || got["a_b_3"] != 3 {
+		t.Errorf("the collisions: %v", got)
+	}
+	if len(warnings) != 1 || !strings.Contains(warnings[0], "are the same name once MLflow's characters are kept") ||
+		!strings.Contains(warnings[0], "a_b_2") || !strings.Contains(warnings[0], "a_b_3") {
+		t.Errorf("warnings: %q", warnings)
+	}
+	// clean names say nothing
+	if _, w := modelMetricsChecked([]resultRow{{Section: "model", Stat: "n", Value: ptr(1.0)}}, time.Now()); len(w) != 0 {
+		t.Errorf("a warning without a collision: %q", w)
+	}
+}
+
 func TestTheContentOfAnMLflowRun(t *testing.T) {
 	params := flattenParams(map[string]any{"outcome": "quantity", "predictors": []any{"price", "channel"}, "alpha": 0.05,
 		"robust": true, "reference": map[string]any{"channel": "shop"}, "weights": nil})

@@ -246,7 +246,9 @@ func (q *queue) mlflowLog(ctx context.Context, r *scriptNodeRun, s *modelStep, c
 		return err
 	}
 	params := append(flattenParams(s.checked), modelFormula(rows)...)
-	if err := tr.LogBatch(ctx, run.ID, params, modelMetrics(rows, started), tags); err != nil {
+	metrics, metricWarnings := modelMetricsChecked(rows, started)
+	rec.warnings = append(rec.warnings, metricWarnings...)
+	if err := tr.LogBatch(ctx, run.ID, params, metrics, tags); err != nil {
 		return err
 	}
 	up, err := q.mlflowArtifacts(ctx, tr, r, s, child, f, rows, run, rec)
@@ -604,6 +606,73 @@ func metricKey(s string) string {
 	return b.String()
 }
 
+// maxMetricKey is MLflow's longest key (MAX_ENTITY_KEY_LENGTH = 250 characters in its
+// validation.py, which the REST reference of log-batch repeats): longer ones fail the batch.
+const maxMetricKey = mlflowconn.MaxKeyLength
+
+// shortKey keeps a cleaned key within MLflow's limit: past it, the head and «_» and 8 hexadecimal
+// digits of the hash of the whole raw name, so that two long names that start alike stay apart.
+func shortKey(cleaned, raw string) string {
+	if len(cleaned) <= maxMetricKey {
+		return cleaned
+	}
+	sum := sha256.Sum256([]byte(raw))
+	return cleaned[:maxMetricKey-9] + "_" + hex.EncodeToString(sum[:4])
+}
+
+// suffixed is key with «_n» at its end, cut so that the whole stays within the limit.
+func suffixed(key string, n int) string {
+	suffix := "_" + strconv.Itoa(n)
+	if len(key)+len(suffix) > maxMetricKey {
+		key = key[:maxMetricKey-len(suffix)]
+	}
+	return key + suffix
+}
+
+// metricNames gives each raw name of the run's scalar metrics its key in MLflow: cleaned, within
+// the limit, and unique. A second raw name that is the same key once cleaned (`a b` and `a_b`)
+// does not replace the first: it takes `_2`, `_3`… and is said.
+type metricNames struct {
+	rawOf   map[string]string // key -> the raw name that has it
+	keyOf   map[string]string // raw name -> its key
+	said    []string
+	clashes int
+}
+
+// of is the key of a raw name; again false when this very raw name was given a key before.
+func (m *metricNames) of(raw string) (string, bool) {
+	if key, known := m.keyOf[raw]; known {
+		return key, false
+	}
+	base := shortKey(metricKey(raw), raw)
+	key := base
+	for n := 2; ; n++ {
+		holder, taken := m.rawOf[key]
+		if !taken {
+			m.rawOf[key], m.keyOf[raw] = raw, key
+			return key, true
+		}
+		clashed := suffixed(base, n)
+		if m.clashes < 3 {
+			m.said = append(m.said, fmt.Sprintf("«%s» and «%s» are the same name once MLflow's characters are kept: the second is logged as «%s».",
+				runes(holder, 60), runes(raw, 60), runes(clashed, 60)))
+		}
+		m.clashes++
+		key = clashed
+	}
+}
+
+func (m *metricNames) warnings() []string {
+	if m.clashes == 0 {
+		return nil
+	}
+	text := "Two metrics of the model had the same name in MLflow: " + strings.Join(m.said, " ")
+	if m.clashes > len(m.said) {
+		text += fmt.Sprintf(" And %d more like them.", m.clashes-len(m.said))
+	}
+	return []string{text}
+}
+
 // maxImportanceMetrics is how many predictors' importance a run logs (the first by rank).
 const maxImportanceMetrics = 20
 
@@ -642,12 +711,18 @@ func learningMetricName(level string, rows []resultRow) string {
 // `.mean_abs_shap_share` for the first 20 predictors, and each learning curve as a metric
 // history (`learning.train.<metric>`, `learning.validation.<metric>`, step = the round).
 func modelMetrics(rows []resultRow, at time.Time) []mlflowconn.Metric {
-	seen := map[string]bool{}
+	out, _ := modelMetricsChecked(rows, at)
+	return out
+}
+
+// modelMetricsChecked is modelMetrics and the warnings to write in the run: the keys are within
+// MLflow's length (a long one is cut and ends with a hash), and two names that are the same key
+// once cleaned are both kept (the second with `_2`) and said.
+func modelMetricsChecked(rows []resultRow, at time.Time) ([]mlflowconn.Metric, []string) {
+	names := &metricNames{rawOf: map[string]string{}, keyOf: map[string]string{}}
 	var out []mlflowconn.Metric
-	add := func(key string, v float64) {
-		key = metricKey(key)
-		if !seen[key] {
-			seen[key] = true
+	add := func(raw string, v float64) {
+		if key, isNew := names.of(raw); isNew {
 			out = append(out, mlflowconn.Metric{Key: key, Value: v, Timestamp: at.UnixMilli()})
 		}
 	}
@@ -679,11 +754,12 @@ func modelMetrics(rows []resultRow, at time.Time) []mlflowconn.Metric {
 			add("importance."+*r.Level+"."+r.Stat, *r.Value)
 		case boosting && r.Section == "curve" && r.Stat == "y" && r.Level != nil && r.Level2 != nil && r.X0 != nil &&
 			strings.HasPrefix(*r.Level, "learning_") && (*r.Level2 == "train" || *r.Level2 == "validation"):
-			out = append(out, mlflowconn.Metric{Key: metricKey("learning." + *r.Level2 + "." + learningMetricName(*r.Level, rows)),
+			raw := "learning." + *r.Level2 + "." + learningMetricName(*r.Level, rows)
+			out = append(out, mlflowconn.Metric{Key: shortKey(metricKey(raw), raw),
 				Value: *r.Value, Timestamp: at.UnixMilli(), Step: int64(*r.X0)})
 		}
 	}
-	return out
+	return out, names.warnings()
 }
 
 // coefficientsCSV is the `coef` section as a table: term, level, then one column per
