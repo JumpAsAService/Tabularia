@@ -6,7 +6,11 @@ prepared, with native categories (`cat_features`: a category's value is its labe
 the sentinel «␟missing», which a column may not hold), numbers with nan_mode = Min, the training
 rows in time order with has_time = true for a validation part in time (the ordered target
 statistics then never read later rows), early stopping on the validation part with
-use_best_model (the model keeps the trees up to the best round), a callback that stops at 60 % of
+use_best_model (the model keeps the trees up to the best round), the boosting started from the
+best constant (boost_from_average for RMSE and Logloss: the mean, the logit of the event's share;
+for MultiClass, which CatBoost does not start so, the log of each class's share in the training
+part as the pools' baseline, then the model's bias: a model file predicts from there without a
+baseline), a callback that stops at 60 % of
 the step's time, allow_writing_files = False and train_dir under /tmp (the code folder and the
 root are read-only: CatBoost writes nothing). The importance is PredictionValuesChange (it sums
 to 100); the SHAP values are CatBoost's ShapValues (exact TreeSHAP; n × (p + 1), or n × k × (p + 1)
@@ -94,9 +98,22 @@ def _cat_features(X: pd.DataFrame) -> list[int]:
     return [j for j, c in enumerate(X.columns) if isinstance(X[c].dtype, pd.CategoricalDtype)]
 
 
-def pool(X: pd.DataFrame, label: Any = None, weight: Any = None):
-    """A Pool of a positional frame (its categories as cat_features)."""
-    return _cb().Pool(cat_frame(X), label=label, weight=weight, cat_features=_cat_features(X))
+def pool(X: pd.DataFrame, label: Any = None, weight: Any = None, baseline: np.ndarray | None = None):
+    """A Pool of a positional frame (its categories as cat_features); `baseline`, one raw score per
+    class, the same for every row."""
+    rows = None if baseline is None else np.tile(np.asarray(baseline, dtype=np.float64), (len(X), 1))
+    return _cb().Pool(cat_frame(X), label=label, weight=weight, cat_features=_cat_features(X), baseline=rows)
+
+
+def class_start(P: B.Prepared) -> np.ndarray | None:
+    """A multiclass fit's start: the log of each class's share of the fit's weights in the training
+    part (the best constant of the multiclass loss; every class has training rows). None for the
+    other tasks, which boost_from_average starts."""
+    if P.task != "multiclass":
+        return None
+    tr = ~P.validation
+    per = np.array([float(P.fit_w[tr & (P.y == c)].sum()) for c in range(P.k)])
+    return np.log(per / per.sum())
 
 
 def raw_scores(model: Any, X: pd.DataFrame, threads: int) -> np.ndarray:
@@ -116,6 +133,8 @@ def model_params(P: B.Prepared) -> dict[str, Any]:
               "eval_metric": eval_metric, "nan_mode": "Min", "random_seed": int(p["seed"]), "thread_count": int(P.threads),
               "use_best_model": early, "has_time": P.split == "time", "allow_writing_files": False, "train_dir": TRAIN_DIR,
               "verbose": False}
+    if P.task != "multiclass":  # CatBoost refuses it for MultiClass: class_start
+        params["boost_from_average"] = True
     if key != loss:
         params["custom_metric"] = [loss]
     if early:
@@ -164,11 +183,14 @@ def fit_catboost(task: dict[str, Any]) -> dict[str, Any]:
     early = bool(params["use_best_model"])
     weighted = P.weighted or p.get("class_weight") == "balanced"
     tr_rows, va = P.train_order, P.valid
-    train_pool = pool(P.X.iloc[tr_rows], P.y[tr_rows], P.fit_w[tr_rows] if weighted else None)
-    valid_pool = pool(P.X.iloc[va], P.y[va], P.w[va] if P.weighted else None)
+    start = class_start(P)
+    train_pool = pool(P.X.iloc[tr_rows], P.y[tr_rows], P.fit_w[tr_rows] if weighted else None, start)
+    valid_pool = pool(P.X.iloc[va], P.y[va], P.w[va] if P.weighted else None, start)
     model = (cb.CatBoostRegressor if P.task == "regression" else cb.CatBoostClassifier)(**params)
     budget = TimeBudget(B.deadline(task))
     model.fit(train_pool, eval_set=valid_pool, callbacks=[budget] if budget.until is not None else None)
+    if start is not None:  # the pools' baseline becomes the model's bias: the file predicts from the start too
+        model.set_scale_and_bias(1.0, [float(b) for b in start])
 
     log = model.get_evals_result()
     curves = {m: {"train": [float(v) for v in log.get("learn", {}).get(m, [])], "validation": [float(v) for v in vals]}
@@ -380,7 +402,8 @@ def _test_determinism(code: Any) -> None:
     _expect(np.array_equal(va, vb, equal_nan=True), "1 and 4 threads: the numbers differ")
 
 
-@register("catboost: categories native with the missing sentinel, has_time in time order, the stop metrics, the time budget")
+@register("catboost: categories native with the missing sentinel, has_time in time order, the stop metrics, the time budget, "
+          "the start at the class shares")
 def _test_options(code: Any) -> None:
     df = synthetic(300, "binary", seed=6)
     bad = df.copy()
@@ -423,6 +446,14 @@ def _test_options(code: Any) -> None:
     _expect(rows.value[at["model|||stopped_by_time"]] == 1 and "model|||note_time_budget" in at, "the time budget")
     _expect(rows.text[at["assumption|trees_limit||verdict"]] == "doubtful", "trees_limit after the time budget")
     _expect(rows.value[at["model|||trees"]] < 5000, "the time budget kept every tree")
+    for what in ("binary", "multiclass"):  # the start: the logit of the event's share, the log of the class shares
+        t = _task(what, synthetic(300, what, seed=9))
+        out = fit_catboost(t)
+        P = B.prepare(t)
+        bias = np.atleast_1d(np.asarray(load_model_file(out["card"], out["model_file"]["data"]).get_scale_and_bias()[1], dtype=float))
+        counts = np.bincount(P.y[~P.validation], minlength=P.k if what == "multiclass" else 2).astype(float)
+        want = np.log(counts / counts.sum()) if what == "multiclass" else np.log(counts[1:] / counts[:1])
+        _expect(np.allclose(bias, want, rtol=0, atol=1e-6), f"{what}: the model starts at {bias}, not at {want}")
     off = fit_catboost(_task("regression", synthetic(300, "regression", seed=5), early_stopping=False, max_trees=40))["rows"]
     at = _at(off)
     _expect(off.value[at["model|||trees"]] == 40 and off.value[at["model|||best_iteration"]] == 39

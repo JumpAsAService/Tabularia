@@ -362,11 +362,12 @@
     },
     {
      "key": "assumption|overfitting||value",
-     "value": 0.5347279975186752
+     "value": 0.0,
+     "rel": 1e-06
     },
     {
      "key": "assumption|overfitting||verdict",
-     "text": "doubtful"
+     "text": "ok"
     },
     {
      "key": "assumption|trees_limit||value",
@@ -586,8 +587,13 @@
      "value": 0.10393237904407916
     },
     {
+     "key": "assumption|calibration||threshold",
+     "value": 0.14484324068441334,
+     "rel": 1e-09
+    },
+    {
      "key": "assumption|calibration||verdict",
-     "text": "failed"
+     "text": "ok"
     },
     {
      "key": "assumption|calibration_slope||value",
@@ -596,7 +602,7 @@
     },
     {
      "key": "assumption|calibration_slope||verdict",
-     "text": "doubtful"
+     "text": "ok"
     },
     {
      "key": "importance|price||gain",
@@ -712,7 +718,8 @@
     },
     {
      "key": "assumption|overfitting||value",
-     "value": 0.6378773190036032
+     "value": 0.0,
+     "rel": 1e-06
     },
     {
      "key": "assumption|overfitting||verdict",
@@ -1141,7 +1148,8 @@
     },
     {
      "key": "assumption|overfitting||value",
-     "value": 0.7069579689971919
+     "value": 0.0,
+     "rel": 1e-06
     },
     {
      "key": "assumption|overfitting||verdict",
@@ -1436,7 +1444,8 @@
     },
     {
      "key": "assumption|overfitting||value",
-     "value": 0.6791965804555483
+     "value": 0.0,
+     "rel": 1e-06
     },
     {
      "key": "assumption|overfitting||verdict",
@@ -1685,11 +1694,12 @@
     },
     {
      "key": "assumption|overfitting||value",
-     "value": 0.27301240918657615
+     "value": 0.14724974343134956,
+     "rel": 1e-06
     },
     {
      "key": "assumption|overfitting||verdict",
-     "text": "failed"
+     "text": "doubtful"
     },
     {
      "key": "assumption|trees_limit||value",
@@ -2114,7 +2124,8 @@
     },
     {
      "key": "assumption|overfitting||value",
-     "value": 0.7790436590742348
+     "value": 0.0,
+     "rel": 1e-06
     },
     {
      "key": "assumption|overfitting||verdict",
@@ -2224,11 +2235,11 @@
     },
     {
      "key": "model|||trees",
-     "value": 7.0
+     "value": 8.0
     },
     {
      "key": "model|||best_iteration",
-     "value": 6.0
+     "value": 7.0
     },
     {
      "key": "model|||max_trees",
@@ -2268,27 +2279,27 @@
     },
     {
      "key": "model|||train_auc",
-     "value": 0.8090135723098902
+     "value": 0.815604909409702
     },
     {
      "key": "model|||train_logloss",
-     "value": 0.5552365912061704
+     "value": 0.4360515544080973
     },
     {
      "key": "model|||train_brier",
-     "value": 0.1825669748649315
+     "value": 0.13762572663789618
     },
     {
      "key": "model|||validation_auc",
-     "value": 0.8574358974358974
+     "value": 0.8538461538461538
     },
     {
      "key": "model|||validation_logloss",
-     "value": 0.5583003834354583
+     "value": 0.4340480134489807
     },
     {
      "key": "model|||validation_brier",
-     "value": 0.1840274831440318
+     "value": 0.1377472678681128
     },
     {
      "key": "model|||baseline_logloss",
@@ -2300,51 +2311,56 @@
     },
     {
      "key": "model|||validation_accuracy",
-     "value": 0.1875
+     "value": 0.8125
     },
     {
      "key": "model|||validation_sensitivity",
-     "value": 1.0
+     "value": 0.0
     },
     {
      "key": "model|||validation_specificity",
-     "value": 0.0
+     "value": 1.0
     },
     {
      "key": "model|||validation_precision",
-     "value": 0.1875
+     "value": null
     },
     {
      "key": "model|||validation_f1",
-     "value": 0.3157894736842105
+     "value": 0.0
     },
     {
      "key": "cell|no|no|observed",
-     "value": 0.0
-    },
-    {
-     "key": "cell|no|yes|observed",
      "value": 65.0
     },
     {
-     "key": "cell|yes|no|observed",
+     "key": "cell|no|yes|observed",
      "value": 0.0
     },
     {
-     "key": "cell|yes|yes|observed",
+     "key": "cell|yes|no|observed",
      "value": 15.0
     },
     {
+     "key": "cell|yes|yes|observed",
+     "value": 0.0
+    },
+    {
      "key": "assumption|calibration||value",
-     "value": 0.2613126582617203
+     "value": 0.13831343880516897
+    },
+    {
+     "key": "assumption|calibration||threshold",
+     "value": 0.14957165854725452,
+     "rel": 1e-09
     },
     {
      "key": "assumption|calibration||verdict",
-     "text": "failed"
+     "text": "ok"
     },
     {
      "key": "assumption|calibration_slope||value",
-     "value": 15.13548040039923,
+     "value": 6.072752916293718,
      "rel": 1e-06
     },
     {
@@ -2353,19 +2369,19 @@
     },
     {
      "key": "importance|price||gain",
-     "value": 59.99250962410202
+     "value": 51.827024710081574
     },
     {
      "key": "importance|price||gain_share",
-     "value": 0.5999250962410201
+     "value": 0.5182702471008157
     },
     {
      "key": "importance|price||mean_abs_shap",
-     "value": 0.10695786807958994
+     "value": 0.21942796759512745
     },
     {
      "key": "importance|price||mean_abs_shap_share",
-     "value": 0.5664328801902724
+     "value": 0.5294663009591672
     },
     {
      "key": "importance|price||rank",
@@ -2373,11 +2389,11 @@
     },
     {
      "key": "importance|price||mean_abs_shap_train",
-     "value": 0.10564639671048992
+     "value": 0.216261964267029
     },
     {
      "key": "importance|price||mean_abs_shap_validation",
-     "value": 0.11220375355599004
+     "value": 0.23209198090752142
     },
     {
      "key": "importance|price||missing_share",
@@ -2385,31 +2401,31 @@
     },
     {
      "key": "importance|visits||gain",
-     "value": 15.575638110217493
+     "value": 26.953149678482117
     },
     {
      "key": "importance|visits||gain_share",
-     "value": 0.1557563811021749
+     "value": 0.2695314967848212
     },
     {
      "key": "importance|visits||mean_abs_shap",
-     "value": 0.024844397825842534
+     "value": 0.10943422126953799
     },
     {
      "key": "importance|visits||mean_abs_shap_share",
-     "value": 0.13157221689023477
+     "value": 0.2640581005646426
     },
     {
      "key": "importance|visits||rank",
-     "value": 3.0
+     "value": 2.0
     },
     {
      "key": "importance|visits||mean_abs_shap_train",
-     "value": 0.025654031504605608
+     "value": 0.1112404049524331
     },
     {
      "key": "importance|visits||mean_abs_shap_validation",
-     "value": 0.021605863110790127
+     "value": 0.1022094865379568
     },
     {
      "key": "importance|visits||missing_share",
@@ -2417,31 +2433,31 @@
     },
     {
      "key": "importance|channel||gain",
-     "value": 24.431852265680504
+     "value": 21.219825611436306
     },
     {
      "key": "importance|channel||gain_share",
-     "value": 0.244318522656805
+     "value": 0.21219825611436305
     },
     {
      "key": "importance|channel||mean_abs_shap",
-     "value": 0.057024816384814096
+     "value": 0.0855701691487105
     },
     {
      "key": "importance|channel||mean_abs_shap_share",
-     "value": 0.3019949029194928
+     "value": 0.20647559847619015
     },
     {
      "key": "importance|channel||rank",
-     "value": 2.0
+     "value": 3.0
     },
     {
      "key": "importance|channel||mean_abs_shap_train",
-     "value": 0.056964855190989115
+     "value": 0.08589535026222363
     },
     {
      "key": "importance|channel||mean_abs_shap_validation",
-     "value": 0.057264661160114194
+     "value": 0.0842694446946578
     },
     {
      "key": "importance|channel||missing_share",
@@ -2457,23 +2473,28 @@
     },
     {
      "key": "assumption|beats_baseline||value",
-     "value": -0.1568357595797003
+     "value": 0.10062346681092882
     },
     {
      "key": "assumption|beats_baseline||verdict",
-     "text": "failed"
+     "text": "ok"
+    },
+    {
+     "key": "assumption|overfitting||value",
+     "value": 0.0,
+     "rel": 1e-06
     },
     {
      "key": "assumption|overfitting||verdict",
-     "text": "not_computed"
+     "text": "ok"
     },
     {
      "key": "assumption|trees_limit||value",
-     "value": 7.0
+     "value": 8.0
     },
     {
      "key": "assumption|trees_limit||verdict",
-     "text": "doubtful"
+     "text": "ok"
     },
     {
      "key": "assumption|class_imbalance||value",
@@ -2497,7 +2518,7 @@
     },
     {
      "key": "assumption|leakage|price|value",
-     "value": 0.5664328801902724
+     "value": 0.5294663009591672
     },
     {
      "key": "assumption|leakage|price|verdict",
@@ -2676,7 +2697,7 @@
     },
     {
      "key": "importance|spend|bronze|mean_abs_shap",
-     "value": 0.3200669395578816
+     "value": 0.32006693955788174
     },
     {
      "key": "class|gold||support",
@@ -2764,7 +2785,7 @@
     },
     {
      "key": "importance|spend|silver|mean_abs_shap",
-     "value": 0.09088782635354635
+     "value": 0.0908878263535464
     },
     {
      "key": "model|||validation_balanced_accuracy",
@@ -2788,11 +2809,11 @@
     },
     {
      "key": "importance|spend||mean_abs_shap",
-     "value": 0.7662346286627416
+     "value": 0.7662346286627417
     },
     {
      "key": "importance|spend||mean_abs_shap_share",
-     "value": 0.42560587944261447
+     "value": 0.4256058794426145
     },
     {
      "key": "importance|spend||rank",
@@ -2800,7 +2821,7 @@
     },
     {
      "key": "importance|spend||mean_abs_shap_train",
-     "value": 0.7585682633703958
+     "value": 0.7585682633703961
     },
     {
      "key": "importance|spend||mean_abs_shap_validation",
@@ -2820,11 +2841,11 @@
     },
     {
      "key": "importance|orders||mean_abs_shap",
-     "value": 0.5492544130156292
+     "value": 0.5492544130156293
     },
     {
      "key": "importance|orders||mean_abs_shap_share",
-     "value": 0.3050839765584987
+     "value": 0.3050839765584988
     },
     {
      "key": "importance|orders||rank",
@@ -2832,11 +2853,11 @@
     },
     {
      "key": "importance|orders||mean_abs_shap_train",
-     "value": 0.5579993641051485
+     "value": 0.5579993641051486
     },
     {
      "key": "importance|orders||mean_abs_shap_validation",
-     "value": 0.5142746086575526
+     "value": 0.5142746086575527
     },
     {
      "key": "importance|orders||missing_share",
@@ -2844,11 +2865,11 @@
     },
     {
      "key": "importance|member||gain",
-     "value": 16.846531932665922
+     "value": 16.84653193266592
     },
     {
      "key": "importance|member||gain_share",
-     "value": 0.16846531932665923
+     "value": 0.16846531932665917
     },
     {
      "key": "importance|member||mean_abs_shap",
@@ -2868,7 +2889,7 @@
     },
     {
      "key": "importance|member||mean_abs_shap_validation",
-     "value": 0.42661030329058247
+     "value": 0.4266103032905823
     },
     {
      "key": "importance|member||missing_share",
@@ -2896,7 +2917,7 @@
     },
     {
      "key": "importance|store||mean_abs_shap_train",
-     "value": 0.06001317741786348
+     "value": 0.060013177417863495
     },
     {
      "key": "importance|store||mean_abs_shap_validation",
@@ -2924,7 +2945,8 @@
     },
     {
      "key": "assumption|overfitting||value",
-     "value": 0.8789394436395244
+     "value": 0.0,
+     "rel": 1e-06
     },
     {
      "key": "assumption|overfitting||verdict",
@@ -2960,7 +2982,7 @@
     },
     {
      "key": "assumption|leakage|spend|value",
-     "value": 0.42560587944261447
+     "value": 0.4256058794426145
     },
     {
      "key": "assumption|leakage|spend|verdict",
@@ -3219,7 +3241,8 @@
     },
     {
      "key": "assumption|overfitting||value",
-     "value": 0.697331216855165
+     "value": 0.0,
+     "rel": 1e-06
     },
     {
      "key": "assumption|overfitting||verdict",
@@ -3470,7 +3493,8 @@
     },
     {
      "key": "assumption|overfitting||value",
-     "value": 0.32030626473395835
+     "value": 0.054498605881364424,
+     "rel": 1e-06
     },
     {
      "key": "assumption|overfitting||verdict",

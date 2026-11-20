@@ -210,11 +210,14 @@ def ll(y, p, w) -> float:
     return wavg(-(y * np.log(q) + (1 - y) * np.log(1 - q)), w)
 
 
-def slope_by_optimizer(p, y, w) -> float:
+def slope_by_optimizer(p, y, w) -> tuple[float, float]:
+    """The slope by scipy's optimizer, and its standard error from the information matrix at the
+    optimum written out (the weights scaled to sum to the rows)."""
     from scipy.optimize import minimize
 
     q = np.clip(p, EPS, 1 - EPS)
     x = np.log(q / (1 - q))
+    w = w / w.mean()
 
     def nll(b):
         z = b[0] + b[1] * x
@@ -225,7 +228,32 @@ def slope_by_optimizer(p, y, w) -> float:
         r = w * (mu - y)
         return np.array([r.sum(), (r * x).sum()])
     res = minimize(nll, np.array([0.0, 1.0]), jac=grad, method="BFGS", options={"gtol": 1e-12, "maxiter": 10000})
-    return float(res.x[1])
+    mu = 1 / (1 + np.exp(-(res.x[0] + res.x[1] * x)))
+    v = w * mu * (1 - mu)
+    i00, i01, i11 = v.sum(), (v * x).sum(), (v * x * x).sum()
+    return float(res.x[1]), math.sqrt(i00 / (i00 * i11 - i01 * i01))
+
+
+def ece_noise_by_halfnormals(p, w) -> float:
+    """The calibration error well calibrated probabilities reach 95 % of the time: per bin of the
+    ECE (the same bins) a half-normal of scale σ_b = √(Σ w² p (1 − p)) / W_b, by scipy's
+    distributions; their weighted sum taken as normal, its 95 % quantile."""
+    from scipy.stats import halfnorm, norm
+
+    order = sorted(range(len(p)), key=lambda i: (p[i], i))
+    W = float(w.sum())
+    acc = 0.0
+    bins: dict[int, list[int]] = {}
+    for i in order:
+        bins.setdefault(min(9, int(math.floor(10 * acc / W))), []).append(i)
+        acc += w[i]
+    mean = var = 0.0
+    for idx in bins.values():
+        wb = w[idx]
+        h = halfnorm(scale=math.sqrt(float(np.sum(wb ** 2 * p[idx] * (1 - p[idx])))) / wb.sum())
+        mean += wb.sum() / W * h.mean()
+        var += (wb.sum() / W) ** 2 * h.var()
+    return float(norm(mean, math.sqrt(var)).ppf(0.95))
 
 
 def ece_by_bins(p, y, w) -> tuple[float, list[float]]:
@@ -380,10 +408,21 @@ def catboost_fit(c: Case) -> Fit:
     if p["early_stopping"]:
         kw["early_stopping_rounds"] = p["early_stopping_rounds"]
     to, va = c.train_order, c.va
-    train = Pool(X.iloc[to], label=c.y[to], weight=c.fw[to] if c.weighted else None, cat_features=cats)
-    valid = Pool(X.iloc[va], label=c.y[va], weight=c.w[va] if c.weights else None, cat_features=cats)
+    # the start: the best constant; CatBoost's own for RMSE and Logloss, for MultiClass the log of the
+    # class shares (the fit's weights, the training rows) as the pools' baseline, then the model's bias
+    start = None
+    if what == "multiclass":
+        start = np.log(np.array([c.fw[c.tr][c.y[c.tr] == j].sum() for j in range(c.k)]) / c.fw[c.tr].sum())
+    else:
+        kw["boost_from_average"] = True
+    train = Pool(X.iloc[to], label=c.y[to], weight=c.fw[to] if c.weighted else None, cat_features=cats,
+                 baseline=None if start is None else np.tile(start, (len(to), 1)))
+    valid = Pool(X.iloc[va], label=c.y[va], weight=c.w[va] if c.weights else None, cat_features=cats,
+                 baseline=None if start is None else np.tile(start, (len(va), 1)))
     model = (CatBoostRegressor if what == "regression" else CatBoostClassifier)(**kw)
     model.fit(train, eval_set=valid)
+    if start is not None:
+        model.set_scale_and_bias(1.0, start.tolist())
     log = model.get_evals_result()
     rounds = len(log["validation"][key])
     best = model.get_best_iteration() if p["early_stopping"] else model.tree_count_ - 1
@@ -438,7 +477,6 @@ def case_values(case: dict[str, Any], fit_with: Any) -> list[dict[str, Any]]:
         b_va = math.sqrt(wavg((y[va] - base) ** 2, w[va]))
         num("model|||baseline_rmse", b_va)
         num("model|||validation_mean", wavg(y[va], w[va]))
-        L_tr, B_tr = math.sqrt(wavg(r["train"] ** 2, w[tr])), math.sqrt(wavg((y[tr] - base) ** 2, w[tr]))
         L_va, B_va = math.sqrt(wavg(r["validation"] ** 2, w[va])), b_va
         metric = 1 - np.sum(w[va] * r["validation"] ** 2) / np.sum(w[va] * (y[va] - wavg(y[va], w[va])) ** 2)
         size, size_ok = len(va), (100, 30)
@@ -468,16 +506,23 @@ def case_values(case: dict[str, Any], fit_with: Any) -> list[dict[str, Any]]:
         for a, la in enumerate(classes):
             for b, lb in enumerate(classes):
                 num(f"cell|{la}|{lb}|observed", float(w[va][(y[va] == a) & ((pr[va] >= thr) == bool(b))].sum()))
-        L_tr, B_tr = ll(yf[tr], pr[tr], w[tr]), ll(yf[tr], np.full(len(tr), prev), w[tr])
         L_va, B_va = ll(yf[va], pr[va], w[va]), ll(yf[va], np.full(len(va), prev), w[va])
         metric = auc_pairs(pr[va], y[va], w[va])
         size, size_ok = int(min(np.sum(y[va] == 0), np.sum(y[va] == 1))), (30, 10)
-        e, _ = ece_by_bins(pr[va], yf[va], w[va])
-        num("assumption|calibration||value", e)
-        txt("assumption|calibration||verdict", verdict(e, lambda x: x <= 0.05, lambda x: x <= 0.10))
-        s = slope_by_optimizer(pr[va], yf[va], w[va])
-        num("assumption|calibration_slope||value", s, rel=1e-6)
-        txt("assumption|calibration_slope||verdict", verdict(s, lambda x: 0.8 <= x <= 1.25, lambda x: 0.5 <= x <= 2))
+        smallest = int(min(np.sum(y[va] == 0), np.sum(y[va] == 1)))
+        if smallest >= 10:
+            e, _ = ece_by_bins(pr[va], yf[va], w[va])
+            noise = ece_noise_by_halfnormals(pr[va], w[va])
+            num("assumption|calibration||value", e)
+            num("assumption|calibration||threshold", max(0.05, noise), rel=1e-9)
+            txt("assumption|calibration||verdict", verdict(e, lambda x: x <= max(0.05, noise), lambda x: x <= max(0.10, noise + 0.05)))
+            s, se = slope_by_optimizer(pr[va], yf[va], w[va])
+            lo, hi = s - 1.959963984540054 * se, s + 1.959963984540054 * se
+            num("assumption|calibration_slope||value", s, rel=1e-6)
+            txt("assumption|calibration_slope||verdict", verdict(0, lambda _: hi >= 0.8 and lo <= 1.25, lambda _: hi >= 0.5 and lo <= 2))
+        else:
+            txt("assumption|calibration||verdict", "not_computed")
+            txt("assumption|calibration_slope||verdict", "not_computed")
     else:
         z = raw - raw.max(axis=1, keepdims=True)
         P = np.exp(z) / np.exp(z).sum(axis=1, keepdims=True)
@@ -513,7 +558,6 @@ def case_values(case: dict[str, Any], fit_with: Any) -> list[dict[str, Any]]:
         num("model|||validation_balanced_accuracy", float(np.mean(recalls)))
         num("model|||validation_macro_auc", float(np.mean(aucs)))
         num("model|||validation_macro_f1", float(np.mean(f1s)))
-        L_tr, B_tr = mll(tr, P[tr]), mll(tr, np.tile(sh_tr, (len(tr), 1)))
         L_va, B_va = mll(va, P[va]), mll(va, np.tile(sh_tr, (len(va), 1)))
         metric = float(np.mean(aucs))
         size, size_ok = int(np.bincount(y[va], minlength=k).min()), (30, 10)
@@ -538,17 +582,19 @@ def case_values(case: dict[str, Any], fit_with: Any) -> list[dict[str, Any]]:
     u = 1 - L_va / B_va
     num("assumption|beats_baseline||value", u)
     txt("assumption|beats_baseline||verdict", verdict(u, lambda x: x >= 0.05, lambda x: x > 0))
-    if B_tr - L_tr > 0:
-        s_ = (B_va - L_va) / (B_tr - L_tr)
-        num("assumption|overfitting||value", s_)
-        txt("assumption|overfitting||verdict", verdict(s_, lambda x: x >= 0.6, lambda x: x >= 0.3))
-    else:  # the training part does not beat its baseline: there is no gain to share
-        txt("assumption|overfitting||verdict", "not_computed")
     vloss = f.vloss
+    lowest = min(vloss[: best + 1])
+    if B_va - lowest > 0:  # the share of the validation gain given back between the best tree and the tree kept
+        r = max(0.0, (vloss[best] - lowest) / (B_va - lowest))
+        num("assumption|overfitting||value", r, rel=1e-6)
+        txt("assumption|overfitting||verdict", verdict(r, lambda x: x <= 0.05, lambda x: x <= 0.25))
+    else:  # the validation loss never beats the baseline's: no gain to give back
+        txt("assumption|overfitting||verdict", "not_computed")
     if p["early_stopping"]:
         stopped = rounds < p["max_trees"]
         num("assumption|trees_limit||value", best + 1)
-        txt("assumption|trees_limit||verdict", "ok" if stopped and best + 1 >= 20 else "doubtful")
+        # few trees are read above the default learning rate only: below it they say a weak pattern
+        txt("assumption|trees_limit||verdict", "ok" if stopped and (best + 1 >= 20 or p["learning_rate"] <= 0.05) else "doubtful")
     else:
         excess = (vloss[-1] - min(vloss)) / abs(min(vloss))
         num("assumption|trees_limit||value", excess)
@@ -574,9 +620,19 @@ def case_values(case: dict[str, Any], fit_with: Any) -> list[dict[str, Any]]:
         txt("assumption|zero_importance||verdict", "ok")
     first = predictors[ranked[0]]
     share = mas[ranked[0]] / mas.sum()
-    num(f"assumption|leakage|{first}|value", share)
-    big, perfect = share >= 0.8, metric >= 0.98
-    txt(f"assumption|leakage|{first}|verdict", "failed" if big and perfect else "doubtful" if big or perfect else "ok")
+    perfect = metric >= 0.98
+    if len(predictors) == 1:  # a lone predictor's share is 1: the fit alone is read
+        num(f"assumption|leakage|{first}|value", metric)
+        txt(f"assumption|leakage|{first}|verdict", "doubtful" if perfect else "ok")
+    else:
+        num(f"assumption|leakage|{first}|value", share)
+        if share >= 0.8 and perfect:
+            said = "failed"
+        elif perfect or (share >= 0.6 and metric >= 0.95):
+            said = "doubtful"
+        else:
+            said = "ok"
+        txt(f"assumption|leakage|{first}|verdict", said)
     return E
 
 

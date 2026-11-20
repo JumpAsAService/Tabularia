@@ -42,6 +42,9 @@ TIME_BUDGET_SHARE = 0.6
 BEESWARM_BINS = 50
 BEESWARM_HALF_WIDTH = 0.4
 CALIBRATION_BINS = 10
+CALIBRATION_MIN_CLASS = 10  # the calibration is not read with fewer validation rows of a class
+Z95 = 1.6448536269514722    # the normal's 95 % quantile, one-sided
+Z975 = 1.959963984540054    # two-sided 95 %
 PROBABILITY_BINS = 20
 ROC_POINTS = 1000
 ROC_OVR_POINTS = 200
@@ -574,21 +577,24 @@ def softmax(M: np.ndarray) -> np.ndarray:
     return e / e.sum(axis=1, keepdims=True)
 
 
-def calibration_bins(p: np.ndarray, y: np.ndarray, w: np.ndarray, bins: int = CALIBRATION_BINS) -> dict[str, np.ndarray]:
-    """Bins of equal weight of the predicted probability: rows sorted by p (stable), a row's bin is
-    ⌊bins × (the weight before it) / W⌋. Per bin with weight: the mean p, the observed rate (both
-    weighted), the weight and the rows."""
+def _calibration_groups(p: np.ndarray, w: np.ndarray, bins: int = CALIBRATION_BINS) -> list[np.ndarray]:
+    """The rows of each bin of equal weight of the predicted probability (rows sorted by p, stable;
+    a row's bin is ⌊bins × (the weight before it) / W⌋), the bins with weight only."""
     order = np.argsort(p, kind="stable")
     ws = w[order]
     W = float(ws.sum())
     before = np.cumsum(ws) - ws
     b = np.minimum(bins - 1, np.floor(bins * before / W).astype(np.int64))
+    groups = [order[b == j] for j in range(bins)]
+    return [i for i in groups if len(i) and float(w[i].sum()) > 0]
+
+
+def calibration_bins(p: np.ndarray, y: np.ndarray, w: np.ndarray, bins: int = CALIBRATION_BINS) -> dict[str, np.ndarray]:
+    """Bins of equal weight of the predicted probability (_calibration_groups). Per bin with
+    weight: the mean p, the observed rate (both weighted), the weight and the rows."""
     out = {"p": [], "y": [], "weight": [], "rows": []}
-    for j in range(bins):
-        i = order[b == j]
+    for i in _calibration_groups(p, w, bins):
         wj = float(w[i].sum())
-        if not len(i) or wj <= 0:
-            continue
         out["p"].append(float(np.sum(w[i] * p[i]) / wj))
         out["y"].append(float(np.sum(w[i] * y[i]) / wj))
         out["weight"].append(wj)
@@ -602,11 +608,32 @@ def ece(p: np.ndarray, y: np.ndarray, w: np.ndarray) -> float:
     return float(np.sum(b["weight"] * np.abs(b["y"] - b["p"])) / np.sum(b["weight"]))
 
 
-def calibration_slope(p: np.ndarray, y: np.ndarray, w: np.ndarray) -> float:
+def ece_noise(p: np.ndarray, w: np.ndarray) -> float:
+    """The expected calibration error that perfectly calibrated probabilities p reach 95 % of the
+    time with these rows and weights, by a formula: in a bin the observed rate minus the mean p is
+    about normal, of variance σ_b² = Σ w_i² p_i (1 − p_i) / W_b²; the ECE is then a sum of
+    half-normals Σ ω_b |N(0, σ_b²)|, ω_b = W_b / W, of mean Σ ω_b σ_b √(2/π) and variance
+    Σ ω_b² σ_b² (1 − 2/π), taken as normal: the mean + 1.645 standard deviations. With 80
+    validation rows it is about 0.16, with 400 about 0.07, with 4,000 about 0.02."""
+    W = float(w.sum())
+    mean = var = 0.0
+    for i in _calibration_groups(p, w):
+        wb = float(w[i].sum())
+        sd = math.sqrt(float(np.sum(w[i] ** 2 * p[i] * (1 - p[i])))) / wb
+        omega = wb / W
+        mean += omega * sd * math.sqrt(2 / math.pi)
+        var += (omega * sd) ** 2 * (1 - 2 / math.pi)
+    return mean + Z95 * math.sqrt(var)
+
+
+def calibration_slope(p: np.ndarray, y: np.ndarray, w: np.ndarray) -> tuple[float, float]:
     """The slope of a weighted logistic regression of y on logit(p), with an intercept, by Newton's
-    method; NaN when it does not converge (a separation)."""
+    method, and its standard error (the inverse of the information at the optimum, the weights
+    scaled to sum to the rows: they say how much a row counts, not how many rows it stands for);
+    (NaN, NaN) when it does not converge (a separation)."""
     q = np.clip(p, EPS, 1 - EPS)
     x = np.log(q / (1 - q))
+    w = w * (len(w) / float(w.sum()))
     A = np.column_stack([np.ones_like(x), x])
     beta = np.array([0.0, 1.0])
     for _ in range(100):
@@ -616,13 +643,19 @@ def calibration_slope(p: np.ndarray, y: np.ndarray, w: np.ndarray) -> float:
         try:
             step = np.linalg.solve(H, g)
         except np.linalg.LinAlgError:
-            return math.nan
+            return math.nan, math.nan
         beta = beta + step
         if not np.all(np.isfinite(beta)) or abs(beta[1]) > 1e6:
-            return math.nan
+            return math.nan, math.nan
         if np.max(np.abs(step)) < 1e-12:
-            return float(beta[1])
-    return math.nan
+            mu = sigmoid(A @ beta)
+            H = (A * (w * mu * (1 - mu))[:, None]).T @ A
+            try:
+                var = float(np.linalg.inv(H)[1, 1])
+            except np.linalg.LinAlgError:
+                return math.nan, math.nan
+            return float(beta[1]), math.sqrt(var) if var > 0 else math.nan
+    return math.nan, math.nan
 
 
 def spearman(a: np.ndarray, b: np.ndarray) -> float:
@@ -635,12 +668,19 @@ def spearman(a: np.ndarray, b: np.ndarray) -> float:
 
 
 # ── the diagnostics: rules of thumb, not tests ──────────────────────────────────
+# Each advice has an id; the runner writes it next to the sentence (the row `advice_id`), and the
+# report says the advice of that id in its own words (report_texts/boosting.json): the sentence
+# may change, the id does not.
 ADVICE = {
     "validation_size": "the validation numbers rest on few rows: raise validation_share, or add rows",
     "beats_baseline": "the model predicts the validation part no better than the average (the class shares): check the "
                       "predictors and the outcome",
-    "overfitting": "the model learns the training rows more than the pattern: lower max_depth, raise min_child_weight "
-                   "(XGBoost) or l2_leaf_reg (CatBoost), lower subsample, or add rows",
+    "beats_baseline_constant": "the baseline's loss is 0: the outcome does not vary in the validation part",
+    "overfitting": "the validation loss of the tree kept is worse than at the best tree before it: the trees after it learn "
+                   "the training rows, not the pattern; turn early stopping on with stop_metric = loss, or lower max_trees, "
+                   "max_depth or learning_rate",
+    "overfitting_no_gain": "the validation loss never goes below the baseline's, so there is no gain to give back (with "
+                           "class_weight = balanced the probabilities move away from the class shares, and the loss with them)",
     "trees_more": "the validation loss was still falling at the last tree: raise max_trees or learning_rate",
     "trees_few": "stopped after very few trees: lower learning_rate",
     "trees_no_stop": "the validation loss at the last tree is more than 1 % worse than at the best: turn early stopping on",
@@ -649,35 +689,54 @@ ADVICE = {
     "calibration": "the predicted probabilities do not match the observed rates: do not read them as probabilities, or "
                    "recalibrate",
     "calibration_balanced": "expected: balanced weights move the probabilities; turn it off if they are used as probabilities",
+    "calibration_few_rows": f"the validation part has fewer than {CALIBRATION_MIN_CLASS} rows of a class: the calibration "
+                            "cannot be read; raise validation_share, or add rows",
     "calibration_slope": "below 1: the probabilities are too extreme (overfitting); above 1: too timid",
+    "slope_separated": "the logistic regression on logit(p) does not converge: the validation part is separated",
     "importance_stability": "the model leans on different predictors in the two parts: the ranking is not reliable; more "
                             "rows, or fewer correlated predictors",
+    "importance_few_predictors": "fewer than 3 predictors: there is no ranking to compare",
+    "importance_few_rows": "fewer than 50 validation rows in the SHAP sample: add rows, or raise validation_share",
+    "importance_flat": "the importance does not vary between the predictors",
     "zero_importance": "the model never uses it: drop it, or check that it varies",
     "leakage": "one predictor explains nearly everything, or the fit is nearly perfect: check that no predictor is computed "
                "from the outcome or recorded after it (an id, a status, a later date)",
-    "leakage_time": "; try validation = time",
+    "leakage_time": "one predictor explains nearly everything, or the fit is nearly perfect: check that no predictor is "
+                    "computed from the outcome or recorded after it (an id, a status, a later date); try validation = time",
 }
 
 H0 = {
     "validation_size_regression": "the rows of the validation part",
     "validation_size": "the smallest number of rows of a class in the validation part",
     "beats_baseline": "1 − validation loss / the baseline's",
-    "overfitting": "the share of the training part's gain over the baseline that holds on validation",
+    "overfitting": "the share of the validation gain over the baseline given back between the best tree and the tree kept",
     "trees_limit": "whether early stopping stopped, and the trees kept",
     "trees_limit_no_stop": "how much worse the validation loss is at the last tree than at the best",
     "class_imbalance": "the largest class share over the smallest",
-    "calibration": "the expected calibration error",
-    "calibration_slope": "the slope of a logistic regression on logit(p)",
+    "calibration": "the expected calibration error, against the one well calibrated probabilities reach with these rows",
+    "calibration_slope": "the slope of a logistic regression on logit(p), read with its 95 % interval",
     "importance_stability": "Spearman's ρ of the importance in the two parts",
     "zero_importance": "the predictors no split uses",
-    "leakage": "the first predictor's share of |SHAP|, and how nearly perfect the validation fit is",
+    "leakage": "the first predictor's share of |SHAP| (with one predictor: the validation fit), and how nearly perfect the "
+               "validation fit is",
 }
+
+# the thresholds of the diagnostics («Open questions for the owner», 20), tuned on clean and on
+# spoiled tables (docs/specs/statistical-models.md, «The diagnostics»)
+OVERFITTING_OK, OVERFITTING_FAILED = 0.05, 0.25
+CALIBRATION_OK, CALIBRATION_FAILED = 0.05, 0.10
+SLOPE_OK, SLOPE_DOUBTFUL = (0.8, 1.25), (0.5, 2.0)
+LEAKAGE_SHARE, LEAKAGE_PERFECT = 0.8, 0.98
+LEAKAGE_SOME_SHARE, LEAKAGE_HIGH = 0.6, 0.95
+TREES_FEW_RATE = 0.05  # the default learning rate: «few trees» is read above it
 
 
 def _check(check: str, verdict: str, value: float = math.nan, threshold: float = math.nan, advice: str | None = None,
            level_2: str | None = None, h0: str | None = None) -> dict[str, Any]:
+    """A diagnostic's row; `advice` is the id of its advice (ADVICE), said only when it is not ok."""
+    said = None if verdict == "ok" or advice is None else advice
     return {"check": check, "level_2": level_2, "h0": h0 or H0[check], "verdict": verdict, "value": value,
-            "threshold": threshold, "advice": None if verdict == "ok" else advice}
+            "threshold": threshold, "advice_id": said, "advice": ADVICE[said] if said else None}
 
 
 def check_validation_size(what: str, n_valid: int, smallest_class: int | None) -> dict[str, Any]:
@@ -688,92 +747,131 @@ def check_validation_size(what: str, n_valid: int, smallest_class: int | None) -
         v, ok, doubtful = int(smallest_class or 0), 30, 10
         h0 = H0["validation_size"]
     verdict = "ok" if v >= ok else "doubtful" if v >= doubtful else "failed"
-    return _check("validation_size", verdict, v, ok, ADVICE["validation_size"], h0=h0)
+    return _check("validation_size", verdict, v, ok, "validation_size", h0=h0)
 
 
 def check_beats_baseline(loss_valid: float, base_valid: float) -> dict[str, Any]:
     if not (base_valid > 0) or not math.isfinite(loss_valid):
-        return _check("beats_baseline", "not_computed", advice="the baseline's loss is 0: the outcome does not vary in the "
-                                                               "validation part")
+        return _check("beats_baseline", "not_computed", advice="beats_baseline_constant")
     u = 1 - loss_valid / base_valid
     verdict = "ok" if u >= 0.05 else "doubtful" if u > 0 else "failed"
-    return _check("beats_baseline", verdict, u, 0.05, ADVICE["beats_baseline"])
+    return _check("beats_baseline", verdict, u, 0.05, "beats_baseline")
 
 
-def check_overfitting(loss_train: float, base_train: float, loss_valid: float, base_valid: float) -> dict[str, Any]:
-    gain_train = base_train - loss_train
-    if not (gain_train > 0) or not math.isfinite(loss_valid) or not math.isfinite(base_valid):
-        return _check("overfitting", "not_computed", advice="the model does not improve on the baseline in the training part")
-    s = (base_valid - loss_valid) / gain_train
-    verdict = "ok" if s >= 0.6 else "doubtful" if s >= 0.3 else "failed"
-    return _check("overfitting", verdict, s, 0.6, ADVICE["overfitting"])
+def check_overfitting(curve: list[float] | np.ndarray, kept: int, base_valid: float) -> dict[str, Any]:
+    """r = (L_kept − L_best) / (B − L_best) on the validation loss curve, L_best its lowest value up
+    to the tree kept, B the baseline's loss: the share of the gain over the baseline that the trees
+    after the best give back. 0 when the tree kept is the best (early stopping on the loss); it
+    grows when the trees go on learning the training rows while the validation gets worse. The
+    training loss is not read: deep trees bring it near 0 by construction."""
+    c = np.asarray(curve, dtype=float)[: kept + 1]
+    if not len(c) or not np.isfinite(c).all() or not math.isfinite(base_valid):
+        return _check("overfitting", "not_computed", advice="overfitting_no_gain")
+    best = float(c.min())
+    gain = base_valid - best
+    if not gain > 0:
+        return _check("overfitting", "not_computed", advice="overfitting_no_gain")
+    r = max(0.0, (float(c[-1]) - best) / gain)
+    verdict = "ok" if r <= OVERFITTING_OK else "doubtful" if r <= OVERFITTING_FAILED else "failed"
+    return _check("overfitting", verdict, r, OVERFITTING_OK, "overfitting")
 
 
 def check_trees_limit(early_stopping: bool, stopped_early: bool, stopped_by_time: bool, kept: int,
-                      last_loss: float, best_loss: float) -> dict[str, Any]:
+                      last_loss: float, best_loss: float, learning_rate: float = TREES_FEW_RATE) -> dict[str, Any]:
+    """With early stopping: doubtful when it did not stop (max_trees reached, or the time budget),
+    or when it stopped before 20 trees with a learning rate above 0.05 (each tree a big step: a
+    lower rate helps). With the default rate or a lower one, an early stop says that the pattern is
+    weak, which beats_baseline reads: lowering the rate again would not help (the threshold of 20
+    is then not written). Without early stopping: the last tree's validation loss against the best."""
     if early_stopping:
+        few = 20 if learning_rate > TREES_FEW_RATE else math.nan
         if stopped_by_time or not stopped_early:
-            return _check("trees_limit", "doubtful", kept, 20, ADVICE["trees_more"])
-        if kept < 20:
-            return _check("trees_limit", "doubtful", kept, 20, ADVICE["trees_few"])
-        return _check("trees_limit", "ok", kept, 20)
+            return _check("trees_limit", "doubtful", kept, few, "trees_more")
+        if kept < 20 and learning_rate > TREES_FEW_RATE:
+            return _check("trees_limit", "doubtful", kept, few, "trees_few")
+        return _check("trees_limit", "ok", kept, few)
     h0 = H0["trees_limit_no_stop"]
     excess = (last_loss - best_loss) / abs(best_loss) if best_loss else (0.0 if last_loss == best_loss else math.inf)
     if stopped_by_time:
-        return _check("trees_limit", "doubtful", excess, 0.01, ADVICE["trees_more"], h0=h0)
+        return _check("trees_limit", "doubtful", excess, 0.01, "trees_more", h0=h0)
     verdict = "doubtful" if excess > 0.01 else "ok"
-    return _check("trees_limit", verdict, excess, 0.01, ADVICE["trees_no_stop"], h0=h0)
+    return _check("trees_limit", verdict, excess, 0.01, "trees_no_stop", h0=h0)
 
 
 def check_class_imbalance(shares: np.ndarray) -> dict[str, Any]:
     present = shares[shares > 0]
     r = float(present.max() / present.min())
     verdict = "ok" if r < 4 else "doubtful" if r < 20 else "failed"
-    return _check("class_imbalance", verdict, r, 4, ADVICE["class_imbalance"])
+    return _check("class_imbalance", verdict, r, 4, "class_imbalance")
 
 
-def check_calibration(e: float, balanced: bool) -> dict[str, Any]:
-    verdict = "ok" if e <= 0.05 else "doubtful" if e <= 0.10 else "failed"
-    return _check("calibration", verdict, e, 0.05, ADVICE["calibration_balanced" if balanced else "calibration"])
+def check_calibration(e: float, noise: float, balanced: bool, smallest_class: int) -> dict[str, Any]:
+    """The ECE against max(0.05, the noise): `noise` is the ECE that well calibrated probabilities
+    reach 95 % of the time with these rows (ece_noise; about 0.16 with 80 validation rows), so that
+    a small validation part does not fail by chance alone. Failed above max(0.10, noise + 0.05).
+    Not computed with fewer than 10 validation rows of a class."""
+    if smallest_class < CALIBRATION_MIN_CLASS or not math.isfinite(e):
+        return _check("calibration", "not_computed", advice="calibration_few_rows")
+    ok_at = max(CALIBRATION_OK, noise)
+    failed_at = max(CALIBRATION_FAILED, noise + CALIBRATION_OK)
+    verdict = "ok" if e <= ok_at else "doubtful" if e <= failed_at else "failed"
+    return _check("calibration", verdict, e, ok_at, "calibration_balanced" if balanced else "calibration")
 
 
-def check_calibration_slope(slope: float) -> dict[str, Any]:
-    if not math.isfinite(slope):
-        return _check("calibration_slope", "not_computed",
-                      advice="the logistic regression on logit(p) does not converge: the validation part is separated")
-    verdict = "ok" if 0.8 <= slope <= 1.25 else "doubtful" if 0.5 <= slope <= 2 else "failed"
-    return _check("calibration_slope", verdict, slope, 0.8, ADVICE["calibration_slope"])
+def check_calibration_slope(slope: float, se: float, smallest_class: int) -> dict[str, Any]:
+    """The slope read with its 95 % interval: ok when the interval meets 0.8–1.25, doubtful when
+    it misses it but meets 0.5–2, failed when it misses both. A slope from a few rows has a wide
+    interval and is not called wrong for its noise alone."""
+    if smallest_class < CALIBRATION_MIN_CLASS:
+        return _check("calibration_slope", "not_computed", advice="calibration_few_rows")
+    if not math.isfinite(slope) or not math.isfinite(se):
+        return _check("calibration_slope", "not_computed", advice="slope_separated")
+    lo, hi = slope - Z975 * se, slope + Z975 * se
+
+    def meets(band: tuple[float, float]) -> bool:
+        return hi >= band[0] and lo <= band[1]
+    verdict = "ok" if meets(SLOPE_OK) else "doubtful" if meets(SLOPE_DOUBTFUL) else "failed"
+    return _check("calibration_slope", verdict, slope, advice="calibration_slope")
 
 
 def check_importance_stability(mas_train: np.ndarray, mas_valid: np.ndarray, valid_rows_in_sample: int) -> dict[str, Any]:
     if len(mas_train) < 3:
-        return _check("importance_stability", "not_computed", advice="fewer than 3 predictors: there is no ranking to compare")
+        return _check("importance_stability", "not_computed", advice="importance_few_predictors")
     if valid_rows_in_sample < 50:
-        return _check("importance_stability", "not_computed",
-                      advice="fewer than 50 validation rows in the SHAP sample: add rows, or raise validation_share")
+        return _check("importance_stability", "not_computed", advice="importance_few_rows")
     top = 10
     union = sorted(set(np.lexsort((np.arange(len(mas_train)), -mas_train))[:top].tolist())
                    | set(np.lexsort((np.arange(len(mas_valid)), -mas_valid))[:top].tolist()))
     rho = spearman(mas_train[union], mas_valid[union])
     if not math.isfinite(rho):
-        return _check("importance_stability", "not_computed", advice="the importance does not vary between the predictors")
+        return _check("importance_stability", "not_computed", advice="importance_flat")
     verdict = "ok" if rho >= 0.8 else "doubtful" if rho >= 0.5 else "failed"
-    return _check("importance_stability", verdict, rho, 0.8, ADVICE["importance_stability"])
+    return _check("importance_stability", verdict, rho, 0.8, "importance_stability")
 
 
 def check_zero_importance(gain: np.ndarray, predictors: list[str]) -> list[dict[str, Any]]:
     zero = [j for j in range(len(predictors)) if gain[j] == 0]
     if not zero:
         return [_check("zero_importance", "ok", 0.0)]
-    return [_check("zero_importance", "doubtful", 0.0, advice=ADVICE["zero_importance"], level_2=predictors[j]) for j in zero]
+    return [_check("zero_importance", "doubtful", 0.0, advice="zero_importance", level_2=predictors[j]) for j in zero]
 
 
-def check_leakage(first: str | None, share: float, metric: float, time_advice: bool) -> dict[str, Any]:
-    big_share = math.isfinite(share) and share >= 0.8
-    perfect = math.isfinite(metric) and metric >= 0.98
-    verdict = "failed" if big_share and perfect else "doubtful" if big_share or perfect else "ok"
-    advice = ADVICE["leakage"] + (ADVICE["leakage_time"] if time_advice else "")
-    return _check("leakage", verdict, share, 0.8, advice, level_2=first)
+def check_leakage(first: str | None, share: float, n_predictors: int, metric: float, time_advice: bool) -> dict[str, Any]:
+    """Two signs: the first predictor's share of |SHAP| (with two predictors or more: alone, a
+    predictor's share is 1 by construction), and a validation fit near perfect (R², AUC or macro
+    AUC). Failed when one predictor holds ≥ 0.8 of |SHAP| and the fit is ≥ 0.98; doubtful with a
+    fit ≥ 0.98 alone, or with a share ≥ 0.6 and a fit ≥ 0.95. A dominant predictor in a fit far
+    from perfect is ok: real data often have one. With one predictor the value is the fit, its
+    threshold 0.98."""
+    perfect = math.isfinite(metric) and metric >= LEAKAGE_PERFECT
+    high = math.isfinite(metric) and metric >= LEAKAGE_HIGH
+    advice = "leakage_time" if time_advice else "leakage"
+    if n_predictors < 2:
+        return _check("leakage", "doubtful" if perfect else "ok", metric, LEAKAGE_PERFECT, advice, level_2=first)
+    big = math.isfinite(share) and share >= LEAKAGE_SHARE
+    some = math.isfinite(share) and share >= LEAKAGE_SOME_SHARE
+    verdict = "failed" if big and perfect else "doubtful" if perfect or (some and high) else "ok"
+    return _check("leakage", verdict, share, LEAKAGE_SHARE, advice, level_2=first)
 
 
 def write_checks(rows: Rows, checks: list[dict[str, Any]]) -> None:
@@ -787,6 +885,7 @@ def write_checks(rows: Rows, checks: list[dict[str, Any]]) -> None:
         text(rows, "assumption", "verdict", c["verdict"], level=lv, level_2=lv2)
         if c["advice"]:
             text(rows, "assumption", "advice", c["advice"], level=lv, level_2=lv2)
+            text(rows, "assumption", "advice_id", c["advice_id"], level=lv, level_2=lv2)
 
 
 # ── SHAP: the sample, the importance, the beeswarm ──────────────────────────────
@@ -929,7 +1028,7 @@ def finish(task: dict[str, Any], prepared: Prepared, fitted: Fitted) -> dict[str
              "train_r_squared": r_squared(y[tr], pred[tr], w[tr]), "validation_rmse": rmse(y[va], pred[va], w[va]),
              "validation_mae": mae(y[va], pred[va], w[va]), "validation_r_squared": r_squared(y[va], pred[va], w[va]),
              "baseline_rmse": rmse(y[va], np.full(len(va), base), w[va]), "validation_mean": wmean(y[va], w[va])}
-        loss = (m["train_rmse"], rmse(y[tr], np.full(len(tr), base), w[tr]), m["validation_rmse"], m["baseline_rmse"])
+        loss = (m["validation_rmse"], m["baseline_rmse"])
         fit_metric = m["validation_r_squared"]
         checks.append(check_validation_size(what, len(va), None))
     elif what == "binary":
@@ -944,7 +1043,7 @@ def finish(task: dict[str, Any], prepared: Prepared, fitted: Fitted) -> dict[str
              "baseline_logloss": logloss(y[va], np.full(len(va), prev), w[va]), "train_brier": brier(y[tr], prob[tr], w[tr]),
              "validation_brier": brier(y[va], prob[va], w[va]), "threshold": thr,
              **{f"validation_{k_}": v for k_, v in at.items()}}
-        loss = (m["train_logloss"], logloss(y[tr], np.full(len(tr), prev), w[tr]), m["validation_logloss"], m["baseline_logloss"])
+        loss = (m["validation_logloss"], m["baseline_logloss"])
         fit_metric = m["validation_auc"]
         checks.append(check_validation_size(what, len(va), int(np.bincount(y[va], minlength=2).min())))
     else:
@@ -965,8 +1064,7 @@ def finish(task: dict[str, Any], prepared: Prepared, fitted: Fitted) -> dict[str
              "validation_balanced_accuracy": float(np.mean(pc["recall"][present])),
              "validation_macro_auc": float(np.nanmean(aucs[present])) if np.isfinite(aucs[present]).any() else math.nan,
              "validation_macro_f1": float(np.mean(pc["f1"][present]))}
-        loss = (m["train_mlogloss"], mlogloss(y[tr], np.tile(share_tr, (len(tr), 1)), w[tr]), m["validation_mlogloss"],
-                m["baseline_mlogloss"])
+        loss = (m["validation_mlogloss"], m["baseline_mlogloss"])
         fit_metric = m["validation_macro_auc"]
         counts_va = np.bincount(y[va], minlength=k)
         checks.append(check_validation_size(what, len(va), int(counts_va[counts_va > 0].min())))
@@ -1012,25 +1110,27 @@ def finish(task: dict[str, Any], prepared: Prepared, fitted: Fitted) -> dict[str
             number(rows, "importance", "mean_abs_shap", mas_class[:, j], level=name, level_2=P.classes)
 
     # ── the diagnostics ──
-    L_tr, B_tr, L_va, B_va = loss
+    L_va, B_va = loss
     checks.append(check_beats_baseline(L_va, B_va))
-    checks.append(check_overfitting(L_tr, B_tr, L_va, B_va))
     curve = _loss_curve(fitted)
+    checks.append(check_overfitting(curve, fitted.best_iteration, B_va))
     last, best = (curve[-1], min(curve)) if curve else (math.nan, math.nan)
     checks.append(check_trees_limit(bool(p.get("early_stopping", True)), fitted.stopped_early, fitted.stopped_by_time,
-                                    fitted.best_iteration + 1, last, best))
+                                    fitted.best_iteration + 1, last, best, float(p.get("learning_rate", TREES_FEW_RATE))))
     if what != "regression":
         shares = np.array([float(w[tr][y[tr] == c].sum()) for c in range(len(P.classes))]) / float(w[tr].sum())
         checks.append(check_class_imbalance(shares))
     if what == "binary":
         balanced = p.get("class_weight") == "balanced"
-        checks.append(check_calibration(ece(prob[va], y[va].astype(float), w[va]), balanced))
-        checks.append(check_calibration_slope(calibration_slope(prob[va], y[va].astype(float), w[va])))
+        smallest = int(np.bincount(y[va], minlength=2).min())
+        pv, yv = prob[va], y[va].astype(float)
+        checks.append(check_calibration(ece(pv, yv, w[va]), ece_noise(pv, w[va]), balanced, smallest))
+        checks.append(check_calibration_slope(*calibration_slope(pv, yv, w[va]), smallest))
     checks.append(check_importance_stability(mas_t, mas_v, int((~in_tr).sum())))
     checks.extend(check_zero_importance(gain, P.predictors))
     first = int(order[0]) if len(order) and s_total > 0 else None
     checks.append(check_leakage(P.predictors[first] if first is not None else None,
-                                mas[first] / s_total if first is not None else math.nan, fit_metric,
+                                mas[first] / s_total if first is not None else math.nan, len(P.predictors), fit_metric,
                                 P.split == "random" and P.has_time_column))
     write_checks(rows, checks)
 
@@ -1290,21 +1390,34 @@ def _test_checks(code: Any) -> None:
             "validation_size, classes")
     _expect([v(check_beats_baseline(L, 1.0)) for L in (0.95, 0.96, 0.999, 1.0, 1.2)] == ["ok", "doubtful", "doubtful", "failed",
                                                                                          "failed"], "beats_baseline")
-    _expect([v(check_overfitting(0.0, 1.0, 1 - s, 1.0)) for s in (0.6, 0.59, 0.3, 0.29, -1)] == ["ok", "doubtful", "doubtful",
-                                                                                              "failed", "failed"], "overfitting")
-    _expect(v(check_overfitting(1.0, 1.0, 0.5, 1.0)) == "not_computed", "overfitting without a training gain")
-    trees = [v(check_trees_limit(True, True, False, 20, 0, 0)), v(check_trees_limit(True, True, False, 19, 0, 0)),
+    up = lambda r: [1.0, 0.6, 0.5, 0.5 + 0.5 * r]  # noqa: E731 — a curve from 1 down to 0.5, back up by r of the gain
+    _expect([v(check_overfitting(up(r), 3, 1.0)) for r in (0.0, 0.049, 0.051, 0.249, 0.251, 3.0)]
+            == ["ok", "ok", "doubtful", "doubtful", "failed", "failed"], "overfitting")
+    _expect(abs(check_overfitting(up(0.2), 3, 1.0)["value"] - 0.2) < 1e-12, "overfitting's share given back")
+    _expect(v(check_overfitting([1.2, 0.5, 0.9], 1, 1.0)) == "ok", "overfitting reads the curve up to the tree kept")
+    _expect(v(check_overfitting([1.2, 1.1, 1.3], 2, 1.0)) == "not_computed", "overfitting without a validation gain")
+    trees = [v(check_trees_limit(True, True, False, 20, 0, 0, 0.1)), v(check_trees_limit(True, True, False, 19, 0, 0, 0.1)),
              v(check_trees_limit(True, False, False, 500, 0, 0)), v(check_trees_limit(True, True, True, 500, 0, 0)),
              v(check_trees_limit(False, False, False, 1000, 1.005, 1.0)), v(check_trees_limit(False, False, False, 1000, 1.0101, 1.0))]
     _expect(trees == ["ok", "doubtful", "doubtful", "doubtful", "ok", "doubtful"], f"trees_limit: {trees}")
-    _expect(check_trees_limit(True, True, False, 19, 0, 0)["advice"] == ADVICE["trees_few"], "the advice of few trees")
+    _expect(check_trees_limit(True, True, False, 19, 0, 0, 0.1)["advice"] == ADVICE["trees_few"]
+            and check_trees_limit(True, True, False, 19, 0, 0, 0.1)["advice_id"] == "trees_few", "the advice of few trees")
+    _expect(v(check_trees_limit(True, True, False, 3, 0, 0, 0.05)) == "ok", "few trees at the default rate: a weak pattern")
+    _expect(check_trees_limit(True, True, False, 20, 0, 0)["advice_id"] is None, "an ok check has no advice")
     _expect([v(check_class_imbalance(np.array([r, 1.0, 2.0]))) for r in (3.99, 4.0, 19.99, 20.0)]
             == ["ok", "doubtful", "doubtful", "failed"], "class_imbalance")
-    _expect([v(check_calibration(e, False)) for e in (0.05, 0.0501, 0.10, 0.1001)] == ["ok", "doubtful", "doubtful", "failed"],
-            "calibration")
-    _expect(check_calibration(0.2, True)["advice"] == ADVICE["calibration_balanced"], "calibration with balanced weights")
-    _expect([v(check_calibration_slope(s)) for s in (0.8, 1.25, 0.79, 1.26, 0.5, 2.0, 0.49, 2.01, math.nan)]
-            == ["ok", "ok", "doubtful", "doubtful", "doubtful", "doubtful", "failed", "failed", "not_computed"], "calibration_slope")
+    _expect([v(check_calibration(e, 0.03, False, 10)) for e in (0.05, 0.0501, 0.10, 0.1001)] == ["ok", "doubtful", "doubtful",
+                                                                                                "failed"], "calibration")
+    _expect([v(check_calibration(e, 0.16, False, 10)) for e in (0.16, 0.1601, 0.21, 0.2101)] == ["ok", "doubtful", "doubtful",
+                                                                                                "failed"], "calibration, noisy")
+    _expect(check_calibration(0.1, 0.16, False, 10)["threshold"] == 0.16 and v(check_calibration(0.3, 0.1, False, 9))
+            == "not_computed", "calibration's threshold, and its rows")
+    _expect(check_calibration(0.2, 0.03, True, 10)["advice"] == ADVICE["calibration_balanced"], "calibration with balanced weights")
+    slopes = [v(check_calibration_slope(s, se, 10)) for s, se in ((1.0, 0.01), (0.7, 0.052), (0.7, 0.05), (2.3, 0.2),
+                                                                   (2.5, 0.2), (0.4, 0.05), (math.nan, math.nan), (1.0, 0.1))]
+    _expect(slopes == ["ok", "ok", "doubtful", "doubtful", "failed", "failed", "not_computed", "ok"], f"calibration_slope {slopes}")
+    _expect(v(check_calibration_slope(1.0, 0.1, 9)) == "not_computed" and math.isnan(check_calibration_slope(0.5, 0.1, 10)
+                                                                                         ["threshold"]), "the slope's rows")
     a = np.array([5.0, 4, 3, 2, 1])
     _expect([v(check_importance_stability(a, b, 50)) for b in (a, np.array([5.0, 4, 3, 1, 2]), np.array([3.0, 5, 4, 1, 2]),
                                                                np.array([1.0, 2, 3, 4, 5]))]
@@ -1315,9 +1428,15 @@ def _test_checks(code: Any) -> None:
     _expect([(c["level_2"], c["verdict"]) for c in z] == [("b", "doubtful"), ("d", "doubtful")], "zero_importance")
     _expect([(c["level_2"], c["verdict"]) for c in check_zero_importance(np.array([1.0]), ["a"])] == [(None, "ok")],
             "zero_importance, none")
-    leak = [v(check_leakage("a", s, m, False)) for s, m in ((0.79, 0.979), (0.8, 0.5), (0.5, 0.98), (0.81, 0.99))]
-    _expect(leak == ["ok", "doubtful", "doubtful", "failed"], f"leakage: {leak}")
-    _expect(check_leakage("a", 0.9, 0.99, True)["advice"].endswith("try validation = time"), "leakage's advice in time")
+    leak = [v(check_leakage("a", s, 3, m, False)) for s, m in ((0.79, 0.949), (0.9, 0.5), (0.59, 0.97), (0.6, 0.95), (0.5, 0.98),
+                                                               (0.79, 0.99), (0.8, 0.98))]
+    _expect(leak == ["ok", "ok", "ok", "doubtful", "doubtful", "doubtful", "failed"], f"leakage: {leak}")
+    one = [check_leakage("a", 1.0, 1, m, False) for m in (0.97, 0.98)]
+    _expect([c["verdict"] for c in one] == ["ok", "doubtful"] and one[0]["value"] == 0.97, f"leakage, one predictor: {one}")
+    _expect(check_leakage("a", 0.9, 3, 0.99, True)["advice"].endswith("try validation = time")
+            and check_leakage("a", 0.9, 3, 0.99, True)["advice_id"] == "leakage_time", "leakage's advice in time")
+    for c in ADVICE:
+        _expect(_check("x", "doubtful", advice=c, h0="x")["advice"] == ADVICE[c], c)
 
 
 @register("boosting: the beeswarm's positions stay within ±0.4 and are the same on every run")
@@ -1358,8 +1477,14 @@ def _test_metrics(code: Any) -> None:
     _expect(list(b["rows"]) == [2.0] * 10, f"ten bins of equal weight: {b['rows']}")
     z = gen.normal(size=20000)
     y2 = (gen.uniform(size=len(z)) < sigmoid(z)).astype(float)
-    slope = calibration_slope(sigmoid(2 * z), y2, np.ones(len(z)))
-    _expect(abs(slope - 0.5) < 0.05, f"the calibration slope of over-confident probabilities {slope}")
+    slope, se = calibration_slope(sigmoid(2 * z), y2, np.ones(len(z)))
+    _expect(abs(slope - 0.5) < 0.05 and 0.005 < se < 0.02, f"the calibration slope of over-confident probabilities {slope} ± {se}")
+    _expect(calibration_slope(sigmoid(2 * z), y2, np.full(len(z), 7.0)) == (slope, se), "the slope does not read the weights' scale")
+    q = 1 / (1 + np.exp(-gen.normal(-1, 1.2, size=400)))
+    noise = ece_noise(q, np.ones(400))
+    draws = [ece(q, (gen.uniform(size=400) < q).astype(float), np.ones(400)) for _ in range(400)]
+    _expect(0.06 < noise < 0.08 and 0.9 <= np.mean(np.array(draws) <= noise) <= 0.99,
+            f"the noise of the calibration error {noise}: {np.mean(np.array(draws) <= noise)} of the draws under it")
     C = confusion(np.array([0, 0, 1, 1, 2]), np.array([0, 1, 1, 1, 0]), np.array([1.0, 2, 1, 1, 1]), 3)
     pc = per_class(C)
     _expect(C.tolist() == [[1, 2, 0], [0, 2, 0], [1, 0, 0]] and np.isnan(pc["precision"][2]) and pc["f1"][2] == 0,
