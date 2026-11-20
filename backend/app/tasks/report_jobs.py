@@ -68,6 +68,12 @@ def render_report_task(
 STAT_ROWS_PREFIX = "dataprep:statreport:"
 # past this the rows are not remembered: a test's are some hundreds, a few thousand with 200 groups
 STAT_ROWS_MAX_BYTES = 2 * 1024 * 1024
+# Valkey has no ceiling on its memory and a key is born per parameter (alpha, a language of the
+# chain...): the rows live an hour, the time to ask the PDF and the Excel after the pages, and the
+# heavy ones only minutes, so that what piles up is bounded by the rate of requests, not by a day's
+STAT_ROWS_TTL_SECONDS = 3600
+STAT_ROWS_HEAVY_BYTES = 256 * 1024
+STAT_ROWS_HEAVY_TTL_SECONDS = 600
 STAT_TIMEOUT = ("The test took longer than the workers allow: give the source a development sample, "
                 "or filter before the test")
 
@@ -101,8 +107,10 @@ def _stat_rows_remember(key: str, rows: list[dict]) -> None:
 
     try:
         raw = json.dumps({"rows": [[r.get(name) for name in OUTPUT_NAMES] for r in rows]}, ensure_ascii=False)
-        if len(raw.encode("utf-8")) < STAT_ROWS_MAX_BYTES:
-            rowcount._redis().set(key, raw, ex=rowcount._ttl())
+        size = len(raw.encode("utf-8"))
+        if size < STAT_ROWS_MAX_BYTES:
+            life = STAT_ROWS_HEAVY_TTL_SECONDS if size >= STAT_ROWS_HEAVY_BYTES else STAT_ROWS_TTL_SECONDS
+            rowcount._redis().set(key, raw, ex=min(life, rowcount._ttl()))
     except Exception:  # noqa: BLE001, S110 — a courtesy: the next time they are read again
         pass
 
