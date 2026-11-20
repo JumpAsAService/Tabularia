@@ -62,8 +62,8 @@ const ARIMA = m.modelOf('arima')
 test('the catalogue the editor reads is the engine\'s snapshot, byte for byte', () => {
   assert.equal(read('../assets/model-catalog.json'), read('../../backend/app/engine/models/catalog.json'),
     'run python3 .github/scripts/model_catalog.py')
-  assert.deepEqual(m.MODEL_CATALOG.models.map((x) => x.id), ['linear', 'logistic', 'kaplan_meier', 'cox', 'parametric_survival', 'arima', 'xgboost', 'catboost'])
-  assert.deepEqual(m.MODEL_CATALOG.groups.map((g) => g.id), ['regression', 'survival', 'timeseries', 'boosting'])
+  assert.deepEqual(m.MODEL_CATALOG.models.map((x) => x.id), ['linear', 'logistic', 'kaplan_meier', 'cox', 'parametric_survival', 'arima', 'xgboost', 'catboost', 'clv', 'bg_bb'])
+  assert.deepEqual(m.MODEL_CATALOG.groups.map((g) => g.id), ['regression', 'survival', 'timeseries', 'boosting', 'customer_lifetime'])
 })
 
 test('every key of every model has a control the form draws', () => {
@@ -101,10 +101,11 @@ test('the fields of a model in the catalogue\'s order, what it needs first', () 
 })
 
 // The parametric survival node's words and form come with lot P6 of docs/specs/statistical-models.md:
-// until then the palette leaves it out and its words are not asked for. P6 takes this away.
+// until then the palette leaves it out and its words are not asked for. P6 takes this away. The same for the
+// customer lifetime nodes clv and bg_bb, whose words and form are lot B6 of docs/specs/customer-lifetime-models.md.
 const WORDED = {
   ...m.MODEL_CATALOG,
-  models: m.MODEL_CATALOG.models.filter((x) => x.id !== 'parametric_survival'),
+  models: m.MODEL_CATALOG.models.filter((x) => !['parametric_survival', 'clv', 'bg_bb'].includes(x.id)),
   predict: { ...m.MODEL_CATALOG.predict, takes: Object.fromEntries(Object.entries(m.MODEL_CATALOG.predict.takes).filter(([k]) => k !== 'quantiles')) },
 }
 
@@ -171,7 +172,7 @@ test('the palette shows the groups the person may use: not a disabled one, not o
   assert.deepEqual(m.modelShownGroups(null), [])
   assert.deepEqual(m.modelShownGroups({ disabled_reason: 'not_configured', groups: [] }), [])
   // Compose: all of them, to be shown greyed out
-  assert.equal(m.modelShownGroups({ disabled_reason: 'kubernetes', groups: [] }).length, 4)
+  assert.equal(m.modelShownGroups({ disabled_reason: 'kubernetes', groups: [] }).length, 5)
   assert.equal(m.modelOff('linear' && 'regression', { disabled_reason: 'kubernetes', groups: [] }), 'kubernetes')
   assert.equal(m.modelOff('survival', STATE), 'not_enabled')
   assert.equal(m.modelOff('regression', STATE), '')

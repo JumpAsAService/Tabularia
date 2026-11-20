@@ -24,6 +24,14 @@ func TestPredictsOptionsAreTheModels(t *testing.T) {
 		!strings.Contains(err.Error(), "Predict: 'quantiles'") {
 		t.Errorf("a quantile of 1: %v", err)
 	}
+	// a customer lifetime model takes a horizon (in the card's unit) and nothing else
+	if got, err := CheckPredict("clv", "value", map[string]any{"horizon": 26.0}); err != nil || fmt.Sprint(got) != "map[horizon:26]" {
+		t.Errorf("clv: %v %v", got, err)
+	}
+	if _, err := CheckPredict("bg_bb", "purchases", map[string]any{"interval": true}); err == nil ||
+		!strings.Contains(err.Error(), "Predict's option 'interval' applies to") || !strings.Contains(err.Error(), "not to bg_bb") {
+		t.Errorf("interval is not a lifetime model's: %v", err)
+	}
 	if got, err := CheckPredict("linear", "unpenalized", map[string]any{"interval": false, "horizon": nil}); err != nil || len(got) != 0 {
 		t.Errorf("what is off or empty is not given: %v %v", got, err)
 	}
@@ -82,6 +90,10 @@ func TestTheColumnsAPredictAdds(t *testing.T) {
 		{"xgboost", "regression", "prediction"},
 		{"catboost", "binary", "prediction prediction_class"},
 		{"xgboost", "multiclass", "prediction prediction_probability prediction_prob_*"},
+		// a customer lifetime model's: by the card's variant, with the spend part or without it
+		{"clv", "purchases", "prediction prediction_p_alive"},
+		{"clv", "value", "prediction prediction_p_alive prediction_spend prediction_clv"},
+		{"bg_bb", "value", "prediction prediction_p_alive prediction_spend prediction_clv"},
 	} {
 		if got := strings.Join(PredictColumns(c.model, c.variant, nil), " "); got != c.want {
 			t.Errorf("%s:%s: %q, want %q", c.model, c.variant, got, c.want)

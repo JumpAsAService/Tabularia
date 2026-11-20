@@ -26,6 +26,7 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/config"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/jobs"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/kube"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/modelgroups"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyd"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pystr"
@@ -180,11 +181,17 @@ func (b *scriptBuilds) buildJobs() int64 {
 }
 
 // dockerfile is script_builds.dockerfile (internal/scriptimage, which cmd/modelgroup reads
-// too). managed: a statistical model group's environment, whose Python image holds only its
-// recipe's packages.
-func (b *scriptBuilds) dockerfile(language, baseImage string, packages []string, managed bool) (string, error) {
+// too). managedBy: a statistical model group's environment (model_group:<id>), whose Python image
+// holds only its recipe's packages and whose R image installs the system libraries its recipe names
+// (`system_libraries`); nil for every other environment, whose Dockerfile is what it has always been.
+func (b *scriptBuilds) dockerfile(language, baseImage string, packages []string, managedBy *string) (string, error) {
+	var systemLibraries []string
+	if g, ok := modelgroups.Get(mgGroupOfManaged(managedBy)); ok {
+		systemLibraries = g.Recipe.SystemLibraries
+	}
 	d, err := scriptimage.Dockerfile(language, baseImage, packages, scriptimage.Settings{
-		PyPIIndexURL: b.s.Scripts.PyPIIndexURL, CRANURL: b.s.Scripts.CRANURL, Jobs: b.buildJobs(), Managed: managed})
+		PyPIIndexURL: b.s.Scripts.PyPIIndexURL, CRANURL: b.s.Scripts.CRANURL, Jobs: b.buildJobs(), Managed: managedBy != nil,
+		SystemLibraries: systemLibraries})
 	var bad scriptimage.ValueError
 	if errors.As(err, &bad) {
 		// a setting that cannot become a Dockerfile fails the version (advance), as before
@@ -244,7 +251,7 @@ func (b *scriptBuilds) job(name string, labels pyjson.Object, deadline int64, po
 }
 
 // buildJob is script_builds.build_job.
-func (b *scriptBuilds) buildJob(v *sbVersion, language string, managed bool) (pyjson.Object, error) {
+func (b *scriptBuilds) buildJob(v *sbVersion, language string, managedBy *string) (pyjson.Object, error) {
 	repo, err := b.repository(v.EnvironmentID)
 	if err != nil {
 		return nil, err
@@ -294,7 +301,7 @@ func (b *scriptBuilds) buildJob(v *sbVersion, language string, managed bool) (py
 	if err != nil {
 		return nil, err
 	}
-	dockerfile, err := b.dockerfile(language, v.BaseImage, packages, managed)
+	dockerfile, err := b.dockerfile(language, v.BaseImage, packages, managedBy)
 	if err != nil {
 		return nil, err
 	}
@@ -472,7 +479,7 @@ func (b *scriptBuilds) advance(ctx context.Context, tx pgx.Tx, v *sbVersion) err
 		return nil
 	}
 	if v.Status == "queued" {
-		manifest, err := b.buildJob(v, env.Language, env.ManagedBy != nil)
+		manifest, err := b.buildJob(v, env.Language, env.ManagedBy)
 		var bad sbValueError
 		if errors.As(err, &bad) { // packages or settings that cannot become a Dockerfile
 			b.fail(v, bad.Error(), nil)

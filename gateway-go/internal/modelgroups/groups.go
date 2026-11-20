@@ -91,11 +91,14 @@ func Commands(language string) (run, selftest []string) {
 
 // Recipe is a group's recipe.json.
 type Recipe struct {
-	Language  string   `json:"language"`
-	Base      string   `json:"base"` // a version of scripts.baseImages (SCRIPTS__BASE_IMAGES)
-	PinnedOn  string   `json:"pinned_on"`
-	Packages  []string `json:"packages"` // R: name@version, dependencies first; Python: name==version, the whole closure
-	Resources struct {
+	Language string   `json:"language"`
+	Base     string   `json:"base"` // a version of scripts.baseImages (SCRIPTS__BASE_IMAGES)
+	PinnedOn string   `json:"pinned_on"`
+	Packages []string `json:"packages"` // R: name@version, dependencies first; Python: name==version, the whole closure
+	// SystemLibraries: Debian packages an R image installs besides the fixed list every R image has
+	// (scriptimage.RSystemLibraries); optional, and used by the customer lifetime group alone (GSL)
+	SystemLibraries []string `json:"system_libraries,omitempty"`
+	Resources       struct {
 		CPU    string `json:"cpu"`    // the limit; the request is half
 		Memory string `json:"memory"` // the limit; the request is half
 	} `json:"resources"`
@@ -124,6 +127,7 @@ func Groups() []Group {
 		out[i] = g
 		out[i].Models = append([]string(nil), g.Models...)
 		out[i].Recipe.Packages = append([]string(nil), g.Recipe.Packages...)
+		out[i].Recipe.SystemLibraries = append([]string(nil), g.Recipe.SystemLibraries...)
 	}
 	return out
 }
@@ -249,6 +253,7 @@ func Dockerfile(group string, images map[string][]scriptcfg.Image, s scriptimage
 		return "", err
 	}
 	s.Managed = true
+	s.SystemLibraries = g.Recipe.SystemLibraries
 	return scriptimage.Dockerfile(g.Recipe.Language, base, g.Recipe.Packages, s)
 }
 
@@ -441,6 +446,9 @@ func load() ([]Group, error) {
 		entry, known := entries[r.Language]
 		if !known {
 			return nil, fmt.Errorf("%s/recipe.json: language %q (r or python)", cg.ID, r.Language)
+		}
+		if len(r.SystemLibraries) > 0 && r.Language != "r" {
+			return nil, fmt.Errorf("%s/recipe.json: system_libraries is for an R image", cg.ID)
 		}
 		if _, err := fs.Stat(files, path.Join("groups", cg.ID, entry)); err != nil {
 			return nil, fmt.Errorf("the group %s has no %s", cg.ID, entry)

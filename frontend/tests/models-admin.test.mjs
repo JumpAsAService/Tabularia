@@ -66,7 +66,7 @@ test('every word the section uses exists in the five languages, with the same ke
     'modelsAdmin.status.': ['queued', 'building', 'checking', 'ready', 'failed'],
     'modelsAdmin.done.': ['enable', 'disable', 'rebuild'],
     'modelsAdmin.group.': ['regression.name', 'regression.description', 'survival.name', 'survival.description', 'timeseries.name', 'timeseries.description',
-      'boosting.name', 'boosting.description'], // the group's words (found missing on kind: the card showed the bare id)
+      'boosting.name', 'boosting.description', 'customer_lifetime.name', 'customer_lifetime.description'], // the group's words (found missing on kind: the card showed the bare id)
   }
   for (const [prefix, tails] of Object.entries(dynamic)) for (const tail of tails) used.add(prefix + tail)
   assert.ok(used.size > 40, `${used.size} keys used`)

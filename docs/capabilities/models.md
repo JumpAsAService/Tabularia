@@ -34,7 +34,7 @@ statistics that works everywhere.
 
 ## Turning a group on (administrators)
 
-**Administration → Statistical models** lists the four groups Tabularia ships, each with its
+**Administration → Statistical models** lists the five groups Tabularia ships, each with its
 models, the number of packages its image pins and its state. Only an administrator acts, and
 not with an API token; an observer reads the section. Every action is in the
 [audit log](../governance/audit-log.md) (`models.group_enable`, `models.group_disable`,
@@ -458,6 +458,19 @@ SHAP is the long part: it can take several times as long as the training itself.
 and `sconto_pct`), an **XGBoost** with the task `regression`, the outcome `quantita` and the
 predictors `prezzo_unitario` and `sconto_pct`. Read the first page's diagnostics, then the
 beeswarm: whether a higher price pushes the quantity down.
+
+### Customer lifetime value (R): being built
+
+Model ids in the catalogue: `clv` and `bg_bb`. A group of two nodes, **Customer lifetime
+value** and **BG/BB**, is being built for customers who leave without saying so (a shop, a web
+store, a donor): from one row per customer (the number of repeat purchases, the time of the
+last one, how long the customer has been known, optionally the average spend) they will give,
+for each customer, the expected purchases over a horizon, the probability that the customer is
+still active, the expected spend and the discounted value (the CLV). The nodes take no
+transactions: the row per customer is built first with Group by. In this version the nodes do
+not fit a model yet: they stop with «… is not built yet in this version of Tabularia». This
+section will describe them when they do. The group's image needs the GNU Scientific Library,
+which the build installs from Debian.
 
 ## The output
 

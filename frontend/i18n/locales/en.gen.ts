@@ -6499,7 +6499,8 @@ export default {
       "regression": "Regression",
       "survival": "Survival",
       "timeseries": "Time series",
-      "boosting": "Boosting"
+      "boosting": "Boosting",
+      "customer_lifetime": "Customer lifetime"
     },
     "linear": {
       "name": "Linear regression",
@@ -6957,6 +6958,7 @@ export default {
       "survival": { "name": "Survival analysis", "description": "Kaplan–Meier curves and Cox proportional hazards." },
       "timeseries": { "name": "Time series", "description": "ARIMA, from AR to SARIMAX, with automatic orders too." },
       "boosting": { "name": "Boosting", "description": "Gradient boosting: XGBoost and CatBoost, with importances by gain and SHAP." },
+      "customer_lifetime": { "name": "Customer lifetime", "description": "Customers who leave without saying so: purchases to expect, probability of still being active and the discounted value (CLV), from Pareto/NBD, BG/NBD, MBG/NBD, BG/BB and Gamma–Gamma." },
     },
     "modelsIn": "Models:",
     "packagesPinned": "{n} packages pinned",

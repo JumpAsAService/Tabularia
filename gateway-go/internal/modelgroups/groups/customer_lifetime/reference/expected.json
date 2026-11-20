@@ -1,0 +1,13 @@
+{
+  "format_version": 1,
+  "generated": {
+    "by": "make_reference.R",
+    "note": "lots B2 and B3 write the reference cases (docs/specs/customer-lifetime-models.md, «Reference values»); lot B0 has none",
+    "R": "4.6.0",
+    "packages": {
+      "CLVTools": "0.12.1",
+      "jsonlite": "2.0.0"
+    }
+  },
+  "cases": []
+}

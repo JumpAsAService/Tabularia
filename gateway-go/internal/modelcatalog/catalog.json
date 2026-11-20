@@ -55,7 +55,13 @@
     "max_model_file_bytes": 67108864,
     "max_importance_bars": 20,
     "max_beeswarm_predictors": 10,
-    "max_roc_classes": 10
+    "max_roc_classes": 10,
+    "min_customers": 20,
+    "min_repeaters": 5,
+    "max_opportunities": 1000,
+    "max_clv_steps": 520,
+    "max_top_customers": 20,
+    "palive_grid_frequency": 10
   },
   "controls": [
     "column",
@@ -495,6 +501,40 @@
       "control": "number",
       "min": 0,
       "max": 100
+    },
+    "time_unit": {
+      "control": "choice",
+      "choices": [
+        "day",
+        "week",
+        "month",
+        "quarter",
+        "year"
+      ]
+    },
+    "purchase_model": {
+      "control": "choice",
+      "choices": [
+        "auto",
+        "pareto_nbd",
+        "bg_nbd",
+        "mbg_nbd"
+      ]
+    },
+    "horizon_periods": {
+      "control": "integer",
+      "min": 1,
+      "max": 1000
+    },
+    "discount_rate": {
+      "control": "number",
+      "min": 0,
+      "max": 1
+    },
+    "holdout_opportunities": {
+      "control": "integer",
+      "min": 1,
+      "max": 1000
     }
   },
   "season_of_frequency": {
@@ -584,6 +624,11 @@
       "level": "required",
       "level_2": "null",
       "indexed": false
+    },
+    "customer": {
+      "level": "required",
+      "level_2": "null",
+      "indexed": false
     }
   },
   "verdicts": [
@@ -627,6 +672,15 @@
       "models": [
         "xgboost",
         "catboost"
+      ]
+    },
+    {
+      "id": "customer_lifetime",
+      "language": "r",
+      "label": "models.groups.customer_lifetime",
+      "models": [
+        "clv",
+        "bg_bb"
       ]
     }
   ],
@@ -4869,6 +4923,941 @@
           }
         }
       ]
+    },
+    {
+      "id": "clv",
+      "group": "customer_lifetime",
+      "family": "customer_lifetime",
+      "label": "models.clv.name",
+      "needs": {
+        "customer": "column",
+        "frequency": "number_column",
+        "recency": "number_column",
+        "age": "number_column",
+        "time_unit": "time_unit"
+      },
+      "takes": {
+        "spend": "number_column",
+        "purchase_model": "purchase_model",
+        "compare": "boolean",
+        "horizon": "horizon_periods",
+        "discount_rate": "discount_rate",
+        "margin": "fraction",
+        "holdout_transactions": "number_column",
+        "holdout_length": "positive",
+        "alpha": "alpha",
+        "seed": "seed",
+        "output": "output_rows"
+      },
+      "defaults": {
+        "spend": null,
+        "purchase_model": "auto",
+        "compare": false,
+        "horizon": null,
+        "discount_rate": 0.1,
+        "margin": 1.0,
+        "holdout_transactions": null,
+        "holdout_length": null,
+        "alpha": 0.05,
+        "seed": 1,
+        "output": "rows"
+      },
+      "applies": {
+        "compare": {
+          "purchase_model": [
+            "pareto_nbd",
+            "bg_nbd",
+            "mbg_nbd"
+          ]
+        },
+        "discount_rate": {
+          "spend": true
+        },
+        "margin": {
+          "spend": true
+        },
+        "holdout_length": {
+          "holdout_transactions": true
+        }
+      },
+      "requires": [
+        {
+          "key": "holdout_length",
+          "when": {
+            "holdout_transactions": true
+          },
+          "reason": "holdout_needs_length",
+          "message": "the holdout's purchases need the holdout's length ('holdout_length')"
+        }
+      ],
+      "forbids": [],
+      "disjoint": [
+        "customer",
+        "frequency",
+        "recency",
+        "age",
+        "spend",
+        "holdout_transactions"
+      ],
+      "presets": {},
+      "variants": [
+        {
+          "id": "value",
+          "when": {
+            "spend": true
+          },
+          "sections": {
+            "model": {
+              "levels": null,
+              "texts": [
+                "model",
+                "variant",
+                "formula",
+                "software",
+                "group_version",
+                "rows_from",
+                "note_*",
+                "purchase_model",
+                "purchase_model_asked",
+                "time_unit",
+                "optimizer"
+              ],
+              "numbers": [
+                "n",
+                "n_missing",
+                "n_repeaters",
+                "share_repeaters",
+                "mean_frequency",
+                "max_age",
+                "median_age",
+                "horizon",
+                "log_lik",
+                "aic",
+                "bic",
+                "n_params",
+                "converged",
+                "param_*",
+                "mean_rate",
+                "mean_dropout",
+                "expected_transactions",
+                "mean_p_alive",
+                "holdout_length",
+                "holdout_observed",
+                "holdout_expected",
+                "holdout_rel_error",
+                "holdout_mae",
+                "holdout_rmse",
+                "holdout_correlation",
+                "spend_n",
+                "spend_log_lik",
+                "spend_param_*",
+                "mean_spend_population",
+                "discount_rate",
+                "discount_per_period",
+                "margin",
+                "clv_total",
+                "clv_mean",
+                "clv_median",
+                "clv_top10_share",
+                "clv_top20_share",
+                "discounted_transactions"
+              ]
+            },
+            "coef": {
+              "levels": null,
+              "numbers": [
+                "estimate",
+                "std_error",
+                "ci_low",
+                "ci_high"
+              ],
+              "texts": []
+            },
+            "candidate": {
+              "levels": [
+                "pareto_nbd",
+                "bg_nbd",
+                "mbg_nbd"
+              ],
+              "texts": [],
+              "numbers": [
+                "log_lik",
+                "aic",
+                "bic",
+                "n_params",
+                "chi_square",
+                "chi_square_p_value",
+                "holdout_rel_error",
+                "holdout_mae",
+                "converged",
+                "chosen",
+                "param_*"
+              ]
+            },
+            "assumption": {
+              "levels": [
+                "convergence",
+                "boundary",
+                "sample_size",
+                "frequency_fit",
+                "holdout",
+                "horizon_length",
+                "spend_independence",
+                "spend_tail"
+              ],
+              "numbers": [
+                "statistic",
+                "df",
+                "df_2",
+                "p_value",
+                "threshold",
+                "value",
+                "count"
+              ],
+              "texts": [
+                "h0",
+                "verdict",
+                "advice",
+                "significance",
+                "rows",
+                "advice_id"
+              ]
+            },
+            "hist": {
+              "levels": [
+                "frequency",
+                "holdout",
+                "p_alive",
+                "clv",
+                "spend"
+              ],
+              "numbers": [
+                "count",
+                "mean"
+              ],
+              "texts": []
+            },
+            "cell": {
+              "levels": null,
+              "numbers": [
+                "p_alive"
+              ],
+              "texts": []
+            },
+            "curve": {
+              "levels": [
+                "p_alive_recency",
+                "concentration",
+                "spend_frequency"
+              ],
+              "numbers": [
+                "y"
+              ],
+              "texts": []
+            },
+            "point": {
+              "levels": [
+                "spend_frequency"
+              ],
+              "numbers": [
+                "y"
+              ],
+              "texts": []
+            },
+            "customer": {
+              "levels": null,
+              "numbers": [
+                "rank",
+                "frequency",
+                "recency",
+                "age",
+                "p_alive",
+                "expected_transactions",
+                "expected_spend",
+                "clv"
+              ],
+              "texts": []
+            }
+          },
+          "charts": [
+            {
+              "id": "frequency",
+              "under": "frequency_fit"
+            },
+            {
+              "id": "holdout",
+              "under": "holdout"
+            },
+            {
+              "id": "p_alive_cell",
+              "under": null
+            },
+            {
+              "id": "p_alive_recency",
+              "under": null
+            },
+            {
+              "id": "p_alive",
+              "under": null
+            },
+            {
+              "id": "spend",
+              "under": "spend_tail"
+            },
+            {
+              "id": "spend_frequency",
+              "under": "spend_independence"
+            },
+            {
+              "id": "clv",
+              "under": null
+            },
+            {
+              "id": "concentration",
+              "under": null
+            }
+          ],
+          "outputs": {
+            "rows": [
+              "pred_p_alive",
+              "pred_transactions",
+              "pred_holdout_transactions",
+              "pred_spend",
+              "pred_discounted_transactions",
+              "pred_clv"
+            ]
+          }
+        },
+        {
+          "id": "purchases",
+          "when": {
+            "spend": false
+          },
+          "sections": {
+            "model": {
+              "levels": null,
+              "texts": [
+                "model",
+                "variant",
+                "formula",
+                "software",
+                "group_version",
+                "rows_from",
+                "note_*",
+                "purchase_model",
+                "purchase_model_asked",
+                "time_unit",
+                "optimizer"
+              ],
+              "numbers": [
+                "n",
+                "n_missing",
+                "n_repeaters",
+                "share_repeaters",
+                "mean_frequency",
+                "max_age",
+                "median_age",
+                "horizon",
+                "log_lik",
+                "aic",
+                "bic",
+                "n_params",
+                "converged",
+                "param_*",
+                "mean_rate",
+                "mean_dropout",
+                "expected_transactions",
+                "mean_p_alive",
+                "holdout_length",
+                "holdout_observed",
+                "holdout_expected",
+                "holdout_rel_error",
+                "holdout_mae",
+                "holdout_rmse",
+                "holdout_correlation"
+              ]
+            },
+            "coef": {
+              "levels": null,
+              "numbers": [
+                "estimate",
+                "std_error",
+                "ci_low",
+                "ci_high"
+              ],
+              "texts": []
+            },
+            "candidate": {
+              "levels": [
+                "pareto_nbd",
+                "bg_nbd",
+                "mbg_nbd"
+              ],
+              "texts": [],
+              "numbers": [
+                "log_lik",
+                "aic",
+                "bic",
+                "n_params",
+                "chi_square",
+                "chi_square_p_value",
+                "holdout_rel_error",
+                "holdout_mae",
+                "converged",
+                "chosen",
+                "param_*"
+              ]
+            },
+            "assumption": {
+              "levels": [
+                "convergence",
+                "boundary",
+                "sample_size",
+                "frequency_fit",
+                "holdout",
+                "horizon_length"
+              ],
+              "numbers": [
+                "statistic",
+                "df",
+                "df_2",
+                "p_value",
+                "threshold",
+                "value",
+                "count"
+              ],
+              "texts": [
+                "h0",
+                "verdict",
+                "advice",
+                "significance",
+                "rows",
+                "advice_id"
+              ]
+            },
+            "hist": {
+              "levels": [
+                "frequency",
+                "holdout",
+                "p_alive",
+                "clv"
+              ],
+              "numbers": [
+                "count",
+                "mean"
+              ],
+              "texts": []
+            },
+            "cell": {
+              "levels": null,
+              "numbers": [
+                "p_alive"
+              ],
+              "texts": []
+            },
+            "curve": {
+              "levels": [
+                "p_alive_recency",
+                "concentration"
+              ],
+              "numbers": [
+                "y"
+              ],
+              "texts": []
+            },
+            "customer": {
+              "levels": null,
+              "numbers": [
+                "rank",
+                "frequency",
+                "recency",
+                "age",
+                "p_alive",
+                "expected_transactions"
+              ],
+              "texts": []
+            }
+          },
+          "charts": [
+            {
+              "id": "frequency",
+              "under": "frequency_fit"
+            },
+            {
+              "id": "holdout",
+              "under": "holdout"
+            },
+            {
+              "id": "p_alive_cell",
+              "under": null
+            },
+            {
+              "id": "p_alive_recency",
+              "under": null
+            },
+            {
+              "id": "p_alive",
+              "under": null
+            },
+            {
+              "id": "clv",
+              "under": null
+            },
+            {
+              "id": "concentration",
+              "under": null
+            }
+          ],
+          "outputs": {
+            "rows": [
+              "pred_p_alive",
+              "pred_transactions",
+              "pred_holdout_transactions"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "bg_bb",
+      "group": "customer_lifetime",
+      "family": "customer_lifetime",
+      "label": "models.bg_bb.name",
+      "needs": {
+        "customer": "column",
+        "frequency": "number_column",
+        "recency": "number_column",
+        "opportunities": "number_column",
+        "period_unit": "time_unit"
+      },
+      "takes": {
+        "spend": "number_column",
+        "horizon": "horizon_periods",
+        "discount_rate": "discount_rate",
+        "margin": "fraction",
+        "holdout_transactions": "number_column",
+        "holdout_length": "holdout_opportunities",
+        "alpha": "alpha",
+        "seed": "seed",
+        "output": "output_rows"
+      },
+      "defaults": {
+        "spend": null,
+        "horizon": null,
+        "discount_rate": 0.1,
+        "margin": 1.0,
+        "holdout_transactions": null,
+        "holdout_length": null,
+        "alpha": 0.05,
+        "seed": 1,
+        "output": "rows"
+      },
+      "applies": {
+        "discount_rate": {
+          "spend": true
+        },
+        "margin": {
+          "spend": true
+        },
+        "holdout_length": {
+          "holdout_transactions": true
+        }
+      },
+      "requires": [
+        {
+          "key": "holdout_length",
+          "when": {
+            "holdout_transactions": true
+          },
+          "reason": "holdout_needs_length",
+          "message": "the holdout's purchases need the holdout's length ('holdout_length')"
+        }
+      ],
+      "forbids": [],
+      "disjoint": [
+        "customer",
+        "frequency",
+        "recency",
+        "opportunities",
+        "spend",
+        "holdout_transactions"
+      ],
+      "presets": {},
+      "variants": [
+        {
+          "id": "value",
+          "when": {
+            "spend": true
+          },
+          "sections": {
+            "model": {
+              "levels": null,
+              "texts": [
+                "model",
+                "variant",
+                "formula",
+                "software",
+                "group_version",
+                "rows_from",
+                "note_*",
+                "purchase_model",
+                "purchase_model_asked",
+                "time_unit",
+                "optimizer"
+              ],
+              "numbers": [
+                "n",
+                "n_missing",
+                "n_repeaters",
+                "share_repeaters",
+                "mean_frequency",
+                "max_age",
+                "median_age",
+                "horizon",
+                "log_lik",
+                "aic",
+                "bic",
+                "n_params",
+                "converged",
+                "param_*",
+                "mean_rate",
+                "mean_dropout",
+                "expected_transactions",
+                "mean_p_alive",
+                "holdout_length",
+                "holdout_observed",
+                "holdout_expected",
+                "holdout_rel_error",
+                "holdout_mae",
+                "holdout_rmse",
+                "holdout_correlation",
+                "spend_n",
+                "spend_log_lik",
+                "spend_param_*",
+                "mean_spend_population",
+                "discount_rate",
+                "discount_per_period",
+                "margin",
+                "clv_total",
+                "clv_mean",
+                "clv_median",
+                "clv_top10_share",
+                "clv_top20_share",
+                "discounted_transactions"
+              ]
+            },
+            "coef": {
+              "levels": null,
+              "numbers": [
+                "estimate",
+                "std_error",
+                "ci_low",
+                "ci_high"
+              ],
+              "texts": []
+            },
+            "assumption": {
+              "levels": [
+                "convergence",
+                "boundary",
+                "sample_size",
+                "frequency_fit",
+                "holdout",
+                "horizon_length",
+                "spend_independence",
+                "spend_tail"
+              ],
+              "numbers": [
+                "statistic",
+                "df",
+                "df_2",
+                "p_value",
+                "threshold",
+                "value",
+                "count"
+              ],
+              "texts": [
+                "h0",
+                "verdict",
+                "advice",
+                "significance",
+                "rows",
+                "advice_id"
+              ]
+            },
+            "hist": {
+              "levels": [
+                "frequency",
+                "holdout",
+                "p_alive",
+                "clv",
+                "spend"
+              ],
+              "numbers": [
+                "count",
+                "mean"
+              ],
+              "texts": []
+            },
+            "cell": {
+              "levels": null,
+              "numbers": [
+                "p_alive"
+              ],
+              "texts": []
+            },
+            "curve": {
+              "levels": [
+                "p_alive_recency",
+                "concentration",
+                "spend_frequency"
+              ],
+              "numbers": [
+                "y"
+              ],
+              "texts": []
+            },
+            "point": {
+              "levels": [
+                "spend_frequency"
+              ],
+              "numbers": [
+                "y"
+              ],
+              "texts": []
+            },
+            "customer": {
+              "levels": null,
+              "numbers": [
+                "rank",
+                "frequency",
+                "recency",
+                "age",
+                "p_alive",
+                "expected_transactions",
+                "expected_spend",
+                "clv"
+              ],
+              "texts": []
+            }
+          },
+          "charts": [
+            {
+              "id": "frequency",
+              "under": "frequency_fit"
+            },
+            {
+              "id": "holdout",
+              "under": "holdout"
+            },
+            {
+              "id": "p_alive_cell",
+              "under": null
+            },
+            {
+              "id": "p_alive_recency",
+              "under": null
+            },
+            {
+              "id": "p_alive",
+              "under": null
+            },
+            {
+              "id": "spend",
+              "under": "spend_tail"
+            },
+            {
+              "id": "spend_frequency",
+              "under": "spend_independence"
+            },
+            {
+              "id": "clv",
+              "under": null
+            },
+            {
+              "id": "concentration",
+              "under": null
+            }
+          ],
+          "outputs": {
+            "rows": [
+              "pred_p_alive",
+              "pred_transactions",
+              "pred_holdout_transactions",
+              "pred_spend",
+              "pred_discounted_transactions",
+              "pred_clv"
+            ]
+          }
+        },
+        {
+          "id": "purchases",
+          "when": {
+            "spend": false
+          },
+          "sections": {
+            "model": {
+              "levels": null,
+              "texts": [
+                "model",
+                "variant",
+                "formula",
+                "software",
+                "group_version",
+                "rows_from",
+                "note_*",
+                "purchase_model",
+                "purchase_model_asked",
+                "time_unit",
+                "optimizer"
+              ],
+              "numbers": [
+                "n",
+                "n_missing",
+                "n_repeaters",
+                "share_repeaters",
+                "mean_frequency",
+                "max_age",
+                "median_age",
+                "horizon",
+                "log_lik",
+                "aic",
+                "bic",
+                "n_params",
+                "converged",
+                "param_*",
+                "mean_rate",
+                "mean_dropout",
+                "expected_transactions",
+                "mean_p_alive",
+                "holdout_length",
+                "holdout_observed",
+                "holdout_expected",
+                "holdout_rel_error",
+                "holdout_mae",
+                "holdout_rmse",
+                "holdout_correlation"
+              ]
+            },
+            "coef": {
+              "levels": null,
+              "numbers": [
+                "estimate",
+                "std_error",
+                "ci_low",
+                "ci_high"
+              ],
+              "texts": []
+            },
+            "assumption": {
+              "levels": [
+                "convergence",
+                "boundary",
+                "sample_size",
+                "frequency_fit",
+                "holdout",
+                "horizon_length"
+              ],
+              "numbers": [
+                "statistic",
+                "df",
+                "df_2",
+                "p_value",
+                "threshold",
+                "value",
+                "count"
+              ],
+              "texts": [
+                "h0",
+                "verdict",
+                "advice",
+                "significance",
+                "rows",
+                "advice_id"
+              ]
+            },
+            "hist": {
+              "levels": [
+                "frequency",
+                "holdout",
+                "p_alive",
+                "clv"
+              ],
+              "numbers": [
+                "count",
+                "mean"
+              ],
+              "texts": []
+            },
+            "cell": {
+              "levels": null,
+              "numbers": [
+                "p_alive"
+              ],
+              "texts": []
+            },
+            "curve": {
+              "levels": [
+                "p_alive_recency",
+                "concentration"
+              ],
+              "numbers": [
+                "y"
+              ],
+              "texts": []
+            },
+            "customer": {
+              "levels": null,
+              "numbers": [
+                "rank",
+                "frequency",
+                "recency",
+                "age",
+                "p_alive",
+                "expected_transactions"
+              ],
+              "texts": []
+            }
+          },
+          "charts": [
+            {
+              "id": "frequency",
+              "under": "frequency_fit"
+            },
+            {
+              "id": "holdout",
+              "under": "holdout"
+            },
+            {
+              "id": "p_alive_cell",
+              "under": null
+            },
+            {
+              "id": "p_alive_recency",
+              "under": null
+            },
+            {
+              "id": "p_alive",
+              "under": null
+            },
+            {
+              "id": "clv",
+              "under": null
+            },
+            {
+              "id": "concentration",
+              "under": null
+            }
+          ],
+          "outputs": {
+            "rows": [
+              "pred_p_alive",
+              "pred_transactions",
+              "pred_holdout_transactions"
+            ]
+          }
+        }
+      ]
     }
   ],
   "predict": {
@@ -4899,7 +5888,9 @@
         "catboost:binary"
       ],
       "horizon": [
-        "arima"
+        "arima",
+        "clv",
+        "bg_bb"
       ],
       "at_times": [
         "cox",
@@ -4968,6 +5959,34 @@
           "upper_80",
           "lower",
           "upper"
+        ]
+      },
+      "clv:purchases": {
+        "always": [
+          "prediction",
+          "prediction_p_alive"
+        ]
+      },
+      "clv:value": {
+        "always": [
+          "prediction",
+          "prediction_p_alive",
+          "prediction_spend",
+          "prediction_clv"
+        ]
+      },
+      "bg_bb:purchases": {
+        "always": [
+          "prediction",
+          "prediction_p_alive"
+        ]
+      },
+      "bg_bb:value": {
+        "always": [
+          "prediction",
+          "prediction_p_alive",
+          "prediction_spend",
+          "prediction_clv"
         ]
       },
       "xgboost:regression": {

@@ -603,8 +603,9 @@ export const modelGroupKey = (group: string): string => `models.groups.${group}`
  *  name, hint or group holds it. */
 // Models the catalogue declares and the engine's contract holds, whose form and words the editor
 // does not have yet: the palette leaves them out. Lot P6 of docs/specs/statistical-models.md
-// («The parametric survival lots») takes this away with the node's words.
-const NOT_IN_THE_PALETTE_YET = new Set(['parametric_survival'])
+// («The parametric survival lots») takes parametric_survival away with the node's words; lot B6 of
+// docs/specs/customer-lifetime-models.md takes clv and bg_bb away with theirs.
+const NOT_IN_THE_PALETTE_YET = new Set(['parametric_survival', 'clv', 'bg_bb'])
 
 export function modelPalette(shown: readonly ModelGroupDef[], query: string, text: Text, catalog: ModelCatalog = MODEL_CATALOG): ModelPaletteGroup[] {
   const q = query.trim().toLowerCase()

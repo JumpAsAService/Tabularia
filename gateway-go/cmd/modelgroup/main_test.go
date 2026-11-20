@@ -54,7 +54,7 @@ func TestTheSubcommands(t *testing.T) {
 		t.Errorf("a refused task: %v", err)
 	}
 	out.Reset()
-	if err := run([]string{"groups"}, &out); err != nil || strings.Count(out.String(), "\n") != 4 {
+	if err := run([]string{"groups"}, &out); err != nil || strings.Count(out.String(), "\n") != 5 {
 		t.Errorf("groups: %v\n%s", err, out.String())
 	}
 	// a Python group: its Dockerfile and its code, the library of its language only

@@ -35,6 +35,9 @@ FIXTURES = Path(__file__).resolve().parent / "fixtures" / "models"
 # The parametric survival node's layout is lot P5's (docs/specs/statistical-models.md, «The parametric
 # survival lots»): its fixtures exist (results.py checks them), its report not yet. P5 takes this away.
 PENDING = {"parametric_survival"}
+# The customer lifetime nodes' layouts are lot B5's (docs/specs/customer-lifetime-models.md, «The lots B0–B10»):
+# their fixtures exist, their report not yet. B5 takes this away.
+PENDING |= {"clv", "bg_bb"}
 CASES = sorted(p.stem for p in FIXTURES.glob("*-*.json") if p.stem.split("-")[0] not in PENDING)
 DRAWN = {m: spec for m, spec in catalog.MODELS.items() if m not in PENDING}
 

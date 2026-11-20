@@ -27,6 +27,8 @@ var (
 	// BasePackages are installed in every image of the language, before its own.
 	BasePackages = map[string][]string{"python": {"polars", "pyarrow", "marimo"}, "r": {"arrow"}}
 	url          = regexp.MustCompile(`^https?://[^\s"'\\]+\n?$`)
+	// a Debian package's name, as a recipe may name one
+	debianPackage = regexp.MustCompile(`^[a-z0-9][a-z0-9+.-]+$`)
 )
 
 // ValueError is what script_builds raises for packages or settings that cannot become a
@@ -47,6 +49,11 @@ type Settings struct {
 	// closure pinned; `pip check` then fails the build when one is missing. An R image is the
 	// same either way.
 	Managed bool
+	// SystemLibraries are Debian packages an R image installs besides RSystemLibraries: a
+	// managed environment's own (a model group's recipe, `system_libraries`: the GNU Scientific
+	// Library of the customer lifetime group). Never taken from a user's input. None: the
+	// Dockerfile is the one every R image has had.
+	SystemLibraries []string
 }
 
 func heredoc(path string, lines []string, mark string) string {
@@ -89,10 +96,19 @@ func Dockerfile(language, baseImage string, packages []string, s Settings) (stri
 	if !url.MatchString(cran) {
 		return "", ValueError("SCRIPTS__CRAN_URL is not an http(s) address")
 	}
+	libraries := RSystemLibraries
+	if len(s.SystemLibraries) > 0 {
+		libraries = append(append([]string{}, RSystemLibraries...), s.SystemLibraries...)
+		for _, l := range s.SystemLibraries {
+			if !debianPackage.MatchString(l) {
+				return "", ValueError(fmt.Sprintf("«%s» is not the name of a Debian package", l))
+			}
+		}
+	}
 	// NOT_CRAN and LIBARROW_MINIMAL: arrow, built from source, gets S3 support. rocker's
 	// images point R at a package manager of their own; CRAN replaces it
 	return "FROM " + baseImage + "\nENV NOT_CRAN=true LIBARROW_MINIMAL=false CRAN=\"" + cran + "\"\n" +
-		"RUN apt-get update && apt-get install -y --no-install-recommends " + strings.Join(RSystemLibraries, " ") +
+		"RUN apt-get update && apt-get install -y --no-install-recommends " + strings.Join(libraries, " ") +
 		" && rm -rf /var/lib/apt/lists/*\n" +
 		`RUN printf 'options(repos = c(CRAN = "%s"))\n' "$CRAN" >> "$(R RHOME)/etc/Rprofile.site"` + "\n" +
 		heredoc("/opt/tabularia/packages.txt", wanted, "TABULARIA_PACKAGES") +

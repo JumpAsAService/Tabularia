@@ -1,0 +1,11 @@
+{
+  "about": "The witnesses of the reference values: packages that compute the same numbers outside Tabularia, run by hand by make_witness.R in a scratch library with GSL (docs/specs/customer-lifetime-models.md, «Reference values»). Never installed in the group's image; not part of the recipe, so changing them builds nothing.",
+  "checked_on": "2026-11-20",
+  "r": [
+    "BTYD@2.4.3",
+    "BTYDplus@1.2.0 (archived by CRAN on 2025-06-13: installed from the CRAN Archive)",
+    "hypergeo@1.2-15",
+    "CLVTools@0.12.1 (the recipe's)"
+  ],
+  "python": []
+}

@@ -161,3 +161,26 @@ def test_a_fixture_s_columns_are_the_ten():
     assert results.REQUIRED_KEYS == ("model|||model", "model|||variant", "model|||n")
     for path in FIXTURES:
         assert json.loads(path.read_text(encoding="utf-8"))["columns"] == list(OUTPUT_NAMES)
+
+
+@pytest.mark.parametrize("name", ["clv-value", "clv-purchases", "bg_bb-value", "bg_bb-purchases"])
+def test_the_customer_lifetime_fixtures_refuse_what_their_variant_does_not_declare(name):
+    path = next(p for p in FIXTURES if p.stem == name)
+    model, params, table = read_fixture(path)
+    rows = [list(r.values()) for r in table.to_pylist()]
+    assert check_table(model, params, table) == name.split("-")[1]
+    # a stat that no variant declares
+    extra = [*rows, ["model", None, None, "clv_forecast", 1.0, None, None, None, len(rows), "model|||clv_forecast"]]
+    with pytest.raises(ResultsError, match="writes no 'clv_forecast' in the section model"):
+        check_table(model, params, table_of_rows(extra))
+    # the top customers' table: the customer's id is its level
+    top = next(i for i, r in enumerate(rows) if r[0] == "customer")
+    nolevel = [list(r) for r in rows]
+    nolevel[top][1], nolevel[top][9] = None, "customer||" + "|" + nolevel[top][3]
+    with pytest.raises(ResultsError, match="level is required in the section customer"):
+        check_table(model, params, table_of_rows(nolevel))
+    # the spend part belongs to the variant `value` alone
+    if name.endswith("purchases"):
+        spend = [*rows, ["model", None, None, "clv_total", 1.0, None, None, None, len(rows), "model|||clv_total"]]
+        with pytest.raises(ResultsError, match="writes no 'clv_total'"):
+            check_table(model, params, table_of_rows(spend))

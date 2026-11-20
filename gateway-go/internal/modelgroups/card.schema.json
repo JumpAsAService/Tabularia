@@ -9,9 +9,9 @@
   "properties": {
     "format": {"const": "tabularia-model"},
     "format_version": {"const": 1},
-    "model": {"enum": ["linear", "logistic", "kaplan_meier", "cox", "parametric_survival", "arima", "xgboost", "catboost"]},
+    "model": {"enum": ["linear", "logistic", "kaplan_meier", "cox", "parametric_survival", "arima", "xgboost", "catboost", "clv", "bg_bb"]},
     "variant": {"type": "string", "minLength": 1},
-    "group": {"enum": ["regression", "survival", "timeseries", "boosting"]},
+    "group": {"enum": ["regression", "survival", "timeseries", "boosting", "customer_lifetime"]},
     "group_version": {"type": ["integer", "string"]},
     "recipe_hash": {"type": "string"},
     "runner_hash": {"type": "string"},
@@ -158,6 +158,41 @@
         "flexsurv": {"type": "string", "description": "the version of flexsurv that fitted it"}
       }
     },
+    "customer_lifetime": {
+      "type": "object",
+      "description": "a customer lifetime model's («buy till you die»): the purchase model's parameters and, with a spend column, Gamma–Gamma's, with the time unit, the horizon, the discount and the margin. A few dozen numbers, never a row and no serialized object: with `inputs` it is all Predict needs, computed by the runner with the same functions as the fit (docs/specs/customer-lifetime-models.md, «The saved model, MLflow and Predict»)",
+      "required": ["node", "time_unit", "purchase_model", "chosen_by", "purchases", "horizon", "discount_rate", "periods_per_year", "margin", "library"],
+      "properties": {
+        "node": {"enum": ["clv", "bg_bb"]},
+        "time_unit": {"enum": ["day", "week", "month", "quarter", "year"], "description": "the unit of the recency, the age and the horizon; BG/BB's opportunity"},
+        "purchase_model": {"enum": ["pareto_nbd", "bg_nbd", "mbg_nbd", "bg_bb"], "description": "the one fitted (with `auto`, the one chosen)"},
+        "chosen_by": {"enum": ["log_lik", "manual"]},
+        "purchases": {
+          "type": "object",
+          "required": ["model", "params"],
+          "properties": {
+            "model": {"enum": ["pareto_nbd", "bg_nbd", "mbg_nbd", "bg_bb"]},
+            "params": {"type": "object", "minProperties": 4, "additionalProperties": {"type": "number", "exclusiveMinimum": 0}, "description": "r, alpha, s, beta (Pareto/NBD); r, alpha, a, b (BG/NBD, MBG/NBD); alpha, beta, gamma, delta (BG/BB)"},
+            "vcov_log": {"type": ["array", "null"], "items": {"type": "array", "items": {"type": "number"}}, "description": "the covariance of the log parameters; null when the Hessian was not positive definite"}
+          }
+        },
+        "spend": {
+          "type": ["object", "null"],
+          "description": "Gamma–Gamma, in the variant `value`; null without a spend column",
+          "required": ["model", "params"],
+          "properties": {
+            "model": {"const": "gamma_gamma"},
+            "params": {"type": "object", "required": ["p", "q", "gamma"], "additionalProperties": {"type": "number", "exclusiveMinimum": 0}},
+            "vcov_log": {"type": ["array", "null"], "items": {"type": "array", "items": {"type": "number"}}}
+          }
+        },
+        "horizon": {"type": "integer", "minimum": 1, "description": "periods ahead, in `time_unit`"},
+        "discount_rate": {"type": "number", "minimum": 0, "maximum": 1, "description": "annual"},
+        "periods_per_year": {"type": "number", "exclusiveMinimum": 0, "description": "365.25, 365.25/7, 12, 4 or 1: how the annual rate becomes a rate per period"},
+        "margin": {"type": "number", "exclusiveMinimum": 0, "maximum": 1},
+        "library": {"type": "object", "required": ["CLVTools", "gsl"], "additionalProperties": {"type": "string"}, "description": "the versions that fitted it"}
+      }
+    },
     "arima": {
       "type": "object",
       "required": ["orders", "frequency", "coefficients", "last"],
@@ -219,6 +254,7 @@
     {"if": {"properties": {"model": {"const": "kaplan_meier"}}}, "then": {"required": ["kaplan_meier", "outcome"]}},
     {"if": {"properties": {"model": {"const": "parametric_survival"}}}, "then": {"required": ["parametric_survival", "outcome"]}},
     {"if": {"properties": {"model": {"const": "arima"}}}, "then": {"required": ["arima"]}},
+    {"if": {"properties": {"model": {"enum": ["clv", "bg_bb"]}}}, "then": {"required": ["customer_lifetime"]}},
     {"if": {"properties": {"group": {"const": "boosting"}}, "required": ["group"]},
      "then": {"required": ["boosting"], "properties": {"software": {"required": ["Python"]}}},
      "else": {"properties": {"software": {"required": ["R"]},

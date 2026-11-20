@@ -66,7 +66,7 @@ func TestTheSharedCases(t *testing.T) {
 }
 
 func TestGroupsModelsAndVariants(t *testing.T) {
-	if got := Models(); !reflect.DeepEqual(got, []string{"linear", "logistic", "kaplan_meier", "cox", "parametric_survival", "arima", "xgboost", "catboost"}) {
+	if got := Models(); !reflect.DeepEqual(got, []string{"linear", "logistic", "kaplan_meier", "cox", "parametric_survival", "arima", "xgboost", "catboost", "clv", "bg_bb"}) {
 		t.Fatalf("models: %v", got)
 	}
 	groups := map[string]string{}
@@ -87,7 +87,8 @@ func TestGroupsModelsAndVariants(t *testing.T) {
 		t.Error("GroupOf or KindOf")
 	}
 	if Limit("max_chart_points") != 2000 || Limit("max_terms") != 200 || Limit("max_cells") != 50_000_000 ||
-		Limit("max_quantiles") != 9 || Limit("shap_cost_budget") != 20_000_000_000 || Limit("max_model_file_bytes") != 64<<20 {
+		Limit("max_quantiles") != 9 || Limit("min_customers") != 20 || Limit("min_repeaters") != 5 || Limit("max_opportunities") != 1000 ||
+		Limit("max_clv_steps") != 520 || Limit("max_top_customers") != 20 || Limit("palive_grid_frequency") != 10 || Limit("shap_cost_budget") != 20_000_000_000 || Limit("max_model_file_bytes") != 64<<20 {
 		t.Error("limits")
 	}
 	cases := []struct {
@@ -103,6 +104,11 @@ func TestGroupsModelsAndVariants(t *testing.T) {
 		{"parametric_survival", map[string]any{"time": "t", "event": "e", "event_value": "1", "distribution": "gengamma"}, "aft"},
 		{"parametric_survival", map[string]any{"time": "t", "event": "e", "event_value": "1", "distribution": "gompertz"}, "ph"},
 		{"parametric_survival", map[string]any{"time": "t", "event": "e", "event_value": "1", "distribution": "auto"}, "auto"},
+		// the variant is made by a column being given: the spend part
+		{"clv", map[string]any{"customer": "id", "frequency": "x", "recency": "t_x", "age": "T", "time_unit": "week"}, "purchases"},
+		{"clv", map[string]any{"customer": "id", "frequency": "x", "recency": "t_x", "age": "T", "time_unit": "week", "spend": "m"}, "value"},
+		{"bg_bb", map[string]any{"customer": "id", "frequency": "x", "recency": "t_x", "opportunities": "n", "period_unit": "year"}, "purchases"},
+		{"bg_bb", map[string]any{"customer": "id", "frequency": "x", "recency": "t_x", "opportunities": "n", "period_unit": "year", "spend": "m"}, "value"},
 		{"kaplan_meier", map[string]any{"time": "t", "event": "e", "event_value": "1"}, "default"},
 		{"cox", map[string]any{"time": "t", "event": "e", "event_value": "1", "predictors": []any{"x"}}, "default"},
 		{"arima", map[string]any{"time": "t", "value": "v", "frequency": "month"}, "manual"},

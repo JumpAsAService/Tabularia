@@ -1168,7 +1168,7 @@
    "what": "a model that does not exist",
    "model": "survival_forest",
    "params": {},
-   "error": "there is no model 'survival_forest' (the models: linear, logistic, kaplan_meier, cox, parametric_survival, arima, xgboost, catboost)"
+   "error": "there is no model 'survival_forest' (the models: linear, logistic, kaplan_meier, cox, parametric_survival, arima, xgboost, catboost, clv, bg_bb)"
   },
   {
    "what": "the answer given back to the check: an empty exog is none, not an error",
@@ -1807,6 +1807,344 @@
     "event": "status"
    },
    "error": "parametric_survival: 'event_value' is required"
+  },
+  {
+   "what": "the smallest customer lifetime node",
+   "model": "clv",
+   "params": {
+    "customer": "customer",
+    "frequency": "frequency",
+    "recency": "recency",
+    "age": "age",
+    "time_unit": "week"
+   },
+   "checked": {
+    "customer": "customer",
+    "frequency": "frequency",
+    "recency": "recency",
+    "age": "age",
+    "time_unit": "week",
+    "spend": null,
+    "purchase_model": "auto",
+    "horizon": null,
+    "holdout_transactions": null,
+    "alpha": 0.05,
+    "seed": 1,
+    "output": "rows"
+   }
+  },
+  {
+   "what": "the same with a spend column, a discount, a margin and a horizon",
+   "model": "clv",
+   "params": {
+    "customer": "customer",
+    "frequency": "frequency",
+    "recency": "recency",
+    "age": "age",
+    "time_unit": "week",
+    "spend": "avg_spend",
+    "discount_rate": 0.08,
+    "margin": 0.4,
+    "horizon": 104
+   },
+   "checked": {
+    "customer": "customer",
+    "frequency": "frequency",
+    "recency": "recency",
+    "age": "age",
+    "time_unit": "week",
+    "spend": "avg_spend",
+    "purchase_model": "auto",
+    "horizon": 104,
+    "discount_rate": 0.08,
+    "margin": 0.4,
+    "holdout_transactions": null,
+    "alpha": 0.05,
+    "seed": 1,
+    "output": "rows"
+   }
+  },
+  {
+   "what": "a chosen purchase model and the comparison of the others",
+   "model": "clv",
+   "params": {
+    "customer": "customer",
+    "frequency": "frequency",
+    "recency": "recency",
+    "age": "age",
+    "time_unit": "week",
+    "purchase_model": "bg_nbd",
+    "compare": true,
+    "alpha": 0.1,
+    "output": "results"
+   },
+   "checked": {
+    "customer": "customer",
+    "frequency": "frequency",
+    "recency": "recency",
+    "age": "age",
+    "time_unit": "week",
+    "spend": null,
+    "purchase_model": "bg_nbd",
+    "compare": true,
+    "horizon": null,
+    "holdout_transactions": null,
+    "alpha": 0.1,
+    "seed": 1,
+    "output": "results"
+   }
+  },
+  {
+   "what": "a holdout with its length",
+   "model": "clv",
+   "params": {
+    "customer": "customer",
+    "frequency": "frequency",
+    "recency": "recency",
+    "age": "age",
+    "time_unit": "week",
+    "holdout_transactions": "holdout_purchases",
+    "holdout_length": 39
+   },
+   "checked": {
+    "customer": "customer",
+    "frequency": "frequency",
+    "recency": "recency",
+    "age": "age",
+    "time_unit": "week",
+    "spend": null,
+    "purchase_model": "auto",
+    "horizon": null,
+    "holdout_transactions": "holdout_purchases",
+    "holdout_length": 39.0,
+    "alpha": 0.05,
+    "seed": 1,
+    "output": "rows"
+   }
+  },
+  {
+   "what": "a time unit that is not one",
+   "model": "clv",
+   "params": {
+    "customer": "customer",
+    "frequency": "frequency",
+    "recency": "recency",
+    "age": "age",
+    "time_unit": "fortnight"
+   },
+   "error": "clv: 'time_unit' must be one of day, week, month, quarter, year"
+  },
+  {
+   "what": "a purchase model that is not one",
+   "model": "clv",
+   "params": {
+    "customer": "customer",
+    "frequency": "frequency",
+    "recency": "recency",
+    "age": "age",
+    "time_unit": "week",
+    "purchase_model": "gamma"
+   },
+   "error": "clv: 'purchase_model' must be one of auto, pareto_nbd, bg_nbd, mbg_nbd"
+  },
+  {
+   "what": "the comparison with the choice left to auto",
+   "model": "clv",
+   "params": {
+    "customer": "customer",
+    "frequency": "frequency",
+    "recency": "recency",
+    "age": "age",
+    "time_unit": "week",
+    "compare": true
+   },
+   "error": "clv: 'compare' only applies when purchase_model = pareto_nbd or bg_nbd or mbg_nbd"
+  },
+  {
+   "what": "a margin without a spend column",
+   "model": "clv",
+   "params": {
+    "customer": "customer",
+    "frequency": "frequency",
+    "recency": "recency",
+    "age": "age",
+    "time_unit": "week",
+    "margin": 0.5
+   },
+   "error": "clv: 'margin' only applies when 'spend' is given"
+  },
+  {
+   "what": "a margin above one",
+   "model": "clv",
+   "params": {
+    "customer": "customer",
+    "frequency": "frequency",
+    "recency": "recency",
+    "age": "age",
+    "time_unit": "week",
+    "spend": "avg_spend",
+    "margin": 1.5
+   },
+   "error": "clv: 'margin' must be a number above 0 and at most 1"
+  },
+  {
+   "what": "an annual discount rate above one",
+   "model": "clv",
+   "params": {
+    "customer": "customer",
+    "frequency": "frequency",
+    "recency": "recency",
+    "age": "age",
+    "time_unit": "week",
+    "spend": "avg_spend",
+    "discount_rate": 1.5
+   },
+   "error": "clv: 'discount_rate' must be a number at least 0 and at most 1"
+  },
+  {
+   "what": "a holdout without its length",
+   "model": "clv",
+   "params": {
+    "customer": "customer",
+    "frequency": "frequency",
+    "recency": "recency",
+    "age": "age",
+    "time_unit": "week",
+    "holdout_transactions": "holdout_purchases"
+   },
+   "error": "clv: the holdout's purchases need the holdout's length ('holdout_length')"
+  },
+  {
+   "what": "a holdout's length without the holdout",
+   "model": "clv",
+   "params": {
+    "customer": "customer",
+    "frequency": "frequency",
+    "recency": "recency",
+    "age": "age",
+    "time_unit": "week",
+    "holdout_length": 39
+   },
+   "error": "clv: 'holdout_length' only applies when 'holdout_transactions' is given"
+  },
+  {
+   "what": "the spend is the frequency",
+   "model": "clv",
+   "params": {
+    "customer": "customer",
+    "frequency": "frequency",
+    "recency": "recency",
+    "age": "age",
+    "time_unit": "week",
+    "spend": "frequency"
+   },
+   "error": "clv: the column «frequency» is both 'frequency' and 'spend': choose another"
+  },
+  {
+   "what": "the time unit is needed",
+   "model": "clv",
+   "params": {
+    "customer": "customer",
+    "frequency": "frequency",
+    "recency": "recency",
+    "age": "age"
+   },
+   "error": "clv: 'time_unit' is required"
+  },
+  {
+   "what": "the smallest BG/BB node",
+   "model": "bg_bb",
+   "params": {
+    "customer": "donor",
+    "frequency": "x",
+    "recency": "t_x",
+    "opportunities": "n",
+    "period_unit": "year"
+   },
+   "checked": {
+    "customer": "donor",
+    "frequency": "x",
+    "recency": "t_x",
+    "opportunities": "n",
+    "period_unit": "year",
+    "spend": null,
+    "horizon": null,
+    "holdout_transactions": null,
+    "alpha": 0.05,
+    "seed": 1,
+    "output": "rows"
+   }
+  },
+  {
+   "what": "BG/BB with a spend, a holdout of 5 opportunities and a horizon",
+   "model": "bg_bb",
+   "params": {
+    "customer": "donor",
+    "frequency": "x",
+    "recency": "t_x",
+    "opportunities": "n",
+    "period_unit": "year",
+    "spend": "avg_gift",
+    "holdout_transactions": "later_gifts",
+    "holdout_length": 5,
+    "horizon": 10
+   },
+   "checked": {
+    "customer": "donor",
+    "frequency": "x",
+    "recency": "t_x",
+    "opportunities": "n",
+    "period_unit": "year",
+    "spend": "avg_gift",
+    "horizon": 10,
+    "discount_rate": 0.1,
+    "margin": 1.0,
+    "holdout_transactions": "later_gifts",
+    "holdout_length": 5,
+    "alpha": 0.05,
+    "seed": 1,
+    "output": "rows"
+   }
+  },
+  {
+   "what": "BG/BB takes no purchase model",
+   "model": "bg_bb",
+   "params": {
+    "customer": "donor",
+    "frequency": "x",
+    "recency": "t_x",
+    "opportunities": "n",
+    "period_unit": "year",
+    "purchase_model": "auto"
+   },
+   "error": "bg_bb: there is no parameter 'purchase_model' (it takes: customer, frequency, recency, opportunities, period_unit, spend, horizon, discount_rate, margin, holdout_transactions, holdout_length, alpha, seed, output)"
+  },
+  {
+   "what": "BG/BB's holdout counts whole opportunities",
+   "model": "bg_bb",
+   "params": {
+    "customer": "donor",
+    "frequency": "x",
+    "recency": "t_x",
+    "opportunities": "n",
+    "period_unit": "year",
+    "holdout_transactions": "later_gifts",
+    "holdout_length": 2.5
+   },
+   "error": "bg_bb: 'holdout_length' must be a whole number from 1 to 1000"
+  },
+  {
+   "what": "BG/BB's horizon is in opportunities, at most the catalogue's",
+   "model": "bg_bb",
+   "params": {
+    "customer": "donor",
+    "frequency": "x",
+    "recency": "t_x",
+    "opportunities": "n",
+    "period_unit": "year",
+    "horizon": 5000
+   },
+   "error": "bg_bb: 'horizon' must be a whole number from 1 to 1000"
   }
  ]
 }

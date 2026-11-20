@@ -76,6 +76,13 @@ LIMITS: dict[str, int] = {
     "max_importance_bars": 20,   # bars of an importance chart, the rest summed up as «(others)»
     "max_beeswarm_predictors": 10,  # predictors of the SHAP summary
     "max_roc_classes": 10,       # one-against-rest ROC curves of a multiclass model
+    # the customer lifetime group's (docs/specs/customer-lifetime-models.md, «Performance and limits»)
+    "min_customers": 20,         # customers a lifetime model needs
+    "min_repeaters": 5,          # customers who bought again
+    "max_opportunities": 1000,   # BG/BB's opportunities n, and its holdout's length
+    "max_clv_steps": 520,        # periods summed one by one in a CLV; beyond it coarser steps
+    "max_top_customers": 20,     # rows of the top customers' table
+    "palive_grid_frequency": 10, # frequencies of the P(alive) map
 }
 
 # ── groups: one image each, built when an administrator enables it ─────────
@@ -84,6 +91,7 @@ GROUPS: dict[str, dict[str, Any]] = {
     "survival": {"language": "r", "label": "models.groups.survival", "models": ["kaplan_meier", "cox", "parametric_survival"]},
     "timeseries": {"language": "r", "label": "models.groups.timeseries", "models": ["arima"]},
     "boosting": {"language": "python", "label": "models.groups.boosting", "models": ["xgboost", "catboost"]},
+    "customer_lifetime": {"language": "r", "label": "models.groups.customer_lifetime", "models": ["clv", "bg_bb"]},
 }
 
 # ── controls and kinds ──────────────────────────────────────────────────────
@@ -182,6 +190,12 @@ KINDS: dict[str, dict[str, Any]] = {
     "nonnegative": {"control": "number", "min": 0, "max": 1000},
     "fraction": {"control": "number", "above": 0, "max": 1},
     "strength": {"control": "number", "min": 0, "max": 100},
+    # the customer lifetime group's
+    "time_unit": _choice("day", "week", "month", "quarter", "year"),
+    "purchase_model": _choice("auto", "pareto_nbd", "bg_nbd", "mbg_nbd"),
+    "horizon_periods": _int(1, LIMITS["max_horizon"]),
+    "discount_rate": {"control": "number", "min": 0, "max": 1},
+    "holdout_opportunities": _int(1, LIMITS["max_opportunities"]),
 }
 
 # The seasonal period a frequency implies when `s` is not given.
@@ -208,6 +222,8 @@ SECTION_SHAPES: dict[str, dict[str, Any]] = {
     # the boosting group's: a predictor (and, multiclass, a class); a class of the outcome
     "importance": {"level": "required", "level_2": "optional", "indexed": False},
     "class": {"level": "required", "level_2": "null", "indexed": False},
+    # the customer lifetime group's: a customer of the top table, its id as the label
+    "customer": {"level": "required", "level_2": "null", "indexed": False},
 }
 
 VERDICTS = ("ok", "doubtful", "failed", "not_computed")
@@ -843,6 +859,101 @@ MODELS["catboost"] = _boosting(
     {"l2_leaf_reg": 3.0, "rsm": 1.0, "random_strength": 1.0},
     "depth_catboost")
 
+# ── customer lifetime (docs/specs/customer-lifetime-models.md, «The two nodes», «The output») ──
+# Two nodes, `clv` (continuous time) and `bg_bb` (discrete opportunities), each with two variants
+# keyed on whether a spend column is given: `purchases` (no Gamma–Gamma, no CLV) and `value`. The
+# purchase model (Pareto/NBD, BG/NBD, MBG/NBD, auto) is a text of the `model` section, not a variant.
+_CLV_PURCHASE_MODELS = ["pareto_nbd", "bg_nbd", "mbg_nbd"]
+_CLV_CHECKS = ["convergence", "boundary", "sample_size", "frequency_fit", "holdout", "horizon_length"]
+_CLV_VALUE_CHECKS = ["spend_independence", "spend_tail"]
+_CLV_MODEL_TEXTS = [*_MODEL_TEXTS, "purchase_model", "purchase_model_asked", "time_unit", "optimizer"]
+_CLV_MODEL_NUMBERS = [
+    "n", "n_missing", "n_repeaters", "share_repeaters", "mean_frequency", "max_age", "median_age", "horizon", "log_lik",
+    "aic", "bic", "n_params", "converged", "param_*", "mean_rate", "mean_dropout", "expected_transactions",
+    "mean_p_alive", "holdout_length", "holdout_observed", "holdout_expected", "holdout_rel_error", "holdout_mae",
+    "holdout_rmse", "holdout_correlation",
+]
+_CLV_VALUE_NUMBERS = [
+    # the Gamma–Gamma's p, q and gamma are `spend_param_*`: BG/BB's own gamma is `param_gamma`
+    "spend_n", "spend_log_lik", "spend_param_*", "mean_spend_population", "discount_rate", "discount_per_period", "margin", "clv_total",
+    "clv_mean", "clv_median", "clv_top10_share", "clv_top20_share", "discounted_transactions",
+]
+_CLV_CUSTOMER = ["rank", "frequency", "recency", "age", "p_alive", "expected_transactions"]
+_CLV_VALUE_CUSTOMER = ["expected_spend", "clv"]
+
+
+def _clv_variant(id_: str, node: str, value: bool) -> dict[str, Any]:
+    """`purchases` or `value` of a customer lifetime node. A variant declares what the runner MAY
+    write: the comparison of purchase models (`candidate`) only with `clv`; in `purchases` the
+    charts of the CLV are drawn on the expected transactions, under the same ids."""
+    checks = [*_CLV_CHECKS, *(_CLV_VALUE_CHECKS if value else [])]
+    hist = ["frequency", "holdout", "p_alive", "clv", *(["spend"] if value else [])]
+    curve = ["p_alive_recency", "concentration", *(["spend_frequency"] if value else [])]
+    assumption = _assumptions(*checks)
+    assumption = {**assumption, "texts": [*assumption["texts"], "advice_id"]}
+    sections: dict[str, Any] = {
+        "model": {"levels": None, "texts": _CLV_MODEL_TEXTS,
+                  "numbers": [*_CLV_MODEL_NUMBERS, *(_CLV_VALUE_NUMBERS if value else [])]},
+        "coef": {"levels": None, "numbers": ["estimate", "std_error", "ci_low", "ci_high"], "texts": []},
+    }
+    if node == "clv":
+        sections["candidate"] = {"levels": list(_CLV_PURCHASE_MODELS), "texts": [],
+                                 "numbers": ["log_lik", "aic", "bic", "n_params", "chi_square", "chi_square_p_value",
+                                             "holdout_rel_error", "holdout_mae", "converged", "chosen", "param_*"]}
+    sections.update({
+        "assumption": assumption,
+        "hist": _chart(*hist, stats=["count", "mean"]),
+        "cell": {"levels": None, "numbers": ["p_alive"], "texts": []},
+        "curve": _chart(*curve, stats=["y"]),
+    })
+    if value:
+        sections["point"] = _chart("spend_frequency", stats=["y"])
+    sections["customer"] = {"levels": None, "numbers": [*_CLV_CUSTOMER, *(_CLV_VALUE_CUSTOMER if value else [])], "texts": []}
+    charts = [{"id": "frequency", "under": "frequency_fit"}, {"id": "holdout", "under": "holdout"},
+              {"id": "p_alive_cell", "under": None}, {"id": "p_alive_recency", "under": None},
+              {"id": "p_alive", "under": None}]
+    if value:
+        charts += [{"id": "spend", "under": "spend_tail"}, {"id": "spend_frequency", "under": "spend_independence"}]
+    charts += [{"id": "clv", "under": None}, {"id": "concentration", "under": None}]
+    rows = ["pred_p_alive", "pred_transactions", "pred_holdout_transactions"]
+    if value:
+        rows += ["pred_spend", "pred_discounted_transactions", "pred_clv"]
+    return {"id": id_, "when": {"spend": value}, "sections": sections, "charts": charts, "outputs": {"rows": rows}}
+
+
+def _clv_node(needs: dict[str, str], holdout_length: str, extra_takes: dict[str, str],
+              extra_defaults: dict[str, Any], extra_applies: dict[str, Any], node: str) -> dict[str, Any]:
+    takes = {"spend": "number_column", **extra_takes, "horizon": "horizon_periods", "discount_rate": "discount_rate",
+             "margin": "fraction", "holdout_transactions": "number_column", "holdout_length": holdout_length,
+             "alpha": "alpha", "seed": "seed", "output": "output_rows"}
+    return {
+        "group": "customer_lifetime",
+        "family": "customer_lifetime",
+        "needs": needs,
+        "takes": takes,
+        "defaults": {"spend": None, **extra_defaults, "horizon": None, "discount_rate": 0.1, "margin": 1.0,
+                     "holdout_transactions": None, "holdout_length": None, "alpha": 0.05, "seed": 1, "output": "rows"},
+        "applies": {**extra_applies, "discount_rate": {"spend": True}, "margin": {"spend": True},
+                    "holdout_length": {"holdout_transactions": True}},
+        "requires": [{"key": "holdout_length", "when": {"holdout_transactions": True}, "reason": "holdout_needs_length",
+                      "message": "the holdout's purchases need the holdout's length ('holdout_length')"}],
+        "forbids": [],
+        "disjoint": ["customer", "frequency", "recency", *([k for k in needs if k in ("age", "opportunities")]), "spend",
+                     "holdout_transactions"],
+        "variants": [_clv_variant("value", node, True), _clv_variant("purchases", node, False)],
+    }
+
+
+MODELS["clv"] = _clv_node(
+    {"customer": "column", "frequency": "number_column", "recency": "number_column", "age": "number_column",
+     "time_unit": "time_unit"},
+    "positive", {"purchase_model": "purchase_model", "compare": "boolean"},
+    {"purchase_model": "auto", "compare": False}, {"compare": {"purchase_model": _CLV_PURCHASE_MODELS}}, "clv")
+MODELS["bg_bb"] = _clv_node(
+    {"customer": "column", "frequency": "number_column", "recency": "number_column", "opportunities": "number_column",
+     "period_unit": "time_unit"},
+    "holdout_opportunities", {}, {}, {}, "bg_bb")
+
 # the models in the order of their groups: the palette, the sentences and the snapshot list them so
 MODELS = {m: MODELS[m] for g in GROUPS.values() for m in g["models"]}
 
@@ -856,7 +967,7 @@ PREDICT: dict[str, Any] = {
     # entry is a model, or `model:variant` for one variant of it (the card's variant)
     "applies_to": {"interval": ["linear", "kaplan_meier", "arima", "parametric_survival"],
                    "threshold": ["logistic", "xgboost:binary", "catboost:binary"],
-                   "horizon": ["arima"], "at_times": ["cox", "parametric_survival"],
+                   "horizon": ["arima", "clv", "bg_bb"], "at_times": ["cox", "parametric_survival"],
                    "quantiles": ["parametric_survival"]},
     # the columns Predict adds, per model of the card (or `model:variant`, which comes first):
     # always, and with each key given. `prediction_prob_*`: one column per class of the card
@@ -869,6 +980,10 @@ PREDICT: dict[str, Any] = {
         "parametric_survival": {"always": ["prediction"], "quantiles": ["quantile_*"], "at_times": ["survival_at_*"],
                                 "interval": ["prediction_low", "prediction_high"]},
         "arima": {"always": ["prediction"], "interval": ["lower_80", "upper_80", "lower", "upper"]},
+        # the expected transactions over the horizon, P(alive); with a spend part the expected spend and the CLV
+        **{f"{m}:{v}": cols for m in ("clv", "bg_bb") for v, cols in (
+            ("purchases", {"always": ["prediction", "prediction_p_alive"]}),
+            ("value", {"always": ["prediction", "prediction_p_alive", "prediction_spend", "prediction_clv"]}))},
         **{f"{m}:{v}": cols for m in ("xgboost", "catboost") for v, cols in (
             ("regression", {"always": ["prediction"]}),
             ("binary", {"always": ["prediction", "prediction_class"]}),
@@ -1159,7 +1274,7 @@ def _check_columns(model: str, spec: Mapping[str, Any], kinds: Mapping[str, str]
 def variant_spec(model: str, checked: Mapping[str, Any]) -> dict[str, Any]:
     """The variant of `model` its parameters make: the first whose `when` holds."""
     for v in MODELS[model]["variants"]:
-        if all(checked.get(k, MODELS[model]["defaults"].get(k)) in values for k, values in v["when"].items()):
+        if all(_holds(rule, checked.get(k, MODELS[model]["defaults"].get(k))) for k, rule in v["when"].items()):
             return v
     raise AssertionError(f"{model}: no variant for {dict(checked)}")
 

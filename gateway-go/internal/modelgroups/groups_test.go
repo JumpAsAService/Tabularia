@@ -25,7 +25,7 @@ var pinned = map[string]*regexp.Regexp{
 
 func TestEveryGroupOfTheCatalogueHasARecipeAndARunner(t *testing.T) {
 	groups := Groups()
-	if len(groups) != len(modelcatalog.Groups()) || len(groups) != 4 {
+	if len(groups) != len(modelcatalog.Groups()) || len(groups) != 5 {
 		t.Fatalf("groups: %d", len(groups))
 	}
 	for _, g := range groups {
@@ -173,6 +173,42 @@ func TestTheDockerfileIsTheScriptingEnvironmentsOne(t *testing.T) {
 	}
 	if _, err := Dockerfile("nope", scriptcfg.DefaultBaseImages, s); err == nil {
 		t.Error("a Dockerfile of no group")
+	}
+}
+
+// The GNU Scientific Library is the customer lifetime group's alone: its Dockerfile adds libgsl-dev
+// to the fixed libraries of every R image, and no other group's image changes (docs/specs/
+// customer-lifetime-models.md, «The recipe»).
+func TestOnlyTheCustomerLifetimeImageInstallsGSL(t *testing.T) {
+	s := scriptimage.Settings{CRANURL: "https://cran.r-project.org", Jobs: 2}
+	for _, g := range Groups() {
+		d, err := Dockerfile(g.ID, scriptcfg.DefaultBaseImages, s)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if g.ID != "customer_lifetime" {
+			if len(g.Recipe.SystemLibraries) != 0 || strings.Contains(d, "libgsl") {
+				t.Errorf("%s: a system library the other groups do not have", g.ID)
+			}
+			continue
+		}
+		fixed := strings.Join(scriptimage.RSystemLibraries, " ")
+		if !reflect.DeepEqual(g.Recipe.SystemLibraries, []string{"libgsl-dev"}) ||
+			!strings.Contains(d, "install -y --no-install-recommends "+fixed+" libgsl-dev && rm -rf /var/lib/apt/lists/*\n") ||
+			!strings.Contains(d, "\nCLVTools@0.12.1\n") {
+			t.Errorf("customer_lifetime:\n%s", d)
+		}
+		// the same recipe without its system library is what every other R group's Dockerfile is made of
+		plain, _ := scriptimage.Dockerfile("r", "rocker/r-ver:4.6.0", g.Recipe.Packages, scriptimage.Settings{CRANURL: s.CRANURL, Jobs: 2, Managed: true})
+		if strings.Replace(d, " libgsl-dev", "", 1) != plain {
+			t.Error("libgsl-dev is not the only difference")
+		}
+	}
+	// a Job's group copy is not the shipped one
+	g, _ := Get("customer_lifetime")
+	g.Recipe.SystemLibraries[0] = "x"
+	if again, _ := Get("customer_lifetime"); again.Recipe.SystemLibraries[0] != "libgsl-dev" {
+		t.Error("Groups hands out the recipe's own slice")
 	}
 }
 

@@ -35,8 +35,8 @@ def test_the_snapshot_is_what_the_catalogue_says():
 
 def test_groups_and_models_point_at_each_other():
     snap = catalog.snapshot()
-    assert [g["id"] for g in snap["groups"]] == ["regression", "survival", "timeseries", "boosting"]
-    assert [m["id"] for m in snap["models"]] == ["linear", "logistic", "kaplan_meier", "cox", "parametric_survival", "arima", "xgboost", "catboost"]
+    assert [g["id"] for g in snap["groups"]] == ["regression", "survival", "timeseries", "boosting", "customer_lifetime"]
+    assert [m["id"] for m in snap["models"]] == ["linear", "logistic", "kaplan_meier", "cox", "parametric_survival", "arima", "xgboost", "catboost", "clv", "bg_bb"]
     listed = [m for g in catalog.GROUPS.values() for m in g["models"]]
     assert sorted(listed) == sorted(catalog.MODELS) and len(listed) == len(set(listed))
     for model, spec in catalog.MODELS.items():
@@ -102,6 +102,58 @@ def test_the_parametric_survival_node_and_its_four_variants():
     assert catalog.check_params("parametric_survival", {**base, "predictors": ["x"]})["reference"] == {}
 
 
+def test_the_customer_lifetime_nodes_and_their_two_variants():
+    assert catalog.GROUPS["customer_lifetime"] == {"language": "r", "label": "models.groups.customer_lifetime",
+                                                   "models": ["clv", "bg_bb"]}
+    assert catalog.SECTION_SHAPES["customer"] == {"level": "required", "level_2": "null", "indexed": False}
+    for key, value in {"min_customers": 20, "min_repeaters": 5, "max_opportunities": 1000, "max_clv_steps": 520,
+                       "max_top_customers": 20, "palive_grid_frequency": 10}.items():
+        assert catalog.LIMITS[key] == value, key
+    clv, bgbb = catalog.MODELS["clv"], catalog.MODELS["bg_bb"]
+    assert list(clv["needs"]) == ["customer", "frequency", "recency", "age", "time_unit"]
+    assert list(bgbb["needs"]) == ["customer", "frequency", "recency", "opportunities", "period_unit"]
+    for spec in (clv, bgbb):
+        assert list(spec["takes"])[-3:] == ["alpha", "seed", "output"]
+        assert spec["defaults"]["output"] == "rows" and spec["defaults"]["discount_rate"] == 0.1 and spec["defaults"]["margin"] == 1.0
+        assert spec["defaults"]["horizon"] is None and spec["defaults"]["spend"] is None
+        assert [v["id"] for v in spec["variants"]] == ["value", "purchases"]
+    assert list(clv["takes"])[:3] == ["spend", "purchase_model", "compare"] and clv["defaults"]["purchase_model"] == "auto"
+    assert "purchase_model" not in bgbb["takes"] and "compare" not in bgbb["takes"]
+    assert catalog.KINDS["holdout_opportunities"] == {"control": "integer", "min": 1, "max": 1000}
+    base = {"customer": "id", "frequency": "x", "recency": "t_x", "age": "T", "time_unit": "week"}
+    assert catalog.variant("clv", base) == "purchases" and catalog.variant("clv", {**base, "spend": "m"}) == "value"
+    assert catalog.variant("bg_bb", {"spend": "m"}) == "value" and catalog.variant("bg_bb", {}) == "purchases"
+    # the spend part's keys apply with a spend column only; `compare` only with a chosen purchase model
+    assert "discount_rate" not in catalog.check_params("clv", base) and catalog.check_params("clv", {**base, "spend": "m"})["margin"] == 1.0
+    with pytest.raises(EngineError, match="'margin' only applies when 'spend' is given"):
+        catalog.check_params("clv", {**base, "margin": 0.5})
+    with pytest.raises(EngineError, match="'compare' only applies when purchase_model = pareto_nbd or bg_nbd or mbg_nbd"):
+        catalog.check_params("clv", {**base, "compare": True})
+    assert catalog.check_params("clv", {**base, "purchase_model": "bg_nbd", "compare": True})["compare"] is True
+    # the holdout is a pair
+    with pytest.raises(EngineError, match="the holdout's purchases need the holdout's length"):
+        catalog.check_params("clv", {**base, "holdout_transactions": "h"})
+    with pytest.raises(EngineError, match="'holdout_length' only applies when 'holdout_transactions' is given"):
+        catalog.check_params("clv", {**base, "holdout_length": 26})
+    assert catalog.check_params("clv", {**base, "holdout_transactions": "h", "holdout_length": 26.5})["holdout_length"] == 26.5
+    with pytest.raises(EngineError, match="whole number from 1 to 1000"):
+        catalog.check_params("bg_bb", {"customer": "id", "frequency": "x", "recency": "t_x", "opportunities": "n",
+                                       "period_unit": "year", "holdout_transactions": "h", "holdout_length": 26.5})
+    with pytest.raises(EngineError, match="both 'frequency' and 'recency'"):
+        catalog.check_params("clv", {**base, "recency": "x"})
+    # what Predict says of them
+    assert catalog.PREDICT["applies_to"]["horizon"] == ["arima", "clv", "bg_bb"]
+    for model in ("clv", "bg_bb"):
+        assert catalog.PREDICT["columns"][f"{model}:purchases"] == {"always": ["prediction", "prediction_p_alive"]}
+        assert catalog.PREDICT["columns"][f"{model}:value"]["always"][-2:] == ["prediction_spend", "prediction_clv"]
+    # a variant declares what the runner may write: the comparison of purchase models is `clv`'s alone
+    sections = {(m, v["id"]): v["sections"] for m in ("clv", "bg_bb") for v in catalog.MODELS[m]["variants"]}
+    assert {k for k, s in sections.items() if "candidate" in s} == {("clv", "value"), ("clv", "purchases")}
+    assert all("point" in s for k, s in sections.items() if k[1] == "value") and not any("point" in s for k, s in sections.items() if k[1] == "purchases")
+    assert all("spend_independence" in s["assumption"]["levels"] for k, s in sections.items() if k[1] == "value")
+    assert not any("spend_independence" in s["assumption"]["levels"] for k, s in sections.items() if k[1] == "purchases")
+
+
 def test_every_kind_has_a_control_and_only_the_control_s_options():
     options = {
         "column": {"numeric", "types"}, "columns": {"min", "max", "numeric", "predictor"}, "level": {"of"},
@@ -147,7 +199,8 @@ def test_every_model_s_keys_defaults_and_rules_are_consistent():
 def test_every_combination_of_the_keys_that_make_variants_has_one():
     for model, spec in catalog.MODELS.items():
         keys = sorted({k for v in spec["variants"] for k in v["when"]})
-        choices = [catalog.KINDS[{**spec["needs"], **spec["takes"]}[k]]["choices"] for k in keys]
+        # a key that makes a variant by being given or not (a column) has two cases
+        choices = [catalog.KINDS[{**spec["needs"], **spec["takes"]}[k]].get("choices", [None, "x"]) for k in keys]
         ids = [v["id"] for v in spec["variants"]]
         assert len(ids) == len(set(ids)), model
         for combo in itertools.product(*choices):

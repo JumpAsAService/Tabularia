@@ -66,6 +66,42 @@ func TestTheImagesThatWereStayAsTheyWere(t *testing.T) {
 	}
 }
 
+// An R image installs the system libraries its recipe names after the fixed ones, and only then: with none
+// the Dockerfile is the one every R image had (the sha256 above).
+func TestARecipeSystemLibrariesComeAfterTheFixedOnes(t *testing.T) {
+	s := Settings{CRANURL: "https://cran.example/", Jobs: 3, Managed: true}
+	plain, err := Dockerfile("r", "rocker/r-ver:4.6.0", []string{"zoo@1.9-1"}, s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.SystemLibraries = []string{"libgsl-dev"}
+	with, err := Dockerfile("r", "rocker/r-ver:4.6.0", []string{"zoo@1.9-1"}, s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixed := strings.Join(RSystemLibraries, " ")
+	if !strings.Contains(with, "install -y --no-install-recommends "+fixed+" libgsl-dev && rm -rf /var/lib/apt/lists/*\n") {
+		t.Errorf("libgsl-dev does not follow the fixed libraries:\n%s", with)
+	}
+	if strings.Replace(with, " libgsl-dev", "", 1) != plain || strings.Contains(plain, "libgsl") {
+		t.Error("the library is the only difference")
+	}
+	for _, bad := range []string{"libgsl-dev; rm -rf /", "-y", "Libgsl", "a", "libgsl dev", ""} {
+		s.SystemLibraries = []string{bad}
+		if _, err := Dockerfile("r", "rocker/r-ver:4.6.0", nil, s); err == nil {
+			t.Errorf("%q is not a Debian package's name", bad)
+		}
+	}
+	// a Python image installs no Debian package: its Dockerfile is the same
+	s.SystemLibraries = []string{"libgsl-dev"}
+	a, _ := Dockerfile("python", "python:3.14-slim", []string{"numpy==2.0"}, s)
+	s.SystemLibraries = nil
+	b, _ := Dockerfile("python", "python:3.14-slim", []string{"numpy==2.0"}, s)
+	if a != b {
+		t.Error("a Python image takes no system library")
+	}
+}
+
 // A managed Python image: the recipe's packages only, wheels without their dependencies, then pip check.
 func TestAManagedPythonImage(t *testing.T) {
 	d, err := Dockerfile("python", "python:3.14-slim", []string{"numpy==2.5.5", "pyarrow==26.0.1"}, Settings{Jobs: 2, Managed: true})
