@@ -3315,7 +3315,7 @@
         "learning_rate": "learning_rate",
         "max_depth": "depth_catboost",
         "subsample": "fraction",
-        "l2_leaf_reg": "nonnegative",
+        "l2_leaf_reg": "positive",
         "rsm": "fraction",
         "random_strength": "strength",
         "seed": "seed",

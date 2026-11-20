@@ -738,7 +738,7 @@ MODELS["xgboost"] = _boosting(
     {"min_child_weight": 1.0, "colsample_bytree": 0.8, "reg_lambda": 1.0, "reg_alpha": 0.0, "gamma": 0.0},
     "depth_xgboost")
 MODELS["catboost"] = _boosting(
-    {"l2_leaf_reg": "nonnegative", "rsm": "fraction", "random_strength": "strength"},
+    {"l2_leaf_reg": "positive", "rsm": "fraction", "random_strength": "strength"},
     {"l2_leaf_reg": 3.0, "rsm": 1.0, "random_strength": 1.0},
     "depth_catboost")
 

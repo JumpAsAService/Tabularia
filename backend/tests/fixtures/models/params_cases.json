@@ -1503,6 +1503,19 @@
    "error": "xgboost: 'learning_rate' must be a number above 0 and at most 1"
   },
   {
+   "what": "CatBoost's l2_leaf_reg is above 0: with 0 it fails on a multiclass fit",
+   "model": "catboost",
+   "params": {
+    "task": "regression",
+    "outcome": "boxes",
+    "predictors": [
+     "price"
+    ],
+    "l2_leaf_reg": 0
+   },
+   "error": "catboost: 'l2_leaf_reg' must be a number above 0"
+  },
+  {
    "what": "the time and the outcome are not one column",
    "model": "xgboost",
    "params": {
