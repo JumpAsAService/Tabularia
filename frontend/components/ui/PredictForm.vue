@@ -17,7 +17,7 @@ import { useFormat } from '~/composables/useFormat'
 import { useModelGroups, type MlflowExperiment, type MlflowVersion } from '~/composables/useModelGroups'
 import { vDraft } from '~/composables/draftField'
 import {
-  MODEL_RETRIES_MAX, MODEL_TIMEOUT_MIN, MODEL_TIMEOUT_SECONDS, modelNumber, modelNumberProblem, predictColumns,
+  MODEL_RETRIES_MAX, MODEL_TIMEOUT_MIN, versionHeld, MODEL_TIMEOUT_SECONDS, modelNumber, modelNumberProblem, predictColumns,
   predictFields, predictParams, type ModelField, type ModelOff,
 } from '~/composables/modelCatalog'
 
@@ -131,9 +131,11 @@ function pickVersion(value: unknown) {
   emit('update', { registeredModel, version, params: {} })
 }
 // the model the version holds decides which options there are
-const kind = computed(() => versions.value.find((v) => v.model === props.data?.registeredModel)?.kind ?? null)
+// (the version the node holds, or the newest one for «latest»: not the first the server lists)
+const held = computed(() => versionHeld(versions.value, props.data?.registeredModel, props.data?.version))
+const kind = computed(() => held.value?.kind ?? versions.value.find((v) => v.model === props.data?.registeredModel)?.kind ?? null)
 // the variant of the version (the tag tabularia.variant): the boosting models' options depend on it
-const variant = computed(() => versions.value.find((v) => v.model === props.data?.registeredModel)?.variant ?? null)
+const variant = computed(() => held.value?.variant ?? null)
 
 // ── the options of that model ────────────────────────────────────────────────
 const fields = computed<ModelField[]>(() => predictFields(kind.value, undefined, variant.value))

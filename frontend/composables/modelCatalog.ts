@@ -663,6 +663,16 @@ export function modelWordKeys(catalog: ModelCatalog = MODEL_CATALOG): string[] {
 
 // ── Predict ──────────────────────────────────────────────────────────────────
 
+/** The version of a registered model a Predict node means: the one it names, or, for «latest», the
+ *  newest one (the highest number). Its kind and its variant (the tag tabularia.variant) are the
+ *  ones the form draws: two versions of a model may differ (v1 regression, v2 binary). */
+export function versionHeld<V extends { model: string; version: string }>(versions: readonly V[], registeredModel: string | null | undefined, version: string | null | undefined): V | null {
+  const ofModel = versions.filter((v) => v.model === registeredModel)
+  if (version && version !== 'latest') return ofModel.find((v) => v.version === version) ?? null
+  const number = (v: V) => Number(v.version)
+  return ofModel.reduce<V | null>((best, v) => (best === null || number(v) > number(best) ? v : best), null)
+}
+
 /** What a model's Predict options are: the keys of `predict.takes` that apply to a model of the
  *  catalogue, with their kinds. */
 export function predictFields(modelId: string | null | undefined, catalog: ModelCatalog = MODEL_CATALOG,

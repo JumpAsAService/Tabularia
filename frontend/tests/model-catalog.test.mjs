@@ -455,6 +455,28 @@ test('Predict: the options of the model the version holds, and the columns it ad
   assert.deepEqual(m.predictColumns('catboost', {}, undefined, 'binary'), ['prediction', 'prediction_class'])
 })
 
+// the Predict form takes the variant of the version the node holds, not of the first one listed
+test('the version a Predict node means decides its kind and its variant', () => {
+  const list = [
+    { model: 'churn', version: '1', kind: 'xgboost', variant: 'regression' },
+    { model: 'churn', version: '2', kind: 'xgboost', variant: 'binary' },
+    { model: 'churn', version: '10', kind: 'xgboost', variant: 'multiclass' },
+    { model: 'other', version: '5', kind: 'logistic', variant: null },
+  ]
+  assert.equal(m.versionHeld(list, 'churn', '1').variant, 'regression') // a number: that one, not the newest
+  assert.equal(m.versionHeld(list, 'churn', '2').variant, 'binary')
+  assert.equal(m.versionHeld(list, 'churn', 'latest').version, '10') // 10 is newer than 2 (a number, not a text)
+  assert.equal(m.versionHeld(list.slice().reverse(), 'churn', 'latest').variant, 'multiclass') // whatever the order
+  assert.equal(m.versionHeld(list, 'churn', '7'), null)
+  assert.equal(m.versionHeld(list, 'nope', 'latest'), null)
+  // v1 regression, v2 binary, the node on v1: no threshold; on v2: the threshold
+  const keys = (version) => m.predictFields('xgboost', undefined, m.versionHeld(list, 'churn', version)?.variant).map((f) => f.key)
+  assert.deepEqual(keys('1'), [])
+  assert.deepEqual(keys('2'), ['threshold'])
+  // and the form reads it from there
+  assert.match(read('../components/ui/PredictForm.vue'), /versionHeld\(versions\.value, props\.data\?\.registeredModel, props\.data\?\.version\)/)
+})
+
 // ── what is drawn ────────────────────────────────────────────────────────────
 
 /** A component of the app, compiled (script and template together) and imported. */
