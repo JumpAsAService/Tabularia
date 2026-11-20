@@ -3,6 +3,7 @@ package modelcatalog
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"reflect"
 	"strings"
@@ -165,5 +166,141 @@ func TestColumnsAreWhatTheModelReads(t *testing.T) {
 	}
 	if Columns("nope", nil) != nil {
 		t.Error("no model, no columns")
+	}
+}
+
+// The check is idempotent: what it answers, given back, is answered again as it is, in the shape
+// and in the values (an ARIMA was once refused for its own default). The same test is in the
+// engine (backend/tests/test_models_catalog.py), the form (frontend/tests) and the assistant.
+
+func asJSON(t *testing.T, v any) string {
+	t.Helper()
+	b, err := json.Marshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+func checkTwice(t *testing.T, what, model string, params map[string]any) {
+	t.Helper()
+	first, err := Check(model, params)
+	if err != nil {
+		return // a combination the check refuses: nothing to repeat
+	}
+	second, err := Check(model, first)
+	if err != nil {
+		t.Errorf("%s: %s refuses its own answer: %v\n answer %s", what, model, err, asJSON(t, first))
+		return
+	}
+	if a, b := asJSON(t, first), asJSON(t, second); a != b {
+		t.Errorf("%s: %s: checking twice changes the answer:\n once  %s\n twice %s", what, model, a, b)
+	}
+}
+
+// sampleParams are the parameters a model needs, with a column or a level each.
+func sampleParams(m *Model) map[string]any {
+	p := map[string]any{}
+	for i, k := range m.Keys {
+		if !m.Needs[k] {
+			continue
+		}
+		kind := data.kinds[m.KindOf[k]]
+		switch kind.Control {
+		case "column":
+			p[k] = fmt.Sprintf("col%d", i)
+		case "columns":
+			p[k] = []any{fmt.Sprintf("col%d", i)}
+		case "level":
+			p[k] = "yes"
+		case "choice":
+			p[k] = kind.Choices[0]
+		}
+	}
+	return p
+}
+
+func TestCheckingTwiceIsCheckingOnce(t *testing.T) {
+	for _, id := range Models() {
+		m := data.byID[id]
+		base := sampleParams(m)
+		checkTwice(t, "the defaults", id, base)
+		// every choice of every choosing key, alone and two by two: the variants
+		type pick struct {
+			key string
+			val any
+		}
+		var picks []pick
+		for _, k := range m.Keys {
+			if kind := data.kinds[m.KindOf[k]]; kind.Control == "choice" && !m.Needs[k] {
+				for _, c := range kind.Choices {
+					picks = append(picks, pick{k, c})
+				}
+			}
+			if data.kinds[m.KindOf[k]].Control == "boolean" {
+				picks = append(picks, pick{k, true}, pick{k, false})
+			}
+		}
+		with := func(ps ...pick) map[string]any {
+			out := map[string]any{}
+			for k, v := range base {
+				out[k] = v
+			}
+			for _, p := range ps {
+				out[p.key] = p.val
+			}
+			return out
+		}
+		for i, a := range picks {
+			checkTwice(t, fmt.Sprintf("%s=%v", a.key, a.val), id, with(a))
+			for _, b := range picks[i+1:] {
+				if a.key != b.key {
+					checkTwice(t, fmt.Sprintf("%s=%v %s=%v", a.key, a.val, b.key, b.val), id, with(a, b))
+				}
+			}
+		}
+	}
+}
+
+func TestEverySharedCaseThatPassesIsItsOwnAnswerToo(t *testing.T) {
+	b, err := os.ReadFile("../../../backend/tests/fixtures/models/params_cases.json")
+	if err != nil {
+		t.Skip("the engine's sources are not beside the gateway's: ", err)
+	}
+	var file struct {
+		Cases []struct {
+			What    string         `json:"what"`
+			Model   string         `json:"model"`
+			Params  map[string]any `json:"params"`
+			Checked map[string]any `json:"checked"`
+		} `json:"cases"`
+	}
+	if err := json.Unmarshal(b, &file); err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	for _, c := range file.Cases {
+		if c.Checked == nil {
+			continue
+		}
+		n++
+		checkTwice(t, c.What, c.Model, c.Params)
+		again, err := Check(c.Model, c.Checked)
+		if err != nil || asJSON(t, again) != asJSON(t, c.Checked) {
+			t.Errorf("%s: the shared answer given back: %v\n got  %s\n want %s", c.What, err, asJSON(t, again), asJSON(t, c.Checked))
+		}
+	}
+	if n < 15 {
+		t.Errorf("only %d cases that pass", n)
+	}
+}
+
+func TestAnEmptyListOfColumnsStaysAnEmptyList(t *testing.T) {
+	got, err := Check("arima", map[string]any{"time": "t", "value": "v", "frequency": "month", "exog": []any{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if enc := asJSON(t, got["exog"]); enc != "[]" {
+		t.Errorf("exog: %s, want []", enc)
 	}
 }

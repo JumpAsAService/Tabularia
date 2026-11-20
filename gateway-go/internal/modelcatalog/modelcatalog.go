@@ -538,7 +538,7 @@ func readValue(model, key string, k Kind, v any) (any, error) {
 		if k.Max != nil && float64(len(list)) > *k.Max {
 			return nil, refuse(model, "'%s' may name at most %s columns", key, num(*k.Max))
 		}
-		return append([]any(nil), list...), nil
+		return append(make([]any, 0, len(list)), list...), nil
 	case "level":
 		return readLevel(model, key, v)
 	case "reference":
