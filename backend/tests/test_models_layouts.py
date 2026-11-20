@@ -457,6 +457,8 @@ def test_a_boosting_advice_and_note_are_said_in_the_page_language_whatever_the_r
     assert advised("beats_baseline", "beats_baseline", "fr").startswith("Le modèle ne prédit pas")
     # a check not computed for one of several reasons: the words of that reason
     assert advised("importance_stability", "importance_few_predictors", "it", "not_computed") == "Non calcolato: servono almeno 3 predittori."
+    assert advised("overfitting", "overfitting_kept_best", "it", "not_computed").startswith(
+        "Non calcolato: l'arresto anticipato sulla perdita tiene l'albero con la perdita in validazione più bassa")
     assert advised("calibration_slope", "slope_separated", "es", "not_computed").startswith("No calculado: la regresión logística")
 
 
@@ -473,6 +475,10 @@ def test_what_a_boosting_check_reads_follows_the_nodes_settings():
     assert h0(params, "beats_baseline", "en") == "1 − validation loss / the baseline's"
     assert h0({**params, "class_weight": "balanced"}, "beats_baseline", "it").startswith(
         "1 − perdita in validazione / quella del riferimento, entrambe pesate come l'adattamento")
+    # early stopping on the loss keeps the best tree: overfitting then reads the validation loss over the training loss
+    assert h0(params, "overfitting", "en").startswith("the validation loss over the training loss at the tree kept")
+    for other in ({"stop_metric": "auc"}, {"early_stopping": False}):
+        assert h0({**params, **other}, "overfitting", "en").startswith("the share of the validation gain"), other
     assert common.by_params({"a=1&b=true": "both", "b=false": "not b", "": "else"}, {"a": 1, "b": True}) == "both"
     assert common.by_params({"a=1&b=true": "both", "b=false": "not b", "": "else"}, {"a": 2, "b": False}) == "not b"
     assert common.by_params({"a=1": "a", "": "else"}, {}) == "else" and common.by_params("plain", {}) == "plain"

@@ -230,9 +230,16 @@
    },
    "overfitting": {
     "name": "Overfitting",
-    "h0": "the share of the validation gain over the baseline given back between the best tree and the tree kept",
+    "h0": {
+     "early_stopping=true&stop_metric=loss": "the validation loss over the training loss at the tree kept, for information (early stopping on the loss keeps the tree of the lowest validation loss: nothing is given back by construction)",
+     "": "the share of the validation gain over the baseline given back between the best tree and the tree kept"
+    },
     "advice": "The validation loss of the tree kept is worse than at the best tree before it: the trees after it learn the training rows, not the pattern. Turn early stopping on with stop_metric = loss, or lower max_trees, max_depth or learning_rate.",
-    "not_computed": "Not computed: the validation loss never goes below the baseline's, so there is no gain to give back."
+    "not_computed": {
+     "overfitting_kept_best": "Not computed: early stopping on the loss keeps the tree of the lowest validation loss, so it gives nothing back by construction. The value is the validation loss over the training loss at that tree, for information: far above 1, the trees learned the training rows much better than the pattern (compare the learning curves and the table «Training and validation»).",
+     "overfitting_no_gain": "Not computed: the validation loss never goes below the baseline's, so there is no gain to give back.",
+     "": "Not computed: the validation loss never goes below the baseline's, so there is no gain to give back."
+    }
    },
    "trees_limit": {
     "name": "Number of trees",
@@ -247,9 +254,9 @@
     }
    },
    "importance_stability": {
-    "name": "Stability of the importance",
-    "h0": "Spearman's ρ between the importance in the training and in the validation part",
-    "advice": "The model leans on different predictors in the two parts: the ranking is not reliable; use more rows, or fewer correlated predictors.",
+    "name": "Same importance in both parts",
+    "h0": "Spearman's ρ between the mean |SHAP| on the training and on the validation rows: whether the predictors weigh the same on rows the model did not learn. A shift between the parts (later rows, other groups) shows here; it does not say that another sample would rank them the same.",
+    "advice": "The predictors weigh differently on the validation rows than on the training rows: the two parts differ (later rows, other groups, a drift). Read the validation numbers with care, and look at what changes between the parts.",
     "not_computed": {
      "importance_few_predictors": "Not computed: it needs at least 3 predictors.",
      "importance_few_rows": "Not computed: it needs 50 validation rows in the SHAP sample; add rows, or raise validation_share.",
@@ -527,9 +534,16 @@
    },
    "overfitting": {
     "name": "Sovradattamento",
-    "h0": "la quota del guadagno in validazione sul riferimento restituita tra l'albero migliore e quello tenuto",
+    "h0": {
+     "early_stopping=true&stop_metric=loss": "la perdita in validazione su quella in addestramento all'albero tenuto, come informazione (l'arresto anticipato sulla perdita tiene l'albero con la perdita in validazione più bassa: per costruzione non si restituisce nulla)",
+     "": "la quota del guadagno in validazione sul riferimento restituita tra l'albero migliore e quello tenuto"
+    },
     "advice": "La perdita in validazione dell'albero tenuto è peggiore di quella dell'albero migliore prima di esso: gli alberi successivi imparano le righe di addestramento, non lo schema. Attivate l'arresto anticipato con stop_metric = loss, oppure abbassate max_trees, max_depth o learning_rate.",
-    "not_computed": "Non calcolato: la perdita in validazione non scende mai sotto quella del riferimento, quindi non c'è guadagno da restituire."
+    "not_computed": {
+     "overfitting_kept_best": "Non calcolato: l'arresto anticipato sulla perdita tiene l'albero con la perdita in validazione più bassa, quindi per costruzione non restituisce nulla. Il valore è la perdita in validazione su quella in addestramento a quell'albero, come informazione: molto sopra 1, gli alberi hanno imparato le righe di addestramento molto meglio dell'andamento (confrontate le curve di apprendimento e la tabella «Addestramento e validazione»).",
+     "overfitting_no_gain": "Non calcolato: la perdita in validazione non scende mai sotto quella del riferimento, quindi non c'è guadagno da restituire.",
+     "": "Non calcolato: la perdita in validazione non scende mai sotto quella del riferimento, quindi non c'è guadagno da restituire."
+    }
    },
    "trees_limit": {
     "name": "Numero di alberi",
@@ -544,9 +558,9 @@
     }
    },
    "importance_stability": {
-    "name": "Stabilità dell'importanza",
-    "h0": "ρ di Spearman tra l'importanza nella parte di addestramento e in quella di validazione",
-    "advice": "Il modello si appoggia a predittori diversi nelle due parti: la graduatoria non è affidabile; servono più righe o meno predittori correlati.",
+    "name": "Stessa importanza nelle due parti",
+    "h0": "ρ di Spearman tra la media di |SHAP| sulle righe di addestramento e su quelle di validazione: se i predittori pesano allo stesso modo sulle righe che il modello non ha imparato. Uno spostamento tra le parti (righe più recenti, altri gruppi) si vede qui; non dice che un altro campione li ordinerebbe allo stesso modo.",
+    "advice": "I predittori pesano in modo diverso sulle righe di validazione e su quelle di addestramento: le due parti differiscono (righe più recenti, altri gruppi, una deriva). Leggete con cautela i numeri della validazione, e guardate cosa cambia tra le parti.",
     "not_computed": {
      "importance_few_predictors": "Non calcolato: servono almeno 3 predittori.",
      "importance_few_rows": "Non calcolato: servono 50 righe di validazione nel campione SHAP; aggiungete righe o aumentate validation_share.",
@@ -824,9 +838,16 @@
    },
    "overfitting": {
     "name": "Überanpassung",
-    "h0": "der Anteil des Validierungsgewinns gegenüber der Referenz, der zwischen dem besten und dem behaltenen Baum verloren geht",
+    "h0": {
+     "early_stopping=true&stop_metric=loss": "der Validierungsverlust geteilt durch den Trainingsverlust beim behaltenen Baum, zur Information (vorzeitiges Stoppen auf dem Verlust behält den Baum mit dem niedrigsten Validierungsverlust: es geht konstruktionsbedingt nichts verloren)",
+     "": "der Anteil des Validierungsgewinns gegenüber der Referenz, der zwischen dem besten und dem behaltenen Baum verloren geht"
+    },
     "advice": "Der Validierungsverlust des behaltenen Baums ist schlechter als beim besten Baum davor: die Bäume danach lernen die Trainingszeilen, nicht das Muster. Schalten Sie das vorzeitige Stoppen mit stop_metric = loss ein oder senken Sie max_trees, max_depth oder learning_rate.",
-    "not_computed": "Nicht berechnet: der Validierungsverlust fällt nie unter den der Referenz, es gibt also keinen Gewinn, der verloren gehen könnte."
+    "not_computed": {
+     "overfitting_kept_best": "Nicht berechnet: vorzeitiges Stoppen auf dem Verlust behält den Baum mit dem niedrigsten Validierungsverlust, es geht also konstruktionsbedingt nichts verloren. Der Wert ist der Validierungsverlust geteilt durch den Trainingsverlust bei diesem Baum, zur Information: weit über 1 haben die Bäume die Trainingszeilen viel besser gelernt als das Muster (vergleichen Sie die Lernkurven und die Tabelle «Training und Validierung»).",
+     "overfitting_no_gain": "Nicht berechnet: der Validierungsverlust fällt nie unter den der Referenz, es gibt also keinen Gewinn, der verloren gehen könnte.",
+     "": "Nicht berechnet: der Validierungsverlust fällt nie unter den der Referenz, es gibt also keinen Gewinn, der verloren gehen könnte."
+    }
    },
    "trees_limit": {
     "name": "Anzahl der Bäume",
@@ -841,9 +862,9 @@
     }
    },
    "importance_stability": {
-    "name": "Stabilität der Wichtigkeit",
-    "h0": "Spearmans ρ zwischen der Wichtigkeit im Trainings- und im Validierungsteil",
-    "advice": "Das Modell stützt sich in den beiden Teilen auf verschiedene Prädiktoren: die Rangfolge ist nicht verlässlich; mehr Zeilen oder weniger korrelierte Prädiktoren.",
+    "name": "Gleiche Wichtigkeit in beiden Teilen",
+    "h0": "Spearmans ρ zwischen dem mittleren |SHAP| auf den Trainings- und auf den Validierungszeilen: ob die Prädiktoren auf Zeilen, die das Modell nicht gelernt hat, gleich wiegen. Eine Verschiebung zwischen den Teilen (spätere Zeilen, andere Gruppen) zeigt sich hier; es sagt nicht, dass eine andere Stichprobe sie gleich ordnen würde.",
+    "advice": "Die Prädiktoren wiegen auf den Validierungszeilen anders als auf den Trainingszeilen: die beiden Teile unterscheiden sich (spätere Zeilen, andere Gruppen, eine Drift). Lesen Sie die Validierungszahlen mit Vorsicht, und sehen Sie nach, was sich zwischen den Teilen ändert.",
     "not_computed": {
      "importance_few_predictors": "Nicht berechnet: es braucht mindestens 3 Prädiktoren.",
      "importance_few_rows": "Nicht berechnet: es braucht 50 Validierungszeilen in der SHAP-Stichprobe; fügen Sie Zeilen hinzu oder erhöhen Sie validation_share.",
@@ -1121,9 +1142,16 @@
    },
    "overfitting": {
     "name": "Sobreajuste",
-    "h0": "la parte de la ganancia en validación sobre la referencia que se devuelve entre el mejor árbol y el conservado",
+    "h0": {
+     "early_stopping=true&stop_metric=loss": "la pérdida de validación sobre la de entrenamiento en el árbol conservado, como información (la parada temprana sobre la pérdida conserva el árbol de menor pérdida de validación: por construcción no se devuelve nada)",
+     "": "la parte de la ganancia en validación sobre la referencia que se devuelve entre el mejor árbol y el conservado"
+    },
     "advice": "La pérdida de validación del árbol conservado es peor que la del mejor árbol anterior: los árboles siguientes aprenden las filas de entrenamiento, no el patrón. Active la parada temprana con stop_metric = loss, o baje max_trees, max_depth o learning_rate.",
-    "not_computed": "No calculado: la pérdida de validación nunca baja de la de la referencia, así que no hay ganancia que devolver."
+    "not_computed": {
+     "overfitting_kept_best": "No calculado: la parada temprana sobre la pérdida conserva el árbol de menor pérdida de validación, así que por construcción no devuelve nada. El valor es la pérdida de validación sobre la de entrenamiento en ese árbol, como información: muy por encima de 1, los árboles aprendieron las filas de entrenamiento mucho mejor que el patrón (compare las curvas de aprendizaje y la tabla «Entrenamiento y validación»).",
+     "overfitting_no_gain": "No calculado: la pérdida de validación nunca baja de la de la referencia, así que no hay ganancia que devolver.",
+     "": "No calculado: la pérdida de validación nunca baja de la de la referencia, así que no hay ganancia que devolver."
+    }
    },
    "trees_limit": {
     "name": "Número de árboles",
@@ -1138,9 +1166,9 @@
     }
    },
    "importance_stability": {
-    "name": "Estabilidad de la importancia",
-    "h0": "ρ de Spearman entre la importancia en la parte de entrenamiento y en la de validación",
-    "advice": "El modelo se apoya en predictores distintos en las dos partes: la clasificación no es fiable; más filas, o menos predictores correlacionados.",
+    "name": "Misma importancia en las dos partes",
+    "h0": "ρ de Spearman entre la media de |SHAP| en las filas de entrenamiento y en las de validación: si los predictores pesan lo mismo en filas que el modelo no aprendió. Un desplazamiento entre las partes (filas más recientes, otros grupos) se ve aquí; no dice que otra muestra los ordenaría igual.",
+    "advice": "Los predictores pesan distinto en las filas de validación que en las de entrenamiento: las dos partes difieren (filas más recientes, otros grupos, una deriva). Lea con cuidado los números de validación, y mire qué cambia entre las partes.",
     "not_computed": {
      "importance_few_predictors": "No calculado: necesita al menos 3 predictores.",
      "importance_few_rows": "No calculado: necesita 50 filas de validación en la muestra SHAP; añada filas o suba validation_share.",
@@ -1418,9 +1446,16 @@
    },
    "overfitting": {
     "name": "Surapprentissage",
-    "h0": "la part du gain de validation sur la référence rendue entre le meilleur arbre et l'arbre conservé",
+    "h0": {
+     "early_stopping=true&stop_metric=loss": "la perte de validation sur la perte d'entraînement à l'arbre conservé, pour information (l'arrêt anticipé sur la perte conserve l'arbre de plus faible perte de validation : par construction rien n'est rendu)",
+     "": "la part du gain de validation sur la référence rendue entre le meilleur arbre et l'arbre conservé"
+    },
     "advice": "La perte de validation de l'arbre conservé est moins bonne qu'au meilleur arbre avant lui : les arbres suivants apprennent les lignes d'entraînement, pas la structure. Activez l'arrêt anticipé avec stop_metric = loss, ou baissez max_trees, max_depth ou learning_rate.",
-    "not_computed": "Non calculé : la perte de validation ne descend jamais sous celle de la référence, il n'y a donc pas de gain à rendre."
+    "not_computed": {
+     "overfitting_kept_best": "Non calculé : l'arrêt anticipé sur la perte conserve l'arbre de plus faible perte de validation, il ne rend donc rien par construction. La valeur est la perte de validation sur la perte d'entraînement à cet arbre, pour information : très au-dessus de 1, les arbres ont appris les lignes d'entraînement bien mieux que le motif (comparez les courbes d'apprentissage et le tableau «Entraînement et validation»).",
+     "overfitting_no_gain": "Non calculé : la perte de validation ne descend jamais sous celle de la référence, il n'y a donc pas de gain à rendre.",
+     "": "Non calculé : la perte de validation ne descend jamais sous celle de la référence, il n'y a donc pas de gain à rendre."
+    }
    },
    "trees_limit": {
     "name": "Nombre d'arbres",
@@ -1435,9 +1470,9 @@
     }
    },
    "importance_stability": {
-    "name": "Stabilité de l'importance",
-    "h0": "ρ de Spearman entre l'importance dans la partie d'entraînement et celle de validation",
-    "advice": "Le modèle s'appuie sur des prédicteurs différents dans les deux parties : le classement n'est pas fiable ; plus de lignes, ou moins de prédicteurs corrélés.",
+    "name": "Même importance dans les deux parties",
+    "h0": "ρ de Spearman entre la moyenne de |SHAP| sur les lignes d'entraînement et sur celles de validation : si les prédicteurs pèsent autant sur des lignes que le modèle n'a pas apprises. Un décalage entre les parties (lignes plus récentes, autres groupes) se voit ici ; il ne dit pas qu'un autre échantillon les classerait de même.",
+    "advice": "Les prédicteurs pèsent autrement sur les lignes de validation que sur celles d'entraînement : les deux parties diffèrent (lignes plus récentes, autres groupes, une dérive). Lisez avec prudence les chiffres de validation, et regardez ce qui change entre les parties.",
     "not_computed": {
      "importance_few_predictors": "Non calculé : il faut au moins 3 prédicteurs.",
      "importance_few_rows": "Non calculé : il faut 50 lignes de validation dans l'échantillon SHAP ; ajoutez des lignes ou relevez validation_share.",

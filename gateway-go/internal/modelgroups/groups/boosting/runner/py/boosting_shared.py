@@ -730,6 +730,8 @@ ADVICE = {
                    "the training rows, not the pattern; turn early stopping on with stop_metric = loss, or lower max_trees, "
                    "max_depth or learning_rate",
     "overfitting_no_gain": "the validation loss never goes below the baseline's, so there is no gain to give back",
+    "overfitting_kept_best": "early stopping on the loss keeps the tree of the lowest validation loss, so it gives nothing back "
+                             "by construction; the value is the validation loss over the training loss there, for information",
     "trees_more": "the validation loss was still falling at the last tree: raise max_trees or learning_rate",
     "trees_few": "stopped after very few trees: lower learning_rate",
     "stop_on_loss": "early stopping on a metric that is not the loss (auc, error, mae) stopped while the validation loss still "
@@ -747,8 +749,8 @@ ADVICE = {
                             "cannot be read; raise validation_share, or add rows",
     "calibration_slope": "below 1: the probabilities are too extreme (overfitting); above 1: too timid",
     "slope_separated": "the logistic regression on logit(p) does not converge: the validation part is separated",
-    "importance_stability": "the model leans on different predictors in the two parts: the ranking is not reliable; more "
-                            "rows, or fewer correlated predictors",
+    "importance_stability": "the predictors weigh differently on the validation rows than on the training rows: the two "
+                            "parts differ (later rows, other groups, a drift); read the validation numbers with care",
     "importance_few_predictors": "fewer than 3 predictors: there is no ranking to compare",
     "importance_few_rows": "fewer than 50 validation rows in the SHAP sample: add rows, or raise validation_share",
     "importance_flat": "the importance does not vary between the predictors",
@@ -766,12 +768,16 @@ H0 = {
     "beats_baseline_balanced": "1 − validation loss / the baseline's, both weighted as the fit (class_weight = balanced: each "
                                "class the same)",
     "overfitting": "the share of the validation gain over the baseline given back between the best tree and the tree kept",
+    "overfitting_kept_best": "the validation loss over the training loss at the tree kept, for information (early stopping on "
+                             "the loss keeps the tree of the lowest validation loss: nothing is given back by construction)",
     "trees_limit": "whether early stopping stopped, and the trees kept",
     "trees_limit_no_stop": "how much worse the validation loss is at the last tree than at the best",
     "class_imbalance": "the largest class share over the smallest",
     "calibration": "the expected calibration error, against the one well calibrated probabilities reach with these rows",
     "calibration_slope": "the slope of a logistic regression on logit(p), read with its 95 % interval",
-    "importance_stability": "Spearman's ρ of the importance in the two parts",
+    "importance_stability": "Spearman's ρ between the mean |SHAP| on the training and on the validation rows: whether the "
+                            "predictors weigh the same on rows the model did not learn (a shift between the parts shows here; "
+                            "it does not say that another sample would rank them the same)",
     "zero_importance": "the predictors no split uses",
     "leakage": "the first predictor's share of |SHAP| (with one predictor: the validation fit), and how nearly perfect the "
                "validation fit is",
@@ -820,12 +826,17 @@ def check_beats_baseline(loss_valid: float, base_valid: float, balanced: bool = 
     return _check("beats_baseline", verdict, u, 0.05, "beats_baseline_balanced" if balanced else "beats_baseline", h0=h0)
 
 
-def check_overfitting(curve: list[float] | np.ndarray, kept: int, base_valid: float) -> dict[str, Any]:
+def check_overfitting(curve: list[float] | np.ndarray, kept: int, base_valid: float, kept_is_best: bool = False,
+                      gap: float = math.nan) -> dict[str, Any]:
     """r = (L_kept − L_best) / (B − L_best) on the validation loss curve, L_best its lowest value up
     to the tree kept, B the baseline's loss: the share of the gain over the baseline that the trees
-    after the best give back. 0 when the tree kept is the best (early stopping on the loss); it
-    grows when the trees go on learning the training rows while the validation gets worse. The
-    training loss is not read: deep trees bring it near 0 by construction."""
+    after the best give back; it grows when the trees go on learning the training rows while the
+    validation gets worse. The training loss is not read: deep trees bring it near 0 by
+    construction. With early stopping on the loss the tree kept is the lowest by construction and r
+    is always 0 (`kept_is_best`): not computed, never «ok» for nothing, with `gap` (the validation
+    loss over the training loss at the tree kept) as the value, for information."""
+    if kept_is_best:
+        return _check("overfitting", "not_computed", gap, advice="overfitting_kept_best", h0=H0["overfitting_kept_best"])
     c = np.asarray(curve, dtype=float)[: kept + 1]
     if not len(c) or not np.isfinite(c).all() or not math.isfinite(base_valid):
         return _check("overfitting", "not_computed", advice="overfitting_no_gain")
@@ -1230,7 +1241,11 @@ def finish(task: dict[str, Any], prepared: Prepared, fitted: Fitted) -> dict[str
     L_va, B_va = loss
     checks.append(check_beats_baseline(L_va, B_va, balanced))
     curve = _loss_curve(fitted)
-    checks.append(check_overfitting(curve, fitted.best_iteration, B_va))
+    kept_is_best = bool(p.get("early_stopping", True)) and fitted.stop_metric_name == fitted.loss_metric_name
+    loss_train = {"regression": "train_rmse", "binary": "train_logloss", "multiclass": "train_mlogloss"}[what]
+    loss_valid = {"regression": "validation_rmse", "binary": "validation_logloss", "multiclass": "validation_mlogloss"}[what]
+    gap = m[loss_valid] / m[loss_train] if m[loss_train] > 0 else math.nan
+    checks.append(check_overfitting(curve, fitted.best_iteration, B_va, kept_is_best, gap))
     last, best = (curve[-1], min(curve)) if curve else (math.nan, math.nan)
     on_noise = fitted.stop_metric_name != fitted.loss_metric_name and stopped_on_noise(curve, fitted.best_iteration + 1, B_va)
     checks.append(check_trees_limit(bool(p.get("early_stopping", True)), fitted.stopped_early, fitted.stopped_by_time,
@@ -1546,6 +1561,9 @@ def _test_checks(code: Any) -> None:
     _expect(abs(check_overfitting(up(0.2), 3, 1.0)["value"] - 0.2) < 1e-12, "overfitting's share given back")
     _expect(v(check_overfitting([1.2, 0.5, 0.9], 1, 1.0)) == "ok", "overfitting reads the curve up to the tree kept")
     _expect(v(check_overfitting([1.2, 1.1, 1.3], 2, 1.0)) == "not_computed", "overfitting without a validation gain")
+    best = check_overfitting(up(0.0), 3, 1.0, kept_is_best=True, gap=28.6)
+    _expect(best["verdict"] == "not_computed" and best["value"] == 28.6 and best["advice_id"] == "overfitting_kept_best"
+            and best["h0"] == H0["overfitting_kept_best"], f"overfitting with early stopping on the loss: {best}")
     trees = [v(check_trees_limit(True, True, False, 20, 0, 0, 0.1)), v(check_trees_limit(True, True, False, 19, 0, 0, 0.1)),
              v(check_trees_limit(True, False, False, 500, 0, 0)), v(check_trees_limit(True, True, True, 500, 0, 0)),
              v(check_trees_limit(False, False, False, 1000, 1.005, 1.0)), v(check_trees_limit(False, False, False, 1000, 1.0101, 1.0))]

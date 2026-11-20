@@ -480,6 +480,7 @@ def case_values(case: dict[str, Any], fit_with: Any) -> list[dict[str, Any]]:
         num("model|||baseline_rmse", b_va)
         num("model|||validation_mean", wavg(y[va], w[va]))
         L_va, B_va = math.sqrt(wavg(r["validation"] ** 2, w[va])), b_va
+        gap = L_va / math.sqrt(wavg(r["train"] ** 2, w[tr]))  # the table's losses, validation over training
         metric = 1 - np.sum(w[va] * r["validation"] ** 2) / np.sum(w[va] * (y[va] - wavg(y[va], w[va])) ** 2)
         size, size_ok = len(va), (100, 30)
     elif what == "binary":
@@ -509,6 +510,7 @@ def case_values(case: dict[str, Any], fit_with: Any) -> list[dict[str, Any]]:
             for b, lb in enumerate(classes):
                 num(f"cell|{la}|{lb}|observed", float(w[va][(y[va] == a) & ((pr[va] >= thr) == bool(b))].sum()))
         L_va, B_va = ll(yf[va], pr[va], w[va]), ll(yf[va], np.full(len(va), prev), w[va])
+        gap = L_va / ll(yf[tr], pr[tr], w[tr])
         if p["class_weight"] == "balanced":  # the losses the fit weighs; the baseline their best constant
             L_va, B_va = ll(yf[va], pr[va], fw[va]), ll(yf[va], np.full(len(va), wavg(yf[tr], fw[tr])), fw[va])
         metric = auc_pairs(pr[va], y[va], w[va])
@@ -563,6 +565,7 @@ def case_values(case: dict[str, Any], fit_with: Any) -> list[dict[str, Any]]:
         num("model|||validation_macro_auc", float(np.mean(aucs)))
         num("model|||validation_macro_f1", float(np.mean(f1s)))
         L_va, B_va = mll(va, P[va]), mll(va, np.tile(sh_tr, (len(va), 1)))
+        gap = L_va / mll(tr, P[tr])
         if p["class_weight"] == "balanced":  # the losses the fit weighs; the baseline their best constant
             even = np.array([fw[tr][y[tr] == j].sum() for j in range(k)]) / fw[tr].sum()
             L_va, B_va = mll(va, P[va], fw), mll(va, np.tile(even, (len(va), 1)), fw)
@@ -591,7 +594,10 @@ def case_values(case: dict[str, Any], fit_with: Any) -> list[dict[str, Any]]:
     txt("assumption|beats_baseline||verdict", verdict(u, lambda x: x >= 0.05, lambda x: x > 0))
     vloss = f.vloss
     lowest = min(vloss[: best + 1])
-    if B_va - lowest > 0:  # the share of the validation gain given back between the best tree and the tree kept
+    if p["early_stopping"] and p["stop_metric"] == "loss":  # the tree kept is the lowest by construction: the gap, for information
+        num("assumption|overfitting||value", gap)
+        txt("assumption|overfitting||verdict", "not_computed")
+    elif B_va - lowest > 0:  # the share of the validation gain given back between the best tree and the tree kept
         r = max(0.0, (vloss[best] - lowest) / (B_va - lowest))
         num("assumption|overfitting||value", r, rel=1e-6)
         txt("assumption|overfitting||verdict", verdict(r, lambda x: x <= 0.05, lambda x: x <= 0.25))

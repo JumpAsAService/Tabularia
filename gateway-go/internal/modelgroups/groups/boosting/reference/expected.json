@@ -362,12 +362,11 @@
     },
     {
      "key": "assumption|overfitting||value",
-     "value": 0.0,
-     "rel": 1e-06
+     "value": 27.873623509750313
     },
     {
      "key": "assumption|overfitting||verdict",
-     "text": "ok"
+     "text": "not_computed"
     },
     {
      "key": "assumption|trees_limit||value",
@@ -2124,12 +2123,11 @@
     },
     {
      "key": "assumption|overfitting||value",
-     "value": 0.0,
-     "rel": 1e-06
+     "value": 2.2523179261192263
     },
     {
      "key": "assumption|overfitting||verdict",
-     "text": "ok"
+     "text": "not_computed"
     },
     {
      "key": "assumption|trees_limit||value",

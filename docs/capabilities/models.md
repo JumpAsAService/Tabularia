@@ -387,11 +387,11 @@ where to look, not that the model is wrong; each comes with advice. They look at
 |---|---|
 | `validation_size` | Whether the validation part has enough rows (the rarest class, for a classification) for its numbers to mean something |
 | `beats_baseline` | Whether the model predicts the validation part better than the plain average (or the class shares) |
-| `overfitting` | Whether the improvement over that baseline seen on the training part holds on the validation part |
+| `overfitting` | Which share of the validation gain over the baseline the trees after the best one give back. With early stopping on the loss the tree kept is the best by construction: the check is then *not computed*, and its value is the validation loss over the training loss, for information |
 | `trees_limit` | Whether early stopping stopped by itself, or the trees ran out, the time ran out or very few were kept |
 | `class_imbalance` | How uneven the classes are (classification) |
 | `calibration`, `calibration_slope` | Whether a binary model's probabilities match the rates observed, and whether they are too extreme or too timid |
-| `importance_stability` | Whether the importance ranking is the same on the training and the validation rows |
+| `importance_stability` | Whether the predictors weigh the same (mean \|SHAP\|) on the validation rows as on the training rows: a shift between the parts, such as later rows in a split in time, shows here. It does not say that another sample would rank them the same: on pure noise it is ok too |
 | `zero_importance` | The predictors no split uses |
 | `leakage` | Whether one predictor explains nearly everything, or the fit is nearly perfect: a sign that a column was computed from the outcome, or recorded after it |
 
