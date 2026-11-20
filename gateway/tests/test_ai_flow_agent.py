@@ -582,6 +582,98 @@ async def test_an_assistant_puts_a_binary_xgboost_on_the_draft_and_a_binary_with
     assert fake_engine.previews == []
 
 
+_SURVIVAL = {"time": "days", "event": "status", "event_value": "lost"}
+_CUSTOMER = {"customer": "customer_id", "frequency": "frequency", "recency": "recency", "age": "age", "time_unit": "week"}
+
+
+def test_the_parametric_survival_node_has_its_line_of_reference_and_the_prompt_says_when_to_choose_it_over_cox():
+    reference = ai_flow_agent.context(None, "en")
+    line = next(l for l in reference.splitlines() if l.startswith("- model_parametric_survival {time, event, event_value"))
+    assert "distribution?: weibull|exponential|lognormal|loglogistic|gengamma|gompertz|auto" in line
+    assert all(key in line for key in ("start?", "alive_at?", "aic_margin?: number", "quantiles?: [numbers]", "times?: [numbers]"))
+    assert "aic_margin only when distribution = auto" in reference
+    assert "choose it over model_cox when the person wants a time" in reference and "`distribution: auto`" in reference
+    assert "`alive_at` is how long each unit to be predicted has already lasted" in reference
+    assert "quantiles for model_parametric_survival; alive_at for model_parametric_survival" in reference
+    for given in ({}, {"distribution": "auto", "aic_margin": 0}, {"distribution": "gompertz", "predictors": ["load"], "strata": "line",
+                  "start": "entry", "alive_at": "age", "quantiles": [0.1, 0.9], "times": [30, 90], "output": "rows"}):
+        assert clean_params("model_parametric_survival", {**_SURVIVAL, **given}) == {**_SURVIVAL, **given}
+
+
+@pytest.mark.parametrize("params, message", [
+    ({}, "'event_value' is required"),
+    ({"aic_margin": 2}, "'aic_margin' only applies when distribution = auto"),
+    ({"distribution": "auto", "aic_margin": 20}, "'aic_margin' must be a number at least 0 and at most 10"),
+    ({"distribution": "gamma"}, "'distribution' must be one of weibull, exponential, lognormal, loglogistic, gengamma, gompertz, auto"),
+    ({"start": "days"}, "the column «days» is both 'time' and 'start': choose another"),
+    ({"quantiles": [0.5, 1.2]}, "'quantiles' must be a list of numbers, each above 0 and below 1"),
+    ({"reference": {"line": "A"}}, "'reference' only applies when 'predictors' is given"),
+])
+def test_a_parametric_survival_node_with_wrong_parameters_is_refused_with_what_to_fix(params, message):
+    given = {k: v for k, v in _SURVIVAL.items() if not (message.startswith("'event_value'") and k == "event_value")}
+    with pytest.raises(ModelRetry) as e:
+        clean_params("model_parametric_survival", {**given, **params})
+    assert message in str(e.value)
+
+
+@pytest.mark.parametrize("model_id, unit_key", [("clv", "time_unit"), ("bg_bb", "period_unit")])
+def test_the_customer_lifetime_nodes_have_their_line_of_reference_and_the_prompt_says_one_row_per_customer(model_id, unit_key):
+    reference = ai_flow_agent.context(None, "en")
+    line = next(l for l in reference.splitlines() if l.startswith(f"- model_{model_id} {{customer, frequency, recency"))
+    assert f"{unit_key}: day|week|month|quarter|year" in line and line.endswith("(customer_lifetime)")
+    assert ("purchase_model?: auto|pareto_nbd|bg_nbd|mbg_nbd" in line) == (model_id == "clv")
+    assert "one row per customer, never transactions" in reference and "the CLV is of revenue unless `margin` is set" in reference
+    assert "a probability from the model, not an observed churn" in reference
+    assert "horizon for model_arima, model_clv, model_bg_bb" in reference
+    key = "age" if model_id == "clv" else "opportunities"
+    given = {**{k: v for k, v in _CUSTOMER.items() if k not in ("age", "time_unit")}, key: "n", unit_key: "month"}
+    assert clean_params(f"model_{model_id}", given) == given
+    full = {**given, "spend": "avg_spend", "margin": 0.4, "discount_rate": 0.08, "horizon": 12, "holdout_transactions": "later",
+            "holdout_length": 6, "output": "results"}
+    assert clean_params(f"model_{model_id}", full) == full
+
+
+@pytest.mark.parametrize("operation, params, message", [
+    ("model_clv", {k: v for k, v in _CUSTOMER.items() if k != "time_unit"}, "'time_unit' is required"),
+    ("model_clv", {**_CUSTOMER, "holdout_transactions": "later"}, "the holdout's purchases need the holdout's length ('holdout_length')"),
+    ("model_clv", {**_CUSTOMER, "compare": True}, "'compare' only applies when purchase_model = pareto_nbd or bg_nbd or mbg_nbd"),
+    ("model_clv", {**_CUSTOMER, "margin": 0.4}, "'margin' only applies when 'spend' is given"),
+    ("model_clv", {**_CUSTOMER, "spend": "m", "margin": 0}, "'margin' must be a number above 0 and at most 1"),
+    ("model_clv", {**_CUSTOMER, "recency": "frequency"}, "the column «frequency» is both 'frequency' and 'recency': choose another"),
+    ("model_clv", {**_CUSTOMER, "time_unit": "fortnight"}, "'time_unit' must be one of day, week, month, quarter, year"),
+    ("model_bg_bb", {"customer": "c", "frequency": "f", "recency": "r", "opportunities": "n", "period_unit": "month", "purchase_model": "bg_nbd"},
+     "there is no parameter 'purchase_model'"),
+    ("model_bg_bb", {"customer": "c", "frequency": "f", "recency": "r", "opportunities": "n", "period_unit": "month",
+                     "holdout_transactions": "h", "holdout_length": 2.5}, "'holdout_length' must be a whole number from 1 to 1000"),
+])
+def test_a_customer_lifetime_node_with_wrong_parameters_is_refused_with_what_to_fix(operation, params, message):
+    with pytest.raises(ModelRetry) as e:
+        clean_params(operation, params)
+    assert message in str(e.value)
+
+
+@pytest.mark.anyio
+async def test_an_assistant_puts_a_customer_lifetime_node_after_a_summary_built_with_group_by(session, world, fake_engine, monkeypatch):
+    fake_engine.preview_response = (200, {"columns": COLUMNS, "rows": [{"country": "IT", "amount": 3.5}], "row_count": 1, "truncated": False})
+    summary = {"by": ["country"], "aggregations": [{"column": "amount", "func": "count", "alias": "days"}]}
+    clv = {**_CUSTOMER, "customer": "country", "frequency": "days", "recency": "days", "spend": "amount", "purchase_model": "auto"}
+    events = await _turn(session, world, monkeypatch, world["editor"], [
+        ("add_source", {"datasource_id": world["orders"].id}),
+        ("add_step", {"after": "source", "operation": "group_by", "params": summary}),
+        ("add_step", {"after": "op-1", "operation": "model_clv", "params": clv}),
+        ("add_step", {"after": "op-1", "operation": "model_clv", "params": {**clv, "recency": "recency"}}),
+        "Added the customer lifetime value of each customer (ctl-1); it runs with the flow.",
+    ], message="how much will each customer buy next year, and are they still active")
+    assert "error" not in [n for n, _ in events]
+    steps = [d for n, d in events if n == "tool_result" and d["name"] == "add_step"]
+    assert [s["ok"] for s in steps] == [True, False, True]
+    assert "the column «days» is both 'frequency' and 'recency'" in steps[1]["error"]
+    canvas = json.loads(events[-1][1]["definition"])
+    node = next(n for n in canvas["nodes"] if n["id"] == "ctl-1")
+    assert node["type"] == "model" and node["data"]["model"] == "clv" and node["data"]["params"]["time_unit"] == "week"
+    assert any(e["source"] == "op-1" and e["target"] == "ctl-1" and e["targetHandle"] == "left" for e in canvas["edges"])
+
+
 def test_the_reference_tells_the_assistant_what_a_model_needs_to_run():
     reference = ai_flow_agent.context(None, "en")
     for sentence in ("Kubernetes", "group of models an administrator has enabled", "there is no preview",
