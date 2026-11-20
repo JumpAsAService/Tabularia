@@ -1,18 +1,20 @@
 <script setup lang="ts">
 // The node panel of a Model node and of a Predict node: the title (an ARIMA node says what its orders
 // make), the delete button, and the form drawn from the catalogue (ui/ModelForm.vue, ui/PredictForm.vue).
-// What the node reads and writes comes from its edges, as on a Script node. The slot `run` is where
-// the trial's button and its outcome go (Run on the sample, the latest output, «stale»): the panel
-// hands the form what the trial needs and nothing more is here.
+// What the node reads and writes comes from its edges, as on a Script node. The form's slot `run`
+// holds the trial's button and its outcome (ModelRun.vue: Run on the sample, the latest output,
+// «not up to date»); the editor runs it (the panel's `run`, as a Script node's).
 import { computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ChartScatter, ChartSpline, HeartPulse, Sparkles, Trash2 } from 'lucide-vue-next'
 import type { Node } from '@vue-flow/core'
 import type { ColumnInfo } from '~/composables/useApi'
-import { modelArimaTitle, modelNameKey, modelOff, modelOf } from '~/composables/modelCatalog'
+import { modelArimaTitle, modelNameKey, modelOff, modelOf, modelUnset } from '~/composables/modelCatalog'
 import { useModelGroups } from '~/composables/useModelGroups'
+import type { ScriptOutputs } from '~/composables/useScripting'
 import ModelForm from '~/components/ui/ModelForm.vue'
 import PredictForm from '~/components/ui/PredictForm.vue'
+import ModelRun from '~/components/models/ModelRun.vue'
 
 const props = defineProps<{
   node: Node
@@ -21,10 +23,15 @@ const props = defineProps<{
   fetchDistinct?: (column: string) => Promise<any[]>
   connections?: { id: number; name: string; db_type: string; project_id?: number }[]
   readOnly?: boolean
+  // the node's latest trial or run and the trial in progress (the editor's, as a Script node's)
+  outputs?: ScriptOutputs[string] | null
+  trial?: { runId: number | null; status: string; startedAt: number; error: string } | null
+  flowDirty?: boolean
 }>()
 const emit = defineEmits<{
   (e: 'update', patch: Record<string, any>): void
   (e: 'delete'): void
+  (e: 'run'): void
 }>()
 const { t } = useI18n()
 const groups = useModelGroups()
@@ -39,6 +46,8 @@ const title = computed(() => {
   if (!model.value) return t('models.node.title')
   return model.value.id === 'arima' ? modelArimaTitle(props.node.data?.params) : t(modelNameKey(model.value.id))
 })
+// Run waits for the group (the form says why it is off) and for what the node still lacks
+const lacking = computed(() => (model.value ? modelUnset(model.value, props.node.data?.params) : []))
 const icon = computed(() => (isPredict.value ? Sparkles : model.value?.family === 'survival' ? HeartPulse : model.value?.family === 'timeseries' ? ChartSpline : ChartScatter))
 </script>
 
@@ -71,7 +80,17 @@ const icon = computed(() => (isPredict.value ? Sparkles : model.value?.family ==
       :read-only="readOnly"
       @update="emit('update', $event)"
     >
-      <template #run><slot name="run" /></template>
+      <template #run>
+        <ModelRun
+          :outputs="outputs"
+          :trial="trial"
+          :flow-dirty="flowDirty"
+          :disabled="!!off || lacking.length > 0"
+          :why="!off && lacking.length ? $t('models.node.setIt') : ''"
+          :read-only="readOnly"
+          @run="emit('run')"
+        />
+      </template>
     </ModelForm>
   </div>
 </template>

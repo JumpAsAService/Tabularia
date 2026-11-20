@@ -6808,10 +6808,29 @@ export default {
       "groupOff": "El grupo de modelos «{group}» no está habilitado: pídelo a un administrador. El paso no se ejecuta hasta entonces.",
       "groupNotAllowed": "No puedes usar este grupo de modelos: pídelo a un administrador.",
       "notConfigured": "Los modelos estadísticos necesitan la parte de scripting, que no está configurada en esta instalación.",
-      "previewAfterRun": "Aún no hay datos de este modelo: ejecuta el flujo.",
+      "previewAfterRun": "Aún no hay datos de este modelo: pulsa Ejecutar en su panel, o ejecuta el flujo.",
       "previewFromTrial": "De la ejecución del modelo del {when}, sobre la muestra.",
       "previewFromRun": "De la ejecución del flujo del {when}.",
-      "previewStale": "El modelo ha cambiado desde entonces."
+      "previewStale": "El modelo ha cambiado desde entonces.",
+      "run": "Ejecutar",
+      "saveAndRun": "Guardar y ejecutar",
+      "running": "Ejecutando… {s} s",
+      "runHint": "Ajusta el modelo sobre la muestra de las fuentes, sin los nodos posteriores: su tabla se convierte en su vista previa, y su informe se abre en la pestaña Informe.",
+      "lastTrial": "Última ejecución desde aquí {when}: {status}",
+      "lastRun": "Última ejecución del flujo {when}: {status}",
+      "rows": "{n} filas",
+      "stale": "El modelo o un paso anterior ha cambiado desde entonces: ejecútalo de nuevo para ver sus números ahora.",
+      "log": "Log"
+    },
+    "runDetail": {
+      "group": "Grupo de modelos",
+      "model": "Modelo",
+      "attempts": "Intentos",
+      "exitCode": "Código de salida",
+      "inputRows": "Filas leídas",
+      "refusal": "Rechazado",
+      "log": "Log",
+      "noLog": "El runner no imprimió nada."
     },
     "predict": {
       "title": "Predicción",

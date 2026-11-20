@@ -796,8 +796,12 @@ function pickDatasource(id: number | null) {
         :fetch-distinct="fetchDistinct"
         :connections="connections"
         :read-only="!!readOnly"
+        :outputs="scriptOutputs?.[node.id] ?? null"
+        :trial="scriptTrials?.[node.id] ?? null"
+        :flow-dirty="!!flowDirty"
         @update="emit('update', $event)"
         @delete="emit('delete')"
+        @run="emit('script-run', node.id)"
       />
     </template>
 

@@ -6808,10 +6808,29 @@ export default {
       "groupOff": "Le groupe de modèles « {group} » n'est pas activé : demandez à un administrateur. L'étape ne s'exécute pas d'ici là.",
       "groupNotAllowed": "Vous ne pouvez pas utiliser ce groupe de modèles : demandez à un administrateur.",
       "notConfigured": "Les modèles statistiques demandent la partie scripting, qui n'est pas configurée sur cette installation.",
-      "previewAfterRun": "Pas encore de données de ce modèle : exécutez le flux.",
+      "previewAfterRun": "Pas encore de données de ce modèle : appuyez sur Exécuter dans son panneau, ou exécutez le flux.",
       "previewFromTrial": "De l'exécution du modèle du {when}, sur l'échantillon.",
       "previewFromRun": "De l'exécution du flux du {when}.",
-      "previewStale": "Le modèle a changé depuis."
+      "previewStale": "Le modèle a changé depuis.",
+      "run": "Exécuter",
+      "saveAndRun": "Enregistrer et exécuter",
+      "running": "En cours… {s} s",
+      "runHint": "Ajuste le modèle sur l'échantillon des sources, sans les nœuds suivants : sa table devient leur aperçu, et son rapport s'ouvre dans l'onglet Rapport.",
+      "lastTrial": "Dernière exécution d'ici {when} : {status}",
+      "lastRun": "Dernière exécution du flux {when} : {status}",
+      "rows": "{n} lignes",
+      "stale": "Le modèle ou une étape avant lui a changé depuis : exécutez-le à nouveau pour voir ses chiffres maintenant.",
+      "log": "Log"
+    },
+    "runDetail": {
+      "group": "Groupe de modèles",
+      "model": "Modèle",
+      "attempts": "Tentatives",
+      "exitCode": "Code de sortie",
+      "inputRows": "Lignes lues",
+      "refusal": "Refusé",
+      "log": "Log",
+      "noLog": "Le runner n'a rien affiché."
     },
     "predict": {
       "title": "Prédiction",

@@ -6808,10 +6808,29 @@ export default {
       "groupOff": "The model group «{group}» is not enabled: ask an administrator. The step does not run until it is.",
       "groupNotAllowed": "You may not use this model group: ask an administrator.",
       "notConfigured": "Statistical models need the scripting machinery, which is not set up on this installation.",
-      "previewAfterRun": "No data from this model yet: run the flow.",
+      "previewAfterRun": "No data from this model yet: press Run in its panel, or run the flow.",
       "previewFromTrial": "From the model's run of {when}, on the sample.",
       "previewFromRun": "From the flow's run of {when}.",
-      "previewStale": "The model changed since."
+      "previewStale": "The model changed since.",
+      "run": "Run",
+      "saveAndRun": "Save and run",
+      "running": "Running… {s} s",
+      "runHint": "Fits the model on the sources' sample, without the nodes after it: its table becomes their preview, and its report opens in the Report tab.",
+      "lastTrial": "Last run from here {when}: {status}",
+      "lastRun": "Last run of the flow {when}: {status}",
+      "rows": "{n} rows",
+      "stale": "The model or a step before it changed since: run it again to see its numbers now.",
+      "log": "Log"
+    },
+    "runDetail": {
+      "group": "Model group",
+      "model": "Model",
+      "attempts": "Attempts",
+      "exitCode": "Exit code",
+      "inputRows": "Rows read",
+      "refusal": "Refused",
+      "log": "Log",
+      "noLog": "The runner printed nothing."
     },
     "predict": {
       "title": "Predict",

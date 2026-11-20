@@ -6808,10 +6808,29 @@ export default {
       "groupOff": "Die Modellgruppe «{group}» ist nicht aktiviert: fragen Sie eine Administratorin. Der Schritt läuft erst dann.",
       "groupNotAllowed": "Sie dürfen diese Modellgruppe nicht nutzen: fragen Sie eine Administratorin.",
       "notConfigured": "Statistische Modelle brauchen die Skript-Infrastruktur, die in dieser Installation nicht eingerichtet ist.",
-      "previewAfterRun": "Noch keine Daten von diesem Modell: führen Sie den Flow aus.",
+      "previewAfterRun": "Noch keine Daten von diesem Modell: klicken Sie in seinem Panel auf Ausführen, oder führen Sie den Flow aus.",
       "previewFromTrial": "Aus dem Lauf des Modells vom {when}, auf der Stichprobe.",
       "previewFromRun": "Aus dem Lauf des Flows vom {when}.",
-      "previewStale": "Das Modell hat sich seitdem geändert."
+      "previewStale": "Das Modell hat sich seitdem geändert.",
+      "run": "Ausführen",
+      "saveAndRun": "Speichern und ausführen",
+      "running": "Läuft… {s} s",
+      "runHint": "Schätzt das Modell auf der Stichprobe der Quellen, ohne die Knoten danach: seine Tabelle wird ihre Vorschau, und sein Bericht öffnet sich im Tab Bericht.",
+      "lastTrial": "Letzte Ausführung von hier {when}: {status}",
+      "lastRun": "Letzte Ausführung des Flows {when}: {status}",
+      "rows": "{n} Zeilen",
+      "stale": "Das Modell oder ein Schritt davor hat sich seitdem geändert: führen Sie es erneut aus, um seine Zahlen jetzt zu sehen.",
+      "log": "Log"
+    },
+    "runDetail": {
+      "group": "Modellgruppe",
+      "model": "Modell",
+      "attempts": "Versuche",
+      "exitCode": "Exit-Code",
+      "inputRows": "Gelesene Zeilen",
+      "refusal": "Abgelehnt",
+      "log": "Log",
+      "noLog": "Der Runner hat nichts ausgegeben."
     },
     "predict": {
       "title": "Vorhersage",

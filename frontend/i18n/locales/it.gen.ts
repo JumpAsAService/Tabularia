@@ -6808,10 +6808,29 @@ export default {
       "groupOff": "Il gruppo di modelli «{group}» non è abilitato: chiedi a un amministratore. Il passo non gira finché non lo è.",
       "groupNotAllowed": "Non puoi usare questo gruppo di modelli: chiedi a un amministratore.",
       "notConfigured": "I modelli statistici richiedono la parte di scripting, che non è configurata su questa installazione.",
-      "previewAfterRun": "Ancora nessun dato da questo modello: esegui il flusso.",
+      "previewAfterRun": "Ancora nessun dato da questo modello: premi Esegui nel suo pannello, o esegui il flusso.",
       "previewFromTrial": "Dall'esecuzione del modello del {when}, sul campione.",
       "previewFromRun": "Dall'esecuzione del flusso del {when}.",
-      "previewStale": "Il modello è cambiato da allora."
+      "previewStale": "Il modello è cambiato da allora.",
+      "run": "Esegui",
+      "saveAndRun": "Salva ed esegui",
+      "running": "In esecuzione… {s} s",
+      "runHint": "Stima il modello sul campione delle sorgenti, senza i nodi dopo: la sua tabella diventa la loro anteprima, e il suo report si apre nella scheda Report.",
+      "lastTrial": "Ultima esecuzione da qui {when}: {status}",
+      "lastRun": "Ultima esecuzione del flusso {when}: {status}",
+      "rows": "{n} righe",
+      "stale": "Il modello o un passo prima di lui è cambiato da allora: eseguilo di nuovo per vedere i suoi numeri ora.",
+      "log": "Log"
+    },
+    "runDetail": {
+      "group": "Gruppo di modelli",
+      "model": "Modello",
+      "attempts": "Tentativi",
+      "exitCode": "Codice di uscita",
+      "inputRows": "Righe lette",
+      "refusal": "Rifiutato",
+      "log": "Log",
+      "noLog": "Il runner non ha stampato nulla."
     },
     "predict": {
       "title": "Previsione",
