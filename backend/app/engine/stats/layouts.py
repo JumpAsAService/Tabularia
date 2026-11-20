@@ -326,11 +326,17 @@ def _table(id: str, title: str, filter_: str, cols: list[dict], y: float, visibl
     return item
 
 
+def _key_part(field: str) -> str:
+    """A level as a key holds it: a backslash doubled, a bar after a backslash (as
+    `output.key_part` writes it), so that «a|» and «b» are not «a» and «|b»."""
+    return f'REPLACE(REPLACE({field}, "\\", "\\\\"), "|", "\\|")'
+
+
 def _row_key(section: str, stat: str, two_levels: bool = False) -> str:
     """The key of the row `stat` of the group (or cell, pair) of the row at hand: its section,
-    its `level` (and `level_2` for a pair or a cell of a contingency table)."""
-    second = '"|" & [level_2] & "|' if two_levels else '"||'
-    return f'"{section}|" & [level] & {second}{stat}"'
+    its `level` (and `level_2` for a pair or a cell of a contingency table), escaped."""
+    second = f'"|" & {_key_part("[level_2]")} & "|' if two_levels else '"||'
+    return f'"{section}|" & {_key_part("[level]")} & {second}{stat}"'
 
 
 def _rounded(x: str) -> str:

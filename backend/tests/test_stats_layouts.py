@@ -268,6 +268,9 @@ def test_a_layout_reads_only_rows_the_test_writes(test):
         text = json.dumps(layouts.definition(test, {**REFERENCE[test], **params}, "en"), ensure_ascii=False)
         named = set(re.findall(r'LOOKUP\(\\"([^"\\]+)\\", \[key\]', text))
         assert named and named <= written, sorted(named - written)
+        # a level in a key is escaped as the output escapes it (`_key_part`): read here as the level itself
+        for field in ("[level]", "[level_2]"):
+            text = text.replace(json.dumps(layouts._key_part(field))[1:-1], field)
         # a key made of a group's label is a row of every group; of a pair's, of every pair
         groups = {r["level"] for r in rows if r["section"] == "group"}
         # (the margins of a contingency table: a category of x has its row's numbers, one of y its column's)
@@ -288,6 +291,33 @@ def test_a_layout_reads_only_rows_the_test_writes(test):
         sections = set(re.findall(r'\[section\] = \\"(\w+)\\"', text))
         # (a variant that may be exact on the data, McNemar's, has no curve: its chart is not drawn then)
         assert {r["section"] for r in rows} <= sections and sections - {r["section"] for r in rows} <= {"curve"}, (params, sections)
+
+
+def test_a_label_with_a_bar_has_a_key_of_its_own(tmp_path, chart_service, monkeypatch):  # noqa: F811
+    """The key is the section, the levels and the stat joined by bars: a level with a bar in it
+    is escaped («a|» is «a\\|»), else («a|», «b») and («a», «|b») were one key, and the
+    report's LOOKUP read one cell's count for the other's. The report escapes its levels the
+    same way."""
+    from app.engine.stats.output import key_part
+
+    assert key_part("a|") == "a\\|" and key_part("\\|") == "\\\\\\|" and key_part(None) == "" and key_part("plain") == "plain"
+    frame = counts_table(["a|", "a"], ["b", "|b"], [[11, 12], [13, 14]])
+    params = {"x": "x", "y": "y"}
+    rows = [dict(zip(OUTPUT_NAMES, r)) for r in run_hypothesis_test(PolarsStatSource(frame.lazy()), "chi2_independence",
+                                                                    {**params, "detail": "report"}, "polars")]
+    keys = [r["key"] for r in rows]
+    assert len(keys) == len(set(keys))
+    observed = {r["key"]: r["value"] for r in rows if r["stat"] == "observed"}
+    assert observed == {"cell|a\\||b|observed": 11, "cell|a\\||\\|b|observed": 12, "cell|a|b|observed": 13, "cell|a|\\|b|observed": 14}
+    out = render.render(layouts.definition("chi2_independence", params, "en"),
+                        {"result": {"rows": layouts.with_labels("chi2_independence", rows, "en"), "columns": layouts.columns()}}, {},
+                        "xlsx", tmp_path, title="t", now=NOW, limits=render.Limits(chart_url=chart_service[0]))
+    with zipfile.ZipFile(out.path) as z:
+        names = re.findall(r'<sheet name="([^"]+)"', z.read("xl/workbook.xml").decode())
+        sheet = z.read(f"xl/worksheets/sheet{names.index('Observed and expected') + 1}.xml").decode()
+    # each cell's own count, in the order of the rows: a|–b, a|–|b, a–b, a–|b (sorted labels: «a» first)
+    counts = [float(v) for v in re.findall(r'<c r="C\d+"[^>]*><v>([^<]+)</v>', sheet)]
+    assert sorted(counts) == [11.0, 12.0, 13.0, 14.0]
 
 
 def test_the_report_reads_as_many_rows_as_a_test_may_write():

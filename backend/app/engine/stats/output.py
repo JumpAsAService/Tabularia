@@ -47,16 +47,25 @@ def _finite(v: Any) -> float | None:
     return 0.0 if abs(v) < sys.float_info.min else v + 0.0  # + 0.0: a −0.0 is written 0.0
 
 
+def key_part(text: str | None) -> str:
+    """A part of a row's key as it is written: a bar in it as «\\|» and a backslash as «\\\\»,
+    nothing for a null part. A label may hold a bar (the groups «a|» and «b», «a» and «|b»):
+    escaped, no two rows' keys are one. The report writes its keys the same way
+    (`layouts._key_part`)."""
+    return (text or "").replace("\\", "\\\\").replace("|", "\\|")
+
+
 class Rows:
     """The rows of an output, in the order they are added: `ord` is their place, `key` their
-    section, level, level_2 and stat joined by a bar, nothing for a part that is null (and
-    the index after one more bar, for the rows of a report's charts: `point`)."""
+    section, level, level_2 and stat joined by a bar, each escaped (`key_part`), nothing for a
+    part that is null (and the index after one more bar, for the rows of a report's charts:
+    `point`)."""
 
     def __init__(self) -> None:
         self.rows: list[tuple] = []
 
     def _add(self, section: str, level: str | None, level_2: str | None, stat: str, value: Any, text: str | None) -> None:
-        key = "|".join((section, level or "", level_2 or "", stat))
+        key = "|".join(map(key_part, (section, level, level_2, stat)))
         self.rows.append((section, level, level_2, stat, _finite(value), text, None, None, len(self.rows), key))
 
     def number(self, section: str, stat: str, value: Any, level: str | None = None, level_2: str | None = None) -> None:
@@ -70,7 +79,7 @@ class Rows:
         """A row of a report's chart, one of many with the same stat: an interval of a
         histogram (`x0`, `x1` its edges), a point of a curve (`x0` its abscissa). Its key
         ends with its index."""
-        key = "|".join((section, level or "", "", stat, str(index)))
+        key = "|".join((*map(key_part, (section, level, None, stat)), str(index)))
         self.rows.append((section, level, None, stat, _finite(value), text, _finite(x0), _finite(x1), len(self.rows), key))
 
 

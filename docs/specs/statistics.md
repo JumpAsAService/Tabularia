@@ -262,7 +262,7 @@ Ten columns, in this order, on every engine (types as a preview names them):
 | 7 | `x0` | Float64, nullable | A histogram interval's lower edge; a curve point's abscissa |
 | 8 | `x1` | Float64, nullable | A histogram interval's upper edge |
 | 9 | `ord` | Int64 | The row's place, 0 to N−1: sort by it |
-| 10 | `key` | String | Section, level, level_2 and stat joined by a vertical bar, with nothing for a null part; `hist` and `curve` rows add a bar and their index. Unique (examples below) |
+| 10 | `key` | String | Section, level, level_2 and stat joined by a vertical bar, with nothing for a null part; `hist` and `curve` rows add a bar and their index. Each part escaped (`output.key_part`): a backslash doubled, a bar preceded by a backslash, so that a label holding a bar never makes another row's key (the groups «a\|» and «b» against «a» and «\|b»); the report escapes its levels the same way, with `REPLACE`. Unique (examples below) |
 
 Keys, exactly: `test|||p_value`, `group|web||mean`, `pair|a|b|p_adjusted`,
 `cell|m|x|observed`, `hist|web||count|3`, `curve|||density|117`.
