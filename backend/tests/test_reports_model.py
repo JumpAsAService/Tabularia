@@ -544,6 +544,19 @@ def test_a_gauge_keeps_its_pointer_on_the_arc_and_a_bullet_shows_negative_values
 def test_a_heatmap_s_scale_says_its_lowest_and_highest_value():
     o = _chart("heatmap", ROWS, split_by="[kind]", options={"format": "#,##0.0"})
     assert o["visualMap"]["text"] == ["30.0", "1.0"]
+    assert (o["visualMap"]["min"], o["visualMap"]["max"]) == (1.0, 30.0)  # no min or max: the data's own ends
+
+
+def test_a_heatmap_with_a_min_and_a_max_has_a_fixed_scale_whatever_its_values():
+    """A probability's map runs from 0 to 1 even when its cells run from 0.3 to 0.9; a bound that is not set stays the data's."""
+    rows = [{"region": r, "kind": k, "amount": v} for r, k, v in (("N", "x", 0.3), ("N", "y", 0.9), ("S", "x", 0.5), ("S", "y", 0.6))]
+    both = _chart("heatmap", rows, split_by="[kind]", options={"format": "0.##", "min": 0, "max": 1})
+    assert both["visualMap"]["text"] == ["1", "0"] and (both["visualMap"]["min"], both["visualMap"]["max"]) == (0, 1)
+    assert sorted(c["value"][2] for c in both["series"][0]["data"]) == [0.3, 0.5, 0.6, 0.9]  # the cells are the data's
+    only_max = _chart("heatmap", rows, split_by="[kind]", options={"format": "0.##", "max": 1})
+    assert (only_max["visualMap"]["min"], only_max["visualMap"]["max"]) == (0.3, 1)
+    only_min = _chart("heatmap", rows, split_by="[kind]", options={"format": "0.##", "min": 0})
+    assert (only_min["visualMap"]["min"], only_min["visualMap"]["max"]) == (0, 0.9)
 
 
 # the long table of a hypothesis test, as the three kinds below read it: a number a row
