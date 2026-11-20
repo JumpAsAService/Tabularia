@@ -104,11 +104,14 @@ def layout(model: str, params: dict[str, Any], locale: str, sample: list[dict] |
     resid = c.xy("resid_linear", ch["resid_linear"], '[section] = "point" AND [level] = "resid_linear"',
                  [{"value": "[value]", "as": "point", "name": s["points"], "label": "[text]"}], {"target": 0, "legend": False},
                  under="deviance_residuals")
+    # the intercept is left out: its odds are a baseline's, on another scale than the ratios
     odds = c.coef_interval("odds_ratio_interval", ch["odds_ratio_interval"], ("odds_ratio", "or_ci_low", "or_ci_high"),
                            (s["odds_ratio"], s["ci_low"], s["ci_high"]), 1.0, log=True,
                            filter_='[section] = "coef" AND [level] <> "(Intercept)"')._replace(wide=True)
+    # a probit's coefficients have no odds ratios: no chart, rather than an empty place for one
+    charts = (*classification_charts(w), resid, *((odds,) if checked.get("link", "logit") == "logit" else ()))
     return c.page(model, params, locale, sample, step, name=name(params, locale), about=about(params, locale), cards=cards,
-                  coef_tables=tables, blocks=(confusion_block,), charts=(*classification_charts(w), resid, odds))
+                  coef_tables=tables, blocks=(confusion_block,), charts=charts)
 
 
 register("logistic", layout, name, about)

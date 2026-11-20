@@ -24,7 +24,9 @@
 # long compile, witness.json): the VIFs are checked against Fox and Monette's formula on the
 # regressors' correlation matrix and, for a term of one column, against 1/(1 − R²) of the
 # regression of that column on the others. `statsmodels` (the second witness, 1e-6) is not
-# available on the machine that wrote these values: no witness file yet.
+# available on the machine that wrote these values: no witness file yet. `ResourceSelection`
+# and `pROC` are not installed either: the logistic cases compute Hosmer–Lemeshow and DeLong's
+# interval by a second construction (see «the logistic regression» below).
 #
 # Lane M1 writes the cases of the linear regression; the lanes of the logistic regression and
 # of the penalties add theirs below, each in a function of its own.
@@ -34,6 +36,8 @@ suppressPackageStartupMessages({
   library(sandwich)
   library(lmtest)
   library(nortest)
+  library(brglm2)
+  library(detectseparation)
   library(jsonlite)
 })
 
@@ -357,9 +361,315 @@ linear_cases <- function() {
   cases
 }
 
-cases <- linear_cases()
+# ── the logistic regression (lane M2) ────────────────────────────────────────
+# By the packages called directly: glm, brglm2::brglmFit, detectseparation, sandwich, lmtest,
+# stats::confint (profile). The witnesses of the specification for the runner's own pieces,
+# ResourceSelection::hoslem.test and pROC's DeLong interval, are not installed in the image
+# (witness.json): the reference computes them by a second construction, on the rows repeated
+# as many times as their weight (so a weighted case checks the frequency weights too):
+#   - Hosmer–Lemeshow: hoslem.test's own steps (unique deciles of the predicted risk, cut with
+#     the lowest included, xtabs of observed and expected) on those rows, df = groups − 2;
+#   - the AUC and DeLong's variance: the pairwise kernel of every case against every non-case
+#     (an n1 × n0 matrix), its row and column means the placement values, var/n1 + var/n0;
+#   - the VIFs: Fox and Monette's formula on the regressors' correlations weighted by the
+#     fit's working weights (not on the coefficients' as the runner computes them);
+#   - McFadden's and Nagelkerke's R² from the log-likelihood of the intercept-only model
+#     fitted again (not from the deviances); Tjur's R², the Brier score and the rates from
+#     the repeated rows.
 
-packages <- c("stats", "sandwich", "lmtest", "nortest", "jsonlite")
+# 200 customers of a subscription: churned (yes or no) against tenure in months (its effect is
+# log-linear in the logit: Box–Tidwell sees it), the monthly fee, the change of the fee (numbers
+# around 0: no Box–Tidwell), the plan, a store effect (clusters), a frequency weight; a tenure,
+# a plan and an outcome left empty.
+churn <- function() {
+  set.seed(20261123)
+  n <- 200
+  tenure <- round(stats::runif(n, 1, 72))
+  fee <- round(stats::runif(n, 15, 120), 2)
+  change <- round(stats::rnorm(n, 0, 5), 1)
+  plan <- sample(c("basic", "plus", "premium"), n, TRUE, prob = c(0.5, 0.3, 0.2))
+  store <- sprintf("s%02d", sample(1:10, n, TRUE))
+  store_effect <- stats::rnorm(10, 0, 0.5)
+  eta <- 0.8 - 0.9 * log(tenure) + 0.025 * fee + 0.05 * change + c(basic = 0, plus = -0.5, premium = -1.1)[plan] +
+    store_effect[as.integer(sub("s", "", store))]
+  churned <- ifelse(stats::runif(n) < stats::plogis(eta), "yes", "no")
+  weight <- sample(1:3, n, TRUE)
+  tenure[15] <- NA
+  plan[88] <- NA
+  churned[150] <- NA
+  data.frame(customer = seq_len(n), tenure = tenure, fee = fee, change = change, plan = plan, store = store, weight = weight,
+             churned = churned)
+}
+
+# 40 patients: above a dose of 5 every one is sick, below none (complete separation), and a
+# group that explains nothing.
+separated <- function() {
+  set.seed(20261124)
+  n <- 40
+  dose <- round(stats::runif(n, 0, 10), 1)
+  group <- sample(c("a", "b"), n, TRUE)
+  data.frame(dose = dose, group = group, status = ifelse(dose > 5, "sick", "well"))
+}
+
+logistic_case <- function(id, data, file, types, params, formula, map, term_names, row_numbers, event, outcome,
+                          weights = NULL, cluster = NULL, full = TRUE, n_missing = 0) {
+  alpha <- params$alpha %||% 0.05
+  se <- params$se %||% "classical"
+  link <- params$link %||% "logit"
+  firth <- identical(params$estimation, "firth")
+  threshold <- params$threshold %||% 0.5
+  data$.y <- as.numeric(tolower(as.character(data[[outcome]])) == tolower(event))
+  data$.w <- if (is.null(weights)) 1 else data[[weights]]
+  formula <- stats::update(formula, .y ~ .)
+  fam <- stats::binomial(link)
+  fit <- function(f, d) if (firth) stats::glm(f, family = fam, data = d, weights = .w, method = brglm2::brglmFit, type = "AS_mean") else
+    stats::glm(f, family = fam, data = d, weights = .w)
+  m <- fit(formula, data)
+  V <- switch(se, classical = stats::vcov(m), hc0 = sandwich::vcovHC(m, type = "HC0"), hc1 = sandwich::vcovHC(m, type = "HC1"),
+              hc2 = sandwich::vcovHC(m, type = "HC2"), hc3 = sandwich::vcovHC(m, type = "HC3"),
+              cluster = sandwich::vcovCL(m, cluster = data[[cluster]]))
+  ct <- if (se == "classical") summary(m)$coefficients else lmtest::coeftest(m, vcov. = V)
+  z <- stats::qnorm(1 - alpha / 2)
+  ci <- if (identical(params$ci, "profile") && !firth) suppressMessages(stats::confint(m, level = 1 - alpha)) else
+    cbind(ct[, 1] - z * ct[, 2], ct[, 1] + z * ct[, 2])
+  w <- data$.w
+  n <- sum(w)
+  events <- sum(w * data$.y)
+  expect <- list(txt("model|||variant", "unpenalized"), num("model|||n", n), num("model|||events", events),
+                 num("model|||n_missing", n_missing), txt("model|||event_value", event))
+  for (name in rownames(ct)) {
+    expect <- c(expect, list(
+      num(coef_key(map, name, "estimate"), ct[name, 1]), num(coef_key(map, name, "std_error"), ct[name, 2]),
+      num(coef_key(map, name, "statistic"), ct[name, 3]), num(coef_key(map, name, "p_value"), ct[name, 4]),
+      txt(coef_key(map, name, "significance"), stars(ct[name, 4])),
+      num(coef_key(map, name, "ci_low"), ci[name, 1]), num(coef_key(map, name, "ci_high"), ci[name, 2])))
+    if (link == "logit") {
+      expect <- c(expect, list(num(coef_key(map, name, "odds_ratio"), exp(ct[name, 1])),
+                               num(coef_key(map, name, "or_ci_low"), exp(ci[name, 1])),
+                               num(coef_key(map, name, "or_ci_high"), exp(ci[name, 2]))))
+    }
+  }
+  if (!full) return(list(id = id, model = "logistic", data = file, types = types, params = params, expect = expect))
+
+  # the fit's numbers; the classification's on the rows repeated as many times as their weight
+  # the intercept-only model fitted again; with Firth's, brglm2's own null deviance (its null fit
+  # converges to brglm2's tolerance, 1e-6 on the estimate: fitted again it differs by 1e-10)
+  m0 <- fit(.y ~ 1, data)
+  ll <- as.numeric(stats::logLik(m))
+  ll0 <- if (firth) -m$null.deviance / 2 else as.numeric(stats::logLik(m0))
+  rep_ <- rep(seq_len(nrow(data)), w)
+  yy <- data$.y[rep_]
+  pp <- unname(stats::fitted(m))[rep_]
+  if (!is.null(weights) && !firth) {  # the weighted fit is the fit of the repeated rows
+    big <- stats::glm(formula, family = fam, data = data[rep_, setdiff(names(data), ".w")])
+    stopifnot(max(abs(stats::coef(big) - stats::coef(m))) < 1e-8)
+  }
+  hat <- as.numeric(pp >= threshold)
+  confusion <- table(factor(yy, levels = c(1, 0)), factor(hat, levels = c(1, 0)))
+  other <- setdiff(sort(unique(tolower(as.character(data[[outcome]])))), tolower(event))
+  if (is.logical(data[[outcome]])) other <- tolower(other)
+  # AUC and DeLong's variance from the pairwise kernel
+  x1 <- pp[yy == 1]
+  x0 <- pp[yy == 0]
+  psi <- outer(x1, x0, ">") + 0.5 * outer(x1, x0, "==")
+  auc <- mean(psi)
+  v10 <- rowMeans(psi)
+  v01 <- colMeans(psi)
+  s <- sqrt(stats::var(v10) / length(x1) + stats::var(v01) / length(x0))
+  lr <- m$null.deviance - m$deviance
+  lr_df <- m$df.null - m$df.residual
+  cs <- 1 - exp(2 * (ll0 - ll) / n)
+  expect <- c(expect, list(
+    txt("model|||family", "binomial"), txt("model|||link", link), txt("model|||estimation", if (firth) "firth" else "ml"),
+    txt("model|||se_type", se),
+    num("model|||auc", auc), num("model|||auc_ci_low", max(0, auc - z * s)), num("model|||auc_ci_high", min(1, auc + z * s)),
+    num("model|||brier", mean((pp - yy)^2)), num("model|||threshold", threshold),
+    num("model|||accuracy", mean(hat == yy)), num("model|||sensitivity", mean(hat[yy == 1] == 1)),
+    num("model|||specificity", mean(hat[yy == 0] == 0)), num("model|||precision", mean(yy[hat == 1] == 1)),
+    num("model|||deviance", m$deviance), num("model|||null_deviance", m$null.deviance), num("model|||lr_statistic", lr),
+    num("model|||lr_df", lr_df), num("model|||lr_p_value", stats::pchisq(lr, lr_df, lower.tail = FALSE)),
+    num("model|||log_lik", ll), num("model|||aic", stats::AIC(m)), num("model|||bic", stats::BIC(m)),
+    num("model|||mcfadden_r2", 1 - ll / ll0), num("model|||nagelkerke_r2", cs / (1 - exp(2 * ll0 / n))),
+    num("model|||tjur_r2", mean(pp[yy == 1]) - mean(pp[yy == 0])),
+    num(paste0("cell|", event, "|", event, "|observed"), confusion[1, 1]),
+    num(paste0("cell|", event, "|", other, "|observed"), confusion[1, 2]),
+    num(paste0("cell|", other, "|", event, "|observed"), confusion[2, 1]),
+    num(paste0("cell|", other, "|", other, "|observed"), confusion[2, 2])))
+  if (firth) expect <- c(expect, list(txt("model|||note_firth", paste0(
+    "Firth's penalized likelihood (brglm2, AS_mean): the estimates are pulled towards 0 and stay finite under separation; ",
+    "the deviance, the likelihood-ratio test and the AIC are the ordinary likelihood's at these estimates."))))
+
+  # separation, by detectseparation called directly
+  sep <- stats::glm(formula, family = fam, data = data, weights = .w, method = detectseparation::detect_separation)
+  infinite <- names(sep$coefficients)[is.infinite(sep$coefficients)]
+  infinite <- c(setdiff(infinite, "(Intercept)"), intersect(infinite, "(Intercept)"))
+  if (length(infinite)) {
+    for (name in infinite) {
+      t <- map[[name]]
+      label <- if (is.na(t[[2]])) t[[1]] else paste0(t[[1]], ": ", t[[2]])
+      expect <- c(expect, list(txt(paste0("assumption|separation|", label, "|verdict"), "doubtful")))
+    }
+  } else {
+    expect <- c(expect, list(txt("assumption|separation||verdict", "ok")))
+  }
+
+  # Hosmer–Lemeshow, hoslem.test's steps on the repeated rows
+  qq <- unique(stats::quantile(pp, probs = seq(0, 1, 0.1)))
+  cut_ <- cut(pp, breaks = qq, include.lowest = TRUE)
+  observed <- stats::xtabs(cbind(y0 = 1 - yy, y1 = yy) ~ cut_)
+  expected <- stats::xtabs(cbind(yhat0 = 1 - pp, yhat1 = pp) ~ cut_)
+  chisq <- sum((observed - expected)^2 / expected)
+  groups <- nlevels(cut_)
+  p_hl <- stats::pchisq(chisq, groups - 2, lower.tail = FALSE)
+  expect <- c(expect, list(num("assumption|hosmer_lemeshow||statistic", chisq), num("assumption|hosmer_lemeshow||df", groups - 2),
+                           num("assumption|hosmer_lemeshow||p_value", p_hl),
+                           txt("assumption|hosmer_lemeshow||verdict", if (p_hl < alpha) "failed" else "ok")))
+
+  # Box–Tidwell: each number predictor above 0 with its x·log(x), the Wald test of that term
+  for (name in names(term_names)) {
+    x <- data[[name]]
+    if (!is.numeric(x)) next
+    label <- term_names[[name]]
+    if (any(x <= 0) || length(unique(x)) < 3) {
+      expect <- c(expect, list(txt(paste0("assumption|box_tidwell|", label, "|verdict"), "not_computed")))
+      next
+    }
+    d2 <- data
+    d2$bt <- x * log(x)
+    s2 <- summary(fit(stats::update(formula, . ~ . + bt), d2))$coefficients
+    expect <- c(expect, list(num(paste0("assumption|box_tidwell|", label, "|statistic"), s2["bt", 3]),
+                             num(paste0("assumption|box_tidwell|", label, "|p_value"), s2["bt", 4]),
+                             txt(paste0("assumption|box_tidwell|", label, "|verdict"), if (s2["bt", 4] < alpha) "failed" else "ok")))
+  }
+
+  # the VIFs, from the regressors' correlations weighted by the working weights
+  X <- stats::model.matrix(m)
+  assign <- attr(X, "assign")
+  Xs <- X[, assign > 0, drop = FALSE]
+  assign <- assign[assign > 0]
+  R <- stats::cov.wt(Xs, wt = m$weights / sum(m$weights), cor = TRUE)$cor
+  labels <- attr(stats::terms(m), "term.labels")
+  for (a in unique(assign)) {
+    sub <- which(assign == a)
+    gvif <- det(R[sub, sub, drop = FALSE]) * det(R[-sub, -sub, drop = FALSE]) / det(R)
+    value <- gvif^(1 / length(sub))
+    label <- term_names[[labels[[a]]]]
+    expect <- c(expect, list(num(paste0("assumption|vif|", label, "|value"), value, rel = 1e-8),
+                             txt(paste0("assumption|vif|", label, "|verdict"),
+                                 if (value > 10) "failed" else if (value > 5) "doubtful" else "ok")))
+    if (length(sub) > 1) expect <- c(expect, list(num(paste0("assumption|vif|", label, "|statistic"), gvif, rel = 1e-8)))
+  }
+
+  # events per variable
+  k <- ncol(Xs)
+  epv <- min(events, n - events) / k
+  expect <- c(expect, list(num("assumption|epv||value", epv), txt("assumption|epv||verdict", if (epv < 10) "doubtful" else "ok")))
+
+  # influence, by stats
+  rows_n <- nrow(data)
+  cooks <- stats::cooks.distance(m)
+  h <- stats::hatvalues(m)
+  dr <- abs(stats::residuals(m, type = "deviance"))
+  named <- function(score, above) {
+    top <- head(order(-score), 5L)
+    paste(row_numbers[top[score[top] > above]], collapse = ", ")
+  }
+  limit_h <- 2 * ncol(X) / rows_n
+  expect <- c(expect, list(
+    num("assumption|cooks_distance||count", sum(cooks > 4 / rows_n)), num("assumption|cooks_distance||threshold", 4 / rows_n),
+    num("assumption|leverage||count", sum(h > limit_h)), num("assumption|leverage||threshold", limit_h),
+    num("assumption|deviance_residuals||count", sum(dr > 3))))
+  if (sum(cooks > 4 / rows_n) > 0) expect <- c(expect, list(txt("assumption|cooks_distance||rows", named(cooks, 4 / rows_n))))
+  if (sum(h > limit_h) > 0) expect <- c(expect, list(txt("assumption|leverage||rows", named(h, limit_h))))
+  if (sum(dr > 3) > 0) expect <- c(expect, list(txt("assumption|deviance_residuals||rows", named(dr, 3))))
+  list(id = id, model = "logistic", data = file, types = types, params = params, expect = expect)
+}
+
+logistic_cases <- function() {
+  cases <- list()
+  ch <- write_table(churn(), "logistic_churn.csv")
+  ch_types <- list(customer = "integer", tenure = "number", fee = "number", change = "number", plan = "text", store = "text",
+                   weight = "integer", churned = "text")
+  used <- stats::complete.cases(ch[, c("churned", "tenure", "fee", "change", "plan")])
+  d <- ch[used, ]
+  rownames(d) <- NULL
+  d$plan <- factor(d$plan, levels = c("basic", "plus", "premium"))
+  rows_d <- which(used)
+  map <- list("(Intercept)" = c("(Intercept)", NA), tenure = c("tenure", NA), fee = c("fee", NA), change = c("change", NA),
+              planplus = c("plan", "plus"), planpremium = c("plan", "premium"))
+  names_ <- list(tenure = "tenure", fee = "fee", change = "change", plan = "plan")
+  base <- list(outcome = "churned", event_value = "yes", predictors = list("tenure", "fee", "change", "plan"))
+  f <- churned ~ tenure + fee + change + plan
+  one <- function(id, params, full = TRUE, ...) {
+    logistic_case(id, d, "data/logistic_churn.csv", ch_types, c(base, params), f, map, names_, rows_d, "yes", "churned",
+                  full = full, n_missing = sum(!used), ...)
+  }
+  cases[[length(cases) + 1L]] <- one("logistic_ml", list())
+  cases[[length(cases) + 1L]] <- one("logistic_probit", list(link = "probit", threshold = 0.3))
+  cases[[length(cases) + 1L]] <- one("logistic_firth", list(estimation = "firth"))
+  for (type in c("hc0", "hc1", "hc2", "hc3")) cases[[length(cases) + 1L]] <- one(paste0("logistic_", type), list(se = type), full = FALSE)
+  cases[[length(cases) + 1L]] <- one("logistic_cluster", list(se = "cluster", cluster = "store"), full = FALSE, cluster = "store")
+  cases[[length(cases) + 1L]] <- one("logistic_profile", list(ci = "profile", alpha = 0.1), full = FALSE)
+  case <- one("logistic_firth_profile", list(estimation = "firth", ci = "profile"), full = FALSE)
+  case$expect <- c(case$expect, list(txt("model|||note_firth_profile",
+                                         "brglm2 has no profile likelihood intervals for Firth's fit: the intervals are Wald's.")))
+  cases[[length(cases) + 1L]] <- case
+  case <- one("logistic_weights", list(weights = "weight"), weights = "weight")
+  case$expect <- c(case$expect, list(txt("model|||note_weights", paste0(
+    "The weights are frequencies: n, the events, the rates and the checks count the cases the rows stand for."))))
+  cases[[length(cases) + 1L]] <- case
+
+  # the separated table: Firth fits, maximum likelihood refuses
+  sp <- write_table(separated(), "logistic_separated.csv")
+  sp_types <- list(dose = "number", group = "text", status = "text")
+  sp$group <- factor(sp$group, levels = c("a", "b"))
+  cases[[length(cases) + 1L]] <- logistic_case(
+    "logistic_firth_separated", sp, "data/logistic_separated.csv", sp_types,
+    list(outcome = "status", event_value = "sick", predictors = list("dose", "group"), estimation = "firth"),
+    status ~ dose + group, list("(Intercept)" = c("(Intercept)", NA), dose = c("dose", NA), groupb = c("group", "b")),
+    list(dose = "dose", group = "group"), seq_len(nrow(sp)), "sick", "status")
+
+  # names that look like code, and a boolean outcome whose event is true
+  odd <- utils::read.csv(file.path(data_dir, "linear_names.csv"), check.names = FALSE, na.strings = "", encoding = "UTF-8",
+                         stringsAsFactors = FALSE)
+  odd_types <- stats::setNames(list("number", "number", "text", "boolean"), names(odd))
+  plain <- odd
+  names(plain) <- c("y", "a", "g", "b")
+  plain$g <- factor(plain$g, levels = c("east", "north", "south"))
+  A <- "a`b"
+  G <- "x); system(\"id\")"
+  B <- "ü ñ"
+  cases[[length(cases) + 1L]] <- logistic_case(
+    "logistic_names", plain, "data/linear_names.csv", odd_types, list(outcome = B, event_value = TRUE, predictors = list(A, G)),
+    b ~ a + g, list("(Intercept)" = c("(Intercept)", NA), a = c(A, NA), gnorth = c(G, "north"), gsouth = c(G, "south")),
+    list(a = A, g = G), seq_len(nrow(plain)), "true", "b")
+
+  refusal <- function(id, file, types, params, code, message) {
+    list(id = id, model = "logistic", data = file, types = types, params = params, expect = list(),
+         refuses = list(code = code, message = message))
+  }
+  cases[[length(cases) + 1L]] <- refusal(
+    "logistic_refuses_separation", "data/logistic_separated.csv", sp_types,
+    list(outcome = "status", event_value = "sick", predictors = list("dose", "group")), "separation",
+    "the term «dose» separates the outcome: use estimation = firth, or a penalty")
+  cases[[length(cases) + 1L]] <- refusal(
+    "logistic_refuses_three_values", "data/logistic_churn.csv", ch_types,
+    list(outcome = "plan", event_value = "basic", predictors = list("tenure")), "outcome_not_binary",
+    "the outcome «plan» has 3 values: a logistic regression explains two (an event and its absence)")
+  cases[[length(cases) + 1L]] <- refusal(
+    "logistic_refuses_event_value", "data/logistic_churn.csv", ch_types,
+    list(outcome = "churned", event_value = "maybe", predictors = list("tenure")), "event_value",
+    "the outcome «churned» has no value «maybe» to be the event: its values are «no», «yes»")
+  cases[[length(cases) + 1L]] <- refusal(
+    "logistic_refuses_weights", "data/logistic_churn.csv", ch_types,
+    list(outcome = "churned", event_value = "yes", predictors = list("tenure"), weights = "fee"), "weights_not_frequencies",
+    "the weights «fee» are frequencies: whole numbers, 0 or more")
+  cases
+}
+
+cases <- c(linear_cases(), logistic_cases())
+
+packages <- c("stats", "sandwich", "lmtest", "nortest", "brglm2", "detectseparation", "jsonlite")
 out <- list(format_version = 1L,
             generated = list(by = "make_reference.R", R = paste(R.version$major, R.version$minor, sep = "."),
                              packages = as.list(stats::setNames(vapply(packages, function(p) as.character(utils::packageVersion(p)), ""),

@@ -19,7 +19,7 @@
    "prob": "Predicted probabilities by observed outcome",
    "confusion": "Confusion matrix at the threshold",
    "resid_linear": "Deviance residuals against the linear predictor",
-   "odds_ratio_interval": "Odds ratios with their intervals (logarithmic axis)"
+   "odds_ratio_interval": "Odds ratios with their intervals (logarithmic axis, the intercept left out)"
   },
   "series": {
    "roc": "ROC",
@@ -51,7 +51,16 @@
     "lr_p_value": "Likelihood-ratio p-value",
     "mcfadden_r2": "McFadden's R²",
     "nagelkerke_r2": "Nagelkerke's R²",
-    "tjur_r2": "Tjur's R²"
+    "tjur_r2": "Tjur's R²",
+    "note_firth": "Note: Firth's estimation",
+    "note_firth_profile": "Note: intervals with Firth",
+    "note_firth_robust": "Note: robust errors with Firth",
+    "note_probit": "Note: the probit link",
+    "note_weights": "Note: the weights",
+    "note_robust_weights": "Note: robust errors with weights",
+    "note_zero_weights": "Note: rows of weight 0",
+    "note_interactions": "Note: the interactions",
+    "note_not_converged": "Note: convergence"
    }
   },
   "values": {
@@ -61,28 +70,61 @@
    "link": {
     "logit": "logit",
     "probit": "probit"
+   },
+   "note_firth": {
+    "Firth's penalized likelihood (brglm2, AS_mean): the estimates are pulled towards 0 and stay finite under separation; the deviance, the likelihood-ratio test and the AIC are the ordinary likelihood's at these estimates.": "Firth's penalized likelihood (brglm2, AS_mean): the estimates are pulled towards 0 and stay finite under separation; the deviance, the likelihood-ratio test and the AIC are the ordinary likelihood's at these estimates."
+   },
+   "note_firth_profile": {
+    "brglm2 has no profile likelihood intervals for Firth's fit: the intervals are Wald's.": "brglm2 has no profile likelihood intervals for Firth's fit: the intervals are Wald's."
+   },
+   "note_firth_robust": {
+    "With Firth's estimation the robust standard errors are sandwich's for a glm, at Firth's estimates.": "With Firth's estimation the robust standard errors are sandwich's for a glm, at Firth's estimates."
+   },
+   "note_probit": {
+    "With the probit link the coefficients are on the scale of a standard normal variable, not of log odds: there are no odds ratios.": "With the probit link the coefficients are on the scale of a standard normal variable, not of log odds: there are no odds ratios."
+   },
+   "note_weights": {
+    "The weights are frequencies: n, the events, the rates and the checks count the cases the rows stand for.": "The weights are frequencies: n, the events, the rates and the checks count the cases the rows stand for."
+   },
+   "note_robust_weights": {
+    "With weights, the robust standard errors take each row as one observation, not as many as its weight.": "With weights, the robust standard errors take each row as one observation, not as many as its weight."
+   },
+   "note_zero_weights": {
+    "Rows of weight 0 were left out of the fit.": "Rows of weight 0 were left out of the fit."
+   },
+   "note_interactions": {
+    "The terms of an interaction are correlated with their parts by construction: their VIFs are large for that reason; centre the predictors to read them.": "The terms of an interaction are correlated with their parts by construction: their VIFs are large for that reason; centre the predictors to read them."
+   },
+   "note_not_converged": {
+    "The fit did not converge: the estimates may be unreliable; look for a predictor that almost separates the outcome.": "The fit did not converge: the estimates may be unreliable; look for a predictor that almost separates the outcome."
    }
   },
   "checks": {
    "separation": {
     "name": "No separation",
     "h0": "No combination of predictors separates the outcome completely.",
-    "advice": "A predictor separates the outcome: use estimation = firth, or a penalty."
+    "advice": "The outcome is separated: with Firth's estimation or a penalty the estimates stay finite, but the separating terms' effects are very large and uncertain: read them with care.",
+    "not_computed": "detectseparation's linear program could not run on these rows."
    },
    "hosmer_lemeshow": {
     "name": "Calibration: Hosmer–Lemeshow",
     "h0": "The predicted probabilities match the observed rates in 10 groups of risk.",
-    "advice": "The predicted probabilities do not match the observed rates: add the missing terms, read the calibration chart."
+    "advice": "The predicted probabilities do not match the observed rates: add the missing terms (a curve, an interaction) and read the calibration chart.",
+    "not_computed": "Too few distinct predicted risks to make groups: read the calibration chart."
    },
    "box_tidwell": {
     "name": "Linearity of the logit: Box–Tidwell",
     "h0": "The predictor's effect is linear in the logit (its x·log(x) term adds nothing).",
-    "advice": "That predictor's effect is not linear in the logit: transform it."
+    "advice": "That predictor's effect is not linear in the logit: transform it (a log, a square) or cut it into bands.",
+    "not_computed": "It needs a number predictor with at least three distinct values, all above 0: shift the column above 0, or read the residuals' chart."
    },
    "deviance_residuals": {
     "name": "Influence: deviance residuals",
-    "h0": "No row is far from what the model predicts for it.",
+    "h0": "No row is far from what the model predicts for it (|deviance residual| under 3).",
     "advice": "Look at the rows named: the model predicts them badly."
+   },
+   "epv": {
+    "advice": "Few events for the number of terms: use fewer terms; Firth's estimation or a penalty reduce the bias, and with one already chosen read the intervals with care."
    }
   }
  },
@@ -106,7 +148,7 @@
    "prob": "Probabilità stimate per esito osservato",
    "confusion": "Matrice di confusione alla soglia",
    "resid_linear": "Residui di devianza rispetto al predittore lineare",
-   "odds_ratio_interval": "Odds ratio con i loro intervalli (asse logaritmico)"
+   "odds_ratio_interval": "Odds ratio con i loro intervalli (asse logaritmico, senza l'intercetta)"
   },
   "series": {
    "roc": "ROC",
@@ -138,7 +180,16 @@
     "lr_p_value": "p-value del rapporto di verosimiglianza",
     "mcfadden_r2": "R² di McFadden",
     "nagelkerke_r2": "R² di Nagelkerke",
-    "tjur_r2": "R² di Tjur"
+    "tjur_r2": "R² di Tjur",
+    "note_firth": "Nota: la stima di Firth",
+    "note_firth_profile": "Nota: intervalli con Firth",
+    "note_firth_robust": "Nota: errori robusti con Firth",
+    "note_probit": "Nota: il legame probit",
+    "note_weights": "Nota: i pesi",
+    "note_robust_weights": "Nota: errori robusti con i pesi",
+    "note_zero_weights": "Nota: righe di peso 0",
+    "note_interactions": "Nota: le interazioni",
+    "note_not_converged": "Nota: convergenza"
    }
   },
   "values": {
@@ -148,28 +199,61 @@
    "link": {
     "logit": "logit",
     "probit": "probit"
+   },
+   "note_firth": {
+    "Firth's penalized likelihood (brglm2, AS_mean): the estimates are pulled towards 0 and stay finite under separation; the deviance, the likelihood-ratio test and the AIC are the ordinary likelihood's at these estimates.": "Verosimiglianza penalizzata di Firth (brglm2, AS_mean): le stime sono attratte verso 0 e restano finite anche con la separazione; la devianza, il test del rapporto di verosimiglianza e l'AIC sono quelli della verosimiglianza ordinaria a queste stime."
+   },
+   "note_firth_profile": {
+    "brglm2 has no profile likelihood intervals for Firth's fit: the intervals are Wald's.": "brglm2 non ha intervalli di verosimiglianza profilo per la stima di Firth: gli intervalli sono quelli di Wald."
+   },
+   "note_firth_robust": {
+    "With Firth's estimation the robust standard errors are sandwich's for a glm, at Firth's estimates.": "Con la stima di Firth gli errori standard robusti sono quelli di sandwich per un glm, calcolati alle stime di Firth."
+   },
+   "note_probit": {
+    "With the probit link the coefficients are on the scale of a standard normal variable, not of log odds: there are no odds ratios.": "Con il legame probit i coefficienti sono sulla scala di una normale standard, non dei log-odds: non ci sono odds ratio."
+   },
+   "note_weights": {
+    "The weights are frequencies: n, the events, the rates and the checks count the cases the rows stand for.": "I pesi sono frequenze: n, gli eventi, i tassi e le verifiche contano i casi che le righe rappresentano."
+   },
+   "note_robust_weights": {
+    "With weights, the robust standard errors take each row as one observation, not as many as its weight.": "Con i pesi, gli errori standard robusti contano ogni riga come un'osservazione sola, non tante quante il suo peso."
+   },
+   "note_zero_weights": {
+    "Rows of weight 0 were left out of the fit.": "Le righe di peso 0 sono state escluse dalla stima."
+   },
+   "note_interactions": {
+    "The terms of an interaction are correlated with their parts by construction: their VIFs are large for that reason; centre the predictors to read them.": "I termini di un'interazione sono correlati per costruzione con le loro parti: per questo i loro VIF sono grandi; centrate i predittori per leggerli."
+   },
+   "note_not_converged": {
+    "The fit did not converge: the estimates may be unreliable; look for a predictor that almost separates the outcome.": "La stima non è arrivata a convergenza: le stime possono essere inaffidabili; cercate un predittore che separa quasi l'esito."
    }
   },
   "checks": {
    "separation": {
     "name": "Assenza di separazione",
     "h0": "Nessuna combinazione di predittori separa del tutto l'esito.",
-    "advice": "Un predittore separa l'esito: usate estimation = firth, oppure una penalizzazione."
+    "advice": "L'esito è separato: con la stima di Firth o una penalizzazione le stime restano finite, ma gli effetti dei termini che separano sono molto grandi e incerti: leggeteli con cautela.",
+    "not_computed": "Il programma lineare di detectseparation non ha potuto girare su queste righe."
    },
    "hosmer_lemeshow": {
     "name": "Calibrazione: Hosmer–Lemeshow",
     "h0": "Le probabilità stimate corrispondono ai tassi osservati in 10 gruppi di rischio.",
-    "advice": "Le probabilità stimate non corrispondono ai tassi osservati: aggiungete i termini che mancano, leggete il grafico di calibrazione."
+    "advice": "Le probabilità stimate non corrispondono ai tassi osservati: aggiungete i termini che mancano (una curva, un'interazione) e leggete il grafico di calibrazione.",
+    "not_computed": "Troppo pochi rischi stimati distinti per formare i gruppi: leggete il grafico di calibrazione."
    },
    "box_tidwell": {
     "name": "Linearità del logit: Box–Tidwell",
     "h0": "L'effetto del predittore è lineare nel logit (il termine x·log(x) non aggiunge nulla).",
-    "advice": "L'effetto di quel predittore non è lineare nel logit: trasformatelo."
+    "advice": "L'effetto di quel predittore non è lineare nel logit: trasformatelo (un logaritmo, un quadrato) o dividetelo in fasce.",
+    "not_computed": "Serve un predittore numerico con almeno tre valori distinti, tutti sopra 0: spostate la colonna sopra 0, oppure leggete il grafico dei residui."
    },
    "deviance_residuals": {
     "name": "Influenza: residui di devianza",
-    "h0": "Nessuna riga è lontana da ciò che il modello prevede per lei.",
+    "h0": "Nessuna riga è lontana da ciò che il modello prevede per lei (|residuo di devianza| sotto 3).",
     "advice": "Guardate le righe indicate: il modello le prevede male."
+   },
+   "epv": {
+    "advice": "Pochi eventi per il numero di termini: usate meno termini; la stima di Firth o una penalizzazione riducono la distorsione, e se ne avete già scelta una leggete gli intervalli con cautela."
    }
   }
  },
@@ -193,7 +277,7 @@
    "prob": "Geschätzte Wahrscheinlichkeiten nach beobachtetem Ergebnis",
    "confusion": "Konfusionsmatrix an der Schwelle",
    "resid_linear": "Devianzresiduen gegen den linearen Prädiktor",
-   "odds_ratio_interval": "Odds Ratios mit ihren Intervallen (logarithmische Achse)"
+   "odds_ratio_interval": "Odds Ratios mit ihren Intervallen (logarithmische Achse, ohne den Achsenabschnitt)"
   },
   "series": {
    "roc": "ROC",
@@ -225,7 +309,16 @@
     "lr_p_value": "p-Wert des Likelihood-Quotienten",
     "mcfadden_r2": "R² nach McFadden",
     "nagelkerke_r2": "R² nach Nagelkerke",
-    "tjur_r2": "R² nach Tjur"
+    "tjur_r2": "R² nach Tjur",
+    "note_firth": "Hinweis: Firth-Schätzung",
+    "note_firth_profile": "Hinweis: Intervalle mit Firth",
+    "note_firth_robust": "Hinweis: robuste Fehler mit Firth",
+    "note_probit": "Hinweis: Probit-Link",
+    "note_weights": "Hinweis: Gewichte",
+    "note_robust_weights": "Hinweis: robuste Fehler mit Gewichten",
+    "note_zero_weights": "Hinweis: Zeilen mit Gewicht 0",
+    "note_interactions": "Hinweis: Wechselwirkungen",
+    "note_not_converged": "Hinweis: Konvergenz"
    }
   },
   "values": {
@@ -235,28 +328,61 @@
    "link": {
     "logit": "Logit",
     "probit": "Probit"
+   },
+   "note_firth": {
+    "Firth's penalized likelihood (brglm2, AS_mean): the estimates are pulled towards 0 and stay finite under separation; the deviance, the likelihood-ratio test and the AIC are the ordinary likelihood's at these estimates.": "Penalisierte Likelihood nach Firth (brglm2, AS_mean): Die Schätzungen werden zu 0 gezogen und bleiben auch bei Separation endlich; Devianz, Likelihood-Quotienten-Test und AIC sind die der gewöhnlichen Likelihood an diesen Schätzungen."
+   },
+   "note_firth_profile": {
+    "brglm2 has no profile likelihood intervals for Firth's fit: the intervals are Wald's.": "brglm2 hat keine Profil-Likelihood-Intervalle für die Firth-Schätzung: Die Intervalle sind Wald-Intervalle."
+   },
+   "note_firth_robust": {
+    "With Firth's estimation the robust standard errors are sandwich's for a glm, at Firth's estimates.": "Mit der Firth-Schätzung sind die robusten Standardfehler die von sandwich für ein glm, an den Firth-Schätzungen."
+   },
+   "note_probit": {
+    "With the probit link the coefficients are on the scale of a standard normal variable, not of log odds: there are no odds ratios.": "Mit dem Probit-Link stehen die Koeffizienten auf der Skala einer Standardnormalverteilung, nicht der Log-Odds: Es gibt keine Odds Ratios."
+   },
+   "note_weights": {
+    "The weights are frequencies: n, the events, the rates and the checks count the cases the rows stand for.": "Die Gewichte sind Häufigkeiten: n, die Ereignisse, die Raten und die Prüfungen zählen die Fälle, für die die Zeilen stehen."
+   },
+   "note_robust_weights": {
+    "With weights, the robust standard errors take each row as one observation, not as many as its weight.": "Mit Gewichten zählen die robusten Standardfehler jede Zeile als eine Beobachtung, nicht so oft wie ihr Gewicht."
+   },
+   "note_zero_weights": {
+    "Rows of weight 0 were left out of the fit.": "Zeilen mit Gewicht 0 wurden von der Schätzung ausgeschlossen."
+   },
+   "note_interactions": {
+    "The terms of an interaction are correlated with their parts by construction: their VIFs are large for that reason; centre the predictors to read them.": "Die Terme einer Wechselwirkung sind konstruktionsbedingt mit ihren Teilen korreliert: Deshalb sind ihre VIFs groß; zentrieren Sie die Prädiktoren, um sie zu lesen."
+   },
+   "note_not_converged": {
+    "The fit did not converge: the estimates may be unreliable; look for a predictor that almost separates the outcome.": "Die Schätzung ist nicht konvergiert: Die Schätzungen können unzuverlässig sein; suchen Sie einen Prädiktor, der das Ergebnis fast trennt."
    }
   },
   "checks": {
    "separation": {
     "name": "Keine Separation",
     "h0": "Keine Kombination von Prädiktoren trennt das Ergebnis vollständig.",
-    "advice": "Ein Prädiktor trennt das Ergebnis: Verwenden Sie estimation = firth oder eine Penalisierung."
+    "advice": "Das Ergebnis ist separiert: Mit der Firth-Schätzung oder einer Penalisierung bleiben die Schätzungen endlich, doch die Effekte der trennenden Terme sind sehr groß und unsicher: Lesen Sie sie mit Vorsicht.",
+    "not_computed": "Das lineare Programm von detectseparation konnte auf diesen Zeilen nicht laufen."
    },
    "hosmer_lemeshow": {
     "name": "Kalibrierung: Hosmer–Lemeshow",
     "h0": "Die geschätzten Wahrscheinlichkeiten entsprechen den beobachteten Raten in 10 Risikogruppen.",
-    "advice": "Die geschätzten Wahrscheinlichkeiten passen nicht zu den beobachteten Raten: Ergänzen Sie fehlende Terme, lesen Sie das Kalibrierungsdiagramm."
+    "advice": "Die geschätzten Wahrscheinlichkeiten passen nicht zu den beobachteten Raten: Ergänzen Sie fehlende Terme (eine Krümmung, eine Wechselwirkung) und lesen Sie das Kalibrierungsdiagramm.",
+    "not_computed": "Zu wenige verschiedene geschätzte Risiken, um Gruppen zu bilden: Lesen Sie das Kalibrierungsdiagramm."
    },
    "box_tidwell": {
     "name": "Linearität des Logits: Box–Tidwell",
     "h0": "Der Effekt des Prädiktors ist im Logit linear (sein Term x·log(x) fügt nichts hinzu).",
-    "advice": "Der Effekt dieses Prädiktors ist im Logit nicht linear: transformieren Sie ihn."
+    "advice": "Der Effekt dieses Prädiktors ist im Logit nicht linear: Transformieren Sie ihn (Logarithmus, Quadrat) oder teilen Sie ihn in Klassen.",
+    "not_computed": "Nötig ist ein numerischer Prädiktor mit mindestens drei verschiedenen Werten, alle über 0: Verschieben Sie die Spalte über 0, oder lesen Sie das Residuendiagramm."
    },
    "deviance_residuals": {
     "name": "Einfluss: Devianzresiduen",
-    "h0": "Keine Zeile liegt weit von dem, was das Modell für sie vorhersagt.",
+    "h0": "Keine Zeile liegt weit von dem, was das Modell für sie vorhersagt (|Devianzresiduum| unter 3).",
     "advice": "Prüfen Sie die genannten Zeilen: Das Modell sagt sie schlecht vorher."
+   },
+   "epv": {
+    "advice": "Wenige Ereignisse für die Zahl der Terme: Verwenden Sie weniger Terme; die Firth-Schätzung oder eine Penalisierung verringern die Verzerrung, und ist eine davon bereits gewählt, lesen Sie die Intervalle mit Vorsicht."
    }
   }
  },
@@ -280,7 +406,7 @@
    "prob": "Probabilidades estimadas por resultado observado",
    "confusion": "Matriz de confusión en el umbral",
    "resid_linear": "Residuos de devianza frente al predictor lineal",
-   "odds_ratio_interval": "Odds ratios con sus intervalos (eje logarítmico)"
+   "odds_ratio_interval": "Odds ratios con sus intervalos (eje logarítmico, sin el intercepto)"
   },
   "series": {
    "roc": "ROC",
@@ -312,7 +438,16 @@
     "lr_p_value": "p-valor de la razón de verosimilitud",
     "mcfadden_r2": "R² de McFadden",
     "nagelkerke_r2": "R² de Nagelkerke",
-    "tjur_r2": "R² de Tjur"
+    "tjur_r2": "R² de Tjur",
+    "note_firth": "Nota: la estimación de Firth",
+    "note_firth_profile": "Nota: intervalos con Firth",
+    "note_firth_robust": "Nota: errores robustos con Firth",
+    "note_probit": "Nota: el enlace probit",
+    "note_weights": "Nota: los pesos",
+    "note_robust_weights": "Nota: errores robustos con pesos",
+    "note_zero_weights": "Nota: filas de peso 0",
+    "note_interactions": "Nota: las interacciones",
+    "note_not_converged": "Nota: convergencia"
    }
   },
   "values": {
@@ -322,28 +457,61 @@
    "link": {
     "logit": "logit",
     "probit": "probit"
+   },
+   "note_firth": {
+    "Firth's penalized likelihood (brglm2, AS_mean): the estimates are pulled towards 0 and stay finite under separation; the deviance, the likelihood-ratio test and the AIC are the ordinary likelihood's at these estimates.": "Verosimilitud penalizada de Firth (brglm2, AS_mean): las estimaciones se acercan a 0 y siguen siendo finitas con separación; la devianza, la prueba de razón de verosimilitudes y el AIC son los de la verosimilitud ordinaria en estas estimaciones."
+   },
+   "note_firth_profile": {
+    "brglm2 has no profile likelihood intervals for Firth's fit: the intervals are Wald's.": "brglm2 no tiene intervalos de verosimilitud perfil para la estimación de Firth: los intervalos son los de Wald."
+   },
+   "note_firth_robust": {
+    "With Firth's estimation the robust standard errors are sandwich's for a glm, at Firth's estimates.": "Con la estimación de Firth los errores estándar robustos son los de sandwich para un glm, en las estimaciones de Firth."
+   },
+   "note_probit": {
+    "With the probit link the coefficients are on the scale of a standard normal variable, not of log odds: there are no odds ratios.": "Con el enlace probit los coeficientes están en la escala de una normal estándar, no de log-odds: no hay odds ratio."
+   },
+   "note_weights": {
+    "The weights are frequencies: n, the events, the rates and the checks count the cases the rows stand for.": "Los pesos son frecuencias: n, los eventos, las tasas y las comprobaciones cuentan los casos que representan las filas."
+   },
+   "note_robust_weights": {
+    "With weights, the robust standard errors take each row as one observation, not as many as its weight.": "Con pesos, los errores estándar robustos cuentan cada fila como una sola observación, no tantas como su peso."
+   },
+   "note_zero_weights": {
+    "Rows of weight 0 were left out of the fit.": "Las filas de peso 0 se excluyeron de la estimación."
+   },
+   "note_interactions": {
+    "The terms of an interaction are correlated with their parts by construction: their VIFs are large for that reason; centre the predictors to read them.": "Los términos de una interacción están correlacionados con sus partes por construcción: por eso sus VIF son grandes; centre los predictores para leerlos."
+   },
+   "note_not_converged": {
+    "The fit did not converge: the estimates may be unreliable; look for a predictor that almost separates the outcome.": "La estimación no convergió: las estimaciones pueden no ser fiables; busque un predictor que casi separe el resultado."
    }
   },
   "checks": {
    "separation": {
     "name": "Sin separación",
     "h0": "Ninguna combinación de predictores separa del todo el resultado.",
-    "advice": "Un predictor separa el resultado: use estimation = firth, o una penalización."
+    "advice": "El resultado está separado: con la estimación de Firth o una penalización las estimaciones siguen siendo finitas, pero los efectos de los términos que separan son muy grandes e inciertos: léalos con cautela.",
+    "not_computed": "El programa lineal de detectseparation no pudo ejecutarse con estas filas."
    },
    "hosmer_lemeshow": {
     "name": "Calibración: Hosmer–Lemeshow",
     "h0": "Las probabilidades estimadas coinciden con las tasas observadas en 10 grupos de riesgo.",
-    "advice": "Las probabilidades estimadas no coinciden con las tasas observadas: añada los términos que faltan, lea el gráfico de calibración."
+    "advice": "Las probabilidades estimadas no coinciden con las tasas observadas: añada los términos que faltan (una curva, una interacción) y lea el gráfico de calibración.",
+    "not_computed": "Muy pocos riesgos estimados distintos para formar grupos: lea el gráfico de calibración."
    },
    "box_tidwell": {
     "name": "Linealidad del logit: Box–Tidwell",
     "h0": "El efecto del predictor es lineal en el logit (su término x·log(x) no añade nada).",
-    "advice": "El efecto de ese predictor no es lineal en el logit: transfórmelo."
+    "advice": "El efecto de ese predictor no es lineal en el logit: transfórmelo (un logaritmo, un cuadrado) o divídalo en tramos.",
+    "not_computed": "Hace falta un predictor numérico con al menos tres valores distintos, todos por encima de 0: desplace la columna por encima de 0, o lea el gráfico de residuos."
    },
    "deviance_residuals": {
     "name": "Influencia: residuos de devianza",
-    "h0": "Ninguna fila está lejos de lo que el modelo predice para ella.",
+    "h0": "Ninguna fila está lejos de lo que el modelo predice para ella (|residuo de devianza| menor que 3).",
     "advice": "Revise las filas indicadas: el modelo las predice mal."
+   },
+   "epv": {
+    "advice": "Pocos eventos para el número de términos: use menos términos; la estimación de Firth o una penalización reducen el sesgo, y si ya eligió una, lea los intervalos con cautela."
    }
   }
  },
@@ -367,7 +535,7 @@
    "prob": "Probabilités prédites selon le résultat observé",
    "confusion": "Matrice de confusion au seuil",
    "resid_linear": "Résidus de déviance selon le prédicteur linéaire",
-   "odds_ratio_interval": "Odds ratios avec leurs intervalles (axe logarithmique)"
+   "odds_ratio_interval": "Odds ratios avec leurs intervalles (axe logarithmique, sans la constante)"
   },
   "series": {
    "roc": "ROC",
@@ -399,7 +567,16 @@
     "lr_p_value": "p-valeur du rapport de vraisemblance",
     "mcfadden_r2": "R² de McFadden",
     "nagelkerke_r2": "R² de Nagelkerke",
-    "tjur_r2": "R² de Tjur"
+    "tjur_r2": "R² de Tjur",
+    "note_firth": "Note : l'estimation de Firth",
+    "note_firth_profile": "Note : intervalles avec Firth",
+    "note_firth_robust": "Note : erreurs robustes avec Firth",
+    "note_probit": "Note : le lien probit",
+    "note_weights": "Note : les poids",
+    "note_robust_weights": "Note : erreurs robustes avec poids",
+    "note_zero_weights": "Note : lignes de poids 0",
+    "note_interactions": "Note : les interactions",
+    "note_not_converged": "Note : convergence"
    }
   },
   "values": {
@@ -409,28 +586,61 @@
    "link": {
     "logit": "logit",
     "probit": "probit"
+   },
+   "note_firth": {
+    "Firth's penalized likelihood (brglm2, AS_mean): the estimates are pulled towards 0 and stay finite under separation; the deviance, the likelihood-ratio test and the AIC are the ordinary likelihood's at these estimates.": "Vraisemblance pénalisée de Firth (brglm2, AS_mean) : les estimations sont tirées vers 0 et restent finies même en cas de séparation ; la déviance, le test du rapport de vraisemblance et l'AIC sont ceux de la vraisemblance ordinaire à ces estimations."
+   },
+   "note_firth_profile": {
+    "brglm2 has no profile likelihood intervals for Firth's fit: the intervals are Wald's.": "brglm2 n'a pas d'intervalles de vraisemblance profilée pour l'estimation de Firth : les intervalles sont ceux de Wald."
+   },
+   "note_firth_robust": {
+    "With Firth's estimation the robust standard errors are sandwich's for a glm, at Firth's estimates.": "Avec l'estimation de Firth, les erreurs standard robustes sont celles de sandwich pour un glm, aux estimations de Firth."
+   },
+   "note_probit": {
+    "With the probit link the coefficients are on the scale of a standard normal variable, not of log odds: there are no odds ratios.": "Avec le lien probit, les coefficients sont à l'échelle d'une loi normale centrée réduite, pas des log-odds : il n'y a pas d'odds ratio."
+   },
+   "note_weights": {
+    "The weights are frequencies: n, the events, the rates and the checks count the cases the rows stand for.": "Les poids sont des fréquences : n, les événements, les taux et les vérifications comptent les cas que les lignes représentent."
+   },
+   "note_robust_weights": {
+    "With weights, the robust standard errors take each row as one observation, not as many as its weight.": "Avec des poids, les erreurs standard robustes comptent chaque ligne comme une seule observation, pas autant que son poids."
+   },
+   "note_zero_weights": {
+    "Rows of weight 0 were left out of the fit.": "Les lignes de poids 0 ont été exclues de l'estimation."
+   },
+   "note_interactions": {
+    "The terms of an interaction are correlated with their parts by construction: their VIFs are large for that reason; centre the predictors to read them.": "Les termes d'une interaction sont corrélés à leurs parties par construction : leurs VIF sont donc grands ; centrez les prédicteurs pour les lire."
+   },
+   "note_not_converged": {
+    "The fit did not converge: the estimates may be unreliable; look for a predictor that almost separates the outcome.": "L'estimation n'a pas convergé : les estimations peuvent être peu fiables ; cherchez un prédicteur qui sépare presque le résultat."
    }
   },
   "checks": {
    "separation": {
     "name": "Pas de séparation",
     "h0": "Aucune combinaison de prédicteurs ne sépare complètement le résultat.",
-    "advice": "Un prédicteur sépare le résultat : utilisez estimation = firth, ou une pénalisation."
+    "advice": "Le résultat est séparé : avec l'estimation de Firth ou une pénalisation les estimations restent finies, mais les effets des termes qui séparent sont très grands et incertains : lisez-les avec prudence.",
+    "not_computed": "Le programme linéaire de detectseparation n'a pas pu tourner sur ces lignes."
    },
    "hosmer_lemeshow": {
     "name": "Calibration : Hosmer–Lemeshow",
     "h0": "Les probabilités prédites correspondent aux taux observés dans 10 groupes de risque.",
-    "advice": "Les probabilités prédites ne correspondent pas aux taux observés : ajoutez les termes manquants, lisez le graphique de calibration."
+    "advice": "Les probabilités prédites ne correspondent pas aux taux observés : ajoutez les termes manquants (une courbure, une interaction) et lisez le graphique de calibration.",
+    "not_computed": "Trop peu de risques prédits distincts pour former des groupes : lisez le graphique de calibration."
    },
    "box_tidwell": {
     "name": "Linéarité du logit : Box–Tidwell",
     "h0": "L'effet du prédicteur est linéaire dans le logit (son terme x·log(x) n'apporte rien).",
-    "advice": "L'effet de ce prédicteur n'est pas linéaire dans le logit : transformez-le."
+    "advice": "L'effet de ce prédicteur n'est pas linéaire dans le logit : transformez-le (un logarithme, un carré) ou découpez-le en classes.",
+    "not_computed": "Il faut un prédicteur numérique avec au moins trois valeurs distinctes, toutes au-dessus de 0 : décalez la colonne au-dessus de 0, ou lisez le graphique des résidus."
    },
    "deviance_residuals": {
     "name": "Influence : résidus de déviance",
-    "h0": "Aucune ligne n'est loin de ce que le modèle prédit pour elle.",
+    "h0": "Aucune ligne n'est loin de ce que le modèle prédit pour elle (|résidu de déviance| sous 3).",
     "advice": "Examinez les lignes indiquées : le modèle les prédit mal."
+   },
+   "epv": {
+    "advice": "Peu d'événements pour le nombre de termes : utilisez moins de termes ; l'estimation de Firth ou une pénalisation réduisent le biais, et si l'une est déjà choisie, lisez les intervalles avec prudence."
    }
   }
  }
