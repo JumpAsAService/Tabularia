@@ -17,6 +17,21 @@ The line margin is built like this (in Tabularia, joining the two sources):
     margin   = revenue - cost_p - cost_c
 and the attribution by agent/inspector/area manager comes from the cross-DB join
 on cliente_id/agente_id with the ClickHouse CRM.
+
+THE CUSTOMER LIFECYCLE. Customers are not a fixed list that orders at random: each one is
+simulated, in a Pareto/NBD process (the model behind «buy till you die» analyses):
+  · acquisition: ~30% of the customers are in the portfolio when the window opens, the
+    others arrive over time at a rate that grows, with a season (more in January, few in
+    August) and a pace of its own for each channel; `clienti.data_acquisizione` is that day;
+  · frequency: each customer orders at a Poisson rate of its own (gamma across customers,
+    the mean set by the channel), shaped by the month, weekday and channel seasons;
+  · churn: each customer's lifetime is exponential, with a hazard that depends on channel,
+    macro-area and agent, times a gamma frailty. NOBODY WRITES THE CHURN DOWN: the database
+    only has `clienti.stato`, computed like a CRM would (no order for six months = inattivo),
+    and an inactive customer can be a slow one, not a lost one;
+  · spend: an average order size of its own (gamma across customers, independent of the
+    rate), the order's noise on top: the assumption of the Gamma–Gamma model.
+The random seed is fixed, so the data is the same at every run.
 """
 from __future__ import annotations
 
@@ -58,8 +73,8 @@ START_DATE = date(2023, 7, 1)
 DAYS = (END_DATE - START_DATE).days
 
 # ── trends over time (so that the data is NOT flat/uniform) ──────────────────
-# compound annual company growth: more orders as time goes by
-ANNUAL_GROWTH = 0.18
+# the company grows because customers ARRIVE (see the lifecycle below), not because every
+# customer orders more: the order rate of a customer has no trend of its own
 # annual growth of the average order value (a basket that widens over time)
 ANNUAL_BASKET_GROWTH = 0.05
 # monthly seasonality of pasta and bakery goods (index 1..12; 0 = placeholder):
@@ -68,6 +83,37 @@ ANNUAL_BASKET_GROWTH = 0.05
 # anomalies have tables of their own further down (CATEGORY_SEASON, CHANNEL_SEASON,
 # CANCEL_*).
 MONTH_MULT = np.array([0.0, 0.90, 0.82, 1.05, 1.15, 1.00, 0.95, 0.90, 0.62, 1.05, 1.12, 1.30, 1.80])
+
+# ── the customer lifecycle ───────────────────────────────────────────────────
+# share of the customers already in the portfolio when the window opens (the others are
+# acquired over the window); their acquisition date lies before it, and what they ordered
+# before is not in the data
+INITIAL_SHARE = 0.30
+# a share of the customers per channel (the order is CHANNELS' one)
+CHANNEL_SHARE = [0.20, 0.26, 0.12, 0.27, 0.15]
+# the growth of the ACQUISITIONS from one year to the next, per channel: the online channel
+# is the one that takes off, the supermarkets are a slow, contracted business
+ACQ_GROWTH = {"Supermercati": 1.10, "Ristorazione": 1.20, "Ingrosso": 1.05, "Negozi": 1.00, "Online": 1.60}
+# acquisitions by month (index 1..12; 0 = placeholder): a push at the start of the year,
+# a dead August, a quiet December
+ACQ_SEASON = np.array([0.0, 1.40, 1.25, 1.10, 1.00, 0.95, 0.90, 0.75, 0.30, 1.20, 1.15, 0.90, 0.55])
+# orders a year of a live customer, on average, by channel: the supermarkets and the
+# restaurants order often, the wholesalers rarely and in bulk. The scale is then
+# calibrated, so that the orders add up to the preset's; what stays is the proportion
+CHANNEL_RATE = {"Supermercati": 16.0, "Ristorazione": 14.0, "Ingrosso": 5.0, "Negozi": 7.0, "Online": 5.0}
+RATE_SHAPE = 1.5            # gamma shape of the rate across customers (a CV of ~0.8)
+# churn: a hazard a year = base × channel × macro-area × the agent's × frailty
+BASE_CHURN = 0.25
+CHANNEL_CHURN = {"Supermercati": 0.55, "Ristorazione": 1.35, "Ingrosso": 0.85, "Negozi": 1.25, "Online": 1.60}
+AREA_CHURN = {"Nord-Ovest": 0.75, "Nord-Est": 0.80, "Centro": 1.00, "Sud": 1.35, "Isole": 1.70}
+AGENT_CHURN_SIGMA = 0.30    # a lognormal factor per agent: some lose more customers than others
+FRAILTY_SHAPE = 3.0         # gamma, mean 1: what the covariates do not explain
+SPEND_SHAPE = 4.0           # gamma, mean 1: the size of a customer's orders (a CV of 0.5)
+FIRST_ORDER_LAG_DAYS = 5.0  # the first order follows the acquisition by this many days, on average
+INACTIVE_AFTER_DAYS = 183   # the CRM calls a customer «inattivo» after six months with no order
+# the CRM activity of a customer who has churned: a fraction of a live one's, the attempts
+# to win it back
+POST_CHURN_ACTIVITY = 0.12
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -375,41 +421,194 @@ def _agent_row(aid, role, resp, area, comm):
     )
 
 
-def gen_customers(agents: pd.DataFrame) -> pd.DataFrame:
-    """Customer registry, each one assigned to an AGENT (not an inspector/manager)."""
-    agent_ids_pool = agents.loc[agents.ruolo == "agente", "id"].to_numpy()
+def build_day_intensity() -> np.ndarray:
+    """The intensity of each day of the data window, mean 1: the yearly season (Christmas
+    and Easter up, August down — see MONTH_MULT), the weekly B2B one (weekdays up, Saturday
+    down, Sunday almost zero) and a little daily noise, so that the curves are not too smooth.
+    There is NO growth in it: the company grows by acquiring customers."""
+    ndays = DAYS + 1
+    dates = pd.to_datetime(np.datetime64(START_DATE) + np.arange(ndays).astype("timedelta64[D]"))
+    dow = dates.dayofweek.to_numpy()  # 0=Mon … 6=Sun
+    weekly = np.where(dow < 5, 1.0, np.where(dow == 5, 0.45, 0.12))
+    w = MONTH_MULT[dates.month.to_numpy()] * weekly * rng.uniform(0.85, 1.15, ndays)
+    return w / w.mean()
+
+
+def _boundaries(intensity: np.ndarray) -> np.ndarray:
+    """Cumulative intensity at the START of each day (and after the last): the integral that
+    turns an interval of days into an expected number of events, and, inverted with
+    searchsorted, a uniform draw into a day."""
+    return np.concatenate([[0.0], np.cumsum(intensity)])
+
+
+def _draw_days(cum: np.ndarray, lo: np.ndarray, hi: np.ndarray) -> np.ndarray:
+    """One day for each interval of boundaries [lo, hi], with probability proportional to the
+    intensity inside it: the days of the data window (0 = START_DATE)."""
+    u = cum[lo] + rng.random(len(lo)) * (cum[hi] - cum[lo])
+    return np.clip(np.searchsorted(cum, u, side="left") - 1, lo, hi - 1)
+
+
+def simulate_lifecycles(agents: pd.DataFrame, intensity: np.ndarray) -> dict:
+    """Who the customers are and WHEN: acquisition, order rate, lifetime, size of the orders.
+
+    All the arrays are indexed by customer 0..C-1 (the id is index + 1), the times are days from
+    START_DATE. `death` is the day the customer stops buying for good (inf: never, in the
+    data's horizon): it lives only in this dictionary and never reaches the databases —
+    the point is that analyses must infer it."""
+    C = P["customers"]
+    ndays = DAYS + 1
+    agent_pool = agents.loc[agents.ruolo == "agente", "id"].to_numpy()
+    n_init = int(round(C * INITIAL_SHARE))
+    initial = np.zeros(C, dtype=bool)
+    initial[:n_init] = True
+
+    geo_idx = rng.integers(0, len(GEO), C)
+    channel_idx = rng.choice(len(CHANNELS), size=C, p=np.array(CHANNEL_SHARE) / sum(CHANNEL_SHARE))
+    agent_id = agent_pool[rng.integers(0, len(agent_pool), C)]
+    macro_of = {r[0]: r[1] for r in REGIONS}
+    area_mult = np.array([AREA_CHURN[macro_of[GEO[g][0]]] for g in range(len(GEO))])[geo_idx]
+    ch_churn = np.array([CHANNEL_CHURN[c] for c in CHANNELS])[channel_idx]
+    ch_rate = np.array([CHANNEL_RATE[c] for c in CHANNELS])[channel_idx]
+
+    # ── acquisition: the first customers are there already, the others arrive over time ──
+    acq = np.zeros(C, dtype=np.int64)
+    acq_date_before = np.zeros(C, dtype=np.int64)       # days before START_DATE, for the first ones
+    t = np.arange(ndays)
+    month = pd.to_datetime(np.datetime64(START_DATE) + t.astype("timedelta64[D]")).month.to_numpy()
+    dow = pd.to_datetime(np.datetime64(START_DATE) + t.astype("timedelta64[D]")).dayofweek.to_numpy()
+    weekly = np.where(dow < 5, 1.0, np.where(dow == 5, 0.10, 0.02))   # contracts are signed on working days
+    for c, name in enumerate(CHANNELS):
+        sel = np.where((channel_idx == c) & ~initial)[0]
+        if sel.size:
+            cum = _boundaries(ACQ_GROWTH[name] ** (t / 365.25) * ACQ_SEASON[month] * weekly)
+            acq[sel] = _draw_days(cum, np.zeros(sel.size, dtype=np.int64), np.full(sel.size, ndays, dtype=np.int64))
+    # the portfolio of the start: acquired up to a few years before the window
+    back = np.minimum(np.floor(rng.exponential(450.0, n_init)), 8 * 365) + 1
+    acq_date_before[:n_init] = back.astype(np.int64)
+    acq[:n_init] = -acq_date_before[:n_init]
+
+    # ── churn: an exponential lifetime, with a hazard that depends on covariates ──
+    agent_effect = {int(a): float(e) for a, e in zip(agent_pool, rng.lognormal(0.0, AGENT_CHURN_SIGMA, len(agent_pool)))}
+    frailty = rng.gamma(FRAILTY_SHAPE, 1.0 / FRAILTY_SHAPE, C)
+    hazard = BASE_CHURN * ch_churn * area_mult * np.array([agent_effect[int(a)] for a in agent_id]) * frailty  # a year
+    lifetime = rng.exponential(1.0 / hazard) * 365.25
+    # a customer of the start is observed from day 0: its remaining life is exponential too
+    death = np.where(initial, 0, acq) + lifetime
+
+    # ── frequency and spend: a customer's own, independent of each other ──
+    rate = rng.gamma(RATE_SHAPE, ch_rate / RATE_SHAPE)      # orders a year while alive
+    spend = rng.gamma(SPEND_SHAPE, 1.0 / SPEND_SHAPE, C)    # the size of its orders, mean 1
+
+    # the first order follows the acquisition by a few days, and falls on a working day
+    lag = np.minimum(np.floor(rng.exponential(FIRST_ORDER_LAG_DAYS, C)), 40).astype(np.int64)
+    first = acq + lag
+    wd = dow[np.clip(first, 0, DAYS)]
+    first = np.where(initial, -1, first + np.where(wd == 5, 2, np.where(wd == 6, 1, 0)))
+
+    return dict(initial=initial, geo_idx=geo_idx, channel_idx=channel_idx, agent_id=agent_id, acq=acq,
+                death=death, rate=rate, spend=spend, first=first, hazard=hazard)
+
+
+def gen_customers(agents: pd.DataFrame, life: dict) -> pd.DataFrame:
+    """Customer registry (without `stato`: the CRM computes it from the orders, later), each one
+    assigned to an AGENT (not an inspector/manager)."""
     C = P["customers"]
     log(f"  customers: generating {C:,} records with Faker…")
-    geo_idx = rng.integers(0, len(GEO), C)
-    channel_idx = rng.integers(0, len(CHANNELS), C)
-    agent_ids = agent_ids_pool[rng.integers(0, len(agent_ids_pool), C)]
-    acq_days = rng.integers(0, DAYS, C)
     base = np.datetime64(START_DATE)
-    # ClickHouse Date wants real dates (not strings): vectorised datetime64
-    acq = pd.to_datetime(base + acq_days.astype("timedelta64[D]"))
+    acq_date = pd.to_datetime(base + life["acq"].astype("timedelta64[D]"))
 
     rows = []
     for i in range(C):
-        reg, prov, city = GEO[geo_idx[i]]
+        reg, prov, city = GEO[life["geo_idx"][i]]
         rows.append((
             i + 1,
             fake.company(),
             fake.numerify("###########"),      # VAT number, 11 digits
-            CHANNELS[channel_idx[i]],
+            CHANNELS[life["channel_idx"][i]],
             fake.street_address().replace("\n", " "),
             fake.numerify("#####"),
             city, prov, reg,
-            int(agent_ids[i]),
-            int(rng.random() > 0.08),           # ~92% active
+            int(life["agent_id"][i]),
         ))
     cols = ["id", "ragione_sociale", "partita_iva", "canale", "indirizzo", "cap",
-            "citta", "provincia", "regione", "agente_id", "attivo"]
+            "citta", "provincia", "regione", "agente_id"]
     df = pd.DataFrame(rows, columns=cols)
-    df["data_acquisizione"] = acq
+    df["data_acquisizione"] = acq_date
     # helper arrays for the facts (indexed by cliente_id 1..C)
     df.attrs["agent_of"] = np.concatenate([[0], df.agente_id.to_numpy()])
-    df.attrs["channel_of"] = np.concatenate([[0], channel_idx + 1])  # 1-based in CHANNELS
+    df.attrs["channel_of"] = np.concatenate([[0], life["channel_idx"] + 1])  # 1-based in CHANNELS
     return df
+
+
+def crm_status(life: dict, last_order: np.ndarray) -> pd.DataFrame:
+    """`stato` and `attivo` as a CRM would compute them at END_DATE, from what it can see: the
+    last order that was not cancelled. «attivo»: it ordered within INACTIVE_AFTER_DAYS;
+    «inattivo»: it did not (lost, or only slow: the data does not say); «nuovo»: acquired in the
+    last INACTIVE_AFTER_DAYS and nothing delivered yet."""
+    since_last = DAYS - last_order
+    since_acq = DAYS - life["acq"]
+    stato = np.where(last_order >= 0,
+                     np.where(since_last <= INACTIVE_AFTER_DAYS, "attivo", "inattivo"),
+                     np.where(since_acq <= INACTIVE_AFTER_DAYS, "nuovo", "inattivo"))
+    return pd.DataFrame({"stato": stato, "attivo": (stato != "inattivo").astype(np.uint8)})
+
+
+def channel_multipliers() -> np.ndarray:
+    """[len(CHANNELS) × 13]: the channel mix × season as a multiplier of each channel's order
+    rate. The monthly VOLUME is still MONTH_MULT's: here the table is divided by the weighted
+    mean of the channels, so that it only moves the SHARE of each channel month by month."""
+    ch = np.array([CHANNEL_SEASON[c] for c in CHANNELS])
+    w = np.array([CHANNEL_RATE[c] * CHANNEL_SHARE[i] for i, c in enumerate(CHANNELS)])
+    mean = (w[:, None] * ch).sum(axis=0) / w.sum()
+    mean[0] = 1.0
+    return ch / mean
+
+
+def simulate_orders(life: dict, intensity: np.ndarray, day_month: np.ndarray):
+    """The orders of every customer: (customer index, day), in chronological order.
+
+    A customer's first order follows its acquisition (the customers of the start have none:
+    it was before the window); the following ones are a Poisson process of the customer's own
+    rate, modulated by the seasons (month, weekday, channel), until its death or the end of
+    the window. The rates are scaled so that the orders add up to the preset's."""
+    O, C = P["orders"], P["customers"]
+    ndays = DAYS + 1
+    ch_mult = channel_multipliers()
+    cum_ch = [_boundaries(intensity * ch_mult[c][day_month]) for c in range(len(CHANNELS))]
+    channel, first, rate = life["channel_idx"], life["first"], life["rate"]
+
+    ordered = (~life["initial"]) & (first <= DAYS)            # has its first order in the window
+    last_day = np.minimum(np.floor(life["death"]), DAYS).astype(np.int64)
+    lo = np.where(life["initial"], 0, first + 1)              # the repeat orders: from the day after
+    hi = last_day + 1                                         # …to the death (boundary after its day)
+    live = (lo < hi) & (life["initial"] | ordered)
+
+    # expected repeat orders per customer, then the scale that makes the total the preset's
+    expected = np.zeros(C)
+    for c in range(len(CHANNELS)):
+        sel = np.where(live & (channel == c))[0]
+        expected[sel] = rate[sel] / 365.25 * (cum_ch[c][hi[sel]] - cum_ch[c][lo[sel]])
+    n_first = int(ordered.sum())
+    want = max(O - n_first, 0)
+    k = 1.03 * want / max(expected.sum(), 1e-9)               # 3% over, then thinned to the exact total
+    n_rep = rng.poisson(k * expected)
+
+    cust_rep = np.repeat(np.arange(C), n_rep)
+    day_rep = np.empty(len(cust_rep), dtype=np.int64)
+    ch_rep = channel[cust_rep]
+    for c in range(len(CHANNELS)):
+        sel = np.where(ch_rep == c)[0]
+        if sel.size:
+            day_rep[sel] = _draw_days(cum_ch[c], lo[cust_rep[sel]], hi[cust_rep[sel]])
+    if len(cust_rep) > want:                                  # thinning a Poisson process leaves a Poisson process
+        keep = np.sort(rng.choice(len(cust_rep), size=want, replace=False))
+        cust_rep, day_rep = cust_rep[keep], day_rep[keep]
+    log(f"  order rate scale ×{k:.3f} · {n_first:,} first orders + {len(cust_rep):,} repeat orders")
+
+    cust = np.concatenate([np.where(ordered)[0], cust_rep])
+    day = np.concatenate([first[ordered], day_rep])
+    o = np.argsort(day, kind="stable")
+    return cust[o], day[o]
 
 
 def gen_catalogue(cur, prod: pd.DataFrame) -> None:
@@ -437,26 +636,6 @@ def gen_catalogue(cur, prod: pd.DataFrame) -> None:
                                          "costo_materia_prima_kg", "costo_lavorazione_kg", "costo_confezionamento_pz"]))
 
 
-def build_day_weights() -> np.ndarray:
-    """The probability of each day of the data window, so that orders and activities
-    are NOT spread uniformly but follow a realistic TREND:
-      · compound company growth (ANNUAL_GROWTH);
-      · yearly seasonality (Christmas/Easter ↑, August ↓ — see MONTH_MULT);
-      · weekly B2B seasonality (weekdays ↑, Saturday ↓, Sunday almost zero).
-    A little daily noise avoids curves that are too smooth."""
-    ndays = DAYS + 1
-    idx = np.arange(ndays)
-    dates = pd.to_datetime(np.datetime64(START_DATE) + idx.astype("timedelta64[D]"))
-    years = idx / 365.25
-    growth = (1.0 + ANNUAL_GROWTH) ** years
-    seasonal = MONTH_MULT[dates.month.to_numpy()]
-    dow = dates.dayofweek.to_numpy()  # 0=Mon … 6=Sun
-    weekly = np.where(dow < 5, 1.0, np.where(dow == 5, 0.45, 0.12))
-    noise = rng.uniform(0.85, 1.15, ndays)
-    w = growth * seasonal * weekly * noise
-    return w / w.sum()
-
-
 def build_seasonality(prod: pd.DataFrame):
     """For each SKU: a monthly seasonal vector [P_n × 13] (category, with an
     override by name) + base popularity [P_n]. The product choice weights month
@@ -479,28 +658,27 @@ def build_seasonality(prod: pd.DataFrame):
     return season, pop
 
 
-def gen_orders_and_lines(cur, prod: pd.DataFrame, agent_of, channel_of, agents: pd.DataFrame) -> None:
+def gen_orders_and_lines(cur, prod: pd.DataFrame, life: dict, intensity: np.ndarray, agent_of, channel_of,
+                         agents: pd.DataFrame) -> np.ndarray:
     """Orders + lines + commercial costs, in blocks. Header → customer (and their
-    agent); lines → products with price≈list±noise and a discount per channel."""
-    O = P["orders"]
+    agent); lines → products with price≈list±noise and a discount per channel. The orders
+    come from the customers' lifecycles (`simulate_orders`). Returns the day of each
+    customer's last order that was not cancelled (-1: none), for the CRM status."""
     C = P["customers"]
     P_n = len(prod)
     prices = prod._list_price.to_numpy()
     base_comm = np.concatenate([[0.0], agents.provvigione_base_pct.to_numpy().astype(float)])
     base_d = np.datetime64(START_DATE)
-    p_day = build_day_weights()  # growth trend + seasonality (not uniform)
 
-    # ── helper tables for the finer seasonalities (computed once) ──
     # the month of each day of the window: days → month without going through pandas again
     days64 = base_d + np.arange(DAYS + 1).astype("timedelta64[D]")
     day_month = pd.to_datetime(days64).month.to_numpy()
 
-    # CUSTOMER choice weights per month (channel mix × season): the month being equal,
-    # the customers of the channels "in season" are more likely to order
-    ch_mat = np.array([CHANNEL_SEASON[c] for c in CHANNELS])   # [len(CHANNELS) × 13]
-    client_ch0 = (channel_of[1:] - 1).astype(int)              # 0-based channel per customer 1..C
-    client_ids = np.arange(1, C + 1, dtype=np.int64)
-    client_w = {m: (lambda col: col / col.sum())(ch_mat[client_ch0, m]) for m in range(1, 13)}
+    # the customers' orders: who orders, and when
+    o_cust, o_day = simulate_orders(life, intensity, day_month)
+    O = len(o_cust)
+    last_order = np.full(C, -1, dtype=np.int64)
+    spend = np.concatenate([[1.0], life["spend"]])     # by cliente_id: the size of the customer's orders
 
     # PRODUCT choice weights per month (product mix × season)
     season, base_pop = build_seasonality(prod)
@@ -517,16 +695,10 @@ def gen_orders_and_lines(cur, prod: pd.DataFrame, agent_of, channel_of, agents: 
     while done < O:
         n = min(ORDERS_CHUNK, O - done)
         oid = np.arange(done + 1, done + n + 1, dtype=np.int64)
-        days = rng.choice(DAYS + 1, size=n, p=p_day)       # date weighted by the trend
+        days = o_day[done:done + n]
         order_date = (base_d + days.astype("timedelta64[D]")).astype(str)
-        months = day_month[days]                           # the month of each order
 
-        # customer chosen per month, weighted by the channel's seasonality
-        customer = np.empty(n, dtype=np.int64)
-        for m in range(1, 13):
-            sel = np.where(months == m)[0]
-            if sel.size:
-                customer[sel] = rng.choice(client_ids, size=sel.size, p=client_w[m])
+        customer = o_cust[done:done + n] + 1               # cliente_id
         agent = agent_of[customer]
         channel_i = channel_of[customer]                   # 1..len(CHANNELS)
         channel = np.array(CHANNELS)[channel_i - 1]
@@ -548,6 +720,7 @@ def gen_orders_and_lines(cur, prod: pd.DataFrame, agent_of, channel_of, agents: 
         p_inprog = 0.03 + 0.10 * (days / DAYS)             # 3%→13% towards the end of the window
         in_prog = (~cancelled) & (rng.random(n) < p_inprog)
         state = np.where(cancelled, "annullato", np.where(in_prog, "in_lavorazione", "evaso"))
+        np.maximum.at(last_order, customer[~cancelled] - 1, days[~cancelled])
 
         copy_df(cur, "vendite.ordini", pd.DataFrame({
             "id": oid, "numero": number, "data_ordine": order_date, "cliente_id": customer,
@@ -561,6 +734,7 @@ def gen_orders_and_lines(cur, prod: pd.DataFrame, agent_of, channel_of, agents: 
         r_channel_bulk = np.repeat(bulk, n_lines)
         r_agent = np.repeat(agent, n_lines)
         r_days = np.repeat(days, n_lines)
+        r_spend = np.repeat(spend[customer], n_lines)
         # product chosen per month: the MIX follows the season (panettone at Christmas,
         # taralli in summer, …), it is no longer uniform
         r_months = day_month[r_days]
@@ -570,10 +744,11 @@ def gen_orders_and_lines(cur, prod: pd.DataFrame, agent_of, channel_of, agents: 
             if sel.size:
                 prod_i[sel] = rng.choice(P_n, size=sel.size, p=prod_w[m])
         list_price = prices[prod_i]
-        # quantity (kilos or pieces): gamma (skewed), higher for Supermercati/Ingrosso,
-        # and slowly growing over time (the average basket widens year on year)
+        # quantity (kilos or pieces): gamma (skewed), higher for Supermercati/Ingrosso, the
+        # customer's own size (independent of how often it orders) and slowly growing over
+        # time (the average basket widens year on year)
         basket = (1.0 + ANNUAL_BASKET_GROWTH) ** (r_days / 365.25)
-        qty = (rng.gamma(2.0, np.where(r_channel_bulk, QTY_BULK, QTY_BASE)) + 2.0) * basket
+        qty = (rng.gamma(2.0, np.where(r_channel_bulk, QTY_BULK, QTY_BASE)) + 2.0) * basket * r_spend
         qty = np.round(qty, 3)
         unit_price = np.round(list_price * (1 + rng.normal(0, 0.04, tot)), 4)
         unit_price = np.maximum(unit_price, 0.2)
@@ -599,33 +774,55 @@ def gen_orders_and_lines(cur, prod: pd.DataFrame, agent_of, channel_of, agents: 
         line_id += tot
         done += n
         log(f"    orders {done:,}/{O:,} · order lines {line_id:,}")
+    return last_order
 
 
-def gen_activities(ch, agent_of) -> None:
-    """CRM activities (ClickHouse's big table), in blocks."""
+def gen_activities(ch, agent_of, life: dict, intensity: np.ndarray) -> None:
+    """CRM activities (ClickHouse's big table), in blocks. They follow the customers' lives:
+    none before the acquisition (the customers of the start: from the window's start); while
+    the customer buys, the normal pace; after it has churned, a fraction of it (POST_CHURN_ACTIVITY):
+    the reminders and the attempts to win it back, the reminders more often."""
     A = P["activities"]
     C = P["customers"]
     KINDS = np.array(["visita", "telefonata", "email", "sollecito", "reclamo"])
     OUTCOMES = np.array(["positivo", "neutro", "negativo", "ordine"])
     base = np.datetime64(f"{START_DATE}T00:00:00")
-    p_day = build_day_weights()  # the same trend/seasonality as the orders
+    ndays = DAYS + 1
+    cum = _boundaries(intensity)
+
+    # each customer's two stretches of the window: alive and churned, and the weight of each
+    # (the time in the season's intensity, times a propensity of its own to be contacted)
+    start = np.maximum(life["acq"], 0)
+    death = np.minimum(np.floor(life["death"]) + 1, ndays).astype(np.int64)   # boundary where the churn starts
+    alive_hi = np.maximum(death, start)
+    propensity = rng.gamma(2.0, 0.5, C)
+    w_alive = propensity * (cum[alive_hi] - cum[start])
+    w_dead = propensity * POST_CHURN_ACTIVITY * (cum[ndays] - cum[alive_hi])
+    cum_w = np.cumsum(w_alive + w_dead)
+
     done = 0
     while done < A:
         n = min(ACTIVITIES_CHUNK, A - done)
-        customer = rng.integers(1, C + 1, n)
+        idx = np.minimum(np.searchsorted(cum_w, rng.random(n) * cum_w[-1], side="right"), C - 1)
+        customer = idx + 1
         agent = agent_of[customer]
-        # day weighted by the trend + time of day concentrated in working hours
-        day = rng.choice(DAYS + 1, size=n, p=p_day)
+        dead = rng.random(n) * (w_alive[idx] + w_dead[idx]) >= w_alive[idx]
+        lo = np.where(dead, alive_hi[idx], start[idx])
+        hi = np.where(dead, ndays, alive_hi[idx])
+        day = _draw_days(cum, lo, np.maximum(hi, lo + 1))
         sec_of_day = np.clip(rng.normal(13 * 3600, 2.5 * 3600, n), 7 * 3600, 20 * 3600)
         offset = (day * 86400 + sec_of_day).astype(np.int64).astype("timedelta64[s]")
         when = base + offset
+        # a live customer's contacts are as before; a churned one gets reminders and calls, and says no
+        tipo = np.where(dead, rng.choice(len(KINDS), n, p=[0.10, 0.30, 0.25, 0.30, 0.05]), rng.integers(0, len(KINDS), n))
+        esito = np.where(dead, rng.choice(len(OUTCOMES), n, p=[0.15, 0.30, 0.50, 0.05]), rng.integers(0, len(OUTCOMES), n))
         df = pd.DataFrame({
             "id": np.arange(done + 1, done + n + 1, dtype=np.int64),
             "cliente_id": customer.astype(np.uint32),
             "agente_id": agent.astype(np.uint32),
             "data": pd.to_datetime(when),
-            "tipo": KINDS[rng.integers(0, len(KINDS), n)],
-            "esito": OUTCOMES[rng.integers(0, len(OUTCOMES), n)],
+            "tipo": KINDS[tipo],
+            "esito": OUTCOMES[esito],
             "durata_min": rng.integers(2, 90, n).astype(np.uint16),
             "note": "",
         })
@@ -662,11 +859,10 @@ def main() -> None:
     ch.insert_df("analytics.agenti", agents)
     log(f"  {len(agents):,} agents ({P['managers']} area managers, {P['inspectors']} supervisors, {P['agents']} agents)")
 
-    customers = gen_customers(agents)
-    ch.insert_df("analytics.clienti", customers[[
-        "id", "ragione_sociale", "partita_iva", "canale", "indirizzo", "cap",
-        "citta", "provincia", "regione", "agente_id", "data_acquisizione", "attivo"]])
-    log(f"  {len(customers):,} customers inserted")
+    log("Simulating the customers' lives (acquisition, order rate, churn, spend)…")
+    intensity = build_day_intensity()
+    life = simulate_lifecycles(agents, intensity)
+    customers = gen_customers(agents, life)
     agent_of = customers.attrs["agent_of"]
     channel_of = customers.attrs["channel_of"]
 
@@ -685,8 +881,17 @@ def main() -> None:
     # facts
     log("Generating orders, order lines and commercial costs (Postgres)…")
     with pg.cursor() as cur:
-        gen_orders_and_lines(cur, prod, agent_of, channel_of, agents)
+        last_order = gen_orders_and_lines(cur, prod, life, intensity, agent_of, channel_of, agents)
     pg.commit()
+
+    # the registry goes in now: its CRM status needs the orders (and never the churn, which no
+    # one has written down)
+    customers = pd.concat([customers, crm_status(life, last_order)], axis=1)
+    ch.insert_df("analytics.clienti", customers[[
+        "id", "ragione_sociale", "partita_iva", "canale", "indirizzo", "cap",
+        "citta", "provincia", "regione", "agente_id", "data_acquisizione", "stato", "attivo"]])
+    log(f"  {len(customers):,} customers inserted: " + ", ".join(
+        f"{k} {v:,}" for k, v in customers.stato.value_counts().items()))
 
     log("Building the secondary Postgres indexes…")
     with pg.cursor() as cur:
@@ -694,7 +899,7 @@ def main() -> None:
     pg.commit()
 
     log("Generating the CRM activities (ClickHouse)…")
-    gen_activities(ch, agent_of)
+    gen_activities(ch, agent_of, life, intensity)
 
     pg.close()
     log(f"Done in {int(time.time() - t0)}s. Scale «{SCALE}».")

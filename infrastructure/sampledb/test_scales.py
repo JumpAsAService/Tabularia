@@ -31,6 +31,12 @@ class Scales(unittest.TestCase):
         # the billion is in ClickHouse: the order system stays at robust's size
         self.assertEqual(scales.PRESETS["massive"]["orders"], scales.PRESETS["robust"]["orders"])
 
+    def test_every_customer_can_place_its_first_order(self):
+        # the generator gives each customer acquired in the window a first order, and spreads
+        # the rest of the preset's orders over the customers' lifetimes (generate.py)
+        for name, preset in scales.PRESETS.items():
+            self.assertGreater(preset["orders"], preset["customers"], name)
+
     def test_the_name_is_read_as_written_or_by_its_earlier_name(self):
         self.assertEqual(scales.resolve(None), "small")
         self.assertEqual(scales.resolve(""), "small")
