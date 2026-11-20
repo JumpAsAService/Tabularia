@@ -34,7 +34,10 @@ log-likelihood, the location's coefficients (the intercept included: log scale, 
 same accelerated-failure-time scale), their standard errors, the shape (lifelines' rho_, beta_,
 sigma_ on the log scale; the generalized gamma's lambda_ is flexsurv's Q). Its own optimiser: an
 estimate is compared to 1e-5 relative or a thousandth of its standard error, whichever is wider.
-Exit 1 when a value differs.
+The restricted mean's default horizon is the least of the strata's largest times (the runner's and
+survRM2's); the witness first took the whole table's largest time, which reads a stratum past its own
+last time (lifelines carries the last step on, R's rmean does not the same way): four values differed
+by that, a definition of the witness's, not an error of the runner. Exit 1 when a value differs.
 """
 from __future__ import annotations
 
@@ -82,7 +85,10 @@ def km_case(case: dict) -> dict[str, float]:
     loglog = p.get("conf_type", "log") == "log-log"
     strata = sorted(df[p["strata"]].unique()) if p.get("strata") else ["all"]
     groups = df[p["strata"]].to_numpy() if p.get("strata") else np.array(["all"] * len(df))
-    tau = p.get("rmst_tau", float(time.max()))
+    # the runner's default horizon, and survRM2's: the least of the strata's largest times, so that every
+    # stratum's mean is read inside its own follow-up (the whole table's largest time would take the
+    # restricted mean of a stratum past its last time, which lifelines then extends with the last step)
+    tau = p.get("rmst_tau", float(min(time[groups == s].max() for s in strata)))
     out: dict[str, float] = {}
     for s in strata:
         name = f"{p['strata']}={s}" if p.get("strata") else "all"
@@ -280,7 +286,9 @@ def ps_case(case: dict) -> tuple[dict[str, float], dict[str, float], dict[str, f
     if fit is None:
         raise RuntimeError(f"{case['id']}: lifelines does not converge")
     location, shape, shape_name = ("mu_", "sigma_", "sigma") if dist == "gengamma" else PS_FITTERS[dist][1:]
-    r_ll = next(e["value"] for e in case["expect"] if e["key"] == "model|||log_lik")
+    r_ll = next((e["value"] for e in case["expect"] if e["key"] == "model|||log_lik"), None)
+    if r_ll is None:  # a case of the checks (lot P2) or of the choice: no fit of its own to witness
+        return {}, {}, {}
     short = fit.log_likelihood_ < r_ll - 1e-9 * abs(r_ll)
     if short:
         print(f"STOPS SHORT {case['id']}: lifelines' log-likelihood {fit.log_likelihood_!r}, R's {r_ll!r} "

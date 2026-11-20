@@ -35,7 +35,7 @@
 #
 # Parametric survival (lot P1): make_reference_parametric.R, sourced at the end (its own tables,
 # flexsurv, survreg and coxph called directly; the header of that file says what each case
-# checks and at which tolerance).
+# checks and at which tolerance); its checks (lot P2): make_reference_checks.R, after it.
 
 suppressPackageStartupMessages(library(survival))
 
@@ -517,6 +517,17 @@ cases[[length(cases) + 1L]] <- list(
   expect = list(), refuses = list(code = "start_not_before_time"))
 
 source(file.path(here, "make_reference_parametric.R"), local = TRUE)
+source(file.path(here, "make_reference_checks.R"), local = TRUE)
+
+# The file travels in the ConfigMap, whose limit the group's code must stay under: compact, 13 digits
+# (the tightest tolerance is 1e-10), and the default relative tolerance (1e-9) left unwritten.
+cases <- lapply(cases, function(case) {
+  case$expect <- lapply(case$expect, function(e) {
+    if (isTRUE(e$rel == 1e-9)) e$rel <- NULL
+    e
+  })
+  case
+})
 
 out <- list(format_version = 1L,
             generated = list(by = "make_reference.R", R = paste(R.version$major, R.version$minor, sep = "."),
@@ -526,6 +537,6 @@ out <- list(format_version = 1L,
                                              numDeriv = as.character(packageVersion("numDeriv")),
                                              jsonlite = as.character(packageVersion("jsonlite")))),
             cases = cases)
-writeLines(jsonlite::toJSON(out, auto_unbox = TRUE, null = "null", na = "null", digits = NA, pretty = TRUE),
+writeLines(jsonlite::toJSON(out, auto_unbox = TRUE, null = "null", na = "null", digits = 13, pretty = FALSE),
            file.path(here, "expected.json"))
 cat(length(cases), "cases written,", sum(vapply(cases, function(x) length(x$expect), 0L)), "values\n")
