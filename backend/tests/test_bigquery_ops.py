@@ -344,6 +344,22 @@ def test_statistics_report_rows_ask_bigquery_for_quartiles_and_a_histogram():
     sqlglot.parse_one(asked[0], read="bigquery")
 
 
+def test_a_text_literal_holds_no_line_break():
+    """A quoted string of GoogleSQL may not hold a line break: a label with one (a group
+    «north\nwest») is written with the escapes BigQuery reads back, and parses."""
+    import sqlglot
+
+    assert _lit("north\nwest") == "'north\\nwest'" and _lit("a\r\nb") == "'a\\r\\nb'"
+    assert _lit("it's\\") == "'it\\'s\\\\'"
+    from app.engine.stats.output import Rows, values_sql
+
+    out = Rows()
+    out.number("group", "n", 3, level="north\nwest")
+    sql = values_sql("bigquery", out.rows, _lit)
+    assert "\n" not in sql and "'north\\nwest'" in sql
+    sqlglot.parse_one(sql, read="bigquery")
+
+
 def test_statistics_never_partition_bigquery_by_a_column():
     """GoogleSQL partitions a window by no FLOAT64: the quartiles of a report and Levene's
     medians are partitioned by `dense_rank()` of the group, as the ranks are. A group column

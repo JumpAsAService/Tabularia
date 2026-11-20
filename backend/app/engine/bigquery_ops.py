@@ -79,7 +79,8 @@ def _lit(v: Any) -> str:
         return "TRUE" if v else "FALSE"
     if isinstance(v, (int, float)):
         return repr(v)
-    return "'" + str(v).replace("\\", "\\\\").replace("'", "\\'") + "'"
+    # a quoted string of GoogleSQL holds no line break: written as the escapes it reads back
+    return "'" + str(v).replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n").replace("\r", "\\r") + "'"
 
 
 def _require(params: dict, key: str) -> Any:
