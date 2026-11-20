@@ -13,7 +13,7 @@
   "stop_metric": "error",
   "max_depth": 4
  },
- "fixture": "the runner's output (groups/boosting/runner/py/boosting_xgboost.py, lot X2) on reference/data/multiclass.csv with these params, a trial in the group's image with 2 threads; max_chart_points 500 to keep the file small",
+ "fixture": "the runner's output (groups/boosting/runner/py/boosting_xgboost.py) on the reference case xgboost_multiclass (reference/data/multiclass.csv) with these params, a trial in the group's image with 2 threads; max_chart_points 500 to keep the file small",
  "columns": [
   "section",
   "level",
@@ -929,6 +929,18 @@
   ],
   [
    "assumption",
+   "validation_size",
+   null,
+   "advice_id",
+   null,
+   "validation_size",
+   null,
+   null,
+   75,
+   "assumption|validation_size||advice_id"
+  ],
+  [
+   "assumption",
    "beats_baseline",
    null,
    "h0",
@@ -936,7 +948,7 @@
    "1 − validation loss / the baseline's",
    null,
    null,
-   75,
+   76,
    "assumption|beats_baseline||h0"
   ],
   [
@@ -948,7 +960,7 @@
    null,
    null,
    null,
-   76,
+   77,
    "assumption|beats_baseline||value"
   ],
   [
@@ -960,7 +972,7 @@
    null,
    null,
    null,
-   77,
+   78,
    "assumption|beats_baseline||threshold"
   ],
   [
@@ -972,7 +984,7 @@
    "ok",
    null,
    null,
-   78,
+   79,
    "assumption|beats_baseline||verdict"
   ],
   [
@@ -981,10 +993,10 @@
    null,
    "h0",
    null,
-   "the share of the training part's gain over the baseline that holds on validation",
+   "the share of the validation gain over the baseline given back between the best tree and the tree kept",
    null,
    null,
-   79,
+   80,
    "assumption|overfitting||h0"
   ],
   [
@@ -992,11 +1004,11 @@
    "overfitting",
    null,
    "value",
-   0.7069579689971921,
+   0.0,
    null,
    null,
    null,
-   80,
+   81,
    "assumption|overfitting||value"
   ],
   [
@@ -1004,11 +1016,11 @@
    "overfitting",
    null,
    "threshold",
-   0.6,
+   0.05,
    null,
    null,
    null,
-   81,
+   82,
    "assumption|overfitting||threshold"
   ],
   [
@@ -1020,7 +1032,7 @@
    "ok",
    null,
    null,
-   82,
+   83,
    "assumption|overfitting||verdict"
   ],
   [
@@ -1032,7 +1044,7 @@
    "whether early stopping stopped, and the trees kept",
    null,
    null,
-   83,
+   84,
    "assumption|trees_limit||h0"
   ],
   [
@@ -1044,20 +1056,8 @@
    null,
    null,
    null,
-   84,
-   "assumption|trees_limit||value"
-  ],
-  [
-   "assumption",
-   "trees_limit",
-   null,
-   "threshold",
-   20.0,
-   null,
-   null,
-   null,
    85,
-   "assumption|trees_limit||threshold"
+   "assumption|trees_limit||value"
   ],
   [
    "assumption",
@@ -1209,7 +1209,7 @@
    "spend",
    "h0",
    null,
-   "the first predictor's share of |SHAP|, and how nearly perfect the validation fit is",
+   "the first predictor's share of |SHAP| (with one predictor: the validation fit), and how nearly perfect the validation fit is",
    null,
    null,
    98,
