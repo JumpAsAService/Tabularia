@@ -7044,7 +7044,7 @@ export default {
     "hints": {
       "interval": "Adds the lower and upper bounds of each prediction.",
       "threshold": "Adds the predicted class: the event from this probability up. 0.5 when empty.",
-      "horizon": "How many steps after the series ends. Empty: the model's own.",
+      "horizon": "How many steps after the series ends. For the customer lifetime models: how many periods ahead, in the unit the model was fitted in. Empty: the model's own.",
       "at_times": "A survival column for each time, e.g. 12, 24.",
       "alive_at": "A column of the rows: the time each unit has already survived. The median, the quantiles and the survival columns then speak of the time left. Empty: from the start.",
       "quantiles": "A column for each quantile, e.g. 0.25, 0.75. Empty: the quantiles the model was fitted with."
@@ -7067,6 +7067,7 @@ export default {
     },
     "modelsIn": "Models:",
     "packagesPinned": "{n} packages pinned",
+    "systemLibrary": "System library: {library} (Debian)",
     "state": {
       "not_enabled": "Not enabled",
       "building": "Building",

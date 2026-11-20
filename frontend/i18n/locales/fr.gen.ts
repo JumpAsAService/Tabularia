@@ -7044,7 +7044,7 @@ export default {
     "hints": {
       "interval": "Ajoute les bornes inférieure et supérieure de chaque prédiction.",
       "threshold": "Ajoute la classe prédite : l'événement à partir de cette probabilité. 0,5 si vide.",
-      "horizon": "Combien de pas après la fin de la série. Vide : celui du modèle.",
+      "horizon": "Combien de pas après la fin de la série. Pour les modèles de valeur client : combien de périodes en avant, dans l'unité de l'ajustement du modèle. Vide : celui du modèle.",
       "at_times": "Une colonne de survie par temps, p. ex. 12, 24.",
       "alive_at": "Une colonne des lignes : le temps que chaque unité a déjà survécu. La médiane, les quantiles et les colonnes de survie parlent alors du temps restant. Vide : depuis le début.",
       "quantiles": "Une colonne par quantile, p. ex. 0.25, 0.75. Vide : les quantiles avec lesquels le modèle a été ajusté."
@@ -7067,6 +7067,7 @@ export default {
     },
     "modelsIn": "Modèles :",
     "packagesPinned": "{n} paquets à version figée",
+    "systemLibrary": "Bibliothèque système : {library} (Debian)",
     "state": {
       "not_enabled": "Non activé",
       "building": "En construction",

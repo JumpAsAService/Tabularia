@@ -8,7 +8,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
-import { failureSentence, groupBusy, limitsDraftOf, limitsInputOf } from '../composables/useModelsAdmin.ts'
+import { failureSentence, groupBusy, limitsDraftOf, limitsInputOf, systemLibraryLabel } from '../composables/useModelsAdmin.ts'
 
 const FRONTEND = fileURLToPath(new URL('..', import.meta.url))
 const read = (p) => readFileSync(join(FRONTEND, p), 'utf8')
@@ -104,5 +104,31 @@ test('the introduction of the section does not say the groups are in R only: a g
     assert.equal(lines.length, 1, lang)
     assert.match(lines[0], /\bPython\b/, `${lang}: the introduction names Python beside R`)
     assert.doesNotMatch(lines[0], /\(R (?:and its|e i suoi|und seine|y sus|et ses)/, lang)
+  }
+})
+
+// the system library of a group's image (the customer lifetime group's GSL) on its card
+test('a system library is said with its name and version, and the card shows each one with its words in five languages', () => {
+  assert.equal(systemLibraryLabel({ package: 'libgsl-dev', name: 'GSL', version: '2.7.1' }), 'GSL 2.7.1')
+  assert.equal(systemLibraryLabel({ package: 'libfoo-dev', name: 'libfoo-dev' }), 'libfoo-dev')
+  const component = read('components/admin/ModelsSection.vue')
+  assert.match(component, /v-for="lib in g\.system_libraries \?\? \[\]"/)
+  assert.match(component, /modelsAdmin\.systemLibrary', \{ library: systemLibraryLabel\(lib\) \}/)
+  const expected = {
+    en: 'System library: {library} (Debian)', it: 'Libreria di sistema: {library} (Debian)', fr: 'Bibliothèque système : {library} (Debian)',
+    de: 'Systembibliothek: {library} (Debian)', es: 'Biblioteca del sistema: {library} (Debian)',
+  }
+  for (const [lang, text] of Object.entries(expected)) {
+    assert.ok(read(`i18n/locales/${lang}.gen.ts`).includes(`"systemLibrary": "${text}"`), lang)
+  }
+  // a group with none shows nothing: the answer's list is empty (the gateway's), and an older answer without it is read as empty
+  assert.match(component, /g\.system_libraries \?\? \[\]/)
+})
+
+test('Predict\'s horizon is worded for the customer lifetime models too, in five languages', () => {
+  for (const lang of ['en', 'it', 'fr', 'de', 'es']) {
+    const source = read(`i18n/locales/${lang}.gen.ts`)
+    const hint = source.match(/\n  "predict": \{[\s\S]*?"hints": \{[\s\S]*?"horizon": "([^"]+)"/)
+    assert.ok(hint && hint[1].length > 80, `${lang}: the horizon hint`)
   }
 })

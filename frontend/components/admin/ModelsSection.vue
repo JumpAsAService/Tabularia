@@ -12,7 +12,7 @@ import { errMessage } from '~/composables/useApi'
 import { useFormat } from '~/composables/useFormat'
 import type { GroupOut } from '~/composables/useProjects'
 import {
-  failureSentence, groupBusy, limitsDraftOf, limitsInputOf, useModelsAdmin,
+  failureSentence, groupBusy, limitsDraftOf, limitsInputOf, systemLibraryLabel, useModelsAdmin,
   type LimitsDraft, type ModelGroupAdmin, type ModelGroupAnswer, type ModelsAdminState,
 } from '~/composables/useModelsAdmin'
 
@@ -211,6 +211,9 @@ const shortRef = (ref: string | null) => (ref ? ref.replace(/^(.*@sha256:)([0-9a
         {{ $t('modelsAdmin.modelsIn') }}
         <code v-for="m in g.models" :key="m">{{ m }}</code>
         · {{ $t('modelsAdmin.packagesPinned', { n: g.packages }) }}
+        <template v-for="lib in g.system_libraries ?? []" :key="lib.package">
+          · <span class="system-library">{{ $t('modelsAdmin.systemLibrary', { library: systemLibraryLabel(lib) }) }}</span>
+        </template>
       </p>
 
       <!-- why it failed, in a sentence; the log is below -->

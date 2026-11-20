@@ -289,6 +289,9 @@ type mgGroupOut struct {
 	EnabledBy      *string        `json:"enabled_by"`
 	EnabledAt      *string        `json:"enabled_at"`
 	Versions       []mgVersionOut `json:"versions"`
+
+	// the Debian libraries the group's image installs besides the fixed list (an empty list for most groups)
+	SystemLibraries []modelgroups.SystemLibrary `json:"system_libraries"`
 }
 
 func mgOut(ctx context.Context, q perm.Querier, s *mgState) (mgGroupOut, error) {
@@ -301,7 +304,8 @@ func mgOut(ctx context.Context, q perm.Querier, s *mgState) (mgGroupOut, error) 
 	}
 	out := mgGroupOut{ID: g.ID, Language: g.Recipe.Language, Base: g.Recipe.Base, Models: g.Models, Packages: len(g.Recipe.Packages),
 		Enabled: s.Enabled, State: s.state(), Limits: lim, Defaults: def, Everyone: s.Everyone, GroupIDs: []int64{}, Groups: []string{},
-		EnabledBy: s.EnabledBy, EnabledAt: isoPtr(s.EnabledAt), Versions: []mgVersionOut{}}
+		EnabledBy: s.EnabledBy, EnabledAt: isoPtr(s.EnabledAt), Versions: []mgVersionOut{},
+		SystemLibraries: g.SystemLibraries()}
 	cur := s.current()
 	out.Ready = cur != nil
 	if cur != nil {

@@ -32,12 +32,25 @@ export interface ModelGroupLimits {
   max_rows: number
 }
 
+export interface ModelGroupSystemLibrary {
+  package: string
+  name: string
+  version?: string
+}
+
+/** A system library as the card says it: its name and, when known, its version («GSL 2.7.1»). */
+export function systemLibraryLabel(lib: ModelGroupSystemLibrary): string {
+  return lib.version ? `${lib.name} ${lib.version}` : lib.name
+}
+
 export interface ModelGroupAdmin {
   id: string
   language: 'r' | 'python'
   base: string
   models: string[]
   packages: number
+  // the Debian libraries the group's image installs besides the fixed list (empty for most groups)
+  system_libraries: ModelGroupSystemLibrary[]
   enabled: boolean
   state: ModelGroupState
   ready: boolean

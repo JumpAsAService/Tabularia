@@ -7044,7 +7044,7 @@ export default {
     "hints": {
       "interval": "Fügt die untere und obere Grenze jeder Vorhersage hinzu.",
       "threshold": "Fügt die vorhergesagte Klasse hinzu: das Ereignis ab dieser Wahrscheinlichkeit. 0,5, wenn leer.",
-      "horizon": "Wie viele Schritte nach Ende der Reihe. Leer: der des Modells.",
+      "horizon": "Wie viele Schritte nach Ende der Reihe. Bei den Kundenwert-Modellen: wie viele Perioden voraus, in der Einheit, in der das Modell geschätzt wurde. Leer: der des Modells.",
       "at_times": "Eine Überlebensspalte je Zeitpunkt, z. B. 12, 24.",
       "alive_at": "Eine Spalte der Zeilen: die Zeit, die jede Einheit schon überlebt hat. Median, Quantile und Überlebensspalten sprechen dann von der Restzeit. Leer: vom Anfang an.",
       "quantiles": "Eine Spalte je Quantil, z. B. 0.25, 0.75. Leer: die Quantile, mit denen das Modell angepasst wurde."
@@ -7067,6 +7067,7 @@ export default {
     },
     "modelsIn": "Modelle:",
     "packagesPinned": "{n} Pakete in festgelegter Version",
+    "systemLibrary": "Systembibliothek: {library} (Debian)",
     "state": {
       "not_enabled": "Nicht aktiviert",
       "building": "Wird gebaut",

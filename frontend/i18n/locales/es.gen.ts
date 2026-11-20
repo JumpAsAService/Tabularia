@@ -7044,7 +7044,7 @@ export default {
     "hints": {
       "interval": "Añade los límites inferior y superior de cada predicción.",
       "threshold": "Añade la clase prevista: el evento desde esta probabilidad. 0,5 si está vacío.",
-      "horizon": "Cuántos pasos tras el final de la serie. Vacío: el del modelo.",
+      "horizon": "Cuántos pasos tras el final de la serie. En los modelos de valor del cliente: cuántos periodos hacia delante, en la unidad con que se ajustó el modelo. Vacío: el del modelo.",
       "at_times": "Una columna de supervivencia por cada tiempo, p. ej. 12, 24.",
       "alive_at": "Una columna de las filas: el tiempo que cada unidad ya ha sobrevivido. La mediana, los cuantiles y las columnas de supervivencia hablan entonces del tiempo restante. Vacío: desde el inicio.",
       "quantiles": "Una columna por cuantil, p. ej. 0.25, 0.75. Vacío: los cuantiles con que se ajustó el modelo."
@@ -7067,6 +7067,7 @@ export default {
     },
     "modelsIn": "Modelos:",
     "packagesPinned": "{n} paquetes en versión fija",
+    "systemLibrary": "Biblioteca del sistema: {library} (Debian)",
     "state": {
       "not_enabled": "No habilitado",
       "building": "En construcción",
