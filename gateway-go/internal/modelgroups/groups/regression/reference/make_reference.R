@@ -679,8 +679,11 @@ logistic_cases <- function() {
 # out-of-fold predictions (keep = TRUE). A fixed λ is added to glmnet's own path for the rows;
 # mixing = cv runs the grid on the same folds and keeps the least error at each one's best λ.
 # The out-of-fold numbers are computed here from fit.preval: R², RMSE and MAE; for the logistic
-# the AUC and DeLong's interval by the pairwise kernel on the rows repeated by their weight (as
-# above), the Brier score, the rates at the threshold, the deviance from dbinom.
+# the Brier score, the rates at the threshold and the deviance from dbinom on all the rows, and
+# the AUC fold by fold (the folds' fits have different intercepts: their predictions are not
+# ranked together) by the pairwise kernel on each fold's rows repeated by their weight, the mean
+# weighted by the folds' weights and the standard error between folds as cv.glmnet's cvsd; with
+# measure = auc and no weights that mean is cv.glmnet's own cvm, checked here.
 
 # 40 rows of four numbers and an outcome that none of them explains (the lasso keeps nothing).
 noise <- function() {
@@ -766,18 +769,27 @@ penalized_case <- function(id, model, data, file, types, params, formula, map, e
     rep_ <- rep(seq_along(y), ww)
     yy <- y[rep_]
     pp <- p[rep_]
-    x1 <- pp[yy == 1]
-    x0 <- pp[yy == 0]
-    psi <- outer(x1, x0, ">") + 0.5 * outer(x1, x0, "==")
-    auc <- mean(psi)
-    s <- sqrt(stats::var(rowMeans(psi)) / length(x1) + stats::var(colMeans(psi)) / length(x0))
-    z <- stats::qnorm(1 - (params$alpha %||% 0.05) / 2)
+    ff <- foldid[rep_]
+    per <- t(vapply(sort(unique(foldid)), function(k) {
+      x1 <- pp[ff == k & yy == 1]
+      x0 <- pp[ff == k & yy == 0]
+      a <- if (length(x1) && length(x0)) mean(outer(x1, x0, ">") + 0.5 * outer(x1, x0, "==")) else NA_real_
+      c(weight = sum(ff == k), auc = a, brier = mean((pp[ff == k] - yy[ff == k])^2))
+    }, numeric(3)))
+    between <- function(x, wt) {
+      ok <- !is.na(x)
+      m <- sum(x[ok] * wt[ok]) / sum(wt[ok])
+      c(mean = m, se = sqrt(sum(wt[ok] * (x[ok] - m)^2) / sum(wt[ok]) / (sum(ok) - 1)), n = sum(ok))
+    }
+    auc <- between(per[, "auc"], per[, "weight"])
+    brier <- between(per[, "brier"], per[, "weight"])
+    if (measure == "auc" && is.null(w)) stopifnot(abs(auc[["mean"]] - cv$cvm[[idx]]) < 1e-12, abs(auc[["se"]] - cv$cvsd[[idx]]) < 1e-12)
     hat <- as.numeric(pp >= threshold)
     expect <- c(expect, list(
       txt("model|||link", "logit"), txt("model|||event_value", event),
-      num("model|||n", sum(ww)), num("model|||events", sum(ww * y)), num("model|||auc", auc, rel),
-      num("model|||auc_ci_low", max(0, auc - z * s), rel), num("model|||auc_ci_high", min(1, auc + z * s), rel),
-      num("model|||brier", mean((pp - yy)^2), rel), num("model|||threshold", threshold),
+      num("model|||n", sum(ww)), num("model|||events", sum(ww * y)), num("model|||auc", auc[["mean"]], rel),
+      num("model|||auc_se", auc[["se"]], rel), num("model|||auc_folds", auc[["n"]]),
+      num("model|||brier", mean((pp - yy)^2), rel), num("model|||brier_se", brier[["se"]], rel), num("model|||threshold", threshold),
       num("model|||accuracy", mean(hat == yy)), num("model|||sensitivity", mean(hat[yy == 1] == 1)),
       num("model|||specificity", mean(hat[yy == 0] == 0)), num("model|||precision", mean(yy[hat == 1] == 1)),
       num("model|||deviance", -2 * sum(stats::dbinom(yy, 1, pp, log = TRUE)), rel)))

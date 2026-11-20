@@ -21,8 +21,13 @@
 #
 # No standard error, p-value or interval: inference after a penalized selection is out of
 # scope. The numbers of the fit are the out-of-fold predictions' (cv.glmnet's fit.preval at the
-# chosen λ): R², RMSE and MAE for the linear, the AUC with DeLong's interval, the Brier score,
-# the deviance and the classification at the threshold for the logistic. The checks are
+# chosen λ): R², RMSE and MAE for the linear; for the logistic the Brier score, the deviance and
+# the classification at the threshold (each row's own loss or class, from the fit without its
+# fold: they add up across folds), and the AUC fold by fold (penalized_folds_auc): a ranking
+# cannot mix folds, whose fits have different intercepts, so the AUC is the mean of the folds'
+# weighted by their weights, with the standard error between folds, as cv.glmnet's cvm and
+# cvsd; the Brier score has its standard error between folds too, and the ROC chart is the
+# mean of the folds' curves. The checks are
 # diagnostics, not tests: the choice of λ (its least error at an edge of the path, every
 # coefficient zero), separation and the events per variable for the logistic; the charts out
 # of fold. The tests of an unpenalized fit assume no penalty and are not computed.
@@ -173,15 +178,16 @@ fit_penalized <- function(task) {
   tab_text(rows, "model", "software", tab_software(PENALIZED_PACKAGES))
   if (logistic) {
     prob <- stats::plogis(pre)
-    auc <- logistic_auc(prob, y, w, alpha)
+    folds_ <- penalized_folds_auc(prob, y, w, foldid)
     cls <- logistic_classes(prob, y, w, threshold)
     tab_number(rows, "model", "n", sw)
     tab_number(rows, "model", "events", sum(w * y))
     tab_number(rows, "model", "n_missing", design$n_missing)
-    tab_number(rows, "model", "auc", auc$auc)
-    tab_number(rows, "model", "auc_ci_low", auc$low)
-    tab_number(rows, "model", "auc_ci_high", auc$high)
+    tab_number(rows, "model", "auc", folds_$auc)
+    tab_number(rows, "model", "auc_se", folds_$auc_se)
+    tab_number(rows, "model", "auc_folds", folds_$auc_folds)
     tab_number(rows, "model", "brier", sum(w * (prob - y)^2) / sw)
+    tab_number(rows, "model", "brier_se", folds_$brier_se)
     tab_number(rows, "model", "threshold", threshold)
     tab_number(rows, "model", "accuracy", cls$accuracy)
     tab_number(rows, "model", "sensitivity", cls$sensitivity)
@@ -257,7 +263,7 @@ fit_penalized <- function(task) {
   penalized_paths(rows, cv$glmnet.fit, design$terms[if (has_int) -1L else seq_len(nrow(design$terms)), , drop = FALSE], Xn, w, idx)
   if (logistic) {
     hl <- logistic_hosmer_lemeshow(prob, y, w)
-    logistic_classification_charts(rows, task, prob, y, w, hl, ev)
+    logistic_classification_charts(rows, task, prob, y, w, hl, ev, roc = folds_$roc)
     logistic_cells(rows, cls, ev)
   } else {
     penalized_residual_charts(rows, task, pre, sqrt(w) * (y - pre), design$rows)
@@ -352,6 +358,46 @@ penalized_cv <- function(X, y, w, family, mixing, foldid, measure, standardize, 
 
 # The λ by which a mixing is judged: its least error, or the fixed λ.
 penalized_best <- function(cv, fixed) if (is.null(fixed)) cv$index["min", 1L] else match(fixed, cv$lambda)
+
+# The AUC fold by fold: each fold's out-of-fold probabilities come from one fit, so their
+# ranking is the fold's AUC (logistic_auc, Mann–Whitney: cv.glmnet's own for continuous
+# probabilities); a fold without a case or a non-case has none. The mean is weighted by the
+# folds' weights and the standard error between folds is cv.glmnet's cvsd: sqrt(weighted mean
+# of (x − mean)² / (folds − 1)); `auc_folds`: the folds that have an AUC. The Brier score of all
+# the rows is the same weighted mean of the folds' (each row's own loss): only its standard
+# error is computed here. `roc`: the folds' ROC curves averaged vertically, on 101 points of
+# 1 − specificity, each fold's curve read by linear interpolation (the top of a vertical step).
+PENALIZED_ROC_GRID <- seq(0, 1, by = 0.01)
+
+penalized_folds_auc <- function(prob, y, w, foldid) {
+  folds <- sort(unique(foldid))
+  one <- lapply(folds, function(k) {
+    i <- foldid == k
+    wk <- w[i]
+    yk <- y[i]
+    pk <- prob[i]
+    has_both <- sum(wk[yk == 1]) > 0 && sum(wk[yk == 0]) > 0
+    roc <- if (has_both) logistic_roc(pk, yk, wk) else NULL
+    list(weight = sum(wk), auc = if (has_both) logistic_auc(pk, yk, wk, 0.05)$auc else NA_real_,
+         brier = sum(wk * (pk - yk)^2) / sum(wk),
+         tpr = if (has_both) stats::approx(roc$fpr, roc$tpr, xout = PENALIZED_ROC_GRID, ties = max)$y else NULL)
+  })
+  weight <- vapply(one, `[[`, 0, "weight")
+  between <- function(x) {
+    ok <- !is.na(x)
+    m <- stats::weighted.mean(x[ok], weight[ok])
+    list(mean = m, se = if (sum(ok) > 1L) sqrt(stats::weighted.mean((x[ok] - m)^2, weight[ok]) / (sum(ok) - 1L)) else NA_real_,
+         n = sum(ok))
+  }
+  auc <- between(vapply(one, `[[`, 0, "auc"))
+  brier <- between(vapply(one, `[[`, 0, "brier"))
+  curves <- Filter(function(f) !is.null(f$tpr), one)
+  tpr <- if (length(curves)) {
+    colSums(do.call(rbind, lapply(curves, function(f) f$tpr * f$weight))) / sum(vapply(curves, `[[`, 0, "weight"))
+  } else numeric()
+  list(auc = auc$mean, auc_se = auc$se, auc_folds = auc$n, brier_se = brier$se,
+       roc = if (length(tpr)) list(fpr = c(0, PENALIZED_ROC_GRID), tpr = c(0, tpr)) else NULL)
+}
 
 # Separation (a note-like row: the penalty keeps the estimates finite), Hosmer–Lemeshow (a test of
 # an unpenalized fit: not computed, the calibration chart out of fold is the diagnostic), the

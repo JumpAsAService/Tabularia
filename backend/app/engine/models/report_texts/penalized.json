@@ -14,7 +14,8 @@
    "auc_oof": "AUC out of fold",
    "brier_oof": "Brier score out of fold",
    "n_events": "Rows / events",
-   "auc_ci": "CI {low} – {high}"
+   "auc_folds": "mean of {k} folds · SE {se}",
+   "brier_folds": "SE between folds {se}"
   },
   "coef": {
    "no_inference": "No standard error, p-value or interval: inference after a penalized selection is out of scope.",
@@ -40,7 +41,7 @@
    "residual_oof": "Histogram of the residuals, out of fold",
    "resid_fitted_oof": "Residuals against fitted values, out of fold",
    "qq_oof": "Normal Q–Q of the residuals, out of fold",
-   "roc_oof": "ROC curve, out of fold",
+   "roc_oof": "ROC curve, out of fold: the mean of the folds' curves",
    "calibration_oof": "Calibration by deciles, out of fold",
    "prob_oof": "Predicted probabilities by observed outcome, out of fold",
    "confusion_oof": "Confusion matrix at the threshold, out of fold"
@@ -125,9 +126,7 @@
     "r_squared": "R² out of fold",
     "rmse": "RMSE out of fold",
     "mae": "MAE out of fold",
-    "auc": "AUC out of fold",
-    "auc_ci_low": "AUC out of fold, CI low (DeLong)",
-    "auc_ci_high": "AUC out of fold, CI high (DeLong)",
+    "auc": "AUC out of fold, mean of the folds",
     "brier": "Brier score out of fold",
     "accuracy": "Accuracy out of fold",
     "sensitivity": "Sensitivity out of fold",
@@ -148,7 +147,10 @@
     "note_case_weights": "Note: the weights",
     "note_frequency_weights": "Note: the weights",
     "note_zero_weights": "Note: rows of weight 0",
-    "note_class_threshold": "Note: the misclassification error"
+    "note_class_threshold": "Note: the misclassification error",
+    "auc_se": "AUC out of fold, standard error between folds",
+    "auc_folds": "Folds with an AUC",
+    "brier_se": "Brier score out of fold, standard error between folds"
    }
   },
   "checks": {
@@ -183,7 +185,8 @@
    "auc_oof": "AUC fuori campione",
    "brier_oof": "Brier fuori campione",
    "n_events": "Righe / eventi",
-   "auc_ci": "IC {low} – {high}"
+   "auc_folds": "media di {k} gruppi · ES {se}",
+   "brier_folds": "ES tra i gruppi {se}"
   },
   "coef": {
    "no_inference": "Né errore standard, né p-value, né intervallo: l'inferenza dopo una selezione penalizzata non è prevista.",
@@ -209,7 +212,7 @@
    "residual_oof": "Istogramma dei residui, fuori campione",
    "resid_fitted_oof": "Residui rispetto ai valori stimati, fuori campione",
    "qq_oof": "Q–Q normale dei residui, fuori campione",
-   "roc_oof": "Curva ROC, fuori campione",
+   "roc_oof": "Curva ROC fuori campione: la media delle curve dei gruppi",
    "calibration_oof": "Calibrazione per decili, fuori campione",
    "prob_oof": "Probabilità stimate per esito osservato, fuori campione",
    "confusion_oof": "Matrice di confusione alla soglia, fuori campione"
@@ -294,9 +297,7 @@
     "r_squared": "R² fuori campione",
     "rmse": "RMSE fuori campione",
     "mae": "MAE fuori campione",
-    "auc": "AUC fuori campione",
-    "auc_ci_low": "AUC fuori campione, IC inferiore (DeLong)",
-    "auc_ci_high": "AUC fuori campione, IC superiore (DeLong)",
+    "auc": "AUC fuori campione, media dei gruppi",
     "brier": "Punteggio di Brier fuori campione",
     "accuracy": "Accuratezza fuori campione",
     "sensitivity": "Sensibilità fuori campione",
@@ -317,7 +318,10 @@
     "note_case_weights": "Nota: i pesi",
     "note_frequency_weights": "Nota: i pesi",
     "note_zero_weights": "Nota: righe di peso 0",
-    "note_class_threshold": "Nota: l'errore di classificazione"
+    "note_class_threshold": "Nota: l'errore di classificazione",
+    "auc_se": "AUC fuori campione, errore standard tra i gruppi",
+    "auc_folds": "Gruppi con un'AUC",
+    "brier_se": "Punteggio di Brier fuori campione, errore standard tra i gruppi"
    }
   },
   "checks": {
@@ -352,7 +356,8 @@
    "auc_oof": "AUC außerhalb der Falte",
    "brier_oof": "Brier außerhalb der Falte",
    "n_events": "Zeilen / Ereignisse",
-   "auc_ci": "KI {low} – {high}"
+   "auc_folds": "Mittel von {k} Folds · SF {se}",
+   "brier_folds": "SF zwischen den Folds {se}"
   },
   "coef": {
    "no_inference": "Kein Standardfehler, kein p-Wert, kein Intervall: Inferenz nach einer penalisierten Auswahl ist nicht vorgesehen.",
@@ -378,7 +383,7 @@
    "residual_oof": "Histogramm der Residuen, außerhalb der Falte",
    "resid_fitted_oof": "Residuen gegen angepasste Werte, außerhalb der Falte",
    "qq_oof": "Normal-Q–Q der Residuen, außerhalb der Falte",
-   "roc_oof": "ROC-Kurve, außerhalb der Falte",
+   "roc_oof": "ROC-Kurve außerhalb der Stichprobe: Mittel der Kurven der Folds",
    "calibration_oof": "Kalibrierung nach Dezilen, außerhalb der Falte",
    "prob_oof": "Wahrscheinlichkeiten nach Ergebnis, außerhalb der Falte",
    "confusion_oof": "Konfusionsmatrix beim Schwellenwert, außerhalb der Falte"
@@ -463,9 +468,7 @@
     "r_squared": "R² außerhalb der Falte",
     "rmse": "RMSE außerhalb der Falte",
     "mae": "MAE außerhalb der Falte",
-    "auc": "AUC außerhalb der Falte",
-    "auc_ci_low": "AUC außerhalb der Falte, KI unten (DeLong)",
-    "auc_ci_high": "AUC außerhalb der Falte, KI oben (DeLong)",
+    "auc": "AUC außerhalb der Stichprobe, Mittel der Folds",
     "brier": "Brier-Score außerhalb der Falte",
     "accuracy": "Genauigkeit außerhalb der Falte",
     "sensitivity": "Sensitivität außerhalb der Falte",
@@ -486,7 +489,10 @@
     "note_case_weights": "Hinweis: die Gewichte",
     "note_frequency_weights": "Hinweis: die Gewichte",
     "note_zero_weights": "Hinweis: Zeilen mit Gewicht 0",
-    "note_class_threshold": "Hinweis: die Fehlklassifikationsrate"
+    "note_class_threshold": "Hinweis: die Fehlklassifikationsrate",
+    "auc_se": "AUC außerhalb der Stichprobe, Standardfehler zwischen den Folds",
+    "auc_folds": "Folds mit einer AUC",
+    "brier_se": "Brier-Score außerhalb der Stichprobe, Standardfehler zwischen den Folds"
    }
   },
   "checks": {
@@ -521,7 +527,8 @@
    "auc_oof": "AUC fuera de muestra",
    "brier_oof": "Brier fuera de muestra",
    "n_events": "Filas / eventos",
-   "auc_ci": "IC {low} – {high}"
+   "auc_folds": "media de {k} grupos · EE {se}",
+   "brier_folds": "EE entre grupos {se}"
   },
   "coef": {
    "no_inference": "Ni error estándar, ni p-valor, ni intervalo: la inferencia tras una selección penalizada no está prevista.",
@@ -547,7 +554,7 @@
    "residual_oof": "Histograma de los residuos, fuera de muestra",
    "resid_fitted_oof": "Residuos frente a valores ajustados, fuera de muestra",
    "qq_oof": "Q–Q normal de los residuos, fuera de muestra",
-   "roc_oof": "Curva ROC, fuera de muestra",
+   "roc_oof": "Curva ROC fuera de muestra: la media de las curvas de los grupos",
    "calibration_oof": "Calibración por deciles, fuera de muestra",
    "prob_oof": "Probabilidades estimadas por resultado observado, fuera de muestra",
    "confusion_oof": "Matriz de confusión en el umbral, fuera de muestra"
@@ -632,9 +639,7 @@
     "r_squared": "R² fuera de muestra",
     "rmse": "RMSE fuera de muestra",
     "mae": "MAE fuera de muestra",
-    "auc": "AUC fuera de muestra",
-    "auc_ci_low": "AUC fuera de muestra, IC inferior (DeLong)",
-    "auc_ci_high": "AUC fuera de muestra, IC superior (DeLong)",
+    "auc": "AUC fuera de muestra, media de los grupos",
     "brier": "Puntuación de Brier fuera de muestra",
     "accuracy": "Exactitud fuera de muestra",
     "sensitivity": "Sensibilidad fuera de muestra",
@@ -655,7 +660,10 @@
     "note_case_weights": "Nota: los pesos",
     "note_frequency_weights": "Nota: los pesos",
     "note_zero_weights": "Nota: filas de peso 0",
-    "note_class_threshold": "Nota: el error de clasificación"
+    "note_class_threshold": "Nota: el error de clasificación",
+    "auc_se": "AUC fuera de muestra, error estándar entre grupos",
+    "auc_folds": "Grupos con un AUC",
+    "brier_se": "Puntuación de Brier fuera de muestra, error estándar entre grupos"
    }
   },
   "checks": {
@@ -690,7 +698,8 @@
    "auc_oof": "AUC hors échantillon",
    "brier_oof": "Brier hors échantillon",
    "n_events": "Lignes / événements",
-   "auc_ci": "IC {low} – {high}"
+   "auc_folds": "moyenne de {k} plis · ET {se}",
+   "brier_folds": "ET entre plis {se}"
   },
   "coef": {
    "no_inference": "Ni erreur standard, ni p-valeur, ni intervalle : l'inférence après une sélection pénalisée n'est pas prévue.",
@@ -716,7 +725,7 @@
    "residual_oof": "Histogramme des résidus, hors échantillon",
    "resid_fitted_oof": "Résidus selon les valeurs ajustées, hors échantillon",
    "qq_oof": "Q–Q normal des résidus, hors échantillon",
-   "roc_oof": "Courbe ROC, hors échantillon",
+   "roc_oof": "Courbe ROC hors échantillon : la moyenne des courbes des plis",
    "calibration_oof": "Calibration par déciles, hors échantillon",
    "prob_oof": "Probabilités prédites par issue observée, hors échantillon",
    "confusion_oof": "Matrice de confusion au seuil, hors échantillon"
@@ -801,9 +810,7 @@
     "r_squared": "R² hors échantillon",
     "rmse": "RMSE hors échantillon",
     "mae": "MAE hors échantillon",
-    "auc": "AUC hors échantillon",
-    "auc_ci_low": "AUC hors échantillon, IC bas (DeLong)",
-    "auc_ci_high": "AUC hors échantillon, IC haut (DeLong)",
+    "auc": "AUC hors échantillon, moyenne des plis",
     "brier": "Score de Brier hors échantillon",
     "accuracy": "Exactitude hors échantillon",
     "sensitivity": "Sensibilité hors échantillon",
@@ -824,7 +831,10 @@
     "note_case_weights": "Note : les poids",
     "note_frequency_weights": "Note : les poids",
     "note_zero_weights": "Note : lignes de poids 0",
-    "note_class_threshold": "Note : le taux de mauvaise classification"
+    "note_class_threshold": "Note : le taux de mauvaise classification",
+    "auc_se": "AUC hors échantillon, erreur type entre plis",
+    "auc_folds": "Plis avec une AUC",
+    "brier_se": "Score de Brier hors échantillon, erreur type entre plis"
    }
   },
   "checks": {

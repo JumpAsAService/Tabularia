@@ -6,12 +6,15 @@ and for the logistic separation and the events per variable; the tests of an unp
 are not computed.
 
 Cards: linear — the rows, λ, the terms selected, R² out of fold; logistic — rows and events,
-the AUC out of fold, λ, the Brier score out of fold. Charts: the cross-validation curve with
+the AUC out of fold (the mean of the folds' AUCs with its standard error between folds, as
+cv.glmnet's cvm: the folds' fits have different intercepts, so the AUC of all the out-of-fold
+predictions together would mix their scales and is not shown), λ, the Brier score out of fold
+with its standard error between folds. Charts: the cross-validation curve with
 its band and both λ marked (the least error's and the 1 SE rule's, and a fixed λ), the paths
 of the coefficients with the chosen λ marked, the terms kept at the chosen λ (the intercept
 left out: on the outcome's scale it would flatten the others); then the residuals out of fold,
 against the fitted values, their Q–Q and histogram (linear), or the ROC, calibration,
-probabilities and confusion matrix out of fold (logistic).
+probabilities and confusion matrix out of fold (logistic), the ROC the mean of the folds' curves.
 """
 from __future__ import annotations
 
@@ -52,6 +55,16 @@ def cv_charts(w: dict, checked: dict[str, Any]) -> tuple[c.Chart, ...]:
     return cv, paths, selected
 
 
+def folds_card(w: dict, id_: str, label: str, stat: str, under: str, k: str | None = None) -> c.Card:
+    """A number out of fold with its standard error between folds under it («mean of 10 folds · SE 0.031»)."""
+    se = c.num(c.model_key(stat + "_se"))
+    parts = {"se": c.shown(se, "0.000")}
+    if k:
+        parts["k"] = c.shown(c.num(c.model_key(k)), "#,##0")
+    return c.Card(id_, label, c.shown(c.num(c.model_key(stat)), "0.0000" if stat == "brier" else "0.000"),
+                  under=f'IF(ISNULL({se}), "", {c.join(under, **parts)})')
+
+
 def coef_note(w: dict, penalty: str) -> str:
     """No inference, and, when a categorical predictor made dummies, that each is penalized alone
     (the lasso and the elastic net may keep one level and drop another; the ridge shrinks each)."""
@@ -78,8 +91,8 @@ def page(model: str, params: dict[str, Any], locale: str, sample: list[dict] | N
         charts = (*cv_charts(w, checked), *linear.residual_charts(w, out_of_fold=True),
                   c.histogram("c_residual", w["charts"]["residual_oof"], "residual", w["series"]["count"]))
     else:
-        cards = (logistic.rows_and_events(w), logistic.auc_card(w, k["auc_oof"]), lam,
-                 c.Card("k_brier", k["brier_oof"], c.shown(c.num(c.model_key("brier")), "0.0000")))
+        cards = (logistic.rows_and_events(w), folds_card(w, "k_auc", k["auc_oof"], "auc", k["auc_folds"], k="auc_folds"), lam,
+                 folds_card(w, "k_brier", k["brier_oof"], "brier", k["brier_folds"]))
         stats_ = ("estimate", "odds_ratio", "selected")
         charts = (*cv_charts(w, checked), *logistic.classification_charts(w, out_of_fold=True))
     return c.page(model, params, locale, sample, step, name=name, about=about, cards=cards,

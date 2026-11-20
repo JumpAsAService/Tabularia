@@ -11886,22 +11886,27 @@
         },
         {
           "key": "model|||auc",
-          "value": 0.715154994259472,
+          "value": 0.763843221076724,
           "rel": 1e-09
         },
         {
-          "key": "model|||auc_ci_low",
-          "value": 0.642425781863755,
+          "key": "model|||auc_se",
+          "value": 0.0333553351736399,
           "rel": 1e-09
         },
         {
-          "key": "model|||auc_ci_high",
-          "value": 0.787884206655189,
+          "key": "model|||auc_folds",
+          "value": 10,
           "rel": 1e-09
         },
         {
           "key": "model|||brier",
           "value": 0.198312926729822,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||brier_se",
+          "value": 0.0136639716750168,
           "rel": 1e-09
         },
         {
@@ -12245,22 +12250,27 @@
         },
         {
           "key": "model|||auc",
-          "value": 0.691733639494834,
+          "value": 0.759319980639778,
           "rel": 1e-09
         },
         {
-          "key": "model|||auc_ci_low",
-          "value": 0.616271711090946,
+          "key": "model|||auc_se",
+          "value": 0.0300148997099016,
           "rel": 1e-09
         },
         {
-          "key": "model|||auc_ci_high",
-          "value": 0.767195567898721,
+          "key": "model|||auc_folds",
+          "value": 10,
           "rel": 1e-09
         },
         {
           "key": "model|||brier",
           "value": 0.207377811846525,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||brier_se",
+          "value": 0.0125946070180796,
           "rel": 1e-09
         },
         {
@@ -12605,22 +12615,27 @@
         },
         {
           "key": "model|||auc",
-          "value": 0.449253731343284,
+          "value": 0.751472808980587,
           "rel": 1e-09
         },
         {
-          "key": "model|||auc_ci_low",
-          "value": 0.362956912133868,
+          "key": "model|||auc_se",
+          "value": 0.0171606337741215,
           "rel": 1e-09
         },
         {
-          "key": "model|||auc_ci_high",
-          "value": 0.535550550552699,
+          "key": "model|||auc_folds",
+          "value": 5,
           "rel": 1e-09
         },
         {
           "key": "model|||brier",
           "value": 0.229666688047196,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||brier_se",
+          "value": 0.0168411385018115,
           "rel": 1e-09
         },
         {
@@ -12949,22 +12964,27 @@
         },
         {
           "key": "model|||auc",
-          "value": 0.691349895240946,
+          "value": 0.760178613376288,
           "rel": 1e-09
         },
         {
-          "key": "model|||auc_ci_low",
-          "value": 0.637976632126053,
+          "key": "model|||auc_se",
+          "value": 0.0339738764814237,
           "rel": 1e-09
         },
         {
-          "key": "model|||auc_ci_high",
-          "value": 0.744723158355839,
+          "key": "model|||auc_folds",
+          "value": 10,
           "rel": 1e-09
         },
         {
           "key": "model|||brier",
           "value": 0.204591628431974,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||brier_se",
+          "value": 0.0125801912031025,
           "rel": 1e-09
         },
         {
@@ -13248,18 +13268,23 @@
           "rel": 1e-09
         },
         {
-          "key": "model|||auc_ci_low",
-          "value": 1,
+          "key": "model|||auc_se",
+          "value": 0,
           "rel": 1e-09
         },
         {
-          "key": "model|||auc_ci_high",
-          "value": 1,
+          "key": "model|||auc_folds",
+          "value": 5,
           "rel": 1e-09
         },
         {
           "key": "model|||brier",
           "value": 0.000201897947547559,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||brier_se",
+          "value": 0.000111865138642887,
           "rel": 1e-09
         },
         {

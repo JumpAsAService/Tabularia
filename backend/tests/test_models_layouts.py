@@ -231,6 +231,23 @@ def test_the_first_page_holds_the_assumptions_with_r_s_stars_and_the_verdicts(tm
     assert asked["Coefficients with their intervals (the intercept left out)"]["series"][0]["type"] == "boxplot"
 
 
+def test_a_penalized_logistic_says_its_auc_out_of_fold_fold_by_fold(tmp_path, chart_service, monkeypatch):  # noqa: F811
+    """The folds' fits have different intercepts: the AUC of all the out-of-fold predictions
+    together mixes their scales (0.45 for a ridge where the cross-validation said 0.75). The
+    runner writes the mean of the folds' AUCs with its standard error between folds, as
+    cv.glmnet's cvm; no DeLong interval of the pooled predictions is declared or drawn."""
+    spec = catalog.variant_spec("logistic", catalog.check_params("logistic", {"outcome": "y", "predictors": ["x"],
+                                                                             "penalty": "ridge", "event_value": 1}))
+    numbers = spec["sections"]["model"]["numbers"]
+    assert {"auc", "auc_se", "auc_folds", "brier_se"} <= set(numbers) and not {"auc_ci_low", "auc_ci_high"} & set(numbers)
+    del chart_service[1][:]
+    _, page = draw(tmp_path, chart_service, monkeypatch, "logistic-penalized", fmt="svg")
+    texts = set(strings(json.loads(page)))
+    assert "0.759" in texts and "mean of 10 folds · SE 0.030" in texts, sorted(t for t in texts if "fold" in t)
+    asked = {spec["option"]["title"]["text"] for spec in chart_service[1] if "title" in spec["option"]}
+    assert "ROC curve, out of fold: the mean of the folds' curves" in asked, asked
+
+
 def test_a_survival_curve_is_a_step_with_its_band_and_the_number_at_risk_under_it(tmp_path, chart_service, monkeypatch):  # noqa: F811
     del chart_service[1][:]
     out, page = draw(tmp_path, chart_service, monkeypatch, "kaplan_meier-default", locale="it")

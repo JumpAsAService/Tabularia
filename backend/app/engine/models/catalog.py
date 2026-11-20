@@ -352,7 +352,9 @@ MODELS: dict[str, dict[str, Any]] = {
                 "sections": {
                     "model": {"levels": None, "texts": [*_MODEL_TEXTS, "family", "link", "penalty", "cv_measure",
                                                         "event_value"],
-                              "numbers": ["n", "events", "n_missing", "auc", "auc_ci_low", "auc_ci_high", "brier",
+                              # the AUC is the mean of the folds' (their fits' intercepts differ: a ranking
+                              # cannot mix them), with its standard error between folds, as cv.glmnet's cvm
+                              "numbers": ["n", "events", "n_missing", "auc", "auc_se", "auc_folds", "brier", "brier_se",
                                           "threshold", "accuracy", "sensitivity", "specificity", "precision",
                                           "deviance", *_PENALTY_FIT]},
                     "coef": {"levels": None, "numbers": ["estimate", "odds_ratio", "selected"], "texts": []},
