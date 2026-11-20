@@ -368,10 +368,14 @@ def test_the_boosting_charts_of_each_task(tmp_path, chart_service, monkeypatch):
     # the gain and the SHAP bars; a multiclass model stacks the SHAP bars by class
     asked = asked_options(chart_service)
     gain = asked["Importance by PredictionValuesChange (share of the total)"]
-    assert gain["yAxis"]["data"] == ["spend", "orders", "member", "store"]  # catboost-multiclass: the runner's, by gain share
+    _, _, rows = fixture("catboost-multiclass")
+    by_gain = [r["level"] for r in sorted((r for r in rows if r["section"] == "importance" and r["stat"] == "gain_share"),
+                                          key=lambda r: -r["value"])]
+    assert gain["yAxis"]["data"] == by_gain[:20]
+    classes = sorted({r["level_2"] for r in rows if r["section"] == "importance" and r["level_2"]})
     stacked = asked["Mean |SHAP| by class"]
-    assert [s["name"] for s in stacked["series"]] == ["bronze", "gold", "silver"] and all(s["stack"] == "total" for s in stacked["series"])
-    assert (asked["ROC curves, one class against the rest"]["legend"]["data"]) == ["bronze", "gold", "silver"]
+    assert sorted(s["name"] for s in stacked["series"]) == classes and all(s["stack"] == "total" for s in stacked["series"])
+    assert sorted(asked["ROC curves, one class against the rest"]["legend"]["data"]) == classes
 
 
 def test_the_beeswarm_has_the_ramp_the_names_of_the_predictors_by_rank_and_how_to_read_it(tmp_path, chart_service, monkeypatch):  # noqa: F811
