@@ -1562,10 +1562,10 @@
      0.75
     ],
     "times": [],
+    "alive_at": null,
     "alpha": 0.05,
     "seed": 1,
-    "output": "results",
-    "alive_at": null
+    "output": "results"
    }
   },
   {
@@ -1633,10 +1633,10 @@
      10.0,
      30.0
     ],
+    "alive_at": null,
     "alpha": 0.1,
     "seed": 7,
-    "output": "rows",
-    "alive_at": null
+    "output": "rows"
    }
   },
   {
@@ -1668,10 +1668,11 @@
      0.75
     ],
     "times": [],
+    "alive_at": null,
+    "aic_margin": 2.0,
     "alpha": 0.05,
     "seed": 1,
-    "output": "results",
-    "alive_at": null
+    "output": "results"
    }
   },
   {
@@ -2148,6 +2149,101 @@
     "horizon": 5000
    },
    "error": "bg_bb: 'horizon' must be a whole number from 1 to 1000"
+  },
+  {
+   "what": "the automatic choice, the AIC margin of the parsimony rule at its default",
+   "model": "parametric_survival",
+   "params": {
+    "time": "days",
+    "event": "status",
+    "event_value": "failed",
+    "distribution": "auto"
+   },
+   "checked": {
+    "time": "days",
+    "event": "status",
+    "event_value": "failed",
+    "predictors": [],
+    "strata": null,
+    "weights": null,
+    "distribution": "auto",
+    "quantiles": [
+     0.25,
+     0.75
+    ],
+    "times": [],
+    "alive_at": null,
+    "aic_margin": 2.0,
+    "alpha": 0.05,
+    "seed": 1,
+    "output": "results"
+   }
+  },
+  {
+   "what": "the automatic choice with a margin of 0.5",
+   "model": "parametric_survival",
+   "params": {
+    "time": "days",
+    "event": "status",
+    "event_value": "failed",
+    "distribution": "auto",
+    "aic_margin": 0.5
+   },
+   "checked": {
+    "time": "days",
+    "event": "status",
+    "event_value": "failed",
+    "predictors": [],
+    "strata": null,
+    "weights": null,
+    "distribution": "auto",
+    "quantiles": [
+     0.25,
+     0.75
+    ],
+    "times": [],
+    "alive_at": null,
+    "aic_margin": 0.5,
+    "alpha": 0.05,
+    "seed": 1,
+    "output": "results"
+   }
+  },
+  {
+   "what": "an AIC margin without the automatic choice",
+   "model": "parametric_survival",
+   "params": {
+    "time": "days",
+    "event": "status",
+    "event_value": "failed",
+    "distribution": "weibull",
+    "aic_margin": 1
+   },
+   "error": "parametric_survival: 'aic_margin' only applies when distribution = auto"
+  },
+  {
+   "what": "a negative AIC margin",
+   "model": "parametric_survival",
+   "params": {
+    "time": "days",
+    "event": "status",
+    "event_value": "failed",
+    "distribution": "auto",
+    "aic_margin": -1
+   },
+   "error": "parametric_survival: 'aic_margin' must be a number at least 0 and at most 10"
+  },
+  {
+   "what": "an AIC margin of 11",
+   "model": "parametric_survival",
+   "params": {
+    "time": "days",
+    "event": "status",
+    "event_value": "failed",
+    "distribution": "auto",
+    "aic_margin": 11
+   },
+   "error": "parametric_survival: 'aic_margin' must be a number at least 0 and at most 10"
   }
  ]
 }

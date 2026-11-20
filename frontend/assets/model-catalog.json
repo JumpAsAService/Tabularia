@@ -531,6 +531,11 @@
       "min": 0,
       "max": 1
     },
+    "aic_margin": {
+      "control": "number",
+      "min": 0,
+      "max": 10
+    },
     "holdout_opportunities": {
       "control": "integer",
       "min": 1,
@@ -2061,6 +2066,7 @@
         "quantiles": "quantiles",
         "times": "times",
         "alive_at": "number_column",
+        "aic_margin": "aic_margin",
         "alpha": "alpha",
         "seed": "seed",
         "output": "output_rows"
@@ -2080,7 +2086,8 @@
         "alpha": 0.05,
         "seed": 1,
         "output": "results",
-        "alive_at": null
+        "alive_at": null,
+        "aic_margin": 2.0
       },
       "applies": {
         "reference": {
@@ -2088,6 +2095,11 @@
         },
         "interactions": {
           "predictors": true
+        },
+        "aic_margin": {
+          "distribution": [
+            "auto"
+          ]
         }
       },
       "requires": [],
@@ -2721,7 +2733,8 @@
                 "last_event_time",
                 "exponential_lr_statistic",
                 "exponential_lr_df",
-                "exponential_lr_p_value"
+                "exponential_lr_p_value",
+                "aic_margin"
               ]
             },
             "coef": {

@@ -842,6 +842,17 @@ test('parametric survival: no predictor is allowed, and with none the reference 
   // the distribution is one of the seven; any other word is not kept
   for (const d of ['weibull', 'exponential', 'lognormal', 'loglogistic', 'gengamma', 'gompertz', 'auto']) assert.equal(m.modelParams(PS, { ...base, distribution: d }).distribution, d)
   assert.ok(!('distribution' in m.modelParams(PS, { ...base, distribution: 'gamma' })))
+  // the AIC margin of the automatic choice: only with `auto`, 2 until the person changes it, from 0 to 10
+  assert.equal(m.modelApplies(PS, 'aic_margin', base), false)
+  assert.equal(m.modelApplies(PS, 'aic_margin', { ...base, distribution: 'auto' }), true)
+  assert.ok(!('aic_margin' in m.modelParams(PS, { ...base, aic_margin: 1 })))
+  assert.equal(m.modelParams(PS, { ...base, distribution: 'auto', aic_margin: 0.5 }).aic_margin, 0.5)
+  assert.equal(m.modelDefaults('parametric_survival').aic_margin, undefined)
+  const margin = m.modelFields(PS).find((f) => f.key === 'aic_margin')
+  assert.equal(margin.control, 'number')
+  assert.equal(m.modelNumberProblem(margin, -1), 'range')
+  assert.equal(m.modelNumberProblem(margin, 11), 'range')
+  assert.equal(m.modelNumberProblem(margin, 2), '')
   // the kinds of P0 are drawn by existing controls
   const by = Object.fromEntries(m.modelFields(PS).map((f) => [f.key, f]))
   assert.deepEqual([by.distribution.control, by.quantiles.control, by.predictors.control], ['choice', 'numbers', 'columns'])
