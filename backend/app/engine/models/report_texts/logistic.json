@@ -60,7 +60,8 @@
     "note_robust_weights": "Note: robust errors with weights",
     "note_zero_weights": "Note: rows of weight 0",
     "note_interactions": "Note: the interactions",
-    "note_not_converged": "Note: convergence"
+    "note_not_converged": "Note: convergence",
+    "note_separation_approximate": "Note: separation checked approximately"
    }
   },
   "values": {
@@ -97,6 +98,9 @@
    },
    "note_not_converged": {
     "The fit did not converge: the estimates may be unreliable; look for a predictor that almost separates the outcome.": "The fit did not converge: the estimates may be unreliable; look for a predictor that almost separates the outcome."
+   },
+   "note_separation_approximate": {
+    "Separation was checked approximately, as the rows are many: from the maximum likelihood fit (whether it converged, probabilities of 0 or 1, very large coefficients), not by detectseparation's linear program; a term it names stops no fit.": "Separation was checked approximately, as the rows are many: from the maximum likelihood fit (whether it converged, probabilities of 0 or 1, very large coefficients), not by detectseparation's linear program; a term it names stops no fit."
    }
   },
   "checks": {
@@ -189,7 +193,8 @@
     "note_robust_weights": "Nota: errori robusti con i pesi",
     "note_zero_weights": "Nota: righe di peso 0",
     "note_interactions": "Nota: le interazioni",
-    "note_not_converged": "Nota: convergenza"
+    "note_not_converged": "Nota: convergenza",
+    "note_separation_approximate": "Nota: separazione controllata in modo approssimato"
    }
   },
   "values": {
@@ -226,6 +231,9 @@
    },
    "note_not_converged": {
     "The fit did not converge: the estimates may be unreliable; look for a predictor that almost separates the outcome.": "La stima non è arrivata a convergenza: le stime possono essere inaffidabili; cercate un predittore che separa quasi l'esito."
+   },
+   "note_separation_approximate": {
+    "Separation was checked approximately, as the rows are many: from the maximum likelihood fit (whether it converged, probabilities of 0 or 1, very large coefficients), not by detectseparation's linear program; a term it names stops no fit.": "La separazione è stata controllata in modo approssimato, perché le righe sono molte: dalla stima di massima verosimiglianza (se è giunta a convergenza, probabilità di 0 o 1, coefficienti molto grandi), non con il programma lineare di detectseparation; un termine che indica non ferma la stima."
    }
   },
   "checks": {
@@ -318,7 +326,8 @@
     "note_robust_weights": "Hinweis: robuste Fehler mit Gewichten",
     "note_zero_weights": "Hinweis: Zeilen mit Gewicht 0",
     "note_interactions": "Hinweis: Wechselwirkungen",
-    "note_not_converged": "Hinweis: Konvergenz"
+    "note_not_converged": "Hinweis: Konvergenz",
+    "note_separation_approximate": "Hinweis: Separation näherungsweise geprüft"
    }
   },
   "values": {
@@ -355,6 +364,9 @@
    },
    "note_not_converged": {
     "The fit did not converge: the estimates may be unreliable; look for a predictor that almost separates the outcome.": "Die Schätzung ist nicht konvergiert: Die Schätzungen können unzuverlässig sein; suchen Sie einen Prädiktor, der das Ergebnis fast trennt."
+   },
+   "note_separation_approximate": {
+    "Separation was checked approximately, as the rows are many: from the maximum likelihood fit (whether it converged, probabilities of 0 or 1, very large coefficients), not by detectseparation's linear program; a term it names stops no fit.": "Die Separation wurde näherungsweise geprüft, weil es viele Zeilen sind: an der Maximum-Likelihood-Schätzung (ob sie konvergierte, Wahrscheinlichkeiten von 0 oder 1, sehr große Koeffizienten), nicht mit dem linearen Programm von detectseparation; ein Term, den sie nennt, hält keine Schätzung an."
    }
   },
   "checks": {
@@ -447,7 +459,8 @@
     "note_robust_weights": "Nota: errores robustos con pesos",
     "note_zero_weights": "Nota: filas de peso 0",
     "note_interactions": "Nota: las interacciones",
-    "note_not_converged": "Nota: convergencia"
+    "note_not_converged": "Nota: convergencia",
+    "note_separation_approximate": "Nota: separación comprobada de forma aproximada"
    }
   },
   "values": {
@@ -484,6 +497,9 @@
    },
    "note_not_converged": {
     "The fit did not converge: the estimates may be unreliable; look for a predictor that almost separates the outcome.": "La estimación no convergió: las estimaciones pueden no ser fiables; busque un predictor que casi separe el resultado."
+   },
+   "note_separation_approximate": {
+    "Separation was checked approximately, as the rows are many: from the maximum likelihood fit (whether it converged, probabilities of 0 or 1, very large coefficients), not by detectseparation's linear program; a term it names stops no fit.": "La separación se comprobó de forma aproximada, porque las filas son muchas: a partir del ajuste de máxima verosimilitud (si convergió, probabilidades de 0 o 1, coeficientes muy grandes), no con el programa lineal de detectseparation; un término que señale no detiene el ajuste."
    }
   },
   "checks": {
@@ -576,7 +592,8 @@
     "note_robust_weights": "Note : erreurs robustes avec poids",
     "note_zero_weights": "Note : lignes de poids 0",
     "note_interactions": "Note : les interactions",
-    "note_not_converged": "Note : convergence"
+    "note_not_converged": "Note : convergence",
+    "note_separation_approximate": "Note : séparation vérifiée de façon approchée"
    }
   },
   "values": {
@@ -613,6 +630,9 @@
    },
    "note_not_converged": {
     "The fit did not converge: the estimates may be unreliable; look for a predictor that almost separates the outcome.": "L'estimation n'a pas convergé : les estimations peuvent être peu fiables ; cherchez un prédicteur qui sépare presque le résultat."
+   },
+   "note_separation_approximate": {
+    "Separation was checked approximately, as the rows are many: from the maximum likelihood fit (whether it converged, probabilities of 0 or 1, very large coefficients), not by detectseparation's linear program; a term it names stops no fit.": "La séparation a été vérifiée de façon approchée, car les lignes sont nombreuses : à partir de l'ajustement du maximum de vraisemblance (s'il a convergé, probabilités de 0 ou 1, coefficients très grands), et non par le programme linéaire de detectseparation ; un terme qu'elle signale n'arrête pas l'ajustement."
    }
   },
   "checks": {

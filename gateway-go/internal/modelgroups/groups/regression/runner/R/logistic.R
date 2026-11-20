@@ -29,6 +29,8 @@ LOGISTIC_EPV <- 10            # events per variable under which the estimates ar
 LOGISTIC_DEV_RESIDUAL <- 3    # |deviance residual| above which a row is predicted badly
 LOGISTIC_PROB_BINS <- 20L     # the histogram of the predicted probabilities, on [0, 1]
 LOGISTIC_LABELLED <- 3L       # points named on a chart
+LOGISTIC_SEPARATION_LP_ROWS <- 10000L  # rows up to which detectseparation's linear program runs (16 s at 20 000)
+LOGISTIC_SEPARATION_SIZE <- 10         # above: |β| (β × sd for a column that is not 0/1) that marks a term
 
 # The notes the runner may write: an id each (the row's stat is note_<id>) and one sentence,
 # with no number or name in it, so that the report's words can say it in the page's language
@@ -47,7 +49,10 @@ LOGISTIC_NOTES <- c(
   interactions = paste0("The terms of an interaction are correlated with their parts by construction: their VIFs are large ",
                         "for that reason; centre the predictors to read them."),
   not_converged = paste0("The fit did not converge: the estimates may be unreliable; look for a predictor that almost ",
-                         "separates the outcome.")
+                         "separates the outcome."),
+  separation_approximate = paste0("Separation was checked approximately, as the rows are many: from the maximum likelihood ",
+                                  "fit (whether it converged, probabilities of 0 or 1, very large coefficients), not by ",
+                                  "detectseparation's linear program; a term it names stops no fit.")
 )
 
 logistic_note <- function(rows, id) tab_text(rows, "model", paste0("note_", id), LOGISTIC_NOTES[[id]])
@@ -149,7 +154,7 @@ fit_logistic <- function(task) {
   form <- stats::reformulate(colnames(Xn), response = "y", intercept = has_int)
   fam <- stats::binomial(link)
   separated <- logistic_separation(form, fam, dat, design$terms)
-  if (!firth && length(separated$terms)) {
+  if (!firth && length(separated$terms) && !separated$approximate) {
     tab_refuse("separation", paste0("the term «", separated$terms[[1L]], "» separates the outcome: use estimation = firth, ",
                                     "or a penalty"), list(terms = as.list(separated$terms)))
   }
@@ -261,6 +266,7 @@ fit_logistic <- function(task) {
   if (zero_weights > 0L) logistic_note(rows, "zero_weights")
   if (length(p$interactions %||% list())) logistic_note(rows, "interactions")
   if (!isTRUE(m$converged)) logistic_note(rows, "not_converged")
+  if (separated$approximate) logistic_note(rows, "separation_approximate")
 
   # ── the card, and the rows output ─────────────────────────────────────────
   card <- tab_card(task, design, LOGISTIC_PACKAGES)
@@ -289,16 +295,41 @@ logistic_glm <- function(form, fam, dat, firth) {
   }
 }
 
-# Separation, by detectseparation's linear program: the terms whose maximum likelihood estimate
-# is infinite (their labels, the intercept last), or the error that kept it from running.
-logistic_separation <- function(form, fam, dat, terms) {
+# Separation: the terms whose maximum likelihood estimate is infinite (their labels, the
+# intercept last), or the error that kept the check from running. Up to `lp_rows` rows by
+# detectseparation's linear program (exact; 300 s at 100 000 rows); above, approximately
+# (`approximate`: the report says so, and a maximum likelihood fit is not stopped by it).
+logistic_separation <- function(form, fam, dat, terms, lp_rows = LOGISTIC_SEPARATION_LP_ROWS) {
+  if (nrow(dat) > lp_rows) return(logistic_separation_quick(form, fam, dat, terms))
   r <- tryCatch(stats::glm(form, family = fam, data = dat, weights = .w, method = detectseparation::detect_separation),
                 error = function(e) e)
-  if (inherits(r, "error")) return(list(terms = character(), error = conditionMessage(r)))
+  if (inherits(r, "error")) return(list(terms = character(), error = conditionMessage(r), approximate = FALSE))
   beta <- r$coefficients
   infinite <- which(is.infinite(beta))
   labels <- terms$label[infinite]
-  list(terms = c(labels[labels != "(Intercept)"], labels[labels == "(Intercept)"]), error = NULL, outcome = isTRUE(r$outcome))
+  list(terms = c(labels[labels != "(Intercept)"], labels[labels == "(Intercept)"]), error = NULL, outcome = isTRUE(r$outcome),
+       approximate = FALSE)
+}
+
+# The approximate check, from the maximum likelihood fit itself: separation drives it to fitted
+# probabilities of 0 or 1 (glm's own threshold, 10 ε) or keeps it from converging, while the
+# separating terms' estimates grow without bound. Suspected when the fit did not converge or a
+# row's probability is 0 or 1; the terms named are those whose |β| (β × the column's standard
+# deviation for a column that is not 0/1) is above LOGISTIC_SEPARATION_SIZE, «(the fit)» when
+# none is. A diagnostic: its verdict is «doubtful», never a refusal.
+logistic_separation_quick <- function(form, fam, dat, terms) {
+  m <- tryCatch(suppressWarnings(stats::glm(form, family = fam, data = dat, weights = .w)), error = function(e) e)
+  if (inherits(m, "error")) return(list(terms = character(), error = conditionMessage(m), approximate = TRUE))
+  eps <- 10 * .Machine$double.eps
+  prob <- stats::fitted(m)[dat$.w > 0]
+  suspect <- !isTRUE(m$converged) || any(prob < eps | prob > 1 - eps)
+  if (!suspect) return(list(terms = character(), error = NULL, approximate = TRUE))
+  X <- stats::model.matrix(m)
+  scale <- apply(X, 2L, function(x) if (all(x %in% c(0, 1))) 1 else stats::sd(x))
+  size <- abs(stats::coef(m)) * scale
+  labels <- terms$label[!is.na(size) & size > LOGISTIC_SEPARATION_SIZE]
+  labels <- c(labels[labels != "(Intercept)"], labels[labels == "(Intercept)"])
+  list(terms = if (length(labels)) labels else "(the fit)", error = NULL, approximate = TRUE)
 }
 
 # The AUC (the probability that a case's predicted risk is above a non-case's, ties a half) and
@@ -520,13 +551,15 @@ logistic_charts <- function(rows, task, prob, y, w, eta, infl, hl, ev, row_numbe
 }
 
 # The ROC curve, the calibration on the Hosmer–Lemeshow groups and the predicted probabilities
-# by observed outcome (penalized.R draws them from the out-of-fold probabilities).
-logistic_classification_charts <- function(rows, task, prob, y, w, hl, ev) {
+# by observed outcome (penalized.R draws them from the out-of-fold probabilities, the ROC as the
+# mean of its folds' curves).
+logistic_classification_charts <- function(rows, task, prob, y, w, hl, ev, roc = NULL) {
   most <- tab_limit(task, "max_chart_points")
-  # ROC: (1 − specificity, sensitivity) at every distinct threshold, from (0, 0) to (1, 1)
-  cuts <- sort(unique(prob), decreasing = TRUE)
-  tpr <- c(0, vapply(cuts, function(t) sum(w[y == 1 & prob >= t]), 0) / sum(w[y == 1]))
-  fpr <- c(0, vapply(cuts, function(t) sum(w[y == 0 & prob >= t]), 0) / sum(w[y == 0]))
+  # ROC: (1 − specificity, sensitivity) at every distinct threshold, from (0, 0) to (1, 1); a
+  # penalized fit hands the mean of its folds' curves instead
+  if (is.null(roc)) roc <- logistic_roc(prob, y, w)
+  tpr <- roc$tpr
+  fpr <- roc$fpr
   if (length(tpr) > most) {
     i <- unique(round(seq(1, length(tpr), length.out = most)))
     tpr <- tpr[i]
@@ -543,6 +576,19 @@ logistic_classification_charts <- function(rows, task, prob, y, w, hl, ev) {
     tab_points(rows, "hist", "prob", "count", x = head(breaks, -1L), y = count, x1 = tail(breaks, -1L), level_2 = class$label)
   }
   invisible(rows)
+}
+
+# The ROC curve's points: at each distinct predicted probability t, from the largest, the share
+# of the cases and of the non-cases whose probability is t or more (weights count cases), after
+# (0, 0). One sort and two running sums, O(n log n): the rows sorted by decreasing
+# probability, the running sums read at the last row of each run of tied probabilities.
+logistic_roc <- function(prob, y, w) {
+  o <- order(prob, decreasing = TRUE)
+  p <- prob[o]
+  w1 <- (w * (y == 1))[o]
+  w0 <- (w * (y == 0))[o]
+  last <- c(p[-1L] != p[-length(p)], TRUE)
+  list(tpr = c(0, cumsum(w1)[last] / sum(w1)), fpr = c(0, cumsum(w0)[last] / sum(w0)))
 }
 
 # The confusion matrix at the threshold: observed class (level) by predicted class (level_2),
@@ -643,4 +689,41 @@ predict_logistic <- function(task, card) {
   if (!is.null(threshold)) out$prediction_class <- logistic_class_of(card, pr$prob, as.numeric(threshold))
   rownames(out) <- NULL
   list(output = out)
+}
+
+# ── the runner's own tests, run by the group's self-test with the common library's ──
+TAB_COMMON_TESTS[["logistic: the ROC in one sort gives the points of every threshold, ties and weights included"]] <- function(code) {
+  set.seed(7)
+  n <- 600L
+  prob <- round(stats::runif(n), 2) # ties
+  y <- as.numeric(stats::runif(n) < prob)
+  for (w in list(rep(1, n), sample(0:4, n, replace = TRUE))) {
+    cuts <- sort(unique(prob), decreasing = TRUE) # the definition, one threshold at a time
+    tpr <- c(0, vapply(cuts, function(t) sum(w[y == 1 & prob >= t]), 0) / sum(w[y == 1]))
+    fpr <- c(0, vapply(cuts, function(t) sum(w[y == 0 & prob >= t]), 0) / sum(w[y == 0]))
+    roc <- logistic_roc(prob, y, w)
+    .tab_expect(identical(roc$tpr, tpr) && identical(roc$fpr, fpr), "the ROC's points differ from one threshold at a time")
+    # its area by the trapezoids is the AUC of logistic_auc (Mann–Whitney, ties a half)
+    area <- sum(diff(roc$fpr) * (head(roc$tpr, -1L) + tail(roc$tpr, -1L)) / 2)
+    .tab_expect(abs(area - logistic_auc(prob, y, w, 0.05)$auc) < 1e-12, "the ROC's area is not the AUC")
+  }
+}
+
+TAB_COMMON_TESTS[["logistic: separation, by the linear program or approximately above its rows"]] <- function(code) {
+  check <- function(file, types, outcome, event, predictors) {
+    df <- tab_read_csv(file.path(code, "reference", "data", file), types)
+    d <- tab_design(df, predictors, outcome = outcome)
+    dat <- data.frame(y = as.numeric(tab_label(d$y) == event), d$X[, -1L, drop = FALSE], check.names = FALSE)
+    dat$.w <- 1
+    form <- stats::reformulate(colnames(d$X)[-1L], response = "y")
+    list(lp = logistic_separation(form, stats::binomial(), dat, d$terms),
+         quick = logistic_separation(form, stats::binomial(), dat, d$terms, lp_rows = 0L))
+  }
+  sp <- check("logistic_separated.csv", list(dose = "number", group = "text", status = "text"), "status", "sick", c("dose", "group"))
+  .tab_expect(!sp$lp$approximate && "dose" %in% sp$lp$terms, "the linear program: ", paste(sp$lp$terms, collapse = ", "))
+  .tab_expect(sp$quick$approximate && "dose" %in% sp$quick$terms, "the approximate check missed «dose»: ",
+              paste(sp$quick$terms, collapse = ", "))
+  ch <- check("logistic_churn.csv", list(tenure = "number", fee = "number", change = "number", plan = "text", churned = "text"),
+              "churned", "yes", c("tenure", "fee", "change", "plan"))
+  .tab_expect(!length(ch$lp$terms) && !length(ch$quick$terms) && ch$quick$approximate, "a term named where nothing separates")
 }

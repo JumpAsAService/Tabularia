@@ -64,7 +64,8 @@ PENALIZED_NOTES <- c(
   frequency_weights = "The weights are frequencies: n, the events, the rates and the checks count the cases the rows stand for.",
   zero_weights = "Rows of weight 0 were left out of the fit.",
   class_threshold = paste0("The misclassification error of the cross-validation counts at the threshold 0.5, as glmnet ",
-                           "does; the classification of the fit is at the node's threshold.")
+                           "does; the classification of the fit is at the node's threshold."),
+  separation_approximate = LOGISTIC_NOTES[["separation_approximate"]]
 )
 
 penalized_note <- function(rows, id) tab_text(rows, "model", paste0("note_", id), PENALIZED_NOTES[[id]])
@@ -272,6 +273,7 @@ fit_penalized <- function(task) {
   if (!is.null(weights_col)) penalized_note(rows, if (logistic) "frequency_weights" else "case_weights")
   if (zero_weights > 0L) penalized_note(rows, "zero_weights")
   if (logistic && identical(measure, "class") && threshold != 0.5) penalized_note(rows, "class_threshold")
+  if (logistic && separated$approximate) penalized_note(rows, "separation_approximate")
 
   # ── the card, and the rows output ─────────────────────────────────────────
   card <- tab_card(task, design, PENALIZED_PACKAGES)
