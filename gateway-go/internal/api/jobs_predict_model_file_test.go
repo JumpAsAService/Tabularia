@@ -314,6 +314,20 @@ func TestAModelFileThatCannotBeAppliedStopsThePredictBeforeAnyRun(t *testing.T) 
 	}
 }
 
+func TestAFileTagThatDisagreesWithTheCardStopsThePredict(t *testing.T) {
+	w := newBoostWorld(t)
+	w.registerBoost(boostCard(declares("xgboost.json", len(w.file), shaOf(w.file))), w.file,
+		map[string]string{"tabularia.model_file_sha256": shaOf([]byte("another file"))})
+	_, _, err := w.predict(boostData)
+	want := "tag tabularia.model_file_sha256) that is not the one its card keeps"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Fatalf("%v, want %q", err, want)
+	}
+	if w.runsMade() != 0 || len(w.attempts) != 0 || w.up.calls != 0 {
+		t.Errorf("%d runs, %d Jobs, %d uploads: nothing may start", w.runsMade(), len(w.attempts), w.up.calls)
+	}
+}
+
 func TestAFileThatIsNotTheCardsStopsTheStepAndLeavesNoObject(t *testing.T) {
 	w := newBoostWorld(t)
 	// the card keeps the hash of another file: the sizes agree, so only the engine can tell

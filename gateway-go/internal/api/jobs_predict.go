@@ -719,6 +719,11 @@ func checkModelFile(ctx context.Context, tr *mlflowconn.Tracker, where, what str
 	case mf.Bytes > limit:
 		return fmt.Sprintf("the model file of %s is larger than a model file may be (%d bytes)", what, limit), nil
 	}
+	// the version's tag is informative, and free to check: when it is there it says the same as the card
+	if tag := strings.ToLower(strings.TrimSpace(s.version.Tags["tabularia.model_file_sha256"])); tag != "" && tag != strings.ToLower(mf.SHA256) {
+		return fmt.Sprintf("the model file of %s has a fingerprint (the tag tabularia.model_file_sha256) that is not the one its card keeps: "+
+			"it was changed after it was registered, and is not applied", what), nil
+	}
 	rc, length, err := tr.Open(ctx, where, mf.Name, limit)
 	var nf *mlflowconn.NotFound
 	var tl *mlflowconn.TooLarge
