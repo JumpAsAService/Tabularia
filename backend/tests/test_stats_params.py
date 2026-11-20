@@ -435,7 +435,8 @@ def test_lot_2_data_refused(name, storage, plants):
     assert say("pearson", x="wide", y="a") == "stat_pearson: the column «wide» holds infinite values: the test cannot be computed"
     # several groups
     assert say("anova", value="amount", group="one") == "stat_anova: the test compares groups and the column «one» has 1 (x): it needs at least two"
-    assert say("anova", value="amount", group="plant") == (
+    # a group of one value: the classic ANOVA takes it (as R's aov), Welch's divides by its variance
+    assert say("anova", value="amount", group="plant", var_equal=False) == (
         "stat_anova: the group «p5» has 1 usable value of «amount» (a NULL or a NaN is left out): at least 2 are needed")
     assert say_on_three("anova", value="flat", group="plant") == (
         "stat_anova: all the values of «flat» are equal inside every group (the variance within the groups is 0): there is no F statistic")

@@ -95,6 +95,7 @@ same row.
 the classic F test; off: Welch's, which does not assume equal variances), **pairwise
 comparisons** and the correction for them ([below](#which-groups-differ-the-post-hoc-comparisons)).
 The results hold the sums of squares, the F statistic, `eta_squared` and `omega_squared`.
+The classic test takes a group with a single value, as R does (Welch's needs two in each).
 *Example:* `crm_activities`, value `durata_min`, group `tipo`, pairwise comparisons
 **Tukey's HSD**: which kinds of contact last longer than the others?
 

@@ -735,8 +735,12 @@ H0: all means equal. A1, A2.
 - Welch (variant `welch`): wᵢ = nᵢ/sᵢ², W = Σwᵢ, m_w = Σwᵢmᵢ/W, Λ = Σ(1 − wᵢ/W)²/(nᵢ − 1);
   F = [Σwᵢ(mᵢ − m_w)²/(k − 1)] / [1 + 2(k − 2)Λ/(k² − 1)]; `df_1` = k − 1,
   `df_2` = (k² − 1)/(3Λ).
-- Refused: fewer than two groups; a group with n < 2 (named); `ss_within` = 0; Welch with a
-  group of variance 0. Blocks of Welch: `sum_weights`, `weighted_mean`, `welch_lambda`.
+- Refused: fewer than two groups; a group with no usable value (named), and for Welch one
+  with n < 2; every group of one value (N − k = 0); `ss_within` = 0; Welch with a group of
+  variance 0. The classic ANOVA takes a group of one value, as R's `aov` and `oneway.test`
+  (var.equal = TRUE) do: it counts in `ss_between`, adds nothing to `ss_within`, and a note
+  names it; its `var`, `sd`, `se` and interval are NULL rows. Blocks of Welch: `sum_weights`,
+  `weighted_mean`, `welch_lambda`.
 - Note, classic only: the largest group variance more than four times the smallest (or one
   of them 0): «Welch's ANOVA (var_equal = false) does not assume them equal.»
 

@@ -123,11 +123,15 @@ def _write_group(out: Rows, label: str, m: Moments, alpha: float, quartiles: Qua
     """A numeric group's rows: its numbers, and the two-sided interval of its mean; for a
     report its quartiles too, which a box plot draws between `min` and `max`. `more`: (stat,
     number) a test adds to each group."""
-    sd = math.sqrt(m.var)
-    se = sd / math.sqrt(m.n)
-    q = dist.t_isf(alpha / 2.0, m.n - 1)
+    if m.var is None:  # one value (a group of the classic ANOVA): no spread, no interval
+        sd = se = low = high = None
+    else:
+        sd = math.sqrt(m.var)
+        se = sd / math.sqrt(m.n)
+        q = dist.t_isf(alpha / 2.0, m.n - 1)
+        low, high = m.mean - q * se, m.mean + q * se
     for stat, value in (("n", m.n), ("mean", m.mean), ("var", m.var), ("sd", sd), ("se", se),
-                        ("ci_low", m.mean - q * se), ("ci_high", m.mean + q * se), ("min", m.min), ("max", m.max), *more):
+                        ("ci_low", low), ("ci_high", high), ("min", m.min), ("max", m.max), *more):
         out.number("group", stat, value, level=label)
     _write_quartiles(out, label, quartiles)
 
@@ -148,7 +152,7 @@ def _refuse_unusable(test: str, value: str, label: str | None, m: Moments, least
             + (f" of «{value}»" if label is not None else "")
             + f" (a NULL or a NaN is left out): at least {least} are needed",
         )
-    if not all(v is not None and math.isfinite(v) for v in (m.min, m.max, m.mean, m.var)):
+    if not all(v is not None and math.isfinite(v) for v in (m.min, m.max, m.mean) + ((m.var,) if m.n > 1 else ())):
         raise refusal(test, f"the column «{value}» holds infinite values" + (f" in the group «{label}»" if label is not None else "")
                       + ": the test cannot be computed")
 
@@ -608,11 +612,17 @@ def _anova(source, p: dict[str, Any], out: Rows, engine_name: str) -> None:
                             f"and the column «{group}» has {len(labels)}: filter the groups first, or set 'posthoc' to none")
     by_label = {label_of(m.level): m for m in source.moments(value, group) if m.level is not None}
     groups = [by_label[g] for g in labels]
+    # The classic ANOVA takes a group of one value, as R's `aov` and `oneway.test` do: it adds
+    # to the means between the groups and nothing to the variance within them, which the other
+    # groups' degrees of freedom (N − k > 0) estimate. Welch's divides by each group's variance.
     for g, m in zip(labels, groups):
-        _refuse_unusable(test, value, g, m)
+        _refuse_unusable(test, value, g, m, 1 if p["var_equal"] else 2)
     ns = [m.n for m in groups]
-    table = _anova_table(ns, [m.mean_centred for m in groups], [m.var for m in groups])
+    table = _anova_table(ns, [m.mean_centred for m in groups], [0.0 if m.var is None else m.var for m in groups])
     k, total = table["k"], table["N"]
+    if total == k:
+        raise refusal(test, f"every group has one usable value of «{value}»: there are no degrees of freedom within the groups "
+                            "(N − k = 0), and no F statistic")
     if table["ss_within"] == 0.0:
         raise refusal(test, f"all the values of «{value}» are equal inside every group (the variance within the groups is 0): "
                             "there is no F statistic")
@@ -628,10 +638,15 @@ def _anova(source, p: dict[str, Any], out: Rows, engine_name: str) -> None:
         d1, d2 = float(k - 1), float(total - k)
         formula = ("F = ms_between / ms_within, ms_between = ss_between / (k − 1), ms_within = ss_within / (N − k), "
                    "ss_between = ∑ n·(m − M)², ss_within = ∑ (n − 1)·s², M = ∑ n·m / N, df = k − 1, N − k")
-        variances = [m.var for m in groups]
-        if min(variances) == 0.0 or max(variances) / min(variances) > 4.0:
+        variances = [m.var for m in groups if m.var is not None]
+        if len(variances) > 1 and (min(variances) == 0.0 or max(variances) / min(variances) > 4.0):
             notes.append("The largest variance of a group is more than 4 times the smallest: Welch's ANOVA "
                          "(var_equal = false) does not assume them equal.")
+        single = [g for g, m in zip(labels, groups) if m.n == 1]
+        if single:
+            notes.append(f"{'The group' if len(single) == 1 else 'The groups'} {_listed([f'«{g}»' for g in single])} "
+                         f"{'has' if len(single) == 1 else 'have'} one value: it counts in the means between the groups, "
+                         "not in the variance within them (as in R's aov).")
     else:
         variant = "welch"
         for g, m in zip(labels, groups):

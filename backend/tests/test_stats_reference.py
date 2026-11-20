@@ -520,6 +520,33 @@ def test_anova(name, storage, abc):
 
 
 @pytest.mark.parametrize("name", ENGINES)
+def test_anova_with_a_group_of_one_value(name, storage):
+    """R 4.6.1: `oneway.test(v ~ g, var.equal = TRUE)` and `summary(aov(v ~ g))` on a = 1, 2, 3,
+    b = 5, c = 7, 8, 9 give F = 27 on 2 and 4 degrees of freedom, p = 0.004756242568371
+    (= (1 + 2·27/4)^−2, F(2, d) having a closed tail). The group of one value counts in the
+    means, not in the variance within the groups; Welch's ANOVA refuses it."""
+    df = pl.DataFrame({"g": ["a", "a", "a", "b", "c", "c", "c"], "v": [1.0, 2.0, 3.0, 5.0, 7.0, 8.0, 9.0]})
+    src = upload_df(storage, df, "datasets/stats_anova_single.parquet")
+    _, rows, by_key = result(name, storage, src, stat_op("anova", value="v", group="g", posthoc="tukey"))
+    check_numbers(by_key, {"statistic": 27.0, "df_1": 2.0, "df_2": 4.0, "p_value": 1.0 / 210.25, "ss_between": 54.0,
+                           "ss_within": 4.0, "ms_within": 1.0, "grand_mean": 5.0})
+    check_numbers(by_key, {"n": 1, "mean": 5.0, "var": None, "sd": None, "se": None, "ci_low": None, "ci_high": None,
+                           "min": 5.0, "max": 5.0}, "group|b||")
+    # Tukey's HSD takes the group of one value too: the pair is there, with ms_within's degrees of freedom
+    assert by_key["pair|a|b|estimate"]["value"] == -3.0 and by_key["pair|a|b|df"]["value"] == 4.0
+    notes = [r["text"] for r in rows if r["stat"].startswith("note_")]
+    assert any("«b» has one value" in n for n in notes)
+    with pytest.raises(EngineError) as e:
+        _engine(name, storage).preview(src, [stat_op("anova", value="v", group="g", var_equal=False)], limit=100, use_cache=False)
+    assert str(e.value) == "stat_anova: the group «b» has 1 usable value of «v» (a NULL or a NaN is left out): at least 2 are needed"
+    ones = upload_df(storage, pl.DataFrame({"g": ["a", "b", "c"], "v": [1.0, 2.0, 4.0]}), "datasets/stats_anova_ones.parquet")
+    with pytest.raises(EngineError) as e:
+        _engine(name, storage).preview(ones, [stat_op("anova", value="v", group="g")], limit=100, use_cache=False)
+    assert str(e.value) == ("stat_anova: every group has one usable value of «v»: there are no degrees of freedom within the groups "
+                            "(N − k = 0), and no F statistic")
+
+
+@pytest.mark.parametrize("name", ENGINES)
 def test_anova_tukey(name, storage, abc):
     _, rows, by_key = result(name, storage, abc, stat_op("anova", **ANOVA, posthoc="tukey"))
     check_pairs(by_key, "estimate", DIFFS)
