@@ -10,5 +10,7 @@ for (file in sort(list.files(file.path(here, "runner", "R"), pattern = "[.]R$", 
 
 tab_main("survival", list(
   kaplan_meier = list(fit = function(task) fit_kaplan_meier(task), predict = function(task, card) predict_kaplan_meier(task, card)),
-  cox = list(fit = function(task) fit_cox(task), predict = function(task, card) predict_cox(task, card))
+  cox = list(fit = function(task) fit_cox(task), predict = function(task, card) predict_cox(task, card)),
+  parametric_survival = list(fit = function(task) fit_parametric_survival(task),
+                             predict = function(task, card) predict_parametric_survival(task, card))
 ))

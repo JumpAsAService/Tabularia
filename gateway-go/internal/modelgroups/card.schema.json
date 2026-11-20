@@ -9,7 +9,7 @@
   "properties": {
     "format": {"const": "tabularia-model"},
     "format_version": {"const": 1},
-    "model": {"enum": ["linear", "logistic", "kaplan_meier", "cox", "arima", "xgboost", "catboost"]},
+    "model": {"enum": ["linear", "logistic", "kaplan_meier", "cox", "parametric_survival", "arima", "xgboost", "catboost"]},
     "variant": {"type": "string", "minLength": 1},
     "group": {"enum": ["regression", "survival", "timeseries", "boosting"]},
     "group_version": {"type": ["integer", "string"]},
@@ -117,6 +117,47 @@
         }
       }
     },
+    "parametric_survival": {
+      "type": "object",
+      "description": "a parametric survival model's: the distribution, which element of `coefficients` is which, and the columns of the time and the event. A few dozen numbers, never a row: with `terms`, `coefficients`, `vcov` and `inputs` it is all Predict needs (flexsurv's p, q and h functions of the distribution, the delta method with vcov for the intervals)",
+      "required": ["distribution", "selection", "coefficient_scale", "parameters", "location", "transforms", "order", "time_column",
+                   "event_column", "event_value", "last_time", "quantiles", "times", "alpha", "flexsurv"],
+      "properties": {
+        "distribution": {"enum": ["weibull", "exponential", "lognormal", "loglogistic", "gengamma", "gompertz"], "description": "the one fitted (with selection auto, the one chosen)"},
+        "selection": {"enum": ["manual", "auto"]},
+        "coefficient_scale": {"enum": ["log_time_ratio", "log_hazard_ratio"]},
+        "parameters": {"type": "array", "items": {"type": "string"}, "description": "flexsurv's names of the distribution's parameters, the location last"},
+        "location": {"type": "string", "description": "the parameter the predictors act on"},
+        "transforms": {"type": "array", "items": {"enum": ["identity", "log"]}, "description": "the scale on which the optimiser moves each parameter, in the order of `parameters`"},
+        "order": {
+          "type": "array",
+          "description": "what each element of `coefficients` is: the distribution's own parameters, the location's terms (by their position in `terms`, from 1, or a stratum's effect), the strata's shapes",
+          "items": {
+            "type": "object",
+            "required": ["role"],
+            "properties": {
+              "role": {"enum": ["parameter", "location", "anc"]},
+              "name": {"type": "string"},
+              "term": {"type": "integer", "minimum": 1},
+              "stratum": {"type": "string"}
+            }
+          }
+        },
+        "strata": {
+          "type": ["object", "null"],
+          "properties": {"column": {"type": "string"}, "levels": {"type": "array", "items": {"type": "string"}}}
+        },
+        "time_column": {"type": "string"},
+        "event_column": {"type": "string"},
+        "event_value": {"description": "the value of the event column that is an event"},
+        "last_time": {"type": "number", "description": "the last time observed when fitting: a prediction beyond it is an extrapolation"},
+        "last_time_by_stratum": {"type": "object", "additionalProperties": {"type": "number"}},
+        "quantiles": {"type": "array", "maxItems": 9, "items": {"type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1}},
+        "times": {"type": "array", "maxItems": 10, "items": {"type": "number", "minimum": 0}},
+        "alpha": {"type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1},
+        "flexsurv": {"type": "string", "description": "the version of flexsurv that fitted it"}
+      }
+    },
     "arima": {
       "type": "object",
       "required": ["orders", "frequency", "coefficients", "last"],
@@ -168,7 +209,7 @@
     }
   },
   "allOf": [
-    {"if": {"properties": {"model": {"enum": ["linear", "logistic", "cox"]}}},
+    {"if": {"properties": {"model": {"enum": ["linear", "logistic", "cox", "parametric_survival"]}}},
      "then": {"required": ["terms", "coefficients"]}},
     {"if": {"properties": {"model": {"enum": ["linear", "logistic"]}}}, "then": {"required": ["link"]}},
     {"if": {"properties": {"model": {"const": "linear"}, "variant": {"const": "unpenalized"}}}, "then": {"required": ["linear"]}},
@@ -176,6 +217,7 @@
     {"if": {"properties": {"model": {"const": "logistic"}}}, "then": {"required": ["threshold", "outcome"]}},
     {"if": {"properties": {"model": {"const": "cox"}}}, "then": {"required": ["cox", "outcome"]}},
     {"if": {"properties": {"model": {"const": "kaplan_meier"}}}, "then": {"required": ["kaplan_meier", "outcome"]}},
+    {"if": {"properties": {"model": {"const": "parametric_survival"}}}, "then": {"required": ["parametric_survival", "outcome"]}},
     {"if": {"properties": {"model": {"const": "arima"}}}, "then": {"required": ["arima"]}},
     {"if": {"properties": {"group": {"const": "boosting"}}, "required": ["group"]},
      "then": {"required": ["boosting"], "properties": {"software": {"required": ["Python"]}}},

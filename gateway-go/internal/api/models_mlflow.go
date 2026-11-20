@@ -252,11 +252,12 @@ func tabulariaVersions(ctx context.Context, tr *mlflowconn.Tracker, experiment s
 
 // mainMetrics is the number the list shows of each model, in order of preference.
 var mainMetrics = map[string][]string{
-	"linear":       {"adj_r_squared", "r_squared"},
-	"logistic":     {"auc"},
-	"cox":          {"concordance"},
-	"kaplan_meier": {"events", "n"},
-	"arima":        {"aicc", "aic"},
+	"linear":              {"adj_r_squared", "r_squared"},
+	"logistic":            {"auc"},
+	"cox":                 {"concordance"},
+	"parametric_survival": {"concordance", "aic"},
+	"kaplan_meier":        {"events", "n"},
+	"arima":               {"aicc", "aic"},
 }
 
 func mainMetric(model string, metrics map[string]float64) (string, float64, bool) {
