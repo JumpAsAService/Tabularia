@@ -189,7 +189,15 @@
     "h0": "The residuals' skewness and kurtosis are a normal distribution's.",
     "advice": "The intervals rely on normal errors: with few rows read them with care, or transform the outcome."
    }
-  }
+  },
+  "measures": {
+   "title": "Measures without a verdict",
+   "measure": "Measure",
+   "group": "Group",
+   "value": "Value",
+   "what": "What it is"
+  },
+  "alpha_note": "Verdicts come only from tests with a p-value, read against alpha = {alpha} (the node's option). The other measures are numbers with no verdict, listed under the checks."
  },
  "it": {
   "footer": "Calcolato da Tabularia",
@@ -381,7 +389,15 @@
     "h0": "Asimmetria e curtosi dei residui sono quelle di una normale.",
     "advice": "Gli intervalli presuppongono errori normali: con poche righe leggeteli con cautela, o trasformate la risposta."
    }
-  }
+  },
+  "measures": {
+   "title": "Misure senza verdetto",
+   "measure": "Misura",
+   "group": "Gruppo",
+   "value": "Valore",
+   "what": "Che cos'è"
+  },
+  "alpha_note": "I verdetti vengono solo da test con un p-value, letti contro alfa = {alpha} (l'opzione del nodo). Le altre misure sono numeri senza verdetto, elencati sotto le verifiche."
  },
  "de": {
   "footer": "Berechnet von Tabularia",
@@ -573,7 +589,15 @@
     "h0": "Schiefe und Wölbung der Residuen sind die einer Normalverteilung.",
     "advice": "Die Intervalle setzen normalverteilte Fehler voraus: bei wenigen Zeilen mit Vorsicht lesen, oder die Zielgröße transformieren."
    }
-  }
+  },
+  "measures": {
+   "title": "Messgrößen ohne Urteil",
+   "measure": "Messgröße",
+   "group": "Gruppe",
+   "value": "Wert",
+   "what": "Was es ist"
+  },
+  "alpha_note": "Urteile stammen nur aus Tests mit einem p-Wert, gelesen gegen Alpha = {alpha} (die Option des Knotens). Die übrigen Messgrößen sind Zahlen ohne Urteil, unter den Prüfungen aufgeführt."
  },
  "es": {
   "footer": "Calculado por Tabularia",
@@ -765,7 +789,15 @@
     "h0": "La asimetría y la curtosis de los residuos son las de una normal.",
     "advice": "Los intervalos suponen errores normales: con pocas filas léalos con cautela, o transforme la respuesta."
    }
-  }
+  },
+  "measures": {
+   "title": "Medidas sin veredicto",
+   "measure": "Medida",
+   "group": "Grupo",
+   "value": "Valor",
+   "what": "Qué es"
+  },
+  "alpha_note": "Los veredictos salen solo de pruebas con valor p, leído frente a alfa = {alpha} (la opción del nodo). Las demás medidas son números sin veredicto, listados bajo las comprobaciones."
  },
  "fr": {
   "footer": "Calculé par Tabularia",
@@ -957,6 +989,14 @@
     "h0": "L'asymétrie et l'aplatissement des résidus sont ceux d'une loi normale.",
     "advice": "Les intervalles supposent des erreurs normales : avec peu de lignes lisez-les avec prudence, ou transformez la réponse."
    }
-  }
+  },
+  "measures": {
+   "title": "Mesures sans verdict",
+   "measure": "Mesure",
+   "group": "Groupe",
+   "value": "Valeur",
+   "what": "Ce que c'est"
+  },
+  "alpha_note": "Les verdicts viennent seulement de tests avec une valeur p, lue contre alpha = {alpha} (l'option du nœud). Les autres mesures sont des nombres sans verdict, listés sous les vérifications."
  }
 }

@@ -1,0 +1,72 @@
+{
+ "en": {
+  "name": "Customer lifetime value",
+  "spend_of": "spend:",
+  "parameters": {
+   "purchases": {
+    "r": "r, shape of the purchase rate across customers",
+    "alpha": "α, scale of the purchase rate across customers",
+    "s": "s, shape of the dropout rate across customers",
+    "beta": "β, scale of the dropout rate across customers",
+    "a": "a, first shape of the dropout probability",
+    "b": "b, second shape of the dropout probability"
+   }
+  }
+ },
+ "it": {
+  "name": "Valore del cliente nel tempo",
+  "spend_of": "spesa:",
+  "parameters": {
+   "purchases": {
+    "r": "r, forma del tasso di acquisto tra i clienti",
+    "alpha": "α, scala del tasso di acquisto tra i clienti",
+    "s": "s, forma del tasso di abbandono tra i clienti",
+    "beta": "β, scala del tasso di abbandono tra i clienti",
+    "a": "a, prima forma della probabilità di abbandono",
+    "b": "b, seconda forma della probabilità di abbandono"
+   }
+  }
+ },
+ "de": {
+  "name": "Kundenwert über die Lebensdauer",
+  "spend_of": "Ausgabe:",
+  "parameters": {
+   "purchases": {
+    "r": "r, Form der Kaufrate über die Kunden",
+    "alpha": "α, Skala der Kaufrate über die Kunden",
+    "s": "s, Form der Abwanderungsrate über die Kunden",
+    "beta": "β, Skala der Abwanderungsrate über die Kunden",
+    "a": "a, erste Form der Abwanderungswahrscheinlichkeit",
+    "b": "b, zweite Form der Abwanderungswahrscheinlichkeit"
+   }
+  }
+ },
+ "es": {
+  "name": "Valor del cliente en el tiempo",
+  "spend_of": "gasto:",
+  "parameters": {
+   "purchases": {
+    "r": "r, forma de la tasa de compra entre clientes",
+    "alpha": "α, escala de la tasa de compra entre clientes",
+    "s": "s, forma de la tasa de abandono entre clientes",
+    "beta": "β, escala de la tasa de abandono entre clientes",
+    "a": "a, primera forma de la probabilidad de abandono",
+    "b": "b, segunda forma de la probabilidad de abandono"
+   }
+  }
+ },
+ "fr": {
+  "name": "Valeur vie client",
+  "spend_of": "dépense :",
+  "parameters": {
+   "purchases": {
+    "r": "r, forme du taux d'achat entre clients",
+    "alpha": "α, échelle du taux d'achat entre clients",
+    "s": "s, forme du taux d'abandon entre clients",
+    "beta": "β, échelle du taux d'abandon entre clients",
+    "a": "a, première forme de la probabilité d'abandon",
+    "b": "b, seconde forme de la probabilité d'abandon"
+   }
+  }
+ }
+}

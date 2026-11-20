@@ -32,14 +32,8 @@ from tests.test_reports_render import chart_service  # noqa: F401 — the fake c
 
 NOW = datetime(2026, 11, 19, 23, 30, tzinfo=timezone.utc)
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "models"
-# The parametric survival node's layout is lot P5's (docs/specs/statistical-models.md, «The parametric
-# survival lots»): its fixtures exist (results.py checks them), its report not yet. P5 takes this away.
-PENDING = {"parametric_survival"}
-# The customer lifetime nodes' layouts are lot B5's (docs/specs/customer-lifetime-models.md, «The lots B0–B10»):
-# their fixtures exist, their report not yet. B5 takes this away.
-PENDING |= {"clv", "bg_bb"}
-CASES = sorted(p.stem for p in FIXTURES.glob("*-*.json") if p.stem.split("-")[0] not in PENDING)
-DRAWN = {m: spec for m, spec in catalog.MODELS.items() if m not in PENDING}
+CASES = sorted(p.stem for p in FIXTURES.glob("*-*.json"))
+DRAWN = dict(catalog.MODELS)
 
 
 def fixture(case: str) -> tuple[str, dict, list[dict]]:
@@ -93,7 +87,7 @@ def test_every_model_and_variant_has_a_layout_and_a_fixture():
 
 
 def test_the_words_are_complete_in_the_five_languages():
-    for name in ("common", "penalized", "boosting", *DRAWN):
+    for name in ("common", "penalized", "boosting", "customer_lifetime", *DRAWN):
         words = common._file(name)
         assert tuple(words) == LOCALES, name
         english = _keys(words["en"])
@@ -110,7 +104,7 @@ def test_every_number_and_check_a_variant_writes_has_its_name_in_each_language(c
     spec = catalog.variant_spec(model, catalog.check_params(model, params))
     for code in LOCALES:
         w = common.words(model, variant, code)
-        for section in ("model", "coef", "stratum", "pair", "candidate"):
+        for section in ("model", "coef", "stratum", "pair", "candidate", "parameter", "customer"):
             declared = spec["sections"].get(section, {})
             for stat in [*declared.get("numbers", []), *(t for t in declared.get("texts", []) if section == "model")]:
                 if stat.endswith("*") or stat.endswith("significance") or stat in ("model", "variant", "formula", "software",
@@ -121,7 +115,7 @@ def test_every_number_and_check_a_variant_writes_has_its_name_in_each_language(c
             said = w["checks"].get(check, {})
             assert said.get("name") and said.get("h0") and (said.get("advice") or said.get("not_computed")), f"{code}: {check}"
         for row in layouts.with_labels(model, params, rows, code):  # the numbered ones too (note_1, surv_at_30)
-            if row["section"] in ("model", "stratum") and row["stat"].startswith(("note_", "surv_at_", "ar_root", "ma_root")):
+            if row["section"] in ("model", "stratum") and row["stat"].startswith(("note_", "surv_at_", "quantile_", "ar_root", "ma_root")):
                 assert row["label"] != row["stat"], (code, row["stat"])
     assert common.stat_label(common.words("kaplan_meier", "default", "it"), "stratum", "surv_at_30_low") == \
         "Sopravvivenza a 30, estremo inferiore"

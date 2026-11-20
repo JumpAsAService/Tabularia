@@ -65,8 +65,9 @@ def _words(model: str, variant: str, locale: str) -> dict:
     own = _lang(model, locale)
     if variant == "penalized":  # the blocks both regressions share when a penalty is on
         own = _merged(own, _lang("penalized", locale))
-    if catalog.MODELS.get(model, {}).get("family") == "boosting":  # the words XGBoost and CatBoost share
-        own = _merged(_lang("boosting", locale), own)
+    family = catalog.MODELS.get(model, {}).get("family")
+    if family in ("boosting", "customer_lifetime"):  # the words XGBoost and CatBoost share; those `clv` and `bg_bb` share
+        own = _merged(_lang(family, locale), own)
     return _merged(_lang("common", locale), own)
 
 
@@ -83,6 +84,9 @@ def code(locale: str | None) -> str:
 # ── the names of the numbers, of the checks, of the settings ────────────────
 _WILDCARDS = (
     (re.compile(r"^note_(\d+)$"), "note"),
+    (re.compile(r"^quantile_(.+)_ci_low$"), "quantile_low"),
+    (re.compile(r"^quantile_(.+)_ci_high$"), "quantile_high"),
+    (re.compile(r"^quantile_(.+)$"), "quantile"),
     (re.compile(r"^surv_at_(.+)_low$"), "surv_at_low"),
     (re.compile(r"^surv_at_(.+)_high$"), "surv_at_high"),
     (re.compile(r"^surv_at_(.+)$"), "surv_at"),
@@ -348,15 +352,21 @@ def subject(params: Mapping[str, Any], outcome: str = "outcome", predictors: str
 
 def page(model: str, params: Mapping[str, Any], locale: str, sample: list[dict] | None, step: str | None, *,
          name: str, about: str, cards: tuple[Card | tuple[Card, ...], ...], coef_tables: tuple[CoefTable, ...] = (),
-         coef_note: str | None = None, blocks: tuple[Block, ...] = (), charts: tuple[Chart, ...] = (),
-         assumptions_note: str | None = None, p_values: bool = True, fit_skip: tuple[str, ...] = ()) -> dict:
+         coef_note: str | tuple[str, str] | None = None, blocks: tuple[Block, ...] = (), charts: tuple[Chart, ...] = (),
+         assumptions_note: str | None = None, p_values: bool = True, fit_skip: tuple[str, ...] = (),
+         summary_lines: tuple[tuple[str, str], ...] = (), after_assumptions: tuple[Block, ...] = (), coef_first: tuple[Block, ...] = (),
+         after_coefficients: tuple[Block, ...] = ()) -> dict:
     """A model's report: the summary (four cards, the formula), the assumptions (first page),
     the coefficients, the fit, the model's own blocks (strata, forecast…), the diagnostics,
     the notes. `name`: the model as the header says it; `about`: what it is about;
     `assumptions_note`: a sentence under the checks (a penalized fit's: diagnostics, not tests);
     `p_values`: False for a variant with no p-value (no statistic, df, p or R's codes in the
     checks and the fit, no warning about the tests on many rows); `fit_skip`: numbers of the
-    `model` section the fit's table leaves out (the model's own block says them)."""
+    `model` section the fit's table leaves out (the model's own block says them; a name ending in «_» is a prefix);
+    `summary_lines`: (id, expression) of lines under the formula (a customer lifetime's business
+    settings); `coef_first`: blocks drawn under the coefficients' heading and note, before their tables
+    and kept with the heading on one page; `after_coefficients`: blocks under the tables, before the fit;
+    `coef_note` may be a (text, visible) pair."""
     from app.reports import formats
 
     lang = code(locale)
@@ -366,10 +376,14 @@ def page(model: str, params: Mapping[str, Any], locale: str, sample: list[dict] 
     sample_text = stats.sample_line(sample, lang)
     header, footer = stats.bands(name, " · ".join(x for x in (about, step) if x), w, formats.locale(lang).texts, sample_text)
     p = stats.Page()
-    _summary(p, w, cards)
+    _summary(p, w, cards, summary_lines)
     _assumptions(p, w, lang, assumptions_note, p_values)
+    for block in after_assumptions:
+        block(p, w)
     if coef_tables:
-        _coefficients(p, w, lang, coef_tables, coef_note)
+        _coefficients(p, w, lang, coef_tables, coef_note, coef_first)
+    for block in after_coefficients:
+        block(p, w)
     _fit(p, w, p_values, fit_skip)
     for block in blocks:
         block(p, w)
@@ -379,7 +393,8 @@ def page(model: str, params: Mapping[str, Any], locale: str, sample: list[dict] 
     return stats.document(header, p.items, footer, lang)
 
 
-def _summary(p: stats.Page, w: dict, cards: tuple[Card | tuple[Card, ...], ...]) -> None:
+def _summary(p: stats.Page, w: dict, cards: tuple[Card | tuple[Card, ...], ...],
+             lines: tuple[tuple[str, str], ...] = ()) -> None:
     """Four places of cards; a place may hold alternatives, each `visible` when its rows say
     (the MAPE on the holdout, or in sample without one)."""
     p.heading("s_summary", w["sections"]["summary"])
@@ -400,6 +415,8 @@ def _summary(p: stats.Page, w: dict, cards: tuple[Card | tuple[Card, ...], ...])
     p.keep()
     p.text("formula", "=" + txt(model_key("formula")), h=6.5, size=9.5, weight="semibold", background=PANEL, padding=1.5,
            can_grow=True, visible=exists('[key] = "model|||formula"'))
+    for id_, expression in lines:
+        p.text(id_, "=" + expression, h=6.5, size=9, background=PANEL, padding=1.5, can_grow=True)
 
 
 def value_of_check(w: dict) -> str:
@@ -466,12 +483,46 @@ def _assumptions(p: stats.Page, w: dict, lang: str, note: str | None = None, p_v
     ], p.y, visible=exists(advised)), 10)
 
 
-def _coefficients(p: stats.Page, w: dict, lang: str, tables: tuple[CoefTable, ...], note: str | None) -> None:
+def alpha_said(sentence: str, alpha: Any, locale: str) -> str:
+    """The sentence that says the alpha the page's tests were read against («{alpha}» in it), in the language's decimals."""
+    from app.reports import formats
+
+    text = f"{float(alpha):g}".replace(".", formats.locale(locale).decimal)
+    return sentence.replace("{alpha}", text)
+
+
+def measures(ids: tuple[str, ...]):
+    """A table of the checks that are numbers, with no verdict and no colour: those of `ids` whose
+    rows have a `value` and no `verdict`; each says in a sentence of the model's words
+    (`measures.<id>`) what the number is."""
+    def block(p: stats.Page, w: dict) -> None:
+        m = w["measures"]
+        one = ('[section] = "assumption" AND [stat] = "value" AND ISNULL(' + of_row("assumption", "verdict", "text") + ')')
+        said = "IFS(" + ", ".join(f'[level] = "{i}", {q(w["measure_texts"][i])}' for i in ids) + ', "")'
+        names = "IFS(" + ", ".join(f'[level] = "{i}", {q(check_name(w, i))}' for i in ids) + ", [level])"
+        p.add(stats.table("measures", m["title"], one, [
+            {"header": m["measure"], "value": names, "width": 52},
+            {"header": m["group"], "value": 'IF(ISNULL([level_2]), "", [level_2])', "width": 24},
+            {"header": m["value"], "value": number_of_row("assumption", "value"), "width": 22, "align": "right", "format": "0.####"},
+            {"header": m["what"], "value": said, "style": {"size": 7.5}},
+        ], p.y, visible=exists(one)), 10)
+    return block
+
+
+def _coefficients(p: stats.Page, w: dict, lang: str, tables: tuple[CoefTable, ...], note: str | tuple[str, str] | None,
+                  first: tuple[Block, ...] = ()) -> None:
     c = w["coef"]
     p.heading("s_coef", w["sections"]["coefficients"])
-    if note:
-        p.text("coef_note", note, h=5, color=MUTED, can_grow=True)
+    for block in first:  # the charts: one band with the heading; the note, which grows, is under them
+        block(p, w)
+    if first:
         p.keep()
+        p.y += 1.0
+    if note:
+        text, visible = note if isinstance(note, tuple) else (note, None)
+        p.text("coef_note", text, h=5, color=MUTED, can_grow=True, visible=visible)
+        if not first:
+            p.keep()
         p.y += 1.0
     for t in tables:
         one_row = f'[section] = "coef" AND [stat] = "{t.stats[0]}"'
@@ -496,8 +547,12 @@ def _fit(p: stats.Page, w: dict, p_values: bool = True, skip: tuple[str, ...] = 
     """Every number of the `model` section, then how it was fitted (its settings in words)."""
     f = w["fit"]
     p.heading("s_fit", w["sections"]["fit"])
+    p.y += 8.0  # room for the table's header and first row in the heading's band: a heading is never left alone at the end of a page
+    p.keep()
+    p.y -= 8.0
     sig = f'LOOKUP("model|||" & LEFT([stat], LEN([stat]) - 7) & "significance", [key], [text])'
-    numbers = '[section] = "model" AND NOT ISNULL([value])' + "".join(f' AND [stat] <> "{s}"' for s in skip)
+    numbers = '[section] = "model" AND NOT ISNULL([value])' + "".join(
+        f' AND NOT STARTSWITH([stat], "{s}")' if s.endswith("_") else f' AND [stat] <> "{s}"' for s in skip)
     cols = [
         {"header": f["quantity"], "value": "[label]"},
         {"header": f["name"], "value": "[stat]", "width": 50, "style": {"color": MUTED}},
@@ -516,12 +571,17 @@ def _fit(p: stats.Page, w: dict, p_values: bool = True, skip: tuple[str, ...] = 
 
 
 def _diagnostics(p: stats.Page, w: dict, charts: tuple[Chart, ...]) -> None:
+    grid(p, w, charts, ("s_diagnostics", w["sections"]["diagnostics"]))
+
+
+def grid(p: stats.Page, w: dict, charts: tuple[Chart, ...], heading: tuple[str, str] | None, tall: float = 62.0) -> None:
     """The charts two by two (a wide one across the page), each with the verdict of the check
     it illustrates under it. A row of charts and its captions stay on one page (an invisible
     rectangle as tall as both makes them one row of the body), the heading with the first."""
-    p.heading("s_diagnostics", w["sections"]["diagnostics"])
-    half, gap, tall, caption = 91.0, 4.0, 62.0, 4.5
-    column, top, first = 0, p.y, True
+    if heading:
+        p.heading(*heading)
+    half, gap, caption = 91.0, 4.0, 4.5
+    column, top, first = 0, p.y, bool(heading)  # without a heading the first row keeps itself, like the others
     room = 0.0  # what the captions of the row at hand need under its charts (caption: a few lines of 7 pt)
 
     def close_row() -> None:
@@ -544,12 +604,13 @@ def _diagnostics(p: stats.Page, w: dict, charts: tuple[Chart, ...]) -> None:
         item: dict[str, Any] = {"id": chart.id, "type": "chart", "dataset": DATASET, "kind": chart.kind, "x": x, "y": top,
                                 "w": width, "h": tall, "title": stats.fit(chart.title, 7.5, width - 4, 700), **chart.more}
         p.add(item)
-        if chart.caption:  # how to read it: static words, as many lines of 7 pt as the width needs
-            lines = -(-int(glyphs.width_mm(chart.caption, 7)) // int(width - 2)) or 1
+        if chart.caption:  # how to read it: static words (or an expression, when it starts with «=»), as many lines of 7 pt as the width needs
+            said = chart.caption.startswith("=")
+            lines = -(-int(glyphs.width_mm(chart.caption.lstrip("="), 7)) // int(width - 2)) or 1
             height = round(3.1 * lines + 1.4, 2)
             room = max(room, height)
             p.items.append({"id": chart.id + "_how", "type": "text", "x": x, "y": top + tall + 0.3, "w": width, "h": height,
-                            "value": stats.static(chart.caption), "style": {"size": 7, "color": MUTED},
+                            "value": chart.caption if said else stats.static(chart.caption), "style": {"size": 7, "color": MUTED},
                             "visible": chart.more.get("visible")})
         if chart.under:  # «check», or «check|term» for a check of each term
             key = f"assumption|{chart.under}|verdict" if "|" in chart.under else f"assumption|{chart.under}||verdict"
@@ -570,12 +631,15 @@ def _notes(p: stats.Page, w: dict) -> None:
     n = w["notes"]
     p.heading("s_notes", w["sections"]["notes"])
     rows_from = txt(model_key("rows_from"))
-    p.text("rows_from", f'=IF({rows_from} = "trial", {q(n["trial"])}, {q(n["run"])})', can_grow=True)
+    left_out = join(n["rows"], n=shown(num(model_key("n")), "#,##0"),
+                    missing=shown(f"COALESCE({num(model_key('n_missing'))}, 0)", "#,##0"))
+    software = join(n["software"], software=txt(model_key("software")), version=txt(model_key("group_version")))
+    # the three lines are one text: a page never ends with the last of them alone
+    p.text("notes_lines", f'=IF({rows_from} = "trial", {q(n["trial"])}, {q(n["run"])}) & "\n" & {left_out} & "\n" & {software}',
+           h=14.5, can_grow=True)
+    p.y += 15.0  # room for the notes' table (its header and first row) in the same band: a table, which takes its row alone, is never left alone on a page
     p.keep()
-    p.text("left_out", "=" + join(n["rows"], n=shown(num(model_key("n")), "#,##0"),
-                                  missing=shown(f"COALESCE({num(model_key('n_missing'))}, 0)", "#,##0")), can_grow=True)
-    p.text("software", "=" + join(n["software"], software=txt(model_key("software")), version=txt(model_key("group_version"))),
-           can_grow=True)
+    p.y -= 15.0
     p.y += 1.5
     is_note = '[section] = "model" AND STARTSWITH([stat], "note_")'
     p.add(stats.table("notes", n["title"], is_note, [{"header": n["note"], "value": "[text]"}], p.y,

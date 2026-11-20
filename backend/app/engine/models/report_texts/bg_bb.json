@@ -1,0 +1,62 @@
+{
+ "en": {
+  "name": "BG/BB",
+  "spend_of": "spend:",
+  "parameters": {
+   "purchases": {
+    "alpha": "α, first shape of the purchase probability",
+    "beta": "β, second shape of the purchase probability",
+    "gamma": "γ, first shape of the dropout probability",
+    "delta": "δ, second shape of the dropout probability"
+   }
+  }
+ },
+ "it": {
+  "name": "BG/BB",
+  "spend_of": "spesa:",
+  "parameters": {
+   "purchases": {
+    "alpha": "α, prima forma della probabilità di acquisto",
+    "beta": "β, seconda forma della probabilità di acquisto",
+    "gamma": "γ, prima forma della probabilità di abbandono",
+    "delta": "δ, seconda forma della probabilità di abbandono"
+   }
+  }
+ },
+ "de": {
+  "name": "BG/BB",
+  "spend_of": "Ausgabe:",
+  "parameters": {
+   "purchases": {
+    "alpha": "α, erste Form der Kaufwahrscheinlichkeit",
+    "beta": "β, zweite Form der Kaufwahrscheinlichkeit",
+    "gamma": "γ, erste Form der Abwanderungswahrscheinlichkeit",
+    "delta": "δ, zweite Form der Abwanderungswahrscheinlichkeit"
+   }
+  }
+ },
+ "es": {
+  "name": "BG/BB",
+  "spend_of": "gasto:",
+  "parameters": {
+   "purchases": {
+    "alpha": "α, primera forma de la probabilidad de compra",
+    "beta": "β, segunda forma de la probabilidad de compra",
+    "gamma": "γ, primera forma de la probabilidad de abandono",
+    "delta": "δ, segunda forma de la probabilidad de abandono"
+   }
+  }
+ },
+ "fr": {
+  "name": "BG/BB",
+  "spend_of": "dépense :",
+  "parameters": {
+   "purchases": {
+    "alpha": "α, première forme de la probabilité d'achat",
+    "beta": "β, seconde forme de la probabilité d'achat",
+    "gamma": "γ, première forme de la probabilité d'abandon",
+    "delta": "δ, seconde forme de la probabilité d'abandon"
+   }
+  }
+ }
+}
