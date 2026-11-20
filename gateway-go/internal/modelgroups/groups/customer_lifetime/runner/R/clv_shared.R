@@ -669,6 +669,7 @@ clv_add_inference <- function(p, s, comp, alpha = 0.05) {
   p$se <- inf$se
   p$ci_low <- inf$ci_low
   p$ci_high <- inf$ci_high
+  p$gradient <- g
   if (!isTRUE(p$fallback)) {
     p$kkt1 <- !is.null(g) && max(abs(g)) <= 1e-3 * (1 + abs(nll(p$log_par)))
     p$kkt2 <- !is.null(h) && all(is.finite(h)) && all(eigen(h, symmetric = TRUE, only.values = TRUE)$values > 0)

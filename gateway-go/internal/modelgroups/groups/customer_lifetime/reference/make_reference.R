@@ -5,10 +5,17 @@
 #   docker run --rm -v "$PWD/gateway-go/internal/modelgroups/groups/customer_lifetime/reference:/ref" \
 #     tabularia-models-customer_lifetime:dev Rscript /ref/make_reference.R
 #
-# Every table here is built, not drawn: no random number, no copy of a public data set. Lot B1 writes
-# the refusal cases (a wrong summary stops with a sentence that says what to change; the sentences
-# are written out here by hand, so that they are checked word for word). Lots B2 and B3 add their
-# fitted cases (clv_*.csv, bgbb_*.csv) to the same script and the same expected.json.
+# No copy of a public data set. Lot B1 wrote the refusal cases: tables built, not drawn (a wrong summary
+# stops with a sentence that says what to change; the sentences are written out here by hand, so that
+# they are checked word for word). Lot B2 adds the fitted cases of the node `clv` (clv_*.csv): customers
+# drawn from the models' own processes with fixed seeds, in whole days, and their expected values
+# computed here without the runner — CLVTools' public pnbd(), bgnbd(), gg() and predict() on the
+# transaction log the summary comes from (route A), an MBG/NBD likelihood written here and maximized
+# to the end, Pearson's r and the HC3 test through lm(). Verdicts, counts and texts are the cases'
+# purpose, written by hand.
+#
+# expected.json is shared: each case says which script wrote it (`by`), and this script replaces only
+# its own cases, keeping those of another script (BG/BB's, lot B3: make_reference_bgbb.R does the same).
 
 args <- commandArgs(FALSE)
 here <- dirname(normalizePath(sub("^--file=", "", grep("^--file=", args, value = TRUE))))
@@ -105,13 +112,334 @@ cases <- list(
   refusal("refusal BG/BB holdout", over(bb, holdout_transactions = "h_bb_over", holdout_length = 5), "bgbb_holdout",
           "a customer has at most one transaction per opportunity: the customer c14 has 9 in the 5 opportunities of the holdout", model = "bg_bb")
 )
-# the cases of the nodes' fits are added here by lots B2 and B3
 
+# ── the fitted cases of `clv` (lot B2) ───────────────────────────────────────────
+suppressMessages({
+  library(CLVTools)
+  library(data.table)
+})
+
+# Numbers written with 17 significant digits, so that the runner reads back exactly the summary the
+# expected values were computed on (a week is a whole number of days over 7).
+write_exact <- function(d, name) {
+  for (k in names(d)) if (is.double(d[[k]])) d[[k]] <- ifelse(is.na(d[[k]]), NA_character_, formatC(d[[k]], digits = 17, format = "g"))
+  utils::write.csv(d, file.path(here, "data", name), row.names = FALSE, na = "")
+}
+
+# One customer drawn from a purchase model: the days of the repeat purchases after the first one (day 0),
+# up to `end` days. Purchases of the same day are one, as the summary counts them.
+draw_days <- function(model, par, end) {
+  weeks <- end / 7
+  lambda <- stats::rgamma(1, par[[1L]], rate = par[[2L]])
+  t <- numeric()
+  cur <- 0
+  if (model == "pareto_nbd") {
+    life <- stats::rexp(1, stats::rgamma(1, par[[3L]], rate = par[[4L]]))
+    repeat {
+      cur <- cur + stats::rexp(1, lambda)
+      if (cur > min(life, weeks)) break
+      t <- c(t, cur)
+    }
+  } else if (model == "poisson") {
+    repeat {
+      cur <- cur + stats::rexp(1, lambda)
+      if (cur > weeks) break
+      t <- c(t, cur)
+    }
+  } else {
+    p <- stats::rbeta(1, par[[3L]], par[[4L]])
+    alive <- if (model == "mbg_nbd") stats::runif(1) > p else TRUE
+    while (alive) {
+      cur <- cur + stats::rexp(1, lambda)
+      if (cur > weeks) break
+      t <- c(t, cur)
+      if (stats::runif(1) < p) alive <- FALSE
+    }
+  }
+  d <- unique(pmax(ceiling(t * 7), 1))
+  sort(d[d <= end])
+}
+
+# n customers: their ages in days (`ages`, recycled), the days of their purchases up to the end of a
+# holdout of `holdout` days after their age; a Gamma–Gamma spend (p, q, γ) for the repeaters, or `spend`
+# a function of the frequency. Returns the summary (weeks) and the purchase days, for the transaction log.
+draw_customers <- function(seed, n, model, par, ages, holdout = 0, gg = c(6, 4, 15), spend = NULL, prefix = "c") {
+  set.seed(seed)
+  age <- if (length(ages) == 1L) rep(ages, n) else sample(ages, n, replace = TRUE)
+  days <- lapply(seq_len(n), function(i) draw_days(model, par, age[[i]] + holdout))
+  cal <- lapply(seq_len(n), function(i) days[[i]][days[[i]] <= age[[i]]])
+  x <- vapply(cal, length, 0)
+  nu <- stats::rgamma(n, gg[[2L]], rate = gg[[3L]])
+  m <- if (is.null(spend)) stats::rgamma(n, shape = gg[[1L]] * pmax(x, 1), rate = nu * pmax(x, 1)) else spend(x)
+  d <- data.frame(customer = paste0(prefix, seq_len(n)), frequency = x,
+                  recency = vapply(cal, function(z) if (length(z)) max(z) / 7 else 0, 0), age = age / 7,
+                  avg_spend = ifelse(x > 0, m, NA_real_), stringsAsFactors = FALSE)
+  if (holdout > 0) d$holdout_purchases <- vapply(seq_len(n), function(i) sum(days[[i]] > age[[i]]), 0)
+  list(summary = d, days = days, age = age)
+}
+
+# Route A: the transaction log the summary comes from (the first purchase `age` days before the split,
+# the repeat purchases on their days, each at the customer's average spend; the holdout's after the
+# split), and CLVTools' public objects on it.
+clv_log <- function(drawn) {
+  d <- drawn$summary
+  split <- as.Date("2020-01-01")
+  log_ <- rbindlist(lapply(seq_len(nrow(d)), function(i) {
+    dd <- c(0, drawn$days[[i]])
+    price <- if (is.null(d$avg_spend) || is.na(d$avg_spend[[i]])) 1 else d$avg_spend[[i]]
+    data.table(Id = d$customer[[i]], Date = split - drawn$age[[i]] + dd, Price = c(10, rep(price, length(dd) - 1L)))
+  }))
+  if (max(log_$Date) <= split) log_ <- rbind(log_, data.table(Id = d$customer[[1L]], Date = split + 30, Price = 5))
+  clvdata(log_, date.format = "ymd", time.unit = "weeks", estimation.split = split, name.id = "Id", name.date = "Date", name.price = "Price")
+}
+
+# The MBG/NBD log-likelihood (Batislam, Denizel, Filiztekin 2007), written here from the article, and its
+# maximum: Nelder–Mead, then BFGS and nlminb to the end (a tolerance far below the runner's L-BFGS-B).
+mbgnbd_ll <- function(par, x, tx, T) {
+  r <- par[[1L]]; al <- par[[2L]]; a <- par[[3L]]; b <- par[[4L]]
+  A <- lbeta(a, b + x + 1) - lbeta(a, b) - (r + x) * log(al + T)
+  B <- lbeta(a + 1, b + x) - lbeta(a, b) - (r + x) * log(al + tx)
+  M <- pmax(A, B)
+  sum(lgamma(r + x) - lgamma(r) + r * log(al) + M + log(exp(A - M) + exp(B - M)))
+}
+mbgnbd_max <- function(d) {
+  f <- function(lp) -mbgnbd_ll(exp(lp), d$frequency, d$recency, d$age)
+  o <- stats::optim(log(c(1, 3, 1, 3)), f, method = "Nelder-Mead", control = list(maxit = 20000, reltol = 1e-14))
+  for (k in 1:3) {
+    o <- stats::optim(o$par, f, method = "BFGS", control = list(maxit = 10000, reltol = 1e-16))
+    n <- stats::nlminb(o$par, f, control = list(eval.max = 10000, iter.max = 10000, rel.tol = 1e-15, x.tol = 1e-12))
+    o$par <- n$par
+  }
+  list(par = stats::setNames(exp(o$par), c("r", "alpha", "a", "b")), log_lik = -f(o$par))
+}
+
+# Pearson's r of the frequency and the average spend over the repeaters, and the slope's HC3 test, through lm().
+hc3 <- function(d) {
+  u <- d[d$frequency > 0 & !is.na(d$avg_spend), ]
+  fit <- stats::lm(avg_spend ~ frequency, data = u)
+  X <- stats::model.matrix(fit)
+  e <- stats::residuals(fit) / (1 - stats::hatvalues(fit))
+  bread <- solve(crossprod(X))
+  V <- bread %*% crossprod(X * e) %*% bread
+  z <- stats::coef(fit)[[2L]] / sqrt(V[2L, 2L])
+  list(r = stats::cor(u$frequency, u$avg_spend), z = z, p = 2 * stats::pnorm(-abs(z)), n = nrow(u))
+}
+
+clv_types <- function(d) {
+  t <- as.list(stats::setNames(rep("number", ncol(d)), names(d)))
+  t[[names(d)[[1L]]]] <- "text"
+  t
+}
+
+# The expectations: a number with its tolerances, a text exactly.
+num_ <- function(key, value, rel = 1e-9, abs = 1e-12, from = NULL) {
+  out <- list(key = key, value = unname(value), rel = rel, abs = abs)
+  if (!is.null(from)) out$from <- from
+  out
+}
+txt_ <- function(key, text) list(key = key, text = text)
+params_of <- function(prefix, par, rel, from) unname(Map(function(k, v) num_(paste0(prefix, k), v, rel = rel, from = from), names(par), par))
+
+# The tolerances (docs/specs/customer-lifetime-models.md, «Reference values», as measured by lot B2): the
+# runner's estimates against CLVTools' public fit on the same customers, relative 1e-7 (measured: at most
+# 8.7e-9 for Pareto/NBD, 3.4e-8 for Gamma-Gamma; the two minimize the same function from the same start, and
+# a last-bit difference in the summary CLVTools derives from the dates moves where L-BFGS-B stops along a flat
+# direction); the log-likelihoods 1e-6 absolute (measured 3e-12); the expectations against CLVTools'
+# predict(), relative 1e-7 (measured 6e-10); the MBG/NBD against this script's own maximum, relative 1e-3 on
+# the parameters (measured 5.3e-4: the runner's L-BFGS-B stops at its default tolerance on a flat ridge, far
+# inside the standard errors) and 1e-6 absolute on the log-likelihood (measured 1.5e-7).
+REL_A <- 1e-7
+LL_ABS <- 1e-6
+REL_PREDICT <- 1e-7
+REL_MBG <- 1e-3
+
+fitted_case <- function(id, data, params, expect, variant) {
+  list(id = id, model = "clv", variant = variant, data = paste0("data/", data$file), types = clv_types(data$summary),
+       params = params, expect = expect, refuses = NULL)
+}
+
+clv_params <- function(...) {
+  utils::modifyList(list(customer = "customer", frequency = "frequency", recency = "recency", age = "age", time_unit = "week",
+                         alpha = 0.05, seed = 1), list(...))
+}
+
+checks_ <- function(verdicts) unname(Map(function(k, v) txt_(paste0("assumption|", k, "||verdict"), v), names(verdicts), verdicts))
+
+fitted <- list()
+
+# A. BG/NBD customers (r 0.25, α 4, a 0.8, b 2.5), ages of 20 to 52 weeks in whole days, a 26-week holdout,
+#    a Gamma–Gamma spend (6, 4, 15) independent of the frequency; `auto` with a spend: the three candidates
+#    against their references, the choice, the spend, the clean checks.
+A <- draw_customers(101, 400, "bg_nbd", c(0.25, 4, 0.8, 2.5), 140:364, holdout = 182)
+A$file <- "clv_bgnbd.csv"
+write_exact(A$summary, A$file)
+cdA <- clv_log(A)
+pnA <- pnbd(cdA, verbose = FALSE)
+bgA <- bgnbd(cdA, verbose = FALSE)
+ggA <- suppressWarnings(gg(cdA, verbose = FALSE))
+mbA <- mbgnbd_max(A$summary)
+llA <- c(pareto_nbd = as.numeric(logLik(pnA)), bg_nbd = as.numeric(logLik(bgA)), mbg_nbd = mbA$log_lik)
+chosenA <- names(llA)[llA >= max(llA) - 1e-6][[1L]]
+hA <- hc3(A$summary)
+fitted[[length(fitted) + 1L]] <- fitted_case(
+  "clv BG/NBD customers, auto with a spend and a holdout", A,
+  clv_params(spend = "avg_spend", purchase_model = "auto", holdout_transactions = "holdout_purchases", holdout_length = 26, horizon = 52),
+  c(list(txt_("model|||purchase_model", chosenA), txt_("model|||purchase_model_asked", "auto"),
+         num_("model|||n", 400), num_("model|||n_repeaters", sum(A$summary$frequency > 0)),
+         num_("model|||holdout_observed", sum(A$summary$holdout_purchases)), num_("model|||spend_n", sum(A$summary$frequency > 0)),
+         num_("candidate|pareto_nbd||log_lik", llA[["pareto_nbd"]], abs = LL_ABS, from = "CLVTools pnbd()"),
+         num_("candidate|bg_nbd||log_lik", llA[["bg_nbd"]], abs = LL_ABS, from = "CLVTools bgnbd()"),
+         num_("candidate|mbg_nbd||log_lik", llA[["mbg_nbd"]], abs = LL_ABS, from = "MBG/NBD maximized here")),
+    params_of("candidate|pareto_nbd||param_", coef(pnA), REL_A, "CLVTools pnbd()"),
+    params_of("candidate|bg_nbd||param_", coef(bgA), REL_A, "CLVTools bgnbd()"),
+    params_of("candidate|mbg_nbd||param_", mbA$par, REL_MBG, "MBG/NBD maximized here"),
+    params_of("model|||spend_param_", stats::setNames(coef(ggA), c("p", "q", "gamma")), REL_A, "CLVTools gg()"),
+    list(num_("model|||spend_log_lik", as.numeric(logLik(ggA)), abs = LL_ABS, from = "CLVTools gg()"),
+         num_("assumption|spend_independence||value", hA$r, from = "cor()"), num_("assumption|spend_independence||p_value", hA$p, rel = 1e-8, from = "lm(), HC3"),
+         num_("assumption|sample_size||value", 400), num_("assumption|sample_size||count", sum(A$summary$frequency > 0)),
+         num_("assumption|horizon_length||value", 52 / max(A$summary$age))),
+    checks_(c(convergence = "ok", boundary = "ok", frequency_fit = "ok", spend_independence = "ok", spend_tail = "ok"))),
+  "value")
+
+# B. Pareto/NBD customers (r 0.55, α 10, s 0.6, β 12), no spend, no holdout: the `purchases` variant; P(alive)
+#    and the expected purchases against CLVTools' predict().
+B <- draw_customers(202, 400, "pareto_nbd", c(0.55, 10, 0.6, 12), 140:364)
+B$summary$avg_spend <- NULL
+B$file <- "clv_pnbd.csv"
+write_exact(B$summary, B$file)
+pnB <- pnbd(clv_log(B), verbose = FALSE)
+prB <- predict(pnB, prediction.end = 52, predict.spending = FALSE, verbose = FALSE)
+fitted[[length(fitted) + 1L]] <- fitted_case(
+  "clv Pareto/NBD customers, the purchases variant", B, clv_params(purchase_model = "pareto_nbd", horizon = 52),
+  c(list(txt_("model|||variant", "purchases"), txt_("model|||purchase_model", "pareto_nbd"), txt_("model|||optimizer", "L-BFGS-B"),
+         num_("model|||log_lik", as.numeric(logLik(pnB)), abs = LL_ABS, from = "CLVTools pnbd()"),
+         num_("model|||expected_transactions", sum(prB$CET), rel = REL_PREDICT, from = "CLVTools predict()"),
+         num_("model|||mean_p_alive", mean(prB$PAlive), rel = REL_PREDICT, from = "CLVTools predict()")),
+    params_of("model|||param_", coef(pnB), REL_A, "CLVTools pnbd()"),
+    checks_(c(convergence = "ok", boundary = "ok", frequency_fit = "ok"))),
+  "purchases")
+
+# C. MBG/NBD customers (r 0.5, α 6, a 0.9, b 1.6) with a spend, the model asked for: against the likelihood
+#    maximized here (and BTYDplus in make_witness.R); the spend against gg().
+C <- draw_customers(303, 400, "mbg_nbd", c(0.5, 6, 0.9, 1.6), 140:364)
+C$file <- "clv_mbgnbd.csv"
+write_exact(C$summary, C$file)
+mbC <- mbgnbd_max(C$summary)
+ggC <- suppressWarnings(gg(clv_log(C), verbose = FALSE))
+fitted[[length(fitted) + 1L]] <- fitted_case(
+  "clv MBG/NBD customers with a spend", C, clv_params(spend = "avg_spend", purchase_model = "mbg_nbd", discount_rate = 0.08, margin = 0.4),
+  c(list(txt_("model|||purchase_model", "mbg_nbd"), num_("model|||log_lik", mbC$log_lik, abs = LL_ABS, from = "MBG/NBD maximized here"),
+         num_("model|||horizon", 52), num_("model|||margin", 0.4), num_("model|||discount_per_period", 1.08^(7 / 365.25) - 1, rel = 1e-12)),
+    params_of("model|||param_", mbC$par, REL_MBG, "MBG/NBD maximized here"),
+    params_of("model|||spend_param_", stats::setNames(coef(ggC), c("p", "q", "gamma")), REL_A, "CLVTools gg()"),
+    checks_(c(convergence = "ok", boundary = "ok", spend_independence = "ok"))),
+  "value")
+
+# D. One cohort: every customer known for 39 weeks (BG/NBD customers), a 13-week holdout; BG/NBD asked for,
+#    its expectations against CLVTools' predict().
+D <- draw_customers(404, 300, "bg_nbd", c(0.25, 4, 0.8, 2.5), 273, holdout = 91)
+D$summary$avg_spend <- NULL
+D$file <- "clv_equal_age.csv"
+write_exact(D$summary, D$file)
+bgD <- bgnbd(clv_log(D), verbose = FALSE)
+prD <- predict(bgD, prediction.end = 13, predict.spending = FALSE, verbose = FALSE)
+prD52 <- predict(bgD, prediction.end = 52, predict.spending = FALSE, verbose = FALSE)
+fitted[[length(fitted) + 1L]] <- fitted_case(
+  "clv one cohort of equal ages, BG/NBD with a holdout", D,
+  clv_params(purchase_model = "bg_nbd", holdout_transactions = "holdout_purchases", holdout_length = 13),
+  c(list(txt_("model|||purchase_model", "bg_nbd"), txt_("model|||optimizer", "Nelder-Mead, BFGS"), num_("model|||median_age", 39, rel = 1e-12),
+         num_("model|||log_lik", as.numeric(logLik(bgD)), abs = LL_ABS, from = "CLVTools bgnbd()"),
+         num_("model|||holdout_observed", sum(D$summary$holdout_purchases)),
+         num_("model|||holdout_expected", sum(prD$CET), rel = REL_PREDICT, from = "CLVTools predict()"),
+         num_("assumption|holdout||value", (sum(prD$CET) - sum(D$summary$holdout_purchases)) / sum(D$summary$holdout_purchases), rel = REL_PREDICT * 10,
+              from = "CLVTools predict()"),
+         num_("model|||expected_transactions", sum(prD52$CET), rel = REL_PREDICT, from = "CLVTools predict()"),
+         num_("model|||mean_p_alive", mean(prD52$PAlive), rel = REL_PREDICT, from = "CLVTools predict()")),
+    params_of("model|||param_", coef(bgD), REL_A, "CLVTools bgnbd()"),
+    checks_(c(convergence = "ok", boundary = "ok"))),
+  "purchases")
+
+# E. The average spend rises with the frequency (m̄ = 10 + 4x, times a log-normal noise): Gamma–Gamma's
+#    assumption broken, spend_independence failed.
+E <- draw_customers(505, 400, "mbg_nbd", c(0.5, 6, 0.9, 1.6), 140:364,
+                    spend = function(x) (10 + 4 * x) * stats::rlnorm(length(x), 0, 0.3))
+E$file <- "clv_dependent_spend.csv"
+write_exact(E$summary, E$file)
+hE <- hc3(E$summary)
+fitted[[length(fitted) + 1L]] <- fitted_case(
+  "clv a spend that rises with the frequency", E, clv_params(spend = "avg_spend", purchase_model = "mbg_nbd"),
+  c(list(num_("assumption|spend_independence||value", hE$r, from = "cor()"),
+         num_("assumption|spend_independence||statistic", hE$z, rel = 1e-8, from = "lm(), HC3"),
+         num_("assumption|spend_independence||p_value", hE$p, rel = 1e-6, abs = 1e-300, from = "lm(), HC3"),
+         num_("assumption|spend_independence||count", hE$n), num_("assumption|spend_independence||threshold", 0.05),
+         txt_("assumption|spend_independence||advice_id", "spend_independence")),
+    checks_(c(spend_independence = "failed"))),
+  "value")
+
+# F. Customers who never drop out (Poisson purchases, rate ~ Gamma(0.6, 6)): MBG/NBD's a goes to its edge,
+#    the reading is «no dropout», and the Hessian is not positive definite there.
+F <- draw_customers(606, 300, "poisson", c(0.6, 6), 140:364)
+F$summary$avg_spend <- NULL
+F$file <- "clv_no_dropout.csv"
+write_exact(F$summary, F$file)
+fitted[[length(fitted) + 1L]] <- fitted_case(
+  "clv customers who never drop out", F, clv_params(purchase_model = "mbg_nbd"),
+  c(list(txt_("assumption|boundary|a|verdict", "doubtful"), txt_("assumption|boundary|a|advice_id", "boundary_no_dropout"),
+         txt_("assumption|convergence||verdict", "doubtful"), txt_("assumption|convergence||advice_id", "convergence_edge"))),
+  "purchases")
+
+# G. Two customers of 5,000 and 20,000 repeat purchases among 48 ordinary ones, average spends of millions (the
+#    48 drawn from Gamma-Gamma and scaled by 1e6, the two at 1e7 and 3e6): the quadrature where GSL gives no
+#    number, every number finite.
+G <- draw_customers(707, 48, "bg_nbd", c(0.25, 4, 0.8, 2.5), 140:364)
+G$summary$avg_spend <- G$summary$avg_spend * 1e6
+G$summary <- rbind(data.frame(customer = c("huge1", "huge2"), frequency = c(5000, 20000), recency = c(99.9, 100), age = c(100, 100),
+                              avg_spend = c(1e7, 3e6)), G$summary)
+G$file <- "clv_huge.csv"
+write_exact(G$summary, G$file)
+fitted[[length(fitted) + 1L]] <- fitted_case(
+  "clv two customers of 5,000 and 20,000 purchases", G, clv_params(spend = "avg_spend", purchase_model = "bg_nbd", horizon = 26),
+  list(txt_("model|||note_cet_quadrature", "@cet_quadrature n=2"), num_("model|||n", 50), num_("customer|huge2||rank", 1),
+       num_("customer|huge1||rank", 2)),
+  "value")
+
+# H. Column names that look like code, 30 customers.
+H <- draw_customers(808, 30, "mbg_nbd", c(0.5, 6, 0.9, 1.6), 140:364, prefix = "k")
+names(H$summary) <- c("ü ñ", "x); system(\"id\")", "a`b", "T", "m")
+H$file <- "clv_names.csv"
+write_exact(H$summary, H$file)
+fitted[[length(fitted) + 1L]] <- fitted_case(
+  "clv column names that look like code", H,
+  list(customer = "ü ñ", frequency = "x); system(\"id\")", recency = "a`b", age = "T", spend = "m", time_unit = "month", purchase_model = "mbg_nbd",
+       seed = 1),
+  list(num_("model|||n", 30), txt_("model|||time_unit", "month"), txt_("model|||formula", "x: frequency, t_x: recency, T: age, in months")),
+  "value")
+
+# I. A spend drawn with q = 0.8: no finite mean, the node stops; q as CLVTools' gg() finds it.
+I <- draw_customers(909, 200, "mbg_nbd", c(0.5, 6, 0.9, 1.6), 140:364, gg = c(6, 0.8, 15))
+I$file <- "clv_spend_no_mean.csv"
+write_exact(I$summary, I$file)
+qI <- coef(suppressWarnings(gg(clv_log(I), verbose = FALSE)))[[2L]]
+fitted[[length(fitted) + 1L]] <- list(
+  id = "refusal spend without a finite mean", model = "clv", variant = "value", data = paste0("data/", I$file), types = clv_types(I$summary),
+  params = clv_params(spend = "avg_spend", purchase_model = "mbg_nbd"),
+  refuses = list(code = "spend_no_mean", message = paste0("the spend model's q is ", format(round(qI, 2), trim = TRUE, scientific = FALSE), ", at most 1: the average spend has no ",
+                                                          "finite mean, and the CLV cannot be computed; look for extreme amounts, or leave out the spend column")))
+
+cases <- c(cases, fitted)
+cases <- lapply(cases, function(k) c(k, list(by = "make_reference.R")))
+
+# expected.json keeps the cases another script wrote (`by`), after this script's
+path <- file.path(here, "expected.json")
+others <- if (file.exists(path)) Filter(function(k) !identical(k$by, "make_reference.R") && !is.null(k$by),
+                                        jsonlite::fromJSON(path, simplifyVector = FALSE)$cases) else list()
 expected <- list(
   format_version = 1,
-  generated = list(by = "make_reference.R", note = paste0("lot B1 writes the refusal cases; lots B2 and B3 add the fitted cases ",
-                                                           "(docs/specs/customer-lifetime-models.md, «Reference values»)"),
-                   R = paste(R.version$major, R.version$minor, sep = "."), packages = list(jsonlite = as.character(utils::packageVersion("jsonlite")))),
-  cases = cases)
-writeLines(jsonlite::toJSON(expected, auto_unbox = TRUE, pretty = TRUE, null = "null", digits = NA), file.path(here, "expected.json"), useBytes = TRUE)
-cat("wrote", length(cases), "cases\n")
+  generated = list(by = "make_reference.R", note = paste0("lot B1 wrote the refusal cases, lot B2 the fitted cases of clv; lot B3 adds BG/BB's with its own ",
+                                                           "script (docs/specs/customer-lifetime-models.md, «Reference values»)"),
+                   R = paste(R.version$major, R.version$minor, sep = "."),
+                   packages = list(jsonlite = as.character(utils::packageVersion("jsonlite")), CLVTools = as.character(utils::packageVersion("CLVTools")),
+                                   data.table = as.character(utils::packageVersion("data.table")))),
+  cases = c(cases, others))
+writeLines(jsonlite::toJSON(expected, auto_unbox = TRUE, pretty = TRUE, null = "null", digits = NA), path, useBytes = TRUE)
+cat("wrote", length(cases), "cases of make_reference.R and kept", length(others), "of other scripts\n")

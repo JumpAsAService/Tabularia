@@ -2,10 +2,12 @@
   "format_version": 1,
   "generated": {
     "by": "make_reference.R",
-    "note": "lot B1 writes the refusal cases; lots B2 and B3 add the fitted cases (docs/specs/customer-lifetime-models.md, «Reference values»)",
+    "note": "lot B1 wrote the refusal cases, lot B2 the fitted cases of clv; lot B3 adds BG/BB's with its own script (docs/specs/customer-lifetime-models.md, «Reference values»)",
     "R": "4.6.0",
     "packages": {
-      "jsonlite": "2.0.0"
+      "jsonlite": "2.0.0",
+      "CLVTools": "0.12.1",
+      "data.table": "1.18.6.1"
     }
   },
   "cases": [
@@ -31,7 +33,8 @@
       "refuses": {
         "code": "duplicate_customer",
         "message": "the customer c3 appears on 2 rows: one row per customer; group the transactions by customer first"
-      }
+      },
+      "by": "make_reference.R"
     },
     {
       "id": "refusal frequency not whole",
@@ -55,7 +58,8 @@
       "refuses": {
         "code": "frequency_not_whole",
         "message": "frequency must count purchases: the customer c4 has 2.5"
-      }
+      },
+      "by": "make_reference.R"
     },
     {
       "id": "refusal negative recency",
@@ -79,7 +83,8 @@
       "refuses": {
         "code": "negative_value",
         "message": "recency, age and frequency are 0 or more: the customer c11 has a recency of −3"
-      }
+      },
+      "by": "make_reference.R"
     },
     {
       "id": "refusal age zero",
@@ -103,7 +108,8 @@
       "refuses": {
         "code": "age_zero",
         "message": "the customer c6 has an age of 0: age is the time since the first purchase, more than 0"
-      }
+      },
+      "by": "make_reference.R"
     },
     {
       "id": "refusal recency after age",
@@ -127,7 +133,8 @@
       "refuses": {
         "code": "recency_after_age",
         "message": "the customer c17 bought last (recency 39) after the end of the period (age 37): recency is at most age"
-      }
+      },
+      "by": "make_reference.R"
     },
     {
       "id": "refusal recency without purchase",
@@ -151,7 +158,8 @@
       "refuses": {
         "code": "recency_without_purchase",
         "message": "the customer c15 has no repeat purchase but a recency of 12: recency is 0 without repeat purchases"
-      }
+      },
+      "by": "make_reference.R"
     },
     {
       "id": "refusal same moment",
@@ -175,7 +183,8 @@
       "refuses": {
         "code": "same_moment",
         "message": "the customer c10 has 2 repeat purchases at recency 0: purchases of the same day must be one purchase; group by customer and day first"
-      }
+      },
+      "by": "make_reference.R"
     },
     {
       "id": "refusal spend not positive",
@@ -201,7 +210,8 @@
       "refuses": {
         "code": "spend_not_positive",
         "message": "the customer c3 has an average spend of 0 with repeat purchases: the spend model needs amounts above 0; leave out returns and refunds, or those customers"
-      }
+      },
+      "by": "make_reference.R"
     },
     {
       "id": "refusal holdout negative",
@@ -228,7 +238,8 @@
       "refuses": {
         "code": "holdout_negative",
         "message": "holdout purchases are whole numbers, 0 or more: the customer c20 has −1"
-      }
+      },
+      "by": "make_reference.R"
     },
     {
       "id": "refusal few customers",
@@ -252,7 +263,8 @@
       "refuses": {
         "code": "few_customers",
         "message": "12 customers: these models need at least 20"
-      }
+      },
+      "by": "make_reference.R"
     },
     {
       "id": "refusal no repeaters",
@@ -276,7 +288,8 @@
       "refuses": {
         "code": "no_repeaters",
         "message": "no customer bought again: the models cannot tell the purchase rate from the dropout without repeat purchases"
-      }
+      },
+      "by": "make_reference.R"
     },
     {
       "id": "refusal few repeaters",
@@ -300,7 +313,8 @@
       "refuses": {
         "code": "few_repeaters",
         "message": "3 customers bought again: these models need at least 5"
-      }
+      },
+      "by": "make_reference.R"
     },
     {
       "id": "refusal few spenders",
@@ -326,7 +340,8 @@
       "refuses": {
         "code": "few_spenders",
         "message": "3 repeat customers have a spend: the spend model needs at least 5"
-      }
+      },
+      "by": "make_reference.R"
     },
     {
       "id": "refusal BG/BB opportunities",
@@ -350,7 +365,8 @@
       "refuses": {
         "code": "bgbb_opportunities",
         "message": "opportunities run from 1 to 1,000: the customer c12 has 0"
-      }
+      },
+      "by": "make_reference.R"
     },
     {
       "id": "refusal BG/BB frequency",
@@ -374,7 +390,8 @@
       "refuses": {
         "code": "bgbb_frequency",
         "message": "the customer c8 has 3 transactions in 1 opportunities up to its last: at most one transaction per opportunity"
-      }
+      },
+      "by": "make_reference.R"
     },
     {
       "id": "refusal BG/BB recency after opportunities",
@@ -398,7 +415,8 @@
       "refuses": {
         "code": "recency_after_age",
         "message": "the customer c9 bought last at the opportunity 8, after the last of its 6 opportunities: recency is at most opportunities"
-      }
+      },
+      "by": "make_reference.R"
     },
     {
       "id": "refusal BG/BB holdout",
@@ -425,7 +443,829 @@
       "refuses": {
         "code": "bgbb_holdout",
         "message": "a customer has at most one transaction per opportunity: the customer c14 has 9 in the 5 opportunities of the holdout"
-      }
+      },
+      "by": "make_reference.R"
+    },
+    {
+      "id": "clv BG/NBD customers, auto with a spend and a holdout",
+      "model": "clv",
+      "variant": "value",
+      "data": "data/clv_bgnbd.csv",
+      "types": {
+        "customer": "text",
+        "frequency": "number",
+        "recency": "number",
+        "age": "number",
+        "avg_spend": "number",
+        "holdout_purchases": "number"
+      },
+      "params": {
+        "customer": "customer",
+        "frequency": "frequency",
+        "recency": "recency",
+        "age": "age",
+        "time_unit": "week",
+        "alpha": 0.05,
+        "seed": 1,
+        "spend": "avg_spend",
+        "purchase_model": "auto",
+        "holdout_transactions": "holdout_purchases",
+        "holdout_length": 26,
+        "horizon": 52
+      },
+      "expect": [
+        {
+          "key": "model|||purchase_model",
+          "text": "bg_nbd"
+        },
+        {
+          "key": "model|||purchase_model_asked",
+          "text": "auto"
+        },
+        {
+          "key": "model|||n",
+          "value": 400,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||n_repeaters",
+          "value": 174,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||holdout_observed",
+          "value": 207,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||spend_n",
+          "value": 174,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|pareto_nbd||log_lik",
+          "value": -1804.07508308406,
+          "rel": 1e-09,
+          "abs": 1e-06,
+          "from": "CLVTools pnbd()"
+        },
+        {
+          "key": "candidate|bg_nbd||log_lik",
+          "value": -1798.7413424181,
+          "rel": 1e-09,
+          "abs": 1e-06,
+          "from": "CLVTools bgnbd()"
+        },
+        {
+          "key": "candidate|mbg_nbd||log_lik",
+          "value": -1801.22471061599,
+          "rel": 1e-09,
+          "abs": 1e-06,
+          "from": "MBG/NBD maximized here"
+        },
+        {
+          "key": "candidate|pareto_nbd||param_r",
+          "value": 0.532166893083317,
+          "rel": 1e-07,
+          "abs": 1e-12,
+          "from": "CLVTools pnbd()"
+        },
+        {
+          "key": "candidate|pareto_nbd||param_alpha",
+          "value": 10.3437491032131,
+          "rel": 1e-07,
+          "abs": 1e-12,
+          "from": "CLVTools pnbd()"
+        },
+        {
+          "key": "candidate|pareto_nbd||param_s",
+          "value": 6.16798874682792,
+          "rel": 1e-07,
+          "abs": 1e-12,
+          "from": "CLVTools pnbd()"
+        },
+        {
+          "key": "candidate|pareto_nbd||param_beta",
+          "value": 236.07499828915,
+          "rel": 1e-07,
+          "abs": 1e-12,
+          "from": "CLVTools pnbd()"
+        },
+        {
+          "key": "candidate|bg_nbd||param_r",
+          "value": 0.272864952309725,
+          "rel": 1e-07,
+          "abs": 1e-12,
+          "from": "CLVTools bgnbd()"
+        },
+        {
+          "key": "candidate|bg_nbd||param_alpha",
+          "value": 4.72747455074669,
+          "rel": 1e-07,
+          "abs": 1e-12,
+          "from": "CLVTools bgnbd()"
+        },
+        {
+          "key": "candidate|bg_nbd||param_a",
+          "value": 0.599769174341922,
+          "rel": 1e-07,
+          "abs": 1e-12,
+          "from": "CLVTools bgnbd()"
+        },
+        {
+          "key": "candidate|bg_nbd||param_b",
+          "value": 1.40447654724963,
+          "rel": 1e-07,
+          "abs": 1e-12,
+          "from": "CLVTools bgnbd()"
+        },
+        {
+          "key": "candidate|mbg_nbd||param_r",
+          "value": 0.578149486815427,
+          "rel": 0.001,
+          "abs": 1e-12,
+          "from": "MBG/NBD maximized here"
+        },
+        {
+          "key": "candidate|mbg_nbd||param_alpha",
+          "value": 6.67872650164916,
+          "rel": 0.001,
+          "abs": 1e-12,
+          "from": "MBG/NBD maximized here"
+        },
+        {
+          "key": "candidate|mbg_nbd||param_a",
+          "value": 0.983436766448454,
+          "rel": 0.001,
+          "abs": 1e-12,
+          "from": "MBG/NBD maximized here"
+        },
+        {
+          "key": "candidate|mbg_nbd||param_b",
+          "value": 1.85432142956598,
+          "rel": 0.001,
+          "abs": 1e-12,
+          "from": "MBG/NBD maximized here"
+        },
+        {
+          "key": "model|||spend_param_p",
+          "value": 9.37444908303703,
+          "rel": 1e-07,
+          "abs": 1e-12,
+          "from": "CLVTools gg()"
+        },
+        {
+          "key": "model|||spend_param_q",
+          "value": 4.68154360440074,
+          "rel": 1e-07,
+          "abs": 1e-12,
+          "from": "CLVTools gg()"
+        },
+        {
+          "key": "model|||spend_param_gamma",
+          "value": 11.3575352099448,
+          "rel": 1e-07,
+          "abs": 1e-12,
+          "from": "CLVTools gg()"
+        },
+        {
+          "key": "model|||spend_log_lik",
+          "value": -699.639976708107,
+          "rel": 1e-09,
+          "abs": 1e-06,
+          "from": "CLVTools gg()"
+        },
+        {
+          "key": "assumption|spend_independence||value",
+          "value": 0.0469054842576492,
+          "rel": 1e-09,
+          "abs": 1e-12,
+          "from": "cor()"
+        },
+        {
+          "key": "assumption|spend_independence||p_value",
+          "value": 0.461465478004823,
+          "rel": 1e-08,
+          "abs": 1e-12,
+          "from": "lm(), HC3"
+        },
+        {
+          "key": "assumption|sample_size||value",
+          "value": 400,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|sample_size||count",
+          "value": 174,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|horizon_length||value",
+          "value": 1,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|convergence||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|boundary||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|frequency_fit||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|spend_independence||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|spend_tail||verdict",
+          "text": "ok"
+        }
+      ],
+      "refuses": null,
+      "by": "make_reference.R"
+    },
+    {
+      "id": "clv Pareto/NBD customers, the purchases variant",
+      "model": "clv",
+      "variant": "purchases",
+      "data": "data/clv_pnbd.csv",
+      "types": {
+        "customer": "text",
+        "frequency": "number",
+        "recency": "number",
+        "age": "number"
+      },
+      "params": {
+        "customer": "customer",
+        "frequency": "frequency",
+        "recency": "recency",
+        "age": "age",
+        "time_unit": "week",
+        "alpha": 0.05,
+        "seed": 1,
+        "purchase_model": "pareto_nbd",
+        "horizon": 52
+      },
+      "expect": [
+        {
+          "key": "model|||variant",
+          "text": "purchases"
+        },
+        {
+          "key": "model|||purchase_model",
+          "text": "pareto_nbd"
+        },
+        {
+          "key": "model|||optimizer",
+          "text": "L-BFGS-B"
+        },
+        {
+          "key": "model|||log_lik",
+          "value": -1802.96938882825,
+          "rel": 1e-09,
+          "abs": 1e-06,
+          "from": "CLVTools pnbd()"
+        },
+        {
+          "key": "model|||expected_transactions",
+          "value": 345.477810065163,
+          "rel": 1e-07,
+          "abs": 1e-12,
+          "from": "CLVTools predict()"
+        },
+        {
+          "key": "model|||mean_p_alive",
+          "value": 0.440107801733898,
+          "rel": 1e-07,
+          "abs": 1e-12,
+          "from": "CLVTools predict()"
+        },
+        {
+          "key": "model|||param_r",
+          "value": 0.612402158943083,
+          "rel": 1e-07,
+          "abs": 1e-12,
+          "from": "CLVTools pnbd()"
+        },
+        {
+          "key": "model|||param_alpha",
+          "value": 11.9299484145857,
+          "rel": 1e-07,
+          "abs": 1e-12,
+          "from": "CLVTools pnbd()"
+        },
+        {
+          "key": "model|||param_s",
+          "value": 1.06168365393983,
+          "rel": 1e-07,
+          "abs": 1e-12,
+          "from": "CLVTools pnbd()"
+        },
+        {
+          "key": "model|||param_beta",
+          "value": 29.5383094000855,
+          "rel": 1e-07,
+          "abs": 1e-12,
+          "from": "CLVTools pnbd()"
+        },
+        {
+          "key": "assumption|convergence||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|boundary||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|frequency_fit||verdict",
+          "text": "ok"
+        }
+      ],
+      "refuses": null,
+      "by": "make_reference.R"
+    },
+    {
+      "id": "clv MBG/NBD customers with a spend",
+      "model": "clv",
+      "variant": "value",
+      "data": "data/clv_mbgnbd.csv",
+      "types": {
+        "customer": "text",
+        "frequency": "number",
+        "recency": "number",
+        "age": "number",
+        "avg_spend": "number"
+      },
+      "params": {
+        "customer": "customer",
+        "frequency": "frequency",
+        "recency": "recency",
+        "age": "age",
+        "time_unit": "week",
+        "alpha": 0.05,
+        "seed": 1,
+        "spend": "avg_spend",
+        "purchase_model": "mbg_nbd",
+        "discount_rate": 0.08,
+        "margin": 0.4
+      },
+      "expect": [
+        {
+          "key": "model|||purchase_model",
+          "text": "mbg_nbd"
+        },
+        {
+          "key": "model|||log_lik",
+          "value": -1661.52793856773,
+          "rel": 1e-09,
+          "abs": 1e-06,
+          "from": "MBG/NBD maximized here"
+        },
+        {
+          "key": "model|||horizon",
+          "value": 52,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||margin",
+          "value": 0.4,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||discount_per_period",
+          "value": 0.00147604321038264,
+          "rel": 1e-12,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||param_r",
+          "value": 0.332855909315814,
+          "rel": 0.001,
+          "abs": 1e-12,
+          "from": "MBG/NBD maximized here"
+        },
+        {
+          "key": "model|||param_alpha",
+          "value": 4.52934486261156,
+          "rel": 0.001,
+          "abs": 1e-12,
+          "from": "MBG/NBD maximized here"
+        },
+        {
+          "key": "model|||param_a",
+          "value": 1.77895474644542,
+          "rel": 0.001,
+          "abs": 1e-12,
+          "from": "MBG/NBD maximized here"
+        },
+        {
+          "key": "model|||param_b",
+          "value": 5.27175387935793,
+          "rel": 0.001,
+          "abs": 1e-12,
+          "from": "MBG/NBD maximized here"
+        },
+        {
+          "key": "model|||spend_param_p",
+          "value": 3.8714126888748,
+          "rel": 1e-07,
+          "abs": 1e-12,
+          "from": "CLVTools gg()"
+        },
+        {
+          "key": "model|||spend_param_q",
+          "value": 4.87582362601889,
+          "rel": 1e-07,
+          "abs": 1e-12,
+          "from": "CLVTools gg()"
+        },
+        {
+          "key": "model|||spend_param_gamma",
+          "value": 28.8933013039326,
+          "rel": 1e-07,
+          "abs": 1e-12,
+          "from": "CLVTools gg()"
+        },
+        {
+          "key": "assumption|convergence||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|boundary||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|spend_independence||verdict",
+          "text": "ok"
+        }
+      ],
+      "refuses": null,
+      "by": "make_reference.R"
+    },
+    {
+      "id": "clv one cohort of equal ages, BG/NBD with a holdout",
+      "model": "clv",
+      "variant": "purchases",
+      "data": "data/clv_equal_age.csv",
+      "types": {
+        "customer": "text",
+        "frequency": "number",
+        "recency": "number",
+        "age": "number",
+        "holdout_purchases": "number"
+      },
+      "params": {
+        "customer": "customer",
+        "frequency": "frequency",
+        "recency": "recency",
+        "age": "age",
+        "time_unit": "week",
+        "alpha": 0.05,
+        "seed": 1,
+        "purchase_model": "bg_nbd",
+        "holdout_transactions": "holdout_purchases",
+        "holdout_length": 13
+      },
+      "expect": [
+        {
+          "key": "model|||purchase_model",
+          "text": "bg_nbd"
+        },
+        {
+          "key": "model|||optimizer",
+          "text": "Nelder-Mead, BFGS"
+        },
+        {
+          "key": "model|||median_age",
+          "value": 39,
+          "rel": 1e-12,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||log_lik",
+          "value": -1709.36844625692,
+          "rel": 1e-09,
+          "abs": 1e-06,
+          "from": "CLVTools bgnbd()"
+        },
+        {
+          "key": "model|||holdout_observed",
+          "value": 103,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||holdout_expected",
+          "value": 86.4266914009752,
+          "rel": 1e-07,
+          "abs": 1e-12,
+          "from": "CLVTools predict()"
+        },
+        {
+          "key": "assumption|holdout||value",
+          "value": -0.160905908728396,
+          "rel": 1e-06,
+          "abs": 1e-12,
+          "from": "CLVTools predict()"
+        },
+        {
+          "key": "model|||expected_transactions",
+          "value": 275.515508368247,
+          "rel": 1e-07,
+          "abs": 1e-12,
+          "from": "CLVTools predict()"
+        },
+        {
+          "key": "model|||mean_p_alive",
+          "value": 0.75240812689969,
+          "rel": 1e-07,
+          "abs": 1e-12,
+          "from": "CLVTools predict()"
+        },
+        {
+          "key": "model|||param_r",
+          "value": 0.258500777331029,
+          "rel": 1e-07,
+          "abs": 1e-12,
+          "from": "CLVTools bgnbd()"
+        },
+        {
+          "key": "model|||param_alpha",
+          "value": 3.11727807423886,
+          "rel": 1e-07,
+          "abs": 1e-12,
+          "from": "CLVTools bgnbd()"
+        },
+        {
+          "key": "model|||param_a",
+          "value": 1.48337913164588,
+          "rel": 1e-07,
+          "abs": 1e-12,
+          "from": "CLVTools bgnbd()"
+        },
+        {
+          "key": "model|||param_b",
+          "value": 6.0324760886783,
+          "rel": 1e-07,
+          "abs": 1e-12,
+          "from": "CLVTools bgnbd()"
+        },
+        {
+          "key": "assumption|convergence||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|boundary||verdict",
+          "text": "ok"
+        }
+      ],
+      "refuses": null,
+      "by": "make_reference.R"
+    },
+    {
+      "id": "clv a spend that rises with the frequency",
+      "model": "clv",
+      "variant": "value",
+      "data": "data/clv_dependent_spend.csv",
+      "types": {
+        "customer": "text",
+        "frequency": "number",
+        "recency": "number",
+        "age": "number",
+        "avg_spend": "number"
+      },
+      "params": {
+        "customer": "customer",
+        "frequency": "frequency",
+        "recency": "recency",
+        "age": "age",
+        "time_unit": "week",
+        "alpha": 0.05,
+        "seed": 1,
+        "spend": "avg_spend",
+        "purchase_model": "mbg_nbd"
+      },
+      "expect": [
+        {
+          "key": "assumption|spend_independence||value",
+          "value": 0.894915744192861,
+          "rel": 1e-09,
+          "abs": 1e-12,
+          "from": "cor()"
+        },
+        {
+          "key": "assumption|spend_independence||statistic",
+          "value": 13.9454971721825,
+          "rel": 1e-08,
+          "abs": 1e-12,
+          "from": "lm(), HC3"
+        },
+        {
+          "key": "assumption|spend_independence||p_value",
+          "value": 3.35104708618355e-44,
+          "rel": 1e-06,
+          "abs": 1e-300,
+          "from": "lm(), HC3"
+        },
+        {
+          "key": "assumption|spend_independence||count",
+          "value": 151,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|spend_independence||threshold",
+          "value": 0.05,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|spend_independence||advice_id",
+          "text": "spend_independence"
+        },
+        {
+          "key": "assumption|spend_independence||verdict",
+          "text": "failed"
+        }
+      ],
+      "refuses": null,
+      "by": "make_reference.R"
+    },
+    {
+      "id": "clv customers who never drop out",
+      "model": "clv",
+      "variant": "purchases",
+      "data": "data/clv_no_dropout.csv",
+      "types": {
+        "customer": "text",
+        "frequency": "number",
+        "recency": "number",
+        "age": "number"
+      },
+      "params": {
+        "customer": "customer",
+        "frequency": "frequency",
+        "recency": "recency",
+        "age": "age",
+        "time_unit": "week",
+        "alpha": 0.05,
+        "seed": 1,
+        "purchase_model": "mbg_nbd"
+      },
+      "expect": [
+        {
+          "key": "assumption|boundary|a|verdict",
+          "text": "doubtful"
+        },
+        {
+          "key": "assumption|boundary|a|advice_id",
+          "text": "boundary_no_dropout"
+        },
+        {
+          "key": "assumption|convergence||verdict",
+          "text": "doubtful"
+        },
+        {
+          "key": "assumption|convergence||advice_id",
+          "text": "convergence_edge"
+        }
+      ],
+      "refuses": null,
+      "by": "make_reference.R"
+    },
+    {
+      "id": "clv two customers of 5,000 and 20,000 purchases",
+      "model": "clv",
+      "variant": "value",
+      "data": "data/clv_huge.csv",
+      "types": {
+        "customer": "text",
+        "frequency": "number",
+        "recency": "number",
+        "age": "number",
+        "avg_spend": "number"
+      },
+      "params": {
+        "customer": "customer",
+        "frequency": "frequency",
+        "recency": "recency",
+        "age": "age",
+        "time_unit": "week",
+        "alpha": 0.05,
+        "seed": 1,
+        "spend": "avg_spend",
+        "purchase_model": "bg_nbd",
+        "horizon": 26
+      },
+      "expect": [
+        {
+          "key": "model|||note_cet_quadrature",
+          "text": "@cet_quadrature n=2"
+        },
+        {
+          "key": "model|||n",
+          "value": 50,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "customer|huge2||rank",
+          "value": 1,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "customer|huge1||rank",
+          "value": 2,
+          "rel": 1e-09,
+          "abs": 1e-12
+        }
+      ],
+      "refuses": null,
+      "by": "make_reference.R"
+    },
+    {
+      "id": "clv column names that look like code",
+      "model": "clv",
+      "variant": "value",
+      "data": "data/clv_names.csv",
+      "types": {
+        "ü ñ": "text",
+        "x); system(\"id\")": "number",
+        "a`b": "number",
+        "T": "number",
+        "m": "number"
+      },
+      "params": {
+        "customer": "ü ñ",
+        "frequency": "x); system(\"id\")",
+        "recency": "a`b",
+        "age": "T",
+        "spend": "m",
+        "time_unit": "month",
+        "purchase_model": "mbg_nbd",
+        "seed": 1
+      },
+      "expect": [
+        {
+          "key": "model|||n",
+          "value": 30,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||time_unit",
+          "text": "month"
+        },
+        {
+          "key": "model|||formula",
+          "text": "x: frequency, t_x: recency, T: age, in months"
+        }
+      ],
+      "refuses": null,
+      "by": "make_reference.R"
+    },
+    {
+      "id": "refusal spend without a finite mean",
+      "model": "clv",
+      "variant": "value",
+      "data": "data/clv_spend_no_mean.csv",
+      "types": {
+        "customer": "text",
+        "frequency": "number",
+        "recency": "number",
+        "age": "number",
+        "avg_spend": "number"
+      },
+      "params": {
+        "customer": "customer",
+        "frequency": "frequency",
+        "recency": "recency",
+        "age": "age",
+        "time_unit": "week",
+        "alpha": 0.05,
+        "seed": 1,
+        "spend": "avg_spend",
+        "purchase_model": "mbg_nbd"
+      },
+      "refuses": {
+        "code": "spend_no_mean",
+        "message": "the spend model's q is 0.86, at most 1: the average spend has no finite mean, and the CLV cannot be computed; look for extreme amounts, or leave out the spend column"
+      },
+      "by": "make_reference.R"
     }
   ]
 }

@@ -1,17 +1,27 @@
 # Customer lifetime value (docs/specs/customer-lifetime-models.md, «The two nodes», «The models»):
-# fit_clv(task) and predict_clv(task, card). Pareto/NBD and BG/NBD through the CLVTools functions
-# bound in clv_shared.R, MBG/NBD written there, `auto` and `compare`, GSL's status and the
-# Gauss–Jacobi fallback.
+# fit_clv(task) and predict_clv(task, card).
 #
-# Lot B0 gave the node its contract (the catalogue, the card's schema, the recipe, the route in run.R);
-# lot B1 wrote the shared module (clv_shared.R: the summary's checks, the models, the optimizer, the CLV, the
-# rows, the card, the Predict core, and their self-tests). Lot B2 makes this file the node: the checks
-# (assumption rows), the reference cases and the witness. Until then the node reads and checks the summary
-# (so that a wrong table stops with its sentence) and refuses, as every node not built yet.
+# The node is the wiring of the shared module (clv_shared.R, lot B1) and of the checks (clv_checks.R):
+#   - clv_fit() reads and checks the summary, fits the purchase models the node asks for (Pareto/NBD and
+#     BG/NBD through CLVTools' compiled functions with CLVTools' own optimizer settings, MBG/NBD written in
+#     the module), keeps the one asked for or, with `auto`, the highest log-likelihood among those that
+#     converged, computes its Hessian only, fits Gamma–Gamma when a spend column is given, and evaluates
+#     every customer (GSL's ₂F₁, the Gauss–Jacobi quadrature only where GSL fails);
+#   - clv_results() writes the rows of every section but `assumption`, the output rows and the card;
+#   - clv_checks() writes the section `assumption`: verdicts from p-values against the node's alpha and
+#     from certain facts, the rest measures without a verdict.
+# Predict is clv_predict_node(): the card's parameters and the same functions as the fit, so that the
+# training rows get the fit's numbers bit for bit; a row that breaks a rule of the summary gets NULL.
 
 fit_clv <- function(task) {
-  clv_read_summary(task, "clv", task$.frame)
-  tab_not_built("Customer lifetime value")
+  frame <- task$.frame
+  fit <- clv_fit(task, "clv", frame)
+  result <- clv_results(task, fit, frame)
+  clv_checks(result$rows, fit)
+  result
 }
 
-predict_clv <- function(task, card) tab_not_built("Predict for a customer lifetime value model")
+predict_clv <- function(task, card) {
+  got <- clv_predict_node(task, card)
+  list(output = got$output)
+}
