@@ -2,12 +2,430 @@
   "format_version": 1,
   "generated": {
     "by": "make_reference.R",
-    "note": "lots B2 and B3 write the reference cases (docs/specs/customer-lifetime-models.md, «Reference values»); lot B0 has none",
+    "note": "lot B1 writes the refusal cases; lots B2 and B3 add the fitted cases (docs/specs/customer-lifetime-models.md, «Reference values»)",
     "R": "4.6.0",
     "packages": {
-      "CLVTools": "0.12.1",
       "jsonlite": "2.0.0"
     }
   },
-  "cases": []
+  "cases": [
+    {
+      "id": "refusal duplicate customer",
+      "model": "clv",
+      "variant": "purchases",
+      "data": "data/clv_refusals.csv",
+      "types": {
+        "id_dup": "text",
+        "x": "number",
+        "tx": "number",
+        "T": "number"
+      },
+      "params": {
+        "customer": "id_dup",
+        "frequency": "x",
+        "recency": "tx",
+        "age": "T",
+        "time_unit": "week",
+        "seed": 1
+      },
+      "refuses": {
+        "code": "duplicate_customer",
+        "message": "the customer c3 appears on 2 rows: one row per customer; group the transactions by customer first"
+      }
+    },
+    {
+      "id": "refusal frequency not whole",
+      "model": "clv",
+      "variant": "purchases",
+      "data": "data/clv_refusals.csv",
+      "types": {
+        "id": "text",
+        "x_frac": "number",
+        "tx": "number",
+        "T": "number"
+      },
+      "params": {
+        "customer": "id",
+        "frequency": "x_frac",
+        "recency": "tx",
+        "age": "T",
+        "time_unit": "week",
+        "seed": 1
+      },
+      "refuses": {
+        "code": "frequency_not_whole",
+        "message": "frequency must count purchases: the customer c4 has 2.5"
+      }
+    },
+    {
+      "id": "refusal negative recency",
+      "model": "clv",
+      "variant": "purchases",
+      "data": "data/clv_refusals.csv",
+      "types": {
+        "id": "text",
+        "x": "number",
+        "tx_neg": "number",
+        "T": "number"
+      },
+      "params": {
+        "customer": "id",
+        "frequency": "x",
+        "recency": "tx_neg",
+        "age": "T",
+        "time_unit": "week",
+        "seed": 1
+      },
+      "refuses": {
+        "code": "negative_value",
+        "message": "recency, age and frequency are 0 or more: the customer c11 has a recency of −3"
+      }
+    },
+    {
+      "id": "refusal age zero",
+      "model": "clv",
+      "variant": "purchases",
+      "data": "data/clv_refusals.csv",
+      "types": {
+        "id": "text",
+        "x": "number",
+        "tx": "number",
+        "T_zero": "number"
+      },
+      "params": {
+        "customer": "id",
+        "frequency": "x",
+        "recency": "tx",
+        "age": "T_zero",
+        "time_unit": "week",
+        "seed": 1
+      },
+      "refuses": {
+        "code": "age_zero",
+        "message": "the customer c6 has an age of 0: age is the time since the first purchase, more than 0"
+      }
+    },
+    {
+      "id": "refusal recency after age",
+      "model": "clv",
+      "variant": "purchases",
+      "data": "data/clv_refusals.csv",
+      "types": {
+        "id": "text",
+        "x": "number",
+        "tx_after": "number",
+        "T": "number"
+      },
+      "params": {
+        "customer": "id",
+        "frequency": "x",
+        "recency": "tx_after",
+        "age": "T",
+        "time_unit": "week",
+        "seed": 1
+      },
+      "refuses": {
+        "code": "recency_after_age",
+        "message": "the customer c17 bought last (recency 39) after the end of the period (age 37): recency is at most age"
+      }
+    },
+    {
+      "id": "refusal recency without purchase",
+      "model": "clv",
+      "variant": "purchases",
+      "data": "data/clv_refusals.csv",
+      "types": {
+        "id": "text",
+        "x": "number",
+        "tx_nopurchase": "number",
+        "T": "number"
+      },
+      "params": {
+        "customer": "id",
+        "frequency": "x",
+        "recency": "tx_nopurchase",
+        "age": "T",
+        "time_unit": "week",
+        "seed": 1
+      },
+      "refuses": {
+        "code": "recency_without_purchase",
+        "message": "the customer c15 has no repeat purchase but a recency of 12: recency is 0 without repeat purchases"
+      }
+    },
+    {
+      "id": "refusal same moment",
+      "model": "clv",
+      "variant": "purchases",
+      "data": "data/clv_refusals.csv",
+      "types": {
+        "id": "text",
+        "x_same_moment": "number",
+        "tx": "number",
+        "T": "number"
+      },
+      "params": {
+        "customer": "id",
+        "frequency": "x_same_moment",
+        "recency": "tx",
+        "age": "T",
+        "time_unit": "week",
+        "seed": 1
+      },
+      "refuses": {
+        "code": "same_moment",
+        "message": "the customer c10 has 2 repeat purchases at recency 0: purchases of the same day must be one purchase; group by customer and day first"
+      }
+    },
+    {
+      "id": "refusal spend not positive",
+      "model": "clv",
+      "variant": "value",
+      "data": "data/clv_refusals.csv",
+      "types": {
+        "id": "text",
+        "x": "number",
+        "tx": "number",
+        "T": "number",
+        "m_zero": "number"
+      },
+      "params": {
+        "customer": "id",
+        "frequency": "x",
+        "recency": "tx",
+        "age": "T",
+        "time_unit": "week",
+        "seed": 1,
+        "spend": "m_zero"
+      },
+      "refuses": {
+        "code": "spend_not_positive",
+        "message": "the customer c3 has an average spend of 0 with repeat purchases: the spend model needs amounts above 0; leave out returns and refunds, or those customers"
+      }
+    },
+    {
+      "id": "refusal holdout negative",
+      "model": "clv",
+      "variant": "purchases",
+      "data": "data/clv_refusals.csv",
+      "types": {
+        "id": "text",
+        "x": "number",
+        "tx": "number",
+        "T": "number",
+        "h_neg": "number"
+      },
+      "params": {
+        "customer": "id",
+        "frequency": "x",
+        "recency": "tx",
+        "age": "T",
+        "time_unit": "week",
+        "seed": 1,
+        "holdout_transactions": "h_neg",
+        "holdout_length": 26
+      },
+      "refuses": {
+        "code": "holdout_negative",
+        "message": "holdout purchases are whole numbers, 0 or more: the customer c20 has −1"
+      }
+    },
+    {
+      "id": "refusal few customers",
+      "model": "clv",
+      "variant": "purchases",
+      "data": "data/clv_refusals_small.csv",
+      "types": {
+        "id": "text",
+        "x": "number",
+        "tx": "number",
+        "T": "number"
+      },
+      "params": {
+        "customer": "id",
+        "frequency": "x",
+        "recency": "tx",
+        "age": "T",
+        "time_unit": "week",
+        "seed": 1
+      },
+      "refuses": {
+        "code": "few_customers",
+        "message": "12 customers: these models need at least 20"
+      }
+    },
+    {
+      "id": "refusal no repeaters",
+      "model": "clv",
+      "variant": "purchases",
+      "data": "data/clv_refusals.csv",
+      "types": {
+        "id": "text",
+        "x_none": "number",
+        "tx_none": "number",
+        "T": "number"
+      },
+      "params": {
+        "customer": "id",
+        "frequency": "x_none",
+        "recency": "tx_none",
+        "age": "T",
+        "time_unit": "week",
+        "seed": 1
+      },
+      "refuses": {
+        "code": "no_repeaters",
+        "message": "no customer bought again: the models cannot tell the purchase rate from the dropout without repeat purchases"
+      }
+    },
+    {
+      "id": "refusal few repeaters",
+      "model": "clv",
+      "variant": "purchases",
+      "data": "data/clv_refusals.csv",
+      "types": {
+        "id": "text",
+        "x_few": "number",
+        "tx_few": "number",
+        "T": "number"
+      },
+      "params": {
+        "customer": "id",
+        "frequency": "x_few",
+        "recency": "tx_few",
+        "age": "T",
+        "time_unit": "week",
+        "seed": 1
+      },
+      "refuses": {
+        "code": "few_repeaters",
+        "message": "3 customers bought again: these models need at least 5"
+      }
+    },
+    {
+      "id": "refusal few spenders",
+      "model": "clv",
+      "variant": "value",
+      "data": "data/clv_refusals.csv",
+      "types": {
+        "id": "text",
+        "x": "number",
+        "tx": "number",
+        "T": "number",
+        "m_few": "number"
+      },
+      "params": {
+        "customer": "id",
+        "frequency": "x",
+        "recency": "tx",
+        "age": "T",
+        "time_unit": "week",
+        "seed": 1,
+        "spend": "m_few"
+      },
+      "refuses": {
+        "code": "few_spenders",
+        "message": "3 repeat customers have a spend: the spend model needs at least 5"
+      }
+    },
+    {
+      "id": "refusal BG/BB opportunities",
+      "model": "bg_bb",
+      "variant": "purchases",
+      "data": "data/clv_refusals.csv",
+      "types": {
+        "id": "text",
+        "x_bb": "number",
+        "tx_bb": "number",
+        "n_zero": "number"
+      },
+      "params": {
+        "customer": "id",
+        "frequency": "x_bb",
+        "recency": "tx_bb",
+        "opportunities": "n_zero",
+        "period_unit": "month",
+        "seed": 1
+      },
+      "refuses": {
+        "code": "bgbb_opportunities",
+        "message": "opportunities run from 1 to 1,000: the customer c12 has 0"
+      }
+    },
+    {
+      "id": "refusal BG/BB frequency",
+      "model": "bg_bb",
+      "variant": "purchases",
+      "data": "data/clv_refusals.csv",
+      "types": {
+        "id": "text",
+        "x_bb": "number",
+        "tx_bb_low": "number",
+        "n": "number"
+      },
+      "params": {
+        "customer": "id",
+        "frequency": "x_bb",
+        "recency": "tx_bb_low",
+        "opportunities": "n",
+        "period_unit": "month",
+        "seed": 1
+      },
+      "refuses": {
+        "code": "bgbb_frequency",
+        "message": "the customer c8 has 3 transactions in 1 opportunities up to its last: at most one transaction per opportunity"
+      }
+    },
+    {
+      "id": "refusal BG/BB recency after opportunities",
+      "model": "bg_bb",
+      "variant": "purchases",
+      "data": "data/clv_refusals.csv",
+      "types": {
+        "id": "text",
+        "x_bb": "number",
+        "tx_bb_late": "number",
+        "n": "number"
+      },
+      "params": {
+        "customer": "id",
+        "frequency": "x_bb",
+        "recency": "tx_bb_late",
+        "opportunities": "n",
+        "period_unit": "month",
+        "seed": 1
+      },
+      "refuses": {
+        "code": "recency_after_age",
+        "message": "the customer c9 bought last at the opportunity 8, after the last of its 6 opportunities: recency is at most opportunities"
+      }
+    },
+    {
+      "id": "refusal BG/BB holdout",
+      "model": "bg_bb",
+      "variant": "purchases",
+      "data": "data/clv_refusals.csv",
+      "types": {
+        "id": "text",
+        "x_bb": "number",
+        "tx_bb": "number",
+        "n": "number",
+        "h_bb_over": "number"
+      },
+      "params": {
+        "customer": "id",
+        "frequency": "x_bb",
+        "recency": "tx_bb",
+        "opportunities": "n",
+        "period_unit": "month",
+        "seed": 1,
+        "holdout_transactions": "h_bb_over",
+        "holdout_length": 5
+      },
+      "refuses": {
+        "code": "bgbb_holdout",
+        "message": "a customer has at most one transaction per opportunity: the customer c14 has 9 in the 5 opportunities of the holdout"
+      }
+    }
+  ]
 }

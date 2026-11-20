@@ -1,10 +1,14 @@
-# BG/BB (docs/specs/customer-lifetime-models.md, «The two nodes», «The models»): fit_bg_bb(task)
-# and predict_bg_bb(task, card), the likelihood, P(alive), the expected transactions and the
-# probability mass written here (CLVTools has no BG/BB: its bgbb() is a stub).
+# BG/BB, the discrete-opportunity model (docs/specs/customer-lifetime-models.md, «The two nodes»): fit_bg_bb(task)
+# and predict_bg_bb(task, card). The likelihood, P(alive), the expectation and the PMF are written in clv_shared.R
+# (lot B1), with the fit's pieces.
 #
-# Lot B0 gives the node its contract; lot B3 writes the fit, the card, the rows and Predict here.
-# Until then the node refuses, with a sentence, as every node not built yet.
+# Lot B3 makes this file the node: the checks (assumption rows), the reference cases and the witness lines.
+# Until then the node reads and checks the summary (so that a wrong table stops with its sentence) and
+# refuses, as every node not built yet.
 
-fit_bg_bb <- function(task) tab_not_built("BG/BB")
+fit_bg_bb <- function(task) {
+  clv_read_summary(task, "bg_bb", task$.frame)
+  tab_not_built("BG/BB")
+}
 
 predict_bg_bb <- function(task, card) tab_not_built("Predict for a BG/BB model")
