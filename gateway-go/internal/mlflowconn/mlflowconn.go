@@ -29,12 +29,15 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"regexp"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/dbtls"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/egress"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
 )
 
@@ -223,8 +226,34 @@ func origin(u *url.URL) string {
 
 var errCrossOrigin = errors.New("redirect to another origin")
 
+// ForbiddenAddress says which addresses the connection never dials: loopback, link-local (the
+// clouds' metadata service), multicast, unspecified. It is the rule of the egress proxy, which the
+// SIEM and the registries follow too; the private ranges (10/8, 172.16/12, 192.168/16, the
+// cluster's Services) stay allowed, because a tracking server in the cluster or on the company's
+// network is the ordinary case. The test of the package that serves from a local port replaces it.
+var ForbiddenAddress = egress.Forbidden
+
+// errForbiddenAddress is what a dial to a forbidden address says: the name leads to an address
+// the gateway does not call.
+var errForbiddenAddress = errors.New("the address of the tracking server is not one Tabularia calls (loopback, link-local or metadata)")
+
+// guardedDialer refuses an address once the name is resolved, at the moment of connecting: a name
+// that changes its answer between a check and the call (DNS rebinding) gets no chance, and a
+// redirect to such an address is refused the same way.
+func guardedDialer() *net.Dialer {
+	return &net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second,
+		Control: func(_, address string, _ syscall.RawConn) error {
+			ap, err := netip.ParseAddrPort(address)
+			if err != nil || ForbiddenAddress(ap.Addr()) {
+				return errForbiddenAddress
+			}
+			return nil
+		}}
+}
+
 func newClient(c Config) *http.Client {
 	t := http.DefaultTransport.(*http.Transport).Clone()
+	t.DialContext = guardedDialer().DialContext
 	cfg := &tls.Config{MinVersion: tls.VersionTLS12}
 	switch {
 	case !c.VerifyTLS:
