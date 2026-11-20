@@ -68,7 +68,7 @@ type mlflowConnRefused struct {
 func (e *mlflowConnRefused) Error() string { return e.msg }
 
 // mlflowConnection loads the connection #id for the person: an *mlflowConnRefused when it is not
-// an MLflow connection or the person lacks CONNECT on its folder.
+// an MLflow connection or the person lacks CONNECT on its folder (the refusal names the connection by its number, never by its name: whoever may not use it may not read it either).
 func (d *Deps) mlflowConnection(ctx context.Context, user *auth.User, id int64) (*mlflowConn, error) {
 	conn, err := connpayload.Load(ctx, d.DB, id)
 	if err != nil {
@@ -80,7 +80,7 @@ func (d *Deps) mlflowConnection(ctx context.Context, user *auth.User, id int64) 
 	if ok, err := perm.For(d.DB, user).Has(ctx, conn.ProjectID, perm.Connect); err != nil {
 		return nil, err
 	} else if !ok {
-		return nil, &mlflowConnRefused{msg: fmt.Sprintf("%s may not use the MLflow connection «%s»: it needs CONNECT on its folder", user.Email, conn.Name)}
+		return nil, &mlflowConnRefused{msg: fmt.Sprintf("%s may not use the MLflow connection #%d: it needs CONNECT on its folder", user.Email, conn.ID)}
 	}
 	secretText := ""
 	if conn.PasswordEncrypted != "" {

@@ -143,7 +143,17 @@ func (d *Deps) trialNode(w http.ResponseWriter, r *http.Request, p *auth.Princip
 		// a Predict node (docs/specs/statistical-models.md, «Predict»): the version read from
 		// MLflow and checked, its group, its options, refused here before any run exists
 		qq := newQueue(d)
-		s, err := qq.planPredict(q.ctx, &p.User, node)
+		// MLflow is read inside this HTTP request: it gets a limit, not the ten minutes a flow run's
+		// download may take
+		readCtx, stopReading := context.WithTimeout(q.ctx, predictTrialReadTimeout)
+		s, err := qq.planPredict(readCtx, &p.User, node)
+		timedOut := readCtx.Err() != nil && q.ctx.Err() == nil
+		stopReading()
+		if timedOut {
+			q.refuse(http.StatusGatewayTimeout, fmt.Sprintf("MLflow did not answer in %d seconds: the model's version and its card could not be read. "+
+				"Try again, or check the MLflow server", int(predictTrialReadTimeout/time.Second)))
+			return
+		}
 		if err != nil {
 			var sf *scriptFailed
 			if !errors.As(err, &sf) {

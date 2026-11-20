@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/config"
@@ -413,8 +414,8 @@ func TestAGroupThatCannotRunStopsThePredict(t *testing.T) {
 	if _, err := w.db.Exec(w.ctx, `DELETE FROM permissions WHERE project_id = $1 AND user_id = $2`, w.folder, w.ann.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := w.predict(data); err == nil || !strings.Contains(err.Error(), "may not use the MLflow connection «Tracking»: it needs CONNECT") {
-		t.Errorf("no CONNECT: %v", err)
+	if _, _, err := w.predict(data); err == nil || !strings.Contains(err.Error(), "may not use the MLflow connection #") || strings.Contains(err.Error(), "Tracking") {
+		t.Errorf("no CONNECT, or the name of the connection told: %v", err)
 	}
 }
 
@@ -545,5 +546,33 @@ func TestTheEditorsRunOfAPredictAndLatestNotUpToDate(t *testing.T) {
 	}
 	if out := w.outputs(w.ann, r.flow.ID)["p"]; out["last"]["stale"] != false {
 		t.Errorf("another model's version: %v", out)
+	}
+}
+
+func TestATrialsReadOfMLflowHasALimitAndSaysSo(t *testing.T) {
+	w := newPredictWorld(t)
+	w.register("Pasta/price elasticity", "price-elasticity", w.card, nil)
+	r := w.predictFlow(`"registeredModel": "price-elasticity", "version": "latest", "params": {"interval": true}`)
+	prev := predictTrialReadTimeout
+	predictTrialReadTimeout = 300 * time.Millisecond
+	t.Cleanup(func() { predictTrialReadTimeout = prev })
+	// the server accepts the call and never answers (until the caller gives up, or 5 s)
+	w.ml.Fail = func(req *http.Request) int {
+		select {
+		case <-req.Context().Done():
+		case <-time.After(5 * time.Second):
+		}
+		return http.StatusGatewayTimeout
+	}
+	start := time.Now()
+	rec := w.trial(w.ann, r.flow.ID, "p")
+	if took := time.Since(start); took > 3*time.Second {
+		t.Errorf("the request waited %s", took)
+	}
+	if rec.Code != http.StatusGatewayTimeout || !strings.Contains(rec.Body.String(), "MLflow did not answer in") {
+		t.Errorf("a server that does not answer: %d %s", rec.Code, rec.Body)
+	}
+	if n := w.runsMade(); n != 0 {
+		t.Errorf("%d runs made by a refusal", n)
 	}
 }

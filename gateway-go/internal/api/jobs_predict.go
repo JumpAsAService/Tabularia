@@ -89,6 +89,10 @@ type predictStep struct {
 // predictLatest is the version that means «the newest one Tabularia registered».
 const predictLatest = "latest"
 
+// predictTrialReadTimeout bounds the reading of MLflow (the version, its files, its card of at most
+// 1 MB) that a trial does inside the editor's HTTP request. A variable: the tests shorten it.
+var predictTrialReadTimeout = 45 * time.Second
+
 var versionNumber = regexp.MustCompile(`^[1-9][0-9]{0,17}$`)
 
 // planPredict is «Before anything» for a Predict node: the step, or why it cannot run (a

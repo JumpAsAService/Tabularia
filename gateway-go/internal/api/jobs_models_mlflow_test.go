@@ -497,8 +497,11 @@ func TestAConnectionThePersonMayNotUseStopsTheStepBeforeAnything(t *testing.T) {
 	conn := w.connection(other, "Elsewhere", "")
 	before := len(w.attempts)
 	_, err := w.runWith(fmt.Sprintf(`{"connectionId": %d, "experiment": "x"}`, conn))
-	if err == nil || err.Error() != fmt.Sprintf("model «Elasticity»: %s may not use the MLflow connection «Elsewhere»: it needs CONNECT on its folder", w.ann.Email) {
+	if err == nil || err.Error() != fmt.Sprintf("model «Elasticity»: %s may not use the MLflow connection #%d: it needs CONNECT on its folder", w.ann.Email, conn) {
 		t.Fatalf("%v", err)
+	}
+	if strings.Contains(err.Error(), "Elsewhere") {
+		t.Errorf("the refusal gives the name of a connection the person may not use: %v", err)
 	}
 	if _, err := w.runWith(`{"connectionId": 999999, "experiment": "x"}`); err == nil || !strings.Contains(err.Error(), "does not exist any more") {
 		t.Errorf("a connection gone: %v", err)
