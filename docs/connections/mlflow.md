@@ -3,7 +3,8 @@
 An MLflow connection is a tracking server that lives **outside Tabularia**: the place where
 the statistical models of a flow are recorded (experiments, runs, parameters, metrics, files
 and registered versions). It names the server's address and the way to sign in. Tabularia
-does not install or run MLflow.
+does not install or run MLflow. To try one on a Kubernetes cluster, see
+[an optional MLflow server next to Tabularia](../deploy/kind.md#14-optional-a-tracking-server-for-the-statistical-models-mlflow).
 
 ## At a glance
 
@@ -53,8 +54,8 @@ allowed (403), no MLflow API at the address (404), a redirect to another address
 answer that is not MLflow's. The server's own text is never shown.
 
 The calls are the ones of MLflow's REST reference (API 2.0). Tabularia's own tests run against a
-stand-in of that API; the range of MLflow versions it supports is written here once it has been
-run against a real server.
+stand-in of that API, and it has been tried against a real server, MLflow 2.22.0, with its basic
+authentication, its artifact proxy and a model registry on SQLite.
 
 ## What a model records here
 

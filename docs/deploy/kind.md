@@ -17,7 +17,8 @@ use there:
 - Tabularia's images copied into the private registry, and Python and R scripts built
   and run through it;
 - images of your own run as steps of a flow (the Container node), from that registry;
-- if you like, the sample data of the Docker Compose stack, to play with (step 13).
+- if you like, the sample data of the Docker Compose stack, to play with (step 13), and a
+  tracking server for the statistical models (step 14).
 
 It is meant for people who know a terminal and want to try Tabularia as it will run in
 production, or test a change of the chart before a customer does. To simply try
@@ -766,6 +767,208 @@ on `Sample`, and CONNECT too to import from its two connections.
   `kubectl delete secret sampledb-admin --namespace tabularia-deps`. The `Sample` folder
   stays in Tabularia, with its tables, until you delete it in Explore; its connections
   and the flows that read them then fail.
+
+## 14. Optional: a tracking server for the statistical models (MLflow)
+
+The statistical models of a flow can record their runs on an MLflow tracking server, and
+the **Predict** node applies a model registered there. Both are optional: without MLflow
+the models run all the same (their results stay with the run, and a model node can also
+be set to **Continue without MLflow**). Tabularia does not run MLflow, so this step puts
+a small one next to it, to try the feature on this cluster.
+
+It runs in **Tabularia's namespace**, as a Deployment of its own. Nothing in the chart
+stands in the way: the network policies there limit what the engine, the workers and
+the egress proxy may reach, and who may reach the engine and the egress proxy, and none
+selects the gateway or an MLflow pod. Only the **gateway** talks to MLflow; the Jobs
+that fit the models, in the namespaces of the scripts, never reach it (their network
+policy keeps them out of Tabularia's namespace).
+
+Tabularia's namespace allows only non-root pods, and the official MLflow image runs as
+root and lacks one package of MLflow's basic authentication (Flask-WTF). Build a small
+image on top of it, pinned to the version this was tried with (MLflow 2.22.0), and copy
+it into the private registry as in step 6:
+
+```bash
+docker build -t 127.0.0.1:5443/tabularia/mlflow:2.22.0 - <<'EOF'
+FROM ghcr.io/mlflow/mlflow:v2.22.0
+RUN pip install --no-cache-dir 'Flask-WTF==1.2.2'
+EOF
+export DOCKER_CONFIG="$WORK/docker"
+echo "$REGISTRY_PASSWORD" | docker login 127.0.0.1:5443 -u tabularia --password-stdin
+docker push 127.0.0.1:5443/tabularia/mlflow:2.22.0
+unset DOCKER_CONFIG
+```
+
+Then the server. Its administrator is `admin`, with a password made now (and kept, as in
+step 1); MLflow also needs a secret key of its own. The Secret holds the settings of its
+basic authentication, so the password never goes in an image or a command line. The data
+(a SQLite database and the files of the runs) live on a volume:
+
+```bash
+export MLFLOW_PASSWORD="$(openssl rand -hex 16)" MLFLOW_SECRET_KEY="$(openssl rand -hex 32)"
+printf 'export MLFLOW_PASSWORD=%s\n' "$MLFLOW_PASSWORD" >> "$WORK/env"
+kubectl apply -f - <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mlflow-auth
+  namespace: tabularia
+type: Opaque
+stringData:
+  flask-secret-key: "$MLFLOW_SECRET_KEY"
+  basic_auth.ini: |
+    [mlflow]
+    default_permission = READ
+    database_uri = sqlite:////data/basic_auth.db
+    admin_username = admin
+    admin_password = $MLFLOW_PASSWORD
+    authorization_function = mlflow.server.auth:authenticate_request_basic_auth
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mlflow-data
+  namespace: tabularia
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mlflow
+  namespace: tabularia
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: mlflow
+  template:
+    metadata:
+      labels:
+        app: mlflow
+    spec:
+      imagePullSecrets:
+        - name: registry
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: mlflow
+          image: tabularia-registry:5000/tabularia/mlflow:2.22.0
+          args:
+            - mlflow
+            - server
+            - --host=0.0.0.0
+            - --port=5000
+            - --backend-store-uri=sqlite:////data/mlflow.db
+            - --serve-artifacts
+            - --artifacts-destination=/data/artifacts
+            - --app-name=basic-auth
+          env:
+            - name: MLFLOW_AUTH_CONFIG_PATH
+              value: /auth/basic_auth.ini
+            - name: MLFLOW_FLASK_SERVER_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: mlflow-auth
+                  key: flask-secret-key
+            - name: HOME
+              value: /tmp
+          ports:
+            - containerPort: 5000
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+          resources:
+            requests: { cpu: 100m, memory: 512Mi }
+            limits: { memory: 1Gi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - { name: data, mountPath: /data }
+            - { name: auth, mountPath: /auth, readOnly: true }
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: mlflow-data
+        - name: auth
+          secret:
+            secretName: mlflow-auth
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mlflow
+  namespace: tabularia
+spec:
+  selector:
+    app: mlflow
+  ports:
+    - port: 5000
+      targetPort: 5000
+EOF
+kubectl rollout status deployment/mlflow --namespace tabularia
+```
+
+The last command waits until the pod is ready (a minute at most; the first time it
+creates its databases on the volume). The administrator's password is read when MLflow
+creates its authentication database, the first time: to change it later, remove the
+volume (see below) and start again.
+
+**Check:** open MLflow from your computer, in a second terminal (it keeps running until
+you press Ctrl+C):
+
+```bash
+kubectl port-forward --namespace tabularia service/mlflow 5000:5000
+```
+
+and open **http://localhost:5000** in the browser (on Windows, in the browser of
+Windows). It asks for a user and a password: `admin` and `$MLFLOW_PASSWORD` (`echo
+"$MLFLOW_PASSWORD"` in the first terminal).
+
+**Connect it to Tabularia.** In **Explore**, in a folder you may use: **New → New
+connection**, type **MLflow**, and fill in:
+
+| Field | Value |
+|---|---|
+| Tracking URI | `http://mlflow.tabularia.svc:5000` |
+| Authentication | **User and password (basic)** |
+| Username | `admin` |
+| Password | the value of `$MLFLOW_PASSWORD` |
+| Address for the browser | `http://localhost:5000` (the address of the port-forward above, so the links to MLflow in the results open it) |
+
+Press **Test connection**: it says that the server answers, the credentials work, MLflow
+2.22.0, and that the model registry and the artifact proxy are available. Then save. A
+model node of a flow can now choose this connection in its **MLflow** block (see
+[Statistical models](../capabilities/models.md#mlflow) and
+[MLflow connections](../connections/mlflow.md)). The address is plain HTTP, inside the
+cluster: the credentials do not leave it.
+
+> [!WARNING]
+> This server is for trying the feature: SQLite on one volume, one replica, plain HTTP.
+> For real use, give MLflow a PostgreSQL database for its backend store, a bucket for the
+> artifacts and TLS, and run it as your company runs its other services.
+
+**Remove it:**
+
+```bash
+kubectl delete service/mlflow deployment/mlflow persistentvolumeclaim/mlflow-data secret/mlflow-auth --namespace tabularia
+```
+
+The volume holds the runs: deleting it deletes them. A connection that still points at
+the server fails its test until you delete it in Explore.
 
 ## What this cluster shows
 

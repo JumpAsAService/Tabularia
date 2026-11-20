@@ -530,7 +530,8 @@ log and, with MLflow, the experiment and the run, with a link to MLflow.
 
 A model node has an optional **MLflow** block: the **connection** (a type [MLflow
 connection](../connections/mlflow.md) you may use), the **Experiment** (required with a
-connection) and **Register the model as** (optional). Tabularia does not run MLflow.
+connection) and **Register the model as** (optional). Tabularia does not run MLflow. To try a
+tracking server on a Kubernetes cluster, see [the kind guide, step 14](../deploy/kind.md#14-optional-a-tracking-server-for-the-statistical-models-mlflow).
 
 **What a flow run records.** After the step has its results, and before its files leave the
 scripts bucket, the gateway:
