@@ -300,6 +300,15 @@ cases[[length(cases) + 1L]] <- list(
   expect = c(km_expect(x, NULL, "plain", 0.05, 0, c(5, 12.5, 1000), 20, FALSE, 0),
              list(txt("model|||formula", "Surv(hours, broke = true) ~ 1"))))
 
+# the node's defaults: no time asked, no restricted mean (found on kind: the empty `times`
+# broke the runner). The same table as above, so the same numbers but those that follow `times` and `rmst_tau`.
+single_case <- cases[[length(cases)]]
+cases[[length(cases) + 1L]] <- list(
+  id = "kaplan_meier_default", model = "kaplan_meier", data = "data/kaplan_meier_single.csv",
+  types = list(hours = "number", broke = "boolean"),
+  params = list(time = "hours", event = "broke", event_value = TRUE, conf_type = "plain"),
+  expect = Filter(function(e) !grepl("surv_at|rmst", e$key), single_case$expect))
+
 # no row is the event: refused
 cases[[length(cases) + 1L]] <- list(
   id = "kaplan_meier_no_events", model = "kaplan_meier", data = "data/kaplan_meier_single.csv",

@@ -1674,6 +1674,170 @@
       ]
     },
     {
+      "id": "kaplan_meier_default",
+      "model": "kaplan_meier",
+      "data": "data/kaplan_meier_single.csv",
+      "types": {
+        "hours": "number",
+        "broke": "boolean"
+      },
+      "params": {
+        "time": "hours",
+        "event": "broke",
+        "event_value": true,
+        "conf_type": "plain"
+      },
+      "expect": [
+        {
+          "key": "model|||n",
+          "value": 48,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||events",
+          "value": 34,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||censored",
+          "value": 14,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n_missing",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n_strata",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||conf_type",
+          "text": "plain"
+        },
+        {
+          "key": "stratum|all||n",
+          "value": 48,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|all||events",
+          "value": 34,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|all||censored",
+          "value": 14,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|all||q25",
+          "value": 5.11,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|all||q25_ci_low",
+          "value": 4.21,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|all||q25_ci_high",
+          "value": 7.29,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|all||median",
+          "value": 8.83,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|all||median_ci_low",
+          "value": 7.04,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|all||median_ci_high",
+          "value": 14.76,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|all||q75",
+          "value": 16.71,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|all||q75_ci_low",
+          "value": 11.94,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|all||q75_ci_high",
+          "value": null,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|censoring_informative||verdict",
+          "text": "not_computed"
+        },
+        {
+          "key": "assumption|censoring_informative||value",
+          "value": 0.291666666666667,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|km|all|surv|1",
+          "value": 0.979166666666667,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|km|all|lower|1",
+          "value": 0.938761661752253,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|cumhaz|all|cumhaz|1",
+          "value": 0.0208333333333333,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|km|all|surv|5",
+          "value": 0.895833333333333,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|km|all|lower|5",
+          "value": 0.809415083837458,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|cumhaz|all|cumhaz|5",
+          "value": 0.108798554462292,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|km|all|surv|10",
+          "value": 0.791666666666666,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|km|all|lower|10",
+          "value": 0.676777776733748,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|cumhaz|all|cumhaz|10",
+          "value": 0.230895161768769,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||formula",
+          "text": "Surv(hours, broke = true) ~ 1"
+        }
+      ]
+    },
+    {
       "id": "kaplan_meier_no_events",
       "model": "kaplan_meier",
       "data": "data/kaplan_meier_single.csv",

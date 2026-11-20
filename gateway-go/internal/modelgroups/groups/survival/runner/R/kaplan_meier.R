@@ -144,7 +144,7 @@ fit_kaplan_meier <- function(task) {
       tab_number(rows, "stratum", "expected", oe$exp[[i]], level = name)
     }
     reported[[name]] <- c(q25 = q$quantile[[1L]], median = q$quantile[[2L]], q75 = q$quantile[[3L]],
-                          stats::setNames(times, paste0("surv_at_", vapply(times, km_time_label, ""))), rmst_tau = tau)
+                          if (length(times)) stats::setNames(times, paste0("surv_at_", vapply(times, km_time_label, ""))), rmst_tau = tau)
     km_notes(rows, s, name, at, times, q)
   }
 
