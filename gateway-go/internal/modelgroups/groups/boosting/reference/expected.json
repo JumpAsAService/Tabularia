@@ -1,5 +1,1769 @@
 {
-  "format_version": 1,
-  "generated": {"by": "lot X0: no case yet; make_reference.py writes them (lots X2 and X3)"},
-  "cases": []
+ "format_version": 1,
+ "generated": {
+  "by": "make_reference.py",
+  "python": "3.14.10",
+  "packages": {
+   "numpy": "2.5.5",
+   "pandas": "3.1.1",
+   "scipy": "1.18.1",
+   "xgboost-cpu": "3.4.1",
+   "catboost": "1.2.10"
+  },
+  "threads": 2
+ },
+ "cases": [
+  {
+   "id": "xgboost_regression",
+   "model": "xgboost",
+   "data": "data/regression.csv",
+   "types": {
+    "boxes": "number",
+    "price": "number",
+    "discount": "number",
+    "visits": "number",
+    "tenure": "number",
+    "noise": "number",
+    "w": "number"
+   },
+   "params": {
+    "task": "regression",
+    "outcome": "boxes",
+    "weights": "w",
+    "predictors": [
+     "price",
+     "discount",
+     "visits",
+     "tenure",
+     "noise",
+     "region"
+    ]
+   },
+   "expect": [
+    {
+     "key": "model|||task",
+     "text": "regression"
+    },
+    {
+     "key": "model|||library",
+     "text": "xgboost"
+    },
+    {
+     "key": "model|||objective",
+     "text": "reg:squarederror"
+    },
+    {
+     "key": "model|||stop_metric",
+     "text": "rmse"
+    },
+    {
+     "key": "model|||validation",
+     "text": "random"
+    },
+    {
+     "key": "model|||importance_type",
+     "text": "total_gain"
+    },
+    {
+     "key": "model|||n",
+     "value": 295.0
+    },
+    {
+     "key": "model|||n_missing",
+     "value": 2.0
+    },
+    {
+     "key": "model|||n_train",
+     "value": 236.0
+    },
+    {
+     "key": "model|||n_validation",
+     "value": 59.0
+    },
+    {
+     "key": "model|||n_predictors",
+     "value": 6.0
+    },
+    {
+     "key": "model|||n_categorical",
+     "value": 1.0
+    },
+    {
+     "key": "model|||trees",
+     "value": 280.0
+    },
+    {
+     "key": "model|||best_iteration",
+     "value": 279.0
+    },
+    {
+     "key": "model|||max_trees",
+     "value": 1000.0
+    },
+    {
+     "key": "model|||stopped_early",
+     "value": 1.0
+    },
+    {
+     "key": "model|||stopped_by_time",
+     "value": 0.0
+    },
+    {
+     "key": "model|||threads",
+     "value": 2.0
+    },
+    {
+     "key": "model|||shap_rows",
+     "value": 295.0
+    },
+    {
+     "key": "model|||seed",
+     "value": 1.0
+    },
+    {
+     "key": "model|||train_rmse",
+     "value": 0.1435060523064573
+    },
+    {
+     "key": "model|||train_mae",
+     "value": 0.08276311663262459
+    },
+    {
+     "key": "model|||train_r_squared",
+     "value": 0.9995171119384654
+    },
+    {
+     "key": "model|||validation_rmse",
+     "value": 4.0000336733607265
+    },
+    {
+     "key": "model|||validation_mae",
+     "value": 3.3982517785079382
+    },
+    {
+     "key": "model|||validation_r_squared",
+     "value": 0.7089201842902587
+    },
+    {
+     "key": "model|||baseline_rmse",
+     "value": 7.415342576560386
+    },
+    {
+     "key": "model|||validation_mean",
+     "value": 26.861084444444444
+    },
+    {
+     "key": "importance|price||gain",
+     "value": 48397.39453125
+    },
+    {
+     "key": "importance|price||gain_share",
+     "value": 0.46546635965449384
+    },
+    {
+     "key": "importance|price||mean_abs_shap",
+     "value": 3.310716818022873
+    },
+    {
+     "key": "importance|price||mean_abs_shap_share",
+     "value": 0.37597742193915207
+    },
+    {
+     "key": "importance|price||rank",
+     "value": 1.0
+    },
+    {
+     "key": "importance|price||mean_abs_shap_train",
+     "value": 3.345534967742979
+    },
+    {
+     "key": "importance|price||mean_abs_shap_validation",
+     "value": 3.171444219142451
+    },
+    {
+     "key": "importance|price||missing_share",
+     "value": 0.030508474576271188
+    },
+    {
+     "key": "importance|discount||gain",
+     "value": 7734.09619140625
+    },
+    {
+     "key": "importance|discount||gain_share",
+     "value": 0.07438337609490676
+    },
+    {
+     "key": "importance|discount||mean_abs_shap",
+     "value": 1.3433704882339275
+    },
+    {
+     "key": "importance|discount||mean_abs_shap_share",
+     "value": 0.15255819226996253
+    },
+    {
+     "key": "importance|discount||rank",
+     "value": 3.0
+    },
+    {
+     "key": "importance|discount||mean_abs_shap_train",
+     "value": 1.328442845870425
+    },
+    {
+     "key": "importance|discount||mean_abs_shap_validation",
+     "value": 1.4030810576879371
+    },
+    {
+     "key": "importance|discount||missing_share",
+     "value": 0.0
+    },
+    {
+     "key": "importance|visits||gain",
+     "value": 10962.861328125
+    },
+    {
+     "key": "importance|visits||gain_share",
+     "value": 0.10543631952138433
+    },
+    {
+     "key": "importance|visits||mean_abs_shap",
+     "value": 1.4097419894489822
+    },
+    {
+     "key": "importance|visits||mean_abs_shap_share",
+     "value": 0.16009558893923428
+    },
+    {
+     "key": "importance|visits||rank",
+     "value": 2.0
+    },
+    {
+     "key": "importance|visits||mean_abs_shap_train",
+     "value": 1.4038832025559052
+    },
+    {
+     "key": "importance|visits||mean_abs_shap_validation",
+     "value": 1.4331771370212911
+    },
+    {
+     "key": "importance|visits||missing_share",
+     "value": 0.0
+    },
+    {
+     "key": "importance|tenure||gain",
+     "value": 14302.7412109375
+    },
+    {
+     "key": "importance|tenure||gain_share",
+     "value": 0.13755791916105525
+    },
+    {
+     "key": "importance|tenure||mean_abs_shap",
+     "value": 0.9922549954094624
+    },
+    {
+     "key": "importance|tenure||mean_abs_shap_share",
+     "value": 0.11268419970243355
+    },
+    {
+     "key": "importance|tenure||rank",
+     "value": 5.0
+    },
+    {
+     "key": "importance|tenure||mean_abs_shap_train",
+     "value": 1.0244731572140955
+    },
+    {
+     "key": "importance|tenure||mean_abs_shap_validation",
+     "value": 0.86338234819093
+    },
+    {
+     "key": "importance|tenure||missing_share",
+     "value": 0.0
+    },
+    {
+     "key": "importance|noise||gain",
+     "value": 12140.3212890625
+    },
+    {
+     "key": "importance|noise||gain_share",
+     "value": 0.1167606481751224
+    },
+    {
+     "key": "importance|noise||mean_abs_shap",
+     "value": 0.5118244068355742
+    },
+    {
+     "key": "importance|noise||mean_abs_shap_share",
+     "value": 0.0581246997387396
+    },
+    {
+     "key": "importance|noise||rank",
+     "value": 6.0
+    },
+    {
+     "key": "importance|noise||mean_abs_shap_train",
+     "value": 0.5422807073687258
+    },
+    {
+     "key": "importance|noise||mean_abs_shap_validation",
+     "value": 0.3899992047029674
+    },
+    {
+     "key": "importance|noise||missing_share",
+     "value": 0.0
+    },
+    {
+     "key": "importance|region||gain",
+     "value": 10438.7236328125
+    },
+    {
+     "key": "importance|region||gain_share",
+     "value": 0.10039537739303739
+    },
+    {
+     "key": "importance|region||mean_abs_shap",
+     "value": 1.237717982894599
+    },
+    {
+     "key": "importance|region||mean_abs_shap_share",
+     "value": 0.1405598974104779
+    },
+    {
+     "key": "importance|region||rank",
+     "value": 4.0
+    },
+    {
+     "key": "importance|region||mean_abs_shap_train",
+     "value": 1.2246350087166242
+    },
+    {
+     "key": "importance|region||mean_abs_shap_validation",
+     "value": 1.2900498796064974
+    },
+    {
+     "key": "importance|region||missing_share",
+     "value": 0.061016949152542375
+    },
+    {
+     "key": "assumption|validation_size||value",
+     "value": 59.0
+    },
+    {
+     "key": "assumption|validation_size||verdict",
+     "text": "doubtful"
+    },
+    {
+     "key": "assumption|beats_baseline||value",
+     "value": 0.46057331376642263
+    },
+    {
+     "key": "assumption|beats_baseline||verdict",
+     "text": "ok"
+    },
+    {
+     "key": "assumption|overfitting||value",
+     "value": 0.5347279975186752
+    },
+    {
+     "key": "assumption|overfitting||verdict",
+     "text": "doubtful"
+    },
+    {
+     "key": "assumption|trees_limit||value",
+     "value": 280.0
+    },
+    {
+     "key": "assumption|trees_limit||verdict",
+     "text": "ok"
+    },
+    {
+     "key": "assumption|importance_stability||value",
+     "value": 1.0
+    },
+    {
+     "key": "assumption|importance_stability||verdict",
+     "text": "ok"
+    },
+    {
+     "key": "assumption|zero_importance||verdict",
+     "text": "ok"
+    },
+    {
+     "key": "assumption|leakage|price|value",
+     "value": 0.37597742193915207
+    },
+    {
+     "key": "assumption|leakage|price|verdict",
+     "text": "ok"
+    }
+   ],
+   "refuses": null
+  },
+  {
+   "id": "xgboost_binary",
+   "model": "xgboost",
+   "data": "data/binary.csv",
+   "types": {
+    "price": "number",
+    "visits": "number",
+    "first_order": "date"
+   },
+   "params": {
+    "task": "binary",
+    "outcome": "reordered",
+    "event_value": "yes",
+    "predictors": [
+     "price",
+     "visits",
+     "channel"
+    ],
+    "stop_metric": "auc",
+    "threshold": 0.3
+   },
+   "expect": [
+    {
+     "key": "model|||task",
+     "text": "binary"
+    },
+    {
+     "key": "model|||library",
+     "text": "xgboost"
+    },
+    {
+     "key": "model|||objective",
+     "text": "binary:logistic"
+    },
+    {
+     "key": "model|||stop_metric",
+     "text": "auc"
+    },
+    {
+     "key": "model|||validation",
+     "text": "random"
+    },
+    {
+     "key": "model|||importance_type",
+     "text": "total_gain"
+    },
+    {
+     "key": "model|||n",
+     "value": 400.0
+    },
+    {
+     "key": "model|||n_missing",
+     "value": 0.0
+    },
+    {
+     "key": "model|||n_train",
+     "value": 320.0
+    },
+    {
+     "key": "model|||n_validation",
+     "value": 80.0
+    },
+    {
+     "key": "model|||n_predictors",
+     "value": 3.0
+    },
+    {
+     "key": "model|||n_categorical",
+     "value": 1.0
+    },
+    {
+     "key": "model|||trees",
+     "value": 31.0
+    },
+    {
+     "key": "model|||best_iteration",
+     "value": 30.0
+    },
+    {
+     "key": "model|||max_trees",
+     "value": 1000.0
+    },
+    {
+     "key": "model|||stopped_early",
+     "value": 1.0
+    },
+    {
+     "key": "model|||stopped_by_time",
+     "value": 0.0
+    },
+    {
+     "key": "model|||threads",
+     "value": 2.0
+    },
+    {
+     "key": "model|||shap_rows",
+     "value": 400.0
+    },
+    {
+     "key": "model|||seed",
+     "value": 1.0
+    },
+    {
+     "key": "model|||event_value",
+     "text": "yes"
+    },
+    {
+     "key": "model|||events",
+     "value": 74.0
+    },
+    {
+     "key": "model|||validation_events",
+     "value": 15.0
+    },
+    {
+     "key": "model|||train_auc",
+     "value": 0.9260990973439833
+    },
+    {
+     "key": "model|||train_logloss",
+     "value": 0.34383624650105277
+    },
+    {
+     "key": "model|||train_brier",
+     "value": 0.1055859981596835
+    },
+    {
+     "key": "model|||validation_auc",
+     "value": 0.8364102564102565
+    },
+    {
+     "key": "model|||validation_logloss",
+     "value": 0.3970534340320806
+    },
+    {
+     "key": "model|||validation_brier",
+     "value": 0.1272036827078958
+    },
+    {
+     "key": "model|||baseline_logloss",
+     "value": 0.4826098941117614
+    },
+    {
+     "key": "model|||threshold",
+     "value": 0.3
+    },
+    {
+     "key": "model|||validation_accuracy",
+     "value": 0.775
+    },
+    {
+     "key": "model|||validation_sensitivity",
+     "value": 0.3333333333333333
+    },
+    {
+     "key": "model|||validation_specificity",
+     "value": 0.8769230769230769
+    },
+    {
+     "key": "model|||validation_precision",
+     "value": 0.38461538461538464
+    },
+    {
+     "key": "model|||validation_f1",
+     "value": 0.35714285714285715
+    },
+    {
+     "key": "cell|no|no|observed",
+     "value": 57.0
+    },
+    {
+     "key": "cell|no|yes|observed",
+     "value": 8.0
+    },
+    {
+     "key": "cell|yes|no|observed",
+     "value": 10.0
+    },
+    {
+     "key": "cell|yes|yes|observed",
+     "value": 5.0
+    },
+    {
+     "key": "assumption|calibration||value",
+     "value": 0.10393237904407916
+    },
+    {
+     "key": "assumption|calibration||verdict",
+     "text": "failed"
+    },
+    {
+     "key": "assumption|calibration_slope||value",
+     "value": 1.8116484957179984,
+     "rel": 1e-06
+    },
+    {
+     "key": "assumption|calibration_slope||verdict",
+     "text": "doubtful"
+    },
+    {
+     "key": "importance|price||gain",
+     "value": 494.0924377441406
+    },
+    {
+     "key": "importance|price||gain_share",
+     "value": 0.5964775453734132
+    },
+    {
+     "key": "importance|price||mean_abs_shap",
+     "value": 0.4906073191517498
+    },
+    {
+     "key": "importance|price||mean_abs_shap_share",
+     "value": 0.47807722466680647
+    },
+    {
+     "key": "importance|price||rank",
+     "value": 1.0
+    },
+    {
+     "key": "importance|price||mean_abs_shap_train",
+     "value": 0.48761983867589154
+    },
+    {
+     "key": "importance|price||mean_abs_shap_validation",
+     "value": 0.5025572410551831
+    },
+    {
+     "key": "importance|price||missing_share",
+     "value": 0.0
+    },
+    {
+     "key": "importance|visits||gain",
+     "value": 237.50442504882812
+    },
+    {
+     "key": "importance|visits||gain_share",
+     "value": 0.28671974239324166
+    },
+    {
+     "key": "importance|visits||mean_abs_shap",
+     "value": 0.34136283720843497
+    },
+    {
+     "key": "importance|visits||mean_abs_shap_share",
+     "value": 0.332644441789334
+    },
+    {
+     "key": "importance|visits||rank",
+     "value": 2.0
+    },
+    {
+     "key": "importance|visits||mean_abs_shap_train",
+     "value": 0.3422595536918379
+    },
+    {
+     "key": "importance|visits||mean_abs_shap_validation",
+     "value": 0.33777597127482295
+    },
+    {
+     "key": "importance|visits||missing_share",
+     "value": 0.0475
+    },
+    {
+     "key": "importance|channel||gain",
+     "value": 96.75357818603516
+    },
+    {
+     "key": "importance|channel||gain_share",
+     "value": 0.11680271223334515
+    },
+    {
+     "key": "importance|channel||mean_abs_shap",
+     "value": 0.19423919610097073
+    },
+    {
+     "key": "importance|channel||mean_abs_shap_share",
+     "value": 0.18927833354385956
+    },
+    {
+     "key": "importance|channel||rank",
+     "value": 3.0
+    },
+    {
+     "key": "importance|channel||mean_abs_shap_train",
+     "value": 0.1953558326975326
+    },
+    {
+     "key": "importance|channel||mean_abs_shap_validation",
+     "value": 0.18977264971472324
+    },
+    {
+     "key": "importance|channel||missing_share",
+     "value": 0.0
+    },
+    {
+     "key": "assumption|validation_size||value",
+     "value": 15.0
+    },
+    {
+     "key": "assumption|validation_size||verdict",
+     "text": "doubtful"
+    },
+    {
+     "key": "assumption|beats_baseline||value",
+     "value": 0.1772787112811821
+    },
+    {
+     "key": "assumption|beats_baseline||verdict",
+     "text": "ok"
+    },
+    {
+     "key": "assumption|overfitting||value",
+     "value": 0.6378773190036032
+    },
+    {
+     "key": "assumption|overfitting||verdict",
+     "text": "ok"
+    },
+    {
+     "key": "assumption|trees_limit||value",
+     "value": 31.0
+    },
+    {
+     "key": "assumption|trees_limit||verdict",
+     "text": "ok"
+    },
+    {
+     "key": "assumption|class_imbalance||value",
+     "value": 4.423728813559322
+    },
+    {
+     "key": "assumption|class_imbalance||verdict",
+     "text": "doubtful"
+    },
+    {
+     "key": "assumption|importance_stability||value",
+     "value": 1.0
+    },
+    {
+     "key": "assumption|importance_stability||verdict",
+     "text": "ok"
+    },
+    {
+     "key": "assumption|zero_importance||verdict",
+     "text": "ok"
+    },
+    {
+     "key": "assumption|leakage|price|value",
+     "value": 0.47807722466680647
+    },
+    {
+     "key": "assumption|leakage|price|verdict",
+     "text": "ok"
+    }
+   ],
+   "refuses": null
+  },
+  {
+   "id": "xgboost_multiclass",
+   "model": "xgboost",
+   "data": "data/multiclass.csv",
+   "types": {
+    "spend": "number",
+    "orders": "number",
+    "member": "boolean"
+   },
+   "params": {
+    "task": "multiclass",
+    "outcome": "segment",
+    "predictors": [
+     "spend",
+     "orders",
+     "member"
+    ],
+    "split_by": "store",
+    "stop_metric": "error",
+    "max_depth": 4
+   },
+   "expect": [
+    {
+     "key": "model|||task",
+     "text": "multiclass"
+    },
+    {
+     "key": "model|||library",
+     "text": "xgboost"
+    },
+    {
+     "key": "model|||objective",
+     "text": "multi:softprob"
+    },
+    {
+     "key": "model|||stop_metric",
+     "text": "merror"
+    },
+    {
+     "key": "model|||validation",
+     "text": "grouped"
+    },
+    {
+     "key": "model|||importance_type",
+     "text": "total_gain"
+    },
+    {
+     "key": "model|||n",
+     "value": 450.0
+    },
+    {
+     "key": "model|||n_missing",
+     "value": 0.0
+    },
+    {
+     "key": "model|||n_train",
+     "value": 359.0
+    },
+    {
+     "key": "model|||n_validation",
+     "value": 91.0
+    },
+    {
+     "key": "model|||n_predictors",
+     "value": 3.0
+    },
+    {
+     "key": "model|||n_categorical",
+     "value": 1.0
+    },
+    {
+     "key": "model|||trees",
+     "value": 23.0
+    },
+    {
+     "key": "model|||best_iteration",
+     "value": 22.0
+    },
+    {
+     "key": "model|||max_trees",
+     "value": 1000.0
+    },
+    {
+     "key": "model|||stopped_early",
+     "value": 1.0
+    },
+    {
+     "key": "model|||stopped_by_time",
+     "value": 0.0
+    },
+    {
+     "key": "model|||threads",
+     "value": 2.0
+    },
+    {
+     "key": "model|||shap_rows",
+     "value": 450.0
+    },
+    {
+     "key": "model|||seed",
+     "value": 1.0
+    },
+    {
+     "key": "model|||n_classes",
+     "value": 3.0
+    },
+    {
+     "key": "model|||train_mlogloss",
+     "value": 0.8261787338525419
+    },
+    {
+     "key": "model|||validation_mlogloss",
+     "value": 0.8935034126897414
+    },
+    {
+     "key": "model|||baseline_mlogloss",
+     "value": 1.083248455351689
+    },
+    {
+     "key": "model|||train_accuracy",
+     "value": 0.7381615598885793
+    },
+    {
+     "key": "model|||validation_accuracy",
+     "value": 0.6483516483516484
+    },
+    {
+     "key": "class|bronze||support",
+     "value": 35.0
+    },
+    {
+     "key": "class|bronze||share_train",
+     "value": 0.34540389972144847
+    },
+    {
+     "key": "class|bronze||share_validation",
+     "value": 0.38461538461538464
+    },
+    {
+     "key": "class|bronze||precision",
+     "value": 0.7027027027027027
+    },
+    {
+     "key": "class|bronze||recall",
+     "value": 0.7428571428571429
+    },
+    {
+     "key": "class|bronze||f1",
+     "value": 0.7222222222222222
+    },
+    {
+     "key": "class|bronze||auc_ovr",
+     "value": 0.8660714285714286
+    },
+    {
+     "key": "cell|bronze|bronze|observed",
+     "value": 26.0
+    },
+    {
+     "key": "cell|bronze|gold|observed",
+     "value": 0.0
+    },
+    {
+     "key": "cell|bronze|silver|observed",
+     "value": 9.0
+    },
+    {
+     "key": "importance|spend|bronze|mean_abs_shap",
+     "value": 0.14099391695525912
+    },
+    {
+     "key": "class|gold||support",
+     "value": 21.0
+    },
+    {
+     "key": "class|gold||share_train",
+     "value": 0.2924791086350975
+    },
+    {
+     "key": "class|gold||share_validation",
+     "value": 0.23076923076923078
+    },
+    {
+     "key": "class|gold||precision",
+     "value": 0.8461538461538461
+    },
+    {
+     "key": "class|gold||recall",
+     "value": 0.5238095238095238
+    },
+    {
+     "key": "class|gold||f1",
+     "value": 0.6470588235294118
+    },
+    {
+     "key": "class|gold||auc_ovr",
+     "value": 0.9061224489795918
+    },
+    {
+     "key": "cell|gold|bronze|observed",
+     "value": 0.0
+    },
+    {
+     "key": "cell|gold|gold|observed",
+     "value": 11.0
+    },
+    {
+     "key": "cell|gold|silver|observed",
+     "value": 10.0
+    },
+    {
+     "key": "importance|spend|gold|mean_abs_shap",
+     "value": 0.26515057762981287
+    },
+    {
+     "key": "class|silver||support",
+     "value": 35.0
+    },
+    {
+     "key": "class|silver||share_train",
+     "value": 0.362116991643454
+    },
+    {
+     "key": "class|silver||share_validation",
+     "value": 0.38461538461538464
+    },
+    {
+     "key": "class|silver||precision",
+     "value": 0.5365853658536586
+    },
+    {
+     "key": "class|silver||recall",
+     "value": 0.6285714285714286
+    },
+    {
+     "key": "class|silver||f1",
+     "value": 0.5789473684210527
+    },
+    {
+     "key": "class|silver||auc_ovr",
+     "value": 0.6431122448979592
+    },
+    {
+     "key": "cell|silver|bronze|observed",
+     "value": 11.0
+    },
+    {
+     "key": "cell|silver|gold|observed",
+     "value": 2.0
+    },
+    {
+     "key": "cell|silver|silver|observed",
+     "value": 22.0
+    },
+    {
+     "key": "importance|spend|silver|mean_abs_shap",
+     "value": 0.14770262934577963
+    },
+    {
+     "key": "model|||validation_balanced_accuracy",
+     "value": 0.6317460317460317
+    },
+    {
+     "key": "model|||validation_macro_auc",
+     "value": 0.8051020408163265
+    },
+    {
+     "key": "model|||validation_macro_f1",
+     "value": 0.6494094713908956
+    },
+    {
+     "key": "importance|spend||gain",
+     "value": 923.5076293945312
+    },
+    {
+     "key": "importance|spend||gain_share",
+     "value": 0.5508970297807091
+    },
+    {
+     "key": "importance|spend||mean_abs_shap",
+     "value": 0.5538471239308516
+    },
+    {
+     "key": "importance|spend||mean_abs_shap_share",
+     "value": 0.4111080009728109
+    },
+    {
+     "key": "importance|spend||rank",
+     "value": 1.0
+    },
+    {
+     "key": "importance|spend||mean_abs_shap_train",
+     "value": 0.5604964989058487
+    },
+    {
+     "key": "importance|spend||mean_abs_shap_validation",
+     "value": 0.5276149743042149
+    },
+    {
+     "key": "importance|spend||missing_share",
+     "value": 0.0
+    },
+    {
+     "key": "importance|orders||gain",
+     "value": 546.3666381835938
+    },
+    {
+     "key": "importance|orders||gain_share",
+     "value": 0.3259223297851356
+    },
+    {
+     "key": "importance|orders||mean_abs_shap",
+     "value": 0.46022439904976636
+    },
+    {
+     "key": "importance|orders||mean_abs_shap_share",
+     "value": 0.34161400234315337
+    },
+    {
+     "key": "importance|orders||rank",
+     "value": 2.0
+    },
+    {
+     "key": "importance|orders||mean_abs_shap_train",
+     "value": 0.46363899582532603
+    },
+    {
+     "key": "importance|orders||mean_abs_shap_validation",
+     "value": 0.44675362715497613
+    },
+    {
+     "key": "importance|orders||missing_share",
+     "value": 0.0
+    },
+    {
+     "key": "importance|member||gain",
+     "value": 206.4964141845703
+    },
+    {
+     "key": "importance|member||gain_share",
+     "value": 0.12318064043415528
+    },
+    {
+     "key": "importance|member||mean_abs_shap",
+     "value": 0.3331343757619874
+    },
+    {
+     "key": "importance|member||mean_abs_shap_share",
+     "value": 0.2472779966840358
+    },
+    {
+     "key": "importance|member||rank",
+     "value": 3.0
+    },
+    {
+     "key": "importance|member||mean_abs_shap_train",
+     "value": 0.3341432013860216
+    },
+    {
+     "key": "importance|member||mean_abs_shap_validation",
+     "value": 0.32915450324519324
+    },
+    {
+     "key": "importance|member||missing_share",
+     "value": 0.0
+    },
+    {
+     "key": "assumption|validation_size||value",
+     "value": 21.0
+    },
+    {
+     "key": "assumption|validation_size||verdict",
+     "text": "doubtful"
+    },
+    {
+     "key": "assumption|beats_baseline||value",
+     "value": 0.17516299397846335
+    },
+    {
+     "key": "assumption|beats_baseline||verdict",
+     "text": "ok"
+    },
+    {
+     "key": "assumption|overfitting||value",
+     "value": 0.7069579689971919
+    },
+    {
+     "key": "assumption|overfitting||verdict",
+     "text": "ok"
+    },
+    {
+     "key": "assumption|trees_limit||value",
+     "value": 23.0
+    },
+    {
+     "key": "assumption|trees_limit||verdict",
+     "text": "ok"
+    },
+    {
+     "key": "assumption|class_imbalance||value",
+     "value": 1.238095238095238
+    },
+    {
+     "key": "assumption|class_imbalance||verdict",
+     "text": "ok"
+    },
+    {
+     "key": "assumption|importance_stability||value",
+     "value": 1.0
+    },
+    {
+     "key": "assumption|importance_stability||verdict",
+     "text": "ok"
+    },
+    {
+     "key": "assumption|zero_importance||verdict",
+     "text": "ok"
+    },
+    {
+     "key": "assumption|leakage|spend|value",
+     "value": 0.4111080009728109
+    },
+    {
+     "key": "assumption|leakage|spend|verdict",
+     "text": "ok"
+    }
+   ],
+   "refuses": null
+  },
+  {
+   "id": "xgboost_leakage",
+   "model": "xgboost",
+   "data": "data/leakage.csv",
+   "types": {
+    "y": "number",
+    "x1": "number",
+    "x2": "number",
+    "echo": "number"
+   },
+   "params": {
+    "task": "regression",
+    "outcome": "y",
+    "predictors": [
+     "x1",
+     "x2",
+     "echo"
+    ],
+    "early_stopping": false,
+    "max_trees": 150,
+    "learning_rate": 0.1,
+    "max_depth": 3
+   },
+   "expect": [
+    {
+     "key": "model|||task",
+     "text": "regression"
+    },
+    {
+     "key": "model|||library",
+     "text": "xgboost"
+    },
+    {
+     "key": "model|||objective",
+     "text": "reg:squarederror"
+    },
+    {
+     "key": "model|||stop_metric",
+     "text": "rmse"
+    },
+    {
+     "key": "model|||validation",
+     "text": "random"
+    },
+    {
+     "key": "model|||importance_type",
+     "text": "total_gain"
+    },
+    {
+     "key": "model|||n",
+     "value": 200.0
+    },
+    {
+     "key": "model|||n_missing",
+     "value": 0.0
+    },
+    {
+     "key": "model|||n_train",
+     "value": 160.0
+    },
+    {
+     "key": "model|||n_validation",
+     "value": 40.0
+    },
+    {
+     "key": "model|||n_predictors",
+     "value": 3.0
+    },
+    {
+     "key": "model|||n_categorical",
+     "value": 0.0
+    },
+    {
+     "key": "model|||trees",
+     "value": 150.0
+    },
+    {
+     "key": "model|||best_iteration",
+     "value": 149.0
+    },
+    {
+     "key": "model|||max_trees",
+     "value": 150.0
+    },
+    {
+     "key": "model|||stopped_early",
+     "value": 0.0
+    },
+    {
+     "key": "model|||stopped_by_time",
+     "value": 0.0
+    },
+    {
+     "key": "model|||threads",
+     "value": 2.0
+    },
+    {
+     "key": "model|||shap_rows",
+     "value": 200.0
+    },
+    {
+     "key": "model|||seed",
+     "value": 1.0
+    },
+    {
+     "key": "model|||train_rmse",
+     "value": 0.04259630093698369
+    },
+    {
+     "key": "model|||train_mae",
+     "value": 0.03324722232107599
+    },
+    {
+     "key": "model|||train_r_squared",
+     "value": 0.9996698828814298
+    },
+    {
+     "key": "model|||validation_rmse",
+     "value": 0.17215437010930845
+    },
+    {
+     "key": "model|||validation_mae",
+     "value": 0.14148043959480047
+    },
+    {
+     "key": "model|||validation_r_squared",
+     "value": 0.9891515645910163
+    },
+    {
+     "key": "model|||baseline_rmse",
+     "value": 1.7355541238828114
+    },
+    {
+     "key": "model|||validation_mean",
+     "value": 0.42036716749999997
+    },
+    {
+     "key": "importance|x1||gain",
+     "value": 289.339599609375
+    },
+    {
+     "key": "importance|x1||gain_share",
+     "value": 0.07520985621727727
+    },
+    {
+     "key": "importance|x1||mean_abs_shap",
+     "value": 0.08837045612977817
+    },
+    {
+     "key": "importance|x1||mean_abs_shap_share",
+     "value": 0.048300713052442955
+    },
+    {
+     "key": "importance|x1||rank",
+     "value": 2.0
+    },
+    {
+     "key": "importance|x1||mean_abs_shap_train",
+     "value": 0.08920173449150752
+    },
+    {
+     "key": "importance|x1||mean_abs_shap_validation",
+     "value": 0.08504534268286079
+    },
+    {
+     "key": "importance|x1||missing_share",
+     "value": 0.0
+    },
+    {
+     "key": "importance|x2||gain",
+     "value": 150.99649047851562
+    },
+    {
+     "key": "importance|x2||gain_share",
+     "value": 0.03924946448233999
+    },
+    {
+     "key": "importance|x2||mean_abs_shap",
+     "value": 0.05774406561860815
+    },
+    {
+     "key": "importance|x2||mean_abs_shap_share",
+     "value": 0.03156122154478722
+    },
+    {
+     "key": "importance|x2||rank",
+     "value": 3.0
+    },
+    {
+     "key": "importance|x2||mean_abs_shap_train",
+     "value": 0.06067910022684373
+    },
+    {
+     "key": "importance|x2||mean_abs_shap_validation",
+     "value": 0.046003927185665816
+    },
+    {
+     "key": "importance|x2||missing_share",
+     "value": 0.0
+    },
+    {
+     "key": "importance|echo||gain",
+     "value": 3406.7607421875
+    },
+    {
+     "key": "importance|echo||gain_share",
+     "value": 0.8855406793003827
+    },
+    {
+     "key": "importance|echo||mean_abs_shap",
+     "value": 1.683474536985159
+    },
+    {
+     "key": "importance|echo||mean_abs_shap_share",
+     "value": 0.9201380654027698
+    },
+    {
+     "key": "importance|echo||rank",
+     "value": 1.0
+    },
+    {
+     "key": "importance|echo||mean_abs_shap_train",
+     "value": 1.7734981458634138
+    },
+    {
+     "key": "importance|echo||mean_abs_shap_validation",
+     "value": 1.3233801014721394
+    },
+    {
+     "key": "importance|echo||missing_share",
+     "value": 0.0
+    },
+    {
+     "key": "assumption|validation_size||value",
+     "value": 40.0
+    },
+    {
+     "key": "assumption|validation_size||verdict",
+     "text": "doubtful"
+    },
+    {
+     "key": "assumption|beats_baseline||value",
+     "value": 0.9008072593413787
+    },
+    {
+     "key": "assumption|beats_baseline||verdict",
+     "text": "ok"
+    },
+    {
+     "key": "assumption|overfitting||value",
+     "value": 0.6791965804555483
+    },
+    {
+     "key": "assumption|overfitting||verdict",
+     "text": "ok"
+    },
+    {
+     "key": "assumption|trees_limit||value",
+     "value": 0.0
+    },
+    {
+     "key": "assumption|trees_limit||verdict",
+     "text": "ok"
+    },
+    {
+     "key": "assumption|importance_stability||verdict",
+     "text": "not_computed"
+    },
+    {
+     "key": "assumption|zero_importance||verdict",
+     "text": "ok"
+    },
+    {
+     "key": "assumption|leakage|echo|value",
+     "value": 0.9201380654027698
+    },
+    {
+     "key": "assumption|leakage|echo|verdict",
+     "text": "failed"
+    }
+   ],
+   "refuses": null
+  },
+  {
+   "id": "xgboost_time",
+   "model": "xgboost",
+   "data": "data/time.csv",
+   "types": {
+    "sales": "number",
+    "temp": "number",
+    "day": "date"
+   },
+   "params": {
+    "task": "regression",
+    "outcome": "sales",
+    "predictors": [
+     "temp",
+     "promo"
+    ],
+    "validation": "time",
+    "order_by": "day",
+    "validation_share": 0.25,
+    "stop_metric": "mae"
+   },
+   "expect": [
+    {
+     "key": "model|||task",
+     "text": "regression"
+    },
+    {
+     "key": "model|||library",
+     "text": "xgboost"
+    },
+    {
+     "key": "model|||objective",
+     "text": "reg:squarederror"
+    },
+    {
+     "key": "model|||stop_metric",
+     "text": "mae"
+    },
+    {
+     "key": "model|||validation",
+     "text": "time"
+    },
+    {
+     "key": "model|||importance_type",
+     "text": "total_gain"
+    },
+    {
+     "key": "model|||n",
+     "value": 300.0
+    },
+    {
+     "key": "model|||n_missing",
+     "value": 0.0
+    },
+    {
+     "key": "model|||n_train",
+     "value": 222.0
+    },
+    {
+     "key": "model|||n_validation",
+     "value": 78.0
+    },
+    {
+     "key": "model|||n_predictors",
+     "value": 2.0
+    },
+    {
+     "key": "model|||n_categorical",
+     "value": 1.0
+    },
+    {
+     "key": "model|||trees",
+     "value": 64.0
+    },
+    {
+     "key": "model|||best_iteration",
+     "value": 63.0
+    },
+    {
+     "key": "model|||max_trees",
+     "value": 1000.0
+    },
+    {
+     "key": "model|||stopped_early",
+     "value": 1.0
+    },
+    {
+     "key": "model|||stopped_by_time",
+     "value": 0.0
+    },
+    {
+     "key": "model|||threads",
+     "value": 2.0
+    },
+    {
+     "key": "model|||shap_rows",
+     "value": 300.0
+    },
+    {
+     "key": "model|||seed",
+     "value": 1.0
+    },
+    {
+     "key": "model|||train_rmse",
+     "value": 4.056113380304909
+    },
+    {
+     "key": "model|||train_mae",
+     "value": 3.2375849896955065
+    },
+    {
+     "key": "model|||train_r_squared",
+     "value": 0.8250912166416342
+    },
+    {
+     "key": "model|||validation_rmse",
+     "value": 6.355062811260104
+    },
+    {
+     "key": "model|||validation_mae",
+     "value": 4.730630135247646
+    },
+    {
+     "key": "model|||validation_r_squared",
+     "value": 0.26225355001695116
+    },
+    {
+     "key": "model|||baseline_rmse",
+     "value": 7.895502587792046
+    },
+    {
+     "key": "model|||validation_mean",
+     "value": 83.59344615384617
+    },
+    {
+     "key": "importance|temp||gain",
+     "value": 118856.90625
+    },
+    {
+     "key": "importance|temp||gain_share",
+     "value": 0.8205077591813639
+    },
+    {
+     "key": "importance|temp||mean_abs_shap",
+     "value": 5.351735137204329
+    },
+    {
+     "key": "importance|temp||mean_abs_shap_share",
+     "value": 0.6726595830788454
+    },
+    {
+     "key": "importance|temp||rank",
+     "value": 1.0
+    },
+    {
+     "key": "importance|temp||mean_abs_shap_train",
+     "value": 5.335213480097753
+    },
+    {
+     "key": "importance|temp||mean_abs_shap_validation",
+     "value": 5.398758315123045
+    },
+    {
+     "key": "importance|temp||missing_share",
+     "value": 0.0
+    },
+    {
+     "key": "importance|promo||gain",
+     "value": 26000.841796875
+    },
+    {
+     "key": "importance|promo||gain_share",
+     "value": 0.1794922408186361
+    },
+    {
+     "key": "importance|promo||mean_abs_shap",
+     "value": 2.6043473625183107
+    },
+    {
+     "key": "importance|promo||mean_abs_shap_share",
+     "value": 0.32734041692115456
+    },
+    {
+     "key": "importance|promo||rank",
+     "value": 2.0
+    },
+    {
+     "key": "importance|promo||mean_abs_shap_train",
+     "value": 2.685264695335079
+    },
+    {
+     "key": "importance|promo||mean_abs_shap_validation",
+     "value": 2.3740441845013547
+    },
+    {
+     "key": "importance|promo||missing_share",
+     "value": 0.0
+    },
+    {
+     "key": "assumption|validation_size||value",
+     "value": 78.0
+    },
+    {
+     "key": "assumption|validation_size||verdict",
+     "text": "doubtful"
+    },
+    {
+     "key": "assumption|beats_baseline||value",
+     "value": 0.19510344774172528
+    },
+    {
+     "key": "assumption|beats_baseline||verdict",
+     "text": "ok"
+    },
+    {
+     "key": "assumption|overfitting||value",
+     "value": 0.27301240918657615
+    },
+    {
+     "key": "assumption|overfitting||verdict",
+     "text": "failed"
+    },
+    {
+     "key": "assumption|trees_limit||value",
+     "value": 64.0
+    },
+    {
+     "key": "assumption|trees_limit||verdict",
+     "text": "ok"
+    },
+    {
+     "key": "assumption|importance_stability||verdict",
+     "text": "not_computed"
+    },
+    {
+     "key": "assumption|zero_importance||verdict",
+     "text": "ok"
+    },
+    {
+     "key": "assumption|leakage|temp|value",
+     "value": 0.6726595830788454
+    },
+    {
+     "key": "assumption|leakage|temp|verdict",
+     "text": "ok"
+    }
+   ],
+   "refuses": null
+  },
+  {
+   "id": "xgboost_refuses_few_rows",
+   "model": "xgboost",
+   "data": "data/tiny.csv",
+   "types": {
+    "y": "number",
+    "x": "number"
+   },
+   "params": {
+    "task": "regression",
+    "outcome": "y",
+    "predictors": [
+     "x"
+    ]
+   },
+   "expect": [],
+   "refuses": {
+    "code": "too_few_rows",
+    "message": null
+   }
+  },
+  {
+   "id": "xgboost_refuses_events_all_in_training",
+   "model": "xgboost",
+   "data": "data/time.csv",
+   "types": {
+    "sales": "number",
+    "temp": "number",
+    "day": "date"
+   },
+   "params": {
+    "task": "binary",
+    "outcome": "early_event",
+    "event_value": "yes",
+    "predictors": [
+     "temp",
+     "promo"
+    ],
+    "validation": "time",
+    "order_by": "day"
+   },
+   "expect": [],
+   "refuses": {
+    "code": "class_absent",
+    "message": null
+   }
+  }
+ ]
 }
