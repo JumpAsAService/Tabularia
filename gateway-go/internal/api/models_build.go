@@ -18,6 +18,7 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/modelgroups"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/scriptcfg"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/scriptimage"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -29,17 +30,31 @@ const mgSelftestMark = "TABULARIA_SELFTEST_BEGIN"
 // scripts' own check, with the completions; Python: mgPyCheck, the scripting environments' check
 // imports polars, which a group's image does not hold), then the self-test in the code's folder.
 // `set -e` keeps the self-test's exit code.
-func mgCheckScript(language string) string {
+func mgCheckScript(language string) string { return mgCheckScriptWith(language, false) }
+
+// mgCheckScriptWith is mgCheckScript for a group whose image records its system libraries
+// (`system_libraries`, scriptimage.SystemLibrariesFile): their `package@version` lines follow the
+// R packages in the lock, which is where the card reads their versions.
+func mgCheckScriptWith(language string, systemLibraries bool) string {
 	check := `Rscript -e "$TABULARIA_R_CHECK"`
 	if language == "python" {
 		check = `python -I -c "$TABULARIA_PY_MANAGED_CHECK"`
 	}
 	_, selftest := modelgroups.Commands(language)
+	if systemLibraries {
+		check += "\ncat " + scriptimage.SystemLibrariesFile
+	}
 	return "set -e\n" + check + "\n" +
 		"echo\n" +
 		"echo " + mgSelftestMark + "\n" +
 		"cd " + modelgroups.CodeDir + "\n" +
 		strings.Join(selftest, " ") + "\n"
+}
+
+// hasSystemLibraries says whether the group's recipe names system libraries (its image records them).
+func hasSystemLibraries(group string) bool {
+	g, ok := modelgroups.Get(group)
+	return ok && len(g.Recipe.SystemLibraries) > 0
 }
 
 // mgPyCheck is a Python group's lock: one name==version per installed distribution; it fails
@@ -93,7 +108,7 @@ func (b *scriptBuilds) managedCheckJob(v *sbVersion, env *sbEnvironment, group s
 		environment = append(environment, pyjson.Object{{Key: "name", Value: "TABULARIA_R_CHECK"}, {Key: "value", Value: sbRCheck}})
 	}
 	container := pyjson.Object{
-		{Key: "name", Value: "check"}, {Key: "image", Value: image}, {Key: "command", Value: []any{"sh", "-c", mgCheckScript(language)}},
+		{Key: "name", Value: "check"}, {Key: "image", Value: image}, {Key: "command", Value: []any{"sh", "-c", mgCheckScriptWith(language, hasSystemLibraries(group))}},
 		{Key: "workingDir", Value: modelgroups.CodeDir},
 		{Key: "env", Value: environment},
 		{Key: "resources", Value: pyjson.Object{

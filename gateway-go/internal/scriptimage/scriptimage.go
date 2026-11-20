@@ -18,6 +18,10 @@ import (
 const ScriptUID = 10001
 
 var (
+	// SystemLibrariesFile is where an R image records the versions of the Debian libraries its recipe
+	// names (`system_libraries`), one `package@version` line each; absent from every other image.
+	SystemLibrariesFile = "/opt/tabularia/system-libraries.txt"
+
 	// RSystemLibraries are the Debian packages an R image compiles its packages with.
 	RSystemLibraries = []string{
 		"build-essential", "gfortran", "cmake", "pkg-config", "libcurl4-openssl-dev", "libssl-dev", "libxml2-dev",
@@ -97,6 +101,7 @@ func Dockerfile(language, baseImage string, packages []string, s Settings) (stri
 		return "", ValueError("SCRIPTS__CRAN_URL is not an http(s) address")
 	}
 	libraries := RSystemLibraries
+	record := ""
 	if len(s.SystemLibraries) > 0 {
 		libraries = append(append([]string{}, RSystemLibraries...), s.SystemLibraries...)
 		for _, l := range s.SystemLibraries {
@@ -104,12 +109,16 @@ func Dockerfile(language, baseImage string, packages []string, s Settings) (stri
 				return "", ValueError(fmt.Sprintf("«%s» is not the name of a Debian package", l))
 			}
 		}
+		// what apt installed, as `package@version` lines the version's check adds to its lock: the
+		// Administration card says the version from here. Only an image that names libraries has it
+		record = "RUN mkdir -p /opt/tabularia && dpkg-query -W -f '${Package}@${Version}\\n' " + strings.Join(s.SystemLibraries, " ") +
+			" > " + SystemLibrariesFile + "\n"
 	}
 	// NOT_CRAN and LIBARROW_MINIMAL: arrow, built from source, gets S3 support. rocker's
 	// images point R at a package manager of their own; CRAN replaces it
 	return "FROM " + baseImage + "\nENV NOT_CRAN=true LIBARROW_MINIMAL=false CRAN=\"" + cran + "\"\n" +
 		"RUN apt-get update && apt-get install -y --no-install-recommends " + strings.Join(libraries, " ") +
-		" && rm -rf /var/lib/apt/lists/*\n" +
+		" && rm -rf /var/lib/apt/lists/*\n" + record +
 		`RUN printf 'options(repos = c(CRAN = "%s"))\n' "$CRAN" >> "$(R RHOME)/etc/Rprofile.site"` + "\n" +
 		heredoc("/opt/tabularia/packages.txt", wanted, "TABULARIA_PACKAGES") +
 		heredoc("/opt/tabularia/install.R", scriptnodes.SplitLines(RInstall), "TABULARIA_INSTALL") +

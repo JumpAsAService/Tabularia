@@ -860,6 +860,15 @@ func TestTheChecksScriptByLanguage(t *testing.T) {
 	if r != want {
 		t.Errorf("the R check changed:\n%s", r)
 	}
+	// a group whose image records system libraries adds their lines to the lock, before the mark
+	withLibs := mgCheckScriptWith("r", true)
+	if withLibs != "set -e\nRscript -e \"$TABULARIA_R_CHECK\"\ncat /opt/tabularia/system-libraries.txt\necho\necho TABULARIA_SELFTEST_BEGIN\ncd /tabularia/code\n"+
+		"Rscript /tabularia/code/runner/run.R --selftest\n" {
+		t.Errorf("the R check with system libraries:\n%s", withLibs)
+	}
+	if !hasSystemLibraries("customer_lifetime") || hasSystemLibraries("regression") || hasSystemLibraries("survival") {
+		t.Error("which groups record system libraries")
+	}
 	py := mgCheckScript("python")
 	for _, w := range []string{`python -I -c "$TABULARIA_PY_MANAGED_CHECK"`, "echo TABULARIA_SELFTEST_BEGIN\n",
 		"python -I -B /tabularia/code/runner/run.py --selftest\n"} {

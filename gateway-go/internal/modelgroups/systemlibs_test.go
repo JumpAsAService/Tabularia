@@ -5,30 +5,42 @@ import (
 	"testing"
 )
 
-// The system libraries of a group's image as its Administration card shows them: the customer
-// lifetime group's is GSL; the other groups have none, and say so with an empty list.
+// The system libraries of a group's image as its Administration card shows them: the label is a
+// name; the version comes from the lock of the version built, never from this package.
 func TestTheSystemLibrariesAGroupsCardShows(t *testing.T) {
 	g, ok := Get("customer_lifetime")
 	if !ok {
 		t.Fatal("no customer_lifetime group")
 	}
-	got, _ := json.Marshal(g.SystemLibraries())
-	if string(got) != `[{"package":"libgsl-dev","name":"GSL","version":"2.7.1"}]` {
-		t.Errorf("customer_lifetime: %s", got)
+	say := func(libs []SystemLibrary) string {
+		b, _ := json.Marshal(libs)
+		return string(b)
+	}
+	// before a build: the name only, no version
+	if got := say(g.SystemLibraries(nil)); got != `[{"package":"libgsl-dev","name":"GSL"}]` {
+		t.Errorf("before a build: %s", got)
+	}
+	lock := "R6@2.6.1\nlibgsl-dev@2.9.9+test-1\nCLVTools@0.12.1"
+	if got := say(g.SystemLibraries(&lock)); got != `[{"package":"libgsl-dev","name":"GSL","version":"2.9.9+test-1"}]` {
+		t.Errorf("after a build: %s", got)
+	}
+	// a lock of a build that recorded none (an older version): no version
+	old := "R6@2.6.1"
+	if got := say(g.SystemLibraries(&old)); got != `[{"package":"libgsl-dev","name":"GSL"}]` {
+		t.Errorf("an old lock: %s", got)
 	}
 	for _, other := range []string{"regression", "survival", "timeseries", "boosting"} {
 		g, ok := Get(other)
 		if !ok {
 			continue
 		}
-		if libs := g.SystemLibraries(); libs == nil || len(libs) != 0 {
+		if libs := g.SystemLibraries(&lock); libs == nil || len(libs) != 0 {
 			t.Errorf("%s: %v", other, libs)
 		}
 	}
-	// a package this table does not know is shown by its Debian name
+	// a package without a label is shown by its Debian name
 	odd := Group{Recipe: Recipe{SystemLibraries: []string{"libfoo-dev"}}}
-	got, _ = json.Marshal(odd.SystemLibraries())
-	if string(got) != `[{"package":"libfoo-dev","name":"libfoo-dev"}]` {
+	if got := say(odd.SystemLibraries(nil)); got != `[{"package":"libfoo-dev","name":"libfoo-dev"}]` {
 		t.Errorf("unknown: %s", got)
 	}
 }

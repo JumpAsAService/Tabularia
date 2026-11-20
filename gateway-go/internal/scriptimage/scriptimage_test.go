@@ -83,8 +83,15 @@ func TestARecipeSystemLibrariesComeAfterTheFixedOnes(t *testing.T) {
 	if !strings.Contains(with, "install -y --no-install-recommends "+fixed+" libgsl-dev && rm -rf /var/lib/apt/lists/*\n") {
 		t.Errorf("libgsl-dev does not follow the fixed libraries:\n%s", with)
 	}
-	if strings.Replace(with, " libgsl-dev", "", 1) != plain || strings.Contains(plain, "libgsl") {
-		t.Error("the library is the only difference")
+	// after the apt install the build records the versions installed, for the card (and for nothing
+	// else: without libraries the Dockerfile has no such step)
+	record := "RUN mkdir -p /opt/tabularia && dpkg-query -W -f '${Package}@${Version}\\n' libgsl-dev > " + SystemLibrariesFile + "\n"
+	if !strings.Contains(with, "rm -rf /var/lib/apt/lists/*\n"+record+"RUN printf") {
+		t.Errorf("the versions installed are not recorded right after the install:\n%s", with)
+	}
+	if strings.Replace(strings.Replace(with, record, "", 1), " libgsl-dev", "", 1) != plain || strings.Contains(plain, "libgsl") ||
+		strings.Contains(plain, "dpkg-query") {
+		t.Error("the library and its record are the only difference")
 	}
 	for _, bad := range []string{"libgsl-dev; rm -rf /", "-y", "Libgsl", "a", "libgsl dev", ""} {
 		s.SystemLibraries = []string{bad}

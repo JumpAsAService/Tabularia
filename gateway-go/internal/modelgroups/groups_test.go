@@ -200,8 +200,10 @@ func TestOnlyTheCustomerLifetimeImageInstallsGSL(t *testing.T) {
 		}
 		// the same recipe without its system library is what every other R group's Dockerfile is made of
 		plain, _ := scriptimage.Dockerfile("r", "rocker/r-ver:4.6.0", g.Recipe.Packages, scriptimage.Settings{CRANURL: s.CRANURL, Jobs: 2, Managed: true})
-		if strings.Replace(d, " libgsl-dev", "", 1) != plain {
-			t.Error("libgsl-dev is not the only difference")
+		// and the step that records the versions installed, which the card reads from the lock
+		record := "RUN mkdir -p /opt/tabularia && dpkg-query -W -f '${Package}@${Version}\\n' libgsl-dev > " + scriptimage.SystemLibrariesFile + "\n"
+		if strings.Replace(strings.Replace(d, record, "", 1), " libgsl-dev", "", 1) != plain || !strings.Contains(d, record) {
+			t.Error("libgsl-dev and the record of its version are not the only difference")
 		}
 	}
 	// a Job's group copy is not the shipped one
