@@ -6956,6 +6956,7 @@ export default {
       "regression": { "name": "Regression", "description": "Linear and logistic regression, with ridge, lasso and elastic-net penalties." },
       "survival": { "name": "Survival analysis", "description": "Kaplan–Meier curves and Cox proportional hazards." },
       "timeseries": { "name": "Time series", "description": "ARIMA, from AR to SARIMAX, with automatic orders too." },
+      "boosting": { "name": "Boosting", "description": "Gradient boosting: XGBoost and CatBoost, with importances by gain and SHAP." },
     },
     "modelsIn": "Models:",
     "packagesPinned": "{n} packages pinned",
