@@ -712,3 +712,47 @@ test('the palette: the Models group after Statistics, closed, by group, with Pre
   assert.ok(!text(html).includes('Kaplan'))
   groups.state.value = null
 })
+
+// ── the check is idempotent: what it keeps, given back, is kept as it is ─────
+// The same test is in the engine (backend/tests/test_models_catalog.py), the gateway
+// (internal/modelcatalog) and the assistant (gateway/tests/test_ai_flow_agent.py).
+
+const twice = (what, model, params) => {
+  const first = m.modelParams(model, params)
+  const second = m.modelParams(model, first)
+  assert.equal(JSON.stringify(second), JSON.stringify(first), `${what}: ${model.id}: checking twice changes the answer`)
+}
+
+test('modelParams twice is modelParams once: the defaults, every preset, every choice of every variant', () => {
+  for (const model of m.MODEL_CATALOG.models) {
+    twice('the defaults', model, m.modelDefaults(model.id))
+    for (const preset of Object.keys(model.presets ?? {})) twice(`preset ${preset}`, model, m.modelDefaults(model.id, preset))
+    const base = m.modelDefaults(model.id)
+    const picks = []
+    for (const f of m.modelFields(model)) {
+      if (f.control === 'choice') for (const c of f.choices) picks.push([f.key, c])
+      if (f.control === 'boolean') picks.push([f.key, true], [f.key, false])
+    }
+    picks.forEach((a, i) => {
+      twice(`${a[0]}=${a[1]}`, model, { ...base, [a[0]]: a[1] })
+      for (const b of picks.slice(i + 1)) if (a[0] !== b[0]) twice(`${a} ${b}`, model, { ...base, [a[0]]: a[1], [b[0]]: b[1] })
+    })
+  }
+})
+
+test('modelParams twice is modelParams once on the 61 cases the engine and the gateway share', () => {
+  const cases = JSON.parse(read('../../backend/tests/fixtures/models/params_cases.json')).cases
+  assert.ok(cases.length >= 40, `${cases.length} cases`)
+  for (const c of cases) {
+    const model = m.modelOf(c.model)
+    if (!model) continue // «there is no model»: nothing to keep
+    twice(c.what, model, c.params)
+    if (c.checked) twice(`${c.what} (its answer)`, model, c.checked)
+  }
+})
+
+test('an empty list of columns is not given, once or twice (an empty exog is none)', () => {
+  const first = m.modelParams(ARIMA, { time: 't', value: 'v', frequency: 'month', exog: [] })
+  assert.ok(!('exog' in first))
+  assert.deepEqual(m.modelParams(ARIMA, first), first)
+})
