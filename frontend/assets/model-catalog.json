@@ -1532,6 +1532,12 @@
                 "median",
                 "median_ci_low",
                 "median_ci_high",
+                "q25",
+                "q25_ci_low",
+                "q25_ci_high",
+                "q75",
+                "q75_ci_low",
+                "q75_ci_high",
                 "surv_at_*",
                 "rmst",
                 "rmst_se",
@@ -1555,7 +1561,9 @@
               "levels": [
                 "censoring_informative",
                 "proportional_hazards",
-                "censoring_by_stratum"
+                "censoring_by_stratum",
+                "follow_up_by_stratum",
+                "few_at_risk"
               ],
               "numbers": [
                 "statistic",

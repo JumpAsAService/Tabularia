@@ -214,10 +214,13 @@ def test_a_survival_curve_is_a_step_with_its_band_and_the_number_at_risk_under_i
     asked = {spec["option"]["title"]["text"]: spec["option"] for spec in chart_service[1] if "title" in spec["option"]}
     km = next(o for t, o in asked.items() if t.startswith("Sopravvivenza per strato"))
     steps = [s for s in km["series"] if s.get("step") == "end" and "stack" not in s]
-    assert [s["name"] for s in steps] == ["line=A", "line=B"] and km["legend"]["data"] == ["line=A", "line=B"]
-    assert len([s for s in km["series"] if s.get("areaStyle")]) == 2  # a band each
+    strata = ["line=A", "line=B", "line=C"]
+    assert [s["name"] for s in steps] == strata and km["legend"]["data"] == strata
+    assert len([s for s in km["series"] if s.get("areaStyle")]) == 3  # a band each
     said = set(strings(json.loads(page)))
-    assert {"Strato \\ tempo", "60", "56", "Tempo", "30", "line=A – line=B", "p corretto (Holm)"} <= said
+    # the number at risk at 0 and 50 of line=A, the median of line=B with its interval, a time asked, a pair
+    assert {"Strato \\ tempo", "59", "39", "Tempo", "30", "58", "line=A – line=B", "p corretto (Holm)"} <= said
+    assert "48 – 92" in said  # the interval of line=B's median
 
 
 def test_a_forecast_draws_its_two_bands_along_dates_and_the_correlograms_their_bounds(tmp_path, chart_service, monkeypatch):  # noqa: F811

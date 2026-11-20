@@ -1,5 +1,1694 @@
 {
   "format_version": 1,
-  "generated": null,
-  "cases": []
+  "generated": {
+    "by": "make_reference.R",
+    "R": "4.6.0",
+    "packages": {
+      "survival": "3.8.12",
+      "jsonlite": "2.0.0"
+    }
+  },
+  "cases": [
+    {
+      "id": "kaplan_meier_strata",
+      "model": "kaplan_meier",
+      "data": "data/kaplan_meier_strata.csv",
+      "types": {
+        "days": "number",
+        "status": "text",
+        "line": "text"
+      },
+      "params": {
+        "time": "days",
+        "event": "status",
+        "event_value": "failed",
+        "strata": "line",
+        "pairwise": true,
+        "times": [
+          30,
+          90
+        ],
+        "rmst_tau": 180
+      },
+      "expect": [
+        {
+          "key": "model|||n",
+          "value": 147,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||events",
+          "value": 106,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||censored",
+          "value": 41,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n_missing",
+          "value": 3,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n_strata",
+          "value": 3,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||rmst_tau",
+          "value": 180,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||conf_type",
+          "text": "log"
+        },
+        {
+          "key": "stratum|line=A||n",
+          "value": 59,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=A||events",
+          "value": 33,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=A||censored",
+          "value": 26,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=A||q25",
+          "value": 50,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=A||q25_ci_low",
+          "value": 44,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=A||q25_ci_high",
+          "value": 84,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=A||median",
+          "value": 146,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=A||median_ci_low",
+          "value": 84,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=A||median_ci_high",
+          "value": 196,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=A||q75",
+          "value": 188,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=A||q75_ci_low",
+          "value": 160,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=A||q75_ci_high",
+          "value": null,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=A||surv_at_30",
+          "value": 0.897985289414775,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=A||surv_at_30_low",
+          "value": 0.823859256134973,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=A||surv_at_30_high",
+          "value": 0.978780749260924,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=A||surv_at_90",
+          "value": 0.560008839999968,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=A||surv_at_90_low",
+          "value": 0.437970045733919,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=A||surv_at_90_high",
+          "value": 0.716053309884664,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=A||rmst",
+          "value": 114.66756688951,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=A||rmst_se",
+          "value": 9.01112812018596,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=B||n",
+          "value": 49,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=B||events",
+          "value": 37,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=B||censored",
+          "value": 12,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=B||q25",
+          "value": 26,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=B||q25_ci_low",
+          "value": 14,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=B||q25_ci_high",
+          "value": 52,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=B||median",
+          "value": 58,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=B||median_ci_low",
+          "value": 48,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=B||median_ci_high",
+          "value": 92,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=B||q75",
+          "value": 102,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=B||q75_ci_low",
+          "value": 70,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=B||q75_ci_high",
+          "value": null,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=B||surv_at_30",
+          "value": 0.712630998345284,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=B||surv_at_30_low",
+          "value": 0.596145457714893,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=B||surv_at_30_high",
+          "value": 0.851877563152503,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=B||surv_at_90",
+          "value": 0.340467373434406,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=B||surv_at_90_low",
+          "value": 0.221882277162372,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=B||surv_at_90_high",
+          "value": 0.522430334931597,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=B||rmst",
+          "value": 70.9667013477845,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=B||rmst_se",
+          "value": 8.6600315558277,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=C||n",
+          "value": 39,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=C||events",
+          "value": 36,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=C||censored",
+          "value": 3,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=C||q25",
+          "value": 14,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=C||q25_ci_low",
+          "value": 10,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=C||q25_ci_high",
+          "value": 32,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=C||median",
+          "value": 44,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=C||median_ci_low",
+          "value": 30,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=C||median_ci_high",
+          "value": 56,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=C||q75",
+          "value": 68,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=C||q75_ci_low",
+          "value": 52,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=C||q75_ci_high",
+          "value": 90,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=C||surv_at_30",
+          "value": 0.612426035502958,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=C||surv_at_30_low",
+          "value": 0.476435758251716,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=C||surv_at_30_high",
+          "value": 0.787232365467648,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=C||surv_at_90",
+          "value": 0.0840859545312986,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=C||surv_at_90_low",
+          "value": 0.0285551337661805,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=C||surv_at_90_high",
+          "value": 0.247606885939843,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=C||rmst",
+          "value": 50.1142946122703,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=C||rmst_se",
+          "value": 7.24275006796189,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||test_statistic",
+          "value": 25.302632486592,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||test_df",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||test_p_value",
+          "value": 3.20334095841032e-06,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||test_significance",
+          "text": "***"
+        },
+        {
+          "key": "stratum|line=A||observed",
+          "value": 33,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=A||expected",
+          "value": 55.0308706181301,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=B||observed",
+          "value": 37,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=B||expected",
+          "value": 31.4728263750329,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=C||observed",
+          "value": 36,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=C||expected",
+          "value": 19.496303006837,
+          "rel": 1e-09
+        },
+        {
+          "key": "pair|line=A|line=B|statistic",
+          "value": 9.15274274593502,
+          "rel": 1e-09
+        },
+        {
+          "key": "pair|line=A|line=B|p_value",
+          "value": 0.00248345539474675,
+          "rel": 1e-09
+        },
+        {
+          "key": "pair|line=A|line=B|p_adjusted",
+          "value": 0.00496691078949349,
+          "rel": 1e-09
+        },
+        {
+          "key": "pair|line=A|line=B|significance",
+          "text": "**"
+        },
+        {
+          "key": "pair|line=A|line=C|statistic",
+          "value": 25.6840684852878,
+          "rel": 1e-09
+        },
+        {
+          "key": "pair|line=A|line=C|p_value",
+          "value": 4.02133146346203e-07,
+          "rel": 1e-09
+        },
+        {
+          "key": "pair|line=A|line=C|p_adjusted",
+          "value": 1.20639943903861e-06,
+          "rel": 1e-09
+        },
+        {
+          "key": "pair|line=A|line=C|significance",
+          "text": "***"
+        },
+        {
+          "key": "pair|line=B|line=C|statistic",
+          "value": 4.09140548078855,
+          "rel": 1e-09
+        },
+        {
+          "key": "pair|line=B|line=C|p_value",
+          "value": 0.0431017869965949,
+          "rel": 1e-09
+        },
+        {
+          "key": "pair|line=B|line=C|p_adjusted",
+          "value": 0.0431017869965949,
+          "rel": 1e-09
+        },
+        {
+          "key": "pair|line=B|line=C|significance",
+          "text": "*"
+        },
+        {
+          "key": "assumption|censoring_by_stratum||statistic",
+          "value": 15.870123496197,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|censoring_by_stratum||p_value",
+          "value": 0.000357969866068807,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|censoring_by_stratum||verdict",
+          "text": "doubtful"
+        },
+        {
+          "key": "assumption|follow_up_by_stratum||statistic",
+          "value": 2.28909611627956,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|follow_up_by_stratum||p_value",
+          "value": 0.318367769003537,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|follow_up_by_stratum||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|proportional_hazards||statistic",
+          "value": 0.407230642074898,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|proportional_hazards||df",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|proportional_hazards||p_value",
+          "value": 0.815776122749184,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|censoring_informative||verdict",
+          "text": "not_computed"
+        },
+        {
+          "key": "assumption|censoring_informative||value",
+          "value": 0.27891156462585,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|km|line=A|surv|1",
+          "value": 0.966101694915254,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|km|line=A|lower|1",
+          "value": 0.921011213156443,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|cumhaz|line=A|cumhaz|1",
+          "value": 0.0338983050847458,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|km|line=A|surv|5",
+          "value": 0.897985289414775,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|km|line=A|lower|5",
+          "value": 0.823859256134973,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|cumhaz|line=A|cumhaz|5",
+          "value": 0.106035767093111,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|km|line=A|surv|10",
+          "value": 0.825671570195075,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|km|line=A|lower|10",
+          "value": 0.732898012613183,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|cumhaz|line=A|cumhaz|10",
+          "value": 0.189115595836677,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||formula",
+          "text": "Surv(days, status = failed) ~ line"
+        },
+        {
+          "key": "model|||test",
+          "text": "logrank"
+        }
+      ]
+    },
+    {
+      "id": "kaplan_meier_peto",
+      "model": "kaplan_meier",
+      "data": "data/kaplan_meier_strata.csv",
+      "types": {
+        "days": "number",
+        "status": "text",
+        "line": "text"
+      },
+      "params": {
+        "time": "days",
+        "event": "status",
+        "event_value": "failed",
+        "strata": "line",
+        "test": "peto",
+        "conf_type": "log-log",
+        "alpha": 0.1,
+        "times": [
+          60
+        ]
+      },
+      "expect": [
+        {
+          "key": "model|||n",
+          "value": 147,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||events",
+          "value": 106,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||censored",
+          "value": 41,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n_missing",
+          "value": 3,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n_strata",
+          "value": 3,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||rmst_tau",
+          "value": 240,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||conf_type",
+          "text": "log-log"
+        },
+        {
+          "key": "stratum|line=A||n",
+          "value": 59,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=A||events",
+          "value": 33,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=A||censored",
+          "value": 26,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=A||q25",
+          "value": 50,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=A||q25_ci_low",
+          "value": 42,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=A||q25_ci_high",
+          "value": 64,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=A||median",
+          "value": 146,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=A||median_ci_low",
+          "value": 84,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=A||median_ci_high",
+          "value": 166,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=A||q75",
+          "value": 188,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=A||q75_ci_low",
+          "value": 160,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=A||q75_ci_high",
+          "value": 196,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=A||surv_at_60",
+          "value": 0.670737860636325,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=A||surv_at_60_low",
+          "value": 0.553229167466251,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=A||surv_at_60_high",
+          "value": 0.763809672705669,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=A||rmst",
+          "value": 122.037683230224,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=A||rmst_se",
+          "value": 10.9317064976928,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=B||n",
+          "value": 49,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=B||events",
+          "value": 37,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=B||censored",
+          "value": 12,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=B||q25",
+          "value": 26,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=B||q25_ci_low",
+          "value": 14,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=B||q25_ci_high",
+          "value": 36,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=B||median",
+          "value": 58,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=B||median_ci_low",
+          "value": 44,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=B||median_ci_high",
+          "value": 70,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=B||q75",
+          "value": 102,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=B||q75_ci_low",
+          "value": 70,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=B||q75_ci_high",
+          "value": 152,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=B||surv_at_60",
+          "value": 0.447876723386927,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=B||surv_at_60_low",
+          "value": 0.320972122257231,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=B||surv_at_60_high",
+          "value": 0.566800092906445,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=B||rmst",
+          "value": 73.4277940757532,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=B||rmst_se",
+          "value": 9.73750504278764,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=C||n",
+          "value": 39,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=C||events",
+          "value": 36,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=C||censored",
+          "value": 3,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=C||q25",
+          "value": 14,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=C||q25_ci_low",
+          "value": 10,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=C||q25_ci_high",
+          "value": 30,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=C||median",
+          "value": 44,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=C||median_ci_low",
+          "value": 30,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=C||median_ci_high",
+          "value": 52,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=C||q75",
+          "value": 68,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=C||q75_ci_low",
+          "value": 52,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=C||q75_ci_high",
+          "value": 80,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=C||surv_at_60",
+          "value": 0.280286515104329,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=C||surv_at_60_low",
+          "value": 0.166597768606952,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=C||surv_at_60_high",
+          "value": 0.405463378887728,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=C||rmst",
+          "value": 50.1142946122703,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=C||rmst_se",
+          "value": 7.24275006796189,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||test_statistic",
+          "value": 22.1455623422227,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||test_df",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||test_p_value",
+          "value": 1.55293128079263e-05,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||test_significance",
+          "text": "***"
+        },
+        {
+          "key": "stratum|line=A||observed",
+          "value": 33,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=A||expected",
+          "value": 55.0308706181301,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=B||observed",
+          "value": 37,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=B||expected",
+          "value": 31.4728263750329,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=C||observed",
+          "value": 36,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|line=C||expected",
+          "value": 19.496303006837,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|censoring_by_stratum||statistic",
+          "value": 15.870123496197,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|censoring_by_stratum||p_value",
+          "value": 0.000357969866068807,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|censoring_by_stratum||verdict",
+          "text": "doubtful"
+        },
+        {
+          "key": "assumption|follow_up_by_stratum||statistic",
+          "value": 2.28909611627956,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|follow_up_by_stratum||p_value",
+          "value": 0.318367769003537,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|follow_up_by_stratum||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|proportional_hazards||statistic",
+          "value": 0.407230642074898,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|proportional_hazards||df",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|proportional_hazards||p_value",
+          "value": 0.815776122749184,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|censoring_informative||verdict",
+          "text": "not_computed"
+        },
+        {
+          "key": "assumption|censoring_informative||value",
+          "value": 0.27891156462585,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|km|line=A|surv|1",
+          "value": 0.966101694915254,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|km|line=A|lower|1",
+          "value": 0.895516081849542,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|cumhaz|line=A|cumhaz|1",
+          "value": 0.0338983050847458,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|km|line=A|surv|5",
+          "value": 0.897985289414775,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|km|line=A|lower|5",
+          "value": 0.810025854008476,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|cumhaz|line=A|cumhaz|5",
+          "value": 0.106035767093111,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|km|line=A|surv|10",
+          "value": 0.825671570195075,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|km|line=A|lower|10",
+          "value": 0.724039499300445,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|cumhaz|line=A|cumhaz|10",
+          "value": 0.189115595836677,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||test",
+          "text": "peto"
+        }
+      ]
+    },
+    {
+      "id": "kaplan_meier_crossing",
+      "model": "kaplan_meier",
+      "data": "data/kaplan_meier_crossing.csv",
+      "types": {
+        "months": "number",
+        "churned": "integer",
+        "plan": "text"
+      },
+      "params": {
+        "time": "months",
+        "event": "churned",
+        "event_value": 1,
+        "strata": "plan",
+        "times": [
+          6,
+          24
+        ]
+      },
+      "expect": [
+        {
+          "key": "model|||n",
+          "value": 140,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||events",
+          "value": 103,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||censored",
+          "value": 37,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n_missing",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n_strata",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||rmst_tau",
+          "value": 47,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||conf_type",
+          "text": "log"
+        },
+        {
+          "key": "stratum|plan=basic||n",
+          "value": 70,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|plan=basic||events",
+          "value": 39,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|plan=basic||censored",
+          "value": 31,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|plan=basic||q25",
+          "value": 1.1,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|plan=basic||q25_ci_low",
+          "value": 0.8,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|plan=basic||q25_ci_high",
+          "value": 3.4,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|plan=basic||median",
+          "value": 15,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|plan=basic||median_ci_low",
+          "value": 3.6,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|plan=basic||median_ci_high",
+          "value": null,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|plan=basic||q75",
+          "value": null,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|plan=basic||q75_ci_low",
+          "value": 37.2,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|plan=basic||q75_ci_high",
+          "value": null,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|plan=basic||surv_at_6",
+          "value": 0.6,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|plan=basic||surv_at_6_low",
+          "value": 0.495544300620308,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|plan=basic||surv_at_6_high",
+          "value": 0.726473898598697,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|plan=basic||surv_at_24",
+          "value": 0.446639397387696,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|plan=basic||surv_at_24_low",
+          "value": 0.338399667370143,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|plan=basic||surv_at_24_high",
+          "value": 0.589500435532772,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|plan=basic||rmst",
+          "value": 22.1765946415297,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|plan=basic||rmst_se",
+          "value": 2.60625134670869,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|plan=premium||n",
+          "value": 70,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|plan=premium||events",
+          "value": 64,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|plan=premium||censored",
+          "value": 6,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|plan=premium||q25",
+          "value": 2.6,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|plan=premium||q25_ci_low",
+          "value": 1.7,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|plan=premium||q25_ci_high",
+          "value": 3.9,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|plan=premium||median",
+          "value": 6.15,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|plan=premium||median_ci_low",
+          "value": 3.9,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|plan=premium||median_ci_high",
+          "value": 9.2,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|plan=premium||q75",
+          "value": 15.9,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|plan=premium||q75_ci_low",
+          "value": 9.6,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|plan=premium||q75_ci_high",
+          "value": 19.3,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|plan=premium||surv_at_6",
+          "value": 0.514285714285714,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|plan=premium||surv_at_6_low",
+          "value": 0.409574447732646,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|plan=premium||surv_at_6_high",
+          "value": 0.645767326019849,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|plan=premium||surv_at_24",
+          "value": 0.06328125,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|plan=premium||surv_at_24_low",
+          "value": 0.0223839580823262,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|plan=premium||surv_at_24_high",
+          "value": 0.1789011839119,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|plan=premium||rmst",
+          "value": 9.35511383928571,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|plan=premium||rmst_se",
+          "value": 1.1775530568635,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||test_statistic",
+          "value": 14.078282703463,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||test_df",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||test_p_value",
+          "value": 0.000175356847455666,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||test_significance",
+          "text": "***"
+        },
+        {
+          "key": "stratum|plan=basic||observed",
+          "value": 39,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|plan=basic||expected",
+          "value": 57.2673305379649,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|plan=premium||observed",
+          "value": 64,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|plan=premium||expected",
+          "value": 45.7326694620351,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|censoring_by_stratum||statistic",
+          "value": 22.9598530569404,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|censoring_by_stratum||p_value",
+          "value": 1.65420157778509e-06,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|censoring_by_stratum||verdict",
+          "text": "doubtful"
+        },
+        {
+          "key": "assumption|follow_up_by_stratum||statistic",
+          "value": 0.313694767145781,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|follow_up_by_stratum||p_value",
+          "value": 0.575421729253393,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|follow_up_by_stratum||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|proportional_hazards||statistic",
+          "value": 30.381699287325,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|proportional_hazards||df",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|proportional_hazards||p_value",
+          "value": 3.5486026609794e-08,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|censoring_informative||verdict",
+          "text": "not_computed"
+        },
+        {
+          "key": "assumption|censoring_informative||value",
+          "value": 0.264285714285714,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|km|plan=basic|surv|0",
+          "value": 0.985714285714286,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|km|plan=basic|lower|0",
+          "value": 0.958303842514148,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|cumhaz|plan=basic|cumhaz|0",
+          "value": 0.0142857142857143,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|km|plan=basic|surv|4",
+          "value": 0.885714285714286,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|km|plan=basic|lower|4",
+          "value": 0.814232185316579,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|cumhaz|plan=basic|cumhaz|4",
+          "value": 0.119510469664829,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|km|plan=basic|surv|9",
+          "value": 0.785714285714286,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|km|plan=basic|lower|9",
+          "value": 0.695238300043112,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|cumhaz|plan=basic|cumhaz|9",
+          "value": 0.237713451998588,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|proportional_hazards||verdict",
+          "text": "failed"
+        },
+        {
+          "key": "assumption|proportional_hazards||count",
+          "value": 1,
+          "rel": 1e-09
+        }
+      ]
+    },
+    {
+      "id": "kaplan_meier_single",
+      "model": "kaplan_meier",
+      "data": "data/kaplan_meier_single.csv",
+      "types": {
+        "hours": "number",
+        "broke": "boolean"
+      },
+      "params": {
+        "time": "hours",
+        "event": "broke",
+        "event_value": true,
+        "conf_type": "plain",
+        "times": [
+          5,
+          12.5,
+          1000
+        ],
+        "rmst_tau": 20
+      },
+      "expect": [
+        {
+          "key": "model|||n",
+          "value": 48,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||events",
+          "value": 34,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||censored",
+          "value": 14,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n_missing",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n_strata",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||rmst_tau",
+          "value": 20,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||conf_type",
+          "text": "plain"
+        },
+        {
+          "key": "stratum|all||n",
+          "value": 48,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|all||events",
+          "value": 34,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|all||censored",
+          "value": 14,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|all||q25",
+          "value": 5.11,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|all||q25_ci_low",
+          "value": 4.21,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|all||q25_ci_high",
+          "value": 7.29,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|all||median",
+          "value": 8.83,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|all||median_ci_low",
+          "value": 7.04,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|all||median_ci_high",
+          "value": 14.76,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|all||q75",
+          "value": 16.71,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|all||q75_ci_low",
+          "value": 11.94,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|all||q75_ci_high",
+          "value": null,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|all||surv_at_5",
+          "value": 0.75,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|all||surv_at_5_low",
+          "value": 0.627502250966247,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|all||surv_at_5_high",
+          "value": 0.872497749033753,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|all||surv_at_12.5",
+          "value": 0.394410637818346,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|all||surv_at_12.5_low",
+          "value": 0.246879330019562,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|all||surv_at_12.5_high",
+          "value": 0.54194194561713,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|all||surv_at_1000",
+          "value": null,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|all||surv_at_1000_low",
+          "value": null,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|all||surv_at_1000_high",
+          "value": null,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|all||rmst",
+          "value": 10.9424069848246,
+          "rel": 1e-09
+        },
+        {
+          "key": "stratum|all||rmst_se",
+          "value": 0.965687702691834,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|censoring_informative||verdict",
+          "text": "not_computed"
+        },
+        {
+          "key": "assumption|censoring_informative||value",
+          "value": 0.291666666666667,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|km|all|surv|1",
+          "value": 0.979166666666667,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|km|all|lower|1",
+          "value": 0.938761661752253,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|cumhaz|all|cumhaz|1",
+          "value": 0.0208333333333333,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|km|all|surv|5",
+          "value": 0.895833333333333,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|km|all|lower|5",
+          "value": 0.809415083837458,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|cumhaz|all|cumhaz|5",
+          "value": 0.108798554462292,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|km|all|surv|10",
+          "value": 0.791666666666666,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|km|all|lower|10",
+          "value": 0.676777776733748,
+          "rel": 1e-09
+        },
+        {
+          "key": "curve|cumhaz|all|cumhaz|10",
+          "value": 0.230895161768769,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||formula",
+          "text": "Surv(hours, broke = true) ~ 1"
+        }
+      ]
+    },
+    {
+      "id": "kaplan_meier_no_events",
+      "model": "kaplan_meier",
+      "data": "data/kaplan_meier_single.csv",
+      "types": {
+        "hours": "number",
+        "broke": "boolean"
+      },
+      "params": {
+        "time": "hours",
+        "event": "broke",
+        "event_value": "maybe"
+      },
+      "expect": [],
+      "refuses": {
+        "code": "no_events"
+      }
+    }
+  ]
 }

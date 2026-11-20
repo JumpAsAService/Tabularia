@@ -8,7 +8,12 @@
    "of_n": "of {n} rows",
    "censored": "Censored",
    "logrank": "Log-rank test: p",
-   "peto": "Peto's test: p"
+   "peto": "Peto's test: p",
+   "median": "Median time to the event",
+   "not_reached": "not reached",
+   "ci": "CI {ci}",
+   "rmst": "Restricted mean",
+   "up_to": "up to {tau}"
   },
   "charts": {
    "km": "Survival by stratum, with its confidence band; dots: censored times",
@@ -24,15 +29,18 @@
    "at_risk": "Number at risk",
    "stratum_time": "Stratum \\ time",
    "stratum": "Stratum",
-   "strata": "Events and medians",
-   "rmst": "Restricted mean survival, observed and expected events",
+   "strata": "Rows and events; observed and expected under the test's H0",
+   "rmst": "Restricted mean survival",
    "surv_at": "Survival at the times asked",
    "time": "Time",
    "survival": "Survival",
    "low": "Low end",
    "high": "High end",
    "pairs": "Pairs of strata (Holm)",
-   "pair": "Pair"
+   "pair": "Pair",
+   "quartiles": "Quartiles of the time to the event",
+   "ci": "Interval",
+   "horizon": "Up to"
   },
   "stats": {
    "model": {
@@ -53,6 +61,12 @@
     "median": "Median",
     "median_ci_low": "Median, CI low",
     "median_ci_high": "Median, CI high",
+    "q25": "25%",
+    "q25_ci_low": "25%, CI low",
+    "q25_ci_high": "25%, CI high",
+    "q75": "75%",
+    "q75_ci_low": "75%, CI low",
+    "q75_ci_high": "75%, CI high",
     "rmst": "Restricted mean",
     "rmst_se": "Its std. error",
     "observed": "Observed events",
@@ -84,14 +98,26 @@
    "proportional_hazards": {
     "name": "Proportional hazards",
     "h0": "The strata's hazards keep the same ratio over time (the curves do not cross).",
-    "advice": "The curves cross: compare with test = peto, or with the restricted mean."
+    "advice": "The hazards' ratio changes over time, or the curves cross: the log-rank test loses power; compare with test = peto, or with the restricted mean."
    },
    "censoring_by_stratum": {
     "name": "Censoring by stratum",
     "h0": "The share censored is the same in every stratum.",
-    "advice": "Censoring differs between strata: read the comparison with care."
+    "advice": "The share censored differs between strata: expected when their survival differs; the follow-up check says whether censoring itself differs."
+   },
+   "follow_up_by_stratum": {
+    "name": "Follow-up by stratum",
+    "h0": "The rows of every stratum are followed as long (the reverse Kaplan–Meier).",
+    "advice": "The follow-up differs between strata: the rows of one are censored sooner; ask why before comparing."
+   },
+   "few_at_risk": {
+    "name": "Rows still at risk",
+    "h0": "Every number reported is read where at least 10 rows are still at risk.",
+    "advice": "Few rows are left at risk where these numbers are read: the end of a curve is uncertain; read them with their intervals, or report at an earlier time."
    }
-  }
+  },
+  "all": "All rows",
+  "quartiles_caption": "25%: the time by which a quarter of the rows had the event (survival 0.75); an empty cell or a dash: not reached, the curve does not go that low."
  },
  "it": {
   "name": "Kaplan–Meier",
@@ -102,7 +128,12 @@
    "of_n": "su {n} righe",
    "censored": "Censurati",
    "logrank": "Test log-rank: p",
-   "peto": "Test di Peto: p"
+   "peto": "Test di Peto: p",
+   "median": "Tempo mediano all'evento",
+   "not_reached": "non raggiunto",
+   "ci": "IC {ci}",
+   "rmst": "Media ristretta",
+   "up_to": "fino a {tau}"
   },
   "charts": {
    "km": "Sopravvivenza per strato, con la sua banda di confidenza; punti: tempi censurati",
@@ -118,15 +149,18 @@
    "at_risk": "Numero a rischio",
    "stratum_time": "Strato \\ tempo",
    "stratum": "Strato",
-   "strata": "Eventi e mediane",
-   "rmst": "Sopravvivenza media ristretta, eventi osservati e attesi",
+   "strata": "Righe ed eventi; osservati e attesi sotto l'H0 del test",
+   "rmst": "Sopravvivenza media ristretta",
    "surv_at": "Sopravvivenza ai tempi richiesti",
    "time": "Tempo",
    "survival": "Sopravvivenza",
    "low": "Estremo inferiore",
    "high": "Estremo superiore",
    "pairs": "Coppie di strati (Holm)",
-   "pair": "Coppia"
+   "pair": "Coppia",
+   "quartiles": "Quartili del tempo all'evento",
+   "ci": "Intervallo",
+   "horizon": "Fino a"
   },
   "stats": {
    "model": {
@@ -147,6 +181,12 @@
     "median": "Mediana",
     "median_ci_low": "Mediana, IC inf.",
     "median_ci_high": "Mediana, IC sup.",
+    "q25": "25%",
+    "q25_ci_low": "25%, IC inf.",
+    "q25_ci_high": "25%, IC sup.",
+    "q75": "75%",
+    "q75_ci_low": "75%, IC inf.",
+    "q75_ci_high": "75%, IC sup.",
     "rmst": "Media ristretta",
     "rmst_se": "Il suo errore std.",
     "observed": "Eventi osservati",
@@ -178,14 +218,26 @@
    "proportional_hazards": {
     "name": "Rischi proporzionali",
     "h0": "I rischi degli strati mantengono lo stesso rapporto nel tempo (le curve non si incrociano).",
-    "advice": "Le curve si incrociano: confrontate con test = peto, oppure con la media ristretta."
+    "advice": "Il rapporto dei rischi cambia nel tempo, o le curve si incrociano: il test log-rank perde potenza; confrontate con test = peto, oppure con la media ristretta."
    },
    "censoring_by_stratum": {
     "name": "Censura per strato",
     "h0": "La quota di censurati è la stessa in ogni strato.",
-    "advice": "La censura cambia tra gli strati: leggete il confronto con cautela."
+    "advice": "La quota di censurati cambia tra gli strati: è atteso quando la loro sopravvivenza è diversa; la verifica del follow-up dice se cambia la censura stessa."
+   },
+   "follow_up_by_stratum": {
+    "name": "Follow-up per strato",
+    "h0": "Le righe di ogni strato sono seguite per lo stesso tempo (Kaplan–Meier inverso).",
+    "advice": "Il follow-up cambia tra gli strati: le righe di uno sono censurate prima; chiedetevi perché prima di confrontarli."
+   },
+   "few_at_risk": {
+    "name": "Righe ancora a rischio",
+    "h0": "Ogni numero riportato è letto dove almeno 10 righe sono ancora a rischio.",
+    "advice": "Restano poche righe a rischio dove questi numeri sono letti: la coda della curva è incerta; leggeteli con i loro intervalli, oppure riportateli a un tempo più breve."
    }
-  }
+  },
+  "all": "Tutte le righe",
+  "quartiles_caption": "25%: il tempo entro cui un quarto delle righe ha avuto l'evento (sopravvivenza 0,75); una cella vuota o un trattino: non raggiunto, la curva non scende così in basso."
  },
  "de": {
   "name": "Kaplan–Meier",
@@ -196,7 +248,12 @@
    "of_n": "von {n} Zeilen",
    "censored": "Zensiert",
    "logrank": "Log-Rank-Test: p",
-   "peto": "Peto-Test: p"
+   "peto": "Peto-Test: p",
+   "median": "Medianzeit bis zum Ereignis",
+   "not_reached": "nicht erreicht",
+   "ci": "KI {ci}",
+   "rmst": "Eingeschränktes Mittel",
+   "up_to": "bis {tau}"
   },
   "charts": {
    "km": "Überleben je Schicht mit Konfidenzband; Punkte: zensierte Zeiten",
@@ -212,15 +269,18 @@
    "at_risk": "Anzahl unter Risiko",
    "stratum_time": "Schicht \\ Zeit",
    "stratum": "Schicht",
-   "strata": "Ereignisse und Mediane",
-   "rmst": "Restricted Mean Survival, beobachtete und erwartete Ereignisse",
+   "strata": "Zeilen und Ereignisse; beobachtet und erwartet unter der H0 des Tests",
+   "rmst": "Eingeschränkte mittlere Überlebenszeit",
    "surv_at": "Überleben zu den gewünschten Zeiten",
    "time": "Zeit",
    "survival": "Überleben",
    "low": "Untere Grenze",
    "high": "Obere Grenze",
    "pairs": "Paare von Schichten (Holm)",
-   "pair": "Paar"
+   "pair": "Paar",
+   "quartiles": "Quartile der Zeit bis zum Ereignis",
+   "ci": "Intervall",
+   "horizon": "Bis"
   },
   "stats": {
    "model": {
@@ -241,6 +301,12 @@
     "median": "Median",
     "median_ci_low": "Median, KI unten",
     "median_ci_high": "Median, KI oben",
+    "q25": "25 %",
+    "q25_ci_low": "25 %, KI unten",
+    "q25_ci_high": "25 %, KI oben",
+    "q75": "75 %",
+    "q75_ci_low": "75 %, KI unten",
+    "q75_ci_high": "75 %, KI oben",
     "rmst": "Eingeschränktes Mittel",
     "rmst_se": "Sein Std.-Fehler",
     "observed": "Beobachtete Ereignisse",
@@ -272,14 +338,26 @@
    "proportional_hazards": {
     "name": "Proportionale Hazards",
     "h0": "Die Hazards der Schichten behalten über die Zeit dasselbe Verhältnis (die Kurven kreuzen sich nicht).",
-    "advice": "Die Kurven kreuzen sich: Vergleichen Sie mit test = peto oder mit dem eingeschränkten Mittel."
+    "advice": "Das Hazard-Verhältnis ändert sich mit der Zeit, oder die Kurven kreuzen sich: Der Log-Rank-Test verliert an Trennschärfe; vergleichen Sie mit test = peto oder mit dem eingeschränkten Mittel."
    },
    "censoring_by_stratum": {
     "name": "Zensierung je Schicht",
     "h0": "Der Anteil zensierter Zeilen ist in jeder Schicht gleich.",
-    "advice": "Die Zensierung unterscheidet sich zwischen den Schichten: Lesen Sie den Vergleich mit Vorsicht."
+    "advice": "Der Anteil zensierter Zeilen unterscheidet sich zwischen den Schichten: erwartet, wenn ihr Überleben verschieden ist; die Prüfung der Nachbeobachtung zeigt, ob sich die Zensierung selbst unterscheidet."
+   },
+   "follow_up_by_stratum": {
+    "name": "Nachbeobachtung je Schicht",
+    "h0": "Die Zeilen jeder Schicht werden gleich lange beobachtet (umgekehrter Kaplan–Meier).",
+    "advice": "Die Nachbeobachtung unterscheidet sich zwischen den Schichten: Die Zeilen einer Schicht werden früher zensiert; klären Sie den Grund, bevor Sie vergleichen."
+   },
+   "few_at_risk": {
+    "name": "Zeilen noch unter Risiko",
+    "h0": "Jede berichtete Zahl wird dort abgelesen, wo noch mindestens 10 Zeilen unter Risiko stehen.",
+    "advice": "Wo diese Zahlen abgelesen werden, stehen nur noch wenige Zeilen unter Risiko: Das Ende einer Kurve ist unsicher; lesen Sie sie mit ihren Intervallen oder berichten Sie zu einer früheren Zeit."
    }
-  }
+  },
+  "all": "Alle Zeilen",
+  "quartiles_caption": "25 %: die Zeit, bis zu der ein Viertel der Zeilen das Ereignis hatte (Überleben 0,75); eine leere Zelle oder ein Strich: nicht erreicht, die Kurve sinkt nicht so tief."
  },
  "es": {
   "name": "Kaplan–Meier",
@@ -290,7 +368,12 @@
    "of_n": "de {n} filas",
    "censored": "Censurados",
    "logrank": "Prueba log-rank: p",
-   "peto": "Prueba de Peto: p"
+   "peto": "Prueba de Peto: p",
+   "median": "Tiempo mediano hasta el evento",
+   "not_reached": "no alcanzada",
+   "ci": "IC {ci}",
+   "rmst": "Media restringida",
+   "up_to": "hasta {tau}"
   },
   "charts": {
    "km": "Supervivencia por estrato, con su banda de confianza; puntos: tiempos censurados",
@@ -306,15 +389,18 @@
    "at_risk": "Número en riesgo",
    "stratum_time": "Estrato \\ tiempo",
    "stratum": "Estrato",
-   "strata": "Eventos y medianas",
-   "rmst": "Supervivencia media restringida, eventos observados y esperados",
+   "strata": "Filas y eventos; observados y esperados bajo la H0 de la prueba",
+   "rmst": "Supervivencia media restringida",
    "surv_at": "Supervivencia en los tiempos pedidos",
    "time": "Tiempo",
    "survival": "Supervivencia",
    "low": "Extremo inferior",
    "high": "Extremo superior",
    "pairs": "Pares de estratos (Holm)",
-   "pair": "Par"
+   "pair": "Par",
+   "quartiles": "Cuartiles del tiempo hasta el evento",
+   "ci": "Intervalo",
+   "horizon": "Hasta"
   },
   "stats": {
    "model": {
@@ -335,6 +421,12 @@
     "median": "Mediana",
     "median_ci_low": "Mediana, IC inf.",
     "median_ci_high": "Mediana, IC sup.",
+    "q25": "25 %",
+    "q25_ci_low": "25 %, IC inf.",
+    "q25_ci_high": "25 %, IC sup.",
+    "q75": "75 %",
+    "q75_ci_low": "75 %, IC inf.",
+    "q75_ci_high": "75 %, IC sup.",
     "rmst": "Media restringida",
     "rmst_se": "Su error est.",
     "observed": "Eventos observados",
@@ -366,14 +458,26 @@
    "proportional_hazards": {
     "name": "Riesgos proporcionales",
     "h0": "Los riesgos de los estratos mantienen la misma razón en el tiempo (las curvas no se cruzan).",
-    "advice": "Las curvas se cruzan: compare con test = peto, o con la media restringida."
+    "advice": "La razón de riesgos cambia con el tiempo, o las curvas se cruzan: la prueba log-rank pierde potencia; compare con test = peto, o con la media restringida."
    },
    "censoring_by_stratum": {
     "name": "Censura por estrato",
     "h0": "La proporción de censurados es la misma en cada estrato.",
-    "advice": "La censura difiere entre estratos: lea la comparación con cautela."
+    "advice": "La proporción de censurados difiere entre estratos: es lo esperado cuando su supervivencia difiere; la comprobación del seguimiento dice si difiere la censura misma."
+   },
+   "follow_up_by_stratum": {
+    "name": "Seguimiento por estrato",
+    "h0": "Las filas de cada estrato se siguen durante el mismo tiempo (Kaplan–Meier inverso).",
+    "advice": "El seguimiento difiere entre estratos: las filas de uno se censuran antes; pregúntese por qué antes de comparar."
+   },
+   "few_at_risk": {
+    "name": "Filas aún en riesgo",
+    "h0": "Cada número informado se lee donde al menos 10 filas siguen en riesgo.",
+    "advice": "Quedan pocas filas en riesgo donde se leen estos números: el final de una curva es incierto; léalos con sus intervalos, o infórmelos en un tiempo anterior."
    }
-  }
+  },
+  "all": "Todas las filas",
+  "quartiles_caption": "25 %: el tiempo en que una cuarta parte de las filas tuvo el evento (supervivencia 0,75); una celda vacía o un guion: no alcanzado, la curva no baja tanto."
  },
  "fr": {
   "name": "Kaplan–Meier",
@@ -384,7 +488,12 @@
    "of_n": "sur {n} lignes",
    "censored": "Censurés",
    "logrank": "Test du log-rank : p",
-   "peto": "Test de Peto : p"
+   "peto": "Test de Peto : p",
+   "median": "Temps médian jusqu'à l'événement",
+   "not_reached": "non atteinte",
+   "ci": "IC {ci}",
+   "rmst": "Moyenne restreinte",
+   "up_to": "jusqu'à {tau}"
   },
   "charts": {
    "km": "Survie par strate, avec sa bande de confiance ; points : temps censurés",
@@ -400,15 +509,18 @@
    "at_risk": "Nombre à risque",
    "stratum_time": "Strate \\ temps",
    "stratum": "Strate",
-   "strata": "Événements et médianes",
-   "rmst": "Survie moyenne restreinte, événements observés et attendus",
+   "strata": "Lignes et événements ; observés et attendus sous l'H0 du test",
+   "rmst": "Survie moyenne restreinte",
    "surv_at": "Survie aux temps demandés",
    "time": "Temps",
    "survival": "Survie",
    "low": "Borne inférieure",
    "high": "Borne supérieure",
    "pairs": "Paires de strates (Holm)",
-   "pair": "Paire"
+   "pair": "Paire",
+   "quartiles": "Quartiles du temps jusqu'à l'événement",
+   "ci": "Intervalle",
+   "horizon": "Jusqu'à"
   },
   "stats": {
    "model": {
@@ -429,6 +541,12 @@
     "median": "Médiane",
     "median_ci_low": "Médiane, IC inf.",
     "median_ci_high": "Médiane, IC sup.",
+    "q25": "25 %",
+    "q25_ci_low": "25 %, IC inf.",
+    "q25_ci_high": "25 %, IC sup.",
+    "q75": "75 %",
+    "q75_ci_low": "75 %, IC inf.",
+    "q75_ci_high": "75 %, IC sup.",
     "rmst": "Moyenne restreinte",
     "rmst_se": "Son erreur type",
     "observed": "Événements observés",
@@ -460,13 +578,25 @@
    "proportional_hazards": {
     "name": "Risques proportionnels",
     "h0": "Les risques des strates gardent le même rapport dans le temps (les courbes ne se croisent pas).",
-    "advice": "Les courbes se croisent : comparez avec test = peto, ou avec la moyenne restreinte."
+    "advice": "Le rapport des risques change dans le temps, ou les courbes se croisent : le test du log-rank perd de la puissance ; comparez avec test = peto, ou avec la moyenne restreinte."
    },
    "censoring_by_stratum": {
     "name": "Censure par strate",
     "h0": "La part de censurés est la même dans chaque strate.",
-    "advice": "La censure diffère entre les strates : lisez la comparaison avec prudence."
+    "advice": "La part de censurés diffère entre les strates : c'est attendu quand leur survie diffère ; le contrôle du suivi dit si la censure elle-même diffère."
+   },
+   "follow_up_by_stratum": {
+    "name": "Suivi par strate",
+    "h0": "Les lignes de chaque strate sont suivies aussi longtemps (Kaplan–Meier inverse).",
+    "advice": "Le suivi diffère entre les strates : les lignes de l'une sont censurées plus tôt ; demandez-vous pourquoi avant de comparer."
+   },
+   "few_at_risk": {
+    "name": "Lignes encore à risque",
+    "h0": "Chaque nombre rapporté est lu là où au moins 10 lignes sont encore à risque.",
+    "advice": "Il reste peu de lignes à risque là où ces nombres sont lus : la fin d'une courbe est incertaine ; lisez-les avec leurs intervalles, ou rapportez-les à un temps plus court."
    }
-  }
+  },
+  "all": "Toutes les lignes",
+  "quartiles_caption": "25 % : le temps auquel un quart des lignes a eu l'événement (survie 0,75) ; une cellule vide ou un tiret : non atteint, la courbe ne descend pas si bas."
  }
 }
