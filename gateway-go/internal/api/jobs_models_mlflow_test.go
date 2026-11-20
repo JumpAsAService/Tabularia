@@ -183,6 +183,8 @@ type mlflowWorld struct {
 	files  map[string][]byte // by the last part of the key: results.parquet, model.json…
 	mu     sync.Mutex
 	engine []string // the engine's paths, in order, past the fixture's
+	// rows, when set, is what the engine answers to the read-back of the results (the linear model's otherwise)
+	rows string
 }
 
 const mlflowSecret = "mlflow-s3cret-pw"
@@ -240,6 +242,8 @@ func (w *mlflowWorld) serveEngine(rw http.ResponseWriter, r *http.Request) {
 	w.engine = append(w.engine, r.URL.Path)
 	w.mu.Unlock()
 	switch {
+	case r.URL.Path == "/scripts/results/rows" && w.rows != "":
+		_, _ = rw.Write([]byte(w.rows))
 	case r.URL.Path == "/scripts/results/rows":
 		_, _ = rw.Write([]byte(`{"rows": [
 			{"section": "model", "level": null, "level_2": null, "stat": "formula", "value": null, "text": "quantity ~ price + channel"},
@@ -693,7 +697,7 @@ func TestCandidateKeysStayWithinTheLimitAndApart(t *testing.T) {
 func TestTheCatalogueFixturesLogTheirCandidatesAndParameters(t *testing.T) {
 	dir := "../../../backend/tests/fixtures/models"
 	for _, name := range []string{"parametric_survival-auto", "parametric_survival-ph_aft", "parametric_survival-aft",
-		"parametric_survival-ph", "arima-auto", "arima-manual"} {
+		"parametric_survival-ph", "arima-auto", "arima-manual", "clv-purchases", "clv-value", "bg_bb-purchases", "bg_bb-value"} {
 		raw, err := os.ReadFile(dir + "/" + name + ".json")
 		if err != nil {
 			t.Skipf("no fixtures here: %v", err)
@@ -767,6 +771,112 @@ func TestTheCatalogueFixturesLogTheirCandidatesAndParameters(t *testing.T) {
 		if strings.HasSuffix(name, "-auto") && candidates == 0 {
 			t.Errorf("%s: an automatic choice without candidates", name)
 		}
+	}
+}
+
+// ── customer lifetime (docs/specs/customer-lifetime-models.md, lot B7) ──────
+
+// A customer lifetime fit's results: the model section's numbers (the parameters, the CLV, the
+// holdout), every candidate's numbers, the checks' statistic, p-value and value; the purchase model
+// used and the horizon used are parameters; the per-customer rows, the charts' points and the
+// coefficients' table are not metrics.
+func TestACustomerLifetimeFitLogsItsNumbersAndTheChoice(t *testing.T) {
+	rows := []resultRow{
+		{Section: "model", Stat: "model", Text: ptr("clv")},
+		{Section: "model", Stat: "purchase_model", Text: ptr("mbg_nbd")},
+		{Section: "model", Stat: "purchase_model_asked", Text: ptr("auto")},
+		{Section: "model", Stat: "time_unit", Text: ptr("week")},
+		{Section: "model", Stat: "horizon", Value: ptr(52.0)},
+		{Section: "model", Stat: "log_lik", Value: ptr(-9582.14)},
+		{Section: "model", Stat: "param_r", Value: ptr(0.5248)},
+		{Section: "model", Stat: "clv_total", Value: ptr(97108.4)},
+		{Section: "model", Stat: "discount_rate", Value: ptr(0.1)},
+		{Section: "model", Stat: "margin", Value: ptr(1.0)},
+		{Section: "candidate", Level: ptr("pareto_nbd"), Stat: "log_lik", Value: ptr(-9594.98)},
+		{Section: "candidate", Level: ptr("pareto_nbd"), Stat: "chosen", Value: ptr(0.0)},
+		{Section: "candidate", Level: ptr("mbg_nbd"), Stat: "chosen", Value: ptr(1.0)},
+		{Section: "candidate", Level: ptr("mbg_nbd"), Stat: "holdout_rel_error", Value: ptr(-0.12)},
+		{Section: "assumption", Level: ptr("frequency_fit"), Stat: "p_value", Value: ptr(0.3)},
+		{Section: "assumption", Level: ptr("holdout"), Stat: "value", Value: ptr(-0.12)}, // a measure: no verdict
+		{Section: "assumption", Level: ptr("holdout"), Stat: "verdict", Text: ptr("passed")},
+		{Section: "customer", Level: ptr("c4217"), Stat: "clv", Value: ptr(1234.5)},
+		{Section: "coef", Level: ptr("r"), Level2: ptr("purchases"), Stat: "estimate", Value: ptr(0.5248)},
+	}
+	got := map[string]float64{}
+	for _, m := range modelMetrics(rows, time.Now()) {
+		got[m.Key] = m.Value
+	}
+	want := map[string]float64{"horizon": 52, "log_lik": -9582.14, "param_r": 0.5248, "clv_total": 97108.4, "discount_rate": 0.1, "margin": 1,
+		"candidate.pareto_nbd.log_lik": -9594.98, "candidate.pareto_nbd.chosen": 0, "candidate.mbg_nbd.chosen": 1,
+		"candidate.mbg_nbd.holdout_rel_error": -0.12, "assumption.frequency_fit.p_value": 0.3, "assumption.holdout.value": -0.12}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Errorf("metrics:\n got %v\nwant %v", got, want)
+	}
+	params := func(checked map[string]any) map[string]string {
+		out := map[string]string{}
+		for _, p := range customerLifetimeParams(rows, checked) {
+			out[p.Key] = p.Value
+		}
+		return out
+	}
+	// the node said `auto` and no horizon: the model used and the horizon used are logged
+	if got := fmt.Sprint(params(map[string]any{"purchase_model": "auto", "horizon": nil})); got != "map[horizon:52 purchase_model_chosen:mbg_nbd]" {
+		t.Errorf("params: %s", got)
+	}
+	// a horizon the node gave is the node's parameter, not repeated
+	if got := fmt.Sprint(params(map[string]any{"horizon": 26.0})); got != "map[purchase_model_chosen:mbg_nbd]" {
+		t.Errorf("params with a horizon: %s", got)
+	}
+	// another model's results (no purchase model) add nothing, and keep their checks' `value` out
+	other := []resultRow{{Section: "model", Stat: "horizon", Value: ptr(12.0)},
+		{Section: "assumption", Level: ptr("ljung_box"), Stat: "value", Value: ptr(0.4)}}
+	if p := customerLifetimeParams(other, map[string]any{}); len(p) != 0 {
+		t.Errorf("another model's params: %v", p)
+	}
+	for _, m := range modelMetrics(other, time.Now()) {
+		if strings.HasPrefix(m.Key, "assumption.") {
+			t.Errorf("another model logs a check's value: %s", m.Key)
+		}
+	}
+}
+
+// A customer lifetime card's purchase model is read for the version's tag.
+func TestACustomerLifetimeCardsPurchaseModelIsRead(t *testing.T) {
+	c := parseCardFile([]byte(`{"variant": "value", "customer_lifetime": {"node": "clv", "purchase_model": "bg_nbd"}}`))
+	if c.variant != "value" || c.purchaseModel != "bg_nbd" {
+		t.Errorf("%+v", c)
+	}
+	if c := parseCardFile([]byte(`{"variant": "unpenalized"}`)); c.purchaseModel != "" {
+		t.Errorf("a card without one: %+v", c)
+	}
+}
+
+// A run of a customer lifetime model registers its version with the tags Predict's form reads:
+// the variant and the purchase model the fit used.
+func TestACustomerLifetimeRunRegistersItsVersionWithTheVariantAndThePurchaseModel(t *testing.T) {
+	w := newMLflowWorld(t)
+	w.files["model.json"] = []byte(`{"format": "tabularia-model", "format_version": 1, "model": "clv", "variant": "value", "group": "customer_lifetime",
+		"customer_lifetime": {"node": "clv", "purchase_model": "mbg_nbd", "horizon": 52}}`)
+	w.rows = `{"rows": [
+		{"section": "model", "level": null, "level_2": null, "stat": "purchase_model", "value": null, "text": "mbg_nbd"},
+		{"section": "model", "level": null, "level_2": null, "stat": "horizon", "value": 52, "text": null},
+		{"section": "model", "level": null, "level_2": null, "stat": "clv_total", "value": 97108.4, "text": null},
+		{"section": "candidate", "level": "bg_nbd", "level_2": null, "stat": "log_lik", "value": -9582.43, "text": null}]}`
+	id, err := w.runWith(w.block(`, "registerAs": "customers"`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r := w.row(id); r.status != "SUCCESS" {
+		t.Fatalf("%+v", r)
+	}
+	run := w.ml.OnlyRun()
+	if run.Params["purchase_model_chosen"] != "mbg_nbd" || run.Params["horizon"] != "52" ||
+		run.Metrics["clv_total"] != 97108.4 || run.Metrics["candidate.bg_nbd.log_lik"] != -9582.43 {
+		t.Errorf("params %v, metrics %v", run.Params, run.Metrics)
+	}
+	versions := w.ml.Models["customers"]
+	if len(versions) != 1 || versions[0].Tags["tabularia.variant"] != "value" || versions[0].Tags["tabularia.purchase_model"] != "mbg_nbd" {
+		t.Errorf("versions: %+v", versions)
 	}
 }
 

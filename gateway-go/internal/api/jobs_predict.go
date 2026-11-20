@@ -334,6 +334,12 @@ type predictCard struct {
 		Time  string `json:"time_column"`
 		Start string `json:"start_column"`
 	} `json:"cox"`
+	// a customer lifetime card's own object: what its prediction is computed from
+	CustomerLifetime *struct {
+		Node      string          `json:"node"`
+		Purchases json.RawMessage `json:"purchases"`
+		Spend     json.RawMessage `json:"spend"`
+	} `json:"customer_lifetime"`
 }
 
 // incompatible is why this Tabularia does not apply the card ("" when it does): the rule of
@@ -350,6 +356,31 @@ func (c *predictCard) incompatible(model, group string) string {
 		return fmt.Sprintf("says the group «%s», but the model «%s» is in «%s»", c.Group, model, group)
 	case !modelcatalog.HasVariant(model, c.Variant):
 		return fmt.Sprintf("was fitted with the variant «%s», which this version of Tabularia does not know", c.Variant)
+	case group == customerLifetimeGroup:
+		return c.customerLifetimeProblem(model)
+	}
+	return ""
+}
+
+// customerLifetimeGroup is the group of the customer lifetime models, whose cards hold their own
+// parameters (`customer_lifetime`): the prediction is computed from nothing else.
+const customerLifetimeGroup = "customer_lifetime"
+
+// customerLifetimeProblem is why a card of the customer lifetime group cannot be applied ("" when
+// it can): it must hold the parameters of its purchase part, of the node that wrote it, and of the
+// spend part exactly when the variant is the one with a value.
+func (c *predictCard) customerLifetimeProblem(model string) string {
+	cl := c.CustomerLifetime
+	empty := func(raw json.RawMessage) bool { return len(raw) == 0 || string(raw) == "null" }
+	switch {
+	case cl == nil || empty(cl.Purchases):
+		return "holds no customer lifetime parameters (customer_lifetime.purchases): fit the model again"
+	case cl.Node != model:
+		return fmt.Sprintf("holds the parameters of the node «%s», but the version says «%s»", cl.Node, model)
+	case c.Variant == "value" && empty(cl.Spend):
+		return "was fitted with a spend column but holds no spend parameters (customer_lifetime.spend): fit the model again"
+	case c.Variant == "purchases" && !empty(cl.Spend):
+		return "was fitted without a spend column but holds spend parameters: it is not applied"
 	}
 	return ""
 }

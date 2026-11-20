@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -577,5 +578,170 @@ func TestATrialsReadOfMLflowHasALimitAndSaysSo(t *testing.T) {
 	}
 	if n := w.runsMade(); n != 0 {
 		t.Errorf("%d runs made by a refusal", n)
+	}
+}
+
+// ── customer lifetime (docs/specs/customer-lifetime-models.md, lot B7) ──────
+
+const clvCardText = `{"format": "tabularia-model", "format_version": 1, "model": "clv", "variant": "value", "group": "customer_lifetime",
+ "group_version": 1, "params": {"customer": "id", "frequency": "x", "recency": "t_x", "age": "T", "time_unit": "week", "spend": "m"},
+ "inputs": [{"name": "x", "type": "number"}, {"name": "t_x", "type": "number"}, {"name": "T", "type": "number"}, {"name": "m", "type": "number"}],
+ "customer_lifetime": {"node": "clv", "time_unit": "week", "purchase_model": "mbg_nbd", "chosen_by": "log_lik",
+   "purchases": {"model": "mbg_nbd", "params": {"r": 0.5, "alpha": 6.2, "a": 0.9, "b": 1.6}},
+   "spend": {"model": "gamma_gamma", "params": {"p": 6.2, "q": 3.7, "gamma": 15.4}},
+   "horizon": 52, "discount_rate": 0.1, "periods_per_year": 52.17857142857143, "margin": 1}}`
+
+func TestACustomerLifetimeCardIsAppliedOnlyWithItsParameters(t *testing.T) {
+	read := func(text string) predictCard {
+		var c predictCard
+		if err := json.Unmarshal([]byte(text), &c); err != nil {
+			t.Fatal(err)
+		}
+		return c
+	}
+	good := read(clvCardText)
+	if why := good.incompatible("clv", "customer_lifetime"); why != "" {
+		t.Fatal(why)
+	}
+	purchases := read(strings.Replace(strings.Replace(clvCardText, `"variant": "value"`, `"variant": "purchases"`, 1),
+		`"spend": {"model": "gamma_gamma", "params": {"p": 6.2, "q": 3.7, "gamma": 15.4}},`, "", 1))
+	if why := purchases.incompatible("clv", "customer_lifetime"); why != "" {
+		t.Errorf("a card without a spend part: %s", why)
+	}
+	for what, c := range map[string]struct{ text, want string }{
+		"no parameters":    {strings.Replace(clvCardText, `"customer_lifetime": {`, `"other": {`, 1), "holds no customer lifetime parameters (customer_lifetime.purchases)"},
+		"no purchase part": {strings.Replace(clvCardText, `"purchases": {"model"`, `"nothing": {"model"`, 1), "holds no customer lifetime parameters (customer_lifetime.purchases)"},
+		"another node":     {strings.Replace(clvCardText, `"node": "clv"`, `"node": "bg_bb"`, 1), "holds the parameters of the node «bg_bb», but the version says «clv»"},
+		"a spend column and no spend part": {strings.Replace(clvCardText, `"spend": {"model": "gamma_gamma"`, `"x": {"model": "gamma_gamma"`, 1),
+			"holds no spend parameters (customer_lifetime.spend)"},
+		"a spend part and no spend column": {strings.Replace(clvCardText, `"variant": "value"`, `"variant": "purchases"`, 1),
+			"was fitted without a spend column but holds spend parameters"},
+		"another group's card": {strings.Replace(clvCardText, `"group": "customer_lifetime"`, `"group": "survival"`, 1), "says the group «survival», but the model «clv» is in «customer_lifetime»"},
+	} {
+		got := read(c.text)
+		if why := got.incompatible("clv", "customer_lifetime"); !strings.Contains(why, c.want) {
+			t.Errorf("%s: %q", what, why)
+		}
+	}
+	// the other groups' cards need no such object
+	if why := (&predictCard{Format: "tabularia-model", FormatVersion: 1, Model: "linear", Variant: "unpenalized", Group: "regression"}).incompatible("linear", "regression"); why != "" {
+		t.Error(why)
+	}
+}
+
+// enableGroup makes a group of the shipped ones usable by everyone, with a ready image, as the
+// fixture does for regression; the rows are removed with the test.
+func (w *predictWorld) enableGroup(id string) {
+	w.t.Helper()
+	shipped, ok := modelgroups.Get(id)
+	if !ok {
+		w.t.Fatalf("no group %s", id)
+	}
+	one := func(query string, args ...any) int64 {
+		var n int64
+		if err := w.db.QueryRow(w.ctx, query, args...).Scan(&n); err != nil {
+			w.t.Fatal(err)
+		}
+		return n
+	}
+	_, _ = w.db.Exec(w.ctx, `DELETE FROM model_groups WHERE id = $1`, id)
+	_, _ = w.db.Exec(w.ctx, `DELETE FROM script_environments WHERE managed_by = $1`, "model_group:"+id)
+	env := one(`INSERT INTO script_environments (name, description, language, enabled, cpu_request, cpu_limit, memory_request,
+		memory_limit, max_timeout_seconds, created_at, updated_at, managed_by) VALUES ($1, '', 'r', true, '1', '2', '2Gi', '4Gi', 3600,
+		now(), now(), $2) RETURNING id`, fmt.Sprintf("%s %d", id, time.Now().UnixNano()), "model_group:"+id)
+	version := one(`INSERT INTO script_environment_versions (environment_id, number, language_version, base_image, packages, status,
+		image_ref, arch, recipe_hash, created_at) VALUES ($1, 1, '4.6', 'rocker/r-ver:4.6.0', '', 'ready',
+		'registry:5000/envs@sha256:fedcba9876543210', 'amd64', $2, now()) RETURNING id`, env, shipped.RecipeHash)
+	if _, err := w.db.Exec(w.ctx, `UPDATE script_environments SET current_version_id = $1 WHERE id = $2`, version, env); err != nil {
+		w.t.Fatal(err)
+	}
+	if _, err := w.db.Exec(w.ctx, `INSERT INTO model_groups (id, environment_id, enabled, everyone, updated_at) VALUES ($1, $2, true, true, now())`, id, env); err != nil {
+		w.t.Fatal(err)
+	}
+	w.t.Cleanup(func() {
+		_, _ = w.db.Exec(context.Background(), `DELETE FROM model_groups WHERE id = $1`, id)
+		_, _ = w.db.Exec(context.Background(), `UPDATE script_environments SET current_version_id = NULL WHERE id = $1`, env)
+		_, _ = w.db.Exec(context.Background(), `DELETE FROM script_environment_versions WHERE environment_id = $1`, env)
+		_, _ = w.db.Exec(context.Background(), `DELETE FROM script_environments WHERE id = $1`, env)
+	})
+}
+
+func (w *predictWorld) registerCLV(model string, card string, tags map[string]string) {
+	t := map[string]string{"tabularia.model": "clv", "tabularia.group": "customer_lifetime", "tabularia.group_version": "1",
+		"tabularia.variant": "value", "tabularia.purchase_model": "mbg_nbd"}
+	for k, v := range tags {
+		t[k] = v
+	}
+	w.register("Pasta/price elasticity", model, []byte(card), t)
+}
+
+// A registered customer lifetime version is applied by a Predict node in the group's Job: the
+// horizon (in the card's unit) is the only option, the columns are the catalogue's of the variant,
+// and nothing here depends on the numbers of the fit.
+func TestAPredictOfACustomerLifetimeVersion(t *testing.T) {
+	w := newPredictWorld(t)
+	w.enableGroup("customer_lifetime")
+	w.registerCLV("customers", clvCardText, nil)
+	id, _, err := w.predict(`"registeredModel": "customers", "version": "1", "params": {"horizon": 26}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r := w.row(id); r.status != "SUCCESS" {
+		t.Fatalf("%+v", r)
+	}
+	if len(w.attempts) != 1 {
+		t.Fatalf("%d attempts", len(w.attempts))
+	}
+	task := taskOf(t, w.attempts[0])
+	if task.Mode != "predict" || task.Group != "customer_lifetime" || task.Model != "clv" || task.Variant != "value" || task.Output != "rows" ||
+		fmt.Sprint(task.Params) != "map[horizon:26]" {
+		t.Errorf("task.json: %+v", task)
+	}
+	// without a horizon: the card's own
+	w.attempts = nil
+	if _, _, err := w.predict(`"registeredModel": "customers", "version": "1", "params": {}`); err != nil {
+		t.Fatal(err)
+	}
+	if got := fmt.Sprint(taskOf(t, w.attempts[0]).Params); got != "map[]" {
+		t.Errorf("params without a horizon: %s", got)
+	}
+}
+
+func TestAVersionOfACustomerLifetimeModelThatCannotBeAppliedIsRefused(t *testing.T) {
+	w := newPredictWorld(t)
+	w.enableGroup("customer_lifetime")
+	w.registerCLV("good", clvCardText, nil)
+	w.registerCLV("noparams", strings.Replace(clvCardText, `"customer_lifetime": {`, `"other": {`, 1), nil)
+	w.registerCLV("clash", strings.Replace(clvCardText, `{"name": "m", "type": "number"}`, `{"name": "prediction_clv", "type": "number"}`, 1), nil)
+	// the version's group tag says another group than the model's
+	w.registerCLV("elsewhere", clvCardText, map[string]string{"tabularia.group": "survival"})
+	// a tag that names a model of another group, with this group's card
+	w.registerCLV("wrongcard", clvCardText, map[string]string{"tabularia.model": "linear", "tabularia.group": "regression"})
+	for what, c := range map[string]struct{ data, want string }{
+		"an option of another model": {`"registeredModel": "good", "version": "1", "params": {"interval": true}`,
+			"Predict's option 'interval' applies to linear, kaplan_meier, arima, parametric_survival, not to clv"},
+		"a negative horizon": {`"registeredModel": "good", "version": "1", "params": {"horizon": -3}`, "Predict: 'horizon'"},
+		"no parameters in the card": {`"registeredModel": "noparams", "version": "1"`,
+			"holds no customer lifetime parameters (customer_lifetime.purchases): fit the model again"},
+		"a column the model reads": {`"registeredModel": "clash", "version": "1"`,
+			"the model reads a column «prediction_clv», which the prediction would overwrite: rename it before the node"},
+		"another group's tag": {`"registeredModel": "elsewhere", "version": "1"`,
+			"says it belongs to the group «survival», but the model «clv» is in «customer_lifetime»"},
+		"a card of this group under another model": {`"registeredModel": "wrongcard", "version": "1"`,
+			"holds the model «clv», but the version says «linear»"},
+	} {
+		if _, _, err := w.predict(c.data); err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Errorf("%s: %v", what, err)
+		}
+	}
+	if n := w.runsMade(); n != 0 || len(w.attempts) != 0 {
+		t.Errorf("%d runs and %d Jobs made by refusals", n, len(w.attempts))
+	}
+	// the group that is off stops it, in its own words
+	if _, err := w.db.Exec(w.ctx, `UPDATE model_groups SET enabled = false WHERE id = 'customer_lifetime'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := w.predict(`"registeredModel": "good", "version": "1"`); err == nil || err.Error() != "Predict «Next month»: the model group customer_lifetime is disabled" {
+		t.Errorf("disabled: %v", err)
 	}
 }

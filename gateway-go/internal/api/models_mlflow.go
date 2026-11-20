@@ -258,6 +258,9 @@ var mainMetrics = map[string][]string{
 	"parametric_survival": {"concordance", "aic"},
 	"kaplan_meier":        {"events", "n"},
 	"arima":               {"aicc", "aic"},
+	// customer lifetime: the log-likelihood the purchase model was chosen by (also what `auto` compares)
+	"clv":   {"log_lik", "aic"},
+	"bg_bb": {"log_lik", "aic"},
 }
 
 func mainMetric(model string, metrics map[string]float64) (string, float64, bool) {

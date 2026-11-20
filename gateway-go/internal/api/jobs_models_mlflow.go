@@ -245,7 +245,8 @@ func (q *queue) mlflowLog(ctx context.Context, r *scriptNodeRun, s *modelStep, c
 	if err != nil {
 		return err
 	}
-	params := append(append(flattenParams(s.checked), modelFormula(rows)...), modelDistribution(rows)...)
+	params := append(append(append(flattenParams(s.checked), modelFormula(rows)...), modelDistribution(rows)...),
+		customerLifetimeParams(rows, s.checked)...)
 	metrics, metricWarnings := modelMetricsChecked(rows, started)
 	rec.warnings = append(rec.warnings, metricWarnings...)
 	if err := tr.LogBatch(ctx, run.ID, params, metrics, tags); err != nil {
@@ -274,6 +275,9 @@ func (q *queue) mlflowLog(ctx context.Context, r *scriptNodeRun, s *modelStep, c
 				{Key: "tabularia.card_sha256", Value: hex.EncodeToString(sum[:])}}
 			if c := parseCardFile(card); c.variant != "" {
 				tags = append(tags, mlflowconn.Tag{Key: "tabularia.variant", Value: c.variant})
+			}
+			if c := parseCardFile(card); c.purchaseModel != "" {
+				tags = append(tags, mlflowconn.Tag{Key: "tabularia.purchase_model", Value: c.purchaseModel})
 			}
 			if up.fileSHA != "" {
 				tags = append(tags, mlflowconn.Tag{Key: "tabularia.model_file_sha256", Value: up.fileSHA})
@@ -326,9 +330,10 @@ type cardModelFile struct {
 // cardFile is what the gateway reads of a card besides what decides whether it is applied: its
 // variant and the model file it declares.
 type cardFile struct {
-	variant string
-	library string
-	file    *cardModelFile
+	variant       string
+	library       string
+	file          *cardModelFile
+	purchaseModel string // a customer lifetime card's purchase model (the one used)
 }
 
 func parseCardFile(card []byte) cardFile {
@@ -338,11 +343,17 @@ func parseCardFile(card []byte) cardFile {
 			Library   string         `json:"library"`
 			ModelFile *cardModelFile `json:"model_file"`
 		} `json:"boosting"`
+		CustomerLifetime *struct {
+			PurchaseModel string `json:"purchase_model"`
+		} `json:"customer_lifetime"`
 	}
 	if json.Unmarshal(card, &c) != nil {
 		return cardFile{}
 	}
 	out := cardFile{variant: c.Variant}
+	if c.CustomerLifetime != nil {
+		out.purchaseModel = c.CustomerLifetime.PurchaseModel
+	}
 	if c.Boosting != nil {
 		out.library, out.file = c.Boosting.Library, c.Boosting.ModelFile
 	}
@@ -604,6 +615,42 @@ func modelDistribution(rows []resultRow) []mlflowconn.Tag {
 	return nil
 }
 
+// isCustomerLifetime says whether results are a customer lifetime model's: its model section says
+// the purchase model it used (`purchase_model`, a text no other model's results have).
+func isCustomerLifetime(rows []resultRow) bool {
+	for _, r := range rows {
+		if r.Section == "model" && r.Stat == "purchase_model" && r.Text != nil && *r.Text != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// customerLifetimeParams are what a customer lifetime fit settled that the node may only have said
+// as `auto` or left empty: the purchase model it used (`purchase_model_chosen`; the node's own
+// `purchase_model` stays as the node says it) and, when the node gave no horizon, the one it used
+// (the default of one year, in the node's unit). The unit, the discount rate, the margin and alpha
+// are the node's checked parameters, defaults included, logged with the others.
+func customerLifetimeParams(rows []resultRow, checked map[string]any) []mlflowconn.Tag {
+	var out []mlflowconn.Tag
+	horizon := ""
+	for _, r := range rows {
+		if r.Section != "model" {
+			continue
+		}
+		switch {
+		case r.Stat == "purchase_model" && r.Text != nil && *r.Text != "":
+			out = append(out, mlflowconn.Tag{Key: "purchase_model_chosen", Value: *r.Text})
+		case r.Stat == "horizon" && r.Value != nil:
+			horizon = paramText(*r.Value)
+		}
+	}
+	if len(out) > 0 && horizon != "" && checked["horizon"] == nil {
+		out = append(out, mlflowconn.Tag{Key: "horizon", Value: horizon})
+	}
+	return out
+}
+
 // metricKey keeps the characters MLflow allows in a key (letters, digits, _ - . space /).
 func metricKey(s string) string {
 	var b strings.Builder
@@ -749,6 +796,8 @@ func modelMetricsChecked(rows []resultRow, at time.Time) ([]mlflowconn.Metric, [
 			boosting = true
 		}
 	}
+	// a customer lifetime model's checks are also measures with a value and no verdict
+	withValue := boosting || isCustomerLifetime(rows)
 	predictors := map[string]bool{}
 	for _, r := range rows {
 		if r.Value == nil {
@@ -757,7 +806,7 @@ func modelMetricsChecked(rows []resultRow, at time.Time) ([]mlflowconn.Metric, [
 		switch {
 		case r.Section == "model":
 			add(r.Stat, *r.Value)
-		case r.Section == "assumption" && (r.Stat == "statistic" || r.Stat == "p_value" || (boosting && r.Stat == "value")) && r.Level != nil:
+		case r.Section == "assumption" && (r.Stat == "statistic" || r.Stat == "p_value" || (withValue && r.Stat == "value")) && r.Level != nil:
 			key := "assumption." + *r.Level
 			if r.Level2 != nil && *r.Level2 != "" {
 				key += "." + *r.Level2
