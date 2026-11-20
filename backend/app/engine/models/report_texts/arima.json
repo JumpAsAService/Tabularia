@@ -61,7 +61,8 @@
     "transform": "Transform",
     "criterion": "Criterion",
     "rmse": "RMSE in sample",
-    "mae": "MAE in sample"
+    "mae": "MAE in sample",
+    "time_kind": "Time column"
    },
    "candidate": {
     "aicc": "AICc",
@@ -90,52 +91,76 @@
     "aicc": "AICc",
     "aic": "AIC",
     "bic": "BIC"
+   },
+   "time_kind": {
+    "date": "date",
+    "datetime": "date and time",
+    "integer": "integer (steps)"
    }
   },
   "checks": {
    "adf": {
     "name": "Stationarity: augmented Dickey–Fuller",
     "h0": "The differenced series has a unit root.",
-    "advice": "ADF does not reject a unit root: difference once more (d + 1), or let orders = auto choose."
+    "advice": "ADF does not reject a unit root: difference once more (d + 1), or let orders = auto choose.",
+    "not_computed": "The differenced series is too short for the unit-root tests (fewer than 12 values)."
    },
    "kpss": {
     "name": "Stationarity: KPSS",
     "h0": "The differenced series is stationary.",
-    "advice": "KPSS rejects stationarity: difference once more (d + 1), or let orders = auto choose."
+    "advice": "KPSS rejects stationarity: difference once more (d + 1), or let orders = auto choose.",
+    "not_computed": "The differenced series is too short for the unit-root tests (fewer than 12 values)."
    },
    "stationarity": {
     "name": "Stationarity: ADF and KPSS together",
     "h0": "ADF rejects a unit root and KPSS keeps stationarity.",
-    "advice": "The two tests disagree: a trend or a break, look at the series."
+    "advice": "Read the four cases under the fit: when ADF keeps a unit root and KPSS rejects, difference once more (d + 1); when both reject, look at the series for a trend or a break; when neither rejects, the series is too short to tell.",
+    "not_computed": "The differenced series is too short for the unit-root tests (fewer than 12 values)."
    },
    "roots": {
     "name": "Stationarity and invertibility of the fit",
     "h0": "Every root of the AR and MA polynomials is outside the unit circle.",
-    "advice": "A root near the unit circle: an order too many, or a difference missing."
+    "advice": "A root near the unit circle: an order too many, or a difference missing.",
+    "not_computed": "No AR or MA order: there is no root to check."
    },
    "ljung_box_10": {
     "name": "White-noise residuals: Ljung–Box, 10 lags",
     "h0": "The residuals are not autocorrelated up to lag 10.",
-    "advice": "Structure left in the residuals: raise an order, or try orders = auto."
+    "advice": "Structure left in the residuals: raise an order, or try orders = auto.",
+    "not_computed": "The model has as many ARMA coefficients as lags, or more: the test has no degree of freedom."
    },
    "ljung_box_2s": {
     "name": "White-noise residuals: Ljung–Box, 2·s lags",
     "h0": "The residuals are not autocorrelated up to two seasons.",
-    "advice": "Seasonal structure left in the residuals: raise a seasonal order, or try orders = auto."
+    "advice": "Seasonal structure left in the residuals: raise a seasonal order, or try orders = auto.",
+    "not_computed": "No season (s = 1), or two seasons are more lags than the residuals allow."
    },
    "arch_lm": {
     "name": "Constant variance: ARCH LM",
     "h0": "The residuals' variance does not depend on the past residuals.",
-    "advice": "The variance changes: try transform = log or box_cox."
+    "advice": "The variance changes: try transform = log or box_cox.",
+    "not_computed": "Too few residuals for the test's lags (s, or 12 without a season)."
    },
    "variance_ratio": {
     "name": "Constant variance: first third against last third",
     "h0": "The residuals' variance is the same at the start and at the end.",
-    "advice": "The variance changes: try transform = log or box_cox."
+    "advice": "The variance changes: try transform = log or box_cox.",
+    "not_computed": "Too few residuals to compare the first third with the last."
    },
    "jarque_bera": {
-    "advice": "The bands assume normal errors: read them with care."
+    "advice": "The bands assume normal errors: read them with care.",
+    "not_computed": "Too few residuals."
    }
+  },
+  "cases": {
+   "title": "ADF and KPSS read together",
+   "alpha": "The four cases of the two tests at α = {alpha}, on the differenced series:",
+   "1": "ADF rejects a unit root, KPSS keeps stationarity: the differences are enough.",
+   "2": "ADF keeps a unit root, KPSS rejects stationarity: difference once more (d + 1).",
+   "3": "Both reject: a trend or a break, look at the series.",
+   "4": "Neither rejects: the series is too short or too noisy for them to tell; read the correlograms.",
+   "this_series": "this series",
+   "none": "The two tests were not computed: the differenced series is too short."
   }
  },
  "it": {
@@ -200,7 +225,8 @@
     "transform": "Trasformazione",
     "criterion": "Criterio",
     "rmse": "RMSE nel campione",
-    "mae": "MAE nel campione"
+    "mae": "MAE nel campione",
+    "time_kind": "Colonna del tempo"
    },
    "candidate": {
     "aicc": "AICc",
@@ -229,52 +255,76 @@
     "aicc": "AICc",
     "aic": "AIC",
     "bic": "BIC"
+   },
+   "time_kind": {
+    "date": "data",
+    "datetime": "data e ora",
+    "integer": "intero (passi)"
    }
   },
   "checks": {
    "adf": {
     "name": "Stazionarietà: Dickey–Fuller aumentato",
     "h0": "La serie differenziata ha una radice unitaria.",
-    "advice": "L'ADF non rifiuta la radice unitaria: differenziate ancora (d + 1), oppure lasciate scegliere a orders = auto."
+    "advice": "L'ADF non rifiuta la radice unitaria: differenziate ancora (d + 1), oppure lasciate scegliere a orders = auto.",
+    "not_computed": "La serie differenziata è troppo corta per i test di radice unitaria (meno di 12 valori)."
    },
    "kpss": {
     "name": "Stazionarietà: KPSS",
     "h0": "La serie differenziata è stazionaria.",
-    "advice": "Il KPSS rifiuta la stazionarietà: differenziate ancora (d + 1), oppure lasciate scegliere a orders = auto."
+    "advice": "Il KPSS rifiuta la stazionarietà: differenziate ancora (d + 1), oppure lasciate scegliere a orders = auto.",
+    "not_computed": "La serie differenziata è troppo corta per i test di radice unitaria (meno di 12 valori)."
    },
    "stationarity": {
     "name": "Stazionarietà: ADF e KPSS insieme",
     "h0": "L'ADF rifiuta la radice unitaria e il KPSS non rifiuta la stazionarietà.",
-    "advice": "I due test non sono d'accordo: un trend o una rottura, guardate la serie."
+    "advice": "Leggete i quattro casi sotto la stima: se l'ADF non rifiuta la radice unitaria e il KPSS rifiuta, differenziate ancora (d + 1); se rifiutano entrambi, cercate nella serie un trend o una rottura; se non rifiuta nessuno, la serie è troppo corta per dirlo.",
+    "not_computed": "La serie differenziata è troppo corta per i test di radice unitaria (meno di 12 valori)."
    },
    "roots": {
     "name": "Stazionarietà e invertibilità della stima",
     "h0": "Ogni radice dei polinomi AR e MA sta fuori dal cerchio unitario.",
-    "advice": "Una radice vicina al cerchio unitario: un ordine di troppo, o manca una differenza."
+    "advice": "Una radice vicina al cerchio unitario: un ordine di troppo, o manca una differenza.",
+    "not_computed": "Nessun ordine AR o MA: non c'è alcuna radice da controllare."
    },
    "ljung_box_10": {
     "name": "Residui come rumore bianco: Ljung–Box, 10 ritardi",
     "h0": "I residui non sono autocorrelati fino al ritardo 10.",
-    "advice": "Nei residui resta struttura: alzate un ordine, oppure provate orders = auto."
+    "advice": "Nei residui resta struttura: alzate un ordine, oppure provate orders = auto.",
+    "not_computed": "Il modello ha tanti coefficienti ARMA quanti ritardi, o più: il test non ha gradi di libertà."
    },
    "ljung_box_2s": {
     "name": "Residui come rumore bianco: Ljung–Box, 2·s ritardi",
     "h0": "I residui non sono autocorrelati fino a due stagioni.",
-    "advice": "Nei residui resta struttura stagionale: alzate un ordine stagionale, oppure provate orders = auto."
+    "advice": "Nei residui resta struttura stagionale: alzate un ordine stagionale, oppure provate orders = auto.",
+    "not_computed": "Nessuna stagione (s = 1), oppure due stagioni sono più ritardi di quanti i residui ne consentano."
    },
    "arch_lm": {
     "name": "Varianza costante: ARCH LM",
     "h0": "La varianza dei residui non dipende dai residui passati.",
-    "advice": "La varianza cambia: provate transform = log o box_cox."
+    "advice": "La varianza cambia: provate transform = log o box_cox.",
+    "not_computed": "Troppo pochi residui per i ritardi del test (s, oppure 12 senza stagione)."
    },
    "variance_ratio": {
     "name": "Varianza costante: primo terzo contro ultimo terzo",
     "h0": "La varianza dei residui è la stessa all'inizio e alla fine.",
-    "advice": "La varianza cambia: provate transform = log o box_cox."
+    "advice": "La varianza cambia: provate transform = log o box_cox.",
+    "not_computed": "Troppo pochi residui per confrontare il primo terzo con l'ultimo."
    },
    "jarque_bera": {
-    "advice": "Le bande presuppongono errori normali: leggetele con cautela."
+    "advice": "Le bande presuppongono errori normali: leggetele con cautela.",
+    "not_computed": "Troppo pochi residui."
    }
+  },
+  "cases": {
+   "title": "ADF e KPSS letti insieme",
+   "alpha": "I quattro casi dei due test con α = {alpha}, sulla serie differenziata:",
+   "1": "L'ADF rifiuta la radice unitaria, il KPSS non rifiuta la stazionarietà: le differenze bastano.",
+   "2": "L'ADF non rifiuta la radice unitaria, il KPSS rifiuta la stazionarietà: differenziate ancora (d + 1).",
+   "3": "Rifiutano entrambi: un trend o una rottura, guardate la serie.",
+   "4": "Non rifiuta nessuno dei due: la serie è troppo corta o troppo rumorosa per dirlo; leggete i correlogrammi.",
+   "this_series": "questa serie",
+   "none": "I due test non sono stati calcolati: la serie differenziata è troppo corta."
   }
  },
  "de": {
@@ -339,7 +389,8 @@
     "transform": "Transformation",
     "criterion": "Kriterium",
     "rmse": "RMSE in der Stichprobe",
-    "mae": "MAE in der Stichprobe"
+    "mae": "MAE in der Stichprobe",
+    "time_kind": "Zeitspalte"
    },
    "candidate": {
     "aicc": "AICc",
@@ -368,52 +419,76 @@
     "aicc": "AICc",
     "aic": "AIC",
     "bic": "BIC"
+   },
+   "time_kind": {
+    "date": "Datum",
+    "datetime": "Datum und Uhrzeit",
+    "integer": "ganze Zahl (Schritte)"
    }
   },
   "checks": {
    "adf": {
     "name": "Stationarität: erweiterter Dickey–Fuller",
     "h0": "Die differenzierte Reihe hat eine Einheitswurzel.",
-    "advice": "ADF verwirft die Einheitswurzel nicht: Differenzieren Sie noch einmal (d + 1), oder lassen Sie orders = auto wählen."
+    "advice": "ADF verwirft die Einheitswurzel nicht: Differenzieren Sie noch einmal (d + 1), oder lassen Sie orders = auto wählen.",
+    "not_computed": "Die differenzierte Reihe ist für die Einheitswurzeltests zu kurz (weniger als 12 Werte)."
    },
    "kpss": {
     "name": "Stationarität: KPSS",
     "h0": "Die differenzierte Reihe ist stationär.",
-    "advice": "KPSS verwirft die Stationarität: Differenzieren Sie noch einmal (d + 1), oder lassen Sie orders = auto wählen."
+    "advice": "KPSS verwirft die Stationarität: Differenzieren Sie noch einmal (d + 1), oder lassen Sie orders = auto wählen.",
+    "not_computed": "Die differenzierte Reihe ist für die Einheitswurzeltests zu kurz (weniger als 12 Werte)."
    },
    "stationarity": {
     "name": "Stationarität: ADF und KPSS zusammen",
     "h0": "ADF verwirft die Einheitswurzel und KPSS behält die Stationarität.",
-    "advice": "Die beiden Tests widersprechen sich: ein Trend oder ein Bruch, sehen Sie sich die Reihe an."
+    "advice": "Lesen Sie die vier Fälle unter der Anpassung: behält ADF eine Einheitswurzel und verwirft KPSS, noch einmal differenzieren (d + 1); verwerfen beide, die Reihe auf einen Trend oder Bruch prüfen; verwirft keiner, ist die Reihe für eine Aussage zu kurz.",
+    "not_computed": "Die differenzierte Reihe ist für die Einheitswurzeltests zu kurz (weniger als 12 Werte)."
    },
    "roots": {
     "name": "Stationarität und Invertierbarkeit der Anpassung",
     "h0": "Jede Wurzel der AR- und MA-Polynome liegt außerhalb des Einheitskreises.",
-    "advice": "Eine Wurzel nahe dem Einheitskreis: eine Ordnung zu viel, oder eine Differenz fehlt."
+    "advice": "Eine Wurzel nahe dem Einheitskreis: eine Ordnung zu viel, oder eine Differenz fehlt.",
+    "not_computed": "Keine AR- oder MA-Ordnung: es gibt keine Wurzel zu prüfen."
    },
    "ljung_box_10": {
     "name": "Residuen als weißes Rauschen: Ljung–Box, 10 Lags",
     "h0": "Die Residuen sind bis Lag 10 nicht autokorreliert.",
-    "advice": "In den Residuen bleibt Struktur: Erhöhen Sie eine Ordnung, oder versuchen Sie orders = auto."
+    "advice": "In den Residuen bleibt Struktur: Erhöhen Sie eine Ordnung, oder versuchen Sie orders = auto.",
+    "not_computed": "Das Modell hat so viele ARMA-Koeffizienten wie Lags oder mehr: der Test hat keinen Freiheitsgrad."
    },
    "ljung_box_2s": {
     "name": "Residuen als weißes Rauschen: Ljung–Box, 2·s Lags",
     "h0": "Die Residuen sind über zwei Saisons nicht autokorreliert.",
-    "advice": "In den Residuen bleibt saisonale Struktur: Erhöhen Sie eine saisonale Ordnung, oder versuchen Sie orders = auto."
+    "advice": "In den Residuen bleibt saisonale Struktur: Erhöhen Sie eine saisonale Ordnung, oder versuchen Sie orders = auto.",
+    "not_computed": "Keine Saison (s = 1), oder zwei Saisons sind mehr Lags, als die Residuen erlauben."
    },
    "arch_lm": {
     "name": "Konstante Varianz: ARCH-LM",
     "h0": "Die Varianz der Residuen hängt nicht von vergangenen Residuen ab.",
-    "advice": "Die Varianz ändert sich: Versuchen Sie transform = log oder box_cox."
+    "advice": "Die Varianz ändert sich: Versuchen Sie transform = log oder box_cox.",
+    "not_computed": "Zu wenige Residuen für die Lags des Tests (s, oder 12 ohne Saison)."
    },
    "variance_ratio": {
     "name": "Konstante Varianz: erstes gegen letztes Drittel",
     "h0": "Die Varianz der Residuen ist am Anfang und am Ende gleich.",
-    "advice": "Die Varianz ändert sich: Versuchen Sie transform = log oder box_cox."
+    "advice": "Die Varianz ändert sich: Versuchen Sie transform = log oder box_cox.",
+    "not_computed": "Zu wenige Residuen, um das erste Drittel mit dem letzten zu vergleichen."
    },
    "jarque_bera": {
-    "advice": "Die Bänder setzen normalverteilte Fehler voraus: Lesen Sie sie mit Vorsicht."
+    "advice": "Die Bänder setzen normalverteilte Fehler voraus: Lesen Sie sie mit Vorsicht.",
+    "not_computed": "Zu wenige Residuen."
    }
+  },
+  "cases": {
+   "title": "ADF und KPSS zusammen gelesen",
+   "alpha": "Die vier Fälle der beiden Tests bei α = {alpha}, auf der differenzierten Reihe:",
+   "1": "ADF verwirft eine Einheitswurzel, KPSS behält die Stationarität: die Differenzen genügen.",
+   "2": "ADF behält eine Einheitswurzel, KPSS verwirft die Stationarität: noch einmal differenzieren (d + 1).",
+   "3": "Beide verwerfen: ein Trend oder ein Bruch, sehen Sie sich die Reihe an.",
+   "4": "Keiner verwirft: die Reihe ist zu kurz oder zu verrauscht für eine Aussage; lesen Sie die Korrelogramme.",
+   "this_series": "diese Reihe",
+   "none": "Die beiden Tests wurden nicht berechnet: die differenzierte Reihe ist zu kurz."
   }
  },
  "es": {
@@ -478,7 +553,8 @@
     "transform": "Transformación",
     "criterion": "Criterio",
     "rmse": "RMSE en la muestra",
-    "mae": "MAE en la muestra"
+    "mae": "MAE en la muestra",
+    "time_kind": "Columna de tiempo"
    },
    "candidate": {
     "aicc": "AICc",
@@ -507,52 +583,76 @@
     "aicc": "AICc",
     "aic": "AIC",
     "bic": "BIC"
+   },
+   "time_kind": {
+    "date": "fecha",
+    "datetime": "fecha y hora",
+    "integer": "entero (pasos)"
    }
   },
   "checks": {
    "adf": {
     "name": "Estacionariedad: Dickey–Fuller aumentada",
     "h0": "La serie diferenciada tiene una raíz unitaria.",
-    "advice": "La ADF no rechaza la raíz unitaria: diferencie una vez más (d + 1), o deje elegir a orders = auto."
+    "advice": "La ADF no rechaza la raíz unitaria: diferencie una vez más (d + 1), o deje elegir a orders = auto.",
+    "not_computed": "La serie diferenciada es demasiado corta para las pruebas de raíz unitaria (menos de 12 valores)."
    },
    "kpss": {
     "name": "Estacionariedad: KPSS",
     "h0": "La serie diferenciada es estacionaria.",
-    "advice": "La KPSS rechaza la estacionariedad: diferencie una vez más (d + 1), o deje elegir a orders = auto."
+    "advice": "La KPSS rechaza la estacionariedad: diferencie una vez más (d + 1), o deje elegir a orders = auto.",
+    "not_computed": "La serie diferenciada es demasiado corta para las pruebas de raíz unitaria (menos de 12 valores)."
    },
    "stationarity": {
     "name": "Estacionariedad: ADF y KPSS juntas",
     "h0": "La ADF rechaza la raíz unitaria y la KPSS mantiene la estacionariedad.",
-    "advice": "Las dos pruebas no coinciden: una tendencia o una ruptura, mire la serie."
+    "advice": "Lea los cuatro casos bajo el ajuste: si ADF mantiene una raíz unitaria y KPSS rechaza, diferencie una vez más (d + 1); si las dos rechazan, busque en la serie una tendencia o una ruptura; si ninguna rechaza, la serie es demasiado corta para decirlo.",
+    "not_computed": "La serie diferenciada es demasiado corta para las pruebas de raíz unitaria (menos de 12 valores)."
    },
    "roots": {
     "name": "Estacionariedad e invertibilidad del ajuste",
     "h0": "Todas las raíces de los polinomios AR y MA están fuera del círculo unidad.",
-    "advice": "Una raíz cerca del círculo unidad: un orden de más, o falta una diferencia."
+    "advice": "Una raíz cerca del círculo unidad: un orden de más, o falta una diferencia.",
+    "not_computed": "Ningún orden AR o MA: no hay raíces que comprobar."
    },
    "ljung_box_10": {
     "name": "Residuos como ruido blanco: Ljung–Box, 10 retardos",
     "h0": "Los residuos no están autocorrelacionados hasta el retardo 10.",
-    "advice": "Queda estructura en los residuos: suba un orden, o pruebe orders = auto."
+    "advice": "Queda estructura en los residuos: suba un orden, o pruebe orders = auto.",
+    "not_computed": "El modelo tiene tantos coeficientes ARMA como retardos, o más: la prueba no tiene grados de libertad."
    },
    "ljung_box_2s": {
     "name": "Residuos como ruido blanco: Ljung–Box, 2·s retardos",
     "h0": "Los residuos no están autocorrelacionados hasta dos estaciones.",
-    "advice": "Queda estructura estacional en los residuos: suba un orden estacional, o pruebe orders = auto."
+    "advice": "Queda estructura estacional en los residuos: suba un orden estacional, o pruebe orders = auto.",
+    "not_computed": "Sin estación (s = 1), o dos estaciones son más retardos de los que permiten los residuos."
    },
    "arch_lm": {
     "name": "Varianza constante: ARCH LM",
     "h0": "La varianza de los residuos no depende de los residuos pasados.",
-    "advice": "La varianza cambia: pruebe transform = log o box_cox."
+    "advice": "La varianza cambia: pruebe transform = log o box_cox.",
+    "not_computed": "Muy pocos residuos para los retardos de la prueba (s, o 12 sin estación)."
    },
    "variance_ratio": {
     "name": "Varianza constante: primer tercio frente al último",
     "h0": "La varianza de los residuos es la misma al principio y al final.",
-    "advice": "La varianza cambia: pruebe transform = log o box_cox."
+    "advice": "La varianza cambia: pruebe transform = log o box_cox.",
+    "not_computed": "Muy pocos residuos para comparar el primer tercio con el último."
    },
    "jarque_bera": {
-    "advice": "Las bandas suponen errores normales: léalas con cautela."
+    "advice": "Las bandas suponen errores normales: léalas con cautela.",
+    "not_computed": "Muy pocos residuos."
    }
+  },
+  "cases": {
+   "title": "ADF y KPSS leídos juntos",
+   "alpha": "Los cuatro casos de las dos pruebas con α = {alpha}, sobre la serie diferenciada:",
+   "1": "ADF rechaza una raíz unitaria, KPSS mantiene la estacionariedad: las diferencias bastan.",
+   "2": "ADF mantiene una raíz unitaria, KPSS rechaza la estacionariedad: diferencie una vez más (d + 1).",
+   "3": "Las dos rechazan: una tendencia o una ruptura, mire la serie.",
+   "4": "Ninguna rechaza: la serie es demasiado corta o ruidosa para decirlo; lea los correlogramas.",
+   "this_series": "esta serie",
+   "none": "Las dos pruebas no se calcularon: la serie diferenciada es demasiado corta."
   }
  },
  "fr": {
@@ -617,7 +717,8 @@
     "transform": "Transformation",
     "criterion": "Critère",
     "rmse": "RMSE dans l'échantillon",
-    "mae": "MAE dans l'échantillon"
+    "mae": "MAE dans l'échantillon",
+    "time_kind": "Colonne du temps"
    },
    "candidate": {
     "aicc": "AICc",
@@ -646,52 +747,76 @@
     "aicc": "AICc",
     "aic": "AIC",
     "bic": "BIC"
+   },
+   "time_kind": {
+    "date": "date",
+    "datetime": "date et heure",
+    "integer": "entier (pas)"
    }
   },
   "checks": {
    "adf": {
     "name": "Stationnarité : Dickey–Fuller augmenté",
     "h0": "La série différenciée a une racine unitaire.",
-    "advice": "L'ADF ne rejette pas la racine unitaire : différenciez encore (d + 1), ou laissez orders = auto choisir."
+    "advice": "L'ADF ne rejette pas la racine unitaire : différenciez encore (d + 1), ou laissez orders = auto choisir.",
+    "not_computed": "La série différenciée est trop courte pour les tests de racine unitaire (moins de 12 valeurs)."
    },
    "kpss": {
     "name": "Stationnarité : KPSS",
     "h0": "La série différenciée est stationnaire.",
-    "advice": "Le KPSS rejette la stationnarité : différenciez encore (d + 1), ou laissez orders = auto choisir."
+    "advice": "Le KPSS rejette la stationnarité : différenciez encore (d + 1), ou laissez orders = auto choisir.",
+    "not_computed": "La série différenciée est trop courte pour les tests de racine unitaire (moins de 12 valeurs)."
    },
    "stationarity": {
     "name": "Stationnarité : ADF et KPSS ensemble",
     "h0": "L'ADF rejette la racine unitaire et le KPSS garde la stationnarité.",
-    "advice": "Les deux tests se contredisent : une tendance ou une rupture, regardez la série."
+    "advice": "Lisez les quatre cas sous l'ajustement : si ADF garde une racine unitaire et que KPSS rejette, différenciez une fois de plus (d + 1) ; si les deux rejettent, cherchez dans la série une tendance ou une rupture ; si aucun ne rejette, la série est trop courte pour trancher.",
+    "not_computed": "La série différenciée est trop courte pour les tests de racine unitaire (moins de 12 valeurs)."
    },
    "roots": {
     "name": "Stationnarité et inversibilité de l'ajustement",
     "h0": "Toutes les racines des polynômes AR et MA sont hors du cercle unité.",
-    "advice": "Une racine près du cercle unité : un ordre de trop, ou une différence manquante."
+    "advice": "Une racine près du cercle unité : un ordre de trop, ou une différence manquante.",
+    "not_computed": "Aucun ordre AR ou MA : il n'y a pas de racine à vérifier."
    },
    "ljung_box_10": {
     "name": "Résidus en bruit blanc : Ljung–Box, 10 retards",
     "h0": "Les résidus ne sont pas autocorrélés jusqu'au retard 10.",
-    "advice": "Il reste de la structure dans les résidus : augmentez un ordre, ou essayez orders = auto."
+    "advice": "Il reste de la structure dans les résidus : augmentez un ordre, ou essayez orders = auto.",
+    "not_computed": "Le modèle a autant de coefficients ARMA que de retards, ou plus : le test n'a pas de degré de liberté."
    },
    "ljung_box_2s": {
     "name": "Résidus en bruit blanc : Ljung–Box, 2·s retards",
     "h0": "Les résidus ne sont pas autocorrélés jusqu'à deux saisons.",
-    "advice": "Il reste une structure saisonnière dans les résidus : augmentez un ordre saisonnier, ou essayez orders = auto."
+    "advice": "Il reste une structure saisonnière dans les résidus : augmentez un ordre saisonnier, ou essayez orders = auto.",
+    "not_computed": "Pas de saison (s = 1), ou deux saisons font plus de retards que les résidus ne le permettent."
    },
    "arch_lm": {
     "name": "Variance constante : ARCH LM",
     "h0": "La variance des résidus ne dépend pas des résidus passés.",
-    "advice": "La variance change : essayez transform = log ou box_cox."
+    "advice": "La variance change : essayez transform = log ou box_cox.",
+    "not_computed": "Trop peu de résidus pour les retards du test (s, ou 12 sans saison)."
    },
    "variance_ratio": {
     "name": "Variance constante : premier tiers contre dernier tiers",
     "h0": "La variance des résidus est la même au début et à la fin.",
-    "advice": "La variance change : essayez transform = log ou box_cox."
+    "advice": "La variance change : essayez transform = log ou box_cox.",
+    "not_computed": "Trop peu de résidus pour comparer le premier tiers au dernier."
    },
    "jarque_bera": {
-    "advice": "Les bandes supposent des erreurs normales : lisez-les avec prudence."
+    "advice": "Les bandes supposent des erreurs normales : lisez-les avec prudence.",
+    "not_computed": "Trop peu de résidus."
    }
+  },
+  "cases": {
+   "title": "ADF et KPSS lus ensemble",
+   "alpha": "Les quatre cas des deux tests à α = {alpha}, sur la série différenciée :",
+   "1": "ADF rejette une racine unitaire, KPSS garde la stationnarité : les différences suffisent.",
+   "2": "ADF garde une racine unitaire, KPSS rejette la stationnarité : différenciez une fois de plus (d + 1).",
+   "3": "Les deux rejettent : une tendance ou une rupture, regardez la série.",
+   "4": "Aucun ne rejette : la série est trop courte ou trop bruitée pour trancher ; lisez les corrélogrammes.",
+   "this_series": "cette série",
+   "none": "Les deux tests n'ont pas été calculés : la série différenciée est trop courte."
   }
  }
 }

@@ -513,7 +513,7 @@ MODELS: dict[str, dict[str, Any]] = {
 }
 
 _ARIMA_SECTIONS: dict[str, Any] = {
-    "model": {"levels": None, "texts": [*_MODEL_TEXTS, "model_name", "frequency", "transform"],
+    "model": {"levels": None, "texts": [*_MODEL_TEXTS, "model_name", "frequency", "transform", "time_kind"],
               "numbers": ["n", "n_missing", "p", "d", "q", "P", "D", "Q", "s", "log_lik", "aic", "aicc", "bic",
                           "sigma2", "rmse", "mae", "mape", "mase", "holdout", "holdout_rmse", "holdout_mae",
                           "holdout_mape", "holdout_mase", "box_cox_lambda", "horizon", "ar_root_modulus_*",

@@ -2082,7 +2082,8 @@
                 "note_*",
                 "model_name",
                 "frequency",
-                "transform"
+                "transform",
+                "time_kind"
               ],
               "numbers": [
                 "n",
@@ -2277,6 +2278,7 @@
                 "model_name",
                 "frequency",
                 "transform",
+                "time_kind",
                 "criterion",
                 "orders_reason_*"
               ],
