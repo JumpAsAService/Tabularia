@@ -17,7 +17,7 @@ or an email.
 | | |
 |---|---|
 | Where | **Explore** → a folder → **New** → **New flow**, or the **Flows** tab → **New flow**. Both ask for the **Execution engine** first. |
-| What a flow holds | Source nodes, transformations (19 operations plus the **Foreach loop**), 21 statistical tests, Script and Container nodes, Output nodes, notes |
+| What a flow holds | Source nodes, transformations (19 operations plus the **Foreach loop**), 21 statistical tests, statistical models, Script and Container nodes, Output nodes, notes |
 | What you see | The selected node's first 100 rows as a table, or a chart computed on all its rows |
 | Engines | Polars, DuckDB, chDB, ClickHouse (external), BigQuery: one for the editor, optionally another for production ([Engines](engines.md)) |
 | Permissions | VIEW to open, EDIT to save, RUN to run; publishing and connections need more ([Permissions](#permissions)) |
@@ -28,6 +28,7 @@ The editor has five areas:
 
 - **The palette**, on the left, with a search box. Its groups are **Sources**,
   **Transforms**, **Statistics** (the hypothesis tests, a group you open when you need it),
+  **Models** (the statistical models and Predict, for the groups an administrator enabled),
   **Control** (the **Foreach loop**, **Script** and **Container**),
   **Output** and **Notes**. Drag an item onto the canvas to create the node: a
   transformation dropped on a node becomes its next step, dropped on a connection it
@@ -143,6 +144,21 @@ them, on the rows that reach it.
 
 Every test, its options, its output and its report are in [Statistics](statistics.md). A
 flow with a statistics node cannot be exported to dbt.
+
+### Models
+
+Six statistical models, in the palette's **Models** group, under one subtitle for each group an
+administrator enabled and you may use: **Regression** (**Linear regression**, **Logistic
+regression**, both with ridge, lasso or elastic-net penalties), **Survival** (**Kaplan–Meier**,
+**Cox**) and **Time series** (**ARIMA**, also dropped as AR, MA, ARMA, ARIMA, SARIMA or
+SARIMAX with the orders set). **Predict** applies a model registered in MLflow to the rows
+that reach it. A model is a step node like **Script**: it is not an operation of the engine
+but a Job on Kubernetes, with one input and one output. Choose its columns and options in the
+panel, press **Run** to fit it on the development sample, and read its **Table** and its
+**Report**, whose first page holds the checks of the model's assumptions; a run of the flow
+fits it on every row and can record it in MLflow. A model whose group is not enabled, or on
+Docker Compose, is greyed out with the reason and does not run. Everything is in
+[Statistical models](models.md). A flow whose output reads a model cannot be exported to dbt.
 
 ### Control
 

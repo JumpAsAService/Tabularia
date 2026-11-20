@@ -149,6 +149,24 @@ the release's namespace, the private ranges (unless listed in
 that enforces egress rules. See [Python and R in flows](../scripting.md#network-policies)
 and [The Container node](../container-node.md).
 
+### Statistical models
+
+The [statistical models](../capabilities/models.md) run as Jobs of the same machinery, so they
+need the same settings as the scripts and nothing more: `scripts.enabled: true` with its image
+registry and push and pull secrets (the three namespaces, the builder image, the network
+policies), and the **scripts bucket** set in **Administration → Scripting environments**,
+where a model reads its input. There is no `models` block in the chart. An administrator then
+enables each group in **Administration → Statistical models**: the cluster builds its image
+(R 4.6 with its packages, built by the same rootless BuildKit as the environments, so with the
+resources of `SCRIPTS__BUILD_CPU` and `SCRIPTS__BUILD_MEMORY`) and runs its self-test.
+The build needs the registries of R packages (CRAN) or your mirror of them, as an
+environment does; a model Job at run time has no internet and reaches the scripts bucket
+through the egress proxy only. The images are large (an R image with compiled packages
+weighs more than a gigabyte): on a big cluster pre-pull them, because the first run on a node
+pulls the image. Two variables are read from the gateway's environment (`extraEnv`), and are in
+no chart value: `MODELS__ENABLED=false` switches the models off, and `MODELS__MAX_CHART_POINTS`
+changes the points a report chart keeps (2,000).
+
 ## Backend image (`backend/Dockerfile`)
 
 One Dockerfile for the four backend roles and for both development and production.

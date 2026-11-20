@@ -43,6 +43,28 @@ Development on `main` for the next minor version. The stable line stays 1.4.x
   numbers, equal within a relative 1e-9. New operations `stat_<test>` (21); new route
   `POST /tasks/stat-report`; saved reports and dashboards do not change; a flow with a test
   cannot be exported to dbt (`op_not_exportable`). [Statistics](docs/capabilities/statistics.md).
+- **Statistical models in the flow editor.** A **Models** group in the palette holds six models
+  and a Predict node, for Kubernetes: linear regression (ordinary or weighted least squares,
+  classical, robust HC0 to HC3, HAC or clustered errors), logistic regression (maximum
+  likelihood or Firth, logit or probit), both with ridge, lasso or elastic-net penalties and
+  the penalty chosen by cross-validation; Kaplan–Meier (log-rank and Peto–Peto tests, strata,
+  restricted mean); Cox (Efron, Breslow or exact ties, strata, start–stop rows, robust errors);
+  and ARIMA from AR to SARIMAX, with the orders given or searched for. A model runs in R as a
+  Job, in an image built per group from a recipe with pinned packages, and writes the ten-column
+  table of the statistics. Its **Report** tab opens on the checks of its assumptions, each with
+  its verdict and advice, then the coefficients, the fit and the diagnostic charts, as PDF or
+  Excel, in the five languages. **Run** in the node's panel fits it on the development sample
+  and marks its numbers «not up to date» when the node or a step before it changes. A flow run
+  can log the model to an [MLflow](docs/connections/mlflow.md) server (parameters, metrics, the
+  report, the model and a registered version; «Continue without MLflow» lets the step go on
+  when the server is down), and **Predict** applies a version Tabularia registered, fixed or the
+  latest, after checking its card's hash. An administrator enables each group (regression,
+  survival, time series) in **Administration → Statistical models**: the build, the self-test
+  against values computed outside Tabularia, limits (CPU, memory, longest run, input rows) and
+  who may use it. They are off on Docker Compose. New routes `GET /models/groups`,
+  `/admin/models…`, `POST /tasks/model-report`; migration 0044; an Output that reads a model
+  cannot be exported to dbt (`model_not_exportable`).
+  [Statistical models](docs/capabilities/models.md).
 
 ## 1.4.7 «Romulus» — 2026-11-18 · long-term support
 

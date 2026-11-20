@@ -31,6 +31,7 @@ export const DOCS_GROUPS: { title: string, icon: DocsIcon, intro: string, items:
       ['/docs/capabilities/home', 'The home page'],
       ['/docs/capabilities/flows', 'Low-code flows'],
       ['/docs/capabilities/statistics', 'Statistics: hypothesis tests'],
+      ['/docs/capabilities/models', 'Statistical models'],
       ['/docs/capabilities/preview-and-analysis', 'Preview and analysis'],
       ['/docs/capabilities/lineage', 'Lineage'],
       ['/docs/capabilities/ask-your-data', 'Ask your data with AI'],

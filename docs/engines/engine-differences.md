@@ -70,6 +70,16 @@ five engines (BigQuery live, against a real project):
   `NaN` value in a column the test uses is left out on every engine, and the p-value of a test
   never depends on the engine (see below).
 
+## Statistical models
+
+The [statistical models](../capabilities/models.md) (`model` and `model_predict` nodes) are not
+operations of the engines and are not counted among the 41: no engine fits a Cox model. The engine
+only writes the rows that reach the node, and only the columns the model reads (every column for Predict), into the scripts
+bucket; the model runs in R in a Job of its group on Kubernetes, and the engine imports its
+results. So the same flow gives the same numbers on every engine for what comes before the model,
+and the model's numbers depend on the group's version (kept in the results) and not on the engine.
+Compose cannot run them.
+
 ## Statistics
 
 The [hypothesis tests](../capabilities/statistics.md) are the one place where the engines'

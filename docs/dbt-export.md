@@ -770,6 +770,12 @@ before a release.
   A test ends in a p-value, a quantile or an exact distribution that no SQL model computes the same
   way on every target, so the export does not guess. Export the flow up to the step before the
   test, and run the test in Tabularia.
+- **The statistical models cannot be exported**: an Output that reads what a
+  [model or Predict node](capabilities/models.md) writes, however far down, is refused with
+  `model_not_exportable`, the message «The output «…» of the flow «…» reads what the model node «…»
+  writes: a statistical model runs on Tabularia's cluster, not in dbt, so it cannot be exported.
+  Export the outputs before the model.» A model that feeds no exported Output is left out of the
+  project, with a note: Tabularia keeps running it with the flow.
 - A **Script** node (Python or R) is not dbt: an Output that reads what a script writes,
   however far down, cannot be exported, and the export says which. A Script node that
   feeds no exported Output is left out of the project, with a note: Tabularia keeps

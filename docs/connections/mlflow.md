@@ -10,7 +10,7 @@ does not install or run MLflow.
 | | |
 |---|---|
 | Where | A folder in Explore, **New → New connection**, type **MLflow** |
-| Used by | The **MLflow** block of the model nodes and the Predict node (when they ship) |
+| Used by | The **MLflow** block of the [statistical model](../capabilities/models.md) nodes and the Predict node |
 | Authentication | **None**, **User and password** (MLflow's basic-authentication app) or **Bearer token** (a reverse proxy or an identity provider in front of MLflow) |
 | Permissions | CONNECT on the connection's folder, to create it and to choose it in a node |
 
@@ -49,5 +49,17 @@ answer that is not MLflow's. The server's own text is never shown.
 The calls are the ones of MLflow's REST reference (API 2.0). Tabularia's own tests run against a
 stand-in of that API; the range of MLflow versions it supports is written here once it has been
 run against a real server.
+
+## What a model records here
+
+A run of a flow whose model node names this connection writes to the experiment the node names
+(created when missing): the node's parameters and the model's formula, every number of the fit
+and the statistic and p-value of each assumption as metrics, tags that say which flow, node and
+version of the model made it, and, when the server has an artifact proxy, the results, the
+coefficients, the report as PDF and the model with its card. With **Register the model as**, each
+run adds a version of that registered model, which the **Predict** node can apply. The editor's
+**Run** logs nothing. The connection's secret is used only by the gateway: it never reaches the
+Job that fits the model. The details, and **Continue without MLflow**, are in
+[Statistical models: MLflow](../capabilities/models.md#mlflow).
 
 See [Connections](README.md) for what every type has in common.

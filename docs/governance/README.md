@@ -55,6 +55,7 @@ one line per topic and the page that covers it.
 | Permissions on a folder and below it | Whoever has MANAGE on the folder (administrators always) |
 | Which engines may be chosen, which AI models may be used | Administrators |
 | Which scripting environments and container registries a group may use | Administrators |
+| Which statistical model groups are enabled, with what limits, and who may use them | Administrators, in **Administration → Statistical models** (not with an API token); observers read it ([Statistical models](../capabilities/models.md#turning-a-group-on-administrators)) |
 | A datasource's data contract | Whoever has EDIT on the datasource's folder |
 | Where an SMTP connection may send | Whoever has CONNECT on its folder (the connection's allowed domains) |
 
