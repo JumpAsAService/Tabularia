@@ -753,25 +753,17 @@ arima_card <- function(task, prep, model, fit, levels) {
     coefficients = as.list(tab_finite(fit$coef)), sigma2 = fit$sigma2, transform = o$transform,
     box_cox_lambda = if (is.null(model$lambda)) NULL else model$lambda, drift = model$drift, mean = model$mean,
     exog = as.list(o$exog), horizon = o$horizon,
-    # the same numbers to the last bit (JSON numbers keep 15 digits): what predict reads
-    exact = list(coefficients = as.list(sprintf("%.17g", fit$coef)), sigma2 = sprintf("%.17g", fit$sigma2),
-                 box_cox_lambda = if (is.null(model$lambda)) NULL else sprintf("%.17g", model$lambda)),
     last = list(time_kind = prep$kind, t0 = tab_label(prep$times[[prep$first]]),
                 time = as.list(tab_label(prep$times[keep])), value = as.list(prep$y[keep]), exog = tab_object(exog)))
   card
 }
 
-# The model a card holds, as arima_filter applies it.
+# The model a card holds, as arima_filter applies it (the card's numbers are the fit's to the
+# last bit: tab_json writes 17 significant digits).
 arima_model_of_card <- function(card) {
   a <- card$arima
   orders <- lapply(a$orders[c("p", "d", "q", "P", "D", "Q")], as.integer)
   coef <- unlist(lapply(a$coefficients, function(x) if (is.null(x)) NA_real_ else as.numeric(x)))
-  exact <- a$exact
-  if (!is.null(exact) && length(exact$coefficients) == length(coef)) {
-    coef[] <- as.numeric(unlist(exact$coefficients))
-    a$sigma2 <- exact$sigma2
-    if (!is.null(exact$box_cox_lambda)) a$box_cox_lambda <- exact$box_cox_lambda
-  }
   list(orders = orders, s = as.integer(a$orders$s), mean = isTRUE(a$mean), drift = isTRUE(a$drift),
        exog = unlist(a$exog %||% list()), lambda = if (is.null(a$box_cox_lambda)) NULL else as.numeric(a$box_cox_lambda),
        transform = a$transform, coef = coef, sigma2 = as.numeric(a$sigma2))
