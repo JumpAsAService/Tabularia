@@ -952,14 +952,19 @@ test('a parametric survival node in the editor: the form, with its words, only w
   const base = { time: 'amount', event: 'vip', event_value: 'true' }
   let html = await render(Form, node('parametric_survival', m.modelDefaults('parametric_survival')))
   let page = text(html)
-  for (const words of ['The time to an event with a named distribution', 'Follow-up time (a number)', 'Event column', 'Predictors (optional)', 'Strata column', 'Weights column', 'Distribution',
+  for (const words of ['The time to an event with a named distribution', 'Follow-up time (a number)', 'Event column', 'Predictors (optional)', 'Strata column', 'Weights column', 'Start time column', 'Distribution',
     'Quantiles of the time', 'Survival at times', 'Time already survived (a number)', 'Significance level', 'Seed', 'Output', 'Still to set: Follow-up time (a number), Event column, Value that means the event happened.']) {
     assert.ok(page.includes(words), `«${words}» is not on the page: ${page}`)
   }
   // no predictor: no reference levels, no interactions; the order is the catalogue's
   assert.ok(!page.includes('Reference levels') && !page.includes('Interactions'))
-  const order = ['Follow-up time', 'Event column', 'Value that means', 'Predictors (optional)', 'Strata column', 'Weights column', 'Distribution', 'Quantiles of the time', 'Survival at times', 'Time already survived', 'Significance level']
+  const order = ['Follow-up time', 'Event column', 'Value that means', 'Predictors (optional)', 'Strata column', 'Weights column', 'Start time column', 'Distribution', 'Quantiles of the time', 'Survival at times', 'Time already survived', 'Significance level']
   assert.deepEqual([...order].sort((a, b) => page.indexOf(a) - page.indexOf(b)), order)
+  // delayed entry: Cox's key and kind, an optional numeric column the page offers (a text column is not), its hint in the node's words
+  const start = m.modelFields(m.MODEL_CATALOG.models.find((x) => x.id === 'parametric_survival')).find((f) => f.key === 'start')
+  assert.ok(start && start.control === 'column' && start.numeric === true && start.required === false, JSON.stringify(start))
+  assert.ok(page.includes('each unit is observed only from its start (delayed entry)'))
+  assert.ok(!page.includes('Still to set: Follow-up time (a number), Event column, Value that means the event happened, Start time column'))
   // conditional survival: an optional numeric column (a text column is not offered), the time left then being what is predicted
   assert.ok(!page.includes('Still to set: Follow-up time (a number), Event column, Value that means the event happened, Time already survived'))
   assert.ok(selectsOf(html).some((x) => x.includes('amount') && x.includes('qty') && !x.includes('channel')))

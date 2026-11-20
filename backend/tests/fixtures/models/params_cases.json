@@ -1556,6 +1556,7 @@
     "predictors": [],
     "strata": null,
     "weights": null,
+    "start": null,
     "distribution": "weibull",
     "quantiles": [
      0.25,
@@ -1623,6 +1624,7 @@
     ],
     "strata": "plant",
     "weights": "w",
+    "start": null,
     "distribution": "lognormal",
     "quantiles": [
      0.1,
@@ -1662,6 +1664,7 @@
     "interactions": [],
     "strata": null,
     "weights": null,
+    "start": null,
     "distribution": "auto",
     "quantiles": [
      0.25,
@@ -2166,6 +2169,7 @@
     "predictors": [],
     "strata": null,
     "weights": null,
+    "start": null,
     "distribution": "auto",
     "quantiles": [
      0.25,
@@ -2196,6 +2200,7 @@
     "predictors": [],
     "strata": null,
     "weights": null,
+    "start": null,
     "distribution": "auto",
     "quantiles": [
      0.25,
@@ -2244,6 +2249,58 @@
     "aic_margin": 11
    },
    "error": "parametric_survival: 'aic_margin' must be a number at least 0 and at most 10"
+  },
+  {
+   "what": "delayed entry: a start column, a number column of its own",
+   "model": "parametric_survival",
+   "params": {
+    "time": "days",
+    "event": "status",
+    "event_value": "failed",
+    "start": "entered"
+   },
+   "checked": {
+    "time": "days",
+    "event": "status",
+    "event_value": "failed",
+    "predictors": [],
+    "strata": null,
+    "weights": null,
+    "start": "entered",
+    "distribution": "weibull",
+    "quantiles": [
+     0.25,
+     0.75
+    ],
+    "times": [],
+    "alive_at": null,
+    "alpha": 0.05,
+    "seed": 1,
+    "output": "results"
+   }
+  },
+  {
+   "what": "the start is not the time",
+   "model": "parametric_survival",
+   "params": {
+    "time": "days",
+    "event": "status",
+    "event_value": "failed",
+    "start": "days"
+   },
+   "error": "parametric_survival: the column «days» is both 'time' and 'start': choose another"
+  },
+  {
+   "what": "the start is not the weights",
+   "model": "parametric_survival",
+   "params": {
+    "time": "days",
+    "event": "status",
+    "event_value": "failed",
+    "start": "w",
+    "weights": "w"
+   },
+   "error": "parametric_survival: the column «w» is both 'start' and 'weights': choose another"
   }
  ]
 }

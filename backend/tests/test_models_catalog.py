@@ -383,3 +383,18 @@ def test_the_intervals_of_the_quantiles_and_the_times_are_columns_of_predict_and
     assertion = catalog.variant_spec("parametric_survival", {})["sections"]["assumption"]
     assert "at" in assertion["numbers"] and "description" in assertion["texts"]
     assert "alpha" in catalog.variant_spec("parametric_survival", {})["sections"]["model"]["numbers"]
+
+
+def test_delayed_entry_is_a_column_of_the_parametric_node_as_of_cox():
+    # start: Cox's key and kind; the time of each row is then the end of the interval (start, time]
+    spec = catalog.MODELS["parametric_survival"]
+    assert spec["takes"]["start"] == catalog.MODELS["cox"]["takes"]["start"] == "number_column"
+    assert spec["defaults"]["start"] is None and "start" in spec["disjoint"]
+    base = {"time": "days", "event": "status", "event_value": "failed"}
+    assert catalog.check_params("parametric_survival", base)["start"] is None
+    assert catalog.check_params("parametric_survival", {**base, "start": "entered"})["start"] == "entered"
+    # the node writes how many rows enter after 0, in every variant
+    for variant in spec["variants"]:
+        assert "n_delayed" in variant["sections"]["model"]["numbers"], variant["id"]
+    # Predict has no start: the card holds the parameters, and the time already survived of a unit is alive_at
+    assert "start" not in catalog.PREDICT["takes"]

@@ -620,7 +620,7 @@ _PS_CHECKS_COMMON = ["convergence", "epv", "separation", "km_agreement", "distri
 _PS_PH_CHECKS = ["ph_cox", "ph_cox_global"]
 _PS_MODEL_TEXTS = [*_MODEL_TEXTS, "event_value", "distribution", "selection", "coefficient_scale", "profile",
                    "lr_significance"]
-_PS_MODEL_NUMBERS = ["n", "events", "alpha", "censored", "n_missing", "n_zero_time", "n_strata", "n_parameters", "log_lik", "aic",
+_PS_MODEL_NUMBERS = ["n", "events", "alpha", "censored", "n_missing", "n_zero_time", "n_delayed", "n_strata", "n_parameters", "log_lik", "aic",
                      "bic", "lr_statistic", "lr_df", "lr_p_value", "concordance", "concordance_se", "last_time",
                      "last_event_time"]
 _PS_SHAPE_LR = ["exponential_lr_statistic", "exponential_lr_df", "exponential_lr_p_value"]  # the shape against a constant hazard
@@ -676,17 +676,17 @@ MODELS["parametric_survival"] = {
     "family": "survival",
     "needs": {"time": "number_column", "event": "column", "event_value": "event_level"},
     "takes": {"predictors": "predictors_optional", "reference": "reference", "interactions": "interactions",
-              "strata": "column", "weights": "number_column", "distribution": "distribution", "quantiles": "quantiles",
-              "times": "times", "alive_at": "number_column", "aic_margin": "aic_margin", "alpha": "alpha",
+              "strata": "column", "weights": "number_column", "start": "number_column", "distribution": "distribution",
+              "quantiles": "quantiles", "times": "times", "alive_at": "number_column", "aic_margin": "aic_margin", "alpha": "alpha",
               "seed": "seed", "output": "output_rows"},
-    "defaults": {"predictors": [], "reference": {}, "interactions": [], "strata": None, "weights": None,
+    "defaults": {"predictors": [], "reference": {}, "interactions": [], "strata": None, "weights": None, "start": None,
                  "distribution": "weibull", "quantiles": [0.25, 0.75], "times": [], "alpha": 0.05, "seed": 1,
                  "output": "results", "alive_at": None, "aic_margin": 2.0},
     "applies": {"reference": {"predictors": True}, "interactions": {"predictors": True},
                 "aic_margin": {"distribution": ["auto"]}},
     "requires": [],
     "forbids": [],
-    "disjoint": ["time", "event", "predictors", "strata", "weights"],
+    "disjoint": ["time", "event", "start", "predictors", "strata", "weights"],
     "variants": [
         _ps_variant("ph_aft", ["weibull", "exponential"], [*_PS_SHAPE_LR], ["exponential_lr_significance"],
                     [*_PS_COEF_BASE, *_PS_TIME_RATIO, *_PS_HAZARD_RATIO],
