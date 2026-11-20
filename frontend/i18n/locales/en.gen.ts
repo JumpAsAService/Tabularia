@@ -6947,7 +6947,7 @@ export default {
   "modelsAdmin": {
     "navTitle": "Statistical models",
     "title": "Statistical models",
-    "lead": "The groups of statistical models Tabularia ships. Each group runs in an image the cluster builds from the group's recipe (R and its packages, at pinned versions) and proves with a self-test: the models are fitted on small reference tables and compared with values computed outside Tabularia. A group is ready only when every value matches.",
+    "lead": "The groups of statistical models Tabularia ships. Each group runs in an image the cluster builds from the group's recipe (R or Python and their packages, at pinned versions) and proves with a self-test: the models are fitted on small reference tables and compared with values computed outside Tabularia. A group is ready only when every value matches.",
     "offKubernetes": "Requires Kubernetes: the statistical models run as Jobs in the cluster. Turn on scripting (scripts.enabled) in the Helm chart.",
     "offConfiguration": "Off: the scripts namespace or the image registry is missing (SCRIPTS__NAMESPACE, SCRIPTS__REGISTRY).",
     "noBucket": "The scripts have no bucket yet: a model reads its input from it. Set it in Scripting environments before running a model.",

@@ -6947,7 +6947,7 @@ export default {
   "modelsAdmin": {
     "navTitle": "Statistische Modelle",
     "title": "Statistische Modelle",
-    "lead": "Die Gruppen statistischer Modelle, die Tabularia mitbringt. Jede Gruppe läuft in einem Image, das der Cluster aus dem Rezept der Gruppe baut (R und seine Pakete in festgelegten Versionen) und mit einem Selbsttest prüft: Die Modelle werden auf kleinen Referenztabellen geschätzt und mit Werten verglichen, die außerhalb von Tabularia berechnet wurden. Eine Gruppe ist erst bereit, wenn alle Werte übereinstimmen.",
+    "lead": "Die Gruppen statistischer Modelle, die Tabularia mitbringt. Jede Gruppe läuft in einem Image, das der Cluster aus dem Rezept der Gruppe baut (R oder Python und ihre Pakete in festgelegten Versionen) und mit einem Selbsttest prüft: Die Modelle werden auf kleinen Referenztabellen geschätzt und mit Werten verglichen, die außerhalb von Tabularia berechnet wurden. Eine Gruppe ist erst bereit, wenn alle Werte übereinstimmen.",
     "offKubernetes": "Erfordert Kubernetes: Die statistischen Modelle laufen als Jobs im Cluster. Aktivieren Sie das Scripting (scripts.enabled) im Helm-Chart.",
     "offConfiguration": "Aus: Der Namespace der Skripte oder die Image-Registry fehlt (SCRIPTS__NAMESPACE, SCRIPTS__REGISTRY).",
     "noBucket": "Die Skripte haben noch keinen Bucket: Ein Modell liest seine Eingabe daraus. Legen Sie ihn unter Skriptumgebungen fest, bevor Sie ein Modell ausführen.",

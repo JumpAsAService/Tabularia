@@ -6947,7 +6947,7 @@ export default {
   "modelsAdmin": {
     "navTitle": "Modèles statistiques",
     "title": "Modèles statistiques",
-    "lead": "Les groupes de modèles statistiques fournis par Tabularia. Chaque groupe s'exécute dans une image que le cluster construit à partir de la recette du groupe (R et ses paquets, à versions figées) et qu'il éprouve par un auto-test : les modèles sont ajustés sur de petites tables de référence et comparés à des valeurs calculées hors de Tabularia. Un groupe n'est prêt que lorsque toutes les valeurs concordent.",
+    "lead": "Les groupes de modèles statistiques fournis par Tabularia. Chaque groupe s'exécute dans une image que le cluster construit à partir de la recette du groupe (R ou Python et leurs paquets, à versions figées) et qu'il éprouve par un auto-test : les modèles sont ajustés sur de petites tables de référence et comparés à des valeurs calculées hors de Tabularia. Un groupe n'est prêt que lorsque toutes les valeurs concordent.",
     "offKubernetes": "Nécessite Kubernetes : les modèles statistiques s'exécutent comme des Jobs dans le cluster. Activez le scripting (scripts.enabled) dans le chart Helm.",
     "offConfiguration": "Désactivé : le namespace des scripts ou le registre d'images manque (SCRIPTS__NAMESPACE, SCRIPTS__REGISTRY).",
     "noBucket": "Les scripts n'ont pas encore de bucket : un modèle y lit ses données. Définissez-le dans Environnements de script avant d'exécuter un modèle.",

@@ -97,3 +97,12 @@ test('every action is a native control: a button, a field, a disclosure', () => 
   assert.doesNotMatch(component, /<(div|span|li)[^>]*@click/, 'a click on something that is not a button')
   assert.doesNotMatch(component, /tabindex=/)
 })
+
+test('the introduction of the section does not say the groups are in R only: a group may be in Python', () => {
+  for (const lang of ['en', 'it', 'de', 'es', 'fr']) {
+    const lines = read(`i18n/locales/${lang}.gen.ts`).split('\n').filter((l) => /^\s+"lead": ".*\(R [^)]*\b(?:Pakete|paquetes|paquets|pacchetti|packages)/.test(l))
+    assert.equal(lines.length, 1, lang)
+    assert.match(lines[0], /\bPython\b/, `${lang}: the introduction names Python beside R`)
+    assert.doesNotMatch(lines[0], /\(R (?:and its|e i suoi|und seine|y sus|et ses)/, lang)
+  }
+})
