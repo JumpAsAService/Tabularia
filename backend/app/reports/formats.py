@@ -6,7 +6,11 @@ stay numbers. A pattern is spreadsheet-like and read by a small parser of our ow
 
   numbers  0  0.00  #,##0  #,##0.00  0%  0.0%  — text before or after the digits
            (`€ #,##0.00`, `#,##0 pcs`, "text in double quotes"), and up to three
-           sections, positive;negative;zero (`#,##0;(#,##0)`: negatives in brackets)
+           sections, positive;negative;zero (`#,##0;(#,##0)`: negatives in brackets);
+           by the exponent, as a spreadsheet's `0.00E+0` (`e` writes a small e, `E-0`
+           the exponent's sign only when it is negative, `E+00` two digits at least);
+           `General`, as a spreadsheet's: the number as it is (ten decimals at most, no
+           separator), by its exponent below 1e-6 or from 1e15 (Excel: its own General)
   dates    yyyy yy MMMM MMM MM M dd d EEEE EEE HH H mm m ss s — `M` is the month, `m`
            the minute; 'text in single quotes' ('' is an apostrophe)
 
@@ -149,9 +153,59 @@ class _Section:
     grouping: bool
     percent: bool
     digits: bool = True  # False: a section of text only (`#,##0;(#,##0);-` writes zero as -)
+    exponent: str = ""  # «E+00», «e-0»: the number written by its exponent, as a spreadsheet's
 
 
 _NUMBER_CORE = re.compile(r"[0#,]*[0#](?:\.[0#]*)?|\.[0#]+")
+_EXPONENT = re.compile(r"[Ee][+-]0+")
+GENERAL = "General"
+
+
+def is_general(pattern: str | None) -> bool:
+    """The spreadsheet's `General` (any case): the number as it is, by its exponent when very
+    small or very large."""
+    return isinstance(pattern, str) and pattern.strip().lower() == "general"
+
+
+def _exponent_text(value: float, mantissa_digits: int, letter: str, signed: bool, places: int, loc: "Locale",
+                   exp_digits: int = 1) -> str:
+    """m·10^e as «5.1687e-12»: the mantissa rounded to `mantissa_digits` decimals (trailing
+    zeros dropped past `places`), the language's decimal mark; the exponent's sign always
+    (`signed`) or only when negative, and `exp_digits` digits at least."""
+    if value == 0:
+        e, m = 0, 0.0
+    else:
+        e = math.floor(math.log10(abs(value)))
+        m = abs(value) / 10.0 ** e if e > -300 else abs(value) * 10.0 ** -e
+        if m < 1.0:  # log10 a hair low
+            m, e = m * 10.0, e - 1
+        if round(m, mantissa_digits) >= 10.0:
+            m, e = m / 10.0, e + 1
+    whole, _, frac = f"{m:.{mantissa_digits}f}".partition(".")
+    frac = frac.rstrip("0")
+    if len(frac) < places:
+        frac += "0" * (places - len(frac))
+    sign = "-" if value < 0 else ""
+    exp_sign = "-" if e < 0 else ("+" if signed else "")
+    return f"{sign}{whole}{loc.decimal + frac if frac else ''}{letter}{exp_sign}{str(abs(e)).rjust(exp_digits, '0')}"
+
+
+def format_general(value: float | int, loc: "Locale") -> str:
+    """A number as a spreadsheet's General writes it, all its digits that count: a whole
+    number as it is; another with ten decimals at most, none it does not have, no separator
+    of thousands; by its exponent, ten significant digits («5.168702726e-12»), below 1e-6 —
+    which ten decimals would write 0 — or from 1e15."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return str(value)
+    if isinstance(value, int):
+        return format_number(value, "0", loc)
+    if not math.isfinite(value):
+        return ""
+    if value == 0:
+        return "0"
+    if abs(value) < 1e-6 or abs(value) >= 1e15:
+        return _exponent_text(value, 9, "e", False, 0, loc)
+    return format_number(value, "0.##########", loc)
 
 
 def _literal_parts(section: str) -> list[tuple[bool, str]]:
@@ -184,6 +238,7 @@ _BRACKETS = re.compile(r"\[[^\]]*\]")
 def _section(text: str) -> _Section:
     prefix, suffix, core = [], [], None
     percent = False
+    exponent = ""
     for literal, part in _literal_parts(text):
         if literal:
             (suffix if core is not None else prefix).append(part)
@@ -203,18 +258,25 @@ def _section(text: str) -> _Section:
                                       'in double quotes, e.g. #,##0.0 "M"')
                 core = m.group(0)
                 prefix.append(part[:m.start()])
-                suffix.append(part[m.end():])
+                after = part[m.end():]
+                e = _EXPONENT.match(after)
+                if e:  # 0.00E+0: by the exponent
+                    exponent = e.group(0)
+                    after = after[e.end():]
+                suffix.append(after)
                 continue
         (suffix if core is not None else prefix).append(part)
     if core is None:
         return _Section("".join(prefix), "", 0, 0, 0, False, percent, digits=False)
     whole, _, frac = core.partition(".")
     return _Section("".join(prefix), "".join(suffix), whole.count("0"), frac.count("0"), len(frac),
-                    "," in whole, percent)
+                    "," in whole and not exponent, percent, exponent=exponent)
 
 
 def is_number_pattern(pattern: str) -> bool:
-    """True when the pattern formats numbers (it has 0 or # outside quotes)."""
+    """True when the pattern formats numbers (it has 0 or # outside quotes, or is `General`)."""
+    if is_general(pattern):
+        return True
     plain = "".join(p for literal, p in _safe_parts(pattern) if not literal)
     return "0" in plain or "#" in plain
 
@@ -270,6 +332,8 @@ def _group(whole: str, loc: Locale) -> str:
 
 
 def format_number(value: float | int, pattern: str, loc: Locale) -> str:
+    if is_general(pattern):
+        return format_general(value, loc)
     sections = number_pattern(pattern)
     if isinstance(value, float) and not math.isfinite(value):
         return ""
@@ -277,6 +341,11 @@ def format_number(value: float | int, pattern: str, loc: Locale) -> str:
     sec = sections[0]
     if negative and len(sections) > 1:
         sec = sections[1]
+    if sec.exponent:
+        shown = _exponent_text(abs(float(value)) * (100.0 if sec.percent else 1.0), sec.max_frac, sec.exponent[0],
+                               sec.exponent[1] == "+", sec.min_frac, loc, len(sec.exponent) - 2)
+        sign = "-" if negative and len(sections) == 1 and float(value) != 0 else ""
+        return f"{sign}{sec.prefix}{shown}{sec.suffix}"
     whole, frac = _digits(value, sec)
     if len(sections) > 2 and not whole.strip("0") and not frac.strip("0"):
         sec = sections[2]
@@ -381,6 +450,8 @@ def display(value: Any, pattern: str | None, loc: Locale) -> str:
 
 def check_pattern(pattern: str) -> None:
     """FormatError when a pattern can be read neither as a number's nor as a date's."""
+    if is_general(pattern):
+        return
     if is_number_pattern(pattern):
         number_pattern(pattern)
     elif not any(t[0] in _DATE_LETTERS for t in date_tokens(pattern)):  # a quote left open is said as such
@@ -403,6 +474,8 @@ def excel_number_format(pattern: str | None, whole: bool = False, value: float |
     pattern does not say how to write them. Excel uses its own user's separators. With no
     pattern a whole number (`whole`) has no separators, as `display` writes it.
     `value`: the float this cell holds, whose optional decimals may come to nothing."""
+    if is_general(pattern):
+        return "General"
     if not pattern or not is_number_pattern(pattern):
         if whole:
             return "0;[Red]-0"
@@ -417,8 +490,9 @@ def excel_number_format(pattern: str | None, whole: bool = False, value: float |
         core = ("#,##0" if sec.grouping else "0" if sec.min_int else "#")
         if sec.grouping and sec.min_int == 0:
             core = "#,##"
-        if sec.max_frac and not (value is not None and _no_decimals_left(value, sec)):
+        if sec.max_frac and (sec.exponent or not (value is not None and _no_decimals_left(value, sec))):
             core += "." + "0" * sec.min_frac + "#" * (sec.max_frac - sec.min_frac)
+        core += sec.exponent
         prefix, suffix = sec.prefix.replace("%", ""), sec.suffix.replace("%", "")
         out.append(f"{_xl_text(prefix)}{core}{'%' if sec.percent else ''}{_xl_text(suffix)}")
     if len(out) == 1:

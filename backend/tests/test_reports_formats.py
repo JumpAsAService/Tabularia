@@ -155,3 +155,44 @@ def test_a_whole_float_has_no_stray_decimal_point_in_excel():
     assert f.excel_number_format("0.##%", value=0.5) == "0%;[Red]-0%"
     assert f.excel_number_format("0.##%", value=0.125) == "0.##%;[Red]-0.##%"
     assert f.excel_number_format("#,##0.00", value=7.0) == "#,##0.00;[Red]-#,##0.00"  # its decimals are asked for
+
+
+@pytest.mark.parametrize("code, pattern, value, text", [
+    ("en", "0.00E+0", 12345.678, "1.23E+4"),
+    ("en", "0.00E+00", 0.000123, "1.23E-04"),
+    ("en", "0.0000e+0", 1.23456e-7, "1.2346e-7"),
+    ("it", "0.0000e+0", -4.2e-5, "-4,2000e-5"),
+    ("en", "0.##E-0", 1500.0, "1.5E3"),
+    ("en", "0.00E+0", 9.996, "1.00E+1"),  # the mantissa that rounds to 10 moves the exponent
+    ("en", "0.00E+0", 0.0, "0.00E+0"),
+    ("fr", "0.0E+0 \"u\"", 2.5e-9, "2,5E-9 u"),
+])
+def test_numbers_by_their_exponent(code, pattern, value, text):
+    assert f.format_number(value, pattern, f.locale(code)) == text
+    f.check_pattern(pattern)
+
+
+@pytest.mark.parametrize("code, value, text", [
+    ("en", 5.168702726e-12, "5.168702726e-12"),
+    ("it", -2.5e-7, "-2,5e-7"),
+    ("en", 0.000516870272598936, "0.0005168703"),
+    ("en", 1000000005.6875, "1000000005.6875"),
+    ("de", 1234567.5, "1234567,5"),  # no separator of thousands
+    ("en", 12.0, "12"),
+    ("en", 3, "3"),
+    ("en", 0.0, "0"),
+    ("en", 2.5e16, "2.5e16"),
+    ("en", 9.99999999999e-7, "1e-6"),
+])
+def test_the_general_format(code, value, text):
+    """A spreadsheet's General: the number as it is (ten decimals at most), by its exponent
+    below 1e-6 or from 1e15; Excel gets its own General, the cell a number."""
+    assert f.display(value, "General", f.locale(code)) == text
+    assert f.display(value, "general", f.locale(code)) == text
+    f.check_pattern("General")
+    assert f.excel_number_format("General", isinstance(value, int), value if isinstance(value, float) else None) == "General"
+
+
+def test_excel_writes_the_exponent_of_a_pattern():
+    assert f.excel_number_format("0.0000e+0", value=1e-7) == "0.0000e+0;[Red]-0.0000e+0"
+    assert f.excel_number_format("0.00E+00") == "0.00E+00;[Red]-0.00E+00"
