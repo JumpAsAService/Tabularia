@@ -41,6 +41,7 @@ MIN_VALIDATION_ROWS = 10
 TIME_BUDGET_SHARE = 0.6
 SHAP_TIME_SHARE = 0.85  # the SHAP values end by 85 % of the step's time: the charts and the files keep the rest
 SHAP_PILOT_ROWS = 64    # the rows whose SHAP values are timed to size the sample on the time left
+MODEL_SIZE_SHARE = 0.95  # the boosting stops before its model file passes 95 % of max_model_file_bytes
 BEESWARM_BINS = 50
 BEESWARM_HALF_WIDTH = 0.4
 CALIBRATION_BINS = 10
@@ -63,6 +64,8 @@ NOTES = {
     "shap_sampled": "The SHAP values are computed on a sample of the rows, drawn with the node's seed.",
     "class_absent_validation": "A class has no row in the validation part: its numbers there are empty.",
     "zero_weights": "Rows whose weight is 0 are left out of the fit and of every number.",
+    "model_size": "The boosting stopped before its model file would be larger than a model file can be (64 MiB): the trees kept "
+                  "are the best so far; lower max_depth (each level can double a tree), or the classes.",
 }
 
 
@@ -156,6 +159,7 @@ class Fitted:
     model_format: str               # xgboost-json | catboost-cbm
     missing_level: str | None = None
     lower_is_better: dict[str, bool] = field(default_factory=dict)  # per curve metric; a metric left out: lower is better
+    stopped_by_size: bool = False   # stopped before the model file would pass MODEL_SIZE_SHARE of its limit
 
 
 def _refuse_missing_columns(df: pd.DataFrame, columns: list[str]) -> None:
@@ -727,6 +731,8 @@ ADVICE = {
     "trees_more": "the validation loss was still falling at the last tree: raise max_trees or learning_rate",
     "trees_few": "stopped after very few trees: lower learning_rate",
     "trees_no_stop": "the validation loss at the last tree is more than 1 % worse than at the best: turn early stopping on",
+    "trees_size": "the boosting stopped so that the model file stays within 64 MiB: lower max_depth (each level can double a "
+                  "tree), or raise learning_rate so that fewer trees are needed",
     "class_imbalance": "read the AUC and the log-loss, not the accuracy; choose a threshold; class_weight = balanced trades "
                        "calibrated probabilities for balance",
     "calibration": "the predicted probabilities do not match the observed rates: do not read them as probabilities, or "
@@ -820,14 +826,18 @@ def check_overfitting(curve: list[float] | np.ndarray, kept: int, base_valid: fl
 
 
 def check_trees_limit(early_stopping: bool, stopped_early: bool, stopped_by_time: bool, kept: int,
-                      last_loss: float, best_loss: float, learning_rate: float = TREES_FEW_RATE) -> dict[str, Any]:
-    """With early stopping: doubtful when it did not stop (max_trees reached, or the time budget),
-    or when it stopped before 20 trees with a learning rate above 0.05 (each tree a big step: a
-    lower rate helps). With the default rate or a lower one, an early stop says that the pattern is
-    weak, which beats_baseline reads: lowering the rate again would not help (the threshold of 20
-    is then not written). Without early stopping: the last tree's validation loss against the best."""
+                      last_loss: float, best_loss: float, learning_rate: float = TREES_FEW_RATE,
+                      stopped_by_size: bool = False) -> dict[str, Any]:
+    """With early stopping: doubtful when it did not stop (max_trees reached, the time budget, or
+    the model file's size), or when it stopped before 20 trees with a learning rate above 0.05
+    (each tree a big step: a lower rate helps). With the default rate or a lower one, an early
+    stop says that the pattern is weak, which beats_baseline reads: lowering the rate again would
+    not help (the threshold of 20 is then not written). Without early stopping: the last tree's
+    validation loss against the best."""
     if early_stopping:
         few = 20 if learning_rate > TREES_FEW_RATE else math.nan
+        if stopped_by_size:
+            return _check("trees_limit", "doubtful", kept, few, "trees_size")
         if stopped_by_time or not stopped_early:
             return _check("trees_limit", "doubtful", kept, few, "trees_more")
         if kept < 20 and learning_rate > TREES_FEW_RATE:
@@ -835,6 +845,8 @@ def check_trees_limit(early_stopping: bool, stopped_early: bool, stopped_by_time
         return _check("trees_limit", "ok", kept, few)
     h0 = H0["trees_limit_no_stop"]
     excess = (last_loss - best_loss) / abs(best_loss) if best_loss else (0.0 if last_loss == best_loss else math.inf)
+    if stopped_by_size:
+        return _check("trees_limit", "doubtful", excess, 0.01, "trees_size", h0=h0)
     if stopped_by_time:
         return _check("trees_limit", "doubtful", excess, 0.01, "trees_more", h0=h0)
     verdict = "doubtful" if excess > 0.01 else "ok"
@@ -1139,6 +1151,8 @@ def finish(task: dict[str, Any], prepared: Prepared, fitted: Fitted) -> dict[str
         notes.insert(0, "validation_chose_trees")
     if fitted.stopped_by_time:
         notes.append("time_budget")
+    if fitted.stopped_by_size:
+        notes.append("model_size")
     if len(sample) < P.n:
         notes.append("shap_sampled")
     for nid in dict.fromkeys(notes):
@@ -1178,7 +1192,8 @@ def finish(task: dict[str, Any], prepared: Prepared, fitted: Fitted) -> dict[str
     checks.append(check_overfitting(curve, fitted.best_iteration, B_va))
     last, best = (curve[-1], min(curve)) if curve else (math.nan, math.nan)
     checks.append(check_trees_limit(bool(p.get("early_stopping", True)), fitted.stopped_early, fitted.stopped_by_time,
-                                    fitted.best_iteration + 1, last, best, float(p.get("learning_rate", TREES_FEW_RATE))))
+                                    fitted.best_iteration + 1, last, best, float(p.get("learning_rate", TREES_FEW_RATE)),
+                                    fitted.stopped_by_size))
     if what != "regression":
         shares = np.array([float(w[tr][y[tr] == c].sum()) for c in range(len(P.classes))]) / float(w[tr].sum())
         checks.append(check_class_imbalance(shares))

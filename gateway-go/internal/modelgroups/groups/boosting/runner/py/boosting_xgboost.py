@@ -120,13 +120,43 @@ def fit_xgboost(task: dict[str, Any]) -> dict[str, Any]:
                 self.stopped = True
             return self.stopped
 
+    class SizeBudget(xgb.callback.TrainingCallback):
+        """Stops before the model file passes `most` bytes (a depth of 12, or 20 classes, can pass
+        64 MiB with the trees allowed): the booster's JSON measured at rounds 1, 2, 4, 8… (doubling,
+        so that all the measures cost about twice the last), the next measure brought forward to
+        where the largest bytes per round seen so far would fill what is left."""
+
+        def __init__(self, most: float):
+            super().__init__()
+            self.most = most
+            self.at = 1
+            self.last = (0, 0)
+            self.rate = 0.0
+            self.stopped = False
+
+        def after_iteration(self, model: Any, epoch: int, evals_log: Any) -> bool:
+            r = epoch + 1
+            if r < self.at:
+                return False
+            size = len(model.save_raw("json"))
+            r0, s0 = self.last
+            self.rate = max(self.rate, (size - s0) / (r - r0))
+            self.last = (r, size)
+            room = self.most - size
+            if room < self.rate:
+                self.stopped = True
+                return True
+            self.at = r + max(1, min(r, int(room // self.rate)))
+            return False
+
     budget = TimeBudget(B.deadline(task))
+    size_budget = SizeBudget(B.MODEL_SIZE_SHARE * B.limit(task, "max_model_file_bytes"))
     callbacks: list[Any] = []
     early = bool(p.get("early_stopping", True))
     if early:
         callbacks.append(xgb.callback.EarlyStopping(rounds=int(p["early_stopping_rounds"]), metric_name=stop,
                                                     data_name="validation", maximize=maximize, save_best=False))
-    callbacks.append(budget)
+    callbacks += [budget, size_budget]
     log: dict[str, dict[str, list[float]]] = {}
     max_trees = int(p["max_trees"])
     booster = xgb.train(params, dtrain, num_boost_round=max_trees, evals=[(dtrain, "train"), (dvalid, "validation")],
@@ -141,7 +171,8 @@ def fit_xgboost(task: dict[str, Any]) -> dict[str, Any]:
         best = rounds - 1
         kept = booster
     stopped_by_time = budget.stopped
-    stopped_early = early and not stopped_by_time and rounds < max_trees
+    stopped_by_size = size_budget.stopped and not stopped_by_time
+    stopped_early = early and not stopped_by_time and not stopped_by_size and rounds < max_trees
     threads = P.threads
     model_bytes = bytes(kept.save_raw("json"))
     p_count = len(P.predictors)
@@ -157,7 +188,8 @@ def fit_xgboost(task: dict[str, Any]) -> dict[str, Any]:
         raw_train=margins(kept, P.X.iloc[P.train], threads), raw_validation=margins(kept, P.X.iloc[va], threads),
         curves=curves, best_iteration=int(best), trees=int(best + 1), stopped_early=bool(stopped_early),
         stopped_by_time=bool(stopped_by_time), gain=gain, shap=shap, predict_raw=lambda X: margins(kept, X, threads),
-        model_bytes=model_bytes, model_name=MODEL_NAME, model_format=MODEL_FORMAT, lower_is_better={"auc": False})
+        model_bytes=model_bytes, model_name=MODEL_NAME, model_format=MODEL_FORMAT, lower_is_better={"auc": False},
+        stopped_by_size=bool(stopped_by_size))
     return B.finish(task, P, fitted)
 
 
@@ -425,3 +457,22 @@ def _test_time_from_start(code: Any) -> None:
     rows = fit_xgboost(ample)["rows"]
     at = {k: i for i, k in enumerate(rows.key)}
     _expect(rows.value[at["model|||shap_rows"]] == 300 and rows.value[at["model|||trees"]] == 200, "time enough")
+
+
+@register("xgboost: the boosting stops before the model file would pass its limit, with a note")
+def _test_model_size(code: Any) -> None:
+    for what, early in (("regression", False), ("multiclass", True)):
+        task = _task(what, synthetic(300, what, seed=6), max_trees=400, max_depth=6, early_stopping=early, early_stopping_rounds=400)
+        task["limits"]["max_model_file_bytes"] = 60_000
+        out = fit_xgboost(task)
+        rows, data = out["rows"], out["model_file"]["data"]
+        at = {k: i for i, k in enumerate(rows.key)}
+        trees = rows.value[at["model|||trees"]]
+        _expect(len(data) <= 60_000 and "model|||note_model_size" in at and trees < 400 and rows.value[at["model|||stopped_early"]] == 0,
+                f"{what}: a model file of {len(data)} bytes, {trees} trees")
+        _expect(rows.text[at["assumption|trees_limit||verdict"]] == "doubtful"
+                and rows.text[at["assumption|trees_limit||advice_id"]] == "trees_size", f"{what}: trees_limit")
+        # the stop is near the limit, not far below it: the model holds more than half of what the file may
+        _expect(len(data) > 30_000, f"{what}: stopped at {len(data)} bytes, far below 60,000")
+    rows = fit_xgboost(_task("regression", synthetic(300, "regression", seed=6)))["rows"]
+    _expect("model|||note_model_size" not in {k for k in rows.key}, "a small model has the note of the size")

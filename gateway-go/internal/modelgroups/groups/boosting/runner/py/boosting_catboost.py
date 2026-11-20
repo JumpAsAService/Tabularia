@@ -142,6 +142,21 @@ def model_params(P: B.Prepared) -> dict[str, Any]:
     return params
 
 
+def tree_bytes(depth: int, k: int) -> int:
+    """At most the bytes one tree adds to catboost.cbm: a tree of CatBoost is symmetric, 2^depth
+    leaves of k values (one per class of a multiclass model, else 1) and a weight, as doubles, its
+    splits and a little more; the self-test checks it against the files of fitted models."""
+    return (2 ** depth) * (k + 1) * 8 + 64 * depth + 512
+
+
+def size_trees(P: B.Prepared, task: dict[str, Any]) -> int:
+    """The most trees whose file stays within MODEL_SIZE_SHARE of max_model_file_bytes (the rest
+    for the borders and the categories' statistics): a depth of 10 with 20 classes adds about
+    170 KB a tree, so 64 MiB hold about 380 of them."""
+    most = B.MODEL_SIZE_SHARE * B.limit(task, "max_model_file_bytes")
+    return max(1, int(most // tree_bytes(int(P.params["max_depth"]), P.k)))
+
+
 def model_bytes(model: Any) -> bytes:
     """catboost.cbm's bytes: written under /tmp and read back, without the metadata that changes
     on every fit."""
@@ -178,6 +193,9 @@ def fit_catboost(task: dict[str, Any]) -> dict[str, Any]:
             raise Refusal("missing_sentinel", f"the column «{name}» holds the value «{SENTINEL}», which the CatBoost node keeps "
                                               "for a missing value: replace it before the node", {"column": name})
     params = model_params(P)
+    by_size = size_trees(P, task)
+    capped = by_size < params["iterations"]
+    params["iterations"] = min(params["iterations"], by_size)
     loss = LOSS[P.task]
     _, stop = stop_metric(P.task, p.get("stop_metric", "loss"))
     early = bool(params["use_best_model"])
@@ -199,7 +217,8 @@ def fit_catboost(task: dict[str, Any]) -> dict[str, Any]:
     trees = int(model.tree_count_)
     best = int(model.get_best_iteration()) if early else trees - 1
     stopped_by_time = budget.stopped
-    stopped_early = early and not stopped_by_time and rounds < int(params["iterations"])
+    stopped_by_size = capped and not stopped_by_time and rounds >= int(params["iterations"])
+    stopped_early = early and not stopped_by_time and not stopped_by_size and rounds < int(params["iterations"])
     threads = P.threads
     p_count = len(P.predictors)
     pvc = np.asarray(model.get_feature_importance(type="PredictionValuesChange", thread_count=threads), dtype=np.float64)
@@ -217,7 +236,8 @@ def fit_catboost(task: dict[str, Any]) -> dict[str, Any]:
         curves=curves, best_iteration=best, trees=trees, stopped_early=bool(stopped_early), stopped_by_time=bool(stopped_by_time),
         gain=gain, shap=shap, predict_raw=lambda X: raw_scores(model, X, threads), model_bytes=model_bytes(model),
         model_name=MODEL_NAME, model_format=MODEL_FORMAT,
-        missing_level=SENTINEL if any(t == "category" for t in P.types) else None, lower_is_better={"AUC": False})
+        missing_level=SENTINEL if any(t == "category" for t in P.types) else None, lower_is_better={"AUC": False},
+        stopped_by_size=bool(stopped_by_size))
     return B.finish(task, P, fitted)
 
 
@@ -481,3 +501,25 @@ def _test_no_files(code: Any) -> None:
     _expect(set(os.listdir(tmp)) == before, f"left in {tmp}: {sorted(set(os.listdir(tmp)) - before)}")
     _expect(set(os.listdir(".")) == here, f"written in the working folder: {sorted(set(os.listdir('.')) - here)}")
     _expect(not os.path.exists(TRAIN_DIR), f"{TRAIN_DIR} was made")
+
+
+@register("catboost: the trees are capped so that the model file stays within its limit; a tree's bytes are bounded")
+def _test_model_size(code: Any) -> None:
+    for what, depth in (("regression", 3), ("binary", 6), ("multiclass", 6)):
+        df = synthetic(300, what, seed=6)
+        sizes = []
+        for trees in (10, 30):
+            out = fit_catboost(_task(what, df, max_trees=trees, max_depth=depth, early_stopping=False))
+            sizes.append(len(out["model_file"]["data"]))
+        k = 3 if what == "multiclass" else 1
+        per = (sizes[1] - sizes[0]) / 20
+        _expect(per <= tree_bytes(depth, k), f"{what} depth {depth}: {per:.0f} bytes a tree, bounded by {tree_bytes(depth, k)}")
+    task = _task("multiclass", synthetic(300, "multiclass", seed=6), max_trees=400, max_depth=6, early_stopping=False)
+    task["limits"]["max_model_file_bytes"] = 100_000
+    out = fit_catboost(task)
+    rows, data = out["rows"], out["model_file"]["data"]
+    at = _at(rows)
+    want = int(B.MODEL_SIZE_SHARE * 100_000 // tree_bytes(6, 3))
+    _expect(len(data) <= 100_000 and rows.value[at["model|||trees"]] == want and "model|||note_model_size" in at,
+            f"a model file of {len(data)} bytes, {rows.value[at['model|||trees']]} trees ({want} expected)")
+    _expect(rows.text[at["assumption|trees_limit||advice_id"]] == "trees_size", "trees_limit")

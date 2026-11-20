@@ -125,7 +125,8 @@
    "shap_sampled": "The SHAP values, and the importance by SHAP, are computed on {shap_rows} of {n} rows, drawn with seed {seed}.",
    "class_absent_validation": "A class of the outcome is absent from the validation part: the numbers that need it (its AUC, precision and recall) are not computed.",
    "zero_weights": "Rows of weight 0 were left out of the fit.",
-   "model_file_too_large": "The model file would be larger than a model file can be (64 MiB): the results and the report are complete, but the model is not logged to MLflow and no Predict node can apply it."
+   "model_file_too_large": "The model file would be larger than a model file can be (64 MiB): the results and the report are complete, but the model is not logged to MLflow and no Predict node can apply it.",
+   "model_size": "The boosting stopped before its model file would pass 64 MiB, the most a model file can be: the trees kept are the best so far. A lower max_depth (each level can double a tree) or fewer classes make the trees smaller."
   },
   "stats": {
    "model": {
@@ -184,7 +185,8 @@
     "note_shap_sampled": "Note: the SHAP sample",
     "note_class_absent_validation": "Note: a class absent from validation",
     "note_zero_weights": "Note: rows of weight 0",
-    "note_model_file_too_large": "Note: the model file"
+    "note_model_file_too_large": "Note: the model file",
+    "note_model_size": "Note: the model file's size"
    },
    "importance": {
     "gain": "Native importance",
@@ -231,6 +233,7 @@
      "trees_more": "The validation loss was still falling at the last tree: raise max_trees or learning_rate.",
      "trees_few": "It stopped after very few trees with a learning rate above 0.05: lower learning_rate.",
      "trees_no_stop": "The last tree is more than 1 % worse than the best: turn early stopping on.",
+     "trees_size": "The boosting stopped so that the model file stays within 64 MiB: lower max_depth (each level can double a tree), or raise learning_rate so that fewer trees are needed.",
      "": "The number of trees may not be the right one: read the learning curves."
     }
    },
@@ -410,7 +413,8 @@
    "shap_sampled": "I valori SHAP, e l'importanza secondo SHAP, sono calcolati su {shap_rows} righe di {n}, estratte con seed {seed}.",
    "class_absent_validation": "Una classe dell'esito manca nella parte di validazione: i numeri che la richiedono (AUC, precisione e richiamo) non sono calcolati.",
    "zero_weights": "Le righe di peso 0 sono state escluse dall'adattamento.",
-   "model_file_too_large": "Il file del modello sarebbe più grande di quanto un file di modello possa essere (64 MiB): i risultati e il report sono completi, ma il modello non è registrato in MLflow e nessun nodo Predict può applicarlo."
+   "model_file_too_large": "Il file del modello sarebbe più grande di quanto un file di modello possa essere (64 MiB): i risultati e il report sono completi, ma il modello non è registrato in MLflow e nessun nodo Predict può applicarlo.",
+   "model_size": "Il boosting si è fermato prima che il file del modello superasse 64 MiB, il massimo per un file di modello: gli alberi tenuti sono i migliori finora. Un max_depth più basso (ogni livello può raddoppiare un albero) o meno classi rendono gli alberi più piccoli."
   },
   "stats": {
    "model": {
@@ -469,7 +473,8 @@
     "note_shap_sampled": "Nota: il campione SHAP",
     "note_class_absent_validation": "Nota: una classe assente dalla validazione",
     "note_zero_weights": "Nota: righe di peso 0",
-    "note_model_file_too_large": "Nota: il file del modello"
+    "note_model_file_too_large": "Nota: il file del modello",
+    "note_model_size": "Nota: la dimensione del file del modello"
    },
    "importance": {
     "gain": "Importanza nativa",
@@ -516,6 +521,7 @@
      "trees_more": "La perdita in validazione scendeva ancora all'ultimo albero: alzate max_trees o learning_rate.",
      "trees_few": "Si è fermato dopo pochissimi alberi con un learning rate sopra 0,05: abbassate learning_rate.",
      "trees_no_stop": "L'ultimo albero è peggiore del migliore di oltre l'1 %: attivate l'arresto anticipato.",
+     "trees_size": "Il boosting si è fermato perché il file del modello restasse entro 64 MiB: abbassate max_depth (ogni livello può raddoppiare un albero), o alzate learning_rate perché servano meno alberi.",
      "": "Il numero di alberi potrebbe non essere quello giusto: leggete le curve di apprendimento."
     }
    },
@@ -695,7 +701,8 @@
    "shap_sampled": "Die SHAP-Werte und die Wichtigkeit nach SHAP sind auf {shap_rows} von {n} Zeilen berechnet, gezogen mit Seed {seed}.",
    "class_absent_validation": "Eine Klasse des Ergebnisses fehlt im Validierungsteil: die Zahlen, die sie brauchen (AUC, Präzision und Trefferquote), werden nicht berechnet.",
    "zero_weights": "Zeilen mit Gewicht 0 wurden von der Anpassung ausgeschlossen.",
-   "model_file_too_large": "Die Modelldatei wäre größer, als eine Modelldatei sein darf (64 MiB): die Ergebnisse und der Bericht sind vollständig, aber das Modell wird nicht in MLflow protokolliert und kein Predict-Knoten kann es anwenden."
+   "model_file_too_large": "Die Modelldatei wäre größer, als eine Modelldatei sein darf (64 MiB): die Ergebnisse und der Bericht sind vollständig, aber das Modell wird nicht in MLflow protokolliert und kein Predict-Knoten kann es anwenden.",
+   "model_size": "Das Boosting stoppte, bevor die Modelldatei 64 MiB überschritten hätte, das Höchstmaß einer Modelldatei: die behaltenen Bäume sind die bisher besten. Ein kleineres max_depth (jede Ebene kann einen Baum verdoppeln) oder weniger Klassen machen die Bäume kleiner."
   },
   "stats": {
    "model": {
@@ -754,7 +761,8 @@
     "note_shap_sampled": "Hinweis: die SHAP-Stichprobe",
     "note_class_absent_validation": "Hinweis: eine Klasse fehlt in der Validierung",
     "note_zero_weights": "Hinweis: Zeilen mit Gewicht 0",
-    "note_model_file_too_large": "Hinweis: die Modelldatei"
+    "note_model_file_too_large": "Hinweis: die Modelldatei",
+    "note_model_size": "Hinweis: die Größe der Modelldatei"
    },
    "importance": {
     "gain": "Native Wichtigkeit",
@@ -801,6 +809,7 @@
      "trees_more": "Der Validierungsverlust fiel beim letzten Baum noch: erhöhen Sie max_trees oder learning_rate.",
      "trees_few": "Es stoppte nach sehr wenigen Bäumen mit einer Lernrate über 0,05: senken Sie learning_rate.",
      "trees_no_stop": "Der letzte Baum ist mehr als 1 % schlechter als der beste: schalten Sie das vorzeitige Stoppen ein.",
+     "trees_size": "Das Boosting stoppte, damit die Modelldatei innerhalb von 64 MiB bleibt: senken Sie max_depth (jede Ebene kann einen Baum verdoppeln) oder erhöhen Sie learning_rate, damit weniger Bäume nötig sind.",
      "": "Die Anzahl der Bäume ist vielleicht nicht die richtige: lesen Sie die Lernkurven."
     }
    },
@@ -980,7 +989,8 @@
    "shap_sampled": "Los valores SHAP, y la importancia según SHAP, se calculan sobre {shap_rows} de {n} filas, extraídas con semilla {seed}.",
    "class_absent_validation": "Una clase del resultado falta en la parte de validación: los números que la necesitan (su AUC, precisión y exhaustividad) no se calculan.",
    "zero_weights": "Las filas de peso 0 se dejaron fuera del ajuste.",
-   "model_file_too_large": "El archivo del modelo sería más grande de lo que puede ser un archivo de modelo (64 MiB): los resultados y el informe están completos, pero el modelo no se registra en MLflow y ningún nodo Predict puede aplicarlo."
+   "model_file_too_large": "El archivo del modelo sería más grande de lo que puede ser un archivo de modelo (64 MiB): los resultados y el informe están completos, pero el modelo no se registra en MLflow y ningún nodo Predict puede aplicarlo.",
+   "model_size": "El boosting se detuvo antes de que el archivo del modelo superara 64 MiB, el máximo de un archivo de modelo: los árboles conservados son los mejores hasta ahora. Un max_depth menor (cada nivel puede duplicar un árbol) o menos clases hacen los árboles más pequeños."
   },
   "stats": {
    "model": {
@@ -1039,7 +1049,8 @@
     "note_shap_sampled": "Nota: la muestra SHAP",
     "note_class_absent_validation": "Nota: una clase ausente de la validación",
     "note_zero_weights": "Nota: filas de peso 0",
-    "note_model_file_too_large": "Nota: el archivo del modelo"
+    "note_model_file_too_large": "Nota: el archivo del modelo",
+    "note_model_size": "Nota: el tamaño del archivo del modelo"
    },
    "importance": {
     "gain": "Importancia nativa",
@@ -1086,6 +1097,7 @@
      "trees_more": "La pérdida de validación seguía bajando en el último árbol: suba max_trees o learning_rate.",
      "trees_few": "Se detuvo tras muy pocos árboles con una tasa de aprendizaje superior a 0,05: baje learning_rate.",
      "trees_no_stop": "El último árbol es más de un 1 % peor que el mejor: active la parada temprana.",
+     "trees_size": "El boosting se detuvo para que el archivo del modelo no pase de 64 MiB: baje max_depth (cada nivel puede duplicar un árbol) o suba learning_rate para que hagan falta menos árboles.",
      "": "El número de árboles puede no ser el adecuado: lea las curvas de aprendizaje."
     }
    },
@@ -1265,7 +1277,8 @@
    "shap_sampled": "Les valeurs SHAP, et l'importance selon SHAP, sont calculées sur {shap_rows} lignes sur {n}, tirées avec la graine {seed}.",
    "class_absent_validation": "Une classe du résultat est absente de la partie de validation : les chiffres qui en ont besoin (son AUC, sa précision et son rappel) ne sont pas calculés.",
    "zero_weights": "Les lignes de poids 0 ont été laissées hors de l'ajustement.",
-   "model_file_too_large": "Le fichier du modèle serait plus grand que ce qu'un fichier de modèle peut être (64 Mio) : les résultats et le rapport sont complets, mais le modèle n'est pas enregistré dans MLflow et aucun nœud Predict ne peut l'appliquer."
+   "model_file_too_large": "Le fichier du modèle serait plus grand que ce qu'un fichier de modèle peut être (64 Mio) : les résultats et le rapport sont complets, mais le modèle n'est pas enregistré dans MLflow et aucun nœud Predict ne peut l'appliquer.",
+   "model_size": "Le boosting s'est arrêté avant que le fichier du modèle ne dépasse 64 Mio, le maximum d'un fichier de modèle : les arbres conservés sont les meilleurs jusque-là. Un max_depth plus bas (chaque niveau peut doubler un arbre) ou moins de classes rendent les arbres plus petits."
   },
   "stats": {
    "model": {
@@ -1324,7 +1337,8 @@
     "note_shap_sampled": "Note : l'échantillon SHAP",
     "note_class_absent_validation": "Note : une classe absente de la validation",
     "note_zero_weights": "Note : lignes de poids 0",
-    "note_model_file_too_large": "Note : le fichier du modèle"
+    "note_model_file_too_large": "Note : le fichier du modèle",
+    "note_model_size": "Note : la taille du fichier du modèle"
    },
    "importance": {
     "gain": "Importance native",
@@ -1371,6 +1385,7 @@
      "trees_more": "La perte de validation baissait encore au dernier arbre : relevez max_trees ou learning_rate.",
      "trees_few": "Il s'est arrêté après très peu d'arbres avec un taux d'apprentissage au-dessus de 0,05 : baissez learning_rate.",
      "trees_no_stop": "Le dernier arbre est plus de 1 % moins bon que le meilleur : activez l'arrêt anticipé.",
+     "trees_size": "Le boosting s'est arrêté pour que le fichier du modèle reste dans 64 Mio : baissez max_depth (chaque niveau peut doubler un arbre), ou relevez learning_rate pour qu'il faille moins d'arbres.",
      "": "Le nombre d'arbres n'est peut-être pas le bon : lisez les courbes d'apprentissage."
     }
    },

@@ -413,8 +413,12 @@ JSON format) or **`model/catboost.cbm`** (CatBoost's binary format). Both are mo
 parses; **no pickle, joblib or any format that runs code is ever written or read.** Its size and
 sha256 are in the card, the card's sha256 is the version's tag `tabularia.card_sha256`, and the
 version carries `tabularia.variant` (the task) and `tabularia.model_file_sha256`. The model file
-may be 64 MiB at most; a larger one gets a note, the fit goes on with its results and report, and
-the model is not logged.
+may be 64 MiB at most, and a deep tree is large (XGBoost's JSON takes about 8 KB a tree at depth 6
+and 260 KB at depth 12; a multiclass round grows a tree per class). So the boosting **stops before
+the file would pass the limit**: XGBoost measures its file as it grows, CatBoost caps its trees
+ahead (each adds 2^depth × (classes + 1) numbers). The trees kept are the best so far, the note
+`model_size` says so and `trees_limit` is doubtful. A file that still came out larger gets a
+note, the fit goes on with its results and report, and the model is not logged.
 
 **Predict** applies such a version like the others (see [Predict](#predict)), with one more check:
 the gateway streams the file from MLflow to the scripts bucket and compares its **fingerprint** with
@@ -436,7 +440,7 @@ class), `prediction_class` (binary, at the node's threshold or the card's), and 
 | Trees | 5,000 at most |
 | SHAP sample | 5,000 rows at most |
 | Points in a chart | 2,000 (the beeswarm splits them among its predictors) |
-| Model file | 64 MiB |
+| Model file | 64 MiB: the boosting stops before it (the note `model_size`) |
 | Time | The group's longest run (60 minutes) and the node's timeout. Boosting stops at 60 % of the timeout so that SHAP and the files still fit: the note `time_budget` says so, and `trees_limit` is doubtful |
 
 SHAP is the long part: it can take several times as long as the training itself.
@@ -663,7 +667,7 @@ and needs its connection and version chosen first.
 | Rows | More than terms plus one; with a penalty, 3 per fold, at least 2 terms, and with the AUC measure 10 per fold; at least one event; for ARIMA enough observations for its orders and season |
 | Run time | The group's longest run (30 minutes by default, 60 for boosting); the node's timeout, 900 seconds unless you change it, must be within it |
 | Model card | 1 MB: the covariance (above 200 terms) and the baseline hazard (above 5,000 times) are dropped first, then the card is refused |
-| Model file (boosting) | 64 MiB: above it the fit goes on, with a note, and the model is not logged to MLflow |
+| Model file (boosting) | 64 MiB: the boosting stops before it (a note); a file still larger is not logged to MLflow, with a note |
 
 Every refusal is a sentence that says what to do. A model started on an installation without
 Kubernetes, or without the scripting machinery or the scripts bucket, says so before anything.
