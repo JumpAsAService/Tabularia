@@ -26,6 +26,14 @@ uses them (the intervals, the Wald test) where times are tied: R's score residua
 correction for ties, lifelines' do not (on the same rows with the ties broken the two agree to
 1e-9). lifelines' CoxTimeVaryingFitter has no robust errors: on start–stop rows the classical
 ones are compared.
+Parametric survival (lot P1), per case of expected.json fitted with Weibull, log-normal,
+log-logistic or the generalized gamma without strata: lifelines' WeibullAFTFitter,
+LogNormalAFTFitter, LogLogisticAFTFitter and GeneralizedGammaRegressionFitter on the same design
+(numbers, treatment dummies, products for the interactions; case weights as weights_col): the
+log-likelihood, the location's coefficients (the intercept included: log scale, meanlog, mu, the
+same accelerated-failure-time scale), their standard errors, the shape (lifelines' rho_, beta_,
+sigma_ on the log scale; the generalized gamma's lambda_ is flexsurv's Q). Its own optimiser: an
+estimate is compared to 1e-5 relative or a thousandth of its standard error, whichever is wider.
 Exit 1 when a value differs.
 """
 from __future__ import annotations
@@ -37,12 +45,17 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from lifelines import CoxPHFitter, CoxTimeVaryingFitter, KaplanMeierFitter, NelsonAalenFitter
+from lifelines import (CoxPHFitter, CoxTimeVaryingFitter, GeneralizedGammaRegressionFitter, KaplanMeierFitter,
+                       LogLogisticAFTFitter, LogNormalAFTFitter, NelsonAalenFitter, WeibullAFTFitter)
+from lifelines.exceptions import ConvergenceError
 from lifelines.statistics import multivariate_logrank_test, pairwise_logrank_test, proportional_hazard_test
 from lifelines.utils import restricted_mean_survival_time
 
 HERE = Path(__file__).resolve().parent
 TOL = 1e-6
+PS_TOL = 1e-5      # lifelines' own optimiser for the parametric models
+PS_TOL_SE = 1e-3   # or a thousandth of the estimate's standard error, for an estimate near 0
+PS_GTOLS = (1e-9, 1e-7, 1e-5)  # scipy's BFGS: its default (1e-5) stops 1e-2 from a maximum; the smallest it reaches is kept
 
 
 def label(t: float) -> str:
@@ -198,17 +211,114 @@ def cox_case(case: dict) -> tuple[dict[str, float], dict[str, float]]:
     return out, beside
 
 
+PS_FITTERS = {  # lifelines' class, its location's and its shape's parameter, the shape's name in the runner, log scale
+    "weibull": (WeibullAFTFitter, "lambda_", "rho_", "shape"),
+    "lognormal": (LogNormalAFTFitter, "mu_", "sigma_", "sdlog"),
+    "loglogistic": (LogLogisticAFTFitter, "alpha_", "beta_", "shape"),
+}
+
+
+def ps_case(case: dict) -> tuple[dict[str, float], dict[str, float], dict[str, float]]:
+    """What lifelines says of the keys of a parametric survival case: (values compared, their
+    standard errors, values said beside). Said beside, not compared: the estimates of a fit whose
+    log-likelihood lifelines leaves below R's (its log-logistic stops 2.7e-5 below on
+    ps_loglogistic, the same likelihood evaluated at both points: its optimiser, on covariates it
+    normalizes, stops short) and the standard errors of its generalized gamma (its variance
+    disagrees with the inverse Hessian of both R constructions, which agree with each other to
+    1e-7; lifelines calls that fitter experimental)."""
+    p, types = case["params"], case["types"]
+    df = pd.read_csv(HERE / case["data"], keep_default_na=False, na_values=[""], dtype=str)
+    predictors = list(p.get("predictors", []))
+    used = [p["time"], p["event"], *predictors, *([p["weights"]] if p.get("weights") else [])]
+    df = df.dropna(subset=used).reset_index(drop=True)
+    df = df[pd.to_numeric(df[p["time"]]) > 0].reset_index(drop=True)
+    frame = pd.DataFrame({"T": pd.to_numeric(df[p["time"]]),
+                          "E": is_event(df[p["event"]], p["event_value"], types[p["event"]]).astype(int)})
+    parts: dict[str, list[tuple[str | None, pd.Series]]] = {}
+    for name in predictors:
+        kind = types[name]
+        if kind in ("number", "integer"):
+            parts[name] = [(None, pd.to_numeric(df[name]))]
+            continue
+        labels = df[name].str.lower() if kind == "boolean" else df[name]
+        levels = sorted(labels.unique())
+        reference = str(p.get("reference", {}).get(name, levels[0]))
+        parts[name] = [(level, (labels == level).astype(float)) for level in levels if level != reference]
+    names: list[tuple[str, str | None, str]] = []  # (term, level, the frame's column) in the runner's order
+    for name in predictors:
+        for level, x in parts[name]:
+            frame[f"x{len(names)}"] = x.to_numpy()
+            names.append((name, level, f"x{len(names)}"))
+    for a, b in p.get("interactions", []):
+        for la, xa in parts[a]:
+            for lb, xb in parts[b]:
+                level = " × ".join(v for v in (la, lb) if v is not None) or None
+                frame[f"x{len(names)}"] = (xa * xb).to_numpy()
+                names.append((f"{a} × {b}", level, f"x{len(names)}"))
+    kw: dict = {}
+    if p.get("weights"):
+        frame["W"] = pd.to_numeric(df[p["weights"]])
+        kw["weights_col"] = "W"
+    dist = p.get("distribution", "weibull")
+    columns = [c for _, _, c in names]
+
+    def fitted(gtol: float):
+        options = {"gtol": gtol, "maxiter": 5000}
+        if dist == "gengamma":
+            regressors = {"mu_": " + ".join(columns) if columns else "1", "sigma_": "1", "lambda_": "1"}
+            return GeneralizedGammaRegressionFitter(alpha=p.get("alpha", 0.05)).fit(frame, "T", "E", regressors=regressors,
+                                                                                    fit_options=options, **kw)
+        return PS_FITTERS[dist][0](alpha=p.get("alpha", 0.05)).fit(frame, "T", "E", fit_options=options, **kw)
+
+    fit = None
+    for gtol in PS_GTOLS:
+        try:
+            fit = fitted(gtol)
+            break
+        except ConvergenceError:
+            print(f"NOTE {case['id']}: lifelines does not reach gtol {gtol:g}")
+    if fit is None:
+        raise RuntimeError(f"{case['id']}: lifelines does not converge")
+    location, shape, shape_name = ("mu_", "sigma_", "sigma") if dist == "gengamma" else PS_FITTERS[dist][1:]
+    r_ll = next(e["value"] for e in case["expect"] if e["key"] == "model|||log_lik")
+    short = fit.log_likelihood_ < r_ll - 1e-9 * abs(r_ll)
+    if short:
+        print(f"STOPS SHORT {case['id']}: lifelines' log-likelihood {fit.log_likelihood_!r}, R's {r_ll!r} "
+              f"({(r_ll - fit.log_likelihood_) / abs(r_ll):.2g} relative below): its estimates are said beside")
+    out: dict[str, float] = {"model|||log_lik": float(fit.log_likelihood_)}
+    se: dict[str, float] = {}
+    beside: dict[str, float] = {}
+    estimates = beside if short else out
+    for term, level, column in [("(Intercept)", None, "Intercept"), *names]:
+        key = f"coef|{term}|{level or ''}|"
+        estimates[key + "estimate"] = float(fit.params_[(location, column)])
+        se[key + "estimate"] = float(fit.standard_errors_[(location, column)])
+        (beside if short or dist == "gengamma" else out)[key + "std_error"] = se[key + "estimate"]
+    estimates[f"parameter|{shape_name}||estimate"] = math.exp(float(fit.params_[(shape, "Intercept")]))
+    if dist == "gengamma":
+        estimates["parameter|Q||estimate"] = float(fit.params_[("lambda_", "Intercept")])
+        se["parameter|Q||estimate"] = float(fit.standard_errors_[("lambda_", "Intercept")])
+    return out, se, beside
+
+
 def main() -> int:
     expected = json.loads((HERE / "expected.json").read_text(encoding="utf-8"))
     bad = compared = 0
     worst = 0.0
     per_model: dict[str, list[float]] = {}  # model → [values compared, the largest relative difference]
+    ps_in_se = [0.0]  # parametric survival: the largest difference of an estimate in its standard errors
     for case in expected["cases"]:
         if case.get("refuses") or case["model"] == "cox" and case["params"].get("ties", "efron") != "efron":
             continue
+        if case["model"] == "parametric_survival" and (case["params"].get("strata") or case["params"].get(
+                "distribution", "weibull") not in ("weibull", "lognormal", "loglogistic", "gengamma")):
+            continue
         beside: dict[str, float] = {}
+        se_of: dict[str, float] = {}
         if case["model"] == "kaplan_meier":
             said = km_case(case)
+        elif case["model"] == "parametric_survival":
+            said, se_of, beside = ps_case(case)
         else:
             said, beside = cox_case(case)
         want_of = {e["key"]: e.get("value") for e in case["expect"]}
@@ -227,6 +337,11 @@ def main() -> int:
             mine[0] += 1
             if want is None or math.isnan(got):
                 ok = want is None and math.isnan(got)
+            elif case["model"] == "parametric_survival":
+                ok = abs(got - want) <= max(1e-12, PS_TOL * abs(want), PS_TOL_SE * se_of.get(e["key"], 0.0))
+                mine[1] = max(mine[1], abs(got - want) / max(abs(want), 1e-12))
+                if e["key"] in se_of:
+                    ps_in_se[0] = max(ps_in_se[0], abs(got - want) / se_of[e["key"]])
             else:
                 ok = abs(got - want) <= max(1e-12, TOL * abs(want))
                 worst = max(worst, abs(got - want) / max(abs(want), 1e-12))
@@ -236,7 +351,9 @@ def main() -> int:
                 print(f"DIFFERS {case['id']} {e['key']}: R {want!r}, lifelines {got!r}")
     for model, (n, w) in per_model.items():
         print(f"  {model}: {n} values, the largest relative difference {w:.3g}")
-    print(f"{compared} values compared with lifelines, {bad} differ by more than {TOL:g}; the largest relative difference "
+    if "parametric_survival" in per_model:
+        print(f"  parametric_survival: the largest difference of an estimate, in its standard errors {ps_in_se[0]:.3g}")
+    print(f"{compared} values compared with lifelines, {bad} differ by more than their tolerance; the largest relative difference "
           f"{worst:.3g}")
     return 1 if bad else 0
 
