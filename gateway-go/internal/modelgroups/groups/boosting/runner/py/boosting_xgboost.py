@@ -400,3 +400,28 @@ def _test_determinism(code: Any) -> None:
     _expect(rows.value[at["model|||stopped_by_time"]] == 1 and "model|||note_time_budget" in at, "the time budget")
     _expect(rows.text[at["assumption|trees_limit||verdict"]] == "doubtful", "trees_limit after the time budget")
     _expect(rows.value[at["model|||trees"]] < 5000, "the time budget kept every tree")
+
+
+@register("xgboost: the time budget counts from the runner's start; the SHAP sample shrinks to the time left")
+def _test_time_from_start(code: Any) -> None:
+    df = synthetic(300, "regression", seed=5)
+    # the step's time spent before the fit (reading, preparing): 60 % of it is already gone, one tree is grown
+    late = _task("regression", df, max_trees=200, early_stopping=False)
+    late["limits"]["time_budget_seconds"] = 100.0
+    late["_started"] = time.monotonic() - 70.0
+    rows = fit_xgboost(late)["rows"]
+    at = {k: i for i, k in enumerate(rows.key)}
+    _expect(rows.value[at["model|||trees"]] == 1 and rows.value[at["model|||stopped_by_time"]] == 1,
+            f"the budget did not count from the start: {rows.value[at['model|||trees']]} trees")
+    # 85 % of it gone too: the SHAP values of the pilot's rows only, the note says the sample
+    later = dict(late, _started=time.monotonic() - 90.0)
+    rows = fit_xgboost(later)["rows"]
+    at = {k: i for i, k in enumerate(rows.key)}
+    _expect(rows.value[at["model|||shap_rows"]] == B.SHAP_PILOT_ROWS and "model|||note_shap_sampled" in at,
+            f"the SHAP sample on no time left: {rows.value[at['model|||shap_rows']]} rows")
+    # time enough: every row, as without a budget (the numbers do not follow the machine's speed)
+    ample = dict(late, _started=time.monotonic())
+    ample["limits"] = dict(late["limits"], time_budget_seconds=1e6)
+    rows = fit_xgboost(ample)["rows"]
+    at = {k: i for i, k in enumerate(rows.key)}
+    _expect(rows.value[at["model|||shap_rows"]] == 300 and rows.value[at["model|||trees"]] == 200, "time enough")

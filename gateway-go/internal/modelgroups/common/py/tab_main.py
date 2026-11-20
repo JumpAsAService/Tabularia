@@ -33,11 +33,17 @@ from tab_selftest import selftest
 
 Routes = dict[str, dict[str, Callable[..., dict[str, Any]]]]
 
+# when the runner started (time.monotonic()): this module is imported before the task is read, so
+# a time budget counted from here holds the reading of the input and the preparation of the rows
+STARTED = time.monotonic()
+
 
 def main(group: str, routes: Routes) -> None:
-    """Runs the task (or the self-test with --selftest) and exits with its code."""
+    """Runs the task (or the self-test with --selftest) and exits with its code. The task the
+    model's functions get holds `_started`, when the runner started (time.monotonic()), from which
+    a time budget counts."""
     code = code_dir()
-    started = time.monotonic()
+    started = STARTED
     phases: dict[str, float] = {}
     task: dict[str, Any] | None = None
     status = 1
@@ -61,6 +67,7 @@ def main(group: str, routes: Routes) -> None:
                 else:
                     task["group"] = task.get("group") or group
                     task["variant"] = task.get("variant") or variant_of(task.get("model") or "", task["params"])
+                    task["_started"] = started
                     route = routes.get(task.get("model") or "")
                     if route is None:
                         raise Refusal("unknown_model", f"the group {group} has no model «{task.get('model') or ''}»")

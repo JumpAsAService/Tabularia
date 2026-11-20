@@ -39,6 +39,8 @@ EPS = float(np.finfo(np.float64).eps)  # the log-loss's clipping (scikit-learn's
 MIN_TRAIN_ROWS = 20
 MIN_VALIDATION_ROWS = 10
 TIME_BUDGET_SHARE = 0.6
+SHAP_TIME_SHARE = 0.85  # the SHAP values end by 85 % of the step's time: the charts and the files keep the rest
+SHAP_PILOT_ROWS = 64    # the rows whose SHAP values are timed to size the sample on the time left
 BEESWARM_BINS = 50
 BEESWARM_HALF_WIDTH = 0.4
 CALIBRATION_BINS = 10
@@ -498,13 +500,16 @@ def balanced_factors(y: np.ndarray, w: np.ndarray, train: np.ndarray, k: int) ->
         return np.where(per > 0, total / (k * per), 0.0)
 
 
-def deadline(task: dict[str, Any]) -> float | None:
-    """When the boosting must stop (time.monotonic()): 60 % of the step's time from now; None
-    without a time budget."""
+def deadline(task: dict[str, Any], share: float = TIME_BUDGET_SHARE) -> float | None:
+    """When `share` of the step's time is spent (time.monotonic()), counted from the runner's
+    start (tab_main writes it in the task as `_started`: the input read and the rows prepared
+    are part of the step's time), from now when the task does not say it; None without a time
+    budget. The boosting stops at 60 %; the SHAP sample is sized to end by SHAP_TIME_SHARE."""
     s = (task.get("limits") or {}).get("time_budget_seconds")
     if not s:
         return None
-    return time.monotonic() + TIME_BUDGET_SHARE * float(s)
+    started = task.get("_started")
+    return (time.monotonic() if started is None else float(started)) + share * float(s)
 
 
 # ── the metrics, by hand ────────────────────────────────────────────────────────
@@ -936,6 +941,25 @@ def shap_sample_size(task: dict[str, Any], trees_total: int, depth: int) -> int:
     return int(min(most, max(200, math.floor(limit(task, "shap_cost_budget") / cost))))
 
 
+def shap_size_in_time(task: dict[str, Any], shap: Callable[[np.ndarray], Any], n: int, size: int) -> int:
+    """The SHAP sample's size on the time left: the SHAP values of the first SHAP_PILOT_ROWS rows
+    timed, the size cut to what ends by SHAP_TIME_SHARE of the step's time (deadline), never
+    below the pilot's rows. With time enough, or without a time budget, `size` as it is: the
+    results then do not depend on the machine's speed."""
+    end = deadline(task, SHAP_TIME_SHARE)
+    size = min(size, n)
+    if end is None or size <= SHAP_PILOT_ROWS:
+        return size
+    pilot = np.arange(SHAP_PILOT_ROWS)
+    t0 = time.monotonic()
+    shap(pilot)
+    per_row = (time.monotonic() - t0) / len(pilot)
+    left = end - time.monotonic()
+    if left >= per_row * size:
+        return size
+    return int(max(SHAP_PILOT_ROWS, math.floor(left / per_row))) if per_row > 0 else size
+
+
 def shap_sample(n: int, validation: np.ndarray, size: int, gen: np.random.Generator) -> np.ndarray:
     """The rows (positions, increasing) of the SHAP sample: all when n ≤ size; else drawn with the
     generator in proportion to the parts, at least min(500, the validation rows) from validation."""
@@ -1047,7 +1071,7 @@ def finish(task: dict[str, Any], prepared: Prepared, fitted: Fitted) -> dict[str
     if what == "binary":
         text(rows, "model", "event_value", P.event_value)
     trees_total = fitted.trees * P.k
-    size = shap_sample_size(task, trees_total, int(p.get("max_depth", 6)))
+    size = shap_size_in_time(task, fitted.shap, P.n, shap_sample_size(task, trees_total, int(p.get("max_depth", 6))))
     sample = shap_sample(P.n, P.validation, size, P.gen)
     counts = {"n": P.n, "n_missing": P.n_missing, "n_train": len(tr), "n_validation": len(va), "n_predictors": len(P.predictors),
               "n_categorical": sum(t == "category" for t in P.types), "trees": fitted.trees, "best_iteration": fitted.best_iteration,
