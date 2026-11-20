@@ -733,6 +733,8 @@ ADVICE = {
     "overfitting_kept_best": "early stopping on the loss keeps the tree of the lowest validation loss, so it gives nothing back "
                              "by construction; the value is the validation loss over the training loss there, for information",
     "trees_more": "the validation loss was still falling at the last tree: raise max_trees or learning_rate",
+    "trees_time": "the time budget stopped the boosting before early stopping or max_trees did: raise the step's timeout "
+                  "(or learning_rate, so that fewer trees are needed)",
     "trees_few": "stopped after very few trees: lower learning_rate",
     "stop_on_loss": "early stopping on a metric that is not the loss (auc, error, mae) stopped while the validation loss still "
                     "fell well below the tree kept a few trees later: the metric's noise stopped it; use stop_metric = loss, "
@@ -876,7 +878,9 @@ def check_trees_limit(early_stopping: bool, stopped_early: bool, stopped_by_time
         few = 20 if learning_rate > TREES_FEW_RATE else math.nan
         if stopped_by_size:
             return _check("trees_limit", "doubtful", kept, few, "trees_size")
-        if stopped_by_time or not stopped_early:
+        if stopped_by_time:
+            return _check("trees_limit", "doubtful", kept, few, "trees_time")
+        if not stopped_early:
             return _check("trees_limit", "doubtful", kept, few, "trees_more")
         if on_noise:
             return _check("trees_limit", "doubtful", kept, few, "stop_on_loss")
@@ -888,7 +892,7 @@ def check_trees_limit(early_stopping: bool, stopped_early: bool, stopped_by_time
     if stopped_by_size:
         return _check("trees_limit", "doubtful", excess, 0.01, "trees_size", h0=h0)
     if stopped_by_time:
-        return _check("trees_limit", "doubtful", excess, 0.01, "trees_more", h0=h0)
+        return _check("trees_limit", "doubtful", excess, 0.01, "trees_time", h0=h0)
     verdict = "doubtful" if excess > 0.01 else "ok"
     return _check("trees_limit", verdict, excess, 0.01, "trees_no_stop", h0=h0)
 
@@ -1572,6 +1576,11 @@ def _test_checks(code: Any) -> None:
             and check_trees_limit(True, True, False, 19, 0, 0, 0.1)["advice_id"] == "trees_few", "the advice of few trees")
     _expect(v(check_trees_limit(True, True, False, 3, 0, 0, 0.05)) == "ok", "few trees at the default rate: a weak pattern")
     _expect(check_trees_limit(True, True, False, 20, 0, 0)["advice_id"] is None, "an ok check has no advice")
+    # stopped by the time budget: raise the timeout, not max_trees (with early stopping and without)
+    _expect(check_trees_limit(True, False, True, 500, 0, 0)["advice_id"] == "trees_time"
+            and check_trees_limit(False, False, True, 500, 1.0, 1.0)["advice_id"] == "trees_time"
+            and check_trees_limit(True, False, False, 1000, 0, 0)["advice_id"] == "trees_more", "the advice after the time budget")
+    _expect(check_trees_limit(False, False, False, 1000, 1.0, 1.0)["h0"] == H0["trees_limit_no_stop"], "the h0 without early stopping")
     # stopped on another metric while the loss still fell: 0.85 at the tree kept, 0.6 three trees later, a gain of 0.4
     _expect(stopped_on_noise([1.0, 0.9, 0.85, 0.7, 0.6, 0.62], 3, 1.0) and not stopped_on_noise([1.0, 0.8, 0.61, 0.6], 3, 1.0)
             and not stopped_on_noise([1.0, 0.9, 0.85, 0.7, 0.6], 5, 1.0) and not stopped_on_noise([1.2, 1.1, 1.3], 1, 1.0),

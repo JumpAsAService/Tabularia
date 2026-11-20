@@ -81,7 +81,6 @@
    "importance_shap": "Mean |SHAP| (on the outcome's own scale)",
    "importance_shap_class": "Mean |SHAP| by class",
    "shap_beeswarm": "SHAP summary: the effect of each predictor on each row",
-   "beeswarm_note": "Each point is a row of the SHAP sample. Right of 0 the predictor raises the prediction, left of 0 it lowers it (log-odds for a classification). Colour: the predictor's value, from low (blue) to high (red); grey for a category or a missing value.",
    "learning_loss_regression": "Learning curve: RMSE by tree (line: best round)",
    "learning_loss_binary": "Learning curve: log-loss by tree (line: best round)",
    "learning_loss_multiclass": "Learning curve: log-loss by tree (line: best round)",
@@ -95,7 +94,9 @@
    "confusion": "Confusion matrix (validation)",
    "roc_ovr": "ROC curves, one class against the rest",
    "learning_balanced_note": "With class_weight = balanced the curves weigh the classes as the fit does (each class the same), as early stopping and the diagnostics read them: they are not the log-loss of the table, which weighs every row the same.",
-   "error_note": "The error rate (XGBoost's error, CatBoost's ZeroOneLoss) counts a row as wrong when its probability is on the wrong side of 0.5, not of the node's threshold."
+   "error_note": "The error rate (XGBoost's error, CatBoost's ZeroOneLoss) counts a row as wrong when its probability is on the wrong side of 0.5, not of the node's threshold.",
+   "beeswarm_note_regression": "Each point is a row of the SHAP sample. Right of 0 the predictor raises the predicted value, left of 0 it lowers it, in the outcome's units. Colour: the predictor's value, from low (blue) to high (red); grey for a category or a missing value.",
+   "beeswarm_note_binary": "Each point is a row of the SHAP sample. Right of 0 the predictor raises the probability of the event, left of 0 it lowers it, in log-odds. Colour: the predictor's value, from low (blue) to high (red); grey for a category or a missing value."
   },
   "series": {
    "train": "Training",
@@ -243,13 +244,17 @@
    },
    "trees_limit": {
     "name": "Number of trees",
-    "h0": "whether early stopping stopped, and the trees kept",
+    "h0": {
+     "early_stopping=false": "how much worse the validation loss is at the last tree than at the best (early stopping is off: every tree is kept)",
+     "": "whether early stopping stopped, and the trees kept"
+    },
     "advice": {
      "trees_more": "The validation loss was still falling at the last tree: raise max_trees or learning_rate.",
      "trees_few": "It stopped after very few trees with a learning rate above 0.05: lower learning_rate.",
      "trees_no_stop": "The last tree is more than 1 % worse than the best: turn early stopping on.",
      "trees_size": "The boosting stopped so that the model file stays within 64 MiB: lower max_depth (each level can double a tree), or raise learning_rate so that fewer trees are needed.",
      "stop_on_loss": "Early stopping watched a metric that is not the loss (AUC, error rate, MAE) and stopped while the validation loss, a few trees later, was still well below its value at the tree kept: that metric moves in steps, and its noise stopped the boosting. Set stop_metric = loss, or raise early_stopping_rounds.",
+     "trees_time": "The time budget stopped the boosting before early stopping or max_trees did: raise the step's timeout (or learning_rate, so that fewer trees are needed).",
      "": "The number of trees may not be the right one: read the learning curves."
     }
    },
@@ -385,7 +390,6 @@
    "importance_shap": "|SHAP| medio (sulla scala dell'esito)",
    "importance_shap_class": "|SHAP| medio per classe",
    "shap_beeswarm": "Riepilogo SHAP: l'effetto di ogni predittore su ogni riga",
-   "beeswarm_note": "Ogni punto è una riga del campione SHAP. A destra dello 0 il predittore alza la previsione, a sinistra la abbassa (log-odds in una classificazione). Colore: il valore del predittore, da basso (blu) ad alto (rosso); grigio per una categoria o un valore mancante.",
    "learning_loss_regression": "Curva di apprendimento: RMSE per albero (linea: round migliore)",
    "learning_loss_binary": "Curva di apprendimento: log-loss per albero (linea: round migliore)",
    "learning_loss_multiclass": "Curva di apprendimento: log-loss per albero (linea: round migliore)",
@@ -399,7 +403,9 @@
    "confusion": "Matrice di confusione (validazione)",
    "roc_ovr": "Curve ROC, una classe contro le altre",
    "learning_balanced_note": "Con class_weight = balanced le curve pesano le classi come l'adattamento (ogni classe uguale), come le leggono l'arresto anticipato e le diagnostiche: non sono la log-loss della tabella, che pesa ogni riga uguale.",
-   "error_note": "Il tasso di errore (error di XGBoost, ZeroOneLoss di CatBoost) conta una riga come sbagliata quando la sua probabilità è dalla parte sbagliata di 0,5, non della soglia del nodo."
+   "error_note": "Il tasso di errore (error di XGBoost, ZeroOneLoss di CatBoost) conta una riga come sbagliata quando la sua probabilità è dalla parte sbagliata di 0,5, non della soglia del nodo.",
+   "beeswarm_note_regression": "Ogni punto è una riga del campione SHAP. A destra dello 0 il predittore alza il valore previsto, a sinistra lo abbassa, nelle unità dell'esito. Colore: il valore del predittore, da basso (blu) ad alto (rosso); grigio per una categoria o un valore mancante.",
+   "beeswarm_note_binary": "Ogni punto è una riga del campione SHAP. A destra dello 0 il predittore alza la probabilità dell'evento, a sinistra la abbassa, in log-odds. Colore: il valore del predittore, da basso (blu) ad alto (rosso); grigio per una categoria o un valore mancante."
   },
   "series": {
    "train": "Addestramento",
@@ -547,13 +553,17 @@
    },
    "trees_limit": {
     "name": "Numero di alberi",
-    "h0": "se l'arresto anticipato è intervenuto, e gli alberi tenuti",
+    "h0": {
+     "early_stopping=false": "quanto la perdita in validazione all'ultimo albero è peggiore che al migliore (l'arresto anticipato è spento: si tengono tutti gli alberi)",
+     "": "se l'arresto anticipato è intervenuto, e gli alberi tenuti"
+    },
     "advice": {
      "trees_more": "La perdita in validazione scendeva ancora all'ultimo albero: alzate max_trees o learning_rate.",
      "trees_few": "Si è fermato dopo pochissimi alberi con un learning rate sopra 0,05: abbassate learning_rate.",
      "trees_no_stop": "L'ultimo albero è peggiore del migliore di oltre l'1 %: attivate l'arresto anticipato.",
      "trees_size": "Il boosting si è fermato perché il file del modello restasse entro 64 MiB: abbassate max_depth (ogni livello può raddoppiare un albero), o alzate learning_rate perché servano meno alberi.",
      "stop_on_loss": "L'arresto anticipato seguiva una metrica che non è la perdita (AUC, tasso di errore, MAE) e si è fermato mentre la perdita in validazione, qualche albero dopo, era ancora ben sotto il valore dell'albero tenuto: quella metrica si muove a scatti, e il suo rumore ha fermato il boosting. Impostate stop_metric = loss, o alzate early_stopping_rounds.",
+     "trees_time": "Il budget di tempo ha fermato il boosting prima dell'arresto anticipato o di max_trees: alzate il timeout del passo (o learning_rate, perché servano meno alberi).",
      "": "Il numero di alberi potrebbe non essere quello giusto: leggete le curve di apprendimento."
     }
    },
@@ -689,7 +699,6 @@
    "importance_shap": "Mittleres |SHAP| (auf der Skala des Ergebnisses)",
    "importance_shap_class": "Mittleres |SHAP| nach Klasse",
    "shap_beeswarm": "SHAP-Übersicht: die Wirkung jedes Prädiktors auf jede Zeile",
-   "beeswarm_note": "Jeder Punkt ist eine Zeile der SHAP-Stichprobe. Rechts von 0 erhöht der Prädiktor die Vorhersage, links davon senkt er sie (Log-Odds bei einer Klassifikation). Farbe: der Wert des Prädiktors, von niedrig (blau) bis hoch (rot); grau für eine Kategorie oder einen fehlenden Wert.",
    "learning_loss_regression": "Lernkurve: RMSE je Baum (Linie: beste Runde)",
    "learning_loss_binary": "Lernkurve: Log-Loss je Baum (Linie: beste Runde)",
    "learning_loss_multiclass": "Lernkurve: Log-Loss je Baum (Linie: beste Runde)",
@@ -703,7 +712,9 @@
    "confusion": "Konfusionsmatrix (Validierung)",
    "roc_ovr": "ROC-Kurven, eine Klasse gegen den Rest",
    "learning_balanced_note": "Mit class_weight = balanced gewichten die Kurven die Klassen wie die Anpassung (jede Klasse gleich), so wie das vorzeitige Stoppen und die Diagnosen sie lesen: sie sind nicht der Log-Loss der Tabelle, der jede Zeile gleich gewichtet.",
-   "error_note": "Die Fehlerrate (error bei XGBoost, ZeroOneLoss bei CatBoost) zählt eine Zeile als falsch, wenn ihre Wahrscheinlichkeit auf der falschen Seite von 0,5 liegt, nicht der Schwelle des Knotens."
+   "error_note": "Die Fehlerrate (error bei XGBoost, ZeroOneLoss bei CatBoost) zählt eine Zeile als falsch, wenn ihre Wahrscheinlichkeit auf der falschen Seite von 0,5 liegt, nicht der Schwelle des Knotens.",
+   "beeswarm_note_regression": "Jeder Punkt ist eine Zeile der SHAP-Stichprobe. Rechts von 0 erhöht der Prädiktor den vorhergesagten Wert, links davon senkt er ihn, in den Einheiten des Ergebnisses. Farbe: der Wert des Prädiktors, von niedrig (blau) bis hoch (rot); grau für eine Kategorie oder einen fehlenden Wert.",
+   "beeswarm_note_binary": "Jeder Punkt ist eine Zeile der SHAP-Stichprobe. Rechts von 0 erhöht der Prädiktor die Wahrscheinlichkeit des Ereignisses, links davon senkt er sie, in Log-Odds. Farbe: der Wert des Prädiktors, von niedrig (blau) bis hoch (rot); grau für eine Kategorie oder einen fehlenden Wert."
   },
   "series": {
    "train": "Training",
@@ -851,13 +862,17 @@
    },
    "trees_limit": {
     "name": "Anzahl der Bäume",
-    "h0": "ob das vorzeitige Stoppen eingegriffen hat, und die behaltenen Bäume",
+    "h0": {
+     "early_stopping=false": "wie viel schlechter der Validierungsverlust beim letzten Baum ist als beim besten (vorzeitiges Stoppen ist aus: alle Bäume werden behalten)",
+     "": "ob das vorzeitige Stoppen eingegriffen hat, und die behaltenen Bäume"
+    },
     "advice": {
      "trees_more": "Der Validierungsverlust fiel beim letzten Baum noch: erhöhen Sie max_trees oder learning_rate.",
      "trees_few": "Es stoppte nach sehr wenigen Bäumen mit einer Lernrate über 0,05: senken Sie learning_rate.",
      "trees_no_stop": "Der letzte Baum ist mehr als 1 % schlechter als der beste: schalten Sie das vorzeitige Stoppen ein.",
      "trees_size": "Das Boosting stoppte, damit die Modelldatei innerhalb von 64 MiB bleibt: senken Sie max_depth (jede Ebene kann einen Baum verdoppeln) oder erhöhen Sie learning_rate, damit weniger Bäume nötig sind.",
      "stop_on_loss": "Das vorzeitige Stoppen beobachtete eine Metrik, die nicht der Verlust ist (AUC, Fehlerrate, MAE), und stoppte, während der Validierungsverlust einige Bäume später noch deutlich unter seinem Wert beim behaltenen Baum lag: diese Metrik bewegt sich in Stufen, und ihr Rauschen hat das Boosting gestoppt. Setzen Sie stop_metric = loss, oder erhöhen Sie early_stopping_rounds.",
+     "trees_time": "Das Zeitbudget stoppte das Boosting vor dem vorzeitigen Stoppen oder max_trees: erhöhen Sie das Timeout des Schritts (oder learning_rate, damit weniger Bäume nötig sind).",
      "": "Die Anzahl der Bäume ist vielleicht nicht die richtige: lesen Sie die Lernkurven."
     }
    },
@@ -993,7 +1008,6 @@
    "importance_shap": "|SHAP| medio (en la escala del resultado)",
    "importance_shap_class": "|SHAP| medio por clase",
    "shap_beeswarm": "Resumen SHAP: el efecto de cada predictor en cada fila",
-   "beeswarm_note": "Cada punto es una fila de la muestra SHAP. A la derecha de 0 el predictor sube la predicción, a la izquierda la baja (log-odds en una clasificación). Color: el valor del predictor, de bajo (azul) a alto (rojo); gris para una categoría o un valor ausente.",
    "learning_loss_regression": "Curva de aprendizaje: RMSE por árbol (línea: mejor ronda)",
    "learning_loss_binary": "Curva de aprendizaje: log-loss por árbol (línea: mejor ronda)",
    "learning_loss_multiclass": "Curva de aprendizaje: log-loss por árbol (línea: mejor ronda)",
@@ -1007,7 +1021,9 @@
    "confusion": "Matriz de confusión (validación)",
    "roc_ovr": "Curvas ROC, una clase contra el resto",
    "learning_balanced_note": "Con class_weight = balanced las curvas ponderan las clases como el ajuste (cada clase igual), como las leen la parada temprana y los diagnósticos: no son la log-loss de la tabla, que pondera cada fila igual.",
-   "error_note": "La tasa de error (error de XGBoost, ZeroOneLoss de CatBoost) cuenta una fila como errónea cuando su probabilidad está del lado equivocado de 0,5, no del umbral del nodo."
+   "error_note": "La tasa de error (error de XGBoost, ZeroOneLoss de CatBoost) cuenta una fila como errónea cuando su probabilidad está del lado equivocado de 0,5, no del umbral del nodo.",
+   "beeswarm_note_regression": "Cada punto es una fila de la muestra SHAP. A la derecha de 0 el predictor sube el valor previsto, a la izquierda lo baja, en las unidades del resultado. Color: el valor del predictor, de bajo (azul) a alto (rojo); gris para una categoría o un valor ausente.",
+   "beeswarm_note_binary": "Cada punto es una fila de la muestra SHAP. A la derecha de 0 el predictor sube la probabilidad del evento, a la izquierda la baja, en log-odds. Color: el valor del predictor, de bajo (azul) a alto (rojo); gris para una categoría o un valor ausente."
   },
   "series": {
    "train": "Entrenamiento",
@@ -1155,13 +1171,17 @@
    },
    "trees_limit": {
     "name": "Número de árboles",
-    "h0": "si la parada temprana actuó, y los árboles conservados",
+    "h0": {
+     "early_stopping=false": "cuánto peor es la pérdida de validación en el último árbol que en el mejor (la parada temprana está apagada: se conservan todos los árboles)",
+     "": "si la parada temprana actuó, y los árboles conservados"
+    },
     "advice": {
      "trees_more": "La pérdida de validación seguía bajando en el último árbol: suba max_trees o learning_rate.",
      "trees_few": "Se detuvo tras muy pocos árboles con una tasa de aprendizaje superior a 0,05: baje learning_rate.",
      "trees_no_stop": "El último árbol es más de un 1 % peor que el mejor: active la parada temprana.",
      "trees_size": "El boosting se detuvo para que el archivo del modelo no pase de 64 MiB: baje max_depth (cada nivel puede duplicar un árbol) o suba learning_rate para que hagan falta menos árboles.",
      "stop_on_loss": "La parada temprana vigilaba una métrica que no es la pérdida (AUC, tasa de error, MAE) y se detuvo cuando la pérdida de validación, unos árboles después, seguía bastante por debajo de su valor en el árbol conservado: esa métrica se mueve a saltos, y su ruido detuvo el boosting. Ponga stop_metric = loss, o suba early_stopping_rounds.",
+     "trees_time": "El presupuesto de tiempo detuvo el boosting antes que la parada temprana o max_trees: suba el timeout del paso (o learning_rate, para que hagan falta menos árboles).",
      "": "El número de árboles puede no ser el adecuado: lea las curvas de aprendizaje."
     }
    },
@@ -1297,7 +1317,6 @@
    "importance_shap": "|SHAP| moyen (sur l'échelle du résultat)",
    "importance_shap_class": "|SHAP| moyen par classe",
    "shap_beeswarm": "Résumé SHAP : l'effet de chaque prédicteur sur chaque ligne",
-   "beeswarm_note": "Chaque point est une ligne de l'échantillon SHAP. À droite de 0 le prédicteur relève la prédiction, à gauche il l'abaisse (log-odds pour une classification). Couleur : la valeur du prédicteur, de basse (bleu) à haute (rouge) ; gris pour une catégorie ou une valeur manquante.",
    "learning_loss_regression": "Courbe d'apprentissage : RMSE par arbre (trait : meilleur tour)",
    "learning_loss_binary": "Courbe d'apprentissage : log-loss par arbre (trait : meilleur tour)",
    "learning_loss_multiclass": "Courbe d'apprentissage : log-loss par arbre (trait : meilleur tour)",
@@ -1311,7 +1330,9 @@
    "confusion": "Matrice de confusion (validation)",
    "roc_ovr": "Courbes ROC, une classe contre les autres",
    "learning_balanced_note": "Avec class_weight = balanced les courbes pondèrent les classes comme l'ajustement (chaque classe autant), comme les lisent l'arrêt anticipé et les diagnostics : ce n'est pas la log-loss du tableau, qui pondère chaque ligne autant.",
-   "error_note": "Le taux d'erreur (error de XGBoost, ZeroOneLoss de CatBoost) compte une ligne comme fausse quand sa probabilité est du mauvais côté de 0,5, pas du seuil du nœud."
+   "error_note": "Le taux d'erreur (error de XGBoost, ZeroOneLoss de CatBoost) compte une ligne comme fausse quand sa probabilité est du mauvais côté de 0,5, pas du seuil du nœud.",
+   "beeswarm_note_regression": "Chaque point est une ligne de l'échantillon SHAP. À droite de 0 le prédicteur relève la valeur prédite, à gauche il l'abaisse, dans les unités du résultat. Couleur : la valeur du prédicteur, de basse (bleu) à haute (rouge) ; gris pour une catégorie ou une valeur manquante.",
+   "beeswarm_note_binary": "Chaque point est une ligne de l'échantillon SHAP. À droite de 0 le prédicteur relève la probabilité de l'événement, à gauche il l'abaisse, en log-odds. Couleur : la valeur du prédicteur, de basse (bleu) à haute (rouge) ; gris pour une catégorie ou une valeur manquante."
   },
   "series": {
    "train": "Entraînement",
@@ -1459,13 +1480,17 @@
    },
    "trees_limit": {
     "name": "Nombre d'arbres",
-    "h0": "si l'arrêt anticipé est intervenu, et les arbres conservés",
+    "h0": {
+     "early_stopping=false": "de combien la perte de validation au dernier arbre est pire qu'au meilleur (l'arrêt anticipé est désactivé : tous les arbres sont conservés)",
+     "": "si l'arrêt anticipé est intervenu, et les arbres conservés"
+    },
     "advice": {
      "trees_more": "La perte de validation baissait encore au dernier arbre : relevez max_trees ou learning_rate.",
      "trees_few": "Il s'est arrêté après très peu d'arbres avec un taux d'apprentissage au-dessus de 0,05 : baissez learning_rate.",
      "trees_no_stop": "Le dernier arbre est plus de 1 % moins bon que le meilleur : activez l'arrêt anticipé.",
      "trees_size": "Le boosting s'est arrêté pour que le fichier du modèle reste dans 64 Mio : baissez max_depth (chaque niveau peut doubler un arbre), ou relevez learning_rate pour qu'il faille moins d'arbres.",
      "stop_on_loss": "L'arrêt anticipé suivait une métrique qui n'est pas la perte (AUC, taux d'erreur, MAE) et s'est arrêté alors que la perte de validation, quelques arbres plus loin, était encore bien sous sa valeur à l'arbre conservé : cette métrique bouge par paliers, et son bruit a arrêté le boosting. Mettez stop_metric = loss, ou relevez early_stopping_rounds.",
+     "trees_time": "Le budget de temps a arrêté le boosting avant l'arrêt anticipé ou max_trees : relevez le timeout de l'étape (ou learning_rate, pour qu'il faille moins d'arbres).",
      "": "Le nombre d'arbres n'est peut-être pas le bon : lisez les courbes d'apprentissage."
     }
    },

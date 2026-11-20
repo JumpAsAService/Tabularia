@@ -447,6 +447,7 @@ def test_a_boosting_advice_and_note_are_said_in_the_page_language_whatever_the_r
 
     for advice_id, start in (("trees_more", "La perdita in validazione scendeva ancora"), ("trees_few", "Si è fermato dopo pochissimi alberi"),
                              ("stop_on_loss", "L'arresto anticipato seguiva una metrica che non è la perdita"),
+                             ("trees_time", "Il budget di tempo ha fermato il boosting"),
                              ("trees_size", "Il boosting si è fermato perché il file del modello restasse entro 64 MiB"),
                              ("trees_no_stop", "L'ultimo albero è peggiore"), ("newer_than_the_words", "Il numero di alberi potrebbe"),
                              (None, "Il numero di alberi potrebbe")):
@@ -460,6 +461,21 @@ def test_a_boosting_advice_and_note_are_said_in_the_page_language_whatever_the_r
     assert advised("overfitting", "overfitting_kept_best", "it", "not_computed").startswith(
         "Non calcolato: l'arresto anticipato sulla perdita tiene l'albero con la perdita in validazione più bassa")
     assert advised("calibration_slope", "slope_separated", "es", "not_computed").startswith("No calculado: la regresión logística")
+
+
+def test_the_calibration_is_drawn_on_a_square_of_0_to_1_and_the_beeswarm_says_the_scale_of_its_task(
+        tmp_path, chart_service, monkeypatch):  # noqa: F811
+    del chart_service[1][:]
+    draw(tmp_path, chart_service, monkeypatch, "xgboost-binary")
+    cal = asked_options(chart_service)["Calibration by deciles (validation)"]
+    assert (cal["xAxis"]["min"], cal["xAxis"]["max"], cal["yAxis"]["min"], cal["yAxis"]["max"]) == (0, 1, 0, 1)
+    assert cal["grid"]["width"] == cal["grid"]["height"]  # a square plot: the diagonal at 45°
+    [diagonal] = [m for s in cal["series"] for m in s.get("markLine", {}).get("data", []) if isinstance(m, list)]
+    assert diagonal == [{"coord": [0.0, 0.0]}, {"coord": [1.0, 1.0]}]
+    for case, scale, other in (("xgboost-regression", "in the outcome's units", "log-odds"), ("xgboost-binary", "in log-odds", "units")):
+        model, params, _ = fixture(case)
+        [said] = [s for s in strings(layouts.definition(model, params, "en")) if s.startswith("Each point is a row of the SHAP sample")]
+        assert scale in said and other not in said, case
 
 
 def test_what_a_boosting_check_reads_follows_the_nodes_settings():
@@ -479,6 +495,10 @@ def test_what_a_boosting_check_reads_follows_the_nodes_settings():
     assert h0(params, "overfitting", "en").startswith("the validation loss over the training loss at the tree kept")
     for other in ({"stop_metric": "auc"}, {"early_stopping": False}):
         assert h0({**params, **other}, "overfitting", "en").startswith("the share of the validation gain"), other
+    # without early stopping trees_limit reads the last tree against the best, not whether it stopped
+    assert h0(params, "trees_limit", "en") == "whether early stopping stopped, and the trees kept"
+    assert h0({**params, "early_stopping": False}, "trees_limit", "it").startswith(
+        "quanto la perdita in validazione all'ultimo albero è peggiore che al migliore")
     assert common.by_params({"a=1&b=true": "both", "b=false": "not b", "": "else"}, {"a": 1, "b": True}) == "both"
     assert common.by_params({"a=1&b=true": "both", "b=false": "not b", "": "else"}, {"a": 2, "b": False}) == "not b"
     assert common.by_params({"a=1": "a", "": "else"}, {}) == "else" and common.by_params("plain", {}) == "plain"

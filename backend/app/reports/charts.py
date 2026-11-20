@@ -598,7 +598,8 @@ def _xy(data: ChartData, it: rd.ChartItem, theme: rd.Theme, loc: formats.Locale,
     (a survival curve: the value holds until the next x), stems from zero (a correlogram),
     bands (two edges, the area between filled: the low edge invisible, the width stacked on
     it); `options.target` a dashed horizontal line (`mirror`: at −target too),
-    `options.target_x` vertical ones, `options.diagonal` the line y = x."""
+    `options.target_x` vertical ones, `options.diagonal` the line y = x; `options.unit_square`
+    both axes from 0 to 1 on a square plot, so that the line y = x is at 45°."""
     o = it.options
     palette = _palette(theme)
     days = (lambda x: x * _DAY_MS) if o.x_time else (lambda x: x)
@@ -655,7 +656,7 @@ def _xy(data: ChartData, it: rd.ChartItem, theme: rd.Theme, loc: formats.Locale,
             xs.append(t)
     if o.diagonal and xs and ys:
         # where both axes reach (ECharts draws no line with an end outside the plot)
-        lo, hi = max(min(xs), min(ys)), min(max(xs), max(ys))
+        lo, hi = (0.0, 1.0) if o.unit_square else (max(min(xs), min(ys)), min(max(xs), max(ys)))
         if lo < hi:
             marks.append([{"coord": [days(lo), lo]}, {"coord": [days(hi), hi]}])
     if marks:
@@ -693,6 +694,17 @@ def _xy(data: ChartData, it: rd.ChartItem, theme: rd.Theme, loc: formats.Locale,
     elif bands and ys and o.min is None and o.max is None:
         # a band's stack counts zero (the low edge stands on it): the axis is the marks' own, rounded
         y_axis.update(_nice_bounds(min(ys), max(ys)))
+    if o.unit_square:  # 0 to 1 on both axes, and a square plot: the diagonal at 45°, centred in the chart's width
+        for axis in (x_axis, y_axis):
+            axis.pop("scale", None)
+            axis.update(min=0, max=1, interval=0.2)
+        width_px, height_px = max(int(it.w * MM_PX), 40), max(int(it.h * MM_PX), 20)
+        left, right, bottom = 34, 10, 24  # the labels of the y axis («0.8») and of the x axis, outside the square
+        side = max(40, min(width_px - left - right, height_px - base["grid"]["top"] - bottom))
+        base["grid"].update(containLabel=False, left=left + max(0, (width_px - left - right - side) // 2), width=side,
+                            height=side)
+        base["grid"].pop("right", None)
+        base["grid"].pop("bottom", None)
     legend = {**base["legend"], "data": _xy_legend(data)}
     return {**base, "legend": legend, "xAxis": x_axis, "yAxis": y_axis, "series": series}
 

@@ -268,10 +268,12 @@ class ChartOptions(_Model):
     bands: list[Annotated[float, Field(allow_inf_nan=False)]] = Field(default_factory=list, max_length=10)
     format: Pattern | None = None
     # `xy` only: the target's line drawn at −target too (a correlogram's bounds); vertical lines;
-    # the line y = x; x as days since 1970-01-01, an axis of dates; a logarithmic x axis
+    # the line y = x; both axes from 0 to 1 on a square plot (probabilities against rates: the line
+    # y = x at 45°); x as days since 1970-01-01, an axis of dates; a logarithmic x axis
     mirror: bool = False
     target_x: list[float | Expr] | float | Expr | None = None
     diagonal: bool = False
+    unit_square: bool = False
     x_time: bool = False
     log_x: bool = False
     # `xy` only: the y axis shows names: at each whole number j, this expression's value on the first
@@ -734,7 +736,7 @@ class _Checks:
             if s.color is not None:
                 self.problems.append(Problem("a series' color is an xy chart's", it.id, f"series[{i}].color"))
         o = it.options
-        for name in ("mirror", "diagonal", "x_time", "log_x"):
+        for name in ("mirror", "diagonal", "unit_square", "x_time", "log_x"):
             if getattr(o, name):
                 self.problems.append(Problem(f"the option «{name}» is an xy chart's", it.id, f"options.{name}"))
         if o.target_x is not None:

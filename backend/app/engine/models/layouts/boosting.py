@@ -201,13 +201,15 @@ def importance_bars(task: str, w: dict) -> tuple[c.Chart, c.Chart]:
     return gain_chart, shap
 
 
-def beeswarm(w: dict) -> c.Chart:
+def beeswarm(task: str, w: dict) -> c.Chart:
     """The SHAP summary: the runner's points (x the SHAP value, y the place of the predictor with
-    its jitter, `stat` the colour bin), a series a bin in the ramp, the names on the y axis."""
+    its jitter, `stat` the colour bin), a series a bin in the ramp, the names on the y axis; its
+    caption says the scale of the task (the outcome's units, or log-odds of the event)."""
     f = '[section] = "point" AND [level] = "shap_beeswarm"'
     series = [{"value": f'IF([stat] = "{bin_}", [value], NULL)', "as": "point", "name": bin_, "color": colour} for bin_, colour in BEESWARM]
     return c.xy("shap_beeswarm", w["charts"]["shap_beeswarm"], f, series,
-                {"legend": False, "target_x": [0], "y_categories": "[level_2]"}, wide=True)._replace(caption=w["charts"]["beeswarm_note"])
+                {"legend": False, "target_x": [0], "y_categories": "[level_2]"}, wide=True)._replace(
+                    caption=w["charts"]["beeswarm_note_" + task])
 
 
 def learning_charts(task: str, w: dict, checked: dict[str, Any]) -> tuple[c.Chart, ...]:
@@ -260,8 +262,8 @@ def task_charts(task: str, w: dict) -> tuple[c.Chart, ...]:
     roc = c.xy("roc", ch["roc"], '[section] = "curve" AND [level] = "roc"', [c.mark("y", "line", s["roc"])],
                {"diagonal": True, "legend": False})
     calibration = c.xy("calibration", ch["calibration"], '[section] = "point" AND [level] = "calibration"',
-                       [c.mark("y", "point", s["deciles"]), c.mark("y", "line")], {"diagonal": True, "legend": False},
-                       under="calibration")
+                       [c.mark("y", "point", s["deciles"]), c.mark("y", "line")],
+                       {"diagonal": True, "unit_square": True, "legend": False}, under="calibration")
     return roc, calibration, c.histogram("probability", ch["probability"], "probability", s["count"], split=True), confusion
 
 
@@ -273,7 +275,7 @@ def report(model: str, params: dict[str, Any], locale: str, sample: list[dict] |
     gain, shap = importance_bars(task, w)
     charts = [gain, shap]
     if task != "multiclass":
-        charts.append(beeswarm(w))
+        charts.append(beeswarm(task, w))
     charts += [*learning_charts(task, w, checked), *task_charts(task, w)]
     blocks = (fit_block(model, checked, keys), importance_block(task), *((confusion_block(task),) if task != "regression" else ()))
     return c.page(model, params, locale, sample, step, name=name(model, params, locale), about=about(params, locale),
