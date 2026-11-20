@@ -94,7 +94,8 @@
    "probability": "Predicted probabilities by observed class",
    "confusion": "Confusion matrix (validation)",
    "roc_ovr": "ROC curves, one class against the rest",
-   "learning_balanced_note": "With class_weight = balanced the curves weigh the classes as the fit does (each class the same), as early stopping and the diagnostics read them: they are not the log-loss of the table, which weighs every row the same."
+   "learning_balanced_note": "With class_weight = balanced the curves weigh the classes as the fit does (each class the same), as early stopping and the diagnostics read them: they are not the log-loss of the table, which weighs every row the same.",
+   "error_note": "The error rate (XGBoost's error, CatBoost's ZeroOneLoss) counts a row as wrong when its probability is on the wrong side of 0.5, not of the node's threshold."
   },
   "series": {
    "train": "Training",
@@ -241,6 +242,7 @@
      "trees_few": "It stopped after very few trees with a learning rate above 0.05: lower learning_rate.",
      "trees_no_stop": "The last tree is more than 1 % worse than the best: turn early stopping on.",
      "trees_size": "The boosting stopped so that the model file stays within 64 MiB: lower max_depth (each level can double a tree), or raise learning_rate so that fewer trees are needed.",
+     "stop_on_loss": "Early stopping watched a metric that is not the loss (AUC, error rate, MAE) and stopped while the validation loss, a few trees later, was still well below its value at the tree kept: that metric moves in steps, and its noise stopped the boosting. Set stop_metric = loss, or raise early_stopping_rounds.",
      "": "The number of trees may not be the right one: read the learning curves."
     }
    },
@@ -389,7 +391,8 @@
    "probability": "Probabilità previste per classe osservata",
    "confusion": "Matrice di confusione (validazione)",
    "roc_ovr": "Curve ROC, una classe contro le altre",
-   "learning_balanced_note": "Con class_weight = balanced le curve pesano le classi come l'adattamento (ogni classe uguale), come le leggono l'arresto anticipato e le diagnostiche: non sono la log-loss della tabella, che pesa ogni riga uguale."
+   "learning_balanced_note": "Con class_weight = balanced le curve pesano le classi come l'adattamento (ogni classe uguale), come le leggono l'arresto anticipato e le diagnostiche: non sono la log-loss della tabella, che pesa ogni riga uguale.",
+   "error_note": "Il tasso di errore (error di XGBoost, ZeroOneLoss di CatBoost) conta una riga come sbagliata quando la sua probabilità è dalla parte sbagliata di 0,5, non della soglia del nodo."
   },
   "series": {
    "train": "Addestramento",
@@ -536,6 +539,7 @@
      "trees_few": "Si è fermato dopo pochissimi alberi con un learning rate sopra 0,05: abbassate learning_rate.",
      "trees_no_stop": "L'ultimo albero è peggiore del migliore di oltre l'1 %: attivate l'arresto anticipato.",
      "trees_size": "Il boosting si è fermato perché il file del modello restasse entro 64 MiB: abbassate max_depth (ogni livello può raddoppiare un albero), o alzate learning_rate perché servano meno alberi.",
+     "stop_on_loss": "L'arresto anticipato seguiva una metrica che non è la perdita (AUC, tasso di errore, MAE) e si è fermato mentre la perdita in validazione, qualche albero dopo, era ancora ben sotto il valore dell'albero tenuto: quella metrica si muove a scatti, e il suo rumore ha fermato il boosting. Impostate stop_metric = loss, o alzate early_stopping_rounds.",
      "": "Il numero di alberi potrebbe non essere quello giusto: leggete le curve di apprendimento."
     }
    },
@@ -684,7 +688,8 @@
    "probability": "Vorhergesagte Wahrscheinlichkeiten je beobachteter Klasse",
    "confusion": "Konfusionsmatrix (Validierung)",
    "roc_ovr": "ROC-Kurven, eine Klasse gegen den Rest",
-   "learning_balanced_note": "Mit class_weight = balanced gewichten die Kurven die Klassen wie die Anpassung (jede Klasse gleich), so wie das vorzeitige Stoppen und die Diagnosen sie lesen: sie sind nicht der Log-Loss der Tabelle, der jede Zeile gleich gewichtet."
+   "learning_balanced_note": "Mit class_weight = balanced gewichten die Kurven die Klassen wie die Anpassung (jede Klasse gleich), so wie das vorzeitige Stoppen und die Diagnosen sie lesen: sie sind nicht der Log-Loss der Tabelle, der jede Zeile gleich gewichtet.",
+   "error_note": "Die Fehlerrate (error bei XGBoost, ZeroOneLoss bei CatBoost) zählt eine Zeile als falsch, wenn ihre Wahrscheinlichkeit auf der falschen Seite von 0,5 liegt, nicht der Schwelle des Knotens."
   },
   "series": {
    "train": "Training",
@@ -831,6 +836,7 @@
      "trees_few": "Es stoppte nach sehr wenigen Bäumen mit einer Lernrate über 0,05: senken Sie learning_rate.",
      "trees_no_stop": "Der letzte Baum ist mehr als 1 % schlechter als der beste: schalten Sie das vorzeitige Stoppen ein.",
      "trees_size": "Das Boosting stoppte, damit die Modelldatei innerhalb von 64 MiB bleibt: senken Sie max_depth (jede Ebene kann einen Baum verdoppeln) oder erhöhen Sie learning_rate, damit weniger Bäume nötig sind.",
+     "stop_on_loss": "Das vorzeitige Stoppen beobachtete eine Metrik, die nicht der Verlust ist (AUC, Fehlerrate, MAE), und stoppte, während der Validierungsverlust einige Bäume später noch deutlich unter seinem Wert beim behaltenen Baum lag: diese Metrik bewegt sich in Stufen, und ihr Rauschen hat das Boosting gestoppt. Setzen Sie stop_metric = loss, oder erhöhen Sie early_stopping_rounds.",
      "": "Die Anzahl der Bäume ist vielleicht nicht die richtige: lesen Sie die Lernkurven."
     }
    },
@@ -979,7 +985,8 @@
    "probability": "Probabilidades previstas por clase observada",
    "confusion": "Matriz de confusión (validación)",
    "roc_ovr": "Curvas ROC, una clase contra el resto",
-   "learning_balanced_note": "Con class_weight = balanced las curvas ponderan las clases como el ajuste (cada clase igual), como las leen la parada temprana y los diagnósticos: no son la log-loss de la tabla, que pondera cada fila igual."
+   "learning_balanced_note": "Con class_weight = balanced las curvas ponderan las clases como el ajuste (cada clase igual), como las leen la parada temprana y los diagnósticos: no son la log-loss de la tabla, que pondera cada fila igual.",
+   "error_note": "La tasa de error (error de XGBoost, ZeroOneLoss de CatBoost) cuenta una fila como errónea cuando su probabilidad está del lado equivocado de 0,5, no del umbral del nodo."
   },
   "series": {
    "train": "Entrenamiento",
@@ -1126,6 +1133,7 @@
      "trees_few": "Se detuvo tras muy pocos árboles con una tasa de aprendizaje superior a 0,05: baje learning_rate.",
      "trees_no_stop": "El último árbol es más de un 1 % peor que el mejor: active la parada temprana.",
      "trees_size": "El boosting se detuvo para que el archivo del modelo no pase de 64 MiB: baje max_depth (cada nivel puede duplicar un árbol) o suba learning_rate para que hagan falta menos árboles.",
+     "stop_on_loss": "La parada temprana vigilaba una métrica que no es la pérdida (AUC, tasa de error, MAE) y se detuvo cuando la pérdida de validación, unos árboles después, seguía bastante por debajo de su valor en el árbol conservado: esa métrica se mueve a saltos, y su ruido detuvo el boosting. Ponga stop_metric = loss, o suba early_stopping_rounds.",
      "": "El número de árboles puede no ser el adecuado: lea las curvas de aprendizaje."
     }
    },
@@ -1274,7 +1282,8 @@
    "probability": "Probabilités prédites par classe observée",
    "confusion": "Matrice de confusion (validation)",
    "roc_ovr": "Courbes ROC, une classe contre les autres",
-   "learning_balanced_note": "Avec class_weight = balanced les courbes pondèrent les classes comme l'ajustement (chaque classe autant), comme les lisent l'arrêt anticipé et les diagnostics : ce n'est pas la log-loss du tableau, qui pondère chaque ligne autant."
+   "learning_balanced_note": "Avec class_weight = balanced les courbes pondèrent les classes comme l'ajustement (chaque classe autant), comme les lisent l'arrêt anticipé et les diagnostics : ce n'est pas la log-loss du tableau, qui pondère chaque ligne autant.",
+   "error_note": "Le taux d'erreur (error de XGBoost, ZeroOneLoss de CatBoost) compte une ligne comme fausse quand sa probabilité est du mauvais côté de 0,5, pas du seuil du nœud."
   },
   "series": {
    "train": "Entraînement",
@@ -1421,6 +1430,7 @@
      "trees_few": "Il s'est arrêté après très peu d'arbres avec un taux d'apprentissage au-dessus de 0,05 : baissez learning_rate.",
      "trees_no_stop": "Le dernier arbre est plus de 1 % moins bon que le meilleur : activez l'arrêt anticipé.",
      "trees_size": "Le boosting s'est arrêté pour que le fichier du modèle reste dans 64 Mio : baissez max_depth (chaque niveau peut doubler un arbre), ou relevez learning_rate pour qu'il faille moins d'arbres.",
+     "stop_on_loss": "L'arrêt anticipé suivait une métrique qui n'est pas la perte (AUC, taux d'erreur, MAE) et s'est arrêté alors que la perte de validation, quelques arbres plus loin, était encore bien sous sa valeur à l'arbre conservé : cette métrique bouge par paliers, et son bruit a arrêté le boosting. Mettez stop_metric = loss, ou relevez early_stopping_rounds.",
      "": "Le nombre d'arbres n'est peut-être pas le bon : lisez les courbes d'apprentissage."
     }
    },

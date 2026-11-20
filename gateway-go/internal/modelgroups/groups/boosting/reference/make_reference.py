@@ -600,8 +600,13 @@ def case_values(case: dict[str, Any], fit_with: Any) -> list[dict[str, Any]]:
     if p["early_stopping"]:
         stopped = rounds < p["max_trees"]
         num("assumption|trees_limit||value", best + 1)
+        # stopped by another metric than the loss while the loss, a few trees later, was lower than at the tree kept by
+        # more than 5 % of its gain over the baseline: the metric's noise stopped it
+        later = min(vloss[best:])
+        on_noise = p["stop_metric"] != "loss" and B_va - min(vloss) > 0 and vloss[best] - later > 0.05 * (B_va - min(vloss))
         # few trees are read above the default learning rate only: below it they say a weak pattern
-        txt("assumption|trees_limit||verdict", "ok" if stopped and (best + 1 >= 20 or p["learning_rate"] <= 0.05) else "doubtful")
+        txt("assumption|trees_limit||verdict",
+            "ok" if stopped and not on_noise and (best + 1 >= 20 or p["learning_rate"] <= 0.05) else "doubtful")
     else:
         excess = (vloss[-1] - min(vloss)) / abs(min(vloss))
         num("assumption|trees_limit||value", excess)

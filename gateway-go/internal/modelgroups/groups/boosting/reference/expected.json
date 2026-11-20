@@ -731,7 +731,7 @@
     },
     {
      "key": "assumption|trees_limit||verdict",
-     "text": "ok"
+     "text": "doubtful"
     },
     {
      "key": "assumption|class_imbalance||value",
@@ -1161,7 +1161,7 @@
     },
     {
      "key": "assumption|trees_limit||verdict",
-     "text": "ok"
+     "text": "doubtful"
     },
     {
      "key": "assumption|class_imbalance||value",
@@ -2494,7 +2494,7 @@
     },
     {
      "key": "assumption|trees_limit||verdict",
-     "text": "ok"
+     "text": "doubtful"
     },
     {
      "key": "assumption|class_imbalance||value",
@@ -2958,7 +2958,7 @@
     },
     {
      "key": "assumption|trees_limit||verdict",
-     "text": "ok"
+     "text": "doubtful"
     },
     {
      "key": "assumption|class_imbalance||value",

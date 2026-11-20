@@ -225,7 +225,9 @@ def learning_charts(task: str, w: dict, checked: dict[str, Any]) -> tuple[c.Char
     balanced = task != "regression" and checked.get("class_weight") == "balanced"
     out = [curve("learning_loss", ch["learning_loss_" + task], "overfitting", ch["learning_balanced_note"] if balanced else None)]
     if stop_metric != "loss":  # the stop metric is another number than the loss: its curve too
-        out.append(curve("learning_stop", ch["learning_stop"], "trees_limit"))
+        # a binary error rate cuts at 0.5 (XGBoost's error, CatBoost's ZeroOneLoss), whatever the node's threshold
+        said = ch["error_note"] if stop_metric == "error" and task == "binary" else None
+        out.append(curve("learning_stop", ch["learning_stop"], "trees_limit", said))
     return tuple(out)
 
 

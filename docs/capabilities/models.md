@@ -317,7 +317,7 @@ value used):
 | `class_weight` | none | `balanced` weights the classes against each other in the fit, and in the losses early stopping and the diagnostics read (the validation part weighted the same way, the baseline one share per class); the metrics table stays unweighted. The probabilities are then no longer calibrated, and a diagnostic says so |
 | `validation`, `validation_share` | random, 20 % | How the validation part is drawn (below) |
 | `early_stopping`, `early_stopping_rounds` | on, 50 | Stop when the validation measure has not improved for that many trees |
-| `stop_metric` | loss | What early stopping watches: the loss (RMSE or log-loss), `mae` (regression), `auc` (binary), `error` (classification) |
+| `stop_metric` | loss | What early stopping watches: the loss (RMSE or log-loss), `mae` (regression), `auc` (binary), `error` (classification: for a binary task the share of rows on the wrong side of a probability of 0.5, XGBoost's `error` and CatBoost's `ZeroOneLoss`, not of the node's `threshold`). The AUC and the error rate move in steps and can stop the boosting on their noise after a few trees: `trees_limit` then reads the loss curve and is doubtful (the advice `stop_on_loss`) |
 | `max_trees` | 1,000 | The most trees. A multiclass round grows one tree per class |
 | `learning_rate` | 0.05 | How much each tree counts |
 | `max_depth` | 6 | The depth of a tree: up to 12 for XGBoost, 10 for CatBoost |

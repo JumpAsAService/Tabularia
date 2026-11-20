@@ -732,6 +732,9 @@ ADVICE = {
     "overfitting_no_gain": "the validation loss never goes below the baseline's, so there is no gain to give back",
     "trees_more": "the validation loss was still falling at the last tree: raise max_trees or learning_rate",
     "trees_few": "stopped after very few trees: lower learning_rate",
+    "stop_on_loss": "early stopping on a metric that is not the loss (auc, error, mae) stopped while the validation loss still "
+                    "fell well below the tree kept a few trees later: the metric's noise stopped it; use stop_metric = loss, "
+                    "or more early_stopping_rounds",
     "trees_no_stop": "the validation loss at the last tree is more than 1 % worse than at the best: turn early stopping on",
     "trees_size": "the boosting stopped so that the model file stays within 64 MiB: lower max_depth (each level can double a "
                   "tree), or raise learning_rate so that fewer trees are needed",
@@ -782,6 +785,7 @@ SLOPE_OK, SLOPE_DOUBTFUL = (0.8, 1.25), (0.5, 2.0)
 LEAKAGE_SHARE, LEAKAGE_PERFECT = 0.8, 0.98
 LEAKAGE_SOME_SHARE, LEAKAGE_HIGH = 0.6, 0.95
 TREES_FEW_RATE = 0.05  # the default learning rate: «few trees» is read above it
+STOP_LOSS_SHARE = 0.05  # stopped on another metric: the loss at the tree kept above its later minimum by this share of the gain
 
 
 def _check(check: str, verdict: str, value: float = math.nan, threshold: float = math.nan, advice: str | None = None,
@@ -834,21 +838,37 @@ def check_overfitting(curve: list[float] | np.ndarray, kept: int, base_valid: fl
     return _check("overfitting", verdict, r, OVERFITTING_OK, "overfitting")
 
 
+def stopped_on_noise(loss_curve: list[float] | np.ndarray, kept: int, base: float) -> bool:
+    """Early stopping on a metric that is not the loss (the AUC, the error rate, the MAE) can stop
+    on its noise: the AUC and the error move in steps, and a few flat rounds stop it after 1 to 9
+    trees while the loss still falls. True when the validation loss at the tree kept is above its
+    minimum from there on (the trees early stopping still grew) by more than STOP_LOSS_SHARE of the
+    gain over the baseline (B − the lowest loss)."""
+    c = np.asarray(loss_curve, dtype=float)
+    if kept < 1 or len(c) < kept or not np.isfinite(c).all() or not math.isfinite(base):
+        return False
+    gain = base - float(c.min())
+    return gain > 0 and float(c[kept - 1]) - float(c[kept - 1:].min()) > STOP_LOSS_SHARE * gain
+
+
 def check_trees_limit(early_stopping: bool, stopped_early: bool, stopped_by_time: bool, kept: int,
                       last_loss: float, best_loss: float, learning_rate: float = TREES_FEW_RATE,
-                      stopped_by_size: bool = False) -> dict[str, Any]:
+                      stopped_by_size: bool = False, on_noise: bool = False) -> dict[str, Any]:
     """With early stopping: doubtful when it did not stop (max_trees reached, the time budget, or
-    the model file's size), or when it stopped before 20 trees with a learning rate above 0.05
-    (each tree a big step: a lower rate helps). With the default rate or a lower one, an early
-    stop says that the pattern is weak, which beats_baseline reads: lowering the rate again would
-    not help (the threshold of 20 is then not written). Without early stopping: the last tree's
-    validation loss against the best."""
+    the model file's size), when it stopped on a metric that is not the loss while the loss still
+    fell (`on_noise`, stopped_on_noise), or when it stopped before 20 trees with a learning rate
+    above 0.05 (each tree a big step: a lower rate helps). With the default rate or a lower one, an
+    early stop says that the pattern is weak, which beats_baseline reads: lowering the rate again
+    would not help (the threshold of 20 is then not written). Without early stopping: the last
+    tree's validation loss against the best."""
     if early_stopping:
         few = 20 if learning_rate > TREES_FEW_RATE else math.nan
         if stopped_by_size:
             return _check("trees_limit", "doubtful", kept, few, "trees_size")
         if stopped_by_time or not stopped_early:
             return _check("trees_limit", "doubtful", kept, few, "trees_more")
+        if on_noise:
+            return _check("trees_limit", "doubtful", kept, few, "stop_on_loss")
         if kept < 20 and learning_rate > TREES_FEW_RATE:
             return _check("trees_limit", "doubtful", kept, few, "trees_few")
         return _check("trees_limit", "ok", kept, few)
@@ -1212,9 +1232,10 @@ def finish(task: dict[str, Any], prepared: Prepared, fitted: Fitted) -> dict[str
     curve = _loss_curve(fitted)
     checks.append(check_overfitting(curve, fitted.best_iteration, B_va))
     last, best = (curve[-1], min(curve)) if curve else (math.nan, math.nan)
+    on_noise = fitted.stop_metric_name != fitted.loss_metric_name and stopped_on_noise(curve, fitted.best_iteration + 1, B_va)
     checks.append(check_trees_limit(bool(p.get("early_stopping", True)), fitted.stopped_early, fitted.stopped_by_time,
                                     fitted.best_iteration + 1, last, best, float(p.get("learning_rate", TREES_FEW_RATE)),
-                                    fitted.stopped_by_size))
+                                    fitted.stopped_by_size, on_noise))
     if what != "regression":
         shares = np.array([float(w[tr][y[tr] == c].sum()) for c in range(len(P.classes))]) / float(w[tr].sum())
         checks.append(check_class_imbalance(shares))
@@ -1533,6 +1554,14 @@ def _test_checks(code: Any) -> None:
             and check_trees_limit(True, True, False, 19, 0, 0, 0.1)["advice_id"] == "trees_few", "the advice of few trees")
     _expect(v(check_trees_limit(True, True, False, 3, 0, 0, 0.05)) == "ok", "few trees at the default rate: a weak pattern")
     _expect(check_trees_limit(True, True, False, 20, 0, 0)["advice_id"] is None, "an ok check has no advice")
+    # stopped on another metric while the loss still fell: 0.85 at the tree kept, 0.6 three trees later, a gain of 0.4
+    _expect(stopped_on_noise([1.0, 0.9, 0.85, 0.7, 0.6, 0.62], 3, 1.0) and not stopped_on_noise([1.0, 0.8, 0.61, 0.6], 3, 1.0)
+            and not stopped_on_noise([1.0, 0.9, 0.85, 0.7, 0.6], 5, 1.0) and not stopped_on_noise([1.2, 1.1, 1.3], 1, 1.0),
+            "stopped_on_noise: 62 % of the gain, 2.5 %, the minimum kept, no gain")
+    _expect(abs(STOP_LOSS_SHARE - 0.05) < 1e-15 and not stopped_on_noise([1.0, 0.8, 0.615, 0.6], 3, 1.0)
+            and stopped_on_noise([1.0, 0.8, 0.625, 0.6], 3, 1.0), "stopped_on_noise on both sides of 5 % of the gain")
+    noisy = check_trees_limit(True, True, False, 8, 0, 0, 0.05, on_noise=True)
+    _expect(noisy["verdict"] == "doubtful" and noisy["advice_id"] == "stop_on_loss" and noisy["value"] == 8, f"stop_on_loss: {noisy}")
     _expect([v(check_class_imbalance(np.array([r, 1.0, 2.0]))) for r in (3.99, 4.0, 19.99, 20.0)]
             == ["ok", "doubtful", "doubtful", "failed"], "class_imbalance")
     _expect([v(check_calibration(e, 0.03, False, 10)) for e in (0.05, 0.0501, 0.10, 0.1001)] == ["ok", "doubtful", "doubtful",

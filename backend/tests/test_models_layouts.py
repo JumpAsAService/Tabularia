@@ -446,6 +446,8 @@ def test_a_boosting_advice_and_note_are_said_in_the_page_language_whatever_the_r
         return one["text"]
 
     for advice_id, start in (("trees_more", "La perdita in validazione scendeva ancora"), ("trees_few", "Si è fermato dopo pochissimi alberi"),
+                             ("stop_on_loss", "L'arresto anticipato seguiva una metrica che non è la perdita"),
+                             ("trees_size", "Il boosting si è fermato perché il file del modello restasse entro 64 MiB"),
                              ("trees_no_stop", "L'ultimo albero è peggiore"), ("newer_than_the_words", "Il numero di alberi potrebbe"),
                              (None, "Il numero di alberi potrebbe")):
         assert advised("trees_limit", advice_id, "it").startswith(start), advice_id
@@ -479,6 +481,10 @@ def test_what_a_boosting_check_reads_follows_the_nodes_settings():
         return [s for s in strings(layouts.definition(model, p, "en")) if s.startswith("With class_weight = balanced the curves")]
 
     assert not caption(params) and len(caption({**params, "class_weight": "balanced"})) == 1
+    # the binary error rate cuts at 0.5, whatever the node's threshold: its curve says so
+    cut = "The error rate (XGBoost's error, CatBoost's ZeroOneLoss) counts a row as wrong"
+    assert any(s.startswith(cut) for s in strings(layouts.definition(model, {**params, "stop_metric": "error"}, "en")))
+    assert not any(s.startswith(cut) for s in strings(layouts.definition(model, {**params, "stop_metric": "auc"}, "en")))
 
 
 def test_excel_holds_the_tables_one_sheet_each(tmp_path, chart_service, monkeypatch):  # noqa: F811
