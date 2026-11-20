@@ -87,7 +87,10 @@ def main(group: str, routes: Routes) -> None:
             for line in traceback.format_exception(e)[-12:]:
                 print("  " + line.rstrip().replace("\n", "\n  "), file=sys.stderr)
             status = 1
-        said = list(dict.fromkeys(f"{w.category.__name__}: {w.message}" for w in caught))[:50]
+        # a runner's own warning (warnings.warn: a UserWarning) is a sentence for the run page, said as it is, as R's
+        # are; another category (a library's DeprecationWarning, RuntimeWarning…) keeps its name in front
+        said = list(dict.fromkeys(str(w.message) if w.category is UserWarning else f"{w.category.__name__}: {w.message}"
+                                  for w in caught))[:50]
     if task is not None and task.get("mode") != "selftest":
         run = {"protocol": PROTOCOL, "group": group, "model": task.get("model"), "mode": task.get("mode"), "exit": status,
                "software": versions(), "seconds": round(time.monotonic() - started, 3), "phases": phases, "warnings": said}

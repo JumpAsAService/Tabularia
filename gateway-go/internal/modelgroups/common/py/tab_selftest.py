@@ -485,7 +485,7 @@ def _exits(code: Path) -> None:
                         f"error.json: {err}")
                 _expect(any(line.startswith("TABULARIA_ERROR {") for line in out.stdout.splitlines()), "no TABULARIA_ERROR line")
                 run = json.loads((here / "artifacts" / "run.json").read_text(encoding="utf-8"))
-                _expect(run["exit"] == 3 and any("a warning of a library" in w for w in run["warnings"]), f"run.json: {run}")
+                _expect(run["exit"] == 3 and "a warning of a library" in run["warnings"], f"run.json: {run}")
             if route == "protocol":
                 err = json.loads((here / "artifacts" / "error.json").read_text(encoding="utf-8"))
                 _expect(err["code"] == "protocol", f"protocol: {err['code']}")
