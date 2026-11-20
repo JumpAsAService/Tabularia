@@ -384,6 +384,7 @@ def prepare(task: dict[str, Any]) -> Prepared:
         train_order = np.flatnonzero(~validation)
 
     check_parts(what, outcome, y, validation, classes, notes)
+    refuse_constant(X, validation)
 
     fit_w = w.copy()
     if what != "regression" and p.get("class_weight") == "balanced":
@@ -472,6 +473,21 @@ def check_parts(what: str, outcome: str, y: np.ndarray, validation: np.ndarray, 
                           {"class": classes[c], "part": part})
     if (in_valid == 0).any():
         notes.append("class_absent_validation")
+
+
+def refuse_constant(X: pd.DataFrame, validation: np.ndarray) -> None:
+    """Refused when no predictor varies in the training part (a missing value counts as a value of
+    its own, as both libraries split on it): CatBoost stops on it, XGBoost would grow trees
+    without a split. Both refuse it with one sentence."""
+    tr = ~validation
+    for name in X.columns:
+        x = X[name]
+        values = x.cat.codes.to_numpy()[tr] if isinstance(x.dtype, pd.CategoricalDtype) else x.to_numpy(dtype=float)[tr]
+        present = values[values >= 0] if isinstance(x.dtype, pd.CategoricalDtype) else values[~np.isnan(values)]
+        if len(np.unique(present)) + int(len(present) < len(values)) > 1:
+            return
+    raise Refusal("constant_predictors", "no predictor varies in the training part: every one holds a single value there, so the "
+                                         "trees have nothing to split on; choose predictors that vary")
 
 
 def balanced_factors(y: np.ndarray, w: np.ndarray, train: np.ndarray, k: int) -> np.ndarray:
@@ -1420,6 +1436,16 @@ def _test_prepare(code: Any) -> None:
             f"factor_labels: {levels} {codes}")
     codes, unseen = category_codes(mixed, ["2", "a", "true"])
     _expect(codes.tolist() == [2, -1, -1, 2, -1, 1, 0, -1, 1] and unseen == 2, f"category_codes: {codes} {unseen}")
+    # no predictor that varies: refused with a sentence (CatBoost stopped on it); one that varies, or a value with missing
+    # ones beside it (both libraries split on a missing value), is enough
+    flat = df.assign(x=2.0, c="a")
+    for frame, refused in ((flat, True), (flat.assign(x=np.where(np.arange(n) % 3 == 0, np.nan, 2.0)), False),
+                           (flat.assign(c=np.where(np.arange(n) % 2 == 0, "a", "b")), False)):
+        try:
+            prepare({**task, "_frame": frame})
+            _expect(not refused, "predictors that never vary were not refused")
+        except Refusal as e:
+            _expect(refused and e.code == "constant_predictors", f"{e.code}: {e.message}")
 
 
 @register("boosting: each diagnostic on both sides of its thresholds")

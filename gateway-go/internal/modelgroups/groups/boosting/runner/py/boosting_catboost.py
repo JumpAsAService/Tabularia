@@ -420,6 +420,11 @@ def _test_options(code: Any) -> None:
         raise AssertionError("a column holding the sentinel was not refused")
     except Refusal as e:
         _expect(e.code == "missing_sentinel" and "«c»" in e.message, e.code)
+    try:  # CatBoost stopped on «All features are either constant or ignored»: a refusal with a sentence instead
+        fit_catboost(_task("binary", df.assign(a=1.0, b=0.5, c="n", d=True)))
+        raise AssertionError("predictors that never vary were not refused")
+    except Refusal as e:
+        _expect(e.code == "constant_predictors", f"{e.code}: {e.message}")
     P = B.prepare(_task("binary", df))
     _expect(list(cat_frame(P.X)["v3"][df["c"].isna().to_numpy()]) == [SENTINEL] * int(df["c"].isna().sum()), "the sentinel")
     _expect(model_params(P)["has_time"] is False and model_params(P)["nan_mode"] == "Min", "has_time without time")
