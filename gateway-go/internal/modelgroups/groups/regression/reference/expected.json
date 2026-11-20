@@ -10,6 +10,7 @@
       "nortest": "1.0.4",
       "brglm2": "1.1.1",
       "detectseparation": "0.4.0",
+      "glmnet": "5.2",
       "jsonlite": "2.0.0"
     },
     "command": "Rscript gateway-go/internal/modelgroups/groups/regression/reference/make_reference.R"
@@ -10540,6 +10541,2890 @@
       "refuses": {
         "code": "weights_not_frequencies",
         "message": "the weights «fee» are frequencies: whole numbers, 0 or more"
+      }
+    },
+    {
+      "id": "penalized_linear_lasso",
+      "model": "linear",
+      "data": "data/linear_categorical.csv",
+      "types": {
+        "region": "text",
+        "price": "number",
+        "price_cents": "number",
+        "month": "integer",
+        "promo": "boolean",
+        "sales": "number"
+      },
+      "params": {
+        "outcome": "sales",
+        "predictors": [
+          "price",
+          "region",
+          "month",
+          "promo"
+        ],
+        "reference": {
+          "region": "north"
+        },
+        "interactions": [
+          [
+            "price",
+            "region"
+          ]
+        ],
+        "penalty": "lasso"
+      },
+      "expect": [
+        {
+          "key": "model|||variant",
+          "text": "penalized"
+        },
+        {
+          "key": "model|||penalty",
+          "text": "lasso"
+        },
+        {
+          "key": "model|||cv_measure",
+          "text": "mse"
+        },
+        {
+          "key": "model|||family",
+          "text": "gaussian"
+        },
+        {
+          "key": "model|||n_missing",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lambda",
+          "value": 1.52998682977186,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||log_lambda",
+          "value": 0.425259127375046,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lambda_min",
+          "value": 0.197605397746903,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lambda_1se",
+          "value": 1.52998682977186,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||log_lambda_min",
+          "value": -1.62148317750855,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||log_lambda_1se",
+          "value": 0.425259127375046,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||mixing",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||cv_value",
+          "value": 81.0776812699539,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||cv_se",
+          "value": 11.0783362135381,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n_selected",
+          "value": 6,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|(Intercept)||estimate",
+          "value": 195.473192076805,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|(Intercept)||selected",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|price||estimate",
+          "value": -9.1923130725863,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|price||selected",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|region|east|estimate",
+          "value": -9.42161521688978,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|region|east|selected",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|region|south|estimate",
+          "value": 23.2072419870607,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|region|south|selected",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|month||estimate",
+          "value": 1.2325330886896,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|month||selected",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|promo|true|estimate",
+          "value": 13.3460485466079,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|promo|true|selected",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|price × region|east|estimate",
+          "value": -0.958599265236493,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|price × region|east|selected",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|price × region|south|estimate",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|price × region|south|selected",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_mean|0",
+          "value": 750.146653925118,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_low|0",
+          "value": 674.533498066652,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_high|0",
+          "value": 825.759809783584,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||n_selected|0",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_mean|49",
+          "value": 70.6730426437312,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_low|49",
+          "value": 59.7014993056636,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_high|49",
+          "value": 81.6445859817988,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||n_selected|49",
+          "value": 5,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_mean|27",
+          "value": 81.0776812699539,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_low|27",
+          "value": 69.9993450564158,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_high|27",
+          "value": 92.156017483492,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||n_selected|27",
+          "value": 6,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_mean|57",
+          "value": 71.519510762953,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_low|57",
+          "value": 60.6187320583246,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_high|57",
+          "value": 82.4202894675815,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||n_selected|57",
+          "value": 5,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n",
+          "value": 60,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||rmse",
+          "value": 9.00431459190281,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||mae",
+          "value": 7.26470475512857,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||r_squared",
+          "value": 0.890147088295063,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|lambda_choice||verdict",
+          "text": "ok"
+        }
+      ]
+    },
+    {
+      "id": "penalized_linear_ridge_edge",
+      "model": "linear",
+      "data": "data/linear_categorical.csv",
+      "types": {
+        "region": "text",
+        "price": "number",
+        "price_cents": "number",
+        "month": "integer",
+        "promo": "boolean",
+        "sales": "number"
+      },
+      "params": {
+        "outcome": "sales",
+        "predictors": [
+          "price",
+          "region",
+          "month",
+          "promo"
+        ],
+        "reference": {
+          "region": "north"
+        },
+        "interactions": [
+          [
+            "price",
+            "region"
+          ]
+        ],
+        "penalty": "ridge",
+        "lambda": "cv_min"
+      },
+      "expect": [
+        {
+          "key": "model|||variant",
+          "text": "penalized"
+        },
+        {
+          "key": "model|||penalty",
+          "text": "ridge"
+        },
+        {
+          "key": "model|||cv_measure",
+          "text": "mse"
+        },
+        {
+          "key": "model|||family",
+          "text": "gaussian"
+        },
+        {
+          "key": "model|||n_missing",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lambda",
+          "value": 1.88623927447354,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||log_lambda",
+          "value": 0.634585044919959,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lambda_min",
+          "value": 1.88623927447354,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lambda_1se",
+          "value": 6.32192455263047,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||log_lambda_min",
+          "value": 0.634585044919959,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||log_lambda_1se",
+          "value": 1.8440236796239,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||mixing",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||cv_value",
+          "value": 74.7103597424904,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||cv_se",
+          "value": 10.9346650548136,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n_selected",
+          "value": 7,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|(Intercept)||estimate",
+          "value": 195.171411409147,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|(Intercept)||selected",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|price||estimate",
+          "value": -9.59502300575358,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|price||selected",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|region|east|estimate",
+          "value": -10.5048459628952,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|region|east|selected",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|region|south|estimate",
+          "value": 19.9985730908897,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|region|south|selected",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|month||estimate",
+          "value": 1.53544637576797,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|month||selected",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|promo|true|estimate",
+          "value": 15.391646612628,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|promo|true|selected",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|price × region|east|estimate",
+          "value": -1.14624598045252,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|price × region|east|selected",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|price × region|south|estimate",
+          "value": 0.923412349166839,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|price × region|south|selected",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_mean|0",
+          "value": 753.864588215407,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_low|0",
+          "value": 678.290293629733,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_high|0",
+          "value": 829.438882801081,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||n_selected|0",
+          "value": 7,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_mean|99",
+          "value": 74.7103597424904,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_low|99",
+          "value": 63.7756946876769,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_high|99",
+          "value": 85.645024797304,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||n_selected|99",
+          "value": 7,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_mean|86",
+          "value": 84.4605529619858,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_low|86",
+          "value": 73.5381378292417,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_high|86",
+          "value": 95.3829680947299,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||n_selected|86",
+          "value": 7,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n",
+          "value": 60,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||rmse",
+          "value": 8.64351547360739,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||mae",
+          "value": 7.21411016527716,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||r_squared",
+          "value": 0.898774232024352,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|lambda_choice||verdict",
+          "text": "doubtful"
+        },
+        {
+          "key": "model|||note_edge_small",
+          "text": "The least cross-validated error is at the smallest λ of the path: the best penalty may be smaller still; widen the path with a fixed λ below it, or compare with the fit without a penalty."
+        }
+      ]
+    },
+    {
+      "id": "penalized_linear_enet_grouped",
+      "model": "linear",
+      "data": "data/linear_heteroscedastic.csv",
+      "types": {
+        "day": "integer",
+        "price": "number",
+        "channel": "text",
+        "store": "text",
+        "weight": "number",
+        "quantity": "number"
+      },
+      "params": {
+        "outcome": "quantity",
+        "predictors": [
+          "price",
+          "channel"
+        ],
+        "interactions": [
+          [
+            "price",
+            "channel"
+          ]
+        ],
+        "penalty": "elastic_net",
+        "mixing": "cv",
+        "fold_by": "store",
+        "folds": 4,
+        "weights": "weight",
+        "measure": "mae"
+      },
+      "expect": [
+        {
+          "key": "model|||variant",
+          "text": "penalized"
+        },
+        {
+          "key": "model|||penalty",
+          "text": "elastic_net"
+        },
+        {
+          "key": "model|||cv_measure",
+          "text": "mae"
+        },
+        {
+          "key": "model|||family",
+          "text": "gaussian"
+        },
+        {
+          "key": "model|||n_missing",
+          "value": 3,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lambda",
+          "value": 0.533577440624446,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||log_lambda",
+          "value": -0.628151062964768,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lambda_min",
+          "value": 0.0359319087274211,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lambda_1se",
+          "value": 0.533577440624446,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||log_lambda_min",
+          "value": -3.32612955576587,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||log_lambda_1se",
+          "value": -0.628151062964768,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||mixing",
+          "value": 0.1,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||cv_value",
+          "value": 2.13689962788198,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||cv_se",
+          "value": 0.127864326031217,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n_selected",
+          "value": 3,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|(Intercept)||estimate",
+          "value": 59.3983733168674,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|(Intercept)||selected",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|price||estimate",
+          "value": -6.79018013034105,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|price||selected",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|channel|web|estimate",
+          "value": 3.54414969982694,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|channel|web|selected",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|price × channel|web|estimate",
+          "value": -0.86593945033749,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|price × channel|web|selected",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_mean|0",
+          "value": 5.44505140176222,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_low|0",
+          "value": 4.94997796061328,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_high|0",
+          "value": 5.94012484291117,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||n_selected|0",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_mean|80",
+          "value": 2.08738492606955,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_low|80",
+          "value": 2.03524172888013,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_high|80",
+          "value": 2.13952812325897,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||n_selected|80",
+          "value": 3,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_mean|51",
+          "value": 2.13689962788198,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_low|51",
+          "value": 2.00903530185076,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_high|51",
+          "value": 2.2647639539132,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||n_selected|51",
+          "value": 3,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_mean|83",
+          "value": 2.08742354946497,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_low|83",
+          "value": 2.03600074690013,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_high|83",
+          "value": 2.13884635202981,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||n_selected|83",
+          "value": 3,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n",
+          "value": 117,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||rmse",
+          "value": 2.96711370384756,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||mae",
+          "value": 2.13689962788198,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||r_squared",
+          "value": 0.813713588695135,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|lambda_choice||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "model|||note_mixing_cv",
+          "text": "The mixing was chosen by cross-validation among 0.1, 0.25, 0.5, 0.75, 0.9 and 1, on the same folds: the one with the least error at its best λ."
+        },
+        {
+          "key": "model|||note_grouped_folds",
+          "text": "The folds are grouped: all the rows of a value of the column fold_by fall in the same fold."
+        }
+      ]
+    },
+    {
+      "id": "penalized_linear_noise",
+      "model": "linear",
+      "data": "data/penalized_noise.csv",
+      "types": {
+        "x1": "number",
+        "x2": "number",
+        "x3": "number",
+        "x4": "number",
+        "y": "number"
+      },
+      "params": {
+        "outcome": "y",
+        "predictors": [
+          "x1",
+          "x2",
+          "x3",
+          "x4"
+        ],
+        "penalty": "lasso",
+        "folds": 5,
+        "seed": 2
+      },
+      "expect": [
+        {
+          "key": "model|||variant",
+          "text": "penalized"
+        },
+        {
+          "key": "model|||penalty",
+          "text": "lasso"
+        },
+        {
+          "key": "model|||cv_measure",
+          "text": "mse"
+        },
+        {
+          "key": "model|||family",
+          "text": "gaussian"
+        },
+        {
+          "key": "model|||n_missing",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lambda",
+          "value": 0.995146688397614,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||log_lambda",
+          "value": -0.00486512716437888,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lambda_min",
+          "value": 0.392506359840718,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lambda_1se",
+          "value": 0.995146688397614,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||log_lambda_min",
+          "value": -0.935202538475105,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||log_lambda_1se",
+          "value": -0.00486512716437888,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||mixing",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||cv_value",
+          "value": 3.91719367677757,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||cv_se",
+          "value": 1.17258014691264,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n_selected",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|(Intercept)||estimate",
+          "value": 10.474175,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|(Intercept)||selected",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|x1||estimate",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|x1||selected",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|x2||estimate",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|x2||selected",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|x3||estimate",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|x3||selected",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|x4||estimate",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|x4||selected",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_mean|0",
+          "value": 3.91719367677757,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_low|0",
+          "value": 2.74461352986493,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_high|0",
+          "value": 5.08977382369021,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||n_selected|0",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_mean|10",
+          "value": 3.35032020409777,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_low|10",
+          "value": 2.39794726449532,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_high|10",
+          "value": 4.30269314370021,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||n_selected|10",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_mean|61",
+          "value": 3.62777228835043,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_low|61",
+          "value": 2.76184120301751,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_high|61",
+          "value": 4.49370337368335,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||n_selected|61",
+          "value": 4,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n",
+          "value": 40,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||rmse",
+          "value": 1.9791901568009,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||mae",
+          "value": 1.5266873351001,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||r_squared",
+          "value": -0.0680198728536214,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|lambda_choice||verdict",
+          "text": "doubtful"
+        },
+        {
+          "key": "model|||note_all_zero_1se",
+          "text": "Every coefficient is zero at the chosen λ, the largest within one standard error of the least error: lambda = cv_min keeps the terms of the least error."
+        }
+      ]
+    },
+    {
+      "id": "penalized_logistic_lasso",
+      "model": "logistic",
+      "data": "data/logistic_churn.csv",
+      "types": {
+        "customer": "integer",
+        "tenure": "number",
+        "fee": "number",
+        "change": "number",
+        "plan": "text",
+        "store": "text",
+        "weight": "integer",
+        "churned": "text"
+      },
+      "params": {
+        "outcome": "churned",
+        "event_value": "yes",
+        "predictors": [
+          "tenure",
+          "fee",
+          "change",
+          "plan"
+        ],
+        "penalty": "lasso",
+        "lambda": "cv_min"
+      },
+      "expect": [
+        {
+          "key": "model|||variant",
+          "text": "penalized"
+        },
+        {
+          "key": "model|||penalty",
+          "text": "lasso"
+        },
+        {
+          "key": "model|||cv_measure",
+          "text": "deviance"
+        },
+        {
+          "key": "model|||family",
+          "text": "binomial"
+        },
+        {
+          "key": "model|||n_missing",
+          "value": 3,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lambda",
+          "value": 0.00590199756622645,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||log_lambda",
+          "value": -5.13246441482568,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lambda_min",
+          "value": 0.00590199756622645,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lambda_1se",
+          "value": 0.0876427906974937,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||log_lambda_min",
+          "value": -5.13246441482568,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||log_lambda_1se",
+          "value": -2.43448592202458,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||mixing",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||cv_value",
+          "value": 1.15253686714263,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||cv_se",
+          "value": 0.0630013818035844,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n_selected",
+          "value": 5,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|(Intercept)||estimate",
+          "value": -0.770312957429449,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|(Intercept)||selected",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|(Intercept)||odds_ratio",
+          "value": 0.462868187603497,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|tenure||estimate",
+          "value": -0.0320676667743716,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|tenure||selected",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|tenure||odds_ratio",
+          "value": 0.968441048580076,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|fee||estimate",
+          "value": 0.0188008910585438,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|fee||selected",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|fee||odds_ratio",
+          "value": 1.01897874063927,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|change||estimate",
+          "value": 0.0241110009903407,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|change||selected",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|change||odds_ratio",
+          "value": 1.02440402144079,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|plan|plus|estimate",
+          "value": -0.266742240963431,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|plan|plus|selected",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|plan|plus|odds_ratio",
+          "value": 0.76587045605634,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|plan|premium|estimate",
+          "value": -0.443779451077642,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|plan|premium|selected",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|plan|premium|odds_ratio",
+          "value": 0.641606910936785,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_mean|0",
+          "value": 1.29748298283795,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_low|0",
+          "value": 1.23981984445973,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_high|0",
+          "value": 1.35514612121616,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||n_selected|0",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_mean|35",
+          "value": 1.15253686714263,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_low|35",
+          "value": 1.08953548533905,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_high|35",
+          "value": 1.21553824894621,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||n_selected|35",
+          "value": 5,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_mean|6",
+          "value": 1.2060875808612,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_low|6",
+          "value": 1.1531916309943,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_high|6",
+          "value": 1.25898353072811,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||n_selected|6",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_mean|52",
+          "value": 1.15293430989765,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_low|52",
+          "value": 1.08714439094103,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_high|52",
+          "value": 1.21872422885427,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||n_selected|52",
+          "value": 5,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||link",
+          "text": "logit"
+        },
+        {
+          "key": "model|||event_value",
+          "text": "yes"
+        },
+        {
+          "key": "model|||n",
+          "value": 197,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||events",
+          "value": 67,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||auc",
+          "value": 0.715154994259472,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||auc_ci_low",
+          "value": 0.642425781863755,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||auc_ci_high",
+          "value": 0.787884206655189,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||brier",
+          "value": 0.198312926729822,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||threshold",
+          "value": 0.5,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||accuracy",
+          "value": 0.6751269035533,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||sensitivity",
+          "value": 0.373134328358209,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||specificity",
+          "value": 0.830769230769231,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||precision",
+          "value": 0.531914893617021,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||deviance",
+          "value": 227.049762827098,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|hosmer_lemeshow||verdict",
+          "text": "not_computed"
+        },
+        {
+          "key": "assumption|separation||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|epv||value",
+          "value": 13.4,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|epv||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|lambda_choice||verdict",
+          "text": "ok"
+        }
+      ]
+    },
+    {
+      "id": "penalized_logistic_enet",
+      "model": "logistic",
+      "data": "data/logistic_churn.csv",
+      "types": {
+        "customer": "integer",
+        "tenure": "number",
+        "fee": "number",
+        "change": "number",
+        "plan": "text",
+        "store": "text",
+        "weight": "integer",
+        "churned": "text"
+      },
+      "params": {
+        "outcome": "churned",
+        "event_value": "yes",
+        "predictors": [
+          "tenure",
+          "fee",
+          "change",
+          "plan"
+        ],
+        "penalty": "elastic_net",
+        "mixing": 0.5
+      },
+      "expect": [
+        {
+          "key": "model|||variant",
+          "text": "penalized"
+        },
+        {
+          "key": "model|||penalty",
+          "text": "elastic_net"
+        },
+        {
+          "key": "model|||cv_measure",
+          "text": "deviance"
+        },
+        {
+          "key": "model|||family",
+          "text": "binomial"
+        },
+        {
+          "key": "model|||n_missing",
+          "value": 3,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lambda",
+          "value": 0.145525169114346,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||log_lambda",
+          "value": -1.92740622372678,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lambda_min",
+          "value": 0.0118039951324529,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lambda_1se",
+          "value": 0.145525169114346,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||log_lambda_min",
+          "value": -4.43931723426574,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||log_lambda_1se",
+          "value": -1.92740622372678,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||mixing",
+          "value": 0.5,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||cv_value",
+          "value": 1.20420028535794,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||cv_se",
+          "value": 0.0525866036853079,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n_selected",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|(Intercept)||estimate",
+          "value": -0.686863392995653,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|(Intercept)||selected",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|(Intercept)||odds_ratio",
+          "value": 0.503151785988003,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|tenure||estimate",
+          "value": -0.01192415508958,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|tenure||selected",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|tenure||odds_ratio",
+          "value": 0.98814665591447,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|fee||estimate",
+          "value": 0.00636837619472226,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|fee||selected",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|fee||odds_ratio",
+          "value": 1.00638869741723,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|change||estimate",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|change||selected",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|change||odds_ratio",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|plan|plus|estimate",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|plan|plus|selected",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|plan|plus|odds_ratio",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|plan|premium|estimate",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|plan|premium|selected",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|plan|premium|odds_ratio",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_mean|0",
+          "value": 1.29798490258223,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_low|0",
+          "value": 1.24043516099653,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_high|0",
+          "value": 1.35553464416794,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||n_selected|0",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_mean|35",
+          "value": 1.15147837241855,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_low|35",
+          "value": 1.08970150076046,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_high|35",
+          "value": 1.21325524407664,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||n_selected|35",
+          "value": 5,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_mean|8",
+          "value": 1.20420028535794,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_low|8",
+          "value": 1.15161368167263,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_high|8",
+          "value": 1.25678688904324,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||n_selected|8",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_mean|55",
+          "value": 1.15261528843395,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_low|55",
+          "value": 1.08693100497714,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_high|55",
+          "value": 1.21829957189077,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||n_selected|55",
+          "value": 5,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||link",
+          "text": "logit"
+        },
+        {
+          "key": "model|||event_value",
+          "text": "yes"
+        },
+        {
+          "key": "model|||n",
+          "value": 197,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||events",
+          "value": 67,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||auc",
+          "value": 0.691733639494834,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||auc_ci_low",
+          "value": 0.616271711090946,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||auc_ci_high",
+          "value": 0.767195567898721,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||brier",
+          "value": 0.207377811846525,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||threshold",
+          "value": 0.5,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||accuracy",
+          "value": 0.649746192893401,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||sensitivity",
+          "value": 0.0298507462686567,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||specificity",
+          "value": 0.969230769230769,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||precision",
+          "value": 0.333333333333333,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||deviance",
+          "value": 237.227456215513,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|hosmer_lemeshow||verdict",
+          "text": "not_computed"
+        },
+        {
+          "key": "assumption|separation||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|epv||value",
+          "value": 13.4,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|epv||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|lambda_choice||verdict",
+          "text": "ok"
+        }
+      ]
+    },
+    {
+      "id": "penalized_logistic_ridge_auc",
+      "model": "logistic",
+      "data": "data/logistic_churn.csv",
+      "types": {
+        "customer": "integer",
+        "tenure": "number",
+        "fee": "number",
+        "change": "number",
+        "plan": "text",
+        "store": "text",
+        "weight": "integer",
+        "churned": "text"
+      },
+      "params": {
+        "outcome": "churned",
+        "event_value": "yes",
+        "predictors": [
+          "tenure",
+          "fee",
+          "change",
+          "plan"
+        ],
+        "penalty": "ridge",
+        "measure": "auc",
+        "folds": 5
+      },
+      "expect": [
+        {
+          "key": "model|||variant",
+          "text": "penalized"
+        },
+        {
+          "key": "model|||penalty",
+          "text": "ridge"
+        },
+        {
+          "key": "model|||cv_measure",
+          "text": "auc"
+        },
+        {
+          "key": "model|||family",
+          "text": "binomial"
+        },
+        {
+          "key": "model|||n_missing",
+          "value": 3,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lambda",
+          "value": 139.552107588014,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||log_lambda",
+          "value": 4.93843806261292,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lambda_min",
+          "value": 0.0243871271290982,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lambda_1se",
+          "value": 139.552107588014,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||log_lambda_min",
+          "value": -3.71369986257683,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||log_lambda_1se",
+          "value": 4.93843806261292,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||mixing",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||cv_value",
+          "value": 0.751472808980587,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||cv_se",
+          "value": 0.0171606337741215,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n_selected",
+          "value": 5,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|(Intercept)||estimate",
+          "value": -0.66298605184327,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|(Intercept)||selected",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|(Intercept)||odds_ratio",
+          "value": 0.515310291573726,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|tenure||estimate",
+          "value": -5.20476696412799e-05,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|tenure||selected",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|tenure||odds_ratio",
+          "value": 0.999947953684815,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|fee||estimate",
+          "value": 3.20845822725307e-05,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|fee||selected",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|fee||odds_ratio",
+          "value": 1.00003208509699,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|change||estimate",
+          "value": 3.84541836132208e-05,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|change||selected",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|change||odds_ratio",
+          "value": 1.00003845492298,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|plan|plus|estimate",
+          "value": -0.000365003146548085,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|plan|plus|selected",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|plan|plus|odds_ratio",
+          "value": 0.999635063458996,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|plan|premium|estimate",
+          "value": -0.000360681436780139,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|plan|premium|selected",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|plan|premium|odds_ratio",
+          "value": 0.99963938360095,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_mean|0",
+          "value": 0.589819514946418,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_low|0",
+          "value": 0.533035917390305,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_high|0",
+          "value": 0.646603112502532,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||n_selected|0",
+          "value": 5,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_mean|94",
+          "value": 0.756839601186252,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_low|94",
+          "value": 0.734774892406998,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_high|94",
+          "value": 0.778904309965507,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||n_selected|94",
+          "value": 5,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_mean|1",
+          "value": 0.751472808980587,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_low|1",
+          "value": 0.734312175206465,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_high|1",
+          "value": 0.768633442754709,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||n_selected|1",
+          "value": 5,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_mean|99",
+          "value": 0.756159022130039,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_low|99",
+          "value": 0.733717800945924,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_high|99",
+          "value": 0.778600243314154,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||n_selected|99",
+          "value": 5,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||link",
+          "text": "logit"
+        },
+        {
+          "key": "model|||event_value",
+          "text": "yes"
+        },
+        {
+          "key": "model|||n",
+          "value": 197,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||events",
+          "value": 67,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||auc",
+          "value": 0.449253731343284,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||auc_ci_low",
+          "value": 0.362956912133868,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||auc_ci_high",
+          "value": 0.535550550552699,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||brier",
+          "value": 0.229666688047196,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||threshold",
+          "value": 0.5,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||accuracy",
+          "value": 0.65989847715736,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||sensitivity",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||specificity",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||precision",
+          "value": null,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||deviance",
+          "value": 257.239012408681,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|hosmer_lemeshow||verdict",
+          "text": "not_computed"
+        },
+        {
+          "key": "assumption|separation||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|epv||value",
+          "value": 13.4,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|epv||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|lambda_choice||verdict",
+          "text": "ok"
+        }
+      ]
+    },
+    {
+      "id": "penalized_logistic_enet_fixed",
+      "model": "logistic",
+      "data": "data/logistic_churn.csv",
+      "types": {
+        "customer": "integer",
+        "tenure": "number",
+        "fee": "number",
+        "change": "number",
+        "plan": "text",
+        "store": "text",
+        "weight": "integer",
+        "churned": "text"
+      },
+      "params": {
+        "outcome": "churned",
+        "event_value": "yes",
+        "predictors": [
+          "tenure",
+          "fee",
+          "change",
+          "plan"
+        ],
+        "penalty": "elastic_net",
+        "mixing": 0.5,
+        "lambda": 0.02,
+        "measure": "class",
+        "weights": "weight",
+        "threshold": 0.4,
+        "standardize": false
+      },
+      "expect": [
+        {
+          "key": "model|||variant",
+          "text": "penalized"
+        },
+        {
+          "key": "model|||penalty",
+          "text": "elastic_net"
+        },
+        {
+          "key": "model|||cv_measure",
+          "text": "class"
+        },
+        {
+          "key": "model|||family",
+          "text": "binomial"
+        },
+        {
+          "key": "model|||n_missing",
+          "value": 3,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lambda",
+          "value": 0.02,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||log_lambda",
+          "value": -3.91202300542815,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lambda_min",
+          "value": 1.07000032289208,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lambda_1se",
+          "value": 9.09236450800901,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||log_lambda_min",
+          "value": 0.067658950242065,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||log_lambda_1se",
+          "value": 2.20743499625673,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||mixing",
+          "value": 0.5,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||cv_value",
+          "value": 0.325581395348837,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||cv_se",
+          "value": 0.0363104552532567,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n_selected",
+          "value": 4,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|(Intercept)||estimate",
+          "value": -1.29900485397516,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|(Intercept)||selected",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|(Intercept)||odds_ratio",
+          "value": 0.272803136955513,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|tenure||estimate",
+          "value": -0.0250604996627257,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|tenure||selected",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|tenure||odds_ratio",
+          "value": 0.975250907892485,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|fee||estimate",
+          "value": 0.0208025251962976,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|fee||selected",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|fee||odds_ratio",
+          "value": 1.02102040592397,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|change||estimate",
+          "value": 0.0275484163333816,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|change||selected",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|change||odds_ratio",
+          "value": 1.02793138257098,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|plan|plus|estimate",
+          "value": -0.176295697957615,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|plan|plus|selected",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|plan|plus|odds_ratio",
+          "value": 0.838370042371807,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|plan|premium|estimate",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|plan|premium|selected",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|plan|premium|odds_ratio",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_mean|0",
+          "value": 0.335917312661499,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_low|0",
+          "value": 0.291445767032151,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_high|0",
+          "value": 0.380388858290846,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||n_selected|0",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_mean|23",
+          "value": 0.310077519379845,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_low|23",
+          "value": 0.274858353973664,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_high|23",
+          "value": 0.345296684786026,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||n_selected|23",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_mean|98",
+          "value": 0.333333333333333,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_low|98",
+          "value": 0.302706817797353,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_high|98",
+          "value": 0.363959848869314,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||n_selected|98",
+          "value": 5,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||link",
+          "text": "logit"
+        },
+        {
+          "key": "model|||event_value",
+          "text": "yes"
+        },
+        {
+          "key": "model|||n",
+          "value": 387,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||events",
+          "value": 130,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||auc",
+          "value": 0.691349895240946,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||auc_ci_low",
+          "value": 0.637976632126053,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||auc_ci_high",
+          "value": 0.744723158355839,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||brier",
+          "value": 0.204591628431974,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||threshold",
+          "value": 0.4,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||accuracy",
+          "value": 0.656330749354005,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||sensitivity",
+          "value": 0.484615384615385,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||specificity",
+          "value": 0.743190661478599,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||precision",
+          "value": 0.488372093023256,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||deviance",
+          "value": 457.141014657415,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|hosmer_lemeshow||verdict",
+          "text": "not_computed"
+        },
+        {
+          "key": "assumption|separation||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|epv||value",
+          "value": 26,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|epv||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|lambda_choice||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "model|||note_fixed_lambda",
+          "text": "λ is fixed: it is added to glmnet's path, and the coefficients and the out-of-fold numbers are read at it."
+        },
+        {
+          "key": "model|||note_not_standardized",
+          "text": "The predictors are penalized on their own scales (standardize = false): a predictor with large values is penalized less than one with small values."
+        }
+      ]
+    },
+    {
+      "id": "penalized_logistic_separated",
+      "model": "logistic",
+      "data": "data/logistic_separated.csv",
+      "types": {
+        "dose": "number",
+        "group": "text",
+        "status": "text"
+      },
+      "params": {
+        "outcome": "status",
+        "event_value": "sick",
+        "predictors": [
+          "dose",
+          "group"
+        ],
+        "penalty": "lasso",
+        "folds": 5
+      },
+      "expect": [
+        {
+          "key": "model|||variant",
+          "text": "penalized"
+        },
+        {
+          "key": "model|||penalty",
+          "text": "lasso"
+        },
+        {
+          "key": "model|||cv_measure",
+          "text": "deviance"
+        },
+        {
+          "key": "model|||family",
+          "text": "binomial"
+        },
+        {
+          "key": "model|||n_missing",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lambda",
+          "value": 0.000122589527712842,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||log_lambda",
+          "value": -9.0066689564397,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lambda_min",
+          "value": 6.39182813516727e-05,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||lambda_1se",
+          "value": 0.000122589527712842,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||log_lambda_min",
+          "value": -9.6579051443572,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||log_lambda_1se",
+          "value": -9.0066689564397,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||mixing",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||cv_value",
+          "value": 0.00807410483773972,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||cv_se",
+          "value": 0.00351208335777596,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||n_selected",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|(Intercept)||estimate",
+          "value": -94.7132174312015,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|(Intercept)||selected",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|(Intercept)||odds_ratio",
+          "value": 7.35482436833808e-42,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|dose||estimate",
+          "value": 18.0215487488522,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|dose||selected",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|dose||odds_ratio",
+          "value": 67090213.9713567,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|group|b|estimate",
+          "value": 3.60668528622079,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|group|b|selected",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "coef|group|b|odds_ratio",
+          "value": 36.8437237850603,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_mean|0",
+          "value": 1.44243563315304,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_low|0",
+          "value": 1.31460917114025,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_high|0",
+          "value": 1.57026209516582,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||n_selected|0",
+          "value": 0,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_mean|94",
+          "value": 0.00574444070351758,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_low|94",
+          "value": 0.0030902314186446,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_high|94",
+          "value": 0.00839864998839055,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||n_selected|94",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_mean|87",
+          "value": 0.00807410483773972,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_low|87",
+          "value": 0.00456202147996376,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||cv_high|87",
+          "value": 0.0115861881955157,
+          "rel": 1e-09
+        },
+        {
+          "key": "cv|||n_selected|87",
+          "value": 2,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||link",
+          "text": "logit"
+        },
+        {
+          "key": "model|||event_value",
+          "text": "sick"
+        },
+        {
+          "key": "model|||n",
+          "value": 40,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||events",
+          "value": 16,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||auc",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||auc_ci_low",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||auc_ci_high",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||brier",
+          "value": 0.000201897947547559,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||threshold",
+          "value": 0.5,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||accuracy",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||sensitivity",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||specificity",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||precision",
+          "value": 1,
+          "rel": 1e-09
+        },
+        {
+          "key": "model|||deviance",
+          "value": 0.322356692005285,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|hosmer_lemeshow||verdict",
+          "text": "not_computed"
+        },
+        {
+          "key": "assumption|separation|dose|verdict",
+          "text": "doubtful"
+        },
+        {
+          "key": "assumption|separation|group: b|verdict",
+          "text": "doubtful"
+        },
+        {
+          "key": "assumption|epv||value",
+          "value": 8,
+          "rel": 1e-09
+        },
+        {
+          "key": "assumption|epv||verdict",
+          "text": "doubtful"
+        },
+        {
+          "key": "assumption|lambda_choice||verdict",
+          "text": "doubtful"
+        },
+        {
+          "key": "model|||note_edge_small",
+          "text": "The least cross-validated error is at the smallest λ of the path: the best penalty may be smaller still; widen the path with a fixed λ below it, or compare with the fit without a penalty."
+        }
+      ]
+    },
+    {
+      "id": "penalized_refuses_few_groups",
+      "model": "linear",
+      "data": "data/linear_heteroscedastic.csv",
+      "types": {
+        "day": "integer",
+        "price": "number",
+        "channel": "text",
+        "store": "text",
+        "weight": "number",
+        "quantity": "number"
+      },
+      "params": {
+        "outcome": "quantity",
+        "predictors": [
+          "price",
+          "channel"
+        ],
+        "penalty": "lasso",
+        "fold_by": "store"
+      },
+      "expect": [],
+      "refuses": {
+        "code": "too_few_groups",
+        "message": "the column «store» has 8 values: grouped folds need at least as many values as folds (10): choose fewer folds, or another column"
+      }
+    },
+    {
+      "id": "penalized_refuses_one_term",
+      "model": "linear",
+      "data": "data/linear_categorical.csv",
+      "types": {
+        "region": "text",
+        "price": "number",
+        "price_cents": "number",
+        "month": "integer",
+        "promo": "boolean",
+        "sales": "number"
+      },
+      "params": {
+        "outcome": "sales",
+        "predictors": [
+          "price"
+        ],
+        "penalty": "ridge"
+      },
+      "expect": [],
+      "refuses": {
+        "code": "one_term",
+        "message": "a penalty needs at least two terms besides the intercept, and the model has 1: add a predictor, or turn the penalty off"
+      }
+    },
+    {
+      "id": "penalized_refuses_few_rows",
+      "model": "linear",
+      "data": "data/linear_tiny.csv",
+      "types": {
+        "y": "number",
+        "x1": "number",
+        "x2": "number",
+        "g": "text"
+      },
+      "params": {
+        "outcome": "y",
+        "predictors": [
+          "x1",
+          "x2",
+          "g"
+        ],
+        "penalty": "lasso",
+        "folds": 3
+      },
+      "expect": [],
+      "refuses": {
+        "code": "too_few_rows",
+        "message": "the model has 4 rows it can use: cross-validation in 3 folds needs at least 9 (3 in each fold): choose fewer folds"
+      }
+    },
+    {
+      "id": "penalized_refuses_auc_few_rows",
+      "model": "logistic",
+      "data": "data/logistic_separated.csv",
+      "types": {
+        "dose": "number",
+        "group": "text",
+        "status": "text"
+      },
+      "params": {
+        "outcome": "status",
+        "event_value": "sick",
+        "predictors": [
+          "dose",
+          "group"
+        ],
+        "penalty": "lasso",
+        "measure": "auc",
+        "folds": 5
+      },
+      "expect": [],
+      "refuses": {
+        "code": "auc_few_rows",
+        "message": "the AUC of a fold needs at least 10 rows in it: with 40 rows choose at most 4 folds, or measure = deviance"
       }
     }
   ]

@@ -38,6 +38,7 @@ suppressPackageStartupMessages({
   library(nortest)
   library(brglm2)
   library(detectseparation)
+  library(glmnet)
   library(jsonlite)
 })
 
@@ -667,9 +668,258 @@ logistic_cases <- function() {
   cases
 }
 
-cases <- c(linear_cases(), logistic_cases())
+# ── the penalties (lane M3) ──────────────────────────────────────────────────
+# By glmnet::cv.glmnet called directly, on the design stats::model.matrix makes from a formula
+# (the same columns in the same order as the runner's, the intercept left to glmnet), with the
+# folds drawn the way the specification says: the node's seed set (Mersenne-Twister, Inversion,
+# Rejection), then sample(rep(1:K, length.out = n)), cv.glmnet's own draw; grouped, the values
+# of the fold_by column in text order drawn into the folds the same way, every row going with
+# its value. That foldid is handed to cv.glmnet, which then computes the very numbers the runner
+# reads: the path, the curve, λ min and 1se, the coefficients (coef(cv, s = …)), the
+# out-of-fold predictions (keep = TRUE). A fixed λ is added to glmnet's own path for the rows;
+# mixing = cv runs the grid on the same folds and keeps the least error at each one's best λ.
+# The out-of-fold numbers are computed here from fit.preval: R², RMSE and MAE; for the logistic
+# the AUC and DeLong's interval by the pairwise kernel on the rows repeated by their weight (as
+# above), the Brier score, the rates at the threshold, the deviance from dbinom.
 
-packages <- c("stats", "sandwich", "lmtest", "nortest", "brglm2", "detectseparation", "jsonlite")
+# 40 rows of four numbers and an outcome that none of them explains (the lasso keeps nothing).
+noise <- function() {
+  set.seed(20261125)
+  n <- 40
+  data.frame(x1 = round(stats::rnorm(n), 3), x2 = round(stats::rnorm(n), 3), x3 = round(stats::rnorm(n), 3),
+             x4 = round(stats::runif(n, 0, 10), 2), y = round(stats::rnorm(n, 10, 2), 3))
+}
+
+penalized_foldid <- function(n, folds, seed = 1, groups = NULL) {
+  set.seed(seed, kind = "Mersenne-Twister", normal.kind = "Inversion", sample.kind = "Rejection")
+  if (is.null(groups)) return(sample(rep(seq_len(folds), length.out = n)))
+  values <- sort(unique(groups), method = "radix")
+  of_value <- sample(rep(seq_len(folds), length.out = length(values)))
+  of_value[match(groups, values)]
+}
+
+penalized_case <- function(id, model, data, file, types, params, formula, map, event = NULL, n_missing = 0,
+                           notes = character(), rel = 1e-9) {
+  logistic <- model == "logistic"
+  penalty <- params$penalty
+  folds <- params$folds %||% 10
+  measure <- params$measure %||% (if (logistic) "deviance" else "mse")
+  standardize <- params$standardize %||% TRUE
+  choice <- params$lambda %||% "cv_1se"
+  fixed <- if (is.numeric(choice)) choice else NULL
+  threshold <- params$threshold %||% 0.5
+  outcome <- all.vars(formula)[[1]]
+  X <- stats::model.matrix(formula, data)[, -1, drop = FALSE]
+  y <- if (logistic) as.numeric(as.character(data[[outcome]]) == event) else data[[outcome]]
+  w <- if (is.null(params$weights)) NULL else data[[params$weights]]
+  ww <- if (is.null(w)) rep(1, nrow(X)) else w
+  groups <- if (is.null(params$fold_by)) NULL else as.character(data[[params$fold_by]])
+  foldid <- penalized_foldid(nrow(X), folds, params$seed %||% 1, groups)
+  family <- if (logistic) "binomial" else "gaussian"
+  one <- function(a) {
+    lambda <- NULL
+    if (!is.null(fixed)) {
+      path <- glmnet::glmnet(X, y, weights = w, family = family, alpha = a, standardize = standardize)$lambda
+      lambda <- sort(unique(c(path, fixed)), decreasing = TRUE)
+    }
+    glmnet::cv.glmnet(X, y, weights = w, family = family, alpha = a, standardize = standardize, lambda = lambda,
+                      foldid = foldid, type.measure = measure, keep = TRUE)
+  }
+  grid <- c(0.1, 0.25, 0.5, 0.75, 0.9, 1)
+  mixing <- switch(penalty, ridge = 0, lasso = 1, elastic_net = params$mixing %||% 0.5)
+  if (identical(mixing, "cv")) {
+    fits <- lapply(grid, one)
+    at <- function(f) if (is.null(fixed)) which(f$lambda == f$lambda.min) else which(f$lambda == fixed)
+    score <- vapply(fits, function(f) f$cvm[[at(f)]], 0)
+    best <- if (measure == "auc") which.max(score) else which.min(score)
+    cv <- fits[[best]]
+    mixing <- grid[[best]]
+  } else {
+    cv <- one(mixing)
+  }
+  lam <- if (!is.null(fixed)) fixed else if (choice == "cv_min") cv$lambda.min else cv$lambda.1se
+  idx <- which(cv$lambda == lam)
+  i_min <- which(cv$lambda == cv$lambda.min)
+  b <- as.matrix(stats::coef(cv, s = lam))[, 1]
+  n_selected <- sum(b[-1] != 0)
+  expect <- list(txt("model|||variant", "penalized"), txt("model|||penalty", penalty), txt("model|||cv_measure", measure),
+                 txt("model|||family", family), num("model|||n_missing", n_missing),
+                 num("model|||lambda", lam, rel), num("model|||log_lambda", log(lam), rel),
+                 num("model|||lambda_min", cv$lambda.min, rel), num("model|||lambda_1se", cv$lambda.1se, rel),
+                 num("model|||log_lambda_min", log(cv$lambda.min), rel), num("model|||log_lambda_1se", log(cv$lambda.1se), rel),
+                 num("model|||mixing", mixing), num("model|||cv_value", cv$cvm[[idx]], rel), num("model|||cv_se", cv$cvsd[[idx]], rel),
+                 num("model|||n_selected", n_selected))
+  for (name in names(b)) {
+    expect <- c(expect, list(num(coef_key(map, name, "estimate"), b[[name]], rel),
+                             num(coef_key(map, name, "selected"), as.numeric(b[[name]] != 0 || name == "(Intercept)"))))
+    if (logistic) expect <- c(expect, list(num(coef_key(map, name, "odds_ratio"), exp(b[[name]]), rel)))
+  }
+  # the curve: its first and last λ, the least error's and the 1se's
+  for (i in unique(c(1L, i_min, which(cv$lambda == cv$lambda.1se), length(cv$lambda)))) {
+    k <- i - 1L
+    expect <- c(expect, list(num(paste0("cv|||cv_mean|", k), cv$cvm[[i]], rel), num(paste0("cv|||cv_low|", k), cv$cvlo[[i]], rel),
+                             num(paste0("cv|||cv_high|", k), cv$cvup[[i]], rel), num(paste0("cv|||n_selected|", k), cv$nzero[[i]])))
+  }
+  pre <- cv$fit.preval[, idx]
+  if (logistic) {
+    p <- 1 / (1 + exp(-pre))
+    rep_ <- rep(seq_along(y), ww)
+    yy <- y[rep_]
+    pp <- p[rep_]
+    x1 <- pp[yy == 1]
+    x0 <- pp[yy == 0]
+    psi <- outer(x1, x0, ">") + 0.5 * outer(x1, x0, "==")
+    auc <- mean(psi)
+    s <- sqrt(stats::var(rowMeans(psi)) / length(x1) + stats::var(colMeans(psi)) / length(x0))
+    z <- stats::qnorm(1 - (params$alpha %||% 0.05) / 2)
+    hat <- as.numeric(pp >= threshold)
+    expect <- c(expect, list(
+      txt("model|||link", "logit"), txt("model|||event_value", event),
+      num("model|||n", sum(ww)), num("model|||events", sum(ww * y)), num("model|||auc", auc, rel),
+      num("model|||auc_ci_low", max(0, auc - z * s), rel), num("model|||auc_ci_high", min(1, auc + z * s), rel),
+      num("model|||brier", mean((pp - yy)^2), rel), num("model|||threshold", threshold),
+      num("model|||accuracy", mean(hat == yy)), num("model|||sensitivity", mean(hat[yy == 1] == 1)),
+      num("model|||specificity", mean(hat[yy == 0] == 0)), num("model|||precision", mean(yy[hat == 1] == 1)),
+      num("model|||deviance", -2 * sum(stats::dbinom(yy, 1, pp, log = TRUE)), rel)))
+    # separation by detectseparation, the events per variable
+    d2 <- data.frame(.y = y, X)
+    sep <- stats::glm(.y ~ ., family = stats::binomial(), data = d2, weights = ww, method = detectseparation::detect_separation)
+    expect <- c(expect, list(txt("assumption|hosmer_lemeshow||verdict", "not_computed")))
+    if (!any(is.infinite(sep$coefficients))) expect <- c(expect, list(txt("assumption|separation||verdict", "ok")))
+    infinite <- sub("^X[.]", "", names(sep$coefficients)[is.infinite(sep$coefficients)])
+    for (name in setdiff(names(b), "(Intercept)")) {
+      if (!make.names(name) %in% infinite) next
+      t <- map[[name]]
+      label <- if (is.na(t[[2]])) t[[1]] else paste0(t[[1]], ": ", t[[2]])
+      expect <- c(expect, list(txt(paste0("assumption|separation|", label, "|verdict"), "doubtful")))
+    }
+    epv <- min(sum(ww * y), sum(ww) - sum(ww * y)) / ncol(X)
+    expect <- c(expect, list(num("assumption|epv||value", epv), txt("assumption|epv||verdict", if (epv < 10) "doubtful" else "ok")))
+  } else {
+    e <- y - pre
+    expect <- c(expect, list(
+      num("model|||n", nrow(X)),
+      num("model|||rmse", sqrt(stats::weighted.mean(e^2, ww)), rel), num("model|||mae", stats::weighted.mean(abs(e), ww), rel),
+      num("model|||r_squared", 1 - sum(ww * e^2) / sum(ww * (y - stats::weighted.mean(y, ww))^2), rel)))
+  }
+  edge <- i_min == length(cv$lambda) || i_min == 1L
+  expect <- c(expect, list(txt("assumption|lambda_choice||verdict", if (edge || n_selected == 0 || idx == 1L) "doubtful" else "ok")))
+  for (note in names(notes)) expect <- c(expect, list(txt(paste0("model|||note_", note), notes[[note]])))
+  list(id = id, model = model, data = file, types = types, params = params, expect = expect)
+}
+
+penalized_cases <- function() {
+  cases <- list()
+  edge_small <- paste0("The least cross-validated error is at the smallest λ of the path: the best penalty may be smaller ",
+                       "still; widen the path with a fixed λ below it, or compare with the fit without a penalty.")
+  # the categorical table: lasso at λ 1se; ridge at λ min, the least error at the path's smallest λ
+  cat_ <- utils::read.csv(file.path(data_dir, "linear_categorical.csv"), na.strings = "", encoding = "UTF-8", stringsAsFactors = FALSE)
+  cat_types <- list(region = "text", price = "number", price_cents = "number", month = "integer", promo = "boolean",
+                    sales = "number")
+  cat_$region <- factor(cat_$region, levels = c("north", "east", "south"))
+  cat_$promo <- factor(tolower(as.character(cat_$promo)), levels = c("false", "true"))
+  map_c <- list("(Intercept)" = c("(Intercept)", NA), price = c("price", NA), regioneast = c("region", "east"),
+                regionsouth = c("region", "south"), month = c("month", NA), promotrue = c("promo", "true"),
+                "price:regioneast" = c("price × region", "east"), "price:regionsouth" = c("price × region", "south"))
+  base_c <- list(outcome = "sales", predictors = list("price", "region", "month", "promo"), reference = list(region = "north"),
+                 interactions = list(list("price", "region")))
+  f_c <- sales ~ price + region + month + promo + price:region
+  cases[[length(cases) + 1L]] <- penalized_case("penalized_linear_lasso", "linear", cat_, "data/linear_categorical.csv", cat_types,
+                                                c(base_c, list(penalty = "lasso")), f_c, map_c)
+  cases[[length(cases) + 1L]] <- penalized_case("penalized_linear_ridge_edge", "linear", cat_, "data/linear_categorical.csv",
+                                                cat_types, c(base_c, list(penalty = "ridge", lambda = "cv_min")), f_c, map_c,
+                                                notes = c(edge_small = edge_small))
+
+  # the heteroscedastic table: elastic net, its mixing by cross-validation, folds grouped by store, case weights, MAE
+  het <- utils::read.csv(file.path(data_dir, "linear_heteroscedastic.csv"), na.strings = "", encoding = "UTF-8",
+                         stringsAsFactors = FALSE)
+  het_types <- list(day = "integer", price = "number", channel = "text", store = "text", weight = "number", quantity = "number")
+  used <- stats::complete.cases(het[, c("quantity", "price", "channel", "store", "weight")])
+  h <- het[used, ]
+  rownames(h) <- NULL
+  h$channel <- factor(h$channel, levels = c("shop", "web"))
+  map_h <- list("(Intercept)" = c("(Intercept)", NA), price = c("price", NA), channelweb = c("channel", "web"),
+                "price:channelweb" = c("price × channel", "web"))
+  cases[[length(cases) + 1L]] <- penalized_case(
+    "penalized_linear_enet_grouped", "linear", h, "data/linear_heteroscedastic.csv", het_types,
+    list(outcome = "quantity", predictors = list("price", "channel"), interactions = list(list("price", "channel")),
+         penalty = "elastic_net", mixing = "cv", fold_by = "store", folds = 4, weights = "weight", measure = "mae"),
+    quantity ~ price + channel + price:channel, map_h, n_missing = sum(!used),
+    notes = c(mixing_cv = paste0("The mixing was chosen by cross-validation among 0.1, 0.25, 0.5, 0.75, 0.9 and 1, on the same ",
+                                 "folds: the one with the least error at its best λ."),
+              grouped_folds = "The folds are grouped: all the rows of a value of the column fold_by fall in the same fold."))
+
+  # noise: at λ 1se the lasso keeps no term (at λ min two, by chance)
+  nz <- write_table(noise(), "penalized_noise.csv")
+  nz_types <- list(x1 = "number", x2 = "number", x3 = "number", x4 = "number", y = "number")
+  cases[[length(cases) + 1L]] <- penalized_case(
+    "penalized_linear_noise", "linear", nz, "data/penalized_noise.csv", nz_types,
+    list(outcome = "y", predictors = list("x1", "x2", "x3", "x4"), penalty = "lasso", folds = 5, seed = 2),
+    y ~ x1 + x2 + x3 + x4, list("(Intercept)" = c("(Intercept)", NA), x1 = c("x1", NA), x2 = c("x2", NA), x3 = c("x3", NA),
+                                x4 = c("x4", NA)),
+    notes = c(all_zero_1se = paste0("Every coefficient is zero at the chosen λ, the largest within one standard error of the ",
+                                    "least error: lambda = cv_min keeps the terms of the least error.")))
+
+  # the churn table: lasso at λ min; ridge by the AUC; elastic net at a fixed λ with frequency weights
+  ch <- utils::read.csv(file.path(data_dir, "logistic_churn.csv"), na.strings = "", encoding = "UTF-8", stringsAsFactors = FALSE)
+  ch_types <- list(customer = "integer", tenure = "number", fee = "number", change = "number", plan = "text", store = "text",
+                   weight = "integer", churned = "text")
+  used <- stats::complete.cases(ch[, c("churned", "tenure", "fee", "change", "plan")])
+  d <- ch[used, ]
+  rownames(d) <- NULL
+  d$plan <- factor(d$plan, levels = c("basic", "plus", "premium"))
+  map_d <- list("(Intercept)" = c("(Intercept)", NA), tenure = c("tenure", NA), fee = c("fee", NA), change = c("change", NA),
+                planplus = c("plan", "plus"), planpremium = c("plan", "premium"))
+  base_d <- list(outcome = "churned", event_value = "yes", predictors = list("tenure", "fee", "change", "plan"))
+  f_d <- churned ~ tenure + fee + change + plan
+  one <- function(id, params, ...) penalized_case(id, "logistic", d, "data/logistic_churn.csv", ch_types, c(base_d, params), f_d,
+                                                  map_d, event = "yes", n_missing = sum(!used), ...)
+  cases[[length(cases) + 1L]] <- one("penalized_logistic_lasso", list(penalty = "lasso", lambda = "cv_min"))
+  cases[[length(cases) + 1L]] <- one("penalized_logistic_enet", list(penalty = "elastic_net", mixing = 0.5))
+  cases[[length(cases) + 1L]] <- one("penalized_logistic_ridge_auc", list(penalty = "ridge", measure = "auc", folds = 5))
+  cases[[length(cases) + 1L]] <- one(
+    "penalized_logistic_enet_fixed",
+    list(penalty = "elastic_net", mixing = 0.5, lambda = 0.02, measure = "class", weights = "weight", threshold = 0.4,
+         standardize = FALSE),
+    notes = c(fixed_lambda = "λ is fixed: it is added to glmnet's path, and the coefficients and the out-of-fold numbers are read at it.",
+              not_standardized = paste0("The predictors are penalized on their own scales (standardize = false): a predictor with ",
+                                        "large values is penalized less than one with small values.")))
+
+  # the separated table: the lasso keeps the estimates finite, its least error at the path's smallest λ
+  sp <- utils::read.csv(file.path(data_dir, "logistic_separated.csv"), na.strings = "", encoding = "UTF-8", stringsAsFactors = FALSE)
+  sp$group <- factor(sp$group, levels = c("a", "b"))
+  cases[[length(cases) + 1L]] <- penalized_case(
+    "penalized_logistic_separated", "logistic", sp, "data/logistic_separated.csv", list(dose = "number", group = "text", status = "text"),
+    list(outcome = "status", event_value = "sick", predictors = list("dose", "group"), penalty = "lasso", folds = 5),
+    status ~ dose + group, list("(Intercept)" = c("(Intercept)", NA), dose = c("dose", NA), groupb = c("group", "b")),
+    event = "sick", notes = c(edge_small = edge_small))
+
+  refusal <- function(id, model, file, types, params, code, message) {
+    list(id = id, model = model, data = file, types = types, params = params, expect = list(),
+         refuses = list(code = code, message = message))
+  }
+  cases[[length(cases) + 1L]] <- refusal(
+    "penalized_refuses_few_groups", "linear", "data/linear_heteroscedastic.csv", het_types,
+    list(outcome = "quantity", predictors = list("price", "channel"), penalty = "lasso", fold_by = "store"), "too_few_groups",
+    "the column «store» has 8 values: grouped folds need at least as many values as folds (10): choose fewer folds, or another column")
+  cases[[length(cases) + 1L]] <- refusal(
+    "penalized_refuses_one_term", "linear", "data/linear_categorical.csv", cat_types,
+    list(outcome = "sales", predictors = list("price"), penalty = "ridge"), "one_term",
+    "a penalty needs at least two terms besides the intercept, and the model has 1: add a predictor, or turn the penalty off")
+  cases[[length(cases) + 1L]] <- refusal(
+    "penalized_refuses_few_rows", "linear", "data/linear_tiny.csv", list(y = "number", x1 = "number", x2 = "number", g = "text"),
+    list(outcome = "y", predictors = list("x1", "x2", "g"), penalty = "lasso", folds = 3), "too_few_rows",
+    "the model has 4 rows it can use: cross-validation in 3 folds needs at least 9 (3 in each fold): choose fewer folds")
+  cases[[length(cases) + 1L]] <- refusal(
+    "penalized_refuses_auc_few_rows", "logistic", "data/logistic_separated.csv", list(dose = "number", group = "text", status = "text"),
+    list(outcome = "status", event_value = "sick", predictors = list("dose", "group"), penalty = "lasso", measure = "auc", folds = 5),
+    "auc_few_rows", "the AUC of a fold needs at least 10 rows in it: with 40 rows choose at most 4 folds, or measure = deviance")
+  cases
+}
+
+cases <- c(linear_cases(), logistic_cases(), penalized_cases())
+
+packages <- c("stats", "sandwich", "lmtest", "nortest", "brglm2", "detectseparation", "glmnet", "jsonlite")
 out <- list(format_version = 1L,
             generated = list(by = "make_reference.R", R = paste(R.version$major, R.version$minor, sep = "."),
                              packages = as.list(stats::setNames(vapply(packages, function(p) as.character(utils::packageVersion(p)), ""),

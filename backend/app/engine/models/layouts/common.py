@@ -281,10 +281,14 @@ def subject(params: Mapping[str, Any], outcome: str = "outcome", predictors: str
 
 def page(model: str, params: Mapping[str, Any], locale: str, sample: list[dict] | None, step: str | None, *,
          name: str, about: str, cards: tuple[Card | tuple[Card, ...], ...], coef_tables: tuple[CoefTable, ...] = (),
-         coef_note: str | None = None, blocks: tuple[Block, ...] = (), charts: tuple[Chart, ...] = ()) -> dict:
+         coef_note: str | None = None, blocks: tuple[Block, ...] = (), charts: tuple[Chart, ...] = (),
+         assumptions_note: str | None = None, p_values: bool = True) -> dict:
     """A model's report: the summary (four cards, the formula), the assumptions (first page),
     the coefficients, the fit, the model's own blocks (strata, forecast…), the diagnostics,
-    the notes. `name`: the model as the header says it; `about`: what it is about."""
+    the notes. `name`: the model as the header says it; `about`: what it is about;
+    `assumptions_note`: a sentence under the checks (a penalized fit's: diagnostics, not tests);
+    `p_values`: False for a variant with no p-value (no statistic, df, p or R's codes in the
+    checks and the fit, no warning about the tests on many rows)."""
     from app.reports import formats
 
     lang = code(locale)
@@ -295,10 +299,10 @@ def page(model: str, params: Mapping[str, Any], locale: str, sample: list[dict] 
     header, footer = stats.bands(name, " · ".join(x for x in (about, step) if x), w, formats.locale(lang).texts, sample_text)
     p = stats.Page()
     _summary(p, w, cards)
-    _assumptions(p, w, lang)
+    _assumptions(p, w, lang, assumptions_note, p_values)
     if coef_tables:
         _coefficients(p, w, lang, coef_tables, coef_note)
-    _fit(p, w)
+    _fit(p, w, p_values)
     for block in blocks:
         block(p, w)
     if charts:
@@ -330,7 +334,7 @@ def _summary(p: stats.Page, w: dict, cards: tuple[Card | tuple[Card, ...], ...])
            can_grow=True, visible=exists('[key] = "model|||formula"'))
 
 
-def _assumptions(p: stats.Page, w: dict, lang: str) -> None:
+def _assumptions(p: stats.Page, w: dict, lang: str, note: str | None = None, p_values: bool = True) -> None:
     """One row a check: what it checks, H0, the statistic, df, p with R's stars, the value it
     reads (a VIF, an EPV, a count), the verdict in words and with a mark; then what to do
     about those that failed, are doubtful or were not computed."""
@@ -357,11 +361,16 @@ def _assumptions(p: stats.Page, w: dict, lang: str) -> None:
         {"header": a["verdict"], "value": said, "width": 30,
          "rules": [{"when": f'[text] = "{v}"', "style": {"color": c, "weight": "semibold"}} for v, c in VERDICT_COLOURS.items()]},
     ]
+    if not p_values:  # no statistic, df or p to show: the checks are read by their value and verdict
+        cols = [cols[0], cols[1], cols[6], cols[7]]
     p.add(stats.table("assumptions", a["title"], one_row, cols, p.y, visible=exists(one_row)), 10)
     p.text("assumptions_none", a["none"], h=5, color=MUTED, visible=f"=COUNTIF({one_row}) = 0")
-    p.text("signif_legend", stats.static(stats.signif_legend(w, lang)), h=4.5, size=7, color=MUTED)
-    p.text("many_rows", "=" + join(a["many_rows"], n=shown(num(model_key("n")), "#,##0")), h=5, size=8, color=MID,
-           can_grow=True, visible=f"={num(model_key('n'))} > {MANY_ROWS}")
+    if note:
+        p.text("assumptions_note", note, h=5, size=8, color=MUTED, can_grow=True)
+    if p_values:
+        p.text("signif_legend", stats.static(stats.signif_legend(w, lang)), h=4.5, size=7, color=MUTED)
+        p.text("many_rows", "=" + join(a["many_rows"], n=shown(num(model_key("n")), "#,##0")), h=5, size=8, color=MID,
+               can_grow=True, visible=f"={num(model_key('n'))} > {MANY_ROWS}")
     p.y += 1.0
     advised = '[section] = "assumption" AND [stat] = "advice" AND NOT ISNULL([text]) AND [text] <> ""'
     p.add(stats.table("advice", a["advice_title"], advised, [
@@ -401,18 +410,19 @@ def _coefficients(p: stats.Page, w: dict, lang: str, tables: tuple[CoefTable, ..
         p.text("coef_signif_legend", stats.static(stats.signif_legend(w, lang)), h=4.5, size=7, color=MUTED)
 
 
-def _fit(p: stats.Page, w: dict) -> None:
+def _fit(p: stats.Page, w: dict, p_values: bool = True) -> None:
     """Every number of the `model` section, then how it was fitted (its settings in words)."""
     f = w["fit"]
     p.heading("s_fit", w["sections"]["fit"])
     sig = f'LOOKUP("model|||" & LEFT([stat], LEN([stat]) - 7) & "significance", [key], [text])'
     numbers = '[section] = "model" AND NOT ISNULL([value])'
-    p.add(stats.table("fit", f["title"], numbers, [
+    cols = [
         {"header": f["quantity"], "value": "[label]"},
         {"header": f["name"], "value": "[stat]", "width": 50, "style": {"color": MUTED}},
         {"header": f["value"], "value": "IF(ISNULL([tiny]), [value], [tiny])", "width": 34, "align": "right", "format": EXACT},
         {"header": w["signif"]["column"], "value": f'IF(RIGHT([stat], 7) = "p_value", {sig}, "")', "width": 14},
-    ], p.y), 10)
+    ]
+    p.add(stats.table("fit", f["title"], numbers, cols if p_values else cols[:3], p.y), 10)
     hidden = ("model", "variant", "formula", "software", "group_version", "rows_from")
     settings = ('[section] = "model" AND ISNULL([value]) AND NOT ISNULL([text]) AND [text] <> "" AND '
                 + " AND ".join(f'[stat] <> "{s}"' for s in hidden)

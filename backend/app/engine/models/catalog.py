@@ -213,7 +213,8 @@ _PENALTY_APPLIES = {
 _CLUSTER_REQUIRED = {"key": "cluster", "when": {"se": "cluster", "penalty": "none"}, "reason": "cluster_needs_column",
                      "message": "clustered standard errors need the column of the clusters ('cluster')"}
 _CV_SECTION = {"levels": None, "numbers": ["cv_mean", "cv_low", "cv_high", "n_selected"], "texts": []}
-_PENALTY_FIT = ["lambda", "log_lambda", "lambda_min", "lambda_1se", "mixing", "cv_value", "cv_se", "n_selected"]
+_PENALTY_FIT = ["lambda", "log_lambda", "lambda_min", "lambda_1se", "log_lambda_min", "log_lambda_1se", "mixing", "cv_value",
+                "cv_se", "n_selected"]
 
 MODELS: dict[str, dict[str, Any]] = {
     # ── regression ──────────────────────────────────────────────────────────
@@ -353,7 +354,7 @@ MODELS: dict[str, dict[str, Any]] = {
                                                         "event_value"],
                               "numbers": ["n", "events", "n_missing", "auc", "auc_ci_low", "auc_ci_high", "brier",
                                           "threshold", "accuracy", "sensitivity", "specificity", "precision",
-                                          *_PENALTY_FIT]},
+                                          "deviance", *_PENALTY_FIT]},
                     "coef": {"levels": None, "numbers": ["estimate", "odds_ratio", "selected"], "texts": []},
                     "cv": _CV_SECTION,
                     "assumption": _assumptions("separation", "hosmer_lemeshow", "epv", "lambda_choice"),

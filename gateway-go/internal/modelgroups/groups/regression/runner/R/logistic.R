@@ -511,6 +511,18 @@ logistic_box_tidwell <- function(rows, p, alpha, design, form, fam, dat, firth) 
 logistic_charts <- function(rows, task, prob, y, w, eta, infl, hl, ev, row_numbers) {
   most <- tab_limit(task, "max_chart_points")
   keep <- tab_limit(task, "extreme_points")
+  logistic_classification_charts(rows, task, prob, y, w, hl, ev)
+  # deviance residuals against the linear predictor, the largest named
+  i <- tab_cap(length(eta), max = most, score = infl$dev, keep = keep)
+  labels <- tab_extreme_labels(infl$dev, row_numbers, keep = LOGISTIC_LABELLED)[i]
+  tab_points(rows, "point", "resid_linear", "y", x = eta[i], y = infl$dev[i], labels = labels)
+  invisible(rows)
+}
+
+# The ROC curve, the calibration on the Hosmer–Lemeshow groups and the predicted probabilities
+# by observed outcome (penalized.R draws them from the out-of-fold probabilities).
+logistic_classification_charts <- function(rows, task, prob, y, w, hl, ev) {
+  most <- tab_limit(task, "max_chart_points")
   # ROC: (1 − specificity, sensitivity) at every distinct threshold, from (0, 0) to (1, 1)
   cuts <- sort(unique(prob), decreasing = TRUE)
   tpr <- c(0, vapply(cuts, function(t) sum(w[y == 1 & prob >= t]), 0) / sum(w[y == 1]))
@@ -530,10 +542,6 @@ logistic_charts <- function(rows, task, prob, y, w, eta, infl, hl, ev, row_numbe
     count <- vapply(seq_len(LOGISTIC_PROB_BINS), function(b) sum(w[bin == b & y == class$is]), 0)
     tab_points(rows, "hist", "prob", "count", x = head(breaks, -1L), y = count, x1 = tail(breaks, -1L), level_2 = class$label)
   }
-  # deviance residuals against the linear predictor, the largest named
-  i <- tab_cap(length(eta), max = most, score = infl$dev, keep = keep)
-  labels <- tab_extreme_labels(infl$dev, row_numbers, keep = LOGISTIC_LABELLED)[i]
-  tab_points(rows, "point", "resid_linear", "y", x = eta[i], y = infl$dev[i], labels = labels)
   invisible(rows)
 }
 

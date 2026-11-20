@@ -12,21 +12,32 @@
    "n_selected": "Terms selected",
    "r_squared_oof": "R² out of fold",
    "auc_oof": "AUC out of fold",
-   "brier": "Brier score",
+   "brier_oof": "Brier score out of fold",
    "n_events": "Rows / events",
    "auc_ci": "CI {low} – {high}"
   },
   "coef": {
    "no_inference": "No standard error, p-value or interval: inference after a penalized selection is out of scope.",
-   "dummies": "The dummies of a categorical predictor are penalized one by one."
+   "dummies": "The dummies of a categorical predictor are penalized one by one: the lasso may keep one level and drop another.",
+   "dummies_ridge": "The dummies of a categorical predictor are penalized one by one: each level is shrunk on its own."
   },
   "tables": {
-   "at_lambda": "Coefficients at the chosen λ (original scale)"
+   "at_lambda": "Coefficients at the chosen λ (original scale)",
+   "confusion_line": "Out of fold, at the threshold {threshold}: accuracy {accuracy}, sensitivity {sensitivity}, specificity {specificity}."
+  },
+  "sections": {
+   "confusion": "Classification out of fold"
+  },
+  "diagnostics_note": {
+   "linear": "With a penalty the checks are diagnostics, not tests: the choice of λ here, the residuals out of fold in the charts. The tests of an unpenalized fit (curvature, variance, normality, independence, collinearity, influence) assume no penalty and are not computed.",
+   "logistic": "With a penalty the checks are diagnostics, not tests: separation, the events per variable and the choice of λ here, the ROC and the calibration out of fold in the charts. The tests of an unpenalized fit (Hosmer–Lemeshow, Box–Tidwell, collinearity, influence) assume no penalty and are not computed."
   },
   "charts": {
-   "cv": "Cross-validation: the error against log λ, the chosen λ marked",
-   "paths": "Paths of the coefficients against log λ",
-   "coef_selected": "Coefficients at the chosen λ",
+   "cv": "Cross-validation against log λ; dashed: λ of the least error (left) and within 1 SE (right)",
+   "cv_fixed": "Cross-validation against log λ; dashed: λ of the least error, within 1 SE, and the fixed λ",
+   "paths": "Paths of the coefficients against log λ (original scale); dashed: the chosen λ",
+   "coef_selected": "Terms kept at the chosen λ (the intercept left out)",
+   "residual_oof": "Histogram of the residuals, out of fold",
    "resid_fitted_oof": "Residuals against fitted values, out of fold",
    "qq_oof": "Normal Q–Q of the residuals, out of fold",
    "roc_oof": "ROC curve, out of fold",
@@ -35,8 +46,69 @@
    "confusion_oof": "Confusion matrix at the threshold, out of fold"
   },
   "series": {
-   "cv_mean": "Error",
-   "cv_band": "± 1 SE"
+   "cv_band": "± 1 SE",
+   "others": "Others: sum of |coefficient|"
+  },
+  "measures": {
+   "mse": "Mean squared error",
+   "mae": "Mean absolute error",
+   "deviance": "Binomial deviance",
+   "auc": "AUC",
+   "class": "Misclassification error"
+  },
+  "values": {
+   "cv_measure": {
+    "mse": "mean squared error",
+    "mae": "mean absolute error",
+    "deviance": "binomial deviance",
+    "auc": "AUC",
+    "class": "misclassification error"
+   },
+   "note_edge_small": {
+    "The least cross-validated error is at the smallest λ of the path: the best penalty may be smaller still; widen the path with a fixed λ below it, or compare with the fit without a penalty.": "The least cross-validated error is at the smallest λ of the path: the best penalty may be smaller still; widen the path with a fixed λ below it, or compare with the fit without a penalty."
+   },
+   "note_edge_large": {
+    "The least cross-validated error is at the largest λ of the path, where the penalty keeps almost nothing: out of fold, the predictors do not predict the outcome better than its mean.": "The least cross-validated error is at the largest λ of the path, where the penalty keeps almost nothing: out of fold, the predictors do not predict the outcome better than its mean."
+   },
+   "note_all_zero_1se": {
+    "Every coefficient is zero at the chosen λ, the largest within one standard error of the least error: lambda = cv_min keeps the terms of the least error.": "Every coefficient is zero at the chosen λ, the largest within one standard error of the least error: lambda = cv_min keeps the terms of the least error."
+   },
+   "note_all_zero": {
+    "Every coefficient is zero at the chosen λ: out of fold, the predictors do not predict the outcome better than its mean.": "Every coefficient is zero at the chosen λ: out of fold, the predictors do not predict the outcome better than its mean."
+   },
+   "note_largest_1se": {
+    "The chosen λ is the largest of the path, within one standard error of the least error: the coefficients are shrunk almost to zero; lambda = cv_min keeps the terms of the least error.": "The chosen λ is the largest of the path, within one standard error of the least error: the coefficients are shrunk almost to zero; lambda = cv_min keeps the terms of the least error."
+   },
+   "note_largest": {
+    "The chosen λ is the largest of the path: the coefficients are shrunk almost to zero, and the model predicts little more than the outcome's mean.": "The chosen λ is the largest of the path: the coefficients are shrunk almost to zero, and the model predicts little more than the outcome's mean."
+   },
+   "note_mixing_cv": {
+    "The mixing was chosen by cross-validation among 0.1, 0.25, 0.5, 0.75, 0.9 and 1, on the same folds: the one with the least error at its best λ.": "The mixing was chosen by cross-validation among 0.1, 0.25, 0.5, 0.75, 0.9 and 1, on the same folds: the one with the least error at its best λ."
+   },
+   "note_mixing_cv_fixed": {
+    "The mixing was chosen by cross-validation among 0.1, 0.25, 0.5, 0.75, 0.9 and 1, on the same folds: the one with the least error at the fixed λ.": "The mixing was chosen by cross-validation among 0.1, 0.25, 0.5, 0.75, 0.9 and 1, on the same folds: the one with the least error at the fixed λ."
+   },
+   "note_fixed_lambda": {
+    "λ is fixed: it is added to glmnet's path, and the coefficients and the out-of-fold numbers are read at it.": "λ is fixed: it is added to glmnet's path, and the coefficients and the out-of-fold numbers are read at it."
+   },
+   "note_grouped_folds": {
+    "The folds are grouped: all the rows of a value of the column fold_by fall in the same fold.": "The folds are grouped: all the rows of a value of the column fold_by fall in the same fold."
+   },
+   "note_not_standardized": {
+    "The predictors are penalized on their own scales (standardize = false): a predictor with large values is penalized less than one with small values.": "The predictors are penalized on their own scales (standardize = false): a predictor with large values is penalized less than one with small values."
+   },
+   "note_case_weights": {
+    "The weights are case weights: the fit, the cross-validation and the out-of-fold numbers weigh each row by them; the residuals' charts read √w × residual.": "The weights are case weights: the fit, the cross-validation and the out-of-fold numbers weigh each row by them; the residuals' charts read √w × residual."
+   },
+   "note_frequency_weights": {
+    "The weights are frequencies: n, the events, the rates and the checks count the cases the rows stand for.": "The weights are frequencies: n, the events, the rates and the checks count the cases the rows stand for."
+   },
+   "note_zero_weights": {
+    "Rows of weight 0 were left out of the fit.": "Rows of weight 0 were left out of the fit."
+   },
+   "note_class_threshold": {
+    "The misclassification error of the cross-validation counts at the threshold 0.5, as glmnet does; the classification of the fit is at the node's threshold.": "The misclassification error of the cross-validation counts at the threshold 0.5, as glmnet does; the classification of the fit is at the node's threshold."
+   }
   },
   "stats": {
    "model": {
@@ -44,20 +116,55 @@
     "log_lambda": "log λ chosen",
     "lambda_min": "λ of the least error",
     "lambda_1se": "Largest λ within 1 SE",
+    "log_lambda_min": "log λ of the least error",
+    "log_lambda_1se": "log of the largest λ within 1 SE",
     "mixing": "Mixing (α of the elastic net)",
-    "cv_value": "Error at the chosen λ",
+    "cv_value": "Cross-validated error at the chosen λ",
     "cv_se": "Its standard error",
     "n_selected": "Terms selected",
     "r_squared": "R² out of fold",
     "rmse": "RMSE out of fold",
-    "mae": "MAE out of fold"
+    "mae": "MAE out of fold",
+    "auc": "AUC out of fold",
+    "auc_ci_low": "AUC out of fold, CI low (DeLong)",
+    "auc_ci_high": "AUC out of fold, CI high (DeLong)",
+    "brier": "Brier score out of fold",
+    "accuracy": "Accuracy out of fold",
+    "sensitivity": "Sensitivity out of fold",
+    "specificity": "Specificity out of fold",
+    "precision": "Precision out of fold",
+    "deviance": "Deviance out of fold",
+    "note_edge_small": "Note: λ at the edge of the path",
+    "note_edge_large": "Note: λ at the top of the path",
+    "note_all_zero_1se": "Note: no term kept",
+    "note_all_zero": "Note: no term kept",
+    "note_largest_1se": "Note: the largest λ",
+    "note_largest": "Note: the largest λ",
+    "note_mixing_cv": "Note: the mixing",
+    "note_mixing_cv_fixed": "Note: the mixing",
+    "note_fixed_lambda": "Note: a fixed λ",
+    "note_grouped_folds": "Note: grouped folds",
+    "note_not_standardized": "Note: no standardization",
+    "note_case_weights": "Note: the weights",
+    "note_frequency_weights": "Note: the weights",
+    "note_zero_weights": "Note: rows of weight 0",
+    "note_class_threshold": "Note: the misclassification error"
    }
   },
   "checks": {
    "lambda_choice": {
     "name": "The choice of λ",
-    "h0": "The chosen λ is inside the path, not at its edge, and keeps some terms.",
-    "advice": "Widen the path: the best λ is at its edge; or every coefficient is zero."
+    "h0": "The least error is inside the path of λ, and the chosen λ keeps some terms.",
+    "advice": "The least error is at an edge of the path, or the chosen λ keeps no term: the notes say which, and what to do."
+   },
+   "separation": {
+    "advice": "The term separates the outcome: the penalty keeps its estimate finite, but its size depends on λ: read it with care."
+   },
+   "hosmer_lemeshow": {
+    "not_computed": "With a penalty the test is not computed (it assumes an unpenalized fit): read the calibration chart out of fold, a diagnostic."
+   },
+   "epv": {
+    "advice": "Few events for the number of terms: the penalty steadies the estimates; fewer terms steady them more."
    }
   }
  },
@@ -74,21 +181,32 @@
    "n_selected": "Termini selezionati",
    "r_squared_oof": "R² fuori campione",
    "auc_oof": "AUC fuori campione",
-   "brier": "Punteggio di Brier",
+   "brier_oof": "Brier fuori campione",
    "n_events": "Righe / eventi",
    "auc_ci": "IC {low} – {high}"
   },
   "coef": {
    "no_inference": "Né errore standard, né p-value, né intervallo: l'inferenza dopo una selezione penalizzata non è prevista.",
-   "dummies": "Le variabili indicatrici di un predittore categoriale sono penalizzate una a una."
+   "dummies": "Le variabili indicatrici di un predittore categoriale sono penalizzate una a una: il lasso può tenere un livello e scartarne un altro.",
+   "dummies_ridge": "Le variabili indicatrici di un predittore categoriale sono penalizzate una a una: ogni livello è ridotto per conto suo."
   },
   "tables": {
-   "at_lambda": "Coefficienti al λ scelto (scala originale)"
+   "at_lambda": "Coefficienti al λ scelto (scala originale)",
+   "confusion_line": "Fuori campione, alla soglia {threshold}: accuratezza {accuracy}, sensibilità {sensitivity}, specificità {specificity}."
+  },
+  "sections": {
+   "confusion": "Classificazione fuori campione"
+  },
+  "diagnostics_note": {
+   "linear": "Con una penalizzazione le verifiche sono diagnostiche, non test: qui la scelta di λ, nei grafici i residui fuori campione. I test di un modello non penalizzato (curvatura, varianza, normalità, indipendenza, collinearità, influenza) presuppongono l'assenza di penalizzazione e non vengono calcolati.",
+   "logistic": "Con una penalizzazione le verifiche sono diagnostiche, non test: qui la separazione, gli eventi per variabile e la scelta di λ, nei grafici la ROC e la calibrazione fuori campione. I test di un modello non penalizzato (Hosmer–Lemeshow, Box–Tidwell, collinearità, influenza) presuppongono l'assenza di penalizzazione e non vengono calcolati."
   },
   "charts": {
-   "cv": "Convalida incrociata: l'errore rispetto a log λ, il λ scelto segnato",
-   "paths": "Percorsi dei coefficienti rispetto a log λ",
-   "coef_selected": "Coefficienti al λ scelto",
+   "cv": "Convalida incrociata rispetto a log λ; tratteggiati: λ dell'errore minimo (sinistra) ed entro 1 ES (destra)",
+   "cv_fixed": "Convalida incrociata rispetto a log λ; tratteggiati: λ dell'errore minimo, entro 1 ES e il λ fisso",
+   "paths": "Percorsi dei coefficienti rispetto a log λ (scala originale); tratteggiato: il λ scelto",
+   "coef_selected": "Termini tenuti al λ scelto (senza l'intercetta)",
+   "residual_oof": "Istogramma dei residui, fuori campione",
    "resid_fitted_oof": "Residui rispetto ai valori stimati, fuori campione",
    "qq_oof": "Q–Q normale dei residui, fuori campione",
    "roc_oof": "Curva ROC, fuori campione",
@@ -97,8 +215,69 @@
    "confusion_oof": "Matrice di confusione alla soglia, fuori campione"
   },
   "series": {
-   "cv_mean": "Errore",
-   "cv_band": "± 1 ES"
+   "cv_band": "± 1 ES",
+   "others": "Altri: somma dei |coefficienti|"
+  },
+  "measures": {
+   "mse": "Errore quadratico medio",
+   "mae": "Errore assoluto medio",
+   "deviance": "Devianza binomiale",
+   "auc": "AUC",
+   "class": "Errore di classificazione"
+  },
+  "values": {
+   "cv_measure": {
+    "mse": "errore quadratico medio",
+    "mae": "errore assoluto medio",
+    "deviance": "devianza binomiale",
+    "auc": "AUC",
+    "class": "errore di classificazione"
+   },
+   "note_edge_small": {
+    "The least cross-validated error is at the smallest λ of the path: the best penalty may be smaller still; widen the path with a fixed λ below it, or compare with the fit without a penalty.": "L'errore minimo della convalida incrociata è al λ più piccolo del percorso: la penalizzazione migliore potrebbe essere ancora più piccola; allargate il percorso con un λ fisso più piccolo, o confrontate con il modello senza penalizzazione."
+   },
+   "note_edge_large": {
+    "The least cross-validated error is at the largest λ of the path, where the penalty keeps almost nothing: out of fold, the predictors do not predict the outcome better than its mean.": "L'errore minimo della convalida incrociata è al λ più grande del percorso, dove la penalizzazione non tiene quasi nulla: fuori campione, i predittori non prevedono l'esito meglio della sua media."
+   },
+   "note_all_zero_1se": {
+    "Every coefficient is zero at the chosen λ, the largest within one standard error of the least error: lambda = cv_min keeps the terms of the least error.": "Tutti i coefficienti sono zero al λ scelto, il più grande entro un errore standard dall'errore minimo: lambda = cv_min tiene i termini dell'errore minimo."
+   },
+   "note_all_zero": {
+    "Every coefficient is zero at the chosen λ: out of fold, the predictors do not predict the outcome better than its mean.": "Tutti i coefficienti sono zero al λ scelto: fuori campione, i predittori non prevedono l'esito meglio della sua media."
+   },
+   "note_largest_1se": {
+    "The chosen λ is the largest of the path, within one standard error of the least error: the coefficients are shrunk almost to zero; lambda = cv_min keeps the terms of the least error.": "Il λ scelto è il più grande del percorso, entro un errore standard dall'errore minimo: i coefficienti sono ridotti quasi a zero; lambda = cv_min tiene i termini dell'errore minimo."
+   },
+   "note_largest": {
+    "The chosen λ is the largest of the path: the coefficients are shrunk almost to zero, and the model predicts little more than the outcome's mean.": "Il λ scelto è il più grande del percorso: i coefficienti sono ridotti quasi a zero, e il modello prevede poco più della media dell'esito."
+   },
+   "note_mixing_cv": {
+    "The mixing was chosen by cross-validation among 0.1, 0.25, 0.5, 0.75, 0.9 and 1, on the same folds: the one with the least error at its best λ.": "La miscela è stata scelta per convalida incrociata tra 0,1, 0,25, 0,5, 0,75, 0,9 e 1, sugli stessi gruppi: quella con l'errore minimo al suo λ migliore."
+   },
+   "note_mixing_cv_fixed": {
+    "The mixing was chosen by cross-validation among 0.1, 0.25, 0.5, 0.75, 0.9 and 1, on the same folds: the one with the least error at the fixed λ.": "La miscela è stata scelta per convalida incrociata tra 0,1, 0,25, 0,5, 0,75, 0,9 e 1, sugli stessi gruppi: quella con l'errore minimo al λ fisso."
+   },
+   "note_fixed_lambda": {
+    "λ is fixed: it is added to glmnet's path, and the coefficients and the out-of-fold numbers are read at it.": "λ è fisso: viene aggiunto al percorso di glmnet, e i coefficienti e i valori fuori campione si leggono lì."
+   },
+   "note_grouped_folds": {
+    "The folds are grouped: all the rows of a value of the column fold_by fall in the same fold.": "I gruppi della convalida sono raggruppati: tutte le righe di un valore della colonna fold_by cadono nello stesso gruppo."
+   },
+   "note_not_standardized": {
+    "The predictors are penalized on their own scales (standardize = false): a predictor with large values is penalized less than one with small values.": "I predittori sono penalizzati sulla loro scala (standardize = false): un predittore con valori grandi è penalizzato meno di uno con valori piccoli."
+   },
+   "note_case_weights": {
+    "The weights are case weights: the fit, the cross-validation and the out-of-fold numbers weigh each row by them; the residuals' charts read √w × residual.": "I pesi sono pesi delle righe: il modello, la convalida incrociata e i valori fuori campione pesano ogni riga con essi; i grafici dei residui leggono √w × residuo."
+   },
+   "note_frequency_weights": {
+    "The weights are frequencies: n, the events, the rates and the checks count the cases the rows stand for.": "I pesi sono frequenze: n, gli eventi, i tassi e le verifiche contano i casi che le righe rappresentano."
+   },
+   "note_zero_weights": {
+    "Rows of weight 0 were left out of the fit.": "Le righe di peso 0 sono state escluse dal modello."
+   },
+   "note_class_threshold": {
+    "The misclassification error of the cross-validation counts at the threshold 0.5, as glmnet does; the classification of the fit is at the node's threshold.": "L'errore di classificazione della convalida incrociata conta alla soglia 0,5, come fa glmnet; la classificazione del modello è alla soglia del nodo."
+   }
   },
   "stats": {
    "model": {
@@ -106,20 +285,55 @@
     "log_lambda": "log λ scelto",
     "lambda_min": "λ dell'errore minimo",
     "lambda_1se": "λ più grande entro 1 ES",
+    "log_lambda_min": "log λ dell'errore minimo",
+    "log_lambda_1se": "log del λ più grande entro 1 ES",
     "mixing": "Miscela (α dell'elastic net)",
-    "cv_value": "Errore al λ scelto",
+    "cv_value": "Errore di convalida al λ scelto",
     "cv_se": "Il suo errore standard",
     "n_selected": "Termini selezionati",
     "r_squared": "R² fuori campione",
     "rmse": "RMSE fuori campione",
-    "mae": "MAE fuori campione"
+    "mae": "MAE fuori campione",
+    "auc": "AUC fuori campione",
+    "auc_ci_low": "AUC fuori campione, IC inferiore (DeLong)",
+    "auc_ci_high": "AUC fuori campione, IC superiore (DeLong)",
+    "brier": "Punteggio di Brier fuori campione",
+    "accuracy": "Accuratezza fuori campione",
+    "sensitivity": "Sensibilità fuori campione",
+    "specificity": "Specificità fuori campione",
+    "precision": "Precisione fuori campione",
+    "deviance": "Devianza fuori campione",
+    "note_edge_small": "Nota: λ al bordo del percorso",
+    "note_edge_large": "Nota: λ in cima al percorso",
+    "note_all_zero_1se": "Nota: nessun termine tenuto",
+    "note_all_zero": "Nota: nessun termine tenuto",
+    "note_largest_1se": "Nota: il λ più grande",
+    "note_largest": "Nota: il λ più grande",
+    "note_mixing_cv": "Nota: la miscela",
+    "note_mixing_cv_fixed": "Nota: la miscela",
+    "note_fixed_lambda": "Nota: un λ fisso",
+    "note_grouped_folds": "Nota: gruppi della convalida per colonna",
+    "note_not_standardized": "Nota: nessuna standardizzazione",
+    "note_case_weights": "Nota: i pesi",
+    "note_frequency_weights": "Nota: i pesi",
+    "note_zero_weights": "Nota: righe di peso 0",
+    "note_class_threshold": "Nota: l'errore di classificazione"
    }
   },
   "checks": {
    "lambda_choice": {
     "name": "La scelta di λ",
-    "h0": "Il λ scelto è dentro il percorso, non al suo bordo, e tiene qualche termine.",
-    "advice": "Allargate il percorso: il λ migliore è al suo bordo; oppure tutti i coefficienti sono zero."
+    "h0": "L'errore minimo è dentro il percorso di λ, e il λ scelto tiene qualche termine.",
+    "advice": "L'errore minimo è a un bordo del percorso, oppure il λ scelto non tiene alcun termine: le note dicono quale, e cosa fare."
+   },
+   "separation": {
+    "advice": "Il termine separa l'esito: la penalizzazione tiene la stima finita, ma la sua grandezza dipende da λ: leggetela con cautela."
+   },
+   "hosmer_lemeshow": {
+    "not_computed": "Con una penalizzazione il test non viene calcolato (presuppone un modello non penalizzato): leggete il grafico di calibrazione fuori campione, una diagnostica."
+   },
+   "epv": {
+    "advice": "Pochi eventi per il numero di termini: la penalizzazione stabilizza le stime; meno termini le stabilizzano di più."
    }
   }
  },
@@ -136,52 +350,159 @@
    "n_selected": "Ausgewählte Terme",
    "r_squared_oof": "R² außerhalb der Falte",
    "auc_oof": "AUC außerhalb der Falte",
-   "brier": "Brier-Score",
+   "brier_oof": "Brier außerhalb der Falte",
    "n_events": "Zeilen / Ereignisse",
    "auc_ci": "KI {low} – {high}"
   },
   "coef": {
    "no_inference": "Kein Standardfehler, kein p-Wert, kein Intervall: Inferenz nach einer penalisierten Auswahl ist nicht vorgesehen.",
-   "dummies": "Die Indikatorvariablen eines kategorialen Prädiktors werden einzeln penalisiert."
+   "dummies": "Die Indikatorvariablen eines kategorialen Prädiktors werden einzeln penalisiert: das Lasso kann eine Stufe behalten und eine andere verwerfen.",
+   "dummies_ridge": "Die Indikatorvariablen eines kategorialen Prädiktors werden einzeln penalisiert: jede Stufe wird für sich geschrumpft."
   },
   "tables": {
-   "at_lambda": "Koeffizienten beim gewählten λ (ursprüngliche Skala)"
+   "at_lambda": "Koeffizienten beim gewählten λ (ursprüngliche Skala)",
+   "confusion_line": "Außerhalb der Falte, beim Schwellenwert {threshold}: Genauigkeit {accuracy}, Sensitivität {sensitivity}, Spezifität {specificity}."
+  },
+  "sections": {
+   "confusion": "Klassifikation außerhalb der Falte"
+  },
+  "diagnostics_note": {
+   "linear": "Mit einer Penalisierung sind die Prüfungen Diagnosen, keine Tests: hier die Wahl von λ, in den Diagrammen die Residuen außerhalb der Falte. Die Tests eines nicht penalisierten Modells (Krümmung, Varianz, Normalität, Unabhängigkeit, Kollinearität, Einfluss) setzen keine Penalisierung voraus und werden nicht berechnet.",
+   "logistic": "Mit einer Penalisierung sind die Prüfungen Diagnosen, keine Tests: hier die Separation, die Ereignisse pro Variable und die Wahl von λ, in den Diagrammen ROC und Kalibrierung außerhalb der Falte. Die Tests eines nicht penalisierten Modells (Hosmer–Lemeshow, Box–Tidwell, Kollinearität, Einfluss) setzen keine Penalisierung voraus und werden nicht berechnet."
   },
   "charts": {
-   "cv": "Kreuzvalidierung: der Fehler gegen log λ, das gewählte λ markiert",
-   "paths": "Pfade der Koeffizienten gegen log λ",
-   "coef_selected": "Koeffizienten beim gewählten λ",
+   "cv": "Kreuzvalidierung gegen log λ; gestrichelt: λ des kleinsten Fehlers (links) und innerhalb 1 SE (rechts)",
+   "cv_fixed": "Kreuzvalidierung gegen log λ; gestrichelt: λ des kleinsten Fehlers, innerhalb 1 SE und das feste λ",
+   "paths": "Pfade der Koeffizienten gegen log λ (ursprüngliche Skala); gestrichelt: das gewählte λ",
+   "coef_selected": "Behaltene Terme beim gewählten λ (ohne Achsenabschnitt)",
+   "residual_oof": "Histogramm der Residuen, außerhalb der Falte",
    "resid_fitted_oof": "Residuen gegen angepasste Werte, außerhalb der Falte",
    "qq_oof": "Normal-Q–Q der Residuen, außerhalb der Falte",
    "roc_oof": "ROC-Kurve, außerhalb der Falte",
    "calibration_oof": "Kalibrierung nach Dezilen, außerhalb der Falte",
-   "prob_oof": "Geschätzte Wahrscheinlichkeiten nach Ergebnis, außerhalb der Falte",
-   "confusion_oof": "Konfusionsmatrix an der Schwelle, außerhalb der Falte"
+   "prob_oof": "Wahrscheinlichkeiten nach Ergebnis, außerhalb der Falte",
+   "confusion_oof": "Konfusionsmatrix beim Schwellenwert, außerhalb der Falte"
   },
   "series": {
-   "cv_mean": "Fehler",
-   "cv_band": "± 1 SF"
+   "cv_band": "± 1 SE",
+   "others": "Andere: Summe der |Koeffizienten|"
+  },
+  "measures": {
+   "mse": "Mittlerer quadratischer Fehler",
+   "mae": "Mittlerer absoluter Fehler",
+   "deviance": "Binomiale Devianz",
+   "auc": "AUC",
+   "class": "Fehlklassifikationsrate"
+  },
+  "values": {
+   "cv_measure": {
+    "mse": "mittlerer quadratischer Fehler",
+    "mae": "mittlerer absoluter Fehler",
+    "deviance": "binomiale Devianz",
+    "auc": "AUC",
+    "class": "Fehlklassifikationsrate"
+   },
+   "note_edge_small": {
+    "The least cross-validated error is at the smallest λ of the path: the best penalty may be smaller still; widen the path with a fixed λ below it, or compare with the fit without a penalty.": "Der kleinste kreuzvalidierte Fehler liegt beim kleinsten λ des Pfads: die beste Penalisierung könnte noch kleiner sein; erweitern Sie den Pfad mit einem festen kleineren λ, oder vergleichen Sie mit dem Modell ohne Penalisierung."
+   },
+   "note_edge_large": {
+    "The least cross-validated error is at the largest λ of the path, where the penalty keeps almost nothing: out of fold, the predictors do not predict the outcome better than its mean.": "Der kleinste kreuzvalidierte Fehler liegt beim größten λ des Pfads, wo die Penalisierung fast nichts behält: außerhalb der Falte sagen die Prädiktoren das Ergebnis nicht besser voraus als sein Mittelwert."
+   },
+   "note_all_zero_1se": {
+    "Every coefficient is zero at the chosen λ, the largest within one standard error of the least error: lambda = cv_min keeps the terms of the least error.": "Alle Koeffizienten sind beim gewählten λ null, dem größten innerhalb eines Standardfehlers vom kleinsten Fehler: lambda = cv_min behält die Terme des kleinsten Fehlers."
+   },
+   "note_all_zero": {
+    "Every coefficient is zero at the chosen λ: out of fold, the predictors do not predict the outcome better than its mean.": "Alle Koeffizienten sind beim gewählten λ null: außerhalb der Falte sagen die Prädiktoren das Ergebnis nicht besser voraus als sein Mittelwert."
+   },
+   "note_largest_1se": {
+    "The chosen λ is the largest of the path, within one standard error of the least error: the coefficients are shrunk almost to zero; lambda = cv_min keeps the terms of the least error.": "Das gewählte λ ist das größte des Pfads, innerhalb eines Standardfehlers vom kleinsten Fehler: die Koeffizienten sind fast auf null geschrumpft; lambda = cv_min behält die Terme des kleinsten Fehlers."
+   },
+   "note_largest": {
+    "The chosen λ is the largest of the path: the coefficients are shrunk almost to zero, and the model predicts little more than the outcome's mean.": "Das gewählte λ ist das größte des Pfads: die Koeffizienten sind fast auf null geschrumpft, und das Modell sagt kaum mehr als den Mittelwert des Ergebnisses voraus."
+   },
+   "note_mixing_cv": {
+    "The mixing was chosen by cross-validation among 0.1, 0.25, 0.5, 0.75, 0.9 and 1, on the same folds: the one with the least error at its best λ.": "Die Mischung wurde per Kreuzvalidierung unter 0,1, 0,25, 0,5, 0,75, 0,9 und 1 auf denselben Falten gewählt: die mit dem kleinsten Fehler bei ihrem besten λ."
+   },
+   "note_mixing_cv_fixed": {
+    "The mixing was chosen by cross-validation among 0.1, 0.25, 0.5, 0.75, 0.9 and 1, on the same folds: the one with the least error at the fixed λ.": "Die Mischung wurde per Kreuzvalidierung unter 0,1, 0,25, 0,5, 0,75, 0,9 und 1 auf denselben Falten gewählt: die mit dem kleinsten Fehler beim festen λ."
+   },
+   "note_fixed_lambda": {
+    "λ is fixed: it is added to glmnet's path, and the coefficients and the out-of-fold numbers are read at it.": "λ ist fest: es wird dem Pfad von glmnet hinzugefügt, und die Koeffizienten und die Werte außerhalb der Falte werden dort abgelesen."
+   },
+   "note_grouped_folds": {
+    "The folds are grouped: all the rows of a value of the column fold_by fall in the same fold.": "Die Falten sind gruppiert: alle Zeilen eines Werts der Spalte fold_by fallen in dieselbe Falte."
+   },
+   "note_not_standardized": {
+    "The predictors are penalized on their own scales (standardize = false): a predictor with large values is penalized less than one with small values.": "Die Prädiktoren werden auf ihrer eigenen Skala penalisiert (standardize = false): ein Prädiktor mit großen Werten wird weniger penalisiert als einer mit kleinen."
+   },
+   "note_case_weights": {
+    "The weights are case weights: the fit, the cross-validation and the out-of-fold numbers weigh each row by them; the residuals' charts read √w × residual.": "Die Gewichte sind Zeilengewichte: Modell, Kreuzvalidierung und die Werte außerhalb der Falte gewichten jede Zeile damit; die Residuendiagramme lesen √w × Residuum."
+   },
+   "note_frequency_weights": {
+    "The weights are frequencies: n, the events, the rates and the checks count the cases the rows stand for.": "Die Gewichte sind Häufigkeiten: n, die Ereignisse, die Raten und die Prüfungen zählen die Fälle, für die die Zeilen stehen."
+   },
+   "note_zero_weights": {
+    "Rows of weight 0 were left out of the fit.": "Zeilen mit Gewicht 0 wurden aus dem Modell ausgeschlossen."
+   },
+   "note_class_threshold": {
+    "The misclassification error of the cross-validation counts at the threshold 0.5, as glmnet does; the classification of the fit is at the node's threshold.": "Die Fehlklassifikationsrate der Kreuzvalidierung zählt beim Schwellenwert 0,5, wie glmnet; die Klassifikation des Modells gilt beim Schwellenwert des Knotens."
+   }
   },
   "stats": {
    "model": {
     "lambda": "Gewähltes λ",
     "log_lambda": "log des gewählten λ",
     "lambda_min": "λ des kleinsten Fehlers",
-    "lambda_1se": "Größtes λ innerhalb 1 SF",
+    "lambda_1se": "Größtes λ innerhalb 1 SE",
+    "log_lambda_min": "log λ des kleinsten Fehlers",
+    "log_lambda_1se": "log des größten λ innerhalb 1 SE",
     "mixing": "Mischung (α des Elastic Net)",
-    "cv_value": "Fehler beim gewählten λ",
+    "cv_value": "Kreuzvalidierter Fehler beim gewählten λ",
     "cv_se": "Sein Standardfehler",
     "n_selected": "Ausgewählte Terme",
     "r_squared": "R² außerhalb der Falte",
     "rmse": "RMSE außerhalb der Falte",
-    "mae": "MAE außerhalb der Falte"
+    "mae": "MAE außerhalb der Falte",
+    "auc": "AUC außerhalb der Falte",
+    "auc_ci_low": "AUC außerhalb der Falte, KI unten (DeLong)",
+    "auc_ci_high": "AUC außerhalb der Falte, KI oben (DeLong)",
+    "brier": "Brier-Score außerhalb der Falte",
+    "accuracy": "Genauigkeit außerhalb der Falte",
+    "sensitivity": "Sensitivität außerhalb der Falte",
+    "specificity": "Spezifität außerhalb der Falte",
+    "precision": "Präzision außerhalb der Falte",
+    "deviance": "Devianz außerhalb der Falte",
+    "note_edge_small": "Hinweis: λ am Rand des Pfads",
+    "note_edge_large": "Hinweis: λ am Anfang des Pfads",
+    "note_all_zero_1se": "Hinweis: kein Term behalten",
+    "note_all_zero": "Hinweis: kein Term behalten",
+    "note_largest_1se": "Hinweis: das größte λ",
+    "note_largest": "Hinweis: das größte λ",
+    "note_mixing_cv": "Hinweis: die Mischung",
+    "note_mixing_cv_fixed": "Hinweis: die Mischung",
+    "note_fixed_lambda": "Hinweis: ein festes λ",
+    "note_grouped_folds": "Hinweis: gruppierte Falten",
+    "note_not_standardized": "Hinweis: keine Standardisierung",
+    "note_case_weights": "Hinweis: die Gewichte",
+    "note_frequency_weights": "Hinweis: die Gewichte",
+    "note_zero_weights": "Hinweis: Zeilen mit Gewicht 0",
+    "note_class_threshold": "Hinweis: die Fehlklassifikationsrate"
    }
   },
   "checks": {
    "lambda_choice": {
     "name": "Die Wahl von λ",
-    "h0": "Das gewählte λ liegt innerhalb des Pfads, nicht an seinem Rand, und behält Terme.",
-    "advice": "Erweitern Sie den Pfad: Das beste λ liegt an seinem Rand; oder alle Koeffizienten sind null."
+    "h0": "Der kleinste Fehler liegt innerhalb des λ-Pfads, und das gewählte λ behält einige Terme.",
+    "advice": "Der kleinste Fehler liegt an einem Rand des Pfads, oder das gewählte λ behält keinen Term: die Hinweise sagen, welches, und was zu tun ist."
+   },
+   "separation": {
+    "advice": "Der Term trennt das Ergebnis: die Penalisierung hält seine Schätzung endlich, aber ihre Größe hängt von λ ab: lesen Sie sie mit Vorsicht."
+   },
+   "hosmer_lemeshow": {
+    "not_computed": "Mit einer Penalisierung wird der Test nicht berechnet (er setzt ein nicht penalisiertes Modell voraus): lesen Sie das Kalibrierungsdiagramm außerhalb der Falte, eine Diagnose."
+   },
+   "epv": {
+    "advice": "Wenige Ereignisse für die Zahl der Terme: die Penalisierung stabilisiert die Schätzungen; weniger Terme stabilisieren sie mehr."
    }
   }
  },
@@ -196,33 +517,105 @@
    "lambda": "λ elegido",
    "log_lambda": "log λ = {x}",
    "n_selected": "Términos seleccionados",
-   "r_squared_oof": "R² fuera de pliegue",
-   "auc_oof": "AUC fuera de pliegue",
-   "brier": "Puntuación de Brier",
+   "r_squared_oof": "R² fuera de muestra",
+   "auc_oof": "AUC fuera de muestra",
+   "brier_oof": "Brier fuera de muestra",
    "n_events": "Filas / eventos",
    "auc_ci": "IC {low} – {high}"
   },
   "coef": {
    "no_inference": "Ni error estándar, ni p-valor, ni intervalo: la inferencia tras una selección penalizada no está prevista.",
-   "dummies": "Las variables indicadoras de un predictor categórico se penalizan una a una."
+   "dummies": "Las variables indicadoras de un predictor categórico se penalizan una a una: el lasso puede conservar un nivel y descartar otro.",
+   "dummies_ridge": "Las variables indicadoras de un predictor categórico se penalizan una a una: cada nivel se reduce por su cuenta."
   },
   "tables": {
-   "at_lambda": "Coeficientes en el λ elegido (escala original)"
+   "at_lambda": "Coeficientes en el λ elegido (escala original)",
+   "confusion_line": "Fuera de muestra, en el umbral {threshold}: exactitud {accuracy}, sensibilidad {sensitivity}, especificidad {specificity}."
+  },
+  "sections": {
+   "confusion": "Clasificación fuera de muestra"
+  },
+  "diagnostics_note": {
+   "linear": "Con una penalización las comprobaciones son diagnósticos, no pruebas: aquí la elección de λ, en los gráficos los residuos fuera de muestra. Las pruebas de un modelo sin penalizar (curvatura, varianza, normalidad, independencia, colinealidad, influencia) suponen que no hay penalización y no se calculan.",
+   "logistic": "Con una penalización las comprobaciones son diagnósticos, no pruebas: aquí la separación, los eventos por variable y la elección de λ, en los gráficos la ROC y la calibración fuera de muestra. Las pruebas de un modelo sin penalizar (Hosmer–Lemeshow, Box–Tidwell, colinealidad, influencia) suponen que no hay penalización y no se calculan."
   },
   "charts": {
-   "cv": "Validación cruzada: el error frente a log λ, el λ elegido marcado",
-   "paths": "Trayectorias de los coeficientes frente a log λ",
-   "coef_selected": "Coeficientes en el λ elegido",
-   "resid_fitted_oof": "Residuos frente a valores ajustados, fuera de pliegue",
-   "qq_oof": "Q–Q normal de los residuos, fuera de pliegue",
-   "roc_oof": "Curva ROC, fuera de pliegue",
-   "calibration_oof": "Calibración por deciles, fuera de pliegue",
-   "prob_oof": "Probabilidades estimadas por resultado, fuera de pliegue",
-   "confusion_oof": "Matriz de confusión en el umbral, fuera de pliegue"
+   "cv": "Validación cruzada frente a log λ; discontinuas: λ del error mínimo (izquierda) y dentro de 1 EE (derecha)",
+   "cv_fixed": "Validación cruzada frente a log λ; discontinuas: λ del error mínimo, dentro de 1 EE y el λ fijo",
+   "paths": "Trayectorias de los coeficientes frente a log λ (escala original); discontinua: el λ elegido",
+   "coef_selected": "Términos conservados en el λ elegido (sin el intercepto)",
+   "residual_oof": "Histograma de los residuos, fuera de muestra",
+   "resid_fitted_oof": "Residuos frente a valores ajustados, fuera de muestra",
+   "qq_oof": "Q–Q normal de los residuos, fuera de muestra",
+   "roc_oof": "Curva ROC, fuera de muestra",
+   "calibration_oof": "Calibración por deciles, fuera de muestra",
+   "prob_oof": "Probabilidades estimadas por resultado observado, fuera de muestra",
+   "confusion_oof": "Matriz de confusión en el umbral, fuera de muestra"
   },
   "series": {
-   "cv_mean": "Error",
-   "cv_band": "± 1 EE"
+   "cv_band": "± 1 EE",
+   "others": "Otros: suma de |coeficientes|"
+  },
+  "measures": {
+   "mse": "Error cuadrático medio",
+   "mae": "Error absoluto medio",
+   "deviance": "Devianza binomial",
+   "auc": "AUC",
+   "class": "Error de clasificación"
+  },
+  "values": {
+   "cv_measure": {
+    "mse": "error cuadrático medio",
+    "mae": "error absoluto medio",
+    "deviance": "devianza binomial",
+    "auc": "AUC",
+    "class": "error de clasificación"
+   },
+   "note_edge_small": {
+    "The least cross-validated error is at the smallest λ of the path: the best penalty may be smaller still; widen the path with a fixed λ below it, or compare with the fit without a penalty.": "El error mínimo de la validación cruzada está en el λ más pequeño de la trayectoria: la mejor penalización podría ser aún menor; amplíe la trayectoria con un λ fijo menor, o compare con el modelo sin penalización."
+   },
+   "note_edge_large": {
+    "The least cross-validated error is at the largest λ of the path, where the penalty keeps almost nothing: out of fold, the predictors do not predict the outcome better than its mean.": "El error mínimo de la validación cruzada está en el λ más grande de la trayectoria, donde la penalización no conserva casi nada: fuera de muestra, los predictores no predicen el resultado mejor que su media."
+   },
+   "note_all_zero_1se": {
+    "Every coefficient is zero at the chosen λ, the largest within one standard error of the least error: lambda = cv_min keeps the terms of the least error.": "Todos los coeficientes son cero en el λ elegido, el mayor dentro de un error estándar del error mínimo: lambda = cv_min conserva los términos del error mínimo."
+   },
+   "note_all_zero": {
+    "Every coefficient is zero at the chosen λ: out of fold, the predictors do not predict the outcome better than its mean.": "Todos los coeficientes son cero en el λ elegido: fuera de muestra, los predictores no predicen el resultado mejor que su media."
+   },
+   "note_largest_1se": {
+    "The chosen λ is the largest of the path, within one standard error of the least error: the coefficients are shrunk almost to zero; lambda = cv_min keeps the terms of the least error.": "El λ elegido es el mayor de la trayectoria, dentro de un error estándar del error mínimo: los coeficientes se reducen casi a cero; lambda = cv_min conserva los términos del error mínimo."
+   },
+   "note_largest": {
+    "The chosen λ is the largest of the path: the coefficients are shrunk almost to zero, and the model predicts little more than the outcome's mean.": "El λ elegido es el mayor de la trayectoria: los coeficientes se reducen casi a cero, y el modelo predice poco más que la media del resultado."
+   },
+   "note_mixing_cv": {
+    "The mixing was chosen by cross-validation among 0.1, 0.25, 0.5, 0.75, 0.9 and 1, on the same folds: the one with the least error at its best λ.": "La mezcla se eligió por validación cruzada entre 0,1, 0,25, 0,5, 0,75, 0,9 y 1, en los mismos pliegues: la de menor error en su mejor λ."
+   },
+   "note_mixing_cv_fixed": {
+    "The mixing was chosen by cross-validation among 0.1, 0.25, 0.5, 0.75, 0.9 and 1, on the same folds: the one with the least error at the fixed λ.": "La mezcla se eligió por validación cruzada entre 0,1, 0,25, 0,5, 0,75, 0,9 y 1, en los mismos pliegues: la de menor error en el λ fijo."
+   },
+   "note_fixed_lambda": {
+    "λ is fixed: it is added to glmnet's path, and the coefficients and the out-of-fold numbers are read at it.": "λ es fijo: se añade a la trayectoria de glmnet, y los coeficientes y los valores fuera de muestra se leen en él."
+   },
+   "note_grouped_folds": {
+    "The folds are grouped: all the rows of a value of the column fold_by fall in the same fold.": "Los pliegues están agrupados: todas las filas de un valor de la columna fold_by caen en el mismo pliegue."
+   },
+   "note_not_standardized": {
+    "The predictors are penalized on their own scales (standardize = false): a predictor with large values is penalized less than one with small values.": "Los predictores se penalizan en su propia escala (standardize = false): un predictor con valores grandes se penaliza menos que uno con valores pequeños."
+   },
+   "note_case_weights": {
+    "The weights are case weights: the fit, the cross-validation and the out-of-fold numbers weigh each row by them; the residuals' charts read √w × residual.": "Los pesos son pesos de las filas: el modelo, la validación cruzada y los valores fuera de muestra ponderan cada fila con ellos; los gráficos de residuos leen √w × residuo."
+   },
+   "note_frequency_weights": {
+    "The weights are frequencies: n, the events, the rates and the checks count the cases the rows stand for.": "Los pesos son frecuencias: n, los eventos, las tasas y las comprobaciones cuentan los casos que representan las filas."
+   },
+   "note_zero_weights": {
+    "Rows of weight 0 were left out of the fit.": "Las filas de peso 0 se excluyeron del modelo."
+   },
+   "note_class_threshold": {
+    "The misclassification error of the cross-validation counts at the threshold 0.5, as glmnet does; the classification of the fit is at the node's threshold.": "El error de clasificación de la validación cruzada se cuenta en el umbral 0,5, como hace glmnet; la clasificación del modelo es en el umbral del nodo."
+   }
   },
   "stats": {
    "model": {
@@ -230,20 +623,55 @@
     "log_lambda": "log del λ elegido",
     "lambda_min": "λ del error mínimo",
     "lambda_1se": "Mayor λ dentro de 1 EE",
+    "log_lambda_min": "log del λ del error mínimo",
+    "log_lambda_1se": "log del mayor λ dentro de 1 EE",
     "mixing": "Mezcla (α del elastic net)",
-    "cv_value": "Error en el λ elegido",
+    "cv_value": "Error de validación en el λ elegido",
     "cv_se": "Su error estándar",
     "n_selected": "Términos seleccionados",
-    "r_squared": "R² fuera de pliegue",
-    "rmse": "RMSE fuera de pliegue",
-    "mae": "MAE fuera de pliegue"
+    "r_squared": "R² fuera de muestra",
+    "rmse": "RMSE fuera de muestra",
+    "mae": "MAE fuera de muestra",
+    "auc": "AUC fuera de muestra",
+    "auc_ci_low": "AUC fuera de muestra, IC inferior (DeLong)",
+    "auc_ci_high": "AUC fuera de muestra, IC superior (DeLong)",
+    "brier": "Puntuación de Brier fuera de muestra",
+    "accuracy": "Exactitud fuera de muestra",
+    "sensitivity": "Sensibilidad fuera de muestra",
+    "specificity": "Especificidad fuera de muestra",
+    "precision": "Precisión fuera de muestra",
+    "deviance": "Devianza fuera de muestra",
+    "note_edge_small": "Nota: λ en el borde de la trayectoria",
+    "note_edge_large": "Nota: λ al comienzo de la trayectoria",
+    "note_all_zero_1se": "Nota: ningún término conservado",
+    "note_all_zero": "Nota: ningún término conservado",
+    "note_largest_1se": "Nota: el mayor λ",
+    "note_largest": "Nota: el mayor λ",
+    "note_mixing_cv": "Nota: la mezcla",
+    "note_mixing_cv_fixed": "Nota: la mezcla",
+    "note_fixed_lambda": "Nota: un λ fijo",
+    "note_grouped_folds": "Nota: pliegues agrupados",
+    "note_not_standardized": "Nota: sin estandarización",
+    "note_case_weights": "Nota: los pesos",
+    "note_frequency_weights": "Nota: los pesos",
+    "note_zero_weights": "Nota: filas de peso 0",
+    "note_class_threshold": "Nota: el error de clasificación"
    }
   },
   "checks": {
    "lambda_choice": {
     "name": "La elección de λ",
-    "h0": "El λ elegido está dentro de la trayectoria, no en su borde, y conserva términos.",
-    "advice": "Amplíe la trayectoria: el mejor λ está en su borde; o todos los coeficientes son cero."
+    "h0": "El error mínimo está dentro de la trayectoria de λ, y el λ elegido conserva algunos términos.",
+    "advice": "El error mínimo está en un borde de la trayectoria, o el λ elegido no conserva ningún término: las notas dicen cuál, y qué hacer."
+   },
+   "separation": {
+    "advice": "El término separa el resultado: la penalización mantiene finita su estimación, pero su tamaño depende de λ: léala con cautela."
+   },
+   "hosmer_lemeshow": {
+    "not_computed": "Con una penalización la prueba no se calcula (supone un modelo sin penalizar): lea el gráfico de calibración fuera de muestra, un diagnóstico."
+   },
+   "epv": {
+    "advice": "Pocos eventos para el número de términos: la penalización estabiliza las estimaciones; menos términos las estabilizan más."
    }
   }
  },
@@ -255,57 +683,164 @@
   },
   "kpi": {
    "n": "Lignes utilisées",
-   "lambda": "λ retenu",
+   "lambda": "λ choisi",
    "log_lambda": "log λ = {x}",
-   "n_selected": "Termes retenus",
-   "r_squared_oof": "R² hors pli",
-   "auc_oof": "AUC hors pli",
-   "brier": "Score de Brier",
+   "n_selected": "Termes sélectionnés",
+   "r_squared_oof": "R² hors échantillon",
+   "auc_oof": "AUC hors échantillon",
+   "brier_oof": "Brier hors échantillon",
    "n_events": "Lignes / événements",
    "auc_ci": "IC {low} – {high}"
   },
   "coef": {
-   "no_inference": "Ni erreur type, ni p-valeur, ni intervalle : l'inférence après une sélection pénalisée n'est pas prévue.",
-   "dummies": "Les indicatrices d'un prédicteur catégoriel sont pénalisées une à une."
+   "no_inference": "Ni erreur standard, ni p-valeur, ni intervalle : l'inférence après une sélection pénalisée n'est pas prévue.",
+   "dummies": "Les indicatrices d'un prédicteur catégoriel sont pénalisées une à une : le lasso peut garder un niveau et en écarter un autre.",
+   "dummies_ridge": "Les indicatrices d'un prédicteur catégoriel sont pénalisées une à une : chaque niveau est réduit pour son compte."
   },
   "tables": {
-   "at_lambda": "Coefficients au λ retenu (échelle d'origine)"
+   "at_lambda": "Coefficients au λ choisi (échelle d'origine)",
+   "confusion_line": "Hors échantillon, au seuil {threshold} : exactitude {accuracy}, sensibilité {sensitivity}, spécificité {specificity}."
+  },
+  "sections": {
+   "confusion": "Classification hors échantillon"
+  },
+  "diagnostics_note": {
+   "linear": "Avec une pénalité, les vérifications sont des diagnostics, pas des tests : ici le choix de λ, dans les graphiques les résidus hors échantillon. Les tests d'un modèle non pénalisé (courbure, variance, normalité, indépendance, colinéarité, influence) supposent l'absence de pénalité et ne sont pas calculés.",
+   "logistic": "Avec une pénalité, les vérifications sont des diagnostics, pas des tests : ici la séparation, les événements par variable et le choix de λ, dans les graphiques la ROC et la calibration hors échantillon. Les tests d'un modèle non pénalisé (Hosmer–Lemeshow, Box–Tidwell, colinéarité, influence) supposent l'absence de pénalité et ne sont pas calculés."
   },
   "charts": {
-   "cv": "Validation croisée : l'erreur selon log λ, le λ retenu marqué",
-   "paths": "Chemins des coefficients selon log λ",
-   "coef_selected": "Coefficients au λ retenu",
-   "resid_fitted_oof": "Résidus selon les valeurs ajustées, hors pli",
-   "qq_oof": "Q–Q normal des résidus, hors pli",
-   "roc_oof": "Courbe ROC, hors pli",
-   "calibration_oof": "Calibration par déciles, hors pli",
-   "prob_oof": "Probabilités prédites selon le résultat, hors pli",
-   "confusion_oof": "Matrice de confusion au seuil, hors pli"
+   "cv": "Validation croisée selon log λ ; en tirets : λ de l'erreur minimale (gauche) et à 1 ET (droite)",
+   "cv_fixed": "Validation croisée selon log λ ; en tirets : λ de l'erreur minimale, à 1 ET et le λ fixé",
+   "paths": "Chemins des coefficients selon log λ (échelle d'origine) ; en tirets : le λ choisi",
+   "coef_selected": "Termes gardés au λ choisi (sans la constante)",
+   "residual_oof": "Histogramme des résidus, hors échantillon",
+   "resid_fitted_oof": "Résidus selon les valeurs ajustées, hors échantillon",
+   "qq_oof": "Q–Q normal des résidus, hors échantillon",
+   "roc_oof": "Courbe ROC, hors échantillon",
+   "calibration_oof": "Calibration par déciles, hors échantillon",
+   "prob_oof": "Probabilités prédites par issue observée, hors échantillon",
+   "confusion_oof": "Matrice de confusion au seuil, hors échantillon"
   },
   "series": {
-   "cv_mean": "Erreur",
-   "cv_band": "± 1 ET"
+   "cv_band": "± 1 ET",
+   "others": "Autres : somme des |coefficients|"
+  },
+  "measures": {
+   "mse": "Erreur quadratique moyenne",
+   "mae": "Erreur absolue moyenne",
+   "deviance": "Déviance binomiale",
+   "auc": "AUC",
+   "class": "Taux de mauvaise classification"
+  },
+  "values": {
+   "cv_measure": {
+    "mse": "erreur quadratique moyenne",
+    "mae": "erreur absolue moyenne",
+    "deviance": "déviance binomiale",
+    "auc": "AUC",
+    "class": "taux de mauvaise classification"
+   },
+   "note_edge_small": {
+    "The least cross-validated error is at the smallest λ of the path: the best penalty may be smaller still; widen the path with a fixed λ below it, or compare with the fit without a penalty.": "L'erreur minimale de la validation croisée est au plus petit λ du chemin : la meilleure pénalité pourrait être plus petite encore ; élargissez le chemin avec un λ fixé plus petit, ou comparez avec le modèle sans pénalité."
+   },
+   "note_edge_large": {
+    "The least cross-validated error is at the largest λ of the path, where the penalty keeps almost nothing: out of fold, the predictors do not predict the outcome better than its mean.": "L'erreur minimale de la validation croisée est au plus grand λ du chemin, où la pénalité ne garde presque rien : hors échantillon, les prédicteurs ne prédisent pas l'issue mieux que sa moyenne."
+   },
+   "note_all_zero_1se": {
+    "Every coefficient is zero at the chosen λ, the largest within one standard error of the least error: lambda = cv_min keeps the terms of the least error.": "Tous les coefficients sont nuls au λ choisi, le plus grand à moins d'une erreur standard de l'erreur minimale : lambda = cv_min garde les termes de l'erreur minimale."
+   },
+   "note_all_zero": {
+    "Every coefficient is zero at the chosen λ: out of fold, the predictors do not predict the outcome better than its mean.": "Tous les coefficients sont nuls au λ choisi : hors échantillon, les prédicteurs ne prédisent pas l'issue mieux que sa moyenne."
+   },
+   "note_largest_1se": {
+    "The chosen λ is the largest of the path, within one standard error of the least error: the coefficients are shrunk almost to zero; lambda = cv_min keeps the terms of the least error.": "Le λ choisi est le plus grand du chemin, à moins d'une erreur standard de l'erreur minimale : les coefficients sont réduits presque à zéro ; lambda = cv_min garde les termes de l'erreur minimale."
+   },
+   "note_largest": {
+    "The chosen λ is the largest of the path: the coefficients are shrunk almost to zero, and the model predicts little more than the outcome's mean.": "Le λ choisi est le plus grand du chemin : les coefficients sont réduits presque à zéro, et le modèle ne prédit guère plus que la moyenne de l'issue."
+   },
+   "note_mixing_cv": {
+    "The mixing was chosen by cross-validation among 0.1, 0.25, 0.5, 0.75, 0.9 and 1, on the same folds: the one with the least error at its best λ.": "Le mélange a été choisi par validation croisée parmi 0,1, 0,25, 0,5, 0,75, 0,9 et 1, sur les mêmes plis : celui de la plus petite erreur à son meilleur λ."
+   },
+   "note_mixing_cv_fixed": {
+    "The mixing was chosen by cross-validation among 0.1, 0.25, 0.5, 0.75, 0.9 and 1, on the same folds: the one with the least error at the fixed λ.": "Le mélange a été choisi par validation croisée parmi 0,1, 0,25, 0,5, 0,75, 0,9 et 1, sur les mêmes plis : celui de la plus petite erreur au λ fixé."
+   },
+   "note_fixed_lambda": {
+    "λ is fixed: it is added to glmnet's path, and the coefficients and the out-of-fold numbers are read at it.": "λ est fixé : il est ajouté au chemin de glmnet, et les coefficients et les valeurs hors échantillon y sont lus."
+   },
+   "note_grouped_folds": {
+    "The folds are grouped: all the rows of a value of the column fold_by fall in the same fold.": "Les plis sont groupés : toutes les lignes d'une valeur de la colonne fold_by tombent dans le même pli."
+   },
+   "note_not_standardized": {
+    "The predictors are penalized on their own scales (standardize = false): a predictor with large values is penalized less than one with small values.": "Les prédicteurs sont pénalisés sur leur propre échelle (standardize = false) : un prédicteur aux grandes valeurs est moins pénalisé qu'un prédicteur aux petites valeurs."
+   },
+   "note_case_weights": {
+    "The weights are case weights: the fit, the cross-validation and the out-of-fold numbers weigh each row by them; the residuals' charts read √w × residual.": "Les poids sont des poids de lignes : le modèle, la validation croisée et les valeurs hors échantillon pondèrent chaque ligne ; les graphiques des résidus lisent √w × résidu."
+   },
+   "note_frequency_weights": {
+    "The weights are frequencies: n, the events, the rates and the checks count the cases the rows stand for.": "Les poids sont des fréquences : n, les événements, les taux et les vérifications comptent les cas que les lignes représentent."
+   },
+   "note_zero_weights": {
+    "Rows of weight 0 were left out of the fit.": "Les lignes de poids 0 ont été exclues du modèle."
+   },
+   "note_class_threshold": {
+    "The misclassification error of the cross-validation counts at the threshold 0.5, as glmnet does; the classification of the fit is at the node's threshold.": "Le taux de mauvaise classification de la validation croisée compte au seuil 0,5, comme glmnet ; la classification du modèle est au seuil du nœud."
+   }
   },
   "stats": {
    "model": {
-    "lambda": "λ retenu",
-    "log_lambda": "log du λ retenu",
+    "lambda": "λ choisi",
+    "log_lambda": "log du λ choisi",
     "lambda_min": "λ de l'erreur minimale",
     "lambda_1se": "Plus grand λ à 1 ET",
+    "log_lambda_min": "log du λ de l'erreur minimale",
+    "log_lambda_1se": "log du plus grand λ à 1 ET",
     "mixing": "Mélange (α de l'elastic net)",
-    "cv_value": "Erreur au λ retenu",
-    "cv_se": "Son erreur type",
-    "n_selected": "Termes retenus",
-    "r_squared": "R² hors pli",
-    "rmse": "RMSE hors pli",
-    "mae": "MAE hors pli"
+    "cv_value": "Erreur de validation au λ choisi",
+    "cv_se": "Son erreur standard",
+    "n_selected": "Termes sélectionnés",
+    "r_squared": "R² hors échantillon",
+    "rmse": "RMSE hors échantillon",
+    "mae": "MAE hors échantillon",
+    "auc": "AUC hors échantillon",
+    "auc_ci_low": "AUC hors échantillon, IC bas (DeLong)",
+    "auc_ci_high": "AUC hors échantillon, IC haut (DeLong)",
+    "brier": "Score de Brier hors échantillon",
+    "accuracy": "Exactitude hors échantillon",
+    "sensitivity": "Sensibilité hors échantillon",
+    "specificity": "Spécificité hors échantillon",
+    "precision": "Précision hors échantillon",
+    "deviance": "Déviance hors échantillon",
+    "note_edge_small": "Note : λ au bord du chemin",
+    "note_edge_large": "Note : λ en tête du chemin",
+    "note_all_zero_1se": "Note : aucun terme gardé",
+    "note_all_zero": "Note : aucun terme gardé",
+    "note_largest_1se": "Note : le plus grand λ",
+    "note_largest": "Note : le plus grand λ",
+    "note_mixing_cv": "Note : le mélange",
+    "note_mixing_cv_fixed": "Note : le mélange",
+    "note_fixed_lambda": "Note : un λ fixé",
+    "note_grouped_folds": "Note : plis groupés",
+    "note_not_standardized": "Note : pas de standardisation",
+    "note_case_weights": "Note : les poids",
+    "note_frequency_weights": "Note : les poids",
+    "note_zero_weights": "Note : lignes de poids 0",
+    "note_class_threshold": "Note : le taux de mauvaise classification"
    }
   },
   "checks": {
    "lambda_choice": {
     "name": "Le choix de λ",
-    "h0": "Le λ retenu est à l'intérieur du chemin, pas à son bord, et garde des termes.",
-    "advice": "Élargissez le chemin : le meilleur λ est à son bord ; ou tous les coefficients sont nuls."
+    "h0": "L'erreur minimale est à l'intérieur du chemin de λ, et le λ choisi garde quelques termes.",
+    "advice": "L'erreur minimale est à un bord du chemin, ou le λ choisi ne garde aucun terme : les notes disent lequel, et que faire."
+   },
+   "separation": {
+    "advice": "Le terme sépare l'issue : la pénalité garde son estimation finie, mais sa taille dépend de λ : lisez-la avec prudence."
+   },
+   "hosmer_lemeshow": {
+    "not_computed": "Avec une pénalité le test n'est pas calculé (il suppose un modèle non pénalisé) : lisez le graphique de calibration hors échantillon, un diagnostic."
+   },
+   "epv": {
+    "advice": "Peu d'événements pour le nombre de termes : la pénalité stabilise les estimations ; moins de termes les stabilisent davantage."
    }
   }
  }

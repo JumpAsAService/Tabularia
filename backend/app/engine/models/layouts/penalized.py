@@ -1,13 +1,17 @@
 """The report of a penalized regression, linear or logistic (docs/specs/statistical-models.md,
 `penalty`): ridge, lasso, elastic net, λ chosen by cross-validation. No standard error,
 p-value or interval (inference after a penalized selection is out of scope, and the page
-says so); the choice of λ is the check, its curve and the coefficients' paths its charts.
+says so); the checks are diagnostics, not tests, and the page says that too: the choice of λ,
+and for the logistic separation and the events per variable; the tests of an unpenalized fit
+are not computed.
 
 Cards: linear — the rows, λ, the terms selected, R² out of fold; logistic — rows and events,
-the AUC out of fold, λ, the Brier score. Charts: the cross-validation curve with its band
-and the chosen λ, the paths of the coefficients, the coefficients at the chosen λ; then the
-residuals out of fold (linear) or the ROC, calibration, probabilities and confusion matrix
-out of fold (logistic).
+the AUC out of fold, λ, the Brier score out of fold. Charts: the cross-validation curve with
+its band and both λ marked (the least error's and the 1 SE rule's, and a fixed λ), the paths
+of the coefficients with the chosen λ marked, the terms kept at the chosen λ (the intercept
+left out: on the outcome's scale it would flatten the others); then the residuals out of fold,
+against the fitted values, their Q–Q and histogram (linear), or the ROC, calibration,
+probabilities and confusion matrix out of fold (logistic).
 """
 from __future__ import annotations
 
@@ -16,26 +20,45 @@ from typing import Any
 from app.engine.models import catalog
 from app.engine.models.layouts import common as c
 
+# the series of the paths that sums up the terms not drawn one by one (the runner's name for it)
+OTHERS = "(others)"
+
 
 def name(w: dict, checked: dict[str, Any]) -> str:
     """«Linear regression — lasso»."""
     return w["name"] + " — " + w["penalties"][checked["penalty"]]
 
 
-def cv_charts(w: dict) -> tuple[c.Chart, ...]:
+def cv_charts(w: dict, checked: dict[str, Any]) -> tuple[c.Chart, ...]:
     ch, s = w["charts"], w["series"]
-    cv = c.xy("cv", ch["cv"], '[section] = "cv"', [
-        c.mark("cv_mean", "line", s["cv_mean"]), c.mark("cv_mean", "point"),
+    fixed = not isinstance(checked.get("lambda", "cv_1se"), str)
+    marked = [c.num(c.model_key("log_lambda_min")), c.num(c.model_key("log_lambda_1se"))]
+    if fixed:
+        marked.append(c.num(c.model_key("log_lambda")))
+    cv = c.xy("cv", ch["cv_fixed" if fixed else "cv"], '[section] = "cv"', [
+        c.mark("cv_mean", "line", w["measures"][checked.get("measure") or "mse"]), c.mark("cv_mean", "point"),
         c.mark("cv_low", "band_low", s["cv_band"]), c.mark("cv_high", "band_high"),
-    ], {"target_x": [c.num(c.model_key("log_lambda"))], "legend": False}, under="lambda_choice")
+    ], {"target_x": marked, "legend": True}, under="lambda_choice", wide=True)
     paths = c.xy("paths", ch["paths"], '[section] = "curve" AND [level] = "paths"', [c.mark("y", "line")],
-                 {"target_x": [c.num(c.model_key("log_lambda"))], "target": 0}, split_by="[level_2]", wide=True)
+                 {"target_x": [c.num(c.model_key("log_lambda"))], "target": 0},
+                 split_by=f'IF([level_2] = {c.q(OTHERS)}, {c.q(s["others"])}, [level_2])', wide=True)
+    # the terms kept; the intercept left out: on the outcome's scale (or the log odds' baseline) it would
+    # flatten the others. No labels on the bars: the table above has the numbers, and a negative bar's
+    # label would cross its term's name
+    f = '[section] = "coef" AND [stat] = "estimate" AND [level] <> "(Intercept)" AND [value] <> 0'
     selected = c.Chart("coef_selected", "bar", ch["coef_selected"], {
-        "filter": '[section] = "coef" AND [stat] = "estimate"', "category": c.term(),
-        "series": [{"value": "SUM([value])", "name": s["estimate"]}],
-        "options": {"labels": True, "format": "0.###", "legend": False},
-        "visible": c.exists('[section] = "coef" AND [stat] = "estimate"')})
+        "filter": f, "category": c.term(), "series": [{"value": "SUM([value])", "name": s["estimate"]}],
+        "options": {"legend": False, "format": "0.###"}, "visible": c.exists(f)})
     return cv, paths, selected
+
+
+def coef_note(w: dict, penalty: str) -> str:
+    """No inference, and, when a categorical predictor made dummies, that each is penalized alone
+    (the lasso and the elastic net may keep one level and drop another; the ridge shrinks each)."""
+    dummies = w["coef"]["dummies_ridge" if penalty == "ridge" else "dummies"]
+    alone, with_dummies = w["coef"]["no_inference"], w["coef"]["no_inference"] + " " + dummies
+    dummies = '[section] = "coef" AND NOT ISNULL([level_2]) AND [level_2] <> ""'
+    return f"=IF(COUNTIF({dummies}) > 0, {c.q(with_dummies)}, {c.q(alone)})"
 
 
 def page(model: str, params: dict[str, Any], locale: str, sample: list[dict] | None, step: str | None, *,
@@ -52,13 +75,14 @@ def page(model: str, params: dict[str, Any], locale: str, sample: list[dict] | N
                  c.Card("k_selected", k["n_selected"], c.num(c.model_key("n_selected")), "#,##0"),
                  c.Card("k_r2", k["r_squared_oof"], c.shown(c.num(c.model_key("r_squared")), "0.0000")))
         stats_ = ("estimate", "selected")
-        charts = (*cv_charts(w), *linear.residual_charts(w, out_of_fold=True))
+        charts = (*cv_charts(w, checked), *linear.residual_charts(w, out_of_fold=True),
+                  c.histogram("c_residual", w["charts"]["residual_oof"], "residual", w["series"]["count"]))
     else:
         cards = (logistic.rows_and_events(w), logistic.auc_card(w, k["auc_oof"]), lam,
-                 c.Card("k_brier", k["brier"], c.shown(c.num(c.model_key("brier")), "0.0000")))
+                 c.Card("k_brier", k["brier_oof"], c.shown(c.num(c.model_key("brier")), "0.0000")))
         stats_ = ("estimate", "odds_ratio", "selected")
-        charts = (*cv_charts(w), *logistic.classification_charts(w, out_of_fold=True))
-    note = w["coef"]["no_inference"] + (" " + w["coef"]["dummies"] if checked.get("predictors") else "")
+        charts = (*cv_charts(w, checked), *logistic.classification_charts(w, out_of_fold=True))
     return c.page(model, params, locale, sample, step, name=name, about=about, cards=cards,
-                  coef_tables=(c.CoefTable("coef", ct["at_lambda"], stats_, width=30),), coef_note=note, charts=charts,
-                  blocks=(logistic.confusion_block,) if model == "logistic" else ())
+                  coef_tables=(c.CoefTable("coef", ct["at_lambda"], stats_, width=30),), coef_note=coef_note(w, checked["penalty"]),
+                  charts=charts, blocks=(logistic.confusion_block,) if model == "logistic" else (),
+                  assumptions_note=w["diagnostics_note"][model], p_values=False)

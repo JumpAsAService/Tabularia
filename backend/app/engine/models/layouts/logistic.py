@@ -56,9 +56,10 @@ def classification_charts(w: dict, out_of_fold: bool = False) -> tuple[c.Chart, 
     suffix = "_oof" if out_of_fold else ""
     roc = c.xy("roc", ch["roc" + suffix], '[section] = "curve" AND [level] = "roc"', [c.mark("y", "line", s["roc"])],
                {"diagonal": True, "legend": False})
+    # out of fold (a penalized fit) the chart is the diagnostic itself: Hosmer–Lemeshow is not computed there
     calibration = c.xy("calibration", ch["calibration" + suffix], '[section] = "point" AND [level] = "calibration"',
                        [c.mark("y", "point", s["deciles"]), c.mark("y", "line")], {"diagonal": True, "legend": False},
-                       under="hosmer_lemeshow")
+                       under=None if out_of_fold else "hosmer_lemeshow")
     prob = c.histogram("c_prob", ch["prob" + suffix], "prob", s["count"], split=True)
     f = '[section] = "cell"'
     confusion = c.Chart("confusion", "heatmap", ch["confusion" + suffix], {
