@@ -27,7 +27,7 @@ import ReportPages from '~/components/report/ReportPages.vue'
 import { errMessage } from '~/composables/useApi'
 import type { Recent } from '~/composables/previewGrid'
 import {
-  STAT_REPORT_ZOOM_KEY, STAT_REPORT_ZOOMS, statModelReportKey, statModelReportRequest, statReportKey, statReportProblem,
+  STAT_REPORT_SETTLE_MS, STAT_REPORT_ZOOM_KEY, STAT_REPORT_ZOOMS, statReportCancelPath, statModelReportKey, statModelReportRequest, statReportKey, statReportProblem,
   statReportRequest, statReportRetryable, statReportShouldDraw, statReportState, statReportUnset, statReportZoomRead,
   statReportZoomStep, type StatModelReportTarget, type StatModelRuns, type StatReportChain, type StatReportProblem,
   type StatReportShown,
@@ -113,8 +113,12 @@ async function draw() {
   problem.value = null
   failedKey.value = null
   startClock()
+  let started: string | null = null
   try {
     const { task_id } = await ask({ chain, model, locale: lang, step }, 'svg', mine.signal)
+    started = task_id
+    // left while the request was on its way: the render is stopped on the server too
+    if (controller !== mine) { cancelRender(task_id); return }
     const outcome = await reports.followRender(task_id, { signal: mine.signal })
     const screen = await reports.screenOf(outcome)
     const entry: StatReportShown = { key: k, pages: screen.pages, chain, ...(model ? { model } : {}), locale: lang, step }
@@ -123,7 +127,11 @@ async function draw() {
     shown.value = entry
     announce.value = t('statReport.drawn', { n: entry.pages.length }, entry.pages.length)
   } catch (e) {
-    if (isAbort(e) || controller !== mine) return
+    if (isAbort(e) || controller !== mine) {
+      // the tab left it: the server stops it too, and gives the person's place back
+      if (started) cancelRender(started)
+      return
+    }
     // the pages of the node as it was go: the answer to «Update» is this sentence
     shown.value = null
     problem.value = statReportProblem(e, errMessage(e))
@@ -138,7 +146,24 @@ async function draw() {
   }
 }
 
+/** «Stop» on a render nobody waits for any more: it would run on the server up to an hour and
+ *  hold one of the person's places. The answer is of no use; a render that ended is left as it is. */
+function cancelRender(taskId: string) {
+  apiFetch(statReportCancelPath(taskId), { method: 'POST' }).catch(() => { /* it ends by itself */ })
+}
+
+// a node clicked after another within a moment is not drawn: a click in a row on several nodes
+// asks for the report of the last
+let settle: ReturnType<typeof setTimeout> | undefined
+function drawSoon() {
+  clearTimeout(settle)
+  busy.value = !unset.value
+  settle = setTimeout(() => { settle = undefined; busy.value = false; draw() }, STAT_REPORT_SETTLE_MS)
+}
+
 function stop() {
+  clearTimeout(settle)
+  settle = undefined
   controller?.abort()
   controller = null
   busy.value = false
@@ -146,8 +171,11 @@ function stop() {
 }
 
 // the tab opened, another node, another language: its pages from memory, or drawn
+let opening = true
 watch([() => props.nodeId, locale], ([node, lang], before) => {
   const was = before ? { node: before[0] as string | null, locale: String(before[1]) } : null
+  const first = opening
+  opening = false
   if (!statReportShouldDraw({ node, locale: String(lang) }, was)) return
   stop()
   problem.value = null
@@ -160,7 +188,9 @@ watch([() => props.nodeId, locale], ([node, lang], before) => {
   // another node's pages are not this one's; the same node's in another language stay,
   // dimmed, until the new ones come
   if (!was || was.node !== node) shown.value = null
-  draw()
+  // the tab opening, a model node (a run asked for on purpose) or the same node in another language: at once
+  if (first || props.model || was?.node === node) draw()
+  else drawSoon()
 }, { immediate: true })
 
 // the same node, set differently: pages this page has drawn already are shown at once (an
@@ -182,6 +212,7 @@ watch(key, (k) => {
 const modelStale = computed(() => !!props.model?.stale && state.value === 'ready')
 
 onBeforeUnmount(() => {
+  clearTimeout(settle)
   controller?.abort()
   stopClock()
 })

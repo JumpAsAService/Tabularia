@@ -94,6 +94,15 @@ export const STAT_REPORT_STEP_MAX = 200
 export const STAT_REPORT_REMEMBERED = 12
 
 // ── zoom ──────────────────────────────────────────────────────────────────────
+/** How long a node stays selected before its report is asked for: clicking through several in a
+ *  row asks for the last one's only. */
+export const STAT_REPORT_SETTLE_MS = 350
+
+/** POST: stops a render the page no longer waits for (the gateway's, the owner's only). */
+export function statReportCancelPath(taskId: string): string {
+  return `/tasks/exports/${encodeURIComponent(taskId)}/cancel`
+}
+
 export const STAT_REPORT_ZOOM_KEY = 'tabularia.statReport.zoom'
 export const STAT_REPORT_ZOOM_DEFAULT = 0.75
 export const STAT_REPORT_ZOOMS: readonly number[] = [0.25, 0.33, 0.5, 0.67, 0.75, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4]

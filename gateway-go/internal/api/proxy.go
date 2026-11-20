@@ -45,6 +45,7 @@ func init() {
 			{Method: http.MethodPost, Pattern: "/tasks/exports", Handler: a("/tasks/exports", d.proxyStartExport)},
 			{Method: http.MethodGet, Pattern: "/tasks/exports/{task_id}", Handler: a("/tasks/exports/{task_id}", d.proxyExportStatus)},
 			{Method: http.MethodGet, Pattern: "/tasks/exports/{task_id}/file", Handler: a("/tasks/exports/{task_id}/file", d.proxyExportFile)},
+			{Method: http.MethodPost, Pattern: "/tasks/exports/{task_id}/cancel", Handler: a("/tasks/exports/{task_id}/cancel", d.proxyExportCancel)},
 			{Method: http.MethodPost, Pattern: "/tasks/stat-report", Handler: a("/tasks/stat-report", d.proxyStatReport)},
 			{Method: http.MethodGet, Pattern: "/tasks/{task_id}", Handler: a("/tasks/{task_id}", d.proxyTaskStatus)},
 			{Method: http.MethodPost, Pattern: "/files", Handler: a("/files", d.proxyUpload)},
@@ -669,6 +670,19 @@ func (d *Deps) proxyExportStatus(w http.ResponseWriter, r *http.Request, p *auth
 		return
 	}
 	d.forward(w, r, http.MethodGet, withQuery("/tasks/exports/"+id, []qsPair{{"owner", exportOwner(p.User.ID)}}), nil, false)
+}
+
+// proxyExportCancel is POST /tasks/exports/{task_id}/cancel: the Report tab, or whoever started a
+// render, no longer waits for it. The engine revokes the task and gives the place back; the
+// owner is the person's, so a task of another is answered as if it did not exist. A route of
+// the Go gateway only.
+func (d *Deps) proxyExportCancel(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+	id := r.PathValue("task_id")
+	if !taskIDRe.MatchString(id) {
+		server.JSON(w, http.StatusNotFound, map[string]string{"detail": "Export not found"})
+		return
+	}
+	d.forward(w, r, http.MethodPost, withQuery("/tasks/exports/"+id+"/cancel", []qsPair{{"owner", exportOwner(p.User.ID)}}), nil, false)
 }
 
 // proxyExportFile is GET /tasks/exports/{task_id}/file: a JSON answer gzipped for a

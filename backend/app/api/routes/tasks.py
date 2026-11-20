@@ -10,6 +10,7 @@ from app.tasks.jobs import transform_data_task
 from app.tasks.celery_app import celery_app
 from app.tasks import worker_pool
 from app.api import exports, preview_slots
+from app.core import export_slots
 from app.api.preview_slots import CANCELLED as SLOT_CANCELLED
 from app.api.models import (
     TransformOperation, TaskResponse, TransformDataRequest, TaskStatusResponse,
@@ -444,6 +445,21 @@ def export_status(task_id: str, owner: str | None = None):
         if lost:
             return {"status": "failed", "code": 503, "detail": lost}
     return {"status": "running"}
+
+
+@router.post("/exports/{task_id}/cancel")
+def export_cancel(task_id: str, owner: str | None = None) -> dict:
+    """Stops an export or a document its owner no longer waits for (the Report tab left a
+    render that was still running): the task is revoked, killed if it runs, and its place
+    among the owner's is given back at once, not when a worker would have found it. Only the
+    owner's: another's is answered as if it did not exist. A finished one is left as it is."""
+    exports.ensure_owner(task_id, owner)
+    result = AsyncResult(task_id, app=celery_app)
+    if result.state in ("SUCCESS", "FAILURE", "REVOKED"):
+        return {"cancelled": False}
+    celery_app.control.revoke(task_id, terminate=True, signal="SIGUSR1")
+    export_slots.release(owner, task_id)
+    return {"cancelled": True}
 
 
 @router.get("/exports/{task_id}/file")

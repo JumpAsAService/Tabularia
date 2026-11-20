@@ -306,3 +306,21 @@ test('a model\'s pages of a run older than the node stay, marked, with Run', asy
   const fresh = await render(View, { nodeId: 'ctl-7', chain: null, model: RUNS, memory })
   assert.ok(!text(fresh).includes(en.statReport.stale))
 })
+
+// ── a render the tab left is stopped on the server ───────────────────────────
+test('the path that stops a render names the task, encoded; the node settles before it is drawn', () => {
+  assert.equal(R.statReportCancelPath('0123-abcd'), '/tasks/exports/0123-abcd/cancel')
+  assert.equal(R.statReportCancelPath('a/b'), '/tasks/exports/a%2Fb/cancel')
+  assert.ok(R.STAT_REPORT_SETTLE_MS >= 200 && R.STAT_REPORT_SETTLE_MS <= 600)
+})
+
+test('the view stops a render it abandons and waits for the node to settle', () => {
+  const src = readFileSync(join(FRONTEND, 'components/ui/StatReportView.vue'), 'utf8')
+  // abandoned in flight (superseded, left, unmounted) or while the request was on its way
+  assert.match(src, /if \(started\) cancelRender\(started\)/)
+  assert.match(src, /if \(controller !== mine\) \{ cancelRender\(task_id\); return \}/)
+  assert.match(src, /apiFetch\(statReportCancelPath\(taskId\), \{ method: 'POST' \}\)/)
+  // a change of node draws after the settle time, and a stop or unmount cancels the wait
+  assert.match(src, /setTimeout\(\(\) => \{ settle = undefined; busy\.value = false; draw\(\) \}, STAT_REPORT_SETTLE_MS\)/)
+  assert.equal((src.match(/clearTimeout\(settle\)/g) ?? []).length >= 3, true)
+})
