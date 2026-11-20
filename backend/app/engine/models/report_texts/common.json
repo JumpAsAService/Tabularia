@@ -197,7 +197,8 @@
    "value": "Value",
    "what": "What it is"
   },
-  "alpha_note": "Verdicts come only from tests with a p-value, read against alpha = {alpha} (the node's option). The other measures are numbers with no verdict, listed under the checks."
+  "alpha_note": "Verdicts come only from tests with a p-value, read against alpha = {alpha} (the node's option). The other measures are numbers with no verdict, listed under the checks.",
+  "all": "All rows"
  },
  "it": {
   "footer": "Calcolato da Tabularia",
@@ -397,7 +398,8 @@
    "value": "Valore",
    "what": "Che cos'è"
   },
-  "alpha_note": "I verdetti vengono solo da test con un p-value, letti contro alfa = {alpha} (l'opzione del nodo). Le altre misure sono numeri senza verdetto, elencati sotto le verifiche."
+  "alpha_note": "I verdetti vengono solo da test con un p-value, letti contro alfa = {alpha} (l'opzione del nodo). Le altre misure sono numeri senza verdetto, elencati sotto le verifiche.",
+  "all": "Tutte le righe"
  },
  "de": {
   "footer": "Berechnet von Tabularia",
@@ -597,7 +599,8 @@
    "value": "Wert",
    "what": "Was es ist"
   },
-  "alpha_note": "Urteile stammen nur aus Tests mit einem p-Wert, gelesen gegen Alpha = {alpha} (die Option des Knotens). Die übrigen Messgrößen sind Zahlen ohne Urteil, unter den Prüfungen aufgeführt."
+  "alpha_note": "Urteile stammen nur aus Tests mit einem p-Wert, gelesen gegen Alpha = {alpha} (die Option des Knotens). Die übrigen Messgrößen sind Zahlen ohne Urteil, unter den Prüfungen aufgeführt.",
+  "all": "Alle Zeilen"
  },
  "es": {
   "footer": "Calculado por Tabularia",
@@ -797,7 +800,8 @@
    "value": "Valor",
    "what": "Qué es"
   },
-  "alpha_note": "Los veredictos salen solo de pruebas con valor p, leído frente a alfa = {alpha} (la opción del nodo). Las demás medidas son números sin veredicto, listados bajo las comprobaciones."
+  "alpha_note": "Los veredictos salen solo de pruebas con valor p, leído frente a alfa = {alpha} (la opción del nodo). Las demás medidas son números sin veredicto, listados bajo las comprobaciones.",
+  "all": "Todas las filas"
  },
  "fr": {
   "footer": "Calculé par Tabularia",
@@ -997,6 +1001,7 @@
    "value": "Valeur",
    "what": "Ce que c'est"
   },
-  "alpha_note": "Les verdicts viennent seulement de tests avec une valeur p, lue contre alpha = {alpha} (l'option du nœud). Les autres mesures sont des nombres sans verdict, listés sous les vérifications."
+  "alpha_note": "Les verdicts viennent seulement de tests avec une valeur p, lue contre alpha = {alpha} (l'option du nœud). Les autres mesures sont des nombres sans verdict, listés sous les vérifications.",
+  "all": "Toutes les lignes"
  }
 }

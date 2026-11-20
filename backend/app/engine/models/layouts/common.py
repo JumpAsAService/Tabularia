@@ -137,6 +137,8 @@ def with_labels(model: str, params: Mapping[str, Any] | None, rows: list[dict], 
     for r in rows:
         section, stat, text = r["section"], r["stat"], r.get("text")
         label = stat_label(w, section, stat)
+        if label != stat and loc.decimal != ".":  # «Quantile 0.25», «Survival at 0.5»: the language's decimal in a label made of a number
+            label = re.sub(r"(\d)\.(\d)", lambda m: m.group(1) + loc.decimal + m.group(2), label)
         if section == "assumption":
             check = w.get("checks", {}).get(r["level"], {})
             verdict = verdicts.get((r["level"], r["level_2"]))
@@ -153,12 +155,75 @@ def with_labels(model: str, params: Mapping[str, Any] | None, rows: list[dict], 
                 text = count_said(w, r["level"], r["value"], loc.group)
         elif section == "model" and isinstance(text, str):
             text = w.get("values", {}).get(stat, {}).get(text, text)
-            if stat.startswith("note_") and stat[5:] in w.get("note_texts", {}):  # a note by its id: the runner's wording may change, the page's does not
+            if stat.startswith("note_") and text.startswith("@"):  # a note the runner sends as an id and its parameters
+                text = structured_note(w, text, loc)
+            elif stat.startswith("note_") and stat[5:] in w.get("note_texts", {}):  # a note by its id: the runner's wording may change, the page's does not
                 text = note_said(w["note_texts"][stat[5:]], model_numbers, loc.group)
+            elif stat == "profile":
+                text = profile_said(w, text, loc)
+            elif stat == "formula":
+                text = formula_said(w, text)
         elif section == "hist" and isinstance(r.get("x0"), (int, float)) and isinstance(r.get("x1"), (int, float)):
             text = stats.edges_text(r["x0"], r["x1"], False, loc.decimal, loc.group)
         out.append({**r, "text": text, "label": label, "tiny": stats.tiny(r.get("value"), code(locale))})
     return out
+
+
+NUMBER_IN_TEXT = re.compile(r"-?\d+(?:\.\d+)?(?:e[-+]?\d+)?")
+
+
+def _decimal(text: str, loc: Any) -> str:
+    """Every number written with a point in a text, with the language's decimal."""
+    if loc.decimal == ".":
+        return text
+    return re.sub(r"(\d)\.(\d)", lambda m: m.group(1) + loc.decimal + m.group(2), text)
+
+
+def structured_note(w: dict, text: str, loc: Any) -> str:
+    """A note sent as «@id name=value name=value…» (a list is joined with «,»): the page's sentence
+    of `note_texts.<id>`, each «{name}» replaced by its value, a number with the language's decimal, a name of a
+    distribution or of a purchase model in the page's words (`values.distribution`, `values.purchase_model`)."""
+    head, *rest = text[1:].split(" ")
+    said = w.get("note_texts", {}).get(head)
+    if said is None:
+        return text
+    names = {**w.get("values", {}).get("purchase_model", {}), **w.get("values", {}).get("distribution", {}),
+             **w.get("values", {}).get("time_unit", {})}
+    parts = dict(r.partition("=")[::2] for r in rest if "=" in r)
+
+    def word(v: str) -> str:
+        if NUMBER_IN_TEXT.fullmatch(v):
+            return _decimal(v, loc)
+        return names.get(v, v)
+
+    out = said
+    for k, v in parts.items():
+        out = out.replace("{" + k + "}", ", ".join(word(x) for x in v.split(",")))
+    return out
+
+
+def profile_said(w: dict, text: str, loc: Any) -> str:
+    """«load = 52.3 (mean); line = A (reference)» in the page's words and decimals."""
+    for key, word in w.get("profile_words", {}).items():
+        text = text.replace(f"({key})", f"({word})")
+    return _decimal(text, loc)
+
+
+def formula_said(w: dict, text: str) -> str:
+    """The runner's formula in the page's language: its «in weeks» (a customer lifetime's) and its
+    «· Weibull, accelerated failure time» (a parametric survival's); the user's column names stay."""
+    units = w.get("values", {}).get("time_unit", {})
+    if "formula_in" in w:
+        text = re.sub(r", in (day|week|month|quarter|year)s?$",
+                      lambda m: ", " + w["formula_in"].replace("{unit}", units.get(m.group(1), m.group(1))), text)
+    kinds = w.get("formula_kinds", {})
+    names = w.get("values", {}).get("distribution", {})
+
+    def survival(m: re.Match) -> str:
+        key = re.sub(r"[^a-z]", "", m.group(1).lower())
+        return f" · {names.get(key, m.group(1))}, {kinds.get(m.group(2), m.group(2))}"
+
+    return re.sub(r" · ([A-Za-z -]+), (accelerated failure time|proportional hazards)$", survival, text) if kinds else text
 
 
 def by_params(said: str | dict, params: Mapping[str, Any]) -> str | None:
@@ -300,6 +365,7 @@ class CoefTable(NamedTuple):
     title: str
     stats: tuple[str, ...]
     width: float = 24.0
+    fmt: str = NUMBER  # the numbers' pattern: six decimals at most; a model with small estimates asks for more
 
 
 Block = Callable[["stats.Page", dict], None]
@@ -354,7 +420,7 @@ def page(model: str, params: Mapping[str, Any], locale: str, sample: list[dict] 
          name: str, about: str, cards: tuple[Card | tuple[Card, ...], ...], coef_tables: tuple[CoefTable, ...] = (),
          coef_note: str | tuple[str, str] | None = None, blocks: tuple[Block, ...] = (), charts: tuple[Chart, ...] = (),
          assumptions_note: str | None = None, p_values: bool = True, fit_skip: tuple[str, ...] = (),
-         summary_lines: tuple[tuple[str, str], ...] = (), after_assumptions: tuple[Block, ...] = (), coef_first: tuple[Block, ...] = (),
+         summary_lines: tuple[tuple[str, str], ...] = (), fit_format: str = EXACT, room: float = 0.0, after_assumptions: tuple[Block, ...] = (), coef_first: tuple[Block, ...] = (),
          after_coefficients: tuple[Block, ...] = ()) -> dict:
     """A model's report: the summary (four cards, the formula), the assumptions (first page),
     the coefficients, the fit, the model's own blocks (strata, forecast…), the diagnostics,
@@ -363,7 +429,7 @@ def page(model: str, params: Mapping[str, Any], locale: str, sample: list[dict] 
     `p_values`: False for a variant with no p-value (no statistic, df, p or R's codes in the
     checks and the fit, no warning about the tests on many rows); `fit_skip`: numbers of the
     `model` section the fit's table leaves out (the model's own block says them; a name ending in «_» is a prefix);
-    `summary_lines`: (id, expression) of lines under the formula (a customer lifetime's business
+    `room`: mm kept under the Fit and Notes headings for their tables' first rows, so that a page never ends with such a heading (a blank that long under it); `fit_format`: the pattern of the fit's numbers (all their digits by default); `summary_lines`: (id, expression) of lines under the formula (a customer lifetime's business
     settings); `coef_first`: blocks drawn under the coefficients' heading and note, before their tables
     and kept with the heading on one page; `after_coefficients`: blocks under the tables, before the fit;
     `coef_note` may be a (text, visible) pair."""
@@ -384,12 +450,12 @@ def page(model: str, params: Mapping[str, Any], locale: str, sample: list[dict] 
         _coefficients(p, w, lang, coef_tables, coef_note, coef_first)
     for block in after_coefficients:
         block(p, w)
-    _fit(p, w, p_values, fit_skip)
+    _fit(p, w, p_values, fit_skip, fit_format, room)
     for block in blocks:
         block(p, w)
     if charts:
         _diagnostics(p, w, charts)
-    _notes(p, w)
+    _notes(p, w, room)
     return stats.document(header, p.items, footer, lang)
 
 
@@ -448,7 +514,7 @@ def _assumptions(p: stats.Page, w: dict, lang: str, note: str | None = None, p_v
     df2 = of_row("assumption", "df_2")
     one_row = '[section] = "assumption" AND [stat] = "verdict"'
     cols = [
-        {"header": a["check"], "value": '[label] & IF(ISNULL([level_2]) OR [level_2] = "", "", " — " & [level_2])', "width": 36},
+        {"header": a["check"], "value": '[label] & IF(ISNULL([level_2]) OR [level_2] = "", "", " — " & IF([level_2] = "all", ' + q(w["all"]) + ", [level_2]))", "width": 36},
         {"header": a["h0"], "value": of_row("assumption", "h0", "text"), "style": {"size": 7}},
         {"header": a["statistic"], "value": number_of_row("assumption", "statistic"), "width": 17, "align": "right",
          "format": "0.####"},
@@ -502,7 +568,7 @@ def measures(ids: tuple[str, ...]):
         names = "IFS(" + ", ".join(f'[level] = "{i}", {q(check_name(w, i))}' for i in ids) + ", [level])"
         p.add(stats.table("measures", m["title"], one, [
             {"header": m["measure"], "value": names, "width": 52},
-            {"header": m["group"], "value": 'IF(ISNULL([level_2]), "", [level_2])', "width": 24},
+            {"header": m["group"], "value": 'IF(ISNULL([level_2]), "", IF([level_2] = "all", ' + q(w["all"]) + ", [level_2]))", "width": 24},
             {"header": m["value"], "value": number_of_row("assumption", "value"), "width": 22, "align": "right", "format": "0.####"},
             {"header": m["what"], "value": said, "style": {"size": 7.5}},
         ], p.y, visible=exists(one)), 10)
@@ -537,26 +603,27 @@ def _coefficients(p: stats.Page, w: dict, lang: str, tables: tuple[CoefTable, ..
                              "width": t.width})
             else:
                 cols.append({"header": header, "value": number_of_row("coef", s), "width": t.width, "align": "right",
-                             "format": NUMBER})
+                             "format": t.fmt})
         p.add(stats.table(t.id, t.title, one_row, cols, p.y, visible=exists(one_row)), 10)
     if any("p_value" in t.stats for t in tables):
         p.text("coef_signif_legend", stats.static(stats.signif_legend(w, lang)), h=4.5, size=7, color=MUTED)
 
 
-def _fit(p: stats.Page, w: dict, p_values: bool = True, skip: tuple[str, ...] = ()) -> None:
+def _fit(p: stats.Page, w: dict, p_values: bool = True, skip: tuple[str, ...] = (), pattern: str = EXACT, room: float = 0.0) -> None:
     """Every number of the `model` section, then how it was fitted (its settings in words)."""
     f = w["fit"]
     p.heading("s_fit", w["sections"]["fit"])
-    p.y += 8.0  # room for the table's header and first row in the heading's band: a heading is never left alone at the end of a page
-    p.keep()
-    p.y -= 8.0
+    if room:
+        p.y += room
+        p.keep()
+        p.y -= room
     sig = f'LOOKUP("model|||" & LEFT([stat], LEN([stat]) - 7) & "significance", [key], [text])'
     numbers = '[section] = "model" AND NOT ISNULL([value])' + "".join(
         f' AND NOT STARTSWITH([stat], "{s}")' if s.endswith("_") else f' AND [stat] <> "{s}"' for s in skip)
     cols = [
         {"header": f["quantity"], "value": "[label]"},
         {"header": f["name"], "value": "[stat]", "width": 50, "style": {"color": MUTED}},
-        {"header": f["value"], "value": "IF(ISNULL([tiny]), [value], [tiny])", "width": 34, "align": "right", "format": EXACT},
+        {"header": f["value"], "value": "IF(ISNULL([tiny]), [value], [tiny])", "width": 34, "align": "right", "format": pattern},
         {"header": w["signif"]["column"], "value": f'IF(RIGHT([stat], 7) = "p_value", {sig}, "")', "width": 14},
     ]
     p.add(stats.table("fit", f["title"], numbers, cols if p_values else cols[:3], p.y), 10)
@@ -627,7 +694,7 @@ def grid(p: stats.Page, w: dict, charts: tuple[Chart, ...], heading: tuple[str, 
         close_row()
 
 
-def _notes(p: stats.Page, w: dict) -> None:
+def _notes(p: stats.Page, w: dict, room: float = 0.0) -> None:
     n = w["notes"]
     p.heading("s_notes", w["sections"]["notes"])
     rows_from = txt(model_key("rows_from"))
@@ -637,9 +704,9 @@ def _notes(p: stats.Page, w: dict) -> None:
     # the three lines are one text: a page never ends with the last of them alone
     p.text("notes_lines", f'=IF({rows_from} = "trial", {q(n["trial"])}, {q(n["run"])}) & "\n" & {left_out} & "\n" & {software}',
            h=14.5, can_grow=True)
-    p.y += 15.0  # room for the notes' table (its header and first row) in the same band: a table, which takes its row alone, is never left alone on a page
+    p.y += room  # room for the notes' table (its header and first row) in the same band: never a table alone on a page
     p.keep()
-    p.y -= 15.0
+    p.y -= room
     p.y += 1.5
     is_note = '[section] = "model" AND STARTSWITH([stat], "note_")'
     p.add(stats.table("notes", n["title"], is_note, [{"header": n["note"], "value": "[text]"}], p.y,
