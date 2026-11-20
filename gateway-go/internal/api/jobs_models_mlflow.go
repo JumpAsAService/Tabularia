@@ -20,9 +20,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
-	"github.com/JumpAsAService/Tabularia/gateway-go/internal/connpayload"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/mlflowconn"
-	"github.com/JumpAsAService/Tabularia/gateway-go/internal/perm"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/sharelinks"
 )
@@ -90,35 +88,16 @@ func (q *queue) planMLflow(ctx context.Context, user *auth.User, node pyjson.Obj
 	if experiment == "" {
 		return refuse("name the MLflow experiment its runs are logged to, or remove the MLflow connection")
 	}
-	conn, err := connpayload.Load(ctx, q.d.DB, id)
+	conn, err := q.d.mlflowConnection(ctx, user, id)
+	var refused *mlflowConnRefused
+	if errors.As(err, &refused) {
+		return refuse(refused.msg)
+	}
 	if err != nil {
 		return nil, err
 	}
-	if conn == nil || conn.DBType != "mlflow" {
-		return refuse(fmt.Sprintf("the MLflow connection #%d does not exist any more: choose another one", id))
-	}
-	if ok, err := perm.For(q.d.DB, user).Has(ctx, conn.ProjectID, perm.Connect); err != nil {
-		return nil, err
-	} else if !ok {
-		return refuse(fmt.Sprintf("%s may not use the MLflow connection «%s»: it needs CONNECT on its folder", user.Email, conn.Name))
-	}
-	secretText := ""
-	if conn.PasswordEncrypted != "" {
-		if q.d.Fernet == nil {
-			return nil, errEncrypt
-		}
-		if secretText, err = q.d.Fernet.Decrypt(conn.PasswordEncrypted); err != nil {
-			return nil, err
-		}
-	}
-	cfg := mlflowConfig(conn.Host, conn.Username, secretText, conn.Extra)
-	cfg.Timeout = mlflowCallTimeout
-	ui := mlflowconn.ParseOptions(conn.Extra).UIURL
-	if ui == "" {
-		ui = cfg.URI
-	}
 	register, _ := block.Value("registerAs").(string)
-	return &mlflowPlan{connID: conn.ID, connName: conn.Name, cfg: cfg, ui: strings.TrimRight(ui, "/"), experiment: experiment,
+	return &mlflowPlan{connID: conn.id, connName: conn.name, cfg: conn.cfg, ui: conn.ui, experiment: experiment,
 		registerAs: strings.TrimSpace(register), continueWithout: block.Value("continueWithout") == true}, nil
 }
 

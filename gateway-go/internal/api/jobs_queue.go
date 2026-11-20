@@ -527,9 +527,7 @@ func (q *queue) orchestrate(ctx context.Context, user *auth.User, flow *jobFlow,
 			case "model":
 				out, err = q.runModel(ctx, run)
 			case "model_predict":
-				// lot H (docs/specs/statistical-models.md, «Predict»): until then a flow with a
-				// Predict node stops there, saying so, rather than skipping it
-				err = &scriptFailed{fmt.Sprintf("Predict «%s» does not run in this version of Tabularia yet", modelLabel(node))}
+				out, err = q.runPredict(ctx, run)
 			default:
 				out, err = q.runContainer(ctx, run)
 			}

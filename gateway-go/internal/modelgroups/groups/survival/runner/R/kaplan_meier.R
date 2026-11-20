@@ -407,6 +407,12 @@ predict_kaplan_meier <- function(task, card) {
   km <- card$kaplan_meier
   num <- function(x) vapply(x, function(v) if (is.null(v)) NA_real_ else as.numeric(v), numeric(1))
   df <- tab_input(task)
+  made <- c("prediction", if (isTRUE(task$params$interval)) c("prediction_low", "prediction_high"))
+  clash <- intersect(made, names(df))
+  if (length(clash)) {
+    tab_refuse("output_column_exists", paste0("the rows already have a column «", clash[[1L]], "»: rename it before the node"),
+               list(column = clash[[1L]]))
+  }
   if (!km$time_column %in% names(df)) {
     tab_refuse("missing_column", paste0("the rows have no column «", km$time_column, "», the time the model was fitted on"),
                list(column = km$time_column))

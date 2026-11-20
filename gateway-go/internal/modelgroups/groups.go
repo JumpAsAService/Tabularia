@@ -273,6 +273,31 @@ func FitTask(model string, params map[string]any, hasNext bool, maxChartPoints i
 		RecipeHash: g.RecipeHash, RunnerHash: g.RunnerHash}, nil
 }
 
+// PredictTask is the task of a Predict step: the card's model and variant applied (mode
+// predict) with the node's options checked by modelcatalog.CheckPredict. The rows always go to
+// TABULARIA_OUTPUT: the input's rows with the columns added (`rows`), or an ARIMA's forecast
+// (`forecast`). The card itself is TABULARIA_MODEL_IN, never in task.json.
+func PredictTask(model, variant string, checked map[string]any) (Task, error) {
+	group := modelcatalog.GroupOf(model)
+	g, ok := Get(group)
+	if !ok {
+		return Task{}, &modelcatalog.Error{Message: fmt.Sprintf("there is no model '%s' in this version of Tabularia", model)}
+	}
+	if !modelcatalog.HasVariant(model, variant) {
+		return Task{}, &modelcatalog.Error{Message: fmt.Sprintf("%s: this version of Tabularia has no variant '%s'", model, variant)}
+	}
+	output := "rows"
+	if model == "arima" {
+		output = "forecast"
+	}
+	params := map[string]any{}
+	for k, v := range checked {
+		params[k] = v
+	}
+	return Task{Protocol: Protocol, Mode: "predict", Group: group, Model: model, Variant: variant, Params: params, Output: output,
+		WriteOutput: true, RowsFrom: "run", Limits: modelcatalog.Limits(), RecipeHash: g.RecipeHash, RunnerHash: g.RunnerHash}, nil
+}
+
 // JSON is the task as task.json holds it.
 func (t Task) JSON() []byte {
 	b, _ := json.Marshal(t)

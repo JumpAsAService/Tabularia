@@ -43,6 +43,11 @@ class FakeS3:
     def download_file(self, Bucket, Key, Filename):
         Path(Filename).write_bytes(self._get(Key, "HeadObject"))
 
+    def put_object(self, Bucket, Key, Body, ContentType=None):
+        if Key == "refused":
+            raise ClientError({"Error": {"Code": "AccessDenied", "Message": "Access Denied"}}, "PutObject")
+        self.objects[Key] = Body
+
 
 @pytest.fixture
 def bucket(monkeypatch):
@@ -96,3 +101,29 @@ def test_results_gone_are_404(bucket):
     with pytest.raises(HTTPException) as e:
         routes.results_rows(routes.ResultsRowsRequest(connection=_conn(), key="step/results.parquet", sections=["model"]))
     assert e.value.status_code == 404
+
+
+# ── a Predict step's card written into its prefix ───────────────────────────────
+
+
+def test_a_card_is_written_at_its_key(bucket):
+    objects: dict[str, bytes] = {}
+    bucket(objects)
+    card = '{"format": "tabularia-model", "model": "linear", "name": "prix à l\u2019unité"}'
+    got = routes.objects_write(routes.ObjectWriteRequest(connection=_conn(), key="env-4/step/model.json", text=card))
+    assert got == {"bytes": len(card.encode("utf-8"))}
+    assert objects["env-4/step/model.json"] == card.encode("utf-8")
+
+
+def test_writing_refuses_what_is_not_a_card(bucket):
+    bucket({})
+    with pytest.raises(HTTPException) as big:
+        routes.objects_write(routes.ObjectWriteRequest(connection=_conn(), key="k", text="x" * (routes.OBJECT_WRITE_MAX + 1)))
+    assert big.value.status_code == 413
+    for key in ("", "/abs", "env-4/../other"):
+        with pytest.raises(HTTPException) as bad:
+            routes.objects_write(routes.ObjectWriteRequest(connection=_conn(), key=key, text="{}"))
+        assert bad.value.status_code == 422
+    with pytest.raises(HTTPException) as refused:
+        routes.objects_write(routes.ObjectWriteRequest(connection=_conn(), key="refused", text="{}"))
+    assert refused.value.status_code == 502 and "AccessDenied" in refused.value.detail

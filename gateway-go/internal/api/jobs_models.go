@@ -85,6 +85,15 @@ type modelStep struct {
 	delay   int64
 	budget  int64
 	mlflow  *mlflowPlan // a flow run's MLflow block, nil when it logs nothing (always for a trial)
+	predict bool        // a Predict step's (jobs_predict.go): its sentences name it so
+}
+
+// what names the step in its sentences: «model «Elasticity»», «Predict «Prices next month»».
+func (s *modelStep) what() string {
+	if s.predict {
+		return "Predict «" + s.label + "»"
+	}
+	return "model «" + s.label + "»"
 }
 
 // modelLabel is the node's name, else its id.
@@ -237,16 +246,17 @@ type modelInput struct {
 	sample []any
 }
 
-// modelPrepareInput writes the chain before a model node, ended by the `select` of the columns
-// it reads, at inKey of the scripts bucket. A variable: the tests stand in for the engine.
+// modelPrepareInput writes the chain before a model or Predict node, ended by the `select` of the
+// columns it reads (nil: all of them), at inKey of the scripts bucket; what names the step in its
+// sentences («model «Elasticity»»). A variable: the tests stand in for the engine.
 var modelPrepareInput = func(q *queue, ctx context.Context, r *scriptNodeRun, child *childRun, storage *scriptStorage, inKey string,
-	columns []string, label string) (*modelInput, error) {
+	columns []string, what string) (*modelInput, error) {
 	req, err := flowresolver.ResolveScriptInput(r.definition, r.node, r.resolveDS, q.d.Config.EngineBucket, q.d.flowMode(r.mode), r.outputs)
 	if err != nil {
 		return nil, err
 	}
 	if req == nil {
-		return nil, &scriptFailed{fmt.Sprintf("model «%s» has no input: connect the step it reads to it", label)}
+		return nil, &scriptFailed{fmt.Sprintf("%s has no input: connect the step it reads to it", what)}
 	}
 	ops, _ := req.Value("operations").([]any)
 	in := &modelInput{sample: samplesOf(ops)}
@@ -277,7 +287,7 @@ var modelPrepareInput = func(q *queue, ctx context.Context, r *scriptNodeRun, ch
 		if run.Error != nil && *run.Error != "" {
 			why = *run.Error
 		}
-		return nil, &scriptFailed{fmt.Sprintf("the input of model «%s» could not be prepared (run %d): %s", label, run.ID, why)}
+		return nil, &scriptFailed{fmt.Sprintf("the input of %s could not be prepared (run %d): %s", what, run.ID, why)}
 	}
 	in.rows = run.RowsWritten
 	return in, child.save(ctx, "input_key", run.OutputKey)
@@ -344,6 +354,13 @@ func numberOf(v any) (float64, bool) {
 // names), with the edges between them. A change to any of them makes the output «not up to
 // date» (docs/specs/statistical-models.md, «The trial»).
 func modelFingerprint(definition pyjson.Object, node pyjson.Object) string {
+	data := nodeData(node)
+	return chainFingerprint(definition, node, pyDumps(pyjson.Object{{Key: "model", Value: data.Value("model")},
+		{Key: "params", Value: pyjson.Or(data.Value("params"), pyjson.Object{})}}))
+}
+
+// chainFingerprint is the hash of a node's own settings (own) and of the chain before it.
+func chainFingerprint(definition pyjson.Object, node pyjson.Object, own string) string {
 	nodes := map[string]pyjson.Object{}
 	for _, n := range objectList(definition.Value("nodes")) {
 		nodes[jsonKey(n.Value("id"))] = n
@@ -388,8 +405,6 @@ func modelFingerprint(definition pyjson.Object, node pyjson.Object) string {
 	}
 	sort.Strings(chain)
 	sort.Strings(chainEdges)
-	data := nodeData(node)
-	own := pyDumps(pyjson.Object{{Key: "model", Value: data.Value("model")}, {Key: "params", Value: pyjson.Or(data.Value("params"), pyjson.Object{})}})
 	h := sha256.New()
 	h.Write([]byte(own))
 	for _, part := range [][]string{chain, chainEdges} {
@@ -400,12 +415,6 @@ func modelFingerprint(definition pyjson.Object, node pyjson.Object) string {
 		}
 	}
 	return hex.EncodeToString(h.Sum(nil))
-}
-
-// predictFingerprint is a Predict node's: its settings (lot H refines it).
-func predictFingerprint(node pyjson.Object) string {
-	sum := sha256.Sum256([]byte(pyDumps(withoutKeys(nodeData(node), "label"))))
-	return hex.EncodeToString(sum[:])
 }
 
 func withoutKeys(o pyjson.Object, keys ...string) pyjson.Object {
@@ -504,7 +513,7 @@ func (q *queue) runModel(ctx context.Context, r *scriptNodeRun) (*flowresolver.S
 	r.io()
 	defer func() { d.deleteObjects(context.Background(), storage, written) }()
 	out, err := func() (*flowresolver.Source, error) {
-		in, err := modelPrepareInput(q, ctx, r, child, storage, inKey, columns, s.label)
+		in, err := modelPrepareInput(q, ctx, r, child, storage, inKey, columns, "model «"+s.label+"»")
 		if err != nil {
 			return nil, err
 		}
@@ -693,7 +702,7 @@ func (q *queue) modelAttempts(ctx context.Context, child *childRun, s *modelStep
 				return false, "", "", ctx.Err()
 			}
 			if !q.d.runStillOpen(ctx, runID) {
-				return false, "", "", &scriptFailed{fmt.Sprintf("model «%s» failed: %s (not run again: its run was closed)", s.label, reason)}
+				return false, "", "", &scriptFailed{fmt.Sprintf("%s failed: %s (not run again: its run was closed)", s.what(), reason)}
 			}
 			if hasOutput {
 				q.d.deleteObjects(ctx, storage, []string{outKey})

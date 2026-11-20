@@ -24,6 +24,10 @@
   gateway holds the MLflow credentials, the engine the bucket's.
 - POST /scripts/results/rows: some sections of a model step's results, read back for the
   gateway (the metrics and the coefficients it logs to MLflow).
+- POST /scripts/objects/write: a small text written into a step's prefix: the model card a
+  Predict step applies, which the gateway read from MLflow and checked
+  (docs/specs/statistical-models.md, «Predict»). The Job reads it from the bucket and never
+  sees MLflow.
 
 The secret arrives encrypted (Fernet shared with the gateway). See
 docs/specs/script-node.md.
@@ -304,6 +308,32 @@ def objects_read(request: ObjectReadRequest):
         raise HTTPException(status_code=502, detail=f"The scripts bucket answered: {_reason(e)}")
     return StreamingResponse(obj["Body"].iter_chunks(1024 * 1024), media_type="application/octet-stream",
                              headers={"Content-Length": str(obj["ContentLength"])})
+
+
+# a model card is at most 1 MB (the catalogue's max_card_bytes): a little room above it
+OBJECT_WRITE_MAX = 2 * 1024 * 1024
+
+
+class ObjectWriteRequest(BaseModel):
+    connection: S3ConnectionSpec
+    key: str
+    text: str
+
+
+@router.post("/objects/write")
+def objects_write(request: ObjectWriteRequest):
+    """{bytes}: the text written as UTF-8 at the key (replaced when there)."""
+    body = request.text.encode("utf-8")
+    if len(body) > OBJECT_WRITE_MAX:
+        raise HTTPException(status_code=413, detail=f"At most {OBJECT_WRITE_MAX} bytes are written this way")
+    if not request.key or request.key.startswith("/") or ".." in request.key.split("/"):
+        raise HTTPException(status_code=422, detail="Not a key of a step")
+    conn = request.connection
+    try:
+        conn.client().put_object(Bucket=conn.bucket, Key=request.key, Body=body, ContentType="application/json")
+    except (ClientError, BotoCoreError) as e:
+        raise HTTPException(status_code=502, detail=f"The scripts bucket answered: {_reason(e)}")
+    return {"bytes": len(body)}
 
 
 class ResultsRowsRequest(BaseModel):

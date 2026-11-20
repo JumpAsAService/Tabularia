@@ -32,6 +32,7 @@ type Run struct {
 type Version struct {
 	Version, Source, RunID string
 	Tags                   map[string]string
+	Created                int64 // creation_timestamp, milliseconds
 }
 
 // Server is the fake. Set its options before the calls.
@@ -53,6 +54,7 @@ type Server struct {
 	Runs        map[string]*Run
 	Artifacts   map[string][]byte // by path after mlflow-artifacts/artifacts/
 	Models      map[string][]Version
+	clock       int64 // the creation timestamps given, in order
 }
 
 // New starts a fake; it stops with the test.
@@ -144,6 +146,57 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 		s.Experiments[name] = id
 		s.ExpTags[name] = tags(in["tags"])
 		answer(w, 200, map[string]any{"experiment_id": id})
+	case path == "/api/2.0/mlflow/experiments/search":
+		var list []map[string]any
+		for name, id := range s.Experiments {
+			if !s.Deleted[name] {
+				list = append(list, map[string]any{"experiment_id": id, "name": name, "lifecycle_stage": "active"})
+			}
+		}
+		answer(w, 200, map[string]any{"experiments": list})
+	case path == "/api/2.0/mlflow/runs/search":
+		ids, _ := in["experiment_ids"].([]any)
+		filter := str("filter")
+		var list []map[string]any
+		for i := len(s.Runs); i >= 1; i-- { // newest first
+			run := s.Runs[fmt.Sprintf("run%d", i)]
+			if run == nil || len(ids) != 1 || ids[0] != run.Experiment {
+				continue
+			}
+			if filter == "tags.`tabularia.model` != ''" && run.Tags["tabularia.model"] == "" {
+				continue
+			}
+			list = append(list, runJSON(run))
+		}
+		answer(w, 200, map[string]any{"runs": list})
+	case path == "/api/2.0/mlflow/model-versions/search" && r.Method == http.MethodGet && !s.NoRegistry:
+		filter := r.URL.Query().Get("filter")
+		var list []map[string]any
+		for name, versions := range s.Models {
+			for _, v := range versions {
+				if matches(filter, name, v) {
+					list = append(list, versionJSON(name, v))
+				}
+			}
+		}
+		answer(w, 200, map[string]any{"model_versions": list})
+	case path == "/api/2.0/mlflow/model-versions/get" && r.Method == http.MethodGet && !s.NoRegistry:
+		name, number := r.URL.Query().Get("name"), r.URL.Query().Get("version")
+		for _, v := range s.Models[name] {
+			if v.Version == number {
+				answer(w, 200, map[string]any{"model_version": versionJSON(name, v)})
+				return
+			}
+		}
+		refuse(w, http.StatusNotFound, "RESOURCE_DOES_NOT_EXIST")
+	case strings.HasPrefix(path, "/api/2.0/mlflow-artifacts/artifacts/") && r.Method == http.MethodGet && !s.NoProxy:
+		b, ok := s.Artifacts[strings.TrimPrefix(path, "/api/2.0/mlflow-artifacts/artifacts/")]
+		if !ok {
+			refuse(w, http.StatusNotFound, "RESOURCE_DOES_NOT_EXIST")
+			return
+		}
+		w.Header().Set("Content-Type", "application/octet-stream")
+		_, _ = w.Write(b)
 	case path == "/api/2.0/mlflow/runs/create":
 		id := fmt.Sprintf("run%d", len(s.Runs)+1)
 		exp := str("experiment_id")
@@ -222,7 +275,9 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 				refuse(w, http.StatusNotFound, "RESOURCE_DOES_NOT_EXIST")
 				return
 			}
-			v := Version{Version: fmt.Sprint(len(versions) + 1), Source: str("source"), RunID: str("run_id"), Tags: tags(in["tags"])}
+			s.clock++
+			v := Version{Version: fmt.Sprint(len(versions) + 1), Source: str("source"), RunID: str("run_id"), Tags: tags(in["tags"]),
+				Created: 1_700_000_000_000 + s.clock}
 			s.Models[name] = append(versions, v)
 			answer(w, 200, map[string]any{"model_version": map[string]any{"name": name, "version": v.Version, "status": "READY"}})
 		default:
@@ -243,4 +298,77 @@ func tags(v any) map[string]string {
 		out[k] = val
 	}
 	return out
+}
+
+func runJSON(run *Run) map[string]any {
+	var tagList, metrics []map[string]any
+	for k, v := range run.Tags {
+		tagList = append(tagList, map[string]any{"key": k, "value": v})
+	}
+	for k, v := range run.Metrics {
+		metrics = append(metrics, map[string]any{"key": k, "value": v})
+	}
+	return map[string]any{"info": map[string]any{"run_id": run.ID, "experiment_id": run.Experiment, "status": run.Status},
+		"data": map[string]any{"tags": tagList, "metrics": metrics}}
+}
+
+func versionJSON(name string, v Version) map[string]any {
+	var tagList []map[string]any
+	for k, val := range v.Tags {
+		tagList = append(tagList, map[string]any{"key": k, "value": val})
+	}
+	return map[string]any{"name": name, "version": v.Version, "run_id": v.RunID, "source": v.Source, "status": "READY",
+		"creation_timestamp": v.Created, "tags": tagList}
+}
+
+// matches is the two filters the client sends: `run_id IN ('a', 'b')` and `name = 'x'`.
+func matches(filter, name string, v Version) bool {
+	if rest, ok := strings.CutPrefix(filter, "run_id IN ("); ok {
+		for _, id := range strings.Split(strings.TrimSuffix(rest, ")"), ",") {
+			if strings.Trim(strings.TrimSpace(id), "'") == v.RunID {
+				return true
+			}
+		}
+		return false
+	}
+	if rest, ok := strings.CutPrefix(filter, "name = "); ok {
+		return strings.Trim(rest, "'") == name
+	}
+	return filter == ""
+}
+
+// Register adds a version as Tabularia's registration leaves it: the run (in the experiment,
+// with its tags and metrics), the model's files under the run's artifacts, the version and its
+// tags. The run's id.
+func (s *Server) Register(experiment, model string, runTags map[string]string, metrics map[string]float64,
+	files map[string][]byte, versionTags map[string]string) (runID, version string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	exp, ok := s.Experiments[experiment]
+	if !ok {
+		exp = fmt.Sprint(len(s.Experiments) + 1)
+		s.Experiments[experiment] = exp
+	}
+	runID = fmt.Sprintf("run%d", len(s.Runs)+1)
+	run := &Run{ID: runID, Experiment: exp, Status: "FINISHED", Params: map[string]string{}, Metrics: map[string]float64{},
+		Tags: map[string]string{}, Ended: true}
+	for k, v := range runTags {
+		run.Tags[k] = v
+	}
+	for k, v := range metrics {
+		run.Metrics[k] = v
+	}
+	s.Runs[runID] = run
+	for name, b := range files {
+		s.Artifacts[fmt.Sprintf("%s/%s/artifacts/model/%s", exp, runID, name)] = b
+	}
+	s.clock++
+	version = fmt.Sprint(len(s.Models[model]) + 1)
+	tags := map[string]string{}
+	for k, v := range versionTags {
+		tags[k] = v
+	}
+	s.Models[model] = append(s.Models[model], Version{Version: version, RunID: runID, Tags: tags, Created: 1_700_000_000_000 + s.clock,
+		Source: fmt.Sprintf("mlflow-artifacts:/%s/%s/artifacts/model", exp, runID)})
+	return runID, version
 }

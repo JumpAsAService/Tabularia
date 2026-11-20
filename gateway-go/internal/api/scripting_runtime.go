@@ -512,14 +512,20 @@ func nodeOutputs(d *Deps) authedFunc {
 			put(n.Value("id"), flowaccess.ContainerFingerprint(n))
 		}
 		// a model node's output is up to date with its parameters and the chain before it
-		// (docs/specs/statistical-models.md, «The trial»); a Predict node's with its settings
+		// (docs/specs/statistical-models.md, «The trial»); a Predict node's with the model it
+		// applies, its options and its chain (jobs_predict.go)
 		if models := flowaccess.ModelNodes(f.Definition); len(models) > 0 {
 			definition := pyjson.Obj(pyjson.Or(parsedDefinition(f.Definition), pyjson.Object{}))
 			for _, n := range models {
 				if n.Value("type") == "model" {
 					put(n.Value("id"), modelFingerprint(definition, n))
 				} else {
-					put(n.Value("id"), predictFingerprint(n))
+					fp, err := predictNodeFingerprint(q.ctx, d.DB, definition, n)
+					if err != nil {
+						q.fail(err)
+						return
+					}
+					put(n.Value("id"), fp)
 				}
 			}
 		}

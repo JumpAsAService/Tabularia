@@ -79,7 +79,7 @@ func (d *Deps) trialNode(w http.ResponseWriter, r *http.Request, p *auth.Princip
 		}
 	}
 	kind, _ := node.Value("type").(string)
-	if node == nil || (kind != "script" && kind != "container" && kind != "model") {
+	if node == nil || (kind != "script" && kind != "container" && kind != "model" && kind != "model_predict") {
 		q.refuse(http.StatusNotFound, "The node is not in the saved flow: save the flow first")
 		return
 	}
@@ -139,6 +139,22 @@ func (d *Deps) trialNode(w http.ResponseWriter, r *http.Request, p *auth.Princip
 		data := nodeData(node)
 		model, _ := data.Value("model").(string)
 		label, detail = modelLabel(node), pyjson.Object{{Key: "model", Value: model}, {Key: "group", Value: modelcatalog.GroupOf(model)}}
+	} else if kind == "model_predict" {
+		// a Predict node (docs/specs/statistical-models.md, «Predict»): the version read from
+		// MLflow and checked, its group, its options, refused here before any run exists
+		qq := newQueue(d)
+		s, err := qq.planPredict(q.ctx, &p.User, node)
+		if err != nil {
+			var sf *scriptFailed
+			if !errors.As(err, &sf) {
+				q.fail(err)
+				return
+			}
+			q.refuse(predictTrialStatus(qq, sf.msg), upperFirst(sf.msg))
+			return
+		}
+		label, detail = modelLabel(node), pyjson.Object{{Key: "model", Value: s.model}, {Key: "group", Value: s.group},
+			{Key: "registered_model", Value: s.version.Name}, {Key: "version", Value: s.version.Version}}
 	} else {
 		if !scriptcfg.Load(config.FromOS()).Containers.Enabled {
 			q.refuse(http.StatusConflict, "Containers are off on this installation")
@@ -204,7 +220,7 @@ func (d *Deps) trialNode(w http.ResponseWriter, r *http.Request, p *auth.Princip
 	switch kind {
 	case "container":
 		action = "container.trial"
-	case "model":
+	case "model", "model_predict":
 		action = "models.trial"
 	}
 	q.audit(audit.Event{Action: action, TargetType: strp("flow"), TargetID: &flow.ID, TargetLabel: &flow.Name,
@@ -314,6 +330,8 @@ func (d *Deps) trialRun(ctx context.Context, runID int64, user *auth.User, nodeI
 		_, err = q.runContainer(ctx, r)
 	case "model":
 		_, err = q.runModel(ctx, r)
+	case "model_predict":
+		_, err = q.runPredict(ctx, r)
 	default:
 		_, err = q.runScript(ctx, r)
 	}

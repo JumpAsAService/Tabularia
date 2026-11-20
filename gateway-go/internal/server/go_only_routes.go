@@ -90,6 +90,9 @@ var goOnlyRoutes = []struct {
 	{after: "/admin/models/{group_id}/disable", route: pyRoute{path: "/admin/models/{group_id}/rebuild", methods: []string{"POST"}, regex: `^/admin/models/(?P<group_id>[^/]+)/rebuild$`}},
 	{after: "/admin/models/{group_id}/rebuild", route: pyRoute{path: "/admin/models/{group_id}/settings", methods: []string{"PUT"}, regex: `^/admin/models/(?P<group_id>[^/]+)/settings$`}},
 	{after: "/admin/models/{group_id}/settings", route: pyRoute{path: "/admin/models/{group_id}/access", methods: []string{"PUT"}, regex: `^/admin/models/(?P<group_id>[^/]+)/access$`}},
+	// a Predict node's lists: the experiments and the versions Tabularia registered (api/models_mlflow.go)
+	{after: "/admin/models/{group_id}/access", route: pyRoute{path: "/models/mlflow/{connection_id}/experiments", methods: []string{"GET"}, regex: `^/models/mlflow/(?P<connection_id>[^/]+)/experiments$`}},
+	{after: "/models/mlflow/{connection_id}/experiments", route: pyRoute{path: "/models/mlflow/{connection_id}/versions", methods: []string{"GET"}, regex: `^/models/mlflow/(?P<connection_id>[^/]+)/versions$`}},
 }
 
 // mainRoutes is the main application's table: FastAPI's, with the Go-only routes in place.
