@@ -389,7 +389,7 @@ func (q *queue) mlflowArtifacts(ctx context.Context, tr *mlflowconn.Tracker, r *
 			return up, err
 		}
 	}
-	for _, name := range []string{"MLmodel", "model.json", "native.rds", "native.pkl", "xgboost.json", "catboost.cbm"} {
+	for _, name := range []string{"MLmodel", "model.json", "native.rds", "xgboost.json", "catboost.cbm"} {
 		in, size, err := q.d.openScriptObject(ctx, f.storage, f.artifacts+name)
 		if err != nil {
 			return up, err

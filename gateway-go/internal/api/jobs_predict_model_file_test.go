@@ -386,6 +386,31 @@ func TestAFlowRunUploadsTheModelFileAndItsHash(t *testing.T) {
 	}
 }
 
+// a native.pkl a runner left among the artifacts is not part of a model: it is not uploaded
+func TestALeftoverNativePklIsNotUploadedToMLflow(t *testing.T) {
+	w := newMLflowWorld(t)
+	file := append([]byte("\x00CBM\xff"), mlflowtest.Pattern(40_000)...)
+	w.files["model.json"], w.files["xgboost.json"] = boostCard(declares("xgboost.json", len(file), shaOf(file))), file
+	w.files["native.pkl"] = []byte("pickle that must never travel")
+	delete(w.files, "native.rds")
+	id, err := w.runWith(w.block(`, "registerAs": "churn"`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r := w.row(id); r.status != "SUCCESS" {
+		t.Fatalf("%+v", r)
+	}
+	run := w.ml.OnlyRun()
+	for key := range w.ml.Artifacts {
+		if strings.HasPrefix(key, "1/"+run.ID+"/") && strings.Contains(key, "native.pkl") {
+			t.Errorf("uploaded: %s", key)
+		}
+	}
+	if len(w.ml.Artifacts["1/"+run.ID+"/artifacts/model/xgboost.json"]) == 0 {
+		t.Error("the model file itself was not uploaded")
+	}
+}
+
 func TestAFileThatItsCardDoesNotDescribeIsNotRegistered(t *testing.T) {
 	file := []byte("\x00model file bytes\xff")
 	for name, card := range map[string][]byte{

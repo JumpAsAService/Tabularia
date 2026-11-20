@@ -472,7 +472,7 @@ func withoutKeys(o pyjson.Object, keys ...string) pyjson.Object {
 func modelStepKeys(prefix string) (in, out, results, artifacts string, all []string) {
 	in, out, results, artifacts = prefix+"/input.parquet", prefix+"/output.parquet", prefix+"/results.parquet", prefix+"/artifacts/"
 	all = []string{in, out, results}
-	for _, f := range []string{"model.json", "run.json", "error.json", "MLmodel", "native.rds", "native.pkl", "xgboost.json", "catboost.cbm"} {
+	for _, f := range []string{"model.json", "run.json", "error.json", "MLmodel", "native.rds", "xgboost.json", "catboost.cbm"} {
 		all = append(all, artifacts+f)
 	}
 	return
