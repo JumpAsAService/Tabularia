@@ -923,7 +923,9 @@ kubectl rollout status deployment/mlflow --namespace tabularia
 ```
 
 The last command waits until the pod is ready (a minute at most; the first time it
-creates its databases on the volume). The administrator's password is read when MLflow
+creates its databases on the volume, and it can fail once and be restarted by Kubernetes
+while its worker processes create them at the same time: the pod is ready on the second
+start, with nothing to do). The administrator's password is read when MLflow
 creates its authentication database, the first time: to change it later, remove the
 volume (see below) and start again.
 
@@ -968,7 +970,9 @@ kubectl delete service/mlflow deployment/mlflow persistentvolumeclaim/mlflow-dat
 ```
 
 The volume holds the runs: deleting it deletes them. A connection that still points at
-the server fails its test until you delete it in Explore.
+the server fails its test until you delete it in Explore. The image stays in the private
+registry (the one of step 6 does not delete images); it is harmless, and goes with the
+registry when you remove the cluster.
 
 ## What this cluster shows
 
