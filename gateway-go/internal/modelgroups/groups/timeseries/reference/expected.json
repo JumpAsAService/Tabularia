@@ -1786,6 +1786,3244 @@
         "code": "too_short",
         "message": "the series has 20 observations; SARIMA(1,0,0)(0,1,1)[12] needs at least 35: a longer series, or lower orders"
       }
+    },
+    {
+      "id": "arima_auto_nonseasonal",
+      "model": "arima",
+      "data": "data/ar_index.csv",
+      "types": {
+        "t": "integer",
+        "level": "number"
+      },
+      "params": {
+        "time": "t",
+        "value": "level",
+        "frequency": "index",
+        "orders": "auto"
+      },
+      "expect": [
+        {
+          "key": "candidate|ARIMA(2,0,2) with mean||aicc",
+          "value": null,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,0) with mean||aicc",
+          "value": 542.1866,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,0) with mean||aic",
+          "value": 542.084052860794,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,0) with mean||aicc",
+          "value": 542.186616963358,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,0) with mean||bic",
+          "value": 547.659036346358,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,0,0) with mean||aicc",
+          "value": 521.6705,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,0,0) with mean||aic",
+          "value": 521.463598538046,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,0,0) with mean||aicc",
+          "value": 521.67049508977,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,0,0) with mean||bic",
+          "value": 529.826073766392,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,1) with mean||aicc",
+          "value": 515.333,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,1) with mean||aic",
+          "value": 515.12609574046,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,1) with mean||aicc",
+          "value": 515.332992292184,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,1) with mean||bic",
+          "value": 523.488570968806,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,0)||aicc",
+          "value": 1280.115,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,0)||aic",
+          "value": 1280.08128206571,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,0)||aicc",
+          "value": 1280.1151803708,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,0)||bic",
+          "value": 1282.8687738085,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,0,1) with mean||aicc",
+          "value": 517.016,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,0,1) with mean||aic",
+          "value": 516.668176930901,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,0,1) with mean||aicc",
+          "value": 517.016003017858,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,0,1) with mean||bic",
+          "value": 527.818143902029,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,2) with mean||aicc",
+          "value": 516.7654,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,2) with mean||aic",
+          "value": 516.417590961957,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,2) with mean||aicc",
+          "value": 516.765417048914,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,2) with mean||bic",
+          "value": 527.567557933085,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,0,2) with mean||aicc",
+          "value": 516.1724,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,0,2) with mean||aic",
+          "value": 515.646071509247,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,0,2) with mean||aicc",
+          "value": 516.172387298721,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,0,2) with mean||bic",
+          "value": 529.583530223158,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,1)||aicc",
+          "value": null,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,0,2) with mean||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,0) with mean||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,0,0) with mean||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,1) with mean||chosen",
+          "value": 1,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,0)||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,0,1) with mean||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,2) with mean||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,0,2) with mean||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,1)||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||candidates",
+          "value": 9,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||p",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||d",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||q",
+          "value": 1,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||P",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||D",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||Q",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||model_name",
+          "text": "MA(1)"
+        },
+        {
+          "key": "model|||criterion",
+          "text": "aicc"
+        },
+        {
+          "key": "coef|ma1||estimate",
+          "value": 0.49104726826782,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|intercept||estimate",
+          "value": 49.6550515862596,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||aic",
+          "value": 515.12609574046,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||aicc",
+          "value": 515.332992292184,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||bic",
+          "value": 523.488570968806,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "curve|forecast||forecast|1",
+          "value": 48.125723171582,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "curve|forecast||forecast|12",
+          "value": 49.6550515862596,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "curve|forecast||upper|12",
+          "value": 54.0948557648231,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||order_test_kpss_d0_statistic",
+          "value": 0.150352634118444,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||order_test_kpss_d0_p_value",
+          "value": 0.1,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||orders_reason_1",
+          "text": "d_keep_0"
+        },
+        {
+          "key": "model|||orders_reason_2",
+          "text": "search_stepwise"
+        }
+      ],
+      "refuses": null
+    },
+    {
+      "id": "arima_auto_seasonal",
+      "model": "arima",
+      "data": "data/sarima_monthly.csv",
+      "types": {
+        "month": "date",
+        "boxes": "number"
+      },
+      "params": {
+        "time": "month",
+        "value": "boxes",
+        "frequency": "month",
+        "transform": "log",
+        "holdout": 12,
+        "orders": "auto"
+      },
+      "expect": [
+        {
+          "key": "candidate|ARIMA(2,1,2)(1,1,1)[12]||aicc",
+          "value": -576.6921,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,2)(1,1,1)[12]||aic",
+          "value": -577.70109939057,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,2)(1,1,1)[12]||aicc",
+          "value": -576.692090381561,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,2)(1,1,1)[12]||bic",
+          "value": -558.24723493879,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,1,0)(0,1,0)[12]||aicc",
+          "value": -454.6967,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,1,0)(0,1,0)[12]||aic",
+          "value": -454.73087204115,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,1,0)(0,1,0)[12]||aicc",
+          "value": -454.696684006962,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,1,0)(0,1,0)[12]||bic",
+          "value": -451.951748548039,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(1,1,0)[12]||aicc",
+          "value": -575.1491,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(1,1,0)[12]||aic",
+          "value": -575.357802509674,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(1,1,0)[12]||aicc",
+          "value": -575.1491068575,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(1,1,0)[12]||bic",
+          "value": -567.020432030339,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,1,1)(0,1,1)[12]||aicc",
+          "value": -562.555,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,1,1)(0,1,1)[12]||aic",
+          "value": -562.763719105957,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,1,1)(0,1,1)[12]||aicc",
+          "value": -562.555023453783,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,1,1)(0,1,1)[12]||bic",
+          "value": -554.426348626623,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,2)(0,1,1)[12]||aicc",
+          "value": null,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,2)(1,1,0)[12]||aicc",
+          "value": null,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,2)(2,1,1)[12]||aicc",
+          "value": -574.5851,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,2)(2,1,1)[12]||aic",
+          "value": -575.894189344542,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,2)(2,1,1)[12]||aicc",
+          "value": -574.585098435451,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,2)(2,1,1)[12]||bic",
+          "value": -553.661201399649,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,2)(1,1,2)[12]||aicc",
+          "value": -574.6801,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,2)(1,1,2)[12]||aic",
+          "value": -575.989176161723,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,2)(1,1,2)[12]||aicc",
+          "value": -574.680085252632,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,2)(1,1,2)[12]||bic",
+          "value": -553.756188216831,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,2)(0,1,0)[12]||aicc",
+          "value": -556.4443,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,2)(0,1,0)[12]||aic",
+          "value": -556.975303551872,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,2)(0,1,0)[12]||aicc",
+          "value": -556.444330100544,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,2)(0,1,0)[12]||bic",
+          "value": -543.079686086314,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,2)(0,1,2)[12]||aicc",
+          "value": -576.5555,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,2)(0,1,2)[12]||aic",
+          "value": -577.564502122145,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,2)(0,1,2)[12]||aicc",
+          "value": -576.555493113136,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,2)(0,1,2)[12]||bic",
+          "value": -558.110637670364,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,2)(2,1,0)[12]||aicc",
+          "value": -574.2617,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,2)(2,1,0)[12]||aic",
+          "value": -575.270712658396,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,2)(2,1,0)[12]||aicc",
+          "value": -574.261703649387,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,2)(2,1,0)[12]||bic",
+          "value": -555.816848206616,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,2)(2,1,2)[12]||aicc",
+          "value": -572.3282,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,2)(2,1,2)[12]||aic",
+          "value": -573.979587774699,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,2)(2,1,2)[12]||aicc",
+          "value": -572.32821162791,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,2)(2,1,2)[12]||bic",
+          "value": -548.967476336695,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,2)(1,1,1)[12]||aicc",
+          "value": -578.8827,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,2)(1,1,1)[12]||aic",
+          "value": -579.632682152605,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,2)(1,1,1)[12]||aicc",
+          "value": -578.882682152605,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,2)(1,1,1)[12]||bic",
+          "value": -562.957941193935,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,2)(0,1,1)[12]||aicc",
+          "value": -580.3853,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,2)(0,1,1)[12]||aic",
+          "value": -580.916254349746,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,2)(0,1,1)[12]||aicc",
+          "value": -580.385280898419,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,2)(0,1,1)[12]||bic",
+          "value": -567.020636884188,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,2)(0,1,0)[12]||aicc",
+          "value": -558.4516,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,2)(0,1,0)[12]||aic",
+          "value": -558.802515877563,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,2)(0,1,0)[12]||aicc",
+          "value": -558.45163868458,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,2)(0,1,0)[12]||bic",
+          "value": -547.686021905117,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,2)(0,1,2)[12]||aicc",
+          "value": -578.7644,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,2)(0,1,2)[12]||aic",
+          "value": -579.514424557857,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,2)(0,1,2)[12]||aicc",
+          "value": -578.764424557857,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,2)(0,1,2)[12]||bic",
+          "value": -562.839683599188,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,2)(1,1,0)[12]||aicc",
+          "value": -573.6247,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,2)(1,1,0)[12]||aic",
+          "value": -574.15569861873,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,2)(1,1,0)[12]||aicc",
+          "value": -573.624725167403,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,2)(1,1,0)[12]||bic",
+          "value": -560.260081153173,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,2)(1,1,2)[12]||aicc",
+          "value": -576.9331,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,2)(1,1,2)[12]||aic",
+          "value": -577.942145855613,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,2)(1,1,2)[12]||aicc",
+          "value": -576.933136846604,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,2)(1,1,2)[12]||bic",
+          "value": -558.488281403832,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,1,2)(0,1,1)[12]||aicc",
+          "value": -576.3711,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,1,2)(0,1,1)[12]||aic",
+          "value": -576.721982994729,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,1,2)(0,1,1)[12]||aicc",
+          "value": -576.371105801747,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,1,2)(0,1,1)[12]||bic",
+          "value": -565.605489022283,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,1)(0,1,1)[12]||aicc",
+          "value": -582.5009,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,1)(0,1,1)[12]||aic",
+          "value": -582.851745130566,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,1)(0,1,1)[12]||aicc",
+          "value": -582.500867937584,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,1)(0,1,1)[12]||bic",
+          "value": -571.73525115812,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,1)(0,1,0)[12]||aicc",
+          "value": -560.5503,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,1)(0,1,0)[12]||aic",
+          "value": -560.758963311759,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,1)(0,1,0)[12]||aicc",
+          "value": -560.550267659585,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,1)(0,1,0)[12]||bic",
+          "value": -552.421592832425,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,1)(1,1,1)[12]||aicc",
+          "value": -581.1016,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,1)(1,1,1)[12]||aic",
+          "value": -581.632543711083,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,1)(1,1,1)[12]||aicc",
+          "value": -581.101570259756,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,1)(1,1,1)[12]||bic",
+          "value": -567.736926245526,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,1)(0,1,2)[12]||aicc",
+          "value": -580.9805,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,1)(0,1,2)[12]||aic",
+          "value": -581.511433184422,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,1)(0,1,2)[12]||aicc",
+          "value": -580.980459733095,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,1)(0,1,2)[12]||bic",
+          "value": -567.615815718865,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,1)(1,1,0)[12]||aicc",
+          "value": -575.6742,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,1)(1,1,0)[12]||aic",
+          "value": -576.025053958946,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,1)(1,1,0)[12]||aicc",
+          "value": -575.674176765964,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,1)(1,1,0)[12]||bic",
+          "value": -564.9085599865,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,1)(1,1,2)[12]||aicc",
+          "value": -579.1897,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,1)(1,1,2)[12]||aic",
+          "value": -579.939692173588,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,1)(1,1,2)[12]||aicc",
+          "value": -579.189692173588,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,1)(1,1,2)[12]||bic",
+          "value": -563.264951214919,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(0,1,1)[12]||aicc",
+          "value": -582.6564,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(0,1,1)[12]||aic",
+          "value": -582.865093838834,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(0,1,1)[12]||aicc",
+          "value": -582.656398186661,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(0,1,1)[12]||bic",
+          "value": -574.5277233595,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(0,1,0)[12]||aicc",
+          "value": -558.8694,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(0,1,0)[12]||aic",
+          "value": -558.972836620792,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(0,1,0)[12]||aicc",
+          "value": -558.86938834493,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(0,1,0)[12]||bic",
+          "value": -553.414589634569,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(1,1,1)[12]||aicc",
+          "value": -581.3322,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(1,1,1)[12]||aic",
+          "value": -581.68306275043,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(1,1,1)[12]||aicc",
+          "value": -581.332185557447,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(1,1,1)[12]||bic",
+          "value": -570.566568777984,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(0,1,2)[12]||aicc",
+          "value": -581.2274,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(0,1,2)[12]||aic",
+          "value": -581.578323480236,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(0,1,2)[12]||aicc",
+          "value": -581.227446287253,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(0,1,2)[12]||bic",
+          "value": -570.46182950779,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(1,1,2)[12]||aicc",
+          "value": -579.3524,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(1,1,2)[12]||aic",
+          "value": -579.883403871127,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(1,1,2)[12]||aicc",
+          "value": -579.3524304198,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(1,1,2)[12]||bic",
+          "value": -565.98778640557,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,1,0)(0,1,1)[12]||aicc",
+          "value": -504.5062,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,1,0)(0,1,1)[12]||aic",
+          "value": -504.609633979175,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,1,0)(0,1,1)[12]||aicc",
+          "value": -504.506185703313,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,1,0)(0,1,1)[12]||bic",
+          "value": -499.051386992952,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,0)(0,1,1)[12]||aicc",
+          "value": -582.2753,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,0)(0,1,1)[12]||aic",
+          "value": -582.626132740013,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,0)(0,1,1)[12]||aicc",
+          "value": -582.275255547031,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,0)(0,1,1)[12]||bic",
+          "value": -571.509638767567,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,1)(0,1,1)[12]||aicc",
+          "value": -580.3373,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,1)(0,1,1)[12]||aic",
+          "value": -580.868311264081,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,1)(0,1,1)[12]||aicc",
+          "value": -580.337337812754,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,1)(0,1,1)[12]||bic",
+          "value": -566.972693798524,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,2)(1,1,1)[12]||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,1,0)(0,1,0)[12]||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(1,1,0)[12]||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,1,1)(0,1,1)[12]||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,2)(0,1,1)[12]||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,2)(1,1,0)[12]||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,2)(2,1,1)[12]||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,2)(1,1,2)[12]||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,2)(0,1,0)[12]||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,2)(0,1,2)[12]||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,2)(2,1,0)[12]||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,2)(2,1,2)[12]||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,2)(1,1,1)[12]||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,2)(0,1,1)[12]||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,2)(0,1,0)[12]||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,2)(0,1,2)[12]||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,2)(1,1,0)[12]||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,2)(1,1,2)[12]||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,1,2)(0,1,1)[12]||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,1)(0,1,1)[12]||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,1)(0,1,0)[12]||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,1)(1,1,1)[12]||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,1)(0,1,2)[12]||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,1)(1,1,0)[12]||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,1)(1,1,2)[12]||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(0,1,1)[12]||chosen",
+          "value": 1,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(0,1,0)[12]||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(1,1,1)[12]||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(0,1,2)[12]||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(1,1,2)[12]||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,1,0)(0,1,1)[12]||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,0)(0,1,1)[12]||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,1)(0,1,1)[12]||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||candidates",
+          "value": 33,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||p",
+          "value": 1,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||d",
+          "value": 1,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||q",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||P",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||D",
+          "value": 1,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||Q",
+          "value": 1,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||model_name",
+          "text": "SARIMA(1,1,0)(0,1,1)[12]"
+        },
+        {
+          "key": "model|||criterion",
+          "text": "aicc"
+        },
+        {
+          "key": "coef|ar1||estimate",
+          "value": 0.710455571345015,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|sma1||estimate",
+          "value": -0.618476853108383,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||aic",
+          "value": -582.865093838834,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||aicc",
+          "value": -582.656398186661,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||bic",
+          "value": -574.5277233595,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||order_test_seasonal_strength",
+          "value": 0.905926187662214,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||order_test_kpss_d0_statistic",
+          "value": 0.804964619906026,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||order_test_kpss_d0_p_value",
+          "value": 0.01,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||order_test_kpss_d1_statistic",
+          "value": 0.101968557484852,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||order_test_kpss_d1_p_value",
+          "value": 0.1,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||orders_reason_1",
+          "text": "D_seas_yes"
+        },
+        {
+          "key": "model|||orders_reason_2",
+          "text": "d_diff_0"
+        },
+        {
+          "key": "model|||orders_reason_3",
+          "text": "d_keep_1"
+        },
+        {
+          "key": "model|||orders_reason_4",
+          "text": "search_stepwise"
+        }
+      ],
+      "refuses": null
+    },
+    {
+      "id": "arima_auto_exog",
+      "model": "arima",
+      "data": "data/arimax_weekly.csv",
+      "types": {
+        "week": "date",
+        "sales": "number",
+        "price": "number",
+        "promo`flag": "number"
+      },
+      "params": {
+        "time": "week",
+        "value": "sales",
+        "frequency": "week",
+        "s": 1,
+        "exog": [
+          "price",
+          "promo`flag"
+        ],
+        "orders": "auto"
+      },
+      "expect": [
+        {
+          "key": "candidate|ARIMA(2,0,2) with mean||aicc",
+          "value": 694.4654,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,0,2) with mean||aic",
+          "value": 692.916986770732,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,0,2) with mean||aicc",
+          "value": 694.465373867507,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,0,2) with mean||bic",
+          "value": 713.916769277007,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,0) with mean||aicc",
+          "value": 721.1401,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,0) with mean||aic",
+          "value": 720.727701349273,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,0) with mean||aicc",
+          "value": 721.140072483294,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,0) with mean||bic",
+          "value": 731.22759260241,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,0,0) with mean||aicc",
+          "value": 690.2842,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,0,0) with mean||aic",
+          "value": 689.659154374782,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,0,0) with mean||aicc",
+          "value": 690.284154374782,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,0,0) with mean||bic",
+          "value": 702.784018441204,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,1) with mean||aicc",
+          "value": 692.5128,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,1) with mean||aic",
+          "value": 691.887776846362,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,1) with mean||aicc",
+          "value": 692.512776846362,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,1) with mean||bic",
+          "value": 705.012640912783,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,0)||aicc",
+          "value": 896.1815,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,0)||aic",
+          "value": 895.936556683316,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,0)||aicc",
+          "value": 896.181454642499,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,0)||bic",
+          "value": 903.811475123169,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,0,0) with mean||aicc",
+          "value": 689.8089,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,0,0) with mean||aic",
+          "value": 688.924706783908,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,0,0) with mean||aicc",
+          "value": 689.808917310224,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,0,0) with mean||bic",
+          "value": 704.674543663614,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(3,0,0) with mean||aicc",
+          "value": 692.116,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(3,0,0) with mean||aic",
+          "value": 690.924523250668,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(3,0,0) with mean||aicc",
+          "value": 692.11601261237,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(3,0,0) with mean||bic",
+          "value": 709.299332943658,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,0,1) with mean||aicc",
+          "value": 692.116,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,0,1) with mean||aic",
+          "value": 690.924556781932,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,0,1) with mean||aicc",
+          "value": 692.116046143634,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,0,1) with mean||bic",
+          "value": 709.299366474922,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,0,1) with mean||aicc",
+          "value": 689.9366,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,0,1) with mean||aic",
+          "value": 689.052421441219,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,0,1) with mean||aicc",
+          "value": 689.936631967535,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,0,1) with mean||bic",
+          "value": 704.802258320924,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(3,0,1) with mean||aicc",
+          "value": 693.2018,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(3,0,1) with mean||aic",
+          "value": 691.65343999225,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(3,0,1) with mean||aicc",
+          "value": 693.201827089024,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(3,0,1) with mean||bic",
+          "value": 712.653222498524,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,0,2) with mean||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,0) with mean||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,0,0) with mean||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,1) with mean||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,0)||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,0,0) with mean||chosen",
+          "value": 1,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(3,0,0) with mean||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,0,1) with mean||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,0,1) with mean||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(3,0,1) with mean||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||candidates",
+          "value": 11,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||p",
+          "value": 2,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||d",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||q",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||P",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||D",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||Q",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||model_name",
+          "text": "ARIMAX(2,0,0)"
+        },
+        {
+          "key": "model|||criterion",
+          "text": "aicc"
+        },
+        {
+          "key": "coef|ar1||estimate",
+          "value": 0.670337951376257,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|ar2||estimate",
+          "value": -0.166797582425746,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|intercept||estimate",
+          "value": 187.035775227429,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|price||estimate",
+          "value": -25.6241471600199,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|promo`flag||estimate",
+          "value": 25.593240338702,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||aic",
+          "value": 688.924706783908,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||aicc",
+          "value": 689.808917310224,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||bic",
+          "value": 704.674543663614,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||order_test_kpss_d0_statistic",
+          "value": 0.216791608875641,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||order_test_kpss_d0_p_value",
+          "value": 0.1,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||orders_reason_1",
+          "text": "exog_residuals"
+        },
+        {
+          "key": "model|||orders_reason_2",
+          "text": "d_keep_0"
+        },
+        {
+          "key": "model|||orders_reason_3",
+          "text": "search_stepwise"
+        }
+      ],
+      "refuses": null
+    },
+    {
+      "id": "arima_auto_drift_ocsb",
+      "model": "arima",
+      "data": "data/drift_quarterly.csv",
+      "types": {
+        "q": "integer",
+        "revenue": "number"
+      },
+      "params": {
+        "time": "q",
+        "value": "revenue",
+        "frequency": "quarter",
+        "drift": true,
+        "transform": "box_cox",
+        "criterion": "bic",
+        "unit_root_test": "adf",
+        "seasonal_test": "ocsb",
+        "horizon": 8,
+        "orders": "auto"
+      },
+      "expect": [
+        {
+          "key": "candidate|ARIMA(2,1,2)(1,0,1)[4] with drift||bic",
+          "value": -104.8046,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,2)(1,0,1)[4] with drift||aic",
+          "value": -123.760206485432,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,2)(1,0,1)[4] with drift||aicc",
+          "value": -121.703063628289,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,2)(1,0,1)[4] with drift||bic",
+          "value": -104.804623665695,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,1,0) with drift||bic",
+          "value": -31.41835,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,1,0) with drift||aic",
+          "value": -36.1572492873412,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,1,0) with drift||aicc",
+          "value": -35.9993545504991,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,1,0) with drift||bic",
+          "value": -31.4183535824071,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(1,0,0)[4] with drift||bic",
+          "value": -104.9211,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(1,0,0)[4] with drift||aic",
+          "value": -114.398916444302,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(1,0,0)[4] with drift||aicc",
+          "value": -113.858375903762,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(1,0,0)[4] with drift||bic",
+          "value": -104.921125034434,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,1,1)(0,0,1)[4] with drift||bic",
+          "value": -93.40796,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,1,1)(0,0,1)[4] with drift||aic",
+          "value": -102.885753339847,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,1,1)(0,0,1)[4] with drift||aicc",
+          "value": -102.345212799306,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,1,1)(0,0,1)[4] with drift||bic",
+          "value": -93.4079619299786,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,1,0)||bic",
+          "value": -32.96682,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,1,0)||aic",
+          "value": -35.3362706352448,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,1,0)||aicc",
+          "value": -35.2843225832967,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,1,0)||bic",
+          "value": -32.9668227827778,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0) with drift||bic",
+          "value": -99.76399,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0) with drift||aic",
+          "value": -106.872336743353,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0) with drift||aicc",
+          "value": -106.552336743353,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0) with drift||bic",
+          "value": -99.763993185952,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(2,0,0)[4] with drift||bic",
+          "value": -109.9088,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(2,0,0)[4] with drift||aic",
+          "value": -121.756062986469,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(2,0,0)[4] with drift||aicc",
+          "value": -120.93414517825,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(2,0,0)[4] with drift||bic",
+          "value": -109.908823724134,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(2,0,1)[4] with drift||bic",
+          "value": -111.702,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(2,0,1)[4] with drift||aic",
+          "value": -125.918711429973,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(2,0,1)[4] with drift||aicc",
+          "value": -124.752044763307,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(2,0,1)[4] with drift||bic",
+          "value": -111.702024315171,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(1,0,1)[4] with drift||bic",
+          "value": -114.6198,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(1,0,1)[4] with drift||aic",
+          "value": -126.466989968451,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(1,0,1)[4] with drift||aicc",
+          "value": -125.645072160231,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(1,0,1)[4] with drift||bic",
+          "value": -114.619750706115,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(0,0,1)[4] with drift||bic",
+          "value": -101.0883,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(0,0,1)[4] with drift||aic",
+          "value": -110.566129097639,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(0,0,1)[4] with drift||aicc",
+          "value": -110.025588557098,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(0,0,1)[4] with drift||bic",
+          "value": -101.088337687771,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(1,0,2)[4] with drift||bic",
+          "value": -112.65,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(1,0,2)[4] with drift||aic",
+          "value": -126.866677693538,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(1,0,2)[4] with drift||aicc",
+          "value": -125.700011026871,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(1,0,2)[4] with drift||bic",
+          "value": -112.649990578736,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(0,0,2)[4] with drift||bic",
+          "value": -102.2126,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(0,0,2)[4] with drift||aic",
+          "value": -114.059849398098,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(0,0,2)[4] with drift||aicc",
+          "value": -113.237931589878,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(0,0,2)[4] with drift||bic",
+          "value": -102.212610135763,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(2,0,2)[4] with drift||bic",
+          "value": -108.3059,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(2,0,2)[4] with drift||aic",
+          "value": -124.892073199252,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(2,0,2)[4] with drift||aicc",
+          "value": -123.31460841052,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(2,0,2)[4] with drift||bic",
+          "value": -108.305938231983,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,1,0)(1,0,1)[4] with drift||bic",
+          "value": null,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,0)(1,0,1)[4] with drift||bic",
+          "value": null,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,1)(1,0,1)[4] with drift||bic",
+          "value": null,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,1,1)(1,0,1)[4] with drift||bic",
+          "value": null,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,1)(1,0,1)[4] with drift||bic",
+          "value": -109.1544,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,1)(1,0,1)[4] with drift||aic",
+          "value": -125.740581524071,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,1)(1,0,1)[4] with drift||aicc",
+          "value": -124.163116735339,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,1)(1,0,1)[4] with drift||bic",
+          "value": -109.154446556802,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(1,0,1)[4]||bic",
+          "value": null,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,2)(1,0,1)[4] with drift||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,1,0) with drift||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(1,0,0)[4] with drift||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,1,1)(0,0,1)[4] with drift||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,1,0)||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0) with drift||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(2,0,0)[4] with drift||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(2,0,1)[4] with drift||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(1,0,1)[4] with drift||chosen",
+          "value": 1,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(0,0,1)[4] with drift||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(1,0,2)[4] with drift||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(0,0,2)[4] with drift||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(2,0,2)[4] with drift||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,1,0)(1,0,1)[4] with drift||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,0)(1,0,1)[4] with drift||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,1)(1,0,1)[4] with drift||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,1,1)(1,0,1)[4] with drift||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,1,1)(1,0,1)[4] with drift||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,1,0)(1,0,1)[4]||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||candidates",
+          "value": 19,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||p",
+          "value": 1,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||d",
+          "value": 1,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||q",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||P",
+          "value": 1,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||D",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||Q",
+          "value": 1,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||model_name",
+          "text": "SARIMA(1,1,0)(1,0,1)[4]"
+        },
+        {
+          "key": "model|||criterion",
+          "text": "bic"
+        },
+        {
+          "key": "coef|ar1||estimate",
+          "value": -0.490631473769803,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|sar1||estimate",
+          "value": 0.953398592382996,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|sma1||estimate",
+          "value": -0.691029807995432,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|drift||estimate",
+          "value": 0.0431775923412578,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||aic",
+          "value": -126.466989968451,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||aicc",
+          "value": -125.645072160231,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||bic",
+          "value": -114.619750706115,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "curve|forecast||forecast|1",
+          "value": 81.3671294772149,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "curve|forecast||forecast|8",
+          "value": 88.2778312501335,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "curve|forecast||upper|8",
+          "value": 104.385046708244,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||order_test_ocsb_statistic",
+          "value": -2.89364089812072,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||order_test_ocsb_critical",
+          "value": -1.89269992465577,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||order_test_adf_d0_statistic",
+          "value": 0.508864770643838,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||order_test_adf_d0_p_value",
+          "value": 0.1,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||order_test_adf_d1_statistic",
+          "value": -8.02471433901253,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||order_test_adf_d1_p_value",
+          "value": 0.01,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||orders_reason_1",
+          "text": "D_ocsb_no"
+        },
+        {
+          "key": "model|||orders_reason_2",
+          "text": "d_diff_0"
+        },
+        {
+          "key": "model|||orders_reason_3",
+          "text": "d_keep_1"
+        },
+        {
+          "key": "model|||orders_reason_4",
+          "text": "search_stepwise"
+        }
+      ],
+      "refuses": null
+    },
+    {
+      "id": "arima_auto_approx_all",
+      "model": "arima",
+      "data": "data/arimax_weekly.csv",
+      "types": {
+        "week": "date",
+        "sales": "number",
+        "price": "number",
+        "promo`flag": "number"
+      },
+      "params": {
+        "time": "week",
+        "value": "sales",
+        "frequency": "week",
+        "stepwise": false,
+        "criterion": "aic",
+        "unit_root_test": "pp",
+        "orders": "auto"
+      },
+      "expect": [
+        {
+          "key": "candidate|ARIMA(0,0,0)||aic",
+          "value": 1260.888,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,0) with mean||aic",
+          "value": 832.0329,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,1)||aic",
+          "value": 1147.656,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,1) with mean||aic",
+          "value": 799.0746,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,2)||aic",
+          "value": null,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,2) with mean||aic",
+          "value": 793.2769,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,3)||aic",
+          "value": 1039.964,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,3) with mean||aic",
+          "value": 784.199,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,4)||aic",
+          "value": null,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,4) with mean||aic",
+          "value": 783.3137,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,5)||aic",
+          "value": null,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,5) with mean||aic",
+          "value": 774.2947,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,0,0)||aic",
+          "value": null,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,0,0) with mean||aic",
+          "value": 835.3627,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,0,1)||aic",
+          "value": null,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,0,1) with mean||aic",
+          "value": 801.3236,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,0,2)||aic",
+          "value": null,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,0,2) with mean||aic",
+          "value": 796.4935,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,0,3)||aic",
+          "value": null,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,0,3) with mean||aic",
+          "value": 791.7114,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,0,4)||aic",
+          "value": null,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,0,4) with mean||aic",
+          "value": 789.1988,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,0,0)||aic",
+          "value": null,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,0,0) with mean||aic",
+          "value": 836.0731,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,0,1)||aic",
+          "value": null,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,0,1) with mean||aic",
+          "value": 802.0957,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,0,2)||aic",
+          "value": null,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,0,2) with mean||aic",
+          "value": 791.2519,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,0,3)||aic",
+          "value": null,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,0,3) with mean||aic",
+          "value": 792.1417,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(3,0,0)||aic",
+          "value": null,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(3,0,0) with mean||aic",
+          "value": 833.3117,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(3,0,1)||aic",
+          "value": null,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(3,0,1) with mean||aic",
+          "value": null,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(3,0,2)||aic",
+          "value": null,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(3,0,2) with mean||aic",
+          "value": null,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(4,0,0)||aic",
+          "value": null,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(4,0,0) with mean||aic",
+          "value": 824.9811,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(4,0,1)||aic",
+          "value": null,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(4,0,1) with mean||aic",
+          "value": 785.7085,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(5,0,0)||aic",
+          "value": null,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(5,0,0) with mean||aic",
+          "value": 824.234,
+          "rel": 1e-06,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,0)||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,0) with mean||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,1)||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,1) with mean||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,2)||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,2) with mean||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,3)||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,3) with mean||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,4)||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,4) with mean||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,5)||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(0,0,5) with mean||chosen",
+          "value": 1,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,0,0)||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,0,0) with mean||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,0,1)||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,0,1) with mean||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,0,2)||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,0,2) with mean||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,0,3)||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,0,3) with mean||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,0,4)||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(1,0,4) with mean||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,0,0)||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,0,0) with mean||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,0,1)||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,0,1) with mean||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,0,2)||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,0,2) with mean||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,0,3)||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(2,0,3) with mean||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(3,0,0)||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(3,0,0) with mean||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(3,0,1)||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(3,0,1) with mean||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(3,0,2)||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(3,0,2) with mean||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(4,0,0)||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(4,0,0) with mean||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(4,0,1)||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(4,0,1) with mean||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(5,0,0)||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "candidate|ARIMA(5,0,0) with mean||chosen",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||candidates",
+          "value": 42,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||p",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||d",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||q",
+          "value": 5,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||P",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||D",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||Q",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||model_name",
+          "text": "MA(5)"
+        },
+        {
+          "key": "model|||criterion",
+          "text": "aic"
+        },
+        {
+          "key": "coef|ma1||estimate",
+          "value": 0.0642077475478127,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|ma2||estimate",
+          "value": -0.0217165050814125,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|ma3||estimate",
+          "value": 0.0557308953360824,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|ma4||estimate",
+          "value": 0.0153378406039792,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|ma5||estimate",
+          "value": 0.107988158362721,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|intercept||estimate",
+          "value": 114.908725228637,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "curve|forecast||forecast|1",
+          "value": 115.37703450046,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "curve|forecast||forecast|12",
+          "value": 114.908725228637,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "curve|forecast||upper|12",
+          "value": 143.148908439858,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||order_test_pp_d0_statistic",
+          "value": -8.89034032107914,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||order_test_pp_d0_p_value",
+          "value": 0.01,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||orders_reason_1",
+          "text": "D_short"
+        },
+        {
+          "key": "model|||orders_reason_2",
+          "text": "d_keep_0"
+        },
+        {
+          "key": "model|||orders_reason_3",
+          "text": "search_all_approx"
+        }
+      ],
+      "refuses": null
     }
   ]
 }

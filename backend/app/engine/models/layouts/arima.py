@@ -123,20 +123,94 @@ def _forecast(params: dict[str, Any]):
     return block
 
 
+def _p_of_table(p: str) -> str:
+    """A p-value read from urca's table, which stops at 0.01 and 0.10: «≤ 0.01», «≥ 0.1», else
+    three decimals."""
+    return (f'IF({p} <= 0.01, "≤ " & FORMAT(0.01, "0.##"), IF({p} >= 0.1, "≥ " & FORMAT(0.1, "0.#"), '
+            f'FORMAT({p}, "0.###")))')
+
+
+REASON_FIELDS = ("reason_seasonal", "reason_differences", "reason_search")
+
+
+def _reasons(params: dict[str, Any], w: dict) -> list[dict]:
+    """The sentences of the steps of the choice, as calculated fields of the dataset (one
+    expression each would be too long for one column): the runner writes each step's key
+    (`D_seas_yes`, `d_diff_0`, `search_stepwise`…) and the numbers of its test
+    (`order_test_*`); the words say it in the page's language with those numbers. A field is
+    empty on every other row; a key without words is shown as it is."""
+    a, r = w["auto"], w["auto"]["reasons"]
+    test = params.get("unit_root_test") or "kpss"
+    kind = "kpss" if test == "kpss" else "unit"
+    test_name = c.q(a["tests"].get(test, test))
+    criterion = c.q(w["values"]["criterion"].get(params.get("criterion") or "aicc", "AICc"))
+    D = c.num(c.model_key("D"))
+    three = lambda key: c.shown(c.num(c.model_key(key)), "0.###")  # noqa: E731
+    threshold = 'FORMAT(0.64, "0.##")'
+    seasonal = [
+        ("exog_residuals", c.join(r["exog_residuals"])),
+        ("D_short", c.join(r["D_short"], two_s=c.shown(f"2 * {c.num(c.model_key('s'))}", "#,##0"))),
+        ("D_error", c.join(r["D_error"])),
+        ("D_dropped", c.join(r["D_dropped"])),
+    ]
+    for case in ("yes", "no", "capped"):
+        seasonal.append((f"D_seas_{case}", c.join(r[f"D_seas_{case}"], strength=three("order_test_seasonal_strength"),
+                                                  threshold=threshold)))
+        seasonal.append((f"D_ocsb_{case}", c.join(r[f"D_ocsb_{case}"], statistic=three("order_test_ocsb_statistic"),
+                                                  critical=three("order_test_ocsb_critical"))))
+    # the steps of d: «d_diff_1» is the test at the first difference; k is the key's last character
+    k = "RIGHT([text], 1)"
+    series = (f'IFS({k} = "0", IF({D} > 0, {c.q(a["series_seasonal"])}, {c.q(a["series"][0])}), {k} = "1", '
+              f'{c.q(a["series"][1])}, {c.q(a["series"][2])})')
+    p_said = _p_of_table(f'LOOKUP("model|||order_test_{test}_d" & {k} & "_p_value", [key], [value])')
+    parts = {"series": series, "test": test_name, "p": p_said, "k": k}
+    steps = [(f"d_{case}", c.join(r[f"d_{case}_{kind}"], **parts)) for case in ("diff", "keep", "max")]
+    steps += [(f"d_{case}", c.join(r[f"d_{case}"], **parts)) for case in ("constant", "error", "dropped")]
+    # the chosen model: its name, and its drift or its mean when it has one
+    has = lambda term: f'NOT ISNULL(LOOKUP("coef|{term}||estimate", [key], [value]))'  # noqa: E731
+    model = (f'{c.txt(c.model_key("model_name"))} & IF({has("drift")}, {c.q(" " + a["with_drift"])}, '
+             f'IF({has("intercept")}, {c.q(" " + a["with_mean"])}, ""))')
+    n = c.shown(c.num(c.model_key("candidates")), "#,##0")
+    search = [(key, c.join(r[key], model=model, criterion=criterion, n=n))
+              for key in ("search_stepwise", "search_all", "search_stepwise_approx", "search_all_approx")]
+
+    def field(name: str, pairs: list[tuple[str, str]], of: str) -> dict:
+        said = ", ".join(f"{of} = {c.q(key)}, {e}" for key, e in pairs)
+        return {"name": name, "expr": f'IF(STARTSWITH([stat], "orders_reason_"), IFS({said}, NULL), NULL)'}
+
+    return [field(REASON_FIELDS[0], seasonal, "[text]"), field(REASON_FIELDS[1], steps, "LEFT([text], LEN([text]) - 2)"),
+            field(REASON_FIELDS[2], search, "[text]"), _auto_advice(w)]
+
+
+def _auto_advice(w: dict) -> dict:
+    """With automatic orders, the advice that would send the reader to `orders = auto` (ADF,
+    KPSS, Ljung–Box) says instead what to do when the automatic choice leaves the check
+    failed: the column `text` again, those four sentences replaced."""
+    swaps = ", ".join(f"[text] = {c.q(w['checks'][check]['advice'])}, {c.q(said)}" for check, said in w["auto"]["advice"].items())
+    return {"name": "text", "expr": f'IF([section] = "assumption" AND [stat] = "advice", IFS({swaps}, [text]), [text])'}
+
+
 def _candidates(params: dict[str, Any]):
-    """With `orders = auto`: why these orders (one sentence a step), then every candidate,
-    sorted by the criterion, the chosen one marked."""
+    """With `orders = auto`: why these orders (one sentence a step, in the page's language,
+    with the numbers of its test), then every candidate auto.arima fitted, sorted by the
+    criterion, the chosen one marked; under it, what an empty criterion means and, when
+    the search used the approximation, that its criteria are the approximate ones."""
     criterion = params.get("criterion") or "aicc"
 
     def block(p: stats.Page, w: dict) -> None:
-        t = w["tables"]
+        t, a = w["tables"], w["auto"]
         c.heading(p, "s_candidates", w["sections"]["candidates"])
         reasons = '[section] = "model" AND STARTSWITH([stat], "orders_reason_")'
-        c.text_rows(p, "orders_reason", t["reasons"], reasons, t["reason"])
+        p.add(stats.table("orders_reason", t["reasons"], reasons, [
+            {"header": t["reason"], "value": 'MID([stat], 15, 3)', "width": 12, "align": "right"},
+            {"header": a["decision"], "value": "COALESCE(" + ", ".join(f"[{f}]" for f in REASON_FIELDS) + ", [text])"},
+        ], p.y, visible=c.exists(reasons)), 10)
         one = f'[section] = "candidate" AND [stat] = "{criterion}"'
         chosen = c.of_row("candidate", "chosen")
+        said = (f'REPLACE(REPLACE([level], " with drift", {c.q(" " + a["with_drift"])}), " with mean", '
+                f'{c.q(" " + a["with_mean"])})')
         table = stats.table("candidates", t["candidates"], one, [
-            {"header": t["candidate"], "value": "[level]",
+            {"header": t["candidate"], "value": said,
              "rules": [{"when": f"{chosen} = 1", "style": {"weight": "bold", "color": c.ACCENT}}]},
             *({"header": c.stat_label(w, "candidate", s_), "value": c.number_of_row("candidate", s_), "width": 26,
                "align": "right", "format": "0.##"} for s_ in ("aicc", "aic", "bic")),
@@ -146,6 +220,12 @@ def _candidates(params: dict[str, Any]):
         ], p.y, visible=c.exists(one))
         table["sort"] = [{"by": "[value]"}, {"by": "[ord]"}]
         p.add(table, 10)
+        empty = f'{one} AND ISNULL([value])'
+        p.text("candidates_left_out", a["left_out"], h=5, size=7.5, color=c.MUTED, can_grow=True,
+               visible=f"=COUNTIF({empty}) > 0")
+        approx = f'{reasons} AND RIGHT([text], 7) = "_approx"'
+        p.text("candidates_approx", a["approx_note"], h=5, size=7.5, color=c.MUTED, can_grow=True,
+               visible=f"=COUNTIF({approx}) > 0")
     return block
 
 
@@ -176,8 +256,11 @@ def layout(model: str, params: dict[str, Any], locale: str, sample: list[dict] |
     charts = (lags("acf", "stationarity"), lags("pacf", "stationarity"), lags("resid_acf", "ljung_box_10"),
               lags("resid_pacf", "ljung_box_10"), c.histogram("c_residual", ch["residual"], "residual", s["count"]), qq)
     blocks = (_stationarity(params), _forecast(params)) + ((_candidates(params),) if variant == "auto" else ())
-    return c.page(model, params, locale, sample, step, name=name(params, locale), about=about(params, locale), cards=cards,
-                  coef_tables=tables, blocks=blocks, charts=charts)
+    doc = c.page(model, params, locale, sample, step, name=name(params, locale), about=about(params, locale), cards=cards,
+                 coef_tables=tables, blocks=blocks, charts=charts)
+    if variant == "auto":
+        doc["datasets"][0]["calculated"] = _reasons(params, w)
+    return doc
 
 
 register("arima", layout, name, about)

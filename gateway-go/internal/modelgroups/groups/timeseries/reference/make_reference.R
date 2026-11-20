@@ -22,7 +22,9 @@
 # missing weeks), and writes the numbers the runner must reproduce (relative 1e-9). The
 # runner's own pieces (the four cases of ADF and KPSS, the roots' moduli, the first third
 # against the last third) are computed here by their definitions. The second witness,
-# statsmodels' SARIMAX, is make_witness.py (1e-4 relative on the coefficients).
+# statsmodels' SARIMAX, is make_witness.py (1e-4 relative on the coefficients). The cases of
+# the automatic orders (forecast::auto.arima called directly) are in arima_auto.R, sourced
+# below.
 #
 # The format is common/R/selftest.R's: {"format_version": 1, "generated": {…}, "cases": [{"id",
 # "model", "data", "types", "params", "expect": [{"key", "value" | "text", "rel", "abs"}],
@@ -294,6 +296,9 @@ case("arima_too_short", "short_monthly.csv", list(month = "date", boxes = "numbe
      list(time = "month", value = "boxes", frequency = "month", p = 1, d = 0, q = 0, P = 0, D = 1, Q = 1),
      refuses = list(code = "too_short", message = paste0("the series has 20 observations; SARIMA(1,0,0)(0,1,1)[12] needs at ",
                                                          "least 35: a longer series, or lower orders")))
+
+# ── automatic orders (lane M7): auto.arima called directly, in arima_auto.R ──
+source(file.path(here, "arima_auto.R"), local = TRUE)
 
 versions <- c(R = paste(R.version$major, R.version$minor, sep = "."))
 for (p in c("stats", "forecast", "tseries", "FinTS", "urca")) versions[[p]] <- as.character(packageVersion(p))

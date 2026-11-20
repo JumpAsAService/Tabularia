@@ -24,7 +24,7 @@ from app.engine.models.results import read_fixture
 from app.engine.stats.layouts import LOCALES
 from app.engine.stats.output import OUTPUT_NAMES
 from app.reports import definition as rd
-from app.reports import glyphs, pdf, render
+from app.reports import charts, glyphs, pdf, render
 from app.tasks import jobs, report_jobs
 from tests.fakes import FakeRedis
 from tests.test_export_route import Result, Storage, _play
@@ -230,10 +230,29 @@ def test_a_forecast_draws_its_two_bands_along_dates_and_the_correlograms_their_b
     forecast = asked["The series, the fitted values and the forecast with its bands"]
     assert forecast["xAxis"]["type"] == "time" and forecast["legend"]["data"] == ["Observed", "Fitted", "Forecast", "80% band",
                                                                                   "95% band"]
-    assert forecast["yAxis"]["min"] > 0  # the bands' stack does not pull the axis to zero
+    # the bands' stack does not pull the axis to zero: the axis is the marks' own, rounded
+    _, _, rows = fixture("arima-auto")
+    ys = [r["value"] for r in rows if r["section"] == "curve" and r["level"] == "forecast" and r["value"] is not None]
+    assert (forecast["yAxis"]["min"], forecast["yAxis"]["max"]) == tuple(charts._nice_bounds(min(ys), max(ys)).values())
     acf = asked["ACF of the residuals"]
     marks = next(s for s in acf["series"] if "markLine" in s)["markLine"]["data"]
     assert acf["series"][0]["type"] == "bar" and marks[0]["yAxis"] == -marks[1]["yAxis"] > 0
+
+
+def test_automatic_orders_say_each_step_in_the_page_language_with_its_numbers(tmp_path, chart_service, monkeypatch):  # noqa: F811
+    _, page = draw(tmp_path, chart_service, monkeypatch, "arima-auto", locale="it")
+    said = set(strings(json.loads(page)))
+    # the runner writes keys (D_seas_yes, d_diff_0…) and the tests' numbers; the page says them in Italian
+    assert {"D = 1: la forza stagionale 0,906 supera 0,64.",
+            "La serie dopo la differenza stagionale: il KPSS rifiuta la stazionarietà (p ≤ 0,01): un'altra differenza.",
+            "La sua differenza prima: il KPSS non rifiuta la stazionarietà (p ≥ 0,1): d = 1.",
+            "SARIMA(1,1,0)(0,1,1)[12] ha il valore di AICc più basso tra i 33 candidati della ricerca passo passo."} <= said
+    assert not {"D_seas_yes", "d_diff_0", "search_stepwise"} & said
+    # the candidates with their criterion, the chosen one marked
+    assert {"ARIMA(1,1,0)(0,1,1)[12]", "ARIMA(2,1,2)(1,1,1)[12]", "-582,66", "✓"} <= said
+    # with automatic orders the advice does not send the reader to orders = auto
+    assert not any("orders = auto" in s for s in said)
+    assert any(s.startswith("L'ADF mantiene una radice unitaria nella serie differenziata") for s in said)
 
 
 def test_excel_holds_the_tables_one_sheet_each(tmp_path, chart_service, monkeypatch):  # noqa: F811

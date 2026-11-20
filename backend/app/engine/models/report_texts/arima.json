@@ -62,7 +62,28 @@
     "criterion": "Criterion",
     "rmse": "RMSE in sample",
     "mae": "MAE in sample",
-    "time_kind": "Time column"
+    "time_kind": "Time column",
+    "order_test_seasonal_strength": "Seasonal strength (test of D)",
+    "order_test_ocsb_statistic": "OCSB statistic (test of D)",
+    "order_test_ocsb_critical": "OCSB critical value (test of D)",
+    "order_test_kpss_d0_statistic": "KPSS, the series: statistic",
+    "order_test_kpss_d0_p_value": "KPSS, the series: p-value",
+    "order_test_kpss_d1_statistic": "KPSS, the first difference: statistic",
+    "order_test_kpss_d1_p_value": "KPSS, the first difference: p-value",
+    "order_test_kpss_d2_statistic": "KPSS, the second difference: statistic",
+    "order_test_kpss_d2_p_value": "KPSS, the second difference: p-value",
+    "order_test_adf_d0_statistic": "ADF, the series: statistic",
+    "order_test_adf_d0_p_value": "ADF, the series: p-value",
+    "order_test_adf_d1_statistic": "ADF, the first difference: statistic",
+    "order_test_adf_d1_p_value": "ADF, the first difference: p-value",
+    "order_test_adf_d2_statistic": "ADF, the second difference: statistic",
+    "order_test_adf_d2_p_value": "ADF, the second difference: p-value",
+    "order_test_pp_d0_statistic": "Phillips–Perron, the series: statistic",
+    "order_test_pp_d0_p_value": "Phillips–Perron, the series: p-value",
+    "order_test_pp_d1_statistic": "Phillips–Perron, the first difference: statistic",
+    "order_test_pp_d1_p_value": "Phillips–Perron, the first difference: p-value",
+    "order_test_pp_d2_statistic": "Phillips–Perron, the second difference: statistic",
+    "order_test_pp_d2_p_value": "Phillips–Perron, the second difference: p-value"
    },
    "candidate": {
     "aicc": "AICc",
@@ -161,6 +182,55 @@
    "4": "Neither rejects: the series is too short or too noisy for them to tell; read the correlograms.",
    "this_series": "this series",
    "none": "The two tests were not computed: the differenced series is too short."
+  },
+  "auto": {
+   "decision": "Decision",
+   "with_drift": "with drift",
+   "with_mean": "with mean",
+   "series": [
+    "The series",
+    "Its first difference",
+    "Its second difference"
+   ],
+   "series_seasonal": "The series after its seasonal difference",
+   "tests": {
+    "kpss": "KPSS",
+    "adf": "ADF",
+    "pp": "Phillips–Perron"
+   },
+   "left_out": "An empty criterion: auto.arima left the model out (the fit failed, a root of its polynomials is within 1.01 of the unit circle, or a standard error could not be computed).",
+   "approx_note": "With the approximation the criteria of the table are those of the approximate likelihood; the chosen model's own, by maximum likelihood, are under «Fit».",
+   "reasons": {
+    "exog_residuals": "With exogenous columns the tests read the residuals of the series' regression on them, as auto.arima does.",
+    "D_short": "D = 0: the series is too short to test its season (that needs more than two seasons, {two_s} values).",
+    "D_seas_yes": "D = 1: the seasonal strength {strength} is above {threshold}.",
+    "D_seas_no": "D = 0: the seasonal strength {strength} is not above {threshold}.",
+    "D_seas_capped": "D = 0: the seasonal strength {strength} is above {threshold}, but max_D = 0.",
+    "D_ocsb_yes": "D = 1: the OCSB statistic {statistic} is above its critical value {critical}.",
+    "D_ocsb_no": "D = 0: the OCSB statistic {statistic} is not above its critical value {critical}.",
+    "D_ocsb_capped": "D = 0: the OCSB statistic {statistic} is above its critical value {critical}, but max_D = 0.",
+    "D_error": "D = 0: the seasonal test could not be computed on this series.",
+    "D_dropped": "No seasonal difference: it would leave an exogenous column constant.",
+    "d_diff_kpss": "{series}: KPSS rejects stationarity (p {p}): one more difference.",
+    "d_keep_kpss": "{series}: KPSS does not reject stationarity (p {p}): d = {k}.",
+    "d_max_kpss": "{series}: KPSS rejects stationarity (p {p}), but max_d = {k}: d = {k}.",
+    "d_diff_unit": "{series}: {test} does not reject a unit root (p {p}): one more difference.",
+    "d_keep_unit": "{series}: {test} rejects a unit root (p {p}): d = {k}.",
+    "d_max_unit": "{series}: {test} does not reject a unit root (p {p}), but max_d = {k}: d = {k}.",
+    "d_constant": "{series} is constant: d = {k}.",
+    "d_error": "{series}: {test} could not be computed: d = {k}.",
+    "d_dropped": "d = {k}: one more difference would leave an exogenous column constant.",
+    "search_stepwise": "{model} has the lowest {criterion} of the {n} candidates of the stepwise search.",
+    "search_all": "{model} has the lowest {criterion} of the {n} candidates, every order with p + q + P + Q ≤ 5.",
+    "search_stepwise_approx": "The {n} candidates of the stepwise search were compared by an approximate likelihood (conditional sum of squares), as auto.arima does for a series longer than 150 values or a season longer than 12: {model} is the one of lowest {criterion} that maximum likelihood can fit.",
+    "search_all_approx": "The {n} candidates, every order with p + q + P + Q ≤ 5, were compared by an approximate likelihood (conditional sum of squares), as auto.arima does for a series longer than 150 values or a season longer than 12: {model} is the one of lowest {criterion} that maximum likelihood can fit."
+   },
+   "advice": {
+    "adf": "ADF keeps a unit root in the differenced series, though the test that chose d asked for no more differences: look at the series for a trend or a break, or set the orders by hand with d + 1.",
+    "kpss": "KPSS rejects the stationarity of the differenced series, though the test that chose d asked for no more differences (or max_d stopped it): look at the series, or set the orders by hand with d + 1.",
+    "ljung_box_10": "Structure left in the residuals: the search found no model without it; try stepwise = off, or raise max_p and max_q.",
+    "ljung_box_2s": "Seasonal structure left in the residuals: try stepwise = off, or raise max_P and max_Q."
+   }
   }
  },
  "it": {
@@ -226,7 +296,28 @@
     "criterion": "Criterio",
     "rmse": "RMSE nel campione",
     "mae": "MAE nel campione",
-    "time_kind": "Colonna del tempo"
+    "time_kind": "Colonna del tempo",
+    "order_test_seasonal_strength": "Forza stagionale (test di D)",
+    "order_test_ocsb_statistic": "Statistica OCSB (test di D)",
+    "order_test_ocsb_critical": "Valore critico OCSB (test di D)",
+    "order_test_kpss_d0_statistic": "KPSS, la serie: statistica",
+    "order_test_kpss_d0_p_value": "KPSS, la serie: p-value",
+    "order_test_kpss_d1_statistic": "KPSS, la differenza prima: statistica",
+    "order_test_kpss_d1_p_value": "KPSS, la differenza prima: p-value",
+    "order_test_kpss_d2_statistic": "KPSS, la differenza seconda: statistica",
+    "order_test_kpss_d2_p_value": "KPSS, la differenza seconda: p-value",
+    "order_test_adf_d0_statistic": "ADF, la serie: statistica",
+    "order_test_adf_d0_p_value": "ADF, la serie: p-value",
+    "order_test_adf_d1_statistic": "ADF, la differenza prima: statistica",
+    "order_test_adf_d1_p_value": "ADF, la differenza prima: p-value",
+    "order_test_adf_d2_statistic": "ADF, la differenza seconda: statistica",
+    "order_test_adf_d2_p_value": "ADF, la differenza seconda: p-value",
+    "order_test_pp_d0_statistic": "Phillips–Perron, la serie: statistica",
+    "order_test_pp_d0_p_value": "Phillips–Perron, la serie: p-value",
+    "order_test_pp_d1_statistic": "Phillips–Perron, la differenza prima: statistica",
+    "order_test_pp_d1_p_value": "Phillips–Perron, la differenza prima: p-value",
+    "order_test_pp_d2_statistic": "Phillips–Perron, la differenza seconda: statistica",
+    "order_test_pp_d2_p_value": "Phillips–Perron, la differenza seconda: p-value"
    },
    "candidate": {
     "aicc": "AICc",
@@ -325,6 +416,55 @@
    "4": "Non rifiuta nessuno dei due: la serie è troppo corta o troppo rumorosa per dirlo; leggete i correlogrammi.",
    "this_series": "questa serie",
    "none": "I due test non sono stati calcolati: la serie differenziata è troppo corta."
+  },
+  "auto": {
+   "decision": "Decisione",
+   "with_drift": "con deriva",
+   "with_mean": "con media",
+   "series": [
+    "La serie",
+    "La sua differenza prima",
+    "La sua differenza seconda"
+   ],
+   "series_seasonal": "La serie dopo la differenza stagionale",
+   "tests": {
+    "kpss": "KPSS",
+    "adf": "ADF",
+    "pp": "Phillips–Perron"
+   },
+   "left_out": "Un criterio vuoto: auto.arima ha scartato il modello (la stima non è riuscita, una radice dei suoi polinomi è entro 1,01 dal cerchio unitario, oppure un errore standard non si è potuto calcolare).",
+   "approx_note": "Con l'approssimazione i criteri della tabella sono quelli della verosimiglianza approssimata; quelli del modello scelto, per massima verosimiglianza, sono in «Adattamento».",
+   "reasons": {
+    "exog_residuals": "Con colonne esogene i test leggono i residui della regressione della serie su di esse, come fa auto.arima.",
+    "D_short": "D = 0: la serie è troppo corta per verificarne la stagionalità (servono più di due stagioni, {two_s} valori).",
+    "D_seas_yes": "D = 1: la forza stagionale {strength} supera {threshold}.",
+    "D_seas_no": "D = 0: la forza stagionale {strength} non supera {threshold}.",
+    "D_seas_capped": "D = 0: la forza stagionale {strength} supera {threshold}, ma max_D = 0.",
+    "D_ocsb_yes": "D = 1: la statistica OCSB {statistic} supera il suo valore critico {critical}.",
+    "D_ocsb_no": "D = 0: la statistica OCSB {statistic} non supera il suo valore critico {critical}.",
+    "D_ocsb_capped": "D = 0: la statistica OCSB {statistic} supera il suo valore critico {critical}, ma max_D = 0.",
+    "D_error": "D = 0: il test stagionale non si è potuto calcolare su questa serie.",
+    "D_dropped": "Nessuna differenza stagionale: renderebbe costante una colonna esogena.",
+    "d_diff_kpss": "{series}: il KPSS rifiuta la stazionarietà (p {p}): un'altra differenza.",
+    "d_keep_kpss": "{series}: il KPSS non rifiuta la stazionarietà (p {p}): d = {k}.",
+    "d_max_kpss": "{series}: il KPSS rifiuta la stazionarietà (p {p}), ma max_d = {k}: d = {k}.",
+    "d_diff_unit": "{series}: il test {test} non rifiuta la radice unitaria (p {p}): un'altra differenza.",
+    "d_keep_unit": "{series}: il test {test} rifiuta la radice unitaria (p {p}): d = {k}.",
+    "d_max_unit": "{series}: il test {test} non rifiuta la radice unitaria (p {p}), ma max_d = {k}: d = {k}.",
+    "d_constant": "{series} è costante: d = {k}.",
+    "d_error": "{series}: il test {test} non si è potuto calcolare: d = {k}.",
+    "d_dropped": "d = {k}: un'altra differenza renderebbe costante una colonna esogena.",
+    "search_stepwise": "{model} ha il valore di {criterion} più basso tra i {n} candidati della ricerca passo passo.",
+    "search_all": "{model} ha il valore di {criterion} più basso tra i {n} candidati, tutti gli ordini con p + q + P + Q ≤ 5.",
+    "search_stepwise_approx": "I {n} candidati della ricerca passo passo sono stati confrontati con una verosimiglianza approssimata (somma condizionata dei quadrati), come fa auto.arima con una serie di più di 150 valori o una stagione più lunga di 12: {model} è quello con il valore di {criterion} più basso che la massima verosimiglianza riesce a stimare.",
+    "search_all_approx": "I {n} candidati, tutti gli ordini con p + q + P + Q ≤ 5, sono stati confrontati con una verosimiglianza approssimata (somma condizionata dei quadrati), come fa auto.arima con una serie di più di 150 valori o una stagione più lunga di 12: {model} è quello con il valore di {criterion} più basso che la massima verosimiglianza riesce a stimare."
+   },
+   "advice": {
+    "adf": "L'ADF mantiene una radice unitaria nella serie differenziata, benché il test che ha scelto d non chiedesse altre differenze: guardate la serie per un trend o una rottura, oppure fissate gli ordini a mano con d + 1.",
+    "kpss": "Il KPSS rifiuta la stazionarietà della serie differenziata, benché il test che ha scelto d non chiedesse altre differenze (o max_d l'abbia fermato): guardate la serie, oppure fissate gli ordini a mano con d + 1.",
+    "ljung_box_10": "Nei residui resta struttura: la ricerca non ha trovato un modello senza; provate stepwise = off, oppure alzate max_p e max_q.",
+    "ljung_box_2s": "Nei residui resta struttura stagionale: provate stepwise = off, oppure alzate max_P e max_Q."
+   }
   }
  },
  "de": {
@@ -390,7 +530,28 @@
     "criterion": "Kriterium",
     "rmse": "RMSE in der Stichprobe",
     "mae": "MAE in der Stichprobe",
-    "time_kind": "Zeitspalte"
+    "time_kind": "Zeitspalte",
+    "order_test_seasonal_strength": "Saisonale Stärke (Test von D)",
+    "order_test_ocsb_statistic": "OCSB-Statistik (Test von D)",
+    "order_test_ocsb_critical": "Kritischer Wert der OCSB (Test von D)",
+    "order_test_kpss_d0_statistic": "KPSS, die Reihe: Statistik",
+    "order_test_kpss_d0_p_value": "KPSS, die Reihe: p-Wert",
+    "order_test_kpss_d1_statistic": "KPSS, die erste Differenz: Statistik",
+    "order_test_kpss_d1_p_value": "KPSS, die erste Differenz: p-Wert",
+    "order_test_kpss_d2_statistic": "KPSS, die zweite Differenz: Statistik",
+    "order_test_kpss_d2_p_value": "KPSS, die zweite Differenz: p-Wert",
+    "order_test_adf_d0_statistic": "ADF, die Reihe: Statistik",
+    "order_test_adf_d0_p_value": "ADF, die Reihe: p-Wert",
+    "order_test_adf_d1_statistic": "ADF, die erste Differenz: Statistik",
+    "order_test_adf_d1_p_value": "ADF, die erste Differenz: p-Wert",
+    "order_test_adf_d2_statistic": "ADF, die zweite Differenz: Statistik",
+    "order_test_adf_d2_p_value": "ADF, die zweite Differenz: p-Wert",
+    "order_test_pp_d0_statistic": "Phillips–Perron, die Reihe: Statistik",
+    "order_test_pp_d0_p_value": "Phillips–Perron, die Reihe: p-Wert",
+    "order_test_pp_d1_statistic": "Phillips–Perron, die erste Differenz: Statistik",
+    "order_test_pp_d1_p_value": "Phillips–Perron, die erste Differenz: p-Wert",
+    "order_test_pp_d2_statistic": "Phillips–Perron, die zweite Differenz: Statistik",
+    "order_test_pp_d2_p_value": "Phillips–Perron, die zweite Differenz: p-Wert"
    },
    "candidate": {
     "aicc": "AICc",
@@ -489,6 +650,55 @@
    "4": "Keiner verwirft: die Reihe ist zu kurz oder zu verrauscht für eine Aussage; lesen Sie die Korrelogramme.",
    "this_series": "diese Reihe",
    "none": "Die beiden Tests wurden nicht berechnet: die differenzierte Reihe ist zu kurz."
+  },
+  "auto": {
+   "decision": "Entscheidung",
+   "with_drift": "mit Drift",
+   "with_mean": "mit Mittelwert",
+   "series": [
+    "Die Reihe",
+    "Ihre erste Differenz",
+    "Ihre zweite Differenz"
+   ],
+   "series_seasonal": "Die Reihe nach ihrer saisonalen Differenz",
+   "tests": {
+    "kpss": "KPSS",
+    "adf": "ADF",
+    "pp": "Phillips–Perron"
+   },
+   "left_out": "Ein leeres Kriterium: auto.arima hat das Modell ausgelassen (die Schätzung schlug fehl, eine Wurzel seiner Polynome liegt näher als 1,01 am Einheitskreis, oder ein Standardfehler ließ sich nicht berechnen).",
+   "approx_note": "Mit der Näherung sind die Kriterien der Tabelle die der genäherten Likelihood; die des gewählten Modells, nach Maximum-Likelihood, stehen unter «Anpassung».",
+   "reasons": {
+    "exog_residuals": "Mit exogenen Spalten lesen die Tests die Residuen der Regression der Reihe auf diese Spalten, wie auto.arima es tut.",
+    "D_short": "D = 0: Die Reihe ist zu kurz, um ihre Saison zu testen (dafür braucht es mehr als zwei Saisons, {two_s} Werte).",
+    "D_seas_yes": "D = 1: Die saisonale Stärke {strength} liegt über {threshold}.",
+    "D_seas_no": "D = 0: Die saisonale Stärke {strength} liegt nicht über {threshold}.",
+    "D_seas_capped": "D = 0: Die saisonale Stärke {strength} liegt über {threshold}, aber max_D = 0.",
+    "D_ocsb_yes": "D = 1: Die OCSB-Statistik {statistic} liegt über ihrem kritischen Wert {critical}.",
+    "D_ocsb_no": "D = 0: Die OCSB-Statistik {statistic} liegt nicht über ihrem kritischen Wert {critical}.",
+    "D_ocsb_capped": "D = 0: Die OCSB-Statistik {statistic} liegt über ihrem kritischen Wert {critical}, aber max_D = 0.",
+    "D_error": "D = 0: Der saisonale Test ließ sich für diese Reihe nicht berechnen.",
+    "D_dropped": "Keine saisonale Differenz: Sie würde eine exogene Spalte konstant machen.",
+    "d_diff_kpss": "{series}: KPSS verwirft die Stationarität (p {p}): eine weitere Differenz.",
+    "d_keep_kpss": "{series}: KPSS verwirft die Stationarität nicht (p {p}): d = {k}.",
+    "d_max_kpss": "{series}: KPSS verwirft die Stationarität (p {p}), aber max_d = {k}: d = {k}.",
+    "d_diff_unit": "{series}: {test} verwirft die Einheitswurzel nicht (p {p}): eine weitere Differenz.",
+    "d_keep_unit": "{series}: {test} verwirft die Einheitswurzel (p {p}): d = {k}.",
+    "d_max_unit": "{series}: {test} verwirft die Einheitswurzel nicht (p {p}), aber max_d = {k}: d = {k}.",
+    "d_constant": "{series} ist konstant: d = {k}.",
+    "d_error": "{series}: {test} ließ sich nicht berechnen: d = {k}.",
+    "d_dropped": "d = {k}: Eine weitere Differenz würde eine exogene Spalte konstant machen.",
+    "search_stepwise": "{model} hat das niedrigste {criterion} der {n} Kandidaten der schrittweisen Suche.",
+    "search_all": "{model} hat das niedrigste {criterion} der {n} Kandidaten, aller Ordnungen mit p + q + P + Q ≤ 5.",
+    "search_stepwise_approx": "Die {n} Kandidaten der schrittweisen Suche wurden mit einer genäherten Likelihood (bedingte Quadratsumme) verglichen, wie auto.arima es bei einer Reihe mit mehr als 150 Werten oder einer Saison länger als 12 tut: {model} ist der mit dem niedrigsten {criterion}, den die Maximum-Likelihood schätzen kann.",
+    "search_all_approx": "Die {n} Kandidaten, alle Ordnungen mit p + q + P + Q ≤ 5, wurden mit einer genäherten Likelihood (bedingte Quadratsumme) verglichen, wie auto.arima es bei einer Reihe mit mehr als 150 Werten oder einer Saison länger als 12 tut: {model} ist der mit dem niedrigsten {criterion}, den die Maximum-Likelihood schätzen kann."
+   },
+   "advice": {
+    "adf": "ADF behält in der differenzierten Reihe eine Einheitswurzel, obwohl der Test, der d gewählt hat, keine weitere Differenz verlangte: Prüfen Sie die Reihe auf einen Trend oder Bruch, oder legen Sie die Ordnungen von Hand mit d + 1 fest.",
+    "kpss": "KPSS verwirft die Stationarität der differenzierten Reihe, obwohl der Test, der d gewählt hat, keine weitere Differenz verlangte (oder max_d ihn stoppte): Prüfen Sie die Reihe, oder legen Sie die Ordnungen von Hand mit d + 1 fest.",
+    "ljung_box_10": "In den Residuen bleibt Struktur: Die Suche fand kein Modell ohne sie; versuchen Sie stepwise = off, oder erhöhen Sie max_p und max_q.",
+    "ljung_box_2s": "In den Residuen bleibt saisonale Struktur: Versuchen Sie stepwise = off, oder erhöhen Sie max_P und max_Q."
+   }
   }
  },
  "es": {
@@ -554,7 +764,28 @@
     "criterion": "Criterio",
     "rmse": "RMSE en la muestra",
     "mae": "MAE en la muestra",
-    "time_kind": "Columna de tiempo"
+    "time_kind": "Columna de tiempo",
+    "order_test_seasonal_strength": "Fuerza estacional (prueba de D)",
+    "order_test_ocsb_statistic": "Estadístico OCSB (prueba de D)",
+    "order_test_ocsb_critical": "Valor crítico OCSB (prueba de D)",
+    "order_test_kpss_d0_statistic": "KPSS, la serie: estadístico",
+    "order_test_kpss_d0_p_value": "KPSS, la serie: p-valor",
+    "order_test_kpss_d1_statistic": "KPSS, la primera diferencia: estadístico",
+    "order_test_kpss_d1_p_value": "KPSS, la primera diferencia: p-valor",
+    "order_test_kpss_d2_statistic": "KPSS, la segunda diferencia: estadístico",
+    "order_test_kpss_d2_p_value": "KPSS, la segunda diferencia: p-valor",
+    "order_test_adf_d0_statistic": "ADF, la serie: estadístico",
+    "order_test_adf_d0_p_value": "ADF, la serie: p-valor",
+    "order_test_adf_d1_statistic": "ADF, la primera diferencia: estadístico",
+    "order_test_adf_d1_p_value": "ADF, la primera diferencia: p-valor",
+    "order_test_adf_d2_statistic": "ADF, la segunda diferencia: estadístico",
+    "order_test_adf_d2_p_value": "ADF, la segunda diferencia: p-valor",
+    "order_test_pp_d0_statistic": "Phillips–Perron, la serie: estadístico",
+    "order_test_pp_d0_p_value": "Phillips–Perron, la serie: p-valor",
+    "order_test_pp_d1_statistic": "Phillips–Perron, la primera diferencia: estadístico",
+    "order_test_pp_d1_p_value": "Phillips–Perron, la primera diferencia: p-valor",
+    "order_test_pp_d2_statistic": "Phillips–Perron, la segunda diferencia: estadístico",
+    "order_test_pp_d2_p_value": "Phillips–Perron, la segunda diferencia: p-valor"
    },
    "candidate": {
     "aicc": "AICc",
@@ -653,6 +884,55 @@
    "4": "Ninguna rechaza: la serie es demasiado corta o ruidosa para decirlo; lea los correlogramas.",
    "this_series": "esta serie",
    "none": "Las dos pruebas no se calcularon: la serie diferenciada es demasiado corta."
+  },
+  "auto": {
+   "decision": "Decisión",
+   "with_drift": "con deriva",
+   "with_mean": "con media",
+   "series": [
+    "La serie",
+    "Su primera diferencia",
+    "Su segunda diferencia"
+   ],
+   "series_seasonal": "La serie tras su diferencia estacional",
+   "tests": {
+    "kpss": "KPSS",
+    "adf": "ADF",
+    "pp": "Phillips–Perron"
+   },
+   "left_out": "Un criterio vacío: auto.arima dejó fuera el modelo (el ajuste falló, una raíz de sus polinomios está a menos de 1,01 del círculo unidad, o un error estándar no se pudo calcular).",
+   "approx_note": "Con la aproximación, los criterios de la tabla son los de la verosimilitud aproximada; los del modelo elegido, por máxima verosimilitud, están en «Ajuste».",
+   "reasons": {
+    "exog_residuals": "Con columnas exógenas, las pruebas leen los residuos de la regresión de la serie sobre ellas, como hace auto.arima.",
+    "D_short": "D = 0: la serie es demasiado corta para probar su estacionalidad (hacen falta más de dos estaciones, {two_s} valores).",
+    "D_seas_yes": "D = 1: la fuerza estacional {strength} supera {threshold}.",
+    "D_seas_no": "D = 0: la fuerza estacional {strength} no supera {threshold}.",
+    "D_seas_capped": "D = 0: la fuerza estacional {strength} supera {threshold}, pero max_D = 0.",
+    "D_ocsb_yes": "D = 1: el estadístico OCSB {statistic} supera su valor crítico {critical}.",
+    "D_ocsb_no": "D = 0: el estadístico OCSB {statistic} no supera su valor crítico {critical}.",
+    "D_ocsb_capped": "D = 0: el estadístico OCSB {statistic} supera su valor crítico {critical}, pero max_D = 0.",
+    "D_error": "D = 0: la prueba estacional no se pudo calcular en esta serie.",
+    "D_dropped": "Sin diferencia estacional: dejaría constante una columna exógena.",
+    "d_diff_kpss": "{series}: la KPSS rechaza la estacionariedad (p {p}): una diferencia más.",
+    "d_keep_kpss": "{series}: la KPSS no rechaza la estacionariedad (p {p}): d = {k}.",
+    "d_max_kpss": "{series}: la KPSS rechaza la estacionariedad (p {p}), pero max_d = {k}: d = {k}.",
+    "d_diff_unit": "{series}: la prueba {test} no rechaza la raíz unitaria (p {p}): una diferencia más.",
+    "d_keep_unit": "{series}: la prueba {test} rechaza la raíz unitaria (p {p}): d = {k}.",
+    "d_max_unit": "{series}: la prueba {test} no rechaza la raíz unitaria (p {p}), pero max_d = {k}: d = {k}.",
+    "d_constant": "{series} es constante: d = {k}.",
+    "d_error": "{series}: la prueba {test} no se pudo calcular: d = {k}.",
+    "d_dropped": "d = {k}: una diferencia más dejaría constante una columna exógena.",
+    "search_stepwise": "{model} tiene el {criterion} más bajo de los {n} candidatos de la búsqueda paso a paso.",
+    "search_all": "{model} tiene el {criterion} más bajo de los {n} candidatos, todos los órdenes con p + q + P + Q ≤ 5.",
+    "search_stepwise_approx": "Los {n} candidatos de la búsqueda paso a paso se compararon con una verosimilitud aproximada (suma condicional de cuadrados), como hace auto.arima con una serie de más de 150 valores o una estación de más de 12: {model} es el de {criterion} más bajo que la máxima verosimilitud puede ajustar.",
+    "search_all_approx": "Los {n} candidatos, todos los órdenes con p + q + P + Q ≤ 5, se compararon con una verosimilitud aproximada (suma condicional de cuadrados), como hace auto.arima con una serie de más de 150 valores o una estación de más de 12: {model} es el de {criterion} más bajo que la máxima verosimilitud puede ajustar."
+   },
+   "advice": {
+    "adf": "La ADF mantiene una raíz unitaria en la serie diferenciada, aunque la prueba que eligió d no pidió más diferencias: busque en la serie una tendencia o una ruptura, o fije los órdenes a mano con d + 1.",
+    "kpss": "La KPSS rechaza la estacionariedad de la serie diferenciada, aunque la prueba que eligió d no pidió más diferencias (o max_d la detuvo): mire la serie, o fije los órdenes a mano con d + 1.",
+    "ljung_box_10": "Queda estructura en los residuos: la búsqueda no encontró un modelo sin ella; pruebe stepwise = off, o suba max_p y max_q.",
+    "ljung_box_2s": "Queda estructura estacional en los residuos: pruebe stepwise = off, o suba max_P y max_Q."
+   }
   }
  },
  "fr": {
@@ -718,7 +998,28 @@
     "criterion": "Critère",
     "rmse": "RMSE dans l'échantillon",
     "mae": "MAE dans l'échantillon",
-    "time_kind": "Colonne du temps"
+    "time_kind": "Colonne du temps",
+    "order_test_seasonal_strength": "Force saisonnière (test de D)",
+    "order_test_ocsb_statistic": "Statistique OCSB (test de D)",
+    "order_test_ocsb_critical": "Valeur critique OCSB (test de D)",
+    "order_test_kpss_d0_statistic": "KPSS, la série : statistique",
+    "order_test_kpss_d0_p_value": "KPSS, la série : p-valeur",
+    "order_test_kpss_d1_statistic": "KPSS, la différence première : statistique",
+    "order_test_kpss_d1_p_value": "KPSS, la différence première : p-valeur",
+    "order_test_kpss_d2_statistic": "KPSS, la différence seconde : statistique",
+    "order_test_kpss_d2_p_value": "KPSS, la différence seconde : p-valeur",
+    "order_test_adf_d0_statistic": "ADF, la série : statistique",
+    "order_test_adf_d0_p_value": "ADF, la série : p-valeur",
+    "order_test_adf_d1_statistic": "ADF, la différence première : statistique",
+    "order_test_adf_d1_p_value": "ADF, la différence première : p-valeur",
+    "order_test_adf_d2_statistic": "ADF, la différence seconde : statistique",
+    "order_test_adf_d2_p_value": "ADF, la différence seconde : p-valeur",
+    "order_test_pp_d0_statistic": "Phillips–Perron, la série : statistique",
+    "order_test_pp_d0_p_value": "Phillips–Perron, la série : p-valeur",
+    "order_test_pp_d1_statistic": "Phillips–Perron, la différence première : statistique",
+    "order_test_pp_d1_p_value": "Phillips–Perron, la différence première : p-valeur",
+    "order_test_pp_d2_statistic": "Phillips–Perron, la différence seconde : statistique",
+    "order_test_pp_d2_p_value": "Phillips–Perron, la différence seconde : p-valeur"
    },
    "candidate": {
     "aicc": "AICc",
@@ -817,6 +1118,55 @@
    "4": "Aucun ne rejette : la série est trop courte ou trop bruitée pour trancher ; lisez les corrélogrammes.",
    "this_series": "cette série",
    "none": "Les deux tests n'ont pas été calculés : la série différenciée est trop courte."
+  },
+  "auto": {
+   "decision": "Décision",
+   "with_drift": "avec dérive",
+   "with_mean": "avec moyenne",
+   "series": [
+    "La série",
+    "Sa différence première",
+    "Sa différence seconde"
+   ],
+   "series_seasonal": "La série après sa différence saisonnière",
+   "tests": {
+    "kpss": "KPSS",
+    "adf": "ADF",
+    "pp": "Phillips–Perron"
+   },
+   "left_out": "Un critère vide : auto.arima a écarté le modèle (l'ajustement a échoué, une racine de ses polynômes est à moins de 1,01 du cercle unité, ou une erreur type n'a pas pu être calculée).",
+   "approx_note": "Avec l'approximation, les critères du tableau sont ceux de la vraisemblance approchée ; ceux du modèle choisi, par maximum de vraisemblance, sont sous « Ajustement ».",
+   "reasons": {
+    "exog_residuals": "Avec des colonnes exogènes, les tests lisent les résidus de la régression de la série sur elles, comme le fait auto.arima.",
+    "D_short": "D = 0 : la série est trop courte pour tester sa saisonnalité (il faut plus de deux saisons, {two_s} valeurs).",
+    "D_seas_yes": "D = 1 : la force saisonnière {strength} dépasse {threshold}.",
+    "D_seas_no": "D = 0 : la force saisonnière {strength} ne dépasse pas {threshold}.",
+    "D_seas_capped": "D = 0 : la force saisonnière {strength} dépasse {threshold}, mais max_D = 0.",
+    "D_ocsb_yes": "D = 1 : la statistique OCSB {statistic} dépasse sa valeur critique {critical}.",
+    "D_ocsb_no": "D = 0 : la statistique OCSB {statistic} ne dépasse pas sa valeur critique {critical}.",
+    "D_ocsb_capped": "D = 0 : la statistique OCSB {statistic} dépasse sa valeur critique {critical}, mais max_D = 0.",
+    "D_error": "D = 0 : le test saisonnier n'a pas pu être calculé sur cette série.",
+    "D_dropped": "Pas de différence saisonnière : elle rendrait constante une colonne exogène.",
+    "d_diff_kpss": "{series} : le KPSS rejette la stationnarité (p {p}) : une différence de plus.",
+    "d_keep_kpss": "{series} : le KPSS ne rejette pas la stationnarité (p {p}) : d = {k}.",
+    "d_max_kpss": "{series} : le KPSS rejette la stationnarité (p {p}), mais max_d = {k} : d = {k}.",
+    "d_diff_unit": "{series} : le test {test} ne rejette pas la racine unitaire (p {p}) : une différence de plus.",
+    "d_keep_unit": "{series} : le test {test} rejette la racine unitaire (p {p}) : d = {k}.",
+    "d_max_unit": "{series} : le test {test} ne rejette pas la racine unitaire (p {p}), mais max_d = {k} : d = {k}.",
+    "d_constant": "{series} est constante : d = {k}.",
+    "d_error": "{series} : le test {test} n'a pas pu être calculé : d = {k}.",
+    "d_dropped": "d = {k} : une différence de plus rendrait constante une colonne exogène.",
+    "search_stepwise": "{model} a le {criterion} le plus bas des {n} candidats de la recherche pas à pas.",
+    "search_all": "{model} a le {criterion} le plus bas des {n} candidats, tous les ordres avec p + q + P + Q ≤ 5.",
+    "search_stepwise_approx": "Les {n} candidats de la recherche pas à pas ont été comparés par une vraisemblance approchée (somme conditionnelle des carrés), comme le fait auto.arima pour une série de plus de 150 valeurs ou une saison de plus de 12 : {model} est celui de plus bas {criterion} que le maximum de vraisemblance sait ajuster.",
+    "search_all_approx": "Les {n} candidats, tous les ordres avec p + q + P + Q ≤ 5, ont été comparés par une vraisemblance approchée (somme conditionnelle des carrés), comme le fait auto.arima pour une série de plus de 150 valeurs ou une saison de plus de 12 : {model} est celui de plus bas {criterion} que le maximum de vraisemblance sait ajuster."
+   },
+   "advice": {
+    "adf": "L'ADF garde une racine unitaire dans la série différenciée, bien que le test qui a choisi d n'ait pas demandé d'autre différence : cherchez dans la série une tendance ou une rupture, ou fixez les ordres à la main avec d + 1.",
+    "kpss": "Le KPSS rejette la stationnarité de la série différenciée, bien que le test qui a choisi d n'ait pas demandé d'autre différence (ou que max_d l'ait arrêté) : regardez la série, ou fixez les ordres à la main avec d + 1.",
+    "ljung_box_10": "Il reste de la structure dans les résidus : la recherche n'a pas trouvé de modèle sans elle ; essayez stepwise = off, ou augmentez max_p et max_q.",
+    "ljung_box_2s": "Il reste de la structure saisonnière dans les résidus : essayez stepwise = off, ou augmentez max_P et max_Q."
+   }
   }
  }
 }

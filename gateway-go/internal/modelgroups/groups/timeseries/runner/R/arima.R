@@ -14,6 +14,7 @@
 #                                               (a function of rows) adds the variant's own rows
 #                                               (the candidates, orders_reason) after the
 #                                               model section's numbers
+#   arima_lambda(prep)                          the transform's λ, which the search needs first
 #
 # The series. One row per period of `frequency`: a time held twice (two rows in one month)
 # stops the node; a period without a row, or with an empty value, is a missing value that the
@@ -374,17 +375,7 @@ arima_fit_orders <- function(task, prep, orders, extra = NULL) {
                                    "; ", name, " needs at least ", need, ": a longer series, or lower orders"),
                list(n = n, needed = need))
   }
-  y_train <- prep$y[prep$train]
-  lambda <- NULL
-  if (o$transform %in% c("log", "box_cox")) {
-    span_y <- prep$y[prep$span]
-    if (any(span_y <= 0, na.rm = TRUE)) {
-      tab_refuse("not_positive", paste0("the column «", o$value, "» holds 0 or a negative value: a log or Box–Cox transform ",
-                                        "needs positive values; use transform = none"), list(column = o$value))
-    }
-    lambda <- if (o$transform == "log") 0 else if (identical(o$box_cox_lambda %||% "auto", "auto"))
-      forecast::BoxCox.lambda(stats::ts(y_train, frequency = max(1L, s))) else as.numeric(o$box_cox_lambda)
-  }
+  lambda <- arima_lambda(prep)
   model <- arima_spec(o, orders, lambda)
   rows <- tab_rows_start(task)
   notes <- character()
@@ -494,6 +485,22 @@ arima_fit_orders <- function(task, prep, orders, extra = NULL) {
   output <- if (identical(task$params$output %||% "results", "forecast")) arima_output(prep, whole) else NULL
   card <- arima_card(task, prep, model, fit, levels)
   list(rows = rows, output = output, card = card, native = fit)
+}
+
+# The transform's λ: NULL for none, 0 for the log, Box–Cox's given or estimated on the training
+# part (forecast::BoxCox.lambda); a value at or below 0 stops the node.
+arima_lambda <- function(prep) {
+  o <- prep$params
+  if (!o$transform %in% c("log", "box_cox")) return(NULL)
+  if (any(prep$y[prep$span] <= 0, na.rm = TRUE)) {
+    tab_refuse("not_positive", paste0("the column «", o$value, "» holds 0 or a negative value: a log or Box–Cox transform ",
+                                      "needs positive values; use transform = none"), list(column = o$value))
+  }
+  if (o$transform == "log") return(0)
+  if (identical(o$box_cox_lambda %||% "auto", "auto")) {
+    return(forecast::BoxCox.lambda(stats::ts(prep$y[prep$train], frequency = max(1L, o$s))))
+  }
+  as.numeric(o$box_cox_lambda)
 }
 
 # «boxes ~ SARIMA(1,1,1)(0,1,1)[12]», «log(boxes) ~ price + promo + drift, errors ARIMA(1,0,1)».
