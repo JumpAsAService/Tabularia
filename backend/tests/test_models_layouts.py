@@ -141,6 +141,20 @@ def test_the_runner_s_english_is_said_in_the_page_s_language():
     assert informative["text"].startswith("It cannot be tested from the data")
 
 
+def test_a_card_too_large_is_a_note_in_the_page_s_language():
+    """The runner's note when the model card is over max_card_bytes (common/R/card.R): the fit
+    went on, and the page says why the model is not in MLflow, in its language, whatever the model."""
+    english = ("The model card would be larger than a card can be (1 MiB): the results and the report are complete, but the "
+               "model is not logged to MLflow and no Predict node can apply it.")
+    for case in ("kaplan_meier-default", "linear-unpenalized", "arima-manual"):
+        model, params, rows = fixture(case)
+        note = dict(zip(OUTPUT_NAMES, ["model", None, None, "note_card_too_large", None, english, None, None, len(rows),
+                                        "model|||note_card_too_large"]))
+        for code, starts in (("en", "The model card"), ("it", "La scheda del modello"), ("de", "Die Modellkarte")):
+            [said] = [r for r in layouts.with_labels(model, params, [*rows, note], code) if r["stat"] == "note_card_too_large"]
+            assert said["text"].startswith(starts) and said["label"] != "note_card_too_large", (case, code, said)
+
+
 # ── the definition ───────────────────────────────────────────────────────────
 @pytest.mark.parametrize("case", CASES)
 @pytest.mark.parametrize("locale", LOCALES)

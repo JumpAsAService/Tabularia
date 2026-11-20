@@ -8,7 +8,8 @@
 # the variant: a runner that writes another shape is a bug, and the Job fails (exit 1).
 #
 # What tab_main writes, in fit mode: TABULARIA_RESULTS (always), TABULARIA_OUTPUT (when the
-# task says write_output and the fit gave rows), artifacts/model.json (the card),
+# task says write_output and the fit gave rows), artifacts/model.json (the card, unless it is
+# larger than max_card_bytes),
 # artifacts/MLmodel and artifacts/native.rds (when the task says mlflow), artifacts/run.json
 # (software, timings, warnings) — in predict mode TABULARIA_OUTPUT and run.json.
 
@@ -77,13 +78,16 @@ tab_main <- function(group, routes) {
 }
 
 # Writes what a fit gave, after checking its rows.
+# A card larger than max_card_bytes does not stop the step (tab_card_fits): its results, rows
+# and report are written, with a note; model.json, MLmodel and native.rds are not.
 tab_finish_fit <- function(task, result) {
+  card <- if (is.null(result$card)) NULL else tab_card_fits(task, result$card, result$rows)
   problems <- tab_check_declared(result$rows, task$model, task$variant)
   if (length(problems)) stop("the results do not match the catalogue:\n  ", paste(head(problems, 20L), collapse = "\n  "))
   tab_write_results(result$rows)
   if (isTRUE(task$write_output) && !is.null(result$output)) tab_write_output(result$output)
-  if (!is.null(result$card)) {
-    tab_write_card(task, result$card)
+  if (!is.null(card)) {
+    tab_write_text(tab_artifact("model.json"), card)
     if (isTRUE(task$mlflow)) {
       tab_write_text(tab_artifact("MLmodel"), tab_mlmodel(result$card))
       if (!is.null(result$native)) {

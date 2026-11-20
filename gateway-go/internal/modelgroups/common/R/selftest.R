@@ -271,6 +271,44 @@ TAB_COMMON_TESTS <- list(
     small$limits$max_card_bytes <- 100
     .tab_refused_with("card_too_large", tab_write_card(small, card, tempfile()))
   },
+  "a card too large does not stop the fit: results and a note, no model files" = function(code) {
+    if (identical(Sys.getenv("TABULARIA_SELFTEST_NO_ARROW"), "1") || !requireNamespace("arrow", quietly = TRUE)) return("skipped")
+    df <- .tab_selftest_table(code)
+    d <- tab_design(df, c(TAB_A, TAB_X), outcome = "y")
+    task <- list(model = "linear", variant = "unpenalized", group = "regression", group_version = 1, params = list(),
+                 mlflow = TRUE, limits = tab_catalog()$limits)
+    task$limits$max_card_bytes <- 100
+    rows <- tab_rows_start(task)
+    tab_number(rows, "model", "n", d$n)
+    card <- tab_card(task, d)
+    card$coefficients <- as.list(stats::lm.fit(d$X, d$y)$coefficients)
+    dir <- tempfile("finish-")
+    dir.create(dir)
+    old <- Sys.getenv(c("TABULARIA_RESULTS", "TABULARIA_ARTIFACTS"), unset = NA)
+    on.exit({
+      for (k in names(old)) if (is.na(old[[k]])) Sys.unsetenv(k) else do.call(Sys.setenv, stats::setNames(list(old[[k]]), k))
+      unlink(dir, recursive = TRUE)
+    })
+    Sys.setenv(TABULARIA_RESULTS = file.path(dir, "results.parquet"), TABULARIA_ARTIFACTS = file.path(dir, "artifacts"))
+    said <- character()
+    withCallingHandlers(tab_finish_fit(task, list(rows = rows, output = NULL, card = card, native = list(a = 1))),
+                        warning = function(w) {
+                          said <<- c(said, conditionMessage(w))
+                          invokeRestart("muffleWarning")
+                        })
+    back <- as.data.frame(arrow::read_parquet(file.path(dir, "results.parquet")))
+    .tab_expect(identical(back$text[back$key == "model|||note_card_too_large"], TAB_NOTE_CARD_TOO_LARGE), "no note in the results")
+    .tab_expect(!any(file.exists(file.path(dir, "artifacts", c("model.json", "MLmodel", "native.rds")))), "a model file was written")
+    .tab_expect(length(said) == 1L && grepl("is not written", said, fixed = TRUE), "the warning for run.json: ", paste(said, collapse = "; "))
+    # under the limit the same fit writes its card, MLmodel and native.rds, and no note
+    task$limits$max_card_bytes <- 1048576
+    rows <- tab_rows_start(task)
+    tab_number(rows, "model", "n", d$n)
+    tab_finish_fit(task, list(rows = rows, output = NULL, card = card, native = list(a = 1)))
+    back <- as.data.frame(arrow::read_parquet(file.path(dir, "results.parquet")))
+    .tab_expect(!"model|||note_card_too_large" %in% back$key, "a note under the limit")
+    .tab_expect(all(file.exists(file.path(dir, "artifacts", c("model.json", "MLmodel", "native.rds")))), "the model files are missing")
+  },
   "a refusal writes error.json and exits 3; a crash exits 1" = function(code) {
     for (case in list(list(route = "refuse", status = 3L), list(route = "crash", status = 1L), list(route = "protocol", status = 3L))) {
       dir <- tempfile("selftest-")

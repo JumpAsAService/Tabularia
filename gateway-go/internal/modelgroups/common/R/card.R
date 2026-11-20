@@ -1,8 +1,9 @@
 # The model card (card.schema.json): what applying the model to new rows needs, as data.
 # A runner starts from tab_card(task, design) and adds what its model needs (sigma and
 # df_residual, the penalty, Cox's centring and baseline, the Kaplan–Meier table, ARIMA's
-# orders and last observations); tab_write_card checks the size and writes model.json, and
-# MLmodel when the node logs to MLflow. Tabularia never loads native.rds: it is for people.
+# orders and last observations); tab_finish_fit (main.R) writes model.json, and MLmodel and
+# native.rds when the node logs to MLflow, unless the card is larger than max_card_bytes
+# (tab_card_fits: a note, and no model files). Tabularia never loads native.rds: it is for people.
 
 TAB_CARD_FORMAT <- "tabularia-model"
 TAB_CARD_VERSION <- 1L
@@ -52,11 +53,31 @@ tab_write_card <- function(task, card, path = tab_artifact("model.json")) {
   text <- tab_card_text(card)
   size <- nchar(text, type = "bytes")
   if (size > tab_limit(task, "max_card_bytes")) {
-    tab_refuse("card_too_large", paste0("the model's card would be ", size, " bytes (at most ", tab_limit(task, "max_card_bytes"),
-                                        "): fewer terms or strata"), list(bytes = size))
+    tab_refuse("card_too_large", paste0("the model's card would be ", size, " bytes (at most ", tab_limit(task, "max_card_bytes"), ")"),
+               list(bytes = size))
   }
   tab_write_text(path, text)
   invisible(text)
+}
+
+# The note of a fit whose card is too large. A card too large never stops the fit: the step
+# gives its results, its rows and its report; only the model is not logged to MLflow (no
+# model.json, MLmodel or native.rds), so no Predict node can apply it. The sentence has no
+# number or name in it: report_texts/common.json says it in the page's language.
+TAB_NOTE_CARD_TOO_LARGE <- paste0(
+  "The model card would be larger than a card can be (1 MiB): the results and the report are complete, but the model ",
+  "is not logged to MLflow and no Predict node can apply it.")
+
+# The card's text when it is not larger than max_card_bytes; else NULL, with the note
+# note_card_too_large in the rows and a warning for run.json.
+tab_card_fits <- function(task, card, rows) {
+  text <- tab_card_text(card)
+  size <- nchar(text, type = "bytes")
+  most <- tab_limit(task, "max_card_bytes")
+  if (size <= most) return(text)
+  tab_text(rows, "model", "note_card_too_large", TAB_NOTE_CARD_TOO_LARGE)
+  warning("the model card would be ", size, " bytes (at most ", most, "): it is not written, and the model is not logged to MLflow")
+  NULL
 }
 
 # MLflow's MLmodel, written by hand (no mlflow package in the images): a `tabularia` flavor

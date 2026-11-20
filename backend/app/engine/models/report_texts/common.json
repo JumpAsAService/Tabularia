@@ -101,7 +101,8 @@
     "event_value": "Event",
     "penalty": "Penalty",
     "cv_measure": "Measure of the cross-validation",
-    "threshold": "Threshold"
+    "threshold": "Threshold",
+    "note_card_too_large": "Note: the model card"
    },
    "coef": {
     "estimate": "Estimate",
@@ -152,6 +153,9 @@
     "identity": "identity",
     "logit": "logit",
     "probit": "probit"
+   },
+   "note_card_too_large": {
+    "The model card would be larger than a card can be (1 MiB): the results and the report are complete, but the model is not logged to MLflow and no Predict node can apply it.": "The model card would be larger than a card can be (1 MiB): the results and the report are complete, but the model is not logged to MLflow and no Predict node can apply it."
    }
   },
   "checks": {
@@ -284,7 +288,8 @@
     "event_value": "Evento",
     "penalty": "Penalizzazione",
     "cv_measure": "Misura della convalida incrociata",
-    "threshold": "Soglia"
+    "threshold": "Soglia",
+    "note_card_too_large": "Nota: la scheda del modello"
    },
    "coef": {
     "estimate": "Stima",
@@ -335,6 +340,9 @@
     "identity": "identità",
     "logit": "logit",
     "probit": "probit"
+   },
+   "note_card_too_large": {
+    "The model card would be larger than a card can be (1 MiB): the results and the report are complete, but the model is not logged to MLflow and no Predict node can apply it.": "La scheda del modello supererebbe la dimensione massima di una scheda (1 MiB): risultati e report sono completi, ma il modello non viene registrato in MLflow e nessun nodo Predict può applicarlo."
    }
   },
   "checks": {
@@ -467,7 +475,8 @@
     "event_value": "Ereignis",
     "penalty": "Penalisierung",
     "cv_measure": "Maß der Kreuzvalidierung",
-    "threshold": "Schwelle"
+    "threshold": "Schwelle",
+    "note_card_too_large": "Hinweis: die Modellkarte"
    },
    "coef": {
     "estimate": "Schätzung",
@@ -518,6 +527,9 @@
     "identity": "Identität",
     "logit": "logit",
     "probit": "probit"
+   },
+   "note_card_too_large": {
+    "The model card would be larger than a card can be (1 MiB): the results and the report are complete, but the model is not logged to MLflow and no Predict node can apply it.": "Die Modellkarte wäre größer, als eine Karte sein darf (1 MiB): Ergebnisse und Bericht sind vollständig, aber das Modell wird nicht in MLflow protokolliert, und kein Predict-Knoten kann es anwenden."
    }
   },
   "checks": {
@@ -650,7 +662,8 @@
     "event_value": "Evento",
     "penalty": "Penalización",
     "cv_measure": "Medida de la validación cruzada",
-    "threshold": "Umbral"
+    "threshold": "Umbral",
+    "note_card_too_large": "Nota: la ficha del modelo"
    },
    "coef": {
     "estimate": "Estimación",
@@ -701,6 +714,9 @@
     "identity": "identidad",
     "logit": "logit",
     "probit": "probit"
+   },
+   "note_card_too_large": {
+    "The model card would be larger than a card can be (1 MiB): the results and the report are complete, but the model is not logged to MLflow and no Predict node can apply it.": "La ficha del modelo superaría el tamaño máximo de una ficha (1 MiB): los resultados y el informe están completos, pero el modelo no se registra en MLflow y ningún nodo Predict puede aplicarlo."
    }
   },
   "checks": {
@@ -833,7 +849,8 @@
     "event_value": "Événement",
     "penalty": "Pénalisation",
     "cv_measure": "Mesure de la validation croisée",
-    "threshold": "Seuil"
+    "threshold": "Seuil",
+    "note_card_too_large": "Note : la fiche du modèle"
    },
    "coef": {
     "estimate": "Estimation",
@@ -884,6 +901,9 @@
     "identity": "identité",
     "logit": "logit",
     "probit": "probit"
+   },
+   "note_card_too_large": {
+    "The model card would be larger than a card can be (1 MiB): the results and the report are complete, but the model is not logged to MLflow and no Predict node can apply it.": "La fiche du modèle dépasserait la taille maximale d'une fiche (1 Mio) : les résultats et le rapport sont complets, mais le modèle n'est pas enregistré dans MLflow et aucun nœud Predict ne peut l'appliquer."
    }
   },
   "checks": {
