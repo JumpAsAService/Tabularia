@@ -50,8 +50,9 @@ tab_rename <- function(names) {
 # The input as a data.frame with the input's own names (check.names off: a name is data).
 tab_read_input <- function(path = Sys.getenv("TABULARIA_INPUT"), columns = NULL) {
   if (!nzchar(path)) tab_refuse("no_input", "the step has no input (TABULARIA_INPUT is empty)")
-  tbl <- arrow::read_parquet(path, col_select = if (is.null(columns)) NULL else tidyselect::all_of(columns),
-                             as_data_frame = TRUE)
+  # col_select is read with tidy evaluation: an `if` written inside it would select nothing
+  tbl <- if (is.null(columns)) arrow::read_parquet(path, as_data_frame = TRUE) else
+    arrow::read_parquet(path, col_select = tidyselect::all_of(columns), as_data_frame = TRUE)
   df <- as.data.frame(tbl, stringsAsFactors = FALSE, optional = TRUE)
   for (j in seq_along(df)) if (is.factor(df[[j]])) df[[j]] <- as.character(df[[j]])
   df
