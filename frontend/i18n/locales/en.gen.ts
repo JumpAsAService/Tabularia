@@ -6430,6 +6430,7 @@ export default {
       "notNumeric": "not a number",
       "notInInput": "not in the step's input",
       "notInData": "not in the data",
+      "repaired": "«{field}» went back to «{choice}»: {reason}",
       "noNumericColumns": "The step's input has no numeric column: convert one first.",
       "successPlaceholder": "yes, 1, true…",
       "successValues": "Values of «{column}»",

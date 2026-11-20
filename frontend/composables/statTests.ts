@@ -186,13 +186,46 @@ export function statDefaults(operation: string, catalog: StatCatalog = STAT_CATA
 }
 
 /** The parameters after one field changed. Values chosen among a column's (the two groups
- *  to compare) do not survive another column. */
+ *  to compare) do not survive another column; a choice the change makes forbidden goes back to
+ *  one that is allowed (`statSetChecked` says which). */
 export function statSet(test: StatTest, params: Params | null | undefined, key: string, value: unknown, catalog: StatCatalog = STAT_CATALOG): Params {
+  return statSetChecked(test, params, key, value, catalog).params
+}
+
+/** A choice put back because the change before it forbade it. */
+export interface StatRepair {
+  key: string
+  from: unknown
+  to: unknown
+  rule: StatForbid
+}
+
+/** `statSet`, and what it put back: a choice that the other parameters, as they are now,
+ *  forbid (Tukey's HSD once the variances are not equal) is not sent to the engine, which
+ *  refuses it: it goes to the test's default if that is allowed, else the first choice that is.
+ *  The key just set is the person's own and is never changed here (the form disables what is
+ *  forbidden). */
+export function statSetChecked(test: StatTest, params: Params | null | undefined, key: string, value: unknown,
+  catalog: StatCatalog = STAT_CATALOG): { params: Params; repaired: StatRepair[] } {
   const next: Params = { ...(params ?? {}), [key]: value }
   if ((params ?? {})[key] !== value) {
     for (const f of statFields(test, catalog)) if (STAT_VALUE_CONTROLS.includes(f.control) && f.of === key) delete next[f.key]
   }
-  return statParams(test, next, catalog)
+  const repaired: StatRepair[] = []
+  const fields = statFields(test, catalog)
+  for (let pass = 0; pass < test.forbids.length; pass++) {
+    const now: Params = { ...test.defaults }
+    for (const [k, v] of Object.entries(next)) if (!isEmpty(v)) now[k] = v
+    const rule = test.forbids.find((r) => r.key !== key && now[r.key] === r.value && statForbidden(test, r.key, now[r.key], next))
+    if (!rule) break
+    const field = fields.find((f) => f.key === rule.key)
+    const allowed = (c: unknown) => !statForbidden(test, rule.key, c, next)
+    const to = [test.defaults[rule.key], ...(field?.choices ?? [])].find((c) => c !== undefined && c !== rule.value && allowed(c))
+    if (to === undefined) break
+    next[rule.key] = to
+    repaired.push({ key: rule.key, from: rule.value, to, rule })
+  }
+  return { params: statParams(test, next, catalog), repaired }
 }
 
 /** A node that becomes another test keeps what the two share: a key both have, of the same

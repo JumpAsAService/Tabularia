@@ -443,3 +443,32 @@ test('a test that reads categories says so in its own words: no «number» hint 
     }
   }
 })
+
+test('a change that forbids a choice puts it back, and says which; what is allowed is left alone', () => {
+  const anova = s.statTestOf('stat_zz_anova', TWO)
+  const base = { value: 'amount', group: 'channel', zz_posthoc: 'tukey' }
+  // Tukey chosen, then the variances declared unequal: it goes back to the default, which is allowed
+  const r = s.statSetChecked(anova, base, 'var_equal', false, TWO)
+  assert.equal(r.params.zz_posthoc, 'none')
+  assert.equal(r.params.var_equal, false)
+  assert.deepEqual(r.repaired.map((x) => [x.key, x.from, x.to, x.rule.reason]), [['zz_posthoc', 'tukey', 'none', 'zz_tukey']])
+  assert.equal(s.statForbidden(anova, 'zz_posthoc', r.params.zz_posthoc, r.params), null)
+  // the other way: Games–Howell, then equal variances
+  const g = s.statSetChecked(anova, { ...base, zz_posthoc: 'games_howell', var_equal: false }, 'var_equal', true, TWO)
+  assert.equal(g.params.zz_posthoc, 'none')
+  assert.equal(g.repaired.length, 1)
+  // an allowed combination, and a change of another key: nothing put back
+  assert.deepEqual(s.statSetChecked(anova, base, 'alpha', 0.01, TWO).repaired, [])
+  assert.equal(s.statSetChecked(anova, { ...base, var_equal: false, zz_posthoc: 'games_howell' }, 'alpha', 0.01, TWO).params.zz_posthoc, 'games_howell')
+  // the key the person sets is theirs: not changed here (the form disables the forbidden choices)
+  assert.equal(s.statSetChecked(anova, { var_equal: false }, 'zz_posthoc', 'tukey', TWO).params.zz_posthoc, 'tukey')
+  // statSet is the same parameters
+  assert.deepEqual(s.statSet(anova, base, 'var_equal', false, TWO), r.params)
+  // the real catalogue: ANOVA, Tukey, then var_equal off
+  const real = s.STAT_CATALOG.tests.find((t) => t.id === 'anova')
+  const out = s.statSetChecked(real, { value: 'a', group: 'g', posthoc: 'tukey' }, 'var_equal', false)
+  assert.ok(out.params.posthoc !== 'tukey' && out.repaired.length === 1)
+  // the form says it, in a polite status, in each language
+  const form = read('../components/ui/StatTestForm.vue')
+  assert.ok(form.includes('statSetChecked') && form.includes("t('stat.form.repaired'") && /role="status" aria-live="polite"/.test(form))
+})

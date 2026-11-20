@@ -6430,6 +6430,7 @@ export default {
       "notNumeric": "pas un nombre",
       "notInInput": "absente de l'entrée de l'étape",
       "notInData": "absent des données",
+      "repaired": "« {field} » est revenu à « {choice} » : {reason}",
       "noNumericColumns": "L'entrée de l'étape n'a aucune colonne numérique : convertissez-en une d'abord.",
       "successPlaceholder": "oui, 1, true…",
       "successValues": "Valeurs de «{column}»",

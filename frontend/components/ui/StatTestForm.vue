@@ -7,7 +7,7 @@
 //
 // The node works on the rows that reach it, as every step: the form says nothing about
 // samples. A choice another option forbids is disabled, with the reason.
-import { computed, reactive, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Info, TriangleAlert } from 'lucide-vue-next'
 import type { ColumnInfo } from '~/composables/useApi'
@@ -15,7 +15,7 @@ import { isSuperseded } from '~/composables/usePreviewSlots'
 import { isNumericDtype } from '~/composables/previewGrid'
 import {
   STAT_LEVELS_SHOWN, STAT_VALUE_CONTROLS, statApplies, statFieldWordKey, statFields, statForbidden, statHintKey, statLevelLabels,
-  statNumberProblem, statReasonKey, statSet, statShares, statSharesProblem, statTestOf, type StatField,
+  statNumberProblem, statReasonKey, statSetChecked, statShares, statSharesProblem, statTestOf, type StatField,
 } from '~/composables/statTests'
 
 const props = defineProps<{
@@ -48,8 +48,23 @@ const hintOf = (f: StatField) => {
 }
 const dtypeOf = (column: unknown) => props.inputColumns.find((c) => c.name === column)?.dtype ?? ''
 
+// what the last change put back, in a sentence: a choice the change forbade (Tukey's HSD once
+// the variances are not equal) is not sent to the engine, which would refuse it
+const repairedNote = ref('')
+watch(() => props.nodeId, () => { repairedNote.value = '' })
 function set(key: string, value: unknown) {
-  if (test.value) emit('update', statSet(test.value, props.params, key, value))
+  if (!test.value) return
+  const { params, repaired } = statSetChecked(test.value, props.params, key, value)
+  repairedNote.value = repaired.map((r) => {
+    const f = fields.value.find((x) => x.key === r.key)
+    const reasonKey = statReasonKey(r.rule.reason)
+    return t('stat.form.repaired', {
+      field: f ? labelOf(f) : r.key,
+      choice: f ? t(`stat.choices.${f.kind}.${String(r.to)}`) : String(r.to),
+      reason: te(reasonKey) ? t(reasonKey) : r.rule.message,
+    })
+  }).join(' ')
+  emit('update', params)
 }
 
 // ── a column ─────────────────────────────────────────────────────────────────
@@ -236,6 +251,7 @@ function forbidden(f: StatField, value: unknown): string {
 <template>
   <div v-if="test" class="statform">
     <p class="about">{{ $t(statHintKey(test)) }}</p>
+    <p class="note" role="status" aria-live="polite"><template v-if="repairedNote"><Info :size="13" aria-hidden="true" /> {{ repairedNote }}</template></p>
 
     <!-- columns being resolved: a skeleton in place of the false "no column" -->
     <div v-if="columnsLoading && !inputColumns.length" class="skcols" aria-busy="true">

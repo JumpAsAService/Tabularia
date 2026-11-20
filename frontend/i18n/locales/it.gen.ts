@@ -6430,6 +6430,7 @@ export default {
       "notNumeric": "non è un numero",
       "notInInput": "non è nell'ingresso del passo",
       "notInData": "non è nei dati",
+      "repaired": "«{field}» è tornato a «{choice}»: {reason}",
       "noNumericColumns": "L'ingresso del passo non ha colonne numeriche: convertine una prima.",
       "successPlaceholder": "sì, 1, true…",
       "successValues": "Valori di «{column}»",

@@ -6430,6 +6430,7 @@ export default {
       "notNumeric": "keine Zahl",
       "notInInput": "nicht in der Eingabe des Schritts",
       "notInData": "nicht in den Daten",
+      "repaired": "„{field}“ wurde auf „{choice}“ zurückgesetzt: {reason}",
       "noNumericColumns": "Die Eingabe des Schritts hat keine numerische Spalte: Wandeln Sie zuerst eine um.",
       "successPlaceholder": "ja, 1, true…",
       "successValues": "Werte von «{column}»",
