@@ -240,7 +240,7 @@ func (q *queue) planPredict(ctx context.Context, user *auth.User, node pyjson.Ob
 			int64(gv), s.group, s.img.Version))
 	}
 	// the options, and the columns they add
-	if s.checked, err = modelcatalog.CheckPredict(s.model, params); err != nil {
+	if s.checked, err = modelcatalog.CheckPredict(s.model, s.variant, params); err != nil {
 		var ce *modelcatalog.Error
 		if errors.As(err, &ce) {
 			return refuse("%s", ce.Message)
@@ -248,7 +248,7 @@ func (q *queue) planPredict(ctx context.Context, user *auth.User, node pyjson.Ob
 		return nil, err
 	}
 	reads := card.columns()
-	for _, c := range modelcatalog.PredictColumns(s.model, s.checked) {
+	for _, c := range modelcatalog.PredictColumns(s.model, s.variant, s.checked) {
 		if reads[c] {
 			return refuse("the model reads a column «%s», which the prediction would overwrite: rename it before the node", c)
 		}
@@ -441,7 +441,8 @@ func (q *queue) runPredict(ctx context.Context, r *scriptNodeRun) (*flowresolver
 	stepID := newUUIDText()
 	prefix := fmt.Sprintf("env-%d/%s", s.img.EnvironmentID, stepID)
 	inKey, outKey, artifacts, cardKey := prefix+"/input.parquet", prefix+"/output.parquet", prefix+"/artifacts/", prefix+"/model.json"
-	written := []string{inKey, outKey, cardKey, artifacts + "run.json", artifacts + "error.json"}
+	// model_file: a boosting model's xgboost.json or catboost.cbm, beside its card (lot X5 writes it)
+	written := []string{inKey, outKey, cardKey, prefix + "/model_file", artifacts + "run.json", artifacts + "error.json"}
 	bucket := d.Config.EngineBucket
 	engineOutKey := "out/" + newHex() + ".parquet"
 	modelURL := fmt.Sprintf("%s/#/models/%s/versions/%s", s.conn.ui, url.PathEscape(s.version.Name), url.PathEscape(s.version.Version))

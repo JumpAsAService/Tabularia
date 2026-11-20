@@ -63,6 +63,18 @@ LIMITS: dict[str, int] = {
     "max_vcov_terms": 200,       # terms whose covariance the card keeps
     "max_baseline_times": 5000,  # times of Cox's baseline hazard in the card
     "max_paths_terms": 20,       # coefficient paths drawn, the rest summed up as «others»
+    # the boosting group's (docs: «Group `boosting` — Python», «Performance and limits»); the R
+    # groups read none of them
+    "max_predictors": 200,       # predictors of a boosting node
+    "max_levels_trees": 1000,    # values of a categorical predictor of a boosting node
+    "max_classes": 20,           # classes of a multiclass outcome
+    "max_cells": 50_000_000,     # rows × predictors, checked by the gateway before the Job
+    "max_shap_rows": 5000,       # rows of the SHAP sample at most
+    "shap_cost_budget": 20_000_000_000,  # T · L · D² · rows of TreeSHAP: fewer rows for large models
+    "max_model_file_bytes": 64 << 20,    # xgboost.json, catboost.cbm
+    "max_importance_bars": 20,   # bars of an importance chart, the rest summed up as «(others)»
+    "max_beeswarm_predictors": 10,  # predictors of the SHAP summary
+    "max_roc_classes": 10,       # one-against-rest ROC curves of a multiclass model
 }
 
 # ── groups: one image each, built when an administrator enables it ─────────
@@ -70,6 +82,7 @@ GROUPS: dict[str, dict[str, Any]] = {
     "regression": {"language": "r", "label": "models.groups.regression", "models": ["linear", "logistic"]},
     "survival": {"language": "r", "label": "models.groups.survival", "models": ["kaplan_meier", "cox"]},
     "timeseries": {"language": "r", "label": "models.groups.timeseries", "models": ["arima"]},
+    "boosting": {"language": "python", "label": "models.groups.boosting", "models": ["xgboost", "catboost"]},
 }
 
 # ── controls and kinds ──────────────────────────────────────────────────────
@@ -150,6 +163,21 @@ KINDS: dict[str, dict[str, Any]] = {
     "output_rows": _choice("results", "rows"),
     "output_table": _choice("results", "table"),
     "output_forecast": _choice("results", "forecast"),
+    # the boosting group's
+    "task_boosting": _choice("regression", "binary", "multiclass"),
+    "class_weight": _choice("none", "balanced"),
+    "validation": _choice("random", "time"),
+    "validation_share": {"control": "number", "min": 0.05, "max": 0.5},
+    "order_column": {"control": "column", "types": ["number", "integer", "date", "datetime"]},
+    "stop_metric": _choice("loss", "mae", "auc", "error"),
+    "max_trees": _int(10, 5000),
+    "rounds": _int(5, 1000),
+    "learning_rate": {"control": "number", "above": 0, "max": 1},
+    "depth_xgboost": _int(1, 12),
+    "depth_catboost": _int(1, 10),
+    "nonnegative": {"control": "number", "min": 0, "max": 1000},
+    "fraction": {"control": "number", "above": 0, "max": 1},
+    "strength": {"control": "number", "min": 0, "max": 100},
 }
 
 # The seasonal period a frequency implies when `s` is not given.
@@ -171,6 +199,9 @@ SECTION_SHAPES: dict[str, dict[str, Any]] = {
     "curve": {"level": "required", "level_2": "optional", "indexed": True},
     "lag": {"level": "required", "level_2": "null", "indexed": True, "unindexed": ["bound"]},
     "hist": {"level": "required", "level_2": "optional", "indexed": True},
+    # the boosting group's: a predictor (and, multiclass, a class); a class of the outcome
+    "importance": {"level": "required", "level_2": "optional", "indexed": False},
+    "class": {"level": "required", "level_2": "null", "indexed": False},
 }
 
 VERDICTS = ("ok", "doubtful", "failed", "not_computed")
@@ -555,21 +586,177 @@ for _variant in MODELS["arima"]["variants"]:
     for _field in ("sections", "charts", "outputs"):
         _variant[_field] = _SHARED_DECLARATIONS[(_field, _variant[_field])]
 
+# ── boosting (docs: «Group `boosting` — Python») ────────────────────────────
+# Both nodes take the same keys but for their own hyperparameters; `task` is the variant.
+_CLASSIFICATION = ["binary", "multiclass"]
+_BOOSTING_NEEDS = {"task": "task_boosting", "outcome": "column", "predictors": "predictors"}
+_BOOSTING_TAKES = {
+    "event_value": "outcome_level", "weights": "number_column", "class_weight": "class_weight",
+    "threshold": "proportion", "validation": "validation", "validation_share": "validation_share",
+    "order_by": "order_column", "split_by": "column", "stratify": "boolean", "early_stopping": "boolean",
+    "early_stopping_rounds": "rounds", "stop_metric": "stop_metric", "max_trees": "max_trees",
+    "learning_rate": "learning_rate", "max_depth": "depth_xgboost", "subsample": "fraction",
+}
+_BOOSTING_DEFAULTS = {
+    "event_value": None, "weights": None, "class_weight": "none", "threshold": 0.5, "validation": "random",
+    "validation_share": 0.2, "order_by": None, "split_by": None, "stratify": True, "early_stopping": True,
+    "early_stopping_rounds": 50, "stop_metric": "loss", "max_trees": 1000, "learning_rate": 0.05, "max_depth": 6,
+    "subsample": 0.8,
+}
+_BOOSTING_TAIL = {"seed": "seed", "output": "output_rows"}  # last in the form
+_BOOSTING_APPLIES = {
+    "event_value": {"task": ["binary"]},
+    "class_weight": {"task": _CLASSIFICATION},
+    "threshold": {"task": ["binary"]},
+    "order_by": {"validation": ["time"]},
+    "split_by": {"validation": ["random"]},
+    "stratify": {"validation": ["random"], "task": _CLASSIFICATION, "split_by": False},
+    "early_stopping_rounds": {"early_stopping": [True]},
+}
+_BOOSTING_REQUIRES = [
+    {"key": "event_value", "when": {"task": "binary"}, "reason": "binary_needs_event",
+     "message": "a binary task needs the outcome's value whose probability is predicted ('event_value')"},
+    {"key": "order_by", "when": {"validation": "time"}, "reason": "time_needs_order",
+     "message": "a validation part in time needs the column of the time ('order_by')"},
+]
+_BOOSTING_FORBIDS = [
+    {"key": "stop_metric", "value": "mae", "when": {"task": _CLASSIFICATION}, "reason": "mae_needs_regression",
+     "message": "the mean absolute error is a regression's metric: use stop_metric = loss, auc or error"},
+    {"key": "stop_metric", "value": "auc", "when": {"task": ["regression", "multiclass"]}, "reason": "auc_needs_binary",
+     "message": "the AUC is a binary task's metric: use stop_metric = loss"
+                + " (or mae for a regression, error for a multiclass task)"},
+    {"key": "stop_metric", "value": "error", "when": {"task": ["regression"]}, "reason": "error_needs_classes",
+     "message": "the error rate is a classification's metric: use stop_metric = loss or mae"},
+]
+_BOOSTING_MODEL_TEXTS = [*_MODEL_TEXTS, "task", "library", "objective", "stop_metric", "validation", "importance_type"]
+_BOOSTING_MODEL_NUMBERS = ["n", "n_missing", "n_train", "n_validation", "n_predictors", "n_categorical", "trees",
+                           "best_iteration", "max_trees", "stopped_early", "stopped_by_time", "threads", "shap_rows",
+                           "seed"]
+_BOOSTING_IMPORTANCE = {"levels": None, "numbers": ["gain", "gain_share", "mean_abs_shap", "mean_abs_shap_share", "rank",
+                                                    "mean_abs_shap_train", "mean_abs_shap_validation", "missing_share"],
+                        "texts": []}
+_BOOSTING_CHECKS = ["validation_size", "beats_baseline", "overfitting", "trees_limit", "importance_stability",
+                    "zero_importance", "leakage"]
+_BEESWARM_BINS = ["low", "mid_low", "mid", "mid_high", "high", "category", "missing"]
+_BOOSTING_SHARED_CHARTS = [
+    {"id": "importance_gain", "under": None}, {"id": "importance_shap", "under": "importance_stability"},
+]
+_LEARNING_CHARTS = [{"id": "learning_loss", "under": "overfitting"}, {"id": "learning_stop", "under": "trees_limit"}]
+_BOOSTING_VARIANTS: list[dict[str, Any]] = [
+    {
+        "id": "regression",
+        "when": {"task": ["regression"]},
+        "sections": {
+            "model": {"levels": None, "texts": _BOOSTING_MODEL_TEXTS,
+                      "numbers": [*_BOOSTING_MODEL_NUMBERS, "train_rmse", "train_mae", "train_r_squared",
+                                  "validation_rmse", "validation_mae", "validation_r_squared", "baseline_rmse",
+                                  "validation_mean"]},
+            "importance": _BOOSTING_IMPORTANCE,
+            "assumption": _assumptions(*_BOOSTING_CHECKS),
+            "curve": _chart("learning_loss", "learning_stop", stats=["y"]),
+            "point": {"levels": ["shap_beeswarm", "observed_predicted", "resid_predicted"],
+                      "numbers": [*_BEESWARM_BINS, "y"], "texts": []},
+            "hist": _chart("residual", stats=["count"]),
+        },
+        "charts": [*_BOOSTING_SHARED_CHARTS, {"id": "shap_beeswarm", "under": None}, *_LEARNING_CHARTS,
+                   {"id": "observed_predicted", "under": None}, {"id": "resid_predicted", "under": None},
+                   {"id": "residual", "under": None}],
+        "outputs": {"rows": ["pred_value", "pred_residual", "pred_part"]},
+    },
+    {
+        "id": "binary",
+        "when": {"task": ["binary"]},
+        "sections": {
+            "model": {"levels": None, "texts": [*_BOOSTING_MODEL_TEXTS, "event_value"],
+                      "numbers": [*_BOOSTING_MODEL_NUMBERS, "events", "validation_events", "train_auc",
+                                  "validation_auc", "train_logloss", "validation_logloss", "baseline_logloss",
+                                  "train_brier", "validation_brier", "threshold", "validation_accuracy",
+                                  "validation_sensitivity", "validation_specificity", "validation_precision",
+                                  "validation_f1"]},
+            "importance": _BOOSTING_IMPORTANCE,
+            "assumption": _assumptions(*_BOOSTING_CHECKS, "class_imbalance", "calibration", "calibration_slope"),
+            "curve": _chart("learning_loss", "learning_stop", "roc", stats=["y"]),
+            "point": {"levels": ["shap_beeswarm", "calibration"], "numbers": [*_BEESWARM_BINS, "y"], "texts": []},
+            "hist": _chart("probability", stats=["count"]),
+            "cell": {"levels": None, "numbers": ["observed"], "texts": []},
+        },
+        "charts": [*_BOOSTING_SHARED_CHARTS, {"id": "shap_beeswarm", "under": None}, *_LEARNING_CHARTS,
+                   {"id": "roc", "under": None}, {"id": "calibration", "under": "calibration"},
+                   {"id": "probability", "under": None}, {"id": "confusion", "under": None}],
+        "outputs": {"rows": ["pred_prob", "pred_class", "pred_part"]},
+    },
+    {
+        "id": "multiclass",
+        "when": {"task": ["multiclass"]},
+        "sections": {
+            "model": {"levels": None, "texts": _BOOSTING_MODEL_TEXTS,
+                      "numbers": [*_BOOSTING_MODEL_NUMBERS, "n_classes", "train_mlogloss", "validation_mlogloss",
+                                  "baseline_mlogloss", "train_accuracy", "validation_accuracy",
+                                  "validation_balanced_accuracy", "validation_macro_auc", "validation_macro_f1"]},
+            "importance": _BOOSTING_IMPORTANCE,
+            "class": {"levels": None, "numbers": ["support", "share_train", "share_validation", "precision", "recall",
+                                                  "f1", "auc_ovr"], "texts": []},
+            "assumption": _assumptions(*_BOOSTING_CHECKS, "class_imbalance"),
+            "curve": _chart("learning_loss", "learning_stop", "roc_ovr", stats=["y"]),
+            "cell": {"levels": None, "numbers": ["observed"], "texts": []},
+        },
+        "charts": [*_BOOSTING_SHARED_CHARTS, *_LEARNING_CHARTS, {"id": "confusion", "under": None},
+                   {"id": "roc_ovr", "under": None}],
+        "outputs": {"rows": ["pred_class", "pred_prob", "pred_prob_*", "pred_part"]},
+    },
+]
+
+
+def _boosting(own: dict[str, str], defaults: dict[str, Any], depth: str) -> dict[str, Any]:
+    """A boosting node: the shared keys, then the library's own hyperparameters, `seed` and
+    `output` last. Each variant is a copy: the snapshot holds plain data."""
+    takes = {**_BOOSTING_TAKES, "max_depth": depth, **own, **_BOOSTING_TAIL}
+    return {
+        "group": "boosting",
+        "family": "boosting",
+        "needs": dict(_BOOSTING_NEEDS),
+        "takes": takes,
+        "defaults": {**_BOOSTING_DEFAULTS, **defaults, "seed": 1, "output": "results"},
+        "applies": json.loads(json.dumps(_BOOSTING_APPLIES)),
+        "requires": json.loads(json.dumps(_BOOSTING_REQUIRES)),
+        "forbids": json.loads(json.dumps(_BOOSTING_FORBIDS)),
+        "disjoint": ["outcome", "predictors", "weights", "order_by", "split_by"],
+        "variants": json.loads(json.dumps(_BOOSTING_VARIANTS)),
+    }
+
+
+MODELS["xgboost"] = _boosting(
+    {"min_child_weight": "nonnegative", "colsample_bytree": "fraction", "reg_lambda": "nonnegative",
+     "reg_alpha": "nonnegative", "gamma": "nonnegative"},
+    {"min_child_weight": 1.0, "colsample_bytree": 0.8, "reg_lambda": 1.0, "reg_alpha": 0.0, "gamma": 0.0},
+    "depth_xgboost")
+MODELS["catboost"] = _boosting(
+    {"l2_leaf_reg": "nonnegative", "rsm": "fraction", "random_strength": "strength"},
+    {"l2_leaf_reg": 3.0, "rsm": 1.0, "random_strength": 1.0},
+    "depth_catboost")
+
 # ── Predict: a registered model applied to new rows ─────────────────────────
 PREDICT: dict[str, Any] = {
     "takes": {"interval": "boolean", "threshold": "proportion", "horizon": "horizon", "at_times": "times"},
     # None: the card's own (its threshold, its horizon)
     "defaults": {"interval": False, "threshold": None, "horizon": None, "at_times": []},
-    # which models each key means something for; given for another model it is refused
-    "applies_to": {"interval": ["linear", "kaplan_meier", "arima"], "threshold": ["logistic"],
+    # which models each key means something for; given for another model it is refused. An
+    # entry is a model, or `model:variant` for one variant of it (the card's variant)
+    "applies_to": {"interval": ["linear", "kaplan_meier", "arima"],
+                   "threshold": ["logistic", "xgboost:binary", "catboost:binary"],
                    "horizon": ["arima"], "at_times": ["cox"]},
-    # the columns Predict adds, per model of the card: always, and with each key given
+    # the columns Predict adds, per model of the card (or `model:variant`, which comes first):
+    # always, and with each key given. `prediction_prob_*`: one column per class of the card
     "columns": {
         "linear": {"always": ["prediction"], "interval": ["prediction_low", "prediction_high"]},
         "logistic": {"always": ["prediction"], "threshold": ["prediction_class"]},
         "kaplan_meier": {"always": ["prediction"], "interval": ["prediction_low", "prediction_high"]},
         "cox": {"always": ["prediction"], "at_times": ["survival_at_*"]},
         "arima": {"always": ["prediction"], "interval": ["lower_80", "upper_80", "lower", "upper"]},
+        **{f"{m}:{v}": cols for m in ("xgboost", "catboost") for v, cols in (
+            ("regression", {"always": ["prediction"]}),
+            ("binary", {"always": ["prediction", "prediction_class"]}),
+            ("multiclass", {"always": ["prediction", "prediction_probability", "prediction_prob_*"]}))},
     },
 }
 
@@ -753,10 +940,15 @@ def _when_text(when: Mapping[str, Any]) -> str:
         if r is False:
             return f"'{k}' is not given"
         if isinstance(r, list):
-            return f"{k} = {' or '.join(str(x) for x in r)}"
-        return f"{k} = {r}"
+            return f"{k} = {' or '.join(_word(x) for x in r)}"
+        return f"{k} = {_word(r)}"
 
     return " and ".join(one(k, r) for k, r in when.items())
+
+
+def _word(v: Any) -> str:
+    """A value of a rule as the sentences write it: JSON's true and false, as the gateway's."""
+    return ("true" if v else "false") if isinstance(v, bool) else str(v)
 
 
 def _column_names(spec: Mapping[str, Any], key: str, value: Any) -> list[str]:

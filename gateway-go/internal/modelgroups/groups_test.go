@@ -3,6 +3,9 @@ package modelgroups
 import (
 	"encoding/json"
 	"errors"
+	"io/fs"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -12,17 +15,21 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/scriptimage"
 )
 
-// a package of a recipe: pinned, as the scripting environments' R packages are written
-var pinned = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9.]*@[0-9][0-9.-]*$`)
+// a package of a recipe: pinned, as the scripting environments' packages are written (R
+// name@version, Python name==version)
+var pinned = map[string]*regexp.Regexp{
+	"r":      regexp.MustCompile(`^[A-Za-z][A-Za-z0-9.]*@[0-9][0-9.-]*$`),
+	"python": regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*==[0-9][0-9A-Za-z.+-]*$`),
+}
 
 func TestEveryGroupOfTheCatalogueHasARecipeAndARunner(t *testing.T) {
 	groups := Groups()
-	if len(groups) != len(modelcatalog.Groups()) || len(groups) != 3 {
+	if len(groups) != len(modelcatalog.Groups()) || len(groups) != 4 {
 		t.Fatalf("groups: %d", len(groups))
 	}
 	for _, g := range groups {
 		r := g.Recipe
-		if r.Language != "r" || r.Base == "" || r.PinnedOn == "" || r.MaxRows <= 0 || r.MaxSeconds <= 0 ||
+		if pinned[r.Language] == nil || r.Base == "" || r.PinnedOn == "" || r.MaxRows <= 0 || r.MaxSeconds <= 0 ||
 			r.Resources.CPU == "" || r.Resources.Memory == "" {
 			t.Errorf("%s: recipe %+v", g.ID, r)
 		}
@@ -32,14 +39,22 @@ func TestEveryGroupOfTheCatalogueHasARecipeAndARunner(t *testing.T) {
 		seen := map[string]bool{}
 		for _, p := range r.Packages {
 			name, _, _ := strings.Cut(p, "@")
-			if !pinned.MatchString(p) || seen[name] {
+			name, _, _ = strings.Cut(name, "==")
+			if !pinned[r.Language].MatchString(p) || seen[name] {
 				t.Errorf("%s: package %q not pinned, or twice", g.ID, p)
 			}
 			seen[name] = true
 		}
-		// arrow reads and writes the Parquet files, jsonlite task.json and the card
-		if !seen["arrow"] || !seen["jsonlite"] || len(r.Packages) > 200 {
-			t.Errorf("%s: arrow and jsonlite must be pinned, at most 200 packages", g.ID)
+		// R: arrow reads and writes the Parquet files, jsonlite task.json and the card; Python:
+		// pyarrow, numpy and pandas, the library's own (json is Python's)
+		need := map[string][]string{"r": {"arrow", "jsonlite"}, "python": {"pyarrow", "numpy", "pandas"}}[r.Language]
+		for _, n := range need {
+			if !seen[n] {
+				t.Errorf("%s: %s must be pinned", g.ID, n)
+			}
+		}
+		if len(r.Packages) > 200 {
+			t.Errorf("%s: at most 200 packages", g.ID)
 		}
 		if len(g.RecipeHash) != 64 || len(g.RunnerHash) != 64 || len(g.ReferenceHash) != 64 {
 			t.Errorf("%s: hashes %q %q %q", g.ID, g.RecipeHash, g.RunnerHash, g.ReferenceHash)
@@ -54,20 +69,44 @@ func TestEveryGroupOfTheCatalogueHasARecipeAndARunner(t *testing.T) {
 			paths[f.Path] = true
 			size += len(f.Content)
 		}
-		for _, want := range []string{"runner/run.R", "common/R/protocol.R", "common/R/main.R", "common/R/selftest.R",
-			"common/selftest/table.csv", "card.schema.json", "catalog.json"} {
+		wanted := map[string][]string{
+			"r": {"runner/run.R", "common/R/protocol.R", "common/R/main.R", "common/R/selftest.R"},
+			"python": {"runner/run.py", "common/py/tab_protocol.py", "common/py/tab_main.py", "common/py/tab_selftest.py",
+				"common/py/tab_columns.py", "common/py/tab_results.py", "common/py/tab_card.py", "common/py/tab_charts.py"},
+		}[r.Language]
+		for _, want := range append(wanted, "common/selftest/table.csv", "card.schema.json", "catalog.json") {
 			if !paths[want] {
 				t.Errorf("%s: no %s among %v", g.ID, want, paths)
 			}
 		}
-		// one file per model: every model of the group is a function of its runner
-		run := string(mustFile(t, code, "runner/run.R"))
-		for _, m := range g.Models {
-			if !strings.Contains(run, m+" = list(") {
-				t.Errorf("%s: run.R has no route for %s", g.ID, m)
+		// a group receives its language's library only
+		other := map[string]string{"r": "common/py/", "python": "common/R/"}[r.Language]
+		for p := range paths {
+			if strings.HasPrefix(p, other) {
+				t.Errorf("%s: %s is another language's", g.ID, p)
 			}
-			if !paths["runner/R/"+m+".R"] {
-				t.Errorf("%s: no runner/R/%s.R", g.ID, m)
+		}
+		// one file per model: every model of the group is a function of its runner
+		if r.Language == "r" {
+			run := string(mustFile(t, code, "runner/run.R"))
+			for _, m := range g.Models {
+				if !strings.Contains(run, m+" = list(") {
+					t.Errorf("%s: run.R has no route for %s", g.ID, m)
+				}
+				if !paths["runner/R/"+m+".R"] {
+					t.Errorf("%s: no runner/R/%s.R", g.ID, m)
+				}
+			}
+		} else {
+			// a module is never named as a library: `import xgboost` inside it must reach the library
+			run := string(mustFile(t, code, "runner/run.py"))
+			for _, m := range g.Models {
+				if !strings.Contains(run, `"`+m+`": {"fit": `) {
+					t.Errorf("%s: run.py has no route for %s", g.ID, m)
+				}
+				if !paths["runner/py/"+g.ID+"_"+m+".py"] || paths["runner/py/"+m+".py"] {
+					t.Errorf("%s: runner/py/%s_%s.py, never runner/py/%s.py", g.ID, g.ID, m, m)
+				}
 			}
 		}
 		withRef, _ := CodeFiles(g.ID, []byte("{}"), true)
@@ -200,5 +239,91 @@ func TestTheRLibrarySpeaksTheSameProtocol(t *testing.T) {
 	}
 	if !strings.Contains(string(mustFile(t, code, "common/R/selftest.R")), `cat("TABULARIA_SELFTEST_REPORT "`) {
 		t.Error("selftest.R does not print the report's line")
+	}
+}
+
+// //go:embed leaves out the files and folders whose name starts with «_» or «.»: none may be in
+// a runner or a library, and every file of them in the source tree is among the Job's files.
+func TestEveryFileOfTheSourceTreeIsInTheJobsCode(t *testing.T) {
+	for _, g := range Groups() {
+		code, err := CodeFiles(g.ID, nil, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		have := map[string]bool{}
+		for _, f := range code {
+			have[f.Path] = true
+		}
+		library := map[string]string{"r": "common/R", "python": "common/py"}[g.Recipe.Language]
+		for root, as := range map[string]string{filepath.Join("groups", g.ID, "runner"): "runner", library: library, "common/selftest": "common/selftest"} {
+			n := 0
+			err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+				if err != nil {
+					return err
+				}
+				if d.Name() == "__pycache__" && d.IsDir() {
+					return filepath.SkipDir // bytecode of a local run, never shipped
+				}
+				if strings.HasPrefix(d.Name(), "_") || strings.HasPrefix(d.Name(), ".") {
+					t.Errorf("%s: %s starts with «_» or «.»: //go:embed leaves it out", g.ID, p)
+				}
+				if d.IsDir() {
+					return nil
+				}
+				rel, _ := filepath.Rel(root, p)
+				if want := as + "/" + filepath.ToSlash(rel); !have[want] {
+					t.Errorf("%s: %s is not among the Job's files", g.ID, want)
+				}
+				n++
+				return nil
+			})
+			if err != nil || n == 0 {
+				t.Errorf("%s: %s: %d files, %v", g.ID, root, n, err)
+			}
+		}
+		if _, err := os.Stat(filepath.Join("groups", g.ID, "reference", "expected.json")); err != nil {
+			t.Errorf("%s: %v", g.ID, err)
+		}
+	}
+}
+
+func TestTheCommandsByLanguage(t *testing.T) {
+	run, selftest := Commands("r")
+	if strings.Join(run, " ") != "Rscript /tabularia/code/runner/run.R" || strings.Join(selftest, " ") != "Rscript /tabularia/code/runner/run.R --selftest" {
+		t.Errorf("R: %v %v", run, selftest)
+	}
+	run, selftest = Commands("python")
+	if strings.Join(run, " ") != "python -I -B /tabularia/code/runner/run.py" ||
+		strings.Join(selftest, " ") != "python -I -B /tabularia/code/runner/run.py --selftest" || len(run) != 4 {
+		t.Errorf("Python: %v %v", run, selftest)
+	}
+}
+
+// The Python library speaks the protocol the gateway reads.
+func TestThePythonLibrarySpeaksTheSameProtocol(t *testing.T) {
+	code, _ := CodeFiles("boosting", nil, false)
+	protocol := string(mustFile(t, code, "common/py/tab_protocol.py"))
+	for _, want := range []string{"PROTOCOL = 1", "EXIT_REFUSED = 3", "EXIT_SELFTEST_FAILED = 4", `print("TABULARIA_ERROR " + text`,
+		EnvInput, EnvOutput, EnvResults, EnvArtifacts, EnvModelIn, EnvModelFileIn} {
+		if !strings.Contains(protocol, want) {
+			t.Errorf("tab_protocol.py does not say %q", want)
+		}
+	}
+	if !strings.Contains(string(mustFile(t, code, "common/py/tab_selftest.py")), `print("TABULARIA_SELFTEST_REPORT " + to_json(report)`) {
+		t.Error("tab_selftest.py does not print the report's line")
+	}
+}
+
+// A managed Python image: the recipe's packages only, wheels without dependencies, pip check.
+func TestThePythonGroupsDockerfile(t *testing.T) {
+	d, err := Dockerfile("boosting", scriptcfg.DefaultBaseImages, scriptimage.Settings{Jobs: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	g, _ := Get("boosting")
+	want, _ := scriptimage.Dockerfile("python", "python:3.14-slim", g.Recipe.Packages, scriptimage.Settings{Jobs: 2, Managed: true})
+	if d != want || !strings.HasPrefix(d, "FROM python:3.14-slim\n") || !strings.Contains(d, "\nxgboost-cpu==3.4.1\n") ||
+		!strings.Contains(d, "--no-deps --only-binary=:all:") || strings.Contains(d, "polars") || strings.Contains(d, "marimo") {
+		t.Errorf("Dockerfile:\n%s", d)
 	}
 }

@@ -1168,7 +1168,7 @@
    "what": "a model that does not exist",
    "model": "survival_forest",
    "params": {},
-   "error": "there is no model 'survival_forest' (the models: linear, logistic, kaplan_meier, cox, arima)"
+   "error": "there is no model 'survival_forest' (the models: linear, logistic, kaplan_meier, cox, arima, xgboost, catboost)"
   },
   {
    "what": "the answer given back to the check: an empty exog is none, not an error",
@@ -1217,6 +1217,316 @@
     "seed": 1,
     "output": "results"
    }
+  },
+  {
+   "what": "the smallest XGBoost: a regression",
+   "model": "xgboost",
+   "params": {
+    "task": "regression",
+    "outcome": "boxes",
+    "predictors": [
+     "price",
+     "channel"
+    ]
+   },
+   "checked": {
+    "task": "regression",
+    "outcome": "boxes",
+    "predictors": [
+     "price",
+     "channel"
+    ],
+    "weights": null,
+    "validation": "random",
+    "validation_share": 0.2,
+    "split_by": null,
+    "early_stopping": true,
+    "early_stopping_rounds": 50,
+    "stop_metric": "loss",
+    "max_trees": 1000,
+    "learning_rate": 0.05,
+    "max_depth": 6,
+    "subsample": 0.8,
+    "min_child_weight": 1.0,
+    "colsample_bytree": 0.8,
+    "reg_lambda": 1.0,
+    "reg_alpha": 0.0,
+    "gamma": 0.0,
+    "seed": 1,
+    "output": "results"
+   }
+  },
+  {
+   "what": "a binary CatBoost with its event, its threshold and a grouped split",
+   "model": "catboost",
+   "params": {
+    "task": "binary",
+    "outcome": "reordered",
+    "event_value": "yes",
+    "predictors": [
+     "price",
+     "channel",
+     "region"
+    ],
+    "threshold": 0.3,
+    "split_by": "customer",
+    "class_weight": "balanced",
+    "stop_metric": "auc",
+    "rsm": 0.5
+   },
+   "checked": {
+    "task": "binary",
+    "outcome": "reordered",
+    "predictors": [
+     "price",
+     "channel",
+     "region"
+    ],
+    "event_value": "yes",
+    "weights": null,
+    "class_weight": "balanced",
+    "threshold": 0.3,
+    "validation": "random",
+    "validation_share": 0.2,
+    "split_by": "customer",
+    "early_stopping": true,
+    "early_stopping_rounds": 50,
+    "stop_metric": "auc",
+    "max_trees": 1000,
+    "learning_rate": 0.05,
+    "max_depth": 6,
+    "subsample": 0.8,
+    "l2_leaf_reg": 3.0,
+    "rsm": 0.5,
+    "random_strength": 1.0,
+    "seed": 1,
+    "output": "results"
+   }
+  },
+  {
+   "what": "a multiclass XGBoost with a validation part in time and no early stopping",
+   "model": "xgboost",
+   "params": {
+    "task": "multiclass",
+    "outcome": "segment",
+    "predictors": [
+     "price"
+    ],
+    "validation": "time",
+    "order_by": "day",
+    "early_stopping": false,
+    "max_trees": 200,
+    "max_depth": 4
+   },
+   "checked": {
+    "task": "multiclass",
+    "outcome": "segment",
+    "predictors": [
+     "price"
+    ],
+    "weights": null,
+    "class_weight": "none",
+    "validation": "time",
+    "validation_share": 0.2,
+    "order_by": "day",
+    "early_stopping": false,
+    "stop_metric": "loss",
+    "max_trees": 200,
+    "learning_rate": 0.05,
+    "max_depth": 4,
+    "subsample": 0.8,
+    "min_child_weight": 1.0,
+    "colsample_bytree": 0.8,
+    "reg_lambda": 1.0,
+    "reg_alpha": 0.0,
+    "gamma": 0.0,
+    "seed": 1,
+    "output": "results"
+   }
+  },
+  {
+   "what": "a binary task needs its event",
+   "model": "xgboost",
+   "params": {
+    "task": "binary",
+    "outcome": "reordered",
+    "predictors": [
+     "price"
+    ]
+   },
+   "error": "xgboost: a binary task needs the outcome's value whose probability is predicted ('event_value')"
+  },
+  {
+   "what": "a validation part in time needs the time",
+   "model": "catboost",
+   "params": {
+    "task": "regression",
+    "outcome": "boxes",
+    "predictors": [
+     "price"
+    ],
+    "validation": "time"
+   },
+   "error": "catboost: a validation part in time needs the column of the time ('order_by')"
+  },
+  {
+   "what": "the AUC is a binary task's",
+   "model": "xgboost",
+   "params": {
+    "task": "regression",
+    "outcome": "boxes",
+    "predictors": [
+     "price"
+    ],
+    "stop_metric": "auc"
+   },
+   "error": "xgboost: the AUC is a binary task's metric: use stop_metric = loss (or mae for a regression, error for a multiclass task)"
+  },
+  {
+   "what": "the mean absolute error is a regression's",
+   "model": "catboost",
+   "params": {
+    "task": "multiclass",
+    "outcome": "segment",
+    "predictors": [
+     "price"
+    ],
+    "stop_metric": "mae"
+   },
+   "error": "catboost: the mean absolute error is a regression's metric: use stop_metric = loss, auc or error"
+  },
+  {
+   "what": "the error rate is a classification's",
+   "model": "xgboost",
+   "params": {
+    "task": "regression",
+    "outcome": "boxes",
+    "predictors": [
+     "price"
+    ],
+    "stop_metric": "error"
+   },
+   "error": "xgboost: the error rate is a classification's metric: use stop_metric = loss or mae"
+  },
+  {
+   "what": "the event's value only with a binary task",
+   "model": "xgboost",
+   "params": {
+    "task": "regression",
+    "outcome": "boxes",
+    "predictors": [
+     "price"
+    ],
+    "event_value": "yes"
+   },
+   "error": "xgboost: 'event_value' only applies when task = binary"
+  },
+  {
+   "what": "the patience only with early stopping",
+   "model": "catboost",
+   "params": {
+    "task": "regression",
+    "outcome": "boxes",
+    "predictors": [
+     "price"
+    ],
+    "early_stopping": false,
+    "early_stopping_rounds": 10
+   },
+   "error": "catboost: 'early_stopping_rounds' only applies when early_stopping = true"
+  },
+  {
+   "what": "stratified parts only without a column that splits them",
+   "model": "xgboost",
+   "params": {
+    "task": "binary",
+    "outcome": "reordered",
+    "event_value": "yes",
+    "predictors": [
+     "price"
+    ],
+    "split_by": "customer",
+    "stratify": true
+   },
+   "error": "xgboost: 'stratify' only applies when validation = random and task = binary or multiclass and 'split_by' is not given"
+  },
+  {
+   "what": "CatBoost's depth is at most 10",
+   "model": "catboost",
+   "params": {
+    "task": "regression",
+    "outcome": "boxes",
+    "predictors": [
+     "price"
+    ],
+    "max_depth": 12
+   },
+   "error": "catboost: 'max_depth' must be a whole number from 1 to 10"
+  },
+  {
+   "what": "a CatBoost has no gamma",
+   "model": "catboost",
+   "params": {
+    "task": "regression",
+    "outcome": "boxes",
+    "predictors": [
+     "price"
+    ],
+    "gamma": 1
+   },
+   "error": "catboost: there is no parameter 'gamma' (it takes: task, outcome, predictors, event_value, weights, class_weight, threshold, validation, validation_share, order_by, split_by, stratify, early_stopping, early_stopping_rounds, stop_metric, max_trees, learning_rate, max_depth, subsample, l2_leaf_reg, rsm, random_strength, seed, output)"
+  },
+  {
+   "what": "the validation share is between 0.05 and 0.5",
+   "model": "xgboost",
+   "params": {
+    "task": "regression",
+    "outcome": "boxes",
+    "predictors": [
+     "price"
+    ],
+    "validation_share": 0.6
+   },
+   "error": "xgboost: 'validation_share' must be a number at least 0.05 and at most 0.5"
+  },
+  {
+   "what": "a learning rate of 0 is no learning rate",
+   "model": "xgboost",
+   "params": {
+    "task": "regression",
+    "outcome": "boxes",
+    "predictors": [
+     "price"
+    ],
+    "learning_rate": 0
+   },
+   "error": "xgboost: 'learning_rate' must be a number above 0 and at most 1"
+  },
+  {
+   "what": "the time and the outcome are not one column",
+   "model": "xgboost",
+   "params": {
+    "task": "regression",
+    "outcome": "boxes",
+    "predictors": [
+     "price"
+    ],
+    "validation": "time",
+    "order_by": "boxes"
+   },
+   "error": "xgboost: the column «boxes» is both 'outcome' and 'order_by': choose another"
+  },
+  {
+   "what": "a task is one of three",
+   "model": "catboost",
+   "params": {
+    "task": "ranking",
+    "outcome": "boxes",
+    "predictors": [
+     "price"
+    ]
+   },
+   "error": "catboost: 'task' must be one of regression, binary, multiclass"
   }
  ]
 }

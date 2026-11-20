@@ -1,15 +1,22 @@
 // Package modelgroups holds the groups of statistical models as Tabularia ships them
 // (docs/specs/statistical-models.md, «Model groups and their images»): per group a recipe
 // (recipe.json: language, base, packages pinned by version, resources, max_rows), a runner
-// (runner/run.R, the dispatcher, and one file per model in runner/R/), reference cases
-// (reference/expected.json and the small tables of reference/data/), plus the R library every
-// runner shares (common/R/) and the model card's schema (card.schema.json). Everything is
-// embedded: the gateway builds a group's image from its recipe with the scripting machinery,
-// and hands the runner's files to every model Job in its ConfigMap (CodeFiles).
+// (an R group: runner/run.R, the dispatcher, and one file per model in runner/R/; a Python
+// group: runner/run.py and its modules in runner/py/), reference cases (reference/expected.json
+// and the small tables of reference/data/), plus the library every runner of a language shares
+// (common/R/, common/py/), the self-test's table (common/selftest/) and the model card's schema
+// (card.schema.json). Everything is embedded: the gateway builds a group's image from its recipe
+// with the scripting machinery, and hands the runner's files to every model Job in its ConfigMap
+// (CodeFiles).
 //
 // The protocol between a Job and Tabularia — task.json, the environment, the files written,
-// the exit codes, the log's lines — is described in common/R/protocol.R; Task, the Env* and
-// Exit* constants and the parsers of the log's lines are its Go side.
+// the exit codes, the log's lines — is described in common/R/protocol.R and, the same for
+// Python, common/py/tab_protocol.py; Task, the Env* and Exit* constants and the parsers of the
+// log's lines are its Go side.
+//
+// //go:embed leaves out every file and folder whose name starts with «_» or «.»: no file of a
+// runner or of a library may (a Python library is flat modules, without __init__.py; a test
+// lists the source tree and checks that CodeFiles holds every file of it).
 package modelgroups
 
 import (
@@ -45,6 +52,9 @@ const (
 	EnvResults   = "TABULARIA_RESULTS"   // the ten columns, Parquet: …/<step_id>/results.parquet
 	EnvArtifacts = "TABULARIA_ARTIFACTS" // a prefix: …/<step_id>/artifacts/ (model.json, MLmodel, native.rds, run.json, error.json)
 	EnvModelIn   = "TABULARIA_MODEL_IN"  // Predict: the model card to apply
+	// EnvModelFileIn is Predict's model file (a boosting model's xgboost.json or catboost.cbm),
+	// whose sha256 the card holds
+	EnvModelFileIn = "TABULARIA_MODEL_FILE_IN"
 )
 
 // The exit codes of a runner: anything else is a crash (a bug), the log's tail says what.
@@ -60,18 +70,31 @@ const (
 	LogSelftestReport = "TABULARIA_SELFTEST_REPORT "
 )
 
-// RunCommand and SelftestCommand are the container's command, in CodeDir.
-var (
-	RunCommand      = []string{"Rscript", CodeDir + "/runner/run.R"}
-	SelftestCommand = []string{"Rscript", CodeDir + "/runner/run.R", "--selftest"}
-)
+// The languages of the groups, and the file a group's runner starts from.
+var entries = map[string]string{"r": "runner/run.R", "python": "runner/run.py"}
+
+// libraries are the folders of common/ a group of the language receives, besides common/selftest.
+var libraries = map[string]string{"r": "common/R", "python": "common/py"}
+
+// Commands are the container's commands of a group of the language, in CodeDir: a run, and the
+// self-test. Python: -I ignores PYTHONPATH, the user's site and the script's folder (run.py puts
+// exactly the library's and the runner's folders on sys.path), -B writes no bytecode (the code
+// is a read-only ConfigMap).
+func Commands(language string) (run, selftest []string) {
+	if language == "python" {
+		run = []string{"python", "-I", "-B", CodeDir + "/runner/run.py"}
+	} else {
+		run = []string{"Rscript", CodeDir + "/runner/run.R"}
+	}
+	return run, append(append([]string(nil), run...), "--selftest")
+}
 
 // Recipe is a group's recipe.json.
 type Recipe struct {
 	Language  string   `json:"language"`
 	Base      string   `json:"base"` // a version of scripts.baseImages (SCRIPTS__BASE_IMAGES)
 	PinnedOn  string   `json:"pinned_on"`
-	Packages  []string `json:"packages"` // name@version, dependencies first
+	Packages  []string `json:"packages"` // R: name@version, dependencies first; Python: name==version, the whole closure
 	Resources struct {
 		CPU    string `json:"cpu"`    // the limit; the request is half
 		Memory string `json:"memory"` // the limit; the request is half
@@ -127,19 +150,21 @@ type File struct {
 	Content []byte
 }
 
-// CodeFiles are the files a model Job of the group finds in CodeDir, in a fixed order:
-// runner/run.R, runner/R/*.R, common/R/*.R, common/selftest/*, card.schema.json,
+// CodeFiles are the files a model Job of the group finds in CodeDir, in a fixed order: the
+// runner (runner/run.R and runner/R/*.R, or runner/run.py and runner/py/*.py), the library of
+// the group's language (common/R/*.R or common/py/*.py), common/selftest/*, card.schema.json,
 // catalog.json, then task.json when given, and the reference cases (reference/expected.json,
 // reference/data/*) when withReference (the self-test). A ConfigMap holds them as
 // f0, f1… with items mapping each key to its path, as a Script node's files.
 func CodeFiles(group string, task []byte, withReference bool) ([]File, error) {
-	if _, ok := Get(group); !ok {
+	g, ok := Get(group)
+	if !ok {
 		return nil, fmt.Errorf("no model group %q", group)
 	}
-	return codeFiles(group, task, withReference)
+	return codeFiles(group, g.Recipe.Language, task, withReference)
 }
 
-func codeFiles(group string, task []byte, withReference bool) ([]File, error) {
+func codeFiles(group, language string, task []byte, withReference bool) ([]File, error) {
 	var out []File
 	add := func(root, prefix string) error {
 		return fs.WalkDir(files, root, func(p string, d fs.DirEntry, err error) error {
@@ -157,7 +182,14 @@ func codeFiles(group string, task []byte, withReference bool) ([]File, error) {
 	if err := add("groups/"+group+"/runner", "runner/"); err != nil {
 		return nil, err
 	}
-	if err := add("common", "common/"); err != nil {
+	library, ok := libraries[language]
+	if !ok {
+		return nil, fmt.Errorf("the group %s is written in %q, which no library serves", group, language)
+	}
+	if err := add(library, library+"/"); err != nil {
+		return nil, err
+	}
+	if err := add("common/selftest", "common/selftest/"); err != nil {
 		return nil, err
 	}
 	out = append(out, File{Path: "card.schema.json", Content: CardSchema()}, File{Path: "catalog.json", Content: modelcatalog.Raw()})
@@ -203,8 +235,10 @@ func BaseImage(r Recipe, images map[string][]scriptcfg.Image) (string, error) {
 	return "", fmt.Errorf("the base %s %s is not one of the base images offered (SCRIPTS__BASE_IMAGES)", r.Language, r.Base)
 }
 
-// Dockerfile is the group's image as the build loop of the scripting environments makes it:
-// the base image, arrow, then the recipe's packages in their order.
+// Dockerfile is the group's image as the build loop of the scripting environments makes it for
+// a managed environment: R, the base image, arrow, then the recipe's packages in their order;
+// Python, the base image and the recipe's packages only, wheels without their dependencies (the
+// recipe is the whole closure), then pip check.
 func Dockerfile(group string, images map[string][]scriptcfg.Image, s scriptimage.Settings) (string, error) {
 	g, ok := Get(group)
 	if !ok {
@@ -214,6 +248,7 @@ func Dockerfile(group string, images map[string][]scriptcfg.Image, s scriptimage
 	if err != nil {
 		return "", err
 	}
+	s.Managed = true
 	return scriptimage.Dockerfile(g.Recipe.Language, base, g.Recipe.Packages, s)
 }
 
@@ -403,12 +438,19 @@ func load() ([]Group, error) {
 		if r.Language != cg.Language {
 			return nil, fmt.Errorf("%s/recipe.json: language %q, the catalogue says %q", cg.ID, r.Language, cg.Language)
 		}
+		entry, known := entries[r.Language]
+		if !known {
+			return nil, fmt.Errorf("%s/recipe.json: language %q (r or python)", cg.ID, r.Language)
+		}
+		if _, err := fs.Stat(files, path.Join("groups", cg.ID, entry)); err != nil {
+			return nil, fmt.Errorf("the group %s has no %s", cg.ID, entry)
+		}
 		sum := sha256.Sum256(raw)
 		g := Group{ID: cg.ID, Models: cg.Models, Recipe: r, RecipeHash: hex.EncodeToString(sum[:])}
 		out = append(out, g)
 	}
 	for i := range out {
-		code, err := codeFiles(out[i].ID, nil, true)
+		code, err := codeFiles(out[i].ID, out[i].Recipe.Language, nil, true)
 		if err != nil {
 			return nil, err
 		}

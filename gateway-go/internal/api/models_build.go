@@ -25,14 +25,29 @@ import (
 // mgSelftestMark separates, in the check's log, the package lock from the self-test's output.
 const mgSelftestMark = "TABULARIA_SELFTEST_BEGIN"
 
-// mgCheckScript is the managed check's command: the scripts' own check (the lock and the
-// completions), then the self-test in the code's folder. `set -e` keeps the self-test's exit code.
-const mgCheckScript = "set -e\n" +
-	`Rscript -e "$TABULARIA_R_CHECK"` + "\n" +
-	"echo\n" +
-	"echo " + mgSelftestMark + "\n" +
-	"cd " + modelgroups.CodeDir + "\n" +
-	"Rscript " + modelgroups.CodeDir + "/runner/run.R --selftest\n"
+// mgCheckScript is the managed check's command for a group of the language: the lock (R: the
+// scripts' own check, with the completions; Python: mgPyCheck, the scripting environments' check
+// imports polars, which a group's image does not hold), then the self-test in the code's folder.
+// `set -e` keeps the self-test's exit code.
+func mgCheckScript(language string) string {
+	check := `Rscript -e "$TABULARIA_R_CHECK"`
+	if language == "python" {
+		check = `python -I -c "$TABULARIA_PY_MANAGED_CHECK"`
+	}
+	_, selftest := modelgroups.Commands(language)
+	return "set -e\n" + check + "\n" +
+		"echo\n" +
+		"echo " + mgSelftestMark + "\n" +
+		"cd " + modelgroups.CodeDir + "\n" +
+		strings.Join(selftest, " ") + "\n"
+}
+
+// mgPyCheck is a Python group's lock: one name==version per installed distribution; it fails
+// unless pyarrow reads S3 (the input, the results and the artifacts are s3:// addresses).
+const mgPyCheck = "from pyarrow.fs import S3FileSystem\n" +
+	"import importlib.metadata as m\n" +
+	"names = {f\"{d.metadata['Name']}=={d.version}\" for d in m.distributions() if d.metadata['Name']}\n" +
+	"print('\\n'.join(sorted(names, key=str.lower)))\n"
 
 func mgCodeName(v *sbVersion, recheck bool) string {
 	if recheck {
@@ -68,12 +83,19 @@ func (b *scriptBuilds) managedCheckJob(v *sbVersion, env *sbEnvironment, group s
 	if v.ImageRef != nil {
 		image = *v.ImageRef
 	}
+	language := modelgroupsLanguage(group)
+	environment := []any{pyjson.Object{{Key: "name", Value: "HOME"}, {Key: "value", Value: "/tmp"}},
+		pyjson.Object{{Key: "name", Value: "TMPDIR"}, {Key: "value", Value: "/tmp"}}}
+	if language == "python" {
+		environment = append(environment, pyjson.Object{{Key: "name", Value: "TABULARIA_PY_MANAGED_CHECK"}, {Key: "value", Value: mgPyCheck}},
+			pyjson.Object{{Key: "name", Value: "PYTHONHASHSEED"}, {Key: "value", Value: "0"}})
+	} else {
+		environment = append(environment, pyjson.Object{{Key: "name", Value: "TABULARIA_R_CHECK"}, {Key: "value", Value: sbRCheck}})
+	}
 	container := pyjson.Object{
-		{Key: "name", Value: "check"}, {Key: "image", Value: image}, {Key: "command", Value: []any{"sh", "-c", mgCheckScript}},
+		{Key: "name", Value: "check"}, {Key: "image", Value: image}, {Key: "command", Value: []any{"sh", "-c", mgCheckScript(language)}},
 		{Key: "workingDir", Value: modelgroups.CodeDir},
-		{Key: "env", Value: []any{pyjson.Object{{Key: "name", Value: "HOME"}, {Key: "value", Value: "/tmp"}},
-			pyjson.Object{{Key: "name", Value: "TMPDIR"}, {Key: "value", Value: "/tmp"}},
-			pyjson.Object{{Key: "name", Value: "TABULARIA_R_CHECK"}, {Key: "value", Value: sbRCheck}}}},
+		{Key: "env", Value: environment},
 		{Key: "resources", Value: pyjson.Object{
 			{Key: "requests", Value: pyjson.Object{{Key: "cpu", Value: env.CPURequest}, {Key: "memory", Value: env.MemoryRequest}}},
 			{Key: "limits", Value: pyjson.Object{{Key: "cpu", Value: env.CPULimit}, {Key: "memory", Value: env.MemLimit}}}}},

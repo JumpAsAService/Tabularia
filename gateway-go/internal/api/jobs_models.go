@@ -239,6 +239,43 @@ func thousands(n int64) string {
 	return b.String()
 }
 
+// modelCellGroups are the groups whose models are limited by rows × predictors (the catalogue's
+// max_cells, docs/specs/statistical-models.md, «Performance and limits»): the boosting group's
+// trees hold the whole table in memory; the R groups read none of its limits.
+var modelCellGroups = map[string]bool{"boosting": true}
+
+// modelCellsSentence is why a model of such a group may not read `rows` rows with its predictors,
+// "" when it may: «1,000,000 rows × 120 predictors make 120 million values; this group allows 50
+// million: fewer predictors, or sample before the node».
+func modelCellsSentence(group string, rows int64, checked map[string]any) string {
+	most := int64(modelcatalog.Limit("max_cells"))
+	predictors := 0
+	switch p := checked["predictors"].(type) {
+	case []any:
+		predictors = len(p)
+	case []string:
+		predictors = len(p)
+	}
+	if !modelCellGroups[group] || most <= 0 || predictors == 0 {
+		return ""
+	}
+	cells := rows * int64(predictors)
+	if cells <= most {
+		return ""
+	}
+	return fmt.Sprintf("%s rows × %d predictors make %s values; this group allows %s: fewer predictors, or sample before the node",
+		thousands(rows), predictors, millions(cells), millions(most))
+}
+
+// millions is a count as the sentences of the limits write it: «120 million», «52.5 million»,
+// «812,340» below a million.
+func millions(n int64) string {
+	if n < 1_000_000 {
+		return thousands(n)
+	}
+	return strconv.FormatFloat(math.Round(float64(n)/100_000)/10, 'f', -1, 64) + " million"
+}
+
 // modelInput is the chain to a model node written into the scripts bucket: the rows written
 // (nil when the engine did not say) and the development samples the chain read.
 type modelInput struct {
@@ -435,7 +472,7 @@ func withoutKeys(o pyjson.Object, keys ...string) pyjson.Object {
 func modelStepKeys(prefix string) (in, out, results, artifacts string, all []string) {
 	in, out, results, artifacts = prefix+"/input.parquet", prefix+"/output.parquet", prefix+"/results.parquet", prefix+"/artifacts/"
 	all = []string{in, out, results}
-	for _, f := range []string{"model.json", "run.json", "error.json", "MLmodel", "native.rds", "native.pkl"} {
+	for _, f := range []string{"model.json", "run.json", "error.json", "MLmodel", "native.rds", "native.pkl", "xgboost.json", "catboost.cbm"} {
 		all = append(all, artifacts+f)
 	}
 	return
@@ -528,6 +565,11 @@ func (q *queue) runModel(ctx context.Context, r *scriptNodeRun) (*flowresolver.S
 			return nil, &scriptFailed{fmt.Sprintf("model «%s»: the model would read %s rows; the group «%s» allows %s: filter or sample "+
 				"before the node, or ask an administrator", s.label, thousands(*in.rows), s.group, thousands(s.img.MaxRows))}
 		}
+		if in.rows != nil {
+			if why := modelCellsSentence(s.group, *in.rows, s.checked); why != "" {
+				return nil, &scriptFailed{fmt.Sprintf("model «%s»: %s", s.label, why)}
+			}
+		}
 		runID := r.orchestrationOf(childID)
 		task.GroupVersion = s.img.Version
 		task.IDs = modelgroups.IDs{FlowID: r.flow.ID, NodeID: pyjson.Str(nodeID), RunID: runID, StepRunID: childID}
@@ -539,6 +581,8 @@ func (q *queue) runModel(ctx context.Context, r *scriptNodeRun) (*flowresolver.S
 			task.RowsFrom = "trial"
 		}
 		task.MLflow = s.mlflow != nil // the runner writes MLmodel and native.rds; the gateway logs them
+		// the runner stops its boosting in time for its results to be written within the step's timeout
+		task.Limits["time_budget_seconds"] = int(s.timeout)
 		code, err := modelgroups.CodeFiles(s.group, task.JSON(), false)
 		if err != nil {
 			return nil, err
@@ -629,8 +673,14 @@ func pyjsonOf(v any) any {
 func modelJobManifest(js jobSettings, name string, img *ModelGroupImage, environment pyjson.Object, labels pyjson.Object,
 	timeout int64, items []any, codeName, secretName string, net *offlineNet) pyjson.Object {
 	environment = net.applyEnv(environment)
-	command := make([]any, len(modelgroups.RunCommand))
-	for i, c := range modelgroups.RunCommand {
+	language := modelgroupsLanguage(img.Group)
+	if language == "python" {
+		// no code relies on the order of a set or a dict of strings, but nothing is left to it
+		environment = merge(environment, pyjson.Object{{Key: "PYTHONHASHSEED", Value: "0"}})
+	}
+	run, _ := modelgroups.Commands(language)
+	command := make([]any, len(run))
+	for i, c := range run {
 		command[i] = c
 	}
 	container := pyjson.Object{{Key: "name", Value: "model"}, {Key: "image", Value: img.Image}, {Key: "command", Value: command},

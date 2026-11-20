@@ -271,6 +271,15 @@ are «not computed» when there are too few.
 per day. ARIMA with the time `data_ordine`, the series the count, daily frequency, seasonal
 period 7 and automatic orders: what a week looks like, and the next two.
 
+### Boosting (Python): being built
+
+Model ids in the catalogue: `xgboost` and `catboost`. A fourth group, **Boosting**, written in
+Python, is being built: gradient-boosted trees for a regression, a binary or a multiclass
+outcome, with a validation part, early stopping, the importance of each predictor (gain and
+SHAP) and diagnostics in the report. In this version its nodes do not fit a model yet: they stop
+with «… is not built yet in this version of Tabularia». This section will describe them when
+they do.
+
 ## The output
 
 Every model writes the same **ten columns** as the [statistical tests](statistics.md#the-output):

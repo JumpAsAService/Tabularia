@@ -67,8 +67,13 @@ func TestAModelJobIsTheGroupsImageOfflineAndIsolated(t *testing.T) {
 		t.Errorf("container %v", c)
 	}
 	cmd, _ := c.Value("command").([]any)
-	if len(cmd) != len(modelgroups.RunCommand) || cmd[0] != "Rscript" {
+	if run, _ := modelgroups.Commands("r"); len(cmd) != len(run) || cmd[0] != "Rscript" {
 		t.Errorf("command %v", cmd)
+	}
+	for _, e := range objectList(c.Value("env")) {
+		if e.Value("name") == "PYTHONHASHSEED" {
+			t.Errorf("an R group's Job has PYTHONHASHSEED")
+		}
 	}
 	sec := pyjson.Obj(c.Value("securityContext"))
 	if sec.Value("readOnlyRootFilesystem") != true || sec.Value("allowPrivilegeEscalation") != false {
@@ -755,5 +760,79 @@ func TestTheEditorsRunOfAModelNodeAndItsOutputs(t *testing.T) {
 	}
 	if out := f.outputs(f.ann, flow.ID)["m"]; out["output"]["stale"] != true {
 		t.Errorf("after a change of its chain: %v", out)
+	}
+}
+
+// A Python group's Job: python -I -B on its run.py, and PYTHONHASHSEED set.
+func TestAPythonGroupsJob(t *testing.T) {
+	img := &ModelGroupImage{Group: "boosting", EnvironmentID: 5, Image: "registry:5000/envs@sha256:4567", CPURequest: "1", CPULimit: "2",
+		MemoryRequest: "2Gi", MemoryLimit: "4Gi"}
+	labels := pyjson.Object{{Key: labelModelGroup, Value: "boosting"}, {Key: labelModel, Value: "xgboost"}}
+	m := modelJobManifest(jobSettings{jobTTL: 60}, "tabularia-model-9-a1", img, pyjson.Object{{Key: modelgroups.EnvInput, Value: "s3://b/in"}},
+		labels, 900, []any{pyjson.Object{{Key: "key", Value: "f0"}, {Key: "path", Value: "runner/run.py"}}}, "code", "env", nil)
+	pod := pyjson.Obj(pyjson.Obj(pyjson.Obj(m.Value("spec")).Value("template")).Value("spec"))
+	c := objectList(pod.Value("containers"))[0]
+	cmd, _ := c.Value("command").([]any)
+	if fmt.Sprint(cmd) != "[python -I -B /tabularia/code/runner/run.py]" {
+		t.Errorf("command %v", cmd)
+	}
+	seed := ""
+	for _, e := range objectList(c.Value("env")) {
+		if e.Value("name") == "PYTHONHASHSEED" {
+			seed = pyjson.Str(e.Value("value"))
+		}
+	}
+	if seed != "0" {
+		t.Errorf("PYTHONHASHSEED %q", seed)
+	}
+}
+
+// rows × predictors: the boosting group's limit, said before the Job; the R groups have none.
+func TestTheCellsAModelMayRead(t *testing.T) {
+	predictors := make([]any, 120)
+	for i := range predictors {
+		predictors[i] = fmt.Sprintf("p%d", i)
+	}
+	got := modelCellsSentence("boosting", 1_000_000, map[string]any{"predictors": predictors})
+	if got != "1,000,000 rows × 120 predictors make 120 million values; this group allows 50 million: fewer predictors, or sample before the node" {
+		t.Errorf("%q", got)
+	}
+	if got := modelCellsSentence("boosting", 416_667, map[string]any{"predictors": predictors}); got == "" || !strings.Contains(got, "50.0 million") && !strings.Contains(got, "make 50 million") {
+		t.Errorf("just above: %q", got)
+	}
+	for _, c := range []struct {
+		group string
+		rows  int64
+	}{{"boosting", 416_666}, {"regression", 1_000_000}} {
+		if got := modelCellsSentence(c.group, c.rows, map[string]any{"predictors": predictors}); got != "" {
+			t.Errorf("%s %d: %q", c.group, c.rows, got)
+		}
+	}
+	if millions(52_500_000) != "52.5 million" || millions(812_340) != "812,340" {
+		t.Errorf("millions: %s %s", millions(52_500_000), millions(812_340))
+	}
+	_, _, _, _, keys := modelStepKeys("env-1/s")
+	if !strings.Contains(strings.Join(keys, " "), "env-1/s/artifacts/xgboost.json env-1/s/artifacts/catboost.cbm") {
+		t.Errorf("the step's keys: %v", keys)
+	}
+}
+
+// The check Job of a group's version: the lock, the mark, then the self-test, in the group's language.
+func TestTheChecksScriptByLanguage(t *testing.T) {
+	r := mgCheckScript("r")
+	want := "set -e\nRscript -e \"$TABULARIA_R_CHECK\"\necho\necho TABULARIA_SELFTEST_BEGIN\ncd /tabularia/code\n" +
+		"Rscript /tabularia/code/runner/run.R --selftest\n"
+	if r != want {
+		t.Errorf("the R check changed:\n%s", r)
+	}
+	py := mgCheckScript("python")
+	for _, w := range []string{`python -I -c "$TABULARIA_PY_MANAGED_CHECK"`, "echo TABULARIA_SELFTEST_BEGIN\n",
+		"python -I -B /tabularia/code/runner/run.py --selftest\n"} {
+		if !strings.Contains(py, w) {
+			t.Errorf("no %q in\n%s", w, py)
+		}
+	}
+	if strings.Contains(mgPyCheck, "polars") || !strings.Contains(mgPyCheck, "S3FileSystem") {
+		t.Errorf("the Python lock:\n%s", mgPyCheck)
 	}
 }

@@ -180,10 +180,11 @@ func (b *scriptBuilds) buildJobs() int64 {
 }
 
 // dockerfile is script_builds.dockerfile (internal/scriptimage, which cmd/modelgroup reads
-// too).
-func (b *scriptBuilds) dockerfile(language, baseImage string, packages []string) (string, error) {
+// too). managed: a statistical model group's environment, whose Python image holds only its
+// recipe's packages.
+func (b *scriptBuilds) dockerfile(language, baseImage string, packages []string, managed bool) (string, error) {
 	d, err := scriptimage.Dockerfile(language, baseImage, packages, scriptimage.Settings{
-		PyPIIndexURL: b.s.Scripts.PyPIIndexURL, CRANURL: b.s.Scripts.CRANURL, Jobs: b.buildJobs()})
+		PyPIIndexURL: b.s.Scripts.PyPIIndexURL, CRANURL: b.s.Scripts.CRANURL, Jobs: b.buildJobs(), Managed: managed})
 	var bad scriptimage.ValueError
 	if errors.As(err, &bad) {
 		// a setting that cannot become a Dockerfile fails the version (advance), as before
@@ -243,7 +244,7 @@ func (b *scriptBuilds) job(name string, labels pyjson.Object, deadline int64, po
 }
 
 // buildJob is script_builds.build_job.
-func (b *scriptBuilds) buildJob(v *sbVersion, language string) (pyjson.Object, error) {
+func (b *scriptBuilds) buildJob(v *sbVersion, language string, managed bool) (pyjson.Object, error) {
 	repo, err := b.repository(v.EnvironmentID)
 	if err != nil {
 		return nil, err
@@ -293,7 +294,7 @@ func (b *scriptBuilds) buildJob(v *sbVersion, language string) (pyjson.Object, e
 	if err != nil {
 		return nil, err
 	}
-	dockerfile, err := b.dockerfile(language, v.BaseImage, packages)
+	dockerfile, err := b.dockerfile(language, v.BaseImage, packages, managed)
 	if err != nil {
 		return nil, err
 	}
@@ -471,7 +472,7 @@ func (b *scriptBuilds) advance(ctx context.Context, tx pgx.Tx, v *sbVersion) err
 		return nil
 	}
 	if v.Status == "queued" {
-		manifest, err := b.buildJob(v, env.Language)
+		manifest, err := b.buildJob(v, env.Language, env.ManagedBy != nil)
 		var bad sbValueError
 		if errors.As(err, &bad) { // packages or settings that cannot become a Dockerfile
 			b.fail(v, bad.Error(), nil)

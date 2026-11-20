@@ -44,7 +44,17 @@
     "max_card_bytes": 1048576,
     "max_vcov_terms": 200,
     "max_baseline_times": 5000,
-    "max_paths_terms": 20
+    "max_paths_terms": 20,
+    "max_predictors": 200,
+    "max_levels_trees": 1000,
+    "max_classes": 20,
+    "max_cells": 50000000,
+    "max_shap_rows": 5000,
+    "shap_cost_budget": 20000000000,
+    "max_model_file_bytes": 67108864,
+    "max_importance_bars": 20,
+    "max_beeswarm_predictors": 10,
+    "max_roc_classes": 10
   },
   "controls": [
     "column",
@@ -376,6 +386,91 @@
         "results",
         "forecast"
       ]
+    },
+    "task_boosting": {
+      "control": "choice",
+      "choices": [
+        "regression",
+        "binary",
+        "multiclass"
+      ]
+    },
+    "class_weight": {
+      "control": "choice",
+      "choices": [
+        "none",
+        "balanced"
+      ]
+    },
+    "validation": {
+      "control": "choice",
+      "choices": [
+        "random",
+        "time"
+      ]
+    },
+    "validation_share": {
+      "control": "number",
+      "min": 0.05,
+      "max": 0.5
+    },
+    "order_column": {
+      "control": "column",
+      "types": [
+        "number",
+        "integer",
+        "date",
+        "datetime"
+      ]
+    },
+    "stop_metric": {
+      "control": "choice",
+      "choices": [
+        "loss",
+        "mae",
+        "auc",
+        "error"
+      ]
+    },
+    "max_trees": {
+      "control": "integer",
+      "min": 10,
+      "max": 5000
+    },
+    "rounds": {
+      "control": "integer",
+      "min": 5,
+      "max": 1000
+    },
+    "learning_rate": {
+      "control": "number",
+      "above": 0,
+      "max": 1
+    },
+    "depth_xgboost": {
+      "control": "integer",
+      "min": 1,
+      "max": 12
+    },
+    "depth_catboost": {
+      "control": "integer",
+      "min": 1,
+      "max": 10
+    },
+    "nonnegative": {
+      "control": "number",
+      "min": 0,
+      "max": 1000
+    },
+    "fraction": {
+      "control": "number",
+      "above": 0,
+      "max": 1
+    },
+    "strength": {
+      "control": "number",
+      "min": 0,
+      "max": 100
     }
   },
   "season_of_frequency": {
@@ -450,6 +545,16 @@
       "level": "required",
       "level_2": "optional",
       "indexed": true
+    },
+    "importance": {
+      "level": "required",
+      "level_2": "optional",
+      "indexed": false
+    },
+    "class": {
+      "level": "required",
+      "level_2": "null",
+      "indexed": false
     }
   },
   "verdicts": [
@@ -483,6 +588,15 @@
       "label": "models.groups.timeseries",
       "models": [
         "arima"
+      ]
+    },
+    {
+      "id": "boosting",
+      "language": "python",
+      "label": "models.groups.boosting",
+      "models": [
+        "xgboost",
+        "catboost"
       ]
     }
   ],
@@ -2477,6 +2591,1388 @@
           }
         }
       ]
+    },
+    {
+      "id": "xgboost",
+      "group": "boosting",
+      "family": "boosting",
+      "label": "models.xgboost.name",
+      "needs": {
+        "task": "task_boosting",
+        "outcome": "column",
+        "predictors": "predictors"
+      },
+      "takes": {
+        "event_value": "outcome_level",
+        "weights": "number_column",
+        "class_weight": "class_weight",
+        "threshold": "proportion",
+        "validation": "validation",
+        "validation_share": "validation_share",
+        "order_by": "order_column",
+        "split_by": "column",
+        "stratify": "boolean",
+        "early_stopping": "boolean",
+        "early_stopping_rounds": "rounds",
+        "stop_metric": "stop_metric",
+        "max_trees": "max_trees",
+        "learning_rate": "learning_rate",
+        "max_depth": "depth_xgboost",
+        "subsample": "fraction",
+        "min_child_weight": "nonnegative",
+        "colsample_bytree": "fraction",
+        "reg_lambda": "nonnegative",
+        "reg_alpha": "nonnegative",
+        "gamma": "nonnegative",
+        "seed": "seed",
+        "output": "output_rows"
+      },
+      "defaults": {
+        "event_value": null,
+        "weights": null,
+        "class_weight": "none",
+        "threshold": 0.5,
+        "validation": "random",
+        "validation_share": 0.2,
+        "order_by": null,
+        "split_by": null,
+        "stratify": true,
+        "early_stopping": true,
+        "early_stopping_rounds": 50,
+        "stop_metric": "loss",
+        "max_trees": 1000,
+        "learning_rate": 0.05,
+        "max_depth": 6,
+        "subsample": 0.8,
+        "min_child_weight": 1.0,
+        "colsample_bytree": 0.8,
+        "reg_lambda": 1.0,
+        "reg_alpha": 0.0,
+        "gamma": 0.0,
+        "seed": 1,
+        "output": "results"
+      },
+      "applies": {
+        "event_value": {
+          "task": [
+            "binary"
+          ]
+        },
+        "class_weight": {
+          "task": [
+            "binary",
+            "multiclass"
+          ]
+        },
+        "threshold": {
+          "task": [
+            "binary"
+          ]
+        },
+        "order_by": {
+          "validation": [
+            "time"
+          ]
+        },
+        "split_by": {
+          "validation": [
+            "random"
+          ]
+        },
+        "stratify": {
+          "validation": [
+            "random"
+          ],
+          "task": [
+            "binary",
+            "multiclass"
+          ],
+          "split_by": false
+        },
+        "early_stopping_rounds": {
+          "early_stopping": [
+            true
+          ]
+        }
+      },
+      "requires": [
+        {
+          "key": "event_value",
+          "when": {
+            "task": "binary"
+          },
+          "reason": "binary_needs_event",
+          "message": "a binary task needs the outcome's value whose probability is predicted ('event_value')"
+        },
+        {
+          "key": "order_by",
+          "when": {
+            "validation": "time"
+          },
+          "reason": "time_needs_order",
+          "message": "a validation part in time needs the column of the time ('order_by')"
+        }
+      ],
+      "forbids": [
+        {
+          "key": "stop_metric",
+          "value": "mae",
+          "when": {
+            "task": [
+              "binary",
+              "multiclass"
+            ]
+          },
+          "reason": "mae_needs_regression",
+          "message": "the mean absolute error is a regression's metric: use stop_metric = loss, auc or error"
+        },
+        {
+          "key": "stop_metric",
+          "value": "auc",
+          "when": {
+            "task": [
+              "regression",
+              "multiclass"
+            ]
+          },
+          "reason": "auc_needs_binary",
+          "message": "the AUC is a binary task's metric: use stop_metric = loss (or mae for a regression, error for a multiclass task)"
+        },
+        {
+          "key": "stop_metric",
+          "value": "error",
+          "when": {
+            "task": [
+              "regression"
+            ]
+          },
+          "reason": "error_needs_classes",
+          "message": "the error rate is a classification's metric: use stop_metric = loss or mae"
+        }
+      ],
+      "disjoint": [
+        "outcome",
+        "predictors",
+        "weights",
+        "order_by",
+        "split_by"
+      ],
+      "presets": {},
+      "variants": [
+        {
+          "id": "regression",
+          "when": {
+            "task": [
+              "regression"
+            ]
+          },
+          "sections": {
+            "model": {
+              "levels": null,
+              "texts": [
+                "model",
+                "variant",
+                "formula",
+                "software",
+                "group_version",
+                "rows_from",
+                "note_*",
+                "task",
+                "library",
+                "objective",
+                "stop_metric",
+                "validation",
+                "importance_type"
+              ],
+              "numbers": [
+                "n",
+                "n_missing",
+                "n_train",
+                "n_validation",
+                "n_predictors",
+                "n_categorical",
+                "trees",
+                "best_iteration",
+                "max_trees",
+                "stopped_early",
+                "stopped_by_time",
+                "threads",
+                "shap_rows",
+                "seed",
+                "train_rmse",
+                "train_mae",
+                "train_r_squared",
+                "validation_rmse",
+                "validation_mae",
+                "validation_r_squared",
+                "baseline_rmse",
+                "validation_mean"
+              ]
+            },
+            "importance": {
+              "levels": null,
+              "numbers": [
+                "gain",
+                "gain_share",
+                "mean_abs_shap",
+                "mean_abs_shap_share",
+                "rank",
+                "mean_abs_shap_train",
+                "mean_abs_shap_validation",
+                "missing_share"
+              ],
+              "texts": []
+            },
+            "assumption": {
+              "levels": [
+                "validation_size",
+                "beats_baseline",
+                "overfitting",
+                "trees_limit",
+                "importance_stability",
+                "zero_importance",
+                "leakage"
+              ],
+              "numbers": [
+                "statistic",
+                "df",
+                "df_2",
+                "p_value",
+                "threshold",
+                "value",
+                "count"
+              ],
+              "texts": [
+                "h0",
+                "verdict",
+                "advice",
+                "significance",
+                "rows"
+              ]
+            },
+            "curve": {
+              "levels": [
+                "learning_loss",
+                "learning_stop"
+              ],
+              "numbers": [
+                "y"
+              ],
+              "texts": []
+            },
+            "point": {
+              "levels": [
+                "shap_beeswarm",
+                "observed_predicted",
+                "resid_predicted"
+              ],
+              "numbers": [
+                "low",
+                "mid_low",
+                "mid",
+                "mid_high",
+                "high",
+                "category",
+                "missing",
+                "y"
+              ],
+              "texts": []
+            },
+            "hist": {
+              "levels": [
+                "residual"
+              ],
+              "numbers": [
+                "count"
+              ],
+              "texts": []
+            }
+          },
+          "charts": [
+            {
+              "id": "importance_gain",
+              "under": null
+            },
+            {
+              "id": "importance_shap",
+              "under": "importance_stability"
+            },
+            {
+              "id": "shap_beeswarm",
+              "under": null
+            },
+            {
+              "id": "learning_loss",
+              "under": "overfitting"
+            },
+            {
+              "id": "learning_stop",
+              "under": "trees_limit"
+            },
+            {
+              "id": "observed_predicted",
+              "under": null
+            },
+            {
+              "id": "resid_predicted",
+              "under": null
+            },
+            {
+              "id": "residual",
+              "under": null
+            }
+          ],
+          "outputs": {
+            "rows": [
+              "pred_value",
+              "pred_residual",
+              "pred_part"
+            ]
+          }
+        },
+        {
+          "id": "binary",
+          "when": {
+            "task": [
+              "binary"
+            ]
+          },
+          "sections": {
+            "model": {
+              "levels": null,
+              "texts": [
+                "model",
+                "variant",
+                "formula",
+                "software",
+                "group_version",
+                "rows_from",
+                "note_*",
+                "task",
+                "library",
+                "objective",
+                "stop_metric",
+                "validation",
+                "importance_type",
+                "event_value"
+              ],
+              "numbers": [
+                "n",
+                "n_missing",
+                "n_train",
+                "n_validation",
+                "n_predictors",
+                "n_categorical",
+                "trees",
+                "best_iteration",
+                "max_trees",
+                "stopped_early",
+                "stopped_by_time",
+                "threads",
+                "shap_rows",
+                "seed",
+                "events",
+                "validation_events",
+                "train_auc",
+                "validation_auc",
+                "train_logloss",
+                "validation_logloss",
+                "baseline_logloss",
+                "train_brier",
+                "validation_brier",
+                "threshold",
+                "validation_accuracy",
+                "validation_sensitivity",
+                "validation_specificity",
+                "validation_precision",
+                "validation_f1"
+              ]
+            },
+            "importance": {
+              "levels": null,
+              "numbers": [
+                "gain",
+                "gain_share",
+                "mean_abs_shap",
+                "mean_abs_shap_share",
+                "rank",
+                "mean_abs_shap_train",
+                "mean_abs_shap_validation",
+                "missing_share"
+              ],
+              "texts": []
+            },
+            "assumption": {
+              "levels": [
+                "validation_size",
+                "beats_baseline",
+                "overfitting",
+                "trees_limit",
+                "importance_stability",
+                "zero_importance",
+                "leakage",
+                "class_imbalance",
+                "calibration",
+                "calibration_slope"
+              ],
+              "numbers": [
+                "statistic",
+                "df",
+                "df_2",
+                "p_value",
+                "threshold",
+                "value",
+                "count"
+              ],
+              "texts": [
+                "h0",
+                "verdict",
+                "advice",
+                "significance",
+                "rows"
+              ]
+            },
+            "curve": {
+              "levels": [
+                "learning_loss",
+                "learning_stop",
+                "roc"
+              ],
+              "numbers": [
+                "y"
+              ],
+              "texts": []
+            },
+            "point": {
+              "levels": [
+                "shap_beeswarm",
+                "calibration"
+              ],
+              "numbers": [
+                "low",
+                "mid_low",
+                "mid",
+                "mid_high",
+                "high",
+                "category",
+                "missing",
+                "y"
+              ],
+              "texts": []
+            },
+            "hist": {
+              "levels": [
+                "probability"
+              ],
+              "numbers": [
+                "count"
+              ],
+              "texts": []
+            },
+            "cell": {
+              "levels": null,
+              "numbers": [
+                "observed"
+              ],
+              "texts": []
+            }
+          },
+          "charts": [
+            {
+              "id": "importance_gain",
+              "under": null
+            },
+            {
+              "id": "importance_shap",
+              "under": "importance_stability"
+            },
+            {
+              "id": "shap_beeswarm",
+              "under": null
+            },
+            {
+              "id": "learning_loss",
+              "under": "overfitting"
+            },
+            {
+              "id": "learning_stop",
+              "under": "trees_limit"
+            },
+            {
+              "id": "roc",
+              "under": null
+            },
+            {
+              "id": "calibration",
+              "under": "calibration"
+            },
+            {
+              "id": "probability",
+              "under": null
+            },
+            {
+              "id": "confusion",
+              "under": null
+            }
+          ],
+          "outputs": {
+            "rows": [
+              "pred_prob",
+              "pred_class",
+              "pred_part"
+            ]
+          }
+        },
+        {
+          "id": "multiclass",
+          "when": {
+            "task": [
+              "multiclass"
+            ]
+          },
+          "sections": {
+            "model": {
+              "levels": null,
+              "texts": [
+                "model",
+                "variant",
+                "formula",
+                "software",
+                "group_version",
+                "rows_from",
+                "note_*",
+                "task",
+                "library",
+                "objective",
+                "stop_metric",
+                "validation",
+                "importance_type"
+              ],
+              "numbers": [
+                "n",
+                "n_missing",
+                "n_train",
+                "n_validation",
+                "n_predictors",
+                "n_categorical",
+                "trees",
+                "best_iteration",
+                "max_trees",
+                "stopped_early",
+                "stopped_by_time",
+                "threads",
+                "shap_rows",
+                "seed",
+                "n_classes",
+                "train_mlogloss",
+                "validation_mlogloss",
+                "baseline_mlogloss",
+                "train_accuracy",
+                "validation_accuracy",
+                "validation_balanced_accuracy",
+                "validation_macro_auc",
+                "validation_macro_f1"
+              ]
+            },
+            "importance": {
+              "levels": null,
+              "numbers": [
+                "gain",
+                "gain_share",
+                "mean_abs_shap",
+                "mean_abs_shap_share",
+                "rank",
+                "mean_abs_shap_train",
+                "mean_abs_shap_validation",
+                "missing_share"
+              ],
+              "texts": []
+            },
+            "class": {
+              "levels": null,
+              "numbers": [
+                "support",
+                "share_train",
+                "share_validation",
+                "precision",
+                "recall",
+                "f1",
+                "auc_ovr"
+              ],
+              "texts": []
+            },
+            "assumption": {
+              "levels": [
+                "validation_size",
+                "beats_baseline",
+                "overfitting",
+                "trees_limit",
+                "importance_stability",
+                "zero_importance",
+                "leakage",
+                "class_imbalance"
+              ],
+              "numbers": [
+                "statistic",
+                "df",
+                "df_2",
+                "p_value",
+                "threshold",
+                "value",
+                "count"
+              ],
+              "texts": [
+                "h0",
+                "verdict",
+                "advice",
+                "significance",
+                "rows"
+              ]
+            },
+            "curve": {
+              "levels": [
+                "learning_loss",
+                "learning_stop",
+                "roc_ovr"
+              ],
+              "numbers": [
+                "y"
+              ],
+              "texts": []
+            },
+            "cell": {
+              "levels": null,
+              "numbers": [
+                "observed"
+              ],
+              "texts": []
+            }
+          },
+          "charts": [
+            {
+              "id": "importance_gain",
+              "under": null
+            },
+            {
+              "id": "importance_shap",
+              "under": "importance_stability"
+            },
+            {
+              "id": "learning_loss",
+              "under": "overfitting"
+            },
+            {
+              "id": "learning_stop",
+              "under": "trees_limit"
+            },
+            {
+              "id": "confusion",
+              "under": null
+            },
+            {
+              "id": "roc_ovr",
+              "under": null
+            }
+          ],
+          "outputs": {
+            "rows": [
+              "pred_class",
+              "pred_prob",
+              "pred_prob_*",
+              "pred_part"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "catboost",
+      "group": "boosting",
+      "family": "boosting",
+      "label": "models.catboost.name",
+      "needs": {
+        "task": "task_boosting",
+        "outcome": "column",
+        "predictors": "predictors"
+      },
+      "takes": {
+        "event_value": "outcome_level",
+        "weights": "number_column",
+        "class_weight": "class_weight",
+        "threshold": "proportion",
+        "validation": "validation",
+        "validation_share": "validation_share",
+        "order_by": "order_column",
+        "split_by": "column",
+        "stratify": "boolean",
+        "early_stopping": "boolean",
+        "early_stopping_rounds": "rounds",
+        "stop_metric": "stop_metric",
+        "max_trees": "max_trees",
+        "learning_rate": "learning_rate",
+        "max_depth": "depth_catboost",
+        "subsample": "fraction",
+        "l2_leaf_reg": "nonnegative",
+        "rsm": "fraction",
+        "random_strength": "strength",
+        "seed": "seed",
+        "output": "output_rows"
+      },
+      "defaults": {
+        "event_value": null,
+        "weights": null,
+        "class_weight": "none",
+        "threshold": 0.5,
+        "validation": "random",
+        "validation_share": 0.2,
+        "order_by": null,
+        "split_by": null,
+        "stratify": true,
+        "early_stopping": true,
+        "early_stopping_rounds": 50,
+        "stop_metric": "loss",
+        "max_trees": 1000,
+        "learning_rate": 0.05,
+        "max_depth": 6,
+        "subsample": 0.8,
+        "l2_leaf_reg": 3.0,
+        "rsm": 1.0,
+        "random_strength": 1.0,
+        "seed": 1,
+        "output": "results"
+      },
+      "applies": {
+        "event_value": {
+          "task": [
+            "binary"
+          ]
+        },
+        "class_weight": {
+          "task": [
+            "binary",
+            "multiclass"
+          ]
+        },
+        "threshold": {
+          "task": [
+            "binary"
+          ]
+        },
+        "order_by": {
+          "validation": [
+            "time"
+          ]
+        },
+        "split_by": {
+          "validation": [
+            "random"
+          ]
+        },
+        "stratify": {
+          "validation": [
+            "random"
+          ],
+          "task": [
+            "binary",
+            "multiclass"
+          ],
+          "split_by": false
+        },
+        "early_stopping_rounds": {
+          "early_stopping": [
+            true
+          ]
+        }
+      },
+      "requires": [
+        {
+          "key": "event_value",
+          "when": {
+            "task": "binary"
+          },
+          "reason": "binary_needs_event",
+          "message": "a binary task needs the outcome's value whose probability is predicted ('event_value')"
+        },
+        {
+          "key": "order_by",
+          "when": {
+            "validation": "time"
+          },
+          "reason": "time_needs_order",
+          "message": "a validation part in time needs the column of the time ('order_by')"
+        }
+      ],
+      "forbids": [
+        {
+          "key": "stop_metric",
+          "value": "mae",
+          "when": {
+            "task": [
+              "binary",
+              "multiclass"
+            ]
+          },
+          "reason": "mae_needs_regression",
+          "message": "the mean absolute error is a regression's metric: use stop_metric = loss, auc or error"
+        },
+        {
+          "key": "stop_metric",
+          "value": "auc",
+          "when": {
+            "task": [
+              "regression",
+              "multiclass"
+            ]
+          },
+          "reason": "auc_needs_binary",
+          "message": "the AUC is a binary task's metric: use stop_metric = loss (or mae for a regression, error for a multiclass task)"
+        },
+        {
+          "key": "stop_metric",
+          "value": "error",
+          "when": {
+            "task": [
+              "regression"
+            ]
+          },
+          "reason": "error_needs_classes",
+          "message": "the error rate is a classification's metric: use stop_metric = loss or mae"
+        }
+      ],
+      "disjoint": [
+        "outcome",
+        "predictors",
+        "weights",
+        "order_by",
+        "split_by"
+      ],
+      "presets": {},
+      "variants": [
+        {
+          "id": "regression",
+          "when": {
+            "task": [
+              "regression"
+            ]
+          },
+          "sections": {
+            "model": {
+              "levels": null,
+              "texts": [
+                "model",
+                "variant",
+                "formula",
+                "software",
+                "group_version",
+                "rows_from",
+                "note_*",
+                "task",
+                "library",
+                "objective",
+                "stop_metric",
+                "validation",
+                "importance_type"
+              ],
+              "numbers": [
+                "n",
+                "n_missing",
+                "n_train",
+                "n_validation",
+                "n_predictors",
+                "n_categorical",
+                "trees",
+                "best_iteration",
+                "max_trees",
+                "stopped_early",
+                "stopped_by_time",
+                "threads",
+                "shap_rows",
+                "seed",
+                "train_rmse",
+                "train_mae",
+                "train_r_squared",
+                "validation_rmse",
+                "validation_mae",
+                "validation_r_squared",
+                "baseline_rmse",
+                "validation_mean"
+              ]
+            },
+            "importance": {
+              "levels": null,
+              "numbers": [
+                "gain",
+                "gain_share",
+                "mean_abs_shap",
+                "mean_abs_shap_share",
+                "rank",
+                "mean_abs_shap_train",
+                "mean_abs_shap_validation",
+                "missing_share"
+              ],
+              "texts": []
+            },
+            "assumption": {
+              "levels": [
+                "validation_size",
+                "beats_baseline",
+                "overfitting",
+                "trees_limit",
+                "importance_stability",
+                "zero_importance",
+                "leakage"
+              ],
+              "numbers": [
+                "statistic",
+                "df",
+                "df_2",
+                "p_value",
+                "threshold",
+                "value",
+                "count"
+              ],
+              "texts": [
+                "h0",
+                "verdict",
+                "advice",
+                "significance",
+                "rows"
+              ]
+            },
+            "curve": {
+              "levels": [
+                "learning_loss",
+                "learning_stop"
+              ],
+              "numbers": [
+                "y"
+              ],
+              "texts": []
+            },
+            "point": {
+              "levels": [
+                "shap_beeswarm",
+                "observed_predicted",
+                "resid_predicted"
+              ],
+              "numbers": [
+                "low",
+                "mid_low",
+                "mid",
+                "mid_high",
+                "high",
+                "category",
+                "missing",
+                "y"
+              ],
+              "texts": []
+            },
+            "hist": {
+              "levels": [
+                "residual"
+              ],
+              "numbers": [
+                "count"
+              ],
+              "texts": []
+            }
+          },
+          "charts": [
+            {
+              "id": "importance_gain",
+              "under": null
+            },
+            {
+              "id": "importance_shap",
+              "under": "importance_stability"
+            },
+            {
+              "id": "shap_beeswarm",
+              "under": null
+            },
+            {
+              "id": "learning_loss",
+              "under": "overfitting"
+            },
+            {
+              "id": "learning_stop",
+              "under": "trees_limit"
+            },
+            {
+              "id": "observed_predicted",
+              "under": null
+            },
+            {
+              "id": "resid_predicted",
+              "under": null
+            },
+            {
+              "id": "residual",
+              "under": null
+            }
+          ],
+          "outputs": {
+            "rows": [
+              "pred_value",
+              "pred_residual",
+              "pred_part"
+            ]
+          }
+        },
+        {
+          "id": "binary",
+          "when": {
+            "task": [
+              "binary"
+            ]
+          },
+          "sections": {
+            "model": {
+              "levels": null,
+              "texts": [
+                "model",
+                "variant",
+                "formula",
+                "software",
+                "group_version",
+                "rows_from",
+                "note_*",
+                "task",
+                "library",
+                "objective",
+                "stop_metric",
+                "validation",
+                "importance_type",
+                "event_value"
+              ],
+              "numbers": [
+                "n",
+                "n_missing",
+                "n_train",
+                "n_validation",
+                "n_predictors",
+                "n_categorical",
+                "trees",
+                "best_iteration",
+                "max_trees",
+                "stopped_early",
+                "stopped_by_time",
+                "threads",
+                "shap_rows",
+                "seed",
+                "events",
+                "validation_events",
+                "train_auc",
+                "validation_auc",
+                "train_logloss",
+                "validation_logloss",
+                "baseline_logloss",
+                "train_brier",
+                "validation_brier",
+                "threshold",
+                "validation_accuracy",
+                "validation_sensitivity",
+                "validation_specificity",
+                "validation_precision",
+                "validation_f1"
+              ]
+            },
+            "importance": {
+              "levels": null,
+              "numbers": [
+                "gain",
+                "gain_share",
+                "mean_abs_shap",
+                "mean_abs_shap_share",
+                "rank",
+                "mean_abs_shap_train",
+                "mean_abs_shap_validation",
+                "missing_share"
+              ],
+              "texts": []
+            },
+            "assumption": {
+              "levels": [
+                "validation_size",
+                "beats_baseline",
+                "overfitting",
+                "trees_limit",
+                "importance_stability",
+                "zero_importance",
+                "leakage",
+                "class_imbalance",
+                "calibration",
+                "calibration_slope"
+              ],
+              "numbers": [
+                "statistic",
+                "df",
+                "df_2",
+                "p_value",
+                "threshold",
+                "value",
+                "count"
+              ],
+              "texts": [
+                "h0",
+                "verdict",
+                "advice",
+                "significance",
+                "rows"
+              ]
+            },
+            "curve": {
+              "levels": [
+                "learning_loss",
+                "learning_stop",
+                "roc"
+              ],
+              "numbers": [
+                "y"
+              ],
+              "texts": []
+            },
+            "point": {
+              "levels": [
+                "shap_beeswarm",
+                "calibration"
+              ],
+              "numbers": [
+                "low",
+                "mid_low",
+                "mid",
+                "mid_high",
+                "high",
+                "category",
+                "missing",
+                "y"
+              ],
+              "texts": []
+            },
+            "hist": {
+              "levels": [
+                "probability"
+              ],
+              "numbers": [
+                "count"
+              ],
+              "texts": []
+            },
+            "cell": {
+              "levels": null,
+              "numbers": [
+                "observed"
+              ],
+              "texts": []
+            }
+          },
+          "charts": [
+            {
+              "id": "importance_gain",
+              "under": null
+            },
+            {
+              "id": "importance_shap",
+              "under": "importance_stability"
+            },
+            {
+              "id": "shap_beeswarm",
+              "under": null
+            },
+            {
+              "id": "learning_loss",
+              "under": "overfitting"
+            },
+            {
+              "id": "learning_stop",
+              "under": "trees_limit"
+            },
+            {
+              "id": "roc",
+              "under": null
+            },
+            {
+              "id": "calibration",
+              "under": "calibration"
+            },
+            {
+              "id": "probability",
+              "under": null
+            },
+            {
+              "id": "confusion",
+              "under": null
+            }
+          ],
+          "outputs": {
+            "rows": [
+              "pred_prob",
+              "pred_class",
+              "pred_part"
+            ]
+          }
+        },
+        {
+          "id": "multiclass",
+          "when": {
+            "task": [
+              "multiclass"
+            ]
+          },
+          "sections": {
+            "model": {
+              "levels": null,
+              "texts": [
+                "model",
+                "variant",
+                "formula",
+                "software",
+                "group_version",
+                "rows_from",
+                "note_*",
+                "task",
+                "library",
+                "objective",
+                "stop_metric",
+                "validation",
+                "importance_type"
+              ],
+              "numbers": [
+                "n",
+                "n_missing",
+                "n_train",
+                "n_validation",
+                "n_predictors",
+                "n_categorical",
+                "trees",
+                "best_iteration",
+                "max_trees",
+                "stopped_early",
+                "stopped_by_time",
+                "threads",
+                "shap_rows",
+                "seed",
+                "n_classes",
+                "train_mlogloss",
+                "validation_mlogloss",
+                "baseline_mlogloss",
+                "train_accuracy",
+                "validation_accuracy",
+                "validation_balanced_accuracy",
+                "validation_macro_auc",
+                "validation_macro_f1"
+              ]
+            },
+            "importance": {
+              "levels": null,
+              "numbers": [
+                "gain",
+                "gain_share",
+                "mean_abs_shap",
+                "mean_abs_shap_share",
+                "rank",
+                "mean_abs_shap_train",
+                "mean_abs_shap_validation",
+                "missing_share"
+              ],
+              "texts": []
+            },
+            "class": {
+              "levels": null,
+              "numbers": [
+                "support",
+                "share_train",
+                "share_validation",
+                "precision",
+                "recall",
+                "f1",
+                "auc_ovr"
+              ],
+              "texts": []
+            },
+            "assumption": {
+              "levels": [
+                "validation_size",
+                "beats_baseline",
+                "overfitting",
+                "trees_limit",
+                "importance_stability",
+                "zero_importance",
+                "leakage",
+                "class_imbalance"
+              ],
+              "numbers": [
+                "statistic",
+                "df",
+                "df_2",
+                "p_value",
+                "threshold",
+                "value",
+                "count"
+              ],
+              "texts": [
+                "h0",
+                "verdict",
+                "advice",
+                "significance",
+                "rows"
+              ]
+            },
+            "curve": {
+              "levels": [
+                "learning_loss",
+                "learning_stop",
+                "roc_ovr"
+              ],
+              "numbers": [
+                "y"
+              ],
+              "texts": []
+            },
+            "cell": {
+              "levels": null,
+              "numbers": [
+                "observed"
+              ],
+              "texts": []
+            }
+          },
+          "charts": [
+            {
+              "id": "importance_gain",
+              "under": null
+            },
+            {
+              "id": "importance_shap",
+              "under": "importance_stability"
+            },
+            {
+              "id": "learning_loss",
+              "under": "overfitting"
+            },
+            {
+              "id": "learning_stop",
+              "under": "trees_limit"
+            },
+            {
+              "id": "confusion",
+              "under": null
+            },
+            {
+              "id": "roc_ovr",
+              "under": null
+            }
+          ],
+          "outputs": {
+            "rows": [
+              "pred_class",
+              "pred_prob",
+              "pred_prob_*",
+              "pred_part"
+            ]
+          }
+        }
+      ]
     }
   ],
   "predict": {
@@ -2499,7 +3995,9 @@
         "arima"
       ],
       "threshold": [
-        "logistic"
+        "logistic",
+        "xgboost:binary",
+        "catboost:binary"
       ],
       "horizon": [
         "arima"
@@ -2552,6 +4050,42 @@
           "upper_80",
           "lower",
           "upper"
+        ]
+      },
+      "xgboost:regression": {
+        "always": [
+          "prediction"
+        ]
+      },
+      "xgboost:binary": {
+        "always": [
+          "prediction",
+          "prediction_class"
+        ]
+      },
+      "xgboost:multiclass": {
+        "always": [
+          "prediction",
+          "prediction_probability",
+          "prediction_prob_*"
+        ]
+      },
+      "catboost:regression": {
+        "always": [
+          "prediction"
+        ]
+      },
+      "catboost:binary": {
+        "always": [
+          "prediction",
+          "prediction_class"
+        ]
+      },
+      "catboost:multiclass": {
+        "always": [
+          "prediction",
+          "prediction_probability",
+          "prediction_prob_*"
         ]
       }
     }

@@ -339,7 +339,7 @@ func TestAVersionThatCannotBeAppliedIsRefusedBeforeAnyRun(t *testing.T) {
 		"no files":                  {`"registeredModel": "nofiles", "version": "1"`, "the version 1 of «nofiles» has no MLmodel among its files"},
 		"a newer card format":       {`"registeredModel": "newer", "version": "1"`, "has the format version 2, which this version of Tabularia does not read"},
 		"an option of another model": {`"registeredModel": "good", "version": "` + good + `", "params": {"threshold": 0.4}`,
-			"Predict's option 'threshold' applies to logistic, not to linear"},
+			"Predict's option 'threshold' applies to logistic, xgboost (binary), catboost (binary), not to linear"},
 		"no version chosen": {`"registeredModel": "good", "version": ""`, "choose the model's version (or its latest version)"},
 		"not a version":     {`"registeredModel": "good", "version": "v1"`, "«v1» is not a version: a number, or «latest»"},
 	} {

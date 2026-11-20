@@ -35,16 +35,44 @@ def test_the_snapshot_is_what_the_catalogue_says():
 
 def test_groups_and_models_point_at_each_other():
     snap = catalog.snapshot()
-    assert [g["id"] for g in snap["groups"]] == ["regression", "survival", "timeseries"]
-    assert [m["id"] for m in snap["models"]] == ["linear", "logistic", "kaplan_meier", "cox", "arima"]
+    assert [g["id"] for g in snap["groups"]] == ["regression", "survival", "timeseries", "boosting"]
+    assert [m["id"] for m in snap["models"]] == ["linear", "logistic", "kaplan_meier", "cox", "arima", "xgboost", "catboost"]
     listed = [m for g in catalog.GROUPS.values() for m in g["models"]]
     assert sorted(listed) == sorted(catalog.MODELS) and len(listed) == len(set(listed))
     for model, spec in catalog.MODELS.items():
         assert model in catalog.GROUPS[spec["group"]]["models"], model
-        assert catalog.GROUPS[spec["group"]]["language"] == "r"
-    assert set(catalog.PREDICT["columns"]) == set(catalog.MODELS)
+        assert catalog.GROUPS[spec["group"]]["language"] == ("python" if spec["group"] == "boosting" else "r")
+    # Predict's columns and options name a model, or `model:variant` (the card's variant)
+    variants = {f"{m}:{v['id']}" for m, spec in catalog.MODELS.items() for v in spec["variants"]}
+    keyed = set(catalog.PREDICT["columns"])
+    assert keyed <= set(catalog.MODELS) | variants
+    for model, spec in catalog.MODELS.items():
+        assert model in keyed or all(f"{model}:{v['id']}" in keyed for v in spec["variants"]), model
     for key, models in catalog.PREDICT["applies_to"].items():
-        assert key in catalog.PREDICT["takes"] and set(models) <= set(catalog.MODELS), key
+        assert key in catalog.PREDICT["takes"] and set(models) <= set(catalog.MODELS) | variants, key
+
+
+def test_the_boosting_nodes_take_the_same_keys_but_for_their_own_hyperparameters():
+    xgb, cat = catalog.MODELS["xgboost"], catalog.MODELS["catboost"]
+    own = {"xgboost": ["min_child_weight", "colsample_bytree", "reg_lambda", "reg_alpha", "gamma"],
+           "catboost": ["l2_leaf_reg", "rsm", "random_strength"]}
+    shared = [k for k in xgb["takes"] if k not in own["xgboost"]]
+    assert shared == [k for k in cat["takes"] if k not in own["catboost"]]
+    assert list(xgb["needs"]) == ["task", "outcome", "predictors"] and list(xgb["takes"])[-2:] == ["seed", "output"]
+    assert xgb["takes"]["max_depth"] == "depth_xgboost" and cat["takes"]["max_depth"] == "depth_catboost"
+    for spec in (xgb, cat):
+        assert [v["id"] for v in spec["variants"]] == ["regression", "binary", "multiclass"]
+        for v in spec["variants"]:
+            assert {"importance", "assumption"} <= set(v["sections"])
+            assert ("cell" in v["sections"]) == (v["id"] != "regression") and ("class" in v["sections"]) == (v["id"] == "multiclass")
+    base = {"outcome": "y", "predictors": ["x"]}
+    assert catalog.check_params("xgboost", {**base, "task": "regression"})["max_depth"] == 6
+    binary = catalog.check_params("catboost", {**base, "task": "binary", "event_value": "yes"})
+    assert binary["threshold"] == 0.5 and binary["stratify"] is True and "order_by" not in binary
+    assert "early_stopping_rounds" not in catalog.check_params("xgboost", {**base, "task": "regression", "early_stopping": False})
+    for limit in ("max_predictors", "max_levels_trees", "max_classes", "max_cells", "max_shap_rows", "shap_cost_budget",
+                  "max_model_file_bytes", "max_importance_bars", "max_beeswarm_predictors", "max_roc_classes"):
+        assert catalog.LIMITS[limit] > 0, limit
 
 
 def test_every_kind_has_a_control_and_only_the_control_s_options():

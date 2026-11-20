@@ -66,12 +66,12 @@ func TestTheSharedCases(t *testing.T) {
 }
 
 func TestGroupsModelsAndVariants(t *testing.T) {
-	if got := Models(); !reflect.DeepEqual(got, []string{"linear", "logistic", "kaplan_meier", "cox", "arima"}) {
+	if got := Models(); !reflect.DeepEqual(got, []string{"linear", "logistic", "kaplan_meier", "cox", "arima", "xgboost", "catboost"}) {
 		t.Fatalf("models: %v", got)
 	}
 	groups := map[string]string{}
 	for _, g := range Groups() {
-		if g.Language != "r" {
+		if want := map[bool]string{true: "python", false: "r"}[g.ID == "boosting"]; g.Language != want {
 			t.Errorf("%s: language %q", g.ID, g.Language)
 		}
 		for _, m := range g.Models {
@@ -86,7 +86,8 @@ func TestGroupsModelsAndVariants(t *testing.T) {
 	if GroupOf("nope") != "" || KindOf("linear", "penalty") != "penalty" || KindOf("linear", "nope") != "" {
 		t.Error("GroupOf or KindOf")
 	}
-	if Limit("max_chart_points") != 2000 || Limit("max_terms") != 200 {
+	if Limit("max_chart_points") != 2000 || Limit("max_terms") != 200 || Limit("max_cells") != 50_000_000 ||
+		Limit("shap_cost_budget") != 20_000_000_000 || Limit("max_model_file_bytes") != 64<<20 {
 		t.Error("limits")
 	}
 	cases := []struct {

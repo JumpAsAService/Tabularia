@@ -32,7 +32,11 @@ from tests.test_reports_render import chart_service  # noqa: F401 — the fake c
 
 NOW = datetime(2026, 11, 19, 23, 30, tzinfo=timezone.utc)
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "models"
-CASES = sorted(p.stem for p in FIXTURES.glob("*-*.json"))
+# The boosting group's layouts are lot X4's (docs/specs/statistical-models.md, «The boosting group's
+# lots»): its fixtures exist (results.py checks them), its report not yet. X4 takes this away.
+PENDING = {"xgboost", "catboost"}
+CASES = sorted(p.stem for p in FIXTURES.glob("*-*.json") if p.stem.split("-")[0] not in PENDING)
+DRAWN = {m: spec for m, spec in catalog.MODELS.items() if m not in PENDING}
 
 
 def fixture(case: str) -> tuple[str, dict, list[dict]]:
@@ -78,15 +82,15 @@ def draw(tmp_path, chart_service, monkeypatch, case, fmt="pdf", locale="en", sam
 
 # ── the catalogue, the fixtures, the words ──────────────────────────────────
 def test_every_model_and_variant_has_a_layout_and_a_fixture():
-    assert set(layouts.LAYOUTS) == set(catalog.MODELS)
-    assert set(CASES) == {f"{m}-{v['id']}" for m, spec in catalog.MODELS.items() for v in spec["variants"]}
+    assert set(layouts.LAYOUTS) == set(DRAWN)
+    assert set(CASES) == {f"{m}-{v['id']}" for m, spec in DRAWN.items() for v in spec["variants"]}
     for case in CASES:  # each fixture is what its variant writes (results.py)
         model, params, table = read_fixture(FIXTURES / f"{case}.json")
         assert f"{model}-{catalog.variant(model, params)}" == case
 
 
 def test_the_words_are_complete_in_the_five_languages():
-    for name in ("common", "penalized", *catalog.MODELS):
+    for name in ("common", "penalized", *DRAWN):
         words = common._file(name)
         assert tuple(words) == LOCALES, name
         english = _keys(words["en"])

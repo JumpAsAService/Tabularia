@@ -2,20 +2,20 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://tabularia.org/schemas/model-card/1",
   "title": "Tabularia model card",
-  "description": "model.json: everything needed to apply a fitted model to new rows, as data, never as code (docs/specs/statistical-models.md, «The model card»). Written by a group's runner (common/R/card.R) in fit mode; read by Tabularia to log and register the model, and by the runner in predict mode. A card is at most 1 MiB: vcov is written up to 200 terms, Cox's baseline hazard at most 5,000 times per stratum.",
+  "description": "model.json: everything needed to apply a fitted model to new rows, as data, never as code (docs/specs/statistical-models.md, «The model card»). Written by a group's runner (common/R/card.R, common/py/tab_card.py) in fit mode; read by Tabularia to log and register the model, and by the runner in predict mode. A card is at most 1 MiB: vcov is written up to 200 terms, Cox's baseline hazard at most 5,000 times per stratum.",
   "type": "object",
   "required": ["format", "format_version", "model", "variant", "group", "group_version", "recipe_hash", "runner_hash",
                "software", "created_at", "params", "inputs"],
   "properties": {
     "format": {"const": "tabularia-model"},
     "format_version": {"const": 1},
-    "model": {"enum": ["linear", "logistic", "kaplan_meier", "cox", "arima"]},
+    "model": {"enum": ["linear", "logistic", "kaplan_meier", "cox", "arima", "xgboost", "catboost"]},
     "variant": {"type": "string", "minLength": 1},
-    "group": {"enum": ["regression", "survival", "timeseries"]},
+    "group": {"enum": ["regression", "survival", "timeseries", "boosting"]},
     "group_version": {"type": ["integer", "string"]},
     "recipe_hash": {"type": "string"},
     "runner_hash": {"type": "string"},
-    "software": {"type": "object", "required": ["R"], "additionalProperties": {"type": "string"}},
+    "software": {"type": "object", "description": "the language (R or Python) and the packages, with their versions", "minProperties": 1, "additionalProperties": {"type": "string"}},
     "created_at": {"type": "string", "description": "UTC, ISO 8601"},
     "params": {"type": "object", "description": "the node's parameters, as the catalogue's check answered them"},
     "formula": {"type": "string", "description": "in symbols, with the columns' names: for people, never parsed"},
@@ -36,10 +36,10 @@
         "properties": {
           "name": {"type": "string", "minLength": 1},
           "type": {"enum": ["number", "category", "time"]},
-          "levels": {"type": "array", "items": {"type": "string"}, "description": "a category's levels, the reference first"},
+          "levels": {"type": "array", "items": {"type": "string"}, "description": "a category's levels: a regression's with the reference first; a boosting model's in text order, in the order of its codes"},
           "reference": {"type": "string"}
         },
-        "allOf": [{"if": {"properties": {"type": {"const": "category"}}}, "then": {"required": ["levels", "reference"]}}]
+        "allOf": [{"if": {"properties": {"type": {"const": "category"}}}, "then": {"required": ["levels"]}}]
       }
     },
     "terms": {
@@ -136,6 +136,35 @@
         "exog": {"type": "array", "items": {"type": "string"}},
         "last": {"type": "object", "description": "the last observations, residuals and times the filter needs to forecast"}
       }
+    },
+    "boosting": {
+      "type": "object",
+      "description": "a boosting model's: the library, the task, the classes, and the model file beside the card (XGBoost's JSON, CatBoost's cbm: data the library parses, never code), tied to the card by its sha256",
+      "required": ["library", "library_version", "task", "objective", "classes", "event_value", "threshold", "trees", "best_iteration",
+                   "threads", "missing_level", "model_file"],
+      "properties": {
+        "library": {"enum": ["xgboost", "catboost"]},
+        "library_version": {"type": "string"},
+        "task": {"enum": ["regression", "binary", "multiclass"]},
+        "objective": {"type": "string", "description": "the library's name of the loss: binary:logistic, Logloss…"},
+        "classes": {"type": "array", "items": {"type": "string"}, "description": "the outcome's labels in text order, the class index 0…k − 1 (empty for a regression)"},
+        "event_value": {"type": ["string", "null"], "description": "binary: the class whose probability is predicted"},
+        "threshold": {"type": ["number", "null"], "exclusiveMinimum": 0, "exclusiveMaximum": 1},
+        "trees": {"type": "integer", "minimum": 0, "description": "the boosting rounds kept"},
+        "best_iteration": {"type": "integer", "minimum": 0, "description": "from 0"},
+        "threads": {"type": "integer", "minimum": 1},
+        "missing_level": {"type": ["string", "null"], "description": "CatBoost: the text a missing category becomes"},
+        "model_file": {
+          "type": "object",
+          "required": ["name", "format", "bytes", "sha256"],
+          "properties": {
+            "name": {"enum": ["xgboost.json", "catboost.cbm"]},
+            "format": {"enum": ["xgboost-json", "catboost-cbm"]},
+            "bytes": {"type": "integer", "minimum": 1, "maximum": 67108864},
+            "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+          }
+        }
+      }
     }
   },
   "allOf": [
@@ -147,6 +176,10 @@
     {"if": {"properties": {"model": {"const": "logistic"}}}, "then": {"required": ["threshold", "outcome"]}},
     {"if": {"properties": {"model": {"const": "cox"}}}, "then": {"required": ["cox", "outcome"]}},
     {"if": {"properties": {"model": {"const": "kaplan_meier"}}}, "then": {"required": ["kaplan_meier", "outcome"]}},
-    {"if": {"properties": {"model": {"const": "arima"}}}, "then": {"required": ["arima"]}}
+    {"if": {"properties": {"model": {"const": "arima"}}}, "then": {"required": ["arima"]}},
+    {"if": {"properties": {"group": {"const": "boosting"}}, "required": ["group"]},
+     "then": {"required": ["boosting"], "properties": {"software": {"required": ["Python"]}}},
+     "else": {"properties": {"software": {"required": ["R"]},
+                             "inputs": {"items": {"if": {"properties": {"type": {"const": "category"}}}, "then": {"required": ["reference"]}}}}}}
   ]
 }

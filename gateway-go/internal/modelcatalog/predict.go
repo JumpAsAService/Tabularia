@@ -46,11 +46,17 @@ func HasVariant(model, variant string) bool {
 	return false
 }
 
-// CheckPredict reads a Predict node's options for the model its version holds: a key Predict
-// does not take is refused, as one that does not apply to that model; a value is read by its
-// kind. The answer holds only what was given (a null, an empty list or false is not given):
-// the runner's defaults are the card's.
-func CheckPredict(model string, params map[string]any) (map[string]any, error) {
+// appliesTo says whether a list of `applies_to` names the model, or the model's variant as
+// `model:variant` (the boosting models' threshold is the binary variant's).
+func appliesTo(list []string, model, variant string) bool {
+	return contains(list, model) || variant != "" && contains(list, model+":"+variant)
+}
+
+// CheckPredict reads a Predict node's options for the model (and the variant) its version
+// holds: a key Predict does not take is refused, as one that does not apply to that model; a
+// value is read by its kind. The answer holds only what was given (a null, an empty list or
+// false is not given): the runner's defaults are the card's.
+func CheckPredict(model, variant string, params map[string]any) (map[string]any, error) {
 	if _, ok := data.byID[model]; !ok {
 		return nil, &Error{Message: fmt.Sprintf("there is no model '%s' (the models: %s)", model, strings.Join(Models(), ", "))}
 	}
@@ -77,9 +83,17 @@ func CheckPredict(model string, params map[string]any) (map[string]any, error) {
 		if list, isList := v.([]any); isList && len(list) == 0 {
 			continue
 		}
-		if !contains(predictData.AppliesTo[k], model) {
+		if !appliesTo(predictData.AppliesTo[k], model, variant) {
+			what := model
+			if variant != "" && strings.Contains(strings.Join(predictData.AppliesTo[k], ","), model+":") {
+				what = model + ":" + variant
+			}
+			names := make([]string, len(predictData.AppliesTo[k]))
+			for i, m := range predictData.AppliesTo[k] {
+				names[i] = modelVariantName(m)
+			}
 			return nil, &Error{Message: fmt.Sprintf("Predict's option '%s' applies to %s, not to %s", k,
-				strings.Join(predictData.AppliesTo[k], ", "), model)}
+				strings.Join(names, ", "), modelVariantName(what))}
 		}
 		read, err := readValue("Predict", k, data.kinds[kindName], v)
 		if err != nil {
@@ -93,6 +107,14 @@ func CheckPredict(model string, params map[string]any) (map[string]any, error) {
 	return out, nil
 }
 
+// modelVariantName is how a sentence names an entry of `applies_to`: «logistic», «xgboost (binary)».
+func modelVariantName(entry string) string {
+	if m, v, isVariant := strings.Cut(entry, ":"); isVariant {
+		return m + " (" + v + ")"
+	}
+	return entry
+}
+
 func contains(list []string, s string) bool {
 	for _, x := range list {
 		if x == s {
@@ -102,10 +124,16 @@ func contains(list []string, s string) bool {
 	return false
 }
 
-// PredictColumns are the columns a Predict step adds for the model with its checked options, in
-// the catalogue's order: `survival_at_<t>` once per time, t written as the runner writes it.
-func PredictColumns(model string, checked map[string]any) []string {
-	spec := predictData.Columns[model]
+// PredictColumns are the columns a Predict step adds for the model (its variant's, when the
+// catalogue keys them `model:variant`) with its checked options, in the catalogue's order:
+// `survival_at_<t>` once per time, t written as the runner writes it. A name ending in «*»
+// whose option is not a list of times (`prediction_prob_*`: one per class of the card) is
+// written as it is: the card's classes are not the catalogue's.
+func PredictColumns(model, variant string, checked map[string]any) []string {
+	spec := predictData.Columns[model+":"+variant]
+	if spec == nil {
+		spec = predictData.Columns[model]
+	}
 	if spec == nil {
 		return nil
 	}

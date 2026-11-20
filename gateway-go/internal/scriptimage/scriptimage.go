@@ -36,10 +36,17 @@ type ValueError string
 func (e ValueError) Error() string { return string(e) }
 
 // Settings are what the Dockerfile reads besides the version: the package indexes
-// (SCRIPTS__PYPI_INDEX_URL, SCRIPTS__CRAN_URL) and how many compilers run at once.
+// (SCRIPTS__PYPI_INDEX_URL, SCRIPTS__CRAN_URL), how many compilers run at once, and whether the
+// environment is managed by Tabularia (a statistical model group's: docs/specs/
+// statistical-models.md, «The runner in Python»).
 type Settings struct {
 	PyPIIndexURL, CRANURL string
 	Jobs                  int64
+	// Managed: a Python image installs only the packages given (no BasePackages: no polars, no
+	// marimo), each one a wheel and none of their dependencies, since the list is the whole
+	// closure pinned; `pip check` then fails the build when one is missing. An R image is the
+	// same either way.
+	Managed bool
 }
 
 func heredoc(path string, lines []string, mark string) string {
@@ -57,6 +64,9 @@ func Dockerfile(language, baseImage string, packages []string, s Settings) (stri
 	user := fmt.Sprintf("RUN useradd --uid %d --create-home --shell /usr/sbin/nologin tabularia\nUSER %d\nWORKDIR /home/tabularia\n",
 		ScriptUID, ScriptUID)
 	wanted := append(append([]string{}, BasePackages[language]...), packages...)
+	if language == "python" && s.Managed {
+		wanted = append([]string{}, packages...)
+	}
 	if language == "python" {
 		index := pyd.Strip(s.PyPIIndexURL)
 		if index != "" && !url.MatchString(index) {
@@ -66,9 +76,14 @@ func Dockerfile(language, baseImage string, packages []string, s Settings) (stri
 		if index != "" {
 			env += ` PIP_INDEX_URL="` + index + `"`
 		}
+		install := fmt.Sprintf("RUN MAKEFLAGS=-j%d pip install -r /opt/tabularia/requirements.txt\n", s.Jobs)
+		if s.Managed {
+			// wheels only (nothing compiles), from PyPI or its mirror, without what the wheels
+			// ask for: the recipe is the closure, and pip check says what it lacks
+			install = "RUN pip install --no-deps --only-binary=:all: -r /opt/tabularia/requirements.txt && pip check\n"
+		}
 		return "FROM " + baseImage + "\n" + env + "\n" +
-			heredoc("/opt/tabularia/requirements.txt", wanted, "TABULARIA_PACKAGES") +
-			fmt.Sprintf("RUN MAKEFLAGS=-j%d pip install -r /opt/tabularia/requirements.txt\n", s.Jobs) + user, nil
+			heredoc("/opt/tabularia/requirements.txt", wanted, "TABULARIA_PACKAGES") + install + user, nil
 	}
 	cran := pyd.Strip(s.CRANURL)
 	if !url.MatchString(cran) {

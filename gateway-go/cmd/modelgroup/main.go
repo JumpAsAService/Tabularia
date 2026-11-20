@@ -8,17 +8,27 @@
 //	docker run --rm -v /tmp/regression-code:/tabularia/code:ro tabularia-models-regression:dev \
 //	    Rscript /tabularia/code/runner/run.R --selftest
 //
+// A Python group (boosting) the same way; its image is a download of wheels (nothing compiles),
+// and its runner is started as the Job starts it, on a read-only root with /tmp writable:
+//
+//	go run ./cmd/modelgroup dockerfile boosting > /tmp/boosting.Dockerfile
+//	docker build -f /tmp/boosting.Dockerfile -t tabularia-models-boosting:dev /tmp
+//	go run ./cmd/modelgroup code boosting /tmp/boosting-code
+//	docker run --rm --read-only --tmpfs /tmp -v /tmp/boosting-code:/tabularia/code:ro tabularia-models-boosting:dev \
+//	    python -I -B /tabularia/code/runner/run.py --selftest
+//
 // Subcommands:
 //
 //	dockerfile <group>                   the image's Dockerfile (base image from SCRIPTS__BASE_IMAGES or
-//	                                     Tabularia's defaults, CRAN from SCRIPTS__CRAN_URL; -jobs compilers)
+//	                                     Tabularia's defaults, CRAN from SCRIPTS__CRAN_URL, PyPI from
+//	                                     SCRIPTS__PYPI_INDEX_URL; -jobs compilers)
 //	code <group> <dir> [<task.json>]     writes the Job's /tabularia/code into <dir>: the runner, the common
 //	                                     library, the schema, the catalogue, the reference cases, the task
 //	task <model> <params.json>           the task.json of a fit with those parameters (checked by the catalogue)
 //	groups                               each group's recipe hash, runner hash and reference hash
 //
 // The directory written by `code` is what the Job's ConfigMap holds; a laptop with R (and
-// jsonlite) also runs its self-test without Docker:
+// jsonlite) also runs an R group's self-test without Docker:
 //
 //	TABULARIA_SELFTEST_NO_ARROW=1 Rscript /tmp/regression-code/runner/run.R --selftest
 package main
