@@ -309,6 +309,40 @@ TAB_COMMON_TESTS <- list(
     .tab_expect(!"model|||note_card_too_large" %in% back$key, "a note under the limit")
     .tab_expect(all(file.exists(file.path(dir, "artifacts", c("model.json", "MLmodel", "native.rds")))), "the model files are missing")
   },
+  "native.rds holds no row of the input, and predicts as the fit (lm, glm)" = function(code) {
+    df <- .tab_selftest_table(code)
+    d <- tab_design(df, c(TAB_A, TAB_X), outcome = "y")
+    dat <- data.frame(y = d$y, d$X[, -1L], check.names = FALSE)
+    big <- dat[rep(seq_len(nrow(dat)), 50L), ] # the same fit on 50 times the rows
+    form <- stats::reformulate(colnames(d$X)[-1L], response = "y")
+    dat$hit <- as.numeric(dat$y > stats::median(dat$y))
+    big$hit <- as.numeric(big$y > stats::median(big$y))
+    for (kind in c("lm", "glm")) {
+      fit <- function(data) {
+        secret <- data # a local of the frame that made the formula: saveRDS would write it with the formula's environment
+        f <- stats::reformulate(colnames(d$X)[-1L], response = if (kind == "lm") "y" else "hit")
+        if (kind == "lm") stats::lm(f, data = data) else suppressWarnings(stats::glm(f, family = stats::binomial(), data = data))
+      }
+      small <- fit(dat)
+      lean <- tab_native_lean(small)
+      left <- tab_native_rows_left(lean, nrow(dat))
+      .tab_expect(!length(left), kind, ": rows left in ", paste(left, collapse = ", "))
+      size <- function(x) length(serialize(x, NULL))
+      .tab_expect(size(tab_native_lean(fit(big))) < 1.05 * size(lean), kind, ": its size grows with the rows (",
+                  size(tab_native_lean(fit(big))), " against ", size(lean), ")")
+      .tab_expect(size(lean) < size(small) / 2, kind, ": not smaller than the fit")
+      back <- unserialize(serialize(lean, NULL))
+      type <- if (kind == "lm") "response" else "link"
+      .tab_expect(isTRUE(all.equal(unname(stats::predict(back, newdata = dat, type = type)),
+                                   unname(stats::predict(small, newdata = dat, type = type)), tolerance = 1e-12)),
+                  kind, ": predict differs from the fit's")
+      if (kind == "lm") {
+        ci <- stats::predict(back, newdata = dat, se.fit = TRUE, scale = summary(small)$sigma)$se.fit
+        .tab_expect(isTRUE(all.equal(unname(ci), unname(stats::predict(small, newdata = dat, se.fit = TRUE)$se.fit), tolerance = 1e-10)),
+                    "lm: the standard errors of predict differ")
+      }
+    }
+  },
   "a refusal writes error.json and exits 3; a crash exits 1" = function(code) {
     for (case in list(list(route = "refuse", status = 3L), list(route = "crash", status = 1L), list(route = "protocol", status = 3L))) {
       dir <- tempfile("selftest-")

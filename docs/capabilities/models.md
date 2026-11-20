@@ -380,7 +380,24 @@ any case.
 baseline hazard, the orders and the coefficients of an ARIMA…), at most 1 MB, in a format of
 Tabularia's own (`tabularia-model`). Its sha256 is the tag `tabularia.card_sha256`.
 `native.rds` is R's own object, kept for people who want to open the fit in R; Tabularia
-never loads it.
+never loads it. It holds **no row of the input**: before it is written the runner removes the
+model frame, the design and the outcome, every value that has one number per row (residuals,
+fitted values, linear predictors, weights, a Cox model's stratum of each row, the
+cross-validation's out-of-fold predictions and folds), the QR decomposition of the design
+(only its R, the first rows, stays) and the environment of the formula. What stays gives the
+same predictions as the fit: `predict(fit, newdata)` for a linear or logistic regression
+(with `se.fit` when you pass the residual scale, which the report gives), the linear
+predictor and the risk of a Cox model (`reference = "sample"`), and `predict(fit, newx, s =)`
+for a penalized fit. What needs the rows does not work on it (`summary()`, `residuals()`, a
+Cox model's `survfit()`): the report and `coefficients.csv` have those numbers. Two objects
+are kept whole, and they are data: a Kaplan–Meier's `survfit` is the curve itself (one step
+per event time), and an ARIMA's `forecast::Arima` keeps the series, which `forecast()` needs
+to go on from its last values. The columns inside are named by position (`d1`, `d2`…), as
+the runner names them.
+
+A model card larger than 1 MB does not stop the step: its results and its report are there,
+with a note, but the model is not logged to MLflow (no `model/` files) and no Predict node can
+apply it.
 
 ## Predict
 

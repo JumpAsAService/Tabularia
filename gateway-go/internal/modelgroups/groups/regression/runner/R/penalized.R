@@ -535,3 +535,23 @@ predict_penalized <- function(task, card) {
   rownames(out) <- NULL
   list(output = out)
 }
+
+# ── the runner's own tests, run by the group's self-test with the common library's ──
+TAB_COMMON_TESTS[["penalized: native.rds holds no row of the input, and predicts as cv.glmnet"]] <- function(code) {
+  df <- tab_read_csv(file.path(code, "reference", "data", "logistic_churn.csv"),
+                     list(tenure = "number", fee = "number", change = "number", plan = "text", churned = "text"))
+  params <- list(outcome = "churned", event_value = "yes", predictors = list("tenure", "fee", "change", "plan"), penalty = "lasso")
+  fit <- fit_penalized(list(model = "logistic", variant = "penalized", group = "regression", group_version = "selftest",
+                            params = params, rows_from = "run", limits = tab_catalog()$limits, .frame = df))
+  full <- fit$native
+  lean <- unserialize(serialize(tab_native_lean(full), NULL))
+  n <- nrow(full$fit.preval)
+  left <- tab_native_rows_left(lean, n)
+  .tab_expect(!length(left), "rows left in ", paste(left, collapse = ", "))
+  d <- tab_design(df, unlist(params$predictors), outcome = "churned")
+  X <- d$X[, -1L, drop = FALSE]
+  for (s in c("lambda.min", "lambda.1se")) {
+    .tab_expect(isTRUE(all.equal(stats::predict(lean, newx = X, s = s), stats::predict(full, newx = X, s = s), tolerance = 1e-12)),
+                "predict at ", s, " differs from cv.glmnet's")
+  }
+}

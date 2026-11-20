@@ -80,6 +80,39 @@ tab_card_fits <- function(task, card, rows) {
   NULL
 }
 
+# native.rds: R's own object of the fit, for people who open it in R, without the input's rows.
+# A fit object carries its rows several ways: the model frame (`model`), the design and the
+# outcome (`x`, `y`), one value per row (residuals, fitted values, linear predictors, weights,
+# effects, a Cox model's stratum of each row, the cross-validation's out-of-fold predictions
+# and folds), the data itself (glm's `data`), the QR decomposition of the design (`qr$qr`, from
+# which the design comes back), and the environment of its formula, which saveRDS writes whole
+# (the runner's frame, with the input in it). All of that is removed or cut: the QR keeps its R
+# (the first `rank` rows), what predict's standard errors read; the formula's environment
+# becomes the global one (not written). What stays answers predict(fit, newdata) as the fit
+# itself does (lm, glm, coxph's linear predictor and risk with reference = "sample",
+# cv.glmnet's predict(newx, s)); what needs the rows (summary, residuals, survfit of a Cox
+# model) does not work on it: the report and coefficients.csv have those numbers.
+# Kept whole: a survfit (Kaplan–Meier: the estimate is the curve, per event time) and an ARIMA
+# (forecast::Arima keeps the series, which forecast() needs to go on from its last values).
+TAB_NATIVE_ROWS <- c("model", "x", "y", "residuals", "fitted.values", "effects", "linear.predictors", "weights", "prior.weights",
+                     "data", "offset", "na.action", "strata", "fit.preval", "foldid")
+
+tab_native_lean <- function(fit) {
+  if (is.null(fit) || !inherits(fit, c("lm", "coxph", "cv.glmnet"))) return(fit)
+  for (k in intersect(TAB_NATIVE_ROWS, names(fit))) fit[[k]] <- NULL
+  if (is.list(fit$qr) && is.matrix(fit$qr$qr)) fit$qr$qr <- fit$qr$qr[seq_len(fit$rank), , drop = FALSE]
+  for (k in c("terms", "formula")) {
+    if (!is.null(fit[[k]]) && !is.null(attr(fit[[k]], ".Environment"))) attr(fit[[k]], ".Environment") <- globalenv()
+  }
+  fit
+}
+
+# What a lean object still holds of the rows: the names of its elements with one value per row
+# (for the self-tests: none).
+tab_native_rows_left <- function(fit, n) {
+  names(fit)[vapply(fit, function(x) is.atomic(x) && NROW(x) == n || is.data.frame(x), logical(1))]
+}
+
 # MLflow's MLmodel, written by hand (no mlflow package in the images): a `tabularia` flavor
 # naming model.json, and the inputs' signature in MLflow's format.
 tab_mlmodel <- function(card, run_id = "") {

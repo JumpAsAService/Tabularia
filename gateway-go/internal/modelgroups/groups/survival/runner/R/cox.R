@@ -686,3 +686,23 @@ TAB_COMMON_TESTS[["cox: strata, and the survival of each row in its stratum from
   away <- predict_cox(list(params = list(at_times = list(6)), .frame = transform(rows_, region = "west")), card)$output
   .tab_expect(all(is.na(away$survival_at_6)) && all(is.finite(away$prediction)), "an unseen stratum: survival empty, risk given")
 }
+
+TAB_COMMON_TESTS[["cox: native.rds holds no row of the input, and gives the fit's linear predictor and risk"]] <- function(code) {
+  df <- tab_read_csv(file.path(code, "reference", "data", "cox_strata.csv"),
+                     list(months = "number", churned = "integer", price = "number", premium = "boolean", region = "text",
+                          customer = "text"))
+  params <- list(time = "months", event = "churned", event_value = 1, predictors = list("price", "premium"), strata = "region")
+  fit <- fit_cox(list(model = "cox", variant = "default", group = "survival", group_version = "selftest", params = params,
+                      rows_from = "run", limits = tab_catalog()$limits, .frame = df))
+  full <- fit$native
+  lean <- unserialize(serialize(tab_native_lean(full), NULL))
+  left <- tab_native_rows_left(lean, full$n)
+  .tab_expect(!length(left), "rows left in ", paste(left, collapse = ", "))
+  .tab_expect(length(serialize(lean, NULL)) < length(serialize(full, NULL)) / 2, "not smaller than the fit")
+  frame <- stats::model.frame(full)
+  for (type in c("lp", "risk")) {
+    .tab_expect(isTRUE(all.equal(unname(stats::predict(lean, newdata = frame, type = type, reference = "sample")),
+                                 unname(stats::predict(full, newdata = frame, type = type, reference = "sample")), tolerance = 1e-12)),
+                type, ": predict differs from the fit's")
+  }
+}

@@ -92,7 +92,7 @@ tab_finish_fit <- function(task, result) {
       tab_write_text(tab_artifact("MLmodel"), tab_mlmodel(result$card))
       if (!is.null(result$native)) {
         file <- tempfile(fileext = ".rds")
-        saveRDS(result$native, file)
+        saveRDS(tab_native_lean(result$native), file)
         tab_copy_file(file, tab_artifact("native.rds"))
       }
     }
