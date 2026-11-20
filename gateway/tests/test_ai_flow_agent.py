@@ -4,6 +4,7 @@ canvas back for one Undo step. It never saves the flow. The model is a scripted
 FunctionModel; the engine is the FakeEngine of conftest."""
 import json
 from contextlib import nullcontext
+from pathlib import Path
 
 import pytest
 from fastapi import HTTPException
@@ -543,3 +544,61 @@ async def test_an_assistant_puts_a_lasso_regression_on_the_draft_and_a_wrong_one
     assert node["data"] == {"model": "linear", "params": lasso, "timeoutSeconds": 900, "retries": 0}
     assert any(e["source"] == "source" and e["target"] == "ctl-1" and e["targetHandle"] == "left" for e in canvas["edges"])
     assert fake_engine.previews == []  # a model runs as a Job: nothing to preview
+
+
+# ── the check is idempotent: what it keeps, given back, is kept as it is ─────
+# The same test is in the engine (backend/tests/test_models_catalog.py), the gateway
+# (internal/modelcatalog) and the form (frontend/tests/model-catalog.test.mjs).
+
+def _twice(what, operation, params):
+    """clean(clean(x)) == clean(x), in the shape and in the values. A set that is refused has nothing to repeat."""
+    try:
+        first = clean_params(operation, params)
+    except ModelRetry:
+        return
+    second = clean_params(operation, first)
+    assert json.dumps(second, sort_keys=True) == json.dumps(first, sort_keys=True), (what, operation)
+
+
+def test_checking_a_model_twice_is_checking_it_once():
+    catalogue = ai_flow_agent.MODEL_CATALOG
+    for operation, model_id in ai_flow_agent.MODEL_OPERATIONS.items():
+        m = ai_flow_agent.MODELS[model_id]
+        needed = {k: _sample(catalogue["kinds"][kind], k) for k, kind in m["needs"].items()}
+        full = {**m["defaults"], **needed}
+        defaults = {k: v for k, v in m["defaults"].items()
+                    if k not in needed and ai_flow_agent._given(v) and ai_flow_agent.model_applies(model_id, k, full)}
+        _twice("the defaults", operation, {**needed, **defaults})
+        _twice("only what it needs", operation, needed)
+        picks = []
+        for key, kind in m["takes"].items():
+            control = catalogue["kinds"][kind]["control"]
+            if control == "choice":
+                picks += [(key, c) for c in catalogue["kinds"][kind]["choices"]]
+            elif control == "boolean":
+                picks += [(key, True), (key, False)]
+        for i, a in enumerate(picks):
+            _twice(a, operation, {**needed, a[0]: a[1]})
+            for b in picks[i + 1:]:
+                if a[0] != b[0]:
+                    _twice((a, b), operation, {**needed, a[0]: a[1], b[0]: b[1]})
+
+
+def test_checking_the_shared_cases_twice_is_checking_them_once():
+    cases_file = Path(__file__).resolve().parents[2] / "backend" / "tests" / "fixtures" / "models" / "params_cases.json"
+    if not cases_file.exists():
+        pytest.skip("the engine's sources are not beside the gateway's")
+    cases = json.loads(cases_file.read_text(encoding="utf-8"))["cases"]
+    assert len(cases) >= 40
+    for case in cases:
+        operation = f"model_{case['model']}"
+        if operation not in ai_flow_agent.OPERATIONS:
+            continue  # «there is no model»
+        _twice(case["what"], operation, case["params"])
+        if "checked" in case:
+            _twice(f"{case['what']} (its answer)", operation, case["checked"])
+
+
+def test_an_empty_list_of_columns_stays_an_empty_list():
+    out = clean_params("model_arima", {"time": "t", "value": "v", "frequency": "month", "exog": []})
+    assert out.get("exog", []) == []
