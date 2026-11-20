@@ -36,6 +36,7 @@ export interface MlflowVersion {
   model: string
   version: string
   kind: string
+  variant?: string | null // the tag tabularia.variant (regression, binary, multiclass…)
   created_at?: string | null
   flow?: string | null
   node?: string | null

@@ -665,11 +665,15 @@ export function modelWordKeys(catalog: ModelCatalog = MODEL_CATALOG): string[] {
 
 /** What a model's Predict options are: the keys of `predict.takes` that apply to a model of the
  *  catalogue, with their kinds. */
-export function predictFields(modelId: string | null | undefined, catalog: ModelCatalog = MODEL_CATALOG): ModelField[] {
+export function predictFields(modelId: string | null | undefined, catalog: ModelCatalog = MODEL_CATALOG,
+  variant?: string | null): ModelField[] {
   if (!modelId) return []
   const out: ModelField[] = []
   for (const [key, kind] of Object.entries(catalog.predict.takes)) {
-    if (!catalog.predict.applies_to[key]?.includes(modelId)) continue
+    // an entry of `applies_to` is a model, or `model:variant` for one variant of it (the version's tag
+    // tabularia.variant): the boosting models' threshold is for their binary variant only
+    const list = catalog.predict.applies_to[key]
+    if (!list?.includes(modelId) && !(variant && list?.includes(`${modelId}:${variant}`))) continue
     const how = catalog.kinds[kind]
     if (how) out.push({ ...how, key, kind, required: false, choices: how.choices ?? [] })
   }
@@ -678,10 +682,11 @@ export function predictFields(modelId: string | null | undefined, catalog: Model
 
 /** A Predict node's options as the gateway takes them: only the keys of the model the version holds,
  *  read as the form writes them, what is empty left out. */
-export function predictParams(modelId: string | null | undefined, params: Params | null | undefined, catalog: ModelCatalog = MODEL_CATALOG): Params {
+export function predictParams(modelId: string | null | undefined, params: Params | null | undefined, catalog: ModelCatalog = MODEL_CATALOG,
+  variant?: string | null): Params {
   const p = params ?? {}
   const out: Params = {}
-  for (const f of predictFields(modelId, catalog)) {
+  for (const f of predictFields(modelId, catalog, variant)) {
     const v = p[f.key]
     if (isEmpty(v)) continue
     const one = readOne(f, v)
@@ -693,10 +698,12 @@ export function predictParams(modelId: string | null | undefined, params: Params
 }
 
 /** The columns a Predict step adds for a model with the options given (`survival_at_*` is one per time). */
-export function predictColumns(modelId: string | null | undefined, params: Params | null | undefined, catalog: ModelCatalog = MODEL_CATALOG): string[] {
-  const rows = modelId ? catalog.predict.columns[modelId] : null
+export function predictColumns(modelId: string | null | undefined, params: Params | null | undefined, catalog: ModelCatalog = MODEL_CATALOG,
+  variant?: string | null): string[] {
+  // `model:variant` comes first (the boosting models), then the model
+  const rows = modelId ? (variant ? catalog.predict.columns[`${modelId}:${variant}`] : null) ?? catalog.predict.columns[modelId] : null
   if (!rows) return []
-  const given = predictParams(modelId, params, catalog)
+  const given = predictParams(modelId, params, catalog, variant)
   const out = [...(rows.always ?? [])]
   for (const [option, names] of Object.entries(rows)) {
     if (option === 'always' || given[option] === undefined) continue

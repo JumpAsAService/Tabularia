@@ -24,13 +24,14 @@ import (
 //	GET /models/mlflow/{connection_id}/experiments
 //	→ {"experiments": [{"id": "3", "name": "Pasta/price elasticity"}, …]}        (by name)
 //	GET /models/mlflow/{connection_id}/versions?experiment=<name>
-//	→ {"versions": [{"model": "price-elasticity", "version": "7", "kind": "linear",
+//	→ {"versions": [{"model": "price-elasticity", "version": "7", "kind": "linear", "variant": null,
 //	                 "created_at": "2026-11-19T10:00:00Z", "flow": "Pricing", "node": "Elasticity",
 //	                 "metric": {"name": "adj_r_squared", "value": 0.83}}, …]}  (newest first)
 //
 // Only the versions Tabularia registered (the version's tag tabularia.model) whose run is in the
 // experiment («Provisional decisions», 5): the experiment's runs that carry the tag, then the
-// versions registered from them. `kind` is the tag (the catalogue's model), `flow` and `node`
+// versions registered from them. `kind` is the tag (the catalogue's model), `variant` the tag
+// tabularia.variant (the form's options of a boosting model depend on it; null on older versions), `flow` and `node`
 // the run's tags, `metric` the model's main number among the run's metrics.
 //
 // A failure of MLflow is 502 with the tracking client's sentence (never the server's text); an
@@ -183,7 +184,8 @@ func mlflowVersions(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Pri
 	out := make([]any, 0, len(list))
 	for _, v := range list {
 		o := pyjson.Object{{Key: "model", Value: v.version.Name}, {Key: "version", Value: v.version.Version},
-			{Key: "kind", Value: v.version.Tags["tabularia.model"]}, {Key: "created_at", Value: nil},
+			{Key: "kind", Value: v.version.Tags["tabularia.model"]}, {Key: "variant", Value: nilIfEmpty(v.version.Tags["tabularia.variant"])},
+			{Key: "created_at", Value: nil},
 			{Key: "flow", Value: nilIfEmpty(v.run.Tags["tabularia.flow_name"])}, {Key: "node", Value: nilIfEmpty(v.run.Tags["tabularia.node_name"])},
 			{Key: "metric", Value: nil}}
 		if v.version.Created > 0 {

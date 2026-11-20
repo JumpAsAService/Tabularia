@@ -442,6 +442,17 @@ test('Predict: the options of the model the version holds, and the columns it ad
   assert.deepEqual(m.predictColumns('cox', { at_times: [12, 24] }), ['prediction', 'survival_at_12', 'survival_at_24'])
   assert.deepEqual(m.predictColumns('arima', { interval: true }), ['prediction', 'lower_80', 'upper_80', 'lower', 'upper'])
   assert.deepEqual(m.predictColumns('nope', {}), [])
+  // the boosting models: an entry of the catalogue may be `model:variant`, the variant being the version's tag
+  assert.deepEqual(m.predictFields('xgboost').map((f) => f.key), [])
+  assert.deepEqual(m.predictFields('xgboost', undefined, 'regression').map((f) => f.key), [])
+  assert.deepEqual(m.predictFields('xgboost', undefined, 'binary').map((f) => f.key), ['threshold'])
+  assert.deepEqual(m.predictFields('catboost', undefined, 'binary').map((f) => f.key), ['threshold'])
+  assert.deepEqual(m.predictFields('catboost', undefined, 'multiclass').map((f) => f.key), [])
+  assert.deepEqual(m.predictFields('logistic', undefined, 'binary').map((f) => f.key), ['threshold'])
+  assert.deepEqual(m.predictParams('xgboost', { threshold: 0.3 }, undefined, 'binary'), { threshold: 0.3 })
+  assert.deepEqual(m.predictParams('xgboost', { threshold: 0.3 }, undefined, 'regression'), {})
+  assert.deepEqual(m.predictColumns('xgboost', {}, undefined, 'regression'), ['prediction'])
+  assert.deepEqual(m.predictColumns('catboost', {}, undefined, 'binary'), ['prediction', 'prediction_class'])
 })
 
 // ── what is drawn ────────────────────────────────────────────────────────────

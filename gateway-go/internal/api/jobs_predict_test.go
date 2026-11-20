@@ -436,7 +436,7 @@ func (w *predictWorld) browse(u *auth.User, path string, connection int64, query
 
 func TestTheFormListsTheExperimentsAndTabulariasVersions(t *testing.T) {
 	w := newPredictWorld(t)
-	w.register("Pasta/price elasticity", "price-elasticity", w.card, nil)
+	w.register("Pasta/price elasticity", "price-elasticity", w.card, map[string]string{"tabularia.variant": "binary"})
 	w.register("Pasta/price elasticity", "price-elasticity", w.card, nil)
 	w.register("Pasta/price elasticity", "by-hand", w.card, map[string]string{"tabularia.model": ""})
 	w.register("Other", "churn", w.card, nil)
@@ -461,6 +461,9 @@ func TestTheFormListsTheExperimentsAndTabulariasVersions(t *testing.T) {
 	}
 	if strings.Join(seen, " ") != "price-elasticity:2 price-elasticity:1" {
 		t.Errorf("the versions, newest first, Tabularia's in the experiment only: %v", seen)
+	}
+	if got.Versions[1]["variant"] != "binary" || got.Versions[0]["variant"] != nil {
+		t.Errorf("the variant is the version's tag tabularia.variant, null without it: %v %v", got.Versions[1]["variant"], got.Versions[0]["variant"])
 	}
 	v := got.Versions[0]
 	if v["kind"] != "linear" || v["flow"] != "Pricing" || v["node"] != "Elasticity" || !strings.HasPrefix(fmt.Sprint(v["created_at"]), "2023-11-") ||

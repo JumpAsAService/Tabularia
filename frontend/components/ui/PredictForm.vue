@@ -132,13 +132,15 @@ function pickVersion(value: unknown) {
 }
 // the model the version holds decides which options there are
 const kind = computed(() => versions.value.find((v) => v.model === props.data?.registeredModel)?.kind ?? null)
+// the variant of the version (the tag tabularia.variant): the boosting models' options depend on it
+const variant = computed(() => versions.value.find((v) => v.model === props.data?.registeredModel)?.variant ?? null)
 
 // ── the options of that model ────────────────────────────────────────────────
-const fields = computed<ModelField[]>(() => predictFields(kind.value))
+const fields = computed<ModelField[]>(() => predictFields(kind.value, undefined, variant.value))
 const labelOf = (f: ModelField) => (te(`predict.params.${f.key}`) ? t(`predict.params.${f.key}`) : f.key)
 const hintOf = (f: ModelField) => (te(`predict.hints.${f.key}`) ? t(`predict.hints.${f.key}`) : '')
 function set(key: string, value: unknown) {
-  emit('update', { params: predictParams(kind.value, { ...params.value, [key]: value }) })
+  emit('update', { params: predictParams(kind.value, { ...params.value, [key]: value }, undefined, variant.value) })
 }
 function numberProblem(f: ModelField): string {
   const problem = modelNumberProblem(f, params.value[f.key])
@@ -147,7 +149,7 @@ function numberProblem(f: ModelField): string {
 const timesText = (f: ModelField) => (Array.isArray(params.value[f.key]) ? params.value[f.key].join(', ') : '')
 
 // the columns the step adds, and the ones of its input they would overwrite (the form refuses)
-const added = computed(() => predictColumns(kind.value, params.value))
+const added = computed(() => predictColumns(kind.value, params.value, undefined, variant.value))
 const clash = computed(() => added.value.filter((c) => props.inputColumns.some((x) => x.name === c)))
 
 // ── the run's limits ─────────────────────────────────────────────────────────
