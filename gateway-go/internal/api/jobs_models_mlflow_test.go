@@ -1079,3 +1079,17 @@ func hasMetricPrefix(m map[string]float64, prefix string) bool {
 	}
 	return false
 }
+
+// BG/BB's formula is an id the report words; MLflow gets it as an English sentence, not as «@bgbb_formula unit=…».
+func TestTheBgbbFormulaGoesToMlflowAsAnEnglishSentence(t *testing.T) {
+	rows := []resultRow{{Section: "model", Stat: "formula", Text: ptr("@bgbb_formula unit=quarter")}}
+	want := "x: transactions, t_x: opportunity of the last, n: opportunities, one opportunity a quarter"
+	if f := modelFormula(rows); len(f) != 1 || f[0].Key != "formula" || f[0].Value != want {
+		t.Errorf("formula: %v", f)
+	}
+	for _, text := range []string{"x: frequency, t_x: recency, T: age, in weeks", "@bgbb_formula unit=fortnight", "y ~ x · Weibull, accelerated failure time"} {
+		if got := formulaEnglish(text); got != text {
+			t.Errorf("%q became %q", text, got)
+		}
+	}
+}

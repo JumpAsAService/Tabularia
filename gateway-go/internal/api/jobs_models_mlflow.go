@@ -640,14 +640,27 @@ func paramText(v any) string {
 	return fmt.Sprint(v)
 }
 
-// modelFormula is the `formula` text of the results' model section, as a parameter.
+// modelFormula is the `formula` text of the results' model section, as a parameter. BG/BB's
+// formula arrives as an id the report words («@bgbb_formula unit=year»); MLflow gets its English
+// sentence (report_texts/customer_lifetime.json, en.formula_texts.bgbb_formula; a backend test
+// keeps the two the same).
 func modelFormula(rows []resultRow) []mlflowconn.Tag {
 	for _, r := range rows {
 		if r.Section == "model" && r.Stat == "formula" && r.Text != nil && *r.Text != "" {
-			return []mlflowconn.Tag{{Key: "formula", Value: *r.Text}}
+			return []mlflowconn.Tag{{Key: "formula", Value: formulaEnglish(*r.Text)}}
 		}
 	}
 	return nil
+}
+
+var bgbbFormulaUnits = map[string]bool{"day": true, "week": true, "month": true, "quarter": true, "year": true}
+
+// formulaEnglish says a formula sent as an id in plain English; any other text stays as it is.
+func formulaEnglish(text string) string {
+	if unit, ok := strings.CutPrefix(text, "@bgbb_formula unit="); ok && bgbbFormulaUnits[unit] {
+		return "x: transactions, t_x: opportunity of the last, n: opportunities, one opportunity a " + unit
+	}
+	return text
 }
 
 // modelDistribution is the distribution the fit used, the `distribution` text of the results'

@@ -722,6 +722,14 @@ def test_the_spend_check_not_computed_says_why_in_the_page_s_language(locale):
     assert said(rows) == [why["spend_independence_leverage"]] and why["spend_independence_leverage"] != why[""]
 
 
+def test_the_gateways_english_bgbb_formula_for_mlflow_is_the_english_text_of_the_report():
+    """The gateway (jobs_models_mlflow.go, formulaEnglish) sends BG/BB's formula to MLflow as this sentence, the
+    English `formula_texts.bgbb_formula` with its unit in the singular («{unit:one}»)."""
+    path = Path(__file__).resolve().parents[1] / "app" / "engine" / "models" / "report_texts" / "customer_lifetime.json"
+    said = json.loads(path.read_text())["en"]["formula_texts"]["bgbb_formula"]
+    assert said.replace("{unit:one}", "year") == "x: transactions, t_x: opportunity of the last, n: opportunities, one opportunity a year"
+
+
 def test_bg_bb_s_formula_is_an_id_the_page_words_with_its_unit(monkeypatch):
     """BG/BB's runner sends its formula as «@bgbb_formula unit=year»: the page reads the sentence of that id in
     `formula_texts` of its language, the unit in its words; the continuous models' formula keeps its «in weeks»."""
