@@ -50,6 +50,8 @@ const props = withDefaults(defineProps<{
   count?: RowCount | null
   // what to say when there is nothing at all
   empty?: string
+  // what to say under a header without rows, instead of «No rows» (a model's columns before its Run)
+  noRows?: string
   label?: string
   // the columns of what is being computed, when the page knows them already (the node's
   // last preview, a source's schema): the header names them at once, over a skeleton.
@@ -77,7 +79,7 @@ const props = withDefaults(defineProps<{
   // the columns whose values are on their way: named in their place, their cells waiting
   waiting?: string[] | null
 }>(), {
-  summary: undefined, summaryId: undefined, changes: null, count: null, empty: undefined, label: undefined,
+  summary: undefined, summaryId: undefined, changes: null, count: null, empty: undefined, noRows: undefined, label: undefined,
   pendingColumns: null, profile: null, profileState: 'none', profileError: undefined, profileRetry: undefined,
   columnDetail: undefined, profileWhole: undefined, valueActions: null, arrange: false, waiting: null,
 })
@@ -1082,7 +1084,7 @@ function act(kind: 'keep' | 'exclude' | 'fill', value?: unknown) {
               </template>
             </tbody>
           </table>
-          <p v-if="!rows.length && !pending" class="dg-norows muted">{{ $t('dataGrid.noRows') }}</p>
+          <p v-if="!rows.length && !pending" class="dg-norows muted">{{ noRows ?? $t('dataGrid.noRows') }}</p>
         </div>
         <!-- where a dragged field would land: a line between two names, the table's height -->
         <span v-if="dropAt" class="dg-insert" :style="{ transform: `translateX(${dropAt.x - 1}px)` }" aria-hidden="true" />

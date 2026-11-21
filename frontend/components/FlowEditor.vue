@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, computed, watch, nextTick, onMounted, onUnmounted, provide } from 'vue'
+import { ref, reactive, computed, watch, nextTick, onMounted, onUnmounted, provide, shallowRef, toRaw } from 'vue'
 import { VueFlow, useVueFlow } from '@vue-flow/core'
 import type { Node, Connection } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
@@ -25,7 +25,7 @@ import ScriptNode from '~/components/nodes/ScriptNode.vue'
 import ContainerNode from '~/components/nodes/ContainerNode.vue'
 import ModelNode from '~/components/nodes/ModelNode.vue'
 import PredictNode from '~/components/nodes/PredictNode.vue'
-import { MODEL_COLOR, modelArimaTitle, modelFromKind, modelNameKey, modelNodeData, modelOf, predictNodeData } from '~/composables/modelCatalog'
+import { MODEL_COLOR, MODEL_NODE_TYPE, modelArimaTitle, modelColumnsAfterStep, modelFromKind, modelNameKey, modelNodeData, modelOf, modelOutputColumns, predictNodeData } from '~/composables/modelCatalog'
 import { useModelGroups } from '~/composables/useModelGroups'
 import { useScriptingEditor, type ScriptOutputs } from '~/composables/useScripting'
 import { useRegistriesEditor } from '~/composables/useRegistries'
@@ -1921,15 +1921,22 @@ function dropOnCanvas(ev: DragEvent) {
 function patchSelected(patch: Record<string, any>) {
   if (!selectedId.value) return
   updateNodeData(selectedId.value, patch)
+  const step = findNode(selectedId.value)
+  if (STEP_TYPES.has(step?.type ?? '')) {
+    // a Script, Container or model node's settings change nothing before it: its columns and those
+    // after it only. It previews its last output, which they change nothing of until it runs; a model
+    // that has not run shows the columns its options make, which change with them (no request: its
+    // input's columns are known)
+    invalidateStats(selectedId.value, true)
+    if (step?.type === MODEL_NODE_TYPE && !scriptSources.value[selectedId.value]) void runPreview(selectedId.value)
+    return
+  }
   invalidateColumns()
   invalidateStats(selectedId.value)
   // the SQL node does NOT run the preview at every change: a query may be heavy and
   // trying it again at every key/blur is wasteful. The preview is on command («Preview»
   // button or Cmd/Ctrl+Enter → previewSelected).
   if (findNode(selectedId.value)?.data?.opType === 'sql') return
-  // a Script or Container node previews its last output: its code or its image change
-  // nothing there until it runs
-  if (STEP_TYPES.has(findNode(selectedId.value)?.type ?? '')) return
   refreshForNode(selectedId.value)
 }
 
@@ -2175,8 +2182,13 @@ async function ensureColumns(nodeId: string): Promise<ColumnInfo[]> {
   if (!node) return []
   if (node.type === 'source') return (node.data.columns as ColumnInfo[]) ?? []
   if (nodeColumns[nodeId]) return nodeColumns[nodeId]
-  const { sourceNode, operations: ops } = resolveChain(getNodes.value, getEdges.value, nodeId, scriptSources.value)
-  if (!sourceNode?.data?.parquetKey) return []
+  const { sourceNode, operations: ops, afterScript } = resolveChain(getNodes.value, getEdges.value, nodeId, scriptSources.value)
+  if (!sourceNode?.data?.parquetKey) {
+    // after a model that has not run: the columns its options make, when the steps between say them
+    const expected = afterScript && findNode(afterScript)?.type === MODEL_NODE_TYPE ? await expectedColumns(nodeId) : null
+    if (expected) nodeColumns[nodeId] = expected.columns
+    return expected?.columns ?? []
+  }
   const res = await apiPreview({
     bucket: sourceNode.data.bucket ?? bucket,
     input_key: sourceNode.data.parquetKey,
@@ -2186,6 +2198,44 @@ async function ensureColumns(nodeId: string): Promise<ColumnInfo[]> {
   nodeColumns[nodeId] = res.columns
   if (!nodeStats[nodeId]) nodeStats[nodeId] = { cols: res.columns.length }
   return res.columns
+}
+
+// ── A model that has not run: the columns it will hand on ─────────────────────
+// A model is a Job: no rows until it runs (Run in its panel, or a run of the flow). Its columns,
+// though, are known from the catalogue and its options: the node and the steps after it that only
+// keep, drop, order, rename, cast or filter columns show them before any Run, in the panel's fields
+// and in the Table's header, without rows. A name the data fill (a probability per class) waits for
+// the Run. null: not known this way (another step between, a Script, a model that has run already,
+// whose own output is read instead).
+interface ExpectedColumns { columns: ColumnInfo[]; later: string[]; modelId: string }
+async function expectedColumns(nodeId: string): Promise<ExpectedColumns | null> {
+  const inc = buildIncoming(getEdges.value)
+  const steps: Node[] = []
+  const seen = new Set<string>()
+  let cur: string | undefined = nodeId
+  while (cur && !seen.has(cur)) {
+    seen.add(cur)
+    const node = findNode(cur)
+    if (!node || node.type === MODEL_NODE_TYPE) break
+    if (node.type !== 'operation' || node.parentNode) return null
+    steps.unshift(node)
+    cur = inc.get(cur)?.left
+  }
+  const model = cur ? findNode(cur) : undefined
+  const def = model?.type === MODEL_NODE_TYPE && !scriptSources.value[model.id] ? modelOf(model.data?.model) : null
+  if (!model || !def) return null
+  // the rows output starts with the input's columns: the step before's, as for any node (edges
+  // that close a loop through the model say none: asking would never end)
+  const inputId = leftOf(model.id)
+  for (let up = inputId, n = 0; up; up = inc.get(up)?.left, n++) if (up === model.id || n > getNodes.value.length) return null
+  const input = inputId ? await ensureColumns(inputId) : []
+  let { columns, later } = modelOutputColumns(def, model.data?.params, input)
+  for (const step of steps) {
+    const next = modelColumnsAfterStep(String(step.data?.opType ?? ''), step.data?.params, columns)
+    if (!next) return null
+    columns = next
+  }
+  return { columns, later, modelId: model.id }
 }
 
 const CLICK_SETTLE_MS = 180
@@ -2628,7 +2678,7 @@ const valueActions = computed(() => {
   const id = previewNodeId.value
   // the rows of a step's input, shown while the step is not set: they are not the place to
   // start another step from
-  if (!id || loadBlocked.value || inputShownFor.value) return null
+  if (!id || loadBlocked.value || inputShownFor.value || previewIsExpected.value) return null
   return {
     filter: (column: string, value: unknown, exclude: boolean) => {
       const params = value === null || value === undefined
@@ -2670,6 +2720,33 @@ function computeAgain() {
   nextTick(() => (document.querySelector('.viewbody .datagrid') as HTMLElement | null)?.focus())
 }
 
+/** The columns a model that has not run will hand on, as a table without rows: the node's own, or a
+ *  step's after it; the line over it says that the rows come with the model's Run, and which names
+ *  wait for it. No count, no profile, no value to filter on: there is no row. */
+const expectedPreview = shallowRef<PreviewResult | null>(null)
+const previewIsExpected = computed(() => !!preview.value && toRaw(preview.value) === expectedPreview.value)
+function showExpected(nodeId: string, expected: ExpectedColumns) {
+  endCompute()
+  stopCount()
+  stopProfile()
+  cancelledNodeId.value = null
+  inputShownFor.value = null
+  nodeColumns[nodeId] = expected.columns
+  const res: PreviewResult = { columns: expected.columns, rows: [], row_count: 0, truncated: false }
+  expectedPreview.value = res
+  preview.value = res
+  previewNodeId.value = nodeId
+  previewError.value = ''
+  previewMs.value = 0
+  rowCount.value = { state: 'none' }
+  const parts = [nodeId === expected.modelId
+    ? t('models.node.previewColumnsBeforeRun')
+    : t('models.node.previewColumnsAfterModel', { model: nodeName(expected.modelId) })]
+  if (expected.later.length) parts.push(t('models.node.previewColumnsLater', { names: expected.later.join(', ') }))
+  previewNote.value = parts.join(' ')
+  previewLoading.value = false
+}
+
 let previewSeq = 0 // only the LAST preview launched writes the result and turns the skeleton off
 async function runPreview(nodeId: string) {
   const { chain, body, key } = previewBody(nodeId)
@@ -2680,6 +2757,18 @@ async function runPreview(nodeId: string) {
   const seq = ++previewSeq
   if (!sourceNode?.data?.parquetKey || !body || !key) {
     previewSlots.cancel('preview')
+    // after a model that has not run: the columns it will hand on, without rows
+    if (afterScript && findNode(afterScript)?.type === MODEL_NODE_TYPE) {
+      let expected: ExpectedColumns | null = null
+      try {
+        expected = await expectedColumns(nodeId)
+      } catch { /* the input's columns did not come: the sentence alone, below */ }
+      if (seq !== previewSeq) return
+      if (expected) {
+        showExpected(nodeId, expected)
+        return
+      }
+    }
     endCompute()
     stopCount()
     preview.value = null
@@ -2868,12 +2957,14 @@ onUnmounted(() => document.removeEventListener('pointerdown', onRemovedOutside, 
 const summaryRows = computed(() => {
   const r = preview.value
   if (!r) return ''
+  if (previewIsExpected.value) return t('models.node.rowsAfterRun')
   return rowsPhrase(r.rows.length, r.truncated, rowCount.value, t, (n) => fmt.count(n))
 })
 // the same, as short as a node of the canvas says it, for a narrow bar
 const summaryRowsShort = computed(() => {
   const r = preview.value
   if (!r) return ''
+  if (previewIsExpected.value) return t('models.node.rowsAfterRunShort')
   return nodeRowsPhrase(r.rows.length, r.truncated, rowCount.value, t, (n) => fmt.count(n))
 })
 // One announcement a click, once everything about it has arrived (rows, count, changes): the
@@ -3883,9 +3974,10 @@ async function pollTask(id: string) {
           :profile-error="profileError"
           :profile-retry="profileRetry"
           :profile-whole="profileWhole"
-          :column-detail="columnDetail"
+          :column-detail="previewIsExpected ? undefined : columnDetail"
           :value-actions="valueActions"
           :empty="selectedId ? $t('dataGrid.nothingYet') : undefined"
+          :no-rows="previewIsExpected ? $t('models.node.noRowsBeforeRun') : undefined"
         >
           <template #action>
             <button v-if="cancelledNodeId" type="button" class="pv-again" @click="computeAgain">

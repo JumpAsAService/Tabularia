@@ -105,6 +105,11 @@ export interface ModelCatalog {
   column_kinds: string[]
   kinds: Record<string, ModelKind>
   season_of_frequency: Record<string, number>
+  /** Per output (`rows`, `table`, `forecast`, `results`), the type of each column it writes as the engine names it; a
+   *  name with a `*` stands for every name it makes, «@<key>» is the type of the input's column the key names. */
+  output_types: Record<string, Record<string, string>>
+  /** How a runner of a language writes the input's columns back in the rows output, by their kind, where the type changes. */
+  rows_input_types: Record<string, Record<string, string>>
   groups: ModelGroupDef[]
   models: ModelDef[]
   predict: PredictDef
@@ -846,6 +851,118 @@ export function modelRowsColumns(model: ModelDef, params: Params | null | undefi
     }
   }
   return out
+}
+
+// ── what a model node hands on before it has run ─────────────────────────────
+
+/** A column as a preview names it. */
+export interface ModelColumn { name: string; dtype: string }
+
+/** The kind of a column's type an R runner reads it as (the catalogue's `column_kind`, for what changes on the way back). */
+const columnKind = (dtype: string): string => (WHOLE.test(dtype) ? 'integer' : isNumericDtype(dtype) ? 'number' : dtype)
+
+/** A number as the runner writes it in a column's name, its shortest form: 10, 0.25 (the engine's `_number_label`). */
+const numberLabel = (v: number): string => String(v)
+
+/** What a model node hands to the next step before it has run, from its options and the catalogue alone
+ *  (backend/app/engine/models/catalog.py `output_columns`, on the same cases: tests/model-catalog.test.mjs): the input's
+ *  columns first for the rows output (as the runner writes them back), then the model's, in the runner's order, each
+ *  quantile and time with its interval; the ten columns of the results table. `later`: the names the data fill
+ *  («pred_prob_*», one per class), not columns until the model runs. Options not given take their defaults. */
+export function modelOutputColumns(model: ModelDef, params: Params | null | undefined, input: readonly ModelColumn[] | null | undefined,
+  catalog: ModelCatalog = MODEL_CATALOG): { columns: ModelColumn[]; later: string[] } {
+  const full = modelFull(model, modelParams(model, params, catalog))
+  const output = typeof full.output === 'string' && full.output ? full.output : 'results'
+  const types = catalog.output_types?.[output] ?? {}
+  if (output === 'results') return { columns: Object.entries(types).map(([name, dtype]) => ({ name, dtype })), later: [] }
+  const variant = model.variants.find((v) => v.id === modelVariant(model, full))
+  const names = (variant?.outputs?.[output] ?? []).filter((name) => {
+    const rule = variant?.rows_when?.[name]
+    return !rule || Object.entries(rule).every(([k, r]) => modelHolds(r, full[k]))
+  })
+  const wildcards: Record<string, string> = { pred_quantile_: 'quantiles', pred_surv_at_: 'times' }
+  const made: { name: string; pattern: string }[] = []
+  const later: string[] = []
+  for (let i = 0; i < names.length;) {
+    const at = names[i]!.indexOf('*')
+    if (at < 0) {
+      made.push({ name: names[i]!, pattern: names[i]! })
+      i++
+      continue
+    }
+    // the names with the same start go together, one number at a time: as the runner writes them
+    const start = names[i]!.slice(0, at)
+    const group = [names[i]!]
+    while (i + group.length < names.length && names[i + group.length]!.includes('*') && names[i + group.length]!.slice(0, names[i + group.length]!.indexOf('*')) === start) {
+      group.push(names[i + group.length]!)
+    }
+    i += group.length
+    const key = wildcards[start]
+    if (!key) {
+      later.push(...group)
+      continue
+    }
+    const values = Array.isArray(full[key]) ? [...new Set((full[key] as unknown[]).filter((v): v is number => typeof v === 'number' && Number.isFinite(v)))].sort((a, b) => a - b) : []
+    for (const v of values) {
+      if (key === 'quantiles' && v === 0.5) continue // the median: pred_median, no pred_quantile_0.5
+      for (const pattern of group) made.push({ name: pattern.replace('*', numberLabel(v)), pattern })
+    }
+  }
+  const inputs = new Map((input ?? []).map((c) => [c.name, c.dtype]))
+  const columns: ModelColumn[] = made.map(({ name, pattern }) => {
+    let dtype = types[pattern] ?? 'Unknown'
+    if (dtype.startsWith('@')) {
+      const source = inputs.get(typeof full[dtype.slice(1)] === 'string' ? full[dtype.slice(1)] : '')
+      dtype = source === undefined ? 'Unknown' : columnKind(source) === 'integer' ? 'Int32' : source
+    }
+    return { name, dtype }
+  })
+  if (output !== 'rows') return { columns, later }
+  const language = catalog.groups.find((g) => g.id === model.group)?.language ?? ''
+  const kept = catalog.rows_input_types?.[language] ?? {}
+  return { columns: [...(input ?? []).map((c) => ({ name: c.name, dtype: kept[columnKind(c.dtype)] ?? c.dtype })), ...columns], later }
+}
+
+// the type a cast step gives a column (the engine's dtypes.py), as a preview names it
+const CAST_TYPES: Record<string, string> = {
+  int: 'Int64', int64: 'Int64', int32: 'Int32', float: 'Float64', float64: 'Float64', float32: 'Float32', str: 'String',
+  string: 'String', utf8: 'String', bool: 'Boolean', boolean: 'Boolean', date: 'Date', datetime: "Datetime(time_unit='us', time_zone=None)",
+}
+
+/** The columns after a step that only keeps, removes, orders, renames, casts or filters them, known without its rows (the
+ *  steps after a model that has not run); null after any other step, whose columns come from computing it. */
+export function modelColumnsAfterStep(opType: string, params: Params | null | undefined, columns: readonly ModelColumn[]): ModelColumn[] | null {
+  const p = params ?? {}
+  const listed = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [])
+  switch (opType) {
+    case 'filter': case 'sort': case 'limit': case 'unique': case 'drop_nulls': case 'fill_null': case 'sample':
+      return [...columns]
+    case 'select': {
+      const byName = new Map(columns.map((c) => [c.name, c]))
+      return listed(p.columns).flatMap((n) => (byName.has(n) ? [byName.get(n)!] : []))
+    }
+    case 'drop': {
+      const gone = new Set(listed(p.columns))
+      return columns.filter((c) => !gone.has(c.name))
+    }
+    case 'reorder': {
+      const first = listed(p.columns).filter((n) => columns.some((c) => c.name === n))
+      return [...first.map((n) => columns.find((c) => c.name === n)!), ...columns.filter((c) => !first.includes(c.name))]
+    }
+    case 'rename': {
+      const mapping = p.mapping && typeof p.mapping === 'object' ? (p.mapping as Record<string, unknown>) : {}
+      return columns.map((c) => (typeof mapping[c.name] === 'string' && mapping[c.name] ? { ...c, name: mapping[c.name] as string } : c))
+    }
+    case 'cast': {
+      const to = p.columns && typeof p.columns === 'object' ? (p.columns as Record<string, unknown>) : {}
+      return columns.map((c) => {
+        const t = typeof to[c.name] === 'string' ? CAST_TYPES[(to[c.name] as string).toLowerCase()] : undefined
+        return t ? { ...c, dtype: t } : c
+      })
+    }
+    default:
+      return null
+  }
 }
 
 /** Whether Predict is offered: a group the person may use, and an MLflow connection they may use. */

@@ -1171,3 +1171,69 @@ test('a column the model needs says so to a screen reader, an optional one does 
   }
   assert.ok(trigger('spend') && !/aria-required/.test(trigger('spend')), trigger('spend'))
 })
+
+// ── what a model node hands on before it has run ─────────────────────────────
+
+const OUTPUT_CASES = JSON.parse(read('../../backend/tests/fixtures/models/output_columns.json')).cases
+const globMatch = (pattern, name) => new RegExp(`^${pattern.split('*').map((p) => p.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.+')}$`).test(name)
+
+test('the columns a model hands on before its Run are the ones its runner writes, on the cases the engine checks', () => {
+  assert.ok(OUTPUT_CASES.length >= 20, `${OUTPUT_CASES.length} cases`)
+  for (const c of OUTPUT_CASES) {
+    const model = m.modelOf(c.model)
+    const input = c.input.map(([name, dtype]) => ({ name, dtype }))
+    const { columns, later } = m.modelOutputColumns(model, c.params, input)
+    const written = c.columns.map(([name, dtype]) => ({ name, dtype }))
+    // the names the data fill (a probability per class) come with the Run, and only those
+    const known = written.filter((col) => !later.some((p) => globMatch(p, col.name)))
+    assert.deepEqual(columns, known, c.what)
+    assert.equal(written.length - known.length > 0, later.length > 0, `${c.what}: ${later}`)
+  }
+})
+
+test('a model just dropped already says its columns; a type read from a column not chosen is Unknown', () => {
+  for (const model of m.MODEL_CATALOG.models) {
+    const { columns } = m.modelOutputColumns(model, m.modelDefaults(model.id), [])
+    assert.ok(columns.length > 0 && columns.every((c) => c.name && c.dtype), model.id)
+  }
+  const arima = m.modelOf('arima')
+  assert.deepEqual(m.modelOutputColumns(arima, { output: 'forecast' }, [{ name: 'month', dtype: 'Date' }]).columns[0], { name: 'time', dtype: 'Unknown' })
+  assert.deepEqual(m.modelOutputColumns(arima, { time: 'month', output: 'forecast' }, [{ name: 'month', dtype: 'Date' }]).columns[0], { name: 'time', dtype: 'Date' })
+  assert.deepEqual(m.modelOutputColumns(arima, { time: 'n', output: 'forecast' }, [{ name: 'n', dtype: 'Int64' }]).columns[0], { name: 'time', dtype: 'Int32' })
+  // the results table: the ten columns of the statistics, whatever the input
+  assert.deepEqual(m.modelOutputColumns(LINEAR, { outcome: 'y', predictors: ['x'] }, [{ name: 'x', dtype: 'Float64' }]).columns.map((c) => c.name),
+    ['section', 'level', 'level_2', 'stat', 'value', 'text', 'x0', 'x1', 'ord', 'key'])
+  // the numbers in increasing order, each once, as the runner gets them; the quantile 0.5 is the median's
+  const ps = m.modelOf('parametric_survival')
+  const names = m.modelOutputColumns(ps, { output: 'rows', quantiles: [0.75, 0.25, 0.5, 0.75], times: [30, 7.5] }, []).columns.map((c) => c.name)
+  assert.deepEqual(names.filter((n) => /^pred_(quantile|surv_at)_[0-9.]+$/.test(n)), ['pred_quantile_0.25', 'pred_quantile_0.75', 'pred_surv_at_7.5', 'pred_surv_at_30'])
+  // a probability per class: named only by the Run
+  const xgb = m.modelOf('xgboost')
+  assert.deepEqual(m.modelOutputColumns(xgb, { task: 'multiclass', output: 'rows' }, []).later, ['pred_prob_*'])
+})
+
+test('the steps after a model that only keep, drop, order, rename, cast or filter say their columns; the others do not', () => {
+  const cols = [{ name: 'a', dtype: 'Int32' }, { name: 'pred_fitted', dtype: 'Float64' }, { name: 'c', dtype: 'String' }]
+  for (const op of ['filter', 'sort', 'limit', 'unique', 'drop_nulls', 'fill_null']) assert.deepEqual(m.modelColumnsAfterStep(op, {}, cols), cols, op)
+  assert.deepEqual(m.modelColumnsAfterStep('select', { columns: ['c', 'pred_fitted', 'gone'] }, cols).map((c) => c.name), ['c', 'pred_fitted'])
+  assert.deepEqual(m.modelColumnsAfterStep('drop', { columns: ['a'] }, cols).map((c) => c.name), ['pred_fitted', 'c'])
+  assert.deepEqual(m.modelColumnsAfterStep('reorder', { columns: ['c'] }, cols).map((c) => c.name), ['c', 'a', 'pred_fitted'])
+  assert.deepEqual(m.modelColumnsAfterStep('rename', { mapping: { pred_fitted: 'fitted' } }, cols)[1], { name: 'fitted', dtype: 'Float64' })
+  assert.deepEqual(m.modelColumnsAfterStep('cast', { columns: { a: 'float', c: 'date' } }, cols).map((c) => c.dtype), ['Float64', 'Float64', 'Date'])
+  for (const op of ['group_by', 'join', 'union', 'compute', 'sql', 'pivot', 'unpivot', 'stat_t_test', '']) {
+    assert.equal(m.modelColumnsAfterStep(op, {}, cols), null, op)
+  }
+})
+
+test('the editor shows a model\'s columns before its Run, in the five languages', () => {
+  const editor = read('../components/FlowEditor.vue')
+  assert.ok(editor.includes('modelOutputColumns(def, model.data?.params, input)'), 'FlowEditor.vue asks the catalogue for the columns')
+  for (const key of ['previewColumnsBeforeRun', 'previewColumnsAfterModel', 'previewColumnsLater', 'rowsAfterRun', 'rowsAfterRunShort', 'noRowsBeforeRun']) {
+    assert.ok(editor.includes(`models.node.${key}`), key)
+    for (const lang of LANGS) assert.ok(WORDS[lang][`models.node.${key}`], `${lang}: models.node.${key}`)
+  }
+  for (const lang of LANGS) {
+    assert.ok(WORDS[lang]['models.node.previewColumnsAfterModel'].includes('{model}'), lang)
+    assert.ok(WORDS[lang]['models.node.previewColumnsLater'].includes('{names}'), lang)
+  }
+})
