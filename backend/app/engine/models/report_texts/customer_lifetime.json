@@ -204,7 +204,8 @@
     "h0": "The optimizer found a maximum: it converged and the Hessian is positive definite.",
     "advice": {
      "": "The estimates may not be the best ones: the data may hold too few repeat customers for this model; try another purchase model.",
-     "convergence_edge": "The optimizer stopped at an edge of a parameter's range, where the likelihood keeps growing towards the limit: the estimate is that limit, and its standard error, if any, means little; read the measure of the estimates at an edge."
+     "convergence_edge": "The optimizer stopped at an edge of a parameter's range, where the likelihood keeps growing towards the limit: the estimate is that limit, and its standard error, if any, means little; read the measure of the estimates at an edge.",
+     "convergence_spend": "The spend model (Gamma–Gamma) did not reach a maximum: its estimates, and the values that use them, may not be the best ones; look for extreme or almost equal average amounts, or leave out the spend column."
     }
    },
    "boundary": {
@@ -468,7 +469,8 @@
     "h0": "L'ottimizzatore ha trovato un massimo: è convergito e l'Hessiana è definita positiva.",
     "advice": {
      "": "Le stime potrebbero non essere le migliori: i dati potrebbero contenere troppi pochi clienti con riacquisti per questo modello; provate un altro modello degli acquisti.",
-     "convergence_edge": "L'ottimizzatore si è fermato a un bordo dell'intervallo di un parametro, dove la verosimiglianza continua a crescere verso il limite: la stima è quel limite, e il suo errore standard, se c'è, dice poco; leggete la misura delle stime ai bordi."
+     "convergence_edge": "L'ottimizzatore si è fermato a un bordo dell'intervallo di un parametro, dove la verosimiglianza continua a crescere verso il limite: la stima è quel limite, e il suo errore standard, se c'è, dice poco; leggete la misura delle stime ai bordi.",
+     "convergence_spend": "Il modello della spesa (Gamma–Gamma) non ha raggiunto un massimo: le sue stime, e i valori che le usano, potrebbero non essere le migliori; cercate importi medi estremi o quasi uguali, oppure togliete la colonna della spesa."
     }
    },
    "boundary": {
@@ -732,7 +734,8 @@
     "h0": "Der Optimierer hat ein Maximum gefunden: Er ist konvergiert, und die Hesse-Matrix ist positiv definit.",
     "advice": {
      "": "Die Schätzungen sind vielleicht nicht die besten: Die Daten enthalten möglicherweise zu wenige Wiederkäufer für dieses Modell; ein anderes Kaufmodell versuchen.",
-     "convergence_edge": "Der Optimierer hat am Rand des Bereichs eines Parameters angehalten, wo die Likelihood zum Grenzwert hin weiter steigt: Der Schätzwert ist dieser Grenzwert, und sein Standardfehler, falls vorhanden, sagt wenig; die Messung der Schätzwerte am Rand lesen."
+     "convergence_edge": "Der Optimierer hat am Rand des Bereichs eines Parameters angehalten, wo die Likelihood zum Grenzwert hin weiter steigt: Der Schätzwert ist dieser Grenzwert, und sein Standardfehler, falls vorhanden, sagt wenig; die Messung der Schätzwerte am Rand lesen.",
+     "convergence_spend": "Das Ausgabenmodell (Gamma–Gamma) hat kein Maximum erreicht: Seine Schätzungen und die Werte, die sie verwenden, sind vielleicht nicht die besten; suchen Sie nach extremen oder fast gleichen Durchschnittsbeträgen, oder lassen Sie die Ausgabenspalte weg."
     }
    },
    "boundary": {
@@ -996,7 +999,8 @@
     "h0": "El optimizador encontró un máximo: convergió y la hessiana es definida positiva.",
     "advice": {
      "": "Puede que las estimaciones no sean las mejores: los datos quizá tengan muy pocos clientes con recompras para este modelo; prueben otro modelo de compras.",
-     "convergence_edge": "El optimizador se detuvo en un borde del rango de un parámetro, donde la verosimilitud sigue creciendo hacia el límite: la estimación es ese límite, y su error estándar, si lo hay, dice poco; lean la medida de las estimaciones en el borde."
+     "convergence_edge": "El optimizador se detuvo en un borde del rango de un parámetro, donde la verosimilitud sigue creciendo hacia el límite: la estimación es ese límite, y su error estándar, si lo hay, dice poco; lean la medida de las estimaciones en el borde.",
+     "convergence_spend": "El modelo del gasto (Gamma–Gamma) no alcanzó un máximo: sus estimaciones, y los valores que las usan, puede que no sean las mejores; busquen importes medios extremos o casi iguales, o quiten la columna del gasto."
     }
    },
    "boundary": {
@@ -1260,7 +1264,8 @@
     "h0": "L'optimiseur a trouvé un maximum : il a convergé et la hessienne est définie positive.",
     "advice": {
      "": "Les estimations ne sont peut-être pas les meilleures : les données ont peut-être trop peu de clients avec rachats pour ce modèle ; essayez un autre modèle d'achats.",
-     "convergence_edge": "L'optimiseur s'est arrêté à une borne du domaine d'un paramètre, où la vraisemblance continue de croître vers la limite : l'estimation est cette limite, et son erreur standard, s'il y en a une, dit peu ; lisez la mesure des estimations aux bornes."
+     "convergence_edge": "L'optimiseur s'est arrêté à une borne du domaine d'un paramètre, où la vraisemblance continue de croître vers la limite : l'estimation est cette limite, et son erreur standard, s'il y en a une, dit peu ; lisez la mesure des estimations aux bornes.",
+     "convergence_spend": "Le modèle de la dépense (Gamma–Gamma) n'a pas atteint de maximum : ses estimations, et les valeurs qui les utilisent, ne sont peut-être pas les meilleures ; cherchez des montants moyens extrêmes ou presque égaux, ou retirez la colonne de la dépense."
     }
    },
    "boundary": {

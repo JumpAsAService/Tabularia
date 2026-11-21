@@ -86,6 +86,8 @@ clv_checks <- function(rows, fit) {
 # to its limit, a legitimate limit of the model, and their fit came out failed. `value`: the Newton step left
 # at the purchase model's estimates, in its standard errors. At an edge a line search that failed (L-BFGS-B's
 # codes 51, 52) is the edge's, not a failure (clv_code_converged): the likelihood flattens towards the limit.
+# Each part has its advice: the purchases' when they fail, the spend's (advice_id convergence_spend) when
+# only Gamma–Gamma does.
 clv_check_convergence <- function(rows, fit) {
   failed <- function(f) {
     if (is.null(f)) return(FALSE)
@@ -100,9 +102,13 @@ clv_check_convergence <- function(rows, fit) {
   if (!is.null(p$vcov_log) && !is.null(p$gradient) && all(is.finite(p$gradient))) {
     step <- max(abs(drop(p$vcov_log %*% p$gradient)) / sqrt(pmax(diag(p$vcov_log), 1e-300)))
   }
-  if (failed(fit$purchases) || failed(fit$spend)) {
+  if (failed(fit$purchases)) {
     clv_check_rows(rows, "convergence", "failed", value = step,
                    advice = "the estimates may not be the best ones: the data may hold too few repeat customers for this model; try another purchase model")
+  } else if (failed(fit$spend)) {
+    clv_check_rows(rows, "convergence", "failed", value = step, advice_id = "convergence_spend",
+                   advice = paste0("the spend model (Gamma–Gamma) did not reach a maximum: its estimates, and the values that use them, ",
+                                   "may not be the best ones; look for extreme or almost equal average amounts, or leave out the spend column"))
   } else if (any(edge)) {
     clv_check_rows(rows, "convergence", "doubtful", advice_id = "convergence_edge",
                    advice = "the optimizer stopped at an edge of a parameter's range, where the likelihood keeps growing towards the limit: the estimate is a limit and its standard error means little; read the estimates at an edge")

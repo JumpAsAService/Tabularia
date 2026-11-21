@@ -101,6 +101,14 @@ TAB_COMMON_TESTS[["customer_lifetime: a verdict is a p-value against the node's 
   }
   .tab_expect(clv_code_converged(52L, pair) && !clv_code_converged(52L, clv_no_edges()) && !clv_code_converged(1L, pair) &&
               clv_code_converged(0L, clv_no_edges()), "clv_code_converged")
+  # only Gamma–Gamma fails: the spend's advice, not the purchase model's
+  for (spend_fail in list(list(spend_converged = FALSE), list(spend_vcov = FALSE))) {
+    a <- .clv_check_frame(do.call(.clv_check_fit, spend_fail))
+    .tab_expect(identical(g(a, "convergence", "verdict"), "failed") && identical(g(a, "convergence", "advice_id"), "convergence_spend") &&
+                grepl("spend model", g(a, "convergence", "advice"), fixed = TRUE), "the spend alone fails: ", g(a, "convergence", "advice_id"))
+  }
+  a <- .clv_check_frame(.clv_check_fit(converged = FALSE, spend_converged = FALSE))
+  .tab_expect(identical(g(a, "convergence", "advice_id"), "convergence"), "both fail: the purchase model's advice")
 }
 
 TAB_COMMON_TESTS[["customer_lifetime: a pair's edge is found by longer steps along it, not by the Hessian's flat direction"]] <- function(code) {
