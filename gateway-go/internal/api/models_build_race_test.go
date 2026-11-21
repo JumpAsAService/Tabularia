@@ -54,11 +54,18 @@ func (f *modelsFixture) round(b *scriptBuilds) {
 	}
 }
 
-// waited makes the environment's versions queued longer than mgForeignWait ago.
+// waited makes the environment's versions queued longer than the wait for another release
+// (MODELS__OTHER_RELEASE_WAIT_SECONDS) ago.
 func (f *modelsFixture) waited(env int64) {
 	f.t.Helper()
+	f.aged(env, int(f.builds().otherReleaseWait().Seconds())+1)
+}
+
+// aged makes the environment's versions queued that many seconds earlier.
+func (f *modelsFixture) aged(env int64, seconds int) {
+	f.t.Helper()
 	if _, err := f.db.Exec(f.ctx, `UPDATE script_environment_versions SET created_at = created_at - $2::interval WHERE environment_id = $1`,
-		env, fmt.Sprintf("%d seconds", int(mgForeignWait.Seconds())+1)); err != nil {
+		env, fmt.Sprintf("%d seconds", seconds)); err != nil {
 		f.t.Fatal(err)
 	}
 }
@@ -156,7 +163,7 @@ func TestARoundOfAReleaseThatDoesNotKnowTheGroupLeavesItsVersionAlone(t *testing
 }
 
 // A `helm rollback` while the newer release's version waits: no gateway of that release is left to
-// build it. Once it has waited longer than a replica of it would let it (mgForeignWait), the release
+// build it. Once it has waited longer than a replica of it would let it (MODELS__OTHER_RELEASE_WAIT_SECONDS), the release
 // rolled back to fails it, saying why, and queues its own recipe in the same round.
 func TestAVersionOfAReleaseThatNoLongerRunsIsFailedAndThisRecipeQueued(t *testing.T) {
 	f := newModelsFixture(t)
@@ -215,7 +222,7 @@ func TestABuildOfAReleaseThatNoLongerRunsEndsWithItsJob(t *testing.T) {
 
 // Right after an upgrade the version in use was built by the previous release, long ago: the new
 // recipe is queued at once. A version another release made a moment ago is not answered with a
-// version of this recipe until mgForeignWait has passed (no replicas queuing in turn).
+// version of this recipe until MODELS__OTHER_RELEASE_WAIT_SECONDS have passed (no replicas queuing in turn).
 func TestAVersionOfAnotherReleaseIsAnsweredOnlyOnceItWaited(t *testing.T) {
 	f := newModelsFixture(t)
 	b := f.builds()
@@ -235,4 +242,29 @@ func TestAVersionOfAnotherReleaseIsAnsweredOnlyOnceItWaited(t *testing.T) {
 	if vs := f.versions("timeseries"); len(vs) != 2 || vs[0].Status != "queued" {
 		t.Fatalf("the new recipe not queued: %+v", vs)
 	}
+}
+
+// The wait for another release is MODELS__OTHER_RELEASE_WAIT_SECONDS: ten minutes by default, and the
+// installation's own when set.
+func TestTheWaitForAnotherReleaseIsTheSetting(t *testing.T) {
+	f := newModelsFixture(t)
+	if w := f.builds().otherReleaseWait(); w.Minutes() != 10 {
+		t.Fatalf("the default wait: %s", w)
+	}
+	t.Setenv("MODELS__OTHER_RELEASE_WAIT_SECONDS", "120")
+	b := f.builds()
+	f.enable(f.admin, "timeseries") // queued by the newer release
+	env := f.envOf("timeseries")
+	as(previousRelease("timeseries", true), func() {
+		f.aged(env, 100)
+		f.round(b)
+		if v := f.versions("timeseries")[0]; v.Status != "queued" {
+			t.Fatalf("after 100 seconds of 120: %s %q", v.Status, deref(v.Error))
+		}
+		f.aged(env, 21)
+		f.round(b)
+		if vs := f.versions("timeseries"); len(vs) != 2 || vs[1].Status != "failed" || vs[0].Status != "queued" {
+			t.Fatalf("after 121 seconds of 120: %+v", vs)
+		}
+	})
 }

@@ -81,6 +81,10 @@ type KubeJobsConfig struct {
 
 	ScriptsLint bool // scripts.lint
 
+	// ModelsOtherReleaseWait is how long, in seconds, a statistical model group's version queued by
+	// another release of Tabularia waits for a gateway of that release (MODELS__OTHER_RELEASE_WAIT_SECONDS)
+	ModelsOtherReleaseWait int64
+
 	// NotebooksSettings
 	NotebooksIdleMinutes        int64
 	NotebooksStartTimeout       int64
@@ -142,6 +146,7 @@ func loadKubeJobs(r *reader) KubeJobsConfig {
 		NotebooksIdleMinutes:        int64(r.integer("NOTEBOOKS__IDLE_MINUTES", 15, 1, 24*60)),
 		NotebooksStartTimeout:       int64(r.integer("NOTEBOOKS__START_TIMEOUT_SECONDS", 300, 30, 3600)),
 		ScriptsLint:                 r.boolean("SCRIPTS__LINT", true),
+		ModelsOtherReleaseWait:      int64(r.integer("MODELS__OTHER_RELEASE_WAIT_SECONDS", 600, 60, 0)),
 		NotebooksMaxVisitorsPerApp:  int64(r.integer("NOTEBOOKS__MAX_VISITORS_PER_APP", 10, 1, 1000)),
 		NotebooksMaxVisitorsCeiling: int64(r.integer("NOTEBOOKS__MAX_VISITORS_CEILING", 50, 1, 1000)),
 		ContainersPullCheck:         int64(r.integer("CONTAINERS__PULL_CHECK_SECONDS", 300, 30, 0)),

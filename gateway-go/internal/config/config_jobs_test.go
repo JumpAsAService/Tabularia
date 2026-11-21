@@ -39,3 +39,23 @@ func TestTheRoleIsAppSettingsRole(t *testing.T) {
 		}
 	}
 }
+
+// How long a model group's version of another release waits for a gateway of that release: ten
+// minutes unless MODELS__OTHER_RELEASE_WAIT_SECONDS says otherwise, never under a minute.
+func TestTheWaitForAnotherReleasesVersion(t *testing.T) {
+	vars := map[string]string{"APP__ROLE": "orchestrator", "SECURITY__FERNET_KEY": "k"}
+	c, err := Load(env(vars))
+	if err != nil || c.Jobs.Kube.ModelsOtherReleaseWait != 600 {
+		t.Fatalf("default: %v %d", err, c.Jobs.Kube.ModelsOtherReleaseWait)
+	}
+	vars["MODELS__OTHER_RELEASE_WAIT_SECONDS"] = "1800"
+	if c, err = Load(env(vars)); err != nil || c.Jobs.Kube.ModelsOtherReleaseWait != 1800 {
+		t.Errorf("set: %v %d", err, c.Jobs.Kube.ModelsOtherReleaseWait)
+	}
+	for _, bad := range []string{"59", "ten minutes"} {
+		vars["MODELS__OTHER_RELEASE_WAIT_SECONDS"] = bad
+		if _, err := Load(env(vars)); err == nil || !strings.Contains(err.Error(), "MODELS__OTHER_RELEASE_WAIT_SECONDS") {
+			t.Errorf("%q accepted: %v", bad, err)
+		}
+	}
+}

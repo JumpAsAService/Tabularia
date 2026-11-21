@@ -79,9 +79,18 @@ Deployments at the same time.
 
   After a `helm rollback` in the middle of such a build no pod of the newer release is left
   to finish it. The release rolled back to waits ten minutes after the version was queued
-  (an image already built: until its Job's TTL, `scripts.job_ttl_seconds`, takes the Job
+  (`MODELS__OTHER_RELEASE_WAIT_SECONDS` in [`extraEnv`](../configuration.md#scripting-environments-kubernetes);
+  an image already built: until its Job's TTL, `scripts.job_ttl_seconds`, takes the Job
   away), then marks it **Failed** with *queued by another version of Tabularia … this
   version of Tabularia builds its own*, and queues a version of its own recipe at once.
+  For as long, a version the other release has just made is not answered with one of the
+  running release's recipe.
+
+  One case is not covered: two releases that ship the same recipe and runner of a group but
+  write its Dockerfile differently (a change in how Tabularia builds every image, not in
+  the group). Either release may then build the other's version, as it would its own, and
+  the image follows the Dockerfile of the pod that built it. **Build again** on the group
+  once the upgrade is over gives it the new release's Dockerfile.
 - **The interface** rolls like the gateway. A browser tab left open keeps the old version
   until it is reloaded.
 

@@ -262,16 +262,24 @@ func mgBaseSentence(g modelgroups.Group) string {
 // whoever made it.
 //
 // A version of another release waits for that release's gateway, which takes it at its next round.
-// When none comes (a rollback), it is failed once it has waited mgForeignWait, saying why, and the same
+// When none comes (a rollback), it is failed once it has waited otherReleaseWait, saying why, and the same
 // round queues the recipe of the gateway that failed it (mgQueueStale); a built image waits for its Job
 // to go (the Job's TTL), then fails the same way.
+//
+// The limit, kept on purpose (recording the Dockerfile's hash would take a column): two releases that
+// ship the same recipe and runner but write the Dockerfile differently (scriptimage) build each other's
+// versions; Build again after the upgrade gives the group the new release's.
 
-// mgForeignWait is how long a version of another release waits for a gateway of that release before
-// it is failed (its queueing), and how long a version another release made is left unanswered by a
-// version of this recipe (mgQueueStale). The replicas of a rolling upgrade overlap for the time the new
-// one takes to become ready and the old one to stop, and a gateway's loop takes its turn every
-// scripts.poll_seconds (at most a minute): far less than this.
-const mgForeignWait = 10 * time.Minute
+// otherReleaseWait is MODELS__OTHER_RELEASE_WAIT_SECONDS (ten minutes by default): how long a version
+// of another release waits for a gateway of that release before it is failed (from its queueing), and
+// how long a version another release made is left unanswered by a version of this recipe
+// (mgQueueStale). It is a setting of its own, tied to none of the scripts' settings: what it must
+// outlast is the time the replicas of two releases run side by side (the new one becoming ready, the
+// old one stopping, a gateway's loop taking its turn every scripts.poll_seconds), which neither a
+// build's timeout nor a Job's TTL says anything about.
+func (b *scriptBuilds) otherReleaseWait() time.Duration {
+	return time.Duration(b.cfg.ModelsOtherReleaseWait) * time.Second
+}
 
 // mgOtherReleaseSentence is why a version of another release, which no gateway of that release built
 // or checked, is failed.
@@ -293,7 +301,7 @@ func mgOfAnotherRelease(env *sbEnvironment, v *sbVersion) bool {
 // waitForAnotherRelease leaves a queued version of another release to that release's gateway, and
 // fails it once it has waited longer than such a gateway would have let it.
 func (b *scriptBuilds) waitForAnotherRelease(v *sbVersion) {
-	if jobs.NaiveNow().Sub(v.CreatedAt) >= mgForeignWait {
+	if jobs.NaiveNow().Sub(v.CreatedAt) >= b.otherReleaseWait() {
 		b.fail(v, mgOtherReleaseSentence, nil)
 	}
 }
@@ -302,8 +310,8 @@ func (b *scriptBuilds) waitForAnotherRelease(v *sbVersion) {
 // from another recipe than the one this Tabularia ships (or has none): «Rebuild needed» without
 // a click. A group whose newest version failed on the recipe shipped is left to the
 // administrator's Rebuild, and one whose newest version another release made less than
-// mgForeignWait ago is left to that release for now. It returns how many it queued.
-func mgQueueStale(ctx context.Context, tx pgx.Tx, log *slog.Logger) (int64, error) {
+// otherReleaseWait ago is left to that release for now. It returns how many it queued.
+func mgQueueStale(ctx context.Context, tx pgx.Tx, log *slog.Logger, otherReleaseWait time.Duration) (int64, error) {
 	var queued int64
 	for _, g := range modelgroups.Groups() {
 		var env int64
@@ -327,7 +335,7 @@ func mgQueueStale(ctx context.Context, tx pgx.Tx, log *slog.Logger) (int64, erro
 		if err == nil && (mgInProgress(status) || hash != nil && *hash == g.RecipeHash) {
 			continue
 		}
-		if err == nil && hash != nil && jobs.NaiveNow().Sub(created) < mgForeignWait {
+		if err == nil && hash != nil && jobs.NaiveNow().Sub(created) < otherReleaseWait {
 			// another release made it a moment ago: the other replica of a rolling upgrade, not a
 			// version for this recipe to answer (the two would queue in turn)
 			continue

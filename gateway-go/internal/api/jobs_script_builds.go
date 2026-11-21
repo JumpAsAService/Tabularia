@@ -768,7 +768,7 @@ func (b *scriptBuilds) oneRound(ctx context.Context) (int64, error) {
 		}
 	}
 	// the model groups enabled whose shipped recipe changed since their version was built
-	queued, err := mgQueueStale(ctx, tx, b.log)
+	queued, err := mgQueueStale(ctx, tx, b.log, b.otherReleaseWait())
 	if err != nil {
 		return 0, err
 	}
