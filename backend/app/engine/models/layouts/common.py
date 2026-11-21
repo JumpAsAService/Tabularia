@@ -171,6 +171,9 @@ def with_labels(model: str, params: Mapping[str, Any] | None, rows: list[dict], 
 
 
 NUMBER_IN_TEXT = re.compile(r"-?\d+(?:\.\d+)?(?:e[-+]?\d+)?")
+# The values of a note that are names (of a column, a stratum, a distribution, a purchase model, a unit), never
+# numbers: a stratum or a column called «2.5» stays «2.5» in every language, as in the tables
+NOTE_NAMES = frozenset({"stratum", "pairs", "cluster", "weights", "names", "distribution", "other", "models", "unit"})
 
 
 def _decimal(text: str, loc: Any) -> str:
@@ -185,7 +188,8 @@ def structured_note(w: dict, text: str, loc: Any, texts: str = "note_texts") -> 
     of `note_texts.<id>`, each «{name}» replaced by its value, a number with the language's decimal, a name of a
     distribution, of a purchase model or of a unit of time in the page's words (`values.distribution`,
     `values.purchase_model`, `values.time_unit`). A formula sent the same way (BG/BB's «@bgbb_formula unit=year») is
-    read from `formula_texts`. A value's «%», « » and «,» come encoded (%25, %20, %2C: the survival runner's
+    read from `formula_texts`. A value that is a name (NOTE_NAMES: a stratum, a column, a distribution…) is never
+    read as a number: a stratum «2.5» stays «2.5». A value's «%», « » and «,» come encoded (%25, %20, %2C: the survival runner's
     surv_note, so that a stratum «North Side» or «a,b» does not split the note) and are decoded here, after the
     split on «,»."""
     head, *rest = text[1:].split(" ")
@@ -199,16 +203,17 @@ def structured_note(w: dict, text: str, loc: Any, texts: str = "note_texts") -> 
     forms = {"one": values.get("time_unit_one", {}), "dative": values.get("time_unit_dative", {})}
     parts = dict(r.partition("=")[::2] for r in rest if "=" in r)
 
-    def word(v: str, form: str = "") -> str:
+    def word(v: str, form: str = "", name: bool = False) -> str:
         v = unquote(v)
-        if NUMBER_IN_TEXT.fullmatch(v):
+        if not name and NUMBER_IN_TEXT.fullmatch(v):
             return _decimal(v, loc)
         return forms[form].get(v, names.get(v, v)) if form else names.get(v, v)
 
     out = said
     for k, v in parts.items():
         for form in ("", *forms):
-            out = out.replace("{" + k + (":" + form if form else "") + "}", ", ".join(word(x, form) for x in v.split(",")))
+            out = out.replace("{" + k + (":" + form if form else "") + "}",
+                              ", ".join(word(x, form, k in NOTE_NAMES) for x in v.split(",")))
     return out
 
 

@@ -965,6 +965,18 @@ def test_a_parametric_survival_with_strata_names_them_without_the_column_and_gro
     assert "groups" not in items["quantiles"] and items["hazard"]["w"] < common.WIDTH
 
 
+def test_a_note_s_names_stay_as_they_are_and_its_numbers_take_the_language_s_decimal():
+    """A stratum, a column or a list of names called «2.5» is a name, not a number: «2.5» in every language, as in
+    the tables; a number of the same note takes the page's decimal."""
+    from app.reports import formats
+
+    w = {"note_texts": {"x": "{stratum} | {cluster} | {weights} | {pairs} | {epv} | {times}"}}
+    said = common.structured_note(w, "@x stratum=2.5 cluster=1.5 weights=0.5 pairs=2.5%20×%203.5 epv=2.5 times=1.5,2.5",
+                                  formats.locale("it"))
+    assert said == "2.5 | 1.5 | 0.5 | 2.5 × 3.5 | 2,5 | 1,5, 2,5"
+    assert common.structured_note(w, "@x stratum=2.5 epv=2.5", formats.locale("en")).startswith("2.5 | ")
+
+
 @pytest.mark.parametrize("locale", LOCALES)
 def test_a_parametric_survival_candidate_auto_did_not_check_says_so(tmp_path, chart_service, monkeypatch, locale):  # noqa: F811
     """`auto` checks the convergence of the candidates its choice reaches: one fitted that it never reached has no row
