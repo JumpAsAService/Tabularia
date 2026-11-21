@@ -394,8 +394,7 @@ test('the variants output keeps the variant column\'s own type, as the engine sa
 // ── the words ────────────────────────────────────────────────────────────────
 
 test('every word the experiments\' form asks for is in the five languages, with the same holes', () => {
-  // (the decomposition's words are lot D5's of docs/specs/ts-decomposition.md: the palette leaves the node out until then)
-  const keys = [...m.modelWordKeys({ ...m.MODEL_CATALOG, models: m.MODEL_CATALOG.models.filter((x) => x.id !== 'decomposition') })].filter((k) => /ab_|reasons\.(ratio|sequential|metric|numerator|denominator|units|sum_squares|days)/.test(k) || k.startsWith('models.params.') || k.startsWith('models.choice.'))
+  const keys = [...m.modelWordKeys(m.MODEL_CATALOG)].filter((k) => /ab_|reasons\.(ratio|sequential|metric|numerator|denominator|units|sum_squares|days)/.test(k) || k.startsWith('models.params.') || k.startsWith('models.choice.'))
   assert.ok(keys.length > 60)
   const missing = []
   for (const lang of LANGS) for (const key of keys) if (!WORDS[lang][key]?.trim()) missing.push(`${lang} ${key}`)

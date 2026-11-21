@@ -6627,6 +6627,10 @@ export default {
         "min_lift": "The relative lift to detect: 0.02 is 2 % of the baseline."
       }
     },
+    "decomposition": {
+      "name": "Decomposition",
+      "hint": "Splits a series into trend, seasonal parts and remainder (STL, classical, MSTL) or into its intrinsic modes (EMD), tests the season and checks what is left."
+    },
     "presets": {
       "ar": {
         "name": "AR",
@@ -6654,6 +6658,22 @@ export default {
       }
     },
     "params": {
+      "method": "Method",
+      "period": "Seasonal period",
+      "periods": "Seasonal periods",
+      "type": "Components combine",
+      "robust": "Robust to outliers",
+      "s_window": "Seasonal smoother span",
+      "s_windows": "Seasonal smoother spans",
+      "t_window": "Trend smoother span",
+      "iterate": "Passes over the periods",
+      "max_imf": "Most IMFs to extract",
+      "s_number": "S-number (stopping rule)",
+      "max_siftings": "Most siftings per IMF",
+      "noise_imfs": "First IMFs read as noise",
+      "missing": "A period without a value",
+      "seasonality_test": "Test of the seasonality",
+      "lb_lag": "Ljung–Box lag",
       "outcome": "Outcome",
       "event_value": "Value that is the event",
       "predictors": "Predictors",
@@ -6790,6 +6810,22 @@ export default {
       "traffic_share": "Share of the traffic in the experiment"
     },
     "hints": {
+      "method": "STL: one season, robust to outliers. Classical: moving averages, additive or multiplicative. MSTL: several seasons at once. EMD: intrinsic modes, no period needed.",
+      "period": "Steps in one season: 7 for days in a week, 12 for months in a year. Empty: the frequency's own (24, 7, 52, 12, 4); a yearly or index series has none, so give it. For EMD it only serves the seasonality test and the subseries chart.",
+      "periods": "Up to 4 different whole periods, in steps, e.g. 7, 365 for daily data. They are sorted from the shortest.",
+      "type": "Additive: value = trend + season + remainder. Multiplicative: value = trend × season × remainder.",
+      "robust": "Gives outliers a lower weight, so that one odd value does not bend the trend or the season.",
+      "s_window": "The cycles the seasonal smoother looks at, a whole number from 7 up; «Periodic» repeats the same pattern every cycle.",
+      "s_windows": "One whole number from 7 up for each period, in the periods' order. Empty: 11, 15, 19, 23.",
+      "t_window": "The steps the trend smoother looks at, a whole number from 3 up. Automatic is STL's own rule.",
+      "iterate": "How many times the periods are passed over, from 1 to 5.",
+      "max_imf": "The most IMFs extracted, from 1 to 16; what is slower stays in the residue.",
+      "s_number": "Stopping rule of the sifting: how many sifts in a row may leave the count of extrema unchanged, from 0 to 20 (0: off).",
+      "max_siftings": "The most siftings of one IMF, from 1 to 1,000.",
+      "noise_imfs": "The first k IMFs are read as noise, and the checks test the remainder after them. 0: no check of a remainder.",
+      "missing": "What happens to a period with no value inside the series. Refuse stops the node; linear draws a line between the neighbours; seasonal fills in with the season in mind.",
+      "seasonality_test": "The test of each seasonal period: Friedman or Kruskal–Wallis, or none.",
+      "lb_lag": "The lag of the Ljung–Box test of the remainder. Automatic: the smaller of twice the longest period and a fifth of the rows, or 10 without a season.",
       "outcome": "The column to explain.",
       "event_value": "Which value of the column is the event; the others are not.",
       "predictors": "The columns that explain it, numbers or categories. A date is not accepted: compute the month, or the days since a start, first.",
@@ -6902,6 +6938,18 @@ export default {
       "traffic_share": "The share of all the new units that go into the experiment: above 0, up to 1. It lengthens the duration."
     },
     "choice": {
+      "stl": "STL",
+      "mstl": "MSTL",
+      "emd": "EMD",
+      "additive": "Additive",
+      "multiplicative": "Multiplicative",
+      "periodic": "Periodic",
+      "refuse": "Refuse",
+      "linear": "Linear interpolation",
+      "seasonal": "Seasonal interpolation",
+      "friedman": "Friedman",
+      "kruskal_wallis": "Kruskal–Wallis",
+      "components": "Components",
       "ols": "Ordinary least squares",
       "wls": "Weighted least squares",
       "ml": "Maximum likelihood",
@@ -7023,6 +7071,9 @@ export default {
       }
     },
     "reasons": {
+      "multiplicative_transform": "A multiplicative decomposition already works in ratios: choose no transform, or an additive decomposition of the log.",
+      "period_needed": "A yearly or index series has no season of its own: give the period, in steps.",
+      "periods_needed": "An MSTL decomposition needs its seasonal periods, in steps.",
       "wls_needs_weights": "Weighted least squares need the column of the weights.",
       "cluster_needs_column": "Clustered standard errors need the column of the clusters.",
       "firth_needs_logit": "Firth's correction is for the logit link: choose logit, or maximum likelihood.",
@@ -7046,6 +7097,7 @@ export default {
       "days_need_date": "The lift detectable in a number of days needs the column of the day each unit first appeared."
     },
     "form": {
+      "periodsPlaceholder": "e.g. 7, 365",
       "notUsable": "not usable here",
       "notInInput": "not in the step's input",
       "notInData": "not in the data",

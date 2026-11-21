@@ -100,9 +100,7 @@ test('the fields of a model in the catalogue\'s order, what it needs first', () 
   assert.equal(m.modelFields(ARIMA).find((f) => f.key === 'time').types.length, 3)
 })
 
-// The nodes the palette leaves out until their lots give them a form and words (`NOT_IN_THE_PALETTE_YET`): the decomposition
-// (docs/specs/ts-decomposition.md, lot D5). Their words are not asked for until then (the group's are). D5 takes this away.
-const WORDED = { ...m.MODEL_CATALOG, models: m.MODEL_CATALOG.models.filter((x) => x.id !== 'decomposition') }
+const WORDED = m.MODEL_CATALOG
 
 test('every model, group, preset, field, choice and reason has its words in the five languages', () => {
   const wanted = m.modelWordKeys(WORDED)
@@ -1233,7 +1231,7 @@ test('the decomposition says its columns before a run: a seasonal column per per
     assert.ok(!columns.some((c) => c.name === 'other') && later.length === 0)
   }
   assert.equal(m.modelOutputColumns(dec, { time: 'gone' }, [{ name: 'day', dtype: 'Int64' }]).columns[0].dtype, 'Unknown')
-  // a model the palette does not show yet: lot D5 gives it a form
+  // a model the palette does not show yet: its runner is not built (lots D2 and D3)
   const palette = m.modelPalette(m.MODEL_CATALOG.groups, '', (k) => k)
   assert.ok(!palette.flatMap((g) => g.items).some((i) => i.model === 'decomposition'))
 })

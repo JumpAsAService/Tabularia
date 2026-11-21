@@ -6627,6 +6627,10 @@ export default {
         "min_lift": "Der relative Anstieg, der erkannt werden soll: 0,02 sind 2 % des Ausgangswerts."
       }
     },
+    "decomposition": {
+      "name": "Zerlegung",
+      "hint": "Zerlegt eine Reihe in Trend, saisonale Anteile und Rest (STL, klassisch, MSTL) oder in ihre intrinsischen Moden (EMD), prüft die Saison und kontrolliert, was übrig bleibt."
+    },
     "presets": {
       "ar": {
         "name": "AR",
@@ -6654,6 +6658,22 @@ export default {
       }
     },
     "params": {
+      "method": "Verfahren",
+      "period": "Saisonale Periode",
+      "periods": "Saisonale Perioden",
+      "type": "Wie sich die Komponenten verbinden",
+      "robust": "Robust gegen Ausreißer",
+      "s_window": "Spanne der saisonalen Glättung",
+      "s_windows": "Spannen der saisonalen Glättung",
+      "t_window": "Spanne der Trendglättung",
+      "iterate": "Durchgänge über die Perioden",
+      "max_imf": "Höchstzahl der IMFs",
+      "s_number": "S-Zahl (Abbruchregel)",
+      "max_siftings": "Höchstzahl der Siebungen je IMF",
+      "noise_imfs": "Erste IMFs als Rauschen gelesen",
+      "missing": "Eine Periode ohne Wert",
+      "seasonality_test": "Test der Saisonalität",
+      "lb_lag": "Ljung–Box-Lag",
       "outcome": "Zielgröße",
       "event_value": "Wert, der das Ereignis ist",
       "predictors": "Prädiktoren",
@@ -6790,6 +6810,22 @@ export default {
       "traffic_share": "Anteil des Verkehrs im Experiment"
     },
     "hints": {
+      "method": "STL: eine Saison, robust gegen Ausreißer. Klassisch: gleitende Durchschnitte, additiv oder multiplikativ. MSTL: mehrere Saisons zugleich. EMD: intrinsische Moden, keine Periode nötig.",
+      "period": "Schritte einer Saison: 7 für die Tage einer Woche, 12 für die Monate eines Jahres. Leer: die der Frequenz (24, 7, 52, 12, 4); eine Jahres- oder Indexreihe hat keine, also angeben. Bei EMD dient sie nur dem Saisontest und dem Teilreihen-Diagramm.",
+      "periods": "Bis zu 4 verschiedene ganze Perioden, in Schritten, z. B. 7, 365 für Tagesdaten. Sie werden von der kürzesten an sortiert.",
+      "type": "Additiv: Wert = Trend + Saison + Rest. Multiplikativ: Wert = Trend × Saison × Rest.",
+      "robust": "Gibt Ausreißern ein geringeres Gewicht, damit ein ungewöhnlicher Wert weder Trend noch Saison verbiegt.",
+      "s_window": "Die Zyklen, die die saisonale Glättung betrachtet, eine ganze Zahl ab 7; «Periodisch» wiederholt in jedem Zyklus dasselbe Muster.",
+      "s_windows": "Eine ganze Zahl ab 7 für jede Periode, in der Reihenfolge der Perioden. Leer: 11, 15, 19, 23.",
+      "t_window": "Die Schritte, die die Trendglättung betrachtet, eine ganze Zahl ab 3. Automatisch ist die eigene Regel von STL.",
+      "iterate": "Wie oft die Perioden durchlaufen werden, von 1 bis 5.",
+      "max_imf": "Die höchste Zahl extrahierter IMFs, von 1 bis 16; was langsamer ist, bleibt im Residuum.",
+      "s_number": "Abbruchregel der Siebung: wie viele Siebungen in Folge die Zahl der Extrema unverändert lassen dürfen, von 0 bis 20 (0: aus).",
+      "max_siftings": "Die höchste Zahl der Siebungen einer IMF, von 1 bis 1.000.",
+      "noise_imfs": "Die ersten k IMFs werden als Rauschen gelesen, und die Prüfungen testen den Rest danach. 0: keine Prüfung eines Rests.",
+      "missing": "Was mit einer Periode ohne Wert innerhalb der Reihe geschieht. Ablehnen stoppt den Knoten; linear zieht eine Gerade zwischen den Nachbarn; saisonal füllt unter Beachtung der Saison.",
+      "seasonality_test": "Der Test jeder saisonalen Periode: Friedman oder Kruskal–Wallis, oder keiner.",
+      "lb_lag": "Der Lag des Ljung–Box-Tests des Rests. Automatisch: das Kleinere aus dem Doppelten der längsten Periode und einem Fünftel der Zeilen, ohne Saison 10.",
       "outcome": "Die zu erklärende Spalte.",
       "event_value": "Welcher Wert der Spalte das Ereignis ist; die anderen nicht.",
       "predictors": "Die erklärenden Spalten, Zahlen oder Kategorien. Ein Datum wird nicht akzeptiert: berechnen Sie zuerst den Monat oder die Tage seit einem Start.",
@@ -6902,6 +6938,18 @@ export default {
       "traffic_share": "Der Anteil aller neuen Einheiten, die ins Experiment gehen: über 0, bis 1. Er verlängert die Dauer."
     },
     "choice": {
+      "stl": "STL",
+      "mstl": "MSTL",
+      "emd": "EMD",
+      "additive": "Additiv",
+      "multiplicative": "Multiplikativ",
+      "periodic": "Periodisch",
+      "refuse": "Ablehnen",
+      "linear": "Lineare Interpolation",
+      "seasonal": "Saisonale Interpolation",
+      "friedman": "Friedman",
+      "kruskal_wallis": "Kruskal–Wallis",
+      "components": "Komponenten",
       "ols": "Gewöhnliche kleinste Quadrate",
       "wls": "Gewichtete kleinste Quadrate",
       "ml": "Maximum Likelihood",
@@ -7023,6 +7071,9 @@ export default {
       }
     },
     "reasons": {
+      "multiplicative_transform": "Eine multiplikative Zerlegung arbeitet schon mit Verhältnissen: keine Transformation wählen, oder eine additive Zerlegung des Logarithmus.",
+      "period_needed": "Eine Jahres- oder Indexreihe hat keine eigene Saison: die Periode in Schritten angeben.",
+      "periods_needed": "Eine MSTL-Zerlegung braucht ihre saisonalen Perioden, in Schritten.",
       "wls_needs_weights": "Gewichtete kleinste Quadrate brauchen die Gewichtsspalte.",
       "cluster_needs_column": "Clusterrobuste Standardfehler brauchen die Cluster-Spalte.",
       "firth_needs_logit": "Die Firth-Korrektur gilt für den Logit-Link: Logit oder Maximum Likelihood wählen.",
@@ -7046,6 +7097,7 @@ export default {
       "days_need_date": "Der in einer Anzahl Tage erkennbare Anstieg braucht die Spalte des Tages, an dem jede Einheit zum ersten Mal auftrat."
     },
     "form": {
+      "periodsPlaceholder": "z. B. 7, 365",
       "notUsable": "hier nicht verwendbar",
       "notInInput": "nicht in der Eingabe des Schritts",
       "notInData": "nicht in den Daten",

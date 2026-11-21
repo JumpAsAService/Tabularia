@@ -228,10 +228,12 @@ export function modelForbiddenOption(model: ModelDef, key: string, value: unknow
   if (direct) return direct
   const full = modelFull(model, params)
   return model.forbids.find((r) => {
-    const keys = Object.keys(r.when)
-    if (keys.length !== 1 || keys[0] !== key || full[r.key] !== r.value) return false
+    // the rule names this choice among its conditions, the value it forbids is the one the other key has, and every other
+    // condition holds (a multiplicative decomposition is grey while a transform is chosen, but only with the classical method)
+    if (!(key in r.when) || full[r.key] !== r.value) return false
     const want = r.when[key]
-    return Array.isArray(want) ? want.some((x) => x === value) : want === value
+    if (!modelHolds(want, value)) return false
+    return Object.entries(r.when).every(([k, w]) => k === key || modelHolds(w, full[k]))
   }) ?? null
 }
 
@@ -263,6 +265,7 @@ export function modelNumber(value: unknown, decimalComma?: boolean): number {
 /** The words of the example under an empty box of numbers: the quantiles' own («e.g. 0.1, 0.9»: proportions, with a point, the
  *  comma being a separator of the list), the times' and the others' («e.g. 12, 24, 36»). */
 export function modelNumbersPlaceholderKey(field: Pick<ModelField, 'key'>): string {
+  if (field.key === 'periods') return 'models.form.periodsPlaceholder'
   return field.key === 'quantiles' ? 'models.form.quantilesPlaceholder' : 'models.form.numbersPlaceholder'
 }
 
@@ -528,12 +531,17 @@ export function modelLevelShares(value: unknown, labels: readonly string[]): num
   return weights.map((w) => w / sum)
 }
 
+/** The keys whose numbers are whole (a period or a span counted in steps, a lag): the catalogue's kinds do not say it
+ *  for the lists and the number-or-word ones, and the runner refuses «365.25» with its own sentence (`period_whole`). */
+const WHOLE_KEYS = new Set(['periods', 's_windows', 's_window', 't_window', 'lb_lag'])
+export const modelWhole = (key: string): boolean => WHOLE_KEYS.has(key)
+
 /** What is wrong with a list of numbers against its field's bounds (the quantiles in (0, 1), the times from 0,
  *  at most `max_count` of them): '' when nothing, else the first number's problem or 'tooMany'. */
-export function modelNumbersProblem(field: Pick<ModelField, 'above' | 'below' | 'min' | 'max' | 'max_count'>, value: unknown): ReturnType<typeof modelNumberProblem> | 'tooMany' {
+export function modelNumbersProblem(field: Pick<ModelField, 'above' | 'below' | 'min' | 'max' | 'max_count'> & { key?: string }, value: unknown): ReturnType<typeof modelNumberProblem> | 'tooMany' {
   const list = modelNumbers(value)
   for (const n of list) {
-    const problem = modelNumberProblem({ control: 'number', above: field.above, below: field.below, min: field.min, max: field.max }, n)
+    const problem = modelNumberProblem({ control: field.key && modelWhole(field.key) ? 'integer' : 'number', above: field.above, below: field.below, min: field.min, max: field.max }, n)
     if (problem) return problem
   }
   return field.max_count !== undefined && list.length > field.max_count ? 'tooMany' : ''
@@ -650,6 +658,13 @@ export function modelSummary(id: string, params: Params | null | undefined, cata
     const metric = named('metric') || [named('numerator'), named('denominator')].filter(Boolean).join(' / ') || [named('units_count'), named('metric_sum')].filter(Boolean).join(', ')
     return [metric, named('variant')].filter(Boolean).join(' ~ ')
   }
+  if (id === 'decomposition') {
+    // the method over the series: «STL (7) · sales»; MSTL lists its periods, EMD has no period of its own to say
+    const method = typeof p.method === 'string' ? p.method : 'stl'
+    const shown = method === 'mstl' ? list(Array.isArray(p.periods) ? p.periods : []).replace(/ \+ /g, ', ') : method === 'emd' ? '' : p.period === undefined || p.period === null ? '' : String(p.period)
+    const name = method === 'classical' ? (p.type === 'multiplicative' ? 'classical ×' : 'classical') : method.toUpperCase()
+    return [shown ? `${name} (${shown})` : name, typeof p.value === 'string' ? p.value : ''].filter(Boolean).join(' · ')
+  }
   if (id === 'cox') {
     const left = [p.time, p.event].filter((x) => typeof x === 'string').join(', ')
     return [left, list(p.predictors)].filter(Boolean).join(' ~ ')
@@ -761,13 +776,15 @@ export const modelGroupKey = (group: string): string => `models.groups.${group}`
 
 // Models whose form and words the editor has, but whose runners refuse «not built yet» (lots E2 and E5 of
 // docs/specs/ab-testing.md): the palette leaves them out. Lot E9 takes this away once they run. The decomposition
-// (docs/specs/ts-decomposition.md) is in the catalogue and has no form nor words yet: lot D5 gives them and takes it away.
-const NOT_IN_THE_PALETTE_YET = new Set(['ab_test', 'ab_plan', 'decomposition'])
+// (docs/specs/ts-decomposition.md) has its form and words (lot D5) and a runner that refuses «not built yet» until lots D2
+// and D3: lot D6 takes it away from this list once the runner runs.
+export const MODEL_NOT_IN_THE_PALETTE_YET = new Set(['ab_test', 'ab_plan', 'decomposition'])
 
 /** The palette's Models group: the shown groups in the catalogue's order, each with its models
  *  and, after ARIMA, the six presets of that same node. With a search, only the items whose
  *  name, hint or group holds it. */
-export function modelPalette(shown: readonly ModelGroupDef[], query: string, text: Text, catalog: ModelCatalog = MODEL_CATALOG): ModelPaletteGroup[] {
+export function modelPalette(shown: readonly ModelGroupDef[], query: string, text: Text, catalog: ModelCatalog = MODEL_CATALOG,
+  hidden: ReadonlySet<string> = MODEL_NOT_IN_THE_PALETTE_YET): ModelPaletteGroup[] {
   const q = query.trim().toLowerCase()
   const has = (s: string) => s.toLowerCase().includes(q)
   const out: ModelPaletteGroup[] = []
@@ -776,7 +793,7 @@ export function modelPalette(shown: readonly ModelGroupDef[], query: string, tex
     const items: ModelPaletteItem[] = []
     for (const id of group.models) {
       const model = modelOf(id, catalog)
-      if (!model || NOT_IN_THE_PALETTE_YET.has(id)) continue
+      if (!model || hidden.has(id)) continue
       items.push({ kind: modelKindOf(id), model: id, nameKey: modelNameKey(id), hintKey: modelHintKey(id) })
       for (const preset of Object.keys(model.presets)) {
         items.push({ kind: modelKindOf(id, preset), model: id, preset, nameKey: modelPresetNameKey(preset), hintKey: modelPresetHintKey(preset) })

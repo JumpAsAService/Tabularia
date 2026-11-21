@@ -22,7 +22,7 @@ import { statLevelLabels } from '~/composables/statTests'
 import { vDraft } from '~/composables/draftField'
 import { useModelNumbersBox } from '~/composables/modelNumbersBox'
 import {
-  modelApplies, modelChoiceWordKey, modelColumnFits, modelFieldWordKey, modelFields, modelForbiddenOption, modelFull, modelLevelNumbersMissing, modelLevelShares, modelGiven, modelParams, modelRowsColumns, modelGroupKey,
+  modelApplies, modelChoiceWordKey, modelColumnFits, modelFieldWordKey, modelFields, modelForbiddenOption, modelWhole, modelFull, modelLevelNumbersMissing, modelLevelShares, modelGiven, modelParams, modelRowsColumns, modelGroupKey,
   modelHintKey, modelIsCategorical, modelMlflow, modelMlflowProblem, modelNumber, modelNumberProblem, modelOf,
   modelNumbersPlaceholderKey, MODEL_CATALOG, modelOverlaps, modelReasonKey, modelRequiredReason, modelSeason, modelSet, modelTaken, modelUnset,
   MODEL_RETRIES_MAX, MODEL_TIMEOUT_MIN, MODEL_TIMEOUT_SECONDS, type ModelField, type ModelOff,
@@ -288,7 +288,7 @@ const pairsFull = (f: ModelField) => pairRows(f).length >= (f.max ?? Infinity)
 
 // ── a number ─────────────────────────────────────────────────────────────────
 function numberProblem(f: ModelField, value: unknown = params.value[f.key]): string {
-  const problem = modelNumberProblem(f, value)
+  const problem = modelNumberProblem(modelWhole(f.key) && f.control !== 'integer' ? { ...f, control: 'integer' } : f, value)
   return problem ? t(`models.form.${problem}`, { above: f.above ?? '', below: f.below ?? '', min: f.min ?? '', max: f.max ?? '' }) : ''
 }
 const defaultOf = (f: ModelField) => {
@@ -311,9 +311,14 @@ function pickNumberOrChoice(f: ModelField, c: string) {
   set(f.key, c === '__number__' ? numberOr(f) : c)
 }
 // the number a box starts from when «a value» is chosen: the middle of mixing's range, else 1
+// (a number the model starts from, else 1, else the field's own lowest when that is above 1: a span of at least 7)
 const numberOr = (f: ModelField): number => {
   const v = params.value[f.key]
-  return typeof v === 'number' ? v : f.key === 'mixing' ? 0.5 : 1
+  if (typeof v === 'number') return v
+  if (f.key === 'mixing') return 0.5
+  const own = model.value?.defaults[f.key]
+  if (typeof own === 'number') return own
+  return f.min !== undefined && f.min > 1 ? f.min : 1
 }
 
 // ── a list of numbers (the times to report survival at) ──────────────────────
@@ -625,10 +630,11 @@ function limit(key: 'timeoutSeconds' | 'retries', raw: string, min: number, max:
           v-draft="timesText(f)"
           :placeholder="$t(modelNumbersPlaceholderKey(f))"
           :aria-invalid="timesProblem(f) ? 'true' : undefined"
-          :aria-describedby="timesProblem(f) ? idOf(f.key, 'problem') : [numbersBox.said(f) ? idOf(f.key, 'said') : '', hintOf(f) ? idOf(f.key, 'hint') : ''].filter(Boolean).join(' ') || undefined"
+          :aria-describedby="timesProblem(f) ? idOf(f.key, 'problem') : requiredNote(f) ? idOf(f.key, 'required') : [numbersBox.said(f) ? idOf(f.key, 'said') : '', hintOf(f) ? idOf(f.key, 'hint') : ''].filter(Boolean).join(' ') || undefined"
           @change="numbersBox.change(f, ($event.target as HTMLInputElement).value)"
         />
         <p v-if="timesProblem(f)" :id="idOf(f.key, 'problem')" class="note warn" role="alert"><TriangleAlert :size="13" aria-hidden="true" /> {{ timesProblem(f) }}</p>
+        <p v-else-if="requiredNote(f)" :id="idOf(f.key, 'required')" class="note warn"><TriangleAlert :size="13" aria-hidden="true" /> {{ requiredNote(f) }}</p>
         <template v-else>
           <p v-if="numbersBox.said(f)" :id="idOf(f.key, 'said')" class="hint said">{{ numbersBox.said(f) }}</p>
           <p v-if="hintOf(f)" :id="idOf(f.key, 'hint')" class="hint">{{ hintOf(f) }}</p>

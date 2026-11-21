@@ -6627,6 +6627,10 @@ export default {
         "min_lift": "La hausse relative à détecter : 0,02 vaut 2 % de la base de départ."
       }
     },
+    "decomposition": {
+      "name": "Décomposition",
+      "hint": "Sépare une série en tendance, parties saisonnières et reste (STL, classique, MSTL) ou en ses modes intrinsèques (EMD), teste la saison et vérifie ce qui reste."
+    },
     "presets": {
       "ar": {
         "name": "AR",
@@ -6654,6 +6658,22 @@ export default {
       }
     },
     "params": {
+      "method": "Méthode",
+      "period": "Période saisonnière",
+      "periods": "Périodes saisonnières",
+      "type": "Combinaison des composantes",
+      "robust": "Robuste aux valeurs aberrantes",
+      "s_window": "Étendue du lissage saisonnier",
+      "s_windows": "Étendues du lissage saisonnier",
+      "t_window": "Étendue du lissage de la tendance",
+      "iterate": "Passes sur les périodes",
+      "max_imf": "Maximum d'IMF à extraire",
+      "s_number": "S-number (règle d'arrêt)",
+      "max_siftings": "Maximum de tamisages par IMF",
+      "noise_imfs": "Premières IMF lues comme du bruit",
+      "missing": "Une période sans valeur",
+      "seasonality_test": "Test de la saisonnalité",
+      "lb_lag": "Décalage de Ljung–Box",
       "outcome": "Résultat",
       "event_value": "Valeur qui est l'événement",
       "predictors": "Prédicteurs",
@@ -6790,6 +6810,22 @@ export default {
       "traffic_share": "Part du trafic dans l'expérience"
     },
     "hints": {
+      "method": "STL : une saison, robuste aux valeurs aberrantes. Classique : moyennes mobiles, additive ou multiplicative. MSTL : plusieurs saisons à la fois. EMD : modes intrinsèques, aucune période requise.",
+      "period": "Pas d'une saison : 7 pour les jours d'une semaine, 12 pour les mois d'une année. Vide : celle de la fréquence (24, 7, 52, 12, 4) ; une série annuelle ou à indice n'en a pas, donnez-la. Pour EMD, elle ne sert qu'au test de saisonnalité et au graphique des sous-séries.",
+      "periods": "Jusqu'à 4 périodes entières différentes, en pas, par exemple 7, 365 pour des données quotidiennes. Elles sont triées de la plus courte à la plus longue.",
+      "type": "Additive : valeur = tendance + saison + reste. Multiplicative : valeur = tendance × saison × reste.",
+      "robust": "Donne un poids plus faible aux valeurs aberrantes, pour qu'une valeur singulière ne déforme ni la tendance ni la saison.",
+      "s_window": "Les cycles que regarde le lissage saisonnier, un nombre entier à partir de 7 ; « Périodique » répète le même motif à chaque cycle.",
+      "s_windows": "Un nombre entier à partir de 7 pour chaque période, dans l'ordre des périodes. Vide : 11, 15, 19, 23.",
+      "t_window": "Les pas que regarde le lissage de la tendance, un nombre entier à partir de 3. Automatique est la règle propre de STL.",
+      "iterate": "Combien de fois on repasse sur les périodes, de 1 à 5.",
+      "max_imf": "Le maximum d'IMF extraites, de 1 à 16 ; ce qui est plus lent reste dans le résidu.",
+      "s_number": "Règle d'arrêt du tamisage : combien de tamisages de suite peuvent laisser inchangé le nombre d'extrema, de 0 à 20 (0 : désactivée).",
+      "max_siftings": "Le maximum de tamisages d'une IMF, de 1 à 1 000.",
+      "noise_imfs": "Les k premières IMF sont lues comme du bruit, et les contrôles testent le reste qui suit. 0 : aucun contrôle d'un reste.",
+      "missing": "Ce qui arrive à une période sans valeur dans la série. Refuser arrête le nœud ; linéaire trace une droite entre les voisines ; saisonnière comble en tenant compte de la saison.",
+      "seasonality_test": "Le test de chaque période saisonnière : Friedman ou Kruskal–Wallis, ou aucun.",
+      "lb_lag": "Le décalage du test de Ljung–Box du reste. Automatique : le plus petit du double de la plus longue période et du cinquième des lignes, ou 10 sans saison.",
       "outcome": "La colonne à expliquer.",
       "event_value": "Quelle valeur de la colonne est l'événement ; les autres non.",
       "predictors": "Les colonnes qui l'expliquent, nombres ou catégories. Une date n'est pas acceptée : calculez d'abord le mois, ou les jours depuis un début.",
@@ -6902,6 +6938,18 @@ export default {
       "traffic_share": "La part de toutes les nouvelles unités qui entre dans l'expérience : au-dessus de 0, jusqu'à 1. Elle allonge la durée."
     },
     "choice": {
+      "stl": "STL",
+      "mstl": "MSTL",
+      "emd": "EMD",
+      "additive": "Additive",
+      "multiplicative": "Multiplicative",
+      "periodic": "Périodique",
+      "refuse": "Refuser",
+      "linear": "Interpolation linéaire",
+      "seasonal": "Interpolation saisonnière",
+      "friedman": "Friedman",
+      "kruskal_wallis": "Kruskal–Wallis",
+      "components": "Composantes",
       "ols": "Moindres carrés ordinaires",
       "wls": "Moindres carrés pondérés",
       "ml": "Maximum de vraisemblance",
@@ -7023,6 +7071,9 @@ export default {
       }
     },
     "reasons": {
+      "multiplicative_transform": "Une décomposition multiplicative travaille déjà en rapports : choisissez aucune transformation, ou une décomposition additive du logarithme.",
+      "period_needed": "Une série annuelle ou à indice n'a pas de saison propre : donnez la période, en pas.",
+      "periods_needed": "Une décomposition MSTL a besoin de ses périodes saisonnières, en pas.",
       "wls_needs_weights": "Les moindres carrés pondérés demandent la colonne des poids.",
       "cluster_needs_column": "Les erreurs standard par grappes demandent la colonne des grappes.",
       "firth_needs_logit": "La correction de Firth vaut pour le lien logit : choisissez logit, ou le maximum de vraisemblance.",
@@ -7046,6 +7097,7 @@ export default {
       "days_need_date": "La hausse détectable en un nombre de jours demande la colonne du jour où chaque unité est apparue pour la première fois."
     },
     "form": {
+      "periodsPlaceholder": "p. ex. 7, 365",
       "notUsable": "inutilisable ici",
       "notInInput": "absente de l'entrée de l'étape",
       "notInData": "absent des données",

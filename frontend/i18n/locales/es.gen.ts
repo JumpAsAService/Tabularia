@@ -6627,6 +6627,10 @@ export default {
         "min_lift": "El aumento relativo que se quiere detectar: 0,02 es el 2 % de la base de partida."
       }
     },
+    "decomposition": {
+      "name": "Descomposición",
+      "hint": "Separa una serie en tendencia, partes estacionales y resto (STL, clásica, MSTL) o en sus modos intrínsecos (EMD), prueba la estación y revisa lo que queda."
+    },
     "presets": {
       "ar": {
         "name": "AR",
@@ -6654,6 +6658,22 @@ export default {
       }
     },
     "params": {
+      "method": "Método",
+      "period": "Período estacional",
+      "periods": "Períodos estacionales",
+      "type": "Cómo se combinan los componentes",
+      "robust": "Robusta a los valores atípicos",
+      "s_window": "Amplitud del suavizado estacional",
+      "s_windows": "Amplitudes del suavizado estacional",
+      "t_window": "Amplitud del suavizado de la tendencia",
+      "iterate": "Pasadas sobre los períodos",
+      "max_imf": "Máximo de IMF a extraer",
+      "s_number": "S-number (regla de parada)",
+      "max_siftings": "Máximo de tamizados por IMF",
+      "noise_imfs": "Primeras IMF leídas como ruido",
+      "missing": "Un período sin valor",
+      "seasonality_test": "Prueba de la estacionalidad",
+      "lb_lag": "Retardo de Ljung–Box",
       "outcome": "Resultado",
       "event_value": "Valor que es el evento",
       "predictors": "Predictores",
@@ -6790,6 +6810,22 @@ export default {
       "traffic_share": "Parte del tráfico en el experimento"
     },
     "hints": {
+      "method": "STL: una estación, robusta a los valores atípicos. Clásica: medias móviles, aditiva o multiplicativa. MSTL: varias estaciones a la vez. EMD: modos intrínsecos, sin período.",
+      "period": "Pasos de una estación: 7 para los días de una semana, 12 para los meses de un año. Vacío: el de la frecuencia (24, 7, 52, 12, 4); una serie anual o de índice no tiene, así que indícalo. En EMD solo sirve para la prueba de estacionalidad y el gráfico de subseries.",
+      "periods": "Hasta 4 períodos enteros distintos, en pasos, por ejemplo 7, 365 para datos diarios. Se ordenan del más corto al más largo.",
+      "type": "Aditiva: valor = tendencia + estación + resto. Multiplicativa: valor = tendencia × estación × resto.",
+      "robust": "Da menos peso a los valores atípicos, de modo que un valor raro no tuerza la tendencia ni la estación.",
+      "s_window": "Los ciclos que mira el suavizado estacional, un número entero desde 7; «Periódico» repite el mismo patrón en cada ciclo.",
+      "s_windows": "Un número entero desde 7 para cada período, en el orden de los períodos. Vacío: 11, 15, 19, 23.",
+      "t_window": "Los pasos que mira el suavizado de la tendencia, un número entero desde 3. Automático es la regla propia de STL.",
+      "iterate": "Cuántas veces se pasa por los períodos, de 1 a 5.",
+      "max_imf": "El máximo de IMF extraídas, de 1 a 16; lo más lento queda en el residuo.",
+      "s_number": "Regla de parada del tamizado: cuántos tamizados seguidos pueden dejar sin cambio el número de extremos, de 0 a 20 (0: apagada).",
+      "max_siftings": "El máximo de tamizados de una IMF, de 1 a 1.000.",
+      "noise_imfs": "Las primeras k IMF se leen como ruido, y las comprobaciones prueban el resto que sigue. 0: ninguna comprobación de un resto.",
+      "missing": "Qué ocurre con un período sin valor dentro de la serie. Rechazar detiene el nodo; lineal traza una recta entre los vecinos; estacional rellena teniendo en cuenta la estación.",
+      "seasonality_test": "La prueba de cada período estacional: Friedman o Kruskal–Wallis, o ninguna.",
+      "lb_lag": "El retardo de la prueba de Ljung–Box del resto. Automático: el menor entre el doble del período más largo y un quinto de las filas, o 10 sin estación.",
       "outcome": "La columna a explicar.",
       "event_value": "Qué valor de la columna es el evento; los demás no.",
       "predictors": "Las columnas que lo explican, números o categorías. No se acepta una fecha: calcula antes el mes o los días desde un inicio.",
@@ -6902,6 +6938,18 @@ export default {
       "traffic_share": "La parte de todas las unidades nuevas que entra en el experimento: por encima de 0, hasta 1. Alarga la duración."
     },
     "choice": {
+      "stl": "STL",
+      "mstl": "MSTL",
+      "emd": "EMD",
+      "additive": "Aditiva",
+      "multiplicative": "Multiplicativa",
+      "periodic": "Periódico",
+      "refuse": "Rechazar",
+      "linear": "Interpolación lineal",
+      "seasonal": "Interpolación estacional",
+      "friedman": "Friedman",
+      "kruskal_wallis": "Kruskal–Wallis",
+      "components": "Componentes",
       "ols": "Mínimos cuadrados ordinarios",
       "wls": "Mínimos cuadrados ponderados",
       "ml": "Máxima verosimilitud",
@@ -7023,6 +7071,9 @@ export default {
       }
     },
     "reasons": {
+      "multiplicative_transform": "Una descomposición multiplicativa ya trabaja con razones: elige ninguna transformación, o una descomposición aditiva del logaritmo.",
+      "period_needed": "Una serie anual o de índice no tiene una estación propia: indica el período, en pasos.",
+      "periods_needed": "Una descomposición MSTL necesita sus períodos estacionales, en pasos.",
       "wls_needs_weights": "Los mínimos cuadrados ponderados necesitan la columna de pesos.",
       "cluster_needs_column": "Los errores estándar por clústeres necesitan la columna de clústeres.",
       "firth_needs_logit": "La corrección de Firth es para el enlace logit: elige logit, o la máxima verosimilitud.",
@@ -7046,6 +7097,7 @@ export default {
       "days_need_date": "El aumento detectable en un número de días necesita la columna del día en que cada unidad apareció por primera vez."
     },
     "form": {
+      "periodsPlaceholder": "p. ej. 7, 365",
       "notUsable": "no utilizable aquí",
       "notInInput": "no está en la entrada del paso",
       "notInData": "no está en los datos",
