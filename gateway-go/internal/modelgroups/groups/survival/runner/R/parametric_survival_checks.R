@@ -72,6 +72,8 @@ ps_checks <- function(task, prepared, fitted, model, rows) {
     })
   }
   charts <- function(f) tryCatch(f(), error = function(e) if (selftest) stop(e))
+  # the charts come last: the points a series may have are what max_result_rows leaves them
+  ctx$most <- tab_chart_points(task, rows, psc_chart_series(ctx))
   tab_number(rows, "model", "alpha", ctx$alpha)
   guard("convergence", function() psc_convergence(ctx, rows))
   guard("epv", function() psc_epv(ctx, rows))
@@ -510,6 +512,15 @@ psc_extrapolation <- function(ctx, rows) {
 }
 
 # ── the charts' points ───────────────────────────────────────────────────────
+# The series the charts below write, at most: per group fit_km's surv, lower, upper and fitted, and
+# loglog's points and curve; cox_snell; per stratum the profile's survival and hazard with their
+# bands; deviance_linear.
+psc_chart_series <- function(ctx) {
+  groups <- length(psc_groups(ctx))
+  loglog <- ctx$distribution %in% c("weibull", "exponential")
+  groups * (4L + if (loglog) 2L else 0L) + 1L + 6L * length(ctx$prepared$strata_levels) + if (ctx$has_predictors) 1L else 0L
+}
+
 # Kaplan–Meier against the fitted curve, per group; and for the Weibull and the exponential the
 # same on the log(−log S) against log t scale.
 psc_chart_fit <- function(ctx, rows) {
@@ -938,4 +949,16 @@ TAB_COMMON_TESTS[["parametric survival, delayed entry: Kaplan–Meier with the r
   tt$e[[1L]] <- 1L
   o <- .psc_run(tt, list(time = "t", event = "e", event_value = 1, start = "s", predictors = list("x"), distribution = "weibull"))
   .tab_expect(.psc_stat(o, "dfbeta", "value", "x") > 1 && grepl("^1(,|$)", .psc_stat(o, "dfbeta", "rows", "x")), "dfbeta names the outlier first")
+}
+
+TAB_COMMON_TESTS[["parametric survival checks: the charts share max_result_rows between the groups' series"]] <- function(code) {
+  # 600 rows in two groups: at max_chart_points a series the charts alone are about 4,400 rows; the limit here 3,000
+  df <- .psc_table(600, 1.3, 20261121, censor_to = 40)
+  f <- .psc_run(df, .psc_params("weibull"), limits = list(max_result_rows = 3000))
+  .tab_expect(nrow(f) <= 3000L, nrow(f), " rows, more than the 3000 of the limit")
+  for (g in c("g=a", "g=b")) {
+    km <- f[f$section == "curve" & f$level == "fit_km" & f$level_2 %in% g & f$stat == "surv", ]
+    .tab_expect(nrow(km) > 50L && km$value[[1L]] == 1, g, ": ", nrow(km), " points of Kaplan–Meier's curve")
+  }
+  .tab_expect(sum(f$section == "point" & f$level == "cox_snell") > 50L, "the Cox–Snell chart")
 }
