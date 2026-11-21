@@ -1278,10 +1278,9 @@ ps_card <- function(task, prepared, fitted, selection = "manual") {
              lapply(seq_along(m$i_terms), function(j) list(role = "location", term = j)),
              lapply(seq_along(m$i_strata), function(j) list(role = "location", stratum = levels[[j + 1L]])),
              lapply(seq_along(m$i_anc), function(j) list(role = "anc", name = m$anc_name, stratum = levels[[j + 1L]])))
-  last_by <- NULL
-  if (!is.null(strata)) {
-    last_by <- stats::setNames(lapply(seq_along(levels), function(s) max(prepared$time[prepared$stratum == s])), levels)
-  }
+  # one number per stratum, in the order of strata.levels («all» without strata): a level is a
+  # value of the data, «» among them, never a key of the JSON (an empty key became «1»)
+  last_by <- lapply(seq_along(levels), function(s) max(prepared$time[prepared$stratum == s]))
   card$parametric_survival <- list(
     distribution = fitted$distribution, selection = selection,
     coefficient_scale = if (m$aft == 0) "log_hazard_ratio" else "log_time_ratio",
@@ -1341,7 +1340,32 @@ ps_model <- function(card) {
   list(card = plain, spec = m, par = par, vcov = V, alpha = alpha,
        strata_col = ps$strata$column %||% NULL, strata_levels = levels, selection = ps$selection %||% "manual",
        coefficient_scale = ps$coefficient_scale, quantiles = .ps_num(ps$quantiles), times = .ps_num(ps$times),
-       last_time = as.numeric(ps$last_time), last_time_by_stratum = ps$last_time_by_stratum)
+       last_time = as.numeric(ps$last_time), last_time_by_stratum = ps_last_times(ps, levels))
+}
+
+# The last time observed in each stratum, in the order of `levels`. A card writes a list in that
+# order; one written before (by 2026-11-21) an object by level, or null without strata: read by
+# name, and where a name is not there (an empty level was written as its position) the last time
+# of all the strata.
+ps_last_times <- function(ps, levels) {
+  last <- suppressWarnings(as.numeric(ps$last_time))
+  all <- rep(if (length(last) == 1L && is.finite(last)) last else NA_real_, length(levels))
+  by <- ps$last_time_by_stratum
+  if (!length(by)) return(all)
+  got <- if (is.null(names(by))) {
+    if (length(by) != length(levels)) {
+      tab_refuse("card_invalid", paste0("the model card is not a parametric survival model's as the node writes it: it has ",
+                                        length(by), " last times for ", length(levels), " strata; fit the model again"),
+                 list(problem = "last_time_by_stratum"))
+    }
+    tryCatch(.ps_num(by), error = function(e) rep(NA_real_, length(levels)))
+  } else {
+    vapply(levels, function(l) {
+      v <- by[[l]]
+      if (is.numeric(v) && length(v) == 1L) v else NA_real_
+    }, numeric(1), USE.NAMES = FALSE)
+  }
+  ifelse(is.finite(got), got, all)
 }
 
 # The design of rows for a card's model, and each row's stratum (NA: a stratum the fit did not
@@ -1606,12 +1630,12 @@ predict_parametric_survival <- function(task, card) {
   if (empty > 0L) warning(empty, " rows have an empty value in a column the model needs: their prediction is empty")
   # beyond the last time observed (in the row's stratum) the numbers come from the distribution's shape
   last <- if (is.null(model$strata_col)) rep(model$last_time, nrow(df)) else
-    .ps_num(model$last_time_by_stratum[model$strata_levels])[ifelse(d$ok, d$stratum, 1L)]
+    model$last_time_by_stratum[ifelse(d$ok, d$stratum, 1L)]
   furthest <- pmax(pr$median, if (length(quantiles)) apply(pr$quantile, 1L, max) else -Inf, if (length(times)) max(times) else -Inf,
                    na.rm = TRUE)
   # with alive_at the numbers are the time left: the time on the model's scale is a more
   if (!is.null(alive_at)) furthest <- alive_at + furthest
-  beyond <- sum(d$ok & !pr$alive_empty & !pr$alive_dead & is.finite(furthest) & furthest > last)
+  beyond <- sum(d$ok & !pr$alive_empty & !pr$alive_dead & is.finite(furthest) & furthest > last, na.rm = TRUE)
   if (sum(pr$alive_empty) > 0L) {
     warning(sum(pr$alive_empty), " rows have an empty, negative or infinite time already survived (alive_at): their prediction is empty")
   }
@@ -2100,3 +2124,38 @@ TAB_COMMON_TESTS[["parametric survival: the covariance from the rows' own deriva
     .tab_expect(gap < 1e-6, d, ": numDeriv's standard errors off by ", format(gap, digits = 3))
   }
 }
+TAB_COMMON_TESTS[["parametric survival: a stratum «» (empty text) is predicted as the others; the card's last times are a list by level, old cards read"]] <- function(code) {
+  set.seed(3)
+  n <- 120L
+  x <- round(stats::rnorm(n), 2)
+  t <- stats::rweibull(n, 1.5, exp(3 + 0.3 * x))
+  cens <- stats::runif(n, 5, 60)
+  df <- data.frame(days = round(pmin(t, cens), 2), status = ifelse(t <= cens, "failed", "running"), plant = sample(c("", "A", "B"), n, TRUE),
+                   x = x, stringsAsFactors = FALSE)
+  fit <- fit_parametric_survival(.ps_test_task(df, list(time = "days", event = "status", event_value = "failed", strata = "plant",
+                                                        predictors = list("x"), distribution = "weibull")))
+  card <- jsonlite::fromJSON(tab_card_text(fit$card), simplifyVector = FALSE)
+  last <- vapply(c("", "A", "B"), function(l) max(df$days[df$plant == l]), numeric(1))
+  .tab_expect(is.null(names(card$parametric_survival$last_time_by_stratum)) &&
+              identical(.ps_num(card$parametric_survival$last_time_by_stratum), unname(last)), "the card's last times")
+  # the stratum «» alone, and a table of the three: predicted, never an R error
+  rows_ <- df[c(which(df$plant == "")[1:2], which(df$plant == "A")[[1L]], which(df$plant == "B")[[1L]]), c("days", "plant", "x")]
+  rows_$x[[2L]] <- 0
+  got <- predict_parametric_survival(list(params = list(at_times = list(80)), .frame = rows_), card)$output
+  .tab_expect(all(is.finite(got$prediction)) && all(is.finite(got$survival_at_80)), "the predictions: ", paste(got$prediction, collapse = " "))
+  run <- .ps_with_warnings(predict_parametric_survival(list(params = list(at_times = list(80)), .frame = rows_), card))
+  .tab_expect(any(grepl("^4 rows are predicted beyond the last time observed", run$warnings)), paste(run$warnings, collapse = " | "))
+  # a card written before: an object by level (the empty one under its position, «1»), or null without strata
+  old <- card
+  old$parametric_survival$last_time_by_stratum <- stats::setNames(as.list(unname(last)), c("1", "A", "B"))
+  back <- predict_parametric_survival(list(params = list(at_times = list(80)), .frame = rows_), old)$output
+  .tab_expect(identical(back$prediction, got$prediction), "an old card predicts otherwise")
+  .tab_expect(identical(ps_model(old)$last_time_by_stratum, c(max(df$days), last[["A"]], last[["B"]])), "an old card's last times")
+  # without strata the list has one number, the last time: the card matches card.schema.json (null did not)
+  plain <- fit_parametric_survival(.ps_test_task(df, list(time = "days", event = "status", event_value = "failed", distribution = "weibull")))
+  pc <- jsonlite::fromJSON(tab_card_text(plain$card), simplifyVector = FALSE)
+  .tab_expect(identical(.ps_num(pc$parametric_survival$last_time_by_stratum), max(df$days)), "the last time without strata")
+  problems <- tab_schema_problems(pc, jsonlite::fromJSON(file.path(code, "card.schema.json"), simplifyVector = FALSE))
+  .tab_expect(!length(problems), paste(problems, collapse = "; "))
+}
+

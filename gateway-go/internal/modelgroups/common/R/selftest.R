@@ -52,6 +52,11 @@ tab_selftest <- function(group, routes, code = tab_code_dir()) {
   if (counts[["failed"]] > 0L) TAB_EXIT_SELFTEST_FAILED else TAB_EXIT_OK
 }
 
+# The groups whose reference cards do not match card.schema.json yet, so not checked against it:
+# timeseries, whose arima.coefficients is an array (tab_finite drops the names) where the schema
+# says an object by name. To be removed with that fix.
+TAB_CARD_SCHEMA_PENDING <- c("timeseries")
+
 # One reference case: fitted in this process on its CSV, compared value by value.
 tab_reference_case <- function(case, routes, code, group) {
   df <- tab_read_csv(file.path(code, "reference", case$data), case$types)
@@ -75,6 +80,12 @@ tab_reference_case <- function(case, routes, code, group) {
   df <- tab_results_frame(outcome$rows)
   problems <- tab_check_declared(df, case$model, task$variant)
   if (length(problems)) stop(problems[[1L]])
+  # the card as model.json holds it, against the schema MLflow and Predict read it by
+  if (!is.null(outcome$card) && !group %in% TAB_CARD_SCHEMA_PENDING) {
+    back <- jsonlite::fromJSON(tab_card_text(outcome$card), simplifyVector = FALSE)
+    problems <- tab_schema_problems(back, jsonlite::fromJSON(file.path(code, "card.schema.json"), simplifyVector = FALSE))
+    if (length(problems)) stop("the card does not match card.schema.json: ", problems[[1L]])
+  }
   for (e in case$expect) {
     i <- match(e$key, df$key)
     if (is.na(i)) stop("no row ", e$key)
@@ -92,6 +103,73 @@ tab_reference_case <- function(case, routes, code, group) {
     if (abs(got - want) > tol) stop(sprintf("%s: %.17g, expected %.17g (tolerance %.3g)", e$key, got, want, tol))
   }
   invisible(TRUE)
+}
+
+# ── a JSON value against a JSON Schema (draft 2020-12) ─────────────────────────
+# The keywords card.schema.json uses: type, const, enum, properties, required,
+# additionalProperties, minProperties, items, minItems, maxItems, minimum, maximum,
+# exclusiveMinimum, exclusiveMaximum, minLength, pattern, allOf, oneOf, if/then/else; the others
+# are read as notes. `x` is jsonlite's reading with simplifyVector = FALSE (an object a named
+# list, an array an unnamed one). What is wrong, one sentence each with where; empty: nothing.
+.tab_json_kind <- function(x) {
+  if (is.null(x)) return("null")
+  if (is.list(x)) return(if (is.null(names(x))) "array" else "object")
+  if (is.character(x)) return("string")
+  if (is.logical(x)) return("boolean")
+  if (is.numeric(x)) return(if (is.finite(x) && x == round(x)) "integer" else "number")
+  "other"
+}
+
+.tab_json_text <- function(x) as.character(jsonlite::toJSON(x, auto_unbox = TRUE, digits = NA, null = "null"))
+
+tab_schema_problems <- function(x, schema, where = "$") {
+  if (isTRUE(schema)) return(character())
+  if (isFALSE(schema)) return(paste0(where, ": nothing may be here"))
+  out <- character()
+  said <- function(...) out <<- c(out, paste0(where, ": ", ...))
+  kind <- .tab_json_kind(x)
+  types <- unlist(schema[["type"]])
+  if (length(types) && !(kind %in% types || (kind == "integer" && "number" %in% types))) {
+    return(paste0(where, ": ", kind, ", not ", paste(types, collapse = " or ")))
+  }
+  if ("const" %in% names(schema) && !identical(.tab_json_text(x), .tab_json_text(schema[["const"]]))) said("not ", .tab_json_text(schema[["const"]]))
+  if (!is.null(schema[["enum"]]) && !(.tab_json_text(x) %in% vapply(schema[["enum"]], .tab_json_text, ""))) {
+    said(.tab_json_text(x), " is none of ", paste(vapply(schema[["enum"]], .tab_json_text, ""), collapse = ", "))
+  }
+  if (kind == "object") {
+    for (name in setdiff(unlist(schema[["required"]]), names(x))) said("no «", name, "»")
+    if (!is.null(schema[["minProperties"]]) && length(x) < schema[["minProperties"]]) said("fewer than ", schema[["minProperties"]], " members")
+    props <- schema[["properties"]] %||% list()
+    for (name in names(x)) {
+      sub <- if (name %in% names(props)) props[[name]] else schema[["additionalProperties"]]
+      if (!is.null(sub)) out <- c(out, tab_schema_problems(x[[name]], sub, paste0(where, ".", name)))
+    }
+  }
+  if (kind == "array") {
+    if (!is.null(schema[["minItems"]]) && length(x) < schema[["minItems"]]) said("fewer than ", schema[["minItems"]], " items")
+    if (!is.null(schema[["maxItems"]]) && length(x) > schema[["maxItems"]]) said("more than ", schema[["maxItems"]], " items")
+    if (!is.null(schema[["items"]])) for (i in seq_along(x)) out <- c(out, tab_schema_problems(x[[i]], schema[["items"]], paste0(where, "[", i - 1L, "]")))
+  }
+  if (kind %in% c("integer", "number")) {
+    if (!is.null(schema[["minimum"]]) && x < schema[["minimum"]]) said(x, " below ", schema[["minimum"]])
+    if (!is.null(schema[["maximum"]]) && x > schema[["maximum"]]) said(x, " above ", schema[["maximum"]])
+    if (!is.null(schema[["exclusiveMinimum"]]) && x <= schema[["exclusiveMinimum"]]) said(x, " not above ", schema[["exclusiveMinimum"]])
+    if (!is.null(schema[["exclusiveMaximum"]]) && x >= schema[["exclusiveMaximum"]]) said(x, " not below ", schema[["exclusiveMaximum"]])
+  }
+  if (kind == "string") {
+    if (!is.null(schema[["minLength"]]) && nchar(x) < schema[["minLength"]]) said("shorter than ", schema[["minLength"]])
+    if (!is.null(schema[["pattern"]]) && !grepl(schema[["pattern"]], x, perl = TRUE)) said("«", x, "» does not match ", schema[["pattern"]])
+  }
+  for (sub in schema[["allOf"]]) out <- c(out, tab_schema_problems(x, sub, where))
+  if (!is.null(schema[["oneOf"]])) {
+    fits <- vapply(schema[["oneOf"]], function(sub) !length(tab_schema_problems(x, sub, where)), logical(1))
+    if (sum(fits) != 1L) said("it matches ", sum(fits), " of the schemas of oneOf, not one")
+  }
+  if (!is.null(schema[["if"]])) {
+    branch <- if (!length(tab_schema_problems(x, schema[["if"]], where))) schema[["then"]] else schema[["else"]]
+    if (!is.null(branch)) out <- c(out, tab_schema_problems(x, branch, where))
+  }
+  out
 }
 
 # ── the common library's own tests ─────────────────────────────────────────────
@@ -307,6 +385,29 @@ TAB_COMMON_TESTS <- list(
     small <- task
     small$limits$max_card_bytes <- 100
     .tab_refused_with("card_too_large", tab_write_card(small, card, tempfile()))
+  },
+  "a card is checked against card.schema.json, as every reference case's is" = function(code) {
+    df <- .tab_selftest_table(code)
+    d <- tab_design(df, c(TAB_A, TAB_X), outcome = "y")
+    task <- list(model = "linear", variant = "unpenalized", group = "regression", group_version = 1, params = list(),
+                 limits = tab_catalog()$limits)
+    card <- tab_card(task, d)
+    card$coefficients <- as.list(unname(stats::lm.fit(d$X, d$y)$coefficients))
+    card$link <- "identity"
+    card$linear <- list(sigma = 1, df_residual = 16)
+    back <- jsonlite::fromJSON(tab_card_text(card), simplifyVector = FALSE)
+    schema <- jsonlite::fromJSON(file.path(code, "card.schema.json"), simplifyVector = FALSE)
+    .tab_expect(!length(tab_schema_problems(back, schema)), paste(tab_schema_problems(back, schema), collapse = "; "))
+    bad <- back
+    bad$model <- "nope"
+    bad$format_version <- 2L
+    bad$params <- NULL
+    got <- tab_schema_problems(bad, schema)
+    .tab_expect(any(grepl("$.model: \"nope\" is none of", got, fixed = TRUE)) && any(grepl("$.format_version: not 1", got, fixed = TRUE)) &&
+                any(grepl("$: no «params»", got, fixed = TRUE)), paste(got, collapse = "; "))
+    one_of <- list(oneOf = list(list(type = "array"), list(type = "object"), list(type = "null")))
+    .tab_expect(!length(tab_schema_problems(NULL, one_of)) && length(tab_schema_problems("x", one_of)) == 1L &&
+                length(tab_schema_problems(NULL, list(type = "object"))) == 1L, "oneOf and type")
   },
   "a card too large does not stop the fit: results and a note, no model files" = function(code) {
     if (identical(Sys.getenv("TABULARIA_SELFTEST_NO_ARROW"), "1") || !requireNamespace("arrow", quietly = TRUE)) return("skipped")

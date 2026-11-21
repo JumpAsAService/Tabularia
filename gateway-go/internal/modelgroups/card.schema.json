@@ -152,7 +152,14 @@
         "event_value": {"description": "the value of the event column that is an event"},
         "start_column": {"type": ["string", "null"], "description": "the column of the delayed entry the model was fitted with (left truncation), or null: Predict does not read it, the parameters already hold it"},
         "last_time": {"type": "number", "description": "the last time observed when fitting: a prediction beyond it is an extrapolation"},
-        "last_time_by_stratum": {"type": "object", "additionalProperties": {"type": "number"}},
+        "last_time_by_stratum": {
+          "description": "the last time observed in each stratum, one number per level in the order of `strata.levels` (one number, the last time, without strata). Cards written before 2026-11-21 hold an object by level, or null without strata: Predict still reads them",
+          "oneOf": [
+            {"type": "array", "minItems": 1, "items": {"type": "number"}},
+            {"type": "object", "additionalProperties": {"type": "number"}},
+            {"type": "null"}
+          ]
+        },
         "quantiles": {"type": "array", "maxItems": 9, "items": {"type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1}},
         "times": {"type": "array", "maxItems": 10, "items": {"type": "number", "minimum": 0}},
         "alpha": {"type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1},
