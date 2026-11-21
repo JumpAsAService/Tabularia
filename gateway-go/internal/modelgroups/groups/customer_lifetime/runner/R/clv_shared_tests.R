@@ -222,7 +222,7 @@ TAB_COMMON_TESTS[["customer_lifetime: the five models' functions equal the value
   same(vapply(0:3, function(k) clv_pmf("bg_bb", pb, k, 3), 0), c(0.35313796587583057, 0.22575512631648686, 0.19634414481562756, 0.22476276299205494))
   near <- c(1.2, 0.75, 1.00001, 2.78)
   same(clv_bgbb_cet(near, 5, xb, txb, nb), c(0.03651799424183351, 0.044463616069753117, 0.79876694650102797, 3.4249442562996166, 0.37259403672726271, 1.5221974472442763), 1e-7)
-  # the limit at γ = 1: the closed form's value at 1 ± h is the limit within O(h²), and the limit form does not cancel
+  # γ = 1, where the closed form divided by γ − 1: the sum has no special case, and is continuous there
   lim <- clv_bgbb_cet(c(1.2, 0.75, 1, 2.78), 5, xb, txb, nb)
   mid <- (clv_bgbb_cet(c(1.2, 0.75, 1.002, 2.78), 5, xb, txb, nb) + clv_bgbb_cet(c(1.2, 0.75, 0.998, 2.78), 5, xb, txb, nb)) / 2
   .tab_expect(.clv_rel(lim, mid) < 1e-5 && all(is.finite(lim)), "the limit at gamma = 1: ", .clv_rel(lim, mid))

@@ -539,25 +539,28 @@ clv_bgbb_palive <- function(par, x, tx, n) {
   exp(lbeta(al + x, be + n - x) - lbeta(al, be) + lbeta(ga, de + n + 1) - lbeta(ga, de) - clv_bgbb_ll_ind(par, x, tx, n))
 }
 
-# The expected transactions in the next `nstar` opportunities (BG/BB), with the limit form at γ = 1.
+# Σ_{i=1}^{n*} B(γ, δ + n + i) / B(γ, δ) for each n of a vector (BG/BB's dropout part of the expected
+# transactions; n* whole). Each ratio B(γ, δ + m)/B(γ, δ) = Π_{j<m} (δ + j)/(γ + δ + j) is a cumulative sum of
+# log1p(−γ/(γ + δ + j)), exact for any γ and δ; the window of each n is read off one sum taken from the top, so
+# the part subtracted is the terms after the window, never larger than the window's own (the terms fall with
+# m). The closed form, a difference of two ratios of gamma functions, cancels to nothing when δ is large (δ
+# above 1e7 lost every digit) and gives Inf · 0 when γ is large too: customers who never drop out push the fit
+# there.
+clv_bgbb_tail <- function(ga, de, n, nstar) {
+  if (nstar <= 0) return(numeric(length(n)))
+  top <- max(n) + nstar
+  terms <- exp(cumsum(log1p(-ga / (ga + de + 0:(top - 1)))))
+  from_top <- c(rev(cumsum(rev(terms))), 0)
+  from_top[n + 1] - from_top[n + nstar + 1]
+}
+
+# The expected transactions in the next `nstar` opportunities (BG/BB): E[p^(x+1) (1−p)^(n−x)] over the
+# likelihood, times the dropout's sum (clv_bgbb_tail).
 clv_bgbb_cet <- function(par, nstar, x, tx, n) {
   al <- par[[1L]]
   be <- par[[2L]]
-  ga <- par[[3L]]
-  de <- par[[4L]]
   front <- exp(lbeta(al + x + 1, be + n - x) - lbeta(al, be) - clv_bgbb_ll_ind(par, x, tx, n))
-  d <- ga - 1
-  tail <- if (abs(d) >= 1e-4) {
-    de / d * exp(lgamma(ga + de) - lgamma(1 + de)) *
-      (exp(lgamma(1 + de + n) - lgamma(ga + de + n)) - exp(lgamma(1 + de + n + nstar) - lgamma(ga + de + n + nstar)))
-  } else {
-    # the limit at γ = 1 and its first-order term: δ [ψ(1+δ+n+n*) − ψ(1+δ+n)] + δ (γ−1) g''(1) / 2
-    psi <- function(m) digamma(1 + de + m)
-    g1 <- psi(n + nstar) - psi(n)
-    h2 <- function(m) (digamma(1 + de) - digamma(1 + de + m))^2 + (trigamma(1 + de) - trigamma(1 + de + m))
-    de * (g1 + d * (h2(n) - h2(n + nstar)) / 2)
-  }
-  front * tail
+  front * clv_bgbb_tail(par[[3L]], par[[4L]], n, round(nstar))
 }
 
 # P(X(n) = k) for BG/BB; n a vector of whole opportunities, k one count. The sum over the moment of dropout
