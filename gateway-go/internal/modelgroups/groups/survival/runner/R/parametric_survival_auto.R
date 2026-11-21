@@ -7,8 +7,10 @@
 #
 # The candidates are the six distributions, fitted in order of cost (exponential, Weibull,
 # log-normal, log-logistic, Gompertz, then the generalized gamma, by far the dearest), each with the same predictors, strata
-# and weights, and each with the second start `ps_fit` gives it. The generalized gamma starts from
-# the Weibull's and the log-normal's fits just made.
+# and weights, and each with the second start `ps_fit` gives it. The generalized gamma (lot P12)
+# is taken by Newton steps from the rows' own derivatives straight from the point nested in it of
+# the better of the Weibull and the log-normal just fitted; only when they do not reach its maximum
+# is it fitted by flexsurv from three starts (flexsurv's own, the Weibull's, the log-normal's).
 #
 #   admissible   converged with a finite log-likelihood. No Hessian is taken for a candidate (owner,
 #                2026-11-20: nothing that costs eons at run time): the candidates are compared by
@@ -102,7 +104,19 @@ ps_auto <- function(task, prepared) {
       entry$status <- "too_few_rows"
     } else {
       starts <- if (d == "gengamma") list(weibull = fits$weibull, lognormal = fits$lognormal) else NULL
-      f <- tryCatch(ps_fit(prepared, d, starts = starts), error = function(e) {
+      fit_d <- function() ps_fit(prepared, d, starts = starts)
+      if (d == "gengamma") {
+        # lot P12: the generalized gamma from the point of the better of the Weibull and the
+        # log-normal already fitted, by Newton steps from the rows' own derivatives (BFGS from three
+        # starts took 10.7 s of the choice's 17.6 on 5,000 rows and 33 parameters); flexsurv's fit
+        # from the three starts when they do not reach the maximum
+        nested <- Filter(Negate(is.null), list(fits$weibull, fits$lognormal))
+        if (length(nested)) {
+          best <- nested[[which.max(vapply(nested, function(x) x$loglik, numeric(1)))]]
+          fit_d <- function() ps_fit_nested(prepared, d, ps_nested_point(best, d, prepared), function() ps_fit(prepared, d, starts = starts))
+        }
+      }
+      f <- tryCatch(fit_d(), error = function(e) {
         # the runner's own check of its likelihood is a bug, not a candidate that failed
         if (grepl("^the runner's log-likelihood", conditionMessage(e))) stop(e)
         list(converged = FALSE, reason = conditionMessage(e), loglik = NA_real_)

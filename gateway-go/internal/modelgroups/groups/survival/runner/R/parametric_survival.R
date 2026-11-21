@@ -103,6 +103,7 @@ fit_parametric_survival <- function(task) {
     fitted <- ps_fit(prepared, prepared$distribution, fail_first = fail_first)
   }
   ps_refuse_not_converged(fitted)
+  fitted <- ps_attach_flexsurv(fitted, prepared) # an auto candidate made by Newton steps alone has none
   fitted <- ps_newton(fitted)
   # what the node's own fit cost (with auto, the choice): the fits the checks add are given as
   # much time, never more (PS_CHECK_LIMITS$extra_fit_min_seconds at least)
@@ -417,6 +418,77 @@ ps_fit <- function(prepared, distribution, starts = NULL, hessian = FALSE, fail_
   list(distribution = distribution, spec = m, converged = TRUE, status = "ok", attempts = attempts, fit = fit, delayed = !is.null(prepared$start),
        par = unname(par), names = names(par), loglik = fit$loglik, n_parameters = length(par),
        loglik_rows = loglik_rows, loglik_fn = loglik, centring = ps_centring(m, prepared$X, prepared$S), prepared = prepared)
+}
+
+# The point of a larger distribution (`target`: gengamma, or the exponential's Weibull) that is the
+# fit `f` of a distribution nested in it, on the optimiser's scale: the generalized gamma at Q = 1
+# is the Weibull (μ = log scale, log σ = −log shape, the shape's strata turning sign on σ), at
+# Q = 0 the log-normal (μ = meanlog, σ = sdlog); the exponential is the Weibull of shape 1 (log
+# scale = −log rate, its coefficients on the log rate turned), so the generalized gamma at σ = 1,
+# Q = 1.
+ps_nested_point <- function(f, target, prepared) {
+  m <- f$spec
+  par <- f$par
+  shift <- par[c(m$i_terms, m$i_strata)]
+  mt <- ps_spec(target, length(m$i_terms), length(prepared$strata_levels))
+  n_anc <- length(mt$i_anc)
+  start <- switch(paste(f$distribution, target),
+    "weibull gengamma" = c(par[[2L]], -par[[1L]], 1, shift, -par[m$i_anc]),
+    "lognormal gengamma" = c(par[[1L]], par[[2L]], 0, shift, par[m$i_anc]),
+    "exponential gengamma" = c(-par[[1L]], 0, 1, -shift, rep(0, n_anc)),
+    "exponential weibull" = c(0, -par[[1L]], -shift, rep(0, n_anc)),
+    stop("no nested point of ", f$distribution, " in ", target))
+  if (length(start) != mt$nb + length(mt$i_terms) + length(mt$i_strata) + n_anc) stop("the nested point has the wrong length")
+  start
+}
+
+# A fit made without flexsurv, at the point `par` (the optimiser's scale): what ps_fit returns,
+# with no flexsurvreg object (`fit` NULL; ps_attach_flexsurv makes one when it is needed).
+ps_fit_at <- function(prepared, distribution, par) {
+  m <- ps_spec(distribution, ncol(prepared$X), length(prepared$strata_levels))
+  loglik_rows <- function(p) ps_loglik_rows(m, p, prepared$time, prepared$status, prepared$X, prepared$S, prepared$start)
+  loglik <- function(p) sum(prepared$w * loglik_rows(p))
+  ll <- tryCatch(loglik(par), error = function(e) NA_real_)
+  list(distribution = distribution, spec = m, converged = is.finite(ll), status = if (is.finite(ll)) "ok" else "not_converged",
+       attempts = 1L, fit = NULL, delayed = !is.null(prepared$start), par = unname(par), names = NULL, loglik = ll,
+       n_parameters = length(par), loglik_rows = loglik_rows, loglik_fn = loglik, centring = ps_centring(m, prepared$X, prepared$S),
+       prepared = prepared, reason = if (is.finite(ll)) NULL else "the starting point has no finite log-likelihood")
+}
+
+# A larger distribution from a point nested in it (lot P12): Newton steps from the rows' own
+# derivatives straight from `init`, no BFGS, when they reach the maximum (ps_newton_steps's
+# `at_maximum`); else `fallback()`, a fit by flexsurv, whose result is returned as it is.
+ps_fit_nested <- function(prepared, distribution, init, fallback) {
+  f <- ps_newton_steps(ps_fit_at(prepared, distribution, init), prepared)
+  if (isTRUE(f$converged) && isTRUE(f$at_maximum)) return(f)
+  fallback()
+}
+
+# The flexsurvreg object of a fit made by ps_fit_at, at its estimates (all parameters fixed: one
+# evaluation), with the check that its log-likelihood is the runner's: native.rds and the
+# self-test's check of the card read it.
+ps_attach_flexsurv <- function(fitted, prepared) {
+  if (!is.null(fitted$fit)) return(fitted)
+  m <- fitted$spec
+  fit <- suppressWarnings(ps_flexsurvreg(ps_formula(prepared), ps_anc_formula(prepared, m), prepared$frame, m$flexsurv,
+                                         init = ps_to_natural(m, fitted$par), fixedpars = TRUE))
+  own <- fitted$loglik_fn(fitted$par)
+  if (!is.finite(own) || abs(own - fit$loglik) > PS_LOGLIK_CHECK * max(1, abs(fit$loglik))) {
+    stop("the runner's log-likelihood (", format(own, digits = 17), ") is not flexsurv's (", format(fit$loglik, digits = 17), ")")
+  }
+  # with every parameter fixed flexsurv keeps the estimates alone: the columns of a fit, which
+  # ps_native fills with the runner's numbers
+  blank <- function(x) {
+    out <- matrix(NA_real_, nrow(x), 4L, dimnames = list(rownames(x), c("est", "L95%", "U95%", "se")))
+    out[, "est"] <- x[, "est"]
+    out
+  }
+  fit$res.t <- blank(fit$res.t)
+  fit$res <- blank(fit$res)
+  fit$opt <- list(par = stats::setNames(fitted$par, rownames(fit$res.t)), convergence = 0L)
+  fitted$fit <- fit
+  fitted$names <- rownames(fit$res.t)
+  fitted
 }
 
 # flexsurvreg called with symbols bound in an environment of its own, so that the call it keeps
@@ -784,10 +856,13 @@ ps_structured_derivatives <- function(fitted, prepared, par = fitted$par) {
   list(gradient = g, hessian = (H + t(H)) / 2)
 }
 
-# Newton steps of a fit (from ps_fit) to the maximum of its log-likelihood: `loglik` there,
-# `newton_steps` the steps taken. No covariance is kept (`vcov` NULL).
+# Newton steps of a fit (from ps_fit or ps_fit_at) to the maximum of its log-likelihood: `loglik`
+# there, `newton_steps` the steps taken, `at_maximum` whether the last step computed was below
+# PS_AT_MAXIMUM standard errors with −H positive definite. No covariance is kept (`vcov` NULL).
+PS_AT_MAXIMUM <- 1e-4
 ps_newton_steps <- function(fitted, prepared) {
   fitted$newton_steps <- 0L
+  fitted$at_maximum <- FALSE
   if (!isTRUE(fitted$converged)) return(fitted)
   par <- fitted$par
   ll <- fitted$loglik_fn(par)
@@ -802,7 +877,11 @@ ps_newton_steps <- function(fitted, prepared) {
     V_c <- chol2inv(ch)
     step_c <- drop(V_c %*% crossprod(A, dv$gradient))
     if (!all(is.finite(step_c))) break
-    small <- max(abs(step_c) / sqrt(diag(V_c))) < PS_NEWTON_DONE
+    size <- max(abs(step_c) / sqrt(diag(V_c)))
+    small <- size < PS_NEWTON_DONE
+    # −H positive definite and a step this small: the maximum, as far as the log-likelihood's
+    # rounding tells (a step of 1e-4 standard errors changes it by about 1e-8)
+    fitted$at_maximum <- size < PS_AT_MAXIMUM
     step <- drop(A %*% step_c)
     taken <- FALSE
     for (t_ in c(1, 0.5, 0.25, 0.125)) {
@@ -1989,8 +2068,9 @@ TAB_COMMON_TESTS[["parametric survival: Newton steps from the rows' own derivati
   real <- ps_fit
   assign("ps_fit", function(...) { calls <<- calls + 1L; real(...) }, envir = globalenv())
   f <- tryCatch(tab_results_frame(fit_parametric_survival(.ps_test_task(df, params))$rows), finally = assign("ps_fit", real, envir = globalenv()))
-  # the six candidates and the model without predictors: nothing for the checks
-  .tab_expect(calls == 7L, "auto fitted ", calls, " models")
+  # five candidates by flexsurv (the generalized gamma by Newton steps from the better nested one) and the model without
+  # predictors: nothing for the checks
+  .tab_expect(calls == 6L, "auto fitted ", calls, " models")
   manual <- tab_results_frame(fit_parametric_survival(.ps_test_task(df, utils::modifyList(params, list(distribution = "weibull"))))$rows)
   at <- function(x) x$value[x$section == "assumption" & x$level == "distribution_vs_gengamma" & x$stat == "statistic"]
   .tab_expect(abs(at(f) - at(manual)) < 1e-6, "the comparison with auto ", at(f), " and without ", at(manual))

@@ -304,27 +304,9 @@ psc_agreement <- function(ctx, group) {
 }
 
 # ── the LR checks: a larger distribution against the one fitted ──────────────
-# The point of the larger distribution (`target`: gengamma, or the exponential's Weibull) that is
-# the node's own fit, on the optimiser's scale: the generalized gamma at Q = 1 is the Weibull
-# (μ = log scale, log σ = −log shape, the shape's strata turning sign on σ), at Q = 0 the
-# log-normal (μ = meanlog, σ = sdlog); the exponential is the Weibull of shape 1 (log scale = −log
-# rate, its coefficients on the log rate turned), so the generalized gamma at σ = 1, Q = 1.
-psc_nested_start <- function(ctx, target) {
-  f <- ctx$fitted
-  m <- f$spec
-  par <- f$par
-  shift <- par[c(m$i_terms, m$i_strata)]
-  mt <- ps_spec(target, length(m$i_terms), length(ctx$prepared$strata_levels))
-  n_anc <- length(mt$i_anc)
-  start <- switch(paste(ctx$distribution, target),
-    "weibull gengamma" = c(par[[2L]], -par[[1L]], 1, shift, -par[m$i_anc]),
-    "lognormal gengamma" = c(par[[1L]], par[[2L]], 0, shift, par[m$i_anc]),
-    "exponential gengamma" = c(-par[[1L]], 0, 1, -shift, rep(0, n_anc)),
-    "exponential weibull" = c(0, -par[[1L]], -shift, rep(0, n_anc)),
-    stop("no nested point of ", ctx$distribution, " in ", target))
-  if (length(start) != mt$nb + length(mt$i_terms) + length(mt$i_strata) + n_anc) stop("the nested point has the wrong length")
-  start
-}
+# The point of the larger distribution that is the node's own fit: ps_nested_point
+# (parametric_survival.R).
+psc_nested_start <- function(ctx, target) ps_nested_point(ctx$fitted, target, ctx$prepared)
 
 # The larger distribution's fit at its maximum, once per check run: list(fit, status, seconds),
 # status «ok», «not_converged», «time» (the allowance ran out while it was fitted) or, with auto,
@@ -344,10 +326,11 @@ psc_larger_fit <- function(ctx, target) {
     }
   } else {
     init <- psc_nested_start(ctx, target)
-    run <- ps_within(allowance, {
+    # Newton steps straight from the nested point; BFGS first only when they do not reach the maximum
+    run <- ps_within(allowance, ps_fit_nested(p, target, init, function() {
       f <- ps_fit(p, target, init = init, reltol = PSC_RELTOL, second = FALSE)
       if (isTRUE(f$converged)) ps_newton_steps(f, p) else f
-    })
+    }))
     status <- if (run$time_up) "time" else if (isTRUE(run$value$converged)) "ok" else "not_converged"
     out <- list(fit = run$value, status = status, seconds = allowance)
   }
