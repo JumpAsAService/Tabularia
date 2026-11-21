@@ -742,20 +742,38 @@ func readEnvironment(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Pr
 }
 
 // scEnvName is _name: stripped, not empty, no other environment with it (case aside).
-func scEnvName(ctx context.Context, q perm.Querier, name string, id int64) (string, *auth.Refusal, error) {
+//
+// The environment of a statistical model group (managed_by) is not listed and its name is shown
+// nowhere: when it holds the name, it is moved aside to «… (n)» (mgYieldName), as Enable takes
+// «… (n)» when an ordinary environment holds its name. A name is never refused for an environment
+// the administrator cannot see.
+func scEnvName(ctx context.Context, q scNamesDB, name string, id int64) (string, *auth.Refusal, error) {
 	name = pyd.Strip(name)
 	if name == "" {
 		return "", &auth.Refusal{Status: http.StatusUnprocessableEntity, Detail: "The environment needs a name"}, nil
 	}
 	var clash int64
-	err := q.QueryRow(ctx, `SELECT id FROM script_environments WHERE lower(name) = $1`, pyd.Lower(name)).Scan(&clash)
+	var managedBy *string
+	err := q.QueryRow(ctx, `SELECT id, managed_by FROM script_environments WHERE lower(name) = $1`, pyd.Lower(name)).Scan(&clash, &managedBy)
 	if err != nil && !scNoRows(err) {
 		return "", nil, err
 	}
 	if err == nil && clash != id {
+		if managedBy != nil {
+			if err := mgYieldName(ctx, q, clash, *managedBy); err != nil {
+				return "", nil, err
+			}
+			return name, nil, nil
+		}
 		return "", &auth.Refusal{Status: http.StatusConflict, Detail: fmt.Sprintf("An environment named «%s» already exists", name)}, nil
 	}
 	return name, nil, nil
+}
+
+// scNamesDB is what scEnvName reads and, to move a managed environment aside, writes in: the pool.
+type scNamesDB interface {
+	perm.Querier
+	mgBeginner
 }
 
 // scLanguageVersion is _language_version: the base image of a version offered.

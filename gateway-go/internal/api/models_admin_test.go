@@ -704,6 +704,84 @@ func TestAnEnvironmentOfTheGroupsNameDoesNotStopEnabling(t *testing.T) {
 	}
 }
 
+// The other way round: an ordinary environment created, or renamed, with the name the managed one
+// holds, a name the Scripting section shows nowhere. The administrator's name is not refused: the
+// managed environment moves aside to the next «… (n)», and keeps serving.
+func TestTheManagedEnvironmentsNameYieldsToAnEnvironmentOfThatName(t *testing.T) {
+	f := newModelsFixture(t)
+	f.enable(f.admin, "survival")
+	managed := f.envOf("survival")
+	var made []int64
+	t.Cleanup(func() {
+		_, _ = f.db.Exec(f.ctx, `DELETE FROM script_environment_groups WHERE environment_id = ANY($1)`, made)
+		_, _ = f.db.Exec(f.ctx, `UPDATE script_environments SET current_version_id = NULL WHERE id = ANY($1)`, made)
+		_, _ = f.db.Exec(f.ctx, `DELETE FROM script_environment_versions WHERE environment_id = ANY($1)`, made)
+		_, _ = f.db.Exec(f.ctx, `DELETE FROM script_environments WHERE id = ANY($1)`, made)
+	})
+	send := func(h func(*Deps, http.ResponseWriter, *http.Request, *auth.Principal, pyd.Body), id int64, body string) *httptest.ResponseRecorder {
+		t.Helper()
+		b, resp := pyd.ReadBody([]byte(body), "application/json")
+		if resp != nil {
+			t.Fatalf("the body: %v", resp)
+		}
+		r := httptest.NewRequest(http.MethodPost, "/x", nil)
+		r.SetPathValue("environment_id", fmt.Sprint(id))
+		w := httptest.NewRecorder()
+		h(f.d, w, r, &auth.Principal{User: *f.admin}, b)
+		return w
+	}
+	nameOf := func(id int64) string {
+		var n string
+		if err := f.db.QueryRow(f.ctx, `SELECT name FROM script_environments WHERE id = $1`, id).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	// created with the name, in another case
+	w := send(createEnvironment, 0, `{"name": "statistical models: survival", "language": "r", "language_version": "4.6"}`)
+	if w.Code != http.StatusOK && w.Code != http.StatusCreated {
+		t.Fatalf("created: %d %s", w.Code, w.Body)
+	}
+	var created struct {
+		ID   int64  `json:"id"`
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &created); err != nil || created.ID == 0 {
+		t.Fatalf("%s %v", w.Body, err)
+	}
+	made = append(made, created.ID)
+	if created.Name != "statistical models: survival" || nameOf(managed) != "Statistical models: survival (2)" {
+		t.Errorf("the names: %q, the managed one %q", created.Name, nameOf(managed))
+	}
+	// another one renamed to the managed environment's new name: it moves again
+	w = send(createEnvironment, 0, `{"name": "Mine", "language": "r", "language_version": "4.6"}`)
+	if err := json.Unmarshal(w.Body.Bytes(), &created); err != nil || created.ID == 0 {
+		t.Fatalf("%d %s %v", w.Code, w.Body, err)
+	}
+	made = append(made, created.ID)
+	if w := send(changeEnvironment, created.ID, `{"name": "Statistical models: survival (2)"}`); w.Code != http.StatusOK {
+		t.Fatalf("renamed: %d %s", w.Code, w.Body)
+	}
+	if nameOf(created.ID) != "Statistical models: survival (2)" || nameOf(managed) != "Statistical models: survival (3)" {
+		t.Errorf("after the rename: %q, the managed one %q", nameOf(created.ID), nameOf(managed))
+	}
+	// a name an ordinary environment holds is still refused, and the managed one stays where it is
+	if w := send(createEnvironment, 0, `{"name": "STATISTICAL MODELS: SURVIVAL (2)", "language": "r", "language_version": "4.6"}`); w.Code != http.StatusConflict ||
+		!strings.Contains(w.Body.String(), "already exists") {
+		t.Errorf("an ordinary environment's name: %d %s", w.Code, w.Body)
+	}
+	if nameOf(managed) != "Statistical models: survival (3)" {
+		t.Errorf("the managed one moved for a refused name: %q", nameOf(managed))
+	}
+	// the managed environment is still the group's, and the group still enables
+	if f.envOf("survival") != managed {
+		t.Error("the group lost its environment")
+	}
+	if got := answerOf(t, f.enable(f.admin, "survival")).Group; !got.Enabled {
+		t.Errorf("enabled again: %+v", got)
+	}
+}
+
 // Whoever may use a model group may not run code of their own in its image: the managed environment
 // is no Script node's environment, nor a saved script's, for a person in the group nor for an
 // administrator, and the access check of a run does not know it.

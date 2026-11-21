@@ -670,7 +670,8 @@ func mgInFlight(ctx context.Context, tx pgx.Tx, envID int64) (int64, error) {
 // named an ordinary one «Statistical models: <group>» before the group was enabled. The managed
 // environment's name is shown nowhere (the Scripting section hides it), so it takes the first
 // free one of «Statistical models: <group>», «… (2)», «… (3)»…: enabling never stops on a name
-// the administrator cannot see, and nobody has to rename anything.
+// the administrator cannot see, and nobody has to rename anything. The other way round, an
+// ordinary environment given the managed one's name later moves it aside (mgYieldName).
 func mgEnsureEnvironment(ctx context.Context, tx pgx.Tx, g modelgroups.Group, who string) (int64, error) {
 	// the lock's two keys: the table's own oid and the group (a pair never used by another lock)
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock('script_environments'::regclass::oid::int, hashtext($1))`, mgManagedBy(g.ID)); err != nil {
@@ -686,19 +687,10 @@ func mgEnsureEnvironment(ctx context.Context, tx pgx.Tx, g modelgroups.Group, wh
 	}
 	cpu, memory := g.Recipe.Resources.CPU, g.Recipe.Resources.Memory
 	now := time.Now().UTC()
-	base := "Statistical models: " + g.ID
-	for n := 1; ; n++ {
-		name := base
-		if n > 1 {
-			name = fmt.Sprintf("%s (%d)", base, n)
-		}
-		// taken also when it differs only in case: the rule of the environments' names (scEnvName)
-		var taken bool
-		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM script_environments WHERE lower(name) = lower($1))`, name).Scan(&taken); err != nil {
+	for {
+		name, err := mgFreeName(ctx, tx, mgEnvironmentName(g.ID))
+		if err != nil {
 			return 0, err
-		}
-		if taken {
-			continue
 		}
 		err = tx.QueryRow(ctx, `INSERT INTO script_environments (name, description, language, enabled, current_version_id, cpu_request, cpu_limit,
 			memory_request, memory_limit, max_timeout_seconds, created_at, created_by, updated_at, updated_by, managed_by)
@@ -715,6 +707,55 @@ func mgEnsureEnvironment(ctx context.Context, tx pgx.Tx, g modelgroups.Group, wh
 			return id, err
 		}
 	}
+}
+
+// mgEnvironmentName is the name a group's managed environment takes when it is free.
+func mgEnvironmentName(group string) string { return "Statistical models: " + group }
+
+// mgFreeName is the first of base, «base (2)», «base (3)»… that no environment has, also in
+// another case: the rule of the environments' names (scEnvName).
+func mgFreeName(ctx context.Context, q perm.Querier, base string) (string, error) {
+	for n := 1; ; n++ {
+		name := base
+		if n > 1 {
+			name = fmt.Sprintf("%s (%d)", base, n)
+		}
+		var taken bool
+		if err := q.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM script_environments WHERE lower(name) = lower($1))`, name).Scan(&taken); err != nil {
+			return "", err
+		}
+		if !taken {
+			return name, nil
+		}
+	}
+}
+
+// mgYieldName moves the managed environment id (of managedBy) out of the name an administrator
+// gives an ordinary environment: the managed environment's name is shown nowhere, so it takes the
+// next free «Statistical models: <group> (n)» and the administrator's name is never refused for a
+// name nobody sees. As mgEnsureEnvironment, under the group's lock.
+func mgYieldName(ctx context.Context, db mgBeginner, id int64, managedBy string) error {
+	tx, err := db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock('script_environments'::regclass::oid::int, hashtext($1))`, managedBy); err != nil {
+		return err
+	}
+	name, err := mgFreeName(ctx, tx, mgEnvironmentName(mgGroupOfManaged(&managedBy)))
+	if err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE script_environments SET name = $2 WHERE id = $1 AND managed_by IS NOT NULL`, id, name); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+// mgBeginner is a database a transaction is begun on (the pool).
+type mgBeginner interface {
+	Begin(ctx context.Context) (pgx.Tx, error)
 }
 
 // mgEnable is POST /admin/models/{group_id}/enable: the group's environment made (or enabled
