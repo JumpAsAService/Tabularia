@@ -136,6 +136,20 @@ cd Tabularia/infrastructure
 
 Every `docker compose` command of this guide runs from this `infrastructure` folder.
 
+> [!NOTE]
+> **One Tabularia per machine.** The compose file gives its containers fixed names
+> (`dataprep-gateway`, `dataprep-postgres`, …) and its network the fixed name
+> `dataprep-network`, so a second copy cannot run beside the first: Docker answers
+> *container name already in use*. The volumes, on the other hand, are named after the
+> folder (`infrastructure_postgres_data`, …): a second clone, wherever it is, shares the
+> data of the first. The images are tagged `tabularia-backend:dev` and so on, and a build
+> from another clone moves those tags. To keep a stack you already have, stop it first
+> (`docker compose stop`, in its folder). For a separate trial with its own data, set
+> `COMPOSE_PROJECT_NAME` (for example `export COMPOSE_PROJECT_NAME=tabularia-trial`, in
+> PowerShell `$env:COMPOSE_PROJECT_NAME="tabularia-trial"`) before every `docker compose`
+> command: the volumes then take that prefix, and the backup commands of step 10 use it in
+> place of `infrastructure`.
+
 #### Windows
 
 Nothing more to do.
