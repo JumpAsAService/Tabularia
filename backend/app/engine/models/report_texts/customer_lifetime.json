@@ -18,14 +18,15 @@
    "clv": "Total CLV",
    "clv_mean": "mean {mean} a customer",
    "alive": "Mean P(alive)",
-   "alive_share": "{share} repeat customers"
+   "alive_share": "{share} repeat customers",
+   "billions": "{n} bn"
   },
   "business": {
    "chosen_by": ", chosen by the log-likelihood",
-   "value": "{model} · {unit} · horizon {horizon} {unit} · discount {discount} a year · margin {margin}: {kind}",
+   "value": "{model} · {unit} · horizon {horizon} {horizon_unit} · discount {discount} a year · margin {margin}: {kind}",
    "revenue": "CLV of revenue",
    "margin": "CLV of margin",
-   "purchases": "{model} · {unit} · horizon {horizon} {unit}"
+   "purchases": "{model} · {unit} · horizon {horizon} {horizon_unit}"
   },
   "measure_texts": {
    "sample_size": "The customers the estimates rest on; beside it, how many of them bought again (the repeat purchases teach the purchase rate and the dropout).",
@@ -37,7 +38,6 @@
     "boundary_homogeneous": "The customers look alike on this process: the spread of the rate is not identified."
    }
   },
-  "formula_in": "in {unit}",
   "note_texts": {
    "optimizer_fallback": "The first optimizer did not converge: the Nelder–Mead method was used, as the convergence check says.",
    "cet_quadrature": "{n} customers needed numerical integration for their expected purchases, where the closed form gave no number.",
@@ -182,6 +182,20 @@
     "month": "months",
     "quarter": "quarters",
     "year": "years"
+   },
+   "time_unit_one": {
+    "day": "day",
+    "week": "week",
+    "month": "month",
+    "quarter": "quarter",
+    "year": "year"
+   },
+   "time_unit_dative": {
+    "day": "days",
+    "week": "weeks",
+    "month": "months",
+    "quarter": "quarters",
+    "year": "years"
    }
   },
   "checks": {
@@ -229,7 +243,10 @@
     "name": "Spend independent of frequency",
     "h0": "The average spend does not move with the frequency (Gamma–Gamma's assumption).",
     "advice": "The average spend moves with the frequency: Gamma–Gamma's CLV is then biased; segment the customers by frequency, or read the CLV with care.",
-    "not_computed": "Not computed: the frequencies or the average spends of the repeat customers do not vary, so the slope has no test.",
+    "not_computed": {
+     "": "Not computed: the frequencies or the average spends of the repeat customers do not vary, so the slope has no test.",
+     "spend_independence_leverage": "Not computed: one repeat customer alone has a frequency no other has, and the others share one, so the slope is that customer's alone and has no test."
+    },
     "count": {
      "one": "{n} repeat customer",
      "other": "{n} repeat customers"
@@ -240,6 +257,10 @@
     "h0": "The spend's variance is finite (q above 2).",
     "advice": "The spend varies so much across customers that its average has no finite variance: a few large spenders drive it."
    }
+  },
+  "formula_texts": {
+   "clv_formula": "x: frequency, t_x: recency, T: age, in {unit}",
+   "bgbb_formula": "x: transactions, t_x: opportunity of the last, n: opportunities, one opportunity a {unit:one}"
   }
  },
  "it": {
@@ -261,14 +282,15 @@
    "clv": "CLV totale",
    "clv_mean": "media {mean} a cliente",
    "alive": "P(vivo) media",
-   "alive_share": "{share} clienti con riacquisti"
+   "alive_share": "{share} clienti con riacquisti",
+   "billions": "{n} Mld"
   },
   "business": {
    "chosen_by": ", scelto con la log-verosimiglianza",
-   "value": "{model} · {unit} · orizzonte {horizon} {unit} · sconto {discount} all'anno · margine {margin}: {kind}",
+   "value": "{model} · {unit} · orizzonte {horizon} {horizon_unit} · sconto {discount} all'anno · margine {margin}: {kind}",
    "revenue": "CLV del fatturato",
    "margin": "CLV del margine",
-   "purchases": "{model} · {unit} · orizzonte {horizon} {unit}"
+   "purchases": "{model} · {unit} · orizzonte {horizon} {horizon_unit}"
   },
   "measure_texts": {
    "sample_size": "I clienti su cui poggiano le stime; accanto, quanti di loro hanno riacquistato (i riacquisti insegnano il tasso di acquisto e l'abbandono).",
@@ -280,7 +302,6 @@
     "boundary_homogeneous": "I clienti si somigliano su questo processo: la dispersione del tasso non è identificata."
    }
   },
-  "formula_in": "in {unit}",
   "note_texts": {
    "optimizer_fallback": "Il primo ottimizzatore non è convergito: è stato usato il metodo Nelder–Mead, come dice la verifica di convergenza.",
    "cet_quadrature": "{n} clienti hanno richiesto l'integrazione numerica per gli acquisti attesi, dove la forma chiusa non dava un numero.",
@@ -425,6 +446,20 @@
     "month": "mesi",
     "quarter": "trimestri",
     "year": "anni"
+   },
+   "time_unit_one": {
+    "day": "giorno",
+    "week": "settimana",
+    "month": "mese",
+    "quarter": "trimestre",
+    "year": "anno"
+   },
+   "time_unit_dative": {
+    "day": "giorni",
+    "week": "settimane",
+    "month": "mesi",
+    "quarter": "trimestri",
+    "year": "anni"
    }
   },
   "checks": {
@@ -472,7 +507,10 @@
     "name": "Spesa indipendente dalla frequenza",
     "h0": "La spesa media non varia con la frequenza (ipotesi della Gamma–Gamma).",
     "advice": "La spesa media varia con la frequenza: il CLV della Gamma–Gamma è allora distorto; segmentate i clienti per frequenza, o leggete il CLV con cautela.",
-    "not_computed": "Non calcolata: le frequenze o le spese medie dei clienti che hanno riacquistato non variano, quindi la pendenza non ha un test.",
+    "not_computed": {
+     "": "Non calcolata: le frequenze o le spese medie dei clienti che hanno riacquistato non variano, quindi la pendenza non ha un test.",
+     "spend_independence_leverage": "Non calcolata: un solo cliente con riacquisti ha una frequenza che nessun altro ha, e gli altri ne condividono una, quindi la pendenza è solo di quel cliente e non ha un test."
+    },
     "count": {
      "one": "{n} cliente con riacquisti",
      "other": "{n} clienti con riacquisti"
@@ -483,6 +521,10 @@
     "h0": "La varianza della spesa è finita (q sopra 2).",
     "advice": "La spesa varia tanto tra i clienti che la sua media non ha varianza finita: pochi grandi spenditori la determinano."
    }
+  },
+  "formula_texts": {
+   "clv_formula": "x: frequenza, t_x: recency, T: età, in {unit}",
+   "bgbb_formula": "x: transazioni, t_x: occasione dell'ultima, n: occasioni, un'occasione per {unit:one}"
   }
  },
  "de": {
@@ -504,14 +546,15 @@
    "clv": "CLV gesamt",
    "clv_mean": "Mittel {mean} je Kunde",
    "alive": "Mittlere P(aktiv)",
-   "alive_share": "{share} Wiederkäufer"
+   "alive_share": "{share} Wiederkäufer",
+   "billions": "{n} Mrd."
   },
   "business": {
    "chosen_by": ", gewählt nach der Log-Likelihood",
-   "value": "{model} · {unit} · Horizont {horizon} {unit} · Diskont {discount} pro Jahr · Marge {margin}: {kind}",
+   "value": "{model} · {unit} · Horizont {horizon} {horizon_unit} · Diskont {discount} pro Jahr · Marge {margin}: {kind}",
    "revenue": "CLV des Umsatzes",
    "margin": "CLV der Marge",
-   "purchases": "{model} · {unit} · Horizont {horizon} {unit}"
+   "purchases": "{model} · {unit} · Horizont {horizon} {horizon_unit}"
   },
   "measure_texts": {
    "sample_size": "Die Kunden, auf denen die Schätzungen beruhen; daneben, wie viele von ihnen wieder gekauft haben (die Wiederkäufe lehren die Kaufrate und die Abwanderung).",
@@ -523,7 +566,6 @@
     "boundary_homogeneous": "Die Kunden gleichen sich bei diesem Prozess: Die Streuung der Rate ist nicht identifiziert."
    }
   },
-  "formula_in": "in {unit}",
   "note_texts": {
    "optimizer_fallback": "Der erste Optimierer konvergierte nicht: Es wurde das Nelder–Mead-Verfahren verwendet, wie die Konvergenzprüfung sagt.",
    "cet_quadrature": "{n} Kunden brauchten numerische Integration für ihre erwarteten Käufe, wo die geschlossene Form keine Zahl lieferte.",
@@ -668,6 +710,20 @@
     "month": "Monate",
     "quarter": "Quartale",
     "year": "Jahre"
+   },
+   "time_unit_one": {
+    "day": "Tag",
+    "week": "Woche",
+    "month": "Monat",
+    "quarter": "Quartal",
+    "year": "Jahr"
+   },
+   "time_unit_dative": {
+    "day": "Tagen",
+    "week": "Wochen",
+    "month": "Monaten",
+    "quarter": "Quartalen",
+    "year": "Jahren"
    }
   },
   "checks": {
@@ -715,7 +771,10 @@
     "name": "Ausgabe unabhängig von der Häufigkeit",
     "h0": "Die durchschnittliche Ausgabe ändert sich nicht mit der Häufigkeit (Annahme des Gamma–Gamma).",
     "advice": "Die durchschnittliche Ausgabe ändert sich mit der Häufigkeit: Der CLV des Gamma–Gamma ist dann verzerrt; die Kunden nach Häufigkeit segmentieren oder den CLV mit Vorsicht lesen.",
-    "not_computed": "Nicht berechnet: Die Häufigkeiten oder die durchschnittlichen Ausgaben der Wiederkäufer variieren nicht, daher hat die Steigung keinen Test.",
+    "not_computed": {
+     "": "Nicht berechnet: Die Häufigkeiten oder die durchschnittlichen Ausgaben der Wiederkäufer variieren nicht, daher hat die Steigung keinen Test.",
+     "spend_independence_leverage": "Nicht berechnet: Ein einziger Wiederkäufer hat eine Häufigkeit, die kein anderer hat, und die anderen teilen sich eine, daher gehört die Steigung diesem Kunden allein und hat keinen Test."
+    },
     "count": {
      "one": "{n} Wiederkäufer",
      "other": "{n} Wiederkäufer"
@@ -726,6 +785,10 @@
     "h0": "Die Varianz der Ausgabe ist endlich (q über 2).",
     "advice": "Die Ausgabe schwankt so stark zwischen den Kunden, dass ihr Mittelwert keine endliche Varianz hat: Wenige Großkunden bestimmen ihn."
    }
+  },
+  "formula_texts": {
+   "clv_formula": "x: Häufigkeit, t_x: Recency, T: Alter, in {unit:dative}",
+   "bgbb_formula": "x: Transaktionen, t_x: Gelegenheit der letzten, n: Gelegenheiten, eine Gelegenheit pro {unit:one}"
   }
  },
  "es": {
@@ -747,14 +810,15 @@
    "clv": "CLV total",
    "clv_mean": "media {mean} por cliente",
    "alive": "P(vivo) media",
-   "alive_share": "{share} clientes con recompras"
+   "alive_share": "{share} clientes con recompras",
+   "billions": "{n} mil M"
   },
   "business": {
    "chosen_by": ", elegido por la log-verosimilitud",
-   "value": "{model} · {unit} · horizonte {horizon} {unit} · descuento {discount} al año · margen {margin}: {kind}",
+   "value": "{model} · {unit} · horizonte {horizon} {horizon_unit} · descuento {discount} al año · margen {margin}: {kind}",
    "revenue": "CLV de los ingresos",
    "margin": "CLV del margen",
-   "purchases": "{model} · {unit} · horizonte {horizon} {unit}"
+   "purchases": "{model} · {unit} · horizonte {horizon} {horizon_unit}"
   },
   "measure_texts": {
    "sample_size": "Los clientes en que se apoyan las estimaciones; al lado, cuántos de ellos volvieron a comprar (las recompras enseñan la tasa de compra y el abandono).",
@@ -766,7 +830,6 @@
     "boundary_homogeneous": "Los clientes se parecen en este proceso: la dispersión de la tasa no está identificada."
    }
   },
-  "formula_in": "en {unit}",
   "note_texts": {
    "optimizer_fallback": "El primer optimizador no convergió: se usó el método de Nelder–Mead, como dice la comprobación de convergencia.",
    "cet_quadrature": "{n} clientes necesitaron integración numérica para sus compras esperadas, donde la forma cerrada no daba un número.",
@@ -911,6 +974,20 @@
     "month": "meses",
     "quarter": "trimestres",
     "year": "años"
+   },
+   "time_unit_one": {
+    "day": "día",
+    "week": "semana",
+    "month": "mes",
+    "quarter": "trimestre",
+    "year": "año"
+   },
+   "time_unit_dative": {
+    "day": "días",
+    "week": "semanas",
+    "month": "meses",
+    "quarter": "trimestres",
+    "year": "años"
    }
   },
   "checks": {
@@ -958,7 +1035,10 @@
     "name": "Gasto independiente de la frecuencia",
     "h0": "El gasto medio no varía con la frecuencia (supuesto de la Gamma–Gamma).",
     "advice": "El gasto medio varía con la frecuencia: el CLV de la Gamma–Gamma queda entonces sesgado; segmenten a los clientes por frecuencia, o lean el CLV con cuidado.",
-    "not_computed": "No calculada: las frecuencias o los gastos medios de los clientes que recompraron no varían, así que la pendiente no tiene prueba.",
+    "not_computed": {
+     "": "No calculada: las frecuencias o los gastos medios de los clientes que recompraron no varían, así que la pendiente no tiene prueba.",
+     "spend_independence_leverage": "No calculada: un solo cliente con recompras tiene una frecuencia que ningún otro tiene, y los demás comparten una, así que la pendiente es solo de ese cliente y no tiene prueba."
+    },
     "count": {
      "one": "{n} cliente con recompras",
      "other": "{n} clientes con recompras"
@@ -969,6 +1049,10 @@
     "h0": "La varianza del gasto es finita (q por encima de 2).",
     "advice": "El gasto varía tanto entre clientes que su media no tiene varianza finita: unos pocos grandes gastadores la determinan."
    }
+  },
+  "formula_texts": {
+   "clv_formula": "x: frecuencia, t_x: recencia, T: edad, en {unit}",
+   "bgbb_formula": "x: transacciones, t_x: ocasión de la última, n: ocasiones, una ocasión por {unit:one}"
   }
  },
  "fr": {
@@ -990,14 +1074,15 @@
    "clv": "CLV total",
    "clv_mean": "moyenne {mean} par client",
    "alive": "P(actif) moyenne",
-   "alive_share": "{share} clients avec rachats"
+   "alive_share": "{share} clients avec rachats",
+   "billions": "{n} Md"
   },
   "business": {
    "chosen_by": ", choisi par la log-vraisemblance",
-   "value": "{model} · {unit} · horizon {horizon} {unit} · actualisation {discount} par an · marge {margin} : {kind}",
+   "value": "{model} · {unit} · horizon {horizon} {horizon_unit} · actualisation {discount} par an · marge {margin} : {kind}",
    "revenue": "CLV du chiffre d'affaires",
    "margin": "CLV de la marge",
-   "purchases": "{model} · {unit} · horizon {horizon} {unit}"
+   "purchases": "{model} · {unit} · horizon {horizon} {horizon_unit}"
   },
   "measure_texts": {
    "sample_size": "Les clients sur lesquels reposent les estimations ; à côté, combien d'entre eux ont racheté (les rachats apprennent le taux d'achat et l'abandon).",
@@ -1009,7 +1094,6 @@
     "boundary_homogeneous": "Les clients se ressemblent sur ce processus : la dispersion du taux n'est pas identifiée."
    }
   },
-  "formula_in": "en {unit}",
   "note_texts": {
    "optimizer_fallback": "Le premier optimiseur n'a pas convergé : la méthode de Nelder–Mead a été utilisée, comme le dit la vérification de convergence.",
    "cet_quadrature": "{n} clients ont eu besoin de l'intégration numérique pour leurs achats attendus, là où la forme fermée ne donnait pas de nombre.",
@@ -1154,6 +1238,20 @@
     "month": "mois",
     "quarter": "trimestres",
     "year": "années"
+   },
+   "time_unit_one": {
+    "day": "jour",
+    "week": "semaine",
+    "month": "mois",
+    "quarter": "trimestre",
+    "year": "année"
+   },
+   "time_unit_dative": {
+    "day": "jours",
+    "week": "semaines",
+    "month": "mois",
+    "quarter": "trimestres",
+    "year": "années"
    }
   },
   "checks": {
@@ -1201,7 +1299,10 @@
     "name": "Dépense indépendante de la fréquence",
     "h0": "La dépense moyenne ne varie pas avec la fréquence (hypothèse du Gamma–Gamma).",
     "advice": "La dépense moyenne varie avec la fréquence : la CLV du Gamma–Gamma est alors biaisée ; segmentez les clients par fréquence, ou lisez la CLV avec prudence.",
-    "not_computed": "Non calculée : les fréquences ou les dépenses moyennes des clients qui ont racheté ne varient pas, la pente n'a donc pas de test.",
+    "not_computed": {
+     "": "Non calculée : les fréquences ou les dépenses moyennes des clients qui ont racheté ne varient pas, la pente n'a donc pas de test.",
+     "spend_independence_leverage": "Non calculée : un seul client qui a racheté a une fréquence qu'aucun autre n'a, et les autres en partagent une, la pente est donc celle de ce client seul et n'a pas de test."
+    },
     "count": {
      "one": "{n} client avec rachats",
      "other": "{n} clients avec rachats"
@@ -1212,6 +1313,10 @@
     "h0": "La variance de la dépense est finie (q au-dessus de 2).",
     "advice": "La dépense varie tellement entre clients que sa moyenne n'a pas de variance finie : quelques gros dépensiers la déterminent."
    }
+  },
+  "formula_texts": {
+   "clv_formula": "x : fréquence, t_x : récence, T : âge, en {unit}",
+   "bgbb_formula": "x : transactions, t_x : occasion de la dernière, n : occasions, une occasion par {unit:one}"
   }
  }
 }

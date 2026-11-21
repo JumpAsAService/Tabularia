@@ -11,6 +11,10 @@
     "a": "a, first shape of the dropout probability",
     "b": "b, second shape of the dropout probability"
    }
+  },
+  "candidate_not_checked": {
+   "cell": "not checked",
+   "legend": "Not checked: the choice stopped at a better model whose convergence check passed."
   }
  },
  "it": {
@@ -25,6 +29,10 @@
     "a": "a, prima forma della probabilità di abbandono",
     "b": "b, seconda forma della probabilità di abbandono"
    }
+  },
+  "candidate_not_checked": {
+   "cell": "non controllato",
+   "legend": "Non controllato: la scelta si è fermata a un modello migliore il cui controllo di convergenza è passato."
   }
  },
  "de": {
@@ -39,6 +47,10 @@
     "a": "a, erste Form der Abwanderungswahrscheinlichkeit",
     "b": "b, zweite Form der Abwanderungswahrscheinlichkeit"
    }
+  },
+  "candidate_not_checked": {
+   "cell": "nicht geprüft",
+   "legend": "Nicht geprüft: Die Wahl endete bei einem besseren Modell, dessen Konvergenzprüfung bestanden wurde."
   }
  },
  "es": {
@@ -53,6 +65,10 @@
     "a": "a, primera forma de la probabilidad de abandono",
     "b": "b, segunda forma de la probabilidad de abandono"
    }
+  },
+  "candidate_not_checked": {
+   "cell": "no comprobado",
+   "legend": "No comprobado: la elección se detuvo en un modelo mejor cuya comprobación de convergencia se superó."
   }
  },
  "fr": {
@@ -67,6 +83,10 @@
     "a": "a, première forme de la probabilité d'abandon",
     "b": "b, seconde forme de la probabilité d'abandon"
    }
+  },
+  "candidate_not_checked": {
+   "cell": "non vérifié",
+   "legend": "Non vérifié : le choix s'est arrêté à un meilleur modèle dont le contrôle de convergence a réussi."
   }
  }
 }

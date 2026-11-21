@@ -704,8 +704,18 @@ def test_the_spend_check_not_computed_says_why_in_the_page_s_language(locale):
                  "text": "not computed: the repeat customers' frequencies or spends do not vary", "x0": None, "x1": None,
                  "key": "assumption|spend_independence||advice"})
     w = common.words(model, "value", locale)
-    said = [r["text"] for r in layouts.with_labels(model, params, rows, locale) if r["level"] == "spend_independence" and r["stat"] == "advice"]
-    assert said == [w["checks"]["spend_independence"]["not_computed"]] and said[0] != w["checks"]["spend_independence"]["advice"]
+    why = w["checks"]["spend_independence"]["not_computed"]
+
+    def said(rows: list[dict]) -> list[str]:
+        return [r["text"] for r in layouts.with_labels(model, params, rows, locale)
+                if r["level"] == "spend_independence" and r["stat"] == "advice"]
+
+    assert said(rows) == [why[""]] and why[""] != w["checks"]["spend_independence"]["advice"]
+    # one repeat customer alone has its frequency: the runner's advice_id says which reason, the page its sentence
+    rows = [r for r in rows if not (r["level"] == "spend_independence" and r["stat"] == "advice_id")]
+    rows.append({"section": "assumption", "level": "spend_independence", "level_2": None, "stat": "advice_id", "value": None,
+                 "text": "spend_independence_leverage", "x0": None, "x1": None, "key": "assumption|spend_independence||advice_id"})
+    assert said(rows) == [why["spend_independence_leverage"]] and why["spend_independence_leverage"] != why[""]
 
 
 def test_bg_bb_s_formula_is_an_id_the_page_words_with_its_unit(monkeypatch):
@@ -859,6 +869,40 @@ def test_kaplan_meier_s_and_cox_s_checks_not_computed_say_why_in_the_page_s_lang
         assert said == w["checks"][check]["not_computed"], (model, check)
 
 
+@pytest.mark.parametrize("locale", LOCALES)
+def test_a_customer_lifetime_formula_and_its_units_are_the_page_s_words(locale):
+    """CLV's formula («x: frequency, t_x: recency, T: age, in weeks») and BG/BB's («@bgbb_formula unit=year») are
+    sentences of the page's language; a unit after one period is singular («over 1 year»), German's after a
+    preposition dative («in 5 Jahren», «Holdout von 5 Jahren»)."""
+    model, params, rows = fixture("clv-value")
+    w = common.words(model, "value", locale)
+    [formula] = [r["text"] for r in layouts.with_labels(model, params, rows, locale) if r["stat"] == "formula"]
+    assert formula == w["formula_texts"]["clv_formula"].replace("{unit}", w["values"]["time_unit"]["week"]).replace(
+        "{unit:dative}", w["values"]["time_unit_dative"]["week"])
+    model, params, rows = fixture("bg_bb-value")
+    w = common.words(model, "value", locale)
+    [formula] = [r["text"] for r in layouts.with_labels(model, params, rows, locale) if r["stat"] == "formula"]
+    assert formula == w["formula_texts"]["bgbb_formula"].replace("{unit:one}", w["values"]["time_unit_one"]["year"])
+    if locale != "en":
+        assert not re.search(r"\b(frequency|opportunit\w*|the|last)\b", formula), formula
+    doc = " ".join(strings(layouts.definition(model, params, locale, None, None)))  # the expressions
+    for unit in ("day", "week", "month", "quarter", "year"):
+        assert f'"{w["values"]["time_unit_one"][unit]}"' in doc, unit
+    if locale == "de":
+        assert '"Jahren"' in doc and '"Monaten"' in doc
+
+
+def test_a_customer_lifetime_page_says_one_period_in_the_singular(tmp_path, chart_service, monkeypatch):  # noqa: F811
+    model, params, rows = fixture("bg_bb-value")
+    rows = [{**r, "value": 1.0} if r["key"] in ("model|||horizon", "model|||holdout_length") else r for r in rows]
+    for locale, one, many in (("en", "over 1 year", "1 years"), ("it", "in 1 anno", "1 anni"), ("de", "von 1 Jahr", "1 Jahre")):
+        _, page = draw(tmp_path / locale, chart_service, monkeypatch, "bg_bb-value", fmt="svg", locale=locale, rows=rows)
+        said = " ".join(strings(json.loads(page)))
+        assert one in said and many not in said, locale
+    _, page = draw(tmp_path / "de5", chart_service, monkeypatch, "bg_bb-value", fmt="svg", locale="de")
+    assert "Holdout von 5 Jahren" in " ".join(strings(json.loads(page)))
+
+
 def test_numbers_too_large_or_too_small_for_a_column_are_written_by_their_exponent_and_a_fit_s_p_value_as_everywhere(
         tmp_path, chart_service, monkeypatch):  # noqa: F811
     """A CLV's spend parameter with an interval up to 6.2e+150 (a real fit of the runner) is «6.204e+150», not 151
@@ -913,3 +957,21 @@ def test_a_parametric_survival_with_strata_names_them_without_the_column_and_gro
     items = {i["id"]: i for i in layouts.definition("parametric_survival", {**params, "strata": None}, "en", None, None)
              ["sections"]["body"]["items"]}
     assert "groups" not in items["quantiles"] and items["hazard"]["w"] < common.WIDTH
+
+
+@pytest.mark.parametrize("locale", LOCALES)
+def test_a_clv_candidate_auto_did_not_check_says_so(tmp_path, chart_service, monkeypatch, locale):  # noqa: F811
+    """`auto` stops at the first candidate, by log-likelihood, whose convergence check passes: the others have no row
+    `converged`, and the table says «not checked» with a line under it saying why."""
+    model, params, rows = fixture("clv-value")
+    converged = [r for r in rows if r["section"] == "candidate" and r["stat"] == "converged"]
+    assert len(converged) == 3
+    chosen = {r["level"] for r in rows if r["section"] == "candidate" and r["stat"] == "chosen" and r["value"] == 1}
+    rows = [r for r in rows if not (r in converged and r["level"] not in chosen)]
+    w = common.words(model, "value", locale)
+    _, page = draw(tmp_path, chart_service, monkeypatch, "clv-value", fmt="svg", locale=locale, rows=rows)
+    said = strings(json.loads(page))
+    assert said.count(w["candidate_not_checked"]["cell"]) == 2 and w["candidate_not_checked"]["legend"] in said
+    _, page = draw(tmp_path / "all", chart_service, monkeypatch, "clv-value", fmt="svg", locale=locale)
+    said = strings(json.loads(page))
+    assert w["candidate_not_checked"]["cell"] not in said and w["candidate_not_checked"]["legend"] not in said

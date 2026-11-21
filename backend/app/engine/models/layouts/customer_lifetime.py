@@ -73,6 +73,28 @@ def _series_name(w: dict, group: str = "[level_2]") -> str:
     return f'IF({group} = "observed", {c.q(s["observed"])}, IF({group} = "expected", {c.q(s["expected"])}, {group}))'
 
 
+UNITS = ("day", "week", "month", "quarter", "year")
+
+
+def _unit(w: dict, n: str, after_preposition: bool = False) -> str:
+    """The unit of time after the number `n` («1 year», «5 years»): the singular for 1, else the plural; after a
+    preposition the plural of `time_unit_dative` (German's «in 5 Jahren», «von 5 Jahren»). The row `time_unit` holds the
+    plural in the page's words (with_labels): its singular is read back from it."""
+    v = w["values"]
+    said = c.txt(c.model_key("time_unit"))
+
+    def by(forms: dict) -> str:
+        return "IFS(" + ", ".join(f"{said} = {c.q(v['time_unit'][u])}, {c.q(forms[u])}" for u in UNITS) + f", TRUE, {said})"
+
+    return f"IF({n} = 1, {by(v['time_unit_one'])}, {by(v['time_unit_dative'] if after_preposition else v['time_unit'])})"
+
+
+def _money(w: dict, x: str) -> str:
+    """A total as a card has room for it: whole, and from a billion in billions with one decimal («28.3 B»)."""
+    return (f'IF(ABS({x}) >= 1000000000, {c.join(w["kpi"]["billions"], n=c.shown(f"{x} / 1000000000", "#,##0.#"))}, '
+            f'{c.shown(x, "#,##0")})')
+
+
 def _verdict_key(check: str) -> str:
     return f"assumption|{check}||verdict"
 
@@ -111,22 +133,29 @@ def _comparison(p: stats.Page, w: dict) -> None:
                 "align": "right", "format": pattern}
 
     holdout = c.of_row("candidate", "holdout_rel_error")
+    # `auto` checks the convergence of the best candidate first and stops at the first that passes: the others
+    # have no row `converged` («not checked», and a line under the table says why)
+    converged = c.of_row("candidate", "converged")
+    unchecked = f'{one} AND ISNULL({converged})'
     table = stats.table("candidates", t["candidates"], one, [
         {"header": t["purchase_model"], "value": _model_of_level(w),
          "rules": [{"when": f"{chosen} = 1", "style": {"weight": "bold", "color": c.ACCENT}}]},
-        number("log_lik", "#,##0.##", 30), number("aic", "#,##0.##"), number("bic", "#,##0.##"),
+        number("log_lik", "#,##0.##", 28), number("aic", "#,##0.##"), number("bic", "#,##0.##"),
         {"header": c.stat_label(w, "candidate", "chi_square_p_value"), "value": c.p_said(c.of_row("candidate", "chi_square_p_value")),
          "width": 22, "align": "right"},
         {"header": c.stat_label(w, "candidate", "holdout_rel_error"),
          "value": f'IF(ISNULL({holdout}), "", {_signed_percent(holdout)})', "width": 26, "align": "right"},
         {"header": c.stat_label(w, "candidate", "converged"),
-         "value": f'IF({c.of_row("candidate", "converged")} = 1, {c.q(w["coef"]["yes"])}, {c.q(w["coef"]["no"])})', "width": 22},
+         "value": f'IF(ISNULL({converged}), {c.q(w["candidate_not_checked"]["cell"])}, '
+                  f'IF({converged} = 1, {c.q(w["coef"]["yes"])}, {c.q(w["coef"]["no"])}))', "width": 24, "style": {"size": 7}},
         {"header": c.stat_label(w, "candidate", "chosen"), "value": f'IF({chosen} = 1, "✓", "")', "width": 16, "align": "center"},
     ], p.y, visible=c.exists(one))
     table["sort"] = [{"by": c.of_row("candidate", "log_lik"), "dir": "desc"}, {"by": "[ord]"}]
     p.add(table, 10)
     p.text("candidates_note", w["candidates_note"], h=4.5, size=7, color=c.MUTED, can_grow=True,
            visible="=" + c.exists(one).lstrip("=") + " AND " + same.lstrip("="))
+    p.text("candidates_not_checked", w["candidate_not_checked"]["legend"], h=4.5, size=7, color=c.MUTED, can_grow=True,
+           visible=c.exists(unchecked))
 
 
 # ── the fit to the data ─────────────────────────────────────────────────────
@@ -154,7 +183,7 @@ def _fit_to_the_data(p: stats.Page, w: dict) -> None:
     p.text("holdout_totals", "=" + c.join(w["holdout_totals"], expected=c.shown(c.num(c.model_key("holdout_expected")), "#,##0"),
                                          observed=c.shown(c.num(c.model_key("holdout_observed")), "#,##0"),
                                          error=_signed_percent(share), length=c.shown(c.num(c.model_key("holdout_length")), "#,##0"),
-                                         unit=c.txt(c.model_key("time_unit"))),
+                                         unit=_unit(w, c.num(c.model_key("holdout_length")), True)),
            h=5, size=8, color=c.MUTED, can_grow=True, visible=f"=NOT ISNULL({share})")
 
 
@@ -162,11 +191,12 @@ def _fit_to_the_data(p: stats.Page, w: dict) -> None:
 def _p_alive(p: stats.Page, w: dict) -> None:
     ch, s = w["charts"], w["series"]
     median_age = c.shown(c.num(c.model_key("median_age")), "0.#")
-    how = "=" + c.join(w["p_alive_how"], age=median_age, unit=c.txt(c.model_key("time_unit")))
+    how = "=" + c.join(w["p_alive_how"], age=median_age, unit=_unit(w, c.num(c.model_key("median_age")), True))
     f = '[section] = "cell" AND [stat] = "p_alive"'
     cell = c.Chart("p_alive_cell", "heatmap", ch["p_alive_cell"], {
         "filter": f, "category": "[level_2]", "split_by": "[level]", "series": [{"value": "SUM([value])", "name": s["p_alive"]}],
-        "options": {"labels": True, "format": "0.00", "min": 0, "max": 1}, "visible": c.exists(f)}, caption=how)
+        "options": {"labels": True, "format": "0.00", "min": 0, "max": 1}, "visible": c.exists(f)}, caption=how,
+        measured=w["p_alive_how"].replace("{age}", "999.9").replace("{unit}", max(w["values"]["time_unit_dative"].values(), key=len)))
     curves = c.xy("p_alive_recency", ch["p_alive_recency"], '[section] = "curve" AND [level] = "p_alive_recency"',
                   [{"value": "[value]", "as": "line", "name": ""}], {"min": 0, "max": 1, "legend": True, "format": "0.##"},
                   split_by="[level_2]")
@@ -235,9 +265,10 @@ def build(model: str, params: dict[str, Any], locale: str, sample: list[dict] | 
     cards = (c.Card("k_n", k["customers"], c.num(c.model_key("n")), "#,##0", under=c.join(k["repeaters"], n=repeaters)),
              c.Card("k_model", k["model"], c.txt(c.model_key("purchase_model")),
                     under=c.join(k["log_lik"], ll=c.shown(c.num(c.model_key("log_lik")), "#,##0.#"))),
-             c.Card("k_expected", k["expected"], c.shown(c.num(c.model_key("expected_transactions")), "#,##0"),
-                    under=c.join(k["over"], horizon=c.shown(c.num(c.model_key("horizon")), "#,##0.##"), unit=unit)),
-             c.Card("k_clv", k["clv"], c.shown(c.num(c.model_key("clv_total")), "#,##0"),
+             c.Card("k_expected", k["expected"], _money(w, c.num(c.model_key("expected_transactions"))),
+                    under=c.join(k["over"], horizon=c.shown(c.num(c.model_key("horizon")), "#,##0.##"),
+                                 unit=_unit(w, c.num(c.model_key("horizon")), True))),
+             c.Card("k_clv", k["clv"], _money(w, c.num(c.model_key("clv_total"))),
                     under=c.join(k["clv_mean"], mean=c.shown(c.num(c.model_key("clv_mean")), "#,##0.##"))) if value else
              c.Card("k_alive", k["alive"], c.shown(c.num(c.model_key("mean_p_alive")), "0.000"),
                     under=c.join(k["alive_share"], share=_percent(c.num(c.model_key("share_repeaters")), "0")))
@@ -245,13 +276,14 @@ def build(model: str, params: dict[str, Any], locale: str, sample: list[dict] | 
     asked_auto = f'{c.txt(c.model_key("purchase_model_asked"))} = {c.q(w["values"]["purchase_model_asked"]["auto"])}'
     model_said = c.txt(c.model_key("purchase_model")) + f' & IF({asked_auto}, {c.q(w["business"]["chosen_by"])}, "")'
     horizon = c.shown(c.num(c.model_key("horizon")), "#,##0.##")
+    horizon_unit = _unit(w, c.num(c.model_key("horizon")))
     if value:
         margin = c.num(c.model_key("margin"))
-        line = c.join(w["business"]["value"], model=model_said, unit=unit, horizon=horizon,
+        line = c.join(w["business"]["value"], model=model_said, unit=unit, horizon=horizon, horizon_unit=horizon_unit,
                       discount=_percent(c.num(c.model_key("discount_rate")), "0.##"), margin=_percent(margin, "0.##"),
                       kind=f'IF({margin} = 1, {c.q(w["business"]["revenue"])}, {c.q(w["business"]["margin"])})')
     else:
-        line = c.join(w["business"]["purchases"], model=model_said, unit=unit, horizon=horizon)
+        line = c.join(w["business"]["purchases"], model=model_said, unit=unit, horizon=horizon, horizon_unit=horizon_unit)
     blocks = (_fit_to_the_data, _p_alive, *((_spend,) if value else ()), _clv(value))
     doc = c.page(model, params, locale, sample, step, name=name, about=about, cards=cards,
                  assumptions_note=c.alpha_said(w["alpha_note"], checked.get("alpha", 0.05), locale) + " " + w["assumptions_note"],

@@ -163,7 +163,7 @@ def with_labels(model: str, params: Mapping[str, Any] | None, rows: list[dict], 
             elif stat == "profile":
                 text = profile_said(w, text, loc)
             elif stat == "formula":
-                text = structured_note(w, text, loc, "formula_texts") if text.startswith("@") else formula_said(w, text)
+                text = structured_note(w, text, loc, "formula_texts") if text.startswith("@") else formula_said(w, text, loc)
         elif section == "hist" and isinstance(r.get("x0"), (int, float)) and isinstance(r.get("x1"), (int, float)):
             text = stats.edges_text(r["x0"], r["x1"], False, loc.decimal, loc.group)
         out.append({**r, "text": text, "label": label, "tiny": stats.tiny(r.get("value"), code(locale))})
@@ -219,13 +219,16 @@ def profile_said(w: dict, text: str, loc: Any) -> str:
     return _decimal(text, loc)
 
 
-def formula_said(w: dict, text: str) -> str:
-    """The runner's formula in the page's language: its «in weeks» (a customer lifetime's) and its
-    «· Weibull, accelerated failure time» (a parametric survival's); the user's column names stay."""
-    units = w.get("values", {}).get("time_unit", {})
-    if "formula_in" in w:
-        text = re.sub(r", in (day|week|month|quarter|year)s?$",
-                      lambda m: ", " + w["formula_in"].replace("{unit}", units.get(m.group(1), m.group(1))), text)
+CLV_FORMULA = re.compile(r"^x: frequency, t_x: recency, T: age, in (day|week|month|quarter|year)s?$")
+
+
+def formula_said(w: dict, text: str, loc: Any = None) -> str:
+    """The runner's formula in the page's language: a customer lifetime's «x: frequency, t_x: recency, T: age,
+    in weeks» (the sentence of `formula_texts.clv_formula`, its unit in the page's words) and a parametric
+    survival's «· Weibull, accelerated failure time»; the user's column names stay."""
+    m = CLV_FORMULA.match(text)
+    if m and "clv_formula" in w.get("formula_texts", {}):
+        return structured_note(w, f"@clv_formula unit={m.group(1)}", loc, "formula_texts")
     kinds = w.get("formula_kinds", {})
     names = w.get("values", {}).get("distribution", {})
 
