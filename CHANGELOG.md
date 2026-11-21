@@ -56,7 +56,11 @@ Development on `main` for the next minor version. The stable line stays 1.4.x
   table of the statistics. Its **Report** tab opens on the checks of its assumptions, each with
   its verdict and advice, then the coefficients, the fit and the diagnostic charts, as PDF or
   Excel, in the five languages. **Run** in the node's panel fits it on the development sample
-  and marks its numbers «not up to date» when the node or a step before it changes. A flow run
+  and marks its numbers «not up to date» when the node or a step before it changes. Before its
+  first Run the Table shows the columns it will hand on, without rows, and the steps after it
+  that keep, drop, order, rename, cast or filter columns are set up with them (their types are
+  declared in the catalogue and checked against what the runners write); the flow assistant
+  builds after a model the same way. A flow run
   can log the model to an [MLflow](docs/connections/mlflow.md) server (parameters, metrics, the
   report, the model and a registered version; «Continue without MLflow» lets the step go on
   when the server is down), and **Predict** applies a version Tabularia registered, fixed or the

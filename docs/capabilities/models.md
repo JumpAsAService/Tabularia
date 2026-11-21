@@ -104,7 +104,9 @@ built, so a column called `x); system("id")` is a label and nothing more.
 
 A model node has one input on the left and one output on the right. A model with nothing
 after it still runs: its results stay with its run, its report can be opened and MLflow gets
-its log. **Longest run** and **Retries** (0 to 5) are on the node, as on a Script node.
+its log. Steps can follow it from the start: before any Run they already know the columns it
+will hand on ([below](#trying-a-model-run-and-not-up-to-date)). **Longest run** and
+**Retries** (0 to 5) are on the node, as on a Script node.
 
 **Which rows count.** A row with an empty or `NaN` value in a column the model uses is left
 out (`n_missing`); nothing is filled in. An infinite value stops the node and names the
@@ -927,6 +929,15 @@ What the node hands to the step after it is the **Output** option:
 The model's own results are kept with the run whatever the output is, so the report can always
 be drawn.
 
+The columns' types are known before the model runs, and are what a run writes: the model's
+columns are numbers (`Float64`) but for `pred_class` and `pred_part`, texts; in the survival
+table `stratum` is a text and `n_risk`, `n_event` and `n_censor` whole numbers (`Int32`); in the
+forecast `time` has the type of the series' time column (a whole number as `Int32`, a date as a
+date) and `is_forecast` is true or false; the results table has the statistics' types. In the
+rows output of an R model (all but XGBoost and CatBoost) a whole-number column of the input comes
+back as `Int32`. The catalogue declares these types, and a test checks them against what the
+runners write.
+
 ## The Report tab
 
 The **Report** tab, beside **Table** and **Chart**, draws the pages of the model: A4, in the
@@ -998,6 +1009,20 @@ the sample» or «From the flow's run of …».
 
 If the node or any step before it changed since, the numbers stay and are marked **not up to
 date**: «run it again to see its numbers now». They are never redrawn from a guess.
+
+**Before the first Run** a model has no rows, but its columns are known: they follow from its
+options and the **Output** (above). The **Table** tab shows them as a header without rows, with
+the line «The columns this model will give, from its options. Its rows come with a Run». The
+steps after the model can be set up at once: a step that only keeps, drops, orders, renames,
+casts or filters columns (Select, Drop, Reorder, Rename, Cast, Filter, Sort, Limit, Unique rows,
+Drop nulls, Fill nulls) gets those columns in its panel, its lists and its formulas, and its Table
+shows them too, through any number of such steps. After another kind of step (a Group by, a Join,
+a computed column) the columns come with the model's Run, as the rows do. A name that depends on
+the data is not known before the Run, and the line says so: a multiclass XGBoost or CatBoost writes
+one `pred_prob_<class>` per class of the outcome. Once the model has run, its output is what the
+steps after it read, as before. No Job starts for any of this. The flow editor's
+[assistant](../integrations/ai.md) works the same way: it adds steps after a model and is told
+their columns, worked out, with no rows until the model runs.
 
 A trial is a trial: it logs nothing to MLflow. A run of the flow fits the model on every row
 that reaches it, up to the group's limit, and logs.
