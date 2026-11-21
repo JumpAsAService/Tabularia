@@ -32,6 +32,12 @@ numpy's `inverted_cdf` quantile, which is R's type 1); then
     covariate balance            statsmodels anova_oneway(use_var="unequal")                       1e-12
     power at this size, MDE      a transcription with scipy.stats.norm                             1e-9
 
+Lot E4 (the sequential test), per case seq_* (make_reference_sequential.R): every look from the raw rows (the
+lift, its delta-method variance, CUPED's θ with statsmodels OLS), the mixture's log Λ, the running minimum of 1/Λ,
+the confidence sequence, multipletests at each look, the first crossing, the decision                1e-12
+                                 Johari et al.'s balanced formula where the arms are equal           1e-12
+                                 the closed form against SciPy's quad over the mixture               1e-10
+
 A tolerance is relative to the expected value (absolute below 1e-300). Each check prints one line; exit 1
 when one differs. The Bayesian, sequential and planning parts (lots E3, E4, E5) add their witnesses here,
 each as its own function called from main().
@@ -537,6 +543,171 @@ def witness_bayes(case: dict[str, Any]) -> None:
 
 
 
+# ── lot E4: the sequential test ──────────────────────────────────────────────────
+def witness_sequential(case: dict[str, Any]) -> None:
+    """The sequential test of a case of make_reference_sequential.R (docs/specs/ab-testing.md, «Sequential:
+    always-valid p-values»), from the raw rows of every look (pandas, numpy; statsmodels OLS for CUPED's θ;
+    statsmodels multipletests at each look): the lift and its delta-method variance, the mixture's log Λ, the
+    running minimum of 1/Λ, the confidence sequence intersected over the looks, the first crossing, the decision;
+    where every look has as many units in each arm, Johari et al.'s balanced formula Λ_n = √(V/(V + nτ²))
+    exp(n²τ²Δ̄²/(2V(V + nτ²))) with V = n·v; and the closed form against the integral over the mixture (SciPy's
+    quad). 1e-12 relative, the integral 1e-10."""
+    import numpy as np
+    import pandas as pd
+    import statsmodels.formula.api as smf
+    from scipy import integrate
+    from statsmodels.stats.multitest import multipletests
+
+    cid = case["id"]
+    want = expected_of(case)
+    p = {**DEFAULTS, **case["params"]}
+    tau = float(p.get("sequential_tau", 0.05))
+    kind, v = p["metric_type"], p["variant"]
+    aggregated = p["input_shape"] == "aggregated"
+    if aggregated:
+        df = read(case)
+        df = df[df[v].notna()]
+        labels = sorted(df[v].unique(), key=lambda s: s.encode("utf-8"))
+        own = None
+    else:
+        p, df, labels, _, _, _, own = units_of(case)
+    k = len(labels)
+    ci = labels.index(p["control"])
+    tr = [j for j in range(k) if j != ci]
+    a_int = p["alpha"] / len(tr) if p["correction"] == "bonferroni" else p["alpha"]
+    g = np.array([labels.index(x) for x in df[v]])
+    if p.get("date"):
+        day = ((df[p["date"]] - pd.Timestamp("1970-01-01")).dt.days).to_numpy(float)
+    else:
+        day = np.zeros(len(df))
+    first, last = day.min(), day.max()
+    span = last - first + 1
+    period = math.ceil(span / 1000) if span > 1000 else 1
+    look = np.floor((day - first) / period).astype(int)
+    D = int((span - 1) // period) + 1
+    day_of = [min(first + (l + 1) * period - 1, last) for l in range(D)]
+    check(cid, "model|||n_looks", float(D), want.get("model|||n_looks"), 0, "the days, grouped beyond 1,000")
+
+    def estimates(sel):
+        gs = g[sel]
+        if aggregated:
+            n = np.array([df[p["units_count"]].to_numpy(float)[sel][gs == j].sum() for j in range(k)])
+            s = np.array([df[p["metric_sum"]].to_numpy(float)[sel][gs == j].sum() for j in range(k)])
+            m = s / n
+            if kind == "binary":
+                return m, m * (1 - m) / n, n
+            q = np.array([df[p["metric_sum_squares"]].to_numpy(float)[sel][gs == j].sum() for j in range(k)])
+            return m, (q - s * s / n) / (n - 1) / n, n
+        n = np.array([float((gs == j).sum()) for j in range(k)])
+        if kind == "ratio":
+            y, x = df[p["numerator"]].to_numpy(float)[sel], df[p["denominator"]].to_numpy(float)[sel]
+            m = np.array([y[gs == j].sum() / x[gs == j].sum() for j in range(k)])
+            var = np.array([delta_var(y[gs == j], x[gs == j]) for j in range(k)])
+            lin = (y - m[gs] * x) / np.array([x[gs == j].mean() for j in range(k)])[gs]
+        else:
+            y = df[p["metric"]].to_numpy(float)[sel]
+            m = np.array([y[gs == j].mean() for j in range(k)])
+            var = m * (1 - m) / n if kind == "binary" else np.array([np.var(y[gs == j], ddof=1) / n[j] for j in range(k)])
+            lin = y
+        if p.get("covariate"):
+            c = df[p["covariate"]].to_numpy(float)[sel]
+            fr = pd.DataFrame({"lin": lin, "g": gs.astype(str), "c": c})
+            theta = float(smf.ols("lin ~ C(g) + c", data=fr[own[sel]]).fit().params["c"])
+            m = m - theta * (np.array([c[gs == j].mean() for j in range(k)]) - c.mean())
+            var = np.array([np.var(lin[gs == j] - theta * c[gs == j], ddof=1) for j in range(k)]) / n
+        return m, var, n
+
+    lift = np.full((len(tr), D), np.nan)
+    lv = np.full((len(tr), D), np.nan)
+    mc = np.full((len(tr), D), np.nan)
+    balanced = True
+    for l in range(D):
+        sel = look <= l
+        n = np.array([float((g[sel] == j).sum()) for j in range(k)]) if not aggregated else \
+            np.array([df[p["units_count"]].to_numpy(float)[sel][g[sel] == j].sum() for j in range(k)])
+        if (n < 2).any() or (own is not None and min(float((g[sel & own] == j).sum()) for j in range(k)) < 2):
+            continue
+        m, var, n = estimates(sel)
+        balanced = balanced and len(set(n.tolist())) == 1
+        if m[ci] == 0:
+            continue
+        for i, t in enumerate(tr):
+            w = var[t] / m[ci] ** 2 + m[t] ** 2 * var[ci] / m[ci] ** 4
+            if w > 0:
+                lift[i, l], lv[i, l], mc[i, l] = m[t] / m[ci] - 1, w, m[ci]
+                if balanced:
+                    # Johari et al.'s balanced form, n units in each arm, V = n v
+                    nn = n[t]
+                    V = nn * w
+                    johari = 0.5 * math.log(V / (V + nn * tau ** 2)) + nn ** 2 * tau ** 2 * lift[i, l] ** 2 / (2 * V * (V + nn * tau ** 2))
+                    lv_ = w
+                    mine = -0.5 * math.log1p(tau ** 2 / lv_) + tau ** 2 * lift[i, l] ** 2 / (2 * lv_ * (lv_ + tau ** 2))
+                    check(cid, f"look {l + 1} {labels[t]}: log Λ", float(mine), float(johari), 1e-12, "Johari et al.'s balanced formula")
+    logl = 0.5 * np.log(lv / (lv + tau ** 2)) + tau ** 2 * lift ** 2 / (2 * lv * (lv + tau ** 2))
+    half = np.sqrt(lv * (lv + tau ** 2) / tau ** 2 * (2 * math.log(1 / a_int) + np.log((lv + tau ** 2) / lv)))
+    praw = np.ones((len(tr), D))
+    low = np.full((len(tr), D), np.nan)
+    high = np.full((len(tr), D), np.nan)
+    for i in range(len(tr)):
+        run, lo, hi = 1.0, -math.inf, math.inf
+        for l in range(D):
+            if not math.isnan(logl[i, l]):
+                run = min(run, math.exp(-logl[i, l]))
+                lo, hi = max(lo, lift[i, l] - half[i, l]), min(hi, lift[i, l] + half[i, l])
+            praw[i, l] = run
+            if math.isfinite(lo) and math.isfinite(hi) and lo <= hi:
+                low[i, l], high[i, l] = lo, hi
+        if np.isnan(logl[i]).all():
+            praw[i, :] = np.nan
+    how = {"holm": "holm", "benjamini_hochberg": "fdr_bh", "bonferroni": "bonferroni", "none": None}[p["correction"]]
+    padj = praw.copy()
+    for l in range(D):
+        ok = ~np.isnan(praw[:, l])
+        if how and ok.any():
+            padj[ok, l] = multipletests(praw[ok, l], method=how)[1]
+    for i, t in enumerate(tr):
+        lab = labels[t]
+        key = f"sequential|{lab}||"
+        mono = bool(np.all(np.diff(padj[i]) <= 0)) and bool(np.all(np.diff(praw[i]) <= 0))
+        check(cid, key + " p non-increasing over the looks", 0.0 if mono else 1.0, 0.0, 0, "raw and adjusted")
+        for stat, value, what in (("p_value", praw[i, -1], "the running minimum of 1/Λ"), ("p_adjusted", padj[i, -1], f"multipletests ({how})"),
+                                  ("log_lambda", logl[i, -1], "the mixture's closed form"), ("cs_low", low[i, -1], "the sequence, intersected"),
+                                  ("cs_high", high[i, -1], "the sequence, intersected")):
+            check(cid, key + stat, None if math.isnan(value) else float(value), want.get(key + stat), 1e-12, what)
+        hit = [l for l in range(D) if padj[i, l] < p["alpha"]]
+        crossing = float(day_of[hit[0]]) if hit and p.get("date") else None
+        check(cid, key + "first_crossing", crossing, want.get(key + "first_crossing"), 0, "the first look below alpha, its last day")
+        # the duality: the sequence leaves 0 out exactly when the always-valid p is at most a_int
+        out = (not math.isnan(low[i, -1]) and low[i, -1] > 0) or (not math.isnan(high[i, -1]) and high[i, -1] < 0)
+        check(cid, key + " sequence ⇔ p", 0.0 if out == (praw[i, -1] <= a_int) else 1.0, 0.0, 0, "0 left out ⇔ p ≤ alpha")
+        last = max([l for l in range(D) if not math.isnan(lift[i, l])], default=None)
+        if last is not None:
+            if low[i, -1] > 0:  # a NaN compares False
+                up = True
+            elif high[i, -1] < 0:
+                up = False
+            else:
+                up = bool(lift[i, last] > 0)
+            if mc[i, last] < 0:
+                up = not up
+            dec = "not_computed" if math.isnan(padj[i, -1]) else ("better" if up == bool(p["higher_is_better"]) else "worse") if padj[i, -1] < p["alpha"] else "not_significant"
+            said.append(("ok" if dec == want.get(key + "decision") else "DIFF", cid, key + "decision [the corrected p against alpha]", dec,
+                         want.get(key + "decision"), 0))
+            # the closed form against the integral of the likelihood ratio over θ ~ N(0, τ²), at the last look
+            lam, w = lift[i, last], lv[i, last]
+            f = lambda th: math.exp(th * lam / w - th * th / (2 * w)) * math.exp(-th * th / (2 * tau ** 2)) / (tau * math.sqrt(2 * math.pi))
+            centre, spread = lam * tau ** 2 / (w + tau ** 2), math.sqrt(w * tau ** 2 / (w + tau ** 2))  # θ's posterior
+            value = integrate.quad(f, centre - 40 * spread, centre + 40 * spread, epsabs=0, epsrel=1e-13, limit=200, points=[centre])[0]
+            check(cid, key + "log_lambda (the integral)", math.log(value), float(logl[i, last]), 1e-10, "scipy quad over the mixture")
+        at = [l for l in range(D) if not math.isnan(lift[i, l])]
+        for x, l in enumerate(at):
+            for chart, stat, series in (("sequential_p", "y", padj), ("sequential_lift", "y", lift), ("sequential_lift", "low", low),
+                                        ("sequential_lift", "high", high)):
+                ck = f"curve|{chart}|{lab}|{stat}|{x}"
+                if ck in want:
+                    check(cid, ck, float(series[i, l]), want[ck], 1e-12, "the look's long way")
+
+
 # ── lot E5: the planning node ─────────────────────────────────────────────────────
 PLAN_DEFAULTS = {"solve_for": "sample_size", "min_lift": 0.02, "arms": 2, "alpha": 0.05, "power": 0.8, "alternative": "two_sided",
                  "correction": "holm", "traffic_share": 1.0}
@@ -666,7 +837,8 @@ def main(argv: list[str]) -> int:
     else:
         for case in EXPECTED["cases"]:
             if case["model"] == "ab_test" and not case.get("refuses") and "reading" in case:
-                (witness_bayes if case["id"].startswith("bayes_") else witness_comparisons)(case)
+                run = witness_bayes if case["id"].startswith("bayes_") else witness_sequential if case["id"].startswith("seq_") else witness_comparisons
+                run(case)
     if "--engine" not in argv:
         for case in EXPECTED["cases"]:  # lot E5: the planning node
             if case["model"] == "ab_plan" and not case.get("refuses") and "reading" in case:
