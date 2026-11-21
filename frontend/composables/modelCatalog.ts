@@ -61,6 +61,8 @@ export interface ModelVariant {
   when: Record<string, unknown>
   /** The columns each output adds (`rows`: the names the node's rows carry, a `*` standing for one per quantile or per time). */
   outputs?: Record<string, string[]>
+  /** A column of the rows output the runner writes only when its rule holds, as `when` (a holdout's). */
+  rows_when?: Record<string, Record<string, unknown>>
 }
 
 export interface ModelDef {
@@ -819,7 +821,10 @@ export function modelRowsColumns(model: ModelDef, params: Params | null | undefi
   const read = modelParams(model, params, catalog)
   const full = modelFull(model, read)
   const variant = model.variants.find((v) => v.id === modelVariant(model, read))
-  const names = variant?.outputs?.rows ?? []
+  const names = (variant?.outputs?.rows ?? []).filter((name) => {
+    const rule = variant?.rows_when?.[name]
+    return !rule || Object.entries(rule).every(([k, r]) => modelHolds(r, full[k]))
+  })
   const wildcards: Record<string, string> = { pred_quantile_: 'quantiles', pred_surv_at_: 'times' }
   const out: string[] = []
   for (const name of names) {

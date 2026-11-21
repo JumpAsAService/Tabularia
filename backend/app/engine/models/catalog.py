@@ -924,7 +924,9 @@ def _clv_variant(id_: str, node: str, value: bool) -> dict[str, Any]:
     rows = ["pred_p_alive", "pred_transactions", "pred_holdout_transactions"]
     if value:
         rows += ["pred_spend", "pred_discounted_transactions", "pred_clv"]
-    return {"id": id_, "when": {"spend": value}, "sections": sections, "charts": charts, "outputs": {"rows": rows}}
+    # `rows_when`: a column of the rows output the runner writes only when its rule holds (as a `when`)
+    return {"id": id_, "when": {"spend": value}, "sections": sections, "charts": charts, "outputs": {"rows": rows},
+            "rows_when": {"pred_holdout_transactions": {"holdout_transactions": True}}}
 
 
 def _clv_node(needs: dict[str, str], holdout_length: str, extra_takes: dict[str, str],
@@ -1273,9 +1275,9 @@ def _check_columns(model: str, spec: Mapping[str, Any], kinds: Mapping[str, str]
                 raise refusal(model, f"the column «{name}» ({columns[name]}) cannot be a predictor: "
                                      "numbers, texts and true or false can")
     output = full.get("output")
-    variant_outputs = variant_spec(model, full)["outputs"]
+    made = variant_spec(model, full)
     if output == "rows":
-        clash = [c for c in _rows_columns(variant_outputs["rows"], full) if c in columns]
+        clash = [c for c in _rows_columns(made["outputs"]["rows"], full, made.get("rows_when")) if c in columns]
         if clash:
             raise refusal(model, f"the input already has a column «{clash[0]}», which the model's rows add: rename it first")
 
@@ -1290,10 +1292,15 @@ def _number_label(t: float) -> str:
     return str(int(t)) if float(t).is_integer() and abs(t) < 1e15 else repr(float(t))
 
 
-def _rows_columns(names: list[str], full: Mapping[str, Any]) -> list[str]:
-    """The columns the rows output adds, the `*` of a quantile's or a time's name made one per number."""
+def _rows_columns(names: list[str], full: Mapping[str, Any], when: Mapping[str, Mapping[str, Any]] | None = None) -> list[str]:
+    """The columns the rows output adds, the `*` of a quantile's or a time's name made one per number. `when`
+    (a variant's `rows_when`): a column the runner adds only when its rule holds, as a variant's `when`
+    (`pred_holdout_transactions` only with a holdout)."""
     out: list[str] = []
     for name in names:
+        rule = (when or {}).get(name)
+        if rule and not all(_holds(r, full.get(k)) for k, r in rule.items()):
+            continue
         pre, star, post = name.partition("*")
         key = _ROWS_WILDCARDS.get(pre)
         if not star or key is None:

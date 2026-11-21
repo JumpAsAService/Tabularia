@@ -327,6 +327,21 @@ def test_the_columns_are_checked_when_their_types_are_known():
     assert check_params("linear", {**base, "penalty": "lasso"}, COLUMNS)["penalty"] == "lasso"
 
 
+def test_a_rows_column_the_runner_writes_only_with_a_holdout_clashes_only_with_one():
+    """`pred_holdout_transactions` is written only with a holdout (the variant's `rows_when`): without one an
+    input column of that name is no clash."""
+    columns = {"id": "String", "x": "Int64", "tx": "Float64", "T": "Float64", "later": "Int64",
+               "pred_holdout_transactions": "Float64"}
+    base = {"customer": "id", "frequency": "x", "recency": "tx", "age": "T", "time_unit": "week"}
+    assert check_params("clv", base, columns)["output"] == "rows"
+    with pytest.raises(EngineError, match="already has a column «pred_holdout_transactions»"):
+        check_params("clv", {**base, "holdout_transactions": "later", "holdout_length": 26}, columns)
+    with pytest.raises(EngineError, match="already has a column «pred_p_alive»"):
+        check_params("clv", base, {**columns, "pred_p_alive": "Float64"})
+    for v in catalog.MODELS["clv"]["variants"] + catalog.MODELS["bg_bb"]["variants"]:
+        assert set(v["rows_when"]) <= set(v["outputs"]["rows"]), v["id"]
+
+
 def test_column_kinds_from_the_engine_s_types():
     for dtype, kind in (("Int64", "integer"), ("UInt8", "integer"), ("Float32", "number"), ("Decimal(10, 2)", "number"),
                         ("String", "text"), ("Utf8", "text"), ("Boolean", "boolean"), ("Date", "date"),

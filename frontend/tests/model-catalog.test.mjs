@@ -1097,8 +1097,13 @@ test('the node and Predict forms read their lists of numbers through the same bo
 test('the rows output names the columns it would add, as the engine does', () => {
   const clv = m.modelOf('clv')
   const base = { customer: 'id', frequency: 'x', recency: 'tx', age: 'T', time_unit: 'week', spend: 'amount' }
-  assert.deepEqual(m.modelRowsColumns(clv, base), ['pred_p_alive', 'pred_transactions', 'pred_holdout_transactions', 'pred_spend', 'pred_discounted_transactions', 'pred_clv'])
-  assert.deepEqual(m.modelRowsColumns(clv, { ...base, spend: undefined }), ['pred_p_alive', 'pred_transactions', 'pred_holdout_transactions'])
+  // the holdout's column only with a holdout: without one the runner does not write it (`rows_when`)
+  assert.deepEqual(m.modelRowsColumns(clv, base), ['pred_p_alive', 'pred_transactions', 'pred_spend', 'pred_discounted_transactions', 'pred_clv'])
+  const held = { ...base, holdout_transactions: 'later', holdout_length: 26 }
+  assert.deepEqual(m.modelRowsColumns(clv, held), ['pred_p_alive', 'pred_transactions', 'pred_holdout_transactions', 'pred_spend', 'pred_discounted_transactions', 'pred_clv'])
+  assert.deepEqual(m.modelRowsColumns(clv, { ...held, spend: undefined }), ['pred_p_alive', 'pred_transactions', 'pred_holdout_transactions'])
+  assert.deepEqual(m.modelRowsColumns(m.modelOf('bg_bb'), { customer: 'id', frequency: 'x', recency: 'tx', opportunities: 'n', period_unit: 'year' }),
+    ['pred_p_alive', 'pred_transactions'])
   // `*` is one per quantile (the median 0.5 adds none) and per time, the number as its shortest form
   const cols = m.modelRowsColumns(PS, { time: 't', event: 'e', quantiles: [0.25, 0.5, 0.75], times: [12, 24.5] })
   assert.ok(cols.includes('pred_quantile_0.25') && cols.includes('pred_quantile_0.75_low') && !cols.some((c) => c.startsWith('pred_quantile_0.5')))
