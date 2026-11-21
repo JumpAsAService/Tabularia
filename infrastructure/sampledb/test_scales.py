@@ -37,6 +37,13 @@ class Scales(unittest.TestCase):
         for name, preset in scales.PRESETS.items():
             self.assertGreater(preset["orders"], preset["customers"], name)
 
+    def test_every_macro_area_has_an_area_manager(self):
+        # a customer's agent is one of its own macro-area (generate.py, assign_agents): the five
+        # macro-areas each need a manager, and the inspectors are dealt to the managers in turn
+        for name, preset in scales.PRESETS.items():
+            self.assertGreaterEqual(preset["managers"], 5, name)
+            self.assertGreaterEqual(preset["inspectors"], preset["managers"], name)
+
     def test_the_name_is_read_as_written_or_by_its_earlier_name(self):
         self.assertEqual(scales.resolve(None), "small")
         self.assertEqual(scales.resolve(""), "small")

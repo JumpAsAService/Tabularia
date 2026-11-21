@@ -5,14 +5,16 @@ numpy and pandas.
 """
 from __future__ import annotations
 
-# (area managers, inspectors, agents, customers, orders, CRM activities). massive puts a
+# (area managers, inspectors, agents, customers, orders, CRM activities). At least one area
+# manager for each of the five macro-areas: a customer's agent is one of its own macro-area
+# (generate.py, assign_agents). massive puts a
 # billion rows where Tabularia reads them best, the ClickHouse CRM log; the order system
 # stays at robust's size (Postgres at a billion rows would take most of a day and
 # hundreds of GB). The orders are the total of the customers' lifecycles (generate.py): each
 # customer acquired in the window has a first order, and the order rates of all of them are
 # scaled so that the orders add up to this number, whatever the number of customers.
 PRESETS = {
-    "small":   dict(managers=3,  inspectors=12, agents=90,    customers=3_000,   orders=30_000,     activities=60_000),
+    "small":   dict(managers=5,  inspectors=12, agents=90,    customers=3_000,   orders=30_000,     activities=60_000),
     "medium":  dict(managers=5,  inspectors=30, agents=300,   customers=30_000,  orders=1_000_000,  activities=2_000_000),
     "robust":  dict(managers=8,  inspectors=56, agents=700,   customers=150_000, orders=12_000_000, activities=60_000_000),
     "massive": dict(managers=10, inspectors=80, agents=1_000, customers=500_000, orders=12_000_000, activities=1_000_000_000),

@@ -111,6 +111,8 @@ FRAILTY_SHAPE = 3.0         # gamma, mean 1: what the covariates do not explain
 SPEND_SHAPE = 4.0           # gamma, mean 1: the size of a customer's orders (a CV of 0.5)
 FIRST_ORDER_LAG_DAYS = 5.0  # the first order follows the acquisition by this many days, on average
 INACTIVE_AFTER_DAYS = 183   # the CRM calls a customer «inattivo» after six months with no order
+IN_PROGRESS_DAYS = 21       # an order is still «in_lavorazione» at the window's end only if it is this recent
+ORDER_OUTCOME_DAYS = 14     # a CRM contact ends in «ordine» only if an order follows within these days
 # the CRM activity of a customer who has churned: a fraction of a live one's, the attempts
 # to win it back
 POST_CHURN_ACTIVITY = 0.12
@@ -388,7 +390,9 @@ def ensure_ref(pg) -> bool:
 
 
 def gen_agents() -> pd.DataFrame:
-    """Hierarchical sales network: area managers → inspectors → agents."""
+    """Hierarchical sales network: area managers → inspectors → agents. Every macro-area has its
+    manager (the presets have at least as many managers as AREAS) and its inspectors (dealt to the
+    managers in turn), so that every customer can be followed by an agent of its own macro-area."""
     rows = []
     aid = 0
     managers, insp = [], []
@@ -397,9 +401,9 @@ def gen_agents() -> pd.DataFrame:
         area = AREAS[(aid - 1) % len(AREAS)]
         rows.append(_agent_row(aid, "capo_area", 0, area, rng.uniform(0.8, 1.5)))
         managers.append((aid, area))
-    for _ in range(P["inspectors"]):
+    for k in range(P["inspectors"]):
         aid += 1
-        manager_id, area = managers[rng.integers(len(managers))]
+        manager_id, area = managers[k % len(managers)]
         rows.append(_agent_row(aid, "ispettore", manager_id, area, rng.uniform(1.5, 2.5)))
         insp.append((aid, area))
     for _ in range(P["agents"]):
@@ -464,7 +468,6 @@ def simulate_lifecycles(agents: pd.DataFrame, intensity: np.ndarray) -> dict:
 
     geo_idx = rng.integers(0, len(GEO), C)
     channel_idx = rng.choice(len(CHANNELS), size=C, p=np.array(CHANNEL_SHARE) / sum(CHANNEL_SHARE))
-    agent_id = agent_pool[rng.integers(0, len(agent_pool), C)]
     macro_of = {r[0]: r[1] for r in REGIONS}
     area_mult = np.array([AREA_CHURN[macro_of[GEO[g][0]]] for g in range(len(GEO))])[geo_idx]
     ch_churn = np.array([CHANNEL_CHURN[c] for c in CHANNELS])[channel_idx]
@@ -487,6 +490,10 @@ def simulate_lifecycles(agents: pd.DataFrame, intensity: np.ndarray) -> dict:
     acq_date_before[:n_init] = back.astype(np.int64)
     acq[:n_init] = -acq_date_before[:n_init]
 
+    # ── the agent: one of the customer's macro-area, already hired on the day it was acquired ──
+    area_of_customer = np.array([macro_of[GEO[g][0]] for g in range(len(GEO))])[geo_idx]
+    agent_id = assign_agents(agents, area_of_customer, acq)
+
     # ── churn: an exponential lifetime, with a hazard that depends on covariates ──
     agent_effect = {int(a): float(e) for a, e in zip(agent_pool, rng.lognormal(0.0, AGENT_CHURN_SIGMA, len(agent_pool)))}
     frailty = rng.gamma(FRAILTY_SHAPE, 1.0 / FRAILTY_SHAPE, C)
@@ -507,6 +514,38 @@ def simulate_lifecycles(agents: pd.DataFrame, intensity: np.ndarray) -> dict:
 
     return dict(initial=initial, geo_idx=geo_idx, channel_idx=channel_idx, agent_id=agent_id, acq=acq,
                 death=death, rate=rate, spend=spend, first=first, hazard=hazard)
+
+
+def assign_agents(agents: pd.DataFrame, area: np.ndarray, acq: np.ndarray) -> np.ndarray:
+    """The agent of each customer: one of the agents of its macro-area (`area`) already hired on
+    the day it was acquired (`acq`, days from START_DATE), drawn alike among them; so no order,
+    CRM activity or acquisition of a customer comes before its agent was hired. Where no agent of
+    the area was hired yet (a customer of the start acquired years before the window), the area's
+    earliest hire takes it, and that agent's `data_assunzione` moves back to the acquisition:
+    `agents` is changed in place."""
+    pool = agents[agents.ruolo == "agente"]
+    hired = (pd.to_datetime(pool.data_assunzione) - pd.Timestamp(START_DATE)).dt.days.to_numpy()
+    out = np.zeros(len(area), dtype=np.int64)
+    for a in AREAS:
+        cust = np.where(area == a)[0]
+        if not cust.size:
+            continue
+        mine = np.where(pool.area.to_numpy() == a)[0]
+        if not mine.size:
+            raise ValueError(f"no agent in the macro-area {a}: the preset needs an area manager for each of {AREAS}")
+        mine = mine[np.argsort(hired[mine], kind="stable")]
+        ready = np.searchsorted(hired[mine], acq[cust], side="right")      # agents hired by the acquisition
+        pick = np.floor(rng.random(cust.size) * np.maximum(ready, 1)).astype(np.int64)
+        out[cust] = pool.id.to_numpy()[mine[pick]]
+    # the earliest hire of an area takes the customers no one was hired for yet: hired by then
+    first_acq = pd.Series(acq).groupby(out).min()
+    ids = agents.id.to_numpy()
+    for aid, day in first_acq.items():
+        row = np.where(ids == aid)[0][0]
+        start = (pd.Timestamp(agents.at[row, "data_assunzione"]) - pd.Timestamp(START_DATE)).days
+        if start > day:
+            agents.at[row, "data_assunzione"] = (pd.Timestamp(START_DATE) + pd.Timedelta(days=int(day))).date()
+    return out
 
 
 def gen_customers(agents: pd.DataFrame, life: dict) -> pd.DataFrame:
@@ -540,16 +579,18 @@ def gen_customers(agents: pd.DataFrame, life: dict) -> pd.DataFrame:
     return df
 
 
-def crm_status(life: dict, last_order: np.ndarray) -> pd.DataFrame:
+def crm_status(life: dict, last_order: np.ndarray, delivered: np.ndarray | None = None) -> pd.DataFrame:
     """`stato` and `attivo` as a CRM would compute them at END_DATE, from what it can see: the
-    last order that was not cancelled. «attivo»: it ordered within INACTIVE_AFTER_DAYS;
-    «inattivo»: it did not (lost, or only slow: the data does not say); «nuovo»: acquired in the
-    last INACTIVE_AFTER_DAYS and nothing delivered yet."""
+    last order that was not cancelled, and whether one was delivered (`delivered`; None: every
+    customer with an order has one). «nuovo»: acquired in the last INACTIVE_AFTER_DAYS and nothing
+    delivered yet (no order, or only orders still in progress); «attivo»: it ordered within
+    INACTIVE_AFTER_DAYS; «inattivo»: it did not (lost, or only slow: the data does not say)."""
+    if delivered is None:
+        delivered = last_order >= 0
     since_last = DAYS - last_order
     since_acq = DAYS - life["acq"]
-    stato = np.where(last_order >= 0,
-                     np.where(since_last <= INACTIVE_AFTER_DAYS, "attivo", "inattivo"),
-                     np.where(since_acq <= INACTIVE_AFTER_DAYS, "nuovo", "inattivo"))
+    stato = np.where(~delivered & (since_acq <= INACTIVE_AFTER_DAYS), "nuovo",
+                     np.where((last_order >= 0) & (since_last <= INACTIVE_AFTER_DAYS), "attivo", "inattivo"))
     return pd.DataFrame({"stato": stato, "attivo": (stato != "inattivo").astype(np.uint8)})
 
 
@@ -659,11 +700,13 @@ def build_seasonality(prod: pd.DataFrame):
 
 
 def gen_orders_and_lines(cur, prod: pd.DataFrame, life: dict, intensity: np.ndarray, agent_of, channel_of,
-                         agents: pd.DataFrame) -> np.ndarray:
+                         agents: pd.DataFrame) -> dict:
     """Orders + lines + commercial costs, in blocks. Header → customer (and their
     agent); lines → products with price≈list±noise and a discount per channel. The orders
-    come from the customers' lifecycles (`simulate_orders`). Returns the day of each
-    customer's last order that was not cancelled (-1: none), for the CRM status."""
+    come from the customers' lifecycles (`simulate_orders`). Returns what the CRM sees of them:
+    `last_order`, the day of each customer's last order that was not cancelled (-1: none), and
+    `delivered`, whether it has one evaso (for the CRM status); `customer` and `day`, the orders
+    that were not cancelled (customer index, day), for the CRM activities' outcomes."""
     C = P["customers"]
     P_n = len(prod)
     prices = prod._list_price.to_numpy()
@@ -678,6 +721,8 @@ def gen_orders_and_lines(cur, prod: pd.DataFrame, life: dict, intensity: np.ndar
     o_cust, o_day = simulate_orders(life, intensity, day_month)
     O = len(o_cust)
     last_order = np.full(C, -1, dtype=np.int64)
+    delivered = np.zeros(C, dtype=bool)
+    kept_customer, kept_day = [], []
     spend = np.concatenate([[1.0], life["spend"]])     # by cliente_id: the size of the customer's orders
 
     # PRODUCT choice weights per month (product mix × season)
@@ -707,7 +752,8 @@ def gen_orders_and_lines(cur, prod: pd.DataFrame, life: dict, intensity: np.ndar
         number = np.char.add("ORD-", oid.astype(str))
 
         # order state: cancelled share = baseline + depot anomalies (chronic /
-        # incident); "in_lavorazione" concentrated on recent orders
+        # incident); "in_lavorazione" only for the orders of the window's last weeks, most of
+        # those of the last days (an order is fulfilled in a few days: the older ones are evasi)
         p_cancel = np.full(n, CANCEL_BASE)
         for dep, mx in CANCEL_CHRONIC.items():
             mask = depot == dep
@@ -717,10 +763,14 @@ def gen_orders_and_lines(cur, prod: pd.DataFrame, life: dict, intensity: np.ndar
             p_cancel[mask] += peak * incident_flag[dep][days[mask]]
         p_cancel = np.clip(p_cancel, 0.0, 0.95)
         cancelled = rng.random(n) < p_cancel
-        p_inprog = 0.03 + 0.10 * (days / DAYS)             # 3%→13% towards the end of the window
+        age = DAYS - days                                   # days from the order to the end of the window
+        p_inprog = np.where(age <= IN_PROGRESS_DAYS, 0.7 * np.exp(-age / 4.0), 0.0)
         in_prog = (~cancelled) & (rng.random(n) < p_inprog)
         state = np.where(cancelled, "annullato", np.where(in_prog, "in_lavorazione", "evaso"))
         np.maximum.at(last_order, customer[~cancelled] - 1, days[~cancelled])
+        delivered[customer[state == "evaso"] - 1] = True
+        kept_customer.append(customer[~cancelled] - 1)
+        kept_day.append(days[~cancelled])
 
         copy_df(cur, "vendite.ordini", pd.DataFrame({
             "id": oid, "numero": number, "data_ordine": order_date, "cliente_id": customer,
@@ -774,14 +824,18 @@ def gen_orders_and_lines(cur, prod: pd.DataFrame, life: dict, intensity: np.ndar
         line_id += tot
         done += n
         log(f"    orders {done:,}/{O:,} · order lines {line_id:,}")
-    return last_order
+    return dict(last_order=last_order, delivered=delivered, customer=np.concatenate(kept_customer),
+                day=np.concatenate(kept_day))
 
 
-def gen_activities(ch, agent_of, life: dict, intensity: np.ndarray) -> None:
+def gen_activities(ch, agent_of, life: dict, intensity: np.ndarray, orders: dict) -> None:
     """CRM activities (ClickHouse's big table), in blocks. They follow the customers' lives:
     none before the acquisition (the customers of the start: from the window's start); while
     the customer buys, the normal pace; after it has churned, a fraction of it (POST_CHURN_ACTIVITY):
-    the reminders and the attempts to win it back, the reminders more often."""
+    the reminders and the attempts to win it back, the reminders more often. The outcome «ordine»
+    is a contact an order follows: it stays only where the customer has an order that was not
+    cancelled (`orders`, gen_orders_and_lines') on that day or within ORDER_OUTCOME_DAYS after it,
+    and never on a complaint; elsewhere the contact went well without an order («positivo»)."""
     A = P["activities"]
     C = P["customers"]
     KINDS = np.array(["visita", "telefonata", "email", "sollecito", "reclamo"])
@@ -799,6 +853,8 @@ def gen_activities(ch, agent_of, life: dict, intensity: np.ndarray) -> None:
     w_alive = propensity * (cum[alive_hi] - cum[start])
     w_dead = propensity * POST_CHURN_ACTIVITY * (cum[ndays] - cum[alive_hi])
     cum_w = np.cumsum(w_alive + w_dead)
+    # the orders as one sorted key (customer, day): the next order of a customer from a day on
+    order_key = np.sort(orders["customer"].astype(np.int64) * (ndays + 1) + orders["day"])
 
     done = 0
     while done < A:
@@ -816,6 +872,11 @@ def gen_activities(ch, agent_of, life: dict, intensity: np.ndarray) -> None:
         # a live customer's contacts are as before; a churned one gets reminders and calls, and says no
         tipo = np.where(dead, rng.choice(len(KINDS), n, p=[0.10, 0.30, 0.25, 0.30, 0.05]), rng.integers(0, len(KINDS), n))
         esito = np.where(dead, rng.choice(len(OUTCOMES), n, p=[0.15, 0.30, 0.50, 0.05]), rng.integers(0, len(OUTCOMES), n))
+        key = idx.astype(np.int64) * (ndays + 1) + day
+        at = np.searchsorted(order_key, key, side="left")
+        nxt = order_key[np.minimum(at, len(order_key) - 1)] if len(order_key) else np.full(n, -1)
+        followed = (at < len(order_key)) & (nxt // (ndays + 1) == idx) & (nxt - key <= ORDER_OUTCOME_DAYS)
+        esito = np.where((esito == 3) & (~followed | (tipo == 4)), 0, esito)
         df = pd.DataFrame({
             "id": np.arange(done + 1, done + n + 1, dtype=np.int64),
             "cliente_id": customer.astype(np.uint32),
@@ -856,12 +917,13 @@ def main() -> None:
     # dimensions
     log("Generating the sales network (agents)…")
     agents = gen_agents()
-    ch.insert_df("analytics.agenti", agents)
-    log(f"  {len(agents):,} agents ({P['managers']} area managers, {P['inspectors']} supervisors, {P['agents']} agents)")
 
     log("Simulating the customers' lives (acquisition, order rate, churn, spend)…")
     intensity = build_day_intensity()
     life = simulate_lifecycles(agents, intensity)
+    # after the lives: a customer's agent is hired by its acquisition (assign_agents may move a hire back)
+    ch.insert_df("analytics.agenti", agents)
+    log(f"  {len(agents):,} agents ({P['managers']} area managers, {P['inspectors']} supervisors, {P['agents']} agents)")
     customers = gen_customers(agents, life)
     agent_of = customers.attrs["agent_of"]
     channel_of = customers.attrs["channel_of"]
@@ -881,12 +943,12 @@ def main() -> None:
     # facts
     log("Generating orders, order lines and commercial costs (Postgres)…")
     with pg.cursor() as cur:
-        last_order = gen_orders_and_lines(cur, prod, life, intensity, agent_of, channel_of, agents)
+        orders = gen_orders_and_lines(cur, prod, life, intensity, agent_of, channel_of, agents)
     pg.commit()
 
     # the registry goes in now: its CRM status needs the orders (and never the churn, which no
     # one has written down)
-    customers = pd.concat([customers, crm_status(life, last_order)], axis=1)
+    customers = pd.concat([customers, crm_status(life, orders["last_order"], orders["delivered"])], axis=1)
     ch.insert_df("analytics.clienti", customers[[
         "id", "ragione_sociale", "partita_iva", "canale", "indirizzo", "cap",
         "citta", "provincia", "regione", "agente_id", "data_acquisizione", "stato", "attivo"]])
@@ -899,7 +961,7 @@ def main() -> None:
     pg.commit()
 
     log("Generating the CRM activities (ClickHouse)…")
-    gen_activities(ch, agent_of, life, intensity)
+    gen_activities(ch, agent_of, life, intensity, orders)
 
     pg.close()
     log(f"Done in {int(time.time() - t0)}s. Scale «{SCALE}».")
