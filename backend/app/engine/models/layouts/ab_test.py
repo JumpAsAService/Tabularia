@@ -336,7 +336,7 @@ def _cuped(p: stats.Page, w: dict, kind: str, checked: dict[str, Any]) -> None:
         cols += [number(t["fill_value"], "covariate_fill_value", 24),
                  {"header": t["filled"], "value": e.of_variant("n_covariate_filled"), "format": "#,##0", "width": 18, "align": "right"}]
     else:
-        cols.append({"header": t["excluded"], "value": e.of_variant("n_covariate_excluded"), "format": "#,##0", "width": 18, "align": "right"})
+        cols.append({"header": t["excluded"], "value": e.of_variant("n_covariate_excluded"), "format": "#,##0", "width": 20, "align": "right"})
     cols += [number(t["mean_unadjusted"], "mean_unadjusted", 24, "metric"), number(t["mean_adjusted"], "mean", 24, "metric"),
              number(t["variance_reduction"], "variance_reduction", 24, "pct")]
     p.add(stats.table("cuped", t["cuped"], one, cols, p.y, visible=c.exists(one)), 10)
@@ -356,15 +356,15 @@ def _comparisons(p: stats.Page, w: dict, kind: str, checked: dict[str, Any], lan
     cols = [{"header": t["variant"], "value": "[level]", "width": 16, "style": {"weight": "semibold"}},
             {"header": t["difference_interval"], "value": f'{_difference(w, kind, e.of_comparison("difference"))} & " [" & '
                                                          f'{_difference(w, kind, low)} & ", " & {_difference(w, kind, high)} & "]"'},
-            number(t["std_error"], "difference_std_error", 18), number(t["lift_std_error"], "lift_std_error", 18),
+            number(t["std_error"], "difference_std_error", 18), number(t["lift_std_error"], "lift_std_error", 20),
             number(t["statistic"], "statistic", 18, "0.###")]
     if kind == "continuous":
         cols.append(number(t["df"], "df", 16, "#,##0.#"))
     mde, power = e.of_comparison("mde"), e.of_comparison("power_at_min_lift")
-    cols += [{"header": t["mde"], "value": f'IF(ISNULL({mde}), "", {e.pct(mde, "0.##")})', "width": 18, "align": "right"},
+    cols += [{"header": t["mde"], "value": f'IF(ISNULL({mde}), "", {e.pct(mde, "0.##")})', "width": 20, "align": "right"},
              {"header": t["power_at_min_lift"], "value": f'IF(ISNULL({power}), "", {e.pct(power, "0.#")})', "width": 20, "align": "right"},
              {"header": t["min_lift_position"], "value": e.said_by(w["min_lift_position"], e.of_comparison("min_lift_position", "text")),
-              "width": 30, "style": {"size": 7}}]
+              "width": 23, "style": {"size": 7}}]
     p.add(stats.table("comparisons", t["comparisons"], COMPARISON, cols, p.y, visible=c.exists(COMPARISON)), 10)
     p.text("comparisons_note", _intervals_note(w, checked, lang) or " ", h=4.5, size=7, color=c.MUTED, can_grow=True)
     e.reading_table(p, w, "comparison", "reading_comparison", w["reading"]["comparisons"])
@@ -397,7 +397,7 @@ def _bayes(p: stats.Page, w: dict, kind: str, checked: dict[str, Any], lang: str
     low, high = e.of_level("bayes", "cred_low"), e.of_level("bayes", "cred_high")
     cols = [{"header": t["variant"], "value": "[level]", "width": 16, "style": {"weight": "semibold"}},
             {"header": t["posterior_mean"], "value": _mean(kind, "[value]"), "width": 22, "align": "right"},
-            {"header": t["credible"], "value": f'"[" & {_mean(kind, low)} & ", " & {_mean(kind, high)} & "]"', "width": 34, "align": "right"},
+            {"header": t["credible"], "value": f'"[" & {_mean(kind, low)} & ", " & {_mean(kind, high)} & "]"', "width": 38, "align": "right"},
             share(w["measures_table"]["prob_beat"], "prob_beat_control"), share(t["prob_best"], "prob_best"),
             share(t["loss_choose"], "expected_loss_relative", "0.###", 22), share(t["loss_keep"], "expected_loss_control_relative", "0.###", 22),
             {"header": w["measures_table"]["threshold"], "value": e.said_by(w["loss_position"], e.of_level("bayes", "loss_position", "text")),

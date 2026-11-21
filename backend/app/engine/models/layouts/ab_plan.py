@@ -100,12 +100,12 @@ def _grid(p: stats.Page, w: dict, checked: dict[str, Any]) -> None:
         x = e.of_level("plan", stat)
         return {"header": header, "value": f'IF(ISNULL({x}), "", {c.shown(x, "#,##0")})', "width": width, "align": "right", "rules": bold}
 
-    cols = [{"header": t["lift"], "value": e.pct("[value]", "0.##"), "width": 16, "align": "right", "rules": bold},
+    cols = [{"header": t["lift"], "value": e.pct("[value]", "0.##"), "width": 19, "align": "right", "rules": bold},
             {"header": t["mde_absolute"], "value": c.shown(e.of_level("plan", "mde_absolute"), "#,##0.######"), "width": 22,
              "align": "right", "rules": bold},
             number(t["n_per_variant"], "n_per_variant", 24), number(t["n_control"], "n_control", 22), number(t["n_total"], "n_total", 24)]
     if checked.get("date"):
-        cols += [number(t["days"], "days", 14), number(t["weeks"], "weeks", 14)]
+        cols += [number(t["days"], "days", 14), number(t["weeks"], "weeks", 17)]
     if checked.get("covariate"):
         cols.append(number(t["n_per_variant_cuped"], "n_per_variant_cuped", 24))
         if checked.get("date"):

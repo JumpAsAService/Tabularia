@@ -238,6 +238,8 @@ def test_every_report_renders_in_the_five_languages(tmp_path, chart_service, mon
     w = common.words(*case.split("-"), locale)
     assert any(s.startswith(w["footer"] + " · ") for s in said)
     assert w["sections"]["how" if model == "ab_plan" else "assumptions"] in said
+    if model in EXPERIMENTS:  # a p-value below what four decimals write is «p < 0.0001», never «p = < 0.0001»
+        assert not [s for s in said if re.search(r"=\s*[<>]", s)], [s for s in said if re.search(r"=\s*[<>]", s)]
 
 
 def test_the_first_page_holds_the_assumptions_with_r_s_stars_and_the_verdicts(tmp_path, chart_service, monkeypatch):  # noqa: F811
@@ -1172,3 +1174,25 @@ def test_every_note_of_an_experiment_is_a_sentence_with_its_numbers(locale):
         assert "@" not in text and "{" not in text and "%2" not in text, text
     assert f"11{decimal}3 %" in said["note_3"] and f"12{decimal}3" in said["note_3"] and "B" in said["note_3"]
     assert f"99{decimal}9 %" in said["note_6"] and "96" in said["note_6"]
+
+
+@pytest.mark.parametrize("case", AB_CASES)
+@pytest.mark.parametrize("locale", LOCALES)
+def test_no_header_of_an_experiment_s_table_runs_into_the_next_column(case, locale):
+    """The report engine warns of a value wider than its column (model.py, the tables' widths), not of a header: each
+    word of a header fits its column in bold, at the table's size, within the cell's padding — the engine's own
+    measure. The checks' table is every model's (common.py) and is not the experiments' to change."""
+    from app.reports.model import CELL_PAD
+
+    model, params, _ = fixture(case)
+    for item in layouts.definition(model, params, locale, None, None)["sections"]["body"]["items"]:
+        if item["type"] != "table" or item["id"] in ("assumptions", "advice"):
+            continue
+        cols = item["columns"]
+        left = item["w"] - sum(c.get("width") or 0 for c in cols)
+        free = sum(1 for c in cols if not c.get("width")) or 1
+        size = item.get("style", {}).get("size", 9)
+        for c in cols:
+            room = (c.get("width") or left / free) - 2 * CELL_PAD + 0.2
+            wide = [word for word in c["header"].split() if glyphs.width_mm(word, size, 700) > room]
+            assert not wide, (item["id"], c["header"], round(room, 1))
