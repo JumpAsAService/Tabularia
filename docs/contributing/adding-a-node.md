@@ -828,8 +828,12 @@ cry wolf. See [How a check speaks](../capabilities/models.md#how-a-check-speaks-
 
 The runner's **notes** (`note_<id>` rows of the `model` section) that carry numbers are written as an id and its
 parameters, `@auto_close distribution=weibull other=gengamma margin=2 delta_aic=0.30 weight=0.47`, which the layout turns into a sentence in the
-report's language (`note_texts.<id>` in the words file). A note sent as plain English is shown as it is, in English, in every
-language: send an id.
+report's language (`note_texts.<id>` in the words file). A value that is a name of the data may hold a space, a comma or a
+«%»: write them %20, %2C and %25 (`surv_note` in `kaplan_meier.R`), and the layout decodes them; a list is joined with «,». A
+unit of time is said in the page's words, `{unit}` its plural, `{unit:one}` its singular, `{unit:dative}` the plural after a
+preposition (German's dative). A note sent as plain English is shown as it is, in English, in every language: send an id.
+A heading of the report stays with the table right under it (the report engine keeps a band of words right above a table on
+the table's page): a layout needs no room kept under a heading for that.
 
 ### Step 4. The report, the editor and the words
 
@@ -855,12 +859,12 @@ of reference, the defaults pass, the wrong parameters are sent back with what to
 - `docs/capabilities/models.md`: a section with the line `Model id in the catalogue: `<id>`.`, the tables of
   its options (as the form says them), what it gives, the checks (verdicts, facts and measures), Predict, MLflow, what it refuses and an
   *Example* on the sample data; an example that cites a number must come from a real run, otherwise it describes the nodes and gives no number.
-- The counts («Ten models in five groups») in `models.md`, `flows.md`, `docs/capabilities/README.md` and the README, `CHANGELOG.md` under `## Unreleased`
+- The counts («Ten models are in the first release, in five groups») in `models.md`, `flows.md`, `docs/capabilities/README.md` and the README, `CHANGELOG.md` under `## Unreleased`
   and, when you add a package or a system library, `docs/deploy/kubernetes.md`.
 
 ## What CI runs
 
-Five workflows in `.github/workflows/`. A pull request is green when these pass:
+Six workflows in `.github/workflows/`. A pull request is green when these pass:
 
 | Workflow | Job | What it runs | When |
 |---|---|---|---|

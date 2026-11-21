@@ -52,13 +52,13 @@ reads its input from it. Without the bucket the section says so and the models d
 | State | Meaning |
 |---|---|
 | **Not enabled** | Nothing is built; the nodes are not in the palette |
-| **Building** | A Job in the build namespace builds the image from the group's recipe: R 4.6 (Python 3.14 for boosting) and its packages at pinned versions, without internet access at run time. The customer lifetime recipe also installs a system library, the GNU Scientific Library, from Debian, and records its version |
+| **Building** | A Job in the build namespace builds the image from the group's recipe: R 4.6 (Python 3.14 for boosting) and its packages at pinned versions, without internet access at run time. The customer lifetime recipe also installs a system library, the GNU Scientific Library (`libgsl-dev`), with the image's package manager, and the build records the version installed |
 | **Checking** | The image is built and its **self-test** runs: the models are fitted on small reference tables and compared with values computed outside Tabularia |
 | **Ready** | Every value matched; the version is in use |
 | **Failed** | The build or the self-test failed; the version in use, if any, is kept. The section shows the build log and the self-test's output |
 | **Rebuild needed** | This Tabularia ships a newer recipe than the image in use; a new version is queued by itself, and until it is ready the group's steps do not run |
 | **Rechecking** | This Tabularia ships a new runner for the group (the code that fits the models), not a new recipe: the self-test runs again on the image in use, without a build. The version serves meanwhile; it becomes **Failed** only if the self-test reports values that differ |
-| **Recheck retrying** | The cluster stopped that self-test before it reported (a Pod never scheduled or refused, an image not pulled, the deadline, a node gone, a log not given): that says nothing of the image, so the version serves on and the self-test runs again a minute later, at most six times (a node's most retries and its default delay). After the sixth the version still serves, self-tested with its previous runner, and the section says why; **Build again** checks it |
+| **Recheck retrying** | The cluster stopped that self-test before it reported (a Pod never scheduled or refused, an image not pulled, the deadline, a node gone, a log not given): that says nothing of the image, so the version serves on and the self-test runs again a minute later, up to five times (a node's most retries, at its default delay): six attempts in all. After the sixth the group is **Ready** again: the version serves on, self-tested with its previous runner, and the section says why; **Build again** checks it |
 
 **Enable** creates the group's own scripting environment (managed by Tabularia, you do not
 edit its packages) and queues its first version. **Build again** makes a new version from the
@@ -209,8 +209,9 @@ happened**; the rest are censored (their time is the last moment known). Options
 **Strata column** (one curve per value, at most 20), the **confidence band** (log, log–log or
 plain), the **test between strata** (log-rank, or Peto–Peto, in which early differences weigh
 more) and whether to **compare each pair** of strata, **Survival at times** (up to 10 times
-reported with their intervals) and **Restricted mean up to** a time (the longest observed
-time by default).
+reported with their intervals) and **Restricted mean up to** a time (by default the shortest of the strata's
+follow-ups, so that every stratum is read over the same span; without strata the longest observed
+time).
 
 The table gives, per stratum, the rows, events, censored, the median and the quartiles with
 their intervals, the survival at the times asked, and the restricted mean. The **survival
@@ -219,7 +220,9 @@ its band), to send on to other nodes.
 
 **Assumptions checked:** that censoring tells nothing of the time to the event (it cannot be
 tested from the data: the report says to ask how the rows came to be censored), proportional
-hazards between strata (the curves must not cross), the share censored in each stratum, the
+hazards between strata (curves that cross fail it; Grambsch–Therneau's test below the significance level
+makes it doubtful; when that test cannot be made and no curves cross, it is not computed, with the reason),
+the share censored in each stratum, the
 follow-up of each stratum (by the reverse Kaplan–Meier) and whether the numbers are read
 where at least 10 rows are still at risk. Stratum names are `column=value`, or `all`.
 
@@ -243,7 +246,9 @@ sits at the means of the predictors.
 advises to stratify by the term, or to let it interact with time), the linear form of a
 numeric predictor (a test against a natural spline with 3 degrees of freedom, and the
 martingale residuals' chart), influence (dfbeta: over 2/√n doubtful, over 1 failed; not
-computed with exact ties), VIF and **events per coefficient** (at least 10).
+computed with exact ties), VIF and **events per coefficient** (at least 10). With exact ties and many
+events at one time the exact likelihood cannot be computed: the node refuses and says to use Efron's. A start
+not before its time, or too close to it for the survival package to tell them apart, is refused, naming the row.
 
 ### Parametric survival
 
@@ -330,8 +335,8 @@ yet fitted are left out (status *time*, with a note).
   have one of those names.
 - The **intervals** of what is predicted come from the delta method, computed from a covariance
   Tabularia builds itself (the Hessian of the log-likelihood, from each row's derivatives in the
-  distribution's few parameters: fast whatever the number of predictors), the same for every
-  distribution; a median or quantile the distribution never reaches (a Gompertz whose hazard
+  distribution's few parameters: fast whatever the number of predictors; a Richardson Hessian of all of
+  them only where a row's derivatives fail), the same for every distribution; a median or quantile the distribution never reaches (a Gompertz whose hazard
   falls, so that part of the rows never has the event) is left empty, with a note.
 
 **The time left, and delayed entry.** They are two different things. **Start time column** acts
@@ -367,7 +372,7 @@ significance level:
 from 0 to 1, between the fitted mean curve and Kaplan–Meier's, where it happens and how many of
 Kaplan–Meier's standard errors it is; points with fewer than 10 rows still at risk are not read), the **influential rows**
 (the largest change one row makes to each coefficient, with the five rows that make it), **events
-per parameter**, the **VIF** and the **extrapolation** (how far beyond the last time observed the
+per parameter**, the **VIF** and the **extrapolation**, per stratum (how far beyond that stratum's last time observed the
 medians, quantiles and times asked go). The VIF is shown in the tables of the coefficients, beside
 each term. Cox–Snell's residuals are a chart. With a start time column every check is still
 written, read on the rows from their entry. Kaplan–Meier's curve is then drawn with the rows at
@@ -387,8 +392,9 @@ the choice of the distribution with *auto*, the fit to the data (Kaplan–Meier 
 curve, Cox–Snell, log(−log S) for the Weibull and the exponential), the profile with its survival
 and hazard curves and bands, the influence, and the notes.
 
-**What it refuses**, with a sentence that says what to do: no event, a negative time or start,
-a start not before the time, a stratum with no event (its shape cannot be estimated), fewer rows
+**What it refuses**, with a sentence that says what to do: no event, a negative time, start or weight,
+a time, start or weight that is not a number, a start not before the time (or so close to it that the
+survival package cannot tell them apart), a column of the rows output already in the input, a stratum with no event (its shape cannot be estimated), fewer rows
 than the parameters plus 2, a design with a term that repeats another, more than 20 strata, a date as
 predictor, a fit that does not converge from two starting points, and with *auto* none of the six
 fitting.
@@ -650,8 +656,8 @@ The group **Customer lifetime** has two nodes. **Customer lifetime value** (this
 customers who may buy at any moment, and has the purchase model inside; **[BG/BB](#bgbb-r)** is for
 purchases at fixed occasions (a yearly campaign, a monthly renewal). In both, the spend model
 (Gamma–Gamma) and the CLV are part of the node. The image of this group installs the GNU
-Scientific Library from Debian, which the build records: the group's card in Administration says
-which version.
+Scientific Library, and the build records its version: the group's card in Administration says «GSL 2.7.1»,
+with the package's whole version beside it. An image built before that record shows no version.
 
 #### The input: one row per customer
 
@@ -660,9 +666,9 @@ the nodes of Tabularia ([below](#building-the-summary-per-customer)).
 
 | Option | Meaning, and what is refused |
 |---|---|
-| **Customer column** | The customer's id. A repeated id is refused («the customer 4812 appears on 3 rows: one row per customer; group the transactions by customer first»); an empty one leaves the row out |
+| **Customer column** | The customer's id. A repeated id is refused («the customer 4812 appears on 3 rows: one row per customer; group the transactions by customer first»); an empty one, or one of spaces only, leaves the row out |
 | **Repeat purchases** (x) | The purchases after the first one, in the calibration period: a whole number, 0 or more |
-| **Time of the last purchase** (t_x) | The time from the first purchase to the last one, in the unit below. 0 for a customer with no repeat purchase, and above 0 for every other (purchases of the same day must be one purchase); not more than the age |
+| **Time of the last purchase** (t_x) | The time from the first purchase to the last one, in the unit below. 0 for a customer with no repeat purchase, and above 0 for every other (purchases of the same day must be one purchase); not more than the age (one above it by a rounding error is set to the age, with a note) |
 | **Age of the customer** (T) | The time from the first purchase to the end of the calibration period: more than 0 |
 | **Unit of time** | Days, weeks, months, quarters or years: the unit of the last two columns, the horizon, the holdout and the discounting. **Required**; a note asks whether the unit is right when the largest age passes 30 years in it |
 | **Average spend** | Optional. The **average value of the repeat purchases** (the first one left out, as the spend model assumes), above 0 for a customer who bought again; empty leaves that customer out of the spend fit only. With it the node gives the expected spend and the CLV; without it, only the purchases and P(alive). Returns and refunds: leave those customers out, or net them before averaging |
@@ -674,7 +680,7 @@ customers, 5 repeat customers** and, with a spend, 5 of those with a spend are n
 
 | Option | Default | Meaning |
 |---|---|---|
-| **Purchase model** | auto | **auto** fits Pareto/NBD, BG/NBD and MBG/NBD and keeps the one with the **highest log-likelihood** (the three have four parameters, so AIC and BIC rank them the same way); or one of the three. The holdout is never used to choose, so it stays an honest check |
+| **Purchase model** | auto | **auto** fits Pareto/NBD, BG/NBD and MBG/NBD and keeps the one with the **highest log-likelihood** among those whose convergence check passes (the three have four parameters, so AIC and BIC rank them the same way). It checks them from the highest log-likelihood down and stops at the first that passes: the others are «not checked» in the comparison and have no `converged` row. When none passes, it keeps the highest whose log-likelihood is not numerical noise; a model whose fit fails is left out, with a note. Or one of the three. The holdout is never used to choose, so it stays an honest check |
 | **Compare with the other models** | off | With a purchase model chosen: fits the two others for the comparison table only |
 | **Periods ahead** | one year | 1 to 1,000, in the unit (365 days, 52 weeks, 12 months, 4 quarters, 1 year when empty) |
 | **Yearly discount rate** | 0.10 | Only with a spend; 0 to 1, annual: the node derives the rate of one period |
@@ -690,8 +696,8 @@ distribution), and **MBG/NBD** also after the first. They differ little when the
 lets the likelihood choose. **Gamma–Gamma** models the average value of a repeat customer's
 purchases, assuming it does not depend on how often the customer buys (a check tests that). The
 parameters are estimated by maximum likelihood on one row per distinct summary, so large
-tables are cheap; Pareto/NBD and BG/NBD use the compiled likelihoods of the CLVTools package, the
-other two are written in the runner and checked against independent implementations
+tables are cheap; Pareto/NBD, BG/NBD and Gamma–Gamma use the compiled likelihoods of the CLVTools package,
+MBG/NBD and BG/BB are written in the runner and checked against independent implementations
 ([Where Tabularia and R differ](#where-tabularia-and-r-differ)).
 
 **The CLV.** For each customer, the expected purchases of each period of the horizon, discounted at
@@ -702,7 +708,8 @@ and a measure says when the horizon is more than twice the longest age the model
 **What the node gives.**
 
 - **The rows** (default): the input's columns with `pred_p_alive`, `pred_transactions` (the
-  expected purchases over the horizon), with a holdout `pred_holdout_transactions`, and with a
+  expected purchases over the horizon), with a holdout `pred_holdout_transactions` (without one the column is not
+  added, and an input column of that name is no clash), and with a
   spend `pred_spend`, `pred_discounted_transactions` and `pred_clv`. P(alive) is a **probability
   from the model**, not an observed churn: a customer with a low value has not been seen to leave. A
   column of the input with one of those names is refused.
@@ -714,18 +721,21 @@ and a measure says when the horizon is more than twice the longest age the model
 
 **Assumptions checked.** A verdict comes from two tests with a p-value, read against the significance level:
 **frequency fit** (a χ² of the observed against the expected number of customers by number of
-repeat purchases, adjacent classes pooled until every one expects at least 5, the condition of the χ²
-test known as Cochran's rule; the chart shows the pooled classes, «5–7»; with the share gap beside it as a
-number) and, with a spend, **spend independence** (the slope of the average spend on the
-frequency, with robust errors; Pearson's r is its value). Two facts: **convergence** (the optimizer
+repeat purchases, adjacent classes pooled from the top until every one expects at least 5, the last open
+(«12+»), the condition of the χ² test known as Cochran's rule; the chart shows the pooled classes, «5–7»; its
+degrees of freedom are the classes less 1 less the parameters, and with none left the check is **not computed**;
+the share gap is beside it as a number) and, with a spend, **spend independence** (the slope of the average spend
+on the frequency, with HC3 standard errors; Pearson's r is its value. It is **not computed** when the frequencies
+or the spends do not vary, or when one repeat customer alone holds a frequency and the others share one: that
+customer's leverage is 1, and the slope is its alone). Two facts: **convergence** (the optimizer
 converged, its log-likelihood is a real one and not the noise of a computation that lost its digits, and
 the Hessian is positive definite; **doubtful** when an estimate sits at an edge, where the likelihood keeps
-growing towards the limit, so that the estimate is that limit; **failed** otherwise, and a purchase model that failed this way is
-never chosen by *auto*) and **spend tail** (the spend model's q must be above 2 for its variance to be finite; at 1 or
-below the average spend does not exist and the node refuses: *look for extreme amounts, or leave out the spend column*).
+growing towards the limit, so that the estimate is that limit; **failed** otherwise; a fit that ends in numerical noise is never chosen by *auto*, one that only fails the check
+is chosen only when no other passes it) and **spend tail** (the spend model's q must be above 2 for its variance to be
+finite: **doubtful** at 2 or below; at 1 or below the average spend does not exist and the node refuses: *look for extreme amounts, or leave out the spend column*).
 **Measures with no verdict**: **customers and repeat customers**, the **holdout** (the expected against the
-observed purchases: the relative error of the total, and by frequency class in a chart; without a holdout the
-page says how to add one), the **horizon** against the longest age, and the **estimates at an edge** (one row for each
+observed purchases: the relative error of the total, and by frequency class in a chart; **not computed** when no
+purchase was observed in it, since the error has no denominator; without a holdout the page says how to add one), the **horizon** against the longest age, and the **estimates at an edge** (one row for each
 parameter where one more step towards 0 or towards infinity does not lower the likelihood, with what it means:
 *almost nobody leaves*, or *the customers look alike*; no row when there is none).
 
@@ -745,8 +755,9 @@ a rule of the summary gets empty predictions and a warning that counts them. Pre
 the fit gives the fit's own numbers.
 
 **MLflow** records the parameters, `log_lik`, the CLV total, the holdout's error, the number of
-every candidate, and the statistic, p-value and value of each check; the model chosen by *auto*
-is the parameter `purchase_model_chosen`, and the registered version has the tags `tabularia.variant`
+every candidate, and the statistic, p-value and value of each check; the model the fit used
+(the one *auto* chose, or the one given) is the parameter `purchase_model_chosen`, the horizon used the parameter
+`horizon` when the node left it empty, and the registered version has the tags `tabularia.variant`
 (`purchases` or `value`) and `tabularia.purchase_model`. No `native.rds` is written for this
 group: the card holds every parameter.
 
@@ -872,7 +883,7 @@ other table, and a **Filter** on `section` is how you take the coefficients out.
 
 | Section | Holds |
 |---|---|
-| `model` | The fit: rows used, rows left out, the model's numbers (R², AIC, AUC, concordance…), and texts: the model, the variant, the formula in symbols, the software, the group's version, whether the rows came from a trial or a run, and a `note_…` row for every doubt the numbers raised (few events for the terms, a boundary λ, so many rows that every test rejects) |
+| `model` | The fit: rows used, rows left out, the model's numbers (R², AIC, AUC, concordance…), and texts: the model, the variant, the formula in symbols, the software, the group's version, whether the rows came from a trial or a run, and a `note_…` row for every doubt the numbers raised (few events for the terms, a boundary λ, so many rows that every test rejects). For the linear model, survival, ARIMA and customer lifetime a note's text is an id with its values, `@curves_cross pairs=A%20×%20B` (a space, a comma or a % in a value written %20, %2C, %25), which the report says in the page's language |
 | `coef` | One row per term and statistic: estimate, standard error, statistic, p-value, interval, odds or hazard ratio, VIF, and `significance` with R's codes. For a category, the level is in `level_2` |
 | `assumption` | One row per check and statistic: `h0`, `verdict`, `advice`, the statistic, its degrees of freedom, the p-value, its stars and the numbers of the rows the check names |
 | `cv`, `candidate` | The path of a penalty (λ against the error, with its band and the terms kept), and the candidates of an automatic choice: the orders of ARIMA, the distributions of parametric survival (log-likelihood, AIC, BIC, ΔAIC, Akaike weight, status), the purchase models of customer lifetime |
@@ -880,7 +891,7 @@ other table, and a **Filter** on `section` is how you take the coefficients out.
 | `customer` | Customer lifetime: the twenty customers of highest value, with their frequency, recency, age, P(alive), expected purchases and spend |
 | `stratum`, `pair` | Kaplan–Meier: each stratum, and each pair of strata; for parametric survival, the **profile** of each stratum: its median, quantiles and survival at the times asked |
 | `cell` | The confusion matrix; for customer lifetime, the map of P(alive) by frequency and recency |
-| `point`, `curve`, `lag`, `hist` | What the charts draw: points, lines with their bands, the correlogram's lags, the histogram's bins. At most 2,000 points a chart; above that a sample with the seed, keeping the ten most extreme points, labelled |
+| `point`, `curve`, `lag`, `hist` | What the charts draw: points, lines with their bands, the correlogram's lags, the histogram's bins. At most 2,000 points a series, fewer when the results would pass 100,000 rows: the series then share what is left. Above that a sample with the seed, keeping the ten most extreme points, labelled |
 
 What the node hands to the step after it is the **Output** option:
 
@@ -987,12 +998,13 @@ scripts bucket, the gateway:
 1. finds the experiment by name and creates it when missing (tag `tabularia.created = true`;
    one in MLflow's trash gets a sentence of its own);
 2. opens a run named after the flow, the node and the date, with
-   - **parameters**: the node's, flattened, and the model's formula; with *auto*, the distribution
-     or the purchase model that was chosen (`distribution_chosen`, `purchase_model_chosen`), beside
-     the node's own `auto`;
+   - **parameters**: the node's, flattened, and the model's formula; the distribution or the
+     purchase model the fit used (`distribution_chosen`, `purchase_model_chosen`: the one *auto* chose, or the
+     one given), beside the node's own; for customer lifetime also `horizon` when the node left it empty;
    - **metrics**: every number of the `model` section, and for each assumption its statistic
-     and p-value, as `assumption.<check>[.<level_2>].<statistic>`; for the measures with no verdict
-     (the holdout's error, the share gap of the frequency fit) the `value` too. The candidates of
+     and p-value, as `assumption.<check>[.<level_2>].<statistic>`; for the customer lifetime models also
+     each check's `value` (the holdout's error, the share gap of the frequency fit); a parametric survival
+     measure's value is not a metric, it is in `tabularia/results.parquet`. The candidates of
      an automatic choice are metrics of their own, `candidate.<name>.<number>` (`aic`, `bic`,
      `log_lik`, `akaike_weight`, `chosen`…, also ARIMA's orders), and the distribution's parameters
      `parameter.<name>[.<stratum>].estimate`;
@@ -1009,8 +1021,10 @@ scripts bucket, the gateway:
      so; a PDF that cannot be drawn is a warning, not a failure;
 3. with **Register the model as**, adds a version of that registered model from the run's
    `model` folder, with the tags `tabularia.model`, `tabularia.group`,
-   `tabularia.group_version` and `tabularia.card_sha256`: what Predict checks (the customer
-   lifetime models add `tabularia.variant`, *purchases* or *value*, and `tabularia.purchase_model`);
+   `tabularia.variant` (the variant fitted: `unpenalized`, `ph_aft`, `auto`, `purchases`…),
+   `tabularia.group_version` and `tabularia.card_sha256`: what Predict checks. A parametric survival
+   version adds `tabularia.distribution`, the distribution fitted (with *auto*, the one chosen); the customer
+   lifetime models add `tabularia.purchase_model`;
 4. ends the run as finished.
 
 **When MLflow cannot be reached,** the step fails with «the model was fitted but MLflow could
@@ -1107,8 +1121,11 @@ which each group's self-test checks.
 | XGBoost, CatBoost | A regression's value, a binary model's probability of the event, a multiclass model's likeliest class | Binary: **Class threshold** gives `prediction_class`; multiclass adds `prediction_probability` and `prediction_prob_<class>` |
 
 A parametric survival model predicts **beyond the last time observed** (the shape of the distribution
-gives it), unlike Kaplan–Meier and Cox, and the run page counts the rows that go beyond as an
-extrapolation; a median the distribution never reaches is empty. **Time already survived** is refused
+gives it), unlike Kaplan–Meier and Cox, and the run page counts the rows that go beyond the last time observed in their stratum as an
+extrapolation; a median the distribution never reaches is empty. Without a covariance in the card (more than 200
+parameters, or a fit whose Hessian was not positive definite) no interval is added, and a warning says why. A row
+whose time already survived is beyond what the model allows gets an empty prediction, counted. A quantile of 0.5 is
+the median, `prediction`, and adds no column. **Time already survived** is refused
 for the other models, and a row with no value, a negative one or an infinite one gets an empty
 prediction. For the customer lifetime models a row that breaks a rule of the summary (a recency above
 the age, a repeated purchase at the first moment) gets empty predictions and a warning that counts them.
@@ -1136,6 +1153,7 @@ and needs its connection and version chosen first.
 | Forecast steps | 1,000 |
 | Rows | More than terms plus one; with a penalty, 3 per fold, at least 2 terms, and with the AUC measure 10 per fold; at least one event; for ARIMA enough observations for its orders and season |
 | Run time | The group's longest run (30 minutes by default, 60 for boosting); the node's timeout, 900 seconds unless you change it, must be within it |
+| Rows of the results table | 100,000: the charts share what the other sections leave; a fit still above it is refused, «fewer strata, predictors or levels» |
 | Model card | 1 MB: the covariance (above 200 terms) and the baseline hazard (above 5,000 times) are dropped first, then the card is refused |
 | Model file (boosting) | 64 MiB: the boosting stops before it (a note); a file still larger is not logged to MLflow, with a note |
 
@@ -1182,12 +1200,13 @@ report says so:
 - Hosmer–Lemeshow's degrees of freedom are the groups made minus 2;
 - Cox's risk score is relative to the means of the fit, and its survival curve is for a row at
   the means, not for each stratum's;
-- parametric survival fits with `flexsurv` but takes the covariance from its own Richardson
-  Hessian of the log-likelihood, for every distribution, because flexsurv's is a finite difference
+- parametric survival fits with `flexsurv` but takes the covariance from its own Hessian of the
+  log-likelihood, built from each row's derivatives in the distribution's few parameters (a Richardson
+  Hessian only where those fail), for every distribution, because flexsurv's is a finite difference
   for the distributions with no analytic derivatives; the exponential's coefficients are reported
   as time ratios, the opposite sign of its rate's, so that every distribution reads the same way;
   a time of 0 is left out, since no distribution gives it a density;
-- customer lifetime: Pareto/NBD and BG/NBD are computed with CLVTools' compiled likelihoods;
+- customer lifetime: Pareto/NBD, BG/NBD and Gamma–Gamma are computed with CLVTools' compiled likelihoods;
   MBG/NBD and BG/BB, which CLVTools does not have, are written in the runner and agree with
   independent implementations to better than 1e-13 on likelihoods, P(alive) and expected purchases. Where
   the Gauss hypergeometric function fails in the GNU Scientific Library the runner uses a
