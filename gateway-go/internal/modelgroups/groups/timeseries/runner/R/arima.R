@@ -727,9 +727,14 @@ arima_charts <- function(task, rows, prep, model, whole, z, resid) {
 }
 
 # The output as an Arrow table with the time column first, in the type of the input's own (an Int64 stays Int64, a
-# timestamp keeps its unit and zone): `df` holds the other columns.
+# timestamp keeps its unit and zone): `df` holds the other columns. The columns are passed by position and named after:
+# a time column called «schema» passed by its name would be arrow_table's own `schema` argument.
 arima_table <- function(df, time_name, time_array) {
-  do.call(arrow::arrow_table, c(stats::setNames(list(time_array), time_name), as.list(df[setdiff(names(df), time_name)])))
+  others <- setdiff(names(df), time_name)
+  cols <- c(list(time_array), unname(as.list(df[others])))
+  tbl <- do.call(arrow::arrow_table, stats::setNames(cols, paste0("c", seq_along(cols))))
+  names(tbl) <- c(time_name, others)
+  tbl
 }
 
 # The forecast output: one row a period of the span and of the future.
@@ -900,5 +905,11 @@ TAB_COMMON_TESTS[["arima: ADF's and KPSS's tables are tseries', and an end of th
       as.POSIXct("2024-01-01", tz = "UTC") + c(0, 3600)
     tbl <- arima_table(data.frame(observed = c(1, 2)), "t", ts_time_array(values, type))
     .tab_expect(tbl$schema$GetFieldByName("t")$type == type && identical(names(tbl), c("t", "observed")), "the type ", type$ToString())
+  }
+  # a time column called like one of arrow_table's own arguments is a column like any other (lot D9)
+  for (name in c("schema", "...")) {
+    tbl <- arima_table(data.frame(observed = c(1, 2), pred = c(3, 4)), name, ts_time_array(c(1, 2), arrow::int64()))
+    .tab_expect(identical(names(tbl), c(name, "observed", "pred")) && tbl$schema$GetFieldByName(name)$type == arrow::int64() &&
+                  identical(as.numeric(as.data.frame(tbl)$pred), c(3, 4)), "a time called ", name)
   }
 }

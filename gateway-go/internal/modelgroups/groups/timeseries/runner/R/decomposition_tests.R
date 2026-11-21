@@ -151,4 +151,24 @@ TAB_COMMON_TESTS[["timeseries: a decomposition that cannot be made is refused wi
   flat <- d
   flat$y <- 5
   .tab_expect(identical(said("constant", list(method = "stl"), flat), "the column «y» has the same value everywhere: there is nothing to decompose"), "constant")
+  # values whose squares leave the range of a double are not «the same value everywhere» (lot D9): their own sentence, for
+  # every method, before any test reads an infinite or a zero variance
+  for (method in c("stl", "classical", "emd")) {
+    huge <- d
+    huge$y <- huge$y * 1e300
+    m <- said("scale", list(method = method), huge)
+    .tab_expect(grepl("too large to compute with", m, fixed = TRUE), m)
+    tiny <- d
+    tiny$y <- tiny$y * 1e-300
+    m <- said("scale", list(method = method), tiny)
+    .tab_expect(grepl("too small to compute with", m, fixed = TRUE), m)
+  }
+  # a series no longer than the season the frequency implies: the seasonality test is not computed, the node runs (lot D9:
+  # stats::filter stopped EMD on 4 daily values without a sentence)
+  short <- data.frame(day = as.Date("2024-01-01") + 0:4, y = c(1, 3, 2, 4, 0))
+  rows <- tab_results_frame(.dec_run(short, list(time = "day", value = "y", frequency = "day", method = "emd"))$rows)
+  .tab_expect(identical(rows$text[rows$key == "assumption|seasonality|7|verdict"], "not_computed") &&
+                identical(rows$text[rows$key == "assumption|seasonality|7|advice_id"], "seasonality_few_cycles"), "EMD of 5 days")
+  .tab_expect(identical(ts_seasonality(c(1, 3, 2, 4), 7L, "kruskal_wallis", 0.05)$verdict, "not_computed") &&
+                identical(ts_seasonality(c(1, 3, 2, 4, 5, 1), 6L, "friedman", 0.05)$count, 0L), "a series no longer than its period")
 }

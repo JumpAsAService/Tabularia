@@ -296,7 +296,7 @@ def build(model: str, variant: str, params: dict[str, Any], spec: dict[str, Any]
     q_lb = n * (n + 2) * sum(r ** 2 / (n - k) for k, r in enumerate(r_acf, start=1))
     p_lb = _chi2_sf(q_lb, h)
     test("ljung_box", None, f"the remainder is not autocorrelated up to lag {h}", q_lb, h, p_lb, "failed",
-         "structure left in the remainder: a season missing (another period), a wider trend window, or a model of the remainder")
+         "structure left in the remainder: a season missing (another period), a narrower trend window, or a model of the remainder")
     big = max(range(h), key=lambda k: abs(r_acf[k]))
     measure("largest_acf", None, abs(r_acf[big]), lag=big + 1)
     say("remainder", None, "remainder_white" if p_lb >= alpha else "remainder_structure", lag=h, p_value=p_lb, alpha=alpha,

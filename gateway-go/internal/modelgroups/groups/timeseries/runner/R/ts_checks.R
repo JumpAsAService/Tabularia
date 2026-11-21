@@ -80,7 +80,7 @@ ts_ljung_box <- function(r, h, alpha, acf = NULL) {
   q <- n * (n + 2) * sum(1 / seq.int(n - 1, n - h) * obs^2)
   p <- stats::pchisq(q, h, lower.tail = FALSE)
   list(id = "ljung_box", kind = "test", h0 = h0, statistic = q, df = h, p_value = p, verdict = if (p < alpha) "failed" else "ok",
-       advice = "structure left in the remainder: a season missing (another period), a wider trend window, or a model of the remainder",
+       advice = "structure left in the remainder: a season missing (another period), a narrower trend window, or a model of the remainder",
        advice_id = "ljung_box_failed", lag = h)
 }
 
@@ -195,6 +195,12 @@ ts_seasonality <- function(y, p, test, alpha, type = "additive") {
   level_2 <- as.character(p)
   h0 <- paste0("the series has no seasonal pattern of period ", p)
   y <- as.numeric(y)
+  # a series no longer than the period has no complete cycle after the moving average (and stats::filter refuses a
+  # filter longer than the series: an EMD of 4 daily values with the week implied stopped the node without a sentence)
+  if (length(y) <= p) {
+    return(.ts_not_computed("seasonality", h0, paste0("fewer than two complete cycles of period ", p, " after the moving average: ",
+                                                      "a longer series"), "seasonality_few_cycles", level_2 = level_2, count = 0L))
+  }
   ma <- ts_ma(y, p)
   d <- if (identical(type, "multiplicative")) y / ma else y - ma
   valid <- which(!is.na(d))

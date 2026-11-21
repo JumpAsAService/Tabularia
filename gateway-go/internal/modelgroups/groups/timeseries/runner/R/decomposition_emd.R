@@ -124,10 +124,7 @@ fit_decomposition_emd <- function(task, params = NULL) {
     tab_refuse("too_short", paste0("the series has ", n, " values; EMD needs at least ", EMD_MIN_VALUES, ": a longer series"),
                list(n = n, min = EMD_MIN_VALUES))
   }
-  if (all(z == z[[1L]])) {
-    tab_refuse("constant", paste0("the column «", o$value, "» has the same value everywhere: there is nothing to decompose"),
-               list(column = o$value))
-  }
+  ts_refuse_degenerate(s$y[!s$filled], o$value)
   d <- emd_decompose(z, o$max_imf, o$s_number, o$max_siftings)
   k <- o$noise_imfs
   if (k > d$n_imfs) {

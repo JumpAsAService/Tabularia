@@ -226,6 +226,25 @@ ts_series <- function(task, time, value, frequency, missing = "refuse", transfor
        missing = missing, n_missing = no_time + outside, n_filled = length(gaps))
 }
 
+# A series nothing can be computed on: the same value everywhere (`constant`), or values whose variance a double cannot
+# hold — squares beyond 1.8e308 or below 4.9e-324 (`scale`: the tests would read an infinite or a zero variance and say
+# «constant» of a series that is not). `y`: the observed values.
+ts_refuse_degenerate <- function(y, value) {
+  y <- y[!is.na(y)]
+  if (length(y) < 2L || max(y) == min(y)) {
+    tab_refuse("constant", paste0("the column «", value, "» has the same value everywhere: there is nothing to decompose"),
+               list(column = value))
+  }
+  v <- stats::var(y)
+  if (!is.finite(v) || v == 0) {
+    tab_refuse("scale", paste0("the values of the column «", value, "» are too ", if (is.finite(v)) "small" else "large",
+                               " to compute with: their squares leave the range of a number; rescale the column first ",
+                               "(a Formula that ", if (is.finite(v)) "multiplies" else "divides", " it by a power of ten)"),
+               list(column = value))
+  }
+  invisible(TRUE)
+}
+
 # «an empty day», «an empty month»…: one period of the frequency, in the refusal's advice.
 .ts_one <- function(frequency) c(hour = "hour", day = "day", week = "week", month = "month", quarter = "quarter",
                                  year = "year", index = "step")[[frequency]]

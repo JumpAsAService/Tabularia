@@ -111,9 +111,7 @@ dec_seasonal <- function(task, o) {
   s <- ts_series(task, o$time, o$value, o$frequency, missing = o$missing, transform = o$transform, box_cox_lambda = o$box_cox_lambda,
                  period = min(periods))
   n <- s$n
-  if (.ts_constant(s$y[!s$filled])) {
-    tab_refuse("constant", paste0("the column «", o$value, "» has the same value everywhere: there is nothing to decompose"), list(column = o$value))
-  }
+  ts_refuse_degenerate(s$y[!s$filled], o$value)
   unit <- TS_UNIT[[o$frequency]]
   for (p in periods) {
     need <- if (identical(method, "classical")) 2L * p else 2L * p + 1L
