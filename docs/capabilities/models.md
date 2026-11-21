@@ -345,22 +345,38 @@ significance level:
 
 - for the exponential, the **constant hazard** (a likelihood-ratio test against the Weibull; for the
   distributions that have a shape, the same test is a number of the fit, not a check), and the
-  distribution against the **generalized gamma** (the Weibull, the log-normal, the exponential),
-  which is **not computed** above 5,000 rows, when half the step's timeout has passed, or when the
-  generalized gamma does not converge (fit it, or *auto*, to see it);
+  distribution against the **generalized gamma** (the Weibull, the log-normal, the exponential).
+  The larger distribution of these two tests starts from the node's own fit (the Weibull is the
+  generalized gamma at Q = 1, the log-normal at Q = 0, the exponential the Weibull of shape 1) and
+  is taken to its maximum by Newton steps that cost little; with *auto* it is the candidate
+  already fitted. It is given as much time as the node's own fit took (at least 10 seconds),
+  checked while it runs: a test that needs longer, or that starts after half the step's timeout,
+  is **not computed** and says why, as when the larger distribution does not converge. The
+  likelihood-ratio tests of the fit (the predictors, the shape against the exponential) follow
+  the same rule: out of time, a note says which is missing;
 - **proportional hazards**, for each term and globally (Grambsch–Therneau, as in Cox), for the
   Weibull, the exponential and the Gompertz with predictors, which are the distributions that assume it;
 - two facts: **convergence** (a positive definite Hessian: without it the intervals are empty) and
   **separation** (a level of a category among whose rows no event happens, which leaves its
   coefficient with no limit).
 
-**Measures, with no verdict:** the **agreement with Kaplan–Meier** (the largest gap in survival
-between the fitted mean curve and Kaplan–Meier's, where it happens and how many standard errors
-it is; points with fewer than 10 rows still at risk are not read), the **influential rows**
+**Measures, with no verdict:** the **agreement with Kaplan–Meier** (the largest gap in survival,
+from 0 to 1, between the fitted mean curve and Kaplan–Meier's, where it happens and how many of
+Kaplan–Meier's standard errors it is; points with fewer than 10 rows still at risk are not read), the **influential rows**
 (the largest change one row makes to each coefficient, with the five rows that make it), **events
 per parameter**, the **VIF** and the **extrapolation** (how far beyond the last time observed the
-medians, quantiles and times asked go). Cox–Snell's residuals are a chart. With a start time
-column every check is still written, read on the rows from their entry.
+medians, quantiles and times asked go). The VIF is shown in the tables of the coefficients, beside
+each term. Cox–Snell's residuals are a chart. With a start time column every check is still
+written, read on the rows from their entry. Kaplan–Meier's curve is then drawn with the rows at
+risk at each time, and the fitted curve beside it is the mean, over the rows, of their survival
+conditional on lasting until the first time read, each row weighed by its chance of it: when rows
+enter at different times this is **an approximation** of what Kaplan–Meier estimates, not the
+same quantity, and the report's note says so.
+
+**AIC and BIC with weights.** The BIC is −2 ℓ + k log n with **n the number of rows** used, whatever
+their weights: with case weights that stand for several units each, the BIC is that of the rows,
+not of the units they count (the AIC does not depend on n). The comparison of the candidates of
+*auto* reads the AIC.
 
 **The report** (four or five pages): the first has the checks, the measures and the significance
 level; then the coefficients with their interval charts and the distribution's parameters, the fit,
