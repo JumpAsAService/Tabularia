@@ -34,14 +34,14 @@ from tests.test_reports_render import chart_service  # noqa: F401 — the fake c
 
 NOW = datetime(2026, 11, 19, 23, 30, tzinfo=timezone.utc)
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "models"
-# The decomposition node's layout is lot D4's (docs/specs/ts-decomposition.md, «The lots D0–D9»): its fixtures exist
-# (results.py checks them), its report not yet. D4 takes this away.
-PENDING = {"decomposition"}
-CASES = sorted(p.stem for p in FIXTURES.glob("*-*.json") if p.stem.split("-")[0] not in PENDING)
-DRAWN = {m: spec for m, spec in catalog.MODELS.items() if m not in PENDING}
+CASES = sorted(p.stem for p in FIXTURES.glob("*-*.json"))
+DRAWN = dict(catalog.MODELS)
 # the experiments' reports open with their decision, not with the checks, and the planning node has no check at all
 # (docs/specs/ab-testing.md, «The report (pixel perfect)»)
 EXPERIMENTS = {m for m, spec in catalog.MODELS.items() if spec.get("family") == "experiments"}
+# the reports that explain their method in words (the A/B's mechanism: docs/specs/ts-decomposition.md, «Explaining the
+# method in the report»): a page or two more, and no «= <» in a sentence
+EXPLAINED = EXPERIMENTS | {"decomposition"}
 
 
 def fixture(case: str) -> tuple[str, dict, list[dict]]:
@@ -236,12 +236,12 @@ def test_a_parametric_survival_with_delayed_entry_names_its_start_and_says_so_in
 def test_every_report_renders_in_the_five_languages(tmp_path, chart_service, monkeypatch, case, locale):  # noqa: F811
     out, page = draw(tmp_path, chart_service, monkeypatch, case, locale=locale, sample=[{"first": 500}], step="Prices compared")
     model = case.split("-")[0]
-    assert out.path.read_bytes().startswith(b"%PDF-") and 2 <= out.pages <= (12 if model in EXPERIMENTS else 8) and out.warnings == []
+    assert out.path.read_bytes().startswith(b"%PDF-") and 2 <= out.pages <= (12 if model in EXPLAINED else 8) and out.warnings == []
     said = set(strings(json.loads(page)))
     w = common.words(*case.split("-"), locale)
     assert any(s.startswith(w["footer"] + " · ") for s in said)
     assert w["sections"]["how" if model == "ab_plan" else "assumptions"] in said
-    if model in EXPERIMENTS:  # a p-value below what four decimals write is «p < 0.0001», never «p = < 0.0001»
+    if model in EXPLAINED:  # a p-value below what four decimals write is «p < 0.0001», never «p = < 0.0001»
         assert not [s for s in said if re.search(r"=\s*[<>]", s)], [s for s in said if re.search(r"=\s*[<>]", s)]
 
 
@@ -1224,3 +1224,155 @@ def test_no_header_of_an_experiment_s_table_runs_into_the_next_column(case, loca
             room = (c.get("width") or left / free) - 2 * CELL_PAD + 0.2
             wide = [word for word in c["header"].split() if glyphs.width_mm(word, size, 700) > room]
             assert not wide, (item["id"], c["header"], round(room, 1))
+
+
+# ── the decomposition's report (docs/specs/ts-decomposition.md, lot D4): the explanation, the positions, the pages ─
+DECOMPOSITION_CASES = [c for c in CASES if c.startswith("decomposition-")]
+# every template id the runner may write (the spec's «Explaining the method in the report» and D4's «As built»)
+DECOMPOSITION_READINGS = (
+    "summary_stl", "summary_classical", "summary_mstl", "summary_emd", "transform_log", "transform_box_cox", "filled_linear",
+    "filled_seasonal", "strength", "strength_not_computed", "seasonality_supported", "seasonality_not_supported",
+    "seasonality_not_computed", "season_shape", "season_shape_ratio", "remainder_white", "remainder_structure", "remainder_large_n",
+    "remainder_not_computed_emd", "stationarity_both_ok", "stationarity_adf_only", "stationarity_kpss_only", "stationarity_neither",
+    "stationarity_both_ok_kpss_above", "stationarity_kpss_only_kpss_above", "stationarity_adf_only_kpss_below",
+    "stationarity_neither_kpss_below",
+    "kpss_table_end", "imfs_found", "imf_mode", "imfs_cut", "imfs_empty", "robust_weights", "method_stl", "method_classical",
+    "method_mstl", "method_emd", "method_transform", "method_filled", "method_seasonality", "method_strength", "method_remainder",
+    "method_stationarity")
+DECOMPOSITION_FORMULAS = ("formula_stl", "formula_classical", "formula_mstl", "formula_emd", "formula_box_cox", "formula_strength",
+                          "formula_friedman", "formula_kruskal_wallis", "formula_ljung_box", "formula_adf", "formula_kpss",
+                          "formula_orthogonality")
+DECOMPOSITION_VERDICTS = ("seasonality_supported", "seasonality_not_supported", "remainder_white", "remainder_structure")
+
+
+def _said(text) -> list[str]:
+    """A template's sentences: one, or one for each setting it depends on (by_params)."""
+    return [text] if isinstance(text, str) else list(text.values())
+
+
+def test_every_reading_of_a_decomposition_has_its_five_texts_with_the_same_numbers():
+    words = common._file("decomposition")
+    for kind, ids in (("reading_texts", DECOMPOSITION_READINGS), ("formula_texts", DECOMPOSITION_FORMULAS)):
+        english = words["en"][kind]
+        assert set(english) == set(ids), (kind, sorted(set(english) ^ set(ids)))
+        for code in LOCALES:
+            other = words[code][kind]
+            assert set(other) == set(english), (kind, code)
+            for key, text in english.items():
+                assert isinstance(text, str) == isinstance(other[key], str) and (isinstance(text, str) or set(text) == set(other[key]))
+                pairs = ((text, other[key]),) if isinstance(text, str) else ((text[k], other[key][k]) for k in text)
+                for one, two in pairs:
+                    assert sorted(re.findall(r"\{[^}]+\}", one)) == sorted(re.findall(r"\{[^}]+\}", two)), (code, key)
+        labelled = set(words["en"]["reading_labels"])
+        assert {i for i in ids if i.startswith(("method_", "formula_"))} <= labelled, kind
+
+
+@pytest.mark.parametrize("case", DECOMPOSITION_CASES)
+@pytest.mark.parametrize("locale", LOCALES)
+def test_every_reading_of_a_decomposition_is_a_sentence_of_the_page_s_language(case, locale):
+    model, params, rows = fixture(case)
+    ids = {r["text"][1:].split(" ")[0] for r in rows if r["section"] == "reading"}
+    assert ids and ids <= set(DECOMPOSITION_READINGS) | set(DECOMPOSITION_FORMULAS), sorted(ids)
+    for r in (r for r in layouts.with_labels(model, params, rows, locale) if r["section"] == "reading"):
+        assert not re.search(r"@|\{|%2|⟨", r["text"]), r["text"]
+        assert r["label"] not in ("", r["stat"]), r
+
+
+@pytest.mark.parametrize("locale", LOCALES)
+def test_no_sentence_of_a_decomposition_s_measure_holds_a_word_of_judgement(locale):
+    """The owner's rule: verdicts come only from tests with a p-value against alpha. The strengths F_T and F_S, the
+    shape of a season, the IMFs' periods and shares, the largest autocorrelation are measures: their sentences never
+    say «supported», «white noise», «structure left», «strong» (the words file's `verdict_words`, `measure_readings`)."""
+    w = common._file("decomposition")[locale]
+    assert w["measure_readings"] == common._file("decomposition")["en"]["measure_readings"] and w["verdict_words"]
+    assert {"strength", "season_shape", "imf_mode", "imfs_found", "remainder_large_n"} <= set(w["measure_readings"]) <= set(w["reading_texts"])
+    assert not set(w["measure_readings"]) & set(DECOMPOSITION_VERDICTS)
+    sentences = [*(s for key in w["measure_readings"] for s in _said(w["reading_texts"][key])), *w["measure_texts"].values()]
+    for sentence in sentences:
+        for word in w["verdict_words"]:
+            assert not re.search(r"(?<!\w)" + re.escape(word) + r"(?!\w)", sentence, re.I), (locale, word, sentence)
+    # and the words do catch a verdict: each test's sentence holds one
+    for key in DECOMPOSITION_VERDICTS:
+        for sentence in _said(w["reading_texts"][key]):
+            assert any(re.search(r"(?<!\w)" + re.escape(v) + r"(?!\w)", sentence, re.I) for v in w["verdict_words"]), (locale, key)
+
+
+def test_a_decomposition_says_its_positions_in_words_and_its_first_page_the_checks_and_the_measures(tmp_path, chart_service, monkeypatch):  # noqa: F811
+    _, page = draw(tmp_path / "en", chart_service, monkeypatch, "decomposition-mstl", fmt="svg")
+    said = set(strings(json.loads(page)))
+    assert any(s.startswith("Reading: MSTL split «orders» (90 observations) into a trend, one seasonal pattern for each period (7 / 30 days) "
+                            "and a remainder, the part none of them describes. 2 instants without a value were filled by linear "
+                            "interpolation; the output marks them in its column «filled». The trend's strength is 0.9864") for s in said)
+    assert any("The pattern that repeats every 7 days is highest on Wednesday, where it adds 5.85 to the trend, and lowest on Saturday, "
+               "where it adds −5.85." in s for s in said), sorted(s for s in said if "repeats every 7" in s)
+    assert any("is highest at position 6" in s for s in said)
+    assert {"Wednesday", "Saturday", "position 6", "position 21"} <= said  # the table of the seasons
+    assert not [s for s in said if re.search(r"(weekday|month|step|hour|day)_\d", s)]
+    assert {"Checks", "What it is", "Trend strength F_T", "0.99", "0.98 · 0.92", "periods 7, 30",
+            "periods 7, 30 · robust", "1 Jan 2026 – 31 Mar 2026", "Seasonality: rank test — 7", "≥ 0.1", "0.0040",
+            "orders = trend + seasonal[7] + seasonal[30] + remainder · MSTL, robust · α = 0.05"} <= said
+    assert "≤ 0.01" not in said  # ADF's p-value is MacKinnon's, continuous: only KPSS's is a table's
+    assert any(s.startswith("A seasonal pattern of period 7 is supported: if the positions of the cycle did not differ, rankings this "
+                            "unequal would appear by chance with probability < 0.0001, below α = 0.05 (Friedman's test on 12 complete "
+                            "cycles).") for s in said)
+    _, page = draw(tmp_path / "it", chart_service, monkeypatch, "decomposition-classical", fmt="svg", locale="it")
+    said = set(strings(json.loads(page)))
+    assert any("L'andamento che si ripete ogni 12 mesi è massimo ad aprile, dove moltiplica il trend per 1,25, e minimo a ottobre, "
+               "dove lo moltiplica per 0,75." in s for s in said), sorted(s for s in said if "si ripete" in s)
+    assert {"aprile", "ottobre", "boxes = trend × stagionale[12] × residuo · classica, moltiplicativa · α = 0,05"} <= said
+
+
+def test_a_decomposition_says_the_runner_s_codes_of_positions_kpss_s_table_ends_and_its_reasons_in_words(tmp_path, chart_service, monkeypatch):  # noqa: F811
+    """ts_positions' codes (a weekday's hour, a day of the year), KPSS's p-value at an end of its table (D1's p_side: the
+    runner chooses the id that says «≤ 0.01») and a check not computed for one of D1's reasons."""
+    model, params, rows = fixture("decomposition-mstl")
+    swapped = {
+        "reading|season|7|line_1": "@season_shape period=7 peak=weekday_3_hour_14 trough=yearday_45 peak_value=5.8 trough_value=-5.8 "
+                                   "position=weekday_hour",
+        "reading|stationarity||line_1": "@stationarity_neither_kpss_below p_adf=0.3 alpha=0.05",
+        "season|7||peak_label": "weekday_3_hour_14", "season|7||position_kind": "weekday_hour",
+        "assumption|kpss||verdict": "not_computed",
+    }
+    rows = [{**r, "text": swapped.get(r["key"], r["text"])} for r in rows]
+    rows.append({**next(r for r in rows if r["key"] == "assumption|kpss||verdict"), "stat": "advice_id", "text": "kpss_short",
+                 "key": "assumption|kpss||advice_id"})
+    rows.append({**next(r for r in rows if r["key"] == "assumption|kpss||verdict"), "stat": "advice", "text": "too short",
+                 "key": "assumption|kpss||advice"})
+    _, page = draw(tmp_path / "en", chart_service, monkeypatch, "decomposition-mstl", fmt="svg", rows=rows)
+    said = set(strings(json.loads(page)))
+    assert any("is highest on Wednesday, at hour 14, where it adds 5.8 to the trend, and lowest on day 45," in s for s in said),         sorted(s for s in said if "repeats every 7" in s)
+    assert "Wednesday, hour 14" in said and any("1 = Monday from 00:00" in s for s in said)
+    assert any("KPSS rejects stationarity (p-value ≤ 0.01), at α = 0.05" in s for s in said)
+    assert "The remainder has fewer than 12 values: too few for the test." in said
+    _, page = draw(tmp_path / "it", chart_service, monkeypatch, "decomposition-mstl", fmt="svg", rows=rows, locale="it")
+    said = set(strings(json.loads(page)))
+    assert any("è massimo di mercoledì, all'ora 14, dove aggiunge 5,8 al trend, e minimo il giorno 45," in s for s in said)
+    assert any("(p-value ≤ 0,01)" in s for s in said)
+
+
+def test_an_emd_decomposition_draws_its_oscillations_with_their_table_and_its_time_in_steps(tmp_path, chart_service, monkeypatch):  # noqa: F811
+    model, params, rows = fixture("decomposition-emd")
+    d = layouts.definition(model, params, "en")
+    body = {it["id"]: it for it in d["sections"]["body"]["items"]}
+    assert {"imf_1", "imf_10", "residue", "imf_observed", "imfs", "noise"} <= set(body) and "components" not in body
+    assert body["imf_1_steps"]["options"]["x_time"] is False and body["imf_1"]["options"]["x_time"] is True
+    _, page = draw(tmp_path, chart_service, monkeypatch, "decomposition-emd", fmt="svg")
+    said = set(strings(json.loads(page)))
+    assert {"Oscillations (EMD)", "IMF 1", "IMF 3", "Residue", "Largest oscillation", "65.1 %", "of the variance, IMF 3"} <= said, \
+        sorted(said)
+    assert any(s.startswith("Reading: EMD found 3 oscillations (IMFs) of the 10 allowed") and "IMF 3 repeats about every 21.33 steps." in s
+               for s in said)
+
+
+def test_the_decomposition_s_last_pages_explain_the_method_and_excel_keeps_the_checks_the_seasons_and_the_reading(
+        tmp_path, chart_service, monkeypatch):  # noqa: F811
+    _, page = draw(tmp_path, chart_service, monkeypatch, "decomposition-stl", fmt="svg")
+    said = " ".join(strings(json.loads(page)))
+    w = common.words("decomposition", "stl", "en")
+    assert w["reading_texts"]["method_stl"] in said and w["formula_texts"]["formula_stl"] in said and w["sections"]["how"] in said
+    out, _ = draw(tmp_path / "x", chart_service, monkeypatch, "decomposition-mstl", fmt="xlsx")
+    with zipfile.ZipFile(out.path) as z:
+        sheets = re.findall(r'<sheet name="([^"]+)"', z.read("xl/workbook.xml").decode())
+    assert {"Checks of the decomposition", "Measures, not tests", "The seasonal patterns", "Mean pattern by position",
+            "Reading of the seasonal pattern", "Checks of the remainder", "Reading"} <= set(sheets), sheets
+

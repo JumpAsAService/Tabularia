@@ -178,9 +178,10 @@ def with_labels(model: str, params: Mapping[str, Any] | None, rows: list[dict], 
 
 NUMBER_IN_TEXT = re.compile(r"-?\d+(?:\.\d+)?(?:e[-+]?\d+)?")
 # The values of a note that are names (of a column, a stratum, a distribution, a purchase model, a unit, a variant of
-# an experiment), never numbers: a stratum or a column called «2.5» stays «2.5» in every language, as in the tables
+# an experiment, a time column or a position of a season), never numbers: a stratum or a column called «2.5» stays «2.5»
+# in every language, as in the tables. Not «value»: the A/B's cap note sends a number by that name
 NOTE_NAMES = frozenset({"stratum", "pairs", "cluster", "weights", "names", "distribution", "other", "models", "unit",
-                        "variant", "variants", "control", "metric", "covariate", "treatments"})
+                        "variant", "variants", "control", "metric", "covariate", "treatments", "time", "position", "peak", "trough"})
 # The forms a template may ask a number in, «{x:pct}» (docs/specs/ab-testing.md, «Explaining the method in the report»):
 # only the sentences that ask for one change, so every other report says its numbers as before
 NUMBER_FORMS = ("pct", "spct", "int", "p", "num", "date")
