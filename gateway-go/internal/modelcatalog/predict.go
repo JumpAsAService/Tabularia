@@ -187,10 +187,36 @@ func PredictColumns(model, variant string, checked map[string]any) []string {
 }
 
 // timeLabel is km_time_label of the survival runner for the numbers a form gives: a whole
-// number without decimals, else its shortest form.
+// number without decimals, else tab_number_label's form, C's %.15g (%.16g, %.17g when 15 digits
+// do not give the number back): fixed notation unless the exponent is below -4 or at least the
+// digits' count. Go's shortest 'g' turns to an exponent from 1e+06 on, where R writes 1234567.5:
+// the gateway would name a column the runner does not write.
 func timeLabel(t float64) string {
 	if t == float64(int64(t)) && t < 1e15 && t > -1e15 {
 		return strconv.FormatInt(int64(t), 10)
+	}
+	if t == float64(int64(t)) && t < 1e16 && t > -1e16 { // tab_number_label's whole number
+		return strconv.FormatInt(int64(t), 10) + ".0"
+	}
+	for digits := 15; digits <= 17; digits++ {
+		e := strconv.FormatFloat(t, 'e', digits-1, 64)
+		if back, err := strconv.ParseFloat(e, 64); err != nil || (back != t && digits < 17) {
+			continue
+		}
+		exp, _ := strconv.Atoi(e[strings.IndexByte(e, 'e')+1:])
+		if exp < -4 || exp >= digits {
+			// %g's exponent form: the mantissa without its trailing zeros
+			mantissa, rest, _ := strings.Cut(e, "e")
+			if strings.Contains(mantissa, ".") {
+				mantissa = strings.TrimRight(strings.TrimRight(mantissa, "0"), ".")
+			}
+			return mantissa + "e" + rest
+		}
+		fixed := strconv.FormatFloat(t, 'f', digits-1-exp, 64)
+		if strings.Contains(fixed, ".") {
+			fixed = strings.TrimRight(strings.TrimRight(fixed, "0"), ".")
+		}
+		return fixed
 	}
 	return strconv.FormatFloat(t, 'g', -1, 64)
 }

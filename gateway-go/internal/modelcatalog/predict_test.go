@@ -82,6 +82,24 @@ func TestPredictsOptionsAreTheModels(t *testing.T) {
 	}
 }
 
+// The numbers in a column's name as the survival runner writes them (km_time_label, R's
+// tab_number_label: %.15g, %.16g, %.17g), the expected texts printed by R 4.6.
+func TestTimeLabelIsTheRunnerS(t *testing.T) {
+	for _, c := range []struct {
+		t    float64
+		want string
+	}{
+		{2.5, "2.5"}, {0.1, "0.1"}, {6.5, "6.5"}, {30, "30"}, {1234567.5, "1234567.5"}, {1e-05, "1e-05"}, {0.0001, "0.0001"},
+		{0.00012345, "0.00012345"}, {123456789012.25, "123456789012.25"}, {1.0 / 3, "0.3333333333333333"},
+		{6666666.666666666, "6666666.666666666"}, {1.5e20, "1.5e+20"}, {0.30000000000000004, "0.30000000000000004"}, {1.5e300, "1.5e+300"},
+		{9.87654321e-7, "9.87654321e-07"}, {-2.5, "-2.5"}, {1e15, "1000000000000000.0"},
+	} {
+		if got := timeLabel(c.t); got != c.want {
+			t.Errorf("timeLabel(%v) = %q, want %q", c.t, got, c.want)
+		}
+	}
+}
+
 func TestTheColumnsAPredictAdds(t *testing.T) {
 	for _, c := range []struct {
 		model  string
