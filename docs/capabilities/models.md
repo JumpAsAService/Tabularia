@@ -1016,8 +1016,10 @@ together and says why in words (a ratio needs rows of units; the sequential p-va
   the power at your smallest lift: it helps read a «not significant». It is never the power at the observed effect.
 - **Secondary metrics.** Each one is compared in the same way. Their comparisons are corrected **among
   themselves**, never with the primary: the primary alone decides. The first page lists the ones worse than the control; their
-  own page has every comparison. The direction is the primary's («a higher value is better») in this version: a guardrail where lower is better
-  beside a primary where higher is better cannot be said yet. A direction for each secondary metric ("higher is better" or "lower is better", by default the primary's) is being added and will be described here when it lands.
+  own page has every comparison. Each secondary metric has its own direction, «higher is better» or «lower is better» (`secondary_directions`, a
+  map from the column to `higher` or `lower`; in the editor, one select under the secondary metrics); a metric not given one takes
+  the primary's. The report writes ↑ or ↓ beside the metric's name, and «worse» and «better» are read in its direction:
+  a latency, returns or cancellations can be guardrails beside a conversion. The direction changes no number, only the verdict.
 
 #### How a check speaks
 

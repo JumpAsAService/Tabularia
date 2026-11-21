@@ -137,7 +137,8 @@ Development on `main` for the next minor version. The stable line stays 1.4.x
   experiment (fill or exclude the units without one), a cap on a heavy tail, a Bayesian reading
   (probability of beating the control, expected loss: measures, never verdicts), always-valid
   p-values and confidence sequences for results looked at early, the lift detectable at this size and
-  secondary metrics corrected among themselves. **A/B test planning** sizes the next experiment
+  secondary metrics corrected among themselves, each with its own direction (higher or lower is
+  better; the primary's by default), shown as ↑ or ↓ in the report. **A/B test planning** sizes the next experiment
   from history: the units and days to detect a lift, or the lift the units or the days allow, with
   CUPED too. The report explains the method under each block and in a final page, from templates in
   five languages with the run's numbers; PDF and Excel; a **Variants** output keeps the variant
