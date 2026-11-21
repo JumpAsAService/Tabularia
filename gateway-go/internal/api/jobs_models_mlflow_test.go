@@ -102,12 +102,13 @@ func TestMetricKeysAreWithinMLflowsLimitAndStayApart(t *testing.T) {
 	if len(metrics) != 6 {
 		t.Fatalf("%d metrics, want the 6 distinct names: %v", len(metrics), got)
 	}
-	// the first keeps its name; the others are kept, apart
-	if got["a_b"] != 1 || got["a_b_2"] != 2 || got["a_b_3"] != 3 {
+	// the name that is already a key keeps it, wherever it comes; the others are kept, apart
+	if got["a_b"] != 2 || got["a_b_2"] != 1 || got["a_b_3"] != 3 {
 		t.Errorf("the collisions: %v", got)
 	}
-	if len(warnings) != 1 || !strings.Contains(warnings[0], "are the same name once MLflow's characters are kept") ||
-		!strings.Contains(warnings[0], "a_b_2") || !strings.Contains(warnings[0], "a_b_3") {
+	if len(warnings) != 1 || warnings[0] != "Two metrics of the model had the same name in MLflow: "+
+		"«a_b» and «a#b» are the same name once MLflow's characters are kept: the second is logged as «a_b_2». "+
+		"«a_b» and «a?b» are the same name once MLflow's characters are kept: the second is logged as «a_b_3»." {
 		t.Errorf("warnings: %q", warnings)
 	}
 	// clean names say nothing
@@ -133,7 +134,7 @@ func TestParameterKeysAreOnesMLflowTakes(t *testing.T) {
 		}
 		got[p.Key] = p.Value
 	}
-	if len(params) != 7 || got["reference.Canale _web_"] != "negozio" || got["reference.Canale _web__2"] != "x" ||
+	if len(params) != 7 || got["reference.Canale _web_"] != "x" || got["reference.Canale _web__2"] != "negozio" ||
 		got["reference.Fatturato _"] != "alto" || got["reference.a/b"] != "y" || got["outcome"] != "y" {
 		t.Errorf("the parameters: %v", got)
 	}
@@ -146,6 +147,55 @@ func TestParameterKeysAreOnesMLflowTakes(t *testing.T) {
 		if key := metricKey(raw); key != want || mlflowtest.BadKey(key) {
 			t.Errorf("metricKey(%q) = %q, want %q", raw, key, want)
 		}
+	}
+}
+
+// Names that become one key: a name that is already a key MLflow takes keeps it, whichever comes
+// first, and the others take the first free suffix; the warning says each name once, with the key it
+// was logged under, and counts names, not tries.
+func TestAColumnWhoseNameIsAKeyKeepsItAndTheWarningSaysTheKeyGiven(t *testing.T) {
+	params, warnings := flattenParams(map[string]any{"reference": map[string]any{
+		"Canale (web)": "of Canale (web)", "Canale [web]": "of Canale [web]", "Canale _web_": "of Canale _web_"}})
+	got := map[string]string{}
+	for _, p := range params {
+		got[p.Key] = p.Value
+	}
+	if len(got) != 3 || got["reference.Canale _web_"] != "of Canale _web_" || got["reference.Canale _web__2"] != "of Canale (web)" ||
+		got["reference.Canale _web__3"] != "of Canale [web]" {
+		t.Errorf("the parameters: %v", got)
+	}
+	if len(warnings) != 1 || warnings[0] != "Two parameters of the node had the same name in MLflow: "+
+		"«reference.Canale _web_» and «reference.Canale (web)» are the same name once MLflow's characters are kept: "+
+		"the second is logged as «reference.Canale _web__2». "+
+		"«reference.Canale _web_» and «reference.Canale [web]» are the same name once MLflow's characters are kept: "+
+		"the second is logged as «reference.Canale _web__3»." {
+		t.Errorf("warnings: %q", warnings)
+	}
+	metrics, mwarnings := modelMetricsChecked([]resultRow{
+		{Section: "model", Stat: "library", Text: ptr("xgboost")},
+		{Section: "importance", Level: ptr("eta (anni)"), Stat: "gain_share", Value: ptr(0.1)},
+		{Section: "importance", Level: ptr("eta [anni]"), Stat: "gain_share", Value: ptr(0.2)},
+		{Section: "importance", Level: ptr("eta _anni_"), Stat: "gain_share", Value: ptr(0.7)},
+	}, time.UnixMilli(1700000000000))
+	values := map[string]float64{}
+	for _, m := range metrics {
+		values[m.Key] = m.Value
+	}
+	if len(values) != 3 || values["importance.eta _anni_.gain_share"] != 0.7 || values["importance.eta _anni_.gain_share_2"] != 0.1 ||
+		values["importance.eta _anni_.gain_share_3"] != 0.2 {
+		t.Errorf("the metrics: %v", values)
+	}
+	if len(mwarnings) != 1 || strings.Count(mwarnings[0], "are the same name") != 2 || strings.Contains(mwarnings[0], "more like them") {
+		t.Errorf("warnings: %q", mwarnings)
+	}
+	// more than three names: three said, and the others counted once each
+	many := map[string]any{"a_b": "0"}
+	for _, c := range "!#$%&?" {
+		many["a"+string(c)+"b"] = string(c)
+	}
+	if _, w := flattenParams(map[string]any{"r": many}); len(w) != 1 || strings.Count(w[0], "are the same name") != 3 ||
+		!strings.HasSuffix(w[0], " And 3 more like them.") {
+		t.Errorf("many: %q", w)
 	}
 }
 

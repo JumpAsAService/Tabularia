@@ -1024,7 +1024,10 @@ scripts bucket, the gateway:
      measure's value is not a metric, it is in `tabularia/results.parquet`. The candidates of
      an automatic choice are metrics of their own, `candidate.<name>.<number>` (`aic`, `bic`,
      `log_lik`, `akaike_weight`, `chosen`…, also ARIMA's orders), and the distribution's parameters
-     `parameter.<name>[.<stratum>].estimate`;
+     `parameter.<name>[.<stratum>].estimate`. A name MLflow does not take in a key (a column's,
+     a predictor's) is cleaned and kept within 250 characters; when two names become the same
+     key, the one that already is a key keeps it, the others get `_2`, `_3`…, and the run page
+     says under which key each was logged;
    - **tags**: `tabularia.url` (the run's page), the flow's id and name, the node, the model
      and its group, the group's version, the image digest, whether the rows were a development
      sample (`tabularia.dev_sample`), who launched it, the number of rows and
@@ -1036,13 +1039,13 @@ scripts bucket, the gateway:
      parameter).
      A server that keeps its runs' files elsewhere gets none of them, and the run page says
      so; a PDF that cannot be drawn is a warning, not a failure;
-3. with **Register the model as**, adds a version of that registered model from the run's
+3. ends the run as finished;
+4. with **Register the model as**, adds a version of that registered model from the run's
    `model` folder, with the tags `tabularia.model`, `tabularia.group`,
    `tabularia.variant` (the variant fitted: `unpenalized`, `ph_aft`, `auto`, `purchases`…),
    `tabularia.group_version` and `tabularia.card_sha256`: what Predict checks. A parametric survival
    version adds `tabularia.distribution`, the distribution fitted (with *auto*, the one chosen); the customer
-   lifetime models add `tabularia.purchase_model`;
-4. ends the run as finished.
+   lifetime models add `tabularia.purchase_model`. A registration that fails sets the run failed.
 
 **When MLflow cannot be reached,** the step fails with «the model was fitted but MLflow could
 not record it» and the reason. With **Continue without MLflow** on, the step succeeds with a

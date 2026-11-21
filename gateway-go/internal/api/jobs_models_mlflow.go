@@ -605,10 +605,13 @@ func flattenParams(params map[string]any) ([]mlflowconn.Tag, []string) {
 	}
 	sort.Slice(raw, func(i, j int) bool { return raw[i].Key < raw[j].Key }) // the same suffixes from run to run
 	names := newKeyNames("parameters of the node")
+	for _, p := range raw {
+		names.add(p.Key)
+	}
+	names.assign()
 	out := make([]mlflowconn.Tag, 0, len(raw))
 	for _, p := range raw {
-		key, _ := names.of(p.Key)
-		out = append(out, mlflowconn.Tag{Key: key, Value: p.Value})
+		out = append(out, mlflowconn.Tag{Key: names.key(p.Key), Value: p.Value})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Key < out[j].Key })
 	return out, names.warnings()
@@ -749,41 +752,65 @@ func suffixed(key string, n int) string {
 }
 
 // metricNames gives each raw name of the run's scalar metrics (or of the node's parameters) its key
-// in MLflow: cleaned, within the limit, and unique. A second raw name that is the same key once
-// cleaned (`a b` and `a_b`) does not replace the first: it takes `_2`, `_3`… and is said.
+// in MLflow: cleaned, within the limit, and unique. The names are all met first (add), then given
+// their keys (assign) in two passes: a name that is already a key MLflow takes keeps it, so the key
+// of a column's or a predictor's exact name holds its value; then the others take their cleaned
+// key, or, when it is taken (`a b` beside `a_b`), the first free `_2`, `_3`… and are said, once each,
+// with the key they got.
 type metricNames struct {
 	what    string            // whose names the warning speaks of: «metrics of the model»
-	rawOf   map[string]string // key -> the raw name that has it
+	order   []string          // the raw names, as met, each once
 	keyOf   map[string]string // raw name -> its key
 	said    []string
-	clashes int
+	clashes int // how many names did not get their cleaned key
 }
 
-// of is the key of a raw name; again false when this very raw name was given a key before.
-func (m *metricNames) of(raw string) (string, bool) {
-	if key, known := m.keyOf[raw]; known {
-		return key, false
+// add meets a raw name; false when it was met before.
+func (m *metricNames) add(raw string) bool {
+	if _, known := m.keyOf[raw]; known {
+		return false
 	}
-	base := shortKey(metricKey(raw), raw)
-	key := base
-	for n := 2; ; n++ {
-		holder, taken := m.rawOf[key]
-		if !taken {
-			m.rawOf[key], m.keyOf[raw] = raw, key
-			return key, true
+	m.keyOf[raw] = ""
+	m.order = append(m.order, raw)
+	return true
+}
+
+// assign gives every name met its key.
+func (m *metricNames) assign() {
+	rawOf := map[string]string{} // key -> the raw name that has it
+	for _, raw := range m.order {
+		if shortKey(metricKey(raw), raw) == raw {
+			rawOf[raw], m.keyOf[raw] = raw, raw
 		}
-		clashed := suffixed(base, n)
-		if m.clashes < 3 {
-			m.said = append(m.said, fmt.Sprintf("«%s» and «%s» are the same name once MLflow's characters are kept: the second is logged as «%s».",
-				runes(holder, 60), runes(raw, 60), runes(clashed, 60)))
+	}
+	for _, raw := range m.order {
+		if _, kept := rawOf[raw]; kept && rawOf[raw] == raw {
+			continue
 		}
-		m.clashes++
-		key = clashed
+		base := shortKey(metricKey(raw), raw)
+		key := base
+		for n := 2; ; n++ {
+			if _, held := rawOf[key]; !held {
+				break
+			}
+			key = suffixed(base, n)
+		}
+		if key != base {
+			if m.clashes < 3 {
+				m.said = append(m.said, fmt.Sprintf("«%s» and «%s» are the same name once MLflow's characters are kept: the second is logged as «%s».",
+					runes(rawOf[base], 60), runes(raw, 60), runes(key, 60)))
+			}
+			m.clashes++
+		}
+		rawOf[key], m.keyOf[raw] = raw, key
 	}
 }
+
+// key is the key of a raw name met, once assigned.
+func (m *metricNames) key(raw string) string { return m.keyOf[raw] }
 
 func newKeyNames(what string) *metricNames {
-	return &metricNames{what: what, rawOf: map[string]string{}, keyOf: map[string]string{}}
+	return &metricNames{what: what, keyOf: map[string]string{}}
 }
 
 func (m *metricNames) warnings() []string {
@@ -846,13 +873,15 @@ func modelMetrics(rows []resultRow, at time.Time) []mlflowconn.Metric {
 
 // modelMetricsChecked is modelMetrics and the warnings to write in the run: the keys are within
 // MLflow's length (a long one is cut and ends with a hash), and two names that are the same key
-// once cleaned are both kept (the second with `_2`) and said.
+// once cleaned are both kept (the one that is already a key keeps it, the other takes `_2`) and said.
 func modelMetricsChecked(rows []resultRow, at time.Time) ([]mlflowconn.Metric, []string) {
 	names := newKeyNames("metrics of the model")
 	var out []mlflowconn.Metric
+	var named []int // the metrics of out whose Key is a raw name, given its key at the end
 	add := func(raw string, v float64) {
-		if key, isNew := names.of(raw); isNew {
-			out = append(out, mlflowconn.Metric{Key: key, Value: v, Timestamp: at.UnixMilli()})
+		if names.add(raw) {
+			named = append(named, len(out))
+			out = append(out, mlflowconn.Metric{Key: raw, Value: v, Timestamp: at.UnixMilli()})
 		}
 	}
 	boosting := false
@@ -897,6 +926,10 @@ func modelMetricsChecked(rows []resultRow, at time.Time) ([]mlflowconn.Metric, [
 			out = append(out, mlflowconn.Metric{Key: shortKey(metricKey(raw), raw),
 				Value: *r.Value, Timestamp: at.UnixMilli(), Step: int64(*r.X0)})
 		}
+	}
+	names.assign()
+	for _, i := range named {
+		out[i].Key = names.key(out[i].Key)
 	}
 	return out, names.warnings()
 }
