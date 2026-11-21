@@ -84,14 +84,26 @@ clv_period_rate <- function(annual, unit) (1 + annual)^(1 / clv_periods_per_year
 # ── the models' table ────────────────────────────────────────────────────────────
 # `start`: the start values (CLVTools' for Pareto/NBD, BG/NBD and Gamma–Gamma, BTYDplus' for MBG/NBD,
 # ones for BG/BB); `method`: "default" is optimx's own list (Nelder–Mead, then BFGS), whose last row
-# CLVTools keeps for BG/NBD.
+# CLVTools keeps for BG/NBD. `tight`: the model is written here (MBG/NBD, BG/BB), so its L-BFGS-B runs to
+# the tolerances of CLV_TIGHT instead of optim's defaults (CLVTools' models keep CLVTools' own settings, so
+# that their estimates are CLVTools').
 CLV_MODELS <- list(
-  pareto_nbd = list(params = c("r", "alpha", "s", "beta"), start = c(0.5, 15, 0.5, 10), method = "L-BFGS-B"),
-  bg_nbd = list(params = c("r", "alpha", "a", "b"), start = c(1, 3, 1, 3), method = "default"),
-  mbg_nbd = list(params = c("r", "alpha", "a", "b"), start = c(1, 3, 1, 3), method = "L-BFGS-B"),
-  bg_bb = list(params = c("alpha", "beta", "gamma", "delta"), start = c(1, 1, 1, 1), method = "L-BFGS-B"),
-  gamma_gamma = list(params = c("p", "q", "gamma"), start = c(1, 1, 1), method = "L-BFGS-B")
+  pareto_nbd = list(params = c("r", "alpha", "s", "beta"), start = c(0.5, 15, 0.5, 10), method = "L-BFGS-B", tight = FALSE),
+  bg_nbd = list(params = c("r", "alpha", "a", "b"), start = c(1, 3, 1, 3), method = "default", tight = FALSE),
+  mbg_nbd = list(params = c("r", "alpha", "a", "b"), start = c(1, 3, 1, 3), method = "L-BFGS-B", tight = TRUE),
+  bg_bb = list(params = c("alpha", "beta", "gamma", "delta"), start = c(1, 1, 1, 1), method = "L-BFGS-B", tight = TRUE),
+  gamma_gamma = list(params = c("p", "q", "gamma"), start = c(1, 1, 1), method = "L-BFGS-B", tight = FALSE)
 )
+
+# L-BFGS-B's stopping rules for the models written here: a relative change of the likelihood below
+# factr × the machine's epsilon (optim's default factr is 1e7, about 2e-9), and a projected gradient below
+# pgtol (optim's default 0 switches that test off). A few more iterations of a cheap likelihood, and the
+# estimate is the maximum to many more digits (the reference cases' tolerances, «As built, B10»).
+CLV_TIGHT <- list(factr = 10, pgtol = 1e-10)
+
+# The rounding of a sum of logs, relative: how far two computations of the same log-likelihood may differ
+# because of floating point alone. A numerical tolerance of the guard (clv_sound), never a verdict.
+CLV_ROUNDING <- sqrt(.Machine$double.eps)
 
 clv_num <- function(v) {
   s <- format(round(v, 6), trim = TRUE, scientific = FALSE)
@@ -309,7 +321,7 @@ clv_compress <- function(x, tx, age) {
 }
 
 # ── the optimizer ────────────────────────────────────────────────────────────────
-clv_optimx <- function(fn, start, names, method, itnmax = 3000, kkt = TRUE) {
+clv_optimx <- function(fn, start, names, method, itnmax = 3000, kkt = TRUE, tight = FALSE) {
   args <- list(par = stats::setNames(start, names), fn = fn)
   if (identical(method, "default")) {
     # CLVTools' BG/NBD: optimx's own list, no other setting (the KKT tests, which compute a Hessian, only when asked)
@@ -318,21 +330,26 @@ clv_optimx <- function(fn, start, names, method, itnmax = 3000, kkt = TRUE) {
     args$method <- method
     args$itnmax <- itnmax
     args$control <- list(kkt = kkt, save.failures = TRUE, starttests = FALSE)
+    if (tight && identical(method, "L-BFGS-B")) args$control <- c(args$control, CLV_TIGHT)
   }
   tryCatch(suppressWarnings(do.call(optimx::optimx, args)), error = function(e) NULL)
 }
 
 # The estimate of a model, on the log scale, from `fn(log_par)`: the negative log-likelihood (a sum
 # over the customers). The settings are CLVTools' own (the model's `method`); when they fail (a trial point
-# overflows: «L-BFGS-B needs finite values of 'fn'») or do not converge, Nelder–Mead restarts from the same
-# start and L-BFGS-B polishes from its end point (`fallback`).
-clv_optimize <- function(fn, model, hessian = TRUE) {
+# overflows: «L-BFGS-B needs finite values of 'fn'»), do not converge, or stop where the likelihood is
+# numerical noise (`sound(lp, value)` is FALSE: clv_sound), the fallback works on `stable` (the same
+# likelihood computed in a form that does not lose its digits; `fn` when none is given): L-BFGS-B polishes
+# from the best sound row the first run left (BG/NBD's optimx list leaves Nelder–Mead's row before BFGS's,
+# and that row is where BFGS jumped from into the noise), or, when there is none, Nelder–Mead restarts from
+# the start and L-BFGS-B polishes its end point (`fallback`). An end point that is not sound is never kept
+# over one that is; when none is, the fit is `fault`: not converged, and `auto` never chooses it.
+clv_optimize <- function(fn, model, hessian = TRUE, sound = function(lp, value) TRUE, stable = fn) {
   spec <- CLV_MODELS[[model]]
   names_ <- paste0("log.", spec$params)
   start <- log(spec$start)
-  take <- function(res) {
+  take <- function(res, f, i = if (is.null(res)) 0L else nrow(res)) {
     if (is.null(res) || !nrow(res)) return(NULL)
-    i <- nrow(res)
     lp <- unname(unlist(res[i, names_]))
     value <- res$value[[i]]
     if (!all(is.finite(lp)) || !is.finite(value)) return(NULL)
@@ -340,30 +357,57 @@ clv_optimize <- function(fn, model, hessian = TRUE) {
     h <- tryCatch(det[i, "nhatend"][[1L]], error = function(e) NULL)
     list(lp = lp, value = value, convcode = res$convcode[[i]], kkt1 = isTRUE(res$kkt1[[i]]), kkt2 = isTRUE(res$kkt2[[i]]),
          hessian = if (is.matrix(h) && all(dim(h) == length(lp)) && all(is.finite(h))) h else NULL,
-         rows = rownames(res))
+         rows = rownames(res), sound = isTRUE(sound(lp, value)), fn = f)
   }
-  fit <- take(clv_optimx(fn, start, names_, spec$method, kkt = hessian))
+  first <- clv_optimx(fn, start, names_, spec$method, kkt = hessian, tight = spec$tight)
+  fit <- take(first, fn)
   fallback <- FALSE
-  if (is.null(fit) || fit$convcode != 0) {
+  if (is.null(fit) || fit$convcode != 0 || !fit$sound) {
     fallback <- TRUE
     capped <- function(lp) {
-      v <- fn(lp)
+      v <- stable(lp)
       if (is.finite(v)) v else 1e300
     }
-    nm <- take(clv_optimx(capped, start, names_, "Nelder-Mead", itnmax = 10000, kkt = FALSE))
-    polished <- if (is.null(nm)) NULL else take(clv_optimx(fn, nm$lp, names_, "L-BFGS-B", kkt = hessian))
+    earlier <- if (is.null(first) || nrow(first) < 2L) list() else
+      Filter(function(b) !is.null(b) && b$sound && b$convcode == 0, lapply(seq_len(nrow(first) - 1L), function(i) take(first, fn, i)))
+    nm <- if (length(earlier)) earlier[[which.min(vapply(earlier, function(b) b$value, 0))]] else
+      take(clv_optimx(capped, start, names_, "Nelder-Mead", itnmax = 10000, kkt = FALSE), stable)
+    polished <- if (is.null(nm)) NULL else take(clv_optimx(stable, nm$lp, names_, "L-BFGS-B", kkt = hessian, tight = TRUE), stable)
     best <- Filter(Negate(is.null), list(polished, nm, fit))
     if (!length(best)) {
       tab_refuse("optimizer_failed", paste0("the ", clv_model_label(model), " estimate could not be found: the data may hold too few repeat customers for this model; try another purchase model"),
                  list(model = model))
     }
+    good <- vapply(best, function(b) b$sound, logical(1))
+    if (any(good)) best <- best[good]
     fit <- best[[which.min(vapply(best, function(b) b$value, 0))]]
     fit$kkt1 <- fit$kkt2 <- NA
   }
-  if (is.null(fit$hessian) && hessian) fit$hessian <- tryCatch(numDeriv::hessian(fn, fit$lp), error = function(e) NULL)
+  # the Hessian is taken on the function the estimate was found on (CLVTools' own, or the stable form after a fallback)
+  if (is.null(fit$hessian) && hessian && fit$sound) fit$hessian <- tryCatch(numDeriv::hessian(fit$fn, fit$lp), error = function(e) NULL)
+  fit$fault <- !fit$sound
+  if (fit$fault) fit$convcode <- 9999L
   fit$fallback <- fallback
   fit$optimizer <- if (fallback) "Nelder-Mead, L-BFGS-B (fallback)" else if (identical(spec$method, "default")) "Nelder-Mead, BFGS" else spec$method
   fit
+}
+
+# Is the log-likelihood at an end point what the model says, or numerical noise? Two facts, checked at the
+# end point only (one more evaluation of the likelihood; docs/specs/customer-lifetime-models.md, «As built,
+# B10»): (1) a customer without a repeat purchase (x = 0) has a probability, not a density, so its
+# log-likelihood is at most 0 (for BG/BB every customer's is a probability); above 0 by more than rounding is
+# a broken computation; (2) the optimizer's value (−`value`) equals the sum of the customers' log-likelihoods
+# computed in the stable form (clv_ll_stable), up to rounding. CLVTools' BG/NBD sums r·log α − (r + x)·log(α + T)
+# as two terms: where r and α run to 1e35 and 1e67 the two cancel to noise of the order of 1e24, which the
+# optimizer took for a maximum; the stable sum there is −992,183, not +4.9e24.
+clv_sound <- function(model, comp, lp, value) {
+  if (!all(is.finite(lp)) || !is.finite(value)) return(FALSE)
+  ind <- clv_ll_stable(model, exp(lp), comp$x, comp$tx, comp$T)
+  if (anyNA(ind) || any(ind == Inf)) return(FALSE)
+  zero <- if (identical(model, "bg_bb")) rep(TRUE, length(ind)) else comp$x == 0
+  if (any(ind[zero] > CLV_ROUNDING)) return(FALSE)
+  total <- sum(comp$n * ind)
+  is.finite(total) && abs(-value - total) <= CLV_ROUNDING * (1 + abs(total))
 }
 
 clv_model_label <- function(model) {
@@ -404,25 +448,57 @@ clv_logsumexp2 <- function(a, b) {
   ifelse(is.finite(m), m + log(exp(a - m) + exp(b - m)), m)
 }
 
+# log Γ(r + x) − log Γ(r) without the cancellation of two large numbers: Γ(r + x)/Γ(r) = Γ(x)/B(r, x) for x > 0,
+# and R's lbeta keeps its digits for large arguments (it subtracts the Stirling corrections, not the lgammas).
+# At r = 1e35 the two lgammas are 8e36, whose last digit is 1e21: their difference is noise, lbeta's is not.
+clv_lgamma_ratio <- function(r, x) {
+  out <- numeric(length(x))
+  pos <- x > 0
+  out[pos] <- lgamma(x[pos]) - lbeta(r, x[pos])
+  out
+}
+
+# The part of the NBD's likelihood that holds r and α: r·log(α/(α + t)) − x·log(α + t), with the first term as
+# −r·log1p(t/α), which stays exact where α is far larger than t (r·log α − (r + x)·log(α + t) as two terms
+# loses every digit there).
+clv_nbd_part <- function(r, alpha, x, t) -r * log1p(t / alpha) - x * log(alpha + t)
+
+# BG/NBD (Fader, Hardie, Lee 2005), the per-customer log-likelihood in the stable form: what CLVTools' compiled
+# function computes, kept to its digits where r and α are huge. The fit uses CLVTools' own (its settings, its
+# estimates); this one is the guard's recomputation (clv_sound) and the fallback's likelihood.
+clv_bgnbd_ll_ind <- function(par, x, tx, T) {
+  r <- par[[1L]]
+  alpha <- par[[2L]]
+  a <- par[[3L]]
+  b <- par[[4L]]
+  g <- clv_lgamma_ratio(r, x)
+  t1 <- g + clv_nbd_part(r, alpha, x, T) + lbeta(a, b + x) - lbeta(a, b)
+  t2 <- rep(-Inf, length(x))
+  pos <- x > 0
+  t2[pos] <- g[pos] + clv_nbd_part(r, alpha, x[pos], tx[pos]) + lbeta(a + 1, b + x[pos] - 1) - lbeta(a, b)
+  clv_logsumexp2(t1, t2)
+}
+
 # MBG/NBD (Batislam, Denizel, Filiztekin 2007): the BG/NBD in which a customer may also leave right after
-# the first purchase.
+# the first purchase. The stable form, as clv_bgnbd_ll_ind.
 clv_mbg_ll_ind <- function(par, x, tx, T) {
   r <- par[[1L]]
   alpha <- par[[2L]]
   a <- par[[3L]]
   b <- par[[4L]]
-  l0 <- lgamma(r + x) - lgamma(r) + r * log(alpha)
-  t1 <- lbeta(a, b + x + 1) - lbeta(a, b) - (r + x) * log(alpha + T)
-  t2 <- lbeta(a + 1, b + x) - lbeta(a, b) - (r + x) * log(alpha + tx)
+  l0 <- clv_lgamma_ratio(r, x)
+  t1 <- lbeta(a, b + x + 1) - lbeta(a, b) + clv_nbd_part(r, alpha, x, T)
+  t2 <- lbeta(a + 1, b + x) - lbeta(a, b) + clv_nbd_part(r, alpha, x, tx)
   l0 + clv_logsumexp2(t1, t2)
 }
 
+# log((α + T)/(α + t_x)) as log1p((T − t_x)/(α + t_x)): exact where α is far larger than T.
 clv_mbg_palive <- function(par, x, tx, T) {
   r <- par[[1L]]
   alpha <- par[[2L]]
   a <- par[[3L]]
   b <- par[[4L]]
-  1 / (1 + exp(log(a) - log(b + x) + (r + x) * (log(alpha + T) - log(alpha + tx))))
+  1 / (1 + exp(log(a) - log(b + x) + (r + x) * log1p((T - tx) / (alpha + tx))))
 }
 
 # P(X(t) = k) for MBG/NBD: t is a vector (the customers' ages), k one count.
@@ -484,21 +560,27 @@ clv_bgbb_cet <- function(par, nstar, x, tx, n) {
   front * tail
 }
 
-# P(X(n) = k) for BG/BB; n a vector of opportunities, k one count.
+# P(X(n) = k) for BG/BB; n a vector of whole opportunities, k one count. The sum over the moment of dropout
+# i = k … n − 1 is the same for every n up to its end, so it is one cumulative sum up to the largest n,
+# read at each n (the distinct n of a summary, up to max_opportunities, cost one pass).
 clv_bgbb_pmf <- function(par, k, n) {
   al <- par[[1L]]
   be <- par[[2L]]
   ga <- par[[3L]]
   de <- par[[4L]]
-  vapply(n, function(m) {
-    if (k > m) return(0)
-    s <- choose(m, k) * exp(lbeta(al + k, be + m - k) - lbeta(al, be) + lbeta(ga, de + m) - lbeta(ga, de))
-    if (m - 1 >= k) {
-      i <- k:(m - 1)
-      s <- s + sum(choose(i, k) * exp(lbeta(al + k, be + i - k) - lbeta(al, be) + lbeta(ga + 1, de + i) - lbeta(ga, de)))
-    }
-    s
-  }, 0)
+  out <- numeric(length(n))
+  top <- max(n, 0)
+  cum <- if (top - 1 >= k) {
+    i <- k:(top - 1)
+    cumsum(exp(lchoose(i, k) + lbeta(al + k, be + i - k) - lbeta(al, be) + lbeta(ga + 1, de + i) - lbeta(ga, de)))
+  } else numeric()
+  use <- n >= k
+  m <- n[use]
+  alive <- exp(lchoose(m, k) + lbeta(al + k, be + m - k) - lbeta(al, be) + lbeta(ga, de + m) - lbeta(ga, de))
+  left <- numeric(length(m))
+  left[m - 1 >= k] <- cum[m[m - 1 >= k] - k]
+  out[use] <- alive + left
+  out
 }
 
 # Per-customer log-likelihood on natural parameters.
@@ -511,8 +593,19 @@ clv_ll_ind <- function(model, par, x, tx, T) {
     stop("no likelihood for ", model))
 }
 
+# The per-customer log-likelihood the guard recomputes (clv_sound): BG/NBD in the stable form written here, the
+# others as the fit computes them (MBG/NBD and BG/BB are written here in that form; Pareto/NBD is CLVTools' own,
+# so for it the guard checks that CLVTools' sum is the sum of CLVTools' customers).
+clv_ll_stable <- function(model, par, x, tx, T) {
+  if (identical(model, "bg_nbd")) clv_bgnbd_ll_ind(par, x, tx, T) else clv_ll_ind(model, par, x, tx, T)
+}
+
 # The negative log-likelihood of a model on the compressed summary, as a function of the log parameters.
-clv_nll <- function(model, comp) {
+# `stable`: BG/NBD in the stable form written here instead of CLVTools' compiled sum (the fallback's, the edges').
+clv_nll <- function(model, comp, stable = FALSE) {
+  if (stable && identical(model, "bg_nbd")) {
+    return(function(lp) -sum(comp$n * clv_bgnbd_ll_ind(exp(unname(lp)), comp$x, comp$tx, comp$T)))
+  }
   switch(model,
     pareto_nbd = {
       f <- clv_fn("pnbd_nocov_LL_sum")
@@ -586,33 +679,74 @@ clv_gauss_beta <- local({
   }
 })
 
-# The expected transactions of BG/NBD and MBG/NBD from the integral form, for the customers `i`:
-# CET(t) = P(alive) · E[(1 − ((α+T)/(α+T+p t))^(r+x)) / p], p ~ Beta(a, b + x + shift).
+# The expected transactions of BG/NBD and MBG/NBD from the integral form, for each customer:
+# CET(t) = P(alive) · E[G(p)/p], p ~ Beta(a, B), B = b + x + shift, G(p) = 1 − (1 + p·t/(α+T))^−(r+x).
+# G(p)/p bends at the knee p* = (α+T)/((r+x)·t): below it G(p)/p is nearly (r+x)·t/(α+T), above it nearly 1/p.
+# Where x is large and T short the knee falls inside the Beta's mass, and a quadrature on p alone misses it
+# (64 Gauss–Jacobi nodes were off by 0.5–2 % at x = 200…20,000, T = 2, t = 520). So the integral is cut in three:
+#   [0, c₀], c₀ = e⁻² · min(p*, 1/B, 1/2): p = c₀u, the weight u^(a−1) exact (Gauss–Jacobi, 32 nodes), the rest
+#     nearly constant there;
+#   [c₀, 1/2] on u = log p: smooth in u through the knee and the Beta's cut-off at p ≈ 1/B, Gauss–Legendre with
+#     16 nodes on panels at most 1 wide (about log(1/c₀) panels: 3 to 30);
+#   [1/2, 1]: p = (1 + v)/2, the weight (1 − v)^(B−1) exact (Gauss–Jacobi, 32 nodes); below 2^−60 of the rest
+#     when B ≥ 60, so left out there.
+# Measured against integrate() at rel.tol 1e-13 on x = 0…20,000, T = 2…100, t = 1…520: within 2e-14 relative.
 clv_cet_quadrature <- function(par, t, x, T, palive, shift) {
   r <- par[[1L]]
   alpha <- par[[2L]]
   a <- par[[3L]]
   b <- par[[4L]]
+  near0 <- clv_gauss_beta(a, 1, 32L)
+  legendre <- clv_gauss_beta(1, 1, 16L)
   out <- numeric(length(x))
-  for (k in unique(x)) {
-    j <- which(x == k)
-    g <- clv_gauss_beta(a, b + k + shift)
-    for (i in j) {
-      u <- -expm1((r + k) * log1p(-g$p * t / (alpha + T[[i]] + g$p * t))) / g$p
-      out[[i]] <- palive[[i]] * sum(g$w * u)
+  for (i in seq_along(x)) {
+    B <- b + x[[i]] + shift
+    k <- t / (alpha + T[[i]])
+    n <- r + x[[i]]
+    G <- function(p) -expm1(-n * log1p(p * k))
+    lb <- lbeta(a, B)
+    c0 <- exp(-2) * min(1 / (k * n), 1 / B, 0.5)
+    p1 <- c0 * near0$p
+    s1 <- exp(a * log(c0) - log(a) - lb) * sum(near0$w * exp((B - 1) * log1p(-p1)) * G(p1) / p1)
+    lo <- log(c0)
+    hi <- -log(2)
+    panels <- max(1L, ceiling(hi - lo))
+    edges <- seq(lo, hi, length.out = panels + 1L)
+    u <- as.vector(outer(legendre$p, diff(edges)) + rep(edges[-(panels + 1L)], each = length(legendre$p)))
+    wu <- as.vector(outer(legendre$w, diff(edges)))
+    s2 <- sum(wu * exp((a - 1) * u + (B - 1) * log1p(-exp(u)) - lb) * G(exp(u)))
+    s3 <- 0
+    if (B < 60) {
+      far <- clv_gauss_beta(1, B, 32L)
+      p3 <- (1 + far$p) / 2
+      s3 <- exp(-B * log(2) - log(B) - lb) * sum(far$w * p3^(a - 2) * G(p3))
     }
+    out[[i]] <- palive[[i]] * (s1 + s2 + s3)
   }
   out
 }
 
-# MBG/NBD's expected transactions in (T, T + t]: the closed form with GSL's ₂F₁.
+# BG/NBD's and MBG/NBD's expected transactions in (T, T + t]: the closed forms with GSL's ₂F₁ (NA where GSL's
+# status is not 0), ((α+T)/(α+T+t))^(r+x) as exp(−(r+x)·log1p(t/(α+T))). BG/NBD (Fader, Hardie, Lee 2005, eq. 10):
+# (a+b+x−1)/(a−1) · [1 − (…)^(r+x) ₂F₁(r+x, b+x; a+b+x−1; z)] · P(alive); written here, not CLVTools' CET, because
+# CLVTools' does not say when GSL failed (8 configurations in 3,000 drawn by the review returned a number off by
+# up to 241 %).
+clv_bgnbd_cet_closed <- function(par, t, x, tx, T) {
+  r <- par[[1L]]
+  alpha <- par[[2L]]
+  a <- par[[3L]]
+  b <- par[[4L]]
+  h <- clv_hyp2f1(r + x, b + x, a + b + x - 1, t / (alpha + T + t))
+  (a + b + x - 1) / (a - 1) * (1 - exp(-(r + x) * log1p(t / (alpha + T))) * h) * clv_palive("bg_nbd", par, x, tx, T)
+}
+
 clv_mbg_cet_closed <- function(par, t, x, tx, T) {
   r <- par[[1L]]
   alpha <- par[[2L]]
   a <- par[[3L]]
   b <- par[[4L]]
   h <- clv_hyp2f1(r + x, b + x + 1, a + b + x, t / (alpha + T + t))
-  (a + b + x) / (a - 1) * (1 - ((alpha + T) / (alpha + T + t))^(r + x) * h) * clv_mbg_palive(par, x, tx, T)
+  (a + b + x) / (a - 1) * (1 - exp(-(r + x) * log1p(t / (alpha + T))) * h) * clv_mbg_palive(par, x, tx, T)
 }
 
 # The expected transactions of a continuous-time model in the next `t` periods, for each customer.
@@ -627,11 +761,7 @@ clv_cet <- function(model, par, t, x, tx, T) {
     out <- clv_fn("pnbd_nocov_CET")(par[[1L]], par[[2L]], par[[3L]], par[[4L]], t, x, tx, T)
     return(structure(out, quadrature = rep(FALSE, length(x))))
   }
-  closed <- if (model == "bg_nbd") {
-    clv_fn("bgnbd_nocov_CET")(par[[1L]], par[[2L]], par[[3L]], par[[4L]], t, x, tx, T)
-  } else {
-    clv_mbg_cet_closed(par, t, x, tx, T)
-  }
+  closed <- if (model == "bg_nbd") clv_bgnbd_cet_closed(par, t, x, tx, T) else clv_mbg_cet_closed(par, t, x, tx, T)
   bad <- !is.finite(closed) | closed < 0 | par[[3L]] == 1
   if (any(bad)) {
     pa <- clv_palive(model, par, x[bad], tx[bad], T[bad])
@@ -646,22 +776,29 @@ clv_cet <- function(model, par, t, x, tx, T) {
 clv_fit_purchases <- function(model, s, comp = NULL, alpha = 0.05, inference = TRUE) {
   comp <- comp %||% clv_compress(s$x, s$tx, s$T)
   nll <- clv_nll(model, comp)
-  fit <- clv_optimize(nll, model, hessian = inference)
+  fit <- clv_optimize(nll, model, hessian = inference, sound = function(lp, value) clv_sound(model, comp, lp, value),
+                      stable = clv_nll(model, comp, stable = TRUE))
   inf <- clv_inference(fit, alpha)
   par <- exp(fit$lp)
   names(par) <- CLV_MODELS[[model]]$params
   k <- length(par)
   ll <- -fit$value
   list(model = model, par = par, log_par = fit$lp, log_lik = ll, aic = 2 * k - 2 * ll, bic = k * log(s$n) - 2 * ll, n_params = k,
-       converged = fit$convcode == 0, kkt1 = fit$kkt1, kkt2 = fit$kkt2, convcode = fit$convcode, fallback = fit$fallback,
+       converged = fit$convcode == 0, fault = fit$fault, kkt1 = fit$kkt1, kkt2 = fit$kkt2, convcode = fit$convcode, fallback = fit$fallback,
        optimizer = fit$optimizer, vcov_log = inf$vcov_log, se = inf$se, ci_low = inf$ci_low, ci_high = inf$ci_high)
 }
 
 # The Hessian, the standard errors and the intervals of a fit made without them (`inference = FALSE`), at its
 # optimum: what the candidates not chosen never need. The KKT tests are optimx's: a small gradient, a positive
 # definite Hessian.
+# A fit whose end point is numerical noise (`fault`) gets none of it: its Hessian would be the noise's. After a
+# fallback the derivatives are taken on the function the estimate was found on (BG/NBD's stable form).
 clv_add_inference <- function(p, s, comp, alpha = 0.05) {
-  nll <- clv_nll(p$model, comp)
+  if (isTRUE(p$fault)) {
+    p$edges <- clv_no_edges()
+    return(p)
+  }
+  nll <- clv_nll(p$model, comp, stable = isTRUE(p$fallback))
   h <- tryCatch(numDeriv::hessian(nll, p$log_par), error = function(e) NULL)
   g <- tryCatch(numDeriv::grad(nll, p$log_par), error = function(e) NULL)
   inf <- clv_inference(list(lp = p$log_par, hessian = h), alpha)
@@ -674,7 +811,52 @@ clv_add_inference <- function(p, s, comp, alpha = 0.05) {
     p$kkt1 <- !is.null(g) && max(abs(g)) <= 1e-3 * (1 + abs(nll(p$log_par)))
     p$kkt2 <- !is.null(h) && all(is.finite(h)) && all(eigen(h, symmetric = TRUE, only.values = TRUE)$values > 0)
   }
+  p$edges <- clv_edges(clv_nll(p$model, comp, stable = TRUE), p$log_par, p$model)
   p
+}
+
+# ── the edges: where the likelihood keeps growing ────────────────────────────────
+# The two parameters of each mixing distribution of a model: the purchase rate's, the dropout's (Gamma–Gamma:
+# the spend's scale, q and γ, whose ratio is the mean of ν).
+CLV_PAIRS <- list(
+  pareto_nbd = list(rate = c("r", "alpha"), dropout = c("s", "beta")),
+  bg_nbd = list(rate = c("r", "alpha"), dropout = c("a", "b")),
+  mbg_nbd = list(rate = c("r", "alpha"), dropout = c("a", "b")),
+  bg_bb = list(rate = c("alpha", "beta"), dropout = c("gamma", "delta")),
+  gamma_gamma = list(scale = c("q", "gamma")))
+
+clv_no_edges <- function() data.frame(param = character(), side = character(), pair = character(), stringsAsFactors = FALSE)
+
+# The estimates at an edge, as a fact of the likelihood: one step further towards the edge (a factor e on the
+# parameter, the scale the optimizer works on) the log-likelihood is not lower than at the estimate, beyond
+# rounding. The directions: each parameter down (towards 0) and up (towards ∞), and each pair of a mixing
+# distribution up together (its mean kept: the spread goes to 0, where the customers look alike). At an
+# interior maximum every step lowers it; at an edge the maximum is the limit, not a point, so the step does
+# not. Returns one row per parameter at an edge: `side` low or high, `pair` the pair's kind when it is the
+# pair's direction. 2k + pairs evaluations of the likelihood, once, for the chosen model and the spend.
+clv_edges <- function(nll, lp, model) {
+  names_ <- CLV_MODELS[[model]]$params
+  v0 <- tryCatch(nll(lp), error = function(e) NA_real_)
+  out <- clv_no_edges()
+  if (!is.finite(v0)) return(out)
+  tol <- CLV_ROUNDING * (1 + abs(v0))
+  grows <- function(d) {
+    v <- tryCatch(nll(lp + d), error = function(e) NA_real_)
+    is.finite(v) && v <= v0 + tol
+  }
+  for (k in seq_along(names_)) {
+    for (side in c("low", "high")) {
+      d <- numeric(length(names_))
+      d[[k]] <- if (side == "low") -1 else 1
+      if (grows(d)) out[nrow(out) + 1L, ] <- list(names_[[k]], side, "")
+    }
+  }
+  for (kind in names(CLV_PAIRS[[model]])) {
+    two <- CLV_PAIRS[[model]][[kind]]
+    d <- as.numeric(names_ %in% two)
+    if (grows(d)) for (name in two) out[nrow(out) + 1L, ] <- list(name, "high", kind)
+  }
+  out
 }
 
 # ── Gamma–Gamma ──────────────────────────────────────────────────────────────────
@@ -687,6 +869,7 @@ clv_fit_spend <- function(s, alpha = 0.05) {
   nll <- function(lp) gg(unname(lp), x, m, rep(1, length(x)))
   fit <- clv_optimize(nll, "gamma_gamma")
   inf <- clv_inference(fit, alpha)
+  edges <- clv_edges(nll, fit$lp, "gamma_gamma")
   par <- stats::setNames(exp(fit$lp), CLV_MODELS$gamma_gamma$params)
   if (par[["q"]] <= 1) {
     tab_refuse("spend_no_mean", paste0("the spend model's q is ", clv_num(round(par[["q"]], 2)), ", at most 1: the average spend has no finite mean, ",
@@ -695,7 +878,7 @@ clv_fit_spend <- function(s, alpha = 0.05) {
   }
   list(model = "gamma_gamma", par = par, log_par = fit$lp, log_lik = -fit$value, n = length(x), converged = fit$convcode == 0,
        kkt1 = fit$kkt1, kkt2 = fit$kkt2, convcode = fit$convcode, fallback = fit$fallback, optimizer = fit$optimizer,
-       vcov_log = inf$vcov_log, se = inf$se, ci_low = inf$ci_low, ci_high = inf$ci_high)
+       vcov_log = inf$vcov_log, se = inf$se, ci_low = inf$ci_low, ci_high = inf$ci_high, edges = edges)
 }
 
 # The population's expected average spend, pγ/(q − 1).
@@ -770,30 +953,66 @@ clv_holdout <- function(expected, observed) {
        correlation = if (length(o) > 2L && stats::sd(e) > 0 && stats::sd(o) > 0) stats::cor(e, o) else NA_real_)
 }
 
-# The frequency classes for the fit's check and charts: 0, 1, 2…, pooled from the top until the last class
-# expects at least `min_expected` customers; the last class is open («k+»). `expected` is the model's
-# expected number of customers per count 0…K, with the open tail as its last element, `observed` likewise.
+# The frequency classes for the fit's check and charts: the counts 0, 1, 2…, the last open («k+»), pooled into
+# runs of adjacent counts until EVERY class expects at least `min_expected` customers. The 5 is Cochran's rule
+# for Pearson's χ² (its χ² distribution is an approximation that needs expected counts of about 5 or more), a
+# condition of the test, not a threshold of a verdict. From the top down: the open tail gathers counts until it
+# expects 5, then each next class downwards does the same; a remainder at the bottom joins the class above it.
+# `expected` is the model's expected number of customers per count 0…K, with the open tail as its last element,
+# `observed` likewise. x0 is a class's lowest count, x1 its highest (NA for the open last class).
 clv_pool_classes <- function(observed, expected, min_expected = 5) {
-  o <- observed
-  e <- expected
-  while (length(e) > 1L && e[[length(e)]] < min_expected) {
-    k <- length(e)
-    e[[k - 1L]] <- e[[k - 1L]] + e[[k]]
-    o[[k - 1L]] <- o[[k - 1L]] + o[[k]]
-    e <- e[-k]
-    o <- o[-k]
+  k <- length(expected)
+  lo <- integer()
+  hi <- integer()
+  o <- numeric()
+  e <- numeric()
+  acc_o <- 0
+  acc_e <- 0
+  top <- k
+  for (j in k:1) {
+    acc_o <- acc_o + observed[[j]]
+    acc_e <- acc_e + expected[[j]]
+    if (acc_e >= min_expected) {
+      lo <- c(lo, j)
+      hi <- c(hi, top)
+      o <- c(o, acc_o)
+      e <- c(e, acc_e)
+      acc_o <- 0
+      acc_e <- 0
+      top <- j - 1L
+    }
   }
-  list(x0 = seq_along(e) - 1, x1 = c(seq_along(e)[-length(e)] - 1, NA_real_), observed = o, expected = e)
+  if (top >= 1L) {
+    # a remainder at the bottom joins the class above it (or is the only class)
+    m <- length(e)
+    if (m) {
+      lo[[m]] <- 1L
+      o[[m]] <- o[[m]] + acc_o
+      e[[m]] <- e[[m]] + acc_e
+    } else {
+      lo <- 1L
+      hi <- k
+      o <- acc_o
+      e <- acc_e
+    }
+  }
+  ord <- rev(seq_along(e))
+  x1 <- as.numeric(hi[ord] - 1L)
+  x1[[length(x1)]] <- NA_real_
+  list(x0 = as.numeric(lo[ord] - 1L), x1 = x1, observed = o[ord], expected = e[ord])
 }
 
 # The model's expected number of customers per repeat count, against the observed ones: the χ² with its
 # degrees of freedom (classes − 1 − the parameters), the largest gap between the observed and expected
 # shares. Expected = Σ_i P(X(T_i) = k); it depends on T only, so the distinct T are taken with their counts.
+# Continuous ages: when they are more than `max_ages` distinct, the PMF (smooth in T) is taken at the mean age of
+# `max_ages` classes of equal counts. BG/BB's opportunities are whole numbers (at most `max_opportunities`): its
+# PMF is taken at each distinct n, never at a mean (a PMF at 37.4 opportunities is not a probability).
 clv_frequency_fit <- function(model, par, s, max_class = 60L, max_ages = 200L) {
   k_max <- min(max(s$x), max_class)
   tt <- sort(unique(s$T))
   w <- tabulate(match(s$T, tt), length(tt))
-  if (length(tt) > max_ages) {
+  if (length(tt) > max_ages && !identical(model, "bg_bb")) {
     # many distinct ages (continuous time): the PMF is smooth in T, so the customers are grouped in `max_ages`
     # classes of equal counts and each class is taken at its mean age (a few hundred PMF evaluations, not one per customer)
     g <- findInterval(s$T, unique(stats::quantile(s$T, seq(0, 1, length.out = max_ages + 1L), names = FALSE, type = 1)), rightmost.closed = TRUE)
@@ -811,8 +1030,8 @@ clv_frequency_fit <- function(model, par, s, max_class = 60L, max_ages = 200L) {
              max_share_gap = max(abs(cl$observed - cl$expected)) / s$n, n_classes = length(cl$expected)))
 }
 
-# The frequency class of each customer (the classes of clv_frequency_fit).
-clv_class_of <- function(x, classes) as.integer(pmin(x, max(classes$x0)) + 1)
+# The frequency class of each customer (the classes of clv_frequency_fit: x0 the lowest count of each).
+clv_class_of <- function(x, classes) findInterval(x, classes$x0)
 
 # The mean holdout purchases per customer of each frequency class, observed and expected.
 clv_holdout_by_class <- function(x, observed, expected, classes) {
@@ -1004,6 +1223,8 @@ clv_plan <- function(task, s) {
 clv_predict_frame <- function(card, df, horizon = NULL, max_steps = 520, max_opportunities = 1000) {
   cl <- card$customer_lifetime
   node <- cl$node
+  purchases <- clv_card_params(cl, "purchases")
+  spend <- if (is.null(cl$spend)) NULL else clv_card_params(cl, "spend")
   inputs <- vapply(card$inputs, function(i) i$name, "")
   for (name in inputs) {
     if (!name %in% names(df)) tab_refuse("missing_column", paste0("the rows have no column «", name, "», which the model was fitted on"), list(column = name))
@@ -1012,7 +1233,8 @@ clv_predict_frame <- function(card, df, horizon = NULL, max_steps = 520, max_opp
   with_spend <- !is.null(cl$spend)
   v <- list(id = as.character(seq_len(nrow(df))), x = num(inputs[[1L]]), tx = num(inputs[[2L]]), T = num(inputs[[3L]]),
             m = if (with_spend) num(inputs[[4L]]) else rep(NA_real_, nrow(df)), h = rep(NA_real_, nrow(df)))
-  isnull <- is.na(v$x) | is.na(v$tx) | is.na(v$T) | is.infinite(v$x) | is.infinite(v$tx) | is.infinite(v$T)
+  # a NULL or an infinite number gets a NULL prediction (the fit refuses an infinite spend: Predict leaves its row out)
+  isnull <- is.na(v$x) | is.na(v$tx) | is.na(v$T) | is.infinite(v$x) | is.infinite(v$tx) | is.infinite(v$T) | is.infinite(v$m)
   bad <- rep(FALSE, nrow(df))
   usable <- !isnull
   if (any(usable)) {
@@ -1022,12 +1244,19 @@ clv_predict_frame <- function(card, df, horizon = NULL, max_steps = 520, max_opp
   ok <- usable & !bad
   out <- data.frame(p_alive = rep(NA_real_, nrow(df)), transactions = NA_real_, spend = NA_real_, clv = NA_real_, discounted_transactions = NA_real_)
   if (any(ok)) {
+    # as the fit reads its summary (clv_read_summary): x rounded; BG/BB's recency and opportunities rounded, the
+    # continuous recency clamped to the age
     s <- list(x = round(v$x[ok]), tx = v$tx[ok], T = v$T[ok], m = v$m[ok])
-    if (!identical(node, "bg_bb")) s$tx <- pmin(s$tx, s$T)
+    if (identical(node, "bg_bb")) {
+      s$tx <- round(s$tx)
+      s$T <- round(s$T)
+    } else {
+      s$tx <- pmin(s$tx, s$T)
+    }
     s$m[s$x == 0] <- NA_real_
     plan <- list(horizon = as.integer(horizon %||% cl$horizon), discount_rate = cl$discount_rate, unit = cl$time_unit, margin = cl$margin,
                  holdout_length = NA_real_, max_steps = max_steps)
-    ev <- clv_evaluate(cl$purchases$model, unlist(cl$purchases$params), if (with_spend) unlist(cl$spend$params) else NULL, s, plan)
+    ev <- clv_evaluate(cl$purchases$model, purchases, spend, s, plan)
     out$p_alive[ok] <- ev$p_alive
     out$transactions[ok] <- ev$transactions
     out$discounted_transactions[ok] <- ev$discounted_transactions
@@ -1037,6 +1266,31 @@ clv_predict_frame <- function(card, df, horizon = NULL, max_steps = 520, max_opp
     }
   }
   list(predictions = out, n_bad = sum(bad), n_null = sum(isnull), ok = ok)
+}
+
+# The parameters of a card's part ("purchases" or "spend"), by their names in CLV_MODELS' order: a card read
+# from MLflow is JSON, and the order of its keys is not a promise. A card that does not hold what the fit wrote
+# is refused with a sentence: a model outside the list (or one the node does not fit), a parameter missing, or
+# one that is not a positive finite number.
+clv_card_params <- function(cl, part) {
+  bad <- function(why) tab_refuse("bad_card", paste0("the saved model cannot predict: ", why, "; fit it again"), list(part = part))
+  node <- cl$node
+  if (!is.character(node) || length(node) != 1L || !node %in% c("clv", "bg_bb")) bad("its node is not clv or bg_bb")
+  model <- cl[[part]]$model
+  allowed <- if (part == "spend") "gamma_gamma" else if (identical(node, "bg_bb")) "bg_bb" else c("pareto_nbd", "bg_nbd", "mbg_nbd")
+  if (!is.character(model) || length(model) != 1L || !model %in% allowed) {
+    bad(paste0("its ", part, " model «", paste(model, collapse = ""), "» is not one the node ", node, " fits"))
+  }
+  if (identical(part, "purchases") && !identical(cl$purchase_model, model)) bad("its purchase model and its parameters' model differ")
+  names_ <- CLV_MODELS[[model]]$params
+  raw <- cl[[part]]$params
+  got <- vapply(names_, function(k) {
+    v <- raw[[k]]
+    if (is.numeric(v) && length(v) == 1L) as.numeric(v) else NA_real_
+  }, 0)
+  wrong <- names_[!is.finite(got) | got <= 0]
+  if (length(wrong)) bad(paste0("the ", part, " parameter ", wrong[[1L]], " is not a positive number"))
+  stats::setNames(got, names_)
 }
 
 # ── a candidate, the choice, the whole fit ───────────────────────────────────────
@@ -1059,15 +1313,16 @@ clv_candidates <- function(node, params) {
   if (isTRUE(params$compare)) c(asked, setdiff(three, asked)) else asked
 }
 
-# `auto` keeps the highest log-likelihood among the models that converged (and whose parameters are within
-# 1e-10 … 1e10: beyond it the likelihood is numerical noise); a tie within 1e-6 keeps the first.
+# `auto` keeps the highest log-likelihood among the models that converged; a tie within 1e-6 keeps the first.
+# A model whose end point is numerical noise (`fault`, clv_sound) is never chosen: its log-likelihood is not
+# one. When none converged, the highest among those that are not noise; when all are noise, the first.
 clv_choose <- function(candidates, asked) {
   if (!identical(asked, "auto")) return(1L)
   ll <- vapply(candidates, function(c) c$p$log_lik, 0)
-  # converged, and no parameter so far out that the likelihood is only numerical noise (1e-10 … 1e10)
-  ok <- vapply(candidates, function(c) c$p$converged && all(c$p$par > 1e-10 & c$p$par < 1e10), logical(1))
-  if (!any(ok)) ok <- vapply(candidates, function(c) c$p$converged, logical(1))
-  pool <- if (any(ok)) which(ok) else seq_along(candidates)
+  fault <- vapply(candidates, function(c) isTRUE(c$p$fault), logical(1))
+  if (all(fault)) return(1L)
+  ok <- vapply(candidates, function(c) isTRUE(c$p$converged), logical(1)) & !fault
+  pool <- if (any(ok)) which(ok) else which(!fault)
   best <- max(ll[pool])
   pool[ll[pool] >= best - 1e-6][[1L]]
 }

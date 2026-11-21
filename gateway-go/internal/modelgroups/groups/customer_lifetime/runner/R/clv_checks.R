@@ -8,18 +8,24 @@
 #     pooled from the top until each expects 5 customers, df = classes − 1 − the parameters; «not
 #     computed» when no degree of freedom is left) and spend_independence (the slope of the average
 #     spend on the frequency, HC3 standard errors; Pearson's r is its `value`).
-#   - A certain fact: convergence (the optimizer's code, a positive definite Hessian; an estimate at an
-#     edge, where the likelihood is flat, leaves no positive definite Hessian: «doubtful», advice
-#     `convergence_edge`), spend_tail (q ≤ 2: the spend's variance is infinite, a mathematical fact;
-#     q ≤ 1 stopped the node before).
+#   - A certain fact: convergence (the optimizer's code, the guard against a likelihood that is numerical
+#     noise, a positive definite Hessian; an estimate at an edge, where the likelihood keeps growing
+#     towards the limit, leaves no positive definite Hessian: «doubtful», advice `convergence_edge`),
+#     spend_tail (q ≤ 2: the spend's variance is infinite, a mathematical fact; q ≤ 1 stopped the node
+#     before).
 # Every other check is a measure: a `value` with no verdict and no advice, said by the report in a
 # sentence (`measure_texts`): sample_size (the customers, and the repeat customers in `count`),
 # holdout (the relative error of the holdout's total), horizon_length (the horizon over the longest
-# age) and boundary (an estimate far out on the log scale: its value, and in `advice_id` what such an
-# edge means for the model; no row when no estimate is out there). The share gap of the frequency
-# classes is frequency_fit's `value`.
+# age) and boundary (an estimate at an edge: its value, and in `advice_id` what such an edge means for
+# the model; no row when no estimate is at one). The share gap of the frequency classes is
+# frequency_fit's `value`.
 #
-# Light: nothing is refitted; the χ², the holdout and the HC3 test are numbers clv_fit() already has.
+# An edge is a fact of the likelihood, not a number of ours (clv_edges, as decided in B10): one step
+# further towards 0 or ∞ (a factor e on the parameter, alone, or on both parameters of a mixing
+# distribution together) the log-likelihood is not lower than at the estimate. No constant decides it.
+#
+# Light: nothing is refitted; the χ², the holdout and the HC3 test are numbers clv_fit() already has, and
+# the edges a dozen evaluations of the likelihood made once by clv_fit().
 # Names here start with `clv_check` or `CLV_CHECK`: the files of the group share one environment.
 
 # What each check assumes («H0»); the report says it in the page's language by the check's id.
@@ -28,12 +34,6 @@ CLV_CHECK_H0 <- list(
   frequency_fit = "The distribution of repeat purchases is the model's.",
   spend_independence = "The average spend does not move with the frequency (Gamma-Gamma's assumption).",
   spend_tail = "The spend's variance is finite (q above 2).")
-
-# An estimate is far out when its log leaves ±log(1e4): the optimizer works on the log scale, and there
-# the likelihood is flat towards the model's limit (no dropout, no spread). It decides which estimates
-# the `boundary` measure shows and when the convergence check reads a flat Hessian as an edge; it never
-# decides a verdict.
-CLV_CHECK_EDGE <- c(low = 1e-4, high = 1e4)
 
 # One check's rows, in the order the report reads them. `verdict` NULL: a measure (no advice).
 clv_check_rows <- function(rows, id, verdict = NULL, h0 = CLV_CHECK_H0[[id]], advice = NULL, advice_id = id, level_2 = NULL,
@@ -75,16 +75,20 @@ clv_checks <- function(rows, fit) {
 }
 
 # ── convergence (a fact) ─────────────────────────────────────────────────────
-# Both parts (the purchases, the spend) converged with a positive definite Hessian: «ok». The optimizer did
-# not converge, or the Hessian is not positive definite with every estimate inside its range: «failed».
-# The Hessian is not positive definite because an estimate went to an edge, where the likelihood is flat
-# (the boundary measure says which and what it means): «doubtful» (advice_id convergence_edge), with no
-# standard errors. `value`: the Newton step left at the purchase model's estimates, in its standard errors.
+# Both parts (the purchases, the spend) converged with a positive definite Hessian and no estimate at an edge:
+# «ok». The optimizer did not converge, its end point is numerical noise (clv_sound: the fit is `fault`, not
+# converged), or the Hessian is not positive definite while no estimate is at an edge: «failed». An estimate
+# at an edge, where the likelihood keeps growing towards the limit (clv_edges; the boundary measure says which
+# and what it means): «doubtful» (advice_id convergence_edge), whether or not the Hessian there is still
+# positive definite to the last digits: the maximum is the limit, not a point, and a standard error there
+# means little. Why the edge is not «failed» (B2): customers who never drop out push the dropout's parameter
+# to its limit, a legitimate limit of the model, and their fit came out failed. `value`: the Newton step left
+# at the purchase model's estimates, in its standard errors.
 clv_check_convergence <- function(rows, fit) {
   parts <- Filter(Negate(is.null), list(fit$purchases, fit$spend))
   stopped <- vapply(parts, function(f) !isTRUE(f$converged), logical(1))
   flat <- vapply(parts, function(f) is.null(f$vcov_log), logical(1))
-  edge <- vapply(parts, function(f) any(f$par < CLV_CHECK_EDGE[["low"]] | f$par > CLV_CHECK_EDGE[["high"]]), logical(1))
+  edge <- vapply(parts, function(f) !is.null(f$edges) && nrow(f$edges) > 0L, logical(1))
   p <- fit$purchases
   step <- NULL
   if (!is.null(p$vcov_log) && !is.null(p$gradient) && all(is.finite(p$gradient))) {
@@ -93,51 +97,44 @@ clv_check_convergence <- function(rows, fit) {
   if (any(stopped | (flat & !edge))) {
     clv_check_rows(rows, "convergence", "failed", value = step,
                    advice = "the estimates may not be the best ones: the data may hold too few repeat customers for this model; try another purchase model")
-  } else if (any(flat)) {
+  } else if (any(edge)) {
     clv_check_rows(rows, "convergence", "doubtful", advice_id = "convergence_edge",
-                   advice = "the optimizer stopped at an edge of a parameter's range, where the likelihood is flat: there are no standard errors; read the estimates at an edge")
+                   advice = "the optimizer stopped at an edge of a parameter's range, where the likelihood keeps growing towards the limit: the estimate is a limit and its standard error means little; read the estimates at an edge")
   } else {
     clv_check_rows(rows, "convergence", "ok", value = step)
   }
 }
 
 # ── boundary (a measure) ─────────────────────────────────────────────────────
-# One row per estimate far out on the log scale (`level_2` the parameter, the spend's as spend_p, spend_q,
+# One row per estimate at an edge (clv_edges: `level_2` the parameter, the spend's as spend_p, spend_q,
 # spend_gamma): its `value`, and `advice_id` the model's reading of that edge (boundary_no_dropout,
 # boundary_homogeneous, boundary), which the report says in a sentence. No verdict: whether the model is
 # still right there is not something a number can settle, and the convergence check already says when the
-# flat likelihood left no standard errors. No row when no estimate is out there.
+# flat likelihood left no standard errors. No row when no estimate is at an edge.
 clv_check_boundary <- function(rows, fit) {
-  at <- function(par) par < CLV_CHECK_EDGE[["low"]] | par > CLV_CHECK_EDGE[["high"]]
-  pp <- fit$purchases$par
-  sp <- if (is.null(fit$spend)) numeric() else stats::setNames(fit$spend$par, paste0("spend_", names(fit$spend$par)))
-  par <- c(pp, sp)
-  edge <- at(par)
-  high <- par > CLV_CHECK_EDGE[["high"]]
-  for (name in names(par)[edge]) {
-    id <- clv_check_edge_reading(fit$model, name, par, high)
-    clv_check_rows(rows, "boundary", level_2 = name, value = par[[name]])
-    tab_text(rows, "assumption", "advice_id", if (nzchar(id)) id else "boundary", "boundary", name)
+  for (part in Filter(Negate(is.null), list(fit$purchases, fit$spend))) {
+    e <- part$edges
+    if (is.null(e) || !nrow(e)) next
+    spend <- identical(part$model, "gamma_gamma")
+    for (name in unique(e$param)) {
+      label <- if (spend) paste0("spend_", name) else name
+      clv_check_rows(rows, "boundary", level_2 = label, value = part$par[[name]])
+      id <- if (spend) "" else clv_check_edge_reading(fit$model, name, e[e$param == name, , drop = FALSE])
+      tab_text(rows, "assumption", "advice_id", if (nzchar(id)) id else "boundary", "boundary", label)
+    }
   }
   invisible(rows)
 }
 
-# What an edge means for the model (`high`: which estimates are above the edge). Both parameters of a
-# mixing distribution large: its spread is not identified (everyone alike: boundary_homogeneous). The
-# dropout's first parameter small or its second large (Pareto/NBD s → 0 or β → ∞, BG/NBD a → 0 or b → ∞,
-# BG/BB γ → 0 or δ → ∞): the mean dropout goes to 0 (boundary_no_dropout). "" when the edge has no reading.
-clv_check_edge_reading <- function(model, name, par, high) {
-  pair <- switch(model,
-    pareto_nbd = list(rate = c("r", "alpha"), dropout = c("s", "beta")),
-    bg_nbd = , mbg_nbd = list(rate = c("r", "alpha"), dropout = c("a", "b")),
-    bg_bb = list(rate = c("alpha", "beta"), dropout = c("gamma", "delta")),
-    list())
-  for (kind in names(pair)) {
-    two <- pair[[kind]]
-    if (!name %in% two) next
-    if (isTRUE(high[[two[[1L]]]]) && isTRUE(high[[two[[2L]]]])) return("boundary_homogeneous")
-    if (kind == "dropout" && ((name == two[[1L]] && !high[[name]]) || (name == two[[2L]] && high[[name]]))) return("boundary_no_dropout")
-  }
+# What an edge means for the model (`at`: the parameter's rows of clv_edges). The pair of a mixing distribution
+# going up together: its spread is not identified (everyone alike: boundary_homogeneous). The dropout's first
+# parameter towards 0 or its second towards ∞ (Pareto/NBD s → 0 or β → ∞, BG/NBD a → 0 or b → ∞, BG/BB γ → 0 or
+# δ → ∞): the mean dropout goes to 0 (boundary_no_dropout), read first. "" when the edge has no reading.
+clv_check_edge_reading <- function(model, name, at) {
+  two <- CLV_PAIRS[[model]]$dropout
+  towards <- if (!is.null(two) && identical(name, two[[1L]])) "low" else "high"
+  if (!is.null(two) && name %in% two && any(at$pair == "" & at$side == towards)) return("boundary_no_dropout")
+  if (any(at$pair != "")) return("boundary_homogeneous")
   ""
 }
 

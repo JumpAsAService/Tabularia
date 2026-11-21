@@ -361,11 +361,14 @@ TAB_COMMON_TESTS[["customer_lifetime: the optimizer's fallback, the standard err
   z <- stats::qnorm(0.95)
   .tab_expect(.clv_rel(f2$ci_low, exp(f2$log_par - z * sqrt(diag(v)))) < 1e-12 && all(f2$ci_low > 0 & f2$ci_low < f2$par & f2$par < f2$ci_high), "intervals on the log scale")
   .tab_expect(abs(f2$aic - (8 - 2 * f2$log_lik)) < 1e-9 && abs(f2$bic - (4 * log(s2$n) - 2 * f2$log_lik)) < 1e-9, "AIC and BIC")
-  # `auto` keeps the highest log-likelihood, a tie the first, and a model out of any plausible range is not chosen
-  cand <- function(ll, par = rep(1, 4), conv = TRUE) list(p = list(log_lik = ll, par = par, converged = conv))
+  # `auto` keeps the highest log-likelihood, a tie the first, and a model whose end point is numerical noise (`fault`) is never
+  # chosen, whatever its parameters; a large estimate alone excludes nothing
+  cand <- function(ll, par = rep(1, 4), conv = TRUE, fault = FALSE) list(p = list(log_lik = ll, par = par, converged = conv && !fault, fault = fault))
   .tab_expect(clv_choose(list(cand(-10), cand(-9), cand(-11)), "auto") == 2L, "the highest")
   .tab_expect(clv_choose(list(cand(-9), cand(-9 + 1e-8), cand(-11)), "auto") == 1L, "a tie")
-  .tab_expect(clv_choose(list(cand(-10), cand(7e108, par = c(1e120, 1, 1, 1)), cand(-11)), "auto") == 1L, "noise")
+  .tab_expect(clv_choose(list(cand(-10), cand(4.9e24, par = c(1.4e35, 8.1e67, 5, 0.04), fault = TRUE), cand(-11)), "auto") == 1L, "noise")
+  .tab_expect(clv_choose(list(cand(-10, conv = FALSE), cand(4.9e24, fault = TRUE), cand(-11, conv = FALSE)), "auto") == 1L, "noise, none converged")
+  .tab_expect(clv_choose(list(cand(-10), cand(-9, par = c(1e12, 1e13, 1, 1))), "auto") == 2L, "a large estimate is no reason")
   .tab_expect(clv_choose(list(cand(-10, conv = FALSE), cand(-12), cand(-11, conv = FALSE)), "auto") == 2L, "converged first")
   .tab_expect(clv_choose(list(cand(-10), cand(-9)), "mbg_nbd") == 1L, "a model asked for")
   .tab_expect(identical(clv_candidates("clv", list(purchase_model = "auto")), c("pareto_nbd", "bg_nbd", "mbg_nbd")) &&
@@ -414,12 +417,24 @@ TAB_COMMON_TESTS[["customer_lifetime: the CLV, the holdout, the classes and the 
   .tab_expect(h$n == 3L && h$observed == 10 && h$expected == 8 && abs(h$rel_error + 0.2) < 1e-15 && abs(h$mae - 2 / 3) < 1e-15 &&
               abs(h$rmse - sqrt(2 / 3)) < 1e-15 && h$correlation > 0.9, "holdout numbers")
   .tab_expect(is.null(clv_holdout(c(1, 2), c(NA, NA))), "no holdout")
-  # the classes: pooled from the top until the last expects 5
+  # the classes: adjacent counts pooled from the top until every class expects 5 (Cochran's rule), not only the last
   cl <- clv_pool_classes(c(50, 30, 12, 5, 2, 1), c(48, 33, 10, 6, 2.5, 0.5))
   .tab_expect(identical(cl$x0, c(0, 1, 2, 3)) && identical(cl$x1, c(0, 1, 2, NA)) && cl$observed[[4L]] == 8 && cl$expected[[4L]] == 9 &&
               identical(cl$observed[1:3], c(50, 30, 12)), "pooling")
   cl <- clv_pool_classes(c(10), c(10))
   .tab_expect(length(cl$x0) == 1L, "a single class")
+  # a long tail: counts 0…40 whose expected numbers fall below 5 long before the last; every class expects 5 or more,
+  # the classes are adjacent runs, and nothing is lost
+  e <- c(400, 150, 60, 25, 4, 3, 2.5, 2, 6, 1.5, rep(0.4, 30), 3)
+  o <- round(e) + c(1, -1, 0, 2, 0, 1, 0, 0, -2, 1, rep(0, 30), 0)
+  cl <- clv_pool_classes(o, e)
+  .tab_expect(all(cl$expected >= 5) && identical(cl$x0[-1L], cl$x1[-length(cl$x1)] + 1) && cl$x0[[1L]] == 0 && is.na(cl$x1[[length(cl$x1)]]) &&
+              abs(sum(cl$expected) - sum(e)) < 1e-9 && sum(cl$observed) == sum(o) && length(cl$x0) < 12L, "every class expects 5: ",
+              paste(cl$x0, cl$x1, signif(cl$expected, 3), collapse = " | "))
+  .tab_expect(identical(clv_class_of(c(0, 3, 4, 5, 39, 400), cl), findInterval(c(0, 3, 4, 5, 39, 400), cl$x0)) && clv_class_of(0, cl) == 1L, "the class of a count")
+  # a small class at the bottom joins the class above it
+  cl <- clv_pool_classes(c(2, 9, 30), c(3, 8, 31))
+  .tab_expect(identical(cl$x0, c(0, 2)) && identical(cl$x1, c(1, NA)) && identical(cl$expected, c(11, 31)), "the bottom's remainder")
   # the frequency check: observed customers drawn from the model are not rejected, and the degrees of freedom are classes − 1 − 4
   set.seed(31)
   par_m <- c(0.5, 6, 0.9, 1.6)
@@ -511,8 +526,8 @@ TAB_COMMON_TESTS[["customer_lifetime: a fit gives its rows, its output, its card
   hf <- df[df$section == "hist" & df$level == "frequency" & df$level_2 == "observed", ]
   hn <- df[df$section == "hist" & df$level == "holdout" & df$stat == "count", ]
   k <- nrow(hm)
-  .tab_expect(k > 2L && identical(hm$x0, hf$x0) && identical(hm$x1, hf$x1) && is.na(hm$x1[[k]]) && !anyNA(hm$x1[-k]) && identical(hm$x1[-k], hm$x0[-k]),
-              "the holdout's classes carry the frequency's bounds, the last open")
+  .tab_expect(k > 2L && identical(hm$x0, hf$x0) && identical(hm$x1, hf$x1) && is.na(hm$x1[[k]]) && !anyNA(hm$x1[-k]) && all(hm$x1[-k] >= hm$x0[-k]) &&
+              identical(hm$x0[-1L], hm$x1[-k] + 1), "the holdout's classes carry the frequency's bounds, adjacent, the last open")
   .tab_expect(nrow(hn) == k && identical(hn$x1, hm$x1) && all(hn$level_2 == "customers") && sum(hn$value) == sum(!is.na(S$h[!is.na(S$id)])), "the holdout's customers by class")
   # the output: the input's columns and the predictions, NULL on the row left out
   out <- res$output
@@ -635,4 +650,149 @@ TAB_COMMON_TESTS[["customer_lifetime: the spend points are capped with the large
   tab_seed(task)
   again <- tab_results_frame(clv_results(task, clv_fit(task, "bg_bb", bb), bb)$rows)
   .tab_expect(identical(again$value, df$value) && identical(again$x0, df$x0), "the same seed, the same points")
+}
+
+# ── B10: the guard, the stable forms, GSL's hidden failures, the quadrature, Predict's rows and cards ─────
+# The integral form of BG/NBD's and MBG/NBD's expected transactions by R's adaptive integrate() on u = log p:
+# the reference of the quadrature and of the closed forms where GSL fails.
+.clv_cet_integrate <- function(par, t, x, T, palive, shift) {
+  vapply(seq_along(x), function(i) {
+    f <- function(u) {
+      p <- exp(u)
+      g <- -expm1(-(par[[1L]] + x[[i]]) * log1p(p * t / (par[[2L]] + T[[i]])))
+      exp(log(g) + (par[[3L]] - 1) * u + (par[[4L]] + x[[i]] + shift - 1) * log1p(-p) - lbeta(par[[3L]], par[[4L]] + x[[i]] + shift))
+    }
+    palive[[i]] * stats::integrate(f, -200, 0, rel.tol = 1e-13, subdivisions = 5000L, stop.on.error = FALSE)$value
+  }, 0)
+}
+
+TAB_COMMON_TESTS[["customer_lifetime: the guard against a likelihood of numerical noise, and the stable forms of BG/NBD and MBG/NBD"]] <- function(code) {
+  # log Γ(r + x) − log Γ(r) keeps its digits where r is huge, and equals the difference of lgammas where that has them
+  big <- clv_lgamma_ratio(1e35, c(0, 1, 7, 20000))
+  .tab_expect(.clv_rel(big[-1L], c(1, 7, 20000) * log(1e35)) < 1e-14 && big[[1L]] == 0, "the ratio at r = 1e35: ", paste(big, collapse = " "))
+  x0 <- 0:40
+  .tab_expect(max(abs(clv_lgamma_ratio(0.73, x0) - (lgamma(0.73 + x0) - lgamma(0.73)))) < 1e-12, "the ratio at r = 0.73")
+  # the stable BG/NBD is CLVTools' likelihood where CLVTools' has its digits
+  x <- c(0, 1, 3, 7, 12, 2, 5000)
+  tx <- c(0, 10.5, 30.2, 38.9, 20, 2.5, 99.9)
+  T <- c(39, 39, 38.4, 39, 52, 26.5, 100)
+  for (par in list(c(0.24, 4.4, 0.79, 2.4), c(3.7, 0.52, 1.25, 7.5), c(0.9, 7.9, 0.37, 6.45))) {
+    .tab_expect(max(abs(clv_bgnbd_ll_ind(par, x, tx, T) - clv_ll_ind("bg_nbd", par, x, tx, T))) < 1e-10, "the stable BG/NBD at ", paste(par, collapse = " "))
+  }
+  # where r and α are huge, CLVTools' sum is noise and the stable one is not: the guard says so
+  bad <- c(1.35968e35, 8.14935e67, 5.08702, 0.0449367)
+  comp <- clv_compress(x, tx, T)
+  stable <- clv_nll("bg_nbd", comp, stable = TRUE)(log(bad))
+  .tab_expect(is.finite(stable) && stable > 0, "the stable value at the broken point: ", stable)
+  .tab_expect(!clv_sound("bg_nbd", comp, log(bad), -1e24) && clv_sound("bg_nbd", comp, log(bad), stable), "the guard at the broken point")
+  good <- c(0.24, 4.4, 0.79, 2.4)
+  .tab_expect(clv_sound("bg_nbd", comp, log(good), clv_nll("bg_nbd", comp)(log(good))), "the guard where CLVTools is right")
+  .tab_expect(clv_sound("pareto_nbd", comp, log(c(0.55, 10.6, 0.61, 11.7)), clv_nll("pareto_nbd", comp)(log(c(0.55, 10.6, 0.61, 11.7)))), "the guard, Pareto/NBD")
+  # a customer without repeat purchases has a probability: a log-likelihood above 0 is a broken computation
+  .tab_expect(!clv_sound("mbg_nbd", list(x = c(0, 2), tx = c(0, 3), T = c(10, 10), n = c(1, 1)), log(c(1, 1, 1, 1)), -0.1 + 10), "a sum that is not the customers'")
+  # MBG/NBD's stable form at huge r and α: the limit of a Poisson rate r/α, P(no purchase in T) = exp(−T r/α)·(the dropout's part)
+  r <- 1e30
+  pm <- c(r, r / 0.3, 0.5, 2)
+  l0 <- clv_mbg_ll_ind(pm, 0, 0, 10)
+  want <- log(exp(lbeta(0.5, 3) - lbeta(0.5, 2) - 3) + exp(lbeta(1.5, 2) - lbeta(0.5, 2)))
+  .tab_expect(abs(l0 - want) < 1e-12 && l0 <= 0, "MBG/NBD at r = 1e30: ", l0, " against ", want)
+  .tab_expect(is.finite(clv_mbg_palive(pm, 3, 5, 10)) && abs(clv_mbg_palive(pm, 3, 5, 10) - 1 / (1 + 0.5 / 5 * exp(0.3 * 5))) < 1e-12, "MBG/NBD's P(alive) at r = 1e30")
+}
+
+TAB_COMMON_TESTS[["customer_lifetime: BG/NBD's expected transactions see GSL's failures, and the quadrature equals integrate() where it is used"]] <- function(code) {
+  # the configuration of the review: GSL's status is not 0, CLVTools' CET gives 426, the integral 125
+  par <- c(2.57, 0.96, 1.07, 24)
+  ce <- clv_cet("bg_nbd", par, 520, 18, 1, 1.14)
+  ref <- .clv_cet_integrate(par, 520, 18, 1.14, clv_palive("bg_nbd", par, 18, 1, 1.14), 0)
+  clvtools <- clv_fn("bgnbd_nocov_CET")(par[[1L]], par[[2L]], par[[3L]], par[[4L]], 520, 18, 1, 1.14)
+  .tab_expect(isTRUE(attr(ce, "quadrature")) && .clv_rel(as.vector(ce), ref) < 1e-9 && .clv_rel(clvtools, ref) > 0.1,
+              "the hidden failure: runner ", as.vector(ce), ", integrate ", ref, ", CLVTools ", clvtools)
+  # where GSL's status is 0 the closed form written here is CLVTools'
+  x <- c(0, 1, 3, 7, 12, 2)
+  tx <- c(0, 10.5, 30.2, 38.9, 20, 2.5)
+  T <- c(39, 39, 38.4, 39, 52, 26.5)
+  for (t in c(1, 26, 520)) {
+    pg <- c(0.24, 4.4, 0.79, 2.4)
+    mine <- clv_bgnbd_cet_closed(pg, t, x, tx, T)
+    theirs <- clv_fn("bgnbd_nocov_CET")(pg[[1L]], pg[[2L]], pg[[3L]], pg[[4L]], t, x, tx, T)
+    .tab_expect(.clv_rel(mine, theirs) < 1e-12, "the closed form against CLVTools at t = ", t, ": ", .clv_rel(mine, theirs))
+  }
+  # the quadrature where 64 Gauss-Jacobi nodes were 0.5-2 % off (x of hundreds to tens of thousands, T = 2, t = 520), and an ordinary grid
+  xs <- c(0, 1, 5, 200, 1000, 5000, 20000)
+  for (spec in list(list(m = "bg_nbd", par = c(0.243, 4.414, 0.793, 2.426)), list(m = "mbg_nbd", par = c(0.525, 6.183, 0.891, 1.614)),
+                    list(m = "bg_nbd", par = c(2.57, 0.96, 1.07, 24)), list(m = "mbg_nbd", par = c(0.9, 7.9, 0.15, 0.4)))) {
+    for (TT in c(2, 39)) for (t in c(1, 52, 520)) {
+      txs <- ifelse(xs > 0, 0.99 * TT, 0)
+      sh <- if (spec$m == "mbg_nbd") 1 else 0
+      pa <- clv_palive(spec$m, spec$par, xs, txs, rep(TT, length(xs)))
+      q <- clv_cet_quadrature(spec$par, t, xs, rep(TT, length(xs)), pa, sh)
+      ref <- .clv_cet_integrate(spec$par, t, xs, rep(TT, length(xs)), pa, sh)
+      .tab_expect(.clv_rel(q, ref) < 1e-10, spec$m, " T ", TT, " t ", t, ": ", .clv_rel(q, ref))
+    }
+  }
+}
+
+TAB_COMMON_TESTS[["customer_lifetime: Predict reads its rows as the fit reads its summary, and refuses a card that does not hold a fit"]] <- function(code) {
+  card <- list(inputs = list(list(name = "x"), list(name = "tx"), list(name = "T"), list(name = "m")),
+               customer_lifetime = list(node = "clv", time_unit = "week", purchase_model = "bg_nbd",
+                                        purchases = list(model = "bg_nbd", params = list(r = 0.24, alpha = 4.4, a = 0.79, b = 2.4)),
+                                        spend = list(model = "gamma_gamma", params = list(p = 6.25, q = 3.74, gamma = 15.44)),
+                                        horizon = 52, discount_rate = 0.1, margin = 1))
+  df <- data.frame(x = c(2, 2, 3, 0), tx = c(10, 10, 5, 0), T = c(39, 39, 39, 20), m = c(20, Inf, 30, NA))
+  got <- clv_predict_frame(card, df)
+  .tab_expect(got$n_null == 1L && got$n_bad == 0L && is.na(got$predictions$clv[[2L]]) && is.na(got$predictions$transactions[[2L]]) &&
+              all(is.finite(got$predictions$clv[-2L])), "an infinite spend is a NULL row, as the fit refuses it")
+  # the order of a card's parameters does not matter, their names do
+  shuffled <- card
+  shuffled$customer_lifetime$purchases$params <- list(b = 2.4, a = 0.79, alpha = 4.4, r = 0.24)
+  shuffled$customer_lifetime$spend$params <- list(gamma = 15.44, q = 3.74, p = 6.25)
+  .tab_expect(identical(clv_predict_frame(shuffled, df)$predictions, got$predictions), "the parameters by name")
+  refused <- function(change) {
+    c2 <- card
+    c2$customer_lifetime <- utils::modifyList(c2$customer_lifetime, change)
+    .tab_refused_with("bad_card", clv_predict_frame(c2, df))
+  }
+  m <- refused(list(purchases = list(model = "lifetime_magic"), purchase_model = "lifetime_magic"))
+  .tab_expect(grepl("purchases model «lifetime_magic» is not one the node clv fits", m, fixed = TRUE) && grepl("fit it again", m, fixed = TRUE), m)
+  .tab_expect(grepl("node clv", refused(list(purchases = list(model = "bg_bb"), purchase_model = "bg_bb")), fixed = TRUE), "a node that does not fit the model")
+  .tab_expect(grepl("its node is not clv or bg_bb", refused(list(node = "survival")), fixed = TRUE), "an unknown node")
+  .tab_expect(grepl("purchase model and its parameters' model differ", refused(list(purchase_model = "pareto_nbd")), fixed = TRUE), "the two names differ")
+  .tab_expect(grepl("parameter a is not a positive number", refused(list(purchases = list(params = list(a = -1)))), fixed = TRUE), "a negative parameter")
+  .tab_expect(grepl("parameter b is not a positive number", refused(list(purchases = list(params = list(b = "2.4")))), fixed = TRUE), "a parameter as text")
+  .tab_expect(grepl("spend parameter q is not a positive number", refused(list(spend = list(params = list(q = Inf)))), fixed = TRUE), "an infinite parameter")
+  c3 <- card
+  c3$customer_lifetime$purchases$params$alpha <- NULL
+  .tab_expect(grepl("parameter alpha is not a positive number", .tab_refused_with("bad_card", clv_predict_frame(c3, df)), fixed = TRUE), "a missing parameter")
+  # BG/BB rounds the recency and the opportunities as the fit does: 3 and 2.9999999999 are one row
+  bb <- list(inputs = list(list(name = "x"), list(name = "tx"), list(name = "T")),
+             customer_lifetime = list(node = "bg_bb", time_unit = "month", purchase_model = "bg_bb",
+                                      purchases = list(model = "bg_bb", params = list(alpha = 1.2, beta = 0.75, gamma = 0.66, delta = 2.78)),
+                                      horizon = 5, discount_rate = 0.1, margin = 1))
+  rows <- data.frame(x = c(2, 2), tx = c(3, 2.9999999999), T = c(6, 6.0000000001))
+  pb <- clv_predict_frame(bb, rows)$predictions
+  .tab_expect(identical(pb[1L, ], pb[2L, ], ignore.environment = TRUE) || isTRUE(all.equal(pb[1L, ], pb[2L, ], tolerance = 0, check.attributes = FALSE)),
+              "BG/BB's rounding: ", paste(unlist(pb), collapse = " "))
+}
+
+TAB_COMMON_TESTS[["customer_lifetime: BG/BB's frequency check takes the PMF at every distinct number of opportunities"]] <- function(code) {
+  pb <- c(1.2, 0.75, 0.66, 2.78)
+  set.seed(3)
+  n <- sample(1:600, 2000, replace = TRUE)
+  s <- list(x = pmin(stats::rbinom(2000, n, 0.05), n), T = n, n = 2000L)
+  f <- clv_frequency_fit("bg_bb", pb, s)
+  .tab_expect(abs(sum(f$expected) - s$n) < 1e-6 && all(f$expected >= 5), "the expected customers add up to the customers: ", sum(f$expected))
+  # the cumulative sum of the PMF is the sum written out, at each n
+  for (k in c(0, 1, 4)) {
+    m <- c(1, 2, 5, 37, 300)
+    direct <- vapply(m, function(mm) {
+      if (k > mm) return(0)
+      v <- choose(mm, k) * exp(lbeta(1.2 + k, 0.75 + mm - k) - lbeta(1.2, 0.75) + lbeta(0.66, 2.78 + mm) - lbeta(0.66, 2.78))
+      if (mm - 1 >= k) {
+        i <- k:(mm - 1)
+        v <- v + sum(choose(i, k) * exp(lbeta(1.2 + k, 0.75 + i - k) - lbeta(1.2, 0.75) + lbeta(1.66, 2.78 + i) - lbeta(0.66, 2.78)))
+      }
+      v
+    }, 0)
+    .tab_expect(.clv_rel(clv_bgbb_pmf(pb, k, m)[direct > 0], direct[direct > 0]) < 1e-12 && all(clv_bgbb_pmf(pb, k, m)[direct == 0] == 0), "the PMF at k = ", k)
+  }
 }

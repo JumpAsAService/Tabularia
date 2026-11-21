@@ -131,15 +131,19 @@ txt_ <- function(key, text) list(key = key, text = text)
 params_of <- function(prefix, par, rel, from) unname(Map(function(k, v) num_(paste0(prefix, k), v, rel = rel, from = from), names(par), par))
 checks_ <- function(verdicts) unname(Map(function(k, v) txt_(paste0("assumption|", k, "||verdict"), v), names(verdicts), verdicts))
 
-# Tolerances (docs/specs/customer-lifetime-models.md, «As built, B3»), as measured: the runner's estimates against
-# the maximum found here to the end. The runner's L-BFGS-B stops at its default tolerance on the ridge BG/BB's four
-# parameters make: the parameters differ by at most 2.3e-4 relative on the donations' shape and 2.1e-3 on the cohorts
-# (the dropout's δ, whose standard error is far larger), so 5e-3; the log-likelihoods by 2e-7 and 7e-6 absolute, so
-# 5e-5; the quantities that are sums over the customers (expected transactions, P(alive), the CLV, the holdout) are
-# evaluated here at this script's maximum, and differ by at most 2.4e-5 and 1.7e-4 relative, so 1e-3.
-REL_PAR <- 5e-3
-LL_ABS <- 5e-5
-REL_SUM <- 1e-3
+# Tolerances (docs/specs/customer-lifetime-models.md, «As built, B3» and «As built, B10»), as measured: the runner's
+# estimates against the maximum found here to the end. Since B10 the runner's L-BFGS-B runs to tight tolerances
+# (CLV_TIGHT) on BG/BB's own likelihood, so the parameters differ by at most 7.1e-6 relative (2.1e-3 with optim's
+# defaults, on the ridge of the four parameters), tolerance 5e-5; the log-likelihoods by 1e-10 absolute, tolerance
+# 1e-8; the quantities that are sums over the customers (expected transactions, P(alive), the CLV, the holdout),
+# evaluated here at this script's maximum, by at most 1.3e-6 relative, tolerance 1e-5 (the holdout's relative error,
+# a small difference of two numbers, 1.6e-4, tolerance 1e-3). Gamma–Gamma keeps CLVTools' optimizer settings (the
+# clv node's spend is CLVTools' own): its parameters differ by 2.4e-5, tolerance 2e-4, its log-likelihood by 3e-8.
+REL_PAR <- 5e-5
+LL_ABS <- 1e-8
+REL_SUM <- 1e-5
+REL_SPEND <- 2e-4
+LL_SPEND <- 1e-6
 
 types_of <- function(d) {
   t <- as.list(stats::setNames(rep("number", ncol(d)), names(d)))
@@ -193,22 +197,22 @@ cases[[length(cases) + 1L]] <- case_(
          txt_("model|||time_unit", "year"), txt_("model|||formula", "x: transactions, t_x: opportunity of the last, n: opportunities, one opportunity is a year"),
          num_("model|||n", 1000), num_("model|||n_repeaters", sum(A$x > 0)), num_("model|||horizon", 5),
          num_("model|||log_lik", mA$log_lik, abs = LL_ABS, from = "BG/BB maximized here"),
-         num_("model|||aic", -2 * mA$log_lik + 8, rel = 1e-9, abs = 2e-6, from = "BG/BB maximized here"),
+         num_("model|||aic", -2 * mA$log_lik + 8, rel = 1e-9, abs = 2 * LL_ABS, from = "BG/BB maximized here"),
          num_("model|||expected_transactions", sum(cetA), rel = REL_SUM, from = "the sum over the opportunities, here"),
          num_("model|||mean_p_alive", mean(palA), rel = REL_SUM, from = "BG/BB definitions, here"),
          num_("model|||holdout_observed", sum(A$later_gifts)),
          num_("model|||holdout_expected", sum(holdA), rel = REL_SUM, from = "the sum over the opportunities, here"),
-         num_("assumption|holdout||value", (sum(holdA) - sum(A$later_gifts)) / sum(A$later_gifts), rel = REL_SUM * 10, from = "the sum over the opportunities, here"),
+         num_("assumption|holdout||value", (sum(holdA) - sum(A$later_gifts)) / sum(A$later_gifts), rel = REL_SUM * 100, from = "the sum over the opportunities, here"),
          num_("model|||spend_n", sum(A$x > 0)), num_("model|||discount_per_period", 0.1, rel = 1e-12), num_("model|||margin", 1),
          num_("model|||clv_total", sum(clvA$clv), rel = REL_SUM, from = "the CLV's definition, here"),
          num_("model|||discounted_transactions", sum(clvA$discounted), rel = REL_SUM, from = "the CLV's definition, here"),
-         num_("model|||spend_log_lik", ggA$log_lik, abs = LL_ABS, from = "Gamma-Gamma maximized here"),
+         num_("model|||spend_log_lik", ggA$log_lik, abs = LL_SPEND, from = "Gamma-Gamma maximized here"),
          num_("assumption|spend_independence||value", hA$r, from = "cor()"),
          num_("assumption|spend_independence||p_value", hA$p, rel = 1e-8, from = "lm(), HC3"),
          num_("assumption|sample_size||value", 1000), num_("assumption|sample_size||count", sum(A$x > 0)),
          num_("assumption|horizon_length||value", 5 / 6)),
     params_of("model|||param_", mA$par, REL_PAR, "BG/BB maximized here"),
-    params_of("model|||spend_param_", ggA$par, REL_PAR, "Gamma-Gamma maximized here"),
+    params_of("model|||spend_param_", ggA$par, REL_SPEND, "Gamma-Gamma maximized here"),
     checks_(c(convergence = "ok", frequency_fit = "ok", spend_independence = "ok", spend_tail = "ok"))),
   "value")
 

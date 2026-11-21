@@ -213,6 +213,83 @@ mbgnbd_max <- function(d) {
   list(par = stats::setNames(exp(o$par), c("r", "alpha", "a", "b")), log_lik = -f(o$par))
 }
 
+# The CLV from its definition, Σ_k margin · E[M] · [CET(k) − CET(k − 1)] / (1 + d)^k over the horizon's weeks, d the
+# week's rate of the annual one; `cet(k)` the customers' expected purchases in the next k weeks, computed here WITHOUT
+# the runner's CET (CLVTools' predict(), or the integral form by integrate()), and E[M] Gamma–Gamma's expected spend.
+clv_by_definition <- function(cet, horizon, annual, margin, gg, d) {
+  rate <- (1 + annual)^(7 / 365.25) - 1
+  g <- stats::setNames(as.numeric(gg), c("p", "q", "gamma"))
+  em <- rep(g[["p"]] * g[["gamma"]] / (g[["q"]] - 1), nrow(d))
+  u <- d$frequency > 0 & !is.na(d$avg_spend)
+  em[u] <- (g[["gamma"]] + d$frequency[u] * d$avg_spend[u]) * g[["p"]] / (g[["p"]] * d$frequency[u] + g[["q"]] - 1)
+  prev <- 0
+  disc <- 0
+  for (k in seq_len(horizon)) {
+    cur <- cet(k)
+    disc <- disc + (cur - prev) / (1 + rate)^k
+    prev <- cur
+  }
+  sum(margin * em * disc)
+}
+
+# MBG/NBD's expected purchases in the next t weeks from the integral form (the model's definition: P(alive) times the
+# NBD's expectation averaged over the dropout probability p ~ Beta(a, b + x + 1)), by R's integrate() on u = log p.
+mbgnbd_cet_integrate <- function(par, t, x, tx, T) {
+  r <- par[[1L]]; al <- par[[2L]]; a <- par[[3L]]; b <- par[[4L]]
+  palive <- 1 / (1 + a / (b + x) * ((al + T) / (al + tx))^(r + x))
+  vapply(seq_along(x), function(i) {
+    f <- function(u) {
+      p <- exp(u)
+      g <- 1 - ((al + T[[i]]) / (al + T[[i]] + p * t))^(r + x[[i]])
+      exp(log(g) + (a - 1) * u + (b + x[[i]]) * log1p(-p) - lbeta(a, b + x[[i]] + 1))
+    }
+    palive[[i]] * stats::integrate(f, -200, 0, rel.tol = 1e-12, subdivisions = 5000L)$value
+  }, 0)
+}
+
+# The BG/NBD log-likelihood (Fader, Hardie, Lee 2005), written here from the article in the form that keeps its digits
+# where r and α are huge (Γ(r + x)/Γ(r) as a product, r·log(α/(α + t)) as −r·log1p(t/α)), and its maximum to the end.
+bgnbd_ll <- function(par, x, tx, T) {
+  r <- par[[1L]]; al <- par[[2L]]; a <- par[[3L]]; b <- par[[4L]]
+  g <- vapply(x, function(k) if (k > 0) sum(log(r + seq_len(k) - 1)) else 0, 0)
+  A <- g - r * log1p(T / al) - x * log(al + T) + lbeta(a, b + x) - lbeta(a, b)
+  B <- ifelse(x > 0, g - r * log1p(tx / al) - x * log(al + tx) + lbeta(a + 1, pmax(b + x - 1, 1e-300)) - lbeta(a, b), -Inf)
+  M <- pmax(A, B)
+  sum(M + log(exp(A - M) + exp(B - M)))
+}
+bgnbd_max <- function(d) {
+  f <- function(lp) -bgnbd_ll(exp(lp), d$frequency, d$recency, d$age)
+  o <- stats::optim(log(c(1, 3, 1, 3)), f, method = "Nelder-Mead", control = list(maxit = 20000, reltol = 1e-14))
+  for (k in 1:3) {
+    o <- stats::optim(o$par, f, method = "BFGS", control = list(maxit = 10000, reltol = 1e-16))
+    n <- stats::nlminb(o$par, f, control = list(eval.max = 10000, iter.max = 10000, rel.tol = 1e-15, x.tol = 1e-12))
+    o$par <- n$par
+  }
+  list(par = stats::setNames(exp(o$par), c("r", "alpha", "a", "b")), log_lik = -f(o$par))
+}
+
+# BG/NBD customers in continuous time (no whole days), ages from 0 to 158 weeks, more of them young (the density
+# falls linearly, as in a base that acquires more customers every year): the process the BG/NBD describes, drawn
+# without the rounding of a transaction log.
+draw_continuous <- function(seed, n, par) {
+  set.seed(seed)
+  T <- 158 * (1 - sqrt(stats::runif(n)))
+  lam <- stats::rgamma(n, par[[1L]], rate = par[[2L]])
+  p <- stats::rbeta(n, par[[3L]], par[[4L]])
+  x <- tx <- numeric(n)
+  for (i in seq_len(n)) {
+    cur <- 0
+    repeat {
+      cur <- cur + stats::rexp(1, lam[[i]])
+      if (cur > T[[i]]) break
+      x[[i]] <- x[[i]] + 1
+      tx[[i]] <- cur
+      if (stats::runif(1) < p[[i]]) break
+    }
+  }
+  data.frame(customer = paste0("j", seq_len(n)), frequency = x, recency = tx, age = T, stringsAsFactors = FALSE)
+}
+
 # Pearson's r of the frequency and the average spend over the repeaters, and the slope's HC3 test, through lm().
 hc3 <- function(d) {
   u <- d[d$frequency > 0 & !is.na(d$avg_spend), ]
@@ -240,18 +317,23 @@ num_ <- function(key, value, rel = 1e-9, abs = 1e-12, from = NULL) {
 txt_ <- function(key, text) list(key = key, text = text)
 params_of <- function(prefix, par, rel, from) unname(Map(function(k, v) num_(paste0(prefix, k), v, rel = rel, from = from), names(par), par))
 
-# The tolerances (docs/specs/customer-lifetime-models.md, «Reference values», as measured by lot B2): the
+# The tolerances (docs/specs/customer-lifetime-models.md, «Reference values», as measured by lot B2 and B10): the
 # runner's estimates against CLVTools' public fit on the same customers, relative 1e-7 (measured: at most
 # 8.7e-9 for Pareto/NBD, 3.4e-8 for Gamma-Gamma; the two minimize the same function from the same start, and
 # a last-bit difference in the summary CLVTools derives from the dates moves where L-BFGS-B stops along a flat
 # direction); the log-likelihoods 1e-6 absolute (measured 3e-12); the expectations against CLVTools'
-# predict(), relative 1e-7 (measured 6e-10); the MBG/NBD against this script's own maximum, relative 1e-3 on
-# the parameters (measured 5.3e-4: the runner's L-BFGS-B stops at its default tolerance on a flat ridge, far
-# inside the standard errors) and 1e-6 absolute on the log-likelihood (measured 1.5e-7).
+# predict(), relative 1e-7 (measured 6e-10; the CLV of case A from predict() week by week 4.3e-12). The MBG/NBD
+# against this script's own maximum: B10 runs the runner's L-BFGS-B to its tight tolerances (CLV_TIGHT), so the
+# parameters are within 1.8e-6 relative (5.3e-4 with optim's defaults), tolerance 1e-5; the log-likelihood
+# 1e-6 absolute (measured 6e-12); the CLV of case C, whose expectations are integrate()'s at this script's
+# maximum, 5.6e-8, tolerance 1e-6. The BG/NBD of case J, found by the runner's fallback on the stable form,
+# against the maximum written here: 3.8e-6 relative on the parameters, tolerance 1e-5.
 REL_A <- 1e-7
 LL_ABS <- 1e-6
 REL_PREDICT <- 1e-7
-REL_MBG <- 1e-3
+REL_MBG <- 1e-5
+REL_MBG_SUM <- 1e-6
+REL_FALLBACK <- 1e-5
 
 fitted_case <- function(id, data, params, expect, variant) {
   list(id = id, model = "clv", variant = variant, data = paste0("data/", data$file), types = clv_types(data$summary),
@@ -281,6 +363,13 @@ mbA <- mbgnbd_max(A$summary)
 llA <- c(pareto_nbd = as.numeric(logLik(pnA)), bg_nbd = as.numeric(logLik(bgA)), mbg_nbd = mbA$log_lik)
 chosenA <- names(llA)[llA >= max(llA) - 1e-6][[1L]]
 hA <- hc3(A$summary)
+# the CLV of the model chosen (BG/NBD), its expectations from CLVTools' predict() week by week, not the runner's CET
+stopifnot(identical(chosenA, "bg_nbd"))
+cetA <- function(k) {
+  pr <- predict(bgA, prediction.end = k, predict.spending = FALSE, verbose = FALSE)
+  pr$CET[match(A$summary$customer, pr$Id)]
+}
+clvA <- clv_by_definition(cetA, 52, 0.1, 1, coef(ggA), A$summary)
 fitted[[length(fitted) + 1L]] <- fitted_case(
   "clv BG/NBD customers, auto with a spend and a holdout", A,
   clv_params(spend = "avg_spend", purchase_model = "auto", holdout_transactions = "holdout_purchases", holdout_length = 26, horizon = 52),
@@ -297,7 +386,8 @@ fitted[[length(fitted) + 1L]] <- fitted_case(
     list(num_("model|||spend_log_lik", as.numeric(logLik(ggA)), abs = LL_ABS, from = "CLVTools gg()"),
          num_("assumption|spend_independence||value", hA$r, from = "cor()"), num_("assumption|spend_independence||p_value", hA$p, rel = 1e-8, from = "lm(), HC3"),
          num_("assumption|sample_size||value", 400), num_("assumption|sample_size||count", sum(A$summary$frequency > 0)),
-         num_("assumption|horizon_length||value", 52 / max(A$summary$age))),
+         num_("assumption|horizon_length||value", 52 / max(A$summary$age)),
+         num_("model|||clv_total", clvA, rel = REL_PREDICT, from = "CLVTools predict() week by week, the CLV's definition here")),
     checks_(c(convergence = "ok", frequency_fit = "ok", spend_independence = "ok", spend_tail = "ok"))),
   "value")
 
@@ -326,10 +416,13 @@ C$file <- "clv_mbgnbd.csv"
 write_exact(C$summary, C$file)
 mbC <- mbgnbd_max(C$summary)
 ggC <- suppressWarnings(gg(clv_log(C), verbose = FALSE))
+clvC <- clv_by_definition(function(k) mbgnbd_cet_integrate(mbC$par, k, C$summary$frequency, C$summary$recency, C$summary$age), 52, 0.08, 0.4,
+                          coef(ggC), C$summary)
 fitted[[length(fitted) + 1L]] <- fitted_case(
   "clv MBG/NBD customers with a spend", C, clv_params(spend = "avg_spend", purchase_model = "mbg_nbd", discount_rate = 0.08, margin = 0.4),
   c(list(txt_("model|||purchase_model", "mbg_nbd"), num_("model|||log_lik", mbC$log_lik, abs = LL_ABS, from = "MBG/NBD maximized here"),
-         num_("model|||horizon", 52), num_("model|||margin", 0.4), num_("model|||discount_per_period", 1.08^(7 / 365.25) - 1, rel = 1e-12)),
+         num_("model|||horizon", 52), num_("model|||margin", 0.4), num_("model|||discount_per_period", 1.08^(7 / 365.25) - 1, rel = 1e-12),
+         num_("model|||clv_total", clvC, rel = REL_MBG_SUM, from = "MBG/NBD maximized here, its CET by integrate(), the CLV's definition here")),
     params_of("model|||param_", mbC$par, REL_MBG, "MBG/NBD maximized here"),
     params_of("model|||spend_param_", stats::setNames(coef(ggC), c("p", "q", "gamma")), REL_A, "CLVTools gg()"),
     checks_(c(convergence = "ok", spend_independence = "ok"))),
@@ -415,6 +508,25 @@ fitted[[length(fitted) + 1L]] <- fitted_case(
        seed = 1),
   list(num_("model|||n", 30), txt_("model|||time_unit", "month"), txt_("model|||formula", "x: frequency, t_x: recency, T: age, in months")),
   "value")
+
+# J. BG/NBD customers whose fit by CLVTools' own settings ends in numerical noise (B10): optimx's Nelder–Mead reaches the
+#    maximum, then its BFGS steps to r ≈ 1e35, α ≈ 1e67, where CLVTools' sum r·log α − (r + x)·log(α + T), two terms of
+#    1e37 that cancel, returns a log-likelihood of noise far above the maximum, and the expected purchases are 0. The
+#    parameters are those of the sample data's customers (r 0.9, α 7.9, a 0.37, b 6.45), the ages more of them young;
+#    seed 21 is the first of the draws below that fails this way (measured on CLVTools 0.12.1: a numerical accident, so a
+#    given draw is what reproduces it). The runner's guard sees it (the sum is not the customers' sum in the stable
+#    form), falls back on the stable likelihood and finds the maximum computed here to the end, with a form written here.
+J <- list(summary = draw_continuous(21, 300, c(0.9, 7.9, 0.37, 6.45)), file = "clv_bgnbd_noise.csv")
+write_exact(J$summary, J$file)
+mJ <- bgnbd_max(J$summary)
+fitted[[length(fitted) + 1L]] <- fitted_case(
+  "clv BG/NBD where CLVTools' sum turns to numerical noise", J, clv_params(purchase_model = "bg_nbd"),
+  c(list(txt_("model|||purchase_model", "bg_nbd"), txt_("model|||optimizer", "Nelder-Mead, L-BFGS-B (fallback)"),
+         txt_("model|||note_optimizer_fallback", "@optimizer_fallback"), num_("model|||converged", 1),
+         num_("model|||log_lik", mJ$log_lik, abs = LL_ABS, from = "BG/NBD maximized here, the stable form")),
+    params_of("model|||param_", mJ$par, REL_FALLBACK, "BG/NBD maximized here, the stable form"),
+    checks_(c(convergence = "ok"))),
+  "purchases")
 
 # I. A spend drawn with q = 0.8: no finite mean, the node stops; q as CLVTools' gg() finds it.
 I <- draw_customers(909, 200, "mbg_nbd", c(0.5, 6, 0.9, 1.6), 140:364, gg = c(6, 0.8, 15))

@@ -586,28 +586,28 @@
         {
           "key": "candidate|mbg_nbd||param_r",
           "value": 0.578149486815427,
-          "rel": 0.001,
+          "rel": 1e-05,
           "abs": 1e-12,
           "from": "MBG/NBD maximized here"
         },
         {
           "key": "candidate|mbg_nbd||param_alpha",
           "value": 6.67872650164916,
-          "rel": 0.001,
+          "rel": 1e-05,
           "abs": 1e-12,
           "from": "MBG/NBD maximized here"
         },
         {
           "key": "candidate|mbg_nbd||param_a",
           "value": 0.983436766448454,
-          "rel": 0.001,
+          "rel": 1e-05,
           "abs": 1e-12,
           "from": "MBG/NBD maximized here"
         },
         {
           "key": "candidate|mbg_nbd||param_b",
           "value": 1.85432142956598,
-          "rel": 0.001,
+          "rel": 1e-05,
           "abs": 1e-12,
           "from": "MBG/NBD maximized here"
         },
@@ -670,6 +670,13 @@
           "value": 1,
           "rel": 1e-09,
           "abs": 1e-12
+        },
+        {
+          "key": "model|||clv_total",
+          "value": 11413.7849950082,
+          "rel": 1e-07,
+          "abs": 1e-12,
+          "from": "CLVTools predict() week by week, the CLV's definition here"
         },
         {
           "key": "assumption|convergence||verdict",
@@ -843,30 +850,37 @@
           "abs": 1e-12
         },
         {
+          "key": "model|||clv_total",
+          "value": 3330.13491448966,
+          "rel": 1e-06,
+          "abs": 1e-12,
+          "from": "MBG/NBD maximized here, its CET by integrate(), the CLV's definition here"
+        },
+        {
           "key": "model|||param_r",
           "value": 0.332855909315814,
-          "rel": 0.001,
+          "rel": 1e-05,
           "abs": 1e-12,
           "from": "MBG/NBD maximized here"
         },
         {
           "key": "model|||param_alpha",
           "value": 4.52934486261156,
-          "rel": 0.001,
+          "rel": 1e-05,
           "abs": 1e-12,
           "from": "MBG/NBD maximized here"
         },
         {
           "key": "model|||param_a",
           "value": 1.77895474644542,
-          "rel": 0.001,
+          "rel": 1e-05,
           "abs": 1e-12,
           "from": "MBG/NBD maximized here"
         },
         {
           "key": "model|||param_b",
           "value": 5.27175387935793,
-          "rel": 0.001,
+          "rel": 1e-05,
           "abs": 1e-12,
           "from": "MBG/NBD maximized here"
         },
@@ -1219,6 +1233,89 @@
       "by": "make_reference.R"
     },
     {
+      "id": "clv BG/NBD where CLVTools' sum turns to numerical noise",
+      "model": "clv",
+      "variant": "purchases",
+      "data": "data/clv_bgnbd_noise.csv",
+      "types": {
+        "customer": "text",
+        "frequency": "number",
+        "recency": "number",
+        "age": "number"
+      },
+      "params": {
+        "customer": "customer",
+        "frequency": "frequency",
+        "recency": "recency",
+        "age": "age",
+        "time_unit": "week",
+        "alpha": 0.05,
+        "seed": 1,
+        "purchase_model": "bg_nbd"
+      },
+      "expect": [
+        {
+          "key": "model|||purchase_model",
+          "text": "bg_nbd"
+        },
+        {
+          "key": "model|||optimizer",
+          "text": "Nelder-Mead, L-BFGS-B (fallback)"
+        },
+        {
+          "key": "model|||note_optimizer_fallback",
+          "text": "@optimizer_fallback"
+        },
+        {
+          "key": "model|||converged",
+          "value": 1,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||log_lik",
+          "value": -4238.18301182522,
+          "rel": 1e-09,
+          "abs": 1e-06,
+          "from": "BG/NBD maximized here, the stable form"
+        },
+        {
+          "key": "model|||param_r",
+          "value": 0.875054080659907,
+          "rel": 1e-05,
+          "abs": 1e-12,
+          "from": "BG/NBD maximized here, the stable form"
+        },
+        {
+          "key": "model|||param_alpha",
+          "value": 7.36244905638147,
+          "rel": 1e-05,
+          "abs": 1e-12,
+          "from": "BG/NBD maximized here, the stable form"
+        },
+        {
+          "key": "model|||param_a",
+          "value": 0.766237112520447,
+          "rel": 1e-05,
+          "abs": 1e-12,
+          "from": "BG/NBD maximized here, the stable form"
+        },
+        {
+          "key": "model|||param_b",
+          "value": 17.264623268713,
+          "rel": 1e-05,
+          "abs": 1e-12,
+          "from": "BG/NBD maximized here, the stable form"
+        },
+        {
+          "key": "assumption|convergence||verdict",
+          "text": "ok"
+        }
+      ],
+      "refuses": null,
+      "by": "make_reference.R"
+    },
+    {
       "id": "refusal spend without a finite mean",
       "model": "clv",
       "variant": "value",
@@ -1316,27 +1413,27 @@
           "key": "model|||log_lik",
           "value": -3098.94080142256,
           "rel": 1e-09,
-          "abs": 5e-05,
+          "abs": 1e-08,
           "from": "BG/BB maximized here"
         },
         {
           "key": "model|||aic",
           "value": 6205.88160284512,
           "rel": 1e-09,
-          "abs": 2e-06,
+          "abs": 2e-08,
           "from": "BG/BB maximized here"
         },
         {
           "key": "model|||expected_transactions",
           "value": 1177.20442112711,
-          "rel": 0.001,
+          "rel": 1e-05,
           "abs": 1e-12,
           "from": "the sum over the opportunities, here"
         },
         {
           "key": "model|||mean_p_alive",
           "value": 0.4428588594281,
-          "rel": 0.001,
+          "rel": 1e-05,
           "abs": 1e-12,
           "from": "BG/BB definitions, here"
         },
@@ -1349,14 +1446,14 @@
         {
           "key": "model|||holdout_expected",
           "value": 1177.20442112711,
-          "rel": 0.001,
+          "rel": 1e-05,
           "abs": 1e-12,
           "from": "the sum over the opportunities, here"
         },
         {
           "key": "assumption|holdout||value",
           "value": 0.00444063236101767,
-          "rel": 0.01,
+          "rel": 0.001,
           "abs": 1e-12,
           "from": "the sum over the opportunities, here"
         },
@@ -1381,14 +1478,14 @@
         {
           "key": "model|||clv_total",
           "value": 26683.5966675126,
-          "rel": 0.001,
+          "rel": 1e-05,
           "abs": 1e-12,
           "from": "the CLV's definition, here"
         },
         {
           "key": "model|||discounted_transactions",
           "value": 904.614562405127,
-          "rel": 0.001,
+          "rel": 1e-05,
           "abs": 1e-12,
           "from": "the CLV's definition, here"
         },
@@ -1396,7 +1493,7 @@
           "key": "model|||spend_log_lik",
           "value": -2994.59230459215,
           "rel": 1e-09,
-          "abs": 5e-05,
+          "abs": 1e-06,
           "from": "Gamma-Gamma maximized here"
         },
         {
@@ -1434,49 +1531,49 @@
         {
           "key": "model|||param_alpha",
           "value": 1.17538389188545,
-          "rel": 0.005,
+          "rel": 5e-05,
           "abs": 1e-12,
           "from": "BG/BB maximized here"
         },
         {
           "key": "model|||param_beta",
           "value": 0.734188334742724,
-          "rel": 0.005,
+          "rel": 5e-05,
           "abs": 1e-12,
           "from": "BG/BB maximized here"
         },
         {
           "key": "model|||param_gamma",
           "value": 1.06975582583882,
-          "rel": 0.005,
+          "rel": 5e-05,
           "abs": 1e-12,
           "from": "BG/BB maximized here"
         },
         {
           "key": "model|||param_delta",
           "value": 6.09844061682158,
-          "rel": 0.005,
+          "rel": 5e-05,
           "abs": 1e-12,
           "from": "BG/BB maximized here"
         },
         {
           "key": "model|||spend_param_p",
           "value": 8.29701707434767,
-          "rel": 0.005,
+          "rel": 0.0002,
           "abs": 1e-12,
           "from": "Gamma-Gamma maximized here"
         },
         {
           "key": "model|||spend_param_q",
           "value": 3.83905487316535,
-          "rel": 0.005,
+          "rel": 0.0002,
           "abs": 1e-12,
           "from": "Gamma-Gamma maximized here"
         },
         {
           "key": "model|||spend_param_gamma",
           "value": 10.1123017212367,
-          "rel": 0.005,
+          "rel": 0.0002,
           "abs": 1e-12,
           "from": "Gamma-Gamma maximized here"
         },
@@ -1557,20 +1654,20 @@
           "key": "model|||log_lik",
           "value": -3046.87974111343,
           "rel": 1e-09,
-          "abs": 5e-05,
+          "abs": 1e-08,
           "from": "BG/BB maximized here"
         },
         {
           "key": "model|||expected_transactions",
           "value": 2017.34034714164,
-          "rel": 0.001,
+          "rel": 1e-05,
           "abs": 1e-12,
           "from": "the sum over the opportunities, here"
         },
         {
           "key": "model|||mean_p_alive",
           "value": 0.622803041447938,
-          "rel": 0.001,
+          "rel": 1e-05,
           "abs": 1e-12,
           "from": "BG/BB definitions, here"
         },
@@ -1583,28 +1680,28 @@
         {
           "key": "model|||param_alpha",
           "value": 1.22661075841747,
-          "rel": 0.005,
+          "rel": 5e-05,
           "abs": 1e-12,
           "from": "BG/BB maximized here"
         },
         {
           "key": "model|||param_beta",
           "value": 1.93013019265349,
-          "rel": 0.005,
+          "rel": 5e-05,
           "abs": 1e-12,
           "from": "BG/BB maximized here"
         },
         {
           "key": "model|||param_gamma",
           "value": 0.386030387868993,
-          "rel": 0.005,
+          "rel": 5e-05,
           "abs": 1e-12,
           "from": "BG/BB maximized here"
         },
         {
           "key": "model|||param_delta",
           "value": 3.56946029259356,
-          "rel": 0.005,
+          "rel": 5e-05,
           "abs": 1e-12,
           "from": "BG/BB maximized here"
         },

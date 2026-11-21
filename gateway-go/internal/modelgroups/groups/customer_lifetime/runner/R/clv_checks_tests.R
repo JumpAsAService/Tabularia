@@ -2,8 +2,12 @@
 # sides of what decides it, on fits made by hand (no optimizer runs here): a test's p-value against the
 # node's alpha, a fact's two states; the measures with a value and no verdict.
 
+# `edges`, `spend_edges`: the rows clv_edges() would give (param, side, pair), e.g. .clv_edge("a", "low").
+.clv_edge <- function(param, side = "high", pair = "") data.frame(param = param, side = side, pair = pair, stringsAsFactors = FALSE)
+
 .clv_check_fit <- function(model = "bg_nbd", par = c(r = 0.25, alpha = 4, a = 0.8, b = 2.5), spend = c(p = 6, q = 4, gamma = 15),
-                           alpha = 0.05, p_value = 0.03, df = 3, holdout = -0.12, vcov = TRUE, converged = TRUE) {
+                           alpha = 0.05, p_value = 0.03, df = 3, holdout = -0.12, vcov = TRUE, converged = TRUE,
+                           edges = clv_no_edges(), spend_edges = clv_no_edges()) {
   set.seed(4)
   n <- 200
   x <- stats::rpois(n, 1.5)
@@ -11,8 +15,8 @@
   k <- length(par)
   list(model = model, alpha = alpha, plan = list(horizon = 52),
        s = list(x = x, m = m, T = stats::runif(n, 20, 40), n = n, has_holdout = !is.null(holdout)),
-       purchases = list(par = par, converged = converged, vcov_log = if (vcov) diag(0.01, k) else NULL, gradient = rep(1e-4, k)),
-       spend = if (is.null(spend)) NULL else list(par = spend, converged = TRUE, vcov_log = diag(0.01, 3)),
+       purchases = list(model = model, par = par, converged = converged, vcov_log = if (vcov) diag(0.01, k) else NULL, gradient = rep(1e-4, k), edges = edges),
+       spend = if (is.null(spend)) NULL else list(model = "gamma_gamma", par = spend, converged = TRUE, vcov_log = diag(0.01, 3), edges = spend_edges),
        freq = list(statistic = 9.1, df = df, p_value = p_value, max_share_gap = 0.021, n_classes = df + 1 + k),
        holdout = if (is.null(holdout)) NULL else list(rel_error = holdout))
 }
@@ -68,41 +72,83 @@ TAB_COMMON_TESTS[["customer_lifetime: a verdict is a p-value against the node's 
   .tab_expect(identical(g(a, "holdout", "verdict"), "not_computed"), "holdout without purchases")
   a <- .clv_check_frame(.clv_check_fit(holdout = NULL, spend = NULL))
   .tab_expect(!any(a$level %in% c("holdout", "spend_independence", "spend_tail")), "no holdout, no spend: their rows are not written")
-  # convergence: a fact in three states
+  # convergence: a fact in three states; the edge is the likelihood's fact (clv_edges), not the estimate's size
   .tab_expect(identical(g(.clv_check_frame(.clv_check_fit()), "convergence", "verdict"), "ok"), "convergence ok")
   .tab_expect(identical(g(.clv_check_frame(.clv_check_fit(converged = FALSE)), "convergence", "verdict"), "failed"), "not converged")
-  .tab_expect(identical(g(.clv_check_frame(.clv_check_fit(vcov = FALSE)), "convergence", "verdict"), "failed"), "no Hessian inside the range")
-  a <- .clv_check_frame(.clv_check_fit(vcov = FALSE, par = c(r = 0.25, alpha = 4, a = 3e-5, b = 2.5)))
+  .tab_expect(identical(g(.clv_check_frame(.clv_check_fit(vcov = FALSE)), "convergence", "verdict"), "failed"), "no Hessian and no edge")
+  .tab_expect(identical(g(.clv_check_frame(.clv_check_fit(vcov = FALSE, par = c(r = 0.25, alpha = 4, a = 3e-5, b = 2.5))), "convergence", "verdict"), "failed"),
+              "an estimate of 3e-5 is no edge by its size alone")
+  a <- .clv_check_frame(.clv_check_fit(vcov = FALSE, par = c(r = 0.25, alpha = 4, a = 0.02, b = 2.5), edges = .clv_edge("a", "low")))
   .tab_expect(identical(g(a, "convergence", "verdict"), "doubtful") && identical(g(a, "convergence", "advice_id"), "convergence_edge"), "no Hessian at an edge")
+  a <- .clv_check_frame(.clv_check_fit(vcov = FALSE, converged = FALSE, edges = .clv_edge("a", "low")))
+  .tab_expect(identical(g(a, "convergence", "verdict"), "failed"), "not converged at an edge is failed")
+  # at an edge the maximum is the limit, even where the Hessian is still positive definite to its last digits
+  a <- .clv_check_frame(.clv_check_fit(vcov = TRUE, par = c(r = 0.25, alpha = 4, a = 1e-7, b = 2.5), edges = .clv_edge("a", "low")))
+  .tab_expect(identical(g(a, "convergence", "verdict"), "doubtful") && identical(g(a, "convergence", "advice_id"), "convergence_edge"), "an edge with a Hessian")
+  a <- .clv_check_frame(.clv_check_fit(spend_edges = .clv_edge("p", "high")))
+  .tab_expect(identical(g(a, "convergence", "verdict"), "doubtful"), "the spend at an edge")
+}
+
+TAB_COMMON_TESTS[["customer_lifetime: an edge is where the likelihood keeps growing, found on the likelihood and not on the estimate's size"]] <- function(code) {
+  # customers who never drop out (Poisson purchases: the reference case F, clv_no_dropout.csv): MBG/NBD's a goes towards 0, and
+  # the likelihood keeps growing that way
+  f0 <- utils::read.csv(file.path(code, "reference", "data", "clv_no_dropout.csv"))
+  comp <- clv_compress(f0$frequency, f0$recency, f0$age)
+  f <- clv_fit_purchases("mbg_nbd", list(x = f0$frequency, tx = f0$recency, T = f0$age, n = nrow(f0)), comp)
+  e <- clv_edges(clv_nll("mbg_nbd", comp), f$log_par, "mbg_nbd")
+  .tab_expect(any(e$param == "a" & e$side == "low") && identical(clv_check_edge_reading("mbg_nbd", "a", e[e$param == "a", ]), "boundary_no_dropout"),
+              "no dropout: ", paste(e$param, e$side, e$pair, collapse = "; "))
+  # an interior maximum: every step lowers the likelihood
+  set.seed(5)
+  sm <- .clv_summary_of_days(.clv_sim_days("bg_nbd", 400, c(0.25, 4, 0.8, 2.5)))
+  c2 <- clv_compress(sm$x, sm$tx, sm$T)
+  f2 <- clv_fit_purchases("bg_nbd", list(x = sm$x, tx = sm$tx, T = sm$T, n = nrow(sm)), c2)
+  .tab_expect(!nrow(clv_edges(clv_nll("bg_nbd", c2, stable = TRUE), f2$log_par, "bg_nbd")), "an interior maximum has no edge")
+  # everyone buys at the same rate (Poisson, one rate): r and α go up together, the rate's spread is not identified
+  set.seed(606)
+  n <- 300
+  T <- sample(140:364, n, replace = TRUE) / 7
+  z <- stats::rpois(n, 0.3 * T)
+  tz <- ifelse(z > 0, T * stats::rbeta(n, pmax(z, 1), 1), 0)
+  c3 <- clv_compress(z, tz, T)
+  f3 <- clv_fit_purchases("mbg_nbd", list(x = z, tx = tz, T = T, n = n), c3)
+  e3 <- clv_edges(clv_nll("mbg_nbd", c3), f3$log_par, "mbg_nbd")
+  .tab_expect(any(e3$pair == "rate") && identical(clv_check_edge_reading("mbg_nbd", "r", e3[e3$param == "r", ]), "boundary_homogeneous"),
+              "r and alpha up together: ", paste(e3$param, e3$side, e3$pair, collapse = "; "))
 }
 
 TAB_COMMON_TESTS[["customer_lifetime: the edges of the parameters are a measure, with the reading of each and no verdict"]] <- function(code) {
   g <- .clv_check_get
   a <- .clv_check_frame(.clv_check_fit())
-  .tab_expect(!any(a$level == "boundary"), "no estimate far out: no row")
-  # BG/NBD: a → 0 or b → ∞ is no dropout; r and α both large, a rate with no spread
+  .tab_expect(!any(a$level == "boundary"), "no estimate at an edge: no row")
   a <- .clv_check_frame(.clv_check_fit(par = c(r = 0.25, alpha = 4, a = 5e-5, b = 2.5)))
+  .tab_expect(!any(a$level == "boundary"), "a small estimate where the likelihood does not grow is no edge")
+  # BG/NBD: a → 0 or b → ∞ is no dropout; r and α up together, a rate with no spread
+  a <- .clv_check_frame(.clv_check_fit(par = c(r = 0.25, alpha = 4, a = 5e-5, b = 2.5), edges = .clv_edge("a", "low")))
   .tab_expect(g(a, "boundary", "value", "a") == 5e-5 && identical(g(a, "boundary", "advice_id", "a"), "boundary_no_dropout") &&
               !any(a$level == "boundary" & a$stat %in% c("verdict", "advice", "h0", "count")) && sum(a$level == "boundary" & a$stat == "value") == 1,
               "BG/NBD a at 0: a value and its reading, no verdict")
-  a <- .clv_check_frame(.clv_check_fit(par = c(r = 0.25, alpha = 4, a = 0.8, b = 2e4)))
+  a <- .clv_check_frame(.clv_check_fit(par = c(r = 0.25, alpha = 4, a = 0.8, b = 2e4), edges = .clv_edge("b", "high")))
   .tab_expect(identical(g(a, "boundary", "advice_id", "b"), "boundary_no_dropout") && g(a, "boundary", "value", "b") == 2e4, "BG/NBD b at infinity")
-  a <- .clv_check_frame(.clv_check_fit(par = c(r = 3e4, alpha = 5e5, a = 0.8, b = 2.5)))
+  a <- .clv_check_frame(.clv_check_fit(par = c(r = 3e4, alpha = 5e5, a = 0.8, b = 2.5), edges = .clv_edge(c("r", "alpha"), "high", "rate")))
   .tab_expect(identical(g(a, "boundary", "advice_id", "r"), "boundary_homogeneous") && identical(g(a, "boundary", "advice_id", "alpha"), "boundary_homogeneous"),
               "a purchase rate with no spread")
-  # Pareto/NBD: s and β both large, the same dropout rate for everyone; β alone large, no dropout
-  a <- .clv_check_frame(.clv_check_fit(model = "pareto_nbd", par = c(r = 0.5, alpha = 10, s = 2e4, beta = 3e5)))
+  # Pareto/NBD: s and β up together, the same dropout rate for everyone; β alone up, no dropout
+  a <- .clv_check_frame(.clv_check_fit(model = "pareto_nbd", par = c(r = 0.5, alpha = 10, s = 2e4, beta = 3e5), edges = .clv_edge(c("s", "beta"), "high", "dropout")))
   .tab_expect(identical(g(a, "boundary", "advice_id", "s"), "boundary_homogeneous") && identical(g(a, "boundary", "advice_id", "beta"), "boundary_homogeneous"),
               "Pareto/NBD s and beta")
-  a <- .clv_check_frame(.clv_check_fit(model = "pareto_nbd", par = c(r = 0.5, alpha = 10, s = 0.6, beta = 3e5)))
+  a <- .clv_check_frame(.clv_check_fit(model = "pareto_nbd", par = c(r = 0.5, alpha = 10, s = 0.6, beta = 3e5), edges = .clv_edge("beta", "high")))
   .tab_expect(identical(g(a, "boundary", "advice_id", "beta"), "boundary_no_dropout"), "Pareto/NBD beta alone")
-  # BG/BB: γ → 0 or δ → ∞ is no dropout; α and β both large, a transaction probability with no spread
-  a <- .clv_check_frame(.clv_check_fit(model = "bg_bb", par = c(alpha = 1.2, beta = 0.75, gamma = 2e-5, delta = 2.7)))
+  # BG/BB: γ → 0 or δ → ∞ is no dropout; α and β up together, a transaction probability with no spread
+  a <- .clv_check_frame(.clv_check_fit(model = "bg_bb", par = c(alpha = 1.2, beta = 0.75, gamma = 2e-5, delta = 2.7), edges = .clv_edge("gamma", "low")))
   .tab_expect(identical(g(a, "boundary", "advice_id", "gamma"), "boundary_no_dropout"), "BG/BB gamma at 0")
-  a <- .clv_check_frame(.clv_check_fit(model = "bg_bb", par = c(alpha = 2e4, beta = 3e4, gamma = 0.6, delta = 2.7)))
+  a <- .clv_check_frame(.clv_check_fit(model = "bg_bb", par = c(alpha = 2e4, beta = 3e4, gamma = 0.6, delta = 2.7), edges = .clv_edge(c("alpha", "beta"), "high", "rate")))
   .tab_expect(identical(g(a, "boundary", "advice_id", "alpha"), "boundary_homogeneous") && identical(g(a, "boundary", "advice_id", "beta"), "boundary_homogeneous"),
               "BG/BB alpha and beta")
+  # a rate's parameter alone at an edge has no reading of its own
+  a <- .clv_check_frame(.clv_check_fit(par = c(r = 0.25, alpha = 4e5, a = 0.8, b = 2.5), edges = .clv_edge("alpha", "high")))
+  .tab_expect(identical(g(a, "boundary", "advice_id", "alpha"), "boundary"), "alpha alone")
   # the spend's parameters are named as the model section names them, with no reading of their own
-  a <- .clv_check_frame(.clv_check_fit(spend = c(p = 6, q = 2e4, gamma = 15)))
+  a <- .clv_check_frame(.clv_check_fit(spend = c(p = 6, q = 2e4, gamma = 15), spend_edges = .clv_edge("q", "high")))
   .tab_expect(g(a, "boundary", "value", "spend_q") == 2e4 && identical(g(a, "boundary", "advice_id", "spend_q"), "boundary"), "the spend's q")
 }
