@@ -255,16 +255,31 @@ km_rmst <- function(s, tau) {
   c(rmean = x[["rmean"]], se = x[["se(rmean)"]])
 }
 
+# A note the report says in the page's language (layouts/common.py, structured_note): «@id name=value …»,
+# the items of a list joined by «,». A value is a name of the data or a number: «%», « » and «,» in
+# it are written %25, %20 and %2C, so that the note splits where it should; the report reads them
+# back (URL decoding). Shared with cox.R.
+surv_note <- function(id, ...) {
+  values <- list(...)
+  encode <- function(x) gsub(",", "%2C", gsub(" ", "%20", gsub("%", "%25", enc2utf8(as.character(x)), fixed = TRUE), fixed = TRUE), fixed = TRUE)
+  parts <- vapply(names(values), function(k) paste0(k, "=", paste(encode(values[[k]]), collapse = ",")), "")
+  paste(c(paste0("@", id), parts), collapse = " ")
+}
+
+# The notes of a stratum, by id: stratum_no_events, median_not_reached, survival_not_estimated.
 km_notes <- function(rows, s, name, at, times, q) {
   if (sum(s$n.event) == 0) {
-    tab_note(rows, paste0("The stratum ", name, " has no event: its curve stays at 1 and its median is not reached."))
+    # «The stratum {stratum} has no event: its curve stays at 1 and its median is not reached.»
+    tab_note(rows, surv_note("stratum_no_events", stratum = name))
   } else if (is.na(q$quantile[[2L]])) {
-    tab_note(rows, paste0("The median of ", name, " is not reached: fewer than half its rows had the event by the end of its follow-up; ",
-                          "read its survival at a time, or its restricted mean."))
+    # «The median of {stratum} is not reached: fewer than half its rows had the event by the end of its follow-up;
+    # read its survival at a time, or its restricted mean.»
+    tab_note(rows, surv_note("median_not_reached", stratum = name))
   }
   if (length(times) && any(at$past)) {
-    tab_note(rows, paste0("Survival of ", name, " at ", paste(vapply(times[at$past], km_time_label, ""), collapse = ", "),
-                          " is not estimated: its follow-up ends at ", km_time_label(max(s$time)), "."))
+    # «Survival of {stratum} at {times} is not estimated: its follow-up ends at {last}.»
+    tab_note(rows, surv_note("survival_not_estimated", stratum = name, times = vapply(times[at$past], km_time_label, ""),
+                             last = km_time_label(max(s$time))))
   }
 }
 
@@ -378,8 +393,9 @@ km_check_proportional <- function(rows, frame, curves, names_, alpha) {
            statistic = if (is.null(zph)) NULL else zph[["chisq"]], df = if (is.null(zph)) NULL else zph[["df"]], p = p,
            threshold = alpha, count = if (length(crossing)) length(crossing) else NULL, look_at = paste(crossing, collapse = "; "))
   if (length(crossing)) {
-    tab_note(rows, paste0("The curves cross (", paste(crossing, collapse = "; "), "): the log-rank and Peto's tests lose power ",
-                          "there; compare the restricted means, and read the curves themselves."))
+    # «The curves cross ({pairs}): the log-rank and Peto's tests lose power there; compare the restricted means, and
+    # read the curves themselves.» Each pair «a × b».
+    tab_note(rows, surv_note("curves_cross", pairs = crossing))
   }
 }
 
@@ -701,4 +717,15 @@ TAB_COMMON_TESTS[["kaplan_meier: the charts share max_result_rows between the st
     km <- f[f$section == "curve" & f$level == "km" & f$level_2 %in% s & f$stat == "surv", ]
     .tab_expect(nrow(km) > 50L && km$value[[1L]] == 1, s, ": ", nrow(km), " points")
   }
+}
+
+TAB_COMMON_TESTS[["kaplan_meier: the notes are ids with their values, which the report words in the page's language"]] <- function(code) {
+  df <- data.frame(t = c(5, 5, 5, 8, 10, 12, 3, 4), e = c(1, 0, 0, 0, 0, 0, 1, 1), g = c("a", "a", "b c", "b c", "a", "b c", "a", "a"),
+                   stringsAsFactors = FALSE)
+  f <- tab_results_frame(fit_kaplan_meier(.km_test_task(df, list(time = "t", event = "e", event_value = 1, strata = "g", times = list(11, 20))))$rows)
+  notes <- f$text[startsWith(f$stat, "note_")]
+  want <- c("@survival_not_estimated stratum=g=a times=11,20 last=10", "@stratum_no_events stratum=g=b%20c",
+            "@survival_not_estimated stratum=g=b%20c times=20 last=12")
+  .tab_expect(identical(notes, want), paste(notes, collapse = " | "))
+  .tab_expect(identical(surv_note("x", names = c("a,b", "50% c"), n = 3), "@x names=a%2Cb,50%25%20c n=3"), "the encoding")
 }

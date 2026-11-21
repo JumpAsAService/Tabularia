@@ -212,21 +212,24 @@ fit_cox <- function(task) {
   for (n_ in notes) tab_note(rows, n_)
   epv <- events / k
   if (epv < COX_EPV) {
-    tab_note(rows, paste0("There are ", format(round(epv, 1), nsmall = 1), " events for each coefficient (", events, " events, ",
-                          k, " coefficients): the estimates are unstable below ", COX_EPV, "; fewer terms, or more rows."))
+    # «There are {epv} events for each coefficient ({events} events, {coefficients} coefficients): the estimates are
+    # unstable below {least}; fewer terms, or more rows.»
+    tab_note(rows, surv_note("few_events", epv = format(round(epv, 1), nsmall = 1), events = events, coefficients = k, least = COX_EPV))
   }
   if (robust) {
-    tab_note(rows, paste0("The standard errors are robust", if (!is.null(cluster_col)) paste0(", clustered by «", cluster_col, "»") else "",
-                          ": the intervals, the z tests and the Wald test use them; the likelihood-ratio and score tests assume ",
-                          "the rows independent."))
+    # «The standard errors are robust[, clustered by «{cluster}»]: the intervals, the z tests and the Wald test use
+    # them; the likelihood-ratio and score tests assume the rows independent.»
+    tab_note(rows, if (is.null(cluster_col)) surv_note("robust_se") else surv_note("robust_se_cluster", cluster = cluster_col))
   }
   if (robust && is.null(cluster_col) && !is.null(start)) {
-    tab_note(rows, paste0("With start–stop rows, several rows are usually one subject's: name the subject's column as cluster, ",
-                          "or the robust errors treat each row as independent."))
+    # «With start–stop rows, several rows are usually one subject's: name the subject's column as cluster, or the
+    # robust errors treat each row as independent.»
+    tab_note(rows, surv_note("robust_start_rows"))
   }
   if (length(interactions)) {
-    tab_note(rows, paste0("The terms of an interaction are correlated with their parts by construction: their VIFs are large ",
-                          "for that reason; centre the predictors to read them."))
+    # «The terms of an interaction are correlated with their parts by construction: their VIFs are large for that
+    # reason; centre the predictors to read them.»
+    tab_note(rows, surv_note("interaction_vif"))
   }
 
   # ── the card, and the rows output ─────────────────────────────────────────
@@ -267,7 +270,8 @@ cox_coxph <- function(form, frame, ties, robust, clustered, notes = function(n) 
   handler <- function(w) {
     m <- conditionMessage(w)
     if (grepl("coefficient may be infinite", m, fixed = TRUE)) infinite <<- TRUE
-    else if (grepl("did not converge", m, fixed = TRUE)) notes("The fit did not converge in the iterations allowed: read its numbers with care.")
+    # «The fit did not converge in the iterations allowed: read its numbers with care.»
+    else if (grepl("did not converge", m, fixed = TRUE)) notes(surv_note("not_converged"))
     invokeRestart("muffleWarning")
   }
   fit <- withCallingHandlers(
@@ -275,9 +279,10 @@ cox_coxph <- function(form, frame, ties, robust, clustered, notes = function(n) 
     else survival::coxph(form, data = frame, ties = ties, robust = robust, model = TRUE, x = TRUE),
     warning = handler)
   if (infinite) {
-    notes(paste0("The likelihood keeps growing as a coefficient grows (monotone likelihood: a predictor separates the rows that ",
-                 "have the event from the others at some time): that coefficient and its interval mean nothing; drop or ",
-                 "merge the predictor, or its rare levels."))
+    # «The likelihood keeps growing as a coefficient grows (monotone likelihood: a predictor separates the rows that
+    # have the event from the others at some time): that coefficient and its interval mean nothing; drop or merge the
+    # predictor, or its rare levels.»
+    notes(surv_note("monotone_likelihood"))
   }
   fit
 }
@@ -564,8 +569,9 @@ cox_card <- function(task, design, fit, formula, time_col, event_col, start_col,
          time = as.list(sf$time[idx]), cumhaz = as.list(sf$cumhaz[idx]))
   })
   if (thinned) {
-    notes(paste0("The card keeps the baseline hazard at ", most, " of its event times per stratum: survival predicted between ",
-                 "them is read at the nearest earlier one."))
+    # «The card keeps the baseline hazard at {times} of its event times per stratum: survival predicted between them
+    # is read at the nearest earlier one.»
+    notes(surv_note("baseline_thinned", times = most))
   }
   card$cox <- list(centring = as.list(unname(fit$means)), ties = ties, time_column = time_col, start_column = start_col %||% NULL,
                    strata = strata_col %||% NULL, baseline = baseline)
