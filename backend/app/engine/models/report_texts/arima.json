@@ -252,6 +252,12 @@
    "no_forecast": "No forecast: with exogenous columns the forecast covers the rows after the last value whose exogenous values are given, and there are none.",
    "drift_dropped": "The drift is left out: with d + D = 2 the model has no drift.",
    "not_converged": "The optimizer did not report convergence (code {code}): read the coefficients with care."
+  },
+  "check_verdicts": {
+   "adf": {
+    "ok": "✓ rejected",
+    "failed": "× not rejected"
+   }
   }
  },
  "it": {
@@ -507,6 +513,12 @@
    "no_forecast": "Nessuna previsione: con colonne esogene la previsione copre le righe dopo l'ultimo valore che hanno i valori esogeni, e non ce n'è nessuna.",
    "drift_dropped": "Il drift è escluso: con d + D = 2 il modello non ha drift.",
    "not_converged": "L'ottimizzatore non ha segnalato la convergenza (codice {code}): leggete i coefficienti con cautela."
+  },
+  "check_verdicts": {
+   "adf": {
+    "ok": "✓ rifiutata",
+    "failed": "× non rifiutata"
+   }
   }
  },
  "de": {
@@ -762,6 +774,12 @@
    "no_forecast": "Keine Prognose: Mit exogenen Spalten deckt die Prognose die Zeilen nach dem letzten Wert ab, deren exogene Werte gegeben sind, und es gibt keine.",
    "drift_dropped": "Der Drift wird ausgelassen: Mit d + D = 2 hat das Modell keinen Drift.",
    "not_converged": "Der Optimierer meldete keine Konvergenz (Code {code}): Lesen Sie die Koeffizienten mit Vorsicht."
+  },
+  "check_verdicts": {
+   "adf": {
+    "ok": "✓ verworfen",
+    "failed": "× nicht verworfen"
+   }
   }
  },
  "es": {
@@ -1017,6 +1035,12 @@
    "no_forecast": "Sin pronóstico: con columnas exógenas el pronóstico cubre las filas después del último valor cuyos valores exógenos están dados, y no hay ninguna.",
    "drift_dropped": "La deriva queda fuera: con d + D = 2 el modelo no tiene deriva.",
    "not_converged": "El optimizador no informó de la convergencia (código {code}): lea los coeficientes con cautela."
+  },
+  "check_verdicts": {
+   "adf": {
+    "ok": "✓ rechazada",
+    "failed": "× no rechazada"
+   }
   }
  },
  "fr": {
@@ -1272,6 +1296,12 @@
    "no_forecast": "Pas de prévision : avec des colonnes exogènes la prévision couvre les lignes après la dernière valeur dont les valeurs exogènes sont données, et il n'y en a aucune.",
    "drift_dropped": "La dérive est écartée : avec d + D = 2 le modèle n'a pas de dérive.",
    "not_converged": "L'optimiseur n'a pas signalé la convergence (code {code}) : lisez les coefficients avec prudence."
+  },
+  "check_verdicts": {
+   "adf": {
+    "ok": "✓ rejetée",
+    "failed": "× non rejetée"
+   }
   }
  }
 }

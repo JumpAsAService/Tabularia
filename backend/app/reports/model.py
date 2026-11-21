@@ -802,10 +802,16 @@ class _Builder:
             nonlocal band, prev_bottom, passed
             if not band:
                 return
+            placed = [p for p in (self.placed(i, top) for i in band) if p is not None]
+            if not placed and all(i.collapse_hidden for i in band):
+                # nothing of it is shown and its items ask for no room then: the next block starts where it would have
+                # started under this one, with its own gap (as if the band had never been there)
+                prev_bottom = bottom
+                band = []
+                return
             for b in passed:
                 b.pop("sticky", None)
             passed = []
-            placed = [p for p in (self.placed(i, top) for i in band) if p is not None]
             block = {"k": "band", "gap": _round_mm(max(top - prev_bottom, 0)), "h": _round_mm(bottom - top), "items": placed}
             if any(i.keep_with_next for i in band):
                 block["sticky"] = True

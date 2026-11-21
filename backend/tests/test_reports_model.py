@@ -407,6 +407,27 @@ def test_only_the_bands_that_ask_are_kept_with_the_next_block():
     assert body[2]["gap"] == 2
 
 
+def test_a_row_whose_hidden_items_ask_for_it_takes_no_room_and_a_person_s_row_keeps_its_place():
+    """Lot D9: the decomposition's report has a panel for each IMF the node may extract; the ones the run did not find
+    are hidden, and their rows left blank bands of 25 mm each before the residue. A row whose items are all hidden and
+    all ask for it (`collapse_hidden`, the engine's layouts only) is no block: the next one starts where it would have
+    started under it, with its own gap. A row a person placed keeps its room, shown or not."""
+    def text(id_, y, **more):
+        return {"id": id_, "type": "text", "x": 0, "y": y, "w": 50, "h": 20, "value": id_, **more}
+    hidden = {"visible": "COUNT() > 100"}
+    body = build(report(text("a", 0), text("b", 25, collapse_hidden=True, **hidden), text("c", 50))).doc["body"]
+    assert [b["items"][0]["parts"] for b in body] == [["a"], ["c"]] and body[1]["gap"] == 5
+    # without the flag the hidden row stays a band of its height, as before
+    body = build(report(text("a", 0), text("b", 25, **hidden), text("c", 50))).doc["body"]
+    assert [(len(b["items"]), b["h"]) for b in body] == [(1, 20), (0, 20), (1, 20)]
+    # a row with one item shown, or one item that does not ask, is drawn
+    body = build(report(text("a", 0), text("b", 25, collapse_hidden=True, **hidden), {**text("b2", 25), "x": 60}, text("c", 50))).doc["body"]
+    assert len(body) == 3 and body[1]["items"][0]["parts"] == ["b2"]
+    body = build(report(text("a", 0), text("b", 25, collapse_hidden=True, **hidden), {**text("b2", 25, **hidden), "x": 60},
+                        text("c", 50))).doc["body"]
+    assert len(body) == 3 and body[1]["items"] == []
+
+
 def test_a_hidden_table_passes_its_kept_words_only_to_a_table_right_under_it():
     """The words kept with a table that is not shown go with the next table when it follows at once (a
     section whose first table depends on the data); when other words come first (the next section's heading),
@@ -717,6 +738,20 @@ def test_an_xy_chart_draws_points_and_a_line_with_their_names():
     assert unseen["symbolSize"] == 0
     assert o["xAxis"]["type"] == "value" and o["yAxis"]["scale"] is True
     assert o["legend"]["show"] is True and o["legend"]["data"] == ["Residuals", "Lowess"]
+
+
+def test_a_short_xy_chart_asks_its_y_axis_for_fewer_ticks_and_a_tall_one_leaves_them_to_echarts():
+    """A panel of 24 mm (the decomposition's IMFs) had five or six tick labels stacked on 50 px of plot (lot D9): a plot
+    shorter than five labels' room asks for as many as fit; a chart of the usual heights is as before."""
+    line = {"filter": '[level] = "resid_fitted"', "category": "[x0]", "series": [{"value": "[value]", "name": "y", "as": "line"}]}
+    small = _chart("xy", MODEL, h=24, title="IMF 1", **line)["yAxis"]
+    assert 1 <= small["splitNumber"] <= 2
+    assert _chart("xy", MODEL, h=32, title="Remainder", **line)["yAxis"]["splitNumber"] == 4
+    for tall in (46, 55, 62):
+        assert "splitNumber" not in _chart("xy", MODEL, h=tall, title="Series", **line)["yAxis"], tall
+    # an axis with its own interval (names at the whole numbers, the unit square) keeps it
+    square = _chart("xy", MODEL, h=24, options={"unit_square": True}, **line)["yAxis"]
+    assert square["interval"] == 0.2 and "splitNumber" not in square
 
 
 def test_an_xy_chart_draws_steps_with_their_bands_one_colour_a_stratum():

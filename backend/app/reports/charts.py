@@ -33,6 +33,9 @@ MAX_CATEGORIES = 2000
 MAX_SERIES = 24
 MAX_LABEL_CHARS = 40  # a name on an axis or a slice: longer ones end in «…», so it takes three lines at most
 MM_PX = 96 / 25.4
+# the y axis of an `xy` chart: a tick label of 9 px every Y_TICK_PX at least, under the x axis' labels and their gap
+Y_TICK_PX = 18
+XY_X_LABELS_PX = 20
 # the PDF's font first (Typst draws the chart with it); then what a browser has, for the
 # screen's pages, where a chart inside an <img> cannot use the page's fonts (Plex alone fell
 # back to a serif)
@@ -738,6 +741,10 @@ def _xy(data: ChartData, it: rd.ChartItem, theme: rd.Theme, loc: formats.Locale,
                             height=side)
         base["grid"].pop("right", None)
         base["grid"].pop("bottom", None)
+    if "interval" not in y_axis:  # a short plot asks for fewer ticks: ECharts' five on 50 px are a stack of labels
+        plot_px = max(int(it.h * MM_PX), 20) - base["grid"]["top"] - XY_X_LABELS_PX
+        if plot_px < 5 * Y_TICK_PX:
+            y_axis["splitNumber"] = max(1, plot_px // Y_TICK_PX)
     legend = {**base["legend"], "data": _xy_legend(data)}
     return {**base, "legend": legend, "xAxis": x_axis, "yAxis": y_axis, "series": series}
 

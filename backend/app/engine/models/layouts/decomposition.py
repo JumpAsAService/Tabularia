@@ -102,11 +102,14 @@ def _twice(p: stats.Page, item: dict, w: dict) -> None:
 
 
 def _panel(p: stats.Page, w: dict, id_: str, title: str, filter_: str, series: list[dict], tall: float,
-           options: dict | None = None) -> None:
-    """A chart across the page along time, its own row of the body."""
+           options: dict | None = None, collapse: bool = False) -> None:
+    """A chart across the page along time, its own row of the body. `collapse`: a panel the run may leave empty (an IMF
+    beyond those found) takes no room when hidden, instead of a blank band (`collapse_hidden`, lot D9)."""
     item = {"id": id_, "type": "chart", "dataset": c.DATASET, "kind": "xy", "x": 0, "y": p.y, "w": c.WIDTH, "h": tall,
             "title": stats.fit(title, 7.5, c.WIDTH - 4, 700), "filter": filter_, "category": "[x0]", "series": series,
             "options": {"format": "0.###", "legend": False, **(options or {})}, "visible": c.exists(filter_)}
+    if collapse:
+        item["collapse_hidden"] = True
     _twice(p, item, w)
     p.y += tall + 1.5
 
@@ -350,13 +353,21 @@ def _seasons(p: stats.Page, w: dict, checked: dict[str, Any], periods: list[str]
 def _remainder(p: stats.Page, w: dict, checked: dict[str, Any]) -> None:
     t, ch, s = w["tables"], w["charts"], w["series"]
     p.heading("s_remainder", w["sections"]["remainder"])
-    if checked.get("method") == "emd":  # the remainder of EMD (the IMFs read as noise) has no panel of components
+    # the heading and its rule go to the next page with what follows them: never alone at the foot of a page
+    for item in p.items[-2:]:
+        item["keep_with_next"] = True
+    emd = checked.get("method") == "emd"
+    # EMD with noise_imfs = 0 separates no remainder: the runner writes none of its charts, and charts nobody sees would
+    # still keep their room (a blank band of a quarter of a page before the checks)
+    charts = not emd or int(checked.get("noise_imfs") or 0) > 0
+    if emd and charts:  # the remainder of EMD (the IMFs read as noise) has no panel of components
         _panel(p, w, "noise", ch["noise"], '[section] = "point" AND [level] = "remainder"',
                [c.mark("y", "point", s["remainder"])], PANEL_TALL, {"target": 0})
     f = '[section] = "lag" AND [level] = "resid_acf"'
     acf = c.xy("resid_acf", ch["resid_acf"], f + ' AND [stat] = "acf"', [c.mark("acf", "stem", s["acf"])],
                {"target": c.num("lag|resid_acf||bound"), "mirror": True, "legend": False, "format": "0.##"}, under="ljung_box")
-    c.grid(p, w, (c.histogram("histogram", ch["histogram"], "remainder", s["count"]), acf), None)
+    if charts:
+        c.grid(p, w, (c.histogram("histogram", ch["histogram"], "remainder", s["count"]), acf), None)
     one = ('[section] = "assumption" AND [stat] = "verdict" AND ('
            + " OR ".join(f'[level] = "{check}"' for check in REMAINDER_CHECKS) + ")")
     said = "IFS(" + ", ".join(f'[text] = "{v}", {c.q(w["verdicts"][v])}' for v in catalog.VERDICTS) + ', "")'
@@ -385,7 +396,7 @@ def _oscillations(p: stats.Page, w: dict, checked: dict[str, Any]) -> None:
     p.keep()
     for k in catalog._imf_labels(checked):
         _panel(p, w, f"imf_{k}", ch["imf"].replace("{k}", k), f'{one} AND [level_2] = "imf_{k}"',
-               [_line(f"imf_{k}", s["imf"], c.ACCENT)], IMF_TALL, {"target": 0})
+               [_line(f"imf_{k}", s["imf"], c.ACCENT)], IMF_TALL, {"target": 0}, collapse=True)
     _panel(p, w, "residue", ch["residue"], f'{one} AND [level_2] = "residue"', [_line("residue", s["residue"], c.ACCENT)], IMF_TALL)
     rows = '[section] = "imf" AND [stat] = "variance_share"'
     mode = f'IF([level] = "residue", {c.q(w["modes"]["residue"])}, {c.join(w["modes"]["imf"], k="MID([level], 5, 3)")})'

@@ -43,7 +43,7 @@
       "trend": "Trend strength",
       "seasonal": "Seasonal strength",
       "largest": "Largest oscillation",
-      "strength_under": "from 0 (noise only) to 1",
+      "strength_under": "from 0 (no more than the remainder) to 1",
       "period": "period {p}",
       "periods": "periods {p}",
       "robust": "robust",
@@ -235,14 +235,14 @@
         "frequency=year": "The pattern that repeats every {period} years is highest {peak}, where it multiplies the trend by {peak_value:num}, and lowest {trough}, where it multiplies it by {trough_value:num}.",
         "": "The pattern that repeats every {period} steps is highest {peak}, where it multiplies the trend by {peak_value:num}, and lowest {trough}, where it multiplies it by {trough_value:num}."
       },
-      "remainder_white": "Up to lag {lag} the remainder shows no autocorrelation: autocorrelations at least this large would appear by chance with probability {p_value:p}, above α = {alpha:num} (Ljung–Box). It behaves like white noise; its largest autocorrelation is {largest_acf:num}, at lag {at_lag}.",
-      "remainder_structure": "The remainder keeps autocorrelation up to lag {lag}: autocorrelations this large would appear by chance with probability {p_value:p}, below α = {alpha:num} (Ljung–Box). The largest is {largest_acf:num}, at lag {at_lag}: structure is left in the remainder, such as a season not removed, a trend too stiff, or a pattern that changes over time.",
-      "remainder_large_n": "With this many values Ljung–Box detects very small autocorrelations: the largest one of the remainder is {largest_acf:num}, at lag {at_lag}, a size to weigh before acting on the test.",
+      "remainder_white": "The data do not support autocorrelation of the remainder up to lag {lag}: autocorrelations at least this large would appear by chance with probability {p_value:p}, above α = {alpha:num}, even if the remainder had none (Ljung–Box). Its largest autocorrelation is {largest_acf:num}, at lag {at_lag}.",
+      "remainder_structure": "The remainder keeps autocorrelation up to lag {lag}: if it had none, autocorrelations this large would appear by chance with probability {p_value:p}, below α = {alpha:num} (Ljung–Box). The largest is {largest_acf:num}, at lag {at_lag}: structure is left in the remainder, such as a season not removed, a trend too stiff, or a pattern that changes over time.",
+      "remainder_large_n": "Ljung–Box detects very small autocorrelations taken together: the largest one of the remainder is {largest_acf:num}, at lag {at_lag}, a size to weigh before acting on the test.",
       "remainder_not_computed_emd": "The remainder was not tested: EMD separates no noise unless you say how many of the fastest IMFs are noise (noise_imfs). ADF and KPSS were read on the oscillating part, the series without its residue.",
       "stationarity_both_ok": "ADF rejects a unit root (p-value {p_adf:p}) and KPSS does not reject stationarity (p-value {p_kpss:num}), at α = {alpha:num}: both point to a remainder that stays around a constant level.",
       "stationarity_adf_only": "ADF rejects a unit root (p-value {p_adf:p}), but KPSS rejects stationarity too (p-value {p_kpss:num}), at α = {alpha:num}: the remainder moves around a level that drifts, a sign that the trend window is too wide.",
-      "stationarity_kpss_only": "Neither test rejects its hypothesis at α = {alpha:num}: ADF keeps a unit root (p-value {p_adf:p}) and KPSS keeps stationarity (p-value {p_kpss:num}). The remainder is too short or too noisy for them to tell: read its chart.",
-      "stationarity_neither": "ADF does not reject a unit root (p-value {p_adf:p}) and KPSS rejects stationarity (p-value {p_kpss:num}), at α = {alpha:num}: the remainder wanders like a random walk, a slow movement the trend did not take; try a narrower trend window.",
+      "stationarity_kpss_only": "Neither test rejects its hypothesis at α = {alpha:num}: ADF keeps a unit root (p-value {p_adf:p}) and KPSS keeps stationarity (p-value {p_kpss:num}). The two tests do not tell on this remainder: read its chart.",
+      "stationarity_neither": "ADF does not reject a unit root (p-value {p_adf:p}) and KPSS rejects stationarity (p-value {p_kpss:num}), at α = {alpha:num}: the remainder's level is not constant and a unit root is not excluded, a slow movement the trend did not take; try a narrower trend window.",
       "kpss_table_end": "KPSS's table gives p-values only from 0.01 to 0.10; here the p-value is at the end {bound:num} and α = {alpha:num} lies outside that range, so the test gives no verdict (statistic {statistic:num}).",
       "imfs_found": "EMD found {n_imfs:int} oscillations (IMFs) of the {max_imf:int} allowed, from the fastest to the slowest; the residue holds the slow movement.",
       "imf_mode": {
@@ -276,9 +276,9 @@
       "method_remainder": "The remainder is what the trend and the patterns leave. Ljung–Box tests whether its autocorrelations up to a lag are all zero, as in white noise; when the test fails, structure is left. The remainder comes out of smoothers, not from the data alone: smoothing takes the slow movements away, so it is often slightly negatively autocorrelated and less variable than the true noise. The tests answer «is there visible structure left», not «is this the true decomposition». With many values Ljung–Box detects tiny autocorrelations: the largest one is shown so that you can weigh its size.",
       "method_stationarity": "ADF and KPSS ask opposite questions of the remainder: ADF's null hypothesis is a unit root (a random walk), KPSS's is stationarity around a constant. ADF's p-value is MacKinnon's (1996) and continuous; KPSS's is read from a table that stops at 0.01 and 0.10, so with α outside that range a p-value at an end gives no verdict. Read together they give four cases, said in the reading.",
       "stationarity_both_ok_kpss_above": "ADF rejects a unit root (p-value {p_adf:p}) and KPSS does not reject stationarity (p-value ≥ 0.10), at α = {alpha:num}: both point to a remainder that stays around a constant level.",
-      "stationarity_kpss_only_kpss_above": "Neither test rejects its hypothesis at α = {alpha:num}: ADF keeps a unit root (p-value {p_adf:p}) and KPSS keeps stationarity (p-value ≥ 0.10). The remainder is too short or too noisy for them to tell: read its chart.",
+      "stationarity_kpss_only_kpss_above": "Neither test rejects its hypothesis at α = {alpha:num}: ADF keeps a unit root (p-value {p_adf:p}) and KPSS keeps stationarity (p-value ≥ 0.10). The two tests do not tell on this remainder: read its chart.",
       "stationarity_adf_only_kpss_below": "ADF rejects a unit root (p-value {p_adf:p}), but KPSS rejects stationarity too (p-value ≤ 0.01), at α = {alpha:num}: the remainder moves around a level that drifts, a sign that the trend window is too wide.",
-      "stationarity_neither_kpss_below": "ADF does not reject a unit root (p-value {p_adf:p}) and KPSS rejects stationarity (p-value ≤ 0.01), at α = {alpha:num}: the remainder wanders like a random walk, a slow movement the trend did not take; try a narrower trend window."
+      "stationarity_neither_kpss_below": "ADF does not reject a unit root (p-value {p_adf:p}) and KPSS rejects stationarity (p-value ≤ 0.01), at α = {alpha:num}: the remainder's level is not constant and a unit root is not excluded, a slow movement the trend did not take; try a narrower trend window."
     },
     "note_texts": {
       "window_made_odd": "A window of {given:num} steps was used as {used:int}: the loess windows are odd whole numbers of steps, so a window is taken to the next odd whole number."
@@ -286,15 +286,15 @@
     "formula_texts": {
       "formula_stl": "Inner loop, repeated: S = loess across the cycles of y − T at each position (seasonal window), its slow part taken away by a low-pass filter; T = loess in time of y − S (trend window). Robust outer loop: weight ρ_t = B(|R_t| / (6 · median |R|)), B(u) = (1 − u²)² for u < 1, else 0;  R = y − T − S",
       "formula_classical": "T_t = (½ y_(t−k) + y_(t−k+1) + … + y_(t+k−1) + ½ y_(t+k)) / p for an even period p = 2k, the plain mean of p values for an odd one;  S_j = the mean of y − T at position j, centred to sum to 0 (of y / T, to average 1, when multiplicative);  R = y − T − S (y / (T · S))",
-      "formula_mstl": "For each period p_i, from the shortest: S_i = STL seasonal of y − Σ_(j≠i) S_j, the passes repeated «iterate» times;  T = STL trend of y − Σ_i S_i;  R = y − T − Σ_i S_i",
-      "formula_emd": "Sifting: h ← h − (e_max + e_min) / 2, e_max and e_min the cubic splines through the maxima and the minima, until h is an IMF (extrema and zero crossings differ by at most 1) for S siftings in a row, or max_siftings;  c_k = h, x ← x − c_k;  y = Σ_k c_k + r",
+      "formula_mstl": "For each period p_i, from the shortest: S_i = STL seasonal of y − Σ_(j≠i) S_j, the passes repeated «iterate» times;  T = the STL trend of the last pass (on y − Σ_(j≠K) S_j, p_K the longest period);  R = y − T − Σ_i S_i",
+      "formula_emd": "Sifting: h ← h − (e_max + e_min) / 2, e_max and e_min the cubic splines through the maxima and the minima, until the numbers of maxima and minima stay the same (a change of at most 1) for S siftings in a row with every maximum above 0 and every minimum below 0, or max_siftings;  c_k = h, x ← x − c_k;  x = Σ_k c_k + r",
       "formula_box_cox": "z = (y^λ − 1) / λ for λ ≠ 0;  z = log y for λ = 0",
       "formula_strength": "F_T = max(0, 1 − Var(R) / Var(T + R));  F_S = max(0, 1 − Var(R) / Var(S + R))",
       "formula_friedman": "Q = 12 / (b p (p + 1)) · Σ_j R_j² − 3 b (p + 1), corrected for ties, χ² with p − 1 degrees of freedom;  b: complete cycles, p: positions, R_j: the sum of the ranks of position j",
       "formula_kruskal_wallis": "H = 12 / (N (N + 1)) · Σ_j R_j² / n_j − 3 (N + 1), corrected for ties, χ² with p − 1 degrees of freedom;  N: values, n_j and R_j: the values of position j and the sum of their ranks",
       "formula_ljung_box": "Q = n (n + 2) Σ_(k=1)^(h) ρ̂_k² / (n − k), χ² with h degrees of freedom;  ρ̂_k: the autocorrelation of the remainder at lag k",
-      "formula_adf": "ΔR_t = α + γ R_(t−1) + Σ_(j=1)^(k) β_j ΔR_(t−j) + ε_t, k = the whole part of (n − 1)^(1/3);  τ = γ̂ / se(γ̂), its p-value by MacKinnon (1996)",
-      "formula_kpss": "η = Σ_t S_t² / (n² σ̂²), S_t = Σ_(i≤t) (R_i − R̄);  σ̂²: the Newey–West long-run variance with the whole part of 3√n / 13 lags",
+      "formula_adf": "ΔR_t = μ + γ R_(t−1) + Σ_(j=1)^(k) β_j ΔR_(t−j) + ε_t, k = the whole part of (n − 1)^(1/3);  τ = γ̂ / se(γ̂), its p-value by MacKinnon (1996) with N = n − k − 1, the regression's observations",
+      "formula_kpss": "η = Σ_t S_t² / (n² σ̂²), S_t = Σ_(i≤t) (R_i − R̄);  σ̂²: the Newey–West long-run variance with Bartlett weights and l = the whole part of 4 (n / 100)^(1/4) lags",
       "formula_orthogonality": "IO = Σ_t Σ_(j≠k) c_j(t) c_k(t) / Σ_t x(t)², over the IMFs and the residue"
     },
     "measure_readings": [
@@ -350,7 +350,17 @@
       "recommend",
       "recommended",
       "better",
-      "worse"
+      "worse",
+      "supports",
+      "stronger",
+      "strongest",
+      "weaker",
+      "weakest",
+      "sufficient",
+      "insufficient",
+      "significance",
+      "reliable",
+      "must"
     ],
     "stats": {
       "model": {
@@ -506,7 +516,7 @@
         "name": "Seasonality: rank test",
         "h0": {
           "seasonality_test=kruskal_wallis": "No seasonal pattern of this period: every position of the cycle has the same distribution.",
-          "": "No seasonal pattern of this period: the positions rank alike in every cycle."
+          "": "No seasonal pattern of this period: within a cycle, every order of the positions is equally likely."
         },
         "advice": "The seasonal component of this period may be noise: read its strength and its chart, and try without this period.",
         "not_computed": {
@@ -590,7 +600,7 @@
       "seasonal_strength": "1 − Var(R) / Var(S + R) for the pattern of this period, at least 0.",
       "largest_acf": "The largest autocorrelation of the remainder, in absolute value, up to the lag of Ljung–Box.",
       "robust_weights": "The instants whose final weight in the robust fit is 0.",
-      "orthogonality": "0 when the modes are exactly orthogonal: only then do the shares of the variance add up to 1."
+      "orthogonality": "The modes' cross products over Σ x²: the shares of the energy add up to 1 − IO, to 1 when it is 0 (orthogonal modes)."
     },
     "measures": {
       "title": "Measures, not tests",
@@ -652,7 +662,7 @@
       "trend": "Forza del trend",
       "seasonal": "Forza stagionale",
       "largest": "Oscillazione maggiore",
-      "strength_under": "da 0 (solo rumore) a 1",
+      "strength_under": "da 0 (non più della componente residua) a 1",
       "period": "periodo {p}",
       "periods": "periodi {p}",
       "robust": "robusta",
@@ -844,14 +854,14 @@
         "frequency=year": "L'andamento che si ripete ogni {period} anni è massimo {peak}, dove moltiplica il trend per {peak_value:num}, e minimo {trough}, dove lo moltiplica per {trough_value:num}.",
         "": "L'andamento che si ripete ogni {period} passi è massimo {peak}, dove moltiplica il trend per {peak_value:num}, e minimo {trough}, dove lo moltiplica per {trough_value:num}."
       },
-      "remainder_white": "Fino al ritardo {lag} la componente residua non mostra autocorrelazione: autocorrelazioni almeno così grandi comparirebbero per caso con probabilità {p_value:p}, sopra α = {alpha:num} (Ljung–Box). Si comporta come un rumore bianco; la sua autocorrelazione più grande è {largest_acf:num}, al ritardo {at_lag}.",
-      "remainder_structure": "La componente residua conserva autocorrelazione fino al ritardo {lag}: autocorrelazioni così grandi comparirebbero per caso con probabilità {p_value:p}, sotto α = {alpha:num} (Ljung–Box). La più grande è {largest_acf:num}, al ritardo {at_lag}: nella componente residua resta struttura, per esempio una stagionalità non tolta, un trend troppo rigido o un andamento che cambia nel tempo.",
-      "remainder_large_n": "Con così tanti valori Ljung–Box rileva autocorrelazioni molto piccole: la più grande della componente residua è {largest_acf:num}, al ritardo {at_lag}, una grandezza da valutare prima di agire sul test.",
+      "remainder_white": "I dati non sostengono un'autocorrelazione della componente residua fino al ritardo {lag}: autocorrelazioni almeno così grandi comparirebbero per caso con probabilità {p_value:p}, sopra α = {alpha:num}, anche se la componente residua non ne avesse (Ljung–Box). La sua autocorrelazione più grande è {largest_acf:num}, al ritardo {at_lag}.",
+      "remainder_structure": "La componente residua conserva autocorrelazione fino al ritardo {lag}: se non ne avesse, autocorrelazioni così grandi comparirebbero per caso con probabilità {p_value:p}, sotto α = {alpha:num} (Ljung–Box). La più grande è {largest_acf:num}, al ritardo {at_lag}: nella componente residua resta struttura, per esempio una stagionalità non tolta, un trend troppo rigido o un andamento che cambia nel tempo.",
+      "remainder_large_n": "Ljung–Box rileva autocorrelazioni molto piccole prese insieme: la più grande della componente residua è {largest_acf:num}, al ritardo {at_lag}, una grandezza da valutare prima di agire sul test.",
       "remainder_not_computed_emd": "La componente residua non è stata sottoposta al test: EMD non separa alcun rumore se non dite quante delle IMF più rapide sono rumore (noise_imfs). ADF e KPSS sono stati letti sulla parte oscillante, la serie senza la sua tendenza residua.",
       "stationarity_both_ok": "L'ADF rifiuta la radice unitaria (p-value {p_adf:p}) e il KPSS non rifiuta la stazionarietà (p-value {p_kpss:num}), ad α = {alpha:num}: entrambi indicano una componente residua che resta attorno a un livello costante.",
       "stationarity_adf_only": "L'ADF rifiuta la radice unitaria (p-value {p_adf:p}), ma anche il KPSS rifiuta la stazionarietà (p-value {p_kpss:num}), ad α = {alpha:num}: la componente residua si muove attorno a un livello che deriva, segno che la finestra del trend è troppo larga.",
-      "stationarity_kpss_only": "Nessuno dei due test rifiuta la sua ipotesi ad α = {alpha:num}: l'ADF non esclude la radice unitaria (p-value {p_adf:p}) e il KPSS non esclude la stazionarietà (p-value {p_kpss:num}). La componente residua è troppo corta o troppo rumorosa perché lo dicano: leggete il suo grafico.",
-      "stationarity_neither": "L'ADF non rifiuta la radice unitaria (p-value {p_adf:p}) e il KPSS rifiuta la stazionarietà (p-value {p_kpss:num}), ad α = {alpha:num}: la componente residua vaga come una passeggiata casuale, un movimento lento che il trend non ha preso; provate una finestra del trend più stretta.",
+      "stationarity_kpss_only": "Nessuno dei due test rifiuta la sua ipotesi ad α = {alpha:num}: l'ADF non esclude la radice unitaria (p-value {p_adf:p}) e il KPSS non esclude la stazionarietà (p-value {p_kpss:num}). I due test non decidono su questa componente residua: leggete il suo grafico.",
+      "stationarity_neither": "L'ADF non rifiuta la radice unitaria (p-value {p_adf:p}) e il KPSS rifiuta la stazionarietà (p-value {p_kpss:num}), ad α = {alpha:num}: il livello della componente residua non è costante e una radice unitaria non è esclusa, un movimento lento che il trend non ha preso; provate una finestra del trend più stretta.",
       "kpss_table_end": "La tavola del KPSS dà p-value solo da 0,01 a 0,10; qui il p-value è all'estremo {bound:num} e α = {alpha:num} è fuori da quell'intervallo, quindi il test non dà un verdetto (statistica {statistic:num}).",
       "imfs_found": "EMD ha trovato {n_imfs:int} oscillazioni (IMF) delle {max_imf:int} consentite, dalla più rapida alla più lenta; la tendenza residua contiene il movimento lento.",
       "imf_mode": {
@@ -885,9 +895,9 @@
       "method_remainder": "La componente residua è ciò che il trend e gli andamenti lasciano. Ljung–Box verifica se le sue autocorrelazioni fino a un ritardo sono tutte nulle, come in un rumore bianco; quando la verifica non è rispettata, resta struttura. La componente residua esce da operazioni di lisciamento, non dai soli dati: il lisciamento toglie i movimenti lenti, quindi è spesso un po' autocorrelata negativamente e meno variabile del vero rumore. I test rispondono a «resta una struttura visibile?», non a «è questa la scomposizione vera?». Con molti valori Ljung–Box rileva autocorrelazioni minime: la più grande è mostrata perché possiate valutarne la grandezza.",
       "method_stationarity": "ADF e KPSS pongono alla componente residua domande opposte: l'ipotesi nulla dell'ADF è una radice unitaria (una passeggiata casuale), quella del KPSS la stazionarietà attorno a una costante. Il p-value dell'ADF è quello di MacKinnon (1996), continuo; quello del KPSS è letto da una tavola che si ferma a 0,01 e 0,10, quindi con α fuori da quell'intervallo un p-value a un estremo non dà un verdetto. Letti insieme danno quattro casi, detti nella lettura.",
       "stationarity_both_ok_kpss_above": "L'ADF rifiuta la radice unitaria (p-value {p_adf:p}) e il KPSS non rifiuta la stazionarietà (p-value ≥ 0,10), ad α = {alpha:num}: entrambi indicano una componente residua che resta attorno a un livello costante.",
-      "stationarity_kpss_only_kpss_above": "Nessuno dei due test rifiuta la sua ipotesi ad α = {alpha:num}: l'ADF non esclude la radice unitaria (p-value {p_adf:p}) e il KPSS non esclude la stazionarietà (p-value ≥ 0,10). La componente residua è troppo corta o troppo rumorosa perché lo dicano: leggete il suo grafico.",
+      "stationarity_kpss_only_kpss_above": "Nessuno dei due test rifiuta la sua ipotesi ad α = {alpha:num}: l'ADF non esclude la radice unitaria (p-value {p_adf:p}) e il KPSS non esclude la stazionarietà (p-value ≥ 0,10). I due test non decidono su questa componente residua: leggete il suo grafico.",
       "stationarity_adf_only_kpss_below": "L'ADF rifiuta la radice unitaria (p-value {p_adf:p}), ma anche il KPSS rifiuta la stazionarietà (p-value ≤ 0,01), ad α = {alpha:num}: la componente residua si muove attorno a un livello che deriva, segno che la finestra del trend è troppo larga.",
-      "stationarity_neither_kpss_below": "L'ADF non rifiuta la radice unitaria (p-value {p_adf:p}) e il KPSS rifiuta la stazionarietà (p-value ≤ 0,01), ad α = {alpha:num}: la componente residua vaga come una passeggiata casuale, un movimento lento che il trend non ha preso; provate una finestra del trend più stretta."
+      "stationarity_neither_kpss_below": "L'ADF non rifiuta la radice unitaria (p-value {p_adf:p}) e il KPSS rifiuta la stazionarietà (p-value ≤ 0,01), ad α = {alpha:num}: il livello della componente residua non è costante e una radice unitaria non è esclusa, un movimento lento che il trend non ha preso; provate una finestra del trend più stretta."
     },
     "note_texts": {
       "window_made_odd": "Una finestra di {given:num} passi è stata usata come {used:int}: le finestre del loess sono numeri interi dispari di passi, quindi una finestra passa al numero intero dispari successivo."
@@ -895,15 +905,15 @@
     "formula_texts": {
       "formula_stl": "Ciclo interno, ripetuto: S = loess attraverso i cicli di y − T in ogni posizione (finestra stagionale), tolta la sua parte lenta con un filtro passa-basso; T = loess nel tempo di y − S (finestra del trend). Ciclo esterno robusto: peso ρ_t = B(|R_t| / (6 · mediana |R|)), B(u) = (1 − u²)² per u < 1, altrimenti 0;  R = y − T − S",
       "formula_classical": "T_t = (½ y_(t−k) + y_(t−k+1) + … + y_(t+k−1) + ½ y_(t+k)) / p per un periodo pari p = 2k, la semplice media di p valori per uno dispari;  S_j = la media di y − T nella posizione j, centrata perché sommi a 0 (di y / T, con media 1, se moltiplicativa);  R = y − T − S (y / (T · S))",
-      "formula_mstl": "Per ogni periodo p_i, dal più breve: S_i = stagionale STL di y − Σ_(j≠i) S_j, passaggi ripetuti «iterate» volte;  T = trend STL di y − Σ_i S_i;  R = y − T − Σ_i S_i",
-      "formula_emd": "Setacciatura: h ← h − (e_max + e_min) / 2, e_max ed e_min le spline cubiche per i massimi e per i minimi, finché h è una IMF (estremi e passaggi per lo zero differiscono al più di 1) per S setacciature di fila, o max_siftings;  c_k = h, x ← x − c_k;  y = Σ_k c_k + r",
+      "formula_mstl": "Per ogni periodo p_i, dal più breve: S_i = stagionale STL di y − Σ_(j≠i) S_j, passaggi ripetuti «iterate» volte;  T = il trend STL dell'ultimo passaggio (su y − Σ_(j≠K) S_j, p_K il periodo più lungo);  R = y − T − Σ_i S_i",
+      "formula_emd": "Setacciatura: h ← h − (e_max + e_min) / 2, e_max ed e_min le spline cubiche per i massimi e per i minimi, finché i numeri di massimi e di minimi restano gli stessi (una variazione al più di 1) per S setacciature di fila con ogni massimo sopra 0 e ogni minimo sotto 0, o max_siftings;  c_k = h, x ← x − c_k;  x = Σ_k c_k + r",
       "formula_box_cox": "z = (y^λ − 1) / λ per λ ≠ 0;  z = log y per λ = 0",
       "formula_strength": "F_T = max(0, 1 − Var(R) / Var(T + R));  F_S = max(0, 1 − Var(R) / Var(S + R))",
       "formula_friedman": "Q = 12 / (b p (p + 1)) · Σ_j R_j² − 3 b (p + 1), corretta per i pareggi, χ² con p − 1 gradi di libertà;  b: cicli completi, p: posizioni, R_j: la somma dei ranghi della posizione j",
       "formula_kruskal_wallis": "H = 12 / (N (N + 1)) · Σ_j R_j² / n_j − 3 (N + 1), corretta per i pareggi, χ² con p − 1 gradi di libertà;  N: valori, n_j e R_j: i valori della posizione j e la somma dei loro ranghi",
       "formula_ljung_box": "Q = n (n + 2) Σ_(k=1)^(h) ρ̂_k² / (n − k), χ² con h gradi di libertà;  ρ̂_k: l'autocorrelazione della componente residua al ritardo k",
-      "formula_adf": "ΔR_t = α + γ R_(t−1) + Σ_(j=1)^(k) β_j ΔR_(t−j) + ε_t, k = la parte intera di (n − 1)^(1/3);  τ = γ̂ / se(γ̂), il suo p-value secondo MacKinnon (1996)",
-      "formula_kpss": "η = Σ_t S_t² / (n² σ̂²), S_t = Σ_(i≤t) (R_i − R̄);  σ̂²: la varianza di lungo periodo di Newey–West con la parte intera di 3√n / 13 ritardi",
+      "formula_adf": "ΔR_t = μ + γ R_(t−1) + Σ_(j=1)^(k) β_j ΔR_(t−j) + ε_t, k = la parte intera di (n − 1)^(1/3);  τ = γ̂ / se(γ̂), il suo p-value secondo MacKinnon (1996) con N = n − k − 1, le osservazioni della regressione",
+      "formula_kpss": "η = Σ_t S_t² / (n² σ̂²), S_t = Σ_(i≤t) (R_i − R̄);  σ̂²: la varianza di lungo periodo di Newey–West con pesi di Bartlett e l = la parte intera di 4 (n / 100)^(1/4) ritardi",
       "formula_orthogonality": "IO = Σ_t Σ_(j≠k) c_j(t) c_k(t) / Σ_t x(t)², sulle IMF e sulla tendenza residua"
     },
     "measure_readings": [
@@ -957,7 +967,37 @@
       "dovrebbe",
       "consiglia",
       "migliore",
-      "peggiore"
+      "peggiore",
+      "sostenute",
+      "sostenuti",
+      "sostenere",
+      "supporta",
+      "supportato",
+      "supportata",
+      "significative",
+      "rifiutati",
+      "rifiutate",
+      "rifiutare",
+      "confermata",
+      "confermano",
+      "dimostrano",
+      "fallisce",
+      "falliti",
+      "forti",
+      "deboli",
+      "vera",
+      "veri",
+      "reali",
+      "buona",
+      "buoni",
+      "cattiva",
+      "sufficiente",
+      "sufficienti",
+      "insufficiente",
+      "dovrebbero",
+      "consigliato",
+      "migliori",
+      "peggiori"
     ],
     "stats": {
       "model": {
@@ -1113,7 +1153,7 @@
         "name": "Stagionalità: test sui ranghi",
         "h0": {
           "seasonality_test=kruskal_wallis": "Nessun andamento stagionale di questo periodo: ogni posizione del ciclo ha la stessa distribuzione.",
-          "": "Nessun andamento stagionale di questo periodo: le posizioni hanno ranghi simili in ogni ciclo."
+          "": "Nessun andamento stagionale di questo periodo: in un ciclo ogni ordine delle posizioni è ugualmente probabile."
         },
         "advice": "La componente stagionale di questo periodo può essere rumore: leggete la sua forza e il suo grafico, e provate senza questo periodo.",
         "not_computed": {
@@ -1197,7 +1237,7 @@
       "seasonal_strength": "1 − Var(R) / Var(S + R) per l'andamento di questo periodo, almeno 0.",
       "largest_acf": "La maggiore autocorrelazione della componente residua, in valore assoluto, fino al ritardo di Ljung–Box.",
       "robust_weights": "Gli istanti il cui peso finale nella stima robusta è 0.",
-      "orthogonality": "0 quando i modi sono esattamente ortogonali: solo allora le quote della varianza sommano a 1."
+      "orthogonality": "I prodotti incrociati dei modi su Σ x²: le quote dell'energia sommano a 1 − IO, a 1 quando vale 0 (modi ortogonali)."
     },
     "measures": {
       "title": "Misure, non test",
@@ -1259,7 +1299,7 @@
       "trend": "Trendstärke",
       "seasonal": "Saisonstärke",
       "largest": "Größte Schwingung",
-      "strength_under": "von 0 (nur Rauschen) bis 1",
+      "strength_under": "von 0 (nicht mehr als die Restkomponente) bis 1",
       "period": "Periode {p}",
       "periods": "Perioden {p}",
       "robust": "robust",
@@ -1451,14 +1491,14 @@
         "frequency=year": "Das Muster, das sich alle {period} Jahre wiederholt, ist am höchsten {peak}, wo es den Trend mit {peak_value:num} multipliziert, und am tiefsten {trough}, wo es ihn mit {trough_value:num} multipliziert.",
         "": "Das Muster, das sich alle {period} Schritte wiederholt, ist am höchsten {peak}, wo es den Trend mit {peak_value:num} multipliziert, und am tiefsten {trough}, wo es ihn mit {trough_value:num} multipliziert."
       },
-      "remainder_white": "Bis Lag {lag} zeigt die Restkomponente keine Autokorrelation: Mindestens so große Autokorrelationen träten mit Wahrscheinlichkeit {p_value:p} zufällig auf, über α = {alpha:num} (Ljung–Box). Sie verhält sich wie weißes Rauschen; ihre größte Autokorrelation ist {largest_acf:num}, bei Lag {at_lag}.",
-      "remainder_structure": "Die Restkomponente behält Autokorrelation bis Lag {lag}: So große Autokorrelationen träten mit Wahrscheinlichkeit {p_value:p} zufällig auf, unter α = {alpha:num} (Ljung–Box). Die größte ist {largest_acf:num}, bei Lag {at_lag}: In der Restkomponente bleibt Struktur übrig, etwa eine nicht entfernte Saison, ein zu steifer Trend oder ein Muster, das sich mit der Zeit ändert.",
-      "remainder_large_n": "Bei so vielen Werten erkennt Ljung–Box sehr kleine Autokorrelationen: Die größte der Restkomponente ist {largest_acf:num}, bei Lag {at_lag}, eine Größe, die man abwägen sollte, bevor man nach dem Test handelt.",
+      "remainder_white": "Die Daten stützen keine Autokorrelation der Restkomponente bis Lag {lag}: Mindestens so große Autokorrelationen träten mit Wahrscheinlichkeit {p_value:p} zufällig auf, über α = {alpha:num}, auch wenn die Restkomponente keine hätte (Ljung–Box). Ihre größte Autokorrelation ist {largest_acf:num}, bei Lag {at_lag}.",
+      "remainder_structure": "Die Restkomponente behält Autokorrelation bis Lag {lag}: Hätte sie keine, träten so große Autokorrelationen mit Wahrscheinlichkeit {p_value:p} zufällig auf, unter α = {alpha:num} (Ljung–Box). Die größte ist {largest_acf:num}, bei Lag {at_lag}: In der Restkomponente bleibt Struktur übrig, etwa eine nicht entfernte Saison, ein zu steifer Trend oder ein Muster, das sich mit der Zeit ändert.",
+      "remainder_large_n": "Ljung–Box erkennt sehr kleine Autokorrelationen zusammengenommen: Die größte der Restkomponente ist {largest_acf:num}, bei Lag {at_lag}, eine Größe, die vor einer Handlung nach dem Test abzuwägen ist.",
       "remainder_not_computed_emd": "Die Restkomponente wurde nicht getestet: EMD trennt kein Rauschen ab, solange Sie nicht angeben, wie viele der schnellsten IMFs Rauschen sind (noise_imfs). ADF und KPSS wurden auf dem schwingenden Teil gelesen, der Reihe ohne ihren Residualtrend.",
       "stationarity_both_ok": "ADF verwirft eine Einheitswurzel (p-Wert {p_adf:p}) und KPSS verwirft die Stationarität nicht (p-Wert {p_kpss:num}), bei α = {alpha:num}: Beide deuten auf eine Restkomponente, die um ein konstantes Niveau bleibt.",
       "stationarity_adf_only": "ADF verwirft eine Einheitswurzel (p-Wert {p_adf:p}), aber auch KPSS verwirft die Stationarität (p-Wert {p_kpss:num}), bei α = {alpha:num}: Die Restkomponente bewegt sich um ein driftendes Niveau, ein Zeichen, dass das Trendfenster zu breit ist.",
-      "stationarity_kpss_only": "Keiner der beiden Tests verwirft seine Hypothese bei α = {alpha:num}: ADF behält die Einheitswurzel (p-Wert {p_adf:p}) und KPSS die Stationarität (p-Wert {p_kpss:num}). Die Restkomponente ist zu kurz oder zu verrauscht, als dass sie es sagen könnten: Lesen Sie ihr Diagramm.",
-      "stationarity_neither": "ADF verwirft keine Einheitswurzel (p-Wert {p_adf:p}) und KPSS verwirft die Stationarität (p-Wert {p_kpss:num}), bei α = {alpha:num}: Die Restkomponente wandert wie ein Random Walk, eine langsame Bewegung, die der Trend nicht aufgenommen hat; versuchen Sie ein schmaleres Trendfenster.",
+      "stationarity_kpss_only": "Keiner der beiden Tests verwirft seine Hypothese bei α = {alpha:num}: ADF behält die Einheitswurzel (p-Wert {p_adf:p}) und KPSS die Stationarität (p-Wert {p_kpss:num}). Die beiden Tests entscheiden bei dieser Restkomponente nicht: Lesen Sie ihr Diagramm.",
+      "stationarity_neither": "ADF verwirft die Einheitswurzel nicht (p-Wert {p_adf:p}) und KPSS verwirft die Stationarität (p-Wert {p_kpss:num}), bei α = {alpha:num}: Das Niveau der Restkomponente ist nicht konstant und eine Einheitswurzel ist nicht ausgeschlossen, eine langsame Bewegung, die der Trend nicht aufgenommen hat; versuchen Sie ein schmaleres Trendfenster.",
       "kpss_table_end": "Die KPSS-Tabelle gibt p-Werte nur von 0,01 bis 0,10; hier liegt der p-Wert am Ende {bound:num} und α = {alpha:num} liegt außerhalb dieses Bereichs, daher gibt der Test kein Urteil (Statistik {statistic:num}).",
       "imfs_found": "EMD hat {n_imfs:int} Schwingungen (IMFs) von {max_imf:int} erlaubten gefunden, von der schnellsten zur langsamsten; der Residualtrend enthält die langsame Bewegung.",
       "imf_mode": {
@@ -1492,9 +1532,9 @@
       "method_remainder": "Die Restkomponente ist, was Trend und Muster übrig lassen. Ljung–Box prüft, ob ihre Autokorrelationen bis zu einem Lag alle null sind, wie bei weißem Rauschen; ist die Prüfung nicht erfüllt, bleibt Struktur. Die Restkomponente kommt aus Glättungen, nicht aus den Daten allein: Glätten nimmt die langsamen Bewegungen heraus, daher ist sie oft leicht negativ autokorreliert und weniger variabel als das wahre Rauschen. Die Tests beantworten «bleibt sichtbare Struktur?», nicht «ist das die wahre Zerlegung?». Bei vielen Werten erkennt Ljung–Box winzige Autokorrelationen: Die größte wird gezeigt, damit Sie ihre Größe abwägen können.",
       "method_stationarity": "ADF und KPSS stellen der Restkomponente entgegengesetzte Fragen: Die Nullhypothese des ADF ist eine Einheitswurzel (ein Random Walk), die des KPSS Stationarität um eine Konstante. Der p-Wert des ADF ist der von MacKinnon (1996) und stetig; der des KPSS wird aus einer Tabelle gelesen, die bei 0,01 und 0,10 endet, daher gibt ein p-Wert an einem Ende bei α außerhalb dieses Bereichs kein Urteil. Zusammen gelesen ergeben sie vier Fälle, die die Lesart nennt.",
       "stationarity_both_ok_kpss_above": "ADF verwirft eine Einheitswurzel (p-Wert {p_adf:p}) und KPSS verwirft die Stationarität nicht (p-Wert ≥ 0,10), bei α = {alpha:num}: Beide deuten auf eine Restkomponente, die um ein konstantes Niveau bleibt.",
-      "stationarity_kpss_only_kpss_above": "Keiner der beiden Tests verwirft seine Hypothese bei α = {alpha:num}: ADF behält die Einheitswurzel (p-Wert {p_adf:p}) und KPSS die Stationarität (p-Wert ≥ 0,10). Die Restkomponente ist zu kurz oder zu verrauscht, als dass sie es sagen könnten: Lesen Sie ihr Diagramm.",
+      "stationarity_kpss_only_kpss_above": "Keiner der beiden Tests verwirft seine Hypothese bei α = {alpha:num}: ADF behält die Einheitswurzel (p-Wert {p_adf:p}) und KPSS die Stationarität (p-Wert ≥ 0,10). Die beiden Tests entscheiden bei dieser Restkomponente nicht: Lesen Sie ihr Diagramm.",
       "stationarity_adf_only_kpss_below": "ADF verwirft eine Einheitswurzel (p-Wert {p_adf:p}), aber auch KPSS verwirft die Stationarität (p-Wert ≤ 0,01), bei α = {alpha:num}: Die Restkomponente bewegt sich um ein driftendes Niveau, ein Zeichen, dass das Trendfenster zu breit ist.",
-      "stationarity_neither_kpss_below": "ADF verwirft keine Einheitswurzel (p-Wert {p_adf:p}) und KPSS verwirft die Stationarität (p-Wert ≤ 0,01), bei α = {alpha:num}: Die Restkomponente wandert wie ein Random Walk, eine langsame Bewegung, die der Trend nicht aufgenommen hat; versuchen Sie ein schmaleres Trendfenster."
+      "stationarity_neither_kpss_below": "ADF verwirft die Einheitswurzel nicht (p-Wert {p_adf:p}) und KPSS verwirft die Stationarität (p-Wert ≤ 0,01), bei α = {alpha:num}: Das Niveau der Restkomponente ist nicht konstant und eine Einheitswurzel ist nicht ausgeschlossen, eine langsame Bewegung, die der Trend nicht aufgenommen hat; versuchen Sie ein schmaleres Trendfenster."
     },
     "note_texts": {
       "window_made_odd": "Ein Fenster von {given:num} Schritten wurde als {used:int} verwendet: Die Loess-Fenster sind ungerade ganze Zahlen von Schritten, daher wird ein Fenster auf die nächste ungerade ganze Zahl gebracht."
@@ -1502,15 +1542,15 @@
     "formula_texts": {
       "formula_stl": "Innere Schleife, wiederholt: S = Loess über die Zyklen von y − T an jeder Position (Saisonfenster), sein langsamer Teil durch einen Tiefpassfilter entfernt; T = Loess in der Zeit von y − S (Trendfenster). Robuste äußere Schleife: Gewicht ρ_t = B(|R_t| / (6 · Median |R|)), B(u) = (1 − u²)² für u < 1, sonst 0;  R = y − T − S",
       "formula_classical": "T_t = (½ y_(t−k) + y_(t−k+1) + … + y_(t+k−1) + ½ y_(t+k)) / p für eine gerade Periode p = 2k, der einfache Mittelwert von p Werten für eine ungerade;  S_j = der Mittelwert von y − T an Position j, zentriert auf die Summe 0 (von y / T, mit Mittel 1, wenn multiplikativ);  R = y − T − S (y / (T · S))",
-      "formula_mstl": "Für jede Periode p_i, von der kürzesten an: S_i = STL-Saison von y − Σ_(j≠i) S_j, die Durchläufe «iterate»-mal wiederholt;  T = STL-Trend von y − Σ_i S_i;  R = y − T − Σ_i S_i",
-      "formula_emd": "Sieben: h ← h − (e_max + e_min) / 2, e_max und e_min die kubischen Splines durch die Maxima und die Minima, bis h für S Siebungen in Folge eine IMF ist (Extrema und Nulldurchgänge unterscheiden sich höchstens um 1), oder max_siftings;  c_k = h, x ← x − c_k;  y = Σ_k c_k + r",
+      "formula_mstl": "Für jede Periode p_i, von der kürzesten an: S_i = STL-Saison von y − Σ_(j≠i) S_j, die Durchläufe «iterate»-mal wiederholt;  T = STL-Trend des letzten Durchlaufs (auf y − Σ_(j≠K) S_j, p_K die längste Periode);  R = y − T − Σ_i S_i",
+      "formula_emd": "Sieben: h ← h − (e_max + e_min) / 2, e_max und e_min die kubischen Splines durch die Maxima und die Minima, bis die Anzahlen der Maxima und der Minima für S Siebungen in Folge gleich bleiben (eine Änderung von höchstens 1), jedes Maximum über 0 und jedes Minimum unter 0, oder max_siftings;  c_k = h, x ← x − c_k;  x = Σ_k c_k + r",
       "formula_box_cox": "z = (y^λ − 1) / λ für λ ≠ 0;  z = log y für λ = 0",
       "formula_strength": "F_T = max(0, 1 − Var(R) / Var(T + R));  F_S = max(0, 1 − Var(R) / Var(S + R))",
       "formula_friedman": "Q = 12 / (b p (p + 1)) · Σ_j R_j² − 3 b (p + 1), korrigiert für Bindungen, χ² mit p − 1 Freiheitsgraden;  b: vollständige Zyklen, p: Positionen, R_j: die Rangsumme der Position j",
       "formula_kruskal_wallis": "H = 12 / (N (N + 1)) · Σ_j R_j² / n_j − 3 (N + 1), korrigiert für Bindungen, χ² mit p − 1 Freiheitsgraden;  N: Werte, n_j und R_j: die Werte der Position j und ihre Rangsumme",
       "formula_ljung_box": "Q = n (n + 2) Σ_(k=1)^(h) ρ̂_k² / (n − k), χ² mit h Freiheitsgraden;  ρ̂_k: die Autokorrelation der Restkomponente bei Lag k",
-      "formula_adf": "ΔR_t = α + γ R_(t−1) + Σ_(j=1)^(k) β_j ΔR_(t−j) + ε_t, k = der ganze Teil von (n − 1)^(1/3);  τ = γ̂ / se(γ̂), sein p-Wert nach MacKinnon (1996)",
-      "formula_kpss": "η = Σ_t S_t² / (n² σ̂²), S_t = Σ_(i≤t) (R_i − R̄);  σ̂²: die langfristige Varianz nach Newey–West mit dem ganzen Teil von 3√n / 13 Lags",
+      "formula_adf": "ΔR_t = μ + γ R_(t−1) + Σ_(j=1)^(k) β_j ΔR_(t−j) + ε_t, k = der ganze Teil von (n − 1)^(1/3);  τ = γ̂ / se(γ̂), sein p-Wert nach MacKinnon (1996) mit N = n − k − 1, den Beobachtungen der Regression",
+      "formula_kpss": "η = Σ_t S_t² / (n² σ̂²), S_t = Σ_(i≤t) (R_i − R̄);  σ̂²: die langfristige Varianz nach Newey–West mit Bartlett-Gewichten und l = der ganze Teil von 4 (n / 100)^(1/4) Lags",
       "formula_orthogonality": "IO = Σ_t Σ_(j≠k) c_j(t) c_k(t) / Σ_t x(t)², über die IMFs und den Residualtrend"
     },
     "measure_readings": [
@@ -1562,7 +1602,30 @@
       "ausgereicht",
       "empfohlen",
       "besser",
-      "schlechter"
+      "schlechter",
+      "sollte",
+      "sollten",
+      "unterstützt",
+      "unterstützen",
+      "belegt",
+      "signifikantes",
+      "signifikanter",
+      "starke",
+      "starken",
+      "starker",
+      "stärker",
+      "schwache",
+      "schwachen",
+      "schwächer",
+      "echte",
+      "echten",
+      "gute",
+      "guten",
+      "guter",
+      "gutes",
+      "schlechte",
+      "schlechten",
+      "empfehlen"
     ],
     "stats": {
       "model": {
@@ -1718,7 +1781,7 @@
         "name": "Saisonalität: Rangtest",
         "h0": {
           "seasonality_test=kruskal_wallis": "Kein Saisonmuster dieser Periode: Jede Position des Zyklus hat dieselbe Verteilung.",
-          "": "Kein Saisonmuster dieser Periode: Die Positionen haben in jedem Zyklus ähnliche Ränge."
+          "": "Kein Saisonmuster dieser Periode: Innerhalb eines Zyklus ist jede Reihenfolge der Positionen gleich wahrscheinlich."
         },
         "advice": "Die Saisonkomponente dieser Periode kann Rauschen sein: Lesen Sie ihre Stärke und ihr Diagramm, und versuchen Sie es ohne diese Periode.",
         "not_computed": {
@@ -1802,7 +1865,7 @@
       "seasonal_strength": "1 − Var(R) / Var(S + R) für das Muster dieser Periode, mindestens 0.",
       "largest_acf": "Die betragsmäßig größte Autokorrelation der Restkomponente bis zum Lag von Ljung–Box.",
       "robust_weights": "Die Zeitpunkte, deren endgültiges Gewicht in der robusten Schätzung 0 ist.",
-      "orthogonality": "0, wenn die Moden genau orthogonal sind: Nur dann summieren sich die Varianzanteile zu 1."
+      "orthogonality": "Die Kreuzprodukte der Moden über Σ x²: Die Anteile an der Energie summieren sich zu 1 − IO, zu 1, wenn es 0 ist (orthogonale Moden)."
     },
     "measures": {
       "title": "Maße, keine Tests",
@@ -1864,7 +1927,7 @@
       "trend": "Fuerza de la tendencia",
       "seasonal": "Fuerza estacional",
       "largest": "Oscilación mayor",
-      "strength_under": "de 0 (solo ruido) a 1",
+      "strength_under": "de 0 (no más que la componente residual) a 1",
       "period": "periodo {p}",
       "periods": "periodos {p}",
       "robust": "robusta",
@@ -2056,14 +2119,14 @@
         "frequency=year": "El patrón que se repite cada {period} años es máximo {peak}, donde multiplica la tendencia por {peak_value:num}, y mínimo {trough}, donde la multiplica por {trough_value:num}.",
         "": "El patrón que se repite cada {period} pasos es máximo {peak}, donde multiplica la tendencia por {peak_value:num}, y mínimo {trough}, donde la multiplica por {trough_value:num}."
       },
-      "remainder_white": "Hasta el retardo {lag} la componente residual no muestra autocorrelación: autocorrelaciones al menos así de grandes aparecerían por azar con probabilidad {p_value:p}, por encima de α = {alpha:num} (Ljung–Box). Se comporta como ruido blanco; su mayor autocorrelación es {largest_acf:num}, en el retardo {at_lag}.",
-      "remainder_structure": "La componente residual conserva autocorrelación hasta el retardo {lag}: autocorrelaciones así de grandes aparecerían por azar con probabilidad {p_value:p}, por debajo de α = {alpha:num} (Ljung–Box). La mayor es {largest_acf:num}, en el retardo {at_lag}: en la componente residual queda estructura, como una estacionalidad no eliminada, una tendencia demasiado rígida o un patrón que cambia con el tiempo.",
-      "remainder_large_n": "Con tantos valores Ljung–Box detecta autocorrelaciones muy pequeñas: la mayor de la componente residual es {largest_acf:num}, en el retardo {at_lag}, un tamaño que conviene sopesar antes de actuar según la prueba.",
+      "remainder_white": "Los datos no respaldan una autocorrelación de la componente residual hasta el retardo {lag}: autocorrelaciones al menos así de grandes aparecerían por azar con probabilidad {p_value:p}, por encima de α = {alpha:num}, aun si la componente residual no tuviera ninguna (Ljung–Box). Su mayor autocorrelación es {largest_acf:num}, en el retardo {at_lag}.",
+      "remainder_structure": "La componente residual conserva autocorrelación hasta el retardo {lag}: si no la tuviera, autocorrelaciones así de grandes aparecerían por azar con probabilidad {p_value:p}, por debajo de α = {alpha:num} (Ljung–Box). La mayor es {largest_acf:num}, en el retardo {at_lag}: en la componente residual queda estructura, como una estacionalidad no eliminada, una tendencia demasiado rígida o un patrón que cambia con el tiempo.",
+      "remainder_large_n": "Ljung–Box detecta autocorrelaciones muy pequeñas tomadas en conjunto: la mayor de la componente residual es {largest_acf:num}, en el retardo {at_lag}, un tamaño que conviene sopesar antes de actuar según la prueba.",
       "remainder_not_computed_emd": "La componente residual no se sometió a la prueba: EMD no separa ningún ruido si no indica cuántas de las IMF más rápidas son ruido (noise_imfs). ADF y KPSS se leyeron sobre la parte oscilante, la serie sin su tendencia residual.",
       "stationarity_both_ok": "ADF rechaza una raíz unitaria (p-valor {p_adf:p}) y KPSS no rechaza la estacionariedad (p-valor {p_kpss:num}), con α = {alpha:num}: ambas apuntan a una componente residual que se mantiene en torno a un nivel constante.",
       "stationarity_adf_only": "ADF rechaza una raíz unitaria (p-valor {p_adf:p}), pero KPSS también rechaza la estacionariedad (p-valor {p_kpss:num}), con α = {alpha:num}: la componente residual se mueve en torno a un nivel que deriva, señal de que la ventana de la tendencia es demasiado ancha.",
-      "stationarity_kpss_only": "Ninguna de las dos pruebas rechaza su hipótesis con α = {alpha:num}: ADF mantiene la raíz unitaria (p-valor {p_adf:p}) y KPSS la estacionariedad (p-valor {p_kpss:num}). La componente residual es demasiado corta o ruidosa para que lo distingan: lea su gráfico.",
-      "stationarity_neither": "ADF no rechaza una raíz unitaria (p-valor {p_adf:p}) y KPSS rechaza la estacionariedad (p-valor {p_kpss:num}), con α = {alpha:num}: la componente residual vaga como un paseo aleatorio, un movimiento lento que la tendencia no recogió; pruebe una ventana de la tendencia más estrecha.",
+      "stationarity_kpss_only": "Ninguna de las dos pruebas rechaza su hipótesis con α = {alpha:num}: ADF mantiene la raíz unitaria (p-valor {p_adf:p}) y KPSS la estacionariedad (p-valor {p_kpss:num}). Las dos pruebas no deciden sobre esta componente residual: lea su gráfico.",
+      "stationarity_neither": "ADF no rechaza una raíz unitaria (p-valor {p_adf:p}) y KPSS rechaza la estacionariedad (p-valor {p_kpss:num}), con α = {alpha:num}: el nivel de la componente residual no es constante y no se excluye una raíz unitaria, un movimiento lento que la tendencia no recogió; pruebe una ventana de la tendencia más estrecha.",
       "kpss_table_end": "La tabla de KPSS da p-valores solo de 0,01 a 0,10; aquí el p-valor está en el extremo {bound:num} y α = {alpha:num} queda fuera de ese rango, así que la prueba no da veredicto (estadístico {statistic:num}).",
       "imfs_found": "EMD encontró {n_imfs:int} oscilaciones (IMF) de las {max_imf:int} permitidas, de la más rápida a la más lenta; la tendencia residual contiene el movimiento lento.",
       "imf_mode": {
@@ -2097,9 +2160,9 @@
       "method_remainder": "La componente residual es lo que dejan la tendencia y los patrones. Ljung–Box comprueba si sus autocorrelaciones hasta un retardo son todas nulas, como en un ruido blanco; cuando la comprobación no se cumple, queda estructura. La componente residual sale de suavizados, no solo de los datos: suavizar quita los movimientos lentos, así que a menudo está algo autocorrelacionada negativamente y varía menos que el verdadero ruido. Las pruebas responden a «¿queda estructura visible?», no a «¿es esta la descomposición verdadera?». Con muchos valores Ljung–Box detecta autocorrelaciones mínimas: se muestra la mayor para que pueda sopesar su tamaño.",
       "method_stationarity": "ADF y KPSS hacen a la componente residual preguntas opuestas: la hipótesis nula de ADF es una raíz unitaria (un paseo aleatorio), la de KPSS la estacionariedad en torno a una constante. El p-valor de ADF es el de MacKinnon (1996), continuo; el de KPSS se lee de una tabla que se detiene en 0,01 y 0,10, así que con α fuera de ese rango un p-valor en un extremo no da veredicto. Leídas juntas dan cuatro casos, que dice la lectura.",
       "stationarity_both_ok_kpss_above": "ADF rechaza una raíz unitaria (p-valor {p_adf:p}) y KPSS no rechaza la estacionariedad (p-valor ≥ 0,10), con α = {alpha:num}: ambas apuntan a una componente residual que se mantiene en torno a un nivel constante.",
-      "stationarity_kpss_only_kpss_above": "Ninguna de las dos pruebas rechaza su hipótesis con α = {alpha:num}: ADF mantiene la raíz unitaria (p-valor {p_adf:p}) y KPSS la estacionariedad (p-valor ≥ 0,10). La componente residual es demasiado corta o ruidosa para que lo distingan: lea su gráfico.",
+      "stationarity_kpss_only_kpss_above": "Ninguna de las dos pruebas rechaza su hipótesis con α = {alpha:num}: ADF mantiene la raíz unitaria (p-valor {p_adf:p}) y KPSS la estacionariedad (p-valor ≥ 0,10). Las dos pruebas no deciden sobre esta componente residual: lea su gráfico.",
       "stationarity_adf_only_kpss_below": "ADF rechaza una raíz unitaria (p-valor {p_adf:p}), pero KPSS también rechaza la estacionariedad (p-valor ≤ 0,01), con α = {alpha:num}: la componente residual se mueve en torno a un nivel que deriva, señal de que la ventana de la tendencia es demasiado ancha.",
-      "stationarity_neither_kpss_below": "ADF no rechaza una raíz unitaria (p-valor {p_adf:p}) y KPSS rechaza la estacionariedad (p-valor ≤ 0,01), con α = {alpha:num}: la componente residual vaga como un paseo aleatorio, un movimiento lento que la tendencia no recogió; pruebe una ventana de la tendencia más estrecha."
+      "stationarity_neither_kpss_below": "ADF no rechaza una raíz unitaria (p-valor {p_adf:p}) y KPSS rechaza la estacionariedad (p-valor ≤ 0,01), con α = {alpha:num}: el nivel de la componente residual no es constante y no se excluye una raíz unitaria, un movimiento lento que la tendencia no recogió; pruebe una ventana de la tendencia más estrecha."
     },
     "note_texts": {
       "window_made_odd": "Una ventana de {given:num} pasos se usó como {used:int}: las ventanas del loess son números enteros impares de pasos, así que una ventana pasa al siguiente número entero impar."
@@ -2107,15 +2170,15 @@
     "formula_texts": {
       "formula_stl": "Bucle interno, repetido: S = loess a través de los ciclos de y − T en cada posición (ventana estacional), quitada su parte lenta con un filtro paso bajo; T = loess en el tiempo de y − S (ventana de la tendencia). Bucle externo robusto: peso ρ_t = B(|R_t| / (6 · mediana |R|)), B(u) = (1 − u²)² para u < 1, si no 0;  R = y − T − S",
       "formula_classical": "T_t = (½ y_(t−k) + y_(t−k+1) + … + y_(t+k−1) + ½ y_(t+k)) / p para un periodo par p = 2k, la media simple de p valores para uno impar;  S_j = la media de y − T en la posición j, centrada para que sume 0 (de y / T, con media 1, si es multiplicativa);  R = y − T − S (y / (T · S))",
-      "formula_mstl": "Para cada periodo p_i, del más corto: S_i = estacional STL de y − Σ_(j≠i) S_j, las pasadas repetidas «iterate» veces;  T = tendencia STL de y − Σ_i S_i;  R = y − T − Σ_i S_i",
-      "formula_emd": "Cribado: h ← h − (e_max + e_min) / 2, e_max y e_min los splines cúbicos por los máximos y por los mínimos, hasta que h es una IMF (extremos y cruces por cero difieren a lo sumo en 1) durante S cribados seguidos, o max_siftings;  c_k = h, x ← x − c_k;  y = Σ_k c_k + r",
+      "formula_mstl": "Para cada periodo p_i, del más corto: S_i = estacional STL de y − Σ_(j≠i) S_j, las pasadas repetidas «iterate» veces;  T = tendencia STL de la última pasada (sobre y − Σ_(j≠K) S_j, p_K el periodo más largo);  R = y − T − Σ_i S_i",
+      "formula_emd": "Cribado: h ← h − (e_max + e_min) / 2, e_max y e_min los splines cúbicos por los máximos y por los mínimos, hasta que los números de máximos y de mínimos se mantienen (un cambio de a lo sumo 1) durante S cribados seguidos con cada máximo por encima de 0 y cada mínimo por debajo de 0, o max_siftings;  c_k = h, x ← x − c_k;  x = Σ_k c_k + r",
       "formula_box_cox": "z = (y^λ − 1) / λ para λ ≠ 0;  z = log y para λ = 0",
       "formula_strength": "F_T = max(0, 1 − Var(R) / Var(T + R));  F_S = max(0, 1 − Var(R) / Var(S + R))",
       "formula_friedman": "Q = 12 / (b p (p + 1)) · Σ_j R_j² − 3 b (p + 1), corregido por empates, χ² con p − 1 grados de libertad;  b: ciclos completos, p: posiciones, R_j: la suma de los rangos de la posición j",
       "formula_kruskal_wallis": "H = 12 / (N (N + 1)) · Σ_j R_j² / n_j − 3 (N + 1), corregido por empates, χ² con p − 1 grados de libertad;  N: valores, n_j y R_j: los valores de la posición j y la suma de sus rangos",
       "formula_ljung_box": "Q = n (n + 2) Σ_(k=1)^(h) ρ̂_k² / (n − k), χ² con h grados de libertad;  ρ̂_k: la autocorrelación de la componente residual en el retardo k",
-      "formula_adf": "ΔR_t = α + γ R_(t−1) + Σ_(j=1)^(k) β_j ΔR_(t−j) + ε_t, k = la parte entera de (n − 1)^(1/3);  τ = γ̂ / se(γ̂), su p-valor según MacKinnon (1996)",
-      "formula_kpss": "η = Σ_t S_t² / (n² σ̂²), S_t = Σ_(i≤t) (R_i − R̄);  σ̂²: la varianza de largo plazo de Newey–West con la parte entera de 3√n / 13 retardos",
+      "formula_adf": "ΔR_t = μ + γ R_(t−1) + Σ_(j=1)^(k) β_j ΔR_(t−j) + ε_t, k = la parte entera de (n − 1)^(1/3);  τ = γ̂ / se(γ̂), su p-valor según MacKinnon (1996) con N = n − k − 1, las observaciones de la regresión",
+      "formula_kpss": "η = Σ_t S_t² / (n² σ̂²), S_t = Σ_(i≤t) (R_i − R̄);  σ̂²: la varianza de largo plazo de Newey–West con pesos de Bartlett y l = la parte entera de 4 (n / 100)^(1/4) retardos",
       "formula_orthogonality": "IO = Σ_t Σ_(j≠k) c_j(t) c_k(t) / Σ_t x(t)², sobre las IMF y la tendencia residual"
     },
     "measure_readings": [
@@ -2168,7 +2231,28 @@
       "debería",
       "recomienda",
       "mejor",
-      "peor"
+      "peor",
+      "respaldados",
+      "respaldadas",
+      "rechazados",
+      "rechazadas",
+      "significativos",
+      "significativas",
+      "confirman",
+      "demuestran",
+      "fuertes",
+      "débiles",
+      "buena",
+      "buenos",
+      "mala",
+      "verdadera",
+      "reales",
+      "insuficiente",
+      "deberían",
+      "mejores",
+      "peores",
+      "sostiene",
+      "apoya"
     ],
     "stats": {
       "model": {
@@ -2324,7 +2408,7 @@
         "name": "Estacionalidad: prueba de rangos",
         "h0": {
           "seasonality_test=kruskal_wallis": "Ningún patrón estacional de este periodo: cada posición del ciclo tiene la misma distribución.",
-          "": "Ningún patrón estacional de este periodo: las posiciones tienen rangos parecidos en cada ciclo."
+          "": "Ningún patrón estacional de este periodo: dentro de un ciclo, todo orden de las posiciones es igual de probable."
         },
         "advice": "La componente estacional de este periodo puede ser ruido: lea su fuerza y su gráfico, y pruebe sin este periodo.",
         "not_computed": {
@@ -2408,7 +2492,7 @@
       "seasonal_strength": "1 − Var(R) / Var(S + R) para el patrón de este periodo, al menos 0.",
       "largest_acf": "La mayor autocorrelación de la componente residual, en valor absoluto, hasta el retardo de Ljung–Box.",
       "robust_weights": "Los instantes cuyo peso final en el ajuste robusto es 0.",
-      "orthogonality": "0 cuando los modos son exactamente ortogonales: solo entonces las partes de la varianza suman 1."
+      "orthogonality": "Los productos cruzados de los modos sobre Σ x²: las partes de la energía suman 1 − IO, 1 cuando vale 0 (modos ortogonales)."
     },
     "measures": {
       "title": "Medidas, no pruebas",
@@ -2470,7 +2554,7 @@
       "trend": "Force de la tendance",
       "seasonal": "Force saisonnière",
       "largest": "Plus grande oscillation",
-      "strength_under": "de 0 (bruit seul) à 1",
+      "strength_under": "de 0 (pas plus que la composante résiduelle) à 1",
       "period": "période {p}",
       "periods": "périodes {p}",
       "robust": "robuste",
@@ -2662,14 +2746,14 @@
         "frequency=year": "Le motif qui se répète tous les {period} années est au plus haut {peak}, où il multiplie la tendance par {peak_value:num}, et au plus bas {trough}, où il la multiplie par {trough_value:num}.",
         "": "Le motif qui se répète tous les {period} pas est au plus haut {peak}, où il multiplie la tendance par {peak_value:num}, et au plus bas {trough}, où il la multiplie par {trough_value:num}."
       },
-      "remainder_white": "Jusqu'au retard {lag} la composante résiduelle ne montre pas d'autocorrélation : des autocorrélations au moins aussi grandes apparaîtraient par hasard avec une probabilité de {p_value:p}, au-dessus de α = {alpha:num} (Ljung–Box). Elle se comporte comme un bruit blanc ; sa plus grande autocorrélation est {largest_acf:num}, au retard {at_lag}.",
-      "remainder_structure": "La composante résiduelle garde de l'autocorrélation jusqu'au retard {lag} : des autocorrélations aussi grandes apparaîtraient par hasard avec une probabilité de {p_value:p}, sous α = {alpha:num} (Ljung–Box). La plus grande est {largest_acf:num}, au retard {at_lag} : il reste de la structure dans la composante résiduelle, comme une saisonnalité non retirée, une tendance trop rigide ou un motif qui change avec le temps.",
-      "remainder_large_n": "Avec autant de valeurs Ljung–Box détecte de très petites autocorrélations : la plus grande de la composante résiduelle est {largest_acf:num}, au retard {at_lag}, une taille à peser avant d'agir d'après le test.",
+      "remainder_white": "Les données n'étayent pas une autocorrélation de la composante résiduelle jusqu'au retard {lag} : des autocorrélations au moins aussi grandes apparaîtraient par hasard avec une probabilité de {p_value:p}, au-dessus de α = {alpha:num}, même si la composante résiduelle n'en avait aucune (Ljung–Box). Sa plus grande autocorrélation est {largest_acf:num}, au retard {at_lag}.",
+      "remainder_structure": "La composante résiduelle garde de l'autocorrélation jusqu'au retard {lag} : si elle n'en avait pas, des autocorrélations aussi grandes apparaîtraient par hasard avec une probabilité de {p_value:p}, sous α = {alpha:num} (Ljung–Box). La plus grande est {largest_acf:num}, au retard {at_lag} : il reste de la structure dans la composante résiduelle, comme une saisonnalité non retirée, une tendance trop rigide ou un motif qui change avec le temps.",
+      "remainder_large_n": "Ljung–Box détecte de très petites autocorrélations prises ensemble : la plus grande de la composante résiduelle est {largest_acf:num}, au retard {at_lag}, une taille à peser avant d'agir d'après le test.",
       "remainder_not_computed_emd": "La composante résiduelle n'a pas été soumise au test : EMD ne sépare aucun bruit tant que vous ne dites pas combien des IMF les plus rapides sont du bruit (noise_imfs). ADF et KPSS ont été lus sur la partie oscillante, la série sans sa tendance résiduelle.",
       "stationarity_both_ok": "ADF rejette une racine unitaire (p-valeur {p_adf:p}) et KPSS ne rejette pas la stationnarité (p-valeur {p_kpss:num}), au seuil α = {alpha:num} : tous deux indiquent une composante résiduelle qui reste autour d'un niveau constant.",
       "stationarity_adf_only": "ADF rejette une racine unitaire (p-valeur {p_adf:p}), mais KPSS rejette aussi la stationnarité (p-valeur {p_kpss:num}), au seuil α = {alpha:num} : la composante résiduelle se déplace autour d'un niveau qui dérive, signe que la fenêtre de la tendance est trop large.",
-      "stationarity_kpss_only": "Aucun des deux tests ne rejette son hypothèse au seuil α = {alpha:num} : ADF garde la racine unitaire (p-valeur {p_adf:p}) et KPSS la stationnarité (p-valeur {p_kpss:num}). La composante résiduelle est trop courte ou trop bruitée pour qu'ils tranchent : lisez son graphique.",
-      "stationarity_neither": "ADF ne rejette pas une racine unitaire (p-valeur {p_adf:p}) et KPSS rejette la stationnarité (p-valeur {p_kpss:num}), au seuil α = {alpha:num} : la composante résiduelle erre comme une marche aléatoire, un mouvement lent que la tendance n'a pas pris ; essayez une fenêtre de la tendance plus étroite.",
+      "stationarity_kpss_only": "Aucun des deux tests ne rejette son hypothèse au seuil α = {alpha:num} : ADF garde la racine unitaire (p-valeur {p_adf:p}) et KPSS la stationnarité (p-valeur {p_kpss:num}). Les deux tests ne tranchent pas sur cette composante résiduelle : lisez son graphique.",
+      "stationarity_neither": "ADF ne rejette pas la racine unitaire (p-valeur {p_adf:p}) et KPSS rejette la stationnarité (p-valeur {p_kpss:num}), au seuil α = {alpha:num} : le niveau de la composante résiduelle n'est pas constant et une racine unitaire n'est pas exclue, un mouvement lent que la tendance n'a pas pris ; essayez une fenêtre de la tendance plus étroite.",
       "kpss_table_end": "La table de KPSS ne donne des p-valeurs que de 0,01 à 0,10 ; ici la p-valeur est à la borne {bound:num} et α = {alpha:num} est hors de cet intervalle, donc le test ne donne pas de verdict (statistique {statistic:num}).",
       "imfs_found": "EMD a trouvé {n_imfs:int} oscillations (IMF) sur les {max_imf:int} permises, de la plus rapide à la plus lente ; la tendance résiduelle contient le mouvement lent.",
       "imf_mode": {
@@ -2703,9 +2787,9 @@
       "method_remainder": "La composante résiduelle est ce que laissent la tendance et les motifs. Ljung–Box vérifie si ses autocorrélations jusqu'à un retard sont toutes nulles, comme dans un bruit blanc ; quand la vérification n'est pas satisfaite, il reste de la structure. La composante résiduelle sort de lissages, pas des seules données : lisser retire les mouvements lents, aussi est-elle souvent un peu autocorrélée négativement et moins variable que le vrai bruit. Les tests répondent à «reste-t-il une structure visible ?», pas à «est-ce la vraie décomposition ?». Avec beaucoup de valeurs Ljung–Box détecte des autocorrélations infimes : la plus grande est montrée pour que vous puissiez en peser la taille.",
       "method_stationarity": "ADF et KPSS posent à la composante résiduelle des questions opposées : l'hypothèse nulle d'ADF est une racine unitaire (une marche aléatoire), celle de KPSS la stationnarité autour d'une constante. La p-valeur d'ADF est celle de MacKinnon (1996), continue ; celle de KPSS est lue dans une table qui s'arrête à 0,01 et 0,10, donc avec α hors de cet intervalle une p-valeur à une borne ne donne pas de verdict. Lus ensemble ils donnent quatre cas, dits dans la lecture.",
       "stationarity_both_ok_kpss_above": "ADF rejette une racine unitaire (p-valeur {p_adf:p}) et KPSS ne rejette pas la stationnarité (p-valeur ≥ 0,10), au seuil α = {alpha:num} : tous deux indiquent une composante résiduelle qui reste autour d'un niveau constant.",
-      "stationarity_kpss_only_kpss_above": "Aucun des deux tests ne rejette son hypothèse au seuil α = {alpha:num} : ADF garde la racine unitaire (p-valeur {p_adf:p}) et KPSS la stationnarité (p-valeur ≥ 0,10). La composante résiduelle est trop courte ou trop bruitée pour qu'ils tranchent : lisez son graphique.",
+      "stationarity_kpss_only_kpss_above": "Aucun des deux tests ne rejette son hypothèse au seuil α = {alpha:num} : ADF garde la racine unitaire (p-valeur {p_adf:p}) et KPSS la stationnarité (p-valeur ≥ 0,10). Les deux tests ne tranchent pas sur cette composante résiduelle : lisez son graphique.",
       "stationarity_adf_only_kpss_below": "ADF rejette une racine unitaire (p-valeur {p_adf:p}), mais KPSS rejette aussi la stationnarité (p-valeur ≤ 0,01), au seuil α = {alpha:num} : la composante résiduelle se déplace autour d'un niveau qui dérive, signe que la fenêtre de la tendance est trop large.",
-      "stationarity_neither_kpss_below": "ADF ne rejette pas une racine unitaire (p-valeur {p_adf:p}) et KPSS rejette la stationnarité (p-valeur ≤ 0,01), au seuil α = {alpha:num} : la composante résiduelle erre comme une marche aléatoire, un mouvement lent que la tendance n'a pas pris ; essayez une fenêtre de la tendance plus étroite."
+      "stationarity_neither_kpss_below": "ADF ne rejette pas la racine unitaire (p-valeur {p_adf:p}) et KPSS rejette la stationnarité (p-valeur ≤ 0,01), au seuil α = {alpha:num} : le niveau de la composante résiduelle n'est pas constant et une racine unitaire n'est pas exclue, un mouvement lent que la tendance n'a pas pris ; essayez une fenêtre de la tendance plus étroite."
     },
     "note_texts": {
       "window_made_odd": "Une fenêtre de {given:num} pas a été utilisée comme {used:int} : les fenêtres du loess sont des nombres entiers impairs de pas, une fenêtre passe donc au nombre entier impair suivant."
@@ -2713,15 +2797,15 @@
     "formula_texts": {
       "formula_stl": "Boucle interne, répétée : S = loess à travers les cycles de y − T à chaque position (fenêtre saisonnière), sa partie lente retirée par un filtre passe-bas ; T = loess dans le temps de y − S (fenêtre de la tendance). Boucle externe robuste : poids ρ_t = B(|R_t| / (6 · médiane |R|)), B(u) = (1 − u²)² pour u < 1, sinon 0 ;  R = y − T − S",
       "formula_classical": "T_t = (½ y_(t−k) + y_(t−k+1) + … + y_(t+k−1) + ½ y_(t+k)) / p pour une période paire p = 2k, la simple moyenne de p valeurs pour une impaire ;  S_j = la moyenne de y − T à la position j, centrée pour que sa somme soit 0 (de y / T, de moyenne 1, si multiplicative) ;  R = y − T − S (y / (T · S))",
-      "formula_mstl": "Pour chaque période p_i, de la plus courte : S_i = saisonnier STL de y − Σ_(j≠i) S_j, les passes répétées «iterate» fois ;  T = tendance STL de y − Σ_i S_i ;  R = y − T − Σ_i S_i",
-      "formula_emd": "Tamisage : h ← h − (e_max + e_min) / 2, e_max et e_min les splines cubiques par les maxima et par les minima, jusqu'à ce que h soit une IMF (extrema et passages par zéro diffèrent d'au plus 1) pendant S tamisages de suite, ou max_siftings ;  c_k = h, x ← x − c_k ;  y = Σ_k c_k + r",
+      "formula_mstl": "Pour chaque période p_i, de la plus courte : S_i = saisonnier STL de y − Σ_(j≠i) S_j, les passes répétées «iterate» fois ;  T = tendance STL de la dernière passe (sur y − Σ_(j≠K) S_j, p_K la période la plus longue) ;  R = y − T − Σ_i S_i",
+      "formula_emd": "Tamisage : h ← h − (e_max + e_min) / 2, e_max et e_min les splines cubiques par les maxima et par les minima, jusqu'à ce que les nombres de maxima et de minima restent les mêmes (une variation d'au plus 1) pendant S tamisages de suite, chaque maximum au-dessus de 0 et chaque minimum au-dessous de 0, ou max_siftings ;  c_k = h, x ← x − c_k ;  x = Σ_k c_k + r",
       "formula_box_cox": "z = (y^λ − 1) / λ pour λ ≠ 0 ;  z = log y pour λ = 0",
       "formula_strength": "F_T = max(0, 1 − Var(R) / Var(T + R)) ;  F_S = max(0, 1 − Var(R) / Var(S + R))",
       "formula_friedman": "Q = 12 / (b p (p + 1)) · Σ_j R_j² − 3 b (p + 1), corrigée des ex aequo, χ² à p − 1 degrés de liberté ;  b : cycles complets, p : positions, R_j : la somme des rangs de la position j",
       "formula_kruskal_wallis": "H = 12 / (N (N + 1)) · Σ_j R_j² / n_j − 3 (N + 1), corrigée des ex aequo, χ² à p − 1 degrés de liberté ;  N : valeurs, n_j et R_j : les valeurs de la position j et la somme de leurs rangs",
       "formula_ljung_box": "Q = n (n + 2) Σ_(k=1)^(h) ρ̂_k² / (n − k), χ² à h degrés de liberté ;  ρ̂_k : l'autocorrélation de la composante résiduelle au retard k",
-      "formula_adf": "ΔR_t = α + γ R_(t−1) + Σ_(j=1)^(k) β_j ΔR_(t−j) + ε_t, k = la partie entière de (n − 1)^(1/3) ;  τ = γ̂ / se(γ̂), sa p-valeur selon MacKinnon (1996)",
-      "formula_kpss": "η = Σ_t S_t² / (n² σ̂²), S_t = Σ_(i≤t) (R_i − R̄) ;  σ̂² : la variance de long terme de Newey–West avec la partie entière de 3√n / 13 retards",
+      "formula_adf": "ΔR_t = μ + γ R_(t−1) + Σ_(j=1)^(k) β_j ΔR_(t−j) + ε_t, k = la partie entière de (n − 1)^(1/3) ;  τ = γ̂ / se(γ̂), sa p-valeur selon MacKinnon (1996) avec N = n − k − 1, les observations de la régression",
+      "formula_kpss": "η = Σ_t S_t² / (n² σ̂²), S_t = Σ_(i≤t) (R_i − R̄) ;  σ̂² : la variance de long terme de Newey–West avec pondération de Bartlett et l = la partie entière de 4 (n / 100)^(1/4) retards",
       "formula_orthogonality": "IO = Σ_t Σ_(j≠k) c_j(t) c_k(t) / Σ_t x(t)², sur les IMF et la tendance résiduelle"
     },
     "measure_readings": [
@@ -2773,7 +2857,31 @@
       "devrait",
       "recommande",
       "meilleur",
-      "pire"
+      "pire",
+      "étaye",
+      "étayés",
+      "étayées",
+      "rejetés",
+      "rejetées",
+      "significatifs",
+      "significatives",
+      "confirment",
+      "confirmée",
+      "forte",
+      "forts",
+      "fortes",
+      "faibles",
+      "vraie",
+      "réelle",
+      "réels",
+      "bonne",
+      "mauvaise",
+      "suffisante",
+      "suffit",
+      "insuffisant",
+      "devraient",
+      "meilleure",
+      "soutient"
     ],
     "stats": {
       "model": {
@@ -2929,7 +3037,7 @@
         "name": "Saisonnalité : test de rangs",
         "h0": {
           "seasonality_test=kruskal_wallis": "Aucun motif saisonnier de cette période : chaque position du cycle a la même distribution.",
-          "": "Aucun motif saisonnier de cette période : les positions ont des rangs semblables dans chaque cycle."
+          "": "Aucun motif saisonnier de cette période : dans un cycle, tout ordre des positions est également probable."
         },
         "advice": "La composante saisonnière de cette période peut être du bruit : lisez sa force et son graphique, et essayez sans cette période.",
         "not_computed": {
@@ -3013,7 +3121,7 @@
       "seasonal_strength": "1 − Var(R) / Var(S + R) pour le motif de cette période, au moins 0.",
       "largest_acf": "La plus grande autocorrélation de la composante résiduelle, en valeur absolue, jusqu'au retard de Ljung–Box.",
       "robust_weights": "Les instants dont le poids final dans l'ajustement robuste est 0.",
-      "orthogonality": "0 quand les modes sont exactement orthogonaux : alors seulement les parts de la variance font 1."
+      "orthogonality": "Les produits croisés des modes sur Σ x² : les parts de l'énergie font 1 − IO, 1 quand il vaut 0 (modes orthogonaux)."
     },
     "measures": {
       "title": "Mesures, pas des tests",

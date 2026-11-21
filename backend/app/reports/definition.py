@@ -151,6 +151,10 @@ class _Item(_Model):
     # heading and the words that introduce a table). Set by the engine's own layouts (statistics, models); the
     # designer does not offer it, and a report without it is laid out where its items are
     keep_with_next: bool = False
+    # the body's row of this item takes no room when nothing of it is shown (every item of the row hidden and asking for
+    # it): a panel of the decomposition's report for an IMF the run did not find. The engine's own layouts only, as
+    # keep_with_next; a row a person placed keeps its place, shown or not
+    collapse_hidden: bool = False
 
 
 class TextItem(_Item):

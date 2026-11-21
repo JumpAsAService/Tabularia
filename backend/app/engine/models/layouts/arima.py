@@ -229,6 +229,22 @@ def _candidates(params: dict[str, Any]):
     return block
 
 
+def _adf_words(doc: dict, w: dict) -> None:
+    """ADF's good outcome is the rejection of its H0 (a unit root): its row says «✓ rejected» / «× not rejected», the
+    decomposition's words for the same test (lot D9), not «✓ ok» / «× failed». Only the words: a unit root left after
+    the differencing is still a failed assumption of the fit, in the colour of a failure."""
+    own = w["check_verdicts"]["adf"]
+    header = w["assumptions"]["verdict"]
+    for item in doc["sections"]["body"]["items"]:
+        if item.get("id") not in ("assumptions", "advice"):
+            continue
+        verdict = "[text]" if item["id"] == "assumptions" else c.of_row("assumption", "verdict", "text")
+        for col in item["columns"]:
+            if col["header"] == header:
+                cases = ", ".join(f'[level] = "adf" AND {verdict} = "{v}", {c.q(said)}' for v, said in own.items())
+                col["value"] = f"IFS({cases}, TRUE, {col['value']})"
+
+
 def layout(model: str, params: dict[str, Any], locale: str, sample: list[dict] | None, step: str | None) -> dict:
     variant = catalog.variant(model, catalog.check_params(model, params))
     w = c.words(model, variant, locale)
@@ -260,6 +276,7 @@ def layout(model: str, params: dict[str, Any], locale: str, sample: list[dict] |
                  coef_tables=tables, blocks=blocks, charts=charts)
     if variant == "auto":
         doc["datasets"][0]["calculated"] = _reasons(params, w)
+    _adf_words(doc, w)
     return doc
 
 

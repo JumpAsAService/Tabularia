@@ -1390,6 +1390,43 @@ def test_an_emd_decomposition_draws_its_oscillations_with_their_table_and_its_ti
                for s in said)
 
 
+def test_arima_s_adf_says_rejected_or_not_rejected_as_the_decomposition_and_its_other_checks_ok_or_failed(
+        tmp_path, chart_service, monkeypatch):  # noqa: F811
+    """Lot D9: one test, one pair of words in both reports of the time series group. ADF's good outcome is the rejection
+    of a unit root: «✓ rejected» / «× not rejected» (ARIMA keeps the failure's mark and colour: a unit root left after
+    the differencing breaks the fit), the other checks «✓ ok» / «× failed» as before."""
+    for locale, failed, ok, other_failed in (("en", "× not rejected", "✓ rejected", "× failed"),
+                                             ("it", "× non rifiutata", "✓ rifiutata", "× non rispettata")):
+        _, page = draw(tmp_path / locale, chart_service, monkeypatch, "arima-manual", fmt="svg", locale=locale)
+        said = set(strings(json.loads(page)))
+        assert failed in said and other_failed not in said, sorted(s for s in said if s[:1] in "✓×–!")
+        assert common.words("arima", "manual", locale)["verdicts"]["ok"] in said  # KPSS, the roots, Ljung–Box…
+        model, params, rows = fixture("arima-manual")
+        flipped = [{**r, "text": "ok"} if r["key"] == "assumption|adf||verdict" else r for r in rows]
+        _, page = draw(tmp_path / (locale + "_ok"), chart_service, monkeypatch, "arima-manual", fmt="svg", locale=locale, rows=flipped)
+        assert ok in set(strings(json.loads(page)))
+        assert common.words("decomposition", "stl", locale)["check_verdicts"]["adf"]["ok"] == ok
+
+
+@pytest.mark.parametrize("case", DECOMPOSITION_CASES)
+def test_the_remainder_s_heading_goes_with_what_follows_and_an_emd_without_noise_keeps_no_room_for_its_charts(case):
+    """Lot D9 (the PDFs of the kind run, D8): the heading «Remainder» was left alone at the foot of a page, and an EMD's
+    page started with a blank band of a quarter of a page — the room of the remainder's charts, which an EMD with
+    noise_imfs = 0 does not have. The heading asks the report engine to keep it with what follows (`keep_with_next`);
+    the charts are not drawn when the runner writes none."""
+    model, params, _ = fixture(case)
+    body = {it["id"]: it for it in layouts.definition(model, params, "en")["sections"]["body"]["items"]}
+    assert body["s_remainder"].get("keep_with_next") is True and body["s_remainder_rule"].get("keep_with_next") is True
+    assert {"histogram", "resid_acf"} <= set(body)
+    if params.get("method") == "emd":
+        assert params.get("noise_imfs", 0) > 0 and "noise" in body
+        quiet = {it["id"] for it in layouts.definition(model, {**params, "noise_imfs": 0}, "en")["sections"]["body"]["items"]}
+        assert not {"noise", "noise_steps", "histogram", "resid_acf", "resid_acf_caption"} & quiet and "remainder_checks" in quiet
+        # the panels of the IMFs the run may not find take no room when hidden; the series and the residue always have one
+        assert all(body[f"imf_{k}{steps}"].get("collapse_hidden") is True for k in range(1, 11) for steps in ("", "_steps"))
+        assert not body["imf_observed"].get("collapse_hidden") and not body["residue"].get("collapse_hidden")
+
+
 def test_the_decomposition_s_last_pages_explain_the_method_and_excel_keeps_the_checks_the_seasons_and_the_reading(
         tmp_path, chart_service, monkeypatch):  # noqa: F811
     _, page = draw(tmp_path, chart_service, monkeypatch, "decomposition-stl", fmt="svg")
@@ -1402,6 +1439,51 @@ def test_the_decomposition_s_last_pages_explain_the_method_and_excel_keeps_the_c
     assert {"Checks of the decomposition", "Measures, not tests", "The seasonal patterns", "Mean pattern by position",
             "Reading of the seasonal pattern", "Checks of the remainder", "Reading"} <= set(sheets), sheets
 
+
+
+def test_a_column_name_that_looks_like_a_formula_or_markup_stays_text_in_the_pdf_and_in_excel(tmp_path, chart_service, monkeypatch):  # noqa: F811
+    """Lot D9, security: the value column's name travels into the header, the formula line, the summary's reading (the
+    runner's «@summary_stl value=…», encoded) and the Excel workbook. It stays a text everywhere: no Excel formula, no
+    report expression, no Typst markup."""
+    hostile = '=HYPERLINK("http://x","y") #set ] 1% <b>'
+    model, params, rows = fixture("decomposition-stl")
+    encoded = hostile.replace("%", "%25").replace(" ", "%20").replace(",", "%2C")  # decomposition_reading.R's dec_encode
+    rows = [{**r, "text": re.sub(r"value=\S+", lambda _: "value=" + encoded, r["text"])}
+            if r["section"] == "reading" and r["text"].startswith("@summary_") else r for r in rows]
+    monkeypatch.setitem(params, "value", hostile)
+    import tests.test_models_layouts as me
+    monkeypatch.setattr(me, "fixture", lambda case: (model, params, rows))
+    _, page = draw(tmp_path / "svg", chart_service, monkeypatch, "decomposition-stl", fmt="svg")
+    said = " ".join(strings(json.loads(page)))
+    assert f"«{hostile}» over «month», monthly series" in said  # the header
+    assert f"{hostile} = trend + seasonal[12] + remainder" in said  # the formula line
+    assert f"STL split «{hostile}»" in said  # the reading, decoded once
+    out, _ = draw(tmp_path / "pdf", chart_service, monkeypatch, "decomposition-stl")
+    assert out.path.read_bytes().startswith(b"%PDF-") and out.warnings == []
+    out, _ = draw(tmp_path / "xlsx", chart_service, monkeypatch, "decomposition-stl", fmt="xlsx")
+    with zipfile.ZipFile(out.path) as z:
+        xml = " ".join(z.read(n).decode() for n in z.namelist() if n.startswith("xl/worksheets/") or n == "xl/sharedStrings.xml")
+    assert "HYPERLINK" in xml and not re.search(r"<f>[^<]*HYPERLINK", xml)
+    assert not [f for f in re.findall(r"<f>([^<]+)</f>", xml) if not f.startswith("SUBTOTAL(")]
+
+
+@pytest.mark.parametrize("locale", LOCALES)
+def test_the_decomposition_s_words_say_what_the_runner_computes_and_no_more_than_its_tests(locale):
+    """Lot D9: KPSS's lags are tseries' short rule, ADF's p-value MacKinnon's at the regression's observations, MSTL's
+    trend the last pass's, the orthogonality index what the energy shares miss; a test that does not reject says that the
+    data do not support, never that the remainder «is» white noise or a random walk."""
+    w = common._file("decomposition")[locale]
+    f = w["formula_texts"]
+    assert "4 (n / 100)^(1/4)" in f["formula_kpss"] and "3√n" not in f["formula_kpss"]
+    assert "N = n − k − 1" in f["formula_adf"] and "p_K" in f["formula_mstl"] and "y = Σ_k c_k" not in f["formula_emd"]
+    assert "1 − IO" in w["measure_texts"]["orthogonality"]
+    overclaims = {"en": ("white noise", "random walk", "noise only"), "it": ("rumore bianco", "passeggiata casuale", "solo rumore"),
+                  "de": ("weißes Rauschen", "Random Walk", "nur Rauschen"), "es": ("ruido blanco", "paseo aleatorio", "solo ruido"),
+                  "fr": ("bruit blanc", "marche aléatoire", "bruit seul")}[locale]
+    r = w["reading_texts"]
+    for key in ("remainder_white", "stationarity_neither", "stationarity_neither_kpss_below"):
+        assert not any(o.lower() in r[key].lower() for o in overclaims), (key, r[key])
+    assert not any(o.lower() in w["kpi"]["strength_under"].lower() for o in overclaims)
 
 
 @pytest.mark.parametrize("locale", LOCALES)
