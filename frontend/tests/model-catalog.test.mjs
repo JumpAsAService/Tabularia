@@ -1200,7 +1200,7 @@ test('a model just dropped already says its columns; a type read from a column n
   const arima = m.modelOf('arima')
   assert.deepEqual(m.modelOutputColumns(arima, { output: 'forecast' }, [{ name: 'month', dtype: 'Date' }]).columns[0], { name: 'time', dtype: 'Unknown' })
   assert.deepEqual(m.modelOutputColumns(arima, { time: 'month', output: 'forecast' }, [{ name: 'month', dtype: 'Date' }]).columns[0], { name: 'time', dtype: 'Date' })
-  assert.deepEqual(m.modelOutputColumns(arima, { time: 'n', output: 'forecast' }, [{ name: 'n', dtype: 'Int64' }]).columns[0], { name: 'time', dtype: 'Int32' })
+  assert.deepEqual(m.modelOutputColumns(arima, { time: 'n', output: 'forecast' }, [{ name: 'n', dtype: 'Int64' }]).columns[0], { name: 'time', dtype: 'Int64' })
   // the results table: the ten columns of the statistics, whatever the input
   assert.deepEqual(m.modelOutputColumns(LINEAR, { outcome: 'y', predictors: ['x'] }, [{ name: 'x', dtype: 'Float64' }]).columns.map((c) => c.name),
     ['section', 'level', 'level_2', 'stat', 'value', 'text', 'x0', 'x1', 'ord', 'key'])
