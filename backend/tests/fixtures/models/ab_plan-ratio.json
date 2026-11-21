@@ -4855,7 +4855,7 @@
    null,
    "line_1",
    null,
-   "@plan_size units=2833237 total=14166184 days=2673 daily=5300.0 lift=0.02 power=0.8 alpha=0.05 baseline=0.0412",
+   "@plan_mde_units units=20000 mde=0.02 power=0.8 alpha=0.05 baseline=0.0412",
    null,
    null,
    403,

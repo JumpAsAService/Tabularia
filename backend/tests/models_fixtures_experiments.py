@@ -581,9 +581,16 @@ def build_ab_plan(variant: str, params: dict[str, Any], spec: dict[str, Any], ch
         t.add("curve", "y", n_total(lift), level="n_lift", x0=lift, index=i)
     for i in range(32):
         t.add("hist", "count", round(2600 * math.exp(-i / 5)), level="metric", x0=i * 12.0, x1=(i + 1) * 12.0, index=i)
+    solve = checked["solve_for"]
+    if solve == "sample_size":  # the answer's sentence by what is solved for (the ids and names of report_texts/ab_plan.json)
+        answer = note("plan_size", units=math.ceil(nt * wt), total=math.ceil(nt), days=math.ceil(nt / daily), daily=daily, lift=min_lift,
+                      power=power, alpha=alpha, baseline=p0)
+    elif solve == "mde_for_units":
+        answer = note("plan_mde_units", units=checked["units_per_variant"], mde=min_lift, power=power, alpha=alpha, baseline=p0)
+    else:
+        answer = note("plan_mde_days", days=checked["days"], daily=daily, units=math.ceil(nt * wt), mde=min_lift, power=power, alpha=alpha)
     lines = {
-        "plan": [note("plan_size", units=math.ceil(nt * wt), total=math.ceil(nt), days=math.ceil(nt / daily), daily=daily, lift=min_lift,
-                      power=power, alpha=alpha, baseline=p0)],
+        "plan": [answer],
         "baseline": [note("baseline_read", mean=p0, sd=sd0, history_days=56, units=40000)],
         "correction": [note(f"correction_{how}", arms=arms, alpha=alpha, alpha_per_comparison=a1)],
         "method": [note("method_plan"), note("method_power"), note("method_weeks")],

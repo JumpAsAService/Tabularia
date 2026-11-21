@@ -43,9 +43,8 @@ def test_every_column_an_output_declares_has_a_type():
     assert set(catalog.ROWS_INPUT_TYPES) == {g["language"] for g in catalog.GROUPS.values()}
 
 
-# The planning node is a stub until lot E5 writes it: no runner has run its output yet, so output_columns.json has no
-# case of it. E5 adds its cases to make_output_columns.py and takes the model away from here (ab_test's are E2's).
-NOT_RUN_YET = {"ab_plan"}
+# No model is waiting for its first run now: lot E5's planning node has its three cases in make_output_columns.py.
+NOT_RUN_YET: set[str] = set()
 
 
 def test_every_variant_that_hands_on_columns_was_run():

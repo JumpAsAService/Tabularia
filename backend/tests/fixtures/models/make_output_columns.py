@@ -71,6 +71,9 @@ CASES: list[tuple[str, str, str, dict[str, Any]]] = [
     ("A/B test, continuous with a cap: the variants", "experiments", "continuous_three_cap_bh", {"output": "variants"}),
     ("A/B test, ratio with CUPED: the variants", "experiments", "cuped_ratio", {"output": "variants"}),
     ("A/B test, a whole-number variant keeps its own type: the variants", "experiments", "types_int", {"output": "variants"}),
+    ("A/B planning, binary: the plan", "experiments", "plan_binary_size", {"output": "plan"}),
+    ("A/B planning, continuous with CUPED: the plan", "experiments", "plan_cuped_days", {"output": "plan"}),
+    ("A/B planning, ratio: the plan", "experiments", "plan_ratio_arms4", {"output": "plan"}),
 ]
 
 POLARS = {"integer": pl.Int64, "number": pl.Float64, "text": pl.String, "boolean": pl.Boolean, "date": pl.Date,

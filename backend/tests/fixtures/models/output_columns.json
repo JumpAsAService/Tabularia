@@ -2888,6 +2888,252 @@
      "Float64"
     ]
    ]
+  },
+  {
+   "what": "A/B planning, binary: the plan",
+   "model": "ab_plan",
+   "params": {
+    "metric_type": "binary",
+    "metric": "converted",
+    "date": "day",
+    "min_lift": 0.15,
+    "output": "plan"
+   },
+   "input": [
+    [
+     "day",
+     "Date"
+    ],
+    [
+     "converted",
+     "Float64"
+    ],
+    [
+     "revenue",
+     "String"
+    ],
+    [
+     "revenue_pre",
+     "String"
+    ],
+    [
+     "clicks",
+     "String"
+    ],
+    [
+     "impressions",
+     "String"
+    ]
+   ],
+   "columns": [
+    [
+     "lift",
+     "Float64"
+    ],
+    [
+     "mde_absolute",
+     "Float64"
+    ],
+    [
+     "n_per_variant",
+     "Float64"
+    ],
+    [
+     "n_control",
+     "Float64"
+    ],
+    [
+     "n_total",
+     "Float64"
+    ],
+    [
+     "days",
+     "Float64"
+    ],
+    [
+     "weeks",
+     "Float64"
+    ],
+    [
+     "n_per_variant_cuped",
+     "Float64"
+    ],
+    [
+     "days_cuped",
+     "Float64"
+    ],
+    [
+     "asked",
+     "Boolean"
+    ]
+   ]
+  },
+  {
+   "what": "A/B planning, continuous with CUPED: the plan",
+   "model": "ab_plan",
+   "params": {
+    "metric_type": "continuous",
+    "metric": "revenue",
+    "covariate": "revenue_pre",
+    "date": "day",
+    "solve_for": "mde_for_days",
+    "days": 60,
+    "traffic_share": 0.5,
+    "correction": "none",
+    "alternative": "greater",
+    "output": "plan"
+   },
+   "input": [
+    [
+     "day",
+     "Date"
+    ],
+    [
+     "converted",
+     "String"
+    ],
+    [
+     "revenue",
+     "Float64"
+    ],
+    [
+     "revenue_pre",
+     "Float64"
+    ],
+    [
+     "clicks",
+     "String"
+    ],
+    [
+     "impressions",
+     "String"
+    ]
+   ],
+   "columns": [
+    [
+     "lift",
+     "Float64"
+    ],
+    [
+     "mde_absolute",
+     "Float64"
+    ],
+    [
+     "n_per_variant",
+     "Float64"
+    ],
+    [
+     "n_control",
+     "Float64"
+    ],
+    [
+     "n_total",
+     "Float64"
+    ],
+    [
+     "days",
+     "Float64"
+    ],
+    [
+     "weeks",
+     "Float64"
+    ],
+    [
+     "n_per_variant_cuped",
+     "Float64"
+    ],
+    [
+     "days_cuped",
+     "Float64"
+    ],
+    [
+     "asked",
+     "Boolean"
+    ]
+   ]
+  },
+  {
+   "what": "A/B planning, ratio: the plan",
+   "model": "ab_plan",
+   "params": {
+    "metric_type": "ratio",
+    "numerator": "clicks",
+    "denominator": "impressions",
+    "date": "day",
+    "min_lift": 0.1,
+    "arms": 4,
+    "control_share": 0.4,
+    "correction": "bonferroni",
+    "output": "plan"
+   },
+   "input": [
+    [
+     "day",
+     "Date"
+    ],
+    [
+     "converted",
+     "String"
+    ],
+    [
+     "revenue",
+     "String"
+    ],
+    [
+     "revenue_pre",
+     "String"
+    ],
+    [
+     "clicks",
+     "Float64"
+    ],
+    [
+     "impressions",
+     "Float64"
+    ]
+   ],
+   "columns": [
+    [
+     "lift",
+     "Float64"
+    ],
+    [
+     "mde_absolute",
+     "Float64"
+    ],
+    [
+     "n_per_variant",
+     "Float64"
+    ],
+    [
+     "n_control",
+     "Float64"
+    ],
+    [
+     "n_total",
+     "Float64"
+    ],
+    [
+     "days",
+     "Float64"
+    ],
+    [
+     "weeks",
+     "Float64"
+    ],
+    [
+     "n_per_variant_cuped",
+     "Float64"
+    ],
+    [
+     "days_cuped",
+     "Float64"
+    ],
+    [
+     "asked",
+     "Boolean"
+    ]
+   ]
   }
  ]
 }

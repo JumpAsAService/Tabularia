@@ -537,6 +537,129 @@ def witness_bayes(case: dict[str, Any]) -> None:
 
 
 
+# ── lot E5: the planning node ─────────────────────────────────────────────────────
+PLAN_DEFAULTS = {"solve_for": "sample_size", "min_lift": 0.02, "arms": 2, "alpha": 0.05, "power": 0.8, "alternative": "two_sided",
+                 "correction": "holm", "traffic_share": 1.0}
+
+
+def witness_plan(case: dict[str, Any]) -> None:
+    """The planning node (lot E5) from the raw rows, with statsmodels' NormalIndPower for the sizes and the detectable lift
+    (1e-9; a binary treatment's variance moves with the lift, which NormalIndPower takes as the common standard deviation
+    that gives the same variance of the difference: s_e² = (v_c / w_c + v_t / w_t) / (1 / w_c + 1 / w_t)); a transcription
+    of the equation with scipy's brentq for the binary lift; OLS for CUPED's θ and the variance it takes out."""
+    import numpy as np
+    import statsmodels.api as sm
+    from scipy.optimize import brentq
+    from statsmodels.stats.power import NormalIndPower
+
+    cid = case["id"]
+    p = {**PLAN_DEFAULTS, **case["params"]}
+    df = read(case)
+    kind = p["metric_type"]
+    want = expected_of(case)
+    if kind == "ratio":
+        y, x = df[p["numerator"]].to_numpy(float), df[p["denominator"]].to_numpy(float)
+        m0 = y.sum() / x.sum()
+        s0 = math.sqrt((np.var(y, ddof=1) - 2 * m0 * np.cov(y, x)[0, 1] + m0 ** 2 * np.var(x, ddof=1)) / x.mean() ** 2)
+    else:
+        y = df[p["metric"]].to_numpy(float)
+        m0 = y.mean()
+        s0 = math.sqrt(m0 * (1 - m0)) if kind == "binary" else float(np.std(y, ddof=1))
+    check(cid, "model|||baseline_mean", m0, want["model|||baseline_mean"], 1e-12, "the history's mean")
+    check(cid, "model|||baseline_sd", s0, want["model|||baseline_sd"], 1e-12, "the history's standard deviation (delta method for a ratio)")
+    keep = 1.0
+    if p.get("covariate"):
+        c = df[p["covariate"]].to_numpy(float)
+        own = ~np.isnan(c)
+        fit = sm.OLS(y[own], sm.add_constant(c[own])).fit()
+        theta = float(fit.params[1])
+        filled = np.where(own, c, c[own].mean())
+        r = 1 - float(np.var(y - theta * filled, ddof=1) / np.var(y, ddof=1))
+        keep = 1 - r
+        check(cid, "model|||variance_reduction", r, want["model|||variance_reduction"], 1e-12, "1 − var(y − θc) / var(y), θ = OLS slope on the units with a covariate")
+        rho = float(np.corrcoef(y[own], c[own])[0, 1])
+        check(cid, "model|||covariate_correlation", rho, want["model|||covariate_correlation"], 1e-12, "the correlation on the units with a covariate")
+    arms = int(p["arms"])
+    wc = p.get("control_share") or 1 / arms
+    wt = (1 - wc) / (arms - 1)
+    a1 = p["alpha"] if p["correction"] == "none" else p["alpha"] / (arms - 1)
+    check(cid, "model|||alpha_per_comparison", a1, want["model|||alpha_per_comparison"], 1e-15, "alpha / (arms − 1)")
+    alpha_sm = a1 / 2 if p["alternative"] == "two_sided" else a1  # NormalIndPower's «larger» is the one tail the plan's formula uses
+    dated = bool(p.get("date"))
+    if dated:
+        span = (df[p["date"]].max() - df[p["date"]].min()).days + 1
+        daily = len(df) / span * p["traffic_share"]
+        check(cid, "model|||daily_units", daily, want["model|||daily_units"], 1e-12, "units / days of history × traffic share")
+    pw = NormalIndPower()
+
+    def spread(L: float, sc: float) -> float:
+        vt = (m0 * (1 + L)) * (1 - m0 * (1 + L)) * sc if kind == "binary" else s0 ** 2 * sc
+        return math.sqrt((s0 ** 2 * sc / wc + vt / wt) / (1 / wc + 1 / wt))
+
+    def sizes(L: float, sc: float = 1.0) -> tuple[int, int, int]:
+        n_c = pw.solve_power(effect_size=abs(m0) * L / spread(L, sc), alpha=alpha_sm, power=p["power"], ratio=wt / wc, alternative="larger")
+        n_c, n_t = math.ceil(n_c - 1e-9), math.ceil(n_c * wt / wc - 1e-9)
+        return n_t, n_c, n_c + (arms - 1) * n_t
+
+    def mde(n_c: float, n_t: float, sc: float = 1.0) -> float:
+        top = (1 - m0) / m0 if kind == "binary" else 1e3
+        f = lambda L: pw.power(abs(m0) * L / spread(L, sc), nobs1=n_c, alpha=alpha_sm, ratio=n_t / n_c, alternative="larger") - p["power"]  # noqa: E731
+        return brentq(f, 1e-9, top, xtol=1e-15, rtol=1e-14)
+
+    if p["solve_for"] == "sample_size":
+        L = p["min_lift"]
+        n_t, n_c, total = sizes(L)
+        n_c0, n_t0 = n_c, n_t
+    else:
+        n_t0 = p["units_per_variant"] if p["solve_for"] == "mde_for_units" else p["days"] * daily * wt
+        n_c0 = n_t0 * wc / wt
+        L = mde(n_c0, n_t0)
+        n_t, n_c = (n_t0, math.ceil(n_c0 - 1e-9)) if p["solve_for"] == "mde_for_units" else (math.floor(n_t0), math.floor(n_c0))
+        total = n_c + (arms - 1) * n_t
+    check(cid, "model|||mde", L, want["model|||mde"], 1e-9, "the lift asked or the lift detectable (NormalIndPower / brentq on its power)")
+    check(cid, "model|||mde_absolute", abs(m0) * L, want["model|||mde_absolute"], 1e-9, "baseline × lift")
+    for key, got in (("n_per_variant", n_t), ("n_control", n_c), ("n_total", total)):
+        check(cid, f"model|||{key}", float(got), want[f"model|||{key}"], 0.0, "units: NormalIndPower.solve_power, rounded up")
+    if dated:
+        days = p["days"] if p["solve_for"] == "mde_for_days" else math.ceil(total / daily - 1e-9)
+        check(cid, "model|||days", float(days), want["model|||days"], 0.0, "days = ⌈units / units a day⌉")
+        check(cid, "model|||weeks", float(math.ceil(days / 7)), want["model|||weeks"], 0.0, "weeks = ⌈days / 7⌉")
+    if keep != 1.0:
+        n_t1, _, total1 = sizes(L, keep)
+        check(cid, "model|||n_per_variant_cuped", float(n_t1), want["model|||n_per_variant_cuped"], 0.0, "the same with the variance × (1 − r)")
+        check(cid, "model|||n_total_cuped", float(total1), want["model|||n_total_cuped"], 0.0, "the same, in all")
+        check(cid, "model|||mde_cuped", mde(n_c0, n_t0, keep), want["model|||mde_cuped"], 1e-9, "the lift detectable at these units with the variance × (1 − r)")
+        if dated:
+            check(cid, "model|||days_cuped", float(math.ceil(total1 / daily - 1e-9)), want["model|||days_cuped"], 0.0, "days with CUPED")
+    for key in want:  # the grid's rows the case lists: the sizes at that lift
+        if key.startswith("plan|") and key.endswith("||lift"):
+            lab, lift = key.split("|")[1], want[key]
+            n_t_g, _, total_g = sizes(lift)
+            check(cid, f"plan|{lab}||n_per_variant", float(n_t_g), want[f"plan|{lab}||n_per_variant"], 0.0, "the grid's units")
+            check(cid, f"plan|{lab}||n_total", float(total_g), want[f"plan|{lab}||n_total"], 0.0, "the grid's units in all")
+            if dated:
+                check(cid, f"plan|{lab}||days", float(math.ceil(total_g / daily - 1e-9)), want[f"plan|{lab}||days"], 0.0, "the grid's days")
+            if keep != 1.0:
+                check(cid, f"plan|{lab}||n_per_variant_cuped", float(sizes(lift, keep)[0]), want[f"plan|{lab}||n_per_variant_cuped"], 0.0, "the grid's units with CUPED")
+
+
+def witness_plan_rule(case: dict[str, Any]) -> None:
+    """Kohavi et al.'s rule: two equal arms, α = 0.05 two-sided, power 0.8 need 16 σ² / Δ² units each (the formula's
+    2 (1.95996 + 0.84162)² = 15.70, within 2 %), on the case's own history; and the statsmodels two-sided solution, which also
+    counts the other tail, differs from the one-tailed formula by about a millionth."""
+    import numpy as np
+    from statsmodels.stats.power import NormalIndPower
+
+    df = read(case)
+    y = df[case["params"]["metric"]].to_numpy(float)
+    s0, m0, lift = float(np.std(y, ddof=1)), float(y.mean()), 0.05
+    rule = 16 * s0 ** 2 / (m0 * lift) ** 2
+    two = NormalIndPower().solve_power(effect_size=m0 * lift / s0, alpha=0.05, power=0.8, ratio=1.0, alternative="two-sided")
+    one = 2 * (1.959963984540054 + 0.8416212335729143) ** 2 * s0 ** 2 / (m0 * lift) ** 2
+    check("plan_rule", "16σ²/Δ²", one, rule, 0.02, "n per arm = 2 (z_a + z_b)² σ²/Δ² against 16 σ²/Δ²")
+    check("plan_rule", "two-sided solve_power", two, one, 1e-5, "statsmodels counts the opposite tail too")
+
+
 def main(argv: list[str]) -> int:
     if "--engine" in argv:
         witness_engine()
@@ -544,6 +667,12 @@ def main(argv: list[str]) -> int:
         for case in EXPECTED["cases"]:
             if case["model"] == "ab_test" and not case.get("refuses") and "reading" in case:
                 (witness_bayes if case["id"].startswith("bayes_") else witness_comparisons)(case)
+    if "--engine" not in argv:
+        for case in EXPECTED["cases"]:  # lot E5: the planning node
+            if case["model"] == "ab_plan" and not case.get("refuses") and "reading" in case:
+                witness_plan(case)
+                if case["id"] == "plan_continuous_no_date":
+                    witness_plan_rule(case)
     width = max(len(s[1]) for s in said)
     for status, case, key, got, want, tol in said:
         print(f"{status:4} {case:{width}} {key}: witness {got!r}, expected {want!r} (tolerance {tol:g})")

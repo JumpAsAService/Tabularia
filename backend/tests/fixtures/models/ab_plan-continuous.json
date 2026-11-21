@@ -5733,7 +5733,7 @@
    null,
    "line_1",
    null,
-   "@plan_size units=216818 total=650454 days=246 daily=2650.0 lift=0.02 power=0.8 alpha=0.05 baseline=41.2",
+   "@plan_mde_days days=28 daily=2650.0 units=216818 mde=0.02 power=0.8 alpha=0.05",
    null,
    null,
    476,
