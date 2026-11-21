@@ -14,7 +14,9 @@ after the gateway and the sample databases are healthy. In order, it:
      difference shows between a datasource ready for the assistant and one that
      is not;
   5. builds eleven flows in «Flows» — with joins between private and public data,
-     a sql node, pivots, calculations — and schedules three of them;
+     a sql node, pivots, calculations — and schedules three of them; with the
+     administrator's «Experiments» model group enabled, two more on the web shop's
+     A/B tests («Experiment: checkout», «Experiment planning»), never scheduled;
   6. runs them once, so that the tables they produce exist, and saves four views
      on those in the Sample folder;
   7. makes the dashboard «Sales overview» and the reports «Margin review» and
@@ -171,6 +173,10 @@ def prepare_databases() -> None:
     if generate.ensure_ref(pg):
         log("added the missing public tables (calendar, regions)")
     pg.close()
+    import clickhouse_connect
+
+    if generate.ensure_experiments(clickhouse_connect.get_client(**generate.CH)):
+        log("added the missing experiments tables (the web shop's A/B tests)")
 
 
 # ── 2. the folders ────────────────────────────────────────────────────────────
@@ -210,6 +216,15 @@ PRIVATE = [  # (name, connection, table, description or None = left undescribed 
     ("sales_network", "ch", "agenti",
      "Sales force: agents, area managers and inspectors, with the reporting line."),
     ("crm_activities", "ch", "attivita_crm", None),
+    # the web shop's experiments (generate.py, «The web shop's experiments»)
+    ("experiments", "ch", "esperimenti",
+     "The web shop's experiments: what was tried, when, on which variants and with which planned split."),
+    ("experiment_users", "ch", "esperimenti_utenti",
+     "One row per visitor and experiment: the variant it saw, the day it entered, what it did and what it bought, and what it had spent in the 28 days before."),
+    ("experiment_history", "ch", "esperimenti_storico",
+     "The visitors of the eight weeks before the experiments: the baseline for planning one."),
+    ("experiment_daily", "ch", "esperimenti_giornaliero",
+     "The experiments' results summed by experiment, variant and day: the aggregated form."),
 ]
 PUBLIC = [
     ("calendar", "pg", "ref.calendario",
@@ -248,6 +263,25 @@ COLUMNS = {
                       "ruolo": "Role: agente, capo area, ispettore.", "responsabile_id": "Person they report to.",
                       "area": "Territory covered.", "provvigione_base_pct": "Base commission rate, in percent.",
                       "data_assunzione": "Date they joined.", "email": "Work email address."},
+    "experiments": {"id": "Experiment identifier. Joins to experiment_users.esperimento_id.", "nome": "Name of the experiment.",
+                    "descrizione": "What was tried.", "inizio": "First day visitors entered.", "fine": "Last day visitors entered.",
+                    "varianti": "The variants, comma separated: the first is the control.",
+                    "quote_previste": "The share of visitors planned for each variant, in the same order."},
+    "experiment_users": {"esperimento_id": "Experiment the visitor was in. Refers to experiments.id.",
+                         "utente_id": "Visitor identifier: a 64-bit number, some above 2^31. A few visitors of the checkout test saw both variants.",
+                         "variante": "The variant the visitor saw.", "data_ingresso": "The day the visitor entered the experiment.",
+                         "sessioni": "Sessions during the experiment.", "impression": "Banners shown to the visitor.",
+                         "click": "Banners clicked.", "convertito": "True when the visitor bought something.",
+                         "ricavo": "Revenue of the visitor during the experiment, in euro: 0 without a purchase.",
+                         "ricavo_pre_28g": "Revenue in the 28 days before the experiment, in euro: empty for a new visitor.",
+                         "sessioni_pre_28g": "Sessions in the 28 days before the experiment: empty for a new visitor."},
+    "experiment_history": {"utente_id": "Visitor identifier.", "data_prima_visita": "The day of the visitor's first visit in the eight weeks.",
+                           "sessioni": "Sessions.", "impression": "Banners shown.", "click": "Banners clicked.",
+                           "convertito": "True when the visitor bought something.", "ricavo": "Revenue in euro: 0 without a purchase.",
+                           "ricavo_pre_28g": "Revenue in the 28 days before the first visit, in euro: empty for a new visitor."},
+    "experiment_daily": {"esperimento_id": "Experiment. Refers to experiments.id.", "variante": "The variant.", "giorno": "The day.",
+                         "utenti": "Visitors who entered that day.", "conversioni": "Of them, the ones who bought.",
+                         "ricavo_totale": "Their revenue, in euro.", "ricavo_quadrati": "The sum of the squares of their revenue: what the variance of a revenue needs."},
     "calendar": {"giorno": "The day. Joins to orders.data_ordine.", "anno": "Year.", "trimestre": "Quarter, 1 to 4.",
                  "mese": "Month, 1 to 12.", "anno_mese": "Year and month as YYYYMM, the key reports aggregate on.",
                  "settimana_iso": "ISO week number.", "giorno_settimana": "1 = Monday … 7 = Sunday.",
@@ -391,10 +425,20 @@ def lines_with_revenue(c: Builder, y: int = 260) -> str:
     return "ricavo"
 
 
-def flows(ds: dict[str, dict], outputs_in: int) -> list[dict]:
-    """Eleven flows that make sense on the pasta and bakery model. The expressions use
-    only portable SQL (EXTRACT, CASE WHEN, ||, round, coalesce), so they run on
-    whichever engine the installation allows."""
+def model_groups() -> dict[str, dict]:
+    """The model groups the palette offers, by id (`GET /models/groups`: enabled, usable, ready).
+    Empty when the route says no: the flows that need a group are then left out."""
+    s, r = gw.call("GET", "/models/groups")
+    if s >= 400 or not isinstance(r, dict):
+        return {}
+    return {g["id"]: g for g in r.get("groups") or [] if g.get("enabled") and g.get("usable")}
+
+
+def flows(ds: dict[str, dict], outputs_in: int, groups: dict[str, dict] | None = None) -> list[dict]:
+    """Eleven flows that make sense on the pasta and bakery model, and, when the administrator has
+    enabled the experiments group (`groups`, from model_groups), the web shop's two. The expressions
+    use only portable SQL (EXTRACT, CASE WHEN, ||, round, coalesce), so they run on whichever
+    engine the installation allows."""
     out = []
 
     # 1. margin by category and month: 5 sources, 6 joins, a sql node
@@ -615,13 +659,50 @@ def flows(ds: dict[str, dict], outputs_in: int) -> list[dict]:
     c.edge(orders, "j-o", "right"); c.edge(cal, "j-cal", "right")
     out.append(dict(name="Discount by Channel and Quarter", cron=None, c=c,
                     description="Average discount granted per channel and quarter, next to the revenue it bought."))
+    if groups and "experiments" in groups:
+        out.extend(experiment_flows(ds, outputs_in, groups["experiments"]))
     return out
 
 
-def create_flows(project: int, engine: str, ds: dict[str, dict], outputs_in: int) -> list[dict]:
+def experiment_flows(ds: dict[str, dict], outputs_in: int, group: dict) -> list[dict]:
+    """The web shop's two flows on the A/B test nodes (the experiments group): the checkout test
+    on its visitors, and the planning of a next one on the history. Never scheduled."""
+    out = []
+
+    # 12. the checkout experiment: B against A on conversion, CUPED on the 28 days before, sequentially
+    c = Builder(ds, outputs_in)
+    c.source("src", "experiment_users", 40, 200)
+    c.op("checkout", "filter", {"column": "esperimento_id", "operator": "eq", "value": "checkout_2026"}, 300, 200)
+    c.nodes.append({"id": "ab", "type": "model", "position": {"x": 560, "y": 200}, "data": {
+        "label": "A/B test", "model": "ab_test", "timeoutSeconds": 900, "retries": 0, "params": {
+            "variant": "variante", "control": "A", "metric_type": "binary", "metric": "convertito", "unit": "utente_id",
+            "covariate": "ricavo_pre_28g", "covariate_missing": "fill", "date": "data_ingresso", "sequential": True,
+            "secondary_metrics": ["ricavo"], "output": "variants"}}})
+    c.output("Experiment: checkout results", 820, 200)
+    c.chain("src", "checkout", "ab", "out")
+    out.append(dict(name="Experiment: checkout", cron=None, c=c, group=group,
+                    description="Did the new checkout convert more? The A/B test node on the checkout experiment's visitors: conversion, "
+                                "the 28-day revenue before as CUPED covariate, the sequential look by entry day, and revenue as a secondary metric."))
+
+    # 13. the planning: what the history says about the next experiment
+    c = Builder(ds, outputs_in)
+    c.source("src", "experiment_history", 40, 200)
+    c.nodes.append({"id": "plan", "type": "model", "position": {"x": 300, "y": 200}, "data": {
+        "label": "A/B test planning", "model": "ab_plan", "timeoutSeconds": 900, "retries": 0, "params": {
+            "metric_type": "continuous", "metric": "ricavo", "unit": "utente_id", "covariate": "ricavo_pre_28g",
+            "covariate_missing": "fill", "date": "data_prima_visita", "solve_for": "sample_size", "min_lift": 0.05,
+            "output": "plan"}}})
+    c.output("Experiment planning results", 560, 200)
+    c.chain("src", "plan", "out")
+    out.append(dict(name="Experiment planning", cron=None, c=c, group=group,
+                    description="How many visitors, and how many days, to see a 5% lift in revenue per visitor? The A/B test planning node on the eight weeks before the experiments."))
+    return out
+
+
+def create_flows(project: int, engine: str, ds: dict[str, dict], outputs_in: int, groups: dict[str, dict] | None = None) -> list[dict]:
     existing = {f["name"]: f for f in gw.must("GET", "/flows") if f["project_id"] == project}
     created = []
-    for spec in flows(ds, outputs_in):
+    for spec in flows(ds, outputs_in, groups):
         if spec["name"] in existing:
             created.append({**spec, "id": existing[spec["name"]]["id"]})
             continue
@@ -647,6 +728,9 @@ def run_once(created_flows: list[dict], outputs_in: int) -> list[str]:
     failed = []
     for f in created_flows:
         if f["c"].output_name in present:
+            continue
+        if f.get("group") and not f["group"].get("ready"):
+            log(f"«{f['name']}» not run: the group of its nodes has no version ready yet (starting the container again runs it)")
             continue
         s, r = gw.call("POST", f"/flows/{f['id']}/run-now", {})
         if s >= 400:
@@ -1065,7 +1149,7 @@ def main() -> None:
 
     engine = choose_engine()
     log(f"engine for the flows: {engine}")
-    created = create_flows(flows_dir, engine, by_name, private)
+    created = create_flows(flows_dir, engine, by_name, private, model_groups())
     failed = []
     if RUN_FLOWS:
         log("running the flows once, so the tables they produce exist…")

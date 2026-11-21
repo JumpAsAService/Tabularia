@@ -40,6 +40,7 @@ import os
 import sys
 import time
 from datetime import date, datetime
+from decimal import Decimal
 
 import numpy as np
 import pandas as pd
@@ -892,6 +893,226 @@ def gen_activities(ch, agent_of, life: dict, intensity: np.ndarray, orders: dict
         log(f"    CRM activities {done:,}/{A:,}")
 
 
+# ── the web shop's experiments ──────────────────────────────────────────────────
+# A separate part of the generator (docs/specs/ab-testing.md, «Sample data»): the company's web
+# shop runs three experiments on its visitors, in ClickHouse `analytics`. It draws from a generator
+# of its OWN (a PCG64 on SEED + 1000) and never from `rng` or Faker, so every other table is
+# byte for byte what it was (test_generate_experiments pins their hash at small).
+#
+#   checkout_2026        A/B, 50/50, 6 weeks: B +5% conversion (relative), a converter's revenue unchanged
+#   banner_home          A/B/C/D, 25% each, 4 weeks: clicks per impression, B +6%, C -4%, D 0
+#   spedizione_gratuita  A/B, 50/50 planned, 5 weeks: B +3% revenue per visitor AND a real SRM: from day
+#                        12 a bot filter, deployed on B only, drops its least engaged visitors (7% of B's)
+#
+# A visitor has an engagement (lognormal) that drives its sessions, impressions, clicks, conversion
+# and what it spends; the spend of a converter is a lognormal and, once in fifty, a Pareto(1.5) bulk
+# order. The 28 days before the experiment come from the same engagement (the CUPED covariate),
+# unknown for the 40% of visitors that are new. `utente_id` is a BIGINT, a few above 2^31.
+EXP_SEED_OFFSET = 1000
+EXP_ENGAGEMENT_SIGMA = 0.7      # the lognormal engagement, mean 1
+EXP_NEW_SHARE = 0.40            # visitors without a past: no 28-day covariate
+EXP_CROSSOVER_SHARE = 0.001     # checkout visitors seen in both variants
+EXP_HIGH_ID_SHARE = 0.05        # visitors whose id is above 2^31
+EXP_CONV_EXPONENT = 1.0         # conversion ∝ engagement^this; spend per order ∝ engagement^EXP_SPEND_EXPONENT
+EXP_SPEND_EXPONENT = 1.0
+EXP_ORDER_SIGMA = 0.5           # the noise of an order's size (lognormal)
+EXP_ORDER_MEDIAN = 35.0         # euro
+EXP_BULK_CHANCE = 0.02          # a converter's order is a bulk one, a Pareto(1.5) multiple of the normal size
+EXP_BULK_SCALE = 0.5
+EXP_BOT_FROM_DAY = 12           # the shipping experiment's bot filter acts from this day (1-based) …
+EXP_BOT_SHARE = 0.07            # … on B, dropping the least engaged arrivals: this share of ALL of B's visitors
+EXP_WEEK = np.array([0.90, 0.92, 0.96, 1.00, 1.08, 1.25, 1.18])   # entries by weekday, Monday first
+EXP_HISTORY_DAYS = 56           # the history: the eight weeks before the first experiment
+EXP_SHARES = {"checkout_2026": 30, "banner_home": 14, "spedizione_gratuita": 16}   # of 60 (parts of `users`)
+
+EXPERIMENTS = [
+    dict(id="checkout_2026", nome="Nuovo checkout", inizio=date(2026, 3, 2), giorni=42, varianti=["A", "B"],
+         quote=[0.5, 0.5], conv=0.38, ctr=0.05, conv_lift={"B": 0.05}, ctr_lift={}, rev_lift={},
+         descrizione="Checkout a pagina unica (B) contro il checkout a due passi (A, controllo): sei settimane, metà dei visitatori ciascuno."),
+    dict(id="banner_home", nome="Banner della home", inizio=date(2026, 4, 20), giorni=28, varianti=["A", "B", "C", "D"],
+         quote=[0.25] * 4, conv=0.30, ctr=0.05, conv_lift={}, ctr_lift={"B": 0.06, "C": -0.04}, rev_lift={},
+         descrizione="Quattro banner della home page (A è quello attuale): quattro settimane, un quarto dei visitatori per banner; la misura sono i click per impression."),
+    dict(id="spedizione_gratuita", nome="Soglia di spedizione gratuita", inizio=date(2026, 5, 25), giorni=35, varianti=["A", "B"],
+         quote=[0.5, 0.5], conv=0.30, ctr=0.05, conv_lift={}, ctr_lift={}, rev_lift={"B": 0.03},
+         descrizione="Spedizione gratuita a una soglia più bassa (B) contro quella attuale (A): cinque settimane, metà dei visitatori ciascuno."),
+]
+EXP_BOT_EXPERIMENT = "spedizione_gratuita"
+EXP_USER_COLUMNS = ["esperimento_id", "utente_id", "variante", "data_ingresso", "sessioni", "impression", "click",
+                    "convertito", "ricavo", "ricavo_pre_28g", "sessioni_pre_28g"]
+EXP_HISTORY_COLUMNS = ["utente_id", "data_prima_visita", "sessioni", "impression", "click", "convertito", "ricavo", "ricavo_pre_28g"]
+
+
+def experiment_rng() -> np.random.Generator:
+    """The experiments' own random generator: the same at every run, and apart from `rng`."""
+    return np.random.Generator(np.random.PCG64(SEED + EXP_SEED_OFFSET))
+
+
+def _experiment_ids(r: np.random.Generator, n: int) -> np.ndarray:
+    """n distinct visitor ids (int64), in no order: most below 2^31, EXP_HIGH_ID_SHARE of them above it
+    (up to 2^33), so that the column needs 64 bits and a narrower type would show."""
+    high = max(1, round(n * EXP_HIGH_ID_SHARE))
+    low = r.choice(2_000_000_000 - 10_000_000, size=n - high, replace=False).astype(np.int64) + 10_000_000
+    top = r.choice(2**33 - 2**31 - 1, size=high, replace=False).astype(np.int64) + 2**31 + 1
+    return r.permutation(np.concatenate([low, top]))
+
+
+def _engagement(r: np.random.Generator, n: int) -> np.ndarray:
+    s = EXP_ENGAGEMENT_SIGMA
+    return r.lognormal(-s * s / 2, s, size=n)
+
+
+def _orders(r: np.random.Generator, eng: np.ndarray, bulk: float) -> np.ndarray:
+    """The size of an order, per visitor: a lognormal around the visitor's own level; with chance
+    `bulk` a Pareto(1.5) multiple of it (the heavy tail the cap is for)."""
+    size = np.exp(np.log(EXP_ORDER_MEDIAN) + EXP_SPEND_EXPONENT * np.log(eng) + r.normal(0, EXP_ORDER_SIGMA, size=len(eng)))
+    big = r.random(len(eng)) < bulk
+    return np.where(big, size * (1 + EXP_BULK_SCALE * r.pareto(1.5, size=len(eng))), size)
+
+
+def _conversion_probability(eng: np.ndarray, base: float) -> np.ndarray:
+    """∝ engagement^EXP_CONV_EXPONENT, with the mean `base` (before the 0.95 ceiling)."""
+    s, k = EXP_ENGAGEMENT_SIGMA, EXP_CONV_EXPONENT
+    return base * eng ** k / np.exp(s * s * (k * k - k) / 2)
+
+
+def _behaviour(r: np.random.Generator, spec: dict, eng: np.ndarray, fresh: np.ndarray, variant: np.ndarray | None) -> dict:
+    """What the visitors do in the experiment (variant None: the history's, with no effect), and in the
+    28 days before it. `fresh`: the visitors with no past (their covariates are null)."""
+    n = len(eng)
+    pick = (lambda eff: np.array([1.0 + eff.get(v, 0.0) for v in variant])) if variant is not None else (lambda eff: np.ones(n))
+    sessions = 1 + r.poisson(2.0 * eng)
+    impressions = 1 + r.poisson(8.0 * sessions)
+    ctr = np.minimum(spec["ctr"] * eng ** 0.2 * pick(spec["ctr_lift"]), 0.5)
+    clicks = r.binomial(impressions, ctr)
+    p = np.minimum(_conversion_probability(eng, spec["conv"]) * pick(spec["conv_lift"]), 0.95)
+    converted = r.random(n) < p
+    revenue = np.where(converted, _orders(r, eng, EXP_BULK_CHANCE) * pick(spec["rev_lift"]), 0.0)
+    # the 28 days before: the same engagement, its own noise, one order's size where it bought
+    pre_bought = r.random(n) < np.minimum(_conversion_probability(eng, spec["conv"]), 0.95)
+    pre_revenue = np.where(pre_bought, _orders(r, eng, EXP_BULK_CHANCE / 2), 0.0)
+    pre_sessions = 1 + r.poisson(2.0 * eng)
+    return dict(sessioni=sessions, impression=impressions, click=clicks, convertito=converted,
+                ricavo=np.round(revenue, 2),
+                ricavo_pre_28g=np.where(fresh, np.nan, np.round(pre_revenue, 2)),
+                sessioni_pre_28g=np.where(fresh, np.nan, pre_sessions))
+
+
+def _entry_days(r: np.random.Generator, start: date, days: int, n: int) -> np.ndarray:
+    """The day (0-based) each visitor enters, with the week's cycle: more at the weekend."""
+    weekday = (np.datetime64(start) + np.arange(days).astype("timedelta64[D]")).astype("datetime64[D]").astype(int) % 7
+    # 1970-01-01 was a Thursday: weekday 0 = Monday needs +3
+    weights = EXP_WEEK[(weekday + 3) % 7]
+    return r.choice(days, size=n, p=weights / weights.sum())
+
+
+def _experiment(r: np.random.Generator, spec: dict, ids: np.ndarray) -> pd.DataFrame:
+    """One experiment's visitors, one row each (and the checkout's few seen in both variants)."""
+    n = len(ids)
+    eng = _engagement(r, n)
+    fresh = r.random(n) < EXP_NEW_SHARE
+    day = _entry_days(r, spec["inizio"], spec["giorni"], n)
+    variants = np.array(spec["varianti"])
+    variant = variants[r.choice(len(variants), size=n, p=spec["quote"])]
+    # the crossover: a few visitors of the checkout see the other variant too, on a later day
+    if spec["id"] == "checkout_2026":
+        k = round(n * EXP_CROSSOVER_SHARE)
+        twin = r.choice(n, size=k, replace=False)
+        ids = np.concatenate([ids, ids[twin]])
+        eng, fresh = np.concatenate([eng, eng[twin]]), np.concatenate([fresh, fresh[twin]])
+        other = np.where(variant[twin] == variants[0], variants[1], variants[0])
+        day = np.concatenate([day, np.minimum(day[twin] + r.integers(0, 4, size=k), spec["giorni"] - 1)])
+        variant = np.concatenate([variant, other])
+    what = _behaviour(r, spec, eng, fresh, variant)
+    if spec["id"] == EXP_BOT_EXPERIMENT:
+        # the bot filter: from its day, on B only, it drops the least engaged arrivals (it took them for bots)
+        in_b = variant == spec["varianti"][1]
+        late = in_b & (day >= EXP_BOT_FROM_DAY - 1)
+        cut = np.quantile(eng[late], EXP_BOT_SHARE * in_b.sum() / late.sum())
+        keep = ~(late & (eng < cut))
+        ids, day, variant = ids[keep], day[keep], variant[keep]
+        what = {k: v[keep] for k, v in what.items()}
+    df = pd.DataFrame({"esperimento_id": spec["id"], "utente_id": ids.astype(np.int64), "variante": variant,
+                       "data_ingresso": pd.to_datetime(np.datetime64(spec["inizio"]) + day.astype("timedelta64[D]")), **what})
+    return df.sort_values(["data_ingresso", "utente_id"], kind="stable", ignore_index=True)
+
+
+def _exp_table(df: pd.DataFrame) -> pd.DataFrame:
+    """The columns as ClickHouse stores them: whole numbers, a boolean, money to the cent, nulls where unknown."""
+    df = df.copy()
+    for c in ("sessioni", "impression", "click"):
+        df[c] = df[c].astype(np.uint32)
+    df["convertito"] = df["convertito"].astype(bool)
+    df["ricavo"] = df["ricavo"].map(lambda v: Decimal(f"{v:.2f}"))
+    df["ricavo_pre_28g"] = df["ricavo_pre_28g"].map(lambda v: None if v != v else Decimal(f"{v:.2f}")).astype(object)
+    if "sessioni_pre_28g" in df:
+        df["sessioni_pre_28g"] = pd.array(df["sessioni_pre_28g"].map(lambda v: None if v != v else int(v)), dtype="UInt32")
+    return df
+
+
+def build_experiments(scale: str = SCALE) -> dict[str, pd.DataFrame]:
+    """The four tables (`esperimenti`, `esperimenti_utenti`, `esperimenti_storico`, `esperimenti_giornaliero`),
+    in memory, as raw numbers (`_exp_table` turns them into what ClickHouse takes)."""
+    sizes = scales.EXPERIMENTS[scale]
+    r = experiment_rng()
+    parts = {s["id"]: round(sizes["users"] * EXP_SHARES[s["id"]] / sum(EXP_SHARES.values())) for s in EXPERIMENTS}
+    last = EXPERIMENTS[-1]["id"]
+    parts[last] = sizes["users"] - sum(v for k, v in parts.items() if k != last)
+    ids = _experiment_ids(r, sizes["users"] + sizes["history"])
+    users, at = [], 0
+    for spec in EXPERIMENTS:
+        users.append(_experiment(r, spec, ids[at:at + parts[spec["id"]]]))
+        at += parts[spec["id"]]
+    users = pd.concat(users, ignore_index=True)
+    # the history: the same visitors' mechanics with no effect, the eight weeks before the first experiment
+    hist_ids = ids[at:]
+    eng = _engagement(r, len(hist_ids))
+    fresh = r.random(len(hist_ids)) < EXP_NEW_SHARE
+    what = _behaviour(r, EXPERIMENTS[0], eng, fresh, None)
+    first = EXPERIMENTS[0]["inizio"]
+    day = _entry_days(r, first - pd.Timedelta(days=EXP_HISTORY_DAYS).to_pytimedelta(), EXP_HISTORY_DAYS, len(hist_ids))
+    history = pd.DataFrame({"utente_id": hist_ids.astype(np.int64),
+                            "data_prima_visita": pd.to_datetime(np.datetime64(first) - np.timedelta64(EXP_HISTORY_DAYS, "D") + day.astype("timedelta64[D]")),
+                            **{k: v for k, v in what.items() if k != "sessioni_pre_28g"}})
+    history = history.sort_values(["data_prima_visita", "utente_id"], kind="stable", ignore_index=True)
+    daily = users.assign(ricavo_quadrati=users["ricavo"] ** 2, utenti=1, conversioni=users["convertito"].astype(int)).groupby(
+        ["esperimento_id", "variante", "data_ingresso"], as_index=False).agg(
+        utenti=("utenti", "sum"), conversioni=("conversioni", "sum"), ricavo_totale=("ricavo", "sum"), ricavo_quadrati=("ricavo_quadrati", "sum"))
+    daily = daily.rename(columns={"data_ingresso": "giorno"})[["esperimento_id", "variante", "giorno", "utenti", "conversioni", "ricavo_totale", "ricavo_quadrati"]]
+    experiments = pd.DataFrame([{"id": s["id"], "nome": s["nome"], "descrizione": s["descrizione"],
+                                 "inizio": pd.Timestamp(s["inizio"]), "fine": pd.Timestamp(s["inizio"] + pd.Timedelta(days=s["giorni"] - 1).to_pytimedelta()),
+                                 "varianti": ",".join(s["varianti"]), "quote_previste": ",".join(f"{q:g}" for q in s["quote"])}
+                                for s in EXPERIMENTS])
+    return {"esperimenti": experiments, "esperimenti_utenti": users, "esperimenti_storico": history,
+            "esperimenti_giornaliero": daily}
+
+
+def gen_experiments(ch, scale: str = SCALE) -> None:
+    """Creates the experiments' tables in ClickHouse and fills them."""
+    with open(os.path.join(HERE, "schema_experiments.sql"), encoding="utf-8") as f:
+        script = "\n".join(line.split("--")[0] for line in f.read().splitlines())    # a comment may hold a semicolon
+    for stmt in script.split(";"):
+        if stmt.strip():
+            ch.command(stmt)
+    t = build_experiments(scale)
+    t["esperimenti_utenti"] = _exp_table(t["esperimenti_utenti"])
+    t["esperimenti_storico"] = _exp_table(t["esperimenti_storico"])
+    t["esperimenti_giornaliero"] = t["esperimenti_giornaliero"].assign(
+        ricavo_totale=lambda d: d["ricavo_totale"].round(2).map(lambda v: Decimal(f"{v:.2f}")),
+        ricavo_quadrati=lambda d: d["ricavo_quadrati"].round(2).map(lambda v: Decimal(f"{v:.2f}")))
+    for name, df in t.items():
+        ch.insert_df(f"analytics.{name}", df)
+        log(f"  experiments: {name} {len(df):,} rows")
+
+
+def ensure_experiments(ch) -> bool:
+    """For databases filled before the experiments existed: adds them if their tables are missing.
+    True when it added them."""
+    if ch.command("EXISTS TABLE analytics.esperimenti_utenti") == 1:
+        return False
+    gen_experiments(ch)
+    return True
+
+
 # ── main ─────────────────────────────────────────────────────────────────────
 def main() -> None:
     t0 = time.time()
@@ -962,6 +1183,9 @@ def main() -> None:
 
     log("Generating the CRM activities (ClickHouse)…")
     gen_activities(ch, agent_of, life, intensity, orders)
+
+    log("Generating the web shop's experiments (ClickHouse)…")
+    gen_experiments(ch)
 
     pg.close()
     log(f"Done in {int(time.time() - t0)}s. Scale «{SCALE}».")

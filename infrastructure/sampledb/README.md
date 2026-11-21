@@ -28,6 +28,23 @@ are in Italian, as a real Italian ERP and CRM would have them.
 | `clienti` | customer records (company name, VAT number, channel, geography), each assigned to an agent of its own macro-area, hired by the day the customer was acquired, with the acquisition date `data_acquisizione` and the commercial status `stato` (`attivo`, `inattivo`, `nuovo`) |
 | `attivita_crm` | visits, calls and reminders (the big table) |
 
+**ClickHouse `analytics` — the web shop's experiments** (a generator of its own, apart from the CRM's: the tables above are byte for byte the same with or without it)
+
+| table | description |
+|---|---|
+| `esperimenti` | three experiments: their variants, the planned split and the days |
+| `esperimenti_utenti` | one row per visitor and experiment: `utente_id` (BIGINT, some above 2^31), `variante`, the entry day, sessions, impressions, clicks, `convertito`, `ricavo` (heavy tail), and `ricavo_pre_28g`, `sessioni_pre_28g` (the 28 days before: empty for the 40% of new visitors) |
+| `esperimenti_storico` | 40,000 visitors of the eight weeks before the experiments, for planning (at `small`) |
+| `esperimenti_giornaliero` | the experiments' results summed by experiment, variant and day (visitors, conversions, revenue, its squares) |
+
+| experiment | what is built in |
+|---|---|
+| `checkout_2026` (A/B, six weeks) | B converts about 5% more (relative), a converter's revenue unchanged; a few visitors (0.1%) are in both variants |
+| `banner_home` (A/B/C/D, four weeks) | clicks per impression: B +6%, C -4%, D the same as A: four variants, a ratio metric |
+| `spedizione_gratuita` (A/B, five weeks) | B +3% revenue per visitor **and a real sample ratio mismatch**: from day 12 a bot filter on B only drops its least engaged visitors (7% of B), so the split planned 50/50 is not, and B looks better than it is |
+
+Only `small` is generated for the experiments (60,000 visitors planned, the shipping experiment losing some to its filter); the sizes of `medium` and `robust` are in `scales.py`. The seed imports the tables as private tables, and, when an administrator has enabled the *Experiments* model group, builds the flows «Experiment: checkout» and «Experiment planning» on them.
+
 `ordini.cliente_id` and `ordini.agente_id` are **logical** keys into the CRM on
 ClickHouse: the cross-database join is the point of the dataset.
 

@@ -19,6 +19,16 @@ PRESETS = {
     "robust":  dict(managers=8,  inspectors=56, agents=700,   customers=150_000, orders=12_000_000, activities=60_000_000),
     "massive": dict(managers=10, inspectors=80, agents=1_000, customers=500_000, orders=12_000_000, activities=1_000_000_000),
 }
+# the web shop's experiments (generate.py, «The web shop's experiments»): `users` is the number of visitors
+# let into the three experiments (the shipping one loses some to its bot filter: its rows are fewer by that
+# many), `history` the visitors of the weeks before them. massive takes robust's.
+EXPERIMENTS = {
+    "small":  dict(users=60_000,  history=40_000),
+    "medium": dict(users=600_000, history=400_000),
+    "robust": dict(users=3_000_000, history=2_000_000),
+}
+EXPERIMENTS["massive"] = EXPERIMENTS["robust"]
+
 # robust's earlier name: an .env written for 1.3.0 or before keeps working
 ALIASES = {"robusta": "robust"}
 
