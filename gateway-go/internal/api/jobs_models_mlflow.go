@@ -279,6 +279,9 @@ func (q *queue) mlflowLog(ctx context.Context, r *scriptNodeRun, s *modelStep, c
 			if c := parseCardFile(card); c.purchaseModel != "" {
 				tags = append(tags, mlflowconn.Tag{Key: "tabularia.purchase_model", Value: c.purchaseModel})
 			}
+			if c := parseCardFile(card); c.distribution != "" {
+				tags = append(tags, mlflowconn.Tag{Key: "tabularia.distribution", Value: c.distribution})
+			}
 			if up.fileSHA != "" {
 				tags = append(tags, mlflowconn.Tag{Key: "tabularia.model_file_sha256", Value: up.fileSHA})
 			}
@@ -334,6 +337,7 @@ type cardFile struct {
 	library       string
 	file          *cardModelFile
 	purchaseModel string // a customer lifetime card's purchase model (the one used)
+	distribution  string // a parametric survival card's distribution (the one fitted; with auto, the one chosen)
 }
 
 func parseCardFile(card []byte) cardFile {
@@ -346,6 +350,9 @@ func parseCardFile(card []byte) cardFile {
 		CustomerLifetime *struct {
 			PurchaseModel string `json:"purchase_model"`
 		} `json:"customer_lifetime"`
+		ParametricSurvival *struct {
+			Distribution string `json:"distribution"`
+		} `json:"parametric_survival"`
 	}
 	if json.Unmarshal(card, &c) != nil {
 		return cardFile{}
@@ -353,6 +360,9 @@ func parseCardFile(card []byte) cardFile {
 	out := cardFile{variant: c.Variant}
 	if c.CustomerLifetime != nil {
 		out.purchaseModel = c.CustomerLifetime.PurchaseModel
+	}
+	if c.ParametricSurvival != nil {
+		out.distribution = c.ParametricSurvival.Distribution
 	}
 	if c.Boosting != nil {
 		out.library, out.file = c.Boosting.Library, c.Boosting.ModelFile

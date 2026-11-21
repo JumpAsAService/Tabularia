@@ -851,6 +851,36 @@ func TestACustomerLifetimeCardsPurchaseModelIsRead(t *testing.T) {
 	}
 }
 
+// A parametric survival card's distribution is read for the version's tag (lot P12): with auto, the one chosen.
+func TestAParametricSurvivalCardsDistributionIsRead(t *testing.T) {
+	c := parseCardFile([]byte(`{"variant": "auto", "parametric_survival": {"distribution": "gompertz", "selection": "auto"}}`))
+	if c.variant != "auto" || c.distribution != "gompertz" || c.purchaseModel != "" {
+		t.Errorf("%+v", c)
+	}
+	if c := parseCardFile([]byte(`{"variant": "value", "customer_lifetime": {"purchase_model": "bg_nbd"}}`)); c.distribution != "" {
+		t.Errorf("a card without one: %+v", c)
+	}
+}
+
+// A run of a parametric survival model registers its version with the distribution it fitted, for the list of versions.
+func TestAParametricSurvivalRunRegistersItsVersionWithTheDistribution(t *testing.T) {
+	w := newMLflowWorld(t)
+	w.files["model.json"] = []byte(`{"format": "tabularia-model", "format_version": 1, "model": "parametric_survival", "variant": "auto",
+		"group": "survival", "parametric_survival": {"distribution": "weibull", "selection": "auto"}}`)
+	id, err := w.runWith(w.block(`, "registerAs": "failures"`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r := w.row(id); r.status != "SUCCESS" {
+		t.Fatalf("%+v", r)
+	}
+	versions := w.ml.Models["failures"]
+	if len(versions) != 1 || versions[0].Tags["tabularia.variant"] != "auto" || versions[0].Tags["tabularia.distribution"] != "weibull" ||
+		versions[0].Tags["tabularia.purchase_model"] != "" {
+		t.Errorf("versions: %+v", versions)
+	}
+}
+
 // A run of a customer lifetime model registers its version with the tags Predict's form reads:
 // the variant and the purchase model the fit used.
 func TestACustomerLifetimeRunRegistersItsVersionWithTheVariantAndThePurchaseModel(t *testing.T) {
