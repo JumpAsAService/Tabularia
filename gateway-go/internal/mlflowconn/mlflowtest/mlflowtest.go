@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -349,7 +350,9 @@ func versionJSON(name string, v Version) map[string]any {
 		"creation_timestamp": v.Created, "tags": tagList}
 }
 
-// matches is the two filters the client sends: `run_id IN ('a', 'b')` and `name = 'x'`.
+// matches is the filters the client sends: `run_id IN ('a', 'b')`, `name = 'x'` (or between double
+// quotes) and `name LIKE 'x_y'`, read as MLflow 2.22 reads them: the value between its quotes, no
+// escape undone; LIKE's `_` is any one character and `%` any text.
 func matches(filter, name string, v Version) bool {
 	if rest, ok := strings.CutPrefix(filter, "run_id IN ("); ok {
 		for _, id := range strings.Split(strings.TrimSuffix(rest, ")"), ",") {
@@ -360,7 +363,21 @@ func matches(filter, name string, v Version) bool {
 		return false
 	}
 	if rest, ok := strings.CutPrefix(filter, "name = "); ok {
-		return strings.Trim(rest, "'") == name
+		return len(rest) >= 2 && (rest[0] == '\'' || rest[0] == '"') && rest[len(rest)-1] == rest[0] && rest[1:len(rest)-1] == name
+	}
+	if rest, ok := strings.CutPrefix(filter, "name LIKE '"); ok && strings.HasSuffix(rest, "'") {
+		var re strings.Builder
+		for _, c := range strings.TrimSuffix(rest, "'") {
+			switch c {
+			case '_':
+				re.WriteString(".")
+			case '%':
+				re.WriteString(".*")
+			default:
+				re.WriteString(regexp.QuoteMeta(string(c)))
+			}
+		}
+		return regexp.MustCompile("^(?s:" + re.String() + ")$").MatchString(name)
 	}
 	return filter == ""
 }

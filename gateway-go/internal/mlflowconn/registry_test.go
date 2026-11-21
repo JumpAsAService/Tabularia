@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -49,8 +50,14 @@ func TestTheRegistryIsRead(t *testing.T) {
 	if err != nil || len(of) != 1 {
 		t.Errorf("versions of a model %+v %v", of, err)
 	}
-	if _, err := tr.VersionsOf(ctx, "o'neil"); !errors.As(err, &nf) {
-		t.Errorf("a name with a quote: %v", err)
+	// a name with quotes or a backslash: between the quotes it does not hold, else by LIKE and kept
+	// only when it is exactly that name
+	for _, name := range []string{"Customer's CLV", `the "best" model`, `o'neil "x"`, `ends with \`, `a\'b`} {
+		s.Register("Pasta", name, tags, nil, files, tags)
+		s.Register("Pasta", strings.NewReplacer("'", "x", `"`, "x", `\`, "x").Replace(name), tags, nil, files, tags) // a name alike
+		if of, err := tr.VersionsOf(ctx, name); err != nil || len(of) != 1 || of[0].Name != name {
+			t.Errorf("the versions of %q: %+v %v", name, of, err)
+		}
 	}
 	v, err := tr.Version(ctx, "price", v1)
 	if err != nil || v.RunID != run1 || v.Tags["tabularia.model"] != "linear" || v.Number() != 1 {
@@ -88,5 +95,40 @@ func TestTheRegistryIsRead(t *testing.T) {
 	s.Fail = func(r *http.Request) int { return http.StatusServiceUnavailable }
 	if _, err := tr.Version(ctx, "price", v1); !errors.As(err, &me) || strings.Contains(err.Error(), mlflowtest.Leak) {
 		t.Errorf("a failing server: %v", err)
+	}
+}
+
+// The same names on a real MLflow server (TEST_MLFLOW_URL, e.g. ghcr.io/mlflow/mlflow:v2.22.0 run
+// with `mlflow server --serve-artifacts`): what «latest» reads finds each of them.
+func TestQuotedNamesAreFoundOnARealMLflow(t *testing.T) {
+	uri := os.Getenv("TEST_MLFLOW_URL")
+	if uri == "" {
+		t.Skip("TEST_MLFLOW_URL not set")
+	}
+	ctx := context.Background()
+	tr := mlflowconn.NewTracker(mlflowconn.Config{URI: uri, Auth: "none", VerifyTLS: true})
+	stamp := time.Now().Format("150405.000000")
+	exp, _, err := tr.Experiment(ctx, "names-"+stamp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	run, err := tr.CreateRun(ctx, exp, "r", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"Customer's CLV", `the "best" model`, `o'neil "x"`, `ends with \`, `a\'b`, "plain"} {
+		name += " " + stamp
+		alike := strings.NewReplacer("'", "x", `"`, "x", `\`, "x").Replace(name)
+		for i, n := range []string{name, alike} {
+			if i == 1 && alike == name {
+				continue
+			}
+			if _, err := tr.Register(ctx, n, strings.TrimRight(run.ArtifactURI, "/")+"/model", run.ID, nil); err != nil {
+				t.Fatalf("register %q: %v", n, err)
+			}
+		}
+		if of, err := tr.VersionsOf(ctx, name); err != nil || len(of) != 1 || of[0].Name != name || of[0].Version != "1" {
+			t.Errorf("the versions of %q: %+v %v", name, of, err)
+		}
 	}
 }

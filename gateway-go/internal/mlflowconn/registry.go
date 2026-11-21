@@ -275,13 +275,27 @@ func (t *Tracker) VersionsOfRuns(ctx context.Context, runIDs []string) ([]ModelV
 	return out, nil
 }
 
-// VersionsOf are the versions of one registered model. A name holding a quote cannot be put in
-// MLflow's filter: a *NotFound.
-func (t *Tracker) VersionsOf(ctx context.Context, name string) ([]ModelVersion, error) {
-	if strings.ContainsAny(name, `'\`) {
-		return nil, &NotFound{What: fmt.Sprintf("the registered model «%s» (a name with a quote cannot be looked up)", name)}
+// nameFilter is the filter of model-versions/search that finds the registered model named. MLflow
+// reads a value between single or double quotes and undoes no escape (measured on 2.22: `'a\'b'`
+// is the name a\'b, and a quote doubled finds nothing), so the name goes between the quotes it
+// does not hold; a backslash just before the closing quote would escape it for the filter's
+// parser. A name that holds both quotes, or ends with a backslash, is looked up with LIKE, each of
+// ' " \ matched by `_`: that finds it among a few names alike, and the caller keeps the one of
+// exactly that name.
+func nameFilter(name string) string {
+	single, double := strings.Contains(name, "'"), strings.Contains(name, `"`)
+	switch {
+	case strings.HasSuffix(name, `\`) || single && double:
+		return "name LIKE '" + strings.NewReplacer(`'`, "_", `"`, "_", `\`, "_").Replace(name) + "'"
+	case single:
+		return `name = "` + name + `"`
 	}
-	got, err := t.searchVersions(ctx, "name = '"+name+"'", fmt.Sprintf("listing the versions of «%s»", name))
+	return "name = '" + name + "'"
+}
+
+// VersionsOf are the versions of one registered model.
+func (t *Tracker) VersionsOf(ctx context.Context, name string) ([]ModelVersion, error) {
+	got, err := t.searchVersions(ctx, nameFilter(name), fmt.Sprintf("listing the versions of «%s»", name))
 	if err != nil {
 		return nil, err
 	}
