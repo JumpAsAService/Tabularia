@@ -671,3 +671,22 @@ def test_the_ticks_of_an_axis_around_1e9_ask_for_their_digits_and_a_normal_axis_
     en = charts.formats.locale("en")
     assert charts._value_formatter(None, en, 11) == {"$fmt": "compact", "locale": en.code, "digits": 11}
     assert charts._value_formatter(None, en) == {"$fmt": "compact", "locale": en.code}
+
+
+def test_a_legend_of_many_long_names_tells_them_apart_and_keeps_room_for_its_lines():
+    """Twenty strata «plant=Plant number 06 — north-east side»: ECharts writes 22 characters of a name, so every
+    one would read «plant=Plant number…». The words they all share are left out («…06…»); names that fit, or share
+    nothing, stay. A tall chart keeps room for more than four lines of legend (a share of its height)."""
+    from app.reports import charts
+
+    names = [f"plant=Plant number {i:02d} — north-east side" for i in range(20)]
+    short = charts._short_names(names)
+    assert short[6] == "…06…" and len(set(short)) == 20
+    assert charts._short_names(["north", "south"]) == ["north", "south"]
+    assert charts._short_names(["a very long name of the first group", "another one, with nothing in common"]) == \
+        ["a very long name of the first group", "another one, with nothing in common"]
+    assert charts._short_names(["shared first words then A and more words here", "shared first words then B"]) == \
+        ["…A and more words here", "…B"]
+    long_names = [f"group with a long name {i:02d}" for i in range(20)]
+    assert charts._legend_rows(long_names, 300, 234) == 5 and charts._legend_rows(long_names, 300, 120) == 4
+    assert charts._legend_rows(long_names, 300, 600) > 5 and charts._legend_rows(["a", "b"], 300, 600) == 1

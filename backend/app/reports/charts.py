@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import concurrent.futures
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from app.reports import definition as rd
@@ -119,21 +119,48 @@ def _points(s: SeriesData, below: str | None = None) -> list[dict | None]:
             for v, t in zip(s.values, s.labels)]
 
 
-def _legend_rows(names: list[str], width: int) -> int:
-    """How many lines the legend takes: ECharts does not keep room for it in the grid."""
+LEGEND_NAME = 22  # the characters of a legend's name ECharts writes (it truncates the rest at 120 px)
+LEGEND_SHARE = 0.4  # the most of a chart's height its legend takes: the plot keeps the rest
+
+
+def _legend_rows(names: list[str], width: int, height: int = 0) -> int:
+    """How many lines the legend takes: ECharts does not keep room for it in the grid. As many as
+    its names need, up to four, or up to LEGEND_SHARE of the chart's height on a tall one (the plot
+    keeps the rest)."""
     rows, used = 1, 0.0
     for name in names:
-        w = 10 + 5 + min(len(name), 22) * 9 * 0.56 + 8  # icon, gap, text (truncated at 120 px), item gap
+        w = 10 + 5 + min(len(name), LEGEND_NAME) * 9 * 0.56 + 8  # icon, gap, text (truncated at 120 px), item gap
         if used and used + w > width - 10:
             rows, used = rows + 1, 0.0
         used += w
-    return min(rows, 4)
+    most = max(4, int(height * LEGEND_SHARE) // 16)
+    return min(rows, most)
 
 
-def _base(data: ChartData, theme: rd.Theme, legend: bool, width: int) -> dict:
+def _short_names(names: list[str]) -> list[str]:
+    """Names a legend can tell apart: when some are longer than it writes and they share their first or last
+    words («plant=Plant number 06 — north-east side», «plant=Plant number 07 — north-east side»), those
+    words are left out, an ellipsis in their place («…number 06…»). The names as they are when they fit,
+    when nothing is shared, or when the shortened ones would no longer differ."""
+    if len(names) < 2 or all(len(n) <= LEGEND_NAME for n in names):
+        return names
+    words = [n.split(" ") for n in names]
+    first = 0
+    while all(len(w) > first + 1 for w in words) and len({w[first] for w in words}) == 1:
+        first += 1
+    last = 0
+    while all(len(w) > first + last + 1 for w in words) and len({w[-1 - last] for w in words}) == 1:
+        last += 1
+    if not first and not last:
+        return names
+    short = [("…" if first else "") + " ".join(w[first:len(w) - last]) + ("…" if last else "") for w in words]
+    return short if len(set(short)) == len(set(names)) else names
+
+
+def _base(data: ChartData, theme: rd.Theme, legend: bool, width: int, height: int = 0) -> dict:
     top = 22 if data.title else 8
     names = [s.name for s in data.series] or [name for name, _ in data.points] or _xy_legend(data)
-    lines = _legend_rows(names, width) if legend else 0
+    lines = _legend_rows(names, width, height) if legend else 0
     option: dict[str, Any] = {
         "animation": False,
         "color": _palette(theme),
@@ -241,7 +268,11 @@ def _option(data: ChartData, it: rd.ChartItem, theme: rd.Theme, loc: formats.Loc
                                                                           "gauge", "bullet", "boxplot", "interval"))
     width_px = max(int(it.w * MM_PX), 40)
     height_px = max(int(it.h * MM_PX), 20)
-    base = _base(data, theme, bool(legend), width_px)
+    if kind == "xy":  # names a legend can tell apart (the strata of a survival model, a common prefix)
+        short = dict(zip(names := _xy_legend(data), _short_names(names)))
+        if any(k != v for k, v in short.items()):
+            data = replace(data, xy=[replace(x, name=short.get(x.name, x.name)) for x in data.xy])
+    base = _base(data, theme, bool(legend), width_px, height_px)
     if kind in ("column", "line", "area", "combo"):
         right = any(s.axis == "right" for s in data.series)
         series = []
