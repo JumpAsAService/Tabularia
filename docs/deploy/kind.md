@@ -567,7 +567,7 @@ In **Administration → Scripting environments**, the scripts bucket of step 7:
 **Test** answers that it wrote, read and deleted a probe object, and that the key cannot
 list the bucket. Then create an environment, for example Python 3.12. Its image is built
 in the cluster, pushed to the private registry with the company's authority, checked,
-and marked **Ready** after a few minutes. Script nodes can use it: see
+and shown as **Version 1 in use** after a few minutes. Script nodes can use it: see
 [Python and R in flows](../scripting.md). Scripts can also be kept on their own, next to
 flows and views: **Explore → New → Script**.
 
@@ -996,8 +996,9 @@ and open **http://localhost:5000** in the browser (on Windows, in the browser of
 Windows). It asks for a user and a password: `admin` and `$MLFLOW_PASSWORD` (`echo
 "$MLFLOW_PASSWORD"` in the first terminal).
 
-**Connect it to Tabularia.** In **Explore**, in a folder you may use: **New → New
-connection**, type **MLflow**, and fill in:
+**Connect it to Tabularia.** In **Explore**, open a folder you may use (your own, the one
+named after you: the **New** menu of the first page, with the list of all folders, has no
+connection in it), then **New → New connection**, type **MLflow**, and fill in:
 
 | Field | Value |
 |---|---|
