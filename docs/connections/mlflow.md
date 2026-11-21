@@ -4,7 +4,7 @@ An MLflow connection is a tracking server that lives **outside Tabularia**: the 
 the statistical models of a flow are recorded (experiments, runs, parameters, metrics, files
 and registered versions). It names the server's address and the way to sign in. Tabularia
 does not install or run MLflow. To try one on a Kubernetes cluster, see
-[an optional MLflow server next to Tabularia](../deploy/kind.md#14-optional-a-tracking-server-for-the-statistical-models-mlflow).
+[an optional MLflow server next to Tabularia](../deploy/kind.md#14-optional-the-statistical-models-and-a-tracking-server-for-them-mlflow).
 
 ## At a glance
 

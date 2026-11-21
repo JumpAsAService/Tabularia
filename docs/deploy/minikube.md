@@ -14,8 +14,8 @@ What you get at the end:
 - Tabularia in your browser at `http://localhost:8080`, with you as its administrator;
 - your data kept in a bucket of your cloud object storage (Scaleway, AWS or any
   S3-compatible service), not on your laptop;
-- optionally, flows that run on your ClickHouse service, and Python and R scripts in
-  flows.
+- optionally, flows that run on your ClickHouse service, Python and R scripts in
+  flows, and (with a release that has them, step 11) statistical models.
 
 Plan about an hour the first time, most of it waiting for downloads.
 
@@ -477,6 +477,30 @@ apps](../capabilities/notebooks.md) explains them, and why the separate address.
 > from Tabularia's own pods and from the cloud's metadata address. minikube's network
 > does not apply such rules: here the rule is written but has no effect. A company
 > cluster applies it; [the kind guide](kind.md) builds one on your computer.
+
+## Step 11 — Optional: statistical models
+
+> [!IMPORTANT]
+> **Release 1.4.7, which this guide installs, has no statistical models.** There is no
+> **Models** group in the flow editor and no **Administration → Statistical models**. They
+> are in the code of `main` and will be in the release that follows 1.4.7: when it is
+> published, redo step 3 and the image version of your `my-values.yaml` with that release
+> and upgrade as in [Upgrading Tabularia](upgrading.md). Until then, the way to try them is
+> [the kind guide](kind.md), whose step 6 has a note, «The code of a branch instead of a
+> release», that builds the images from the clone.
+
+With a version that has them, the models need what step 10 set up (the registry, the
+scripts block and the scripts bucket). Then, as an administrator, open **Administration →
+Statistical models**, choose one group (start with *Survival* or *Regression*) and press
+**Enable**. The cluster builds the group's image and runs a self-test: the state goes from
+**Building** to **Checking** to **Ready**, and only then the **Models** group appears in the
+palette. The build gets 2 CPU and 4Gi of memory by default (`SCRIPTS__BUILD_CPU` and
+`SCRIPTS__BUILD_MEMORY`, in **Administration → Settings**) and compiles R packages: several
+minutes to tens of minutes the first time. On a computer with 16 GB, enable **one group at
+a time** and wait for **Ready** before the next. The customer lifetime group also installs a
+system library from the Ubuntu archives, so its build needs internet access. More:
+[Kubernetes](kubernetes.md#statistical-models) and
+[Statistical models](../capabilities/models.md#turning-a-group-on-administrators).
 
 ## Every day
 

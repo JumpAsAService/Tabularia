@@ -17,8 +17,9 @@ use there:
 - Tabularia's images copied into the private registry, and Python and R scripts built
   and run through it;
 - images of your own run as steps of a flow (the Container node), from that registry;
-- if you like, the sample data of the Docker Compose stack, to play with (step 13), and a
-  tracking server for the statistical models (step 14).
+- if you like, the sample data of the Docker Compose stack, to play with (step 13), the
+  statistical models and a tracking server for them (step 14). The models are not in
+  release 1.4.7, the one this guide installs by default: see the first note of step 14.
 
 It is meant for people who know a terminal and want to try Tabularia as it will run in
 production, or test a change of the chart before a customer does. To simply try
@@ -119,6 +120,12 @@ cd Tabularia
 export VERSION=1.4.7 WORK="$HOME/tabularia-kind"
 mkdir -p "$WORK"
 ```
+
+> [!NOTE]
+> **Statistical models.** Release 1.4.7 has no statistical models and no MLflow support
+> (step 14). To try them, take the code of a branch instead of this release: the note
+> «The code of a branch instead of a release» in step 6 says how, and replaces the
+> `--branch v1.4.7` above.
 
 Every later command runs from the `Tabularia` folder. `$WORK` holds what the cluster
 needs outside of it: certificates, passwords, the settings. Choose now the first
@@ -759,6 +766,21 @@ on `Sample`, and CONNECT too to import from its two connections.
   kubectl logs --namespace tabularia-deps job/sampledb-init --tail=1
   ```
 
+- **Volumes made by an older version.** The Job generates data only into empty databases, so
+  a sample database made before the customers had a life (before the `stato` and
+  `data_acquisizione` of the current `clienti`, see the changelog) keeps its old tables, and
+  the models' examples need the new ones. To begin again: delete the `Sample` folder in
+  Explore (its tables are copies of the old data), then
+
+  ```bash
+  kubectl delete -f infrastructure/kind/samples.yaml
+  docker build -t tabularia-sampledb:local infrastructure/sampledb
+  kind load docker-image tabularia-sampledb:local --name tabularia
+  kubectl apply -f infrastructure/kind/samples.yaml
+  ```
+
+  The first command removes the two databases with their volumes (and the secret stays);
+  the rest is the beginning of this step again, with the new image.
 - **Who reaches the databases**: Tabularia's workers, which already reach
   `tabularia-deps` (step 8), at `sampledb-postgres.tabularia-deps.svc.cluster.local:5432`
   and `sampledb-clickhouse.tabularia-deps.svc.cluster.local:8123`. A network policy keeps
@@ -768,7 +790,41 @@ on `Sample`, and CONNECT too to import from its two connections.
   stays in Tabularia, with its tables, until you delete it in Explore; its connections
   and the flows that read them then fail.
 
-## 14. Optional: a tracking server for the statistical models (MLflow)
+## 14. Optional: the statistical models, and a tracking server for them (MLflow)
+
+> [!IMPORTANT]
+> **A version that has the models.** Release 1.4.7, which step 1 clones and step 6 copies,
+> has no statistical models: no **Models** group in the palette, no **Administration →
+> Statistical models**, no MLflow connection. They are in the code of `main`. Until a
+> release holds them, do this step with the note «The code of a branch instead of a
+> release» of step 6: clone without `--branch`, build the five images from the clone and
+> let `VERSION` come from the chart. If you installed 1.4.7 first, follow
+> [Upgrade it](#upgrade-it) with those images.
+
+### Turn on a group of models
+
+Nothing is built until an administrator enables a group. What it needs is already done:
+`scripts.enabled` in step 8, the private registry (steps 5 and 6) and the scripts bucket
+(step 10). Then, in **Administration → Statistical models**, open one group (start with
+*Survival* or *Regression*) and press **Enable**. The state goes from **Building** to
+**Checking**, where the models are fitted on small reference tables and compared with values
+computed outside Tabularia, and then to **Ready**; a group that is not Ready has no nodes in
+the palette. Only then the **Models** group appears in the flow editor.
+
+The build is a Job like an environment's image, in the cluster, with the CPU and memory of
+`SCRIPTS__BUILD_CPU` and `SCRIPTS__BUILD_MEMORY` (2 CPU and 4Gi by default; they are in
+**Administration → Settings**). The R packages are compiled from source, so a group takes
+from several minutes to tens of minutes the first time, once per version. On a computer
+with 16 GB, shared with the three kind nodes, enable **one group at a time** and wait for
+**Ready** before the next one; the boosting group is Python wheels and compiles nothing. The
+customer lifetime group also installs the GNU Scientific Library from the Ubuntu archives
+during its build, so that build needs access to `archive.ubuntu.com`. The details
+(registries, mirrors, the Jobs at run time) are in
+[Kubernetes](kubernetes.md#statistical-models); what each state means is in
+[Statistical models](../capabilities/models.md#turning-a-group-on-administrators). The
+examples on the sample data (step 13) are in [the same page](../capabilities/models.md#parametric-survival).
+
+### A tracking server (MLflow)
 
 The statistical models of a flow can record their runs on an MLflow tracking server, and
 the **Predict** node applies a model registered there. Both are optional: without MLflow
