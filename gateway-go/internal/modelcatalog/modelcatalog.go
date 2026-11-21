@@ -69,6 +69,8 @@ type Kind struct {
 	Min       *float64 `json:"min"`
 	Max       *float64 `json:"max"`
 	MaxCount  *int     `json:"max_count"`
+	// Whole: each number of a `numbers` or `number_or_choice` kind is a whole one (a period, a window, a lag)
+	Whole bool `json:"whole"`
 }
 
 // cond is one condition of a rule: a key and what its value must be (a value, a list of
@@ -510,6 +512,19 @@ func isNumber(v any) (float64, bool) {
 	return f, ok && !math.IsInf(f, 0) && !math.IsNaN(f)
 }
 
+// whole is the engine's _whole: a number of a `whole` kind is a whole one, any number otherwise.
+func whole(k Kind, v float64) bool {
+	return !k.Whole || v == math.Floor(v)
+}
+
+// numberWord is «number», or «whole number» for a `whole` kind, as the refusals say it.
+func numberWord(k Kind) string {
+	if k.Whole {
+		return "whole number"
+	}
+	return "number"
+}
+
 func readLevel(model, key string, v any) (any, error) {
 	switch x := v.(type) {
 	case string:
@@ -646,11 +661,15 @@ func readValue(model, key string, k Kind, v any) (any, error) {
 		return nil, refuse(model, "'%s' must be true or false", key)
 	case "numbers":
 		list, ok := v.([]any)
+		// the count first: a list of a million numbers is refused before one of them is read
+		if ok && k.MaxCount != nil && len(list) > *k.MaxCount {
+			return nil, refuse(model, "'%s' may hold at most %d numbers", key, *k.MaxCount)
+		}
 		values := make([]float64, 0, len(list))
 		if ok {
 			for _, x := range list {
 				f, isNum := isNumber(x)
-				if !isNum || !within(k, f) {
+				if !isNum || !within(k, f) || !whole(k, f) {
 					ok = false
 					break
 				}
@@ -658,7 +677,7 @@ func readValue(model, key string, k Kind, v any) (any, error) {
 			}
 		}
 		if !ok {
-			return nil, refuse(model, "'%s' must be a list of numbers, each %s", key, boundsText(k))
+			return nil, refuse(model, "'%s' must be a list of %ss, each %s", key, numberWord(k), boundsText(k))
 		}
 		seen := map[float64]bool{}
 		for _, f := range values {
@@ -666,9 +685,6 @@ func readValue(model, key string, k Kind, v any) (any, error) {
 				return nil, refuse(model, "'%s' holds a number twice", key)
 			}
 			seen[f] = true
-		}
-		if k.MaxCount != nil && len(values) > *k.MaxCount {
-			return nil, refuse(model, "'%s' may hold at most %d numbers", key, *k.MaxCount)
 		}
 		sort.Float64s(values)
 		out := make([]any, len(values))
@@ -729,10 +745,10 @@ func readValue(model, key string, k Kind, v any) (any, error) {
 				}
 			}
 		}
-		if f, ok := isNumber(v); ok && within(k, f) {
+		if f, ok := isNumber(v); ok && within(k, f) && whole(k, f) {
 			return f, nil
 		}
-		return nil, refuse(model, "%s", withBounds(fmt.Sprintf("'%s' must be one of %s, or a number", key, strings.Join(k.Choices, ", ")), k))
+		return nil, refuse(model, "%s", withBounds(fmt.Sprintf("'%s' must be one of %s, or a %s", key, strings.Join(k.Choices, ", "), numberWord(k)), k))
 	}
 	panic("modelcatalog: unknown control " + k.Control)
 }

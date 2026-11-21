@@ -22,7 +22,7 @@ import { statLevelLabels } from '~/composables/statTests'
 import { vDraft } from '~/composables/draftField'
 import { useModelNumbersBox } from '~/composables/modelNumbersBox'
 import {
-  modelApplies, modelChoiceWordKey, modelColumnFits, modelFieldWordKey, modelFields, modelForbiddenOption, modelWhole, modelFull, modelLevelNumbersMissing, modelLevelShares, modelGiven, modelParams, modelRowsColumns, modelGroupKey,
+  modelApplies, modelChoiceWordKey, modelColumnFits, modelFieldWordKey, modelFields, modelForbiddenOption, modelFull, modelLevelNumbersMissing, modelLevelShares, modelGiven, modelParams, modelRowsColumns, modelGroupKey,
   modelHintKey, modelIsCategorical, modelMlflow, modelMlflowProblem, modelNumber, modelNumberProblem, modelOf,
   modelNumbersPlaceholderKey, MODEL_CATALOG, modelOverlaps, modelReasonKey, modelRequiredReason, modelSeason, modelSet, modelTaken, modelUnset,
   MODEL_RETRIES_MAX, MODEL_TIMEOUT_MIN, MODEL_TIMEOUT_SECONDS, type ModelField, type ModelOff,
@@ -303,7 +303,7 @@ const pairsFull = (f: ModelField) => pairRows(f).length >= (f.max ?? Infinity)
 
 // ── a number ─────────────────────────────────────────────────────────────────
 function numberProblem(f: ModelField, value: unknown = params.value[f.key]): string {
-  const problem = modelNumberProblem(modelWhole(f.key) && f.control !== 'integer' ? { ...f, control: 'integer' } : f, value)
+  const problem = modelNumberProblem(f, value)
   return problem ? t(`models.form.${problem}`, { above: f.above ?? '', below: f.below ?? '', min: f.min ?? '', max: f.max ?? '' }) : ''
 }
 const defaultOf = (f: ModelField) => {

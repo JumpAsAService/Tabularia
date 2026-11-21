@@ -123,20 +123,26 @@ test('the periods are whole numbers between 2 and the limit, at most four; the s
   assert.equal(m.modelNumbersProblem(by.periods, [7, 10001]), 'range')
   assert.equal(m.modelNumbersProblem(by.periods, [2, 3, 4, 5, 6]), 'tooMany')
   assert.equal(m.modelNumbersProblem(by.s_windows, [11, 15]), '')
-  assert.equal(m.modelNumbersProblem(by.s_windows, [5]), 'atLeast')
+  assert.equal(m.modelNumbersProblem(by.s_windows, [5]), 'range')  // from 7 to the windows' limit (lot D9)
   assert.equal(m.modelNumbersProblem(by.s_windows, [11.5]), 'whole')
   assert.equal(m.modelNumberProblem({ ...by.period }, 12), '')
   assert.equal(m.modelNumberProblem({ ...by.period }, 12.5), 'whole')
   assert.equal(m.modelNumberProblem({ ...by.period }, 1), 'range')
-  // the number-or-word ones: whole too, and from their own lowest
+  // the number-or-word ones: whole too (the catalogue's `whole`, lot D9), from their own lowest to their own highest
   for (const [key, bad, good] of [['s_window', 5, 11], ['t_window', 2, 3], ['lb_lag', 0, 20]]) {
-    assert.ok(m.modelWhole(key), key)
-    assert.notEqual(m.modelNumberProblem({ ...by[key], control: 'integer' }, bad), '', key)
-    assert.equal(m.modelNumberProblem({ ...by[key], control: 'integer' }, good), '', key)
+    assert.ok(m.modelWhole(by[key]), key)
+    assert.notEqual(m.modelNumberProblem(by[key], bad), '', key)
+    assert.equal(m.modelNumberProblem(by[key], good), '', key)
+    assert.equal(m.modelNumberProblem(by[key], good + 0.5), 'whole', key)
   }
-  assert.ok(!m.modelWhole('box_cox_lambda') && !m.modelWhole('alpha') && !m.modelWhole('quantiles'))
+  assert.equal(m.modelNumberProblem(by.s_window, 3e9), 'range')
+  assert.equal(m.modelNumbersProblem(by.s_windows, [1e300]), 'range')
+  // the flag is the catalogue's, the one the engine and the gateway read: exactly the keys counted in steps
+  const whole = Object.entries(m.MODEL_CATALOG.kinds).filter(([, how]) => how.whole).map(([kind]) => kind).sort()
+  assert.deepEqual(whole, ['lb_lag', 'periods', 's_window', 's_windows', 't_window'])
+  assert.ok(!m.modelWhole(by.box_cox_lambda) && !m.modelWhole(by.alpha))
   // the other models' lists are not asked for whole numbers
-  assert.equal(m.modelNumbersProblem({ key: 'quantiles', above: 0, below: 1 }, [0.25, 0.5]), '')
+  assert.equal(m.modelNumbersProblem({ above: 0, below: 1 }, [0.25, 0.5]), '')
 })
 
 // ── a combination that is not allowed ────────────────────────────────────────

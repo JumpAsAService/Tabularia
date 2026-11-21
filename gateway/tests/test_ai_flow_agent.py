@@ -832,6 +832,21 @@ def test_checking_the_shared_cases_twice_is_checking_them_once():
             _twice(f"{case['what']} (its answer)", operation, case["checked"])
 
 
+def test_a_decomposition_s_periods_windows_and_lag_are_whole_numbers_as_the_catalogue_says():
+    """Lot D9: the catalogue's `whole` (the engine's and the Go gateway's check): the assistant is told «a whole number»
+    for 7.5 before the flow is saved, a list too long for its length, an integer of 400 digits as a number refused."""
+    base = {"time": "day", "value": "orders", "frequency": "day"}
+    for params in ({**base, "s_window": 7.5}, {**base, "t_window": 21.5}, {**base, "lb_lag": 7.5},
+                   {**base, "method": "mstl", "periods": [7, 365.25]}, {**base, "method": "mstl", "periods": [7], "s_windows": [11.5]}):
+        with pytest.raises(ModelRetry, match="whole number"):
+            clean_params("model_decomposition", params)
+    with pytest.raises(ModelRetry, match="at most 4 numbers"):
+        clean_params("model_decomposition", {**base, "method": "mstl", "periods": ["x"] * 100_000})
+    with pytest.raises(ModelRetry, match="must be"):
+        clean_params("model_decomposition", {**base, "s_window": 10 ** 400})
+    assert clean_params("model_decomposition", {**base, "s_window": 13, "lb_lag": 24})["s_window"] == 13
+
+
 def test_an_empty_list_of_columns_stays_an_empty_list():
     out = clean_params("model_arima", {"time": "t", "value": "v", "frequency": "month", "exog": []})
     assert out.get("exog", []) == []

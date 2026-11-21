@@ -299,7 +299,17 @@ def stat_reference() -> str:
 # the checks below are gateway-go/internal/modelcatalog's (Check, CheckPredict, readValue): the same
 # rules, and the same sentences where a person reads them
 def _is_number(v: Any) -> bool:
-    return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+    if not isinstance(v, (int, float)) or isinstance(v, bool):
+        return False
+    try:  # an integer of 400 digits is no float: a refusal, never an OverflowError
+        return math.isfinite(v)
+    except OverflowError:
+        return False
+
+
+def _whole(spec: dict, v: Any) -> bool:
+    """The catalogue's `whole`: a period, a window, a lag is a whole number (the engine's and the gateway's check)."""
+    return not spec.get("whole") or float(v) == math.floor(float(v))
 
 
 def _same(a: Any, b: Any) -> bool:
@@ -433,21 +443,22 @@ def _model_value(who: str, key: str, spec: dict, value: Any) -> Any:
             return value
         raise bad("must be true or false")
     if control == "numbers":
-        ok = isinstance(value, list) and all(_is_number(x) and _within(spec, x) for x in value)
+        if isinstance(value, list) and spec.get("max_count") is not None and len(value) > spec["max_count"]:
+            raise bad(f"may hold at most {spec['max_count']} numbers")
+        ok = isinstance(value, list) and all(_is_number(x) and _within(spec, x) and _whole(spec, x) for x in value)
         if not ok:
-            raise bad("must be a list of numbers, each " + _bounds_text(spec))
+            raise bad("must be a list of " + ("whole numbers" if spec.get("whole") else "numbers") + ", each " + _bounds_text(spec))
         if len(set(value)) != len(value):
             raise bad("holds a number twice")
-        if spec.get("max_count") is not None and len(value) > spec["max_count"]:
-            raise bad(f"may hold at most {spec['max_count']} numbers")
         return sorted(value)
     if control == "number_or_choice":
         if isinstance(value, str) and value in spec["choices"]:
             return value
-        if _is_number(value) and _within(spec, value):
+        if _is_number(value) and _within(spec, value) and _whole(spec, value):
             return value
         b = _bounds_text(spec)
-        raise ModelRetry(f"{who}: '{key}' must be one of " + ", ".join(spec["choices"]) + ", or a number" + (f" {b}" if b else "") + ".")
+        number = "whole number" if spec.get("whole") else "number"
+        raise ModelRetry(f"{who}: '{key}' must be one of " + ", ".join(spec["choices"]) + f", or a {number}" + (f" {b}" if b else "") + ".")
     return value  # a control this version does not know: the runner judges it
 
 

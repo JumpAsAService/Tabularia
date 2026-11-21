@@ -37,6 +37,9 @@ export interface ModelKind {
   above?: number
   below?: number
   choices?: string[]
+  /** each number is a whole one (a period, a window, a lag counted in steps): the catalogue says it, the engine and the
+   *  gateway refuse 7.5 by the same flag */
+  whole?: boolean
 }
 
 /** `key` may not be `value` while every key of `when` holds (a value, a list of values, true/false). */
@@ -504,11 +507,11 @@ export function modelTaken(model: ModelDef, params: Params | null | undefined, k
 /** What is wrong with a number against its field's bounds: '' when nothing. «between» and
  *  «above»/«below» exclude the bound; «range» and «atLeast»/«atMost» include it; «whole» is a
  *  number that is not an integer where a whole number is asked. */
-export function modelNumberProblem(field: Pick<ModelField, 'control' | 'above' | 'below' | 'min' | 'max'>, value: unknown): '' | 'between' | 'above' | 'below' | 'range' | 'atLeast' | 'atMost' | 'whole' {
+export function modelNumberProblem(field: Pick<ModelField, 'control' | 'above' | 'below' | 'min' | 'max'> & { whole?: boolean }, value: unknown): '' | 'between' | 'above' | 'below' | 'range' | 'atLeast' | 'atMost' | 'whole' {
   if (isEmpty(value)) return ''
   const n = modelNumber(value)
   if (!Number.isFinite(n)) return ''
-  if (field.control === 'integer' && !Number.isInteger(n)) return 'whole'
+  if ((field.control === 'integer' || modelWhole(field)) && !Number.isInteger(n)) return 'whole'
   const low = field.above !== undefined && !(n > field.above)
   const high = field.below !== undefined && !(n < field.below)
   if (low || high) {
@@ -541,17 +544,16 @@ export function modelLevelShares(value: unknown, labels: readonly string[]): num
   return weights.map((w) => w / sum)
 }
 
-/** The keys whose numbers are whole (a period or a span counted in steps, a lag): the catalogue's kinds do not say it
- *  for the lists and the number-or-word ones, and the runner refuses «365.25» with its own sentence (`period_whole`). */
-const WHOLE_KEYS = new Set(['periods', 's_windows', 's_window', 't_window', 'lb_lag'])
-export const modelWhole = (key: string): boolean => WHOLE_KEYS.has(key)
+/** Whether a field's numbers are whole (a period or a span counted in steps, a lag): its kind's `whole` in the catalogue,
+ *  the flag the engine and the Go gateway read to refuse «365.25» (an `integer` kind is whole by its control). */
+export const modelWhole = (field: { whole?: boolean }): boolean => field.whole === true
 
 /** What is wrong with a list of numbers against its field's bounds (the quantiles in (0, 1), the times from 0,
  *  at most `max_count` of them): '' when nothing, else the first number's problem or 'tooMany'. */
-export function modelNumbersProblem(field: Pick<ModelField, 'above' | 'below' | 'min' | 'max' | 'max_count'> & { key?: string }, value: unknown): ReturnType<typeof modelNumberProblem> | 'tooMany' {
+export function modelNumbersProblem(field: Pick<ModelField, 'above' | 'below' | 'min' | 'max' | 'max_count'> & { whole?: boolean }, value: unknown): ReturnType<typeof modelNumberProblem> | 'tooMany' {
   const list = modelNumbers(value)
   for (const n of list) {
-    const problem = modelNumberProblem({ control: field.key && modelWhole(field.key) ? 'integer' : 'number', above: field.above, below: field.below, min: field.min, max: field.max }, n)
+    const problem = modelNumberProblem({ control: 'number', whole: field.whole, above: field.above, below: field.below, min: field.min, max: field.max }, n)
     if (problem) return problem
   }
   return field.max_count !== undefined && list.length > field.max_count ? 'tooMany' : ''

@@ -98,6 +98,9 @@ LIMITS: dict[str, int] = {
     "max_periods": 4,            # seasonal periods of one MSTL decomposition
     "max_imfs": 16,              # IMFs of an EMD (log2 of 200,000 rows is about 17.6)
     "max_lb_lags": 1000,         # lag of the Ljung–Box test, and lags of the remainder's ACF chart
+    # a smoother's span (STL's seasonal and trend windows): stl's own periodic window for the group's longest series
+    # (10 · 200,000 + 1); wider is no other smoother, and a larger number would not fit the Fortran's integers
+    "max_window": 2_000_001,
 }
 
 # ── groups: one image each, built when an administrator enables it ─────────
@@ -124,6 +127,8 @@ GROUPS: dict[str, dict[str, Any]] = {
 #   boolean           true or false
 #   numbers           distinct numbers, at most `max_count`, each within the number's bounds
 #   number_or_choice  one of `choices`, or a number within the bounds
+# `whole` (numbers, number_or_choice): each number is a whole one (a period, a window, a lag counted in steps): the
+# engine, the gateway and the editor read it here, and refuse 7.5
 #   level_numbers     a number for each value of the column the key `of` names, as {value: number},
 #                     each within the number's bounds (the form lists the column's values with a
 #                     number field each; the values themselves are the data's, known at the run)
@@ -246,10 +251,10 @@ KINDS: dict[str, dict[str, Any]] = {
     "decomposition_method": _choice("stl", "classical", "mstl", "emd"),
     "decomposition_type": _choice("additive", "multiplicative"),
     "period": _int(2, LIMITS["max_period"]),
-    "periods": {"control": "numbers", "min": 2, "max": LIMITS["max_period"], "max_count": LIMITS["max_periods"]},
-    "s_window": {"control": "number_or_choice", "choices": ["periodic"], "min": 7},
-    "s_windows": {"control": "numbers", "min": 7, "max_count": LIMITS["max_periods"]},
-    "t_window": {"control": "number_or_choice", "choices": ["auto"], "min": 3},
+    "periods": {"control": "numbers", "min": 2, "max": LIMITS["max_period"], "max_count": LIMITS["max_periods"], "whole": True},
+    "s_window": {"control": "number_or_choice", "choices": ["periodic"], "min": 7, "max": LIMITS["max_window"], "whole": True},
+    "s_windows": {"control": "numbers", "min": 7, "max": LIMITS["max_window"], "max_count": LIMITS["max_periods"], "whole": True},
+    "t_window": {"control": "number_or_choice", "choices": ["auto"], "min": 3, "max": LIMITS["max_window"], "whole": True},
     "mstl_iterate": _int(1, 5),
     "max_imf": _int(1, LIMITS["max_imfs"]),
     "s_number": _int(0, 20),
@@ -257,7 +262,7 @@ KINDS: dict[str, dict[str, Any]] = {
     "noise_imfs": _int(0, LIMITS["max_imfs"]),
     "missing_values": _choice("refuse", "linear", "seasonal"),
     "seasonality_test": _choice("friedman", "kruskal_wallis", "none"),
-    "lb_lag": {"control": "number_or_choice", "choices": ["auto"], "min": 1, "max": LIMITS["max_lb_lags"]},
+    "lb_lag": {"control": "number_or_choice", "choices": ["auto"], "min": 1, "max": LIMITS["max_lb_lags"], "whole": True},
     "output_components": _choice("components", "results"),
 }
 
@@ -1472,7 +1477,17 @@ def column_kind(dtype: Any) -> str:
 
 
 def _is_number(v: Any) -> bool:
-    return not isinstance(v, bool) and isinstance(v, (int, float)) and math.isfinite(v)
+    if isinstance(v, bool) or not isinstance(v, (int, float)):
+        return False
+    try:  # JSON's integers have no bound: one of 400 digits is no float, and math.isfinite would raise
+        return math.isfinite(v)
+    except OverflowError:
+        return False
+
+
+def _whole(how: Mapping[str, Any], v: Any) -> bool:
+    """A number of a `whole` kind is a whole one (a period, a window, a lag): any number otherwise."""
+    return not how.get("whole") or float(v) == math.floor(float(v))
 
 
 def _bounds_text(how: Mapping[str, Any]) -> str:
@@ -1570,12 +1585,14 @@ def read_value(model: str, key: str, kind: str, v: Any) -> Any:
             raise refusal(model, f"'{key}' must be true or false")
         return v
     if control == "numbers":
-        if not isinstance(v, list) or not all(_is_number(x) and _within(how, float(x)) for x in v):
-            raise refusal(model, f"'{key}' must be a list of numbers, each {_bounds_text(how)}")
+        # the count first: a list of a million numbers is refused before one of them is read
+        if isinstance(v, list) and len(v) > how["max_count"]:
+            raise refusal(model, f"'{key}' may hold at most {how['max_count']} numbers")
+        if not isinstance(v, list) or not all(_is_number(x) and _within(how, float(x)) and _whole(how, x) for x in v):
+            what = "whole numbers" if how.get("whole") else "numbers"
+            raise refusal(model, f"'{key}' must be a list of {what}, each {_bounds_text(how)}")
         if len(set(float(x) for x in v)) != len(v):
             raise refusal(model, f"'{key}' holds a number twice")
-        if len(v) > how["max_count"]:
-            raise refusal(model, f"'{key}' may hold at most {how['max_count']} numbers")
         return sorted(float(x) for x in v)
     if control == "level_numbers":
         if not isinstance(v, dict) or not all(isinstance(c, str) and c for c in v):
@@ -1591,11 +1608,11 @@ def read_value(model: str, key: str, kind: str, v: Any) -> Any:
     if control == "number_or_choice":
         if isinstance(v, str) and v in how["choices"]:
             return v
-        if _is_number(v) and _within(how, float(v)):
+        if _is_number(v) and _within(how, float(v)) and _whole(how, v):
             return float(v)
         bounds = _bounds_text(how)
-        raise refusal(model, f"'{key}' must be one of {', '.join(how['choices'])}, or a number"
-                             + (f" {bounds}" if bounds else ""))
+        raise refusal(model, f"'{key}' must be one of {', '.join(how['choices'])}, or a "
+                             + ("whole number" if how.get("whole") else "number") + (f" {bounds}" if bounds else ""))
     raise AssertionError(f"unknown control {control}")
 
 

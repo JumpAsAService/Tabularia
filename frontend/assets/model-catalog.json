@@ -70,7 +70,8 @@
     "max_period": 10000,
     "max_periods": 4,
     "max_imfs": 16,
-    "max_lb_lags": 1000
+    "max_lb_lags": 1000,
+    "max_window": 2000001
   },
   "controls": [
     "column",
@@ -722,26 +723,33 @@
       "control": "numbers",
       "min": 2,
       "max": 10000,
-      "max_count": 4
+      "max_count": 4,
+      "whole": true
     },
     "s_window": {
       "control": "number_or_choice",
       "choices": [
         "periodic"
       ],
-      "min": 7
+      "min": 7,
+      "max": 2000001,
+      "whole": true
     },
     "s_windows": {
       "control": "numbers",
       "min": 7,
-      "max_count": 4
+      "max": 2000001,
+      "max_count": 4,
+      "whole": true
     },
     "t_window": {
       "control": "number_or_choice",
       "choices": [
         "auto"
       ],
-      "min": 3
+      "min": 3,
+      "max": 2000001,
+      "whole": true
     },
     "mstl_iterate": {
       "control": "integer",
@@ -790,7 +798,8 @@
         "auto"
       ],
       "min": 1,
-      "max": 1000
+      "max": 1000,
+      "whole": true
     },
     "output_components": {
       "control": "choice",

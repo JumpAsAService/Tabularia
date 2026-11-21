@@ -299,13 +299,39 @@ def test_the_decomposition_node_and_its_four_variants():
     assert catalog.check_params("decomposition", {**base, "method": "classical", "type": "multiplicative"})["transform"] == "none"
 
 
+def test_the_decomposition_s_periods_windows_and_lag_are_whole_numbers_declared_by_the_catalogue():
+    """Lot D9: the keys counted in steps say so in the catalogue (`whole`), which the engine, the Go gateway and the editor
+    read: a 7.5 is refused before the Job, and a window has an upper bound that fits the runner's integers."""
+    whole = {k for k, how in catalog.KINDS.items() if how.get("whole")}
+    assert whole == {"periods", "s_windows", "s_window", "t_window", "lb_lag"}
+    assert all(catalog.KINDS[k]["control"] in ("numbers", "number_or_choice") for k in whole)
+    for k in ("s_window", "s_windows", "t_window"):
+        assert catalog.KINDS[k]["max"] == catalog.LIMITS["max_window"] < 2 ** 31
+    base = {"time": "m", "value": "v", "frequency": "month"}
+    for params in ({**base, "s_window": 7.5}, {**base, "t_window": 21.5}, {**base, "lb_lag": 7.5}, {**base, "s_window": 10 ** 400},
+                   {**base, "method": "mstl", "periods": [7, 12.5]}, {**base, "method": "mstl", "periods": [7], "s_windows": [9.5]}):
+        with pytest.raises(EngineError, match="whole number"):
+            catalog.check_params("decomposition", params)
+    assert catalog.check_params("decomposition", {**base, "s_window": 13.0, "lb_lag": 24})["s_window"] == 13.0
+    # a list too long is refused for its length, before any of its numbers is read
+    with pytest.raises(EngineError, match="at most 4 numbers"):
+        catalog.check_params("decomposition", {**base, "method": "mstl", "periods": [object()] * 1_000_000})
+
+
+def test_an_integer_of_any_length_is_refused_as_a_number_never_an_overflow():
+    """JSON's integers have no bound: a parameter of 400 digits is a refusal with its sentence, not an OverflowError."""
+    for params in ({"outcome": "y", "predictors": ["x"], "alpha": 10 ** 400}, {"outcome": "y", "predictors": ["x"], "folds": -10 ** 400}):
+        with pytest.raises(EngineError, match="must be"):
+            catalog.check_params("linear", params)
+
+
 def test_every_kind_has_a_control_and_only_the_control_s_options():
     options = {
         "column": {"numeric", "types"}, "columns": {"min", "max", "numeric", "types", "predictor"}, "level": {"of"},
         "reference": {"of"}, "pairs": {"of", "max"}, "choice": {"choices"},
         "number": {"above", "below", "min", "max"}, "integer": {"min", "max"}, "boolean": set(),
-        "numbers": {"above", "below", "min", "max", "max_count"},
-        "number_or_choice": {"choices", "above", "below", "min", "max"},
+        "numbers": {"above", "below", "min", "max", "max_count", "whole"},
+        "number_or_choice": {"choices", "above", "below", "min", "max", "whole"},
         "level_numbers": {"of", "above", "below", "min", "max"}, "column_choices": {"of", "choices"},
     }
     assert set(options) == set(catalog.CONTROLS)

@@ -4003,7 +4003,7 @@
     "frequency": "month",
     "s_window": 5
    },
-   "error": "decomposition: 's_window' must be one of periodic, or a number at least 7"
+   "error": "decomposition: 's_window' must be one of periodic, or a whole number at least 7 and at most 2000001"
   },
   {
    "what": "a seasonal window that is a word",
@@ -4014,7 +4014,7 @@
     "frequency": "month",
     "s_window": "wide"
    },
-   "error": "decomposition: 's_window' must be one of periodic, or a number at least 7"
+   "error": "decomposition: 's_window' must be one of periodic, or a whole number at least 7 and at most 2000001"
   },
   {
    "what": "a trend window below 3",
@@ -4025,7 +4025,7 @@
     "frequency": "month",
     "t_window": 2
    },
-   "error": "decomposition: 't_window' must be one of auto, or a number at least 3"
+   "error": "decomposition: 't_window' must be one of auto, or a whole number at least 3 and at most 2000001"
   },
   {
    "what": "a period of 1 is no season",
@@ -4108,7 +4108,7 @@
      5
     ]
    },
-   "error": "decomposition: 's_windows' must be a list of numbers, each at least 7"
+   "error": "decomposition: 's_windows' must be a list of whole numbers, each at least 7 and at most 2000001"
   },
   {
    "what": "too many MSTL passes",
@@ -4214,7 +4214,7 @@
     "frequency": "month",
     "lb_lag": 1001
    },
-   "error": "decomposition: 'lb_lag' must be one of auto, or a number at least 1 and at most 1000"
+   "error": "decomposition: 'lb_lag' must be one of auto, or a whole number at least 1 and at most 1000"
   },
   {
    "what": "a Ljung-Box lag that is a word",
@@ -4225,7 +4225,7 @@
     "frequency": "month",
     "lb_lag": "many"
    },
-   "error": "decomposition: 'lb_lag' must be one of auto, or a number at least 1 and at most 1000"
+   "error": "decomposition: 'lb_lag' must be one of auto, or a whole number at least 1 and at most 1000"
   },
   {
    "what": "a way of filling that does not exist",
@@ -4349,6 +4349,157 @@
     "missing": "refuse",
     "seasonality_test": "friedman",
     "lb_lag": "auto",
+    "alpha": 0.05,
+    "output": "components"
+   }
+  },
+  {
+   "what": "a seasonal window that is not a whole number (lot D9)",
+   "model": "decomposition",
+   "params": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "s_window": 7.5
+   },
+   "error": "decomposition: 's_window' must be one of periodic, or a whole number at least 7 and at most 2000001"
+  },
+  {
+   "what": "a seasonal window beyond stl's own periodic one, which would not fit the runner's integers (lot D9)",
+   "model": "decomposition",
+   "params": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "s_window": 1e+300
+   },
+   "error": "decomposition: 's_window' must be one of periodic, or a whole number at least 7 and at most 2000001"
+  },
+  {
+   "what": "a trend window that is not a whole number (lot D9)",
+   "model": "decomposition",
+   "params": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "t_window": 21.5
+   },
+   "error": "decomposition: 't_window' must be one of auto, or a whole number at least 3 and at most 2000001"
+  },
+  {
+   "what": "a trend window beyond the limit (lot D9)",
+   "model": "decomposition",
+   "params": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "t_window": 3000000000.0
+   },
+   "error": "decomposition: 't_window' must be one of auto, or a whole number at least 3 and at most 2000001"
+  },
+  {
+   "what": "a Ljung-Box lag that is not a whole number (lot D9)",
+   "model": "decomposition",
+   "params": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "lb_lag": 7.5
+   },
+   "error": "decomposition: 'lb_lag' must be one of auto, or a whole number at least 1 and at most 1000"
+  },
+  {
+   "what": "a period of MSTL that is not a whole number (lot D9)",
+   "model": "decomposition",
+   "params": {
+    "time": "day",
+    "value": "orders",
+    "frequency": "day",
+    "method": "mstl",
+    "periods": [
+     7,
+     365.25
+    ]
+   },
+   "error": "decomposition: 'periods' must be a list of whole numbers, each at least 2 and at most 10000"
+  },
+  {
+   "what": "a window of MSTL that is not a whole number (lot D9)",
+   "model": "decomposition",
+   "params": {
+    "time": "day",
+    "value": "orders",
+    "frequency": "day",
+    "method": "mstl",
+    "periods": [
+     7
+    ],
+    "s_windows": [
+     11.5
+    ]
+   },
+   "error": "decomposition: 's_windows' must be a list of whole numbers, each at least 7 and at most 2000001"
+  },
+  {
+   "what": "a window of MSTL beyond the limit (lot D9)",
+   "model": "decomposition",
+   "params": {
+    "time": "day",
+    "value": "orders",
+    "frequency": "day",
+    "method": "mstl",
+    "periods": [
+     7
+    ],
+    "s_windows": [
+     1e+300
+    ]
+   },
+   "error": "decomposition: 's_windows' must be a list of whole numbers, each at least 7 and at most 2000001"
+  },
+  {
+   "what": "a list of periods too long is refused for its length before its numbers are read (lot D9)",
+   "model": "decomposition",
+   "params": {
+    "time": "day",
+    "value": "orders",
+    "frequency": "day",
+    "method": "mstl",
+    "periods": [
+     7,
+     "x",
+     null,
+     -1,
+     1e+300,
+     7
+    ]
+   },
+   "error": "decomposition: 'periods' may hold at most 4 numbers"
+  },
+  {
+   "what": "whole windows and lag as numbers ending in .0 (lot D9)",
+   "model": "decomposition",
+   "params": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "s_window": 13.0,
+    "t_window": 23.0,
+    "lb_lag": 24.0
+   },
+   "checked": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "method": "stl",
+    "period": null,
+    "robust": false,
+    "s_window": 13.0,
+    "t_window": 23.0,
+    "transform": "none",
+    "missing": "refuse",
+    "seasonality_test": "friedman",
+    "lb_lag": 24.0,
     "alpha": 0.05,
     "output": "components"
    }
