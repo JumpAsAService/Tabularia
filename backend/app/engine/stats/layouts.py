@@ -332,10 +332,24 @@ class _Page:
         self.items: list[dict] = []
         self.y = 0.0
         self.kept = ("", 0.0)
+        self.section = -1  # where the last heading's items start in `items`
 
     def add(self, item: dict, advance: float = 0.0) -> None:
+        if item.get("type") == "table":
+            self.introduce()
         self.items.append(item)
         self.y += advance
+
+    def introduce(self) -> None:
+        """The words between the last heading and the table about to be added (the heading, its rule, a sentence,
+        a formula) stay on the table's page: each asks the report engine to keep it with what follows
+        (`keep_with_next`), so a page never ends with them and the table starting on the next one. Only when
+        they are all words (texts, rules, the rectangles nobody sees of `keep`): a chart's caption stays with
+        its chart, and the table that follows another table brings nothing with it."""
+        intro = self.items[self.section:] if self.section >= 0 else []
+        if intro and all(i.get("type") in ("text", "line", "rect") for i in intro):
+            for i in intro:
+                i["keep_with_next"] = True
 
     def text(self, id: str, value: str, h: float = 5.0, x: float = 0.0, w: float = WIDTH, advance: bool = True,
              visible: str | None = None, **style: Any) -> None:
@@ -347,6 +361,7 @@ class _Page:
     def heading(self, id: str, value: str) -> None:
         self.y += 3.0
         self.kept = (id, self.y)
+        self.section = len(self.items)
         self.text(id, value, h=6.0, size=11, weight="bold", color=ACCENT)
         self.add({"id": id + "_rule", "type": "line", "x": 0, "y": self.y, "w": WIDTH, "h": 0,
                   "style": {"border": {"width": 0.25, "color": RULE}}}, 1.5)

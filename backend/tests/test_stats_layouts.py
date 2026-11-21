@@ -1066,3 +1066,44 @@ def test_a_label_with_a_number_is_turned_never_wrapped():
     assert _x_axis(bins, 280)["axisLabel"]["rotate"] == 40  # it would end a line inside a number
     assert "rotate" not in _x_axis(["North", "South", "East"], 280)["axisLabel"]
     assert "rotate" not in _x_axis(["1", "2", "3"], 280)["axisLabel"]  # it fits
+
+
+def test_the_words_that_introduce_a_table_are_kept_with_it_and_nothing_else():
+    """The heading of a section and the words under it (the method, the formula of the comparisons) ask to be kept with
+    the table that follows (`keep_with_next`): the report engine makes them one sticky run of bands, so a page never ends
+    with the title and the table on the next one, nor the title alone and its formula on the next. Nothing else asks:
+    the words under a table, the cards, the charts and their captions stay where they are."""
+    from tests.test_reports_model import build
+
+    asked = {**REFERENCE["chi2_independence"], "posthoc": "cells"}
+    d = layouts.definition("chi2_independence", asked, "en", None, None)
+    items = {i["id"]: i for i in d["sections"]["body"]["items"]}
+    for id_ in ("s_pairs", "s_pairs_rule", "pairs_method", "s_pairs_keep", "pairs_formula",  # the comparisons
+                "s_computed", "formula", "symbols", "distribution", "critical",  # how it is computed, above its numbers
+                "s_groups", "s_groups_rule"):  # a section's heading right above its first table
+        assert items[id_].get("keep_with_next"), id_
+    for id_ in ("pairs_signif_legend", "signif_legend", "decision", "s_result", "s_charts", "c_observed"):
+        assert not items[id_].get("keep_with_next"), id_
+    assert not any(i.get("keep_with_next") for i in items.values() if i["type"] not in ("text", "line", "rect"))
+    rows = layouts.with_labels("chi2_independence", rows_of("chi2_independence", posthoc="cells"), "en")
+    body = build(d, rows=rows).doc["body"]
+    at = next(i for i, b in enumerate(body) if b["k"] == "table" and b.get("id") == "pairs_p")
+    assert [b.get("sticky") for b in body[at - 2:at]] == [True, True]  # the heading with the method, then the formula
+    assert not body[at - 3].get("sticky")
+
+
+def test_a_model_report_keeps_its_headings_and_the_coefficients_note_with_their_tables():
+    """The model reports write with the same page (stats.Page): the Fit and Notes headings ask to be kept with their
+    tables, and the note under the coefficients' charts (parametric survival) with the coefficients' tables, not with
+    the charts above it; the charts and their captions never ask."""
+    from pathlib import Path
+
+    from app.engine.models import layouts as model_layouts
+
+    fixture = json.loads((Path(__file__).parent / "fixtures" / "models" / "parametric_survival-ph.json").read_text())
+    d = model_layouts.definition(fixture["model"], fixture["params"], "en", None, None)
+    items = {i["id"]: i for i in d["sections"]["body"]["items"]}
+    for id_ in ("s_fit", "s_fit_rule", "s_notes", "s_notes_rule", "notes_lines", "coef_note"):
+        assert items[id_].get("keep_with_next"), id_
+    assert not any(i.get("keep_with_next") for i in items.values() if i["type"] not in ("text", "line", "rect"))
+    assert not any(i.get("keep_with_next") for id_, i in items.items() if id_.endswith(("_how", "_caption")))

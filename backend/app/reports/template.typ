@@ -186,7 +186,7 @@
       }
     }
   }
-  // sticky: the words that introduce the table under the band stay on its page (model.py, body)
+  // sticky: a band whose items ask to be kept with what follows (`keep_with_next`) stays on its page (model.py, body)
   block(width: 100%, height: height, breakable: false, sticky: b.at("sticky", default: false), {
     for (i, it) in b.items.enumerate() {
       place(top + left, dx: it.x * 1mm, dy: it.y * 1mm, item(it, height: heights.at(str(i), default: auto), size: sizes.at(str(i), default: T.size)))

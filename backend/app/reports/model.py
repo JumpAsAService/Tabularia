@@ -51,7 +51,6 @@ MIN_SHARE = 10.0  # mm a column without a width keeps when the others are too wi
 MIN_ROW = 1.2  # mm: no row of a table is lower (the padding of its cells alone is 2.2, template.typ)
 PALETTE = {"muted": "#6b7590", "rule": "#d9dde5", "band": "#e9eef9", "head": "#f1f3f5", "negative": "#c92a2a",
            "positive": "#2b8a3e", "total": "#1f2933"}
-INTRO_TYPES = ("text", "line", "rect")  # a band of only these right above a table introduces it: kept with it
 
 
 # ── what Excel and the email need beyond the template's JSON ─────────────────
@@ -791,39 +790,41 @@ class _Builder:
         band: list[Any] = []
         top = bottom = 0.0
         prev_bottom = 0.0
-        # the band of words right above the next table (a sentence, a heading), with those it touches through a
-        # rule (a band of no height: a heading's): they introduce it
-        intro: list[dict] = []
+        # A band with an item that asks to be kept with what follows (`keep_with_next`: the engine's own layouts set it on
+        # the words that introduce a table, a user's report never) is a sticky block: Typst never ends a page with it
+        # and moves it to the next page with the block under it. Only those bands: a band the user placed stays where
+        # the user placed it. `passed`: the sticky bands right above a table that is not shown; they go with the next
+        # table when it follows at once, and stop being sticky when anything else comes first (a hidden section's
+        # heading does not drag the next section's heading with it) or nothing does.
+        passed: list[dict] = []
 
         def close() -> None:
-            nonlocal band, prev_bottom, intro
+            nonlocal band, prev_bottom, passed
             if not band:
                 return
+            for b in passed:
+                b.pop("sticky", None)
+            passed = []
             placed = [p for p in (self.placed(i, top) for i in band) if p is not None]
-            gap = _round_mm(max(top - prev_bottom, 0))
-            block = {"k": "band", "gap": gap, "h": _round_mm(bottom - top), "items": placed}
+            block = {"k": "band", "gap": _round_mm(max(top - prev_bottom, 0)), "h": _round_mm(bottom - top), "items": placed}
+            if any(i.keep_with_next for i in band):
+                block["sticky"] = True
             blocks.append(block)
-            if not all(i.type in INTRO_TYPES for i in band):
-                intro = []
-            elif intro and gap == 0 and blocks[-2] is intro[-1] and 0 in (block["h"], intro[-1]["h"]):
-                intro.append(block)
-            else:
-                intro = [block]
             prev_bottom = bottom
             band = []
 
         for it in items:
             if it.type in rd.GROWING:
                 noted = len(self.blocks)
-                # the words that introduce a table (intro) stay on its page: the page never ends with
-                # them and the table starting on the next one (Typst's sticky blocks). A table that is
-                # not shown passes them on to the next.
                 close()
                 out = self.either(it, self._visible_table, it)
-                if out is not None:
-                    for b in intro:
-                        b["sticky"] = True
-                    intro = []
+                if out is None:
+                    for b in reversed(blocks):
+                        if b["k"] != "band" or not b.get("sticky") or any(b is x for x in passed):
+                            break
+                        passed.append(b)
+                else:
+                    passed = []
                     blocks.append({"k": "table", "gap": _round_mm(max(it.y - prev_bottom, 0)), **self.typst_table(out)})
                     above = self.blocks[noted:]
                     if above and all(kind == "text" for kind, _ in above):
@@ -840,6 +841,8 @@ class _Builder:
             close()
             band, top, bottom = [it], it.y, it.y + it.h
         close()
+        for b in passed:  # the body ends under a table not shown: nothing to keep them with
+            b.pop("sticky", None)
         self.in_body = False
         return blocks
 

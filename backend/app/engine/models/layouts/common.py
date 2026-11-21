@@ -644,6 +644,8 @@ def _coefficients(p: stats.Page, w: dict, lang: str, tables: tuple[CoefTable, ..
         p.text("coef_note", text, h=5, color=MUTED, can_grow=True, visible=visible)
         if not first:
             p.keep()
+        else:  # under the charts, the note is about the tables: it goes to their page with them
+            p.items[-1]["keep_with_next"] = True
         p.y += 1.0
     for t in tables:
         one_row = f'[section] = "coef" AND [stat] = "{t.stats[0]}"'
@@ -666,7 +668,7 @@ def _coefficients(p: stats.Page, w: dict, lang: str, tables: tuple[CoefTable, ..
 
 def _fit(p: stats.Page, w: dict, p_values: bool = True, skip: tuple[str, ...] = (), pattern: str = EXACT) -> None:
     """Every number of the `model` section, then how it was fitted (its settings in words). The heading
-    is a band of words right above the table: the report keeps the two on one page (model.py, body)."""
+    is kept with the table under it on one page (`keep_with_next`, stats.Page.introduce)."""
     f = w["fit"]
     p.heading("s_fit", w["sections"]["fit"])
     sig = f'LOOKUP("model|||" & LEFT([stat], LEN([stat]) - 7) & "significance", [key], [text])'

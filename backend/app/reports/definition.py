@@ -147,6 +147,10 @@ class _Item(_Model):
     h: Length = 10
     style: Style = Field(default_factory=Style)
     visible: Expr | None = None
+    # the body's row of this item is never the last on a page: it goes to the next page with the block under it (a
+    # heading and the words that introduce a table). Set by the engine's own layouts (statistics, models); the
+    # designer does not offer it, and a report without it is laid out where its items are
+    keep_with_next: bool = False
 
 
 class TextItem(_Item):

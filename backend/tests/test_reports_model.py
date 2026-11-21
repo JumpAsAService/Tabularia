@@ -384,25 +384,50 @@ def test_items_that_overlap_form_a_row_and_a_table_takes_its_own():
     assert body[2]["items"][0]["parts"] == ["56"]
 
 
-def test_the_words_right_above_a_table_stay_with_it():
-    """A heading (its text, and its rule: a band of no height) right above a table is sticky: Typst keeps it on
-    the table's page, never alone at the bottom of the one before. A band with a chart is not; a table not shown
-    passes the heading on to the next."""
+def test_only_the_bands_that_ask_are_kept_with_the_next_block():
+    """A band with an item that has `keep_with_next` is sticky: Typst keeps it on the page of the block under it,
+    never alone at the bottom of the one before. The engine's layouts set it on a heading and the words that
+    introduce a table; a user's report never has it, and its bands stay where the user placed them, however
+    close to a table they are."""
     heading = [{"id": "h", "type": "text", "x": 0, "y": 0, "w": 50, "h": 6, "value": "Fit"},
                {"id": "rule", "type": "line", "x": 0, "y": 6, "w": 186, "h": 0}]
-    body = build(report(*heading, table(y=7.5, h=30))).doc["body"]
-    assert [(b["k"], b.get("sticky")) for b in body] == [("band", True), ("band", True), ("table", None)]
-    hidden = {**table(y=7.5, h=8), "id": "t0", "visible": "COUNT() > 100"}
-    body = build(report(*heading, hidden, {**table(y=20, h=30), "id": "t2"})).doc["body"]
-    assert [(b["k"], b.get("sticky")) for b in body] == [("band", True), ("band", True), ("table", None)]
-    chart = {"id": "c", "type": "chart", "dataset": "d", "kind": "column", "x": 0, "y": 0, "w": 90, "h": 40,
-             "category": "[region]", "series": [{"value": "SUM([amount])"}]}
-    body = build(report(chart, table(y=45, h=30))).doc["body"]
+    sub = {"id": "s", "type": "text", "x": 0, "y": 8, "w": 50, "h": 5, "value": "said"}
+    # a user's heading, rule and subtitle right above a table: nothing is sticky (as before the rule existed)
+    body = build(report(*heading, sub, table(y=15, h=30))).doc["body"]
+    assert [(b["k"], b.get("sticky")) for b in body] == [("band", None), ("band", None), ("band", None), ("table", None)]
+    # a block of text, cards made of a rectangle and texts: where the user put them
+    card = [{"id": "box", "type": "rect", "x": 0, "y": 0, "w": 45, "h": 30},
+            {"id": "val", "type": "text", "x": 2, "y": 10, "w": 41, "h": 12, "value": "42"}]
+    body = build(report(*card, table(y=34, h=30))).doc["body"]
     assert [(b["k"], b.get("sticky")) for b in body] == [("band", None), ("table", None)]
-    # a sentence under a chart, the rule of a heading away from it: only the words touching the table
-    body = build(report(*heading, {"id": "s", "type": "text", "x": 0, "y": 10, "w": 50, "h": 5, "value": "said"},
-                        table(y=15, h=30))).doc["body"]
-    assert [(b["k"], b.get("sticky")) for b in body] == [("band", None), ("band", None), ("band", True), ("table", None)]
+    # the same words marked: every band of them is sticky, also with a gap between them (title, method, formula)
+    kept = [{**i, "keep_with_next": True} for i in (*heading, sub)]
+    body = build(report(*kept, table(y=15, h=30))).doc["body"]
+    assert [(b["k"], b.get("sticky")) for b in body] == [("band", True), ("band", True), ("band", True), ("table", None)]
+    assert body[2]["gap"] == 2
+
+
+def test_a_hidden_table_passes_its_kept_words_only_to_a_table_right_under_it():
+    """The words kept with a table that is not shown go with the next table when it follows at once (a
+    section whose first table depends on the data); when other words come first (the next section's heading),
+    they are not sticky any more: a hidden section's heading does not drag the next one's."""
+    def heading(id_, y):
+        return [{"id": id_, "type": "text", "x": 0, "y": y, "w": 50, "h": 6, "value": id_, "keep_with_next": True},
+                {"id": id_ + "_rule", "type": "line", "x": 0, "y": y + 6, "w": 186, "h": 0, "keep_with_next": True}]
+    hidden = {**table(y=7.5, h=8), "id": "t0", "visible": "COUNT() > 100"}
+    body = build(report(*heading("a", 0), hidden, {**table(y=20, h=30), "id": "t2"})).doc["body"]
+    assert [(b["k"], b.get("sticky")) for b in body] == [("band", True), ("band", True), ("table", None)]
+    body = build(report(*heading("a", 0), hidden, *heading("b", 20), {**table(y=27.5, h=30), "id": "t2"})).doc["body"]
+    assert [(b["k"], b.get("sticky")) for b in body] == [("band", None), ("band", None), ("band", True), ("band", True),
+                                                          ("table", None)]
+    # a chart after the hidden table: the heading stays where it is, not glued to the chart
+    chart = {"id": "c", "type": "chart", "dataset": "d", "kind": "column", "x": 0, "y": 20, "w": 90, "h": 40,
+             "category": "[region]", "series": [{"value": "SUM([amount])"}]}
+    body = build(report(*heading("a", 0), hidden, chart)).doc["body"]
+    assert [(b["k"], b.get("sticky")) for b in body] == [("band", None), ("band", None), ("band", None)]
+    # nothing after the hidden table: nothing to keep them with
+    body = build(report(*heading("a", 0), hidden)).doc["body"]
+    assert [(b["k"], b.get("sticky")) for b in body] == [("band", None), ("band", None)]
 
 
 def test_page_numbers_and_parameters_in_the_footer():
