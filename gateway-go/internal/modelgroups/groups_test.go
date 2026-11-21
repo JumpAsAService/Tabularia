@@ -285,11 +285,12 @@ func TestTheExperimentsImageIsTheArrowClosureAndNothingElse(t *testing.T) {
 	if strings.Contains(run, "predict = ") || !strings.Contains(run, `tab_main("experiments"`) {
 		t.Errorf("run.R:\n%s", run)
 	}
-	for _, m := range g.Models {
-		stub := string(mustFile(t, code, "runner/R/"+m+".R"))
-		if !strings.Contains(stub, "tab_not_built(") {
-			t.Errorf("%s is not a stub that refuses «not built yet»", m)
-		}
+	// the A/B test is built (lot E2) and writes no card; the planning node refuses «not built yet» until lot E5
+	if s := string(mustFile(t, code, "runner/R/ab_test.R")); strings.Contains(s, "tab_not_built(") || !strings.Contains(s, "card = NULL") {
+		t.Error("ab_test.R: not built, or it writes a card")
+	}
+	if !strings.Contains(string(mustFile(t, code, "runner/R/ab_plan.R")), "tab_not_built(") {
+		t.Error("ab_plan.R is not a stub that refuses «not built yet»")
 	}
 	if !strings.Contains(string(mustFile(t, code, "runner/R/ab_data.R")), "options(arrow.int64_downcast = FALSE)") {
 		t.Error("the runner does not read an Int64 as it is")
