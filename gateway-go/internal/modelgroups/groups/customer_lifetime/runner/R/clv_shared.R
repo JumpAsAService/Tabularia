@@ -1058,20 +1058,27 @@ clv_holdout_by_class <- function(x, observed, expected, classes) {
 
 # Pearson's r between the frequency and the average spend of the repeaters, and the test of the slope of
 # m̄ on x with HC3 standard errors (under Gamma–Gamma the variance of m̄ falls with x, so the classical test
-# would flag the model's own data).
+# would flag the model's own data). The customers are taken in the order of (x, m̄), so the numbers do not
+# depend on the order of the rows, to the last digit. `why` says why there is no test: "constant" (the
+# frequencies or the spends do not vary) or "leverage": one customer's leverage is 1 (to rounding: two
+# frequencies only, one of them held by that customer alone), so the slope is that customer's alone, its
+# residual is 0 and HC3's e / (1 − h) is 0/0, a number made of rounding that changed with the rows' order.
 clv_spend_independence <- function(x, m) {
   use <- x > 0 & !is.na(m)
-  x <- x[use]
-  m <- m[use]
-  if (length(x) < 4L || stats::sd(x) == 0 || stats::sd(m) == 0) return(list(r = NA_real_, statistic = NA_real_, p_value = NA_real_, n = length(x)))
+  o <- order(x[use], m[use])
+  x <- x[use][o]
+  m <- m[use][o]
+  none <- function(why, r = NA_real_) list(r = r, statistic = NA_real_, p_value = NA_real_, n = length(x), why = why)
+  if (length(x) < 4L || stats::sd(x) == 0 || stats::sd(m) == 0) return(none("constant"))
   design <- cbind(1, x)
   fit <- stats::lm.fit(design, m)
   e <- fit$residuals
-  h <- rowSums((design %*% solve(crossprod(design))) * design)
   bread <- solve(crossprod(design))
+  h <- rowSums((design %*% bread) * design)
+  if (max(h) > 1 - CLV_ROUNDING) return(none("leverage", stats::cor(x, m)))
   v <- bread %*% crossprod(design * (e / (1 - h))) %*% bread
   z <- fit$coefficients[[2L]] / sqrt(v[2L, 2L])
-  list(r = stats::cor(x, m), statistic = z, p_value = 2 * stats::pnorm(-abs(z)), n = length(x))
+  list(r = stats::cor(x, m), statistic = z, p_value = 2 * stats::pnorm(-abs(z)), n = length(x), why = "")
 }
 
 # ── P(alive): the grid, the curves, the distribution ────────────────────────────

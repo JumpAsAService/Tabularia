@@ -152,3 +152,40 @@ TAB_COMMON_TESTS[["customer_lifetime: the edges of the parameters are a measure,
   a <- .clv_check_frame(.clv_check_fit(spend = c(p = 6, q = 2e4, gamma = 15), spend_edges = .clv_edge("q", "high")))
   .tab_expect(g(a, "boundary", "value", "spend_q") == 2e4 && identical(g(a, "boundary", "advice_id", "spend_q"), "boundary"), "the spend's q")
 }
+
+TAB_COMMON_TESTS[["customer_lifetime: spend_independence does not depend on the rows' order, and a customer whose leverage is 1 leaves it not computed"]] <- function(code) {
+  # 200 donors over two yearly campaigns: 40 gave once more, one gave at both. That donor alone has x = 2: its leverage is 1,
+  # HC3's e / (1 − h) is 0/0, and the p-value was rounding (ok at one order of the rows, failed at another)
+  set.seed(71)
+  n <- 200
+  x <- c(rep(1, 40), 2, rep(0, n - 41))
+  d <- data.frame(id = sprintf("d%03d", 1:n), x = x, tx = c(sample(1:2, 40, TRUE), 2, rep(0, n - 41)), T = 2,
+                  m = ifelse(x > 0, round(stats::rgamma(n, 6, 1) * 5, 2), NA))
+  params <- .clv_params(list(spend = "m", period_unit = "year"), "bg_bb")
+  rows_of <- function(frame) {
+    df <- tab_results_frame(fit_bg_bb(.clv_task(params, frame, "bg_bb"))$rows)
+    df[df$section == "assumption" & df$level == "spend_independence", c("key", "value", "text")]
+  }
+  first <- rows_of(d)
+  said <- function(stat) first$text[first$key == paste0("assumption|spend_independence||", stat)]
+  .tab_expect(identical(said("verdict"), "not_computed") && identical(said("advice_id"), "spend_independence_leverage") &&
+              grepl("one repeat customer alone", said("advice"), fixed = TRUE) && !"assumption|spend_independence||p_value" %in% first$key,
+              "a leverage of 1: not computed, with its own sentence")
+  for (seed in 1:4) {
+    set.seed(seed)
+    .tab_expect(identical(rows_of(d[sample(n), ]), first), "the rows in another order give other numbers (seed ", seed, ")")
+  }
+  # without such a customer the test runs, and its numbers are the same in any order of the rows, to the last digit
+  set.seed(9)
+  x2 <- stats::rpois(300, 2) + 1
+  m2 <- stats::rgamma(300, 6, 0.2)
+  base <- clv_spend_independence(x2, m2)
+  .tab_expect(is.finite(base$p_value) && identical(base$why, ""), "a test where the frequencies vary")
+  for (seed in 1:4) {
+    set.seed(seed)
+    o <- sample(300)
+    .tab_expect(identical(clv_spend_independence(x2[o], m2[o]), base), "the same test in another order (seed ", seed, ")")
+  }
+  .tab_expect(identical(clv_spend_independence(c(1, 1, 1, 1, 2), c(5, 6, 7, 8, 9))$why, "leverage") &&
+              identical(clv_spend_independence(c(1, 1, 2, 2, 2), c(5, 6, 7, 8, 9))$why, ""), "the leverage of a lone frequency")
+}

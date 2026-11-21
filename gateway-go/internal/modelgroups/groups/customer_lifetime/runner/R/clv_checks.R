@@ -185,13 +185,19 @@ clv_check_horizon <- function(rows, fit) {
 clv_check_spend_independence <- function(rows, fit) {
   si <- clv_spend_independence(fit$s$x, fit$s$m)
   verdict <- clv_check_verdict_p(si$p_value, fit$alpha)
-  advice <- if (identical(verdict, "not_computed")) {
+  advice_id <- "spend_independence"
+  advice <- if (identical(si$why, "leverage")) {
+    advice_id <- "spend_independence_leverage"
+    paste0("not computed: one repeat customer alone has a frequency that no other has, and the others share one, ",
+           "so the slope is that customer's alone and has no test")
+  } else if (identical(verdict, "not_computed")) {
     "not computed: the repeat customers' frequencies or spends do not vary"
   } else {
     paste0("the average spend moves with the frequency: Gamma-Gamma's CLV is then biased; segment the customers by frequency, ",
            "or read the CLV with care")
   }
-  clv_check_rows(rows, "spend_independence", verdict, advice = advice, statistic = if (is.finite(si$statistic)) si$statistic else NULL,
+  clv_check_rows(rows, "spend_independence", verdict, advice = advice, advice_id = advice_id,
+                 statistic = if (is.finite(si$statistic)) si$statistic else NULL,
                  p = if (is.finite(si$p_value)) si$p_value else NULL, threshold = fit$alpha, value = if (is.finite(si$r)) si$r else NULL,
                  count = si$n)
 }
