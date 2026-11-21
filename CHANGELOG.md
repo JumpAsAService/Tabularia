@@ -146,6 +146,25 @@ Development on `main` for the next minor version. The stable line stays 1.4.x
   the web shop's three experiments (one with a real sample ratio mismatch) and two flows. The
   image installs the same R packages as the other groups plus `arrow`; the assistants and the MCP
   tools know the nodes. [A/B tests](docs/capabilities/models.md#ab-tests-r).
+- **Decomposition.** A node of the Models palette's **Time series** group, beside ARIMA, that splits a series into
+  a trend, seasonal patterns and a remainder, and makes no model (no model card, no Predict; a flow run is
+  logged to MLflow). Four methods: **STL** (loess, optionally robust), the **classical** moving average
+  (additive or multiplicative), **MSTL** (several seasons at once, such as 7 and 365 for daily data) and **EMD**
+  (the oscillations the data themselves contain, with no fixed period). Its output is the decomposed series, one
+  row per instant, with `trend`, one `seasonal_<period>` per period, `remainder` and the seasonally adjusted
+  series (or the IMFs and the residue), known in the editor before the run, and the time column keeps its type. The
+  report says in words how strong the trend and each season are, which seasons a test supports (Friedman or
+  Kruskal–Wallis), and whether the remainder is noise (Ljung–Box, ADF, KPSS): a verdict only from a test with a
+  p-value, the strengths as measures; it explains the method under each block and in a last page, in five
+  languages, as PDF or Excel. **The node refuses a series with gaps** and says how to build the calendar: a
+  calendar Left join and Fill nulls with 0, or an interpolation on request. Up to 200,000 rows. The sample
+  data have a flow, **Orders: weekly and yearly seasons**, when the time series group is enabled; the assistants
+  and the MCP tools know the node. [Decomposition](docs/capabilities/models.md#decomposition-r).
+- **ARIMA keeps the time column's type, and says «not computed» at the ends of its tables.** The forecast's
+  `time` (and Predict's) is no longer narrowed from `Int64` to `Int32`: it keeps the input column's exact type. ADF's
+  and KPSS's p-values come from tables that stop at both ends, and ARIMA compared the clipped value with `alpha`
+  as if it were exact; now the verdict is read from the statistic's side of the table and, past an end, for an
+  `alpha` it cannot answer, the check is «not computed». ARIMA stops at 20,000 rows, whatever the group allows.
 - **The sample data has customers with a life.** The pasta and bakery company's customers
   are no longer all there from the start and ordering at random: about 30% are in the
   portfolio when the data opens and the others are acquired over the three years, faster each

@@ -17,6 +17,9 @@ BG/BB: for customers who leave without saying so, the purchases to expect, the p
 still being active and the discounted value of each customer). An eleventh node, **Predict**,
 applies a model you registered in MLflow to new rows.
 
+The time series group also has **Decomposition**, which splits a series into a trend, seasons and a remainder and
+makes no model ([below](#decomposition-r)).
+
 A sixth group, **experiments**, is not a model: its two nodes, **A/B test** and **A/B test planning**, read the
 result of a randomized experiment and size the next one ([below](#ab-tests-r)). They run as Jobs, are enabled like the
 others, and have no model card and no Predict.
@@ -905,16 +908,132 @@ Length of an opportunity *Months*, Opportunities ahead 12. These customers buy a
 in continuous time, so for them *Customer lifetime value* is the natural choice; BG/BB is for data that
 really come in occasions.
 
-### Decomposition (R): being built
+### Decomposition (R)
 
-Model id in the catalogue: `decomposition`, in the group *Time series* beside ARIMA. It will split a series
-(orders per day, kilowatt-hours per hour) into a trend, one or more seasonal patterns and a remainder by STL, the
-classical moving average, MSTL (several seasonal periods) or EMD (the oscillations the data themselves contain), and
-say in words how strong each part is and whether a test supports each season. The node makes no model: no model card,
-no registration as a model, no Predict; a flow run logs to MLflow like any other. Its output is the decomposed series,
-one row per instant, with the columns the editor shows before the run (`seasonal_7`, `seasonal_365`, `imf_1` …).
-In this version the node does not run yet: it stops with «… is not built yet in this version of Tabularia». This
-section will describe it when it does.
+Model id in the catalogue: `decomposition`, in the group **Time series** beside ARIMA.
+
+A series of a business (orders per day, kilowatt-hours per hour, boxes per month) is the sum, or the
+product, of a slow movement, patterns that repeat and noise. **Decomposition** puts them apart: **the
+trend** without the season (are orders growing once Christmas is out?), **each seasonal pattern** and its
+shape (which weekday is busiest), **what is left** (noise, or structure the decomposition missed) and
+**the series without its season** to hand to the next step. Like the A/B nodes it makes no model: **no
+model card, no *Register the model as*, no [Predict](#predict)**. A decomposition estimates nothing that
+applies to new rows, so for a forecast use [ARIMA](#arima). The node asks the same three things as ARIMA,
+**Time column**, **Series** and **Frequency of the series** (hourly, daily, weekly, monthly, quarterly,
+yearly, or whole numbers), and **Method**.
+
+#### The four methods
+
+| Method | What it does | Use it when |
+|---|---|---|
+| **STL** (the default) | Loess smoothers in two loops (Cleveland and others, 1990): one seasonal pattern that may change slowly from cycle to cycle. **Seasonal smoother span** (*Periodic*: the same pattern every cycle, or an integer of 7 or more; 11 by default), **Trend smoother span** (*auto*, or an integer of 3 or more) and **Robust to outliers** (outliers get a lower weight) | One seasonal period and a pattern that drifts, or outliers you do not want in the season |
+| **Classical** | A centred moving average of the period for the trend and the mean of each position of the cycle for the season; **Components combine** additively (y = trend + season + remainder) or **multiplicatively** (y = trend · season · remainder). The trend and the remainder are empty for half a period at each end | A pattern that is the same every cycle, or one that grows with the level (multiplicative), and a result you can redo by hand |
+| **MSTL** | STL once per period, repeated **Passes over the periods** times (2): several seasons at once, for example 7 and 365 for daily data. Up to four **Seasonal periods**, a **Seasonal smoother span** for each (11, 15, 19, 23 by default) | Daily data with a weekly and a yearly cycle, hourly data with a daily and a weekly one |
+| **EMD** | Huang's empirical mode decomposition (the Rlibeemd package): the **intrinsic modes** the data themselves contain, fastest to slowest (`imf_1`, `imf_2`…), and a residue, with no fixed period. Options: **Most IMFs to extract** (10, up to 16), the **S-number** stopping rule (4) and the **Most siftings per IMF** (50). The ends of the envelopes are extrapolated by the package, not an option | Cycles that are not of a fixed period (a machine's vibration, a market's swings). There are no EEMD or CEEMDAN: they add simulated noise, and a run here never gives two answers |
+
+The **period** is the length of a cycle in steps: empty means the frequency's (24 for hourly, 7 for
+daily, 52 for weekly, 12 for monthly, 4 for quarterly; none for yearly or whole numbers, where STL and
+classical need one). A period is a **whole number of steps**, 2 or more (365, not 365.25: the catalogue
+refuses 1 and a fraction). The series must be longer than **twice** the longest period (STL and MSTL; the
+classical method needs at least twice), and EMD needs at least four values. A **Transform** (none, log or
+Box–Cox) is applied before the decomposition, which is additive on the transformed series; the seasonally
+adjusted series is brought back to the original unit. A multiplicative classical decomposition and a
+transform are refused together: choose one.
+
+#### The output
+
+What the next step receives is the **Output** option:
+
+| Output | Gives |
+|---|---|
+| **The decomposed series** (the default) | One row per instant: `time`, `observed` (empty where a value was filled), `transformed` (with a transform), `filled` (true or false), `trend`, one `seasonal_<period>` per period (`seasonal_7`, `seasonal_365`), `remainder` and `deseasonalized`. For EMD: `imf_1` … `imf_10` (empty after the last IMF found) and `residue`. The columns are known in the editor **before the Run**: `seasonal_*` from the periods, `imf_*` from *Most IMFs to extract* |
+| **The results table** | The ten columns, as every model: sections `model`, `season`, `imf`, `assumption`, `curve`, `point`, `lag`, `hist` and `reading` |
+
+**The `time` column keeps its type exactly**: an `Int64` stays `Int64`, a date a date, a timestamp its unit
+and zone, so the next join on it needs no cast. In the additive decomposition `observed = trend + the seasonals +
+remainder` to rounding; in the multiplicative one the product; for EMD `observed = the IMFs + residue`. The
+**results** are kept with the run whichever output you choose, so the report can always be drawn.
+
+#### What the report says, and the checks
+
+The first page says how strong the trend and each season are, which seasons a test supports, and whether the
+remainder looks like noise, each in words with the run's numbers. The checks follow
+[the rule of this page](#how-a-check-speaks-verdicts-facts-and-measures): **a verdict only from a test with a
+p-value against the node's `alpha`**, never from a threshold of Tabularia's.
+
+| Check | Kind | Reads |
+|---|---|---|
+| **Seasonality** (one per period) | verdict | Is there a seasonal pattern of this period? Friedman's test (the default) or Kruskal–Wallis, on the series detrended by a centred moving average, positions against complete cycles. **supported** (p below alpha) or **not supported** (p at or above alpha). *Not supported* is the absence of evidence, not a fault: it is drawn grey, with no red and no warning, and with few complete cycles (365 on two years of days) the test can see only a very strong pattern, which the reading says with the number of cycles. Choose *None* in **Test of the seasonality** to leave it out |
+| **Ljung–Box** on the remainder | verdict | Is there autocorrelation left up to the lag (**Ljung–Box lag**: *auto*, the smaller of twice the longest period and a fifth of the values, or ten without a season)? **failed** means structure is left in the remainder: another season, a narrower trend span, or a model of the remainder. On many values it rejects tiny autocorrelations, so the reading gives the largest one and its lag: weigh the size |
+| **ADF** and **KPSS** on the remainder | verdicts | Opposite null hypotheses (a unit root; stationarity). ADF reads **rejected** (the remainder has no unit root) or **not rejected**. Their p-values come from tables that stop at both ends: past an end the test answers only the `alpha` on that side, and for another `alpha` it is **not computed**, as in ARIMA. The reading says the four combinations in words |
+| **Trend strength** F_T, **seasonal strength** F_S of each period | measure | 1 − Var(remainder) / Var(trend + remainder), and the same with the season: from 0 (no more than the noise) to 1 (the noise is negligible). A number and a sentence, **no colour and no verdict**. They are never read against a threshold |
+| **Largest autocorrelation**, **weights at 0** (robust) | measures | How large the structure Ljung–Box finds is; the instants robust STL gave a weight of 0 |
+| EMD: **IMF condition**, **residue monotonic**, **orthogonality** | facts and a measure | Whether each mode is an IMF, whether the residue has at most one extremum («raise *Most IMFs to extract*», or only a longer series separates more modes), how far the modes are from orthogonal |
+
+The tests on a remainder are read on the output of smoothers, which take low frequencies out: they answer «is
+there visible structure left», not «is the decomposition the true one», and the report says so. **EMD with no
+IMF read as noise** (*First IMFs read as noise*, 0 by default) separates no remainder: Ljung–Box and the strengths are
+«not computed» with the reason, and ADF and KPSS test what is left once the residue is removed; give the number
+of the fastest IMFs you read as noise to get them.
+
+The Report tab, in the language of the interface, has: 1 the summary (cards for the observations, the method and
+the strengths, the checks and the measures, in words), 2 the components (the series with its trend, one panel per
+period, the remainder as points, the seasonally adjusted series), 3 the seasonal patterns (the mean pattern by
+position, with the lowest and highest cycle as a band; positions are named when the calendar names them: Monday
+to Sunday, January to December, the hours), 4 the remainder (histogram and correlogram), 5 for EMD the
+oscillations (one panel per IMF, mean period, shares of variance and energy), 6 **How this report was computed**
+and 7 the numbers and the notes. Under each block a **reading** of one to three sentences with the run's
+numbers, and at the end the hypothesis, the method and the formulas of each analysis that ran, from templates in
+five languages (no text is written at run time or by an AI). A reading of a *verdict* may say supported or
+left; the reading of a *measure* never does. **Excel** has a sheet for each table. The components themselves are
+the node's output, not a sheet.
+
+#### Gaps: when the node refuses, and how to build the calendar
+
+Every method needs a complete series. **By default the node refuses a series with a period without a value
+inside its span** (no row, or an empty value), with the number of gaps and the first: «the series has 3 periods
+without a value inside its span (the first: 2024-08-15): fill them in the flow (a calendar Left join and Fill
+nulls with 0 when an empty day means none), or choose missing = linear or seasonal». It fills nothing unless you
+ask, because an empty day of orders is often a day with **no** order, a 0, which an interpolation would invent.
+Rows before the first value and after the last are left out and counted.
+
+- **An empty period means none:** a **Group by** of the orders has no row for a day without one. Take a
+  **calendar** table (one row per day, as the sample data's `calendar`), keep the days of the span, **Left join**
+  the grouped orders to it on the day, and add **Fill nulls** with 0 on the count.
+- **An empty period means unknown:** choose **A period without a value** *linear* (a straight line between the two
+  neighbours) or *seasonal* (the interpolation of the `forecast` package: a robust STL of a first fill, the seasonally
+  adjusted series interpolated, the season added back). Each filled instant has `filled` true, `observed` empty,
+  and the report counts them and says the method.
+
+Other refusals say what to do and come before any fit: a series with two rows for one period («aggregate first with Group by»),
+times off the frequency's grid, a text or a true/false value, a value of 0 or below with a log, Box–Cox or multiplicative
+decomposition, a column constant everywhere, a series too short for a period («the series has 600 days; a period of
+365 needs more than 730: drop it, or a longer series»), one seasonal span per period («give one seasonal span per period (2 periods, 3
+spans), or none»), a period for a yearly or whole-number series that has none, and IMFs read as noise beyond those
+found.
+
+#### Limits
+
+| Limit | Value |
+|---|---|
+| Rows | **200,000** (the group's, which an administrator may change); ARIMA stops at 20,000 whatever the group allows. Beyond it the step fails before the Job |
+| Period | 2 to 10,000 steps (hourly data with a yearly cycle has 8,766) |
+| Periods of MSTL | 4, distinct |
+| IMFs | 16 at most (ten by default) |
+| Ljung–Box lag | 1,000 |
+| Time | A run on 100,000 rows takes under ten seconds of R with every option on; 200,000 rows about twenty |
+
+#### MLflow, and no model
+
+A flow run is logged to MLflow like any other: the parameters, the numbers of `model` and of each check, the
+results table and the report. The decomposed series is the flow's data, not logged. There is **no model to register**: a *Register the model as*
+is not offered, and a run that sends one is refused with «a decomposition registers no model: its run is logged to MLflow».
+
+*Example:* the sample flow **Orders: weekly and yearly seasons** (created with the sample data when the time
+series group is enabled): the **calendar**'s days from 1 July 2023 to 15 July 2026 **Left join** the orders
+counted by **Group by** on the day, **Fill nulls** with 0 on the count (a Sunday in August has none), then
+Decomposition: **MSTL**, periods 7 and 365, **Robust**, frequency daily. The first page says whether the weekly
+and the yearly patterns are supported, how strong they are and whether the remainder is noise.
 
 ### A/B tests (R)
 
@@ -1059,6 +1178,7 @@ What the node hands to the step after it is the **Output** option:
 | Kaplan–Meier | **The results table**, or **the survival table** |
 | Parametric survival | **The results table** (the default), or **the rows**: the input's columns with the median time, the quantiles and the survival at the times asked, each with its interval, and the residuals (`pred_median`, `pred_quantile_<p>`, `pred_surv_at_<t>`, `_low`, `_high`, `pred_cox_snell`…) |
 | ARIMA | **The results table**, or **the series and its forecast** |
+| Decomposition | **The decomposed series** (the default: the trend, the seasons and the remainder, one row per instant), or **the results table** |
 | Customer lifetime value, BG/BB | **The rows** (the default, unlike the others): the input's columns with `pred_p_alive`, `pred_transactions`, `pred_clv` and the rest, or **the results table** |
 
 The model's own results are kept with the run whatever the output is, so the report can always
