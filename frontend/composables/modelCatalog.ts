@@ -59,6 +59,8 @@ export interface ModelRequire {
 export interface ModelVariant {
   id: string
   when: Record<string, unknown>
+  /** The columns each output adds (`rows`: the names the node's rows carry, a `*` standing for one per quantile or per time). */
+  outputs?: Record<string, string[]>
 }
 
 export interface ModelDef {
@@ -229,12 +231,53 @@ export function modelNumbersPlaceholderKey(field: Pick<ModelField, 'key'>): stri
   return field.key === 'quantiles' ? 'models.form.quantilesPlaceholder' : 'models.form.numbersPlaceholder'
 }
 
-/** A list of numbers as a box writes it («10, 20 30») or as it is saved. */
+/** The languages that write a decimal with a comma («12,5»): in them the comma is the decimal mark and the list is
+ *  separated by «;» or a space; in the others (English) the point is, and a comma separates. */
+export const DECIMAL_COMMA_LOCALES = ['it', 'de', 'fr', 'es']
+export const modelDecimalComma = (locale: string | null | undefined): boolean => DECIMAL_COMMA_LOCALES.includes((locale ?? '').slice(0, 2).toLowerCase())
+
+const PLAIN_NUMBER = /^[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?$/
+
+export interface ModelNumbersRead {
+  values: number[]
+  /** '' when the text reads one way only; 'ambiguous' when a comma could be a decimal mark or a separator (a decimal-comma
+   *  language writing «12,24,36»); 'notNumber' when a part is no number at all. */
+  problem: '' | 'ambiguous' | 'notNumber'
+  /** The part that is the problem. */
+  part?: string
+}
+
+/** A list of numbers as a person types it, read the way their language writes numbers: «;» and spaces always separate;
+ *  the comma separates in English (point decimal) and is the decimal mark between two digits in it, de, fr and es
+ *  («12,5; 24» is 12.5 and 24). A point is a decimal everywhere. A part that is no number, or a chain «12,24,36» that a
+ *  decimal-comma language cannot read one way only, is a problem, never silently dropped or split. */
+export function modelNumbersRead(text: string, decimalComma: boolean): ModelNumbersRead {
+  const out: number[] = []
+  for (const raw of text.split(decimalComma ? /[;\s]+/ : /[;,\s]+/)) {
+    const part = decimalComma ? raw.replace(/^,+|,+$/g, '') : raw
+    if (part === '') continue
+    if (decimalComma && (part.match(/,/g) ?? []).length > 1) return { values: [], problem: 'ambiguous', part }
+    const n = PLAIN_NUMBER.test(decimalComma ? part.replace(',', '.') : part) ? Number(decimalComma ? part.replace(',', '.') : part) : NaN
+    if (!Number.isFinite(n)) return { values: [], problem: 'notNumber', part }
+    out.push(n)
+  }
+  return { values: [...new Set(out)].sort((a, b) => a - b), problem: '' }
+}
+
+/** A number as a language writes it in a list («12,5» with a decimal comma, «12.5» without). */
+export const modelNumberText = (n: number, decimalComma: boolean): string => (decimalComma ? String(n).replace('.', ',') : String(n))
+
+/** A list of numbers as the box shows it again: «12,5; 24» with a decimal comma, «12.5, 24» without. */
+export function modelNumbersText(values: unknown, decimalComma: boolean): string {
+  return Array.isArray(values) ? values.map((n) => modelNumberText(Number(n), decimalComma)).join(decimalComma ? '; ' : ', ') : ''
+}
+
+/** A list of numbers as it is saved (an array) or, as text, with a point decimal and «;», commas or spaces between. */
 export function modelNumbers(value: unknown): number[] {
   const parts = Array.isArray(value) ? value : typeof value === 'string' ? value.split(/[;,\s]+/) : []
   const out: number[] = []
   for (const part of parts) {
-    const n = modelNumber(part)
+    const n = typeof part === 'number' ? part : PLAIN_NUMBER.test(String(part).trim()) ? Number(String(part).trim()) : NaN
     if (Number.isFinite(n)) out.push(n)
   }
   return [...new Set(out)].sort((a, b) => a - b)
@@ -503,7 +546,8 @@ const DISTRIBUTION_NAMES: Record<string, string> = {
 
 /** What a model node does, in one line: «amount ~ price + channel», «time, event ~ arm», an
  *  ARIMA's orders. */
-export function modelSummary(id: string, params: Params | null | undefined, catalog: ModelCatalog = MODEL_CATALOG): string {
+export function modelSummary(id: string, params: Params | null | undefined, catalog: ModelCatalog = MODEL_CATALOG,
+  words?: { unit?: (unit: string) => string }): string {
   const model = modelOf(id, catalog)
   if (!model) return ''
   const p = modelParams(model, params, catalog)
@@ -521,7 +565,9 @@ export function modelSummary(id: string, params: Params | null | undefined, cata
   if (id === 'clv' || id === 'bg_bb') {
     const columns = [p.frequency, p.recency, p.age ?? p.opportunities].filter((x) => typeof x === 'string').join(', ')
     const unit = p.time_unit ?? p.period_unit
-    return [columns, typeof unit === 'string' ? unit : '', p.spend ? '+ spend' : ''].filter(Boolean).join(' · ')
+    // the unit in the person's language (the caller's words), the spend as the column that holds it
+    const unitText = typeof unit === 'string' ? (words?.unit ? words.unit(unit) : unit) : ''
+    return [columns, unitText, typeof p.spend === 'string' && p.spend ? `+ ${p.spend}` : ''].filter(Boolean).join(' · ')
   }
   if (id === 'cox') {
     const left = [p.time, p.event].filter((x) => typeof x === 'string').join(', ')
@@ -761,6 +807,28 @@ export function predictColumns(modelId: string | null | undefined, params: Param
       const at = name.indexOf('*')
       if (at >= 0 && Array.isArray(list)) out.push(...list.map((t: number) => `${name.slice(0, at)}${t}${name.slice(at + 1)}`))
       else if (at < 0) out.push(name)
+    }
+  }
+  return out
+}
+
+/** The columns a model node's `rows` output adds, as the engine lists them when it refuses an input that has one already:
+ *  the variant's `outputs.rows`, the `*` of a quantile's or a time's name made one per number (the quantile 0.5 is the median:
+ *  no column of its own; a number as its shortest form, 12 and not 12.0). The other names with a `*` stay out. */
+export function modelRowsColumns(model: ModelDef, params: Params | null | undefined, catalog: ModelCatalog = MODEL_CATALOG): string[] {
+  const read = modelParams(model, params, catalog)
+  const full = modelFull(model, read)
+  const variant = model.variants.find((v) => v.id === modelVariant(model, read))
+  const names = variant?.outputs?.rows ?? []
+  const wildcards: Record<string, string> = { pred_quantile_: 'quantiles', pred_surv_at_: 'times' }
+  const out: string[] = []
+  for (const name of names) {
+    const at = name.indexOf('*')
+    const key = at >= 0 ? wildcards[name.slice(0, at)] : undefined
+    if (at < 0) out.push(name)
+    else if (key) {
+      const list = Array.isArray(full[key]) ? (full[key] as number[]) : []
+      out.push(...list.filter((v) => !(key === 'quantiles' && v === 0.5)).map((v) => `${name.slice(0, at)}${v}${name.slice(at + 1)}`))
     }
   }
   return out

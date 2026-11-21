@@ -6507,6 +6507,9 @@ export default {
       "hint": "Erklärt eine Zahl durch andere Spalten: kleinste Quadrate, gewichtet, mit robusten Fehlern oder mit Ridge-, Lasso- oder Elastic-Net-Strafe.",
       "params": {
         "outcome": "Zielgröße (eine Zahl)"
+      },
+      "hints": {
+        "seed": "Jede Zufallsauswahl (die Teile der Kreuzvalidierung) nutzt ihn: gleiche Daten, gleiche Zahlen."
       }
     },
     "logistic": {
@@ -6515,6 +6518,9 @@ export default {
       "params": {
         "outcome": "Zielgröße (zwei Werte)",
         "event_value": "Wert, der das Ereignis ist"
+      },
+      "hints": {
+        "seed": "Jede Zufallsauswahl (die Teile der Kreuzvalidierung) nutzt ihn: gleiche Daten, gleiche Zahlen."
       }
     },
     "kaplan_meier": {
@@ -6751,10 +6757,10 @@ export default {
       "fold_by": "Zeilen mit demselben Wert kommen in denselben Teil (ein Kunde, ein Patient).",
       "standardize": "Auf gleicher Skala, damit die Strafe jeden Prädiktor gleich behandelt. Die Ergebnisse kommen auf die Originalskala zurück.",
       "alpha": "Intervalle gelten für 1 − diesen Wert, Tests werden daran gemessen.",
-      "seed": "Jede Zufallsauswahl (die Teile der Kreuzvalidierung) nutzt ihn: gleiche Daten, gleiche Zahlen.",
+      "seed": "Jede Zufallsauswahl (etwa die Stichprobe der Punkte, die die Diagramme zeichnen) nutzt ihn: gleiche Daten, gleiche Zahlen.",
       "output": "Was der Knoten an den nächsten Schritt weitergibt.",
       "strata": "Eine Kurve je Wert dieser Spalte; leer lassen für eine einzige Kurve.",
-      "times": "Bis zu 10 Zeiten, durch Kommas getrennt: das Überleben zu jeder wird berichtet.",
+      "times": "Bis zu 10 Zeiten, durch «;» oder Leerzeichen getrennt; das Komma ist das Dezimalzeichen (12,5). Das Überleben zu jeder wird berichtet.",
       "alive_at": "Die Spalte mit der Zeit, die jede Einheit schon ohne das Ereignis überlebt hat (das Alter einer Maschine). Die Vorhersagen sagen dann, wie lange noch bleibt: die mediane Restzeit, ihre Quantile und die Wahrscheinlichkeit, noch t durchzuhalten. Es ist nicht die Startzeit-Spalte: Diese sagt, ab wann jede Zeile der Anpassung beobachtet wird, jene, wie lange jede vorherzusagende Einheit schon durchgehalten hat.",
       "aic_margin": "Bei der automatischen Wahl: liegt eine einfachere Verteilung, die in der mit dem niedrigsten AIC enthalten ist, innerhalb dieses Spielraums um deren AIC, wird die einfachere gewählt. 0 nimmt immer den niedrigsten AIC; 2 ist der übliche Spielraum.",
       "rmst_tau": "Die Zeit, bis zu der die mittlere Überlebenszeit berechnet wird.",
@@ -6796,7 +6802,7 @@ export default {
       "rsm": "Jede Teilung wird unter diesem Anteil der Prädiktoren gewählt, zufällig gezogen.",
       "random_strength": "Rauschen auf die Bewertungen der Teilungen: 0 für keins, größere Werte für mehr Abwechslung.",
       "distribution": "Wie die Zeiten verteilt sind. Automatisch passt alle sechs an und behält die mit dem niedrigsten AIC (die einfachere, wenn sie innerhalb von 2 liegt). Gompertz liefert nur Hazard Ratios.",
-      "quantiles": "Bis zu 9 Zahlen zwischen 0 und 1, durch Kommas getrennt, z. B. 0.25, 0.75. Der Median wird immer angegeben.",
+      "quantiles": "Bis zu 9 Zahlen zwischen 0 und 1, durch «;» oder Leerzeichen getrennt, z. B. 0,25; 0,75. Der Median wird immer angegeben.",
       "customer": "Eine Zeile je Kunde: die Transaktionen zuerst nach Kunde gruppieren.",
       "age": "Zeit vom ersten Kauf bis zum Ende des Kalibrierungszeitraums, in der Einheit unten.",
       "opportunities": "Wie viele Kaufgelegenheiten nach dem ersten Kauf bestanden (eine Aktion, ein Jahr): 1 bis 1000.",
@@ -6943,8 +6949,12 @@ export default {
       "removePair": "Diese Wechselwirkung entfernen",
       "pairsNeedPredictors": "Wählen Sie zuerst mindestens zwei Prädiktoren.",
       "aValue": "Ein Wert",
-      "numbersPlaceholder": "z. B. 12, 24, 36",
-      "quantilesPlaceholder": "z. B. 0.1, 0.9",
+      "numbersPlaceholder": "z. B. 12; 24,5; 36",
+      "quantilesPlaceholder": "z. B. 0,1; 0,9",
+      "numbersRead": "1 Wert gelesen: {list} | {n} Werte gelesen: {list}",
+      "numbers_ambiguous": "«{part}» lässt sich auf zwei Arten lesen. Trennen Sie Zahlen mit «;» oder einem Leerzeichen: das Komma ist das Dezimalzeichen.",
+      "numbers_notNumber": "«{part}» ist keine Zahl.",
+      "rowsClash": "Die Eingabe hat schon {columns}, die die Zeilenausgabe dieses Modells hinzufügt: Benennen Sie sie zuerst um, oder wählen Sie eine andere Ausgabe.",
       "between": "Eine Zahl zwischen {above} und {below}, beide ausgeschlossen.",
       "above": "Eine Zahl über {above}.",
       "below": "Eine Zahl unter {below}.",
@@ -6978,6 +6988,13 @@ export default {
       "timeoutMax": "Höchstens {n} Sekunden für diese Gruppe."
     },
     "node": {
+      "units": {
+        "day": "Tag",
+        "week": "Woche",
+        "month": "Monat",
+        "quarter": "Quartal",
+        "year": "Jahr"
+      },
       "title": "Statistisches Modell",
       "setIt": "Legen Sie seine Spalten im Bereich fest.",
       "unknownModel": "Das Modell «{model}» ist dieser Version von Tabularia nicht bekannt.",
@@ -7046,9 +7063,9 @@ export default {
       "interval": "Fügt die untere und obere Grenze jeder Vorhersage hinzu.",
       "threshold": "Fügt die vorhergesagte Klasse hinzu: das Ereignis ab dieser Wahrscheinlichkeit. 0,5, wenn leer.",
       "horizon": "Wie viele Schritte nach Ende der Reihe. Bei den Kundenwert-Modellen: wie viele Perioden voraus, in der Einheit, in der das Modell geschätzt wurde. Leer: der des Modells.",
-      "at_times": "Eine Überlebensspalte je Zeitpunkt, z. B. 12, 24.",
+      "at_times": "Eine Überlebensspalte je Zeit, z. B. 12; 24,5.",
       "alive_at": "Eine Spalte der Zeilen: die Zeit, die jede Einheit schon überlebt hat. Median, Quantile und Überlebensspalten sprechen dann von der Restzeit. Leer: vom Anfang an.",
-      "quantiles": "Eine Spalte je Quantil, z. B. 0.25, 0.75. Leer: die Quantile, mit denen das Modell angepasst wurde."
+      "quantiles": "Eine Spalte je Quantil, z. B. 0,25; 0,75. Leer: die Quantile, mit denen das Modell angepasst wurde."
     }
   },
   "modelsAdmin": {

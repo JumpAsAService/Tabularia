@@ -6507,6 +6507,9 @@ export default {
       "hint": "Explica un número con otras columnas: mínimos cuadrados, ponderados, con errores robustos o con una penalización ridge, lasso o elastic net.",
       "params": {
         "outcome": "Resultado (un número)"
+      },
+      "hints": {
+        "seed": "Toda elección aleatoria (las partes de la validación) lo usa: los mismos datos dan los mismos números."
       }
     },
     "logistic": {
@@ -6515,6 +6518,9 @@ export default {
       "params": {
         "outcome": "Resultado (dos valores)",
         "event_value": "Valor que es el evento"
+      },
+      "hints": {
+        "seed": "Toda elección aleatoria (las partes de la validación) lo usa: los mismos datos dan los mismos números."
       }
     },
     "kaplan_meier": {
@@ -6751,10 +6757,10 @@ export default {
       "fold_by": "Las filas con el mismo valor van a la misma parte (un cliente, un paciente).",
       "standardize": "En la misma escala, para que la penalización trate igual a cada predictor. Los resultados vuelven a la escala original.",
       "alpha": "Los intervalos son a 1 − este valor, y las pruebas se juzgan con él.",
-      "seed": "Toda elección aleatoria (las partes de la validación) lo usa: los mismos datos dan los mismos números.",
+      "seed": "Toda elección aleatoria (como la muestra de puntos que dibujan los gráficos) la usa: los mismos datos dan los mismos números.",
       "output": "Lo que el nodo pasa al paso siguiente.",
       "strata": "Una curva por valor de esta columna; déjala vacía para una sola curva.",
-      "times": "Hasta 10 tiempos, separados por comas: se informa la supervivencia en cada uno.",
+      "times": "Hasta 10 tiempos, separados por «;» o espacios; la coma es el decimal (12,5). Se informa la supervivencia en cada uno.",
       "alive_at": "La columna con el tiempo que cada unidad ya ha sobrevivido sin el evento (la edad de una máquina). Las predicciones dicen entonces cuánto queda: el tiempo restante mediano, sus cuantiles y la probabilidad de durar t más. No es la columna del tiempo de inicio: aquella dice desde cuándo se observa cada fila del ajuste, esta cuánto lleva ya cada unidad a predecir.",
       "aic_margin": "Con la elección automática: si una distribución más simple, contenida en la de menor AIC, está dentro de este margen de su AIC, se elige la más simple. 0 toma siempre el AIC más bajo; 2 es el margen habitual.",
       "rmst_tau": "El tiempo hasta el que se calcula el tiempo medio de supervivencia.",
@@ -6796,7 +6802,7 @@ export default {
       "rsm": "Cada división se elige entre esta proporción de predictores, tomados al azar.",
       "random_strength": "Ruido añadido a las puntuaciones de las divisiones: 0 ninguno, más grande más variedad.",
       "distribution": "Cómo se reparten los tiempos. Automática ajusta las seis y se queda con la de menor AIC (la más simple si está a menos de 2). Gompertz da solo hazard ratios.",
-      "quantiles": "Hasta 9 números entre 0 y 1, separados por comas, p. ej. 0.25, 0.75. La mediana siempre se da.",
+      "quantiles": "Hasta 9 números entre 0 y 1, separados por «;» o espacios, p. ej. 0,25; 0,75. La mediana siempre se da.",
       "customer": "Una fila por cliente: agrupa antes las transacciones por cliente.",
       "age": "Tiempo desde la primera compra hasta el final del periodo de calibración, en la unidad de abajo.",
       "opportunities": "Cuántas ocasiones de compra hubo después de la primera (una campaña, un año): de 1 a 1000.",
@@ -6943,8 +6949,12 @@ export default {
       "removePair": "Quitar esta interacción",
       "pairsNeedPredictors": "Elige primero al menos dos predictores.",
       "aValue": "Un valor",
-      "numbersPlaceholder": "p. ej. 12, 24, 36",
-      "quantilesPlaceholder": "p. ej. 0.1, 0.9",
+      "numbersPlaceholder": "p. ej. 12; 24,5; 36",
+      "quantilesPlaceholder": "p. ej. 0,1; 0,9",
+      "numbersRead": "1 valor leído: {list} | {n} valores leídos: {list}",
+      "numbers_ambiguous": "«{part}» se puede leer de dos formas. Separe los números con «;» o un espacio: la coma es el decimal.",
+      "numbers_notNumber": "«{part}» no es un número.",
+      "rowsClash": "La entrada ya tiene {columns}, que la salida en filas de este modelo añade: renómbrelas primero, o elija otra salida.",
       "between": "Un número entre {above} y {below}, ambos excluidos.",
       "above": "Un número mayor que {above}.",
       "below": "Un número menor que {below}.",
@@ -6978,6 +6988,13 @@ export default {
       "timeoutMax": "Como máximo {n} segundos para este grupo."
     },
     "node": {
+      "units": {
+        "day": "día",
+        "week": "semana",
+        "month": "mes",
+        "quarter": "trimestre",
+        "year": "año"
+      },
       "title": "Modelo estadístico",
       "setIt": "Indica sus columnas en el panel.",
       "unknownModel": "El modelo «{model}» no es conocido por esta versión de Tabularia.",
@@ -7046,9 +7063,9 @@ export default {
       "interval": "Añade los límites inferior y superior de cada predicción.",
       "threshold": "Añade la clase prevista: el evento desde esta probabilidad. 0,5 si está vacío.",
       "horizon": "Cuántos pasos tras el final de la serie. En los modelos de valor del cliente: cuántos periodos hacia delante, en la unidad con que se ajustó el modelo. Vacío: el del modelo.",
-      "at_times": "Una columna de supervivencia por cada tiempo, p. ej. 12, 24.",
+      "at_times": "Una columna de supervivencia por cada tiempo, p. ej. 12; 24,5.",
       "alive_at": "Una columna de las filas: el tiempo que cada unidad ya ha sobrevivido. La mediana, los cuantiles y las columnas de supervivencia hablan entonces del tiempo restante. Vacío: desde el inicio.",
-      "quantiles": "Una columna por cuantil, p. ej. 0.25, 0.75. Vacío: los cuantiles con que se ajustó el modelo."
+      "quantiles": "Una columna por cuantil, p. ej. 0,25; 0,75. Vacío: los cuantiles con los que se ajustó el modelo."
     }
   },
   "modelsAdmin": {

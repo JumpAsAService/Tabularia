@@ -20,10 +20,11 @@ import type { ColumnInfo } from '~/composables/useApi'
 import { isSuperseded } from '~/composables/usePreviewSlots'
 import { statLevelLabels } from '~/composables/statTests'
 import { vDraft } from '~/composables/draftField'
+import { useModelNumbersBox } from '~/composables/modelNumbersBox'
 import {
-  modelApplies, modelChoiceWordKey, modelColumnFits, modelFieldWordKey, modelFields, modelForbidden, modelGiven, modelGroupKey,
+  modelApplies, modelChoiceWordKey, modelColumnFits, modelFieldWordKey, modelFields, modelForbidden, modelFull, modelGiven, modelParams, modelRowsColumns, modelGroupKey,
   modelHintKey, modelIsCategorical, modelMlflow, modelMlflowProblem, modelNumber, modelNumberProblem, modelOf,
-  modelNumbersPlaceholderKey, modelNumbersProblem, modelOverlaps, modelReasonKey, modelRequiredReason, modelSeason, modelSet, modelTaken, modelUnset,
+  modelNumbersPlaceholderKey, modelOverlaps, modelReasonKey, modelRequiredReason, modelSeason, modelSet, modelTaken, modelUnset,
   MODEL_RETRIES_MAX, MODEL_TIMEOUT_MIN, MODEL_TIMEOUT_SECONDS, type ModelField, type ModelOff,
 } from '~/composables/modelCatalog'
 
@@ -70,6 +71,12 @@ function set(key: string, value: unknown) {
 
 // what the node still lacks, said once, on top: the empty field is not the place to find out
 const lacking = computed(() => (model.value ? modelUnset(model.value, params.value) : []))
+// the columns the rows output would add that the input already has (the engine refuses the run: say it before)
+const rowsClash = computed(() => {
+  const m = model.value
+  if (!m || modelFull(m, modelParams(m, params.value)).output !== 'rows') return []
+  return modelRowsColumns(m, params.value).filter((c) => props.inputColumns.some((x) => x.name === c))
+})
 const overlaps = computed(() => (model.value ? modelOverlaps(model.value, params.value) : []))
 const fieldLabel = (key: string) => {
   const f = fields.value.find((x) => x.key === key)
@@ -262,12 +269,10 @@ const numberOr = (f: ModelField): number => {
 }
 
 // ── a list of numbers (the times to report survival at) ──────────────────────
-const timesText = (f: ModelField) => (Array.isArray(params.value[f.key]) ? params.value[f.key].join(', ') : '')
-const timesProblem = (f: ModelField): string => {
-  const problem = modelNumbersProblem(f, params.value[f.key])
-  if (!problem) return ''
-  return t(`models.form.${problem}`, { above: f.above ?? '', below: f.below ?? '', min: f.min ?? '', max: f.max ?? '', n: f.max_count ?? '' })
-}
+const numbersBox = useModelNumbersBox((key) => params.value[key], (key, values) => set(key, values))
+const timesText = (f: ModelField) => numbersBox.text(f)
+const timesProblem = (f: ModelField): string => numbersBox.problem(f)
+watch(() => props.nodeId, () => numbersBox.reset())
 
 // ── a choice ─────────────────────────────────────────────────────────────────
 const chosen = (f: ModelField) => params.value[f.key] ?? model.value?.defaults[f.key]
@@ -348,6 +353,10 @@ function limit(key: 'timeoutSeconds' | 'retries', raw: string, min: number, max:
     </p>
     <p v-for="o in overlaps" :key="o.column" class="note warn" role="alert">
       <TriangleAlert :size="13" aria-hidden="true" /> {{ $t('models.form.overlap', { column: o.column, keys: o.keys.map(fieldLabel).join(' / ') }) }}
+    </p>
+
+    <p v-if="rowsClash.length" class="note warn" role="alert">
+      <TriangleAlert :size="13" aria-hidden="true" /> {{ $t('models.form.rowsClash', { columns: rowsClash.join(', ') }) }}
     </p>
 
     <template v-for="f in fields" :key="f.key">
@@ -514,11 +523,14 @@ function limit(key: 'timeoutSeconds' | 'retries', raw: string, min: number, max:
           v-draft="timesText(f)"
           :placeholder="$t(modelNumbersPlaceholderKey(f))"
           :aria-invalid="timesProblem(f) ? 'true' : undefined"
-          :aria-describedby="timesProblem(f) ? idOf(f.key, 'problem') : hintOf(f) ? idOf(f.key, 'hint') : undefined"
-          @change="set(f.key, ($event.target as HTMLInputElement).value)"
+          :aria-describedby="timesProblem(f) ? idOf(f.key, 'problem') : [numbersBox.said(f) ? idOf(f.key, 'said') : '', hintOf(f) ? idOf(f.key, 'hint') : ''].filter(Boolean).join(' ') || undefined"
+          @change="numbersBox.change(f, ($event.target as HTMLInputElement).value)"
         />
         <p v-if="timesProblem(f)" :id="idOf(f.key, 'problem')" class="note warn" role="alert"><TriangleAlert :size="13" aria-hidden="true" /> {{ timesProblem(f) }}</p>
-        <p v-else-if="hintOf(f)" :id="idOf(f.key, 'hint')" class="hint">{{ hintOf(f) }}</p>
+        <template v-else>
+          <p v-if="numbersBox.said(f)" :id="idOf(f.key, 'said')" class="hint said">{{ numbersBox.said(f) }}</p>
+          <p v-if="hintOf(f)" :id="idOf(f.key, 'hint')" class="hint">{{ hintOf(f) }}</p>
+        </template>
       </div>
 
       <!-- a few words or a number -->

@@ -13,7 +13,7 @@ import { modelIconOf } from '~/composables/modelIcons'
 import { useModelGroups } from '~/composables/useModelGroups'
 
 const props = defineProps<{ id: string; data: any }>()
-const { t } = useI18n()
+const { t, te } = useI18n()
 const groups = useModelGroups()
 
 const model = computed(() => modelOf(props.data?.model))
@@ -38,7 +38,7 @@ const title = computed(() => {
   if (!model.value) return t('models.node.title')
   return model.value.id === 'arima' ? modelArimaTitle(props.data?.params) : t(modelNameKey(model.value.id))
 })
-const summary = computed(() => (model.value ? modelSummary(model.value.id, props.data?.params) || t('models.node.setIt') : ''))
+const summary = computed(() => (model.value ? modelSummary(model.value.id, props.data?.params, undefined, { unit: (u: string) => (te(`models.node.units.${u}`) ? t(`models.node.units.${u}`) : u) }) || t('models.node.setIt') : ''))
 </script>
 
 <template>

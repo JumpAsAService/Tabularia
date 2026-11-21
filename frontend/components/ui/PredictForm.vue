@@ -17,8 +17,9 @@ import type { ColumnInfo } from '~/composables/useApi'
 import { useFormat } from '~/composables/useFormat'
 import { useModelGroups, type MlflowExperiment, type MlflowVersion } from '~/composables/useModelGroups'
 import { vDraft } from '~/composables/draftField'
+import { useModelNumbersBox } from '~/composables/modelNumbersBox'
 import {
-  MODEL_RETRIES_MAX, MODEL_TIMEOUT_MIN, modelColumnFits, versionHeld, MODEL_TIMEOUT_SECONDS, modelNumber, modelNumberProblem, modelNumbersPlaceholderKey, modelNumbersProblem, predictColumns,
+  MODEL_RETRIES_MAX, MODEL_TIMEOUT_MIN, modelColumnFits, versionHeld, MODEL_TIMEOUT_SECONDS, modelNumber, modelNumberProblem, modelNumbersPlaceholderKey, predictColumns,
   predictFields, predictParams, type ModelField, type ModelOff,
 } from '~/composables/modelCatalog'
 
@@ -149,11 +150,10 @@ function numberProblem(f: ModelField): string {
   const problem = modelNumberProblem(f, params.value[f.key])
   return problem ? t(`models.form.${problem}`, { above: f.above ?? '', below: f.below ?? '', min: f.min ?? '', max: f.max ?? '' }) : ''
 }
-function numbersProblem(f: ModelField): string {
-  const problem = modelNumbersProblem(f, params.value[f.key])
-  return problem ? t(`models.form.${problem}`, { above: f.above ?? '', below: f.below ?? '', min: f.min ?? '', max: f.max ?? '', n: f.max_count ?? '' }) : ''
-}
-const timesText = (f: ModelField) => (Array.isArray(params.value[f.key]) ? params.value[f.key].join(', ') : '')
+const numbersBox = useModelNumbersBox((key) => params.value[key], (key, values) => set(key, values))
+const numbersProblem = (f: ModelField): string => numbersBox.problem(f)
+watch(() => props.nodeId, () => numbersBox.reset())
+const timesText = (f: ModelField) => numbersBox.text(f)
 
 // one column of the rows (conditional survival's `alive_at`): only the numeric ones; the one already chosen stays listed
 // whatever it is (a column dropped upstream), with what is wrong, so that the box never hides a value the node still has
@@ -278,10 +278,14 @@ const offText = computed(() => {
           :id="idOf(f.key)" type="text" inputmode="decimal" autocomplete="off"
           :value="timesText(f)" v-draft="timesText(f)" :placeholder="$t(modelNumbersPlaceholderKey(f))"
           :aria-invalid="numbersProblem(f) ? 'true' : undefined"
-          @change="set(f.key, ($event.target as HTMLInputElement).value)"
+          :aria-describedby="numbersProblem(f) ? idOf(f.key, 'problem') : numbersBox.said(f) ? idOf(f.key, 'said') : undefined"
+          @change="numbersBox.change(f, ($event.target as HTMLInputElement).value)"
         />
-        <p v-if="numbersProblem(f)" class="note warn" role="alert"><TriangleAlert :size="13" aria-hidden="true" /> {{ numbersProblem(f) }}</p>
-        <p v-else-if="hintOf(f)" class="hint">{{ hintOf(f) }}</p>
+        <p v-if="numbersProblem(f)" :id="idOf(f.key, 'problem')" class="note warn" role="alert"><TriangleAlert :size="13" aria-hidden="true" /> {{ numbersProblem(f) }}</p>
+        <template v-else>
+          <p v-if="numbersBox.said(f)" :id="idOf(f.key, 'said')" class="hint said">{{ numbersBox.said(f) }}</p>
+          <p v-if="hintOf(f)" class="hint">{{ hintOf(f) }}</p>
+        </template>
       </div>
       <div v-else class="field">
         <label :for="idOf(f.key)" class="lbl">{{ labelOf(f) }}</label>

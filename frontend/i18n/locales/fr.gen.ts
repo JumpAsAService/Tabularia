@@ -6507,6 +6507,9 @@ export default {
       "hint": "Explique un nombre par d'autres colonnes : moindres carrés, pondérés, avec erreurs robustes, ou avec une pénalité ridge, lasso ou elastic net.",
       "params": {
         "outcome": "Résultat (un nombre)"
+      },
+      "hints": {
+        "seed": "Tout choix aléatoire (les blocs de validation) l'utilise : mêmes données, mêmes nombres."
       }
     },
     "logistic": {
@@ -6515,6 +6518,9 @@ export default {
       "params": {
         "outcome": "Résultat (deux valeurs)",
         "event_value": "Valeur qui est l'événement"
+      },
+      "hints": {
+        "seed": "Tout choix aléatoire (les blocs de validation) l'utilise : mêmes données, mêmes nombres."
       }
     },
     "kaplan_meier": {
@@ -6751,10 +6757,10 @@ export default {
       "fold_by": "Les lignes de même valeur vont dans la même partie (un client, un patient).",
       "standardize": "Sur la même échelle, pour que la pénalité traite chaque prédicteur pareillement. Les résultats reviennent à l'échelle d'origine.",
       "alpha": "Les intervalles sont à 1 − cette valeur, et les tests sont jugés par rapport à elle.",
-      "seed": "Tout choix aléatoire (les blocs de validation) l'utilise : mêmes données, mêmes nombres.",
+      "seed": "Tout choix aléatoire (comme l'échantillon de points que dessinent les graphiques) l'utilise : mêmes données, mêmes nombres.",
       "output": "Ce que le nœud transmet à l'étape suivante.",
       "strata": "Une courbe par valeur de cette colonne ; laissez vide pour une seule courbe.",
-      "times": "Jusqu'à 10 temps, séparés par des virgules : la survie à chacun est rapportée.",
+      "times": "Jusqu'à 10 temps, séparés par « ; » ou des espaces ; la virgule est la marque décimale (12,5). La survie à chacun est rapportée.",
       "alive_at": "La colonne du temps que chaque unité a déjà survécu sans l'événement (l'âge d'une machine). Les prévisions disent alors combien il reste : le temps restant médian, ses quantiles et la probabilité de durer encore t. Ce n'est pas la colonne du temps de début : celle-ci dit depuis quand chaque ligne de l'ajustement est observée, celle-là depuis combien de temps dure déjà chaque unité à prédire.",
       "aic_margin": "Avec le choix automatique : si une distribution plus simple, contenue dans celle de plus petit AIC, est dans cette marge de son AIC, on prend la plus simple. 0 prend toujours l'AIC le plus bas ; 2 est la marge habituelle.",
       "rmst_tau": "Le temps jusqu'auquel la durée moyenne de survie est calculée.",
@@ -6796,7 +6802,7 @@ export default {
       "rsm": "Chaque division est choisie parmi cette part de prédicteurs, tirés au hasard.",
       "random_strength": "Bruit ajouté aux scores des divisions : 0 aucun, plus grand plus de variété.",
       "distribution": "Comment les temps se répartissent. Automatique ajuste les six et garde celle de l'AIC le plus bas (la plus simple si elle est à moins de 2). Gompertz ne donne que des hazard ratios.",
-      "quantiles": "Jusqu'à 9 nombres entre 0 et 1, séparés par des virgules, p. ex. 0.25, 0.75. La médiane est toujours donnée.",
+      "quantiles": "Jusqu'à 9 nombres entre 0 et 1, séparés par « ; » ou des espaces, p. ex. 0,25 ; 0,75. La médiane est toujours donnée.",
       "customer": "Une ligne par client : regroupez d'abord les transactions par client.",
       "age": "Temps entre le premier achat et la fin de la période de calibration, dans l'unité ci-dessous.",
       "opportunities": "Combien d'occasions d'achat ont suivi le premier achat (une campagne, un an) : de 1 à 1000.",
@@ -6943,8 +6949,12 @@ export default {
       "removePair": "Retirer cette interaction",
       "pairsNeedPredictors": "Choisissez d'abord au moins deux prédicteurs.",
       "aValue": "Une valeur",
-      "numbersPlaceholder": "p. ex. 12, 24, 36",
-      "quantilesPlaceholder": "p. ex. 0.1, 0.9",
+      "numbersPlaceholder": "p. ex. 12 ; 24,5 ; 36",
+      "quantilesPlaceholder": "p. ex. 0,1 ; 0,9",
+      "numbersRead": "1 valeur lue : {list} | {n} valeurs lues : {list}",
+      "numbers_ambiguous": "« {part} » peut se lire de deux façons. Séparez les nombres par « ; » ou une espace : la virgule est la marque décimale.",
+      "numbers_notNumber": "« {part} » n'est pas un nombre.",
+      "rowsClash": "L'entrée a déjà {columns}, que la sortie en lignes de ce modèle ajoute : renommez-les d'abord, ou choisissez une autre sortie.",
       "between": "Un nombre entre {above} et {below}, bornes exclues.",
       "above": "Un nombre supérieur à {above}.",
       "below": "Un nombre inférieur à {below}.",
@@ -6978,6 +6988,13 @@ export default {
       "timeoutMax": "Au plus {n} secondes pour ce groupe."
     },
     "node": {
+      "units": {
+        "day": "jour",
+        "week": "semaine",
+        "month": "mois",
+        "quarter": "trimestre",
+        "year": "an"
+      },
       "title": "Modèle statistique",
       "setIt": "Définissez ses colonnes dans le panneau.",
       "unknownModel": "Le modèle « {model} » n'est pas connu de cette version de Tabularia.",
@@ -7046,9 +7063,9 @@ export default {
       "interval": "Ajoute les bornes inférieure et supérieure de chaque prédiction.",
       "threshold": "Ajoute la classe prédite : l'événement à partir de cette probabilité. 0,5 si vide.",
       "horizon": "Combien de pas après la fin de la série. Pour les modèles de valeur client : combien de périodes en avant, dans l'unité de l'ajustement du modèle. Vide : celui du modèle.",
-      "at_times": "Une colonne de survie par temps, p. ex. 12, 24.",
+      "at_times": "Une colonne de survie pour chaque temps, p. ex. 12 ; 24,5.",
       "alive_at": "Une colonne des lignes : le temps que chaque unité a déjà survécu. La médiane, les quantiles et les colonnes de survie parlent alors du temps restant. Vide : depuis le début.",
-      "quantiles": "Une colonne par quantile, p. ex. 0.25, 0.75. Vide : les quantiles avec lesquels le modèle a été ajusté."
+      "quantiles": "Une colonne par quantile, p. ex. 0,25 ; 0,75. Vide : les quantiles avec lesquels le modèle a été ajusté."
     }
   },
   "modelsAdmin": {

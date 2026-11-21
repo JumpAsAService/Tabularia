@@ -6507,6 +6507,9 @@ export default {
       "hint": "Explains a number with other columns: least squares, weighted, with robust errors, or with a ridge, lasso or elastic net penalty.",
       "params": {
         "outcome": "Outcome (a number)"
+      },
+      "hints": {
+        "seed": "Every random choice (the cross-validation parts) uses it: the same data give the same numbers."
       }
     },
     "logistic": {
@@ -6515,6 +6518,9 @@ export default {
       "params": {
         "outcome": "Outcome (two values)",
         "event_value": "Value that is the event"
+      },
+      "hints": {
+        "seed": "Every random choice (the cross-validation parts) uses it: the same data give the same numbers."
       }
     },
     "kaplan_meier": {
@@ -6751,10 +6757,10 @@ export default {
       "fold_by": "Rows with the same value go to the same part (a customer, a patient).",
       "standardize": "On the same scale, so that the penalty treats every predictor alike. Results come back on the original scale.",
       "alpha": "Intervals are drawn at 1 − this, and tests are judged against it.",
-      "seed": "Every random choice (the cross-validation parts) uses it: the same data give the same numbers.",
+      "seed": "Every random choice (such as the sample of points the charts draw) uses it: the same data give the same numbers.",
       "output": "What the node hands to the step after it.",
       "strata": "One curve per value of this column; leave empty for a single curve.",
-      "times": "Up to 10 times, separated by commas: the survival at each is reported.",
+      "times": "Up to 10 times, separated by commas or spaces; the point is the decimal mark (12.5). The survival at each is reported.",
       "alive_at": "The column holding the time each unit has already survived without the event (a machine's age). The predictions then say how long is left: the median remaining time, the quantiles of it, and the chance of lasting t more. It is not the Start time column: that one says from when each row of the fit was observed, this one how long each unit to predict has already lasted.",
       "aic_margin": "With the automatic choice: when a simpler distribution nested in the one with the lowest AIC is within this margin of its AIC, the simpler one is chosen. 0 always takes the lowest AIC; 2 is the usual margin.",
       "rmst_tau": "The time up to which the average survival time is computed.",
@@ -6796,7 +6802,7 @@ export default {
       "rsm": "Each split is chosen among this share of the predictors, drawn at random.",
       "random_strength": "Noise added to the scores of the splits: 0 for none, larger for more variety.",
       "distribution": "How the times are spread. Automatic fits all six and keeps the lowest AIC (the simpler one when it is within 2). Gompertz gives hazard ratios only.",
-      "quantiles": "Up to 9 numbers between 0 and 1, separated by commas, e.g. 0.25, 0.75. The median is always given.",
+      "quantiles": "Up to 9 numbers between 0 and 1, separated by commas or spaces, e.g. 0.25, 0.75. The median is always given.",
       "customer": "One row per customer: group the transactions by customer first.",
       "age": "Time from the first purchase to the end of the calibration period, in the unit below.",
       "opportunities": "How many occasions to buy came after the first purchase (a campaign, a year): 1 to 1000.",
@@ -6945,6 +6951,10 @@ export default {
       "aValue": "A value",
       "numbersPlaceholder": "e.g. 12, 24, 36",
       "quantilesPlaceholder": "e.g. 0.1, 0.9",
+      "numbersRead": "1 value read: {list} | {n} values read: {list}",
+      "numbers_ambiguous": "«{part}» can be read two ways. Separate numbers with «;» or a space: the comma is the decimal mark.",
+      "numbers_notNumber": "«{part}» is not a number.",
+      "rowsClash": "The input already has {columns}, which the rows output of this model adds: rename them first, or choose another output.",
       "between": "A number between {above} and {below}, both excluded.",
       "above": "A number above {above}.",
       "below": "A number below {below}.",
@@ -6978,6 +6988,13 @@ export default {
       "timeoutMax": "At most {n} seconds for this group."
     },
     "node": {
+      "units": {
+        "day": "day",
+        "week": "week",
+        "month": "month",
+        "quarter": "quarter",
+        "year": "year"
+      },
       "title": "Statistical model",
       "setIt": "Set its columns in the panel.",
       "unknownModel": "The model «{model}» is not known to this version of Tabularia.",
@@ -7046,7 +7063,7 @@ export default {
       "interval": "Adds the lower and upper bounds of each prediction.",
       "threshold": "Adds the predicted class: the event from this probability up. 0.5 when empty.",
       "horizon": "How many steps after the series ends. For the customer lifetime models: how many periods ahead, in the unit the model was fitted in. Empty: the model's own.",
-      "at_times": "A survival column for each time, e.g. 12, 24.",
+      "at_times": "A survival column for each time, e.g. 12, 24.5.",
       "alive_at": "A column of the rows: the time each unit has already survived. The median, the quantiles and the survival columns then speak of the time left. Empty: from the start.",
       "quantiles": "A column for each quantile, e.g. 0.25, 0.75. Empty: the quantiles the model was fitted with."
     }

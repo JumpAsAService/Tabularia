@@ -926,7 +926,7 @@ test('customer lifetime value: the purchase models compared only when one is cho
   // the customer, the counts and the spend are four different columns
   assert.deepEqual(m.modelOverlaps(CLV, { customer: 'id', frequency: 'id', recency: 'x' }), [{ column: 'id', keys: ['customer', 'frequency'] }])
   assert.equal(m.modelSummary('clv', base), 'qty, amount, amount2 · week')
-  assert.equal(m.modelSummary('clv', { ...base, spend: 'amount3' }), 'qty, amount, amount2 · week · + spend')
+  assert.equal(m.modelSummary('clv', { ...base, spend: 'amount3' }), 'qty, amount, amount2 · week · + amount3')
 })
 
 test('BG/BB: the opportunities and their unit, a whole holdout, no purchase model', () => {
@@ -982,7 +982,9 @@ test('a parametric survival node in the editor: the form, with its words, only w
   assert.equal(m.modelNumbersPlaceholderKey({ key: 'quantiles' }), 'models.form.quantilesPlaceholder')
   assert.equal(m.modelNumbersPlaceholderKey({ key: 'at_times' }), 'models.form.numbersPlaceholder')
   assert.match(read('../components/ui/PredictForm.vue'), /:placeholder="\$t\(modelNumbersPlaceholderKey\(f\)\)"/)
-  for (const lang of ['en', 'it', 'de', 'es', 'fr']) assert.match(MESSAGES[lang].models.form.quantilesPlaceholder, /0\.1, 0\.9$/, lang)
+  // the example is written the way the language writes numbers: a point and commas in English, a decimal comma and «;» in the others
+  assert.match(MESSAGES.en.models.form.quantilesPlaceholder, /0\.1, 0\.9$/)
+  for (const lang of ['it', 'de', 'es', 'fr']) assert.match(MESSAGES[lang].models.form.quantilesPlaceholder, /0,1 ?; 0,9$/, lang)
   // with predictors the reference levels and the interactions come
   html = await render(Form, node('parametric_survival', { ...base, predictors: ['channel', 'qty'] }))
   page = text(html)
@@ -1039,4 +1041,103 @@ test('the palette lists the three nodes under their groups, searchable, with an 
   assert.equal(items.length, 17)
   assert.ok( items.every((x) => x.includes('tabindex="0"') && x.includes('role="button"')))
   groups.state.value = null
+})
+
+// ── the boxes of numbers: a decimal comma is a decimal, never two times ─────────────────────────────────────────────
+
+test('a list of numbers is read the way the language writes numbers: «12,5» is twelve and a half in it, de, fr and es', () => {
+  // decimal-comma languages: «;» and spaces separate, the comma is the decimal mark
+  assert.deepEqual(m.modelNumbersRead('12,5', true), { values: [12.5], problem: '' })
+  assert.deepEqual(m.modelNumbersRead('12,5; 24 36', true).values, [12.5, 24, 36])
+  assert.deepEqual(m.modelNumbersRead('12, 24, 36', true).values, [12, 24, 36])
+  assert.deepEqual(m.modelNumbersRead('0,25;0,75', true).values, [0.25, 0.75])
+  assert.deepEqual(m.modelNumbersRead('2.5, 4', true).values, [2.5, 4])
+  // a chain of commas between digits reads two ways: it is not guessed
+  assert.equal(m.modelNumbersRead('12,24,36', true).problem, 'ambiguous')
+  assert.equal(m.modelNumbersRead('12,24,36', true).part, '12,24,36')
+  assert.equal(m.modelNumbersRead('12; abc', true).problem, 'notNumber')
+  assert.equal(m.modelNumbersRead('12; 1,2x', true).part, '1,2x')
+  assert.deepEqual(m.modelNumbersRead('', true), { values: [], problem: '' })
+  // English: the point is the decimal, the comma separates
+  assert.deepEqual(m.modelNumbersRead('12.5, 24; 36', false).values, [12.5, 24, 36])
+  assert.deepEqual(m.modelNumbersRead('12,24,36', false).values, [12, 24, 36])
+  assert.deepEqual(m.modelNumbersRead('5,12', false).values, [5, 12])
+  assert.equal(m.modelNumbersRead('1..5', false).problem, 'notNumber')
+  assert.equal(m.modelNumbersRead('x', false).problem, 'notNumber')
+  // the languages
+  assert.ok(['it', 'de', 'fr', 'es', 'de-AT', 'IT'].every((l) => m.modelDecimalComma(l)))
+  assert.ok(!m.modelDecimalComma('en') && !m.modelDecimalComma('en-GB') && !m.modelDecimalComma(undefined))
+  // what is shown again
+  assert.equal(m.modelNumbersText([12.5, 24], true), '12,5; 24')
+  assert.equal(m.modelNumbersText([12.5, 24], false), '12.5, 24')
+  assert.equal(m.modelNumbersText(undefined, true), '')
+  // a saved value never loses a decimal: the half is not read as a five and a twelve
+  assert.deepEqual(m.modelParams(KM, { time: 't', event: 'e', event_value: '1', times: [12.5, 24] }).times, [12.5, 24])
+  assert.deepEqual(m.modelNumbers('12.5; 24'), [12.5, 24])
+})
+
+test('the node and Predict forms read their lists of numbers through the same box, and say what they read', () => {
+  const box = read('../composables/modelNumbersBox.ts')
+  for (const file of ['../components/ui/ModelForm.vue', '../components/ui/PredictForm.vue']) {
+    const src = read(file)
+    assert.match(src, /useModelNumbersBox\(/, file)
+    assert.match(src, /numbersBox\.change\(f, /, file)
+    assert.match(src, /numbersBox\.said\(f\)/, file)
+    assert.doesNotMatch(src, /@change="set\(f\.key, \(\$event\.target as HTMLInputElement\)\.value\)"\s*\/>\s*<p v-if="(timesProblem|numbersProblem)/, file)
+  }
+  assert.match(box, /models\.form\.numbers_\$\{b\.problem\}/)
+  // the five languages carry the words, with the same placeholders
+  for (const l of ['en', 'it', 'de', 'fr', 'es']) {
+    const src = read(`../i18n/locales/${l}.gen.ts`)
+    for (const key of ['numbersRead', 'numbers_ambiguous', 'numbers_notNumber', 'rowsClash']) assert.match(src, new RegExp(`"${key}": "`), `${l} ${key}`)
+    assert.match(src, /"numbersRead": "[^"]*\{list\}[^"]*\|[^"]*\{n\}[^"]*\{list\}/, l)
+  }
+})
+
+test('the rows output names the columns it would add, as the engine does', () => {
+  const clv = m.modelOf('clv')
+  const base = { customer: 'id', frequency: 'x', recency: 'tx', age: 'T', time_unit: 'week', spend: 'amount' }
+  assert.deepEqual(m.modelRowsColumns(clv, base), ['pred_p_alive', 'pred_transactions', 'pred_holdout_transactions', 'pred_spend', 'pred_discounted_transactions', 'pred_clv'])
+  assert.deepEqual(m.modelRowsColumns(clv, { ...base, spend: undefined }), ['pred_p_alive', 'pred_transactions', 'pred_holdout_transactions'])
+  // `*` is one per quantile (the median 0.5 adds none) and per time, the number as its shortest form
+  const cols = m.modelRowsColumns(PS, { time: 't', event: 'e', quantiles: [0.25, 0.5, 0.75], times: [12, 24.5] })
+  assert.ok(cols.includes('pred_quantile_0.25') && cols.includes('pred_quantile_0.75_low') && !cols.some((c) => c.startsWith('pred_quantile_0.5')))
+  assert.ok(cols.includes('pred_surv_at_12') && cols.includes('pred_surv_at_24.5_high') && !cols.some((c) => c.includes('*')))
+  assert.deepEqual(m.modelRowsColumns(m.modelOf('linear'), { outcome: 'y', predictors: ['x'], penalty: 'lasso' }), ['pred_fitted', 'pred_residual'])
+  // a model whose output is a table, not rows
+  assert.deepEqual(m.modelRowsColumns(KM, { time: 't', event: 'e' }), [])
+  const form = read('../components/ui/ModelForm.vue')
+  assert.match(form, /v-if="rowsClash\.length"/)
+  assert.match(form, /\.output !== 'rows'/)
+})
+
+test('the node on the canvas says its unit and its spend column in the language of the page', () => {
+  const base = { customer: 'id', frequency: 'qty', recency: 'r', age: 'a', time_unit: 'week', spend: 'spesa_media' }
+  assert.equal(m.modelSummary('clv', base), 'qty, r, a · week · + spesa_media')
+  assert.equal(m.modelSummary('clv', base, undefined, { unit: (u) => ({ week: 'settimana' })[u] ?? u }), 'qty, r, a · settimana · + spesa_media')
+  assert.equal(m.modelSummary('bg_bb', { customer: 'id', frequency: 'x', recency: 'tx', opportunities: 'n', period_unit: 'year' }, undefined, { unit: () => 'anno' }), 'x, tx, n · anno')
+  assert.doesNotMatch(m.modelSummary('clv', base, undefined, { unit: () => 'x' }), /spend/)
+  const node = read('../components/nodes/ModelNode.vue')
+  assert.match(node, /models\.node\.units\./)
+  for (const l of ['en', 'it', 'de', 'fr', 'es']) {
+    const units = MESSAGES[l].models.node.units
+    for (const u of ['day', 'week', 'month', 'quarter', 'year']) assert.ok(units[u], `${l} ${u}`)
+  }
+})
+
+test('the seed says only what it does in the model: the cross-validation parts are the penalized regressions', () => {
+  const src = read('../i18n/locales/en.gen.ts')
+  const shared = src.match(/"alpha": "Intervals are drawn[^\n]*\n\s*"seed": "([^"]*)"/)?.[1] ?? ''
+  assert.ok(shared && !/cross-validation/.test(shared), 'the shared hint')
+  for (const id of ['linear', 'logistic']) {
+    const own = src.match(new RegExp(`"${id}": \\{[\\s\\S]*?"hints": \\{\\s*"seed": "([^"]*)"`))?.[1] ?? ''
+    assert.match(own, /cross-validation/, id)
+  }
+  for (const l of ['it', 'de', 'fr', 'es']) {
+    const t = read(`../i18n/locales/${l}.gen.ts`)
+    assert.ok(/"hints": \{\s*"seed": /.test(t), l)
+  }
+  // no model that has no cross-validation names its own seed hint with it
+  const ids = JSON.parse(read('../assets/model-catalog.json')).models.map((x) => x.id)
+  assert.ok(ids.includes('clv') && ids.includes('bg_bb') && ids.includes('parametric_survival'))
 })
