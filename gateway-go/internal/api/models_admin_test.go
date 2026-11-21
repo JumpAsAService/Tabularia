@@ -1208,7 +1208,9 @@ func TestTheListNamesTheSystemLibrariesVersionsWithoutTheLock(t *testing.T) {
 			}
 		}
 		if g.ID == "customer_lifetime" {
-			found = len(g.SystemLibraries) == 1 && g.SystemLibraries[0].Package == "libgsl-dev" && g.SystemLibraries[0].Version == "2.7.1+dfsg-6ubuntu2"
+			// the library's own version, and the package's whole one beside it (69dc54eb)
+			found = len(g.SystemLibraries) == 1 && g.SystemLibraries[0].Package == "libgsl-dev" && g.SystemLibraries[0].Version == "2.7.1" &&
+				g.SystemLibraries[0].PackageVersion == "2.7.1+dfsg-6ubuntu2"
 		}
 	}
 	if !found {
