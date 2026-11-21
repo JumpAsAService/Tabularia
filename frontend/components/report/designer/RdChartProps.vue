@@ -14,7 +14,9 @@ import RdNum from '~/components/report/designer/RdNum.vue'
 import RdSeg from '~/components/report/designer/RdSeg.vue'
 import RdSection from '~/components/report/designer/RdSection.vue'
 import { useDesign } from '~/composables/reportDesignStore'
-import { CHART_KINDS, type DChart, type DChartOptions } from '~/composables/reportDesignModel'
+import {
+  CHART_KINDS, SCALED_KINDS, STACKABLE_KINDS, UNORDERED_KINDS, dropOptionsOfOtherKinds, type ChartKind, type DChart, type DChartOptions,
+} from '~/composables/reportDesignModel'
 
 const props = defineProps<{ item: DChart }>()
 const store = useDesign()
@@ -25,11 +27,16 @@ const datasetOptions = computed(() => store.doc.value.datasets.map((d) => ({ val
 const id = computed(() => props.item.id)
 const has = (prefix: string) => store.problems.value.some((p) => p.item === id.value && p.path.startsWith(prefix))
 
-const scaled = computed(() => ['gauge', 'bullet'].includes(props.item.kind))
+const scaled = computed(() => SCALED_KINDS.includes(props.item.kind))
 const axes = computed(() => ['bar', 'column', 'line', 'area', 'combo', 'waterfall', 'scatter'].includes(props.item.kind))
-const stackable = computed(() => ['bar', 'column', 'area', 'combo'].includes(props.item.kind))
-// a funnel and a treemap lay out by value whatever the order, a gauge has one value
-const ordered = computed(() => !['funnel', 'treemap', 'gauge'].includes(props.item.kind))
+const stackable = computed(() => STACKABLE_KINDS.includes(props.item.kind))
+const ordered = computed(() => !UNORDERED_KINDS.includes(props.item.kind))
+
+// another kind: the options its panel does not show go (dropOptionsOfOtherKinds)
+function setKind(k: ChartKind) {
+  if (k === props.item.kind) return
+  if (dropOptionsOfOtherKinds(props.item, k).includes('target')) store.clearProblem(id.value, 'options.target')
+}
 
 function opts(): DChartOptions {
   if (!props.item.options) props.item.options = {}
@@ -86,7 +93,7 @@ function addSeries() {
         :aria-checked="item.kind === k"
         :class="{ on: item.kind === k }"
         :title="$t(`reportDesigner.kinds.${k}`)"
-        @click="item.kind = k"
+        @click="setKind(k)"
       >
         <RdChartGlyph :kind="k" :size="28" />
         <span>{{ $t(`reportDesigner.kinds.${k}`) }}</span>

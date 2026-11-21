@@ -95,6 +95,28 @@ export interface DChartOptions {
   bands?: number[]
   format?: string | null
 }
+// the options the chart panel shows only for some kinds (RdChartProps.vue)
+export const SCALED_KINDS: readonly ChartKind[] = ['gauge', 'bullet']
+export const STACKABLE_KINDS: readonly ChartKind[] = ['bar', 'column', 'area', 'combo']
+// a funnel and a treemap lay out by value whatever the order, a gauge has one value
+export const UNORDERED_KINDS: readonly ChartKind[] = ['funnel', 'treemap', 'gauge']
+
+/** A chart that becomes `kind`: the options its panel does not show go. Left in the definition they
+ *  would be out of reach and still change the drawing (a gauge's min and max fixing a bar chart's
+ *  axis or a heatmap's colours, a column chart's «stacked» stacking a line chart's lines). The
+ *  others stay; an undo brings back what went. Returns the names removed. */
+export function dropOptionsOfOtherKinds(chart: { kind: ChartKind; options?: DChartOptions }, kind: ChartKind): string[] {
+  chart.kind = kind
+  const o = chart.options
+  if (!o) return []
+  const gone: (keyof DChartOptions)[] = []
+  if (!SCALED_KINDS.includes(kind)) gone.push('min', 'max', 'target', 'bands')
+  if (!STACKABLE_KINDS.includes(kind)) gone.push('stacked')
+  if (UNORDERED_KINDS.includes(kind)) gone.push('sort')
+  const removed = gone.filter((k) => k in o)
+  for (const k of removed) delete o[k]
+  return removed
+}
 export interface DChart extends DBase {
   type: 'chart'
   dataset: string

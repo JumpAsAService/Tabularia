@@ -14,7 +14,7 @@ import { FN, checkExpression, completionAt, groupName, renameEverywhere, renameI
 register('./alias-hooks.mjs', import.meta.url)
 const { createDesignStore } = await import('../composables/reportDesignStore.ts')
 const {
-  alignFilterOps, chooseTotal, columnFor, dropParamFilters, filterParam, filteredBy, nearestName, newItem, opForParam, paramWritten, plainField,
+  alignFilterOps, chooseTotal, columnFor, dropOptionsOfOtherKinds, dropParamFilters, filterParam, filteredBy, nearestName, newItem, opForParam, paramWritten, plainField,
   setChoiceFilter, sqlFilterLine, tableHeight, tableRows, totalChoices, totalKind, typeOfField, usesOfParam,
 } = await import('../composables/reportDesignModel.ts')
 
@@ -677,4 +677,26 @@ test('a new AI comment on paper starts with nothing to read, wide enough, and it
   assert.equal(it.type, 'comment')
   assert.deepEqual(it.reads, [])
   assert.ok(it.w >= 40, 'the least the engine takes')
+})
+
+test('a chart that changes kind loses the options its panel no longer shows', () => {
+  // a gauge with its scale, target and bands becomes a heatmap: min and max, hidden for a heatmap, no longer
+  // fix its colours; what every kind has (labels, format, legend) stays
+  const chart = { kind: 'gauge', options: { min: 0, max: 100, target: 80, bands: [50, 80], labels: true, format: '0%', legend: false } }
+  assert.deepEqual(dropOptionsOfOtherKinds(chart, 'heatmap').sort(), ['bands', 'max', 'min', 'target'])
+  assert.deepEqual(chart, { kind: 'heatmap', options: { labels: true, format: '0%', legend: false } })
+  // gauge ↔ bullet: both show the scale, nothing goes
+  const bullet = { kind: 'gauge', options: { min: 0, max: 1, target: 0.8 } }
+  assert.deepEqual(dropOptionsOfOtherKinds(bullet, 'bullet'), [])
+  assert.deepEqual(bullet.options, { min: 0, max: 1, target: 0.8 })
+  // stacked columns become lines (not stackable), sorted bars a funnel (laid out by value)
+  const column = { kind: 'column', options: { stacked: true, sort: 'desc', top: 5 } }
+  assert.deepEqual(dropOptionsOfOtherKinds(column, 'line'), ['stacked'])
+  assert.deepEqual(column.options, { sort: 'desc', top: 5 })
+  assert.deepEqual(dropOptionsOfOtherKinds(column, 'funnel'), ['sort'])
+  assert.deepEqual(column.options, { top: 5 })
+  // a chart with no options
+  const bare = { kind: 'bar' }
+  assert.deepEqual(dropOptionsOfOtherKinds(bare, 'pie'), [])
+  assert.equal(bare.kind, 'pie')
 })
