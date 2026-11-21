@@ -1286,7 +1286,7 @@ What the harness counted for a non-admin:
 - GET /runs/{id}: `ensure_can` does 1 full projects load and runs ON THE EVENT LOOP, because the route is `async def`.
 - Flow-group detail (flow_groups.py:139-140) calls `has_capability` twice plus `readable_project_ids`. The flow-group page polls /runs every 2.5 s while a run is live.
 
-Admins with the personal flag skip all of this. That is why the owner's capacity figure does not show it: 95 req/s per process (helm values.yaml:379-383), measured by ~/tabularia-carico/carico.py:33-42 with a guest that has VIEW on the ~4 sample folders.
+Admins with the personal flag skip all of this. That is why the owner's capacity figure does not show it: 95 req/s per process (helm values.yaml:379-383), measured by the owner's load script (outside the repository) with a guest that has VIEW on the ~4 sample folders.
 
 **Impact.** Gateway CPU per request for a non-admin, with no network to Postgres (SQLite in process), so real Postgres only adds time. Each figure is median ms, admin vs non-admin.
 
@@ -1306,7 +1306,7 @@ This work holds the GIL. Each gateway replica is one process.
 
 With 30 people editing flows: one node click fires 1 to 3 previews (FlowEditor.vue:1149-1300). One click every ~7 s each gives ~10 previews/s, or ~3.3/s per replica across 3 replicas. At 2,000 folders that is ~0.85 of a core per replica for RBAC alone, with previews queueing behind each other. At 500 folders it is ~10%, before page loads and polls. Opening a folder in Explore sends ~6 requests, each with its own `ensure_can`, plus /projects. That is ~100 ms of gateway CPU per folder open at 500 folders and ~390 ms at 2,000. Cost grows linearly with folders plus grants, and the grants of other users count too.
 
-**Evidence.** Harness /tmp/claude-1000/-home-ltrivelli-Scrivania-projects-tabularia-data-prep-clone/e4512242-d2ed-46a2-b103-4c17f1ec0061/scratchpad/review/gateway-request-path/harness.py: real app, SQLite in memory, statements counted with before_cursor_execute, median of 15 runs (output for 2,000 folders in scale4.txt). A non-admin preview showed the statement sequence users / groups / groups / projects(all columns) / groups / user_groups / permissions(all) / uploads / datasources.
+**Evidence.** A harness outside the repository: real app, SQLite in memory, statements counted with before_cursor_execute, median of 15 runs (output for 2,000 folders in scale4.txt). A non-admin preview showed the statement sequence users / groups / groups / projects(all columns) / groups / user_groups / permissions(all) / uploads / datasources.
 
 Micro-benchmark bench_perm.py, 500 folders → 2,000 folders, ms:
 - `readable_project_ids`: 39.1 → 142.1

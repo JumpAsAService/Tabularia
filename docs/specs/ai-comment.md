@@ -150,8 +150,8 @@ when a call was last made for an element, on any gateway, and what it wrote: tha
 
 ## Testing
 
-No paid call in any test or check, with the user's key or anyone's: a fake provider, as
-`~/tabularia-carico/kube/prove-ui-2026-10-24/fake_openai.py`, recording what it receives. A real model
+No paid call in any test or check, with the user's key or anyone's: a fake provider, a
+small local server outside the repository that records what it receives. A real model
 is left to the owner, and the final report says so.
 
 | Level | What |

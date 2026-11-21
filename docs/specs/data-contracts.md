@@ -229,8 +229,7 @@ docker exec -e CLICKHOUSE_TEST_HOST=chtest -e CLICKHOUSE_TEST_PORT=8123 -e CLICK
   -e CLICKHOUSE_TEST_PASSWORD=tab -e CLICKHOUSE_TEST_DB=tab dataprep-backend python -m pytest tests -q -p no:cacheprovider
 # frontend types
 docker exec -w /app dataprep-frontend sh -lc 'npx -y -p typescript@5.6.3 -p vue-tsc@2.2.10 vue-tsc --noEmit -p .nuxt/tsconfig.json'
-# live sweep and browser checks against the scratch stack
-~/tabularia-carico/giro.sh
+# live sweep and browser checks against the scratch stack: the owner's tools, outside the repository
 ```
 
 ## Project structure

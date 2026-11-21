@@ -72,8 +72,8 @@ file format, expression syntax or look is copied.
 
 ## Rendering (decided 2026-10-29 from a measured prototype)
 
-The prototype (2,000 orders, regions and customers, credit notes, hostile names; kept in
-`~/tabularia-carico/reports-proto/`, outside the repository) settled the engines:
+The prototype (2,000 orders, regions and customers, credit notes, hostile names; kept outside
+the repository) settled the engines:
 
 - **PDF: Typst** (`typst` on PyPI, Apache-2.0, pinned): a fixed, versioned template; the
   data reaches it ONLY as JSON (`sys.inputs`), so names are text, never markup. 2,000

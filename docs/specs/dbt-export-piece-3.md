@@ -176,11 +176,10 @@ Not in piece 3: AI descriptions (piece 4), export as a pull request.
 engine:    docker exec -e CLICKHOUSE_TEST_HOST=chtest -e CLICKHOUSE_TEST_USER=tab -e CLICKHOUSE_TEST_DB=tab \
              -e CLICKHOUSE_TEST_PASSWORD=… dataprep-backend python -m pytest tests -q
 gateway:   docker exec dataprep-gateway python -m pytest tests -q
-typecheck: vue-tsc pinned, against .nuxt/tsconfig.json (memory: frontend-typecheck-command)
-scratch:   ~/tabularia-carico/dcp build backend gateway frontend && dcp up -d --no-deps …
-oracles:   ~/tabularia-carico/dbt_matrice/matrice.py --motore clickhouse [--solo clickhouse]
-           ~/tabularia-carico/dbt_matrice/ciclo.py · dbt_giro.py · dbt_prova.py <flow> clickhouse
-           giro.sh · sicurezza_export.py · a new prova_dbt_dialogo_browser.py
+typecheck: vue-tsc pinned, against .nuxt/tsconfig.json
+scratch:   the scratch stack, rebuilt without dependencies (the owner's tools, outside the repository)
+oracles:   the dbt matrix and loop scripts against ClickHouse, the live sweep, the export security check
+           and a new browser check of the dialog (the owner's tools, outside the repository)
 ```
 
 ## Boundaries

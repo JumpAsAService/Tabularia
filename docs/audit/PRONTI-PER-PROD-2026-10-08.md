@@ -16,7 +16,7 @@ Il percorso con il compose di produzione su una sola macchina regge meglio. Per 
 
 **Confidenza:** `ESEGUITO` = riprodotto da me sullo stack o nei container; `CODICE` = certo dalla lettura del codice; `PLAUSIBILE` = coerente col codice, non riprodotto.
 
-**Nessun file del prodotto è stato modificato.** Sono cambiati solo gli strumenti di prova in `~/tabularia-carico/`. Cartelle, flussi, utenti e datasource creati durante le prove sono stati eliminati. Il database di prova per l'aggiornamento è stato tolto.
+**Nessun file del prodotto è stato modificato.** Sono cambiati solo gli strumenti di prova, fuori dal repository. Cartelle, flussi, utenti e datasource creati durante le prove sono stati eliminati. Il database di prova per l'aggiornamento è stato tolto.
 
 ## Decisioni dell'utente (2026-10-10)
 
@@ -76,7 +76,7 @@ Nessuno dei due casi era un difetto del prodotto.
 
 Un run normale degli stessi oggetti verrebbe fermato da `ensure_reads_pinned` e `ensure_can_read_keys` (`gateway/app/routes/runs.py:188-189`). L'export non li chiama.
 
-**Riprodotto** (`~/tabularia-carico/sicurezza_export.py`):
+**Riprodotto** (con uno script di prova fuori dal repository):
 
 - **Montaggio.** Un utente con VIEW sulla sola cartella «condivisa» esporta un flusso di quella cartella che legge due datasource di una cartella «privata».
 - **Controllo.** Scaricare direttamente la datasource privata gli dà 403.
