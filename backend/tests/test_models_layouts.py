@@ -858,3 +858,58 @@ def test_kaplan_meier_s_and_cox_s_checks_not_computed_say_why_in_the_page_s_lang
                   if r["level"] == check and r["level_2"] == level_2 and r["stat"] == "advice"]
         assert said == w["checks"][check]["not_computed"], (model, check)
 
+
+def test_numbers_too_large_or_too_small_for_a_column_are_written_by_their_exponent_and_a_fit_s_p_value_as_everywhere(
+        tmp_path, chart_service, monkeypatch):  # noqa: F811
+    """A CLV's spend parameter with an interval up to 6.2e+150 (a real fit of the runner) is «6.204e+150», not 151
+    digits; γ = 8.5e-10 is «8.54e-10»; a p-value of the fit is «< 0.0001», not its ten digits."""
+    model, params, rows = fixture("clv-value")
+    big = {("coef", "p", "spend", "ci_high"): 6.2039e150, ("coef", "p", "spend", "std_error"): 243446034.96,
+           ("coef", "p", "spend", "estimate"): 8.540411785e-10}
+    rows = [{**r, "value": big.get((r["section"], r["level"], r["level_2"], r["stat"]), r["value"])} for r in rows]
+    assert sum(r["value"] in big.values() for r in rows) == 3
+    rows.append(_model_row("chi_square_p_value", value=1.027462077e-23))
+    out, page = draw(tmp_path, chart_service, monkeypatch, "clv-value", fmt="svg", rows=rows)
+    said = set(strings(json.loads(page)))
+    assert {"6.204e+150", "2.434e+8", "8.54e-10"} <= said
+    assert not any(re.search(r"\d{16}", s) for s in said)
+    assert "1.027462077e-23" not in said and "< 0.0001" in said
+    assert out.warnings == []
+    _, page = draw(tmp_path / "it", chart_service, monkeypatch, "clv-value", fmt="svg", rows=rows, locale="it")
+    assert "6,204e+150" in set(strings(json.loads(page)))
+
+
+def test_a_parametric_survival_without_predictors_has_no_ratio_charts_and_no_influence():
+    params = {"time": "t", "event": "e", "event_value": 1, "distribution": "gompertz"}
+    ids = {i["id"] for i in layouts.definition("parametric_survival", params, "en", None, None)["sections"]["body"]["items"]}
+    assert not ids & {"time_ratio_interval", "hazard_ratio_interval", "deviance_linear", "s_influence"}
+    ids = {i["id"] for i in layouts.definition("parametric_survival", {**params, "predictors": ["x"]}, "en", None, None)
+           ["sections"]["body"]["items"]}
+    assert {"hazard_ratio_interval", "deviance_linear", "s_influence"} <= ids
+
+
+@pytest.mark.parametrize("locale", LOCALES)
+def test_auto_counts_the_candidates_that_converged_and_a_median_never_reached_has_no_bare_interval(
+        tmp_path, chart_service, monkeypatch, locale):  # noqa: F811
+    model, params, rows = fixture("parametric_survival-auto")
+    rows = [{**r, "value": 0.0} if r["key"] == "candidate|gengamma||converged" else r for r in rows]
+    rows = [r for r in rows if not r["key"].startswith("stratum|all||median")]
+    _, page = draw(tmp_path, chart_service, monkeypatch, "parametric_survival-auto", fmt="svg", locale=locale, rows=rows)
+    texts = strings(json.loads(page))
+    said = " ".join(texts)
+    w = common.words(model, "auto", locale)
+    head, tail = w["candidates"]["lowest"].split("{n}")
+    assert re.search(re.escape(head.split("}")[-1]) + "5" + re.escape(tail), said), said[:400]  # the five that converged
+    assert w["kpi"]["never"] in texts
+    assert not any(t.strip() == w["kpi"]["ci"].replace("{ci}", "").strip() for t in texts)
+
+
+def test_a_parametric_survival_with_strata_names_them_without_the_column_and_groups_its_tables():
+    params = {"time": "t", "event": "e", "event_value": 1, "predictors": ["x"], "strata": "plant", "quantiles": [0.25]}
+    items = {i["id"]: i for i in layouts.definition("parametric_survival", params, "en", None, None)["sections"]["body"]["items"]}
+    assert items["quantiles"]["groups"][0]["by"].count('"plant="') == 1 and items["surv_at"]["groups"]
+    assert items["profile_survival"]["w"] == items["hazard"]["w"] == common.WIDTH  # a curve a stratum: across the page
+    assert '"plant="' in items["profile_survival"]["split_by"]
+    items = {i["id"]: i for i in layouts.definition("parametric_survival", {**params, "strata": None}, "en", None, None)
+             ["sections"]["body"]["items"]}
+    assert "groups" not in items["quantiles"] and items["hazard"]["w"] < common.WIDTH

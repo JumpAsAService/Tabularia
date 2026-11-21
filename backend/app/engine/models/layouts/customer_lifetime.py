@@ -255,6 +255,6 @@ def build(model: str, params: dict[str, Any], locale: str, sample: list[dict] | 
     blocks = (_fit_to_the_data, _p_alive, *((_spend,) if value else ()), _clv(value))
     doc = c.page(model, params, locale, sample, step, name=name, about=about, cards=cards,
                  assumptions_note=c.alpha_said(w["alpha_note"], checked.get("alpha", 0.05), locale) + " " + w["assumptions_note"],
-                 after_assumptions=(c.measures(MEASURES, COUNTED, SCIENTIFIC),), fit_skip=FIT_SKIP, fit_format=SMALL, room=12.0, summary_lines=(("business", line),),
+                 after_assumptions=(c.measures(MEASURES, COUNTED, SCIENTIFIC),), fit_skip=FIT_SKIP, fit_format=SMALL, summary_lines=(("business", line),),
                  after_coefficients=(_parameters(value), *((_comparison,) if model == "clv" else ())), blocks=blocks)
     return doc

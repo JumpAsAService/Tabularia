@@ -303,11 +303,22 @@ def of_row(section: str, stat: str, column: str = "value") -> str:
     return f"LOOKUP({row_key(section, stat)}, [key], [{column}])"
 
 
+# a number of a table at least this large, or this small and not zero, is written by its exponent with four
+# significant digits («6.2e+150», «8.54e-10»): its digits would run out of its column
+BY_EXPONENT_FROM, BY_EXPONENT_BELOW = 1e7, 1e-4
+SCIENTIFIC = "0.###e+0"
+
+
+def far(x: str) -> str:
+    """The condition of a number written by its exponent (BY_EXPONENT_FROM, BY_EXPONENT_BELOW)."""
+    return f"(ABS({x}) >= {BY_EXPONENT_FROM:.0f} OR ({x} <> 0 AND ABS({x}) < {BY_EXPONENT_BELOW:g}))"
+
+
 def number_of_row(section: str, stat: str) -> str:
-    """A number of the row at hand's term, with the decimals its column has room for; a very
-    small one by its exponent."""
+    """A number of the row at hand's term, with the decimals its column has room for; a very large or
+    very small one by its exponent, four significant digits (a column of some twelve characters)."""
     x = of_row(section, stat)
-    return f"IF(ISNULL({of_row(section, stat, 'tiny')}), {stats.rounded(x)}, {of_row(section, stat, 'tiny')})"
+    return f"IF(ISNULL({x}), {x}, IF({far(x)}, {shown(x, SCIENTIFIC)}, {stats.rounded(x)}))"
 
 
 def p_said(x: str) -> str:
@@ -366,6 +377,7 @@ class Chart(NamedTuple):
     under: str | None = None
     wide: bool = False
     caption: str | None = None
+    measured: str | None = None  # a caption that is an expression: a text as long as what it says, to measure its lines
 
 
 class CoefTable(NamedTuple):
@@ -430,7 +442,7 @@ def page(model: str, params: Mapping[str, Any], locale: str, sample: list[dict] 
          name: str, about: str, cards: tuple[Card | tuple[Card, ...], ...], coef_tables: tuple[CoefTable, ...] = (),
          coef_note: str | tuple[str, str] | None = None, blocks: tuple[Block, ...] = (), charts: tuple[Chart, ...] = (),
          assumptions_note: str | None = None, p_values: bool = True, fit_skip: tuple[str, ...] = (),
-         summary_lines: tuple[tuple[str, str], ...] = (), fit_format: str = EXACT, room: float = 0.0, after_assumptions: tuple[Block, ...] = (), coef_first: tuple[Block, ...] = (),
+         summary_lines: tuple[tuple[str, str], ...] = (), fit_format: str = EXACT, after_assumptions: tuple[Block, ...] = (), coef_first: tuple[Block, ...] = (),
          after_coefficients: tuple[Block, ...] = ()) -> dict:
     """A model's report: the summary (four cards, the formula), the assumptions (first page),
     the coefficients, the fit, the model's own blocks (strata, forecast…), the diagnostics,
@@ -439,7 +451,7 @@ def page(model: str, params: Mapping[str, Any], locale: str, sample: list[dict] 
     `p_values`: False for a variant with no p-value (no statistic, df, p or R's codes in the
     checks and the fit, no warning about the tests on many rows); `fit_skip`: numbers of the
     `model` section the fit's table leaves out (the model's own block says them; a name ending in «_» is a prefix);
-    `room`: mm kept under the Fit and Notes headings for their tables' first rows, so that a page never ends with such a heading (a blank that long under it); `fit_format`: the pattern of the fit's numbers (all their digits by default); `summary_lines`: (id, expression) of lines under the formula (a customer lifetime's business
+    `fit_format`: the pattern of the fit's numbers (all their digits by default); `summary_lines`: (id, expression) of lines under the formula (a customer lifetime's business
     settings); `coef_first`: blocks drawn under the coefficients' heading and note, before their tables
     and kept with the heading on one page; `after_coefficients`: blocks under the tables, before the fit;
     `coef_note` may be a (text, visible) pair."""
@@ -460,12 +472,12 @@ def page(model: str, params: Mapping[str, Any], locale: str, sample: list[dict] 
         _coefficients(p, w, lang, coef_tables, coef_note, coef_first)
     for block in after_coefficients:
         block(p, w)
-    _fit(p, w, p_values, fit_skip, fit_format, room)
+    _fit(p, w, p_values, fit_skip, fit_format)
     for block in blocks:
         block(p, w)
     if charts:
         _diagnostics(p, w, charts)
-    _notes(p, w, room)
+    _notes(p, w)
     return stats.document(header, p.items, footer, lang)
 
 
@@ -649,21 +661,22 @@ def _coefficients(p: stats.Page, w: dict, lang: str, tables: tuple[CoefTable, ..
         p.text("coef_signif_legend", stats.static(stats.signif_legend(w, lang)), h=4.5, size=7, color=MUTED)
 
 
-def _fit(p: stats.Page, w: dict, p_values: bool = True, skip: tuple[str, ...] = (), pattern: str = EXACT, room: float = 0.0) -> None:
-    """Every number of the `model` section, then how it was fitted (its settings in words)."""
+def _fit(p: stats.Page, w: dict, p_values: bool = True, skip: tuple[str, ...] = (), pattern: str = EXACT) -> None:
+    """Every number of the `model` section, then how it was fitted (its settings in words). The heading
+    is a band of words right above the table: the report keeps the two on one page (model.py, body)."""
     f = w["fit"]
     p.heading("s_fit", w["sections"]["fit"])
-    if room:
-        p.y += room
-        p.keep()
-        p.y -= room
     sig = f'LOOKUP("model|||" & LEFT([stat], LEN([stat]) - 7) & "significance", [key], [text])'
     numbers = '[section] = "model" AND NOT ISNULL([value])' + "".join(
         f' AND NOT STARTSWITH([stat], "{s}")' if s.endswith("_") else f' AND [stat] <> "{s}"' for s in skip)
     cols = [
         {"header": f["quantity"], "value": "[label]"},
         {"header": f["name"], "value": "[stat]", "width": 50, "style": {"color": MUTED}},
-        {"header": f["value"], "value": "IF(ISNULL([tiny]), [value], [tiny])", "width": 34, "align": "right", "format": pattern},
+        # a p-value as everywhere else («< 0.0001», four decimals), not its ten digits; a number too large for the
+        # column by its exponent; a very small one by its exponent with all its digits (`tiny`)
+        {"header": f["value"], "value": f'IF(RIGHT([stat], 7) = "p_value", {p_said("[value]")}, IF(ISNULL([tiny]), '
+                                         f'IF(ABS([value]) >= {BY_EXPONENT_FROM:.0f}, {shown("[value]", SCIENTIFIC)}, [value]), [tiny]))',
+         "width": 34, "align": "right", "format": pattern},
         {"header": w["signif"]["column"], "value": f'IF(RIGHT([stat], 7) = "p_value", {sig}, "")', "width": 14},
     ]
     p.add(stats.table("fit", f["title"], numbers, cols if p_values else cols[:3], p.y), 10)
@@ -713,7 +726,7 @@ def grid(p: stats.Page, w: dict, charts: tuple[Chart, ...], heading: tuple[str, 
         p.add(item)
         if chart.caption:  # how to read it: static words (or an expression, when it starts with «=»), as many lines of 7 pt as the width needs
             said = chart.caption.startswith("=")
-            lines = -(-int(glyphs.width_mm(chart.caption.lstrip("="), 7)) // int(width - 2)) or 1
+            lines = -(-int(glyphs.width_mm(chart.measured or chart.caption.lstrip("="), 7)) // int(width - 2)) or 1
             height = round(3.1 * lines + 1.4, 2)
             room = max(room, height)
             p.items.append({"id": chart.id + "_how", "type": "text", "x": x, "y": top + tall + 0.3, "w": width, "h": height,
@@ -734,7 +747,7 @@ def grid(p: stats.Page, w: dict, charts: tuple[Chart, ...], heading: tuple[str, 
         close_row()
 
 
-def _notes(p: stats.Page, w: dict, room: float = 0.0) -> None:
+def _notes(p: stats.Page, w: dict) -> None:
     n = w["notes"]
     p.heading("s_notes", w["sections"]["notes"])
     rows_from = txt(model_key("rows_from"))
@@ -744,9 +757,7 @@ def _notes(p: stats.Page, w: dict, room: float = 0.0) -> None:
     # the three lines are one text: a page never ends with the last of them alone
     p.text("notes_lines", f'=IF({rows_from} = "trial", {q(n["trial"])}, {q(n["run"])}) & "\n" & {left_out} & "\n" & {software}',
            h=14.5, can_grow=True)
-    p.y += room  # room for the notes' table (its header and first row) in the same band: never a table alone on a page
-    p.keep()
-    p.y -= room
+    p.keep()  # the heading and the lines are words right above the notes' table: the report keeps them with it
     p.y += 1.5
     is_note = '[section] = "model" AND STARTSWITH([stat], "note_")'
     p.add(stats.table("notes", n["title"], is_note, [{"header": n["note"], "value": "[text]"}], p.y,

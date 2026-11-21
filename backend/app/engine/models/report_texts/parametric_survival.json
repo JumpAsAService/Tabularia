@@ -904,7 +904,7 @@
    "distribution": "Distribución",
    "auto_weight": "auto · peso de Akaike {weight}",
    "median": "Tiempo mediano hasta el evento",
-   "never": "nunca alcanzado",
+   "never": "no alcanzado",
    "ci": "IC {ci}",
    "concordance": "Concordancia",
    "se": "EE {se}",

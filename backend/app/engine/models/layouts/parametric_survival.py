@@ -57,9 +57,14 @@ def _distribution(w: dict, field: str) -> str:
     return "IFS(" + ", ".join(f'{field} = "{d}", {c.q(names[d])}' for d in DISTRIBUTIONS) + f", {field})"
 
 
-def _group(w: dict, field: str = "[level_2]") -> str:
-    """A group of the charts as the page names it: the words for all the rows, else its own name."""
-    return f'IF({field} = "{ALL}", {c.q(w["all"])}, {field})'
+def _group(w: dict, field: str = "[level_2]", strata: str | None = None) -> str:
+    """A group of the charts as the page names it: the words for all the rows, else its own name; a stratum
+    without the runner's «<strata column>=» before it (the header says «by plant»: «plant=North» is «North»)."""
+    name = field
+    if strata:
+        head = f"{strata}="
+        name = f'IF(STARTSWITH({field}, {c.q(head)}), RIGHT({field}, LEN({field}) - {len(head)}), {field})'
+    return f'IF({field} = "{ALL}", {c.q(w["all"])}, {name})'
 
 
 def _grouped(filter_: str = '[section] = "curve" AND [level] = "fit_km"') -> str:
@@ -117,7 +122,8 @@ def _candidates(params: dict[str, Any]):
         one = '[section] = "candidate" AND [stat] = "n_parameters"'
         chosen_row = c.of_row("candidate", "chosen")
         moved = f'COUNTIF([section] = "candidate" AND [stat] = "parsimony" AND [value] = 1) > 0'
-        n = c.shown(f'COUNTIF([section] = "candidate" AND [stat] = "converged")', "#,##0")
+        # the candidates fitted: those that converged (a row `converged` of 0 is one that did not)
+        n = c.shown(f'COUNTIF([section] = "candidate" AND [stat] = "converged" AND [value] = 1)', "#,##0")
         chosen = c.txt(c.model_key("distribution"))
         p.text("candidates_said", "=" + c.join(w["candidates"]["lowest"], distribution=chosen, n=n), h=5, size=8.5, can_grow=True,
                advance=False, visible=f"=NOT ({moved})")
@@ -174,7 +180,7 @@ def _verdict(w: dict, key: str) -> str:
     return "=" + c.join(w["illustrates"], check=f'LOOKUP({c.q(key)}, [key], [label])', verdict=said)
 
 
-def _fit_to_the_data(has_loglog: bool):
+def _fit_to_the_data(has_loglog: bool, strata: str | None = None):
     def block(p: stats.Page, w: dict) -> None:
         ch, s = w["charts"], w["series"]
         c.heading(p, "s_fit_data", w["sections"]["fit_data"])
@@ -189,7 +195,7 @@ def _fit_to_the_data(has_loglog: bool):
                           {"value": 'IF([stat] = "fitted", [value], NULL)', "as": "line", "name": s["fitted"]}],
                "visible": f"={c.exists(f).lstrip('=')} AND NOT ({_grouped()})"}
         many = {**common, "id": "fit_km_groups", "title": stats.fit(ch["fit_km_groups"], 7.5, c.WIDTH - 4, 700),
-                "split_by": _group(w),
+                "split_by": _group(w, strata=strata),
                 "series": [{"value": 'IF([stat] = "surv", [value], NULL)', "as": "step", "name": s["km"]}, *band,
                            {"value": 'IF([stat] = "fitted", [value], NULL)', "as": "line", "name": s["fitted"]}],
                 "visible": f"={_grouped()}"}
@@ -212,7 +218,7 @@ def _fit_to_the_data(has_loglog: bool):
             charts.append(c.xy("loglog", ch["loglog"], f2, [
                 {"value": 'IF([section] = "point", [value], NULL)', "as": "point", "name": s["km_points"]},
                 {"value": 'IF([section] = "curve", [value], NULL)', "as": "line", "name": s["fitted"]}], {"format": "0.##"},
-                split_by=_group(w))._replace(caption=w["loglog_how"]))
+                split_by=_group(w, strata=strata), wide=bool(strata))._replace(caption=w["loglog_how"]))
         c.grid(p, w, tuple(charts), None)
     return block
 
@@ -220,14 +226,17 @@ def _fit_to_the_data(has_loglog: bool):
 # ── the profile: its median, quantiles and survival; the curves ─────────────
 def _profile(params: dict[str, Any]):
     times = _times(params)
+    strata = params.get("strata")
+    # with strata a chart has a curve each (up to the catalogue's 20): across the page, its legend has room above it
 
     def block(p: stats.Page, w: dict) -> None:
         t, ch, s = w["tables"], w["charts"], w["series"]
         c.heading(p, "s_profile", w["sections"]["profile"])
         p.text("profile_line", "=" + c.join(w["profile_is"], profile=c.txt(c.model_key("profile"))), h=5, size=8.5, can_grow=True,
                visible=c.exists('[key] = "model|||profile"'))
+        p.keep()  # the heading and the profile's line: one band, which the report keeps with the table under it
         one = '[section] = "stratum" AND [stat] = "n"'
-        stratum = {"header": t["stratum"], "value": _group(w, "[level]")}
+        stratum = {"header": t["stratum"], "value": _group(w, "[level]", strata)}
         p.add(stats.table("strata", t["strata"], one, [
             stratum,
             {"header": c.stat_label(w, "stratum", "n"), "value": c.of_row("stratum", "n"), "width": 22, "align": "right",
@@ -239,7 +248,15 @@ def _profile(params: dict[str, Any]):
         quant = ('[section] = "stratum" AND ([stat] = "median" OR (STARTSWITH([stat], "quantile_") AND RIGHT([stat], 7) <> "_ci_low" '
                  'AND RIGHT([stat], 8) <> "_ci_high"))')
         key = '"stratum|" & [level] & "||median"'
-        p.add(stats.table("quantiles", t["quantiles"], quant, [
+        # with strata a stratum's rows under its name (a group), not its name on every row: a long name would take
+        # several lines of each
+        def by_stratum(table: dict) -> dict:
+            if strata:
+                table["columns"] = table["columns"][1:]
+                table["groups"] = [{"by": _group(w, "[level]", strata), "footer": False}]
+            return table
+
+        p.add(by_stratum(stats.table("quantiles", t["quantiles"], quant, [
             stratum, {"header": t["quantity"], "value": "[label]", "width": 40},
             {"header": t["time"], "value": "[value]", "width": 26, "align": "right", "format": "0.###"},
             {"header": t["low"], "value": 'LOOKUP([key] & "_ci_low", [key], [value])', "width": 26, "align": "right",
@@ -249,36 +266,35 @@ def _profile(params: dict[str, Any]):
             {"header": c.stat_label(w, "stratum", "km_median"),
              "value": f'IF([stat] = "median", LOOKUP({key.replace("||median", "||km_median")}, [key], [value]), NULL)',
              "width": 34, "align": "right", "format": "0.###"},
-        ], p.y, visible=c.exists(quant)), 10)
+        ], p.y, visible=c.exists(quant))), 10)
         p.text("quantiles_note", w["quantiles_note"], h=4.5, size=7, color=c.MUTED, can_grow=True, visible=c.exists(quant))
         at = ('[section] = "stratum" AND STARTSWITH([stat], "surv_at_") AND RIGHT([stat], 4) <> "_low" '
               'AND RIGHT([stat], 5) <> "_high"')
-        p.add(stats.table("surv_at", t["surv_at"], at, [
+        p.add(by_stratum(stats.table("surv_at", t["surv_at"], at, [
             stratum, {"header": t["time"], "value": "[x0]", "width": 30, "align": "right", "format": "0.######"},
             {"header": t["survival"], "value": "[value]", "width": 26, "align": "right", "format": "0.0000"},
             {"header": t["low"], "value": 'LOOKUP([key] & "_low", [key], [value])', "width": 26, "align": "right", "format": "0.0000"},
             {"header": t["high"], "value": 'LOOKUP([key] & "_high", [key], [value])', "width": 26, "align": "right",
              "format": "0.0000"},
-        ], p.y, visible=c.exists(at)), 10)
+        ], p.y, visible=c.exists(at))), 10)
         p.y += 1.0
         survival = c.xy("profile_survival", ch["profile_survival"], '[section] = "curve" AND [level] = "profile_survival"',
                         [c.mark("surv", "line", s["survival"]), c.mark("lower", "band_low"), c.mark("upper", "band_high")],
                         {"format": "0.##", "min": 0, "max": 1, "legend": True, **({"target_x": times} if times else {})},
-                        split_by=_group(w))
+                        split_by=_group(w, strata=strata), wide=bool(strata))
         hazard = c.xy("hazard", ch["hazard"], '[section] = "curve" AND [level] = "hazard"',
                       [c.mark("hazard", "line", s["hazard"]), c.mark("lower", "band_low"), c.mark("upper", "band_high")],
-                      {"format": "0.####", "legend": True}, split_by=_group(w))
+                      {"format": "0.####", "legend": True}, split_by=_group(w, strata=strata), wide=bool(strata))
         c.grid(p, w, (survival, hazard), None)
     return block
 
 
 def _influence(p: stats.Page, w: dict) -> None:
     ch, s = w["charts"], w["series"]
-    c.heading(p, "s_influence", w["sections"]["influence"])
     deviance = c.xy("deviance_linear", ch["deviance_linear"], '[section] = "point" AND [level] = "deviance_linear"',
                     [{"value": "[value]", "as": "point", "name": s["residuals"], "label": "[text]"}], {"target": 0, "legend": False},
                     under="dfbeta")
-    c.grid(p, w, (deviance,), None)
+    c.grid(p, w, (deviance,), ("s_influence", w["sections"]["influence"]))  # the heading kept with its chart
 
 
 # ── the measures ────────────────────────────────────────────────────────────
@@ -307,7 +323,7 @@ def layout(model: str, params: dict[str, Any], locale: str, sample: list[dict] |
              c.Card("k_distribution", k["distribution"], c.txt(c.model_key("distribution")),
                     under=f'IF({auto}, ' + c.join(k["auto_weight"], weight=c.shown(weight, "0.00")) + ', "")'),
              (c.Card("k_median", k["median"], f'IF(ISNULL({median}), {c.q(k["never"])}, {c.shown(median, "0.###")})',
-                     visible=alone, under=c.join(k["ci"], ci=median_ci)),
+                     visible=alone, under=f'IF(({median_ci}) = "", "", {c.join(k["ci"], ci=median_ci)})'),  # no interval: no «CI» alone
               c.Card("k_concordance", k["concordance"], c.shown(c.num(c.model_key("concordance")), "0.000"), visible=several,
                      under=c.join(k["se"], se=c.shown(c.num(c.model_key("concordance_se")), "0.000")))),
              c.Card("k_aic", k["aic"], c.shown(c.num(c.model_key("aic"))),
@@ -324,10 +340,13 @@ def layout(model: str, params: dict[str, Any], locale: str, sample: list[dict] |
     tables = (estimates, *(() if variant == "ph" else (ratios,)), *(() if variant == "aft" else (hazards, cox)))
     loglog = variant in ("ph_aft", "auto")
     alpha_note = c.alpha_said(w["alpha_note"], checked.get("alpha", 0.05), locale)
-    blocks = (*((_candidates(checked),) if variant == "auto" else ()), _fit_to_the_data(loglog), _profile(checked), _influence)
+    # without predictors there is no ratio to chart and no row's influence on one: those blocks are left out, not drawn empty
+    predictors = bool(checked.get("predictors"))
+    blocks = (*((_candidates(checked),) if variant == "auto" else ()), _fit_to_the_data(loglog, checked.get("strata")), _profile(checked),
+              *((_influence,) if predictors else ()))
     return c.page(model, params, locale, sample, step, name=name(params, locale), about=about(params, locale), cards=cards,
-                  coef_tables=tables, coef_note=note, assumptions_note=alpha_note, fit_format=SMALL, room=12.0,
-                  after_assumptions=(c.measures(MEASURES, more=_measure_more(w)),), coef_first=(_ratio_charts(variant),),
+                  coef_tables=tables, coef_note=note, assumptions_note=alpha_note, fit_format=SMALL,
+                  after_assumptions=(c.measures(MEASURES, more=_measure_more(w)),), coef_first=(_ratio_charts(variant),) if predictors else (),
                   after_coefficients=(_parameters,),
                   blocks=blocks)
 
