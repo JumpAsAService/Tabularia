@@ -395,8 +395,12 @@ Every number is checked against R 4.6. Two differences are R's, not Tabularia's:
   two groups only (filter the others out), or be cast to text: the engine cannot name its
   groups by a literal that every engine reads the same.
 - **Not included**: one-sample Kolmogorov–Smirnov, Shapiro–Wilk, two-way ANOVA, Dunnett's and
-  Scheffé's comparisons, the Benjamini–Hochberg correction, power and sample size, and an
-  interval for Spearman's ρ or for the Mann–Whitney shift.
+  Scheffé's comparisons, and an interval for Spearman's ρ or for the Mann–Whitney shift.
+- **The experiments' tools are elsewhere.** The Benjamini–Hochberg correction (among Holm's and Bonferroni's) and
+  the power of a test are in the [A/B test nodes](models.md#ab-tests-r) of the Models group, together with the size of an experiment
+  (units, days, the lift it can detect), the check of the split of the units, CUPED and the sequential reading. Their
+  comparison of two means is Welch's t-test, the same numbers as the Statistics node's; for a plain test with no experiment
+  around it, stay here.
 - **No report as a saved object.** The report lives in the editor; it cannot be saved in a
   folder, scheduled, put on a dashboard or sent by email from a flow group. [Saved
   reports](reports.md) and dashboards are unchanged and do not offer the chart kinds the

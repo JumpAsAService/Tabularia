@@ -340,13 +340,16 @@ test('the form is usable with the keyboard alone: native controls, each named, n
 
 // ── the palette and the canvas ───────────────────────────────────────────────
 
-test('the experiments\' nodes have their icons and their summary, and stay out of the palette until their runners are built', () => {
+test('the experiments\' nodes have their icons and their summary, and are in the palette under Experiments', () => {
   assert.notEqual(icons.modelIconOf('ab_test'), icons.modelIconOf('linear'))
   assert.notEqual(icons.modelIconOf('ab_plan'), icons.modelIconOf('ab_test'))
   const t = (k) => WORDS.en[k] ?? k
   const shown = m.MODEL_CATALOG.groups.filter((g) => g.id === 'experiments')
-  assert.deepEqual(m.modelPalette(shown, '', t), [])
-  // their names and hints are in the interface's words, for the day they are in the palette
+  const palette = m.modelPalette(shown, '', t)
+  assert.deepEqual(palette.map((g) => g.group), ['experiments'])
+  assert.deepEqual(palette[0].items.map((i) => i.kind), ['model:ab_test', 'model:ab_plan'])
+  assert.ok(!m.MODEL_NOT_IN_THE_PALETTE_YET.has('ab_test') && !m.MODEL_NOT_IN_THE_PALETTE_YET.has('ab_plan'))
+  // their names and hints are in the interface's words, as the palette shows them
   assert.equal(t('models.groups.experiments'), 'Experiments')
   assert.equal(t('models.ab_test.name'), 'A/B test')
   assert.equal(t('models.ab_plan.name'), 'A/B test planning')

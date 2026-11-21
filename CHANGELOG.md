@@ -127,6 +127,24 @@ Development on `main` for the next minor version. The stable line stays 1.4.x
   value](docs/capabilities/models.md#customer-lifetime-value-r), [how to read a
   verdict](docs/capabilities/models.md#how-a-check-speaks-verdicts-facts-and-measures); the
   assistants and the MCP tools know the three nodes.
+- **A/B tests.** A sixth group of the Models palette, **Experiments**, with two nodes that make no
+  model. **A/B test** reads one row per unit (or rows already summed) of a randomized experiment, with
+  a binary, continuous or ratio metric, and compares each treatment with the control: the difference
+  and the relative lift with their intervals (Fieller's, which agrees with the test), Welch's t or z,
+  Holm, Benjamini–Hochberg or Bonferroni across the treatments. The first page opens with the
+  decision and, when the units are not split as planned (the sample ratio mismatch), with a band that
+  says the comparisons may be biased. It also does CUPED with a covariate measured before the
+  experiment (fill or exclude the units without one), a cap on a heavy tail, a Bayesian reading
+  (probability of beating the control, expected loss: measures, never verdicts), always-valid
+  p-values and confidence sequences for results looked at early, the lift detectable at this size and
+  secondary metrics corrected among themselves. **A/B test planning** sizes the next experiment
+  from history: the units and days to detect a lift, or the lift the units or the days allow, with
+  CUPED too. The report explains the method under each block and in a final page, from templates in
+  five languages with the run's numbers; PDF and Excel; a **Variants** output keeps the variant
+  column's own type. A flow run is logged to MLflow with no model to register. The sample data have
+  the web shop's three experiments (one with a real sample ratio mismatch) and two flows. The
+  image installs the same R packages as the other groups plus `arrow`; the assistants and the MCP
+  tools know the nodes. [A/B tests](docs/capabilities/models.md#ab-tests-r).
 - **The sample data has customers with a life.** The pasta and bakery company's customers
   are no longer all there from the start and ordering at random: about 30% are in the
   portfolio when the data opens and the others are acquired over the three years, faster each

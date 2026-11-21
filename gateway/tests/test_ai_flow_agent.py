@@ -621,6 +621,22 @@ def test_a_parametric_survival_node_with_wrong_parameters_is_refused_with_what_t
     assert message in str(e.value)
 
 
+def test_the_ab_nodes_have_their_lines_and_the_prompt_teaches_the_unit_the_fill_the_sequential_look_and_the_plan():
+    reference = ai_flow_agent.context(None, "en")
+    assert any(l.startswith("- model_ab_test {variant, control: value, metric_type: binary|continuous|ratio") and l.endswith("(experiments)")
+               for l in reference.splitlines())
+    assert any(l.startswith("- model_ab_plan {metric_type: binary|continuous|ratio") and l.endswith("(experiments)") for l in reference.splitlines())
+    for sentence in ("make no model (no model card, no `registerAs`, no Predict)", "**one row per unit**", "add a fill_null with 0 before the node",
+                     "must be measured **before** the experiment started", "turn `sequential` on", "sample ratio mismatch",
+                     "The probability of beating the control is **not** a p-value", "used **before** the experiment"):
+        assert sentence in reference, sentence
+    given = {"variant": "arm", "control": "A", "metric_type": "binary", "metric": "converted", "unit": "user"}
+    assert clean_params("model_ab_test", given) == given
+    with pytest.raises(ModelRetry) as e:
+        clean_params("model_ab_test", {k: v for k, v in given.items() if k != "control"})
+    assert "'control' is required" in str(e.value)
+
+
 @pytest.mark.parametrize("model_id, unit_key", [("clv", "time_unit"), ("bg_bb", "period_unit")])
 def test_the_customer_lifetime_nodes_have_their_line_of_reference_and_the_prompt_says_one_row_per_customer(model_id, unit_key):
     reference = ai_flow_agent.context(None, "en")

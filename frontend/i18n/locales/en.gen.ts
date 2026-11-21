@@ -6928,7 +6928,7 @@ export default {
       "loss_threshold": "The expected loss you accept, as a share of the control's mean: 0.001 is 0.1 % of it.",
       "date": "The day each unit entered the experiment (or the row's day): it gives the daily series and the sequential looks.",
       "sequential": "Always-valid p-values and confidence sequences. Turn it on if the experiment is still running or you looked at the results before its planned end, and read its decision.",
-      "sequential_tau": "The size of the relative lifts you expect: 0.05 is 5 %. Above 0.",
+      "sequential_tau": "The size of the relative lifts you expect: 0.05 is 5 %. Any value keeps the guarantee on false alarms. A small one suits effects of a few points but stays silent on a small experiment even for a large effect; raise it for big changes. Above 0.",
       "secondary_metrics": "Further metrics, reported and corrected among themselves. At most 10, each a true/false, whole or number column.",
       "solve_for": "What is computed: the units and days needed to detect the lift, or the lift detectable with the units or days you have.",
       "units_per_variant": "The units each variant will have: a whole number, 2 or more.",

@@ -175,7 +175,7 @@ test('the palette shows the groups the person may use: not a disabled one, not o
 
 test('the palette\'s entries: the models by group, the six presets after ARIMA, a search, the drag\'s kinds', () => {
   const all = m.modelPalette(m.MODEL_CATALOG.groups, '', en)
-  assert.deepEqual(all.map((g) => g.group), ['regression', 'survival', 'timeseries', 'boosting', 'customer_lifetime'])
+  assert.deepEqual(all.map((g) => g.group), ['regression', 'survival', 'timeseries', 'boosting', 'customer_lifetime', 'experiments'])
   assert.deepEqual(all[0].items.map((i) => i.kind), ['model:linear', 'model:logistic'])
   assert.deepEqual(all[1].items.map((i) => i.kind), ['model:kaplan_meier', 'model:cox', 'model:parametric_survival'])
   assert.deepEqual(all[4].items.map((i) => i.kind), ['model:clv', 'model:bg_bb'])
@@ -1048,11 +1048,12 @@ test('the palette lists the three nodes under their groups, searchable, with an 
   const inside = text('<' + html.slice(html.indexOf('id="palette-models"'), html.indexOf('Control')))
   assert.ok(inside.includes('Survival Kaplan–Meier Cox proportional hazards Parametric survival'), inside)
   assert.ok(inside.includes('Customer lifetime Customer lifetime value BG/BB'), inside)
-  // 1 Predict + 2 + 3 + 7 + 2 + 2
-  assert.match(html, /class="group-count"[^>]*>17</)
+  assert.ok(inside.includes('Experiments A/B test A/B test planning'), inside)
+  // 1 Predict + 2 + 3 + 7 + 2 + 2 + 2
+  assert.match(html, /class="group-count"[^>]*>19</)
   // every item is a button reached with Tab, Enter and Space add it (not a mouse-only control)
   const items = [...html.slice(html.indexOf('id="palette-models"'), html.indexOf('Control')).matchAll(/<div class="item[^"]*"[^>]*>/g)].map((x) => x[0]).filter((x) => x.includes('role="button"'))
-  assert.equal(items.length, 17)
+  assert.equal(items.length, 19)
   assert.ok( items.every((x) => x.includes('tabindex="0"') && x.includes('role="button"')))
   groups.state.value = null
 })

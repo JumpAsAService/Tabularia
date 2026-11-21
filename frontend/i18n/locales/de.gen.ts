@@ -6928,7 +6928,7 @@ export default {
       "loss_threshold": "Der erwartete Verlust, den Sie hinnehmen, als Anteil am Mittelwert der Kontrolle: 0,001 sind 0,1 % davon.",
       "date": "Der Tag, an dem jede Einheit ins Experiment kam (oder der Tag der Zeile): daraus ergeben sich die Tagesreihe und die sequenziellen Zwischenauswertungen.",
       "sequential": "Jederzeit gültige p-Werte und Konfidenzsequenzen. Einschalten, wenn das Experiment noch läuft oder Sie die Ergebnisse vor dem geplanten Ende angesehen haben, und dessen Entscheidung lesen.",
-      "sequential_tau": "Die Größe der relativen Anstiege, die Sie erwarten: 0,05 sind 5 %. Über 0.",
+      "sequential_tau": "Die Größe der relativen Anstiege, die Sie erwarten: 0,05 sind 5 %. Jeder Wert hält die Garantie gegen Fehlalarme. Ein kleiner passt zu Effekten von wenigen Punkten, bleibt bei einem kleinen Experiment aber auch bei großen Effekten stumm; für große Änderungen erhöhen Sie ihn. Über 0.",
       "secondary_metrics": "Weitere Kennzahlen, die untereinander berichtet und korrigiert werden. Höchstens 10, jede eine Spalte wahr/falsch, ganzzahlig oder numerisch.",
       "solve_for": "Was berechnet wird: die Einheiten und Tage, die zum Erkennen des Anstiegs nötig sind, oder der mit den vorhandenen Einheiten oder Tagen erkennbare Anstieg.",
       "units_per_variant": "Die Einheiten, die jede Variante haben wird: eine ganze Zahl, 2 oder mehr.",

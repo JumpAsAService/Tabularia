@@ -6928,7 +6928,7 @@ export default {
       "loss_threshold": "La perte attendue que vous acceptez, en part de la moyenne du contrôle : 0,001 en est 0,1 %.",
       "date": "Le jour où chaque unité est entrée dans l'expérience (ou le jour de la ligne) : il donne la série quotidienne et les observations séquentielles.",
       "sequential": "Valeurs p valables à tout moment et séquences de confiance. Activez-le si l'expérience est encore en cours ou si vous avez regardé les résultats avant la fin prévue, et lisez sa décision.",
-      "sequential_tau": "L'ampleur des hausses relatives que vous attendez : 0,05 vaut 5 %. Au-dessus de 0.",
+      "sequential_tau": "L'ampleur des hausses relatives que vous attendez : 0,05 vaut 5 %. Toute valeur garde la garantie contre les fausses alertes. Une petite convient à des effets de quelques points mais, avec peu de données, reste muette même devant un grand effet : pour de gros changements, augmentez-la. Au-dessus de 0.",
       "secondary_metrics": "D'autres métriques, rapportées et corrigées entre elles. 10 au plus, chacune une colonne vrai/faux, entière ou numérique.",
       "solve_for": "Ce qui est calculé : les unités et les jours nécessaires pour détecter la hausse, ou la hausse détectable avec les unités ou les jours dont vous disposez.",
       "units_per_variant": "Les unités de chaque variante : un entier, 2 ou plus.",

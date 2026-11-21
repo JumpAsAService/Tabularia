@@ -17,6 +17,10 @@ BG/BB: for customers who leave without saying so, the purchases to expect, the p
 still being active and the discounted value of each customer). An eleventh node, **Predict**,
 applies a model you registered in MLflow to new rows.
 
+A sixth group, **experiments**, is not a model: its two nodes, **A/B test** and **A/B test planning**, read the
+result of a randomized experiment and size the next one ([below](#ab-tests-r)). They run as Jobs, are enabled like the
+others, and have no model card and no Predict.
+
 **They need Kubernetes.** A model is not computed by an engine: it runs as a Job in your
 cluster, in an image built from a recipe Tabularia ships, with R (or Python, for boosting). On Docker Compose the
 models are in the palette greyed out (the tooltip says «Needs Kubernetes, with this feature turned on in the Helm chart: not available on this installation»), the section in Administration says
@@ -38,7 +42,7 @@ statistics that works everywhere.
 
 ## Turning a group on (administrators)
 
-**Administration → Statistical models** lists the five groups Tabularia ships, each with its
+**Administration → Statistical models** lists the six groups Tabularia ships, each with its
 models, the number of packages its image pins and its state. Only an administrator acts, and
 not with an API token; an observer reads the section. Every action is in the
 [audit log](../governance/audit-log.md) (`models.group_enable`, `models.group_disable`,
@@ -908,18 +912,121 @@ one row per instant, with the columns the editor shows before the run (`seasonal
 In this version the node does not run yet: it stops with «… is not built yet in this version of Tabularia». This
 section will describe it when it does.
 
-### A/B tests (R): being built
+### A/B tests (R)
 
-Model ids in the catalogue: `ab_test` and `ab_plan`. A group of two nodes, **A/B test** and **A/B test
-planning**, is being built for experiments: users (or sessions, shops, devices) split at random between a
-control and one or more treatments, with a metric measured on each. The first will say whether a treatment
-moved the metric, whether the split of the units can be trusted and how sure the result is; the second will
-size an experiment (units, days, the lift it can detect) from historical data. The nodes make no model: no
-model card, no registration as a model, no Predict; a flow run logs to MLflow like any other. In this
-version the nodes do not run yet: they stop with «… is not built yet in this version of Tabularia». This
-section will describe them when they do.
+Model ids in the catalogue: `ab_test` and `ab_plan`. The group **Experiments** has two nodes, **A/B test**
+and **A/B test planning**, for experiments in which users (or sessions, shops, devices: the
+*randomization units*) are split at random between a **control** and one or more **treatments** and a
+metric is measured on each. Neither node makes a model: there is no model card, no *Register the model as*
+and no [Predict](#predict) for them; a run is logged to MLflow like any other (below).
 
-## The output
+**When to use which node.** The [Statistics](statistics.md) nodes compare groups of rows: a t-test on a
+column, a test of two proportions. Use the A/B test node when the question is «did this treatment move
+the metric?» for an experiment: it also checks that the units fell in the variants as planned (the
+*sample ratio mismatch*), reads rates, means and ratios per unit, can use the visitor's behaviour before the
+experiment to sharpen the answer (CUPED), looks at the data again and again without breaking its
+guarantee (the sequential reading), and gives the decision on the first page. Its comparison of two
+means is Welch's t-test, the same numbers as the Statistics node's. Use a Statistics node for a plain test
+without an experiment around it. Benjamini–Hochberg's correction and the power of a test, which the
+Statistics page lists as not done, are in this group.
+
+#### The input: one row per unit, or sums
+
+The **rows are** either:
+
+- **one per unit** (the default): one row per visitor, with its variant and its metric. When a unit
+  has several rows (one per session or per order), choose the **Unit column** and the node puts the rows of
+  each unit together first: a binary metric is true if any row is, a continuous one is summed, the
+  covariate must be the same on every row of the unit. A unit whose rows carry **more than one
+  variant** saw both arms and is left out, and the check **crossover** says how many;
+- **already summed**: one row per variant, or per variant and day, with the **units**, the
+  **sum of the metric** (for a rate, the units that converted) and, for a mean, the **sum of the squared
+  metric**. It cannot do what needs each unit: ratio metrics, CUPED, the cap, secondary metrics.
+
+Build the first shape with **Group by** `visitor` when your rows are sessions: the *maximum* of a
+true/false column for a conversion, the *sum* of the amounts for a revenue. After a **Left join**
+of the buyers, a visitor who never bought has an empty revenue and the node leaves the row out:
+that removes exactly the people who did not buy. The node says so in a note («put a Fill nulls with 0 before
+the node if an empty value means no revenue»): put the **Fill nulls** before it.
+
+#### The form
+
+| Option | Meaning |
+|---|---|
+| **Variant column** and **Control** | The column that says which variant each unit saw (text, integer, true/false or date; at most 20 values) and the value that is the control. Every other value is a treatment |
+| **Type of metric** | **Binary** (true/false or 0/1: a conversion), **continuous** (a number: revenue, time) or **ratio** (a numerator over a denominator per unit: clicks over impressions) |
+| **Metric**, **Numerator**, **Denominator** | The columns of the metric. A ratio is the sum of the numerators over the sum of the denominators of each variant, with the delta method for its variance |
+| **Unit column** | The unit's identifier, when a unit has several rows |
+| **A higher value is better** | On by default; off for a cost, a latency, a bounce rate. It decides which direction is «better» and «worse» |
+| **Alternative** | Two-sided (default), greater or less, on treatment minus control |
+| **Significance level** | 0.05. The level of every test and interval of the node, written in the report |
+| **Correction across treatments** | Holm (default), Benjamini–Hochberg, Bonferroni or none, for the comparisons of the treatments with the control. With one treatment it changes nothing, and the report says so |
+| **Covariate before the experiment (CUPED)** | A metric measured on each unit **before** the experiment started (the revenue of the 28 days before). It must precede the assignment: a covariate measured afterwards is changed by the treatment and biases the result. The node removes the part of the metric the covariate explains, so the same data detect smaller lifts |
+| **A unit without the covariate** | **Fill** (default): it gets the mean of the covariate of the units of its own variant that have one, and counts with its own metric; **Exclude**: it is left out of the comparisons. The report counts either |
+| **Cap at the percentile** | For a continuous metric: values above this percentile of all units are set to it, which limits the weight of a few huge orders. Decide it before looking at the results |
+| **Level of the split check** | 0.001: the sample ratio mismatch test, stricter than the comparison's because a false alarm throws away a sound experiment |
+| **Expected split of the variants** | Empty: equal shares. Otherwise a number for each value of the variant column (50 and 50, 90 and 10, 1, 1 and 2), normalized |
+| **Smallest lift that matters** | 0.02, 2 %: your business margin. It marks the charts and the reading of the power; it is never a test |
+| **Power** | 0.8: the power of the «lift detectable at this size» |
+| **Bayesian reading** | On: probability of beating the control, expected loss, credible intervals. For a binary metric a Beta prior (1 and 1 by default: uniform); **Expected loss accepted**, 0.001, is the loss you can live with as a share of the control's mean |
+| **Date column** | The day each unit entered: the daily share of each variant, the daily series and the sequential curve |
+| **Sequential reading** | Off by default; see below. **Scale of the sequential mixture** (τ), 0.05: the order of magnitude of the relative change you expect (0.05 is 5 %). Any value keeps the guarantee on false alarms; the choice is yours. A small τ suits effects of a few percentage points, but on an experiment with little data it stays silent even before a large effect: raise it for big changes |
+| **Secondary metrics** | Other columns (up to 10) reported and corrected among themselves, never with the primary |
+| **Output** | **Results** (the ten columns) or **Variants** (one row per variant and metric) |
+
+The defaults are in the form, not hidden: 0.001, 0.02, 0.05 and 0.001 are orders of magnitude of
+web experiments, not the product's opinion of your data. The form greys out the choices that do not fit
+together and says why in words (a ratio needs rows of units; the sequential p-value is two-sided).
+
+#### What it computes
+
+- **The comparison.** For each treatment against the control: the difference and its interval, the
+  **relative lift** and its interval (Fieller's, which excludes 0 exactly when the two-sided test rejects),
+  the statistic, the p-value and the p-value adjusted for the treatments. A rate is compared with the
+  normal (z) test, a mean with Welch's t-test, a ratio by the delta method. The **decision** of a
+  treatment is a verdict from the adjusted p-value against the node's significance level: better, worse or not
+  significant, or not computed with its reason.
+- **The split of the units (SRM).** Pearson's χ² of the units per variant against the expected shares,
+  at the level of the split check. When it fails, the first page opens with a band that says the units are
+  not split as planned and the comparisons may be biased: look for what removed units from one variant (a
+  filter, a bot rule, a redirect that fails) before reading them. Every number stays in the report.
+- **The other checks.** With a covariate, whether the variants were alike before the experiment
+  (Welch's F of the covariate across the variants) and, with empty covariates, whether the empty ones are
+  spread alike across the variants; the crossover; a variant whose metric has no variance.
+- **The Bayesian reading.** The probability that each treatment beats the control, that each variant is
+  best, the expected loss of choosing a treatment instead of the control (absolute and relative to the control's
+  mean) and the credible intervals. It is computed by quadrature, with no random numbers.
+  **The probability of beating the control is not a p-value**: the p-value is the probability of data at least this extreme
+  *if there were no difference*; the probability of beating is the probability of the difference *given the data and the
+  prior*. The report says so and never colours it.
+- **The sequential reading.** The node runs on a snapshot and remembers nothing between runs. With *Sequential
+  reading* it gives, for each treatment, the **always-valid p-value** and a confidence sequence of the
+  lift: a p-value whose guarantee holds however often, and whenever, someone looks and decides to stop. **If you
+  looked at the results before the planned end of the experiment, read the sequential decision; if you did not,
+  read the fixed one.** With a date column it draws the curve over the days: a reconstruction from today's data
+  (a unit's revenue then was smaller), as the report says under the chart. Two runs a week apart can give a later p-value
+  *higher* than the earlier one, because the metrics mature: each run is valid for its data, read the latest. It
+  is two-sided only.
+  **Choosing τ.** τ says what size of change the mixture is tuned to notice. Whatever τ you give, the chance of a false alarm over any number of looks stays within the significance level; τ only moves where the test is sharp. If you expect a few percent, keep 0.05; if you expect, or care only about, big changes (tens of percent) or the experiment is small, raise it (0.2, say), because a small τ on few units can leave the p-value at 1 before a large effect.
+- **The lift detectable at this size.** With the units of the run, the lift detected with the chosen power and
+  the power at your smallest lift: it helps read a «not significant». It is never the power at the observed effect.
+- **Secondary metrics.** Each one is compared in the same way. Their comparisons are corrected **among
+  themselves**, never with the primary: the primary alone decides. The first page lists the ones worse than the control; their
+  own page has every comparison. The direction is the primary's («a higher value is better») in this version: a guardrail where lower is better
+  beside a primary where higher is better cannot be said yet. A direction for each secondary metric ("higher is better" or "lower is better", by default the primary's) is being added and will be described here when it lands.
+
+#### How a check speaks
+
+The nodes follow the rule of [How a check speaks](#how-a-check-speaks-verdicts-facts-and-measures): **no number of
+Tabularia's decides a verdict.**
+
+| It is | Which checks |
+|---|---|
+| A **verdict from a test** | The decision of each treatment (adjusted p against the significance level), the split of the units (against the level of the split check), the balance of the covariate and of its empty values, the sequential decision |
+| A **fact** | The crossover (units seen in more than one variant: ok when none) and a variant with no variance |
+| A **measure**, with no colour and no advice | The probability of beating the control, the probability of being the best, the expected losses (compared with your threshold only as «below» or «above», in a sentence), the lift detectable at this size, the skewness of a continuous metric, the variance reduction of CUPED, the position of the interval against your smallest lift |
+
+#### The output
 
 Every model writes the same **ten columns** as the [statistical tests](statistics.md#the-output):
 `section`, `level`, `level_2`, `stat`, `key`, `x0`, `x1`, `value`, `text` and `ord`, one fact

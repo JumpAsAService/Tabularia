@@ -6928,7 +6928,7 @@ export default {
       "loss_threshold": "La pérdida esperada que aceptas, como parte de la media del control: 0,001 es el 0,1 % de ella.",
       "date": "El día en que cada unidad entró en el experimento (o el día de la fila): da la serie diaria y las observaciones secuenciales.",
       "sequential": "Valores p siempre válidos y secuencias de confianza. Actívalo si el experimento sigue en marcha o miraste los resultados antes del final previsto, y lee su decisión.",
-      "sequential_tau": "El tamaño de los aumentos relativos que esperas: 0,05 es el 5 %. Por encima de 0.",
+      "sequential_tau": "El tamaño de los aumentos relativos que esperas: 0,05 es el 5 %. Cualquier valor mantiene la garantía contra las falsas alarmas. Uno pequeño sirve para efectos de pocos puntos, pero con pocos datos se queda mudo incluso ante efectos grandes: para cambios grandes súbelo. Por encima de 0.",
       "secondary_metrics": "Otras métricas, informadas y corregidas entre sí. Como máximo 10, cada una una columna verdadero/falso, entera o numérica.",
       "solve_for": "Qué se calcula: las unidades y los días necesarios para detectar el aumento, o el aumento detectable con las unidades o los días de que dispones.",
       "units_per_variant": "Las unidades que tendrá cada variante: un número entero, 2 o más.",

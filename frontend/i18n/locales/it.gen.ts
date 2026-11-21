@@ -6928,7 +6928,7 @@ export default {
       "loss_threshold": "La perdita attesa che accetti, come quota della media del controllo: 0,001 è lo 0,1 % di essa.",
       "date": "Il giorno in cui ogni unità è entrata nell'esperimento (o il giorno della riga): dà la serie giornaliera e le osservazioni sequenziali.",
       "sequential": "P-value sempre validi e sequenze di confidenza. Attivalo se l'esperimento è ancora in corso o hai guardato i risultati prima della fine prevista, e leggi la sua decisione.",
-      "sequential_tau": "La dimensione degli incrementi relativi che ti aspetti: 0,05 è il 5 %. Sopra 0.",
+      "sequential_tau": "La dimensione degli incrementi relativi che ti aspetti: 0,05 è il 5 %. Qualunque valore mantiene la garanzia sui falsi allarmi. Uno piccolo è adatto a effetti di pochi punti ma con pochi dati resta muto anche davanti a effetti grandi: per cambiamenti grossi alzalo. Sopra 0.",
       "secondary_metrics": "Altre metriche, riportate e corrette tra loro. Al massimo 10, ciascuna una colonna vero/falso, intera o numerica.",
       "solve_for": "Cosa si calcola: le unità e i giorni necessari per rilevare l'incremento, oppure l'incremento rilevabile con le unità o i giorni che hai.",
       "units_per_variant": "Le unità che avrà ogni variante: un numero intero, 2 o più.",
