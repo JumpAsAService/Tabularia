@@ -538,6 +538,39 @@ func TestACrashIsTriedAgainThenFails(t *testing.T) {
 	}
 }
 
+// The group is disabled, or taken from the person, while an attempt runs: no attempt after it, and
+// the step says why, as when its run is closed.
+func TestNoAttemptAfterTheGroupIsDisabledOrTakenAway(t *testing.T) {
+	for _, c := range []struct {
+		name, sql, why string
+	}{
+		{"disabled", `UPDATE model_groups SET enabled = false WHERE id = 'regression'`, "the model group regression is disabled"},
+		{"taken away", `UPDATE model_groups SET everyone = false WHERE id = 'regression'`, "may not use the model group regression"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			f := newModelRunFixture(t)
+			f.script = []modelAttemptResult{{log: "Killed\n", exit: int64(137), reason: "it ended with exit code 137"}}
+			inner := modelAttemptJob
+			t.Cleanup(func() { modelAttemptJob = inner })
+			modelAttemptJob = func(ctx context.Context, k scriptcfg.Kubernetes, name string, manifest pyjson.Object, code, secret pyjson.Object,
+				timeout int64, ns string, poll float64, logMax int) (bool, string, any, string, error) {
+				if _, err := f.db.Exec(ctx, c.sql); err != nil {
+					t.Fatal(err)
+				}
+				return inner(ctx, k, name, manifest, code, secret, timeout, ns, poll, logMax)
+			}
+			id, err := f.run(f.ann, linearParams, false)
+			want := "model «Elasticity» failed: it ended with exit code 137 (not run again: "
+			if err == nil || !strings.HasPrefix(err.Error(), want) || !strings.Contains(err.Error(), c.why) {
+				t.Fatalf("the step: %v", err)
+			}
+			if r := f.row(id); r.status != "FAILURE" || len(f.attempts) != 1 {
+				t.Errorf("%s, %d Jobs", r.status, len(f.attempts))
+			}
+		})
+	}
+}
+
 func TestATimeoutAndAFullQuotaSayWhy(t *testing.T) {
 	f := newModelRunFixture(t)
 	f.script = []modelAttemptResult{{log: "", exit: nil, reason: "it ran longer than its timeout (600 s)"}}

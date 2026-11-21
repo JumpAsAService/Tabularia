@@ -628,7 +628,7 @@ func (q *queue) runModel(ctx context.Context, r *scriptNodeRun) (*flowresolver.S
 			return modelJobManifest(js, name, s.img, merge(base, pyjson.Object{{Key: "TABULARIA_ATTEMPT", Value: fmt.Sprint(attempt)}}),
 				labels, s.timeout, itemList, name+"-code", name+"-env", offline)
 		}
-		ok, refused, reason, err := q.modelAttempts(ctx, child, s, runID, storage, outKey, task.WriteOutput, manifest, codeData, secret, ns, js)
+		ok, refused, reason, err := q.modelAttempts(ctx, r.user, child, s, runID, storage, outKey, task.WriteOutput, manifest, codeData, secret, ns, js)
 		if err != nil {
 			return nil, err
 		}
@@ -727,8 +727,10 @@ func modelJobManifest(js jobSettings, name string, img *ModelGroupImage, environ
 
 // modelAttempts is the attempts' loop of a model step (attempts, jobs_scripts.go): a refusal
 // of the runner (exit 3) ends it at once with its sentence — the same rows would be refused
-// again. (succeeded, the refusal's sentence, the last reason it failed).
-func (q *queue) modelAttempts(ctx context.Context, child *childRun, s *modelStep, runID int64, storage *scriptStorage, outKey string,
+// again. Before an attempt after the first, the run must still be open and the group still
+// usable by the person (enabled, ready, allowed: as «Before anything», checkModelGroup).
+// (succeeded, the refusal's sentence, the last reason it failed).
+func (q *queue) modelAttempts(ctx context.Context, user *auth.User, child *childRun, s *modelStep, runID int64, storage *scriptStorage, outKey string,
 	hasOutput bool, manifest func(string, int64) pyjson.Object, code, secret pyjson.Object, ns string, js jobSettings) (bool, string, string, error) {
 	var logs []string
 	reason := ""
@@ -769,6 +771,13 @@ func (q *queue) modelAttempts(ctx context.Context, child *childRun, s *modelStep
 			}
 			if !q.d.runStillOpen(ctx, runID) {
 				return false, "", "", &scriptFailed{fmt.Sprintf("%s failed: %s (not run again: its run was closed)", s.what(), reason)}
+			}
+			if _, err := checkModelGroup(ctx, q.d, user, s.group); err != nil {
+				var off *scriptFailed
+				if errors.As(err, &off) { // disabled, being rebuilt, or no longer the person's to use
+					return false, "", "", &scriptFailed{fmt.Sprintf("%s failed: %s (not run again: %s)", s.what(), reason, off.msg)}
+				}
+				return false, "", "", err
 			}
 			if hasOutput {
 				q.d.deleteObjects(ctx, storage, []string{outKey})
