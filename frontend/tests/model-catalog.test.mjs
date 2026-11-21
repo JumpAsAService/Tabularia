@@ -367,9 +367,23 @@ test('a column is one thing only; a level, a reference and an interaction follow
 })
 
 test('numbers are read as the boxes write them, and their problems are known', () => {
+  // one number by the rule of the lists: a comma is a decimal mark only in a language that writes one
+  assert.equal(m.modelNumber('0,5', true), 0.5)
+  assert.equal(m.modelNumber('0.5', true), 0.5)
+  assert.equal(m.modelNumber('0.5'), 0.5)
+  assert.ok(Number.isNaN(m.modelNumber('1,000', false)), '«1,000» in English is no single number, not 1')
+  assert.ok(Number.isNaN(m.modelNumber('0,5', false)))
+  assert.equal(m.modelNumber('1,000', true), 1)
+  // a saved value, its language unknown: read when it reads one way only
   assert.equal(m.modelNumber('0,5'), 0.5)
+  assert.equal(m.modelNumber('12,25'), 12.25)
+  assert.ok(Number.isNaN(m.modelNumber('1,000')) && Number.isNaN(m.modelNumber('-12,500')), 'one or a thousand: no guess')
+  assert.ok(Number.isNaN(m.modelNumber('1,000,5', true)) && Number.isNaN(m.modelNumber('1.000,5', true)))
   assert.equal(m.modelNumber(' 3 '), 3)
-  assert.ok(Number.isNaN(m.modelNumber('')) && Number.isNaN(m.modelNumber('x')))
+  assert.equal(m.modelNumber('-2.5e3'), -2500)
+  assert.equal(m.modelNumber(7), 7)
+  assert.ok(Number.isNaN(m.modelNumber('')) && Number.isNaN(m.modelNumber('x')) && Number.isNaN(m.modelNumber('0x10')))
+  assert.ok(Number.isNaN(m.modelNumber(null)) && Number.isNaN(m.modelNumber('Infinity')))
   assert.deepEqual(m.modelNumbers('24, 12; 12 36'), [12, 24, 36])
   assert.deepEqual(m.modelNumbers([3, '1']), [1, 3])
   assert.deepEqual(m.modelParams(KM, { time: 't', event: 'e', event_value: '1', times: '24, 12' }).times, [12, 24])

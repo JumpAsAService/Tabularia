@@ -220,11 +220,20 @@ export function modelVariant(model: ModelDef, params: Params | null | undefined)
 
 // ── reading what the form writes ─────────────────────────────────────────────
 
-/** A number as a box writes it: «0,5» is a half. NaN when it is not one. */
-export function modelNumber(value: unknown): number {
+/** One number, by the rule of the lists of numbers (modelNumbersRead): a point is a decimal everywhere; a comma is the decimal
+ *  mark in a language that writes one (`decimalComma` true: «0,5» is a half in it, de, fr and es) and never in English
+ *  (false: there it separates numbers, and «1,000» is no single number). A value saved in the node, whose language is not
+ *  known (undefined), is read only when it reads one way only: «0,5» is a half, «1,000» could be one or a thousand and is no
+ *  number. Never a guess: NaN when it is not one, or not only one («1,2,3», «1.000,5»). (The node's boxes of one number are
+ *  `type="number"`: the browser gives them with a point.) */
+export function modelNumber(value: unknown, decimalComma?: boolean): number {
   if (typeof value === 'number') return value
-  if (typeof value !== 'string' || value.trim() === '') return NaN
-  return Number(value.trim().replace(',', '.'))
+  if (typeof value !== 'string') return NaN
+  let text = value.trim()
+  const commas = (text.match(/,/g) ?? []).length
+  if (commas > 1 || (commas && decimalComma === false) || (decimalComma === undefined && /^[-+]?\d+,\d{3}$/.test(text))) return NaN
+  text = text.replace(',', '.')
+  return PLAIN_NUMBER.test(text) ? Number(text) : NaN
 }
 
 /** The words of the example under an empty box of numbers: the quantiles' own («e.g. 0.1, 0.9»: proportions, with a point, the
