@@ -94,9 +94,13 @@ func (q *queue) planMLflow(ctx context.Context, user *auth.User, node pyjson.Obj
 	}
 	register, _ := block.Value("registerAs").(string)
 	register = strings.TrimSpace(register)
-	// a node that makes no model card (`card: false`, the experiments') has no model to register: its run is logged and no more
+	// a node that makes no model card (`card: false`, the experiments' and the decomposition) has no model to register: its run is logged and no more
 	if model, _ := nodeData(node).Value("model").(string); register != "" && modelcatalog.GroupOf(model) != "" && !modelcatalog.HasCard(model) {
-		return refuse("an A/B test registers no model: its run is logged to MLflow")
+		what := "an A/B test"
+		if model == "decomposition" {
+			what = "a decomposition"
+		}
+		return refuse(what + " registers no model: its run is logged to MLflow")
 	}
 	conn, err := q.d.mlflowConnection(ctx, user, id)
 	var refused *mlflowConnRefused

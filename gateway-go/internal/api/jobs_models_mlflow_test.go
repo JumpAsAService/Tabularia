@@ -1107,9 +1107,9 @@ func TestANodeWithoutACardRefusesRegisterAs(t *testing.T) {
 		return pyjson.Object{{Key: "data", Value: pyjson.Object{{Key: "model", Value: model}, {Key: "mlflow", Value: block}}}}
 	}
 	q := &queue{}
-	for _, model := range []string{"ab_test", "ab_plan"} {
+	for model, what := range map[string]string{"ab_test": "an A/B test", "ab_plan": "an A/B test", "decomposition": "a decomposition"} {
 		_, err := q.planMLflow(context.Background(), nil, node(model, " checkout-test "), "A/B")
-		if err == nil || err.Error() != "model «A/B»: an A/B test registers no model: its run is logged to MLflow" {
+		if err == nil || err.Error() != "model «A/B»: "+what+" registers no model: its run is logged to MLflow" {
 			t.Errorf("%s: %v", model, err)
 		}
 	}
