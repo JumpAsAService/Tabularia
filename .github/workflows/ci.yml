@@ -125,3 +125,11 @@ jobs:
       - name: The sample dashboard and reports
         working-directory: .
         run: python3 -m unittest infrastructure/sampledb/test_seed_dashboard.py infrastructure/sampledb/test_scales.py
+
+      # the sample data's generator (the customers' lives, the orders, the spend against the frequency): in the
+      # sampledb image, whose requirements.txt pins numpy, pandas and Faker; a missing library fails, never skips
+      - name: The sample data's generator
+        working-directory: .
+        run: |
+          docker build -q -t tabularia-sampledb:ci infrastructure/sampledb
+          docker run --rm -e SAMPLEDB_REQUIRE_LIBS=1 --entrypoint python tabularia-sampledb:ci -m unittest -v test_generate_lifecycle

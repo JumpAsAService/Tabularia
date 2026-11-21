@@ -711,17 +711,20 @@ and a measure says when the horizon is more than twice the longest age the model
 
 **Assumptions checked.** A verdict comes from two tests with a p-value, read against the significance level:
 **frequency fit** (a χ² of the observed against the expected number of customers by number of
-repeat purchases, the classes pooled until each expects at least 5; with the share gap beside it as a
+repeat purchases, adjacent classes pooled until every one expects at least 5, the condition of the χ²
+test known as Cochran's rule; the chart shows the pooled classes, «5–7»; with the share gap beside it as a
 number) and, with a spend, **spend independence** (the slope of the average spend on the
 frequency, with robust errors; Pearson's r is its value). Two facts: **convergence** (the optimizer
-converged and the Hessian is positive definite; **doubtful** when it is not because an estimate sits at an edge, where the
-likelihood is flat) and **spend tail** (the spend model's q must be above 2 for its variance to be finite; at 1 or
+converged, its log-likelihood is a real one and not the noise of a computation that lost its digits, and
+the Hessian is positive definite; **doubtful** when an estimate sits at an edge, where the likelihood keeps
+growing towards the limit, so that the estimate is that limit; **failed** otherwise, and a purchase model that failed this way is
+never chosen by *auto*) and **spend tail** (the spend model's q must be above 2 for its variance to be finite; at 1 or
 below the average spend does not exist and the node refuses: *look for extreme amounts, or leave out the spend column*).
 **Measures with no verdict**: **customers and repeat customers**, the **holdout** (the expected against the
 observed purchases: the relative error of the total, and by frequency class in a chart; without a holdout the
 page says how to add one), the **horizon** against the longest age, and the **estimates at an edge** (one row for each
-parameter far out, with what it means: *almost nobody leaves*, or *the customers look alike*; no row when
-there is none).
+parameter where one more step towards 0 or towards infinity does not lower the likelihood, with what it means:
+*almost nobody leaves*, or *the customers look alike*; no row when there is none).
 
 **The report** (four pages): the first has the cards (customers and repeat customers, the purchase model and
 its log-likelihood, expected purchases, the total CLV), the formula with the unit, horizon, discount and
@@ -809,7 +812,13 @@ weeks), Periods ahead 52, Purchase model *auto*, Output *the rows*. On the first
 frequency fit and the holdout: whether the model's expected purchases of the next year are near what
 the customers did. Without `avg_spend` the same flow gives the purchases and P(alive) alone. These
 data were built to suit the models, so they are a good place to learn to read the report; the
-numbers are those of your run.
+numbers are those of your run. One check is meant to fail on them: **Spend independent of
+frequency**. Inside a channel a customer's average order does not move with how often it orders,
+which is Gamma–Gamma's assumption; but the channels differ both in the size of their orders and in
+their frequency (`Supermercati` order often and in bulk, `Ingrosso` in bulk and rarely, `Online`
+rarely and little), so over all the customers the two move together, and the check sees it. When
+the CLV matters, fit it per channel: keep `canale` in step 2's **Select columns** and add a
+**Filter** `canale` *equal to* one channel before the summary, one node per channel.
 
 ### BG/BB (R)
 

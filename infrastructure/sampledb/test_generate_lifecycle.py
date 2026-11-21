@@ -3,18 +3,24 @@
     python3 -m unittest infrastructure/sampledb/test_generate_lifecycle.py
 
 It needs the generator's own libraries (numpy, pandas, Faker, psycopg2); without them the
-tests are skipped, so the CI's plain Python job passes over them. In the sampledb image:
-    docker run --rm -v "$PWD/infrastructure/sampledb:/app" -w /app --entrypoint python \
-        tabularia-sampledb:local -m unittest test_generate_lifecycle
+tests are skipped, so a plain Python without them passes over them. The CI runs them in the
+sampledb image, built from requirements.txt's pinned versions, with SAMPLEDB_REQUIRE_LIBS=1 (a
+missing library is then an error, not a skip):
+    docker build -t tabularia-sampledb:ci infrastructure/sampledb
+    docker run --rm -e SAMPLEDB_REQUIRE_LIBS=1 --entrypoint python tabularia-sampledb:ci \
+        -m unittest -v test_generate_lifecycle
 
 What they pin: the same data at every run, the orders adding up to the preset's, nothing
 bought before the customer was acquired or after it churned (the first order apart), the
 churn kept out of what the CRM shows, a spend that does not follow the frequency, and the
-shapes the README promises (a channel's rate, acquisitions that fall in August).
+shapes the README promises (a channel's rate, acquisitions that fall in August); and, on the
+orders as the databases get them, the observed average spend against the frequency: close to
+0 inside each channel, while the channels differ in both.
 """
 import os
 import sys
 import unittest
+from unittest import mock
 
 try:
     import numpy as np
@@ -23,7 +29,9 @@ try:
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import generate as g
     HAVE_LIBS = True
-except ImportError:  # the CI's job has no numpy: the tests below skip
+except ImportError:  # a Python without numpy: the tests below skip, unless they are required
+    if os.environ.get("SAMPLEDB_REQUIRE_LIBS"):
+        raise
     HAVE_LIBS = False
 
 
@@ -109,6 +117,54 @@ class Lifecycle(unittest.TestCase):
         self.assertGreater(alive_but_inactive.sum(), 0)
         # and the customers' table has no column that says it
         self.assertNotIn("death", g.gen_customers(self.agents, life).columns)
+
+
+@unittest.skipUnless(HAVE_LIBS, "numpy, pandas, Faker and psycopg2 are needed")
+class ObservedSpend(unittest.TestCase):
+    """The spend and the frequency as a user measures them on the orders (docs/capabilities/models.md,
+    the customer lifetime example): the customers acquired in the window, the orders that were not
+    cancelled, one purchase per customer and day, the repeat purchases after the first day; x their
+    count, m̄ their average amount. Gamma–Gamma assumes m̄ independent of x: inside a channel it is
+    (each customer's order size is drawn apart from its rate), over the whole base it is not, because
+    the channels differ both in the size of their orders and in how often they order. That is meant:
+    the report's spend check sees it, and the page proposes a fit per channel."""
+
+    @classmethod
+    def setUpClass(cls):
+        tables = {}
+        with mock.patch.object(g, "copy_df", lambda cur, table, df: tables.setdefault(table, []).append(df)), \
+                mock.patch.object(g, "log", lambda *a, **k: None):
+            g.rng = np.random.default_rng(g.SEED)
+            g.Faker.seed(g.SEED)
+            agents = g.gen_agents()
+            intensity = g.build_day_intensity()
+            life = g.simulate_lifecycles(agents, intensity)
+            cust = g.gen_customers(agents, life)
+            prod = g.build_products()
+            g.gen_orders_and_lines(None, prod, life, intensity, cust.attrs["agent_of"], cust.attrs["channel_of"], agents)
+        orders = pd.concat(tables["vendite.ordini"])
+        lines = pd.concat(tables["vendite.righe_ordine"])
+        amount = (lines.quantita * lines.prezzo_unitario * (1 - lines.sconto_pct / 100)).groupby(lines.ordine_id).sum()
+        orders["amount"] = orders.id.map(amount)
+        kept = orders[(orders.stato != "annullato") & orders.cliente_id.isin(np.where(~life["initial"])[0] + 1)]
+        day = kept.groupby(["cliente_id", "data_ordine", "canale"], as_index=False).amount.sum()
+        repeat = day[day.data_ordine > day.groupby("cliente_id").data_ordine.transform("min")]
+        cls.summary = repeat.groupby(["cliente_id", "canale"]).amount.agg(x="size", m="mean").reset_index()
+
+    def test_inside_a_channel_the_average_spend_does_not_follow_the_frequency(self):
+        for channel, q in self.summary.groupby("canale"):
+            r = np.corrcoef(q.x, q.m)[0, 1]
+            self.assertGreater(len(q), 100, channel)
+            self.assertLess(abs(r), 0.12, f"{channel}: r = {r:.3f} on {len(q)} repeat customers")
+
+    def test_the_channels_differ_in_both_the_size_of_their_orders_and_their_frequency(self):
+        by = self.summary.groupby("canale").agg(x=("x", "mean"), m=("m", "mean"))
+        # Supermercati and Ingrosso order in bulk; Supermercati often, Ingrosso rarely
+        for bulk in ("Supermercati", "Ingrosso"):
+            for small in ("Negozi", "Ristorazione", "Online"):
+                self.assertGreater(by.m[bulk], 1.5 * by.m[small], (bulk, small))
+        self.assertGreater(by.x["Supermercati"], 2 * by.x["Ingrosso"])
+        self.assertGreater(by.x["Ristorazione"], 2 * by.x["Online"])
 
 
 if __name__ == "__main__":
