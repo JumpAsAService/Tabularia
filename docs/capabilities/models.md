@@ -1091,9 +1091,15 @@ and the **version**: one of the versions Tabularia registered in that experiment
 or the **latest version** of a registered model. A version is fixed: the same numbers, the
 same predictions, whoever promotes another later. **Latest** is read again at each run, resolved
 to a number then, and the run records the number: it is the highest version of that
-registered model that carries the tag `tabularia.model`, in any experiment (the experiment
-filters the lists only). A version registered by something other than Tabularia is not offered
-and is refused.
+registered model that carries the tag `tabularia.model` and whose MLflow run is `FINISHED`, in
+any experiment (the experiment filters the lists only). A version registered by something other
+than Tabularia is not offered and is refused.
+
+A model step closes its MLflow run `FINISHED` before it registers the version, and sets it
+`FAILED` when the registration fails. When the server made the version but its answer was lost
+(a timeout, a proxy's 502 or 504), the step fails, deletes the version it finds made from its run,
+and, should that deletion fail too, the version's run stays `FAILED`: **latest** skips it, and a
+fixed version whose run is not `FINISHED` is refused with a sentence that says so.
 
 > **Pin a version in production.** With **latest**, whoever has CONNECT on the MLflow
 > connection can register a new version of the same model name, with the tags Tabularia reads
@@ -1106,7 +1112,8 @@ and is refused.
 **What it checks before reading a row,** and a step that fails any of it stops before any Job
 exists:
 
-- the version carries Tabularia's tags and its `MLmodel` has the `tabularia` flavor;
+- the version carries Tabularia's tags, its MLflow run is `FINISHED`, and its `MLmodel` has the
+  `tabularia` flavor;
 - **integrity**: the sha256 of its `model.json` equals the version's `tabularia.card_sha256`
   tag, so a card changed after it was registered is refused;
 - the card is one this Tabularia applies: its format is `tabularia-model`, its format

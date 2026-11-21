@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -157,26 +158,54 @@ func (q *queue) planPredict(ctx context.Context, user *auth.User, node pyjson.Ob
 		}
 		return refuse("MLflow could not be read: %s", mlflowWhy(err))
 	}
-	// the version: the one named, or the newest one Tabularia registered
+	// the version: the one named, or the newest one Tabularia registered from a run that finished (a
+	// version whose run is not FINISHED is one whose step failed after the registration)
 	if s.asked == predictLatest {
 		versions, err := tr.VersionsOf(ctx, s.registered)
 		if err != nil {
 			return mlflowFailed(err)
 		}
-		for i := range versions {
-			v := versions[i]
-			if v.Tags["tabularia.model"] != "" && (s.version == nil || v.Number() > s.version.Number()) {
-				s.version = &v
+		var candidates []mlflowconn.ModelVersion
+		for _, v := range versions {
+			if v.Tags["tabularia.model"] != "" {
+				candidates = append(candidates, v)
+			}
+		}
+		if len(candidates) == 0 {
+			return refuse("the registered model «%s» has no version Tabularia registered: run the flow that registers it first", s.registered)
+		}
+		sort.SliceStable(candidates, func(i, j int) bool { return candidates[i].Number() > candidates[j].Number() })
+		for i := range candidates {
+			status, err := predictRunStatus(ctx, tr, &candidates[i])
+			if err != nil {
+				return mlflowFailed(err)
+			}
+			if status == "FINISHED" {
+				s.version = &candidates[i]
+				break
 			}
 		}
 		if s.version == nil {
-			return refuse("the registered model «%s» has no version Tabularia registered: run the flow that registers it first", s.registered)
+			return refuse("the registered model «%s» has no version Tabularia registered from a run that finished: the steps that "+
+				"registered its versions failed afterwards (their MLflow runs are not FINISHED). Run the flow that registers it again", s.registered)
 		}
 		if s.known, err = predictKnownLatest(ctx, q.d.DB, conn.id, s.registered); err != nil {
 			return nil, err
 		}
-	} else if s.version, err = tr.Version(ctx, s.registered, s.asked); err != nil {
-		return mlflowFailed(err)
+	} else {
+		if s.version, err = tr.Version(ctx, s.registered, s.asked); err != nil {
+			return mlflowFailed(err)
+		}
+		if s.version.Tags["tabularia.model"] != "" { // one that is not Tabularia's is refused below, for that
+			status, err := predictRunStatus(ctx, tr, s.version)
+			if err != nil {
+				return mlflowFailed(err)
+			}
+			if status != "FINISHED" {
+				return refuse("the version %s of «%s» comes from an MLflow run that did not finish (%s): the step that registered it "+
+					"failed afterwards, and it is not applied", s.version.Version, s.version.Name, predictRunStatusText(status))
+			}
+		}
 	}
 	v := s.version
 	name := fmt.Sprintf("the version %s of «%s»", v.Version, v.Name)
@@ -438,6 +467,31 @@ func predictKnownLatest(ctx context.Context, q perm.Querier, connectionID int64,
 		WHERE r.kind = 'model' AND r.mlflow_model_name = $2
 		AND rtrim(c.host, '/') = (SELECT rtrim(host, '/') FROM connections WHERE id = $1)`, connectionID, model).Scan(&n)
 	return n, err
+}
+
+// predictRunStatus is the status of the version's run: "none" when the version names no run,
+// "missing" when MLflow no longer has it.
+func predictRunStatus(ctx context.Context, tr *mlflowconn.Tracker, v *mlflowconn.ModelVersion) (string, error) {
+	if v.RunID == "" {
+		return "none", nil
+	}
+	status, err := tr.RunStatus(ctx, v.RunID)
+	var nf *mlflowconn.NotFound
+	if errors.As(err, &nf) {
+		return "missing", nil
+	}
+	return status, err
+}
+
+// predictRunStatusText says a status of predictRunStatus.
+func predictRunStatusText(status string) string {
+	switch status {
+	case "none":
+		return "the version names no run"
+	case "missing":
+		return "its run is no longer on the MLflow server"
+	}
+	return "its run is " + status
 }
 
 // predictNodeFingerprint is predictFingerprint with what is known of «latest».

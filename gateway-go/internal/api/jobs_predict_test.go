@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/http/httputil"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -314,6 +316,75 @@ func TestLatestIsTheNewestVersionTabulariaRegistered(t *testing.T) {
 	if _, _, err := w.predict(`"registeredModel": "by-hand", "version": "latest"`); err == nil ||
 		!strings.Contains(err.Error(), "the registered model «by-hand» has no version Tabularia registered") {
 		t.Errorf("no version of Tabularia's: %v", err)
+	}
+}
+
+// A registration the server makes but whose answer is lost on the way (a timeout, a proxy's 502/504
+// after the server committed): the step fails, and its version is deleted. When the deletion is
+// refused too, Predict applies no version whose run is not FINISHED: «latest» takes the newest one
+// whose step finished, and the version named is refused with a sentence.
+func TestARegistrationWhoseAnswerIsLostLeavesNoVersionPredictApplies(t *testing.T) {
+	w := newPredictWorld(t)
+	w.files["model.json"] = w.card
+	w.files["MLmodel"] = []byte(predictMLmodel)
+	refuseDelete := false
+	target, _ := url.Parse(w.ml.URL)
+	rp := httputil.NewSingleHostReverseProxy(target)
+	front := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/api/2.0/mlflow/model-versions/create":
+			rp.ServeHTTP(httptest.NewRecorder(), r)   // the server registers the version...
+			rw.WriteHeader(http.StatusGatewayTimeout) // ...and its answer is lost
+		case r.URL.Path == "/api/2.0/mlflow/model-versions/delete" && refuseDelete:
+			rw.WriteHeader(http.StatusBadGateway)
+		default:
+			rp.ServeHTTP(rw, r)
+		}
+	}))
+	t.Cleanup(front.Close)
+	if _, err := w.db.Exec(w.ctx, `UPDATE connections SET host = $1 WHERE id = $2`, front.URL, w.conn); err != nil {
+		t.Fatal(err)
+	}
+	latest := `"registeredModel": "price-elasticity", "version": "latest", "params": {}`
+	id, err := w.runWith(w.block(`, "registerAs": "price-elasticity"`))
+	if err == nil || !strings.Contains(err.Error(), "MLflow could not record it") || w.row(id).status != "FAILURE" {
+		t.Fatalf("the step: %v %+v", err, w.row(id))
+	}
+	if c, _ := w.columns(id); c.version != nil {
+		t.Errorf("the run's record names a version: %+v", c)
+	}
+	if run := w.ml.OnlyRun(); run == nil || run.Status != "FAILED" {
+		t.Errorf("the MLflow run: %+v", run)
+	}
+	if vs := w.ml.Models["price-elasticity"]; len(vs) != 0 {
+		t.Errorf("the version of a failed step is left: %+v", vs)
+	}
+	if _, _, err := w.predict(latest); err == nil || !strings.Contains(err.Error(), "has no version Tabularia registered") {
+		t.Errorf("«latest» with no version: %v", err)
+	}
+	// a version 1 from a step that finished; the step's version 2, which cannot be deleted either
+	w.register("Pasta/price elasticity", "price-elasticity", w.card, nil)
+	refuseDelete = true
+	if _, err := w.runWith(w.block(`, "registerAs": "price-elasticity"`)); err == nil {
+		t.Fatal("a lost registration does not fail the step")
+	}
+	if vs := w.ml.Models["price-elasticity"]; len(vs) != 2 || vs[1].Version != "2" || w.ml.Runs[vs[1].RunID].Status != "FAILED" {
+		t.Fatalf("the versions: %+v", vs)
+	}
+	pid, _, err := w.predict(latest)
+	var info map[string]any
+	_ = json.Unmarshal([]byte(w.row(pid).script), &info)
+	if err != nil || info["model_version"] != "1" {
+		t.Errorf("«latest» applied %v (%v), not the version of the step that finished", info["model_version"], err)
+	}
+	if _, _, err := w.predict(`"registeredModel": "price-elasticity", "version": "2", "params": {}`); err == nil ||
+		!strings.Contains(err.Error(), "the version 2 of «price-elasticity» comes from an MLflow run that did not finish (its run is FAILED)") {
+		t.Errorf("the version named, from a failed step: %v", err)
+	}
+	// no version of a finished step at all
+	w.ml.Runs[w.ml.Models["price-elasticity"][0].RunID].Status = "KILLED"
+	if _, _, err := w.predict(latest); err == nil || !strings.Contains(err.Error(), "has no version Tabularia registered from a run that finished") {
+		t.Errorf("«latest» with no version of a finished step: %v", err)
 	}
 }
 

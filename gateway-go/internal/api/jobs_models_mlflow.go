@@ -299,12 +299,33 @@ func (q *queue) mlflowLog(ctx context.Context, r *scriptNodeRun, s *modelStep, c
 				rec.warnings = append(rec.warnings, fmt.Sprintf("The model was not registered as «%s»: this MLflow server has no model registry.",
 					s.mlflow.registerAs))
 			default:
+				// the server may have made the version and its answer been lost (a timeout, a proxy's
+				// 502/504): the step fails, so its version goes too, as far as the server answers
+				// (Predict also applies no version whose run is not FINISHED, and the run is set FAILED)
+				dropRegistered(ctx, tr, s.mlflow.registerAs, run.ID)
 				return err
 			}
 		}
 	}
 	failed = false
 	return nil
+}
+
+// dropRegistered deletes the versions of the registered model `name` made from the run, whose
+// registration did not answer: best effort, within mlflowCallTimeout, even when the step's context
+// has ended.
+func dropRegistered(ctx context.Context, tr *mlflowconn.Tracker, name, runID string) {
+	cctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), mlflowCallTimeout)
+	defer cancel()
+	versions, err := tr.VersionsOfRuns(cctx, []string{runID})
+	if err != nil {
+		return
+	}
+	for _, v := range versions {
+		if v.Name == name && v.RunID == runID {
+			_ = tr.DeleteVersion(cctx, v.Name, v.Version)
+		}
+	}
 }
 
 // mlflowRunName is «flow · node · date».

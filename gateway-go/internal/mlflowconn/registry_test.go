@@ -132,3 +132,61 @@ func TestQuotedNamesAreFoundOnARealMLflow(t *testing.T) {
 		}
 	}
 }
+
+// A version's run status and the deletion of a version, against the fake and a real MLflow server
+// (TEST_MLFLOW_URL): what the model step does after a registration whose answer was lost, and what
+// Predict reads before it applies a version.
+func TestARunsStatusIsReadAndAVersionDeleted(t *testing.T) {
+	servers := map[string]string{"fake": mlflowtest.New(t).URL}
+	if uri := os.Getenv("TEST_MLFLOW_URL"); uri != "" {
+		servers["real"] = uri
+	}
+	for what, uri := range servers {
+		t.Run(what, func(t *testing.T) {
+			ctx := context.Background()
+			tr := mlflowconn.NewTracker(mlflowconn.Config{URI: uri, Auth: "none", VerifyTLS: true})
+			stamp := time.Now().Format("150405.000000")
+			exp, _, err := tr.Experiment(ctx, "status-"+stamp)
+			if err != nil {
+				t.Fatal(err)
+			}
+			run, err := tr.CreateRun(ctx, exp, "r", time.Now())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if s, err := tr.RunStatus(ctx, run.ID); err != nil || s != "RUNNING" {
+				t.Errorf("a running run: %q %v", s, err)
+			}
+			if err := tr.EndRun(ctx, run.ID, false, time.Now()); err != nil {
+				t.Fatal(err)
+			}
+			if err := tr.EndRun(ctx, run.ID, true, time.Now()); err != nil {
+				t.Fatal(err)
+			}
+			if s, err := tr.RunStatus(ctx, run.ID); err != nil || s != "FAILED" {
+				t.Errorf("a run set FAILED after FINISHED: %q %v", s, err)
+			}
+			var nf *mlflowconn.NotFound
+			if _, err := tr.RunStatus(ctx, "0123456789abcdef0123456789abcdef"); !errors.As(err, &nf) {
+				t.Errorf("a run that is not there: %v", err)
+			}
+			name := "deleted " + stamp
+			v, err := tr.Register(ctx, name, strings.TrimRight(run.ArtifactURI, "/")+"/model", run.ID, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if of, err := tr.VersionsOfRuns(ctx, []string{run.ID}); err != nil || len(of) != 1 || of[0].Version != v {
+				t.Fatalf("the run's versions: %+v %v", of, err)
+			}
+			if err := tr.DeleteVersion(ctx, name, v); err != nil {
+				t.Fatal(err)
+			}
+			if of, err := tr.VersionsOf(ctx, name); err != nil || len(of) != 0 {
+				t.Errorf("after the deletion: %+v %v", of, err)
+			}
+			if err := tr.DeleteVersion(ctx, name, v); err != nil {
+				t.Errorf("a version already gone: %v", err)
+			}
+		})
+	}
+}

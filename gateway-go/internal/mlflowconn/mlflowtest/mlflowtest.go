@@ -124,7 +124,7 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	var in map[string]any
-	if r.Method == http.MethodPost {
+	if r.Method == http.MethodPost || r.Method == http.MethodDelete {
 		_ = json.NewDecoder(r.Body).Decode(&in)
 	}
 	str := func(k string) string { v, _ := in[k].(string); return v }
@@ -224,6 +224,13 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 			f.Flush() // the headers go out before the body: chunked, no length
 		}
 		_, _ = w.Write(b)
+	case path == "/api/2.0/mlflow/runs/get" && r.Method == http.MethodGet:
+		run := s.Runs[r.URL.Query().Get("run_id")]
+		if run == nil {
+			refuse(w, http.StatusNotFound, "RESOURCE_DOES_NOT_EXIST")
+			return
+		}
+		answer(w, 200, map[string]any{"run": runJSON(run)})
 	case path == "/api/2.0/mlflow/runs/create":
 		id := fmt.Sprintf("run%d", len(s.Runs)+1)
 		exp := str("experiment_id")
@@ -319,6 +326,20 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 				Created: 1_700_000_000_000 + s.clock}
 			s.Models[name] = append(versions, v)
 			answer(w, 200, map[string]any{"model_version": map[string]any{"name": name, "version": v.Version, "status": "READY"}})
+		case "/api/2.0/mlflow/model-versions/delete":
+			if r.Method != http.MethodDelete {
+				refuse(w, http.StatusMethodNotAllowed, "ENDPOINT_NOT_FOUND")
+				return
+			}
+			versions := s.Models[name]
+			for i, v := range versions {
+				if v.Version == str("version") {
+					s.Models[name] = append(versions[:i:i], versions[i+1:]...)
+					answer(w, 200, map[string]any{})
+					return
+				}
+			}
+			refuse(w, http.StatusNotFound, "RESOURCE_DOES_NOT_EXIST")
 		default:
 			refuse(w, http.StatusNotFound, "ENDPOINT_NOT_FOUND")
 		}

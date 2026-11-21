@@ -11,6 +11,7 @@ package mlflowconn
 //	POST /api/2.0/mlflow/runs/search             {experiment_ids, filter, …}     the runs Tabularia made
 //	GET  /api/2.0/mlflow/model-versions/search?filter=…&max_results=…&page_token=…
 //	GET  /api/2.0/mlflow/model-versions/get?name=…&version=…
+//	GET  /api/2.0/mlflow/runs/get?run_id=…                                        a version's run, its status
 //	GET  /api/2.0/mlflow-artifacts/artifacts/<path>                              a file, through the proxy
 //
 // Filters: runs/search with `tags.`tabularia.model` != ''` (a run Tabularia logged carries
@@ -19,6 +20,7 @@ package mlflowconn
 // that ignored a filter gives the same lists.
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -327,6 +329,48 @@ func (t *Tracker) Version(ctx context.Context, name, version string) (*ModelVers
 		return nil, &Error{Action: fmt.Sprintf("reading the version %s of «%s»", version, name), Code: "bad_answer", Status: 200}
 	}
 	return &v, nil
+}
+
+// RunStatus is the status of a run (RUNNING, SCHEDULED, FINISHED, FAILED, KILLED); a *NotFound
+// when MLflow has no such run. A version Tabularia registered comes from a run it closed FINISHED
+// just before: any other status is a step that failed after the registration (whose answer was
+// lost on the way, for one), whose version is not applied.
+func (t *Tracker) RunStatus(ctx context.Context, runID string) (string, error) {
+	var got struct {
+		Run struct {
+			Info struct {
+				Status string `json:"status"`
+			} `json:"info"`
+		} `json:"run"`
+	}
+	action := "reading the run of the model's version"
+	err := t.do(ctx, t.client, http.MethodGet, "/api/2.0/mlflow/runs/get?"+url.Values{"run_id": {runID}}.Encode(), nil, 0, "", &got, action)
+	if isMissing(err) {
+		return "", &NotFound{What: "the run " + runID + " of the model's version"}
+	}
+	if err != nil {
+		return "", err
+	}
+	if got.Run.Info.Status == "" {
+		return "", &Error{Action: action, Code: "bad_answer", Status: 200}
+	}
+	return got.Run.Info.Status, nil
+}
+
+// DeleteVersion deletes a version of a registered model; one already gone is fine.
+//
+//	DELETE /api/2.0/mlflow/model-versions/delete  {name, version}
+func (t *Tracker) DeleteVersion(ctx context.Context, name, version string) error {
+	b, err := json.Marshal(map[string]string{"name": name, "version": version})
+	if err != nil {
+		return err
+	}
+	err = t.do(ctx, t.client, http.MethodDelete, "/api/2.0/mlflow/model-versions/delete", bytes.NewReader(b), int64(len(b)), "application/json",
+		nil, fmt.Sprintf("deleting the version %s of «%s»", version, name))
+	if isMissing(err) {
+		return nil
+	}
+	return err
 }
 
 // TooLarge is a file longer than the caller reads.
