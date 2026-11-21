@@ -16,7 +16,7 @@ are in Italian, as a real Italian ERP and CRM would have them.
 | `catalogo.prodotti` | pasta and bakery SKUs (spaghetti, tortellini, frollini, grissini, panettone…) by format; `conservazione_mesi` holds the shelf life in months |
 | `catalogo.listino_prezzi` | price-list history (two periods, a 2025 increase) |
 | `catalogo.costi_produzione` | raw-material, processing and packaging costs per product |
-| `vendite.ordini` | order headers (customer, agent, channel, status) |
+| `vendite.ordini` | order headers (customer, agent, channel, status: `evaso`, `annullato`, or `in_lavorazione` for the orders of the window's last three weeks still being fulfilled) |
 | `vendite.righe_ordine` | order lines with quantity, applied price, discount |
 | `vendite.costi_commerciali` | commission, logistics, promotion per line |
 
@@ -24,8 +24,8 @@ are in Italian, as a real Italian ERP and CRM would have them.
 
 | table | description |
 |---|---|
-| `agenti` | a hierarchical sales network: `agent → supervisor → area manager` (self-reference `responsabile_id`) |
-| `clienti` | customer records (company name, VAT number, channel, geography), each assigned to an agent, with the acquisition date `data_acquisizione` and the commercial status `stato` (`attivo`, `inattivo`, `nuovo`) |
+| `agenti` | a hierarchical sales network: `agent → supervisor → area manager` (self-reference `responsabile_id`), one area manager for each macro-area, with the hiring date `data_assunzione` |
+| `clienti` | customer records (company name, VAT number, channel, geography), each assigned to an agent of its own macro-area, hired by the day the customer was acquired, with the acquisition date `data_acquisizione` and the commercial status `stato` (`attivo`, `inattivo`, `nuovo`) |
 | `attivita_crm` | visits, calls and reminders (the big table) |
 
 `ordini.cliente_id` and `ordini.agente_id` are **logical** keys into the CRM on
@@ -41,7 +41,9 @@ margin     = revenue - cost_prod - cost_comm
 ```
 
 Joining `clienti`/`agenti` from the CRM then gives the margin by agent, supervisor,
-area manager, region and channel.
+area manager, region and channel: a customer's agent works its macro-area, so the area
+manager's territory and the customer's region agree, and no order or contact of a
+customer is dated before its agent was hired.
 
 ## The customers' lives
 
@@ -53,15 +55,17 @@ fitting it too), so that the data suits those models and survival analysis alike
 |---|---|---|
 | **acquisition** | about 30% of the customers are in the portfolio when the window opens (1 July 2023; their `data_acquisizione` lies before it, and what they ordered before is not in the data); the others arrive over the three years, at a rate that grows every year, with a season (a push in January, almost nothing in August, a quiet December) and a pace of its own for each channel (`Online` takes off, `Negozi` stays flat) | new customers per month; cohorts by acquisition date; the company's growth coming from the base, not from every customer ordering more |
 | **frequency** | each customer orders at a Poisson rate of its own: a gamma across customers (shape 1.5, so a few order a lot and many order rarely) whose mean depends on the channel (`Supermercati` and `Ristorazione` often, `Ingrosso` and `Online` rarely), modulated by the month, weekday and channel seasons above. The first order follows the acquisition by a few days | orders per customer a long-tailed count; the intervals between a customer's orders are exponential, with its own mean |
-| **churn** | the lifetime of a customer is exponential, with a hazard a year equal to a base (0.25) × the channel's (`Supermercati` 0.55 … `Online` 1.6) × the macro-area's (`Nord-Ovest` 0.75 … `Isole` 1.7) × the agent's (a lognormal factor: some agents lose more customers) × a gamma frailty that nothing explains. **Nobody writes it down**: the database holds no churn flag, no end date | a Kaplan–Meier by channel that separates (about 65% of the supermarkets still there after two years, about 30% of the online ones); a Cox model with channel, area and agent as covariates; a Weibull fit; the hazard of the whole base falling over time (the frail leave first) |
+| **churn** | the lifetime of a customer is exponential, with a hazard a year equal to a base (0.25) × the channel's (`Supermercati` 0.55 … `Online` 1.6) × the macro-area's (`Nord-Ovest` 0.75 … `Isole` 1.7) × the agent's (a lognormal factor: some agents lose more customers) × a gamma frailty that nothing explains. **Nobody writes it down**: the database holds no churn flag, no end date | a Kaplan–Meier by channel that separates (with the recipe below, about 65% of the supermarkets still there after two years, about 40% of the online ones); a Cox model with channel, area and agent as covariates; a Weibull fit; the hazard of the whole base falling over time (the frail leave first) |
 | **spend** | each customer has an average order size of its own (a gamma across customers, a CV of 0.5), independent of how often it orders, and the order's own noise on top (the lines, the quantities, the products); the basket still grows 5% a year | a correlation of frequency and spend close to 0 inside a channel (the Gamma–Gamma assumption); the channels differ in size (`Supermercati` and `Ingrosso` order in bulk) and in frequency (`Supermercati` often, `Ingrosso` rarely), so **over the whole base the two do move together**: the customer lifetime node's check «Spend independent of frequency» fails there, as it should, and holds inside each channel (fit one node per channel when the CLV matters) |
-| **status** | `clienti.stato` is computed like a CRM would, at the end of the window, from the last order that was not cancelled: `attivo` (an order in the last six months), `inattivo` (none), `nuovo` (acquired in the last six months and nothing delivered yet). `attivo` is 0 for `inattivo`, 1 otherwise | an `inattivo` customer is **not** necessarily lost: a slow one looks the same. The difference between «inactive» and «lost» is what the buy till you die models estimate |
-| **CRM activity** | none before the acquisition; while the customer buys, the usual contacts; after it has churned a small fraction, mostly reminders and calls that end badly (the attempts to win it back) | contacts that follow the customer's life; the `ordine` outcome among the active ones; the change in the mix of contacts around the churn is a signal left on purpose (a model with the CRM's activity as a predictor can find it, the order data alone cannot) |
+| **status** | `clienti.stato` is computed like a CRM would, at the end of the window, from the last order that was not cancelled: `nuovo` (acquired in the last six months and nothing delivered yet: no order, or only orders still `in_lavorazione`), `attivo` (an order in the last six months), `inattivo` (none). `attivo` is 0 for `inattivo`, 1 otherwise | an `inattivo` customer is **not** necessarily lost: a slow one looks the same. The difference between «inactive» and «lost» is what the buy till you die models estimate |
+| **CRM activity** | none before the acquisition; while the customer buys, the usual contacts; after it has churned a small fraction, mostly reminders and calls that end badly (the attempts to win it back). A contact ends in `ordine` only when the customer places an order that day or within two weeks, and a complaint never does | contacts that follow the customer's life; the `ordine` outcome among the active ones, each followed by an order; the change in the mix of contacts around the churn is a signal left on purpose (a model with the CRM's activity as a predictor can find it, the order data alone cannot) |
 
 The orders of the preset are the total of these lives: the rate of every customer is scaled
 so that the orders add up to the preset's number (30,000 at `small`), and the same random
-seed gives the same data at every run. At `medium`, `robust` and `massive` the same customers
-simply order more often in the time they are alive.
+seed gives the same data at every run. Each preset draws its own customers, more of them at
+each scale (3,000, 30,000, 150,000, 500,000), and its own number of orders: a customer orders
+about 10 times in the window at `small`, 33 at `medium`, 80 at `robust` and 24 at `massive`,
+whose orders stay at `robust`'s size.
 
 ## Seasons and anomalies (the data is NOT flat)
 
@@ -93,14 +97,20 @@ the line margin by sales network. On the customers:
   `inattivo`», as its time the days from `data_acquisizione` to the last order plus 183 (the
   six months the CRM waits), and as the censoring time the end of the window for the others; the
   strata or predictors are `canale`, the macro-area of `regione` and `agente_id`;
-- **buy till you die** (BG/NBD, Pareto/NBD, Gamma–Gamma) on the same one-row-per-customer
-  summary: frequency (orders after the first), recency (days from the first to the last order),
-  age (days from the first order to the end of the window) and the average order value, for
-  the customers acquired in the window, **keeping only those with an age above 0** (`age > 0`: a
-  customer whose first order is on the last day has no time to be read, and the node refuses an
-  age of 0). The «Customer Segments by Region (RFM)» flow already builds the recency, frequency and
-  monetary value per customer. Over all the channels the spend check fails (the channels differ in
-  both the size and the frequency of their orders, above); inside one channel it holds.
+- **buy till you die** (BG/NBD, Pareto/NBD, Gamma–Gamma) on a one-row-per-customer summary
+  built as [«Building the summary per customer»](../../docs/capabilities/models.md#building-the-summary-per-customer)
+  says: the orders that were **not cancelled**, of the customers acquired in the window
+  (`data_acquisizione` from 1 July 2023), **one purchase per customer and day** (the amounts of a
+  day summed); frequency (the **days** with a purchase after the first), recency (days from the
+  first to the last of them), age (days from the first to the end of the window), and the average
+  spend of the **repeat purchases only** (the first day left out, as Gamma–Gamma assumes),
+  **keeping only the customers with an age above 0** (`age > 0`: a customer whose first order is
+  on the last day has no time to be read, and the node refuses an age of 0). The «Customer
+  Segments by Region (RFM)» flow already builds the recency, frequency and monetary value per
+  customer. Measured at `small` (2,054 customers, the unit a week, purchase model `auto`): over all
+  the channels the check «Spend independent of frequency» fails (p 0.010, r +0.06: the channels
+  differ in both the size and the frequency of their orders, above), and with one node per channel
+  it holds in each (p from 0.14 to 0.60); the frequency fit and the convergence are ok in all six.
 
 ## Turning them on and off
 

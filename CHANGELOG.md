@@ -130,7 +130,11 @@ Development on `main` for the next minor version. The stable line stays 1.4.x
   macro-area and agent. Nobody writes the churn down: `clienti` has the acquisition date
   (`data_acquisizione`, now meaningful) and a new `stato` computed as a CRM would
   (`attivo`, `inattivo` after six months with no order, `nuovo`), so «inactive» and «lost»
-  are not the same thing. The CRM contacts follow the lives too. Same sizes at every
+  are not the same thing. The CRM contacts follow the lives too. The tables agree with each
+  other: a customer is followed by an agent of its own macro-area, hired by the day it was
+  acquired; an order is `in_lavorazione` only in the window's last three weeks; `nuovo` is a
+  customer with nothing delivered yet; a contact ends in `ordine` only when an order follows
+  within two weeks. Same sizes at every
   `SAMPLES_SCALE`, same seasons and anomalies; a customer table made before this has no
   `stato`: remove the sample volumes to get the new data. See
   [the sample data](infrastructure/sampledb/README.md#the-customers-lives).
