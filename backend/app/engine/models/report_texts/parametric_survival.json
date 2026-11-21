@@ -48,6 +48,10 @@
     "time": "not fitted: out of time"
    },
    "legend": "✓ the distribution chosen; ✓ · chosen by parsimony. A candidate that was not fitted, or did not converge, stays in the table and is out of the choice and of the weights.",
+   "not_checked": {
+    "cell": "fitted, not checked",
+    "legend": "Not checked: the choice stopped at a candidate with a lower AIC whose convergence check passed."
+   },
    "chart_note": "Kaplan–Meier (steps) against the mean fitted survival of every candidate that converged."
   },
   "charts": {
@@ -347,6 +351,10 @@
     "time": "non adattata: tempo esaurito"
    },
    "legend": "✓ la distribuzione scelta; ✓ · scelta per parsimonia. Un candidato non adattato, o non convergente, resta nella tabella ed è fuori dalla scelta e dai pesi.",
+   "not_checked": {
+    "cell": "adattata, non controllata",
+    "legend": "Non controllata: la scelta si è fermata a un candidato con AIC più basso il cui controllo di convergenza è passato."
+   },
    "chart_note": "Kaplan–Meier (gradini) contro la sopravvivenza media adattata di ogni candidato convergente."
   },
   "charts": {
@@ -646,6 +654,10 @@
     "time": "nicht angepasst: Zeit abgelaufen"
    },
    "legend": "✓ die gewählte Verteilung; ✓ · aus Sparsamkeit gewählt. Ein Kandidat, der nicht angepasst wurde oder nicht konvergiert ist, bleibt in der Tabelle, aber außerhalb der Wahl und der Gewichte.",
+   "not_checked": {
+    "cell": "angepasst, nicht geprüft",
+    "legend": "Nicht geprüft: Die Wahl endete bei einem Kandidaten mit niedrigerem AIC, dessen Konvergenzprüfung bestanden wurde."
+   },
    "chart_note": "Kaplan–Meier (Stufen) gegen das mittlere angepasste Überleben jedes konvergierten Kandidaten."
   },
   "charts": {
@@ -945,6 +957,10 @@
     "time": "no ajustada: tiempo agotado"
    },
    "legend": "✓ la distribución elegida; ✓ · elegida por parsimonia. Un candidato que no se ajustó, o que no convergió, queda en la tabla y fuera de la elección y de los pesos.",
+   "not_checked": {
+    "cell": "ajustada, no comprobada",
+    "legend": "No comprobada: la elección se detuvo en un candidato con un AIC más bajo cuya comprobación de convergencia se superó."
+   },
    "chart_note": "Kaplan–Meier (escalones) frente a la supervivencia media ajustada de cada candidato que convergió."
   },
   "charts": {
@@ -1244,6 +1260,10 @@
     "time": "non ajustée : temps épuisé"
    },
    "legend": "✓ la distribution choisie ; ✓ · choisie par parcimonie. Un candidat qui n'a pas été ajusté, ou n'a pas convergé, reste dans le tableau mais hors du choix et des poids.",
+   "not_checked": {
+    "cell": "ajustée, non vérifiée",
+    "legend": "Non vérifiée : le choix s'est arrêté à un candidat d'AIC plus bas dont le contrôle de convergence a réussi."
+   },
    "chart_note": "Kaplan–Meier (marches) contre la survie moyenne ajustée de chaque candidat convergé."
   },
   "charts": {

@@ -122,8 +122,9 @@ def _candidates(params: dict[str, Any]):
         one = '[section] = "candidate" AND [stat] = "n_parameters"'
         chosen_row = c.of_row("candidate", "chosen")
         moved = f'COUNTIF([section] = "candidate" AND [stat] = "parsimony" AND [value] = 1) > 0'
-        # the candidates fitted: those that converged (a row `converged` of 0 is one that did not)
-        n = c.shown(f'COUNTIF([section] = "candidate" AND [stat] = "converged" AND [value] = 1)', "#,##0")
+        # the candidates fitted (status «ok»): those the choice checked and those it never reached, which have no
+        # row `converged` (a row `converged` of 0 is one that did not converge)
+        n = c.shown(f'COUNTIF([section] = "candidate" AND [stat] = "status" AND [text] = "ok")', "#,##0")
         chosen = c.txt(c.model_key("distribution"))
         p.text("candidates_said", "=" + c.join(w["candidates"]["lowest"], distribution=chosen, n=n), h=5, size=8.5, can_grow=True,
                advance=False, visible=f"=NOT ({moved})")
@@ -132,8 +133,13 @@ def _candidates(params: dict[str, Any]):
         p.text("candidates_parsimony", "=" + c.join(w["candidates"]["parsimony"], distribution=chosen, margin=margin), h=5, size=8.5,
                can_grow=True, visible=f"={moved}")
         p.keep()  # the heading with its sentence: the table, which takes its row alone, follows
-        status = ("IFS(" + ", ".join(f'{c.of_row("candidate", "status", "text")} = "{k}", {c.q(w["candidates"]["status"][k])}'
-                                      for k in CANDIDATE_STATUS) + ', "")')
+        # `auto` checks the convergence of the candidates its choice reaches: one fitted that it never reached has no row
+        # `converged` («fitted, not checked», and a line under the table says why)
+        converged = c.of_row("candidate", "converged")
+        unchecked = f'{c.of_row("candidate", "status", "text")} = "ok" AND ISNULL({converged})'
+        status = (f'IFS({unchecked}, {c.q(w["candidates"]["not_checked"]["cell"])}, '
+                  + ", ".join(f'{c.of_row("candidate", "status", "text")} = "{k}", {c.q(w["candidates"]["status"][k])}'
+                              for k in CANDIDATE_STATUS) + ', "")')
         mark = f'IF({c.of_row("candidate", "parsimony")} = 1, "✓ ·", IF({chosen_row} = 1, "✓", ""))'
 
         def number(stat: str, fmt: str = "0.##", width: float = 22.0) -> dict:
@@ -155,10 +161,14 @@ def _candidates(params: dict[str, Any]):
             {"header": t["status"], "value": status, "width": 30},
             {"header": c.stat_label(w, "candidate", "chosen"), "value": mark, "width": 11, "align": "center"},
         ], p.y, visible=c.exists(one))
-        aic = c.of_row("candidate", "aic")  # a candidate with no AIC (it did not converge) goes last
-        table["sort"] = [{"by": f"IF(ISNULL({aic}), 1E+300, {aic})"}, {"by": "[ord]"}]
+        # a candidate out of the choice (no ΔAIC: not fitted, or it did not converge, whatever its AIC) goes last
+        aic = c.of_row("candidate", "aic")
+        table["sort"] = [{"by": f'IF(ISNULL({c.of_row("candidate", "delta_aic")}), 1, 0)'}, {"by": f"IF(ISNULL({aic}), 1E+300, {aic})"},
+                         {"by": "[ord]"}]
         p.add(table, 10)
         p.text("candidates_legend", w["candidates"]["legend"], h=4.5, size=7, color=c.MUTED, can_grow=True)
+        p.text("candidates_not_checked", w["candidates"]["not_checked"]["legend"], h=4.5, size=7, color=c.MUTED, can_grow=True,
+               visible=c.exists(f"{one} AND {unchecked}"))
         f = '[section] = "curve" AND [level] = "candidates"'
         km_step = {"value": 'IF([level_2] = "km", [value], NULL)', "as": "step", "name": s["km"]}
         fitted = {"value": 'IF([level_2] <> "km", [value], NULL)', "as": "line", "name": ""}

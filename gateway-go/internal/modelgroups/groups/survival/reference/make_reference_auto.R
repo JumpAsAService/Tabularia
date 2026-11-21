@@ -98,8 +98,10 @@ ps_auto_expect <- function(fits, n, ks, status = character(), margin = 2) {
     ok <- d %in% adm
     e <- c(e, list(num(key("n_parameters"), ks[[d]]), txt(key("status"), if (ok) "ok" else status[[d]]),
                    num(key("admissible"), as.integer(ok)), num(key("chosen"), as.integer(d == chosen)),
-                   num(key("parsimony"), as.integer(d == chosen && chosen != lowest)),
-                   num(key("converged"), as.integer(isTRUE(fits[[d]]$converged)))))
+                   num(key("parsimony"), as.integer(d == chosen && chosen != lowest))))
+    # the runner checks the convergence of the candidates its choice reaches (the lowest AIC, the one the
+    # parsimony rule takes): an admissible one it never reached has no row `converged`
+    if (!ok || d %in% c(lowest, chosen)) e <- c(e, list(num(key("converged"), as.integer(isTRUE(fits[[d]]$converged)))))
     if (ok) {
       # the chosen fit is brought to the maximum by Newton steps; the others stop where BFGS does, which is
       # 1e-8 relative off for most and up to 2e-5 (a log-likelihood 0.012 low) for the generalized gamma

@@ -940,7 +940,9 @@ def test_a_parametric_survival_without_predictors_has_no_ratio_charts_and_no_inf
 def test_auto_counts_the_candidates_that_converged_and_a_median_never_reached_has_no_bare_interval(
         tmp_path, chart_service, monkeypatch, locale):  # noqa: F811
     model, params, rows = fixture("parametric_survival-auto")
+    # a candidate that did not converge, as the runner writes it: `converged` 0 and its status
     rows = [{**r, "value": 0.0} if r["key"] == "candidate|gengamma||converged" else r for r in rows]
+    rows = [{**r, "text": "not_converged"} if r["key"] == "candidate|gengamma||status" else r for r in rows]
     rows = [r for r in rows if not r["key"].startswith("stratum|all||median")]
     _, page = draw(tmp_path, chart_service, monkeypatch, "parametric_survival-auto", fmt="svg", locale=locale, rows=rows)
     texts = strings(json.loads(page))
@@ -961,6 +963,27 @@ def test_a_parametric_survival_with_strata_names_them_without_the_column_and_gro
     items = {i["id"]: i for i in layouts.definition("parametric_survival", {**params, "strata": None}, "en", None, None)
              ["sections"]["body"]["items"]}
     assert "groups" not in items["quantiles"] and items["hazard"]["w"] < common.WIDTH
+
+
+@pytest.mark.parametrize("locale", LOCALES)
+def test_a_parametric_survival_candidate_auto_did_not_check_says_so(tmp_path, chart_service, monkeypatch, locale):  # noqa: F811
+    """`auto` checks the convergence of the candidates its choice reaches: one fitted that it never reached has no row
+    `converged`, and the table says «fitted, not checked» with a line under it saying why; it still counts as fitted."""
+    model, params, rows = fixture("parametric_survival-auto")
+    chosen = {r["level"] for r in rows if r["section"] == "candidate" and r["stat"] == "chosen" and r["value"] == 1}
+    gone = {r["level"] for r in rows if r["section"] == "candidate" and r["stat"] == "converged" and r["level"] not in chosen}
+    assert len(gone) == 5
+    rows = [r for r in rows if not (r["section"] == "candidate" and r["stat"] == "converged" and r["level"] in gone)]
+    w = common.words(model, "auto", locale)
+    _, page = draw(tmp_path, chart_service, monkeypatch, "parametric_survival-auto", fmt="svg", locale=locale, rows=rows)
+    texts = strings(json.loads(page))
+    said = " ".join(texts)
+    assert texts.count(w["candidates"]["not_checked"]["cell"]) == 5 and w["candidates"]["not_checked"]["legend"] in said
+    head, tail = w["candidates"]["lowest"].split("{n}")
+    assert re.search(re.escape(head.split("}")[-1]) + "6" + re.escape(tail), said), said[:400]  # the six fitted
+    _, page = draw(tmp_path / "all", chart_service, monkeypatch, "parametric_survival-auto", fmt="svg", locale=locale)
+    said = " ".join(strings(json.loads(page)))
+    assert w["candidates"]["not_checked"]["cell"] not in said and w["candidates"]["not_checked"]["legend"] not in said
 
 
 @pytest.mark.parametrize("locale", LOCALES)

@@ -108,7 +108,7 @@ fit_parametric_survival <- function(task) {
   }
   ps_refuse_not_converged(fitted)
   fitted <- ps_attach_flexsurv(fitted, prepared) # an auto candidate made by Newton steps alone has none
-  fitted <- ps_newton(fitted)
+  if (!isTRUE(fitted$checked)) fitted <- ps_newton(fitted) # auto's convergence check already took them (ps_auto_check)
   # what the node's own fit cost (with auto, the choice): the fits the checks add are given as
   # much time, never more (PS_CHECK_LIMITS$extra_fit_min_seconds at least)
   fitted$seconds <- proc.time()[["elapsed"]] - started

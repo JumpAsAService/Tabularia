@@ -12,11 +12,15 @@
 # the better of the Weibull and the log-normal just fitted; only when they do not reach its maximum
 # is it fitted by flexsurv from three starts (flexsurv's own, the Weibull's, the log-normal's).
 #
-#   admissible   converged with a finite log-likelihood. No Hessian is taken for a candidate (owner,
-#                2026-11-20: nothing that costs eons at run time): the candidates are compared by
-#                log-likelihood, AIC and BIC; the Richardson Hessian is taken for the chosen fit
-#                alone, by ps_newton, and the check `convergence` fails if it is not positive
-#                definite. The second start is tried only when the first fails;
+#   admissible   converged with a finite log-likelihood. The candidates are compared by
+#                log-likelihood, AIC and BIC; the second start is tried only when the first fails;
+#   checked      the convergence check (ps_newton: its Newton steps and the covariance from the
+#                rows' own derivatives, NULL when the Hessian is not negative definite) is made only
+#                for the candidates the choice reaches (owner, 2026-11-20: nothing that costs eons at
+#                run time): the lowest AIC and the one the parsimony rule takes. One that fails it is
+#                `not_converged` and out of the choice, and the choice is made again without it.
+#                A candidate never checked has no `converged` row (neither 1 nor 0, as in the
+#                customer lifetime's choice);
 #   chosen       the admissible candidate with the lowest AIC (a tie: fewer parameters, then the
 #                order above) — unless a simpler distribution nested in it is admissible and
 #                within 2 of its AIC (PS_AUTO_NESTED): then the simplest such one (the owner's
@@ -134,26 +138,32 @@ ps_auto <- function(task, prepared) {
     cands[[d]] <- entry
   }
 
-  adm <- PS_AUTO_ORDER[vapply(cands, function(e) e$admissible, logical(1))]
-  if (!length(adm)) {
-    why <- vapply(cands, function(e) paste0(PS_DISTRIBUTIONS[[e$distribution]]$label, ": ", switch(e$status,
-      not_converged = "did not converge", time = "no time left",
-      too_few_rows = "too few rows", e$status)), "")
-    tab_refuse("no_candidate", paste0("no distribution could be fitted to these rows (", paste(why, collapse = "; "),
-                                      "): fewer predictors, merge rare levels, or check the times"),
-               list(candidates = as.list(vapply(cands, function(e) e$status, ""))))
-  }
-  aic <- vapply(adm, function(d) -2 * cands[[d]]$loglik + 2 * cands[[d]]$k, numeric(1))
-  pick <- ps_auto_choose(adm, aic, vapply(adm, function(d) cands[[d]]$k, numeric(1)), margin)
-  if (pick$parsimony) {
-    # every ΔAIC is read from the lowest AIC, which BFGS leaves a little short of its maximum (up to 0.03
-    # for the generalized gamma): take that one fit to its maximum before the rule is applied for good
-    best <- adm[[pick$lowest]]
-    polished <- ps_newton(fits[[best]])
-    if (is.finite(polished$loglik) && polished$loglik >= cands[[best]]$loglik) {
-      cands[[best]]$loglik <- polished$loglik
-      aic[[pick$lowest]] <- -2 * polished$loglik + 2 * cands[[best]]$k
-      pick <- ps_auto_choose(adm, aic, vapply(adm, function(d) cands[[d]]$k, numeric(1)), margin)
+  # the choice, and the convergence check of the candidates it reaches (the lowest AIC, the one the
+  # parsimony rule takes): ps_newton takes each to its maximum (every ΔAIC is read from the lowest
+  # AIC, which BFGS leaves a little short of it: up to 0.03 for the generalized gamma) and gives its
+  # covariance, NULL when the Hessian is not negative definite. A candidate that fails is not
+  # converged and leaves the choice, which is made again (a degenerate generalized gamma, Q = −27 and
+  # no standard error, had the lowest AIC and was chosen with `converged` 1)
+  repeat {
+    adm <- PS_AUTO_ORDER[vapply(cands, function(e) e$admissible, logical(1))]
+    if (!length(adm)) .psa_refuse_no_candidate(cands)
+    aic <- vapply(adm, function(d) -2 * cands[[d]]$loglik + 2 * cands[[d]]$k, numeric(1))
+    pick <- ps_auto_choose(adm, aic, vapply(adm, function(d) cands[[d]]$k, numeric(1)), margin)
+    todo <- unique(adm[c(pick$lowest, pick$chosen)])
+    todo <- todo[!vapply(todo, function(d) isTRUE(cands[[d]]$checked), logical(1))]
+    if (!length(todo)) break
+    d <- todo[[1L]]
+    checked <- ps_auto_check(fits[[d]])
+    cands[[d]]$checked <- TRUE
+    if (is.null(checked)) {
+      cands[[d]]$converged <- FALSE
+      cands[[d]]$admissible <- FALSE
+      cands[[d]]$status <- "not_converged"
+      cands[[d]]$reason <- "the Hessian is not negative definite at the estimates: they are not a maximum"
+      fits[[d]] <- NULL
+    } else {
+      cands[[d]]$loglik <- checked$loglik
+      fits[[d]] <- checked
     }
   }
   lowest <- adm[[pick$lowest]]
@@ -163,6 +173,28 @@ ps_auto <- function(task, prepared) {
   # `fits`: the candidates that converged, which the checks and the LR test against the exponential
   # reuse instead of fitting them again (lot P12)
   list(fitted = fits[[chosen]], write = write, fits = fits)
+}
+
+# The convergence check of a candidate: its fit after ps_newton (`checked` TRUE: the node does not
+# take the steps again), or NULL when the steps leave no covariance (the Hessian is not negative
+# definite) or no finite log-likelihood. The log-likelihood is never lower than the candidate's.
+ps_auto_check <- function(fitted) {
+  out <- tryCatch(ps_newton(fitted), error = function(e) {
+    ps_caught(e)
+    NULL
+  })
+  if (is.null(out) || is.null(out$vcov) || !is.finite(out$loglik)) return(NULL)
+  out$checked <- TRUE
+  out
+}
+
+.psa_refuse_no_candidate <- function(cands) {
+  why <- vapply(cands, function(e) paste0(PS_DISTRIBUTIONS[[e$distribution]]$label, ": ", switch(e$status,
+    not_converged = "did not converge", time = "no time left",
+    too_few_rows = "too few rows", e$status)), "")
+  tab_refuse("no_candidate", paste0("no distribution could be fitted to these rows (", paste(why, collapse = "; "),
+                                    "): fewer predictors, merge rare levels, or check the times"),
+             list(candidates = as.list(vapply(cands, function(e) e$status, ""))))
 }
 
 # The log-likelihood the node wrote for the fit chosen (after the Newton steps): the candidate
@@ -200,7 +232,9 @@ ps_auto <- function(task, prepared) {
       tab_number(rows, "candidate", "delta_aic", delta[[d]], d)
       tab_number(rows, "candidate", "akaike_weight", weight[[d]], d)
     }
-    tab_number(rows, "candidate", "converged", as.integer(e$converged), d)
+    # a candidate fitted but never checked (the choice stopped before it) has no `converged` row: it was
+    # not shown to be a maximum, and a 0 would say it was shown not to be
+    if (!identical(e$status, "ok") || isTRUE(e$checked)) tab_number(rows, "candidate", "converged", as.integer(e$converged), d)
     tab_number(rows, "candidate", "admissible", as.integer(e$admissible), d)
     tab_number(rows, "candidate", "chosen", as.integer(d == chosen), d)
     tab_number(rows, "candidate", "parsimony", as.integer(parsimony && d == chosen), d)
@@ -366,4 +400,33 @@ TAB_COMMON_TESTS[["parametric survival, auto: the time rule, and no candidate le
   task$limits$time_budget_seconds <- 1
   msg <- .tab_refused_with("no_candidate", fit_parametric_survival(task))
   .tab_expect(grepl("^no distribution could be fitted to these rows \\(exponential: no time left;", msg), "the sentence: ", msg)
+}
+
+TAB_COMMON_TESTS[["parametric survival, auto: a candidate whose Hessian is not negative definite is not converged, and the next is chosen"]] <- function(code) {
+  # events from day 183 on, with a spike at 183, and units censored from day 1: the generalized gamma
+  # runs off to a degenerate point (Q about −30, no standard error) with the lowest AIC by far
+  set.seed(2)
+  ev <- 183 + round(stats::rexp(54, 1 / 150))
+  ev[1:4] <- 183
+  ce <- round(stats::runif(96, 0, 1100))
+  ce[ce == 0] <- 1
+  df <- data.frame(days = c(ev, ce), status = c(rep(1, 54), rep(0, 96)))
+  fit <- fit_parametric_survival(.ps_test_task(df, list(time = "days", event = "status", event_value = 1, distribution = "auto")))
+  r <- tab_results_frame(fit$rows)
+  get <- function(key) r$value[match(key, r$key)]
+  said <- function(key) r$text[match(key, r$key)]
+  chosen <- said("model|||distribution")
+  .tab_expect(!identical(chosen, "gengamma") && identical(get("candidate|gengamma||converged"), 0) &&
+              identical(get("candidate|gengamma||admissible"), 0) && identical(said("candidate|gengamma||status"), "not_converged"),
+              "the degenerate generalized gamma: chosen ", chosen, ", converged ", get("candidate|gengamma||converged"))
+  .tab_expect(is.na(get("candidate|gengamma||akaike_weight")) && grepl("gengamma", said("model|||note_auto_not_converged")),
+              "out of the weights, and in the note")
+  .tab_expect(identical(get(paste0("candidate|", chosen, "||converged")), 1) && identical(said("assumption|convergence||verdict"), "ok"),
+              "the chosen one is checked")
+  # the candidates the choice never reached have no row `converged`: not 1, not 0
+  unchecked <- setdiff(PS_AUTO_ORDER, c(chosen, "gengamma"))
+  has <- vapply(unchecked, function(d) paste0("candidate|", d, "||converged") %in% r$key, logical(1))
+  .tab_expect(any(!has), "every candidate was checked")
+  for (d in unchecked[!has]) .tab_expect(identical(said(paste0("candidate|", d, "||status")), "ok"), d, ": not checked but not fitted")
+  .tab_expect(!length(tab_check_declared(r, "parametric_survival", "auto")), "the rows are not what the variant declares")
 }
