@@ -18,7 +18,11 @@
 # Light: no refit per row, no bootstrap, no simulation; dfbetas is V · U_i with U_i from central
 # differences of the vectorized row log-likelihood; curves on a grid of 100 times, the agreement read
 # at 60 of Kaplan–Meier's at most; points capped by tab_cap. The fits besides the node's own are the
-# Weibull and the generalized gamma of the two LR checks, skipped when half the step's time has gone.
+# Weibull and the generalized gamma of the two LR checks (lot P12): with auto the candidates already
+# fitted, else one fit from the point of the node's own estimates nested in it (the Weibull at Q = 1,
+# the log-normal at Q = 0, the exponential at shape 1), BFGS to PSC_RELTOL and Newton steps from
+# the rows' own derivatives; within ps_extra_allowance's time, checked while it runs, else
+# «not_computed» with the reason.
 # Charts (level = id, level_2 = the group or stratum): curve fit_km (surv/lower/upper Kaplan–Meier,
 # fitted: the mean fitted survival), point cox_snell, point/curve loglog (Weibull, exponential),
 # curve profile_survival and hazard (with bands), point deviance_linear.
@@ -38,8 +42,12 @@ PS_CHECK_LIMITS <- list(
   km_max_levels = 6L,         # a categorical predictor with more levels is not a grouping
   dfbeta_named = 5L,          # rows named for each term, the most influential
   curve_points = 100L,        # points of a fitted curve
-  labelled = 3L,              # points named on the deviance chart
-  gengamma_max_rows = 5000L)  # the generalized gamma costs several times the node's own fit: above this many rows its comparison is not made (measured: 10 s at 10,000 rows, 92 s at 100,000)
+  labelled = 3L)              # points named on the deviance chart
+# The fits the two LR checks add (the generalized gamma, the exponential's Weibull) start from the
+# node's own estimates, nested in them, and stop at this relative change of the log-likelihood:
+# Newton steps (ps_newton_steps) then take them to the maximum, which is all an LR test reads.
+# They run within ps_extra_allowance's time (lot P12: no row limit, the clock).
+PSC_RELTOL <- 1e-8
 
 # What a check assumes («H0»), in the words the report may reuse.
 PSC_H0 <- list(
@@ -295,78 +303,106 @@ psc_agreement <- function(ctx, group) {
   list(gap = gap[[j]], time = km$time[at][[j]], d = gap[[j]] / se[at][[j]], t0 = km$t0)
 }
 
-# ── the generalized gamma against the distribution fitted ────────────────────
-psc_gengamma <- function(ctx) {
-  if (!is.null(ctx$gengamma)) return(ctx$gengamma)
+# ── the LR checks: a larger distribution against the one fitted ──────────────
+# The point of the larger distribution (`target`: gengamma, or the exponential's Weibull) that is
+# the node's own fit, on the optimiser's scale: the generalized gamma at Q = 1 is the Weibull
+# (μ = log scale, log σ = −log shape, the shape's strata turning sign on σ), at Q = 0 the
+# log-normal (μ = meanlog, σ = sdlog); the exponential is the Weibull of shape 1 (log scale = −log
+# rate, its coefficients on the log rate turned), so the generalized gamma at σ = 1, Q = 1.
+psc_nested_start <- function(ctx, target) {
   f <- ctx$fitted
-  starts <- list(weibull = if (identical(ctx$distribution, "weibull")) f, lognormal = if (identical(ctx$distribution, "lognormal")) f)
-  if (identical(ctx$distribution, "exponential")) starts$weibull <- psc_weibull(ctx)
-  gg <- ps_fit(ctx$prepared, "gengamma", starts = starts)
-  if (isTRUE(gg$converged)) gg <- ps_newton(gg) # the log-likelihood at its maximum: the test's statistic is a difference of two
-  ctx$gengamma <- list(fit = gg, admissible = isTRUE(gg$converged) && !is.null(gg$vcov))
-  ctx$gengamma
+  m <- f$spec
+  par <- f$par
+  shift <- par[c(m$i_terms, m$i_strata)]
+  mt <- ps_spec(target, length(m$i_terms), length(ctx$prepared$strata_levels))
+  n_anc <- length(mt$i_anc)
+  start <- switch(paste(ctx$distribution, target),
+    "weibull gengamma" = c(par[[2L]], -par[[1L]], 1, shift, -par[m$i_anc]),
+    "lognormal gengamma" = c(par[[1L]], par[[2L]], 0, shift, par[m$i_anc]),
+    "exponential gengamma" = c(-par[[1L]], 0, 1, -shift, rep(0, n_anc)),
+    "exponential weibull" = c(0, -par[[1L]], -shift, rep(0, n_anc)),
+    stop("no nested point of ", ctx$distribution, " in ", target))
+  if (length(start) != mt$nb + length(mt$i_terms) + length(mt$i_strata) + n_anc) stop("the nested point has the wrong length")
+  start
 }
 
-# The Weibull on the same rows (the exponential's alternative), once, at its maximum.
-psc_weibull <- function(ctx) {
-  if (is.null(ctx$weibull)) {
-    w <- ps_fit(ctx$prepared, "weibull")
-    ctx$weibull <- if (isTRUE(w$converged)) ps_newton(w) else w
+# The larger distribution's fit at its maximum, once per check run: list(fit, status, seconds),
+# status «ok», «not_converged», «time» (the allowance ran out while it was fitted) or, with auto,
+# «candidate_<status>» (the candidate was not fitted: its own status in the table of the choice).
+psc_larger_fit <- function(ctx, target) {
+  key <- paste0("larger_", target)
+  if (!is.null(ctx[[key]])) return(ctx[[key]])
+  p <- ctx$prepared
+  allowance <- ps_extra_allowance(ctx$task, ctx$fitted)
+  if (ctx$auto) {
+    candidate <- ctx$fitted$candidates[[target]]
+    if (!isTRUE(candidate$converged)) {
+      out <- list(fit = NULL, status = "candidate_missing", seconds = allowance)
+    } else {
+      run <- ps_within(allowance, ps_newton_steps(candidate, p))
+      out <- list(fit = run$value, status = if (run$time_up) "time" else "ok", seconds = allowance)
+    }
+  } else {
+    init <- psc_nested_start(ctx, target)
+    run <- ps_within(allowance, {
+      f <- ps_fit(p, target, init = init, reltol = PSC_RELTOL, second = FALSE)
+      if (isTRUE(f$converged)) ps_newton_steps(f, p) else f
+    })
+    status <- if (run$time_up) "time" else if (isTRUE(run$value$converged)) "ok" else "not_converged"
+    out <- list(fit = run$value, status = status, seconds = allowance)
   }
-  ctx$weibull
+  ctx[[key]] <- out
+  out
+}
+
+# One LR check of the node's distribution against `target`, nested in it: verdict from p against
+# alpha; «not_computed» with an `advice_id` the report words when the larger fit is not there.
+psc_lr_check <- function(ctx, rows, id, target, advice, advice_auto) {
+  f <- ctx$fitted
+  label <- PS_DISTRIBUTIONS[[target]]$label
+  not_computed <- function(why, advice_id) psc_check(rows, id, PSC_H0[[id]], "not_computed", why, advice_id = advice_id)
+  if (psc_time_up(ctx$task)) {
+    return(not_computed("The time of the step was used before this comparison could be made.", paste0(id, "_no_time")))
+  }
+  larger <- psc_larger_fit(ctx, target)
+  if (identical(larger$status, "time")) {
+    return(not_computed(paste0("The ", label, " took longer to fit than the model itself (", psc_num(larger$seconds), " s): the ",
+                               "comparison was stopped; fit ", target, " to see it."), paste0(id, "_time")))
+  }
+  if (identical(larger$status, "candidate_missing")) {
+    return(not_computed(paste0("The ", label, " was not fitted among the candidates (see the choice of the distribution): ",
+                               "the comparison is not made."), paste0(id, "_candidate")))
+  }
+  if (!identical(larger$status, "ok")) {
+    return(not_computed(paste0("The ", label, " did not converge on these rows: the comparison is not made."), paste0(id, "_not_converged")))
+  }
+  stat <- 2 * (larger$fit$loglik - f$loglik)
+  if (stat < -1e-6 * max(1, abs(f$loglik))) {
+    return(not_computed(paste0("The ", label, " fit stopped below the log-likelihood of the model it contains: the comparison is not made."),
+                        paste0(id, "_below")))
+  }
+  stat <- max(stat, 0)
+  df_ <- larger$fit$n_parameters - f$n_parameters
+  p_ <- stats::pchisq(stat, df_, lower.tail = FALSE)
+  psc_check(rows, id, PSC_H0[[id]], psc_verdict_p(p_, ctx$alpha), if (ctx$auto) advice_auto(larger$fit) else advice(larger$fit),
+            advice_id = if (ctx$auto) paste0(id, "_auto") else id, statistic = stat, df = df_, p = p_, threshold = ctx$alpha)
 }
 
 psc_vs_gengamma <- function(ctx, rows) {
-  id <- "distribution_vs_gengamma"
-  f <- ctx$fitted
-  if (psc_time_up(ctx$task)) {
-    psc_check(rows, id, PSC_H0[[id]], "not_computed", "The time of the step was used before this comparison could be made.")
-    return(invisible())
-  }
-  if (ctx$n > ctx$lim$gengamma_max_rows) {
-    psc_check(rows, id, PSC_H0[[id]], "not_computed",
-              paste0("With more than ", ctx$lim$gengamma_max_rows, " rows the generalized gamma would take longer to fit than the model ",
-                     "itself: the comparison is not made; fit gengamma, or auto, to see it."))
-    return(invisible())
-  }
-  gg <- psc_gengamma(ctx)
-  if (!gg$admissible) {
-    psc_check(rows, id, PSC_H0[[id]], "not_computed", "The generalized gamma did not converge on these rows: the comparison is not made.")
-    return(invisible())
-  }
-  stat <- 2 * (gg$fit$loglik - f$loglik)
-  if (stat < -1e-6 * max(1, abs(f$loglik))) {
-    psc_check(rows, id, PSC_H0[[id]], "not_computed",
-              "The generalized gamma fit stopped below the log-likelihood of the model it contains: the comparison is not made.")
-    return(invisible())
-  }
-  stat <- max(stat, 0)
-  df_ <- gg$fit$n_parameters - f$n_parameters
-  p_ <- stats::pchisq(stat, df_, lower.tail = FALSE)
-  q <- gg$fit$par[[match("Q", gg$fit$spec$pars)]]
-  psc_check(rows, id, PSC_H0[[id]], psc_verdict_p(p_, ctx$alpha),
-            paste0("The generalized gamma describes these times better (its Q is ", psc_num(q),
-                   ", where the Weibull has 1 and the log-normal 0): try gengamma, or auto."),
-            statistic = stat, df = df_, p = p_, threshold = ctx$alpha)
+  q <- function(fit) psc_num(fit$par[[match("Q", fit$spec$pars)]])
+  psc_lr_check(ctx, rows, "distribution_vs_gengamma", "gengamma",
+               function(fit) paste0("The generalized gamma describes these times better (its Q is ", q(fit),
+                                    ", where the Weibull has 1 and the log-normal 0): try gengamma, or auto."),
+               function(fit) paste0("The generalized gamma describes these times better (its Q is ", q(fit),
+                                    ", where the Weibull has 1 and the log-normal 0), though the choice kept the simpler one: ",
+                                    "fit gengamma to use it."))
 }
 
 # ── the exponential's constant hazard, against the Weibull ───────────────────
 psc_constant_hazard <- function(ctx, rows) {
-  id <- "constant_hazard"
-  if (psc_time_up(ctx$task)) {
-    psc_check(rows, id, PSC_H0[[id]], "not_computed", "The time of the step was used before this comparison could be made.")
-    return(invisible())
-  }
-  w <- psc_weibull(ctx)
-  if (!isTRUE(w$converged)) {
-    psc_check(rows, id, PSC_H0[[id]], "not_computed", "The Weibull did not converge on these rows: the comparison is not made.")
-    return(invisible())
-  }
-  stat <- max(2 * (w$loglik - ctx$fitted$loglik), 0)
-  df_ <- w$n_parameters - ctx$fitted$n_parameters
-  p_ <- stats::pchisq(stat, df_, lower.tail = FALSE)
-  psc_check(rows, id, PSC_H0[[id]], psc_verdict_p(p_, ctx$alpha), "The hazard changes over time: use weibull, or auto.",
-            statistic = stat, df = df_, p = p_, threshold = ctx$alpha)
+  psc_lr_check(ctx, rows, "constant_hazard", "weibull",
+               function(fit) "The hazard changes over time: use weibull, or auto.",
+               function(fit) "The hazard changes over time, though the choice kept the exponential: fit weibull to use it.")
 }
 
 # ── proportional hazards: Grambsch–Therneau on the Cox fit of the same predictors ──
@@ -631,9 +667,10 @@ psc_chart_deviance <- function(ctx, rows) {
   utils::modifyList(list(time = "t", event = "e", event_value = 1, predictors = predictors, distribution = distribution), list(...))
 }
 
-.psc_run <- function(df, params, limits = NULL) {
+.psc_run <- function(df, params, limits = NULL, extra = NULL) {
   task <- .ps_test_task(df, params)
   if (!is.null(limits)) task$limits <- utils::modifyList(task$limits, limits)
+  for (k in names(extra)) task[[k]] <- extra[[k]]
   fit <- fit_parametric_survival(task)
   f <- tab_results_frame(fit$rows)
   problems <- tab_check_declared(f, "parametric_survival", task$variant)
@@ -713,12 +750,23 @@ TAB_COMMON_TESTS[["parametric survival checks: a verdict is a p-value against th
   # the step's time used up: the comparison with a fit more is not made
   f_t <- .psc_run(steep, .psc_params("weibull"), limits = list(time_budget_seconds = 0.001))
   .tab_expect(.psc_stat(f_t, "distribution_vs_gengamma", "verdict") == "not_computed", "the time of the step")
-  # a table above the generalized gamma's row limit: the comparison is not made, and says why
-  old <- get("PS_CHECK_LIMITS", envir = globalenv())
-  assign("PS_CHECK_LIMITS", utils::modifyList(old, list(gengamma_max_rows = 10L)), envir = globalenv())
-  f_big <- tryCatch(.psc_run(steep, .psc_params("weibull")), finally = assign("PS_CHECK_LIMITS", old, envir = globalenv()))
+  # the fits added given no time (their allowance used up): the comparisons are not made and say
+  # why; the likelihood-ratio tests of the model section are not written, and a note says so
+  f_big <- .psc_run(steep, .psc_params("weibull"), extra = list(.selftest_allowance = 0))
   .tab_expect(.psc_stat(f_big, "distribution_vs_gengamma", "verdict") == "not_computed" &&
-              grepl("longer to fit", .psc_stat(f_big, "distribution_vs_gengamma", "advice")), "the generalized gamma's row limit")
+              grepl("longer to fit than the model itself", .psc_stat(f_big, "distribution_vs_gengamma", "advice")) &&
+              .psc_stat(f_big, "distribution_vs_gengamma", "advice_id") == "distribution_vs_gengamma_time", "the generalized gamma's time")
+  .tab_expect(!any(c("model|||lr_statistic", "model|||exponential_lr_statistic") %in% f_big$key) &&
+              identical(f_big$text[match(c("model|||note_lr_time", "model|||note_exponential_lr_time"), f_big$key)],
+                        c("@lr_time", "@exponential_lr_time")), "the LR tests out of time")
+  ex_t <- .psc_run(steep, .psc_params("exponential"), extra = list(.selftest_allowance = 0))
+  .tab_expect(.psc_stat(ex_t, "constant_hazard", "advice_id") == "constant_hazard_time", "the Weibull's time")
+  # the clock is read while a fit runs, not only before: a loop stopped at its allowance
+  t0 <- proc.time()[["elapsed"]]
+  stopped <- ps_within(0.3, repeat sum(stats::runif(100)))
+  .tab_expect(isTRUE(stopped$time_up) && is.null(stopped$value) && proc.time()[["elapsed"]] - t0 < 5, "ps_within stops a loop")
+  .tab_expect(identical(ps_within(5, 1 + 1), list(value = 2, time_up = FALSE)) && identical(ps_within(Inf, 3)$value, 3), "ps_within's value")
+  .tab_expect(inherits(tryCatch(ps_within(5, stop("not the time")), error = function(e) e), "error"), "ps_within raises another error")
   # convergence, a fact: a covariance that is not there fails it
   task <- .ps_test_task(steep, .psc_params("weibull"))
   prepared <- ps_prepare(task)

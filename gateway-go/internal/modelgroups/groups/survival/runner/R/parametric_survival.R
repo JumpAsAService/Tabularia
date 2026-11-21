@@ -87,6 +87,7 @@ ps_params <- function(params) {
 
 fit_parametric_survival <- function(task) {
   prepared <- ps_prepare(task)
+  started <- proc.time()[["elapsed"]]
   if (identical(prepared$distribution, "auto")) {
     auto <- get0("ps_auto", mode = "function") # lot P3, parametric_survival_auto.R
     if (is.null(auto)) tab_not_built("The automatic choice of the distribution")
@@ -101,6 +102,11 @@ fit_parametric_survival <- function(task) {
   }
   ps_refuse_not_converged(fitted)
   fitted <- ps_newton(fitted)
+  # what the node's own fit cost (with auto, the choice): the fits the checks add are given as
+  # much time, never more (PS_CHECK_LIMITS$extra_fit_min_seconds at least)
+  fitted$seconds <- proc.time()[["elapsed"]] - started
+  # with auto, the candidates already fitted: the checks reuse them instead of fitting them again
+  if (!is.null(chosen)) fitted$candidates <- chosen$fits
   card <- ps_card(task, prepared, fitted, selection = if (is.null(chosen)) "manual" else "auto")
   model <- ps_model(card)
   rows <- tab_rows_start(task)
@@ -366,24 +372,29 @@ ps_loglik_rows <- function(m, par, time, status, X, S, start = NULL) {
 # log-normal's; with `auto` P3 passes those it has). A second attempt when the first stops with an
 # error or a convergence code: the next start (generalized gamma), the exponential's rate and a
 # flat shape (Gompertz), survreg's estimates (the four survreg knows), with maxit 5000.
-ps_fit <- function(prepared, distribution, starts = NULL, hessian = FALSE, fail_first = FALSE) {
+# `init` (the optimiser's scale) replaces the starts, `reltol` the tolerance, and `second = FALSE`
+# makes one attempt only: the fits of the checks, which start from a point of the node's own fit
+# and take Newton steps after (ps_newton_steps).
+ps_fit <- function(prepared, distribution, starts = NULL, hessian = FALSE, fail_first = FALSE, init = NULL, reltol = NULL,
+                   second = TRUE) {
   m <- ps_spec(distribution, ncol(prepared$X), length(prepared$strata_levels))
   frame <- prepared$frame
   form <- ps_formula(prepared)
   anc <- ps_anc_formula(prepared, m)
   loglik_rows <- function(par) ps_loglik_rows(m, par, prepared$time, prepared$status, prepared$X, prepared$S, prepared$start)
   loglik <- function(par) sum(prepared$w * loglik_rows(par))
-  inits <- ps_starts(prepared, m, distribution, starts, loglik)
+  inits <- if (is.null(init)) ps_starts(prepared, m, distribution, starts, loglik) else list(first = init, second = NULL)
+  reltol <- reltol %||% (if (is.null(prepared$start)) PS_RELTOL else PS_RELTOL_START)
   fit_once <- function(init, maxit) {
     tryCatch(suppressWarnings(ps_flexsurvreg(form, anc, frame, m$flexsurv, init = if (is.null(init)) NULL else ps_to_natural(m, init),
-                                             control = list(reltol = if (is.null(prepared$start)) PS_RELTOL else PS_RELTOL_START, maxit = maxit), hessian = hessian)),
+                                             control = list(reltol = reltol, maxit = maxit), hessian = hessian)),
              error = function(e) e)
   }
   failed <- function(f) inherits(f, "error") || !identical(as.integer(f$opt$convergence %||% 1L), 0L) || !is.finite(f$loglik)
   attempts <- 1L
   first <- if (fail_first) simpleError("forced by the self-test") else fit_once(inits$first, PS_MAXIT)
   fit <- first
-  if (failed(fit)) {
+  if (failed(fit) && second) {
     attempts <- 2L
     second <- inits$second %||% ps_second_start(prepared, m, distribution, form, frame)
     fit <- fit_once(second, PS_MAXIT_SECOND)
@@ -635,6 +646,189 @@ ps_newton_stale <- function(fitted) {
   fitted
 }
 
+# ── Newton steps from each row's own parameters (lot P12) ───────────────────
+# The fits a check or a test adds (the generalized gamma of distribution_vs_gengamma, the
+# exponential's Weibull, the model without predictors and the exponential of the likelihood-ratio
+# tests) need their log-likelihood at its maximum, not their covariance: BFGS, then Newton steps
+# whose gradient and Hessian come from the likelihood's structure, not from a Richardson Hessian of
+# all k parameters (O(k²) evaluations of every row: about 100 s for the generalized gamma of 33
+# parameters on 5,000 rows). A row's log-likelihood depends on the parameters only through its nb
+# linear predictors η_j (the distribution's own parameters on the optimiser's scale),
+# η_j = B_j · par[idx_j], so
+#   g = Σ_j B_j' (w ∘ ∂ℓ/∂η_j),   H = Σ_j Σ_l B_j' diag(w ∘ ∂²ℓ/∂η_j ∂η_l) B_l,
+# with the rows' derivatives by central differences (1 + 2 nb + 2 nb (nb − 1) evaluations of the
+# rows: 19 for three parameters) and O(n k²) to add them up, by chunks of rows (2e-8 relative from
+# numDeriv's Richardson Hessian on the 236 rows of ps_weibull.csv). A step is taken on the centred
+# scale (ps_centring) when −H is positive definite and it raises the log-likelihood, halved up to
+# three times; the steps go on while one is at least PS_NEWTON_DONE standard errors, at most
+# PS_STEPS_MAX. One step is not enough: from the Weibull's point (Q = 1) BFGS hardly moves the
+# generalized gamma (13 evaluations, Q still 0.9999999 on those 236 rows) and the first step leaves
+# its LR statistic at 0.6687 against the maximum's 0.6726; the second and third take it there.
+PS_STEPS_MAX <- 10L
+PS_STEP_H <- 1e-4 # the rows' central differences, relative to max(1, |η|)
+
+# The columns of B_j (the design of η_j: a column of ones, then the location's columns and the
+# strata's dummies, or the shape's) and where each sits in `par`.
+.ps_eta_design <- function(m, X, S) {
+  lapply(seq_len(m$nb), function(j) {
+    cols <- list(ones = TRUE, X = FALSE, S = FALSE)
+    idx <- j
+    if (j == m$loc) {
+      cols$X <- length(m$i_terms) > 0L
+      cols$S <- length(m$i_strata) > 0L
+      idx <- c(idx, m$i_terms, m$i_strata)
+    } else if (!is.na(m$anc) && j == m$anc && length(m$i_anc)) {
+      cols$S <- TRUE
+      idx <- c(idx, m$i_anc)
+    }
+    list(cols = cols, idx = idx)
+  })
+}
+
+.ps_eta_block <- function(d, X, S, rows) {
+  cbind(rep(1, length(rows)), if (d$cols$X) X[rows, , drop = FALSE], if (d$cols$S) S[rows, , drop = FALSE])
+}
+
+# Each row's log-likelihood from its linear predictors E (rows × nb), as ps_loglik_rows from par.
+ps_loglik_eta <- function(m, E, time, status, start = NULL) {
+  pars <- vector("list", m$nb)
+  names(pars) <- m$pars
+  for (j in seq_len(m$nb)) pars[[j]] <- if (m$log[[j]]) exp(E[, j]) else E[, j]
+  out <- ifelse(status == 1L, ps_log_density(m, time, pars), ps_log_survival(m, time, pars))
+  if (!is.null(start)) {
+    late <- which(start > 0)
+    if (length(late)) out[late] <- out[late] - ps_log_survival(m, start[late], lapply(pars, function(p) p[late]))
+  }
+  out
+}
+
+# The gradient and the Hessian of the log-likelihood at `par` (the optimiser's scale), or NULL when
+# a row's derivative is not finite.
+ps_structured_derivatives <- function(fitted, prepared, par = fitted$par) {
+  m <- fitted$spec
+  design <- .ps_eta_design(m, prepared$X, prepared$S)
+  k <- length(par)
+  g <- numeric(k)
+  H <- matrix(0, k, k)
+  n <- length(prepared$time)
+  for (first in seq.int(1L, n, by = PS_CHUNK)) {
+    rows <- seq.int(first, min(first + PS_CHUNK - 1L, n))
+    B <- lapply(design, function(d) .ps_eta_block(d, prepared$X, prepared$S, rows))
+    E <- vapply(seq_len(m$nb), function(j) drop(B[[j]] %*% par[design[[j]]$idx]), numeric(length(rows)))
+    if (!is.matrix(E)) E <- matrix(E, nrow = length(rows))
+    h <- PS_STEP_H * pmax(abs(E), 1) # (pmax keeps the first argument's dimensions)
+    start <- if (is.null(prepared$start)) NULL else prepared$start[rows]
+    ell <- function(Ex) ps_loglik_eta(m, Ex, prepared$time[rows], prepared$status[rows], start)
+    moved <- function(signs) {
+      Ex <- E
+      for (j in seq_along(signs)) if (signs[[j]] != 0) Ex[, j] <- Ex[, j] + signs[[j]] * h[, j]
+      ell(Ex)
+    }
+    unit <- function(j, s) replace(numeric(m$nb), j, s)
+    l0 <- ell(E)
+    w <- prepared$w[rows]
+    d1 <- matrix(0, length(rows), m$nb)
+    d2 <- array(0, c(length(rows), m$nb, m$nb))
+    for (j in seq_len(m$nb)) {
+      up <- moved(unit(j, 1))
+      down <- moved(unit(j, -1))
+      d1[, j] <- (up - down) / (2 * h[, j])
+      d2[, j, j] <- (up - 2 * l0 + down) / h[, j]^2
+    }
+    for (j in seq_len(m$nb)) for (l in seq_len(m$nb)) if (j < l) {
+      both <- function(a, b) moved(replace(numeric(m$nb), c(j, l), c(a, b)))
+      d2[, j, l] <- d2[, l, j] <- (both(1, 1) - both(1, -1) - both(-1, 1) + both(-1, -1)) / (4 * h[, j] * h[, l])
+    }
+    if (!all(is.finite(d1[w > 0, ])) || !all(is.finite(d2[w > 0, , ]))) return(NULL)
+    for (j in seq_len(m$nb)) {
+      ij <- design[[j]]$idx
+      g[ij] <- g[ij] + drop(crossprod(B[[j]], w * d1[, j]))
+      for (l in seq_len(m$nb)) {
+        il <- design[[l]]$idx
+        H[ij, il] <- H[ij, il] + crossprod(B[[j]], (w * d2[, j, l]) * B[[l]])
+      }
+    }
+  }
+  list(gradient = g, hessian = (H + t(H)) / 2)
+}
+
+# Newton steps of a fit (from ps_fit) to the maximum of its log-likelihood: `loglik` there,
+# `newton_steps` the steps taken. No covariance is kept (`vcov` NULL).
+ps_newton_steps <- function(fitted, prepared) {
+  fitted$newton_steps <- 0L
+  if (!isTRUE(fitted$converged)) return(fitted)
+  par <- fitted$par
+  ll <- fitted$loglik_fn(par)
+  A <- fitted$centring
+  steps <- 0L
+  while (steps < PS_STEPS_MAX) {
+    dv <- ps_structured_derivatives(fitted, prepared, par)
+    if (is.null(dv)) break
+    info <- -crossprod(A, dv$hessian %*% A)
+    ch <- tryCatch(chol((info + t(info)) / 2), error = function(e) NULL)
+    if (is.null(ch)) break
+    V_c <- chol2inv(ch)
+    step_c <- drop(V_c %*% crossprod(A, dv$gradient))
+    if (!all(is.finite(step_c))) break
+    small <- max(abs(step_c) / sqrt(diag(V_c))) < PS_NEWTON_DONE
+    step <- drop(A %*% step_c)
+    taken <- FALSE
+    for (t_ in c(1, 0.5, 0.25, 0.125)) {
+      ll_new <- fitted$loglik_fn(par + t_ * step)
+      if (is.finite(ll_new) && ll_new >= ll) {
+        par <- par + t_ * step
+        ll <- ll_new
+        taken <- TRUE
+        break
+      }
+    }
+    if (!taken) break
+    steps <- steps + 1L
+    if (small) break
+  }
+  fitted$par <- par
+  fitted$loglik <- ll
+  fitted$newton_steps <- steps
+  fitted
+}
+
+# ── the time of the fits a check or a test adds ──────────────────────────────
+# The seconds left before half of the step's time budget has gone (the process's clock; with
+# auto, task$.selftest_clock in the self-test), Inf without a budget.
+ps_time_left <- function(task) {
+  budget <- suppressWarnings(as.numeric(task$limits$time_budget_seconds %||% NA_real_))
+  if (length(budget) != 1L || !is.finite(budget) || budget <= 0) return(Inf)
+  0.5 * budget - proc.time()[["elapsed"]]
+}
+
+# The time a fit besides the node's own may take: what the node's own fit took (with auto, the
+# whole choice), at least PS_EXTRA_FIT_MIN_SECONDS so that a small table is never cut short by
+# the machine's speed, never past half of the step's budget. Not a threshold of any verdict: it
+# decides only whether a number is computed. `task$.selftest_allowance` replaces it in the self-test.
+PS_EXTRA_FIT_MIN_SECONDS <- 10
+ps_extra_allowance <- function(task, fitted) {
+  if (!is.null(task$.selftest_allowance)) return(as.numeric(task$.selftest_allowance))
+  min(ps_time_left(task), max(fitted$seconds %||% 0, PS_EXTRA_FIT_MIN_SECONDS))
+}
+
+# `expr` with at most `seconds` of elapsed time (R's own limit, checked while R code runs, the
+# likelihood included): list(value, time_up). On time_up `value` is NULL. An error that is not the
+# time's is raised as it is.
+ps_within <- function(seconds, expr) {
+  if (!is.finite(seconds)) return(list(value = expr, time_up = FALSE))
+  if (seconds <= 0) return(list(value = NULL, time_up = TRUE))
+  t0 <- proc.time()[["elapsed"]]
+  setTimeLimit(elapsed = seconds, transient = TRUE)
+  on.exit(setTimeLimit(elapsed = Inf), add = TRUE)
+  value <- tryCatch(expr, error = function(e) e)
+  setTimeLimit(elapsed = Inf)
+  # the limit raises an error wherever R is: inside the fit (which ps_fit reads as a failed attempt)
+  # or here; either way the clock says it
+  if (proc.time()[["elapsed"]] - t0 >= seconds) return(list(value = NULL, time_up = TRUE))
+  if (inherits(value, "error")) stop(value)
+  list(value = value, time_up = FALSE)
+}
+
 # The flexsurvreg object for native.rds, with the runner's estimates and covariance in place of
 # flexsurv's (summary(fit, newdata = …) reads res.t and res: it then gives the runner's numbers).
 ps_native <- function(fitted, alpha) {
@@ -705,8 +899,21 @@ ps_write <- function(task, prepared, fitted, rows, model) {
   tab_number(rows, "model", "log_lik", ll)
   tab_number(rows, "model", "aic", -2 * ll + 2 * k)
   tab_number(rows, "model", "bic", -2 * ll + k * log(n))
+  # the two likelihood-ratio tests fit a model more each, at its maximum (BFGS and one Newton
+  # step), within the time ps_extra_allowance gives it; out of time, its rows are not written and a
+  # note says so
+  out_of_time <- character()
+  nested_fit <- function(p, d, what) {
+    run <- ps_within(ps_extra_allowance(task, fitted), {
+      f <- ps_fit(p, d)
+      if (isTRUE(f$converged)) ps_newton_steps(f, p) else f
+    })
+    if (run$time_up) out_of_time <<- c(out_of_time, what)
+    run$value
+  }
   if (has_predictors) {
-    null <- ps_fit(ps_without_predictors(prepared), distribution)
+    without <- ps_without_predictors(prepared)
+    null <- nested_fit(without, distribution, "predictors")
     if (isTRUE(null$converged)) {
       lr <- 2 * (ll - null$loglik)
       tab_number(rows, "model", "lr_statistic", lr)
@@ -716,7 +923,9 @@ ps_write <- function(task, prepared, fitted, rows, model) {
   }
   if (distribution %in% c("weibull", "gompertz")) {
     # the shape against the exponential's constant hazard: a number of the fit, not a check
-    ex <- ps_fit(prepared, "exponential")
+    # with auto the exponential is a candidate already fitted: only its Newton step is taken
+    ex <- if (isTRUE(fitted$candidates$exponential$converged)) ps_newton_steps(fitted$candidates$exponential, prepared) else
+      nested_fit(prepared, "exponential", "exponential")
     if (isTRUE(ex$converged)) {
       lr <- 2 * (ll - ex$loglik)
       df_ <- k - ex$n_parameters
@@ -872,6 +1081,9 @@ ps_write <- function(task, prepared, fitted, rows, model) {
   if (fitted$attempts > 1L) {
     tab_text(rows, "model", "note_second_start", "@second_start")
   }
+  # the likelihood-ratio tests not made for want of time
+  if ("predictors" %in% out_of_time) tab_text(rows, "model", "note_lr_time", "@lr_time")
+  if ("exponential" %in% out_of_time) tab_text(rows, "model", "note_exponential_lr_time", "@exponential_lr_time")
   # delayed entry: said whenever there is a start column, with the rows that enter after 0
   if (!is.null(prepared$start)) tab_text(rows, "model", "note_start_rows", paste0("@start_rows delayed=", sum(prepared$start > 0), " rows=", n))
   if (distribution == "weibull" && has_strata && has_predictors) tab_text(rows, "model", "note_strata_no_hr", PS_NOTE_STRATA_NO_HR)
@@ -1639,4 +1851,41 @@ TAB_COMMON_TESTS[["parametric survival: the rows output with alive_at and Predic
   .tab_expect(identical(tab_results_frame(fit$rows)$value, tab_results_frame(without$rows)$value), "alive_at changed the fit")
   .tab_expect(identical(out$pred_cox_snell, without$output$pred_cox_snell) && identical(out$pred_linear, without$output$pred_linear),
               "alive_at changed the residuals or the linear predictor")
+}
+
+# ── the final review's corrections (lot P12) ─────────────────────────────────
+TAB_COMMON_TESTS[["parametric survival: Newton steps from the rows' own derivatives, and auto's candidates reused by the checks"]] <- function(code) {
+  df <- .ps_test_table(code)
+  for (d in c("weibull", "gengamma", "gompertz")) {
+    task <- .ps_test_task(df, list(time = "days", event = "status", event_value = "failed", predictors = list("load", "line"), strata = "plant",
+                                   distribution = d))
+    prepared <- ps_prepare(task)
+    fitted <- ps_fit(prepared, d)
+    full <- ps_newton(fitted)
+    # the structured gradient and Hessian against numDeriv's on all the parameters, at the maximum
+    dv <- ps_structured_derivatives(full, prepared)
+    H <- numDeriv::hessian(full$loglik_fn, full$par)
+    .tab_expect(max(abs(dv$hessian - H)) / max(abs(H)) < 1e-5, d, ": the Hessian off by ", format(max(abs(dv$hessian - H)) / max(abs(H)), digits = 3))
+    # from a point half a standard error away (20 to 110 below in log-likelihood) the steps reach the
+    # maximum (the Richardson Newton's)
+    away <- fitted
+    away$par <- full$par + 0.5 * sqrt(diag(full$vcov))
+    away$loglik <- away$loglik_fn(away$par)
+    step <- ps_newton_steps(away, prepared)
+    .tab_expect(step$newton_steps >= 1L && abs(step$loglik - full$loglik) < 1e-9 * abs(full$loglik), d, ": the steps end ",
+                format(full$loglik - step$loglik, digits = 3), " below the maximum")
+  }
+  # auto: the generalized gamma of the comparison is the candidate's, at its maximum; no fit is made again
+  params <- list(time = "days", event = "status", event_value = "failed", predictors = list("load", "line"), weights = "w", distribution = "auto")
+  calls <- 0L
+  real <- ps_fit
+  assign("ps_fit", function(...) { calls <<- calls + 1L; real(...) }, envir = globalenv())
+  f <- tryCatch(tab_results_frame(fit_parametric_survival(.ps_test_task(df, params))$rows), finally = assign("ps_fit", real, envir = globalenv()))
+  # the six candidates and the model without predictors: nothing for the checks
+  .tab_expect(calls == 7L, "auto fitted ", calls, " models")
+  manual <- tab_results_frame(fit_parametric_survival(.ps_test_task(df, utils::modifyList(params, list(distribution = "weibull"))))$rows)
+  at <- function(x) x$value[x$section == "assumption" & x$level == "distribution_vs_gengamma" & x$stat == "statistic"]
+  .tab_expect(abs(at(f) - at(manual)) < 1e-6, "the comparison with auto ", at(f), " and without ", at(manual))
+  .tab_expect(identical(f$text[f$section == "assumption" & f$level == "distribution_vs_gengamma" & f$stat == "advice_id"], "distribution_vs_gengamma_auto"),
+              "the advice of auto")
 }

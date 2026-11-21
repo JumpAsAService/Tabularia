@@ -3,7 +3,7 @@
 # `fit_parametric_survival` finds `ps_auto` by name (parametric_survival.R) and takes from it the
 # fit of the distribution chosen and a function that writes what belongs to the choice.
 #
-#   ps_auto(task, prepared) → list(fitted, write(rows))
+#   ps_auto(task, prepared) → list(fitted, write(rows), fits)
 #
 # The candidates are the six distributions, fitted in order of cost (exponential, Weibull,
 # log-normal, log-logistic, Gompertz, then the generalized gamma, by far the dearest), each with the same predictors, strata
@@ -147,7 +147,9 @@ ps_auto <- function(task, prepared) {
   chosen <- adm[[pick$chosen]]
   max_points <- tab_limit(task, "max_chart_points")
   write <- function(rows) .psa_write(rows, prepared, cands, fits, adm, lowest, chosen, pick$parsimony, max_points, margin)
-  list(fitted = fits[[chosen]], write = write)
+  # `fits`: the candidates that converged, which the checks and the LR test against the exponential
+  # reuse instead of fitting them again (lot P12)
+  list(fitted = fits[[chosen]], write = write, fits = fits)
 }
 
 # The log-likelihood the node wrote for the fit chosen (after the Newton steps): the candidate
