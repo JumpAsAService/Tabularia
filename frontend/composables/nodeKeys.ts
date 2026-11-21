@@ -8,6 +8,19 @@ export function focusOnCanvas(active: Element | null | undefined, canvas: Elemen
   return !!canvas && (active === canvas || canvas.contains(active))
 }
 
+/** What Delete and Backspace remove. `boxed`: the nodes of the canvas's own selection (a box drawn with Shift, Ctrl/Cmd+click);
+ *  `edges`: its selected edges; `panel`: the node open in the panel. A click on a stroke selects that edge alone: the edge goes,
+ *  not the node still open in the panel. A box selects the nodes in it and the edges that touch them: the nodes go, with
+ *  their edges, and so does any other edge selected with them (before, only the edges went and the nodes stayed). */
+export function removedByDeleteKey(boxed: string[], edges: { id: string; source: string; target: string }[], panel: string | null):
+  { nodes: string[]; edges: string[] } {
+  if (edges.length) {
+    const going = new Set(boxed)
+    return { nodes: boxed, edges: edges.filter((e) => !going.has(e.source) && !going.has(e.target)).map((e) => e.id) }
+  }
+  return { nodes: boxed.length > 1 ? boxed : panel ? [panel] : boxed, edges: [] }
+}
+
 /** Gives the focus to a node of the canvas: a node reached from the keyboard, or just added (from the palette, dropped), so
  *  that Delete and Backspace act on it (focusOnCanvas) without a click on it first. Whether it has it: a node Vue Flow has
  *  just added is drawn hidden until it is measured, and a hidden element takes no focus. */

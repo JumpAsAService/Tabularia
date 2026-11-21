@@ -11,7 +11,7 @@ import { Table2, BarChart3, FileChartColumn, Wand2, Users, Undo2, Redo2, Sparkle
 import FlowAssistant from '~/components/FlowAssistant.vue'
 import { useAi, type AiStatus } from '~/composables/useAi'
 import { useApi, errMessage } from '~/composables/useApi'
-import { focusNodeOf, focusOnCanvas } from '~/composables/nodeKeys'
+import { removedByDeleteKey, focusNodeOf, focusOnCanvas } from '~/composables/nodeKeys'
 import { FIRST_PAUSE_MS, nextPause } from '~/composables/waits'
 import { knownError } from '~/composables/knownErrors'
 import { useAuth } from '~/composables/useAuth'
@@ -2133,17 +2133,13 @@ function onKeydown(e: KeyboardEvent) {
   }
   if (e.key !== 'Delete' && e.key !== 'Backspace') return
   if (inGrid || !onCanvas()) return
-  // a selected edge (click on the stroke) is removed with the same key as the node
-  const edges = getSelectedEdges.value
-  if (edges.length) {
-    e.preventDefault()
-    edges.forEach((edge) => removeEdgeById(edge.id))
-    return
-  }
-  const ids = selectedIds()
-  if (!ids.length) return
+  // a selected edge (click on the stroke) is removed with the same key as the node; a box selects
+  // nodes and their edges, and the nodes go too (removedByDeleteKey)
+  const gone = removedByDeleteKey(getSelectedNodes.value.map((n) => n.id), getSelectedEdges.value, selectedId.value)
+  if (!gone.nodes.length && !gone.edges.length) return
   e.preventDefault()
-  deleteNodes(ids)
+  gone.edges.forEach((id) => removeEdgeById(id))
+  deleteNodes(gone.nodes)
 }
 onMounted(() => window.addEventListener('keydown', onKeydown))
 onUnmounted(() => window.removeEventListener('keydown', onKeydown))

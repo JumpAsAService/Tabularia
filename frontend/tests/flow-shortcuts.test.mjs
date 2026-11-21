@@ -131,3 +131,23 @@ test('a node added from the palette takes the focus, as one reached from the key
   assert.match(editor, /if \(id\) return focusNewNode\(id\)/)
   assert.match(editor, /if \(made && !before\.has\(made\) && findNode\(made\)\) focusNewNode\(made\)/)
 })
+
+test('Delete removes the nodes of a box with their edges, an edge clicked alone, or the node in the panel', async () => {
+  const k = await import('../composables/nodeKeys.ts')
+  const e1 = { id: 'e1', source: 'a', target: 'b' }
+  const e2 = { id: 'e2', source: 'b', target: 'c' }
+  const e3 = { id: 'e3', source: 'x', target: 'y' }
+  // a box over B and C selects them and the edges that touch them: the nodes go (their edges with them)
+  assert.deepEqual(k.removedByDeleteKey(['b', 'c'], [e1, e2], 'b'), { nodes: ['b', 'c'], edges: [] })
+  // a box over B alone, with its edge
+  assert.deepEqual(k.removedByDeleteKey(['b'], [e1], null), { nodes: ['b'], edges: [] })
+  // an edge selected with the nodes but touching none of them goes as well
+  assert.deepEqual(k.removedByDeleteKey(['b', 'c'], [e1, e3], null), { nodes: ['b', 'c'], edges: ['e3'] })
+  // a click on a stroke: the edge alone, never the node still open in the panel
+  assert.deepEqual(k.removedByDeleteKey([], [e1], 'b'), { nodes: [], edges: ['e1'] })
+  // no edge: the canvas's multiple selection, otherwise the node in the panel (as copy and cut)
+  assert.deepEqual(k.removedByDeleteKey(['b', 'c'], [], 'a'), { nodes: ['b', 'c'], edges: [] })
+  assert.deepEqual(k.removedByDeleteKey(['b'], [], 'a'), { nodes: ['a'], edges: [] })
+  assert.deepEqual(k.removedByDeleteKey([], [], 'a'), { nodes: ['a'], edges: [] })
+  assert.deepEqual(k.removedByDeleteKey([], [], null), { nodes: [], edges: [] })
+})
