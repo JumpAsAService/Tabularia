@@ -245,10 +245,10 @@ func (q *queue) mlflowLog(ctx context.Context, r *scriptNodeRun, s *modelStep, c
 	if err != nil {
 		return err
 	}
-	params := append(append(append(flattenParams(s.checked), modelFormula(rows)...), modelDistribution(rows)...),
-		customerLifetimeParams(rows, s.checked)...)
+	params, paramWarnings := flattenParams(s.checked)
+	params = append(append(append(params, modelFormula(rows)...), modelDistribution(rows)...), customerLifetimeParams(rows, s.checked)...)
 	metrics, metricWarnings := modelMetricsChecked(rows, started)
-	rec.warnings = append(rec.warnings, metricWarnings...)
+	rec.warnings = append(append(rec.warnings, paramWarnings...), metricWarnings...)
 	if err := tr.LogBatch(ctx, run.ID, params, metrics, tags); err != nil {
 		return err
 	}
@@ -558,9 +558,12 @@ type resultRow struct {
 }
 
 // flattenParams are the node's checked parameters as MLflow's: one per key, a nested object's
-// keys joined with a dot (`reference.channel`), a list as comma-separated text, sorted.
-func flattenParams(params map[string]any) []mlflowconn.Tag {
-	var out []mlflowconn.Tag
+// keys joined with a dot (`reference.channel`), a list as comma-separated text, sorted. The keys
+// are made as the metrics' are (metricNames): a column's name in `reference.<column>` may hold
+// characters MLflow refuses in a key, or be longer than its limit, and one refused key fails the
+// whole batch. Two names that become one key are both kept, and the warnings say so.
+func flattenParams(params map[string]any) ([]mlflowconn.Tag, []string) {
+	var raw []mlflowconn.Tag
 	var walk func(prefix string, v any)
 	walk = func(prefix string, v any) {
 		switch x := v.(type) {
@@ -570,14 +573,21 @@ func flattenParams(params map[string]any) []mlflowconn.Tag {
 				walk(prefix+"."+k, sub)
 			}
 		default:
-			out = append(out, mlflowconn.Tag{Key: strings.TrimPrefix(prefix, "."), Value: paramText(x)})
+			raw = append(raw, mlflowconn.Tag{Key: strings.TrimPrefix(prefix, "."), Value: paramText(x)})
 		}
 	}
 	for k, v := range params {
 		walk("."+k, v)
 	}
+	sort.Slice(raw, func(i, j int) bool { return raw[i].Key < raw[j].Key }) // the same suffixes from run to run
+	names := newKeyNames("parameters of the node")
+	out := make([]mlflowconn.Tag, 0, len(raw))
+	for _, p := range raw {
+		key, _ := names.of(p.Key)
+		out = append(out, mlflowconn.Tag{Key: key, Value: p.Value})
+	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Key < out[j].Key })
-	return out
+	return out, names.warnings()
 }
 
 func paramText(v any) string {
@@ -661,7 +671,10 @@ func customerLifetimeParams(rows []resultRow, checked map[string]any) []mlflowco
 	return out
 }
 
-// metricKey keeps the characters MLflow allows in a key (letters, digits, _ - . space /).
+// metricKey keeps the characters MLflow allows in a key (letters, digits, _ - . space /), and makes
+// it a path MLflow takes as it is: it refuses a key that is not its own normal form
+// (posixpath.normpath, «Names may be treated as files»), so no empty segment (`a//b`, a leading or
+// a trailing `/`), no `.` segment, and `..` becomes `__`.
 func metricKey(s string) string {
 	var b strings.Builder
 	for _, c := range s {
@@ -672,7 +685,20 @@ func metricKey(s string) string {
 			b.WriteByte('_')
 		}
 	}
-	return b.String()
+	var kept []string
+	for _, segment := range strings.Split(b.String(), "/") {
+		switch segment {
+		case "", ".":
+			continue
+		case "..":
+			segment = "__"
+		}
+		kept = append(kept, segment)
+	}
+	if len(kept) == 0 {
+		return "_"
+	}
+	return strings.Join(kept, "/")
 }
 
 // maxMetricKey is MLflow's longest key (MAX_ENTITY_KEY_LENGTH = 250 characters in its
@@ -698,10 +724,11 @@ func suffixed(key string, n int) string {
 	return key + suffix
 }
 
-// metricNames gives each raw name of the run's scalar metrics its key in MLflow: cleaned, within
-// the limit, and unique. A second raw name that is the same key once cleaned (`a b` and `a_b`)
-// does not replace the first: it takes `_2`, `_3`… and is said.
+// metricNames gives each raw name of the run's scalar metrics (or of the node's parameters) its key
+// in MLflow: cleaned, within the limit, and unique. A second raw name that is the same key once
+// cleaned (`a b` and `a_b`) does not replace the first: it takes `_2`, `_3`… and is said.
 type metricNames struct {
+	what    string            // whose names the warning speaks of: «metrics of the model»
 	rawOf   map[string]string // key -> the raw name that has it
 	keyOf   map[string]string // raw name -> its key
 	said    []string
@@ -731,11 +758,15 @@ func (m *metricNames) of(raw string) (string, bool) {
 	}
 }
 
+func newKeyNames(what string) *metricNames {
+	return &metricNames{what: what, rawOf: map[string]string{}, keyOf: map[string]string{}}
+}
+
 func (m *metricNames) warnings() []string {
 	if m.clashes == 0 {
 		return nil
 	}
-	text := "Two metrics of the model had the same name in MLflow: " + strings.Join(m.said, " ")
+	text := "Two " + m.what + " had the same name in MLflow: " + strings.Join(m.said, " ")
 	if m.clashes > len(m.said) {
 		text += fmt.Sprintf(" And %d more like them.", m.clashes-len(m.said))
 	}
@@ -793,7 +824,7 @@ func modelMetrics(rows []resultRow, at time.Time) []mlflowconn.Metric {
 // MLflow's length (a long one is cut and ends with a hash), and two names that are the same key
 // once cleaned are both kept (the second with `_2`) and said.
 func modelMetricsChecked(rows []resultRow, at time.Time) ([]mlflowconn.Metric, []string) {
-	names := &metricNames{rawOf: map[string]string{}, keyOf: map[string]string{}}
+	names := newKeyNames("metrics of the model")
 	var out []mlflowconn.Metric
 	add := func(raw string, v float64) {
 		if key, isNew := names.of(raw); isNew {
@@ -1072,7 +1103,8 @@ func (q *queue) logFailedModel(ctx context.Context, r *scriptNodeRun, s *modelSt
 			why = sf.msg
 		}
 		tags = append(tags, mlflowconn.Tag{Key: "tabularia.error", Value: why})
-		logErr := tr.LogBatch(ctx, run.ID, flattenParams(s.checked), nil, tags)
+		params, _ := flattenParams(s.checked)
+		logErr := tr.LogBatch(ctx, run.ID, params, nil, tags)
 		if err := tr.EndRun(ctx, run.ID, true, time.Now()); err != nil {
 			return err
 		}

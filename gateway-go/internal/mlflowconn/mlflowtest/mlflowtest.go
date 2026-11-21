@@ -248,6 +248,16 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 			refuse(w, http.StatusBadRequest, "INVALID_PARAMETER_VALUE")
 			return
 		}
+		// one key MLflow refuses fails the whole batch
+		for _, list := range [][]any{params, metrics, tagList} {
+			for _, e := range list {
+				o, _ := e.(map[string]any)
+				if k, _ := o["key"].(string); BadKey(k) {
+					refuse(w, http.StatusBadRequest, "INVALID_PARAMETER_VALUE")
+					return
+				}
+			}
+		}
 		for k, v := range tags(in["params"]) {
 			if len([]rune(v)) > 250 || len([]rune(k)) > 250 {
 				refuse(w, http.StatusBadRequest, "INVALID_PARAMETER_VALUE")
@@ -348,6 +358,28 @@ func versionJSON(name string, v Version) map[string]any {
 	}
 	return map[string]any{"name": name, "version": v.Version, "run_id": v.RunID, "source": v.Source, "status": "READY",
 		"creation_timestamp": v.Created, "tags": tagList}
+}
+
+// keyText is the characters MLflow 2.22 takes in a key (validation.py, `^[/\w.\- :]*$`, \w as
+// Python's: any letter or digit).
+var keyText = regexp.MustCompile(`^[\p{L}\p{N}\p{M}_/.\- :]*$`)
+
+// BadKey says whether MLflow 2.22 refuses the key of a parameter, a metric or a tag: a character it
+// does not take, more than 250 characters, or a path that is not its own normal form
+// (posixpath.normpath: no empty, `.` or `..` segment, no `/` at either end).
+func BadKey(k string) bool {
+	if !keyText.MatchString(k) || len([]rune(k)) > 250 || k == "" {
+		return true
+	}
+	if strings.HasPrefix(k, "/") || strings.HasSuffix(k, "/") {
+		return true
+	}
+	for _, segment := range strings.Split(k, "/") {
+		if segment == "" || segment == "." || segment == ".." {
+			return true
+		}
+	}
+	return false
 }
 
 // matches is the filters the client sends: `run_id IN ('a', 'b')`, `name = 'x'` (or between double

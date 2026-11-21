@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/engine"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/flowresolver"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/mlflowconn"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/mlflowconn/mlflowtest"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/modelgroups"
 )
@@ -114,8 +116,80 @@ func TestMetricKeysAreWithinMLflowsLimitAndStayApart(t *testing.T) {
 	}
 }
 
+// A parameter's key is made as a metric's: `reference.<column>` with a column's name MLflow does not
+// take in a key, or too long, or two that become one, and a predictor with «//» in a metric's key.
+// One key MLflow refuses would fail the whole batch, after the fit.
+func TestParameterKeysAreOnesMLflowTakes(t *testing.T) {
+	long := strings.Repeat("c", 245)
+	params, warnings := flattenParams(map[string]any{"outcome": "y", "reference": map[string]any{
+		"Canale (web)": "negozio", "Fatturato €": "alto", long + "1": "a", long + "2": "b", "Canale _web_": "x", "a//b": "y"}})
+	got := map[string]string{}
+	for _, p := range params {
+		if mlflowtest.BadKey(p.Key) || strings.Contains(p.Key, "…") {
+			t.Errorf("a key MLflow refuses: %q", p.Key)
+		}
+		if _, twice := got[p.Key]; twice {
+			t.Errorf("a key twice: %q", p.Key)
+		}
+		got[p.Key] = p.Value
+	}
+	if len(params) != 7 || got["reference.Canale _web_"] != "negozio" || got["reference.Canale _web__2"] != "x" ||
+		got["reference.Fatturato _"] != "alto" || got["reference.a/b"] != "y" || got["outcome"] != "y" {
+		t.Errorf("the parameters: %v", got)
+	}
+	if len(warnings) != 1 || !strings.HasPrefix(warnings[0], "Two parameters of the node had the same name in MLflow: ") ||
+		!strings.Contains(warnings[0], "reference.Canale _web__2") {
+		t.Errorf("warnings: %q", warnings)
+	}
+	for raw, want := range map[string]string{"importance.a//b.gain_share": "importance.a/b.gain_share", "/a/": "a", "./a": "a",
+		"a/./b": "a/b", "a/../b": "a/__/b", "..": "__", "": "_", "a:b": "a_b"} {
+		if key := metricKey(raw); key != want || mlflowtest.BadKey(key) {
+			t.Errorf("metricKey(%q) = %q, want %q", raw, key, want)
+		}
+	}
+}
+
+// The same keys on a real MLflow server (TEST_MLFLOW_URL, e.g. ghcr.io/mlflow/mlflow:v2.22.0 run with
+// `mlflow server --serve-artifacts`): the batch is logged.
+func TestParameterKeysAreLoggedByARealMLflow(t *testing.T) {
+	uri := os.Getenv("TEST_MLFLOW_URL")
+	if uri == "" {
+		t.Skip("TEST_MLFLOW_URL not set")
+	}
+	ctx := context.Background()
+	tr := mlflowconn.NewTracker(mlflowconn.Config{URI: uri, Auth: "none", VerifyTLS: true})
+	exp, _, err := tr.Experiment(ctx, "keys-"+time.Now().Format("150405.000000"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	long := strings.Repeat("c", 245)
+	for _, reference := range []map[string]any{{"canale": "negozio"}, {"Canale (web)": "negozio"}, {"Fatturato €": "alto"},
+		{long: "a"}, {"Canale (web)": "a", "Canale _web_": "b", "a//b": "c", "../x": "d"}} {
+		run, err := tr.CreateRun(ctx, exp, "keys", time.Now())
+		if err != nil {
+			t.Fatal(err)
+		}
+		params, _ := flattenParams(map[string]any{"outcome": "y", "reference": reference})
+		rows := []resultRow{{Section: "importance", Level: ptr("a//b"), Stat: "gain_share", Value: ptr(0.5)},
+			{Section: "model", Stat: "r_squared", Value: ptr(0.5)}}
+		metrics, _ := modelMetricsChecked(rows, time.Now())
+		if err := tr.LogBatch(ctx, run.ID, params, metrics, nil); err != nil {
+			t.Errorf("%v: %v", reference, err)
+		}
+	}
+	// a key the server refuses all the same: the sentence says why, not only its code
+	run, err := tr.CreateRun(ctx, exp, "refused", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = tr.LogBatch(ctx, run.ID, []mlflowconn.Tag{{Key: "a//b", Value: "1"}}, nil, nil)
+	if err == nil || !strings.Contains(mlflowWhy(err), "refused a key or a value, and so the whole batch (INVALID_PARAMETER_VALUE, HTTP 400): MLflow takes in a key only") {
+		t.Errorf("a refused batch: %v", err)
+	}
+}
+
 func TestTheContentOfAnMLflowRun(t *testing.T) {
-	params := flattenParams(map[string]any{"outcome": "quantity", "predictors": []any{"price", "channel"}, "alpha": 0.05,
+	params, _ := flattenParams(map[string]any{"outcome": "quantity", "predictors": []any{"price", "channel"}, "alpha": 0.05,
 		"robust": true, "reference": map[string]any{"channel": "shop"}, "weights": nil})
 	got := []string{}
 	for _, p := range params {

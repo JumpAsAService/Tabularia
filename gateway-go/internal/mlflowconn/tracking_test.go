@@ -108,6 +108,34 @@ func TestBatchesKeepMLflowsLimits(t *testing.T) {
 	}
 }
 
+// A key is cut without the «…» a value gets (MLflow refuses it in a key); a batch the server refuses
+// for a key or a value says what MLflow takes, never the server's own words.
+func TestAKeyIsCutPlainAndARefusedBatchSaysWhy(t *testing.T) {
+	long := strings.Repeat("k", 300)
+	b := mlflowconn.Batches([]mlflowconn.Tag{{Key: long, Value: "v"}}, []mlflowconn.Metric{{Key: long}}, []mlflowconn.Tag{{Key: long, Value: "v"}})
+	for _, key := range []string{b[0].Params[0].Key, b[0].Metrics[0].Key, b[0].Tags[0].Key} {
+		if key != long[:250] {
+			t.Errorf("a key cut: %d characters, %q at its end", len([]rune(key)), key[len(key)-3:])
+		}
+	}
+	s := mlflowtest.New(t)
+	tr := tracker(s, "none", "")
+	run, err := tr.CreateRun(context.Background(), "1", "r", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = tr.LogBatch(context.Background(), run.ID, []mlflowconn.Tag{{Key: "a//b", Value: "1"}}, nil, nil)
+	var e *mlflowconn.Error
+	if !errors.As(err, &e) || e.ErrorCode != "INVALID_PARAMETER_VALUE" || strings.Contains(err.Error(), mlflowtest.Leak) ||
+		!strings.HasPrefix(err.Error(), "the tracking server refused a key or a value, and so the whole batch (INVALID_PARAMETER_VALUE, HTTP 400): "+
+			"MLflow takes in a key only letters, digits") || !strings.HasSuffix(err.Error(), "shorter values, logging the parameters, metrics and tags") {
+		t.Errorf("a refused batch: %v", err)
+	}
+	if len(s.OnlyRun().Params) != 0 {
+		t.Error("a refused batch logged something")
+	}
+}
+
 func TestArtifactsGoThroughTheProxy(t *testing.T) {
 	for uri, want := range map[string]string{
 		"mlflow-artifacts:/1/abc/artifacts":               "1/abc/artifacts",

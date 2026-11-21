@@ -79,6 +79,10 @@ func (e *Error) Error() string {
 		why = "the tracking server does not offer this (404)"
 	case "bad_answer":
 		why = "the tracking server's answer is not MLflow's"
+	case "batch_refused":
+		why = fmt.Sprintf("the tracking server refused a key or a value, and so the whole batch (%s, HTTP %d): MLflow takes in a key "+
+			"only letters, digits, _ - . / : and spaces, as a plain path (no «//», no «.» or «..» between slashes), up to 250 "+
+			"characters, and an older server keeps shorter values", e.ErrorCode, e.Status)
 	default:
 		why = fmt.Sprintf("the tracking server answered with an error (HTTP %d)", e.Status)
 		if e.ErrorCode != "" {
@@ -290,11 +294,17 @@ func (t *Tracker) CreateRun(ctx context.Context, experimentID, name string, star
 }
 
 // LogBatch logs the parameters, metrics and tags in as many calls as the limits need. Keys
-// and values are cut to the limits.
+// and values are cut to the limits. A batch the server refuses as a whole for one of its keys or
+// values (INVALID_PARAMETER_VALUE) says what MLflow takes, since its own words are never shown.
 func (t *Tracker) LogBatch(ctx context.Context, runID string, params []Tag, metrics []Metric, tags []Tag) error {
 	for _, b := range Batches(params, metrics, tags) {
-		if err := t.post(ctx, "/api/2.0/mlflow/runs/log-batch", map[string]any{"run_id": runID, "params": b.Params, "metrics": b.Metrics,
-			"tags": b.Tags}, nil, "logging the parameters, metrics and tags"); err != nil {
+		err := t.post(ctx, "/api/2.0/mlflow/runs/log-batch", map[string]any{"run_id": runID, "params": b.Params, "metrics": b.Metrics,
+			"tags": b.Tags}, nil, "logging the parameters, metrics and tags")
+		var e *Error
+		if errors.As(err, &e) && e.ErrorCode == "INVALID_PARAMETER_VALUE" {
+			e.Code = "batch_refused"
+		}
+		if err != nil {
 			return err
 		}
 	}
@@ -314,7 +324,7 @@ func Batches(params []Tag, metrics []Metric, tags []Tag) []Batch {
 	params, tags = cutAll(params), cutAll(tags)
 	ms := make([]Metric, len(metrics))
 	for i, m := range metrics {
-		m.Key = Cut(m.Key, MaxKeyLength)
+		m.Key = cutKey(m.Key)
 		ms[i] = m
 	}
 	var out []Batch
@@ -343,9 +353,19 @@ func Batches(params []Tag, metrics []Metric, tags []Tag) []Batch {
 func cutAll(in []Tag) []Tag {
 	out := make([]Tag, len(in))
 	for i, t := range in {
-		out[i] = Tag{Key: Cut(t.Key, MaxKeyLength), Value: Cut(t.Value, MaxValueLength)}
+		out[i] = Tag{Key: cutKey(t.Key), Value: Cut(t.Value, MaxValueLength)}
 	}
 	return out
+}
+
+// cutKey keeps the first MaxKeyLength characters of a key, without the «…» a value gets: MLflow
+// refuses that character in a key, and one refused key fails the whole batch. (The flows' keys
+// come already within the limit, each kept apart by a hash: this is the last guard.)
+func cutKey(s string) string {
+	if utf8.RuneCountInString(s) <= MaxKeyLength {
+		return s
+	}
+	return string([]rune(s)[:MaxKeyLength])
 }
 
 // Cut keeps at most n characters of s, the last one «…» when it was cut.
