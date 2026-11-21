@@ -32,6 +32,9 @@ never other models. Per model:
   says which `sections` the runner writes and which rows (`results.py` refuses any other),
   the `assumptions` it checks, the `charts` of its report, and its `outputs` (the model's
   columns of the rows, table or forecast output).
+
+`OUTPUT_TYPES` gives those columns their types, and `output_columns` what a node hands on
+before it has run (the editor's and the assistants' columns of the steps after a model).
 """
 from __future__ import annotations
 
@@ -41,6 +44,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from app.engine.exceptions import EngineError
+from app.engine.stats.output import OUTPUT_COLUMNS
 
 NODE_MODEL = "model"
 NODE_PREDICT = "model_predict"
@@ -1002,6 +1006,39 @@ PREDICT: dict[str, Any] = {
     },
 }
 
+# ── the types of what a model node hands on (docs: «The output») ──────────────
+# Per output, the type of each column the model writes, as the engine names it when it reads
+# the runner's Parquet file (`column_kind` reads these names): the editor and the assistants
+# show a node after a model with these columns before the model has run. A name with a `*`
+# stands for every name it makes (`pred_quantile_*`: one per quantile asked; `pred_prob_*`: one
+# per class of the data, known only after a run). «@<key>»: the type of the input's column the
+# key names, a whole number written as Int32 (ARIMA's time: what the series' time column is).
+# `results` is the statistics' ten columns. What the runners really write is in
+# backend/tests/fixtures/models/output_columns.json, made by running them, and the engine's
+# test checks these types against it.
+OUTPUT_TYPES: dict[str, dict[str, str]] = {
+    "results": {name: kind for name, kind, _ in OUTPUT_COLUMNS},
+    "rows": {
+        **{name: "Float64" for name in (
+            "pred_fitted", "pred_residual", "pred_std_residual", "pred_leverage", "pred_cooks_distance", "pred_low",
+            "pred_high", "pred_prob", "pred_linear", "pred_deviance_residual", "pred_pearson_residual", "pred_risk",
+            "pred_martingale", "pred_deviance", "pred_median", "pred_median_low", "pred_median_high", "pred_quantile_*",
+            "pred_quantile_*_low", "pred_quantile_*_high", "pred_surv_at_*", "pred_surv_at_*_low", "pred_surv_at_*_high",
+            "pred_cox_snell", "pred_value", "pred_prob_*", "pred_p_alive", "pred_transactions", "pred_holdout_transactions",
+            "pred_spend", "pred_discounted_transactions", "pred_clv")},
+        "pred_class": "String",  # the outcome's value as a text, whatever the outcome's type
+        "pred_part": "String",   # train or validation, empty for a row the fit did not use
+    },
+    "table": {"stratum": "String", "time": "Float64", "n_risk": "Int32", "n_event": "Int32", "n_censor": "Int32",
+              "surv": "Float64", "lower": "Float64", "upper": "Float64"},
+    "forecast": {"time": "@time", **{name: "Float64" for name in (
+        "observed", "fitted", "forecast", "lower_80", "upper_80", "lower", "upper")}, "is_forecast": "Boolean"},
+}
+
+# How a runner writes the input's own columns back in the rows output, by their kind, where the type
+# changes: R reads a whole number as its integer, and writes it as Int32 (a value past 2^31 stays Int64).
+ROWS_INPUT_TYPES: dict[str, dict[str, str]] = {"r": {"integer": "Int32"}, "python": {}}
+
 # The keys of a node's `data` outside `params`, as the gateway reads them (not checked here).
 NODES: dict[str, dict[str, Any]] = {
     NODE_MODEL: {"data": ["model", "params", "mlflow", "timeoutSeconds", "retries"],
@@ -1324,6 +1361,79 @@ def variant(model: str, checked: Mapping[str, Any]) -> str:
     return variant_spec(model, checked)["id"]
 
 
+def output_type(output: str, name: str) -> str | None:
+    """The declared type of a column an output writes (`OUTPUT_TYPES`), by its name or by the name
+    with a `*` that makes it; None when the output declares no such column."""
+    types = OUTPUT_TYPES.get(output, {})
+    if name in types:
+        return types[name]
+    for pattern, kind in types.items():
+        pre, star, post = pattern.partition("*")
+        if star and name.startswith(pre) and name.endswith(post) and len(name) > len(pre) + len(post):
+            return kind
+    return None
+
+
+def output_columns(model: str, params: Mapping[str, Any] | None,
+                   input_columns: list[tuple[str, str]] | None = None) -> tuple[list[tuple[str, str]], list[str]]:
+    """What a model node hands to the next step before it has run, from its parameters alone:
+    ([(name, type)], [the names with a `*` the data fill]). `input_columns` [(name, type)] are the
+    input's: the rows output starts with them, as the runner writes them back (`ROWS_INPUT_TYPES`),
+    and «@<key>» types are read from them. The names a
+    quantile or a time makes are in the runner's order, each with its interval («pred_quantile_0.25»,
+    «…_low», «…_high», then the next quantile); a name the data fill («pred_prob_*», one per class)
+    is not a column yet, and is returned apart. The parameters need not be complete: what is not
+    given takes its default."""
+    spec = MODELS[model]
+    given = {k: v for k, v in (params or {}).items() if v is not None}
+    full = {k: given.get(k, spec["defaults"].get(k)) for k in {**spec["needs"], **spec["takes"]}}
+    output = full.get("output") or "results"
+    types = OUTPUT_TYPES[output]
+    if output == "results":
+        return list(types.items()), []
+    inputs = dict(input_columns or [])
+    made = variant_spec(model, full)
+    names = [n for n in made["outputs"][output]
+             if not (rule := (made.get("rows_when") or {}).get(n)) or all(_holds(r, full.get(k)) for k, r in rule.items())]
+    cols: list[tuple[str, str]] = []
+    unknown: list[str] = []
+    i = 0
+    while i < len(names):
+        pre, star, _ = names[i].partition("*")
+        if not star:
+            cols.append((names[i], names[i]))
+            i += 1
+            continue
+        # the names with the same start go together, one number at a time: as the runner writes them
+        group = [names[i]]
+        while i + len(group) < len(names) and names[i + len(group)].partition("*")[0] == pre \
+                and names[i + len(group)].partition("*")[1]:
+            group.append(names[i + len(group)])
+        i += len(group)
+        key = _ROWS_WILDCARDS.get(pre)
+        if key is None:
+            unknown.extend(group)
+            continue
+        # in increasing order, each once: as the check hands them to the runner
+        for v in sorted({float(x) for x in full.get(key) or [] if _is_number(x)}):
+            if key == "quantiles" and v == 0.5:  # the median: pred_median, no pred_quantile_0.5
+                continue
+            label = _number_label(v)
+            cols.extend((pattern.replace("*", label, 1), pattern) for pattern in group)
+    out: list[tuple[str, str]] = []
+    for name, pattern in cols:
+        kind = types[pattern]
+        if kind.startswith("@"):
+            source = inputs.get(full.get(kind[1:]) or "")
+            # the input's column not known (not chosen yet, no input): neither is the type
+            kind = "Unknown" if source is None else "Int32" if column_kind(source) == "integer" else str(source)
+        out.append((name, kind))
+    if output == "rows":
+        kept = ROWS_INPUT_TYPES[GROUPS[spec["group"]]["language"]]
+        out = [(n, kept.get(column_kind(t), str(t))) for n, t in (input_columns or [])] + out
+    return out, unknown
+
+
 def arima_name(params: Mapping[str, Any]) -> str:
     """What an ARIMA node's orders make of it, as its title says: «AR(1)», «MA(2)»,
     «ARMA(1,1)», «ARIMA(1,1,1)», «SARIMA(1,1,1)(0,1,1)[12]», «SARIMAX(1,1,1)(0,1,1)[12]»
@@ -1363,6 +1473,8 @@ def snapshot() -> dict[str, Any]:
         "column_kinds": list(COLUMN_KINDS),
         "kinds": KINDS,
         "season_of_frequency": SEASON_OF_FREQUENCY,
+        "output_types": OUTPUT_TYPES,
+        "rows_input_types": ROWS_INPUT_TYPES,
         "section_shapes": SECTION_SHAPES,
         "verdicts": list(VERDICTS),
         "groups": [{"id": g, **spec} for g, spec in GROUPS.items()],

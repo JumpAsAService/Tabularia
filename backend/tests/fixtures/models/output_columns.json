@@ -1,0 +1,2320 @@
+{
+ "about": "What the model runners write for the next step, one fit of a reference table each: the input's columns and the output's, with the types the engine reads. Written by make_output_columns.py (it runs the groups' images); read by the engine's, the editor's and the flow assistant's tests.",
+ "cases": [
+  {
+   "what": "linear, the results table",
+   "model": "linear",
+   "params": {
+    "outcome": "quantity",
+    "predictors": [
+     "price",
+     "channel"
+    ],
+    "interactions": [
+     [
+      "price",
+      "channel"
+     ]
+    ],
+    "order_by": "day"
+   },
+   "input": [
+    [
+     "day",
+     "Int64"
+    ],
+    [
+     "price",
+     "Float64"
+    ],
+    [
+     "channel",
+     "String"
+    ],
+    [
+     "store",
+     "String"
+    ],
+    [
+     "weight",
+     "Float64"
+    ],
+    [
+     "quantity",
+     "Float64"
+    ]
+   ],
+   "columns": [
+    [
+     "section",
+     "String"
+    ],
+    [
+     "level",
+     "String"
+    ],
+    [
+     "level_2",
+     "String"
+    ],
+    [
+     "stat",
+     "String"
+    ],
+    [
+     "value",
+     "Float64"
+    ],
+    [
+     "text",
+     "String"
+    ],
+    [
+     "x0",
+     "Float64"
+    ],
+    [
+     "x1",
+     "Float64"
+    ],
+    [
+     "ord",
+     "Int64"
+    ],
+    [
+     "key",
+     "String"
+    ]
+   ]
+  },
+  {
+   "what": "linear, the rows",
+   "model": "linear",
+   "params": {
+    "outcome": "quantity",
+    "predictors": [
+     "price",
+     "channel"
+    ],
+    "interactions": [
+     [
+      "price",
+      "channel"
+     ]
+    ],
+    "order_by": "day",
+    "output": "rows"
+   },
+   "input": [
+    [
+     "day",
+     "Int64"
+    ],
+    [
+     "price",
+     "Float64"
+    ],
+    [
+     "channel",
+     "String"
+    ],
+    [
+     "store",
+     "String"
+    ],
+    [
+     "weight",
+     "Float64"
+    ],
+    [
+     "quantity",
+     "Float64"
+    ]
+   ],
+   "columns": [
+    [
+     "day",
+     "Int32"
+    ],
+    [
+     "price",
+     "Float64"
+    ],
+    [
+     "channel",
+     "String"
+    ],
+    [
+     "store",
+     "String"
+    ],
+    [
+     "weight",
+     "Float64"
+    ],
+    [
+     "quantity",
+     "Float64"
+    ],
+    [
+     "pred_fitted",
+     "Float64"
+    ],
+    [
+     "pred_residual",
+     "Float64"
+    ],
+    [
+     "pred_std_residual",
+     "Float64"
+    ],
+    [
+     "pred_leverage",
+     "Float64"
+    ],
+    [
+     "pred_cooks_distance",
+     "Float64"
+    ],
+    [
+     "pred_low",
+     "Float64"
+    ],
+    [
+     "pred_high",
+     "Float64"
+    ]
+   ]
+  },
+  {
+   "what": "linear with a lasso penalty, the rows",
+   "model": "linear",
+   "params": {
+    "outcome": "sales",
+    "predictors": [
+     "price",
+     "region",
+     "month",
+     "promo"
+    ],
+    "reference": {
+     "region": "north"
+    },
+    "interactions": [
+     [
+      "price",
+      "region"
+     ]
+    ],
+    "penalty": "lasso",
+    "output": "rows"
+   },
+   "input": [
+    [
+     "region",
+     "String"
+    ],
+    [
+     "price",
+     "Float64"
+    ],
+    [
+     "price_cents",
+     "Float64"
+    ],
+    [
+     "month",
+     "Int64"
+    ],
+    [
+     "promo",
+     "Boolean"
+    ],
+    [
+     "sales",
+     "Float64"
+    ]
+   ],
+   "columns": [
+    [
+     "region",
+     "String"
+    ],
+    [
+     "price",
+     "Float64"
+    ],
+    [
+     "price_cents",
+     "Float64"
+    ],
+    [
+     "month",
+     "Int32"
+    ],
+    [
+     "promo",
+     "Boolean"
+    ],
+    [
+     "sales",
+     "Float64"
+    ],
+    [
+     "pred_fitted",
+     "Float64"
+    ],
+    [
+     "pred_residual",
+     "Float64"
+    ]
+   ]
+  },
+  {
+   "what": "logistic, the rows",
+   "model": "logistic",
+   "params": {
+    "outcome": "churned",
+    "event_value": "yes",
+    "predictors": [
+     "tenure",
+     "fee",
+     "change",
+     "plan"
+    ],
+    "output": "rows"
+   },
+   "input": [
+    [
+     "customer",
+     "Int64"
+    ],
+    [
+     "tenure",
+     "Float64"
+    ],
+    [
+     "fee",
+     "Float64"
+    ],
+    [
+     "change",
+     "Float64"
+    ],
+    [
+     "plan",
+     "String"
+    ],
+    [
+     "store",
+     "String"
+    ],
+    [
+     "weight",
+     "Int64"
+    ],
+    [
+     "churned",
+     "String"
+    ]
+   ],
+   "columns": [
+    [
+     "customer",
+     "Int32"
+    ],
+    [
+     "tenure",
+     "Float64"
+    ],
+    [
+     "fee",
+     "Float64"
+    ],
+    [
+     "change",
+     "Float64"
+    ],
+    [
+     "plan",
+     "String"
+    ],
+    [
+     "store",
+     "String"
+    ],
+    [
+     "weight",
+     "Int32"
+    ],
+    [
+     "churned",
+     "String"
+    ],
+    [
+     "pred_prob",
+     "Float64"
+    ],
+    [
+     "pred_class",
+     "String"
+    ],
+    [
+     "pred_linear",
+     "Float64"
+    ],
+    [
+     "pred_deviance_residual",
+     "Float64"
+    ],
+    [
+     "pred_pearson_residual",
+     "Float64"
+    ],
+    [
+     "pred_leverage",
+     "Float64"
+    ],
+    [
+     "pred_cooks_distance",
+     "Float64"
+    ]
+   ]
+  },
+  {
+   "what": "logistic with a lasso penalty, the rows",
+   "model": "logistic",
+   "params": {
+    "outcome": "churned",
+    "event_value": "yes",
+    "predictors": [
+     "tenure",
+     "fee",
+     "change",
+     "plan"
+    ],
+    "penalty": "lasso",
+    "lambda": "cv_min",
+    "output": "rows"
+   },
+   "input": [
+    [
+     "customer",
+     "Int64"
+    ],
+    [
+     "tenure",
+     "Float64"
+    ],
+    [
+     "fee",
+     "Float64"
+    ],
+    [
+     "change",
+     "Float64"
+    ],
+    [
+     "plan",
+     "String"
+    ],
+    [
+     "store",
+     "String"
+    ],
+    [
+     "weight",
+     "Int64"
+    ],
+    [
+     "churned",
+     "String"
+    ]
+   ],
+   "columns": [
+    [
+     "customer",
+     "Int32"
+    ],
+    [
+     "tenure",
+     "Float64"
+    ],
+    [
+     "fee",
+     "Float64"
+    ],
+    [
+     "change",
+     "Float64"
+    ],
+    [
+     "plan",
+     "String"
+    ],
+    [
+     "store",
+     "String"
+    ],
+    [
+     "weight",
+     "Int32"
+    ],
+    [
+     "churned",
+     "String"
+    ],
+    [
+     "pred_prob",
+     "Float64"
+    ],
+    [
+     "pred_class",
+     "String"
+    ],
+    [
+     "pred_linear",
+     "Float64"
+    ]
+   ]
+  },
+  {
+   "what": "Kaplan–Meier with strata, the survival table",
+   "model": "kaplan_meier",
+   "params": {
+    "time": "days",
+    "event": "status",
+    "event_value": "failed",
+    "strata": "line",
+    "pairwise": true,
+    "times": [
+     30,
+     90
+    ],
+    "rmst_tau": 180,
+    "output": "table"
+   },
+   "input": [
+    [
+     "days",
+     "Float64"
+    ],
+    [
+     "status",
+     "String"
+    ],
+    [
+     "line",
+     "String"
+    ]
+   ],
+   "columns": [
+    [
+     "stratum",
+     "String"
+    ],
+    [
+     "time",
+     "Float64"
+    ],
+    [
+     "n_risk",
+     "Int32"
+    ],
+    [
+     "n_event",
+     "Int32"
+    ],
+    [
+     "n_censor",
+     "Int32"
+    ],
+    [
+     "surv",
+     "Float64"
+    ],
+    [
+     "lower",
+     "Float64"
+    ],
+    [
+     "upper",
+     "Float64"
+    ]
+   ]
+  },
+  {
+   "what": "Kaplan–Meier without strata, the survival table",
+   "model": "kaplan_meier",
+   "params": {
+    "time": "hours",
+    "event": "broke",
+    "event_value": true,
+    "conf_type": "plain",
+    "times": [
+     5,
+     12.5,
+     1000
+    ],
+    "rmst_tau": 20,
+    "output": "table"
+   },
+   "input": [
+    [
+     "hours",
+     "Float64"
+    ],
+    [
+     "broke",
+     "Boolean"
+    ]
+   ],
+   "columns": [
+    [
+     "stratum",
+     "String"
+    ],
+    [
+     "time",
+     "Float64"
+    ],
+    [
+     "n_risk",
+     "Int32"
+    ],
+    [
+     "n_event",
+     "Int32"
+    ],
+    [
+     "n_censor",
+     "Int32"
+    ],
+    [
+     "surv",
+     "Float64"
+    ],
+    [
+     "lower",
+     "Float64"
+    ],
+    [
+     "upper",
+     "Float64"
+    ]
+   ]
+  },
+  {
+   "what": "Cox, the rows",
+   "model": "cox",
+   "params": {
+    "time": "days",
+    "event": "status",
+    "event_value": "failed",
+    "predictors": [
+     "load",
+     "line"
+    ],
+    "output": "rows"
+   },
+   "input": [
+    [
+     "days",
+     "Float64"
+    ],
+    [
+     "status",
+     "String"
+    ],
+    [
+     "load",
+     "Float64"
+    ],
+    [
+     "line",
+     "String"
+    ],
+    [
+     "night",
+     "Boolean"
+    ]
+   ],
+   "columns": [
+    [
+     "days",
+     "Float64"
+    ],
+    [
+     "status",
+     "String"
+    ],
+    [
+     "load",
+     "Float64"
+    ],
+    [
+     "line",
+     "String"
+    ],
+    [
+     "night",
+     "Boolean"
+    ],
+    [
+     "pred_linear",
+     "Float64"
+    ],
+    [
+     "pred_risk",
+     "Float64"
+    ],
+    [
+     "pred_martingale",
+     "Float64"
+    ],
+    [
+     "pred_deviance",
+     "Float64"
+    ]
+   ]
+  },
+  {
+   "what": "parametric survival, Weibull, quantiles and times",
+   "model": "parametric_survival",
+   "params": {
+    "time": "days",
+    "event": "status",
+    "event_value": "failed",
+    "predictors": [
+     "load",
+     "line"
+    ],
+    "interactions": [
+     [
+      "load",
+      "line"
+     ]
+    ],
+    "weights": "w",
+    "quantiles": [
+     0.25,
+     0.75
+    ],
+    "times": [
+     10,
+     30
+    ],
+    "distribution": "weibull",
+    "output": "rows"
+   },
+   "input": [
+    [
+     "days",
+     "Float64"
+    ],
+    [
+     "status",
+     "String"
+    ],
+    [
+     "load",
+     "Float64"
+    ],
+    [
+     "line",
+     "String"
+    ],
+    [
+     "plant",
+     "String"
+    ],
+    [
+     "w",
+     "Int64"
+    ]
+   ],
+   "columns": [
+    [
+     "days",
+     "Float64"
+    ],
+    [
+     "status",
+     "String"
+    ],
+    [
+     "load",
+     "Float64"
+    ],
+    [
+     "line",
+     "String"
+    ],
+    [
+     "plant",
+     "String"
+    ],
+    [
+     "w",
+     "Int32"
+    ],
+    [
+     "pred_linear",
+     "Float64"
+    ],
+    [
+     "pred_median",
+     "Float64"
+    ],
+    [
+     "pred_median_low",
+     "Float64"
+    ],
+    [
+     "pred_median_high",
+     "Float64"
+    ],
+    [
+     "pred_quantile_0.25",
+     "Float64"
+    ],
+    [
+     "pred_quantile_0.25_low",
+     "Float64"
+    ],
+    [
+     "pred_quantile_0.25_high",
+     "Float64"
+    ],
+    [
+     "pred_quantile_0.75",
+     "Float64"
+    ],
+    [
+     "pred_quantile_0.75_low",
+     "Float64"
+    ],
+    [
+     "pred_quantile_0.75_high",
+     "Float64"
+    ],
+    [
+     "pred_surv_at_10",
+     "Float64"
+    ],
+    [
+     "pred_surv_at_10_low",
+     "Float64"
+    ],
+    [
+     "pred_surv_at_10_high",
+     "Float64"
+    ],
+    [
+     "pred_surv_at_30",
+     "Float64"
+    ],
+    [
+     "pred_surv_at_30_low",
+     "Float64"
+    ],
+    [
+     "pred_surv_at_30_high",
+     "Float64"
+    ],
+    [
+     "pred_cox_snell",
+     "Float64"
+    ],
+    [
+     "pred_martingale",
+     "Float64"
+    ],
+    [
+     "pred_deviance",
+     "Float64"
+    ]
+   ]
+  },
+  {
+   "what": "parametric survival, log-normal",
+   "model": "parametric_survival",
+   "params": {
+    "time": "days",
+    "event": "status",
+    "event_value": "failed",
+    "predictors": [
+     "load",
+     "line"
+    ],
+    "interactions": [
+     [
+      "load",
+      "line"
+     ]
+    ],
+    "weights": "w",
+    "quantiles": [
+     0.25,
+     0.75
+    ],
+    "times": [
+     10,
+     30
+    ],
+    "distribution": "lognormal",
+    "output": "rows"
+   },
+   "input": [
+    [
+     "days",
+     "Float64"
+    ],
+    [
+     "status",
+     "String"
+    ],
+    [
+     "load",
+     "Float64"
+    ],
+    [
+     "line",
+     "String"
+    ],
+    [
+     "plant",
+     "String"
+    ],
+    [
+     "w",
+     "Int64"
+    ]
+   ],
+   "columns": [
+    [
+     "days",
+     "Float64"
+    ],
+    [
+     "status",
+     "String"
+    ],
+    [
+     "load",
+     "Float64"
+    ],
+    [
+     "line",
+     "String"
+    ],
+    [
+     "plant",
+     "String"
+    ],
+    [
+     "w",
+     "Int32"
+    ],
+    [
+     "pred_linear",
+     "Float64"
+    ],
+    [
+     "pred_median",
+     "Float64"
+    ],
+    [
+     "pred_median_low",
+     "Float64"
+    ],
+    [
+     "pred_median_high",
+     "Float64"
+    ],
+    [
+     "pred_quantile_0.25",
+     "Float64"
+    ],
+    [
+     "pred_quantile_0.25_low",
+     "Float64"
+    ],
+    [
+     "pred_quantile_0.25_high",
+     "Float64"
+    ],
+    [
+     "pred_quantile_0.75",
+     "Float64"
+    ],
+    [
+     "pred_quantile_0.75_low",
+     "Float64"
+    ],
+    [
+     "pred_quantile_0.75_high",
+     "Float64"
+    ],
+    [
+     "pred_surv_at_10",
+     "Float64"
+    ],
+    [
+     "pred_surv_at_10_low",
+     "Float64"
+    ],
+    [
+     "pred_surv_at_10_high",
+     "Float64"
+    ],
+    [
+     "pred_surv_at_30",
+     "Float64"
+    ],
+    [
+     "pred_surv_at_30_low",
+     "Float64"
+    ],
+    [
+     "pred_surv_at_30_high",
+     "Float64"
+    ],
+    [
+     "pred_cox_snell",
+     "Float64"
+    ],
+    [
+     "pred_martingale",
+     "Float64"
+    ],
+    [
+     "pred_deviance",
+     "Float64"
+    ]
+   ]
+  },
+  {
+   "what": "parametric survival, Gompertz",
+   "model": "parametric_survival",
+   "params": {
+    "time": "years",
+    "event": "died",
+    "event_value": 1,
+    "predictors": [
+     "age",
+     "smoker"
+    ],
+    "distribution": "gompertz",
+    "times": [
+     10,
+     20
+    ],
+    "output": "rows"
+   },
+   "input": [
+    [
+     "years",
+     "Float64"
+    ],
+    [
+     "died",
+     "Int64"
+    ],
+    [
+     "age",
+     "Float64"
+    ],
+    [
+     "smoker",
+     "Boolean"
+    ]
+   ],
+   "columns": [
+    [
+     "years",
+     "Float64"
+    ],
+    [
+     "died",
+     "Int32"
+    ],
+    [
+     "age",
+     "Float64"
+    ],
+    [
+     "smoker",
+     "Boolean"
+    ],
+    [
+     "pred_linear",
+     "Float64"
+    ],
+    [
+     "pred_median",
+     "Float64"
+    ],
+    [
+     "pred_median_low",
+     "Float64"
+    ],
+    [
+     "pred_median_high",
+     "Float64"
+    ],
+    [
+     "pred_quantile_0.25",
+     "Float64"
+    ],
+    [
+     "pred_quantile_0.25_low",
+     "Float64"
+    ],
+    [
+     "pred_quantile_0.25_high",
+     "Float64"
+    ],
+    [
+     "pred_quantile_0.75",
+     "Float64"
+    ],
+    [
+     "pred_quantile_0.75_low",
+     "Float64"
+    ],
+    [
+     "pred_quantile_0.75_high",
+     "Float64"
+    ],
+    [
+     "pred_surv_at_10",
+     "Float64"
+    ],
+    [
+     "pred_surv_at_10_low",
+     "Float64"
+    ],
+    [
+     "pred_surv_at_10_high",
+     "Float64"
+    ],
+    [
+     "pred_surv_at_20",
+     "Float64"
+    ],
+    [
+     "pred_surv_at_20_low",
+     "Float64"
+    ],
+    [
+     "pred_surv_at_20_high",
+     "Float64"
+    ],
+    [
+     "pred_cox_snell",
+     "Float64"
+    ],
+    [
+     "pred_martingale",
+     "Float64"
+    ],
+    [
+     "pred_deviance",
+     "Float64"
+    ]
+   ]
+  },
+  {
+   "what": "parametric survival, the quantile 0.5 is the median",
+   "model": "parametric_survival",
+   "params": {
+    "time": "hours",
+    "event": "broke",
+    "event_value": true,
+    "distribution": "exponential",
+    "quantiles": [
+     0.25,
+     0.5
+    ],
+    "output": "rows"
+   },
+   "input": [
+    [
+     "hours",
+     "Float64"
+    ],
+    [
+     "broke",
+     "Boolean"
+    ],
+    [
+     "shift",
+     "String"
+    ]
+   ],
+   "columns": [
+    [
+     "hours",
+     "Float64"
+    ],
+    [
+     "broke",
+     "Boolean"
+    ],
+    [
+     "shift",
+     "String"
+    ],
+    [
+     "pred_linear",
+     "Float64"
+    ],
+    [
+     "pred_median",
+     "Float64"
+    ],
+    [
+     "pred_median_low",
+     "Float64"
+    ],
+    [
+     "pred_median_high",
+     "Float64"
+    ],
+    [
+     "pred_quantile_0.25",
+     "Float64"
+    ],
+    [
+     "pred_quantile_0.25_low",
+     "Float64"
+    ],
+    [
+     "pred_quantile_0.25_high",
+     "Float64"
+    ],
+    [
+     "pred_cox_snell",
+     "Float64"
+    ],
+    [
+     "pred_martingale",
+     "Float64"
+    ],
+    [
+     "pred_deviance",
+     "Float64"
+    ]
+   ]
+  },
+  {
+   "what": "parametric survival, the distribution searched for",
+   "model": "parametric_survival",
+   "params": {
+    "time": "days",
+    "event": "status",
+    "event_value": "failed",
+    "predictors": [
+     "load",
+     "line"
+    ],
+    "distribution": "auto",
+    "output": "rows"
+   },
+   "input": [
+    [
+     "days",
+     "Float64"
+    ],
+    [
+     "status",
+     "String"
+    ],
+    [
+     "load",
+     "Float64"
+    ],
+    [
+     "line",
+     "String"
+    ]
+   ],
+   "columns": [
+    [
+     "days",
+     "Float64"
+    ],
+    [
+     "status",
+     "String"
+    ],
+    [
+     "load",
+     "Float64"
+    ],
+    [
+     "line",
+     "String"
+    ],
+    [
+     "pred_linear",
+     "Float64"
+    ],
+    [
+     "pred_median",
+     "Float64"
+    ],
+    [
+     "pred_median_low",
+     "Float64"
+    ],
+    [
+     "pred_median_high",
+     "Float64"
+    ],
+    [
+     "pred_quantile_0.25",
+     "Float64"
+    ],
+    [
+     "pred_quantile_0.25_low",
+     "Float64"
+    ],
+    [
+     "pred_quantile_0.25_high",
+     "Float64"
+    ],
+    [
+     "pred_quantile_0.75",
+     "Float64"
+    ],
+    [
+     "pred_quantile_0.75_low",
+     "Float64"
+    ],
+    [
+     "pred_quantile_0.75_high",
+     "Float64"
+    ],
+    [
+     "pred_cox_snell",
+     "Float64"
+    ],
+    [
+     "pred_martingale",
+     "Float64"
+    ],
+    [
+     "pred_deviance",
+     "Float64"
+    ]
+   ]
+  },
+  {
+   "what": "ARIMA on a whole-number time, the forecast",
+   "model": "arima",
+   "params": {
+    "time": "t",
+    "value": "level",
+    "frequency": "index",
+    "p": 2,
+    "d": 0,
+    "q": 0,
+    "output": "forecast"
+   },
+   "input": [
+    [
+     "t",
+     "Int64"
+    ],
+    [
+     "level",
+     "Float64"
+    ]
+   ],
+   "columns": [
+    [
+     "time",
+     "Int32"
+    ],
+    [
+     "observed",
+     "Float64"
+    ],
+    [
+     "fitted",
+     "Float64"
+    ],
+    [
+     "forecast",
+     "Float64"
+    ],
+    [
+     "lower_80",
+     "Float64"
+    ],
+    [
+     "upper_80",
+     "Float64"
+    ],
+    [
+     "lower",
+     "Float64"
+    ],
+    [
+     "upper",
+     "Float64"
+    ],
+    [
+     "is_forecast",
+     "Boolean"
+    ]
+   ]
+  },
+  {
+   "what": "SARIMA on dates, the forecast",
+   "model": "arima",
+   "params": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "p": 1,
+    "d": 1,
+    "q": 1,
+    "P": 0,
+    "D": 1,
+    "Q": 1,
+    "transform": "log",
+    "holdout": 12,
+    "horizon": 12,
+    "output": "forecast"
+   },
+   "input": [
+    [
+     "month",
+     "Date"
+    ],
+    [
+     "boxes",
+     "Float64"
+    ]
+   ],
+   "columns": [
+    [
+     "time",
+     "Date"
+    ],
+    [
+     "observed",
+     "Float64"
+    ],
+    [
+     "fitted",
+     "Float64"
+    ],
+    [
+     "forecast",
+     "Float64"
+    ],
+    [
+     "lower_80",
+     "Float64"
+    ],
+    [
+     "upper_80",
+     "Float64"
+    ],
+    [
+     "lower",
+     "Float64"
+    ],
+    [
+     "upper",
+     "Float64"
+    ],
+    [
+     "is_forecast",
+     "Boolean"
+    ]
+   ]
+  },
+  {
+   "what": "ARIMA with automatic orders, the forecast",
+   "model": "arima",
+   "params": {
+    "time": "t",
+    "value": "level",
+    "frequency": "index",
+    "orders": "auto",
+    "output": "forecast"
+   },
+   "input": [
+    [
+     "t",
+     "Int64"
+    ],
+    [
+     "level",
+     "Float64"
+    ]
+   ],
+   "columns": [
+    [
+     "time",
+     "Int32"
+    ],
+    [
+     "observed",
+     "Float64"
+    ],
+    [
+     "fitted",
+     "Float64"
+    ],
+    [
+     "forecast",
+     "Float64"
+    ],
+    [
+     "lower_80",
+     "Float64"
+    ],
+    [
+     "upper_80",
+     "Float64"
+    ],
+    [
+     "lower",
+     "Float64"
+    ],
+    [
+     "upper",
+     "Float64"
+    ],
+    [
+     "is_forecast",
+     "Boolean"
+    ]
+   ]
+  },
+  {
+   "what": "XGBoost regression, the rows",
+   "model": "xgboost",
+   "params": {
+    "task": "regression",
+    "outcome": "boxes",
+    "weights": "w",
+    "predictors": [
+     "price",
+     "discount",
+     "visits",
+     "tenure",
+     "noise",
+     "region"
+    ],
+    "output": "rows"
+   },
+   "input": [
+    [
+     "boxes",
+     "Float64"
+    ],
+    [
+     "price",
+     "Float64"
+    ],
+    [
+     "discount",
+     "Float64"
+    ],
+    [
+     "visits",
+     "Float64"
+    ],
+    [
+     "tenure",
+     "Float64"
+    ],
+    [
+     "noise",
+     "Float64"
+    ],
+    [
+     "region",
+     "String"
+    ],
+    [
+     "w",
+     "Float64"
+    ]
+   ],
+   "columns": [
+    [
+     "boxes",
+     "Float64"
+    ],
+    [
+     "price",
+     "Float64"
+    ],
+    [
+     "discount",
+     "Float64"
+    ],
+    [
+     "visits",
+     "Float64"
+    ],
+    [
+     "tenure",
+     "Float64"
+    ],
+    [
+     "noise",
+     "Float64"
+    ],
+    [
+     "region",
+     "String"
+    ],
+    [
+     "w",
+     "Float64"
+    ],
+    [
+     "pred_value",
+     "Float64"
+    ],
+    [
+     "pred_residual",
+     "Float64"
+    ],
+    [
+     "pred_part",
+     "String"
+    ]
+   ]
+  },
+  {
+   "what": "XGBoost binary, the rows",
+   "model": "xgboost",
+   "params": {
+    "task": "binary",
+    "outcome": "reordered",
+    "event_value": "yes",
+    "predictors": [
+     "price",
+     "visits",
+     "channel"
+    ],
+    "stop_metric": "auc",
+    "threshold": 0.3,
+    "output": "rows"
+   },
+   "input": [
+    [
+     "reordered",
+     "String"
+    ],
+    [
+     "price",
+     "Float64"
+    ],
+    [
+     "visits",
+     "Float64"
+    ],
+    [
+     "channel",
+     "String"
+    ],
+    [
+     "first_order",
+     "Date"
+    ]
+   ],
+   "columns": [
+    [
+     "reordered",
+     "String"
+    ],
+    [
+     "price",
+     "Float64"
+    ],
+    [
+     "visits",
+     "Float64"
+    ],
+    [
+     "channel",
+     "String"
+    ],
+    [
+     "first_order",
+     "Date"
+    ],
+    [
+     "pred_prob",
+     "Float64"
+    ],
+    [
+     "pred_class",
+     "String"
+    ],
+    [
+     "pred_part",
+     "String"
+    ]
+   ]
+  },
+  {
+   "what": "XGBoost multiclass, the rows: a probability per class",
+   "model": "xgboost",
+   "params": {
+    "task": "multiclass",
+    "outcome": "segment",
+    "predictors": [
+     "spend",
+     "orders",
+     "member"
+    ],
+    "split_by": "store",
+    "stop_metric": "error",
+    "max_depth": 4,
+    "output": "rows"
+   },
+   "input": [
+    [
+     "segment",
+     "String"
+    ],
+    [
+     "spend",
+     "Float64"
+    ],
+    [
+     "orders",
+     "Float64"
+    ],
+    [
+     "store",
+     "String"
+    ],
+    [
+     "member",
+     "Boolean"
+    ]
+   ],
+   "columns": [
+    [
+     "segment",
+     "String"
+    ],
+    [
+     "spend",
+     "Float64"
+    ],
+    [
+     "orders",
+     "Float64"
+    ],
+    [
+     "store",
+     "String"
+    ],
+    [
+     "member",
+     "Boolean"
+    ],
+    [
+     "pred_class",
+     "String"
+    ],
+    [
+     "pred_prob",
+     "Float64"
+    ],
+    [
+     "pred_prob_bronze",
+     "Float64"
+    ],
+    [
+     "pred_prob_gold",
+     "Float64"
+    ],
+    [
+     "pred_prob_silver",
+     "Float64"
+    ],
+    [
+     "pred_part",
+     "String"
+    ]
+   ]
+  },
+  {
+   "what": "CatBoost regression, the rows",
+   "model": "catboost",
+   "params": {
+    "task": "regression",
+    "outcome": "boxes",
+    "weights": "w",
+    "predictors": [
+     "price",
+     "discount",
+     "visits",
+     "tenure",
+     "noise",
+     "region"
+    ],
+    "output": "rows"
+   },
+   "input": [
+    [
+     "boxes",
+     "Float64"
+    ],
+    [
+     "price",
+     "Float64"
+    ],
+    [
+     "discount",
+     "Float64"
+    ],
+    [
+     "visits",
+     "Float64"
+    ],
+    [
+     "tenure",
+     "Float64"
+    ],
+    [
+     "noise",
+     "Float64"
+    ],
+    [
+     "region",
+     "String"
+    ],
+    [
+     "w",
+     "Float64"
+    ]
+   ],
+   "columns": [
+    [
+     "boxes",
+     "Float64"
+    ],
+    [
+     "price",
+     "Float64"
+    ],
+    [
+     "discount",
+     "Float64"
+    ],
+    [
+     "visits",
+     "Float64"
+    ],
+    [
+     "tenure",
+     "Float64"
+    ],
+    [
+     "noise",
+     "Float64"
+    ],
+    [
+     "region",
+     "String"
+    ],
+    [
+     "w",
+     "Float64"
+    ],
+    [
+     "pred_value",
+     "Float64"
+    ],
+    [
+     "pred_residual",
+     "Float64"
+    ],
+    [
+     "pred_part",
+     "String"
+    ]
+   ]
+  },
+  {
+   "what": "CatBoost binary, the rows",
+   "model": "catboost",
+   "params": {
+    "task": "binary",
+    "outcome": "reordered",
+    "event_value": "yes",
+    "predictors": [
+     "price",
+     "visits",
+     "channel"
+    ],
+    "stop_metric": "auc",
+    "threshold": 0.3,
+    "max_depth": 4,
+    "output": "rows"
+   },
+   "input": [
+    [
+     "reordered",
+     "String"
+    ],
+    [
+     "price",
+     "Float64"
+    ],
+    [
+     "visits",
+     "Float64"
+    ],
+    [
+     "channel",
+     "String"
+    ],
+    [
+     "first_order",
+     "Date"
+    ]
+   ],
+   "columns": [
+    [
+     "reordered",
+     "String"
+    ],
+    [
+     "price",
+     "Float64"
+    ],
+    [
+     "visits",
+     "Float64"
+    ],
+    [
+     "channel",
+     "String"
+    ],
+    [
+     "first_order",
+     "Date"
+    ],
+    [
+     "pred_prob",
+     "Float64"
+    ],
+    [
+     "pred_class",
+     "String"
+    ],
+    [
+     "pred_part",
+     "String"
+    ]
+   ]
+  },
+  {
+   "what": "CatBoost multiclass, the rows: a probability per class",
+   "model": "catboost",
+   "params": {
+    "task": "multiclass",
+    "outcome": "segment",
+    "predictors": [
+     "spend",
+     "orders",
+     "member",
+     "store"
+    ],
+    "class_weight": "balanced",
+    "stop_metric": "error",
+    "max_depth": 4,
+    "l2_leaf_reg": 5.0,
+    "output": "rows"
+   },
+   "input": [
+    [
+     "segment",
+     "String"
+    ],
+    [
+     "spend",
+     "Float64"
+    ],
+    [
+     "orders",
+     "Float64"
+    ],
+    [
+     "store",
+     "String"
+    ],
+    [
+     "member",
+     "Boolean"
+    ]
+   ],
+   "columns": [
+    [
+     "segment",
+     "String"
+    ],
+    [
+     "spend",
+     "Float64"
+    ],
+    [
+     "orders",
+     "Float64"
+    ],
+    [
+     "store",
+     "String"
+    ],
+    [
+     "member",
+     "Boolean"
+    ],
+    [
+     "pred_class",
+     "String"
+    ],
+    [
+     "pred_prob",
+     "Float64"
+    ],
+    [
+     "pred_prob_bronze",
+     "Float64"
+    ],
+    [
+     "pred_prob_gold",
+     "Float64"
+    ],
+    [
+     "pred_prob_silver",
+     "Float64"
+    ],
+    [
+     "pred_part",
+     "String"
+    ]
+   ]
+  },
+  {
+   "what": "customer lifetime value with a spend and a holdout, the rows",
+   "model": "clv",
+   "params": {
+    "customer": "customer",
+    "frequency": "frequency",
+    "recency": "recency",
+    "age": "age",
+    "time_unit": "week",
+    "alpha": 0.05,
+    "seed": 1,
+    "spend": "avg_spend",
+    "purchase_model": "auto",
+    "holdout_transactions": "holdout_purchases",
+    "holdout_length": 26,
+    "horizon": 52
+   },
+   "input": [
+    [
+     "customer",
+     "String"
+    ],
+    [
+     "frequency",
+     "Float64"
+    ],
+    [
+     "recency",
+     "Float64"
+    ],
+    [
+     "age",
+     "Float64"
+    ],
+    [
+     "avg_spend",
+     "Float64"
+    ],
+    [
+     "holdout_purchases",
+     "Float64"
+    ]
+   ],
+   "columns": [
+    [
+     "customer",
+     "String"
+    ],
+    [
+     "frequency",
+     "Float64"
+    ],
+    [
+     "recency",
+     "Float64"
+    ],
+    [
+     "age",
+     "Float64"
+    ],
+    [
+     "avg_spend",
+     "Float64"
+    ],
+    [
+     "holdout_purchases",
+     "Float64"
+    ],
+    [
+     "pred_p_alive",
+     "Float64"
+    ],
+    [
+     "pred_transactions",
+     "Float64"
+    ],
+    [
+     "pred_holdout_transactions",
+     "Float64"
+    ],
+    [
+     "pred_spend",
+     "Float64"
+    ],
+    [
+     "pred_discounted_transactions",
+     "Float64"
+    ],
+    [
+     "pred_clv",
+     "Float64"
+    ]
+   ]
+  },
+  {
+   "what": "customer lifetime value, the purchases only",
+   "model": "clv",
+   "params": {
+    "customer": "customer",
+    "frequency": "frequency",
+    "recency": "recency",
+    "age": "age",
+    "time_unit": "week",
+    "alpha": 0.05,
+    "seed": 1,
+    "purchase_model": "pareto_nbd",
+    "horizon": 52
+   },
+   "input": [
+    [
+     "customer",
+     "String"
+    ],
+    [
+     "frequency",
+     "Float64"
+    ],
+    [
+     "recency",
+     "Float64"
+    ],
+    [
+     "age",
+     "Float64"
+    ]
+   ],
+   "columns": [
+    [
+     "customer",
+     "String"
+    ],
+    [
+     "frequency",
+     "Float64"
+    ],
+    [
+     "recency",
+     "Float64"
+    ],
+    [
+     "age",
+     "Float64"
+    ],
+    [
+     "pred_p_alive",
+     "Float64"
+    ],
+    [
+     "pred_transactions",
+     "Float64"
+    ]
+   ]
+  },
+  {
+   "what": "BG/BB with a spend and a holdout, the rows",
+   "model": "bg_bb",
+   "params": {
+    "customer": "donor",
+    "frequency": "x",
+    "recency": "t_x",
+    "opportunities": "n",
+    "period_unit": "year",
+    "alpha": 0.05,
+    "seed": 1,
+    "spend": "avg_gift",
+    "holdout_transactions": "later_gifts",
+    "holdout_length": 5,
+    "horizon": 5
+   },
+   "input": [
+    [
+     "donor",
+     "String"
+    ],
+    [
+     "x",
+     "Float64"
+    ],
+    [
+     "t_x",
+     "Float64"
+    ],
+    [
+     "n",
+     "Float64"
+    ],
+    [
+     "avg_gift",
+     "Float64"
+    ],
+    [
+     "later_gifts",
+     "Float64"
+    ]
+   ],
+   "columns": [
+    [
+     "donor",
+     "String"
+    ],
+    [
+     "x",
+     "Float64"
+    ],
+    [
+     "t_x",
+     "Float64"
+    ],
+    [
+     "n",
+     "Float64"
+    ],
+    [
+     "avg_gift",
+     "Float64"
+    ],
+    [
+     "later_gifts",
+     "Float64"
+    ],
+    [
+     "pred_p_alive",
+     "Float64"
+    ],
+    [
+     "pred_transactions",
+     "Float64"
+    ],
+    [
+     "pred_holdout_transactions",
+     "Float64"
+    ],
+    [
+     "pred_spend",
+     "Float64"
+    ],
+    [
+     "pred_discounted_transactions",
+     "Float64"
+    ],
+    [
+     "pred_clv",
+     "Float64"
+    ]
+   ]
+  },
+  {
+   "what": "BG/BB, the purchases only",
+   "model": "bg_bb",
+   "params": {
+    "customer": "donor",
+    "frequency": "x",
+    "recency": "t_x",
+    "opportunities": "n",
+    "period_unit": "month",
+    "alpha": 0.05,
+    "seed": 1
+   },
+   "input": [
+    [
+     "donor",
+     "String"
+    ],
+    [
+     "x",
+     "Float64"
+    ],
+    [
+     "t_x",
+     "Float64"
+    ],
+    [
+     "n",
+     "Float64"
+    ]
+   ],
+   "columns": [
+    [
+     "donor",
+     "String"
+    ],
+    [
+     "x",
+     "Float64"
+    ],
+    [
+     "t_x",
+     "Float64"
+    ],
+    [
+     "n",
+     "Float64"
+    ],
+    [
+     "pred_p_alive",
+     "Float64"
+    ],
+    [
+     "pred_transactions",
+     "Float64"
+    ]
+   ]
+  }
+ ]
+}

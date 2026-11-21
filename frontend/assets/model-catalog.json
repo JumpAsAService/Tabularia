@@ -551,6 +551,83 @@
     "year": 1,
     "index": 1
   },
+  "output_types": {
+    "results": {
+      "section": "String",
+      "level": "String",
+      "level_2": "String",
+      "stat": "String",
+      "value": "Float64",
+      "text": "String",
+      "x0": "Float64",
+      "x1": "Float64",
+      "ord": "Int64",
+      "key": "String"
+    },
+    "rows": {
+      "pred_fitted": "Float64",
+      "pred_residual": "Float64",
+      "pred_std_residual": "Float64",
+      "pred_leverage": "Float64",
+      "pred_cooks_distance": "Float64",
+      "pred_low": "Float64",
+      "pred_high": "Float64",
+      "pred_prob": "Float64",
+      "pred_linear": "Float64",
+      "pred_deviance_residual": "Float64",
+      "pred_pearson_residual": "Float64",
+      "pred_risk": "Float64",
+      "pred_martingale": "Float64",
+      "pred_deviance": "Float64",
+      "pred_median": "Float64",
+      "pred_median_low": "Float64",
+      "pred_median_high": "Float64",
+      "pred_quantile_*": "Float64",
+      "pred_quantile_*_low": "Float64",
+      "pred_quantile_*_high": "Float64",
+      "pred_surv_at_*": "Float64",
+      "pred_surv_at_*_low": "Float64",
+      "pred_surv_at_*_high": "Float64",
+      "pred_cox_snell": "Float64",
+      "pred_value": "Float64",
+      "pred_prob_*": "Float64",
+      "pred_p_alive": "Float64",
+      "pred_transactions": "Float64",
+      "pred_holdout_transactions": "Float64",
+      "pred_spend": "Float64",
+      "pred_discounted_transactions": "Float64",
+      "pred_clv": "Float64",
+      "pred_class": "String",
+      "pred_part": "String"
+    },
+    "table": {
+      "stratum": "String",
+      "time": "Float64",
+      "n_risk": "Int32",
+      "n_event": "Int32",
+      "n_censor": "Int32",
+      "surv": "Float64",
+      "lower": "Float64",
+      "upper": "Float64"
+    },
+    "forecast": {
+      "time": "@time",
+      "observed": "Float64",
+      "fitted": "Float64",
+      "forecast": "Float64",
+      "lower_80": "Float64",
+      "upper_80": "Float64",
+      "lower": "Float64",
+      "upper": "Float64",
+      "is_forecast": "Boolean"
+    }
+  },
+  "rows_input_types": {
+    "r": {
+      "integer": "Int32"
+    },
+    "python": {}
+  },
   "section_shapes": {
     "model": {
       "level": "null",
