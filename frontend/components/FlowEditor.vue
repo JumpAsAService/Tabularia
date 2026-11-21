@@ -1830,6 +1830,15 @@ function dropOnCanvas(ev: DragEvent) {
     // fitted models): its model, then its columns, are chosen in the node panel; input and output
     // come from its edges
     if (deniedToObserver()) return
+    // as a transformation: on an edge it goes in there, on a node it is that node's next step (Shift: a branch)
+    if (over?.edge) {
+      const edge = getEdges.value.find((e) => e.id === over.edge)
+      const box = edge && findNode(edge.source)?.parentNode ? findNode(findNode(edge.source)!.parentNode!) : undefined
+      const at = { x: position.x - (box?.position.x ?? 0), y: position.y - (box?.position.y ?? 0) }
+      if (edge && addStep(edge.source, kind, {}, { edgeId: edge.id, at, snap: true, step: modelStep })) return
+    } else if (over?.node) {
+      if (addStep(over.node, kind, {}, { branch: ev.shiftKey, step: modelStep })) return
+    }
     const id = `ctl-${++outputCounter}`
     addNodes({ id, type: modelStep.type, position, data: modelStep.data })
     selectedId.value = id

@@ -132,3 +132,13 @@ test('a Predict node has Run too, once it names its connection and its version; 
   assert.ok(runs.includes(`r.kind === 'model_predict' ? t('models.predict.title')`))
   for (const lang of LANGS) assert.ok(MESSAGES[lang].models.predict.chooseModel && MESSAGES[lang].models.predict.title, lang)
 })
+
+test('a model or a prediction dropped on a node or a connection is a step there, as a transformation is', () => {
+  const editor = read('components/FlowEditor.vue')
+  const branch = editor.slice(editor.indexOf('const modelStep = modelStepOf(kind)'), editor.indexOf("if (kind === 'container')"))
+  assert.ok(branch.includes('over?.edge') && branch.includes('over?.node'), branch)
+  assert.match(branch, /addStep\(edge\.source, kind, \{\}, \{ edgeId: edge\.id, at, snap: true, step: modelStep \}\)/)
+  assert.match(branch, /addStep\(over\.node, kind, \{\}, \{ branch: ev\.shiftKey, step: modelStep \}\)/)
+  // the free node stays for the empty canvas
+  assert.ok(branch.includes("addNodes({ id, type: modelStep.type, position, data: modelStep.data })"))
+})
