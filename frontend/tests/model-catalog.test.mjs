@@ -62,15 +62,17 @@ const ARIMA = m.modelOf('arima')
 test('the catalogue the editor reads is the engine\'s snapshot, byte for byte', () => {
   assert.equal(read('../assets/model-catalog.json'), read('../../backend/app/engine/models/catalog.json'),
     'run python3 .github/scripts/model_catalog.py')
-  assert.deepEqual(m.MODEL_CATALOG.models.map((x) => x.id), ['linear', 'logistic', 'kaplan_meier', 'cox', 'parametric_survival', 'arima', 'xgboost', 'catboost', 'clv', 'bg_bb'])
-  assert.deepEqual(m.MODEL_CATALOG.groups.map((g) => g.id), ['regression', 'survival', 'timeseries', 'boosting', 'customer_lifetime'])
+  assert.deepEqual(m.MODEL_CATALOG.models.map((x) => x.id), ['linear', 'logistic', 'kaplan_meier', 'cox', 'parametric_survival', 'arima', 'xgboost', 'catboost', 'clv', 'bg_bb', 'ab_test', 'ab_plan'])
+  assert.deepEqual(m.MODEL_CATALOG.groups.map((g) => g.id), ['regression', 'survival', 'timeseries', 'boosting', 'customer_lifetime', 'experiments'])
 })
 
 test('every key of every model has a control the form draws', () => {
   assert.deepEqual([...m.MODEL_CONTROLS].sort(), [...m.MODEL_CATALOG.controls].sort())
   const form = read('../components/ui/ModelForm.vue')
   const predict = read('../components/ui/PredictForm.vue')
-  for (const control of m.MODEL_CATALOG.controls) {
+  // level_numbers (the experiments' expected shares) is drawn by lot E7 of docs/specs/ab-testing.md: until then the palette
+  // leaves its nodes out. E7 takes this exception away.
+  for (const control of m.MODEL_CATALOG.controls.filter((c) => c !== 'level_numbers')) {
     assert.ok(form.includes(`f.control === '${control}'`), `ModelForm.vue does not draw «${control}»`)
   }
   for (const control of ['boolean', 'numbers', 'number', 'integer', 'column']) assert.ok(predict.includes(control) || control === 'integer', `PredictForm.vue: ${control}`)
@@ -100,7 +102,9 @@ test('the fields of a model in the catalogue\'s order, what it needs first', () 
   assert.equal(m.modelFields(ARIMA).find((f) => f.key === 'time').types.length, 3)
 })
 
-const WORDED = m.MODEL_CATALOG
+// The experiments' nodes ab_test and ab_plan: their words and form are lot E7 of docs/specs/ab-testing.md; until then the
+// palette leaves them out and their words are not asked for (the group's are). E7 takes this away.
+const WORDED = { ...m.MODEL_CATALOG, models: m.MODEL_CATALOG.models.filter((x) => !['ab_test', 'ab_plan'].includes(x.id)) }
 
 test('every model, group, preset, field, choice and reason has its words in the five languages', () => {
   const wanted = m.modelWordKeys(WORDED)
@@ -165,7 +169,7 @@ test('the palette shows the groups the person may use: not a disabled one, not o
   assert.deepEqual(m.modelShownGroups(null), [])
   assert.deepEqual(m.modelShownGroups({ disabled_reason: 'not_configured', groups: [] }), [])
   // Compose: all of them, to be shown greyed out
-  assert.equal(m.modelShownGroups({ disabled_reason: 'kubernetes', groups: [] }).length, 5)
+  assert.equal(m.modelShownGroups({ disabled_reason: 'kubernetes', groups: [] }).length, 6)
   assert.equal(m.modelOff('linear' && 'regression', { disabled_reason: 'kubernetes', groups: [] }), 'kubernetes')
   assert.equal(m.modelOff('survival', STATE), 'not_enabled')
   assert.equal(m.modelOff('regression', STATE), '')

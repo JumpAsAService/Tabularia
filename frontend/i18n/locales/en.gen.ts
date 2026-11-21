@@ -6500,7 +6500,8 @@ export default {
       "survival": "Survival",
       "timeseries": "Time series",
       "boosting": "Boosting",
-      "customer_lifetime": "Customer lifetime"
+      "customer_lifetime": "Customer lifetime",
+      "experiments": "Experiments"
     },
     "linear": {
       "name": "Linear regression",
@@ -7088,6 +7089,7 @@ export default {
       "timeseries": { "name": "Time series", "description": "ARIMA, from AR to SARIMAX, with automatic orders too." },
       "boosting": { "name": "Boosting", "description": "Gradient boosting: XGBoost and CatBoost, with importances by gain and SHAP." },
       "customer_lifetime": { "name": "Customer lifetime", "description": "Customers who leave without saying so: purchases to expect, probability of still being active and the discounted value (CLV), from Pareto/NBD, BG/NBD, MBG/NBD, BG/BB and Gamma–Gamma." },
+      "experiments": { "name": "Experiments", "description": "A/B tests: whether a variant moved a metric, whether the split of the units can be trusted and how sure the result is, and the size an experiment needs, from your own data." },
     },
     "modelsIn": "Models:",
     "packagesPinned": "{n} packages pinned",

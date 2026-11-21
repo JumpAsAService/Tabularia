@@ -454,6 +454,11 @@ def test_every_model_of_the_catalogue_is_an_operation_with_a_line_of_reference_a
         assert operation in ai_flow_agent.OPERATIONS and f"- {operation} {{" in reference
         needed = {k: _sample(catalogue["kinds"][kind], k) for k, kind in m["needs"].items()}
         full = {**m["defaults"], **needed}
+        # a key the node needs once the others are chosen (the experiments' metric, which a metric's type and an input shape
+        # make needed): a column each, as the nodes' own `requires` say
+        for rule in m["requires"]:
+            if ai_flow_agent._holds_all(rule["when"], full) and not ai_flow_agent._given(full.get(rule["key"])):
+                needed[rule["key"]] = full[rule["key"]] = _sample(catalogue["kinds"][{**m["needs"], **m["takes"]}[rule["key"]]], rule["key"])
         defaults = {k: v for k, v in m["defaults"].items()
                     if k not in needed and ai_flow_agent._given(v) and ai_flow_agent.model_applies(model_id, k, full)}
         assert clean_params(operation, {**needed, **defaults}) == {**needed, **defaults}
@@ -731,6 +736,11 @@ def test_checking_a_model_twice_is_checking_it_once():
         m = ai_flow_agent.MODELS[model_id]
         needed = {k: _sample(catalogue["kinds"][kind], k) for k, kind in m["needs"].items()}
         full = {**m["defaults"], **needed}
+        # a key the node needs once the others are chosen (the experiments' metric, which a metric's type and an input shape
+        # make needed): a column each, as the nodes' own `requires` say
+        for rule in m["requires"]:
+            if ai_flow_agent._holds_all(rule["when"], full) and not ai_flow_agent._given(full.get(rule["key"])):
+                needed[rule["key"]] = full[rule["key"]] = _sample(catalogue["kinds"][{**m["needs"], **m["takes"]}[rule["key"]]], rule["key"])
         defaults = {k: v for k, v in m["defaults"].items()
                     if k not in needed and ai_flow_agent._given(v) and ai_flow_agent.model_applies(model_id, k, full)}
         _twice("the defaults", operation, {**needed, **defaults})

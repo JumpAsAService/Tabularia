@@ -22,7 +22,7 @@ import { isNumericDtype } from '~/composables/previewGrid'
 
 export type ModelControl =
   | 'column' | 'columns' | 'level' | 'reference' | 'pairs' | 'choice' | 'number' | 'integer'
-  | 'boolean' | 'numbers' | 'number_or_choice'
+  | 'boolean' | 'numbers' | 'number_or_choice' | 'level_numbers'
 
 /** How a form asks for one kind of value (the catalogue's `kinds`). */
 export interface ModelKind {
@@ -128,6 +128,8 @@ export const MODEL_CATALOG: ModelCatalog = raw as unknown as ModelCatalog
 /** The controls components/ui/ModelForm.vue draws: a kind with another one has no field. */
 export const MODEL_CONTROLS: readonly ModelControl[] = [
   'column', 'columns', 'level', 'reference', 'pairs', 'choice', 'number', 'integer', 'boolean', 'numbers', 'number_or_choice',
+  // a number for each value of a column (the experiments' expected shares): its field is lot E7's of docs/specs/ab-testing.md
+  'level_numbers',
 ]
 
 /** The node types of a flow that are models. */
@@ -694,6 +696,10 @@ export const modelPresetNameKey = (preset: string): string => `models.presets.${
 export const modelPresetHintKey = (preset: string): string => `models.presets.${preset}.hint`
 export const modelGroupKey = (group: string): string => `models.groups.${group}`
 
+// Models the catalogue declares and the engine's contract holds, whose form and words the editor does not have
+// yet: the palette leaves them out. Lot E7 of docs/specs/ab-testing.md takes this away with the nodes' words.
+const NOT_IN_THE_PALETTE_YET = new Set(['ab_test', 'ab_plan'])
+
 /** The palette's Models group: the shown groups in the catalogue's order, each with its models
  *  and, after ARIMA, the six presets of that same node. With a search, only the items whose
  *  name, hint or group holds it. */
@@ -706,7 +712,7 @@ export function modelPalette(shown: readonly ModelGroupDef[], query: string, tex
     const items: ModelPaletteItem[] = []
     for (const id of group.models) {
       const model = modelOf(id, catalog)
-      if (!model) continue
+      if (!model || NOT_IN_THE_PALETTE_YET.has(id)) continue
       items.push({ kind: modelKindOf(id), model: id, nameKey: modelNameKey(id), hintKey: modelHintKey(id) })
       for (const preset of Object.keys(model.presets)) {
         items.push({ kind: modelKindOf(id, preset), model: id, preset, nameKey: modelPresetNameKey(preset), hintKey: modelPresetHintKey(preset) })
