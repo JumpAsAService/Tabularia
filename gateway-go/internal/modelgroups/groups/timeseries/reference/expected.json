@@ -5024,6 +5024,664 @@
         }
       ],
       "refuses": null
+    },
+    {
+      "id": "emd_tones",
+      "model": "decomposition",
+      "data": "data/emd_tones.csv",
+      "types": {
+        "t": "integer",
+        "signal": "number"
+      },
+      "params": {
+        "method": "emd",
+        "time": "t",
+        "value": "signal",
+        "frequency": "index",
+        "period": 8
+      },
+      "expect": [
+        {
+          "key": "model|||variant",
+          "text": "emd"
+        },
+        {
+          "key": "model|||n_imfs",
+          "value": 2
+        },
+        {
+          "key": "imf|imf_1||mean_period",
+          "value": 8.0
+        },
+        {
+          "key": "imf|imf_1||extrema",
+          "value": 256
+        },
+        {
+          "key": "imf|imf_1||zero_crossings",
+          "value": 256
+        },
+        {
+          "key": "imf|imf_1||variance_share",
+          "value": 0.11162752836839453
+        },
+        {
+          "key": "imf|imf_1||energy_share",
+          "value": 0.045223756650827944
+        },
+        {
+          "key": "assumption|imf_condition|imf_1|verdict",
+          "text": "ok"
+        },
+        {
+          "key": "imf|imf_2||mean_period",
+          "value": 64.0
+        },
+        {
+          "key": "imf|imf_2||extrema",
+          "value": 32
+        },
+        {
+          "key": "imf|imf_2||zero_crossings",
+          "value": 31
+        },
+        {
+          "key": "assumption|imf_condition|imf_2|verdict",
+          "text": "ok"
+        },
+        {
+          "key": "imf|residue||mean_period",
+          "value": null
+        },
+        {
+          "key": "imf|residue||variance_share",
+          "value": 0.4889989899850391
+        },
+        {
+          "key": "imf|residue||extrema",
+          "value": 0
+        },
+        {
+          "key": "assumption|orthogonality||value",
+          "value": -0.0196096316168654
+        },
+        {
+          "key": "assumption|residue_monotonic||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|residue_monotonic||count",
+          "value": 0
+        },
+        {
+          "key": "assumption|ljung_box||verdict",
+          "text": "not_computed"
+        },
+        {
+          "key": "assumption|ljung_box||advice_id",
+          "text": "emd_no_noise"
+        },
+        {
+          "key": "reading|imfs||line_1",
+          "text": "@imfs_found n_imfs=2 max_imf=10"
+        },
+        {
+          "key": "reading|imfs||line_2",
+          "text": "@imfs_empty first=3 last=10"
+        },
+        {
+          "key": "reading|imfs||line_3",
+          "text": "@imf_mode imf=1 mean_period=8"
+        },
+        {
+          "key": "reading|imfs||line_4",
+          "text": "@imf_mode imf=2 mean_period=64"
+        },
+        {
+          "key": "reading|summary||line_1",
+          "text": "@summary_emd value=signal n=1024"
+        }
+      ],
+      "refuses": null
+    },
+    {
+      "id": "emd_tones_noise_imfs",
+      "model": "decomposition",
+      "data": "data/emd_tones.csv",
+      "types": {
+        "t": "integer",
+        "signal": "number"
+      },
+      "params": {
+        "method": "emd",
+        "time": "t",
+        "value": "signal",
+        "frequency": "index",
+        "period": 8,
+        "noise_imfs": 1
+      },
+      "expect": [
+        {
+          "key": "model|||variant",
+          "text": "emd"
+        },
+        {
+          "key": "model|||n_imfs",
+          "value": 2
+        },
+        {
+          "key": "imf|imf_1||mean_period",
+          "value": 8.0
+        },
+        {
+          "key": "imf|imf_1||extrema",
+          "value": 256
+        },
+        {
+          "key": "imf|imf_1||zero_crossings",
+          "value": 256
+        },
+        {
+          "key": "imf|imf_1||variance_share",
+          "value": 0.11162752836839453
+        },
+        {
+          "key": "imf|imf_1||energy_share",
+          "value": 0.045223756650827944
+        },
+        {
+          "key": "assumption|imf_condition|imf_1|verdict",
+          "text": "ok"
+        },
+        {
+          "key": "imf|imf_2||mean_period",
+          "value": 64.0
+        },
+        {
+          "key": "imf|imf_2||extrema",
+          "value": 32
+        },
+        {
+          "key": "imf|imf_2||zero_crossings",
+          "value": 31
+        },
+        {
+          "key": "assumption|imf_condition|imf_2|verdict",
+          "text": "ok"
+        },
+        {
+          "key": "imf|residue||mean_period",
+          "value": null
+        },
+        {
+          "key": "imf|residue||variance_share",
+          "value": 0.4889989899850391
+        },
+        {
+          "key": "imf|residue||extrema",
+          "value": 0
+        },
+        {
+          "key": "assumption|orthogonality||value",
+          "value": -0.0196096316168654
+        },
+        {
+          "key": "assumption|residue_monotonic||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|residue_monotonic||count",
+          "value": 0
+        },
+        {
+          "key": "assumption|trend_strength||value",
+          "value": 0.8136503520480722
+        },
+        {
+          "key": "assumption|seasonal_strength|8|value",
+          "value": 0.8002582108580252
+        },
+        {
+          "key": "reading|imfs||line_1",
+          "text": "@imfs_found n_imfs=2 max_imf=10"
+        },
+        {
+          "key": "reading|imfs||line_2",
+          "text": "@imfs_empty first=3 last=10"
+        },
+        {
+          "key": "reading|imfs||line_3",
+          "text": "@imf_mode imf=1 mean_period=8"
+        },
+        {
+          "key": "reading|imfs||line_4",
+          "text": "@imf_mode imf=2 mean_period=64"
+        },
+        {
+          "key": "reading|summary||line_1",
+          "text": "@summary_emd value=signal n=1024"
+        }
+      ],
+      "refuses": null
+    },
+    {
+      "id": "emd_tones_fixed_siftings",
+      "model": "decomposition",
+      "data": "data/emd_tones.csv",
+      "types": {
+        "t": "integer",
+        "signal": "number"
+      },
+      "params": {
+        "method": "emd",
+        "time": "t",
+        "value": "signal",
+        "frequency": "index",
+        "period": 8,
+        "s_number": 0,
+        "max_siftings": 10
+      },
+      "expect": [
+        {
+          "key": "model|||variant",
+          "text": "emd"
+        },
+        {
+          "key": "model|||n_imfs",
+          "value": 2
+        },
+        {
+          "key": "imf|imf_1||mean_period",
+          "value": 8.0
+        },
+        {
+          "key": "imf|imf_1||extrema",
+          "value": 256
+        },
+        {
+          "key": "imf|imf_1||zero_crossings",
+          "value": 256
+        },
+        {
+          "key": "imf|imf_1||variance_share",
+          "value": 0.11164299356947054
+        },
+        {
+          "key": "imf|imf_1||energy_share",
+          "value": 0.04523002596817524
+        },
+        {
+          "key": "assumption|imf_condition|imf_1|verdict",
+          "text": "ok"
+        },
+        {
+          "key": "imf|imf_2||mean_period",
+          "value": 64.0
+        },
+        {
+          "key": "imf|imf_2||extrema",
+          "value": 32
+        },
+        {
+          "key": "imf|imf_2||zero_crossings",
+          "value": 31
+        },
+        {
+          "key": "assumption|imf_condition|imf_2|verdict",
+          "text": "ok"
+        },
+        {
+          "key": "imf|residue||mean_period",
+          "value": null
+        },
+        {
+          "key": "imf|residue||variance_share",
+          "value": 0.4893920294918845
+        },
+        {
+          "key": "imf|residue||extrema",
+          "value": 0
+        },
+        {
+          "key": "assumption|orthogonality||value",
+          "value": -0.01999913810659928
+        },
+        {
+          "key": "assumption|residue_monotonic||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|residue_monotonic||count",
+          "value": 0
+        },
+        {
+          "key": "assumption|ljung_box||verdict",
+          "text": "not_computed"
+        },
+        {
+          "key": "assumption|ljung_box||advice_id",
+          "text": "emd_no_noise"
+        },
+        {
+          "key": "reading|imfs||line_1",
+          "text": "@imfs_found n_imfs=2 max_imf=10"
+        },
+        {
+          "key": "reading|imfs||line_2",
+          "text": "@imfs_empty first=3 last=10"
+        },
+        {
+          "key": "reading|imfs||line_3",
+          "text": "@imf_mode imf=1 mean_period=8"
+        },
+        {
+          "key": "reading|imfs||line_4",
+          "text": "@imf_mode imf=2 mean_period=64"
+        },
+        {
+          "key": "reading|summary||line_1",
+          "text": "@summary_emd value=signal n=1024"
+        }
+      ],
+      "refuses": null
+    },
+    {
+      "id": "emd_short",
+      "model": "decomposition",
+      "data": "data/emd_short.csv",
+      "types": {
+        "day": "date",
+        "visits": "number"
+      },
+      "params": {
+        "method": "emd",
+        "time": "day",
+        "value": "visits",
+        "frequency": "day"
+      },
+      "expect": [
+        {
+          "key": "model|||variant",
+          "text": "emd"
+        },
+        {
+          "key": "model|||n_imfs",
+          "value": 3
+        },
+        {
+          "key": "imf|imf_1||mean_period",
+          "value": 5.0
+        },
+        {
+          "key": "imf|imf_1||extrema",
+          "value": 16
+        },
+        {
+          "key": "imf|imf_1||zero_crossings",
+          "value": 15
+        },
+        {
+          "key": "imf|imf_1||variance_share",
+          "value": 1.4686731878364117
+        },
+        {
+          "key": "imf|imf_1||energy_share",
+          "value": 0.02317657763489281
+        },
+        {
+          "key": "assumption|imf_condition|imf_1|verdict",
+          "text": "ok"
+        },
+        {
+          "key": "imf|imf_2||mean_period",
+          "value": 10.0
+        },
+        {
+          "key": "imf|imf_2||extrema",
+          "value": 8
+        },
+        {
+          "key": "imf|imf_2||zero_crossings",
+          "value": 7
+        },
+        {
+          "key": "assumption|imf_condition|imf_2|verdict",
+          "text": "ok"
+        },
+        {
+          "key": "imf|imf_3||mean_period",
+          "value": 40.0
+        },
+        {
+          "key": "imf|imf_3||extrema",
+          "value": 2
+        },
+        {
+          "key": "imf|imf_3||zero_crossings",
+          "value": 1
+        },
+        {
+          "key": "assumption|imf_condition|imf_3|verdict",
+          "text": "ok"
+        },
+        {
+          "key": "imf|residue||mean_period",
+          "value": null
+        },
+        {
+          "key": "imf|residue||variance_share",
+          "value": 0.12675583971108365
+        },
+        {
+          "key": "imf|residue||extrema",
+          "value": 0
+        },
+        {
+          "key": "assumption|orthogonality||value",
+          "value": -0.018496969288810824
+        },
+        {
+          "key": "assumption|residue_monotonic||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|residue_monotonic||count",
+          "value": 0
+        },
+        {
+          "key": "assumption|ljung_box||verdict",
+          "text": "not_computed"
+        },
+        {
+          "key": "assumption|ljung_box||advice_id",
+          "text": "emd_no_noise"
+        },
+        {
+          "key": "reading|imfs||line_1",
+          "text": "@imfs_found n_imfs=3 max_imf=10"
+        },
+        {
+          "key": "reading|imfs||line_2",
+          "text": "@imfs_empty first=4 last=10"
+        },
+        {
+          "key": "reading|imfs||line_3",
+          "text": "@imf_mode imf=1 mean_period=5"
+        },
+        {
+          "key": "reading|imfs||line_4",
+          "text": "@imf_mode imf=2 mean_period=10"
+        },
+        {
+          "key": "reading|imfs||line_5",
+          "text": "@imf_mode imf=3 mean_period=40"
+        },
+        {
+          "key": "reading|summary||line_1",
+          "text": "@summary_emd value=visits n=40"
+        }
+      ],
+      "refuses": null
+    },
+    {
+      "id": "emd_cut",
+      "model": "decomposition",
+      "data": "data/emd_cut.csv",
+      "types": {
+        "t": "integer",
+        "signal": "number"
+      },
+      "params": {
+        "method": "emd",
+        "time": "t",
+        "value": "signal",
+        "frequency": "index",
+        "max_imf": 3
+      },
+      "expect": [
+        {
+          "key": "model|||variant",
+          "text": "emd"
+        },
+        {
+          "key": "model|||n_imfs",
+          "value": 3
+        },
+        {
+          "key": "imf|imf_1||mean_period",
+          "value": 5.988304093567251
+        },
+        {
+          "key": "imf|imf_1||extrema",
+          "value": 341
+        },
+        {
+          "key": "imf|imf_1||zero_crossings",
+          "value": 341
+        },
+        {
+          "key": "imf|imf_1||variance_share",
+          "value": 0.03322649315940215
+        },
+        {
+          "key": "imf|imf_1||energy_share",
+          "value": 0.03307556886995756
+        },
+        {
+          "key": "assumption|imf_condition|imf_1|verdict",
+          "text": "ok"
+        },
+        {
+          "key": "imf|imf_2||mean_period",
+          "value": 19.692307692307693
+        },
+        {
+          "key": "imf|imf_2||extrema",
+          "value": 103
+        },
+        {
+          "key": "imf|imf_2||zero_crossings",
+          "value": 102
+        },
+        {
+          "key": "assumption|imf_condition|imf_2|verdict",
+          "text": "ok"
+        },
+        {
+          "key": "imf|imf_3||mean_period",
+          "value": 68.26666666666667
+        },
+        {
+          "key": "imf|imf_3||extrema",
+          "value": 30
+        },
+        {
+          "key": "imf|imf_3||zero_crossings",
+          "value": 30
+        },
+        {
+          "key": "assumption|imf_condition|imf_3|verdict",
+          "text": "ok"
+        },
+        {
+          "key": "imf|residue||mean_period",
+          "value": null
+        },
+        {
+          "key": "imf|residue||variance_share",
+          "value": 0.7586779638247568
+        },
+        {
+          "key": "imf|residue||extrema",
+          "value": 8
+        },
+        {
+          "key": "assumption|orthogonality||value",
+          "value": 0.005971930448622103
+        },
+        {
+          "key": "assumption|residue_monotonic||verdict",
+          "text": "failed"
+        },
+        {
+          "key": "assumption|residue_monotonic||count",
+          "value": 8
+        },
+        {
+          "key": "assumption|ljung_box||verdict",
+          "text": "not_computed"
+        },
+        {
+          "key": "assumption|ljung_box||advice_id",
+          "text": "emd_no_noise"
+        },
+        {
+          "key": "reading|imfs||line_1",
+          "text": "@imfs_found n_imfs=3 max_imf=3"
+        },
+        {
+          "key": "reading|imfs||line_2",
+          "text": "@imfs_cut max_imf=3 extrema=8"
+        },
+        {
+          "key": "reading|imfs||line_3",
+          "text": "@imf_mode imf=1 mean_period=5.988304093567251"
+        },
+        {
+          "key": "reading|imfs||line_4",
+          "text": "@imf_mode imf=2 mean_period=19.692307692307693"
+        },
+        {
+          "key": "reading|imfs||line_5",
+          "text": "@imf_mode imf=3 mean_period=68.26666666666667"
+        },
+        {
+          "key": "reading|summary||line_1",
+          "text": "@summary_emd value=signal n=1024"
+        }
+      ],
+      "refuses": null
+    },
+    {
+      "id": "emd_noise_imfs_above",
+      "model": "decomposition",
+      "data": "data/emd_short.csv",
+      "types": {
+        "day": "date",
+        "visits": "number"
+      },
+      "params": {
+        "method": "emd",
+        "time": "day",
+        "value": "visits",
+        "frequency": "day",
+        "noise_imfs": 5
+      },
+      "expect": [],
+      "refuses": {
+        "code": "noise_imfs_above",
+        "message": "EMD found 3 IMFs; 5 cannot be noise: choose at most 3"
+      }
     }
   ]
 }

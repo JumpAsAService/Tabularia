@@ -43,16 +43,17 @@ def test_every_column_an_output_declares_has_a_type():
     assert set(catalog.ROWS_INPUT_TYPES) == {g["language"] for g in catalog.GROUPS.values()}
 
 
-# The decomposition node's runner refuses «not built yet» until lots D2 and D3: its cases join make_output_columns.py then
-# (docs/specs/ts-decomposition.md, «The lots D0–D9»), and the test below holds the names it must write until they do.
-NOT_RUN_YET: set[str] = {"decomposition"}
+# The decomposition node's STL, classical and MSTL refuse «not built yet» until lot D2 (EMD is run: lot D3): their cases
+# join make_output_columns.py then (docs/specs/ts-decomposition.md, «The lots D0–D9»), and the test below holds the names
+# they must write until they do.
+NOT_RUN_YET: set[tuple[str, str]] = {("decomposition", "stl"), ("decomposition", "classical"), ("decomposition", "mstl")}
 
 
 def test_every_variant_that_hands_on_columns_was_run():
     run = {(c["model"], _variant_of(c)) for c in CASES if {**catalog.MODELS[c["model"]]["defaults"], **c["params"]}.get("output") != "results"}
     for model, spec in catalog.MODELS.items():
         for v in spec["variants"]:
-            if v["outputs"] and model not in NOT_RUN_YET:
+            if v["outputs"] and (model, v["id"]) not in NOT_RUN_YET:
                 assert (model, v["id"]) in run, f"{model} ({v['id']}): no case of output_columns.json runs it"
     assert any({**catalog.MODELS[c["model"]]["defaults"], **c["params"]}.get("output") == "results" for c in CASES)
 

@@ -1499,6 +1499,195 @@
    ]
   },
   {
+   "what": "decomposition, EMD on dates: the components, imf_4 to imf_10 empty",
+   "model": "decomposition",
+   "params": {
+    "method": "emd",
+    "time": "day",
+    "value": "visits",
+    "frequency": "day"
+   },
+   "input": [
+    [
+     "day",
+     "Date"
+    ],
+    [
+     "visits",
+     "Float64"
+    ]
+   ],
+   "columns": [
+    [
+     "time",
+     "Date"
+    ],
+    [
+     "observed",
+     "Float64"
+    ],
+    [
+     "filled",
+     "Boolean"
+    ],
+    [
+     "imf_1",
+     "Float64"
+    ],
+    [
+     "imf_2",
+     "Float64"
+    ],
+    [
+     "imf_3",
+     "Float64"
+    ],
+    [
+     "imf_4",
+     "Float64"
+    ],
+    [
+     "imf_5",
+     "Float64"
+    ],
+    [
+     "imf_6",
+     "Float64"
+    ],
+    [
+     "imf_7",
+     "Float64"
+    ],
+    [
+     "imf_8",
+     "Float64"
+    ],
+    [
+     "imf_9",
+     "Float64"
+    ],
+    [
+     "imf_10",
+     "Float64"
+    ],
+    [
+     "residue",
+     "Float64"
+    ]
+   ]
+  },
+  {
+   "what": "decomposition, EMD with a log and max_imf 4: the components",
+   "model": "decomposition",
+   "params": {
+    "method": "emd",
+    "time": "day",
+    "value": "visits",
+    "frequency": "day",
+    "transform": "log",
+    "max_imf": 4
+   },
+   "input": [
+    [
+     "day",
+     "Date"
+    ],
+    [
+     "visits",
+     "Float64"
+    ]
+   ],
+   "columns": [
+    [
+     "time",
+     "Date"
+    ],
+    [
+     "observed",
+     "Float64"
+    ],
+    [
+     "transformed",
+     "Float64"
+    ],
+    [
+     "filled",
+     "Boolean"
+    ],
+    [
+     "imf_1",
+     "Float64"
+    ],
+    [
+     "imf_2",
+     "Float64"
+    ],
+    [
+     "imf_3",
+     "Float64"
+    ],
+    [
+     "imf_4",
+     "Float64"
+    ],
+    [
+     "residue",
+     "Float64"
+    ]
+   ]
+  },
+  {
+   "what": "decomposition, EMD on a whole-number time, max_imf 3: the components",
+   "model": "decomposition",
+   "params": {
+    "method": "emd",
+    "time": "t",
+    "value": "signal",
+    "frequency": "index",
+    "max_imf": 3
+   },
+   "input": [
+    [
+     "t",
+     "Int64"
+    ],
+    [
+     "signal",
+     "Float64"
+    ]
+   ],
+   "columns": [
+    [
+     "time",
+     "Int64"
+    ],
+    [
+     "observed",
+     "Float64"
+    ],
+    [
+     "filled",
+     "Boolean"
+    ],
+    [
+     "imf_1",
+     "Float64"
+    ],
+    [
+     "imf_2",
+     "Float64"
+    ],
+    [
+     "imf_3",
+     "Float64"
+    ],
+    [
+     "residue",
+     "Float64"
+    ]
+   ]
+  },
+  {
    "what": "XGBoost regression, the rows",
    "model": "xgboost",
    "params": {
