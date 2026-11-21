@@ -1666,6 +1666,62 @@ func TestAPassOfAnotherRunnerStartsThisRunnersRecheck(t *testing.T) {
 	}
 }
 
+// The cluster refuses the recheck's ConfigMap (the namespace's quota of ConfigMaps, which every
+// script run uses, is full): as a refused Job, an attempt counted, tried again after the delay and
+// said on the card, not a Job made and deleted at every round.
+func TestARecheckWhoseConfigMapIsRefusedIsCountedAndWaits(t *testing.T) {
+	f := newModelsFixture(t)
+	f.enable(f.admin, "survival")
+	f.buildTo(t, "survival", true)
+	b := f.builds()
+	if _, err := f.db.Exec(f.ctx, `UPDATE script_environment_versions SET runner_hash = 'of-the-old-runner'`); err != nil {
+		t.Fatal(err)
+	}
+	created := 0
+	inner := f.kube.srv.Config.Handler
+	f.kube.srv.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/configmaps") {
+			f.kube.reply(w, 403, map[string]any{"message": `configmaps "x" is forbidden: exceeded quota: scripts, requested: count/configmaps=1, ` +
+				`used: count/configmaps=200, limited: count/configmaps=200`})
+			return
+		}
+		if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/jobs") {
+			created++
+		}
+		inner.ServeHTTP(w, r)
+	})
+	for i := 0; i < 5; i++ {
+		if _, err := b.oneRound(f.ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if created != 1 {
+		t.Errorf("%d recheck Jobs made in 5 rounds", created)
+	}
+	if len(f.kube.jobs) != 0 {
+		t.Errorf("a Job left without its code: %v", f.kube.jobs)
+	}
+	v := f.versions("survival")[0]
+	if v.Status != "ready" || v.RecheckAttempts != 1 || v.RecheckAfter == nil ||
+		!strings.HasPrefix(deref(v.RecheckError), "the cluster refused the ConfigMap of its code: ") ||
+		!strings.Contains(deref(v.RecheckError), "exceeded quota: scripts") {
+		t.Fatalf("the version: %s attempts %d after %v why %q", v.Status, v.RecheckAttempts, v.RecheckAfter, deref(v.RecheckError))
+	}
+	if d := answerOf(t, f.call(f.admin, "GET", "survival", "", "", false, mgDetail)).Group; d.State != "recheck_retrying" || !d.Ready {
+		t.Errorf("the card: %s", d.State)
+	}
+	if _, err := ReadyModelGroupImage(f.ctx, f.db, "survival"); err != nil {
+		t.Fatalf("the version in use stopped serving: %v", err)
+	}
+	// after the delay, tried again
+	if _, err := f.db.Exec(f.ctx, `UPDATE script_environment_versions SET recheck_after = now() - interval '1 second'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.oneRound(f.ctx); err != nil || created != 2 || f.versions("survival")[0].RecheckAttempts != 2 {
+		t.Errorf("tried again: %v, %d Jobs, attempts %d", err, created, f.versions("survival")[0].RecheckAttempts)
+	}
+}
+
 // What a group's recheck cannot do (here an answer of the API that is not JSON) does not undo the
 // round: another group's check, whose Job the round read and deleted, keeps its outcome.
 func TestARecheckThatErrsDoesNotUndoTheRound(t *testing.T) {

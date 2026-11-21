@@ -391,6 +391,11 @@ func (b *scriptBuilds) recheckGroup(ctx context.Context, tx pgx.Tx, g modelgroup
 	if err := b.createSelftestCode(ctx, k, manifest, job, code, codeName); err != nil {
 		b.log.Warn(fmt.Sprintf("models: the code of the self-test of the group %s not made (%v)", g.ID, err))
 		_ = kube.DeleteJob(ctx, k, b.s.Scripts.Namespace, sbJobName("recheck", &v))
+		if errors.As(err, &ke) && !mgClusterBusy(ke) {
+			// a refusal (a quota of ConfigMaps full, a policy) that the next round would meet
+			// again: counted, after mgRecheckDelay, and said on the card, as a refused Job
+			return b.recheckLater(ctx, tx, &v, g, "the cluster refused the ConfigMap of its code: "+ke.Message)
+		}
 		return nil
 	}
 	if _, err := tx.Exec(ctx, `UPDATE script_environment_versions SET job_name = $2 WHERE id = $1`, v.ID, sbJobName("recheck", &v)); err != nil {
