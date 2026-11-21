@@ -1745,7 +1745,8 @@ ps_rows_output <- function(df, model, prepared, fitted) {
   # with a start the hazard that counts is the one accrued while the row was observed, H(time) − H(start)
   accrued <- if (is.null(prepared$start)) r else r + ifelse(prepared$start == 0, 0, ps_log_survival(m, prepared$start, pars))
   mart <- prepared$status - accrued
-  dev <- sign(mart) * sqrt(-2 * (mart + ifelse(prepared$status == 1L, log(prepared$status - mart), 0)))
+  # (−2(m + log(1 − m)) is 0 or more; rounding can take it to −1e-17, whose root is NaN: 0, as the checks' psc_residuals)
+  dev <- sign(mart) * sqrt(pmax(-2 * (mart + ifelse(prepared$status == 1L, log(prepared$status - mart), 0)), 0))
   for (name in c("pred_cox_snell", "pred_martingale", "pred_deviance")) out[[name]] <- NA_real_
   out$pred_cox_snell[prepared$rows] <- r
   out$pred_martingale[prepared$rows] <- mart
