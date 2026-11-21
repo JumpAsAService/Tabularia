@@ -432,6 +432,10 @@ def test_the_hyperparameters_are_the_nodes_with_the_defaults_filled_in(tmp_path,
     _, page = draw(tmp_path, chart_service, monkeypatch, "catboost-regression")
     line = next(s for s in strings(json.loads(page)) if s.startswith("Hyperparameters: "))
     assert "l2_leaf_reg = 3" in line and "rsm = 1" in line and "min_child_weight" not in line
+    # a number with the page's decimal mark
+    _, page = draw(tmp_path, chart_service, monkeypatch, "xgboost-regression", locale="it")
+    line = next(s for s in strings(json.loads(page)) if s.startswith("Iperparametri: "))
+    assert "learning_rate = 0,05" in line and "subsample = 0,8" in line and "0.05" not in line
 
 
 def test_a_boosting_advice_and_note_are_said_in_the_page_language_whatever_the_runner_wording():

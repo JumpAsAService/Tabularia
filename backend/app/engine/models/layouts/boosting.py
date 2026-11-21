@@ -21,6 +21,7 @@ from app.engine.models import catalog
 from app.engine.models.layouts import common as c
 from app.engine.stats import layouts as stats
 from app.engine.stats.catalog import label_of
+from app.reports import formats
 
 # the ramp of the beeswarm: the five bins of the predictor's value, then a category and a missing value
 BEESWARM = (("low", "#2c5aa0"), ("mid_low", "#7fa7d6"), ("mid", "#8c8c8c"), ("mid_high", "#e3866b"), ("high", "#b2182b"),
@@ -49,16 +50,19 @@ def stat_names(task: str) -> tuple[str, ...]:
     return tuple(f"{p}_{m}" for m in METRICS[task] for p in PARTS)
 
 
-def hyperparameters(model: str, checked: dict[str, Any], keys: tuple[str, ...]) -> str:
-    """«learning_rate = 0.05 · max_depth = 6 …»: the node's settings, the defaults filled in."""
-    return "  ·  ".join(f"{k} = {_said(checked[k])}" for k in keys if k in checked and checked[k] is not None)
+def hyperparameters(model: str, checked: dict[str, Any], keys: tuple[str, ...], decimal: str = ".") -> str:
+    """«learning_rate = 0.05 · max_depth = 6 …»: the node's settings, the defaults filled in; a number with the
+    language's decimal mark («0,05»)."""
+    return "  ·  ".join(f"{k} = {_said(checked[k], decimal)}" for k in keys if k in checked and checked[k] is not None)
 
 
-def _said(v: Any) -> str:
+def _said(v: Any, decimal: str = ".") -> str:
     if isinstance(v, bool):
         return "true" if v else "false"
     if isinstance(v, float) and v.is_integer():
         return str(int(v))
+    if isinstance(v, float):
+        return str(v).replace(".", decimal)
     return str(v)
 
 
@@ -80,7 +84,7 @@ def cards(task: str, w: dict) -> tuple[c.Card, ...]:
             c.Card("k_logloss", k["logloss"], shown(num(key("validation_mlogloss")), "0.000")), trees)
 
 
-def fit_block(model: str, checked: dict[str, Any], keys: tuple[str, ...]):
+def fit_block(model: str, checked: dict[str, Any], keys: tuple[str, ...], decimal: str = "."):
     """After the numbers of the fit: how the task and the validation part were set, the metrics
     on training, validation and the baseline, the hyperparameters."""
     task = checked["task"]
@@ -111,7 +115,7 @@ def fit_block(model: str, checked: dict[str, Any], keys: tuple[str, ...]):
         ], p.y, visible=c.exists(f_metrics)), 10)
         p.text("metrics_note", m["note"] + (m["note_binary"] if task == "binary" else ""), h=5, size=7.5, color=c.MUTED, can_grow=True)
         p.y += 1.0
-        shown = hyperparameters(model, checked, keys)
+        shown = hyperparameters(model, checked, keys, decimal)
         p.text("hyperparameters", stats.static(f'{f["hyperparameters"]}: {shown}'), h=5, size=8, color=c.MUTED, can_grow=True)
 
     return block
@@ -277,7 +281,7 @@ def report(model: str, params: dict[str, Any], locale: str, sample: list[dict] |
     if task != "multiclass":
         charts.append(beeswarm(task, w))
     charts += [*learning_charts(task, w, checked), *task_charts(task, w)]
-    blocks = (fit_block(model, checked, keys), importance_block(task), *((confusion_block(task),) if task != "regression" else ()))
+    blocks = (fit_block(model, checked, keys, formats.locale(c.code(locale)).decimal), importance_block(task), *((confusion_block(task),) if task != "regression" else ()))
     return c.page(model, params, locale, sample, step, name=name(model, params, locale), about=about(params, locale),
                   cards=cards(task, w), blocks=blocks, charts=tuple(charts), assumptions_note=w["diagnostics_note"],
                   p_values=False, fit_skip=stat_names(task))
