@@ -204,8 +204,9 @@ fit_cox <- function(task) {
   zph <- tryCatch(survival::cox.zph(fit, transform = "km", terms = TRUE), error = function(e) e)
   cox_assumptions(rows, fit = fit, frame = frame, form_rhs = rhs, start = !is.null(start), ties = ties, alpha = alpha,
                   design = design, groups = groups, zph = zph, vif = vif, events = events)
+  # the rows written after the charts: the notes, at most those of coxph and four more, and the card's
   cox_charts(rows, task, fit = fit, frame = frame, design = design, groups = groups, zph = zph, lp = lp,
-             strata_names = strata_names, start = !is.null(start))
+             strata_names = strata_names, start = !is.null(start), after = length(notes) + 5L)
 
   # ── notes ─────────────────────────────────────────────────────────────────
   for (n_ in notes) tab_note(rows, n_)
@@ -464,11 +465,15 @@ cox_numeric_input <- function(design, label) {
   NULL
 }
 
-cox_charts <- function(rows, task, fit, frame, design, groups, zph, lp, strata_names, start) {
-  most <- tab_limit(task, "max_chart_points")
+cox_charts <- function(rows, task, fit, frame, design, groups, zph, lp, strata_names, start, after = 0L) {
   keep <- tab_limit(task, "extreme_points")
   predictors <- unlist(cox_params(task$params)$predictors)
   charted <- head(predictors, COX_MAX_TERMS_CHARTED)
+  numeric <- Filter(function(p) !is.null(cox_numeric_input(design, p)), charted)
+  # the series: per term charted the Schoenfeld points and their smooth with its band; per numeric
+  # predictor the martingale points and their lowess; the deviance chart; a survival curve a stratum.
+  # A series has max_chart_points, fewer when those would pass max_result_rows
+  most <- tab_chart_points(task, rows, 4L * length(charted) + 2L * length(numeric) + 1L + length(strata_names), after = after)
 
   # the scaled Schoenfeld residuals of each predictor against time, plot.cox.zph's smooth
   if (!inherits(zph, "error")) {
@@ -482,7 +487,7 @@ cox_charts <- function(rows, task, fit, frame, design, groups, zph, lp, strata_n
       ok <- is.finite(y)
       i <- which(ok)[tab_cap(sum(ok), max = most, score = y[ok] - stats::median(y[ok]), keep = keep)]
       tab_points(rows, "point", "schoenfeld", "y", x = tt[i], y = y[i], level_2 = label)
-      smooth <- tryCatch(suppressWarnings(graphics::plot(zph, var = j, df = COX_SMOOTH_DF, nsmo = COX_SMOOTH_POINTS, plot = FALSE)),
+      smooth <- tryCatch(suppressWarnings(graphics::plot(zph, var = j, df = COX_SMOOTH_DF, nsmo = min(COX_SMOOTH_POINTS, most), plot = FALSE)),
                          error = function(e) NULL)
       if (!is.null(smooth) && sum(first) >= 2L) {
         at <- stats::approx(xx[first], tt[first], smooth$x, ties = "ordered")$y
@@ -494,7 +499,6 @@ cox_charts <- function(rows, task, fit, frame, design, groups, zph, lp, strata_n
   }
 
   # martingale residuals of the null model against each numeric predictor
-  numeric <- Filter(function(p) !is.null(cox_numeric_input(design, p)), charted)
   if (length(numeric)) {
     null_rhs <- if ("g" %in% names(frame) && nlevels(frame$g) > 1L) "survival::strata(g)" else "1"
     null <- tryCatch(survival::coxph(cox_formula(null_rhs, start), data = frame), error = function(e) NULL)
@@ -504,7 +508,7 @@ cox_charts <- function(rows, task, fit, frame, design, groups, zph, lp, strata_n
         x <- as.numeric(design$data[[p]])
         i <- tab_cap(length(m), max = most, score = m - mean(m), keep = keep)
         tab_points(rows, "point", "martingale", "y", x = x[i], y = m[i], level_2 = p)
-        l <- tab_lowess(x, m)
+        l <- tab_lowess(x, m, max = min(200, most))
         if (nrow(l)) tab_points(rows, "curve", "martingale", "lowess", x = l$x, y = l$y, level_2 = p)
       }
     }
@@ -582,6 +586,7 @@ cox_predict_rows <- function(card, df, at_times = numeric()) {
   lp[!d$ok] <- NA_real_
   risk <- exp(lp)
   surv <- matrix(NA_real_, nrow(df), length(at_times))
+  unseen_strata <- empty_strata <- 0L # rows whose survival is empty for want of their stratum
   if (length(at_times)) {
     strata_col <- card$cox$strata
     if (!is.null(strata_col) && !strata_col %in% names(df)) {
@@ -589,6 +594,11 @@ cox_predict_rows <- function(card, df, at_times = numeric()) {
                  list(column = strata_col))
     }
     labels <- if (is.null(strata_col)) rep("", nrow(df)) else tab_label(df[[strata_col]])
+    if (!is.null(strata_col)) {
+      seen <- vapply(card$cox$baseline, function(s) as.character(s$stratum %||% NA_character_), "")
+      unseen_strata <- sum(!is.na(labels) & !labels %in% seen)
+      empty_strata <- sum(is.na(labels) & d$ok)
+    }
     for (s in card$cox$baseline) {
       rows_ <- which(if (is.null(strata_col)) rep(TRUE, nrow(df)) else !is.na(labels) & labels == s$stratum)
       if (!length(rows_)) next
@@ -604,7 +614,7 @@ cox_predict_rows <- function(card, df, at_times = numeric()) {
       }
     }
   }
-  list(lp = lp, risk = risk, surv = surv, ok = d$ok, unseen = d$unseen)
+  list(lp = lp, risk = risk, surv = surv, ok = d$ok, unseen = d$unseen, unseen_strata = unseen_strata, empty_strata = empty_strata)
 }
 
 # Predicting the rows the model was fitted on from its card gives its fitted risk: checked in
@@ -655,6 +665,11 @@ predict_cox <- function(task, card) {
   }
   pr <- cox_predict_rows(card, df, at_times)
   if (pr$unseen > 0L) warning(pr$unseen, " rows hold a value the model did not see when fitted: their prediction is empty")
+  # the risk needs the predictors only; the survival also the row's stratum
+  if (pr$unseen_strata > 0L) {
+    warning(pr$unseen_strata, " rows hold a stratum the model did not see when fitted: their survival is empty")
+  }
+  if (pr$empty_strata > 0L) warning(pr$empty_strata, " rows have an empty stratum: their survival is empty")
   out <- df
   out$prediction <- pr$risk
   for (k in seq_along(at_times)) out[[names_[[k]]]] <- pr$surv[, k]
@@ -784,3 +799,23 @@ TAB_COMMON_TESTS[["cox: the exact partial likelihood that overflows is refused a
   .tab_expect(grepl(paste0("up to ", largest, " events share one time"), m, fixed = TRUE) && grepl("ties = efron", m, fixed = TRUE), m)
 }
 
+TAB_COMMON_TESTS[["cox: Predict counts the rows whose stratum it did not see; the charts share max_result_rows"]] <- function(code) {
+  df <- tab_read_csv(file.path(code, "reference", "data", "cox_strata.csv"),
+                     list(months = "number", churned = "integer", price = "number", premium = "boolean", region = "text", customer = "text"))
+  params <- list(time = "months", event = "churned", event_value = 1, predictors = list("price", "premium"), strata = "region")
+  fit <- fit_cox(.cox_test_task(df, params, limits = list(max_result_rows = 600, max_chart_points = 2000)))
+  f <- tab_results_frame(fit$rows)
+  .tab_expect(nrow(f) <= 600L && !length(tab_check_declared(f, "cox", "default")), nrow(f), " rows, more than the 600 of the limit")
+  card <- jsonlite::fromJSON(tab_card_text(fit$card), simplifyVector = FALSE)
+  rows_ <- df[c(2L, 50L, 101L), ]
+  rows_$region[[2L]] <- "west"
+  rows_$region[[3L]] <- NA
+  said <- character()
+  out <- withCallingHandlers(predict_cox(list(params = list(at_times = list(6)), .frame = rows_), card)$output, warning = function(w) {
+    said <<- c(said, conditionMessage(w))
+    invokeRestart("muffleWarning")
+  })
+  .tab_expect(is.finite(out$survival_at_6[[1L]]) && all(is.na(out$survival_at_6[2:3])) && all(is.finite(out$prediction)), "the predictions")
+  .tab_expect(identical(said, c("1 rows hold a stratum the model did not see when fitted: their survival is empty",
+                                "1 rows have an empty stratum: their survival is empty")), paste(said, collapse = " | "))
+}
