@@ -1153,6 +1153,101 @@ Tabularia's decides a verdict.**
 
 #### The output
 
+**Results** (the default) are the [ten columns](#the-output). The sections: `model` (the formula, the decision, the
+counts), `variant` (per variant: units, share, expected share, mean, standard error, interval, skewness, conversions…),
+`comparison` (per treatment and control: difference, lift with their intervals, statistic, p, adjusted p, detectable lift), `bayes`,
+`sequential`, `secondary`, `assumption` (the checks), `curve` (the charts' points), `hist` (the histogram of a continuous
+metric) and `reading` (the sentences of the report). Keys read as `comparison|B|A|p_adjusted` or `variant|A||mean`.
+
+**Variants** gives a table one step can use: one row per variant and metric, with `metric`, `role` (primary or
+secondary), `variant`, `is_control`, `units`, `share`, `expected_share`, `mean`, its interval, the difference and the
+lift with their intervals, `p_value`, `p_adjusted`, `decision`, `prob_beat_control`, `prob_best`, `expected_loss` and the
+sequential p-value and interval. **The `variant` column keeps the input column's type**: an Int64 stays Int64, a
+true/false stays true/false, so that the next join on it needs no cast. The columns are known in the editor before the
+Run, as for the other models.
+
+#### The report, and its explanation
+
+The Report tab draws A4 pages in the language of the interface (five languages):
+
+1. **The decision**: the headline, chosen by verdicts only (in this order: the split of the units failed; a treatment
+   is better; a treatment is worse; no variant differs from the control), the cards, the treatments' table, the interval
+   chart of the lifts with the minimum lift in the caption, the checks with the alpha line, two lines of measures.
+2. **The variants**: units assigned and used, the split against the expected, the daily share of each variant (with a date),
+   CUPED, the histograms of a continuous metric.
+3. **The comparisons** and the power reading; 4. **the Bayesian page**: the posterior densities and the table;
+5. **the sequential page**: the lift with its confidence sequence and the p-value over the days; 6. **the secondary
+   metrics**; 7. **How this report was computed**; 8. the notes.
+
+The report **explains the method** to readers who are not statisticians, in two places, from the same numbers so that they cannot
+disagree. Under each block, a **reading**: one to three sentences in italics with the run's numbers («Of 12,480 users of
+B, 512 converted: 4.10 %, against 3.62 % for A…», «If B were no different from A, a difference this large would appear by
+chance with probability 0.006…»). At the end, **How this report was computed**: for each analysis that ran, the hypothesis, why
+that method and what it did to the numbers, and a box with the formulas. The reading of a *verdict* may say significant or
+worse; the reading of a *measure* never does. Every sentence comes from a template in five languages and is filled with the
+numbers of the run: the report has no text written at run time and none written by an AI. **Excel** has one sheet each for the
+treatments, the variants, the checks, the Bayesian table, the sequential table, the secondary metrics and the reading.
+
+#### Planning an experiment: A/B test planning
+
+`ab_plan` reads **historical data of the metric**, with no experiment in them (the same shapes as the A/B test, without the
+variant and the control), and answers one of three questions (**Compute**):
+
+| Compute | Gives |
+|---|---|
+| **Sample size** | The units per variant and in total, the days and the weeks, to detect the smallest lift that matters at the significance level and the power chosen |
+| **The detectable lift with these units** (*Units per variant*) | The smallest relative lift the units reach |
+| **The detectable lift in these days** (*Days*, needs a date column) | The same for a duration |
+
+Further options: the number of **variants, control included**, the **control's share**, the **share of the traffic** in the
+experiment, the correction, and a **covariate** (the sizes again with CUPED: the variance times 1 − ρ²). The **date** is the day each
+unit *first appeared*: the daily new units give the duration. With *k* variants the plan keeps each comparison at α/(k − 1)
+(a conservative plan, as Holm's first step and Bonferroni's), says so, and says that **whole weeks** cover the weekly cycle,
+without a rule. When the history is shorter than the planned days a sentence says it, without colour. Its output is the
+power against the lift, the MDE against the days, a grid of lifts around yours as a table (**Plan** output) and the history's
+histogram; no check is a test, so the node has no verdicts. The sizes are those of the normal approximation of the test the
+A/B node runs, so that the plan and the test agree: the A/B node's «detectable lift» on an experiment of the planned size
+agrees with the planned lift.
+
+#### Limits and refusals
+
+| Limit | Value |
+|---|---|
+| Variants (control included) | 20: «filter the variants you compare» |
+| Units per variant | At least 2 |
+| Looks of the sequential reading | 1,000 days; beyond, equal periods of days, with a note |
+| Secondary metrics | 10 |
+| Rows | The group's: 5,000,000 unless an administrator changed it |
+| Memory and time | 2 GiB and 1 CPU, 1,800 seconds in the group |
+
+The node stops with a sentence that says what to do: the control has no row, only the control has rows, a share missing for a
+variant, a binary metric that is not true/false or 0/1, a variant with a single unit, a covariate with two values for one unit,
+no unit with the covariate, whole numbers expected in the sums, a denominator that sums to 0, a history with no row or with the
+same metric on every unit, a lift no size reaches. There is no random number anywhere: the same rows give the same numbers.
+It does not do bootstrap or permutation tests, a different test for each metric of the secondary ones, or a model card.
+
+#### MLflow, without a model
+
+A flow run logs, to the node's MLflow experiment, one run per analysis: the node's parameters, every number of the `model`
+section, `comparison.<variant>.<number>`, `bayes.<variant>.<number>` and `sequential.<variant>.<number>` as metrics,
+the checks as `assumption.srm.p_value` and the like, and the files `tabularia/results.parquet` and `tabularia/report.pdf` (with
+its reading, in the flow owner's language). MLflow becomes a register of experiments, searchable by flow and node. **There is
+no model to register**: the form does not offer *Register the model as*, a request for it is refused with «an A/B test
+registers no model: its run is logged to MLflow», and no Predict node can apply these nodes.
+
+#### Trying it on the sample data
+
+The sample data of the pasta and bakery company have a web shop that runs three experiments, in the tables `experiments`,
+`experiment_users`, `experiment_history` and `experiment_daily` (`esperimenti…` in the `analytics` database; they follow the same sample databases as the examples above). When the group is
+enabled, the seed also creates two flows, **Experiment: checkout** (the visitors of the new checkout: conversion, the
+revenue of the 28 days before as covariate, the sequential look by entry day, revenue as a secondary metric) and **Experiment
+planning** (how many visitors, and how many days, to see a 5 % lift in revenue per visitor). The checkout's B beats the
+control; the free shipping experiment (`spedizione_gratuita`) opens with the split band, because a filter dropped 7 % of B's
+low-engagement visitors from day 12 on: B looks better than it is, which is what the check is for. Change the **Filter** of the checkout flow to
+`esperimento_id` = `spedizione_gratuita` to see it.
+
+## The output
+
 Every model writes the same **ten columns** as the [statistical tests](statistics.md#the-output):
 `section`, `level`, `level_2`, `stat`, `key`, `x0`, `x1`, `value`, `text` and `ord`, one fact
 a row, the key unique and a number that is not finite empty. A flow can read it like any
