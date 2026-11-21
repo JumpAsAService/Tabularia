@@ -31,6 +31,7 @@ import (
 	"path"
 	"sort"
 	"strings"
+	"sync/atomic"
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/modelcatalog"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/scriptcfg"
@@ -119,12 +120,40 @@ type Group struct {
 	ReferenceHash string // sha256 of the reference cases
 }
 
-var shipped = mustLoad()
+// Ships says whether a version of the group's image recorded with these hashes
+// (script_environment_versions.recipe_hash and runner_hash, written when it was queued) is the group
+// as this Tabularia ships it: the same recipe and the same runner. Only then may this Tabularia make
+// the version's Jobs. The row holds the base image and the packages, but the build's Dockerfile takes
+// the system libraries from the recipe shipped, and the check's self-test runs the runner shipped:
+// a gateway of another release (the other replica of a rolling upgrade, the release a `helm rollback`
+// went back to) would build and check another image than the one queued. A version recorded without
+// them (before they existed), or of a group this Tabularia does not ship, is never its.
+func (g Group) Ships(recipeHash, runnerHash *string) bool {
+	return g.ID != "" && recipeHash != nil && runnerHash != nil && *recipeHash == g.RecipeHash && *runnerHash == g.RunnerHash
+}
+
+var shipped atomic.Pointer[[]Group]
+
+func init() {
+	groups := mustLoad()
+	shipped.Store(&groups)
+}
+
+// Swap makes gs the groups shipped until restore is called: how a test is, on one database, a
+// gateway of another release of Tabularia (another recipe or runner of a group) beside this one, as
+// the two replicas of a rolling upgrade are. The gateway itself never calls it.
+func Swap(gs []Group) (restore func()) {
+	before := shipped.Load()
+	gs = append([]Group(nil), gs...)
+	shipped.Store(&gs)
+	return func() { shipped.Store(before) }
+}
 
 // Groups are the groups shipped, in the catalogue's order.
 func Groups() []Group {
-	out := make([]Group, len(shipped))
-	for i, g := range shipped {
+	groups := *shipped.Load()
+	out := make([]Group, len(groups))
+	for i, g := range groups {
 		out[i] = g
 		out[i].Models = append([]string(nil), g.Models...)
 		out[i].Recipe.Packages = append([]string(nil), g.Recipe.Packages...)

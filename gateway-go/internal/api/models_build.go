@@ -248,10 +248,61 @@ func mgBaseSentence(g modelgroups.Group) string {
 	return ""
 }
 
+// ── two releases on one database ─────────────────────────────────────────────
+//
+// During a rolling upgrade the replica of the previous release and the new one take turns on the
+// build loop's lock; after a `helm rollback` the release rolled back to finds the versions the newer
+// one queued. A version's row holds its base image and packages, but its build's Dockerfile takes the
+// system libraries from the recipe the gateway ships, and its check's self-test is the runner the
+// gateway ships: a gateway of another release would build and check another image than the one
+// queued (found on kind, 2026-11-21: the previous release's replica built the new recipe's packages
+// without its GSL, and Rlibeemd did not compile). So a gateway makes the Jobs of a model group's
+// version only when it ships the recipe and the runner the version was queued with
+// (modelgroups.Group.Ships). The outcome of a Job is read by any gateway: the Job is what it is,
+// whoever made it.
+//
+// A version of another release waits for that release's gateway, which takes it at its next round.
+// When none comes (a rollback), it is failed once it has waited mgForeignWait, saying why, and the same
+// round queues the recipe of the gateway that failed it (mgQueueStale); a built image waits for its Job
+// to go (the Job's TTL), then fails the same way.
+
+// mgForeignWait is how long a version of another release waits for a gateway of that release before
+// it is failed (its queueing), and how long a version another release made is left unanswered by a
+// version of this recipe (mgQueueStale). The replicas of a rolling upgrade overlap for the time the new
+// one takes to become ready and the old one to stop, and a gateway's loop takes its turn every
+// scripts.poll_seconds (at most a minute): far less than this.
+const mgForeignWait = 10 * time.Minute
+
+// mgOtherReleaseSentence is why a version of another release, which no gateway of that release built
+// or checked, is failed.
+const mgOtherReleaseSentence = "This version was queued by another version of Tabularia (another recipe or runner of the group), " +
+	"and no gateway of that version came to build it: this version of Tabularia builds its own"
+
+// mgOfAnotherRelease says whether the version is a model group's version this gateway does not make
+// the Jobs of: queued with another recipe or another runner than the ones it ships, or of a group it
+// does not ship. An environment of the scripting itself is never.
+func mgOfAnotherRelease(env *sbEnvironment, v *sbVersion) bool {
+	group := mgGroupOfManaged(env.ManagedBy)
+	if group == "" {
+		return false
+	}
+	g, ok := modelgroups.Get(group)
+	return !ok || !g.Ships(v.RecipeHash, v.RunnerHash)
+}
+
+// waitForAnotherRelease leaves a queued version of another release to that release's gateway, and
+// fails it once it has waited longer than such a gateway would have let it.
+func (b *scriptBuilds) waitForAnotherRelease(v *sbVersion) {
+	if jobs.NaiveNow().Sub(v.CreatedAt) >= mgForeignWait {
+		b.fail(v, mgOtherReleaseSentence, nil)
+	}
+}
+
 // mgQueueStale queues a new version for every enabled group whose newest version was built
 // from another recipe than the one this Tabularia ships (or has none): «Rebuild needed» without
 // a click. A group whose newest version failed on the recipe shipped is left to the
-// administrator's Rebuild. It returns how many it queued.
+// administrator's Rebuild, and one whose newest version another release made less than
+// mgForeignWait ago is left to that release for now. It returns how many it queued.
 func mgQueueStale(ctx context.Context, tx pgx.Tx, log *slog.Logger) (int64, error) {
 	var queued int64
 	for _, g := range modelgroups.Groups() {
@@ -267,11 +318,18 @@ func mgQueueStale(ctx context.Context, tx pgx.Tx, log *slog.Logger) (int64, erro
 		}
 		var status string
 		var hash *string
-		err := tx.QueryRow(ctx, `SELECT status, recipe_hash FROM script_environment_versions WHERE environment_id = $1 ORDER BY number DESC LIMIT 1`, env).Scan(&status, &hash)
+		var created time.Time
+		err := tx.QueryRow(ctx, `SELECT status, recipe_hash, created_at FROM script_environment_versions WHERE environment_id = $1
+			ORDER BY number DESC LIMIT 1`, env).Scan(&status, &hash, &created)
 		if err != nil && !scNoRows(err) {
 			return queued, err
 		}
 		if err == nil && (mgInProgress(status) || hash != nil && *hash == g.RecipeHash) {
+			continue
+		}
+		if err == nil && hash != nil && jobs.NaiveNow().Sub(created) < mgForeignWait {
+			// another release made it a moment ago: the other replica of a rolling upgrade, not a
+			// version for this recipe to answer (the two would queue in turn)
 			continue
 		}
 		if why := mgBaseSentence(g); why != "" {

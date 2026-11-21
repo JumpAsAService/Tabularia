@@ -1373,7 +1373,8 @@ func TestAChangedRecipeQueuesANewVersionByItself(t *testing.T) {
 	f := newModelsFixture(t)
 	f.enable(f.admin, "survival")
 	f.buildTo(t, "survival", true)
-	if _, err := f.db.Exec(f.ctx, `UPDATE script_environment_versions SET recipe_hash = 'of-another-recipe'`); err != nil {
+	// built by the previous release, before the upgrade (one of a moment ago: models_build_race_test.go)
+	if _, err := f.db.Exec(f.ctx, `UPDATE script_environment_versions SET recipe_hash = 'of-another-recipe', created_at = created_at - interval '1 day'`); err != nil {
 		t.Fatal(err)
 	}
 	g := answerOf(t, f.call(f.admin, "GET", "survival", "", "", false, mgDetail)).Group

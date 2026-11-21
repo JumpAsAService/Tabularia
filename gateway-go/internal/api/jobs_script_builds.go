@@ -99,7 +99,11 @@ type sbVersion struct {
 	Lock, Completions         *string
 	BuildLog, Error           *string
 	Selftest                  *string // a managed (model group) version's self-test, the end of its log
-	StartedAt, FinishedAt     *time.Time
+	// a managed version's recipe and runner, as the gateway that queued it shipped them: only a
+	// gateway that ships the same makes its Jobs (modelgroups.Group.Ships)
+	RecipeHash, RunnerHash *string
+	CreatedAt              time.Time
+	StartedAt, FinishedAt  *time.Time
 }
 
 // sbEnvironment is the part of a script_environments row a round reads.
@@ -184,6 +188,8 @@ func (b *scriptBuilds) buildJobs() int64 {
 // too). managedBy: a statistical model group's environment (model_group:<id>), whose Python image
 // holds only its recipe's packages and whose R image installs the system libraries its recipe names
 // (`system_libraries`); nil for every other environment, whose Dockerfile is what it has always been.
+// The system libraries are the recipe's this gateway ships: it builds only the versions queued with
+// that recipe (mgOfAnotherRelease), whose packages in the row are the same recipe's.
 func (b *scriptBuilds) dockerfile(language, baseImage string, packages []string, managedBy *string) (string, error) {
 	var systemLibraries []string
 	if g, ok := modelgroups.Get(mgGroupOfManaged(managedBy)); ok {
@@ -478,6 +484,13 @@ func (b *scriptBuilds) advance(ctx context.Context, tx pgx.Tx, v *sbVersion) err
 		b.fail(v, "The environment no longer exists", nil)
 		return nil
 	}
+	// a model group's version queued by a gateway of another release: no Job of it is made here
+	// (mgOfAnotherRelease); what its Jobs did is read by any gateway
+	foreign := mgOfAnotherRelease(env, v)
+	if v.Status == "queued" && foreign {
+		b.waitForAnotherRelease(v)
+		return nil
+	}
 	if v.Status == "queued" {
 		manifest, err := b.buildJob(v, env.Language, env.ManagedBy)
 		var bad sbValueError
@@ -511,11 +524,20 @@ func (b *scriptBuilds) advance(ctx context.Context, tx pgx.Tx, v *sbVersion) err
 		return err
 	}
 	if job == nil {
+		if building && foreign { // built, and its TTL took the Job away while no gateway of its release came
+			b.fail(v, mgOtherReleaseSentence, nil)
+			return nil
+		}
 		b.fail(v, fmt.Sprintf("The Job %s of the %s is no longer in the cluster (deleted, or removed once finished "+
 			"while no orchestrator was running): build the environment again", name, stage), nil)
 		return nil
 	}
 	outcome := kube.JobOutcome(job)
+	if building && foreign && outcome == "succeeded" {
+		// the image is built: its check runs the runner of the release that queued it, and is
+		// that release's to make; the Job stays for it
+		return nil
+	}
 	if outcome == "" {
 		// a Pod the cluster refuses, or an image the nodes cannot download, would otherwise
 		// wait for the whole timeout and then say nothing of it
@@ -700,7 +722,7 @@ func (b *scriptBuilds) oneRound(ctx context.Context) (int64, error) {
 		return 0, nil
 	}
 	rows, err := tx.Query(ctx, `SELECT id, environment_id, number, base_image, packages, status, job_name, image_ref, arch, lock,
-		completions, build_log, error, selftest, started_at, finished_at FROM script_environment_versions
+		completions, build_log, error, selftest, recipe_hash, runner_hash, created_at, started_at, finished_at FROM script_environment_versions
 		WHERE status IN ('queued', 'building', 'checking') OR (status = 'ready' AND job_name IS NOT NULL) ORDER BY id`)
 	if err != nil {
 		return 0, err
@@ -709,7 +731,7 @@ func (b *scriptBuilds) oneRound(ctx context.Context) (int64, error) {
 	for rows.Next() {
 		var v sbVersion
 		if err := rows.Scan(&v.ID, &v.EnvironmentID, &v.Number, &v.BaseImage, &v.Packages, &v.Status, &v.JobName, &v.ImageRef, &v.Arch,
-			&v.Lock, &v.Completions, &v.BuildLog, &v.Error, &v.Selftest, &v.StartedAt, &v.FinishedAt); err != nil {
+			&v.Lock, &v.Completions, &v.BuildLog, &v.Error, &v.Selftest, &v.RecipeHash, &v.RunnerHash, &v.CreatedAt, &v.StartedAt, &v.FinishedAt); err != nil {
 			rows.Close()
 			return 0, err
 		}

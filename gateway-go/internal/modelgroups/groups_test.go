@@ -467,3 +467,50 @@ func TestThePythonGroupsDockerfile(t *testing.T) {
 		t.Errorf("Dockerfile:\n%s", d)
 	}
 }
+
+// A version's Jobs are made only by a gateway that ships the recipe and the runner it was queued with.
+func TestAVersionIsTheGroupsOnlyWithItsRecipeAndItsRunner(t *testing.T) {
+	g, _ := Get("timeseries")
+	recipe, runner, other := g.RecipeHash, g.RunnerHash, "of-another-release"
+	for _, c := range []struct {
+		name           string
+		recipe, runner *string
+		want           bool
+	}{
+		{"both shipped", &recipe, &runner, true},
+		{"another recipe", &other, &runner, false},
+		{"another runner", &recipe, &other, false},
+		{"recorded without them", nil, nil, false},
+		{"without the runner", &recipe, nil, false},
+	} {
+		if got := g.Ships(c.recipe, c.runner); got != c.want {
+			t.Errorf("%s: %v", c.name, got)
+		}
+	}
+	if (Group{}).Ships(&recipe, &runner) {
+		t.Error("a group not shipped ships a version")
+	}
+}
+
+// Swap is another release's groups until restored, and gives back the shipped ones after.
+func TestSwapIsAnotherReleaseUntilRestored(t *testing.T) {
+	before, _ := Get("timeseries")
+	other := Groups()
+	for i := range other {
+		if other[i].ID == "timeseries" {
+			other[i].RecipeHash, other[i].Recipe.SystemLibraries = "of-another-release", nil
+		}
+	}
+	restore := Swap(other)
+	other[0].ID = "changed after the swap" // the swap holds its own copy
+	if g, ok := Get("timeseries"); !ok || g.RecipeHash != "of-another-release" || len(g.Recipe.SystemLibraries) != 0 {
+		t.Errorf("swapped: %+v", g.Recipe)
+	}
+	if Groups()[0].ID == "changed after the swap" {
+		t.Error("the swap shares the caller's slice")
+	}
+	restore()
+	if g, _ := Get("timeseries"); !reflect.DeepEqual(g, before) {
+		t.Errorf("not restored: %s", g.RecipeHash)
+	}
+}
