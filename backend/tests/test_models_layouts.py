@@ -706,6 +706,23 @@ def test_the_spend_check_not_computed_says_why_in_the_page_s_language(locale):
     assert said == [w["checks"]["spend_independence"]["not_computed"]] and said[0] != w["checks"]["spend_independence"]["advice"]
 
 
+def test_bg_bb_s_formula_is_an_id_the_page_words_with_its_unit(monkeypatch):
+    """BG/BB's runner sends its formula as «@bgbb_formula unit=year»: the page reads the sentence of that id in
+    `formula_texts` of its language, the unit in its words; the continuous models' formula keeps its «in weeks»."""
+    model, params, rows = fixture("bg_bb-value")
+    assert [r["text"] for r in rows if r["section"] == "model" and r["stat"] == "formula"] == ["@bgbb_formula unit=year"]
+    real = common.words
+
+    def words(m: str, variant: str, locale: str) -> dict:
+        return {**real(m, variant, locale), "formula_texts": {"bgbb_formula": "x, t_x, n · {unit}"}}
+
+    monkeypatch.setattr(common, "words", words)
+    for locale in LOCALES:
+        unit = real(model, "value", locale)["values"]["time_unit"]["year"]
+        said = [r["text"] for r in layouts.with_labels(model, params, rows, locale) if r["section"] == "model" and r["stat"] == "formula"]
+        assert said == [f"x, t_x, n · {unit}"], (locale, said)
+
+
 # ── parametric survival: the final review's corrections (lot P12) ───────────
 @pytest.mark.parametrize("locale", LOCALES)
 def test_the_parametric_survival_measures_are_the_declared_ones_and_kaplan_meier_s_gap_is_read_in_survival(

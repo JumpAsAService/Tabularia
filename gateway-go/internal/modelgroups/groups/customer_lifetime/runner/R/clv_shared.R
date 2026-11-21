@@ -1379,9 +1379,11 @@ clv_fit <- function(task, node, frame = NULL) {
 }
 
 # ── the rows ─────────────────────────────────────────────────────────────────────
+# BG/BB's is an id and its unit, «@bgbb_formula unit=year»: the report says it in the page's language
+# (formula_texts); the continuous models' «in weeks» is translated where it stands.
 clv_formula_text <- function(s) {
   if (identical(s$node, "bg_bb")) {
-    paste0("x: transactions, t_x: opportunity of the last, n: opportunities, one opportunity is a ", s$unit)
+    paste0("@bgbb_formula unit=", s$unit)
   } else {
     paste0("x: frequency, t_x: recency, T: age, in ", s$unit, "s")
   }

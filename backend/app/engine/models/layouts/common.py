@@ -162,7 +162,7 @@ def with_labels(model: str, params: Mapping[str, Any] | None, rows: list[dict], 
             elif stat == "profile":
                 text = profile_said(w, text, loc)
             elif stat == "formula":
-                text = formula_said(w, text)
+                text = structured_note(w, text, loc, "formula_texts") if text.startswith("@") else formula_said(w, text)
         elif section == "hist" and isinstance(r.get("x0"), (int, float)) and isinstance(r.get("x1"), (int, float)):
             text = stats.edges_text(r["x0"], r["x1"], False, loc.decimal, loc.group)
         out.append({**r, "text": text, "label": label, "tiny": stats.tiny(r.get("value"), code(locale))})
@@ -179,12 +179,14 @@ def _decimal(text: str, loc: Any) -> str:
     return re.sub(r"(\d)\.(\d)", lambda m: m.group(1) + loc.decimal + m.group(2), text)
 
 
-def structured_note(w: dict, text: str, loc: Any) -> str:
+def structured_note(w: dict, text: str, loc: Any, texts: str = "note_texts") -> str:
     """A note sent as «@id name=value name=value…» (a list is joined with «,»): the page's sentence
     of `note_texts.<id>`, each «{name}» replaced by its value, a number with the language's decimal, a name of a
-    distribution or of a purchase model in the page's words (`values.distribution`, `values.purchase_model`)."""
+    distribution, of a purchase model or of a unit of time in the page's words (`values.distribution`,
+    `values.purchase_model`, `values.time_unit`). A formula sent the same way (BG/BB's «@bgbb_formula unit=year») is
+    read from `formula_texts`."""
     head, *rest = text[1:].split(" ")
-    said = w.get("note_texts", {}).get(head)
+    said = w.get(texts, {}).get(head)
     if said is None:
         return text
     names = {**w.get("values", {}).get("purchase_model", {}), **w.get("values", {}).get("distribution", {}),

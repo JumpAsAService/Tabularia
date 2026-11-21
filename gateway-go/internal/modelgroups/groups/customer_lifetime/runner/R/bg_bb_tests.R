@@ -24,6 +24,7 @@ TAB_COMMON_TESTS[["customer_lifetime: the node bg_bb fits through its route, wri
               all(c("assumption|sample_size||value", "assumption|holdout||value", "assumption|horizon_length||value") %in% df$key) &&
               !any(df$section == "assumption" & df$level == "boundary") && !any(df$section == "candidate"), "the checks of a clean BG/BB fit")
   .tab_expect(df$value[df$key == "assumption|horizon_length||value"] == 5 / 6, "the horizon over the most opportunities")
+  .tab_expect(identical(df$text[df$key == "model|||formula"], "@bgbb_formula unit=month"), "the formula is an id the report words")
   # the verdict of a test is its p-value against the node's alpha, at both sides of it
   p <- df$value[df$key == "assumption|frequency_fit||p_value"]
   hi <- fit_bg_bb(.clv_task(utils::modifyList(params, list(alpha = min(p * 1.01, 0.999))), d, "bg_bb"))

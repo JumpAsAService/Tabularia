@@ -77,7 +77,7 @@
    null,
    "formula",
    null,
-   "x: transactions, t_x: opportunity of the last, n: opportunities, one opportunity is a year",
+   "@bgbb_formula unit=year",
    null,
    null,
    4,

@@ -194,7 +194,7 @@ cases[[length(cases) + 1L]] <- case_(
   "bg_bb donors like the donations, value with a holdout", "bgbb_donations_like.csv", A,
   bb_params(spend = "avg_gift", holdout_transactions = "later_gifts", holdout_length = 5, horizon = 5),
   c(list(txt_("model|||purchase_model", "bg_bb"), txt_("model|||purchase_model_asked", "bg_bb"), txt_("model|||optimizer", "L-BFGS-B"),
-         txt_("model|||time_unit", "year"), txt_("model|||formula", "x: transactions, t_x: opportunity of the last, n: opportunities, one opportunity is a year"),
+         txt_("model|||time_unit", "year"), txt_("model|||formula", "@bgbb_formula unit=year"),
          num_("model|||n", 1000), num_("model|||n_repeaters", sum(A$x > 0)), num_("model|||horizon", 5),
          num_("model|||log_lik", mA$log_lik, abs = LL_ABS, from = "BG/BB maximized here"),
          num_("model|||aic", -2 * mA$log_lik + 8, rel = 1e-9, abs = 2 * LL_ABS, from = "BG/BB maximized here"),

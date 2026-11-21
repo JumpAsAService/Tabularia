@@ -1389,7 +1389,7 @@
         },
         {
           "key": "model|||formula",
-          "text": "x: transactions, t_x: opportunity of the last, n: opportunities, one opportunity is a year"
+          "text": "@bgbb_formula unit=year"
         },
         {
           "key": "model|||n",
