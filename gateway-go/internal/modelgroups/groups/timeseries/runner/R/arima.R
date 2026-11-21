@@ -63,9 +63,9 @@ predict_arima <- function(task, card) {
   observed <- df[!is.na(df[[params$value]]), , drop = FALSE]
   if (!nrow(observed)) {
     # only future rows (or none): the series is the card's, the input brings the future
-    last <- arima_period(history[[params$time]], a$last$time_kind, a$frequency)
+    last <- ts_period(history[[params$time]], a$last$time_kind, a$frequency)
     after <- df[!is.na(df[[params$time]]), , drop = FALSE]
-    after <- after[arima_period(after[[params$time]], a$last$time_kind, a$frequency) > max(last), , drop = FALSE]
+    after <- after[ts_period(after[[params$time]], a$last$time_kind, a$frequency) > max(last), , drop = FALSE]
     df <- rbind(history[, cols, drop = FALSE], after[, cols, drop = FALSE])
   }
   task$params <- utils::modifyList(params, list(horizon = horizon, holdout = 0L))
@@ -115,60 +115,9 @@ arima_model_name <- function(o, s, exog) {
   sprintf("ARIMA(%d,%d,%d)", o$p, o$d, o$q)
 }
 
-# ── the time: periods, the grid, the axis ───────────────────────────────────
-.arima_ym <- function(t) {
-  lt <- as.POSIXlt(t, tz = "UTC")
-  (lt$year + 1900) * 12 + lt$mon
-}
-
-# The period of each time as a number (whole for times on the frequency's grid): days for a
-# daily date, weeks, months (year·12 + month), hours… An integer time is its own period.
-arima_period <- function(t, kind, frequency) {
-  if (kind == "integer") return(as.numeric(t))
-  days <- if (kind == "date") as.numeric(t) else as.numeric(t) / 86400
-  switch(frequency,
-    hour = days * 24,
-    day = days,
-    week = days / 7,
-    month = .arima_ym(t),
-    quarter = .arima_ym(t) %/% 3,
-    year = .arima_ym(t) %/% 12,
-    index = rank(as.numeric(t), ties.method = "first") - 1,
-    stop("unknown frequency ", frequency))
-}
-
-# A time k periods after `t` (k may be a vector), of t's class.
-arima_time_after <- function(t, k, kind, frequency) {
-  if (kind == "integer") return(t + as.integer(k))
-  months <- c(month = 1L, quarter = 3L, year = 12L)[frequency]
-  if (!is.na(months)) {
-    lt <- as.POSIXlt(t, tz = "UTC")
-    m <- lt$mon + k * months
-    y <- lt$year + 1900 + m %/% 12
-    m <- m %% 12
-    first <- as.Date(sprintf("%04d-%02d-01", y, m + 1L))
-    nextm <- as.Date(sprintf("%04d-%02d-01", y + (m + 1L) %/% 12, (m + 1L) %% 12 + 1L))
-    day <- pmin(lt$mday, as.integer(nextm - first))
-    d <- first + (day - 1L)
-    if (kind == "date") return(d)
-    secs <- lt$hour * 3600 + lt$min * 60 + lt$sec
-    return(as.POSIXct(as.numeric(d) * 86400 + secs, origin = "1970-01-01", tz = "UTC"))
-  }
-  step <- c(hour = 3600, day = 86400, week = 604800)[frequency]
-  if (is.na(step)) step <- 86400
-  if (kind == "date") return(t + as.integer(k * step / 86400))
-  t + k * step
-}
-
-# The x of a chart: days since 1970-01-01 for a date or datetime, the integer itself.
-arima_x0 <- function(t, kind) {
-  if (kind == "date") return(as.numeric(t))
-  if (kind == "datetime") return(as.numeric(t) / 86400)
-  as.numeric(t)
-}
-
-.arima_unit <- c(hour = "hours", day = "days", week = "weeks", month = "months", quarter = "quarters", year = "years",
-                 index = "steps")
+# ── the time ────────────────────────────────────────────────────────────────
+# The grid of a frequency (ts_period, ts_time_after, ts_x0, ts_time_kind, ts_grid) is the group's, in ts_series.R:
+# ARIMA and the decomposition share it.
 
 # ── the series ──────────────────────────────────────────────────────────────
 # The input read and checked, on the grid of its frequency from its first observation: the
@@ -189,18 +138,9 @@ arima_prepare <- function(task, df = NULL, t0 = NULL) {
     tab_refuse("exog_name", paste0("the exogenous column «", clash[[1L]], "» has the name of a term of the model (ar1, ma1, sar1, ",
                                    "sma1, intercept, drift): rename it"), list(column = clash[[1L]]))
   }
-  kind <- tab_kind(df[[time]])
-  if (kind == "number" && all(is.na(df[[time]]) | df[[time]] == trunc(df[[time]]))) kind <- "integer"
-  if (!kind %in% c("date", "datetime", "integer")) {
-    tab_refuse("time_type", paste0("the column «", time, "» is not a date, a datetime or an integer: the time of a series ",
-                                   "must be one of them"), list(column = time))
-  }
+  kind <- ts_time_kind(df[[time]], time, o$frequency)
   whole_time <- kind == "integer" && (is.integer(df[[time]]) || inherits(df[[time]], "integer64"))
   if (kind == "integer") df[[time]] <- as.numeric(df[[time]])
-  if (kind == "date" && o$frequency == "hour") {
-    tab_refuse("frequency_hour", paste0("the column «", time, "» holds dates, without hours: choose frequency = day, or a ",
-                                        "datetime column"), list(column = time))
-  }
   for (name in c(value, exog)) {
     if (!tab_kind(df[[name]]) %in% c("number", "integer")) {
       tab_refuse("not_a_number", paste0("the column «", name, "» is not a number"), list(column = name))
@@ -211,29 +151,10 @@ arima_prepare <- function(task, df = NULL, t0 = NULL) {
   no_time <- sum(is.na(df[[time]]))
   df <- df[!is.na(df[[time]]), , drop = FALSE]
   if (!nrow(df)) tab_refuse("no_values", paste0("the column «", value, "» has no value to model"), list(column = value))
-  df <- df[order(as.numeric(df[[time]]), method = "radix"), , drop = FALSE]
-  period <- arima_period(df[[time]], kind, o$frequency)
-  twice <- which(duplicated(period) | duplicated(as.numeric(df[[time]])))
-  if (length(twice)) {
-    at <- tab_label(df[[time]][twice[[1L]]])
-    tab_refuse("duplicate_time", paste0("the column «", time, "» holds two rows for the period of ", at, ": a series has one ",
-                                        "row per period; aggregate first with Group by"), list(column = time, time = at))
-  }
-  pos <- period - period[[1L]]
-  off <- which(abs(pos - round(pos)) > 1e-9)
-  if (length(off)) {
-    at <- tab_label(df[[time]][off[[1L]]])
-    unit <- .arima_unit[[o$frequency]]
-    tab_refuse("irregular_time", paste0("the times of «", time, "» are not whole ", unit, " apart (", at, "): aggregate them ",
-                                        "by ", sub("s$", "", unit), " first with Group by, or choose another frequency"),
-               list(column = time, time = at))
-  }
-  pos <- as.integer(round(pos)) + 1L
-  periods <- max(pos)
-  if (periods > ARIMA_MAX_PERIODS) {
-    tab_refuse("too_many_periods", paste0("the times of «", time, "» span ", periods, " ", .arima_unit[[o$frequency]],
-                                          " (at most ", ARIMA_MAX_PERIODS, "): is the frequency right?"), list(periods = periods))
-  }
+  grid <- ts_grid(df, time, kind, o$frequency, ARIMA_MAX_PERIODS)
+  df <- grid$df
+  pos <- grid$pos
+  periods <- grid$periods
   # the grid: one place a period, a time each (the row's own where there is one)
   y <- rep(NA_real_, periods)
   y[pos] <- df[[value]]
@@ -278,7 +199,7 @@ arima_prepare <- function(task, df = NULL, t0 = NULL) {
   test <- setdiff(span, train)
   # the times of the grid, and the drift's count from the first observation (or the card's t0)
   grid_len <- max(periods, if (length(future)) max(future) else 0L)
-  times <- arima_time_after(first_time, seq_len(grid_len) - 1L, kind, o$frequency)
+  times <- ts_time_after(first_time, seq_len(grid_len) - 1L, kind, o$frequency)
   times[pos] <- df[[time]]
   if (o$frequency == "index" && kind != "integer" && grid_len > periods) {
     step <- if (periods > 1L) as.numeric(times[[periods]]) - as.numeric(times[[periods - 1L]]) else 1
@@ -286,13 +207,13 @@ arima_prepare <- function(task, df = NULL, t0 = NULL) {
   }
   drift_index <- seq_len(grid_len) - first + 1L
   if (!is.null(t0)) {
-    base <- arima_period(c(t0, times[[first]]), kind, o$frequency)
+    base <- ts_period(c(t0, times[[first]]), kind, o$frequency)
     if (o$frequency != "index" || kind == "integer") drift_index <- drift_index + as.integer(round(base[[2L]] - base[[1L]]))
   }
   row_of <- match(seq_len(grid_len), pos)
   prep <- list(params = o, kind = kind, y = c(y, rep(NA_real_, grid_len - periods)),
                X = rbind(X, matrix(NA_real_, grid_len - periods, length(exog))),
-               times = times, x0 = arima_x0(times, kind), drift_index = drift_index, first = first, last = last,
+               times = times, x0 = ts_x0(times, kind), drift_index = drift_index, first = first, last = last,
                span = span, train = train, test = test, future = future, holdout = holdout,
                n_missing = no_time + missing_in_span + max(0L, outside),
                gaps = missing_in_span, dropped_future = max(0L, dropped_future),
