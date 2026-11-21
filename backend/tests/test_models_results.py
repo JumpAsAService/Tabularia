@@ -184,3 +184,54 @@ def test_the_customer_lifetime_fixtures_refuse_what_their_variant_does_not_decla
         spend = [*rows, ["model", None, None, "clv_total", 1.0, None, None, None, len(rows), "model|||clv_total"]]
         with pytest.raises(ResultsError, match="writes no 'clv_total'"):
             check_table(model, params, table_of_rows(spend))
+
+
+@pytest.mark.parametrize("name", [f"{m}-{t}" for m in ("ab_test", "ab_plan") for t in ("binary", "continuous", "ratio")])
+def test_the_experiments_fixtures_refuse_what_their_variant_does_not_declare(name):
+    path = next(p for p in FIXTURES if p.stem == name)
+    model, params, table = read_fixture(path)
+    rows = [list(r.values()) for r in table.to_pylist()]
+    assert check_table(model, params, table) == name.split("-")[1]
+    # a key no variant declares, in the model section and in the reading
+    extra = [*rows, ["model", None, None, "secret_number", 1.0, None, None, None, len(rows), "model|||secret_number"]]
+    with pytest.raises(ResultsError, match="writes no 'secret_number' in the section model"):
+        check_table(model, params, table_of_rows(extra))
+    block = "decision" if model == "ab_test" else "plan"
+    extra = [*rows, ["reading", block, None, "paragraph_1", None, "x", None, None, len(rows), f"reading|{block}||paragraph_1"]]
+    with pytest.raises(ResultsError, match="writes no 'paragraph_1' in the section reading"):
+        check_table(model, params, table_of_rows(extra))
+    # a block of the reading that the variant does not declare
+    extra = [*rows, ["reading", "tarot", None, "line_1", None, "x", None, None, len(rows), "reading|tarot||line_1"]]
+    with pytest.raises(ResultsError, match="'tarot' is not one of the reading rows"):
+        check_table(model, params, table_of_rows(extra))
+    # a section's level is required where its shape says so: a variant, a comparison's two ends
+    section = "variant" if model == "ab_test" else "plan"
+    first = next(i for i, r in enumerate(rows) if r[0] == section)
+    nolevel = [list(r) for r in rows]
+    nolevel[first][1], nolevel[first][9] = None, f"{section}||" + "|" + nolevel[first][3]
+    with pytest.raises(ResultsError, match=f"level is required in the section {section}"):
+        check_table(model, params, table_of_rows(nolevel))
+    if model == "ab_test":
+        first = next(i for i, r in enumerate(rows) if r[0] == "comparison")
+        one = [list(r) for r in rows]
+        one[first][2], one[first][9] = None, "comparison|" + one[first][1] + "||" + one[first][3]
+        with pytest.raises(ResultsError, match="level_2 is required in the section comparison"):
+            check_table(model, params, table_of_rows(one))
+    # a section of another variant: a plan's rows in a test's table
+    alien = [*rows, ["plan", "0.02", None, "lift", 0.02, None, None, None, len(rows), "plan|0.02||lift"]]
+    if model == "ab_test":
+        with pytest.raises(ResultsError, match="has no section 'plan'"):
+            check_table(model, params, table_of_rows(alien))
+
+
+def test_the_experiments_fixtures_say_the_decision_the_spec_names_and_keep_the_sum_of_the_shares():
+    seen = {}
+    for name in ("ab_test-binary", "ab_test-continuous", "ab_test-ratio"):
+        model, params, table = read_fixture(next(p for p in FIXTURES if p.stem == name))
+        rows = {r["key"]: r for r in table.to_pylist()}
+        seen[name] = rows["model|||decision"]["text"]
+        assert abs(sum(r["value"] for k, r in rows.items() if k.startswith("variant|") and k.endswith("|share")) - 1) < 1e-9
+        assert abs(sum(r["value"] for k, r in rows.items() if k.startswith("bayes|") and k.endswith("|prob_best")) - 1) < 1e-6
+        # the first page's rows: the SRM check and the reading of the decision are there
+        assert "assumption|srm||verdict" in rows and "reading|decision||line_1" in rows
+    assert seen["ab_test-binary"] == "better" and seen["ab_test-ratio"] == "srm_failed"

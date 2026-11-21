@@ -1168,7 +1168,7 @@
    "what": "a model that does not exist",
    "model": "survival_forest",
    "params": {},
-   "error": "there is no model 'survival_forest' (the models: linear, logistic, kaplan_meier, cox, parametric_survival, arima, xgboost, catboost, clv, bg_bb)"
+   "error": "there is no model 'survival_forest' (the models: linear, logistic, kaplan_meier, cox, parametric_survival, arima, xgboost, catboost, clv, bg_bb, ab_test, ab_plan)"
   },
   {
    "what": "the answer given back to the check: an empty exog is none, not an error",
@@ -2301,6 +2301,1013 @@
     "weights": "w"
    },
    "error": "parametric_survival: the column «w» is both 'start' and 'weights': choose another"
+  },
+  {
+   "what": "the smallest A/B test",
+   "model": "ab_test",
+   "params": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "binary",
+    "metric": "converted"
+   },
+   "checked": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "binary",
+    "input_shape": "units",
+    "unit": null,
+    "metric": "converted",
+    "higher_is_better": true,
+    "alternative": "two_sided",
+    "alpha": 0.05,
+    "correction": "holm",
+    "covariate": null,
+    "srm_alpha": 0.001,
+    "expected_shares": {},
+    "min_lift": 0.02,
+    "power": 0.8,
+    "bayes": true,
+    "prior_alpha": 1.0,
+    "prior_beta": 1.0,
+    "loss_threshold": 0.001,
+    "date": null,
+    "sequential": false,
+    "secondary_metrics": [],
+    "output": "results"
+   }
+  },
+  {
+   "what": "a full binary A/B test: expected shares, a date, the sequential reading, a secondary metric",
+   "model": "ab_test",
+   "params": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "binary",
+    "metric": "converted",
+    "unit": "user",
+    "expected_shares": {
+     "B": 1,
+     "A": 1,
+     "C": 2
+    },
+    "date": "entry_day",
+    "sequential": true,
+    "sequential_tau": 0.1,
+    "secondary_metrics": [
+     "revenue",
+     "sessions"
+    ],
+    "correction": "benjamini_hochberg",
+    "srm_alpha": 0.01,
+    "bayes": true,
+    "prior_alpha": 0.5,
+    "prior_beta": 0.5,
+    "loss_threshold": 0.002,
+    "output": "variants"
+   },
+   "checked": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "binary",
+    "input_shape": "units",
+    "unit": "user",
+    "metric": "converted",
+    "higher_is_better": true,
+    "alternative": "two_sided",
+    "alpha": 0.05,
+    "correction": "benjamini_hochberg",
+    "covariate": null,
+    "srm_alpha": 0.01,
+    "expected_shares": {
+     "A": 1.0,
+     "B": 1.0,
+     "C": 2.0
+    },
+    "min_lift": 0.02,
+    "power": 0.8,
+    "bayes": true,
+    "prior_alpha": 0.5,
+    "prior_beta": 0.5,
+    "loss_threshold": 0.002,
+    "date": "entry_day",
+    "sequential": true,
+    "sequential_tau": 0.1,
+    "secondary_metrics": [
+     "revenue",
+     "sessions"
+    ],
+    "output": "variants"
+   }
+  },
+  {
+   "what": "a continuous A/B test with a covariate that may be empty, a cap and no Bayesian reading",
+   "model": "ab_test",
+   "params": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "continuous",
+    "metric": "revenue",
+    "covariate": "revenue_pre",
+    "covariate_missing": "exclude",
+    "cap_percentile": 0.999,
+    "bayes": false,
+    "higher_is_better": false,
+    "alternative": "less"
+   },
+   "checked": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "continuous",
+    "input_shape": "units",
+    "unit": null,
+    "metric": "revenue",
+    "higher_is_better": false,
+    "alternative": "less",
+    "alpha": 0.05,
+    "correction": "holm",
+    "covariate": "revenue_pre",
+    "covariate_missing": "exclude",
+    "cap_percentile": 0.999,
+    "srm_alpha": 0.001,
+    "expected_shares": {},
+    "min_lift": 0.02,
+    "power": 0.8,
+    "bayes": false,
+    "date": null,
+    "sequential": false,
+    "secondary_metrics": [],
+    "output": "results"
+   }
+  },
+  {
+   "what": "a ratio A/B test",
+   "model": "ab_test",
+   "params": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "ratio",
+    "numerator": "clicks",
+    "denominator": "impressions"
+   },
+   "checked": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "ratio",
+    "input_shape": "units",
+    "unit": null,
+    "numerator": "clicks",
+    "denominator": "impressions",
+    "higher_is_better": true,
+    "alternative": "two_sided",
+    "alpha": 0.05,
+    "correction": "holm",
+    "covariate": null,
+    "srm_alpha": 0.001,
+    "expected_shares": {},
+    "min_lift": 0.02,
+    "power": 0.8,
+    "bayes": true,
+    "loss_threshold": 0.001,
+    "date": null,
+    "sequential": false,
+    "secondary_metrics": [],
+    "output": "results"
+   }
+  },
+  {
+   "what": "aggregated rows of a binary metric",
+   "model": "ab_test",
+   "params": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "binary",
+    "input_shape": "aggregated",
+    "units_count": "units",
+    "metric_sum": "converted"
+   },
+   "checked": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "binary",
+    "input_shape": "aggregated",
+    "units_count": "units",
+    "metric_sum": "converted",
+    "higher_is_better": true,
+    "alternative": "two_sided",
+    "alpha": 0.05,
+    "correction": "holm",
+    "srm_alpha": 0.001,
+    "expected_shares": {},
+    "min_lift": 0.02,
+    "power": 0.8,
+    "bayes": true,
+    "prior_alpha": 1.0,
+    "prior_beta": 1.0,
+    "loss_threshold": 0.001,
+    "date": null,
+    "sequential": false,
+    "output": "results"
+   }
+  },
+  {
+   "what": "aggregated rows of a continuous metric need the sum of squares",
+   "model": "ab_test",
+   "params": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "continuous",
+    "input_shape": "aggregated",
+    "units_count": "units",
+    "metric_sum": "revenue"
+   },
+   "error": "ab_test: the variance of a continuous metric needs the sum of its squares ('metric_sum_squares')"
+  },
+  {
+   "what": "a ratio metric needs one row per unit",
+   "model": "ab_test",
+   "params": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "ratio",
+    "input_shape": "aggregated",
+    "units_count": "units",
+    "metric_sum": "clicks"
+   },
+   "error": "ab_test: a ratio metric needs one row per unit: the delta method uses each unit's numerator and denominator"
+  },
+  {
+   "what": "the primary metric is needed",
+   "model": "ab_test",
+   "params": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "binary"
+   },
+   "error": "ab_test: the primary metric needs its column ('metric')"
+  },
+  {
+   "what": "a ratio needs its denominator",
+   "model": "ab_test",
+   "params": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "ratio",
+    "numerator": "clicks"
+   },
+   "error": "ab_test: a ratio metric needs the column of its denominator ('denominator')"
+  },
+  {
+   "what": "a ratio has no metric column: its numerator and denominator are",
+   "model": "ab_test",
+   "params": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "ratio",
+    "metric": "converted",
+    "numerator": "a",
+    "denominator": "b"
+   },
+   "error": "ab_test: 'metric' only applies when input_shape = units and metric_type = binary or continuous"
+  },
+  {
+   "what": "a cap only for a continuous metric",
+   "model": "ab_test",
+   "params": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "binary",
+    "metric": "converted",
+    "cap_percentile": 0.99
+   },
+   "error": "ab_test: 'cap_percentile' only applies when input_shape = units and metric_type = continuous"
+  },
+  {
+   "what": "the cap is above the median and below 1",
+   "model": "ab_test",
+   "params": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "continuous",
+    "metric": "m",
+    "cap_percentile": 0.5
+   },
+   "error": "ab_test: 'cap_percentile' must be a number above 0.5 and below 1"
+  },
+  {
+   "what": "the Beta prior is a binary metric's",
+   "model": "ab_test",
+   "params": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "continuous",
+    "metric": "m",
+    "prior_alpha": 2
+   },
+   "error": "ab_test: 'prior_alpha' only applies when bayes = true and metric_type = binary"
+  },
+  {
+   "what": "the empty covariate's rule needs a covariate",
+   "model": "ab_test",
+   "params": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "binary",
+    "metric": "converted",
+    "covariate_missing": "exclude"
+   },
+   "error": "ab_test: 'covariate_missing' only applies when 'covariate' is given"
+  },
+  {
+   "what": "the mixture's scale needs the sequential reading",
+   "model": "ab_test",
+   "params": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "binary",
+    "metric": "converted",
+    "sequential_tau": 0.1
+   },
+   "error": "ab_test: 'sequential_tau' only applies when sequential = true"
+  },
+  {
+   "what": "the always-valid p-value is two-sided",
+   "model": "ab_test",
+   "params": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "binary",
+    "metric": "converted",
+    "sequential": true,
+    "alternative": "greater"
+   },
+   "error": "ab_test: the always-valid p-value of this node is two-sided"
+  },
+  {
+   "what": "a one-sided alternative without the sequential reading",
+   "model": "ab_test",
+   "params": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "binary",
+    "metric": "converted",
+    "alternative": "greater"
+   },
+   "checked": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "binary",
+    "input_shape": "units",
+    "unit": null,
+    "metric": "converted",
+    "higher_is_better": true,
+    "alternative": "greater",
+    "alpha": 0.05,
+    "correction": "holm",
+    "covariate": null,
+    "srm_alpha": 0.001,
+    "expected_shares": {},
+    "min_lift": 0.02,
+    "power": 0.8,
+    "bayes": true,
+    "prior_alpha": 1.0,
+    "prior_beta": 1.0,
+    "loss_threshold": 0.001,
+    "date": null,
+    "sequential": false,
+    "secondary_metrics": [],
+    "output": "results"
+   }
+  },
+  {
+   "what": "an alternative that is not one",
+   "model": "ab_test",
+   "params": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "binary",
+    "metric": "converted",
+    "alternative": "both"
+   },
+   "error": "ab_test: 'alternative' must be one of two_sided, greater, less"
+  },
+  {
+   "what": "a correction that is not one",
+   "model": "ab_test",
+   "params": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "binary",
+    "metric": "converted",
+    "correction": "sidak"
+   },
+   "error": "ab_test: 'correction' must be one of holm, benjamini_hochberg, bonferroni, none"
+  },
+  {
+   "what": "the metric is not the covariate",
+   "model": "ab_test",
+   "params": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "binary",
+    "metric": "converted",
+    "covariate": "converted"
+   },
+   "error": "ab_test: the column «converted» is both 'metric' and 'covariate': choose another"
+  },
+  {
+   "what": "the variant column is not the unit",
+   "model": "ab_test",
+   "params": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "binary",
+    "metric": "converted",
+    "unit": "arm"
+   },
+   "error": "ab_test: the column «arm» is both 'variant' and 'unit': choose another"
+  },
+  {
+   "what": "a secondary metric is not the primary",
+   "model": "ab_test",
+   "params": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "binary",
+    "metric": "converted",
+    "secondary_metrics": [
+     "converted"
+    ]
+   },
+   "error": "ab_test: the column «converted» is both 'metric' and 'secondary_metrics': choose another"
+  },
+  {
+   "what": "secondary metrics are columns, each once",
+   "model": "ab_test",
+   "params": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "binary",
+    "metric": "converted",
+    "secondary_metrics": [
+     "a",
+     "a"
+    ]
+   },
+   "error": "ab_test: 'secondary_metrics' names a column twice"
+  },
+  {
+   "what": "at most ten secondary metrics",
+   "model": "ab_test",
+   "params": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "binary",
+    "metric": "converted",
+    "secondary_metrics": [
+     "m0",
+     "m1",
+     "m2",
+     "m3",
+     "m4",
+     "m5",
+     "m6",
+     "m7",
+     "m8",
+     "m9",
+     "m10"
+    ]
+   },
+   "error": "ab_test: 'secondary_metrics' may name at most 10 columns"
+  },
+  {
+   "what": "secondary metrics need one row per unit",
+   "model": "ab_test",
+   "params": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "binary",
+    "input_shape": "aggregated",
+    "units_count": "u",
+    "metric_sum": "s",
+    "secondary_metrics": [
+     "x"
+    ]
+   },
+   "error": "ab_test: 'secondary_metrics' only applies when input_shape = units"
+  },
+  {
+   "what": "a share for each value: a number each",
+   "model": "ab_test",
+   "params": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "binary",
+    "metric": "converted",
+    "expected_shares": {
+     "A": 1,
+     "B": "half"
+    }
+   },
+   "error": "ab_test: 'expected_shares.B' must be a number above 0"
+  },
+  {
+   "what": "the shares are positive",
+   "model": "ab_test",
+   "params": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "binary",
+    "metric": "converted",
+    "expected_shares": {
+     "A": 1,
+     "B": 0
+    }
+   },
+   "error": "ab_test: 'expected_shares.B' must be a number above 0"
+  },
+  {
+   "what": "the shares are an object",
+   "model": "ab_test",
+   "params": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "binary",
+    "metric": "converted",
+    "expected_shares": [
+     1,
+     1
+    ]
+   },
+   "error": "ab_test: 'expected_shares' must give a number to each value of the column, as {value: number}"
+  },
+  {
+   "what": "the shares are not one number",
+   "model": "ab_test",
+   "params": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "binary",
+    "metric": "converted",
+    "expected_shares": 0.5
+   },
+   "error": "ab_test: 'expected_shares' must give a number to each value of the column, as {value: number}"
+  },
+  {
+   "what": "an empty object of shares is none",
+   "model": "ab_test",
+   "params": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "binary",
+    "metric": "converted",
+    "expected_shares": {}
+   },
+   "checked": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "binary",
+    "input_shape": "units",
+    "unit": null,
+    "metric": "converted",
+    "higher_is_better": true,
+    "alternative": "two_sided",
+    "alpha": 0.05,
+    "correction": "holm",
+    "covariate": null,
+    "srm_alpha": 0.001,
+    "expected_shares": {},
+    "min_lift": 0.02,
+    "power": 0.8,
+    "bayes": true,
+    "prior_alpha": 1.0,
+    "prior_beta": 1.0,
+    "loss_threshold": 0.001,
+    "date": null,
+    "sequential": false,
+    "secondary_metrics": [],
+    "output": "results"
+   }
+  },
+  {
+   "what": "the shares are written in the text order of the values",
+   "model": "ab_test",
+   "params": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "binary",
+    "metric": "converted",
+    "expected_shares": {
+     "b": 1.5,
+     "A": 2,
+     "B": 1
+    }
+   },
+   "checked": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "binary",
+    "input_shape": "units",
+    "unit": null,
+    "metric": "converted",
+    "higher_is_better": true,
+    "alternative": "two_sided",
+    "alpha": 0.05,
+    "correction": "holm",
+    "covariate": null,
+    "srm_alpha": 0.001,
+    "expected_shares": {
+     "A": 2.0,
+     "B": 1.0,
+     "b": 1.5
+    },
+    "min_lift": 0.02,
+    "power": 0.8,
+    "bayes": true,
+    "prior_alpha": 1.0,
+    "prior_beta": 1.0,
+    "loss_threshold": 0.001,
+    "date": null,
+    "sequential": false,
+    "secondary_metrics": [],
+    "output": "results"
+   }
+  },
+  {
+   "what": "the always-valid p-value is two-sided, the other side too",
+   "model": "ab_test",
+   "params": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "binary",
+    "metric": "converted",
+    "sequential": true,
+    "alternative": "less"
+   },
+   "error": "ab_test: the always-valid p-value of this node is two-sided"
+  },
+  {
+   "what": "the level of the SRM test is between 0 and 1",
+   "model": "ab_test",
+   "params": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "binary",
+    "metric": "converted",
+    "srm_alpha": 1
+   },
+   "error": "ab_test: 'srm_alpha' must be a number above 0 and below 1"
+  },
+  {
+   "what": "the minimum lift is not negative",
+   "model": "ab_test",
+   "params": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "binary",
+    "metric": "converted",
+    "min_lift": -0.01
+   },
+   "error": "ab_test: 'min_lift' must be a number at least 0"
+  },
+  {
+   "what": "the power is between 0 and 1",
+   "model": "ab_test",
+   "params": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "binary",
+    "metric": "converted",
+    "power": 1
+   },
+   "error": "ab_test: 'power' must be a number above 0 and below 1"
+  },
+  {
+   "what": "the control is a value of the column",
+   "model": "ab_test",
+   "params": {
+    "variant": "arm",
+    "control": "",
+    "metric_type": "binary",
+    "metric": "converted"
+   },
+   "error": "ab_test: 'control' must be a value of the column"
+  },
+  {
+   "what": "the control may be a number",
+   "model": "ab_test",
+   "params": {
+    "variant": "arm",
+    "control": 0,
+    "metric_type": "binary",
+    "metric": "converted"
+   },
+   "checked": {
+    "variant": "arm",
+    "control": 0,
+    "metric_type": "binary",
+    "input_shape": "units",
+    "unit": null,
+    "metric": "converted",
+    "higher_is_better": true,
+    "alternative": "two_sided",
+    "alpha": 0.05,
+    "correction": "holm",
+    "covariate": null,
+    "srm_alpha": 0.001,
+    "expected_shares": {},
+    "min_lift": 0.02,
+    "power": 0.8,
+    "bayes": true,
+    "prior_alpha": 1.0,
+    "prior_beta": 1.0,
+    "loss_threshold": 0.001,
+    "date": null,
+    "sequential": false,
+    "secondary_metrics": [],
+    "output": "results"
+   }
+  },
+  {
+   "what": "the metric type is one of three",
+   "model": "ab_test",
+   "params": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "count",
+    "metric": "converted"
+   },
+   "error": "ab_test: 'metric_type' must be one of binary, continuous, ratio"
+  },
+  {
+   "what": "the variant column is needed",
+   "model": "ab_test",
+   "params": {
+    "control": "A",
+    "metric_type": "binary",
+    "metric": "m"
+   },
+   "error": "ab_test: 'variant' is required"
+  },
+  {
+   "what": "a key A/B test does not take",
+   "model": "ab_test",
+   "params": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "binary",
+    "metric": "converted",
+    "seed": 1
+   },
+   "error": "ab_test: there is no parameter 'seed' (it takes: variant, control, metric_type, input_shape, unit, metric, numerator, denominator, units_count, metric_sum, metric_sum_squares, higher_is_better, alternative, alpha, correction, covariate, covariate_missing, cap_percentile, srm_alpha, expected_shares, min_lift, power, bayes, prior_alpha, prior_beta, loss_threshold, date, sequential, sequential_tau, secondary_metrics, output)"
+  },
+  {
+   "what": "the smallest planning node",
+   "model": "ab_plan",
+   "params": {
+    "metric_type": "binary",
+    "metric": "converted"
+   },
+   "checked": {
+    "metric_type": "binary",
+    "input_shape": "units",
+    "unit": null,
+    "metric": "converted",
+    "covariate": null,
+    "date": null,
+    "solve_for": "sample_size",
+    "min_lift": 0.02,
+    "arms": 2,
+    "control_share": null,
+    "alpha": 0.05,
+    "power": 0.8,
+    "alternative": "two_sided",
+    "correction": "holm",
+    "output": "results"
+   }
+  },
+  {
+   "what": "a full planning of a continuous metric: CUPED, a date, three arms and the traffic share",
+   "model": "ab_plan",
+   "params": {
+    "metric_type": "continuous",
+    "metric": "revenue",
+    "unit": "user",
+    "covariate": "revenue_pre",
+    "date": "first_visit",
+    "cap_percentile": 0.999,
+    "arms": 3,
+    "control_share": 0.4,
+    "traffic_share": 0.5,
+    "correction": "bonferroni",
+    "min_lift": 0.05,
+    "power": 0.9,
+    "output": "plan"
+   },
+   "checked": {
+    "metric_type": "continuous",
+    "input_shape": "units",
+    "unit": "user",
+    "metric": "revenue",
+    "cap_percentile": 0.999,
+    "covariate": "revenue_pre",
+    "covariate_missing": "fill",
+    "date": "first_visit",
+    "solve_for": "sample_size",
+    "min_lift": 0.05,
+    "arms": 3,
+    "control_share": 0.4,
+    "traffic_share": 0.5,
+    "alpha": 0.05,
+    "power": 0.9,
+    "alternative": "two_sided",
+    "correction": "bonferroni",
+    "output": "plan"
+   }
+  },
+  {
+   "what": "the lift detectable with a number of units",
+   "model": "ab_plan",
+   "params": {
+    "metric_type": "binary",
+    "metric": "m",
+    "solve_for": "mde_for_units",
+    "units_per_variant": 20000
+   },
+   "checked": {
+    "metric_type": "binary",
+    "input_shape": "units",
+    "unit": null,
+    "metric": "m",
+    "covariate": null,
+    "date": null,
+    "solve_for": "mde_for_units",
+    "units_per_variant": 20000,
+    "arms": 2,
+    "control_share": null,
+    "alpha": 0.05,
+    "power": 0.8,
+    "alternative": "two_sided",
+    "correction": "holm",
+    "output": "results"
+   }
+  },
+  {
+   "what": "the lift detectable with units needs them",
+   "model": "ab_plan",
+   "params": {
+    "metric_type": "binary",
+    "metric": "m",
+    "solve_for": "mde_for_units"
+   },
+   "error": "ab_plan: the lift detectable with a number of units needs the units per variant ('units_per_variant')"
+  },
+  {
+   "what": "the lift detectable in days needs the days",
+   "model": "ab_plan",
+   "params": {
+    "metric_type": "binary",
+    "metric": "m",
+    "solve_for": "mde_for_days",
+    "date": "d"
+   },
+   "error": "ab_plan: the lift detectable in a number of days needs the days ('days')"
+  },
+  {
+   "what": "the lift detectable in days needs the date",
+   "model": "ab_plan",
+   "params": {
+    "metric_type": "binary",
+    "metric": "m",
+    "solve_for": "mde_for_days",
+    "days": 14
+   },
+   "error": "ab_plan: the lift detectable in a number of days needs the column of the day each unit first appeared ('date')"
+  },
+  {
+   "what": "the lift detectable in days",
+   "model": "ab_plan",
+   "params": {
+    "metric_type": "ratio",
+    "numerator": "n",
+    "denominator": "d",
+    "solve_for": "mde_for_days",
+    "days": 28,
+    "date": "first_seen"
+   },
+   "checked": {
+    "metric_type": "ratio",
+    "input_shape": "units",
+    "unit": null,
+    "numerator": "n",
+    "denominator": "d",
+    "covariate": null,
+    "date": "first_seen",
+    "solve_for": "mde_for_days",
+    "days": 28,
+    "arms": 2,
+    "control_share": null,
+    "traffic_share": 1.0,
+    "alpha": 0.05,
+    "power": 0.8,
+    "alternative": "two_sided",
+    "correction": "holm",
+    "output": "results"
+   }
+  },
+  {
+   "what": "the minimum lift is for the sample size",
+   "model": "ab_plan",
+   "params": {
+    "metric_type": "binary",
+    "metric": "m",
+    "solve_for": "mde_for_units",
+    "units_per_variant": 100,
+    "min_lift": 0.1
+   },
+   "error": "ab_plan: 'min_lift' only applies when solve_for = sample_size"
+  },
+  {
+   "what": "the traffic share needs a date",
+   "model": "ab_plan",
+   "params": {
+    "metric_type": "binary",
+    "metric": "m",
+    "traffic_share": 0.5
+   },
+   "error": "ab_plan: 'traffic_share' only applies when 'date' is given"
+  },
+  {
+   "what": "two arms at least",
+   "model": "ab_plan",
+   "params": {
+    "metric_type": "binary",
+    "metric": "m",
+    "arms": 1
+   },
+   "error": "ab_plan: 'arms' must be a whole number from 2 to 20"
+  },
+  {
+   "what": "at most as many arms as variants",
+   "model": "ab_plan",
+   "params": {
+    "metric_type": "binary",
+    "metric": "m",
+    "arms": 21
+   },
+   "error": "ab_plan: 'arms' must be a whole number from 2 to 20"
+  },
+  {
+   "what": "units per variant: two at least",
+   "model": "ab_plan",
+   "params": {
+    "metric_type": "binary",
+    "metric": "m",
+    "solve_for": "mde_for_units",
+    "units_per_variant": 1
+   },
+   "error": "ab_plan: 'units_per_variant' must be a whole number from 2 to 1000000000"
+  },
+  {
+   "what": "a ratio planning needs one row per unit",
+   "model": "ab_plan",
+   "params": {
+    "metric_type": "ratio",
+    "input_shape": "aggregated",
+    "units_count": "u",
+    "metric_sum": "s"
+   },
+   "error": "ab_plan: a ratio metric needs one row per unit: the delta method uses each unit's numerator and denominator"
+  },
+  {
+   "what": "the planning node takes no variant column",
+   "model": "ab_plan",
+   "params": {
+    "metric_type": "binary",
+    "metric": "m",
+    "variant": "arm"
+   },
+   "error": "ab_plan: there is no parameter 'variant' (it takes: metric_type, input_shape, unit, metric, numerator, denominator, units_count, metric_sum, metric_sum_squares, cap_percentile, covariate, covariate_missing, date, solve_for, min_lift, units_per_variant, days, arms, control_share, traffic_share, alpha, power, alternative, correction, output)"
+  },
+  {
+   "what": "the output of a planning is its results or its grid",
+   "model": "ab_plan",
+   "params": {
+    "metric_type": "binary",
+    "metric": "m",
+    "output": "variants"
+   },
+   "error": "ab_plan: 'output' must be one of results, plan"
+  },
+  {
+   "what": "a planning's metric is not its covariate",
+   "model": "ab_plan",
+   "params": {
+    "metric_type": "binary",
+    "metric": "m",
+    "covariate": "m"
+   },
+   "error": "ab_plan: the column «m» is both 'metric' and 'covariate': choose another"
   }
  ]
 }

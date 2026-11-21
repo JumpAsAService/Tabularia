@@ -19,6 +19,7 @@ from typing import Any
 
 from app.engine.models import catalog
 from app.engine.stats.output import OUTPUT_NAMES
+from tests import models_fixtures_experiments as experiments
 
 HERE = Path(__file__).resolve().parent / "fixtures" / "models"
 
@@ -60,6 +61,9 @@ PARAMS: dict[tuple[str, str], dict[str, Any]] = {
                                     "distribution": "gompertz", "quantiles": [0.25, 0.75], "times": [5, 10]},
     ("parametric_survival", "auto"): {"time": "days", "event": "status", "event_value": "failed", "predictors": ["load", "line"],
                                       "weights": "w", "distribution": "auto", "quantiles": [0.25, 0.75], "times": [10, 30]},
+    # the experiments group: one imaginary experiment of three variants (A the control), a table per metric type
+    # (tests/models_fixtures_experiments.py)
+    **experiments.PARAMS,
 }
 
 # Fixtures that are a runner's real output (`from_results`): main() leaves them alone.
@@ -138,6 +142,10 @@ def build(model: str, variant: str) -> dict[str, Any]:
     checked = catalog.check_params(model, params)
     spec = catalog.variant_spec(model, checked)
     assert spec["id"] == variant, (model, variant, spec["id"])
+    if model in ("ab_test", "ab_plan"):
+        made = experiments.build(model, variant, params, spec, checked)
+        return {**made, "fixture": "placeholder numbers: one imaginary experiment, the spec's formulas on its sufficient statistics",
+                "columns": list(OUTPUT_NAMES), "rows": made["rows"]}
     t = Table()
     sections = spec["sections"]
     texts = {**TEXTS, "model": model, "variant": variant}

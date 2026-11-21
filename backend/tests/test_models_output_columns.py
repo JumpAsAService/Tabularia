@@ -34,18 +34,26 @@ def test_every_column_an_output_declares_has_a_type():
                 for name in names:
                     kind = catalog.OUTPUT_TYPES[output].get(name)
                     assert kind is not None, f"{model} ({v['id']}): {output} writes {name}, of no declared type"
-                    assert kind in ENGINE_TYPES or kind[1:] in time_keys, f"{model}: {name} is {kind}"
+                    # «@key», «=key»: the type of the input's column the key names
+                    assert kind in ENGINE_TYPES or kind[1:] in time_keys or (kind[0] == "=" and kind[1:] in {**spec["needs"], **spec["takes"]}), \
+                        f"{model}: {name} is {kind}"
     for output, types in catalog.OUTPUT_TYPES.items():
         declared = {n for spec in catalog.MODELS.values() for v in spec["variants"] for n in v["outputs"].get(output, [])}
         assert output == "results" or set(types) == declared, f"{output}: types of columns no model writes"
     assert set(catalog.ROWS_INPUT_TYPES) == {g["language"] for g in catalog.GROUPS.values()}
 
 
+# The experiments' nodes are stubs until lots E2 (ab_test) and E5 (ab_plan) write them: no runner has run their outputs
+# yet, so output_columns.json has no case of theirs. The lot that writes each adds its cases to make_output_columns.py
+# and takes the model away from here.
+NOT_RUN_YET = {"ab_test", "ab_plan"}
+
+
 def test_every_variant_that_hands_on_columns_was_run():
     run = {(c["model"], _variant_of(c)) for c in CASES if {**catalog.MODELS[c["model"]]["defaults"], **c["params"]}.get("output") != "results"}
     for model, spec in catalog.MODELS.items():
         for v in spec["variants"]:
-            if v["outputs"]:
+            if v["outputs"] and model not in NOT_RUN_YET:
                 assert (model, v["id"]) in run, f"{model} ({v['id']}): no case of output_columns.json runs it"
     assert any({**catalog.MODELS[c["model"]]["defaults"], **c["params"]}.get("output") == "results" for c in CASES)
 
@@ -89,6 +97,29 @@ def test_the_columns_before_a_run_need_no_complete_parameters():
     names = [n for n, _ in catalog.output_columns("bg_bb", {"spend": "s", "holdout_transactions": "h"}, [])[0]]
     assert names == ["pred_p_alive", "pred_transactions", "pred_holdout_transactions", "pred_spend",
                      "pred_discounted_transactions", "pred_clv"]
+
+
+def test_the_experiments_outputs_before_a_run():
+    """`variants`: the variant column keeps the input's own type (`=variant`), whatever it is; `plan` has no input column.
+    Always every column: a null where an analysis is off."""
+    names = [n for n, _ in catalog.output_columns("ab_test", {"output": "variants"}, [])[0]]
+    assert names == ["metric", "role", "variant", "is_control", "units", "share", "expected_share", "mean", "std_error", "ci_low",
+                     "ci_high", "difference", "difference_ci_low", "difference_ci_high", "lift", "lift_ci_low", "lift_ci_high",
+                     "p_value", "p_adjusted", "decision", "prob_beat_control", "prob_best", "expected_loss", "sequential_p_value",
+                     "sequential_p_adjusted", "sequential_lift_low", "sequential_lift_high"]
+    for own in ("Int64", "Int32", "Boolean", "String", "Date", "Datetime(time_unit='us', time_zone=None)"):
+        cols, unknown = catalog.output_columns("ab_test", {"variant": "arm", "output": "variants"}, [("arm", own), ("x", "Int64")])
+        assert dict(cols)["variant"] == own and unknown == [] and "x" not in dict(cols), own  # no input column but the variant
+    assert dict(catalog.output_columns("ab_test", {"output": "variants"}, [("arm", "Int64")])[0])["variant"] == "Unknown"
+    assert dict(catalog.output_columns("ab_test", {"variant": "gone", "output": "variants"}, [("arm", "Int64")])[0])["variant"] == "Unknown"
+    # the rows output's Int32 rule is for `rows` and `@key` alone
+    assert dict(catalog.output_columns("ab_test", {"variant": "arm", "output": "variants"}, [("arm", "Int64")])[0])["units"] == "Int64"
+    plan, unknown = catalog.output_columns("ab_plan", {"output": "plan"}, [("arm", "Int64")])
+    assert [n for n, _ in plan] == ["lift", "mde_absolute", "n_per_variant", "n_control", "n_total", "days", "weeks",
+                                     "n_per_variant_cuped", "days_cuped", "asked"] and unknown == []
+    assert dict(plan)["asked"] == "Boolean" and all(t == "Float64" for n, t in plan if n != "asked")
+    for node in ("ab_test", "ab_plan"):
+        assert catalog.output_columns(node, {}, [("arm", "Int64")])[0] == list(catalog.OUTPUT_TYPES["results"].items())
 
 
 def test_output_type_reads_a_name_through_its_pattern():

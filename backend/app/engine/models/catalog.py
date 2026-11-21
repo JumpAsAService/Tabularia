@@ -87,6 +87,12 @@ LIMITS: dict[str, int] = {
     "max_clv_steps": 520,        # periods summed one by one in a CLV; beyond it coarser steps
     "max_top_customers": 20,     # rows of the top customers' table
     "palive_grid_frequency": 10, # frequencies of the P(alive) map
+    # the experiments group's (docs/specs/ab-testing.md, «Limits»)
+    "max_variants": 20,          # values of the variant column, the control included
+    "max_looks": 1000,           # days of the sequential looks; beyond it, equal periods of days
+    "max_secondary_metrics": 10, # secondary metrics of an A/B node
+    "posterior_points": 200,     # points of a posterior density
+    "power_points": 50,          # points of a power curve
 }
 
 # ── groups: one image each, built when an administrator enables it ─────────
@@ -96,12 +102,13 @@ GROUPS: dict[str, dict[str, Any]] = {
     "timeseries": {"language": "r", "label": "models.groups.timeseries", "models": ["arima"]},
     "boosting": {"language": "python", "label": "models.groups.boosting", "models": ["xgboost", "catboost"]},
     "customer_lifetime": {"language": "r", "label": "models.groups.customer_lifetime", "models": ["clv", "bg_bb"]},
+    "experiments": {"language": "r", "label": "models.groups.experiments", "models": ["ab_test", "ab_plan"]},
 }
 
 # ── controls and kinds ──────────────────────────────────────────────────────
 # What a form draws, and how a value is read (the Go gateway reads the same):
 #   column            one column; `numeric`: numbers only; `types`: the column kinds allowed
-#   columns           distinct columns; `min`, `max` of them; `numeric`; `predictor`: numbers,
+#   columns           distinct columns; `min`, `max` of them; `numeric`; `types`; `predictor`: numbers,
 #                     texts and booleans (a date is refused with its own sentence)
 #   level             one value of the column the key `of` names (a text, number or boolean)
 #   reference         {column of the key `of`: its reference level}
@@ -112,8 +119,11 @@ GROUPS: dict[str, dict[str, Any]] = {
 #   boolean           true or false
 #   numbers           distinct numbers, at most `max_count`, each within the number's bounds
 #   number_or_choice  one of `choices`, or a number within the bounds
+#   level_numbers     a number for each value of the column the key `of` names, as {value: number},
+#                     each within the number's bounds (the form lists the column's values with a
+#                     number field each; the values themselves are the data's, known at the run)
 CONTROLS = ("column", "columns", "level", "reference", "pairs", "choice", "number", "integer",
-            "boolean", "numbers", "number_or_choice")
+            "boolean", "numbers", "number_or_choice", "level_numbers")
 
 # The kinds of a column, as the engine's dtypes map to them (`column_kind`).
 COLUMN_KINDS = ("integer", "number", "text", "boolean", "date", "datetime", "other")
@@ -201,6 +211,29 @@ KINDS: dict[str, dict[str, Any]] = {
     "discount_rate": {"control": "number", "min": 0, "max": 1},
     "aic_margin": {"control": "number", "min": 0, "max": 10},  # parametric survival `auto`: AIC within this, the simpler one
     "holdout_opportunities": _int(1, LIMITS["max_opportunities"]),
+    # the experiments group's (docs/specs/ab-testing.md, «The form»)
+    "variant_column": {"control": "column", "types": ["text", "integer", "boolean", "date"]},
+    "control_level": {"control": "level", "of": "variant"},
+    "metric_type": _choice("binary", "continuous", "ratio"),
+    "input_shape": _choice("units", "aggregated"),
+    "metric_column": {"control": "column", "types": ["boolean", "integer", "number"]},
+    "metric_columns": {"control": "columns", "min": 0, "max": LIMITS["max_secondary_metrics"],
+                       "types": ["boolean", "integer", "number"]},
+    "date_column": {"control": "column", "types": ["date", "datetime"]},
+    "alternative": _choice("two_sided", "greater", "less"),
+    "correction_ab": _choice("holm", "benjamini_hochberg", "bonferroni", "none"),
+    "covariate_missing": _choice("fill", "exclude"),
+    "cap_percentile": {"control": "number", "above": 0.5, "below": 1},
+    "variant_shares": {"control": "level_numbers", "of": "variant", "above": 0},
+    "relative": {"control": "number", "min": 0},
+    "tau": {"control": "number", "above": 0},
+    "share_open": {"control": "number", "above": 0, "max": 1},
+    "solve_for": _choice("sample_size", "mde_for_units", "mde_for_days"),
+    "arms": _int(2, LIMITS["max_variants"]),
+    "days": _int(1, 3650),
+    "units_per_variant": _int(2, 1_000_000_000),
+    "output_variants": _choice("results", "variants"),
+    "output_plan": _choice("results", "plan"),
 }
 
 # The seasonal period a frequency implies when `s` is not given.
@@ -229,6 +262,16 @@ SECTION_SHAPES: dict[str, dict[str, Any]] = {
     "class": {"level": "required", "level_2": "null", "indexed": False},
     # the customer lifetime group's: a customer of the top table, its id as the label
     "customer": {"level": "required", "level_2": "null", "indexed": False},
+    # the experiments group's: a variant; a treatment against the control; a variant's or a treatment's
+    # analysis; a metric against a treatment; a block of the report's explanation (and a variant); a
+    # lift of the planning grid
+    "variant": {"level": "required", "level_2": "null", "indexed": False},
+    "comparison": {"level": "required", "level_2": "required", "indexed": False},
+    "bayes": {"level": "required", "level_2": "null", "indexed": False},
+    "sequential": {"level": "required", "level_2": "null", "indexed": False},
+    "secondary": {"level": "required", "level_2": "required", "indexed": False},
+    "plan": {"level": "required", "level_2": "null", "indexed": False},
+    "reading": {"level": "required", "level_2": "optional", "indexed": False},
 }
 
 VERDICTS = ("ok", "doubtful", "failed", "not_computed")
@@ -966,6 +1009,211 @@ MODELS["bg_bb"] = _clv_node(
      "period_unit": "time_unit"},
     "holdout_opportunities", {}, {}, {}, "bg_bb")
 
+# ── experiments (docs/specs/ab-testing.md, «The node ab_test», «The node ab_plan», «The output») ──
+# Two nodes, `ab_test` and `ab_plan`, each with three variants, the metric's type: `binary`, `continuous`,
+# `ratio` (they decide which numbers the sections hold; the analyses a variant MAY write — Bayes, sequential,
+# CUPED, the cap, secondary metrics — are declared in each). Neither makes a model: `card: false`, so no
+# model card, no registration as a model, no Predict; MLflow logs the run.
+_AB_METRIC_TYPES = ["binary", "continuous", "ratio"]
+_AB_CHECKS = ["srm", "covariate_balance", "covariate_missing_balance", "crossover", "variance_zero"]
+_AB_MODEL_TEXTS = [*_MODEL_TEXTS, "metric_type", "input_shape", "control", "alternative", "correction", "covariate_missing",
+                   "decision", "decision_variants"]
+_AB_MODEL_NUMBERS = ["alpha", "srm_alpha", "n", "n_assigned", "n_missing", "n_variants", "n_crossover", "n_covariate_filled",
+                     "n_covariate_excluded", "theta", "covariate_correlation", "min_lift", "power", "loss_threshold",
+                     "sequential_tau", "n_looks", "first_day", "last_day"]
+_AB_VARIANT_NUMBERS = ["is_control", "n", "n_assigned", "n_missing", "share", "expected_share", "mean", "std_dev", "std_error",
+                       "ci_low", "ci_high", "mean_unadjusted", "std_error_unadjusted", "covariate_mean", "variance_reduction",
+                       "n_covariate_filled", "n_covariate_excluded", "covariate_fill_value"]
+_AB_COMPARISON_NUMBERS = ["difference", "difference_std_error", "difference_ci_low", "difference_ci_high", "lift",
+                          "lift_std_error", "lift_ci_low", "lift_ci_high", "statistic", "p_value", "p_adjusted", "mde",
+                          "power_at_min_lift"]
+_AB_COMPARISON_TEXTS = ["significance", "p_adjusted_significance", "decision", "min_lift_position"]
+_AB_BAYES_NUMBERS = ["posterior_mean", "posterior_sd", "cred_low", "cred_high", "prob_best", "expected_loss_best",
+                     "expected_loss_best_relative", "prob_beat_control", "expected_loss", "expected_loss_relative",
+                     "expected_loss_control", "expected_loss_control_relative"]
+_AB_SEQUENTIAL_NUMBERS = ["p_value", "p_adjusted", "log_lambda", "cs_low", "cs_high", "first_crossing"]
+_AB_READING_BLOCKS = ["decision", "srm", "comparison", "cuped", "cap", "bayes", "sequential", "power", "secondary", "method",
+                      "formulas"]
+_AB_VARIANTS_OUTPUT = ["metric", "role", "variant", "is_control", "units", "share", "expected_share", "mean", "std_error",
+                       "ci_low", "ci_high", "difference", "difference_ci_low", "difference_ci_high", "lift", "lift_ci_low",
+                       "lift_ci_high", "p_value", "p_adjusted", "decision", "prob_beat_control", "prob_best", "expected_loss",
+                       "sequential_p_value", "sequential_p_adjusted", "sequential_lift_low", "sequential_lift_high"]
+_AB_PLAN_OUTPUT = ["lift", "mde_absolute", "n_per_variant", "n_control", "n_total", "days", "weeks", "n_per_variant_cuped",
+                   "days_cuped", "asked"]
+_AB_PLAN_READING_BLOCKS = ["plan", "baseline", "cuped", "correction", "method", "formulas"]
+
+
+def _ab_test_variant(metric_type: str) -> dict[str, Any]:
+    """`binary`, `continuous` or `ratio` of the A/B test node: what the runner may write. The cap and the
+    histogram of the metric are a continuous metric's; the Beta prior a binary metric's; Welch's degrees of
+    freedom a continuous metric's (z has none); a ratio metric has its numerator's and denominator's sums."""
+    binary, continuous, ratio = (metric_type == t for t in _AB_METRIC_TYPES)
+    model_numbers = [*_AB_MODEL_NUMBERS, *(["prior_alpha", "prior_beta"] if binary else []),
+                     *(["cap_value", "n_capped"] if continuous else [])]
+    variant_numbers = [*_AB_VARIANT_NUMBERS, *(["skewness", "n_capped"] if continuous else []),
+                       *(["conversions"] if binary else []), *(["numerator_sum", "denominator_sum"] if ratio else [])]
+    comparison = [*_AB_COMPARISON_NUMBERS, *(["df"] if continuous else [])]
+    assumption = {**_assumptions(*_AB_CHECKS), "texts": [*_ASSUMPTION["texts"], "advice_id"]}
+    sections: dict[str, Any] = {
+        "model": {"levels": None, "texts": _AB_MODEL_TEXTS, "numbers": model_numbers},
+        "variant": {"levels": None, "numbers": variant_numbers, "texts": []},
+        "comparison": {"levels": None, "numbers": comparison, "texts": _AB_COMPARISON_TEXTS},
+        "bayes": {"levels": None, "numbers": _AB_BAYES_NUMBERS, "texts": ["loss_position"]},
+        "sequential": {"levels": None, "numbers": _AB_SEQUENTIAL_NUMBERS, "texts": ["significance", "decision"]},
+        "secondary": {"levels": None, "numbers": [*comparison, "mean_treatment", "mean_control"],
+                      "texts": [*_AB_COMPARISON_TEXTS, "metric_type"]},
+        "reading": {"levels": [b for b in _AB_READING_BLOCKS if continuous or b != "cap"], "numbers": [], "texts": ["line_*"]},
+        "assumption": assumption,
+        "curve": _chart("srm_share", "daily_units", "sequential_lift", "sequential_p", "posterior", "power",
+                        stats=["y", "low", "high"]),
+    }
+    if continuous:
+        sections["hist"] = _chart("metric", stats=["count"])
+    charts = [{"id": "lift_interval", "under": None}, {"id": "srm_units", "under": "srm"}, {"id": "srm_share", "under": "srm"},
+              {"id": "daily_units", "under": None}, *([{"id": "histogram", "under": None}] if continuous else []),
+              {"id": "power", "under": None}, {"id": "posterior", "under": None}, {"id": "sequential_lift", "under": None},
+              {"id": "sequential_p", "under": None}]
+    return {"id": metric_type, "when": {"metric_type": [metric_type]}, "sections": sections, "charts": charts,
+            "outputs": {"variants": list(_AB_VARIANTS_OUTPUT)}}
+
+
+def _ab_plan_variant(metric_type: str) -> dict[str, Any]:
+    """`binary`, `continuous` or `ratio` of the planning node. No check (nothing here is a test)."""
+    continuous = metric_type == "continuous"
+    sections: dict[str, Any] = {
+        "model": {"levels": None,
+                  "texts": [*_MODEL_TEXTS, "metric_type", "input_shape", "solve_for", "alternative", "correction",
+                            "covariate_missing", "history_short"],
+                  "numbers": ["alpha", "n", "n_missing", "min_lift", "arms", "control_share", "traffic_share", "baseline_mean",
+                              "baseline_sd", "n_history", "history_days", "daily_units", "alpha_per_comparison", "n_per_variant",
+                              "n_control", "n_total", "days", "weeks", "mde", "mde_absolute", "power", "covariate_correlation",
+                              "variance_reduction", "n_covariate_filled", "n_covariate_excluded", "n_per_variant_cuped",
+                              "n_total_cuped", "days_cuped", "mde_cuped", *(["cap_value", "n_capped"] if continuous else [])]},
+        "plan": {"levels": None, "numbers": list(_AB_PLAN_OUTPUT), "texts": []},
+        "reading": {"levels": list(_AB_PLAN_READING_BLOCKS), "numbers": [], "texts": ["line_*"]},
+        "curve": _chart("power_lift", "mde_days", "n_lift", stats=["y"]),
+        "hist": _chart("metric", stats=["count"]),
+    }
+    charts = [{"id": "power_lift", "under": None}, {"id": "mde_days", "under": None}, {"id": "history", "under": None}]
+    return {"id": metric_type, "when": {"metric_type": [metric_type]}, "sections": sections, "charts": charts,
+            "outputs": {"plan": list(_AB_PLAN_OUTPUT)}}
+
+
+# the keys both nodes read their metric from, and the rules around them
+_AB_INPUT_TAKES = {"input_shape": "input_shape", "unit": "column", "metric": "metric_column", "numerator": "number_column",
+                   "denominator": "number_column", "units_count": "number_column", "metric_sum": "number_column",
+                   "metric_sum_squares": "number_column"}
+_AB_INPUT_DEFAULTS = {"input_shape": "units", "unit": None, "metric": None, "numerator": None, "denominator": None,
+                      "units_count": None, "metric_sum": None, "metric_sum_squares": None}
+_AB_INPUT_APPLIES = {
+    "unit": {"input_shape": ["units"]},
+    "metric": {"input_shape": ["units"], "metric_type": ["binary", "continuous"]},
+    "numerator": {"input_shape": ["units"], "metric_type": ["ratio"]},
+    "denominator": {"input_shape": ["units"], "metric_type": ["ratio"]},
+    "units_count": {"input_shape": ["aggregated"]},
+    "metric_sum": {"input_shape": ["aggregated"]},
+    "metric_sum_squares": {"input_shape": ["aggregated"], "metric_type": ["continuous"]},
+    "covariate": {"input_shape": ["units"]},
+    "covariate_missing": {"covariate": True},
+    "cap_percentile": {"input_shape": ["units"], "metric_type": ["continuous"]},
+}
+_AB_INPUT_REQUIRES = [
+    {"key": "metric", "when": {"input_shape": "units", "metric_type": ["binary", "continuous"]}, "reason": "metric_needed",
+     "message": "the primary metric needs its column ('metric')"},
+    {"key": "numerator", "when": {"input_shape": "units", "metric_type": "ratio"}, "reason": "numerator_needed",
+     "message": "a ratio metric needs the column of its numerator ('numerator')"},
+    {"key": "denominator", "when": {"input_shape": "units", "metric_type": "ratio"}, "reason": "denominator_needed",
+     "message": "a ratio metric needs the column of its denominator ('denominator')"},
+    {"key": "units_count", "when": {"input_shape": "aggregated"}, "reason": "units_count_needed",
+     "message": "aggregated rows need the column of their units ('units_count')"},
+    {"key": "metric_sum", "when": {"input_shape": "aggregated"}, "reason": "metric_sum_needed",
+     "message": "aggregated rows need the column of their metric's sum ('metric_sum')"},
+    {"key": "metric_sum_squares", "when": {"input_shape": "aggregated", "metric_type": "continuous"},
+     "reason": "sum_squares_needed",
+     "message": "the variance of a continuous metric needs the sum of its squares ('metric_sum_squares')"},
+]
+_AB_RATIO_FORBID = {"key": "input_shape", "value": "aggregated", "when": {"metric_type": "ratio"}, "reason": "ratio_needs_units",
+                    "message": "a ratio metric needs one row per unit: the delta method uses each unit's numerator and denominator"}
+_AB_DISJOINT = ["variant", "unit", "metric", "numerator", "denominator", "covariate", "date", "units_count", "metric_sum",
+                "metric_sum_squares", "secondary_metrics"]
+
+MODELS["ab_test"] = {
+    "group": "experiments",
+    "family": "experiments",
+    "card": False,
+    "needs": {"variant": "variant_column", "control": "control_level", "metric_type": "metric_type"},
+    "takes": {
+        **_AB_INPUT_TAKES, "higher_is_better": "boolean", "alternative": "alternative", "alpha": "alpha",
+        "correction": "correction_ab", "covariate": "number_column", "covariate_missing": "covariate_missing",
+        "cap_percentile": "cap_percentile", "srm_alpha": "proportion", "expected_shares": "variant_shares",
+        "min_lift": "relative", "power": "proportion", "bayes": "boolean", "prior_alpha": "positive", "prior_beta": "positive",
+        "loss_threshold": "relative", "date": "date_column", "sequential": "boolean", "sequential_tau": "tau",
+        "secondary_metrics": "metric_columns", "output": "output_variants",
+    },
+    "defaults": {
+        **_AB_INPUT_DEFAULTS, "higher_is_better": True, "alternative": "two_sided", "alpha": 0.05, "correction": "holm",
+        "covariate": None, "covariate_missing": "fill", "cap_percentile": None, "srm_alpha": 0.001, "expected_shares": {},
+        "min_lift": 0.02, "power": 0.8, "bayes": True, "prior_alpha": 1.0, "prior_beta": 1.0, "loss_threshold": 0.001,
+        "date": None, "sequential": False, "sequential_tau": 0.05, "secondary_metrics": [], "output": "results",
+    },
+    "applies": {
+        **_AB_INPUT_APPLIES,
+        "secondary_metrics": {"input_shape": ["units"]},
+        "prior_alpha": {"bayes": [True], "metric_type": ["binary"]},
+        "prior_beta": {"bayes": [True], "metric_type": ["binary"]},
+        "loss_threshold": {"bayes": [True]},
+        "sequential_tau": {"sequential": [True]},
+    },
+    "requires": [*_AB_INPUT_REQUIRES],
+    "forbids": [
+        _AB_RATIO_FORBID,
+        # the always-valid p-value of this node is two-sided: one rule for each one-sided alternative
+        *({"key": "alternative", "value": side, "when": {"sequential": [True]}, "reason": "sequential_two_sided",
+           "message": "the always-valid p-value of this node is two-sided"} for side in ("greater", "less")),
+    ],
+    "disjoint": list(_AB_DISJOINT),
+    "variants": [_ab_test_variant(t) for t in _AB_METRIC_TYPES],
+}
+
+MODELS["ab_plan"] = {
+    "group": "experiments",
+    "family": "experiments",
+    "card": False,
+    "needs": {"metric_type": "metric_type"},
+    "takes": {
+        **_AB_INPUT_TAKES, "cap_percentile": "cap_percentile", "covariate": "number_column",
+        "covariate_missing": "covariate_missing", "date": "date_column", "solve_for": "solve_for", "min_lift": "positive",
+        "units_per_variant": "units_per_variant", "days": "days", "arms": "arms", "control_share": "proportion",
+        "traffic_share": "share_open", "alpha": "alpha", "power": "proportion", "alternative": "alternative",
+        "correction": "correction_ab", "output": "output_plan",
+    },
+    "defaults": {
+        **_AB_INPUT_DEFAULTS, "cap_percentile": None, "covariate": None, "covariate_missing": "fill", "date": None,
+        "solve_for": "sample_size", "min_lift": 0.02, "units_per_variant": None, "days": None, "arms": 2,
+        "control_share": None, "traffic_share": 1.0, "alpha": 0.05, "power": 0.8, "alternative": "two_sided",
+        "correction": "holm", "output": "results",
+    },
+    "applies": {
+        **_AB_INPUT_APPLIES,
+        "min_lift": {"solve_for": ["sample_size"]},
+        "units_per_variant": {"solve_for": ["mde_for_units"]},
+        "days": {"solve_for": ["mde_for_days"]},
+        "traffic_share": {"date": True},
+    },
+    "requires": [
+        *_AB_INPUT_REQUIRES,
+        {"key": "units_per_variant", "when": {"solve_for": "mde_for_units"}, "reason": "units_per_variant_needed",
+         "message": "the lift detectable with a number of units needs the units per variant ('units_per_variant')"},
+        {"key": "days", "when": {"solve_for": "mde_for_days"}, "reason": "days_needed",
+         "message": "the lift detectable in a number of days needs the days ('days')"},
+        {"key": "date", "when": {"solve_for": "mde_for_days"}, "reason": "days_need_date",
+         "message": "the lift detectable in a number of days needs the column of the day each unit first appeared ('date')"},
+    ],
+    "forbids": [_AB_RATIO_FORBID],
+    "disjoint": [k for k in _AB_DISJOINT if k not in ("variant", "secondary_metrics")],
+    "variants": [_ab_plan_variant(t) for t in _AB_METRIC_TYPES],
+}
+
 # the models in the order of their groups: the palette, the sentences and the snapshot list them so
 MODELS = {m: MODELS[m] for g in GROUPS.values() for m in g["models"]}
 
@@ -1013,6 +1261,8 @@ PREDICT: dict[str, Any] = {
 # stands for every name it makes (`pred_quantile_*`: one per quantile asked; `pred_prob_*`: one
 # per class of the data, known only after a run). «@<key>»: the type of the input's column the
 # key names, a whole number written as Int32 (ARIMA's time: what the series' time column is).
+# «=<key>»: the exact type of the input's column the key names, whatever it is (the experiments'
+# variant: an Int64 stays Int64, a date a date).
 # `results` is the statistics' ten columns. What the runners really write is in
 # backend/tests/fixtures/models/output_columns.json, made by running them, and the engine's
 # test checks these types against it.
@@ -1033,6 +1283,19 @@ OUTPUT_TYPES: dict[str, dict[str, str]] = {
               "surv": "Float64", "lower": "Float64", "upper": "Float64"},
     "forecast": {"time": "@time", **{name: "Float64" for name in (
         "observed", "fitted", "forecast", "lower_80", "upper_80", "lower", "upper")}, "is_forecast": "Boolean"},
+    # the experiments group's: a row per variant and metric (the variant keeps the input column's own type), and the
+    # planning grid; every column is always there, null where an analysis is off (docs/specs/ab-testing.md, «The output»)
+    "variants": {"metric": "String", "role": "String", "variant": "=variant", "is_control": "Boolean", "units": "Int64",
+                 **{name: "Float64" for name in (
+                     "share", "expected_share", "mean", "std_error", "ci_low", "ci_high", "difference", "difference_ci_low",
+                     "difference_ci_high", "lift", "lift_ci_low", "lift_ci_high", "p_value", "p_adjusted")},
+                 "decision": "String",
+                 **{name: "Float64" for name in (
+                     "prob_beat_control", "prob_best", "expected_loss", "sequential_p_value", "sequential_p_adjusted",
+                     "sequential_lift_low", "sequential_lift_high")}},
+    "plan": {**{name: "Float64" for name in (
+        "lift", "mde_absolute", "n_per_variant", "n_control", "n_total", "days", "weeks", "n_per_variant_cuped", "days_cuped")},
+        "asked": "Boolean"},
 }
 
 # How a runner writes the input's own columns back in the rows output, by their kind, where the type
@@ -1179,6 +1442,10 @@ def read_value(model: str, key: str, kind: str, v: Any) -> Any:
         if len(v) > how["max_count"]:
             raise refusal(model, f"'{key}' may hold at most {how['max_count']} numbers")
         return sorted(float(x) for x in v)
+    if control == "level_numbers":
+        if not isinstance(v, dict) or not all(isinstance(c, str) and c for c in v):
+            raise refusal(model, f"'{key}' must give a number to each value of the column, as {{value: number}}")
+        return {c: _read_number(model, f"{key}.{c}", how, v[c]) for c in sorted(v)}
     if control == "number_or_choice":
         if isinstance(v, str) and v in how["choices"]:
             return v
@@ -1392,7 +1659,12 @@ def output_columns(model: str, params: Mapping[str, Any] | None,
     if output == "results":
         return list(types.items()), []
     inputs = dict(input_columns or [])
-    made = variant_spec(model, full)
+    try:
+        made = variant_spec(model, full)
+    except AssertionError:
+        # the key that makes the variant is not chosen yet (a node just dropped): the output's columns are the same
+        # in every variant that has the output (the experiments' metric type), and the first stands for them
+        made = next(v for v in spec["variants"] if output in v["outputs"])
     names = [n for n in made["outputs"][output]
              if not (rule := (made.get("rows_when") or {}).get(n)) or all(_holds(r, full.get(k)) for k, r in rule.items())]
     cols: list[tuple[str, str]] = []
@@ -1427,6 +1699,9 @@ def output_columns(model: str, params: Mapping[str, Any] | None,
             source = inputs.get(full.get(kind[1:]) or "")
             # the input's column not known (not chosen yet, no input): neither is the type
             kind = "Unknown" if source is None else "Int32" if column_kind(source) == "integer" else str(source)
+        elif kind.startswith("="):
+            source = inputs.get(full.get(kind[1:]) or "")
+            kind = "Unknown" if source is None else str(source)  # its own type, as the runner writes it
         out.append((name, kind))
     if output == "rows":
         kept = ROWS_INPUT_TYPES[GROUPS[spec["group"]]["language"]]
@@ -1484,6 +1759,7 @@ def snapshot() -> dict[str, Any]:
                 "group": spec["group"],
                 "family": spec["family"],
                 "label": f"models.{m}.name",
+                "card": spec.get("card", True),
                 "needs": spec["needs"],
                 "takes": spec["takes"],
                 "defaults": spec["defaults"],

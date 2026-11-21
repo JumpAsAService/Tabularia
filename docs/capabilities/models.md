@@ -897,6 +897,17 @@ Length of an opportunity *Months*, Opportunities ahead 12. These customers buy a
 in continuous time, so for them *Customer lifetime value* is the natural choice; BG/BB is for data that
 really come in occasions.
 
+### A/B tests (R): being built
+
+Model ids in the catalogue: `ab_test` and `ab_plan`. A group of two nodes, **A/B test** and **A/B test
+planning**, is being built for experiments: users (or sessions, shops, devices) split at random between a
+control and one or more treatments, with a metric measured on each. The first will say whether a treatment
+moved the metric, whether the split of the units can be trusted and how sure the result is; the second will
+size an experiment (units, days, the lift it can detect) from historical data. The nodes make no model: no
+model card, no registration as a model, no Predict; a flow run logs to MLflow like any other. In this
+version the nodes do not run yet: they stop with «… is not built yet in this version of Tabularia». This
+section will describe them when they do.
+
 ## The output
 
 Every model writes the same **ten columns** as the [statistical tests](statistics.md#the-output):

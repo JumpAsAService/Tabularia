@@ -61,7 +61,12 @@
     "max_opportunities": 1000,
     "max_clv_steps": 520,
     "max_top_customers": 20,
-    "palive_grid_frequency": 10
+    "palive_grid_frequency": 10,
+    "max_variants": 20,
+    "max_looks": 1000,
+    "max_secondary_metrics": 10,
+    "posterior_points": 200,
+    "power_points": 50
   },
   "controls": [
     "column",
@@ -74,7 +79,8 @@
     "integer",
     "boolean",
     "numbers",
-    "number_or_choice"
+    "number_or_choice",
+    "level_numbers"
   ],
   "column_kinds": [
     "integer",
@@ -540,6 +546,143 @@
       "control": "integer",
       "min": 1,
       "max": 1000
+    },
+    "variant_column": {
+      "control": "column",
+      "types": [
+        "text",
+        "integer",
+        "boolean",
+        "date"
+      ]
+    },
+    "control_level": {
+      "control": "level",
+      "of": "variant"
+    },
+    "metric_type": {
+      "control": "choice",
+      "choices": [
+        "binary",
+        "continuous",
+        "ratio"
+      ]
+    },
+    "input_shape": {
+      "control": "choice",
+      "choices": [
+        "units",
+        "aggregated"
+      ]
+    },
+    "metric_column": {
+      "control": "column",
+      "types": [
+        "boolean",
+        "integer",
+        "number"
+      ]
+    },
+    "metric_columns": {
+      "control": "columns",
+      "min": 0,
+      "max": 10,
+      "types": [
+        "boolean",
+        "integer",
+        "number"
+      ]
+    },
+    "date_column": {
+      "control": "column",
+      "types": [
+        "date",
+        "datetime"
+      ]
+    },
+    "alternative": {
+      "control": "choice",
+      "choices": [
+        "two_sided",
+        "greater",
+        "less"
+      ]
+    },
+    "correction_ab": {
+      "control": "choice",
+      "choices": [
+        "holm",
+        "benjamini_hochberg",
+        "bonferroni",
+        "none"
+      ]
+    },
+    "covariate_missing": {
+      "control": "choice",
+      "choices": [
+        "fill",
+        "exclude"
+      ]
+    },
+    "cap_percentile": {
+      "control": "number",
+      "above": 0.5,
+      "below": 1
+    },
+    "variant_shares": {
+      "control": "level_numbers",
+      "of": "variant",
+      "above": 0
+    },
+    "relative": {
+      "control": "number",
+      "min": 0
+    },
+    "tau": {
+      "control": "number",
+      "above": 0
+    },
+    "share_open": {
+      "control": "number",
+      "above": 0,
+      "max": 1
+    },
+    "solve_for": {
+      "control": "choice",
+      "choices": [
+        "sample_size",
+        "mde_for_units",
+        "mde_for_days"
+      ]
+    },
+    "arms": {
+      "control": "integer",
+      "min": 2,
+      "max": 20
+    },
+    "days": {
+      "control": "integer",
+      "min": 1,
+      "max": 3650
+    },
+    "units_per_variant": {
+      "control": "integer",
+      "min": 2,
+      "max": 1000000000
+    },
+    "output_variants": {
+      "control": "choice",
+      "choices": [
+        "results",
+        "variants"
+      ]
+    },
+    "output_plan": {
+      "control": "choice",
+      "choices": [
+        "results",
+        "plan"
+      ]
     }
   },
   "season_of_frequency": {
@@ -620,6 +763,47 @@
       "lower": "Float64",
       "upper": "Float64",
       "is_forecast": "Boolean"
+    },
+    "variants": {
+      "metric": "String",
+      "role": "String",
+      "variant": "=variant",
+      "is_control": "Boolean",
+      "units": "Int64",
+      "share": "Float64",
+      "expected_share": "Float64",
+      "mean": "Float64",
+      "std_error": "Float64",
+      "ci_low": "Float64",
+      "ci_high": "Float64",
+      "difference": "Float64",
+      "difference_ci_low": "Float64",
+      "difference_ci_high": "Float64",
+      "lift": "Float64",
+      "lift_ci_low": "Float64",
+      "lift_ci_high": "Float64",
+      "p_value": "Float64",
+      "p_adjusted": "Float64",
+      "decision": "String",
+      "prob_beat_control": "Float64",
+      "prob_best": "Float64",
+      "expected_loss": "Float64",
+      "sequential_p_value": "Float64",
+      "sequential_p_adjusted": "Float64",
+      "sequential_lift_low": "Float64",
+      "sequential_lift_high": "Float64"
+    },
+    "plan": {
+      "lift": "Float64",
+      "mde_absolute": "Float64",
+      "n_per_variant": "Float64",
+      "n_control": "Float64",
+      "n_total": "Float64",
+      "days": "Float64",
+      "weeks": "Float64",
+      "n_per_variant_cuped": "Float64",
+      "days_cuped": "Float64",
+      "asked": "Boolean"
     }
   },
   "rows_input_types": {
@@ -711,6 +895,41 @@
       "level": "required",
       "level_2": "null",
       "indexed": false
+    },
+    "variant": {
+      "level": "required",
+      "level_2": "null",
+      "indexed": false
+    },
+    "comparison": {
+      "level": "required",
+      "level_2": "required",
+      "indexed": false
+    },
+    "bayes": {
+      "level": "required",
+      "level_2": "null",
+      "indexed": false
+    },
+    "sequential": {
+      "level": "required",
+      "level_2": "null",
+      "indexed": false
+    },
+    "secondary": {
+      "level": "required",
+      "level_2": "required",
+      "indexed": false
+    },
+    "plan": {
+      "level": "required",
+      "level_2": "null",
+      "indexed": false
+    },
+    "reading": {
+      "level": "required",
+      "level_2": "optional",
+      "indexed": false
     }
   },
   "verdicts": [
@@ -764,6 +983,15 @@
         "clv",
         "bg_bb"
       ]
+    },
+    {
+      "id": "experiments",
+      "language": "r",
+      "label": "models.groups.experiments",
+      "models": [
+        "ab_test",
+        "ab_plan"
+      ]
     }
   ],
   "models": [
@@ -772,6 +1000,7 @@
       "group": "regression",
       "family": "regression",
       "label": "models.linear.name",
+      "card": true,
       "needs": {
         "outcome": "number_column",
         "predictors": "predictors"
@@ -1226,6 +1455,7 @@
       "group": "regression",
       "family": "regression",
       "label": "models.logistic.name",
+      "card": true,
       "needs": {
         "outcome": "column",
         "event_value": "outcome_level",
@@ -1733,6 +1963,7 @@
       "group": "survival",
       "family": "survival",
       "label": "models.kaplan_meier.name",
+      "card": true,
       "needs": {
         "time": "number_column",
         "event": "column",
@@ -1932,6 +2163,7 @@
       "group": "survival",
       "family": "survival",
       "label": "models.cox.name",
+      "card": true,
       "needs": {
         "time": "number_column",
         "event": "column",
@@ -2128,6 +2360,7 @@
       "group": "survival",
       "family": "survival",
       "label": "models.parametric_survival.name",
+      "card": true,
       "needs": {
         "time": "number_column",
         "event": "column",
@@ -3041,6 +3274,7 @@
       "group": "timeseries",
       "family": "timeseries",
       "label": "models.arima.name",
+      "card": true,
       "needs": {
         "time": "time_column",
         "value": "number_column",
@@ -3676,6 +3910,7 @@
       "group": "boosting",
       "family": "boosting",
       "label": "models.xgboost.name",
+      "card": true,
       "needs": {
         "task": "task_boosting",
         "outcome": "column",
@@ -4372,6 +4607,7 @@
       "group": "boosting",
       "family": "boosting",
       "label": "models.catboost.name",
+      "card": true,
       "needs": {
         "task": "task_boosting",
         "outcome": "column",
@@ -5064,6 +5300,7 @@
       "group": "customer_lifetime",
       "family": "customer_lifetime",
       "label": "models.clv.name",
+      "card": true,
       "needs": {
         "customer": "column",
         "frequency": "number_column",
@@ -5568,6 +5805,7 @@
       "group": "customer_lifetime",
       "family": "customer_lifetime",
       "label": "models.bg_bb.name",
+      "card": true,
       "needs": {
         "customer": "column",
         "frequency": "number_column",
@@ -6010,6 +6248,1829 @@
             "pred_holdout_transactions": {
               "holdout_transactions": true
             }
+          }
+        }
+      ]
+    },
+    {
+      "id": "ab_test",
+      "group": "experiments",
+      "family": "experiments",
+      "label": "models.ab_test.name",
+      "card": false,
+      "needs": {
+        "variant": "variant_column",
+        "control": "control_level",
+        "metric_type": "metric_type"
+      },
+      "takes": {
+        "input_shape": "input_shape",
+        "unit": "column",
+        "metric": "metric_column",
+        "numerator": "number_column",
+        "denominator": "number_column",
+        "units_count": "number_column",
+        "metric_sum": "number_column",
+        "metric_sum_squares": "number_column",
+        "higher_is_better": "boolean",
+        "alternative": "alternative",
+        "alpha": "alpha",
+        "correction": "correction_ab",
+        "covariate": "number_column",
+        "covariate_missing": "covariate_missing",
+        "cap_percentile": "cap_percentile",
+        "srm_alpha": "proportion",
+        "expected_shares": "variant_shares",
+        "min_lift": "relative",
+        "power": "proportion",
+        "bayes": "boolean",
+        "prior_alpha": "positive",
+        "prior_beta": "positive",
+        "loss_threshold": "relative",
+        "date": "date_column",
+        "sequential": "boolean",
+        "sequential_tau": "tau",
+        "secondary_metrics": "metric_columns",
+        "output": "output_variants"
+      },
+      "defaults": {
+        "input_shape": "units",
+        "unit": null,
+        "metric": null,
+        "numerator": null,
+        "denominator": null,
+        "units_count": null,
+        "metric_sum": null,
+        "metric_sum_squares": null,
+        "higher_is_better": true,
+        "alternative": "two_sided",
+        "alpha": 0.05,
+        "correction": "holm",
+        "covariate": null,
+        "covariate_missing": "fill",
+        "cap_percentile": null,
+        "srm_alpha": 0.001,
+        "expected_shares": {},
+        "min_lift": 0.02,
+        "power": 0.8,
+        "bayes": true,
+        "prior_alpha": 1.0,
+        "prior_beta": 1.0,
+        "loss_threshold": 0.001,
+        "date": null,
+        "sequential": false,
+        "sequential_tau": 0.05,
+        "secondary_metrics": [],
+        "output": "results"
+      },
+      "applies": {
+        "unit": {
+          "input_shape": [
+            "units"
+          ]
+        },
+        "metric": {
+          "input_shape": [
+            "units"
+          ],
+          "metric_type": [
+            "binary",
+            "continuous"
+          ]
+        },
+        "numerator": {
+          "input_shape": [
+            "units"
+          ],
+          "metric_type": [
+            "ratio"
+          ]
+        },
+        "denominator": {
+          "input_shape": [
+            "units"
+          ],
+          "metric_type": [
+            "ratio"
+          ]
+        },
+        "units_count": {
+          "input_shape": [
+            "aggregated"
+          ]
+        },
+        "metric_sum": {
+          "input_shape": [
+            "aggregated"
+          ]
+        },
+        "metric_sum_squares": {
+          "input_shape": [
+            "aggregated"
+          ],
+          "metric_type": [
+            "continuous"
+          ]
+        },
+        "covariate": {
+          "input_shape": [
+            "units"
+          ]
+        },
+        "covariate_missing": {
+          "covariate": true
+        },
+        "cap_percentile": {
+          "input_shape": [
+            "units"
+          ],
+          "metric_type": [
+            "continuous"
+          ]
+        },
+        "secondary_metrics": {
+          "input_shape": [
+            "units"
+          ]
+        },
+        "prior_alpha": {
+          "bayes": [
+            true
+          ],
+          "metric_type": [
+            "binary"
+          ]
+        },
+        "prior_beta": {
+          "bayes": [
+            true
+          ],
+          "metric_type": [
+            "binary"
+          ]
+        },
+        "loss_threshold": {
+          "bayes": [
+            true
+          ]
+        },
+        "sequential_tau": {
+          "sequential": [
+            true
+          ]
+        }
+      },
+      "requires": [
+        {
+          "key": "metric",
+          "when": {
+            "input_shape": "units",
+            "metric_type": [
+              "binary",
+              "continuous"
+            ]
+          },
+          "reason": "metric_needed",
+          "message": "the primary metric needs its column ('metric')"
+        },
+        {
+          "key": "numerator",
+          "when": {
+            "input_shape": "units",
+            "metric_type": "ratio"
+          },
+          "reason": "numerator_needed",
+          "message": "a ratio metric needs the column of its numerator ('numerator')"
+        },
+        {
+          "key": "denominator",
+          "when": {
+            "input_shape": "units",
+            "metric_type": "ratio"
+          },
+          "reason": "denominator_needed",
+          "message": "a ratio metric needs the column of its denominator ('denominator')"
+        },
+        {
+          "key": "units_count",
+          "when": {
+            "input_shape": "aggregated"
+          },
+          "reason": "units_count_needed",
+          "message": "aggregated rows need the column of their units ('units_count')"
+        },
+        {
+          "key": "metric_sum",
+          "when": {
+            "input_shape": "aggregated"
+          },
+          "reason": "metric_sum_needed",
+          "message": "aggregated rows need the column of their metric's sum ('metric_sum')"
+        },
+        {
+          "key": "metric_sum_squares",
+          "when": {
+            "input_shape": "aggregated",
+            "metric_type": "continuous"
+          },
+          "reason": "sum_squares_needed",
+          "message": "the variance of a continuous metric needs the sum of its squares ('metric_sum_squares')"
+        }
+      ],
+      "forbids": [
+        {
+          "key": "input_shape",
+          "value": "aggregated",
+          "when": {
+            "metric_type": "ratio"
+          },
+          "reason": "ratio_needs_units",
+          "message": "a ratio metric needs one row per unit: the delta method uses each unit's numerator and denominator"
+        },
+        {
+          "key": "alternative",
+          "value": "greater",
+          "when": {
+            "sequential": [
+              true
+            ]
+          },
+          "reason": "sequential_two_sided",
+          "message": "the always-valid p-value of this node is two-sided"
+        },
+        {
+          "key": "alternative",
+          "value": "less",
+          "when": {
+            "sequential": [
+              true
+            ]
+          },
+          "reason": "sequential_two_sided",
+          "message": "the always-valid p-value of this node is two-sided"
+        }
+      ],
+      "disjoint": [
+        "variant",
+        "unit",
+        "metric",
+        "numerator",
+        "denominator",
+        "covariate",
+        "date",
+        "units_count",
+        "metric_sum",
+        "metric_sum_squares",
+        "secondary_metrics"
+      ],
+      "presets": {},
+      "variants": [
+        {
+          "id": "binary",
+          "when": {
+            "metric_type": [
+              "binary"
+            ]
+          },
+          "sections": {
+            "model": {
+              "levels": null,
+              "texts": [
+                "model",
+                "variant",
+                "formula",
+                "software",
+                "group_version",
+                "rows_from",
+                "note_*",
+                "metric_type",
+                "input_shape",
+                "control",
+                "alternative",
+                "correction",
+                "covariate_missing",
+                "decision",
+                "decision_variants"
+              ],
+              "numbers": [
+                "alpha",
+                "srm_alpha",
+                "n",
+                "n_assigned",
+                "n_missing",
+                "n_variants",
+                "n_crossover",
+                "n_covariate_filled",
+                "n_covariate_excluded",
+                "theta",
+                "covariate_correlation",
+                "min_lift",
+                "power",
+                "loss_threshold",
+                "sequential_tau",
+                "n_looks",
+                "first_day",
+                "last_day",
+                "prior_alpha",
+                "prior_beta"
+              ]
+            },
+            "variant": {
+              "levels": null,
+              "numbers": [
+                "is_control",
+                "n",
+                "n_assigned",
+                "n_missing",
+                "share",
+                "expected_share",
+                "mean",
+                "std_dev",
+                "std_error",
+                "ci_low",
+                "ci_high",
+                "mean_unadjusted",
+                "std_error_unadjusted",
+                "covariate_mean",
+                "variance_reduction",
+                "n_covariate_filled",
+                "n_covariate_excluded",
+                "covariate_fill_value",
+                "conversions"
+              ],
+              "texts": []
+            },
+            "comparison": {
+              "levels": null,
+              "numbers": [
+                "difference",
+                "difference_std_error",
+                "difference_ci_low",
+                "difference_ci_high",
+                "lift",
+                "lift_std_error",
+                "lift_ci_low",
+                "lift_ci_high",
+                "statistic",
+                "p_value",
+                "p_adjusted",
+                "mde",
+                "power_at_min_lift"
+              ],
+              "texts": [
+                "significance",
+                "p_adjusted_significance",
+                "decision",
+                "min_lift_position"
+              ]
+            },
+            "bayes": {
+              "levels": null,
+              "numbers": [
+                "posterior_mean",
+                "posterior_sd",
+                "cred_low",
+                "cred_high",
+                "prob_best",
+                "expected_loss_best",
+                "expected_loss_best_relative",
+                "prob_beat_control",
+                "expected_loss",
+                "expected_loss_relative",
+                "expected_loss_control",
+                "expected_loss_control_relative"
+              ],
+              "texts": [
+                "loss_position"
+              ]
+            },
+            "sequential": {
+              "levels": null,
+              "numbers": [
+                "p_value",
+                "p_adjusted",
+                "log_lambda",
+                "cs_low",
+                "cs_high",
+                "first_crossing"
+              ],
+              "texts": [
+                "significance",
+                "decision"
+              ]
+            },
+            "secondary": {
+              "levels": null,
+              "numbers": [
+                "difference",
+                "difference_std_error",
+                "difference_ci_low",
+                "difference_ci_high",
+                "lift",
+                "lift_std_error",
+                "lift_ci_low",
+                "lift_ci_high",
+                "statistic",
+                "p_value",
+                "p_adjusted",
+                "mde",
+                "power_at_min_lift",
+                "mean_treatment",
+                "mean_control"
+              ],
+              "texts": [
+                "significance",
+                "p_adjusted_significance",
+                "decision",
+                "min_lift_position",
+                "metric_type"
+              ]
+            },
+            "reading": {
+              "levels": [
+                "decision",
+                "srm",
+                "comparison",
+                "cuped",
+                "bayes",
+                "sequential",
+                "power",
+                "secondary",
+                "method",
+                "formulas"
+              ],
+              "numbers": [],
+              "texts": [
+                "line_*"
+              ]
+            },
+            "assumption": {
+              "levels": [
+                "srm",
+                "covariate_balance",
+                "covariate_missing_balance",
+                "crossover",
+                "variance_zero"
+              ],
+              "numbers": [
+                "statistic",
+                "df",
+                "df_2",
+                "p_value",
+                "threshold",
+                "value",
+                "count"
+              ],
+              "texts": [
+                "h0",
+                "verdict",
+                "advice",
+                "significance",
+                "rows",
+                "advice_id"
+              ]
+            },
+            "curve": {
+              "levels": [
+                "srm_share",
+                "daily_units",
+                "sequential_lift",
+                "sequential_p",
+                "posterior",
+                "power"
+              ],
+              "numbers": [
+                "y",
+                "low",
+                "high"
+              ],
+              "texts": []
+            }
+          },
+          "charts": [
+            {
+              "id": "lift_interval",
+              "under": null
+            },
+            {
+              "id": "srm_units",
+              "under": "srm"
+            },
+            {
+              "id": "srm_share",
+              "under": "srm"
+            },
+            {
+              "id": "daily_units",
+              "under": null
+            },
+            {
+              "id": "power",
+              "under": null
+            },
+            {
+              "id": "posterior",
+              "under": null
+            },
+            {
+              "id": "sequential_lift",
+              "under": null
+            },
+            {
+              "id": "sequential_p",
+              "under": null
+            }
+          ],
+          "outputs": {
+            "variants": [
+              "metric",
+              "role",
+              "variant",
+              "is_control",
+              "units",
+              "share",
+              "expected_share",
+              "mean",
+              "std_error",
+              "ci_low",
+              "ci_high",
+              "difference",
+              "difference_ci_low",
+              "difference_ci_high",
+              "lift",
+              "lift_ci_low",
+              "lift_ci_high",
+              "p_value",
+              "p_adjusted",
+              "decision",
+              "prob_beat_control",
+              "prob_best",
+              "expected_loss",
+              "sequential_p_value",
+              "sequential_p_adjusted",
+              "sequential_lift_low",
+              "sequential_lift_high"
+            ]
+          }
+        },
+        {
+          "id": "continuous",
+          "when": {
+            "metric_type": [
+              "continuous"
+            ]
+          },
+          "sections": {
+            "model": {
+              "levels": null,
+              "texts": [
+                "model",
+                "variant",
+                "formula",
+                "software",
+                "group_version",
+                "rows_from",
+                "note_*",
+                "metric_type",
+                "input_shape",
+                "control",
+                "alternative",
+                "correction",
+                "covariate_missing",
+                "decision",
+                "decision_variants"
+              ],
+              "numbers": [
+                "alpha",
+                "srm_alpha",
+                "n",
+                "n_assigned",
+                "n_missing",
+                "n_variants",
+                "n_crossover",
+                "n_covariate_filled",
+                "n_covariate_excluded",
+                "theta",
+                "covariate_correlation",
+                "min_lift",
+                "power",
+                "loss_threshold",
+                "sequential_tau",
+                "n_looks",
+                "first_day",
+                "last_day",
+                "cap_value",
+                "n_capped"
+              ]
+            },
+            "variant": {
+              "levels": null,
+              "numbers": [
+                "is_control",
+                "n",
+                "n_assigned",
+                "n_missing",
+                "share",
+                "expected_share",
+                "mean",
+                "std_dev",
+                "std_error",
+                "ci_low",
+                "ci_high",
+                "mean_unadjusted",
+                "std_error_unadjusted",
+                "covariate_mean",
+                "variance_reduction",
+                "n_covariate_filled",
+                "n_covariate_excluded",
+                "covariate_fill_value",
+                "skewness",
+                "n_capped"
+              ],
+              "texts": []
+            },
+            "comparison": {
+              "levels": null,
+              "numbers": [
+                "difference",
+                "difference_std_error",
+                "difference_ci_low",
+                "difference_ci_high",
+                "lift",
+                "lift_std_error",
+                "lift_ci_low",
+                "lift_ci_high",
+                "statistic",
+                "p_value",
+                "p_adjusted",
+                "mde",
+                "power_at_min_lift",
+                "df"
+              ],
+              "texts": [
+                "significance",
+                "p_adjusted_significance",
+                "decision",
+                "min_lift_position"
+              ]
+            },
+            "bayes": {
+              "levels": null,
+              "numbers": [
+                "posterior_mean",
+                "posterior_sd",
+                "cred_low",
+                "cred_high",
+                "prob_best",
+                "expected_loss_best",
+                "expected_loss_best_relative",
+                "prob_beat_control",
+                "expected_loss",
+                "expected_loss_relative",
+                "expected_loss_control",
+                "expected_loss_control_relative"
+              ],
+              "texts": [
+                "loss_position"
+              ]
+            },
+            "sequential": {
+              "levels": null,
+              "numbers": [
+                "p_value",
+                "p_adjusted",
+                "log_lambda",
+                "cs_low",
+                "cs_high",
+                "first_crossing"
+              ],
+              "texts": [
+                "significance",
+                "decision"
+              ]
+            },
+            "secondary": {
+              "levels": null,
+              "numbers": [
+                "difference",
+                "difference_std_error",
+                "difference_ci_low",
+                "difference_ci_high",
+                "lift",
+                "lift_std_error",
+                "lift_ci_low",
+                "lift_ci_high",
+                "statistic",
+                "p_value",
+                "p_adjusted",
+                "mde",
+                "power_at_min_lift",
+                "df",
+                "mean_treatment",
+                "mean_control"
+              ],
+              "texts": [
+                "significance",
+                "p_adjusted_significance",
+                "decision",
+                "min_lift_position",
+                "metric_type"
+              ]
+            },
+            "reading": {
+              "levels": [
+                "decision",
+                "srm",
+                "comparison",
+                "cuped",
+                "cap",
+                "bayes",
+                "sequential",
+                "power",
+                "secondary",
+                "method",
+                "formulas"
+              ],
+              "numbers": [],
+              "texts": [
+                "line_*"
+              ]
+            },
+            "assumption": {
+              "levels": [
+                "srm",
+                "covariate_balance",
+                "covariate_missing_balance",
+                "crossover",
+                "variance_zero"
+              ],
+              "numbers": [
+                "statistic",
+                "df",
+                "df_2",
+                "p_value",
+                "threshold",
+                "value",
+                "count"
+              ],
+              "texts": [
+                "h0",
+                "verdict",
+                "advice",
+                "significance",
+                "rows",
+                "advice_id"
+              ]
+            },
+            "curve": {
+              "levels": [
+                "srm_share",
+                "daily_units",
+                "sequential_lift",
+                "sequential_p",
+                "posterior",
+                "power"
+              ],
+              "numbers": [
+                "y",
+                "low",
+                "high"
+              ],
+              "texts": []
+            },
+            "hist": {
+              "levels": [
+                "metric"
+              ],
+              "numbers": [
+                "count"
+              ],
+              "texts": []
+            }
+          },
+          "charts": [
+            {
+              "id": "lift_interval",
+              "under": null
+            },
+            {
+              "id": "srm_units",
+              "under": "srm"
+            },
+            {
+              "id": "srm_share",
+              "under": "srm"
+            },
+            {
+              "id": "daily_units",
+              "under": null
+            },
+            {
+              "id": "histogram",
+              "under": null
+            },
+            {
+              "id": "power",
+              "under": null
+            },
+            {
+              "id": "posterior",
+              "under": null
+            },
+            {
+              "id": "sequential_lift",
+              "under": null
+            },
+            {
+              "id": "sequential_p",
+              "under": null
+            }
+          ],
+          "outputs": {
+            "variants": [
+              "metric",
+              "role",
+              "variant",
+              "is_control",
+              "units",
+              "share",
+              "expected_share",
+              "mean",
+              "std_error",
+              "ci_low",
+              "ci_high",
+              "difference",
+              "difference_ci_low",
+              "difference_ci_high",
+              "lift",
+              "lift_ci_low",
+              "lift_ci_high",
+              "p_value",
+              "p_adjusted",
+              "decision",
+              "prob_beat_control",
+              "prob_best",
+              "expected_loss",
+              "sequential_p_value",
+              "sequential_p_adjusted",
+              "sequential_lift_low",
+              "sequential_lift_high"
+            ]
+          }
+        },
+        {
+          "id": "ratio",
+          "when": {
+            "metric_type": [
+              "ratio"
+            ]
+          },
+          "sections": {
+            "model": {
+              "levels": null,
+              "texts": [
+                "model",
+                "variant",
+                "formula",
+                "software",
+                "group_version",
+                "rows_from",
+                "note_*",
+                "metric_type",
+                "input_shape",
+                "control",
+                "alternative",
+                "correction",
+                "covariate_missing",
+                "decision",
+                "decision_variants"
+              ],
+              "numbers": [
+                "alpha",
+                "srm_alpha",
+                "n",
+                "n_assigned",
+                "n_missing",
+                "n_variants",
+                "n_crossover",
+                "n_covariate_filled",
+                "n_covariate_excluded",
+                "theta",
+                "covariate_correlation",
+                "min_lift",
+                "power",
+                "loss_threshold",
+                "sequential_tau",
+                "n_looks",
+                "first_day",
+                "last_day"
+              ]
+            },
+            "variant": {
+              "levels": null,
+              "numbers": [
+                "is_control",
+                "n",
+                "n_assigned",
+                "n_missing",
+                "share",
+                "expected_share",
+                "mean",
+                "std_dev",
+                "std_error",
+                "ci_low",
+                "ci_high",
+                "mean_unadjusted",
+                "std_error_unadjusted",
+                "covariate_mean",
+                "variance_reduction",
+                "n_covariate_filled",
+                "n_covariate_excluded",
+                "covariate_fill_value",
+                "numerator_sum",
+                "denominator_sum"
+              ],
+              "texts": []
+            },
+            "comparison": {
+              "levels": null,
+              "numbers": [
+                "difference",
+                "difference_std_error",
+                "difference_ci_low",
+                "difference_ci_high",
+                "lift",
+                "lift_std_error",
+                "lift_ci_low",
+                "lift_ci_high",
+                "statistic",
+                "p_value",
+                "p_adjusted",
+                "mde",
+                "power_at_min_lift"
+              ],
+              "texts": [
+                "significance",
+                "p_adjusted_significance",
+                "decision",
+                "min_lift_position"
+              ]
+            },
+            "bayes": {
+              "levels": null,
+              "numbers": [
+                "posterior_mean",
+                "posterior_sd",
+                "cred_low",
+                "cred_high",
+                "prob_best",
+                "expected_loss_best",
+                "expected_loss_best_relative",
+                "prob_beat_control",
+                "expected_loss",
+                "expected_loss_relative",
+                "expected_loss_control",
+                "expected_loss_control_relative"
+              ],
+              "texts": [
+                "loss_position"
+              ]
+            },
+            "sequential": {
+              "levels": null,
+              "numbers": [
+                "p_value",
+                "p_adjusted",
+                "log_lambda",
+                "cs_low",
+                "cs_high",
+                "first_crossing"
+              ],
+              "texts": [
+                "significance",
+                "decision"
+              ]
+            },
+            "secondary": {
+              "levels": null,
+              "numbers": [
+                "difference",
+                "difference_std_error",
+                "difference_ci_low",
+                "difference_ci_high",
+                "lift",
+                "lift_std_error",
+                "lift_ci_low",
+                "lift_ci_high",
+                "statistic",
+                "p_value",
+                "p_adjusted",
+                "mde",
+                "power_at_min_lift",
+                "mean_treatment",
+                "mean_control"
+              ],
+              "texts": [
+                "significance",
+                "p_adjusted_significance",
+                "decision",
+                "min_lift_position",
+                "metric_type"
+              ]
+            },
+            "reading": {
+              "levels": [
+                "decision",
+                "srm",
+                "comparison",
+                "cuped",
+                "bayes",
+                "sequential",
+                "power",
+                "secondary",
+                "method",
+                "formulas"
+              ],
+              "numbers": [],
+              "texts": [
+                "line_*"
+              ]
+            },
+            "assumption": {
+              "levels": [
+                "srm",
+                "covariate_balance",
+                "covariate_missing_balance",
+                "crossover",
+                "variance_zero"
+              ],
+              "numbers": [
+                "statistic",
+                "df",
+                "df_2",
+                "p_value",
+                "threshold",
+                "value",
+                "count"
+              ],
+              "texts": [
+                "h0",
+                "verdict",
+                "advice",
+                "significance",
+                "rows",
+                "advice_id"
+              ]
+            },
+            "curve": {
+              "levels": [
+                "srm_share",
+                "daily_units",
+                "sequential_lift",
+                "sequential_p",
+                "posterior",
+                "power"
+              ],
+              "numbers": [
+                "y",
+                "low",
+                "high"
+              ],
+              "texts": []
+            }
+          },
+          "charts": [
+            {
+              "id": "lift_interval",
+              "under": null
+            },
+            {
+              "id": "srm_units",
+              "under": "srm"
+            },
+            {
+              "id": "srm_share",
+              "under": "srm"
+            },
+            {
+              "id": "daily_units",
+              "under": null
+            },
+            {
+              "id": "power",
+              "under": null
+            },
+            {
+              "id": "posterior",
+              "under": null
+            },
+            {
+              "id": "sequential_lift",
+              "under": null
+            },
+            {
+              "id": "sequential_p",
+              "under": null
+            }
+          ],
+          "outputs": {
+            "variants": [
+              "metric",
+              "role",
+              "variant",
+              "is_control",
+              "units",
+              "share",
+              "expected_share",
+              "mean",
+              "std_error",
+              "ci_low",
+              "ci_high",
+              "difference",
+              "difference_ci_low",
+              "difference_ci_high",
+              "lift",
+              "lift_ci_low",
+              "lift_ci_high",
+              "p_value",
+              "p_adjusted",
+              "decision",
+              "prob_beat_control",
+              "prob_best",
+              "expected_loss",
+              "sequential_p_value",
+              "sequential_p_adjusted",
+              "sequential_lift_low",
+              "sequential_lift_high"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "ab_plan",
+      "group": "experiments",
+      "family": "experiments",
+      "label": "models.ab_plan.name",
+      "card": false,
+      "needs": {
+        "metric_type": "metric_type"
+      },
+      "takes": {
+        "input_shape": "input_shape",
+        "unit": "column",
+        "metric": "metric_column",
+        "numerator": "number_column",
+        "denominator": "number_column",
+        "units_count": "number_column",
+        "metric_sum": "number_column",
+        "metric_sum_squares": "number_column",
+        "cap_percentile": "cap_percentile",
+        "covariate": "number_column",
+        "covariate_missing": "covariate_missing",
+        "date": "date_column",
+        "solve_for": "solve_for",
+        "min_lift": "positive",
+        "units_per_variant": "units_per_variant",
+        "days": "days",
+        "arms": "arms",
+        "control_share": "proportion",
+        "traffic_share": "share_open",
+        "alpha": "alpha",
+        "power": "proportion",
+        "alternative": "alternative",
+        "correction": "correction_ab",
+        "output": "output_plan"
+      },
+      "defaults": {
+        "input_shape": "units",
+        "unit": null,
+        "metric": null,
+        "numerator": null,
+        "denominator": null,
+        "units_count": null,
+        "metric_sum": null,
+        "metric_sum_squares": null,
+        "cap_percentile": null,
+        "covariate": null,
+        "covariate_missing": "fill",
+        "date": null,
+        "solve_for": "sample_size",
+        "min_lift": 0.02,
+        "units_per_variant": null,
+        "days": null,
+        "arms": 2,
+        "control_share": null,
+        "traffic_share": 1.0,
+        "alpha": 0.05,
+        "power": 0.8,
+        "alternative": "two_sided",
+        "correction": "holm",
+        "output": "results"
+      },
+      "applies": {
+        "unit": {
+          "input_shape": [
+            "units"
+          ]
+        },
+        "metric": {
+          "input_shape": [
+            "units"
+          ],
+          "metric_type": [
+            "binary",
+            "continuous"
+          ]
+        },
+        "numerator": {
+          "input_shape": [
+            "units"
+          ],
+          "metric_type": [
+            "ratio"
+          ]
+        },
+        "denominator": {
+          "input_shape": [
+            "units"
+          ],
+          "metric_type": [
+            "ratio"
+          ]
+        },
+        "units_count": {
+          "input_shape": [
+            "aggregated"
+          ]
+        },
+        "metric_sum": {
+          "input_shape": [
+            "aggregated"
+          ]
+        },
+        "metric_sum_squares": {
+          "input_shape": [
+            "aggregated"
+          ],
+          "metric_type": [
+            "continuous"
+          ]
+        },
+        "covariate": {
+          "input_shape": [
+            "units"
+          ]
+        },
+        "covariate_missing": {
+          "covariate": true
+        },
+        "cap_percentile": {
+          "input_shape": [
+            "units"
+          ],
+          "metric_type": [
+            "continuous"
+          ]
+        },
+        "min_lift": {
+          "solve_for": [
+            "sample_size"
+          ]
+        },
+        "units_per_variant": {
+          "solve_for": [
+            "mde_for_units"
+          ]
+        },
+        "days": {
+          "solve_for": [
+            "mde_for_days"
+          ]
+        },
+        "traffic_share": {
+          "date": true
+        }
+      },
+      "requires": [
+        {
+          "key": "metric",
+          "when": {
+            "input_shape": "units",
+            "metric_type": [
+              "binary",
+              "continuous"
+            ]
+          },
+          "reason": "metric_needed",
+          "message": "the primary metric needs its column ('metric')"
+        },
+        {
+          "key": "numerator",
+          "when": {
+            "input_shape": "units",
+            "metric_type": "ratio"
+          },
+          "reason": "numerator_needed",
+          "message": "a ratio metric needs the column of its numerator ('numerator')"
+        },
+        {
+          "key": "denominator",
+          "when": {
+            "input_shape": "units",
+            "metric_type": "ratio"
+          },
+          "reason": "denominator_needed",
+          "message": "a ratio metric needs the column of its denominator ('denominator')"
+        },
+        {
+          "key": "units_count",
+          "when": {
+            "input_shape": "aggregated"
+          },
+          "reason": "units_count_needed",
+          "message": "aggregated rows need the column of their units ('units_count')"
+        },
+        {
+          "key": "metric_sum",
+          "when": {
+            "input_shape": "aggregated"
+          },
+          "reason": "metric_sum_needed",
+          "message": "aggregated rows need the column of their metric's sum ('metric_sum')"
+        },
+        {
+          "key": "metric_sum_squares",
+          "when": {
+            "input_shape": "aggregated",
+            "metric_type": "continuous"
+          },
+          "reason": "sum_squares_needed",
+          "message": "the variance of a continuous metric needs the sum of its squares ('metric_sum_squares')"
+        },
+        {
+          "key": "units_per_variant",
+          "when": {
+            "solve_for": "mde_for_units"
+          },
+          "reason": "units_per_variant_needed",
+          "message": "the lift detectable with a number of units needs the units per variant ('units_per_variant')"
+        },
+        {
+          "key": "days",
+          "when": {
+            "solve_for": "mde_for_days"
+          },
+          "reason": "days_needed",
+          "message": "the lift detectable in a number of days needs the days ('days')"
+        },
+        {
+          "key": "date",
+          "when": {
+            "solve_for": "mde_for_days"
+          },
+          "reason": "days_need_date",
+          "message": "the lift detectable in a number of days needs the column of the day each unit first appeared ('date')"
+        }
+      ],
+      "forbids": [
+        {
+          "key": "input_shape",
+          "value": "aggregated",
+          "when": {
+            "metric_type": "ratio"
+          },
+          "reason": "ratio_needs_units",
+          "message": "a ratio metric needs one row per unit: the delta method uses each unit's numerator and denominator"
+        }
+      ],
+      "disjoint": [
+        "unit",
+        "metric",
+        "numerator",
+        "denominator",
+        "covariate",
+        "date",
+        "units_count",
+        "metric_sum",
+        "metric_sum_squares"
+      ],
+      "presets": {},
+      "variants": [
+        {
+          "id": "binary",
+          "when": {
+            "metric_type": [
+              "binary"
+            ]
+          },
+          "sections": {
+            "model": {
+              "levels": null,
+              "texts": [
+                "model",
+                "variant",
+                "formula",
+                "software",
+                "group_version",
+                "rows_from",
+                "note_*",
+                "metric_type",
+                "input_shape",
+                "solve_for",
+                "alternative",
+                "correction",
+                "covariate_missing",
+                "history_short"
+              ],
+              "numbers": [
+                "alpha",
+                "n",
+                "n_missing",
+                "min_lift",
+                "arms",
+                "control_share",
+                "traffic_share",
+                "baseline_mean",
+                "baseline_sd",
+                "n_history",
+                "history_days",
+                "daily_units",
+                "alpha_per_comparison",
+                "n_per_variant",
+                "n_control",
+                "n_total",
+                "days",
+                "weeks",
+                "mde",
+                "mde_absolute",
+                "power",
+                "covariate_correlation",
+                "variance_reduction",
+                "n_covariate_filled",
+                "n_covariate_excluded",
+                "n_per_variant_cuped",
+                "n_total_cuped",
+                "days_cuped",
+                "mde_cuped"
+              ]
+            },
+            "plan": {
+              "levels": null,
+              "numbers": [
+                "lift",
+                "mde_absolute",
+                "n_per_variant",
+                "n_control",
+                "n_total",
+                "days",
+                "weeks",
+                "n_per_variant_cuped",
+                "days_cuped",
+                "asked"
+              ],
+              "texts": []
+            },
+            "reading": {
+              "levels": [
+                "plan",
+                "baseline",
+                "cuped",
+                "correction",
+                "method",
+                "formulas"
+              ],
+              "numbers": [],
+              "texts": [
+                "line_*"
+              ]
+            },
+            "curve": {
+              "levels": [
+                "power_lift",
+                "mde_days",
+                "n_lift"
+              ],
+              "numbers": [
+                "y"
+              ],
+              "texts": []
+            },
+            "hist": {
+              "levels": [
+                "metric"
+              ],
+              "numbers": [
+                "count"
+              ],
+              "texts": []
+            }
+          },
+          "charts": [
+            {
+              "id": "power_lift",
+              "under": null
+            },
+            {
+              "id": "mde_days",
+              "under": null
+            },
+            {
+              "id": "history",
+              "under": null
+            }
+          ],
+          "outputs": {
+            "plan": [
+              "lift",
+              "mde_absolute",
+              "n_per_variant",
+              "n_control",
+              "n_total",
+              "days",
+              "weeks",
+              "n_per_variant_cuped",
+              "days_cuped",
+              "asked"
+            ]
+          }
+        },
+        {
+          "id": "continuous",
+          "when": {
+            "metric_type": [
+              "continuous"
+            ]
+          },
+          "sections": {
+            "model": {
+              "levels": null,
+              "texts": [
+                "model",
+                "variant",
+                "formula",
+                "software",
+                "group_version",
+                "rows_from",
+                "note_*",
+                "metric_type",
+                "input_shape",
+                "solve_for",
+                "alternative",
+                "correction",
+                "covariate_missing",
+                "history_short"
+              ],
+              "numbers": [
+                "alpha",
+                "n",
+                "n_missing",
+                "min_lift",
+                "arms",
+                "control_share",
+                "traffic_share",
+                "baseline_mean",
+                "baseline_sd",
+                "n_history",
+                "history_days",
+                "daily_units",
+                "alpha_per_comparison",
+                "n_per_variant",
+                "n_control",
+                "n_total",
+                "days",
+                "weeks",
+                "mde",
+                "mde_absolute",
+                "power",
+                "covariate_correlation",
+                "variance_reduction",
+                "n_covariate_filled",
+                "n_covariate_excluded",
+                "n_per_variant_cuped",
+                "n_total_cuped",
+                "days_cuped",
+                "mde_cuped",
+                "cap_value",
+                "n_capped"
+              ]
+            },
+            "plan": {
+              "levels": null,
+              "numbers": [
+                "lift",
+                "mde_absolute",
+                "n_per_variant",
+                "n_control",
+                "n_total",
+                "days",
+                "weeks",
+                "n_per_variant_cuped",
+                "days_cuped",
+                "asked"
+              ],
+              "texts": []
+            },
+            "reading": {
+              "levels": [
+                "plan",
+                "baseline",
+                "cuped",
+                "correction",
+                "method",
+                "formulas"
+              ],
+              "numbers": [],
+              "texts": [
+                "line_*"
+              ]
+            },
+            "curve": {
+              "levels": [
+                "power_lift",
+                "mde_days",
+                "n_lift"
+              ],
+              "numbers": [
+                "y"
+              ],
+              "texts": []
+            },
+            "hist": {
+              "levels": [
+                "metric"
+              ],
+              "numbers": [
+                "count"
+              ],
+              "texts": []
+            }
+          },
+          "charts": [
+            {
+              "id": "power_lift",
+              "under": null
+            },
+            {
+              "id": "mde_days",
+              "under": null
+            },
+            {
+              "id": "history",
+              "under": null
+            }
+          ],
+          "outputs": {
+            "plan": [
+              "lift",
+              "mde_absolute",
+              "n_per_variant",
+              "n_control",
+              "n_total",
+              "days",
+              "weeks",
+              "n_per_variant_cuped",
+              "days_cuped",
+              "asked"
+            ]
+          }
+        },
+        {
+          "id": "ratio",
+          "when": {
+            "metric_type": [
+              "ratio"
+            ]
+          },
+          "sections": {
+            "model": {
+              "levels": null,
+              "texts": [
+                "model",
+                "variant",
+                "formula",
+                "software",
+                "group_version",
+                "rows_from",
+                "note_*",
+                "metric_type",
+                "input_shape",
+                "solve_for",
+                "alternative",
+                "correction",
+                "covariate_missing",
+                "history_short"
+              ],
+              "numbers": [
+                "alpha",
+                "n",
+                "n_missing",
+                "min_lift",
+                "arms",
+                "control_share",
+                "traffic_share",
+                "baseline_mean",
+                "baseline_sd",
+                "n_history",
+                "history_days",
+                "daily_units",
+                "alpha_per_comparison",
+                "n_per_variant",
+                "n_control",
+                "n_total",
+                "days",
+                "weeks",
+                "mde",
+                "mde_absolute",
+                "power",
+                "covariate_correlation",
+                "variance_reduction",
+                "n_covariate_filled",
+                "n_covariate_excluded",
+                "n_per_variant_cuped",
+                "n_total_cuped",
+                "days_cuped",
+                "mde_cuped"
+              ]
+            },
+            "plan": {
+              "levels": null,
+              "numbers": [
+                "lift",
+                "mde_absolute",
+                "n_per_variant",
+                "n_control",
+                "n_total",
+                "days",
+                "weeks",
+                "n_per_variant_cuped",
+                "days_cuped",
+                "asked"
+              ],
+              "texts": []
+            },
+            "reading": {
+              "levels": [
+                "plan",
+                "baseline",
+                "cuped",
+                "correction",
+                "method",
+                "formulas"
+              ],
+              "numbers": [],
+              "texts": [
+                "line_*"
+              ]
+            },
+            "curve": {
+              "levels": [
+                "power_lift",
+                "mde_days",
+                "n_lift"
+              ],
+              "numbers": [
+                "y"
+              ],
+              "texts": []
+            },
+            "hist": {
+              "levels": [
+                "metric"
+              ],
+              "numbers": [
+                "count"
+              ],
+              "texts": []
+            }
+          },
+          "charts": [
+            {
+              "id": "power_lift",
+              "under": null
+            },
+            {
+              "id": "mde_days",
+              "under": null
+            },
+            {
+              "id": "history",
+              "under": null
+            }
+          ],
+          "outputs": {
+            "plan": [
+              "lift",
+              "mde_absolute",
+              "n_per_variant",
+              "n_control",
+              "n_total",
+              "days",
+              "weeks",
+              "n_per_variant_cuped",
+              "days_cuped",
+              "asked"
+            ]
           }
         }
       ]

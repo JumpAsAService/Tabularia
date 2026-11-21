@@ -35,8 +35,8 @@ def test_the_snapshot_is_what_the_catalogue_says():
 
 def test_groups_and_models_point_at_each_other():
     snap = catalog.snapshot()
-    assert [g["id"] for g in snap["groups"]] == ["regression", "survival", "timeseries", "boosting", "customer_lifetime"]
-    assert [m["id"] for m in snap["models"]] == ["linear", "logistic", "kaplan_meier", "cox", "parametric_survival", "arima", "xgboost", "catboost", "clv", "bg_bb"]
+    assert [g["id"] for g in snap["groups"]] == ["regression", "survival", "timeseries", "boosting", "customer_lifetime", "experiments"]
+    assert [m["id"] for m in snap["models"]] == ["linear", "logistic", "kaplan_meier", "cox", "parametric_survival", "arima", "xgboost", "catboost", "clv", "bg_bb", "ab_test", "ab_plan"]
     listed = [m for g in catalog.GROUPS.values() for m in g["models"]]
     assert sorted(listed) == sorted(catalog.MODELS) and len(listed) == len(set(listed))
     for model, spec in catalog.MODELS.items():
@@ -47,7 +47,9 @@ def test_groups_and_models_point_at_each_other():
     keyed = set(catalog.PREDICT["columns"])
     assert keyed <= set(catalog.MODELS) | variants
     for model, spec in catalog.MODELS.items():
-        assert model in keyed or all(f"{model}:{v['id']}" in keyed for v in spec["variants"]), model
+        # a model that makes no card (`card: false`) has nothing to predict with
+        assert spec.get("card", True) is False or model in keyed or all(f"{model}:{v['id']}" in keyed for v in spec["variants"]), model
+        assert spec.get("card", True) is not False or not (model in keyed or any(f"{model}:{v['id']}" in keyed for v in spec["variants"])), model
     for key, models in catalog.PREDICT["applies_to"].items():
         assert key in catalog.PREDICT["takes"] and set(models) <= set(catalog.MODELS) | variants, key
 
@@ -155,13 +157,98 @@ def test_the_customer_lifetime_nodes_and_their_two_variants():
     assert not any("spend_independence" in s["assumption"]["levels"] for k, s in sections.items() if k[1] == "purchases")
 
 
+def test_the_experiments_group_and_its_two_nodes():
+    assert catalog.GROUPS["experiments"] == {"language": "r", "label": "models.groups.experiments", "models": ["ab_test", "ab_plan"]}
+    for key, value in {"max_variants": 20, "max_looks": 1000, "max_secondary_metrics": 10, "posterior_points": 200,
+                       "power_points": 50}.items():
+        assert catalog.LIMITS[key] == value, key
+    test, plan = catalog.MODELS["ab_test"], catalog.MODELS["ab_plan"]
+    # neither makes a model: no card, so no registration and no Predict
+    assert test["card"] is False and plan["card"] is False
+    assert all(spec.get("card", True) for m, spec in catalog.MODELS.items() if m not in ("ab_test", "ab_plan"))
+    snap = {m["id"]: m for m in catalog.snapshot()["models"]}
+    assert [snap[m]["card"] for m in ("linear", "clv", "ab_test", "ab_plan")] == [True, True, False, False]
+    assert not any(k.startswith(("ab_test", "ab_plan")) for k in catalog.PREDICT["columns"])
+    assert list(test["needs"]) == ["variant", "control", "metric_type"] and list(plan["needs"]) == ["metric_type"]
+    assert test["takes"]["expected_shares"] == "variant_shares" and catalog.KINDS["variant_shares"] == {
+        "control": "level_numbers", "of": "variant", "above": 0}
+    assert catalog.KINDS["control_level"] == {"control": "level", "of": "variant"}
+    # one primary metric and no random number: no seed
+    assert "seed" not in test["takes"] and "seed" not in plan["takes"]
+    # the defaults of the margins are the spec's, all visible in the form
+    d = test["defaults"]
+    assert (d["alpha"], d["srm_alpha"], d["min_lift"], d["power"], d["loss_threshold"], d["sequential_tau"], d["prior_alpha"],
+            d["prior_beta"], d["correction"], d["covariate_missing"]) == (0.05, 0.001, 0.02, 0.8, 0.001, 0.05, 1.0, 1.0, "holm", "fill")
+    for node in ("ab_test", "ab_plan"):
+        assert [v["id"] for v in catalog.MODELS[node]["variants"]] == ["binary", "continuous", "ratio"]
+        for t in ("binary", "continuous", "ratio"):
+            assert catalog.variant(node, {"metric_type": t}) == t
+    # the sections a variant may write: the report's explanation in every one, Welch's df and the cap in the continuous one
+    for v in test["variants"]:
+        s = v["sections"]
+        assert {"model", "variant", "comparison", "bayes", "sequential", "secondary", "reading", "assumption", "curve"} <= set(s)
+        assert s["reading"]["texts"] == ["line_*"] and "decision" in s["reading"]["levels"] and "formulas" in s["reading"]["levels"]
+        assert ("df" in s["comparison"]["numbers"]) == (v["id"] == "continuous") and ("hist" in s) == (v["id"] == "continuous")
+        assert ("cap" in s["reading"]["levels"]) == (v["id"] == "continuous")
+        assert "covariate_fill_value" in s["variant"]["numbers"]  # the fill value is per variant (decision 14)
+        assert set(s["assumption"]["levels"]) == {"srm", "covariate_balance", "covariate_missing_balance", "crossover", "variance_zero"}
+        assert list(v["outputs"]) == ["variants"]
+    assert all("assumption" not in v["sections"] for v in plan["variants"])  # nothing in a plan is a test
+    assert all(list(v["outputs"]) == ["plan"] for v in plan["variants"])
+    for name in ("variant", "comparison", "bayes", "sequential", "secondary", "plan", "reading"):
+        assert name in catalog.SECTION_SHAPES
+    assert catalog.SECTION_SHAPES["comparison"] == {"level": "required", "level_2": "required", "indexed": False}
+    assert catalog.SECTION_SHAPES["reading"] == {"level": "required", "level_2": "optional", "indexed": False}
+
+
+def test_the_experiments_nodes_rules():
+    base = {"variant": "arm", "control": "A", "metric_type": "binary", "metric": "converted"}
+    assert catalog.check_params("ab_test", base)["srm_alpha"] == 0.001
+    for params, reason in (
+            ({"variant": "arm", "control": "A", "metric_type": "ratio", "input_shape": "aggregated", "units_count": "u", "metric_sum": "s"},
+             "one row per unit"),
+            ({**base, "sequential": True, "alternative": "less"}, "always-valid p-value of this node is two-sided"),
+            ({"variant": "arm", "control": "A", "metric_type": "continuous", "input_shape": "aggregated", "units_count": "u",
+              "metric_sum": "s"}, "needs the sum of its squares")):
+        with pytest.raises(EngineError, match=reason):
+            catalog.check_params("ab_test", params)
+    # the shares are one number for each value, the column's values are the data's: read at the run
+    assert catalog.check_params("ab_test", {**base, "expected_shares": {"B": 1, "A": 3}})["expected_shares"] == {"A": 3.0, "B": 1.0}
+    assert "expected_shares" in catalog.check_params("ab_test", {**base, "expected_shares": {}})
+    with pytest.raises(EngineError, match="'expected_shares.B' must be a number above 0"):
+        catalog.check_params("ab_test", {**base, "expected_shares": {"A": 1, "B": -1}})
+    # the planning node
+    plan = {"metric_type": "continuous", "metric": "m", "date": "d"}
+    assert catalog.check_params("ab_plan", plan)["arms"] == 2 and "traffic_share" in catalog.check_params("ab_plan", plan)
+    assert "traffic_share" not in catalog.check_params("ab_plan", {"metric_type": "binary", "metric": "m"})
+    with pytest.raises(EngineError, match="needs the column of the day each unit first appeared"):
+        catalog.check_params("ab_plan", {"metric_type": "binary", "metric": "m", "solve_for": "mde_for_days", "days": 7})
+    # the columns' types: the variant a text, a number, a boolean or a date; the metric a boolean or a number
+    columns = {"arm": "String", "converted": "Boolean", "d": "Date", "dt": "Datetime(time_unit='us', time_zone=None)", "label": "String"}
+    assert catalog.check_params("ab_test", {**base, "date": "d"}, columns)["date"] == "d"
+    assert catalog.check_params("ab_test", {**base, "date": "dt"}, columns)["date"] == "dt"
+    with pytest.raises(EngineError, match="«label» \\('metric'\\) must be a boolean or a integer or a number"):
+        catalog.check_params("ab_test", {**base, "metric": "label"}, columns)
+    with pytest.raises(EngineError, match="«label» \\('date'\\) must be a date or a datetime"):
+        catalog.check_params("ab_test", {**base, "date": "label"}, columns)
+    with pytest.raises(EngineError, match="«converted» \\('variant'\\) must be a text or a integer or a boolean or a date"):
+        catalog.check_params("ab_test", {**base, "variant": "converted", "metric": "d", "metric_type": "continuous"},
+                             {**columns, "d": "Float64", "converted": "Float64"})
+    with pytest.raises(EngineError, match="«label» \\('secondary_metrics'\\) must be a boolean or a integer or a number"):
+        catalog.check_params("ab_test", {**base, "secondary_metrics": ["label"]}, columns)
+    # the output «variants» is the same list of columns whichever metric: the variant of the metric type is not needed to know it
+    assert catalog.output_columns("ab_test", {"output": "variants"}, [])[0] == catalog.output_columns(
+        "ab_test", {"metric_type": "ratio", "output": "variants"}, [])[0]
+
+
 def test_every_kind_has_a_control_and_only_the_control_s_options():
     options = {
-        "column": {"numeric", "types"}, "columns": {"min", "max", "numeric", "predictor"}, "level": {"of"},
+        "column": {"numeric", "types"}, "columns": {"min", "max", "numeric", "types", "predictor"}, "level": {"of"},
         "reference": {"of"}, "pairs": {"of", "max"}, "choice": {"choices"},
         "number": {"above", "below", "min", "max"}, "integer": {"min", "max"}, "boolean": set(),
         "numbers": {"above", "below", "min", "max", "max_count"},
         "number_or_choice": {"choices", "above", "below", "min", "max"},
+        "level_numbers": {"of", "above", "below", "min", "max"},
     }
     assert set(options) == set(catalog.CONTROLS)
     for kind, how in catalog.KINDS.items():
