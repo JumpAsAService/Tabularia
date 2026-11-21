@@ -43,6 +43,7 @@ KM_CROSS_GAP <- 0.05
 KM_CROSS_Z <- 2   # standard errors of the difference of two curves that a crossing must pass, both ways
 KM_ALL <- "all" # the stratum's name without strata
 KM_CARD_TOLERANCE <- 0.001 # the most a thinned card's curve or interval differs from the fit's
+KM_CHART_SERIES <- 7L      # a stratum's series: km's surv, lower, upper; cumhaz; loglog; censored; at_risk
 
 # The note of a thinned card: no number or name in it, so that report_texts/kaplan_meier.json
 # says it in the page's language.
@@ -60,7 +61,6 @@ fit_kaplan_meier <- function(task) {
   event_col <- p$event
   strata_col <- p$strata
   times <- sort(unique(as.numeric(unlist(p$times %||% list()))))
-  max_points <- tab_limit(task, "max_chart_points")
 
   df <- tab_input(task, columns = unique(c(time_col, event_col, strata_col)))
   for (name in c(time_col, event_col, strata_col)) {
@@ -189,7 +189,9 @@ fit_kaplan_meier <- function(task) {
   }
 
   km_checks(rows, frame, curves, names_, alpha, reported)
-  km_charts(rows, curves, names_, max_points)
+  # the points a series may have: max_chart_points, fewer when the strata's series at that many
+  # would pass max_result_rows (one row may follow the charts: the note of a thinned card)
+  km_charts(rows, curves, names_, tab_chart_points(task, rows, KM_CHART_SERIES * length(curves), after = 1))
 
   output <- if (identical(p$output, "table")) km_table(curves, if (is.null(strata_col)) NA_character_ else levels) else NULL
   card <- km_card(task, curves, levels, strata_col, time_col, event_col, value_label, conf_type, alpha)
@@ -497,13 +499,29 @@ predict_kaplan_meier <- function(task, card) {
     tab_refuse("missing_column", paste0("the rows have no column «", km$time_column, "», the time the model was fitted on"),
                list(column = km$time_column))
   }
-  time <- suppressWarnings(as.numeric(df[[km$time_column]]))
+  # a time of another kind (a date, a text) is refused, as the parametric node's Predict refuses it:
+  # a date read as a number would be days since 1970
+  if (!tab_kind(df[[km$time_column]]) %in% c("number", "integer")) {
+    tab_refuse("column_kind", paste0("the column «", km$time_column, "» must hold numbers, as when the model was fitted"),
+               list(column = km$time_column))
+  }
+  time <- as.numeric(df[[km$time_column]])
   strata_col <- km$strata_column
   if (!is.null(strata_col) && !strata_col %in% names(df)) {
     tab_refuse("missing_column", paste0("the rows have no column «", strata_col, "», the strata the model was fitted on"),
                list(column = strata_col))
   }
   labels <- if (is.null(strata_col)) rep("", nrow(df)) else tab_label(df[[strata_col]])
+  # the rows whose survival stays empty, counted and said as the parametric node's Predict says them
+  if (!is.null(strata_col)) {
+    seen <- vapply(km$strata, function(s) as.character(s$stratum %||% NA_character_), "")
+    unseen <- sum(!is.na(labels) & !labels %in% seen)
+    if (unseen > 0L) warning(unseen, " rows hold a value the model did not see when fitted: their prediction is empty")
+  }
+  empty <- sum(is.na(time) | is.na(labels))
+  if (empty > 0L) warning(empty, " rows have an empty value in a column the model needs: their prediction is empty")
+  negative <- sum(!is.na(time) & time < 0)
+  if (negative > 0L) warning(negative, " rows have a negative time: their prediction is empty")
   prediction <- low <- high <- rep(NA_real_, nrow(df))
   for (s in km$strata) {
     rows_ <- which(if (is.null(strata_col)) rep(TRUE, nrow(df)) else !is.na(labels) & labels == s$stratum)
@@ -646,3 +664,41 @@ TAB_COMMON_TESTS[["kaplan_meier: proportional hazards not tested is not_computed
   .tab_expect(f$value[f$key == "model|||events"] == 1 && identical(f$text[f$key == "model|||event_value"], "1"), "the event value")
 }
 
+TAB_COMMON_TESTS[["kaplan_meier: Predict counts the rows it leaves empty and refuses a time that is not a number"]] <- function(code) {
+  df <- tab_read_csv(file.path(code, "reference", "data", "kaplan_meier_strata.csv"), list(days = "number", status = "text", line = "text"))
+  fit <- fit_kaplan_meier(.km_test_task(df, list(time = "days", event = "status", event_value = "failed", strata = "line")))
+  card <- jsonlite::fromJSON(tab_card_text(fit$card), simplifyVector = FALSE)
+  rows_ <- data.frame(days = c(5, 5, NA, 5, -1), line = c("A", "Z", "A", NA, "A"), stringsAsFactors = FALSE)
+  said <- character()
+  out <- withCallingHandlers(predict_kaplan_meier(list(params = list(), .frame = rows_), card)$output, warning = function(w) {
+    said <<- c(said, conditionMessage(w))
+    invokeRestart("muffleWarning")
+  })
+  .tab_expect(is.finite(out$prediction[[1L]]) && all(is.na(out$prediction[2:5])), "the predictions: ", paste(out$prediction, collapse = " "))
+  .tab_expect(identical(said, c("1 rows hold a value the model did not see when fitted: their prediction is empty",
+                                "2 rows have an empty value in a column the model needs: their prediction is empty",
+                                "1 rows have a negative time: their prediction is empty")), paste(said, collapse = " | "))
+  # a date is not a time: read as a number it would be days since 1970
+  m <- .tab_refused_with("column_kind", predict_kaplan_meier(list(params = list(), .frame = data.frame(days = as.Date("1970-01-06"), line = "A")), card))
+  .tab_expect(grepl("«days» must hold numbers", m, fixed = TRUE), m)
+}
+
+TAB_COMMON_TESTS[["kaplan_meier: the charts share max_result_rows between the strata's series"]] <- function(code) {
+  # 2,400 rows of continuous times in 6 strata: at max_chart_points a series, 6 × 6 series of ~400 points; the limit here 5,000 rows
+  set.seed(20261121)
+  n <- 2400L
+  event <- stats::rexp(n, 1 / 100)
+  censor <- stats::runif(n, 0, 300)
+  df <- data.frame(days = round(pmin(event, censor), 3), status = as.integer(event <= censor),
+                   plant = sprintf("s%d", sample(1:6, n, TRUE)), stringsAsFactors = FALSE)
+  task <- .km_test_task(df, list(time = "days", event = "status", event_value = 1, strata = "plant"), limits = list(max_result_rows = 5000))
+  fit <- fit_kaplan_meier(task)
+  f <- tab_results_frame(fit$rows)
+  .tab_expect(nrow(f) <= 5000L, nrow(f), " rows, more than the 5000 of the limit")
+  .tab_expect(!length(tab_check_declared(f, "kaplan_meier", "default")), "the results do not match the catalogue")
+  # every stratum keeps its curve, from 1 to its last step's height
+  for (s in sprintf("plant=s%d", 1:6)) {
+    km <- f[f$section == "curve" & f$level == "km" & f$level_2 %in% s & f$stat == "surv", ]
+    .tab_expect(nrow(km) > 50L && km$value[[1L]] == 1, s, ": ", nrow(km), " points")
+  }
+}
