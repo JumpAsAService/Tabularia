@@ -73,7 +73,10 @@ func TestTheRequestOfAResourceIsHalfItsLimit(t *testing.T) {
 		in  string
 		cpu bool
 		out string
-	}{{"2", true, "1000m"}, {"500m", true, "250m"}, {"1", true, "500m"}, {"4Gi", false, "2048Mi"}, {"2Gi", false, "1024Mi"}, {"1G", false, "476Mi"}} {
+	}{{"2", true, "1000m"}, {"500m", true, "250m"}, {"1", true, "500m"}, {"4.35", true, "2175m"}, {"60m", true, "50m"},
+		// never above the limit: a Pod whose request is above its limit is not created
+		{"20m", true, "20m"},
+		{"4Gi", false, "2048Mi"}, {"2Gi", false, "1024Mi"}, {"1G", false, "476Mi"}} {
 		if got := mgHalf(c.in, c.cpu); got != c.out {
 			t.Errorf("%s: %s, want %s", c.in, got, c.out)
 		}
@@ -799,6 +802,11 @@ func TestTheGroupsResourcesLimitsAndAccess(t *testing.T) {
 		if w := settings(bad); w.Code != http.StatusUnprocessableEntity {
 			t.Errorf("%s: %d", bad, w.Code)
 		}
+	}
+	// a CPU limit below the least request a model's Job makes: refused with its sentence
+	if w := settings(`{"cpu_limit":"20m","memory_limit":"4Gi","max_timeout_seconds":600}`); w.Code != http.StatusUnprocessableEntity ||
+		!strings.Contains(w.Body.String(), "less than 50m, the least CPU a model's Job asks for") {
+		t.Errorf("a CPU limit of 20m: %d %s", w.Code, w.Body)
 	}
 	g := answerOf(t, settings(`{"cpu_limit":"1500m","memory_limit":"3Gi","max_timeout_seconds":1800,"max_rows":50}`)).Group
 	if g.Limits != (mgLimits{"1500m", "3Gi", 1800, 50}) || g.Defaults.MaxRows == 50 {

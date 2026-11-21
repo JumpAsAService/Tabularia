@@ -18,6 +18,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -549,12 +550,16 @@ func mgAnswer(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal
 
 // ── enabling, disabling, building again ──────────────────────────────────────
 
+// mgMinCPURequest is the least CPU a group's Job asks for, in millicores: a limit below it is refused
+// (a Pod whose request is above its limit is not created).
+const mgMinCPURequest = 50
+
 // mgHalf is the request that goes with a limit: half of it (the recipe's rule), in the
-// units a Kubernetes quantity has.
+// units a Kubernetes quantity has, never above the limit.
 func mgHalf(quantity string, cpu bool) string {
 	if cpu {
-		cores := mgCores(quantity)
-		return fmt.Sprintf("%dm", max(int64(cores*500), 50))
+		milli := int64(math.Round(mgCores(quantity) * 1000))
+		return fmt.Sprintf("%dm", min(max(milli/2, mgMinCPURequest), milli))
 	}
 	m := sbMemoryParts.FindStringSubmatch(quantity)
 	if m == nil {
@@ -842,6 +847,10 @@ func mgSettings(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Princip
 	switch {
 	case !scCPU.MatchString(in.CPULimit) || sbCores(in.CPULimit) <= 0:
 		detail(w, http.StatusUnprocessableEntity, fmt.Sprintf("cpu_limit: «%s» is not a Kubernetes quantity", in.CPULimit))
+		return
+	case math.Round(sbCores(in.CPULimit)*1000) < mgMinCPURequest:
+		detail(w, http.StatusUnprocessableEntity, fmt.Sprintf("cpu_limit: «%s» is less than %dm, the least CPU a model's Job asks for",
+			in.CPULimit, mgMinCPURequest))
 		return
 	case !scMemory.MatchString(in.MemoryLimit) || mgBytes(in.MemoryLimit) < 256<<20:
 		detail(w, http.StatusUnprocessableEntity, fmt.Sprintf("memory_limit: «%s» is not a Kubernetes quantity of at least 256Mi", in.MemoryLimit))
