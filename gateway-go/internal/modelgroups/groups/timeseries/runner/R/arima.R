@@ -388,7 +388,8 @@ arima_fit_orders <- function(task, prep, orders, extra = NULL) {
       tab_refuse("fit_failed", paste0(name, " could not be fitted (", conditionMessage(fit), "): try lower orders, or ",
                                       "another difference"), list(model = name))
     }
-    notes <- c(notes, "The conditional sum of squares gave no start for these orders: the model was fitted by maximum likelihood alone.")
+    # «The conditional sum of squares gave no start for these orders: the model was fitted by maximum likelihood alone.»
+    notes <- c(notes, arima_note("ml_only"))
   }
   model$coef <- fit$coef
   model$sigma2 <- fit$sigma2
@@ -425,8 +426,9 @@ arima_fit_orders <- function(task, prep, orders, extra = NULL) {
     test <- forecast::accuracy(fc, prep$y[prep$test])
     measures <- c(rmse = "RMSE", mae = "MAE", mape = "MAPE", mase = "MASE")
     for (k in names(measures)) tab_number(rows, "model", paste0("holdout_", k), test["Test set", measures[[k]]])
-    notes <- c(notes, paste0("The coefficients are fitted on the observations before the last ", prep$holdout,
-                             "; the forecast after the last observation applies them to the whole series."))
+    # «The coefficients are fitted on the observations before the last {n}; the forecast after the last observation
+    # applies them to the whole series.»
+    notes <- c(notes, arima_note("holdout_fit", n = prep$holdout))
   }
   if (o$transform == "box_cox") tab_number(rows, "model", "box_cox_lambda", lambda)
   tab_number(rows, "model", "horizon", length(prep$future))
@@ -440,7 +442,8 @@ arima_fit_orders <- function(task, prep, orders, extra = NULL) {
   se <- if (length(est)) sqrt(pmax(diag(fit$var.coef), 0)) else numeric()
   se[!is.finite(se)] <- NA_real_
   if (length(est) && any(is.na(se))) {
-    notes <- c(notes, "Some standard errors could not be computed (the likelihood is flat there): an order too many?")
+    # «Some standard errors could not be computed (the likelihood is flat there): an order too many?»
+    notes <- c(notes, arima_note("se_missing"))
   }
   z <- est / se
   pv <- 2 * stats::pnorm(-abs(z))
@@ -465,19 +468,24 @@ arima_fit_orders <- function(task, prep, orders, extra = NULL) {
 
   # ── notes ──
   if (prep$gaps > 0L) {
-    notes <- c(notes, paste0(prep$gaps, if (prep$gaps == 1L) " period has" else " periods have",
-                             " no value: the likelihood skips them; ADF, KPSS and the correlograms read the series without them."))
+    # «{n} period(s) has/have no value: the likelihood skips them; ADF, KPSS and the correlograms read the series
+    # without them.»
+    notes <- c(notes, arima_note(if (prep$gaps == 1L) "gap" else "gaps", n = prep$gaps))
   }
   if (prep$dropped_future > 0L) {
-    notes <- c(notes, paste0(prep$dropped_future, " rows after the last value are left out: a future row needs every exogenous ",
-                             "value, and the future rows must follow each other without a gap."))
+    # «{n} rows after the last value are left out: a future row needs every exogenous value, and the future rows must
+    # follow each other without a gap.»
+    notes <- c(notes, arima_note(if (prep$dropped_future == 1L) "future_dropped_one" else "future_dropped", n = prep$dropped_future))
   }
   if (length(o$exog) && !length(prep$future)) {
-    notes <- c(notes, "No forecast: with exogenous columns the forecast covers the rows after the last value whose exogenous values are given, and there are none.")
+    # «No forecast: with exogenous columns the forecast covers the rows after the last value whose exogenous values are
+    # given, and there are none.»
+    notes <- c(notes, arima_note("no_forecast"))
   }
-  if (model$drift_dropped) notes <- c(notes, "The drift is left out: with d + D = 2 the model has no drift.")
+  if (model$drift_dropped) notes <- c(notes, arima_note("drift_dropped"))  # «The drift is left out: with d + D = 2 the model has no drift.»
   if (!identical(as.integer(fit$code %||% 0L), 0L)) {
-    notes <- c(notes, paste0("The optimizer did not report convergence (code ", fit$code, "): read the coefficients with care."))
+    # «The optimizer did not report convergence (code {code}): read the coefficients with care.»
+    notes <- c(notes, arima_note("not_converged", code = fit$code))
   }
   for (sentence in notes) tab_note(rows, sentence)
 
@@ -738,6 +746,13 @@ arima_output <- function(prep, whole) {
   out
 }
 
+# A note the report says in the page's language (layouts/common.py, structured_note): «@id name=value …», the
+# values whole numbers or a code. The English of each is in a comment where it is written.
+arima_note <- function(id, ...) {
+  values <- list(...)
+  paste(c(paste0("@", id), vapply(names(values), function(k) paste0(k, "=", values[[k]]), "")), collapse = " ")
+}
+
 # ── the card ────────────────────────────────────────────────────────────────
 arima_card <- function(task, prep, model, fit, levels) {
   o <- prep$params
@@ -748,7 +763,7 @@ arima_card <- function(task, prep, model, fit, levels) {
   card$terms <- lapply(seq_along(labels), function(i) {
     list(term = labels[[i]], level = NULL, variables = if (labels[[i]] %in% o$exog) list(labels[[i]]) else list())
   })
-  card$coefficients <- as.list(unname(tab_finite(fit$coef)))
+  card$coefficients <- as.list(unname(tab_finite(fit$coef)))  # in the order of `terms`
   card$vcov <- if (length(fit$coef)) tab_card_vcov(task, as.matrix(fit$var.coef)) else NULL
   card$alpha <- o$alpha
   card$formula <- arima_formula(o, model, arima_model_name(model$orders, o$s, o$exog))
@@ -757,7 +772,8 @@ arima_card <- function(task, prep, model, fit, levels) {
   for (j in seq_along(o$exog)) exog[[o$exog[[j]]]] <- as.list(prep$X[keep, j])
   card$arima <- list(
     orders = c(model$orders, list(s = o$s)), frequency = o$frequency,
-    coefficients = as.list(tab_finite(fit$coef)), sigma2 = fit$sigma2, transform = o$transform,
+    # by name, as card.schema.json says (tab_finite drops them); arima_model_of_card reads them in this order
+    coefficients = as.list(stats::setNames(tab_finite(fit$coef), names(fit$coef))), sigma2 = fit$sigma2, transform = o$transform,
     box_cox_lambda = if (is.null(model$lambda)) NULL else model$lambda, drift = model$drift, mean = model$mean,
     exog = as.list(o$exog), horizon = o$horizon,
     last = list(time_kind = prep$kind, t0 = tab_label(prep$times[[prep$first]]),
@@ -795,4 +811,19 @@ arima_card_history <- function(card) {
     df[[e]] <- vapply(a$last$exog[[e]], function(x) if (is.null(x)) NA_real_ else as.numeric(x), numeric(1))
   }
   df
+}
+
+TAB_COMMON_TESTS[["arima: the notes are ids the report words, and the card's coefficients are by name"]] <- function(code) {
+  df <- tab_read_csv(file.path(code, "reference", "data", "sarima_monthly.csv"), list(month = "date", boxes = "number"))
+  params <- list(time = "month", value = "boxes", frequency = "month", p = 1, d = 1, q = 1, P = 0, D = 1, Q = 1, holdout = 12)
+  task <- list(protocol = TAB_PROTOCOL, mode = "fit", group = "timeseries", group_version = "selftest", model = "arima",
+               variant = tab_variant_of("arima", params), params = params, output = "results", write_output = FALSE,
+               rows_from = "run", limits = tab_catalog()$limits, .frame = df)
+  out <- fit_arima(task)
+  f <- tab_results_frame(out$rows)
+  notes <- f$text[startsWith(f$stat, "note_")]
+  .tab_expect("@holdout_fit n=12" %in% notes && !any(grepl(" the ", notes, fixed = TRUE)), paste(notes, collapse = " | "))
+  coef <- out$card$arima$coefficients
+  .tab_expect(identical(names(coef), c("ar1", "ma1", "sma1")) && is.numeric(coef[["ar1"]]), paste(names(coef), collapse = ", "))
+  .tab_expect(identical(arima_note("gaps", n = 3L), "@gaps n=3"), "the encoding")
 }

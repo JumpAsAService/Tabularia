@@ -53,27 +53,32 @@
    "schoenfeld": {
     "name": "Proportional hazards: Schoenfeld",
     "h0": "The effect of the term does not change over time.",
-    "advice": "The effect changes over time: stratify by it, or let it interact with time."
+    "advice": "The effect changes over time: stratify by it, or let it interact with time.",
+    "not_computed": "It could not be computed on these rows (the test of the residuals failed): read the term's chart."
    },
    "schoenfeld_global": {
     "name": "Proportional hazards: global test",
     "h0": "No effect of the model changes over time.",
-    "advice": "Some effect changes over time: look at the terms' tests and charts."
+    "advice": "Some effect changes over time: look at the terms' tests and charts.",
+    "not_computed": "It could not be computed on these rows (the test of the residuals failed): read the terms' charts."
    },
    "martingale_form": {
     "name": "Linear form: spline test and martingale residuals",
     "h0": "The numeric predictor acts linearly on the log hazard (a natural spline of it adds nothing).",
-    "advice": "The effect is not linear on the log hazard: read its chart; use a log, a square or a spline of the predictor."
+    "advice": "The effect is not linear on the log hazard: read its chart; use a log, a square or a spline of the predictor.",
+    "not_computed": "It could not be computed: the predictor has too few distinct values to tell a curve from a line, or the fit with a spline of it failed on these rows."
    },
    "dfbeta": {
     "name": "Influence: dfbeta",
     "h0": "No row moves a coefficient by more than its standard error (|dfbetas| under 1).",
-    "advice": "Look at the rows named: each moves a coefficient by much."
+    "advice": "Look at the rows named: each moves a coefficient by much.",
+    "not_computed": "It was not computed: survival gives no dfbeta for the exact partial likelihood (fit with ties = efron to see it), or the residuals failed on these rows."
    },
    "vif": {
     "name": "Multicollinearity: VIF",
     "h0": "Each term is not explained by the other terms (VIF 1).",
-    "advice": "Drop or combine the correlated predictors."
+    "advice": "Drop or combine the correlated predictors.",
+    "not_computed": "It could not be computed: the term is fully explained by the others (aliased), or the covariance of the coefficients is not finite."
    },
    "epv": {
     "name": "Enough events: events per coefficient",
@@ -85,7 +90,17 @@
     }
    }
   },
-  "all": "All rows"
+  "all": "All rows",
+  "note_texts": {
+   "few_events": "There are {epv} events for each coefficient ({events} events, {coefficients} coefficients): the estimates are unstable below {least}; fewer terms, or more rows.",
+   "robust_se": "The standard errors are robust: the intervals, the z tests and the Wald test use them; the likelihood-ratio and score tests assume the rows independent.",
+   "robust_se_cluster": "The standard errors are robust, clustered by «{cluster}»: the intervals, the z tests and the Wald test use them; the likelihood-ratio and score tests assume the rows independent.",
+   "robust_start_rows": "With start–stop rows, several rows are usually one subject's: name the subject's column as cluster, or the robust errors treat each row as independent.",
+   "interaction_vif": "The terms of an interaction are correlated with their parts by construction: their VIFs are large for that reason; centre the predictors to read them.",
+   "not_converged": "The fit did not converge in the iterations allowed: read its numbers with care.",
+   "monotone_likelihood": "The likelihood keeps growing as a coefficient grows (monotone likelihood: a predictor separates the rows that have the event from the others at some time): that coefficient and its interval mean nothing; drop or merge the predictor, or its rare levels.",
+   "baseline_thinned": "The card keeps the baseline hazard at {times} of its event times per stratum: survival predicted between them is read at the nearest earlier one."
+  }
  },
  "it": {
   "name": "Rischi proporzionali di Cox",
@@ -141,27 +156,32 @@
    "schoenfeld": {
     "name": "Rischi proporzionali: Schoenfeld",
     "h0": "L'effetto del termine non cambia nel tempo.",
-    "advice": "L'effetto cambia nel tempo: stratificate per quel termine, oppure fatelo interagire con il tempo."
+    "advice": "L'effetto cambia nel tempo: stratificate per quel termine, oppure fatelo interagire con il tempo.",
+    "not_computed": "Non si è potuto calcolare su queste righe (il test dei residui è fallito): leggete il grafico del termine."
    },
    "schoenfeld_global": {
     "name": "Rischi proporzionali: test globale",
     "h0": "Nessun effetto del modello cambia nel tempo.",
-    "advice": "Qualche effetto cambia nel tempo: guardate i test e i grafici dei termini."
+    "advice": "Qualche effetto cambia nel tempo: guardate i test e i grafici dei termini.",
+    "not_computed": "Non si è potuto calcolare su queste righe (il test dei residui è fallito): leggete i grafici dei termini."
    },
    "martingale_form": {
     "name": "Forma lineare: test con spline e residui martingala",
     "h0": "Il predittore numerico agisce in modo lineare sul log del rischio (una sua spline naturale non aggiunge nulla).",
-    "advice": "L'effetto non è lineare sul log del rischio: leggete il suo grafico; usate un logaritmo, un quadrato o una spline del predittore."
+    "advice": "L'effetto non è lineare sul log del rischio: leggete il suo grafico; usate un logaritmo, un quadrato o una spline del predittore.",
+    "not_computed": "Non si è potuto calcolare: il predittore ha troppo pochi valori distinti per distinguere una curva da una retta, oppure l'adattamento con una sua spline è fallito su queste righe."
    },
    "dfbeta": {
     "name": "Influenza: dfbeta",
     "h0": "Nessuna riga sposta un coefficiente di più del suo errore standard (|dfbetas| sotto 1).",
-    "advice": "Guardate le righe indicate: ognuna sposta molto un coefficiente."
+    "advice": "Guardate le righe indicate: ognuna sposta molto un coefficiente.",
+    "not_computed": "Non è stato calcolato: survival non dà i dfbeta per la verosimiglianza parziale esatta (adattate con ties = efron per vederli), oppure i residui sono falliti su queste righe."
    },
    "vif": {
     "name": "Multicollinearità: VIF",
     "h0": "Nessun termine è spiegato dagli altri termini (VIF 1).",
-    "advice": "Togliete o combinate i predittori correlati."
+    "advice": "Togliete o combinate i predittori correlati.",
+    "not_computed": "Non si è potuto calcolare: il termine è spiegato del tutto dagli altri (aliasing), oppure la covarianza dei coefficienti non è finita."
    },
    "epv": {
     "name": "Eventi sufficienti: eventi per coefficiente",
@@ -173,7 +193,17 @@
     }
    }
   },
-  "all": "Tutte le righe"
+  "all": "Tutte le righe",
+  "note_texts": {
+   "few_events": "Ci sono {epv} eventi per coefficiente ({events} eventi, {coefficients} coefficienti): sotto {least} le stime sono instabili; meno termini, o più righe.",
+   "robust_se": "Gli errori standard sono robusti: li usano gli intervalli, i test z e il test di Wald; i test del rapporto di verosimiglianza e score assumono le righe indipendenti.",
+   "robust_se_cluster": "Gli errori standard sono robusti, raggruppati per «{cluster}»: li usano gli intervalli, i test z e il test di Wald; i test del rapporto di verosimiglianza e score assumono le righe indipendenti.",
+   "robust_start_rows": "Con righe inizio–fine, di solito più righe sono di un solo soggetto: indicate la colonna del soggetto come cluster, altrimenti gli errori robusti trattano ogni riga come indipendente.",
+   "interaction_vif": "I termini di un'interazione sono correlati per costruzione con le loro parti: per questo i loro VIF sono grandi; centrate i predittori per leggerli.",
+   "not_converged": "L'adattamento non è arrivato a convergenza nelle iterazioni concesse: leggetene i numeri con cautela.",
+   "monotone_likelihood": "La verosimiglianza continua a crescere al crescere di un coefficiente (verosimiglianza monotona: un predittore separa a qualche tempo le righe con l'evento dalle altre): quel coefficiente e il suo intervallo non significano nulla; togliete o accorpate il predittore, o i suoi livelli rari.",
+   "baseline_thinned": "La scheda tiene il rischio di base a {times} dei suoi tempi di evento per strato: la sopravvivenza prevista fra due di essi si legge al più vicino precedente."
+  }
  },
  "de": {
   "name": "Cox-Modell der proportionalen Hazards",
@@ -229,27 +259,32 @@
    "schoenfeld": {
     "name": "Proportionale Hazards: Schoenfeld",
     "h0": "Der Effekt des Terms ändert sich nicht über die Zeit.",
-    "advice": "Der Effekt ändert sich über die Zeit: Schichten Sie danach, oder lassen Sie ihn mit der Zeit wechselwirken."
+    "advice": "Der Effekt ändert sich über die Zeit: Schichten Sie danach, oder lassen Sie ihn mit der Zeit wechselwirken.",
+    "not_computed": "Auf diesen Zeilen nicht berechenbar (der Test der Residuen ist gescheitert): Lesen Sie die Grafik des Terms."
    },
    "schoenfeld_global": {
     "name": "Proportionale Hazards: globaler Test",
     "h0": "Kein Effekt des Modells ändert sich über die Zeit.",
-    "advice": "Ein Effekt ändert sich über die Zeit: Lesen Sie die Tests und Diagramme der Terme."
+    "advice": "Ein Effekt ändert sich über die Zeit: Lesen Sie die Tests und Diagramme der Terme.",
+    "not_computed": "Auf diesen Zeilen nicht berechenbar (der Test der Residuen ist gescheitert): Lesen Sie die Grafiken der Terme."
    },
    "martingale_form": {
     "name": "Lineare Form: Spline-Test und Martingal-Residuen",
     "h0": "Der numerische Prädiktor wirkt linear auf das log-Hazard (ein natürlicher Spline von ihm fügt nichts hinzu).",
-    "advice": "Der Effekt ist auf dem log-Hazard nicht linear: Lesen Sie sein Diagramm; verwenden Sie einen Logarithmus, ein Quadrat oder einen Spline des Prädiktors."
+    "advice": "Der Effekt ist auf dem log-Hazard nicht linear: Lesen Sie sein Diagramm; verwenden Sie einen Logarithmus, ein Quadrat oder einen Spline des Prädiktors.",
+    "not_computed": "Nicht berechenbar: Der Prädiktor hat zu wenige verschiedene Werte, um eine Kurve von einer Geraden zu unterscheiden, oder die Anpassung mit einem Spline von ihm ist auf diesen Zeilen gescheitert."
    },
    "dfbeta": {
     "name": "Einfluss: dfbeta",
     "h0": "Keine Zeile verschiebt einen Koeffizienten um mehr als seinen Standardfehler (|dfbetas| unter 1).",
-    "advice": "Prüfen Sie die genannten Zeilen: Jede verschiebt einen Koeffizienten stark."
+    "advice": "Prüfen Sie die genannten Zeilen: Jede verschiebt einen Koeffizienten stark.",
+    "not_computed": "Nicht berechnet: survival liefert keine dfbeta für die exakte partielle Likelihood (passen Sie mit ties = efron an, um sie zu sehen), oder die Residuen sind auf diesen Zeilen gescheitert."
    },
    "vif": {
     "name": "Multikollinearität: VIF",
     "h0": "Kein Term wird durch die anderen Terme erklärt (VIF 1).",
-    "advice": "Entfernen oder kombinieren Sie die korrelierten Prädiktoren."
+    "advice": "Entfernen oder kombinieren Sie die korrelierten Prädiktoren.",
+    "not_computed": "Nicht berechenbar: Der Term wird von den anderen vollständig erklärt (Aliasing), oder die Kovarianz der Koeffizienten ist nicht endlich."
    },
    "epv": {
     "name": "Genug Ereignisse: Ereignisse pro Koeffizient",
@@ -261,7 +296,17 @@
     }
    }
   },
-  "all": "Alle Zeilen"
+  "all": "Alle Zeilen",
+  "note_texts": {
+   "few_events": "Es gibt {epv} Ereignisse je Koeffizient ({events} Ereignisse, {coefficients} Koeffizienten): Unter {least} sind die Schätzwerte instabil; weniger Terme oder mehr Zeilen.",
+   "robust_se": "Die Standardfehler sind robust: Die Intervalle, die z-Tests und der Wald-Test verwenden sie; der Likelihood-Quotienten- und der Score-Test nehmen die Zeilen als unabhängig an.",
+   "robust_se_cluster": "Die Standardfehler sind robust, gruppiert nach «{cluster}»: Die Intervalle, die z-Tests und der Wald-Test verwenden sie; der Likelihood-Quotienten- und der Score-Test nehmen die Zeilen als unabhängig an.",
+   "robust_start_rows": "Bei Start-Stopp-Zeilen gehören meist mehrere Zeilen zu einem Subjekt: Geben Sie die Spalte des Subjekts als Cluster an, sonst behandeln die robusten Fehler jede Zeile als unabhängig.",
+   "interaction_vif": "Die Terme einer Wechselwirkung sind konstruktionsbedingt mit ihren Teilen korreliert: Deshalb sind ihre VIFs groß; zentrieren Sie die Prädiktoren, um sie zu lesen.",
+   "not_converged": "Die Anpassung ist in den erlaubten Iterationen nicht konvergiert: Lesen Sie ihre Zahlen mit Vorsicht.",
+   "monotone_likelihood": "Die Likelihood wächst weiter, solange ein Koeffizient wächst (monotone Likelihood: Ein Prädiktor trennt zu einer Zeit die Zeilen mit Ereignis von den anderen): Dieser Koeffizient und sein Intervall bedeuten nichts; entfernen oder vereinen Sie den Prädiktor oder seine seltenen Stufen.",
+   "baseline_thinned": "Die Karte behält das Basis-Hazard an {times} seiner Ereigniszeiten je Schicht: Ein Überleben dazwischen wird bei der nächstfrüheren gelesen."
+  }
  },
  "es": {
   "name": "Riesgos proporcionales de Cox",
@@ -317,27 +362,32 @@
    "schoenfeld": {
     "name": "Riesgos proporcionales: Schoenfeld",
     "h0": "El efecto del término no cambia en el tiempo.",
-    "advice": "El efecto cambia en el tiempo: estratifique por él, o hágalo interactuar con el tiempo."
+    "advice": "El efecto cambia en el tiempo: estratifique por él, o hágalo interactuar con el tiempo.",
+    "not_computed": "No se pudo calcular en estas filas (la prueba de los residuos falló): lea el gráfico del término."
    },
    "schoenfeld_global": {
     "name": "Riesgos proporcionales: prueba global",
     "h0": "Ningún efecto del modelo cambia en el tiempo.",
-    "advice": "Algún efecto cambia en el tiempo: mire las pruebas y los gráficos de los términos."
+    "advice": "Algún efecto cambia en el tiempo: mire las pruebas y los gráficos de los términos.",
+    "not_computed": "No se pudo calcular en estas filas (la prueba de los residuos falló): lea los gráficos de los términos."
    },
    "martingale_form": {
     "name": "Forma lineal: prueba con spline y residuos martingala",
     "h0": "El predictor numérico actúa de forma lineal sobre el log del riesgo (un spline natural suyo no añade nada).",
-    "advice": "El efecto no es lineal sobre el log del riesgo: lea su gráfico; use un logaritmo, un cuadrado o un spline del predictor."
+    "advice": "El efecto no es lineal sobre el log del riesgo: lea su gráfico; use un logaritmo, un cuadrado o un spline del predictor.",
+    "not_computed": "No se pudo calcular: el predictor tiene muy pocos valores distintos para distinguir una curva de una recta, o el ajuste con un spline suyo falló en estas filas."
    },
    "dfbeta": {
     "name": "Influencia: dfbeta",
     "h0": "Ninguna fila mueve un coeficiente más que su error estándar (|dfbetas| por debajo de 1).",
-    "advice": "Revise las filas indicadas: cada una mueve mucho un coeficiente."
+    "advice": "Revise las filas indicadas: cada una mueve mucho un coeficiente.",
+    "not_computed": "No se calculó: survival no da dfbeta para la verosimilitud parcial exacta (ajuste con ties = efron para verlo), o los residuos fallaron en estas filas."
    },
    "vif": {
     "name": "Multicolinealidad: VIF",
     "h0": "Ningún término se explica por los demás términos (VIF 1).",
-    "advice": "Elimine o combine los predictores correlacionados."
+    "advice": "Elimine o combine los predictores correlacionados.",
+    "not_computed": "No se pudo calcular: el término queda explicado del todo por los demás (aliasing), o la covarianza de los coeficientes no es finita."
    },
    "epv": {
     "name": "Eventos suficientes: eventos por coeficiente",
@@ -349,7 +399,17 @@
     }
    }
   },
-  "all": "Todas las filas"
+  "all": "Todas las filas",
+  "note_texts": {
+   "few_events": "Hay {epv} eventos por coeficiente ({events} eventos, {coefficients} coeficientes): por debajo de {least} las estimaciones son inestables; menos términos, o más filas.",
+   "robust_se": "Los errores estándar son robustos: los usan los intervalos, las pruebas z y la prueba de Wald; las pruebas de razón de verosimilitudes y de score suponen las filas independientes.",
+   "robust_se_cluster": "Los errores estándar son robustos, agrupados por «{cluster}»: los usan los intervalos, las pruebas z y la prueba de Wald; las pruebas de razón de verosimilitudes y de score suponen las filas independientes.",
+   "robust_start_rows": "Con filas inicio–fin, varias filas suelen ser de un mismo sujeto: indique la columna del sujeto como cluster, o los errores robustos tratan cada fila como independiente.",
+   "interaction_vif": "Los términos de una interacción están correlacionados con sus partes por construcción: por eso sus VIF son grandes; centre los predictores para leerlos.",
+   "not_converged": "El ajuste no convergió en las iteraciones permitidas: lea sus números con cautela.",
+   "monotone_likelihood": "La verosimilitud sigue creciendo al crecer un coeficiente (verosimilitud monótona: un predictor separa en algún tiempo las filas con el evento de las demás): ese coeficiente y su intervalo no significan nada; quite o agrupe el predictor, o sus niveles raros.",
+   "baseline_thinned": "La ficha guarda el riesgo base en {times} de sus tiempos de evento por estrato: la supervivencia predicha entre dos de ellos se lee en el anterior más cercano."
+  }
  },
  "fr": {
   "name": "Risques proportionnels de Cox",
@@ -405,27 +465,32 @@
    "schoenfeld": {
     "name": "Risques proportionnels : Schoenfeld",
     "h0": "L'effet du terme ne change pas dans le temps.",
-    "advice": "L'effet change dans le temps : stratifiez selon lui, ou faites-le interagir avec le temps."
+    "advice": "L'effet change dans le temps : stratifiez selon lui, ou faites-le interagir avec le temps.",
+    "not_computed": "Il n'a pas pu être calculé sur ces lignes (le test des résidus a échoué) : lisez le graphique du terme."
    },
    "schoenfeld_global": {
     "name": "Risques proportionnels : test global",
     "h0": "Aucun effet du modèle ne change dans le temps.",
-    "advice": "Un effet change dans le temps : regardez les tests et les graphiques des termes."
+    "advice": "Un effet change dans le temps : regardez les tests et les graphiques des termes.",
+    "not_computed": "Il n'a pas pu être calculé sur ces lignes (le test des résidus a échoué) : lisez les graphiques des termes."
    },
    "martingale_form": {
     "name": "Forme linéaire : test par spline et résidus de martingale",
     "h0": "Le prédicteur numérique agit linéairement sur le log du risque (une spline naturelle de lui n'ajoute rien).",
-    "advice": "L'effet n'est pas linéaire sur le log du risque : lisez son graphique ; utilisez un logarithme, un carré ou une spline du prédicteur."
+    "advice": "L'effet n'est pas linéaire sur le log du risque : lisez son graphique ; utilisez un logarithme, un carré ou une spline du prédicteur.",
+    "not_computed": "Il n'a pas pu être calculé : le prédicteur a trop peu de valeurs distinctes pour distinguer une courbe d'une droite, ou l'ajustement avec une spline de celui-ci a échoué sur ces lignes."
    },
    "dfbeta": {
     "name": "Influence : dfbeta",
     "h0": "Aucune ligne ne déplace un coefficient de plus que son erreur type (|dfbetas| sous 1).",
-    "advice": "Examinez les lignes indiquées : chacune déplace beaucoup un coefficient."
+    "advice": "Examinez les lignes indiquées : chacune déplace beaucoup un coefficient.",
+    "not_computed": "Il n'a pas été calculé : survival ne donne pas de dfbeta pour la vraisemblance partielle exacte (ajustez avec ties = efron pour le voir), ou les résidus ont échoué sur ces lignes."
    },
    "vif": {
     "name": "Multicolinéarité : VIF",
     "h0": "Aucun terme n'est expliqué par les autres termes (VIF 1).",
-    "advice": "Retirez ou combinez les prédicteurs corrélés."
+    "advice": "Retirez ou combinez les prédicteurs corrélés.",
+    "not_computed": "Il n'a pas pu être calculé : le terme est entièrement expliqué par les autres (aliasing), ou la covariance des coefficients n'est pas finie."
    },
    "epv": {
     "name": "Assez d'événements : événements par coefficient",
@@ -437,6 +502,16 @@
     }
    }
   },
-  "all": "Toutes les lignes"
+  "all": "Toutes les lignes",
+  "note_texts": {
+   "few_events": "Il y a {epv} événements par coefficient ({events} événements, {coefficients} coefficients) : en dessous de {least} les estimations sont instables ; moins de termes, ou plus de lignes.",
+   "robust_se": "Les erreurs types sont robustes : les intervalles, les tests z et le test de Wald les utilisent ; les tests du rapport de vraisemblance et du score supposent les lignes indépendantes.",
+   "robust_se_cluster": "Les erreurs types sont robustes, regroupées par «{cluster}» : les intervalles, les tests z et le test de Wald les utilisent ; les tests du rapport de vraisemblance et du score supposent les lignes indépendantes.",
+   "robust_start_rows": "Avec des lignes début–fin, plusieurs lignes sont en général celles d'un même sujet : indiquez la colonne du sujet comme cluster, sinon les erreurs robustes traitent chaque ligne comme indépendante.",
+   "interaction_vif": "Les termes d'une interaction sont corrélés à leurs parties par construction : leurs VIF sont grands pour cette raison ; centrez les prédicteurs pour les lire.",
+   "not_converged": "L'ajustement n'a pas convergé dans les itérations permises : lisez ses nombres avec prudence.",
+   "monotone_likelihood": "La vraisemblance croît sans fin quand un coefficient croît (vraisemblance monotone : un prédicteur sépare à un certain temps les lignes qui ont l'événement des autres) : ce coefficient et son intervalle ne veulent rien dire ; retirez ou regroupez le prédicteur, ou ses niveaux rares.",
+   "baseline_thinned": "La fiche garde le risque de base à {times} de ses temps d'événement par strate : une survie prédite entre deux d'entre eux se lit au plus proche précédent."
+  }
  }
 }

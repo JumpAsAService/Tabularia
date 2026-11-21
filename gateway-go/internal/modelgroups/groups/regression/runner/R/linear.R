@@ -174,28 +174,34 @@ fit_linear <- function(task) {
   linear_charts(rows, task, m, y, wr, infl, design$rows)
 
   # ── notes ─────────────────────────────────────────────────────────────────
+  # each note an id and its values, which the report words in the page's language (linear_note); the English here
   if (length(p$interactions %||% list())) {
-    tab_note(rows, paste0("The terms of an interaction are correlated with their parts by construction: their VIFs are large ",
-                          "for that reason; centre the predictors to read them."))
+    # «The terms of an interaction are correlated with their parts by construction: their VIFs are large for that
+    # reason; centre the predictors to read them.»
+    tab_note(rows, linear_note("interaction_vif"))
   }
   if (!wls && !is.null(p$weights)) {
-    tab_note(rows, paste0("The weights «", p$weights, "» are not used with ordinary least squares: choose estimation = wls ",
-                          "to use them."))
+    # «The weights «{weights}» are not used with ordinary least squares: choose estimation = wls to use them.»
+    tab_note(rows, linear_note("weights_unused", weights = p$weights))
   }
   if (wls) {
-    tab_note(rows, paste0("Weighted least squares: the normality checks, the tests of independence and the charts read the ",
-                          "weighted residuals (√w × residual); the RESET is the F test of the weighted fit."))
+    # «Weighted least squares: the normality checks, the tests of independence and the charts read the weighted
+    # residuals (√w × residual); the RESET is the F test of the weighted fit.»
+    tab_note(rows, linear_note("wls"))
   }
   if (zero_weights > 0L) {
-    tab_note(rows, paste0(zero_weights, " rows have weight 0 and were left out of the fit."))
+    # «{n} rows have weight 0 and were left out of the fit.» (one row: zero_weight)
+    tab_note(rows, linear_note(if (zero_weights == 1L) "zero_weight" else "zero_weights", n = zero_weights))
   }
   if (identical(p$se, "hac") && is.null(order_col)) {
-    tab_note(rows, paste0("The HAC standard errors read the rows in the order they reached the node: choose order_by to make ",
-                          "that order explicit."))
+    # «The HAC standard errors read the rows in the order they reached the node: choose order_by to make that order
+    # explicit.»
+    tab_note(rows, linear_note("hac_order"))
   }
   if (is.finite(s$sigma) && s$sigma <= sqrt(.Machine$double.eps) * max(1, stats::sd(y))) {
-    tab_note(rows, paste0("The model fits the rows exactly (σ is 0): a predictor repeats the outcome, or there are as many ",
-                          "terms as rows; the tests mean nothing here."))
+    # «The model fits the rows exactly (σ is 0): a predictor repeats the outcome, or there are as many terms as rows;
+    # the tests mean nothing here.»
+    tab_note(rows, linear_note("exact_fit"))
   }
 
   # ── the card, and the rows output ─────────────────────────────────────────
@@ -540,4 +546,18 @@ predict_linear <- function(task, card) {
   }
   rownames(out) <- NULL
   list(output = out)
+}
+
+# A note the report says in the page's language (layouts/common.py, structured_note): «@id name=value …». A value is
+# a column's name or a number: «%», « » and «,» in it are written %25, %20 and %2C, which the report decodes.
+linear_note <- function(id, ...) {
+  values <- list(...)
+  encode <- function(x) gsub(",", "%2C", gsub(" ", "%20", gsub("%", "%25", enc2utf8(as.character(x)), fixed = TRUE), fixed = TRUE), fixed = TRUE)
+  parts <- vapply(names(values), function(k) paste0(k, "=", encode(values[[k]])), "")
+  paste(c(paste0("@", id), parts), collapse = " ")
+}
+
+TAB_COMMON_TESTS[["linear: the notes are ids with their values, which the report words in the page's language"]] <- function(code) {
+  .tab_expect(identical(linear_note("weights_unused", weights = "peso 50%,a"), "@weights_unused weights=peso%2050%25%2Ca"), "the encoding")
+  .tab_expect(identical(linear_note("interaction_vif"), "@interaction_vif"), "an id alone")
 }

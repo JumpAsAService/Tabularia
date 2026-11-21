@@ -20,6 +20,7 @@ import re
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Callable, Mapping, NamedTuple
+from urllib.parse import unquote
 
 from app.engine.models import catalog
 from app.engine.stats import layouts as stats
@@ -184,23 +185,30 @@ def structured_note(w: dict, text: str, loc: Any, texts: str = "note_texts") -> 
     of `note_texts.<id>`, each «{name}» replaced by its value, a number with the language's decimal, a name of a
     distribution, of a purchase model or of a unit of time in the page's words (`values.distribution`,
     `values.purchase_model`, `values.time_unit`). A formula sent the same way (BG/BB's «@bgbb_formula unit=year») is
-    read from `formula_texts`."""
+    read from `formula_texts`. A value's «%», « » and «,» come encoded (%25, %20, %2C: the survival runner's
+    surv_note, so that a stratum «North Side» or «a,b» does not split the note) and are decoded here, after the
+    split on «,»."""
     head, *rest = text[1:].split(" ")
     said = w.get(texts, {}).get(head)
     if said is None:
         return text
-    names = {**w.get("values", {}).get("purchase_model", {}), **w.get("values", {}).get("distribution", {}),
-             **w.get("values", {}).get("time_unit", {})}
+    values = w.get("values", {})
+    names = {**values.get("purchase_model", {}), **values.get("distribution", {}), **values.get("time_unit", {})}
+    # a unit of time in another form: «{unit:one}» its singular («one opportunity a year»), «{unit:dative}» the plural
+    # after a preposition (German's dative, «in Monaten»; the plural in the other languages)
+    forms = {"one": values.get("time_unit_one", {}), "dative": values.get("time_unit_dative", {})}
     parts = dict(r.partition("=")[::2] for r in rest if "=" in r)
 
-    def word(v: str) -> str:
+    def word(v: str, form: str = "") -> str:
+        v = unquote(v)
         if NUMBER_IN_TEXT.fullmatch(v):
             return _decimal(v, loc)
-        return names.get(v, v)
+        return forms[form].get(v, names.get(v, v)) if form else names.get(v, v)
 
     out = said
     for k, v in parts.items():
-        out = out.replace("{" + k + "}", ", ".join(word(x) for x in v.split(",")))
+        for form in ("", *forms):
+            out = out.replace("{" + k + (":" + form if form else "") + "}", ", ".join(word(x, form) for x in v.split(",")))
     return out
 
 

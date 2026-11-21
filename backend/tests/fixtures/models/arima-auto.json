@@ -1065,4 +1065,4 @@
   ["lag","resid_pacf",null,"pacf",-0.080777565654942,null,39,null,1064,"lag|resid_pacf||pacf|38"],
   ["lag","resid_pacf",null,"pacf",0.0499893984823679,null,40,null,1065,"lag|resid_pacf||pacf|39"],
   ["lag","resid_pacf",null,"bound",0.170592968093161,null,null,null,1066,"lag|resid_pacf||bound"],
-  ["model",null,null,"note_1",null,"The coefficients are fitted on the observations before the last 12; the forecast after the last observation applies them to the whole series.",null,null,1067,"model|||note_1"]]}
+  ["model",null,null,"note_1",null,"@holdout_fit n=12",null,null,1067,"model|||note_1"]]}

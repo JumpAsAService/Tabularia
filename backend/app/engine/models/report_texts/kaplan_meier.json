@@ -110,7 +110,8 @@
     "count": {
      "one": "{n} pair of curves that cross",
      "other": "{n} pairs of curves that cross"
-    }
+    },
+    "not_computed": "The test of the hazards' ratio could not be computed on these rows (a stratum without events, or a fit that fails), and no two curves cross: read the curves themselves."
    },
    "censoring_by_stratum": {
     "name": "Censoring by stratum",
@@ -141,7 +142,13 @@
    }
   },
   "all": "All rows",
-  "quartiles_caption": "25%: the time by which a quarter of the rows had the event (survival 0.75); an empty cell or a dash: not reached, the curve does not go that low."
+  "quartiles_caption": "25%: the time by which a quarter of the rows had the event (survival 0.75); an empty cell or a dash: not reached, the curve does not go that low.",
+  "note_texts": {
+   "stratum_no_events": "The stratum {stratum} has no event: its curve stays at 1 and its median is not reached.",
+   "median_not_reached": "The median of {stratum} is not reached: fewer than half its rows had the event by the end of its follow-up; read its survival at a time, or its restricted mean.",
+   "survival_not_estimated": "Survival of {stratum} at {times} is not estimated: its follow-up ends at {last}.",
+   "curves_cross": "The curves cross ({pairs}): the log-rank and Peto's tests lose power there; compare the restricted means, and read the curves themselves."
+  }
  },
  "it": {
   "name": "Kaplan–Meier",
@@ -254,7 +261,8 @@
     "count": {
      "one": "{n} coppia di curve che si incrociano",
      "other": "{n} coppie di curve che si incrociano"
-    }
+    },
+    "not_computed": "Il test del rapporto dei rischi non si è potuto calcolare su queste righe (uno strato senza eventi, o un adattamento che fallisce), e nessuna coppia di curve si incrocia: leggete le curve stesse."
    },
    "censoring_by_stratum": {
     "name": "Censura per strato",
@@ -285,7 +293,13 @@
    }
   },
   "all": "Tutte le righe",
-  "quartiles_caption": "25%: il tempo entro cui un quarto delle righe ha avuto l'evento (sopravvivenza 0,75); una cella vuota o un trattino: non raggiunto, la curva non scende così in basso."
+  "quartiles_caption": "25%: il tempo entro cui un quarto delle righe ha avuto l'evento (sopravvivenza 0,75); una cella vuota o un trattino: non raggiunto, la curva non scende così in basso.",
+  "note_texts": {
+   "stratum_no_events": "Lo strato {stratum} non ha eventi: la sua curva resta a 1 e la sua mediana non è raggiunta.",
+   "median_not_reached": "La mediana di {stratum} non è raggiunta: meno della metà delle sue righe ha avuto l'evento entro la fine del suo follow-up; leggete la sua sopravvivenza a un tempo, o la sua media ristretta.",
+   "survival_not_estimated": "La sopravvivenza di {stratum} a {times} non è stimata: il suo follow-up finisce a {last}.",
+   "curves_cross": "Le curve si incrociano ({pairs}): lì i test log-rank e di Peto perdono potenza; confrontate le medie ristrette e leggete le curve stesse."
+  }
  },
  "de": {
   "name": "Kaplan–Meier",
@@ -398,7 +412,8 @@
     "count": {
      "one": "{n} Paar sich kreuzender Kurven",
      "other": "{n} Paare sich kreuzender Kurven"
-    }
+    },
+    "not_computed": "Der Test des Hazard-Verhältnisses ließ sich auf diesen Zeilen nicht berechnen (eine Schicht ohne Ereignis oder eine Anpassung, die scheitert), und keine zwei Kurven kreuzen sich: Lesen Sie die Kurven selbst."
    },
    "censoring_by_stratum": {
     "name": "Zensierung je Schicht",
@@ -429,7 +444,13 @@
    }
   },
   "all": "Alle Zeilen",
-  "quartiles_caption": "25 %: die Zeit, bis zu der ein Viertel der Zeilen das Ereignis hatte (Überleben 0,75); eine leere Zelle oder ein Strich: nicht erreicht, die Kurve sinkt nicht so tief."
+  "quartiles_caption": "25 %: die Zeit, bis zu der ein Viertel der Zeilen das Ereignis hatte (Überleben 0,75); eine leere Zelle oder ein Strich: nicht erreicht, die Kurve sinkt nicht so tief.",
+  "note_texts": {
+   "stratum_no_events": "Die Schicht {stratum} hat kein Ereignis: Ihre Kurve bleibt bei 1, und ihr Median wird nicht erreicht.",
+   "median_not_reached": "Der Median von {stratum} wird nicht erreicht: Weniger als die Hälfte ihrer Zeilen hatte das Ereignis bis zum Ende der Nachbeobachtung; lesen Sie ihr Überleben zu einer Zeit oder ihr eingeschränktes Mittel.",
+   "survival_not_estimated": "Das Überleben von {stratum} bei {times} wird nicht geschätzt: Ihre Nachbeobachtung endet bei {last}.",
+   "curves_cross": "Die Kurven kreuzen sich ({pairs}): Dort verlieren der Log-Rank-Test und der von Peto an Trennschärfe; vergleichen Sie die eingeschränkten Mittel und lesen Sie die Kurven selbst."
+  }
  },
  "es": {
   "name": "Kaplan–Meier",
@@ -542,7 +563,8 @@
     "count": {
      "one": "{n} par de curvas que se cruzan",
      "other": "{n} pares de curvas que se cruzan"
-    }
+    },
+    "not_computed": "La prueba de la razón de riesgos no se pudo calcular en estas filas (un estrato sin eventos, o un ajuste que falla), y ningún par de curvas se cruza: lea las curvas mismas."
    },
    "censoring_by_stratum": {
     "name": "Censura por estrato",
@@ -573,7 +595,13 @@
    }
   },
   "all": "Todas las filas",
-  "quartiles_caption": "25 %: el tiempo en que una cuarta parte de las filas tuvo el evento (supervivencia 0,75); una celda vacía o un guion: no alcanzado, la curva no baja tanto."
+  "quartiles_caption": "25 %: el tiempo en que una cuarta parte de las filas tuvo el evento (supervivencia 0,75); una celda vacía o un guion: no alcanzado, la curva no baja tanto.",
+  "note_texts": {
+   "stratum_no_events": "El estrato {stratum} no tiene eventos: su curva se queda en 1 y su mediana no se alcanza.",
+   "median_not_reached": "La mediana de {stratum} no se alcanza: menos de la mitad de sus filas tuvo el evento antes del final de su seguimiento; lea su supervivencia en un tiempo, o su media restringida.",
+   "survival_not_estimated": "La supervivencia de {stratum} en {times} no se estima: su seguimiento termina en {last}.",
+   "curves_cross": "Las curvas se cruzan ({pairs}): allí las pruebas log-rank y de Peto pierden potencia; compare las medias restringidas y lea las curvas mismas."
+  }
  },
  "fr": {
   "name": "Kaplan–Meier",
@@ -686,7 +714,8 @@
     "count": {
      "one": "{n} paire de courbes qui se croisent",
      "other": "{n} paires de courbes qui se croisent"
-    }
+    },
+    "not_computed": "Le test du rapport des risques n'a pas pu être calculé sur ces lignes (une strate sans événement, ou un ajustement qui échoue), et aucune paire de courbes ne se croise : lisez les courbes elles-mêmes."
    },
    "censoring_by_stratum": {
     "name": "Censure par strate",
@@ -717,6 +746,12 @@
    }
   },
   "all": "Toutes les lignes",
-  "quartiles_caption": "25 % : le temps auquel un quart des lignes a eu l'événement (survie 0,75) ; une cellule vide ou un tiret : non atteint, la courbe ne descend pas si bas."
+  "quartiles_caption": "25 % : le temps auquel un quart des lignes a eu l'événement (survie 0,75) ; une cellule vide ou un tiret : non atteint, la courbe ne descend pas si bas.",
+  "note_texts": {
+   "stratum_no_events": "La strate {stratum} n'a aucun événement : sa courbe reste à 1 et sa médiane n'est pas atteinte.",
+   "median_not_reached": "La médiane de {stratum} n'est pas atteinte : moins de la moitié de ses lignes ont eu l'événement avant la fin de leur suivi ; lisez sa survie à un temps, ou sa moyenne restreinte.",
+   "survival_not_estimated": "La survie de {stratum} à {times} n'est pas estimée : son suivi s'arrête à {last}.",
+   "curves_cross": "Les courbes se croisent ({pairs}) : les tests du log-rank et de Peto y perdent de la puissance ; comparez les moyennes restreintes et lisez les courbes elles-mêmes."
+  }
  }
 }

@@ -11892,7 +11892,7 @@
    null,
    "note_1",
    null,
-   "The terms of an interaction are correlated with their parts by construction: their VIFs are large for that reason; centre the predictors to read them.",
+   "@interaction_vif",
    null,
    null,
    988,

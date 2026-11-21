@@ -231,6 +231,18 @@
     "ljung_box_10": "Structure left in the residuals: the search found no model without it; try stepwise = off, or raise max_p and max_q.",
     "ljung_box_2s": "Seasonal structure left in the residuals: try stepwise = off, or raise max_P and max_Q."
    }
+  },
+  "note_texts": {
+   "ml_only": "The conditional sum of squares gave no start for these orders: the model was fitted by maximum likelihood alone.",
+   "holdout_fit": "The coefficients are fitted on the observations before the last {n}; the forecast after the last observation applies them to the whole series.",
+   "se_missing": "Some standard errors could not be computed (the likelihood is flat there): an order too many?",
+   "gap": "{n} period has no value: the likelihood skips it; ADF, KPSS and the correlograms read the series without it.",
+   "gaps": "{n} periods have no value: the likelihood skips them; ADF, KPSS and the correlograms read the series without them.",
+   "future_dropped_one": "{n} row after the last value is left out: a future row needs every exogenous value, and the future rows must follow each other without a gap.",
+   "future_dropped": "{n} rows after the last value are left out: a future row needs every exogenous value, and the future rows must follow each other without a gap.",
+   "no_forecast": "No forecast: with exogenous columns the forecast covers the rows after the last value whose exogenous values are given, and there are none.",
+   "drift_dropped": "The drift is left out: with d + D = 2 the model has no drift.",
+   "not_converged": "The optimizer did not report convergence (code {code}): read the coefficients with care."
   }
  },
  "it": {
@@ -465,6 +477,18 @@
     "ljung_box_10": "Nei residui resta struttura: la ricerca non ha trovato un modello senza; provate stepwise = off, oppure alzate max_p e max_q.",
     "ljung_box_2s": "Nei residui resta struttura stagionale: provate stepwise = off, oppure alzate max_P e max_Q."
    }
+  },
+  "note_texts": {
+   "ml_only": "La somma condizionata dei quadrati non ha dato un punto di partenza per questi ordini: il modello è stato adattato con la sola massima verosimiglianza.",
+   "holdout_fit": "I coefficienti sono adattati sulle osservazioni prima delle ultime {n}; la previsione dopo l'ultima osservazione li applica a tutta la serie.",
+   "se_missing": "Alcuni errori standard non si sono potuti calcolare (lì la verosimiglianza è piatta): un ordine di troppo?",
+   "gap": "{n} periodo non ha valore: la verosimiglianza lo salta; ADF, KPSS e i correlogrammi leggono la serie senza di esso.",
+   "gaps": "{n} periodi non hanno valore: la verosimiglianza li salta; ADF, KPSS e i correlogrammi leggono la serie senza di essi.",
+   "future_dropped_one": "{n} riga dopo l'ultimo valore è esclusa: una riga futura ha bisogno di tutti i valori esogeni, e le righe future devono seguirsi senza buchi.",
+   "future_dropped": "{n} righe dopo l'ultimo valore sono escluse: una riga futura ha bisogno di tutti i valori esogeni, e le righe future devono seguirsi senza buchi.",
+   "no_forecast": "Nessuna previsione: con colonne esogene la previsione copre le righe dopo l'ultimo valore che hanno i valori esogeni, e non ce n'è nessuna.",
+   "drift_dropped": "Il drift è escluso: con d + D = 2 il modello non ha drift.",
+   "not_converged": "L'ottimizzatore non ha segnalato la convergenza (codice {code}): leggete i coefficienti con cautela."
   }
  },
  "de": {
@@ -699,6 +723,18 @@
     "ljung_box_10": "In den Residuen bleibt Struktur: Die Suche fand kein Modell ohne sie; versuchen Sie stepwise = off, oder erhöhen Sie max_p und max_q.",
     "ljung_box_2s": "In den Residuen bleibt saisonale Struktur: Versuchen Sie stepwise = off, oder erhöhen Sie max_P und max_Q."
    }
+  },
+  "note_texts": {
+   "ml_only": "Die bedingte Quadratsumme lieferte für diese Ordnungen keinen Startwert: Das Modell wurde allein nach Maximum Likelihood angepasst.",
+   "holdout_fit": "Die Koeffizienten sind auf den Beobachtungen vor den letzten {n} angepasst; die Prognose nach der letzten Beobachtung wendet sie auf die ganze Reihe an.",
+   "se_missing": "Einige Standardfehler ließen sich nicht berechnen (die Likelihood ist dort flach): eine Ordnung zu viel?",
+   "gap": "{n} Periode hat keinen Wert: Die Likelihood überspringt sie; ADF, KPSS und die Korrelogramme lesen die Reihe ohne sie.",
+   "gaps": "{n} Perioden haben keinen Wert: Die Likelihood überspringt sie; ADF, KPSS und die Korrelogramme lesen die Reihe ohne sie.",
+   "future_dropped_one": "{n} Zeile nach dem letzten Wert wird ausgelassen: Eine künftige Zeile braucht jeden exogenen Wert, und die künftigen Zeilen müssen lückenlos aufeinander folgen.",
+   "future_dropped": "{n} Zeilen nach dem letzten Wert werden ausgelassen: Eine künftige Zeile braucht jeden exogenen Wert, und die künftigen Zeilen müssen lückenlos aufeinander folgen.",
+   "no_forecast": "Keine Prognose: Mit exogenen Spalten deckt die Prognose die Zeilen nach dem letzten Wert ab, deren exogene Werte gegeben sind, und es gibt keine.",
+   "drift_dropped": "Der Drift wird ausgelassen: Mit d + D = 2 hat das Modell keinen Drift.",
+   "not_converged": "Der Optimierer meldete keine Konvergenz (Code {code}): Lesen Sie die Koeffizienten mit Vorsicht."
   }
  },
  "es": {
@@ -933,6 +969,18 @@
     "ljung_box_10": "Queda estructura en los residuos: la búsqueda no encontró un modelo sin ella; pruebe stepwise = off, o suba max_p y max_q.",
     "ljung_box_2s": "Queda estructura estacional en los residuos: pruebe stepwise = off, o suba max_P y max_Q."
    }
+  },
+  "note_texts": {
+   "ml_only": "La suma condicional de cuadrados no dio un punto de partida para estos órdenes: el modelo se ajustó solo por máxima verosimilitud.",
+   "holdout_fit": "Los coeficientes se ajustan con las observaciones anteriores a las últimas {n}; el pronóstico después de la última observación los aplica a toda la serie.",
+   "se_missing": "Algunos errores estándar no se pudieron calcular (la verosimilitud es plana allí): ¿un orden de más?",
+   "gap": "{n} período no tiene valor: la verosimilitud lo salta; ADF, KPSS y los correlogramas leen la serie sin él.",
+   "gaps": "{n} períodos no tienen valor: la verosimilitud los salta; ADF, KPSS y los correlogramas leen la serie sin ellos.",
+   "future_dropped_one": "{n} fila después del último valor queda fuera: una fila futura necesita todos los valores exógenos, y las filas futuras deben seguirse sin huecos.",
+   "future_dropped": "{n} filas después del último valor quedan fuera: una fila futura necesita todos los valores exógenos, y las filas futuras deben seguirse sin huecos.",
+   "no_forecast": "Sin pronóstico: con columnas exógenas el pronóstico cubre las filas después del último valor cuyos valores exógenos están dados, y no hay ninguna.",
+   "drift_dropped": "La deriva queda fuera: con d + D = 2 el modelo no tiene deriva.",
+   "not_converged": "El optimizador no informó de la convergencia (código {code}): lea los coeficientes con cautela."
   }
  },
  "fr": {
@@ -1167,6 +1215,18 @@
     "ljung_box_10": "Il reste de la structure dans les résidus : la recherche n'a pas trouvé de modèle sans elle ; essayez stepwise = off, ou augmentez max_p et max_q.",
     "ljung_box_2s": "Il reste de la structure saisonnière dans les résidus : essayez stepwise = off, ou augmentez max_P et max_Q."
    }
+  },
+  "note_texts": {
+   "ml_only": "La somme conditionnelle des carrés n'a pas donné de point de départ pour ces ordres : le modèle a été ajusté par le seul maximum de vraisemblance.",
+   "holdout_fit": "Les coefficients sont ajustés sur les observations avant les {n} dernières ; la prévision après la dernière observation les applique à toute la série.",
+   "se_missing": "Certaines erreurs types n'ont pas pu être calculées (la vraisemblance y est plate) : un ordre de trop ?",
+   "gap": "{n} période n'a pas de valeur : la vraisemblance la saute ; ADF, KPSS et les corrélogrammes lisent la série sans elle.",
+   "gaps": "{n} périodes n'ont pas de valeur : la vraisemblance les saute ; ADF, KPSS et les corrélogrammes lisent la série sans elles.",
+   "future_dropped_one": "{n} ligne après la dernière valeur est écartée : une ligne future a besoin de toutes les valeurs exogènes, et les lignes futures doivent se suivre sans trou.",
+   "future_dropped": "{n} lignes après la dernière valeur sont écartées : une ligne future a besoin de toutes les valeurs exogènes, et les lignes futures doivent se suivre sans trou.",
+   "no_forecast": "Pas de prévision : avec des colonnes exogènes la prévision couvre les lignes après la dernière valeur dont les valeurs exogènes sont données, et il n'y en a aucune.",
+   "drift_dropped": "La dérive est écartée : avec d + D = 2 le modèle n'a pas de dérive.",
+   "not_converged": "L'optimiseur n'a pas signalé la convergence (code {code}) : lisez les coefficients avec prudence."
   }
  }
 }

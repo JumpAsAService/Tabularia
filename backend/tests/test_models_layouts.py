@@ -797,3 +797,64 @@ def test_the_lr_checks_say_why_they_were_not_computed_and_the_measures_keep_no_h
     for test, ids in (("distribution_vs_gengamma", ("no_time", "time", "candidate", "not_converged", "below")),
                       ("constant_hazard", ("no_time", "time", "candidate", "not_converged", "below"))):
         assert all(f"{test}_{i}" in w["checks"][test]["not_computed"] for i in ids) and f"{test}_auto" in w["checks"][test]["advice"]
+
+
+# ── the report's lot D of the first bug hunt: notes as ids, units, numbers by their exponent, the pages ──────
+def _model_row(stat: str, text: str | None = None, value: float | None = None) -> dict:
+    return {"section": "model", "level": None, "level_2": None, "stat": stat, "value": value, "text": text, "x0": None,
+            "x1": None, "key": f"model|||{stat}"}
+
+
+# the ids the runners write as notes (kaplan_meier.R and cox.R: surv_note; arima.R: arima_note; linear.R: linear_note)
+NOTE_IDS = {
+    "kaplan_meier": {"stratum_no_events": "stratum=g=a", "median_not_reached": "stratum=g=a",
+                     "survival_not_estimated": "stratum=g=b%20c times=11,20.5 last=10", "curves_cross": "pairs=a%20×%20b,a%20×%20c"},
+    "cox": {"few_events": "epv=2.5 events=10 coefficients=4 least=10", "robust_se": "", "robust_se_cluster": "cluster=patient%2Cid",
+            "robust_start_rows": "", "interaction_vif": "", "not_converged": "", "monotone_likelihood": "",
+            "baseline_thinned": "times=1000"},
+    "arima": {"ml_only": "", "holdout_fit": "n=12", "se_missing": "", "gap": "n=1", "gaps": "n=3", "future_dropped_one": "n=1",
+              "future_dropped": "n=4", "no_forecast": "", "drift_dropped": "", "not_converged": "code=1"},
+    "linear": {"interaction_vif": "", "weights_unused": "weights=peso%2050%25", "wls": "", "zero_weight": "n=1",
+               "zero_weights": "n=3", "hac_order": "", "exact_fit": ""},
+}
+CASE_OF = {"kaplan_meier": "kaplan_meier-default", "cox": "cox-default", "arima": "arima-manual", "linear": "linear-unpenalized"}
+
+
+@pytest.mark.parametrize("locale", LOCALES)
+@pytest.mark.parametrize("model", sorted(NOTE_IDS))
+def test_every_note_a_runner_sends_as_an_id_is_a_sentence_of_the_page_s_language(model, locale):
+    """Kaplan–Meier's, Cox's, ARIMA's and the linear model's notes are «@id name=value …»: each id has its sentence in
+    the five languages, every value in its place, decoded (%20, %25, %2C) and with the language's decimal."""
+    _, params, rows = fixture(CASE_OF[model])
+    notes = [_model_row(f"note_{i}", f"@{note} {values}".strip()) for i, (note, values) in enumerate(NOTE_IDS[model].items(), 1)]
+    said = [r["text"] for r in layouts.with_labels(model, params, rows + notes, locale) if r["stat"] in {n["stat"] for n in notes}]
+    w = common.words(model, catalog.variant(model, catalog.check_params(model, params)), locale)
+    assert set(w["note_texts"]) == set(NOTE_IDS[model])
+    decimal = formats.locale(locale).decimal
+    for text in said:
+        assert "@" not in text and "{" not in text and "%2" not in text, text
+    joined = " ".join(said)
+    if model == "kaplan_meier":
+        assert "g=b c" in joined and f"11, 20{decimal}5" in joined and "a × b, a × c" in joined
+    if model == "cox":
+        assert f"2{decimal}5" in joined and "«patient,id»" in joined
+    if model == "linear":
+        assert "«peso 50%»" in joined
+
+
+@pytest.mark.parametrize("locale", LOCALES)
+def test_kaplan_meier_s_and_cox_s_checks_not_computed_say_why_in_the_page_s_language(locale):
+    """The runners' reason for a check not computed is English (and R's error): the page says its own sentence."""
+    for model, check, level_2 in (("kaplan_meier", "proportional_hazards", None), ("cox", "schoenfeld", "load"),
+                                  ("cox", "schoenfeld_global", None), ("cox", "martingale_form", "load"), ("cox", "dfbeta", "load"),
+                                  ("cox", "vif", "load")):
+        _, params, rows = fixture(CASE_OF[model])
+        base = {"section": "assumption", "level": check, "level_2": level_2, "value": None, "x0": None, "x1": None}
+        rows = [r for r in rows if not (r["section"] == "assumption" and r["level"] == check and r["level_2"] == level_2)] + [
+            {**base, "stat": "verdict", "text": "not_computed"},
+            {**base, "stat": "advice", "text": "It could not be computed on these rows: Error in fitter(X, Y): NA/NaN/Inf"}]
+        w = common.words(model, "default", locale)
+        [said] = [r["text"] for r in layouts.with_labels(model, params, rows, locale)
+                  if r["level"] == check and r["level_2"] == level_2 and r["stat"] == "advice"]
+        assert said == w["checks"][check]["not_computed"], (model, check)
+

@@ -91,6 +91,15 @@
     "h0": "No studentized residual is larger than chance allows.",
     "advice": "Look at the rows named: an outlier pulls the fit towards itself."
    }
+  },
+  "note_texts": {
+   "interaction_vif": "The terms of an interaction are correlated with their parts by construction: their VIFs are large for that reason; centre the predictors to read them.",
+   "weights_unused": "The weights «{weights}» are not used with ordinary least squares: choose estimation = wls to use them.",
+   "wls": "Weighted least squares: the normality checks, the tests of independence and the charts read the weighted residuals (√w × residual); the RESET is the F test of the weighted fit.",
+   "zero_weight": "{n} row has weight 0 and was left out of the fit.",
+   "zero_weights": "{n} rows have weight 0 and were left out of the fit.",
+   "hac_order": "The HAC standard errors read the rows in the order they reached the node: choose order_by to make that order explicit.",
+   "exact_fit": "The model fits the rows exactly (σ is 0): a predictor repeats the outcome, or there are as many terms as rows; the tests mean nothing here."
   }
  },
  "it": {
@@ -185,6 +194,15 @@
     "h0": "Nessun residuo studentizzato è più grande di quanto il caso consenta.",
     "advice": "Guardate le righe indicate: un valore anomalo tira la stima verso di sé."
    }
+  },
+  "note_texts": {
+   "interaction_vif": "I termini di un'interazione sono correlati per costruzione con le loro parti: per questo i loro VIF sono grandi; centrate i predittori per leggerli.",
+   "weights_unused": "I pesi «{weights}» non sono usati con i minimi quadrati ordinari: scegliete estimation = wls per usarli.",
+   "wls": "Minimi quadrati pesati: le verifiche di normalità, i test di indipendenza e i grafici leggono i residui pesati (√w × residuo); il RESET è il test F dell'adattamento pesato.",
+   "zero_weight": "{n} riga ha peso 0 ed è stata esclusa dalla stima.",
+   "zero_weights": "{n} righe hanno peso 0 e sono state escluse dalla stima.",
+   "hac_order": "Gli errori standard HAC leggono le righe nell'ordine in cui sono arrivate al nodo: scegliete order_by per rendere esplicito quell'ordine.",
+   "exact_fit": "Il modello riproduce esattamente le righe (σ è 0): un predittore ripete la risposta, o ci sono tanti termini quante righe; qui i test non significano nulla."
   }
  },
  "de": {
@@ -279,6 +297,15 @@
     "h0": "Kein studentisiertes Residuum ist größer, als der Zufall erlaubt.",
     "advice": "Prüfen Sie die genannten Zeilen: Ein Ausreißer zieht die Anpassung zu sich."
    }
+  },
+  "note_texts": {
+   "interaction_vif": "Die Terme einer Wechselwirkung sind konstruktionsbedingt mit ihren Teilen korreliert: Deshalb sind ihre VIFs groß; zentrieren Sie die Prädiktoren, um sie zu lesen.",
+   "weights_unused": "Die Gewichte «{weights}» werden bei gewöhnlichen kleinsten Quadraten nicht verwendet: Wählen Sie estimation = wls, um sie zu verwenden.",
+   "wls": "Gewichtete kleinste Quadrate: Die Normalitätsprüfungen, die Unabhängigkeitstests und die Grafiken lesen die gewichteten Residuen (√w × Residuum); der RESET ist der F-Test der gewichteten Anpassung.",
+   "zero_weight": "{n} Zeile hat das Gewicht 0 und wurde von der Schätzung ausgeschlossen.",
+   "zero_weights": "{n} Zeilen haben das Gewicht 0 und wurden von der Schätzung ausgeschlossen.",
+   "hac_order": "Die HAC-Standardfehler lesen die Zeilen in der Reihenfolge, in der sie den Knoten erreicht haben: Wählen Sie order_by, um diese Reihenfolge festzulegen.",
+   "exact_fit": "Das Modell gibt die Zeilen exakt wieder (σ ist 0): Ein Prädiktor wiederholt die Zielgröße, oder es gibt so viele Terme wie Zeilen; die Tests bedeuten hier nichts."
   }
  },
  "es": {
@@ -373,6 +400,15 @@
     "h0": "Ningún residuo estudentizado es mayor de lo que permite el azar.",
     "advice": "Revise las filas indicadas: un atípico atrae el ajuste hacia sí."
    }
+  },
+  "note_texts": {
+   "interaction_vif": "Los términos de una interacción están correlacionados con sus partes por construcción: por eso sus VIF son grandes; centre los predictores para leerlos.",
+   "weights_unused": "Los pesos «{weights}» no se usan con mínimos cuadrados ordinarios: elija estimation = wls para usarlos.",
+   "wls": "Mínimos cuadrados ponderados: las comprobaciones de normalidad, las pruebas de independencia y los gráficos leen los residuos ponderados (√w × residuo); el RESET es la prueba F del ajuste ponderado.",
+   "zero_weight": "{n} fila tiene peso 0 y se excluyó de la estimación.",
+   "zero_weights": "{n} filas tienen peso 0 y se excluyeron de la estimación.",
+   "hac_order": "Los errores estándar HAC leen las filas en el orden en que llegaron al nodo: elija order_by para hacer explícito ese orden.",
+   "exact_fit": "El modelo reproduce exactamente las filas (σ es 0): un predictor repite la respuesta, o hay tantos términos como filas; aquí las pruebas no significan nada."
   }
  },
  "fr": {
@@ -467,6 +503,15 @@
     "h0": "Aucun résidu studentisé n'est plus grand que le hasard ne le permet.",
     "advice": "Examinez les lignes indiquées : une valeur aberrante attire l'ajustement vers elle."
    }
+  },
+  "note_texts": {
+   "interaction_vif": "Les termes d'une interaction sont corrélés à leurs parties par construction : leurs VIF sont grands pour cette raison ; centrez les prédicteurs pour les lire.",
+   "weights_unused": "Les poids «{weights}» ne sont pas utilisés avec les moindres carrés ordinaires : choisissez estimation = wls pour les utiliser.",
+   "wls": "Moindres carrés pondérés : les vérifications de normalité, les tests d'indépendance et les graphiques lisent les résidus pondérés (√w × résidu) ; le RESET est le test F de l'ajustement pondéré.",
+   "zero_weight": "{n} ligne a un poids de 0 et a été exclue de l'estimation.",
+   "zero_weights": "{n} lignes ont un poids de 0 et ont été exclues de l'estimation.",
+   "hac_order": "Les erreurs types HAC lisent les lignes dans l'ordre où elles ont atteint le nœud : choisissez order_by pour rendre cet ordre explicite.",
+   "exact_fit": "Le modèle reproduit exactement les lignes (σ vaut 0) : un prédicteur répète la réponse, ou il y a autant de termes que de lignes ; les tests ne veulent rien dire ici."
   }
  }
 }

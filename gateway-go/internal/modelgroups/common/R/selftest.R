@@ -52,11 +52,6 @@ tab_selftest <- function(group, routes, code = tab_code_dir()) {
   if (counts[["failed"]] > 0L) TAB_EXIT_SELFTEST_FAILED else TAB_EXIT_OK
 }
 
-# The groups whose reference cards do not match card.schema.json yet, so not checked against it:
-# timeseries, whose arima.coefficients is an array (tab_finite drops the names) where the schema
-# says an object by name. To be removed with that fix.
-TAB_CARD_SCHEMA_PENDING <- c("timeseries")
-
 # One reference case: fitted in this process on its CSV, compared value by value.
 tab_reference_case <- function(case, routes, code, group) {
   df <- tab_read_csv(file.path(code, "reference", case$data), case$types)
@@ -81,7 +76,7 @@ tab_reference_case <- function(case, routes, code, group) {
   problems <- tab_check_declared(df, case$model, task$variant)
   if (length(problems)) stop(problems[[1L]])
   # the card as model.json holds it, against the schema MLflow and Predict read it by
-  if (!is.null(outcome$card) && !group %in% TAB_CARD_SCHEMA_PENDING) {
+  if (!is.null(outcome$card)) {
     back <- jsonlite::fromJSON(tab_card_text(outcome$card), simplifyVector = FALSE)
     problems <- tab_schema_problems(back, jsonlite::fromJSON(file.path(code, "card.schema.json"), simplifyVector = FALSE))
     if (length(problems)) stop("the card does not match card.schema.json: ", problems[[1L]])
