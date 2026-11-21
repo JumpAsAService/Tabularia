@@ -1568,6 +1568,104 @@ func TestRechecksThatNeverRunStopAndTheVersionServesOn(t *testing.T) {
 	}
 }
 
+// A recheck started by a gateway of another runner (R2), followed by this one (R1, the release
+// rolled back to, which had already self-tested the image): whatever R2's code found, the version
+// stays ready and self-tested with R1, no attempt is counted, and nothing runs again.
+func TestARecheckOfAnotherRunnerIsNotJudgedByThisOne(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		end  func(k *fakeKube, job string)
+	}{
+		{"its values differ", func(k *fakeKube, job string) { k.end(job, false, 4, selftestLog(notPassed)) }},
+		{"it passed", func(k *fakeKube, job string) { k.end(job, true, 0, selftestLog(passed)) }},
+		{"it did not run", func(k *fakeKube, job string) { k.end(job, false, 0, "") }},
+		{"its Job is gone", func(k *fakeKube, job string) { k.remove("scripts", job) }},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			f := newModelsFixture(t)
+			f.enable(f.admin, "survival")
+			f.buildTo(t, "survival", true)
+			b := f.builds()
+			recheck := fmt.Sprintf("tabularia-recheck-e%d-v1", f.envOf("survival"))
+			g, _ := modelgroups.Get("survival")
+			if _, err := f.db.Exec(f.ctx, `UPDATE script_environment_versions SET runner_hash = 'of-the-old-runner'`); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := b.oneRound(f.ctx); err != nil || f.kube.job("scripts", recheck) == nil {
+				t.Fatalf("no recheck: %v", err)
+			}
+			// R2 started it; the gateway now following it is R1, with which the image passed
+			if _, err := f.db.Exec(f.ctx, `UPDATE script_environment_versions SET runner_hash = $1, recheck_runner = 'R2'`, g.RunnerHash); err != nil {
+				t.Fatal(err)
+			}
+			// while it runs, it is left to its end
+			if _, err := b.oneRound(f.ctx); err != nil || f.kube.job("scripts", recheck) == nil {
+				t.Fatalf("a running Job of another runner was not left alone: %v", err)
+			}
+			c.end(f.kube, recheck)
+			if _, err := b.oneRound(f.ctx); err != nil {
+				t.Fatal(err)
+			}
+			v := f.versions("survival")[0]
+			if v.Status != "ready" || v.Error != nil || v.JobName != nil || deref(v.RunnerHash) != g.RunnerHash || v.RecheckRunner != nil ||
+				v.RecheckAttempts != 0 || v.RecheckError != nil || v.RecheckAfter != nil {
+				t.Fatalf("the version: %s %q runner %q recheck %q attempts %d why %q", v.Status, deref(v.Error), deref(v.RunnerHash),
+					deref(v.RecheckRunner), v.RecheckAttempts, deref(v.RecheckError))
+			}
+			if _, err := ReadyModelGroupImage(f.ctx, f.db, "survival"); err != nil {
+				t.Fatalf("the group stopped: %v", err)
+			}
+			if f.kube.job("scripts", recheck) != nil {
+				t.Error("the Job is still there, or a recheck started for a runner the image already passed")
+			}
+			if _, err := b.oneRound(f.ctx); err != nil || f.kube.job("scripts", recheck) != nil {
+				t.Errorf("run again: %v", err)
+			}
+			if d := answerOf(t, f.call(f.admin, "GET", "survival", "", "", false, mgDetail)).Group; d.State != "ready" || d.Versions[0].Recheck != "" {
+				t.Errorf("the card: %s %q", d.State, d.Versions[0].Recheck)
+			}
+		})
+	}
+}
+
+// R1 → R2 → R3: R2's recheck passes, but this gateway is R3. The image is not recorded as passed
+// with R3 (it never ran R3's code): R3's own recheck starts at once, and its pass is recorded.
+func TestAPassOfAnotherRunnerStartsThisRunnersRecheck(t *testing.T) {
+	f := newModelsFixture(t)
+	f.enable(f.admin, "survival")
+	f.buildTo(t, "survival", true)
+	b := f.builds()
+	recheck := fmt.Sprintf("tabularia-recheck-e%d-v1", f.envOf("survival"))
+	g, _ := modelgroups.Get("survival")
+	if _, err := f.db.Exec(f.ctx, `UPDATE script_environment_versions SET runner_hash = 'R1'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.oneRound(f.ctx); err != nil || f.kube.job("scripts", recheck) == nil {
+		t.Fatalf("no recheck: %v", err)
+	}
+	if _, err := f.db.Exec(f.ctx, `UPDATE script_environment_versions SET recheck_runner = 'R2', recheck_attempts = 2`); err != nil {
+		t.Fatal(err)
+	}
+	f.kube.end(recheck, true, 0, selftestLog(passed))
+	if _, err := b.oneRound(f.ctx); err != nil {
+		t.Fatal(err)
+	}
+	v := f.versions("survival")[0]
+	if v.Status != "ready" || deref(v.RunnerHash) != "R1" || deref(v.RecheckRunner) != g.RunnerHash || v.RecheckAttempts != 0 {
+		t.Fatalf("the version: %s runner %q recheck %q attempts %d", v.Status, deref(v.RunnerHash), deref(v.RecheckRunner), v.RecheckAttempts)
+	}
+	if f.kube.job("scripts", recheck) == nil {
+		t.Fatal("no recheck with this runner")
+	}
+	f.kube.end(recheck, true, 0, selftestLog(passed))
+	if _, err := b.oneRound(f.ctx); err != nil {
+		t.Fatal(err)
+	}
+	if v := f.versions("survival")[0]; deref(v.RunnerHash) != g.RunnerHash || v.RecheckRunner != nil || v.JobName != nil {
+		t.Errorf("this runner's pass: runner %q recheck %q", deref(v.RunnerHash), deref(v.RecheckRunner))
+	}
+}
+
 func TestNoSelftestAgainWhileAVersionIsBeingBuilt(t *testing.T) {
 	f := newModelsFixture(t)
 	f.enable(f.admin, "survival")

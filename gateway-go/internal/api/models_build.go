@@ -406,13 +406,29 @@ func (b *scriptBuilds) advanceRecheck(ctx context.Context, tx pgx.Tx, v *sbVersi
 
 // followRecheck is one look at a recheck's Job: "" while it runs or once it reported (the version
 // written), else why it did not run to a report.
+//
+// The Job runs the code of the runner it was started for (recheck_runner), which may not be this
+// gateway's: a `helm rollback` to the release that had already self-tested the image, a later
+// upgrade while the recheck ran, or the two replicas of a rolling upgrade taking turns on the loop's
+// lock. Its result says nothing of this runner: it is not judged here (no version failed for values
+// another runner's code found, no runner recorded that never ran on the image) nor counted as an
+// attempt; the Job is left to end, then discarded, and recheckRunners starts this runner's own
+// recheck if the version was not self-tested with it.
 func (b *scriptBuilds) followRecheck(ctx context.Context, tx pgx.Tx, v *sbVersion, g modelgroups.Group, name string) (string, error) {
 	k, ns := kubeAPI(), b.s.Scripts.Namespace
+	var started *string
+	if err := tx.QueryRow(ctx, `SELECT recheck_runner FROM script_environment_versions WHERE id = $1`, v.ID).Scan(&started); err != nil {
+		return "", err
+	}
+	ours := started != nil && *started == g.RunnerHash
 	job, err := kube.GetJob(ctx, k, ns, name)
 	if err != nil {
 		return "", err
 	}
 	if job == nil {
+		if !ours {
+			return "", b.discardRecheck(ctx, tx, v, g, started)
+		}
 		return "its Job is no longer in the cluster", nil
 	}
 	outcome := kube.JobOutcome(job)
@@ -436,7 +452,16 @@ func (b *scriptBuilds) followRecheck(ctx context.Context, tx pgx.Tx, v *sbVersio
 		if err := kube.DeleteJob(ctx, k, ns, name); err != nil {
 			return "", err
 		}
+		if !ours {
+			return "", b.discardRecheck(ctx, tx, v, g, started)
+		}
 		return "it cannot start: " + why, nil
+	}
+	if !ours { // ended: what it found is of another runner
+		if err := kube.DeleteJob(ctx, k, ns, name); err != nil {
+			return "", err
+		}
+		return "", b.discardRecheck(ctx, tx, v, g, started)
 	}
 	log, exitCode, _, err := kube.JobResult(ctx, k, ns, name, 8<<20)
 	var unavailable *kube.LogUnavailable
@@ -458,8 +483,9 @@ func (b *scriptBuilds) followRecheck(ctx context.Context, tx pgx.Tx, v *sbVersio
 		return "", nil
 	case ran && found && outcome == "succeeded":
 		b.finishManagedCheck(v, nil, outcome, "", log, exitCode)
+		// the runner the Job ran (ours, so this gateway's)
 		if _, err := tx.Exec(ctx, `UPDATE script_environment_versions SET runner_hash = $2, recheck_runner = NULL, recheck_attempts = 0,
-			recheck_after = NULL, recheck_error = NULL WHERE id = $1`, v.ID, g.RunnerHash); err != nil {
+			recheck_after = NULL, recheck_error = NULL WHERE id = $1`, v.ID, *started); err != nil {
 			return "", err
 		}
 		b.log.Info(fmt.Sprintf("models: the group %s passed its self-test again with the new runner (version %d)", g.ID, v.Number))
@@ -481,6 +507,20 @@ func (b *scriptBuilds) followRecheck(ctx context.Context, tx pgx.Tx, v *sbVersio
 		return "the self-test ended without its report" + how, nil
 	}
 	return "the self-test passed, but its Job failed" + how, nil
+}
+
+// discardRecheck forgets a recheck started for another runner (started) than this gateway's,
+// its Job gone: not an attempt of this runner, and the version keeps what it was self-tested with.
+// The same round's recheckRunners starts this runner's recheck when the version needs one.
+func (b *scriptBuilds) discardRecheck(ctx context.Context, tx pgx.Tx, v *sbVersion, g modelgroups.Group, started *string) error {
+	v.JobName = nil
+	if _, err := tx.Exec(ctx, `UPDATE script_environment_versions SET recheck_runner = NULL, recheck_attempts = 0, recheck_after = NULL,
+		recheck_error = NULL WHERE id = $1`, v.ID); err != nil {
+		return err
+	}
+	b.log.Info(fmt.Sprintf("models: the self-test of the group %s (version %d) was started for another runner (%s) than this Tabularia's: "+
+		"its result is not used", g.ID, v.Number, deref(started)))
+	return nil
 }
 
 // recheckLater records a recheck of the version in use that did not run to a report: the version
