@@ -206,6 +206,21 @@ function referenceOptions(f: ModelField, column: string) {
   }
   return [{ value: '', label: t('models.form.firstLevel', { level: labels[0] ?? '…' }) }, ...options]
 }
+// ── one of the choices for each column of another key (the direction of each secondary metric) ──
+// «As the primary» (nothing saved for the column) or one of the choices; the columns are those the key `of` holds now.
+const choiceColumns = (f: ModelField): string[] => (Array.isArray(params.value[f.of ?? '']) ? params.value[f.of ?? ''] : [])
+function columnChoiceOptions(f: ModelField) {
+  const primary = params.value.higher_is_better === false ? 'lower' : 'higher'
+  return [{ value: '', label: t('models.form.likePrimary', { direction: choiceLabel(f, primary) }) },
+    ...f.choices.map((c) => ({ value: c, label: choiceLabel(f, c) }))]
+}
+function setColumnChoice(f: ModelField, column: string, choice: unknown) {
+  const next: Record<string, unknown> = { ...(params.value[f.key] ?? {}) }
+  if (typeof choice === 'string' && choice) next[column] = choice
+  else delete next[column]
+  set(f.key, next)
+}
+
 function setReference(f: ModelField, column: string, level: unknown) {
   const next: Record<string, unknown> = { ...(params.value[f.key] ?? {}) }
   if (typeof level === 'string' && level) next[column] = level
@@ -537,6 +552,21 @@ function limit(key: 'timeoutSeconds' | 'retries', raw: string, min: number, max:
         </button>
         <p v-if="pairChoices(f).length < 2" class="hint">{{ $t('models.form.pairsNeedPredictors') }}</p>
         <p v-else-if="hintOf(f)" class="hint">{{ hintOf(f) }}</p>
+      </fieldset>
+
+      <!-- one of the choices for each column of another key: the direction of each secondary metric -->
+      <fieldset v-else-if="f.control === 'column_choices'" v-show="choiceColumns(f).length" class="field choices">
+        <legend class="lbl">{{ labelOf(f) }}</legend>
+        <div v-for="c in choiceColumns(f)" :key="c" class="place">
+          <span class="sharel" :title="c">{{ c }}</span>
+          <Select
+            :model-value="(params[f.key] ?? {})[c] ?? ''"
+            :options="columnChoiceOptions(f)"
+            :aria-label="`${labelOf(f)}: ${c}`"
+            @update:model-value="(v: any) => setColumnChoice(f, c, v)"
+          />
+        </div>
+        <p v-if="hintOf(f)" class="hint">{{ hintOf(f) }}</p>
       </fieldset>
 
       <!-- a weight for each value of a column, or all equal -->

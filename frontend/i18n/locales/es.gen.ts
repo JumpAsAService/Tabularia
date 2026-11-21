@@ -6802,6 +6802,7 @@ export default {
       "sequential": "Lectura secuencial",
       "sequential_tau": "Escala de la mezcla secuencial",
       "secondary_metrics": "Métricas secundarias",
+      "secondary_directions": "Dirección de cada métrica secundaria",
       "solve_for": "Calcular",
       "units_per_variant": "Unidades por variante",
       "days": "Días",
@@ -6930,6 +6931,7 @@ export default {
       "sequential": "Valores p siempre válidos y secuencias de confianza. Actívalo si el experimento sigue en marcha o miraste los resultados antes del final previsto, y lee su decisión.",
       "sequential_tau": "El tamaño de los aumentos relativos que esperas: 0,05 es el 5 %. Cualquier valor mantiene la garantía contra las falsas alarmas. Uno pequeño sirve para efectos de pocos puntos, pero con pocos datos se queda mudo incluso ante efectos grandes: para cambios grandes súbelo. Por encima de 0.",
       "secondary_metrics": "Otras métricas, informadas y corregidas entre sí. Como máximo 10, cada una una columna verdadero/falso, entera o numérica.",
+      "secondary_directions": "Para cada métrica secundaria, si es mejor un valor más alto o más bajo: la latencia, las devoluciones, las bajas son mejores bajas. Sin elegir: como la métrica principal. «Peor» y «mejor» leen cada métrica en su propia dirección.",
       "solve_for": "Qué se calcula: las unidades y los días necesarios para detectar el aumento, o el aumento detectable con las unidades o los días de que dispones.",
       "units_per_variant": "Las unidades que tendrá cada variante: un número entero, 2 o más.",
       "days": "Cuántos días dura el experimento: un número entero de 1 a 3650. Necesita la columna de fecha.",
@@ -6938,6 +6940,8 @@ export default {
       "traffic_share": "La parte de todas las unidades nuevas que entra en el experimento: por encima de 0, hasta 1. Alarga la duración."
     },
     "choice": {
+      "higher": "Más alto es mejor",
+      "lower": "Más bajo es mejor",
       "stl": "STL",
       "mstl": "MSTL",
       "emd": "EMD",
@@ -7112,6 +7116,7 @@ export default {
       "valuesOf": "Valores de «{column}»",
       "levelsFailed": "No se pudieron leer los valores de la columna: escribe el valor.",
       "firstLevel": "Automático: el primero, {level}",
+      "likePrimary": "Como la principal: {direction}",
       "first": "primer predictor",
       "second": "segundo predictor",
       "addPair": "Añadir una interacción",

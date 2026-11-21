@@ -33,7 +33,8 @@ numpy's `inverted_cdf` quantile, which is R's type 1); then
     power at this size, MDE      a transcription with scipy.stats.norm                             1e-9
 
 Lot E8 (the secondary metrics), per case that names some: each metric's units with pandas, Welch's t (SciPy) or the
-Wald z (statsmodels), Fieller, one multipletests over every metric × treatment, the decision, the detectable lift;
+Wald z (statsmodels), Fieller, one multipletests over every metric × treatment, the decision in each metric's own
+direction, the detectable lift;
 the same case's primary keys by witness_comparisons above (they are E2's, computed without the secondary metrics).
 
 Lot E4 (the sequential test), per case seq_* (make_reference_sequential.R): every look from the raw rows (the
@@ -923,9 +924,12 @@ def witness_secondary(case: dict[str, Any]) -> None:
         check(cid, key + "lift_ci_low", flo, want.get(key + "lift_ci_low"), 1e-10, "Fieller, transcription")
         check(cid, key + "lift_ci_high", fhi, want.get(key + "lift_ci_high"), 1e-10, "Fieller, transcription")
         check(cid, key + "mde", (za + float(stats.norm.ppf(p["power"]))) * se / abs(mc), want.get(key + "mde"), 1e-9, f"transcription at alpha / {M}")
-        dec = ("better" if (mt > mc) == bool(p["higher_is_better"]) else "worse") if a < p["alpha"] else "not_significant"
-        said.append(("ok" if dec == want.get(key + "decision") else "DIFF", cid, key + "decision [the adjusted p against alpha]", dec,
-                     want.get(key + "decision"), 0))
+        # each metric in its own direction (secondary_directions), the primary's where none is given
+        own = (p.get("secondary_directions") or {}).get(r["col"])
+        higher = bool(p["higher_is_better"]) if own is None else own == "higher"
+        dec = ("better" if (mt > mc) == higher else "worse") if a < p["alpha"] else "not_significant"
+        said.append(("ok" if dec == want.get(key + "decision") else "DIFF", cid, key + "decision [the adjusted p against alpha, in its direction]",
+                     dec, want.get(key + "decision"), 0))
 
 
 def main(argv: list[str]) -> int:

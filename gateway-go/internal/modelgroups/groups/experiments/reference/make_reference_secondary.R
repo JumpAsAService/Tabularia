@@ -9,7 +9,9 @@
 # primary. make_witness.py's witness_secondary recomputes the secondary keys with SciPy and statsmodels.
 #
 # Table: secondary.csv (360 users of three arms in 1 or 2 rows each, two of them in two arms; a conversion, a
-# revenue with empty values, a bounce as true/false, the pages seen; B lowers the revenue).
+# revenue with empty values, a bounce as true/false, the pages seen; B lowers the revenue, C bounces more). Each
+# metric is read in its own direction (`secondary_directions`, the primary's where none is given): the bounce, lower
+# is better, comes out worse for C beside a primary where higher is better.
 
 make_data_e8 <- function() {
   set.seed(20261181)
@@ -23,7 +25,7 @@ make_data_e8 <- function() {
   revenue <- round(stats::rgamma(m, 3, 3 / c(A = 45, B = 30, C = 46)[vr]), 1)
   revenue[stats::runif(m) < 0.08] <- NA
   write_table(data.frame(unit = rows, variant = vr, converted = conv, revenue = revenue,
-                         bounced = as.integer(stats::runif(m) < 0.4), pages = 1L + stats::rpois(m, c(A = 3, B = 3, C = 3.6)[vr])),
+                         bounced = as.integer(stats::runif(m) < c(A = 0.35, B = 0.35, C = 0.6)[vr]), pages = 1L + stats::rpois(m, c(A = 3, B = 3, C = 3.6)[vr])),
               "secondary.csv")
 }
 if ("--data" %in% args || !file.exists(file.path(data_dir, "secondary.csv"))) make_data_e8()
@@ -47,9 +49,10 @@ sec_units <- function(raw, p, col, labels, binary) {
   list(g = unname(g), y = unname(y))
 }
 
-sec_case <- function(id, data, types, params, secondary, note = NULL) {
+sec_case <- function(id, data, types, params, secondary, directions = list(), note = NULL) {
   p <- utils::modifyList(DEFAULTS, params)
-  case <- ab_case(id, data, types, c(params, list(secondary_metrics = as.list(secondary))), note)
+  extra <- c(list(secondary_metrics = as.list(secondary)), if (length(directions)) list(secondary_directions = directions))
+  case <- ab_case(id, data, types, c(params, extra), note)
   raw <- read_table(data, types)
   labels <- labels_of(raw[[p[["variant"]]]])
   k <- length(labels)
@@ -116,9 +119,11 @@ sec_case <- function(id, data, types, params, secondary, note = NULL) {
     num(key("mean_control"), x$m[[ci]])
     txt(key("significance"), stars(pv[[i]]))
     txt(key("p_adjusted_significance"), stars(padj[[i]]))
-    dec <- if (padj[[i]] < p[["alpha"]]) (if ((d > 0) == isTRUE(p[["higher_is_better"]])) "better" else "worse") else "not_significant"
+    higher <- if (is.null(directions[[x$col]])) isTRUE(p[["higher_is_better"]]) else directions[[x$col]] == "higher"
+    dec <- if (padj[[i]] < p[["alpha"]]) (if ((d > 0) == higher) "better" else "worse") else "not_significant"
     txt(key("decision"), dec)
     txt(key("metric_type"), if (x$binary) "binary" else "continuous")
+    txt(key("direction"), if (higher) "higher" else "lower")
     if (dec == "worse") worse[[length(worse) + 1L]] <- padj[[i]]
   }
   case$expect <- c(case$expect, ex)
@@ -152,9 +157,9 @@ sec_case <- function(id, data, types, params, secondary, note = NULL) {
 off <- list(bayes = FALSE, sequential = FALSE)
 add_case(sec_case("secondary_three", "secondary.csv", SECONDARY_TYPES,
                   c(list(variant = "variant", control = "A", metric_type = "binary", metric = "converted", unit = "unit"), off),
-                  c("revenue", "bounced", "pages"),
-                  note = "three secondary metrics (a number with empty values, a true/false, a whole number), Holm over 6; the primary's keys are E2's"))
+                  c("revenue", "bounced", "pages"), list(bounced = "lower"),
+                  note = "three secondary metrics (a number with empty values, a true/false lower is better, a whole number), Holm over 6; the primary's keys are E2's"))
 add_case(sec_case("secondary_rows_bonferroni", "secondary.csv", SECONDARY_TYPES,
                   c(list(variant = "variant", control = "A", metric_type = "continuous", metric = "pages", correction = "bonferroni"), off),
-                  c("converted", "bounced", "revenue"),
-                  note = "one row per unit, a 0/1 number is a mean, Bonferroni's intervals at alpha / 6"))
+                  c("converted", "bounced", "revenue"), list(revenue = "lower", converted = "higher"),
+                  note = "one row per unit, a 0/1 number is a mean, Bonferroni's intervals at alpha / 6; a fall of the revenue read as better"))

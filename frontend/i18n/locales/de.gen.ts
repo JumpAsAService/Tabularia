@@ -6802,6 +6802,7 @@ export default {
       "sequential": "Sequenzielle Auswertung",
       "sequential_tau": "Skala der sequenziellen Mischung",
       "secondary_metrics": "Sekundäre Kennzahlen",
+      "secondary_directions": "Richtung jeder sekundären Kennzahl",
       "solve_for": "Berechnen",
       "units_per_variant": "Einheiten je Variante",
       "days": "Tage",
@@ -6930,6 +6931,7 @@ export default {
       "sequential": "Jederzeit gültige p-Werte und Konfidenzsequenzen. Einschalten, wenn das Experiment noch läuft oder Sie die Ergebnisse vor dem geplanten Ende angesehen haben, und dessen Entscheidung lesen.",
       "sequential_tau": "Die Größe der relativen Anstiege, die Sie erwarten: 0,05 sind 5 %. Jeder Wert hält die Garantie gegen Fehlalarme. Ein kleiner passt zu Effekten von wenigen Punkten, bleibt bei einem kleinen Experiment aber auch bei großen Effekten stumm; für große Änderungen erhöhen Sie ihn. Über 0.",
       "secondary_metrics": "Weitere Kennzahlen, die untereinander berichtet und korrigiert werden. Höchstens 10, jede eine Spalte wahr/falsch, ganzzahlig oder numerisch.",
+      "secondary_directions": "Für jede sekundäre Kennzahl, ob ein höherer oder ein niedrigerer Wert besser ist: Latenz, Rücksendungen, Kündigungen sind niedriger besser. Nicht gewählt: wie die primäre Kennzahl. «Schlechter» und «besser» lesen jede Kennzahl in ihrer eigenen Richtung.",
       "solve_for": "Was berechnet wird: die Einheiten und Tage, die zum Erkennen des Anstiegs nötig sind, oder der mit den vorhandenen Einheiten oder Tagen erkennbare Anstieg.",
       "units_per_variant": "Die Einheiten, die jede Variante haben wird: eine ganze Zahl, 2 oder mehr.",
       "days": "Wie viele Tage das Experiment läuft: eine ganze Zahl von 1 bis 3650. Es braucht die Datumsspalte.",
@@ -6938,6 +6940,8 @@ export default {
       "traffic_share": "Der Anteil aller neuen Einheiten, die ins Experiment gehen: über 0, bis 1. Er verlängert die Dauer."
     },
     "choice": {
+      "higher": "Höher ist besser",
+      "lower": "Niedriger ist besser",
       "stl": "STL",
       "mstl": "MSTL",
       "emd": "EMD",
@@ -7112,6 +7116,7 @@ export default {
       "valuesOf": "Werte von «{column}»",
       "levelsFailed": "Die Werte der Spalte konnten nicht gelesen werden: schreiben Sie den Wert.",
       "firstLevel": "Automatisch: der erste, {level}",
+      "likePrimary": "Wie die primäre: {direction}",
       "first": "erster Prädiktor",
       "second": "zweiter Prädiktor",
       "addPair": "Wechselwirkung hinzufügen",

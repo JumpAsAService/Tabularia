@@ -166,7 +166,8 @@
    "correction_one": "With one treatment there is a single comparison: no correction is needed."
   },
   "secondary": {
-   "lead": "Guardrails: each secondary metric is compared with the control like the primary one, and their p-values are corrected among themselves, never together with the primary metric's. Only the primary metric decides."
+   "lead": "Guardrails: each secondary metric is compared with the control like the primary one, and their p-values are corrected among themselves, never together with the primary metric's. Only the primary metric decides.",
+   "legend": "↑ a higher value is better, ↓ a lower one: each secondary metric in its own direction, the primary's where none was chosen."
   }
  },
  "it": {
@@ -336,7 +337,8 @@
    "correction_one": "Con un solo trattamento c'è un solo confronto: non serve alcuna correzione."
   },
   "secondary": {
-   "lead": "Metriche di guardia: ogni metrica secondaria si confronta con il controllo come la principale, e i loro p-value si correggono tra loro, mai insieme a quelli della metrica principale. Decide solo la metrica principale."
+   "lead": "Metriche di guardia: ogni metrica secondaria si confronta con il controllo come la principale, e i loro p-value si correggono tra loro, mai insieme a quelli della metrica principale. Decide solo la metrica principale.",
+   "legend": "↑ è meglio un valore più alto, ↓ uno più basso: ogni metrica secondaria nella sua direzione, quella della principale se non è stata scelta."
   }
  },
  "de": {
@@ -506,7 +508,8 @@
    "correction_one": "Bei einer einzigen Behandlung gibt es nur einen Vergleich: Es ist keine Korrektur nötig."
   },
   "secondary": {
-   "lead": "Leitplanken: Jede sekundäre Kennzahl wird wie die primäre mit der Kontrolle verglichen, und ihre p-Werte werden untereinander korrigiert, nie zusammen mit denen der primären Kennzahl. Nur die primäre Kennzahl entscheidet."
+   "lead": "Leitplanken: Jede sekundäre Kennzahl wird wie die primäre mit der Kontrolle verglichen, und ihre p-Werte werden untereinander korrigiert, nie zusammen mit denen der primären Kennzahl. Nur die primäre Kennzahl entscheidet.",
+   "legend": "↑ ein höherer Wert ist besser, ↓ ein niedrigerer: jede sekundäre Kennzahl in ihrer eigenen Richtung, in der der primären, wo keine gewählt wurde."
   }
  },
  "es": {
@@ -676,7 +679,8 @@
    "correction_one": "Con un solo tratamiento hay una sola comparación: no hace falta ninguna corrección."
   },
   "secondary": {
-   "lead": "Salvaguardas: cada métrica secundaria se compara con el control como la principal, y sus p-valores se corrigen entre ellos, nunca junto con los de la métrica principal. Solo decide la métrica principal."
+   "lead": "Salvaguardas: cada métrica secundaria se compara con el control como la principal, y sus p-valores se corrigen entre ellos, nunca junto con los de la métrica principal. Solo decide la métrica principal.",
+   "legend": "↑ es mejor un valor más alto, ↓ uno más bajo: cada métrica secundaria en su propia dirección, la de la principal si no se eligió ninguna."
   }
  },
  "fr": {
@@ -846,7 +850,8 @@
    "correction_one": "Avec un seul traitement, il n'y a qu'une comparaison : aucune correction n'est nécessaire."
   },
   "secondary": {
-   "lead": "Garde-fous : chaque métrique secondaire est comparée au contrôle comme la principale, et leurs p-valeurs sont corrigées entre elles, jamais avec celles de la métrique principale. Seule la métrique principale décide."
+   "lead": "Garde-fous : chaque métrique secondaire est comparée au contrôle comme la principale, et leurs p-valeurs sont corrigées entre elles, jamais avec celles de la métrique principale. Seule la métrique principale décide.",
+   "legend": "↑ une valeur plus haute est meilleure, ↓ une plus basse : chaque métrique secondaire dans son propre sens, celui de la principale si aucun n'a été choisi."
   }
  }
 }

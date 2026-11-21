@@ -127,8 +127,10 @@ GROUPS: dict[str, dict[str, Any]] = {
 #   level_numbers     a number for each value of the column the key `of` names, as {value: number},
 #                     each within the number's bounds (the form lists the column's values with a
 #                     number field each; the values themselves are the data's, known at the run)
+#   column_choices    {column of the key `of`: one of `choices`}; a column it does not name keeps the
+#                     node's own setting (the A/B test's direction of each secondary metric)
 CONTROLS = ("column", "columns", "level", "reference", "pairs", "choice", "number", "integer",
-            "boolean", "numbers", "number_or_choice", "level_numbers")
+            "boolean", "numbers", "number_or_choice", "level_numbers", "column_choices")
 
 # The kinds of a column, as the engine's dtypes map to them (`column_kind`).
 COLUMN_KINDS = ("integer", "number", "text", "boolean", "date", "datetime", "other")
@@ -230,6 +232,7 @@ KINDS: dict[str, dict[str, Any]] = {
     "covariate_missing": _choice("fill", "exclude"),
     "cap_percentile": {"control": "number", "above": 0.5, "below": 1},
     "variant_shares": {"control": "level_numbers", "of": "variant", "above": 0},
+    "metric_directions": {"control": "column_choices", "of": "secondary_metrics", "choices": ["higher", "lower"]},
     "relative": {"control": "number", "min": 0},
     "tau": {"control": "number", "above": 0},
     "share_open": {"control": "number", "above": 0, "max": 1},
@@ -1185,7 +1188,7 @@ def _ab_test_variant(metric_type: str) -> dict[str, Any]:
         "bayes": {"levels": None, "numbers": _AB_BAYES_NUMBERS, "texts": ["loss_position"]},
         "sequential": {"levels": None, "numbers": _AB_SEQUENTIAL_NUMBERS, "texts": ["significance", "decision"]},
         "secondary": {"levels": None, "numbers": [*comparison, "mean_treatment", "mean_control"],
-                      "texts": [*_AB_COMPARISON_TEXTS, "metric_type"]},
+                      "texts": [*_AB_COMPARISON_TEXTS, "metric_type", "direction"]},
         "reading": {"levels": [b for b in _AB_READING_BLOCKS if continuous or b != "cap"], "numbers": [], "texts": ["line_*"]},
         "assumption": assumption,
         "curve": _chart("srm_share", "daily_units", "sequential_lift", "sequential_p", "posterior", "power",
@@ -1272,17 +1275,20 @@ MODELS["ab_test"] = {
         "cap_percentile": "cap_percentile", "srm_alpha": "proportion", "expected_shares": "variant_shares",
         "min_lift": "relative", "power": "proportion", "bayes": "boolean", "prior_alpha": "positive", "prior_beta": "positive",
         "loss_threshold": "relative", "date": "date_column", "sequential": "boolean", "sequential_tau": "tau",
-        "secondary_metrics": "metric_columns", "output": "output_variants",
+        "secondary_metrics": "metric_columns", "secondary_directions": "metric_directions", "output": "output_variants",
     },
     "defaults": {
         **_AB_INPUT_DEFAULTS, "higher_is_better": True, "alternative": "two_sided", "alpha": 0.05, "correction": "holm",
         "covariate": None, "covariate_missing": "fill", "cap_percentile": None, "srm_alpha": 0.001, "expected_shares": {},
         "min_lift": 0.02, "power": 0.8, "bayes": True, "prior_alpha": 1.0, "prior_beta": 1.0, "loss_threshold": 0.001,
-        "date": None, "sequential": False, "sequential_tau": 0.05, "secondary_metrics": [], "output": "results",
+        "date": None, "sequential": False, "sequential_tau": 0.05, "secondary_metrics": [], "secondary_directions": {},
+        "output": "results",
     },
     "applies": {
         **_AB_INPUT_APPLIES,
         "secondary_metrics": {"input_shape": ["units"]},
+        # each secondary metric's own direction, «higher» or «lower» is better; one not named reads the primary's
+        "secondary_directions": {"secondary_metrics": True},
         "prior_alpha": {"bayes": [True], "metric_type": ["binary"]},
         "prior_beta": {"bayes": [True], "metric_type": ["binary"]},
         "loss_threshold": {"bayes": [True]},
@@ -1575,6 +1581,13 @@ def read_value(model: str, key: str, kind: str, v: Any) -> Any:
         if not isinstance(v, dict) or not all(isinstance(c, str) and c for c in v):
             raise refusal(model, f"'{key}' must give a number to each value of the column, as {{value: number}}")
         return {c: _read_number(model, f"{key}.{c}", how, v[c]) for c in sorted(v)}
+    if control == "column_choices":
+        if not isinstance(v, dict) or not all(isinstance(c, str) and c for c in v):
+            raise refusal(model, f"'{key}' must give a column one of {', '.join(how['choices'])}, as {{column: choice}}")
+        for c in sorted(v):
+            if not isinstance(v[c], str) or v[c] not in how["choices"]:
+                raise refusal(model, f"'{key}.{c}' must be one of {', '.join(how['choices'])}")
+        return {c: v[c] for c in sorted(v)}
     if control == "number_or_choice":
         if isinstance(v, str) and v in how["choices"]:
             return v
@@ -1666,12 +1679,12 @@ def check_params(model: str, params: Mapping[str, Any] | None,
     for rule in spec["forbids"]:
         if full.get(rule["key"]) == rule["value"] and all(_holds(v, full.get(k)) for k, v in rule["when"].items()):
             raise refusal(model, rule["message"])
-    # what one key says of another: a reference level or a pair of predictors
+    # what one key says of another: a reference level, a pair of predictors, a choice for some columns
     for key, kind in kinds.items():
         how = KINDS[kind]
-        if how["control"] in ("reference", "pairs") and key in read:
+        if how["control"] in ("reference", "pairs", "column_choices") and key in read:
             allowed = set(full.get(how["of"]) or [])
-            named = list(read[key]) if how["control"] == "reference" else [c for pair in read[key] for c in pair]
+            named = [c for pair in read[key] for c in pair] if how["control"] == "pairs" else list(read[key])
             for c in named:
                 if c not in allowed:
                     raise refusal(model, f"'{key}' names «{c}», which is not one of the '{how['of']}'")

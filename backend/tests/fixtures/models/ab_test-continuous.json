@@ -18,6 +18,9 @@
    "converted",
    "sessions"
   ],
+  "secondary_directions": {
+   "sessions": "lower"
+  },
   "output": "variants"
  },
  "rows": [
@@ -2364,13 +2367,25 @@
   [
    "secondary",
    "converted",
+   "B",
+   "direction",
+   null,
+   "higher",
+   null,
+   null,
+   195,
+   "secondary|converted|B|direction"
+  ],
+  [
+   "secondary",
+   "converted",
    "C",
    "difference",
    -0.002534,
    null,
    null,
    null,
-   195,
+   196,
    "secondary|converted|C|difference"
   ],
   [
@@ -2382,7 +2397,7 @@
    null,
    null,
    null,
-   196,
+   197,
    "secondary|converted|C|difference_std_error"
   ],
   [
@@ -2394,7 +2409,7 @@
    null,
    null,
    null,
-   197,
+   198,
    "secondary|converted|C|difference_ci_low"
   ],
   [
@@ -2406,7 +2421,7 @@
    null,
    null,
    null,
-   198,
+   199,
    "secondary|converted|C|difference_ci_high"
   ],
   [
@@ -2418,7 +2433,7 @@
    null,
    null,
    null,
-   199,
+   200,
    "secondary|converted|C|lift"
   ],
   [
@@ -2430,7 +2445,7 @@
    null,
    null,
    null,
-   200,
+   201,
    "secondary|converted|C|lift_std_error"
   ],
   [
@@ -2442,7 +2457,7 @@
    null,
    null,
    null,
-   201,
+   202,
    "secondary|converted|C|lift_ci_low"
   ],
   [
@@ -2454,7 +2469,7 @@
    null,
    null,
    null,
-   202,
+   203,
    "secondary|converted|C|lift_ci_high"
   ],
   [
@@ -2466,7 +2481,7 @@
    null,
    null,
    null,
-   203,
+   204,
    "secondary|converted|C|statistic"
   ],
   [
@@ -2478,7 +2493,7 @@
    null,
    null,
    null,
-   204,
+   205,
    "secondary|converted|C|p_value"
   ],
   [
@@ -2490,7 +2505,7 @@
    "",
    null,
    null,
-   205,
+   206,
    "secondary|converted|C|significance"
   ],
   [
@@ -2502,7 +2517,7 @@
    null,
    null,
    null,
-   206,
+   207,
    "secondary|converted|C|p_adjusted"
   ],
   [
@@ -2514,7 +2529,7 @@
    "",
    null,
    null,
-   207,
+   208,
    "secondary|converted|C|p_adjusted_significance"
   ],
   [
@@ -2526,7 +2541,7 @@
    null,
    null,
    null,
-   208,
+   209,
    "secondary|converted|C|mde"
   ],
   [
@@ -2538,7 +2553,7 @@
    null,
    null,
    null,
-   209,
+   210,
    "secondary|converted|C|mean_treatment"
   ],
   [
@@ -2550,7 +2565,7 @@
    null,
    null,
    null,
-   210,
+   211,
    "secondary|converted|C|mean_control"
   ],
   [
@@ -2562,7 +2577,7 @@
    "not_significant",
    null,
    null,
-   211,
+   212,
    "secondary|converted|C|decision"
   ],
   [
@@ -2574,8 +2589,20 @@
    "binary",
    null,
    null,
-   212,
+   213,
    "secondary|converted|C|metric_type"
+  ],
+  [
+   "secondary",
+   "converted",
+   "C",
+   "direction",
+   null,
+   "higher",
+   null,
+   null,
+   214,
+   "secondary|converted|C|direction"
   ],
   [
    "secondary",
@@ -2586,7 +2613,7 @@
    null,
    null,
    null,
-   213,
+   215,
    "secondary|sessions|B|difference"
   ],
   [
@@ -2598,7 +2625,7 @@
    null,
    null,
    null,
-   214,
+   216,
    "secondary|sessions|B|difference_std_error"
   ],
   [
@@ -2610,7 +2637,7 @@
    null,
    null,
    null,
-   215,
+   217,
    "secondary|sessions|B|difference_ci_low"
   ],
   [
@@ -2622,7 +2649,7 @@
    null,
    null,
    null,
-   216,
+   218,
    "secondary|sessions|B|difference_ci_high"
   ],
   [
@@ -2634,7 +2661,7 @@
    null,
    null,
    null,
-   217,
+   219,
    "secondary|sessions|B|lift"
   ],
   [
@@ -2646,7 +2673,7 @@
    null,
    null,
    null,
-   218,
+   220,
    "secondary|sessions|B|lift_std_error"
   ],
   [
@@ -2658,7 +2685,7 @@
    null,
    null,
    null,
-   219,
+   221,
    "secondary|sessions|B|lift_ci_low"
   ],
   [
@@ -2670,7 +2697,7 @@
    null,
    null,
    null,
-   220,
+   222,
    "secondary|sessions|B|lift_ci_high"
   ],
   [
@@ -2682,7 +2709,7 @@
    null,
    null,
    null,
-   221,
+   223,
    "secondary|sessions|B|statistic"
   ],
   [
@@ -2694,7 +2721,7 @@
    null,
    null,
    null,
-   222,
+   224,
    "secondary|sessions|B|p_value"
   ],
   [
@@ -2706,7 +2733,7 @@
    "",
    null,
    null,
-   223,
+   225,
    "secondary|sessions|B|significance"
   ],
   [
@@ -2718,7 +2745,7 @@
    null,
    null,
    null,
-   224,
+   226,
    "secondary|sessions|B|p_adjusted"
   ],
   [
@@ -2730,7 +2757,7 @@
    "",
    null,
    null,
-   225,
+   227,
    "secondary|sessions|B|p_adjusted_significance"
   ],
   [
@@ -2742,7 +2769,7 @@
    null,
    null,
    null,
-   226,
+   228,
    "secondary|sessions|B|mde"
   ],
   [
@@ -2754,7 +2781,7 @@
    null,
    null,
    null,
-   227,
+   229,
    "secondary|sessions|B|mean_treatment"
   ],
   [
@@ -2766,7 +2793,7 @@
    null,
    null,
    null,
-   228,
+   230,
    "secondary|sessions|B|mean_control"
   ],
   [
@@ -2778,7 +2805,7 @@
    "not_significant",
    null,
    null,
-   229,
+   231,
    "secondary|sessions|B|decision"
   ],
   [
@@ -2790,8 +2817,20 @@
    "continuous",
    null,
    null,
-   230,
+   232,
    "secondary|sessions|B|metric_type"
+  ],
+  [
+   "secondary",
+   "sessions",
+   "B",
+   "direction",
+   null,
+   "lower",
+   null,
+   null,
+   233,
+   "secondary|sessions|B|direction"
   ],
   [
    "secondary",
@@ -2802,7 +2841,7 @@
    null,
    null,
    null,
-   231,
+   234,
    "secondary|sessions|C|difference"
   ],
   [
@@ -2814,7 +2853,7 @@
    null,
    null,
    null,
-   232,
+   235,
    "secondary|sessions|C|difference_std_error"
   ],
   [
@@ -2826,7 +2865,7 @@
    null,
    null,
    null,
-   233,
+   236,
    "secondary|sessions|C|difference_ci_low"
   ],
   [
@@ -2838,7 +2877,7 @@
    null,
    null,
    null,
-   234,
+   237,
    "secondary|sessions|C|difference_ci_high"
   ],
   [
@@ -2850,7 +2889,7 @@
    null,
    null,
    null,
-   235,
+   238,
    "secondary|sessions|C|lift"
   ],
   [
@@ -2862,7 +2901,7 @@
    null,
    null,
    null,
-   236,
+   239,
    "secondary|sessions|C|lift_std_error"
   ],
   [
@@ -2874,7 +2913,7 @@
    null,
    null,
    null,
-   237,
+   240,
    "secondary|sessions|C|lift_ci_low"
   ],
   [
@@ -2886,7 +2925,7 @@
    null,
    null,
    null,
-   238,
+   241,
    "secondary|sessions|C|lift_ci_high"
   ],
   [
@@ -2898,7 +2937,7 @@
    null,
    null,
    null,
-   239,
+   242,
    "secondary|sessions|C|statistic"
   ],
   [
@@ -2910,7 +2949,7 @@
    null,
    null,
    null,
-   240,
+   243,
    "secondary|sessions|C|p_value"
   ],
   [
@@ -2922,7 +2961,7 @@
    "",
    null,
    null,
-   241,
+   244,
    "secondary|sessions|C|significance"
   ],
   [
@@ -2934,7 +2973,7 @@
    null,
    null,
    null,
-   242,
+   245,
    "secondary|sessions|C|p_adjusted"
   ],
   [
@@ -2946,7 +2985,7 @@
    "",
    null,
    null,
-   243,
+   246,
    "secondary|sessions|C|p_adjusted_significance"
   ],
   [
@@ -2958,7 +2997,7 @@
    null,
    null,
    null,
-   244,
+   247,
    "secondary|sessions|C|mde"
   ],
   [
@@ -2970,7 +3009,7 @@
    null,
    null,
    null,
-   245,
+   248,
    "secondary|sessions|C|mean_treatment"
   ],
   [
@@ -2982,7 +3021,7 @@
    null,
    null,
    null,
-   246,
+   249,
    "secondary|sessions|C|mean_control"
   ],
   [
@@ -2994,7 +3033,7 @@
    "not_significant",
    null,
    null,
-   247,
+   250,
    "secondary|sessions|C|decision"
   ],
   [
@@ -3006,8 +3045,20 @@
    "continuous",
    null,
    null,
-   248,
+   251,
    "secondary|sessions|C|metric_type"
+  ],
+  [
+   "secondary",
+   "sessions",
+   "C",
+   "direction",
+   null,
+   "lower",
+   null,
+   null,
+   252,
+   "secondary|sessions|C|direction"
   ],
   [
    "assumption",
@@ -3018,7 +3069,7 @@
    "placeholder H0 of srm",
    null,
    null,
-   249,
+   253,
    "assumption|srm||h0"
   ],
   [
@@ -3030,7 +3081,7 @@
    null,
    null,
    null,
-   250,
+   254,
    "assumption|srm||statistic"
   ],
   [
@@ -3042,7 +3093,7 @@
    null,
    null,
    null,
-   251,
+   255,
    "assumption|srm||df"
   ],
   [
@@ -3054,7 +3105,7 @@
    null,
    null,
    null,
-   252,
+   256,
    "assumption|srm||p_value"
   ],
   [
@@ -3066,7 +3117,7 @@
    "",
    null,
    null,
-   253,
+   257,
    "assumption|srm||significance"
   ],
   [
@@ -3078,7 +3129,7 @@
    null,
    null,
    null,
-   254,
+   258,
    "assumption|srm||threshold"
   ],
   [
@@ -3090,7 +3141,7 @@
    "ok",
    null,
    null,
-   255,
+   259,
    "assumption|srm||verdict"
   ],
   [
@@ -3102,7 +3153,7 @@
    "placeholder advice of srm",
    null,
    null,
-   256,
+   260,
    "assumption|srm||advice"
   ],
   [
@@ -3114,7 +3165,7 @@
    "srm_ok",
    null,
    null,
-   257,
+   261,
    "assumption|srm||advice_id"
   ],
   [
@@ -3126,7 +3177,7 @@
    "placeholder H0 of covariate_balance",
    null,
    null,
-   258,
+   262,
    "assumption|covariate_balance||h0"
   ],
   [
@@ -3138,7 +3189,7 @@
    null,
    null,
    null,
-   259,
+   263,
    "assumption|covariate_balance||statistic"
   ],
   [
@@ -3150,7 +3201,7 @@
    null,
    null,
    null,
-   260,
+   264,
    "assumption|covariate_balance||df"
   ],
   [
@@ -3162,7 +3213,7 @@
    null,
    null,
    null,
-   261,
+   265,
    "assumption|covariate_balance||p_value"
   ],
   [
@@ -3174,7 +3225,7 @@
    "",
    null,
    null,
-   262,
+   266,
    "assumption|covariate_balance||significance"
   ],
   [
@@ -3186,7 +3237,7 @@
    null,
    null,
    null,
-   263,
+   267,
    "assumption|covariate_balance||threshold"
   ],
   [
@@ -3198,7 +3249,7 @@
    "ok",
    null,
    null,
-   264,
+   268,
    "assumption|covariate_balance||verdict"
   ],
   [
@@ -3210,7 +3261,7 @@
    "placeholder advice of covariate_balance",
    null,
    null,
-   265,
+   269,
    "assumption|covariate_balance||advice"
   ],
   [
@@ -3222,7 +3273,7 @@
    "covariate_balance_ok",
    null,
    null,
-   266,
+   270,
    "assumption|covariate_balance||advice_id"
   ],
   [
@@ -3234,7 +3285,7 @@
    "placeholder H0 of covariate_missing_balance",
    null,
    null,
-   267,
+   271,
    "assumption|covariate_missing_balance||h0"
   ],
   [
@@ -3246,7 +3297,7 @@
    null,
    null,
    null,
-   268,
+   272,
    "assumption|covariate_missing_balance||statistic"
   ],
   [
@@ -3258,7 +3309,7 @@
    null,
    null,
    null,
-   269,
+   273,
    "assumption|covariate_missing_balance||df"
   ],
   [
@@ -3270,7 +3321,7 @@
    null,
    null,
    null,
-   270,
+   274,
    "assumption|covariate_missing_balance||p_value"
   ],
   [
@@ -3282,7 +3333,7 @@
    "",
    null,
    null,
-   271,
+   275,
    "assumption|covariate_missing_balance||significance"
   ],
   [
@@ -3294,7 +3345,7 @@
    null,
    null,
    null,
-   272,
+   276,
    "assumption|covariate_missing_balance||threshold"
   ],
   [
@@ -3306,7 +3357,7 @@
    "ok",
    null,
    null,
-   273,
+   277,
    "assumption|covariate_missing_balance||verdict"
   ],
   [
@@ -3318,7 +3369,7 @@
    "placeholder advice of covariate_missing_balance",
    null,
    null,
-   274,
+   278,
    "assumption|covariate_missing_balance||advice"
   ],
   [
@@ -3330,7 +3381,7 @@
    "covariate_missing_balance_ok",
    null,
    null,
-   275,
+   279,
    "assumption|covariate_missing_balance||advice_id"
   ],
   [
@@ -3342,7 +3393,7 @@
    "placeholder H0 of crossover",
    null,
    null,
-   276,
+   280,
    "assumption|crossover||h0"
   ],
   [
@@ -3354,7 +3405,7 @@
    null,
    null,
    null,
-   277,
+   281,
    "assumption|crossover||count"
   ],
   [
@@ -3366,7 +3417,7 @@
    "failed",
    null,
    null,
-   278,
+   282,
    "assumption|crossover||verdict"
   ],
   [
@@ -3378,7 +3429,7 @@
    "placeholder advice of crossover",
    null,
    null,
-   279,
+   283,
    "assumption|crossover||advice"
   ],
   [
@@ -3390,7 +3441,7 @@
    "crossover_failed",
    null,
    null,
-   280,
+   284,
    "assumption|crossover||advice_id"
   ],
   [
@@ -3402,7 +3453,7 @@
    "placeholder H0 of variance_zero",
    null,
    null,
-   281,
+   285,
    "assumption|variance_zero||h0"
   ],
   [
@@ -3414,7 +3465,7 @@
    null,
    null,
    null,
-   282,
+   286,
    "assumption|variance_zero||value"
   ],
   [
@@ -3426,7 +3477,7 @@
    "ok",
    null,
    null,
-   283,
+   287,
    "assumption|variance_zero||verdict"
   ],
   [
@@ -3438,7 +3489,7 @@
    "placeholder advice of variance_zero",
    null,
    null,
-   284,
+   288,
    "assumption|variance_zero||advice"
   ],
   [
@@ -3450,7 +3501,7 @@
    "variance_zero_ok",
    null,
    null,
-   285,
+   289,
    "assumption|variance_zero||advice_id"
   ],
   [
@@ -3462,7 +3513,7 @@
    null,
    20514,
    null,
-   286,
+   290,
    "curve|srm_share|A|y|0"
   ],
   [
@@ -3474,7 +3525,7 @@
    null,
    20515,
    null,
-   287,
+   291,
    "curve|srm_share|A|y|1"
   ],
   [
@@ -3486,7 +3537,7 @@
    null,
    20516,
    null,
-   288,
+   292,
    "curve|srm_share|A|y|2"
   ],
   [
@@ -3498,7 +3549,7 @@
    null,
    20517,
    null,
-   289,
+   293,
    "curve|srm_share|A|y|3"
   ],
   [
@@ -3510,7 +3561,7 @@
    null,
    20518,
    null,
-   290,
+   294,
    "curve|srm_share|A|y|4"
   ],
   [
@@ -3522,7 +3573,7 @@
    null,
    20519,
    null,
-   291,
+   295,
    "curve|srm_share|A|y|5"
   ],
   [
@@ -3534,7 +3585,7 @@
    null,
    20520,
    null,
-   292,
+   296,
    "curve|srm_share|A|y|6"
   ],
   [
@@ -3546,7 +3597,7 @@
    null,
    20521,
    null,
-   293,
+   297,
    "curve|srm_share|A|y|7"
   ],
   [
@@ -3558,7 +3609,7 @@
    null,
    20522,
    null,
-   294,
+   298,
    "curve|srm_share|A|y|8"
   ],
   [
@@ -3570,7 +3621,7 @@
    null,
    20523,
    null,
-   295,
+   299,
    "curve|srm_share|A|y|9"
   ],
   [
@@ -3582,7 +3633,7 @@
    null,
    20524,
    null,
-   296,
+   300,
    "curve|srm_share|A|y|10"
   ],
   [
@@ -3594,7 +3645,7 @@
    null,
    20525,
    null,
-   297,
+   301,
    "curve|srm_share|A|y|11"
   ],
   [
@@ -3606,7 +3657,7 @@
    null,
    20526,
    null,
-   298,
+   302,
    "curve|srm_share|A|y|12"
   ],
   [
@@ -3618,7 +3669,7 @@
    null,
    20527,
    null,
-   299,
+   303,
    "curve|srm_share|A|y|13"
   ],
   [
@@ -3630,7 +3681,7 @@
    null,
    20514,
    null,
-   300,
+   304,
    "curve|srm_share|B|y|0"
   ],
   [
@@ -3642,7 +3693,7 @@
    null,
    20515,
    null,
-   301,
+   305,
    "curve|srm_share|B|y|1"
   ],
   [
@@ -3654,7 +3705,7 @@
    null,
    20516,
    null,
-   302,
+   306,
    "curve|srm_share|B|y|2"
   ],
   [
@@ -3666,7 +3717,7 @@
    null,
    20517,
    null,
-   303,
+   307,
    "curve|srm_share|B|y|3"
   ],
   [
@@ -3678,7 +3729,7 @@
    null,
    20518,
    null,
-   304,
+   308,
    "curve|srm_share|B|y|4"
   ],
   [
@@ -3690,7 +3741,7 @@
    null,
    20519,
    null,
-   305,
+   309,
    "curve|srm_share|B|y|5"
   ],
   [
@@ -3702,7 +3753,7 @@
    null,
    20520,
    null,
-   306,
+   310,
    "curve|srm_share|B|y|6"
   ],
   [
@@ -3714,7 +3765,7 @@
    null,
    20521,
    null,
-   307,
+   311,
    "curve|srm_share|B|y|7"
   ],
   [
@@ -3726,7 +3777,7 @@
    null,
    20522,
    null,
-   308,
+   312,
    "curve|srm_share|B|y|8"
   ],
   [
@@ -3738,7 +3789,7 @@
    null,
    20523,
    null,
-   309,
+   313,
    "curve|srm_share|B|y|9"
   ],
   [
@@ -3750,7 +3801,7 @@
    null,
    20524,
    null,
-   310,
+   314,
    "curve|srm_share|B|y|10"
   ],
   [
@@ -3762,7 +3813,7 @@
    null,
    20525,
    null,
-   311,
+   315,
    "curve|srm_share|B|y|11"
   ],
   [
@@ -3774,7 +3825,7 @@
    null,
    20526,
    null,
-   312,
+   316,
    "curve|srm_share|B|y|12"
   ],
   [
@@ -3786,7 +3837,7 @@
    null,
    20527,
    null,
-   313,
+   317,
    "curve|srm_share|B|y|13"
   ],
   [
@@ -3798,7 +3849,7 @@
    null,
    20514,
    null,
-   314,
+   318,
    "curve|srm_share|C|y|0"
   ],
   [
@@ -3810,7 +3861,7 @@
    null,
    20515,
    null,
-   315,
+   319,
    "curve|srm_share|C|y|1"
   ],
   [
@@ -3822,7 +3873,7 @@
    null,
    20516,
    null,
-   316,
+   320,
    "curve|srm_share|C|y|2"
   ],
   [
@@ -3834,7 +3885,7 @@
    null,
    20517,
    null,
-   317,
+   321,
    "curve|srm_share|C|y|3"
   ],
   [
@@ -3846,7 +3897,7 @@
    null,
    20518,
    null,
-   318,
+   322,
    "curve|srm_share|C|y|4"
   ],
   [
@@ -3858,7 +3909,7 @@
    null,
    20519,
    null,
-   319,
+   323,
    "curve|srm_share|C|y|5"
   ],
   [
@@ -3870,7 +3921,7 @@
    null,
    20520,
    null,
-   320,
+   324,
    "curve|srm_share|C|y|6"
   ],
   [
@@ -3882,7 +3933,7 @@
    null,
    20521,
    null,
-   321,
+   325,
    "curve|srm_share|C|y|7"
   ],
   [
@@ -3894,7 +3945,7 @@
    null,
    20522,
    null,
-   322,
+   326,
    "curve|srm_share|C|y|8"
   ],
   [
@@ -3906,7 +3957,7 @@
    null,
    20523,
    null,
-   323,
+   327,
    "curve|srm_share|C|y|9"
   ],
   [
@@ -3918,7 +3969,7 @@
    null,
    20524,
    null,
-   324,
+   328,
    "curve|srm_share|C|y|10"
   ],
   [
@@ -3930,7 +3981,7 @@
    null,
    20525,
    null,
-   325,
+   329,
    "curve|srm_share|C|y|11"
   ],
   [
@@ -3942,7 +3993,7 @@
    null,
    20526,
    null,
-   326,
+   330,
    "curve|srm_share|C|y|12"
   ],
   [
@@ -3954,7 +4005,7 @@
    null,
    20527,
    null,
-   327,
+   331,
    "curve|srm_share|C|y|13"
   ],
   [
@@ -3966,7 +4017,7 @@
    null,
    20514,
    null,
-   328,
+   332,
    "curve|daily_units|A|y|0"
   ],
   [
@@ -3978,7 +4029,7 @@
    null,
    20515,
    null,
-   329,
+   333,
    "curve|daily_units|A|y|1"
   ],
   [
@@ -3990,7 +4041,7 @@
    null,
    20516,
    null,
-   330,
+   334,
    "curve|daily_units|A|y|2"
   ],
   [
@@ -4002,7 +4053,7 @@
    null,
    20517,
    null,
-   331,
+   335,
    "curve|daily_units|A|y|3"
   ],
   [
@@ -4014,7 +4065,7 @@
    null,
    20518,
    null,
-   332,
+   336,
    "curve|daily_units|A|y|4"
   ],
   [
@@ -4026,7 +4077,7 @@
    null,
    20519,
    null,
-   333,
+   337,
    "curve|daily_units|A|y|5"
   ],
   [
@@ -4038,7 +4089,7 @@
    null,
    20520,
    null,
-   334,
+   338,
    "curve|daily_units|A|y|6"
   ],
   [
@@ -4050,7 +4101,7 @@
    null,
    20521,
    null,
-   335,
+   339,
    "curve|daily_units|A|y|7"
   ],
   [
@@ -4062,7 +4113,7 @@
    null,
    20522,
    null,
-   336,
+   340,
    "curve|daily_units|A|y|8"
   ],
   [
@@ -4074,7 +4125,7 @@
    null,
    20523,
    null,
-   337,
+   341,
    "curve|daily_units|A|y|9"
   ],
   [
@@ -4086,7 +4137,7 @@
    null,
    20524,
    null,
-   338,
+   342,
    "curve|daily_units|A|y|10"
   ],
   [
@@ -4098,7 +4149,7 @@
    null,
    20525,
    null,
-   339,
+   343,
    "curve|daily_units|A|y|11"
   ],
   [
@@ -4110,7 +4161,7 @@
    null,
    20526,
    null,
-   340,
+   344,
    "curve|daily_units|A|y|12"
   ],
   [
@@ -4122,7 +4173,7 @@
    null,
    20527,
    null,
-   341,
+   345,
    "curve|daily_units|A|y|13"
   ],
   [
@@ -4134,7 +4185,7 @@
    null,
    20514,
    null,
-   342,
+   346,
    "curve|daily_units|B|y|0"
   ],
   [
@@ -4146,7 +4197,7 @@
    null,
    20515,
    null,
-   343,
+   347,
    "curve|daily_units|B|y|1"
   ],
   [
@@ -4158,7 +4209,7 @@
    null,
    20516,
    null,
-   344,
+   348,
    "curve|daily_units|B|y|2"
   ],
   [
@@ -4170,7 +4221,7 @@
    null,
    20517,
    null,
-   345,
+   349,
    "curve|daily_units|B|y|3"
   ],
   [
@@ -4182,7 +4233,7 @@
    null,
    20518,
    null,
-   346,
+   350,
    "curve|daily_units|B|y|4"
   ],
   [
@@ -4194,7 +4245,7 @@
    null,
    20519,
    null,
-   347,
+   351,
    "curve|daily_units|B|y|5"
   ],
   [
@@ -4206,7 +4257,7 @@
    null,
    20520,
    null,
-   348,
+   352,
    "curve|daily_units|B|y|6"
   ],
   [
@@ -4218,7 +4269,7 @@
    null,
    20521,
    null,
-   349,
+   353,
    "curve|daily_units|B|y|7"
   ],
   [
@@ -4230,7 +4281,7 @@
    null,
    20522,
    null,
-   350,
+   354,
    "curve|daily_units|B|y|8"
   ],
   [
@@ -4242,7 +4293,7 @@
    null,
    20523,
    null,
-   351,
+   355,
    "curve|daily_units|B|y|9"
   ],
   [
@@ -4254,7 +4305,7 @@
    null,
    20524,
    null,
-   352,
+   356,
    "curve|daily_units|B|y|10"
   ],
   [
@@ -4266,7 +4317,7 @@
    null,
    20525,
    null,
-   353,
+   357,
    "curve|daily_units|B|y|11"
   ],
   [
@@ -4278,7 +4329,7 @@
    null,
    20526,
    null,
-   354,
+   358,
    "curve|daily_units|B|y|12"
   ],
   [
@@ -4290,7 +4341,7 @@
    null,
    20527,
    null,
-   355,
+   359,
    "curve|daily_units|B|y|13"
   ],
   [
@@ -4302,7 +4353,7 @@
    null,
    20514,
    null,
-   356,
+   360,
    "curve|daily_units|C|y|0"
   ],
   [
@@ -4314,7 +4365,7 @@
    null,
    20515,
    null,
-   357,
+   361,
    "curve|daily_units|C|y|1"
   ],
   [
@@ -4326,7 +4377,7 @@
    null,
    20516,
    null,
-   358,
+   362,
    "curve|daily_units|C|y|2"
   ],
   [
@@ -4338,7 +4389,7 @@
    null,
    20517,
    null,
-   359,
+   363,
    "curve|daily_units|C|y|3"
   ],
   [
@@ -4350,7 +4401,7 @@
    null,
    20518,
    null,
-   360,
+   364,
    "curve|daily_units|C|y|4"
   ],
   [
@@ -4362,7 +4413,7 @@
    null,
    20519,
    null,
-   361,
+   365,
    "curve|daily_units|C|y|5"
   ],
   [
@@ -4374,7 +4425,7 @@
    null,
    20520,
    null,
-   362,
+   366,
    "curve|daily_units|C|y|6"
   ],
   [
@@ -4386,7 +4437,7 @@
    null,
    20521,
    null,
-   363,
+   367,
    "curve|daily_units|C|y|7"
   ],
   [
@@ -4398,7 +4449,7 @@
    null,
    20522,
    null,
-   364,
+   368,
    "curve|daily_units|C|y|8"
   ],
   [
@@ -4410,7 +4461,7 @@
    null,
    20523,
    null,
-   365,
+   369,
    "curve|daily_units|C|y|9"
   ],
   [
@@ -4422,7 +4473,7 @@
    null,
    20524,
    null,
-   366,
+   370,
    "curve|daily_units|C|y|10"
   ],
   [
@@ -4434,7 +4485,7 @@
    null,
    20525,
    null,
-   367,
+   371,
    "curve|daily_units|C|y|11"
   ],
   [
@@ -4446,7 +4497,7 @@
    null,
    20526,
    null,
-   368,
+   372,
    "curve|daily_units|C|y|12"
   ],
   [
@@ -4458,7 +4509,7 @@
    null,
    20527,
    null,
-   369,
+   373,
    "curve|daily_units|C|y|13"
   ],
   [
@@ -4470,7 +4521,7 @@
    null,
    20514,
    null,
-   370,
+   374,
    "curve|sequential_lift|B|y|0"
   ],
   [
@@ -4482,7 +4533,7 @@
    null,
    20515,
    null,
-   371,
+   375,
    "curve|sequential_lift|B|y|1"
   ],
   [
@@ -4494,7 +4545,7 @@
    null,
    20516,
    null,
-   372,
+   376,
    "curve|sequential_lift|B|y|2"
   ],
   [
@@ -4506,7 +4557,7 @@
    null,
    20517,
    null,
-   373,
+   377,
    "curve|sequential_lift|B|y|3"
   ],
   [
@@ -4518,7 +4569,7 @@
    null,
    20518,
    null,
-   374,
+   378,
    "curve|sequential_lift|B|y|4"
   ],
   [
@@ -4530,7 +4581,7 @@
    null,
    20519,
    null,
-   375,
+   379,
    "curve|sequential_lift|B|y|5"
   ],
   [
@@ -4542,7 +4593,7 @@
    null,
    20520,
    null,
-   376,
+   380,
    "curve|sequential_lift|B|y|6"
   ],
   [
@@ -4554,7 +4605,7 @@
    null,
    20521,
    null,
-   377,
+   381,
    "curve|sequential_lift|B|y|7"
   ],
   [
@@ -4566,7 +4617,7 @@
    null,
    20522,
    null,
-   378,
+   382,
    "curve|sequential_lift|B|y|8"
   ],
   [
@@ -4578,7 +4629,7 @@
    null,
    20523,
    null,
-   379,
+   383,
    "curve|sequential_lift|B|y|9"
   ],
   [
@@ -4590,7 +4641,7 @@
    null,
    20524,
    null,
-   380,
+   384,
    "curve|sequential_lift|B|y|10"
   ],
   [
@@ -4602,7 +4653,7 @@
    null,
    20525,
    null,
-   381,
+   385,
    "curve|sequential_lift|B|y|11"
   ],
   [
@@ -4614,7 +4665,7 @@
    null,
    20526,
    null,
-   382,
+   386,
    "curve|sequential_lift|B|y|12"
   ],
   [
@@ -4626,7 +4677,7 @@
    null,
    20527,
    null,
-   383,
+   387,
    "curve|sequential_lift|B|y|13"
   ],
   [
@@ -4638,7 +4689,7 @@
    null,
    20514,
    null,
-   384,
+   388,
    "curve|sequential_lift|B|low|0"
   ],
   [
@@ -4650,7 +4701,7 @@
    null,
    20515,
    null,
-   385,
+   389,
    "curve|sequential_lift|B|low|1"
   ],
   [
@@ -4662,7 +4713,7 @@
    null,
    20516,
    null,
-   386,
+   390,
    "curve|sequential_lift|B|low|2"
   ],
   [
@@ -4674,7 +4725,7 @@
    null,
    20517,
    null,
-   387,
+   391,
    "curve|sequential_lift|B|low|3"
   ],
   [
@@ -4686,7 +4737,7 @@
    null,
    20518,
    null,
-   388,
+   392,
    "curve|sequential_lift|B|low|4"
   ],
   [
@@ -4698,7 +4749,7 @@
    null,
    20519,
    null,
-   389,
+   393,
    "curve|sequential_lift|B|low|5"
   ],
   [
@@ -4710,7 +4761,7 @@
    null,
    20520,
    null,
-   390,
+   394,
    "curve|sequential_lift|B|low|6"
   ],
   [
@@ -4722,7 +4773,7 @@
    null,
    20521,
    null,
-   391,
+   395,
    "curve|sequential_lift|B|low|7"
   ],
   [
@@ -4734,7 +4785,7 @@
    null,
    20522,
    null,
-   392,
+   396,
    "curve|sequential_lift|B|low|8"
   ],
   [
@@ -4746,7 +4797,7 @@
    null,
    20523,
    null,
-   393,
+   397,
    "curve|sequential_lift|B|low|9"
   ],
   [
@@ -4758,7 +4809,7 @@
    null,
    20524,
    null,
-   394,
+   398,
    "curve|sequential_lift|B|low|10"
   ],
   [
@@ -4770,7 +4821,7 @@
    null,
    20525,
    null,
-   395,
+   399,
    "curve|sequential_lift|B|low|11"
   ],
   [
@@ -4782,7 +4833,7 @@
    null,
    20526,
    null,
-   396,
+   400,
    "curve|sequential_lift|B|low|12"
   ],
   [
@@ -4794,7 +4845,7 @@
    null,
    20527,
    null,
-   397,
+   401,
    "curve|sequential_lift|B|low|13"
   ],
   [
@@ -4806,7 +4857,7 @@
    null,
    20514,
    null,
-   398,
+   402,
    "curve|sequential_lift|B|high|0"
   ],
   [
@@ -4818,7 +4869,7 @@
    null,
    20515,
    null,
-   399,
+   403,
    "curve|sequential_lift|B|high|1"
   ],
   [
@@ -4830,7 +4881,7 @@
    null,
    20516,
    null,
-   400,
+   404,
    "curve|sequential_lift|B|high|2"
   ],
   [
@@ -4842,7 +4893,7 @@
    null,
    20517,
    null,
-   401,
+   405,
    "curve|sequential_lift|B|high|3"
   ],
   [
@@ -4854,7 +4905,7 @@
    null,
    20518,
    null,
-   402,
+   406,
    "curve|sequential_lift|B|high|4"
   ],
   [
@@ -4866,7 +4917,7 @@
    null,
    20519,
    null,
-   403,
+   407,
    "curve|sequential_lift|B|high|5"
   ],
   [
@@ -4878,7 +4929,7 @@
    null,
    20520,
    null,
-   404,
+   408,
    "curve|sequential_lift|B|high|6"
   ],
   [
@@ -4890,7 +4941,7 @@
    null,
    20521,
    null,
-   405,
+   409,
    "curve|sequential_lift|B|high|7"
   ],
   [
@@ -4902,7 +4953,7 @@
    null,
    20522,
    null,
-   406,
+   410,
    "curve|sequential_lift|B|high|8"
   ],
   [
@@ -4914,7 +4965,7 @@
    null,
    20523,
    null,
-   407,
+   411,
    "curve|sequential_lift|B|high|9"
   ],
   [
@@ -4926,7 +4977,7 @@
    null,
    20524,
    null,
-   408,
+   412,
    "curve|sequential_lift|B|high|10"
   ],
   [
@@ -4938,7 +4989,7 @@
    null,
    20525,
    null,
-   409,
+   413,
    "curve|sequential_lift|B|high|11"
   ],
   [
@@ -4950,7 +5001,7 @@
    null,
    20526,
    null,
-   410,
+   414,
    "curve|sequential_lift|B|high|12"
   ],
   [
@@ -4962,7 +5013,7 @@
    null,
    20527,
    null,
-   411,
+   415,
    "curve|sequential_lift|B|high|13"
   ],
   [
@@ -4974,7 +5025,7 @@
    null,
    20514,
    null,
-   412,
+   416,
    "curve|sequential_p|B|y|0"
   ],
   [
@@ -4986,7 +5037,7 @@
    null,
    20515,
    null,
-   413,
+   417,
    "curve|sequential_p|B|y|1"
   ],
   [
@@ -4998,7 +5049,7 @@
    null,
    20516,
    null,
-   414,
+   418,
    "curve|sequential_p|B|y|2"
   ],
   [
@@ -5010,7 +5061,7 @@
    null,
    20517,
    null,
-   415,
+   419,
    "curve|sequential_p|B|y|3"
   ],
   [
@@ -5022,7 +5073,7 @@
    null,
    20518,
    null,
-   416,
+   420,
    "curve|sequential_p|B|y|4"
   ],
   [
@@ -5034,7 +5085,7 @@
    null,
    20519,
    null,
-   417,
+   421,
    "curve|sequential_p|B|y|5"
   ],
   [
@@ -5046,7 +5097,7 @@
    null,
    20520,
    null,
-   418,
+   422,
    "curve|sequential_p|B|y|6"
   ],
   [
@@ -5058,7 +5109,7 @@
    null,
    20521,
    null,
-   419,
+   423,
    "curve|sequential_p|B|y|7"
   ],
   [
@@ -5070,7 +5121,7 @@
    null,
    20522,
    null,
-   420,
+   424,
    "curve|sequential_p|B|y|8"
   ],
   [
@@ -5082,7 +5133,7 @@
    null,
    20523,
    null,
-   421,
+   425,
    "curve|sequential_p|B|y|9"
   ],
   [
@@ -5094,7 +5145,7 @@
    null,
    20524,
    null,
-   422,
+   426,
    "curve|sequential_p|B|y|10"
   ],
   [
@@ -5106,7 +5157,7 @@
    null,
    20525,
    null,
-   423,
+   427,
    "curve|sequential_p|B|y|11"
   ],
   [
@@ -5118,7 +5169,7 @@
    null,
    20526,
    null,
-   424,
+   428,
    "curve|sequential_p|B|y|12"
   ],
   [
@@ -5130,7 +5181,7 @@
    null,
    20527,
    null,
-   425,
+   429,
    "curve|sequential_p|B|y|13"
   ],
   [
@@ -5142,7 +5193,7 @@
    null,
    20514,
    null,
-   426,
+   430,
    "curve|sequential_lift|C|y|0"
   ],
   [
@@ -5154,7 +5205,7 @@
    null,
    20515,
    null,
-   427,
+   431,
    "curve|sequential_lift|C|y|1"
   ],
   [
@@ -5166,7 +5217,7 @@
    null,
    20516,
    null,
-   428,
+   432,
    "curve|sequential_lift|C|y|2"
   ],
   [
@@ -5178,7 +5229,7 @@
    null,
    20517,
    null,
-   429,
+   433,
    "curve|sequential_lift|C|y|3"
   ],
   [
@@ -5190,7 +5241,7 @@
    null,
    20518,
    null,
-   430,
+   434,
    "curve|sequential_lift|C|y|4"
   ],
   [
@@ -5202,7 +5253,7 @@
    null,
    20519,
    null,
-   431,
+   435,
    "curve|sequential_lift|C|y|5"
   ],
   [
@@ -5214,7 +5265,7 @@
    null,
    20520,
    null,
-   432,
+   436,
    "curve|sequential_lift|C|y|6"
   ],
   [
@@ -5226,7 +5277,7 @@
    null,
    20521,
    null,
-   433,
+   437,
    "curve|sequential_lift|C|y|7"
   ],
   [
@@ -5238,7 +5289,7 @@
    null,
    20522,
    null,
-   434,
+   438,
    "curve|sequential_lift|C|y|8"
   ],
   [
@@ -5250,7 +5301,7 @@
    null,
    20523,
    null,
-   435,
+   439,
    "curve|sequential_lift|C|y|9"
   ],
   [
@@ -5262,7 +5313,7 @@
    null,
    20524,
    null,
-   436,
+   440,
    "curve|sequential_lift|C|y|10"
   ],
   [
@@ -5274,7 +5325,7 @@
    null,
    20525,
    null,
-   437,
+   441,
    "curve|sequential_lift|C|y|11"
   ],
   [
@@ -5286,7 +5337,7 @@
    null,
    20526,
    null,
-   438,
+   442,
    "curve|sequential_lift|C|y|12"
   ],
   [
@@ -5298,7 +5349,7 @@
    null,
    20527,
    null,
-   439,
+   443,
    "curve|sequential_lift|C|y|13"
   ],
   [
@@ -5310,7 +5361,7 @@
    null,
    20514,
    null,
-   440,
+   444,
    "curve|sequential_lift|C|low|0"
   ],
   [
@@ -5322,7 +5373,7 @@
    null,
    20515,
    null,
-   441,
+   445,
    "curve|sequential_lift|C|low|1"
   ],
   [
@@ -5334,7 +5385,7 @@
    null,
    20516,
    null,
-   442,
+   446,
    "curve|sequential_lift|C|low|2"
   ],
   [
@@ -5346,7 +5397,7 @@
    null,
    20517,
    null,
-   443,
+   447,
    "curve|sequential_lift|C|low|3"
   ],
   [
@@ -5358,7 +5409,7 @@
    null,
    20518,
    null,
-   444,
+   448,
    "curve|sequential_lift|C|low|4"
   ],
   [
@@ -5370,7 +5421,7 @@
    null,
    20519,
    null,
-   445,
+   449,
    "curve|sequential_lift|C|low|5"
   ],
   [
@@ -5382,7 +5433,7 @@
    null,
    20520,
    null,
-   446,
+   450,
    "curve|sequential_lift|C|low|6"
   ],
   [
@@ -5394,7 +5445,7 @@
    null,
    20521,
    null,
-   447,
+   451,
    "curve|sequential_lift|C|low|7"
   ],
   [
@@ -5406,7 +5457,7 @@
    null,
    20522,
    null,
-   448,
+   452,
    "curve|sequential_lift|C|low|8"
   ],
   [
@@ -5418,7 +5469,7 @@
    null,
    20523,
    null,
-   449,
+   453,
    "curve|sequential_lift|C|low|9"
   ],
   [
@@ -5430,7 +5481,7 @@
    null,
    20524,
    null,
-   450,
+   454,
    "curve|sequential_lift|C|low|10"
   ],
   [
@@ -5442,7 +5493,7 @@
    null,
    20525,
    null,
-   451,
+   455,
    "curve|sequential_lift|C|low|11"
   ],
   [
@@ -5454,7 +5505,7 @@
    null,
    20526,
    null,
-   452,
+   456,
    "curve|sequential_lift|C|low|12"
   ],
   [
@@ -5466,7 +5517,7 @@
    null,
    20527,
    null,
-   453,
+   457,
    "curve|sequential_lift|C|low|13"
   ],
   [
@@ -5478,7 +5529,7 @@
    null,
    20514,
    null,
-   454,
+   458,
    "curve|sequential_lift|C|high|0"
   ],
   [
@@ -5490,7 +5541,7 @@
    null,
    20515,
    null,
-   455,
+   459,
    "curve|sequential_lift|C|high|1"
   ],
   [
@@ -5502,7 +5553,7 @@
    null,
    20516,
    null,
-   456,
+   460,
    "curve|sequential_lift|C|high|2"
   ],
   [
@@ -5514,7 +5565,7 @@
    null,
    20517,
    null,
-   457,
+   461,
    "curve|sequential_lift|C|high|3"
   ],
   [
@@ -5526,7 +5577,7 @@
    null,
    20518,
    null,
-   458,
+   462,
    "curve|sequential_lift|C|high|4"
   ],
   [
@@ -5538,7 +5589,7 @@
    null,
    20519,
    null,
-   459,
+   463,
    "curve|sequential_lift|C|high|5"
   ],
   [
@@ -5550,7 +5601,7 @@
    null,
    20520,
    null,
-   460,
+   464,
    "curve|sequential_lift|C|high|6"
   ],
   [
@@ -5562,7 +5613,7 @@
    null,
    20521,
    null,
-   461,
+   465,
    "curve|sequential_lift|C|high|7"
   ],
   [
@@ -5574,7 +5625,7 @@
    null,
    20522,
    null,
-   462,
+   466,
    "curve|sequential_lift|C|high|8"
   ],
   [
@@ -5586,7 +5637,7 @@
    null,
    20523,
    null,
-   463,
+   467,
    "curve|sequential_lift|C|high|9"
   ],
   [
@@ -5598,7 +5649,7 @@
    null,
    20524,
    null,
-   464,
+   468,
    "curve|sequential_lift|C|high|10"
   ],
   [
@@ -5610,7 +5661,7 @@
    null,
    20525,
    null,
-   465,
+   469,
    "curve|sequential_lift|C|high|11"
   ],
   [
@@ -5622,7 +5673,7 @@
    null,
    20526,
    null,
-   466,
+   470,
    "curve|sequential_lift|C|high|12"
   ],
   [
@@ -5634,7 +5685,7 @@
    null,
    20527,
    null,
-   467,
+   471,
    "curve|sequential_lift|C|high|13"
   ],
   [
@@ -5646,7 +5697,7 @@
    null,
    20514,
    null,
-   468,
+   472,
    "curve|sequential_p|C|y|0"
   ],
   [
@@ -5658,7 +5709,7 @@
    null,
    20515,
    null,
-   469,
+   473,
    "curve|sequential_p|C|y|1"
   ],
   [
@@ -5670,7 +5721,7 @@
    null,
    20516,
    null,
-   470,
+   474,
    "curve|sequential_p|C|y|2"
   ],
   [
@@ -5682,7 +5733,7 @@
    null,
    20517,
    null,
-   471,
+   475,
    "curve|sequential_p|C|y|3"
   ],
   [
@@ -5694,7 +5745,7 @@
    null,
    20518,
    null,
-   472,
+   476,
    "curve|sequential_p|C|y|4"
   ],
   [
@@ -5706,7 +5757,7 @@
    null,
    20519,
    null,
-   473,
+   477,
    "curve|sequential_p|C|y|5"
   ],
   [
@@ -5718,7 +5769,7 @@
    null,
    20520,
    null,
-   474,
+   478,
    "curve|sequential_p|C|y|6"
   ],
   [
@@ -5730,7 +5781,7 @@
    null,
    20521,
    null,
-   475,
+   479,
    "curve|sequential_p|C|y|7"
   ],
   [
@@ -5742,7 +5793,7 @@
    null,
    20522,
    null,
-   476,
+   480,
    "curve|sequential_p|C|y|8"
   ],
   [
@@ -5754,7 +5805,7 @@
    null,
    20523,
    null,
-   477,
+   481,
    "curve|sequential_p|C|y|9"
   ],
   [
@@ -5766,7 +5817,7 @@
    null,
    20524,
    null,
-   478,
+   482,
    "curve|sequential_p|C|y|10"
   ],
   [
@@ -5778,7 +5829,7 @@
    null,
    20525,
    null,
-   479,
+   483,
    "curve|sequential_p|C|y|11"
   ],
   [
@@ -5790,7 +5841,7 @@
    null,
    20526,
    null,
-   480,
+   484,
    "curve|sequential_p|C|y|12"
   ],
   [
@@ -5802,7 +5853,7 @@
    null,
    20527,
    null,
-   481,
+   485,
    "curve|sequential_p|C|y|13"
   ],
   [
@@ -5814,7 +5865,7 @@
    null,
    37.12537936096625,
    null,
-   482,
+   486,
    "curve|posterior|A|y|0"
   ],
   [
@@ -5826,7 +5877,7 @@
    null,
    37.35493307449173,
    null,
-   483,
+   487,
    "curve|posterior|A|y|1"
   ],
   [
@@ -5838,7 +5889,7 @@
    null,
    37.584486788017216,
    null,
-   484,
+   488,
    "curve|posterior|A|y|2"
   ],
   [
@@ -5850,7 +5901,7 @@
    null,
    37.81404050154269,
    null,
-   485,
+   489,
    "curve|posterior|A|y|3"
   ],
   [
@@ -5862,7 +5913,7 @@
    null,
    38.043594215068175,
    null,
-   486,
+   490,
    "curve|posterior|A|y|4"
   ],
   [
@@ -5874,7 +5925,7 @@
    null,
    38.27314792859366,
    null,
-   487,
+   491,
    "curve|posterior|A|y|5"
   ],
   [
@@ -5886,7 +5937,7 @@
    null,
    38.50270164211914,
    null,
-   488,
+   492,
    "curve|posterior|A|y|6"
   ],
   [
@@ -5898,7 +5949,7 @@
    null,
    38.73225535564462,
    null,
-   489,
+   493,
    "curve|posterior|A|y|7"
   ],
   [
@@ -5910,7 +5961,7 @@
    null,
    38.9618090691701,
    null,
-   490,
+   494,
    "curve|posterior|A|y|8"
   ],
   [
@@ -5922,7 +5973,7 @@
    null,
    39.191362782695585,
    null,
-   491,
+   495,
    "curve|posterior|A|y|9"
   ],
   [
@@ -5934,7 +5985,7 @@
    null,
    39.42091649622107,
    null,
-   492,
+   496,
    "curve|posterior|A|y|10"
   ],
   [
@@ -5946,7 +5997,7 @@
    null,
    39.650470209746544,
    null,
-   493,
+   497,
    "curve|posterior|A|y|11"
   ],
   [
@@ -5958,7 +6009,7 @@
    null,
    39.88002392327203,
    null,
-   494,
+   498,
    "curve|posterior|A|y|12"
   ],
   [
@@ -5970,7 +6021,7 @@
    null,
    40.10957763679751,
    null,
-   495,
+   499,
    "curve|posterior|A|y|13"
   ],
   [
@@ -5982,7 +6033,7 @@
    null,
    40.339131350322994,
    null,
-   496,
+   500,
    "curve|posterior|A|y|14"
   ],
   [
@@ -5994,7 +6045,7 @@
    null,
    40.56868506384848,
    null,
-   497,
+   501,
    "curve|posterior|A|y|15"
   ],
   [
@@ -6006,7 +6057,7 @@
    null,
    40.79823877737395,
    null,
-   498,
+   502,
    "curve|posterior|A|y|16"
   ],
   [
@@ -6018,7 +6069,7 @@
    null,
    41.02779249089944,
    null,
-   499,
+   503,
    "curve|posterior|A|y|17"
   ],
   [
@@ -6030,7 +6081,7 @@
    null,
    41.25734620442492,
    null,
-   500,
+   504,
    "curve|posterior|A|y|18"
   ],
   [
@@ -6042,7 +6093,7 @@
    null,
    41.4868999179504,
    null,
-   501,
+   505,
    "curve|posterior|A|y|19"
   ],
   [
@@ -6054,7 +6105,7 @@
    null,
    41.71645363147588,
    null,
-   502,
+   506,
    "curve|posterior|A|y|20"
   ],
   [
@@ -6066,7 +6117,7 @@
    null,
    41.94600734500136,
    null,
-   503,
+   507,
    "curve|posterior|A|y|21"
   ],
   [
@@ -6078,7 +6129,7 @@
    null,
    42.175561058526846,
    null,
-   504,
+   508,
    "curve|posterior|A|y|22"
   ],
   [
@@ -6090,7 +6141,7 @@
    null,
    42.40511477205233,
    null,
-   505,
+   509,
    "curve|posterior|A|y|23"
   ],
   [
@@ -6102,7 +6153,7 @@
    null,
    42.634668485577805,
    null,
-   506,
+   510,
    "curve|posterior|A|y|24"
   ],
   [
@@ -6114,7 +6165,7 @@
    null,
    42.86422219910329,
    null,
-   507,
+   511,
    "curve|posterior|A|y|25"
   ],
   [
@@ -6126,7 +6177,7 @@
    null,
    43.09377591262877,
    null,
-   508,
+   512,
    "curve|posterior|A|y|26"
   ],
   [
@@ -6138,7 +6189,7 @@
    null,
    43.323329626154255,
    null,
-   509,
+   513,
    "curve|posterior|A|y|27"
   ],
   [
@@ -6150,7 +6201,7 @@
    null,
    43.55288333967974,
    null,
-   510,
+   514,
    "curve|posterior|A|y|28"
   ],
   [
@@ -6162,7 +6213,7 @@
    null,
    43.782437053205214,
    null,
-   511,
+   515,
    "curve|posterior|A|y|29"
   ],
   [
@@ -6174,7 +6225,7 @@
    null,
    44.0119907667307,
    null,
-   512,
+   516,
    "curve|posterior|A|y|30"
   ],
   [
@@ -6186,7 +6237,7 @@
    null,
    44.24154448025618,
    null,
-   513,
+   517,
    "curve|posterior|A|y|31"
   ],
   [
@@ -6198,7 +6249,7 @@
    null,
    44.471098193781664,
    null,
-   514,
+   518,
    "curve|posterior|A|y|32"
   ],
   [
@@ -6210,7 +6261,7 @@
    null,
    44.70065190730714,
    null,
-   515,
+   519,
    "curve|posterior|A|y|33"
   ],
   [
@@ -6222,7 +6273,7 @@
    null,
    44.93020562083262,
    null,
-   516,
+   520,
    "curve|posterior|A|y|34"
   ],
   [
@@ -6234,7 +6285,7 @@
    null,
    45.15975933435811,
    null,
-   517,
+   521,
    "curve|posterior|A|y|35"
   ],
   [
@@ -6246,7 +6297,7 @@
    null,
    45.38931304788359,
    null,
-   518,
+   522,
    "curve|posterior|A|y|36"
   ],
   [
@@ -6258,7 +6309,7 @@
    null,
    45.618866761409066,
    null,
-   519,
+   523,
    "curve|posterior|A|y|37"
   ],
   [
@@ -6270,7 +6321,7 @@
    null,
    45.84842047493455,
    null,
-   520,
+   524,
    "curve|posterior|A|y|38"
   ],
   [
@@ -6282,7 +6333,7 @@
    null,
    46.07797418846003,
    null,
-   521,
+   525,
    "curve|posterior|A|y|39"
   ],
   [
@@ -6294,7 +6345,7 @@
    null,
    37.12537936096625,
    null,
-   522,
+   526,
    "curve|posterior|B|y|0"
   ],
   [
@@ -6306,7 +6357,7 @@
    null,
    37.35493307449173,
    null,
-   523,
+   527,
    "curve|posterior|B|y|1"
   ],
   [
@@ -6318,7 +6369,7 @@
    null,
    37.584486788017216,
    null,
-   524,
+   528,
    "curve|posterior|B|y|2"
   ],
   [
@@ -6330,7 +6381,7 @@
    null,
    37.81404050154269,
    null,
-   525,
+   529,
    "curve|posterior|B|y|3"
   ],
   [
@@ -6342,7 +6393,7 @@
    null,
    38.043594215068175,
    null,
-   526,
+   530,
    "curve|posterior|B|y|4"
   ],
   [
@@ -6354,7 +6405,7 @@
    null,
    38.27314792859366,
    null,
-   527,
+   531,
    "curve|posterior|B|y|5"
   ],
   [
@@ -6366,7 +6417,7 @@
    null,
    38.50270164211914,
    null,
-   528,
+   532,
    "curve|posterior|B|y|6"
   ],
   [
@@ -6378,7 +6429,7 @@
    null,
    38.73225535564462,
    null,
-   529,
+   533,
    "curve|posterior|B|y|7"
   ],
   [
@@ -6390,7 +6441,7 @@
    null,
    38.9618090691701,
    null,
-   530,
+   534,
    "curve|posterior|B|y|8"
   ],
   [
@@ -6402,7 +6453,7 @@
    null,
    39.191362782695585,
    null,
-   531,
+   535,
    "curve|posterior|B|y|9"
   ],
   [
@@ -6414,7 +6465,7 @@
    null,
    39.42091649622107,
    null,
-   532,
+   536,
    "curve|posterior|B|y|10"
   ],
   [
@@ -6426,7 +6477,7 @@
    null,
    39.650470209746544,
    null,
-   533,
+   537,
    "curve|posterior|B|y|11"
   ],
   [
@@ -6438,7 +6489,7 @@
    null,
    39.88002392327203,
    null,
-   534,
+   538,
    "curve|posterior|B|y|12"
   ],
   [
@@ -6450,7 +6501,7 @@
    null,
    40.10957763679751,
    null,
-   535,
+   539,
    "curve|posterior|B|y|13"
   ],
   [
@@ -6462,7 +6513,7 @@
    null,
    40.339131350322994,
    null,
-   536,
+   540,
    "curve|posterior|B|y|14"
   ],
   [
@@ -6474,7 +6525,7 @@
    null,
    40.56868506384848,
    null,
-   537,
+   541,
    "curve|posterior|B|y|15"
   ],
   [
@@ -6486,7 +6537,7 @@
    null,
    40.79823877737395,
    null,
-   538,
+   542,
    "curve|posterior|B|y|16"
   ],
   [
@@ -6498,7 +6549,7 @@
    null,
    41.02779249089944,
    null,
-   539,
+   543,
    "curve|posterior|B|y|17"
   ],
   [
@@ -6510,7 +6561,7 @@
    null,
    41.25734620442492,
    null,
-   540,
+   544,
    "curve|posterior|B|y|18"
   ],
   [
@@ -6522,7 +6573,7 @@
    null,
    41.4868999179504,
    null,
-   541,
+   545,
    "curve|posterior|B|y|19"
   ],
   [
@@ -6534,7 +6585,7 @@
    null,
    41.71645363147588,
    null,
-   542,
+   546,
    "curve|posterior|B|y|20"
   ],
   [
@@ -6546,7 +6597,7 @@
    null,
    41.94600734500136,
    null,
-   543,
+   547,
    "curve|posterior|B|y|21"
   ],
   [
@@ -6558,7 +6609,7 @@
    null,
    42.175561058526846,
    null,
-   544,
+   548,
    "curve|posterior|B|y|22"
   ],
   [
@@ -6570,7 +6621,7 @@
    null,
    42.40511477205233,
    null,
-   545,
+   549,
    "curve|posterior|B|y|23"
   ],
   [
@@ -6582,7 +6633,7 @@
    null,
    42.634668485577805,
    null,
-   546,
+   550,
    "curve|posterior|B|y|24"
   ],
   [
@@ -6594,7 +6645,7 @@
    null,
    42.86422219910329,
    null,
-   547,
+   551,
    "curve|posterior|B|y|25"
   ],
   [
@@ -6606,7 +6657,7 @@
    null,
    43.09377591262877,
    null,
-   548,
+   552,
    "curve|posterior|B|y|26"
   ],
   [
@@ -6618,7 +6669,7 @@
    null,
    43.323329626154255,
    null,
-   549,
+   553,
    "curve|posterior|B|y|27"
   ],
   [
@@ -6630,7 +6681,7 @@
    null,
    43.55288333967974,
    null,
-   550,
+   554,
    "curve|posterior|B|y|28"
   ],
   [
@@ -6642,7 +6693,7 @@
    null,
    43.782437053205214,
    null,
-   551,
+   555,
    "curve|posterior|B|y|29"
   ],
   [
@@ -6654,7 +6705,7 @@
    null,
    44.0119907667307,
    null,
-   552,
+   556,
    "curve|posterior|B|y|30"
   ],
   [
@@ -6666,7 +6717,7 @@
    null,
    44.24154448025618,
    null,
-   553,
+   557,
    "curve|posterior|B|y|31"
   ],
   [
@@ -6678,7 +6729,7 @@
    null,
    44.471098193781664,
    null,
-   554,
+   558,
    "curve|posterior|B|y|32"
   ],
   [
@@ -6690,7 +6741,7 @@
    null,
    44.70065190730714,
    null,
-   555,
+   559,
    "curve|posterior|B|y|33"
   ],
   [
@@ -6702,7 +6753,7 @@
    null,
    44.93020562083262,
    null,
-   556,
+   560,
    "curve|posterior|B|y|34"
   ],
   [
@@ -6714,7 +6765,7 @@
    null,
    45.15975933435811,
    null,
-   557,
+   561,
    "curve|posterior|B|y|35"
   ],
   [
@@ -6726,7 +6777,7 @@
    null,
    45.38931304788359,
    null,
-   558,
+   562,
    "curve|posterior|B|y|36"
   ],
   [
@@ -6738,7 +6789,7 @@
    null,
    45.618866761409066,
    null,
-   559,
+   563,
    "curve|posterior|B|y|37"
   ],
   [
@@ -6750,7 +6801,7 @@
    null,
    45.84842047493455,
    null,
-   560,
+   564,
    "curve|posterior|B|y|38"
   ],
   [
@@ -6762,7 +6813,7 @@
    null,
    46.07797418846003,
    null,
-   561,
+   565,
    "curve|posterior|B|y|39"
   ],
   [
@@ -6774,7 +6825,7 @@
    null,
    37.12537936096625,
    null,
-   562,
+   566,
    "curve|posterior|C|y|0"
   ],
   [
@@ -6786,7 +6837,7 @@
    null,
    37.35493307449173,
    null,
-   563,
+   567,
    "curve|posterior|C|y|1"
   ],
   [
@@ -6798,7 +6849,7 @@
    null,
    37.584486788017216,
    null,
-   564,
+   568,
    "curve|posterior|C|y|2"
   ],
   [
@@ -6810,7 +6861,7 @@
    null,
    37.81404050154269,
    null,
-   565,
+   569,
    "curve|posterior|C|y|3"
   ],
   [
@@ -6822,7 +6873,7 @@
    null,
    38.043594215068175,
    null,
-   566,
+   570,
    "curve|posterior|C|y|4"
   ],
   [
@@ -6834,7 +6885,7 @@
    null,
    38.27314792859366,
    null,
-   567,
+   571,
    "curve|posterior|C|y|5"
   ],
   [
@@ -6846,7 +6897,7 @@
    null,
    38.50270164211914,
    null,
-   568,
+   572,
    "curve|posterior|C|y|6"
   ],
   [
@@ -6858,7 +6909,7 @@
    null,
    38.73225535564462,
    null,
-   569,
+   573,
    "curve|posterior|C|y|7"
   ],
   [
@@ -6870,7 +6921,7 @@
    null,
    38.9618090691701,
    null,
-   570,
+   574,
    "curve|posterior|C|y|8"
   ],
   [
@@ -6882,7 +6933,7 @@
    null,
    39.191362782695585,
    null,
-   571,
+   575,
    "curve|posterior|C|y|9"
   ],
   [
@@ -6894,7 +6945,7 @@
    null,
    39.42091649622107,
    null,
-   572,
+   576,
    "curve|posterior|C|y|10"
   ],
   [
@@ -6906,7 +6957,7 @@
    null,
    39.650470209746544,
    null,
-   573,
+   577,
    "curve|posterior|C|y|11"
   ],
   [
@@ -6918,7 +6969,7 @@
    null,
    39.88002392327203,
    null,
-   574,
+   578,
    "curve|posterior|C|y|12"
   ],
   [
@@ -6930,7 +6981,7 @@
    null,
    40.10957763679751,
    null,
-   575,
+   579,
    "curve|posterior|C|y|13"
   ],
   [
@@ -6942,7 +6993,7 @@
    null,
    40.339131350322994,
    null,
-   576,
+   580,
    "curve|posterior|C|y|14"
   ],
   [
@@ -6954,7 +7005,7 @@
    null,
    40.56868506384848,
    null,
-   577,
+   581,
    "curve|posterior|C|y|15"
   ],
   [
@@ -6966,7 +7017,7 @@
    null,
    40.79823877737395,
    null,
-   578,
+   582,
    "curve|posterior|C|y|16"
   ],
   [
@@ -6978,7 +7029,7 @@
    null,
    41.02779249089944,
    null,
-   579,
+   583,
    "curve|posterior|C|y|17"
   ],
   [
@@ -6990,7 +7041,7 @@
    null,
    41.25734620442492,
    null,
-   580,
+   584,
    "curve|posterior|C|y|18"
   ],
   [
@@ -7002,7 +7053,7 @@
    null,
    41.4868999179504,
    null,
-   581,
+   585,
    "curve|posterior|C|y|19"
   ],
   [
@@ -7014,7 +7065,7 @@
    null,
    41.71645363147588,
    null,
-   582,
+   586,
    "curve|posterior|C|y|20"
   ],
   [
@@ -7026,7 +7077,7 @@
    null,
    41.94600734500136,
    null,
-   583,
+   587,
    "curve|posterior|C|y|21"
   ],
   [
@@ -7038,7 +7089,7 @@
    null,
    42.175561058526846,
    null,
-   584,
+   588,
    "curve|posterior|C|y|22"
   ],
   [
@@ -7050,7 +7101,7 @@
    null,
    42.40511477205233,
    null,
-   585,
+   589,
    "curve|posterior|C|y|23"
   ],
   [
@@ -7062,7 +7113,7 @@
    null,
    42.634668485577805,
    null,
-   586,
+   590,
    "curve|posterior|C|y|24"
   ],
   [
@@ -7074,7 +7125,7 @@
    null,
    42.86422219910329,
    null,
-   587,
+   591,
    "curve|posterior|C|y|25"
   ],
   [
@@ -7086,7 +7137,7 @@
    null,
    43.09377591262877,
    null,
-   588,
+   592,
    "curve|posterior|C|y|26"
   ],
   [
@@ -7098,7 +7149,7 @@
    null,
    43.323329626154255,
    null,
-   589,
+   593,
    "curve|posterior|C|y|27"
   ],
   [
@@ -7110,7 +7161,7 @@
    null,
    43.55288333967974,
    null,
-   590,
+   594,
    "curve|posterior|C|y|28"
   ],
   [
@@ -7122,7 +7173,7 @@
    null,
    43.782437053205214,
    null,
-   591,
+   595,
    "curve|posterior|C|y|29"
   ],
   [
@@ -7134,7 +7185,7 @@
    null,
    44.0119907667307,
    null,
-   592,
+   596,
    "curve|posterior|C|y|30"
   ],
   [
@@ -7146,7 +7197,7 @@
    null,
    44.24154448025618,
    null,
-   593,
+   597,
    "curve|posterior|C|y|31"
   ],
   [
@@ -7158,7 +7209,7 @@
    null,
    44.471098193781664,
    null,
-   594,
+   598,
    "curve|posterior|C|y|32"
   ],
   [
@@ -7170,7 +7221,7 @@
    null,
    44.70065190730714,
    null,
-   595,
+   599,
    "curve|posterior|C|y|33"
   ],
   [
@@ -7182,7 +7233,7 @@
    null,
    44.93020562083262,
    null,
-   596,
+   600,
    "curve|posterior|C|y|34"
   ],
   [
@@ -7194,7 +7245,7 @@
    null,
    45.15975933435811,
    null,
-   597,
+   601,
    "curve|posterior|C|y|35"
   ],
   [
@@ -7206,7 +7257,7 @@
    null,
    45.38931304788359,
    null,
-   598,
+   602,
    "curve|posterior|C|y|36"
   ],
   [
@@ -7218,7 +7269,7 @@
    null,
    45.618866761409066,
    null,
-   599,
+   603,
    "curve|posterior|C|y|37"
   ],
   [
@@ -7230,7 +7281,7 @@
    null,
    45.84842047493455,
    null,
-   600,
+   604,
    "curve|posterior|C|y|38"
   ],
   [
@@ -7242,7 +7293,7 @@
    null,
    46.07797418846003,
    null,
-   601,
+   605,
    "curve|posterior|C|y|39"
   ],
   [
@@ -7254,7 +7305,7 @@
    null,
    0.001,
    null,
-   602,
+   606,
    "curve|power|B|y|0"
   ],
   [
@@ -7266,7 +7317,7 @@
    null,
    0.0035,
    null,
-   603,
+   607,
    "curve|power|B|y|1"
   ],
   [
@@ -7278,7 +7329,7 @@
    null,
    0.006,
    null,
-   604,
+   608,
    "curve|power|B|y|2"
   ],
   [
@@ -7290,7 +7341,7 @@
    null,
    0.0085,
    null,
-   605,
+   609,
    "curve|power|B|y|3"
   ],
   [
@@ -7302,7 +7353,7 @@
    null,
    0.011,
    null,
-   606,
+   610,
    "curve|power|B|y|4"
   ],
   [
@@ -7314,7 +7365,7 @@
    null,
    0.013499999999999998,
    null,
-   607,
+   611,
    "curve|power|B|y|5"
   ],
   [
@@ -7326,7 +7377,7 @@
    null,
    0.016,
    null,
-   608,
+   612,
    "curve|power|B|y|6"
   ],
   [
@@ -7338,7 +7389,7 @@
    null,
    0.0185,
    null,
-   609,
+   613,
    "curve|power|B|y|7"
   ],
   [
@@ -7350,7 +7401,7 @@
    null,
    0.021,
    null,
-   610,
+   614,
    "curve|power|B|y|8"
   ],
   [
@@ -7362,7 +7413,7 @@
    null,
    0.023500000000000004,
    null,
-   611,
+   615,
    "curve|power|B|y|9"
   ],
   [
@@ -7374,7 +7425,7 @@
    null,
    0.026,
    null,
-   612,
+   616,
    "curve|power|B|y|10"
   ],
   [
@@ -7386,7 +7437,7 @@
    null,
    0.028499999999999998,
    null,
-   613,
+   617,
    "curve|power|B|y|11"
   ],
   [
@@ -7398,7 +7449,7 @@
    null,
    0.031,
    null,
-   614,
+   618,
    "curve|power|B|y|12"
   ],
   [
@@ -7410,7 +7461,7 @@
    null,
    0.0335,
    null,
-   615,
+   619,
    "curve|power|B|y|13"
   ],
   [
@@ -7422,7 +7473,7 @@
    null,
    0.036,
    null,
-   616,
+   620,
    "curve|power|B|y|14"
   ],
   [
@@ -7434,7 +7485,7 @@
    null,
    0.0385,
    null,
-   617,
+   621,
    "curve|power|B|y|15"
   ],
   [
@@ -7446,7 +7497,7 @@
    null,
    0.041,
    null,
-   618,
+   622,
    "curve|power|B|y|16"
   ],
   [
@@ -7458,7 +7509,7 @@
    null,
    0.043500000000000004,
    null,
-   619,
+   623,
    "curve|power|B|y|17"
   ],
   [
@@ -7470,7 +7521,7 @@
    null,
    0.046000000000000006,
    null,
-   620,
+   624,
    "curve|power|B|y|18"
   ],
   [
@@ -7482,7 +7533,7 @@
    null,
    0.048499999999999995,
    null,
-   621,
+   625,
    "curve|power|B|y|19"
   ],
   [
@@ -7494,7 +7545,7 @@
    null,
    0.051,
    null,
-   622,
+   626,
    "curve|power|B|y|20"
   ],
   [
@@ -7506,7 +7557,7 @@
    null,
    0.0535,
    null,
-   623,
+   627,
    "curve|power|B|y|21"
   ],
   [
@@ -7518,7 +7569,7 @@
    null,
    0.055999999999999994,
    null,
-   624,
+   628,
    "curve|power|B|y|22"
   ],
   [
@@ -7530,7 +7581,7 @@
    null,
    0.058499999999999996,
    null,
-   625,
+   629,
    "curve|power|B|y|23"
   ],
   [
@@ -7542,7 +7593,7 @@
    null,
    0.061,
    null,
-   626,
+   630,
    "curve|power|B|y|24"
   ],
   [
@@ -7554,7 +7605,7 @@
    null,
    0.001,
    null,
-   627,
+   631,
    "curve|power|C|y|0"
   ],
   [
@@ -7566,7 +7617,7 @@
    null,
    0.0035,
    null,
-   628,
+   632,
    "curve|power|C|y|1"
   ],
   [
@@ -7578,7 +7629,7 @@
    null,
    0.006,
    null,
-   629,
+   633,
    "curve|power|C|y|2"
   ],
   [
@@ -7590,7 +7641,7 @@
    null,
    0.0085,
    null,
-   630,
+   634,
    "curve|power|C|y|3"
   ],
   [
@@ -7602,7 +7653,7 @@
    null,
    0.011,
    null,
-   631,
+   635,
    "curve|power|C|y|4"
   ],
   [
@@ -7614,7 +7665,7 @@
    null,
    0.013499999999999998,
    null,
-   632,
+   636,
    "curve|power|C|y|5"
   ],
   [
@@ -7626,7 +7677,7 @@
    null,
    0.016,
    null,
-   633,
+   637,
    "curve|power|C|y|6"
   ],
   [
@@ -7638,7 +7689,7 @@
    null,
    0.0185,
    null,
-   634,
+   638,
    "curve|power|C|y|7"
   ],
   [
@@ -7650,7 +7701,7 @@
    null,
    0.021,
    null,
-   635,
+   639,
    "curve|power|C|y|8"
   ],
   [
@@ -7662,7 +7713,7 @@
    null,
    0.023500000000000004,
    null,
-   636,
+   640,
    "curve|power|C|y|9"
   ],
   [
@@ -7674,7 +7725,7 @@
    null,
    0.026,
    null,
-   637,
+   641,
    "curve|power|C|y|10"
   ],
   [
@@ -7686,7 +7737,7 @@
    null,
    0.028499999999999998,
    null,
-   638,
+   642,
    "curve|power|C|y|11"
   ],
   [
@@ -7698,7 +7749,7 @@
    null,
    0.031,
    null,
-   639,
+   643,
    "curve|power|C|y|12"
   ],
   [
@@ -7710,7 +7761,7 @@
    null,
    0.0335,
    null,
-   640,
+   644,
    "curve|power|C|y|13"
   ],
   [
@@ -7722,7 +7773,7 @@
    null,
    0.036,
    null,
-   641,
+   645,
    "curve|power|C|y|14"
   ],
   [
@@ -7734,7 +7785,7 @@
    null,
    0.0385,
    null,
-   642,
+   646,
    "curve|power|C|y|15"
   ],
   [
@@ -7746,7 +7797,7 @@
    null,
    0.041,
    null,
-   643,
+   647,
    "curve|power|C|y|16"
   ],
   [
@@ -7758,7 +7809,7 @@
    null,
    0.043500000000000004,
    null,
-   644,
+   648,
    "curve|power|C|y|17"
   ],
   [
@@ -7770,7 +7821,7 @@
    null,
    0.046000000000000006,
    null,
-   645,
+   649,
    "curve|power|C|y|18"
   ],
   [
@@ -7782,7 +7833,7 @@
    null,
    0.048499999999999995,
    null,
-   646,
+   650,
    "curve|power|C|y|19"
   ],
   [
@@ -7794,7 +7845,7 @@
    null,
    0.051,
    null,
-   647,
+   651,
    "curve|power|C|y|20"
   ],
   [
@@ -7806,7 +7857,7 @@
    null,
    0.0535,
    null,
-   648,
+   652,
    "curve|power|C|y|21"
   ],
   [
@@ -7818,7 +7869,7 @@
    null,
    0.055999999999999994,
    null,
-   649,
+   653,
    "curve|power|C|y|22"
   ],
   [
@@ -7830,7 +7881,7 @@
    null,
    0.058499999999999996,
    null,
-   650,
+   654,
    "curve|power|C|y|23"
   ],
   [
@@ -7842,7 +7893,7 @@
    null,
    0.061,
    null,
-   651,
+   655,
    "curve|power|C|y|24"
   ],
   [
@@ -7854,7 +7905,7 @@
    null,
    0.0,
    0.0,
-   652,
+   656,
    "hist|metric|A|count|0"
   ],
   [
@@ -7866,7 +7917,7 @@
    null,
    0.0,
    12.0,
-   653,
+   657,
    "hist|metric|A|count|1"
   ],
   [
@@ -7878,7 +7929,7 @@
    null,
    12.0,
    24.0,
-   654,
+   658,
    "hist|metric|A|count|2"
   ],
   [
@@ -7890,7 +7941,7 @@
    null,
    24.0,
    36.0,
-   655,
+   659,
    "hist|metric|A|count|3"
   ],
   [
@@ -7902,7 +7953,7 @@
    null,
    36.0,
    48.0,
-   656,
+   660,
    "hist|metric|A|count|4"
   ],
   [
@@ -7914,7 +7965,7 @@
    null,
    48.0,
    60.0,
-   657,
+   661,
    "hist|metric|A|count|5"
   ],
   [
@@ -7926,7 +7977,7 @@
    null,
    60.0,
    72.0,
-   658,
+   662,
    "hist|metric|A|count|6"
   ],
   [
@@ -7938,7 +7989,7 @@
    null,
    72.0,
    84.0,
-   659,
+   663,
    "hist|metric|A|count|7"
   ],
   [
@@ -7950,7 +8001,7 @@
    null,
    84.0,
    96.0,
-   660,
+   664,
    "hist|metric|A|count|8"
   ],
   [
@@ -7962,7 +8013,7 @@
    null,
    96.0,
    108.0,
-   661,
+   665,
    "hist|metric|A|count|9"
   ],
   [
@@ -7974,7 +8025,7 @@
    null,
    108.0,
    120.0,
-   662,
+   666,
    "hist|metric|A|count|10"
   ],
   [
@@ -7986,7 +8037,7 @@
    null,
    120.0,
    132.0,
-   663,
+   667,
    "hist|metric|A|count|11"
   ],
   [
@@ -7998,7 +8049,7 @@
    null,
    132.0,
    144.0,
-   664,
+   668,
    "hist|metric|A|count|12"
   ],
   [
@@ -8010,7 +8061,7 @@
    null,
    144.0,
    156.0,
-   665,
+   669,
    "hist|metric|A|count|13"
   ],
   [
@@ -8022,7 +8073,7 @@
    null,
    156.0,
    168.0,
-   666,
+   670,
    "hist|metric|A|count|14"
   ],
   [
@@ -8034,7 +8085,7 @@
    null,
    168.0,
    180.0,
-   667,
+   671,
    "hist|metric|A|count|15"
   ],
   [
@@ -8046,7 +8097,7 @@
    null,
    180.0,
    192.0,
-   668,
+   672,
    "hist|metric|A|count|16"
   ],
   [
@@ -8058,7 +8109,7 @@
    null,
    192.0,
    204.0,
-   669,
+   673,
    "hist|metric|A|count|17"
   ],
   [
@@ -8070,7 +8121,7 @@
    null,
    204.0,
    216.0,
-   670,
+   674,
    "hist|metric|A|count|18"
   ],
   [
@@ -8082,7 +8133,7 @@
    null,
    216.0,
    228.0,
-   671,
+   675,
    "hist|metric|A|count|19"
   ],
   [
@@ -8094,7 +8145,7 @@
    null,
    228.0,
    240.0,
-   672,
+   676,
    "hist|metric|A|count|20"
   ],
   [
@@ -8106,7 +8157,7 @@
    null,
    240.0,
    252.0,
-   673,
+   677,
    "hist|metric|A|count|21"
   ],
   [
@@ -8118,7 +8169,7 @@
    null,
    252.0,
    264.0,
-   674,
+   678,
    "hist|metric|A|count|22"
   ],
   [
@@ -8130,7 +8181,7 @@
    null,
    264.0,
    276.0,
-   675,
+   679,
    "hist|metric|A|count|23"
   ],
   [
@@ -8142,7 +8193,7 @@
    null,
    276.0,
    288.0,
-   676,
+   680,
    "hist|metric|A|count|24"
   ],
   [
@@ -8154,7 +8205,7 @@
    null,
    288.0,
    300.0,
-   677,
+   681,
    "hist|metric|A|count|25"
   ],
   [
@@ -8166,7 +8217,7 @@
    null,
    300.0,
    312.0,
-   678,
+   682,
    "hist|metric|A|count|26"
   ],
   [
@@ -8178,7 +8229,7 @@
    null,
    312.0,
    324.0,
-   679,
+   683,
    "hist|metric|A|count|27"
   ],
   [
@@ -8190,7 +8241,7 @@
    null,
    324.0,
    336.0,
-   680,
+   684,
    "hist|metric|A|count|28"
   ],
   [
@@ -8202,7 +8253,7 @@
    null,
    336.0,
    348.0,
-   681,
+   685,
    "hist|metric|A|count|29"
   ],
   [
@@ -8214,7 +8265,7 @@
    null,
    348.0,
    360.0,
-   682,
+   686,
    "hist|metric|A|count|30"
   ],
   [
@@ -8226,7 +8277,7 @@
    null,
    360.0,
    372.0,
-   683,
+   687,
    "hist|metric|A|count|31"
   ],
   [
@@ -8238,7 +8289,7 @@
    null,
    0.0,
    0.0,
-   684,
+   688,
    "hist|metric|B|count|0"
   ],
   [
@@ -8250,7 +8301,7 @@
    null,
    0.0,
    12.0,
-   685,
+   689,
    "hist|metric|B|count|1"
   ],
   [
@@ -8262,7 +8313,7 @@
    null,
    12.0,
    24.0,
-   686,
+   690,
    "hist|metric|B|count|2"
   ],
   [
@@ -8274,7 +8325,7 @@
    null,
    24.0,
    36.0,
-   687,
+   691,
    "hist|metric|B|count|3"
   ],
   [
@@ -8286,7 +8337,7 @@
    null,
    36.0,
    48.0,
-   688,
+   692,
    "hist|metric|B|count|4"
   ],
   [
@@ -8298,7 +8349,7 @@
    null,
    48.0,
    60.0,
-   689,
+   693,
    "hist|metric|B|count|5"
   ],
   [
@@ -8310,7 +8361,7 @@
    null,
    60.0,
    72.0,
-   690,
+   694,
    "hist|metric|B|count|6"
   ],
   [
@@ -8322,7 +8373,7 @@
    null,
    72.0,
    84.0,
-   691,
+   695,
    "hist|metric|B|count|7"
   ],
   [
@@ -8334,7 +8385,7 @@
    null,
    84.0,
    96.0,
-   692,
+   696,
    "hist|metric|B|count|8"
   ],
   [
@@ -8346,7 +8397,7 @@
    null,
    96.0,
    108.0,
-   693,
+   697,
    "hist|metric|B|count|9"
   ],
   [
@@ -8358,7 +8409,7 @@
    null,
    108.0,
    120.0,
-   694,
+   698,
    "hist|metric|B|count|10"
   ],
   [
@@ -8370,7 +8421,7 @@
    null,
    120.0,
    132.0,
-   695,
+   699,
    "hist|metric|B|count|11"
   ],
   [
@@ -8382,7 +8433,7 @@
    null,
    132.0,
    144.0,
-   696,
+   700,
    "hist|metric|B|count|12"
   ],
   [
@@ -8394,7 +8445,7 @@
    null,
    144.0,
    156.0,
-   697,
+   701,
    "hist|metric|B|count|13"
   ],
   [
@@ -8406,7 +8457,7 @@
    null,
    156.0,
    168.0,
-   698,
+   702,
    "hist|metric|B|count|14"
   ],
   [
@@ -8418,7 +8469,7 @@
    null,
    168.0,
    180.0,
-   699,
+   703,
    "hist|metric|B|count|15"
   ],
   [
@@ -8430,7 +8481,7 @@
    null,
    180.0,
    192.0,
-   700,
+   704,
    "hist|metric|B|count|16"
   ],
   [
@@ -8442,7 +8493,7 @@
    null,
    192.0,
    204.0,
-   701,
+   705,
    "hist|metric|B|count|17"
   ],
   [
@@ -8454,7 +8505,7 @@
    null,
    204.0,
    216.0,
-   702,
+   706,
    "hist|metric|B|count|18"
   ],
   [
@@ -8466,7 +8517,7 @@
    null,
    216.0,
    228.0,
-   703,
+   707,
    "hist|metric|B|count|19"
   ],
   [
@@ -8478,7 +8529,7 @@
    null,
    228.0,
    240.0,
-   704,
+   708,
    "hist|metric|B|count|20"
   ],
   [
@@ -8490,7 +8541,7 @@
    null,
    240.0,
    252.0,
-   705,
+   709,
    "hist|metric|B|count|21"
   ],
   [
@@ -8502,7 +8553,7 @@
    null,
    252.0,
    264.0,
-   706,
+   710,
    "hist|metric|B|count|22"
   ],
   [
@@ -8514,7 +8565,7 @@
    null,
    264.0,
    276.0,
-   707,
+   711,
    "hist|metric|B|count|23"
   ],
   [
@@ -8526,7 +8577,7 @@
    null,
    276.0,
    288.0,
-   708,
+   712,
    "hist|metric|B|count|24"
   ],
   [
@@ -8538,7 +8589,7 @@
    null,
    288.0,
    300.0,
-   709,
+   713,
    "hist|metric|B|count|25"
   ],
   [
@@ -8550,7 +8601,7 @@
    null,
    300.0,
    312.0,
-   710,
+   714,
    "hist|metric|B|count|26"
   ],
   [
@@ -8562,7 +8613,7 @@
    null,
    312.0,
    324.0,
-   711,
+   715,
    "hist|metric|B|count|27"
   ],
   [
@@ -8574,7 +8625,7 @@
    null,
    324.0,
    336.0,
-   712,
+   716,
    "hist|metric|B|count|28"
   ],
   [
@@ -8586,7 +8637,7 @@
    null,
    336.0,
    348.0,
-   713,
+   717,
    "hist|metric|B|count|29"
   ],
   [
@@ -8598,7 +8649,7 @@
    null,
    348.0,
    360.0,
-   714,
+   718,
    "hist|metric|B|count|30"
   ],
   [
@@ -8610,7 +8661,7 @@
    null,
    360.0,
    372.0,
-   715,
+   719,
    "hist|metric|B|count|31"
   ],
   [
@@ -8622,7 +8673,7 @@
    null,
    0.0,
    0.0,
-   716,
+   720,
    "hist|metric|C|count|0"
   ],
   [
@@ -8634,7 +8685,7 @@
    null,
    0.0,
    12.0,
-   717,
+   721,
    "hist|metric|C|count|1"
   ],
   [
@@ -8646,7 +8697,7 @@
    null,
    12.0,
    24.0,
-   718,
+   722,
    "hist|metric|C|count|2"
   ],
   [
@@ -8658,7 +8709,7 @@
    null,
    24.0,
    36.0,
-   719,
+   723,
    "hist|metric|C|count|3"
   ],
   [
@@ -8670,7 +8721,7 @@
    null,
    36.0,
    48.0,
-   720,
+   724,
    "hist|metric|C|count|4"
   ],
   [
@@ -8682,7 +8733,7 @@
    null,
    48.0,
    60.0,
-   721,
+   725,
    "hist|metric|C|count|5"
   ],
   [
@@ -8694,7 +8745,7 @@
    null,
    60.0,
    72.0,
-   722,
+   726,
    "hist|metric|C|count|6"
   ],
   [
@@ -8706,7 +8757,7 @@
    null,
    72.0,
    84.0,
-   723,
+   727,
    "hist|metric|C|count|7"
   ],
   [
@@ -8718,7 +8769,7 @@
    null,
    84.0,
    96.0,
-   724,
+   728,
    "hist|metric|C|count|8"
   ],
   [
@@ -8730,7 +8781,7 @@
    null,
    96.0,
    108.0,
-   725,
+   729,
    "hist|metric|C|count|9"
   ],
   [
@@ -8742,7 +8793,7 @@
    null,
    108.0,
    120.0,
-   726,
+   730,
    "hist|metric|C|count|10"
   ],
   [
@@ -8754,7 +8805,7 @@
    null,
    120.0,
    132.0,
-   727,
+   731,
    "hist|metric|C|count|11"
   ],
   [
@@ -8766,7 +8817,7 @@
    null,
    132.0,
    144.0,
-   728,
+   732,
    "hist|metric|C|count|12"
   ],
   [
@@ -8778,7 +8829,7 @@
    null,
    144.0,
    156.0,
-   729,
+   733,
    "hist|metric|C|count|13"
   ],
   [
@@ -8790,7 +8841,7 @@
    null,
    156.0,
    168.0,
-   730,
+   734,
    "hist|metric|C|count|14"
   ],
   [
@@ -8802,7 +8853,7 @@
    null,
    168.0,
    180.0,
-   731,
+   735,
    "hist|metric|C|count|15"
   ],
   [
@@ -8814,7 +8865,7 @@
    null,
    180.0,
    192.0,
-   732,
+   736,
    "hist|metric|C|count|16"
   ],
   [
@@ -8826,7 +8877,7 @@
    null,
    192.0,
    204.0,
-   733,
+   737,
    "hist|metric|C|count|17"
   ],
   [
@@ -8838,7 +8889,7 @@
    null,
    204.0,
    216.0,
-   734,
+   738,
    "hist|metric|C|count|18"
   ],
   [
@@ -8850,7 +8901,7 @@
    null,
    216.0,
    228.0,
-   735,
+   739,
    "hist|metric|C|count|19"
   ],
   [
@@ -8862,7 +8913,7 @@
    null,
    228.0,
    240.0,
-   736,
+   740,
    "hist|metric|C|count|20"
   ],
   [
@@ -8874,7 +8925,7 @@
    null,
    240.0,
    252.0,
-   737,
+   741,
    "hist|metric|C|count|21"
   ],
   [
@@ -8886,7 +8937,7 @@
    null,
    252.0,
    264.0,
-   738,
+   742,
    "hist|metric|C|count|22"
   ],
   [
@@ -8898,7 +8949,7 @@
    null,
    264.0,
    276.0,
-   739,
+   743,
    "hist|metric|C|count|23"
   ],
   [
@@ -8910,7 +8961,7 @@
    null,
    276.0,
    288.0,
-   740,
+   744,
    "hist|metric|C|count|24"
   ],
   [
@@ -8922,7 +8973,7 @@
    null,
    288.0,
    300.0,
-   741,
+   745,
    "hist|metric|C|count|25"
   ],
   [
@@ -8934,7 +8985,7 @@
    null,
    300.0,
    312.0,
-   742,
+   746,
    "hist|metric|C|count|26"
   ],
   [
@@ -8946,7 +8997,7 @@
    null,
    312.0,
    324.0,
-   743,
+   747,
    "hist|metric|C|count|27"
   ],
   [
@@ -8958,7 +9009,7 @@
    null,
    324.0,
    336.0,
-   744,
+   748,
    "hist|metric|C|count|28"
   ],
   [
@@ -8970,7 +9021,7 @@
    null,
    336.0,
    348.0,
-   745,
+   749,
    "hist|metric|C|count|29"
   ],
   [
@@ -8982,7 +9033,7 @@
    null,
    348.0,
    360.0,
-   746,
+   750,
    "hist|metric|C|count|30"
   ],
   [
@@ -8994,7 +9045,7 @@
    null,
    360.0,
    372.0,
-   747,
+   751,
    "hist|metric|C|count|31"
   ],
   [
@@ -9006,7 +9057,7 @@
    "@decision_no_difference variant=B control=A metric=revenue lift=0.0315533980582523 lift_low=-0.01542250296132086 lift_high=0.08076181966277884 p_adjusted=0.3826051513281019 correction=benjamini_hochberg alpha=0.05",
    null,
    null,
-   748,
+   752,
    "reading|decision||line_1"
   ],
   [
@@ -9018,7 +9069,7 @@
    "@decision_means variant=B units=12452 value=42.5 control=A units_control=12484 value_control=41.2 metric=revenue",
    null,
    null,
-   749,
+   753,
    "reading|decision||line_2"
   ],
   [
@@ -9030,7 +9081,7 @@
    "@decision_interval lift_low=-0.01542250296132086 lift_high=0.08076181966277884 conf=0.95",
    null,
    null,
-   750,
+   754,
    "reading|decision||line_3"
   ],
   [
@@ -9042,7 +9093,7 @@
    "@srm_ok shares=0.3333%2C0.3333%2C0.3333 observed=0.3348%2C0.3338%2C0.3314 p=0.7162758057632771 srm_alpha=0.001 chi2=0.6673799652266952",
    null,
    null,
-   751,
+   755,
    "reading|srm||line_1"
   ],
   [
@@ -9054,7 +9105,7 @@
    "@comparison_not_significant variant=B control=A p=0.19130257566405096 alpha=0.05",
    null,
    null,
-   752,
+   756,
    "reading|comparison|B|line_1"
   ],
   [
@@ -9066,7 +9117,7 @@
    "@correction_benjamini_hochberg p=0.19130257566405096 p_adjusted=0.3826051513281019 treatments=2",
    null,
    null,
-   753,
+   757,
    "reading|comparison|B|line_2"
   ],
   [
@@ -9078,7 +9129,7 @@
    "@comparison_not_significant variant=C control=A p=0.46867632761224165 alpha=0.05",
    null,
    null,
-   754,
+   758,
    "reading|comparison|C|line_1"
   ],
   [
@@ -9090,7 +9141,7 @@
    "@correction_benjamini_hochberg p=0.46867632761224165 p_adjusted=0.46867632761224165 treatments=2",
    null,
    null,
-   755,
+   759,
    "reading|comparison|C|line_2"
   ],
   [
@@ -9102,7 +9153,7 @@
    "@cuped_reduced covariate=revenue_pre reduction=0.23 theta=0.41 correlation=0.48",
    null,
    null,
-   756,
+   760,
    "reading|cuped||line_1"
   ],
   [
@@ -9114,7 +9165,7 @@
    "@cuped_filled count=4210",
    null,
    null,
-   757,
+   761,
    "reading|cuped||line_2"
   ],
   [
@@ -9126,7 +9177,7 @@
    "@cap_applied percentile=0.999 value=1840.5 count=96 variants=A%2CB",
    null,
    null,
-   758,
+   762,
    "reading|cap||line_1"
   ],
   [
@@ -9138,7 +9189,7 @@
    "@bayes_beat variant=B control=A probability=0.9043487121679745",
    null,
    null,
-   759,
+   763,
    "reading|bayes|B|line_1"
   ],
   [
@@ -9150,7 +9201,7 @@
    "@bayes_loss variant=B loss=0.09948455926482982 threshold=0.001",
    null,
    null,
-   760,
+   764,
    "reading|bayes|B|line_2"
   ],
   [
@@ -9162,7 +9213,7 @@
    "@bayes_beat variant=C control=A probability=0.23433816380612077",
    null,
    null,
-   761,
+   765,
    "reading|bayes|C|line_1"
   ],
   [
@@ -9174,7 +9225,7 @@
    "@bayes_loss variant=C loss=0.0966004326996519 threshold=0.001",
    null,
    null,
-   762,
+   766,
    "reading|bayes|C|line_2"
   ],
   [
@@ -9186,7 +9237,7 @@
    "@sequential_read variant=B p=1.0 alpha=0.05 day=20523",
    null,
    null,
-   763,
+   767,
    "reading|sequential|B|line_1"
   ],
   [
@@ -9198,7 +9249,7 @@
    "@sequential_snapshot",
    null,
    null,
-   764,
+   768,
    "reading|sequential|B|line_2"
   ],
   [
@@ -9210,7 +9261,7 @@
    "@sequential_read variant=C p=1.0 alpha=0.05 day=20523",
    null,
    null,
-   765,
+   769,
    "reading|sequential|C|line_1"
   ],
   [
@@ -9222,7 +9273,7 @@
    "@sequential_snapshot",
    null,
    null,
-   766,
+   770,
    "reading|sequential|C|line_2"
   ],
   [
@@ -9234,7 +9285,7 @@
    "@power_detectable mde=0.06764914336573562 power=0.8 min_lift=0.02",
    null,
    null,
-   767,
+   771,
    "reading|power||line_1"
   ],
   [
@@ -9246,7 +9297,7 @@
    "@secondary_family comparisons=4",
    null,
    null,
-   768,
+   772,
    "reading|secondary||line_1"
   ],
   [
@@ -9258,7 +9309,7 @@
    "@secondary_none_worse alpha=0.05",
    null,
    null,
-   769,
+   773,
    "reading|secondary||line_2"
   ],
   [
@@ -9270,7 +9321,7 @@
    "@method_decision",
    null,
    null,
-   770,
+   774,
    "reading|method||line_1"
   ],
   [
@@ -9282,7 +9333,7 @@
    "@method_comparison",
    null,
    null,
-   771,
+   775,
    "reading|method||line_2"
   ],
   [
@@ -9294,7 +9345,7 @@
    "@method_srm",
    null,
    null,
-   772,
+   776,
    "reading|method||line_3"
   ],
   [
@@ -9306,7 +9357,7 @@
    "@method_power",
    null,
    null,
-   773,
+   777,
    "reading|method||line_4"
   ],
   [
@@ -9318,7 +9369,7 @@
    "@method_cuped",
    null,
    null,
-   774,
+   778,
    "reading|method||line_5"
   ],
   [
@@ -9330,7 +9381,7 @@
    "@method_cap",
    null,
    null,
-   775,
+   779,
    "reading|method||line_6"
   ],
   [
@@ -9342,7 +9393,7 @@
    "@method_bayes",
    null,
    null,
-   776,
+   780,
    "reading|method||line_7"
   ],
   [
@@ -9354,7 +9405,7 @@
    "@method_sequential",
    null,
    null,
-   777,
+   781,
    "reading|method||line_8"
   ],
   [
@@ -9366,7 +9417,7 @@
    "@method_secondary",
    null,
    null,
-   778,
+   782,
    "reading|method||line_9"
   ],
   [
@@ -9378,7 +9429,7 @@
    "@formula_welch",
    null,
    null,
-   779,
+   783,
    "reading|formulas||line_1"
   ],
   [
@@ -9390,7 +9441,7 @@
    "@formula_fieller",
    null,
    null,
-   780,
+   784,
    "reading|formulas||line_2"
   ],
   [
@@ -9402,7 +9453,7 @@
    "@formula_bh",
    null,
    null,
-   781,
+   785,
    "reading|formulas||line_3"
   ],
   [
@@ -9414,7 +9465,7 @@
    "@formula_srm",
    null,
    null,
-   782,
+   786,
    "reading|formulas||line_4"
   ],
   [
@@ -9426,7 +9477,7 @@
    "@formula_cuped",
    null,
    null,
-   783,
+   787,
    "reading|formulas||line_5"
   ],
   [
@@ -9438,7 +9489,7 @@
    "@formula_normal",
    null,
    null,
-   784,
+   788,
    "reading|formulas||line_6"
   ],
   [
@@ -9450,7 +9501,7 @@
    "@formula_mixture",
    null,
    null,
-   785,
+   789,
    "reading|formulas||line_7"
   ]
  ],

@@ -12,7 +12,7 @@
   f
 }
 
-TAB_COMMON_TESTS[["experiments: three secondary metrics change nothing of the primary (every row, the variants output); their family is one p.adjust"]] <- function(code) {
+TAB_COMMON_TESTS[["experiments: three secondary metrics change nothing of the primary (every row, the variants output); their family is one p.adjust; each its own direction"]] <- function(code) {
   seen <- 0L
   for (case in .abc_cases(code)) {
     if (!length(case$params$secondary_metrics)) next
@@ -42,6 +42,12 @@ TAB_COMMON_TESTS[["experiments: three secondary metrics change nothing of the pr
     .tab_expect(length(p) == 2L * length(case$params$secondary_metrics) && max(abs(stats::p.adjust(p, how) - adj)) < 1e-15, case$id, ": the family")
     decided <- s$text[s$stat == "decision"]
     .tab_expect(identical(decided != "not_significant", adj < 0.05), case$id, ": the decisions")
+    # each metric in its own direction (`secondary_directions`), the primary's where none is given
+    up <- s$value[s$stat == "difference"] > 0
+    higher <- s$text[s$stat == "direction"] == "higher"
+    dirs <- case$params$secondary_directions
+    want <- vapply(rep(unlist(case$params$secondary_metrics), each = 2L), function(m) if (is.null(dirs[[m]])) !isFALSE(case$params$higher_is_better) else dirs[[m]] == "higher", TRUE)
+    .tab_expect(identical(unname(want), higher) && identical(decided[adj < 0.05] == "better", (up == higher)[adj < 0.05]), case$id, ": the directions")
     seen <- seen + 1L
   }
   .tab_expect(seen >= 2L, "only ", seen, " cases with secondary metrics")

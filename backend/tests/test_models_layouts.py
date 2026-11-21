@@ -1151,8 +1151,8 @@ def test_a_secondary_metric_worse_than_the_control_is_on_the_first_page_and_ever
     listed = strings(json.loads(page))
     said = set(listed)
     w = _ab_words(model, "en")
-    assert {w["sections"]["secondary"], w["secondary"]["lead"], "sessions", "converted"} <= said
-    assert listed.count("sessions") == 2 and listed.count("converted") == 2  # one row per treatment, none on the first page
+    assert {w["sections"]["secondary"], w["secondary"]["lead"], "sessions ↓", "converted ↑"} <= said  # each in its own direction
+    assert listed.count("sessions ↓") == 2 and listed.count("converted ↑") == 2  # one row per treatment, none on the first page
     assert any(s.startswith("Reading: The 4 comparisons of the secondary metrics (each metric against the control, for each treatment) were "
                             "corrected among themselves") and s.endswith("No secondary metric is worse than the control at α = 0.05, after the correction.")
                for s in said), sorted(s for s in said if s.startswith("Reading: The 4"))
@@ -1161,7 +1161,7 @@ def test_a_secondary_metric_worse_than_the_control_is_on_the_first_page_and_ever
              for r in rows]
     _, page = draw(tmp_path / "worse", chart_service, monkeypatch, "ab_test-continuous", fmt="svg", rows=worse, locale="it")
     listed = strings(json.loads(page))
-    assert listed.count("sessions") == 3 and listed.count("converted") == 2  # B's sessions under the treatments too
+    assert listed.count("sessions ↓") == 3 and listed.count("converted ↑") == 2  # B's sessions under the treatments too
     assert any(s.endswith("B è peggiore del controllo sulla metrica secondaria «sessions»: p-value corretto 0,0040.") for s in listed)
 
 

@@ -22,7 +22,7 @@ import { isNumericDtype } from '~/composables/previewGrid'
 
 export type ModelControl =
   | 'column' | 'columns' | 'level' | 'reference' | 'pairs' | 'choice' | 'number' | 'integer'
-  | 'boolean' | 'numbers' | 'number_or_choice' | 'level_numbers'
+  | 'boolean' | 'numbers' | 'number_or_choice' | 'level_numbers' | 'column_choices'
 
 /** How a form asks for one kind of value (the catalogue's `kinds`). */
 export interface ModelKind {
@@ -132,6 +132,8 @@ export const MODEL_CONTROLS: readonly ModelControl[] = [
   'column', 'columns', 'level', 'reference', 'pairs', 'choice', 'number', 'integer', 'boolean', 'numbers', 'number_or_choice',
   // a number for each value of a column (the experiments' expected shares)
   'level_numbers',
+  // one of the choices for some columns of another key (the direction of each secondary metric of an A/B test)
+  'column_choices',
 ]
 
 /** The node types of a flow that are models. */
@@ -363,7 +365,7 @@ function readOne(f: ModelField, v: unknown): unknown {
       return Number.isFinite(n) ? n : undefined
     }
     default:
-      return undefined // reference and pairs: read with the columns they name
+      return undefined // reference, pairs, column choices: read with the columns they name
   }
 }
 
@@ -394,6 +396,14 @@ export function modelParams(model: ModelDef, params: Params | null | undefined, 
       for (const [column, level] of Object.entries(v as Params)) {
         const one = readOne({ ...f, control: 'level' }, level)
         if (of.includes(column) && one !== undefined) out[column] = one
+      }
+      if (Object.keys(out).length) read[f.key] = out
+    } else if (f.control === 'column_choices' && v && typeof v === 'object' && !Array.isArray(v)) {
+      // {column: choice}, for the columns of `of` only: one not named keeps the node's own setting
+      const of: string[] = Array.isArray(read[f.of ?? '']) ? read[f.of ?? ''] : []
+      const out: Params = {}
+      for (const [column, choice] of Object.entries(v as Params)) {
+        if (of.includes(column) && typeof choice === 'string' && f.choices.includes(choice)) out[column] = choice
       }
       if (Object.keys(out).length) read[f.key] = out
     } else if (f.control === 'pairs' && Array.isArray(v)) {

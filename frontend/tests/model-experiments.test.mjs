@@ -321,6 +321,27 @@ test('the expected split: a box for each value of the variant column once «give
   assert.doesNotMatch(read('../components/ui/PredictForm.vue'), /level_numbers/)
 })
 
+test('each secondary metric its own direction: «as the primary» or one chosen, kept for the secondary metrics only (lot E8)', async () => {
+  const base = { variant: 'arm', control: 'A', metric_type: 'binary', metric: 'converted' }
+  const by = Object.fromEntries(m.modelFields(AB).map((f) => [f.key, f]))
+  assert.deepEqual([by.secondary_directions.control, by.secondary_directions.of, by.secondary_directions.choices], ['column_choices', 'secondary_metrics', ['higher', 'lower']])
+  assert.equal(m.modelApplies(AB, 'secondary_directions', base), false)
+  const p = m.modelParams(AB, { ...base, secondary_metrics: ['revenue', 'clicks'], secondary_directions: { clicks: 'lower', views: 'lower', revenue: 'faster' } })
+  assert.deepEqual(p.secondary_directions, { clicks: 'lower' }) // a column not among them, a word not a choice: left out
+  assert.deepEqual(m.modelParams(AB, p), p)
+  assert.ok(!('secondary_directions' in m.modelSet(AB, p, 'secondary_metrics', ['revenue']))) // its column gone, nothing is left
+  const Form = await component('components/ui/ModelForm.vue')
+  for (const lang of LANGS) {
+    const html = await render(Form, node('ab_test', { ...p, higher_is_better: false }), lang)
+    const selects = selectsOf(html).filter((s) => s.includes(WORDS[lang]['models.choice.lower']))
+    const like = WORDS[lang]['models.form.likePrimary'].replace('{direction}', WORDS[lang]['models.choice.lower'])
+    assert.equal(selects.length, 2, lang) // one per secondary metric
+    assert.ok(selects.every((s) => s.startsWith(like)), `${lang}: ${selects[0]}`)
+    assert.match(html, /data-value="lower"[^>]*aria-label="[^"]*: clicks"/)
+    assert.ok(text(html).includes(WORDS[lang]['models.params.secondary_directions']), lang)
+  }
+})
+
 test('the form is usable with the keyboard alone: native controls, each named, none that needs F, Home, End or Menu', () => {
   const form = read('../components/ui/ModelForm.vue')
   const split = form.slice(form.indexOf("f.control === 'level_numbers'"), form.indexOf("f.control === 'boolean'"))

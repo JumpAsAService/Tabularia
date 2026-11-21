@@ -306,7 +306,7 @@ def test_every_kind_has_a_control_and_only_the_control_s_options():
         "number": {"above", "below", "min", "max"}, "integer": {"min", "max"}, "boolean": set(),
         "numbers": {"above", "below", "min", "max", "max_count"},
         "number_or_choice": {"choices", "above", "below", "min", "max"},
-        "level_numbers": {"of", "above", "below", "min", "max"},
+        "level_numbers": {"of", "above", "below", "min", "max"}, "column_choices": {"of", "choices"},
     }
     assert set(options) == set(catalog.CONTROLS)
     for kind, how in catalog.KINDS.items():

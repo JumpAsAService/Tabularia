@@ -6802,6 +6802,7 @@ export default {
       "sequential": "Lettura sequenziale",
       "sequential_tau": "Scala della mistura sequenziale",
       "secondary_metrics": "Metriche secondarie",
+      "secondary_directions": "Direzione di ogni metrica secondaria",
       "solve_for": "Calcola",
       "units_per_variant": "Unità per variante",
       "days": "Giorni",
@@ -6930,6 +6931,7 @@ export default {
       "sequential": "P-value sempre validi e sequenze di confidenza. Attivalo se l'esperimento è ancora in corso o hai guardato i risultati prima della fine prevista, e leggi la sua decisione.",
       "sequential_tau": "La dimensione degli incrementi relativi che ti aspetti: 0,05 è il 5 %. Qualunque valore mantiene la garanzia sui falsi allarmi. Uno piccolo è adatto a effetti di pochi punti ma con pochi dati resta muto anche davanti a effetti grandi: per cambiamenti grossi alzalo. Sopra 0.",
       "secondary_metrics": "Altre metriche, riportate e corrette tra loro. Al massimo 10, ciascuna una colonna vero/falso, intera o numerica.",
+      "secondary_directions": "Per ogni metrica secondaria, se è meglio un valore più alto o più basso: latenza, resi, disdette sono meglio bassi. Se non scelta: come la metrica principale. «Peggiore» e «migliore» leggono ogni metrica nella sua direzione.",
       "solve_for": "Cosa si calcola: le unità e i giorni necessari per rilevare l'incremento, oppure l'incremento rilevabile con le unità o i giorni che hai.",
       "units_per_variant": "Le unità che avrà ogni variante: un numero intero, 2 o più.",
       "days": "Quanti giorni dura l'esperimento: un numero intero da 1 a 3650. Richiede la colonna della data.",
@@ -6938,6 +6940,8 @@ export default {
       "traffic_share": "La quota di tutte le nuove unità che entra nell'esperimento: sopra 0, fino a 1. Allunga la durata."
     },
     "choice": {
+      "higher": "Più alto è meglio",
+      "lower": "Più basso è meglio",
       "stl": "STL",
       "mstl": "MSTL",
       "emd": "EMD",
@@ -7112,6 +7116,7 @@ export default {
       "valuesOf": "Valori di «{column}»",
       "levelsFailed": "I valori della colonna non si sono potuti leggere: scrivi il valore.",
       "firstLevel": "Automatico: il primo, {level}",
+      "likePrimary": "Come la principale: {direction}",
       "first": "primo predittore",
       "second": "secondo predittore",
       "addPair": "Aggiungi un'interazione",

@@ -2397,6 +2397,7 @@
      "revenue",
      "sessions"
     ],
+    "secondary_directions": {},
     "output": "variants"
    }
   },
@@ -3059,7 +3060,124 @@
     "metric": "converted",
     "seed": 1
    },
-   "error": "ab_test: there is no parameter 'seed' (it takes: variant, control, metric_type, input_shape, unit, metric, numerator, denominator, units_count, metric_sum, metric_sum_squares, higher_is_better, alternative, alpha, correction, covariate, covariate_missing, cap_percentile, srm_alpha, expected_shares, min_lift, power, bayes, prior_alpha, prior_beta, loss_threshold, date, sequential, sequential_tau, secondary_metrics, output)"
+   "error": "ab_test: there is no parameter 'seed' (it takes: variant, control, metric_type, input_shape, unit, metric, numerator, denominator, units_count, metric_sum, metric_sum_squares, higher_is_better, alternative, alpha, correction, covariate, covariate_missing, cap_percentile, srm_alpha, expected_shares, min_lift, power, bayes, prior_alpha, prior_beta, loss_threshold, date, sequential, sequential_tau, secondary_metrics, secondary_directions, output)"
+  },
+  {
+   "what": "each secondary metric its own direction: a latency and a return rate where lower is better, revenue as the primary",
+   "model": "ab_test",
+   "params": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "binary",
+    "metric": "converted",
+    "secondary_metrics": [
+     "latency",
+     "returns",
+     "revenue"
+    ],
+    "secondary_directions": {
+     "returns": "lower",
+     "latency": "lower"
+    }
+   },
+   "checked": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "binary",
+    "input_shape": "units",
+    "unit": null,
+    "metric": "converted",
+    "higher_is_better": true,
+    "alternative": "two_sided",
+    "alpha": 0.05,
+    "correction": "holm",
+    "covariate": null,
+    "srm_alpha": 0.001,
+    "expected_shares": {},
+    "min_lift": 0.02,
+    "power": 0.8,
+    "bayes": true,
+    "prior_alpha": 1.0,
+    "prior_beta": 1.0,
+    "loss_threshold": 0.001,
+    "date": null,
+    "sequential": false,
+    "secondary_metrics": [
+     "latency",
+     "returns",
+     "revenue"
+    ],
+    "secondary_directions": {
+     "latency": "lower",
+     "returns": "lower"
+    },
+    "output": "results"
+   }
+  },
+  {
+   "what": "a direction is higher or lower",
+   "model": "ab_test",
+   "params": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "binary",
+    "metric": "converted",
+    "secondary_metrics": [
+     "latency"
+    ],
+    "secondary_directions": {
+     "latency": "faster"
+    }
+   },
+   "error": "ab_test: 'secondary_directions.latency' must be one of higher, lower"
+  },
+  {
+   "what": "a direction is given to a secondary metric only",
+   "model": "ab_test",
+   "params": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "binary",
+    "metric": "converted",
+    "secondary_metrics": [
+     "latency"
+    ],
+    "secondary_directions": {
+     "revenue": "lower"
+    }
+   },
+   "error": "ab_test: 'secondary_directions' names «revenue», which is not one of the 'secondary_metrics'"
+  },
+  {
+   "what": "the directions are a column's",
+   "model": "ab_test",
+   "params": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "binary",
+    "metric": "converted",
+    "secondary_metrics": [
+     "latency"
+    ],
+    "secondary_directions": [
+     "lower"
+    ]
+   },
+   "error": "ab_test: 'secondary_directions' must give a column one of higher, lower, as {column: choice}"
+  },
+  {
+   "what": "no direction without secondary metrics",
+   "model": "ab_test",
+   "params": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "binary",
+    "metric": "converted",
+    "secondary_directions": {
+     "latency": "lower"
+    }
+   },
+   "error": "ab_test: 'secondary_directions' only applies when 'secondary_metrics' is given"
   },
   {
    "what": "the smallest planning node",

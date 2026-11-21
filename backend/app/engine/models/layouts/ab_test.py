@@ -464,6 +464,11 @@ def _secondary_value(x: str) -> str:
     return f'IF(ISNULL({x}), "", IF({binary}, {e.pct(x, "0.##")}, {c.shown(x, "#,##0.####")}))'
 
 
+def _secondary_metric() -> str:
+    """The metric's name with its direction: «↑» a higher value is better, «↓» a lower one (its own, or the primary's)."""
+    return f'[level] & IF({of_secondary("direction", "text")} = "lower", " ↓", " ↑")'
+
+
 def _secondary_lift(x: str = "lift") -> str:
     lift = of_secondary(x)
     return (f'IF(ISNULL({lift}), "", {e.signed_pct(lift)} & " " & '
@@ -478,12 +483,13 @@ def _secondary_worse(p: stats.Page, w: dict) -> None:
     """The guardrails that came out worse than the control (their adjusted p against alpha), under the treatments: what
     a guardrail is for. Nothing when none did."""
     t = w["tables"]
-    cols = [{"header": t["metric"], "value": "[level]", "width": 40, "style": {"weight": "semibold"}},
+    cols = [{"header": t["metric"], "value": _secondary_metric(), "width": 40, "style": {"weight": "semibold"}},
             {"header": t["variant"], "value": "[level_2]", "width": 22},
             {"header": t["lift_interval"], "value": _secondary_lift()},
             {"header": t["p_adjusted"], "value": _secondary_p("p_adjusted", "p_adjusted_significance"), "width": 26, "align": "right",
              "style": {"color": c.BAD, "weight": "semibold"}}]
     p.add(stats.table("secondary_worse", t["secondary_worse"], SECONDARY_WORSE, cols, p.y, visible=c.exists(SECONDARY_WORSE)), 10)
+    p.text("secondary_worse_legend", w["secondary"]["legend"], h=4.5, size=7, color=c.MUTED, can_grow=True, visible=c.exists(SECONDARY_WORSE))
 
 
 def _secondary(p: stats.Page, w: dict, checked: dict[str, Any], lang: str) -> None:
@@ -493,16 +499,16 @@ def _secondary(p: stats.Page, w: dict, checked: dict[str, Any], lang: str) -> No
     p.heading("s_secondary", w["sections"]["secondary"])
     p.text("secondary_lead", w["secondary"]["lead"], h=5, size=8.5, color=c.MUTED, can_grow=True)
     p.y += 1.0
-    cols = [{"header": t["metric"], "value": "[level]", "style": {"weight": "semibold"}},  # the rest of the width: a column's name
+    cols = [{"header": t["metric"], "value": _secondary_metric(), "style": {"weight": "semibold"}},  # the rest of the width: a column's name
             {"header": t["variant"], "value": "[level_2]", "width": 15},
             {"header": t["control_value"], "value": _secondary_value(of_secondary("mean_control")), "width": 16, "align": "right"},
             {"header": t["treatment_value"], "value": _secondary_value(of_secondary("mean_treatment")), "width": 20, "align": "right"},
-            {"header": t["lift_interval"], "value": _secondary_lift(), "width": 43},
+            {"header": t["lift_interval"], "value": _secondary_lift(), "width": 42},
             {"header": t["p"], "value": _secondary_p("p_value", "significance"), "width": 23, "align": "right"},
             {"header": t["p_adjusted"], "value": _secondary_p("p_adjusted", "p_adjusted_significance"), "width": 23, "align": "right"},
             _decision_column(w, t["decision"], "[text]")]
     p.add(stats.table("secondary", t["secondary"], SECONDARY, cols, p.y, visible=c.exists(SECONDARY)), 10)
-    p.text("secondary_note", _intervals_note(w, checked, lang) or " ", h=4.5, size=7, color=c.MUTED, can_grow=True)
+    p.text("secondary_note", w["secondary"]["legend"] + " " + _intervals_note(w, checked, lang), h=4.5, size=7, color=c.MUTED, can_grow=True)
     e.reading_under(p, w, "secondary")
 
 

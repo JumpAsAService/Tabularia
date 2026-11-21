@@ -32,7 +32,8 @@ PARAMS: dict[tuple[str, str], dict[str, Any]] = {
     ("ab_test", "continuous"): {"variant": "variant", "control": "A", "metric_type": "continuous", "metric": "revenue",
                                 "unit": "user_id", "date": "entry_day", "covariate": "revenue_pre", "covariate_missing": "fill",
                                 "cap_percentile": 0.999, "correction": "benjamini_hochberg", "bayes": True, "sequential": True,
-                                "secondary_metrics": ["converted", "sessions"], "output": "variants"},
+                                "secondary_metrics": ["converted", "sessions"], "secondary_directions": {"sessions": "lower"},
+                                "output": "variants"},
     ("ab_test", "ratio"): {"variant": "variant", "control": "A", "metric_type": "ratio", "numerator": "clicks",
                            "denominator": "impressions", "unit": "user_id", "date": "entry_day", "covariate": "clicks_pre",
                            "covariate_missing": "exclude", "correction": "bonferroni", "alternative": "two_sided", "bayes": True,
@@ -376,9 +377,11 @@ def build_ab_test(variant: str, params: dict[str, Any], spec: dict[str, Any], ch
                         t.add("secondary", "significance", text=_stars(p), level=col, level_2=treatment)
                     if stat == "p_adjusted":
                         t.add("secondary", "p_adjusted_significance", text=_stars(a), level=col, level_2=treatment)
-            decision = "worse" if a < alpha and d < 0 else "better" if a < alpha else "not_significant"
+            higher = checked["secondary_directions"].get(col, "higher" if checked["higher_is_better"] else "lower") == "higher"
+            decision = ("better" if (d > 0) == higher else "worse") if a < alpha else "not_significant"
             t.add("secondary", "decision", text=decision, level=col, level_2=treatment)
             t.add("secondary", "metric_type", text=kind, level=col, level_2=treatment)
+            t.add("secondary", "direction", text="higher" if higher else "lower", level=col, level_2=treatment)
             secondary.append((col, treatment, a, decision))
         checked = {**checked, "_secondary": secondary}
     # the checks

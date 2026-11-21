@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -267,7 +268,7 @@ func Check(model string, params map[string]any) (map[string]any, error) {
 	for _, k := range m.Keys {
 		kind := data.kinds[m.KindOf[k]]
 		v, ok := read[k]
-		if !ok || (kind.Control != "reference" && kind.Control != "pairs") {
+		if !ok || (kind.Control != "reference" && kind.Control != "pairs" && kind.Control != "column_choices") {
 			continue
 		}
 		allowed := map[string]bool{}
@@ -275,7 +276,7 @@ func Check(model string, params map[string]any) (map[string]any, error) {
 			allowed[c] = true
 		}
 		var named []string
-		if kind.Control == "reference" {
+		if kind.Control == "reference" || kind.Control == "column_choices" {
 			for c := range v.(map[string]any) {
 				named = append(named, c)
 			}
@@ -695,6 +696,29 @@ func readValue(model, key string, k Kind, v any) (any, error) {
 				return nil, refuse(model, "%s", withBounds(fmt.Sprintf("'%s' must be a number", key+"."+c), k))
 			}
 			out[c] = f
+		}
+		return out, nil
+	case "column_choices":
+		// {column of the key `of`: one of the choices} (the A/B test's direction of each secondary metric)
+		obj, ok := v.(map[string]any)
+		for c := range obj {
+			ok = ok && c != ""
+		}
+		if !ok {
+			return nil, refuse(model, "'%s' must give a column one of %s, as {column: choice}", key, strings.Join(k.Choices, ", "))
+		}
+		names := make([]string, 0, len(obj))
+		for c := range obj {
+			names = append(names, c)
+		}
+		sort.Strings(names)
+		out := map[string]any{}
+		for _, c := range names {
+			s, isText := obj[c].(string)
+			if !isText || !slices.Contains(k.Choices, s) {
+				return nil, refuse(model, "'%s.%s' must be one of %s", key, c, strings.Join(k.Choices, ", "))
+			}
+			out[c] = s
 		}
 		return out, nil
 	case "number_or_choice":

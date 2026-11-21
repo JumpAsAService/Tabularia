@@ -6802,6 +6802,7 @@ export default {
       "sequential": "Sequential reading",
       "sequential_tau": "Scale of the sequential mixture",
       "secondary_metrics": "Secondary metrics",
+      "secondary_directions": "Direction of each secondary metric",
       "solve_for": "Compute",
       "units_per_variant": "Units per variant",
       "days": "Days",
@@ -6930,6 +6931,7 @@ export default {
       "sequential": "Always-valid p-values and confidence sequences. Turn it on if the experiment is still running or you looked at the results before its planned end, and read its decision.",
       "sequential_tau": "The size of the relative lifts you expect: 0.05 is 5 %. Any value keeps the guarantee on false alarms. A small one suits effects of a few points but stays silent on a small experiment even for a large effect; raise it for big changes. Above 0.",
       "secondary_metrics": "Further metrics, reported and corrected among themselves. At most 10, each a true/false, whole or number column.",
+      "secondary_directions": "For each secondary metric, whether a higher or a lower value is better: a latency, returns, cancellations are better lower. Not chosen: as the primary metric. «Worse» and «better» read each metric in its own direction.",
       "solve_for": "What is computed: the units and days needed to detect the lift, or the lift detectable with the units or days you have.",
       "units_per_variant": "The units each variant will have: a whole number, 2 or more.",
       "days": "How many days the experiment runs: a whole number from 1 to 3650. It needs the date column.",
@@ -6938,6 +6940,8 @@ export default {
       "traffic_share": "The share of all the new units that go into the experiment: above 0, up to 1. It lengthens the duration."
     },
     "choice": {
+      "higher": "Higher is better",
+      "lower": "Lower is better",
       "stl": "STL",
       "mstl": "MSTL",
       "emd": "EMD",
@@ -7112,6 +7116,7 @@ export default {
       "valuesOf": "Values of «{column}»",
       "levelsFailed": "The column's values could not be read: write the value.",
       "firstLevel": "Automatic: the first, {level}",
+      "likePrimary": "As the primary: {direction}",
       "first": "first predictor",
       "second": "second predictor",
       "addPair": "Add an interaction",

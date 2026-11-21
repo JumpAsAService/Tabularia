@@ -6802,6 +6802,7 @@ export default {
       "sequential": "Lecture séquentielle",
       "sequential_tau": "Échelle du mélange séquentiel",
       "secondary_metrics": "Métriques secondaires",
+      "secondary_directions": "Sens de chaque métrique secondaire",
       "solve_for": "Calculer",
       "units_per_variant": "Unités par variante",
       "days": "Jours",
@@ -6930,6 +6931,7 @@ export default {
       "sequential": "Valeurs p valables à tout moment et séquences de confiance. Activez-le si l'expérience est encore en cours ou si vous avez regardé les résultats avant la fin prévue, et lisez sa décision.",
       "sequential_tau": "L'ampleur des hausses relatives que vous attendez : 0,05 vaut 5 %. Toute valeur garde la garantie contre les fausses alertes. Une petite convient à des effets de quelques points mais, avec peu de données, reste muette même devant un grand effet : pour de gros changements, augmentez-la. Au-dessus de 0.",
       "secondary_metrics": "D'autres métriques, rapportées et corrigées entre elles. 10 au plus, chacune une colonne vrai/faux, entière ou numérique.",
+      "secondary_directions": "Pour chaque métrique secondaire, si une valeur plus haute ou plus basse est meilleure : une latence, des retours, des résiliations sont meilleurs bas. Non choisi : comme la métrique principale. «Moins bien» et «mieux» lisent chaque métrique dans son propre sens.",
       "solve_for": "Ce qui est calculé : les unités et les jours nécessaires pour détecter la hausse, ou la hausse détectable avec les unités ou les jours dont vous disposez.",
       "units_per_variant": "Les unités de chaque variante : un entier, 2 ou plus.",
       "days": "Combien de jours dure l'expérience : un entier de 1 à 3650. Elle demande la colonne de date.",
@@ -6938,6 +6940,8 @@ export default {
       "traffic_share": "La part de toutes les nouvelles unités qui entre dans l'expérience : au-dessus de 0, jusqu'à 1. Elle allonge la durée."
     },
     "choice": {
+      "higher": "Plus haut est mieux",
+      "lower": "Plus bas est mieux",
       "stl": "STL",
       "mstl": "MSTL",
       "emd": "EMD",
@@ -7112,6 +7116,7 @@ export default {
       "valuesOf": "Valeurs de « {column} »",
       "levelsFailed": "Les valeurs de la colonne n'ont pas pu être lues : écrivez la valeur.",
       "firstLevel": "Automatique : le premier, {level}",
+      "likePrimary": "Comme la principale : {direction}",
       "first": "premier prédicteur",
       "second": "second prédicteur",
       "addPair": "Ajouter une interaction",

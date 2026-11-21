@@ -84,7 +84,8 @@
     "boolean",
     "numbers",
     "number_or_choice",
-    "level_numbers"
+    "level_numbers",
+    "column_choices"
   ],
   "column_kinds": [
     "integer",
@@ -637,6 +638,14 @@
       "control": "level_numbers",
       "of": "variant",
       "above": 0
+    },
+    "metric_directions": {
+      "control": "column_choices",
+      "of": "secondary_metrics",
+      "choices": [
+        "higher",
+        "lower"
+      ]
     },
     "relative": {
       "control": "number",
@@ -7376,6 +7385,7 @@
         "sequential": "boolean",
         "sequential_tau": "tau",
         "secondary_metrics": "metric_columns",
+        "secondary_directions": "metric_directions",
         "output": "output_variants"
       },
       "defaults": {
@@ -7406,6 +7416,7 @@
         "sequential": false,
         "sequential_tau": 0.05,
         "secondary_metrics": [],
+        "secondary_directions": {},
         "output": "results"
       },
       "applies": {
@@ -7477,6 +7488,9 @@
           "input_shape": [
             "units"
           ]
+        },
+        "secondary_directions": {
+          "secondary_metrics": true
         },
         "prior_alpha": {
           "bayes": [
@@ -7768,7 +7782,8 @@
                 "p_adjusted_significance",
                 "decision",
                 "min_lift_position",
-                "metric_type"
+                "metric_type",
+                "direction"
               ]
             },
             "reading": {
@@ -8059,7 +8074,8 @@
                 "p_adjusted_significance",
                 "decision",
                 "min_lift_position",
-                "metric_type"
+                "metric_type",
+                "direction"
               ]
             },
             "reading": {
@@ -8360,7 +8376,8 @@
                 "p_adjusted_significance",
                 "decision",
                 "min_lift_position",
-                "metric_type"
+                "metric_type",
+                "direction"
               ]
             },
             "reading": {

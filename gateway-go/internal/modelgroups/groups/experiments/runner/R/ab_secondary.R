@@ -10,7 +10,9 @@
 # costs the primary nothing and the decision stays the primary's alone. With Bonferroni the intervals of the family
 # are at 1 − alpha/M (M: the family's comparisons that were computed, as p.adjust counts them), at 1 − alpha with the
 # other corrections, as E2's; the detectable lift at alpha/M with a correction (the plan's convention). A guardrail
-# is `worse` or `better` only from its adjusted p-value against alpha, in the direction the node calls better.
+# is `worse` or `better` only from its adjusted p-value against alpha, in its own direction: `secondary_directions`
+# ({column: "higher" | "lower"}, the owner's decision: a latency, returns, cancellations are better lower), the
+# primary's `higher_is_better` for a metric it does not name. The direction changes no number, only the word.
 #
 # The units: the rows are read again (only the variant, the unit and these columns: the light path); a unit is the
 # primary's (one row, or the rows of `unit` together, a unit seen in two variants left out); its value of a metric
@@ -89,6 +91,12 @@ ab_part_secondary <- function(r) {
   est
 }
 
+# Whether a higher value of the secondary metric `col` is better: its own direction, else the primary's.
+.abx_higher_is_better <- function(ctx, col) {
+  own <- ctx$params$secondary_directions[[col]]
+  if (is.null(own)) isTRUE(ctx$higher_is_better) else identical(own, "higher")
+}
+
 ab_secondary <- function(r, cols) {
   ctx <- r$ctx
   units <- .abx_units(r, cols)
@@ -117,9 +125,10 @@ ab_secondary <- function(r, cols) {
       i <- i + 1L
       x$metric <- f$unit$name
       x$type <- f$unit$type
+      x$higher_is_better <- .abx_higher_is_better(ctx, f$unit$name)
       x$p_adjusted <- p_adj[[i]]
       x$decision <- if (is.na(x$p_adjusted)) "not_computed" else if (x$p_adjusted < ctx$alpha) {
-        if ((x$difference > 0) == isTRUE(ctx$higher_is_better)) "better" else "worse"
+        if ((x$difference > 0) == x$higher_is_better) "better" else "worse"
       } else "not_significant"
       x$mde <- if (x$computed && !is.na(mc) && mc != 0) (z_a + stats::qnorm(ctx$power)) * x$std_error / abs(mc) else NA_real_
       x$mean_treatment <- f$est$m[[x$t]]
@@ -166,6 +175,7 @@ AB_SECONDARY_NUMBERS <- c("difference", "difference_std_error", "difference_ci_l
     }
     tab_text(rows, "secondary", "decision", x$decision, lv, lv2)
     tab_text(rows, "secondary", "metric_type", x$type, lv, lv2)
+    tab_text(rows, "secondary", "direction", if (x$higher_is_better) "higher" else "lower", lv, lv2)
   }
   invisible(rows)
 }
