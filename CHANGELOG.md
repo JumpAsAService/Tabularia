@@ -43,8 +43,9 @@ Development on `main` for the next minor version. The stable line stays 1.4.x
   numbers, equal within a relative 1e-9. New operations `stat_<test>` (21); new route
   `POST /tasks/stat-report`; saved reports and dashboards do not change; a flow with a test
   cannot be exported to dbt (`op_not_exportable`). [Statistics](docs/capabilities/statistics.md).
-- **Statistical models in the flow editor.** A **Models** group in the palette holds seven models
-  and a Predict node, for Kubernetes: five in R, namely linear regression (ordinary or weighted least squares,
+- **Statistical models in the flow editor.** A **Models** group in the palette holds ten models
+  and a Predict node, for Kubernetes (the first seven are in this entry and the next one, the
+  other three in the entries after them): five in R, namely linear regression (ordinary or weighted least squares,
   classical, robust HC0 to HC3, HAC or clustered errors), logistic regression (maximum
   likelihood or Firth, logit or probit), both with ridge, lasso or elastic-net penalties and
   the penalty chosen by cross-validation; Kaplan–Meier (log-rank and Peto–Peto tests, strata,
@@ -60,7 +61,7 @@ Development on `main` for the next minor version. The stable line stays 1.4.x
   report, the model and a registered version; «Continue without MLflow» lets the step go on
   when the server is down), and **Predict** applies a version Tabularia registered, fixed or the
   latest, after checking its card's hash. An administrator enables each group (regression,
-  survival, time series) in **Administration → Statistical models**: the build, the self-test
+  survival, time series, boosting, customer lifetime) in **Administration → Statistical models**: the build, the self-test
   against values computed outside Tabularia, limits (CPU, memory, longest run, input rows) and
   who may use it. They are off on Docker Compose. New routes `GET /models/groups`,
   `/admin/models…`, `POST /tasks/model-report`; migration 0044; an Output that reads a model
@@ -117,7 +118,7 @@ Development on `main` for the next minor version. The stable line stays 1.4.x
   significance level and the rest (the holdout's error, the customers counted, the horizon, the
   estimates at an edge) are measures. The node writes the scores as rows, MLflow records the
   model with the purchase model chosen, and **Predict** scores other customers. The image
-  installs the GNU Scientific Library from Debian and the Administration card shows its version
+  installs the GNU Scientific Library from Ubuntu's repositories (the R base image is Ubuntu) and the Administration card shows its version
   (the recipe's new `system_libraries` field). [Customer lifetime
   value](docs/capabilities/models.md#customer-lifetime-value-r), [how to read a
   verdict](docs/capabilities/models.md#how-a-check-speaks-verdicts-facts-and-measures); the

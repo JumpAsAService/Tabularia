@@ -158,13 +158,19 @@ policies), and the **scripts bucket** set in **Administration → Scripting envi
 where a model reads its input. There is no `models` block in the chart. An administrator then
 enables each group in **Administration → Statistical models**: the cluster builds its image
 (R 4.6 with its packages, which includes compiling the survival group's `flexsurv` and `rstpm2`
-and, for the customer lifetime group, installing the GNU Scientific Library from Debian's
-repositories (or your mirror of them); for the boosting group, Python 3.14 with `xgboost-cpu` and `catboost`,
+and, for the customer lifetime group, installing the GNU Scientific Library from Ubuntu's
+repositories, the R image being Ubuntu's; for the boosting group, Python 3.14 with `xgboost-cpu` and `catboost`,
 wheels from PyPI or your mirror (`SCRIPTS__PYPI_INDEX_URL`), about 1 GB and no compilation),
 built by the same rootless BuildKit as the environments, so with the resources of
 `SCRIPTS__BUILD_CPU` and `SCRIPTS__BUILD_MEMORY`, and runs its self-test.
 The build needs the registries of R packages (CRAN) or your mirror of them, and for boosting
-of Python packages, as an environment does; a model Job at run time has no internet and reaches the scripts bucket
+of Python packages, as an environment does. The customer lifetime group needs one more: its build
+runs `apt-get install` against the default Ubuntu archives (`archive.ubuntu.com`), and there is no
+setting for an APT mirror, unlike CRAN (`SCRIPTS__CRAN_URL`) and PyPI (`SCRIPTS__PYPI_INDEX_URL`). On a
+cluster with no internet the build of that group must therefore be able to reach those archives (let
+the builder's egress through to them, or through a transparent proxy or mirror of your own that
+answers for the same host names); the other groups install no system package. Once built, the image
+carries the library and nothing is fetched at run time: a model Job at run time has no internet and reaches the scripts bucket
 through the egress proxy only. The images are large (an R image with compiled packages
 weighs more than a gigabyte): on a big cluster pre-pull them, because the first run on a node
 pulls the image. Two variables are read from the gateway's environment (`extraEnv`), and are in

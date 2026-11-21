@@ -738,8 +738,9 @@ that: the palette, the form, the Go gateway's check of the parameters, the Jobs'
 assistants, MLflow and Predict. What the catalogue cannot say is code: the runner, in the
 group's image, and the layout of the report. The design, with the rules every model follows
 (Kubernetes only, the ten columns, the report drawn from the results, MLflow logged by the
-gateway, Predict from the card alone), is in `docs/specs/statistical-models.md` (kept in the
-repository, not published); the user's page is [Statistical models](../capabilities/models.md).
+gateway, Predict from the card alone), is a maintainers' design note that is not part of this repository
+(comments in the code call it `docs/specs/statistical-models.md`); this page and the existing
+models are what to read; the user's page is [Statistical models](../capabilities/models.md).
 Read, as models to copy, the **parametric survival** node (an R model in an existing group, with
 variants, an automatic choice and Predict) and the **customer lifetime** group (a new group, with
 a system library); the history is `git log --oneline -- backend/app/engine/models/catalog.py`.
@@ -789,8 +790,8 @@ A group is a folder, `gateway-go/internal/modelgroups/groups/<group>/`:
   the order they are installed** (each after its dependencies), the default `resources`,
   `max_rows` and `max_seconds`. A new package or version changes the recipe's hash, and
   every installation builds the group again by itself; say so in the changelog. A package that
-  needs a **system library** is listed in `system_libraries` (the Debian packages, for example
-  `libgsl-dev`): the group's Dockerfile installs them with `apt-get` and records the versions that
+  needs a **system library** is listed in `system_libraries` (Ubuntu packages, for example
+  `libgsl-dev`: the R base image is Ubuntu): the group's Dockerfile installs them with `apt-get` and records the versions that
   were installed, which the group's card in Administration shows. Only a group with the field has the step,
   and the Dockerfiles of the others do not change by a byte (a test holds it).
 - **`runner/`**: `run.R` (or `run.py`) routes each model to its fit and its predict function, in a file
@@ -870,7 +871,7 @@ Six workflows in `.github/workflows/`. A pull request is green when these pass:
 |---|---|---|---|
 | `ci.yml` | `engine tests` | builds the backend image with `WITH_DEV=true` and `WITH_CHDB=true`, then `.github/scripts/ci_tests.sh engine tabularia-backend:ci`: every test of `backend/tests` beside real ClickHouse 24.8, PostgreSQL, MinIO and Valkey; a skip not on the allowed list fails | every push and pull request |
 | `ci.yml` | `gateway tests` | builds the gateway image, runs `ci_tests.sh gateway tabularia-gateway:ci`, then `gateway-go/scripts/test.sh`: `gofmt -l .`, `go vet ./...` and `go test ./...` on the gateway and on `dataapi/`, with a PostgreSQL whose schema is made by the migrations | every push and pull request |
-| `ci.yml` | `interface type check` | in `frontend/`: `npm ci`, `vue-tsc --noEmit` (pinned: typescript 5.6.3, vue-tsc 2.2.10) and `npm test`; then the unit tests of the sample data's seed | every push and pull request |
+| `ci.yml` | `interface type check` | in `frontend/`: `npm ci`, `vue-tsc --noEmit` (pinned: typescript 5.6.3, vue-tsc 2.2.10) and `npm test`; then the unit tests of the sample data's seed, and the step «The sample data's generator»: the sampledb image is built and its tests run in Docker | every push and pull request |
 | `stat-catalog.yml` | `check` | `python3 .github/scripts/test_stat_catalog.py -v`: the script's tests and the check that the three copies are the snapshot and every test is named in the statistics page | when the catalogue, its copies, the page or the script change |
 | `model-catalog.yml` | `check` | `python3 .github/scripts/model_catalog.py --check` and its tests: the three copies of the models' catalogue are the snapshot, and every model's id is named in `docs/capabilities/models.md` | when the catalogue, its copies or the page change |
 | `config-reference.yml` | | `docs/configuration.md` against the settings of the code (`python3 .github/scripts/config_reference.py` writes it) | when code that reads a setting changes |
