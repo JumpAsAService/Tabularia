@@ -159,7 +159,7 @@ psc_convergence <- function(ctx, rows) {
     psc_check(rows, "convergence", PSC_H0$convergence, "failed", advice)
     return(invisible())
   }
-  step <- max(abs(drop(V %*% numDeriv::grad(ctx$fitted$loglik_fn, ctx$fitted$par))) / sqrt(diag(V)))
+  step <- max(abs(drop(V %*% ps_grad(ctx$fitted, ctx$fitted$par))) / sqrt(diag(V)))
   psc_check(rows, "convergence", PSC_H0$convergence, "ok", advice, value = step)
 }
 
@@ -435,9 +435,10 @@ psc_zph <- function(ctx, groups) {
 # parameter, and dfbetas is one matrix product, O(n k²).
 psc_row_scores <- function(f) {
   par <- f$par
+  sc <- ps_par_scale(f$spec, max(f$prepared$time)) # a Gompertz shape's step relative to 1 / its times
   U <- matrix(0, length(f$loglik_rows(par)), length(par))
   for (j in seq_along(par)) {
-    h <- 1e-5 * max(1, abs(par[[j]]))
+    h <- 1e-5 * max(sc[[j]], abs(par[[j]]))
     up <- down <- par
     up[[j]] <- par[[j]] + h
     down[[j]] <- par[[j]] - h

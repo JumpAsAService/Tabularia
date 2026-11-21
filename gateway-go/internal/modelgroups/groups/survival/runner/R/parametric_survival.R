@@ -384,7 +384,17 @@ ps_fit <- function(prepared, distribution, starts = NULL, hessian = FALSE, fail_
   loglik <- function(par) sum(prepared$w * loglik_rows(par))
   inits <- if (is.null(init)) ps_starts(prepared, m, distribution, starts, loglik) else list(first = init, second = NULL)
   reltol <- reltol %||% (if (is.null(prepared$start)) PS_RELTOL else PS_RELTOL_START)
+  # Gompertz's shape is a rate, per unit of time, on the identity scale: BFGS runs on the times over
+  # their largest, so that it meets the same problem whatever their unit (on times in seconds it
+  # stopped 5.85 below the maximum, a coefficient 36 % off), and its estimates come back exactly
+  unit <- if (distribution == "gompertz") max(prepared$time) else 1
+  if (unit != 1) {
+    frame$time <- frame$time / unit
+    if (!is.null(frame$start)) frame$start <- frame$start / unit
+  }
+  # an error is a failed attempt, but for the end of ps_within's time (ps_caught raises it again)
   fit_once <- function(init, maxit) {
+    if (!is.null(init) && unit != 1) init <- ps_gompertz_unit(m, init, unit, back = FALSE)
     tryCatch(suppressWarnings(ps_flexsurvreg(form, anc, frame, m$flexsurv, init = if (is.null(init)) NULL else ps_to_natural(m, init),
                                              control = list(reltol = reltol, maxit = maxit), hessian = hessian)),
              error = ps_caught)
@@ -406,13 +416,58 @@ ps_fit <- function(prepared, distribution, starts = NULL, hessian = FALSE, fail_
                 loglik_rows = loglik_rows, loglik_fn = loglik))
   }
   par <- fit$opt$par
+  flexsurv_ll <- fit$loglik
+  if (unit != 1) {
+    # back to the times' own unit: each density is 1 / unit of the scaled one's, a survival the same.
+    # flexsurv's object holds the scaled rows: ps_attach_flexsurv makes the one of these estimates
+    par <- stats::setNames(ps_gompertz_unit(m, par, unit), names(par))
+    flexsurv_ll <- flexsurv_ll - log(unit) * sum(prepared$w * prepared$status)
+    fit <- NULL
+  }
   own <- loglik(par)
-  if (!is.finite(own) || abs(own - fit$loglik) > PS_LOGLIK_CHECK * max(1, abs(fit$loglik))) {
-    stop("the runner's log-likelihood (", format(own, digits = 17), ") is not flexsurv's (", format(fit$loglik, digits = 17), ")")
+  if (!is.finite(own) || abs(own - flexsurv_ll) > PS_LOGLIK_CHECK * max(1, abs(flexsurv_ll))) {
+    stop("the runner's log-likelihood (", format(own, digits = 17), ") is not flexsurv's (", format(flexsurv_ll, digits = 17), ")")
   }
   list(distribution = distribution, spec = m, converged = TRUE, status = "ok", attempts = attempts, fit = fit, delayed = !is.null(prepared$start),
-       par = unname(par), names = names(par), loglik = fit$loglik, n_parameters = length(par),
+       par = unname(par), names = if (is.null(fit)) NULL else names(par), loglik = flexsurv_ll, n_parameters = length(par),
        loglik_rows = loglik_rows, loglik_fn = loglik, centring = ps_centring(m, prepared$X, prepared$S), prepared = prepared)
+}
+
+# A Gompertz fit's vector on times divided by `unit` brought back to the times' own (`back`), or the
+# other way: the shape and the shape's strata effects are per unit of time (divided by `unit` back),
+# the rate's log moves by log(unit); the predictors' and the strata's effects on the rate do not change.
+ps_gompertz_unit <- function(m, par, unit, back = TRUE) {
+  shape <- c(match("shape", m$pars), m$i_anc)
+  par[shape] <- if (back) par[shape] / unit else par[shape] * unit
+  par[[m$loc]] <- par[[m$loc]] + if (back) -log(unit) else log(unit)
+  par
+}
+
+# The scale of each element of the optimiser's vector for numerical derivatives: 1, but for a
+# Gompertz shape (and its strata's effects), a rate per unit of time whose size is about 1 over the
+# times': 1 / `last_time`, so that a step is the same share of it in any unit (an absolute step of
+# 1e-3 made the standard errors depend on the unit, and on times in seconds undefined). The same
+# per linear predictor η (ps_eta_scale) for the rows' own derivatives.
+ps_par_scale <- function(m, last_time) {
+  k <- m$nb + length(m$i_terms) + length(m$i_strata) + length(m$i_anc)
+  out <- rep(1, k)
+  if (identical(m$distribution, "gompertz") && ps_scale_time(last_time)) out[c(match("shape", m$pars), m$i_anc)] <- 1 / last_time
+  out
+}
+
+ps_scale_time <- function(last_time) length(last_time) == 1L && is.finite(last_time) && last_time > 0
+
+ps_eta_scale <- function(m, last_time) {
+  out <- rep(1, m$nb)
+  if (identical(m$distribution, "gompertz") && ps_scale_time(last_time)) out[[match("shape", m$pars)]] <- 1 / last_time
+  out
+}
+
+# numDeriv's gradient of the log-likelihood, each parameter on its scale (ps_par_scale): for any
+# distribution but Gompertz the very same numbers as numDeriv's on the log-likelihood itself.
+ps_grad <- function(fitted, par) {
+  sc <- if (is.null(fitted$prepared)) rep(1, length(par)) else ps_par_scale(fitted$spec, max(fitted$prepared$time))
+  numDeriv::grad(function(u) fitted$loglik_fn(u * sc), par / sc) / sc
 }
 
 # The point of a larger distribution (`target`: gengamma, or the exponential's Weibull) that is the
@@ -638,7 +693,9 @@ ps_covariance <- function(fitted, par = fitted$par) {
     }
   }
   par_c <- drop(solve(A, par))
-  H <- tryCatch(numDeriv::hessian(function(b) fitted$loglik_fn(drop(A %*% b)), par_c), error = function(e) NULL)
+  sc <- if (is.null(fitted$prepared)) rep(1, length(par)) else ps_par_scale(fitted$spec, max(fitted$prepared$time))
+  H <- tryCatch(numDeriv::hessian(function(u) fitted$loglik_fn(drop(A %*% (u * sc))), par_c / sc) / outer(sc, sc),
+                error = function(e) NULL)
   if (is.null(H) || !all(is.finite(H))) return(NULL)
   info <- -(H + t(H)) / 2
   ch <- tryCatch(chol(info), error = function(e) NULL)
@@ -674,7 +731,7 @@ ps_newton <- function(fitted) {
   V <- ps_covariance(fitted, par)
   steps <- 0L
   while (!is.null(V) && steps < PS_NEWTON_STEPS) {
-    g <- tryCatch(numDeriv::grad(fitted$loglik_fn, par), error = function(e) NULL)
+    g <- tryCatch(ps_grad(fitted, par), error = function(e) NULL)
     if (is.null(g) || !all(is.finite(g))) break
     step <- drop(V %*% g)
     small <- max(abs(step) / sqrt(diag(V))) < PS_NEWTON_DONE
@@ -711,7 +768,7 @@ ps_newton_stale <- function(fitted) {
   while (!is.null(V) && rounds < PS_NEWTON_STEPS && !done) {
     rounds <- rounds + 1L
     for (k in seq_len(1L + PS_NEWTON_STALE)) {
-      g <- tryCatch(numDeriv::grad(fitted$loglik_fn, par), error = function(e) NULL)
+      g <- tryCatch(ps_grad(fitted, par), error = function(e) NULL)
       if (is.null(g) || !all(is.finite(g))) {
         done <- TRUE
         break
@@ -814,7 +871,8 @@ ps_structured_derivatives <- function(fitted, prepared, par = fitted$par) {
     B <- lapply(design, function(d) .ps_eta_block(d, prepared$X, prepared$S, rows))
     E <- vapply(seq_len(m$nb), function(j) drop(B[[j]] %*% par[design[[j]]$idx]), numeric(length(rows)))
     if (!is.matrix(E)) E <- matrix(E, nrow = length(rows))
-    h0 <- PS_STEP_H * pmax(abs(E), 1) # (pmax keeps the first argument's dimensions)
+    # (pmax keeps the first argument's dimensions; a Gompertz shape's step is relative to 1 / its times)
+    h0 <- PS_STEP_H * pmax(abs(E), matrix(ps_eta_scale(m, max(prepared$time)), nrow(E), m$nb, byrow = TRUE))
     start <- if (is.null(prepared$start)) NULL else prepared$start[rows]
     ell <- function(Ex) ps_loglik_eta(m, Ex, prepared$time[rows], prepared$status[rows], start)
     l0 <- ell(E)
@@ -1553,9 +1611,12 @@ ps_predict <- function(model, X, strata, quantiles = numeric(), times = numeric(
 # The delta method's standard error of f(par) for each row: the gradient by numDeriv's
 # Richardson extrapolation, the quadratic form g' V g summed column by column (no BLAS: a row's
 # number does not depend on the rows beside it). NA where f is not finite.
-ps_delta_se <- function(f, par, V, value) {
-  G <- suppressWarnings(numDeriv::jacobian(f, par))
+ps_delta_se <- function(f, par, V, value, scale = rep(1, length(par))) {
+  # each parameter on its scale (ps_par_scale): for any distribution but Gompertz numDeriv's
+  # jacobian of f at par itself
+  G <- suppressWarnings(numDeriv::jacobian(function(u) f(u * scale), par / scale))
   if (!is.matrix(G)) G <- matrix(G, nrow = length(value))
+  G <- sweep(G, 2L, scale, "/")
   k <- ncol(G)
   total <- numeric(nrow(G))
   for (j in seq_len(k)) {
