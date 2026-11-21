@@ -61,8 +61,10 @@ def _edges(x0: str = "[x0]", x1: str = "[x1]", pattern: str = "#,##0.##") -> str
 
 
 def _class(x0: str = "[x0]", x1: str = "[x1]") -> str:
-    """A class of a count: 0, 1, 2…; the last, open at the top, «7+»."""
-    return f'IF(ISNULL({x1}), FORMAT({x0}, "0") & "+", FORMAT({x0}, "0"))'
+    """A class of counts: 0, 1, 2…; adjacent counts pooled so that each class expects five customers, «5–7»; the
+    last, open at the top, «12+»."""
+    return (f'IF(ISNULL({x1}), FORMAT({x0}, "0") & "+", IF({x0} = {x1}, FORMAT({x0}, "0"), '
+            f'FORMAT({x0}, "0") & "–" & FORMAT({x1}, "0")))')
 
 
 def _series_name(w: dict, group: str = "[level_2]") -> str:

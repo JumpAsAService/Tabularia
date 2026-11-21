@@ -626,7 +626,9 @@ def test_the_holdout_classes_are_the_frequency_s_with_the_last_one_open_and_the_
         holdout = _classes(rows, "holdout", "mean", which)
         assert [(r["x0"], r["x1"]) for r in holdout] == [(r["x0"], r["x1"]) for r in frequency]
     holdout = _classes(rows, "holdout", "mean", "observed")
-    assert len(holdout) > 2 and holdout[-1]["x1"] is None and all(r["x1"] == r["x0"] for r in holdout[:-1])
+    assert len(holdout) > 2 and holdout[-1]["x1"] is None and all(r["x1"] >= r["x0"] for r in holdout[:-1])
+    # adjacent classes: a pooled class runs from x0 to x1, the next starts at x1 + 1
+    assert all(b["x0"] == a["x1"] + 1 for a, b in zip(holdout[:-1], holdout[1:]))
     customers = _classes(rows, "holdout", "count", "customers")
     assert [(r["x0"], r["x1"]) for r in customers] == [(r["x0"], r["x1"]) for r in frequency]
     n = next(r["value"] for r in rows if r["section"] == "model" and r["stat"] == "n")
@@ -642,7 +644,8 @@ def test_the_holdout_chart_names_its_last_class_with_a_plus_and_its_means_only(t
     [spec] = [s for s in chart_service[1] if s["option"].get("title", {}).get("text") == title]
     categories = spec["option"]["xAxis"]["data"]
     classes = _classes(rows, "holdout", "mean", "observed")
-    assert categories == [str(int(r["x0"])) for r in classes[:-1]] + [f"{int(classes[-1]['x0'])}+"]
+    one = [str(int(r["x0"])) if r["x0"] == r["x1"] else f"{int(r['x0'])}–{int(r['x1'])}" for r in classes[:-1]]
+    assert categories == one + [f"{int(classes[-1]['x0'])}+"]
     # the means only: the customers' rows are not a series
     assert all(len(s["data"]) == len(classes) for s in spec["option"]["series"])
 
@@ -685,6 +688,22 @@ def _items(node):
     elif isinstance(node, list):
         for v in node:
             yield from _items(v)
+
+
+@pytest.mark.parametrize("locale", LOCALES)
+def test_the_spend_check_not_computed_says_why_in_the_page_s_language(locale):
+    """When the repeat customers' frequencies or spends do not vary the HC3 slope has no test: the runner writes the
+    verdict `not_computed`, and the page says why in its language, not the runner's English."""
+    model, params, rows = fixture("clv-value")
+    rows = [dict(r) for r in rows if not (r["level"] == "spend_independence" and r["stat"] in ("statistic", "p_value", "significance"))]
+    for r in rows:
+        if r["level"] == "spend_independence" and r["stat"] == "verdict":
+            r["text"] = "not_computed"
+        if r["level"] == "spend_independence" and r["stat"] == "advice":
+            r["text"] = "not computed: the repeat customers' frequencies or spends do not vary"
+    w = common.words(model, "value", locale)
+    said = [r["text"] for r in layouts.with_labels(model, params, rows, locale) if r["level"] == "spend_independence" and r["stat"] == "advice"]
+    assert said == [w["checks"]["spend_independence"]["not_computed"]] and said[0] != w["checks"]["spend_independence"]["advice"]
 
 
 # ── parametric survival: the final review's corrections (lot P12) ───────────

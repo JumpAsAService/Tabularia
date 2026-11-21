@@ -190,7 +190,7 @@
     "h0": "The optimizer found a maximum: it converged and the Hessian is positive definite.",
     "advice": {
      "": "The estimates may not be the best ones: the data may hold too few repeat customers for this model; try another purchase model.",
-     "convergence_edge": "The optimizer stopped at an edge of a parameter's range, where the likelihood is flat: there are no standard errors; read the measure of the estimates at an edge."
+     "convergence_edge": "The optimizer stopped at an edge of a parameter's range, where the likelihood keeps growing towards the limit: the estimate is that limit, and its standard error, if any, means little; read the measure of the estimates at an edge."
     }
    },
    "boundary": {
@@ -229,6 +229,7 @@
     "name": "Spend independent of frequency",
     "h0": "The average spend does not move with the frequency (Gamma–Gamma's assumption).",
     "advice": "The average spend moves with the frequency: Gamma–Gamma's CLV is then biased; segment the customers by frequency, or read the CLV with care.",
+    "not_computed": "Not computed: the frequencies or the average spends of the repeat customers do not vary, so the slope has no test.",
     "count": {
      "one": "{n} repeat customer",
      "other": "{n} repeat customers"
@@ -432,7 +433,7 @@
     "h0": "L'ottimizzatore ha trovato un massimo: è convergito e l'Hessiana è definita positiva.",
     "advice": {
      "": "Le stime potrebbero non essere le migliori: i dati potrebbero contenere troppi pochi clienti con riacquisti per questo modello; provate un altro modello degli acquisti.",
-     "convergence_edge": "L'ottimizzatore si è fermato a un bordo dell'intervallo di un parametro, dove la verosimiglianza è piatta: non ci sono errori standard; leggete la misura delle stime ai bordi."
+     "convergence_edge": "L'ottimizzatore si è fermato a un bordo dell'intervallo di un parametro, dove la verosimiglianza continua a crescere verso il limite: la stima è quel limite, e il suo errore standard, se c'è, dice poco; leggete la misura delle stime ai bordi."
     }
    },
    "boundary": {
@@ -471,6 +472,7 @@
     "name": "Spesa indipendente dalla frequenza",
     "h0": "La spesa media non varia con la frequenza (ipotesi della Gamma–Gamma).",
     "advice": "La spesa media varia con la frequenza: il CLV della Gamma–Gamma è allora distorto; segmentate i clienti per frequenza, o leggete il CLV con cautela.",
+    "not_computed": "Non calcolata: le frequenze o le spese medie dei clienti che hanno riacquistato non variano, quindi la pendenza non ha un test.",
     "count": {
      "one": "{n} cliente con riacquisti",
      "other": "{n} clienti con riacquisti"
@@ -674,7 +676,7 @@
     "h0": "Der Optimierer hat ein Maximum gefunden: Er ist konvergiert, und die Hesse-Matrix ist positiv definit.",
     "advice": {
      "": "Die Schätzungen sind vielleicht nicht die besten: Die Daten enthalten möglicherweise zu wenige Wiederkäufer für dieses Modell; ein anderes Kaufmodell versuchen.",
-     "convergence_edge": "Der Optimierer hat am Rand des Bereichs eines Parameters angehalten, wo die Likelihood flach ist: Es gibt keine Standardfehler; die Messung der Schätzwerte am Rand lesen."
+     "convergence_edge": "Der Optimierer hat am Rand des Bereichs eines Parameters angehalten, wo die Likelihood zum Grenzwert hin weiter steigt: Der Schätzwert ist dieser Grenzwert, und sein Standardfehler, falls vorhanden, sagt wenig; die Messung der Schätzwerte am Rand lesen."
     }
    },
    "boundary": {
@@ -713,6 +715,7 @@
     "name": "Ausgabe unabhängig von der Häufigkeit",
     "h0": "Die durchschnittliche Ausgabe ändert sich nicht mit der Häufigkeit (Annahme des Gamma–Gamma).",
     "advice": "Die durchschnittliche Ausgabe ändert sich mit der Häufigkeit: Der CLV des Gamma–Gamma ist dann verzerrt; die Kunden nach Häufigkeit segmentieren oder den CLV mit Vorsicht lesen.",
+    "not_computed": "Nicht berechnet: Die Häufigkeiten oder die durchschnittlichen Ausgaben der Wiederkäufer variieren nicht, daher hat die Steigung keinen Test.",
     "count": {
      "one": "{n} Wiederkäufer",
      "other": "{n} Wiederkäufer"
@@ -916,7 +919,7 @@
     "h0": "El optimizador encontró un máximo: convergió y la hessiana es definida positiva.",
     "advice": {
      "": "Puede que las estimaciones no sean las mejores: los datos quizá tengan muy pocos clientes con recompras para este modelo; prueben otro modelo de compras.",
-     "convergence_edge": "El optimizador se detuvo en un borde del rango de un parámetro, donde la verosimilitud es plana: no hay errores estándar; lean la medida de las estimaciones en el borde."
+     "convergence_edge": "El optimizador se detuvo en un borde del rango de un parámetro, donde la verosimilitud sigue creciendo hacia el límite: la estimación es ese límite, y su error estándar, si lo hay, dice poco; lean la medida de las estimaciones en el borde."
     }
    },
    "boundary": {
@@ -955,6 +958,7 @@
     "name": "Gasto independiente de la frecuencia",
     "h0": "El gasto medio no varía con la frecuencia (supuesto de la Gamma–Gamma).",
     "advice": "El gasto medio varía con la frecuencia: el CLV de la Gamma–Gamma queda entonces sesgado; segmenten a los clientes por frecuencia, o lean el CLV con cuidado.",
+    "not_computed": "No calculada: las frecuencias o los gastos medios de los clientes que recompraron no varían, así que la pendiente no tiene prueba.",
     "count": {
      "one": "{n} cliente con recompras",
      "other": "{n} clientes con recompras"
@@ -1158,7 +1162,7 @@
     "h0": "L'optimiseur a trouvé un maximum : il a convergé et la hessienne est définie positive.",
     "advice": {
      "": "Les estimations ne sont peut-être pas les meilleures : les données ont peut-être trop peu de clients avec rachats pour ce modèle ; essayez un autre modèle d'achats.",
-     "convergence_edge": "L'optimiseur s'est arrêté à une borne du domaine d'un paramètre, où la vraisemblance est plate : il n'y a pas d'erreurs standard ; lisez la mesure des estimations aux bornes."
+     "convergence_edge": "L'optimiseur s'est arrêté à une borne du domaine d'un paramètre, où la vraisemblance continue de croître vers la limite : l'estimation est cette limite, et son erreur standard, s'il y en a une, dit peu ; lisez la mesure des estimations aux bornes."
     }
    },
    "boundary": {
@@ -1197,6 +1201,7 @@
     "name": "Dépense indépendante de la fréquence",
     "h0": "La dépense moyenne ne varie pas avec la fréquence (hypothèse du Gamma–Gamma).",
     "advice": "La dépense moyenne varie avec la fréquence : la CLV du Gamma–Gamma est alors biaisée ; segmentez les clients par fréquence, ou lisez la CLV avec prudence.",
+    "not_computed": "Non calculée : les fréquences ou les dépenses moyennes des clients qui ont racheté ne varient pas, la pente n'a donc pas de test.",
     "count": {
      "one": "{n} client avec rachats",
      "other": "{n} clients avec rachats"
