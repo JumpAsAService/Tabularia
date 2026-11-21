@@ -21,9 +21,12 @@ tab_chart_points <- function(task, rows, series, after = 0) {
 
 # The indices of the points to draw: all up to `max`; above it the `keep` largest by
 # `score` (|standardized residual|, Cook's distance…) and a sample of the rest. In
-# increasing order. The seed is the node's (set by the caller with tab_seed).
+# increasing order. The seed is the node's (set by the caller with tab_seed). A `max` below
+# `keep` (MODELS__MAX_CHART_POINTS under extreme_points, or a share of tab_chart_points that
+# can be 1) keeps the `max` largest alone.
 tab_cap <- function(n, max = 2000, score = NULL, keep = 10) {
   if (n <= max) return(seq_len(n))
+  keep <- min(keep, max)
   extreme <- if (is.null(score)) integer() else head(order(-abs(score), seq_len(n)), keep)
   rest <- setdiff(seq_len(n), extreme)
   sort(c(extreme, rest[sort(sample.int(length(rest), max - length(extreme)))]))

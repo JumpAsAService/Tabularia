@@ -330,6 +330,12 @@ TAB_COMMON_TESTS <- list(
     set.seed(1)
     .tab_expect(identical(i, tab_cap(5000, max = 2000, score = score, keep = 10)), "the same seed, the same points")
     .tab_expect(identical(tab_cap(15, 2000), 1:15), "below the cap")
+    # a cap below the extremes kept (MODELS__MAX_CHART_POINTS = 1, 5): the largest alone
+    for (cap in c(1, 5, 10)) {
+      i <- tab_cap(5000, max = cap, score = score, keep = 10)
+      .tab_expect(identical(i, sort(head(order(-abs(score)), cap))), "a cap of ", cap, ": ", paste(i, collapse = " "))
+      .tab_expect(length(tab_cap(5000, max = cap, keep = 10)) == cap, "a cap of ", cap, " without a score")
+    }
     q <- tab_qq(score, 200)
     .tab_expect(nrow(q) == 200L && !is.unsorted(q$y), "Q–Q")
     h <- tab_hist(score)

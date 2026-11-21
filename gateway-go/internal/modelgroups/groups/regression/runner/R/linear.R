@@ -561,3 +561,31 @@ TAB_COMMON_TESTS[["linear: the notes are ids with their values, which the report
   .tab_expect(identical(linear_note("weights_unused", weights = "peso 50%,a"), "@weights_unused weights=peso%2050%25%2Ca"), "the encoding")
   .tab_expect(identical(linear_note("interaction_vif"), "@interaction_vif"), "an id alone")
 }
+
+TAB_COMMON_TESTS[["linear, logistic, penalized: a chart cap below the extremes kept (max_chart_points 1, 5) gives shorter charts"]] <- function(code) {
+  # MODELS__MAX_CHART_POINTS may be any number above 0: below extreme_points (10) the cap keeps the largest alone
+  set.seed(1)
+  n <- 300
+  df <- data.frame(y = stats::rnorm(n), x = stats::rnorm(n), x2 = stats::rnorm(n))
+  df$yb <- as.integer(df$y > 0)
+  for (cap in c(1, 5)) {
+    limits <- tab_catalog()$limits
+    limits$max_chart_points <- cap
+    for (m in list(list("linear", list(outcome = "y", predictors = list("x")), fit_linear),
+                   list("logistic", list(outcome = "yb", event_value = 1, predictors = list("x")), fit_logistic),
+                   list("linear", list(outcome = "y", predictors = list("x", "x2"), penalty = "ridge"), fit_penalized))) {
+      task <- list(protocol = TAB_PROTOCOL, mode = "fit", group = "regression", group_version = "selftest", model = m[[1L]],
+                   variant = tab_variant_of(m[[1L]], m[[2L]]), params = m[[2L]], output = "results", write_output = FALSE,
+                   rows_from = "run", limits = limits, .frame = df)
+      tab_seed(task)
+      out <- tryCatch(m[[3L]](task), error = function(e) e)
+      .tab_expect(!inherits(out, "error"), m[[1L]], " ", m[[2L]]$penalty %||% "", " with max_chart_points ", cap, ": ",
+                  if (inherits(out, "error")) conditionMessage(out))
+      r <- tab_results_frame(out$rows)
+      # the residuals' scatter is the capped chart (the Q–Q has qq_points quantiles of its own)
+      id <- if (identical(m[[1L]], "logistic") && is.null(m[[2L]]$penalty)) "resid_linear" else "resid_fitted"
+      got <- sum(r$section == "point" & r$level == id & r$stat == "y")
+      .tab_expect(got == cap, m[[1L]], " with max_chart_points ", cap, ": ", got, " points in ", id)
+    }
+  }
+}
