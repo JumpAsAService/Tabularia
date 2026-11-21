@@ -9,8 +9,9 @@
 #   - the log-likelihood, Σ wᵢ (δᵢ log f(tᵢ) + (1 − δᵢ) log S(tᵢ)) from the distribution's d and p
 #     functions, checked equal to flexsurv's at the estimates (a gap is a bug: the Job fails);
 #   - the estimates' last digits: Newton steps on that log-likelihood after flexsurv's BFGS;
-#   - the covariance: the inverse of a Richardson Hessian (numDeriv) of that log-likelihood on the
-#     optimiser's scale (flexsurv's own is optim's finite differences where a distribution has no
+#   - the covariance: the inverse of the Hessian of that log-likelihood on the optimiser's scale,
+#     from each row's derivatives in its own few parameters (lot P12; before, a Richardson Hessian
+#     by numDeriv of all the parameters, kept where the rows' fail) (flexsurv's own is optim's finite differences where a distribution has no
 #     analytic derivatives: 5e-4 away from survreg's for the log-logistic);
 #   - every prediction (the profile in `stratum`, the `rows` output, Predict) from the model card,
 #     with the delta method for its intervals: a quantile's on log time, a survival's on
@@ -23,7 +24,8 @@
 #   ps_fit(prepared, distribution, starts = NULL)
 #                                       flexsurvreg with reltol 1e-15 and a second attempt; the
 #                                       optimiser's vector, the log-likelihood and loglik_rows(par);
-#   ps_covariance(fitted)               V, the Richardson Hessian's inverse, or NULL;
+#   ps_covariance(fitted)               V, the inverse of the Hessian from the rows' own derivatives
+#                                       (Richardson's where those fail), or NULL;
 #   ps_newton(fitted)                   Newton steps from flexsurv's estimates to the maximum of the
 #                                       runner's log-likelihood, and V there (BFGS stops on the
 #                                       function's change, 2.5e-9 to 1e-4 away from it);
@@ -414,7 +416,7 @@ ps_fit <- function(prepared, distribution, starts = NULL, hessian = FALSE, fail_
   }
   list(distribution = distribution, spec = m, converged = TRUE, status = "ok", attempts = attempts, fit = fit, delayed = !is.null(prepared$start),
        par = unname(par), names = names(par), loglik = fit$loglik, n_parameters = length(par),
-       loglik_rows = loglik_rows, loglik_fn = loglik, centring = ps_centring(m, prepared$X, prepared$S))
+       loglik_rows = loglik_rows, loglik_fn = loglik, centring = ps_centring(m, prepared$X, prepared$S), prepared = prepared)
 }
 
 # flexsurvreg called with symbols bound in an environment of its own, so that the call it keeps
@@ -531,9 +533,14 @@ ps_refuse_not_converged <- function(fitted) {
              list(distribution = fitted$distribution, reason = fitted$reason %||% ""))
 }
 
-# The covariance on the optimiser's scale: the inverse of the Richardson Hessian of the runner's
-# log-likelihood at `par`. NULL when that Hessian is not negative definite (the estimates are not
-# a maximum): every standard error and interval is then empty.
+# The covariance on the optimiser's scale: the inverse of the Hessian of the runner's
+# log-likelihood at `par`, from the rows' own derivatives (ps_structured_derivatives; lot P12),
+# Richardson's on all the parameters (numDeriv) only where those fail. NULL when the Hessian is not
+# negative definite (the estimates are not a maximum): every standard error and interval is then
+# empty. Against Richardson's on the reference tables (six distributions, with strata, with a
+# start) the standard errors move by 3e-8 relative at most, but for the log-logistic with strata,
+# 9e-7, where the rows' derivatives are the closer to survreg's analytic standard errors (1e-9
+# against Richardson's 9e-7).
 # The Hessian is taken with the location's and the shape's columns centred (their intercepts at
 # the columns' means: par = A · par_c), then brought back exactly, V = A V_c A'. Uncentred, a
 # predictor of values far from 0 makes the Hessian ill-conditioned and its numerical error grows
@@ -541,6 +548,21 @@ ps_refuse_not_converged <- function(fitted) {
 # with a temperature near 20; 1e-9 centred).
 ps_covariance <- function(fitted, par = fitted$par) {
   A <- fitted$centring
+  # the Hessian from the rows' own derivatives (lot P12: on 5,000 rows and 32 parameters the node's
+  # Newton took 31 s with Richardson's, 1.7 s with these); Richardson's only when a row's derivative
+  # is not finite or that Hessian is not negative definite
+  if (!is.null(fitted$prepared)) {
+    dv <- ps_structured_derivatives(fitted, fitted$prepared, par)
+    if (!is.null(dv) && all(is.finite(dv$hessian))) {
+      info <- -crossprod(A, dv$hessian %*% A)
+      ch <- tryCatch(chol((info + t(info)) / 2), error = function(e) NULL)
+      if (!is.null(ch)) {
+        V <- A %*% chol2inv(ch) %*% t(A)
+        V <- (V + t(V)) / 2
+        if (all(is.finite(V)) && all(diag(V) > 0)) return(V)
+      }
+    }
+  }
   par_c <- drop(solve(A, par))
   H <- tryCatch(numDeriv::hessian(function(b) fitted$loglik_fn(drop(A %*% b)), par_c), error = function(e) NULL)
   if (is.null(H) || !all(is.finite(H))) return(NULL)
@@ -564,8 +586,8 @@ ps_centring <- function(m, X, S) {
   A
 }
 
-# Newton steps on the runner's log-likelihood from flexsurv's estimates, each with the Richardson
-# Hessian and gradient, while a step is at least PS_NEWTON_DONE standard errors and raises the
+# Newton steps on the runner's log-likelihood from flexsurv's estimates, each with the Hessian of
+# ps_covariance and numDeriv's Richardson gradient, while a step is at least PS_NEWTON_DONE standard errors and raises the
 # log-likelihood (up to its rounding); V is the covariance at the estimates kept. optim's BFGS stops on the function's
 # relative change, so its estimates are known to about the square root of that (2.5e-9 relative on
 # the exponential's rate; 1e-4 on a Gompertz intercept with a predictor of values near 50):
@@ -658,16 +680,16 @@ ps_newton_stale <- function(fitted) {
 # linear predictors η_j (the distribution's own parameters on the optimiser's scale),
 # η_j = B_j · par[idx_j], so
 #   g = Σ_j B_j' (w ∘ ∂ℓ/∂η_j),   H = Σ_j Σ_l B_j' diag(w ∘ ∂²ℓ/∂η_j ∂η_l) B_l,
-# with the rows' derivatives by central differences (1 + 2 nb + 2 nb (nb − 1) evaluations of the
-# rows: 19 for three parameters) and O(n k²) to add them up, by chunks of rows (2e-8 relative from
-# numDeriv's Richardson Hessian on the 236 rows of ps_weibull.csv). A step is taken on the centred
+# with the rows' derivatives by central differences at two steps and one Richardson extrapolation
+# (1 + 4 nb + 4 nb (nb − 1) evaluations of the rows: 37 for three parameters) and O(n k²) to add
+# them up, by chunks of rows. A step is taken on the centred
 # scale (ps_centring) when −H is positive definite and it raises the log-likelihood, halved up to
 # three times; the steps go on while one is at least PS_NEWTON_DONE standard errors, at most
 # PS_STEPS_MAX. One step is not enough: from the Weibull's point (Q = 1) BFGS hardly moves the
 # generalized gamma (13 evaluations, Q still 0.9999999 on those 236 rows) and the first step leaves
 # its LR statistic at 0.6687 against the maximum's 0.6726; the second and third take it there.
 PS_STEPS_MAX <- 10L
-PS_STEP_H <- 1e-4 # the rows' central differences, relative to max(1, |η|)
+PS_STEP_H <- 1e-3 # the rows' central differences (then h / 2 and the extrapolation), relative to max(1, |η|)
 
 # The columns of B_j (the design of η_j: a column of ones, then the location's columns and the
 # strata's dummies, or the shape's) and where each sits in `par`.
@@ -718,29 +740,37 @@ ps_structured_derivatives <- function(fitted, prepared, par = fitted$par) {
     B <- lapply(design, function(d) .ps_eta_block(d, prepared$X, prepared$S, rows))
     E <- vapply(seq_len(m$nb), function(j) drop(B[[j]] %*% par[design[[j]]$idx]), numeric(length(rows)))
     if (!is.matrix(E)) E <- matrix(E, nrow = length(rows))
-    h <- PS_STEP_H * pmax(abs(E), 1) # (pmax keeps the first argument's dimensions)
+    h0 <- PS_STEP_H * pmax(abs(E), 1) # (pmax keeps the first argument's dimensions)
     start <- if (is.null(prepared$start)) NULL else prepared$start[rows]
     ell <- function(Ex) ps_loglik_eta(m, Ex, prepared$time[rows], prepared$status[rows], start)
-    moved <- function(signs) {
-      Ex <- E
-      for (j in seq_along(signs)) if (signs[[j]] != 0) Ex[, j] <- Ex[, j] + signs[[j]] * h[, j]
-      ell(Ex)
-    }
-    unit <- function(j, s) replace(numeric(m$nb), j, s)
     l0 <- ell(E)
     w <- prepared$w[rows]
-    d1 <- matrix(0, length(rows), m$nb)
-    d2 <- array(0, c(length(rows), m$nb, m$nb))
-    for (j in seq_len(m$nb)) {
-      up <- moved(unit(j, 1))
-      down <- moved(unit(j, -1))
-      d1[, j] <- (up - down) / (2 * h[, j])
-      d2[, j, j] <- (up - 2 * l0 + down) / h[, j]^2
+    # the rows' first and second derivatives by central differences of step h; one Richardson
+    # extrapolation from h and h / 2, (4 D(h / 2) − D(h)) / 3, takes their error from O(h²) to O(h⁴)
+    differences <- function(h) {
+      moved <- function(signs) {
+        Ex <- E
+        for (j in seq_along(signs)) if (signs[[j]] != 0) Ex[, j] <- Ex[, j] + signs[[j]] * h[, j]
+        ell(Ex)
+      }
+      d1 <- matrix(0, length(rows), m$nb)
+      d2 <- array(0, c(length(rows), m$nb, m$nb))
+      for (j in seq_len(m$nb)) {
+        up <- moved(replace(numeric(m$nb), j, 1))
+        down <- moved(replace(numeric(m$nb), j, -1))
+        d1[, j] <- (up - down) / (2 * h[, j])
+        d2[, j, j] <- (up - 2 * l0 + down) / h[, j]^2
+      }
+      for (j in seq_len(m$nb)) for (l in seq_len(m$nb)) if (j < l) {
+        both <- function(a, b) moved(replace(numeric(m$nb), c(j, l), c(a, b)))
+        d2[, j, l] <- d2[, l, j] <- (both(1, 1) - both(1, -1) - both(-1, 1) + both(-1, -1)) / (4 * h[, j] * h[, l])
+      }
+      list(d1 = d1, d2 = d2)
     }
-    for (j in seq_len(m$nb)) for (l in seq_len(m$nb)) if (j < l) {
-      both <- function(a, b) moved(replace(numeric(m$nb), c(j, l), c(a, b)))
-      d2[, j, l] <- d2[, l, j] <- (both(1, 1) - both(1, -1) - both(-1, 1) + both(-1, -1)) / (4 * h[, j] * h[, l])
-    }
+    coarse <- differences(h0)
+    fine <- differences(h0 / 2)
+    d1 <- (4 * fine$d1 - coarse$d1) / 3
+    d2 <- (4 * fine$d2 - coarse$d2) / 3
     if (!all(is.finite(d1[w > 0, ])) || !all(is.finite(d2[w > 0, , ]))) return(NULL)
     for (j in seq_len(m$nb)) {
       ij <- design[[j]]$idx
@@ -1966,4 +1996,27 @@ TAB_COMMON_TESTS[["parametric survival: Newton steps from the rows' own derivati
   .tab_expect(abs(at(f) - at(manual)) < 1e-6, "the comparison with auto ", at(f), " and without ", at(manual))
   .tab_expect(identical(f$text[f$section == "assumption" & f$level == "distribution_vs_gengamma" & f$stat == "advice_id"], "distribution_vs_gengamma_auto"),
               "the advice of auto")
+}
+
+TAB_COMMON_TESTS[["parametric survival: the covariance from the rows' own derivatives against survreg's analytic one and numDeriv's"]] <- function(code) {
+  df <- .ps_test_table(code)
+  base <- list(time = "days", event = "status", event_value = "failed", predictors = list("load", "line"))
+  for (d in c("weibull", "lognormal", "loglogistic")) {
+    task <- .ps_test_task(df, c(base, list(distribution = d, strata = "plant")))
+    prepared <- ps_prepare(task)
+    fitted <- ps_newton(ps_fit(prepared, d))
+    # the location's standard errors are survreg's, a scale per stratum (analytic derivatives): 1e-7 relative
+    frame <- prepared$frame
+    frame$g <- factor(prepared$stratum)
+    sr <- survival::survreg(survival::Surv(time, status) ~ d1 + d2 + d3 + s1 + s2 + strata(g), data = frame, dist = d,
+                            control = survival::survreg.control(rel.tolerance = 1e-13, maxiter = 200))
+    i <- c(fitted$spec$i_terms, fitted$spec$i_strata)
+    gap <- max(abs(sqrt(diag(fitted$vcov))[i] / sqrt(diag(stats::vcov(sr)))[2:6] - 1))
+    .tab_expect(gap < 1e-7, d, ": the standard errors off survreg's by ", format(gap, digits = 3))
+    # without the rows (a fit that does not carry them) the covariance is numDeriv's, within 1e-6
+    bare <- fitted
+    bare$prepared <- NULL
+    gap <- max(abs(sqrt(diag(ps_covariance(bare))) / sqrt(diag(fitted$vcov)) - 1))
+    .tab_expect(gap < 1e-6, d, ": numDeriv's standard errors off by ", format(gap, digits = 3))
+  }
 }
