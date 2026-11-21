@@ -933,6 +933,33 @@ func TestAGroupsVersionIsBuiltCheckedAndSelfTested(t *testing.T) {
 	}
 }
 
+// The card of the list names the system library with the version the image was built with, as the
+// detail does, and still carries no lock (found on kind: the list said «GSL (Debian)» alone).
+func TestTheListNamesTheSystemLibrariesVersionsWithoutTheLock(t *testing.T) {
+	f := newModelsFixture(t)
+	f.enable(f.admin, "customer_lifetime")
+	f.buildTo(t, "customer_lifetime", true)
+	if _, err := f.db.Exec(f.ctx, `UPDATE script_environment_versions SET lock = E'arrow@26.0.1\nlibgsl-dev@2.7.1+dfsg-6ubuntu2' WHERE id = $1`,
+		f.versions("customer_lifetime")[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	l := answerOf(t, f.call(f.observer, "GET", "", "", "", false, mgList))
+	found := false
+	for _, g := range l.Groups {
+		for _, v := range g.Versions {
+			if v.Lock != nil || v.BuildLog != nil || v.Selftest != nil {
+				t.Errorf("the list carries a log: %+v", v)
+			}
+		}
+		if g.ID == "customer_lifetime" {
+			found = len(g.SystemLibraries) == 1 && g.SystemLibraries[0].Package == "libgsl-dev" && g.SystemLibraries[0].Version == "2.7.1+dfsg-6ubuntu2"
+		}
+	}
+	if !found {
+		t.Errorf("the list's system libraries: %+v", l.Groups)
+	}
+}
+
 func TestAVersionWhoseSelftestFailsIsFailedNotReady(t *testing.T) {
 	f := newModelsFixture(t)
 	f.enable(f.admin, "regression")

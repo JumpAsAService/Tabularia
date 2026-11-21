@@ -100,6 +100,7 @@ type mgVersion struct {
 	ImageRef, Arch, Error *string
 	Packages              int // the installed packages, from the lock
 	Lock, BuildLog        *string
+	SystemLock            *string // the lock's lines of the group's system libraries only: the list has no lock, and its card names their versions
 	Selftest              *string
 	JobName               *string // a ready version with a Job: its self-test is being run again (a new runner)
 	CreatedAt             time.Time
@@ -165,9 +166,15 @@ func mgLoad(ctx context.Context, q perm.Querier, g modelgroups.Group, withText b
 	if keep > 0 {
 		limit = fmt.Sprintf(" LIMIT %d", keep)
 	}
+	sysLike := []string{}
+	for _, p := range g.Recipe.SystemLibraries {
+		sysLike = append(sysLike, p+"@%")
+	}
 	rows, err := q.Query(ctx, `SELECT id, number, status, recipe_hash, runner_hash, image_ref, arch, error,
-		coalesce(array_length(regexp_split_to_array(nullif(lock, ''), E'\n'), 1), 0), `+text+`, job_name, created_at, created_by, started_at, finished_at
-		FROM script_environment_versions WHERE environment_id = $1 ORDER BY number DESC`+limit, s.EnvID)
+		coalesce(array_length(regexp_split_to_array(nullif(lock, ''), E'\n'), 1), 0), `+text+`,
+		(SELECT string_agg(l, E'\n') FROM unnest(regexp_split_to_array(coalesce(lock, ''), E'\n')) AS l WHERE l LIKE ANY ($2)),
+		job_name, created_at, created_by, started_at, finished_at
+		FROM script_environment_versions WHERE environment_id = $1 ORDER BY number DESC`+limit, s.EnvID, sysLike)
 	if err != nil {
 		return nil, err
 	}
@@ -175,7 +182,7 @@ func mgLoad(ctx context.Context, q perm.Querier, g modelgroups.Group, withText b
 	for rows.Next() {
 		var v mgVersion
 		if err := rows.Scan(&v.ID, &v.Number, &v.Status, &v.RecipeHash, &v.RunnerHash, &v.ImageRef, &v.Arch, &v.Error, &v.Packages,
-			&v.Lock, &v.BuildLog, &v.Selftest, &v.JobName, &v.CreatedAt, &v.CreatedBy, &v.StartedAt, &v.FinishedAt); err != nil {
+			&v.Lock, &v.BuildLog, &v.Selftest, &v.SystemLock, &v.JobName, &v.CreatedAt, &v.CreatedBy, &v.StartedAt, &v.FinishedAt); err != nil {
 			return nil, err
 		}
 		s.Versions = append(s.Versions, v)
@@ -316,7 +323,11 @@ func mgOut(ctx context.Context, q perm.Querier, s *mgState) (mgGroupOut, error) 
 	// when the recipe has changed since and a new one is wanted: the old one still serves)
 	for i := range s.Versions {
 		if v := &s.Versions[i]; s.CurrentID != nil && v.ID == *s.CurrentID && v.Status == "ready" {
-			out.SystemLibraries = g.SystemLibraries(v.Lock)
+			lock := v.SystemLock
+			if v.Lock != nil {
+				lock = v.Lock
+			}
+			out.SystemLibraries = g.SystemLibraries(lock)
 		}
 	}
 	if s.EnvID != 0 {
