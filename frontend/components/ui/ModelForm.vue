@@ -370,6 +370,7 @@ function limit(key: 'timeoutSeconds' | 'retries', raw: string, min: number, max:
           searchable
           placeholder="—"
           :aria-labelledby="idOf(f.key, 'label')"
+          :aria-required="f.required ? 'true' : undefined"
           :aria-describedby="hintOf(f) ? idOf(f.key, 'hint') : undefined"
           @update:model-value="(v: any) => set(f.key, v)"
         />
@@ -421,6 +422,7 @@ function limit(key: 'timeoutSeconds' | 'retries', raw: string, min: number, max:
           v-draft="shownValue(f)"
           :placeholder="levelColumn(f) ? $t('models.form.levelPlaceholder') : $t('models.form.chooseColumnFirst', { field: fieldLabel(f.of ?? '') })"
           :disabled="!levelColumn(f)"
+          :aria-required="f.required ? 'true' : undefined"
           :aria-describedby="hintOf(f) ? idOf(f.key, 'hint') : undefined"
           @change="set(f.key, ($event.target as HTMLInputElement).value)"
         />
@@ -503,6 +505,7 @@ function limit(key: 'timeoutSeconds' | 'retries', raw: string, min: number, max:
           v-draft="params[f.key] ?? ''"
           :placeholder="defaultOf(f)"
           :aria-invalid="numberProblem(f) ? 'true' : undefined"
+          :aria-required="f.required ? 'true' : undefined"
           :aria-describedby="numberProblem(f) ? idOf(f.key, 'problem') : requiredNote(f) ? idOf(f.key, 'required') : hintOf(f) ? idOf(f.key, 'hint') : undefined"
           @change="setNumber(f, ($event.target as HTMLInputElement).value)"
         />
@@ -586,6 +589,7 @@ function limit(key: 'timeoutSeconds' | 'retries', raw: string, min: number, max:
           :options="choiceOptions(f)"
           :placeholder="'—'"
           :aria-labelledby="idOf(f.key, 'label')"
+          :aria-required="f.required ? 'true' : undefined"
           :aria-describedby="hintOf(f) ? idOf(f.key, 'hint') : undefined"
           @update:model-value="(v: any) => set(f.key, v)"
         />

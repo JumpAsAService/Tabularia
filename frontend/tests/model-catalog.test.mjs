@@ -1141,3 +1141,14 @@ test('the seed says only what it does in the model: the cross-validation parts a
   const ids = JSON.parse(read('../assets/model-catalog.json')).models.map((x) => x.id)
   assert.ok(ids.includes('clv') && ids.includes('bg_bb') && ids.includes('parametric_survival'))
 })
+
+test('a column the model needs says so to a screen reader, an optional one does not', async () => {
+  const Form = await component('components/ui/ModelForm.vue')
+  const html = await render(Form, node('clv', m.modelDefaults('clv')))
+  // (the test's Select is a div carrying the attributes the real one puts on its trigger)
+  const trigger = (key) => html.match(new RegExp(`<div[^>]*id="model-ctl-1-${key}"[^>]*>`))?.[0] ?? ''
+  for (const key of ['customer', 'frequency', 'recency', 'age', 'time_unit']) {
+    assert.match(trigger(key), /aria-required="true"/, key)
+  }
+  assert.ok(trigger('spend') && !/aria-required/.test(trigger('spend')), trigger('spend'))
+})
