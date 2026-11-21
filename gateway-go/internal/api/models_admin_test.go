@@ -1666,6 +1666,54 @@ func TestAPassOfAnotherRunnerStartsThisRunnersRecheck(t *testing.T) {
 	}
 }
 
+// What a group's recheck cannot do (here an answer of the API that is not JSON) does not undo the
+// round: another group's check, whose Job the round read and deleted, keeps its outcome.
+func TestARecheckThatErrsDoesNotUndoTheRound(t *testing.T) {
+	f := newModelsFixture(t)
+	f.enable(f.admin, "survival")
+	f.buildTo(t, "survival", true)
+	b := f.builds()
+	f.enable(f.admin, "regression")
+	if _, err := b.oneRound(f.ctx); err != nil {
+		t.Fatal(err)
+	}
+	reg := f.versions("regression")[0]
+	envReg := f.envOf("regression")
+	f.kube.end(fmt.Sprintf("tabularia-build-e%d-v%d", envReg, reg.Number), true, 0, buildLog())
+	if _, err := b.oneRound(f.ctx); err != nil || f.versions("regression")[0].Status != "checking" {
+		t.Fatalf("not checking: %v", err)
+	}
+	f.kube.end(fmt.Sprintf("tabularia-check-e%d-v%d", envReg, reg.Number), true, 0, selftestLog(passed))
+	// the same round: survival's runner changed, and the API answers its recheck's Job with no JSON
+	if _, err := f.db.Exec(f.ctx, `UPDATE script_environment_versions SET runner_hash = 'of-the-old-runner' WHERE environment_id = $1`,
+		f.envOf("survival")); err != nil {
+		t.Fatal(err)
+	}
+	inner := f.kube.srv.Config.Handler
+	f.kube.srv.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/jobs") {
+			w.WriteHeader(201)
+			_, _ = io.WriteString(w, "<html>a proxy's page</html>")
+			return
+		}
+		inner.ServeHTTP(w, r)
+	})
+	if _, err := b.oneRound(f.ctx); err != nil {
+		t.Fatalf("the round: %v", err)
+	}
+	if v := f.versions("regression")[0]; v.Status != "ready" {
+		t.Errorf("the check read in the round was lost: %s %q", v.Status, deref(v.Error))
+	}
+	if v := f.versions("survival")[0]; v.Status != "ready" || v.JobName != nil || v.RecheckAttempts != 0 {
+		t.Errorf("survival: %s job %q attempts %d", v.Status, deref(v.JobName), v.RecheckAttempts)
+	}
+	// the API answers again: the recheck starts
+	f.kube.srv.Config.Handler = inner
+	if _, err := b.oneRound(f.ctx); err != nil || f.kube.job("scripts", fmt.Sprintf("tabularia-recheck-e%d-v1", f.envOf("survival"))) == nil {
+		t.Errorf("no recheck afterwards: %v", err)
+	}
+}
+
 func TestNoSelftestAgainWhileAVersionIsBeingBuilt(t *testing.T) {
 	f := newModelsFixture(t)
 	f.enable(f.admin, "survival")

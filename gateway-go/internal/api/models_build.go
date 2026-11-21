@@ -305,78 +305,105 @@ const (
 // the card says it is being checked (`rechecking`). No Job while a version is being built: that
 // one is self-tested with the new runner anyway. A recheck that could not run (recheckLater) is
 // started again after mgRecheckDelay, at most mgRecheckRetries times for the same runner.
+//
+// Each group in a savepoint of its own: what one group's recheck could not do (an answer of the
+// API that is not JSON, the runner's files not readable) is logged and tried again at the next
+// round, without undoing the round's other work, the outcomes of the Jobs the round already read
+// and deleted (advance) among them.
 func (b *scriptBuilds) recheckRunners(ctx context.Context, tx pgx.Tx) error {
 	for _, g := range modelgroups.Groups() {
-		var env int64
-		if err := tx.QueryRow(ctx, `SELECT environment_id FROM model_groups WHERE id = $1 AND enabled AND environment_id IS NOT NULL`, g.ID).Scan(&env); err != nil {
-			if scNoRows(err) {
-				continue
-			}
-			return err
-		}
-		if err := mgLockEnvironment(ctx, tx, env); err != nil {
-			return err
-		}
-		if n, err := mgInFlight(ctx, tx, env); err != nil {
-			return err
-		} else if n != 0 {
-			continue
-		}
-		var v sbVersion
-		err := tx.QueryRow(ctx, `SELECT v.id, v.environment_id, v.number, v.image_ref, v.arch FROM script_environments e
-			JOIN script_environment_versions v ON v.id = e.current_version_id WHERE e.id = $1 AND v.status = 'ready' AND v.job_name IS NULL
-			AND v.image_ref IS NOT NULL AND v.recipe_hash = $2 AND v.runner_hash IS DISTINCT FROM $3
-			AND (v.recheck_runner IS DISTINCT FROM $3 OR v.recheck_attempts <= $4 AND (v.recheck_after IS NULL OR v.recheck_after <= $5))`,
-			env, g.RecipeHash, g.RunnerHash, mgRecheckRetries, jobs.NaiveNow()).Scan(&v.ID, &v.EnvironmentID, &v.Number, &v.ImageRef, &v.Arch)
-		if scNoRows(err) {
-			continue
-		}
+		sp, err := tx.Begin(ctx)
 		if err != nil {
 			return err
 		}
-		// the attempts counted are the ones of this runner
-		if _, err := tx.Exec(ctx, `UPDATE script_environment_versions SET recheck_runner = $2, recheck_attempts = 0, recheck_after = NULL,
-			recheck_error = NULL WHERE id = $1 AND recheck_runner IS DISTINCT FROM $2`, v.ID, g.RunnerHash); err != nil {
-			return err
-		}
-		e, err := sbEnvironmentOf(ctx, tx, env)
-		if err != nil || e == nil {
-			return err
-		}
-		codeName := mgRecheckCodeName(&v)
-		manifest, code, err := b.managedCheckJob(&v, e, g.ID, true, codeName)
-		if err != nil {
-			return err
-		}
-		k := kubeAPI()
-		job, err := kube.CreateJob(ctx, k, b.s.Scripts.Namespace, manifest)
-		var ke *kube.Error
-		switch {
-		case errors.As(err, &ke) && ke.Status == 409: // an old one of the name is still going away: next round
-			_ = kube.DeleteJob(ctx, k, b.s.Scripts.Namespace, sbJobName("recheck", &v))
-			continue
-		case errors.As(err, &ke) && (ke.Status == 0 || ke.Status == 429 || ke.Status >= 500): // the API server is restarting: next round
-			b.log.Warn(fmt.Sprintf("models: the self-test of the group %s cannot start again yet (%s)", g.ID, ke.Message))
-			continue
-		case errors.As(err, &ke):
-			if err := b.recheckLater(ctx, tx, &v, g, "the cluster refused its Job: "+ke.Message); err != nil {
-				return err
+		if err := b.recheckGroup(ctx, sp, g); err != nil {
+			if rerr := sp.Rollback(ctx); rerr != nil || ctx.Err() != nil {
+				return errors.Join(err, rerr, ctx.Err())
 			}
-			continue
-		case err != nil:
-			return err
-		}
-		if err := b.createSelftestCode(ctx, k, manifest, job, code, codeName); err != nil {
-			b.log.Warn(fmt.Sprintf("models: the code of the self-test of the group %s not made (%v)", g.ID, err))
-			_ = kube.DeleteJob(ctx, k, b.s.Scripts.Namespace, sbJobName("recheck", &v))
+			b.log.Warn(fmt.Sprintf("models: the self-test of the group %s cannot start again yet (%v)", g.ID, err))
 			continue
 		}
-		if _, err := tx.Exec(ctx, `UPDATE script_environment_versions SET job_name = $2 WHERE id = $1`, v.ID, sbJobName("recheck", &v)); err != nil {
+		if err := sp.Commit(ctx); err != nil {
 			return err
 		}
-		b.log.Info(fmt.Sprintf("models: the runner of the group %s changed: version %d is self-tested again, and serves meanwhile", g.ID, v.Number))
 	}
 	return nil
+}
+
+// recheckGroup is recheckRunners for one group.
+func (b *scriptBuilds) recheckGroup(ctx context.Context, tx pgx.Tx, g modelgroups.Group) error {
+	var env int64
+	if err := tx.QueryRow(ctx, `SELECT environment_id FROM model_groups WHERE id = $1 AND enabled AND environment_id IS NOT NULL`, g.ID).Scan(&env); err != nil {
+		if scNoRows(err) {
+			return nil
+		}
+		return err
+	}
+	if err := mgLockEnvironment(ctx, tx, env); err != nil {
+		return err
+	}
+	if n, err := mgInFlight(ctx, tx, env); err != nil {
+		return err
+	} else if n != 0 {
+		return nil
+	}
+	var v sbVersion
+	err := tx.QueryRow(ctx, `SELECT v.id, v.environment_id, v.number, v.image_ref, v.arch FROM script_environments e
+		JOIN script_environment_versions v ON v.id = e.current_version_id WHERE e.id = $1 AND v.status = 'ready' AND v.job_name IS NULL
+		AND v.image_ref IS NOT NULL AND v.recipe_hash = $2 AND v.runner_hash IS DISTINCT FROM $3
+		AND (v.recheck_runner IS DISTINCT FROM $3 OR v.recheck_attempts <= $4 AND (v.recheck_after IS NULL OR v.recheck_after <= $5))`,
+		env, g.RecipeHash, g.RunnerHash, mgRecheckRetries, jobs.NaiveNow()).Scan(&v.ID, &v.EnvironmentID, &v.Number, &v.ImageRef, &v.Arch)
+	if scNoRows(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	// the attempts counted are the ones of this runner
+	if _, err := tx.Exec(ctx, `UPDATE script_environment_versions SET recheck_runner = $2, recheck_attempts = 0, recheck_after = NULL,
+		recheck_error = NULL WHERE id = $1 AND recheck_runner IS DISTINCT FROM $2`, v.ID, g.RunnerHash); err != nil {
+		return err
+	}
+	e, err := sbEnvironmentOf(ctx, tx, env)
+	if err != nil || e == nil {
+		return err
+	}
+	codeName := mgRecheckCodeName(&v)
+	manifest, code, err := b.managedCheckJob(&v, e, g.ID, true, codeName)
+	if err != nil {
+		return err
+	}
+	k := kubeAPI()
+	job, err := kube.CreateJob(ctx, k, b.s.Scripts.Namespace, manifest)
+	var ke *kube.Error
+	switch {
+	case errors.As(err, &ke) && ke.Status == 409: // an old one of the name is still going away: next round
+		_ = kube.DeleteJob(ctx, k, b.s.Scripts.Namespace, sbJobName("recheck", &v))
+		return nil
+	case errors.As(err, &ke) && mgClusterBusy(ke): // the API server is restarting: next round
+		b.log.Warn(fmt.Sprintf("models: the self-test of the group %s cannot start again yet (%s)", g.ID, ke.Message))
+		return nil
+	case errors.As(err, &ke):
+		return b.recheckLater(ctx, tx, &v, g, "the cluster refused its Job: "+ke.Message)
+	case err != nil:
+		return err
+	}
+	if err := b.createSelftestCode(ctx, k, manifest, job, code, codeName); err != nil {
+		b.log.Warn(fmt.Sprintf("models: the code of the self-test of the group %s not made (%v)", g.ID, err))
+		_ = kube.DeleteJob(ctx, k, b.s.Scripts.Namespace, sbJobName("recheck", &v))
+		return nil
+	}
+	if _, err := tx.Exec(ctx, `UPDATE script_environment_versions SET job_name = $2 WHERE id = $1`, v.ID, sbJobName("recheck", &v)); err != nil {
+		return err
+	}
+	b.log.Info(fmt.Sprintf("models: the runner of the group %s changed: version %d is self-tested again, and serves meanwhile", g.ID, v.Number))
+	return nil
+}
+
+// mgClusterBusy says whether the API server's answer is one of a cluster that cannot answer now
+// (unreachable, too many requests, a server error): the next round tries again, uncounted.
+func mgClusterBusy(ke *kube.Error) bool {
+	return ke.Status == 0 || ke.Status == 429 || ke.Status >= 500
 }
 
 // advanceRecheck follows the Job that runs the self-test again on a version in use. The self-test
