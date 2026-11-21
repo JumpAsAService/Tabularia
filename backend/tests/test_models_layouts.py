@@ -1312,6 +1312,14 @@ def test_a_decomposition_says_its_positions_in_words_and_its_first_page_the_chec
             "periods 7, 30 · robust", "1 Jan 2026 – 31 Mar 2026", "Seasonality: rank test — 7", "≥ 0.1", "0.0040",
             "orders = trend + seasonal[7] + seasonal[30] + remainder · MSTL, robust · α = 0.05"} <= said
     assert "≤ 0.01" not in said  # ADF's p-value is MacKinnon's, continuous: only KPSS's is a table's
+    # a seasonal pattern the test does not support is no broken assumption: its own words, not the red «× failed»;
+    # ADF's good outcome is the rejection of its H0, said so
+    assert {"✓ supported", "– not supported", "✓ rejected"} <= said and "× failed" not in said, sorted(s for s in said if s[:1] in "✓×–")
+    assert "«orders» over «day», daily series" in said
+    checks = next(it for it in layouts.definition("decomposition", fixture("decomposition-mstl")[1], "en")["sections"]["body"]["items"]
+                  if it["id"] == "assumptions")
+    quiet = [r for col in checks["columns"] for r in col.get("rules", []) if r["style"].get("color") == common.MUTED]
+    assert quiet and '[level] = "seasonality"' in quiet[-1]["when"] and '"failed"' in quiet[-1]["when"]
     assert any(s.startswith("A seasonal pattern of period 7 is supported: if the positions of the cycle did not differ, rankings this "
                             "unequal would appear by chance with probability < 0.0001, below α = 0.05 (Friedman's test on 12 complete "
                             "cycles).") for s in said)
@@ -1319,7 +1327,12 @@ def test_a_decomposition_says_its_positions_in_words_and_its_first_page_the_chec
     said = set(strings(json.loads(page)))
     assert any("L'andamento che si ripete ogni 12 mesi è massimo ad aprile, dove moltiplica il trend per 1,25, e minimo a ottobre, "
                "dove lo moltiplica per 0,75." in s for s in said), sorted(s for s in said if "si ripete" in s)
-    assert {"aprile", "ottobre", "boxes = trend × stagionale[12] × residuo · classica, moltiplicativa · α = 0,05"} <= said
+    assert {"aprile", "ottobre", "boxes = trend × stagionale[12] × residuo · classica, moltiplicativa · α = 0,05",
+            "✓ sostenuta", "✓ rifiutata", "«boxes» nel tempo «month», serie mensile"} <= said
+    for code in LOCALES:  # every frequency of the catalogue is said in each language, none left as the catalogue's word
+        for frequency in catalog.KINDS["frequency"]["choices"]:
+            said_about = layouts.title("decomposition", {"time": "t", "value": "v", "frequency": frequency, "period": 5}, code)
+            assert not re.search(rf"\b{frequency}\b", said_about) and said_about.count("«") == 2, (code, said_about)
 
 
 def test_a_decomposition_says_the_runner_s_codes_of_positions_kpss_s_table_ends_and_its_reasons_in_words(tmp_path, chart_service, monkeypatch):  # noqa: F811

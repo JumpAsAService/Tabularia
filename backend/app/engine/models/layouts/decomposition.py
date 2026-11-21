@@ -60,10 +60,14 @@ def name(params: dict[str, Any], locale: str) -> str:
 
 
 def about(params: dict[str, Any], locale: str) -> str:
-    """«boxes over month»."""
+    """«boxes» over «month», monthly series: the two columns named as columns, the frequency in the page's words."""
     w = c.words(WORDS, "stl", locale)
     value, time = params.get("value"), params.get("time")
-    return w["series_of"].replace("{value}", str(value)).replace("{time}", str(time)) if value and time else str(value or "")
+    if not (value and time):
+        return str(value or "")
+    frequency = w["frequency_series"].get(str(params.get("frequency")), "")
+    said = w["series_of"].replace("{value}", str(value)).replace("{time}", str(time)).replace("{frequency}", frequency)
+    return said if frequency else said.rsplit(",", 1)[0]
 
 
 def _numbers(sentence: str, lang: str, **values: float) -> str:
@@ -215,6 +219,24 @@ def _formula_line(w: dict, params: dict[str, Any], checked: dict[str, Any], peri
     return " · ".join((equation, how, _numbers(f["alpha"], lang, alpha=float(checked.get("alpha", 0.05)))))
 
 
+def _own_verdicts(item: dict, w: dict, verdict: str = "[text]") -> None:
+    """The checks whose good outcome is the rejection of H0 (a seasonal pattern, ADF's unit root) say their verdict in
+    their own words: not rejecting H0 is no evidence, not a broken assumption, so «– not supported» is drawn in the
+    muted colour of what was not computed, not in the red of a failure (`check_verdicts`). `verdict`: the expression of
+    the row's verdict (the row's own text in the checks' tables, a LOOKUP in the advice's)."""
+    own = w["check_verdicts"]
+    header = w["assumptions"]["verdict"]
+    for col in item["columns"]:
+        if col["header"] != header:
+            continue
+        cases = ", ".join(f'[level] = "{check}" AND {verdict} = "{v}", {c.q(said)}' for check, words in own.items()
+                          for v, said in words.items())
+        col["value"] = f"IFS({cases}, TRUE, {col['value']})"
+        quiet = " OR ".join(f'[level] = "{check}"' for check in own)
+        col.setdefault("rules", []).append({"when": f'({quiet}) AND {verdict} = "failed"',
+                                            "style": {"color": c.MUTED, "weight": "normal"}})
+
+
 def _p_column(item: dict, w: dict) -> None:
     """The decomposition's ADF p-value is MacKinnon's, continuous (urca's punitroot), not a table's: the checks' column
     of p-values keeps «≥ 0.1» and «≤ 0.01» for KPSS only, whose p-value tseries reads from its table."""
@@ -238,6 +260,8 @@ def _summary(p: stats.Page, w: dict, lang: str, params: dict[str, Any], checked:
     alpha_line = _numbers(w["alpha_line"], lang, alpha=float(checked.get("alpha", 0.05)))
     c._assumptions(p, w, lang, alpha_line, True)
     _p_column(next(it for it in p.items if it["id"] == "assumptions"), w)
+    _own_verdicts(next(it for it in p.items if it["id"] == "assumptions"), w)
+    _own_verdicts(next(it for it in p.items if it["id"] == "advice"), w, c.of_row("assumption", "verdict", "text"))
     lag = c.of_row("assumption", "lag")
     c.measures(MEASURES, more={"largest_acf": f'IF(ISNULL({lag}), "", {c.join(w["at_lag"], lag=c.shown(lag, "0"))})'})(p, w)
     e.reading_under(p, w, "summary", "strength")
@@ -287,7 +311,8 @@ def _seasons(p: stats.Page, w: dict, checked: dict[str, Any], periods: list[str]
         pc = w["position_caption"]
         caption = "IFS(" + ", ".join(f'{kind} = "{k}", {c.q(pc[k])}' for k in POSITION_KINDS) + f', TRUE, {c.q(pc["step"])})'
         key = f"assumption|seasonality|{period}|verdict"
-        verdict = "IFS(" + ", ".join(f'{c.txt(key)} = "{v}", {c.q(w["verdicts"][v])}' for v in catalog.VERDICTS) + ', "")'
+        words = {**w["verdicts"], **w["check_verdicts"]["seasonality"]}
+        verdict = "IFS(" + ", ".join(f'{c.txt(key)} = "{v}", {c.q(words[v])}' for v in catalog.VERDICTS) + ', "")'
         said = c.join(w["illustrates"], check=f"LOOKUP({c.q(key)}, [key], [label])", verdict=verdict)
         measured = max(pc.values(), key=len) + " · " + w["checks"]["seasonality"]["name"] + " — " + w["verdicts"]["not_computed"]
         charts.append(c.xy(f"subseries_{period}", ch["subseries"].replace("{p}", period), f,
@@ -341,10 +366,11 @@ def _remainder(p: stats.Page, w: dict, checked: dict[str, Any]) -> None:
         {"header": t["statistic"], "value": c.number_of_row("assumption", "statistic"), "width": 22, "align": "right", "format": "0.####"},
         {"header": w["assumptions"]["df"], "value": f'IF(ISNULL({df}), "", FORMAT({df}, "0.##"))', "width": 12, "align": "right"},
         {"header": w["assumptions"]["p_value"], "value": "", "width": 20, "align": "right"},
-        {"header": t["verdict"], "value": said, "width": 26,
+        {"header": w["assumptions"]["verdict"], "value": said, "width": 26,
          "rules": [{"when": f'[text] = "{v}"', "style": {"color": colour, "weight": "semibold"}} for v, colour in c.VERDICT_COLOURS.items()]},
     ], p.y, visible=c.exists(one))
     _p_column(item, w)
+    _own_verdicts(item, w)
     p.add(item, 10)
     e.reading_under(p, w, "remainder")
 

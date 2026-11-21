@@ -6,7 +6,26 @@
       "mstl": "MSTL decomposition",
       "emd": "Empirical mode decomposition (EMD)"
     },
-    "series_of": "{value} over {time}",
+    "series_of": "«{value}» over «{time}», {frequency}",
+    "frequency_series": {
+      "hour": "hourly series",
+      "day": "daily series",
+      "week": "weekly series",
+      "month": "monthly series",
+      "quarter": "quarterly series",
+      "year": "yearly series",
+      "index": "series in steps"
+    },
+    "check_verdicts": {
+      "seasonality": {
+        "ok": "✓ supported",
+        "failed": "– not supported"
+      },
+      "adf": {
+        "ok": "✓ rejected",
+        "failed": "– not rejected"
+      }
+    },
     "sections": {
       "summary": "Summary",
       "assumptions": "Checks",
@@ -102,8 +121,7 @@
       "remainder_checks": "Checks of the remainder",
       "check": "Check",
       "statistic": "Statistic",
-      "p": "p-value",
-      "verdict": "Verdict"
+      "p": "p-value"
     },
     "modes": {
       "imf": "IMF {k}",
@@ -588,7 +606,26 @@
       "mstl": "Scomposizione MSTL",
       "emd": "Scomposizione in modi empirici (EMD)"
     },
-    "series_of": "{value} nel tempo {time}",
+    "series_of": "«{value}» nel tempo «{time}», {frequency}",
+    "frequency_series": {
+      "hour": "serie oraria",
+      "day": "serie giornaliera",
+      "week": "serie settimanale",
+      "month": "serie mensile",
+      "quarter": "serie trimestrale",
+      "year": "serie annuale",
+      "index": "serie a passi"
+    },
+    "check_verdicts": {
+      "seasonality": {
+        "ok": "✓ sostenuta",
+        "failed": "– non sostenuta"
+      },
+      "adf": {
+        "ok": "✓ rifiutata",
+        "failed": "– non rifiutata"
+      }
+    },
     "sections": {
       "summary": "Sintesi",
       "assumptions": "Verifiche",
@@ -684,8 +721,7 @@
       "remainder_checks": "Verifiche della componente residua",
       "check": "Verifica",
       "statistic": "Statistica",
-      "p": "p-value",
-      "verdict": "Verdetto"
+      "p": "p-value"
     },
     "modes": {
       "imf": "IMF {k}",
@@ -1168,7 +1204,26 @@
       "mstl": "MSTL-Zerlegung",
       "emd": "Empirische Modenzerlegung (EMD)"
     },
-    "series_of": "{value} über {time}",
+    "series_of": "«{value}» über «{time}», {frequency}",
+    "frequency_series": {
+      "hour": "stündliche Reihe",
+      "day": "tägliche Reihe",
+      "week": "wöchentliche Reihe",
+      "month": "monatliche Reihe",
+      "quarter": "vierteljährliche Reihe",
+      "year": "jährliche Reihe",
+      "index": "Reihe in Schritten"
+    },
+    "check_verdicts": {
+      "seasonality": {
+        "ok": "✓ gestützt",
+        "failed": "– nicht gestützt"
+      },
+      "adf": {
+        "ok": "✓ verworfen",
+        "failed": "– nicht verworfen"
+      }
+    },
     "sections": {
       "summary": "Zusammenfassung",
       "assumptions": "Prüfungen",
@@ -1264,8 +1319,7 @@
       "remainder_checks": "Prüfungen der Restkomponente",
       "check": "Prüfung",
       "statistic": "Statistik",
-      "p": "p-Wert",
-      "verdict": "Urteil"
+      "p": "p-Wert"
     },
     "modes": {
       "imf": "IMF {k}",
@@ -1746,7 +1800,26 @@
       "mstl": "Descomposición MSTL",
       "emd": "Descomposición en modos empíricos (EMD)"
     },
-    "series_of": "{value} a lo largo de {time}",
+    "series_of": "«{value}» a lo largo de «{time}», {frequency}",
+    "frequency_series": {
+      "hour": "serie horaria",
+      "day": "serie diaria",
+      "week": "serie semanal",
+      "month": "serie mensual",
+      "quarter": "serie trimestral",
+      "year": "serie anual",
+      "index": "serie por pasos"
+    },
+    "check_verdicts": {
+      "seasonality": {
+        "ok": "✓ respaldada",
+        "failed": "– no respaldada"
+      },
+      "adf": {
+        "ok": "✓ rechazada",
+        "failed": "– no rechazada"
+      }
+    },
     "sections": {
       "summary": "Resumen",
       "assumptions": "Comprobaciones",
@@ -1842,8 +1915,7 @@
       "remainder_checks": "Comprobaciones de la componente residual",
       "check": "Comprobación",
       "statistic": "Estadístico",
-      "p": "p-valor",
-      "verdict": "Veredicto"
+      "p": "p-valor"
     },
     "modes": {
       "imf": "IMF {k}",
@@ -2325,7 +2397,26 @@
       "mstl": "Décomposition MSTL",
       "emd": "Décomposition en modes empiriques (EMD)"
     },
-    "series_of": "{value} selon {time}",
+    "series_of": "«{value}» selon «{time}», {frequency}",
+    "frequency_series": {
+      "hour": "série horaire",
+      "day": "série quotidienne",
+      "week": "série hebdomadaire",
+      "month": "série mensuelle",
+      "quarter": "série trimestrielle",
+      "year": "série annuelle",
+      "index": "série par pas"
+    },
+    "check_verdicts": {
+      "seasonality": {
+        "ok": "✓ étayée",
+        "failed": "– non étayée"
+      },
+      "adf": {
+        "ok": "✓ rejetée",
+        "failed": "– non rejetée"
+      }
+    },
     "sections": {
       "summary": "Synthèse",
       "assumptions": "Vérifications",
@@ -2421,8 +2512,7 @@
       "remainder_checks": "Vérifications de la composante résiduelle",
       "check": "Vérification",
       "statistic": "Statistique",
-      "p": "p-valeur",
-      "verdict": "Verdict"
+      "p": "p-valeur"
     },
     "modes": {
       "imf": "IMF {k}",
