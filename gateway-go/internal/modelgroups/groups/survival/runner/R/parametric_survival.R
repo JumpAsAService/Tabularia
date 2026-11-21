@@ -879,8 +879,10 @@ ps_newton <- function(fitted) {
   fitted
 }
 
-# With a start (lot P8) the same, but the steps after a Richardson Hessian reuse it: a Hessian costs
-# 2 s on 88,000 rows, a gradient 0.7 s, and four exact steps were needed. A round: V at the point, one
+# With a start (lot P8) the same, but the steps after a Hessian reuse it: the Hessian is ps_covariance's
+# (the rows' own derivatives since lot P12, Richardson's only where those fail; when this was written it
+# was Richardson's alone, 2 s on 88,000 rows against 0.7 s for a gradient, and four exact steps were
+# needed). A round: V at the point, one
 # step, then up to PS_NEWTON_STALE more steps with that V and the gradient of each new point, until
 # one is below PS_NEWTON_DONE standard errors; a step that does not raise the log-likelihood ends the
 # round. At most PS_NEWTON_STEPS rounds; V at the end is the Hessian of the point kept, taken once

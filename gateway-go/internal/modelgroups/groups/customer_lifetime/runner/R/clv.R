@@ -5,8 +5,9 @@
 #   - clv_fit() reads and checks the summary, fits the purchase models the node asks for (Pareto/NBD and
 #     BG/NBD through CLVTools' compiled functions with CLVTools' own optimizer settings, MBG/NBD written in
 #     the module), keeps the one asked for or, with `auto`, the highest log-likelihood among those that
-#     converged (the optimizer's code and a Hessian the convergence check accepts: each candidate's Hessian is
-#     computed before the choice), fits Gamma–Gamma when a spend column is given, and evaluates
+#     converged (the optimizer's code and a Hessian the convergence check accepts: `auto` computes the Hessian
+#     of the best candidate alone, and of the next only when the best fails, clv_check_candidates), fits
+#     Gamma–Gamma when a spend column is given, and evaluates
 #     every customer (GSL's ₂F₁ with its status, the quadrature in three pieces only where GSL fails); a fit whose
 #     likelihood is numerical noise (clv_sound) falls back on the stable form and is never chosen when it stays so;
 #   - clv_results() writes the rows of every section but `assumption`, the output rows and the card;

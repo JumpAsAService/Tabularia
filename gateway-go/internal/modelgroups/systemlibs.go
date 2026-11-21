@@ -19,7 +19,7 @@ import "strings"
 
 // SystemLibrary is a system library of a group's image as the card shows it.
 type SystemLibrary struct {
-	Package        string `json:"package"`                   // the Debian package of the recipe
+	Package        string `json:"package"`                   // the recipe's apt package (the image is Ubuntu)
 	Name           string `json:"name"`                      // «GSL»
 	Version        string `json:"version,omitempty"`         // the library's version, «2.7.1»; empty when no build has recorded it
 	PackageVersion string `json:"package_version,omitempty"` // the package's version as apt installed it, «2.7.1+dfsg-6ubuntu2»
