@@ -327,7 +327,8 @@ yet fitted are left out (status *time*, with a note).
   `pred_cox_snell`, `pred_martingale` and `pred_deviance` (residuals). The input must not already
   have one of those names.
 - The **intervals** of what is predicted come from the delta method, computed from a covariance
-  Tabularia builds itself (a Richardson Hessian of the log-likelihood), the same for every
+  Tabularia builds itself (the Hessian of the log-likelihood, from each row's derivatives in the
+  distribution's few parameters: fast whatever the number of predictors), the same for every
   distribution; a median or quantile the distribution never reaches (a Gompertz whose hazard
   falls, so that part of the rows never has the event) is left empty, with a note.
 
