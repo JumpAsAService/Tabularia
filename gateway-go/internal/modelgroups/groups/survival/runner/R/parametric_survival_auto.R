@@ -117,8 +117,7 @@ ps_auto <- function(task, prepared) {
         }
       }
       f <- tryCatch(fit_d(), error = function(e) {
-        # the runner's own check of its likelihood is a bug, not a candidate that failed
-        if (grepl("^the runner's log-likelihood", conditionMessage(e))) stop(e)
+        ps_caught(e)
         list(converged = FALSE, reason = conditionMessage(e), loglik = NA_real_)
       })
       entry$loglik <- if (is.finite(f$loglik %||% NA_real_)) f$loglik else NA_real_

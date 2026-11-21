@@ -7,7 +7,8 @@
 #
 # What the runner computes itself, not flexsurv:
 #   - the log-likelihood, Σ wᵢ (δᵢ log f(tᵢ) + (1 − δᵢ) log S(tᵢ)) from the distribution's d and p
-#     functions, checked equal to flexsurv's at the estimates (a gap is a bug: the Job fails);
+#     functions (log S with log.p, exact far in the tail), compared with flexsurv's row by row on
+#     the rows where flexsurv keeps its digits (ps_flexsurv_agrees);
 #   - the estimates' last digits: Newton steps on that log-likelihood after flexsurv's BFGS;
 #   - the covariance: the inverse of the Hessian of that log-likelihood on the optimiser's scale,
 #     from each row's derivatives in its own few parameters (lot P12; before, a Richardson Hessian
@@ -22,7 +23,8 @@
 #   ps_prepare(task)                    the positional frame, the design, the strata's dummies, the
 #                                       weights, the rows left out and their counts, the profile;
 #   ps_fit(prepared, distribution, starts = NULL)
-#                                       flexsurvreg with reltol 1e-15 and a second attempt; the
+#                                       flexsurvreg with reltol 1e-15 and a second attempt, then the
+#                                       runner's Newton steps from survreg's estimates; the
 #                                       optimiser's vector, the log-likelihood and loglik_rows(par);
 #   ps_covariance(fitted)               V, the inverse of the Hessian from the rows' own derivatives
 #                                       (Richardson's where those fail), or NULL;
@@ -53,7 +55,9 @@ PS_RELTOL <- 1e-15           # flexsurv's default (1e-8) leaves a Gompertz coeff
 PS_RELTOL_START <- 1e-10     # with a start BFGS runs on numerical gradients (flexsurv has no analytic ones for left truncation; a fit costs 5.8 s on 88,000 rows at 1e-10, 10.7 s at 1e-15): it stops sooner, the Newton steps do the rest
 PS_MAXIT <- 2000L
 PS_MAXIT_SECOND <- 5000L
-PS_LOGLIK_CHECK <- 1e-10     # the runner's log-likelihood against flexsurv's, relative
+PS_LOGLIK_CHECK <- 1e-10     # the runner's log-likelihood against flexsurv's, relative, on the rows where flexsurv keeps its digits
+PS_FLEXSURV_LOG_SURV <- -10  # flexsurv takes log S as log(1 − F): below this it loses digits (−Inf under S = 1e-16)
+PS_OWN_ROUNDS <- 5L          # rounds of PS_STEPS_MAX Newton steps of the runner's own fit, when flexsurv's fails
 PS_CARD_CHECK <- 1e-9        # the card's predictions against flexsurv's own, in the self-test
 PS_CHUNK <- 100000L          # rows a delta-method jacobian takes at once
 PS_NEWTON_STEPS <- 4L        # Newton steps after flexsurv's BFGS, at most
@@ -444,34 +448,115 @@ ps_fit <- function(prepared, distribution, starts = NULL, hessian = FALSE, fail_
   attempts <- 1L
   first <- if (fail_first) simpleError("forced by the self-test") else fit_once(inits$first, PS_MAXIT)
   fit <- first
+  second_start <- NULL
   if (failed(fit) && second) {
     ps_stop_if_out_of_time() # no second attempt after the time ps_within gave
     attempts <- 2L
-    second <- inits$second %||% ps_second_start(prepared, m, distribution, form, frame)
-    fit <- fit_once(second, PS_MAXIT_SECOND)
+    second_start <- inits$second %||% ps_second_start(prepared, m, distribution, form, frame)
+    fit <- fit_once(second_start, PS_MAXIT_SECOND)
   }
   if (failed(fit)) {
     reason <- if (inherits(fit, "error")) conditionMessage(fit) else paste0("optim's code ", fit$opt$convergence)
+    # flexsurv could not fit (an optimiser that cannot even start: «initial value in 'vmmin' is not
+    # finite», when a unit censored far in the tail has S(t) below 1e-16 and flexsurv's log(1 − F) is
+    # −Inf): the runner's own Newton steps from the starts it has, survreg's estimates first
+    own_fit <- if (second) ps_fit_own(prepared, distribution, list(second_start, inits$first)) else NULL
+    if (!is.null(own_fit)) {
+      own_fit$attempts <- attempts + 1L
+      return(own_fit)
+    }
     return(list(distribution = distribution, spec = m, converged = FALSE, status = "not_converged", attempts = attempts,
                 reason = reason, loglik = if (inherits(fit, "error")) NA_real_ else fit$loglik, fit = NULL,
                 loglik_rows = loglik_rows, loglik_fn = loglik))
   }
   par <- fit$opt$par
-  flexsurv_ll <- fit$loglik
+  shift <- 0
   if (unit != 1) {
     # back to the times' own unit: each density is 1 / unit of the scaled one's, a survival the same.
     # flexsurv's object holds the scaled rows: ps_attach_flexsurv makes the one of these estimates
     par <- stats::setNames(ps_gompertz_unit(m, par, unit), names(par))
-    flexsurv_ll <- flexsurv_ll - log(unit) * sum(prepared$w * prepared$status)
+    shift <- log(unit)
+    fit_rows <- fit$logliki
     fit <- NULL
+  } else {
+    fit_rows <- fit$logliki
   }
+  # the log-likelihood is the runner's (exact in the tail, where flexsurv's loses digits); flexsurv's
+  # is compared with it on the rows where it keeps them. A gap there, or rows where it does not keep
+  # them, and flexsurv's estimates are a start: the runner's Newton steps take them to its maximum
   own <- loglik(par)
-  if (!is.finite(own) || abs(own - flexsurv_ll) > PS_LOGLIK_CHECK * max(1, abs(flexsurv_ll))) {
-    stop("the runner's log-likelihood (", format(own, digits = 17), ") is not flexsurv's (", format(flexsurv_ll, digits = 17), ")")
+  exact <- ps_flexsurv_exact_rows(m, par, prepared)
+  agrees <- is.finite(own) && ps_flexsurv_agrees(m, par, prepared, fit_rows, shift, exact)
+  out <- list(distribution = distribution, spec = m, converged = is.finite(own), status = if (is.finite(own)) "ok" else "not_converged",
+              attempts = attempts, fit = fit, delayed = !is.null(prepared$start), par = unname(par),
+              names = if (is.null(fit)) NULL else names(par), loglik = own, n_parameters = length(par),
+              loglik_rows = loglik_rows, loglik_fn = loglik, centring = ps_centring(m, prepared$X, prepared$S), prepared = prepared,
+              reason = if (is.finite(own)) NULL else "the estimates have no finite log-likelihood")
+  if (agrees && all(exact)) return(out)
+  refined <- if (is.finite(own)) ps_own_newton(out, prepared) else NULL
+  if (!is.null(refined)) {
+    refined$attempts <- attempts
+    return(refined)
   }
-  list(distribution = distribution, spec = m, converged = TRUE, status = "ok", attempts = attempts, fit = fit, delayed = !is.null(prepared$start),
-       par = unname(par), names = if (is.null(fit)) NULL else names(par), loglik = flexsurv_ll, n_parameters = length(par),
-       loglik_rows = loglik_rows, loglik_fn = loglik, centring = ps_centring(m, prepared$X, prepared$S), prepared = prepared)
+  if (!is.finite(own)) return(out)
+  # no maximum of the runner's own past flexsurv's: flexsurv's estimates stay, with the runner's log-likelihood
+  out
+}
+
+# The rows on which flexsurv's log-likelihood keeps its digits: an event's (its log density), and a
+# row whose log S(t) (and log S(start), with delayed entry) is above PS_FLEXSURV_LOG_SURV.
+ps_flexsurv_exact_rows <- function(m, par, prepared) {
+  pars <- ps_natural(m, par, prepared$X, prepared$S)
+  ls <- suppressWarnings(ps_log_survival(m, prepared$time, pars))
+  ok <- prepared$status == 1L | (is.finite(ls) & ls > PS_FLEXSURV_LOG_SURV)
+  if (!is.null(prepared$start)) {
+    late <- which(prepared$start > 0)
+    if (length(late)) {
+      l0 <- suppressWarnings(ps_log_survival(m, prepared$start[late], lapply(pars, function(p) p[late])))
+      ok[late] <- ok[late] & is.finite(l0) & l0 > PS_FLEXSURV_LOG_SURV
+    }
+  }
+  ok
+}
+
+# Whether flexsurv's log-likelihood of each row (`fit_rows`: flexsurvreg's logliki, unweighted; on
+# times divided by exp(`shift`) for Gompertz, where each density is that much larger) is the runner's,
+# summed with the weights over the rows `exact`, within PS_LOGLIK_CHECK.
+ps_flexsurv_agrees <- function(m, par, prepared, fit_rows, shift = 0, exact = ps_flexsurv_exact_rows(m, par, prepared)) {
+  own <- ps_loglik_rows(m, par, prepared$time, prepared$status, prepared$X, prepared$S, prepared$start)
+  if (length(fit_rows) != length(own) || !any(exact)) return(FALSE)
+  theirs <- sum(prepared$w[exact] * (fit_rows[exact] - shift * prepared$status[exact]))
+  mine <- sum(prepared$w[exact] * own[exact])
+  is.finite(mine) && is.finite(theirs) && abs(mine - theirs) <= PS_LOGLIK_CHECK * max(1, abs(theirs))
+}
+
+# The runner's own fit by its Newton steps (ps_newton_steps, up to PS_OWN_ROUNDS rounds) from a fit
+# at a point: the fit when they reach the maximum (`at_maximum`), else NULL. Its flexsurvreg object
+# is made by ps_attach_flexsurv at the estimates.
+ps_own_newton <- function(fitted, prepared) {
+  fitted$fit <- NULL
+  fitted$names <- NULL
+  for (round in seq_len(PS_OWN_ROUNDS)) {
+    fitted <- ps_newton_steps(fitted, prepared)
+    if (!isTRUE(fitted$converged) || isTRUE(fitted$at_maximum) || fitted$newton_steps < PS_STEPS_MAX) break
+  }
+  if (!isTRUE(fitted$converged) || !isTRUE(fitted$at_maximum)) return(NULL)
+  fitted$newton_steps <- NULL
+  fitted$at_maximum <- NULL
+  fitted
+}
+
+# The runner's own fit from the first of `points` (the optimiser's scale; NULL ones skipped) where
+# its Newton steps reach a maximum, or NULL.
+ps_fit_own <- function(prepared, distribution, points) {
+  for (p in Filter(Negate(is.null), points)) {
+    ps_stop_if_out_of_time()
+    f <- ps_fit_at(prepared, distribution, p)
+    if (!isTRUE(f$converged)) next
+    f <- tryCatch(ps_own_newton(f, prepared), error = ps_caught)
+    if (!is.null(f) && !inherits(f, "error")) return(f)
+  }
+  NULL
 }
 
 # A Gompertz fit's vector on times divided by `unit` brought back to the times' own (`back`), or the
@@ -556,17 +641,19 @@ ps_fit_nested <- function(prepared, distribution, init, fallback) {
 }
 
 # The flexsurvreg object of a fit made by ps_fit_at, at its estimates (all parameters fixed: one
-# evaluation), with the check that its log-likelihood is the runner's: native.rds and the
-# self-test's check of the card read it.
+# evaluation), when its log-likelihood is the runner's on the rows where flexsurv keeps its digits
+# (ps_flexsurv_agrees): native.rds and the self-test's check of the card read it. When flexsurv
+# fails or disagrees, the fit has none, and native.rds is not written.
 ps_attach_flexsurv <- function(fitted, prepared) {
   if (!is.null(fitted$fit)) return(fitted)
   m <- fitted$spec
-  fit <- suppressWarnings(ps_flexsurvreg(ps_formula(prepared), ps_anc_formula(prepared, m), prepared$frame, m$flexsurv,
-                                         init = ps_to_natural(m, fitted$par), fixedpars = TRUE))
-  own <- fitted$loglik_fn(fitted$par)
-  if (!is.finite(own) || abs(own - fit$loglik) > PS_LOGLIK_CHECK * max(1, abs(fit$loglik))) {
-    stop("the runner's log-likelihood (", format(own, digits = 17), ") is not flexsurv's (", format(fit$loglik, digits = 17), ")")
-  }
+  fit <- tryCatch(suppressWarnings(ps_flexsurvreg(ps_formula(prepared), ps_anc_formula(prepared, m), prepared$frame, m$flexsurv,
+                                                  init = ps_to_natural(m, fitted$par), fixedpars = TRUE)),
+                  error = function(e) {
+                    ps_caught(e)
+                    NULL
+                  })
+  if (is.null(fit) || !ps_flexsurv_agrees(m, fitted$par, prepared, fit$logliki)) return(fitted)
   # with every parameter fixed flexsurv keeps the estimates alone: the columns of a fit, which
   # ps_native fills with the runner's numbers
   blank <- function(x) {
@@ -1988,6 +2075,48 @@ TAB_COMMON_TESTS[["parametric survival: a first attempt that fails is followed b
     .tab_expect("model|||note_second_start" %in% second$key && !"model|||note_second_start" %in% first$key, d, ": the note")
     .tab_expect(abs(ll(second) / ll(first) - 1) < 1e-9, d, ": the second start ends elsewhere (", ll(second), " against ", ll(first), ")")
   }
+}
+
+TAB_COMMON_TESTS[["parametric survival: a unit censored far in the tail, where flexsurv loses digits or cannot start, is fitted"]] <- function(code) {
+  # units that wear out at about 10 days (Weibull shape 8) and some still running at 3 lives: their S(t)
+  # is far below 1e-8, where flexsurv's log(1 − F) loses its digits (below 1e-16 it is −Inf, and
+  # flexsurv's optimiser cannot start). The runner's log-likelihood is exact there: every distribution
+  # and auto are fitted, those survreg knows at survreg's maximum
+  set.seed(11)
+  t <- stats::rweibull(300, 8, 10)
+  tables <- list(two = data.frame(days = c(t, 30, 31), failed = c(rep(1, 300), 0, 0)),
+                 one = data.frame(days = c(t[1:200], 30), failed = c(rep(1, 200), 0)))
+  for (k in names(tables)) {
+    df <- tables[[k]]
+    for (d in c(names(PS_DISTRIBUTIONS), "auto")) {
+      params <- list(time = "days", event = "failed", event_value = 1, distribution = d)
+      fit <- tryCatch(fit_parametric_survival(.ps_test_task(df, params)), error = function(e) e)
+      .tab_expect(!inherits(fit, "error"), k, ", ", d, ": ", if (inherits(fit, "error")) conditionMessage(fit))
+      r <- tab_results_frame(fit$rows)
+      ll <- r$value[match("model|||log_lik", r$key)]
+      .tab_expect(identical(r$text[match("assumption|convergence||verdict", r$key)], "ok"), k, ", ", d, ": not a maximum")
+      if (d %in% c("weibull", "exponential", "lognormal", "loglogistic")) {
+        sr <- survival::survreg(survival::Surv(days, failed) ~ 1, data = df, dist = d)$loglik[[2L]]
+        .tab_expect(abs(ll - sr) < 1e-7 * abs(sr), k, ", ", d, ": log-likelihood ", format(ll, digits = 12), " against survreg's ",
+                    format(sr, digits = 12))
+      }
+    }
+  }
+  # where flexsurv cannot start at all, the runner's own Newton steps from survreg's estimates make the fit
+  prepared <- ps_prepare(.ps_test_task(tables$one, list(time = "days", event = "failed", event_value = 1, distribution = "weibull")))
+  m <- ps_spec("weibull", 0L, 1L)
+  flex <- tryCatch(suppressWarnings(ps_flexsurvreg(ps_formula(prepared), NULL, prepared$frame, "weibull",
+                                                   control = list(reltol = PS_RELTOL, maxit = PS_MAXIT))), error = function(e) e)
+  f <- ps_fit(prepared, "weibull")
+  .tab_expect(inherits(flex, "error") && isTRUE(f$converged) && is.null(f$fit) && f$attempts == 3L,
+              "flexsurv's own fit should fail and the runner's make it (", f$attempts, " attempts)")
+  # the comparison with flexsurv leaves out the rows where it loses digits, and keeps the others
+  par <- f$par
+  exact <- ps_flexsurv_exact_rows(m, par, prepared)
+  .tab_expect(sum(!exact) == 1L && prepared$status[!exact] == 0L, "the rows left out of the comparison")
+  rows_ <- ps_loglik_rows(m, par, prepared$time, prepared$status, prepared$X, prepared$S)
+  .tab_expect(ps_flexsurv_agrees(m, par, prepared, rows_) && !ps_flexsurv_agrees(m, par, prepared, replace(rows_, 1L, rows_[[1L]] + 1e-6)),
+              "the row by row comparison")
 }
 
 TAB_COMMON_TESTS[["parametric survival: Predict's options, its warnings and the refusals of the rows"]] <- function(code) {
