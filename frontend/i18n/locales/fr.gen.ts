@@ -6612,6 +6612,21 @@ export default {
         "holdout_length": "Combien d'occasions contient la période de test, de 1 à 1000."
       }
     },
+    "ab_test": {
+      "name": "Test A/B",
+      "hint": "Compare les variantes d'une expérience à son contrôle : la différence et son intervalle, la décision, la vérification de la répartition (sample ratio mismatch) et, sur demande, la lecture bayésienne et la lecture séquentielle."
+    },
+    "ab_plan": {
+      "name": "Planification d'un test A/B",
+      "hint": "Planifie une expérience à partir de l'historique de la métrique : les unités par variante et les jours pour détecter une hausse, ou la hausse détectable avec les unités ou les jours dont vous disposez.",
+      "params": {
+        "date": "Date de la première apparition"
+      },
+      "hints": {
+        "date": "Le jour où chaque unité est apparue pour la première fois (ou le jour de la ligne) : le trafic quotidien de nouvelles unités, donc la durée. Sans elle, aucun jour n'est calculé.",
+        "min_lift": "La hausse relative à détecter : 0,02 vaut 2 % de la base de départ."
+      }
+    },
     "presets": {
       "ar": {
         "name": "AR",
@@ -6737,7 +6752,42 @@ export default {
       "discount_rate": "Taux d'actualisation annuel",
       "margin": "Marge",
       "holdout_transactions": "Achats dans la période de test",
-      "holdout_length": "Durée de la période de test"
+      "holdout_length": "Durée de la période de test",
+      "variant": "Colonne de la variante",
+      "control": "Contrôle",
+      "metric_type": "Type de métrique",
+      "input_shape": "Les lignes sont",
+      "unit": "Colonne de l'unité",
+      "metric": "Métrique",
+      "numerator": "Numérateur",
+      "denominator": "Dénominateur",
+      "units_count": "Unités dans la ligne",
+      "metric_sum": "Somme de la métrique",
+      "metric_sum_squares": "Somme des carrés de la métrique",
+      "higher_is_better": "Une valeur plus élevée est meilleure",
+      "alternative": "Hypothèse alternative",
+      "correction": "Correction entre les traitements",
+      "covariate": "Covariable avant l'expérience (CUPED)",
+      "covariate_missing": "Une unité sans la covariable",
+      "cap_percentile": "Plafond au percentile",
+      "srm_alpha": "Niveau de la vérification de la répartition",
+      "expected_shares": "Répartition attendue des variantes",
+      "min_lift": "Plus petite hausse qui compte",
+      "power": "Puissance",
+      "bayes": "Lecture bayésienne",
+      "prior_alpha": "A priori Beta : α",
+      "prior_beta": "A priori Beta : β",
+      "loss_threshold": "Perte attendue acceptée",
+      "date": "Colonne de date",
+      "sequential": "Lecture séquentielle",
+      "sequential_tau": "Échelle du mélange séquentiel",
+      "secondary_metrics": "Métriques secondaires",
+      "solve_for": "Calculer",
+      "units_per_variant": "Unités par variante",
+      "days": "Jours",
+      "arms": "Variantes, contrôle inclus",
+      "control_share": "Part du trafic du contrôle",
+      "traffic_share": "Part du trafic dans l'expérience"
     },
     "hints": {
       "outcome": "La colonne à expliquer.",
@@ -6814,7 +6864,42 @@ export default {
       "compare": "Ajuste aussi les deux autres, pour le tableau de comparaison seulement : le modèle du nœud reste celui choisi.",
       "discount_rate": "De 0 à 1 : 0,1 est 10 % par an. Les achats futurs pèsent moins.",
       "margin": "La part de la dépense qui est de la valeur, au-dessus de 0 et jusqu'à 1. Avec 1 la valeur est celle du chiffre d'affaires.",
-      "holdout_transactions": "Les achats de chaque client dans la période qui suit la calibration, pour tester la prévision. Vide : pas de période de test."
+      "holdout_transactions": "Les achats de chaque client dans la période qui suit la calibration, pour tester la prévision. Vide : pas de période de test.",
+      "variant": "La variante de chaque ligne : texte, entier, vrai/faux ou date, 20 valeurs au plus, contrôle compris. Une ligne sans variante est écartée et comptée.",
+      "control": "La variante à laquelle les autres sont comparées. Toute autre valeur de la colonne est un traitement.",
+      "metric_type": "Oui/non (une conversion), un nombre (chiffre d'affaires, durée) ou un rapport de deux sommes (clics par impression, revenu par session).",
+      "input_shape": "Une ligne par unité (un utilisateur, une session, un magasin), ou des lignes déjà additionnées par variante (et par jour ou segment). Des lignes additionnées ne permettent ni métrique de rapport, ni CUPED, ni plafond, ni métriques secondaires.",
+      "unit": "L'identifiant de l'unité. Les lignes d'une même unité sont d'abord regroupées ; une unité vue dans deux variantes est écartée et comptée. Vide : chaque ligne est une unité.",
+      "metric": "Vrai/faux ou 0/1 pour une métrique oui/non ; un nombre pour une métrique continue.",
+      "numerator": "Par unité : les clics, le revenu. La métrique est la somme des numérateurs sur la somme des dénominateurs, par variante.",
+      "denominator": "Par unité : les impressions, les sessions.",
+      "units_count": "Les unités de la ligne : un entier, 0 ou plus.",
+      "metric_sum": "Oui/non : les unités qui ont converti (un entier, au plus les unités). Continue : la somme de la métrique.",
+      "metric_sum_squares": "La variance d'une métrique continue demande la somme de ses carrés.",
+      "higher_is_better": "Désactivez-le pour un coût, une latence, un taux de rebond : la décision considère alors une baisse comme le bon résultat.",
+      "alternative": "Sur traitement moins contrôle. La lecture séquentielle est uniquement bilatérale.",
+      "correction": "Entre les traitements face au contrôle. Avec un seul traitement elle ne change rien, et le rapport le dit.",
+      "covariate": "CUPED : une métrique mesurée sur chaque unité avant le début de l'expérience. Elle réduit la variance. Une colonne mesurée après le début fausserait le résultat.",
+      "covariate_missing": "Remplir donne à l'unité sans covariable la moyenne de la covariable dans sa variante ; exclure laisse l'unité hors des comparaisons. Le rapport compte les deux cas.",
+      "cap_percentile": "Winsorisation : les valeurs au-dessus de ce percentile de toutes les unités (toutes variantes confondues) sont ramenées à lui. Un nombre au-dessus de 0,5 et au-dessous de 1, p. ex. 0,99. Vide : désactivé.",
+      "srm_alpha": "Le niveau du test de sample ratio mismatch, qui vérifie que les unités se sont réparties entre les variantes comme prévu. Plus strict que celui de la comparaison, car une fausse alerte fait écarter une expérience saine.",
+      "expected_shares": "La répartition prévue, vérifiée sur les unités trouvées. Des poids, pas des pourcentages : 1, 1, 2 donne 25 %, 25 % et 50 %. Si elle est donnée, chaque variante en a besoin d'un.",
+      "min_lift": "La plus petite hausse relative qui compte pour l'activité : elle marque les graphiques et la lecture de la puissance. 0,02 vaut 2 % : un ordre de grandeur des expériences web, pas un avis sur vos données.",
+      "power": "La chance de voir une hausse qui existe vraiment, pour la hausse détectable à cette taille. Un nombre au-dessus de 0 et au-dessous de 1.",
+      "bayes": "Ajoute la probabilité de battre le contrôle, la probabilité d'être la meilleure et la perte attendue. Ce n'est pas une valeur p.",
+      "prior_alpha": "L'a priori Beta du taux de chaque variante. 1 et 1 est l'a priori uniforme, qui vaut deux unités. Au-dessus de 0.",
+      "prior_beta": "Le second nombre de l'a priori Beta du taux de chaque variante. Au-dessus de 0.",
+      "loss_threshold": "La perte attendue que vous acceptez, en part de la moyenne du contrôle : 0,001 en est 0,1 %.",
+      "date": "Le jour où chaque unité est entrée dans l'expérience (ou le jour de la ligne) : il donne la série quotidienne et les observations séquentielles.",
+      "sequential": "Valeurs p valables à tout moment et séquences de confiance. Activez-le si l'expérience est encore en cours ou si vous avez regardé les résultats avant la fin prévue, et lisez sa décision.",
+      "sequential_tau": "L'ampleur des hausses relatives que vous attendez : 0,05 vaut 5 %. Au-dessus de 0.",
+      "secondary_metrics": "D'autres métriques, rapportées et corrigées entre elles. 10 au plus, chacune une colonne vrai/faux, entière ou numérique.",
+      "solve_for": "Ce qui est calculé : les unités et les jours nécessaires pour détecter la hausse, ou la hausse détectable avec les unités ou les jours dont vous disposez.",
+      "units_per_variant": "Les unités de chaque variante : un entier, 2 ou plus.",
+      "days": "Combien de jours dure l'expérience : un entier de 1 à 3650. Elle demande la colonne de date.",
+      "arms": "Combien de variantes compte l'expérience, contrôle compris : de 2 à 20.",
+      "control_share": "La part des unités du contrôle, au-dessus de 0 et au-dessous de 1 ; les traitements se partagent le reste à parts égales. Vide : toutes les variantes égales.",
+      "traffic_share": "La part de toutes les nouvelles unités qui entre dans l'expérience : au-dessus de 0, jusqu'à 1. Elle allonge la durée."
     },
     "choice": {
       "ols": "Moindres carrés ordinaires",
@@ -6891,7 +6976,24 @@ export default {
       "gompertz": "Gompertz",
       "pareto_nbd": "Pareto/NBD",
       "bg_nbd": "BG/NBD",
-      "mbg_nbd": "MBG/NBD"
+      "mbg_nbd": "MBG/NBD",
+      "continuous": "Un nombre (continue)",
+      "ratio": "Un rapport de deux sommes",
+      "units": "Une ligne par unité",
+      "aggregated": "Lignes déjà additionnées",
+      "two_sided": "Bilatérale",
+      "greater": "Supérieure : traitement au-dessus du contrôle",
+      "less": "Inférieure : traitement au-dessous du contrôle",
+      "holm": "Holm",
+      "benjamini_hochberg": "Benjamini–Hochberg",
+      "bonferroni": "Bonferroni",
+      "fill": "Remplir avec la moyenne de sa variante",
+      "exclude": "Écarter l'unité",
+      "variants": "Une ligne par variante",
+      "sample_size": "La taille de l'échantillon",
+      "mde_for_units": "La hausse détectable avec ces unités",
+      "mde_for_days": "La hausse détectable en ces jours",
+      "plan": "La grille de planification"
     },
     "choices": {
       "penalty": {
@@ -6915,6 +7017,9 @@ export default {
         "month": "Mois",
         "quarter": "Trimestres",
         "year": "Années"
+      },
+      "correction_ab": {
+        "none": "Aucune correction"
       }
     },
     "reasons": {
@@ -6927,7 +7032,18 @@ export default {
       "mae_needs_regression": "L'erreur absolue mesure un nombre : choisis une autre mesure.",
       "auc_needs_binary": "L'aire sous la courbe ROC concerne les résultats oui/non : choisis une autre mesure.",
       "error_needs_classes": "Le taux d'erreur compte les catégories fausses : pour un nombre, il faut une autre mesure.",
-      "holdout_needs_length": "Les achats de la période de test demandent sa durée."
+      "holdout_needs_length": "Les achats de la période de test demandent sa durée.",
+      "ratio_needs_units": "Une métrique de rapport demande une ligne par unité : la méthode delta utilise le numérateur et le dénominateur de chaque unité.",
+      "sequential_two_sided": "La valeur p valable à tout moment de ce nœud est bilatérale.",
+      "metric_needed": "La métrique principale demande sa colonne.",
+      "numerator_needed": "Une métrique de rapport demande la colonne de son numérateur.",
+      "denominator_needed": "Une métrique de rapport demande la colonne de son dénominateur.",
+      "units_count_needed": "Les lignes additionnées demandent la colonne de leurs unités.",
+      "metric_sum_needed": "Les lignes additionnées demandent la colonne de la somme de leur métrique.",
+      "sum_squares_needed": "La variance d'une métrique continue demande la somme de ses carrés.",
+      "units_per_variant_needed": "La hausse détectable avec un nombre d'unités demande les unités par variante.",
+      "days_needed": "La hausse détectable en un nombre de jours demande les jours.",
+      "days_need_date": "La hausse détectable en un nombre de jours demande la colonne du jour où chaque unité est apparue pour la première fois."
     },
     "form": {
       "notUsable": "inutilisable ici",
@@ -6964,7 +7080,23 @@ export default {
       "atMost": "Au plus {max}.",
       "whole": "Un nombre entier.",
       "tooMany": "Au plus {n} nombres.",
-      "noOrderColumns": "L'entrée de l'étape n'a aucune colonne de date, de date et heure, entière ou numérique pour ordonner les lignes."
+      "noOrderColumns": "L'entrée de l'étape n'a aucune colonne de date, de date et heure, entière ou numérique pour ordonner les lignes.",
+      "equalSplit": "Toutes égales",
+      "givenSplit": "Donnée pour chaque variante",
+      "weightOf": "Poids de « {level} »",
+      "splitMissing": "Donnez à chaque variante un poids supérieur à 0.",
+      "splitNotPositive": "Chaque poids doit être supérieur à 0.",
+      "splitIs": "La répartition : {split}.",
+      "tooManyVariants": "« {column} » compte {n} valeurs et une expérience a au plus {max} variantes : choisissez la colonne de la variante.",
+      "noKindColumns": "L'entrée de l'étape n'a pas de colonne du type que ce champ accepte : {kinds}.",
+      "kind": {
+        "text": "texte",
+        "integer": "entier",
+        "number": "nombre",
+        "boolean": "vrai/faux",
+        "date": "date",
+        "datetime": "date et heure"
+      }
     },
     "mlflow": {
       "title": "MLflow",
@@ -6980,7 +7112,8 @@ export default {
       "registerHint": "Facultatif. Chaque exécution ajoute une version du modèle sous ce nom, qu'une étape Prédiction peut appliquer.",
       "continueWithout": "Continuer sans MLflow",
       "continueHint": "Si MLflow est injoignable, l'étape continue et le signale, au lieu d'échouer.",
-      "unknownConnection": "Connexion #{id} (indisponible pour vous)"
+      "unknownConnection": "Connexion #{id} (indisponible pour vous)",
+      "noModelToRegister": "Ce nœud n'écrit aucun modèle, il n'y a donc rien à enregistrer : l'exécution est journalisée avec ses paramètres, ses nombres et son rapport."
     },
     "run": {
       "title": "Exécution",

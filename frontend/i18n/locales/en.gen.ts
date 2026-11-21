@@ -6612,6 +6612,21 @@ export default {
         "holdout_length": "How many opportunities the holdout holds, from 1 to 1000."
       }
     },
+    "ab_test": {
+      "name": "A/B test",
+      "hint": "Compares the variants of an experiment with its control: the difference and its interval, the decision, the check of the split (sample ratio mismatch) and, if asked, the Bayesian and sequential readings."
+    },
+    "ab_plan": {
+      "name": "A/B test planning",
+      "hint": "Plans an experiment from the history of the metric: the units per variant and the days to detect a lift, or the lift detectable with the units or the days you have.",
+      "params": {
+        "date": "Date of the first appearance"
+      },
+      "hints": {
+        "date": "The day each unit first appeared (or the row's day): the daily traffic of new units, hence the duration. Without it no days are computed.",
+        "min_lift": "The relative lift to detect: 0.02 is 2 % of the baseline."
+      }
+    },
     "presets": {
       "ar": {
         "name": "AR",
@@ -6737,7 +6752,42 @@ export default {
       "discount_rate": "Yearly discount rate",
       "margin": "Margin",
       "holdout_transactions": "Purchases in the holdout",
-      "holdout_length": "Length of the holdout"
+      "holdout_length": "Length of the holdout",
+      "variant": "Variant column",
+      "control": "Control",
+      "metric_type": "Type of metric",
+      "input_shape": "The rows are",
+      "unit": "Unit column",
+      "metric": "Metric",
+      "numerator": "Numerator",
+      "denominator": "Denominator",
+      "units_count": "Units in the row",
+      "metric_sum": "Sum of the metric",
+      "metric_sum_squares": "Sum of the squared metric",
+      "higher_is_better": "A higher value is better",
+      "alternative": "Alternative",
+      "correction": "Correction across treatments",
+      "covariate": "Covariate before the experiment (CUPED)",
+      "covariate_missing": "A unit without the covariate",
+      "cap_percentile": "Cap at the percentile",
+      "srm_alpha": "Level of the split check",
+      "expected_shares": "Expected split of the variants",
+      "min_lift": "Smallest lift that matters",
+      "power": "Power",
+      "bayes": "Bayesian reading",
+      "prior_alpha": "Beta prior: α",
+      "prior_beta": "Beta prior: β",
+      "loss_threshold": "Expected loss accepted",
+      "date": "Date column",
+      "sequential": "Sequential reading",
+      "sequential_tau": "Scale of the sequential mixture",
+      "secondary_metrics": "Secondary metrics",
+      "solve_for": "Compute",
+      "units_per_variant": "Units per variant",
+      "days": "Days",
+      "arms": "Variants, control included",
+      "control_share": "Control's share of the traffic",
+      "traffic_share": "Share of the traffic in the experiment"
     },
     "hints": {
       "outcome": "The column to explain.",
@@ -6814,7 +6864,42 @@ export default {
       "compare": "Fits the other two as well, for the comparison table only: the node's model stays the one chosen.",
       "discount_rate": "From 0 to 1: 0.1 is 10 % a year. Purchases in the future weigh less.",
       "margin": "The share of the spend that is value, above 0 and up to 1. With 1 the value is of the revenue.",
-      "holdout_transactions": "The purchases of each customer in the period after the calibration, to test the forecast. Empty: no holdout."
+      "holdout_transactions": "The purchases of each customer in the period after the calibration, to test the forecast. Empty: no holdout.",
+      "variant": "The variant each row belongs to: text, whole number, true/false or date, at most 20 values, the control included. A row without one is left out and counted.",
+      "control": "The variant the others are compared with. Every other value of the column is a treatment.",
+      "metric_type": "Yes/no (a conversion), a number (revenue, time) or a ratio of two sums (clicks per impression, revenue per session).",
+      "input_shape": "One row per unit (a user, a session, a shop), or rows already summed per variant (and per day or segment). Summed rows cannot give ratio metrics, CUPED, the cap or secondary metrics.",
+      "unit": "The unit's id. Rows of the same unit are put together first; a unit seen in two variants is left out and counted. Empty: every row is a unit.",
+      "metric": "True/false or 0/1 for a yes/no metric; a number for a continuous one.",
+      "numerator": "Per unit: the clicks, the revenue. The metric is the sum of the numerators over the sum of the denominators, per variant.",
+      "denominator": "Per unit: the impressions, the sessions.",
+      "units_count": "The units in the row: a whole number, 0 or more.",
+      "metric_sum": "Yes/no: the units that converted (a whole number, at most the units). Continuous: the sum of the metric.",
+      "metric_sum_squares": "The variance of a continuous metric needs the sum of its squares.",
+      "higher_is_better": "Turn it off for a cost, a latency, a bounce rate: the decision then reads a fall as the good result.",
+      "alternative": "On treatment minus control. The sequential reading is two-sided only.",
+      "correction": "Across the treatments against the control. With one treatment it changes nothing, and the report says so.",
+      "covariate": "CUPED: a metric measured on each unit before the experiment started. It lowers the variance. A column measured after the start would bias the result.",
+      "covariate_missing": "Fill gives a unit without it the mean of the covariate in its own variant; exclude leaves the unit out of the comparisons. The report counts either.",
+      "cap_percentile": "Winsorization: the values above this percentile of all units (all variants together) are set to it. A number above 0.5 and below 1, e.g. 0.99. Empty: off.",
+      "srm_alpha": "The level of the sample ratio mismatch test, which checks that the units fell in the variants as planned. Stricter than the comparison's, because a false alarm throws away a sound experiment.",
+      "expected_shares": "The planned split, checked against the units found. Weights, not percentages: 1, 1, 2 is 25 %, 25 % and 50 %. Given, every variant needs one.",
+      "min_lift": "The smallest relative lift that matters to the business: it marks the charts and the power reading. 0.02 is 2 %: an order of magnitude of web experiments, not an opinion about your data.",
+      "power": "The chance to see a lift that really exists, for the lift detectable at this size. A number above 0 and below 1.",
+      "bayes": "Adds the probability of beating the control, the probability of being the best and the expected loss. It is not a p-value.",
+      "prior_alpha": "The Beta prior of each variant's rate. 1 and 1 is the uniform prior, worth two units. Above 0.",
+      "prior_beta": "The second number of the Beta prior of each variant's rate. Above 0.",
+      "loss_threshold": "The expected loss you accept, as a share of the control's mean: 0.001 is 0.1 % of it.",
+      "date": "The day each unit entered the experiment (or the row's day): it gives the daily series and the sequential looks.",
+      "sequential": "Always-valid p-values and confidence sequences. Turn it on if the experiment is still running or you looked at the results before its planned end, and read its decision.",
+      "sequential_tau": "The size of the relative lifts you expect: 0.05 is 5 %. Above 0.",
+      "secondary_metrics": "Further metrics, reported and corrected among themselves. At most 10, each a true/false, whole or number column.",
+      "solve_for": "What is computed: the units and days needed to detect the lift, or the lift detectable with the units or days you have.",
+      "units_per_variant": "The units each variant will have: a whole number, 2 or more.",
+      "days": "How many days the experiment runs: a whole number from 1 to 3650. It needs the date column.",
+      "arms": "How many variants the experiment has, the control included: 2 to 20.",
+      "control_share": "The control's share of the units, above 0 and below 1; the treatments share the rest equally. Empty: all variants alike.",
+      "traffic_share": "The share of all the new units that go into the experiment: above 0, up to 1. It lengthens the duration."
     },
     "choice": {
       "ols": "Ordinary least squares",
@@ -6891,7 +6976,24 @@ export default {
       "gompertz": "Gompertz",
       "pareto_nbd": "Pareto/NBD",
       "bg_nbd": "BG/NBD",
-      "mbg_nbd": "MBG/NBD"
+      "mbg_nbd": "MBG/NBD",
+      "continuous": "A number (continuous)",
+      "ratio": "A ratio of two sums",
+      "units": "One row per unit",
+      "aggregated": "Rows already summed",
+      "two_sided": "Two-sided",
+      "greater": "Greater: treatment above control",
+      "less": "Less: treatment below control",
+      "holm": "Holm",
+      "benjamini_hochberg": "Benjamini–Hochberg",
+      "bonferroni": "Bonferroni",
+      "fill": "Fill with its variant's mean",
+      "exclude": "Leave the unit out",
+      "variants": "One row per variant",
+      "sample_size": "The sample size",
+      "mde_for_units": "The lift detectable with these units",
+      "mde_for_days": "The lift detectable in these days",
+      "plan": "The planning grid"
     },
     "choices": {
       "penalty": {
@@ -6915,6 +7017,9 @@ export default {
         "month": "Months",
         "quarter": "Quarters",
         "year": "Years"
+      },
+      "correction_ab": {
+        "none": "No correction"
       }
     },
     "reasons": {
@@ -6927,7 +7032,18 @@ export default {
       "mae_needs_regression": "The absolute error measures a number: choose another measure.",
       "auc_needs_binary": "The area under the ROC curve is for yes/no outcomes: choose another measure.",
       "error_needs_classes": "The error rate counts wrong categories: a number needs another measure.",
-      "holdout_needs_length": "The holdout's purchases need the holdout's length."
+      "holdout_needs_length": "The holdout's purchases need the holdout's length.",
+      "ratio_needs_units": "A ratio metric needs one row per unit: the delta method uses each unit's numerator and denominator.",
+      "sequential_two_sided": "The always-valid p-value of this node is two-sided.",
+      "metric_needed": "The primary metric needs its column.",
+      "numerator_needed": "A ratio metric needs the column of its numerator.",
+      "denominator_needed": "A ratio metric needs the column of its denominator.",
+      "units_count_needed": "Summed rows need the column of their units.",
+      "metric_sum_needed": "Summed rows need the column of their metric's sum.",
+      "sum_squares_needed": "The variance of a continuous metric needs the sum of its squares.",
+      "units_per_variant_needed": "The lift detectable with a number of units needs the units per variant.",
+      "days_needed": "The lift detectable in a number of days needs the days.",
+      "days_need_date": "The lift detectable in a number of days needs the column of the day each unit first appeared."
     },
     "form": {
       "notUsable": "not usable here",
@@ -6964,7 +7080,23 @@ export default {
       "atMost": "At most {max}.",
       "whole": "A whole number.",
       "tooMany": "At most {n} numbers.",
-      "noOrderColumns": "The step's input has no date, datetime, integer or number column to order the rows by."
+      "noOrderColumns": "The step's input has no date, datetime, integer or number column to order the rows by.",
+      "equalSplit": "All equal",
+      "givenSplit": "Given for each variant",
+      "weightOf": "Weight of «{level}»",
+      "splitMissing": "Give every variant a weight above 0.",
+      "splitNotPositive": "Every weight must be above 0.",
+      "splitIs": "The split: {split}.",
+      "tooManyVariants": "«{column}» has {n} values and an experiment has at most {max} variants: choose the column of the variant.",
+      "noKindColumns": "The step's input has no column of the kind this field takes: {kinds}.",
+      "kind": {
+        "text": "text",
+        "integer": "whole number",
+        "number": "number",
+        "boolean": "true/false",
+        "date": "date",
+        "datetime": "date and time"
+      }
     },
     "mlflow": {
       "title": "MLflow",
@@ -6980,7 +7112,8 @@ export default {
       "registerHint": "Optional. Each run adds a version of the model under this name, which a Predict step can apply.",
       "continueWithout": "Continue without MLflow",
       "continueHint": "If MLflow cannot be reached the step goes on and says so, instead of failing.",
-      "unknownConnection": "Connection #{id} (not available to you)"
+      "unknownConnection": "Connection #{id} (not available to you)",
+      "noModelToRegister": "This node writes no model, so there is nothing to register: the run is logged with its parameters, numbers and report."
     },
     "run": {
       "title": "Run",

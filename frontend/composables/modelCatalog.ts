@@ -70,6 +70,8 @@ export interface ModelDef {
   group: string
   family: string
   label: string
+  /** Whether the node writes a model (a card the registry can hold): false for the experiments' nodes, which register nothing. */
+  card?: boolean
   needs: Record<string, string>
   takes: Record<string, string>
   defaults: Record<string, unknown>
@@ -128,7 +130,7 @@ export const MODEL_CATALOG: ModelCatalog = raw as unknown as ModelCatalog
 /** The controls components/ui/ModelForm.vue draws: a kind with another one has no field. */
 export const MODEL_CONTROLS: readonly ModelControl[] = [
   'column', 'columns', 'level', 'reference', 'pairs', 'choice', 'number', 'integer', 'boolean', 'numbers', 'number_or_choice',
-  // a number for each value of a column (the experiments' expected shares): its field is lot E7's of docs/specs/ab-testing.md
+  // a number for each value of a column (the experiments' expected shares)
   'level_numbers',
 ]
 
@@ -216,6 +218,21 @@ export function modelApplies(model: ModelDef, key: string, params: Params | null
 export function modelForbidden(model: ModelDef, key: string, value: unknown, params: Params | null | undefined): ModelForbid | null {
   const full = modelFull(model, params)
   return model.forbids.find((r) => r.key === key && r.value === value && Object.entries(r.when).every(([k, want]) => modelHolds(want, full[k]))) ?? null
+}
+
+/** Why a choice's `value` is not offered with the other parameters as they are, or null when it is: the rule that forbids
+ *  `key` to be `value`, or the one that forbids another key's value while this choice is the one in `when` («ratio» next to
+ *  «aggregated»: whichever the person picks first, the other is greyed with the same reason). */
+export function modelForbiddenOption(model: ModelDef, key: string, value: unknown, params: Params | null | undefined): ModelForbid | null {
+  const direct = modelForbidden(model, key, value, params)
+  if (direct) return direct
+  const full = modelFull(model, params)
+  return model.forbids.find((r) => {
+    const keys = Object.keys(r.when)
+    if (keys.length !== 1 || keys[0] !== key || full[r.key] !== r.value) return false
+    const want = r.when[key]
+    return Array.isArray(want) ? want.some((x) => x === value) : want === value
+  }) ?? null
 }
 
 /** The variant the parameters make («unpenalized», «penalized», «manual», «auto», «default»). */
@@ -327,6 +344,16 @@ function readOne(f: ModelField, v: unknown): unknown {
       const list = modelNumbers(v)
       return list.length ? list : undefined
     }
+    case 'level_numbers': {
+      // {value: number}: what is written is kept as a number, and a value with none is left out
+      if (!v || typeof v !== 'object' || Array.isArray(v)) return undefined
+      const out: Record<string, number> = {}
+      for (const [label, raw] of Object.entries(v as Params)) {
+        const n = modelNumber(raw)
+        if (label && Number.isFinite(n)) out[label] = n
+      }
+      return Object.keys(out).length ? out : undefined
+    }
     case 'number_or_choice': {
       if (typeof v === 'string' && f.choices.includes(v)) return v
       const n = modelNumber(v)
@@ -406,13 +433,13 @@ export function modelDefaults(id: string, preset?: string, catalog: ModelCatalog
   return modelParams(model, start, catalog)
 }
 
-/** The parameters after one field changed. A level chosen among a column's values does not
- *  survive another column. */
+/** The parameters after one field changed. A level chosen among a column's values, or a number for each of them, does
+ *  not survive another column. */
 export function modelSet(model: ModelDef, params: Params | null | undefined, key: string, value: unknown, catalog: ModelCatalog = MODEL_CATALOG): Params {
   const before = params ?? {}
   const next: Params = { ...before, [key]: value }
   if (JSON.stringify(before[key]) !== JSON.stringify(value)) {
-    for (const f of modelFields(model, catalog)) if (f.control === 'level' && f.of === key) delete next[f.key]
+    for (const f of modelFields(model, catalog)) if ((f.control === 'level' || f.control === 'level_numbers') && f.of === key) delete next[f.key]
   }
   return modelParams(model, next, catalog)
 }
@@ -484,6 +511,23 @@ export function modelNumberProblem(field: Pick<ModelField, 'control' | 'above' |
   return ''
 }
 
+/** The values of a column that have no number yet in a `level_numbers` value ({value: number}): the field wants one for every
+ *  value of the column once it is given at all (the model refuses a split that leaves a variant out). */
+export function modelLevelNumbersMissing(value: unknown, labels: readonly string[]): string[] {
+  const given = value && typeof value === 'object' && !Array.isArray(value) ? (value as Params) : {}
+  return labels.filter((l) => !Number.isFinite(modelNumber(given[l])))
+}
+
+/** The weights of a `level_numbers` value as shares of their sum, in the labels' order (1:1:2 → 0.25, 0.25, 0.5); null while
+ *  one is missing or not above zero, or there is nothing to share. */
+export function modelLevelShares(value: unknown, labels: readonly string[]): number[] | null {
+  const given = value && typeof value === 'object' && !Array.isArray(value) ? (value as Params) : {}
+  const weights = labels.map((l) => modelNumber(given[l]))
+  if (!weights.length || weights.some((w) => !(w > 0) || !Number.isFinite(w))) return null
+  const sum = weights.reduce((a, b) => a + b, 0)
+  return weights.map((w) => w / sum)
+}
+
 /** What is wrong with a list of numbers against its field's bounds (the quantiles in (0, 1), the times from 0,
  *  at most `max_count` of them): '' when nothing, else the first number's problem or 'tooMany'. */
 export function modelNumbersProblem(field: Pick<ModelField, 'above' | 'below' | 'min' | 'max' | 'max_count'>, value: unknown): ReturnType<typeof modelNumberProblem> | 'tooMany' {
@@ -505,9 +549,22 @@ const WHOLE = /^U?Int/i
  *  for a predictor (the model refuses a date there: compute a number from it first). */
 export function modelColumnFits(kind: Pick<ModelKind, 'numeric' | 'types' | 'predictor'>, dtype: string): boolean {
   if (kind.numeric && !isNumericDtype(dtype)) return false
-  if (kind.types && !(TEMPORAL.test(dtype) || WHOLE.test(dtype) || (kind.types.includes('number') && isNumericDtype(dtype)))) return false
+  if (kind.types && !kind.types.includes(modelColumnKind(dtype))) return false
   if (kind.predictor && TEMPORAL.test(dtype)) return false
   return true
+}
+
+/** The kind of a column from its type as a preview names it, as the engine's `column_kind` says it: «integer», «number»,
+ *  «text», «boolean», «date», «datetime», «other» (what the catalogue's `types` lists). */
+export function modelColumnKind(dtype: string): string {
+  const name = String(dtype || '')
+  if (/^U?Int/.test(name)) return 'integer'
+  if (/^(Float|Decimal)/.test(name)) return 'number'
+  if (name === 'String' || name === 'Utf8' || name === 'Categorical' || name.startsWith('Enum')) return 'text'
+  if (name === 'Boolean') return 'boolean'
+  if (name === 'Date') return 'date'
+  if (name.startsWith('Datetime')) return 'datetime'
+  return 'other'
 }
 
 /** Whether a predictor of this type is a set of categories (text, boolean) and so has a reference level. */
@@ -586,6 +643,12 @@ export function modelSummary(id: string, params: Params | null | undefined, cata
     // the unit in the person's language (the caller's words), the spend as the column that holds it
     const unitText = typeof unit === 'string' ? (words?.unit ? words.unit(unit) : unit) : ''
     return [columns, unitText, typeof p.spend === 'string' && p.spend ? `+ ${p.spend}` : ''].filter(Boolean).join(' · ')
+  }
+  if (id === 'ab_test' || id === 'ab_plan') {
+    // the metric (a column, a ratio of two, or the summed rows' two) over the variant column
+    const named = (k: string) => (typeof p[k] === 'string' ? (p[k] as string) : '')
+    const metric = named('metric') || [named('numerator'), named('denominator')].filter(Boolean).join(' / ') || [named('units_count'), named('metric_sum')].filter(Boolean).join(', ')
+    return [metric, named('variant')].filter(Boolean).join(' ~ ')
   }
   if (id === 'cox') {
     const left = [p.time, p.event].filter((x) => typeof x === 'string').join(', ')
@@ -696,8 +759,8 @@ export const modelPresetNameKey = (preset: string): string => `models.presets.${
 export const modelPresetHintKey = (preset: string): string => `models.presets.${preset}.hint`
 export const modelGroupKey = (group: string): string => `models.groups.${group}`
 
-// Models the catalogue declares and the engine's contract holds, whose form and words the editor does not have
-// yet: the palette leaves them out. Lot E7 of docs/specs/ab-testing.md takes this away with the nodes' words.
+// Models whose form and words the editor has, but whose runners refuse «not built yet» (lots E2 and E5 of
+// docs/specs/ab-testing.md): the palette leaves them out. Lot E9 takes this away once they run.
 const NOT_IN_THE_PALETTE_YET = new Set(['ab_test', 'ab_plan'])
 
 /** The palette's Models group: the shown groups in the catalogue's order, each with its models
@@ -881,6 +944,7 @@ export function modelOutputColumns(model: ModelDef, params: Params | null | unde
   const output = typeof full.output === 'string' && full.output ? full.output : 'results'
   const types = catalog.output_types?.[output] ?? {}
   if (output === 'results') return { columns: Object.entries(types).map(([name, dtype]) => ({ name, dtype })), later: [] }
+  // (a metric type not chosen yet gives the first variant, whose outputs are those of every variant of the experiments)
   const variant = model.variants.find((v) => v.id === modelVariant(model, full))
   const names = (variant?.outputs?.[output] ?? []).filter((name) => {
     const rule = variant?.rows_when?.[name]
@@ -920,6 +984,10 @@ export function modelOutputColumns(model: ModelDef, params: Params | null | unde
     if (dtype.startsWith('@')) {
       const source = inputs.get(typeof full[dtype.slice(1)] === 'string' ? full[dtype.slice(1)] : '')
       dtype = source === undefined ? 'Unknown' : columnKind(source) === 'integer' ? 'Int32' : source
+    } else if (dtype.startsWith('=')) {
+      // the column keeps its own type, as the runner writes it (no Int32 rule): the experiments' variant
+      const source = inputs.get(typeof full[dtype.slice(1)] === 'string' ? full[dtype.slice(1)] : '')
+      dtype = source === undefined ? 'Unknown' : source
     }
     return { name, dtype }
   })

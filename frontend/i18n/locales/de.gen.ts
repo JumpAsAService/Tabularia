@@ -6612,6 +6612,21 @@ export default {
         "holdout_length": "Wie viele Gelegenheiten der Testzeitraum umfasst, von 1 bis 1000."
       }
     },
+    "ab_test": {
+      "name": "A/B-Test",
+      "hint": "Vergleicht die Varianten eines Experiments mit seiner Kontrolle: die Differenz und ihr Intervall, die Entscheidung, die Prüfung der Aufteilung (Sample Ratio Mismatch) und auf Wunsch die bayessche und die sequenzielle Auswertung."
+    },
+    "ab_plan": {
+      "name": "A/B-Test-Planung",
+      "hint": "Plant ein Experiment aus dem Verlauf der Kennzahl: die Einheiten je Variante und die Tage, um einen Anstieg zu erkennen, oder den Anstieg, der mit den vorhandenen Einheiten oder Tagen erkennbar ist.",
+      "params": {
+        "date": "Datum des ersten Auftretens"
+      },
+      "hints": {
+        "date": "Der Tag, an dem jede Einheit zum ersten Mal auftrat (oder der Tag der Zeile): der tägliche Zugang neuer Einheiten, also die Dauer. Ohne sie werden keine Tage berechnet.",
+        "min_lift": "Der relative Anstieg, der erkannt werden soll: 0,02 sind 2 % des Ausgangswerts."
+      }
+    },
     "presets": {
       "ar": {
         "name": "AR",
@@ -6737,7 +6752,42 @@ export default {
       "discount_rate": "Jährlicher Abzinsungssatz",
       "margin": "Marge",
       "holdout_transactions": "Käufe im Testzeitraum",
-      "holdout_length": "Länge des Testzeitraums"
+      "holdout_length": "Länge des Testzeitraums",
+      "variant": "Variantenspalte",
+      "control": "Kontrolle",
+      "metric_type": "Art der Kennzahl",
+      "input_shape": "Die Zeilen sind",
+      "unit": "Einheitenspalte",
+      "metric": "Kennzahl",
+      "numerator": "Zähler",
+      "denominator": "Nenner",
+      "units_count": "Einheiten in der Zeile",
+      "metric_sum": "Summe der Kennzahl",
+      "metric_sum_squares": "Summe der Quadrate der Kennzahl",
+      "higher_is_better": "Ein höherer Wert ist besser",
+      "alternative": "Alternativhypothese",
+      "correction": "Korrektur über die Behandlungen",
+      "covariate": "Kovariate vor dem Experiment (CUPED)",
+      "covariate_missing": "Eine Einheit ohne die Kovariate",
+      "cap_percentile": "Deckelung am Perzentil",
+      "srm_alpha": "Niveau der Aufteilungsprüfung",
+      "expected_shares": "Erwartete Aufteilung der Varianten",
+      "min_lift": "Kleinster relevanter Anstieg",
+      "power": "Teststärke",
+      "bayes": "Bayessche Auswertung",
+      "prior_alpha": "Beta-Prior: α",
+      "prior_beta": "Beta-Prior: β",
+      "loss_threshold": "Akzeptierter erwarteter Verlust",
+      "date": "Datumsspalte",
+      "sequential": "Sequenzielle Auswertung",
+      "sequential_tau": "Skala der sequenziellen Mischung",
+      "secondary_metrics": "Sekundäre Kennzahlen",
+      "solve_for": "Berechnen",
+      "units_per_variant": "Einheiten je Variante",
+      "days": "Tage",
+      "arms": "Varianten, Kontrolle eingeschlossen",
+      "control_share": "Anteil der Kontrolle am Verkehr",
+      "traffic_share": "Anteil des Verkehrs im Experiment"
     },
     "hints": {
       "outcome": "Die zu erklärende Spalte.",
@@ -6814,7 +6864,42 @@ export default {
       "compare": "Passt auch die beiden anderen an, nur für die Vergleichstabelle: das Modell des Knotens bleibt das gewählte.",
       "discount_rate": "Von 0 bis 1: 0,1 sind 10 % im Jahr. Künftige Käufe zählen weniger.",
       "margin": "Der Anteil der Ausgaben, der Wert ist, über 0 bis 1. Mit 1 ist der Wert der des Umsatzes.",
-      "holdout_transactions": "Die Käufe jedes Kunden im Zeitraum nach der Kalibrierung, um die Prognose zu prüfen. Leer: kein Testzeitraum."
+      "holdout_transactions": "Die Käufe jedes Kunden im Zeitraum nach der Kalibrierung, um die Prognose zu prüfen. Leer: kein Testzeitraum.",
+      "variant": "Die Variante, zu der jede Zeile gehört: Text, ganze Zahl, wahr/falsch oder Datum, höchstens 20 Werte, die Kontrolle eingeschlossen. Eine Zeile ohne Variante wird ausgelassen und gezählt.",
+      "control": "Die Variante, mit der die anderen verglichen werden. Jeder andere Wert der Spalte ist eine Behandlung.",
+      "metric_type": "Ja/Nein (eine Konversion), eine Zahl (Umsatz, Zeit) oder ein Verhältnis zweier Summen (Klicks je Einblendung, Umsatz je Sitzung).",
+      "input_shape": "Eine Zeile je Einheit (ein Nutzer, eine Sitzung, ein Geschäft) oder bereits summierte Zeilen je Variante (und je Tag oder Segment). Summierte Zeilen erlauben keine Verhältniskennzahlen, kein CUPED, keine Deckelung und keine sekundären Kennzahlen.",
+      "unit": "Die Kennung der Einheit. Zeilen derselben Einheit werden zuerst zusammengefasst; eine Einheit in zwei Varianten wird ausgelassen und gezählt. Leer: jede Zeile ist eine Einheit.",
+      "metric": "Wahr/falsch oder 0/1 bei einer Ja/Nein-Kennzahl; eine Zahl bei einer stetigen.",
+      "numerator": "Je Einheit: die Klicks, der Umsatz. Die Kennzahl ist je Variante die Summe der Zähler durch die Summe der Nenner.",
+      "denominator": "Je Einheit: die Einblendungen, die Sitzungen.",
+      "units_count": "Die Einheiten in der Zeile: eine ganze Zahl, 0 oder mehr.",
+      "metric_sum": "Ja/Nein: die Einheiten, die konvertiert haben (eine ganze Zahl, höchstens die Einheiten). Stetig: die Summe der Kennzahl.",
+      "metric_sum_squares": "Die Varianz einer stetigen Kennzahl braucht die Summe ihrer Quadrate.",
+      "higher_is_better": "Ausschalten bei einem Kostenwert, einer Latenz, einer Absprungrate: die Entscheidung wertet dann einen Rückgang als gutes Ergebnis.",
+      "alternative": "Für Behandlung minus Kontrolle. Die sequenzielle Auswertung ist nur zweiseitig.",
+      "correction": "Über die Behandlungen gegen die Kontrolle. Bei nur einer Behandlung ändert sich nichts, und der Bericht sagt es.",
+      "covariate": "CUPED: eine Kennzahl, die an jeder Einheit vor Beginn des Experiments gemessen wurde. Sie senkt die Varianz. Eine Spalte, die nach dem Start gemessen wurde, würde das Ergebnis verfälschen.",
+      "covariate_missing": "Auffüllen gibt einer Einheit ohne Kovariate den Mittelwert der Kovariate ihrer Variante; Ausschließen lässt die Einheit aus den Vergleichen heraus. Der Bericht zählt beides.",
+      "cap_percentile": "Winsorisierung: Werte über diesem Perzentil aller Einheiten (alle Varianten zusammen) werden auf diesen Wert gesetzt. Eine Zahl über 0,5 und unter 1, z. B. 0,99. Leer: aus.",
+      "srm_alpha": "Das Niveau des Sample-Ratio-Mismatch-Tests, der prüft, ob die Einheiten wie geplant auf die Varianten fielen. Strenger als das des Vergleichs, weil ein Fehlalarm ein gutes Experiment verwirft.",
+      "expected_shares": "Die geplante Aufteilung, geprüft an den gefundenen Einheiten. Gewichte, keine Prozente: 1, 1, 2 sind 25 %, 25 % und 50 %. Wenn angegeben, braucht jede Variante eines.",
+      "min_lift": "Der kleinste relative Anstieg, der für das Geschäft zählt: er markiert die Diagramme und die Auswertung der Teststärke. 0,02 sind 2 %: eine Größenordnung von Web-Experimenten, keine Meinung über Ihre Daten.",
+      "power": "Die Wahrscheinlichkeit, einen tatsächlich vorhandenen Anstieg zu sehen, für den bei dieser Größe erkennbaren Anstieg. Eine Zahl über 0 und unter 1.",
+      "bayes": "Fügt die Wahrscheinlichkeit hinzu, die Kontrolle zu schlagen, die Wahrscheinlichkeit, die beste zu sein, und den erwarteten Verlust. Es ist kein p-Wert.",
+      "prior_alpha": "Der Beta-Prior der Rate jeder Variante. 1 und 1 ist der gleichverteilte Prior, zwei Einheiten wert. Über 0.",
+      "prior_beta": "Die zweite Zahl des Beta-Priors der Rate jeder Variante. Über 0.",
+      "loss_threshold": "Der erwartete Verlust, den Sie hinnehmen, als Anteil am Mittelwert der Kontrolle: 0,001 sind 0,1 % davon.",
+      "date": "Der Tag, an dem jede Einheit ins Experiment kam (oder der Tag der Zeile): daraus ergeben sich die Tagesreihe und die sequenziellen Zwischenauswertungen.",
+      "sequential": "Jederzeit gültige p-Werte und Konfidenzsequenzen. Einschalten, wenn das Experiment noch läuft oder Sie die Ergebnisse vor dem geplanten Ende angesehen haben, und dessen Entscheidung lesen.",
+      "sequential_tau": "Die Größe der relativen Anstiege, die Sie erwarten: 0,05 sind 5 %. Über 0.",
+      "secondary_metrics": "Weitere Kennzahlen, die untereinander berichtet und korrigiert werden. Höchstens 10, jede eine Spalte wahr/falsch, ganzzahlig oder numerisch.",
+      "solve_for": "Was berechnet wird: die Einheiten und Tage, die zum Erkennen des Anstiegs nötig sind, oder der mit den vorhandenen Einheiten oder Tagen erkennbare Anstieg.",
+      "units_per_variant": "Die Einheiten, die jede Variante haben wird: eine ganze Zahl, 2 oder mehr.",
+      "days": "Wie viele Tage das Experiment läuft: eine ganze Zahl von 1 bis 3650. Es braucht die Datumsspalte.",
+      "arms": "Wie viele Varianten das Experiment hat, die Kontrolle eingeschlossen: 2 bis 20.",
+      "control_share": "Der Anteil der Kontrolle an den Einheiten, über 0 und unter 1; die Behandlungen teilen den Rest gleichmäßig. Leer: alle Varianten gleich.",
+      "traffic_share": "Der Anteil aller neuen Einheiten, die ins Experiment gehen: über 0, bis 1. Er verlängert die Dauer."
     },
     "choice": {
       "ols": "Gewöhnliche kleinste Quadrate",
@@ -6891,7 +6976,24 @@ export default {
       "gompertz": "Gompertz",
       "pareto_nbd": "Pareto/NBD",
       "bg_nbd": "BG/NBD",
-      "mbg_nbd": "MBG/NBD"
+      "mbg_nbd": "MBG/NBD",
+      "continuous": "Eine Zahl (stetig)",
+      "ratio": "Ein Verhältnis zweier Summen",
+      "units": "Eine Zeile je Einheit",
+      "aggregated": "Bereits summierte Zeilen",
+      "two_sided": "Zweiseitig",
+      "greater": "Größer: Behandlung über der Kontrolle",
+      "less": "Kleiner: Behandlung unter der Kontrolle",
+      "holm": "Holm",
+      "benjamini_hochberg": "Benjamini–Hochberg",
+      "bonferroni": "Bonferroni",
+      "fill": "Mit dem Mittelwert seiner Variante auffüllen",
+      "exclude": "Die Einheit auslassen",
+      "variants": "Eine Zeile je Variante",
+      "sample_size": "Die Stichprobengröße",
+      "mde_for_units": "Der mit diesen Einheiten erkennbare Anstieg",
+      "mde_for_days": "Der in diesen Tagen erkennbare Anstieg",
+      "plan": "Das Planungsraster"
     },
     "choices": {
       "penalty": {
@@ -6915,6 +7017,9 @@ export default {
         "month": "Monate",
         "quarter": "Quartale",
         "year": "Jahre"
+      },
+      "correction_ab": {
+        "none": "Keine Korrektur"
       }
     },
     "reasons": {
@@ -6927,7 +7032,18 @@ export default {
       "mae_needs_regression": "Der absolute Fehler misst eine Zahl: wähle ein anderes Maß.",
       "auc_needs_binary": "Die Fläche unter der ROC-Kurve gilt für Ja/Nein-Ergebnisse: wähle ein anderes Maß.",
       "error_needs_classes": "Die Fehlerrate zählt falsche Kategorien: für eine Zahl braucht es ein anderes Maß.",
-      "holdout_needs_length": "Die Käufe des Testzeitraums brauchen seine Länge."
+      "holdout_needs_length": "Die Käufe des Testzeitraums brauchen seine Länge.",
+      "ratio_needs_units": "Eine Verhältniskennzahl braucht eine Zeile je Einheit: die Delta-Methode verwendet Zähler und Nenner jeder Einheit.",
+      "sequential_two_sided": "Der jederzeit gültige p-Wert dieses Knotens ist zweiseitig.",
+      "metric_needed": "Die primäre Kennzahl braucht ihre Spalte.",
+      "numerator_needed": "Eine Verhältniskennzahl braucht die Spalte ihres Zählers.",
+      "denominator_needed": "Eine Verhältniskennzahl braucht die Spalte ihres Nenners.",
+      "units_count_needed": "Summierte Zeilen brauchen die Spalte ihrer Einheiten.",
+      "metric_sum_needed": "Summierte Zeilen brauchen die Spalte der Summe ihrer Kennzahl.",
+      "sum_squares_needed": "Die Varianz einer stetigen Kennzahl braucht die Summe ihrer Quadrate.",
+      "units_per_variant_needed": "Der mit einer Anzahl Einheiten erkennbare Anstieg braucht die Einheiten je Variante.",
+      "days_needed": "Der in einer Anzahl Tage erkennbare Anstieg braucht die Tage.",
+      "days_need_date": "Der in einer Anzahl Tage erkennbare Anstieg braucht die Spalte des Tages, an dem jede Einheit zum ersten Mal auftrat."
     },
     "form": {
       "notUsable": "hier nicht verwendbar",
@@ -6964,7 +7080,23 @@ export default {
       "atMost": "Höchstens {max}.",
       "whole": "Eine ganze Zahl.",
       "tooMany": "Höchstens {n} Zahlen.",
-      "noOrderColumns": "Die Eingabe des Schritts hat keine Datums-, Zeitstempel-, Ganzzahl- oder Zahlenspalte, nach der sich die Zeilen ordnen lassen."
+      "noOrderColumns": "Die Eingabe des Schritts hat keine Datums-, Zeitstempel-, Ganzzahl- oder Zahlenspalte, nach der sich die Zeilen ordnen lassen.",
+      "equalSplit": "Alle gleich",
+      "givenSplit": "Für jede Variante angegeben",
+      "weightOf": "Gewicht von «{level}»",
+      "splitMissing": "Geben Sie jeder Variante ein Gewicht über 0.",
+      "splitNotPositive": "Jedes Gewicht muss über 0 liegen.",
+      "splitIs": "Die Aufteilung: {split}.",
+      "tooManyVariants": "«{column}» hat {n} Werte, ein Experiment hat höchstens {max} Varianten: wählen Sie die Variantenspalte.",
+      "noKindColumns": "Die Eingabe des Schritts hat keine Spalte der Art, die dieses Feld annimmt: {kinds}.",
+      "kind": {
+        "text": "Text",
+        "integer": "ganze Zahl",
+        "number": "Zahl",
+        "boolean": "wahr/falsch",
+        "date": "Datum",
+        "datetime": "Datum und Uhrzeit"
+      }
     },
     "mlflow": {
       "title": "MLflow",
@@ -6980,7 +7112,8 @@ export default {
       "registerHint": "Optional. Jeder Lauf fügt unter diesem Namen eine Modellversion hinzu, die ein Vorhersage-Schritt anwenden kann.",
       "continueWithout": "Ohne MLflow fortfahren",
       "continueHint": "Ist MLflow nicht erreichbar, läuft der Schritt weiter und meldet es, statt zu scheitern.",
-      "unknownConnection": "Verbindung #{id} (für Sie nicht verfügbar)"
+      "unknownConnection": "Verbindung #{id} (für Sie nicht verfügbar)",
+      "noModelToRegister": "Dieser Knoten schreibt kein Modell, also gibt es nichts zu registrieren: der Lauf wird mit Parametern, Zahlen und Bericht protokolliert."
     },
     "run": {
       "title": "Ausführung",

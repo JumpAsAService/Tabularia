@@ -22,9 +22,9 @@ import { statLevelLabels } from '~/composables/statTests'
 import { vDraft } from '~/composables/draftField'
 import { useModelNumbersBox } from '~/composables/modelNumbersBox'
 import {
-  modelApplies, modelChoiceWordKey, modelColumnFits, modelFieldWordKey, modelFields, modelForbidden, modelFull, modelGiven, modelParams, modelRowsColumns, modelGroupKey,
+  modelApplies, modelChoiceWordKey, modelColumnFits, modelFieldWordKey, modelFields, modelForbiddenOption, modelFull, modelLevelNumbersMissing, modelLevelShares, modelGiven, modelParams, modelRowsColumns, modelGroupKey,
   modelHintKey, modelIsCategorical, modelMlflow, modelMlflowProblem, modelNumber, modelNumberProblem, modelOf,
-  modelNumbersPlaceholderKey, modelOverlaps, modelReasonKey, modelRequiredReason, modelSeason, modelSet, modelTaken, modelUnset,
+  modelNumbersPlaceholderKey, MODEL_CATALOG, modelOverlaps, modelReasonKey, modelRequiredReason, modelSeason, modelSet, modelTaken, modelUnset,
   MODEL_RETRIES_MAX, MODEL_TIMEOUT_MIN, MODEL_TIMEOUT_SECONDS, type ModelField, type ModelOff,
 } from '~/composables/modelCatalog'
 
@@ -114,7 +114,12 @@ function columnOptions(f: ModelField) {
   return f.required ? options : [{ value: undefined, label: '—' }, ...options]
 }
 const noUsableColumn = (f: ModelField) => props.inputColumns.length > 0 && !!(f.numeric || f.types) && !props.inputColumns.some((c) => modelColumnFits(f, c.dtype))
-const noUsableText = (f: ModelField) => t(f.types ? (f.types.includes('number') ? 'models.form.noOrderColumns' : 'models.form.noTimeColumns') : 'models.form.noNumericColumns')
+const noUsableText = (f: ModelField) => {
+  if (!f.types) return t('models.form.noNumericColumns')
+  if (f.kind === 'order_column') return t('models.form.noOrderColumns')
+  if (f.kind === 'time_column') return t('models.form.noTimeColumns')
+  return t('models.form.noKindColumns', { kinds: f.types.map((k) => t(`models.form.kind.${k}`)).join(', ') })
+}
 
 // ── some columns (the predictors, the exogenous series) ──────────────────────
 // A list of boxes in the order they were ticked (the order of the terms); past a dozen a filter.
@@ -172,9 +177,10 @@ const categoricalPredictors = (f: ModelField): string[] => {
   return of.filter((c) => props.inputColumns.some((x) => x.name === c && modelIsCategorical(x.dtype)))
 }
 const levelColumn = (f: ModelField): string => (typeof params.value[f.of ?? ''] === 'string' ? params.value[f.of ?? ''] : '')
+const isLevelsField = (f: ModelField) => f.control === 'level' || f.control === 'level_numbers'
 watch(
   () => [props.nodeId, props.inputColumns.length, ...fields.value.flatMap((f) =>
-    f.control === 'reference' ? categoricalPredictors(f) : f.control === 'level' ? [levelColumn(f)] : [])].join('\u0001'),
+    f.control === 'reference' ? categoricalPredictors(f) : isLevelsField(f) ? [levelColumn(f)] : [])].join('\u0001'),
   (now, before) => {
     if (before && now.split('\u0001')[0] !== before.split('\u0001')[0]) {
       known.clear()
@@ -182,7 +188,7 @@ watch(
     }
     for (const f of fields.value) {
       if (f.control === 'reference') categoricalPredictors(f).forEach(loadLevels)
-      else if (f.control === 'level') loadLevels(levelColumn(f))
+      else if (isLevelsField(f)) loadLevels(levelColumn(f))
     }
   },
   { immediate: true },
@@ -205,6 +211,48 @@ function setReference(f: ModelField, column: string, level: unknown) {
   if (typeof level === 'string' && level) next[column] = level
   else delete next[column]
   set(f.key, next)
+}
+
+// ── a number for each value of a column (the expected split of the variants) ──
+// All equal (nothing given), or a weight above 0 for each value, as the node keeps them ({value: number}); the weights are
+// shares of their sum, said below in percent. «Given» is remembered here while nothing is written yet.
+const sharesAsked = reactive<Record<string, boolean>>({})
+watch(() => props.nodeId, () => { for (const k of Object.keys(sharesAsked)) delete sharesAsked[k] })
+const sharesOf = (f: ModelField): Record<string, unknown> => {
+  const v = params.value[f.key]
+  return v && typeof v === 'object' && !Array.isArray(v) ? v : {}
+}
+const sharesGiven = (f: ModelField) => !!sharesAsked[f.key] || Object.keys(sharesOf(f)).length > 0
+const MAX_VARIANTS = MODEL_CATALOG.limits.max_variants ?? 20
+// the column's values, then the ones the node holds that the column no longer has
+const shareLabels = (f: ModelField): string[] => {
+  const labels = levelLabels(levelColumn(f))
+  return [...labels, ...Object.keys(sharesOf(f)).filter((l) => !labels.includes(l))]
+}
+const tooManyShares = (f: ModelField) => levelLabels(levelColumn(f)).length > MAX_VARIANTS
+function chooseShares(f: ModelField, given: boolean) {
+  sharesAsked[f.key] = given
+  if (!given && params.value[f.key] !== undefined) set(f.key, undefined)
+}
+function setShare(f: ModelField, label: string, raw: string) {
+  const next: Record<string, unknown> = { ...sharesOf(f) }
+  if (raw.trim() === '') delete next[label]
+  else next[label] = raw
+  set(f.key, Object.keys(next).length ? next : undefined)
+}
+function shareProblem(f: ModelField, label: string): string {
+  const problem = modelNumberProblem(f, sharesOf(f)[label])
+  return problem ? t(`models.form.${problem}`, { above: f.above ?? '', below: f.below ?? '', min: f.min ?? '', max: f.max ?? '' }) : ''
+}
+/** What to say under the boxes: the split they make, or what is missing. */
+function sharesNote(f: ModelField): { text: string; warn: boolean } | null {
+  const labels = levelLabels(levelColumn(f))
+  if (!labels.length) return null
+  const missing = modelLevelNumbersMissing(params.value[f.key], labels)
+  if (missing.length) return { text: t('models.form.splitMissing'), warn: true }
+  const shares = modelLevelShares(params.value[f.key], labels)
+  if (!shares) return { text: t('models.form.splitNotPositive'), warn: true }
+  return { text: t('models.form.splitIs', { split: labels.map((l, i) => `${l} ${Number((shares[i]! * 100).toFixed(2))} %`).join(' · ') }), warn: false }
 }
 
 // ── pairs of predictors (the interactions) ───────────────────────────────────
@@ -277,7 +325,7 @@ watch(() => props.nodeId, () => numbersBox.reset())
 // ── a choice ─────────────────────────────────────────────────────────────────
 const chosen = (f: ModelField) => params.value[f.key] ?? model.value?.defaults[f.key]
 function forbidden(f: ModelField, value: unknown): string {
-  const rule = model.value ? modelForbidden(model.value, f.key, value, params.value) : null
+  const rule = model.value ? modelForbiddenOption(model.value, f.key, value, params.value) : null
   if (!rule) return ''
   const key = modelReasonKey(rule.reason)
   return te(key) ? t(key) : rule.message
@@ -311,15 +359,22 @@ const mlflowOptionsShown = computed(() => {
     ? [...mlflowOptions.value, { value: id, label: t('models.mlflow.unknownConnection', { id }) }]
     : mlflowOptions.value
 })
+// a node that writes no model (the experiments') has nothing to register: no name to ask for
+const registers = computed(() => model.value?.card !== false)
+const withoutRegistration = (block: Record<string, any>) => {
+  if (registers.value) return block
+  const { registerAs: _gone, ...rest } = block
+  return rest
+}
 function pickConnection(id: unknown) {
   if (typeof id !== 'number') {
     emit('update', { mlflow: undefined })
     return
   }
-  emit('update', { mlflow: modelMlflow({ ...(mlflow.value ?? {}), connectionId: id }) })
+  emit('update', { mlflow: modelMlflow(withoutRegistration({ ...(mlflow.value ?? {}), connectionId: id })) })
 }
 function setMlflow(key: 'experiment' | 'registerAs' | 'continueWithout', value: unknown) {
-  emit('update', { mlflow: modelMlflow({ ...(mlflow.value ?? {}), [key]: value }) })
+  emit('update', { mlflow: modelMlflow(withoutRegistration({ ...(mlflow.value ?? {}), [key]: value })) })
 }
 const mlflowProblem = computed(() => modelMlflowProblem(mlflow.value))
 
@@ -479,6 +534,50 @@ function limit(key: 'timeoutSeconds' | 'retries', raw: string, min: number, max:
         <p v-else-if="hintOf(f)" class="hint">{{ hintOf(f) }}</p>
       </fieldset>
 
+      <!-- a weight for each value of a column, or all equal -->
+      <fieldset v-else-if="f.control === 'level_numbers'" class="field choices">
+        <legend class="lbl">{{ labelOf(f) }}</legend>
+        <label class="chk">
+          <input type="radio" :name="idOf(f.key)" :checked="!sharesGiven(f)" @change="chooseShares(f, false)" />
+          <span>{{ $t('models.form.equalSplit') }}</span>
+        </label>
+        <label class="chk">
+          <input type="radio" :name="idOf(f.key)" :checked="sharesGiven(f)" @change="chooseShares(f, true)" />
+          <span>{{ $t('models.form.givenSplit') }}</span>
+        </label>
+        <template v-if="sharesGiven(f)">
+          <p v-if="!levelColumn(f)" class="note" role="status"><Info :size="13" aria-hidden="true" /> {{ $t('models.form.chooseColumnFirst', { field: fieldLabel(f.of ?? '') }) }}</p>
+          <span v-else-if="levels[levelColumn(f)]?.state === 'loading'" class="sk" style="width: 130px" aria-busy="true" />
+          <p v-else-if="levels[levelColumn(f)]?.state === 'failed'" class="note warn"><TriangleAlert :size="13" aria-hidden="true" /> {{ $t('models.form.levelsFailed') }}</p>
+          <p v-else-if="tooManyShares(f)" class="note warn" role="status">
+            <TriangleAlert :size="13" aria-hidden="true" /> {{ $t('models.form.tooManyVariants', { column: levelColumn(f), n: levelLabels(levelColumn(f)).length, max: MAX_VARIANTS }) }}
+          </p>
+          <template v-else>
+            <div v-for="(l, i) in shareLabels(f)" :key="l" class="place share">
+              <label :for="idOf(f.key, `share-${i}`)" class="sharel" :title="l">{{ l }}</label>
+              <input
+                :id="idOf(f.key, `share-${i}`)"
+                type="number"
+                step="any"
+                min="0"
+                :value="sharesOf(f)[l] ?? ''"
+                v-draft="sharesOf(f)[l] ?? ''"
+                :aria-label="$t('models.form.weightOf', { level: l })"
+                :aria-invalid="shareProblem(f, l) ? 'true' : undefined"
+                :aria-describedby="shareProblem(f, l) ? idOf(f.key, `share-${i}-problem`) : undefined"
+                @change="setShare(f, l, ($event.target as HTMLInputElement).value)"
+              />
+              <span v-if="!levelLabels(levelColumn(f)).includes(l)" class="why warn">{{ $t('models.form.notInData') }}</span>
+              <span v-if="shareProblem(f, l)" :id="idOf(f.key, `share-${i}-problem`)" class="why warn" role="alert">{{ shareProblem(f, l) }}</span>
+            </div>
+            <p v-if="sharesNote(f)" class="note" :class="{ warn: sharesNote(f)!.warn }" role="status">
+              <TriangleAlert v-if="sharesNote(f)!.warn" :size="13" aria-hidden="true" /> {{ sharesNote(f)!.text }}
+            </p>
+          </template>
+        </template>
+        <p v-if="hintOf(f)" class="hint">{{ hintOf(f) }}</p>
+      </fieldset>
+
       <!-- on or off -->
       <div v-else-if="f.control === 'boolean'" class="field">
         <label class="chk">
@@ -628,7 +727,8 @@ function limit(key: 'timeoutSeconds' | 'retries', raw: string, min: number, max:
           />
           <p v-if="mlflowProblem" :id="idOf('mlflow', 'problem')" class="note warn" role="alert"><TriangleAlert :size="13" aria-hidden="true" /> {{ $t('models.mlflow.experimentNeeded') }}</p>
         </div>
-        <div class="field">
+        <p v-if="!registers" class="hint">{{ $t('models.mlflow.noModelToRegister') }}</p>
+        <div v-else class="field">
           <label :for="idOf('mlflow', 'register')" class="lbl">{{ $t('models.mlflow.registerAs') }}</label>
           <input
             :id="idOf('mlflow', 'register')"
@@ -703,6 +803,9 @@ legend.lbl { margin-bottom: 4px; }
 .place { display: flex; align-items: center; gap: 6px; }
 .place > :deep(.sel-trigger) { flex: 1; min-width: 0; }
 .pair .times { color: var(--muted); font-size: 12px; }
+.share { flex-wrap: wrap; }
+.share input { width: 96px; flex: none; }
+.share .why { flex-basis: 100%; }
 .sharel { flex: 1; min-width: 0; font-size: 12.5px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .icon { flex-shrink: 0; border: 0; background: none; color: var(--muted); cursor: pointer; padding: 4px; border-radius: 6px; }
 .icon:hover { color: var(--danger); background: var(--bg-soft); }

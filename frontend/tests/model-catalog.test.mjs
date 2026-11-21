@@ -70,9 +70,7 @@ test('every key of every model has a control the form draws', () => {
   assert.deepEqual([...m.MODEL_CONTROLS].sort(), [...m.MODEL_CATALOG.controls].sort())
   const form = read('../components/ui/ModelForm.vue')
   const predict = read('../components/ui/PredictForm.vue')
-  // level_numbers (the experiments' expected shares) is drawn by lot E7 of docs/specs/ab-testing.md: until then the palette
-  // leaves its nodes out. E7 takes this exception away.
-  for (const control of m.MODEL_CATALOG.controls.filter((c) => c !== 'level_numbers')) {
+  for (const control of m.MODEL_CATALOG.controls) {
     assert.ok(form.includes(`f.control === '${control}'`), `ModelForm.vue does not draw «${control}»`)
   }
   for (const control of ['boolean', 'numbers', 'number', 'integer', 'column']) assert.ok(predict.includes(control) || control === 'integer', `PredictForm.vue: ${control}`)
@@ -102,9 +100,7 @@ test('the fields of a model in the catalogue\'s order, what it needs first', () 
   assert.equal(m.modelFields(ARIMA).find((f) => f.key === 'time').types.length, 3)
 })
 
-// The experiments' nodes ab_test and ab_plan: their words and form are lot E7 of docs/specs/ab-testing.md; until then the
-// palette leaves them out and their words are not asked for (the group's are). E7 takes this away.
-const WORDED = { ...m.MODEL_CATALOG, models: m.MODEL_CATALOG.models.filter((x) => !['ab_test', 'ab_plan'].includes(x.id)) }
+const WORDED = m.MODEL_CATALOG
 
 test('every model, group, preset, field, choice and reason has its words in the five languages', () => {
   const wanted = m.modelWordKeys(WORDED)
