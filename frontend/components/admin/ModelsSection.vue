@@ -12,7 +12,7 @@ import { errMessage } from '~/composables/useApi'
 import { useFormat } from '~/composables/useFormat'
 import type { GroupOut } from '~/composables/useProjects'
 import {
-  failureSentence, groupBusy, limitsDraftOf, limitsInputOf, systemLibraryLabel, useModelsAdmin,
+  failureSentence, groupBusy, groupFollowed, limitsDraftOf, limitsInputOf, recheckOf, systemLibraryLabel, useModelsAdmin,
   type LimitsDraft, type ModelGroupAdmin, type ModelGroupAnswer, type ModelsAdminState,
 } from '~/composables/useModelsAdmin'
 
@@ -90,8 +90,8 @@ async function refreshDetail(g: ModelGroupAdmin) {
 
 onMounted(load)
 
-// while a group is being built or checked, the page follows it
-const anyBusy = computed(() => !!state.value?.groups.some(groupBusy))
+// while a group is being built or checked, or its version in use self-tested again, the page follows it
+const anyBusy = computed(() => !!state.value?.groups.some(groupFollowed))
 let timer: ReturnType<typeof setInterval> | undefined
 watch(anyBusy, (on) => {
   clearInterval(timer)
@@ -160,7 +160,10 @@ function groupLead(id: string): string {
 const languageLabel = (g: ModelGroupAdmin) => `${g.language === 'r' ? 'R' : 'Python'} ${g.base}`
 
 const stateIcon = (s: ModelGroupAdmin['state']) =>
-  ({ ready: CheckCircle2, failed: XCircle, building: LoaderCircle, checking: LoaderCircle, rebuild_needed: TriangleAlert, not_enabled: CircleDot })[s]
+  ({ ready: CheckCircle2, failed: XCircle, building: LoaderCircle, checking: LoaderCircle, rebuild_needed: TriangleAlert, not_enabled: CircleDot,
+    rechecking: LoaderCircle, recheck_retrying: TriangleAlert })[s]
+// a version in use with a new runner (a recheck) shows its version number too: it serves
+const serving = (g: ModelGroupAdmin) => ['ready', 'rechecking', 'recheck_retrying'].includes(g.state) && !!g.current_version
 
 const duration = (v: { started_at: string | null; finished_at: string | null }) => {
   if (!v.started_at || !v.finished_at) return ''
@@ -201,9 +204,9 @@ const shortRef = (ref: string | null) => (ref ? ref.replace(/^(.*@sha256:)([0-9a
         <h4 :id="`mg-${g.id}-name`"><Sigma :size="14" /> {{ groupName(g.id) }}</h4>
         <span class="language">{{ languageLabel(g) }}</span>
         <span class="version-state" :class="shown(g).state" role="status">
-          <component :is="stateIcon(shown(g).state)" :size="13" :class="{ spin: groupBusy(shown(g)) }" />
+          <component :is="stateIcon(shown(g).state)" :size="13" :class="{ spin: groupBusy(shown(g)) || shown(g).state === 'rechecking' }" />
           {{ $t(`modelsAdmin.state.${shown(g).state}`) }}
-          <template v-if="shown(g).state === 'ready' && shown(g).current_version"> · v{{ shown(g).current_version }}</template>
+          <template v-if="serving(shown(g))"> · v{{ shown(g).current_version }}</template>
         </span>
       </div>
       <p v-if="groupLead(g.id)" class="hint muted small">{{ groupLead(g.id) }}</p>
@@ -224,6 +227,21 @@ const shortRef = (ref: string | null) => (ref ? ref.replace(/^(.*@sha256:)([0-9a
       </p>
       <p v-else-if="shown(g).state === 'rebuild_needed'" class="hint muted small">{{ $t('modelsAdmin.rebuildNeededHint') }}</p>
       <p v-else-if="shown(g).state === 'checking'" class="hint muted small">{{ $t('modelsAdmin.checkingHint') }}</p>
+      <p v-else-if="shown(g).state === 'rechecking'" class="hint muted small">{{ $t('modelsAdmin.recheckingHint') }}</p>
+      <!-- a recheck the cluster stopped: the version serves on; when it is tried again, and why -->
+      <p v-else-if="shown(g).state === 'recheck_retrying' && recheckOf(shown(g))" class="notice" role="status">
+        <TriangleAlert :size="13" />
+        <span>{{ $t('modelsAdmin.recheckRetryingHint', {
+          why: recheckOf(shown(g))!.recheck_error ?? '',
+          at: fmt.dateTime(recheckOf(shown(g))!.recheck_after),
+          n: recheckOf(shown(g))!.recheck_attempts ?? 0,
+          max: recheckOf(shown(g))!.recheck_max_attempts ?? 0,
+        }) }}</span>
+      </p>
+      <p v-else-if="shown(g).state === 'ready' && recheckOf(shown(g))?.recheck === 'recheck_stopped'" class="notice" role="status">
+        <TriangleAlert :size="13" />
+        <span>{{ $t('modelsAdmin.recheckStoppedHint', { why: recheckOf(shown(g))!.recheck_error ?? '', n: recheckOf(shown(g))!.recheck_attempts ?? 0 }) }}</span>
+      </p>
 
       <div v-if="editable" class="actions">
         <button
@@ -326,6 +344,7 @@ const shortRef = (ref: string | null) => (ref ? ref.replace(/^(.*@sha256:)([0-9a
               <span class="label">{{ $t(`modelsAdmin.status.${v.status}`) }}</span>
               <span v-if="v.current" class="label current">{{ $t('modelsAdmin.current') }}</span>
               <span v-if="v.stale" class="label stale">{{ $t('modelsAdmin.stale') }}</span>
+              <span v-if="v.recheck" class="label recheck">{{ $t(`modelsAdmin.recheck.${v.recheck}`) }}</span>
               <span class="muted small">{{ v.created_by }} · {{ fmt.ago(v.created_at) }}<template v-if="duration(v)"> · {{ duration(v) }}</template></span>
             </div>
             <p v-if="v.error" class="version-error"><code>{{ v.error }}</code></p>
@@ -369,7 +388,8 @@ const shortRef = (ref: string | null) => (ref ? ref.replace(/^(.*@sha256:)([0-9a
 .version-state { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; }
 .version-state.ready svg, .versions li.ready > .version-row svg { color: var(--accent-2); }
 .version-state.failed, .version-state.failed svg, .versions li.failed > .version-row svg { color: var(--danger); }
-.version-state.rebuild_needed svg { color: var(--warning); }
+.version-state.rebuild_needed svg, .version-state.recheck_retrying svg { color: var(--warning); }
+.version-state.rechecking svg { color: var(--accent-2); }
 .actions { display: flex; gap: 8px; flex-wrap: wrap; }
 button.mini { padding: 2px 10px; min-height: 26px; font-size: 12px; display: inline-flex; align-items: center; gap: 5px; }
 .actions button:not(.mini) { display: inline-flex; align-items: center; gap: 6px; }
@@ -391,6 +411,7 @@ button.mini { padding: 2px 10px; min-height: 26px; font-size: 12px; display: inl
 .label { font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--border); }
 .label.current { border-color: color-mix(in srgb, var(--accent-2) 55%, var(--border)); color: var(--accent-2); }
 .label.stale { border-color: color-mix(in srgb, var(--warning) 55%, var(--border)); color: var(--warning); }
+.label.recheck { border-color: color-mix(in srgb, var(--warning) 55%, var(--border)); color: var(--warning); }
 .version-error { margin: 0; }
 .version-error code { display: block; font-size: 11.5px; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--danger); }
 details summary { cursor: pointer; font-size: 12px; color: var(--muted); }

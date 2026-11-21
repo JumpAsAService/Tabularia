@@ -4,14 +4,24 @@
 // self-test before it is used (docs/specs/statistical-models.md, «Model groups and their images»).
 // Routes: gateway-go/internal/api/models_admin.go.
 
-export type ModelGroupState = 'not_enabled' | 'building' | 'checking' | 'ready' | 'failed' | 'rebuild_needed'
+// rechecking, recheck_retrying: the version in use serves while its self-test runs again with a new
+// runner (a recheck the cluster stopped before it reported is tried again a few times)
+export type ModelGroupState = 'not_enabled' | 'building' | 'checking' | 'ready' | 'failed' | 'rebuild_needed' | 'rechecking' | 'recheck_retrying'
 export type ModelVersionStatus = 'queued' | 'building' | 'checking' | 'ready' | 'failed'
+// where the self-test with a new runner is, on the version in use: running, to be tried again,
+// stopped (none could run: it serves, self-tested with its previous runner), or none
+export type ModelRecheck = 'rechecking' | 'recheck_retrying' | 'recheck_stopped' | ''
 
 export interface ModelGroupVersion {
   number: number
   status: ModelVersionStatus
   current: boolean
   stale: boolean // built from another recipe than the one this Tabularia ships
+  recheck?: ModelRecheck
+  recheck_attempts?: number // the rechecks that could not run
+  recheck_max_attempts?: number // how many are made in all
+  recheck_after?: string | null // the next one, not before
+  recheck_error?: string | null // why the last one could not run
   error: string | null
   image_ref: string | null
   packages: number // installed, from the lock
@@ -96,6 +106,17 @@ export interface ModelAccessInput {
 // a group is being built or checked: the page follows it
 export function groupBusy(g: Pick<ModelGroupAdmin, 'state'>): boolean {
   return g.state === 'building' || g.state === 'checking'
+}
+
+// the page follows a group being built or checked, and one whose version in use is self-tested
+// again (it serves meanwhile, so it is not busy: it can be built again)
+export function groupFollowed(g: Pick<ModelGroupAdmin, 'state'>): boolean {
+  return groupBusy(g) || g.state === 'rechecking' || g.state === 'recheck_retrying'
+}
+
+// the version in use whose self-test with a new runner is running, to be tried again or stopped
+export function recheckOf(g: Pick<ModelGroupAdmin, 'versions'>): ModelGroupVersion | null {
+  return g.versions.find((v) => v.current && !!v.recheck) ?? null
 }
 
 // the limits as the form keeps them: the longest run in minutes, and a max_rows that may be left empty

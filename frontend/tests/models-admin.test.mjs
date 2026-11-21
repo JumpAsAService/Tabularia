@@ -8,7 +8,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
-import { failureSentence, groupBusy, limitsDraftOf, limitsInputOf, systemLibraryLabel } from '../composables/useModelsAdmin.ts'
+import { failureSentence, groupBusy, groupFollowed, limitsDraftOf, limitsInputOf, recheckOf, systemLibraryLabel } from '../composables/useModelsAdmin.ts'
 
 const FRONTEND = fileURLToPath(new URL('..', import.meta.url))
 const read = (p) => readFileSync(join(FRONTEND, p), 'utf8')
@@ -29,9 +29,25 @@ test('a failure shows as its first sentence, a group is busy while built or chec
   assert.equal(failureSentence('The self-test of the group failed: 1 of 12 checks do not match.\n- linear/coef: got 1.5'),
     'The self-test of the group failed: 1 of 12 checks do not match.')
   assert.equal(failureSentence(null), '')
-  for (const [state, busy] of [['building', true], ['checking', true], ['ready', false], ['failed', false], ['not_enabled', false], ['rebuild_needed', false]]) {
+  for (const [state, busy] of [['building', true], ['checking', true], ['ready', false], ['failed', false], ['not_enabled', false], ['rebuild_needed', false],
+    ['rechecking', false], ['recheck_retrying', false]]) {
     assert.equal(groupBusy({ state }), busy, state)
   }
+})
+
+// the version in use self-tested again with a new runner serves meanwhile: the group is not busy (it
+// can be built again), but the page follows it, and the card names the recheck of the version in use
+test('a recheck is followed by the page, and found on the version in use', () => {
+  for (const [state, followed] of [['building', true], ['checking', true], ['rechecking', true], ['recheck_retrying', true], ['ready', false], ['failed', false]]) {
+    assert.equal(groupFollowed({ state }), followed, state)
+  }
+  const inUse = { number: 1, current: true, recheck: 'recheck_retrying', recheck_attempts: 1, recheck_max_attempts: 6 }
+  assert.equal(recheckOf({ versions: [{ number: 2, current: false, recheck: '' }, inUse] }), inUse)
+  assert.equal(recheckOf({ versions: [{ number: 1, current: true, recheck: '' }] }), null)
+  const component = read('components/admin/ModelsSection.vue')
+  assert.match(component, /modelsAdmin\.recheckRetryingHint/)
+  assert.match(component, /modelsAdmin\.recheckStoppedHint/)
+  assert.match(component, /some\(groupFollowed\)/)
 })
 
 // the nested keys of a locale file, "a.b.c"
@@ -62,7 +78,8 @@ test('every word the section uses exists in the five languages, with the same ke
   for (const m of component.matchAll(/\$?t\(\s*['"`](modelsAdmin\.[A-Za-z_.]+)['"`]/g)) used.add(m[1])
   // keys built from a state, a status, an action or a group
   const dynamic = {
-    'modelsAdmin.state.': ['not_enabled', 'building', 'checking', 'ready', 'failed', 'rebuild_needed'],
+    'modelsAdmin.state.': ['not_enabled', 'building', 'checking', 'ready', 'failed', 'rebuild_needed', 'rechecking', 'recheck_retrying'],
+    'modelsAdmin.recheck.': ['rechecking', 'recheck_retrying', 'recheck_stopped'],
     'modelsAdmin.status.': ['queued', 'building', 'checking', 'ready', 'failed'],
     'modelsAdmin.done.': ['enable', 'disable', 'rebuild'],
     'modelsAdmin.group.': ['regression.name', 'regression.description', 'survival.name', 'survival.description', 'timeseries.name', 'timeseries.description',
