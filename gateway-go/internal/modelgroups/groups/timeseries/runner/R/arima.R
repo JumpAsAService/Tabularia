@@ -182,6 +182,13 @@ arima_prepare <- function(task, df = NULL, t0 = NULL) {
   cols <- c(time, value, exog)
   if (is.null(df)) df <- tab_input(task, cols)
   for (name in cols) if (!name %in% names(df)) tab_refuse("no_column", paste0("the input has no column «", name, "»"), list(column = name))
+  # an exogenous column takes its name as its coefficient's label, beside the model's own terms: one
+  # named as a term would give two coefficients one label
+  clash <- exog[grepl(ARIMA_TERM_NAMES, exog)]
+  if (length(clash)) {
+    tab_refuse("exog_name", paste0("the exogenous column «", clash[[1L]], "» has the name of a term of the model (ar1, ma1, sar1, ",
+                                   "sma1, intercept, drift): rename it"), list(column = clash[[1L]]))
+  }
   kind <- tab_kind(df[[time]])
   if (kind == "number" && all(is.na(df[[time]]) | df[[time]] == trunc(df[[time]]))) kind <- "integer"
   if (!kind %in% c("date", "datetime", "integer")) {
@@ -332,11 +339,16 @@ arima_call <- function(model, prep, i, fixed = NULL, method = "CSS-ML") {
   do.call(forecast::Arima, args)
 }
 
-# The coefficients' names as a person reads them: xdrift → drift, xreg2 → its column.
+# The labels of the model's own coefficients, which no exogenous column may take (arima_prepare).
+ARIMA_TERM_NAMES <- "^((s?ar|s?ma)[0-9]+|intercept|drift)$"
+
+# The coefficients' names as a person reads them: xdrift → drift, xreg2 → its column (all at once:
+# a column named «xreg2» is not renamed again).
 arima_coef_labels <- function(model, names) {
   out <- names
   out[out == "xdrift"] <- "drift"
-  for (j in seq_along(model$exog)) out[out == paste0("xreg", j)] <- model$exog[[j]]
+  at <- match(names, paste0("xreg", seq_along(model$exog)))
+  out[!is.na(at)] <- unlist(model$exog)[at[!is.na(at)]]
   out
 }
 
@@ -826,4 +838,32 @@ TAB_COMMON_TESTS[["arima: the notes are ids the report words, and the card's coe
   coef <- out$card$arima$coefficients
   .tab_expect(identical(names(coef), c("ar1", "ma1", "sma1")) && is.numeric(coef[["ar1"]]), paste(names(coef), collapse = ", "))
   .tab_expect(identical(arima_note("gaps", n = 3L), "@gaps n=3"), "the encoding")
+}
+
+.arima_test_task <- function(df, params) {
+  list(protocol = TAB_PROTOCOL, mode = "fit", group = "timeseries", group_version = "selftest", model = "arima",
+       variant = tab_variant_of("arima", params), params = params, output = "results", write_output = FALSE,
+       rows_from = "run", limits = tab_catalog()$limits, .frame = df)
+}
+
+TAB_COMMON_TESTS[["arima: an exogenous column named as a term is refused with a sentence, and one named as a place keeps its name"]] <- function(code) {
+  df <- tab_read_csv(file.path(code, "reference", "data", "sarima_monthly.csv"), list(month = "date", boxes = "number"))
+  task <- function(params) .arima_test_task(df, params)
+  set.seed(3)
+  for (name in c("drift", "intercept", "ar1", "ma2", "sar1", "sma1")) {
+    df[[name]] <- stats::rnorm(nrow(df))
+    params <- list(time = "month", value = "boxes", frequency = "month", p = 1, d = 1, q = 0, exog = list(name), drift = TRUE)
+    msg <- .tab_refused_with("exog_name", fit_arima(task(params)))
+    .tab_expect(grepl(paste0("«", name, "» has the name of a term of the model"), msg, fixed = TRUE), name, ": ", msg)
+    df[[name]] <- NULL
+  }
+  # a column named as the place of another (xreg2) keeps its name, and the other its own
+  df$xreg2 <- stats::rnorm(nrow(df))
+  df$price <- stats::rnorm(nrow(df))
+  params <- list(time = "month", value = "boxes", frequency = "month", p = 1, d = 1, q = 0, exog = list("xreg2", "price"))
+  .tab_expect(identical(arima_coef_labels(list(exog = c("xreg2", "price")), c("ar1", "xreg1", "xreg2")), c("ar1", "xreg2", "price")),
+              "the labels")
+  keys <- tab_results_frame(fit_arima(task(params))$rows)$key
+  .tab_expect(all(c("coef|ar1||estimate", "coef|xreg2||estimate", "coef|price||estimate") %in% keys) && !"coef|xreg1||estimate" %in% keys,
+              "the rows' coefficients: ", paste(grep("^coef\\|.*\\|estimate$", keys, value = TRUE), collapse = ", "))
 }
