@@ -223,6 +223,12 @@ export function modelNumber(value: unknown): number {
   return Number(value.trim().replace(',', '.'))
 }
 
+/** The words of the example under an empty box of numbers: the quantiles' own («e.g. 0.1, 0.9»: proportions, with a point, the
+ *  comma being a separator of the list), the times' and the others' («e.g. 12, 24, 36»). */
+export function modelNumbersPlaceholderKey(field: Pick<ModelField, 'key'>): string {
+  return field.key === 'quantiles' ? 'models.form.quantilesPlaceholder' : 'models.form.numbersPlaceholder'
+}
+
 /** A list of numbers as a box writes it («10, 20 30») or as it is saved. */
 export function modelNumbers(value: unknown): number[] {
   const parts = Array.isArray(value) ? value : typeof value === 'string' ? value.split(/[;,\s]+/) : []
@@ -736,7 +742,8 @@ export function predictParams(modelId: string | null | undefined, params: Params
 }
 
 /** The columns a Predict step adds for a model with the options given (`survival_at_*` is one per time, `quantile_*_low` the
- *  interval of each quantile, under a key `a+b` given when both options are). */
+ *  interval of each quantile, under a key `a+b` given when both options are). A quantile of 0.5 adds none: it is the median,
+ *  the column `prediction` (the runner writes no `quantile_0.5`, as the gateway's `PredictColumns` lists none). */
 export function predictColumns(modelId: string | null | undefined, params: Params | null | undefined, catalog: ModelCatalog = MODEL_CATALOG,
   variant?: string | null): string[] {
   // `model:variant` comes first (the boosting models), then the model
@@ -749,7 +756,7 @@ export function predictColumns(modelId: string | null | undefined, params: Param
     // a key `a+b` is given when both options are; its `*` is one per entry of the first (the interval of each quantile, of each time)
     const parts = option.split('+')
     if (option === 'always' || parts.some((part) => given[part] === undefined)) continue
-    const list = given[parts[0]]
+    const list = Array.isArray(given[parts[0]]) && parts[0] === 'quantiles' ? given[parts[0]].filter((t: number) => t !== 0.5) : given[parts[0]]
     for (const name of names) {
       const at = name.indexOf('*')
       if (at >= 0 && Array.isArray(list)) out.push(...list.map((t: number) => `${name.slice(0, at)}${t}${name.slice(at + 1)}`))

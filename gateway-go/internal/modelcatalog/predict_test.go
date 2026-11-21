@@ -98,7 +98,10 @@ func TestTheColumnsAPredictAdds(t *testing.T) {
 			"prediction survival_at_30 survival_at_30_low survival_at_30_high prediction_low prediction_high quantile_0.25 quantile_0.75 quantile_0.25_low quantile_0.75_low quantile_0.25_high quantile_0.75_high"},
 		// the interval alone has no number to be one of: only the median's
 		{"parametric_survival", map[string]any{"interval": true}, "prediction prediction_low prediction_high"},
-		{"parametric_survival", map[string]any{"quantiles": []any{0.5}}, "prediction quantile_0.5"},
+		// 0.5 is the median, `prediction`: no column of its own (the runner writes none)
+		{"parametric_survival", map[string]any{"quantiles": []any{0.5}}, "prediction"},
+		{"parametric_survival", map[string]any{"quantiles": []any{0.25, 0.5}, "interval": true},
+			"prediction prediction_low prediction_high quantile_0.25 quantile_0.25_low quantile_0.25_high"},
 		// the same columns, now about the time left
 		{"parametric_survival", map[string]any{"alive_at": "age_days", "at_times": []any{30.0}}, "prediction survival_at_30"},
 		{"arima", map[string]any{"interval": true, "horizon": 6.0}, "prediction lower_80 upper_80 lower upper"},

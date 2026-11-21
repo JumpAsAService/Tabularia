@@ -23,7 +23,7 @@ import { vDraft } from '~/composables/draftField'
 import {
   modelApplies, modelChoiceWordKey, modelColumnFits, modelFieldWordKey, modelFields, modelForbidden, modelGiven, modelGroupKey,
   modelHintKey, modelIsCategorical, modelMlflow, modelMlflowProblem, modelNumber, modelNumberProblem, modelOf,
-  modelNumbersProblem, modelOverlaps, modelReasonKey, modelRequiredReason, modelSeason, modelSet, modelTaken, modelUnset,
+  modelNumbersPlaceholderKey, modelNumbersProblem, modelOverlaps, modelReasonKey, modelRequiredReason, modelSeason, modelSet, modelTaken, modelUnset,
   MODEL_RETRIES_MAX, MODEL_TIMEOUT_MIN, MODEL_TIMEOUT_SECONDS, type ModelField, type ModelOff,
 } from '~/composables/modelCatalog'
 
@@ -512,7 +512,7 @@ function limit(key: 'timeoutSeconds' | 'retries', raw: string, min: number, max:
           autocomplete="off"
           :value="timesText(f)"
           v-draft="timesText(f)"
-          :placeholder="$t('models.form.numbersPlaceholder')"
+          :placeholder="$t(modelNumbersPlaceholderKey(f))"
           :aria-invalid="timesProblem(f) ? 'true' : undefined"
           :aria-describedby="timesProblem(f) ? idOf(f.key, 'problem') : hintOf(f) ? idOf(f.key, 'hint') : undefined"
           @change="set(f.key, ($event.target as HTMLInputElement).value)"

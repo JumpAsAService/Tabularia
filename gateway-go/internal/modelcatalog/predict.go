@@ -129,7 +129,8 @@ func contains(list []string, s string) bool {
 // `survival_at_<t>` once per time, t written as the runner writes it. A name ending in «*»
 // whose option is not a list of times (`prediction_prob_*`: one per class of the card) is
 // written as it is: the card's classes are not the catalogue's. A `*` inside a name
-// (`quantile_*_low`) is filled the same way, under a key `a+b` given when both options are.
+// (`quantile_*_low`) is filled the same way, under a key `a+b` given when both options are. A
+// quantile of 0.5 adds no column: it is the median, the column `prediction`.
 func PredictColumns(model, variant string, checked map[string]any) []string {
 	spec := predictData.Columns[model+":"+variant]
 	if spec == nil {
@@ -158,7 +159,8 @@ func PredictColumns(model, variant string, checked map[string]any) []string {
 		if !given {
 			continue
 		}
-		v := checked[strings.SplitN(option, "+", 2)[0]]
+		first := strings.SplitN(option, "+", 2)[0]
+		v := checked[first]
 		for _, name := range spec[option] {
 			prefix, suffix, isPattern := strings.Cut(name, "*")
 			if !isPattern {
@@ -169,6 +171,9 @@ func PredictColumns(model, variant string, checked map[string]any) []string {
 			seen := map[string]bool{}
 			for _, t := range list {
 				if f, isNum := t.(float64); isNum {
+					if first == "quantiles" && f == 0.5 {
+						continue // the median is `prediction`: the runner writes no quantile_0.5 (ps_quantiles)
+					}
 					label := timeLabel(f)
 					if !seen[label] {
 						seen[label] = true

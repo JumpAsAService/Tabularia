@@ -18,7 +18,7 @@ import { useFormat } from '~/composables/useFormat'
 import { useModelGroups, type MlflowExperiment, type MlflowVersion } from '~/composables/useModelGroups'
 import { vDraft } from '~/composables/draftField'
 import {
-  MODEL_RETRIES_MAX, MODEL_TIMEOUT_MIN, modelColumnFits, versionHeld, MODEL_TIMEOUT_SECONDS, modelNumber, modelNumberProblem, modelNumbersProblem, predictColumns,
+  MODEL_RETRIES_MAX, MODEL_TIMEOUT_MIN, modelColumnFits, versionHeld, MODEL_TIMEOUT_SECONDS, modelNumber, modelNumberProblem, modelNumbersPlaceholderKey, modelNumbersProblem, predictColumns,
   predictFields, predictParams, type ModelField, type ModelOff,
 } from '~/composables/modelCatalog'
 
@@ -276,7 +276,7 @@ const offText = computed(() => {
         <label :for="idOf(f.key)" class="lbl">{{ labelOf(f) }}</label>
         <input
           :id="idOf(f.key)" type="text" inputmode="decimal" autocomplete="off"
-          :value="timesText(f)" v-draft="timesText(f)" :placeholder="$t('models.form.numbersPlaceholder')"
+          :value="timesText(f)" v-draft="timesText(f)" :placeholder="$t(modelNumbersPlaceholderKey(f))"
           :aria-invalid="numbersProblem(f) ? 'true' : undefined"
           @change="set(f.key, ($event.target as HTMLInputElement).value)"
         />

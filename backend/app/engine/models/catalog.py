@@ -1299,7 +1299,8 @@ def _rows_columns(names: list[str], full: Mapping[str, Any]) -> list[str]:
         if not star or key is None:
             out.append(name)
         else:
-            out.extend(f"{pre}{_number_label(v)}{post}" for v in (full.get(key) or []))
+            # a quantile of 0.5 is the median, `pred_median`: the runner writes no pred_quantile_0.5 (ps_quantiles)
+            out.extend(f"{pre}{_number_label(v)}{post}" for v in (full.get(key) or []) if not (key == "quantiles" and v == 0.5))
     return out
 
 

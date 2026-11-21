@@ -6944,6 +6944,7 @@ export default {
       "pairsNeedPredictors": "Choose at least two predictors first.",
       "aValue": "A value",
       "numbersPlaceholder": "e.g. 12, 24, 36",
+      "quantilesPlaceholder": "e.g. 0.1, 0.9",
       "between": "A number between {above} and {below}, both excluded.",
       "above": "A number above {above}.",
       "below": "A number below {below}.",

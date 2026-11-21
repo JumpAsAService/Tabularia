@@ -451,6 +451,10 @@ test('Predict: the options of the model the version holds, and the columns it ad
   assert.deepEqual(m.predictParams('parametric_survival', { quantiles: '0.9, 0.1', at_times: '30, 90', interval: true, threshold: 0.4 }), { interval: true, at_times: [30, 90], quantiles: [0.1, 0.9] })
   assert.deepEqual(m.predictColumns('parametric_survival', { quantiles: [0.1, 0.9], at_times: [30] }), ['prediction', 'survival_at_30', 'quantile_0.1', 'quantile_0.9'])
   assert.deepEqual(m.predictColumns('parametric_survival', { interval: true }), ['prediction', 'prediction_low', 'prediction_high'])
+  // 0.5 is the median, `prediction`: no column of its own, as the gateway lists them (the runner writes none)
+  assert.deepEqual(m.predictColumns('parametric_survival', { quantiles: [0.5] }), ['prediction'])
+  assert.deepEqual(m.predictColumns('parametric_survival', { quantiles: [0.25, 0.5], interval: true }),
+    ['prediction', 'prediction_low', 'prediction_high', 'quantile_0.25', 'quantile_0.25_low', 'quantile_0.25_high'])
   // the interval of each quantile and of each time is a column of its own, once both options are given
   assert.deepEqual(m.predictColumns('parametric_survival', { quantiles: [0.1, 0.9], at_times: [30], interval: true }), [
     'prediction', 'survival_at_30', 'survival_at_30_low', 'survival_at_30_high', 'prediction_low', 'prediction_high',
@@ -971,6 +975,14 @@ test('a parametric survival node in the editor: the form, with its words, only w
   // the distribution is a list of seven, the words of each in the language; the quantiles one box with the default
   assert.ok(selectsOf(html).includes('Weibull Exponential Log-normal Log-logistic Generalized gamma Gompertz Automatic: the lowest AIC'), selectsOf(html).join(' | '))
   assert.match(html, /id="model-ctl-1-quantiles"[^>]*value="0.25, 0.75"/)
+  // an empty box of quantiles shows proportions as its example, the times' box times (both forms take the same words)
+  const empty = await render(Form, node('parametric_survival', { ...base, quantiles: [] }))
+  assert.match(empty, /id="model-ctl-1-quantiles"[^>]*placeholder="e\.g\. 0\.1, 0\.9"/)
+  assert.match(empty, /id="model-ctl-1-times"[^>]*placeholder="e\.g\. 12, 24, 36"/)
+  assert.equal(m.modelNumbersPlaceholderKey({ key: 'quantiles' }), 'models.form.quantilesPlaceholder')
+  assert.equal(m.modelNumbersPlaceholderKey({ key: 'at_times' }), 'models.form.numbersPlaceholder')
+  assert.match(read('../components/ui/PredictForm.vue'), /:placeholder="\$t\(modelNumbersPlaceholderKey\(f\)\)"/)
+  for (const lang of ['en', 'it', 'de', 'es', 'fr']) assert.match(MESSAGES[lang].models.form.quantilesPlaceholder, /0\.1, 0\.9$/, lang)
   // with predictors the reference levels and the interactions come
   html = await render(Form, node('parametric_survival', { ...base, predictors: ['channel', 'qty'] }))
   page = text(html)

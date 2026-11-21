@@ -379,6 +379,8 @@ def test_the_intervals_of_the_quantiles_and_the_times_are_columns_of_predict_and
         with pytest.raises(Exception, match=taken):
             catalog.check_params("parametric_survival", base, {**columns_in, taken: "Float64"})
     catalog.check_params("parametric_survival", base, {**columns_in, "pred_surv_at_31_low": "Float64"})  # not one of the times
+    # a quantile of 0.5 is the median (pred_median): the runner writes no pred_quantile_0.5, so a column of that name is no clash
+    catalog.check_params("parametric_survival", {**base, "quantiles": [0.25, 0.5]}, {**columns_in, "pred_quantile_0.5": "Float64"})
     # the checks' measures: a number and a sentence, no verdict; `at` is the time it is read at
     assertion = catalog.variant_spec("parametric_survival", {})["sections"]["assumption"]
     assert "at" in assertion["numbers"] and "description" in assertion["texts"]
