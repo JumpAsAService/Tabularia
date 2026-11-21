@@ -796,3 +796,30 @@ TAB_COMMON_TESTS[["customer_lifetime: BG/BB's frequency check takes the PMF at e
     .tab_expect(.clv_rel(clv_bgbb_pmf(pb, k, m)[direct > 0], direct[direct > 0]) < 1e-12 && all(clv_bgbb_pmf(pb, k, m)[direct == 0] == 0), "the PMF at k = ", k)
   }
 }
+
+TAB_COMMON_TESTS[["customer_lifetime: an empty customer id is a missing one, also when that customer would be among the top customers"]] <- function(code) {
+  set.seed(5)
+  S <- .clv_summary_of_days(.clv_sim_days("bg_nbd", 200, c(0.25, 4, 0.8, 2.5)))
+  S$m <- .clv_sim_spend(S$x)
+  S$id <- paste0("c", seq_len(nrow(S)))
+  top <- order(-S$x)[1:3]
+  S$id[top] <- c("", "   ", NA)   # the guests' orders under an empty code: the most frequent buyers
+  task <- .clv_task(.clv_params(list(spend = "m", purchase_model = "bg_nbd", output = "rows")), S)
+  res <- fit_clv(task)
+  .tab_expect(!length(tab_check_declared(res$rows, "clv", "value")), "the rows are what the catalogue declares")
+  df <- tab_results_frame(res$rows)
+  shown <- df$level[df$section == "customer" & df$stat == "rank"]
+  .tab_expect(df$value[df$key == "model|||n"] == 197 && df$value[df$key == "model|||n_missing"] == 3 && length(shown) == 20L &&
+              all(nzchar(trimws(shown))), "three rows without an id are left out, the top customers all have one")
+  .tab_expect(all(is.na(res$output$pred_clv[top])) && all(is.finite(res$output$pred_clv[-top])), "the rows left out keep NULL predictions")
+  # Predict does not read the id: the empty one is scored by its numbers, as the NULL one is
+  card <- jsonlite::fromJSON(tab_card_text(res$card), simplifyVector = FALSE)
+  pred <- predict_clv(list(params = list(), limits = tab_catalog()$limits, .frame = S), card)$output
+  .tab_expect(all(is.finite(pred$prediction_clv)) && identical(pred$prediction_clv[-top], res$output$pred_clv[-top]), "Predict scores every row")
+  # the same rule on an id of whole numbers: only NULL is missing
+  S2 <- S
+  S2$id <- seq_len(nrow(S2))
+  S2$id[top[[1L]]] <- NA
+  s2 <- clv_read_summary(.clv_task(.clv_params(list(spend = "m")), S2), "clv", S2)
+  .tab_expect(s2$n_missing == 1L, "a numeric id is missing only when NULL")
+}

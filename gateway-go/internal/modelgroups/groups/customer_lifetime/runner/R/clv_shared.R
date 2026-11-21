@@ -206,6 +206,16 @@ clv_numbers <- function(df, name) {
   as.numeric(x)
 }
 
+# A customer id that names no one: NULL, or a text that is empty once its spaces are trimmed (the orders of
+# guests gathered under an empty code). Such a row is left out of the fit (`n_missing`) and keeps NULL
+# predictions in the output. Predict does not read the id: it scores a row by its numbers, whatever its id,
+# NULL and empty alike.
+clv_missing_id <- function(id) {
+  out <- is.na(id)
+  if (is.character(id) || is.factor(id)) out <- out | !nzchar(trimws(as.character(id)))
+  out
+}
+
 # The summary of a node's input: one row per customer, checked rule by rule. `frame` is the
 # self-test's table; else the step's input is read.
 clv_read_summary <- function(task, node, frame = NULL) {
@@ -239,7 +249,7 @@ clv_read_summary <- function(task, node, frame = NULL) {
   base <- data.frame(x = x, tx = tx, age = age)
   names(base) <- c(roles$frequency, roles$recency, roles$age)
   complete <- tab_complete_rows(base, names(base))
-  keep <- complete$keep & !is.na(id_raw)
+  keep <- complete$keep & !clv_missing_id(id_raw)
   v <- list(id = clv_label(id_raw)[keep], x = x[keep], tx = tx[keep], T = age[keep], m = m[keep], h = h[keep], row = which(keep))
   dup <- duplicated(id_raw[keep])
   if (any(dup)) {
