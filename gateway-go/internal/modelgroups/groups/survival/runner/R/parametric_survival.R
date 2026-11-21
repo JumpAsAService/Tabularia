@@ -387,13 +387,14 @@ ps_fit <- function(prepared, distribution, starts = NULL, hessian = FALSE, fail_
   fit_once <- function(init, maxit) {
     tryCatch(suppressWarnings(ps_flexsurvreg(form, anc, frame, m$flexsurv, init = if (is.null(init)) NULL else ps_to_natural(m, init),
                                              control = list(reltol = reltol, maxit = maxit), hessian = hessian)),
-             error = function(e) e)
+             error = ps_caught)
   }
   failed <- function(f) inherits(f, "error") || !identical(as.integer(f$opt$convergence %||% 1L), 0L) || !is.finite(f$loglik)
   attempts <- 1L
   first <- if (fail_first) simpleError("forced by the self-test") else fit_once(inits$first, PS_MAXIT)
   fit <- first
   if (failed(fit) && second) {
+    ps_stop_if_out_of_time() # no second attempt after the time ps_within gave
     attempts <- 2L
     second <- inits$second %||% ps_second_start(prepared, m, distribution, form, frame)
     fit <- fit_once(second, PS_MAXIT_SECOND)
@@ -519,7 +520,10 @@ ps_starts <- function(prepared, m, distribution, starts, loglik) {
   lognormal <- starts$lognormal %||% ps_fit(prepared, "lognormal")
   points <- list()
   own <- tryCatch(suppressWarnings(ps_flexsurvreg(ps_formula(prepared), ps_anc_formula(prepared, m), prepared$frame, "gengamma",
-                                                   fixedpars = TRUE)), error = function(e) NULL)
+                                                   fixedpars = TRUE)), error = function(e) {
+    ps_caught(e)
+    NULL
+  })
   if (!is.null(own)) points$flexsurv <- unname(own$opt$par %||% own$res.t[, "est"])
   n_s <- length(m$i_strata)
   shift <- function(fit) fit$par[c(fit$spec$i_terms, fit$spec$i_strata)]
@@ -569,7 +573,11 @@ ps_second_start <- function(prepared, m, distribution, form, frame) {
   frame$g <- factor(prepared$stratum)
   f <- stats::as.formula(paste("survival::Surv(time, status) ~", if (length(rhs)) paste(rhs, collapse = " + ") else "1"),
                          env = new.env(parent = asNamespace("survival")))
-  sr <- tryCatch(suppressWarnings(survival::survreg(f, data = frame, weights = w, dist = sr_dist)), error = function(e) NULL)
+  sr <- tryCatch(suppressWarnings(survival::survreg(f, data = frame, weights = w, dist = sr_dist)),
+                 error = function(e) {
+                   ps_caught(e)
+                   NULL
+                 })
   if (is.null(sr) || anyNA(stats::coef(sr))) return(NULL)
   b <- unname(stats::coef(sr))
   scale <- unname(sr$scale)
@@ -919,16 +927,36 @@ ps_extra_allowance <- function(task, fitted) {
 # `expr` with at most `seconds` of elapsed time (R's own limit, checked while R code runs, the
 # likelihood included): list(value, time_up). On time_up `value` is NULL. An error that is not the
 # time's is raised as it is.
+# R lifts its limit once it has raised it: an error handler that took the limit's error for a failed
+# attempt would let the next attempt run without one (a fit of 17.6 s given 1 s took 8.4 s). So
+# ps_within also sets a deadline on its clock, which every handler inside a fit reads (ps_caught):
+# past it the error is raised again, and no other attempt starts (ps_stop_if_out_of_time).
+.ps_clock <- new.env(parent = emptyenv())
+
+ps_out_of_time <- function() {
+  deadline <- .ps_clock$deadline
+  !is.null(deadline) && proc.time()[["elapsed"]] >= deadline
+}
+
+# For tryCatch's `error` inside a fit: the error, to be read as a failed attempt; raised again when
+# ps_within's time is out.
+ps_caught <- function(e) if (ps_out_of_time()) stop(e) else e
+
+ps_stop_if_out_of_time <- function() if (ps_out_of_time()) stop("reached elapsed time limit", call. = FALSE)
+
 ps_within <- function(seconds, expr) {
   if (!is.finite(seconds)) return(list(value = expr, time_up = FALSE))
   if (seconds <= 0) return(list(value = NULL, time_up = TRUE))
   t0 <- proc.time()[["elapsed"]]
+  outer <- .ps_clock$deadline # a ps_within inside another keeps the earlier deadline
+  .ps_clock$deadline <- min(outer %||% Inf, t0 + seconds)
+  on.exit(.ps_clock$deadline <- outer, add = TRUE)
   setTimeLimit(elapsed = seconds, transient = TRUE)
   on.exit(setTimeLimit(elapsed = Inf), add = TRUE)
   value <- tryCatch(expr, error = function(e) e)
   setTimeLimit(elapsed = Inf)
-  # the limit raises an error wherever R is: inside the fit (which ps_fit reads as a failed attempt)
-  # or here; either way the clock says it
+  # the limit raises an error wherever R is: inside the fit (raised again by ps_caught) or here;
+  # either way the clock says it
   if (proc.time()[["elapsed"]] - t0 >= seconds) return(list(value = NULL, time_up = TRUE))
   if (inherits(value, "error")) stop(value)
   list(value = value, time_up = FALSE)
@@ -2118,6 +2146,7 @@ TAB_COMMON_TESTS[["parametric survival: the covariance from the rows' own deriva
     .tab_expect(gap < 1e-6, d, ": numDeriv's standard errors off by ", format(gap, digits = 3))
   }
 }
+
 TAB_COMMON_TESTS[["parametric survival: a stratum «» (empty text) is predicted as the others; the card's last times are a list by level, old cards read"]] <- function(code) {
   set.seed(3)
   n <- 120L
@@ -2151,5 +2180,29 @@ TAB_COMMON_TESTS[["parametric survival: a stratum «» (empty text) is predicted
   .tab_expect(identical(.ps_num(pc$parametric_survival$last_time_by_stratum), max(df$days)), "the last time without strata")
   problems <- tab_schema_problems(pc, jsonlite::fromJSON(file.path(code, "card.schema.json"), simplifyVector = FALSE))
   .tab_expect(!length(problems), paste(problems, collapse = "; "))
+}
+
+TAB_COMMON_TESTS[["parametric survival: a fit out of ps_within's time makes no second attempt"]] <- function(code) {
+  df <- .ps_test_table(code)
+  prepared <- ps_prepare(.ps_test_task(df, list(time = "days", event = "status", event_value = "failed", predictors = list("load"),
+                                                distribution = "weibull")))
+  # flexsurv held up past the time given: R raises its limit inside the first attempt, which read it as a failure
+  # and started a second one with no limit (R lifts it once raised)
+  real <- ps_flexsurvreg
+  calls <- 0L
+  on.exit(assign("ps_flexsurvreg", real, envir = globalenv()), add = TRUE)
+  assign("ps_flexsurvreg", function(...) {
+    calls <<- calls + 1L
+    until <- proc.time()[["elapsed"]] + 1.5
+    while (proc.time()[["elapsed"]] < until) NULL
+    real(...)
+  }, envir = globalenv())
+  t0 <- proc.time()[["elapsed"]]
+  run <- ps_within(0.3, ps_fit(prepared, "weibull"))
+  took <- proc.time()[["elapsed"]] - t0
+  .tab_expect(isTRUE(run$time_up) && is.null(run$value), "not out of time")
+  .tab_expect(calls == 1L && took < 1.4, calls, " attempts in ", round(took, 2), " s")
+  # outside ps_within a failed attempt is still followed by the second start
+  .tab_expect(!ps_out_of_time(), "the deadline outlived ps_within")
 }
 
