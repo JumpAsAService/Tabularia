@@ -89,11 +89,19 @@ func (e *Error) Error() string {
 			why = fmt.Sprintf("the tracking server answered %s (HTTP %d)", e.ErrorCode, e.Status)
 		}
 	}
-	if e.Action == "" {
-		return why
+	if e.Action != "" {
+		why += ", " + e.Action
 	}
-	return why + ", " + e.Action
+	if e.Code == "timeout" || e.Code == "unreachable" {
+		why += ". " + NoProxy
+	}
+	return why
 }
+
+// NoProxy says, after a tracking server that does not answer, that the gateway calls it directly
+// (newClient: the proxy of the environment would defeat the check of the address).
+const NoProxy = "Tabularia calls the tracking server directly, never through the proxy of its environment (HTTPS_PROXY): " +
+	"a server reachable only through a proxy cannot be used"
 
 // IsCode says whether err is an *Error with that MLflow error_code.
 func IsCode(err error, code string) bool {

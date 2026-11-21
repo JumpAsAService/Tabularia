@@ -233,8 +233,20 @@ func TestATimeoutIsSaid(t *testing.T) {
 	if !errors.As(err, &e) || e.Code != "timeout" || time.Since(start) > time.Second {
 		t.Fatalf("%v after %s", err, time.Since(start))
 	}
-	if err.Error() != "the tracking server did not answer in time, finding the experiment «x»" {
+	// the sentence says the proxy of the environment is not used: a server reachable only through
+	// one does not answer
+	if err.Error() != "the tracking server did not answer in time, finding the experiment «x». Tabularia calls the tracking server directly, "+
+		"never through the proxy of its environment (HTTPS_PROXY): a server reachable only through a proxy cannot be used" {
 		t.Fatalf("%q", err)
+	}
+	// nothing listens: unreachable, said the same way; another failure says nothing of a proxy
+	s.Close()
+	if _, _, err := tr.Experiment(context.Background(), "x"); err == nil || !strings.HasPrefix(err.Error(), "the tracking server could not be reached") ||
+		!strings.HasSuffix(err.Error(), mlflowconn.NoProxy) {
+		t.Errorf("unreachable: %v", err)
+	}
+	if err := (&mlflowconn.Error{Code: "unauthorized", Status: 401}).Error(); strings.Contains(err, "HTTPS_PROXY") {
+		t.Errorf("a refusal speaks of the proxy: %s", err)
 	}
 }
 

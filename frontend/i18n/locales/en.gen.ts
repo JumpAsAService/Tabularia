@@ -3984,8 +3984,8 @@ export default {
     "artifactsOk": "Artifact proxy: available, files can be uploaded through the server.",
     "artifactsNo": "Artifact proxy: not available. Parameters, metrics and tags can be logged, files cannot (start the server with artifact serving on).",
     "err": {
-      "unreachable": "The server cannot be reached: check the address, the port and that Tabularia's network can get there.",
-      "timeout": "The server did not answer in time.",
+      "unreachable": "The server cannot be reached: check the address, the port and that Tabularia's network can get there. Tabularia calls it directly, never through the proxy of its environment (HTTPS_PROXY): a server reachable only through a proxy cannot be used.",
+      "timeout": "The server did not answer in time. Tabularia calls it directly, never through the proxy of its environment (HTTPS_PROXY): a server reachable only through a proxy cannot be used.",
       "tls_untrusted": "The server's certificate is not signed by an authority Tabularia trusts: paste your company's authority below, or turn the verification off on a network you trust.",
       "tls_hostname": "The server's certificate is not valid for this address: use the name it was issued for.",
       "tls_other": "The server's certificate cannot be accepted (expired or not yet valid).",

@@ -672,7 +672,8 @@ func TestAServerThatDoesNotAnswer(t *testing.T) {
 	w.ml.Delay = 2 * time.Second
 	start := time.Now()
 	id, err := w.runWith(w.block(""))
-	if err == nil || !strings.Contains(err.Error(), "MLflow could not record it: the tracking server did not answer in time, finding the experiment") {
+	if err == nil || !strings.Contains(err.Error(), "MLflow could not record it: the tracking server did not answer in time, finding the experiment") ||
+		!strings.HasSuffix(err.Error(), "never through the proxy of its environment (HTTPS_PROXY): a server reachable only through a proxy cannot be used") {
 		t.Fatalf("timeout: %v", err)
 	}
 	if time.Since(start) > 5*time.Second || w.row(id).status != "FAILURE" {

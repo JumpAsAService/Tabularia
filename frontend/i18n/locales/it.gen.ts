@@ -3984,8 +3984,8 @@ export default {
     "artifactsOk": "Proxy degli artefatti: disponibile, i file si possono caricare tramite il server.",
     "artifactsNo": "Proxy degli artefatti: non disponibile. Parametri, metriche e tag si possono registrare, i file no (avvia il server con gli artefatti serviti).",
     "err": {
-      "unreachable": "Il server non è raggiungibile: controlla l'indirizzo, la porta e che la rete di Tabularia arrivi fin lì.",
-      "timeout": "Il server non ha risposto in tempo.",
+      "unreachable": "Il server non è raggiungibile: controlla l'indirizzo, la porta e che la rete di Tabularia arrivi fin lì. Tabularia lo chiama direttamente, mai attraverso il proxy del suo ambiente (HTTPS_PROXY): un server raggiungibile solo tramite un proxy non si può usare.",
+      "timeout": "Il server non ha risposto in tempo. Tabularia lo chiama direttamente, mai attraverso il proxy del suo ambiente (HTTPS_PROXY): un server raggiungibile solo tramite un proxy non si può usare.",
       "tls_untrusted": "Il certificato del server non è firmato da un'autorità di cui Tabularia si fida: incolla qui sotto l'autorità della tua azienda, oppure spegni la verifica su una rete di cui ti fidi.",
       "tls_hostname": "Il certificato del server non è valido per questo indirizzo: usa il nome per cui è stato emesso.",
       "tls_other": "Il certificato del server non può essere accettato (scaduto o non ancora valido).",

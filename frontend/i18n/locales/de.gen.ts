@@ -3957,8 +3957,8 @@ export default {
     "artifactsOk": "Artefakt-Proxy: verfügbar, Dateien können über den Server hochgeladen werden.",
     "artifactsNo": "Artefakt-Proxy: nicht verfügbar. Parameter, Metriken und Tags können protokolliert werden, Dateien nicht (Server mit aktiviertem Artefakt-Serving starten).",
     "err": {
-      "unreachable": "Der Server ist nicht erreichbar: Prüfen Sie Adresse und Port und ob das Netz von Tabularia dorthin kommt.",
-      "timeout": "Der Server hat nicht rechtzeitig geantwortet.",
+      "unreachable": "Der Server ist nicht erreichbar: Prüfen Sie Adresse und Port und ob das Netz von Tabularia dorthin kommt. Tabularia ruft ihn direkt auf, nie über den Proxy seiner Umgebung (HTTPS_PROXY): Ein Server, der nur über einen Proxy erreichbar ist, kann nicht verwendet werden.",
+      "timeout": "Der Server hat nicht rechtzeitig geantwortet. Tabularia ruft ihn direkt auf, nie über den Proxy seiner Umgebung (HTTPS_PROXY): Ein Server, der nur über einen Proxy erreichbar ist, kann nicht verwendet werden.",
       "tls_untrusted": "Das Zertifikat des Servers ist nicht von einer Stelle signiert, der Tabularia vertraut: Fügen Sie unten die Zertifizierungsstelle Ihres Unternehmens ein oder schalten Sie die Prüfung in einem vertrauenswürdigen Netz aus.",
       "tls_hostname": "Das Zertifikat des Servers gilt nicht für diese Adresse: Verwenden Sie den Namen, für den es ausgestellt wurde.",
       "tls_other": "Das Zertifikat des Servers kann nicht akzeptiert werden (abgelaufen oder noch nicht gültig).",

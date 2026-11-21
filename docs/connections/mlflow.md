@@ -37,7 +37,9 @@ address the name resolves to, at the moment of connecting. A tracking server on 
 network or in the cluster (`mlflow.mlflow.svc`, `10.x`, `192.168.x`) is the ordinary case and
 is allowed. The gateway calls the tracking server itself, never through a proxy of its
 environment (`HTTPS_PROXY`, `HTTP_PROXY`): through a proxy the check would see only the
-proxy's address.
+proxy's address. A tracking server that can be reached only through a proxy (a hosted MLflow
+behind the company's outbound proxy) cannot be used: it does not answer, and the test and the
+run page say that the proxy of the environment is not used.
 
 ## Test connection
 
@@ -50,10 +52,11 @@ The test only **reads**, with the connection's credentials, before or after savi
 | Model registry | `GET /api/2.0/mlflow/registered-models/search?max_results=1` | Models can be registered. A server without a database backend has no registry: runs can still be logged. |
 | Artifact proxy | `GET /api/2.0/mlflow-artifacts/artifacts` | Files can be uploaded through the server. Without it, only parameters, metrics and tags can be logged. |
 
-A failure is named: the address cannot be reached, no answer in time, a certificate not
-signed by a trusted authority or not valid for the address, wrong credentials (401), not
-allowed (403), no MLflow API at the address (404), a redirect to another address, or an
-answer that is not MLflow's. The server's own text is never shown.
+A failure is named: the address cannot be reached or no answer in time (both say the proxy of
+the environment is not used), a certificate not signed by a trusted authority or not valid for
+the address, wrong credentials (401), not allowed (403), no MLflow API at the address (404), a
+redirect to another address, or an answer that is not MLflow's. The server's own text is never
+shown.
 
 The calls are the ones of MLflow's REST reference (API 2.0). Tabularia's own tests run against a
 stand-in of that API, and it has been tried against a real server, MLflow 2.22.0, with its basic
