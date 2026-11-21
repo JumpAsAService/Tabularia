@@ -34,11 +34,11 @@ from tests.test_reports_render import chart_service  # noqa: F401 — the fake c
 
 NOW = datetime(2026, 11, 19, 23, 30, tzinfo=timezone.utc)
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "models"
-# The experiments nodes' layouts are lot E6's (docs/specs/ab-testing.md, «The lots E0–E10»): their fixtures exist
-# (results.py checks them), their report not yet. E6 takes this away.
-PENDING = {"ab_test", "ab_plan"}
-CASES = sorted(p.stem for p in FIXTURES.glob("*-*.json") if p.stem.split("-")[0] not in PENDING)
-DRAWN = {m: spec for m, spec in catalog.MODELS.items() if m not in PENDING}
+CASES = sorted(p.stem for p in FIXTURES.glob("*-*.json"))
+DRAWN = dict(catalog.MODELS)
+# the experiments' reports open with their decision, not with the checks, and the planning node has no check at all
+# (docs/specs/ab-testing.md, «The report (pixel perfect)»)
+EXPERIMENTS = {m for m, spec in catalog.MODELS.items() if spec.get("family") == "experiments"}
 
 
 def fixture(case: str) -> tuple[str, dict, list[dict]]:
@@ -92,7 +92,7 @@ def test_every_model_and_variant_has_a_layout_and_a_fixture():
 
 
 def test_the_words_are_complete_in_the_five_languages():
-    for name in ("common", "penalized", "boosting", "customer_lifetime", *DRAWN):
+    for name in ("common", "penalized", "boosting", "customer_lifetime", "experiments", *DRAWN):
         words = common._file(name)
         assert tuple(words) == LOCALES, name
         english = _keys(words["en"])
@@ -186,10 +186,13 @@ def test_a_layout_is_a_definition_the_report_engine_accepts(case, locale):
         ids = [it["id"] for band in d["sections"].values() for it in band["items"]]
         assert len(ids) == len(set(ids))
         body = d["sections"]["body"]["items"]
-        # the assumptions come before every coefficient, number of the fit and chart: the first page
         first = {it["id"]: i for i, it in enumerate(body)}
-        assert first["assumptions"] < min(i for i, it in enumerate(body) if it["type"] == "chart")
-        assert first["assumptions"] < first["fit"] and first["assumptions"] < first.get("coef", 10**6)
+        if model in EXPERIMENTS:  # the decision (or the plan's answer) first, the explanation and the notes last
+            assert body[0]["id"] in ("s_decision", "s_plan") and first["reading"] > first["s_how"]
+            assert ("assumptions" in first) == (model == "ab_test")
+        else:  # the assumptions come before every coefficient, number of the fit and chart: the first page
+            assert first["assumptions"] < min(i for i, it in enumerate(body) if it["type"] == "chart")
+            assert first["assumptions"] < first["fit"] and first["assumptions"] < first.get("coef", 10**6)
         # no chart title is cut
         assert not [it["title"] for it in body if it["type"] == "chart" and it["title"].endswith("…")]
 
@@ -229,10 +232,12 @@ def test_a_parametric_survival_with_delayed_entry_names_its_start_and_says_so_in
 @pytest.mark.parametrize("locale", LOCALES)
 def test_every_report_renders_in_the_five_languages(tmp_path, chart_service, monkeypatch, case, locale):  # noqa: F811
     out, page = draw(tmp_path, chart_service, monkeypatch, case, locale=locale, sample=[{"first": 500}], step="Prices compared")
-    assert out.path.read_bytes().startswith(b"%PDF-") and 2 <= out.pages <= 8 and out.warnings == []
+    model = case.split("-")[0]
+    assert out.path.read_bytes().startswith(b"%PDF-") and 2 <= out.pages <= (12 if model in EXPERIMENTS else 8) and out.warnings == []
     said = set(strings(json.loads(page)))
     w = common.words(*case.split("-"), locale)
-    assert w["sections"]["assumptions"] in said and any(s.startswith(w["footer"] + " · ") for s in said)
+    assert any(s.startswith(w["footer"] + " · ") for s in said)
+    assert w["sections"]["how" if model == "ab_plan" else "assumptions"] in said
 
 
 def test_the_first_page_holds_the_assumptions_with_r_s_stars_and_the_verdicts(tmp_path, chart_service, monkeypatch):  # noqa: F811
@@ -1025,3 +1030,145 @@ def test_a_clv_candidate_auto_did_not_check_says_so(tmp_path, chart_service, mon
     _, page = draw(tmp_path / "all", chart_service, monkeypatch, "clv-value", fmt="svg", locale=locale)
     said = strings(json.loads(page))
     assert w["candidate_not_checked"]["cell"] not in said and w["candidate_not_checked"]["legend"] not in said
+
+
+# ── the experiments' reports (docs/specs/ab-testing.md, lot E6): the explanation, its numbers, the decision ────────
+AB_CASES = [c for c in CASES if c.split("-")[0] in EXPERIMENTS]
+TEMPLATES = ("reading_texts", "formula_texts", "note_texts")
+
+
+def _ab_words(model: str, locale: str) -> dict:
+    return common.words(model, "binary", locale)
+
+
+def test_the_number_forms_say_a_number_as_each_language_writes_it():
+    said = {code: [common.number_form(x, form, formats.locale(code)) for x, form in (
+        (0.041, "pct"), (0.206464, "spct"), (-0.0189, "spct"), (0.000247, "pct"), (2.4e-5, "pct"), (0.99999996, "pct"),
+        (12480, "int"), (0.0050979, "p"), (4.9e-6, "p"), (41.2, "num"), (1840.5, "num"), (0.048, "num"), (20523, "date"))]
+        for code in LOCALES}
+    assert said["en"] == ["4.1 %", "+20.6 %", "−1.89 %", "0.02 %", "< 0.01 %", "> 99.99 %", "12,480", "0.0051", "< 0.0001",
+                          "41.2", "1,840.5", "0.048", "11 Mar 2026"]
+    assert said["it"] == ["4,1 %", "+20,6 %", "−1,89 %", "0,02 %", "< 0,01 %", "> 99,99 %", "12.480", "0,0051", "< 0,0001",
+                          "41,2", "1.840,5", "0,048", "11/03/2026"]
+    assert said["de"][6] == "12.480" and said["de"][12] == "11.03.2026"
+    assert said["es"][6] == "12.480" and common.number_form(4210, "int", formats.locale("es")) == "4210"  # CLDR: Spanish groups from five digits
+    assert said["fr"][6] == "12 480" and said["fr"][1] == "+20,6 %"
+    # a template asks for a form; one that does not says its numbers as before, and a name is never put in a form
+    w = {"reading_texts": {"x": "{a} | {a:pct} | {variant:pct} | {s:pct}"}}
+    assert common.structured_note(w, "@x a=0.5 variant=0.5 s=0.5%2C0.25,0.25", formats.locale("it"), "reading_texts") == \
+        "0,5 | 50 % | 0.5 | 50 % / 25 % / 25 %"
+
+
+@pytest.mark.parametrize("name", ("experiments", "ab_test", "ab_plan"))
+def test_every_template_of_the_experiments_has_its_five_texts_with_the_same_numbers(name):
+    words = common._file(name)
+    for kind in TEMPLATES:
+        english = words["en"].get(kind, {})
+        for code in LOCALES:
+            other = words[code].get(kind, {})
+            assert set(other) == set(english), (name, kind, code)
+            for key, text in english.items():
+                for one, two in ((text, other[key]),) if isinstance(text, str) else ((text[k], other[key][k]) for k in text):
+                    assert sorted(re.findall(r"\{[^}]+\}", one)) == sorted(re.findall(r"\{[^}]+\}", two)), (name, code, key)
+
+
+@pytest.mark.parametrize("case", AB_CASES)
+@pytest.mark.parametrize("locale", LOCALES)
+def test_every_reading_of_an_experiment_is_a_sentence_of_the_page_s_language(case, locale):
+    """Each row of the explanation the runner writes («@id name=value…») has its sentence in the five languages, every
+    number in its place and form, and is labelled by what it is about."""
+    model, params, rows = fixture(case)
+    ids = {r["text"][1:].split(" ")[0] for r in rows if r["section"] == "reading"}
+    w = _ab_words(model, locale)
+    assert ids and all(i in w["formula_texts" if i.startswith("formula_") else "reading_texts"] for i in ids), \
+        sorted(i for i in ids if i not in w["reading_texts"] and i not in w["formula_texts"])
+    said = [r for r in layouts.with_labels(model, params, rows, locale) if r["section"] == "reading"]
+    for r in said:
+        assert not re.search(r"@|\{|%2", r["text"]), r["text"]
+        assert r["label"] not in ("", r["stat"]), r
+    if model == "ab_plan":  # the history against the plan, a measure said as a note
+        [short] = [r["text"] for r in layouts.with_labels(model, params, rows, locale) if r["stat"] == "history_short"]
+        assert "@" not in short and "56" in short
+
+
+def test_a_reading_follows_the_direction_the_node_calls_better():
+    model, params, rows = fixture("ab_test-binary")
+    above = [r["text"] for r in layouts.with_labels(model, params, rows, "en") if r["key"] == "reading|bayes|B|line_1"]
+    below = [r["text"] for r in layouts.with_labels(model, {**params, "higher_is_better": False}, rows, "en")
+             if r["key"] == "reading|bayes|B|line_1"]
+    assert above == ["Given these data and the prior, the probability that the true value of B is above that of A is 99.87 %."]
+    assert below == ["Given these data and the prior, the probability that the true value of B is below that of A is 99.87 %."]
+
+
+@pytest.mark.parametrize("locale", LOCALES)
+def test_no_sentence_of_a_measure_holds_a_word_of_judgement(locale):
+    """The owner's rule: verdicts come only from tests with a p-value against alpha. P(ahead of the control), the expected
+    loss, the detectable lift, the power, the sizes are measures: their sentences say the number and what it means,
+    never «better», «significant», «worse» (the words file's `verdict_words`, its `measure_readings`)."""
+    shared = common._file("experiments")[locale]
+    assert shared["measure_readings"] == common._file("experiments")["en"]["measure_readings"] and shared["verdict_words"]
+    texts = {**_ab_words("ab_test", locale)["reading_texts"], **_ab_words("ab_plan", locale)["reading_texts"]}
+    measures = {"bayes_beat", "bayes_loss", "power_detectable", "plan_size", "plan_mde_units", "plan_mde_days"}
+    assert measures <= set(shared["measure_readings"]) <= set(texts)
+    for key in shared["measure_readings"]:
+        for sentence in strings(texts[key]):
+            for word in shared["verdict_words"]:
+                assert not re.search(r"(?<!\w)" + re.escape(word) + r"(?!\w)", sentence, re.I), (locale, key, word)
+    # and the words do catch a verdict: a test's sentence holds one
+    verdicts = [texts[k] for k in ("decision_better", "comparison_significant")]
+    assert all(any(re.search(r"(?<!\w)" + re.escape(v) + r"(?!\w)", s, re.I) for v in shared["verdict_words"]) for s in verdicts), locale
+
+
+def test_the_first_page_opens_with_the_srm_band_when_the_split_failed_and_says_the_decision(tmp_path, chart_service, monkeypatch):  # noqa: F811
+    _, page = draw(tmp_path / "ratio", chart_service, monkeypatch, "ab_test-ratio", fmt="svg")
+    said = set(strings(json.loads(page)))
+    band = [s for s in said if s.startswith("Sample ratio mismatch: the units are not split as planned (p < 0.0001, below 0.001)")]
+    assert band, sorted(s for s in said if "mismatch" in s)
+    assert any(s.startswith("Sample ratio mismatch. B beats the control A: +6.1 % [+3.8 %, +8.3 %]") for s in said)
+    _, page = draw(tmp_path / "binary", chart_service, monkeypatch, "ab_test-binary", fmt="svg")
+    said = set(strings(json.loads(page)))
+    assert not any("not split as planned" in s for s in said)
+    assert "B beats the control A: +20.6 % [+6.8 %, +36.5 %] on «converted», corrected p = 0.0051 (Holm), α = 0.05" in said
+    assert {"37,385", "3.62 %", "+20.6 %", "0.0051"} <= said  # the cards: units, the control's rate, the lift and p of B
+    assert any(s.startswith("Reading: B beats the control A: its corrected p-value, 0.0051, is below α = 0.05") for s in said)
+    _, page = draw(tmp_path / "continuous", chart_service, monkeypatch, "ab_test-continuous", fmt="svg", locale="it")
+    said = set(strings(json.loads(page)))
+    assert any(s.startswith("Nessuna variante differisce dal controllo A ad α = 0,05. Con queste unità il test avrebbe rilevato "
+                            "un incremento di 6,6 % (potenza 80 %).") for s in said), sorted(s for s in said if s.startswith("Nessuna"))
+
+
+def test_the_last_pages_explain_the_method_and_excel_keeps_the_reading(tmp_path, chart_service, monkeypatch):  # noqa: F811
+    _, page = draw(tmp_path, chart_service, monkeypatch, "ab_test-continuous", fmt="svg")
+    said = " ".join(strings(json.loads(page)))
+    w = _ab_words("ab_test", "en")
+    for key in ("method_cuped", "method_cap", "method_bayes", "method_sequential"):
+        assert w["reading_texts"][key] in said, key
+    assert w["formula_texts"]["formula_welch"] in said and w["sections"]["how"] in said
+    out, _ = draw(tmp_path / "x", chart_service, monkeypatch, "ab_test-binary", fmt="xlsx")
+    with zipfile.ZipFile(out.path) as z:
+        sheets = re.findall(r'<sheet name="([^"]+)"', z.read("xl/workbook.xml").decode())
+    assert sheets[:2] == ["The treatments against the cont", "Checks of the experiment"]  # 31 characters at most
+    assert {"Reading", "Reading of the comparisons", "Reading of the Bayesian measure", "Reading of the sequential test"} <= set(sheets)
+    assert sheets[-2] == "Reading", sheets  # the explanation last, before the notes
+
+
+# the notes the experiments' runners send (ab_data.R and the spec's «The output»), with values in their forms
+AB_NOTES = {
+    "metric_missing": "count=92 variants=A,B", "date_missing": "count=3 variants=C", "covariate_filled": "variant=B count=1402 share=0.1126 mean=12.3",
+    "covariate_excluded": "variant=B count=205 share=0.0175", "crossover_excluded": "units=37",
+    "cap_applied": "percentile=0.999 value=1840.5 count=96", "fieller_unbounded": "variant=B", "one_treatment": "",
+    "looks_grouped": "days=1460 period=2", "control_zero": "", "history_short": "history_days=56 planned_days=401",
+}
+
+
+@pytest.mark.parametrize("locale", LOCALES)
+def test_every_note_of_an_experiment_is_a_sentence_with_its_numbers(locale):
+    model, params, rows = fixture("ab_test-continuous")
+    notes = [_model_row(f"note_{i}", f"@{note} {values}".strip()) for i, (note, values) in enumerate(AB_NOTES.items(), 1)]
+    said = {r["stat"]: r["text"] for r in layouts.with_labels(model, params, rows + notes, locale) if r["stat"].startswith("note_")}
+    assert set(_ab_words(model, locale)["note_texts"]) == set(AB_NOTES)
+    decimal = formats.locale(locale).decimal
+    for text in said.values():
+        assert "@" not in text and "{" not in text and "%2" not in text, text
+    assert f"11{decimal}3 %" in said["note_3"] and f"12{decimal}3" in said["note_3"] and "B" in said["note_3"]
+    assert f"99{decimal}9 %" in said["note_6"] and "96" in said["note_6"]

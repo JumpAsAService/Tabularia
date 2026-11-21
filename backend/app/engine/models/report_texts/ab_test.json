@@ -1,0 +1,807 @@
+{
+ "en": {
+  "name": "A/B test",
+  "about": "{metric} by {variant}",
+  "about_control": "control {control}",
+  "sections": {
+   "decision": "Decision",
+   "variants": "Variants",
+   "comparisons": "Comparisons",
+   "bayes": "Bayesian measures",
+   "sequential": "Sequential test"
+  },
+  "srm_band": "Sample ratio mismatch: the units are not split as planned (p {p}, below {srm_alpha}). The comparisons below may be biased: look for what removed or added units in one variant (a filter, a bot rule, a redirect that fails) before reading them.",
+  "headline": {
+   "srm": "Sample ratio mismatch.",
+   "better_one": "{variant} beats the control {control}: {lift} {interval} on «{metric}», corrected p {p} ({correction}), α = {alpha}",
+   "better_many": "{variants} beat the control {control} at α = {alpha}; they were not compared with each other.",
+   "worse_one": "{variant} is worse than the control {control}: {lift} {interval} on «{metric}», corrected p {p} ({correction}), α = {alpha}",
+   "worse_many": "{variants} are worse than the control {control} at α = {alpha}.",
+   "no_difference": "No variant differs from the control {control} at α = {alpha}. With these units the test would have detected a lift of {mde} ({power} power)."
+  },
+  "kpi": {
+   "units": "Units",
+   "units_under": "of {assigned} assigned · {variants} variants",
+   "control": {
+    "binary": "Control's rate",
+    "continuous": "Control's mean",
+    "ratio": "Control's ratio"
+   },
+   "control_under": "{control} · {units} units",
+   "lift": "Lift",
+   "lift_under": "{variant} {interval}",
+   "p": "Corrected p-value",
+   "p_under": "{variant} · {correction}"
+  },
+  "formula_line": {
+   "binary": "«{metric}»: rate per {unit}",
+   "continuous": "«{metric}»: mean per {unit}",
+   "ratio": "«{numerator}» / «{denominator}», summed in each variant, units: {unit}",
+   "row": "row",
+   "control": "control «{control}»",
+   "cuped": "CUPED on «{covariate}»",
+   "cap": "cap at the percentile {percentile} %",
+   "alpha": "α = {alpha}"
+  },
+  "tables": {
+   "variant": "Variant",
+   "units": "Units",
+   "mean": {
+    "binary": "Rate",
+    "continuous": "Mean",
+    "ratio": "Ratio"
+   },
+   "difference": "Difference",
+   "points": "pp",
+   "lift_interval": "Lift [interval]",
+   "p": "p-value",
+   "p_adjusted": "Corrected p",
+   "decision": "Decision",
+   "treatments": "The treatments against the control",
+   "control": "control",
+   "assigned": "Assigned",
+   "used": "Used",
+   "missing": "Left out",
+   "share": "Share",
+   "expected_share": "Planned share",
+   "conversions": "Conversions",
+   "filled": "Covariate filled",
+   "excluded": "No covariate, left out",
+   "capped": "Capped",
+   "variants": "Units and their split",
+   "std_dev": "Std. deviation",
+   "std_error": "Std. error",
+   "ci": "Interval",
+   "skewness": "Skewness",
+   "numerator_sum": "Σ numerator",
+   "denominator_sum": "Σ denominator",
+   "variant_metric": "The metric in each variant",
+   "covariate_mean": "Covariate's mean",
+   "fill_value": "Filled with",
+   "mean_unadjusted": "Before CUPED",
+   "mean_adjusted": "After CUPED",
+   "variance_reduction": "Variance removed",
+   "cuped": "CUPED in each variant",
+   "difference_interval": "Difference [interval]",
+   "lift_std_error": "Lift's std. error",
+   "statistic": "Statistic",
+   "df": "df",
+   "mde": "Detectable lift",
+   "power_at_min_lift": "Power at your minimum",
+   "min_lift_position": "Interval and your minimum",
+   "comparisons": "Each comparison in full",
+   "posterior_mean": "Posterior mean",
+   "credible": "Credible interval",
+   "prob_best": "P(highest)",
+   "loss_choose": "Loss if chosen",
+   "loss_keep": "Loss if not chosen",
+   "bayes": "Bayesian measures of each variant",
+   "always_valid_p": "Always-valid p",
+   "log_lambda": "log Λ",
+   "sequence": "Confidence sequence",
+   "first_crossing": "First below α",
+   "never": "never",
+   "sequential": "The sequential test of each treatment"
+  },
+  "charts": {
+   "lift_interval": "Lift of each treatment, with its interval",
+   "lift_caption": "The line at 0: no change. Your minimum lift of interest: {min_lift} %.",
+   "srm_units": "Units: observed and planned",
+   "srm_share": "Share of the units, cumulated day by day",
+   "daily_units": "New units per day",
+   "histogram": "The metric in each variant",
+   "power": "Power against the lift",
+   "power_caption": "A line at the power you asked for ({power} %), a vertical one at your minimum lift ({min_lift} %).",
+   "posterior": "Where the true value of each variant may lie (posterior)",
+   "sequential_lift": "Lift and its confidence sequence, day by day",
+   "sequential_p": "Always-valid p-value, day by day"
+  },
+  "series": {
+   "lift": "Lift",
+   "low": "Low end",
+   "high": "High end",
+   "observed": "Observed",
+   "expected": "Planned",
+   "units": "Units"
+  },
+  "intervals_note": {
+   "holm": "Intervals at {conf} %, each on its own: Holm corrects the p-values, not the intervals.",
+   "benjamini_hochberg": "Intervals at {conf} %, each on its own: Benjamini–Hochberg corrects the p-values, not the intervals.",
+   "bonferroni": "Intervals widened by Bonferroni's correction: they hold together.",
+   "none": "Intervals at {conf} %, without correction."
+  },
+  "alpha_line": "Checks at α = {alpha}; the split of the units at {srm_alpha}, a stricter level of its own.",
+  "measures_table": {
+   "title": "Measures, not tests",
+   "prob_beat": "P(ahead of the control)",
+   "loss": "Expected loss if chosen",
+   "threshold": "Against your threshold",
+   "sequential_p": "Always-valid p (corrected)"
+  },
+  "measures_note": "Probabilities and losses are numbers for your judgement: no threshold of the report turns them into a decision. The always-valid p-value is a test: read it if the results were looked at before the planned end.",
+  "cuped": {
+   "line": "CUPED on «{covariate}»: θ = {theta}, correlation with the metric {rho}."
+  },
+  "bayes": {
+   "prior_binary": "Prior: Beta({a}, {b}) for the rate of every variant.",
+   "prior_normal": "Prior: flat on the mean of every variant (the normal approximation).",
+   "not_a_test": "A reading, not a test: these numbers decide nothing by themselves.",
+   "threshold": "Losses are a share of the control's value; your threshold is {threshold} %."
+  },
+  "sequential": {
+   "which": "Read the sequential decision if the results were looked at before the planned end; the decision of the first page if they were not.",
+   "rebuilt": "Rebuilt from today's data: each unit counts with its metric as it is now, not as it was on each day."
+  },
+  "reading_texts": {
+   "correction_holm": "With {treatments:int} treatments compared with the same control, Holm's correction gives {p_adjusted:p} in place of {p:p}, so that the comparisons together keep at most an α risk of even one false alarm.",
+   "correction_benjamini_hochberg": "With {treatments:int} treatments, the Benjamini–Hochberg correction gives {p_adjusted:p} in place of {p:p}: among the differences called significant, the expected share of false alarms stays at most α.",
+   "correction_bonferroni": "With {treatments:int} treatments, Bonferroni's correction multiplies the probability by {treatments:int}: {p_adjusted:p} in place of {p:p}; the intervals are widened to match.",
+   "correction_none": "No correction was asked for: with {treatments:int} treatments, the risk of at least one false alarm is larger than α.",
+   "correction_one": "With one treatment there is a single comparison: no correction is needed."
+  }
+ },
+ "it": {
+  "name": "Test A/B",
+  "about": "{metric} per {variant}",
+  "about_control": "controllo {control}",
+  "sections": {
+   "decision": "Decisione",
+   "variants": "Varianti",
+   "comparisons": "Confronti",
+   "bayes": "Misure bayesiane",
+   "sequential": "Test sequenziale"
+  },
+  "srm_band": "Sample ratio mismatch: le unità non sono ripartite come previsto (p {p}, sotto {srm_alpha}). I confronti qui sotto possono essere distorti: cercate che cosa ha tolto o aggiunto unità in una variante (un filtro, una regola anti-bot, un reindirizzamento che fallisce) prima di leggerli.",
+  "headline": {
+   "srm": "Sample ratio mismatch.",
+   "better_one": "{variant} è migliore del controllo {control}: {lift} {interval} su «{metric}», p corretto {p} ({correction}), α = {alpha}",
+   "better_many": "{variants} sono migliori del controllo {control} ad α = {alpha}; non sono stati confrontati tra loro.",
+   "worse_one": "{variant} è peggiore del controllo {control}: {lift} {interval} su «{metric}», p corretto {p} ({correction}), α = {alpha}",
+   "worse_many": "{variants} sono peggiori del controllo {control} ad α = {alpha}.",
+   "no_difference": "Nessuna variante differisce dal controllo {control} ad α = {alpha}. Con queste unità il test avrebbe rilevato un incremento di {mde} (potenza {power})."
+  },
+  "kpi": {
+   "units": "Unità",
+   "units_under": "su {assigned} assegnate · {variants} varianti",
+   "control": {
+    "binary": "Tasso del controllo",
+    "continuous": "Media del controllo",
+    "ratio": "Rapporto del controllo"
+   },
+   "control_under": "{control} · {units} unità",
+   "lift": "Incremento",
+   "lift_under": "{variant} {interval}",
+   "p": "p-value corretto",
+   "p_under": "{variant} · {correction}"
+  },
+  "formula_line": {
+   "binary": "«{metric}»: tasso per {unit}",
+   "continuous": "«{metric}»: media per {unit}",
+   "ratio": "«{numerator}» / «{denominator}», sommati in ogni variante, unità: {unit}",
+   "row": "riga",
+   "control": "controllo «{control}»",
+   "cuped": "CUPED su «{covariate}»",
+   "cap": "tetto al percentile {percentile} %",
+   "alpha": "α = {alpha}"
+  },
+  "tables": {
+   "variant": "Variante",
+   "units": "Unità",
+   "mean": {
+    "binary": "Tasso",
+    "continuous": "Media",
+    "ratio": "Rapporto"
+   },
+   "difference": "Differenza",
+   "points": "p.p.",
+   "lift_interval": "Incremento [intervallo]",
+   "p": "p-value",
+   "p_adjusted": "p corretto",
+   "decision": "Decisione",
+   "treatments": "I trattamenti contro il controllo",
+   "control": "controllo",
+   "assigned": "Assegnate",
+   "used": "Usate",
+   "missing": "Escluse",
+   "share": "Quota",
+   "expected_share": "Quota prevista",
+   "conversions": "Conversioni",
+   "filled": "Covariata riempita",
+   "excluded": "Senza covariata, escluse",
+   "capped": "Al tetto",
+   "variants": "Le unità e la loro ripartizione",
+   "std_dev": "Dev. standard",
+   "std_error": "Errore std.",
+   "ci": "Intervallo",
+   "skewness": "Asimmetria",
+   "numerator_sum": "Σ numeratore",
+   "denominator_sum": "Σ denominatore",
+   "variant_metric": "La metrica in ogni variante",
+   "covariate_mean": "Media della covariata",
+   "fill_value": "Riempita con",
+   "mean_unadjusted": "Prima di CUPED",
+   "mean_adjusted": "Dopo CUPED",
+   "variance_reduction": "Varianza tolta",
+   "cuped": "CUPED in ogni variante",
+   "difference_interval": "Differenza [intervallo]",
+   "lift_std_error": "Errore std. dell'incremento",
+   "statistic": "Statistica",
+   "df": "gdl",
+   "mde": "Incremento rilevabile",
+   "power_at_min_lift": "Potenza al vostro minimo",
+   "min_lift_position": "Intervallo e vostro minimo",
+   "comparisons": "Ogni confronto per intero",
+   "posterior_mean": "Media a posteriori",
+   "credible": "Intervallo di credibilità",
+   "prob_best": "P(il più alto)",
+   "loss_choose": "Perdita se scelto",
+   "loss_keep": "Perdita se non scelto",
+   "bayes": "Misure bayesiane di ogni variante",
+   "always_valid_p": "p sempre valido",
+   "log_lambda": "log Λ",
+   "sequence": "Sequenza di confidenza",
+   "first_crossing": "Prima volta sotto α",
+   "never": "mai",
+   "sequential": "Il test sequenziale di ogni trattamento"
+  },
+  "charts": {
+   "lift_interval": "Incremento di ogni trattamento, con il suo intervallo",
+   "lift_caption": "La linea a 0: nessun cambiamento. Il vostro incremento minimo di interesse: {min_lift} %.",
+   "srm_units": "Unità: osservate e previste",
+   "srm_share": "Quota delle unità, cumulata giorno per giorno",
+   "daily_units": "Nuove unità al giorno",
+   "histogram": "La metrica in ogni variante",
+   "power": "Potenza rispetto all'incremento",
+   "power_caption": "Una linea alla potenza richiesta ({power} %), una verticale al vostro incremento minimo ({min_lift} %).",
+   "posterior": "Dove può stare il vero valore di ogni variante (posterior)",
+   "sequential_lift": "Incremento e sua sequenza di confidenza, giorno per giorno",
+   "sequential_p": "p-value sempre valido, giorno per giorno"
+  },
+  "series": {
+   "lift": "Incremento",
+   "low": "Estremo inferiore",
+   "high": "Estremo superiore",
+   "observed": "Osservate",
+   "expected": "Previste",
+   "units": "Unità"
+  },
+  "intervals_note": {
+   "holm": "Intervalli con confidenza {conf} %, ciascuno per conto suo: Holm corregge i p-value, non gli intervalli.",
+   "benjamini_hochberg": "Intervalli con confidenza {conf} %, ciascuno per conto suo: Benjamini–Hochberg corregge i p-value, non gli intervalli.",
+   "bonferroni": "Intervalli allargati dalla correzione di Bonferroni: valgono insieme.",
+   "none": "Intervalli con confidenza {conf} %, senza correzione."
+  },
+  "alpha_line": "Verifiche ad α = {alpha}; la ripartizione delle unità a {srm_alpha}, un livello proprio più severo.",
+  "measures_table": {
+   "title": "Misure, non test",
+   "prob_beat": "P(davanti al controllo)",
+   "loss": "Perdita attesa se scelto",
+   "threshold": "Rispetto alla vostra soglia",
+   "sequential_p": "p sempre valido (corretto)"
+  },
+  "measures_note": "Probabilità e perdite sono numeri per il vostro giudizio: nessuna soglia del report le trasforma in una decisione. Il p-value sempre valido è un test: leggetelo se i risultati sono stati guardati prima della fine prevista.",
+  "cuped": {
+   "line": "CUPED su «{covariate}»: θ = {theta}, correlazione con la metrica {rho}."
+  },
+  "bayes": {
+   "prior_binary": "Prior: Beta({a}, {b}) per il tasso di ogni variante.",
+   "prior_normal": "Prior: piatta sulla media di ogni variante (l'approssimazione normale).",
+   "not_a_test": "Una lettura, non un test: questi numeri da soli non decidono nulla.",
+   "threshold": "Le perdite sono una quota del valore del controllo; la vostra soglia è {threshold} %."
+  },
+  "sequential": {
+   "which": "Leggete la decisione sequenziale se i risultati sono stati guardati prima della fine prevista; la decisione della prima pagina se no.",
+   "rebuilt": "Ricostruita dai dati di oggi: ogni unità conta con la sua metrica com'è adesso, non com'era in ciascun giorno."
+  },
+  "reading_texts": {
+   "correction_holm": "Con {treatments:int} trattamenti confrontati con lo stesso controllo, la correzione di Holm dà {p_adjusted:p} al posto di {p:p}, così i confronti insieme mantengono al più un rischio α anche di un solo falso allarme.",
+   "correction_benjamini_hochberg": "Con {treatments:int} trattamenti, la correzione di Benjamini–Hochberg dà {p_adjusted:p} al posto di {p:p}: tra le differenze dette significative, la quota attesa di falsi allarmi resta al più α.",
+   "correction_bonferroni": "Con {treatments:int} trattamenti, la correzione di Bonferroni moltiplica la probabilità per {treatments:int}: {p_adjusted:p} al posto di {p:p}; gli intervalli sono allargati di conseguenza.",
+   "correction_none": "Non è stata chiesta alcuna correzione: con {treatments:int} trattamenti il rischio di almeno un falso allarme è più grande di α.",
+   "correction_one": "Con un solo trattamento c'è un solo confronto: non serve alcuna correzione."
+  }
+ },
+ "de": {
+  "name": "A/B-Test",
+  "about": "{metric} nach {variant}",
+  "about_control": "Kontrolle {control}",
+  "sections": {
+   "decision": "Entscheidung",
+   "variants": "Varianten",
+   "comparisons": "Vergleiche",
+   "bayes": "Bayessche Messgrößen",
+   "sequential": "Sequenzieller Test"
+  },
+  "srm_band": "Sample ratio mismatch: Die Einheiten sind nicht wie geplant aufgeteilt (p {p}, unter {srm_alpha}). Die Vergleiche unten können verzerrt sein: Suchen Sie, was in einer Variante Einheiten entfernt oder hinzugefügt hat (ein Filter, eine Bot-Regel, eine fehlschlagende Weiterleitung), bevor Sie die Vergleiche lesen.",
+  "headline": {
+   "srm": "Sample ratio mismatch.",
+   "better_one": "{variant} schlägt die Kontrolle {control}: {lift} {interval} bei «{metric}», korrigiertes p {p} ({correction}), α = {alpha}",
+   "better_many": "{variants} schlagen die Kontrolle {control} bei α = {alpha}; untereinander wurden sie nicht verglichen.",
+   "worse_one": "{variant} ist schlechter als die Kontrolle {control}: {lift} {interval} bei «{metric}», korrigiertes p {p} ({correction}), α = {alpha}",
+   "worse_many": "{variants} sind schlechter als die Kontrolle {control} bei α = {alpha}.",
+   "no_difference": "Keine Variante unterscheidet sich bei α = {alpha} von der Kontrolle {control}. Mit diesen Einheiten hätte der Test einen Anstieg von {mde} erkannt (Teststärke {power})."
+  },
+  "kpi": {
+   "units": "Einheiten",
+   "units_under": "von {assigned} zugewiesenen · {variants} Varianten",
+   "control": {
+    "binary": "Rate der Kontrolle",
+    "continuous": "Mittelwert der Kontrolle",
+    "ratio": "Verhältnis der Kontrolle"
+   },
+   "control_under": "{control} · {units} Einheiten",
+   "lift": "Anstieg",
+   "lift_under": "{variant} {interval}",
+   "p": "Korrigierter p-Wert",
+   "p_under": "{variant} · {correction}"
+  },
+  "formula_line": {
+   "binary": "«{metric}»: Rate je {unit}",
+   "continuous": "«{metric}»: Mittelwert je {unit}",
+   "ratio": "«{numerator}» / «{denominator}», je Variante summiert, Einheiten: {unit}",
+   "row": "Zeile",
+   "control": "Kontrolle «{control}»",
+   "cuped": "CUPED auf «{covariate}»",
+   "cap": "Deckelung am Perzentil {percentile} %",
+   "alpha": "α = {alpha}"
+  },
+  "tables": {
+   "variant": "Variante",
+   "units": "Einheiten",
+   "mean": {
+    "binary": "Rate",
+    "continuous": "Mittelwert",
+    "ratio": "Verhältnis"
+   },
+   "difference": "Differenz",
+   "points": "Pp.",
+   "lift_interval": "Anstieg [Intervall]",
+   "p": "p-Wert",
+   "p_adjusted": "Korrigiertes p",
+   "decision": "Entscheidung",
+   "treatments": "Die Behandlungen gegen die Kontrolle",
+   "control": "Kontrolle",
+   "assigned": "Zugewiesen",
+   "used": "Verwendet",
+   "missing": "Ausgelassen",
+   "share": "Anteil",
+   "expected_share": "Geplanter Anteil",
+   "conversions": "Konversionen",
+   "filled": "Kovariate aufgefüllt",
+   "excluded": "Ohne Kovariate, ausgelassen",
+   "capped": "Gedeckelt",
+   "variants": "Die Einheiten und ihre Aufteilung",
+   "std_dev": "Std.-Abw.",
+   "std_error": "Std.-Fehler",
+   "ci": "Intervall",
+   "skewness": "Schiefe",
+   "numerator_sum": "Σ Zähler",
+   "denominator_sum": "Σ Nenner",
+   "variant_metric": "Die Kennzahl in jeder Variante",
+   "covariate_mean": "Mittelwert der Kovariate",
+   "fill_value": "Aufgefüllt mit",
+   "mean_unadjusted": "Vor CUPED",
+   "mean_adjusted": "Nach CUPED",
+   "variance_reduction": "Entfernte Varianz",
+   "cuped": "CUPED in jeder Variante",
+   "difference_interval": "Differenz [Intervall]",
+   "lift_std_error": "Std.-Fehler des Anstiegs",
+   "statistic": "Statistik",
+   "df": "FG",
+   "mde": "Erkennbarer Anstieg",
+   "power_at_min_lift": "Teststärke bei Ihrem Minimum",
+   "min_lift_position": "Intervall und Ihr Minimum",
+   "comparisons": "Jeder Vergleich vollständig",
+   "posterior_mean": "A-posteriori-Mittelwert",
+   "credible": "Glaubwürdigkeitsintervall",
+   "prob_best": "P(am höchsten)",
+   "loss_choose": "Verlust, wenn gewählt",
+   "loss_keep": "Verlust, wenn nicht gewählt",
+   "bayes": "Bayessche Messgrößen jeder Variante",
+   "always_valid_p": "Jederzeit gültiges p",
+   "log_lambda": "log Λ",
+   "sequence": "Konfidenzsequenz",
+   "first_crossing": "Erstmals unter α",
+   "never": "nie",
+   "sequential": "Der sequenzielle Test jeder Behandlung"
+  },
+  "charts": {
+   "lift_interval": "Anstieg jeder Behandlung, mit seinem Intervall",
+   "lift_caption": "Die Linie bei 0: keine Veränderung. Ihr kleinster relevanter Anstieg: {min_lift} %.",
+   "srm_units": "Einheiten: beobachtet und geplant",
+   "srm_share": "Anteil der Einheiten, Tag für Tag kumuliert",
+   "daily_units": "Neue Einheiten pro Tag",
+   "histogram": "Die Kennzahl in jeder Variante",
+   "power": "Teststärke gegen den Anstieg",
+   "power_caption": "Eine Linie bei der verlangten Teststärke ({power} %), eine senkrechte bei Ihrem kleinsten relevanten Anstieg ({min_lift} %).",
+   "posterior": "Wo der wahre Wert jeder Variante liegen kann (Posterior)",
+   "sequential_lift": "Anstieg und seine Konfidenzsequenz, Tag für Tag",
+   "sequential_p": "Jederzeit gültiger p-Wert, Tag für Tag"
+  },
+  "series": {
+   "lift": "Anstieg",
+   "low": "Unteres Ende",
+   "high": "Oberes Ende",
+   "observed": "Beobachtet",
+   "expected": "Geplant",
+   "units": "Einheiten"
+  },
+  "intervals_note": {
+   "holm": "Intervalle zu {conf} %, jedes für sich: Holm korrigiert die p-Werte, nicht die Intervalle.",
+   "benjamini_hochberg": "Intervalle zu {conf} %, jedes für sich: Benjamini–Hochberg korrigiert die p-Werte, nicht die Intervalle.",
+   "bonferroni": "Intervalle durch die Bonferroni-Korrektur verbreitert: Diese Intervalle gelten gemeinsam.",
+   "none": "Intervalle zu {conf} %, ohne Korrektur."
+  },
+  "alpha_line": "Prüfungen bei α = {alpha}; die Aufteilung der Einheiten bei {srm_alpha}, einem eigenen, strengeren Niveau.",
+  "measures_table": {
+   "title": "Messgrößen, keine Tests",
+   "prob_beat": "P(vor der Kontrolle)",
+   "loss": "Erwarteter Verlust, wenn gewählt",
+   "threshold": "Gegenüber Ihrer Schwelle",
+   "sequential_p": "Jederzeit gültiges p (korrigiert)"
+  },
+  "measures_note": "Wahrscheinlichkeiten und Verluste sind Zahlen für Ihr Urteil: Keine Schwelle des Berichts macht daraus eine Entscheidung. Der jederzeit gültige p-Wert ist ein Test: Lesen Sie ihn, wenn die Ergebnisse vor dem geplanten Ende angesehen wurden.",
+  "cuped": {
+   "line": "CUPED auf «{covariate}»: θ = {theta}, Korrelation mit der Kennzahl {rho}."
+  },
+  "bayes": {
+   "prior_binary": "Prior: Beta({a}, {b}) für die Rate jeder Variante.",
+   "prior_normal": "Prior: flach auf dem Mittelwert jeder Variante (die Normalapproximation).",
+   "not_a_test": "Eine Auswertung, kein Test: Diese Zahlen entscheiden für sich allein nichts.",
+   "threshold": "Verluste sind ein Anteil am Wert der Kontrolle; Ihre Schwelle ist {threshold} %."
+  },
+  "sequential": {
+   "which": "Lesen Sie die sequenzielle Entscheidung, wenn die Ergebnisse vor dem geplanten Ende angesehen wurden; sonst die Entscheidung der ersten Seite.",
+   "rebuilt": "Aus den heutigen Daten neu aufgebaut: Jede Einheit zählt mit ihrer Kennzahl, wie sie jetzt ist, nicht wie sie an jedem einzelnen Tag war."
+  },
+  "reading_texts": {
+   "correction_holm": "Bei {treatments:int} Behandlungen, die mit derselben Kontrolle verglichen werden, ergibt die Holm-Korrektur {p_adjusted:p} statt {p:p}, sodass das Risiko, bei allen Vergleichen zusammen auch nur einen Fehlalarm zu haben, höchstens α beträgt.",
+   "correction_benjamini_hochberg": "Bei {treatments:int} Behandlungen ergibt die Benjamini–Hochberg-Korrektur {p_adjusted:p} statt {p:p}: Unter den als signifikant bezeichneten Unterschieden bleibt der erwartete Anteil an Fehlalarmen höchstens α.",
+   "correction_bonferroni": "Bei {treatments:int} Behandlungen multipliziert die Bonferroni-Korrektur die Wahrscheinlichkeit mit {treatments:int}: {p_adjusted:p} statt {p:p}; die Intervalle werden entsprechend verbreitert.",
+   "correction_none": "Es wurde keine Korrektur verlangt: Bei {treatments:int} Behandlungen ist das Risiko mindestens eines Fehlalarms größer als α.",
+   "correction_one": "Bei einer einzigen Behandlung gibt es nur einen Vergleich: Es ist keine Korrektur nötig."
+  }
+ },
+ "es": {
+  "name": "Test A/B",
+  "about": "{metric} por {variant}",
+  "about_control": "control {control}",
+  "sections": {
+   "decision": "Decisión",
+   "variants": "Variantes",
+   "comparisons": "Comparaciones",
+   "bayes": "Medidas bayesianas",
+   "sequential": "Prueba secuencial"
+  },
+  "srm_band": "Sample ratio mismatch: las unidades no se reparten según lo previsto (p {p}, por debajo de {srm_alpha}). Las comparaciones de abajo pueden estar sesgadas: busque qué quitó o añadió unidades en una variante (un filtro, una regla contra bots, una redirección que falla) antes de leerlas.",
+  "headline": {
+   "srm": "Sample ratio mismatch.",
+   "better_one": "{variant} es mejor que el control {control}: {lift} {interval} en «{metric}», p corregido {p} ({correction}), α = {alpha}",
+   "better_many": "{variants} son mejores que el control {control} a α = {alpha}; no se compararon entre sí.",
+   "worse_one": "{variant} es peor que el control {control}: {lift} {interval} en «{metric}», p corregido {p} ({correction}), α = {alpha}",
+   "worse_many": "{variants} son peores que el control {control} a α = {alpha}.",
+   "no_difference": "Ninguna variante difiere del control {control} a α = {alpha}. Con estas unidades la prueba habría detectado un aumento de {mde} (potencia {power})."
+  },
+  "kpi": {
+   "units": "Unidades",
+   "units_under": "de {assigned} asignadas · {variants} variantes",
+   "control": {
+    "binary": "Tasa del control",
+    "continuous": "Media del control",
+    "ratio": "Razón del control"
+   },
+   "control_under": "{control} · {units} unidades",
+   "lift": "Aumento",
+   "lift_under": "{variant} {interval}",
+   "p": "p-valor corregido",
+   "p_under": "{variant} · {correction}"
+  },
+  "formula_line": {
+   "binary": "«{metric}»: tasa por {unit}",
+   "continuous": "«{metric}»: media por {unit}",
+   "ratio": "«{numerator}» / «{denominator}», sumados en cada variante, unidades: {unit}",
+   "row": "fila",
+   "control": "control «{control}»",
+   "cuped": "CUPED sobre «{covariate}»",
+   "cap": "límite en el percentil {percentile} %",
+   "alpha": "α = {alpha}"
+  },
+  "tables": {
+   "variant": "Variante",
+   "units": "Unidades",
+   "mean": {
+    "binary": "Tasa",
+    "continuous": "Media",
+    "ratio": "Razón"
+   },
+   "difference": "Diferencia",
+   "points": "p.p.",
+   "lift_interval": "Aumento [intervalo]",
+   "p": "p-valor",
+   "p_adjusted": "p corregido",
+   "decision": "Decisión",
+   "treatments": "Los tratamientos frente al control",
+   "control": "control",
+   "assigned": "Asignadas",
+   "used": "Usadas",
+   "missing": "Excluidas",
+   "share": "Parte",
+   "expected_share": "Parte prevista",
+   "conversions": "Conversiones",
+   "filled": "Covariable rellenada",
+   "excluded": "Sin covariable, excluidas",
+   "capped": "En el límite",
+   "variants": "Las unidades y su reparto",
+   "std_dev": "Desv. estándar",
+   "std_error": "Error est.",
+   "ci": "Intervalo",
+   "skewness": "Asimetría",
+   "numerator_sum": "Σ numerador",
+   "denominator_sum": "Σ denominador",
+   "variant_metric": "La métrica en cada variante",
+   "covariate_mean": "Media de la covariable",
+   "fill_value": "Rellenada con",
+   "mean_unadjusted": "Antes de CUPED",
+   "mean_adjusted": "Después de CUPED",
+   "variance_reduction": "Varianza eliminada",
+   "cuped": "CUPED en cada variante",
+   "difference_interval": "Diferencia [intervalo]",
+   "lift_std_error": "Error est. del aumento",
+   "statistic": "Estadístico",
+   "df": "gl",
+   "mde": "Aumento detectable",
+   "power_at_min_lift": "Potencia en su mínimo",
+   "min_lift_position": "Intervalo y su mínimo",
+   "comparisons": "Cada comparación completa",
+   "posterior_mean": "Media a posteriori",
+   "credible": "Intervalo de credibilidad",
+   "prob_best": "P(la más alta)",
+   "loss_choose": "Pérdida si se elige",
+   "loss_keep": "Pérdida si no se elige",
+   "bayes": "Medidas bayesianas de cada variante",
+   "always_valid_p": "p siempre válido",
+   "log_lambda": "log Λ",
+   "sequence": "Secuencia de confianza",
+   "first_crossing": "Primera vez por debajo de α",
+   "never": "nunca",
+   "sequential": "La prueba secuencial de cada tratamiento"
+  },
+  "charts": {
+   "lift_interval": "Aumento de cada tratamiento, con su intervalo",
+   "lift_caption": "La línea en 0: ningún cambio. Su aumento mínimo de interés: {min_lift} %.",
+   "srm_units": "Unidades: observadas y previstas",
+   "srm_share": "Parte de las unidades, acumulada día a día",
+   "daily_units": "Unidades nuevas al día",
+   "histogram": "La métrica en cada variante",
+   "power": "Potencia frente al aumento",
+   "power_caption": "Una línea en la potencia pedida ({power} %), una vertical en su aumento mínimo ({min_lift} %).",
+   "posterior": "Dónde puede estar el valor verdadero de cada variante (a posteriori)",
+   "sequential_lift": "Aumento y su secuencia de confianza, día a día",
+   "sequential_p": "p-valor siempre válido, día a día"
+  },
+  "series": {
+   "lift": "Aumento",
+   "low": "Extremo inferior",
+   "high": "Extremo superior",
+   "observed": "Observadas",
+   "expected": "Previstas",
+   "units": "Unidades"
+  },
+  "intervals_note": {
+   "holm": "Intervalos al {conf} %, cada uno por separado: Holm corrige los p-valores, no los intervalos.",
+   "benjamini_hochberg": "Intervalos al {conf} %, cada uno por separado: Benjamini–Hochberg corrige los p-valores, no los intervalos.",
+   "bonferroni": "Intervalos ensanchados por la corrección de Bonferroni: valen todos a la vez.",
+   "none": "Intervalos al {conf} %, sin corrección."
+  },
+  "alpha_line": "Comprobaciones a α = {alpha}; el reparto de las unidades a {srm_alpha}, un nivel propio más estricto.",
+  "measures_table": {
+   "title": "Medidas, no pruebas",
+   "prob_beat": "P(por delante del control)",
+   "loss": "Pérdida esperada si se elige",
+   "threshold": "Frente a su umbral",
+   "sequential_p": "p siempre válido (corregido)"
+  },
+  "measures_note": "Las probabilidades y las pérdidas son números para su criterio: ningún umbral del informe las convierte en una decisión. El p-valor siempre válido es una prueba: léalo si los resultados se miraron antes del final previsto.",
+  "cuped": {
+   "line": "CUPED sobre «{covariate}»: θ = {theta}, correlación con la métrica {rho}."
+  },
+  "bayes": {
+   "prior_binary": "A priori: Beta({a}, {b}) para la tasa de cada variante.",
+   "prior_normal": "A priori: plano sobre la media de cada variante (la aproximación normal).",
+   "not_a_test": "Una lectura, no una prueba: estos números no deciden nada por sí solos.",
+   "threshold": "Las pérdidas son una parte del valor del control; su umbral es {threshold} %."
+  },
+  "sequential": {
+   "which": "Lea la decisión secuencial si los resultados se miraron antes del final previsto; si no, la decisión de la primera página.",
+   "rebuilt": "Reconstruida con los datos de hoy: cada unidad cuenta con su métrica tal como es ahora, no como era cada día."
+  },
+  "reading_texts": {
+   "correction_holm": "Con {treatments:int} tratamientos comparados con el mismo control, la corrección de Holm da {p_adjusted:p} en lugar de {p:p}, de modo que el conjunto de las comparaciones mantiene como mucho en α el riesgo de dar aunque sea una sola falsa alarma.",
+   "correction_benjamini_hochberg": "Con {treatments:int} tratamientos, la corrección de Benjamini–Hochberg da {p_adjusted:p} en lugar de {p:p}: entre las diferencias declaradas significativas, la parte esperada de falsas alarmas se queda como mucho en α.",
+   "correction_bonferroni": "Con {treatments:int} tratamientos, la corrección de Bonferroni multiplica la probabilidad por {treatments:int}: {p_adjusted:p} en lugar de {p:p}; los intervalos se ensanchan en la misma medida.",
+   "correction_none": "No se pidió ninguna corrección: con {treatments:int} tratamientos, el riesgo de al menos una falsa alarma es mayor que α.",
+   "correction_one": "Con un solo tratamiento hay una sola comparación: no hace falta ninguna corrección."
+  }
+ },
+ "fr": {
+  "name": "Test A/B",
+  "about": "{metric} par {variant}",
+  "about_control": "contrôle {control}",
+  "sections": {
+   "decision": "Décision",
+   "variants": "Variantes",
+   "comparisons": "Comparaisons",
+   "bayes": "Mesures bayésiennes",
+   "sequential": "Test séquentiel"
+  },
+  "srm_band": "Sample ratio mismatch : les unités ne sont pas réparties comme prévu (p {p}, au-dessous de {srm_alpha}). Les comparaisons ci-dessous peuvent être biaisées : cherchez ce qui a retiré ou ajouté des unités dans une variante (un filtre, une règle anti-robots, une redirection qui échoue) avant de les lire.",
+  "headline": {
+   "srm": "Sample ratio mismatch.",
+   "better_one": "{variant} bat le contrôle {control} : {lift} {interval} sur «{metric}», p corrigée {p} ({correction}), α = {alpha}",
+   "better_many": "{variants} battent le contrôle {control} au niveau α = {alpha} ; ces traitements n'ont pas été comparés entre eux.",
+   "worse_one": "{variant} fait moins bien que le contrôle {control} : {lift} {interval} sur «{metric}», p corrigée {p} ({correction}), α = {alpha}",
+   "worse_many": "{variants} font moins bien que le contrôle {control} au niveau α = {alpha}.",
+   "no_difference": "Aucune variante ne diffère du contrôle {control} au niveau α = {alpha}. Avec ces unités, le test aurait détecté une hausse de {mde} (puissance {power})."
+  },
+  "kpi": {
+   "units": "Unités",
+   "units_under": "sur {assigned} affectées · {variants} variantes",
+   "control": {
+    "binary": "Taux du contrôle",
+    "continuous": "Moyenne du contrôle",
+    "ratio": "Rapport du contrôle"
+   },
+   "control_under": "{control} · {units} unités",
+   "lift": "Hausse",
+   "lift_under": "{variant} {interval}",
+   "p": "p-valeur corrigée",
+   "p_under": "{variant} · {correction}"
+  },
+  "formula_line": {
+   "binary": "«{metric}» : taux par {unit}",
+   "continuous": "«{metric}» : moyenne par {unit}",
+   "ratio": "«{numerator}» / «{denominator}», additionnés dans chaque variante, unités : {unit}",
+   "row": "ligne",
+   "control": "contrôle «{control}»",
+   "cuped": "CUPED sur «{covariate}»",
+   "cap": "plafond au percentile {percentile} %",
+   "alpha": "α = {alpha}"
+  },
+  "tables": {
+   "variant": "Variante",
+   "units": "Unités",
+   "mean": {
+    "binary": "Taux",
+    "continuous": "Moyenne",
+    "ratio": "Rapport"
+   },
+   "difference": "Différence",
+   "points": "pts",
+   "lift_interval": "Hausse [intervalle]",
+   "p": "p-valeur",
+   "p_adjusted": "p corrigée",
+   "decision": "Décision",
+   "treatments": "Les traitements face au contrôle",
+   "control": "contrôle",
+   "assigned": "Affectées",
+   "used": "Utilisées",
+   "missing": "Exclues",
+   "share": "Part",
+   "expected_share": "Part prévue",
+   "conversions": "Conversions",
+   "filled": "Covariable remplie",
+   "excluded": "Sans covariable, exclues",
+   "capped": "Plafonnées",
+   "variants": "Les unités et leur répartition",
+   "std_dev": "Écart type",
+   "std_error": "Erreur type",
+   "ci": "Intervalle",
+   "skewness": "Asymétrie",
+   "numerator_sum": "Σ numérateur",
+   "denominator_sum": "Σ dénominateur",
+   "variant_metric": "La métrique dans chaque variante",
+   "covariate_mean": "Moyenne de la covariable",
+   "fill_value": "Remplie avec",
+   "mean_unadjusted": "Avant CUPED",
+   "mean_adjusted": "Après CUPED",
+   "variance_reduction": "Variance retirée",
+   "cuped": "CUPED dans chaque variante",
+   "difference_interval": "Différence [intervalle]",
+   "lift_std_error": "Erreur type de la hausse",
+   "statistic": "Statistique",
+   "df": "ddl",
+   "mde": "Hausse détectable",
+   "power_at_min_lift": "Puissance à votre minimum",
+   "min_lift_position": "Intervalle et votre minimum",
+   "comparisons": "Chaque comparaison en détail",
+   "posterior_mean": "Moyenne a posteriori",
+   "credible": "Intervalle de crédibilité",
+   "prob_best": "P(la plus haute)",
+   "loss_choose": "Perte si choisie",
+   "loss_keep": "Perte si non choisie",
+   "bayes": "Mesures bayésiennes de chaque variante",
+   "always_valid_p": "p valable à tout moment",
+   "log_lambda": "log Λ",
+   "sequence": "Séquence de confiance",
+   "first_crossing": "Première fois sous α",
+   "never": "jamais",
+   "sequential": "Le test séquentiel de chaque traitement"
+  },
+  "charts": {
+   "lift_interval": "Hausse de chaque traitement, avec son intervalle",
+   "lift_caption": "La ligne à 0 : aucun changement. Votre hausse minimale d'intérêt : {min_lift} %.",
+   "srm_units": "Unités : observées et prévues",
+   "srm_share": "Part des unités, cumulée jour après jour",
+   "daily_units": "Nouvelles unités par jour",
+   "histogram": "La métrique dans chaque variante",
+   "power": "Puissance selon la hausse",
+   "power_caption": "Une ligne à la puissance demandée ({power} %), une verticale à votre hausse minimale ({min_lift} %).",
+   "posterior": "Où peut se trouver la vraie valeur de chaque variante (loi a posteriori)",
+   "sequential_lift": "Hausse et sa séquence de confiance, jour après jour",
+   "sequential_p": "p-valeur valable à tout moment, jour après jour"
+  },
+  "series": {
+   "lift": "Hausse",
+   "low": "Borne inférieure",
+   "high": "Borne supérieure",
+   "observed": "Observées",
+   "expected": "Prévues",
+   "units": "Unités"
+  },
+  "intervals_note": {
+   "holm": "Intervalles à {conf} %, chacun pris isolément : Holm corrige les p-valeurs, pas les intervalles.",
+   "benjamini_hochberg": "Intervalles à {conf} %, chacun pris isolément : Benjamini–Hochberg corrige les p-valeurs, pas les intervalles.",
+   "bonferroni": "Intervalles élargis par la correction de Bonferroni : ils valent tous ensemble.",
+   "none": "Intervalles à {conf} %, sans correction."
+  },
+  "alpha_line": "Vérifications au niveau α = {alpha} ; la répartition des unités à {srm_alpha}, un niveau propre plus strict.",
+  "measures_table": {
+   "title": "Mesures, pas des tests",
+   "prob_beat": "P(devant le contrôle)",
+   "loss": "Perte attendue si choisie",
+   "threshold": "Par rapport à votre seuil",
+   "sequential_p": "p valable à tout moment (corrigée)"
+  },
+  "measures_note": "Les probabilités et les pertes sont des nombres pour votre jugement : aucun seuil du rapport ne les transforme en décision. La p-valeur valable à tout moment est un test : lisez-la si les résultats ont été consultés avant la fin prévue.",
+  "cuped": {
+   "line": "CUPED sur «{covariate}» : θ = {theta}, corrélation avec la métrique {rho}."
+  },
+  "bayes": {
+   "prior_binary": "A priori : Beta({a}, {b}) pour le taux de chaque variante.",
+   "prior_normal": "A priori : plat sur la moyenne de chaque variante (l'approximation normale).",
+   "not_a_test": "Une lecture, pas un test : ces nombres ne décident rien à eux seuls.",
+   "threshold": "Les pertes sont une part de la valeur du contrôle ; votre seuil est de {threshold} %."
+  },
+  "sequential": {
+   "which": "Lisez la décision séquentielle si les résultats ont été consultés avant la fin prévue ; sinon, la décision de la première page.",
+   "rebuilt": "Courbes reconstruites à partir des données d'aujourd'hui : chaque unité compte avec sa métrique telle qu'elle est maintenant, pas telle qu'elle était chaque jour."
+  },
+  "reading_texts": {
+   "correction_holm": "Avec {treatments:int} traitements comparés au même contrôle, la correction de Holm donne {p_adjusted:p} au lieu de {p:p}, de sorte que, sur l'ensemble des comparaisons, le risque d'au moins une fausse alerte reste au plus α.",
+   "correction_benjamini_hochberg": "Avec {treatments:int} traitements, la correction de Benjamini–Hochberg donne {p_adjusted:p} au lieu de {p:p} : parmi les différences déclarées significatives, la part attendue de fausses alertes reste au plus α.",
+   "correction_bonferroni": "Avec {treatments:int} traitements, la correction de Bonferroni multiplie la p-valeur par {treatments:int} : {p_adjusted:p} au lieu de {p:p} ; les intervalles sont élargis en conséquence.",
+   "correction_none": "Aucune correction n'a été demandée : avec {treatments:int} traitements, le risque d'au moins une fausse alerte est plus grand que α.",
+   "correction_one": "Avec un seul traitement, il n'y a qu'une comparaison : aucune correction n'est nécessaire."
+  }
+ }
+}

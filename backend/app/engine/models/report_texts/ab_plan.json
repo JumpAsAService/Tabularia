@@ -1,0 +1,292 @@
+{
+ "en": {
+  "name": "A/B test planning",
+  "about_arms": "{arms} variants",
+  "sections": {
+   "plan": "Plan",
+   "charts": "Power, lift and duration",
+   "grid": "Sizes for other lifts"
+  },
+  "answer": {
+   "sample_size": "{units} units per variant, {total} in all",
+   "days": ": {days} days at {daily} new units a day ({weeks} weeks)",
+   "mde_for_units": "With {units} units per variant: the smallest detectable lift is {mde} ({absolute} on the metric)",
+   "mde_for_days": "In {days} days, {units} units per variant: the smallest detectable lift is {mde} ({absolute} on the metric)"
+  },
+  "lines": {
+   "baseline": {
+    "binary": "Baseline: a rate of {mean}, from {units} units over {days} days of history, {daily} new units a day.",
+    "continuous": "Baseline: a mean of {mean}, standard deviation {sd} per unit, from {units} units over {days} days of history, {daily} new units a day.",
+    "ratio": "Baseline: a ratio of {mean}, standard deviation {sd} per unit, from {units} units over {days} days of history, {daily} new units a day."
+   },
+   "cuped": "With CUPED on {covariate} (correlation {rho}): the variance {reduction} smaller, {units} units per variant",
+   "cuped_days": ", {days} days",
+   "correction": "{arms} variants, {correction}: each comparison planned at α' = {per} (α = {alpha}), power {power}."
+  },
+  "charts": {
+   "power_lift": "Power against the lift",
+   "mde_days": "Smallest detectable lift against the days",
+   "history": "The metric in the history"
+  },
+  "series": {
+   "units": "Units"
+  },
+  "tables": {
+   "lift": "Lift",
+   "mde_absolute": "On the metric",
+   "n_per_variant": "Units per variant",
+   "n_control": "Control's units",
+   "n_total": "Units in all",
+   "days": "Days",
+   "weeks": "Weeks",
+   "n_per_variant_cuped": "Per variant, CUPED",
+   "days_cuped": "Days, CUPED",
+   "plan": "Units and days for each lift"
+  },
+  "plan_note": "The row in bold is the lift you asked for. The sizes use the normal approximation of the test the A/B node runs.",
+  "reading_texts": {
+   "plan_size": "To detect a lift of {lift:pct} on a baseline of {baseline:num} with a power of {power:pct} at α = {alpha:num}, each variant needs {units:int} units, {total:int} in all: {days:int} days at {daily:int} new units a day.",
+   "plan_size_no_days": "To detect a lift of {lift:pct} on a baseline of {baseline:num} with a power of {power:pct} at α = {alpha:num}, each variant needs {units:int} units, {total:int} in all.",
+   "plan_mde_units": "With {units:int} units per variant, the smallest lift detectable with a power of {power:pct} at α = {alpha:num} is {mde:pct} of the baseline {baseline:num}.",
+   "plan_mde_days": "In {days:int} days, at {daily:int} new units a day, each variant gets {units:int} units: the smallest lift detectable with a power of {power:pct} at α = {alpha:num} is {mde:pct}.",
+   "baseline_read": "The history holds {units:int} units over {history_days:int} days: the metric's mean is {mean:num}, with a standard deviation of {sd:num} per unit.",
+   "cuped_plan": "With the covariate the variance is {reduction:pct} smaller: {units:int} units in all would do, in {days:int} days.",
+   "correction_holm": "With {arms:int} variants each comparison with the control is planned at α' = {alpha_per_comparison:num}: α = {alpha:num} divided by the number of comparisons, the first and strictest step of Holm's correction.",
+   "correction_benjamini_hochberg": "With {arms:int} variants each comparison with the control is planned at α' = {alpha_per_comparison:num}: α = {alpha:num} divided by the number of comparisons, the least favourable case of the Benjamini–Hochberg correction.",
+   "correction_bonferroni": "With {arms:int} variants each comparison with the control is planned at α' = {alpha_per_comparison:num}: α = {alpha:num} divided by the number of comparisons, Bonferroni's correction.",
+   "correction_none": "Each comparison with the control is planned at α = {alpha:num}, without correction."
+  }
+ },
+ "it": {
+  "name": "Pianificazione di un test A/B",
+  "about_arms": "{arms} varianti",
+  "sections": {
+   "plan": "Piano",
+   "charts": "Potenza, incremento e durata",
+   "grid": "Dimensioni per altri incrementi"
+  },
+  "answer": {
+   "sample_size": "{units} unità per variante, {total} in tutto",
+   "days": ": {days} giorni a {daily} nuove unità al giorno ({weeks} settimane)",
+   "mde_for_units": "Con {units} unità per variante: l'incremento minimo rilevabile è {mde} ({absolute} sulla metrica)",
+   "mde_for_days": "In {days} giorni, {units} unità per variante: l'incremento minimo rilevabile è {mde} ({absolute} sulla metrica)"
+  },
+  "lines": {
+   "baseline": {
+    "binary": "Base di partenza: un tasso pari a {mean}, da {units} unità in {days} giorni di storico, {daily} nuove unità al giorno.",
+    "continuous": "Base di partenza: una media di {mean}, deviazione standard {sd} per unità, da {units} unità in {days} giorni di storico, {daily} nuove unità al giorno.",
+    "ratio": "Base di partenza: un rapporto di {mean}, deviazione standard {sd} per unità, da {units} unità in {days} giorni di storico, {daily} nuove unità al giorno."
+   },
+   "cuped": "Con CUPED su {covariate} (correlazione {rho}): la varianza più piccola di {reduction}, {units} unità per variante",
+   "cuped_days": ", {days} giorni",
+   "correction": "{arms} varianti, {correction}: ogni confronto pianificato ad α' = {per} (α = {alpha}), potenza {power}."
+  },
+  "charts": {
+   "power_lift": "Potenza rispetto all'incremento",
+   "mde_days": "Incremento minimo rilevabile rispetto ai giorni",
+   "history": "La metrica nello storico"
+  },
+  "series": {
+   "units": "Unità"
+  },
+  "tables": {
+   "lift": "Incremento",
+   "mde_absolute": "Sulla metrica",
+   "n_per_variant": "Unità per variante",
+   "n_control": "Unità del controllo",
+   "n_total": "Unità in tutto",
+   "days": "Giorni",
+   "weeks": "Settimane",
+   "n_per_variant_cuped": "Per variante, CUPED",
+   "days_cuped": "Giorni, CUPED",
+   "plan": "Unità e giorni per ogni incremento"
+  },
+  "plan_note": "La riga in grassetto è l'incremento che avete chiesto. Le dimensioni usano l'approssimazione normale del test eseguito dal nodo A/B.",
+  "reading_texts": {
+   "plan_size": "Per rilevare un incremento di {lift:pct} su una base di partenza di {baseline:num} con una potenza pari a {power:pct} ad α = {alpha:num}, ogni variante ha bisogno di {units:int} unità, {total:int} in tutto: {days:int} giorni a {daily:int} nuove unità al giorno.",
+   "plan_size_no_days": "Per rilevare un incremento di {lift:pct} su una base di partenza di {baseline:num} con una potenza pari a {power:pct} ad α = {alpha:num}, ogni variante ha bisogno di {units:int} unità, {total:int} in tutto.",
+   "plan_mde_units": "Con {units:int} unità per variante, l'incremento più piccolo rilevabile con una potenza pari a {power:pct} ad α = {alpha:num} è pari a {mde:pct} della base di partenza {baseline:num}.",
+   "plan_mde_days": "In {days:int} giorni, a {daily:int} nuove unità al giorno, ogni variante riceve {units:int} unità: l'incremento più piccolo rilevabile con una potenza pari a {power:pct} ad α = {alpha:num} è {mde:pct}.",
+   "baseline_read": "Lo storico contiene {units:int} unità in {history_days:int} giorni: la media della metrica è {mean:num}, con una deviazione standard di {sd:num} per unità.",
+   "cuped_plan": "Con la covariata la varianza è più piccola di {reduction:pct}: basterebbero {units:int} unità in tutto, in {days:int} giorni.",
+   "correction_holm": "Con {arms:int} varianti ogni confronto con il controllo è pianificato ad α' = {alpha_per_comparison:num}: α = {alpha:num} diviso per il numero di confronti, il primo passo, il più severo, della correzione di Holm.",
+   "correction_benjamini_hochberg": "Con {arms:int} varianti ogni confronto con il controllo è pianificato ad α' = {alpha_per_comparison:num}: α = {alpha:num} diviso per il numero di confronti, il caso meno favorevole della correzione di Benjamini–Hochberg.",
+   "correction_bonferroni": "Con {arms:int} varianti ogni confronto con il controllo è pianificato ad α' = {alpha_per_comparison:num}: α = {alpha:num} diviso per il numero di confronti, la correzione di Bonferroni.",
+   "correction_none": "Ogni confronto con il controllo è pianificato ad α = {alpha:num}, senza correzione."
+  }
+ },
+ "de": {
+  "name": "A/B-Test-Planung",
+  "about_arms": "{arms} Varianten",
+  "sections": {
+   "plan": "Plan",
+   "charts": "Teststärke, Anstieg und Dauer",
+   "grid": "Größen für andere Anstiege"
+  },
+  "answer": {
+   "sample_size": "{units} Einheiten je Variante, {total} insgesamt",
+   "days": ": {days} Tage bei {daily} neuen Einheiten pro Tag ({weeks} Wochen)",
+   "mde_for_units": "Mit {units} Einheiten je Variante: Der kleinste erkennbare Anstieg ist {mde} ({absolute} auf der Kennzahl)",
+   "mde_for_days": "In {days} Tagen, {units} Einheiten je Variante: Der kleinste erkennbare Anstieg ist {mde} ({absolute} auf der Kennzahl)"
+  },
+  "lines": {
+   "baseline": {
+    "binary": "Ausgangswert: eine Rate von {mean}, aus {units} Einheiten über {days} Tage Verlauf, {daily} neue Einheiten pro Tag.",
+    "continuous": "Ausgangswert: ein Mittelwert von {mean}, Standardabweichung {sd} je Einheit, aus {units} Einheiten über {days} Tage Verlauf, {daily} neue Einheiten pro Tag.",
+    "ratio": "Ausgangswert: ein Verhältnis von {mean}, Standardabweichung {sd} je Einheit, aus {units} Einheiten über {days} Tage Verlauf, {daily} neue Einheiten pro Tag."
+   },
+   "cuped": "Mit CUPED auf {covariate} (Korrelation {rho}): die Varianz um {reduction} kleiner, {units} Einheiten je Variante",
+   "cuped_days": ", {days} Tage",
+   "correction": "{arms} Varianten, {correction}: jeder Vergleich geplant bei α' = {per} (α = {alpha}), Teststärke {power}."
+  },
+  "charts": {
+   "power_lift": "Teststärke gegen den Anstieg",
+   "mde_days": "Kleinster erkennbarer Anstieg gegen die Tage",
+   "history": "Die Kennzahl im Verlauf"
+  },
+  "series": {
+   "units": "Einheiten"
+  },
+  "tables": {
+   "lift": "Anstieg",
+   "mde_absolute": "Auf der Kennzahl",
+   "n_per_variant": "Einheiten je Variante",
+   "n_control": "Einheiten der Kontrolle",
+   "n_total": "Einheiten insgesamt",
+   "days": "Tage",
+   "weeks": "Wochen",
+   "n_per_variant_cuped": "Je Variante, CUPED",
+   "days_cuped": "Tage, CUPED",
+   "plan": "Einheiten und Tage für jeden Anstieg"
+  },
+  "plan_note": "Die fett gedruckte Zeile ist der Anstieg, den Sie verlangt haben. Die Größen verwenden die Normalapproximation des Tests, den der A/B-Knoten ausführt.",
+  "reading_texts": {
+   "plan_size": "Um einen Anstieg von {lift:pct} auf einen Ausgangswert von {baseline:num} mit einer Teststärke von {power:pct} bei α = {alpha:num} zu erkennen, braucht jede Variante {units:int} Einheiten, {total:int} insgesamt: {days:int} Tage bei {daily:int} neuen Einheiten pro Tag.",
+   "plan_size_no_days": "Um einen Anstieg von {lift:pct} auf einen Ausgangswert von {baseline:num} mit einer Teststärke von {power:pct} bei α = {alpha:num} zu erkennen, braucht jede Variante {units:int} Einheiten, {total:int} insgesamt.",
+   "plan_mde_units": "Mit {units:int} Einheiten je Variante beträgt der kleinste Anstieg, der mit einer Teststärke von {power:pct} bei α = {alpha:num} erkennbar ist, {mde:pct} des Ausgangswerts {baseline:num}.",
+   "plan_mde_days": "In {days:int} Tagen, bei {daily:int} neuen Einheiten pro Tag, erhält jede Variante {units:int} Einheiten: Der kleinste Anstieg, der mit einer Teststärke von {power:pct} bei α = {alpha:num} erkennbar ist, beträgt {mde:pct}.",
+   "baseline_read": "Der Verlauf enthält {units:int} Einheiten über {history_days:int} Tage: Der Mittelwert der Kennzahl ist {mean:num}, mit einer Standardabweichung von {sd:num} je Einheit.",
+   "cuped_plan": "Mit der Kovariate ist die Varianz um {reduction:pct} kleiner: Insgesamt wären {units:int} Einheiten nötig, in {days:int} Tagen.",
+   "correction_holm": "Bei {arms:int} Varianten wird jeder Vergleich mit der Kontrolle bei α' = {alpha_per_comparison:num} geplant: α = {alpha:num} geteilt durch die Zahl der Vergleiche, der erste und strengste Schritt der Holm-Korrektur.",
+   "correction_benjamini_hochberg": "Bei {arms:int} Varianten wird jeder Vergleich mit der Kontrolle bei α' = {alpha_per_comparison:num} geplant: α = {alpha:num} geteilt durch die Zahl der Vergleiche, der ungünstigste Fall der Benjamini–Hochberg-Korrektur.",
+   "correction_bonferroni": "Bei {arms:int} Varianten wird jeder Vergleich mit der Kontrolle bei α' = {alpha_per_comparison:num} geplant: α = {alpha:num} geteilt durch die Zahl der Vergleiche, die Bonferroni-Korrektur.",
+   "correction_none": "Jeder Vergleich mit der Kontrolle wird bei α = {alpha:num} geplant, ohne Korrektur."
+  }
+ },
+ "es": {
+  "name": "Planificación de un test A/B",
+  "about_arms": "{arms} variantes",
+  "sections": {
+   "plan": "Plan",
+   "charts": "Potencia, aumento y duración",
+   "grid": "Tamaños para otros aumentos"
+  },
+  "answer": {
+   "sample_size": "{units} unidades por variante, {total} en total",
+   "days": ": {days} días a {daily} unidades nuevas al día ({weeks} semanas)",
+   "mde_for_units": "Con {units} unidades por variante: el aumento mínimo detectable es {mde} ({absolute} en la métrica)",
+   "mde_for_days": "En {days} días, {units} unidades por variante: el aumento mínimo detectable es {mde} ({absolute} en la métrica)"
+  },
+  "lines": {
+   "baseline": {
+    "binary": "Base de partida: una tasa del {mean}, a partir de {units} unidades en {days} días de histórico, {daily} unidades nuevas al día.",
+    "continuous": "Base de partida: una media de {mean}, desviación estándar {sd} por unidad, a partir de {units} unidades en {days} días de histórico, {daily} unidades nuevas al día.",
+    "ratio": "Base de partida: una razón de {mean}, desviación estándar {sd} por unidad, a partir de {units} unidades en {days} días de histórico, {daily} unidades nuevas al día."
+   },
+   "cuped": "Con CUPED sobre {covariate} (correlación {rho}): la varianza un {reduction} menor, {units} unidades por variante",
+   "cuped_days": ", {days} días",
+   "correction": "{arms} variantes, {correction}: cada comparación planificada a α' = {per} (α = {alpha}), potencia {power}."
+  },
+  "charts": {
+   "power_lift": "Potencia frente al aumento",
+   "mde_days": "Aumento mínimo detectable frente a los días",
+   "history": "La métrica en el histórico"
+  },
+  "series": {
+   "units": "Unidades"
+  },
+  "tables": {
+   "lift": "Aumento",
+   "mde_absolute": "En la métrica",
+   "n_per_variant": "Unidades por variante",
+   "n_control": "Unidades del control",
+   "n_total": "Unidades en total",
+   "days": "Días",
+   "weeks": "Semanas",
+   "n_per_variant_cuped": "Por variante, CUPED",
+   "days_cuped": "Días, CUPED",
+   "plan": "Unidades y días para cada aumento"
+  },
+  "plan_note": "La fila en negrita es el aumento que usted pidió. Los tamaños usan la aproximación normal de la prueba que ejecuta el nodo A/B.",
+  "reading_texts": {
+   "plan_size": "Para detectar un aumento del {lift:pct} sobre una base de partida de {baseline:num} con una potencia del {power:pct} a α = {alpha:num}, cada variante necesita {units:int} unidades, {total:int} en total: {days:int} días a {daily:int} unidades nuevas al día.",
+   "plan_size_no_days": "Para detectar un aumento del {lift:pct} sobre una base de partida de {baseline:num} con una potencia del {power:pct} a α = {alpha:num}, cada variante necesita {units:int} unidades, {total:int} en total.",
+   "plan_mde_units": "Con {units:int} unidades por variante, el aumento más pequeño que se detecta con una potencia del {power:pct} a α = {alpha:num} es el {mde:pct} de la base de partida {baseline:num}.",
+   "plan_mde_days": "En {days:int} días, a {daily:int} unidades nuevas al día, cada variante recibe {units:int} unidades: el aumento más pequeño que se detecta con una potencia del {power:pct} a α = {alpha:num} es el {mde:pct}.",
+   "baseline_read": "El histórico contiene {units:int} unidades en {history_days:int} días: la media de la métrica es {mean:num}, con una desviación estándar de {sd:num} por unidad.",
+   "cuped_plan": "Con la covariable la varianza es un {reduction:pct} menor: bastarían {units:int} unidades en total, en {days:int} días.",
+   "correction_holm": "Con {arms:int} variantes, cada comparación con el control se planifica a α' = {alpha_per_comparison:num}: α = {alpha:num} dividido por el número de comparaciones, el primer paso, el más estricto, de la corrección de Holm.",
+   "correction_benjamini_hochberg": "Con {arms:int} variantes, cada comparación con el control se planifica a α' = {alpha_per_comparison:num}: α = {alpha:num} dividido por el número de comparaciones, el caso menos favorable de la corrección de Benjamini–Hochberg.",
+   "correction_bonferroni": "Con {arms:int} variantes, cada comparación con el control se planifica a α' = {alpha_per_comparison:num}: α = {alpha:num} dividido por el número de comparaciones, la corrección de Bonferroni.",
+   "correction_none": "Cada comparación con el control se planifica a α = {alpha:num}, sin corrección."
+  }
+ },
+ "fr": {
+  "name": "Planification d'un test A/B",
+  "about_arms": "{arms} variantes",
+  "sections": {
+   "plan": "Plan",
+   "charts": "Puissance, hausse et durée",
+   "grid": "Tailles pour d'autres hausses"
+  },
+  "answer": {
+   "sample_size": "{units} unités par variante, {total} en tout",
+   "days": " : {days} jours à {daily} nouvelles unités par jour ({weeks} semaines)",
+   "mde_for_units": "Avec {units} unités par variante : la plus petite hausse détectable est de {mde} ({absolute} sur la métrique)",
+   "mde_for_days": "En {days} jours, {units} unités par variante : la plus petite hausse détectable est de {mde} ({absolute} sur la métrique)"
+  },
+  "lines": {
+   "baseline": {
+    "binary": "Valeur de référence : un taux de {mean}, d'après {units} unités sur {days} jours d'historique, {daily} nouvelles unités par jour.",
+    "continuous": "Valeur de référence : une moyenne de {mean}, écart type {sd} par unité, d'après {units} unités sur {days} jours d'historique, {daily} nouvelles unités par jour.",
+    "ratio": "Valeur de référence : un rapport de {mean}, écart type {sd} par unité, d'après {units} unités sur {days} jours d'historique, {daily} nouvelles unités par jour."
+   },
+   "cuped": "Avec CUPED sur {covariate} (corrélation {rho}) : la variance plus petite de {reduction}, {units} unités par variante",
+   "cuped_days": ", {days} jours",
+   "correction": "{arms} variantes, {correction} : chaque comparaison planifiée à α' = {per} (α = {alpha}), puissance {power}."
+  },
+  "charts": {
+   "power_lift": "Puissance selon la hausse",
+   "mde_days": "Plus petite hausse détectable selon les jours",
+   "history": "La métrique dans l'historique"
+  },
+  "series": {
+   "units": "Unités"
+  },
+  "tables": {
+   "lift": "Hausse",
+   "mde_absolute": "Sur la métrique",
+   "n_per_variant": "Unités par variante",
+   "n_control": "Unités du contrôle",
+   "n_total": "Unités en tout",
+   "days": "Jours",
+   "weeks": "Semaines",
+   "n_per_variant_cuped": "Par variante, CUPED",
+   "days_cuped": "Jours, CUPED",
+   "plan": "Unités et jours pour chaque hausse"
+  },
+  "plan_note": "La ligne en gras est la hausse que vous avez demandée. Les tailles utilisent l'approximation normale du test qu'exécute le nœud A/B.",
+  "reading_texts": {
+   "plan_size": "Pour détecter une hausse de {lift:pct} sur une valeur de référence de {baseline:num}, avec une puissance de {power:pct} au niveau α = {alpha:num}, chaque variante a besoin de {units:int} unités, {total:int} en tout : {days:int} jours à {daily:int} nouvelles unités par jour.",
+   "plan_size_no_days": "Pour détecter une hausse de {lift:pct} sur une valeur de référence de {baseline:num}, avec une puissance de {power:pct} au niveau α = {alpha:num}, chaque variante a besoin de {units:int} unités, {total:int} en tout.",
+   "plan_mde_units": "Avec {units:int} unités par variante, la plus petite hausse détectable avec une puissance de {power:pct} au niveau α = {alpha:num} représente {mde:pct} de la valeur de référence {baseline:num}.",
+   "plan_mde_days": "En {days:int} jours, à {daily:int} nouvelles unités par jour, chaque variante reçoit {units:int} unités : la plus petite hausse détectable avec une puissance de {power:pct} au niveau α = {alpha:num} est de {mde:pct}.",
+   "baseline_read": "L'historique contient {units:int} unités sur {history_days:int} jours : la moyenne de la métrique est de {mean:num}, avec un écart type de {sd:num} par unité.",
+   "cuped_plan": "Avec la covariable, la variance est plus petite de {reduction:pct} : il faudrait {units:int} unités en tout, en {days:int} jours.",
+   "correction_holm": "Avec {arms:int} variantes, chaque comparaison avec le contrôle est planifiée à α' = {alpha_per_comparison:num} : α = {alpha:num} divisé par le nombre de comparaisons, la première étape de la correction de Holm, la plus stricte.",
+   "correction_benjamini_hochberg": "Avec {arms:int} variantes, chaque comparaison avec le contrôle est planifiée à α' = {alpha_per_comparison:num} : α = {alpha:num} divisé par le nombre de comparaisons, le cas le moins favorable de la correction de Benjamini–Hochberg.",
+   "correction_bonferroni": "Avec {arms:int} variantes, chaque comparaison avec le contrôle est planifiée à α' = {alpha_per_comparison:num} : α = {alpha:num} divisé par le nombre de comparaisons, soit la correction de Bonferroni.",
+   "correction_none": "Chaque comparaison avec le contrôle est planifiée à α = {alpha:num}, sans correction."
+  }
+ }
+}
