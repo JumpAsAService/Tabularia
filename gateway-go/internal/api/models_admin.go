@@ -127,7 +127,9 @@ type mgState struct {
 }
 
 // mgLoad reads a group. withText: the versions' lock, build log and self-test as well; keep:
-// at most that many versions (0: all).
+// at most that many of the newest versions (0: all). The environment's current version is always
+// among them, read by its id when it is older than those kept: however many newer versions failed
+// since, the version in use still serves, and the list, the palette and the detail say the same.
 func mgLoad(ctx context.Context, q perm.Querier, g modelgroups.Group, withText bool, keep int) (*mgState, error) {
 	s := &mgState{Group: g, Everyone: true}
 	var env, seconds *int64
@@ -170,24 +172,46 @@ func mgLoad(ctx context.Context, q perm.Querier, g modelgroups.Group, withText b
 	for _, p := range g.Recipe.SystemLibraries {
 		sysLike = append(sysLike, p+"@%")
 	}
-	rows, err := q.Query(ctx, `SELECT id, number, status, recipe_hash, runner_hash, image_ref, arch, error,
-		coalesce(array_length(regexp_split_to_array(nullif(lock, ''), E'\n'), 1), 0), `+text+`,
+	columns := `SELECT id, number, status, recipe_hash, runner_hash, image_ref, arch, error,
+		coalesce(array_length(regexp_split_to_array(nullif(lock, ''), E'\n'), 1), 0), ` + text + `,
 		(SELECT string_agg(l, E'\n') FROM unnest(regexp_split_to_array(coalesce(lock, ''), E'\n')) AS l WHERE l LIKE ANY ($2)),
 		job_name, created_at, created_by, started_at, finished_at
-		FROM script_environment_versions WHERE environment_id = $1 ORDER BY number DESC`+limit, s.EnvID, sysLike)
+		FROM script_environment_versions`
+	rows, err := q.Query(ctx, columns+` WHERE environment_id = $1 ORDER BY number DESC`+limit, s.EnvID, sysLike)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	for rows.Next() {
+	scan := func(row pgx.Row) (mgVersion, error) {
 		var v mgVersion
-		if err := rows.Scan(&v.ID, &v.Number, &v.Status, &v.RecipeHash, &v.RunnerHash, &v.ImageRef, &v.Arch, &v.Error, &v.Packages,
-			&v.Lock, &v.BuildLog, &v.Selftest, &v.SystemLock, &v.JobName, &v.CreatedAt, &v.CreatedBy, &v.StartedAt, &v.FinishedAt); err != nil {
+		err := row.Scan(&v.ID, &v.Number, &v.Status, &v.RecipeHash, &v.RunnerHash, &v.ImageRef, &v.Arch, &v.Error, &v.Packages,
+			&v.Lock, &v.BuildLog, &v.Selftest, &v.SystemLock, &v.JobName, &v.CreatedAt, &v.CreatedBy, &v.StartedAt, &v.FinishedAt)
+		return v, err
+	}
+	hasCurrent := false
+	for rows.Next() {
+		v, err := scan(rows)
+		if err != nil {
 			return nil, err
 		}
+		hasCurrent = hasCurrent || s.CurrentID != nil && v.ID == *s.CurrentID
 		s.Versions = append(s.Versions, v)
 	}
-	return s, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	rows.Close()
+	if s.CurrentID != nil && !hasCurrent {
+		// older than every version kept: it goes last, the list stays newest first
+		v, err := scan(q.QueryRow(ctx, columns+` WHERE environment_id = $1 AND id = $3`, s.EnvID, sysLike, *s.CurrentID))
+		if err != nil && !scNoRows(err) {
+			return nil, err
+		}
+		if err == nil {
+			s.Versions = append(s.Versions, v)
+		}
+	}
+	return s, nil
 }
 
 func mgInProgress(status string) bool {

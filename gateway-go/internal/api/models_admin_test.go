@@ -605,6 +605,60 @@ func TestRebuildingWaitsForTheVersionBeingBuilt(t *testing.T) {
 	}
 }
 
+// The version in use serves however many newer versions failed since: the list and the palette keep
+// fewer versions than the detail, and all three say the same.
+func TestManyFailedRebuildsLeaveTheVersionInUseServing(t *testing.T) {
+	f := newModelsFixture(t)
+	f.grantEdit(t, f.admin)
+	f.bucket(t)
+	f.enable(f.admin, "regression")
+	f.buildTo(t, "regression", true)
+	for i := 1; i <= 6; i++ { // more than the list keeps (5)
+		if w := f.call(f.admin, "POST", "regression", "", "", true, mgRebuild); w.Code != http.StatusOK {
+			t.Fatalf("rebuild %d: %d %s", i, w.Code, w.Body)
+		}
+		f.buildTo(t, "regression", false)
+	}
+	img, err := ReadyModelGroupImage(f.ctx, f.db, "regression")
+	if err != nil || img.Version != 1 {
+		t.Fatalf("the version in use stopped serving: %v %v", img, err)
+	}
+	detail := answerOf(t, f.call(f.admin, "GET", "regression", "", "", false, mgDetail)).Group
+	var listed mgGroupOut
+	for _, g := range answerOf(t, f.call(f.admin, "GET", "", "", "", false, mgList)).Groups {
+		if g.ID == "regression" {
+			listed = g
+		}
+	}
+	for name, g := range map[string]mgGroupOut{"detail": detail, "list": listed} {
+		if g.State != "ready" || !g.Ready || g.CurrentVersion == nil || *g.CurrentVersion != 1 {
+			t.Errorf("%s: state %s, ready %v, current %v", name, g.State, g.Ready, g.CurrentVersion)
+		}
+		if last := g.Versions[len(g.Versions)-1]; last.Number != 1 || !last.Current {
+			t.Errorf("%s: the version in use is not among the versions: %+v", name, last)
+		}
+	}
+	if len(listed.Versions) != 6 || listed.Versions[0].Number != 7 || listed.Versions[4].Number != 3 {
+		t.Errorf("the list: the five newest and the one in use, newest first: %+v", listed.Versions)
+	}
+	w := httptest.NewRecorder()
+	mgPalette(f.d, w, httptest.NewRequest("GET", "/models/groups", nil), &auth.Principal{User: *f.admin})
+	var palette struct {
+		Groups []struct {
+			ID    string `json:"id"`
+			Ready bool   `json:"ready"`
+		} `json:"groups"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &palette); err != nil || w.Code != http.StatusOK {
+		t.Fatalf("palette: %d %s", w.Code, w.Body)
+	}
+	for _, g := range palette.Groups {
+		if g.ID == "regression" && !g.Ready {
+			t.Error("the palette says the group is not ready")
+		}
+	}
+}
+
 func TestTheGroupsResourcesLimitsAndAccess(t *testing.T) {
 	f := newModelsFixture(t)
 	settings := func(body string) *httptest.ResponseRecorder {
