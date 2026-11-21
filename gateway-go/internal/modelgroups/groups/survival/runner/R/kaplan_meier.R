@@ -152,9 +152,9 @@ fit_kaplan_meier <- function(task) {
       tab_add(rows, "stratum", paste0(stat, "_low"), value = at$lower[[k]], level = name, x0 = times[[k]])
       tab_add(rows, "stratum", paste0(stat, "_high"), value = at$upper[[k]], level = name, x0 = times[[k]])
     }
-    rm <- summary(s, rmean = tau)$table
+    rm <- km_rmst(s, tau)
     tab_number(rows, "stratum", "rmst", rm[["rmean"]], level = name)
-    tab_number(rows, "stratum", "rmst_se", rm[["se(rmean)"]], level = name)
+    tab_number(rows, "stratum", "rmst_se", rm[["se"]], level = name)
     if (!is.null(oe)) {
       tab_number(rows, "stratum", "observed", oe$obs[[i]], level = name)
       tab_number(rows, "stratum", "expected", oe$exp[[i]], level = name)
@@ -213,8 +213,10 @@ km_is_event <- function(x, value) {
     v <- suppressWarnings(as.numeric(value))
     return(!is.na(v) & !is.na(x) & x == v)
   }
-  label <- if (is.character(value)) enc2utf8(value) else tab_label(value)
-  !is.na(x) & tab_label(x) == label
+  # a number given for a column of text or of another kind: «1» as the column writes it, or «1.0»
+  # as the engine labels a number (the refusal says km_value_label's «1»)
+  label <- if (is.character(value)) enc2utf8(value) else unique(c(km_value_label(value), tab_label(value)))
+  !is.na(x) & tab_label(x) %in% label
 }
 
 km_value_label <- function(value) {
@@ -240,6 +242,15 @@ km_surv_at <- function(s, times) {
   for (k in c("surv", "lower", "upper")) out[[k]][past] <- NA_real_
   out$past <- past
   out
+}
+
+# The restricted mean up to tau, and its standard error. Before the stratum's first time its
+# curve is 1 on [0, tau]: the mean is tau, with no error (survival's summary refuses a tau
+# there, «Truncation point for the mean time in state is < smallest survival»).
+km_rmst <- function(s, tau) {
+  if (tau < min(s$time)) return(c(rmean = tau, se = 0))
+  x <- summary(s, rmean = tau)$table
+  c(rmean = x[["rmean"]], se = x[["se(rmean)"]])
 }
 
 km_notes <- function(rows, s, name, at, times, q) {
@@ -324,11 +335,15 @@ km_checks <- function(rows, frame, curves, names_, alpha, reported) {
 # The strata's hazards in proportion: Grambsch–Therneau on the strata as a Cox model's
 # covariate, and the curves that cross.
 km_check_proportional <- function(rows, frame, curves, names_, alpha) {
+  why <- "the test gives no p-value" # why the Grambsch–Therneau test could not be made
   zph <- tryCatch({
-    if (any(vapply(curves, function(s) sum(s$n.event) == 0, logical(1)))) stop("a stratum without events")
+    if (any(vapply(curves, function(s) sum(s$n.event) == 0, logical(1)))) stop("a stratum has no event")
     cfit <- survival::coxph(survival::Surv(time, status) ~ g, data = frame)
     survival::cox.zph(cfit, transform = "km")$table["GLOBAL", ]
-  }, error = function(e) NULL)
+  }, error = function(e) {
+    why <<- conditionMessage(e)
+    NULL
+  })
   crossing <- character()
   pairs <- utils::combn(length(curves), 2L)
   for (k in seq_len(ncol(pairs))) {
@@ -346,10 +361,18 @@ km_check_proportional <- function(rows, frame, curves, names_, alpha) {
     }
   }
   p <- if (is.null(zph)) NULL else zph[["p"]]
-  verdict <- if (length(crossing)) "failed" else if (!is.null(p) && p < alpha) "doubtful" else "ok"
+  # curves that cross fail the check whatever the test; without the test and without a crossing
+  # nothing says the ratio holds: not computed, never «ok»
+  verdict <- if (length(crossing)) "failed" else if (is.null(p) || !is.finite(p)) "not_computed" else if (p < alpha) "doubtful" else "ok"
+  advice <- if (identical(verdict, "not_computed")) {
+    paste0("The test of the hazards' ratio could not be computed on these rows (", why, "), and no two curves cross: ",
+           "read the curves themselves.")
+  } else {
+    paste0("The hazards' ratio changes over time, or the curves cross: the log-rank test loses power, and so does ",
+           "Peto's; compare the restricted means (rmst_tau), and read the curves themselves.")
+  }
   km_check(rows, "proportional_hazards", "The strata's hazards keep the same ratio over time (the curves do not cross).", verdict,
-           advice = paste0("The hazards' ratio changes over time, or the curves cross: the log-rank test loses power, and so does ",
-                           "Peto's; compare the restricted means (rmst_tau), and read the curves themselves."),
+           advice = advice,
            statistic = if (is.null(zph)) NULL else zph[["chisq"]], df = if (is.null(zph)) NULL else zph[["df"]], p = p,
            threshold = alpha, count = if (length(crossing)) length(crossing) else NULL, look_at = paste(crossing, collapse = "; "))
   if (length(crossing)) {
@@ -586,3 +609,40 @@ TAB_COMMON_TESTS[["kaplan_meier: a card on many rows is thinned within its toler
   # the same fit as a step: results and report whatever the card's size
   .tab_expect(!length(tab_check_declared(fit$rows, "kaplan_meier", "default")), "the results do not match the catalogue")
 }
+
+.km_test_task <- function(frame, params, limits = NULL) {
+  task <- list(model = "kaplan_meier", variant = "default", group = "survival", group_version = "selftest", rows_from = "run",
+               params = params, limits = tab_catalog()$limits, .frame = frame)
+  if (!is.null(limits)) task$limits <- utils::modifyList(task$limits, limits)
+  task
+}
+
+TAB_COMMON_TESTS[["kaplan_meier: the restricted mean up to a tau before a stratum's first time is tau, the default included"]] <- function(code) {
+  # B is followed one day, censored before A's first event at 5: the default tau, the shortest follow-up, is 1
+  df <- data.frame(days = c(5, 8, 12, 15, 20, 25, 30, 1, 1, 1), status = c(1, 1, 0, 1, 1, 0, 1, 0, 0, 0),
+                   plant = c(rep("A", 7), rep("B", 3)), stringsAsFactors = FALSE)
+  f <- tab_results_frame(fit_kaplan_meier(.km_test_task(df, list(time = "days", event = "status", event_value = 1, strata = "plant")))$rows)
+  v <- function(key) f$value[match(key, f$key)]
+  .tab_expect(v("model|||rmst_tau") == 1 && v("stratum|plant=A||rmst") == 1 && v("stratum|plant=A||rmst_se") == 0 &&
+              v("stratum|plant=B||rmst") == 1, "the default tau: ", v("stratum|plant=A||rmst"), " ", v("stratum|plant=A||rmst_se"))
+  # a tau given before the first time; and one after it, survival's own
+  f <- tab_results_frame(fit_kaplan_meier(.km_test_task(df[1:7, ], list(time = "days", event = "status", event_value = 1, rmst_tau = 2)))$rows)
+  .tab_expect(f$value[f$key == "stratum|all||rmst"] == 2 && f$value[f$key == "stratum|all||rmst_se"] == 0, "tau = 2")
+  s <- survival::survfit(survival::Surv(days, status) ~ 1, data = df[1:7, ])
+  f <- tab_results_frame(fit_kaplan_meier(.km_test_task(df[1:7, ], list(time = "days", event = "status", event_value = 1, rmst_tau = 18)))$rows)
+  .tab_expect(abs(f$value[f$key == "stratum|all||rmst"] - summary(s, rmean = 18)$table[["rmean"]]) < 1e-12, "tau = 18")
+}
+
+TAB_COMMON_TESTS[["kaplan_meier: proportional hazards not tested is not_computed, never ok; a number for a column of text"]] <- function(code) {
+  # the stratum b has no event: no Grambsch–Therneau test, and too few rows for a crossing
+  df <- data.frame(t = c(5, 5, 5, 8, 10, 12), e = c("1", "0", "0", "0", "0", "0"), g = c("a", "a", "b", "b", "a", "b"),
+                   stringsAsFactors = FALSE)
+  # event_value given as the number 1 for a column of text holding «1» (the engine's label of 1 is «1.0»)
+  fit <- fit_kaplan_meier(.km_test_task(df, list(time = "t", event = "e", event_value = 1, strata = "g")))
+  f <- tab_results_frame(fit$rows)
+  said <- function(stat) f$text[f$key == paste0("assumption|proportional_hazards||", stat)]
+  .tab_expect(identical(said("verdict"), "not_computed") && grepl("a stratum has no event", said("advice"), fixed = TRUE) &&
+              !"assumption|proportional_hazards||p_value" %in% f$key, "the verdict: ", said("verdict"))
+  .tab_expect(f$value[f$key == "model|||events"] == 1 && identical(f$text[f$key == "model|||event_value"], "1"), "the event value")
+}
+
