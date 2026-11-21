@@ -20,10 +20,16 @@
 AB_CORRECTIONS <- c(holm = "holm", benjamini_hochberg = "BH", bonferroni = "bonferroni", none = "none")
 
 # ── the estimates ────────────────────────────────────────────────────────────────
-# The within-variant sums of cross products S_ab,j = Σ_i (a_ij − ā_j)(b_ij − b̄_j) (the (co)variance times n − 1).
+# The within-variant sums of cross products S_ab,j = Σ_i (a_ij − ā_j)(b_ij − b̄_j), from the shifted sums
+# directly (not the (co)variance times n − 1: a variant with one unit of its own covariate has S = 0, not NaN).
 .abc_s <- function(d, a, b = a, own = FALSE) {
   t <- if (own && !is.null(d$totals_own)) d$totals_own else d$totals
-  ab_variance(d, a, b, own = own) * (t[, "n"] - 1)
+  col <- paste0("ss_", a, b)
+  if (!col %in% colnames(t)) col <- paste0("ss_", b, a)
+  n <- t[, "n"]
+  ca <- t[, paste0("sum_", a)] - n * d$shift[[a]]
+  cb <- t[, paste0("sum_", b)] - n * d$shift[[b]]
+  t[, col] - ca * cb / n
 }
 
 ab_estimates <- function(d) {
@@ -118,6 +124,13 @@ ab_estimates <- function(d) {
   est$m <- est$m - theta * (cbar_j - cbar)
   est$s2 <- s2_adj
   est$v <- s2_adj / n
+  # a variant's own adjusted mean also carries x̄, the covariate's mean over all the units, estimated too: its
+  # variance is v_j + θ̂² s²_x / N (s²_x over all the units, filled values included, as x̄ is). The term is the same
+  # for every variant and cancels in a difference: the comparisons, the Bayesian measures and the power keep v_j;
+  # only a variant's own interval (the variants' table, the `variants` output) reads v_level.
+  nn <- sum(n)
+  s2c_all <- if (nn > 1) (sum(.abc_s(d, "c")) + sum(n * (cbar_j - cbar)^2)) / (nn - 1) else 0
+  est$v_level <- est$v + theta^2 * s2c_all / nn
   est$sd <- sqrt(s2_adj)
   est$reference <- "z"
   cov <- d$covariate
@@ -156,10 +169,13 @@ ab_compare <- function(est, ctx) {
   m <- length(tr)
   alpha <- ctx$alpha
   alt <- ctx$alternative
-  # the intervals: simultaneous at 1 − alpha/m with Bonferroni, at 1 − alpha each otherwise
-  a_int <- if (identical(ctx$correction, "bonferroni")) alpha / m else alpha
   mc <- est$m[[ci]]
   vc <- est$v[[ci]]
+  # the family: the comparisons that can be computed (a standard error above 0), as p.adjust counts the p-values
+  # that are not NA; with every treatment computed it is m
+  m_family <- max(1L, sum(vapply(tr, function(t) { se <- sqrt(est$v[[t]] + vc); is.finite(se) && se > 0 }, TRUE)))
+  # the intervals: simultaneous at 1 − alpha/m with Bonferroni, at 1 − alpha each otherwise
+  a_int <- if (identical(ctx$correction, "bonferroni")) alpha / m_family else alpha
   rows <- lapply(tr, function(t) {
     mt <- est$m[[t]]
     vt <- est$v[[t]]
@@ -186,7 +202,7 @@ ab_compare <- function(est, ctx) {
   p <- vapply(rows, `[[`, 0, "p")
   p_adj <- stats::p.adjust(p, method = AB_CORRECTIONS[[ctx$correction]])
   # the level of each comparison in the power at this size: α/(arms − 1) with a correction, as the plan's
-  a_cmp <- if (identical(ctx$correction, "none")) alpha else alpha / m
+  a_cmp <- if (identical(ctx$correction, "none")) alpha else alpha / m_family
   z_a <- if (alt == "two_sided") stats::qnorm(1 - a_cmp / 2) else stats::qnorm(1 - a_cmp)
   z_b <- stats::qnorm(ctx$power)
   for (i in seq_along(rows)) {
@@ -213,7 +229,7 @@ ab_compare <- function(est, ctx) {
     }
     rows[[i]] <- r
   }
-  list(rows = rows, treatments = tr, m = m, alpha_interval = a_int, alpha_comparison = a_cmp, z_a = z_a, z_b = z_b,
+  list(rows = rows, treatments = tr, m = m, m_family = m_family, alpha_interval = a_int, alpha_comparison = a_cmp, z_a = z_a, z_b = z_b,
        conf = 1 - a_int)
 }
 

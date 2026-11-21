@@ -31,6 +31,7 @@
 here <- dirname(normalizePath(sub("^--file=", "", grep("^--file=", commandArgs(FALSE), value = TRUE))))
 args <- commandArgs(trailingOnly = TRUE)
 data_dir <- file.path(here, "data")
+REF_SE_COMPARE <- list()  # per case and variant, the standard error the comparisons use (with CUPED, not the variant's own)
 
 # Quoted only where a value or a name holds a comma or a quote: the self-test's ConfigMap holds the tables, at
 # most 900 KiB with the runner and the catalogue (groups_test.go), so every byte of them counts.
@@ -279,6 +280,9 @@ ab_case <- function(id, data, types, params, note = NULL) {
       m <- m - theta * (cbar_j - mean(cv))
       s2 <- vapply(seq_len(k), function(j) stats::var(lin[g == j] - theta * cv[g == j]), 0)
       v <- s2 / n
+      # a variant's own adjusted mean also carries the covariate's grand mean, estimated too: θ² s²_x / N more
+      # (it cancels in a difference, so the comparisons keep v)
+      v_level <- v + theta^2 * stats::var(cv) / length(cv)
       num("model|||theta", theta)
       num("model|||covariate_correlation", rho)
       if (type == "continuous") {
@@ -315,7 +319,7 @@ ab_case <- function(id, data, types, params, note = NULL) {
     num(paste0(lv, "share"), n_assigned[[j]] / sum(n_assigned))
     num(paste0(lv, "expected_share"), expected[[j]])
     num(paste0(lv, "mean"), m[[j]])
-    num(paste0(lv, "std_error"), sqrt(v[[j]]))
+    num(paste0(lv, "std_error"), sqrt(if (cuped) v_level[[j]] else v[[j]]))
     if (type == "binary") num(paste0(lv, "conversions"), round(m[[j]] * n[[j]]))
     if (type == "continuous" && !aggregated) {
       yy <- units[[p[["metric"]]]][g == j]
@@ -327,10 +331,13 @@ ab_case <- function(id, data, types, params, note = NULL) {
       num(paste0(lv, "denominator_sum"), sum(units[[p[["denominator"]]]][g == j]))
     }
   }
+  REF_SE_COMPARE[[id]] <<- stats::setNames(sqrt(v), labels)  # the comparisons' own (the Bayesian reference reads them)
   # the comparisons
   m_t <- length(tr)
-  a_int <- if (p[["correction"]] == "bonferroni") p[["alpha"]] / m_t else p[["alpha"]]
-  a_cmp <- if (p[["correction"]] == "none") p[["alpha"]] else p[["alpha"]] / m_t
+  # the family: the comparisons with a standard error above 0 (p.adjust counts the p-values that are not NA)
+  m_fam <- max(1L, sum(vapply(tr, function(t) sqrt(v[[t]] + v[[ci]]) > 0, TRUE)))
+  a_int <- if (p[["correction"]] == "bonferroni") p[["alpha"]] / m_fam else p[["alpha"]]
+  a_cmp <- if (p[["correction"]] == "none") p[["alpha"]] else p[["alpha"]] / m_fam
   two <- p[["alternative"]] == "two_sided"
   z_a <- if (two) stats::qnorm(1 - a_cmp / 2) else stats::qnorm(1 - a_cmp)
   res <- lapply(tr, function(t) {
@@ -391,7 +398,7 @@ ab_case <- function(id, data, types, params, note = NULL) {
   }
   srm_failed <- srm$p.value < p[["srm_alpha"]]
   under <- if (any(decisions == "better")) "better" else if (any(decisions == "worse")) "worse" else "no_difference"
-  txt("model|||decision", if (srm_failed) "srm_failed" else under)
+  txt("model|||decision", if (srm_failed) "srm_failed" else if (under == "no_difference" && !any(decisions == "not_significant")) "not_computed" else under)
   # the checks
   num("assumption|srm||statistic", unname(srm$statistic))
   num("assumption|srm||p_value", srm$p.value)
@@ -424,7 +431,7 @@ ab_case <- function(id, data, types, params, note = NULL) {
   pool <- if (under == "no_difference") seq_along(res) else which(decisions == under)
   pa <- ifelse(is.na(padj), Inf, padj)
   best <- res[[pool[[order(pa[pool], -lifts[pool])[[1L]]]]]]
-  say("decision", "", c(if (!is.na(padj[[match(best$t, tr)]])) paste0("decision_", under), if (type == "binary") "decision_counts" else "decision_means",
+  say("decision", "", c(if (!is.na(padj[[match(best$t, tr)]])) paste0("decision_", under, if (under != "no_difference" && length(pool) > 1L) "_many"), if (type == "binary") "decision_counts" else "decision_means",
                         if (!any(is.na(best$lci))) "decision_interval"))
   say("srm", "", if (srm_failed) "srm_failed" else "srm_ok")
   for (i in seq_along(res)) {

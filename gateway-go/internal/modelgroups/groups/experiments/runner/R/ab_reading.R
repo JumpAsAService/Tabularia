@@ -85,9 +85,13 @@ ab_reading_decision <- function(r) {
   best <- .ab_reading_best(r, named)
   control <- est$labels[[est$control]]
   who <- if (kind == "no_difference") est$labels[[best$t]] else est$labels[vapply(named, `[[`, 0L, "t")]
-  # a sentence that lacks one of its numbers is not said: no adjusted p (nothing computed), an interval with an end
-  # NULL (one-sided, or Fieller's set not bounded)
-  head <- if (is.na(best$p_adjusted)) NA_character_ else
+  # a sentence that lacks one of its numbers is not said: no adjusted p (nothing computed: no verdict either), an
+  # interval with an end NULL (one-sided, or Fieller's set not bounded). Several treatments better (or worse): their
+  # names as a list, and the numbers of the one with the smallest adjusted p, named on its own.
+  many <- kind != "no_difference" && length(who) > 1L
+  head <- if (is.na(best$p_adjusted)) NA_character_ else if (many)
+    ab_line(paste0("decision_", kind, "_many"), variants = who, variant = est$labels[[best$t]], control = control,
+            lift = best$lift, p_adjusted = best$p_adjusted, alpha = ctx$alpha) else
     ab_line(paste0("decision_", kind), variant = who, control = control, lift = if (kind != "no_difference") best$lift,
             p_adjusted = best$p_adjusted, alpha = ctx$alpha)
   t <- best$t
@@ -115,8 +119,8 @@ ab_reading_comparison <- function(r) {
   for (x in r$cmp$rows) {
     if (is.na(x$p_adjusted)) next
     id <- if (x$p_adjusted < ctx$alpha) "comparison_significant" else "comparison_not_significant"
-    lines <- ab_line(id, variant = est$labels[[x$t]], control = control, p = x$p_adjusted, alpha = ctx$alpha)
-    lines <- c(lines, if (r$cmp$m > 1L) ab_line(paste0("correction_", ctx$correction), p = x$p, p_adjusted = x$p_adjusted, treatments = r$cmp$m)
+    lines <- ab_line(id, variant = est$labels[[x$t]], control = control, p = x$p, p_adjusted = x$p_adjusted, alpha = ctx$alpha)
+    lines <- c(lines, if (r$cmp$m > 1L) ab_line(paste0("correction_", ctx$correction), p = x$p, p_adjusted = x$p_adjusted, treatments = r$cmp$m_family)
                       else ab_line("correction_one"))
     out[[length(out) + 1L]] <- ab_block("comparison", lines, est$labels[[x$t]])
   }

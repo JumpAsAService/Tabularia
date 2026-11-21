@@ -116,7 +116,7 @@ bayes_case <- function(id, data, types, params, note = NULL) {
   control <- match(p[["control"]], labels)
   n <- vapply(labels, function(l) have(paste0("variant|", l, "||n")), 0)
   m <- vapply(labels, function(l) have(paste0("variant|", l, "||mean")), 0)
-  se <- vapply(labels, function(l) have(paste0("variant|", l, "||std_error")), 0)
+  se <- vapply(labels, function(l) REF_SE_COMPARE[[id]][[l]], 0)  # with CUPED the comparisons' v_j, not a variant's own interval
   cuped <- !is.null(p[["covariate"]])
   binary <- identical(p[["metric_type"]], "binary") && !cuped
   post <- if (binary) {

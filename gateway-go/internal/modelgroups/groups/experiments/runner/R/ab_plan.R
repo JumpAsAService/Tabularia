@@ -135,6 +135,11 @@ fit_ab_plan <- function(task) {
   if (b$type == "binary" && b$m0 * (1 + L) > 1) {
     tab_refuse("lift_too_large", paste0("a rate of ", format(signif(b$m0, 6), scientific = FALSE), " cannot rise by ", format(signif(L, 6), scientific = FALSE), ": it would pass 100 %"), list(lift = L))
   }
+  # a lift or a size beyond what a double counts (a lift of 1e308, or 1e-300): a sentence, not an error of R's
+  if (!is.finite(4 * L)) tab_refuse("lift_too_large", paste0("a lift of ", format(signif(L, 6)), " is beyond what can be planned"), list(lift = L))
+  if (!all(is.finite(unlist(.abp_sizes(b, ctx, L)[c("n_t", "n_c")])))) {
+    tab_refuse("lift_too_small", paste0("a lift of ", format(signif(L, 6)), " would need more units than can be counted: plan a larger lift"), list(lift = L))
+  }
   # the units as the table shows them: whole units (a control's share of a treatment's units, or of the days' traffic, rounded as
   # the sizes are: up for the units asked, down for the units the days bring)
   at <- .abp_sizes(b, ctx, L)
@@ -223,8 +228,7 @@ fit_ab_plan <- function(task) {
     y <- vapply(x, function(day) .abp_mde(b, ctx, day * b$daily * ctx$wc, day * b$daily * ctx$wt), 0)
     tab_points(rows, "curve", "mde_days", "y", x = x[!is.na(y)], y = y[!is.na(y)])  # no point where the days cannot detect any lift
   }
-  h <- d$hist
-  if (!is.null(h)) tab_points(rows, "hist", "metric", "count", x = c(NA_real_, h$breaks), y = h$counts[1L, ], x1 = c(h$breaks, NA_real_))
+  ab_hist_points(rows, d$hist)
 }
 
 # The reading: the answer, the baseline, CUPED, the correction, the method (the ids of the words in experiments.json,

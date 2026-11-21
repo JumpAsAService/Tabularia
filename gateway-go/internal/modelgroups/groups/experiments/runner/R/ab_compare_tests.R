@@ -165,7 +165,9 @@ TAB_COMMON_TESTS[["experiments: binary z, Welch's t (= t.test), the delta method
     .tab_expect(.abc_rel(cu$value("comparison|B|A|difference"), stats::coef(ols)[["factor(v)B"]]) < 1e-10 &&
                   .abc_rel(cu$value("comparison|C|A|difference"), stats::coef(ols)[["factor(v)C"]]) < 1e-10, mode, ": the adjusted difference")
     s2 <- stats::var((df$rev - cu$value("model|||theta") * x)[keep & df$v == "B"])
-    .tab_expect(.abc_rel(cu$value("variant|B||std_error"), sqrt(s2 / sum(keep & df$v == "B"))) < 1e-10, mode, ": the variance of y − θx")
+    s2a <- stats::var((df$rev - cu$value("model|||theta") * x)[keep & df$v == "A"])
+    .tab_expect(.abc_rel(cu$value("comparison|B|A|difference_std_error"), sqrt(s2 / sum(keep & df$v == "B") + s2a / sum(keep & df$v == "A"))) < 1e-10,
+                mode, ": the variance of y − θx")
     if (mode == "fill") {
       .tab_expect(.abc_rel(c(cu$value("variant|A||covariate_fill_value"), cu$value("variant|C||covariate_fill_value")), unname(fill[c("A", "C")])) < 1e-12,
                   "the fill value is the mean of the unit's own variant")

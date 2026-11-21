@@ -216,6 +216,10 @@ def witness_comparisons(case: dict[str, Any]) -> None:
         cbar = c.mean()
         m = np.array([m[j] - theta * (c[g == j].mean() - cbar) for j in range(k)])
         v_ = np.array([np.var((lin - theta * c)[g == j], ddof=1) / n[j] for j in range(k)])
+        # a variant's own interval: the grand mean of the covariate is an estimate too (θ² s²_x / N more, lot E10)
+        for j, lab in enumerate(labels):
+            check(cid, f"variant|{lab}||std_error", float(math.sqrt(v_[j] + theta ** 2 * np.var(c, ddof=1) / len(c))),
+                  want.get(f"variant|{lab}||std_error"), 1e-12, "transcription with the covariate's grand mean")
         if empty is not None and empty.sum() > 0:
             ch = stats.chi2_contingency(np.vstack([empty, given]), correction=False)
             check(cid, "assumption|covariate_missing_balance||statistic", float(ch.statistic),

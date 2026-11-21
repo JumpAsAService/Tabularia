@@ -34,7 +34,9 @@ AB_HIST_BINS <- 30L
 .ab_num <- function(v) if (is.na(v)) "NULL" else format(signif(v, 15), scientific = FALSE, trim = TRUE, drop0trailing = TRUE, big.mark = ",")
 .ab_nf <- function(v) format(signif(v, 15), scientific = FALSE, trim = TRUE, drop0trailing = TRUE)
 .ab_units <- function(n) paste0(.ab_int(n), if (n == 1) " unit" else " units")
-.ab_names <- function(labels) paste(gsub(",", "%2C", labels, fixed = TRUE), collapse = ",")
+# a list of names in a note: each one encoded as a reading's text (its «%», « », «,»), so that a variant called
+# «A count=9» or «x%41y» stays one name and never another value of the note
+.ab_names <- function(labels) paste(ab_reading_text(labels), collapse = ",")
 
 # A label of a value, as tab_label writes it; a 64-bit integer is its decimal digits.
 ab_label <- function(x) {
@@ -551,7 +553,24 @@ ab_read <- function(task) {
   breaks <- seq(lo_hi[[1L]], lo_hi[[2L]], length.out = AB_HIST_BINS + 1L)
   bin <- findInterval(y, breaks, rightmost.closed = TRUE)
   counts <- matrix(tabulate((bin + 1L) * k + v - k, (AB_HIST_BINS + 2L) * k), nrow = k)
-  list(breaks = breaks, counts = counts)
+  list(breaks = breaks, counts = counts, range = c(min(y), max(y)))
+}
+
+# The histogram's rows: one bar an interval, its two edges in x0 and x1, so that every bar is said by its edges
+# («[59.8 – 258)»). The open bin on each side runs to the smallest (largest) value of the metric, and is left out
+# when no unit falls in it; `labels`: the variants (level_2), NULL for one series (the planning's history).
+ab_hist_points <- function(rows, h, labels = NULL) {
+  if (is.null(h)) return(invisible(rows))
+  b <- h$breaks
+  x0 <- c(h$range[[1L]], b)
+  x1 <- c(b, h$range[[2L]])
+  nb <- length(x0)
+  keep <- seq_len(nb)
+  if (all(h$counts[, 1L] == 0L)) keep <- setdiff(keep, 1L)
+  if (all(h$counts[, nb] == 0L)) keep <- setdiff(keep, nb)
+  if (is.null(labels)) tab_points(rows, "hist", "metric", "count", x = x0[keep], y = h$counts[1L, keep], x1 = x1[keep])
+  else for (j in seq_along(labels)) tab_points(rows, "hist", "metric", "count", x = x0[keep], y = h$counts[j, keep], level_2 = labels[[j]], x1 = x1[keep])
+  invisible(rows)
 }
 
 # The rules of the aggregated rows, one by one, with the row's number (its place in the input).

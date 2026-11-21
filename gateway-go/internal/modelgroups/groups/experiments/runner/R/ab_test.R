@@ -81,11 +81,13 @@ ab_test_reading <- function(r, parts = list()) {
 }
 
 # ── the headline ─────────────────────────────────────────────────────────────────
-# By precedence, from verdicts only: the SRM's failure, a treatment better, one worse, none different.
+# By precedence, from verdicts only: the SRM's failure, a treatment better, one worse, none different; with no
+# comparison computed (no test, so no verdict) `not_computed`, never «no difference».
 ab_decision <- function(r) {
   ids <- vapply(r$cmp$rows, `[[`, "", "decision")
-  under <- if (any(ids == "better")) "better" else if (any(ids == "worse")) "worse" else "no_difference"
-  named <- if (under == "no_difference") integer() else vapply(r$cmp$rows[ids == under], `[[`, 0L, "t")
+  under <- if (any(ids == "better")) "better" else if (any(ids == "worse")) "worse" else
+    if (any(ids == "not_significant")) "no_difference" else "not_computed"
+  named <- if (!under %in% c("better", "worse")) integer() else vapply(r$cmp$rows[ids == under], `[[`, 0L, "t")
   list(id = if (identical(r$d$srm$verdict, "failed")) "srm_failed" else under, under = under,
        variants = r$est$labels[named])
 }
@@ -148,9 +150,10 @@ ab_decision <- function(r) {
 }
 
 # The interval of a variant's own estimate at 1 − alpha: Student's t with n − 1 degrees of freedom for a plain
-# continuous mean, the normal otherwise (as its comparison's reference).
+# continuous mean, the normal otherwise (as its comparison's reference). With CUPED the variance of the level
+# (v_level: the grand mean of the covariate is an estimate too), not the comparisons' v.
 .abt_variant_interval <- function(est, alpha) {
-  se <- sqrt(est$v)
+  se <- sqrt(if (is.null(est$v_level)) est$v else est$v_level)
   q <- if (est$reference == "welch") stats::qt(1 - alpha / 2, est$n - 1) else stats::qnorm(1 - alpha / 2)
   list(low = est$m - q * se, high = est$m + q * se, se = se)
 }
@@ -260,7 +263,7 @@ ab_test_checks <- function(r) {
   }
   s2 <- if (is.null(est$cuped)) est$s2 else est$cuped$raw$s2
   zero <- which(!(s2 > 0))
-  out$variance_zero <- list(verdict = if (length(zero)) "failed" else "ok", value = length(zero),
+  out$variance_zero <- list(verdict = if (length(zero)) "failed" else "ok", count = length(zero),
                             advice = paste0("the metric has the same value on every unit of ", paste0("«", est$labels[zero], "»", collapse = ", "),
                                             ": a comparison where both sides have no variance is not computed"))
   out
@@ -294,14 +297,7 @@ ab_test_checks <- function(r) {
                  y = ab_power_at(lifts, x$std_error, mc, r$cmp$z_a, identical(r$ctx$alternative, "two_sided")), level_2 = est$labels[[x$t]])
     }
   }
-  h <- d$hist
-  if (!is.null(h)) {
-    b <- h$breaks
-    nb <- length(b)
-    x0 <- c(NA_real_, b)
-    x1 <- c(b, NA_real_)
-    for (j in seq_len(est$k)) tab_points(rows, "hist", "metric", "count", x = x0, y = h$counts[j, ], level_2 = est$labels[[j]], x1 = x1)
-  }
+  ab_hist_points(rows, d$hist, est$labels)
 }
 
 # ── the `variants` output ────────────────────────────────────────────────────────
