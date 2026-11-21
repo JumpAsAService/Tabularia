@@ -125,3 +125,9 @@ test('the keys that remove nodes act only with the focus on the canvas or on not
   assert.match(editor, /key_ === 'x' && !onCanvas\(\)/)
   assert.match(editor, /focusOnCanvas\(document\.activeElement, canvasEl\.value, document\.body\)/)
 })
+
+test('a node added from the palette takes the focus, as one reached from the keyboard', () => {
+  const editor = readFileSync(new URL('../components/FlowEditor.vue', import.meta.url), 'utf8')
+  assert.match(editor, /if \(id\) return focusNewNode\(id\)/)
+  assert.match(editor, /if \(made && !before\.has\(made\) && findNode\(made\)\) focusNewNode\(made\)/)
+})

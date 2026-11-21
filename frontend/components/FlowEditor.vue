@@ -11,7 +11,7 @@ import { Table2, BarChart3, FileChartColumn, Wand2, Users, Undo2, Redo2, Sparkle
 import FlowAssistant from '~/components/FlowAssistant.vue'
 import { useAi, type AiStatus } from '~/composables/useAi'
 import { useApi, errMessage } from '~/composables/useApi'
-import { focusOnCanvas } from '~/composables/nodeKeys'
+import { focusNodeOf, focusOnCanvas } from '~/composables/nodeKeys'
 import { FIRST_PAUSE_MS, nextPause } from '~/composables/waits'
 import { knownError } from '~/composables/knownErrors'
 import { useAuth } from '~/composables/useAuth'
@@ -1223,9 +1223,23 @@ function walkGraph(way: Walk) {
   }
   selectOnCanvas(to)
   nextTick(() => {
-    const el = canvasEl.value?.querySelector(`.vue-flow__node[data-id="${CSS.escape(to)}"]`) as HTMLElement | null
-    el?.focus({ preventScroll: true })
+    focusNodeOf(canvasEl.value, to)
     revealNode(to)
+  })
+}
+
+// A node just added from the palette (a click, Enter, a drop) takes the focus, as a node reached
+// with Alt+arrow does: Delete and Backspace remove it at once. The focus stayed on the palette's
+// item, outside the canvas, and the keys did nothing (focusOnCanvas). Vue Flow draws a new node
+// hidden until it has measured it: the focus is tried again on the next frames, a few at most,
+// and not when the person has meanwhile chosen something else.
+function focusNewNode(id: string, frames = 10) {
+  nextTick(() => {
+    const again = (left: number) => {
+      if (selectedId.value !== id || focusNodeOf(canvasEl.value, id) || left <= 0) return
+      requestAnimationFrame(() => again(left - 1))
+    }
+    again(frames)
   })
 }
 // On the canvas, before Vue Flow sees the key: an arrow on a selected node moved it by a few
@@ -1446,14 +1460,16 @@ function addFromPalette(opType: string) {
     if (deniedToObserver()) return
     const parents = [selectedId.value, leafNodeId(getNodes.value, getEdges.value)]
     for (const parentId of parents) {
-      if (parentId && findNode(parentId) && addStep(parentId, opType, {}, { reveal: true, step })) return
+      const id = parentId && findNode(parentId) ? addStep(parentId, opType, {}, { reveal: true, step }) : null
+      if (id) return focusNewNode(id)
     }
     return
   }
   if (!operations.value.includes(opType)) return
   const leaf = leafNodeId(getNodes.value, getEdges.value)
   for (const parentId of [selectedId.value, leaf]) {
-    if (parentId && findNode(parentId) && addStep(parentId, opType, defaultParams(opType), { reveal: true })) return
+    const id = parentId && findNode(parentId) ? addStep(parentId, opType, defaultParams(opType), { reveal: true }) : null
+    if (id) return focusNewNode(id)
   }
 }
 
@@ -1755,6 +1771,13 @@ function onCanvasDragLeave(ev: DragEvent) {
 }
 
 function onCanvasDrop(ev: DragEvent) {
+  const before = new Set(getNodes.value.map((n) => n.id))
+  dropOnCanvas(ev)
+  // the node the drop made, selected: it takes the focus (focusNewNode)
+  const made = selectedId.value
+  if (made && !before.has(made) && findNode(made)) focusNewNode(made)
+}
+function dropOnCanvas(ev: DragEvent) {
   const over = dropTarget(ev)
   endDropHint()
   const kind = ev.dataTransfer?.getData('application/tabularia')

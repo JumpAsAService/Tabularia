@@ -7,3 +7,12 @@ export function focusOnCanvas(active: Element | null | undefined, canvas: Elemen
   if (!active || active === body || active.tagName === 'BODY' || active.tagName === 'HTML') return true
   return !!canvas && (active === canvas || canvas.contains(active))
 }
+
+/** Gives the focus to a node of the canvas: a node reached from the keyboard, or just added (from the palette, dropped), so
+ *  that Delete and Backspace act on it (focusOnCanvas) without a click on it first. Whether it has it: a node Vue Flow has
+ *  just added is drawn hidden until it is measured, and a hidden element takes no focus. */
+export function focusNodeOf(canvas: Element | null | undefined, id: string): boolean {
+  const el = canvas?.querySelector(`.vue-flow__node[data-id="${CSS.escape(id)}"]`) as HTMLElement | null
+  el?.focus({ preventScroll: true })
+  return !!el && el.ownerDocument.activeElement === el
+}
