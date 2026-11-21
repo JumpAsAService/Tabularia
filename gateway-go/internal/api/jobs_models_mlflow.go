@@ -256,6 +256,12 @@ func (q *queue) mlflowLog(ctx context.Context, r *scriptNodeRun, s *modelStep, c
 	if err != nil {
 		return err
 	}
+	// the run is closed before the version is made: a run that cannot be closed fails the step, and
+	// leaves no version that Predict's «latest» would apply (the registration is the last act; when it
+	// fails, the run is set FAILED below)
+	if err := tr.EndRun(ctx, run.ID, false, time.Now()); err != nil {
+		return err
+	}
 	card := up.card
 	if s.mlflow.registerAs != "" {
 		switch {
@@ -296,9 +302,6 @@ func (q *queue) mlflowLog(ctx context.Context, r *scriptNodeRun, s *modelStep, c
 				return err
 			}
 		}
-	}
-	if err := tr.EndRun(ctx, run.ID, false, time.Now()); err != nil {
-		return err
 	}
 	failed = false
 	return nil

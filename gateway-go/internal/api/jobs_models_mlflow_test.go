@@ -580,6 +580,42 @@ func TestRefusedCredentialsFailTheStep(t *testing.T) {
 	}
 }
 
+// A run the server does not let close fails the step and leaves no version: Predict's «latest» would
+// apply a version whose step failed. A registration that fails sets the run it was made from FAILED.
+func TestARunThatCannotBeClosedRegistersNoVersion(t *testing.T) {
+	w := newMLflowWorld(t)
+	w.ml.Fail = func(r *http.Request) int {
+		if r.URL.Path == "/api/2.0/mlflow/runs/update" {
+			return http.StatusInternalServerError
+		}
+		return 0
+	}
+	id, err := w.runWith(w.block(`, "registerAs": "price-elasticity"`))
+	if err == nil || !strings.HasSuffix(err.Error(), "(HTTP 500), closing the run") || w.row(id).status != "FAILURE" {
+		t.Fatalf("a run not closed: %v %+v", err, w.row(id))
+	}
+	if len(w.ml.Models) != 0 {
+		t.Errorf("a version registered from a failed step: %+v", w.ml.Models)
+	}
+	if c, _ := w.columns(id); c.version != nil || c.model != nil {
+		t.Errorf("the run's record names a version: %+v", c)
+	}
+	// the registration refused: the run it was made from is FAILED, not FINISHED
+	w.ml.Fail = func(r *http.Request) int {
+		if r.URL.Path == "/api/2.0/mlflow/model-versions/create" {
+			return http.StatusInternalServerError
+		}
+		return 0
+	}
+	w.ml.Runs = map[string]*mlflowtest.Run{}
+	if _, err := w.runWith(w.block(`, "registerAs": "price-elasticity"`)); err == nil {
+		t.Fatal("a refused registration does not fail the step")
+	}
+	if run := w.ml.OnlyRun(); run == nil || run.Status != "FAILED" || len(w.ml.Models["price-elasticity"]) != 0 {
+		t.Errorf("the run of a refused registration: %+v", run)
+	}
+}
+
 func TestAServerThatDoesNotAnswer(t *testing.T) {
 	w := newMLflowWorld(t)
 	mlflowCallTimeout = 150 * time.Millisecond
