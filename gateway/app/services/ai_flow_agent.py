@@ -61,7 +61,8 @@ STAT_TESTS: dict[str, dict] = {t["operation"]: t for t in STAT_CATALOG["tests"]}
 # `model_catalog.json` is written by .github/scripts/model_catalog.py from the engine's catalogue
 # (backend/app/engine/models/catalog.py); nothing here names a model. The assistant's operation for
 # a model is `model_<id>`; it makes a node of the editor's `model` type. A model runs as a
-# Kubernetes Job, so there is no preview of it and no step can follow it.
+# Kubernetes Job, so there is no preview of its rows: what it and the steps after it hand on is
+# worked out from the catalogue's types of its output (`output_types`), as the editor does.
 def _load_model_catalog() -> dict:
     return json.loads((Path(__file__).with_name("model_catalog.json")).read_text(encoding="utf-8"))
 
@@ -79,6 +80,7 @@ AGG_FUNCS = ("sum", "mean", "min", "max", "count", "median", "std", "var", "firs
 DTYPES = ("int", "float", "str", "bool", "date", "datetime")
 JOIN_HOWS = ("inner", "left", "right", "full", "semi", "anti", "cross")
 DATA_NODES = ("source", "operation")
+STEP_NODES = DATA_NODES + (MODEL_NODE, PREDICT_NODE)  # what a step may read: a model's output too
 _SELECT = re.compile(r"^\s*select\b", re.IGNORECASE)
 
 
@@ -606,6 +608,100 @@ def operation_of(node: dict) -> Optional[str]:
     return d.get("opType")
 
 
+# ── what a model hands on before it has run ──────────────────────────────────
+# As the engine's catalogue says it (backend/app/engine/models/catalog.py `output_columns`) and the
+# editor shows it (frontend/composables/modelCatalog.ts `modelOutputColumns`), on the same cases
+# (backend/tests/fixtures/models/output_columns.json, what the runners really write).
+_ROWS_WILDCARDS = {"pred_quantile_": "quantiles", "pred_surv_at_": "times"}
+_CAST_TYPES = {"int": "Int64", "int64": "Int64", "int32": "Int32", "float": "Float64", "float64": "Float64",
+               "float32": "Float32", "str": "String", "string": "String", "utf8": "String", "bool": "Boolean",
+               "boolean": "Boolean", "date": "Date", "datetime": "Datetime(time_unit='us', time_zone=None)"}
+_WHOLE = re.compile(r"^U?Int")
+
+
+def _number_label(v: float) -> str:
+    return str(int(v)) if float(v).is_integer() and abs(v) < 1e15 else repr(float(v))
+
+
+def model_output_columns(model_id: str, params: Optional[dict],
+                         input_columns: Optional[list[dict]]) -> tuple[list[dict], list[str]]:
+    """What a model node hands to the next step before it has run: ([{name, dtype}], [names the data fill]).
+    The rows output starts with the input's columns (`input_columns`, None when they are not known: then
+    only the model's own), as the runner writes them back; the model's follow in the runner's order, each
+    quantile and time with its interval. «pred_prob_*» (one per class) is a name the run fills."""
+    model = MODELS[model_id]
+    given = {k: v for k, v in (params or {}).items() if v is not None}
+    full = {k: given.get(k, model["defaults"].get(k)) for k in _model_keys(model)}
+    output = full.get("output") or "results"
+    types = MODEL_CATALOG["output_types"][output]
+    if output == "results":
+        return [{"name": n, "dtype": t} for n, t in types.items()], []
+    variant = next((v for v in model["variants"] if _holds_all(v["when"], full)), model["variants"][0])
+    names = [n for n in variant["outputs"].get(output, [])
+             if not (variant.get("rows_when") or {}).get(n) or _holds_all(variant["rows_when"][n], full)]
+    made: list[tuple[str, str]] = []
+    later: list[str] = []
+    i = 0
+    while i < len(names):
+        pre, star, _ = names[i].partition("*")
+        if not star:
+            made.append((names[i], names[i]))
+            i += 1
+            continue
+        group = [names[i]]
+        while i + len(group) < len(names) and "*" in names[i + len(group)] and names[i + len(group)].partition("*")[0] == pre:
+            group.append(names[i + len(group)])
+        i += len(group)
+        key = _ROWS_WILDCARDS.get(pre)
+        if key is None:
+            later.extend(group)
+            continue
+        values = sorted({float(v) for v in (full.get(key) or []) if _is_number(v)})
+        for v in values:
+            if key == "quantiles" and v == 0.5:  # the median: pred_median
+                continue
+            made.extend((pattern.replace("*", _number_label(v), 1), pattern) for pattern in group)
+    known = {c["name"]: c.get("dtype") or "" for c in input_columns or []}
+    out = []
+    for name, pattern in made:
+        dtype = types[pattern]
+        if dtype.startswith("@"):
+            source = known.get(full.get(dtype[1:]) or "")
+            dtype = "Unknown" if source is None else "Int32" if _WHOLE.match(source) else source
+        out.append({"name": name, "dtype": dtype})
+    if output == "rows" and input_columns:
+        language = next(g["language"] for g in MODEL_CATALOG["groups"] if g["id"] == model["group"])
+        kept = MODEL_CATALOG["rows_input_types"].get(language, {})
+        kind = lambda t: "integer" if _WHOLE.match(t) else t  # noqa: E731 — the only kind that changes
+        out = [{"name": c["name"], "dtype": kept.get(kind(c.get("dtype") or ""), c.get("dtype") or "")} for c in input_columns] + out
+    return out, later
+
+
+def columns_after_step(operation: str, params: Optional[dict], columns: list[dict]) -> Optional[list[dict]]:
+    """The columns after a step that only keeps, removes, orders, renames, casts or filters them, known without
+    its rows; None after any other step."""
+    p = params or {}
+    listed = [c for c in p.get("columns") or [] if isinstance(c, str)] if isinstance(p.get("columns"), list) else []
+    if operation in ("filter", "sort", "limit", "unique", "drop_nulls", "fill_null"):
+        return list(columns)
+    if operation == "select":
+        by_name = {c["name"]: c for c in columns}
+        return [by_name[n] for n in listed if n in by_name]
+    if operation == "drop":
+        return [c for c in columns if c["name"] not in listed]
+    if operation == "reorder":
+        first = [n for n in listed if any(c["name"] == n for c in columns)]
+        return [next(c for c in columns if c["name"] == n) for n in first] + [c for c in columns if c["name"] not in first]
+    if operation == "rename":
+        mapping = p.get("mapping") if isinstance(p.get("mapping"), dict) else {}
+        return [{**c, "name": mapping[c["name"]]} if isinstance(mapping.get(c["name"]), str) and mapping[c["name"]] else c
+                for c in columns]
+    if operation == "cast":
+        to = p.get("columns") if isinstance(p.get("columns"), dict) else {}
+        return [{**c, "dtype": _CAST_TYPES.get(str(to[c["name"]]).lower(), c["dtype"])} if c["name"] in to else c for c in columns]
+    return None
+
+
 def _applies_text(models: list[str]) -> str:
     """Where a Predict option applies, in words: «for model_logistic», and an entry `model:variant` of the
     catalogue as «for the binary task of model_xgboost and model_catboost» (never `model_x:binary`, which
@@ -788,7 +884,8 @@ async def preview_node(deps: FlowDeps, node_id: str, rows: int, for_the_person: 
     """The node's result on a preview of the draft, as the editor would show it
     (development sample included), checked as the proxy checks the editor's. In
     metadata-only mode only for a plan's card (`for_the_person`), which the model never
-    reads: for a model there is no preview."""
+    reads. A model step has no rows before it runs: what follows one is worked out
+    instead (`_after_model`)."""
     if deps.withholds_data() and not for_the_person:
         return {"error": metadata_only.PREVIEW_WITHHELD}
     draft = deps.draft
@@ -853,10 +950,131 @@ async def _step_result(deps: FlowDeps, node_id: str) -> dict[str, Any]:
     value is there»)."""
     if deps.withholds_data():
         return {"node": node_id, "note": metadata_only.STEP_NOT_CHECKED}
+    if _model_upstream(deps.draft, node_id):
+        return await _after_model(deps, node_id)
     res = await preview_node(deps, node_id, STEP_PREVIEW_ROWS)
     if "error" in res:
         return {"node": node_id, "preview_error": res["error"]}
     return {"node": node_id, "columns": res["columns"], "first_rows": res["rows"]}
+
+
+# ── after a model: the columns, worked out; no rows until the model runs ─────────
+def _model_upstream(draft: FlowDraft, node_id: str) -> Optional[dict]:
+    """The model or Predict step a step reads through its main input, if there is one before any source:
+    the step has no rows before that model runs (the assistant's previews never read a model's output)."""
+    seen: set[str] = set()
+    cur = draft.inputs(node_id).get("left")
+    while cur and cur not in seen:
+        seen.add(cur)
+        node = next((n for n in draft.nodes if n["id"] == cur), None)
+        if node is None or node.get("type") == "source":
+            return None
+        if node.get("type") in (MODEL_NODE, PREDICT_NODE):
+            return node
+        cur = draft.inputs(cur).get("left")
+    return None
+
+
+async def _known_columns(deps: FlowDeps, node_id: Optional[str], depth: int) -> Optional[list[dict]]:
+    """A node's columns when they can be known: a preview of one row, or worked out after a model; None
+    when not (metadata-only mode, a preview that failed, a step after a model that only its rows say)."""
+    if not node_id:
+        return []
+    node = next((n for n in deps.draft.nodes if n["id"] == node_id), None)
+    if node is None or depth > len(deps.draft.nodes):
+        return None
+    if node.get("type") == MODEL_NODE or _model_upstream(deps.draft, node_id):
+        found = await _expected_columns(deps, node_id, depth + 1)
+        return found["columns"] if found else None
+    if node.get("type") == PREDICT_NODE or deps.withholds_data():
+        return None
+    res = await preview_node(deps, node_id, 1)
+    return None if "error" in res else res.get("columns") or []
+
+
+async def _expected_columns(deps: FlowDeps, node_id: str, depth: int = 0) -> Optional[dict[str, Any]]:
+    """What a model step (`node_id`), or a step after one, will hand on: {columns, later, model, input_known},
+    from the model's settings and the steps between that only keep, drop, order, rename, cast or filter
+    columns; None when another kind of step is between, or the model is a Predict step (its columns are those
+    of the version it applies, known when it runs)."""
+    draft = deps.draft
+    steps: list[dict] = []
+    seen: set[str] = set()
+    cur: Optional[str] = node_id
+    node: Optional[dict] = None
+    while cur and cur not in seen:
+        seen.add(cur)
+        node = next((n for n in draft.nodes if n["id"] == cur), None)
+        if node is None or node.get("type") == MODEL_NODE:
+            break
+        if node.get("type") != "operation" or node.get("parentNode"):
+            return None
+        steps.insert(0, node)
+        cur = draft.inputs(cur).get("left")
+    model_id = ((node or {}).get("data") or {}).get("model")
+    if node is None or node.get("type") != MODEL_NODE or model_id not in MODELS:
+        return None
+    params = (node.get("data") or {}).get("params") or {}
+    output = params.get("output") or MODELS[model_id]["defaults"].get("output") or "results"
+    needs_input = output == "rows" or any(t.startswith("@") for t in MODEL_CATALOG["output_types"][output].values())
+    input_id = draft.inputs(node["id"]).get("left")
+    inputs = await _known_columns(deps, input_id, depth) if needs_input else []
+    columns, later = model_output_columns(model_id, params, inputs)
+    for step in steps:
+        d = step.get("data") or {}
+        after = columns_after_step(str(d.get("opType") or ""), d.get("params"), columns)
+        if after is None:
+            return None
+        columns = after
+    return {"columns": columns, "later": later, "model": node["id"], "input_known": inputs is not None}
+
+
+_NO_ROWS_YET = ("there are no rows until the model runs (when the flow runs, or with Run in the model's panel). This is "
+                "not an error: go on building the flow.")
+
+
+def _later_note(later: list[str]) -> str:
+    return (f" After the run there is also one column for each value in the data, named {', '.join(later)} (one per class "
+            "of the outcome): not known before it." if later else "")
+
+
+async def _model_result(deps: FlowDeps, node_id: str) -> dict[str, Any]:
+    """What a model or Predict step returns: it runs as a Job when the flow runs, so no rows; a model's
+    columns, worked out from its settings and the catalogue, without a preview of its own."""
+    node = deps.draft.get(node_id)
+    if node.get("type") == PREDICT_NODE:
+        return {"node": node_id, "note": "A Predict step runs as a Kubernetes Job: it adds the predicted columns of the "
+                "version it applies, known when it runs, and has no rows before. Steps can follow it; their columns are "
+                "known only after the run."}
+    found = await _expected_columns(deps, node_id)
+    if found is None:
+        return {"node": node_id, "note": "A model step runs as a Kubernetes Job: " + _NO_ROWS_YET}
+    note = ("A model step runs as a Kubernetes Job: these are the columns it will hand to the next step, from its settings "
+            "(its `output`); " + _NO_ROWS_YET + " Steps can be added after it.")
+    if not found["input_known"]:
+        note += " Its input's columns come first, before these: they were not read here."
+    out: dict[str, Any] = {"node": node_id, "columns": found["columns"], "note": note + _later_note(found["later"])}
+    if found["later"]:
+        out["columns_after_the_run"] = found["later"]
+    return out
+
+
+async def _after_model(deps: FlowDeps, node_id: str) -> dict[str, Any]:
+    """What a step after a model returns: the columns it will have, worked out, and no rows."""
+    model = _model_upstream(deps.draft, node_id) or {}
+    found = await _expected_columns(deps, node_id)
+    if found is None:
+        return {"node": node_id, "note": f"This step reads the output of {model.get('id')}, which runs as a Kubernetes Job: "
+                "its columns are known only after that run (they cannot be worked out for this kind of step, or for a "
+                "Predict step); " + _NO_ROWS_YET}
+    note = (f"This step reads the output of the model step {model.get('id')}, which runs as a Kubernetes Job: these are the "
+            "columns it will have, worked out from the model's settings; " + _NO_ROWS_YET)
+    if not found["input_known"]:
+        note += " The model's input's columns come first, before these: they were not read here."
+    out: dict[str, Any] = {"node": node_id, "columns": found["columns"], "note": note + _later_note(found["later"])}
+    if found["later"]:
+        out["columns_after_the_run"] = found["later"]
+    return out
 
 
 # ── instructions ─────────────────────────────────────────────────────────────
@@ -881,7 +1099,7 @@ Hypothesis tests: each is a step of its own that reads the rows and gives the te
 
 _MODELS_INTRO = """
 Statistical models: each is a step of its own, a model_<id> operation, that fits a model on the rows that reach it and writes its results table (the coefficients or the estimates, the fit's statistics, the tests of its assumptions) when the flow runs. Differences from the steps above:
-- A model runs as a Job on Kubernetes, in a group of models an administrator has enabled and the person may use; there is no preview of it (add_step returns no rows and no columns), and no step can be added after it: put it at the end of a chain, after the steps that prepare the data.
+- A model runs as a Job on Kubernetes, in a group of models an administrator has enabled and the person may use, after the steps that prepare the data. It has no rows before it runs, so there is no preview of its rows: add_step returns the columns it will hand on, worked out from its `output`: the results table (the default of every model but model_clv and model_bg_bb, whose default is the rows), the rows with the model's columns added, the survival table or the forecast. Steps can be added after a model and read those columns (a filter on `section` takes the coefficients out of the results table, an Output saves the rows); add_step returns their columns when they can be worked out, and no rows: that is not an error. Columns named after the data's values (one probability per class) exist only after the run.
 - The model's keys are those below; a key not listed is refused; a key described as "only when" a condition is refused unless its condition holds. Choose the variant with the keys it names (the penalty of a regression, the orders of ARIMA, the task of a boosted model).
 - Linear and logistic regression explain an effect: a coefficient with its test and its interval. model_xgboost and model_catboost (gradient-boosted trees) predict, with many predictors, interactions and non-linear effects: they output the fit on a validation part, the importance of each predictor (gain and SHAP) and diagnostics that are rules of thumb, not tests. For them always give `task` (and `event_value` for binary), and leave the hyperparameters at their defaults unless the user asks; prefer `validation: time` with `order_by` when the goal is to predict later rows and the table has a time column; never put in `predictors` a column computed from the outcome or recorded after it.
 - model_parametric_survival describes the time to an event with a distribution and predicts how long (a median, a quantile, the survival at a time, also beyond the data) and the time ratios or hazard ratios of the predictors: choose it over model_cox when the person wants a time, or the shape of the hazard matters; model_cox (or model_kaplan_meier) when only the effects or the curves are asked. Always give `event_value`; use `distribution: auto` when the person does not know which distribution fits (the node fits all six and keeps the one with the lowest AIC, preferring a simpler one within `aic_margin`); never put in `predictors` a column recorded after the event. `start` is the time each row begins to be observed (delayed entry, in the fit); `alive_at` is how long each unit to be predicted has already lasted (in Predict, the answers become the time left).
@@ -896,7 +1114,8 @@ Only the models below exist:"""
 METADATA_ONLY_CONTEXT = (
     "- METADATA-ONLY MODE is on, by the administrator's choice: no value of a row of data reaches you, and these "
     "instructions come before anything above about previews and first rows. Your tools run no preview: a step is added "
-    "without being checked and returns no rows and no columns, so reason from the columns of its sources and from the "
+    "without being checked and returns no rows and no columns (a model step only the columns its settings make, from the "
+    "catalogue), so reason from the columns of its sources and from the "
     "settings of the steps. Never state a value or a figure of the data, and do not write a value into a filter unless the "
     "user gave it to you. When you are done, ask the user to check the result on the canvas.")
 
@@ -1017,7 +1236,7 @@ async def get_flow(ctx: RunContext[FlowDeps]) -> dict[str, Any]:
     """The flow on the canvas now: every node with its id, kind and settings, and what it reads (`input`, `right_input`)."""
     draft = ctx.deps.draft
     fed = {e.get("source") for e in draft.edges if e.get("targetHandle") != "seq-in"}
-    ends = [n["id"] for n in draft.nodes if n.get("type") in DATA_NODES and n["id"] not in fed]
+    ends = [n["id"] for n in draft.nodes if n.get("type") in STEP_NODES and n["id"] not in fed]
     return {"nodes": [_summary(draft, n) for n in draft.nodes], "ends_of_chains": ends, "selected": ctx.deps.selected}
 
 
@@ -1052,22 +1271,17 @@ async def add_source(ctx: RunContext[FlowDeps], datasource_id: int) -> dict[str,
 
 
 def _data_node(draft: FlowDraft, node_id: str, role: str) -> dict:
+    """A node another one may read: a source, a step, or a model or Predict step (its output)."""
     node = draft.get(node_id)
-    if node.get("type") not in DATA_NODES:
-        raise ModelRetry(f"{role} must be a source or a step, and '{node_id}' is a {node.get('type')}.")
+    if node.get("type") not in STEP_NODES:
+        raise ModelRetry(f"{role} must be a source, a step or a model step, and '{node_id}' is a {node.get('type')}.")
     return node
-
-
-def _model_result(node_id: str) -> dict[str, Any]:
-    """What a model or Predict step returns: no preview, it runs as a Job when the flow runs."""
-    return {"node": node_id, "note": "A model step runs as a Kubernetes Job when the flow runs: there is no preview "
-            "of it, and no step can come after it."}
 
 
 @flow_tool(reads_data=False)
 async def add_step(ctx: RunContext[FlowDeps], after: str, operation: str, params: dict[str, Any],
                    right: Optional[str] = None) -> dict[str, Any]:
-    """Add an operation that reads the result of node `after` (and, for join or union, of node `right`). Returns the new node id with its columns and first rows, or the error the preview gave."""
+    """Add an operation that reads the result of node `after` (and, for join or union, of node `right`). `after` may be a model step: the new step reads what the model hands on. Returns the new node id with its columns and first rows, or the error the preview gave; a model step, or a step after one, returns its columns worked out and no rows (it has none before the model runs: not an error)."""
     draft = ctx.deps.draft
     parent = _data_node(draft, after, "after")
     if parent.get("parentNode"):
@@ -1094,7 +1308,7 @@ async def add_step(ctx: RunContext[FlowDeps], after: str, operation: str, params
     if right:
         draft.link(right, node_id, "right")
     if is_model:
-        return _model_result(node_id)
+        return await _model_result(ctx.deps, node_id)
     return await _step_result(ctx.deps, node_id)
 
 
@@ -1119,7 +1333,7 @@ async def change_step(ctx: RunContext[FlowDeps], node: str, params: dict[str, An
         if current != PREDICT_OPERATION and "mlflow" not in clean:
             target["data"].pop("mlflow", None)
         draft._touch(node)
-        return _model_result(node)
+        return await _model_result(ctx.deps, node)
     if target.get("type") != "operation":
         raise ModelRetry(f"'{node}' is not a step: only operation nodes have params.")
     if target.get("parentNode"):
@@ -1217,7 +1431,11 @@ async def add_output(ctx: RunContext[FlowDeps], after: str, datasource_name: str
 @flow_tool(reads_data=True)
 async def preview(ctx: RunContext[FlowDeps], node: str, rows: int = 10) -> dict[str, Any]:
     """Columns and the first rows (at most 30) of a node's result, on the development sample of the data."""
-    ctx.deps.draft.get(node)
+    target = ctx.deps.draft.get(node)
+    if not ctx.deps.withholds_data() and (target.get("type") in (MODEL_NODE, PREDICT_NODE) or _model_upstream(ctx.deps.draft, node)):
+        # a model has no rows before it runs: its columns, or those of the step after it, worked out
+        known = await (_model_result(ctx.deps, node) if target.get("type") in (MODEL_NODE, PREDICT_NODE) else _after_model(ctx.deps, node))
+        return {"datasource": f"node {node}", **known, "rows": []}
     res = await preview_node(ctx.deps, node, max(1, min(int(rows or 10), MAX_PREVIEW_ROWS)))
     if "error" in res:
         return {"node": node, "error": res["error"]}

@@ -699,13 +699,15 @@ async def test_an_assistant_puts_a_lasso_regression_on_the_draft_and_a_wrong_one
     ], message="fit the amount on quantity and price with a lasso")
     assert "error" not in [n for n, _ in events]
     steps = [d for n, d in events if n == "tool_result" and d["name"] == "add_step"]
-    assert [s["ok"] for s in steps] == [False, True, False]
-    assert "'se' only applies when penalty = none" in steps[0]["error"] and "must be a source or a step" in steps[2]["error"]
+    assert [s["ok"] for s in steps] == [False, True, True]
+    assert "'se' only applies when penalty = none" in steps[0]["error"]
     canvas = json.loads(events[-1][1]["definition"])
     node = next(n for n in canvas["nodes"] if n["id"] == "ctl-1")
     assert node["type"] == "model"
     assert node["data"] == {"model": "linear", "params": lasso, "timeoutSeconds": 900, "retries": 0}
     assert any(e["source"] == "source" and e["target"] == "ctl-1" and e["targetHandle"] == "left" for e in canvas["edges"])
+    # a step after the model reads its output: the results table, worked out without a preview
+    assert any(e["source"] == "ctl-1" and e["target"] == "op-1" for e in canvas["edges"])
     assert fake_engine.previews == []  # a model runs as a Job: nothing to preview
 
 
@@ -765,3 +767,130 @@ def test_checking_the_shared_cases_twice_is_checking_them_once():
 def test_an_empty_list_of_columns_stays_an_empty_list():
     out = clean_params("model_arima", {"time": "t", "value": "v", "frequency": "month", "exog": []})
     assert out.get("exog", []) == []
+
+
+# ── after a model: the columns, worked out; no rows until it runs ────────────
+# The same cases as the engine's (backend/tests/test_models_output_columns.py) and the editor's
+# (frontend/tests/model-catalog.test.mjs): what the runners really write.
+OUTPUT_CASES = Path(__file__).resolve().parents[2] / "backend" / "tests" / "fixtures" / "models" / "output_columns.json"
+
+
+def test_the_columns_a_model_hands_on_are_the_runner_s_on_the_shared_cases():
+    if not OUTPUT_CASES.exists():
+        pytest.skip("the engine's sources are not beside the gateway's")
+    import fnmatch
+    cases = json.loads(OUTPUT_CASES.read_text(encoding="utf-8"))["cases"]
+    assert len(cases) >= 20
+    for case in cases:
+        inputs = [{"name": n, "dtype": t} for n, t in case["input"]]
+        columns, later = ai_flow_agent.model_output_columns(case["model"], case["params"], inputs)
+        written = [{"name": n, "dtype": t} for n, t in case["columns"]]
+        known = [c for c in written if not any(fnmatch.fnmatchcase(c["name"], p) for p in later)]
+        assert columns == known, case["what"]
+        assert (len(known) < len(written)) == bool(later), case["what"]
+
+
+def test_a_model_s_own_columns_are_known_without_its_input():
+    columns, later = ai_flow_agent.model_output_columns("linear", {"output": "rows"}, None)
+    assert [c["name"] for c in columns] == ["pred_fitted", "pred_residual", "pred_std_residual", "pred_leverage",
+                                            "pred_cooks_distance", "pred_low", "pred_high"] and later == []
+    columns, later = ai_flow_agent.model_output_columns("xgboost", {"task": "multiclass", "output": "rows"}, [])
+    assert [c["name"] for c in columns] == ["pred_class", "pred_prob", "pred_part"] and later == ["pred_prob_*"]
+    columns, _ = ai_flow_agent.model_output_columns("arima", {"time": "t", "output": "forecast"}, None)
+    assert columns[0] == {"name": "time", "dtype": "Unknown"}
+
+
+def test_the_steps_that_only_keep_rename_cast_or_filter_columns_say_them_after_a_model():
+    cols = [{"name": "a", "dtype": "Int32"}, {"name": "b", "dtype": "Float64"}]
+    after = ai_flow_agent.columns_after_step
+    assert after("filter", {"column": "a", "operator": "gt", "value": 1}, cols) == cols
+    assert after("select", {"columns": ["b"]}, cols) == [cols[1]]
+    assert after("drop", {"columns": ["b"]}, cols) == [cols[0]]
+    assert after("reorder", {"columns": ["b"]}, cols) == [cols[1], cols[0]]
+    assert after("rename", {"mapping": {"a": "x"}}, cols)[0] == {"name": "x", "dtype": "Int32"}
+    assert after("cast", {"columns": {"a": "str"}}, cols)[0] == {"name": "a", "dtype": "String"}
+    for op in ("group_by", "join", "compute", "sql", "pivot", "stat_t_test"):
+        assert after(op, {}, cols) is None, op
+
+
+def _deps(session, user, canvas):
+    from types import SimpleNamespace
+    deps = ai_flow_agent.FlowDeps(user=user, session_factory=lambda: nullcontext(session), engine=None, model_id="gpt-oss-120b",
+                                  draft=ai_flow_agent.FlowDraft(canvas))
+    return SimpleNamespace(deps=deps)
+
+
+def _source_canvas(world):
+    return {"nodes": [{"id": "source", "type": "source", "position": {"x": 60, "y": 140},
+                       "data": {"bucket": "data-prep", "datasourceId": world["orders"].id, "parquetKey": "datasets/1/o.parquet",
+                                "filename": "orders", "columns": COLUMNS}}], "edges": []}
+
+
+@pytest.mark.anyio
+async def test_a_model_returns_its_columns_and_a_step_after_it_is_added_with_its_own(session, world, fake_engine):
+    fake_engine.preview_response = (200, {"columns": COLUMNS, "rows": [{"country": "IT", "amount": 3.5}], "row_count": 1, "truncated": False})
+    ctx = _deps(session, world["editor"], _source_canvas(world))
+    model = await ai_flow_agent.add_step(ctx, after="source", operation="model_linear",
+                                         params={"outcome": "amount", "predictors": ["country"], "output": "rows"})
+    # the rows: the input's columns (one preview row of the step before), then the model's, no rows
+    assert model["node"] == "ctl-1" and "rows" not in model and "first_rows" not in model
+    assert model["columns"][:3] == [*COLUMNS, {"name": "pred_fitted", "dtype": "Float64"}]
+    assert "no rows until the model runs" in model["note"] and "not an error" in model["note"]
+    assert fake_engine.previews[-1]["limit"] == 1 and fake_engine.previews[-1]["slot"].endswith(":source")
+    previews = len(fake_engine.previews)
+    # a step after it: allowed, its columns worked out, no preview of it (the engine has no rows to give)
+    kept = await ai_flow_agent.add_step(ctx, after="ctl-1", operation="filter",
+                                        params={"column": "pred_fitted", "operator": "gt", "value": 0})
+    assert kept["node"] == "op-1" and kept["columns"] == model["columns"]
+    assert "ctl-1" in kept["note"] and "not an error" in kept["note"] and "preview_error" not in kept
+    picked = await ai_flow_agent.add_step(ctx, after="op-1", operation="select", params={"columns": ["country", "pred_fitted"]})
+    assert [c["name"] for c in picked["columns"]] == ["country", "pred_fitted"]
+    assert all(p["slot"].endswith(":source") for p in fake_engine.previews[previews:])
+    # a step whose columns only its rows say: added all the same, with the note
+    grouped = await ai_flow_agent.add_step(ctx, after="op-2", operation="group_by",
+                                           params={"by": ["country"], "aggregations": [{"column": "pred_fitted", "func": "mean"}]})
+    assert "columns" not in grouped and "known only after that run" in grouped["note"]
+    # the preview tool says the same, with no rows
+    seen = await ai_flow_agent.preview(ctx, node="op-2")
+    assert seen["rows"] == [] and [c["name"] for c in seen["columns"]] == ["country", "pred_fitted"]
+    flow = await ai_flow_agent.get_flow(ctx)
+    assert flow["ends_of_chains"] == ["op-3"]
+
+
+@pytest.mark.anyio
+async def test_a_model_s_results_table_and_a_probability_per_class_are_said_as_they_are(session, world, fake_engine):
+    ctx = _deps(session, world["editor"], _source_canvas(world))
+    results = await ai_flow_agent.add_step(ctx, after="source", operation="model_linear",
+                                           params={"outcome": "amount", "predictors": ["country"]})
+    assert [c["name"] for c in results["columns"]] == ["section", "level", "level_2", "stat", "value", "text", "x0", "x1", "ord", "key"]
+    assert fake_engine.previews == []  # the results table needs nothing of the input
+    multi = await ai_flow_agent.add_step(ctx, after="source", operation="model_xgboost",
+                                         params={"task": "multiclass", "outcome": "country", "predictors": ["amount"], "output": "rows"})
+    assert multi["columns_after_the_run"] == ["pred_prob_*"] and "one column for each value in the data" in multi["note"]
+    changed = await ai_flow_agent.change_step(ctx, node="ctl-2", params={"task": "regression", "outcome": "amount",
+                                                                        "predictors": ["country"], "output": "rows"})
+    assert "columns_after_the_run" not in changed and changed["columns"][-3:] == [
+        {"name": "pred_value", "dtype": "Float64"}, {"name": "pred_residual", "dtype": "Float64"}, {"name": "pred_part", "dtype": "String"}]
+    # a model nothing reads yet is the end of its chain: the place to add the next step
+    assert (await ai_flow_agent.get_flow(ctx))["ends_of_chains"] == ["ctl-1", "ctl-2"]
+    # an Output may save what a model hands on
+    saved = await ai_flow_agent.add_output(ctx, after="ctl-2", datasource_name="scores", folder_id=world["sales"].id)
+    assert saved["node"].startswith("out-") and any(e["source"] == "ctl-2" and e["target"] == saved["node"] for e in ctx.deps.draft.edges)
+
+
+@pytest.mark.anyio
+async def test_in_metadata_only_mode_a_model_says_only_its_own_columns(session, world, fake_engine):
+    ctx = _deps(session, world["editor"], _source_canvas(world))
+    ctx.deps.metadata_turn = True
+    model = await ai_flow_agent.add_step(ctx, after="source", operation="model_linear",
+                                         params={"outcome": "amount", "predictors": ["country"], "output": "rows"})
+    assert [c["name"] for c in model["columns"]][0] == "pred_fitted" and "were not read here" in model["note"]
+    after = await ai_flow_agent.add_step(ctx, after="ctl-1", operation="limit", params={"n": 5})
+    assert after == {"node": "op-1", "note": ai_flow_agent.metadata_only.STEP_NOT_CHECKED}
+    assert fake_engine.previews == []
+
+
+def test_the_reference_says_steps_can_follow_a_model():
+    reference = ai_flow_agent.context(None, "en")
+    assert "no step can be added after it" not in reference
+    assert "Steps can be added after a model" in reference and "that is not an error" in reference
