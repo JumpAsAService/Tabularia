@@ -34,7 +34,10 @@ func mgCheckScript(language string) string { return mgCheckScriptWith(language, 
 
 // mgCheckScriptWith is mgCheckScript for a group whose image records its system libraries
 // (`system_libraries`, scriptimage.SystemLibrariesFile): their `package@version` lines follow the
-// R packages in the lock, which is where the card reads their versions.
+// R packages in the lock, which is where the card reads their versions. An image built before the
+// record existed (bc564373) has no such file: the line reads it only when it is there, so that
+// `set -e` does not stop the check (and the self-test) on a missing record; the card then shows
+// the library without a version.
 func mgCheckScriptWith(language string, systemLibraries bool) string {
 	check := `Rscript -e "$TABULARIA_R_CHECK"`
 	if language == "python" {
@@ -42,7 +45,8 @@ func mgCheckScriptWith(language string, systemLibraries bool) string {
 	}
 	_, selftest := modelgroups.Commands(language)
 	if systemLibraries {
-		check += "\ncat " + scriptimage.SystemLibrariesFile
+		f := scriptimage.SystemLibrariesFile
+		check += "\n[ -f " + f + " ] && cat " + f + " || true"
 	}
 	return "set -e\n" + check + "\n" +
 		"echo\n" +

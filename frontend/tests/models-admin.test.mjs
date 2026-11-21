@@ -114,13 +114,19 @@ test('a system library is said with its name and version, and the card shows eac
   const component = read('components/admin/ModelsSection.vue')
   assert.match(component, /v-for="lib in g\.system_libraries \?\? \[\]"/)
   assert.match(component, /modelsAdmin\.systemLibrary', \{ library: systemLibraryLabel\(lib\) \}/)
+  // the distribution is not written by hand: the package's whole version (which says it) is secondary text beside the name
   const expected = {
-    en: 'System library: {library} (Debian)', it: 'Libreria di sistema: {library} (Debian)', fr: 'Bibliothèque système : {library} (Debian)',
-    de: 'Systembibliothek: {library} (Debian)', es: 'Biblioteca del sistema: {library} (Debian)',
+    en: ['System library: {library}', 'package {package} {version}'], it: ['Libreria di sistema: {library}', 'pacchetto {package} {version}'],
+    fr: ['Bibliothèque système : {library}', 'paquet {package} {version}'], de: ['Systembibliothek: {library}', 'Paket {package} {version}'],
+    es: ['Biblioteca del sistema: {library}', 'paquete {package} {version}'],
   }
-  for (const [lang, text] of Object.entries(expected)) {
-    assert.ok(read(`i18n/locales/${lang}.gen.ts`).includes(`"systemLibrary": "${text}"`), lang)
+  for (const [lang, [text, pkg]] of Object.entries(expected)) {
+    const source = read(`i18n/locales/${lang}.gen.ts`)
+    assert.ok(source.includes(`"systemLibrary": "${text}"`) && source.includes(`"systemLibraryPackage": "${pkg}"`), lang)
+    assert.doesNotMatch(source, /Debian\)|\(Ubuntu/, lang)
   }
+  assert.match(component, /v-if="lib\.package_version" class="system-library-package">\(\{\{ \$t\('modelsAdmin\.systemLibraryPackage', \{ package: lib\.package, version: lib\.package_version \}\) \}\}\)/)
+  assert.equal(systemLibraryLabel({ package: 'libgsl-dev', name: 'GSL', version: '2.7.1', package_version: '2.7.1+dfsg-6ubuntu2' }), 'GSL 2.7.1')
   // a group with none shows nothing: the answer's list is empty (the gateway's), and an older answer without it is read as empty
   assert.match(component, /g\.system_libraries \?\? \[\]/)
 })

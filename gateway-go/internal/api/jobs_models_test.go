@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -23,6 +25,7 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/modelgroups"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/scriptcfg"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/scriptimage"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/secret"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/settings"
 )
@@ -862,9 +865,35 @@ func TestTheChecksScriptByLanguage(t *testing.T) {
 	}
 	// a group whose image records system libraries adds their lines to the lock, before the mark
 	withLibs := mgCheckScriptWith("r", true)
-	if withLibs != "set -e\nRscript -e \"$TABULARIA_R_CHECK\"\ncat /opt/tabularia/system-libraries.txt\necho\necho TABULARIA_SELFTEST_BEGIN\ncd /tabularia/code\n"+
-		"Rscript /tabularia/code/runner/run.R --selftest\n" {
+	if withLibs != "set -e\nRscript -e \"$TABULARIA_R_CHECK\"\n[ -f /opt/tabularia/system-libraries.txt ] && cat /opt/tabularia/system-libraries.txt || true\n"+
+		"echo\necho TABULARIA_SELFTEST_BEGIN\ncd /tabularia/code\nRscript /tabularia/code/runner/run.R --selftest\n" {
 		t.Errorf("the R check with system libraries:\n%s", withLibs)
+	}
+	// the script under sh: an image built before the record (no file) goes on to the self-test, one with it prints its lines
+	if _, err := exec.LookPath("sh"); err == nil {
+		dir := t.TempDir()
+		run := func(withFile bool) string {
+			f := filepath.Join(dir, "system-libraries.txt")
+			_ = os.Remove(f)
+			if withFile {
+				if err := os.WriteFile(f, []byte("libgsl-dev@2.7.1+dfsg-6ubuntu2\n"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			script := strings.NewReplacer(scriptimage.SystemLibrariesFile, f, `Rscript -e "$TABULARIA_R_CHECK"`, "echo lock",
+				"cd /tabularia/code", "cd "+dir, "Rscript /tabularia/code/runner/run.R --selftest", "echo selftest ran").Replace(withLibs)
+			out, err := exec.Command("sh", "-c", script).CombinedOutput()
+			if err != nil {
+				t.Fatalf("the script stopped (file %v): %v\n%s", withFile, err, out)
+			}
+			return string(out)
+		}
+		if got := run(false); !strings.Contains(got, "selftest ran") || strings.Contains(got, "libgsl-dev") {
+			t.Errorf("an image without the record: %q", got)
+		}
+		if got := run(true); !strings.Contains(got, "lock\nlibgsl-dev@2.7.1+dfsg-6ubuntu2\n") || !strings.Contains(got, "selftest ran") {
+			t.Errorf("an image with the record: %q", got)
+		}
 	}
 	if !hasSystemLibraries("customer_lifetime") || hasSystemLibraries("regression") || hasSystemLibraries("survival") {
 		t.Error("which groups record system libraries")

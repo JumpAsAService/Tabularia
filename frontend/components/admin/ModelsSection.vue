@@ -213,6 +213,8 @@ const shortRef = (ref: string | null) => (ref ? ref.replace(/^(.*@sha256:)([0-9a
         · {{ $t('modelsAdmin.packagesPinned', { n: g.packages }) }}
         <template v-for="lib in g.system_libraries ?? []" :key="lib.package">
           · <span class="system-library">{{ $t('modelsAdmin.systemLibrary', { library: systemLibraryLabel(lib) }) }}</span>
+          <!-- the package's whole version (which distribution built it is in it), as secondary text: read by everyone, no tooltip to reach -->
+          <span v-if="lib.package_version" class="system-library-package">({{ $t('modelsAdmin.systemLibraryPackage', { package: lib.package, version: lib.package_version }) }})</span>
         </template>
       </p>
 

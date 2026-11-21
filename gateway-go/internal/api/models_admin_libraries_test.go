@@ -39,10 +39,10 @@ func TestTheGroupsAnswerCarriesItsSystemLibraries(t *testing.T) {
 	if l, _ := libs[0].(map[string]any); l["package"] != "libgsl-dev" || l["name"] != "GSL" || l["version"] != nil {
 		t.Errorf("before a build: %v", libs[0])
 	}
-	// with a version in use: the version its build recorded in the lock (whatever it is)
-	lock := "R6@2.6.1\nlibgsl-dev@9.8.7-test"
+	// with a version in use: the library's version out of what its build recorded in the lock, and the package's whole
+	lock := "R6@2.6.1\nlibgsl-dev@2.7.1+dfsg-6ubuntu2"
 	libs, _ = answer("customer_lifetime", &lock)["system_libraries"].([]any)
-	if l, _ := libs[0].(map[string]any); l["version"] != "9.8.7-test" {
+	if l, _ := libs[0].(map[string]any); l["version"] != "2.7.1" || l["package_version"] != "2.7.1+dfsg-6ubuntu2" {
 		t.Errorf("after a build: %v", libs[0])
 	}
 	if none, ok := answer("regression", nil)["system_libraries"].([]any); !ok || len(none) != 0 {

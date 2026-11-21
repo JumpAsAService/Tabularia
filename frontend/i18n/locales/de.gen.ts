@@ -7068,7 +7068,8 @@ export default {
     },
     "modelsIn": "Modelle:",
     "packagesPinned": "{n} Pakete in festgelegter Version",
-    "systemLibrary": "Systembibliothek: {library} (Debian)",
+    "systemLibrary": "Systembibliothek: {library}",
+    "systemLibraryPackage": "Paket {package} {version}",
     "state": {
       "not_enabled": "Nicht aktiviert",
       "building": "Wird gebaut",

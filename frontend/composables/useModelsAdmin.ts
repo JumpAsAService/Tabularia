@@ -35,10 +35,12 @@ export interface ModelGroupLimits {
 export interface ModelGroupSystemLibrary {
   package: string
   name: string
+  // the library's own version («2.7.1»), and the package's as apt installed it («2.7.1+dfsg-6ubuntu2»)
   version?: string
+  package_version?: string
 }
 
-/** A system library as the card says it: its name and, when known, its version («GSL 2.7.1»). */
+/** A system library as the card says it: its name and, when known, its own version («GSL 2.7.1»). */
 export function systemLibraryLabel(lib: ModelGroupSystemLibrary): string {
   return lib.version ? `${lib.name} ${lib.version}` : lib.name
 }
@@ -49,7 +51,7 @@ export interface ModelGroupAdmin {
   base: string
   models: string[]
   packages: number
-  // the Debian libraries the group's image installs besides the fixed list (empty for most groups)
+  // the system libraries the group's image installs besides the fixed list (empty for most groups)
   system_libraries: ModelGroupSystemLibrary[]
   enabled: boolean
   state: ModelGroupState
