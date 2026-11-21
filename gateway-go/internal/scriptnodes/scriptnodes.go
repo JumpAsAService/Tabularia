@@ -20,7 +20,9 @@ const (
 	MaxFiles     = 50
 	MaxFileBytes = 256 * 1024
 	MaxCodeBytes = 768 * 1024
-	MaxRetries   = 5
+	MaxRetries   = 5 // the most retries a Script, container or model node may have
+	// DefaultRetryDelaySeconds is the delay between a node's retries when it says none
+	DefaultRetryDelaySeconds = 60
 )
 
 // pathRe is _PATH; Python's `$` also matches before a final newline.
@@ -264,7 +266,7 @@ func CheckSettings(node Node, maxTimeout int64) *auth.Refusal {
 	if !ok || retries < 0 || retries > MaxRetries {
 		return refuse(node, fmt.Sprintf("the retries are between 0 and %d", MaxRetries))
 	}
-	delay, ok := pyIntOf(val("retryDelaySeconds", 60))
+	delay, ok := pyIntOf(val("retryDelaySeconds", DefaultRetryDelaySeconds))
 	if !ok || delay < 0 || delay > 3600 {
 		return refuse(node, "the delay between retries is between 0 and 3600 seconds")
 	}

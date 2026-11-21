@@ -305,7 +305,7 @@ func budgetSeconds(d pyjson.Object) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	delay, err := get("retryDelaySeconds", 60)
+	delay, err := get("retryDelaySeconds", scriptnodes.DefaultRetryDelaySeconds)
 	if err != nil {
 		return 0, err
 	}
@@ -737,7 +737,7 @@ func retrySettings(d pyjson.Object) (int64, int64, int64, error) {
 	for i, k := range []struct {
 		key string
 		def int64
-	}{{"timeoutSeconds", 900}, {"retries", 0}, {"retryDelaySeconds", 60}} {
+	}{{"timeoutSeconds", 900}, {"retries", 0}, {"retryDelaySeconds", scriptnodes.DefaultRetryDelaySeconds}} {
 		v, has := d.Get(k.key)
 		if !has {
 			vals[i] = k.def

@@ -24,7 +24,7 @@ const (
 	maxFiles     = 50
 	maxFileBytes = 256 * 1024
 	maxCodeBytes = 768 * 1024
-	maxRetries   = 5
+	maxRetries   = scriptnodes.MaxRetries
 )
 
 // Python's `$` also matches before a final line feed: `\n?\z` here.

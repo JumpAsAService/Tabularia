@@ -11,6 +11,7 @@ import (
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/scriptnodes"
 )
 
 // services/container_nodes.py and the names of services/container_registry.py; Python's `$`
@@ -217,7 +218,7 @@ func checkContainer(node pyjson.Object, complete bool, s Settings) *auth.Refusal
 	}
 	timeout, okT := pyIntValue(get("timeoutSeconds", 900))
 	retries, okR := pyIntValue(get("retries", 0))
-	delay, okD := pyIntValue(get("retryDelaySeconds", 60))
+	delay, okD := pyIntValue(get("retryDelaySeconds", scriptnodes.DefaultRetryDelaySeconds))
 	if !okT || timeout < 10 || timeout > s.MaxTimeoutSeconds {
 		return containerRefuse(node, fmt.Sprintf("the timeout is a number of seconds between 10 and %d", s.MaxTimeoutSeconds))
 	}

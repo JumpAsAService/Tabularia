@@ -24,6 +24,7 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/perm"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/scriptcfg"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/scriptnodes"
 )
 
 // A model node as a step of a run (docs/specs/statistical-models.md, «A run»): run as a Script
@@ -209,8 +210,8 @@ func (q *queue) planModel(ctx context.Context, user *auth.User, node pyjson.Obje
 	case img.MaxTimeoutSeconds > 0 && timeout > img.MaxTimeoutSeconds:
 		return nil, &scriptFailed{fmt.Sprintf("model «%s»: its timeout (%d s) is longer than the group «%s» allows (%d s)",
 			label, timeout, group, img.MaxTimeoutSeconds)}
-	case retries < 0 || retries > 5:
-		return nil, &scriptFailed{fmt.Sprintf("model «%s»: from 0 to 5 retries", label)}
+	case retries < 0 || retries > scriptnodes.MaxRetries:
+		return nil, &scriptFailed{fmt.Sprintf("model «%s»: from 0 to %d retries", label, scriptnodes.MaxRetries)}
 	case delay < 0:
 		delay = 0
 	}

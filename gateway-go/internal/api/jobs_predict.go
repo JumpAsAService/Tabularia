@@ -23,6 +23,7 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/modelgroups"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/perm"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/scriptnodes"
 )
 
 // A Predict node (`model_predict`) as a step of a run or of a trial
@@ -280,8 +281,8 @@ func (q *queue) planPredict(ctx context.Context, user *auth.User, node pyjson.Ob
 		return refuse("its timeout must be at least one second")
 	case s.img.MaxTimeoutSeconds > 0 && timeout > s.img.MaxTimeoutSeconds:
 		return refuse("its timeout (%d s) is longer than the group «%s» allows (%d s)", timeout, s.group, s.img.MaxTimeoutSeconds)
-	case retries < 0 || retries > 5:
-		return refuse("from 0 to 5 retries")
+	case retries < 0 || retries > scriptnodes.MaxRetries:
+		return refuse("from 0 to %d retries", scriptnodes.MaxRetries)
 	case delay < 0:
 		delay = 0
 	}
