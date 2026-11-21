@@ -9,7 +9,7 @@ engine (docs/specs/reports.md), drawn from the rows the model's runner wrote
 `common.py` holds the blocks every model has; each model has a file of its own
 (`linear.py`, `logistic.py`, `kaplan_meier.py`, `cox.py`, `parametric_survival.py`, `arima.py`, `clv.py` and `bg_bb.py` (their blocks are `customer_lifetime.py`'s), and `penalized.py`
 for the blocks both regressions draw with a penalty, `boosting.py` for those XGBoost and CatBoost share, `ab_test.py` and `ab_plan.py`
-(their shared blocks are `experiments.py`'s), `decomposition.py` (it imports `experiments.py`'s explanation)), which registers itself in `LAYOUTS`,
+(their shared blocks are `experiments.py`'s), `decomposition.py`; the explanation of the method is `common.py`'s), which registers itself in `LAYOUTS`,
 so the models can be built in parallel without touching each other's files. A new model is
 its file here, its words in `report_texts/<model>.json` and its import below.
 """

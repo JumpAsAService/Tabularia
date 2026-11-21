@@ -12,14 +12,14 @@ residue (EMD), with the tests of the seasons and of the remainder and the measur
    and the range of the cycles, position 1 named), the readings of each period.
 4. Remainder: its histogram and its ACF with the bounds ±z/√n, its checks, its reading.
 5. Oscillations (EMD): a panel per IMF and the residue, their table, the reading.
-6. How this report was computed (`experiments.how_computed`), the numbers of the decomposition and the notes.
+6. How this report was computed (`common.how_computed`), the numbers of the decomposition and the notes.
 
 The time's axis follows the runner's `time_kind`, as ARIMA's report does: each chart along time is drawn twice in the
 same place, as dates and as steps, one visible. The positions of a season (`weekday_3`, `month_4`, `step_6`) are said
 in the page's words (`values.position`, `values.position_in_text`) by a calculated field: the readings and the table
 of the seasons say «on Wednesday», «in April», «at position 6». Every number is read from the runner's rows; the words
-are in `report_texts/decomposition.json`. The explanation's helpers are the A/B report's (`experiments.py`), imported
-as they are (docs/specs/ts-decomposition.md, «Explaining the method in the report», Open question 12).
+are in `report_texts/decomposition.json`. The explanation's helpers are every report's (`common.py`: `reading_under`,
+`how_computed`; docs/specs/report-explanations.md, docs/specs/ts-decomposition.md, Open question 12).
 """
 from __future__ import annotations
 
@@ -27,7 +27,6 @@ from typing import Any
 
 from app.engine.models import catalog
 from app.engine.models.layouts import common as c
-from app.engine.models.layouts import experiments as e
 from app.engine.models.layouts import register
 from app.engine.stats import layouts as stats
 from app.reports import glyphs
@@ -158,7 +157,7 @@ def _span(lang: str, as_dates: bool) -> str:
     """The first and the last instant: «1 Jul 2023 – 15 Jul 2026», or «1 – 64» for a time counted in steps."""
     from app.reports import formats
 
-    first, last = e.model_number("first"), e.model_number("last")
+    first, last = c.model_number("first"), c.model_number("last")
     if as_dates:
         day = lambda x: f'FORMAT(DATEADD("d", {x}, DATE(1970, 1, 1)), {c.q(formats.locale(lang).date)})'  # noqa: E731
         return f'{day(first)} & " – " & {day(last)}'
@@ -168,7 +167,7 @@ def _span(lang: str, as_dates: bool) -> str:
 def _cards(p: stats.Page, w: dict, lang: str, checked: dict[str, Any], periods: list[str]) -> None:
     k, method = w["kpi"], str(checked.get("method"))
     integer = _integer_time(w)
-    _card(p, "k_n", 0, k["n"], e.model_number("n"),
+    _card(p, "k_n", 0, k["n"], c.model_number("n"),
           [(_span(lang, True), f"=NOT ({integer})"), (_span(lang, False), "=" + integer)], "#,##0")
     under = [k["periods" if len(periods) > 1 else "period"].replace("{p}", ", ".join(periods))] if periods else []
     if checked.get("robust") and method in ("stl", "mstl"):
@@ -177,7 +176,7 @@ def _cards(p: stats.Page, w: dict, lang: str, checked: dict[str, Any], periods: 
         under.append(w["values"]["type"].get(str(checked.get("type")), str(checked.get("type"))))
     said = c.q(" · ".join(under))
     if method == "emd":
-        said = c.join(k["imfs"], n=c.shown(e.model_number("n_imfs"), "0")) + (f' & " · " & {said}' if under else "")
+        said = c.join(k["imfs"], n=c.shown(c.model_number("n_imfs"), "0")) + (f' & " · " & {said}' if under else "")
     word = w["values"]["method"].get(method, method)
     _card(p, "k_method", 47, k["method"], c.q(word[:1].upper() + word[1:]), [(said, None)])
     trend = c.num("assumption|trend_strength||value")
@@ -185,7 +184,7 @@ def _cards(p: stats.Page, w: dict, lang: str, checked: dict[str, Any], periods: 
     if method == "emd":
         largest = "MAX([imf_share])"
         mode = c.join(w["modes"]["imf"], k='MID(LOOKUP(MAX([imf_share]), [imf_share], [level]), 5, 3)')
-        _card(p, "k_seasonal", 141, k["largest"], f'IF(ISNULL({largest}), "–", {e.pct(largest, "0.#")})',
+        _card(p, "k_seasonal", 141, k["largest"], f'IF(ISNULL({largest}), "–", {c.pct(largest, "0.#")})',
               [(c.join(k["largest_under"], mode=mode), f"=NOT ISNULL({largest})")])
     else:
         def strength(period: str) -> str:
@@ -267,8 +266,8 @@ def _summary(p: stats.Page, w: dict, lang: str, params: dict[str, Any], checked:
     _own_verdicts(next(it for it in p.items if it["id"] == "advice"), w, c.of_row("assumption", "verdict", "text"))
     lag = c.of_row("assumption", "lag")
     c.measures(MEASURES, more={"largest_acf": f'IF(ISNULL({lag}), "", {c.join(w["at_lag"], lag=c.shown(lag, "0"))})'})(p, w)
-    e.reading_under(p, w, "summary", "strength")
-    e.reading_under(p, w, "stationarity")
+    c.reading_under(p, w, "summary", "strength")
+    c.reading_under(p, w, "stationarity")
 
 
 # ── page 2: the components ──────────────────────────────────────────────────
@@ -325,7 +324,7 @@ def _seasons(p: stats.Page, w: dict, checked: dict[str, Any], periods: list[str]
                                 measured=measured))
     c.grid(p, w, tuple(charts), None, tall=SEASON_TALL)
     read = f'{SEASON_READING} AND [stat] = "line_1"'
-    lines = f'TRIM({e.reading_of("seasonality", "[level_2]", 4)} & " " & {e.reading_of("season", "[level_2]", 4)})'
+    lines = f'TRIM({c.reading_of("seasonality", "[level_2]", 4)} & " " & {c.reading_of("season", "[level_2]", 4)})'
     table = stats.table("reading_seasons", w["reading"]["seasons"], read, [
         {"header": w["reading"]["variant"], "value": "[level_2]", "width": 18, "style": {"weight": "semibold"}},
         {"header": w["reading"]["text"], "value": lines, "style": {"italic": True, "size": 8}},
@@ -383,7 +382,7 @@ def _remainder(p: stats.Page, w: dict, checked: dict[str, Any]) -> None:
     _p_column(item, w)
     _own_verdicts(item, w)
     p.add(item, 10)
-    e.reading_under(p, w, "remainder")
+    c.reading_under(p, w, "remainder")
 
 
 # ── page 5: the oscillations (EMD) ──────────────────────────────────────────
@@ -407,7 +406,7 @@ def _oscillations(p: stats.Page, w: dict, checked: dict[str, Any]) -> None:
 
     def share(header: str, stat: str) -> dict:
         x = c.of_row("imf", stat)
-        return {"header": header, "value": f'IF(ISNULL({x}), "", {e.pct(x, "0.#")})', "width": 20, "align": "right"}
+        return {"header": header, "value": f'IF(ISNULL({x}), "", {c.pct(x, "0.#")})', "width": 20, "align": "right"}
 
     key = 'LOOKUP("assumption|imf_condition|" & [level] & "|verdict", [key], [text])'
     verdict = "IFS(" + ", ".join(f'{key} = "{v}", {c.q(w["verdicts"][v])}' for v in catalog.VERDICTS) + ', "")'
@@ -419,7 +418,7 @@ def _oscillations(p: stats.Page, w: dict, checked: dict[str, Any]) -> None:
         {"header": t["imf_condition"], "value": verdict, "width": 26,
          "rules": [{"when": f'{key} = "{v}"', "style": {"color": colour, "weight": "semibold"}} for v, colour in c.VERDICT_COLOURS.items()]},
     ], p.y, visible=c.exists(rows)), 10)
-    e.reading_under(p, w, "imfs")
+    c.reading_under(p, w, "imfs")
 
 
 # ── the page ────────────────────────────────────────────────────────────────
@@ -442,14 +441,14 @@ def layout(model: str, params: dict[str, Any], locale: str, sample: list[dict] |
     _remainder(p, w, checked)
     if method == "emd":
         _oscillations(p, w, checked)
-    e.how_computed(p, w)
+    c.how_computed(p, w)
     c._fit(p, w, False, ("first", "last"))
     # the periods are on the cards and in the formula line; «7,30» among the settings would read as a decimal in four languages
     settings = next(it for it in p.items if it["id"] == "settings")
     settings["filter"] += ' AND [stat] <> "periods"'
     settings["visible"] = c.exists(settings["filter"])
     c._notes(p, w)
-    return e.document(header, p.items, footer, lang, _calculated(w))
+    return c.document(header, p.items, footer, lang, _calculated(w))
 
 
 register("decomposition", layout, name, about)

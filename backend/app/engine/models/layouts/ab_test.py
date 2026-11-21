@@ -75,7 +75,7 @@ def _numbers(sentence: str, lang: str, **values: float) -> str:
 def _srm_band(p: stats.Page, w: dict) -> None:
     """A mismatch of the split is a fact to show, not to hide: a band of its own, first."""
     failed = f'={e.verdict_of("srm")} = "failed"'
-    said = c.join(w["srm_band"], p=e.p_with_sign(c.num("assumption|srm||p_value")), srm_alpha=c.shown(e.model_number("srm_alpha"), "0.####"))
+    said = c.join(w["srm_band"], p=c.p_with_sign(c.num("assumption|srm||p_value")), srm_alpha=c.shown(c.model_number("srm_alpha"), "0.####"))
     # one millimetre high as designed: a band that is not drawn leaves no gap, one that is grows to its words
     p.text("srm_band", "=" + said, h=1.0, size=9.5, weight="semibold", color="#ffffff", background=c.BAD, padding=2.0,
            can_grow=True, visible=failed)
@@ -96,10 +96,10 @@ def _headline(w: dict, metric: str) -> list[tuple[str, str, str]]:
     def decided(stat: str) -> str:
         return f'LOOKUP("{stat}", [decided], [value])'
 
-    common = {"control": e.model_text("control"), "alpha": c.shown(e.model_number("alpha"), "0.####"), "metric": c.q(metric)}
-    single = {**common, "variant": variants, "lift": e.signed_pct(decided("lift")),
+    common = {"control": c.model_text("control"), "alpha": c.shown(c.model_number("alpha"), "0.####"), "metric": c.q(metric)}
+    single = {**common, "variant": variants, "lift": c.signed_pct(decided("lift")),
               "interval": e.interval(decided("lift_ci_low"), decided("lift_ci_high")),
-              "p": e.p_with_sign(decided("p_adjusted")), "correction": e.model_text("correction")}
+              "p": c.p_with_sign(decided("p_adjusted")), "correction": c.model_text("correction")}
     mde = 'MIN(IF([section] = "comparison" AND [stat] = "mde", [value], NULL))'
     srm = f'IF({e.verdict_of("srm")} = "failed", {c.q(h["srm"] + " ")}, "") & '
     return [
@@ -107,7 +107,7 @@ def _headline(w: dict, metric: str) -> list[tuple[str, str, str]]:
         ("headline_better_many", srm + c.join(h["better_many"], **common, variants=variants), f"{better} AND NOT {one}"),
         ("headline_worse", srm + c.join(h["worse_one"], **single), f"NOT ({better}) AND {worse} AND {one}"),
         ("headline_worse_many", srm + c.join(h["worse_many"], **common, variants=variants), f"NOT ({better}) AND {worse} AND NOT {one}"),
-        ("headline", srm + c.join(h["no_difference"], **common, mde=e.pct(mde, "0.#"), power=e.pct(e.model_number("power"), "0")),
+        ("headline", srm + c.join(h["no_difference"], **common, mde=c.pct(mde, "0.#"), power=c.pct(c.model_number("power"), "0")),
          f"NOT ({better}) AND NOT ({worse}) AND {tested}"),
         # no comparison computed (no variance on either side): no test, so no verdict
         ("headline_not_computed", srm + c.join(h["not_computed"], **common), f"NOT ({better}) AND NOT ({worse}) AND NOT ({tested})"),
@@ -129,22 +129,22 @@ def _cards(p: stats.Page, w: dict, kind: str) -> None:
     """The units; the control's metric; the lift of the treatment with the smallest adjusted p-value, its interval;
     that p-value."""
     k = w["kpi"]
-    _card(p, "k_units", 0, k["units"], e.model_number("n"), c.join(k["units_under"], assigned=c.shown(e.model_number("n_assigned"), "#,##0"),
-                                                                  variants=c.shown(e.model_number("n_variants"), "0")), "#,##0")
+    _card(p, "k_units", 0, k["units"], c.model_number("n"), c.join(k["units_under"], assigned=c.shown(c.model_number("n_assigned"), "#,##0"),
+                                                                  variants=c.shown(c.model_number("n_variants"), "0")), "#,##0")
     mean = 'LOOKUP("mean", [of_control], [value])'
-    control_value = e.pct(mean, "0.##") if kind == "binary" else c.shown(mean, "#,##0.####")
+    control_value = c.pct(mean, "0.##") if kind == "binary" else c.shown(mean, "#,##0.####")
     _card(p, "k_control", 47, k["control"][kind], control_value,
-          c.join(k["control_under"], control=e.model_text("control"), units=c.shown('LOOKUP("n", [of_control], [value])', "#,##0")))
+          c.join(k["control_under"], control=c.model_text("control"), units=c.shown('LOOKUP("n", [of_control], [value])', "#,##0")))
     strongest = "LOOKUP(MIN([best_p]), [best_p], [level])"
 
     def of_strongest(stat: str) -> str:
-        return (f'LOOKUP("comparison|" & {e.key_part(strongest)} & "|" & {e.key_part(e.model_text("control"))} & "|{stat}", '
+        return (f'LOOKUP("comparison|" & {c.key_part(strongest)} & "|" & {c.key_part(c.model_text("control"))} & "|{stat}", '
                 f'[key], [value])')
 
-    _card(p, "k_lift", 94, k["lift"], e.signed_pct(of_strongest("lift")),
+    _card(p, "k_lift", 94, k["lift"], c.signed_pct(of_strongest("lift")),
           c.join(k["lift_under"], variant=strongest, interval=e.interval(of_strongest("lift_ci_low"), of_strongest("lift_ci_high"))))
     _card(p, "k_p", 141, k["p"], c.p_said(of_strongest("p_adjusted")),
-          c.join(k["p_under"], variant=strongest, correction=e.model_text("correction")))
+          c.join(k["p_under"], variant=strongest, correction=c.model_text("correction")))
     p.y += 21.5
 
 
@@ -175,7 +175,7 @@ def _difference(w: dict, kind: str, x: str) -> str:
 
 
 def _mean(kind: str, x: str) -> str:
-    return e.pct(x, "0.##") if kind == "binary" else c.shown(x, "#,##0.####")
+    return c.pct(x, "0.##") if kind == "binary" else c.shown(x, "#,##0.####")
 
 
 def _decision_column(w: dict, header: str, x: str) -> dict:
@@ -195,7 +195,7 @@ def _treatments(p: stats.Page, w: dict, kind: str) -> None:
         {"header": t["units"], "value": e.of_variant("n"), "format": "#,##0", "width": 17, "align": "right"},
         {"header": t["mean"][kind], "value": _mean(kind, e.of_variant("mean")), "width": 21, "align": "right"},
         {"header": t["difference"], "value": _difference(w, kind, e.of_comparison("difference")), "width": 21, "align": "right"},
-        {"header": t["lift_interval"], "value": f'{e.signed_pct("[value]")} & " " & {e.interval(e.of_comparison("lift_ci_low"), e.of_comparison("lift_ci_high"))}'},
+        {"header": t["lift_interval"], "value": f'{c.signed_pct("[value]")} & " " & {e.interval(e.of_comparison("lift_ci_low"), e.of_comparison("lift_ci_high"))}'},
         _p_column(t["p"], "p_value", "significance", 19),
         _p_column(t["p_adjusted"], "p_adjusted", "p_adjusted_significance", 21),
         _decision_column(w, t["decision"], e.of_comparison("decision", "text")),
@@ -229,8 +229,8 @@ def _measures(p: stats.Page, w: dict, checked: dict[str, Any]) -> None:
     one = ('[section] = "bayes" AND [stat] = "prob_beat_control"' if bayes else '[section] = "sequential" AND [stat] = "p_value"')
     cols: list[dict] = [{"header": w["tables"]["variant"], "value": "[level]", "width": 18, "style": {"weight": "semibold"}}]
     if bayes:
-        cols += [{"header": m["prob_beat"], "value": e.pct(e.of_level("bayes", "prob_beat_control"), "0.#"), "width": 26, "align": "right"},
-                 {"header": m["loss"], "value": e.pct(e.of_level("bayes", "expected_loss_relative"), "0.###"), "width": 26, "align": "right"},
+        cols += [{"header": m["prob_beat"], "value": c.pct(e.of_level("bayes", "prob_beat_control"), "0.#"), "width": 26, "align": "right"},
+                 {"header": m["loss"], "value": c.pct(e.of_level("bayes", "expected_loss_relative"), "0.###"), "width": 26, "align": "right"},
                  {"header": m["threshold"], "value": e.said_by(w["loss_position"], e.of_level("bayes", "loss_position", "text"))}]
     if sequential:
         cols.append({"header": m["sequential_p"], "value": c.p_said(e.of_level("sequential", "p_adjusted")), "width": 30, "align": "right"})
@@ -259,7 +259,7 @@ def _decision(p: stats.Page, w: dict, lang: str, params: dict[str, Any], checked
     alpha_line = _numbers(w["alpha_line"], lang, alpha=checked.get("alpha", 0.05), srm_alpha=checked.get("srm_alpha", 0.001))
     c._assumptions(p, w, lang, alpha_line, True, df_width=18, df_whole=True)  # Welch's F on many units: «1; 1999998» on one line
     _measures(p, w, checked)
-    e.reading_under(p, w, "decision")
+    c.reading_under(p, w, "decision")
 
 
 # ── page 2: the variants ────────────────────────────────────────────────────
@@ -274,7 +274,7 @@ def _variants(p: stats.Page, w: dict, kind: str, checked: dict[str, Any]) -> Non
         return {"header": header, "value": e.of_variant(stat), "format": "#,##0", "width": width, "align": "right"}
 
     def share(header: str, stat: str) -> dict:
-        return {"header": header, "value": e.pct(e.of_variant(stat), "0.##"), "width": 22, "align": "right"}
+        return {"header": header, "value": c.pct(e.of_variant(stat), "0.##"), "width": 22, "align": "right"}
 
     cols = [name_col, count(t["assigned"], "n_assigned"), count(t["used"], "n"), count(t["missing"], "n_missing"),
             share(t["share"], "share"), share(t["expected_share"], "expected_share")]
@@ -306,7 +306,7 @@ def _variants(p: stats.Page, w: dict, kind: str, checked: dict[str, Any]) -> Non
     units = c.Chart("srm_units", "column", ch["srm_units"], {
         "filter": split, "category": "[level]",
         "series": [{"value": 'SUMIF([stat] = "n_assigned", [value])', "name": s["observed"]},
-                   {"value": f'SUMIF([stat] = "expected_share", [value]) * {e.model_number("n_assigned")}', "name": s["expected"]}],
+                   {"value": f'SUMIF([stat] = "expected_share", [value]) * {c.model_number("n_assigned")}', "name": s["expected"]}],
         "options": {"legend": True, "format": "#,##0"}, "visible": c.exists(split)}, under="srm")
     shares = c.xy("srm_share", ch["srm_share"], '[section] = "curve" AND [level] = "srm_share"', [c.mark("y", "line")],
                   {"x_time": True, "legend": True, "format": "0.##%"}, under="srm", split_by="[level_2]")
@@ -316,11 +316,11 @@ def _variants(p: stats.Page, w: dict, kind: str, checked: dict[str, Any]) -> Non
     if kind == "continuous":
         charts.append(c.histogram("histogram", ch["histogram"], "metric", s["units"], split=True))
     c.grid(p, w, tuple(charts), None)
-    e.reading_under(p, w, "srm")
+    c.reading_under(p, w, "srm")
     if checked.get("covariate"):
         _cuped(p, w, kind, checked)
     if kind == "continuous" and checked.get("cap_percentile"):
-        e.reading_under(p, w, "cap")
+        c.reading_under(p, w, "cap")
 
 
 def _cuped(p: stats.Page, w: dict, kind: str, checked: dict[str, Any]) -> None:
@@ -329,15 +329,15 @@ def _cuped(p: stats.Page, w: dict, kind: str, checked: dict[str, Any]) -> None:
     t, k = w["tables"], w["cuped"]
     p.y += 1.5
     p.text("cuped_line", "=" + c.join(k["line"], covariate=c.q(str(checked["covariate"])),
-                                      theta=c.shown(e.model_number("theta"), "0.####"),
-                                      rho=c.shown(e.model_number("covariate_correlation"), "0.###")),
-           h=6, size=9, background=c.PANEL, padding=1.5, can_grow=True, visible=f'=NOT ISNULL({e.model_number("theta")})')
+                                      theta=c.shown(c.model_number("theta"), "0.####"),
+                                      rho=c.shown(c.model_number("covariate_correlation"), "0.###")),
+           h=6, size=9, background=c.PANEL, padding=1.5, can_grow=True, visible=f'=NOT ISNULL({c.model_number("theta")})')
     p.y += 1.0
     one = '[section] = "variant" AND [stat] = "variance_reduction"'
 
     def number(header: str, stat: str, width: float = 22, form: str = "number") -> dict:
         x = e.of_variant(stat)
-        said = e.pct(x, "0.#") if form == "pct" else _mean(kind, x) if form == "metric" else c.shown(x, "#,##0.####")
+        said = c.pct(x, "0.#") if form == "pct" else _mean(kind, x) if form == "metric" else c.shown(x, "#,##0.####")
         return {"header": header, "value": f'IF(ISNULL({x}), "", {said})', "width": width, "align": "right"}
 
     cols = [{"header": t["variant"], "value": "[level]", "width": 18, "style": {"weight": "semibold"}},
@@ -350,7 +350,7 @@ def _cuped(p: stats.Page, w: dict, kind: str, checked: dict[str, Any]) -> None:
     cols += [number(t["mean_unadjusted"], "mean_unadjusted", 24, "metric"), number(t["mean_adjusted"], "mean", 24, "metric"),
              number(t["variance_reduction"], "variance_reduction", 24, "pct")]
     p.add(stats.table("cuped", t["cuped"], one, cols, p.y, visible=c.exists(one)), 10)
-    e.reading_under(p, w, "cuped")
+    c.reading_under(p, w, "cuped")
 
 
 # ── page 3: the comparisons ─────────────────────────────────────────────────
@@ -373,20 +373,20 @@ def _comparisons(p: stats.Page, w: dict, kind: str, checked: dict[str, Any], lan
         cols.append({"header": t["df"], "value": f'IF(ISNULL({df}), "", IF({df} >= 1000, {c.shown(df, "#,##0")}, {c.shown(df, "#,##0.#")}))',
                      "width": 16, "align": "right"})
     mde, power = e.of_comparison("mde"), e.of_comparison("power_at_min_lift")
-    cols += [{"header": t["mde"], "value": f'IF(ISNULL({mde}), "", {e.pct(mde, "0.##")})', "width": 20, "align": "right"},
-             {"header": t["power_at_min_lift"], "value": f'IF(ISNULL({power}), "", {e.pct(power, "0.#")})', "width": 20, "align": "right"},
+    cols += [{"header": t["mde"], "value": f'IF(ISNULL({mde}), "", {c.pct(mde, "0.##")})', "width": 20, "align": "right"},
+             {"header": t["power_at_min_lift"], "value": f'IF(ISNULL({power}), "", {c.pct(power, "0.#")})', "width": 20, "align": "right"},
              {"header": t["min_lift_position"], "value": e.said_by(w["min_lift_position"], e.of_comparison("min_lift_position", "text")),
               "width": 23, "style": {"size": 7}}]
     p.add(stats.table("comparisons", t["comparisons"], COMPARISON, cols, p.y, visible=c.exists(COMPARISON)), 10)
     p.text("comparisons_note", _intervals_note(w, checked, lang) or " ", h=4.5, size=7, color=c.MUTED, can_grow=True)
-    e.reading_table(p, w, "comparison", "reading_comparison", w["reading"]["comparisons"])
+    c.reading_table(p, w, "comparison", "reading_comparison", w["reading"]["comparisons"])
     ch = w["charts"]
     power_chart = c.xy("power", ch["power"], '[section] = "curve" AND [level] = "power"', [c.mark("y", "line")],
                        {"legend": True, "format": "0.##", "x_format": "0.#%", "min": 0, "max": 1, "target": float(checked.get("power", 0.8)),
                         "target_x": float(checked.get("min_lift", 0.02))}, split_by="[level_2]", wide=True)
     c.grid(p, w, (power_chart._replace(caption=_numbers(ch["power_caption"], lang, power=float(checked.get("power", 0.8)) * 100,
                                                         min_lift=float(checked.get("min_lift", 0.02)) * 100)),), None, tall=56.0)
-    e.reading_under(p, w, "power")
+    c.reading_under(p, w, "power")
 
 
 # ── page 4: the Bayesian measures ───────────────────────────────────────────
@@ -404,7 +404,7 @@ def _bayes(p: stats.Page, w: dict, kind: str, checked: dict[str, Any], lang: str
 
     def share(header: str, stat: str, pattern: str = "0.#", width: float = 20) -> dict:
         x = e.of_level("bayes", stat)
-        return {"header": header, "value": f'IF(ISNULL({x}), "", {e.pct(x, pattern)})', "width": width, "align": "right"}
+        return {"header": header, "value": f'IF(ISNULL({x}), "", {c.pct(x, pattern)})', "width": width, "align": "right"}
 
     low, high = e.of_level("bayes", "cred_low"), e.of_level("bayes", "cred_high")
     cols = [{"header": t["variant"], "value": "[level]", "width": 16, "style": {"weight": "semibold"}},
@@ -417,7 +417,7 @@ def _bayes(p: stats.Page, w: dict, kind: str, checked: dict[str, Any], lang: str
     p.add(stats.table("bayes", t["bayes"], one, cols, p.y, visible=c.exists(one)), 10)
     p.text("bayes_threshold", _numbers(b["threshold"], lang, threshold=float(checked.get("loss_threshold", 0.001)) * 100),
            h=4.5, size=7, color=c.MUTED, can_grow=True)
-    e.reading_table(p, w, "bayes", "reading_bayes", w["reading"]["bayes"])
+    c.reading_table(p, w, "bayes", "reading_bayes", w["reading"]["bayes"])
 
 
 # ── page 5: the sequential test ─────────────────────────────────────────────
@@ -453,19 +453,19 @@ def _sequential(p: stats.Page, w: dict, checked: dict[str, Any], lang: str) -> N
             {"header": t["first_crossing"], "value": f'IF(ISNULL({crossing}), {c.q(t["never"])}, {day})', "width": 26},
             _decision_column(w, t["decision"], e.of_level("sequential", "decision", "text"))]
     p.add(stats.table("sequential", t["sequential"], one, cols, p.y, visible=c.exists(one)), 10)
-    e.reading_table(p, w, "sequential", "reading_sequential", w["reading"]["sequential"])
+    c.reading_table(p, w, "sequential", "reading_sequential", w["reading"]["sequential"])
 
 
 # ── page 6: the secondary metrics ───────────────────────────────────────────
 def of_secondary(stat: str, column: str = "value") -> str:
     """A number (or text) of the comparison at hand of a secondary metric: its row `secondary|<metric>|<treatment>|stat`."""
-    return f'LOOKUP("secondary|" & {e.key_part("[level]")} & "|" & {e.key_part("[level_2]")} & "|{stat}", [key], [{column}])'
+    return f'LOOKUP("secondary|" & {c.key_part("[level]")} & "|" & {c.key_part("[level_2]")} & "|{stat}", [key], [{column}])'
 
 
 def _secondary_value(x: str) -> str:
     """A secondary metric's value: a rate as a percent, a mean as a number (the metric's own type)."""
     binary = f'{of_secondary("metric_type", "text")} = "binary"'
-    return f'IF(ISNULL({x}), "", IF({binary}, {e.pct(x, "0.##")}, {c.shown(x, "#,##0.####")}))'
+    return f'IF(ISNULL({x}), "", IF({binary}, {c.pct(x, "0.##")}, {c.shown(x, "#,##0.####")}))'
 
 
 def _secondary_metric() -> str:
@@ -475,7 +475,7 @@ def _secondary_metric() -> str:
 
 def _secondary_lift(x: str = "lift") -> str:
     lift = of_secondary(x)
-    return (f'IF(ISNULL({lift}), "", {e.signed_pct(lift)} & " " & '
+    return (f'IF(ISNULL({lift}), "", {c.signed_pct(lift)} & " " & '
             f'{e.interval(of_secondary("lift_ci_low"), of_secondary("lift_ci_high"))})')
 
 
@@ -513,7 +513,7 @@ def _secondary(p: stats.Page, w: dict, checked: dict[str, Any], lang: str) -> No
             _decision_column(w, t["decision"], "[text]")]
     p.add(stats.table("secondary", t["secondary"], SECONDARY, cols, p.y, visible=c.exists(SECONDARY)), 10)
     p.text("secondary_note", w["secondary"]["legend"] + " " + _intervals_note(w, checked, lang), h=4.5, size=7, color=c.MUTED, can_grow=True)
-    e.reading_under(p, w, "secondary")
+    c.reading_under(p, w, "secondary")
 
 
 # ── the page ────────────────────────────────────────────────────────────────
@@ -536,9 +536,9 @@ def layout(model: str, params: dict[str, Any], locale: str, sample: list[dict] |
         _sequential(p, w, checked, lang)
     if checked.get("secondary_metrics"):
         _secondary(p, w, checked, lang)
-    e.how_computed(p, w)
+    c.how_computed(p, w)
     e.notes(p, w, "units")
-    return e.document(header, p.items, footer, lang, CALCULATED)
+    return c.document(header, p.items, footer, lang, CALCULATED)
 
 
 register("ab_test", layout, name, about)

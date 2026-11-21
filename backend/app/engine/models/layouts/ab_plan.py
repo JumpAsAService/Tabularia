@@ -36,7 +36,7 @@ def about(params: dict[str, Any], locale: str) -> str:
 def _answer(w: dict, checked: dict[str, Any]) -> str:
     """The answer: units per variant and in total, with a date column the days and weeks; or the smallest lift."""
     a = w["answer"]
-    n = e.model_number
+    n = c.model_number
     units, total = c.shown(n("n_per_variant"), "#,##0"), c.shown(n("n_total"), "#,##0")
     days = c.join(a["days"], days=c.shown(n("days"), "#,##0"), daily=c.shown(n("daily_units"), "#,##0"),
                   weeks=c.shown(n("weeks"), "#,##0"))
@@ -44,7 +44,7 @@ def _answer(w: dict, checked: dict[str, Any]) -> str:
     solve = checked.get("solve_for", "sample_size")
     if solve == "sample_size":
         return f'{c.join(a["sample_size"], units=units, total=total)} & {with_days}'
-    mde = e.pct(n("mde"), "0.##")
+    mde = c.pct(n("mde"), "0.##")
     absolute = c.shown(n("mde_absolute"), "#,##0.####")
     if solve == "mde_for_units":
         return c.join(a["mde_for_units"], units=units, mde=mde, absolute=absolute)
@@ -53,8 +53,8 @@ def _answer(w: dict, checked: dict[str, Any]) -> str:
 
 def _lines(p: stats.Page, w: dict, kind: str, checked: dict[str, Any]) -> None:
     """The baseline, CUPED, the corrections, the history against the plan: one panel each."""
-    n, ln = e.model_number, w["lines"]
-    baseline = e.pct(n("baseline_mean"), "0.###") if kind == "binary" else c.shown(n("baseline_mean"), "#,##0.####")
+    n, ln = c.model_number, w["lines"]
+    baseline = c.pct(n("baseline_mean"), "0.###") if kind == "binary" else c.shown(n("baseline_mean"), "#,##0.####")
     p.text("baseline", "=" + c.join(ln["baseline"][kind], mean=baseline, sd=c.shown(n("baseline_sd"), "#,##0.####"),
                                    units=c.shown(n("n_history"), "#,##0"), days=c.shown(n("history_days"), "#,##0"),
                                    daily=c.shown(n("daily_units"), "#,##0")),
@@ -64,17 +64,17 @@ def _lines(p: stats.Page, w: dict, kind: str, checked: dict[str, Any]) -> None:
         cuped_days = f'IF(ISNULL({n("days_cuped")}), "", {c.join(ln["cuped_days"], days=c.shown(n("days_cuped"), "#,##0"))})'
         p.text("cuped_line", "=" + c.join(ln["cuped"], covariate=c.q(str(checked["covariate"])),
                                           rho=c.shown(n("covariate_correlation"), "0.###"),
-                                          reduction=e.pct(n("variance_reduction"), "0.#"),
+                                          reduction=c.pct(n("variance_reduction"), "0.#"),
                                           units=c.shown(n("n_per_variant_cuped"), "#,##0")) + f" & {cuped_days}",
                h=6, size=9, background=c.PANEL, padding=1.5, can_grow=True, visible=f'=NOT ISNULL({n("variance_reduction")})')
         p.y += 1.0
     said = c.q(w["values"]["correction"].get(str(checked.get("correction", "holm")), str(checked.get("correction"))))
     p.text("correction_line", "=" + c.join(ln["correction"], arms=c.shown(n("arms"), "0"), correction=said,
                                          alpha=c.shown(n("alpha"), "0.####"), per=c.shown(n("alpha_per_comparison"), "0.#####"),
-                                         power=e.pct(n("power"), "0")),
+                                         power=c.pct(n("power"), "0")),
            h=6, size=9, background=c.PANEL, padding=1.5, can_grow=True)
     p.y += 1.0
-    short = e.model_text("history_short")
+    short = c.model_text("history_short")
     p.text("history_short", f"={short}", h=5, size=8.5, color=c.MUTED, can_grow=True, visible=f"=NOT ISNULL({short})")
 
 
@@ -100,7 +100,7 @@ def _grid(p: stats.Page, w: dict, checked: dict[str, Any]) -> None:
         x = e.of_level("plan", stat)
         return {"header": header, "value": f'IF(ISNULL({x}), "", {c.shown(x, "#,##0")})', "width": width, "align": "right", "rules": bold}
 
-    cols = [{"header": t["lift"], "value": e.pct("[value]", "0.##"), "width": 19, "align": "right", "rules": bold},
+    cols = [{"header": t["lift"], "value": c.pct("[value]", "0.##"), "width": 19, "align": "right", "rules": bold},
             {"header": t["mde_absolute"], "value": c.shown(e.of_level("plan", "mde_absolute"), "#,##0.######"), "width": 22,
              "align": "right", "rules": bold},
             number(t["n_per_variant"], "n_per_variant", 24), number(t["n_control"], "n_control", 22), number(t["n_total"], "n_total", 24)]
@@ -131,12 +131,12 @@ def layout(model: str, params: dict[str, Any], locale: str, sample: list[dict] |
     p.y += 1.5
     p.keep()
     _lines(p, w, kind, checked)
-    e.reading_under(p, w, "plan", "baseline", "correction", "cuped")
+    c.reading_under(p, w, "plan", "baseline", "correction", "cuped")
     _charts(p, w, checked, lang)
     _grid(p, w, checked)
     e.notes(p, w, "history")
-    e.how_computed(p, w)
-    return e.document(header, p.items, footer, lang)
+    c.how_computed(p, w)
+    return c.document(header, p.items, footer, lang)
 
 
 register("ab_plan", layout, name, about)
