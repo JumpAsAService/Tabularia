@@ -797,6 +797,10 @@ dialect (here Polars; DuckDB spells a difference of dates `date_diff('day', a, b
    | `avg_spend` | `CASE WHEN days > 1 THEN repeat_total / (days - 1) END` |
 
    A **Filter** `age` *greater than* 0 leaves out customers whose first purchase is the calibration end.
+
+   On DuckDB the two date expressions are `date_diff('day', first_day, last_day) / 7.0` for `recency`
+   and `date_diff('day', first_day, DATE '2025-07-15') / 7.0` for `age`: `date_diff` counts the days
+   from its second argument to its third.
 6. For a **holdout**, a second chain from the same purchases: a **Filter** on the days after the
    calibration end, a **Group by** `customer` with the *distinct count* of `day` as
    `holdout_purchases`, then a **Join**, type *left*, on `customer` into the summary and a **Fill nulls**
