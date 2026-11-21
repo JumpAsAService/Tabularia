@@ -19,7 +19,7 @@ applies a model you registered in MLflow to new rows.
 
 **They need Kubernetes.** A model is not computed by an engine: it runs as a Job in your
 cluster, in an image built from a recipe Tabularia ships, with R (or Python, for boosting). On Docker Compose the
-models are in the palette greyed out («Kubernetes only»), the section in Administration says
+models are in the palette greyed out (the tooltip says «Needs Kubernetes, with this feature turned on in the Helm chart: not available on this installation»), the section in Administration says
 «Requires Kubernetes», and a flow with a model step cannot run it. The [hypothesis tests](statistics.md), which run on every engine, are the part of
 statistics that works everywhere.
 
@@ -410,20 +410,29 @@ not in the data). On a second branch drop `orders`, a **Filter** `stato` *not eq
 `annullato`, and a **Group by** `cliente_id` with the *maximum* of `data_ordine` as `last_order`.
 **Join** the branch into the customers, type *left* so that those who never ordered stay, on
 `cliente_id`. The CRM calls a customer `inattivo` after six months with no order, so the time of
-those is the days from the acquisition to the last order plus those 183 days, and the others are
-censored at the end of the data, 2026-07-15. Two **Computed columns**, in the engine's dialect (here
-Polars; DuckDB spells the difference `date_diff('day', a, b)` and ClickHouse `dateDiff('day', a, b)`):
+those is the days from the acquisition to the last order (the customer lasted until then; the six
+months of silence are not counted), and the time of the others is the days from the acquisition to
+the end of the data, 2026-07-15, where they are censored. Two **Computed columns**, in the engine's
+dialect (here Polars; DuckDB spells the difference `date_diff('day', a, b)` and ClickHouse
+`dateDiff('day', a, b)`):
 
 | Name | Expression |
 |---|---|
 | `days_to_end` | `CAST(DATE '2026-07-15' AS INTEGER) - CAST(data_acquisizione AS INTEGER)` |
-| `days` | `CASE WHEN stato = 'inattivo' THEN CAST(COALESCE(last_order, data_acquisizione) AS INTEGER) - CAST(data_acquisizione AS INTEGER) + 183 ELSE days_to_end END` |
+| `days` | `CASE WHEN stato = 'inattivo' THEN CAST(COALESCE(last_order, data_acquisizione) AS INTEGER) - CAST(data_acquisizione AS INTEGER) ELSE days_to_end END` |
 
-Then **Parametric survival** with the time `days`, the event column `stato`, the event value
-`inattivo`, the predictor `canale` and the distribution *auto*. Read the first page (the checks
-and the measures), then the candidates, then the time ratio of each channel against the reference
-channel, and the profile's median. The sample data are built so that the channels differ in how
-long their customers stay. For the customers still active, a second **Parametric survival** is not
+Then a **Filter** `days` *greater than* 0 (a customer whose only order is on the day of the
+acquisition, or who has none, has no time to be read), and **Parametric survival** with the time `days`, the
+event column `stato`, the event value `inattivo`, the predictor `canale` and the distribution
+*auto*. Read the first page (the checks and the measures), then the candidates, then the time ratio
+of each channel against the reference channel, and the profile's median. On the sample data at
+the `small` size this gives 2,034 customers, 697 of them lost, and *auto* keeps the Weibull (the
+generalised gamma is within 2 points of AIC and has one parameter more, so the simpler one wins); the
+convergence check is ok. The channels differ: the likelihood-ratio test of the predictor has
+p < 0.001, the time ratio of `Supermercati` against the reference channel `Ingrosso` is about 4.3 and
+that of `Ristorazione` about 2.1 (both significant), while `Negozi` and `Online` are not
+distinguishable from `Ingrosso`. The profile's median, for a customer of `Ingrosso`, is about 550 days.
+For the customers still active, a second **Parametric survival** is not
 needed: register the model in MLflow, and a **Predict** with **Time already survived** set to a
 column that holds each customer's days since acquisition gives the median time left.
 
@@ -826,13 +835,18 @@ weeks), Periods ahead 52, Purchase model *auto*, Output *the rows*. On the first
 frequency fit and the holdout: whether the model's expected purchases of the next year are near what
 the customers did. Without `avg_spend` the same flow gives the purchases and P(alive) alone. These
 data were built to suit the models, so they are a good place to learn to read the report; the
-numbers are those of your run. One check is meant to fail on them: **Spend independent of
-frequency**. Inside a channel a customer's average order does not move with how often it orders,
-which is Gamma–Gamma's assumption; but the channels differ both in the size of their orders and in
-their frequency (`Supermercati` order often and in bulk, `Ingrosso` in bulk and rarely, `Online`
-rarely and little), so over all the customers the two move together, and the check sees it. When
-the CLV matters, fit it per channel: keep `canale` in step 2's **Select columns** and add a
-**Filter** `canale` *equal to* one channel before the summary, one node per channel.
+numbers are those of your run. On the `small` size this flow gives 1,282 customers and the
+Pareto/NBD; the frequency fit is ok (p 0.56) and the holdout's expected purchases are 1.8% below
+the observed ones. The check to watch is **Spend independent of frequency**: inside a channel a
+customer's average order does not move with how often it orders, which is Gamma–Gamma's
+assumption, but the channels differ both in the size of their orders and in their frequency
+(`Supermercati` order often and in bulk, `Ingrosso` in bulk and rarely, `Online` rarely and
+little), so over all the customers the two move together. With the calibration ending on
+2025-07-15 the correlation is +0.06 and the check stays just inside its limit (p 0.054, verdict
+*ok*); on a summary that reads the whole window, as the sample database's README describes, it
+fails (p 0.010 on 2,054 customers). When the CLV matters, fit it per channel: keep `canale` in
+step 2's **Select columns** and add a **Filter** `canale` *equal to* one channel before the
+summary, one node per channel.
 
 ### BG/BB (R)
 
@@ -868,7 +882,10 @@ model has one purchase or none at each opportunity.
 
 *Example:* the same customers of the sample data, with a month as the opportunity: did the customer
 order in each month? Build the summary as above, from the table of step 3 of the previous example, with
-the month expression of the page (July 2023 is 7, June 2025 is 30) and the calibration end in June 2025.
+the month expression of the page (July 2023 is 7, June 2025 is 30) and the calibration end in June 2025,
+then a **Filter** `opportunities` *greater than* 0: a customer whose first month is the calibration end
+has no opportunity after it, and the node refuses a summary that holds one. On the `small` size 1,196
+customers are left, the convergence is ok and the frequency fit too (p 0.68).
 In the node, **Opportunities** `opportunities`, **Opportunity of the last transaction** `recency`,
 Length of an opportunity *Months*, Opportunities ahead 12. These customers buy at a rhythm of their own
 in continuous time, so for them *Customer lifetime value* is the natural choice; BG/BB is for data that
