@@ -49,12 +49,25 @@ PARAMS: dict[tuple[str, str], dict[str, Any]] = {
                          "spend": "avg_gift", "holdout_transactions": "later_gifts", "holdout_length": 5, "horizon": 5, "output": "rows"},
     ("bg_bb", "purchases"): {"customer": "donor", "frequency": "x", "recency": "t_x", "opportunities": "n", "period_unit": "year",
                              "output": "rows"},
+    # the parametric survival node on its reference tables (gateway-go/…/survival/reference/data): ps_weibull.csv (236 rows,
+    # a Weibull AFT with a number, a category of three levels, three plants, case weights) and ps_gompertz.csv (ages at death)
+    ("parametric_survival", "ph_aft"): {"time": "days", "event": "status", "event_value": "failed", "predictors": ["load", "line"],
+                                        "strata": "plant", "weights": "w", "distribution": "weibull", "quantiles": [0.25, 0.75],
+                                        "times": [10, 30]},
+    ("parametric_survival", "aft"): {"time": "days", "event": "status", "event_value": "failed", "predictors": ["load", "line"],
+                                     "distribution": "lognormal", "quantiles": [0.25, 0.75], "times": [10, 30]},
+    ("parametric_survival", "ph"): {"time": "years", "event": "died", "event_value": 1, "predictors": ["age", "smoker"],
+                                    "distribution": "gompertz", "quantiles": [0.25, 0.75], "times": [5, 10]},
+    ("parametric_survival", "auto"): {"time": "days", "event": "status", "event_value": "failed", "predictors": ["load", "line"],
+                                      "weights": "w", "distribution": "auto", "quantiles": [0.25, 0.75], "times": [10, 30]},
 }
 
 # Fixtures that are a runner's real output (`from_results`): main() leaves them alone.
 FROM_RUNNER: set[tuple[str, str]] = {("linear", "unpenalized"), ("logistic", "unpenalized"), ("kaplan_meier", "default"),
                                       ("cox", "default"), ("linear", "penalized"), ("logistic", "penalized"), ("clv", "value"),
-                                      ("clv", "purchases"), ("bg_bb", "value"), ("bg_bb", "purchases")}
+                                      ("clv", "purchases"), ("bg_bb", "value"), ("bg_bb", "purchases"),
+                                      ("parametric_survival", "ph_aft"), ("parametric_survival", "aft"),
+                                      ("parametric_survival", "ph"), ("parametric_survival", "auto")}
 
 # The example a declared stat ending in «*» is written as.
 WILDCARDS = {"note_*": ["note_1"], "surv_at_*": ["surv_at_30", "surv_at_30_low", "surv_at_30_high"],
