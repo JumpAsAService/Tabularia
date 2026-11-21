@@ -104,6 +104,12 @@ type mgVersion struct {
 	SystemLock            *string // the lock's lines of the group's system libraries only: the list has no lock, and its card names their versions
 	Selftest              *string
 	JobName               *string // a ready version with a Job: its self-test is being run again (a new runner)
+	// the rechecks of the version in use, for the runner RecheckRunner, that could not run: how
+	// many, not before when the next, why the last (recheckLater)
+	RecheckRunner         *string
+	RecheckAttempts       int64
+	RecheckAfter          *time.Time
+	RecheckError          *string
 	CreatedAt             time.Time
 	CreatedBy             *string
 	StartedAt, FinishedAt *time.Time
@@ -176,7 +182,7 @@ func mgLoad(ctx context.Context, q perm.Querier, g modelgroups.Group, withText b
 	columns := `SELECT id, number, status, recipe_hash, runner_hash, image_ref, arch, error,
 		coalesce(array_length(regexp_split_to_array(nullif(lock, ''), E'\n'), 1), 0), ` + text + `,
 		(SELECT string_agg(l, E'\n') FROM unnest(regexp_split_to_array(coalesce(lock, ''), E'\n')) AS l WHERE l LIKE ANY ($2)),
-		job_name, created_at, created_by, started_at, finished_at
+		job_name, recheck_runner, recheck_attempts, recheck_after, recheck_error, created_at, created_by, started_at, finished_at
 		FROM script_environment_versions`
 	rows, err := q.Query(ctx, columns+` WHERE environment_id = $1 ORDER BY number DESC`+limit, s.EnvID, sysLike)
 	if err != nil {
@@ -186,7 +192,8 @@ func mgLoad(ctx context.Context, q perm.Querier, g modelgroups.Group, withText b
 	scan := func(row pgx.Row) (mgVersion, error) {
 		var v mgVersion
 		err := row.Scan(&v.ID, &v.Number, &v.Status, &v.RecipeHash, &v.RunnerHash, &v.ImageRef, &v.Arch, &v.Error, &v.Packages,
-			&v.Lock, &v.BuildLog, &v.Selftest, &v.SystemLock, &v.JobName, &v.CreatedAt, &v.CreatedBy, &v.StartedAt, &v.FinishedAt)
+			&v.Lock, &v.BuildLog, &v.Selftest, &v.SystemLock, &v.JobName, &v.RecheckRunner, &v.RecheckAttempts, &v.RecheckAfter, &v.RecheckError,
+			&v.CreatedAt, &v.CreatedBy, &v.StartedAt, &v.FinishedAt)
 		return v, err
 	}
 	hasCurrent := false
@@ -231,8 +238,28 @@ func (s *mgState) current() *mgVersion {
 	return nil
 }
 
+// recheck is where the self-test of a ready version with the runner this Tabularia ships is:
+// "rechecking" (its Job runs), "recheck_retrying" (one could not run, the next starts at
+// RecheckAfter), "recheck_stopped" (as many as are tried could not run: the version serves,
+// self-tested with its previous runner), "" when there is none (passed, or not started yet).
+func (v *mgVersion) recheck(g modelgroups.Group) string {
+	switch {
+	case v.Status != "ready":
+		return ""
+	case v.JobName != nil:
+		return "rechecking"
+	case v.RunnerHash != nil && *v.RunnerHash == g.RunnerHash, v.RecheckRunner == nil || *v.RecheckRunner != g.RunnerHash, v.RecheckAttempts == 0:
+		return ""
+	case v.RecheckAttempts > mgRecheckRetries:
+		return "recheck_stopped"
+	}
+	return "recheck_retrying"
+}
+
 // state is what the card says: not_enabled, building, checking, ready, failed or
-// rebuild_needed (the shipped recipe changed and the new version is not queued yet).
+// rebuild_needed (the shipped recipe changed and the new version is not queued yet); for a ready
+// group whose version in use is being self-tested again with a new runner, rechecking or
+// recheck_retrying (it serves meanwhile).
 func (s *mgState) state() string {
 	if !s.Enabled {
 		return "not_enabled"
@@ -246,6 +273,9 @@ func (s *mgState) state() string {
 	case mgInProgress(latest.Status):
 		return "building"
 	case s.current() != nil:
+		if r := s.current().recheck(s.Group); r == "rechecking" || r == "recheck_retrying" {
+			return r
+		}
 		return "ready"
 	case latest.Status == "failed":
 		return "failed"
@@ -283,17 +313,25 @@ type mgVersionOut struct {
 	Current bool   `json:"current"`
 	Stale   bool   `json:"stale"` // built from another recipe than the one shipped
 	// Rechecking: the runner changed and the version in use, still serving, is being self-tested again on the same image
-	Rechecking bool    `json:"rechecking"`
-	Error      *string `json:"error"`
-	ImageRef   *string `json:"image_ref"`
-	Packages   int     `json:"packages"`
-	CreatedAt  string  `json:"created_at"`
-	CreatedBy  *string `json:"created_by"`
-	StartedAt  *string `json:"started_at"`
-	FinishedAt *string `json:"finished_at"`
-	Lock       *string `json:"lock,omitempty"`
-	BuildLog   *string `json:"build_log,omitempty"`
-	Selftest   *string `json:"selftest,omitempty"`
+	Rechecking bool `json:"rechecking"`
+	// Recheck: rechecking, recheck_retrying (one could not run: tried again from RecheckAfter),
+	// recheck_stopped (none could: it serves, self-tested with its previous runner), or ""; the
+	// attempts that could not run and why the last one did not
+	Recheck         string  `json:"recheck"`
+	RecheckAttempts int64   `json:"recheck_attempts"`
+	RecheckMax      int64   `json:"recheck_max_attempts"`
+	RecheckAfter    *string `json:"recheck_after"`
+	RecheckError    *string `json:"recheck_error"`
+	Error           *string `json:"error"`
+	ImageRef        *string `json:"image_ref"`
+	Packages        int     `json:"packages"`
+	CreatedAt       string  `json:"created_at"`
+	CreatedBy       *string `json:"created_by"`
+	StartedAt       *string `json:"started_at"`
+	FinishedAt      *string `json:"finished_at"`
+	Lock            *string `json:"lock,omitempty"`
+	BuildLog        *string `json:"build_log,omitempty"`
+	Selftest        *string `json:"selftest,omitempty"`
 }
 
 type mgLimits struct {
@@ -363,10 +401,17 @@ func mgOut(ctx context.Context, q perm.Querier, s *mgState) (mgGroupOut, error) 
 		out.GroupIDs, out.Groups = ids, names
 	}
 	for _, v := range s.Versions {
-		out.Versions = append(out.Versions, mgVersionOut{Number: v.Number, Status: v.Status, Current: s.CurrentID != nil && *s.CurrentID == v.ID,
+		o := mgVersionOut{Number: v.Number, Status: v.Status, Current: s.CurrentID != nil && *s.CurrentID == v.ID,
 			Stale: v.RecipeHash == nil || *v.RecipeHash != g.RecipeHash, Rechecking: v.Status == "ready" && v.JobName != nil, Error: v.Error, ImageRef: v.ImageRef, Packages: v.Packages,
 			CreatedAt: pyjson.Isoformat(v.CreatedAt), CreatedBy: v.CreatedBy, StartedAt: isoPtr(v.StartedAt), FinishedAt: isoPtr(v.FinishedAt),
-			Lock: v.Lock, BuildLog: v.BuildLog, Selftest: v.Selftest})
+			Lock: v.Lock, BuildLog: v.BuildLog, Selftest: v.Selftest, RecheckMax: mgRecheckRetries + 1}
+		if o.Recheck = v.recheck(g); o.Recheck == "recheck_retrying" || o.Recheck == "recheck_stopped" {
+			o.RecheckAttempts, o.RecheckError = v.RecheckAttempts, v.RecheckError
+			if o.Recheck == "recheck_retrying" {
+				o.RecheckAfter = isoPtr(v.RecheckAfter)
+			}
+		}
+		out.Versions = append(out.Versions, o)
 	}
 	return out, nil
 }

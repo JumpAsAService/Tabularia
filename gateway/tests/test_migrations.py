@@ -482,3 +482,29 @@ def test_0044_adds_the_model_groups_and_leaves_what_was_there(temporary_database
     with pytest.raises(Exception, match="uq_model_group_environment"):
         with temporary_database.begin() as c:
             c.execute(text("INSERT INTO model_groups (id, environment_id, updated_at) VALUES ('survival', 2, now())"))
+
+
+def test_0045_adds_the_recheck_columns_and_leaves_what_was_there(temporary_database):
+    """Only additions: a version has made no recheck attempt, and the previous version's
+    insert (without the columns) still works."""
+    with temporary_database.begin() as c:
+        command.upgrade(m._config(c), "0044")
+        c.execute(text(
+            "INSERT INTO script_environments (id, name, description, language, enabled, cpu_request, cpu_limit, memory_request, "
+            "memory_limit, max_timeout_seconds, created_at, updated_at, managed_by) "
+            "VALUES (1, 'Statistical models: survival', '', 'r', true, '1', '2', '2Gi', '4Gi', 1800, now(), now(), 'model_group:survival')"))
+        c.execute(text(
+            "INSERT INTO script_environment_versions (id, environment_id, number, language_version, base_image, packages, status, "
+            "created_at, runner_hash) VALUES (1, 1, 1, '4.6', 'rocker/r-ver:4.6.0', 'survival', 'ready', now(), 'r1')"))
+    m.migra(temporary_database)  # stops if the database and the models differ
+    with temporary_database.connect() as c:
+        assert c.execute(text(
+            "SELECT runner_hash, recheck_runner, recheck_attempts, recheck_after, recheck_error FROM script_environment_versions")).one() == (
+            "r1", None, 0, None, None)
+    with temporary_database.begin() as c:
+        # the previous version's insert, without the columns
+        c.execute(text(
+            "INSERT INTO script_environment_versions (id, environment_id, number, language_version, base_image, packages, status, "
+            "created_at) VALUES (2, 1, 2, '4.6', 'rocker/r-ver:4.6.0', '', 'queued', now())"))
+    with temporary_database.connect() as c:
+        assert c.execute(text("SELECT recheck_attempts FROM script_environment_versions WHERE id = 2")).scalar() == 0

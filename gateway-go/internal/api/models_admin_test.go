@@ -26,6 +26,7 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/perm"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyd"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/scriptcfg"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/scriptnodes"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/server"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/settings"
 )
@@ -99,10 +100,16 @@ func TestTheRecipesBecomeVersionsTheBuildLoopAccepts(t *testing.T) {
 
 func TestTheStateOfAGroup(t *testing.T) {
 	g := modelgroups.Groups()[0]
-	cur, other := int64(7), "old"
+	cur, other, job := int64(7), "old", "tabularia-recheck-e1-v7"
 	version := func(id int64, status string, hash string) mgVersion {
 		h := hash
 		return mgVersion{ID: id, Number: id, Status: status, RecipeHash: &h}
+	}
+	// a version self-tested with an earlier runner, its recheck's Job, and the attempts that could not run
+	rechecked := func(v mgVersion, job *string, attempts int64) mgVersion {
+		old, shipped := "an earlier runner", g.RunnerHash
+		v.RunnerHash, v.JobName, v.RecheckRunner, v.RecheckAttempts = &old, job, &shipped, attempts
+		return v
 	}
 	cases := []struct {
 		name  string
@@ -120,6 +127,12 @@ func TestTheStateOfAGroup(t *testing.T) {
 		{"the next failed, the version in use serves", mgState{Enabled: true, CurrentID: &cur, Versions: []mgVersion{version(8, "failed", g.RecipeHash), version(7, "ready", g.RecipeHash)}}, "ready", true},
 		{"failed", mgState{Enabled: true, Versions: []mgVersion{version(1, "failed", g.RecipeHash)}}, "failed", false},
 		{"the recipe changed", mgState{Enabled: true, CurrentID: &cur, Versions: []mgVersion{version(7, "ready", other)}}, "rebuild_needed", false},
+		{"rechecked with a new runner", mgState{Enabled: true, CurrentID: &cur, Versions: []mgVersion{rechecked(version(7, "ready", g.RecipeHash), &job, 0)}},
+			"rechecking", true},
+		{"a recheck that could not run, tried again", mgState{Enabled: true, CurrentID: &cur,
+			Versions: []mgVersion{rechecked(version(7, "ready", g.RecipeHash), nil, 2)}}, "recheck_retrying", true},
+		{"no recheck could run", mgState{Enabled: true, CurrentID: &cur,
+			Versions: []mgVersion{rechecked(version(7, "ready", g.RecipeHash), nil, scriptnodes.MaxRetries+1)}}, "ready", true},
 	}
 	for _, c := range cases {
 		c.state.Group = g
@@ -155,6 +168,8 @@ type fakeKube struct {
 	jobs       map[string]map[string]any // "<namespace>/<name>"
 	configmaps map[string]map[string]any
 	ends       map[string]fakeEnd // by Job name: how it ends (absent: it runs)
+	noLog      map[string]bool    // by Job name: its Pod's log is not given (503)
+	refused    map[string]string  // by Job name: the cluster does not create its Pod, with this event's message
 	deleted    []string
 	selectors  []string // the label selectors of the Jobs deleted by a collection delete
 }
@@ -167,7 +182,8 @@ type fakeEnd struct {
 
 func newFakeKube(t *testing.T) *fakeKube {
 	t.Helper()
-	k := &fakeKube{jobs: map[string]map[string]any{}, configmaps: map[string]map[string]any{}, ends: map[string]fakeEnd{}}
+	k := &fakeKube{jobs: map[string]map[string]any{}, configmaps: map[string]map[string]any{}, ends: map[string]fakeEnd{},
+		noLog: map[string]bool{}, refused: map[string]string{}}
 	k.srv = httptest.NewServer(http.HandlerFunc(k.serve))
 	t.Cleanup(k.srv.Close)
 	token := filepath.Join(t.TempDir(), "token")
@@ -225,6 +241,9 @@ func (k *fakeKube) serve(w http.ResponseWriter, r *http.Request) {
 				notFound()
 			default:
 				status := map[string]any{"active": 1}
+				if _, no := k.refused[parts[6]]; no {
+					status = map[string]any{}
+				}
 				if end, ended := k.ends[parts[6]]; ended {
 					cond := map[string]any{"type": "Failed", "status": "True", "reason": "BackoffLimitExceeded"}
 					status = map[string]any{"failed": 1, "conditions": []any{cond}}
@@ -251,6 +270,10 @@ func (k *fakeKube) serve(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if len(parts) == 7 && parts[6] == "log" {
+			if k.noLog[strings.TrimPrefix(parts[5], "pod-")] {
+				k.reply(w, 503, map[string]any{"message": "the kubelet does not answer"})
+				return
+			}
 			_, _ = io.WriteString(w, k.ends[strings.TrimPrefix(parts[5], "pod-")].log)
 			return
 		}
@@ -262,7 +285,12 @@ func (k *fakeKube) serve(w http.ResponseWriter, r *http.Request) {
 		k.reply(w, 201, cm)
 		return
 	case len(parts) == 5 && parts[4] == "events":
-		k.reply(w, 200, map[string]any{"items": []any{}})
+		name := strings.TrimPrefix(r.URL.Query().Get("fieldSelector"), "involvedObject.name=")
+		items := []any{}
+		if msg, no := k.refused[name]; no {
+			items = append(items, map[string]any{"reason": "FailedCreate", "message": msg})
+		}
+		k.reply(w, 200, map[string]any{"items": items})
 		return
 	}
 	notFound()
@@ -272,6 +300,48 @@ func (k *fakeKube) end(job string, ok bool, exit int, log string) {
 	k.mu.Lock()
 	defer k.mu.Unlock()
 	k.ends[job] = fakeEnd{ok, log, exit}
+}
+
+// older makes a Job look created that many seconds ago.
+func (k *fakeKube) older(ns, name string, seconds int) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	k.jobs[ns+"/"+name]["metadata"].(map[string]any)["creationTimestamp"] = time.Now().UTC().Add(-time.Duration(seconds) * time.Second).Format(time.RFC3339)
+}
+
+// recheckCodes are the code's ConfigMaps of the rechecks of the group's version 1 (each has a name
+// of its own).
+func (k *fakeKube) recheckCodes(env int64) []string {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	var names []string
+	for key := range k.configmaps {
+		if strings.HasPrefix(key, fmt.Sprintf("scripts/tabularia-reselftest-e%d-v1-", env)) {
+			names = append(names, key)
+		}
+	}
+	return names
+}
+
+// hideLog makes the cluster not give the log of the Job's Pod.
+func (k *fakeKube) hideLog(job string) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	k.noLog[job] = true
+}
+
+// refuse makes the cluster not create the Job's Pod, and say why in an event.
+func (k *fakeKube) refuse(job, message string) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	k.refused[job] = message
+}
+
+// remove takes a Job away, as someone or its TTL would.
+func (k *fakeKube) remove(ns, name string) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	delete(k.jobs, ns+"/"+name)
 }
 
 func (k *fakeKube) job(ns, name string) map[string]any {
@@ -1297,7 +1367,7 @@ func TestANewRunnerSelftestsTheImageInUseAgainAndItKeepsServing(t *testing.T) {
 	if !strings.Contains(string(text), "--selftest") || !strings.Contains(string(text), strings.TrimPrefix(image.Image, "")) {
 		t.Errorf("the Job is not the self-test on the same image: %.300s", text)
 	}
-	if f.kube.configmaps["scripts/"+fmt.Sprintf("tabularia-reselftest-e%d-v1", env)] == nil {
+	if len(f.kube.recheckCodes(env)) != 1 {
 		t.Error("no ConfigMap of the code")
 	}
 	if len(f.versions("survival")) != 1 {
@@ -1308,7 +1378,8 @@ func TestANewRunnerSelftestsTheImageInUseAgainAndItKeepsServing(t *testing.T) {
 	if err != nil || still.Image != image.Image {
 		t.Fatalf("the version in use stopped serving: %v", err)
 	}
-	if d := answerOf(t, f.call(f.admin, "GET", "survival", "", "", false, mgDetail)).Group; d.State != "ready" || !d.Ready || !d.Versions[0].Rechecking {
+	if d := answerOf(t, f.call(f.admin, "GET", "survival", "", "", false, mgDetail)).Group; d.State != "rechecking" || !d.Ready ||
+		!d.Versions[0].Rechecking || d.Versions[0].Recheck != "rechecking" {
 		t.Errorf("the card: %+v", d)
 	}
 	// a Job that runs is not started twice
@@ -1330,7 +1401,8 @@ func TestANewRunnerSelftestsTheImageInUseAgainAndItKeepsServing(t *testing.T) {
 	if _, err := b.oneRound(f.ctx); err != nil || f.kube.job("scripts", recheck) != nil {
 		t.Errorf("run again: %v", err)
 	}
-	if d := answerOf(t, f.call(f.admin, "GET", "survival", "", "", false, mgDetail)).Group; d.Versions[0].Rechecking {
+	if d := answerOf(t, f.call(f.admin, "GET", "survival", "", "", false, mgDetail)).Group; d.State != "ready" || d.Versions[0].Rechecking ||
+		d.Versions[0].Recheck != "" {
 		t.Error("still said to be checked")
 	}
 }
@@ -1365,6 +1437,132 @@ func TestANewRunnerThatTheImageDoesNotPassFailsTheGroupWithTheDifference(t *test
 	// it is not tried again by itself
 	if _, err := b.oneRound(f.ctx); err != nil || f.kube.job("scripts", recheck) != nil {
 		t.Errorf("tried again: %v", err)
+	}
+}
+
+// A recheck the cluster stops before the self-test reports says nothing of the image: the version in
+// use stays ready and serves, the card says the recheck is tried again and why, and it is, later, with
+// its code in a ConfigMap of a name of its own.
+func TestARecheckThatDidNotRunIsTriedAgainAndTheVersionServes(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		stop func(k *fakeKube, job string)
+		why  string
+	}{
+		{"the Job failed before its Pod ran", func(k *fakeKube, job string) { k.end(job, false, 0, "") },
+			"it stopped before the self-test began (BackoffLimitExceeded)"},
+		{"the Job ended without any log", func(k *fakeKube, job string) { k.end(job, true, 0, "") }, "it stopped before the self-test began"},
+		{"the cluster does not give the log", func(k *fakeKube, job string) { k.end(job, false, 4, selftestLog(notPassed)); k.hideLog(job) },
+			"the cluster did not give its log: "},
+		{"the self-test ended without its report", func(k *fakeKube, job string) {
+			k.end(job, false, 137, "arrow@26.0.1\n\n"+mgSelftestMark+"\nchecking linear\n")
+		}, "the self-test ended without its report (BackoffLimitExceeded)"},
+		{"the Job is gone", func(k *fakeKube, job string) { k.remove("scripts", job) }, "its Job is no longer in the cluster"},
+		{"the cluster does not create its Pod", func(k *fakeKube, job string) {
+			k.refuse(job, `pods "x" is forbidden: exceeded quota: scripts, requested: limits.cpu=2`)
+			k.older("scripts", job, 60)
+		}, "it cannot start: the namespace scripts has no room left (its ResourceQuota is full)"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			f := newModelsFixture(t)
+			f.enable(f.admin, "survival")
+			f.buildTo(t, "survival", true)
+			b := f.builds()
+			env := f.envOf("survival")
+			recheck := fmt.Sprintf("tabularia-recheck-e%d-v1", env)
+			if _, err := f.db.Exec(f.ctx, `UPDATE script_environment_versions SET runner_hash = 'of-the-old-runner'`); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := b.oneRound(f.ctx); err != nil || f.kube.job("scripts", recheck) == nil {
+				t.Fatalf("no recheck: %v", err)
+			}
+			c.stop(f.kube, recheck)
+			if _, err := b.oneRound(f.ctx); err != nil {
+				t.Fatal(err)
+			}
+			if f.kube.job("scripts", recheck) != nil {
+				t.Error("the Job that did not run is still there")
+			}
+			v := f.versions("survival")[0]
+			if v.Status != "ready" || v.Error != nil || v.JobName != nil || v.RecheckAttempts != 1 || !strings.HasPrefix(deref(v.RecheckError), c.why) {
+				t.Fatalf("the version: %s %q, attempts %d, why %q", v.Status, deref(v.Error), v.RecheckAttempts, deref(v.RecheckError))
+			}
+			if _, err := ReadyModelGroupImage(f.ctx, f.db, "survival"); err != nil {
+				t.Fatalf("the version in use stopped serving: %v", err)
+			}
+			d := answerOf(t, f.call(f.admin, "GET", "survival", "", "", false, mgDetail)).Group
+			if out := d.Versions[0]; d.State != "recheck_retrying" || !d.Ready || out.Recheck != "recheck_retrying" || out.RecheckAttempts != 1 ||
+				out.RecheckMax != 6 || out.RecheckAfter == nil || !strings.HasPrefix(deref(out.RecheckError), c.why) {
+				t.Errorf("the card: %s %+v", d.State, out)
+			}
+			// not before its time
+			if _, err := b.oneRound(f.ctx); err != nil || f.kube.job("scripts", recheck) != nil {
+				t.Fatalf("tried again at once: %v", err)
+			}
+			// then again, with a ConfigMap of its own
+			if _, err := f.db.Exec(f.ctx, `UPDATE script_environment_versions SET recheck_after = now() - interval '1 second'`); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := b.oneRound(f.ctx); err != nil || f.kube.job("scripts", recheck) == nil {
+				t.Fatalf("not tried again: %v", err)
+			}
+			if codes := f.kube.recheckCodes(env); len(codes) != 2 {
+				t.Errorf("the code's ConfigMaps: %v", codes)
+			}
+			if d := answerOf(t, f.call(f.admin, "GET", "survival", "", "", false, mgDetail)).Group; d.State != "rechecking" {
+				t.Errorf("the card: %s", d.State)
+			}
+		})
+	}
+}
+
+// As many rechecks as a node may have retries, then no more: the version in use serves on, the card
+// says the recheck stopped and why. A later runner starts them again.
+func TestRechecksThatNeverRunStopAndTheVersionServesOn(t *testing.T) {
+	f := newModelsFixture(t)
+	f.enable(f.admin, "survival")
+	f.buildTo(t, "survival", true)
+	b := f.builds()
+	recheck := fmt.Sprintf("tabularia-recheck-e%d-v1", f.envOf("survival"))
+	if _, err := f.db.Exec(f.ctx, `UPDATE script_environment_versions SET runner_hash = 'of-the-old-runner'`); err != nil {
+		t.Fatal(err)
+	}
+	round := func() {
+		t.Helper()
+		if _, err := b.oneRound(f.ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for attempt := 1; attempt <= scriptnodes.MaxRetries+1; attempt++ {
+		round()
+		if f.kube.job("scripts", recheck) == nil {
+			t.Fatalf("attempt %d not started", attempt)
+		}
+		f.kube.end(recheck, false, 0, "")
+		round()
+		if _, err := f.db.Exec(f.ctx, `UPDATE script_environment_versions SET recheck_after = now() - interval '1 second'`); err != nil {
+			t.Fatal(err)
+		}
+	}
+	round()
+	if f.kube.job("scripts", recheck) != nil {
+		t.Fatal("tried again past the retries")
+	}
+	if _, err := ReadyModelGroupImage(f.ctx, f.db, "survival"); err != nil {
+		t.Fatalf("the version in use stopped serving: %v", err)
+	}
+	d := answerOf(t, f.call(f.admin, "GET", "survival", "", "", false, mgDetail)).Group
+	if out := d.Versions[0]; d.State != "ready" || out.Recheck != "recheck_stopped" || out.RecheckAttempts != 6 || out.RecheckAfter != nil ||
+		!strings.HasPrefix(deref(out.RecheckError), "it stopped before the self-test began") {
+		t.Errorf("the card: %s %+v", d.State, out)
+	}
+	// the attempts counted were for the runner shipped: a later one starts them again
+	if _, err := f.db.Exec(f.ctx, `UPDATE script_environment_versions SET recheck_runner = 'of-an-earlier-runner'`); err != nil {
+		t.Fatal(err)
+	}
+	round()
+	if v := f.versions("survival")[0]; f.kube.job("scripts", recheck) == nil || v.RecheckAttempts != 0 || v.RecheckError != nil {
+		t.Errorf("a new runner's recheck: %+v", v)
 	}
 }
 

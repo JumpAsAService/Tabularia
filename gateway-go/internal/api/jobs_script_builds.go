@@ -568,7 +568,7 @@ func (b *scriptBuilds) advance(ctx context.Context, tx pgx.Tx, v *sbVersion) err
 		group := mgGroupOfManaged(env.ManagedBy)
 		var code pyjson.Object
 		if group != "" { // a model group's check also runs its self-test, on the code in a ConfigMap
-			if manifest, code, err = b.managedCheckJob(v, env, group, false); err != nil {
+			if manifest, code, err = b.managedCheckJob(v, env, group, false, mgCodeName(v)); err != nil {
 				return err
 			}
 		}
@@ -579,7 +579,7 @@ func (b *scriptBuilds) advance(ctx context.Context, tx pgx.Tx, v *sbVersion) err
 			return err
 		}
 		if code != nil {
-			if err := b.createSelftestCode(ctx, k, v, manifest, checkJob, code, false); err != nil {
+			if err := b.createSelftestCode(ctx, k, manifest, checkJob, code, mgCodeName(v)); err != nil {
 				return err
 			}
 		}

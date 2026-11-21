@@ -57,6 +57,8 @@ reads its input from it. Without the bucket the section says so and the models d
 | **Ready** | Every value matched; the version is in use |
 | **Failed** | The build or the self-test failed; the version in use, if any, is kept. The section shows the build log and the self-test's output |
 | **Rebuild needed** | This Tabularia ships a newer recipe than the image in use; a new version is queued by itself, and until it is ready the group's steps do not run |
+| **Rechecking** | This Tabularia ships a new runner for the group (the code that fits the models), not a new recipe: the self-test runs again on the image in use, without a build. The version serves meanwhile; it becomes **Failed** only if the self-test reports values that differ |
+| **Recheck retrying** | The cluster stopped that self-test before it reported (a Pod never scheduled or refused, an image not pulled, the deadline, a node gone, a log not given): that says nothing of the image, so the version serves on and the self-test runs again a minute later, at most six times (a node's most retries and its default delay). After the sixth the version still serves, self-tested with its previous runner, and the section says why; **Build again** checks it |
 
 **Enable** creates the group's own scripting environment (managed by Tabularia, you do not
 edit its packages) and queues its first version. **Build again** makes a new version from the

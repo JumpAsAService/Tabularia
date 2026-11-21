@@ -107,6 +107,14 @@ class ScriptEnvironmentVersion(SQLModel, table=True):
     recipe_hash: Optional[str] = Field(default=None, max_length=64)
     runner_hash: Optional[str] = Field(default=None, max_length=64)
     selftest: Optional[str] = Field(default=None, sa_column=Column(Text))
+    # the version in use of a group whose runner changed: its self-test run again, which the
+    # cluster may stop before it reports; such a recheck is tried again later (the Go gateway's
+    # models_build.go). For the runner `recheck_runner`: how many in a row could not run, not
+    # before when the next one, and why the last one could not
+    recheck_runner: Optional[str] = Field(default=None, max_length=64)
+    recheck_attempts: int = Field(default=0, sa_column_kwargs={"server_default": "0"})
+    recheck_after: Optional[datetime] = None
+    recheck_error: Optional[str] = Field(default=None, sa_column=Column(Text))
 
 
 class ScriptEnvironmentVariable(SQLModel, table=True):

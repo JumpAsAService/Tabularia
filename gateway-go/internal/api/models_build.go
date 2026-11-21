@@ -11,7 +11,9 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/jobs"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/kube"
@@ -19,6 +21,7 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/scriptcfg"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/scriptimage"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/scriptnodes"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -68,11 +71,18 @@ const mgPyCheck = "from pyarrow.fs import S3FileSystem\n" +
 	"names = {f\"{d.metadata['Name']}=={d.version}\" for d in m.distributions() if d.metadata['Name']}\n" +
 	"print('\\n'.join(sorted(names, key=str.lower)))\n"
 
-func mgCodeName(v *sbVersion, recheck bool) string {
-	if recheck {
-		return fmt.Sprintf("tabularia-reselftest-e%d-v%d", v.EnvironmentID, v.Number)
-	}
+// mgCodeName is the ConfigMap of the code of a new version's check: one per version, checked once.
+func mgCodeName(v *sbVersion) string {
 	return fmt.Sprintf("tabularia-selftest-e%d-v%d", v.EnvironmentID, v.Number)
+}
+
+// mgRecheckCodeName is the ConfigMap of the code of one recheck of a version in use: a name of its
+// own each time. A version is rechecked again (a recheck that could not run, a later runner), the
+// ConfigMap of the previous one goes only when the cluster's garbage collector gets to it, and one
+// of the same name still there would count as made (CreateObject) and then go, or hold the code of
+// another runner.
+func mgRecheckCodeName(v *sbVersion) string {
+	return fmt.Sprintf("tabularia-reselftest-e%d-v%d-%s", v.EnvironmentID, v.Number, strconv.FormatInt(time.Now().UnixNano(), 36))
 }
 
 // mgCheckStage is the stage of a check Job: the one of a new version, or the one that runs the
@@ -84,8 +94,9 @@ func mgCheckStage(recheck bool) string {
 	return "check"
 }
 
-// managedCheckJob is the check Job of a model group's version, and the ConfigMap's data of its code.
-func (b *scriptBuilds) managedCheckJob(v *sbVersion, env *sbEnvironment, group string, recheck bool) (pyjson.Object, pyjson.Object, error) {
+// managedCheckJob is the check Job of a model group's version, and the ConfigMap's data of its code
+// (the ConfigMap codeName).
+func (b *scriptBuilds) managedCheckJob(v *sbVersion, env *sbEnvironment, group string, recheck bool, codeName string) (pyjson.Object, pyjson.Object, error) {
 	files, err := modelgroups.CodeFiles(group, nil, true)
 	if err != nil {
 		return nil, nil, err
@@ -129,7 +140,7 @@ func (b *scriptBuilds) managedCheckJob(v *sbVersion, env *sbEnvironment, group s
 			{Key: "runAsGroup", Value: int64(sbScriptUID)}, {Key: "seccompProfile", Value: pyjson.Object{{Key: "type", Value: "RuntimeDefault"}}}}},
 		{Key: "containers", Value: []any{container}},
 		{Key: "volumes", Value: []any{
-			pyjson.Object{{Key: "name", Value: "code"}, {Key: "configMap", Value: pyjson.Object{{Key: "name", Value: mgCodeName(v, recheck)}, {Key: "items", Value: itemList}}}},
+			pyjson.Object{{Key: "name", Value: "code"}, {Key: "configMap", Value: pyjson.Object{{Key: "name", Value: codeName}, {Key: "items", Value: itemList}}}},
 			pyjson.Object{{Key: "name", Value: "tmp"}, {Key: "emptyDir", Value: pyjson.Object{}}}}},
 	}
 	pod = append(pod, sbNodeSelector(v)...)
@@ -140,11 +151,11 @@ func (b *scriptBuilds) managedCheckJob(v *sbVersion, env *sbEnvironment, group s
 	return b.job(sbJobName(mgCheckStage(recheck), v), sbLabels(mgCheckStage(recheck), v), max(b.panel.CheckTimeout(), 900), pod), code, nil
 }
 
-// createSelftestCode makes the ConfigMap of the check's code, owned by its Job (it goes with it).
-func (b *scriptBuilds) createSelftestCode(ctx context.Context, k scriptcfg.Kubernetes, v *sbVersion, manifest pyjson.Object, job any, code pyjson.Object, recheck bool) error {
+// createSelftestCode makes the ConfigMap codeName of the check's code, owned by its Job (it goes with it).
+func (b *scriptBuilds) createSelftestCode(ctx context.Context, k scriptcfg.Kubernetes, manifest pyjson.Object, job any, code pyjson.Object, codeName string) error {
 	labels := pyjson.Obj(pyjson.Obj(manifest.Value("metadata")).Value("labels"))
 	return kube.CreateObject(ctx, k, b.s.Scripts.Namespace, "configmaps", pyjson.Object{{Key: "apiVersion", Value: "v1"}, {Key: "kind", Value: "ConfigMap"},
-		{Key: "metadata", Value: pyjson.Object{{Key: "name", Value: mgCodeName(v, recheck)}, {Key: "labels", Value: labels}, {Key: "ownerReferences", Value: kube.OwnedBy(job)}}},
+		{Key: "metadata", Value: pyjson.Object{{Key: "name", Value: codeName}, {Key: "labels", Value: labels}, {Key: "ownerReferences", Value: kube.OwnedBy(job)}}},
 		{Key: "data", Value: code}})
 }
 
@@ -277,14 +288,23 @@ func mgQueueStale(ctx context.Context, tx pgx.Tx, log *slog.Logger) (int64, erro
 	return queued, nil
 }
 
+// mgRecheckRetries is how many times a recheck that could not run is tried again, and
+// mgRecheckDelay how long after: as a Script or model node with the most retries (MaxRetries) and
+// the delay its retries have when it says none. A recheck that runs and passes or fails ends them.
+const (
+	mgRecheckRetries = scriptnodes.MaxRetries
+	mgRecheckDelay   = scriptnodes.DefaultRetryDelaySeconds * time.Second
+)
+
 // recheckRunners starts, for each enabled group, the self-test again on the image in use when the
 // runner this Tabularia ships is not the one the version was self-tested with (RunnerHash): an
 // upgrade changed the runner's files, the common library, the schema or the catalogue, and the
 // image does not need to be built again for it. Only the check Job runs, on the same image; the
-// version stays ready, and so usable, until the check says otherwise (stopping every flow that
+// version stays ready, and so usable, until the self-test says otherwise (stopping every flow that
 // uses the group for a check that nearly always passes would cost more than it protects), and
 // the card says it is being checked (`rechecking`). No Job while a version is being built: that
-// one is self-tested with the new runner anyway.
+// one is self-tested with the new runner anyway. A recheck that could not run (recheckLater) is
+// started again after mgRecheckDelay, at most mgRecheckRetries times for the same runner.
 func (b *scriptBuilds) recheckRunners(ctx context.Context, tx pgx.Tx) error {
 	for _, g := range modelgroups.Groups() {
 		var env int64
@@ -305,19 +325,26 @@ func (b *scriptBuilds) recheckRunners(ctx context.Context, tx pgx.Tx) error {
 		var v sbVersion
 		err := tx.QueryRow(ctx, `SELECT v.id, v.environment_id, v.number, v.image_ref, v.arch FROM script_environments e
 			JOIN script_environment_versions v ON v.id = e.current_version_id WHERE e.id = $1 AND v.status = 'ready' AND v.job_name IS NULL
-			AND v.image_ref IS NOT NULL AND v.recipe_hash = $2 AND v.runner_hash IS DISTINCT FROM $3`, env, g.RecipeHash, g.RunnerHash).Scan(
-			&v.ID, &v.EnvironmentID, &v.Number, &v.ImageRef, &v.Arch)
+			AND v.image_ref IS NOT NULL AND v.recipe_hash = $2 AND v.runner_hash IS DISTINCT FROM $3
+			AND (v.recheck_runner IS DISTINCT FROM $3 OR v.recheck_attempts <= $4 AND (v.recheck_after IS NULL OR v.recheck_after <= $5))`,
+			env, g.RecipeHash, g.RunnerHash, mgRecheckRetries, jobs.NaiveNow()).Scan(&v.ID, &v.EnvironmentID, &v.Number, &v.ImageRef, &v.Arch)
 		if scNoRows(err) {
 			continue
 		}
 		if err != nil {
 			return err
 		}
+		// the attempts counted are the ones of this runner
+		if _, err := tx.Exec(ctx, `UPDATE script_environment_versions SET recheck_runner = $2, recheck_attempts = 0, recheck_after = NULL,
+			recheck_error = NULL WHERE id = $1 AND recheck_runner IS DISTINCT FROM $2`, v.ID, g.RunnerHash); err != nil {
+			return err
+		}
 		e, err := sbEnvironmentOf(ctx, tx, env)
 		if err != nil || e == nil {
 			return err
 		}
-		manifest, code, err := b.managedCheckJob(&v, e, g.ID, true)
+		codeName := mgRecheckCodeName(&v)
+		manifest, code, err := b.managedCheckJob(&v, e, g.ID, true, codeName)
 		if err != nil {
 			return err
 		}
@@ -328,13 +355,18 @@ func (b *scriptBuilds) recheckRunners(ctx context.Context, tx pgx.Tx) error {
 		case errors.As(err, &ke) && ke.Status == 409: // an old one of the name is still going away: next round
 			_ = kube.DeleteJob(ctx, k, b.s.Scripts.Namespace, sbJobName("recheck", &v))
 			continue
+		case errors.As(err, &ke) && (ke.Status == 0 || ke.Status == 429 || ke.Status >= 500): // the API server is restarting: next round
+			b.log.Warn(fmt.Sprintf("models: the self-test of the group %s cannot start again yet (%s)", g.ID, ke.Message))
+			continue
 		case errors.As(err, &ke):
-			b.log.Warn(fmt.Sprintf("models: the self-test of the group %s cannot start again (%s)", g.ID, ke.Message))
+			if err := b.recheckLater(ctx, tx, &v, g, "the cluster refused its Job: "+ke.Message); err != nil {
+				return err
+			}
 			continue
 		case err != nil:
 			return err
 		}
-		if err := b.createSelftestCode(ctx, k, &v, manifest, job, code, true); err != nil {
+		if err := b.createSelftestCode(ctx, k, manifest, job, code, codeName); err != nil {
 			b.log.Warn(fmt.Sprintf("models: the code of the self-test of the group %s not made (%v)", g.ID, err))
 			_ = kube.DeleteJob(ctx, k, b.s.Scripts.Namespace, sbJobName("recheck", &v))
 			continue
@@ -347,10 +379,12 @@ func (b *scriptBuilds) recheckRunners(ctx context.Context, tx pgx.Tx) error {
 	return nil
 }
 
-// advanceRecheck follows the Job that runs the self-test again on a version in use. It passes: the
-// version records the runner it was checked with. It fails: the version is failed (the group says
-// so, with the values that differ), as a build whose self-test fails. A Job that is gone is asked
-// again at the next round.
+// advanceRecheck follows the Job that runs the self-test again on a version in use. The self-test
+// reports and passes: the version records the runner it was checked with. It reports values that
+// differ: the version is failed (the group says so, with the values), as a build whose self-test
+// fails. Anything else says nothing of the image (a Pod the cluster refuses or never schedules, an
+// image it cannot pull, the deadline, a node gone, a log it does not give, the Job gone): the
+// version stays ready and serves, and the recheck is tried again later (recheckLater).
 func (b *scriptBuilds) advanceRecheck(ctx context.Context, tx pgx.Tx, v *sbVersion, env *sbEnvironment) error {
 	group := mgGroupOfManaged(env.ManagedBy)
 	g, known := modelgroups.Get(group)
@@ -358,36 +392,115 @@ func (b *scriptBuilds) advanceRecheck(ctx context.Context, tx pgx.Tx, v *sbVersi
 		v.JobName = nil
 		return nil
 	}
-	k, ns, name := kubeAPI(), b.s.Scripts.Namespace, *v.JobName
-	job, err := kube.GetJob(ctx, k, ns, name)
-	if err != nil {
+	why, err := b.followRecheck(ctx, tx, v, g, *v.JobName)
+	var ke *kube.Error
+	if errors.As(err, &ke) && ke.Status != 0 && ke.Status != 429 && ke.Status < 500 { // the cluster refuses what the loop asks of it
+		why, err = "the cluster refused it: "+ke.Message, nil
+	}
+	if err != nil || why == "" {
 		return err
 	}
+	v.JobName = nil
+	return b.recheckLater(ctx, tx, v, g, why)
+}
+
+// followRecheck is one look at a recheck's Job: "" while it runs or once it reported (the version
+// written), else why it did not run to a report.
+func (b *scriptBuilds) followRecheck(ctx context.Context, tx pgx.Tx, v *sbVersion, g modelgroups.Group, name string) (string, error) {
+	k, ns := kubeAPI(), b.s.Scripts.Namespace
+	job, err := kube.GetJob(ctx, k, ns, name)
+	if err != nil {
+		return "", err
+	}
 	if job == nil {
-		v.JobName = nil
-		return nil
+		return "its Job is no longer in the cluster", nil
 	}
 	outcome := kube.JobOutcome(job)
 	if outcome == "" {
-		return nil // still running: its own deadline ends it
+		// a Pod the cluster refuses, or an image the nodes cannot download, would otherwise wait
+		// for the whole deadline: as a build's stage (advance)
+		why := ""
+		if !kube.HasPod(job) && sbAgeSeconds(job) >= sbNoPodSeconds {
+			if why, err = kube.Refused(ctx, k, ns, name); err != nil {
+				return "", err
+			}
+		}
+		if why == "" && sbAgeSeconds(job) >= sbPullSeconds {
+			if why, err = kube.PullFailure(ctx, k, ns, name); err != nil {
+				return "", err
+			}
+		}
+		if why == "" {
+			return "", nil // still running: its own deadline ends it
+		}
+		if err := kube.DeleteJob(ctx, k, ns, name); err != nil {
+			return "", err
+		}
+		return "it cannot start: " + why, nil
 	}
 	log, exitCode, _, err := kube.JobResult(ctx, k, ns, name, 8<<20)
 	var unavailable *kube.LogUnavailable
 	if errors.As(err, &unavailable) {
-		log, exitCode = fmt.Sprintf("(the cluster did not give the log: %s)", unavailable.Kube.Message), unavailable.ExitCode
+		log, exitCode = "", unavailable.ExitCode
 	} else if err != nil {
-		return err
+		return "", err
 	}
 	if err := kube.DeleteJob(ctx, k, ns, name); err != nil {
+		return "", err
+	}
+	_, selftestPart, ran := strings.Cut(log, mgSelftestMark)
+	report, found := modelgroups.SelftestFromLog(selftestPart)
+	switch {
+	case ran && found && !report.Passed(): // the self-test ran and values differ
+		b.finishManagedCheck(v, nil, outcome, kube.JobFailure(job), log, exitCode)
+		msg := "The runner of the statistical models changed with this version of Tabularia, and the image in use no longer passes its self-test. " + deref(v.Error)
+		v.Error = &msg
+		return "", nil
+	case ran && found && outcome == "succeeded":
+		b.finishManagedCheck(v, nil, outcome, "", log, exitCode)
+		if _, err := tx.Exec(ctx, `UPDATE script_environment_versions SET runner_hash = $2, recheck_runner = NULL, recheck_attempts = 0,
+			recheck_after = NULL, recheck_error = NULL WHERE id = $1`, v.ID, g.RunnerHash); err != nil {
+			return "", err
+		}
+		b.log.Info(fmt.Sprintf("models: the group %s passed its self-test again with the new runner (version %d)", g.ID, v.Number))
+		return "", nil
+	case unavailable != nil:
+		return "the cluster did not give its log: " + unavailable.Kube.Message, nil
+	}
+	how := ""
+	if outcome == "failed" {
+		if how = kube.JobFailure(job); how == "" {
+			how = "it ended with an error"
+		}
+		how = " (" + how + ")"
+	}
+	switch {
+	case !ran:
+		return "it stopped before the self-test began" + how, nil
+	case !found:
+		return "the self-test ended without its report" + how, nil
+	}
+	return "the self-test passed, but its Job failed" + how, nil
+}
+
+// recheckLater records a recheck of the version in use that did not run to a report: the version
+// stays ready and serves, and the recheck starts again after mgRecheckDelay, as long as fewer than
+// 1 + mgRecheckRetries of the same runner could not run. Past them, nothing more: the version still
+// serves, self-tested with its previous runner, and the card says why (a Rebuild checks it).
+func (b *scriptBuilds) recheckLater(ctx context.Context, tx pgx.Tx, v *sbVersion, g modelgroups.Group, why string) error {
+	var attempts int64
+	err := tx.QueryRow(ctx, `UPDATE script_environment_versions SET recheck_attempts = CASE WHEN recheck_runner IS NOT DISTINCT FROM $2
+		THEN recheck_attempts + 1 ELSE 1 END, recheck_runner = $2, recheck_after = $3, recheck_error = $4 WHERE id = $1 RETURNING recheck_attempts`,
+		v.ID, g.RunnerHash, jobs.NaiveNow().Add(mgRecheckDelay), why).Scan(&attempts)
+	if err != nil {
 		return err
 	}
-	b.finishManagedCheck(v, env, outcome, kube.JobFailure(job), log, exitCode)
-	if v.Status == "ready" {
-		_, err = tx.Exec(ctx, `UPDATE script_environment_versions SET runner_hash = $2 WHERE id = $1`, v.ID, g.RunnerHash)
-		b.log.Info(fmt.Sprintf("models: the group %s passed its self-test again with the new runner (version %d)", group, v.Number))
-		return err
+	if attempts > mgRecheckRetries {
+		b.log.Warn(fmt.Sprintf("models: the self-test of the group %s with the new runner could not run %d times (%s): version %d serves on, "+
+			"self-tested with its previous runner; Rebuild the group to check it", g.ID, attempts, why, v.Number))
+		return nil
 	}
-	msg := "The runner of the statistical models changed with this version of Tabularia, and the image in use no longer passes its self-test. " + deref(v.Error)
-	v.Error = &msg
+	b.log.Warn(fmt.Sprintf("models: the self-test of the group %s with the new runner could not run (%s): version %d serves on, "+
+		"tried again in %s (%d of %d)", g.ID, why, v.Number, mgRecheckDelay, attempts, mgRecheckRetries+1))
 	return nil
 }
