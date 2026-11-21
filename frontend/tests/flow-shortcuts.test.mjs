@@ -97,3 +97,31 @@ test('near the canvas\' edge the ring moves inwards just enough, in the middle n
   // a canvas too small on an axis: centred on it
   assert.equal(m.radialMenuCenter({ x: 10, y: 350 }, extent, { left: 0, top: 0, right: 300, bottom: 700 }).x, 150)
 })
+
+// ── Delete and Backspace belong to the canvas ───────────────────────────────────────────────────────────────────────
+
+test('the keys that remove nodes act only with the focus on the canvas or on nothing', async () => {
+  const k = await import('../composables/nodeKeys.ts')
+  const el = (tagName, parent = null) => ({ tagName, contains(x) { for (let n = x; n; n = n.parent) if (n === this) return true; return false }, parent })
+  const body = el('BODY')
+  const canvas = el('DIV')
+  const node = el('DIV', canvas)
+  const handle = el('BUTTON', node)
+  const panel = el('DIV')
+  const combobox = el('BUTTON', panel) // the trigger of a Select in the node's panel
+  const toolbar = el('BUTTON')
+  assert.equal(k.focusOnCanvas(null, canvas, body), true)
+  assert.equal(k.focusOnCanvas(undefined, canvas, body), true)
+  assert.equal(k.focusOnCanvas(body, canvas, body), true)
+  assert.equal(k.focusOnCanvas(canvas, canvas, body), true)
+  assert.equal(k.focusOnCanvas(node, canvas, body), true)
+  assert.equal(k.focusOnCanvas(handle, canvas, body), true)
+  assert.equal(k.focusOnCanvas(combobox, canvas, body), false)
+  assert.equal(k.focusOnCanvas(toolbar, canvas, body), false)
+  assert.equal(k.focusOnCanvas(combobox, null, body), false)
+  // and the editor asks before it deletes: the key for the nodes, the cut, never the edges' own path
+  const editor = readFileSync(new URL('../components/FlowEditor.vue', import.meta.url), 'utf8')
+  assert.match(editor, /if \(inGrid \|\| !onCanvas\(\)\) return/)
+  assert.match(editor, /key_ === 'x' && !onCanvas\(\)/)
+  assert.match(editor, /focusOnCanvas\(document\.activeElement, canvasEl\.value, document\.body\)/)
+})

@@ -11,6 +11,7 @@ import { Table2, BarChart3, FileChartColumn, Wand2, Users, Undo2, Redo2, Sparkle
 import FlowAssistant from '~/components/FlowAssistant.vue'
 import { useAi, type AiStatus } from '~/composables/useAi'
 import { useApi, errMessage } from '~/composables/useApi'
+import { focusOnCanvas } from '~/composables/nodeKeys'
 import { FIRST_PAUSE_MS, nextPause } from '~/composables/waits'
 import { knownError } from '~/composables/knownErrors'
 import { useAuth } from '~/composables/useAuth'
@@ -2021,6 +2022,12 @@ function typingInAField(): boolean {
     || !!el?.closest('.nokey, [role="dialog"]')
 }
 
+// Whether the keys that remove nodes (Delete, Backspace, Ctrl/Cmd+X) are meant for the canvas: the focus is on it (a node,
+// the pane, a handle) or on nothing (the page's body, after a click on empty space). With the focus on a button of the node's
+// panel (a Select's trigger, a checkbox, a chip), of the toolbar or of the preview, Backspace is the key a Mac calls «delete»
+// and the one a ThinkPad has for erasing: it must never take the node being edited away.
+const onCanvas = (): boolean => focusOnCanvas(document.activeElement, canvasEl.value, document.body)
+
 // The canvas's shortcuts: undo/redo, copy/cut/paste/duplicate, and Del / Backspace
 // deleting what is selected.
 function onKeydown(e: KeyboardEvent) {
@@ -2085,6 +2092,7 @@ function onKeydown(e: KeyboardEvent) {
       // with highlighted text (a cell of the preview) the text is copied
       if (window.getSelection()?.toString()) return
       if (!selectedIds().length) return
+      if (key_ === 'x' && !onCanvas()) return
       e.preventDefault()
       if (key_ === 'x') cutSelection()
       else copySelection()
@@ -2101,7 +2109,7 @@ function onKeydown(e: KeyboardEvent) {
     return
   }
   if (e.key !== 'Delete' && e.key !== 'Backspace') return
-  if (inGrid) return
+  if (inGrid || !onCanvas()) return
   // a selected edge (click on the stroke) is removed with the same key as the node
   const edges = getSelectedEdges.value
   if (edges.length) {
