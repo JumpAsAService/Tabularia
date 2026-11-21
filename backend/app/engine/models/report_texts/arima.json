@@ -124,19 +124,28 @@
     "name": "Stationarity: augmented Dickey–Fuller",
     "h0": "The differenced series has a unit root.",
     "advice": "ADF does not reject a unit root: difference once more (d + 1), or let orders = auto choose.",
-    "not_computed": "The differenced series is too short for the unit-root tests (fewer than 12 values)."
+    "not_computed": {
+     "": "The differenced series is too short for the unit-root tests (fewer than 12 values).",
+     "table_end": "ADF's table gives p-values only from 0.01 to 0.99; this p-value is at an end of it and α lies beyond that end, so the test gives no verdict (its statistic is shown)."
+    }
    },
    "kpss": {
     "name": "Stationarity: KPSS",
     "h0": "The differenced series is stationary.",
     "advice": "KPSS rejects stationarity: difference once more (d + 1), or let orders = auto choose.",
-    "not_computed": "The differenced series is too short for the unit-root tests (fewer than 12 values)."
+    "not_computed": {
+     "": "The differenced series is too short for the unit-root tests (fewer than 12 values).",
+     "table_end": "KPSS's table gives p-values only from 0.01 to 0.10; this p-value is at an end of it and α lies beyond that end, so the test gives no verdict (its statistic is shown)."
+    }
    },
    "stationarity": {
     "name": "Stationarity: ADF and KPSS together",
     "h0": "ADF rejects a unit root and KPSS keeps stationarity.",
     "advice": "Read the four cases under the fit: when ADF keeps a unit root and KPSS rejects, difference once more (d + 1); when both reject, look at the series for a trend or a break; when neither rejects, the series is too short to tell.",
-    "not_computed": "The differenced series is too short for the unit-root tests (fewer than 12 values)."
+    "not_computed": {
+     "": "The differenced series is too short for the unit-root tests (fewer than 12 values).",
+     "table_end": "ADF or KPSS gives no verdict, because its p-value is at an end of its table and α lies beyond that end: the four cases cannot be read."
+    }
    },
    "roots": {
     "name": "Stationarity and invertibility of the fit",
@@ -370,19 +379,28 @@
     "name": "Stazionarietà: Dickey–Fuller aumentato",
     "h0": "La serie differenziata ha una radice unitaria.",
     "advice": "L'ADF non rifiuta la radice unitaria: differenziate ancora (d + 1), oppure lasciate scegliere a orders = auto.",
-    "not_computed": "La serie differenziata è troppo corta per i test di radice unitaria (meno di 12 valori)."
+    "not_computed": {
+     "": "La serie differenziata è troppo corta per i test di radice unitaria (meno di 12 valori).",
+     "table_end": "La tavola dell'ADF dà p-value solo da 0,01 a 0,99; questo p-value è a un estremo e α è oltre quell'estremo, quindi il test non dà un verdetto (se ne mostra la statistica)."
+    }
    },
    "kpss": {
     "name": "Stazionarietà: KPSS",
     "h0": "La serie differenziata è stazionaria.",
     "advice": "Il KPSS rifiuta la stazionarietà: differenziate ancora (d + 1), oppure lasciate scegliere a orders = auto.",
-    "not_computed": "La serie differenziata è troppo corta per i test di radice unitaria (meno di 12 valori)."
+    "not_computed": {
+     "": "La serie differenziata è troppo corta per i test di radice unitaria (meno di 12 valori).",
+     "table_end": "La tavola del KPSS dà p-value solo da 0,01 a 0,10; questo p-value è a un estremo e α è oltre quell'estremo, quindi il test non dà un verdetto (se ne mostra la statistica)."
+    }
    },
    "stationarity": {
     "name": "Stazionarietà: ADF e KPSS insieme",
     "h0": "L'ADF rifiuta la radice unitaria e il KPSS non rifiuta la stazionarietà.",
     "advice": "Leggete i quattro casi sotto la stima: se l'ADF non rifiuta la radice unitaria e il KPSS rifiuta, differenziate ancora (d + 1); se rifiutano entrambi, cercate nella serie un trend o una rottura; se non rifiuta nessuno, la serie è troppo corta per dirlo.",
-    "not_computed": "La serie differenziata è troppo corta per i test di radice unitaria (meno di 12 valori)."
+    "not_computed": {
+     "": "La serie differenziata è troppo corta per i test di radice unitaria (meno di 12 valori).",
+     "table_end": "L'ADF o il KPSS non dà un verdetto, perché il suo p-value è a un estremo della tavola e α è oltre quell'estremo: i quattro casi non si possono leggere."
+    }
    },
    "roots": {
     "name": "Stazionarietà e invertibilità della stima",
@@ -616,19 +634,28 @@
     "name": "Stationarität: erweiterter Dickey–Fuller",
     "h0": "Die differenzierte Reihe hat eine Einheitswurzel.",
     "advice": "ADF verwirft die Einheitswurzel nicht: Differenzieren Sie noch einmal (d + 1), oder lassen Sie orders = auto wählen.",
-    "not_computed": "Die differenzierte Reihe ist für die Einheitswurzeltests zu kurz (weniger als 12 Werte)."
+    "not_computed": {
+     "": "Die differenzierte Reihe ist für die Einheitswurzeltests zu kurz (weniger als 12 Werte).",
+     "table_end": "Die ADF-Tabelle gibt p-Werte nur von 0,01 bis 0,99; dieser p-Wert liegt an einem Ende und α liegt jenseits dieses Endes, daher gibt der Test kein Urteil (seine Statistik wird gezeigt)."
+    }
    },
    "kpss": {
     "name": "Stationarität: KPSS",
     "h0": "Die differenzierte Reihe ist stationär.",
     "advice": "KPSS verwirft die Stationarität: Differenzieren Sie noch einmal (d + 1), oder lassen Sie orders = auto wählen.",
-    "not_computed": "Die differenzierte Reihe ist für die Einheitswurzeltests zu kurz (weniger als 12 Werte)."
+    "not_computed": {
+     "": "Die differenzierte Reihe ist für die Einheitswurzeltests zu kurz (weniger als 12 Werte).",
+     "table_end": "Die KPSS-Tabelle gibt p-Werte nur von 0,01 bis 0,10; dieser p-Wert liegt an einem Ende und α liegt jenseits dieses Endes, daher gibt der Test kein Urteil (seine Statistik wird gezeigt)."
+    }
    },
    "stationarity": {
     "name": "Stationarität: ADF und KPSS zusammen",
     "h0": "ADF verwirft die Einheitswurzel und KPSS behält die Stationarität.",
     "advice": "Lesen Sie die vier Fälle unter der Anpassung: behält ADF eine Einheitswurzel und verwirft KPSS, noch einmal differenzieren (d + 1); verwerfen beide, die Reihe auf einen Trend oder Bruch prüfen; verwirft keiner, ist die Reihe für eine Aussage zu kurz.",
-    "not_computed": "Die differenzierte Reihe ist für die Einheitswurzeltests zu kurz (weniger als 12 Werte)."
+    "not_computed": {
+     "": "Die differenzierte Reihe ist für die Einheitswurzeltests zu kurz (weniger als 12 Werte).",
+     "table_end": "ADF oder KPSS gibt kein Urteil, weil ihr p-Wert an einem Ende der Tabelle liegt und α jenseits dieses Endes liegt: die vier Fälle lassen sich nicht lesen."
+    }
    },
    "roots": {
     "name": "Stationarität und Invertierbarkeit der Anpassung",
@@ -862,19 +889,28 @@
     "name": "Estacionariedad: Dickey–Fuller aumentada",
     "h0": "La serie diferenciada tiene una raíz unitaria.",
     "advice": "La ADF no rechaza la raíz unitaria: diferencie una vez más (d + 1), o deje elegir a orders = auto.",
-    "not_computed": "La serie diferenciada es demasiado corta para las pruebas de raíz unitaria (menos de 12 valores)."
+    "not_computed": {
+     "": "La serie diferenciada es demasiado corta para las pruebas de raíz unitaria (menos de 12 valores).",
+     "table_end": "La tabla de la ADF da p-valores solo de 0,01 a 0,99; este p-valor está en un extremo y α queda más allá de ese extremo, así que la prueba no da veredicto (se muestra su estadístico)."
+    }
    },
    "kpss": {
     "name": "Estacionariedad: KPSS",
     "h0": "La serie diferenciada es estacionaria.",
     "advice": "La KPSS rechaza la estacionariedad: diferencie una vez más (d + 1), o deje elegir a orders = auto.",
-    "not_computed": "La serie diferenciada es demasiado corta para las pruebas de raíz unitaria (menos de 12 valores)."
+    "not_computed": {
+     "": "La serie diferenciada es demasiado corta para las pruebas de raíz unitaria (menos de 12 valores).",
+     "table_end": "La tabla de KPSS da p-valores solo de 0,01 a 0,10; este p-valor está en un extremo y α queda más allá de ese extremo, así que la prueba no da veredicto (se muestra su estadístico)."
+    }
    },
    "stationarity": {
     "name": "Estacionariedad: ADF y KPSS juntas",
     "h0": "La ADF rechaza la raíz unitaria y la KPSS mantiene la estacionariedad.",
     "advice": "Lea los cuatro casos bajo el ajuste: si ADF mantiene una raíz unitaria y KPSS rechaza, diferencie una vez más (d + 1); si las dos rechazan, busque en la serie una tendencia o una ruptura; si ninguna rechaza, la serie es demasiado corta para decirlo.",
-    "not_computed": "La serie diferenciada es demasiado corta para las pruebas de raíz unitaria (menos de 12 valores)."
+    "not_computed": {
+     "": "La serie diferenciada es demasiado corta para las pruebas de raíz unitaria (menos de 12 valores).",
+     "table_end": "La ADF o la KPSS no da veredicto, porque su p-valor está en un extremo de la tabla y α queda más allá de ese extremo: los cuatro casos no se pueden leer."
+    }
    },
    "roots": {
     "name": "Estacionariedad e invertibilidad del ajuste",
@@ -1108,19 +1144,28 @@
     "name": "Stationnarité : Dickey–Fuller augmenté",
     "h0": "La série différenciée a une racine unitaire.",
     "advice": "L'ADF ne rejette pas la racine unitaire : différenciez encore (d + 1), ou laissez orders = auto choisir.",
-    "not_computed": "La série différenciée est trop courte pour les tests de racine unitaire (moins de 12 valeurs)."
+    "not_computed": {
+     "": "La série différenciée est trop courte pour les tests de racine unitaire (moins de 12 valeurs).",
+     "table_end": "La table de l'ADF ne donne des p-valeurs que de 0,01 à 0,99 ; cette p-valeur est à une borne et α est au-delà de cette borne, donc le test ne donne pas de verdict (sa statistique est montrée)."
+    }
    },
    "kpss": {
     "name": "Stationnarité : KPSS",
     "h0": "La série différenciée est stationnaire.",
     "advice": "Le KPSS rejette la stationnarité : différenciez encore (d + 1), ou laissez orders = auto choisir.",
-    "not_computed": "La série différenciée est trop courte pour les tests de racine unitaire (moins de 12 valeurs)."
+    "not_computed": {
+     "": "La série différenciée est trop courte pour les tests de racine unitaire (moins de 12 valeurs).",
+     "table_end": "La table de KPSS ne donne des p-valeurs que de 0,01 à 0,10 ; cette p-valeur est à une borne et α est au-delà de cette borne, donc le test ne donne pas de verdict (sa statistique est montrée)."
+    }
    },
    "stationarity": {
     "name": "Stationnarité : ADF et KPSS ensemble",
     "h0": "L'ADF rejette la racine unitaire et le KPSS garde la stationnarité.",
     "advice": "Lisez les quatre cas sous l'ajustement : si ADF garde une racine unitaire et que KPSS rejette, différenciez une fois de plus (d + 1) ; si les deux rejettent, cherchez dans la série une tendance ou une rupture ; si aucun ne rejette, la série est trop courte pour trancher.",
-    "not_computed": "La série différenciée est trop courte pour les tests de racine unitaire (moins de 12 valeurs)."
+    "not_computed": {
+     "": "La série différenciée est trop courte pour les tests de racine unitaire (moins de 12 valeurs).",
+     "table_end": "L'ADF ou le KPSS ne donne pas de verdict, car sa p-valeur est à une borne de la table et α est au-delà de cette borne : les quatre cas ne peuvent pas être lus."
+    }
    },
    "roots": {
     "name": "Stationnarité et inversibilité de l'ajustement",

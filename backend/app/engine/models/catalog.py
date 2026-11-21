@@ -652,8 +652,9 @@ _ARIMA_SECTIONS: dict[str, Any] = {
                           "ma_root_modulus_*"]},
     "coef": {"levels": None, "numbers": ["estimate", "std_error", "statistic", "p_value", "ci_low", "ci_high"],
              "texts": ["significance"]},
-    "assumption": _assumptions("adf", "kpss", "stationarity", "roots", "ljung_box_10", "ljung_box_2s", "arch_lm",
-                               "variance_ratio", "jarque_bera"),
+    # `advice_id`: ADF and KPSS at an end of tseries' table (the p-value is not known beyond it) say so with an id
+    "assumption": {**_assumptions("adf", "kpss", "stationarity", "roots", "ljung_box_10", "ljung_box_2s", "arch_lm",
+                                  "variance_ratio", "jarque_bera"), "texts": [*_ASSUMPTION["texts"], "advice_id"]},
     "curve": _chart("forecast", "residuals", "qq",
                     stats=["observed", "fitted", "forecast", "lower_80", "upper_80", "lower", "upper", "y"]),
     "point": _chart("qq", stats=["y"]),
@@ -1383,9 +1384,9 @@ PREDICT: dict[str, Any] = {
 # show a node after a model with these columns before the model has run. A name with a `*`
 # stands for every name it makes (`pred_quantile_*`: one per quantile asked; `pred_prob_*`: one
 # per class of the data, known only after a run). «@<key>»: the type of the input's column the
-# key names, a whole number written as Int32 (ARIMA's time: what the series' time column is).
+# key names, a whole number written as Int32 (no output uses it since lot D7: ARIMA's time kept its type).
 # «=<key>»: the exact type of the input's column the key names, whatever it is (the experiments'
-# variant: an Int64 stays Int64, a date a date; the decomposition's time).
+# variant: an Int64 stays Int64, a date a date; the time of ARIMA's forecast and of the decomposition).
 # `results` is the statistics' ten columns. What the runners really write is in
 # backend/tests/fixtures/models/output_columns.json, made by running them, and the engine's
 # test checks these types against it.
@@ -1404,7 +1405,7 @@ OUTPUT_TYPES: dict[str, dict[str, str]] = {
     },
     "table": {"stratum": "String", "time": "Float64", "n_risk": "Int32", "n_event": "Int32", "n_censor": "Int32",
               "surv": "Float64", "lower": "Float64", "upper": "Float64"},
-    "forecast": {"time": "@time", **{name: "Float64" for name in (
+    "forecast": {"time": "=time", **{name: "Float64" for name in (
         "observed", "fitted", "forecast", "lower_80", "upper_80", "lower", "upper")}, "is_forecast": "Boolean"},
     # the experiments group's: a row per variant and metric (the variant keeps the input column's own type), and the
     # planning grid; every column is always there, null where an analysis is off (docs/specs/ab-testing.md, «The output»)

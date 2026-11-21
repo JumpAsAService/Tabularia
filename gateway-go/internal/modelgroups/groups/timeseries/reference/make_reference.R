@@ -112,15 +112,31 @@ checks <- function(fit, z, order, seasonal, s, alpha, drift, mean_ = FALSE) {
   zz <- z[!is.na(z)]
   adf <- suppressWarnings(tseries::adf.test(zz))
   kpss <- suppressWarnings(tseries::kpss.test(zz, null = if (drift && order[2] + seasonal[2] == 0) "Trend" else "Level"))
+  # tseries clips both p-values at the ends of its tables (ADF's 0.01 and 0.99, KPSS's 0.01 and 0.10): at an end the
+  # statistic's side answers only the alphas beyond which it cannot go, and the test is «not computed» for the others
+  # (lot D7). Read here from the published tables' quantiles by hand, the sides as the paper's tables give them.
+  adf_tab <- -cbind(c(4.38, 4.15, 4.04, 3.99, 3.98, 3.96), c(3.95, 3.8, 3.73, 3.69, 3.68, 3.66), c(3.6, 3.5, 3.45, 3.43, 3.42, 3.41),
+                    c(3.24, 3.18, 3.15, 3.13, 3.13, 3.12), c(1.14, 1.19, 1.22, 1.23, 1.24, 1.25), c(0.8, 0.87, 0.9, 0.92, 0.93, 0.94),
+                    c(0.5, 0.58, 0.62, 0.64, 0.65, 0.66), c(0.15, 0.24, 0.28, 0.31, 0.32, 0.33))
+  n_adf <- length(zz) - 1
+  adf_lo <- approx(c(25, 50, 100, 250, 500, 1e5), adf_tab[, 1], n_adf, rule = 2)$y
+  adf_hi <- approx(c(25, 50, 100, 250, 500, 1e5), adf_tab[, 8], n_adf, rule = 2)$y
+  kpss_tab <- if (drift && order[2] + seasonal[2] == 0) c(0.216, 0.176, 0.146, 0.119) else c(0.739, 0.574, 0.463, 0.347)
+  # TRUE rejects, FALSE keeps, NA not computed
+  adf_rejects <- if (adf$statistic < adf_lo) (if (alpha >= 0.01) TRUE else NA) else if (adf$statistic > adf_hi) (if (alpha <= 0.99) FALSE else NA) else adf$p.value < alpha
+  kpss_rejects <- if (kpss$statistic > kpss_tab[1]) (if (alpha >= 0.01) TRUE else NA) else if (kpss$statistic < kpss_tab[4]) (if (alpha <= 0.10) FALSE else NA) else kpss$p.value < alpha
   add("assumption|adf||statistic", adf$statistic)
-  add_p("assumption|adf||", adf$p.value)
-  add_text("assumption|adf||verdict", if (adf$p.value < alpha) "ok" else "failed")
+  if (is.na(adf_rejects)) add_text("assumption|adf||verdict", "not_computed") else {
+    add_p("assumption|adf||", adf$p.value)
+    add_text("assumption|adf||verdict", if (adf_rejects) "ok" else "failed")
+  }
   add("assumption|kpss||statistic", kpss$statistic)
-  add_p("assumption|kpss||", kpss$p.value)
-  add_text("assumption|kpss||verdict", if (kpss$p.value < alpha) "failed" else "ok")
-  a <- adf$p.value < alpha
-  k <- kpss$p.value < alpha
-  add_text("assumption|stationarity||verdict", if (a && !k) "ok" else if (!a && k) "failed" else "doubtful")
+  if (is.na(kpss_rejects)) add_text("assumption|kpss||verdict", "not_computed") else {
+    add_p("assumption|kpss||", kpss$p.value)
+    add_text("assumption|kpss||verdict", if (kpss_rejects) "failed" else "ok")
+  }
+  add_text("assumption|stationarity||verdict", if (is.na(adf_rejects) || is.na(kpss_rejects)) "not_computed" else
+    if (adf_rejects && !kpss_rejects) "ok" else if (!adf_rejects && kpss_rejects) "failed" else "doubtful")
   fitdf <- order[1] + order[3] + seasonal[1] + seasonal[3]
   b <- Box.test(res, lag = 10, type = "Ljung-Box", fitdf = fitdf)
   add("assumption|ljung_box_10||statistic", b$statistic)
@@ -286,6 +302,20 @@ add_text("model|||time_kind", "integer")
 case("arima_drift_box_cox_quarterly", "drift_quarterly.csv", list(q = "integer", revenue = "number"),
      list(time = "q", value = "revenue", frequency = "quarter", p = 0, d = 1, q = 1, P = 0, D = 0, Q = 1,
           drift = TRUE, transform = "box_cox", horizon = 8, alpha = 0.1))
+
+# ── the same AR(2) at alphas beyond the tables' ends (lot D7): ADF's p-value is clipped at 0.01 and KPSS's at 0.10 ──
+# alpha 0.001: ADF cannot say p < 0.001 (not computed), KPSS keeps (p ≥ 0.10 > 0.001); alpha 0.01: ADF rejects (p < 0.01,
+# where `p < alpha` read 0.01 < 0.01 as false); alpha 0.2: ADF rejects, KPSS cannot say p < 0.2 (not computed)
+d <- read("ar_index.csv")
+y <- ts(num(d$level))
+fit <- Arima(y, order = c(2, 0, 0), include.mean = TRUE)
+for (alpha in c(0.001, 0.01, 0.2)) {
+  fit_numbers(fit, alpha)
+  checks(fit, as.numeric(y), c(2, 0, 0), c(0, 0, 0), 1, alpha, FALSE)
+  add("model|||n", 120)
+  case(paste0("arima_ar_index_alpha_", sub("\\.", "_", format(alpha))), "ar_index.csv", list(t = "integer", level = "number"),
+       list(time = "t", value = "level", frequency = "index", p = 2, d = 0, q = 0, alpha = alpha))
+}
 
 # ── refusals ────────────────────────────────────────────────────────────────
 case("arima_duplicate_time", "duplicate_monthly.csv", list(month = "date", boxes = "number"),

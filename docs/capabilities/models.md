@@ -471,7 +471,11 @@ of the two together), that every root of the AR and MA polynomials is outside th
 (a modulus at most 1 failed, under 1.05 doubtful), white-noise residuals (Ljung–Box at 10 lags
 and at 2·s lags), constant variance (ARCH LM, and the first third of the residuals against the
 last) and normal residuals (Jarque–Bera). Statistics that depend on how many rows there are
-are «not computed» when there are too few.
+are «not computed» when there are too few. ADF and KPSS read their p-values from a table that
+stops at both ends (0.01 and 0.99 for ADF, 0.01 and 0.10 for KPSS): when the statistic is beyond an
+end, the test answers only the `alpha` on that side of it (a p-value below 0.01 rejects at any
+`alpha` of 0.01 or more), and for any other `alpha` (0.001, or 0.2 for KPSS) it is «not computed»,
+with its statistic shown, and so is the combined stationarity check.
 
 *Example:* `orders` with a **Group by** `data_ordine` and the *distinct count* of `id`: one row
 per day. ARIMA with the time `data_ordine`, the series the count, daily frequency, seasonal
@@ -1061,8 +1065,8 @@ be drawn.
 The columns' types are known before the model runs, and are what a run writes: the model's
 columns are numbers (`Float64`) but for `pred_class` and `pred_part`, texts; in the survival
 table `stratum` is a text and `n_risk`, `n_event` and `n_censor` whole numbers (`Int32`); in the
-forecast `time` has the type of the series' time column (a whole number as `Int32`, a date as a
-date) and `is_forecast` is true or false; the results table has the statistics' types. In the
+forecast `time` has the exact type of the series' time column (an `Int64` stays `Int64`, a date a
+date, a timestamp its unit and zone; the forecast of **Predict** too) and `is_forecast` is true or false; the results table has the statistics' types. In the
 rows output of an R model (all but XGBoost and CatBoost) a whole-number column of the input comes
 back as `Int32`. The catalogue declares these types, and a test checks them against what the
 runners write.

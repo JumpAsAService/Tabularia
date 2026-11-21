@@ -1743,6 +1743,991 @@
       "refuses": null
     },
     {
+      "id": "arima_ar_index_alpha_0_001",
+      "model": "arima",
+      "data": "data/ar_index.csv",
+      "types": {
+        "t": "integer",
+        "level": "number"
+      },
+      "params": {
+        "time": "t",
+        "value": "level",
+        "frequency": "index",
+        "p": 2,
+        "d": 0,
+        "q": 0,
+        "alpha": 0.001
+      },
+      "expect": [
+        {
+          "key": "coef|ar1||estimate",
+          "value": 0.521185113976782,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|ar1||std_error",
+          "value": 0.0890144040457937,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|ar1||statistic",
+          "value": 5.85506491408578,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|ar1||p_value",
+          "value": 4.76823735891195e-09,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|ar1||significance",
+          "text": "***"
+        },
+        {
+          "key": "coef|ar1||ci_low",
+          "value": 0.228280837976274,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|ar2||estimate",
+          "value": -0.248613920500407,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|ar2||std_error",
+          "value": 0.0888604158260913,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|ar2||statistic",
+          "value": -2.79780280329736,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|ar2||p_value",
+          "value": 0.00514515145773471,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|ar2||significance",
+          "text": "**"
+        },
+        {
+          "key": "coef|ar2||ci_low",
+          "value": -0.541011494147649,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|intercept||estimate",
+          "value": 49.6630918983622,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|intercept||std_error",
+          "value": 0.251695675325906,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|intercept||statistic",
+          "value": 197.314045360757,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|intercept||p_value",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|intercept||significance",
+          "text": "***"
+        },
+        {
+          "key": "coef|intercept||ci_low",
+          "value": 48.8348805505014,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||log_lik",
+          "value": -253.948493191569,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||aic",
+          "value": 515.896986383139,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||aicc",
+          "value": 516.244812470095,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||bic",
+          "value": 527.046953354267,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||sigma2",
+          "value": 4.12578755515657,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||rmse",
+          "value": 2.00565272823529,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||mae",
+          "value": 1.60035748668049,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||mape",
+          "value": 3.23551670193719,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||mase",
+          "value": 0.785003439455413,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|adf||statistic",
+          "value": -4.84599044961347,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|adf||verdict",
+          "text": "not_computed"
+        },
+        {
+          "key": "assumption|kpss||statistic",
+          "value": 0.145863202791841,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|kpss||p_value",
+          "value": 0.1,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|kpss||significance",
+          "text": ""
+        },
+        {
+          "key": "assumption|kpss||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|stationarity||verdict",
+          "text": "not_computed"
+        },
+        {
+          "key": "assumption|ljung_box_10||statistic",
+          "value": 4.42553055288308,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|ljung_box_10||df",
+          "value": 8,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|ljung_box_10||p_value",
+          "value": 0.816836482005459,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|ljung_box_10||significance",
+          "text": ""
+        },
+        {
+          "key": "assumption|ljung_box_2s||verdict",
+          "text": "not_computed"
+        },
+        {
+          "key": "assumption|arch_lm||statistic",
+          "value": 6.88446173401331,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|arch_lm||df",
+          "value": 12,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|arch_lm||p_value",
+          "value": 0.865153360685674,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|arch_lm||significance",
+          "text": ""
+        },
+        {
+          "key": "assumption|variance_ratio||statistic",
+          "value": 1.14324022164786,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|variance_ratio||df",
+          "value": 40,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|variance_ratio||p_value",
+          "value": 0.674098328690652,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|variance_ratio||significance",
+          "text": ""
+        },
+        {
+          "key": "assumption|jarque_bera||statistic",
+          "value": 0.560901399653886,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|jarque_bera||p_value",
+          "value": 0.755443186604016,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|jarque_bera||significance",
+          "text": ""
+        },
+        {
+          "key": "model|||ar_root_modulus_1",
+          "value": 2.0055674796326,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||ar_root_modulus_2",
+          "value": 2.00556747963261,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|roots||value",
+          "value": 2.0055674796326,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|roots||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "model|||n",
+          "value": 120,
+          "rel": 1e-09,
+          "abs": 1e-12
+        }
+      ],
+      "refuses": null
+    },
+    {
+      "id": "arima_ar_index_alpha_0_01",
+      "model": "arima",
+      "data": "data/ar_index.csv",
+      "types": {
+        "t": "integer",
+        "level": "number"
+      },
+      "params": {
+        "time": "t",
+        "value": "level",
+        "frequency": "index",
+        "p": 2,
+        "d": 0,
+        "q": 0,
+        "alpha": 0.01
+      },
+      "expect": [
+        {
+          "key": "coef|ar1||estimate",
+          "value": 0.521185113976782,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|ar1||std_error",
+          "value": 0.0890144040457937,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|ar1||statistic",
+          "value": 5.85506491408578,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|ar1||p_value",
+          "value": 4.76823735891195e-09,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|ar1||significance",
+          "text": "***"
+        },
+        {
+          "key": "coef|ar1||ci_low",
+          "value": 0.291899203597684,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|ar2||estimate",
+          "value": -0.248613920500407,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|ar2||std_error",
+          "value": 0.0888604158260913,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|ar2||statistic",
+          "value": -2.79780280329736,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|ar2||p_value",
+          "value": 0.00514515145773471,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|ar2||significance",
+          "text": "**"
+        },
+        {
+          "key": "coef|ar2||ci_low",
+          "value": -0.477503183510793,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|intercept||estimate",
+          "value": 49.6630918983622,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|intercept||std_error",
+          "value": 0.251695675325906,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|intercept||statistic",
+          "value": 197.314045360757,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|intercept||p_value",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|intercept||significance",
+          "text": "***"
+        },
+        {
+          "key": "coef|intercept||ci_low",
+          "value": 49.0147668022812,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||log_lik",
+          "value": -253.948493191569,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||aic",
+          "value": 515.896986383139,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||aicc",
+          "value": 516.244812470095,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||bic",
+          "value": 527.046953354267,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||sigma2",
+          "value": 4.12578755515657,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||rmse",
+          "value": 2.00565272823529,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||mae",
+          "value": 1.60035748668049,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||mape",
+          "value": 3.23551670193719,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||mase",
+          "value": 0.785003439455413,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|adf||statistic",
+          "value": -4.84599044961347,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|adf||p_value",
+          "value": 0.01,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|adf||significance",
+          "text": "*"
+        },
+        {
+          "key": "assumption|adf||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|kpss||statistic",
+          "value": 0.145863202791841,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|kpss||p_value",
+          "value": 0.1,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|kpss||significance",
+          "text": ""
+        },
+        {
+          "key": "assumption|kpss||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|stationarity||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|ljung_box_10||statistic",
+          "value": 4.42553055288308,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|ljung_box_10||df",
+          "value": 8,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|ljung_box_10||p_value",
+          "value": 0.816836482005459,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|ljung_box_10||significance",
+          "text": ""
+        },
+        {
+          "key": "assumption|ljung_box_2s||verdict",
+          "text": "not_computed"
+        },
+        {
+          "key": "assumption|arch_lm||statistic",
+          "value": 6.88446173401331,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|arch_lm||df",
+          "value": 12,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|arch_lm||p_value",
+          "value": 0.865153360685674,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|arch_lm||significance",
+          "text": ""
+        },
+        {
+          "key": "assumption|variance_ratio||statistic",
+          "value": 1.14324022164786,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|variance_ratio||df",
+          "value": 40,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|variance_ratio||p_value",
+          "value": 0.674098328690652,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|variance_ratio||significance",
+          "text": ""
+        },
+        {
+          "key": "assumption|jarque_bera||statistic",
+          "value": 0.560901399653886,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|jarque_bera||p_value",
+          "value": 0.755443186604016,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|jarque_bera||significance",
+          "text": ""
+        },
+        {
+          "key": "model|||ar_root_modulus_1",
+          "value": 2.0055674796326,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||ar_root_modulus_2",
+          "value": 2.00556747963261,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|roots||value",
+          "value": 2.0055674796326,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|roots||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "model|||n",
+          "value": 120,
+          "rel": 1e-09,
+          "abs": 1e-12
+        }
+      ],
+      "refuses": null
+    },
+    {
+      "id": "arima_ar_index_alpha_0_2",
+      "model": "arima",
+      "data": "data/ar_index.csv",
+      "types": {
+        "t": "integer",
+        "level": "number"
+      },
+      "params": {
+        "time": "t",
+        "value": "level",
+        "frequency": "index",
+        "p": 2,
+        "d": 0,
+        "q": 0,
+        "alpha": 0.2
+      },
+      "expect": [
+        {
+          "key": "coef|ar1||estimate",
+          "value": 0.521185113976782,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|ar1||std_error",
+          "value": 0.0890144040457937,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|ar1||statistic",
+          "value": 5.85506491408578,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|ar1||p_value",
+          "value": 4.76823735891195e-09,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|ar1||significance",
+          "text": "***"
+        },
+        {
+          "key": "coef|ar1||ci_low",
+          "value": 0.407108565115875,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|ar2||estimate",
+          "value": -0.248613920500407,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|ar2||std_error",
+          "value": 0.0888604158260913,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|ar2||statistic",
+          "value": -2.79780280329736,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|ar2||p_value",
+          "value": 0.00514515145773471,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|ar2||significance",
+          "text": "**"
+        },
+        {
+          "key": "coef|ar2||ci_low",
+          "value": -0.362493125517279,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|intercept||estimate",
+          "value": 49.6630918983622,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|intercept||std_error",
+          "value": 0.251695675325906,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|intercept||statistic",
+          "value": 197.314045360757,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|intercept||p_value",
+          "value": 0,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "coef|intercept||significance",
+          "text": "***"
+        },
+        {
+          "key": "coef|intercept||ci_low",
+          "value": 49.3405309116075,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||log_lik",
+          "value": -253.948493191569,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||aic",
+          "value": 515.896986383139,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||aicc",
+          "value": 516.244812470095,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||bic",
+          "value": 527.046953354267,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||sigma2",
+          "value": 4.12578755515657,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||rmse",
+          "value": 2.00565272823529,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||mae",
+          "value": 1.60035748668049,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||mape",
+          "value": 3.23551670193719,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||mase",
+          "value": 0.785003439455413,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|adf||statistic",
+          "value": -4.84599044961347,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|adf||p_value",
+          "value": 0.01,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|adf||significance",
+          "text": "*"
+        },
+        {
+          "key": "assumption|adf||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "assumption|kpss||statistic",
+          "value": 0.145863202791841,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|kpss||verdict",
+          "text": "not_computed"
+        },
+        {
+          "key": "assumption|stationarity||verdict",
+          "text": "not_computed"
+        },
+        {
+          "key": "assumption|ljung_box_10||statistic",
+          "value": 4.42553055288308,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|ljung_box_10||df",
+          "value": 8,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|ljung_box_10||p_value",
+          "value": 0.816836482005459,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|ljung_box_10||significance",
+          "text": ""
+        },
+        {
+          "key": "assumption|ljung_box_2s||verdict",
+          "text": "not_computed"
+        },
+        {
+          "key": "assumption|arch_lm||statistic",
+          "value": 6.88446173401331,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|arch_lm||df",
+          "value": 12,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|arch_lm||p_value",
+          "value": 0.865153360685674,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|arch_lm||significance",
+          "text": ""
+        },
+        {
+          "key": "assumption|variance_ratio||statistic",
+          "value": 1.14324022164786,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|variance_ratio||df",
+          "value": 40,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|variance_ratio||p_value",
+          "value": 0.674098328690652,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|variance_ratio||significance",
+          "text": ""
+        },
+        {
+          "key": "assumption|jarque_bera||statistic",
+          "value": 0.560901399653886,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|jarque_bera||p_value",
+          "value": 0.755443186604016,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|jarque_bera||significance",
+          "text": ""
+        },
+        {
+          "key": "model|||ar_root_modulus_1",
+          "value": 2.0055674796326,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "model|||ar_root_modulus_2",
+          "value": 2.00556747963261,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|roots||value",
+          "value": 2.0055674796326,
+          "rel": 1e-09,
+          "abs": 1e-12
+        },
+        {
+          "key": "assumption|roots||verdict",
+          "text": "ok"
+        },
+        {
+          "key": "model|||n",
+          "value": 120,
+          "rel": 1e-09,
+          "abs": 1e-12
+        }
+      ],
+      "refuses": null
+    },
+    {
       "id": "arima_duplicate_time",
       "model": "arima",
       "data": "data/duplicate_monthly.csv",

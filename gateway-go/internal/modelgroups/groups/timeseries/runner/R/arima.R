@@ -59,6 +59,9 @@ predict_arima <- function(task, card) {
                list(column = missing[[1L]]))
   }
   if (!params$value %in% names(df)) df[[params$value]] <- rep(NA_real_, nrow(df))
+  type <- ts_read(task, params$time)$type[[params$time]]  # the time column's own Arrow type: the output keeps it
+  # an Int64 past 2^31 arrives as a 64-bit integer, which the card's numeric times (rbind) do not mix with
+  if (inherits(df[[params$time]], "integer64")) df[[params$time]] <- as.numeric(df[[params$time]])
   history <- arima_card_history(card)
   observed <- df[!is.na(df[[params$value]]), , drop = FALSE]
   if (!nrow(observed)) {
@@ -69,12 +72,12 @@ predict_arima <- function(task, card) {
     df <- rbind(history[, cols, drop = FALSE], after[, cols, drop = FALSE])
   }
   task$params <- utils::modifyList(params, list(horizon = horizon, holdout = 0L))
-  prep <- arima_prepare(task, df = df[, intersect(cols, names(df)), drop = FALSE], t0 = arima_card_t0(card))
+  prep <- arima_prepare(task, df = df[, intersect(cols, names(df)), drop = FALSE], t0 = arima_card_t0(card), type = type)
   model <- arima_model_of_card(card)
   out <- arima_filter(model, prep, prep$span, levels = arima_levels(card$alpha %||% params$alpha %||% 0.05))
   future <- prep$future
   if (!length(future)) return(list(output = data.frame()))
-  output <- if (length(exog)) prep$rows_of(future) else stats::setNames(data.frame(prep$time_of(future)), params$time)
+  output <- if (length(exog)) prep$rows_of(future) else data.frame(row.names = seq_along(future))
   output$prediction <- out$forecast$mean
   if (interval) {
     output$lower_80 <- out$forecast$lower_80
@@ -82,7 +85,7 @@ predict_arima <- function(task, card) {
     output$lower <- out$forecast$lower
     output$upper <- out$forecast$upper
   }
-  list(output = output)
+  list(output = arima_table(output, params$time, prep$time_array(future)))
 }
 
 # ── the parameters ──────────────────────────────────────────────────────────
@@ -123,13 +126,17 @@ arima_model_name <- function(o, s, exog) {
 # The input read and checked, on the grid of its frequency from its first observation: the
 # observed span, the future rows, the training part and the holdout. `df` and `t0` serve
 # Predict (the rows to apply the card to; the time the drift counts from).
-arima_prepare <- function(task, df = NULL, t0 = NULL) {
+arima_prepare <- function(task, df = NULL, t0 = NULL, type = NULL) {
   o <- arima_params(task$params)
   time <- o$time
   value <- o$value
   exog <- o$exog
   cols <- c(time, value, exog)
-  if (is.null(df)) df <- tab_input(task, cols)
+  if (is.null(df)) {
+    df <- tab_input(task, cols)
+    # the time column's own Arrow type, read apart (the 64-bit option stays inside ts_read): the output keeps it
+    type <- ts_read(task, time)$type[[time]]
+  }
   for (name in cols) if (!name %in% names(df)) tab_refuse("no_column", paste0("the input has no column «", name, "»"), list(column = name))
   # an exogenous column takes its name as its coefficient's label, beside the model's own terms: one
   # named as a term would give two coefficients one label
@@ -217,10 +224,9 @@ arima_prepare <- function(task, df = NULL, t0 = NULL) {
                span = span, train = train, test = test, future = future, holdout = holdout,
                n_missing = no_time + missing_in_span + max(0L, outside),
                gaps = missing_in_span, dropped_future = max(0L, dropped_future),
-               time_of = function(i) if (whole_time) as.integer(times[i]) else times[i],
+               time_array = function(i) ts_time_array(if (whole_time && is.null(type)) as.integer(times[i]) else times[i], type),
                rows_of = function(i) {
                  r <- df[row_of[i], , drop = FALSE]
-                 r[[time]] <- if (whole_time) as.integer(times[i]) else times[i]
                  rownames(r) <- NULL
                  r
                })
@@ -479,7 +485,7 @@ arima_differenced <- function(model, y) {
 
 # One check's rows: H0, the numbers, the verdict, the advice when it is not ok.
 arima_check <- function(rows, id, h0, verdict, advice = NA_character_, statistic = NULL, df = NULL, df_2 = NULL,
-                        p = NULL, threshold = NULL, value = NULL) {
+                        p = NULL, threshold = NULL, value = NULL, advice_id = NULL) {
   tab_text(rows, "assumption", "h0", h0, level = id)
   if (!is.null(statistic)) tab_number(rows, "assumption", "statistic", statistic, level = id)
   if (!is.null(df)) tab_number(rows, "assumption", "df", df, level = id)
@@ -489,7 +495,45 @@ arima_check <- function(rows, id, h0, verdict, advice = NA_character_, statistic
   if (!is.null(value)) tab_number(rows, "assumption", "value", value, level = id)
   tab_text(rows, "assumption", "verdict", verdict, level = id)
   if (verdict != "ok" && !is.na(advice)) tab_text(rows, "assumption", "advice", advice, level = id)
+  # the sentence the report says, when the check has several (a test at the end of its table)
+  if (!is.null(advice_id)) tab_text(rows, "assumption", "advice_id", advice_id, level = id)
   invisible(rows)
+}
+
+# ── the tables of ADF and KPSS ──────────────────────────────────────────────
+# tseries::adf.test and kpss.test read their p-value from a table by linear interpolation (`approx(..., rule = 2)`)
+# and clip it at the table's ends: ADF's 0.01 and 0.99 (Banerjee et al., table 4.2), KPSS's 0.01 and 0.10 (Kwiatkowski
+# et al., table 1). A p-value at an end says only p ≤ 0.01 (or ≥ 0.99, ≥ 0.10): it answers an alpha on the side of the
+# end it lies on and none on the other. The side is read from the statistic (the quantile it passes), not from the
+# clipped p-value, because `p == 0.01` also holds for a statistic exactly at the 1 % quantile and, at alpha = 0.01,
+# `p < alpha` would read a p below 0.01 as false. The self-test checks these tables against tseries'.
+ARIMA_ADF_P <- c(0.01, 0.025, 0.05, 0.1, 0.9, 0.95, 0.975, 0.99)
+ARIMA_ADF_N <- c(25, 50, 100, 250, 500, 1e+05)
+ARIMA_ADF_Q <- -cbind(c(4.38, 4.15, 4.04, 3.99, 3.98, 3.96), c(3.95, 3.8, 3.73, 3.69, 3.68, 3.66),
+                      c(3.6, 3.5, 3.45, 3.43, 3.42, 3.41), c(3.24, 3.18, 3.15, 3.13, 3.13, 3.12),
+                      c(1.14, 1.19, 1.22, 1.23, 1.24, 1.25), c(0.8, 0.87, 0.9, 0.92, 0.93, 0.94),
+                      c(0.5, 0.58, 0.62, 0.64, 0.65, 0.66), c(0.15, 0.24, 0.28, 0.31, 0.32, 0.33))
+ARIMA_KPSS_P <- c(0.01, 0.025, 0.05, 0.1)
+ARIMA_KPSS_Q <- list(Level = c(0.739, 0.574, 0.463, 0.347), Trend = c(0.216, 0.176, 0.146, 0.119))
+
+# Where the ADF statistic of a regression on `n` differences falls against the table's ends at that size:
+# "below" (p < 0.01), "above" (p > 0.99) or "inside".
+arima_adf_side <- function(stat, n) {
+  q <- vapply(seq_along(ARIMA_ADF_P), function(i) stats::approx(ARIMA_ADF_N, ARIMA_ADF_Q[, i], n, rule = 2)$y, numeric(1))
+  if (stat < q[[1L]]) "below" else if (stat > q[[length(q)]]) "above" else "inside"
+}
+
+# The same for KPSS, whose large statistics are the small p-values: "below" (η above the 1 % quantile, p < 0.01),
+# "above" (η under the 10 % quantile, p > 0.10) or "inside".
+arima_kpss_side <- function(eta, null) {
+  q <- ARIMA_KPSS_Q[[null]]
+  if (eta > max(q)) "below" else if (eta < min(q)) "above" else "inside"
+}
+
+# Whether the test rejects at alpha: TRUE, FALSE, or NA when the table's end cannot say (p < lo rejects at alpha ≥ lo;
+# p > hi keeps at alpha ≤ hi). Inside the table p is compared with alpha.
+arima_table_rejects <- function(p, side, alpha, lo, hi) {
+  switch(side, inside = p < alpha, below = if (alpha >= lo) TRUE else NA, above = if (alpha <= hi) FALSE else NA)
 }
 
 arima_checks <- function(rows, model, orders, o, z, resid, roots, fit) {
@@ -506,25 +550,45 @@ arima_checks <- function(rows, model, orders, o, z, resid, roots, fit) {
                   "The differenced series is too short for the unit-root tests: a longer series.")
     }
   } else {
-    adf_rejects <- adf$p.value < alpha
-    kpss_rejects <- kpss$p.value < alpha
-    arima_check(rows, "adf", "The differenced series has a unit root.", if (adf_rejects) "ok" else "failed",
-                "ADF does not reject a unit root: difference once more (d + 1), or let orders = auto choose.",
-                statistic = unname(adf$statistic), p = adf$p.value)
-    arima_check(rows, "kpss", if (kpss_null == "Trend") "The differenced series is stationary around a trend." else
-                  "The differenced series is stationary.", if (kpss_rejects) "failed" else "ok",
-                "KPSS rejects stationarity: difference once more (d + 1), or let orders = auto choose.",
-                statistic = unname(kpss$statistic), p = kpss$p.value)
-    # the four cases of the two tests together
-    case <- if (adf_rejects && !kpss_rejects) "ok" else if (!adf_rejects && kpss_rejects) "failed" else "doubtful"
-    advice <- if (!adf_rejects && kpss_rejects) {
-      "ADF keeps a unit root and KPSS rejects stationarity: difference once more (d + 1), or let orders = auto choose."
-    } else if (adf_rejects && kpss_rejects) {
-      "Both tests reject: a trend or a break, look at the series."
+    # tseries reads both p-values from a table and clips them at its ends; the verdict is read from the side of the
+    # statistic, never from `p == 0.01` (which is wrong at alpha = 0.01), and where the end cannot answer alpha it is
+    # not computed
+    adf_rejects <- arima_table_rejects(adf$p.value, arima_adf_side(unname(adf$statistic), length(zz) - 1L), alpha,
+                                       min(ARIMA_ADF_P), max(ARIMA_ADF_P))
+    kpss_rejects <- arima_table_rejects(kpss$p.value, arima_kpss_side(unname(kpss$statistic), kpss_null), alpha,
+                                        min(ARIMA_KPSS_P), max(ARIMA_KPSS_P))
+    end_advice <- "The p-value is at an end of the test's table and alpha lies beyond it: the table cannot say whether p < alpha."
+    if (is.na(adf_rejects)) {
+      arima_check(rows, "adf", "The differenced series has a unit root.", "not_computed", end_advice,
+                  statistic = unname(adf$statistic), advice_id = "table_end")
     } else {
-      "Neither test rejects: the series is too short or too noisy for them to tell; read the correlograms."
+      arima_check(rows, "adf", "The differenced series has a unit root.", if (adf_rejects) "ok" else "failed",
+                  "ADF does not reject a unit root: difference once more (d + 1), or let orders = auto choose.",
+                  statistic = unname(adf$statistic), p = adf$p.value)
     }
-    arima_check(rows, "stationarity", "ADF rejects a unit root and KPSS keeps stationarity.", case, advice)
+    kpss_h0 <- if (kpss_null == "Trend") "The differenced series is stationary around a trend." else "The differenced series is stationary."
+    if (is.na(kpss_rejects)) {
+      arima_check(rows, "kpss", kpss_h0, "not_computed", end_advice, statistic = unname(kpss$statistic), advice_id = "table_end")
+    } else {
+      arima_check(rows, "kpss", kpss_h0, if (kpss_rejects) "failed" else "ok",
+                  "KPSS rejects stationarity: difference once more (d + 1), or let orders = auto choose.",
+                  statistic = unname(kpss$statistic), p = kpss$p.value)
+    }
+    # the four cases of the two tests together: not computed when either test is
+    if (is.na(adf_rejects) || is.na(kpss_rejects)) {
+      arima_check(rows, "stationarity", "ADF rejects a unit root and KPSS keeps stationarity.", "not_computed", end_advice,
+                  advice_id = "table_end")
+    } else {
+      case <- if (adf_rejects && !kpss_rejects) "ok" else if (!adf_rejects && kpss_rejects) "failed" else "doubtful"
+      advice <- if (!adf_rejects && kpss_rejects) {
+        "ADF keeps a unit root and KPSS rejects stationarity: difference once more (d + 1), or let orders = auto choose."
+      } else if (adf_rejects && kpss_rejects) {
+        "Both tests reject: a trend or a break, look at the series."
+      } else {
+        "Neither test rejects: the series is too short or too noisy for them to tell; read the correlograms."
+      }
+      arima_check(rows, "stationarity", "ADF rejects a unit root and KPSS keeps stationarity.", case, advice)
+    }
   }
   # the roots
   moduli <- c(roots$ar, roots$ma)
@@ -662,12 +726,18 @@ arima_charts <- function(task, rows, prep, model, whole, z, resid) {
   invisible(rows)
 }
 
+# The output as an Arrow table with the time column first, in the type of the input's own (an Int64 stays Int64, a
+# timestamp keeps its unit and zone): `df` holds the other columns.
+arima_table <- function(df, time_name, time_array) {
+  do.call(arrow::arrow_table, c(stats::setNames(list(time_array), time_name), as.list(df[setdiff(names(df), time_name)])))
+}
+
 # The forecast output: one row a period of the span and of the future.
 arima_output <- function(prep, whole) {
   i <- c(prep$span, prep$future)
   nf <- length(prep$future)
   na <- rep(NA_real_, length(prep$span))
-  out <- data.frame(time = prep$time_of(i), observed = c(prep$y[prep$span], rep(NA_real_, nf)),
+  out <- data.frame(observed = c(prep$y[prep$span], rep(NA_real_, nf)),
                     fitted = c(whole$fitted, rep(NA_real_, nf)), stringsAsFactors = FALSE)
   fc <- whole$forecast
   out$forecast <- c(na, if (nf) fc$mean else numeric())
@@ -676,7 +746,7 @@ arima_output <- function(prep, whole) {
   out$lower <- c(na, if (nf) fc$lower else numeric())
   out$upper <- c(na, if (nf) fc$upper else numeric())
   out$is_forecast <- c(rep(FALSE, length(prep$span)), rep(TRUE, nf))
-  out
+  arima_table(out, "time", prep$time_array(i))
 }
 
 # A note the report says in the page's language (layouts/common.py, structured_note): «@id name=value …», the
@@ -799,4 +869,36 @@ TAB_COMMON_TESTS[["arima: a card without coefficients (ARIMA(0,1,0) without a me
   problems <- tab_schema_problems(back, jsonlite::fromJSON(file.path(code, "card.schema.json"), simplifyVector = FALSE))
   .tab_expect(!length(problems), "the card against the schema: ", paste(problems, collapse = "; "))
   .tab_expect(grepl('"coefficients":{}', gsub("[[:space:]]", "", text), fixed = TRUE), "the coefficients are not {}")
+}
+
+TAB_COMMON_TESTS[["arima: ADF's and KPSS's tables are tseries', and an end of the table answers only the alphas on its side"]] <- function(code) {
+  # the sides read from the statistic agree with the clipped p-values of tseries, on series of every kind
+  set.seed(11)
+  for (z in list(stats::rnorm(120), cumsum(stats::rnorm(120)), as.numeric(stats::arima.sim(list(ar = 0.5), 80)),
+                 cumsum(stats::rnorm(60)) + 0.5 * seq_len(60), stats::rnorm(40, sd = 3))) {
+    adf <- suppressWarnings(tseries::adf.test(z))
+    side <- arima_adf_side(unname(adf$statistic), length(z) - 1L)
+    p <- adf$p.value
+    .tab_expect(identical(side == "below", p == 0.01) && identical(side == "above", p == 0.99), "ADF side ", side, " with p = ", p)
+    for (null in c("Level", "Trend")) {
+      kpss <- suppressWarnings(tseries::kpss.test(z, null = null))
+      side <- arima_kpss_side(unname(kpss$statistic), null)
+      .tab_expect(identical(side == "below", kpss$p.value == 0.01) && identical(side == "above", kpss$p.value == 0.1),
+                  "KPSS ", null, " side ", side, " with p = ", kpss$p.value)
+    }
+  }
+  # an end answers the alphas on its side: p < 0.01 rejects at 0.01 (where `p < alpha` would not), is not computed at 0.001
+  .tab_expect(isTRUE(arima_table_rejects(0.01, "below", 0.01, 0.01, 0.99)) && is.na(arima_table_rejects(0.01, "below", 0.001, 0.01, 0.99)) &&
+                isTRUE(arima_table_rejects(0.01, "below", 0.2, 0.01, 0.99)), "the lower end")
+  .tab_expect(identical(arima_table_rejects(0.1, "above", 0.1, 0.01, 0.1), FALSE) && is.na(arima_table_rejects(0.1, "above", 0.2, 0.01, 0.1)) &&
+                identical(arima_table_rejects(0.1, "above", 0.001, 0.01, 0.1), FALSE), "the upper end")
+  .tab_expect(identical(arima_table_rejects(0.03, "inside", 0.05, 0.01, 0.1), TRUE) &&
+                identical(arima_table_rejects(0.03, "inside", 0.02, 0.01, 0.1), FALSE), "inside the table")
+  # the table keeps the type of the time
+  for (type in list(arrow::int64(), arrow::int32(), arrow::date32(), arrow::timestamp("ms", "Europe/Rome"))) {
+    values <- if (type$ToString() %in% c("int64", "int32")) c(1, 2) else if (type$ToString() == "date32") as.Date("2024-01-01") + 0:1 else
+      as.POSIXct("2024-01-01", tz = "UTC") + c(0, 3600)
+    tbl <- arima_table(data.frame(observed = c(1, 2)), "t", ts_time_array(values, type))
+    .tab_expect(tbl$schema$GetFieldByName("t")$type == type && identical(names(tbl), c("t", "observed")), "the type ", type$ToString())
+  }
 }

@@ -860,7 +860,7 @@
       "upper": "Float64"
     },
     "forecast": {
-      "time": "@time",
+      "time": "=time",
       "observed": "Float64",
       "fitted": "Float64",
       "forecast": "Float64",
@@ -3722,7 +3722,8 @@
                 "verdict",
                 "advice",
                 "significance",
-                "rows"
+                "rows",
+                "advice_id"
               ]
             },
             "curve": {
@@ -3921,7 +3922,8 @@
                 "verdict",
                 "advice",
                 "significance",
-                "rows"
+                "rows",
+                "advice_id"
               ]
             },
             "curve": {
