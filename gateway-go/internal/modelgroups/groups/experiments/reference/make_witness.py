@@ -406,13 +406,144 @@ def witness_engine() -> None:
                       "Tabularia's stat_t_two_sample (Welch)")
 
 
+# ── lot E3: the Bayesian reading ─────────────────────────────────────────────────
+def check_abs(case: str, key: str, got: float | None, want: float | None, tol: float, what: str) -> None:
+    """A comparison at an absolute tolerance (the spec's 1e-10 for probabilities and losses)."""
+    if want is None or got is None:
+        said.append(("ok" if want is None and got is None else "DIFF", case, f"{key} [{what}]", got, want, tol))
+        return
+    said.append(("ok" if abs(got - want) <= tol else "DIFF", case, f"{key} [{what}]", got, want, tol))
+
+
+def witness_bayes(case: dict[str, Any]) -> None:
+    """The Bayesian measures of a case of make_reference_bayes.R, by mpmath (30 digits, tanh-sinh on the pieces
+    between the posteriors' quantiles) and, for two Beta posteriors with a whole alpha, Miller's sum and
+    Stucchio's identity at 50 digits; the posteriors from the raw rows as the node makes them (pandas, statsmodels
+    for CUPED). The credible intervals, the means and the sds with SciPy."""
+    import mpmath as mp
+    import numpy as np
+    import pandas as pd
+    import statsmodels.formula.api as smf
+    from scipy import stats
+
+    cid = case["id"]
+    want = expected_of(case)
+    p, df, labels, assigned, empty, given, own = units_of(case)
+    v, kind = p["variant"], p["metric_type"]
+    k = len(labels)
+    ci = labels.index(p["control"])
+    higher = bool(p.get("higher_is_better", True))
+    alpha = float(p["alpha"])
+    threshold = float(p.get("loss_threshold", 0.001))
+    g = np.array([labels.index(x) for x in df[v]])
+    n = np.array([float((g == j).sum()) for j in range(k)])
+    cuped = bool(p.get("covariate"))
+    beta = kind == "binary" and not cuped
+
+    if beta:
+        a0, b0 = float(p.get("prior_alpha", 1.0)), float(p.get("prior_beta", 1.0))
+        conv = np.array([float(df[p["metric"]].to_numpy(float)[g == j].sum()) for j in range(k)])
+        pa, pb = a0 + conv, b0 + n - conv
+        mean = pa / (pa + pb)
+        sd = np.sqrt(pa * pb / ((pa + pb) ** 2 * (pa + pb + 1)))
+        frozen = [stats.beta(pa[j], pb[j]) for j in range(k)]
+    else:
+        if kind == "ratio":
+            y, x = df[p["numerator"]].to_numpy(float), df[p["denominator"]].to_numpy(float)
+            mean = np.array([y[g == j].sum() / x[g == j].sum() for j in range(k)])
+            var = np.array([delta_var(y[g == j], x[g == j]) for j in range(k)])
+            lin = (y - mean[g] * x) / np.array([x[g == j].mean() for j in range(k)])[g]
+        else:
+            y = df[p["metric"]].to_numpy(float)
+            mean = np.array([y[g == j].mean() for j in range(k)])
+            var = mean * (1 - mean) / n if kind == "binary" else np.array([np.var(y[g == j], ddof=1) / n[j] for j in range(k)])
+            lin = y
+        if cuped:
+            c = df[p["covariate"]].to_numpy(float)
+            fr = pd.DataFrame({"lin": lin, "g": g.astype(str), "c": c})
+            theta = float(smf.ols("lin ~ C(g) + c", data=fr[own]).fit().params["c"])
+            mean = np.array([mean[j] - theta * (c[g == j].mean() - c.mean()) for j in range(k)])
+            var = np.array([np.var((lin - theta * c)[g == j], ddof=1) / n[j] for j in range(k)])
+        sd = np.sqrt(var)
+        frozen = [stats.norm(mean[j], sd[j]) for j in range(k)]
+
+    mp.mp.dps = 30
+
+    def lower(j: int, x):
+        return mp.betainc(pa[j], pb[j], 0, x, regularized=True) if beta else mp.ncdf(x, mean[j], sd[j])
+
+    def pdf(j: int, x):
+        return mp.exp((pa[j] - 1) * mp.log(x) + (pb[j] - 1) * mp.log1p(-x) - mp.log(mp.beta(pa[j], pb[j]))) if beta else mp.npdf(x, mean[j], sd[j])
+
+    def behind(j: int, x):
+        return lower(j, x) if higher else 1 - lower(j, x)
+
+    def points(js):
+        probs = [1e-15, 1e-6, 1e-3, 0.05, 0.25, 0.5, 0.75, 0.95, 1 - 1e-3]
+        q = sorted({float(frozen[j].ppf(pr)) for j in js for pr in probs} | {float(frozen[j].isf(1e-15)) for j in js} | {float(frozen[j].isf(1e-6)) for j in js})
+        return [mp.mpf(x) for x in q]
+
+    def integral(f, js):
+        return float(mp.quad(f, points(js), maxdegree=7))
+
+    base = abs(float(mean[ci]))
+    best_p, best_l = [], []
+    everyone = list(range(k))
+    for j in everyone:
+        others = [o for o in everyone if o != j]
+        pb_j = integral(lambda x, j=j, others=others: pdf(j, x) * mp.fprod(behind(o, x) for o in others), everyone)
+        lb_j = integral(lambda x, j=j: behind(j, x) - mp.fprod(behind(o, x) for o in everyone), everyone)
+        best_p.append(pb_j)
+        best_l.append(lb_j)
+        pre = f"bayes|{labels[j]}||"
+        check(cid, pre + "posterior_mean", float(mean[j]), want.get(pre + "posterior_mean"), 1e-12, "scipy/numpy")
+        check(cid, pre + "posterior_sd", float(sd[j]), want.get(pre + "posterior_sd"), 1e-12, "scipy/numpy")
+        check(cid, pre + "cred_low", float(frozen[j].ppf(alpha / 2)), want.get(pre + "cred_low"), 1e-12, "scipy ppf")
+        check(cid, pre + "cred_high", float(frozen[j].isf(alpha / 2)), want.get(pre + "cred_high"), 1e-12, "scipy isf")
+        check_abs(cid, pre + "prob_best", pb_j, want.get(pre + "prob_best"), 1e-10, "mpmath quad")
+        check_abs(cid, pre + "expected_loss_best", lb_j, want.get(pre + "expected_loss_best"), 1e-10, "mpmath quad")
+        check_abs(cid, pre + "expected_loss_best_relative", lb_j / base, want.get(pre + "expected_loss_best_relative"), 1e-10, "mpmath quad")
+        if j == ci:
+            continue
+        t, c_ = j, ci
+        if beta and higher and float(pa[t]) == round(float(pa[t])) and float(pa[c_]) == round(float(pa[c_])) and k == 2:
+            # Miller's sum and Stucchio's identity, 50 digits
+            with mp.workdps(50):
+                def gt(ax, bx, ay, by):
+                    ax, bx, ay, by = (mp.mpf(float(z)) for z in (ax, bx, ay, by))
+                    return mp.fsum(mp.exp(mp.log(mp.beta(ay + i, by + bx)) - mp.log(bx + i) - mp.log(mp.beta(1 + i, bx)) - mp.log(mp.beta(ay, by)))
+                                   for i in range(int(ax)))
+                mt, mc = mp.mpf(float(mean[t])), mp.mpf(float(mean[c_]))
+                at, bt, ac, bc = pa[t], pb[t], pa[c_], pb[c_]
+                beat = float(gt(at, bt, ac, bc))
+                loss = float(mc * gt(ac + 1, bc, at, bt) - mt * gt(ac, bc, at + 1, bt))
+                keep = float(mt * gt(at + 1, bt, ac, bc) - mc * gt(at, bt, ac + 1, bc))
+            what = "Miller's sum, Stucchio's identity (mpmath, 50 digits)"
+            check_abs(cid, f"{pre}[quadrature against Miller]", integral(lambda x: pdf(t, x) * behind(c_, x), [t, c_]), beat, 1e-10, "mpmath quad = Miller")
+        else:
+            beat = integral(lambda x: pdf(t, x) * behind(c_, x), [t, c_])
+            loss = integral(lambda x: behind(t, x) * (1 - behind(c_, x)), [t, c_])
+            keep = integral(lambda x: behind(c_, x) * (1 - behind(t, x)), [t, c_])
+            what = "mpmath quad"
+        check_abs(cid, pre + "prob_beat_control", beat, want.get(pre + "prob_beat_control"), 1e-10, what)
+        check_abs(cid, pre + "expected_loss", loss, want.get(pre + "expected_loss"), 1e-10, what)
+        check_abs(cid, pre + "expected_loss_relative", loss / base, want.get(pre + "expected_loss_relative"), 1e-10, what)
+        check_abs(cid, pre + "expected_loss_control", keep, want.get(pre + "expected_loss_control"), 1e-10, what)
+        check_abs(cid, pre + "expected_loss_control_relative", keep / base, want.get(pre + "expected_loss_control_relative"), 1e-10, what)
+        said.append(("ok" if (loss / base <= threshold) == (want.get(pre + "loss_position") == "below") else "DIFF", cid, f"{pre}loss_position [threshold {threshold:g}]",
+                     loss / base, want.get(pre + "loss_position"), 0.0))
+    check_abs(cid, "Σ P(best) − 1", sum(best_p) - 1.0, 0.0, 1e-10, "mpmath quad")
+    check_abs(cid, "Σ expected values' P(best) − 1", sum(want[f"bayes|{lab}||prob_best"] for lab in labels) - 1.0, 0.0, 1e-10, "expected.json")
+
+
+
 def main(argv: list[str]) -> int:
     if "--engine" in argv:
         witness_engine()
     else:
         for case in EXPECTED["cases"]:
             if case["model"] == "ab_test" and not case.get("refuses") and "reading" in case:
-                witness_comparisons(case)
+                (witness_bayes if case["id"].startswith("bayes_") else witness_comparisons)(case)
     width = max(len(s[1]) for s in said)
     for status, case, key, got, want, tol in said:
         print(f"{status:4} {case:{width}} {key}: witness {got!r}, expected {want!r} (tolerance {tol:g})")
