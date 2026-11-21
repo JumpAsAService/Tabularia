@@ -9,7 +9,7 @@
 // and traffic are DataApiStatus's.
 //
 // /data-api?id=N opens a data API; /data-api?project=P starts a new one in folder P.
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
 import {
@@ -123,6 +123,13 @@ function addResource(id: number) {
   adding.value = false
 }
 const adding = ref(false)
+// the picker of a datasource is gone (one chosen, Escape, a click elsewhere): the focus goes back to «Add», not to the page
+const addButton = ref<HTMLButtonElement | null>(null)
+function closeAdding() {
+  adding.value = false
+  // (only when the focus fell to the page: a click on another field keeps the focus it gave)
+  nextTick(() => { if (!document.activeElement || document.activeElement === document.body) addButton.value?.focus() })
+}
 function removeResource(i: number) {
   resources.value.splice(i, 1)
   open.value = null
@@ -597,8 +604,8 @@ watch(() => route.query.id, (id) => {
             </div>
             <div v-if="canEdit" class="add">
               <Select v-if="adding" :model-value="null" :options="dsOptions" :placeholder="$t('dataApi.chooseDatasource')" auto-open searchable
-                      :aria-label="$t('dataApi.chooseDatasource')" @update:model-value="addResource" @close="adding = false" />
-              <button v-else type="button" :disabled="!catalog.length" @click="adding = true">
+                      :aria-label="$t('dataApi.chooseDatasource')" @update:model-value="addResource" @close="closeAdding" />
+              <button v-else ref="addButton" type="button" :disabled="!catalog.length" @click="adding = true">
                 <Plus :size="14" /> {{ $t('dataApi.addResource') }}
               </button>
               <span v-if="!catalog.length" class="muted small">{{ $t('dataApi.noDatasources') }}</span>

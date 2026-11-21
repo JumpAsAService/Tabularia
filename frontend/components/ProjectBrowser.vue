@@ -626,6 +626,17 @@ function moveTargets(row: Row) {
     .map((p) => ({ value: p.id, label: p.name, hint: folderPaths.pathOf(p.parent_id) }))
 }
 
+// the picker of «Move to…» is gone (a target chosen, Escape, a click elsewhere): the focus goes back to the row's «⋯» button
+// instead of falling to the page, so that the keyboard goes on from the row it was on (a moved row has left: nothing to return to)
+function endMove(row: Row) {
+  moving.value = null
+  const key = rowKey(row)
+  nextTick(() => {
+    if (document.activeElement && document.activeElement !== document.body) return // a click on another field keeps its focus
+    document.querySelector<HTMLElement>(`[data-more="${CSS.escape(key)}"]`)?.focus()
+  })
+}
+
 async function moveRow(row: Row, target: number | null) {
   moving.value = null
   const from = row.kind === 'folder' ? row.raw.parent_id : row.raw.project_id
@@ -1894,7 +1905,7 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
                 auto-open
                 :placeholder="$t('projectBrowser.moveToPlaceholder')"
                 @update:model-value="(v: any) => moveRow(r, v)"
-                @close="moving = null"
+                @close="endMove(r)"
               />
               <template v-else>
                 <!-- the kind's main command stays in the row; the others are in «⋯» -->
@@ -1917,6 +1928,7 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
                 ><RefreshCw :size="13" /></button>
                 <button
                   class="mini rmore"
+                  :data-more="rowKey(r)"
                   :class="{ activebtn: rowMenu?.key === rowKey(r) }"
                   :title="$t('projectBrowser.moreActions')"
                   :aria-label="$t('projectBrowser.moreActionsFor', { name: r.name })"
