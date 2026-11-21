@@ -51,6 +51,7 @@ MIN_SHARE = 10.0  # mm a column without a width keeps when the others are too wi
 MIN_ROW = 1.2  # mm: no row of a table is lower (the padding of its cells alone is 2.2, template.typ)
 PALETTE = {"muted": "#6b7590", "rule": "#d9dde5", "band": "#e9eef9", "head": "#f1f3f5", "negative": "#c92a2a",
            "positive": "#2b8a3e", "total": "#1f2933"}
+INTRO_TYPES = ("text", "line", "rect")  # a band of only these right above a table introduces it: kept with it
 
 
 # ── what Excel and the email need beyond the template's JSON ─────────────────
@@ -790,23 +791,39 @@ class _Builder:
         band: list[Any] = []
         top = bottom = 0.0
         prev_bottom = 0.0
+        # the band of words right above the next table (a sentence, a heading), with those it touches through a
+        # rule (a band of no height: a heading's): they introduce it
+        intro: list[dict] = []
 
         def close() -> None:
-            nonlocal band, prev_bottom
+            nonlocal band, prev_bottom, intro
             if not band:
                 return
             placed = [p for p in (self.placed(i, top) for i in band) if p is not None]
-            blocks.append({"k": "band", "gap": _round_mm(max(top - prev_bottom, 0)), "h": _round_mm(bottom - top),
-                           "items": placed})
+            gap = _round_mm(max(top - prev_bottom, 0))
+            block = {"k": "band", "gap": gap, "h": _round_mm(bottom - top), "items": placed}
+            blocks.append(block)
+            if not all(i.type in INTRO_TYPES for i in band):
+                intro = []
+            elif intro and gap == 0 and blocks[-2] is intro[-1] and 0 in (block["h"], intro[-1]["h"]):
+                intro.append(block)
+            else:
+                intro = [block]
             prev_bottom = bottom
             band = []
 
         for it in items:
             if it.type in rd.GROWING:
                 noted = len(self.blocks)
+                # the words that introduce a table (intro) stay on its page: the page never ends with
+                # them and the table starting on the next one (Typst's sticky blocks). A table that is
+                # not shown passes them on to the next.
                 close()
                 out = self.either(it, self._visible_table, it)
                 if out is not None:
+                    for b in intro:
+                        b["sticky"] = True
+                    intro = []
                     blocks.append({"k": "table", "gap": _round_mm(max(it.y - prev_bottom, 0)), **self.typst_table(out)})
                     above = self.blocks[noted:]
                     if above and all(kind == "text" for kind, _ in above):

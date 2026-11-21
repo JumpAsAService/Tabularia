@@ -384,6 +384,27 @@ def test_items_that_overlap_form_a_row_and_a_table_takes_its_own():
     assert body[2]["items"][0]["parts"] == ["56"]
 
 
+def test_the_words_right_above_a_table_stay_with_it():
+    """A heading (its text, and its rule: a band of no height) right above a table is sticky: Typst keeps it on
+    the table's page, never alone at the bottom of the one before. A band with a chart is not; a table not shown
+    passes the heading on to the next."""
+    heading = [{"id": "h", "type": "text", "x": 0, "y": 0, "w": 50, "h": 6, "value": "Fit"},
+               {"id": "rule", "type": "line", "x": 0, "y": 6, "w": 186, "h": 0}]
+    body = build(report(*heading, table(y=7.5, h=30))).doc["body"]
+    assert [(b["k"], b.get("sticky")) for b in body] == [("band", True), ("band", True), ("table", None)]
+    hidden = {**table(y=7.5, h=8), "id": "t0", "visible": "COUNT() > 100"}
+    body = build(report(*heading, hidden, {**table(y=20, h=30), "id": "t2"})).doc["body"]
+    assert [(b["k"], b.get("sticky")) for b in body] == [("band", True), ("band", True), ("table", None)]
+    chart = {"id": "c", "type": "chart", "dataset": "d", "kind": "column", "x": 0, "y": 0, "w": 90, "h": 40,
+             "category": "[region]", "series": [{"value": "SUM([amount])"}]}
+    body = build(report(chart, table(y=45, h=30))).doc["body"]
+    assert [(b["k"], b.get("sticky")) for b in body] == [("band", None), ("table", None)]
+    # a sentence under a chart, the rule of a heading away from it: only the words touching the table
+    body = build(report(*heading, {"id": "s", "type": "text", "x": 0, "y": 10, "w": 50, "h": 5, "value": "said"},
+                        table(y=15, h=30))).doc["body"]
+    assert [(b["k"], b.get("sticky")) for b in body] == [("band", None), ("band", None), ("band", True), ("table", None)]
+
+
 def test_page_numbers_and_parameters_in_the_footer():
     d = report(table(), parameters=[{"name": "who", "type": "text", "default": "Ada"}])
     d["sections"]["page_footer"] = {"height": 8, "on_last_page": False, "items": [
