@@ -137,6 +137,15 @@ fit_cox <- function(task) {
   notes <- character()
   fit <- cox_coxph(form, frame, ties, robust, !is.null(cluster_col), notes = function(n) notes <<- c(notes, n))
   b <- stats::coef(fit)
+  # the exact partial likelihood sums over every way a time's tied events could be ordered: with
+  # many events at one time it overflows, and coxph gives empty coefficients and a log-likelihood
+  # of −Inf without a warning. The design is not singular (cox_refuse_aliased said so): not «aliased»
+  if (identical(ties, "exact") && (anyNA(b) || !all(is.finite(fit$loglik)))) {
+    largest <- max(table(paste(as.integer(frame$g), time)[status]))
+    tab_refuse("exact_failed", paste0("the exact partial likelihood cannot be computed on these rows: up to ", largest,
+                                      " events share one time, too many to order every way; fit with ties = efron, which ",
+                                      "approximates it closely"), list(largest = largest))
+  }
   if (anyNA(b)) {
     tab_refuse("aliased", paste0("the term «", design$terms$label[which(is.na(b))[[1L]]], "» is a combination of the others ",
                                  "(the design is singular): drop it, or a predictor that repeats it"))
@@ -759,5 +768,19 @@ TAB_COMMON_TESTS[["cox: a start that survival cannot tell from its time is refus
   # 1e-6 before is an interval survival keeps: fitted
   df$s <- ifelse(seq_len(n) %% 3 == 0, df$days - 1e-6, 0)
   .tab_expect(!is.null(fit_cox(.cox_test_task(df, params))$card), "a start 1e-6 before its time was not fitted")
+}
+
+TAB_COMMON_TESTS[["cox: the exact partial likelihood that overflows is refused as such, never as a term «aliased»"]] <- function(code) {
+  # times in whole days 1 to 12: up to a few hundred events at one time, which the exact likelihood cannot order
+  set.seed(11)
+  n <- 3000L
+  x <- stats::rnorm(n)
+  t <- ceiling(stats::rweibull(n, 1.2, exp(1.5 + 0.3 * x)))
+  cens <- sample(4:12, n, TRUE)
+  df <- data.frame(days = pmin(t, cens), status = as.integer(t <= cens), x = x)
+  m <- .tab_refused_with("exact_failed", fit_cox(.cox_test_task(df, list(time = "days", event = "status", event_value = 1,
+                                                                        predictors = list("x"), ties = "exact"))))
+  largest <- max(table(df$days[df$status == 1L]))
+  .tab_expect(grepl(paste0("up to ", largest, " events share one time"), m, fixed = TRUE) && grepl("ties = efron", m, fixed = TRUE), m)
 }
 
