@@ -300,6 +300,23 @@ start. To begin again at a new size, reset the stack: `docker compose down -v`
 (section 10) deletes **everything**, users, flows and connections included. Then set
 `SAMPLES_SCALE` as above and run `docker compose up -d` again.
 
+**Sample data from an older version?** `sampledb-init` fills only empty databases, so
+volumes made before the customers had a life (their `clienti` has no `stato` and the
+acquisition date means nothing) keep the old tables, and the examples of
+[Statistical models](capabilities/models.md) need the new ones. To begin the sample data
+again without losing the rest, delete the `Sample` folder in Explore (its tables are copies
+of the old data), then, from the `infrastructure` folder:
+
+```bash
+docker compose down
+docker volume ls --filter name=sampledb
+```
+
+The second command lists the two volumes of the sample databases, whose names end in
+`sampledb_pg` and `sampledb_ch`; remove those two with `docker volume rm <name> <name>`,
+then run `docker compose up -d --build`. Users, flows and connections are kept, because the
+other volumes are not touched.
+
 With `massive`, the billion rows are in the CRM log on ClickHouse, where Tabularia reads
 large tables best; the import into the `Sample` folder takes about a quarter of an hour
 more. More detail: [the sample database](../infrastructure/sampledb/README.md).

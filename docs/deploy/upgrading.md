@@ -58,6 +58,16 @@ Deployments at the same time.
   stops: they are closed as failed, with a message that says so, and are not resumed.
   The Jobs of Script and Container nodes they had started are stopped. Scheduled flows
   are not lost: the new orchestrator takes the next slots.
+- **The groups of statistical models** you enabled follow what the new release ships, not
+  the image they had. If the release brings a new recipe (a package or a version changed),
+  the group shows **Rebuild needed**: a new version is queued by itself, built in the
+  cluster, self-tested and put in use, and until it is **Ready** the group's steps do not run
+  (a flow that reaches one fails with a sentence that says why). If it brings only a new
+  runner (the code that fits the models), the group shows **Rechecking**: the self-test runs
+  again on the image in use, with no build, and the group serves meanwhile. Plan for it
+  as for an environment's build, a few minutes to tens of minutes per group, and do not
+  upgrade in the middle of a run that matters. The states are in
+  [Statistical models](../capabilities/models.md#turning-a-group-on-administrators).
 - **The interface** rolls like the gateway. A browser tab left open keeps the old version
   until it is reloaded.
 
@@ -166,7 +176,7 @@ kubectl exec --namespace tabularia deploy/tabularia-tabularia-ai -c ai -- python
 ```
 
 Every pod is `Running` and `1/1`, and the second command prints the same revision for the
-database and the code, for example `database: 0020 · code: 0020`. Reload the page in the
+database and the code, for example `database: 0045 · code: 0045` (the numbers of your release). Reload the page in the
 browser with **Ctrl+Shift+R** (macOS: **Cmd+Shift+R**).
 
 ## On a Kubernetes cluster
@@ -201,8 +211,9 @@ kubectl logs deployment/<release>-tabularia-gateway -c migrate --namespace <name
 kubectl exec deployment/<release>-tabularia-ai -c ai --namespace <namespace> -- python -m app.db.migra stato
 ```
 
-The log ends with `database at revision 0021 (was 0020)` when a migration ran, and with
-`database at revision 0021` when another pod had already done it.
+The log ends with `database at revision 0045 (was 0044)` when a migration ran, and with
+`database at revision 0045` when another pod had already done it (the numbers are those of
+your release and of the one you came from).
 
 **GitOps** (Argo CD, Flux): nothing to change. The init container is idempotent, and a sync
 that rolls the pods twice migrates once.
@@ -217,7 +228,7 @@ release's ConfigMap and Secret:
 ```yaml
 apiVersion: batch/v1
 kind: Job
-metadata: { name: tabularia-migrate-1-4-3, namespace: <namespace> }
+metadata: { name: tabularia-migrate-<new-version>, namespace: <namespace> }
 spec:
   backoffLimit: 0
   template:
@@ -225,7 +236,7 @@ spec:
       restartPolicy: Never
       containers:
         - name: migrate
-          image: <registry>/tabularia-gateway:1.4.7
+          image: <registry>/tabularia-gateway:<new-version>
           command: ["python", "-m", "app.db.migra"]
           envFrom:
             - configMapRef: { name: <release>-tabularia-config }
@@ -233,7 +244,7 @@ spec:
 ```
 
 It needs only the database's address and credentials, which the release already holds.
-Wait for it (`kubectl wait --for=condition=complete job/tabularia-migrate-1-4-3`), then
+Wait for it (`kubectl wait --for=condition=complete job/tabularia-migrate-<new-version>`, the version with dashes), then
 upgrade.
 
 ## When something goes wrong
