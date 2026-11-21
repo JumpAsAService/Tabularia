@@ -295,17 +295,16 @@ test('the form is usable with the keyboard alone: native controls, each named, n
 
 // ── the palette, the canvas ──────────────────────────────────────────────────
 
-test('the decomposition has its icon and its summary, and stays out of the palette until its runner is built', () => {
+test('the decomposition has its icon and its summary, and is in the palette after ARIMA', () => {
   assert.notEqual(icons.modelIconOf('decomposition'), icons.modelIconOf('arima'))
   assert.notEqual(icons.modelIconOf('decomposition'), icons.modelIconOf('linear'))
   const t = (k) => WORDS.en[k] ?? k
   const shown = m.MODEL_CATALOG.groups.filter((g) => g.id === 'timeseries')
-  // today: only ARIMA and its six presets
-  const now = m.modelPalette(shown, '', t)
-  assert.ok(!now.flatMap((g) => g.items).some((i) => i.model === 'decomposition'))
-  assert.ok(m.MODEL_NOT_IN_THE_PALETTE_YET.has('decomposition'))
-  // the day it is let in: under Time series, one entry, after ARIMA's, named «Decomposition», and found by its name
-  const open = m.modelPalette(shown, '', t, m.MODEL_CATALOG, new Set())
+  // nothing is held back any more
+  assert.ok(!m.MODEL_NOT_IN_THE_PALETTE_YET.has('decomposition'))
+  // under Time series, one entry, after ARIMA's, named «Decomposition», and found by its name
+  const open = m.modelPalette(shown, '', t)
+  assert.equal(open.flatMap((g) => g.items).filter((i) => i.model === 'decomposition').length, 1)
   assert.deepEqual(open.map((g) => g.group), ['timeseries'])
   const entries = open[0].items.filter((i) => i.model === 'decomposition')
   assert.equal(entries.length, 1)
@@ -313,7 +312,7 @@ test('the decomposition has its icon and its summary, and stays out of the palet
   assert.equal(entries[0].kind, 'model:decomposition')
   assert.equal(t(entries[0].nameKey), 'Decomposition')
   assert.equal(open[0].items.at(-1).model, 'decomposition')
-  assert.equal(m.modelPalette(shown, 'decomp', t, m.MODEL_CATALOG, new Set())[0].items.length, 1)
+  assert.equal(m.modelPalette(shown, 'decomp', t)[0].items.length, 1)
   // the canvas: the method over the series
   assert.equal(m.modelSummary('decomposition', { ...SERIES }), 'STL · orders')
   assert.equal(m.modelSummary('decomposition', { ...SERIES, period: 7 }), 'STL (7) · orders')

@@ -784,10 +784,9 @@ export const modelPresetNameKey = (preset: string): string => `models.presets.${
 export const modelPresetHintKey = (preset: string): string => `models.presets.${preset}.hint`
 export const modelGroupKey = (group: string): string => `models.groups.${group}`
 
-// Models whose form and words the editor has, but whose runner is not built yet: the palette leaves them out. The decomposition
-// (docs/specs/ts-decomposition.md) has its form and words (lot D5) and a runner that refuses «not built yet» until lots D2
-// and D3: lot D6 takes it away from this list once the runner runs. (The A/B nodes left it in lot E9.)
-export const MODEL_NOT_IN_THE_PALETTE_YET = new Set(['decomposition'])
+// Models whose form and words the editor has, but whose runner is not built yet: the palette leaves them out. Empty now: the A/B
+// nodes (lot E9) and the decomposition (lot D6) are in; a model being built goes here until its runner runs.
+export const MODEL_NOT_IN_THE_PALETTE_YET: ReadonlySet<string> = new Set<string>()
 
 /** The palette's Models group: the shown groups in the catalogue's order, each with its models
  *  and, after ARIMA, the six presets of that same node. With a search, only the items whose

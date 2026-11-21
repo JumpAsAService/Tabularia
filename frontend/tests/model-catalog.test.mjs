@@ -179,7 +179,7 @@ test('the palette\'s entries: the models by group, the six presets after ARIMA, 
   assert.deepEqual(all[0].items.map((i) => i.kind), ['model:linear', 'model:logistic'])
   assert.deepEqual(all[1].items.map((i) => i.kind), ['model:kaplan_meier', 'model:cox', 'model:parametric_survival'])
   assert.deepEqual(all[4].items.map((i) => i.kind), ['model:clv', 'model:bg_bb'])
-  assert.deepEqual(all[2].items.map((i) => i.kind), ['model:arima', 'model:arima:ar', 'model:arima:ma', 'model:arima:arma', 'model:arima:arima', 'model:arima:sarima', 'model:arima:sarimax'])
+  assert.deepEqual(all[2].items.map((i) => i.kind), ['model:arima', 'model:arima:ar', 'model:arima:ma', 'model:arima:arma', 'model:arima:arima', 'model:arima:sarima', 'model:arima:sarimax', 'model:decomposition'])
   assert.deepEqual(m.modelPalette(m.modelShownGroups(STATE), '', en).map((g) => g.group), ['regression', 'timeseries'])
   // a search by name, by hint, by group
   assert.deepEqual(m.modelPalette(m.MODEL_CATALOG.groups, 'cox', en).flatMap((g) => g.items.map((i) => i.model)), ['cox'])
@@ -775,10 +775,10 @@ test('the palette: the Models group after Statistics, closed, by group, with Pre
   assert.match(html, /id="palette-models"[^>]*style="display:none;"/)
   const inside = text('<' + html.slice(html.indexOf('id="palette-models"'), html.indexOf('Control')))
   assert.ok(inside.includes('Predict') && inside.includes('Regression Linear regression Logistic regression'), inside)
-  assert.ok(inside.includes('Time series ARIMA AR MA ARMA ARIMA (p, d, q) SARIMA SARIMAX'), inside)
+  assert.ok(inside.includes('Time series ARIMA AR MA ARMA ARIMA (p, d, q) SARIMA SARIMAX Decomposition'), inside)
   assert.ok(!inside.includes('Survival') && !inside.includes('Kaplan'))
-  // 1 Predict + 2 + 7 entries
-  assert.match(html, /class="group-count"[^>]*>10</)
+  // 1 Predict + 2 + 8 entries
+  assert.match(html, /class="group-count"[^>]*>11</)
   // each entry is draggable and reached with Tab, Enter and Space add it
   assert.match(html, /class="item"[^>]*draggable="true"[^>]*role="button"[^>]*tabindex="0"[^>]*title="Explains a number with other columns/)
   // without an MLflow connection: no Predict
@@ -1049,11 +1049,11 @@ test('the palette lists the three nodes under their groups, searchable, with an 
   assert.ok(inside.includes('Survival Kaplan–Meier Cox proportional hazards Parametric survival'), inside)
   assert.ok(inside.includes('Customer lifetime Customer lifetime value BG/BB'), inside)
   assert.ok(inside.includes('Experiments A/B test A/B test planning'), inside)
-  // 1 Predict + 2 + 3 + 7 + 2 + 2 + 2
-  assert.match(html, /class="group-count"[^>]*>19</)
+  // 1 Predict + 2 + 3 + 8 + 2 + 2 + 2
+  assert.match(html, /class="group-count"[^>]*>20</)
   // every item is a button reached with Tab, Enter and Space add it (not a mouse-only control)
   const items = [...html.slice(html.indexOf('id="palette-models"'), html.indexOf('Control')).matchAll(/<div class="item[^"]*"[^>]*>/g)].map((x) => x[0]).filter((x) => x.includes('role="button"'))
-  assert.equal(items.length, 19)
+  assert.equal(items.length, 20)
   assert.ok( items.every((x) => x.includes('tabindex="0"') && x.includes('role="button"')))
   groups.state.value = null
 })
@@ -1232,9 +1232,9 @@ test('the decomposition says its columns before a run: a seasonal column per per
     assert.ok(!columns.some((c) => c.name === 'other') && later.length === 0)
   }
   assert.equal(m.modelOutputColumns(dec, { time: 'gone' }, [{ name: 'day', dtype: 'Int64' }]).columns[0].dtype, 'Unknown')
-  // a model the palette does not show yet: its runner is not built (lots D2 and D3)
+  // its runner is built (lot D6): the palette shows it
   const palette = m.modelPalette(m.MODEL_CATALOG.groups, '', (k) => k)
-  assert.ok(!palette.flatMap((g) => g.items).some((i) => i.model === 'decomposition'))
+  assert.ok(palette.flatMap((g) => g.items).some((i) => i.model === 'decomposition'))
 })
 
 test('the steps after a model that only keep, drop, order, rename, cast or filter say their columns; the others do not', () => {
