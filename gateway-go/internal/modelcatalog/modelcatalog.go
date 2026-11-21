@@ -112,7 +112,8 @@ type Model struct {
 	Requires, Forbids        []Rule
 	Disjoint                 []string
 	Variants                 []Variant
-	Card                     bool // the model makes a model card (false: the experiments' nodes, whose run MLflow logs and no more)
+	Card                     bool  // the model makes a model card (false: the experiments' nodes and the decomposition, whose run MLflow logs and no more)
+	MaxRows                  int64 // the most input rows of this model, below its group's (ARIMA: 20,000); 0: the group's alone
 }
 
 type catalogue struct {
@@ -160,6 +161,15 @@ func HasCard(model string) bool {
 		return m.Card
 	}
 	return false
+}
+
+// MaxRows is the most input rows a model reads, when it has a limit of its own below its group's (ARIMA's 20,000, the cost
+// of the automatic orders); 0 for none, or for no model.
+func MaxRows(model string) int64 {
+	if m, ok := data.byID[model]; ok {
+		return m.MaxRows
+	}
+	return 0
 }
 
 // Limit is one of the catalogue's limits (max_terms, max_chart_points…), 0 for none.
@@ -792,6 +802,11 @@ func parse(b []byte) (*catalogue, error) {
 		if card, ok := rm["card"]; ok { // absent: a model makes its card
 			if err := json.Unmarshal(card, &m.Card); err != nil {
 				return nil, fmt.Errorf("a model's card: %v", err)
+			}
+		}
+		if rows, ok := rm["max_rows"]; ok && string(rows) != "null" { // absent or null: the group's limit alone
+			if err := json.Unmarshal(rows, &m.MaxRows); err != nil || m.MaxRows < 1 {
+				return nil, fmt.Errorf("a model's max_rows: a whole number from 1")
 			}
 		}
 		for field, dst := range map[string]*string{"id": &m.ID, "group": &m.Group, "family": &m.Family, "label": &m.Label} {

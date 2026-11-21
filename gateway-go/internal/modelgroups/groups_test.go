@@ -208,17 +208,19 @@ func TestTheDockerfileIsTheScriptingEnvironmentsOne(t *testing.T) {
 	}
 }
 
-// The GNU Scientific Library is the customer lifetime group's alone: its Dockerfile adds libgsl-dev
-// to the fixed libraries of every R image, and no other group's image changes (docs/specs/
-// customer-lifetime-models.md, «The recipe»).
-func TestOnlyTheCustomerLifetimeImageInstallsGSL(t *testing.T) {
+// The GNU Scientific Library is the customer lifetime group's and, for Rlibeemd (the EMD of the decomposition node), the time
+// series group's: their Dockerfiles add libgsl-dev to the fixed libraries of every R image, and no other group's image changes
+// (docs/specs/customer-lifetime-models.md, «The recipe»; docs/specs/ts-decomposition.md, «The EMD package»).
+func TestOnlyTheCustomerLifetimeAndTheTimeSeriesImagesInstallGSL(t *testing.T) {
+	// the package of each that needs the library
+	needs := map[string]string{"customer_lifetime": "CLVTools@0.12.1", "timeseries": "Rlibeemd@1.4.4"}
 	s := scriptimage.Settings{CRANURL: "https://cran.r-project.org", Jobs: 2}
 	for _, g := range Groups() {
 		d, err := Dockerfile(g.ID, scriptcfg.DefaultBaseImages, s)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if g.ID != "customer_lifetime" {
+		if needs[g.ID] == "" {
 			if len(g.Recipe.SystemLibraries) != 0 || strings.Contains(d, "libgsl") {
 				t.Errorf("%s: a system library the other groups do not have", g.ID)
 			}
@@ -227,8 +229,8 @@ func TestOnlyTheCustomerLifetimeImageInstallsGSL(t *testing.T) {
 		fixed := strings.Join(scriptimage.RSystemLibraries, " ")
 		if !reflect.DeepEqual(g.Recipe.SystemLibraries, []string{"libgsl-dev"}) ||
 			!strings.Contains(d, "install -y --no-install-recommends "+fixed+" libgsl-dev && rm -rf /var/lib/apt/lists/*\n") ||
-			!strings.Contains(d, "\nCLVTools@0.12.1\n") {
-			t.Errorf("customer_lifetime:\n%s", d)
+			!strings.Contains(d, "\n"+needs[g.ID]+"\n") {
+			t.Errorf("%s:\n%s", g.ID, d)
 		}
 		// the same recipe without its system library is what every other R group's Dockerfile is made of
 		plain, _ := scriptimage.Dockerfile("r", "rocker/r-ver:4.6.0", g.Recipe.Packages, scriptimage.Settings{CRANURL: s.CRANURL, Jobs: 2, Managed: true})

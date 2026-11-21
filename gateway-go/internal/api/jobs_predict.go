@@ -591,9 +591,9 @@ func (q *queue) runPredict(ctx context.Context, r *scriptNodeRun) (*flowresolver
 		if err := child.save(ctx); err != nil {
 			return nil, err
 		}
-		if in.rows != nil && s.img.MaxRows > 0 && *in.rows > s.img.MaxRows {
+		if most := modelMaxRows(s.model, s.img.MaxRows); in.rows != nil && most > 0 && *in.rows > most {
 			return nil, &scriptFailed{fmt.Sprintf("%s: the prediction would read %s rows; the group «%s» allows %s: filter or sample "+
-				"before the node, or ask an administrator", s.what(), thousands(*in.rows), s.group, thousands(s.img.MaxRows))}
+				"before the node, or ask an administrator", s.what(), thousands(*in.rows), s.group, thousands(most))}
 		}
 		if err := d.writeScriptText(ctx, storage, cardKey, s.card); err != nil {
 			return nil, err

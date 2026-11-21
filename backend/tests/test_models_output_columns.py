@@ -43,8 +43,9 @@ def test_every_column_an_output_declares_has_a_type():
     assert set(catalog.ROWS_INPUT_TYPES) == {g["language"] for g in catalog.GROUPS.values()}
 
 
-# No model is waiting for its first run now: lot E5's planning node has its three cases in make_output_columns.py.
-NOT_RUN_YET: set[str] = set()
+# The decomposition node's runner refuses «not built yet» until lots D2 and D3: its cases join make_output_columns.py then
+# (docs/specs/ts-decomposition.md, «The lots D0–D9»), and the test below holds the names it must write until they do.
+NOT_RUN_YET: set[str] = {"decomposition"}
 
 
 def test_every_variant_that_hands_on_columns_was_run():
@@ -118,6 +119,38 @@ def test_the_experiments_outputs_before_a_run():
     assert dict(plan)["asked"] == "Boolean" and all(t == "Float64" for n, t in plan if n != "asked")
     for node in ("ab_test", "ab_plan"):
         assert catalog.output_columns(node, {}, [("arm", "Int64")])[0] == list(catalog.OUTPUT_TYPES["results"].items())
+
+
+def test_the_decomposition_s_columns_before_a_run():
+    """`components`: the time keeps the input's own type (`=time`); `seasonal_<period>` one column per period (an MSTL's, else the
+    node's, else the frequency's); `imf_1` … `imf_<max_imf>` fixed by the option, whatever the data hold; `transformed` only
+    with a transform."""
+    def names(params, inputs=()):
+        return [n for n, _ in catalog.output_columns("decomposition", params, list(inputs))[0]]
+
+    assert names({"method": "mstl", "periods": [365, 7], "frequency": "day"}) == [
+        "time", "observed", "filled", "trend", "seasonal_7", "seasonal_365", "remainder", "deseasonalized"]
+    assert names({"frequency": "month", "transform": "log"}) == [
+        "time", "observed", "transformed", "filled", "trend", "seasonal_12", "remainder", "deseasonalized"]
+    assert names({"frequency": "year", "period": 4, "transform": "box_cox"})[4:6] == ["trend", "seasonal_4"]
+    assert "seasonal_7" in names({"frequency": "day"}) and "seasonal_24" in names({"frequency": "hour"})
+    assert names({"frequency": "year"}) == ["time", "observed", "filled", "trend", "remainder", "deseasonalized"]  # no season of its own
+    assert names({"method": "emd"}) == ["time", "observed", "filled", *(f"imf_{i}" for i in range(1, 11)), "residue"]
+    assert names({"method": "emd", "max_imf": 3, "transform": "log"}) == ["time", "observed", "transformed", "filled", "imf_1", "imf_2",
+                                                                         "imf_3", "residue"]
+    # periods are whole numbers, increasing, each once; a period of an STL is the node's own
+    assert names({"method": "mstl", "periods": [30, 7, 30.0, 12.5]}) == names({"method": "mstl", "periods": [7, 30]})
+    assert [n for n in names({"method": "classical", "period": 5, "periods": [9]}) if n.startswith("seasonal_")] == ["seasonal_5"]
+    cols, unknown = catalog.output_columns("decomposition", {"time": "day", "method": "mstl", "periods": [7]}, [("day", "Int64")])
+    assert unknown == [] and dict(cols) == {"time": "Int64", "observed": "Float64", "filled": "Boolean", "trend": "Float64",
+                                           "seasonal_7": "Float64", "remainder": "Float64", "deseasonalized": "Float64"}
+    for own in ("Int64", "Int32", "Date", "Datetime(time_unit='ns', time_zone='UTC')", "Datetime(time_unit='us', time_zone=None)"):
+        cols, _ = catalog.output_columns("decomposition", {"time": "day"}, [("day", own), ("other", "Float64")])
+        assert dict(cols)["time"] == own and "other" not in dict(cols), own  # the input's own type, no Int32 rule
+    assert dict(catalog.output_columns("decomposition", {"time": "gone"}, [("day", "Int64")])[0])["time"] == "Unknown"
+    assert catalog.output_columns("decomposition", {"output": "results"}, [])[0] == list(catalog.OUTPUT_TYPES["results"].items())
+    assert catalog.output_type("components", "seasonal_365") == "Float64" and catalog.output_type("components", "imf_10") == "Float64"
+    assert catalog.output_type("components", "seasonal_") is None and catalog.output_type("components", "time") == "=time"
 
 
 def test_output_type_reads_a_name_through_its_pattern():

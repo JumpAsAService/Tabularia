@@ -29,7 +29,12 @@ func TestTheSystemLibrariesAGroupsCardShows(t *testing.T) {
 	if got := say(g.SystemLibraries(&old)); got != `[{"package":"libgsl-dev","name":"GSL"}]` {
 		t.Errorf("an old lock: %s", got)
 	}
-	for _, other := range []string{"regression", "survival", "timeseries", "boosting"} {
+	// the time series group's Rlibeemd links GSL too: the card shows the library there
+	ts, _ := Get("timeseries")
+	if got := say(ts.SystemLibraries(&lock)); got != `[{"package":"libgsl-dev","name":"GSL","version":"2.9.9","package_version":"2.9.9+test-1"}]` {
+		t.Errorf("timeseries: %s", got)
+	}
+	for _, other := range []string{"regression", "survival", "boosting", "experiments"} {
 		g, ok := Get(other)
 		if !ok {
 			continue

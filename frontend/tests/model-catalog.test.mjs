@@ -62,7 +62,7 @@ const ARIMA = m.modelOf('arima')
 test('the catalogue the editor reads is the engine\'s snapshot, byte for byte', () => {
   assert.equal(read('../assets/model-catalog.json'), read('../../backend/app/engine/models/catalog.json'),
     'run python3 .github/scripts/model_catalog.py')
-  assert.deepEqual(m.MODEL_CATALOG.models.map((x) => x.id), ['linear', 'logistic', 'kaplan_meier', 'cox', 'parametric_survival', 'arima', 'xgboost', 'catboost', 'clv', 'bg_bb', 'ab_test', 'ab_plan'])
+  assert.deepEqual(m.MODEL_CATALOG.models.map((x) => x.id), ['linear', 'logistic', 'kaplan_meier', 'cox', 'parametric_survival', 'arima', 'decomposition', 'xgboost', 'catboost', 'clv', 'bg_bb', 'ab_test', 'ab_plan'])
   assert.deepEqual(m.MODEL_CATALOG.groups.map((g) => g.id), ['regression', 'survival', 'timeseries', 'boosting', 'customer_lifetime', 'experiments'])
 })
 
@@ -100,7 +100,9 @@ test('the fields of a model in the catalogue\'s order, what it needs first', () 
   assert.equal(m.modelFields(ARIMA).find((f) => f.key === 'time').types.length, 3)
 })
 
-const WORDED = m.MODEL_CATALOG
+// The nodes the palette leaves out until their lots give them a form and words (`NOT_IN_THE_PALETTE_YET`): the decomposition
+// (docs/specs/ts-decomposition.md, lot D5). Their words are not asked for until then (the group's are). D5 takes this away.
+const WORDED = { ...m.MODEL_CATALOG, models: m.MODEL_CATALOG.models.filter((x) => x.id !== 'decomposition') }
 
 test('every model, group, preset, field, choice and reason has its words in the five languages', () => {
   const wanted = m.modelWordKeys(WORDED)
@@ -1210,6 +1212,30 @@ test('a model just dropped already says its columns; a type read from a column n
   // a probability per class: named only by the Run
   const xgb = m.modelOf('xgboost')
   assert.deepEqual(m.modelOutputColumns(xgb, { task: 'multiclass', output: 'rows' }, []).later, ['pred_prob_*'])
+})
+
+test('the decomposition says its columns before a run: a seasonal column per period, a fixed count of IMFs, the time as it is', () => {
+  const dec = m.modelOf('decomposition')
+  const names = (params, input = []) => m.modelOutputColumns(dec, params, input).columns.map((c) => c.name)
+  assert.deepEqual(names({ method: 'mstl', periods: [365, 7], frequency: 'day' }),
+    ['time', 'observed', 'filled', 'trend', 'seasonal_7', 'seasonal_365', 'remainder', 'deseasonalized'])
+  assert.deepEqual(names({ frequency: 'month', transform: 'log' }),
+    ['time', 'observed', 'transformed', 'filled', 'trend', 'seasonal_12', 'remainder', 'deseasonalized'])
+  assert.deepEqual(names({ frequency: 'year', period: 4 }).slice(3, 5), ['trend', 'seasonal_4'])
+  assert.deepEqual(names({ frequency: 'year' }), ['time', 'observed', 'filled', 'trend', 'remainder', 'deseasonalized'])
+  assert.deepEqual(names({ method: 'emd' }), ['time', 'observed', 'filled', ...Array.from({ length: 10 }, (_, i) => `imf_${i + 1}`), 'residue'])
+  assert.deepEqual(names({ method: 'emd', max_imf: 3, transform: 'log' }), ['time', 'observed', 'transformed', 'filled', 'imf_1', 'imf_2', 'imf_3', 'residue'])
+  assert.deepEqual(names({ method: 'mstl', periods: [30, 7, 30, 12.5] }), names({ method: 'mstl', periods: [7, 30] }))
+  // the time keeps the input's own type: no Int32 rule
+  for (const own of ['Int64', 'Int32', 'Date', "Datetime(time_unit='ns', time_zone='UTC')"]) {
+    const { columns, later } = m.modelOutputColumns(dec, { time: 'day' }, [{ name: 'day', dtype: own }, { name: 'other', dtype: 'Float64' }])
+    assert.equal(columns[0].dtype, own)
+    assert.ok(!columns.some((c) => c.name === 'other') && later.length === 0)
+  }
+  assert.equal(m.modelOutputColumns(dec, { time: 'gone' }, [{ name: 'day', dtype: 'Int64' }]).columns[0].dtype, 'Unknown')
+  // a model the palette does not show yet: lot D5 gives it a form
+  const palette = m.modelPalette(m.MODEL_CATALOG.groups, '', (k) => k)
+  assert.ok(!palette.flatMap((g) => g.items).some((i) => i.model === 'decomposition'))
 })
 
 test('the steps after a model that only keep, drop, order, rename, cast or filter say their columns; the others do not', () => {

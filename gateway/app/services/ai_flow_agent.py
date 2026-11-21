@@ -612,15 +612,46 @@ def operation_of(node: dict) -> Optional[str]:
 # As the engine's catalogue says it (backend/app/engine/models/catalog.py `output_columns`) and the
 # editor shows it (frontend/composables/modelCatalog.ts `modelOutputColumns`), on the same cases
 # (backend/tests/fixtures/models/output_columns.json, what the runners really write).
-_ROWS_WILDCARDS = {"pred_quantile_": "quantiles", "pred_surv_at_": "times"}
+def _number_label(v: float) -> str:
+    return str(int(v)) if float(v).is_integer() and abs(v) < 1e15 else repr(float(v))
+
+
+def _labels_of(key: str):
+    def labels(full: dict) -> list[str]:
+        # a quantile of 0.5 is the median, `pred_median`: no pred_quantile_0.5
+        return [_number_label(v) for v in sorted({float(x) for x in full.get(key) or [] if _is_number(x)})
+                if not (key == "quantiles" and v == 0.5)]
+
+    return labels
+
+
+def _seasonal_labels(full: dict) -> list[str]:
+    """`seasonal_<period>` of a decomposition: an MSTL's periods, else the node's period, else the frequency's own;
+    whole numbers above 1, increasing, each once."""
+    if full.get("method") == "mstl":
+        given = full.get("periods") or []
+    elif full.get("period") is not None:
+        given = [full["period"]]
+    else:
+        given = [MODEL_CATALOG["season_of_frequency"].get(full.get("frequency"), 1)]
+    return [str(int(v)) for v in sorted({float(x) for x in given if _is_number(x) and float(x) == int(x) and float(x) > 1})]
+
+
+def _imf_labels(full: dict) -> list[str]:
+    """`imf_1` … `imf_<max_imf>`: fixed by the option, not by the data."""
+    n = full.get("max_imf")
+    n = int(n) if _is_number(n) and float(n) == int(n) else 10
+    return [str(i) for i in range(1, min(max(n, 0), MODEL_CATALOG["limits"]["max_imfs"]) + 1)]
+
+
+# the names with a `*` that the node's options fill: the prefix and the function that gives its labels (the other
+# names with a `*`, «pred_prob_*», one per class, are the data's)
+_ROWS_WILDCARDS = {"pred_quantile_": _labels_of("quantiles"), "pred_surv_at_": _labels_of("times"),
+                   "seasonal_": _seasonal_labels, "imf_": _imf_labels}
 _CAST_TYPES = {"int": "Int64", "int64": "Int64", "int32": "Int32", "float": "Float64", "float64": "Float64",
                "float32": "Float32", "str": "String", "string": "String", "utf8": "String", "bool": "Boolean",
                "boolean": "Boolean", "date": "Date", "datetime": "Datetime(time_unit='us', time_zone=None)"}
 _WHOLE = re.compile(r"^U?Int")
-
-
-def _number_label(v: float) -> str:
-    return str(int(v)) if float(v).is_integer() and abs(v) < 1e15 else repr(float(v))
 
 
 def model_output_columns(model_id: str, params: Optional[dict],
@@ -652,15 +683,12 @@ def model_output_columns(model_id: str, params: Optional[dict],
         while i + len(group) < len(names) and "*" in names[i + len(group)] and names[i + len(group)].partition("*")[0] == pre:
             group.append(names[i + len(group)])
         i += len(group)
-        key = _ROWS_WILDCARDS.get(pre)
-        if key is None:
+        labels = _ROWS_WILDCARDS.get(pre)
+        if labels is None:
             later.extend(group)
             continue
-        values = sorted({float(v) for v in (full.get(key) or []) if _is_number(v)})
-        for v in values:
-            if key == "quantiles" and v == 0.5:  # the median: pred_median
-                continue
-            made.extend((pattern.replace("*", _number_label(v), 1), pattern) for pattern in group)
+        for label in labels(full):
+            made.extend((pattern.replace("*", label, 1), pattern) for pattern in group)
     known = {c["name"]: c.get("dtype") or "" for c in input_columns or []}
     out = []
     for name, pattern in made:

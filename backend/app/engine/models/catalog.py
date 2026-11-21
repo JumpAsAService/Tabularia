@@ -93,13 +93,18 @@ LIMITS: dict[str, int] = {
     "max_secondary_metrics": 10, # secondary metrics of an A/B node
     "posterior_points": 200,     # points of a posterior density
     "power_points": 50,          # points of a power curve
+    # the decomposition node's (docs/specs/ts-decomposition.md, «Performance and limits»)
+    "max_period": 10_000,        # a seasonal period, in steps (hourly data with a yearly cycle is 8,766)
+    "max_periods": 4,            # seasonal periods of one MSTL decomposition
+    "max_imfs": 16,              # IMFs of an EMD (log2 of 200,000 rows is about 17.6)
+    "max_lb_lags": 1000,         # lag of the Ljung–Box test, and lags of the remainder's ACF chart
 }
 
 # ── groups: one image each, built when an administrator enables it ─────────
 GROUPS: dict[str, dict[str, Any]] = {
     "regression": {"language": "r", "label": "models.groups.regression", "models": ["linear", "logistic"]},
     "survival": {"language": "r", "label": "models.groups.survival", "models": ["kaplan_meier", "cox", "parametric_survival"]},
-    "timeseries": {"language": "r", "label": "models.groups.timeseries", "models": ["arima"]},
+    "timeseries": {"language": "r", "label": "models.groups.timeseries", "models": ["arima", "decomposition"]},
     "boosting": {"language": "python", "label": "models.groups.boosting", "models": ["xgboost", "catboost"]},
     "customer_lifetime": {"language": "r", "label": "models.groups.customer_lifetime", "models": ["clv", "bg_bb"]},
     "experiments": {"language": "r", "label": "models.groups.experiments", "models": ["ab_test", "ab_plan"]},
@@ -234,6 +239,23 @@ KINDS: dict[str, dict[str, Any]] = {
     "units_per_variant": _int(2, 1_000_000_000),
     "output_variants": _choice("results", "variants"),
     "output_plan": _choice("results", "plan"),
+    # the decomposition node's (docs/specs/ts-decomposition.md, «The form»)
+    "decomposition_method": _choice("stl", "classical", "mstl", "emd"),
+    "decomposition_type": _choice("additive", "multiplicative"),
+    "period": _int(2, LIMITS["max_period"]),
+    "periods": {"control": "numbers", "min": 2, "max": LIMITS["max_period"], "max_count": LIMITS["max_periods"]},
+    "s_window": {"control": "number_or_choice", "choices": ["periodic"], "min": 7},
+    "s_windows": {"control": "numbers", "min": 7, "max_count": LIMITS["max_periods"]},
+    "t_window": {"control": "number_or_choice", "choices": ["auto"], "min": 3},
+    "mstl_iterate": _int(1, 5),
+    "max_imf": _int(1, LIMITS["max_imfs"]),
+    "s_number": _int(0, 20),
+    "max_siftings": _int(1, 1000),
+    "noise_imfs": _int(0, LIMITS["max_imfs"]),
+    "missing_values": _choice("refuse", "linear", "seasonal"),
+    "seasonality_test": _choice("friedman", "kruskal_wallis", "none"),
+    "lb_lag": {"control": "number_or_choice", "choices": ["auto"], "min": 1, "max": LIMITS["max_lb_lags"]},
+    "output_components": _choice("components", "results"),
 }
 
 # The seasonal period a frequency implies when `s` is not given.
@@ -272,6 +294,9 @@ SECTION_SHAPES: dict[str, dict[str, Any]] = {
     "secondary": {"level": "required", "level_2": "required", "indexed": False},
     "plan": {"level": "required", "level_2": "null", "indexed": False},
     "reading": {"level": "required", "level_2": "optional", "indexed": False},
+    # the decomposition node's: a seasonal period; an intrinsic mode function (or the residue)
+    "season": {"level": "required", "level_2": "null", "indexed": False},
+    "imf": {"level": "required", "level_2": "null", "indexed": False},
 }
 
 VERDICTS = ("ok", "doubtful", "failed", "not_computed")
@@ -560,6 +585,9 @@ MODELS: dict[str, dict[str, Any]] = {
     "arima": {
         "group": "timeseries",
         "family": "timeseries",
+        # its own limit of input rows, below the group's (200,000): auto.arima's cost, not the series' (decided 2026-11-21);
+        # the gateway checks it before the Job with the group's sentence, the smaller of the two winning
+        "max_rows": 20_000,
         "needs": {"time": "time_column", "value": "number_column", "frequency": "frequency"},
         "takes": {
             "s": "season", "orders": "orders",
@@ -655,6 +683,101 @@ _SHARED_DECLARATIONS = {
 for _variant in MODELS["arima"]["variants"]:
     for _field in ("sections", "charts", "outputs"):
         _variant[_field] = _SHARED_DECLARATIONS[(_field, _variant[_field])]
+
+# ── the decomposition node (docs/specs/ts-decomposition.md, «The node `decomposition`») ──────────────────────
+# One node, four variants keyed on `method`, because what the runner writes differs: STL, the classical moving
+# average and MSTL give a trend, a seasonal column per period and a remainder; EMD gives intrinsic mode functions
+# and a residue. It makes no model: `card: false`, so nothing is registered or predicted, and MLflow logs the run.
+_DEC_METHODS = ["stl", "classical", "mstl", "emd"]
+_DEC_CHECKS = ["seasonality", "ljung_box", "adf", "kpss", "trend_strength", "seasonal_strength", "largest_acf"]
+_DEC_EMD_CHECKS = ["imf_condition", "residue_monotonic", "orthogonality"]
+_DEC_ASSUMPTION = {"levels": None, "numbers": [*_ASSUMPTION["numbers"], "lag"], "texts": [*_ASSUMPTION["texts"], "advice_id"]}
+_DEC_MODEL_TEXTS = [*_MODEL_TEXTS, "method", "frequency", "transform", "time_kind", "missing", "seasonality_test", "periods"]
+_DEC_MODEL_NUMBERS = ["n", "n_missing", "n_filled", "first", "last", "alpha", "box_cox_lambda", "lb_lag_used"]
+_DEC_READING_BLOCKS = ["summary", "strength", "seasonality", "season", "remainder", "stationarity", "imfs", "method", "formulas"]
+# the columns the next step receives (output `components`): the time keeps the input's own type
+_DEC_SEASONAL_OUTPUT = ["time", "observed", "transformed", "filled", "trend", "seasonal_*", "remainder", "deseasonalized"]
+_DEC_EMD_OUTPUT = ["time", "observed", "transformed", "filled", "imf_*", "residue"]
+_DEC_ROWS_WHEN = {"transformed": {"transform": ["log", "box_cox"]}}
+
+
+def _dec_variant(method: str) -> dict[str, Any]:
+    """`stl`, `classical`, `mstl` or `emd` of the decomposition node: what the runner may write."""
+    emd = method == "emd"
+    own_texts = {"classical": ["type"], "emd": ["boundary"]}.get(method, [])
+    own_numbers = {"stl": ["t_window_used"], "mstl": ["t_window_used", "iterate"],
+                   "emd": ["max_imf", "n_imfs", "s_number", "max_siftings", "noise_imfs"]}.get(method, [])
+    checks = [*_DEC_CHECKS, *(_DEC_EMD_CHECKS if emd else []), *(["robust_weights"] if method in ("stl", "mstl") else [])]
+    sections: dict[str, Any] = {
+        "model": {"levels": None, "texts": [*_DEC_MODEL_TEXTS, *own_texts], "numbers": [*_DEC_MODEL_NUMBERS, *own_numbers]},
+        # the seasonal period's shape and, with the calendar's names, its peak and trough
+        "season": {"levels": None, "texts": ["position_kind", "peak_label", "trough_label"],
+                   "numbers": ["s_window_used", "cycles", "amplitude", "peak_position", "peak_value", "trough_position",
+                               "trough_value"]},
+        **({"imf": {"levels": None, "texts": [],
+                    "numbers": ["mean_period", "mean_period_time", "variance_share", "energy_share", "extrema",
+                                "zero_crossings"]}} if emd else {}),
+        "assumption": {**_DEC_ASSUMPTION, "levels": checks},
+        "curve": _chart(*(["imfs"] if emd else ["components", "adjusted"]), "subseries", stats=["y", "mean", "low", "high"]),
+        "point": _chart("remainder", stats=["y"]),
+        "lag": _chart("resid_acf", stats=["acf", "bound"]),
+        "hist": _chart("remainder", stats=["count"]),
+        "reading": {"levels": [b for b in _DEC_READING_BLOCKS if emd or b != "imfs"], "numbers": [], "texts": ["line_*"]},
+    }
+    charts = [*([{"id": "imfs", "under": None}] if emd else [{"id": "components", "under": None}, {"id": "adjusted", "under": None}]),
+              {"id": "subseries", "under": "seasonality"}, {"id": "resid_acf", "under": "ljung_box"},
+              {"id": "remainder", "under": "adf"}]
+    return {"id": method, "when": {"method": [method]}, "sections": sections, "charts": charts,
+            "outputs": {"components": list(_DEC_EMD_OUTPUT if emd else _DEC_SEASONAL_OUTPUT)}, "rows_when": dict(_DEC_ROWS_WHEN)}
+
+
+MODELS["decomposition"] = {
+    "group": "timeseries",
+    "family": "timeseries",
+    "card": False,
+    "needs": {"time": "time_column", "value": "number_column", "frequency": "frequency"},
+    "takes": {
+        "method": "decomposition_method", "period": "period", "periods": "periods", "type": "decomposition_type",
+        "robust": "boolean", "s_window": "s_window", "s_windows": "s_windows", "t_window": "t_window",
+        "iterate": "mstl_iterate", "max_imf": "max_imf", "s_number": "s_number", "max_siftings": "max_siftings",
+        "noise_imfs": "noise_imfs", "transform": "transform", "box_cox_lambda": "box_cox_lambda",
+        "missing": "missing_values", "seasonality_test": "seasonality_test", "lb_lag": "lb_lag", "alpha": "alpha",
+        "output": "output_components",
+    },
+    "defaults": {
+        "method": "stl", "period": None, "periods": [], "type": "additive", "robust": False, "s_window": 11.0,
+        "s_windows": [], "t_window": "auto", "iterate": 2, "max_imf": 10, "s_number": 4, "max_siftings": 50,
+        "noise_imfs": 0, "transform": "none", "box_cox_lambda": "auto", "missing": "refuse",
+        "seasonality_test": "friedman", "lb_lag": "auto", "alpha": 0.05, "output": "components",
+    },
+    "applies": {
+        "period": {"method": ["stl", "classical", "emd"]},
+        "periods": {"method": ["mstl"]},
+        "type": {"method": ["classical"]},
+        "robust": {"method": ["stl", "mstl"]},
+        "s_window": {"method": ["stl"]},
+        "s_windows": {"method": ["mstl"]},
+        "t_window": {"method": ["stl", "mstl"]},
+        "iterate": {"method": ["mstl"]},
+        **{k: {"method": ["emd"]} for k in ("max_imf", "s_number", "max_siftings", "noise_imfs")},
+        "box_cox_lambda": {"transform": ["box_cox"]},
+    },
+    "requires": [
+        {"key": "period", "when": {"frequency": ["year", "index"], "method": ["stl", "classical"]}, "reason": "period_needed",
+         "message": "a yearly or index series has no season of its own: give the period, in steps ('period')"},
+        {"key": "periods", "when": {"method": "mstl"}, "reason": "periods_needed",
+         "message": "an MSTL decomposition needs its seasonal periods, in steps ('periods')"},
+    ],
+    "forbids": [
+        # a multiplicative decomposition already works in ratios
+        *({"key": "transform", "value": t, "when": {"method": "classical", "type": "multiplicative"},
+           "reason": "multiplicative_transform",
+           "message": "a multiplicative decomposition already works in ratios: choose no transform, or an additive decomposition of the log"}
+          for t in ("log", "box_cox")),
+    ],
+    "disjoint": ["time", "value"],
+    "variants": [_dec_variant(m) for m in _DEC_METHODS],
+}
 
 # ── parametric survival (docs: «The node «Parametric survival»») ────────────
 # One node, four variants keyed on `distribution`, because what the runner writes differs: the
@@ -1262,7 +1385,7 @@ PREDICT: dict[str, Any] = {
 # per class of the data, known only after a run). «@<key>»: the type of the input's column the
 # key names, a whole number written as Int32 (ARIMA's time: what the series' time column is).
 # «=<key>»: the exact type of the input's column the key names, whatever it is (the experiments'
-# variant: an Int64 stays Int64, a date a date).
+# variant: an Int64 stays Int64, a date a date; the decomposition's time).
 # `results` is the statistics' ten columns. What the runners really write is in
 # backend/tests/fixtures/models/output_columns.json, made by running them, and the engine's
 # test checks these types against it.
@@ -1296,6 +1419,11 @@ OUTPUT_TYPES: dict[str, dict[str, str]] = {
     "plan": {**{name: "Float64" for name in (
         "lift", "mde_absolute", "n_per_variant", "n_control", "n_total", "days", "weeks", "n_per_variant_cuped", "days_cuped")},
         "asked": "Boolean"},
+    # the decomposition's: one row per instant of the series (docs/specs/ts-decomposition.md, «The output»). The time keeps the
+    # input column's own type; `seasonal_*` is one column per seasonal period, `imf_*` one per IMF up to `max_imf`
+    "components": {"time": "=time", **{name: "Float64" for name in (
+        "observed", "transformed", "trend", "seasonal_*", "remainder", "deseasonalized", "imf_*", "residue")},
+        "filled": "Boolean"},
 }
 
 # How a runner writes the input's own columns back in the rows output, by their kind, where the type
@@ -1586,14 +1714,45 @@ def _check_columns(model: str, spec: Mapping[str, Any], kinds: Mapping[str, str]
             raise refusal(model, f"the input already has a column «{clash[0]}», which the model's rows add: rename it first")
 
 
-# The rows output's names with a `*` that the node's own numbers fill, as the runner writes them
-# (`km_time_label`: a whole number without decimals, else its shortest form). Others (`pred_prob_*`:
-# one per class of the data) are not known here, and stay as they are.
-_ROWS_WILDCARDS = {"pred_quantile_": "quantiles", "pred_surv_at_": "times"}
-
-
+# The names with a `*` that the node's own options fill, as the runner writes them: the key is the prefix, the value
+# a function of the node's parameters that gives the labels (a name with a `*` the data fill, `pred_prob_*`, has none
+# here: it stays as it is). `pred_quantile_`, `pred_surv_at_`: one per number of a list (`km_time_label`: a whole number
+# without decimals, else its shortest form), increasing, each once; `seasonal_`: one per seasonal period; `imf_`: one
+# per IMF the node extracts at most.
 def _number_label(t: float) -> str:
     return str(int(t)) if float(t).is_integer() and abs(t) < 1e15 else repr(float(t))
+
+
+def _labels_of(key: str):
+    def labels(full: Mapping[str, Any]) -> list[str]:
+        # a quantile of 0.5 is the median, `pred_median`: the runner writes no pred_quantile_0.5 (ps_quantiles)
+        return [_number_label(v) for v in sorted({float(x) for x in full.get(key) or [] if _is_number(x)})
+                if not (key == "quantiles" and v == 0.5)]
+
+    return labels
+
+
+def _seasonal_labels(full: Mapping[str, Any]) -> list[str]:
+    """The seasonal periods of a decomposition, as the runner names its columns (`seasonal_7`): the periods of an MSTL, else
+    the node's period, else the frequency's own; whole numbers, increasing, each once."""
+    if full.get("method") == "mstl":
+        given = full.get("periods") or []
+    elif full.get("period") is not None:
+        given = [full["period"]]
+    else:
+        given = [SEASON_OF_FREQUENCY.get(full.get("frequency"), 1)]
+    return [str(int(v)) for v in sorted({float(x) for x in given if _is_number(x) and float(x) == int(x) and float(x) > 1})]
+
+
+def _imf_labels(full: Mapping[str, Any]) -> list[str]:
+    """`imf_1` … `imf_<max_imf>`: the names are fixed by the option, not by the data (docs/specs/ts-decomposition.md)."""
+    n = full.get("max_imf")
+    n = int(n) if _is_number(n) and float(n) == int(n) else MODELS["decomposition"]["defaults"]["max_imf"]
+    return [str(i) for i in range(1, min(max(n, 0), LIMITS["max_imfs"]) + 1)]
+
+
+_ROWS_WILDCARDS = {"pred_quantile_": _labels_of("quantiles"), "pred_surv_at_": _labels_of("times"),
+                   "seasonal_": _seasonal_labels, "imf_": _imf_labels}
 
 
 def _rows_columns(names: list[str], full: Mapping[str, Any], when: Mapping[str, Mapping[str, Any]] | None = None) -> list[str]:
@@ -1606,12 +1765,11 @@ def _rows_columns(names: list[str], full: Mapping[str, Any], when: Mapping[str, 
         if rule and not all(_holds(r, full.get(k)) for k, r in rule.items()):
             continue
         pre, star, post = name.partition("*")
-        key = _ROWS_WILDCARDS.get(pre)
-        if not star or key is None:
+        labels = _ROWS_WILDCARDS.get(pre)
+        if not star or labels is None:
             out.append(name)
         else:
-            # a quantile of 0.5 is the median, `pred_median`: the runner writes no pred_quantile_0.5 (ps_quantiles)
-            out.extend(f"{pre}{_number_label(v)}{post}" for v in (full.get(key) or []) if not (key == "quantiles" and v == 0.5))
+            out.extend(f"{pre}{label}{post}" for label in labels(full))
     return out
 
 
@@ -1682,15 +1840,12 @@ def output_columns(model: str, params: Mapping[str, Any] | None,
                 and names[i + len(group)].partition("*")[1]:
             group.append(names[i + len(group)])
         i += len(group)
-        key = _ROWS_WILDCARDS.get(pre)
-        if key is None:
+        labels = _ROWS_WILDCARDS.get(pre)
+        if labels is None:
             unknown.extend(group)
             continue
         # in increasing order, each once: as the check hands them to the runner
-        for v in sorted({float(x) for x in full.get(key) or [] if _is_number(x)}):
-            if key == "quantiles" and v == 0.5:  # the median: pred_median, no pred_quantile_0.5
-                continue
-            label = _number_label(v)
+        for label in labels(full):
             cols.extend((pattern.replace("*", label, 1), pattern) for pattern in group)
     out: list[tuple[str, str]] = []
     for name, pattern in cols:
@@ -1760,6 +1915,7 @@ def snapshot() -> dict[str, Any]:
                 "family": spec["family"],
                 "label": f"models.{m}.name",
                 "card": spec.get("card", True),
+                "max_rows": spec.get("max_rows"),
                 "needs": spec["needs"],
                 "takes": spec["takes"],
                 "defaults": spec["defaults"],

@@ -19,6 +19,7 @@ from typing import Any
 
 from app.engine.models import catalog
 from app.engine.stats.output import OUTPUT_NAMES
+from tests import models_fixtures_decomposition as decomposition
 from tests import models_fixtures_experiments as experiments
 
 HERE = Path(__file__).resolve().parent / "fixtures" / "models"
@@ -64,6 +65,8 @@ PARAMS: dict[tuple[str, str], dict[str, Any]] = {
     # the experiments group: one imaginary experiment of three variants (A the control), a table per metric type
     # (tests/models_fixtures_experiments.py)
     **experiments.PARAMS,
+    # the decomposition node: one imaginary series a variant (tests/models_fixtures_decomposition.py)
+    **decomposition.PARAMS,
 }
 
 # Fixtures that are a runner's real output (`from_results`): main() leaves them alone.
@@ -145,6 +148,10 @@ def build(model: str, variant: str) -> dict[str, Any]:
     if model in ("ab_test", "ab_plan"):
         made = experiments.build(model, variant, params, spec, checked)
         return {**made, "fixture": "placeholder numbers: one imaginary experiment, the spec's formulas on its sufficient statistics",
+                "columns": list(OUTPUT_NAMES), "rows": made["rows"]}
+    if model == "decomposition":
+        made = decomposition.build(model, variant, params, spec, checked)
+        return {**made, "fixture": "placeholder numbers: one imaginary series, the spec's formulas on its components",
                 "columns": list(OUTPUT_NAMES), "rows": made["rows"]}
     t = Table()
     sections = spec["sections"]

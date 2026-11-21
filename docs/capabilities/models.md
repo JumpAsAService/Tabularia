@@ -81,7 +81,7 @@ next run, without building again.
 | CPU (limit) | regression 2, survival 2, time series 1, boosting 2, customer lifetime 2 | The Job asks for half and may use up to this |
 | Memory (limit) | 4 GiB, 4 GiB, 2 GiB, 4 GiB, 2 GiB | At least 256 MiB; the Job asks for half. A Job over it is stopped by the cluster and the step says so |
 | Longest run | 30 minutes (boosting 60) | 1 to 1,440 minutes. A node's own timeout (900 seconds unless you change it) must be within it |
-| Most input rows | 2,000,000 (regression), 1,000,000 (survival), 20,000 (time series), 1,000,000 (boosting), 1,000,000 (customer lifetime) | 1 to 1,000,000,000. Empty follows the recipe's number |
+| Most input rows | 2,000,000 (regression), 1,000,000 (survival), 200,000 (time series; ARIMA stops at 20,000 whatever the group allows), 1,000,000 (boosting), 1,000,000 (customer lifetime) | 1 to 1,000,000,000. Empty follows the recipe's number |
 
 **Who may use it:** *everyone who can edit flows* (the default), or only the user groups you
 tick. Administrators always can. With a list and none ticked, only administrators.
@@ -897,6 +897,17 @@ Length of an opportunity *Months*, Opportunities ahead 12. These customers buy a
 in continuous time, so for them *Customer lifetime value* is the natural choice; BG/BB is for data that
 really come in occasions.
 
+### Decomposition (R): being built
+
+Model id in the catalogue: `decomposition`, in the group *Time series* beside ARIMA. It will split a series
+(orders per day, kilowatt-hours per hour) into a trend, one or more seasonal patterns and a remainder by STL, the
+classical moving average, MSTL (several seasonal periods) or EMD (the oscillations the data themselves contain), and
+say in words how strong each part is and whether a test supports each season. The node makes no model: no model card,
+no registration as a model, no Predict; a flow run logs to MLflow like any other. Its output is the decomposed series,
+one row per instant, with the columns the editor shows before the run (`seasonal_7`, `seasonal_365`, `imf_1` …).
+In this version the node does not run yet: it stops with «… is not built yet in this version of Tabularia». This
+section will describe it when it does.
+
 ### A/B tests (R): being built
 
 Model ids in the catalogue: `ab_test` and `ab_plan`. A group of two nodes, **A/B test** and **A/B test
@@ -1206,7 +1217,7 @@ and needs its connection and version chosen first.
 
 | Limit | Value |
 |---|---|
-| Input rows | The group's: 2,000,000, 1,000,000, 20,000, 1,000,000 or 1,000,000 unless an administrator changed it. Beyond it the step fails before the Job, with «the model would read 3,400,000 rows; the group allows 2,000,000: filter or sample before the node» |
+| Input rows | The group's: 2,000,000, 1,000,000, 200,000, 1,000,000 or 1,000,000 unless an administrator changed it (ARIMA, whatever the group allows: 20,000). Beyond it the step fails before the Job, with «the model would read 3,400,000 rows; the group allows 2,000,000: filter or sample before the node» |
 | Terms of the design, after encoding categories | 200 |
 | Levels of a categorical predictor | 50 |
 | Strata (Kaplan–Meier, Cox, parametric survival) | 20 |

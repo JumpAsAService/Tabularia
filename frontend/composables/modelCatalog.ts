@@ -760,8 +760,9 @@ export const modelPresetHintKey = (preset: string): string => `models.presets.${
 export const modelGroupKey = (group: string): string => `models.groups.${group}`
 
 // Models whose form and words the editor has, but whose runners refuse «not built yet» (lots E2 and E5 of
-// docs/specs/ab-testing.md): the palette leaves them out. Lot E9 takes this away once they run.
-const NOT_IN_THE_PALETTE_YET = new Set(['ab_test', 'ab_plan'])
+// docs/specs/ab-testing.md): the palette leaves them out. Lot E9 takes this away once they run. The decomposition
+// (docs/specs/ts-decomposition.md) is in the catalogue and has no form nor words yet: lot D5 gives them and takes it away.
+const NOT_IN_THE_PALETTE_YET = new Set(['ab_test', 'ab_plan', 'decomposition'])
 
 /** The palette's Models group: the shown groups in the catalogue's order, each with its models
  *  and, after ARIMA, the six presets of that same node. With a search, only the items whose
@@ -897,6 +898,29 @@ export function predictColumns(modelId: string | null | undefined, params: Param
   return out
 }
 
+/** The labels a name with a `*` is made of, as the engine writes them (catalog.py `_ROWS_WILDCARDS`): `pred_quantile_`, `pred_surv_at_`
+ *  one per number of a list of the node's options (increasing, each once; the quantile 0.5 is the median: no column of its own;
+ *  a number as its shortest form, 12 and not 12.0); `seasonal_` one per seasonal period of a decomposition (an MSTL's `periods`,
+ *  else the node's `period`, else the frequency's own; whole numbers above 1); `imf_` one per IMF up to `max_imf`. null: a name
+ *  the data fill (`pred_prob_*`, one per class), not known before a run. */
+function wildcardLabels(prefix: string, full: Params, catalog: ModelCatalog): string[] | null {
+  const numbers = (key: string): number[] =>
+    Array.isArray(full[key]) ? [...new Set((full[key] as unknown[]).filter((v): v is number => typeof v === 'number' && Number.isFinite(v)))].sort((a, b) => a - b) : []
+  if (prefix === 'pred_quantile_') return numbers('quantiles').filter((v) => v !== 0.5).map(numberLabel)
+  if (prefix === 'pred_surv_at_') return numbers('times').map(numberLabel)
+  if (prefix === 'seasonal_') {
+    const frequency = typeof full.frequency === 'string' ? catalog.season_of_frequency[full.frequency] : undefined
+    const given = full.method === 'mstl' ? numbers('periods') : typeof full.period === 'number' ? [full.period] : [frequency ?? 1]
+    return [...new Set(given.filter((v) => Number.isInteger(v) && v > 1))].sort((a, b) => a - b).map(String)
+  }
+  if (prefix === 'imf_') {
+    const most = catalog.limits.max_imfs ?? 16
+    const n = typeof full.max_imf === 'number' && Number.isInteger(full.max_imf) ? full.max_imf : 10
+    return Array.from({ length: Math.max(0, Math.min(n, most)) }, (_, i) => String(i + 1))
+  }
+  return null
+}
+
 /** The columns a model node's `rows` output adds, as the engine lists them when it refuses an input that has one already:
  *  the variant's `outputs.rows`, the `*` of a quantile's or a time's name made one per number (the quantile 0.5 is the median:
  *  no column of its own; a number as its shortest form, 12 and not 12.0). The other names with a `*` stay out. */
@@ -908,16 +932,14 @@ export function modelRowsColumns(model: ModelDef, params: Params | null | undefi
     const rule = variant?.rows_when?.[name]
     return !rule || Object.entries(rule).every(([k, r]) => modelHolds(r, full[k]))
   })
-  const wildcards: Record<string, string> = { pred_quantile_: 'quantiles', pred_surv_at_: 'times' }
   const out: string[] = []
   for (const name of names) {
     const at = name.indexOf('*')
-    const key = at >= 0 ? wildcards[name.slice(0, at)] : undefined
-    if (at < 0) out.push(name)
-    else if (key) {
-      const list = Array.isArray(full[key]) ? (full[key] as number[]) : []
-      out.push(...list.filter((v) => !(key === 'quantiles' && v === 0.5)).map((v) => `${name.slice(0, at)}${v}${name.slice(at + 1)}`))
+    if (at < 0) {
+      out.push(name)
+      continue
     }
+    out.push(...(wildcardLabels(name.slice(0, at), full, catalog) ?? []).map((label) => `${name.slice(0, at)}${label}${name.slice(at + 1)}`))
   }
   return out
 }
@@ -950,7 +972,6 @@ export function modelOutputColumns(model: ModelDef, params: Params | null | unde
     const rule = variant?.rows_when?.[name]
     return !rule || Object.entries(rule).every(([k, r]) => modelHolds(r, full[k]))
   })
-  const wildcards: Record<string, string> = { pred_quantile_: 'quantiles', pred_surv_at_: 'times' }
   const made: { name: string; pattern: string }[] = []
   const later: string[] = []
   for (let i = 0; i < names.length;) {
@@ -967,15 +988,13 @@ export function modelOutputColumns(model: ModelDef, params: Params | null | unde
       group.push(names[i + group.length]!)
     }
     i += group.length
-    const key = wildcards[start]
-    if (!key) {
+    const labels = wildcardLabels(start, full, catalog)
+    if (!labels) {
       later.push(...group)
       continue
     }
-    const values = Array.isArray(full[key]) ? [...new Set((full[key] as unknown[]).filter((v): v is number => typeof v === 'number' && Number.isFinite(v)))].sort((a, b) => a - b) : []
-    for (const v of values) {
-      if (key === 'quantiles' && v === 0.5) continue // the median: pred_median, no pred_quantile_0.5
-      for (const pattern of group) made.push({ name: pattern.replace('*', numberLabel(v)), pattern })
+    for (const label of labels) {
+      for (const pattern of group) made.push({ name: pattern.replace('*', label), pattern })
     }
   }
   const inputs = new Map((input ?? []).map((c) => [c.name, c.dtype]))

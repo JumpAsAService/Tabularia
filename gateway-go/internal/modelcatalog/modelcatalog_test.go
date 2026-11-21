@@ -66,7 +66,7 @@ func TestTheSharedCases(t *testing.T) {
 }
 
 func TestGroupsModelsAndVariants(t *testing.T) {
-	if got := Models(); !reflect.DeepEqual(got, []string{"linear", "logistic", "kaplan_meier", "cox", "parametric_survival", "arima", "xgboost", "catboost", "clv", "bg_bb", "ab_test", "ab_plan"}) {
+	if got := Models(); !reflect.DeepEqual(got, []string{"linear", "logistic", "kaplan_meier", "cox", "parametric_survival", "arima", "decomposition", "xgboost", "catboost", "clv", "bg_bb", "ab_test", "ab_plan"}) {
 		t.Fatalf("models: %v", got)
 	}
 	groups := map[string]string{}
@@ -89,7 +89,8 @@ func TestGroupsModelsAndVariants(t *testing.T) {
 	if Limit("max_chart_points") != 2000 || Limit("max_terms") != 200 || Limit("max_cells") != 50_000_000 ||
 		Limit("max_quantiles") != 9 || Limit("min_customers") != 20 || Limit("min_repeaters") != 5 || Limit("max_opportunities") != 1000 ||
 		Limit("max_clv_steps") != 520 || Limit("max_top_customers") != 20 || Limit("palive_grid_frequency") != 10 || Limit("shap_cost_budget") != 20_000_000_000 || Limit("max_model_file_bytes") != 64<<20 ||
-		Limit("max_variants") != 20 || Limit("max_looks") != 1000 || Limit("max_secondary_metrics") != 10 || Limit("posterior_points") != 200 || Limit("power_points") != 50 {
+		Limit("max_variants") != 20 || Limit("max_looks") != 1000 || Limit("max_secondary_metrics") != 10 || Limit("posterior_points") != 200 || Limit("power_points") != 50 ||
+		Limit("max_period") != 10_000 || Limit("max_periods") != 4 || Limit("max_imfs") != 16 || Limit("max_lb_lags") != 1000 {
 		t.Error("limits")
 	}
 	cases := []struct {
@@ -361,7 +362,7 @@ func TestLevelNumbersAreReadAsTheEngineReadsThem(t *testing.T) {
 
 // card: false (the experiments' nodes) makes no model card: no registration, no Predict.
 func TestTheExperimentsNodesMakeNoCard(t *testing.T) {
-	for model, want := range map[string]bool{"ab_test": false, "ab_plan": false, "linear": true, "xgboost": true, "clv": true, "nope": false} {
+	for model, want := range map[string]bool{"ab_test": false, "ab_plan": false, "decomposition": false, "arima": true, "linear": true, "xgboost": true, "clv": true, "nope": false} {
 		if HasCard(model) != want {
 			t.Errorf("HasCard(%s) = %v", model, !want)
 		}
@@ -382,5 +383,56 @@ func TestTheExperimentsNodesMakeNoCard(t *testing.T) {
 	}
 	if v := VariantOf("ab_test", map[string]any{"metric_type": "binary"}); v == nil || v.ID != "binary" || len(v.Outputs["variants"]) != 27 {
 		t.Errorf("ab_test binary: %+v", v)
+	}
+}
+
+// A model may have a limit of input rows of its own below its group's: ARIMA's 20,000 (the cost of the automatic orders),
+// where the time series group allows 200,000 (docs/specs/ts-decomposition.md, «Performance and limits»).
+func TestARIMAKeepsALimitOfRowsOfItsOwn(t *testing.T) {
+	for model, want := range map[string]int64{"arima": 20_000, "decomposition": 0, "linear": 0, "nope": 0} {
+		if MaxRows(model) != want {
+			t.Errorf("MaxRows(%s) = %d, want %d", model, MaxRows(model), want)
+		}
+	}
+	if GroupOf("decomposition") != "timeseries" || GroupOf("arima") != "timeseries" {
+		t.Error("the decomposition is a node of the time series group")
+	}
+}
+
+// The decomposition's own options: the periods come back increasing, a period of 1 is no season, the rules between the
+// method and the keys that apply to it; the answers are the shared cases' (params_cases.json) word for word.
+func TestTheDecompositionNodeChecksItsOptions(t *testing.T) {
+	base := map[string]any{"time": "t", "value": "v", "frequency": "day"}
+	with := func(extra map[string]any) map[string]any {
+		out := map[string]any{}
+		for k, v := range base {
+			out[k] = v
+		}
+		for k, v := range extra {
+			out[k] = v
+		}
+		return out
+	}
+	got, err := Check("decomposition", with(map[string]any{"method": "mstl", "periods": []any{365.0, 7.0}}))
+	if err != nil || !reflect.DeepEqual(got["periods"], []any{7.0, 365.0}) && !reflect.DeepEqual(got["periods"], []float64{7, 365}) {
+		t.Fatalf("%v %v", got["periods"], err)
+	}
+	for params, want := range map[string]string{
+		"period 1":        "decomposition: 'period' must be a whole number from 2 to 10000",
+		"mstl no periods": "decomposition: an MSTL decomposition needs its seasonal periods, in steps ('periods')",
+		"max_imf on stl":  "decomposition: 'max_imf' only applies when method = emd",
+	} {
+		var in map[string]any
+		switch params {
+		case "period 1":
+			in = with(map[string]any{"period": 1.0})
+		case "mstl no periods":
+			in = with(map[string]any{"method": "mstl"})
+		default:
+			in = with(map[string]any{"max_imf": 3.0})
+		}
+		if _, err := Check("decomposition", in); err == nil || err.Error() != want {
+			t.Errorf("%s: %v", params, err)
+		}
 	}
 }

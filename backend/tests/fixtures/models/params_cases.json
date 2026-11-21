@@ -1168,7 +1168,7 @@
    "what": "a model that does not exist",
    "model": "survival_forest",
    "params": {},
-   "error": "there is no model 'survival_forest' (the models: linear, logistic, kaplan_meier, cox, parametric_survival, arima, xgboost, catboost, clv, bg_bb, ab_test, ab_plan)"
+   "error": "there is no model 'survival_forest' (the models: linear, logistic, kaplan_meier, cox, parametric_survival, arima, decomposition, xgboost, catboost, clv, bg_bb, ab_test, ab_plan)"
   },
   {
    "what": "the answer given back to the check: an empty exog is none, not an error",
@@ -3308,6 +3308,932 @@
     "covariate": "m"
    },
    "error": "ab_plan: the column «m» is both 'metric' and 'covariate': choose another"
+  },
+  {
+   "what": "the smallest decomposition: STL with its defaults",
+   "model": "decomposition",
+   "params": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month"
+   },
+   "checked": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "method": "stl",
+    "period": null,
+    "robust": false,
+    "s_window": 11.0,
+    "t_window": "auto",
+    "transform": "none",
+    "missing": "refuse",
+    "seasonality_test": "friedman",
+    "lb_lag": "auto",
+    "alpha": 0.05,
+    "output": "components"
+   }
+  },
+  {
+   "what": "a daily STL with a period, a robust fit and a periodic season",
+   "model": "decomposition",
+   "params": {
+    "time": "day",
+    "value": "orders",
+    "frequency": "day",
+    "period": 7,
+    "robust": true,
+    "s_window": "periodic"
+   },
+   "checked": {
+    "time": "day",
+    "value": "orders",
+    "frequency": "day",
+    "method": "stl",
+    "period": 7,
+    "robust": true,
+    "s_window": "periodic",
+    "t_window": "auto",
+    "transform": "none",
+    "missing": "refuse",
+    "seasonality_test": "friedman",
+    "lb_lag": "auto",
+    "alpha": 0.05,
+    "output": "components"
+   }
+  },
+  {
+   "what": "the seasonal window as a number and the trend window as a number",
+   "model": "decomposition",
+   "params": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "s_window": 15,
+    "t_window": 21
+   },
+   "checked": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "method": "stl",
+    "period": null,
+    "robust": false,
+    "s_window": 15.0,
+    "t_window": 21.0,
+    "transform": "none",
+    "missing": "refuse",
+    "seasonality_test": "friedman",
+    "lb_lag": "auto",
+    "alpha": 0.05,
+    "output": "components"
+   }
+  },
+  {
+   "what": "a classical multiplicative decomposition",
+   "model": "decomposition",
+   "params": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "method": "classical",
+    "type": "multiplicative"
+   },
+   "checked": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "method": "classical",
+    "period": null,
+    "type": "multiplicative",
+    "transform": "none",
+    "missing": "refuse",
+    "seasonality_test": "friedman",
+    "lb_lag": "auto",
+    "alpha": 0.05,
+    "output": "components"
+   }
+  },
+  {
+   "what": "a classical additive decomposition of the logarithm",
+   "model": "decomposition",
+   "params": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "method": "classical",
+    "transform": "log"
+   },
+   "checked": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "method": "classical",
+    "period": null,
+    "type": "additive",
+    "transform": "log",
+    "missing": "refuse",
+    "seasonality_test": "friedman",
+    "lb_lag": "auto",
+    "alpha": 0.05,
+    "output": "components"
+   }
+  },
+  {
+   "what": "MSTL: the periods come back increasing",
+   "model": "decomposition",
+   "params": {
+    "time": "day",
+    "value": "orders",
+    "frequency": "day",
+    "method": "mstl",
+    "periods": [
+     365,
+     7
+    ]
+   },
+   "checked": {
+    "time": "day",
+    "value": "orders",
+    "frequency": "day",
+    "method": "mstl",
+    "periods": [
+     7.0,
+     365.0
+    ],
+    "robust": false,
+    "s_windows": [],
+    "t_window": "auto",
+    "iterate": 2,
+    "transform": "none",
+    "missing": "refuse",
+    "seasonality_test": "friedman",
+    "lb_lag": "auto",
+    "alpha": 0.05,
+    "output": "components"
+   }
+  },
+  {
+   "what": "MSTL with a window for each period",
+   "model": "decomposition",
+   "params": {
+    "time": "day",
+    "value": "orders",
+    "frequency": "day",
+    "method": "mstl",
+    "periods": [
+     7,
+     365
+    ],
+    "s_windows": [
+     11,
+     15
+    ],
+    "iterate": 3,
+    "robust": true
+   },
+   "checked": {
+    "time": "day",
+    "value": "orders",
+    "frequency": "day",
+    "method": "mstl",
+    "periods": [
+     7.0,
+     365.0
+    ],
+    "robust": true,
+    "s_windows": [
+     11.0,
+     15.0
+    ],
+    "t_window": "auto",
+    "iterate": 3,
+    "transform": "none",
+    "missing": "refuse",
+    "seasonality_test": "friedman",
+    "lb_lag": "auto",
+    "alpha": 0.05,
+    "output": "components"
+   }
+  },
+  {
+   "what": "EMD with its defaults",
+   "model": "decomposition",
+   "params": {
+    "time": "t",
+    "value": "x",
+    "frequency": "index",
+    "method": "emd"
+   },
+   "checked": {
+    "time": "t",
+    "value": "x",
+    "frequency": "index",
+    "method": "emd",
+    "period": null,
+    "max_imf": 10,
+    "s_number": 4,
+    "max_siftings": 50,
+    "noise_imfs": 0,
+    "transform": "none",
+    "missing": "refuse",
+    "seasonality_test": "friedman",
+    "lb_lag": "auto",
+    "alpha": 0.05,
+    "output": "components"
+   }
+  },
+  {
+   "what": "EMD with a period, a count of IMFs and noise IMFs",
+   "model": "decomposition",
+   "params": {
+    "time": "t",
+    "value": "x",
+    "frequency": "index",
+    "method": "emd",
+    "period": 8,
+    "max_imf": 6,
+    "noise_imfs": 1,
+    "s_number": 0,
+    "max_siftings": 100
+   },
+   "checked": {
+    "time": "t",
+    "value": "x",
+    "frequency": "index",
+    "method": "emd",
+    "period": 8,
+    "max_imf": 6,
+    "s_number": 0,
+    "max_siftings": 100,
+    "noise_imfs": 1,
+    "transform": "none",
+    "missing": "refuse",
+    "seasonality_test": "friedman",
+    "lb_lag": "auto",
+    "alpha": 0.05,
+    "output": "components"
+   }
+  },
+  {
+   "what": "a Box-Cox transform with its lambda by Guerrero",
+   "model": "decomposition",
+   "params": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "transform": "box_cox"
+   },
+   "checked": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "method": "stl",
+    "period": null,
+    "robust": false,
+    "s_window": 11.0,
+    "t_window": "auto",
+    "transform": "box_cox",
+    "box_cox_lambda": "auto",
+    "missing": "refuse",
+    "seasonality_test": "friedman",
+    "lb_lag": "auto",
+    "alpha": 0.05,
+    "output": "components"
+   }
+  },
+  {
+   "what": "a Box-Cox transform with a lambda given",
+   "model": "decomposition",
+   "params": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "transform": "box_cox",
+    "box_cox_lambda": 0.5
+   },
+   "checked": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "method": "stl",
+    "period": null,
+    "robust": false,
+    "s_window": 11.0,
+    "t_window": "auto",
+    "transform": "box_cox",
+    "box_cox_lambda": 0.5,
+    "missing": "refuse",
+    "seasonality_test": "friedman",
+    "lb_lag": "auto",
+    "alpha": 0.05,
+    "output": "components"
+   }
+  },
+  {
+   "what": "the missing values filled linearly, the Kruskal-Wallis test and a Ljung-Box lag",
+   "model": "decomposition",
+   "params": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "missing": "linear",
+    "seasonality_test": "kruskal_wallis",
+    "lb_lag": 12
+   },
+   "checked": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "method": "stl",
+    "period": null,
+    "robust": false,
+    "s_window": 11.0,
+    "t_window": "auto",
+    "transform": "none",
+    "missing": "linear",
+    "seasonality_test": "kruskal_wallis",
+    "lb_lag": 12.0,
+    "alpha": 0.05,
+    "output": "components"
+   }
+  },
+  {
+   "what": "no seasonality test, an alpha of 1 per cent, the results table",
+   "model": "decomposition",
+   "params": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "seasonality_test": "none",
+    "alpha": 0.01,
+    "output": "results"
+   },
+   "checked": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "method": "stl",
+    "period": null,
+    "robust": false,
+    "s_window": 11.0,
+    "t_window": "auto",
+    "transform": "none",
+    "missing": "refuse",
+    "seasonality_test": "none",
+    "lb_lag": "auto",
+    "alpha": 0.01,
+    "output": "results"
+   }
+  },
+  {
+   "what": "a yearly series has no season of its own",
+   "model": "decomposition",
+   "params": {
+    "time": "y",
+    "value": "v",
+    "frequency": "year"
+   },
+   "error": "decomposition: a yearly or index series has no season of its own: give the period, in steps ('period')"
+  },
+  {
+   "what": "a yearly series with the period given",
+   "model": "decomposition",
+   "params": {
+    "time": "y",
+    "value": "v",
+    "frequency": "year",
+    "period": 4
+   },
+   "checked": {
+    "time": "y",
+    "value": "v",
+    "frequency": "year",
+    "method": "stl",
+    "period": 4,
+    "robust": false,
+    "s_window": 11.0,
+    "t_window": "auto",
+    "transform": "none",
+    "missing": "refuse",
+    "seasonality_test": "friedman",
+    "lb_lag": "auto",
+    "alpha": 0.05,
+    "output": "components"
+   }
+  },
+  {
+   "what": "a yearly EMD needs no period",
+   "model": "decomposition",
+   "params": {
+    "time": "y",
+    "value": "v",
+    "frequency": "year",
+    "method": "emd"
+   },
+   "checked": {
+    "time": "y",
+    "value": "v",
+    "frequency": "year",
+    "method": "emd",
+    "period": null,
+    "max_imf": 10,
+    "s_number": 4,
+    "max_siftings": 50,
+    "noise_imfs": 0,
+    "transform": "none",
+    "missing": "refuse",
+    "seasonality_test": "friedman",
+    "lb_lag": "auto",
+    "alpha": 0.05,
+    "output": "components"
+   }
+  },
+  {
+   "what": "a yearly MSTL needs its periods, not a single one",
+   "model": "decomposition",
+   "params": {
+    "time": "y",
+    "value": "v",
+    "frequency": "year",
+    "method": "mstl"
+   },
+   "error": "decomposition: an MSTL decomposition needs its seasonal periods, in steps ('periods')"
+  },
+  {
+   "what": "MSTL needs its periods",
+   "model": "decomposition",
+   "params": {
+    "time": "day",
+    "value": "orders",
+    "frequency": "day",
+    "method": "mstl"
+   },
+   "error": "decomposition: an MSTL decomposition needs its seasonal periods, in steps ('periods')"
+  },
+  {
+   "what": "an empty list of periods is no periods",
+   "model": "decomposition",
+   "params": {
+    "time": "day",
+    "value": "orders",
+    "frequency": "day",
+    "method": "mstl",
+    "periods": []
+   },
+   "error": "decomposition: an MSTL decomposition needs its seasonal periods, in steps ('periods')"
+  },
+  {
+   "what": "the periods of MSTL only apply to MSTL",
+   "model": "decomposition",
+   "params": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "periods": [
+     12
+    ]
+   },
+   "error": "decomposition: 'periods' only applies when method = mstl"
+  },
+  {
+   "what": "the period of STL does not apply to MSTL",
+   "model": "decomposition",
+   "params": {
+    "time": "day",
+    "value": "orders",
+    "frequency": "day",
+    "method": "mstl",
+    "periods": [
+     7
+    ],
+    "period": 7
+   },
+   "error": "decomposition: 'period' only applies when method = stl or classical or emd"
+  },
+  {
+   "what": "the type only applies to the classical method",
+   "model": "decomposition",
+   "params": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "type": "multiplicative"
+   },
+   "error": "decomposition: 'type' only applies when method = classical"
+  },
+  {
+   "what": "a multiplicative decomposition and the logarithm",
+   "model": "decomposition",
+   "params": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "method": "classical",
+    "type": "multiplicative",
+    "transform": "log"
+   },
+   "error": "decomposition: a multiplicative decomposition already works in ratios: choose no transform, or an additive decomposition of the log"
+  },
+  {
+   "what": "a multiplicative decomposition and Box-Cox",
+   "model": "decomposition",
+   "params": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "method": "classical",
+    "type": "multiplicative",
+    "transform": "box_cox"
+   },
+   "error": "decomposition: a multiplicative decomposition already works in ratios: choose no transform, or an additive decomposition of the log"
+  },
+  {
+   "what": "the seasonal window of STL does not apply to MSTL",
+   "model": "decomposition",
+   "params": {
+    "time": "day",
+    "value": "orders",
+    "frequency": "day",
+    "method": "mstl",
+    "periods": [
+     7
+    ],
+    "s_window": 11
+   },
+   "error": "decomposition: 's_window' only applies when method = stl"
+  },
+  {
+   "what": "the windows of MSTL do not apply to STL",
+   "model": "decomposition",
+   "params": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "s_windows": [
+     11
+    ]
+   },
+   "error": "decomposition: 's_windows' only applies when method = mstl"
+  },
+  {
+   "what": "a seasonal window below 7",
+   "model": "decomposition",
+   "params": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "s_window": 5
+   },
+   "error": "decomposition: 's_window' must be one of periodic, or a number at least 7"
+  },
+  {
+   "what": "a seasonal window that is a word",
+   "model": "decomposition",
+   "params": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "s_window": "wide"
+   },
+   "error": "decomposition: 's_window' must be one of periodic, or a number at least 7"
+  },
+  {
+   "what": "a trend window below 3",
+   "model": "decomposition",
+   "params": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "t_window": 2
+   },
+   "error": "decomposition: 't_window' must be one of auto, or a number at least 3"
+  },
+  {
+   "what": "a period of 1 is no season",
+   "model": "decomposition",
+   "params": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "period": 1
+   },
+   "error": "decomposition: 'period' must be a whole number from 2 to 10000"
+  },
+  {
+   "what": "a period that is not a whole number",
+   "model": "decomposition",
+   "params": {
+    "time": "day",
+    "value": "orders",
+    "frequency": "day",
+    "period": 365.25
+   },
+   "error": "decomposition: 'period' must be a whole number from 2 to 10000"
+  },
+  {
+   "what": "a period beyond the limit",
+   "model": "decomposition",
+   "params": {
+    "time": "day",
+    "value": "orders",
+    "frequency": "day",
+    "period": 10001
+   },
+   "error": "decomposition: 'period' must be a whole number from 2 to 10000"
+  },
+  {
+   "what": "more periods than the limit",
+   "model": "decomposition",
+   "params": {
+    "time": "day",
+    "value": "orders",
+    "frequency": "day",
+    "method": "mstl",
+    "periods": [
+     7,
+     30,
+     90,
+     365,
+     730
+    ]
+   },
+   "error": "decomposition: 'periods' may hold at most 4 numbers"
+  },
+  {
+   "what": "a period twice",
+   "model": "decomposition",
+   "params": {
+    "time": "day",
+    "value": "orders",
+    "frequency": "day",
+    "method": "mstl",
+    "periods": [
+     7,
+     7
+    ]
+   },
+   "error": "decomposition: 'periods' holds a number twice"
+  },
+  {
+   "what": "a window below 7 in the list",
+   "model": "decomposition",
+   "params": {
+    "time": "day",
+    "value": "orders",
+    "frequency": "day",
+    "method": "mstl",
+    "periods": [
+     7
+    ],
+    "s_windows": [
+     5
+    ]
+   },
+   "error": "decomposition: 's_windows' must be a list of numbers, each at least 7"
+  },
+  {
+   "what": "too many MSTL passes",
+   "model": "decomposition",
+   "params": {
+    "time": "day",
+    "value": "orders",
+    "frequency": "day",
+    "method": "mstl",
+    "periods": [
+     7
+    ],
+    "iterate": 6
+   },
+   "error": "decomposition: 'iterate' must be a whole number from 1 to 5"
+  },
+  {
+   "what": "the passes of MSTL do not apply to STL",
+   "model": "decomposition",
+   "params": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "iterate": 3
+   },
+   "error": "decomposition: 'iterate' only applies when method = mstl"
+  },
+  {
+   "what": "more IMFs than the limit",
+   "model": "decomposition",
+   "params": {
+    "time": "t",
+    "value": "x",
+    "frequency": "index",
+    "method": "emd",
+    "max_imf": 17
+   },
+   "error": "decomposition: 'max_imf' must be a whole number from 1 to 16"
+  },
+  {
+   "what": "the IMFs of EMD do not apply to STL",
+   "model": "decomposition",
+   "params": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "max_imf": 5
+   },
+   "error": "decomposition: 'max_imf' only applies when method = emd"
+  },
+  {
+   "what": "noise IMFs do not apply to STL",
+   "model": "decomposition",
+   "params": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "noise_imfs": 1
+   },
+   "error": "decomposition: 'noise_imfs' only applies when method = emd"
+  },
+  {
+   "what": "the S-number out of range",
+   "model": "decomposition",
+   "params": {
+    "time": "t",
+    "value": "x",
+    "frequency": "index",
+    "method": "emd",
+    "s_number": 21
+   },
+   "error": "decomposition: 's_number' must be a whole number from 0 to 20"
+  },
+  {
+   "what": "no siftings",
+   "model": "decomposition",
+   "params": {
+    "time": "t",
+    "value": "x",
+    "frequency": "index",
+    "method": "emd",
+    "max_siftings": 0
+   },
+   "error": "decomposition: 'max_siftings' must be a whole number from 1 to 1000"
+  },
+  {
+   "what": "a method that does not exist",
+   "model": "decomposition",
+   "params": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "method": "eemd"
+   },
+   "error": "decomposition: 'method' must be one of stl, classical, mstl, emd"
+  },
+  {
+   "what": "a Ljung-Box lag beyond the limit",
+   "model": "decomposition",
+   "params": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "lb_lag": 1001
+   },
+   "error": "decomposition: 'lb_lag' must be one of auto, or a number at least 1 and at most 1000"
+  },
+  {
+   "what": "a Ljung-Box lag that is a word",
+   "model": "decomposition",
+   "params": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "lb_lag": "many"
+   },
+   "error": "decomposition: 'lb_lag' must be one of auto, or a number at least 1 and at most 1000"
+  },
+  {
+   "what": "a way of filling that does not exist",
+   "model": "decomposition",
+   "params": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "missing": "interpolate"
+   },
+   "error": "decomposition: 'missing' must be one of refuse, linear, seasonal"
+  },
+  {
+   "what": "a seasonality test that does not exist",
+   "model": "decomposition",
+   "params": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "seasonality_test": "qs"
+   },
+   "error": "decomposition: 'seasonality_test' must be one of friedman, kruskal_wallis, none"
+  },
+  {
+   "what": "the output of a decomposition is its series or its results",
+   "model": "decomposition",
+   "params": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "output": "forecast"
+   },
+   "error": "decomposition: 'output' must be one of components, results"
+  },
+  {
+   "what": "a lambda without the Box-Cox transform",
+   "model": "decomposition",
+   "params": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "box_cox_lambda": 0.5
+   },
+   "error": "decomposition: 'box_cox_lambda' only applies when transform = box_cox"
+  },
+  {
+   "what": "the time and the value are not the same column",
+   "model": "decomposition",
+   "params": {
+    "time": "t",
+    "value": "t",
+    "frequency": "day"
+   },
+   "error": "decomposition: the column «t» is both 'time' and 'value': choose another"
+  },
+  {
+   "what": "an alpha of 1",
+   "model": "decomposition",
+   "params": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "alpha": 1
+   },
+   "error": "decomposition: 'alpha' must be a number above 0 and below 1"
+  },
+  {
+   "what": "a key the model does not take",
+   "model": "decomposition",
+   "params": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "seed": 1
+   },
+   "error": "decomposition: there is no parameter 'seed' (it takes: time, value, frequency, method, period, periods, type, robust, s_window, s_windows, t_window, iterate, max_imf, s_number, max_siftings, noise_imfs, transform, box_cox_lambda, missing, seasonality_test, lb_lag, alpha, output)"
+  },
+  {
+   "what": "a key it needs",
+   "model": "decomposition",
+   "params": {
+    "time": "t",
+    "value": "v"
+   },
+   "error": "decomposition: 'frequency' is required"
+  },
+  {
+   "what": "the answer given back to the check: a list of windows stays",
+   "model": "decomposition",
+   "params": {
+    "time": "day",
+    "value": "orders",
+    "frequency": "day",
+    "method": "mstl",
+    "periods": [
+     7.0,
+     365.0
+    ],
+    "s_windows": [
+     11.0,
+     15.0
+    ]
+   },
+   "checked": {
+    "time": "day",
+    "value": "orders",
+    "frequency": "day",
+    "method": "mstl",
+    "periods": [
+     7.0,
+     365.0
+    ],
+    "robust": false,
+    "s_windows": [
+     11.0,
+     15.0
+    ],
+    "t_window": "auto",
+    "iterate": 2,
+    "transform": "none",
+    "missing": "refuse",
+    "seasonality_test": "friedman",
+    "lb_lag": "auto",
+    "alpha": 0.05,
+    "output": "components"
+   }
   }
  ]
 }

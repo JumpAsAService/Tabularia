@@ -810,6 +810,29 @@ def test_a_model_s_own_columns_are_known_without_its_input():
     assert columns[0] == {"name": "time", "dtype": "Unknown"}
 
 
+def test_the_decomposition_says_its_columns_before_a_run():
+    """A seasonal column per period, a fixed count of IMFs, the time as it is (docs/specs/ts-decomposition.md)."""
+    def names(params, inputs=None):
+        return [c["name"] for c in ai_flow_agent.model_output_columns("decomposition", params, inputs)[0]]
+
+    assert names({"method": "mstl", "periods": [365, 7], "frequency": "day"}) == [
+        "time", "observed", "filled", "trend", "seasonal_7", "seasonal_365", "remainder", "deseasonalized"]
+    assert names({"frequency": "month", "transform": "log"}) == [
+        "time", "observed", "transformed", "filled", "trend", "seasonal_12", "remainder", "deseasonalized"]
+    assert names({"frequency": "year", "period": 4})[3:5] == ["trend", "seasonal_4"]
+    assert names({"frequency": "year"}) == ["time", "observed", "filled", "trend", "remainder", "deseasonalized"]
+    assert names({"method": "emd"}) == ["time", "observed", "filled", *(f"imf_{i}" for i in range(1, 11)), "residue"]
+    assert names({"method": "emd", "max_imf": 3, "transform": "log"}) == [
+        "time", "observed", "transformed", "filled", "imf_1", "imf_2", "imf_3", "residue"]
+    assert names({"method": "mstl", "periods": [30, 7, 30.0, 12.5]}) == names({"method": "mstl", "periods": [7, 30]})
+    for own in ("Int64", "Int32", "Date", "Datetime(time_unit='ns', time_zone='UTC')"):
+        columns, later = ai_flow_agent.model_output_columns("decomposition", {"time": "day"},
+                                                            [{"name": "day", "dtype": own}, {"name": "other", "dtype": "Float64"}])
+        assert columns[0] == {"name": "time", "dtype": own} and not any(c["name"] == "other" for c in columns) and later == []
+    assert ai_flow_agent.model_output_columns("decomposition", {"time": "gone"}, [{"name": "day", "dtype": "Int64"}])[0][0] == {
+        "name": "time", "dtype": "Unknown"}
+
+
 def test_the_steps_that_only_keep_rename_cast_or_filter_columns_say_them_after_a_model():
     cols = [{"name": "a", "dtype": "Int32"}, {"name": "b", "dtype": "Float64"}]
     after = ai_flow_agent.columns_after_step

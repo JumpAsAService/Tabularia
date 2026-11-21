@@ -1,7 +1,10 @@
 {
   "language": "r",
   "base": "4.6",
-  "pinned_on": "2026-11-19",
+  "pinned_on": "2026-11-21",
+  "system_libraries": [
+    "libgsl-dev"
+  ],
   "packages": [
     "assertthat@0.2.1",
     "bit@4.6.0",
@@ -44,12 +47,13 @@
     "TTR@0.24.4",
     "quantmod@0.4.29",
     "tseries@0.10-63",
-    "FinTS@0.4-9"
+    "FinTS@0.4-9",
+    "Rlibeemd@1.4.4"
   ],
   "resources": {
     "cpu": "1",
     "memory": "2Gi"
   },
-  "max_rows": 20000,
+  "max_rows": 200000,
   "max_seconds": 1800
 }

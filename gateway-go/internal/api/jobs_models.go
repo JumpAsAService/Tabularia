@@ -227,6 +227,16 @@ func (q *queue) planModel(ctx context.Context, user *auth.User, node pyjson.Obje
 		timeout: timeout, retries: retries, delay: delay, budget: budget}, nil
 }
 
+// modelMaxRows is the most input rows a model reads: its group's (the recipe's, or what an administrator set), or the model's
+// own when that is smaller (ARIMA's 20,000, below the time series group's 200,000); 0 for no limit. The sentence of the
+// refusal is the same either way.
+func modelMaxRows(model string, group int64) int64 {
+	if own := modelcatalog.MaxRows(model); own > 0 && (group <= 0 || own < group) {
+		return own
+	}
+	return group
+}
+
 // thousands writes a count as the sentences of the limits do: 3,400,000.
 func thousands(n int64) string {
 	s := strconv.FormatInt(n, 10)
@@ -562,9 +572,9 @@ func (q *queue) runModel(ctx context.Context, r *scriptNodeRun) (*flowresolver.S
 		if err := child.save(ctx); err != nil {
 			return nil, err
 		}
-		if in.rows != nil && s.img.MaxRows > 0 && *in.rows > s.img.MaxRows {
+		if most := modelMaxRows(s.model, s.img.MaxRows); in.rows != nil && most > 0 && *in.rows > most {
 			return nil, &scriptFailed{fmt.Sprintf("model «%s»: the model would read %s rows; the group «%s» allows %s: filter or sample "+
-				"before the node, or ask an administrator", s.label, thousands(*in.rows), s.group, thousands(s.img.MaxRows))}
+				"before the node, or ask an administrator", s.label, thousands(*in.rows), s.group, thousands(most))}
 		}
 		if in.rows != nil {
 			if why := modelCellsSentence(s.group, *in.rows, s.checked); why != "" {

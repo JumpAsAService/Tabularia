@@ -982,3 +982,15 @@ func TestTheChecksScriptByLanguage(t *testing.T) {
 		t.Errorf("the Python lock:\n%s", mgPyCheck)
 	}
 }
+
+// ARIMA keeps a limit of rows of its own, 20,000, where its group allows more; every other model has the group's alone.
+func TestAModelMayHaveALimitOfRowsBelowItsGroups(t *testing.T) {
+	for _, c := range []struct {
+		model        string
+		group, wants int64
+	}{{"arima", 200_000, 20_000}, {"arima", 5_000, 5_000}, {"arima", 0, 20_000}, {"decomposition", 200_000, 200_000}, {"linear", 2_000_000, 2_000_000}, {"linear", 0, 0}} {
+		if got := modelMaxRows(c.model, c.group); got != c.wants {
+			t.Errorf("%s in a group of %d: %d, want %d", c.model, c.group, got, c.wants)
+		}
+	}
+}

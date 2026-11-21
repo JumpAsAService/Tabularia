@@ -36,7 +36,7 @@ def test_the_snapshot_is_what_the_catalogue_says():
 def test_groups_and_models_point_at_each_other():
     snap = catalog.snapshot()
     assert [g["id"] for g in snap["groups"]] == ["regression", "survival", "timeseries", "boosting", "customer_lifetime", "experiments"]
-    assert [m["id"] for m in snap["models"]] == ["linear", "logistic", "kaplan_meier", "cox", "parametric_survival", "arima", "xgboost", "catboost", "clv", "bg_bb", "ab_test", "ab_plan"]
+    assert [m["id"] for m in snap["models"]] == ["linear", "logistic", "kaplan_meier", "cox", "parametric_survival", "arima", "decomposition", "xgboost", "catboost", "clv", "bg_bb", "ab_test", "ab_plan"]
     listed = [m for g in catalog.GROUPS.values() for m in g["models"]]
     assert sorted(listed) == sorted(catalog.MODELS) and len(listed) == len(set(listed))
     for model, spec in catalog.MODELS.items():
@@ -165,7 +165,7 @@ def test_the_experiments_group_and_its_two_nodes():
     test, plan = catalog.MODELS["ab_test"], catalog.MODELS["ab_plan"]
     # neither makes a model: no card, so no registration and no Predict
     assert test["card"] is False and plan["card"] is False
-    assert all(spec.get("card", True) for m, spec in catalog.MODELS.items() if m not in ("ab_test", "ab_plan"))
+    assert all(spec.get("card", True) for m, spec in catalog.MODELS.items() if m not in ("ab_test", "ab_plan", "decomposition"))
     snap = {m["id"]: m for m in catalog.snapshot()["models"]}
     assert [snap[m]["card"] for m in ("linear", "clv", "ab_test", "ab_plan")] == [True, True, False, False]
     assert not any(k.startswith(("ab_test", "ab_plan")) for k in catalog.PREDICT["columns"])
@@ -239,6 +239,64 @@ def test_the_experiments_nodes_rules():
     # the output «variants» is the same list of columns whichever metric: the variant of the metric type is not needed to know it
     assert catalog.output_columns("ab_test", {"output": "variants"}, [])[0] == catalog.output_columns(
         "ab_test", {"metric_type": "ratio", "output": "variants"}, [])[0]
+
+
+def test_the_decomposition_node_and_its_four_variants():
+    """docs/specs/ts-decomposition.md, «The node `decomposition`»: one node of the group `timeseries`, four variants keyed on
+    `method`, no card, the limits of the form, the rules between the options."""
+    assert catalog.GROUPS["timeseries"]["models"] == ["arima", "decomposition"]
+    for key, value in {"max_period": 10_000, "max_periods": 4, "max_imfs": 16, "max_lb_lags": 1000}.items():
+        assert catalog.LIMITS[key] == value, key
+    spec = catalog.MODELS["decomposition"]
+    assert spec["card"] is False and spec["group"] == "timeseries" and spec["family"] == "timeseries"
+    assert list(spec["needs"]) == ["time", "value", "frequency"] and "seed" not in spec["takes"]  # nothing is random
+    assert not any(k.startswith("decomposition") for k in catalog.PREDICT["columns"])
+    assert [v["id"] for v in spec["variants"]] == ["stl", "classical", "mstl", "emd"]
+    for m in ("stl", "classical", "mstl", "emd"):
+        assert catalog.variant("decomposition", {"method": m}) == m
+    d = spec["defaults"]
+    assert (d["method"], d["s_window"], d["t_window"], d["iterate"], d["max_imf"], d["s_number"], d["max_siftings"], d["noise_imfs"],
+            d["missing"], d["seasonality_test"], d["lb_lag"], d["alpha"], d["output"]) == (
+        "stl", 11.0, "auto", 2, 10, 4, 50, 0, "refuse", "friedman", "auto", 0.05, "components")
+    # the ARIMA node keeps a limit of its own below the group's
+    assert catalog.MODELS["arima"]["max_rows"] == 20_000
+    assert all("max_rows" not in s for m, s in catalog.MODELS.items() if m != "arima")
+    snap = {m["id"]: m for m in catalog.snapshot()["models"]}
+    assert snap["arima"]["max_rows"] == 20_000 and snap["decomposition"]["max_rows"] is None and snap["decomposition"]["card"] is False
+    # the sections: a season and the checks in every variant, the IMFs in EMD alone, its facts and the robust weights
+    for v in spec["variants"]:
+        s = v["sections"]
+        emd = v["id"] == "emd"
+        assert {"model", "season", "assumption", "curve", "point", "lag", "hist", "reading"} <= set(s)
+        assert ("imf" in s) == emd and ("imfs" in s["reading"]["levels"]) == emd and ("imfs" in s["curve"]["levels"]) == emd
+        assert {"seasonality", "ljung_box", "adf", "kpss", "trend_strength", "seasonal_strength", "largest_acf"} <= set(s["assumption"]["levels"])
+        assert ({"imf_condition", "residue_monotonic", "orthogonality"} <= set(s["assumption"]["levels"])) == emd
+        assert ("robust_weights" in s["assumption"]["levels"]) == (v["id"] in ("stl", "mstl"))
+        assert s["reading"]["texts"] == ["line_*"] and {"summary", "method", "formulas"} <= set(s["reading"]["levels"])
+        assert ("t_window_used" in s["model"]["numbers"]) == (v["id"] in ("stl", "mstl"))
+        assert ("type" in s["model"]["texts"]) == (v["id"] == "classical") and ("boundary" in s["model"]["texts"]) == emd
+        assert list(v["outputs"]) == ["components"] and v["rows_when"] == {"transformed": {"transform": ["log", "box_cox"]}}
+    for name in ("season", "imf"):
+        assert catalog.SECTION_SHAPES[name] == {"level": "required", "level_2": "null", "indexed": False}
+    # the rules between the options
+    base = {"time": "t", "value": "v", "frequency": "day"}
+    for params, reason in (
+            ({**base, "frequency": "year"}, "a yearly or index series has no season of its own"),
+            ({**base, "frequency": "index", "method": "classical"}, "give the period, in steps"),
+            ({**base, "method": "mstl"}, "needs its seasonal periods"),
+            ({**base, "method": "classical", "type": "multiplicative", "transform": "log"}, "already works in ratios"),
+            ({**base, "method": "classical", "type": "multiplicative", "transform": "box_cox"}, "already works in ratios"),
+            ({**base, "method": "mstl", "periods": [7], "period": 7}, "'period' only applies when method = stl or classical or emd"),
+            ({**base, "max_imf": 3}, "'max_imf' only applies when method = emd"),
+            ({**base, "period": 1}, "whole number from 2 to 10000"),
+            ({**base, "method": "mstl", "periods": [7, 30, 90, 365, 730]}, "at most 4 numbers")):
+        with pytest.raises(EngineError, match=reason):
+            catalog.check_params("decomposition", params)
+    assert catalog.check_params("decomposition", {**base, "frequency": "year", "method": "emd"})["max_imf"] == 10
+    assert catalog.check_params("decomposition", {**base, "method": "mstl", "periods": [365, 7]})["periods"] == [7.0, 365.0]
+    assert "period" not in catalog.check_params("decomposition", {**base, "method": "mstl", "periods": [7]})
+    # a multiplicative decomposition with no transform is fine
+    assert catalog.check_params("decomposition", {**base, "method": "classical", "type": "multiplicative"})["transform"] == "none"
 
 
 def test_every_kind_has_a_control_and_only_the_control_s_options():

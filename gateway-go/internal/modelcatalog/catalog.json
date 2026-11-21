@@ -66,7 +66,11 @@
     "max_looks": 1000,
     "max_secondary_metrics": 10,
     "posterior_points": 200,
-    "power_points": 50
+    "power_points": 50,
+    "max_period": 10000,
+    "max_periods": 4,
+    "max_imfs": 16,
+    "max_lb_lags": 1000
   },
   "controls": [
     "column",
@@ -683,6 +687,108 @@
         "results",
         "plan"
       ]
+    },
+    "decomposition_method": {
+      "control": "choice",
+      "choices": [
+        "stl",
+        "classical",
+        "mstl",
+        "emd"
+      ]
+    },
+    "decomposition_type": {
+      "control": "choice",
+      "choices": [
+        "additive",
+        "multiplicative"
+      ]
+    },
+    "period": {
+      "control": "integer",
+      "min": 2,
+      "max": 10000
+    },
+    "periods": {
+      "control": "numbers",
+      "min": 2,
+      "max": 10000,
+      "max_count": 4
+    },
+    "s_window": {
+      "control": "number_or_choice",
+      "choices": [
+        "periodic"
+      ],
+      "min": 7
+    },
+    "s_windows": {
+      "control": "numbers",
+      "min": 7,
+      "max_count": 4
+    },
+    "t_window": {
+      "control": "number_or_choice",
+      "choices": [
+        "auto"
+      ],
+      "min": 3
+    },
+    "mstl_iterate": {
+      "control": "integer",
+      "min": 1,
+      "max": 5
+    },
+    "max_imf": {
+      "control": "integer",
+      "min": 1,
+      "max": 16
+    },
+    "s_number": {
+      "control": "integer",
+      "min": 0,
+      "max": 20
+    },
+    "max_siftings": {
+      "control": "integer",
+      "min": 1,
+      "max": 1000
+    },
+    "noise_imfs": {
+      "control": "integer",
+      "min": 0,
+      "max": 16
+    },
+    "missing_values": {
+      "control": "choice",
+      "choices": [
+        "refuse",
+        "linear",
+        "seasonal"
+      ]
+    },
+    "seasonality_test": {
+      "control": "choice",
+      "choices": [
+        "friedman",
+        "kruskal_wallis",
+        "none"
+      ]
+    },
+    "lb_lag": {
+      "control": "number_or_choice",
+      "choices": [
+        "auto"
+      ],
+      "min": 1,
+      "max": 1000
+    },
+    "output_components": {
+      "control": "choice",
+      "choices": [
+        "components",
+        "results"
+      ]
     }
   },
   "season_of_frequency": {
@@ -804,6 +910,18 @@
       "n_per_variant_cuped": "Float64",
       "days_cuped": "Float64",
       "asked": "Boolean"
+    },
+    "components": {
+      "time": "=time",
+      "observed": "Float64",
+      "transformed": "Float64",
+      "trend": "Float64",
+      "seasonal_*": "Float64",
+      "remainder": "Float64",
+      "deseasonalized": "Float64",
+      "imf_*": "Float64",
+      "residue": "Float64",
+      "filled": "Boolean"
     }
   },
   "rows_input_types": {
@@ -930,6 +1048,16 @@
       "level": "required",
       "level_2": "optional",
       "indexed": false
+    },
+    "season": {
+      "level": "required",
+      "level_2": "null",
+      "indexed": false
+    },
+    "imf": {
+      "level": "required",
+      "level_2": "null",
+      "indexed": false
     }
   },
   "verdicts": [
@@ -963,7 +1091,8 @@
       "language": "r",
       "label": "models.groups.timeseries",
       "models": [
-        "arima"
+        "arima",
+        "decomposition"
       ]
     },
     {
@@ -1001,6 +1130,7 @@
       "family": "regression",
       "label": "models.linear.name",
       "card": true,
+      "max_rows": null,
       "needs": {
         "outcome": "number_column",
         "predictors": "predictors"
@@ -1456,6 +1586,7 @@
       "family": "regression",
       "label": "models.logistic.name",
       "card": true,
+      "max_rows": null,
       "needs": {
         "outcome": "column",
         "event_value": "outcome_level",
@@ -1964,6 +2095,7 @@
       "family": "survival",
       "label": "models.kaplan_meier.name",
       "card": true,
+      "max_rows": null,
       "needs": {
         "time": "number_column",
         "event": "column",
@@ -2164,6 +2296,7 @@
       "family": "survival",
       "label": "models.cox.name",
       "card": true,
+      "max_rows": null,
       "needs": {
         "time": "number_column",
         "event": "column",
@@ -2361,6 +2494,7 @@
       "family": "survival",
       "label": "models.parametric_survival.name",
       "card": true,
+      "max_rows": null,
       "needs": {
         "time": "number_column",
         "event": "column",
@@ -3275,6 +3409,7 @@
       "family": "timeseries",
       "label": "models.arima.name",
       "card": true,
+      "max_rows": 20000,
       "needs": {
         "time": "time_column",
         "value": "number_column",
@@ -3906,11 +4041,955 @@
       ]
     },
     {
+      "id": "decomposition",
+      "group": "timeseries",
+      "family": "timeseries",
+      "label": "models.decomposition.name",
+      "card": false,
+      "max_rows": null,
+      "needs": {
+        "time": "time_column",
+        "value": "number_column",
+        "frequency": "frequency"
+      },
+      "takes": {
+        "method": "decomposition_method",
+        "period": "period",
+        "periods": "periods",
+        "type": "decomposition_type",
+        "robust": "boolean",
+        "s_window": "s_window",
+        "s_windows": "s_windows",
+        "t_window": "t_window",
+        "iterate": "mstl_iterate",
+        "max_imf": "max_imf",
+        "s_number": "s_number",
+        "max_siftings": "max_siftings",
+        "noise_imfs": "noise_imfs",
+        "transform": "transform",
+        "box_cox_lambda": "box_cox_lambda",
+        "missing": "missing_values",
+        "seasonality_test": "seasonality_test",
+        "lb_lag": "lb_lag",
+        "alpha": "alpha",
+        "output": "output_components"
+      },
+      "defaults": {
+        "method": "stl",
+        "period": null,
+        "periods": [],
+        "type": "additive",
+        "robust": false,
+        "s_window": 11.0,
+        "s_windows": [],
+        "t_window": "auto",
+        "iterate": 2,
+        "max_imf": 10,
+        "s_number": 4,
+        "max_siftings": 50,
+        "noise_imfs": 0,
+        "transform": "none",
+        "box_cox_lambda": "auto",
+        "missing": "refuse",
+        "seasonality_test": "friedman",
+        "lb_lag": "auto",
+        "alpha": 0.05,
+        "output": "components"
+      },
+      "applies": {
+        "period": {
+          "method": [
+            "stl",
+            "classical",
+            "emd"
+          ]
+        },
+        "periods": {
+          "method": [
+            "mstl"
+          ]
+        },
+        "type": {
+          "method": [
+            "classical"
+          ]
+        },
+        "robust": {
+          "method": [
+            "stl",
+            "mstl"
+          ]
+        },
+        "s_window": {
+          "method": [
+            "stl"
+          ]
+        },
+        "s_windows": {
+          "method": [
+            "mstl"
+          ]
+        },
+        "t_window": {
+          "method": [
+            "stl",
+            "mstl"
+          ]
+        },
+        "iterate": {
+          "method": [
+            "mstl"
+          ]
+        },
+        "max_imf": {
+          "method": [
+            "emd"
+          ]
+        },
+        "s_number": {
+          "method": [
+            "emd"
+          ]
+        },
+        "max_siftings": {
+          "method": [
+            "emd"
+          ]
+        },
+        "noise_imfs": {
+          "method": [
+            "emd"
+          ]
+        },
+        "box_cox_lambda": {
+          "transform": [
+            "box_cox"
+          ]
+        }
+      },
+      "requires": [
+        {
+          "key": "period",
+          "when": {
+            "frequency": [
+              "year",
+              "index"
+            ],
+            "method": [
+              "stl",
+              "classical"
+            ]
+          },
+          "reason": "period_needed",
+          "message": "a yearly or index series has no season of its own: give the period, in steps ('period')"
+        },
+        {
+          "key": "periods",
+          "when": {
+            "method": "mstl"
+          },
+          "reason": "periods_needed",
+          "message": "an MSTL decomposition needs its seasonal periods, in steps ('periods')"
+        }
+      ],
+      "forbids": [
+        {
+          "key": "transform",
+          "value": "log",
+          "when": {
+            "method": "classical",
+            "type": "multiplicative"
+          },
+          "reason": "multiplicative_transform",
+          "message": "a multiplicative decomposition already works in ratios: choose no transform, or an additive decomposition of the log"
+        },
+        {
+          "key": "transform",
+          "value": "box_cox",
+          "when": {
+            "method": "classical",
+            "type": "multiplicative"
+          },
+          "reason": "multiplicative_transform",
+          "message": "a multiplicative decomposition already works in ratios: choose no transform, or an additive decomposition of the log"
+        }
+      ],
+      "disjoint": [
+        "time",
+        "value"
+      ],
+      "presets": {},
+      "variants": [
+        {
+          "id": "stl",
+          "when": {
+            "method": [
+              "stl"
+            ]
+          },
+          "sections": {
+            "model": {
+              "levels": null,
+              "texts": [
+                "model",
+                "variant",
+                "formula",
+                "software",
+                "group_version",
+                "rows_from",
+                "note_*",
+                "method",
+                "frequency",
+                "transform",
+                "time_kind",
+                "missing",
+                "seasonality_test",
+                "periods"
+              ],
+              "numbers": [
+                "n",
+                "n_missing",
+                "n_filled",
+                "first",
+                "last",
+                "alpha",
+                "box_cox_lambda",
+                "lb_lag_used",
+                "t_window_used"
+              ]
+            },
+            "season": {
+              "levels": null,
+              "texts": [
+                "position_kind",
+                "peak_label",
+                "trough_label"
+              ],
+              "numbers": [
+                "s_window_used",
+                "cycles",
+                "amplitude",
+                "peak_position",
+                "peak_value",
+                "trough_position",
+                "trough_value"
+              ]
+            },
+            "assumption": {
+              "levels": [
+                "seasonality",
+                "ljung_box",
+                "adf",
+                "kpss",
+                "trend_strength",
+                "seasonal_strength",
+                "largest_acf",
+                "robust_weights"
+              ],
+              "numbers": [
+                "statistic",
+                "df",
+                "df_2",
+                "p_value",
+                "threshold",
+                "value",
+                "count",
+                "lag"
+              ],
+              "texts": [
+                "h0",
+                "verdict",
+                "advice",
+                "significance",
+                "rows",
+                "advice_id"
+              ]
+            },
+            "curve": {
+              "levels": [
+                "components",
+                "adjusted",
+                "subseries"
+              ],
+              "numbers": [
+                "y",
+                "mean",
+                "low",
+                "high"
+              ],
+              "texts": []
+            },
+            "point": {
+              "levels": [
+                "remainder"
+              ],
+              "numbers": [
+                "y"
+              ],
+              "texts": []
+            },
+            "lag": {
+              "levels": [
+                "resid_acf"
+              ],
+              "numbers": [
+                "acf",
+                "bound"
+              ],
+              "texts": []
+            },
+            "hist": {
+              "levels": [
+                "remainder"
+              ],
+              "numbers": [
+                "count"
+              ],
+              "texts": []
+            },
+            "reading": {
+              "levels": [
+                "summary",
+                "strength",
+                "seasonality",
+                "season",
+                "remainder",
+                "stationarity",
+                "method",
+                "formulas"
+              ],
+              "numbers": [],
+              "texts": [
+                "line_*"
+              ]
+            }
+          },
+          "charts": [
+            {
+              "id": "components",
+              "under": null
+            },
+            {
+              "id": "adjusted",
+              "under": null
+            },
+            {
+              "id": "subseries",
+              "under": "seasonality"
+            },
+            {
+              "id": "resid_acf",
+              "under": "ljung_box"
+            },
+            {
+              "id": "remainder",
+              "under": "adf"
+            }
+          ],
+          "outputs": {
+            "components": [
+              "time",
+              "observed",
+              "transformed",
+              "filled",
+              "trend",
+              "seasonal_*",
+              "remainder",
+              "deseasonalized"
+            ]
+          },
+          "rows_when": {
+            "transformed": {
+              "transform": [
+                "log",
+                "box_cox"
+              ]
+            }
+          }
+        },
+        {
+          "id": "classical",
+          "when": {
+            "method": [
+              "classical"
+            ]
+          },
+          "sections": {
+            "model": {
+              "levels": null,
+              "texts": [
+                "model",
+                "variant",
+                "formula",
+                "software",
+                "group_version",
+                "rows_from",
+                "note_*",
+                "method",
+                "frequency",
+                "transform",
+                "time_kind",
+                "missing",
+                "seasonality_test",
+                "periods",
+                "type"
+              ],
+              "numbers": [
+                "n",
+                "n_missing",
+                "n_filled",
+                "first",
+                "last",
+                "alpha",
+                "box_cox_lambda",
+                "lb_lag_used"
+              ]
+            },
+            "season": {
+              "levels": null,
+              "texts": [
+                "position_kind",
+                "peak_label",
+                "trough_label"
+              ],
+              "numbers": [
+                "s_window_used",
+                "cycles",
+                "amplitude",
+                "peak_position",
+                "peak_value",
+                "trough_position",
+                "trough_value"
+              ]
+            },
+            "assumption": {
+              "levels": [
+                "seasonality",
+                "ljung_box",
+                "adf",
+                "kpss",
+                "trend_strength",
+                "seasonal_strength",
+                "largest_acf"
+              ],
+              "numbers": [
+                "statistic",
+                "df",
+                "df_2",
+                "p_value",
+                "threshold",
+                "value",
+                "count",
+                "lag"
+              ],
+              "texts": [
+                "h0",
+                "verdict",
+                "advice",
+                "significance",
+                "rows",
+                "advice_id"
+              ]
+            },
+            "curve": {
+              "levels": [
+                "components",
+                "adjusted",
+                "subseries"
+              ],
+              "numbers": [
+                "y",
+                "mean",
+                "low",
+                "high"
+              ],
+              "texts": []
+            },
+            "point": {
+              "levels": [
+                "remainder"
+              ],
+              "numbers": [
+                "y"
+              ],
+              "texts": []
+            },
+            "lag": {
+              "levels": [
+                "resid_acf"
+              ],
+              "numbers": [
+                "acf",
+                "bound"
+              ],
+              "texts": []
+            },
+            "hist": {
+              "levels": [
+                "remainder"
+              ],
+              "numbers": [
+                "count"
+              ],
+              "texts": []
+            },
+            "reading": {
+              "levels": [
+                "summary",
+                "strength",
+                "seasonality",
+                "season",
+                "remainder",
+                "stationarity",
+                "method",
+                "formulas"
+              ],
+              "numbers": [],
+              "texts": [
+                "line_*"
+              ]
+            }
+          },
+          "charts": [
+            {
+              "id": "components",
+              "under": null
+            },
+            {
+              "id": "adjusted",
+              "under": null
+            },
+            {
+              "id": "subseries",
+              "under": "seasonality"
+            },
+            {
+              "id": "resid_acf",
+              "under": "ljung_box"
+            },
+            {
+              "id": "remainder",
+              "under": "adf"
+            }
+          ],
+          "outputs": {
+            "components": [
+              "time",
+              "observed",
+              "transformed",
+              "filled",
+              "trend",
+              "seasonal_*",
+              "remainder",
+              "deseasonalized"
+            ]
+          },
+          "rows_when": {
+            "transformed": {
+              "transform": [
+                "log",
+                "box_cox"
+              ]
+            }
+          }
+        },
+        {
+          "id": "mstl",
+          "when": {
+            "method": [
+              "mstl"
+            ]
+          },
+          "sections": {
+            "model": {
+              "levels": null,
+              "texts": [
+                "model",
+                "variant",
+                "formula",
+                "software",
+                "group_version",
+                "rows_from",
+                "note_*",
+                "method",
+                "frequency",
+                "transform",
+                "time_kind",
+                "missing",
+                "seasonality_test",
+                "periods"
+              ],
+              "numbers": [
+                "n",
+                "n_missing",
+                "n_filled",
+                "first",
+                "last",
+                "alpha",
+                "box_cox_lambda",
+                "lb_lag_used",
+                "t_window_used",
+                "iterate"
+              ]
+            },
+            "season": {
+              "levels": null,
+              "texts": [
+                "position_kind",
+                "peak_label",
+                "trough_label"
+              ],
+              "numbers": [
+                "s_window_used",
+                "cycles",
+                "amplitude",
+                "peak_position",
+                "peak_value",
+                "trough_position",
+                "trough_value"
+              ]
+            },
+            "assumption": {
+              "levels": [
+                "seasonality",
+                "ljung_box",
+                "adf",
+                "kpss",
+                "trend_strength",
+                "seasonal_strength",
+                "largest_acf",
+                "robust_weights"
+              ],
+              "numbers": [
+                "statistic",
+                "df",
+                "df_2",
+                "p_value",
+                "threshold",
+                "value",
+                "count",
+                "lag"
+              ],
+              "texts": [
+                "h0",
+                "verdict",
+                "advice",
+                "significance",
+                "rows",
+                "advice_id"
+              ]
+            },
+            "curve": {
+              "levels": [
+                "components",
+                "adjusted",
+                "subseries"
+              ],
+              "numbers": [
+                "y",
+                "mean",
+                "low",
+                "high"
+              ],
+              "texts": []
+            },
+            "point": {
+              "levels": [
+                "remainder"
+              ],
+              "numbers": [
+                "y"
+              ],
+              "texts": []
+            },
+            "lag": {
+              "levels": [
+                "resid_acf"
+              ],
+              "numbers": [
+                "acf",
+                "bound"
+              ],
+              "texts": []
+            },
+            "hist": {
+              "levels": [
+                "remainder"
+              ],
+              "numbers": [
+                "count"
+              ],
+              "texts": []
+            },
+            "reading": {
+              "levels": [
+                "summary",
+                "strength",
+                "seasonality",
+                "season",
+                "remainder",
+                "stationarity",
+                "method",
+                "formulas"
+              ],
+              "numbers": [],
+              "texts": [
+                "line_*"
+              ]
+            }
+          },
+          "charts": [
+            {
+              "id": "components",
+              "under": null
+            },
+            {
+              "id": "adjusted",
+              "under": null
+            },
+            {
+              "id": "subseries",
+              "under": "seasonality"
+            },
+            {
+              "id": "resid_acf",
+              "under": "ljung_box"
+            },
+            {
+              "id": "remainder",
+              "under": "adf"
+            }
+          ],
+          "outputs": {
+            "components": [
+              "time",
+              "observed",
+              "transformed",
+              "filled",
+              "trend",
+              "seasonal_*",
+              "remainder",
+              "deseasonalized"
+            ]
+          },
+          "rows_when": {
+            "transformed": {
+              "transform": [
+                "log",
+                "box_cox"
+              ]
+            }
+          }
+        },
+        {
+          "id": "emd",
+          "when": {
+            "method": [
+              "emd"
+            ]
+          },
+          "sections": {
+            "model": {
+              "levels": null,
+              "texts": [
+                "model",
+                "variant",
+                "formula",
+                "software",
+                "group_version",
+                "rows_from",
+                "note_*",
+                "method",
+                "frequency",
+                "transform",
+                "time_kind",
+                "missing",
+                "seasonality_test",
+                "periods",
+                "boundary"
+              ],
+              "numbers": [
+                "n",
+                "n_missing",
+                "n_filled",
+                "first",
+                "last",
+                "alpha",
+                "box_cox_lambda",
+                "lb_lag_used",
+                "max_imf",
+                "n_imfs",
+                "s_number",
+                "max_siftings",
+                "noise_imfs"
+              ]
+            },
+            "season": {
+              "levels": null,
+              "texts": [
+                "position_kind",
+                "peak_label",
+                "trough_label"
+              ],
+              "numbers": [
+                "s_window_used",
+                "cycles",
+                "amplitude",
+                "peak_position",
+                "peak_value",
+                "trough_position",
+                "trough_value"
+              ]
+            },
+            "imf": {
+              "levels": null,
+              "texts": [],
+              "numbers": [
+                "mean_period",
+                "mean_period_time",
+                "variance_share",
+                "energy_share",
+                "extrema",
+                "zero_crossings"
+              ]
+            },
+            "assumption": {
+              "levels": [
+                "seasonality",
+                "ljung_box",
+                "adf",
+                "kpss",
+                "trend_strength",
+                "seasonal_strength",
+                "largest_acf",
+                "imf_condition",
+                "residue_monotonic",
+                "orthogonality"
+              ],
+              "numbers": [
+                "statistic",
+                "df",
+                "df_2",
+                "p_value",
+                "threshold",
+                "value",
+                "count",
+                "lag"
+              ],
+              "texts": [
+                "h0",
+                "verdict",
+                "advice",
+                "significance",
+                "rows",
+                "advice_id"
+              ]
+            },
+            "curve": {
+              "levels": [
+                "imfs",
+                "subseries"
+              ],
+              "numbers": [
+                "y",
+                "mean",
+                "low",
+                "high"
+              ],
+              "texts": []
+            },
+            "point": {
+              "levels": [
+                "remainder"
+              ],
+              "numbers": [
+                "y"
+              ],
+              "texts": []
+            },
+            "lag": {
+              "levels": [
+                "resid_acf"
+              ],
+              "numbers": [
+                "acf",
+                "bound"
+              ],
+              "texts": []
+            },
+            "hist": {
+              "levels": [
+                "remainder"
+              ],
+              "numbers": [
+                "count"
+              ],
+              "texts": []
+            },
+            "reading": {
+              "levels": [
+                "summary",
+                "strength",
+                "seasonality",
+                "season",
+                "remainder",
+                "stationarity",
+                "imfs",
+                "method",
+                "formulas"
+              ],
+              "numbers": [],
+              "texts": [
+                "line_*"
+              ]
+            }
+          },
+          "charts": [
+            {
+              "id": "imfs",
+              "under": null
+            },
+            {
+              "id": "subseries",
+              "under": "seasonality"
+            },
+            {
+              "id": "resid_acf",
+              "under": "ljung_box"
+            },
+            {
+              "id": "remainder",
+              "under": "adf"
+            }
+          ],
+          "outputs": {
+            "components": [
+              "time",
+              "observed",
+              "transformed",
+              "filled",
+              "imf_*",
+              "residue"
+            ]
+          },
+          "rows_when": {
+            "transformed": {
+              "transform": [
+                "log",
+                "box_cox"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
       "id": "xgboost",
       "group": "boosting",
       "family": "boosting",
       "label": "models.xgboost.name",
       "card": true,
+      "max_rows": null,
       "needs": {
         "task": "task_boosting",
         "outcome": "column",
@@ -4608,6 +5687,7 @@
       "family": "boosting",
       "label": "models.catboost.name",
       "card": true,
+      "max_rows": null,
       "needs": {
         "task": "task_boosting",
         "outcome": "column",
@@ -5301,6 +6381,7 @@
       "family": "customer_lifetime",
       "label": "models.clv.name",
       "card": true,
+      "max_rows": null,
       "needs": {
         "customer": "column",
         "frequency": "number_column",
@@ -5806,6 +6887,7 @@
       "family": "customer_lifetime",
       "label": "models.bg_bb.name",
       "card": true,
+      "max_rows": null,
       "needs": {
         "customer": "column",
         "frequency": "number_column",
@@ -6258,6 +7340,7 @@
       "family": "experiments",
       "label": "models.ab_test.name",
       "card": false,
+      "max_rows": null,
       "needs": {
         "variant": "variant_column",
         "control": "control_level",
@@ -7413,6 +8496,7 @@
       "family": "experiments",
       "label": "models.ab_plan.name",
       "card": false,
+      "max_rows": null,
       "needs": {
         "metric_type": "metric_type"
       },
