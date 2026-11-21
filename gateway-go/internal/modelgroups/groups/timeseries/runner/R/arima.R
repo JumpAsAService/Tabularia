@@ -785,7 +785,8 @@ arima_card <- function(task, prep, model, fit, levels) {
   card$arima <- list(
     orders = c(model$orders, list(s = o$s)), frequency = o$frequency,
     # by name, as card.schema.json says (tab_finite drops them); arima_model_of_card reads them in this order
-    coefficients = as.list(stats::setNames(tab_finite(fit$coef), names(fit$coef))), sigma2 = fit$sigma2, transform = o$transform,
+    # an object even without coefficients (ARIMA(0,1,0) without a mean): an empty list is written [], which the schema refuses
+    coefficients = tab_object(as.list(stats::setNames(tab_finite(fit$coef), names(fit$coef)))), sigma2 = fit$sigma2, transform = o$transform,
     box_cox_lambda = if (is.null(model$lambda)) NULL else model$lambda, drift = model$drift, mean = model$mean,
     exog = as.list(o$exog), horizon = o$horizon,
     last = list(time_kind = prep$kind, t0 = tab_label(prep$times[[prep$first]]),
@@ -866,4 +867,15 @@ TAB_COMMON_TESTS[["arima: an exogenous column named as a term is refused with a 
   keys <- tab_results_frame(fit_arima(task(params))$rows)$key
   .tab_expect(all(c("coef|ar1||estimate", "coef|xreg2||estimate", "coef|price||estimate") %in% keys) && !"coef|xreg1||estimate" %in% keys,
               "the rows' coefficients: ", paste(grep("^coef\\|.*\\|estimate$", keys, value = TRUE), collapse = ", "))
+}
+
+TAB_COMMON_TESTS[["arima: a card without coefficients (ARIMA(0,1,0) without a mean) matches the schema"]] <- function(code) {
+  df <- tab_read_csv(file.path(code, "reference", "data", "sarima_monthly.csv"), list(month = "date", boxes = "number"))
+  # no coefficient: an object {}, not an array
+  out <- fit_arima(.arima_test_task(df, list(time = "month", value = "boxes", frequency = "month", p = 0, d = 1, q = 0, P = 0, D = 0, Q = 0)))
+  text <- tab_card_text(out$card)
+  back <- jsonlite::fromJSON(text, simplifyVector = FALSE)
+  problems <- tab_schema_problems(back, jsonlite::fromJSON(file.path(code, "card.schema.json"), simplifyVector = FALSE))
+  .tab_expect(!length(problems), "the card against the schema: ", paste(problems, collapse = "; "))
+  .tab_expect(grepl('"coefficients":{}', gsub("[[:space:]]", "", text), fixed = TRUE), "the coefficients are not {}")
 }
