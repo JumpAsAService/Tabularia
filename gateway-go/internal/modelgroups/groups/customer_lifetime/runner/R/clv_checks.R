@@ -48,7 +48,8 @@ clv_check_rows <- function(rows, id, verdict = NULL, h0 = CLV_CHECK_H0[[id]], ad
   if (!is.null(count)) tab_number(rows, section, "count", count, id, level_2)
   if (!is.null(verdict)) {
     tab_text(rows, section, "verdict", verdict, id, level_2)
-    if (!is.null(advice)) {
+    # the advice says what to do about a check that is not ok: an «ok» row has none (the section's contract)
+    if (!is.null(advice) && !identical(verdict, "ok")) {
       tab_text(rows, section, "advice", advice, id, level_2)
       tab_text(rows, section, "advice_id", advice_id, id, level_2)
     }

@@ -189,3 +189,37 @@ TAB_COMMON_TESTS[["customer_lifetime: spend_independence does not depend on the 
   .tab_expect(identical(clv_spend_independence(c(1, 1, 1, 1, 2), c(5, 6, 7, 8, 9))$why, "leverage") &&
               identical(clv_spend_independence(c(1, 1, 2, 2, 2), c(5, 6, 7, 8, 9))$why, ""), "the leverage of a lone frequency")
 }
+
+TAB_COMMON_TESTS[["customer_lifetime: a candidate whose convergence check fails is not converged, for auto and in the rows; an ok check has no advice"]] <- function(code) {
+  # 400 customers who never drop out: BG/NBD's optimizer stops with code 0 on a ridge (a 16.9, b 4,973, below the
+  # maximum), its Hessian is not positive definite and no estimate is at an edge: its convergence check fails, so it
+  # is not converged, neither for auto nor in its rows (MLflow's converged and candidate.bg_nbd.converged)
+  set.seed(51)
+  n <- 400
+  T <- stats::runif(n, 10, 60)
+  x <- stats::rpois(n, stats::rgamma(n, 0.8, rate = 4) * T)
+  tx <- ifelse(x > 0, T * vapply(x, function(k) if (k == 0) 0 else max(stats::runif(k)), 0), 0)
+  d <- data.frame(id = paste0("c", seq_len(n)), x = x, tx = tx, T = T)
+  res <- fit_clv(.clv_task(.clv_params(list(purchase_model = "bg_nbd", output = "results")), d, variant = "purchases"))
+  df <- tab_results_frame(res$rows)
+  .tab_expect(df$value[df$key == "model|||converged"] == 0 && identical(df$text[df$key == "assumption|convergence||verdict"], "failed"),
+              "the model row says what the check says")
+  s <- list(x = x, tx = tx, T = T, n = n)
+  comp <- clv_compress(x, tx, T)
+  cands <- lapply(c("bg_nbd", "mbg_nbd"), function(m) {
+    p <- clv_add_inference(clv_fit_purchases(m, s, comp, inference = FALSE), s, comp)
+    rows <- tab_rows_start(.clv_task(.clv_params(), d))
+    clv_check_convergence(rows, list(purchases = p))
+    list(model = m, p = p, said = tab_results_frame(rows)$text[tab_results_frame(rows)$stat == "verdict"])
+  })
+  for (cand in cands) .tab_expect(identical(cand$said == "failed", !cand$p$converged), cand$model, ": the check says ", cand$said, ", converged ", cand$p$converged)
+  .tab_expect(!cands[[1L]]$p$converged && cands[[2L]]$p$converged, "BG/NBD on the ridge is not converged, MBG/NBD is")
+  # auto takes the converged one even when the ridge's log-likelihood were the higher
+  cands[[1L]]$p$log_lik <- cands[[2L]]$p$log_lik + 1
+  .tab_expect(clv_choose(cands, "auto") == 2L, "auto chose the model whose convergence check fails")
+  # an ok verdict comes with no advice (the advice says what to do about a check that is not ok)
+  a <- .clv_check_frame(.clv_check_fit(alpha = 0.01, spend = c(p = 6, q = 2.5, gamma = 15)))
+  ok <- a$level[a$stat == "verdict" & a$text == "ok"]
+  .tab_expect(all(c("convergence", "frequency_fit", "spend_tail") %in% ok) && !any(a$level %in% ok & a$stat %in% c("advice", "advice_id")),
+              "advice next to ok: ", paste(ok, collapse = ", "))
+}

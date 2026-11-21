@@ -17321,30 +17321,6 @@
   ],
   [
    "assumption",
-   "frequency_fit",
-   null,
-   "advice",
-   null,
-   "the model misses the distribution of repeat purchases: compare the purchase models (compare = true)",
-   null,
-   null,
-   1441,
-   "assumption|frequency_fit||advice"
-  ],
-  [
-   "assumption",
-   "frequency_fit",
-   null,
-   "advice_id",
-   null,
-   "frequency_fit",
-   null,
-   null,
-   1442,
-   "assumption|frequency_fit||advice_id"
-  ],
-  [
-   "assumption",
    "holdout",
    null,
    "value",
@@ -17352,7 +17328,7 @@
    null,
    null,
    null,
-   1443,
+   1441,
    "assumption|holdout||value"
   ],
   [
@@ -17364,7 +17340,7 @@
    null,
    null,
    null,
-   1444,
+   1442,
    "assumption|horizon_length||value"
   ],
   [
@@ -17376,7 +17352,7 @@
    "The average spend does not move with the frequency (Gamma-Gamma's assumption).",
    null,
    null,
-   1445,
+   1443,
    "assumption|spend_independence||h0"
   ],
   [
@@ -17388,7 +17364,7 @@
    null,
    null,
    null,
-   1446,
+   1444,
    "assumption|spend_independence||statistic"
   ],
   [
@@ -17400,7 +17376,7 @@
    null,
    null,
    null,
-   1447,
+   1445,
    "assumption|spend_independence||p_value"
   ],
   [
@@ -17412,7 +17388,7 @@
    "",
    null,
    null,
-   1448,
+   1446,
    "assumption|spend_independence||significance"
   ],
   [
@@ -17424,7 +17400,7 @@
    null,
    null,
    null,
-   1449,
+   1447,
    "assumption|spend_independence||threshold"
   ],
   [
@@ -17436,7 +17412,7 @@
    null,
    null,
    null,
-   1450,
+   1448,
    "assumption|spend_independence||value"
   ],
   [
@@ -17448,7 +17424,7 @@
    null,
    null,
    null,
-   1451,
+   1449,
    "assumption|spend_independence||count"
   ],
   [
@@ -17460,32 +17436,8 @@
    "ok",
    null,
    null,
-   1452,
+   1450,
    "assumption|spend_independence||verdict"
-  ],
-  [
-   "assumption",
-   "spend_independence",
-   null,
-   "advice",
-   null,
-   "the average spend moves with the frequency: Gamma-Gamma's CLV is then biased; segment the customers by frequency, or read the CLV with care",
-   null,
-   null,
-   1453,
-   "assumption|spend_independence||advice"
-  ],
-  [
-   "assumption",
-   "spend_independence",
-   null,
-   "advice_id",
-   null,
-   "spend_independence",
-   null,
-   null,
-   1454,
-   "assumption|spend_independence||advice_id"
   ],
   [
    "assumption",
@@ -17496,7 +17448,7 @@
    "The spend's variance is finite (q above 2).",
    null,
    null,
-   1455,
+   1451,
    "assumption|spend_tail||h0"
   ],
   [
@@ -17508,7 +17460,7 @@
    null,
    null,
    null,
-   1456,
+   1452,
    "assumption|spend_tail||threshold"
   ],
   [
@@ -17520,7 +17472,7 @@
    null,
    null,
    null,
-   1457,
+   1453,
    "assumption|spend_tail||value"
   ],
   [
@@ -17532,32 +17484,8 @@
    "ok",
    null,
    null,
-   1458,
+   1454,
    "assumption|spend_tail||verdict"
-  ],
-  [
-   "assumption",
-   "spend_tail",
-   null,
-   "advice",
-   null,
-   "the spend varies so much across customers that its average has no finite variance: a few large spenders drive it",
-   null,
-   null,
-   1459,
-   "assumption|spend_tail||advice"
-  ],
-  [
-   "assumption",
-   "spend_tail",
-   null,
-   "advice_id",
-   null,
-   "spend_tail",
-   null,
-   null,
-   1460,
-   "assumption|spend_tail||advice_id"
   ]
  ]
 }

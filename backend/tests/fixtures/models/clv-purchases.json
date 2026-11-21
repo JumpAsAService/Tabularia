@@ -8585,30 +8585,6 @@
   ],
   [
    "assumption",
-   "frequency_fit",
-   null,
-   "advice",
-   null,
-   "the model misses the distribution of repeat purchases: compare the purchase models (compare = true)",
-   null,
-   null,
-   713,
-   "assumption|frequency_fit||advice"
-  ],
-  [
-   "assumption",
-   "frequency_fit",
-   null,
-   "advice_id",
-   null,
-   "frequency_fit",
-   null,
-   null,
-   714,
-   "assumption|frequency_fit||advice_id"
-  ],
-  [
-   "assumption",
    "holdout",
    null,
    "value",
@@ -8616,7 +8592,7 @@
    null,
    null,
    null,
-   715,
+   713,
    "assumption|holdout||value"
   ],
   [
@@ -8628,7 +8604,7 @@
    null,
    null,
    null,
-   716,
+   714,
    "assumption|horizon_length||value"
   ]
  ]

@@ -699,8 +699,10 @@ def test_the_spend_check_not_computed_says_why_in_the_page_s_language(locale):
     for r in rows:
         if r["level"] == "spend_independence" and r["stat"] == "verdict":
             r["text"] = "not_computed"
-        if r["level"] == "spend_independence" and r["stat"] == "advice":
-            r["text"] = "not computed: the repeat customers' frequencies or spends do not vary"
+    # an ok verdict has no advice: the runner writes one with not_computed
+    rows.append({"section": "assumption", "level": "spend_independence", "level_2": None, "stat": "advice", "value": None,
+                 "text": "not computed: the repeat customers' frequencies or spends do not vary", "x0": None, "x1": None,
+                 "key": "assumption|spend_independence||advice"})
     w = common.words(model, "value", locale)
     said = [r["text"] for r in layouts.with_labels(model, params, rows, locale) if r["level"] == "spend_independence" and r["stat"] == "advice"]
     assert said == [w["checks"]["spend_independence"]["not_computed"]] and said[0] != w["checks"]["spend_independence"]["advice"]

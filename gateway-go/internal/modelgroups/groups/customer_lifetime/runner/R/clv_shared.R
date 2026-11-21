@@ -825,6 +825,11 @@ clv_add_inference <- function(p, s, comp, alpha = 0.05) {
     p$kkt2 <- !is.null(h) && all(is.finite(h)) && all(eigen(h, symmetric = TRUE, only.values = TRUE)$values > 0)
   }
   p$edges <- clv_edges(clv_nll(p$model, comp, stable = TRUE), p$log_par, p$model)
+  # converged as the convergence check says it (clv_check_convergence): the optimizer's code 0 and a positive
+  # definite Hessian, or no such Hessian because an estimate is at an edge (where the maximum is a limit). A
+  # code 0 on a flat ridge with every estimate inside its range is not a maximum: `auto` does not take it for
+  # one, and the rows (and MLflow's `converged`) say 0, as the check says failed
+  p$converged <- isTRUE(p$converged) && (!is.null(p$vcov_log) || nrow(p$edges) > 0L)
   p
 }
 
@@ -1333,7 +1338,8 @@ clv_candidates <- function(node, params) {
   if (isTRUE(params$compare)) c(asked, setdiff(three, asked)) else asked
 }
 
-# `auto` keeps the highest log-likelihood among the models that converged; a tie within 1e-6 keeps the first.
+# `auto` keeps the highest log-likelihood among the models that converged (clv_add_inference: the optimizer's
+# code and the Hessian, as the convergence check reads them); a tie within 1e-6 keeps the first.
 # A model whose end point is numerical noise (`fault`, clv_sound) is never chosen: its log-likelihood is not
 # one. When none converged, the highest among those that are not noise; when all are noise, the first.
 clv_choose <- function(candidates, asked) {
@@ -1367,10 +1373,11 @@ clv_fit <- function(task, node, frame = NULL) {
   }
   candidates <- fitted[!failed]
   skipped <- models[failed]
+  # every candidate gets its Hessian and its edges before the choice: whether it converged is the convergence
+  # check's fact, which needs them
+  for (k in seq_along(candidates)) candidates[[k]]$p <- clv_add_inference(candidates[[k]]$p, s, comp, alpha)
   chosen <- clv_choose(candidates, asked)
   best <- candidates[[chosen]]
-  best$p <- clv_add_inference(best$p, s, comp, alpha)
-  candidates[[chosen]] <- best
   spend <- if (s$has_spend) clv_fit_spend(s, alpha) else NULL
   ev <- clv_evaluate(best$model, best$p$par, if (is.null(spend)) NULL else spend$par, s, plan)
   list(node = node, s = s, plan = plan, alpha = alpha, asked = asked, chosen_by = if (identical(asked, "auto")) "log_lik" else "manual",
