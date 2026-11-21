@@ -128,9 +128,13 @@
     "advice": "The variants differed before the experiment: check that the covariate was measured before the assignment and that the assignment was random. CUPED corrects a chance imbalance, not a flawed assignment."
    },
    "covariate_missing_balance": {
-    "name": "Empty covariates spread alike (χ²)",
+    "name": "Units without the covariate spread alike (χ²)",
     "h0": "Units without the covariate are equally frequent in every variant.",
-    "advice": "One variant has more units without the covariate (new users, a log missing on one side): leaving them out would bias the comparison; fill them, or find why."
+    "advice": "One variant has more units without the covariate (new users, a log missing on one side): find why. Leaving them out (covariate_missing = exclude) would bias the comparison; filling them does not.",
+    "count": {
+     "one": "{n} unit without the covariate",
+     "other": "{n} units without the covariate"
+    }
    },
    "crossover": {
     "name": "Units in more than one variant",
@@ -144,7 +148,11 @@
    "variance_zero": {
     "name": "A metric with no variance",
     "h0": "The metric varies within every variant.",
-    "advice": "In one variant every unit has the same value: a comparison with a control that has no variance either is not computed. Check the metric column and the filter before the node."
+    "advice": "In one variant every unit has the same value: a comparison with a control that has no variance either is not computed. Check the metric column and the filter before the node.",
+    "count": {
+     "one": "{n} variant without variance",
+     "other": "{n} variants without variance"
+    }
    }
   },
   "reading": {
@@ -202,16 +210,24 @@
    "formula_sample_size": "Sample size"
   },
   "reading_texts": {
-   "decision_better": "{variant} beats the control {control}: its corrected p-value, {p_adjusted:p}, is below α = {alpha:num}, with a lift of {lift:spct}.",
-   "decision_worse": "{variant} is worse than the control {control}: its corrected p-value, {p_adjusted:p}, is below α = {alpha:num}, with a lift of {lift:spct}.",
-   "decision_no_difference": "No treatment differs from the control {control} at α = {alpha:num}: the smallest corrected p-value, {variant}'s, is {p_adjusted:p}.",
+   "decision_better": "{variant} beats the control {control}: its corrected p-value, {p_adjusted:p}, is below α = {alpha:num}, with a change of {lift:spct}.",
+   "decision_worse": "{variant} is worse than the control {control}: its corrected p-value, {p_adjusted:p}, is below α = {alpha:num}, with a change of {lift:spct}.",
+   "decision_better_many": "{variants} beat the control {control} at α = {alpha:num}. The smallest corrected p-value, {p_adjusted:p}, is {variant}'s, with a change of {lift:spct}.",
+   "decision_worse_many": "{variants} are worse than the control {control} at α = {alpha:num}. The smallest corrected p-value, {p_adjusted:p}, is {variant}'s, with a change of {lift:spct}.",
+   "decision_no_difference": "No treatment shows a difference from the control {control} at α = {alpha:num}: the smallest corrected p-value, {variant}'s, is {p_adjusted:p}.",
    "decision_counts": "Of the {units:int} units of {variant}, {converted:int} converted: {rate:pct}, against {rate_control:pct} for {control} ({units_control:int} units).",
    "decision_means": "The {units:int} units of {variant} have a mean of {value:num}, against {value_control:num} for the {units_control:int} units of {control}.",
    "decision_interval": "With {conf:pct} confidence the true lift lies between {lift_low:spct} and {lift_high:spct}: the range of lifts these data are compatible with.",
-   "srm_ok": "The units are split {observed:pct} (the variants in the order of the table) against the planned {shares:pct}. A gap at least this large happens by chance with probability {p:p}, above the level of {srm_alpha:num} set for this check: the split is as planned.",
+   "srm_ok": "The units are split {observed:pct} (the variants in the order of the table) against the planned {shares:pct}. A gap at least this large happens by chance with probability {p:p}, above the level of {srm_alpha:num} set for this check: the data show no departure from the planned split.",
    "srm_failed": "The units are split {observed:pct} against the planned {shares:pct}. A gap this large would happen by chance with probability {p:p}, below the level of {srm_alpha:num} set for this check. Something removed or added units in one variant, so every number of this report may be biased: find the cause before deciding.",
-   "comparison_significant": "If {variant} were no different from {control}, a difference at least this large would appear by chance with probability {p:p}. Corrected for the number of comparisons, this probability is below α = {alpha:num}: the difference is significant.",
-   "comparison_not_significant": "If {variant} were no different from {control}, a difference at least this large would appear by chance with probability {p:p}. Corrected for the number of comparisons, it is not below α = {alpha:num}: the data do not show a difference, which does not prove that there is none.",
+   "comparison_significant": {
+    "correction=none": "If {variant} were no different from {control}, a difference at least this large would appear by chance with probability {p:p}. This is below α = {alpha:num}: the difference is significant.",
+    "": "If {variant} were no different from {control}, a difference at least this large would appear by chance with probability {p:p}. Corrected for the number of comparisons, this probability is {p_adjusted:p}, below α = {alpha:num}: the difference is significant."
+   },
+   "comparison_not_significant": {
+    "correction=none": "If {variant} were no different from {control}, a difference at least this large would appear by chance with probability {p:p}. This is not below α = {alpha:num}: the data do not show a difference, which does not prove that there is none.",
+    "": "If {variant} were no different from {control}, a difference at least this large would appear by chance with probability {p:p}. Corrected for the number of comparisons, this probability is {p_adjusted:p}, not below α = {alpha:num}: the data do not show a difference, which does not prove that there is none."
+   },
    "cuped_reduced": "Using «{covariate}», measured before the experiment, reduced the variance of the metric by {reduction:pct} (θ = {theta:num}, correlation {correlation:num}): the same units now detect smaller lifts.",
    "cuped_filled": "{count:int} units had no value of the covariate: each was given the covariate's mean in its own variant (the column «Filled with» above) and keeps its own value of the metric.",
    "cuped_excluded": "{count:int} units had no value of the covariate and were left out of every comparison: these results hold for the units with a covariate only.",
@@ -230,16 +246,16 @@
    "method_comparison": "The difference is the treatment's value minus the control's; the lift is that difference as a percent of the control's value. The p-value is the probability of a difference at least as large as the one observed if the treatment changed nothing. Rates are compared with a z test (the normal approximation, each variant with its own variance), means with Welch's t test, which does not assume equal variances. The lift's interval is Fieller's: it takes into account that the control's value is uncertain too, and it leaves out 0 exactly when the uncorrected two-sided test is significant at α. With a one-sided test only one direction counts, and one end of every interval is open.",
    "method_ratio": "A ratio metric (clicks per impression, revenue per session) is computed for each variant as the sum of the numerators over the sum of the denominators. The units, not the impressions, were assigned at random, so the impressions of one unit are not independent of each other: the variance is computed with the delta method on each unit's sums (Deng, Knoblich, Lu 2018), which is what keeps the test valid.",
    "method_srm": "The split of the units is checked first: a split that is not the planned one means that something removed or added units in one variant — a filter, a bot rule, a redirect that fails, a lost log — and then the variants no longer differ only by chance. The check is Pearson's χ² test of the units of each variant against the planned shares. Its level is stricter than the comparisons' (0.001 unless you change it), because the check runs on every experiment and a false alarm would throw away a sound one. When it fails, every number of the report may be biased.",
-   "method_power": "Power is the probability that the test detects a lift of a given size, if the lift is really there. The smallest lift detectable with the chosen power (80 % unless you change it) is the detectable lift: more units, or less variance, make it smaller. It helps to read a comparison that shows no difference: if the detectable lift is larger than the smallest lift that matters to you, the experiment was too small to see it. The power at the lift actually observed is not shown: it is only the p-value written another way.",
+   "method_power": "Power is the probability that the test detects a lift of a given size, if the lift is really there. The smallest lift detectable with the chosen power (80 % unless you change it) is the detectable lift: more units, or less variance, make it smaller. It helps to read a comparison that shows no difference: if the detectable lift is larger than the smallest lift that matters to you, the experiment could easily have missed a lift of that size. The power at the lift actually observed is not shown: it is only the p-value written another way.",
    "method_cuped": "CUPED (Deng, Xu, Kohavi, Walker 2013) uses a value measured on each unit before the experiment, the covariate, to take out of the metric what was already predictable. The adjusted mean of a variant is its mean minus θ times the gap between the covariate's mean in that variant and in all units; θ is estimated within the variants, so the treatment cannot leak into it. Because the covariate comes before the assignment, the adjustment cannot bias the difference: it only narrows its interval. A unit without the covariate is either given the covariate's mean in its own variant, so that it keeps its weight and adds no adjustment of its own, or left out, and then the results hold for the units with a covariate only.",
    "method_cap": "A few very large values (a bulk order) widen the interval of a mean a lot. The cap sets every value above a chosen percentile of all units, all variants together, to that percentile, before any computation. The same limit applies to every variant, so the comparison stays fair; it must be chosen before looking at the results, otherwise it could be tuned to the answer one hopes for.",
-   "method_bayes": "The Bayesian reading answers another question than the p-value. The p-value is the probability of data at least this extreme if there were no difference; the probability that a treatment is ahead of the control is the probability of the difference itself, given the data and a prior (uniform unless you change it, worth two units). The expected loss weighs how much you could lose by choosing a treatment, not only how often: it is the average shortfall, the cases in which the treatment is in fact ahead of the control counting as zero. These are measures for your judgement: no threshold of the report turns them into a decision.",
+   "method_bayes": "The Bayesian reading answers another question than the p-value. The p-value is the probability of data at least this extreme if there were no difference; the probability that a treatment is ahead of the control is the probability of the difference itself, given the data and a prior (for a rate a Beta prior, uniform unless you change it, which weighs as much as two units; for a mean or a ratio a flat one). The expected loss weighs how much you could lose by choosing a treatment, not only how often: it is the average shortfall, the cases in which the treatment is in fact ahead of the control counting as zero. These are measures for your judgement: no threshold of the report turns them into a decision.",
    "method_sequential": "An ordinary p-value holds only if it is read once, at the planned end: looking every day and stopping at the first p-value below α makes a false alarm far more likely than α. The always-valid p-value of the mixture sequential probability ratio test (Johari, Koomen, Pekelis, Walsh 2017) keeps its guarantee however often and whenever the results are looked at. It weighs the observed lift against a mixture of possible lifts of typical size τ, and it is more cautious than the ordinary p-value read at the end. The report computes it again from the data of the day at every run and remembers nothing from one run to the next.",
    "method_secondary": "Secondary metrics are guardrails: each is compared like the primary metric, and their p-values are corrected among themselves, never together with the primary's, so that adding a guardrail costs the primary metric nothing. Only the primary metric decides; a secondary metric that comes out worse is listed on the first page.",
    "method_plan": "The plan says how many units an experiment needs so that a lift of the size that matters would be detected with the chosen power at the chosen α, or, the other way round, which lift a given number of units or days can detect. It uses the normal approximation of the test the A/B node runs, with the baseline and the variance of the metric read from the history, so that plan and test agree. With several treatments each comparison is planned at α divided by the number of comparisons: the sizes are on the safe side.",
    "method_weeks": "The duration is the units needed divided by the new units a day of the history (times the share of the traffic sent to the experiment). People behave differently across the week, so an experiment that covers whole weeks compares like with like: the report gives the weeks beside the days.",
    "sequential_read_no_day": "Read this decision if the results were looked at before the planned end. The always-valid p-value of {variant}, on the data of this run, is {p:p} before the correction for several treatments; the table compares the corrected one with α = {alpha:num}.",
-   "sequential_empty": "The intervals of the lift of {variant} computed day after day have no value in common: its confidence sequence is empty, and the table shows no interval. This happens when the lift changed during the experiment.",
+   "sequential_empty": "The intervals of the lift of {variant} computed day after day have no value in common: its confidence sequence is empty, and the table shows no interval. It is a sign that the lift changed during the experiment.",
    "secondary_family": "The {comparisons:int} comparisons of the secondary metrics (each metric against the control, for each treatment) were corrected among themselves with the node's correction, never together with the primary metric's: the primary metric's p-values are the same as without them.",
    "secondary_family_none": "No correction was asked for: the {comparisons:int} comparisons of the secondary metrics keep their own p-values, so the risk of at least one false alarm among them is larger than α. The primary metric's p-values are the same as without them.",
    "secondary_family_one": "With one comparison of a secondary metric there is nothing to correct; the primary metric's p-values are the same as without it.",
@@ -270,7 +286,8 @@
    "secondary_family_none",
    "secondary_family_one",
    "baseline_read_no_days",
-   "cuped_plan_no_days"
+   "cuped_plan_no_days",
+   "sequential_read"
   ],
   "verdict_words": [
    "significant",
@@ -468,9 +485,13 @@
     "advice": "Le varianti erano diverse già prima dell'esperimento: controllate che la covariata sia misurata prima dell'assegnazione e che l'assegnazione sia casuale. CUPED corregge uno squilibrio dovuto al caso, non un'assegnazione difettosa."
    },
    "covariate_missing_balance": {
-    "name": "Covariate vuote distribuite in modo uguale (χ²)",
+    "name": "Unità senza covariata ripartite in modo uguale (χ²)",
     "h0": "Le unità senza covariata sono ugualmente frequenti in ogni variante.",
-    "advice": "Una variante ha più unità senza covariata (utenti nuovi, un log mancante da una parte): escluderle distorcerebbe il confronto; riempitele, o cercatene il motivo."
+    "advice": "Una variante ha più unità senza covariata (utenti nuovi, un log mancante da una parte): cercatene il motivo. Escluderle (covariate_missing = exclude) distorcerebbe il confronto; riempirle no.",
+    "count": {
+     "one": "{n} unità senza covariata",
+     "other": "{n} unità senza covariata"
+    }
    },
    "crossover": {
     "name": "Unità in più di una variante",
@@ -484,7 +505,11 @@
    "variance_zero": {
     "name": "Una metrica senza varianza",
     "h0": "La metrica varia all'interno di ogni variante.",
-    "advice": "In una variante tutte le unità hanno lo stesso valore: un confronto con un controllo anch'esso senza varianza non viene calcolato. Controllate la colonna della metrica e il filtro prima del nodo."
+    "advice": "In una variante tutte le unità hanno lo stesso valore: un confronto con un controllo anch'esso senza varianza non viene calcolato. Controllate la colonna della metrica e il filtro prima del nodo.",
+    "count": {
+     "one": "{n} variante senza varianza",
+     "other": "{n} varianti senza varianza"
+    }
    }
   },
   "reading": {
@@ -542,23 +567,31 @@
    "formula_sample_size": "Dimensione del campione"
   },
   "reading_texts": {
-   "decision_better": "{variant} è migliore del controllo {control}: il suo p-value corretto, {p_adjusted:p}, è sotto α = {alpha:num}, con un incremento di {lift:spct}.",
-   "decision_worse": "{variant} è peggiore del controllo {control}: il suo p-value corretto, {p_adjusted:p}, è sotto α = {alpha:num}, con un incremento di {lift:spct}.",
-   "decision_no_difference": "Nessun trattamento differisce dal controllo {control} ad α = {alpha:num}: il p-value corretto più piccolo, quello di {variant}, è {p_adjusted:p}.",
+   "decision_better": "{variant} è migliore del controllo {control}: il suo p-value corretto, {p_adjusted:p}, è sotto α = {alpha:num}, con una variazione di {lift:spct}.",
+   "decision_worse": "{variant} è peggiore del controllo {control}: il suo p-value corretto, {p_adjusted:p}, è sotto α = {alpha:num}, con una variazione di {lift:spct}.",
+   "decision_better_many": "{variants} sono migliori del controllo {control} ad α = {alpha:num}. Il p-value corretto più piccolo, {p_adjusted:p}, è quello di {variant}, con una variazione di {lift:spct}.",
+   "decision_worse_many": "{variants} sono peggiori del controllo {control} ad α = {alpha:num}. Il p-value corretto più piccolo, {p_adjusted:p}, è quello di {variant}, con una variazione di {lift:spct}.",
+   "decision_no_difference": "Nessun trattamento mostra una differenza dal controllo {control} ad α = {alpha:num}: il p-value corretto più piccolo, quello di {variant}, è {p_adjusted:p}.",
    "decision_counts": "Delle {units:int} unità di {variant}, {converted:int} hanno convertito, cioè {rate:pct}, contro {rate_control:pct} per {control} ({units_control:int} unità).",
    "decision_means": "Le {units:int} unità di {variant} hanno una media di {value:num}, contro {value_control:num} delle {units_control:int} unità di {control}.",
    "decision_interval": "Con una confidenza pari a {conf:pct} il vero incremento sta tra {lift_low:spct} e {lift_high:spct}: l'intervallo di incrementi compatibili con questi dati.",
-   "srm_ok": "Le unità sono ripartite {observed:pct} (le varianti nell'ordine della tabella) contro il previsto {shares:pct}. Uno scarto almeno così grande capita per caso con probabilità {p:p}, sopra il livello {srm_alpha:num} fissato per questa verifica: la ripartizione è come previsto.",
+   "srm_ok": "Le unità sono ripartite {observed:pct} (le varianti nell'ordine della tabella) contro il previsto {shares:pct}. Uno scarto almeno così grande capita per caso con probabilità {p:p}, sopra il livello {srm_alpha:num} fissato per questa verifica: i dati non mostrano uno scarto dalla ripartizione prevista.",
    "srm_failed": "Le unità sono ripartite {observed:pct} contro il previsto {shares:pct}. Uno scarto così grande capiterebbe per caso con probabilità {p:p}, sotto il livello {srm_alpha:num} fissato per questa verifica. Qualcosa ha tolto o aggiunto unità in una variante, quindi ogni numero di questo report può essere distorto: trovatene la causa prima di decidere.",
-   "comparison_significant": "Se {variant} non fosse diverso da {control}, una differenza almeno così grande comparirebbe per caso con probabilità {p:p}. Corretta per il numero di confronti, questa probabilità è sotto α = {alpha:num}: la differenza è significativa.",
-   "comparison_not_significant": "Se {variant} non fosse diverso da {control}, una differenza almeno così grande comparirebbe per caso con probabilità {p:p}. Corretta per il numero di confronti, non è sotto α = {alpha:num}: i dati non mostrano una differenza, il che non dimostra che non ci sia.",
+   "comparison_significant": {
+    "correction=none": "Se {variant} non fosse diverso da {control}, una differenza almeno così grande comparirebbe per caso con probabilità {p:p}. È sotto α = {alpha:num}: la differenza è significativa.",
+    "": "Se {variant} non fosse diverso da {control}, una differenza almeno così grande comparirebbe per caso con probabilità {p:p}. Corretta per il numero di confronti, questa probabilità è {p_adjusted:p}, sotto α = {alpha:num}: la differenza è significativa."
+   },
+   "comparison_not_significant": {
+    "correction=none": "Se {variant} non fosse diverso da {control}, una differenza almeno così grande comparirebbe per caso con probabilità {p:p}. Non è sotto α = {alpha:num}: i dati non mostrano una differenza, il che non dimostra che non ci sia.",
+    "": "Se {variant} non fosse diverso da {control}, una differenza almeno così grande comparirebbe per caso con probabilità {p:p}. Corretta per il numero di confronti, questa probabilità è {p_adjusted:p}, non sotto α = {alpha:num}: i dati non mostrano una differenza, il che non dimostra che non ci sia."
+   },
    "cuped_reduced": "Usare «{covariate}», misurata prima dell'esperimento, ha ridotto la varianza della metrica di {reduction:pct} (θ = {theta:num}, correlazione {correlation:num}): le stesse unità ora rilevano incrementi più piccoli.",
    "cuped_filled": "{count:int} unità non avevano un valore della covariata: a ciascuna è stata data la media della covariata nella propria variante (la colonna «Riempita con» qui sopra), e ciascuna tiene il proprio valore della metrica.",
    "cuped_excluded": "{count:int} unità non avevano un valore della covariata e sono state escluse da ogni confronto: questi risultati valgono solo per le unità con una covariata.",
    "cap_applied": "I valori della metrica sopra {value:num}, il percentile {percentile:pct} di tutte le unità di tutte le varianti insieme, sono stati portati a {value:num}: {count:int} unità, in {variants}. Così pochi valori molto grandi pesano meno.",
    "bayes_beat": {
-    "higher_is_better=false": "Dati questi dati e la prior, la probabilità che il vero valore di {variant} sia sotto quello di {control} è {probability:pct}.",
-    "": "Dati questi dati e la prior, la probabilità che il vero valore di {variant} sia sopra quello di {control} è {probability:pct}."
+    "higher_is_better=false": "Con questi dati e la prior, la probabilità che il vero valore di {variant} sia sotto quello di {control} è {probability:pct}.",
+    "": "Con questi dati e la prior, la probabilità che il vero valore di {variant} sia sopra quello di {control} è {probability:pct}."
    },
    "bayes_loss": "Scegliere {variant} al posto del controllo comporta in media una perdita pari a {loss:pct} del valore del controllo; la soglia che avete fissato è {threshold:pct}.",
    "sequential_read": "Leggete questa decisione se i risultati sono stati guardati prima della fine prevista. Il p-value sempre valido di {variant}, sui dati fino al {day:date}, è {p:p} prima della correzione per più trattamenti; la tabella confronta quello corretto con α = {alpha:num}.",
@@ -570,16 +603,16 @@
    "method_comparison": "La differenza è il valore del trattamento meno quello del controllo; l'incremento è quella differenza in percentuale del valore del controllo. Il p-value è la probabilità di una differenza almeno grande come quella osservata se il trattamento non avesse cambiato nulla. I tassi si confrontano con un test z (l'approssimazione normale, ogni variante con la propria varianza), le medie con il test t di Welch, che non presuppone varianze uguali. L'intervallo dell'incremento è quello di Fieller: tiene conto che anche il valore del controllo è incerto, ed esclude lo 0 esattamente quando il test bilaterale non corretto è significativo ad α. Con un test unilaterale conta una sola direzione, e un estremo di ogni intervallo resta aperto.",
    "method_ratio": "Una metrica a rapporto (clic per impression, ricavo per sessione) si calcola per ogni variante come la somma dei numeratori divisa per la somma dei denominatori. A essere assegnate a caso sono le unità, non le impression, quindi le impression di una stessa unità non sono indipendenti tra loro: la varianza si calcola con il metodo delta sulle somme di ciascuna unità (Deng, Knoblich, Lu 2018), ed è questo che mantiene valido il test.",
    "method_srm": "La ripartizione delle unità si verifica per prima: una ripartizione diversa da quella prevista significa che qualcosa ha tolto o aggiunto unità in una variante (un filtro, una regola anti-bot, un reindirizzamento che fallisce, un log perso), e allora le varianti non differiscono più solo per il caso. La verifica è il test χ² di Pearson delle unità di ogni variante contro le quote previste. Il suo livello è più severo di quello dei confronti (0,001 se non lo cambiate), perché la verifica si fa su ogni esperimento e un falso allarme butterebbe via un esperimento sano. Quando non è rispettata, ogni numero del report può essere distorto.",
-   "method_power": "La potenza è la probabilità che il test rilevi un incremento di una certa ampiezza, se l'incremento c'è davvero. L'incremento più piccolo rilevabile con la potenza scelta (80 % se non la cambiate) è l'incremento rilevabile: più unità, o meno varianza, lo rendono più piccolo. Aiuta a leggere un confronto che non mostra differenze: se l'incremento rilevabile è più grande dell'incremento minimo che vi interessa, l'esperimento era troppo piccolo per vederlo. La potenza all'incremento effettivamente osservato non è mostrata: è solo il p-value scritto in un altro modo.",
+   "method_power": "La potenza è la probabilità che il test rilevi un incremento di una certa ampiezza, se l'incremento c'è davvero. L'incremento più piccolo rilevabile con la potenza scelta (80 % se non la cambiate) è l'incremento rilevabile: più unità, o meno varianza, lo rendono più piccolo. Aiuta a leggere un confronto che non mostra differenze: se l'incremento rilevabile è più grande dell'incremento minimo che vi interessa, l'esperimento poteva facilmente non vedere un incremento di quell'ampiezza. La potenza all'incremento effettivamente osservato non è mostrata: è solo il p-value scritto in un altro modo.",
    "method_cuped": "CUPED (Deng, Xu, Kohavi, Walker 2013) usa un valore misurato su ogni unità prima dell'esperimento, la covariata, per togliere dalla metrica la parte che era già prevedibile. La media corretta di una variante è la sua media meno θ volte lo scarto tra la media della covariata in quella variante e in tutte le unità; θ si stima all'interno delle varianti, così il trattamento non può entrarvi. Poiché la covariata precede l'assegnazione, la correzione non può distorcere la differenza: ne restringe solo l'intervallo. A un'unità senza covariata si dà la media della covariata nella propria variante, così tiene il suo peso e non aggiunge una correzione propria, oppure la si esclude, e allora i risultati valgono solo per le unità con una covariata.",
    "method_cap": "Pochi valori molto grandi (un ordine all'ingrosso) allargano molto l'intervallo di una media. Il tetto porta ogni valore sopra un percentile scelto di tutte le unità, di tutte le varianti insieme, a quel percentile, prima di ogni calcolo. Lo stesso limite vale per ogni variante, quindi il confronto resta equo; va scelto prima di guardare i risultati, altrimenti si potrebbe regolarlo sulla risposta sperata.",
-   "method_bayes": "La lettura bayesiana risponde a una domanda diversa da quella del p-value. Il p-value è la probabilità di dati almeno così estremi se non ci fosse alcuna differenza; la probabilità che un trattamento stia davanti al controllo è la probabilità della differenza stessa, dati i dati e una prior (uniforme se non la cambiate, che vale due unità). La perdita attesa pesa quanto potreste perdere scegliendo un trattamento, non solo quanto spesso: è l'ammanco medio, contando zero i casi in cui il trattamento sta in realtà davanti al controllo. Sono misure per il vostro giudizio: nessuna soglia del report le trasforma in una decisione.",
+   "method_bayes": "La lettura bayesiana risponde a una domanda diversa da quella del p-value. Il p-value è la probabilità di dati almeno così estremi se non ci fosse alcuna differenza; la probabilità che un trattamento stia davanti al controllo è la probabilità della differenza stessa, dati i dati e una prior (per un tasso una Beta, uniforme se non la cambiate, che pesa quanto due unità; per una media o un rapporto una prior piatta). La perdita attesa pesa quanto potreste perdere scegliendo un trattamento, non solo quanto spesso: è l'ammanco medio, contando zero i casi in cui il trattamento sta in realtà davanti al controllo. Sono misure per il vostro giudizio: nessuna soglia del report le trasforma in una decisione.",
    "method_sequential": "Un p-value ordinario vale solo se lo si legge una volta, alla fine prevista: guardare ogni giorno e fermarsi al primo p-value sotto α rende un falso allarme molto più probabile di α. Il p-value sempre valido del test sequenziale del rapporto di probabilità a miscela (Johari, Koomen, Pekelis, Walsh 2017) mantiene la sua garanzia per quanto spesso e quando che sia si guardino i risultati. Confronta l'incremento osservato con una miscela di incrementi possibili di ampiezza tipica τ, ed è più prudente del p-value ordinario letto alla fine. Il report lo ricalcola dai dati del giorno a ogni esecuzione e non ricorda nulla da un'esecuzione all'altra.",
    "method_secondary": "Le metriche secondarie fanno da guardia: ognuna si confronta come la metrica principale, e i loro p-value si correggono tra loro, mai insieme a quello della principale, così aggiungere una metrica di guardia non costa nulla alla metrica principale. Decide solo la metrica principale; una metrica secondaria che risulta peggiore è elencata nella prima pagina.",
    "method_plan": "Il piano dice quante unità servono a un esperimento perché un incremento dell'ampiezza che conta venga rilevato con la potenza scelta all'α scelto, oppure, al contrario, quale incremento può rilevare un dato numero di unità o di giorni. Usa l'approssimazione normale del test eseguito dal nodo A/B, con la base di partenza e la varianza della metrica letti dallo storico, così piano e test concordano. Con più trattamenti ogni confronto è pianificato ad α diviso per il numero di confronti: le dimensioni sono dalla parte della prudenza.",
    "method_weeks": "La durata è il numero di unità necessarie diviso per le nuove unità al giorno dello storico (per la quota del traffico mandata all'esperimento). Le persone si comportano in modo diverso nei giorni della settimana, quindi un esperimento che copre settimane intere confronta cose simili: il report dà le settimane accanto ai giorni.",
    "sequential_read_no_day": "Leggete questa decisione se i risultati sono stati guardati prima della fine prevista. Il p-value sempre valido di {variant}, sui dati di questa esecuzione, è {p:p} prima della correzione per più trattamenti; la tabella confronta quello corretto con α = {alpha:num}.",
-   "sequential_empty": "Gli intervalli dell'incremento di {variant} calcolati giorno dopo giorno non hanno alcun valore in comune: la sua sequenza di confidenza è vuota e la tabella non mostra alcun intervallo. Succede quando l'incremento è cambiato durante l'esperimento.",
+   "sequential_empty": "Gli intervalli dell'incremento di {variant} calcolati giorno dopo giorno non hanno alcun valore in comune: la sua sequenza di confidenza è vuota e la tabella non mostra alcun intervallo. È un segno che l'incremento è cambiato durante l'esperimento.",
    "secondary_family": "I {comparisons:int} confronti delle metriche secondarie (ogni metrica contro il controllo, per ogni trattamento) sono stati corretti tra loro con la correzione del nodo, mai insieme a quelli della metrica principale: i p-value della metrica principale sono gli stessi che senza di essi.",
    "secondary_family_none": "Non è stata chiesta alcuna correzione: i {comparisons:int} confronti delle metriche secondarie mantengono i propri p-value, quindi il rischio di almeno un falso allarme tra di essi è più grande di α. I p-value della metrica principale sono gli stessi che senza di essi.",
    "secondary_family_one": "Con un solo confronto di una metrica secondaria non c'è nulla da correggere; i p-value della metrica principale sono gli stessi che senza di esso.",
@@ -610,7 +643,8 @@
    "secondary_family_none",
    "secondary_family_one",
    "baseline_read_no_days",
-   "cuped_plan_no_days"
+   "cuped_plan_no_days",
+   "sequential_read"
   ],
   "verdict_words": [
    "significativo",
@@ -807,9 +841,13 @@
     "advice": "Die Varianten unterschieden sich schon vor dem Experiment: Prüfen Sie, ob die Kovariate vor der Zuweisung gemessen wurde und ob die Zuweisung zufällig war. CUPED korrigiert ein zufälliges Ungleichgewicht, keine fehlerhafte Zuweisung."
    },
    "covariate_missing_balance": {
-    "name": "Leere Kovariaten gleich verteilt (χ²)",
+    "name": "Einheiten ohne Kovariate gleich verteilt (χ²)",
     "h0": "Einheiten ohne Kovariate sind in jeder Variante gleich häufig.",
-    "advice": "Eine Variante hat mehr Einheiten ohne Kovariate (neue Nutzer, ein auf einer Seite fehlendes Log): Diese Einheiten auszulassen würde den Vergleich verzerren; füllen Sie die Kovariate auf, oder suchen Sie den Grund."
+    "advice": "Eine Variante hat mehr Einheiten ohne Kovariate (neue Nutzer, ein auf einer Seite fehlendes Log): Suchen Sie den Grund. Diese Einheiten auszulassen (covariate_missing = exclude) würde den Vergleich verzerren, sie aufzufüllen nicht.",
+    "count": {
+     "one": "{n} Einheit ohne Kovariate",
+     "other": "{n} Einheiten ohne Kovariate"
+    }
    },
    "crossover": {
     "name": "Einheiten in mehr als einer Variante",
@@ -823,7 +861,11 @@
    "variance_zero": {
     "name": "Eine Kennzahl ohne Varianz",
     "h0": "Die Kennzahl variiert innerhalb jeder Variante.",
-    "advice": "In einer Variante haben alle Einheiten denselben Wert: Ein Vergleich mit einer Kontrolle, die ebenfalls keine Varianz hat, wird nicht berechnet. Prüfen Sie die Spalte der Kennzahl und den Filter vor dem Knoten."
+    "advice": "In einer Variante haben alle Einheiten denselben Wert: Ein Vergleich mit einer Kontrolle, die ebenfalls keine Varianz hat, wird nicht berechnet. Prüfen Sie die Spalte der Kennzahl und den Filter vor dem Knoten.",
+    "count": {
+     "one": "{n} Variante ohne Varianz",
+     "other": "{n} Varianten ohne Varianz"
+    }
    }
   },
   "reading": {
@@ -881,16 +923,24 @@
    "formula_sample_size": "Stichprobengröße"
   },
   "reading_texts": {
-   "decision_better": "{variant} schlägt die Kontrolle {control}: Der korrigierte p-Wert, {p_adjusted:p}, liegt unter α = {alpha:num}; der Anstieg beträgt {lift:spct}.",
-   "decision_worse": "{variant} ist schlechter als die Kontrolle {control}: Der korrigierte p-Wert, {p_adjusted:p}, liegt unter α = {alpha:num}; der Anstieg beträgt {lift:spct}.",
-   "decision_no_difference": "Keine Behandlung unterscheidet sich bei α = {alpha:num} von der Kontrolle {control}: Der kleinste korrigierte p-Wert, der von {variant}, beträgt {p_adjusted:p}.",
+   "decision_better": "{variant} schlägt die Kontrolle {control}: Der korrigierte p-Wert, {p_adjusted:p}, liegt unter α = {alpha:num}; die Veränderung beträgt {lift:spct}.",
+   "decision_worse": "{variant} ist schlechter als die Kontrolle {control}: Der korrigierte p-Wert, {p_adjusted:p}, liegt unter α = {alpha:num}; die Veränderung beträgt {lift:spct}.",
+   "decision_better_many": "{variants} schlagen die Kontrolle {control} bei α = {alpha:num}. Der kleinste korrigierte p-Wert, {p_adjusted:p}, ist der von {variant}; die Veränderung beträgt {lift:spct}.",
+   "decision_worse_many": "{variants} sind schlechter als die Kontrolle {control} bei α = {alpha:num}. Der kleinste korrigierte p-Wert, {p_adjusted:p}, ist der von {variant}; die Veränderung beträgt {lift:spct}.",
+   "decision_no_difference": "Keine Behandlung zeigt bei α = {alpha:num} einen Unterschied zur Kontrolle {control}: Der kleinste korrigierte p-Wert, der von {variant}, beträgt {p_adjusted:p}.",
    "decision_counts": "Von den {units:int} Einheiten von {variant} haben {converted:int} konvertiert: {rate:pct}, gegenüber {rate_control:pct} bei {control} ({units_control:int} Einheiten).",
    "decision_means": "Die {units:int} Einheiten von {variant} haben einen Mittelwert von {value:num}, gegenüber {value_control:num} bei den {units_control:int} Einheiten von {control}.",
    "decision_interval": "Mit einer Konfidenz von {conf:pct} liegt der wahre Anstieg zwischen {lift_low:spct} und {lift_high:spct}: der Bereich der Anstiege, mit denen diese Daten vereinbar sind.",
-   "srm_ok": "Die Einheiten sind {observed:pct} aufgeteilt (die Varianten in der Reihenfolge der Tabelle), geplant waren {shares:pct}. Eine mindestens so große Abweichung tritt mit der Wahrscheinlichkeit {p:p} zufällig auf, über dem für diese Prüfung festgelegten Niveau von {srm_alpha:num}: Die Aufteilung ist wie geplant.",
+   "srm_ok": "Die Einheiten sind {observed:pct} aufgeteilt (die Varianten in der Reihenfolge der Tabelle), geplant waren {shares:pct}. Eine mindestens so große Abweichung tritt mit der Wahrscheinlichkeit {p:p} zufällig auf, über dem für diese Prüfung festgelegten Niveau von {srm_alpha:num}: Die Daten zeigen keine Abweichung von der geplanten Aufteilung.",
    "srm_failed": "Die Einheiten sind {observed:pct} aufgeteilt, geplant waren {shares:pct}. Eine so große Abweichung träte nur mit der Wahrscheinlichkeit {p:p} zufällig auf, unter dem für diese Prüfung festgelegten Niveau von {srm_alpha:num}. Etwas hat in einer Variante Einheiten entfernt oder hinzugefügt, daher kann jede Zahl dieses Berichts verzerrt sein: Finden Sie die Ursache, bevor Sie entscheiden.",
-   "comparison_significant": "Wenn sich {variant} nicht von {control} unterschiede, träte ein mindestens so großer Unterschied mit der Wahrscheinlichkeit {p:p} zufällig auf. Korrigiert für die Zahl der Vergleiche liegt diese Wahrscheinlichkeit unter α = {alpha:num}: Der Unterschied ist signifikant.",
-   "comparison_not_significant": "Wenn sich {variant} nicht von {control} unterschiede, träte ein mindestens so großer Unterschied mit der Wahrscheinlichkeit {p:p} zufällig auf. Korrigiert für die Zahl der Vergleiche liegt diese Wahrscheinlichkeit nicht unter α = {alpha:num}: Die Daten zeigen keinen Unterschied, was nicht beweist, dass es keinen gibt.",
+   "comparison_significant": {
+    "correction=none": "Wenn sich {variant} nicht von {control} unterschiede, träte ein mindestens so großer Unterschied mit der Wahrscheinlichkeit {p:p} zufällig auf. Sie liegt unter α = {alpha:num}: Der Unterschied ist signifikant.",
+    "": "Wenn sich {variant} nicht von {control} unterschiede, träte ein mindestens so großer Unterschied mit der Wahrscheinlichkeit {p:p} zufällig auf. Korrigiert für die Zahl der Vergleiche beträgt diese Wahrscheinlichkeit {p_adjusted:p} und liegt unter α = {alpha:num}: Der Unterschied ist signifikant."
+   },
+   "comparison_not_significant": {
+    "correction=none": "Wenn sich {variant} nicht von {control} unterschiede, träte ein mindestens so großer Unterschied mit der Wahrscheinlichkeit {p:p} zufällig auf. Sie liegt nicht unter α = {alpha:num}: Die Daten zeigen keinen Unterschied, was nicht beweist, dass es keinen gibt.",
+    "": "Wenn sich {variant} nicht von {control} unterschiede, träte ein mindestens so großer Unterschied mit der Wahrscheinlichkeit {p:p} zufällig auf. Korrigiert für die Zahl der Vergleiche beträgt diese Wahrscheinlichkeit {p_adjusted:p} und liegt nicht unter α = {alpha:num}: Die Daten zeigen keinen Unterschied, was nicht beweist, dass es keinen gibt."
+   },
    "cuped_reduced": "Die Verwendung von «{covariate}», gemessen vor dem Experiment, hat die Varianz der Kennzahl um {reduction:pct} verringert (θ = {theta:num}, Korrelation {correlation:num}): Dieselben Einheiten erkennen jetzt kleinere Anstiege.",
    "cuped_filled": "{count:int} Einheiten hatten keinen Wert der Kovariate: Jede erhielt den Mittelwert der Kovariate in ihrer eigenen Variante (die Spalte «Aufgefüllt mit» oben) und behält ihren eigenen Wert der Kennzahl.",
    "cuped_excluded": "{count:int} Einheiten hatten keinen Wert der Kovariate und wurden aus jedem Vergleich ausgelassen: Diese Ergebnisse gelten nur für die Einheiten mit Kovariate.",
@@ -909,16 +959,16 @@
    "method_comparison": "Die Differenz ist der Wert der Behandlung abzüglich des Werts der Kontrolle; der Anstieg ist diese Differenz in Prozent des Werts der Kontrolle. Der p-Wert ist die Wahrscheinlichkeit einer Differenz, die mindestens so groß ist wie die beobachtete, falls die Behandlung nichts verändert hätte. Raten werden mit einem z-Test verglichen (die Normalapproximation, jede Variante mit ihrer eigenen Varianz), Mittelwerte mit dem Welch-t-Test, der keine gleichen Varianzen voraussetzt. Das Intervall des Anstiegs ist das von Fieller: Es berücksichtigt, dass auch der Wert der Kontrolle unsicher ist, und es schließt die 0 genau dann aus, wenn der unkorrigierte zweiseitige Test bei α signifikant ist. Bei einem einseitigen Test zählt nur eine Richtung, und ein Ende jedes Intervalls ist offen.",
    "method_ratio": "Eine Verhältniskennzahl (Klicks je Einblendung, Umsatz je Sitzung) wird für jede Variante als Summe der Zähler durch die Summe der Nenner berechnet. Zufällig zugewiesen wurden die Einheiten, nicht die Einblendungen, daher sind die Einblendungen einer Einheit nicht unabhängig voneinander: Die Varianz wird mit der Delta-Methode auf den Summen jeder Einheit berechnet (Deng, Knoblich, Lu 2018), und das hält den Test gültig.",
    "method_srm": "Die Aufteilung der Einheiten wird zuerst geprüft: Weicht sie von der geplanten ab, hat etwas in einer Variante Einheiten entfernt oder hinzugefügt — ein Filter, eine Bot-Regel, eine fehlschlagende Weiterleitung, ein verlorenes Log —, und dann unterscheiden sich die Varianten nicht mehr nur durch den Zufall. Die Prüfung ist der χ²-Test nach Pearson: die Einheiten jeder Variante gegen die geplanten Anteile. Das Niveau dieser Prüfung ist strenger als das der Vergleiche (0,001, sofern Sie es nicht ändern), weil die Prüfung bei jedem Experiment läuft und ein Fehlalarm ein einwandfreies Experiment verwerfen würde. Schlägt die Prüfung an, kann jede Zahl des Berichts verzerrt sein.",
-   "method_power": "Die Teststärke ist die Wahrscheinlichkeit, dass der Test einen Anstieg einer bestimmten Größe erkennt, falls dieser Anstieg wirklich vorhanden ist. Der kleinste Anstieg, der mit der gewählten Teststärke (80 %, sofern Sie sie nicht ändern) erkennbar ist, heißt erkennbarer Anstieg: Mehr Einheiten oder weniger Varianz machen ihn kleiner. Er hilft, einen Vergleich zu lesen, der keinen Unterschied zeigt: Ist der erkennbare Anstieg größer als der kleinste Anstieg, der für Sie zählt, war das Experiment zu klein, um diesen zu sehen. Die Teststärke beim tatsächlich beobachteten Anstieg wird nicht gezeigt: Diese Zahl ist nur der p-Wert in anderer Form.",
+   "method_power": "Die Teststärke ist die Wahrscheinlichkeit, dass der Test einen Anstieg einer bestimmten Größe erkennt, falls dieser Anstieg wirklich vorhanden ist. Der kleinste Anstieg, der mit der gewählten Teststärke (80 %, sofern Sie sie nicht ändern) erkennbar ist, heißt erkennbarer Anstieg: Mehr Einheiten oder weniger Varianz machen ihn kleiner. Er hilft, einen Vergleich zu lesen, der keinen Unterschied zeigt: Ist der erkennbare Anstieg größer als der kleinste Anstieg, der für Sie zählt, konnte das Experiment einen Anstieg dieser Größe leicht übersehen. Die Teststärke beim tatsächlich beobachteten Anstieg wird nicht gezeigt: Diese Zahl ist nur der p-Wert in anderer Form.",
    "method_cuped": "CUPED (Deng, Xu, Kohavi, Walker 2013) verwendet einen Wert, der an jeder Einheit vor dem Experiment gemessen wurde, die Kovariate, um aus der Kennzahl herauszunehmen, was schon vorhersagbar war. Der bereinigte Mittelwert einer Variante ist ihr Mittelwert minus θ mal dem Abstand zwischen dem Mittelwert der Kovariate in dieser Variante und dem in allen Einheiten; θ wird innerhalb der Varianten geschätzt, sodass die Behandlung nicht darauf einwirken kann. Weil die Kovariate vor der Zuweisung liegt, kann die Bereinigung die Differenz nicht verzerren, nur ihr Intervall verengen. Eine Einheit ohne Kovariate erhält entweder den Mittelwert der Kovariate in ihrer eigenen Variante, sodass sie ihr Gewicht behält und keine eigene Bereinigung beiträgt, oder sie wird ausgelassen, und dann gelten die Ergebnisse nur für die Einheiten mit Kovariate.",
    "method_cap": "Wenige sehr große Werte (eine Großbestellung) verbreitern das Intervall eines Mittelwerts stark. Die Deckelung setzt vor jeder Berechnung jeden Wert über einem gewählten Perzentil aller Einheiten, alle Varianten zusammen, auf dieses Perzentil. Dieselbe Grenze gilt für jede Variante, daher bleibt der Vergleich fair; sie muss gewählt werden, bevor man die Ergebnisse ansieht, sonst könnte man sie auf die erhoffte Antwort abstimmen.",
-   "method_bayes": "Die bayessche Auswertung beantwortet eine andere Frage als der p-Wert. Der p-Wert ist die Wahrscheinlichkeit von Daten, die mindestens so extrem sind, falls es keinen Unterschied gäbe; die Wahrscheinlichkeit, dass eine Behandlung vor der Kontrolle liegt, ist die Wahrscheinlichkeit des Unterschieds selbst, gegeben die Daten und einen Prior (gleichverteilt, sofern Sie ihn nicht ändern, zwei Einheiten wert). Der erwartete Verlust gewichtet, wie viel Sie verlieren könnten, wenn Sie eine Behandlung wählen, nicht nur wie oft: Er ist der mittlere Fehlbetrag, wobei die Fälle, in denen die Behandlung in Wahrheit vor der Kontrolle liegt, mit null zählen. Das sind Messgrößen für Ihr Urteil: Keine Schwelle des Berichts macht daraus eine Entscheidung.",
+   "method_bayes": "Die bayessche Auswertung beantwortet eine andere Frage als der p-Wert. Der p-Wert ist die Wahrscheinlichkeit von Daten, die mindestens so extrem sind, falls es keinen Unterschied gäbe; die Wahrscheinlichkeit, dass eine Behandlung vor der Kontrolle liegt, ist die Wahrscheinlichkeit des Unterschieds selbst, gegeben die Daten und einen Prior (für eine Rate ein Beta-Prior, gleichverteilt, sofern Sie ihn nicht ändern, mit dem Gewicht von zwei Einheiten; für einen Mittelwert oder ein Verhältnis ein flacher). Der erwartete Verlust gewichtet, wie viel Sie verlieren könnten, wenn Sie eine Behandlung wählen, nicht nur wie oft: Er ist der mittlere Fehlbetrag, wobei die Fälle, in denen die Behandlung in Wahrheit vor der Kontrolle liegt, mit null zählen. Das sind Messgrößen für Ihr Urteil: Keine Schwelle des Berichts macht daraus eine Entscheidung.",
    "method_sequential": "Ein gewöhnlicher p-Wert gilt nur, wenn er einmal gelesen wird, am geplanten Ende: Jeden Tag nachzusehen und beim ersten p-Wert unter α aufzuhören, macht einen Fehlalarm weit wahrscheinlicher als α. Der jederzeit gültige p-Wert des sequenziellen Likelihood-Quotienten-Tests mit Mischung (mixture sequential probability ratio test; Johari, Koomen, Pekelis, Walsh 2017) behält seine Garantie, wie oft und wann auch immer die Ergebnisse angesehen werden. Er wägt den beobachteten Anstieg gegen eine Mischung möglicher Anstiege typischer Größe τ ab und ist vorsichtiger als der gewöhnliche, am Ende gelesene p-Wert. Der Bericht berechnet ihn bei jeder Ausführung neu aus den Daten des Tages und merkt sich nichts von einer Ausführung zur nächsten.",
    "method_secondary": "Sekundäre Kennzahlen sind Leitplanken: Jede wird wie die primäre Kennzahl verglichen, und ihre p-Werte werden untereinander korrigiert, nie zusammen mit dem der primären, sodass eine zusätzliche Leitplanke die primäre Kennzahl nichts kostet. Nur die primäre Kennzahl entscheidet; eine sekundäre Kennzahl, die schlechter ausfällt, wird auf der ersten Seite aufgeführt.",
    "method_plan": "Der Plan sagt, wie viele Einheiten ein Experiment braucht, damit ein Anstieg der relevanten Größe mit der gewählten Teststärke beim gewählten α erkannt würde, oder umgekehrt, welchen Anstieg eine gegebene Zahl von Einheiten oder Tagen erkennen kann. Er verwendet die Normalapproximation des Tests, den der A/B-Knoten ausführt, mit dem Ausgangswert und der Varianz der Kennzahl aus dem Verlauf, sodass Plan und Test übereinstimmen. Bei mehreren Behandlungen wird jeder Vergleich bei α geteilt durch die Zahl der Vergleiche geplant: Die Größen liegen auf der sicheren Seite.",
    "method_weeks": "Die Dauer ist die Zahl der nötigen Einheiten geteilt durch die neuen Einheiten pro Tag im Verlauf (multipliziert mit dem Anteil des Verkehrs, der ins Experiment geht). Menschen verhalten sich an den Tagen der Woche unterschiedlich, daher vergleicht ein Experiment, das ganze Wochen abdeckt, Gleiches mit Gleichem: Der Bericht gibt die Wochen neben den Tagen an.",
    "sequential_read_no_day": "Lesen Sie diese Entscheidung, wenn die Ergebnisse vor dem geplanten Ende angesehen wurden. Der jederzeit gültige p-Wert von {variant}, mit den Daten dieses Laufs, beträgt {p:p} vor der Korrektur für mehrere Behandlungen; die Tabelle vergleicht den korrigierten Wert mit α = {alpha:num}.",
-   "sequential_empty": "Die Tag für Tag berechneten Intervalle des Anstiegs von {variant} haben keinen gemeinsamen Wert: Seine Konfidenzsequenz ist leer, und die Tabelle zeigt kein Intervall. Das geschieht, wenn sich der Anstieg während des Experiments verändert hat.",
+   "sequential_empty": "Die Tag für Tag berechneten Intervalle des Anstiegs von {variant} haben keinen gemeinsamen Wert: Seine Konfidenzsequenz ist leer, und die Tabelle zeigt kein Intervall. Das ist ein Zeichen, dass sich der Anstieg während des Experiments verändert hat.",
    "secondary_family": "Die {comparisons:int} Vergleiche der sekundären Kennzahlen (jede Kennzahl gegen die Kontrolle, für jede Behandlung) wurden untereinander mit der Korrektur des Knotens korrigiert, nie zusammen mit denen der primären Kennzahl: Die p-Werte der primären Kennzahl sind dieselben wie ohne sie.",
    "secondary_family_none": "Es wurde keine Korrektur verlangt: Die {comparisons:int} Vergleiche der sekundären Kennzahlen behalten ihre eigenen p-Werte, daher ist das Risiko mindestens eines Fehlalarms unter ihnen größer als α. Die p-Werte der primären Kennzahl sind dieselben wie ohne sie.",
    "secondary_family_one": "Bei nur einem Vergleich einer sekundären Kennzahl gibt es nichts zu korrigieren; die p-Werte der primären Kennzahl sind dieselben wie ohne ihn.",
@@ -949,7 +999,8 @@
    "secondary_family_none",
    "secondary_family_one",
    "baseline_read_no_days",
-   "cuped_plan_no_days"
+   "cuped_plan_no_days",
+   "sequential_read"
   ],
   "verdict_words": [
    "signifikant",
@@ -1165,9 +1216,13 @@
     "advice": "Las variantes ya eran distintas antes del experimento: compruebe que la covariable se midió antes de la asignación y que la asignación fue aleatoria. CUPED corrige un desequilibrio debido al azar, no una asignación defectuosa."
    },
    "covariate_missing_balance": {
-    "name": "Covariables vacías repartidas por igual (χ²)",
+    "name": "Unidades sin covariable repartidas por igual (χ²)",
     "h0": "Las unidades sin covariable son igual de frecuentes en todas las variantes.",
-    "advice": "Una variante tiene más unidades sin covariable (usuarios nuevos, un log que falta en un lado): excluirlas sesgaría la comparación; rellénelas, o busque el motivo."
+    "advice": "Una variante tiene más unidades sin covariable (usuarios nuevos, un log que falta en un lado): busque el motivo. Excluirlas (covariate_missing = exclude) sesgaría la comparación; rellenarlas no.",
+    "count": {
+     "one": "{n} unidad sin covariable",
+     "other": "{n} unidades sin covariable"
+    }
    },
    "crossover": {
     "name": "Unidades en más de una variante",
@@ -1181,7 +1236,11 @@
    "variance_zero": {
     "name": "Una métrica sin varianza",
     "h0": "La métrica varía dentro de cada variante.",
-    "advice": "En una variante todas las unidades tienen el mismo valor: no se calcula una comparación con un control que tampoco tiene varianza. Compruebe la columna de la métrica y el filtro antes del nodo."
+    "advice": "En una variante todas las unidades tienen el mismo valor: no se calcula una comparación con un control que tampoco tiene varianza. Compruebe la columna de la métrica y el filtro antes del nodo.",
+    "count": {
+     "one": "{n} variante sin varianza",
+     "other": "{n} variantes sin varianza"
+    }
    }
   },
   "reading": {
@@ -1239,16 +1298,24 @@
    "formula_sample_size": "Tamaño de la muestra"
   },
   "reading_texts": {
-   "decision_better": "{variant} es mejor que el control {control}: su p-valor corregido, {p_adjusted:p}, está por debajo de α = {alpha:num}, con un aumento de {lift:spct}.",
-   "decision_worse": "{variant} es peor que el control {control}: su p-valor corregido, {p_adjusted:p}, está por debajo de α = {alpha:num}, con un aumento de {lift:spct}.",
-   "decision_no_difference": "Ningún tratamiento difiere del control {control} a α = {alpha:num}: el menor p-valor corregido, el de {variant}, es {p_adjusted:p}.",
+   "decision_better": "{variant} es mejor que el control {control}: su p-valor corregido, {p_adjusted:p}, está por debajo de α = {alpha:num}, con una variación de {lift:spct}.",
+   "decision_worse": "{variant} es peor que el control {control}: su p-valor corregido, {p_adjusted:p}, está por debajo de α = {alpha:num}, con una variación de {lift:spct}.",
+   "decision_better_many": "{variants} son mejores que el control {control} a α = {alpha:num}. El menor p-valor corregido, {p_adjusted:p}, es el de {variant}, con una variación de {lift:spct}.",
+   "decision_worse_many": "{variants} son peores que el control {control} a α = {alpha:num}. El menor p-valor corregido, {p_adjusted:p}, es el de {variant}, con una variación de {lift:spct}.",
+   "decision_no_difference": "Ningún tratamiento muestra una diferencia con el control {control} a α = {alpha:num}: el menor p-valor corregido, el de {variant}, es {p_adjusted:p}.",
    "decision_counts": "De las {units:int} unidades de {variant}, {converted:int} convirtieron: un {rate:pct}, frente a un {rate_control:pct} de {control} ({units_control:int} unidades).",
    "decision_means": "Las {units:int} unidades de {variant} tienen una media de {value:num}, frente a {value_control:num} de las {units_control:int} unidades de {control}.",
    "decision_interval": "Con un {conf:pct} de confianza, el aumento verdadero está entre {lift_low:spct} y {lift_high:spct}: el rango de aumentos compatibles con estos datos.",
-   "srm_ok": "Las unidades se reparten {observed:pct} (las variantes en el orden de la tabla) frente a lo previsto, {shares:pct}. Una diferencia al menos así de grande ocurre por azar con probabilidad {p:p}, por encima del nivel {srm_alpha:num} fijado para esta comprobación: el reparto es el previsto.",
+   "srm_ok": "Las unidades se reparten {observed:pct} (las variantes en el orden de la tabla) frente a lo previsto, {shares:pct}. Una diferencia al menos así de grande ocurre por azar con probabilidad {p:p}, por encima del nivel {srm_alpha:num} fijado para esta comprobación: los datos no muestran una desviación del reparto previsto.",
    "srm_failed": "Las unidades se reparten {observed:pct} frente a lo previsto, {shares:pct}. Una diferencia así de grande ocurriría por azar con probabilidad {p:p}, por debajo del nivel {srm_alpha:num} fijado para esta comprobación. Algo quitó o añadió unidades en una variante, así que cualquier número de este informe puede estar sesgado: busque la causa antes de decidir.",
-   "comparison_significant": "Si {variant} no fuera distinto de {control}, una diferencia al menos así de grande aparecería por azar con probabilidad {p:p}. Corregida por el número de comparaciones, esta probabilidad está por debajo de α = {alpha:num}: la diferencia es significativa.",
-   "comparison_not_significant": "Si {variant} no fuera distinto de {control}, una diferencia al menos así de grande aparecería por azar con probabilidad {p:p}. Corregida por el número de comparaciones, no está por debajo de α = {alpha:num}: los datos no muestran una diferencia, lo que no demuestra que no la haya.",
+   "comparison_significant": {
+    "correction=none": "Si {variant} no fuera distinto de {control}, una diferencia al menos así de grande aparecería por azar con probabilidad {p:p}. Está por debajo de α = {alpha:num}: la diferencia es significativa.",
+    "": "Si {variant} no fuera distinto de {control}, una diferencia al menos así de grande aparecería por azar con probabilidad {p:p}. Corregida por el número de comparaciones, esta probabilidad es {p_adjusted:p}, por debajo de α = {alpha:num}: la diferencia es significativa."
+   },
+   "comparison_not_significant": {
+    "correction=none": "Si {variant} no fuera distinto de {control}, una diferencia al menos así de grande aparecería por azar con probabilidad {p:p}. No está por debajo de α = {alpha:num}: los datos no muestran una diferencia, lo que no demuestra que no la haya.",
+    "": "Si {variant} no fuera distinto de {control}, una diferencia al menos así de grande aparecería por azar con probabilidad {p:p}. Corregida por el número de comparaciones, esta probabilidad es {p_adjusted:p}, no por debajo de α = {alpha:num}: los datos no muestran una diferencia, lo que no demuestra que no la haya."
+   },
    "cuped_reduced": "Usar «{covariate}», medida antes del experimento, redujo la varianza de la métrica en un {reduction:pct} (θ = {theta:num}, correlación {correlation:num}): las mismas unidades detectan ahora aumentos más pequeños.",
    "cuped_filled": "{count:int} unidades no tenían valor de la covariable: cada una recibió la media de la covariable en su propia variante (la columna «Rellenada con» de arriba) y conserva su propio valor de la métrica.",
    "cuped_excluded": "{count:int} unidades no tenían valor de la covariable y se excluyeron de todas las comparaciones: estos resultados valen solo para las unidades con covariable.",
@@ -1267,16 +1334,16 @@
    "method_comparison": "La diferencia es el valor del tratamiento menos el del control; el aumento es esa diferencia como porcentaje del valor del control. El p-valor es la probabilidad de una diferencia al menos tan grande como la observada si el tratamiento no hubiera cambiado nada. Las tasas se comparan con una prueba z (la aproximación normal, cada variante con su propia varianza), las medias con la prueba t de Welch, que no supone varianzas iguales. El intervalo del aumento es el de Fieller: tiene en cuenta que el valor del control también es incierto, y excluye el 0 exactamente cuando la prueba bilateral sin corregir es significativa a α. Con una prueba unilateral solo cuenta una dirección, y un extremo de cada intervalo queda abierto.",
    "method_ratio": "Una métrica de razón (clics por impresión, ingresos por sesión) se calcula en cada variante como la suma de los numeradores dividida por la suma de los denominadores. Lo que se asignó al azar son las unidades, no las impresiones, así que las impresiones de una misma unidad no son independientes entre sí: la varianza se calcula con el método delta sobre las sumas de cada unidad (Deng, Knoblich, Lu 2018), y eso es lo que mantiene válida la prueba.",
    "method_srm": "El reparto de las unidades se comprueba primero: un reparto distinto del previsto significa que algo quitó o añadió unidades en una variante (un filtro, una regla contra bots, una redirección que falla, un log perdido), y entonces las variantes ya no difieren solo por azar. La comprobación es la prueba χ² de Pearson de las unidades de cada variante frente a las partes previstas. Su nivel es más estricto que el de las comparaciones (0,001 salvo que lo cambie), porque la comprobación se hace en cada experimento y una falsa alarma haría descartar un experimento sano. Cuando no se cumple, cualquier número del informe puede estar sesgado.",
-   "method_power": "La potencia es la probabilidad de que la prueba detecte un aumento de un tamaño dado, si ese aumento existe de verdad. El aumento más pequeño que se detecta con la potencia elegida (80 % salvo que la cambie) es el aumento detectable: más unidades, o menos varianza, lo reducen. Ayuda a leer una comparación que no muestra diferencias: si el aumento detectable es mayor que el aumento mínimo que le interesa, el experimento era demasiado pequeño para verlo. No se muestra la potencia en el aumento realmente observado: sería solo el p-valor escrito de otra forma.",
+   "method_power": "La potencia es la probabilidad de que la prueba detecte un aumento de un tamaño dado, si ese aumento existe de verdad. El aumento más pequeño que se detecta con la potencia elegida (80 % salvo que la cambie) es el aumento detectable: más unidades, o menos varianza, lo reducen. Ayuda a leer una comparación que no muestra diferencias: si el aumento detectable es mayor que el aumento mínimo que le interesa, el experimento podía fácilmente no ver un aumento de ese tamaño. No se muestra la potencia en el aumento realmente observado: sería solo el p-valor escrito de otra forma.",
    "method_cuped": "CUPED (Deng, Xu, Kohavi, Walker 2013) usa un valor medido en cada unidad antes del experimento, la covariable, para quitar de la métrica la parte que ya era predecible. La media ajustada de una variante es su media menos θ veces la diferencia entre la media de la covariable en esa variante y en todas las unidades; θ se estima dentro de las variantes, así que el tratamiento no puede influir en él. Como la covariable es anterior a la asignación, el ajuste no puede sesgar la diferencia: solo estrecha su intervalo. Una unidad sin covariable o bien recibe la media de la covariable en su propia variante, de modo que conserva su peso y no aporta un ajuste propio, o bien se excluye, y entonces los resultados valen solo para las unidades con covariable.",
    "method_cap": "Unos pocos valores muy grandes (un pedido al por mayor) ensanchan mucho el intervalo de una media. Antes de cualquier cálculo, el límite lleva cada valor por encima de un percentil elegido de todas las unidades, con todas las variantes juntas, a ese percentil. El mismo límite vale para todas las variantes, así que la comparación sigue siendo justa; hay que elegirlo antes de mirar los resultados, porque si no se podría ajustar a la respuesta que se espera.",
-   "method_bayes": "La lectura bayesiana responde a una pregunta distinta de la del p-valor. El p-valor es la probabilidad de unos datos al menos así de extremos si no hubiera ninguna diferencia; la probabilidad de que un tratamiento vaya por delante del control es la probabilidad de la diferencia misma, dados los datos y un a priori (uniforme salvo que lo cambie, con el peso de dos unidades). La pérdida esperada pondera cuánto podría perder al elegir un tratamiento, no solo con qué frecuencia: es el déficit medio, en el que los casos en que el tratamiento está en realidad por delante del control cuentan como cero. Son medidas para su criterio: ningún umbral del informe las convierte en una decisión.",
+   "method_bayes": "La lectura bayesiana responde a una pregunta distinta de la del p-valor. El p-valor es la probabilidad de unos datos al menos así de extremos si no hubiera ninguna diferencia; la probabilidad de que un tratamiento vaya por delante del control es la probabilidad de la diferencia misma, dados los datos y un a priori (para una tasa una Beta, uniforme salvo que la cambie, con el peso de dos unidades; para una media o un cociente, uno plano). La pérdida esperada pondera cuánto podría perder al elegir un tratamiento, no solo con qué frecuencia: es el déficit medio, en el que los casos en que el tratamiento está en realidad por delante del control cuentan como cero. Son medidas para su criterio: ningún umbral del informe las convierte en una decisión.",
    "method_sequential": "Un p-valor ordinario solo vale si se lee una vez, al final previsto: mirar cada día y parar en el primer p-valor por debajo de α hace una falsa alarma mucho más probable que α. El p-valor siempre válido de la prueba secuencial de razón de probabilidades de mezcla (Johari, Koomen, Pekelis, Walsh 2017) mantiene su garantía se miren los resultados las veces que se miren y en el momento que sea. Compara el aumento observado con una mezcla de aumentos posibles de tamaño típico τ, y es más prudente que el p-valor ordinario leído al final. El informe lo vuelve a calcular con los datos del día en cada ejecución y no recuerda nada de una ejecución a otra.",
    "method_secondary": "Las métricas secundarias hacen de salvaguarda: cada una se compara como la métrica principal, y sus p-valores se corrigen entre ellos, nunca junto con el de la principal, así que añadir una métrica de salvaguarda no le cuesta nada a la métrica principal. Solo decide la métrica principal; una métrica secundaria que resulta peor se indica en la primera página.",
    "method_plan": "El plan dice cuántas unidades necesita un experimento para que un aumento del tamaño que importa se detecte con la potencia elegida al α elegido, o, al revés, qué aumento puede detectar un número dado de unidades o de días. Usa la aproximación normal de la prueba que ejecuta el nodo A/B, con la base de partida y la varianza de la métrica leídas del histórico, para que plan y prueba coincidan. Con varios tratamientos cada comparación se planifica a α dividido por el número de comparaciones: los tamaños quedan del lado de la prudencia.",
    "method_weeks": "La duración es el número de unidades necesarias dividido entre las unidades nuevas por día del histórico (multiplicadas por la parte del tráfico enviada al experimento). Las personas se comportan de forma distinta según el día de la semana, así que un experimento que cubre semanas enteras compara lo comparable: el informe da las semanas junto a los días.",
    "sequential_read_no_day": "Lea esta decisión si los resultados se miraron antes del final previsto. El p-valor siempre válido de {variant}, con los datos de esta ejecución, es {p:p} antes de la corrección por varios tratamientos; la tabla compara el corregido con α = {alpha:num}.",
-   "sequential_empty": "Los intervalos del aumento de {variant} calculados día tras día no tienen ningún valor en común: su secuencia de confianza está vacía y la tabla no muestra ningún intervalo. Ocurre cuando el aumento cambió durante el experimento.",
+   "sequential_empty": "Los intervalos del aumento de {variant} calculados día tras día no tienen ningún valor en común: su secuencia de confianza está vacía y la tabla no muestra ningún intervalo. Es una señal de que el aumento cambió durante el experimento.",
    "secondary_family": "Las {comparisons:int} comparaciones de las métricas secundarias (cada métrica frente al control, para cada tratamiento) se corrigieron entre ellas con la corrección del nodo, nunca junto con las de la métrica principal: los p-valores de la métrica principal son los mismos que sin ellas.",
    "secondary_family_none": "No se pidió ninguna corrección: las {comparisons:int} comparaciones de las métricas secundarias conservan sus propios p-valores, así que el riesgo de al menos una falsa alarma entre ellas es mayor que α. Los p-valores de la métrica principal son los mismos que sin ellas.",
    "secondary_family_one": "Con una sola comparación de una métrica secundaria no hay nada que corregir; los p-valores de la métrica principal son los mismos que sin ella.",
@@ -1307,7 +1374,8 @@
    "secondary_family_none",
    "secondary_family_one",
    "baseline_read_no_days",
-   "cuped_plan_no_days"
+   "cuped_plan_no_days",
+   "sequential_read"
   ],
   "verdict_words": [
    "significativo",
@@ -1518,9 +1586,13 @@
     "advice": "Les variantes différaient déjà avant l'expérience : vérifiez que la covariable a été mesurée avant l'affectation et que l'affectation était aléatoire. CUPED corrige un déséquilibre dû au hasard, pas une affectation défectueuse."
    },
    "covariate_missing_balance": {
-    "name": "Covariables vides réparties de la même façon (χ²)",
-    "h0": "Les unités sans covariable sont aussi fréquentes dans chaque variante.",
-    "advice": "Une variante a plus d'unités sans covariable (de nouveaux utilisateurs, un journal manquant d'un côté) : les exclure biaiserait la comparaison ; remplissez-les, ou cherchez pourquoi."
+    "name": "Unités sans covariable réparties de la même façon (χ²)",
+    "h0": "Les unités sans covariable ont la même fréquence dans chaque variante.",
+    "advice": "Une variante a plus d'unités sans covariable (de nouveaux utilisateurs, un journal manquant d'un côté) : cherchez pourquoi. Les exclure (covariate_missing = exclude) biaiserait la comparaison ; les remplir, non.",
+    "count": {
+     "one": "{n} unité sans covariable",
+     "other": "{n} unités sans covariable"
+    }
    },
    "crossover": {
     "name": "Unités dans plus d'une variante",
@@ -1534,7 +1606,11 @@
    "variance_zero": {
     "name": "Une métrique sans variance",
     "h0": "La métrique varie à l'intérieur de chaque variante.",
-    "advice": "Dans une variante, toutes les unités ont la même valeur : une comparaison avec un contrôle qui n'a pas de variance non plus n'est pas calculée. Vérifiez la colonne de la métrique et le filtre avant le nœud."
+    "advice": "Dans une variante, toutes les unités ont la même valeur : une comparaison avec un contrôle qui n'a pas de variance non plus n'est pas calculée. Vérifiez la colonne de la métrique et le filtre avant le nœud.",
+    "count": {
+     "one": "{n} variante sans variance",
+     "other": "{n} variantes sans variance"
+    }
    }
   },
   "reading": {
@@ -1592,16 +1668,24 @@
    "formula_sample_size": "Taille d'échantillon"
   },
   "reading_texts": {
-   "decision_better": "{variant} bat le contrôle {control} : sa p-valeur corrigée, {p_adjusted:p}, est inférieure à α = {alpha:num}, avec une hausse de {lift:spct}.",
-   "decision_worse": "{variant} fait moins bien que le contrôle {control} : sa p-valeur corrigée, {p_adjusted:p}, est inférieure à α = {alpha:num}, avec une hausse de {lift:spct}.",
-   "decision_no_difference": "Aucun traitement ne diffère du contrôle {control} au niveau α = {alpha:num} : la plus petite p-valeur corrigée, celle de {variant}, est {p_adjusted:p}.",
+   "decision_better": "{variant} bat le contrôle {control} : sa p-valeur corrigée, {p_adjusted:p}, est inférieure à α = {alpha:num}, avec une variation de {lift:spct}.",
+   "decision_worse": "{variant} fait moins bien que le contrôle {control} : sa p-valeur corrigée, {p_adjusted:p}, est inférieure à α = {alpha:num}, avec une variation de {lift:spct}.",
+   "decision_better_many": "{variants} battent le contrôle {control} au niveau α = {alpha:num}. La plus petite p-valeur corrigée, {p_adjusted:p}, est celle de {variant}, avec une variation de {lift:spct}.",
+   "decision_worse_many": "{variants} font moins bien que le contrôle {control} au niveau α = {alpha:num}. La plus petite p-valeur corrigée, {p_adjusted:p}, est celle de {variant}, avec une variation de {lift:spct}.",
+   "decision_no_difference": "Aucun traitement ne montre de différence avec le contrôle {control} au niveau α = {alpha:num} : la plus petite p-valeur corrigée, celle de {variant}, est {p_adjusted:p}.",
    "decision_counts": "Sur les {units:int} unités de {variant}, {converted:int} ont converti : {rate:pct}, contre {rate_control:pct} pour {control} ({units_control:int} unités).",
    "decision_means": "Les {units:int} unités de {variant} ont une moyenne de {value:num}, contre {value_control:num} pour les {units_control:int} unités de {control}.",
    "decision_interval": "Avec une confiance de {conf:pct}, la vraie hausse se situe entre {lift_low:spct} et {lift_high:spct} : la plage des hausses compatibles avec ces données.",
-   "srm_ok": "Les unités sont réparties {observed:pct} (les variantes dans l'ordre du tableau), contre la répartition prévue de {shares:pct}. Un écart au moins aussi grand arrive par hasard avec une probabilité {p:p}, au-dessus du niveau {srm_alpha:num} fixé pour cette vérification : la répartition est celle prévue.",
+   "srm_ok": "Les unités sont réparties {observed:pct} (les variantes dans l'ordre du tableau), contre la répartition prévue de {shares:pct}. Un écart au moins aussi grand arrive par hasard avec une probabilité {p:p}, au-dessus du niveau {srm_alpha:num} fixé pour cette vérification : les données ne montrent pas d'écart à la répartition prévue.",
    "srm_failed": "Les unités sont réparties {observed:pct}, contre la répartition prévue de {shares:pct}. Un écart aussi grand arriverait par hasard avec une probabilité {p:p}, au-dessous du niveau {srm_alpha:num} fixé pour cette vérification. Quelque chose a retiré ou ajouté des unités dans une variante, donc chaque chiffre de ce rapport peut être biaisé : trouvez la cause avant de décider.",
-   "comparison_significant": "Si {variant} ne différait pas de {control}, une différence au moins aussi grande apparaîtrait par hasard avec une probabilité {p:p}. Corrigée pour le nombre de comparaisons, cette probabilité est inférieure à α = {alpha:num} : la différence est significative.",
-   "comparison_not_significant": "Si {variant} ne différait pas de {control}, une différence au moins aussi grande apparaîtrait par hasard avec une probabilité {p:p}. Corrigée pour le nombre de comparaisons, elle n'est pas inférieure à α = {alpha:num} : les données ne montrent pas de différence, ce qui ne prouve pas qu'il n'y en ait aucune.",
+   "comparison_significant": {
+    "correction=none": "Si {variant} ne différait pas de {control}, une différence au moins aussi grande apparaîtrait par hasard avec une probabilité {p:p}. Elle est inférieure à α = {alpha:num} : la différence est significative.",
+    "": "Si {variant} ne différait pas de {control}, une différence au moins aussi grande apparaîtrait par hasard avec une probabilité {p:p}. Corrigée pour le nombre de comparaisons, cette probabilité vaut {p_adjusted:p}, inférieure à α = {alpha:num} : la différence est significative."
+   },
+   "comparison_not_significant": {
+    "correction=none": "Si {variant} ne différait pas de {control}, une différence au moins aussi grande apparaîtrait par hasard avec une probabilité {p:p}. Elle n'est pas inférieure à α = {alpha:num} : les données ne montrent pas de différence, ce qui ne prouve pas qu'il n'y en ait aucune.",
+    "": "Si {variant} ne différait pas de {control}, une différence au moins aussi grande apparaîtrait par hasard avec une probabilité {p:p}. Corrigée pour le nombre de comparaisons, cette probabilité vaut {p_adjusted:p}, qui n'est pas inférieure à α = {alpha:num} : les données ne montrent pas de différence, ce qui ne prouve pas qu'il n'y en ait aucune."
+   },
    "cuped_reduced": "L'usage de «{covariate}», mesurée avant l'expérience, a réduit la variance de la métrique de {reduction:pct} (θ = {theta:num}, corrélation {correlation:num}) : les mêmes unités détectent maintenant des hausses plus petites.",
    "cuped_filled": "{count:int} unités n'avaient pas de valeur de la covariable : chacune a reçu la moyenne de la covariable dans sa propre variante (la colonne «Remplie avec» ci-dessus) et garde sa propre valeur de la métrique.",
    "cuped_excluded": "{count:int} unités n'avaient pas de valeur de la covariable et ont été exclues de toutes les comparaisons : ces résultats ne valent que pour les unités qui ont une covariable.",
@@ -1620,16 +1704,16 @@
    "method_comparison": "La différence est la valeur du traitement moins celle du contrôle ; la hausse est cette différence en pourcentage de la valeur du contrôle (négative si le traitement est au-dessous). La p-valeur est la probabilité d'une différence au moins aussi grande que celle observée si le traitement n'avait rien changé. Les taux sont comparés par un test z (l'approximation normale, chaque variante avec sa propre variance), les moyennes par le test t de Welch, qui ne suppose pas des variances égales. L'intervalle de la hausse est celui de Fieller : il tient compte du fait que la valeur du contrôle est elle aussi incertaine, et il exclut 0 exactement quand le test bilatéral non corrigé est significatif au niveau α. Avec un test unilatéral, une seule direction compte, et une borne de chaque intervalle reste ouverte.",
    "method_ratio": "Une métrique de rapport (clics par impression, chiffre d'affaires par session) se calcule pour chaque variante comme la somme des numérateurs divisée par la somme des dénominateurs. Ce sont les unités, et non les impressions, qui ont été affectées au hasard : les impressions d'une même unité ne sont donc pas indépendantes entre elles. La variance est calculée par la méthode delta sur les sommes de chaque unité (Deng, Knoblich, Lu 2018), et c'est ce qui garde le test valide.",
    "method_srm": "La répartition des unités est vérifiée en premier : une répartition différente de celle prévue signifie que quelque chose a retiré ou ajouté des unités dans une variante — un filtre, une règle anti-robots, une redirection qui échoue, un journal perdu — et alors les variantes ne diffèrent plus seulement par le hasard. La vérification est le test du χ² de Pearson sur les unités de chaque variante face aux parts prévues. Son niveau est plus strict que celui des comparaisons (0,001 sauf si vous le changez), parce que la vérification porte sur chaque expérience et qu'une fausse alerte ferait écarter une expérience saine. Quand elle n'est pas respectée, chaque chiffre du rapport peut être biaisé.",
-   "method_power": "La puissance est la probabilité que le test détecte une hausse d'une taille donnée, si cette hausse existe vraiment. La plus petite hausse détectable avec la puissance choisie (80 % sauf si vous la changez) est la hausse détectable : plus d'unités, ou moins de variance, la rendent plus petite. Elle aide à lire une comparaison qui ne montre pas de différence : si la hausse détectable est plus grande que la plus petite hausse qui compte pour vous, l'expérience était trop petite pour la voir. La puissance à la hausse réellement observée n'est pas affichée : ce n'est que la p-valeur écrite autrement.",
+   "method_power": "La puissance est la probabilité que le test détecte une hausse d'une taille donnée, si cette hausse existe vraiment. La plus petite hausse détectable avec la puissance choisie (80 % sauf si vous la changez) est la hausse détectable : plus d'unités, ou moins de variance, la rendent plus petite. Elle aide à lire une comparaison qui ne montre pas de différence : si la hausse détectable est plus grande que la plus petite hausse qui compte pour vous, l'expérience pouvait facilement manquer une hausse de cette taille. La puissance à la hausse réellement observée n'est pas affichée : ce n'est que la p-valeur écrite autrement.",
    "method_cuped": "CUPED (Deng, Xu, Kohavi, Walker 2013) utilise une valeur mesurée sur chaque unité avant l'expérience, la covariable, pour retirer de la métrique ce qui était déjà prévisible. La moyenne ajustée d'une variante est sa moyenne moins θ fois l'écart entre la moyenne de la covariable dans cette variante et dans toutes les unités ; θ est estimé à l'intérieur des variantes, si bien que le traitement ne peut pas s'y glisser. Comme la covariable précède l'affectation, l'ajustement ne peut pas biaiser la différence : il ne fait que resserrer son intervalle. Une unité sans covariable est soit remplie avec la moyenne de la covariable dans sa propre variante — elle garde alors son poids et n'apporte aucun ajustement propre —, soit exclue, et les résultats ne valent alors que pour les unités qui ont une covariable.",
    "method_cap": "Quelques valeurs très grandes (une commande en gros) élargissent beaucoup l'intervalle d'une moyenne. Le plafond ramène chaque valeur au-dessus d'un percentile choisi de toutes les unités, toutes variantes réunies, à ce percentile, avant tout calcul. La même limite s'applique à chaque variante, donc la comparaison reste équitable ; elle doit être choisie avant de regarder les résultats, sinon on pourrait l'ajuster à la réponse espérée.",
-   "method_bayes": "La lecture bayésienne répond à une autre question que la p-valeur. La p-valeur est la probabilité de données au moins aussi extrêmes s'il n'y avait aucune différence ; la probabilité qu'un traitement soit devant le contrôle est la probabilité de la différence elle-même, compte tenu des données et d'un a priori (uniforme sauf si vous le changez, il pèse autant que deux unités). La perte attendue mesure combien vous pourriez perdre en choisissant un traitement, pas seulement à quelle fréquence : c'est le manque moyen, les cas où le traitement est en réalité devant le contrôle comptant pour zéro. Ce sont des mesures pour votre jugement : aucun seuil du rapport ne les transforme en décision.",
+   "method_bayes": "La lecture bayésienne répond à une autre question que la p-valeur. La p-valeur est la probabilité de données au moins aussi extrêmes s'il n'y avait aucune différence ; la probabilité qu'un traitement soit devant le contrôle est la probabilité de la différence elle-même, compte tenu des données et d'un a priori (pour un taux une loi Beta, uniforme sauf si vous la changez, qui pèse autant que deux unités ; pour une moyenne ou un ratio, un a priori plat). La perte attendue mesure combien vous pourriez perdre en choisissant un traitement, pas seulement à quelle fréquence : c'est le manque moyen, les cas où le traitement est en réalité devant le contrôle comptant pour zéro. Ce sont des mesures pour votre jugement : aucun seuil du rapport ne les transforme en décision.",
    "method_sequential": "Une p-valeur ordinaire ne vaut que si elle est lue une seule fois, à la fin prévue : regarder chaque jour et s'arrêter à la première p-valeur au-dessous de α rend une fausse alerte bien plus probable que α. La p-valeur valable à tout moment du test séquentiel du rapport de vraisemblance à mélange (mixture SPRT ; Johari, Koomen, Pekelis, Walsh 2017) garde sa garantie quels que soient le nombre et le moment des consultations des résultats. Elle compare la hausse observée à un mélange de hausses possibles de taille typique τ, et elle est plus prudente que la p-valeur ordinaire lue à la fin. Le rapport la recalcule à partir des données du jour à chaque exécution et ne garde rien en mémoire d'une exécution à l'autre.",
    "method_secondary": "Les métriques secondaires sont des garde-fous : chacune est comparée comme la métrique principale, et leurs p-valeurs sont corrigées entre elles, jamais avec celle de la principale, de sorte qu'ajouter un garde-fou ne coûte rien à la métrique principale. Seule la métrique principale décide ; une métrique secondaire sur laquelle un traitement fait moins bien est signalée en première page.",
    "method_plan": "Le plan indique combien d'unités il faut à une expérience pour qu'une hausse de la taille qui compte soit détectée avec la puissance choisie au niveau α choisi, ou, à l'inverse, quelle hausse un nombre donné d'unités ou de jours permet de détecter. Il utilise l'approximation normale du test qu'exécute le nœud A/B, avec la valeur de référence et la variance de la métrique lues dans l'historique, si bien que le plan et le test concordent. Avec plusieurs traitements, chaque comparaison est planifiée à α divisé par le nombre de comparaisons : les tailles sont du côté de la prudence.",
    "method_weeks": "La durée est le nombre d'unités nécessaires divisé par les nouvelles unités par jour de l'historique (multipliées par la part du trafic envoyée à l'expérience). Les gens ne se comportent pas de la même façon selon les jours de la semaine : une expérience qui couvre des semaines entières compare des périodes comparables. Le rapport donne donc les semaines à côté des jours.",
    "sequential_read_no_day": "Lisez cette décision si les résultats ont été consultés avant la fin prévue. La p-valeur valable à tout moment de {variant}, sur les données de cette exécution, est {p:p} avant la correction pour plusieurs traitements ; le tableau compare la p-valeur corrigée à α = {alpha:num}.",
-   "sequential_empty": "Les intervalles de la hausse de {variant} calculés jour après jour n'ont aucune valeur en commun : sa séquence de confiance est vide, et le tableau ne montre aucun intervalle. Cela arrive quand la hausse a changé pendant l'expérience.",
+   "sequential_empty": "Les intervalles de la hausse de {variant} calculés jour après jour n'ont aucune valeur en commun : sa séquence de confiance est vide, et le tableau ne montre aucun intervalle. C'est le signe que la hausse a changé pendant l'expérience.",
    "secondary_family": "Les {comparisons:int} comparaisons des métriques secondaires (chaque métrique face au contrôle, pour chaque traitement) ont été corrigées entre elles avec la correction du nœud, jamais avec celles de la métrique principale : les p-valeurs de la métrique principale sont les mêmes que sans elles.",
    "secondary_family_none": "Aucune correction n'a été demandée : les {comparisons:int} comparaisons des métriques secondaires gardent leurs propres p-valeurs, donc le risque d'au moins une fausse alarme parmi elles est plus grand que α. Les p-valeurs de la métrique principale sont les mêmes que sans elles.",
    "secondary_family_one": "Avec une seule comparaison d'une métrique secondaire, il n'y a rien à corriger ; les p-valeurs de la métrique principale sont les mêmes que sans elle.",
@@ -1660,7 +1744,8 @@
    "secondary_family_none",
    "secondary_family_one",
    "baseline_read_no_days",
-   "cuped_plan_no_days"
+   "cuped_plan_no_days",
+   "sequential_read"
   ],
   "verdict_words": [
    "significatif",

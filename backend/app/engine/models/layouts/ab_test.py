@@ -51,13 +51,14 @@ def name(params: dict[str, Any], locale: str) -> str:
 
 
 def about(params: dict[str, Any], locale: str) -> str:
-    """«converted by variant · control A»."""
+    """«converted by variant · control A»: on one line, cut at ABOUT_CHARS (the header cannot grow, and a column's name
+    or a control's value of any length would only be cut there, character by character)."""
     w = c.words(WORDS, "binary", locale)
     metric = e.metric_name(params)
     said = w["about"].replace("{metric}", metric).replace("{variant}", str(params.get("variant") or "")) if metric else ""
     if params.get("control") is not None and params.get("control") != "":
         said += (" · " if said else "") + w["about_control"].replace("{control}", str(params["control"]))
-    return said
+    return e.one_line(said)
 
 
 def _numbers(sentence: str, lang: str, **values: float) -> str:
@@ -88,6 +89,7 @@ def _headline(w: dict, metric: str) -> list[tuple[str, str, str]]:
     h = w["headline"]
     count = 'COUNTIF([section] = "comparison" AND [stat] = "decision" AND [text] = "{0}")'
     better, worse = f'{count.format("better")} > 0', f'{count.format("worse")} > 0'
+    tested = f'{count.format("not_significant")} > 0'  # «no difference» is a verdict: only of a comparison tested
     variants = 'LOOKUP("model|||decision_variants", [key], [said])'
     one = f'(NOT CONTAINS({variants}, ",") AND {variants} <> "")'
 
@@ -106,7 +108,9 @@ def _headline(w: dict, metric: str) -> list[tuple[str, str, str]]:
         ("headline_worse", srm + c.join(h["worse_one"], **single), f"NOT ({better}) AND {worse} AND {one}"),
         ("headline_worse_many", srm + c.join(h["worse_many"], **common, variants=variants), f"NOT ({better}) AND {worse} AND NOT {one}"),
         ("headline", srm + c.join(h["no_difference"], **common, mde=e.pct(mde, "0.#"), power=e.pct(e.model_number("power"), "0")),
-         f"NOT ({better}) AND NOT ({worse})"),
+         f"NOT ({better}) AND NOT ({worse}) AND {tested}"),
+        # no comparison computed (no variance on either side): no test, so no verdict
+        ("headline_not_computed", srm + c.join(h["not_computed"], **common), f"NOT ({better}) AND NOT ({worse}) AND NOT ({tested})"),
     ]
 
 
@@ -253,7 +257,7 @@ def _decision(p: stats.Page, w: dict, lang: str, params: dict[str, Any], checked
         _secondary_worse(p, w)
     _lifts(p, w, lang, checked)
     alpha_line = _numbers(w["alpha_line"], lang, alpha=checked.get("alpha", 0.05), srm_alpha=checked.get("srm_alpha", 0.001))
-    c._assumptions(p, w, lang, alpha_line, True)
+    c._assumptions(p, w, lang, alpha_line, True, df_width=18, df_whole=True)  # Welch's F on many units: «1; 1999998» on one line
     _measures(p, w, checked)
     e.reading_under(p, w, "decision")
 
@@ -378,7 +382,7 @@ def _comparisons(p: stats.Page, w: dict, kind: str, checked: dict[str, Any], lan
     e.reading_table(p, w, "comparison", "reading_comparison", w["reading"]["comparisons"])
     ch = w["charts"]
     power_chart = c.xy("power", ch["power"], '[section] = "curve" AND [level] = "power"', [c.mark("y", "line")],
-                       {"legend": True, "format": "0.##", "min": 0, "max": 1, "target": float(checked.get("power", 0.8)),
+                       {"legend": True, "format": "0.##", "x_format": "0.#%", "min": 0, "max": 1, "target": float(checked.get("power", 0.8)),
                         "target_x": float(checked.get("min_lift", 0.02))}, split_by="[level_2]", wide=True)
     c.grid(p, w, (power_chart._replace(caption=_numbers(ch["power_caption"], lang, power=float(checked.get("power", 0.8)) * 100,
                                                         min_lift=float(checked.get("min_lift", 0.02)) * 100)),), None, tall=56.0)

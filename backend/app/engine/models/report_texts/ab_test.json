@@ -18,7 +18,8 @@
    "better_many": "{variants} beat the control {control} at α = {alpha}; they were not compared with each other.",
    "worse_one": "{variant} is worse than the control {control}: {lift} {interval} on «{metric}», corrected p {p} ({correction}), α = {alpha}",
    "worse_many": "{variants} are worse than the control {control} at α = {alpha}.",
-   "no_difference": "No variant differs from the control {control} at α = {alpha}. With these units the test would have detected a lift of {mde} ({power} power)."
+   "no_difference": "No variant shows a difference from the control {control} at α = {alpha}. With these units the test had a probability of {power} of detecting a lift of {mde}.",
+   "not_computed": "No treatment could be compared with the control {control}: the metric has no variance on either side (see the checks), so there is no test and no verdict."
   },
   "kpi": {
    "units": "Units",
@@ -93,7 +94,7 @@
    "comparisons": "Each comparison in full",
    "posterior_mean": "Posterior mean",
    "credible": "Credible interval",
-   "prob_best": "P(highest)",
+   "prob_best": "P(ahead of all)",
    "loss_choose": "Loss if chosen",
    "loss_keep": "Loss if not chosen",
    "bayes": "Bayesian measures of each variant",
@@ -159,9 +160,9 @@
    "rebuilt": "Rebuilt from today's data: each unit counts with its metric as it is now, not as it was on each day."
   },
   "reading_texts": {
-   "correction_holm": "With {treatments:int} treatments compared with the same control, Holm's correction gives {p_adjusted:p} in place of {p:p}, so that the comparisons together keep at most an α risk of even one false alarm.",
+   "correction_holm": "With {treatments:int} treatments compared with the same control, Holm's correction gives {p_adjusted:p} in place of {p:p}, so that the risk of at least one false alarm, over all the comparisons together, stays at most α.",
    "correction_benjamini_hochberg": "With {treatments:int} treatments, the Benjamini–Hochberg correction gives {p_adjusted:p} in place of {p:p}: among the differences called significant, the expected share of false alarms stays at most α.",
-   "correction_bonferroni": "With {treatments:int} treatments, Bonferroni's correction multiplies the probability by {treatments:int}: {p_adjusted:p} in place of {p:p}; the intervals are widened to match.",
+   "correction_bonferroni": "With {treatments:int} treatments, Bonferroni's correction multiplies the p-value by {treatments:int}: {p_adjusted:p} in place of {p:p}; the intervals are widened to match.",
    "correction_none": "No correction was asked for: with {treatments:int} treatments, the risk of at least one false alarm is larger than α.",
    "correction_one": "With one treatment there is a single comparison: no correction is needed."
   },
@@ -189,7 +190,8 @@
    "better_many": "{variants} sono migliori del controllo {control} ad α = {alpha}; non sono stati confrontati tra loro.",
    "worse_one": "{variant} è peggiore del controllo {control}: {lift} {interval} su «{metric}», p corretto {p} ({correction}), α = {alpha}",
    "worse_many": "{variants} sono peggiori del controllo {control} ad α = {alpha}.",
-   "no_difference": "Nessuna variante differisce dal controllo {control} ad α = {alpha}. Con queste unità il test avrebbe rilevato un incremento di {mde} (potenza {power})."
+   "no_difference": "Nessuna variante mostra una differenza dal controllo {control} ad α = {alpha}. Con queste unità il test aveva una probabilità pari a {power} di rilevare un incremento di {mde}.",
+   "not_computed": "Nessun trattamento si è potuto confrontare con il controllo {control}: la metrica non ha varianza da nessuna delle due parti (vedere le verifiche), quindi non c'è test né verdetto."
   },
   "kpi": {
    "units": "Unità",
@@ -264,7 +266,7 @@
    "comparisons": "Ogni confronto per intero",
    "posterior_mean": "Media a posteriori",
    "credible": "Intervallo di credibilità",
-   "prob_best": "P(il più alto)",
+   "prob_best": "P(davanti a tutte)",
    "loss_choose": "Perdita se scelto",
    "loss_keep": "Perdita se non scelto",
    "bayes": "Misure bayesiane di ogni variante",
@@ -330,9 +332,9 @@
    "rebuilt": "Ricostruita dai dati di oggi: ogni unità conta con la sua metrica com'è adesso, non com'era in ciascun giorno."
   },
   "reading_texts": {
-   "correction_holm": "Con {treatments:int} trattamenti confrontati con lo stesso controllo, la correzione di Holm dà {p_adjusted:p} al posto di {p:p}, così i confronti insieme mantengono al più un rischio α anche di un solo falso allarme.",
+   "correction_holm": "Con {treatments:int} trattamenti confrontati con lo stesso controllo, la correzione di Holm dà {p_adjusted:p} al posto di {p:p}, così il rischio di almeno un falso allarme, sull'insieme dei confronti, resta al più α.",
    "correction_benjamini_hochberg": "Con {treatments:int} trattamenti, la correzione di Benjamini–Hochberg dà {p_adjusted:p} al posto di {p:p}: tra le differenze dette significative, la quota attesa di falsi allarmi resta al più α.",
-   "correction_bonferroni": "Con {treatments:int} trattamenti, la correzione di Bonferroni moltiplica la probabilità per {treatments:int}: {p_adjusted:p} al posto di {p:p}; gli intervalli sono allargati di conseguenza.",
+   "correction_bonferroni": "Con {treatments:int} trattamenti, la correzione di Bonferroni moltiplica il p-value per {treatments:int}: {p_adjusted:p} al posto di {p:p}; gli intervalli sono allargati di conseguenza.",
    "correction_none": "Non è stata chiesta alcuna correzione: con {treatments:int} trattamenti il rischio di almeno un falso allarme è più grande di α.",
    "correction_one": "Con un solo trattamento c'è un solo confronto: non serve alcuna correzione."
   },
@@ -360,7 +362,8 @@
    "better_many": "{variants} schlagen die Kontrolle {control} bei α = {alpha}; untereinander wurden sie nicht verglichen.",
    "worse_one": "{variant} ist schlechter als die Kontrolle {control}: {lift} {interval} bei «{metric}», korrigiertes p {p} ({correction}), α = {alpha}",
    "worse_many": "{variants} sind schlechter als die Kontrolle {control} bei α = {alpha}.",
-   "no_difference": "Keine Variante unterscheidet sich bei α = {alpha} von der Kontrolle {control}. Mit diesen Einheiten hätte der Test einen Anstieg von {mde} erkannt (Teststärke {power})."
+   "no_difference": "Keine Variante zeigt bei α = {alpha} einen Unterschied zur Kontrolle {control}. Mit diesen Einheiten hatte der Test eine Wahrscheinlichkeit von {power}, einen Anstieg von {mde} zu erkennen.",
+   "not_computed": "Keine Behandlung ließ sich mit der Kontrolle {control} vergleichen: Die Kennzahl hat auf keiner der beiden Seiten Varianz (siehe die Prüfungen), also gibt es keinen Test und kein Urteil."
   },
   "kpi": {
    "units": "Einheiten",
@@ -435,7 +438,7 @@
    "comparisons": "Jeder Vergleich vollständig",
    "posterior_mean": "Mittel (Posterior)",
    "credible": "Glaubwürdigkeitsintervall",
-   "prob_best": "P(am höchsten)",
+   "prob_best": "P(vor allen)",
    "loss_choose": "Verlust, wenn gewählt",
    "loss_keep": "Verlust, wenn nicht gewählt",
    "bayes": "Bayessche Messgrößen jeder Variante",
@@ -503,7 +506,7 @@
   "reading_texts": {
    "correction_holm": "Bei {treatments:int} Behandlungen, die mit derselben Kontrolle verglichen werden, ergibt die Holm-Korrektur {p_adjusted:p} statt {p:p}, sodass das Risiko, bei allen Vergleichen zusammen auch nur einen Fehlalarm zu haben, höchstens α beträgt.",
    "correction_benjamini_hochberg": "Bei {treatments:int} Behandlungen ergibt die Benjamini–Hochberg-Korrektur {p_adjusted:p} statt {p:p}: Unter den als signifikant bezeichneten Unterschieden bleibt der erwartete Anteil an Fehlalarmen höchstens α.",
-   "correction_bonferroni": "Bei {treatments:int} Behandlungen multipliziert die Bonferroni-Korrektur die Wahrscheinlichkeit mit {treatments:int}: {p_adjusted:p} statt {p:p}; die Intervalle werden entsprechend verbreitert.",
+   "correction_bonferroni": "Bei {treatments:int} Behandlungen multipliziert die Bonferroni-Korrektur den p-Wert mit {treatments:int}: {p_adjusted:p} statt {p:p}; die Intervalle werden entsprechend verbreitert.",
    "correction_none": "Es wurde keine Korrektur verlangt: Bei {treatments:int} Behandlungen ist das Risiko mindestens eines Fehlalarms größer als α.",
    "correction_one": "Bei einer einzigen Behandlung gibt es nur einen Vergleich: Es ist keine Korrektur nötig."
   },
@@ -531,7 +534,8 @@
    "better_many": "{variants} son mejores que el control {control} a α = {alpha}; no se compararon entre sí.",
    "worse_one": "{variant} es peor que el control {control}: {lift} {interval} en «{metric}», p corregido {p} ({correction}), α = {alpha}",
    "worse_many": "{variants} son peores que el control {control} a α = {alpha}.",
-   "no_difference": "Ninguna variante difiere del control {control} a α = {alpha}. Con estas unidades la prueba habría detectado un aumento de {mde} (potencia {power})."
+   "no_difference": "Ninguna variante muestra una diferencia con el control {control} a α = {alpha}. Con estas unidades la prueba tenía una probabilidad del {power} de detectar un aumento de {mde}.",
+   "not_computed": "Ningún tratamiento se pudo comparar con el control {control}: la métrica no tiene varianza en ninguno de los dos lados (vea las comprobaciones), así que no hay prueba ni veredicto."
   },
   "kpi": {
    "units": "Unidades",
@@ -606,7 +610,7 @@
    "comparisons": "Cada comparación completa",
    "posterior_mean": "Media a posteriori",
    "credible": "Intervalo de credibilidad",
-   "prob_best": "P(la más alta)",
+   "prob_best": "P(por delante de todas)",
    "loss_choose": "Pérdida si se elige",
    "loss_keep": "Pérdida si no se elige",
    "bayes": "Medidas bayesianas de cada variante",
@@ -674,7 +678,7 @@
   "reading_texts": {
    "correction_holm": "Con {treatments:int} tratamientos comparados con el mismo control, la corrección de Holm da {p_adjusted:p} en lugar de {p:p}, de modo que el conjunto de las comparaciones mantiene como mucho en α el riesgo de dar aunque sea una sola falsa alarma.",
    "correction_benjamini_hochberg": "Con {treatments:int} tratamientos, la corrección de Benjamini–Hochberg da {p_adjusted:p} en lugar de {p:p}: entre las diferencias declaradas significativas, la parte esperada de falsas alarmas se queda como mucho en α.",
-   "correction_bonferroni": "Con {treatments:int} tratamientos, la corrección de Bonferroni multiplica la probabilidad por {treatments:int}: {p_adjusted:p} en lugar de {p:p}; los intervalos se ensanchan en la misma medida.",
+   "correction_bonferroni": "Con {treatments:int} tratamientos, la corrección de Bonferroni multiplica el p-valor por {treatments:int}: {p_adjusted:p} en lugar de {p:p}; los intervalos se ensanchan en la misma medida.",
    "correction_none": "No se pidió ninguna corrección: con {treatments:int} tratamientos, el riesgo de al menos una falsa alarma es mayor que α.",
    "correction_one": "Con un solo tratamiento hay una sola comparación: no hace falta ninguna corrección."
   },
@@ -702,7 +706,8 @@
    "better_many": "{variants} battent le contrôle {control} au niveau α = {alpha} ; ces traitements n'ont pas été comparés entre eux.",
    "worse_one": "{variant} fait moins bien que le contrôle {control} : {lift} {interval} sur «{metric}», p corrigée {p} ({correction}), α = {alpha}",
    "worse_many": "{variants} font moins bien que le contrôle {control} au niveau α = {alpha}.",
-   "no_difference": "Aucune variante ne diffère du contrôle {control} au niveau α = {alpha}. Avec ces unités, le test aurait détecté une hausse de {mde} (puissance {power})."
+   "no_difference": "Aucune variante ne montre de différence avec le contrôle {control} au niveau α = {alpha}. Avec ces unités, le test avait une probabilité de {power} de détecter une hausse de {mde}.",
+   "not_computed": "Aucun traitement n'a pu être comparé au contrôle {control} : la métrique n'a de variance d'aucun des deux côtés (voir les vérifications), il n'y a donc ni test ni verdict."
   },
   "kpi": {
    "units": "Unités",
@@ -777,7 +782,7 @@
    "comparisons": "Chaque comparaison en détail",
    "posterior_mean": "Moyenne a posteriori",
    "credible": "Intervalle de crédibilité",
-   "prob_best": "P(la plus haute)",
+   "prob_best": "P(devant toutes)",
    "loss_choose": "Perte si choisie",
    "loss_keep": "Perte si non choisie",
    "bayes": "Mesures bayésiennes de chaque variante",

@@ -30,7 +30,7 @@ def about(params: dict[str, Any], locale: str) -> str:
     w = c.words(WORDS, "binary", locale)
     metric = e.metric_name(params)
     arms = params.get("arms") or catalog.MODELS["ab_plan"]["defaults"].get("arms", 2)
-    return " · ".join(x for x in (metric, w["about_arms"].replace("{arms}", str(arms))) if x)
+    return e.one_line(" · ".join(x for x in (metric, w["about_arms"].replace("{arms}", str(arms))) if x))
 
 
 def _answer(w: dict, checked: dict[str, Any]) -> str:
@@ -82,10 +82,10 @@ def _charts(p: stats.Page, w: dict, checked: dict[str, Any], lang: str) -> None:
     ch = w["charts"]
     power = float(checked.get("power", 0.8))
     lift = c.xy("power_lift", ch["power_lift"], '[section] = "curve" AND [level] = "power_lift"', [c.mark("y", "line")],
-                {"legend": False, "format": "0.##", "min": 0, "max": 1, "target": power, "target_x": float(checked.get("min_lift", 0.02)),
-                 "log_x": True})
+                {"legend": False, "format": "0.##", "x_format": "0.#%", "min": 0, "max": 1, "target": power,
+                 "target_x": float(checked.get("min_lift", 0.02)), "log_x": True})
     days = c.xy("mde_days", ch["mde_days"], '[section] = "curve" AND [level] = "mde_days"', [c.mark("y", "line")],
-                {"legend": False, "format": "0.##%"})
+                {"legend": False, "format": "0.##%", "x_format": "#,##0"})  # x: days, y: the lift
     history = c.histogram("history", ch["history"], "metric", w["series"]["units"])
     c.grid(p, w, (lift, days, history), ("s_charts", w["sections"]["charts"]))
 

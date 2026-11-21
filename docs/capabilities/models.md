@@ -1088,7 +1088,7 @@ the node if an empty value means no revenue»): put the **Fill nulls** before it
 | **Alternative** | Two-sided (default), greater or less, on treatment minus control |
 | **Significance level** | 0.05. The level of every test and interval of the node, written in the report |
 | **Correction across treatments** | Holm (default), Benjamini–Hochberg, Bonferroni or none, for the comparisons of the treatments with the control. With one treatment it changes nothing, and the report says so |
-| **Covariate before the experiment (CUPED)** | A metric measured on each unit **before** the experiment started (the revenue of the 28 days before). It must precede the assignment: a covariate measured afterwards is changed by the treatment and biases the result. The node removes the part of the metric the covariate explains, so the same data detect smaller lifts |
+| **Covariate before the experiment (CUPED)** | A metric measured on each unit **before** the experiment started (the revenue of the 28 days before). It must precede the assignment: a covariate measured afterwards is changed by the treatment and biases the result. The node removes the part of the metric the covariate explains, so the same data detect smaller lifts. A variant's own interval also counts the uncertainty of the covariate's mean over all the units; a comparison does not need it (it cancels in a difference) |
 | **A unit without the covariate** | **Fill** (default): it gets the mean of the covariate of the units of its own variant that have one, and counts with its own metric; **Exclude**: it is left out of the comparisons. The report counts either |
 | **Cap at the percentile** | For a continuous metric: values above this percentile of all units are set to it, which limits the weight of a few huge orders. Decide it before looking at the results |
 | **Level of the split check** | 0.001: the sample ratio mismatch test, stricter than the comparison's because a false alarm throws away a sound experiment |
@@ -1175,7 +1175,8 @@ Run, as for the other models.
 The Report tab draws A4 pages in the language of the interface (five languages):
 
 1. **The decision**: the headline, chosen by verdicts only (in this order: the split of the units failed; a treatment
-   is better; a treatment is worse; no variant differs from the control), the cards, the treatments' table, the interval
+   is better; a treatment is worse; no variant shows a difference from the control; no comparison could be computed,
+   which is no verdict), the cards, the treatments' table, the interval
    chart of the lifts with the minimum lift in the caption, the checks with the alpha line, two lines of measures.
 2. **The variants**: units assigned and used, the split against the expected, the daily share of each variant (with a date),
    CUPED, the histograms of a continuous metric.

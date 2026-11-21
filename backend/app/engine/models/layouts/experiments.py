@@ -20,6 +20,7 @@ from typing import Any
 from app.engine.models.layouts import common as c
 from app.engine.stats import layouts as stats
 
+ABOUT_CHARS = 160  # the header's line of what a report is about: a column's name or a control's value of any length is cut
 READING_LINES = 8  # the sentences a block of the whole experiment may hold (the runner writes three at most)
 FORMULA_PANEL = "#eef1f6"  # the formula box's ground: the panel's, a shade darker so that it reads as a box
 FORMULA_RULE = "#c5ccd8"
@@ -27,8 +28,9 @@ FORMULA_RULE = "#c5ccd8"
 
 # ── small expressions ───────────────────────────────────────────────────────
 def key_part(x: str) -> str:
-    """A label as a key holds it (a backslash doubled, a bar after a backslash: `output.key_part`)."""
-    return f'REPLACE(REPLACE({x}, "\\", "\\\\"), "|", "\\|")'
+    """A label as a key holds it: as it is (the runner's keys join section, level, level_2 and stat with «|» and
+    escape nothing, results.py checks them so: a variant «A|B» or «a\\b» is found by its own label)."""
+    return x
 
 
 def decoded(x: str) -> str:
@@ -172,6 +174,13 @@ def document(header: dict, items: list[dict], footer: dict, lang: str, calculate
     if calculated:
         doc["datasets"][0]["calculated"] = calculated
     return doc
+
+
+def one_line(text: str) -> str:
+    """What a report is about, on one line and at most ABOUT_CHARS long: the header's line is fitted to its width
+    character by character (stats.fit), and a name of thousands of characters would take seconds."""
+    text = " ".join(text.split())
+    return text if len(text) <= ABOUT_CHARS else text[: ABOUT_CHARS - 1].rstrip() + "…"
 
 
 def metric_name(params: dict[str, Any]) -> str:

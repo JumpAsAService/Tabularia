@@ -1120,7 +1120,8 @@ def test_no_sentence_of_a_measure_holds_a_word_of_judgement(locale):
             for word in shared["verdict_words"]:
                 assert not re.search(r"(?<!\w)" + re.escape(word) + r"(?!\w)", sentence, re.I), (locale, key, word)
     # and the words do catch a verdict: a test's sentence holds one (the secondary metrics' too, lot E8)
-    verdicts = [texts[k] for k in ("decision_better", "comparison_significant", "secondary_worse", "secondary_worse_more", "secondary_none_worse")]
+    verdicts = [s for k in ("decision_better", "decision_better_many", "decision_worse_many", "comparison_significant", "secondary_worse",
+                            "secondary_worse_more", "secondary_none_worse") for s in strings(texts[k])]  # a sentence by the settings is several
     assert all(any(re.search(r"(?<!\w)" + re.escape(v) + r"(?!\w)", s, re.I) for v in shared["verdict_words"]) for s in verdicts), locale
 
 
@@ -1138,8 +1139,8 @@ def test_the_first_page_opens_with_the_srm_band_when_the_split_failed_and_says_t
     assert any(s.startswith("Reading: B beats the control A: its corrected p-value, 0.0051, is below α = 0.05") for s in said)
     _, page = draw(tmp_path / "continuous", chart_service, monkeypatch, "ab_test-continuous", fmt="svg", locale="it")
     said = set(strings(json.loads(page)))
-    assert any(s.startswith("Nessuna variante differisce dal controllo A ad α = 0,05. Con queste unità il test avrebbe rilevato "
-                            "un incremento di 6,6 % (potenza 80 %).") for s in said), sorted(s for s in said if s.startswith("Nessuna"))
+    assert any(s.startswith("Nessuna variante mostra una differenza dal controllo A ad α = 0,05. Con queste unità il test aveva una "
+                            "probabilità pari a 80 % di rilevare un incremento di 6,6 %.") for s in said), sorted(s for s in said if s.startswith("Nessuna"))
 
 
 def test_a_secondary_metric_worse_than_the_control_is_on_the_first_page_and_every_one_on_its_own(tmp_path, chart_service, monkeypatch):  # noqa: F811

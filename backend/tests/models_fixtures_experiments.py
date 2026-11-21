@@ -485,7 +485,7 @@ def _reading(metric_type, ex, an, checked, srm_p, chi2, expected, headline, winn
     for r in an["rows"]:
         name = VARIANTS[r["t"]]
         sig = r["p"] < alpha
-        lines = [note("comparison_significant" if sig else "comparison_not_significant", variant=name, control="A", p=r["p"], alpha=alpha)]
+        lines = [note("comparison_significant" if sig else "comparison_not_significant", variant=name, control="A", p=r["p"], p_adjusted=r["adj"], alpha=alpha)]
         if len(an["rows"]) > 1:
             lines.append(note(f"correction_{how}", p=r["p"], p_adjusted=r["adj"], treatments=2))
         out.append(("comparison", name, lines))

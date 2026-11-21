@@ -45,18 +45,27 @@
   },
   "plan_note": "The row in bold is the lift you asked for. The sizes use the normal approximation of the test the A/B node runs.",
   "reading_texts": {
-   "plan_size": "To detect a lift of {lift:pct} on a baseline of {baseline:num} with a power of {power:pct} at α = {alpha:num}, each variant needs {units:int} units, {total:int} in all: {days:int} days at {daily:int} new units a day.",
-   "plan_size_no_days": "To detect a lift of {lift:pct} on a baseline of {baseline:num} with a power of {power:pct} at α = {alpha:num}, each variant needs {units:int} units, {total:int} in all.",
-   "plan_mde_units": "With {units:int} units per variant, the smallest lift detectable with a power of {power:pct} at α = {alpha:num} is {mde:pct} of the baseline {baseline:num}.",
+   "plan_size": {
+    "metric_type=binary": "To detect a relative lift of {lift:pct} on a rate of {baseline:pct} with a power of {power:pct} at α = {alpha:num}, each variant needs {units:int} units, {total:int} in all: {days:int} days at {daily:int} new units a day.",
+    "": "To detect a lift of {lift:pct} on a baseline of {baseline:num} with a power of {power:pct} at α = {alpha:num}, each variant needs {units:int} units, {total:int} in all: {days:int} days at {daily:int} new units a day."
+   },
+   "plan_size_no_days": {
+    "metric_type=binary": "To detect a relative lift of {lift:pct} on a rate of {baseline:pct} with a power of {power:pct} at α = {alpha:num}, each variant needs {units:int} units, {total:int} in all.",
+    "": "To detect a lift of {lift:pct} on a baseline of {baseline:num} with a power of {power:pct} at α = {alpha:num}, each variant needs {units:int} units, {total:int} in all."
+   },
+   "plan_mde_units": {
+    "metric_type=binary": "With {units:int} units per variant, the smallest lift detectable with a power of {power:pct} at α = {alpha:num} is {mde:pct} of the rate {baseline:pct} (a relative lift).",
+    "": "With {units:int} units per variant, the smallest lift detectable with a power of {power:pct} at α = {alpha:num} is {mde:pct} of the baseline {baseline:num}."
+   },
    "plan_mde_days": "In {days:int} days, at {daily:int} new units a day, each variant gets {units:int} units: the smallest lift detectable with a power of {power:pct} at α = {alpha:num} is {mde:pct}.",
    "baseline_read": "The history holds {units:int} units over {history_days:int} days: the metric's mean is {mean:num}, with a standard deviation of {sd:num} per unit.",
-   "cuped_plan": "With the covariate the variance is {reduction:pct} smaller: {units:int} units in all would do, in {days:int} days.",
+   "cuped_plan": "With the covariate the variance is {reduction:pct} smaller: {units:int} units in all would be needed, in {days:int} days.",
    "correction_holm": "With {arms:int} variants each comparison with the control is planned at α' = {alpha_per_comparison:num}: α = {alpha:num} divided by the number of comparisons, the first and strictest step of Holm's correction.",
    "correction_benjamini_hochberg": "With {arms:int} variants each comparison with the control is planned at α' = {alpha_per_comparison:num}: α = {alpha:num} divided by the number of comparisons, the least favourable case of the Benjamini–Hochberg correction.",
    "correction_bonferroni": "With {arms:int} variants each comparison with the control is planned at α' = {alpha_per_comparison:num}: α = {alpha:num} divided by the number of comparisons, Bonferroni's correction.",
    "correction_none": "Each comparison with the control is planned at α = {alpha:num}, without correction.",
    "baseline_read_no_days": "The history holds {units:int} units: the metric's mean is {mean:num}, with a standard deviation of {sd:num} per unit.",
-   "cuped_plan_no_days": "With the covariate the variance is {reduction:pct} smaller: {units:int} units in all would do."
+   "cuped_plan_no_days": "With the covariate the variance is {reduction:pct} smaller: {units:int} units in all would be needed."
   }
  },
  "it": {
@@ -105,18 +114,27 @@
   },
   "plan_note": "La riga in grassetto è l'incremento che avete chiesto. Le dimensioni usano l'approssimazione normale del test eseguito dal nodo A/B.",
   "reading_texts": {
-   "plan_size": "Per rilevare un incremento di {lift:pct} su una base di partenza di {baseline:num} con una potenza pari a {power:pct} ad α = {alpha:num}, ogni variante ha bisogno di {units:int} unità, {total:int} in tutto: {days:int} giorni a {daily:int} nuove unità al giorno.",
-   "plan_size_no_days": "Per rilevare un incremento di {lift:pct} su una base di partenza di {baseline:num} con una potenza pari a {power:pct} ad α = {alpha:num}, ogni variante ha bisogno di {units:int} unità, {total:int} in tutto.",
-   "plan_mde_units": "Con {units:int} unità per variante, l'incremento più piccolo rilevabile con una potenza pari a {power:pct} ad α = {alpha:num} è pari a {mde:pct} della base di partenza {baseline:num}.",
+   "plan_size": {
+    "metric_type=binary": "Per rilevare un incremento relativo di {lift:pct} su un tasso di {baseline:pct} con una potenza pari a {power:pct} ad α = {alpha:num}, ogni variante ha bisogno di {units:int} unità, {total:int} in tutto: {days:int} giorni a {daily:int} nuove unità al giorno.",
+    "": "Per rilevare un incremento di {lift:pct} su una base di partenza di {baseline:num} con una potenza pari a {power:pct} ad α = {alpha:num}, ogni variante ha bisogno di {units:int} unità, {total:int} in tutto: {days:int} giorni a {daily:int} nuove unità al giorno."
+   },
+   "plan_size_no_days": {
+    "metric_type=binary": "Per rilevare un incremento relativo di {lift:pct} su un tasso di {baseline:pct} con una potenza pari a {power:pct} ad α = {alpha:num}, ogni variante ha bisogno di {units:int} unità, {total:int} in tutto.",
+    "": "Per rilevare un incremento di {lift:pct} su una base di partenza di {baseline:num} con una potenza pari a {power:pct} ad α = {alpha:num}, ogni variante ha bisogno di {units:int} unità, {total:int} in tutto."
+   },
+   "plan_mde_units": {
+    "metric_type=binary": "Con {units:int} unità per variante, l'incremento più piccolo rilevabile con una potenza pari a {power:pct} ad α = {alpha:num} è pari a {mde:pct} del tasso {baseline:pct} (un incremento relativo).",
+    "": "Con {units:int} unità per variante, l'incremento più piccolo rilevabile con una potenza pari a {power:pct} ad α = {alpha:num} è pari a {mde:pct} della base di partenza {baseline:num}."
+   },
    "plan_mde_days": "In {days:int} giorni, a {daily:int} nuove unità al giorno, ogni variante riceve {units:int} unità: l'incremento più piccolo rilevabile con una potenza pari a {power:pct} ad α = {alpha:num} è {mde:pct}.",
    "baseline_read": "Lo storico contiene {units:int} unità in {history_days:int} giorni: la media della metrica è {mean:num}, con una deviazione standard di {sd:num} per unità.",
-   "cuped_plan": "Con la covariata la varianza è più piccola di {reduction:pct}: basterebbero {units:int} unità in tutto, in {days:int} giorni.",
+   "cuped_plan": "Con la covariata la varianza è più piccola di {reduction:pct}: ne servirebbero {units:int} in tutto, in {days:int} giorni.",
    "correction_holm": "Con {arms:int} varianti ogni confronto con il controllo è pianificato ad α' = {alpha_per_comparison:num}: α = {alpha:num} diviso per il numero di confronti, il primo passo, il più severo, della correzione di Holm.",
    "correction_benjamini_hochberg": "Con {arms:int} varianti ogni confronto con il controllo è pianificato ad α' = {alpha_per_comparison:num}: α = {alpha:num} diviso per il numero di confronti, il caso meno favorevole della correzione di Benjamini–Hochberg.",
    "correction_bonferroni": "Con {arms:int} varianti ogni confronto con il controllo è pianificato ad α' = {alpha_per_comparison:num}: α = {alpha:num} diviso per il numero di confronti, la correzione di Bonferroni.",
    "correction_none": "Ogni confronto con il controllo è pianificato ad α = {alpha:num}, senza correzione.",
    "baseline_read_no_days": "Lo storico contiene {units:int} unità: la media della metrica è {mean:num}, con una deviazione standard di {sd:num} per unità.",
-   "cuped_plan_no_days": "Con la covariata la varianza è più piccola di {reduction:pct}: basterebbero {units:int} unità in tutto."
+   "cuped_plan_no_days": "Con la covariata la varianza è più piccola di {reduction:pct}: ne servirebbero {units:int} in tutto."
   }
  },
  "de": {
@@ -165,9 +183,18 @@
   },
   "plan_note": "Die fett gedruckte Zeile ist der Anstieg, den Sie verlangt haben. Die Größen verwenden die Normalapproximation des Tests, den der A/B-Knoten ausführt.",
   "reading_texts": {
-   "plan_size": "Um einen Anstieg von {lift:pct} auf einen Ausgangswert von {baseline:num} mit einer Teststärke von {power:pct} bei α = {alpha:num} zu erkennen, braucht jede Variante {units:int} Einheiten, {total:int} insgesamt: {days:int} Tage bei {daily:int} neuen Einheiten pro Tag.",
-   "plan_size_no_days": "Um einen Anstieg von {lift:pct} auf einen Ausgangswert von {baseline:num} mit einer Teststärke von {power:pct} bei α = {alpha:num} zu erkennen, braucht jede Variante {units:int} Einheiten, {total:int} insgesamt.",
-   "plan_mde_units": "Mit {units:int} Einheiten je Variante beträgt der kleinste Anstieg, der mit einer Teststärke von {power:pct} bei α = {alpha:num} erkennbar ist, {mde:pct} des Ausgangswerts {baseline:num}.",
+   "plan_size": {
+    "metric_type=binary": "Um einen relativen Anstieg von {lift:pct} auf eine Rate von {baseline:pct} mit einer Teststärke von {power:pct} bei α = {alpha:num} zu erkennen, braucht jede Variante {units:int} Einheiten, {total:int} insgesamt: {days:int} Tage bei {daily:int} neuen Einheiten pro Tag.",
+    "": "Um einen Anstieg von {lift:pct} auf einen Ausgangswert von {baseline:num} mit einer Teststärke von {power:pct} bei α = {alpha:num} zu erkennen, braucht jede Variante {units:int} Einheiten, {total:int} insgesamt: {days:int} Tage bei {daily:int} neuen Einheiten pro Tag."
+   },
+   "plan_size_no_days": {
+    "metric_type=binary": "Um einen relativen Anstieg von {lift:pct} auf eine Rate von {baseline:pct} mit einer Teststärke von {power:pct} bei α = {alpha:num} zu erkennen, braucht jede Variante {units:int} Einheiten, {total:int} insgesamt.",
+    "": "Um einen Anstieg von {lift:pct} auf einen Ausgangswert von {baseline:num} mit einer Teststärke von {power:pct} bei α = {alpha:num} zu erkennen, braucht jede Variante {units:int} Einheiten, {total:int} insgesamt."
+   },
+   "plan_mde_units": {
+    "metric_type=binary": "Mit {units:int} Einheiten je Variante beträgt der kleinste Anstieg, der mit einer Teststärke von {power:pct} bei α = {alpha:num} erkennbar ist, {mde:pct} der Rate {baseline:pct} (ein relativer Anstieg).",
+    "": "Mit {units:int} Einheiten je Variante beträgt der kleinste Anstieg, der mit einer Teststärke von {power:pct} bei α = {alpha:num} erkennbar ist, {mde:pct} des Ausgangswerts {baseline:num}."
+   },
    "plan_mde_days": "In {days:int} Tagen, bei {daily:int} neuen Einheiten pro Tag, erhält jede Variante {units:int} Einheiten: Der kleinste Anstieg, der mit einer Teststärke von {power:pct} bei α = {alpha:num} erkennbar ist, beträgt {mde:pct}.",
    "baseline_read": "Der Verlauf enthält {units:int} Einheiten über {history_days:int} Tage: Der Mittelwert der Kennzahl ist {mean:num}, mit einer Standardabweichung von {sd:num} je Einheit.",
    "cuped_plan": "Mit der Kovariate ist die Varianz um {reduction:pct} kleiner: Insgesamt wären {units:int} Einheiten nötig, in {days:int} Tagen.",
@@ -225,18 +252,27 @@
   },
   "plan_note": "La fila en negrita es el aumento que usted pidió. Los tamaños usan la aproximación normal de la prueba que ejecuta el nodo A/B.",
   "reading_texts": {
-   "plan_size": "Para detectar un aumento del {lift:pct} sobre una base de partida de {baseline:num} con una potencia del {power:pct} a α = {alpha:num}, cada variante necesita {units:int} unidades, {total:int} en total: {days:int} días a {daily:int} unidades nuevas al día.",
-   "plan_size_no_days": "Para detectar un aumento del {lift:pct} sobre una base de partida de {baseline:num} con una potencia del {power:pct} a α = {alpha:num}, cada variante necesita {units:int} unidades, {total:int} en total.",
-   "plan_mde_units": "Con {units:int} unidades por variante, el aumento más pequeño que se detecta con una potencia del {power:pct} a α = {alpha:num} es el {mde:pct} de la base de partida {baseline:num}.",
+   "plan_size": {
+    "metric_type=binary": "Para detectar un aumento relativo del {lift:pct} sobre una tasa del {baseline:pct} con una potencia del {power:pct} a α = {alpha:num}, cada variante necesita {units:int} unidades, {total:int} en total: {days:int} días a {daily:int} unidades nuevas al día.",
+    "": "Para detectar un aumento del {lift:pct} sobre una base de partida de {baseline:num} con una potencia del {power:pct} a α = {alpha:num}, cada variante necesita {units:int} unidades, {total:int} en total: {days:int} días a {daily:int} unidades nuevas al día."
+   },
+   "plan_size_no_days": {
+    "metric_type=binary": "Para detectar un aumento relativo del {lift:pct} sobre una tasa del {baseline:pct} con una potencia del {power:pct} a α = {alpha:num}, cada variante necesita {units:int} unidades, {total:int} en total.",
+    "": "Para detectar un aumento del {lift:pct} sobre una base de partida de {baseline:num} con una potencia del {power:pct} a α = {alpha:num}, cada variante necesita {units:int} unidades, {total:int} en total."
+   },
+   "plan_mde_units": {
+    "metric_type=binary": "Con {units:int} unidades por variante, el aumento más pequeño que se detecta con una potencia del {power:pct} a α = {alpha:num} es el {mde:pct} de la tasa del {baseline:pct} (un aumento relativo).",
+    "": "Con {units:int} unidades por variante, el aumento más pequeño que se detecta con una potencia del {power:pct} a α = {alpha:num} es el {mde:pct} de la base de partida {baseline:num}."
+   },
    "plan_mde_days": "En {days:int} días, a {daily:int} unidades nuevas al día, cada variante recibe {units:int} unidades: el aumento más pequeño que se detecta con una potencia del {power:pct} a α = {alpha:num} es el {mde:pct}.",
    "baseline_read": "El histórico contiene {units:int} unidades en {history_days:int} días: la media de la métrica es {mean:num}, con una desviación estándar de {sd:num} por unidad.",
-   "cuped_plan": "Con la covariable la varianza es un {reduction:pct} menor: bastarían {units:int} unidades en total, en {days:int} días.",
+   "cuped_plan": "Con la covariable la varianza es un {reduction:pct} menor: harían falta {units:int} unidades en total, en {days:int} días.",
    "correction_holm": "Con {arms:int} variantes, cada comparación con el control se planifica a α' = {alpha_per_comparison:num}: α = {alpha:num} dividido por el número de comparaciones, el primer paso, el más estricto, de la corrección de Holm.",
    "correction_benjamini_hochberg": "Con {arms:int} variantes, cada comparación con el control se planifica a α' = {alpha_per_comparison:num}: α = {alpha:num} dividido por el número de comparaciones, el caso menos favorable de la corrección de Benjamini–Hochberg.",
    "correction_bonferroni": "Con {arms:int} variantes, cada comparación con el control se planifica a α' = {alpha_per_comparison:num}: α = {alpha:num} dividido por el número de comparaciones, la corrección de Bonferroni.",
    "correction_none": "Cada comparación con el control se planifica a α = {alpha:num}, sin corrección.",
    "baseline_read_no_days": "El histórico contiene {units:int} unidades: la media de la métrica es {mean:num}, con una desviación estándar de {sd:num} por unidad.",
-   "cuped_plan_no_days": "Con la covariable la varianza es un {reduction:pct} menor: bastarían {units:int} unidades en total."
+   "cuped_plan_no_days": "Con la covariable la varianza es un {reduction:pct} menor: harían falta {units:int} unidades en total."
   }
  },
  "fr": {
@@ -285,9 +321,18 @@
   },
   "plan_note": "La ligne en gras est la hausse que vous avez demandée. Les tailles utilisent l'approximation normale du test qu'exécute le nœud A/B.",
   "reading_texts": {
-   "plan_size": "Pour détecter une hausse de {lift:pct} sur une valeur de référence de {baseline:num}, avec une puissance de {power:pct} au niveau α = {alpha:num}, chaque variante a besoin de {units:int} unités, {total:int} en tout : {days:int} jours à {daily:int} nouvelles unités par jour.",
-   "plan_size_no_days": "Pour détecter une hausse de {lift:pct} sur une valeur de référence de {baseline:num}, avec une puissance de {power:pct} au niveau α = {alpha:num}, chaque variante a besoin de {units:int} unités, {total:int} en tout.",
-   "plan_mde_units": "Avec {units:int} unités par variante, la plus petite hausse détectable avec une puissance de {power:pct} au niveau α = {alpha:num} représente {mde:pct} de la valeur de référence {baseline:num}.",
+   "plan_size": {
+    "metric_type=binary": "Pour détecter une hausse relative de {lift:pct} sur un taux de {baseline:pct}, avec une puissance de {power:pct} au niveau α = {alpha:num}, chaque variante a besoin de {units:int} unités, {total:int} en tout : {days:int} jours à {daily:int} nouvelles unités par jour.",
+    "": "Pour détecter une hausse de {lift:pct} sur une valeur de référence de {baseline:num}, avec une puissance de {power:pct} au niveau α = {alpha:num}, chaque variante a besoin de {units:int} unités, {total:int} en tout : {days:int} jours à {daily:int} nouvelles unités par jour."
+   },
+   "plan_size_no_days": {
+    "metric_type=binary": "Pour détecter une hausse relative de {lift:pct} sur un taux de {baseline:pct}, avec une puissance de {power:pct} au niveau α = {alpha:num}, chaque variante a besoin de {units:int} unités, {total:int} en tout.",
+    "": "Pour détecter une hausse de {lift:pct} sur une valeur de référence de {baseline:num}, avec une puissance de {power:pct} au niveau α = {alpha:num}, chaque variante a besoin de {units:int} unités, {total:int} en tout."
+   },
+   "plan_mde_units": {
+    "metric_type=binary": "Avec {units:int} unités par variante, la plus petite hausse détectable avec une puissance de {power:pct} au niveau α = {alpha:num} représente {mde:pct} du taux de {baseline:pct} (une hausse relative).",
+    "": "Avec {units:int} unités par variante, la plus petite hausse détectable avec une puissance de {power:pct} au niveau α = {alpha:num} représente {mde:pct} de la valeur de référence {baseline:num}."
+   },
    "plan_mde_days": "En {days:int} jours, à {daily:int} nouvelles unités par jour, chaque variante reçoit {units:int} unités : la plus petite hausse détectable avec une puissance de {power:pct} au niveau α = {alpha:num} est de {mde:pct}.",
    "baseline_read": "L'historique contient {units:int} unités sur {history_days:int} jours : la moyenne de la métrique est de {mean:num}, avec un écart type de {sd:num} par unité.",
    "cuped_plan": "Avec la covariable, la variance est plus petite de {reduction:pct} : il faudrait {units:int} unités en tout, en {days:int} jours.",

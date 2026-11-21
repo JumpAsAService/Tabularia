@@ -284,6 +284,8 @@ class ChartOptions(_Model):
     unit_square: bool = False
     x_time: bool = False
     log_x: bool = False
+    # `xy` only: the numbers of the x axis in their own pattern (days under a lift in %); none: the chart's `format`
+    x_format: Pattern | None = None
     # `xy` only: the y axis shows names: at each whole number j, this expression's value on the first
     # drawn row whose ROUND(y) is j (a beeswarm's predictors); the axis runs from 0.5 to the largest j + 0.5
     y_categories: Expr | None = None
@@ -734,6 +736,8 @@ class _Checks:
                 self.expr(t, it.id, f"options.target_x[{i}]", self.env(ds))
         if it.options.x_time and it.options.log_x:
             self.problems.append(Problem("an axis of dates is not logarithmic: x_time or log_x", it.id, "options.log_x"))
+        if it.options.x_time and it.options.x_format:
+            self.problems.append(Problem("an axis of dates writes dates: x_time or x_format", it.id, "options.x_format"))
 
     def not_xy(self, it: ChartItem) -> None:
         """What only an `xy` chart reads, refused elsewhere: an option a person would expect to
@@ -752,6 +756,8 @@ class _Checks:
                 self.problems.append(Problem(f"the option «{name}» is an xy chart's", it.id, f"options.{name}"))
         if o.target_x is not None:
             self.problems.append(Problem("the option «target_x» is an xy chart's", it.id, "options.target_x"))
+        if o.x_format is not None:
+            self.problems.append(Problem("the option «x_format» is an xy chart's", it.id, "options.x_format"))
         if o.y_categories is not None:
             self.problems.append(Problem("the option «y_categories» is an xy chart's", it.id, "options.y_categories"))
         if o.log and it.kind != "interval":

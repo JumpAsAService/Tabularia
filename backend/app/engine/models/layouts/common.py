@@ -270,16 +270,18 @@ def structured_note(w: dict, text: str, loc: Any, texts: str = "note_texts") -> 
             return names.get(v, v)
         return " / ".join(number_form(float(x), form, loc) for x in items)
 
-    out = said
-    for k, v in parts.items():
-        for form in ("", *forms):
-            out = out.replace("{" + k + (":" + form if form else "") + "}",
-                              ", ".join(word(x, form, k in NOTE_NAMES) for x in v.split(",")))
-        for form in NUMBER_FORMS:
-            mark = "{" + k + ":" + form + "}"
-            if mark in out:
-                out = out.replace(mark, " / ".join(shaped(x, form, k in NOTE_NAMES) for x in v.split(",")))
-    return out
+    def placed(m: re.Match) -> str:
+        k, form = m.group(1), m.group(2) or ""
+        if k not in parts or (form and form not in forms and form not in NUMBER_FORMS):
+            return m.group(0)
+        v = parts[k]
+        if form in NUMBER_FORMS:
+            return " / ".join(shaped(x, form, k in NOTE_NAMES) for x in v.split(","))
+        return ", ".join(word(x, form, k in NOTE_NAMES) for x in v.split(","))
+
+    # one pass over the sentence: a value that holds «{name}» (a variant called «{p:p}») is put in as it is, never read
+    # again as a mark of the sentence
+    return re.sub(r"\{(\w+)(?::(\w+))?\}", placed, said)
 
 
 def reading_said(w: dict, block: str | None, text: str, loc: Any, params: Mapping[str, Any], label: str) -> tuple[str, str]:
@@ -611,25 +613,32 @@ def value_of_check(w: dict) -> str:
     return f"{main} & {limit}"
 
 
-def _assumptions(p: stats.Page, w: dict, lang: str, note: str | None = None, p_values: bool = True) -> None:
+def _assumptions(p: stats.Page, w: dict, lang: str, note: str | None = None, p_values: bool = True, df_width: float = 12,
+                 df_whole: bool = False) -> None:
     """One row a check: what it checks, H0, the statistic, df, p with R's stars, the value it
     reads (a VIF, an EPV, the largest Cook's distance) with what it counts and its threshold,
     the verdict in words and with a mark; then what to do about those that failed, are
-    doubtful or were not computed."""
+    doubtful or were not computed. `df_whole`: degrees of freedom of a thousand or more whole (Welch's on many units,
+    «17998» not «17998.49»), `df_width`: the column's width — a model whose checks have two of them on many units (an
+    A/B test's); the others' as before."""
     a = w["assumptions"]
     p.heading("s_assumptions", w["sections"]["assumptions"])
     verdict = "LOOKUP(" + row_key("assumption", "verdict") + ", [key], [text])"
     said = "IFS(" + ", ".join(f'[text] = "{v}", {q(w["verdicts"][v])}' for v in catalog.VERDICTS) + ', "")'
     df = of_row("assumption", "df")
     df2 = of_row("assumption", "df_2")
+
+    def dof(x: str) -> str:
+        return f'IF({x} >= 1000, FORMAT({x}, "0"), FORMAT({x}, "0.##"))' if df_whole else f'FORMAT({x}, "0.##")'
+
     one_row = '[section] = "assumption" AND [stat] = "verdict"'
     cols = [
         {"header": a["check"], "value": '[label] & IF(ISNULL([level_2]) OR [level_2] = "", "", " — " & IF([level_2] = "all", ' + q(w["all"]) + ", [level_2]))", "width": 36},
         {"header": a["h0"], "value": of_row("assumption", "h0", "text"), "style": {"size": 7}},
         {"header": a["statistic"], "value": number_of_row("assumption", "statistic"), "width": 17, "align": "right",
          "format": "0.####"},
-        {"header": a["df"], "value": f'IF(ISNULL({df}), "", FORMAT({df}, "0.##") & IF(ISNULL({df2}), "", "; " & FORMAT({df2}, "0.##")))',
-         "width": 12, "align": "right"},
+        {"header": a["df"], "value": f'IF(ISNULL({df}), "", {dof(df)} & IF(ISNULL({df2}), "", "; " & {dof(df2)}))',
+         "width": df_width, "align": "right"},
         {"header": a["p_value"], "value": p_of_check(of_row("assumption", "p_value")), "width": 17, "align": "right"},
         {"header": w["signif"]["column"], "value": of_row("assumption", "significance", "text"), "width": 10},
         {"header": a["value"], "value": value_of_check(w), "width": 34, "style": {"size": 7}},

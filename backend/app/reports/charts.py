@@ -714,6 +714,8 @@ def _xy(data: ChartData, it: rd.ChartItem, theme: rd.Theme, loc: formats.Locale,
     elif o.log_x:
         x_axis.update(type="log", logBase=10)
         x_axis.pop("scale")
+    if o.x_format and not o.x_time:  # x in its own format (days under a lift in %), the labels that would touch left out
+        x_axis["axisLabel"] = {"fontSize": 9, "hideOverlap": True, "formatter": _value_formatter(o.x_format, loc)}
     y_axis = {**_value_axis(data, loc, o), "scale": True}
     if data.y_names:  # names at the whole numbers; ECharts draws the ends 0.5 and top + 0.5 too, written as nothing
         whole = list(range(1, max(data.y_names) + 1))  # a tick at each whole number: the axis itself starts at 0.5
