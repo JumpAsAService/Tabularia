@@ -92,6 +92,12 @@ func (q *queue) planMLflow(ctx context.Context, user *auth.User, node pyjson.Obj
 	if experiment == "" {
 		return refuse("name the MLflow experiment its runs are logged to, or remove the MLflow connection")
 	}
+	register, _ := block.Value("registerAs").(string)
+	register = strings.TrimSpace(register)
+	// a node that makes no model card (`card: false`, the experiments') has no model to register: its run is logged and no more
+	if model, _ := nodeData(node).Value("model").(string); register != "" && modelcatalog.GroupOf(model) != "" && !modelcatalog.HasCard(model) {
+		return refuse("an A/B test registers no model: its run is logged to MLflow")
+	}
 	conn, err := q.d.mlflowConnection(ctx, user, id)
 	var refused *mlflowConnRefused
 	if errors.As(err, &refused) {
@@ -100,9 +106,8 @@ func (q *queue) planMLflow(ctx context.Context, user *auth.User, node pyjson.Obj
 	if err != nil {
 		return nil, err
 	}
-	register, _ := block.Value("registerAs").(string)
 	return &mlflowPlan{connID: conn.id, connName: conn.name, cfg: conn.cfg, ui: conn.ui, experiment: experiment,
-		registerAs: strings.TrimSpace(register), continueWithout: block.Value("continueWithout") == true}, nil
+		registerAs: register, continueWithout: block.Value("continueWithout") == true}, nil
 }
 
 // mlflowRecord is what Tabularia's run keeps of its MLflow run.

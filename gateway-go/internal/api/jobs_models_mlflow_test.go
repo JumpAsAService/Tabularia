@@ -19,6 +19,7 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/mlflowconn"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/mlflowconn/mlflowtest"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/modelgroups"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
 )
 
 // A model step's MLflow tracking (docs/specs/statistical-models.md, «MLflow», lot G): a flow run
@@ -1092,4 +1093,31 @@ func TestTheBgbbFormulaGoesToMlflowAsAnEnglishSentence(t *testing.T) {
 			t.Errorf("%q became %q", text, got)
 		}
 	}
+}
+
+// A node that makes no model card (`card: false`, the experiments') registers no model: the step is refused before
+// anything, with a sentence that says its run is logged to MLflow; a registration of a model that makes one is not
+// refused here (the connection is looked up next), and neither is a node that does not ask to register.
+func TestANodeWithoutACardRefusesRegisterAs(t *testing.T) {
+	node := func(model, registerAs string) pyjson.Object {
+		block := pyjson.Object{{Key: "connectionId", Value: int64(1)}, {Key: "experiment", Value: "web"}}
+		if registerAs != "" {
+			block = append(block, pyjson.KV{Key: "registerAs", Value: registerAs})
+		}
+		return pyjson.Object{{Key: "data", Value: pyjson.Object{{Key: "model", Value: model}, {Key: "mlflow", Value: block}}}}
+	}
+	q := &queue{}
+	for _, model := range []string{"ab_test", "ab_plan"} {
+		_, err := q.planMLflow(context.Background(), nil, node(model, " checkout-test "), "A/B")
+		if err == nil || err.Error() != "model «A/B»: an A/B test registers no model: its run is logged to MLflow" {
+			t.Errorf("%s: %v", model, err)
+		}
+	}
+	// a model that makes a card goes on to the connection (here: no database, so it panics only after the refusal's place)
+	defer func() {
+		if recover() == nil {
+			t.Error("a model with a card was refused or did not reach the connection's lookup")
+		}
+	}()
+	_, _ = q.planMLflow(context.Background(), nil, node("linear", "price-elasticity"), "linear")
 }

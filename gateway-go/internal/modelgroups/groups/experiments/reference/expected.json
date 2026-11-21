@@ -1,0 +1,13 @@
+{
+  "format_version": 1,
+  "generated": {
+    "by": "make_reference.R",
+    "note": "lots E1 to E5 write the reference cases (docs/specs/ab-testing.md, «Self-test, reference values, witnesses»); lot E0 has none",
+    "R": "4.6.0",
+    "packages": {
+      "arrow": "26.0.1",
+      "jsonlite": "2.0.0"
+    }
+  },
+  "cases": []
+}

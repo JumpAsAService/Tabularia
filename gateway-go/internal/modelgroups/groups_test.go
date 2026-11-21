@@ -25,7 +25,7 @@ var pinned = map[string]*regexp.Regexp{
 
 func TestEveryGroupOfTheCatalogueHasARecipeAndARunner(t *testing.T) {
 	groups := Groups()
-	if len(groups) != len(modelcatalog.Groups()) || len(groups) != 5 {
+	if len(groups) != len(modelcatalog.Groups()) || len(groups) != 6 {
 		t.Fatalf("groups: %d", len(groups))
 	}
 	for _, g := range groups {
@@ -243,6 +243,56 @@ func TestOnlyTheCustomerLifetimeImageInstallsGSL(t *testing.T) {
 	g.Recipe.SystemLibraries[0] = "x"
 	if again, _ := Get("customer_lifetime"); again.Recipe.SystemLibraries[0] != "libgsl-dev" {
 		t.Error("Groups hands out the recipe's own slice")
+	}
+}
+
+// The experiments group's image is the other R groups' own for as long as it goes: the same base, the same
+// system libraries (none of its own), and as packages the first 16 of every R recipe, the `arrow` closure,
+// and nothing else (docs/specs/ab-testing.md, «The recipe»). Its two nodes have a route and no `predict`.
+func TestTheExperimentsImageIsTheArrowClosureAndNothingElse(t *testing.T) {
+	g, ok := Get("experiments")
+	if !ok || !reflect.DeepEqual(g.Models, []string{"ab_test", "ab_plan"}) {
+		t.Fatalf("group: %+v", g)
+	}
+	r := g.Recipe
+	if r.Language != "r" || r.Base != "4.6" || len(r.SystemLibraries) != 0 || len(r.Packages) != 16 || r.MaxRows != 5_000_000 ||
+		r.MaxSeconds != 1800 || r.Resources.CPU != "1" || r.Resources.Memory != "2Gi" {
+		t.Errorf("recipe: %+v", r)
+	}
+	for _, other := range []string{"regression", "survival", "timeseries", "customer_lifetime"} {
+		o, _ := Get(other)
+		if !reflect.DeepEqual(o.Recipe.Packages[:16], r.Packages) {
+			t.Errorf("%s: its first 16 packages are not the experiments' %v", other, r.Packages)
+		}
+	}
+	s := scriptimage.Settings{CRANURL: "https://cran.r-project.org", Jobs: 2}
+	d, err := Dockerfile("experiments", scriptcfg.DefaultBaseImages, s)
+	if err != nil || !strings.HasPrefix(d, "FROM rocker/r-ver:4.6.0\n") || strings.Contains(d, "libgsl") ||
+		!strings.Contains(d, "\narrow@26.0.1\n") || strings.Contains(d, "data.table") {
+		t.Errorf("Dockerfile: %v\n%s", err, d)
+	}
+	// the base and the system libraries' layer are the other R groups' own, byte for byte
+	other, _ := Dockerfile("regression", scriptcfg.DefaultBaseImages, s)
+	layers := func(d string) string { before, _, _ := strings.Cut(d, "COPY <<'TABULARIA_PACKAGES'"); return before }
+	if layers(d) == "" || layers(d) != layers(other) {
+		t.Errorf("the base and system layers differ:\n%s\n----\n%s", layers(d), layers(other))
+	}
+	code, err := CodeFiles("experiments", nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := string(mustFile(t, code, "runner/run.R"))
+	if strings.Contains(run, "predict = ") || !strings.Contains(run, `tab_main("experiments"`) {
+		t.Errorf("run.R:\n%s", run)
+	}
+	for _, m := range g.Models {
+		stub := string(mustFile(t, code, "runner/R/"+m+".R"))
+		if !strings.Contains(stub, "tab_not_built(") {
+			t.Errorf("%s is not a stub that refuses «not built yet»", m)
+		}
+	}
+	if !strings.Contains(string(mustFile(t, code, "runner/R/ab_data.R")), "options(arrow.int64_downcast = FALSE)") {
+		t.Error("the runner does not read an Int64 as it is")
 	}
 }
 

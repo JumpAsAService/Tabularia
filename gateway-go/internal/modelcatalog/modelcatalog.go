@@ -112,6 +112,7 @@ type Model struct {
 	Requires, Forbids        []Rule
 	Disjoint                 []string
 	Variants                 []Variant
+	Card                     bool // the model makes a model card (false: the experiments' nodes, whose run MLflow logs and no more)
 }
 
 type catalogue struct {
@@ -150,6 +151,15 @@ func GroupOf(model string) string {
 		return m.Group
 	}
 	return ""
+}
+
+// HasCard says whether the model makes a model card, so that it can be registered as a model and predicted
+// with (true for every model but the experiments' nodes); false for no model.
+func HasCard(model string) bool {
+	if m, ok := data.byID[model]; ok {
+		return m.Card
+	}
+	return false
 }
 
 // Limit is one of the catalogue's limits (max_terms, max_chart_points…), 0 for none.
@@ -655,6 +665,28 @@ func readValue(model, key string, k Kind, v any) (any, error) {
 			out[i] = f
 		}
 		return out, nil
+	case "level_numbers":
+		obj, ok := v.(map[string]any)
+		for c := range obj {
+			ok = ok && c != ""
+		}
+		if !ok {
+			return nil, refuse(model, "'%s' must give a number to each value of the column, as {value: number}", key)
+		}
+		names := make([]string, 0, len(obj))
+		for c := range obj {
+			names = append(names, c)
+		}
+		sort.Strings(names)
+		out := map[string]any{}
+		for _, c := range names {
+			f, isNum := isNumber(obj[c])
+			if !isNum || !within(k, f) {
+				return nil, refuse(model, "%s", withBounds(fmt.Sprintf("'%s' must be a number", key+"."+c), k))
+			}
+			out[c] = f
+		}
+		return out, nil
 	case "number_or_choice":
 		if s, ok := v.(string); ok {
 			for _, c := range k.Choices {
@@ -756,7 +788,12 @@ func parse(b []byte) (*catalogue, error) {
 	}
 	c := &catalogue{groups: top.Groups, kinds: top.Kinds, limits: top.Limits, predict: top.Predict, byID: map[string]*Model{}}
 	for _, rm := range top.Models {
-		m := &Model{Needs: map[string]bool{}, KindOf: map[string]string{}, Applies: map[string][]cond{}}
+		m := &Model{Needs: map[string]bool{}, KindOf: map[string]string{}, Applies: map[string][]cond{}, Card: true}
+		if card, ok := rm["card"]; ok { // absent: a model makes its card
+			if err := json.Unmarshal(card, &m.Card); err != nil {
+				return nil, fmt.Errorf("a model's card: %v", err)
+			}
+		}
 		for field, dst := range map[string]*string{"id": &m.ID, "group": &m.Group, "family": &m.Family, "label": &m.Label} {
 			if err := json.Unmarshal(rm[field], dst); err != nil {
 				return nil, fmt.Errorf("a model's %s: %v", field, err)

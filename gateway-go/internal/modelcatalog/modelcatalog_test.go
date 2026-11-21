@@ -66,7 +66,7 @@ func TestTheSharedCases(t *testing.T) {
 }
 
 func TestGroupsModelsAndVariants(t *testing.T) {
-	if got := Models(); !reflect.DeepEqual(got, []string{"linear", "logistic", "kaplan_meier", "cox", "parametric_survival", "arima", "xgboost", "catboost", "clv", "bg_bb"}) {
+	if got := Models(); !reflect.DeepEqual(got, []string{"linear", "logistic", "kaplan_meier", "cox", "parametric_survival", "arima", "xgboost", "catboost", "clv", "bg_bb", "ab_test", "ab_plan"}) {
 		t.Fatalf("models: %v", got)
 	}
 	groups := map[string]string{}
@@ -88,7 +88,8 @@ func TestGroupsModelsAndVariants(t *testing.T) {
 	}
 	if Limit("max_chart_points") != 2000 || Limit("max_terms") != 200 || Limit("max_cells") != 50_000_000 ||
 		Limit("max_quantiles") != 9 || Limit("min_customers") != 20 || Limit("min_repeaters") != 5 || Limit("max_opportunities") != 1000 ||
-		Limit("max_clv_steps") != 520 || Limit("max_top_customers") != 20 || Limit("palive_grid_frequency") != 10 || Limit("shap_cost_budget") != 20_000_000_000 || Limit("max_model_file_bytes") != 64<<20 {
+		Limit("max_clv_steps") != 520 || Limit("max_top_customers") != 20 || Limit("palive_grid_frequency") != 10 || Limit("shap_cost_budget") != 20_000_000_000 || Limit("max_model_file_bytes") != 64<<20 ||
+		Limit("max_variants") != 20 || Limit("max_looks") != 1000 || Limit("max_secondary_metrics") != 10 || Limit("posterior_points") != 200 || Limit("power_points") != 50 {
 		t.Error("limits")
 	}
 	cases := []struct {
@@ -314,5 +315,72 @@ func TestAnEmptyListOfColumnsStaysAnEmptyList(t *testing.T) {
 	}
 	if enc := asJSON(t, got["exog"]); enc != "[]" {
 		t.Errorf("exog: %s, want []", enc)
+	}
+}
+
+// level_numbers: a number for each value of a column (the experiments' expected shares), read as the engine reads it.
+func TestLevelNumbersAreReadAsTheEngineReadsThem(t *testing.T) {
+	base := map[string]any{"variant": "arm", "control": "A", "metric_type": "binary", "metric": "converted"}
+	with := func(shares any) map[string]any {
+		p := map[string]any{}
+		for k, v := range base {
+			p[k] = v
+		}
+		p["expected_shares"] = shares
+		return p
+	}
+	got, err := Check("ab_test", with(map[string]any{"B": 1.0, "A": 3.0}))
+	if err != nil || !reflect.DeepEqual(got["expected_shares"], map[string]any{"A": 3.0, "B": 1.0}) {
+		t.Errorf("shares: %v %v", got["expected_shares"], err)
+	}
+	if got, err := Check("ab_test", with(map[string]any{})); err != nil || len(got["expected_shares"].(map[string]any)) != 0 {
+		t.Errorf("an empty object is none: %v %v", got["expected_shares"], err)
+	}
+	for shares, want := range map[string]any{
+		"B is no number": map[string]any{"A": 1.0, "B": "half"},
+		"B is zero":      map[string]any{"A": 1.0, "B": 0.0},
+		"B is negative":  map[string]any{"B": -1.0, "A": 1.0},
+	} {
+		_, err := Check("ab_test", with(want))
+		if err == nil || err.Error() != "ab_test: 'expected_shares.B' must be a number above 0" {
+			t.Errorf("%s: %v", shares, err)
+		}
+	}
+	for _, bad := range []any{[]any{1.0, 1.0}, 0.5, "A:1", map[string]any{"": 1.0}} {
+		_, err := Check("ab_test", with(bad))
+		if err == nil || err.Error() != "ab_test: 'expected_shares' must give a number to each value of the column, as {value: number}" {
+			t.Errorf("%v: %v", bad, err)
+		}
+	}
+	// the columns of the node are the variant, the metric…: the shares name no column
+	checked, _ := Check("ab_test", with(map[string]any{"A": 1.0, "B": 1.0}))
+	if cols := Columns("ab_test", checked); !reflect.DeepEqual(cols, []string{"arm", "converted"}) {
+		t.Errorf("columns: %v", cols)
+	}
+}
+
+// card: false (the experiments' nodes) makes no model card: no registration, no Predict.
+func TestTheExperimentsNodesMakeNoCard(t *testing.T) {
+	for model, want := range map[string]bool{"ab_test": false, "ab_plan": false, "linear": true, "xgboost": true, "clv": true, "nope": false} {
+		if HasCard(model) != want {
+			t.Errorf("HasCard(%s) = %v", model, !want)
+		}
+	}
+	for _, m := range Models() {
+		for _, v := range data.byID[m].Variants {
+			if cols := PredictColumns(m, v.ID, map[string]any{}); len(cols) > 0 && !HasCard(m) {
+				t.Errorf("%s: no card and Predict columns %v", m, cols)
+			}
+		}
+	}
+	if GroupOf("ab_test") != "experiments" || GroupOf("ab_plan") != "experiments" {
+		t.Error("the group of the experiments' nodes")
+	}
+	// the planning node's variants are the metric's type, its output the planning grid
+	if v := VariantOf("ab_plan", map[string]any{"metric_type": "ratio"}); v == nil || v.ID != "ratio" || len(v.Outputs["plan"]) != 10 {
+		t.Errorf("ab_plan ratio: %+v", v)
+	}
+	if v := VariantOf("ab_test", map[string]any{"metric_type": "binary"}); v == nil || v.ID != "binary" || len(v.Outputs["variants"]) != 27 {
+		t.Errorf("ab_test binary: %+v", v)
 	}
 }
