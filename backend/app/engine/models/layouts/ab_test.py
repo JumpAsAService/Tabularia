@@ -9,11 +9,13 @@ other checks, CUPED and the cap, the power at this size, the Bayesian measures a
 2. Variants: the units and their split, the metric per variant, the observed against the expected units, the daily
    share and the daily units, the histogram of a continuous metric, CUPED; the readings of the split, CUPED, the cap.
 3. Comparisons: every number of each comparison, the power against the lift; the readings.
-4. Bayesian measures (with `bayes`), 5. the sequential test (with `sequential`), 6. secondary metrics (lot E8),
-7. how this report was computed, 8. the notes.
+4. Bayesian measures (with `bayes`), 5. the sequential test (with `sequential`), 6. secondary metrics (with
+`secondary_metrics`: every comparison of the guardrails, adjusted among themselves; those that came out worse are
+listed on the first page too, under the treatments), 7. how this report was computed, 8. the notes.
 
 Every number is read from the runner's rows (`results.py`'s sections `variant`, `comparison`, `bayes`, `sequential`,
-`reading`, `assumption`, `curve`, `hist`); the words are in `report_texts/experiments.json` and `ab_test.json`.
+`secondary`, `reading`, `assumption`, `curve`, `hist`); the words are in `report_texts/experiments.json` and
+`ab_test.json`.
 """
 from __future__ import annotations
 
@@ -27,6 +29,8 @@ from app.engine.stats import layouts as stats
 
 WORDS = "ab_test"
 COMPARISON = '[section] = "comparison" AND [stat] = "lift"'
+SECONDARY = '[section] = "secondary" AND [stat] = "decision"'  # one row per comparison of a secondary metric
+SECONDARY_WORSE = SECONDARY + ' AND [text] = "worse"'
 DECISION_COLOURS = {"better": c.GOOD, "worse": c.BAD}
 
 # The dataset's calculated fields the page reads by: the stat of each row of the decided treatment's comparison
@@ -245,6 +249,8 @@ def _decision(p: stats.Page, w: dict, lang: str, params: dict[str, Any], checked
     p.y += 1.0
     _treatments(p, w, kind)
     p.text("intervals_note", _intervals_note(w, checked, lang) or " ", h=4.5, size=7, color=c.MUTED, can_grow=True)
+    if checked.get("secondary_metrics"):
+        _secondary_worse(p, w)
     _lifts(p, w, lang, checked)
     alpha_line = _numbers(w["alpha_line"], lang, alpha=checked.get("alpha", 0.05), srm_alpha=checked.get("srm_alpha", 0.001))
     c._assumptions(p, w, lang, alpha_line, True)
@@ -359,7 +365,9 @@ def _comparisons(p: stats.Page, w: dict, kind: str, checked: dict[str, Any], lan
             number(t["std_error"], "difference_std_error", 18), number(t["lift_std_error"], "lift_std_error", 20),
             number(t["statistic"], "statistic", 18, "0.###")]
     if kind == "continuous":
-        cols.append(number(t["df"], "df", 16, "#,##0.#"))
+        df = e.of_comparison("df")  # whole above a thousand: a million units give some 600,000 degrees of freedom
+        cols.append({"header": t["df"], "value": f'IF(ISNULL({df}), "", IF({df} >= 1000, {c.shown(df, "#,##0")}, {c.shown(df, "#,##0.#")}))',
+                     "width": 16, "align": "right"})
     mde, power = e.of_comparison("mde"), e.of_comparison("power_at_min_lift")
     cols += [{"header": t["mde"], "value": f'IF(ISNULL({mde}), "", {e.pct(mde, "0.##")})', "width": 20, "align": "right"},
              {"header": t["power_at_min_lift"], "value": f'IF(ISNULL({power}), "", {e.pct(power, "0.#")})', "width": 20, "align": "right"},
@@ -409,6 +417,11 @@ def _bayes(p: stats.Page, w: dict, kind: str, checked: dict[str, Any], lang: str
 
 
 # ── page 5: the sequential test ─────────────────────────────────────────────
+def _log_lambda(x: str) -> str:
+    """log Λ with three decimals; whole from a thousand on (a strong effect on many units gives tens of thousands)."""
+    return f'IF(ABS({x}) >= 1000, {c.shown(x, "#,##0")}, {c.shown(x, "0.###")})'
+
+
 def _sequential(p: stats.Page, w: dict, checked: dict[str, Any], lang: str) -> None:
     from app.reports import formats
 
@@ -430,13 +443,67 @@ def _sequential(p: stats.Page, w: dict, checked: dict[str, Any], lang: str) -> N
             {"header": t["always_valid_p"], "value": c.p_said("[value]"), "width": 24, "align": "right"},
             {"header": t["p_adjusted"], "value": stats.with_stars(c.p_said(e.of_level("sequential", "p_adjusted")),
                                                                   e.of_level("sequential", "significance", "text")), "width": 26, "align": "right"},
-            {"header": t["log_lambda"], "value": c.shown(e.of_level("sequential", "log_lambda"), "0.###"), "width": 18, "align": "right"},
+            {"header": t["log_lambda"], "value": _log_lambda(e.of_level("sequential", "log_lambda")), "width": 18, "align": "right"},
             {"header": t["sequence"], "value": e.interval(e.of_level("sequential", "cs_low"), e.of_level("sequential", "cs_high")), "width": 36,
              "align": "right"},
             {"header": t["first_crossing"], "value": f'IF(ISNULL({crossing}), {c.q(t["never"])}, {day})', "width": 26},
             _decision_column(w, t["decision"], e.of_level("sequential", "decision", "text"))]
     p.add(stats.table("sequential", t["sequential"], one, cols, p.y, visible=c.exists(one)), 10)
     e.reading_table(p, w, "sequential", "reading_sequential", w["reading"]["sequential"])
+
+
+# ── page 6: the secondary metrics ───────────────────────────────────────────
+def of_secondary(stat: str, column: str = "value") -> str:
+    """A number (or text) of the comparison at hand of a secondary metric: its row `secondary|<metric>|<treatment>|stat`."""
+    return f'LOOKUP("secondary|" & {e.key_part("[level]")} & "|" & {e.key_part("[level_2]")} & "|{stat}", [key], [{column}])'
+
+
+def _secondary_value(x: str) -> str:
+    """A secondary metric's value: a rate as a percent, a mean as a number (the metric's own type)."""
+    binary = f'{of_secondary("metric_type", "text")} = "binary"'
+    return f'IF(ISNULL({x}), "", IF({binary}, {e.pct(x, "0.##")}, {c.shown(x, "#,##0.####")}))'
+
+
+def _secondary_lift(x: str = "lift") -> str:
+    lift = of_secondary(x)
+    return (f'IF(ISNULL({lift}), "", {e.signed_pct(lift)} & " " & '
+            f'{e.interval(of_secondary("lift_ci_low"), of_secondary("lift_ci_high"))})')
+
+
+def _secondary_p(stat: str, stars: str) -> str:
+    return stats.with_stars(c.p_said(of_secondary(stat)), of_secondary(stars, "text"))
+
+
+def _secondary_worse(p: stats.Page, w: dict) -> None:
+    """The guardrails that came out worse than the control (their adjusted p against alpha), under the treatments: what
+    a guardrail is for. Nothing when none did."""
+    t = w["tables"]
+    cols = [{"header": t["metric"], "value": "[level]", "width": 40, "style": {"weight": "semibold"}},
+            {"header": t["variant"], "value": "[level_2]", "width": 22},
+            {"header": t["lift_interval"], "value": _secondary_lift()},
+            {"header": t["p_adjusted"], "value": _secondary_p("p_adjusted", "p_adjusted_significance"), "width": 26, "align": "right",
+             "style": {"color": c.BAD, "weight": "semibold"}}]
+    p.add(stats.table("secondary_worse", t["secondary_worse"], SECONDARY_WORSE, cols, p.y, visible=c.exists(SECONDARY_WORSE)), 10)
+
+
+def _secondary(p: stats.Page, w: dict, checked: dict[str, Any], lang: str) -> None:
+    """Every comparison of every secondary metric with the control: the two values, the lift with its interval, the p-value
+    before and after the correction of the family, the decision; how the family was corrected and which came out worse."""
+    t = w["tables"]
+    p.heading("s_secondary", w["sections"]["secondary"])
+    p.text("secondary_lead", w["secondary"]["lead"], h=5, size=8.5, color=c.MUTED, can_grow=True)
+    p.y += 1.0
+    cols = [{"header": t["metric"], "value": "[level]", "style": {"weight": "semibold"}},  # the rest of the width: a column's name
+            {"header": t["variant"], "value": "[level_2]", "width": 15},
+            {"header": t["control_value"], "value": _secondary_value(of_secondary("mean_control")), "width": 16, "align": "right"},
+            {"header": t["treatment_value"], "value": _secondary_value(of_secondary("mean_treatment")), "width": 20, "align": "right"},
+            {"header": t["lift_interval"], "value": _secondary_lift(), "width": 43},
+            {"header": t["p"], "value": _secondary_p("p_value", "significance"), "width": 23, "align": "right"},
+            {"header": t["p_adjusted"], "value": _secondary_p("p_adjusted", "p_adjusted_significance"), "width": 23, "align": "right"},
+            _decision_column(w, t["decision"], "[text]")]
+    p.add(stats.table("secondary", t["secondary"], SECONDARY, cols, p.y, visible=c.exists(SECONDARY)), 10)
+    p.text("secondary_note", _intervals_note(w, checked, lang) or " ", h=4.5, size=7, color=c.MUTED, can_grow=True)
+    e.reading_under(p, w, "secondary")
 
 
 # ── the page ────────────────────────────────────────────────────────────────
@@ -457,6 +524,8 @@ def layout(model: str, params: dict[str, Any], locale: str, sample: list[dict] |
         _bayes(p, w, kind, checked, lang)
     if checked.get("sequential"):
         _sequential(p, w, checked, lang)
+    if checked.get("secondary_metrics"):
+        _secondary(p, w, checked, lang)
     e.how_computed(p, w)
     e.notes(p, w, "units")
     return e.document(header, p.items, footer, lang, CALCULATED)

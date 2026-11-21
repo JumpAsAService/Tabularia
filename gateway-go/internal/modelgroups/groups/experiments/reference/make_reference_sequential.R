@@ -26,6 +26,15 @@ make_data_e4 <- function() {
 }
 if ("--data" %in% args || !file.exists(file.path(data_dir, "sequential.csv"))) make_data_e4()
 
+# A lift that changes sign during the experiment (aggregated rows, written by hand: B doubles A's mean on the first two
+# days, falls to 0.4 of it on the next two, with 25 times the units): the looks' intervals have no lift in common, the
+# confidence sequence is empty (lot E8 closes E4's gap: its sentence, `sequential_empty`).
+make_data_drift <- function() {
+  one <- function(v, day, n, mean) data.frame(variant = v, day = as.Date("2026-03-02") + day, units = n, s = n * mean, q = (n - 1) * 4 + n * mean^2)
+  write_table(rbind(one("A", 0:1, 2000, 10), one("B", 0:1, 2000, 20), one("A", 2:3, 50000, 10), one("B", 2:3, 50000, 4)), "sequential_drift.csv")
+}
+if ("--data" %in% args || !file.exists(file.path(data_dir, "sequential_drift.csv"))) make_data_drift()
+
 SEQ_MAX_LOOKS <- 1000  # the catalogue's max_looks
 
 # The estimate and its variance per variant, on the rows of one look, the long way (E2's formulas).
@@ -178,8 +187,11 @@ seq_case <- function(id, data, types, params, curves = character(), note = NULL)
       chart <- if (stat == "p") "sequential_p" else "sequential_lift"
       for (x in seq_along(at)) num(paste0("curve|", chart, "|", lab, "|", if (stat == "p") "y" else stat, "|", x - 1L), series[[x]])
     }
-    if (!is.null(p[["date"]]) && !is.na(p_raw[i, D])) {
-      ids <- c("sequential_read", if (!is.na(crossing)) "sequential_crossed", "sequential_snapshot")
+    if (!is.na(p_raw[i, D])) {
+      dated <- !is.null(p[["date"]])
+      empty <- is.na(low[i, D]) && is.na(high[i, D]) && any(!is.na(lift[i, ]))
+      ids <- c(if (dated) "sequential_read" else "sequential_read_no_day", if (!is.na(crossing)) "sequential_crossed",
+               if (empty) "sequential_empty", if (dated) "sequential_snapshot")
       for (j in seq_along(ids)) reading[[length(reading) + 1L]] <- list(paste0("reading|sequential|", lab, "|line_", j), ids[[j]])
     }
   }
@@ -223,6 +235,10 @@ add_case(seq_case("seq_grouped", "sequential_long.csv", list(variant = "text", d
 add_case(seq_case("seq_no_date", "continuous_three.csv", list(variant = "text", revenue = "number"),
                   c(list(variant = "variant", control = "A", metric_type = "continuous", metric = "revenue", sequential_tau = 0.2), on),
                   note = "one look, the snapshot: no curve, no day"))
+add_case(seq_case("seq_drift", "sequential_drift.csv", list(variant = "text", day = "date", units = "number", s = "number", q = "number"),
+                  c(list(variant = "variant", control = "A", metric_type = "continuous", input_shape = "aggregated", units_count = "units",
+                         metric_sum = "s", metric_sum_squares = "q", date = "day"), on),
+                  note = "the lift changes sign: the confidence sequence is empty, its sentence instead of its ends"))
 add_case(refused("seq_greater", "binary_two.csv", list(variant = "text", converted = "number"),
                  c(list(variant = "variant", control = "A", metric_type = "binary", metric = "converted", alternative = "greater"), on),
                  "sequential_two_sided", "the always-valid p-value of this node is two-sided"))

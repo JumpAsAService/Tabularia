@@ -228,7 +228,8 @@ fit_ab_plan <- function(task) {
 }
 
 # The reading: the answer, the baseline, CUPED, the correction, the method (the ids of the words in experiments.json,
-# ab_plan.json). A sentence that needs the days of a history is said where the table has a date.
+# ab_plan.json). A sentence that needs the days of a history has a form without them («_no_days») for a table
+# without a date.
 .abp_reading <- function(ctx, b, L, n_t, total, days, cu) {
   dated <- !is.null(ctx$date)
   plan <- switch(ctx$solve_for,
@@ -240,8 +241,10 @@ fit_ab_plan <- function(task) {
   correction <- if (identical(ctx$correction, "none")) ab_line("correction_none", alpha = ctx$alpha) else
     ab_line(paste0("correction_", ctx$correction), arms = ctx$arms, alpha = ctx$alpha, alpha_per_comparison = ctx$a1)
   list(ab_block("plan", plan),
-       ab_block("baseline", if (dated) ab_line("baseline_read", mean = b$m0, sd = b$s0, history_days = b$history_days, units = b$n_used) else NA_character_),
-       ab_block("cuped", if (is.null(cu) || !dated) NA_character_ else ab_line("cuped_plan", reduction = b$reduction, units = cu$total, days = cu$days)),
+       ab_block("baseline", if (dated) ab_line("baseline_read", mean = b$m0, sd = b$s0, history_days = b$history_days, units = b$n_used) else
+         ab_line("baseline_read_no_days", mean = b$m0, sd = b$s0, units = b$n_used)),
+       ab_block("cuped", if (is.null(cu)) NA_character_ else if (dated) ab_line("cuped_plan", reduction = b$reduction, units = cu$total, days = cu$days) else
+         ab_line("cuped_plan_no_days", reduction = b$reduction, units = cu$total)),
        ab_block("correction", correction),
        ab_block("method", c(ab_line("method_plan"), ab_line("method_power"), if (!is.null(cu)) ab_line("method_cuped"), if (dated) ab_line("method_weeks"))),
        ab_block("formulas", c(ab_line("formula_sample_size"), if (!is.null(cu)) ab_line("formula_cuped"))))

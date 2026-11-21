@@ -147,7 +147,7 @@ ab_sequential <- function(r, tau) {
       if (isTRUE(up == isTRUE(ctx$higher_is_better))) "better" else "worse"
     } else "not_significant"
     list(t = tr[[i]], p = p[i, D], p_adjusted = pa, log_lambda = log_lambda[i, D], lift = lift[i, D], cs_low = lo, cs_high = hi,
-         first_crossing = if (length(hit)) days[[hit[[1L]]]] else NA_real_, decision = decision)
+         cs_empty = empty[i, D], first_crossing = if (length(hit)) days[[hit[[1L]]]] else NA_real_, decision = decision)
   })
   list(tau = tau, n_looks = D, days = days, lift = lift, log_lambda = log_lambda, p = p, p_adjusted = p_adj, low = low,
        high = high, computed = computed, rows = rows, treatments = tr)
@@ -198,17 +198,20 @@ ab_sequential <- function(r, tau) {
 }
 
 # The reading of each treatment (E6's words, «Explaining the method in the report»): which decision to read and the
-# always-valid p before the correction, on the data up to the last day; the first day the corrected one fell below
-# alpha; that the curves are rebuilt from today's data. The sentences need a day: without `date` there is no
-# reading of this block (the table and the method's paragraph say the rest).
+# always-valid p before the correction, on the data up to the last day (without `date`, on the data of this run: one
+# look, no day to name); the first day the corrected one fell below alpha; that the confidence sequence is empty when
+# the looks' intervals have no lift in common (a fact: the table then shows no interval); that the curves are
+# rebuilt from today's data (only with `date`: without it there is no curve).
 ab_reading_sequential <- function(r, s) {
-  if (is.null(r$ctx$date)) return(list())
+  dated <- !is.null(r$ctx$date)
   out <- list()
   for (x in s$rows) {
     if (is.na(x$p)) next
     lv <- r$est$labels[[x$t]]
-    lines <- c(ab_line("sequential_read", variant = lv, p = x$p, day = r$d$days$last, alpha = r$ctx$alpha),
-               if (!is.na(x$first_crossing)) ab_line("sequential_crossed", day = x$first_crossing), ab_line("sequential_snapshot"))
+    read <- if (dated) ab_line("sequential_read", variant = lv, p = x$p, day = r$d$days$last, alpha = r$ctx$alpha) else
+      ab_line("sequential_read_no_day", variant = lv, p = x$p, alpha = r$ctx$alpha)
+    lines <- c(read, if (!is.na(x$first_crossing)) ab_line("sequential_crossed", day = x$first_crossing),
+               if (isTRUE(x$cs_empty)) ab_line("sequential_empty", variant = lv), if (dated) ab_line("sequential_snapshot"))
     out[[length(out) + 1L]] <- ab_block("sequential", lines, lv)
   }
   out

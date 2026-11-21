@@ -359,23 +359,28 @@ def build_ab_test(variant: str, params: dict[str, Any], spec: dict[str, Any], ch
                 p = min(1.0, r["p"] * (1.7 + 0.9 * k) if k else r["p"] * 0.4)
                 sec.append((col, VARIANTS[r["t"]], p, r["d"] * (1 if k == 0 else -0.5), r["se"]))
         adj = _adjust([s[2] for s in sec], how)
+        secondary = []  # (metric, treatment, adjusted p, decision): the reading's
         for (col, treatment, p, d, se), a in zip(sec, adj):
+            # as the runner writes them (ab_secondary.R): no df, no minimum lift (the primary's margin), a rate or a mean
             kind = "binary" if col == "converted" else "continuous"
-            vals = {"difference": d, "difference_std_error": se, "difference_ci_low": d - an["q"] * se, "difference_ci_high": d + an["q"] * se,
+            control = 0.0362 if kind == "binary" else 10.0
+            vals = {"difference": d * control / 10, "difference_std_error": se * control / 10,
+                    "difference_ci_low": (d - an["q"] * se) * control / 10, "difference_ci_high": (d + an["q"] * se) * control / 10,
                     "lift": d / 10, "lift_std_error": se / 10, "lift_ci_low": (d - an["q"] * se) / 10, "lift_ci_high": (d + an["q"] * se) / 10,
-                    "statistic": d / se, "p_value": p, "p_adjusted": a, "mde": 0.031, "power_at_min_lift": 0.62,
-                    "mean_treatment": 10 + d, "mean_control": 10.0}
-            if kind == "continuous":
-                vals["df"] = 24000.0
+                    "statistic": d / se, "p_value": p, "p_adjusted": a, "mde": 0.031,
+                    "mean_treatment": control * (1 + d / 10), "mean_control": control}
             for stat in decl["secondary"]["numbers"]:
                 if stat in vals:
                     t.add("secondary", stat, vals[stat], level=col, level_2=treatment)
-            t.add("secondary", "significance", text=_stars(p), level=col, level_2=treatment)
-            t.add("secondary", "p_adjusted_significance", text=_stars(a), level=col, level_2=treatment)
-            t.add("secondary", "decision", text="worse" if a < alpha and d < 0 else "better" if a < alpha else "not_significant",
-                  level=col, level_2=treatment)
-            t.add("secondary", "min_lift_position", text="straddles", level=col, level_2=treatment)
+                    if stat == "p_value":
+                        t.add("secondary", "significance", text=_stars(p), level=col, level_2=treatment)
+                    if stat == "p_adjusted":
+                        t.add("secondary", "p_adjusted_significance", text=_stars(a), level=col, level_2=treatment)
+            decision = "worse" if a < alpha and d < 0 else "better" if a < alpha else "not_significant"
+            t.add("secondary", "decision", text=decision, level=col, level_2=treatment)
             t.add("secondary", "metric_type", text=kind, level=col, level_2=treatment)
+            secondary.append((col, treatment, a, decision))
+        checked = {**checked, "_secondary": secondary}
     # the checks
     for check in decl["assumption"]["levels"]:
         if check == "covariate_balance" and not cuped or check == "covariate_missing_balance" and not cuped:
@@ -498,8 +503,12 @@ def _reading(metric_type, ex, an, checked, srm_p, chi2, expected, headline, winn
             out.append(("sequential", name, [note("sequential_read", variant=name, p=seq[r["t"]]["p"][-1], alpha=alpha, day=DAY0 + 9),
                                              note("sequential_snapshot")]))
     out.append(("power", None, [note("power_detectable", mde=max(r["mde"] for r in an["rows"]), power=checked["power"], min_lift=checked["min_lift"])]))
-    if checked["secondary_metrics"]:
-        out.append(("secondary", None, [note("secondary_worse", metric=checked["secondary_metrics"][-1], variant="B", p_adjusted=0.004)]))
+    if checked["secondary_metrics"]:  # the family's correction, then the guardrails worse than the control (ab_secondary.R)
+        sec = checked["_secondary"]
+        worse = sorted((x for x in sec if x[3] == "worse"), key=lambda x: x[2])
+        lines = [note("secondary_family", comparisons=len(sec))]
+        lines += [note("secondary_worse", variant=b_, metric=m_, p_adjusted=a_) for m_, b_, a_, _ in worse] or [note("secondary_none_worse", alpha=alpha)]
+        out.append(("secondary", None, lines))
     method = ["decision", "comparison", "srm", "power", *(["cuped"] if cuped else []), *(["cap"] if cap else []),
               *(["bayes"] if checked["bayes"] else []), *(["sequential"] if checked["sequential"] else []),
               *(["secondary"] if checked["secondary_metrics"] else [])]

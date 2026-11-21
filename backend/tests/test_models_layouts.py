@@ -1119,8 +1119,8 @@ def test_no_sentence_of_a_measure_holds_a_word_of_judgement(locale):
         for sentence in strings(texts[key]):
             for word in shared["verdict_words"]:
                 assert not re.search(r"(?<!\w)" + re.escape(word) + r"(?!\w)", sentence, re.I), (locale, key, word)
-    # and the words do catch a verdict: a test's sentence holds one
-    verdicts = [texts[k] for k in ("decision_better", "comparison_significant")]
+    # and the words do catch a verdict: a test's sentence holds one (the secondary metrics' too, lot E8)
+    verdicts = [texts[k] for k in ("decision_better", "comparison_significant", "secondary_worse", "secondary_worse_more", "secondary_none_worse")]
     assert all(any(re.search(r"(?<!\w)" + re.escape(v) + r"(?!\w)", s, re.I) for v in shared["verdict_words"]) for s in verdicts), locale
 
 
@@ -1140,6 +1140,29 @@ def test_the_first_page_opens_with_the_srm_band_when_the_split_failed_and_says_t
     said = set(strings(json.loads(page)))
     assert any(s.startswith("Nessuna variante differisce dal controllo A ad α = 0,05. Con queste unità il test avrebbe rilevato "
                             "un incremento di 6,6 % (potenza 80 %).") for s in said), sorted(s for s in said if s.startswith("Nessuna"))
+
+
+def test_a_secondary_metric_worse_than_the_control_is_on_the_first_page_and_every_one_on_its_own(tmp_path, chart_service, monkeypatch):  # noqa: F811
+    """Lot E8: the guardrails that came out worse are listed under the treatments (their adjusted p against alpha); every
+    comparison of every secondary metric has its row on the page of the secondary metrics, with how the family was
+    corrected and the worse ones in its reading."""
+    model, params, rows = fixture("ab_test-continuous")
+    _, page = draw(tmp_path / "none", chart_service, monkeypatch, "ab_test-continuous", fmt="svg")
+    listed = strings(json.loads(page))
+    said = set(listed)
+    w = _ab_words(model, "en")
+    assert {w["sections"]["secondary"], w["secondary"]["lead"], "sessions", "converted"} <= said
+    assert listed.count("sessions") == 2 and listed.count("converted") == 2  # one row per treatment, none on the first page
+    assert any(s.startswith("Reading: The 4 comparisons of the secondary metrics (each metric against the control, for each treatment) were "
+                            "corrected among themselves") and s.endswith("No secondary metric is worse than the control at α = 0.05, after the correction.")
+               for s in said), sorted(s for s in said if s.startswith("Reading: The 4"))
+    worse = [{**r, "text": "worse"} if r["key"] == "secondary|sessions|B|decision" else
+             {**r, "text": "@secondary_worse variant=B metric=sessions p_adjusted=0.004"} if r["key"] == "reading|secondary||line_2" else r
+             for r in rows]
+    _, page = draw(tmp_path / "worse", chart_service, monkeypatch, "ab_test-continuous", fmt="svg", rows=worse, locale="it")
+    listed = strings(json.loads(page))
+    assert listed.count("sessions") == 3 and listed.count("converted") == 2  # B's sessions under the treatments too
+    assert any(s.endswith("B è peggiore del controllo sulla metrica secondaria «sessions»: p-value corretto 0,0040.") for s in listed)
 
 
 def test_the_last_pages_explain_the_method_and_excel_keeps_the_reading(tmp_path, chart_service, monkeypatch):  # noqa: F811
@@ -1163,6 +1186,7 @@ AB_NOTES = {
     "covariate_excluded": "variant=B count=205 share=0.0175", "crossover_excluded": "units=37",
     "cap_applied": "percentile=0.999 value=1840.5 count=96", "fieller_unbounded": "variant=B", "one_treatment": "",
     "looks_grouped": "days=1460 period=2", "control_zero": "", "history_short": "history_days=56 planned_days=401",
+    "secondary_missing": "metric=revenue count=12040",
 }
 
 
@@ -1177,9 +1201,10 @@ def test_every_note_of_an_experiment_is_a_sentence_with_its_numbers(locale):
         assert "@" not in text and "{" not in text and "%2" not in text, text
     assert f"11{decimal}3 %" in said["note_3"] and f"12{decimal}3" in said["note_3"] and "B" in said["note_3"]
     assert f"99{decimal}9 %" in said["note_6"] and "96" in said["note_6"]
+    assert "«revenue»" in said["note_12"] and common.number_form(12040, "int", formats.locale(locale)) in said["note_12"]
 
 
-@pytest.mark.parametrize("case", AB_CASES)
+@pytest.mark.parametrize("case", AB_CASES + [c for c in CASES if c.startswith("decomposition-")])
 @pytest.mark.parametrize("locale", LOCALES)
 def test_no_header_of_an_experiment_s_table_runs_into_the_next_column(case, locale):
     """The report engine warns of a value wider than its column (model.py, the tables' widths), not of a header: each

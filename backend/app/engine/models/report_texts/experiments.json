@@ -237,7 +237,14 @@
    "method_sequential": "An ordinary p-value holds only if it is read once, at the planned end: looking every day and stopping at the first p-value below α makes a false alarm far more likely than α. The always-valid p-value of the mixture sequential probability ratio test (Johari, Koomen, Pekelis, Walsh 2017) keeps its guarantee however often and whenever the results are looked at. It weighs the observed lift against a mixture of possible lifts of typical size τ, and it is more cautious than the ordinary p-value read at the end. The report computes it again from the data of the day at every run and remembers nothing from one run to the next.",
    "method_secondary": "Secondary metrics are guardrails: each is compared like the primary metric, and their p-values are corrected among themselves, never together with the primary's, so that adding a guardrail costs the primary metric nothing. Only the primary metric decides; a secondary metric that comes out worse is listed on the first page.",
    "method_plan": "The plan says how many units an experiment needs so that a lift of the size that matters would be detected with the chosen power at the chosen α, or, the other way round, which lift a given number of units or days can detect. It uses the normal approximation of the test the A/B node runs, with the baseline and the variance of the metric read from the history, so that plan and test agree. With several treatments each comparison is planned at α divided by the number of comparisons: the sizes are on the safe side.",
-   "method_weeks": "The duration is the units needed divided by the new units a day of the history (times the share of the traffic sent to the experiment). People behave differently across the week, so an experiment that covers whole weeks compares like with like: the report gives the weeks beside the days."
+   "method_weeks": "The duration is the units needed divided by the new units a day of the history (times the share of the traffic sent to the experiment). People behave differently across the week, so an experiment that covers whole weeks compares like with like: the report gives the weeks beside the days.",
+   "sequential_read_no_day": "Read this decision if the results were looked at before the planned end. The always-valid p-value of {variant}, on the data of this run, is {p:p} before the correction for several treatments; the table compares the corrected one with α = {alpha:num}.",
+   "sequential_empty": "The intervals of the lift of {variant} computed day after day have no value in common: its confidence sequence is empty, and the table shows no interval. This happens when the lift changed during the experiment.",
+   "secondary_family": "The {comparisons:int} comparisons of the secondary metrics (each metric against the control, for each treatment) were corrected among themselves with the node's correction, never together with the primary metric's: the primary metric's p-values are the same as without them.",
+   "secondary_family_none": "No correction was asked for: the {comparisons:int} comparisons of the secondary metrics keep their own p-values, so the risk of at least one false alarm among them is larger than α. The primary metric's p-values are the same as without them.",
+   "secondary_family_one": "With one comparison of a secondary metric there is nothing to correct; the primary metric's p-values are the same as without it.",
+   "secondary_worse_more": "{count:int} more comparisons of the secondary metrics are worse than the control: the table of the secondary metrics lists them all.",
+   "secondary_none_worse": "No secondary metric is worse than the control at α = {alpha:num}, after the correction."
   },
   "measure_readings": [
    "decision_counts",
@@ -256,7 +263,14 @@
    "plan_mde_units",
    "plan_mde_days",
    "baseline_read",
-   "cuped_plan"
+   "cuped_plan",
+   "sequential_read_no_day",
+   "sequential_empty",
+   "secondary_family",
+   "secondary_family_none",
+   "secondary_family_one",
+   "baseline_read_no_days",
+   "cuped_plan_no_days"
   ],
   "verdict_words": [
    "significant",
@@ -321,7 +335,8 @@
    "one_treatment": "One treatment only: the correction for several comparisons changes nothing.",
    "looks_grouped": "The {days:int} days were put together into periods of {period:int} days for the sequential test.",
    "control_zero": "The control's value is 0: the lift, a percent of it, cannot be computed; the difference is shown.",
-   "history_short": "The history covers {history_days:int} days; the plan asks for {planned_days:int}."
+   "history_short": "The history covers {history_days:int} days; the plan asks for {planned_days:int}.",
+   "secondary_missing": "{count:int} units had no value of the secondary metric «{metric}» and were left out of its comparisons only."
   }
  },
  "it": {
@@ -562,7 +577,14 @@
    "method_sequential": "Un p-value ordinario vale solo se lo si legge una volta, alla fine prevista: guardare ogni giorno e fermarsi al primo p-value sotto α rende un falso allarme molto più probabile di α. Il p-value sempre valido del test sequenziale del rapporto di probabilità a miscela (Johari, Koomen, Pekelis, Walsh 2017) mantiene la sua garanzia per quanto spesso e quando che sia si guardino i risultati. Confronta l'incremento osservato con una miscela di incrementi possibili di ampiezza tipica τ, ed è più prudente del p-value ordinario letto alla fine. Il report lo ricalcola dai dati del giorno a ogni esecuzione e non ricorda nulla da un'esecuzione all'altra.",
    "method_secondary": "Le metriche secondarie fanno da guardia: ognuna si confronta come la metrica principale, e i loro p-value si correggono tra loro, mai insieme a quello della principale, così aggiungere una metrica di guardia non costa nulla alla metrica principale. Decide solo la metrica principale; una metrica secondaria che risulta peggiore è elencata nella prima pagina.",
    "method_plan": "Il piano dice quante unità servono a un esperimento perché un incremento dell'ampiezza che conta venga rilevato con la potenza scelta all'α scelto, oppure, al contrario, quale incremento può rilevare un dato numero di unità o di giorni. Usa l'approssimazione normale del test eseguito dal nodo A/B, con la base di partenza e la varianza della metrica letti dallo storico, così piano e test concordano. Con più trattamenti ogni confronto è pianificato ad α diviso per il numero di confronti: le dimensioni sono dalla parte della prudenza.",
-   "method_weeks": "La durata è il numero di unità necessarie diviso per le nuove unità al giorno dello storico (per la quota del traffico mandata all'esperimento). Le persone si comportano in modo diverso nei giorni della settimana, quindi un esperimento che copre settimane intere confronta cose simili: il report dà le settimane accanto ai giorni."
+   "method_weeks": "La durata è il numero di unità necessarie diviso per le nuove unità al giorno dello storico (per la quota del traffico mandata all'esperimento). Le persone si comportano in modo diverso nei giorni della settimana, quindi un esperimento che copre settimane intere confronta cose simili: il report dà le settimane accanto ai giorni.",
+   "sequential_read_no_day": "Leggete questa decisione se i risultati sono stati guardati prima della fine prevista. Il p-value sempre valido di {variant}, sui dati di questa esecuzione, è {p:p} prima della correzione per più trattamenti; la tabella confronta quello corretto con α = {alpha:num}.",
+   "sequential_empty": "Gli intervalli dell'incremento di {variant} calcolati giorno dopo giorno non hanno alcun valore in comune: la sua sequenza di confidenza è vuota e la tabella non mostra alcun intervallo. Succede quando l'incremento è cambiato durante l'esperimento.",
+   "secondary_family": "I {comparisons:int} confronti delle metriche secondarie (ogni metrica contro il controllo, per ogni trattamento) sono stati corretti tra loro con la correzione del nodo, mai insieme a quelli della metrica principale: i p-value della metrica principale sono gli stessi che senza di essi.",
+   "secondary_family_none": "Non è stata chiesta alcuna correzione: i {comparisons:int} confronti delle metriche secondarie mantengono i propri p-value, quindi il rischio di almeno un falso allarme tra di essi è più grande di α. I p-value della metrica principale sono gli stessi che senza di essi.",
+   "secondary_family_one": "Con un solo confronto di una metrica secondaria non c'è nulla da correggere; i p-value della metrica principale sono gli stessi che senza di esso.",
+   "secondary_worse_more": "Altri {count:int} confronti delle metriche secondarie risultano peggiori del controllo: la tabella delle metriche secondarie li elenca tutti.",
+   "secondary_none_worse": "Nessuna metrica secondaria è peggiore del controllo ad α = {alpha:num}, dopo la correzione."
   },
   "measure_readings": [
    "decision_counts",
@@ -581,7 +603,14 @@
    "plan_mde_units",
    "plan_mde_days",
    "baseline_read",
-   "cuped_plan"
+   "cuped_plan",
+   "sequential_read_no_day",
+   "sequential_empty",
+   "secondary_family",
+   "secondary_family_none",
+   "secondary_family_one",
+   "baseline_read_no_days",
+   "cuped_plan_no_days"
   ],
   "verdict_words": [
    "significativo",
@@ -645,7 +674,8 @@
    "one_treatment": "Un solo trattamento: la correzione per confronti multipli non cambia nulla.",
    "looks_grouped": "I {days:int} giorni sono stati raggruppati in periodi di {period:int} giorni per il test sequenziale.",
    "control_zero": "Il valore del controllo è 0: l'incremento, che ne è una percentuale, non si può calcolare; la differenza è mostrata.",
-   "history_short": "Lo storico copre {history_days:int} giorni; il piano ne chiede {planned_days:int}."
+   "history_short": "Lo storico copre {history_days:int} giorni; il piano ne chiede {planned_days:int}.",
+   "secondary_missing": "{count:int} unità non avevano un valore della metrica secondaria «{metric}» e sono state escluse solo dai suoi confronti."
   }
  },
  "de": {
@@ -886,7 +916,14 @@
    "method_sequential": "Ein gewöhnlicher p-Wert gilt nur, wenn er einmal gelesen wird, am geplanten Ende: Jeden Tag nachzusehen und beim ersten p-Wert unter α aufzuhören, macht einen Fehlalarm weit wahrscheinlicher als α. Der jederzeit gültige p-Wert des sequenziellen Likelihood-Quotienten-Tests mit Mischung (mixture sequential probability ratio test; Johari, Koomen, Pekelis, Walsh 2017) behält seine Garantie, wie oft und wann auch immer die Ergebnisse angesehen werden. Er wägt den beobachteten Anstieg gegen eine Mischung möglicher Anstiege typischer Größe τ ab und ist vorsichtiger als der gewöhnliche, am Ende gelesene p-Wert. Der Bericht berechnet ihn bei jeder Ausführung neu aus den Daten des Tages und merkt sich nichts von einer Ausführung zur nächsten.",
    "method_secondary": "Sekundäre Kennzahlen sind Leitplanken: Jede wird wie die primäre Kennzahl verglichen, und ihre p-Werte werden untereinander korrigiert, nie zusammen mit dem der primären, sodass eine zusätzliche Leitplanke die primäre Kennzahl nichts kostet. Nur die primäre Kennzahl entscheidet; eine sekundäre Kennzahl, die schlechter ausfällt, wird auf der ersten Seite aufgeführt.",
    "method_plan": "Der Plan sagt, wie viele Einheiten ein Experiment braucht, damit ein Anstieg der relevanten Größe mit der gewählten Teststärke beim gewählten α erkannt würde, oder umgekehrt, welchen Anstieg eine gegebene Zahl von Einheiten oder Tagen erkennen kann. Er verwendet die Normalapproximation des Tests, den der A/B-Knoten ausführt, mit dem Ausgangswert und der Varianz der Kennzahl aus dem Verlauf, sodass Plan und Test übereinstimmen. Bei mehreren Behandlungen wird jeder Vergleich bei α geteilt durch die Zahl der Vergleiche geplant: Die Größen liegen auf der sicheren Seite.",
-   "method_weeks": "Die Dauer ist die Zahl der nötigen Einheiten geteilt durch die neuen Einheiten pro Tag im Verlauf (multipliziert mit dem Anteil des Verkehrs, der ins Experiment geht). Menschen verhalten sich an den Tagen der Woche unterschiedlich, daher vergleicht ein Experiment, das ganze Wochen abdeckt, Gleiches mit Gleichem: Der Bericht gibt die Wochen neben den Tagen an."
+   "method_weeks": "Die Dauer ist die Zahl der nötigen Einheiten geteilt durch die neuen Einheiten pro Tag im Verlauf (multipliziert mit dem Anteil des Verkehrs, der ins Experiment geht). Menschen verhalten sich an den Tagen der Woche unterschiedlich, daher vergleicht ein Experiment, das ganze Wochen abdeckt, Gleiches mit Gleichem: Der Bericht gibt die Wochen neben den Tagen an.",
+   "sequential_read_no_day": "Lesen Sie diese Entscheidung, wenn die Ergebnisse vor dem geplanten Ende angesehen wurden. Der jederzeit gültige p-Wert von {variant}, mit den Daten dieses Laufs, beträgt {p:p} vor der Korrektur für mehrere Behandlungen; die Tabelle vergleicht den korrigierten Wert mit α = {alpha:num}.",
+   "sequential_empty": "Die Tag für Tag berechneten Intervalle des Anstiegs von {variant} haben keinen gemeinsamen Wert: Seine Konfidenzsequenz ist leer, und die Tabelle zeigt kein Intervall. Das geschieht, wenn sich der Anstieg während des Experiments verändert hat.",
+   "secondary_family": "Die {comparisons:int} Vergleiche der sekundären Kennzahlen (jede Kennzahl gegen die Kontrolle, für jede Behandlung) wurden untereinander mit der Korrektur des Knotens korrigiert, nie zusammen mit denen der primären Kennzahl: Die p-Werte der primären Kennzahl sind dieselben wie ohne sie.",
+   "secondary_family_none": "Es wurde keine Korrektur verlangt: Die {comparisons:int} Vergleiche der sekundären Kennzahlen behalten ihre eigenen p-Werte, daher ist das Risiko mindestens eines Fehlalarms unter ihnen größer als α. Die p-Werte der primären Kennzahl sind dieselben wie ohne sie.",
+   "secondary_family_one": "Bei nur einem Vergleich einer sekundären Kennzahl gibt es nichts zu korrigieren; die p-Werte der primären Kennzahl sind dieselben wie ohne ihn.",
+   "secondary_worse_more": "Weitere {count:int} Vergleiche der sekundären Kennzahlen fallen schlechter aus als die Kontrolle: Die Tabelle der sekundären Kennzahlen führt sie alle auf.",
+   "secondary_none_worse": "Keine sekundäre Kennzahl ist bei α = {alpha:num} nach der Korrektur schlechter als die Kontrolle."
   },
   "measure_readings": [
    "decision_counts",
@@ -905,7 +942,14 @@
    "plan_mde_units",
    "plan_mde_days",
    "baseline_read",
-   "cuped_plan"
+   "cuped_plan",
+   "sequential_read_no_day",
+   "sequential_empty",
+   "secondary_family",
+   "secondary_family_none",
+   "secondary_family_one",
+   "baseline_read_no_days",
+   "cuped_plan_no_days"
   ],
   "verdict_words": [
    "signifikant",
@@ -988,7 +1032,8 @@
    "one_treatment": "Nur eine Behandlung: Die Korrektur für mehrere Vergleiche ändert nichts.",
    "looks_grouped": "Die {days:int} Tage wurden für den sequenziellen Test zu Zeiträumen von {period:int} Tagen zusammengefasst.",
    "control_zero": "Der Wert der Kontrolle ist 0: Der Anstieg, ein Prozentsatz davon, kann nicht berechnet werden; gezeigt wird die Differenz.",
-   "history_short": "Der Verlauf umfasst {history_days:int} Tage; der Plan verlangt {planned_days:int}."
+   "history_short": "Der Verlauf umfasst {history_days:int} Tage; der Plan verlangt {planned_days:int}.",
+   "secondary_missing": "{count:int} Einheiten hatten keinen Wert der sekundären Kennzahl «{metric}» und wurden nur aus deren Vergleichen ausgeschlossen."
   }
  },
  "es": {
@@ -1229,7 +1274,14 @@
    "method_sequential": "Un p-valor ordinario solo vale si se lee una vez, al final previsto: mirar cada día y parar en el primer p-valor por debajo de α hace una falsa alarma mucho más probable que α. El p-valor siempre válido de la prueba secuencial de razón de probabilidades de mezcla (Johari, Koomen, Pekelis, Walsh 2017) mantiene su garantía se miren los resultados las veces que se miren y en el momento que sea. Compara el aumento observado con una mezcla de aumentos posibles de tamaño típico τ, y es más prudente que el p-valor ordinario leído al final. El informe lo vuelve a calcular con los datos del día en cada ejecución y no recuerda nada de una ejecución a otra.",
    "method_secondary": "Las métricas secundarias hacen de salvaguarda: cada una se compara como la métrica principal, y sus p-valores se corrigen entre ellos, nunca junto con el de la principal, así que añadir una métrica de salvaguarda no le cuesta nada a la métrica principal. Solo decide la métrica principal; una métrica secundaria que resulta peor se indica en la primera página.",
    "method_plan": "El plan dice cuántas unidades necesita un experimento para que un aumento del tamaño que importa se detecte con la potencia elegida al α elegido, o, al revés, qué aumento puede detectar un número dado de unidades o de días. Usa la aproximación normal de la prueba que ejecuta el nodo A/B, con la base de partida y la varianza de la métrica leídas del histórico, para que plan y prueba coincidan. Con varios tratamientos cada comparación se planifica a α dividido por el número de comparaciones: los tamaños quedan del lado de la prudencia.",
-   "method_weeks": "La duración es el número de unidades necesarias dividido entre las unidades nuevas por día del histórico (multiplicadas por la parte del tráfico enviada al experimento). Las personas se comportan de forma distinta según el día de la semana, así que un experimento que cubre semanas enteras compara lo comparable: el informe da las semanas junto a los días."
+   "method_weeks": "La duración es el número de unidades necesarias dividido entre las unidades nuevas por día del histórico (multiplicadas por la parte del tráfico enviada al experimento). Las personas se comportan de forma distinta según el día de la semana, así que un experimento que cubre semanas enteras compara lo comparable: el informe da las semanas junto a los días.",
+   "sequential_read_no_day": "Lea esta decisión si los resultados se miraron antes del final previsto. El p-valor siempre válido de {variant}, con los datos de esta ejecución, es {p:p} antes de la corrección por varios tratamientos; la tabla compara el corregido con α = {alpha:num}.",
+   "sequential_empty": "Los intervalos del aumento de {variant} calculados día tras día no tienen ningún valor en común: su secuencia de confianza está vacía y la tabla no muestra ningún intervalo. Ocurre cuando el aumento cambió durante el experimento.",
+   "secondary_family": "Las {comparisons:int} comparaciones de las métricas secundarias (cada métrica frente al control, para cada tratamiento) se corrigieron entre ellas con la corrección del nodo, nunca junto con las de la métrica principal: los p-valores de la métrica principal son los mismos que sin ellas.",
+   "secondary_family_none": "No se pidió ninguna corrección: las {comparisons:int} comparaciones de las métricas secundarias conservan sus propios p-valores, así que el riesgo de al menos una falsa alarma entre ellas es mayor que α. Los p-valores de la métrica principal son los mismos que sin ellas.",
+   "secondary_family_one": "Con una sola comparación de una métrica secundaria no hay nada que corregir; los p-valores de la métrica principal son los mismos que sin ella.",
+   "secondary_worse_more": "Otras {count:int} comparaciones de las métricas secundarias resultan peores que el control: la tabla de las métricas secundarias las enumera todas.",
+   "secondary_none_worse": "Ninguna métrica secundaria es peor que el control a α = {alpha:num}, después de la corrección."
   },
   "measure_readings": [
    "decision_counts",
@@ -1248,7 +1300,14 @@
    "plan_mde_units",
    "plan_mde_days",
    "baseline_read",
-   "cuped_plan"
+   "cuped_plan",
+   "sequential_read_no_day",
+   "sequential_empty",
+   "secondary_family",
+   "secondary_family_none",
+   "secondary_family_one",
+   "baseline_read_no_days",
+   "cuped_plan_no_days"
   ],
   "verdict_words": [
    "significativo",
@@ -1326,7 +1385,8 @@
    "one_treatment": "Un solo tratamiento: la corrección por comparaciones múltiples no cambia nada.",
    "looks_grouped": "Los {days:int} días se agruparon en periodos de {period:int} días para la prueba secuencial.",
    "control_zero": "El valor del control es 0: el aumento, que es un porcentaje de él, no se puede calcular; se muestra la diferencia.",
-   "history_short": "El histórico cubre {history_days:int} días; el plan pide {planned_days:int}."
+   "history_short": "El histórico cubre {history_days:int} días; el plan pide {planned_days:int}.",
+   "secondary_missing": "{count:int} unidades no tenían valor de la métrica secundaria «{metric}» y se excluyeron solo de sus comparaciones."
   }
  },
  "fr": {
@@ -1567,7 +1627,14 @@
    "method_sequential": "Une p-valeur ordinaire ne vaut que si elle est lue une seule fois, à la fin prévue : regarder chaque jour et s'arrêter à la première p-valeur au-dessous de α rend une fausse alerte bien plus probable que α. La p-valeur valable à tout moment du test séquentiel du rapport de vraisemblance à mélange (mixture SPRT ; Johari, Koomen, Pekelis, Walsh 2017) garde sa garantie quels que soient le nombre et le moment des consultations des résultats. Elle compare la hausse observée à un mélange de hausses possibles de taille typique τ, et elle est plus prudente que la p-valeur ordinaire lue à la fin. Le rapport la recalcule à partir des données du jour à chaque exécution et ne garde rien en mémoire d'une exécution à l'autre.",
    "method_secondary": "Les métriques secondaires sont des garde-fous : chacune est comparée comme la métrique principale, et leurs p-valeurs sont corrigées entre elles, jamais avec celle de la principale, de sorte qu'ajouter un garde-fou ne coûte rien à la métrique principale. Seule la métrique principale décide ; une métrique secondaire sur laquelle un traitement fait moins bien est signalée en première page.",
    "method_plan": "Le plan indique combien d'unités il faut à une expérience pour qu'une hausse de la taille qui compte soit détectée avec la puissance choisie au niveau α choisi, ou, à l'inverse, quelle hausse un nombre donné d'unités ou de jours permet de détecter. Il utilise l'approximation normale du test qu'exécute le nœud A/B, avec la valeur de référence et la variance de la métrique lues dans l'historique, si bien que le plan et le test concordent. Avec plusieurs traitements, chaque comparaison est planifiée à α divisé par le nombre de comparaisons : les tailles sont du côté de la prudence.",
-   "method_weeks": "La durée est le nombre d'unités nécessaires divisé par les nouvelles unités par jour de l'historique (multipliées par la part du trafic envoyée à l'expérience). Les gens ne se comportent pas de la même façon selon les jours de la semaine : une expérience qui couvre des semaines entières compare des périodes comparables. Le rapport donne donc les semaines à côté des jours."
+   "method_weeks": "La durée est le nombre d'unités nécessaires divisé par les nouvelles unités par jour de l'historique (multipliées par la part du trafic envoyée à l'expérience). Les gens ne se comportent pas de la même façon selon les jours de la semaine : une expérience qui couvre des semaines entières compare des périodes comparables. Le rapport donne donc les semaines à côté des jours.",
+   "sequential_read_no_day": "Lisez cette décision si les résultats ont été consultés avant la fin prévue. La p-valeur valable à tout moment de {variant}, sur les données de cette exécution, est {p:p} avant la correction pour plusieurs traitements ; le tableau compare la p-valeur corrigée à α = {alpha:num}.",
+   "sequential_empty": "Les intervalles de la hausse de {variant} calculés jour après jour n'ont aucune valeur en commun : sa séquence de confiance est vide, et le tableau ne montre aucun intervalle. Cela arrive quand la hausse a changé pendant l'expérience.",
+   "secondary_family": "Les {comparisons:int} comparaisons des métriques secondaires (chaque métrique face au contrôle, pour chaque traitement) ont été corrigées entre elles avec la correction du nœud, jamais avec celles de la métrique principale : les p-valeurs de la métrique principale sont les mêmes que sans elles.",
+   "secondary_family_none": "Aucune correction n'a été demandée : les {comparisons:int} comparaisons des métriques secondaires gardent leurs propres p-valeurs, donc le risque d'au moins une fausse alarme parmi elles est plus grand que α. Les p-valeurs de la métrique principale sont les mêmes que sans elles.",
+   "secondary_family_one": "Avec une seule comparaison d'une métrique secondaire, il n'y a rien à corriger ; les p-valeurs de la métrique principale sont les mêmes que sans elle.",
+   "secondary_worse_more": "{count:int} autres comparaisons des métriques secondaires font moins bien que le contrôle : le tableau des métriques secondaires les liste toutes.",
+   "secondary_none_worse": "Aucune métrique secondaire ne fait moins bien que le contrôle au niveau α = {alpha:num}, après la correction."
   },
   "measure_readings": [
    "decision_counts",
@@ -1586,7 +1653,14 @@
    "plan_mde_units",
    "plan_mde_days",
    "baseline_read",
-   "cuped_plan"
+   "cuped_plan",
+   "sequential_read_no_day",
+   "sequential_empty",
+   "secondary_family",
+   "secondary_family_none",
+   "secondary_family_one",
+   "baseline_read_no_days",
+   "cuped_plan_no_days"
   ],
   "verdict_words": [
    "significatif",
@@ -1672,7 +1746,8 @@
    "one_treatment": "Un seul traitement : la correction pour comparaisons multiples ne change rien.",
    "looks_grouped": "Les {days:int} jours ont été regroupés en périodes de {period:int} jours pour le test séquentiel.",
    "control_zero": "La valeur du contrôle est 0 : la hausse, qui en est un pourcentage, ne peut pas être calculée ; la différence est affichée.",
-   "history_short": "L'historique couvre {history_days:int} jours ; le plan en demande {planned_days:int}."
+   "history_short": "L'historique couvre {history_days:int} jours ; le plan en demande {planned_days:int}.",
+   "secondary_missing": "{count:int} unités n'avaient pas de valeur de la métrique secondaire «{metric}» et ont été exclues de ses seules comparaisons."
   }
  }
 }

@@ -54,7 +54,9 @@
    "correction_holm": "With {arms:int} variants each comparison with the control is planned at α' = {alpha_per_comparison:num}: α = {alpha:num} divided by the number of comparisons, the first and strictest step of Holm's correction.",
    "correction_benjamini_hochberg": "With {arms:int} variants each comparison with the control is planned at α' = {alpha_per_comparison:num}: α = {alpha:num} divided by the number of comparisons, the least favourable case of the Benjamini–Hochberg correction.",
    "correction_bonferroni": "With {arms:int} variants each comparison with the control is planned at α' = {alpha_per_comparison:num}: α = {alpha:num} divided by the number of comparisons, Bonferroni's correction.",
-   "correction_none": "Each comparison with the control is planned at α = {alpha:num}, without correction."
+   "correction_none": "Each comparison with the control is planned at α = {alpha:num}, without correction.",
+   "baseline_read_no_days": "The history holds {units:int} units: the metric's mean is {mean:num}, with a standard deviation of {sd:num} per unit.",
+   "cuped_plan_no_days": "With the covariate the variance is {reduction:pct} smaller: {units:int} units in all would do."
   }
  },
  "it": {
@@ -112,7 +114,9 @@
    "correction_holm": "Con {arms:int} varianti ogni confronto con il controllo è pianificato ad α' = {alpha_per_comparison:num}: α = {alpha:num} diviso per il numero di confronti, il primo passo, il più severo, della correzione di Holm.",
    "correction_benjamini_hochberg": "Con {arms:int} varianti ogni confronto con il controllo è pianificato ad α' = {alpha_per_comparison:num}: α = {alpha:num} diviso per il numero di confronti, il caso meno favorevole della correzione di Benjamini–Hochberg.",
    "correction_bonferroni": "Con {arms:int} varianti ogni confronto con il controllo è pianificato ad α' = {alpha_per_comparison:num}: α = {alpha:num} diviso per il numero di confronti, la correzione di Bonferroni.",
-   "correction_none": "Ogni confronto con il controllo è pianificato ad α = {alpha:num}, senza correzione."
+   "correction_none": "Ogni confronto con il controllo è pianificato ad α = {alpha:num}, senza correzione.",
+   "baseline_read_no_days": "Lo storico contiene {units:int} unità: la media della metrica è {mean:num}, con una deviazione standard di {sd:num} per unità.",
+   "cuped_plan_no_days": "Con la covariata la varianza è più piccola di {reduction:pct}: basterebbero {units:int} unità in tutto."
   }
  },
  "de": {
@@ -170,7 +174,9 @@
    "correction_holm": "Bei {arms:int} Varianten wird jeder Vergleich mit der Kontrolle bei α' = {alpha_per_comparison:num} geplant: α = {alpha:num} geteilt durch die Zahl der Vergleiche, der erste und strengste Schritt der Holm-Korrektur.",
    "correction_benjamini_hochberg": "Bei {arms:int} Varianten wird jeder Vergleich mit der Kontrolle bei α' = {alpha_per_comparison:num} geplant: α = {alpha:num} geteilt durch die Zahl der Vergleiche, der ungünstigste Fall der Benjamini–Hochberg-Korrektur.",
    "correction_bonferroni": "Bei {arms:int} Varianten wird jeder Vergleich mit der Kontrolle bei α' = {alpha_per_comparison:num} geplant: α = {alpha:num} geteilt durch die Zahl der Vergleiche, die Bonferroni-Korrektur.",
-   "correction_none": "Jeder Vergleich mit der Kontrolle wird bei α = {alpha:num} geplant, ohne Korrektur."
+   "correction_none": "Jeder Vergleich mit der Kontrolle wird bei α = {alpha:num} geplant, ohne Korrektur.",
+   "baseline_read_no_days": "Der Verlauf enthält {units:int} Einheiten: Der Mittelwert der Kennzahl ist {mean:num}, mit einer Standardabweichung von {sd:num} je Einheit.",
+   "cuped_plan_no_days": "Mit der Kovariate ist die Varianz um {reduction:pct} kleiner: Insgesamt wären {units:int} Einheiten nötig."
   }
  },
  "es": {
@@ -228,7 +234,9 @@
    "correction_holm": "Con {arms:int} variantes, cada comparación con el control se planifica a α' = {alpha_per_comparison:num}: α = {alpha:num} dividido por el número de comparaciones, el primer paso, el más estricto, de la corrección de Holm.",
    "correction_benjamini_hochberg": "Con {arms:int} variantes, cada comparación con el control se planifica a α' = {alpha_per_comparison:num}: α = {alpha:num} dividido por el número de comparaciones, el caso menos favorable de la corrección de Benjamini–Hochberg.",
    "correction_bonferroni": "Con {arms:int} variantes, cada comparación con el control se planifica a α' = {alpha_per_comparison:num}: α = {alpha:num} dividido por el número de comparaciones, la corrección de Bonferroni.",
-   "correction_none": "Cada comparación con el control se planifica a α = {alpha:num}, sin corrección."
+   "correction_none": "Cada comparación con el control se planifica a α = {alpha:num}, sin corrección.",
+   "baseline_read_no_days": "El histórico contiene {units:int} unidades: la media de la métrica es {mean:num}, con una desviación estándar de {sd:num} por unidad.",
+   "cuped_plan_no_days": "Con la covariable la varianza es un {reduction:pct} menor: bastarían {units:int} unidades en total."
   }
  },
  "fr": {
@@ -286,7 +294,9 @@
    "correction_holm": "Avec {arms:int} variantes, chaque comparaison avec le contrôle est planifiée à α' = {alpha_per_comparison:num} : α = {alpha:num} divisé par le nombre de comparaisons, la première étape de la correction de Holm, la plus stricte.",
    "correction_benjamini_hochberg": "Avec {arms:int} variantes, chaque comparaison avec le contrôle est planifiée à α' = {alpha_per_comparison:num} : α = {alpha:num} divisé par le nombre de comparaisons, le cas le moins favorable de la correction de Benjamini–Hochberg.",
    "correction_bonferroni": "Avec {arms:int} variantes, chaque comparaison avec le contrôle est planifiée à α' = {alpha_per_comparison:num} : α = {alpha:num} divisé par le nombre de comparaisons, soit la correction de Bonferroni.",
-   "correction_none": "Chaque comparaison avec le contrôle est planifiée à α = {alpha:num}, sans correction."
+   "correction_none": "Chaque comparaison avec le contrôle est planifiée à α = {alpha:num}, sans correction.",
+   "baseline_read_no_days": "L'historique contient {units:int} unités : la moyenne de la métrique est de {mean:num}, avec un écart type de {sd:num} par unité.",
+   "cuped_plan_no_days": "Avec la covariable, la variance est plus petite de {reduction:pct} : il faudrait {units:int} unités en tout."
   }
  }
 }

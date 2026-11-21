@@ -40,7 +40,9 @@ TAB_COMMON_TESTS[["experiments: the sequential test of every reference case: p n
       # the last look holds every unit: its log Λ from the comparison's lift and the lift's standard error
       .tab_expect(abs(ab_mixture(cmp("lift"), cmp("lift_std_error")^2, tau, a_int)$log_lambda - at("log_lambda")) < 1e-9 * max(1, abs(at("log_lambda"))),
                   case$id, " ", t, ": log Λ")
-      out <- (length(at("cs_low")) && at("cs_low") > 0) || (length(at("cs_high")) && at("cs_high") < 0)
+      # an empty sequence (no end written, a look computed) leaves 0 out too: some look's interval did
+      empty <- !length(at("cs_low")) && !length(at("cs_high")) && length(at("p_value")) > 0
+      out <- empty || (length(at("cs_low")) && at("cs_low") > 0) || (length(at("cs_high")) && at("cs_high") < 0)
       .tab_expect(identical(out, at("p_value") <= a_int), case$id, " ", t, ": the sequence and p")
       seen <- seen + 1L
     }

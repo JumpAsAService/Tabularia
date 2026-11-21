@@ -8,7 +8,8 @@
    "variants": "Variants",
    "comparisons": "Comparisons",
    "bayes": "Bayesian measures",
-   "sequential": "Sequential test"
+   "sequential": "Sequential test",
+   "secondary": "Secondary metrics"
   },
   "srm_band": "Sample ratio mismatch: the units are not split as planned (p {p}, below {srm_alpha}). The comparisons below may be biased: look for what removed or added units in one variant (a filter, a bot rule, a redirect that fails) before reading them.",
   "headline": {
@@ -101,7 +102,12 @@
    "sequence": "Confidence sequence",
    "first_crossing": "First below α",
    "never": "never",
-   "sequential": "The sequential test of each treatment"
+   "sequential": "The sequential test of each treatment",
+   "secondary": "Each secondary metric against the control",
+   "secondary_worse": "Secondary metrics worse than the control",
+   "metric": "Metric",
+   "control_value": "Control",
+   "treatment_value": "Treatment"
   },
   "charts": {
    "lift_interval": "Lift of each treatment, with its interval",
@@ -158,6 +164,9 @@
    "correction_bonferroni": "With {treatments:int} treatments, Bonferroni's correction multiplies the probability by {treatments:int}: {p_adjusted:p} in place of {p:p}; the intervals are widened to match.",
    "correction_none": "No correction was asked for: with {treatments:int} treatments, the risk of at least one false alarm is larger than α.",
    "correction_one": "With one treatment there is a single comparison: no correction is needed."
+  },
+  "secondary": {
+   "lead": "Guardrails: each secondary metric is compared with the control like the primary one, and their p-values are corrected among themselves, never together with the primary metric's. Only the primary metric decides."
   }
  },
  "it": {
@@ -169,7 +178,8 @@
    "variants": "Varianti",
    "comparisons": "Confronti",
    "bayes": "Misure bayesiane",
-   "sequential": "Test sequenziale"
+   "sequential": "Test sequenziale",
+   "secondary": "Metriche secondarie"
   },
   "srm_band": "Sample ratio mismatch: le unità non sono ripartite come previsto (p {p}, sotto {srm_alpha}). I confronti qui sotto possono essere distorti: cercate che cosa ha tolto o aggiunto unità in una variante (un filtro, una regola anti-bot, un reindirizzamento che fallisce) prima di leggerli.",
   "headline": {
@@ -262,7 +272,12 @@
    "sequence": "Sequenza di confidenza",
    "first_crossing": "Prima volta sotto α",
    "never": "mai",
-   "sequential": "Il test sequenziale di ogni trattamento"
+   "sequential": "Il test sequenziale di ogni trattamento",
+   "secondary": "Ogni metrica secondaria contro il controllo",
+   "secondary_worse": "Metriche secondarie peggiori del controllo",
+   "metric": "Metrica",
+   "control_value": "Controllo",
+   "treatment_value": "Trattamento"
   },
   "charts": {
    "lift_interval": "Incremento di ogni trattamento, con il suo intervallo",
@@ -319,6 +334,9 @@
    "correction_bonferroni": "Con {treatments:int} trattamenti, la correzione di Bonferroni moltiplica la probabilità per {treatments:int}: {p_adjusted:p} al posto di {p:p}; gli intervalli sono allargati di conseguenza.",
    "correction_none": "Non è stata chiesta alcuna correzione: con {treatments:int} trattamenti il rischio di almeno un falso allarme è più grande di α.",
    "correction_one": "Con un solo trattamento c'è un solo confronto: non serve alcuna correzione."
+  },
+  "secondary": {
+   "lead": "Metriche di guardia: ogni metrica secondaria si confronta con il controllo come la principale, e i loro p-value si correggono tra loro, mai insieme a quelli della metrica principale. Decide solo la metrica principale."
   }
  },
  "de": {
@@ -330,7 +348,8 @@
    "variants": "Varianten",
    "comparisons": "Vergleiche",
    "bayes": "Bayessche Messgrößen",
-   "sequential": "Sequenzieller Test"
+   "sequential": "Sequenzieller Test",
+   "secondary": "Sekundäre Kennzahlen"
   },
   "srm_band": "Sample ratio mismatch: Die Einheiten sind nicht wie geplant aufgeteilt (p {p}, unter {srm_alpha}). Die Vergleiche unten können verzerrt sein: Suchen Sie, was in einer Variante Einheiten entfernt oder hinzugefügt hat (ein Filter, eine Bot-Regel, eine fehlschlagende Weiterleitung), bevor Sie die Vergleiche lesen.",
   "headline": {
@@ -423,7 +442,12 @@
    "sequence": "Konfidenzsequenz",
    "first_crossing": "Erstmals unter α",
    "never": "nie",
-   "sequential": "Der sequenzielle Test jeder Behandlung"
+   "sequential": "Der sequenzielle Test jeder Behandlung",
+   "secondary": "Jede sekundäre Kennzahl gegen die Kontrolle",
+   "secondary_worse": "Sekundäre Kennzahlen schlechter als die Kontrolle",
+   "metric": "Kennzahl",
+   "control_value": "Kontrolle",
+   "treatment_value": "Behandlung"
   },
   "charts": {
    "lift_interval": "Anstieg jeder Behandlung, mit seinem Intervall",
@@ -480,6 +504,9 @@
    "correction_bonferroni": "Bei {treatments:int} Behandlungen multipliziert die Bonferroni-Korrektur die Wahrscheinlichkeit mit {treatments:int}: {p_adjusted:p} statt {p:p}; die Intervalle werden entsprechend verbreitert.",
    "correction_none": "Es wurde keine Korrektur verlangt: Bei {treatments:int} Behandlungen ist das Risiko mindestens eines Fehlalarms größer als α.",
    "correction_one": "Bei einer einzigen Behandlung gibt es nur einen Vergleich: Es ist keine Korrektur nötig."
+  },
+  "secondary": {
+   "lead": "Leitplanken: Jede sekundäre Kennzahl wird wie die primäre mit der Kontrolle verglichen, und ihre p-Werte werden untereinander korrigiert, nie zusammen mit denen der primären Kennzahl. Nur die primäre Kennzahl entscheidet."
   }
  },
  "es": {
@@ -491,7 +518,8 @@
    "variants": "Variantes",
    "comparisons": "Comparaciones",
    "bayes": "Medidas bayesianas",
-   "sequential": "Prueba secuencial"
+   "sequential": "Prueba secuencial",
+   "secondary": "Métricas secundarias"
   },
   "srm_band": "Sample ratio mismatch: las unidades no se reparten según lo previsto (p {p}, por debajo de {srm_alpha}). Las comparaciones de abajo pueden estar sesgadas: busque qué quitó o añadió unidades en una variante (un filtro, una regla contra bots, una redirección que falla) antes de leerlas.",
   "headline": {
@@ -584,7 +612,12 @@
    "sequence": "Secuencia de confianza",
    "first_crossing": "Primera vez por debajo de α",
    "never": "nunca",
-   "sequential": "La prueba secuencial de cada tratamiento"
+   "sequential": "La prueba secuencial de cada tratamiento",
+   "secondary": "Cada métrica secundaria frente al control",
+   "secondary_worse": "Métricas secundarias peores que el control",
+   "metric": "Métrica",
+   "control_value": "Control",
+   "treatment_value": "Tratamiento"
   },
   "charts": {
    "lift_interval": "Aumento de cada tratamiento, con su intervalo",
@@ -641,6 +674,9 @@
    "correction_bonferroni": "Con {treatments:int} tratamientos, la corrección de Bonferroni multiplica la probabilidad por {treatments:int}: {p_adjusted:p} en lugar de {p:p}; los intervalos se ensanchan en la misma medida.",
    "correction_none": "No se pidió ninguna corrección: con {treatments:int} tratamientos, el riesgo de al menos una falsa alarma es mayor que α.",
    "correction_one": "Con un solo tratamiento hay una sola comparación: no hace falta ninguna corrección."
+  },
+  "secondary": {
+   "lead": "Salvaguardas: cada métrica secundaria se compara con el control como la principal, y sus p-valores se corrigen entre ellos, nunca junto con los de la métrica principal. Solo decide la métrica principal."
   }
  },
  "fr": {
@@ -652,7 +688,8 @@
    "variants": "Variantes",
    "comparisons": "Comparaisons",
    "bayes": "Mesures bayésiennes",
-   "sequential": "Test séquentiel"
+   "sequential": "Test séquentiel",
+   "secondary": "Métriques secondaires"
   },
   "srm_band": "Sample ratio mismatch : les unités ne sont pas réparties comme prévu (p {p}, au-dessous de {srm_alpha}). Les comparaisons ci-dessous peuvent être biaisées : cherchez ce qui a retiré ou ajouté des unités dans une variante (un filtre, une règle anti-robots, une redirection qui échoue) avant de les lire.",
   "headline": {
@@ -745,7 +782,12 @@
    "sequence": "Séquence de confiance",
    "first_crossing": "Première fois sous α",
    "never": "jamais",
-   "sequential": "Le test séquentiel de chaque traitement"
+   "sequential": "Le test séquentiel de chaque traitement",
+   "secondary": "Chaque métrique secondaire face au contrôle",
+   "secondary_worse": "Métriques secondaires moins bonnes que le contrôle",
+   "metric": "Métrique",
+   "control_value": "Contrôle",
+   "treatment_value": "Traitement"
   },
   "charts": {
    "lift_interval": "Hausse de chaque traitement, avec son intervalle",
@@ -802,6 +844,9 @@
    "correction_bonferroni": "Avec {treatments:int} traitements, la correction de Bonferroni multiplie la p-valeur par {treatments:int} : {p_adjusted:p} au lieu de {p:p} ; les intervalles sont élargis en conséquence.",
    "correction_none": "Aucune correction n'a été demandée : avec {treatments:int} traitements, le risque d'au moins une fausse alerte est plus grand que α.",
    "correction_one": "Avec un seul traitement, il n'y a qu'une comparaison : aucune correction n'est nécessaire."
+  },
+  "secondary": {
+   "lead": "Garde-fous : chaque métrique secondaire est comparée au contrôle comme la principale, et leurs p-valeurs sont corrigées entre elles, jamais avec celles de la métrique principale. Seule la métrique principale décide."
   }
  }
 }

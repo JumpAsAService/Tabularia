@@ -32,6 +32,10 @@ numpy's `inverted_cdf` quantile, which is R's type 1); then
     covariate balance            statsmodels anova_oneway(use_var="unequal")                       1e-12
     power at this size, MDE      a transcription with scipy.stats.norm                             1e-9
 
+Lot E8 (the secondary metrics), per case that names some: each metric's units with pandas, Welch's t (SciPy) or the
+Wald z (statsmodels), Fieller, one multipletests over every metric × treatment, the decision, the detectable lift;
+the same case's primary keys by witness_comparisons above (they are E2's, computed without the secondary metrics).
+
 Lot E4 (the sequential test), per case seq_* (make_reference_sequential.R): every look from the raw rows (the
 lift, its delta-method variance, CUPED's θ with statsmodels OLS), the mixture's log Λ, the running minimum of 1/Λ,
 the confidence sequence, multipletests at each look, the first crossing, the decision                1e-12
@@ -678,7 +682,8 @@ def witness_sequential(case: dict[str, Any]) -> None:
         crossing = float(day_of[hit[0]]) if hit and p.get("date") else None
         check(cid, key + "first_crossing", crossing, want.get(key + "first_crossing"), 0, "the first look below alpha, its last day")
         # the duality: the sequence leaves 0 out exactly when the always-valid p is at most a_int
-        out = (not math.isnan(low[i, -1]) and low[i, -1] > 0) or (not math.isnan(high[i, -1]) and high[i, -1] < 0)
+        empty = math.isnan(low[i, -1]) and math.isnan(high[i, -1]) and not np.isnan(logl[i]).all()  # some look's interval left 0 out
+        out = empty or (not math.isnan(low[i, -1]) and low[i, -1] > 0) or (not math.isnan(high[i, -1]) and high[i, -1] < 0)
         check(cid, key + " sequence ⇔ p", 0.0 if out == (praw[i, -1] <= a_int) else 1.0, 0.0, 0, "0 left out ⇔ p ≤ alpha")
         last = max([l for l in range(D) if not math.isnan(lift[i, l])], default=None)
         if last is not None:
@@ -695,10 +700,12 @@ def witness_sequential(case: dict[str, Any]) -> None:
                          want.get(key + "decision"), 0))
             # the closed form against the integral of the likelihood ratio over θ ~ N(0, τ²), at the last look
             lam, w = lift[i, last], lv[i, last]
-            f = lambda th: math.exp(th * lam / w - th * th / (2 * w)) * math.exp(-th * th / (2 * tau ** 2)) / (tau * math.sqrt(2 * math.pi))
             centre, spread = lam * tau ** 2 / (w + tau ** 2), math.sqrt(w * tau ** 2 / (w + tau ** 2))  # θ's posterior
+            # the integrand divided by its value at the centre, so that a Λ beyond a double's range (seq_drift) is a log
+            top = centre * lam / w - centre * centre / (2 * w) - centre * centre / (2 * tau ** 2)
+            f = lambda th: math.exp(th * lam / w - th * th / (2 * w) - th * th / (2 * tau ** 2) - top) / (tau * math.sqrt(2 * math.pi))
             value = integrate.quad(f, centre - 40 * spread, centre + 40 * spread, epsabs=0, epsrel=1e-13, limit=200, points=[centre])[0]
-            check(cid, key + "log_lambda (the integral)", math.log(value), float(logl[i, last]), 1e-10, "scipy quad over the mixture")
+            check(cid, key + "log_lambda (the integral)", math.log(value) + top, float(logl[i, last]), 1e-10, "scipy quad over the mixture")
         at = [l for l in range(D) if not math.isnan(lift[i, l])]
         for x, l in enumerate(at):
             for chart, stat, series in (("sequential_p", "y", padj), ("sequential_lift", "y", lift), ("sequential_lift", "low", low),
@@ -831,6 +838,96 @@ def witness_plan_rule(case: dict[str, Any]) -> None:
     check("plan_rule", "two-sided solve_power", two, one, 1e-5, "statsmodels counts the opposite tail too")
 
 
+# ── lot E8: the secondary metrics ───────────────────────────────────────────────
+def witness_secondary(case: dict[str, Any]) -> None:
+    """Each secondary metric's units with pandas (the rows of a unit together, a unit in two variants left out, a unit
+    without a value of the metric left out of it), its comparisons with SciPy's Welch t (a number) or statsmodels' Wald z
+    (a true/false column), Fieller, ONE multipletests over every metric × every treatment, the decision, the detectable
+    lift at alpha / M."""
+    import numpy as np
+    import pandas as pd
+    from scipy import stats
+    from statsmodels.stats.multitest import multipletests
+    from statsmodels.stats.proportion import confint_proportions_2indep, test_proportions_2indep
+
+    cid, want = case["id"], expected_of(case)
+    p = {**DEFAULTS, **case["params"]}
+    v, unit, types = p["variant"], p.get("unit"), case["types"]
+    df = read(case)
+    df = df[df[v].notna()]
+    labels = sorted(df[v].unique(), key=lambda s: s.encode("utf-8"))
+    ci = labels.index(p["control"])
+    tr = [j for j in range(len(labels)) if j != ci]
+    if unit:
+        nvar = df.groupby(unit)[v].nunique()
+        df = df[df[unit].isin(nvar.index[nvar == 1])]
+    two, alt = p["alternative"] == "two_sided", p["alternative"]
+    res = []
+    for col in p["secondary_metrics"]:
+        binary = types[col] == "boolean"
+        x = df[[v, col] + ([unit] if unit else [])].dropna(subset=[col]).copy()
+        x[col] = x[col].map(lambda s: float(str(s).lower() in ("true", "1"))) if binary else x[col].astype(float)
+        if unit:
+            x = x.groupby(unit).agg({v: "first", col: (lambda s: float((s > 0).any())) if binary else "sum"}).reset_index()
+        g = np.array([labels.index(lab) for lab in x[v]])
+        y = x[col].to_numpy(float)
+        for t in tr:
+            yt, yc = y[g == t], y[g == ci]
+            if binary:
+                r = test_proportions_2indep(yt.sum(), len(yt), yc.sum(), len(yc), method="wald", compare="diff", alternative=ALTERNATIVE[alt])
+                res.append({"col": col, "t": t, "binary": True, "yt": yt, "yc": yc, "stat": float(r.statistic), "p": float(r.pvalue)})
+            else:
+                r = stats.ttest_ind(yt, yc, equal_var=False, alternative=SCIPY_ALT[alt])
+                res.append({"col": col, "t": t, "binary": False, "yt": yt, "yc": yc, "stat": float(r.statistic), "p": float(r.pvalue), "tt": r})
+    M = len(res)
+    how = p["correction"]
+    # the correction on expected.json's own p-values (as _corrections: the p-values themselves are compared at 1e-12 below)
+    ps = np.array([want[f"secondary|{r['col']}|{labels[r['t']]}|p_value"] for r in res])
+    adj = ps if how == "none" else multipletests(ps, method={"holm": "holm", "benjamini_hochberg": "fdr_bh", "bonferroni": "bonferroni"}[how])[1]
+    a_int = p["alpha"] / M if how == "bonferroni" else p["alpha"]
+    a_cmp = p["alpha"] if how == "none" else p["alpha"] / M
+    za = float(stats.norm.ppf(1 - a_cmp / 2) if two else stats.norm.ppf(1 - a_cmp))
+    for r, a in zip(res, adj):
+        key = f"secondary|{r['col']}|{labels[r['t']]}|"
+        yt, yc = r["yt"], r["yc"]
+        mt, mc = yt.mean(), yc.mean()
+        if r["binary"]:
+            vt, vc = mt * (1 - mt) / len(yt), mc * (1 - mc) / len(yc)
+            lo, hi = confint_proportions_2indep(yt.sum(), len(yt), yc.sum(), len(yc), method="wald", compare="diff", alpha=a_int if two else 2 * a_int)
+            lo, hi = (None if alt == "less" else float(lo)), (None if alt == "greater" else float(hi))
+            q = float(stats.norm.ppf(1 - a_int / 2) if two else stats.norm.ppf(1 - a_int))
+            what = "statsmodels test_proportions_2indep(wald)"
+        else:
+            vt, vc = np.var(yt, ddof=1) / len(yt), np.var(yc, ddof=1) / len(yc)
+            iv = r["tt"].confidence_interval(confidence_level=1 - a_int)
+            lo, hi = _finite(iv.low), _finite(iv.high)
+            q = float(stats.t.ppf(1 - a_int / 2, r["tt"].df) if two else stats.t.ppf(1 - a_int, r["tt"].df))
+            what = "scipy ttest_ind"
+        se = math.sqrt(vt + vc)
+        check(cid, key + "statistic", r["stat"], want.get(key + "statistic"), 1e-12, what)
+        check(cid, key + "p_value", r["p"], want.get(key + "p_value"), 1e-12, what)
+        check(cid, key + "difference_ci_low", lo, want.get(key + "difference_ci_low"), 1e-12, what + ", its interval")
+        check(cid, key + "difference_ci_high", hi, want.get(key + "difference_ci_high"), 1e-12, what + ", its interval")
+        w = want.get(key + "p_adjusted")
+        check(cid, key + "p_adjusted", float(a), w, 1e-15 if w and w > 1e-3 else 1e-12, f"statsmodels multipletests ({how}) over {M}")
+        check(cid, key + "mean_treatment", float(mt), want.get(key + "mean_treatment"), 1e-12, "pandas")
+        check(cid, key + "mean_control", float(mc), want.get(key + "mean_control"), 1e-12, "pandas")
+        check(cid, key + "lift", float(mt / mc - 1), want.get(key + "lift"), 1e-12, "the means")
+        check(cid, key + "lift_std_error", math.sqrt(vt / mc ** 2 + mt ** 2 * vc / mc ** 4), want.get(key + "lift_std_error"), 1e-12, "the delta method")
+        flo, fhi = fieller(float(mt), float(vt), float(mc), float(vc), q)
+        if not two and flo is not None:
+            if (alt == "greater") == (mc > 0):
+                fhi = None
+            else:
+                flo = None
+        check(cid, key + "lift_ci_low", flo, want.get(key + "lift_ci_low"), 1e-10, "Fieller, transcription")
+        check(cid, key + "lift_ci_high", fhi, want.get(key + "lift_ci_high"), 1e-10, "Fieller, transcription")
+        check(cid, key + "mde", (za + float(stats.norm.ppf(p["power"]))) * se / abs(mc), want.get(key + "mde"), 1e-9, f"transcription at alpha / {M}")
+        dec = ("better" if (mt > mc) == bool(p["higher_is_better"]) else "worse") if a < p["alpha"] else "not_significant"
+        said.append(("ok" if dec == want.get(key + "decision") else "DIFF", cid, key + "decision [the adjusted p against alpha]", dec,
+                     want.get(key + "decision"), 0))
+
+
 def main(argv: list[str]) -> int:
     if "--engine" in argv:
         witness_engine()
@@ -839,6 +936,8 @@ def main(argv: list[str]) -> int:
             if case["model"] == "ab_test" and not case.get("refuses") and "reading" in case:
                 run = witness_bayes if case["id"].startswith("bayes_") else witness_sequential if case["id"].startswith("seq_") else witness_comparisons
                 run(case)
+                if case["params"].get("secondary_metrics"):  # lot E8: the primary above, its guardrails here
+                    witness_secondary(case)
     if "--engine" not in argv:
         for case in EXPECTED["cases"]:  # lot E5: the planning node
             if case["model"] == "ab_plan" and not case.get("refuses") and "reading" in case:
