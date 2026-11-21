@@ -20,11 +20,13 @@ from app.api.routes import reports as report_routes
 from app.api.routes import tasks
 from app.engine.models import catalog, layouts
 from app.engine.models.layouts import common
+from app.engine.models.layouts import parametric_survival as ps_layout
 from app.engine.models.results import read_fixture
+from app.engine.stats import layouts as stats_layouts
 from app.engine.stats.layouts import LOCALES
 from app.engine.stats.output import OUTPUT_NAMES
 from app.reports import definition as rd
-from app.reports import charts, glyphs, pdf, render
+from app.reports import charts, formats, glyphs, pdf, render
 from app.tasks import jobs, report_jobs
 from tests.fakes import FakeRedis
 from tests.test_export_route import Result, Storage, _play
@@ -683,3 +685,77 @@ def _items(node):
     elif isinstance(node, list):
         for v in node:
             yield from _items(v)
+
+
+# ── parametric survival: the final review's corrections (lot P12) ───────────
+@pytest.mark.parametrize("locale", LOCALES)
+def test_the_parametric_survival_measures_are_the_declared_ones_and_kaplan_meier_s_gap_is_read_in_survival(
+        tmp_path, chart_service, monkeypatch, locale):  # noqa: F811
+    model, params, rows = fixture("parametric_survival-ph_aft")
+    assert any(r["section"] == "assumption" and r["level"] == "vif" for r in rows)  # the runner writes VIF among its checks too
+    _, page = draw(tmp_path, chart_service, monkeypatch, "parametric_survival-ph_aft", fmt="svg", locale=locale)
+    said = set(strings(json.loads(page)))
+    w = common.words(model, "ph_aft", locale)
+    # VIF is in the coefficients' tables: the measures do not repeat it, under its raw name or another
+    assert "vif" not in said and w["checks"]["vif"]["name"] not in said
+    for check in ps_layout.MEASURES:
+        assert w["checks"][check]["name"] in said, (locale, check)
+    # the gap is in survival, from 0 to 1; the row adds where it is read and the gap in Kaplan–Meier's standard errors
+    km = [s for s in said if s.startswith(w["measure_texts"]["km_agreement"])]
+    assert km and all(" · " in s and re.search(r"\d", s.split(" · ")[1]) for s in km), km
+
+
+def test_the_customer_lifetime_measures_are_still_all_shown(tmp_path, chart_service, monkeypatch):  # noqa: F811
+    # the table of measures lists the ids the page declares: the customer lifetime page declares every measure its runner writes
+    model, params, rows = fixture("clv-value")
+    written = {r["level"] for r in rows if r["section"] == "assumption" and r["stat"] == "value"} - {
+        r["level"] for r in rows if r["section"] == "assumption" and r["stat"] == "verdict"}
+    _, page = draw(tmp_path, chart_service, monkeypatch, "clv-value", fmt="svg")
+    said = set(strings(json.loads(page)))
+    w = common.words(model, "value", "en")
+    assert written and all(w["checks"][check]["name"] in said for check in written), written
+
+
+@pytest.mark.parametrize("locale", LOCALES)
+def test_the_candidates_say_a_tiny_akaike_weight_as_below_a_thousandth_and_every_status_in_words(
+        tmp_path, chart_service, monkeypatch, locale):  # noqa: F811
+    model, params, rows = fixture("parametric_survival-auto")
+    tiny = [r["value"] for r in rows if r["section"] == "candidate" and r["stat"] == "akaike_weight" and 0 < r["value"] < 0.001]
+    assert tiny  # the runner's output: the far candidates have weights of 1e-7 and less
+    # a candidate with too few rows, as the runner writes it
+    rows = [{**r, "text": "too_few_rows"} if r["key"] == "candidate|gengamma||status" else r for r in rows]
+    _, page = draw(tmp_path, chart_service, monkeypatch, "parametric_survival-auto", fmt="svg", locale=locale, rows=rows)
+    said = set(strings(json.loads(page)))
+    w = common.words(model, "auto", locale)
+    decimal = formats.locale(locale).decimal
+    assert f"< 0{decimal}001" in said and not any(stats_layouts.tiny(v, locale) in said for v in tiny)
+    assert tuple(w["candidates"]["status"]) == ps_layout.CANDIDATE_STATUS and w["candidates"]["status"]["too_few_rows"] in said
+    assert not re.search("hessian|hesse", w["candidates"]["legend"] + w["note_texts"]["auto_not_converged"], re.I)
+
+
+@pytest.mark.parametrize("locale", LOCALES)
+def test_the_lr_checks_say_why_they_were_not_computed_and_the_measures_keep_no_h0(locale):
+    model, params, rows = fixture("parametric_survival-ph_aft")
+    w = common.words(model, "ph_aft", locale)
+    # the node's own words: a measure has no verdict, so an H0 or an advice of its would never be shown (and they spoke of
+    # thresholds); the common words of epv, dfbeta and vif stay, for the models where they are verdicts
+    own = json.loads((Path(layouts.__file__).parent.parent / "report_texts" / "parametric_survival.json").read_text(encoding="utf-8"))[locale]
+    for check in (*ps_layout.MEASURES, "vif"):
+        assert not {"h0", "advice"} & set(own["checks"][check]), check
+    base = {"section": "assumption", "level": "distribution_vs_gengamma", "level_2": None, "value": None, "x0": None, "x1": None}
+    rows = [r for r in rows if not (r["section"] == "assumption" and r["level"] == "distribution_vs_gengamma")] + [
+        {**base, "stat": "verdict", "text": "not_computed"},
+        {**base, "stat": "advice", "text": "The generalized gamma took longer to fit than the model itself (12.3 s): …"},
+        {**base, "stat": "advice_id", "text": "distribution_vs_gengamma_time"},
+        {"section": "model", "level": None, "level_2": None, "stat": "note_lr_time", "value": None, "text": "@lr_time", "x0": None, "x1": None},
+        {"section": "model", "level": None, "level_2": None, "stat": "note_exponential_lr_time", "value": None, "text": "@exponential_lr_time",
+         "x0": None, "x1": None}]
+    said = {(r["section"], r["level"], r["stat"]): r["text"] for r in layouts.with_labels(model, params, rows, locale)}
+    check = w["checks"]["distribution_vs_gengamma"]
+    assert said[("assumption", "distribution_vs_gengamma", "advice")] == check["not_computed"]["distribution_vs_gengamma_time"]
+    assert said[("model", None, "note_lr_time")] == w["note_texts"]["lr_time"]
+    assert said[("model", None, "note_exponential_lr_time")] == w["note_texts"]["exponential_lr_time"]
+    # every reason the runner gives has its words, and auto's advice too
+    for test, ids in (("distribution_vs_gengamma", ("no_time", "time", "candidate", "not_converged", "below")),
+                      ("constant_hazard", ("no_time", "time", "candidate", "not_converged", "below"))):
+        assert all(f"{test}_{i}" in w["checks"][test]["not_computed"] for i in ids) and f"{test}_auto" in w["checks"][test]["advice"]

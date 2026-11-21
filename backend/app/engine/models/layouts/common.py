@@ -557,17 +557,23 @@ def alpha_said(sentence: str, alpha: Any, locale: str) -> str:
     return sentence.replace("{alpha}", text)
 
 
-def measures(ids: tuple[str, ...], counted: tuple[str, ...] = (), scientific: tuple[str, ...] = ()):
+def measures(ids: tuple[str, ...], counted: tuple[str, ...] = (), scientific: tuple[str, ...] = (),
+             more: Mapping[str, str] | None = None):
     """A table of the checks that are numbers, with no verdict and no colour: those of `ids` whose
-    rows have a `value` and no `verdict`; each says in a sentence of the model's words
-    (`measure_texts.<id>`) what the number is. Those of `counted` add what their `count` row counts,
-    in the check's words («· 174 repeat customers»). A check whose `measure_texts` entry is a
-    dictionary says the sentence of the reading the runner wrote in the row's `advice_id` (the key
-    of that id, else the general one under the key ""). Those of `scientific` write their value by
-    its exponent («5E-5», «3E+5»): numbers far from 1, which a fixed number of decimals would round."""
+    rows have a `value` and no `verdict` (only those: a check the runner writes besides, which the
+    page shows elsewhere, is not repeated here under its raw name); each says in a sentence of the
+    model's words (`measure_texts.<id>`) what the number is. Those of `counted` add what their
+    `count` row counts, in the check's words («· 174 repeat customers»). A check whose
+    `measure_texts` entry is a dictionary says the sentence of the reading the runner wrote in the
+    row's `advice_id` (the key of that id, else the general one under the key ""). Those of
+    `scientific` write their value by its exponent («5E-5», «3E+5»): numbers far from 1, which a
+    fixed number of decimals would round. `more`: per check, an expression of the row whose text is
+    added after the sentence («· at t = 12.5, 2.3 standard errors»), nothing when it is empty."""
     def block(p: stats.Page, w: dict) -> None:
         m = w["measures"]
-        one = ('[section] = "assumption" AND [stat] = "value" AND ISNULL(' + of_row("assumption", "verdict", "text") + ')')
+        declared = " OR ".join(f'[level] = "{i}"' for i in ids)
+        one = ('[section] = "assumption" AND [stat] = "value" AND ISNULL(' + of_row("assumption", "verdict", "text") + ')'
+               + f" AND ({declared})")
         reading = of_row("assumption", "advice_id", "text")
 
         def sentence(i: str) -> str:
@@ -582,6 +588,8 @@ def measures(ids: tuple[str, ...], counted: tuple[str, ...] = (), scientific: tu
             n = of_row("assumption", "count", "text")
             which = " OR ".join(f'[level] = "{i}"' for i in counted)
             what = f'{what} & IF(({which}) AND NOT ISNULL({n}), " · " & {n}, "")'
+        for i, extra in (more or {}).items():
+            what = f'{what} & IF([level] = "{i}" AND ({extra}) <> "", " · " & ({extra}), "")'
         names = "IFS(" + ", ".join(f'[level] = "{i}", {q(check_name(w, i))}' for i in ids) + ", [level])"
         value = {"value": number_of_row("assumption", "value"), "format": "0.####"}
         if scientific:

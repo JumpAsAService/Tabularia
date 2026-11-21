@@ -29,8 +29,10 @@ SMALL = "0.#####"  # the tables' numbers: five decimals at most, as many as they
 ALL = "all"  # the runner's name of the one stratum without strata
 MAX_TIMES_DRAWN = 4  # the vertical lines of the profile's survival: the node's first four times (MAX_XY_TARGETS_X)
 DISTRIBUTIONS = ("exponential", "weibull", "gompertz", "loglogistic", "lognormal", "gengamma")
-MEASURES = ("km_agreement", "dfbeta", "epv", "extrapolation")  # numbers with no p-value: no verdict, no colour
-CANDIDATE_STATUS = ("ok", "not_converged", "hessian", "time")
+# numbers with no p-value: no verdict, no colour. Not `vif`: the runner writes it among the checks too, but the
+# page has it in the coefficients' tables, one per term, beside the ratios it inflates (a row here would repeat it)
+MEASURES = ("km_agreement", "dfbeta", "epv", "extrapolation")
+CANDIDATE_STATUS = ("ok", "not_converged", "too_few_rows", "time")  # what the runner writes in the candidate's `status`
 
 
 def name(params: dict[str, Any], locale: str) -> str:
@@ -124,21 +126,28 @@ def _candidates(params: dict[str, Any]):
         p.text("candidates_parsimony", "=" + c.join(w["candidates"]["parsimony"], distribution=chosen, margin=margin), h=5, size=8.5,
                can_grow=True, visible=f"={moved}")
         p.keep()  # the heading with its sentence: the table, which takes its row alone, follows
-        status = ("IFS(" + ", ".join(f'{c.of_row("candidate", "status", "text")} = "{k}", {c.q(v)}'
-                                      for k, v in w["candidates"]["status"].items()) + ', "")')
+        status = ("IFS(" + ", ".join(f'{c.of_row("candidate", "status", "text")} = "{k}", {c.q(w["candidates"]["status"][k])}'
+                                      for k in CANDIDATE_STATUS) + ', "")')
         mark = f'IF({c.of_row("candidate", "parsimony")} = 1, "✓ ·", IF({chosen_row} = 1, "✓", ""))'
 
         def number(stat: str, fmt: str = "0.##", width: float = 22.0) -> dict:
             return {"header": c.stat_label(w, "candidate", stat), "value": c.number_of_row("candidate", stat), "width": width,
                     "align": "right", "format": fmt}
 
+        # an Akaike weight below 0.001 is «< 0.001» (in the page's decimal), not its exponent: it says only that the
+        # candidate is out of the running
+        weight = c.of_row("candidate", "akaike_weight")
+        weight_said = (f'IF(ISNULL({weight}), "", IF({weight} < 0.001, "< " & {c.shown("0.001", "0.###")}, '
+                       f'{c.shown(weight, "0.###")}))')
+
         table = stats.table("candidates", t["candidates"], one, [
             {"header": t["distribution"], "value": _distribution(w, "[level]"),
              "rules": [{"when": f"{chosen_row} = 1", "style": {"weight": "bold", "color": c.ACCENT}}]},
-            number("n_parameters", "#,##0", 18), number("log_lik", "0.##", 30), number("aic", "0.##", 15), number("bic", "0.##", 15),
-            number("delta_aic", "0.##", 14), number("akaike_weight", "0.###", 20),
-            {"header": t["status"], "value": status, "width": 22},
-            {"header": c.stat_label(w, "candidate", "chosen"), "value": mark, "width": 12, "align": "center"},
+            number("n_parameters", "#,##0", 15), number("log_lik", "0.##", 22), number("aic", "0.##", 19), number("bic", "0.##", 19),
+            number("delta_aic", "0.##", 15),
+            {"header": c.stat_label(w, "candidate", "akaike_weight"), "value": weight_said, "width": 16, "align": "right"},
+            {"header": t["status"], "value": status, "width": 30},
+            {"header": c.stat_label(w, "candidate", "chosen"), "value": mark, "width": 11, "align": "center"},
         ], p.y, visible=c.exists(one))
         aic = c.of_row("candidate", "aic")  # a candidate with no AIC (it did not converge) goes last
         table["sort"] = [{"by": f"IF(ISNULL({aic}), 1E+300, {aic})"}, {"by": "[ord]"}]
@@ -272,6 +281,15 @@ def _influence(p: stats.Page, w: dict) -> None:
     c.grid(p, w, (deviance,), None)
 
 
+# ── the measures ────────────────────────────────────────────────────────────
+def _measure_more(w: dict) -> dict[str, str]:
+    """What a measure's row adds to its sentence: Kaplan–Meier's agreement, where the gap is read and the gap in Kaplan–Meier's
+    standard errors there (its `value` is the gap in survival, from 0 to 1)."""
+    at, se = c.of_row("assumption", "at"), c.of_row("assumption", "statistic")
+    said = c.join(w["measure_more"]["km_agreement"], at=c.shown(at, "0.###"), se=c.shown(se, "0.##"))
+    return {"km_agreement": f'IF(ISNULL({at}) OR ISNULL({se}), "", {said})'}
+
+
 # ── the page ────────────────────────────────────────────────────────────────
 def layout(model: str, params: dict[str, Any], locale: str, sample: list[dict] | None, step: str | None) -> dict:
     checked = catalog.check_params(model, params)
@@ -309,7 +327,8 @@ def layout(model: str, params: dict[str, Any], locale: str, sample: list[dict] |
     blocks = (*((_candidates(checked),) if variant == "auto" else ()), _fit_to_the_data(loglog), _profile(checked), _influence)
     return c.page(model, params, locale, sample, step, name=name(params, locale), about=about(params, locale), cards=cards,
                   coef_tables=tables, coef_note=note, assumptions_note=alpha_note, fit_format=SMALL, room=12.0,
-                  after_assumptions=(c.measures(MEASURES),), coef_first=(_ratio_charts(variant),), after_coefficients=(_parameters,),
+                  after_assumptions=(c.measures(MEASURES, more=_measure_more(w)),), coef_first=(_ratio_charts(variant),),
+                  after_coefficients=(_parameters,),
                   blocks=blocks)
 
 

@@ -44,10 +44,10 @@
    "status": {
     "ok": "fitted",
     "not_converged": "did not converge",
-    "hessian": "Hessian not positive definite",
+    "too_few_rows": "not fitted: too few rows",
     "time": "not fitted: out of time"
    },
-   "legend": "✓ the distribution chosen; ✓ · chosen by parsimony. A candidate that did not converge, or whose Hessian is not positive definite, stays in the table and is out of the choice and of the weights.",
+   "legend": "✓ the distribution chosen; ✓ · chosen by parsimony. A candidate that was not fitted, or did not converge, stays in the table and is out of the choice and of the weights.",
    "chart_note": "Kaplan–Meier (steps) against the mean fitted survival of every candidate that converged."
   },
   "charts": {
@@ -179,15 +179,17 @@
   "note_texts": {
    "strata_no_hr": "With a shape for each stratum the Weibull has no hazard ratio: its time ratios are common to the strata, its hazard ratios are not.",
    "auto_close": "{distribution} is within {margin} of the AIC of {other} (ΔAIC {delta_aic}, weight {weight}): it describes these times about as well, with fewer parameters.",
-   "auto_not_converged": "{names}: did not converge, or the Hessian is not positive definite; out of the choice and of the weights.",
+   "auto_not_converged": "{names}: did not converge; out of the choice and of the weights.",
    "auto_time": "The time budget ran out before {names} were fitted.",
    "quantile_infinite": "The fitted distribution leaves {share} % of the profile without the event for ever: a quantile beyond that is infinite and left empty.",
    "second_start": "The first fit did not reach a maximum: a second start from other estimates did.",
-   "start_rows": "{delayed} of {rows} rows enter the study after time 0: a row counts only from its start, and each row's likelihood is conditional on lasting until it. Kaplan–Meier's curve, Cox–Snell and log(−log S) are drawn with the rows at risk at each time, from the first time with at least 10 rows at risk (before it few rows have entered, and one event would take the curve to 0), as the survival conditional on lasting until then. Rows of one subject are taken as independent.",
+   "start_rows": "{delayed} of {rows} rows enter the study after time 0: a row counts only from its start, and each row's likelihood is conditional on lasting until it. Kaplan–Meier's curve, Cox–Snell and log(−log S) are drawn with the rows at risk at each time, from the first time with at least 10 rows at risk (before it few rows have entered, and one event would take the curve to 0), as the survival conditional on lasting until then. Rows of one subject are taken as independent. The fitted curve beside it is the mean over the rows of their survival conditional on lasting until that first time, each row weighed by its chance of it: when rows enter at different times this is an approximation of what Kaplan–Meier estimates, not the same quantity.",
    "weights_counts": "The weights are not whole numbers: they are read as case weights, each multiplying its row's log-likelihood.",
    "hr_interval_scale": "The interval of a hazard ratio is Wald's on its own scale: near the edge it can exclude 1 while the p-value of the coefficient is just above alpha.",
    "zero_weights": "Rows of weight 0 were left out of the fit.",
-   "zero_times": "{n_zero_time} rows have a time of 0 and were left out of the fit."
+   "zero_times": "{n_zero_time} rows have a time of 0 and were left out of the fit.",
+   "lr_time": "The time of the step ran out before the model without predictors was fitted: the likelihood-ratio test of the predictors is not given.",
+   "exponential_lr_time": "The time of the step ran out before the exponential was fitted: the test of the shape against a constant hazard is not given."
   },
   "patterns": {
    "quantile": "Quantile {x}",
@@ -220,8 +222,6 @@
    },
    "epv": {
     "name": "Enough events: events per parameter",
-    "h0": "At least 10 events for each parameter of the model.",
-    "advice": "Few events for the parameters: fewer predictors, fewer strata, or a distribution with fewer parameters.",
     "count": {
      "one": "{n} event",
      "other": "{n} events"
@@ -233,22 +233,39 @@
     "advice": "No row of this level has the event: its coefficient runs to infinity and means nothing; merge the level or leave its rows out."
    },
    "km_agreement": {
-    "name": "Agreement with Kaplan–Meier",
-    "h0": "The fitted curve stays within the noise of Kaplan–Meier's (a gap under 0.05 never counts).",
-    "advice": {
-     "": "The fitted curve leaves the Kaplan–Meier curve of this group: try another distribution, or auto.",
-     "km_agreement_auto": "Even the distribution with the lowest AIC departs from the data: read the curves; a time-varying effect or a missing predictor."
-    }
+    "name": "Agreement with Kaplan–Meier"
    },
    "distribution_vs_gengamma": {
     "name": "Distribution against the generalized gamma",
     "h0": "The generalized gamma describes the times no better.",
-    "advice": "The generalized gamma describes these times better: try gengamma, or auto."
+    "advice": {
+     "": "The generalized gamma describes these times better: try gengamma, or auto.",
+     "distribution_vs_gengamma_auto": "The generalized gamma describes these times better, though the choice kept the simpler distribution: fit gengamma to use it."
+    },
+    "not_computed": {
+     "": "The comparison with the generalized gamma could not be made on these rows.",
+     "distribution_vs_gengamma_no_time": "The time of the step was used before this comparison could be made.",
+     "distribution_vs_gengamma_time": "The generalized gamma took longer to fit than the model itself: the comparison was stopped; fit gengamma to see it.",
+     "distribution_vs_gengamma_candidate": "The generalized gamma was not fitted among the candidates (see the choice of the distribution): the comparison is not made.",
+     "distribution_vs_gengamma_not_converged": "The generalized gamma did not converge on these rows: the comparison is not made.",
+     "distribution_vs_gengamma_below": "The generalized gamma fit stopped below the log-likelihood of the model it contains: the comparison is not made."
+    }
    },
    "constant_hazard": {
     "name": "Constant hazard: the exponential against the Weibull",
     "h0": "The hazard does not change over time (the Weibull's shape is 1).",
-    "advice": "The hazard changes over time: use weibull, or auto."
+    "advice": {
+     "": "The hazard changes over time: use weibull, or auto.",
+     "constant_hazard_auto": "The hazard changes over time, though the choice kept the exponential: fit weibull to use it."
+    },
+    "not_computed": {
+     "": "The comparison with the Weibull could not be made on these rows.",
+     "constant_hazard_no_time": "The time of the step was used before this comparison could be made.",
+     "constant_hazard_time": "The Weibull took longer to fit than the model itself: the comparison was stopped; fit weibull to see it.",
+     "constant_hazard_candidate": "The Weibull was not fitted among the candidates (see the choice of the distribution): the comparison is not made.",
+     "constant_hazard_not_converged": "The Weibull did not converge on these rows: the comparison is not made.",
+     "constant_hazard_below": "The Weibull fit stopped below the log-likelihood of the exponential it contains: the comparison is not made."
+    }
    },
    "ph_cox": {
     "name": "Proportional hazards: Grambsch–Therneau",
@@ -261,28 +278,25 @@
     "advice": "Some effect changes over time: read the tests of the terms, and use an accelerated failure time distribution or strata."
    },
    "dfbeta": {
-    "name": "Influence: dfbeta",
-    "h0": "No row moves a coefficient by more than one standard error.",
-    "advice": "Look at the rows named: each moves a coefficient by much."
+    "name": "Influence: dfbeta"
    },
    "vif": {
-    "name": "Multicollinearity: VIF",
-    "h0": "Each term is not explained by the other terms (VIF 1).",
-    "advice": "Drop or combine the correlated predictors."
+    "name": "Multicollinearity: VIF"
    },
    "extrapolation": {
-    "name": "Extrapolation beyond the last time observed",
-    "h0": "The numbers asked lie within the time the rows were followed.",
-    "advice": "Beyond the last time observed, the numbers come from the distribution's shape, not from rows: read them as an extrapolation."
+    "name": "Extrapolation beyond the last time observed"
    }
   },
   "measure_texts": {
-   "km_agreement": "Largest gap between the fitted curve and Kaplan–Meier's, in standard errors of Kaplan–Meier, where at least 10 rows are at risk. Read it with the chart.",
+   "km_agreement": "Largest gap in survival (from 0 to 1) between the fitted curve and Kaplan–Meier's, read where at least 10 rows are at risk; the chart shows where.",
    "dfbeta": "Largest |dfbetas| of the term: how far one row moves its coefficient, in standard errors.",
    "epv": "Events for each parameter of the model.",
    "extrapolation": "Largest time asked or read (median, quantiles) over the last time observed: above 1 the number is an extrapolation."
   },
-  "all": "All rows"
+  "all": "All rows",
+  "measure_more": {
+   "km_agreement": "at t = {at}, {se} standard errors of Kaplan–Meier"
+  }
  },
  "it": {
   "name": "Sopravvivenza parametrica",
@@ -329,10 +343,10 @@
    "status": {
     "ok": "adattata",
     "not_converged": "non convergita",
-    "hessian": "hessiana non definita positiva",
+    "too_few_rows": "non adattata: troppe poche righe",
     "time": "non adattata: tempo esaurito"
    },
-   "legend": "✓ la distribuzione scelta; ✓ · scelta per parsimonia. Un candidato non convergente, o con hessiana non definita positiva, resta nella tabella ed è fuori dalla scelta e dai pesi.",
+   "legend": "✓ la distribuzione scelta; ✓ · scelta per parsimonia. Un candidato non adattato, o non convergente, resta nella tabella ed è fuori dalla scelta e dai pesi.",
    "chart_note": "Kaplan–Meier (gradini) contro la sopravvivenza media adattata di ogni candidato convergente."
   },
   "charts": {
@@ -464,15 +478,17 @@
   "note_texts": {
    "strata_no_hr": "Con una forma per ogni strato la Weibull non ha hazard ratio: i suoi rapporti dei tempi sono comuni agli strati, i suoi hazard ratio no.",
    "auto_close": "{distribution} dista meno di {margin} dall'AIC di {other} (ΔAIC {delta_aic}, peso {weight}): descrive questi tempi quasi altrettanto bene, con meno parametri.",
-   "auto_not_converged": "{names}: non convergente, o con hessiana non definita positiva; fuori dalla scelta e dai pesi.",
+   "auto_not_converged": "{names}: non convergente; fuori dalla scelta e dai pesi.",
    "auto_time": "Il budget di tempo è finito prima di adattare {names}.",
    "quantile_infinite": "La distribuzione adattata lascia il {share} % del profilo senza l'evento per sempre: un quantile oltre quel punto è infinito e lasciato vuoto.",
    "second_start": "Il primo adattamento non ha raggiunto un massimo: l'ha raggiunto un secondo avvio da altre stime.",
-   "start_rows": "{delayed} righe su {rows} entrano nello studio dopo il tempo 0: una riga conta solo dal suo inizio, e la verosimiglianza di ogni riga è condizionata a durare fino a quel momento. La curva di Kaplan–Meier, Cox–Snell e log(−log S) sono disegnate con le righe a rischio a ogni tempo, dal primo tempo con almeno 10 righe a rischio (prima sono entrate poche righe e un solo evento porterebbe la curva a 0), come sopravvivenza condizionata a durare fino a lì. Le righe di uno stesso soggetto sono prese come indipendenti.",
+   "start_rows": "{delayed} righe su {rows} entrano nello studio dopo il tempo 0: una riga conta solo dal suo inizio, e la verosimiglianza di ogni riga è condizionata a durare fino a quel momento. La curva di Kaplan–Meier, Cox–Snell e log(−log S) sono disegnate con le righe a rischio a ogni tempo, dal primo tempo con almeno 10 righe a rischio (prima sono entrate poche righe e un solo evento porterebbe la curva a 0), come sopravvivenza condizionata a durare fino a lì. Le righe di uno stesso soggetto sono prese come indipendenti. La curva adattata accanto è la media sulle righe della loro sopravvivenza condizionata a durare fino a quel primo tempo, ogni riga pesata per la sua probabilità di arrivarci: quando le righe entrano in tempi diversi è un'approssimazione di ciò che stima Kaplan–Meier, non la stessa grandezza.",
    "weights_counts": "I pesi non sono numeri interi: sono letti come pesi dei casi, ognuno moltiplica la log-verosimiglianza della sua riga.",
    "hr_interval_scale": "L'intervallo di un hazard ratio è quello di Wald sulla sua scala: vicino al limite può escludere 1 mentre il p-value del coefficiente è appena sopra alpha.",
    "zero_weights": "Le righe di peso 0 sono state escluse dall'adattamento.",
-   "zero_times": "{n_zero_time} righe hanno tempo 0 e sono state escluse dall'adattamento."
+   "zero_times": "{n_zero_time} righe hanno tempo 0 e sono state escluse dall'adattamento.",
+   "lr_time": "Il tempo del passo è finito prima di adattare il modello senza predittori: il test del rapporto di verosimiglianza dei predittori non è dato.",
+   "exponential_lr_time": "Il tempo del passo è finito prima di adattare l'esponenziale: il test della forma contro un rischio costante non è dato."
   },
   "patterns": {
    "quantile": "Quantile {x}",
@@ -505,8 +521,6 @@
    },
    "epv": {
     "name": "Eventi sufficienti: eventi per parametro",
-    "h0": "Almeno 10 eventi per ogni parametro del modello.",
-    "advice": "Pochi eventi per i parametri: meno predittori, meno strati, o una distribuzione con meno parametri.",
     "count": {
      "one": "{n} evento",
      "other": "{n} eventi"
@@ -518,22 +532,39 @@
     "advice": "Nessuna riga di questo livello ha l'evento: il suo coefficiente tende all'infinito e non significa nulla; unite il livello o escludete le sue righe."
    },
    "km_agreement": {
-    "name": "Accordo con Kaplan–Meier",
-    "h0": "La curva adattata resta nel rumore di quella di Kaplan–Meier (uno scarto sotto 0,05 non conta mai).",
-    "advice": {
-     "": "La curva adattata si allontana dalla curva di Kaplan–Meier di questo gruppo: provate un'altra distribuzione, o auto.",
-     "km_agreement_auto": "Anche la distribuzione con l'AIC più basso si allontana dai dati: leggete le curve; un effetto che varia nel tempo o un predittore mancante."
-    }
+    "name": "Accordo con Kaplan–Meier"
    },
    "distribution_vs_gengamma": {
     "name": "Distribuzione contro la gamma generalizzata",
     "h0": "La gamma generalizzata non descrive meglio i tempi.",
-    "advice": "La gamma generalizzata descrive meglio questi tempi: provate gengamma, o auto."
+    "advice": {
+     "": "La gamma generalizzata descrive meglio questi tempi: provate gengamma, o auto.",
+     "distribution_vs_gengamma_auto": "La gamma generalizzata descrive meglio questi tempi, anche se la scelta ha tenuto la distribuzione più semplice: adattate gengamma per usarla."
+    },
+    "not_computed": {
+     "": "Il confronto con la gamma generalizzata non si è potuto fare su queste righe.",
+     "distribution_vs_gengamma_no_time": "Il tempo del passo era finito prima di poter fare questo confronto.",
+     "distribution_vs_gengamma_time": "La gamma generalizzata richiedeva più tempo dell'adattamento del modello stesso: il confronto è stato interrotto; adattate gengamma per vederlo.",
+     "distribution_vs_gengamma_candidate": "La gamma generalizzata non è stata adattata tra i candidati (vedete la scelta della distribuzione): il confronto non è fatto.",
+     "distribution_vs_gengamma_not_converged": "La gamma generalizzata non converge su queste righe: il confronto non è fatto.",
+     "distribution_vs_gengamma_below": "L'adattamento della gamma generalizzata si è fermato sotto la log-verosimiglianza del modello che contiene: il confronto non è fatto."
+    }
    },
    "constant_hazard": {
     "name": "Rischio costante: l'esponenziale contro la Weibull",
     "h0": "Il rischio non cambia nel tempo (la forma della Weibull è 1).",
-    "advice": "Il rischio cambia nel tempo: usate weibull, o auto."
+    "advice": {
+     "": "Il rischio cambia nel tempo: usate weibull, o auto.",
+     "constant_hazard_auto": "Il rischio cambia nel tempo, anche se la scelta ha tenuto l'esponenziale: adattate weibull per usarla."
+    },
+    "not_computed": {
+     "": "Il confronto con la Weibull non si è potuto fare su queste righe.",
+     "constant_hazard_no_time": "Il tempo del passo era finito prima di poter fare questo confronto.",
+     "constant_hazard_time": "La Weibull richiedeva più tempo dell'adattamento del modello stesso: il confronto è stato interrotto; adattate weibull per vederlo.",
+     "constant_hazard_candidate": "La Weibull non è stata adattata tra i candidati (vedete la scelta della distribuzione): il confronto non è fatto.",
+     "constant_hazard_not_converged": "La Weibull non converge su queste righe: il confronto non è fatto.",
+     "constant_hazard_below": "L'adattamento della Weibull si è fermato sotto la log-verosimiglianza dell'esponenziale che contiene: il confronto non è fatto."
+    }
    },
    "ph_cox": {
     "name": "Rischi proporzionali: Grambsch–Therneau",
@@ -546,28 +577,25 @@
     "advice": "Qualche effetto cambia nel tempo: leggete i test dei termini e usate una distribuzione a tempo di guasto accelerato o gli strati."
    },
    "dfbeta": {
-    "name": "Influenza: dfbeta",
-    "h0": "Nessuna riga sposta un coefficiente di oltre un errore standard.",
-    "advice": "Guardate le righe indicate: ognuna sposta molto un coefficiente."
+    "name": "Influenza: dfbeta"
    },
    "vif": {
-    "name": "Multicollinearità: VIF",
-    "h0": "Ogni termine non è spiegato dagli altri termini (VIF 1).",
-    "advice": "Eliminate o combinate i predittori correlati."
+    "name": "Multicollinearità: VIF"
    },
    "extrapolation": {
-    "name": "Estrapolazione oltre l'ultimo tempo osservato",
-    "h0": "I numeri richiesti stanno entro il tempo di osservazione delle righe.",
-    "advice": "Oltre l'ultimo tempo osservato i numeri vengono dalla forma della distribuzione, non dalle righe: leggeteli come un'estrapolazione."
+    "name": "Estrapolazione oltre l'ultimo tempo osservato"
    }
   },
   "measure_texts": {
-   "km_agreement": "Scarto massimo tra la curva adattata e quella di Kaplan–Meier, in errori standard di Kaplan–Meier, dove almeno 10 righe sono a rischio. Si legge con il grafico.",
+   "km_agreement": "Scarto massimo in sopravvivenza (da 0 a 1) tra la curva adattata e quella di Kaplan–Meier, letto dove almeno 10 righe sono a rischio; il grafico mostra dove.",
    "dfbeta": "Massimo |dfbetas| del termine: di quanto una riga sposta il suo coefficiente, in errori standard.",
    "epv": "Eventi per ogni parametro del modello.",
    "extrapolation": "Massimo tempo richiesto o letto (mediana, quantili) rispetto all'ultimo tempo osservato: sopra 1 il numero è un'estrapolazione."
   },
-  "all": "Tutte le righe"
+  "all": "Tutte le righe",
+  "measure_more": {
+   "km_agreement": "a t = {at}, {se} errori standard di Kaplan–Meier"
+  }
  },
  "de": {
   "name": "Parametrische Überlebenszeitanalyse",
@@ -614,10 +642,10 @@
    "status": {
     "ok": "angepasst",
     "not_converged": "nicht konvergiert",
-    "hessian": "Hesse-Matrix nicht positiv definit",
+    "too_few_rows": "nicht angepasst: zu wenige Zeilen",
     "time": "nicht angepasst: Zeit abgelaufen"
    },
-   "legend": "✓ die gewählte Verteilung; ✓ · aus Sparsamkeit gewählt. Ein Kandidat, der nicht konvergiert ist oder dessen Hesse-Matrix nicht positiv definit ist, bleibt in der Tabelle, aber außerhalb der Wahl und der Gewichte.",
+   "legend": "✓ die gewählte Verteilung; ✓ · aus Sparsamkeit gewählt. Ein Kandidat, der nicht angepasst wurde oder nicht konvergiert ist, bleibt in der Tabelle, aber außerhalb der Wahl und der Gewichte.",
    "chart_note": "Kaplan–Meier (Stufen) gegen das mittlere angepasste Überleben jedes konvergierten Kandidaten."
   },
   "charts": {
@@ -749,15 +777,17 @@
   "note_texts": {
    "strata_no_hr": "Mit einer Form je Schicht hat die Weibull-Verteilung kein Hazard Ratio: Ihre Zeitverhältnisse sind den Schichten gemeinsam, ihre Hazard Ratios nicht.",
    "auto_close": "{distribution} liegt höchstens {margin} über dem AIC von {other} (ΔAIC {delta_aic}, Gewicht {weight}): Sie beschreibt diese Zeiten fast ebenso gut, mit weniger Parametern.",
-   "auto_not_converged": "{names}: nicht konvergiert oder Hesse-Matrix nicht positiv definit; außerhalb der Wahl und der Gewichte.",
+   "auto_not_converged": "{names}: nicht konvergiert; außerhalb der Wahl und der Gewichte.",
    "auto_time": "Das Zeitbudget war aufgebraucht, bevor {names} angepasst wurden.",
    "quantile_infinite": "Die angepasste Verteilung lässt {share} % des Profils für immer ohne Ereignis: Ein Quantil darüber ist unendlich und bleibt leer.",
    "second_start": "Die erste Anpassung erreichte kein Maximum: Ein zweiter Start von anderen Schätzwerten erreichte es.",
-   "start_rows": "{delayed} von {rows} Zeilen treten nach dem Zeitpunkt 0 in die Studie ein: Eine Zeile zählt erst ab ihrem Start, und die Likelihood jeder Zeile ist bedingt darauf, bis dahin zu überleben. Die Kaplan-Meier-Kurve, Cox-Snell und log(−log S) werden mit den Zeilen im Risiko zu jedem Zeitpunkt gezeichnet, ab dem ersten Zeitpunkt mit mindestens 10 Zeilen im Risiko (davor sind nur wenige Zeilen eingetreten, und ein einziges Ereignis würde die Kurve auf 0 setzen), als das bedingte Überleben bis dahin. Zeilen desselben Subjekts werden als unabhängig behandelt.",
+   "start_rows": "{delayed} von {rows} Zeilen treten nach dem Zeitpunkt 0 in die Studie ein: Eine Zeile zählt erst ab ihrem Start, und die Likelihood jeder Zeile ist bedingt darauf, bis dahin zu überleben. Die Kaplan-Meier-Kurve, Cox-Snell und log(−log S) werden mit den Zeilen im Risiko zu jedem Zeitpunkt gezeichnet, ab dem ersten Zeitpunkt mit mindestens 10 Zeilen im Risiko (davor sind nur wenige Zeilen eingetreten, und ein einziges Ereignis würde die Kurve auf 0 setzen), als das bedingte Überleben bis dahin. Zeilen desselben Subjekts werden als unabhängig behandelt. Die angepasste Kurve daneben ist der Mittelwert über die Zeilen ihres Überlebens, bedingt darauf, bis zu diesem ersten Zeitpunkt zu überleben, jede Zeile gewichtet mit ihrer Wahrscheinlichkeit dafür: Treten Zeilen zu verschiedenen Zeitpunkten ein, ist das eine Näherung dessen, was Kaplan–Meier schätzt, nicht dieselbe Größe.",
    "weights_counts": "Die Gewichte sind keine ganzen Zahlen: Sie werden als Fallgewichte gelesen, jedes multipliziert die Log-Likelihood seiner Zeile.",
    "hr_interval_scale": "Das Intervall eines Hazard Ratios ist das Wald-Intervall auf seiner eigenen Skala: Nahe der Grenze kann es 1 ausschließen, obwohl der p-Wert des Koeffizienten knapp über alpha liegt.",
    "zero_weights": "Zeilen mit Gewicht 0 wurden aus der Anpassung ausgeschlossen.",
-   "zero_times": "{n_zero_time} Zeilen haben die Zeit 0 und wurden aus der Anpassung ausgeschlossen."
+   "zero_times": "{n_zero_time} Zeilen haben die Zeit 0 und wurden aus der Anpassung ausgeschlossen.",
+   "lr_time": "Die Zeit des Schritts war aufgebraucht, bevor das Modell ohne Prädiktoren angepasst wurde: Der Likelihood-Quotienten-Test der Prädiktoren fehlt.",
+   "exponential_lr_time": "Die Zeit des Schritts war aufgebraucht, bevor die Exponentialverteilung angepasst wurde: Der Test der Form gegen einen konstanten Hazard fehlt."
   },
   "patterns": {
    "quantile": "Quantil {x}",
@@ -790,8 +820,6 @@
    },
    "epv": {
     "name": "Genug Ereignisse: Ereignisse pro Parameter",
-    "h0": "Mindestens 10 Ereignisse je Parameter des Modells.",
-    "advice": "Wenige Ereignisse für die Parameter: weniger Prädiktoren, weniger Schichten oder eine Verteilung mit weniger Parametern.",
     "count": {
      "one": "{n} Ereignis",
      "other": "{n} Ereignisse"
@@ -803,22 +831,39 @@
     "advice": "Keine Zeile dieser Stufe hat das Ereignis: Ihr Koeffizient läuft gegen unendlich und sagt nichts; Stufe zusammenfassen oder ihre Zeilen weglassen."
    },
    "km_agreement": {
-    "name": "Übereinstimmung mit Kaplan–Meier",
-    "h0": "Die angepasste Kurve bleibt im Rauschen der Kaplan–Meier-Kurve (Abweichungen unter 0,05 zählen nie).",
-    "advice": {
-     "": "Die angepasste Kurve weicht von der Kaplan–Meier-Kurve dieser Gruppe ab: eine andere Verteilung versuchen, oder auto.",
-     "km_agreement_auto": "Selbst die Verteilung mit dem niedrigsten AIC weicht von den Daten ab: die Kurven lesen; ein zeitvarianter Effekt oder ein fehlender Prädiktor."
-    }
+    "name": "Übereinstimmung mit Kaplan–Meier"
    },
    "distribution_vs_gengamma": {
     "name": "Verteilung gegen die verallgemeinerte Gamma",
     "h0": "Die verallgemeinerte Gamma beschreibt die Zeiten nicht besser.",
-    "advice": "Die verallgemeinerte Gamma beschreibt diese Zeiten besser: gengamma versuchen, oder auto."
+    "advice": {
+     "": "Die verallgemeinerte Gamma beschreibt diese Zeiten besser: gengamma versuchen, oder auto.",
+     "distribution_vs_gengamma_auto": "Die verallgemeinerte Gamma beschreibt diese Zeiten besser, obwohl die Wahl die einfachere Verteilung behalten hat: gengamma anpassen, um sie zu verwenden."
+    },
+    "not_computed": {
+     "": "Der Vergleich mit der verallgemeinerten Gamma konnte auf diesen Zeilen nicht gemacht werden.",
+     "distribution_vs_gengamma_no_time": "Die Zeit des Schritts war aufgebraucht, bevor dieser Vergleich gemacht werden konnte.",
+     "distribution_vs_gengamma_time": "Die verallgemeinerte Gamma brauchte länger als die Anpassung des Modells selbst: Der Vergleich wurde abgebrochen; gengamma anpassen, um ihn zu sehen.",
+     "distribution_vs_gengamma_candidate": "Die verallgemeinerte Gamma wurde unter den Kandidaten nicht angepasst (siehe die Wahl der Verteilung): Der Vergleich wird nicht gemacht.",
+     "distribution_vs_gengamma_not_converged": "Die verallgemeinerte Gamma konvergiert auf diesen Zeilen nicht: Der Vergleich wird nicht gemacht.",
+     "distribution_vs_gengamma_below": "Die Anpassung der verallgemeinerten Gamma endete unter der Log-Likelihood des Modells, das sie enthält: Der Vergleich wird nicht gemacht."
+    }
    },
    "constant_hazard": {
     "name": "Konstanter Hazard: Exponential gegen Weibull",
     "h0": "Der Hazard ändert sich nicht über die Zeit (die Form der Weibull ist 1).",
-    "advice": "Der Hazard ändert sich über die Zeit: weibull verwenden, oder auto."
+    "advice": {
+     "": "Der Hazard ändert sich über die Zeit: weibull verwenden, oder auto.",
+     "constant_hazard_auto": "Der Hazard ändert sich über die Zeit, obwohl die Wahl die Exponentialverteilung behalten hat: weibull anpassen, um sie zu verwenden."
+    },
+    "not_computed": {
+     "": "Der Vergleich mit der Weibull konnte auf diesen Zeilen nicht gemacht werden.",
+     "constant_hazard_no_time": "Die Zeit des Schritts war aufgebraucht, bevor dieser Vergleich gemacht werden konnte.",
+     "constant_hazard_time": "Die Weibull brauchte länger als die Anpassung des Modells selbst: Der Vergleich wurde abgebrochen; weibull anpassen, um ihn zu sehen.",
+     "constant_hazard_candidate": "Die Weibull wurde unter den Kandidaten nicht angepasst (siehe die Wahl der Verteilung): Der Vergleich wird nicht gemacht.",
+     "constant_hazard_not_converged": "Die Weibull konvergiert auf diesen Zeilen nicht: Der Vergleich wird nicht gemacht.",
+     "constant_hazard_below": "Die Anpassung der Weibull endete unter der Log-Likelihood der Exponentialverteilung, die sie enthält: Der Vergleich wird nicht gemacht."
+    }
    },
    "ph_cox": {
     "name": "Proportionale Hazards: Grambsch–Therneau",
@@ -831,28 +876,25 @@
     "advice": "Ein Effekt ändert sich über die Zeit: die Tests der Terme lesen und eine Verteilung mit beschleunigter Ausfallzeit oder Schichten verwenden."
    },
    "dfbeta": {
-    "name": "Einfluss: dfbeta",
-    "h0": "Keine Zeile verschiebt einen Koeffizienten um mehr als einen Standardfehler.",
-    "advice": "Prüfen Sie die genannten Zeilen: Jede verschiebt einen Koeffizienten stark."
+    "name": "Einfluss: dfbeta"
    },
    "vif": {
-    "name": "Multikollinearität: VIF",
-    "h0": "Jeder Term wird nicht durch die anderen Terme erklärt (VIF 1).",
-    "advice": "Korrelierte Prädiktoren weglassen oder zusammenfassen."
+    "name": "Multikollinearität: VIF"
    },
    "extrapolation": {
-    "name": "Extrapolation über die letzte beobachtete Zeit hinaus",
-    "h0": "Die gewünschten Zahlen liegen innerhalb der Beobachtungsdauer.",
-    "advice": "Jenseits der letzten beobachteten Zeit stammen die Zahlen aus der Form der Verteilung, nicht aus Zeilen: als Extrapolation lesen."
+    "name": "Extrapolation über die letzte beobachtete Zeit hinaus"
    }
   },
   "measure_texts": {
-   "km_agreement": "Größte Abweichung zwischen angepasster Kurve und Kaplan–Meier, in Standardfehlern von Kaplan–Meier, wo mindestens 10 Zeilen im Risiko sind. Mit dem Diagramm zu lesen.",
+   "km_agreement": "Größte Abweichung im Überleben (von 0 bis 1) zwischen angepasster Kurve und Kaplan–Meier, gelesen, wo mindestens 10 Zeilen im Risiko sind; das Diagramm zeigt, wo.",
    "dfbeta": "Größtes |dfbetas| des Terms: wie weit eine Zeile seinen Koeffizienten verschiebt, in Standardfehlern.",
    "epv": "Ereignisse je Parameter des Modells.",
    "extrapolation": "Größte gewünschte oder gelesene Zeit (Median, Quantile) im Verhältnis zur letzten beobachteten Zeit: über 1 ist die Zahl eine Extrapolation."
   },
-  "all": "Alle Zeilen"
+  "all": "Alle Zeilen",
+  "measure_more": {
+   "km_agreement": "bei t = {at}, {se} Standardfehler von Kaplan–Meier"
+  }
  },
  "es": {
   "name": "Supervivencia paramétrica",
@@ -899,10 +941,10 @@
    "status": {
     "ok": "ajustada",
     "not_converged": "no convergió",
-    "hessian": "hessiana no definida positiva",
+    "too_few_rows": "no ajustada: muy pocas filas",
     "time": "no ajustada: tiempo agotado"
    },
-   "legend": "✓ la distribución elegida; ✓ · elegida por parsimonia. Un candidato que no convergió, o cuya hessiana no es definida positiva, queda en la tabla y fuera de la elección y de los pesos.",
+   "legend": "✓ la distribución elegida; ✓ · elegida por parsimonia. Un candidato que no se ajustó, o que no convergió, queda en la tabla y fuera de la elección y de los pesos.",
    "chart_note": "Kaplan–Meier (escalones) frente a la supervivencia media ajustada de cada candidato que convergió."
   },
   "charts": {
@@ -1034,15 +1076,17 @@
   "note_texts": {
    "strata_no_hr": "Con una forma por estrato la Weibull no tiene hazard ratio: sus razones de tiempos son comunes a los estratos, sus hazard ratios no.",
    "auto_close": "{distribution} está a menos de {margin} del AIC de {other} (ΔAIC {delta_aic}, peso {weight}): describe estos tiempos casi igual de bien, con menos parámetros.",
-   "auto_not_converged": "{names}: no convergió, o la hessiana no es definida positiva; fuera de la elección y de los pesos.",
+   "auto_not_converged": "{names}: no convergió; fuera de la elección y de los pesos.",
    "auto_time": "El presupuesto de tiempo se agotó antes de ajustar {names}.",
    "quantile_infinite": "La distribución ajustada deja el {share} % del perfil sin el evento para siempre: un cuantil más allá es infinito y se deja vacío.",
    "second_start": "El primer ajuste no alcanzó un máximo: lo alcanzó un segundo arranque desde otras estimaciones.",
-   "start_rows": "{delayed} de {rows} filas entran en el estudio después del tiempo 0: una fila cuenta solo desde su inicio, y la verosimilitud de cada fila es condicional a durar hasta ese momento. La curva de Kaplan–Meier, Cox–Snell y log(−log S) se dibujan con las filas en riesgo en cada tiempo, desde el primer tiempo con al menos 10 filas en riesgo (antes han entrado pocas filas y un solo evento llevaría la curva a 0), como la supervivencia condicionada a durar hasta ahí. Las filas de un mismo sujeto se toman como independientes.",
+   "start_rows": "{delayed} de {rows} filas entran en el estudio después del tiempo 0: una fila cuenta solo desde su inicio, y la verosimilitud de cada fila es condicional a durar hasta ese momento. La curva de Kaplan–Meier, Cox–Snell y log(−log S) se dibujan con las filas en riesgo en cada tiempo, desde el primer tiempo con al menos 10 filas en riesgo (antes han entrado pocas filas y un solo evento llevaría la curva a 0), como la supervivencia condicionada a durar hasta ahí. Las filas de un mismo sujeto se toman como independientes. La curva ajustada a su lado es la media sobre las filas de su supervivencia condicionada a durar hasta ese primer tiempo, cada fila ponderada por su probabilidad de llegar: cuando las filas entran en tiempos distintos es una aproximación de lo que estima Kaplan–Meier, no la misma magnitud.",
    "weights_counts": "Los pesos no son números enteros: se leen como pesos de los casos, cada uno multiplica la log-verosimilitud de su fila.",
    "hr_interval_scale": "El intervalo de un hazard ratio es el de Wald en su propia escala: cerca del límite puede excluir 1 mientras el valor p del coeficiente está justo por encima de alpha.",
    "zero_weights": "Las filas de peso 0 se dejaron fuera del ajuste.",
-   "zero_times": "{n_zero_time} filas tienen tiempo 0 y se dejaron fuera del ajuste."
+   "zero_times": "{n_zero_time} filas tienen tiempo 0 y se dejaron fuera del ajuste.",
+   "lr_time": "El tiempo del paso se agotó antes de ajustar el modelo sin predictores: no se da la prueba de razón de verosimilitud de los predictores.",
+   "exponential_lr_time": "El tiempo del paso se agotó antes de ajustar la exponencial: no se da la prueba de la forma frente a un riesgo constante."
   },
   "patterns": {
    "quantile": "Cuantil {x}",
@@ -1075,8 +1119,6 @@
    },
    "epv": {
     "name": "Eventos suficientes: eventos por parámetro",
-    "h0": "Al menos 10 eventos por parámetro del modelo.",
-    "advice": "Pocos eventos para los parámetros: menos predictores, menos estratos o una distribución con menos parámetros.",
     "count": {
      "one": "{n} evento",
      "other": "{n} eventos"
@@ -1088,22 +1130,39 @@
     "advice": "Ninguna fila de este nivel tiene el evento: su coeficiente tiende a infinito y no significa nada; unan el nivel o dejen fuera sus filas."
    },
    "km_agreement": {
-    "name": "Acuerdo con Kaplan–Meier",
-    "h0": "La curva ajustada queda dentro del ruido de la de Kaplan–Meier (una diferencia menor de 0,05 nunca cuenta).",
-    "advice": {
-     "": "La curva ajustada se aparta de la curva de Kaplan–Meier de este grupo: prueben otra distribución, o auto.",
-     "km_agreement_auto": "Incluso la distribución con el AIC más bajo se aparta de los datos: lean las curvas; un efecto que varía en el tiempo o un predictor que falta."
-    }
+    "name": "Acuerdo con Kaplan–Meier"
    },
    "distribution_vs_gengamma": {
     "name": "Distribución frente a la gamma generalizada",
     "h0": "La gamma generalizada no describe mejor los tiempos.",
-    "advice": "La gamma generalizada describe mejor estos tiempos: prueben gengamma, o auto."
+    "advice": {
+     "": "La gamma generalizada describe mejor estos tiempos: prueben gengamma, o auto.",
+     "distribution_vs_gengamma_auto": "La gamma generalizada describe mejor estos tiempos, aunque la elección mantuvo la distribución más sencilla: ajusten gengamma para usarla."
+    },
+    "not_computed": {
+     "": "La comparación con la gamma generalizada no pudo hacerse en estas filas.",
+     "distribution_vs_gengamma_no_time": "El tiempo del paso se agotó antes de poder hacer esta comparación.",
+     "distribution_vs_gengamma_time": "La gamma generalizada tardaba más que el ajuste del propio modelo: la comparación se detuvo; ajusten gengamma para verla.",
+     "distribution_vs_gengamma_candidate": "La gamma generalizada no se ajustó entre los candidatos (vean la elección de la distribución): la comparación no se hace.",
+     "distribution_vs_gengamma_not_converged": "La gamma generalizada no converge en estas filas: la comparación no se hace.",
+     "distribution_vs_gengamma_below": "El ajuste de la gamma generalizada se detuvo por debajo de la log-verosimilitud del modelo que contiene: la comparación no se hace."
+    }
    },
    "constant_hazard": {
     "name": "Riesgo constante: la exponencial frente a la Weibull",
     "h0": "El riesgo no cambia en el tiempo (la forma de la Weibull es 1).",
-    "advice": "El riesgo cambia en el tiempo: usen weibull, o auto."
+    "advice": {
+     "": "El riesgo cambia en el tiempo: usen weibull, o auto.",
+     "constant_hazard_auto": "El riesgo cambia en el tiempo, aunque la elección mantuvo la exponencial: ajusten weibull para usarla."
+    },
+    "not_computed": {
+     "": "La comparación con la Weibull no pudo hacerse en estas filas.",
+     "constant_hazard_no_time": "El tiempo del paso se agotó antes de poder hacer esta comparación.",
+     "constant_hazard_time": "La Weibull tardaba más que el ajuste del propio modelo: la comparación se detuvo; ajusten weibull para verla.",
+     "constant_hazard_candidate": "La Weibull no se ajustó entre los candidatos (vean la elección de la distribución): la comparación no se hace.",
+     "constant_hazard_not_converged": "La Weibull no converge en estas filas: la comparación no se hace.",
+     "constant_hazard_below": "El ajuste de la Weibull se detuvo por debajo de la log-verosimilitud de la exponencial que contiene: la comparación no se hace."
+    }
    },
    "ph_cox": {
     "name": "Riesgos proporcionales: Grambsch–Therneau",
@@ -1116,28 +1175,25 @@
     "advice": "Algún efecto cambia en el tiempo: lean las pruebas de los términos y usen una distribución de tiempo de fallo acelerado o estratos."
    },
    "dfbeta": {
-    "name": "Influencia: dfbeta",
-    "h0": "Ninguna fila mueve un coeficiente más de un error estándar.",
-    "advice": "Revisen las filas indicadas: cada una mueve mucho un coeficiente."
+    "name": "Influencia: dfbeta"
    },
    "vif": {
-    "name": "Multicolinealidad: VIF",
-    "h0": "Cada término no es explicado por los demás términos (VIF 1).",
-    "advice": "Eliminen o combinen los predictores correlacionados."
+    "name": "Multicolinealidad: VIF"
    },
    "extrapolation": {
-    "name": "Extrapolación más allá del último tiempo observado",
-    "h0": "Los números pedidos están dentro del tiempo de seguimiento.",
-    "advice": "Más allá del último tiempo observado los números salen de la forma de la distribución, no de las filas: léanlos como una extrapolación."
+    "name": "Extrapolación más allá del último tiempo observado"
    }
   },
   "measure_texts": {
-   "km_agreement": "Mayor diferencia entre la curva ajustada y la de Kaplan–Meier, en errores estándar de Kaplan–Meier, donde hay al menos 10 filas en riesgo. Se lee con el gráfico.",
+   "km_agreement": "Mayor diferencia en supervivencia (de 0 a 1) entre la curva ajustada y la de Kaplan–Meier, leída donde hay al menos 10 filas en riesgo; el gráfico muestra dónde.",
    "dfbeta": "Mayor |dfbetas| del término: cuánto mueve una fila su coeficiente, en errores estándar.",
    "epv": "Eventos por cada parámetro del modelo.",
    "extrapolation": "Mayor tiempo pedido o leído (mediana, cuantiles) sobre el último tiempo observado: por encima de 1 el número es una extrapolación."
   },
-  "all": "Todas las filas"
+  "all": "Todas las filas",
+  "measure_more": {
+   "km_agreement": "en t = {at}, {se} errores estándar de Kaplan–Meier"
+  }
  },
  "fr": {
   "name": "Survie paramétrique",
@@ -1184,10 +1240,10 @@
    "status": {
     "ok": "ajustée",
     "not_converged": "non convergée",
-    "hessian": "hessienne non définie positive",
+    "too_few_rows": "non ajustée : trop peu de lignes",
     "time": "non ajustée : temps épuisé"
    },
-   "legend": "✓ la distribution choisie ; ✓ · choisie par parcimonie. Un candidat qui n'a pas convergé, ou dont la hessienne n'est pas définie positive, reste dans le tableau mais hors du choix et des poids.",
+   "legend": "✓ la distribution choisie ; ✓ · choisie par parcimonie. Un candidat qui n'a pas été ajusté, ou n'a pas convergé, reste dans le tableau mais hors du choix et des poids.",
    "chart_note": "Kaplan–Meier (marches) contre la survie moyenne ajustée de chaque candidat convergé."
   },
   "charts": {
@@ -1319,15 +1375,17 @@
   "note_texts": {
    "strata_no_hr": "Avec une forme par strate la Weibull n'a pas de hazard ratio : ses rapports des temps sont communs aux strates, ses hazard ratios non.",
    "auto_close": "{distribution} est à moins de {margin} de l'AIC de {other} (ΔAIC {delta_aic}, poids {weight}) : elle décrit ces temps presque aussi bien, avec moins de paramètres.",
-   "auto_not_converged": "{names} : non convergée, ou hessienne non définie positive ; hors du choix et des poids.",
+   "auto_not_converged": "{names} : non convergée ; hors du choix et des poids.",
    "auto_time": "Le budget de temps était épuisé avant d'ajuster {names}.",
    "quantile_infinite": "La distribution ajustée laisse {share} % du profil sans l'événement pour toujours : un quantile au-delà est infini et laissé vide.",
    "second_start": "Le premier ajustement n'a pas atteint de maximum : un second départ depuis d'autres estimations l'a atteint.",
-   "start_rows": "{delayed} lignes sur {rows} entrent dans l'étude après l'instant 0 : une ligne ne compte qu'à partir de son début, et la vraisemblance de chaque ligne est conditionnelle au fait de durer jusque-là. La courbe de Kaplan–Meier, Cox–Snell et log(−log S) sont tracées avec les lignes à risque à chaque instant, à partir du premier instant avec au moins 10 lignes à risque (avant, peu de lignes sont entrées et un seul événement mènerait la courbe à 0), comme la survie conditionnelle au fait de durer jusque-là. Les lignes d'un même sujet sont prises comme indépendantes.",
+   "start_rows": "{delayed} lignes sur {rows} entrent dans l'étude après l'instant 0 : une ligne ne compte qu'à partir de son début, et la vraisemblance de chaque ligne est conditionnelle au fait de durer jusque-là. La courbe de Kaplan–Meier, Cox–Snell et log(−log S) sont tracées avec les lignes à risque à chaque instant, à partir du premier instant avec au moins 10 lignes à risque (avant, peu de lignes sont entrées et un seul événement mènerait la courbe à 0), comme la survie conditionnelle au fait de durer jusque-là. Les lignes d'un même sujet sont prises comme indépendantes. La courbe ajustée à côté est la moyenne sur les lignes de leur survie conditionnelle au fait de durer jusqu'à ce premier instant, chaque ligne pondérée par sa probabilité d'y arriver : quand les lignes entrent à des instants différents, c'est une approximation de ce qu'estime Kaplan–Meier, pas la même grandeur.",
    "weights_counts": "Les poids ne sont pas des entiers : ils sont lus comme des poids de cas, chacun multiplie la log-vraisemblance de sa ligne.",
    "hr_interval_scale": "L'intervalle d'un hazard ratio est celui de Wald sur sa propre échelle : près de la limite il peut exclure 1 alors que la valeur p du coefficient est juste au-dessus d'alpha.",
    "zero_weights": "Les lignes de poids 0 ont été écartées de l'ajustement.",
-   "zero_times": "{n_zero_time} lignes ont un temps de 0 et ont été écartées de l'ajustement."
+   "zero_times": "{n_zero_time} lignes ont un temps de 0 et ont été écartées de l'ajustement.",
+   "lr_time": "Le temps de l'étape était épuisé avant l'ajustement du modèle sans prédicteurs : le test du rapport de vraisemblance des prédicteurs n'est pas donné.",
+   "exponential_lr_time": "Le temps de l'étape était épuisé avant l'ajustement de l'exponentielle : le test de la forme contre un risque constant n'est pas donné."
   },
   "patterns": {
    "quantile": "Quantile {x}",
@@ -1360,8 +1418,6 @@
    },
    "epv": {
     "name": "Assez d'événements : événements par paramètre",
-    "h0": "Au moins 10 événements par paramètre du modèle.",
-    "advice": "Peu d'événements pour les paramètres : moins de prédicteurs, moins de strates, ou une distribution avec moins de paramètres.",
     "count": {
      "one": "{n} événement",
      "other": "{n} événements"
@@ -1373,22 +1429,39 @@
     "advice": "Aucune ligne de ce niveau n'a l'événement : son coefficient tend vers l'infini et ne veut rien dire ; fusionnez le niveau ou écartez ses lignes."
    },
    "km_agreement": {
-    "name": "Accord avec Kaplan–Meier",
-    "h0": "La courbe ajustée reste dans le bruit de celle de Kaplan–Meier (un écart sous 0,05 ne compte jamais).",
-    "advice": {
-     "": "La courbe ajustée s'écarte de la courbe de Kaplan–Meier de ce groupe : essayez une autre distribution, ou auto.",
-     "km_agreement_auto": "Même la distribution de plus faible AIC s'écarte des données : lisez les courbes ; un effet qui varie dans le temps ou un prédicteur manquant."
-    }
+    "name": "Accord avec Kaplan–Meier"
    },
    "distribution_vs_gengamma": {
     "name": "Distribution contre la gamma généralisée",
     "h0": "La gamma généralisée ne décrit pas mieux les temps.",
-    "advice": "La gamma généralisée décrit mieux ces temps : essayez gengamma, ou auto."
+    "advice": {
+     "": "La gamma généralisée décrit mieux ces temps : essayez gengamma, ou auto.",
+     "distribution_vs_gengamma_auto": "La gamma généralisée décrit mieux ces temps, bien que le choix ait gardé la distribution plus simple : ajustez gengamma pour l'utiliser."
+    },
+    "not_computed": {
+     "": "La comparaison avec la gamma généralisée n'a pas pu être faite sur ces lignes.",
+     "distribution_vs_gengamma_no_time": "Le temps de l'étape était épuisé avant que cette comparaison puisse être faite.",
+     "distribution_vs_gengamma_time": "La gamma généralisée prenait plus de temps que l'ajustement du modèle lui-même : la comparaison a été arrêtée ; ajustez gengamma pour la voir.",
+     "distribution_vs_gengamma_candidate": "La gamma généralisée n'a pas été ajustée parmi les candidats (voir le choix de la distribution) : la comparaison n'est pas faite.",
+     "distribution_vs_gengamma_not_converged": "La gamma généralisée ne converge pas sur ces lignes : la comparaison n'est pas faite.",
+     "distribution_vs_gengamma_below": "L'ajustement de la gamma généralisée s'est arrêté sous la log-vraisemblance du modèle qu'elle contient : la comparaison n'est pas faite."
+    }
    },
    "constant_hazard": {
     "name": "Risque constant : l'exponentielle contre la Weibull",
     "h0": "Le risque ne change pas dans le temps (la forme de la Weibull est 1).",
-    "advice": "Le risque change dans le temps : utilisez weibull, ou auto."
+    "advice": {
+     "": "Le risque change dans le temps : utilisez weibull, ou auto.",
+     "constant_hazard_auto": "Le risque change dans le temps, bien que le choix ait gardé l'exponentielle : ajustez weibull pour l'utiliser."
+    },
+    "not_computed": {
+     "": "La comparaison avec la Weibull n'a pas pu être faite sur ces lignes.",
+     "constant_hazard_no_time": "Le temps de l'étape était épuisé avant que cette comparaison puisse être faite.",
+     "constant_hazard_time": "La Weibull prenait plus de temps que l'ajustement du modèle lui-même : la comparaison a été arrêtée ; ajustez weibull pour la voir.",
+     "constant_hazard_candidate": "La Weibull n'a pas été ajustée parmi les candidats (voir le choix de la distribution) : la comparaison n'est pas faite.",
+     "constant_hazard_not_converged": "La Weibull ne converge pas sur ces lignes : la comparaison n'est pas faite.",
+     "constant_hazard_below": "L'ajustement de la Weibull s'est arrêté sous la log-vraisemblance de l'exponentielle qu'elle contient : la comparaison n'est pas faite."
+    }
    },
    "ph_cox": {
     "name": "Risques proportionnels : Grambsch–Therneau",
@@ -1401,27 +1474,24 @@
     "advice": "Un effet change dans le temps : lisez les tests des termes et utilisez une distribution à temps de défaillance accéléré ou des strates."
    },
    "dfbeta": {
-    "name": "Influence : dfbeta",
-    "h0": "Aucune ligne ne déplace un coefficient de plus d'une erreur type.",
-    "advice": "Examinez les lignes indiquées : chacune déplace beaucoup un coefficient."
+    "name": "Influence : dfbeta"
    },
    "vif": {
-    "name": "Multicolinéarité : VIF",
-    "h0": "Chaque terme n'est pas expliqué par les autres termes (VIF 1).",
-    "advice": "Retirez ou combinez les prédicteurs corrélés."
+    "name": "Multicolinéarité : VIF"
    },
    "extrapolation": {
-    "name": "Extrapolation au-delà du dernier temps observé",
-    "h0": "Les chiffres demandés restent dans la durée de suivi.",
-    "advice": "Au-delà du dernier temps observé, les chiffres viennent de la forme de la distribution, pas des lignes : lisez-les comme une extrapolation."
+    "name": "Extrapolation au-delà du dernier temps observé"
    }
   },
   "measure_texts": {
-   "km_agreement": "Plus grand écart entre la courbe ajustée et celle de Kaplan–Meier, en erreurs types de Kaplan–Meier, là où au moins 10 lignes sont à risque. À lire avec le graphique.",
+   "km_agreement": "Plus grand écart en survie (de 0 à 1) entre la courbe ajustée et celle de Kaplan–Meier, lu là où au moins 10 lignes sont à risque ; le graphique montre où.",
    "dfbeta": "Plus grand |dfbetas| du terme : de combien une ligne déplace son coefficient, en erreurs types.",
    "epv": "Événements par paramètre du modèle.",
    "extrapolation": "Plus grand temps demandé ou lu (médiane, quantiles) sur le dernier temps observé : au-dessus de 1 le chiffre est une extrapolation."
   },
-  "all": "Toutes les lignes"
+  "all": "Toutes les lignes",
+  "measure_more": {
+   "km_agreement": "à t = {at}, {se} erreurs types de Kaplan–Meier"
+  }
  }
 }
