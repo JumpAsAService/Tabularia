@@ -175,14 +175,17 @@ ps_prepare <- function(task) {
     tab_refuse("negative_time", paste0("the column «", time_col, "» holds a negative time (", tab_number_label(min(time)),
                                        "): a time is counted from the start, 0 or more"), list(column = time_col))
   }
+  # a time of 0 has no density under any of the six distributions: its rows are left out (and
+  # counted) before anything else is asked of them, with a start or without
+  zero_time <- time == 0
   if (!is.null(start)) {
     if (any(start < 0)) {
       tab_refuse("negative_start", paste0("the column «", start_col, "» holds a negative start (", tab_number_label(min(start)),
                                           "): a time is counted from the start, 0 or more"), list(column = start_col))
     }
     # as Cox's: each row is an interval (start, time]
-    if (any(start >= time)) {
-      i <- which(start >= time)[[1L]]
+    if (any(start >= time & !zero_time)) {
+      i <- which(start >= time & !zero_time)[[1L]]
       tab_refuse("start_not_before_time", paste0("in row ", design$rows[[i]], " the start «", start_col, "» (",
                                                  tab_number_label(start[[i]]), ") is not before the time «", time_col, "» (",
                                                  tab_number_label(time[[i]]), "): each row is an interval (start, time]"),
@@ -193,8 +196,7 @@ ps_prepare <- function(task) {
     tab_refuse("negative_weight", paste0("the column «", weights_col, "» holds a negative weight (", tab_number_label(min(w)),
                                          "): a weight is 0 or more"), list(column = weights_col))
   }
-  # a time of 0 has no density under any of the six distributions; a weight of 0 adds nothing
-  zero_time <- time == 0
+  # a weight of 0 adds nothing
   zero_weight <- w == 0 & !zero_time
   keep <- !zero_time & !zero_weight
   rows_used <- design$rows[keep]
@@ -878,7 +880,8 @@ ps_write <- function(task, prepared, fitted, rows, model) {
   ll <- fitted$loglik
   distribution <- fitted$distribution
   has_predictors <- ncol(prepared$X) > 0L
-  has_strata <- !is.null(prepared$strata_col)
+  # a strata column of one level is no strata: one shape, the Weibull's hazard ratios stand
+  has_strata <- length(prepared$strata_levels) > 1L
 
   # ── the model section ─────────────────────────────────────────────────────
   tab_text(rows, "model", "formula", ps_formula_text(prepared))
@@ -1192,22 +1195,41 @@ ps_card <- function(task, prepared, fitted, selection = "manual") {
 
 .ps_num <- function(x) vapply(x, function(v) if (is.null(v)) NA_real_ else as.numeric(v), numeric(1))
 
-# The model a card holds, as ps_predict reads it: the card's numbers only.
+# The model a card holds, as ps_predict reads it: the card's numbers only. A card that does not
+# hold together (altered by hand, or not this node's) is refused with a sentence, never an R error.
 ps_model <- function(card) {
-  ps <- card$parametric_survival
-  levels <- if (is.null(ps$strata)) PS_ALL else vapply(ps$strata$levels, as.character, "")
-  order <- ps$order
-  n_terms <- sum(vapply(order, function(o) identical(o$role, "location") && !is.null(o$term), logical(1)))
-  m <- ps_spec(ps$distribution, n_terms, length(levels))
-  par <- .ps_num(card$coefficients)
-  if (length(par) != length(order) || length(par) != m$nb + n_terms + length(m$i_strata) + length(m$i_anc)) {
-    stop("the card's coefficients and its order differ")
+  bad <- function(what) {
+    tab_refuse("card_invalid", paste0("the model card is not a parametric survival model's as the node writes it: ", what,
+                                      "; fit the model again"), list(problem = what))
   }
+  ps <- card$parametric_survival
+  if (!is.list(ps)) bad("it has no «parametric_survival» part")
+  distribution <- ps$distribution
+  if (!is.character(distribution) || length(distribution) != 1L || !distribution %in% names(PS_DISTRIBUTIONS)) {
+    bad(paste0("its distribution «", paste(unlist(distribution), collapse = ", "), "» is none of ", paste(names(PS_DISTRIBUTIONS), collapse = ", ")))
+  }
+  levels <- if (is.null(ps$strata)) PS_ALL else vapply(ps$strata$levels, function(x) as.character(x %||% NA_character_), "")
+  if (!length(levels) || anyNA(levels)) bad("its strata have no levels")
+  order <- ps$order
+  if (!is.list(order)) bad("it has no order of its coefficients")
+  n_terms <- sum(vapply(order, function(o) is.list(o) && identical(o$role, "location") && !is.null(o$term), logical(1)))
+  m <- ps_spec(distribution, n_terms, length(levels))
+  par <- tryCatch(.ps_num(card$coefficients), error = function(e) NA_real_)
+  k <- m$nb + n_terms + length(m$i_strata) + length(m$i_anc)
+  if (length(par) != length(order) || length(par) != k) bad(paste0("it has ", length(par), " coefficients where its order says ", k))
+  if (!all(is.finite(par))) bad("a coefficient is empty or not finite")
   V <- NULL
-  if (length(card$vcov)) V <- do.call(rbind, lapply(card$vcov, .ps_num))
+  if (length(card$vcov)) {
+    rows_v <- tryCatch(lapply(card$vcov, .ps_num), error = function(e) NULL)
+    V <- if (length(rows_v) == k && all(lengths(rows_v) == k)) do.call(rbind, rows_v) else NULL
+    if (!is.matrix(V)) bad(paste0("its covariance is not ", k, " × ", k, ", one row and column per coefficient"))
+    if (!all(is.finite(V))) bad("its covariance has an empty or infinite number")
+  }
+  alpha <- suppressWarnings(as.numeric(ps$alpha %||% card$alpha %||% 0.05))
+  if (length(alpha) != 1L || !is.finite(alpha) || alpha <= 0 || alpha >= 1) bad("its alpha is not a number between 0 and 1")
   plain <- card
   plain$params$intercept <- FALSE # the distribution's location takes the intercept
-  list(card = plain, spec = m, par = par, vcov = V, alpha = as.numeric(ps$alpha %||% card$alpha %||% 0.05),
+  list(card = plain, spec = m, par = par, vcov = V, alpha = alpha,
        strata_col = ps$strata$column %||% NULL, strata_levels = levels, selection = ps$selection %||% "manual",
        coefficient_scale = ps$coefficient_scale, quantiles = .ps_num(ps$quantiles), times = .ps_num(ps$times),
        last_time = as.numeric(ps$last_time), last_time_by_stratum = ps$last_time_by_stratum)
@@ -1448,7 +1470,14 @@ predict_parametric_survival <- function(task, card) {
   times <- if (given(task$params$at_times)) sort(unique(as.numeric(unlist(task$params$at_times)))) else model$times
   interval <- isTRUE(task$params$interval)
   if (interval && is.null(model$vcov)) {
-    warning("the model card keeps no covariance (more than ", tab_limit(task, "max_vcov_terms"), " parameters): no interval is given")
+    # two reasons for a card without a covariance: too many parameters to keep it, or none to keep
+    # (the fit's Hessian was not positive definite: its report says it under «Convergence»)
+    if (length(model$par) > tab_limit(task, "max_vcov_terms")) {
+      warning("the model card keeps no covariance (more than ", tab_limit(task, "max_vcov_terms"), " parameters): no interval is given")
+    } else {
+      warning("the fit had no covariance (its Hessian was not positive definite: the estimates are not a maximum of the likelihood): ",
+              "no interval is given")
+    }
     interval <- FALSE
   }
   q_names <- .ps_names("quantile_", quantiles)
@@ -1854,6 +1883,55 @@ TAB_COMMON_TESTS[["parametric survival: the rows output with alive_at and Predic
 }
 
 # ── the final review's corrections (lot P12) ─────────────────────────────────
+TAB_COMMON_TESTS[["parametric survival: a strata column of one level is no strata; a time of 0 with a start is left out, not refused"]] <- function(code) {
+  df <- .ps_test_table(code)
+  base <- list(time = "days", event = "status", event_value = "failed", predictors = list("load", "line"), distribution = "weibull")
+  one <- df
+  one$plant <- "P"
+  a <- tab_results_frame(fit_parametric_survival(.ps_test_task(one, c(base, list(strata = "plant"))))$rows)
+  b <- tab_results_frame(fit_parametric_survival(.ps_test_task(df, base))$rows)
+  get <- function(f, key) f$value[match(key, f$key)]
+  # one shape: the Weibull's hazard ratios are written, and the note that there are none is not
+  .tab_expect(get(a, "model|||n_strata") == 1 && "coef|load||hazard_ratio" %in% a$key && !"model|||note_strata_no_hr" %in% a$key,
+              "a stratum of one level: ", paste(a$key[a$section == "model" & grepl("note", a$key)], collapse = ", "))
+  for (key in c("model|||log_lik", "coef|load||hazard_ratio", "coef|line|B|time_ratio")) {
+    .tab_expect(abs(get(a, key) / get(b, key) - 1) < 1e-9, key, " with a stratum of one level is not the fit without strata")
+  }
+  # a start column of 0 everywhere, rows with a time of 0 among them: they are left out and counted, as without a start
+  zero <- df
+  zero$entry <- 0
+  c_ <- tab_results_frame(fit_parametric_survival(.ps_test_task(zero, c(base, list(start = "entry"))))$rows)
+  .tab_expect(get(c_, "model|||n_zero_time") == get(b, "model|||n_zero_time") && get(b, "model|||n_zero_time") > 0 &&
+              "model|||note_zero_times" %in% c_$key, "the rows with a time of 0 and a start")
+  .tab_expect(abs(get(c_, "model|||log_lik") / get(b, "model|||log_lik") - 1) < 1e-9, "a start of 0 is the fit without a start")
+}
+
+TAB_COMMON_TESTS[["parametric survival: an altered card is refused with a sentence; Predict says why a card has no interval"]] <- function(code) {
+  df <- .ps_test_table(code)
+  params <- list(time = "days", event = "status", event_value = "failed", predictors = list("load", "line"), distribution = "weibull")
+  card <- jsonlite::fromJSON(tab_card_text(fit_parametric_survival(.ps_test_task(df, params))$card), simplifyVector = FALSE)
+  rows_ <- df[1:3, ]
+  predict_with <- function(c_, p = list(interval = TRUE)) predict_parametric_survival(list(params = p, .frame = rows_), c_)
+  alter <- function(f) {
+    c_ <- card
+    f(c_)
+  }
+  .tab_refused_with("card_invalid", predict_with(alter(function(c_) { c_$vcov <- c_$vcov[1:2]; c_ })))
+  .tab_refused_with("card_invalid", predict_with(alter(function(c_) { c_$vcov[[1L]] <- c_$vcov[[1L]][-1L]; c_ })))
+  .tab_refused_with("card_invalid", predict_with(alter(function(c_) { c_$parametric_survival$distribution <- "nope"; c_ })))
+  .tab_refused_with("card_invalid", predict_with(alter(function(c_) { c_$parametric_survival$alpha <- 2; c_ })))
+  .tab_refused_with("card_invalid", predict_with(alter(function(c_) { c_$coefficients <- c_$coefficients[-1L]; c_ })))
+  said <- .tab_refused_with("card_invalid", predict_with(alter(function(c_) { c_$parametric_survival <- NULL; c_ })))
+  .tab_expect(grepl("^the model card is not a parametric survival model's", said), said)
+  # no covariance: too many parameters to keep it, or a fit whose Hessian was not positive definite
+  bare <- card
+  bare$vcov <- NULL
+  run <- .ps_with_warnings(predict_with(bare))
+  .tab_expect(any(grepl("Hessian was not positive definite", run$warnings)) && !"prediction_low" %in% names(run$value$output), run$warnings)
+  run <- .ps_with_warnings(predict_parametric_survival(list(params = list(interval = TRUE), .frame = rows_, limits = list(max_vcov_terms = 2)), bare))
+  .tab_expect(any(grepl("keeps no covariance \\(more than 2 parameters\\)", run$warnings)), run$warnings)
+}
+
 TAB_COMMON_TESTS[["parametric survival: Newton steps from the rows' own derivatives, and auto's candidates reused by the checks"]] <- function(code) {
   df <- .ps_test_table(code)
   for (d in c("weibull", "gengamma", "gompertz")) {
