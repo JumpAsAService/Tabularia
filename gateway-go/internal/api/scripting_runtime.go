@@ -232,7 +232,7 @@ func editorLint(d *Deps) authedFunc {
 		envID := *optInt(body, "environment_id")
 		var name, language string
 		var current *int64
-		err := d.DB.QueryRow(ctx, `SELECT name, language, current_version_id FROM script_environments WHERE id = $1`, envID).
+		err := d.DB.QueryRow(ctx, `SELECT name, language, current_version_id FROM script_environments WHERE id = $1 AND managed_by IS NULL`, envID).
 			Scan(&name, &language, &current)
 		if errors.Is(err, pgx.ErrNoRows) {
 			detail(w, http.StatusNotFound, "Scripting environment not found")

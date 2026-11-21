@@ -73,10 +73,13 @@ type scriptEnv struct {
 	MaxTimeout                                       int64
 }
 
+// loadScriptEnv is the scripting environment a Script node, a saved script or a run's access check
+// names: nil when there is none. A model group's managed environment is not one (managed_by): its
+// image runs the group's runner only, never a person's code, whoever may use the group.
 func loadScriptEnv(ctx context.Context, q perm.Querier, id int64) (*scriptEnv, error) {
 	var e scriptEnv
 	err := q.QueryRow(ctx, `SELECT id, name, language, enabled, current_version_id, cpu_request, cpu_limit, memory_request, memory_limit,
-		max_timeout_seconds FROM script_environments WHERE id = $1`, id).Scan(&e.ID, &e.Name, &e.Language, &e.Enabled, &e.CurrentVersionID,
+		max_timeout_seconds FROM script_environments WHERE id = $1 AND managed_by IS NULL`, id).Scan(&e.ID, &e.Name, &e.Language, &e.Enabled, &e.CurrentVersionID,
 		&e.CPURequest, &e.CPULimit, &e.MemoryRequest, &e.MemoryLimit, &e.MaxTimeout)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil

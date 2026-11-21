@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -541,6 +542,43 @@ func TestEnablingAGroupQueuesItsVersionAndHidesItsEnvironment(t *testing.T) {
 	}
 	if au := f.audits(); len(au) != 2 || !strings.HasPrefix(au[0], "models.group_enable regression ") {
 		t.Errorf("the audit: %v", au)
+	}
+}
+
+// Whoever may use a model group may not run code of their own in its image: the managed environment
+// is no Script node's environment, nor a saved script's, for a person in the group nor for an
+// administrator, and the access check of a run does not know it.
+func TestTheManagedEnvironmentRunsNoScript(t *testing.T) {
+	f := newModelsFixture(t)
+	f.enable(f.admin, "regression")
+	f.buildTo(t, "regression", true)
+	var gid int64
+	if err := f.db.QueryRow(f.ctx, `INSERT INTO groups (name, description, is_admin, is_observer, created_at) VALUES ($1, '', false, false, now()) RETURNING id`,
+		fmt.Sprintf("mg-%d", time.Now().UnixNano())).Scan(&gid); err != nil {
+		t.Fatal(err)
+	}
+	defer f.db.Exec(f.ctx, `DELETE FROM groups WHERE id = $1`, gid) //nolint:errcheck
+	if w := f.call(f.admin, "PUT", "regression", "", fmt.Sprintf(`{"everyone":false,"group_ids":[%d]}`, gid), true, mgAccess); w.Code != http.StatusOK {
+		t.Fatalf("access: %d %s", w.Code, w.Body)
+	}
+	if _, err := f.db.Exec(f.ctx, `INSERT INTO user_groups (user_id, group_id) VALUES ($1, $2)`, f.ann.ID, gid); err != nil {
+		t.Fatal(err)
+	}
+	defer f.db.Exec(f.ctx, `DELETE FROM user_groups WHERE group_id = $1`, gid) //nolint:errcheck
+	if usable, err := ModelGroupUsable(f.ctx, f.db, perm.For(f.db, f.ann), f.ann.ID, "regression"); err != nil || !usable {
+		t.Fatalf("ann may use the group: %v %v", usable, err)
+	}
+	env := f.envOf("regression")
+	if e, err := loadScriptEnv(f.ctx, f.db, env); err != nil || e != nil {
+		t.Errorf("the managed environment is a scripting environment: %+v %v", e, err)
+	}
+	sc := scriptcfg.Load(config.FromOS())
+	for _, u := range []*auth.User{f.ann, f.admin} {
+		e, v, err := f.d.environmentOf(f.ctx, sc, u, env, "choose an environment")
+		var refused *scriptFailed
+		if !errors.As(err, &refused) || refused.msg != "choose an environment" || e != nil || v != nil {
+			t.Errorf("%s's Script node in the managed environment: %+v %+v %v", u.FullName, e, v, err)
+		}
 	}
 }
 
