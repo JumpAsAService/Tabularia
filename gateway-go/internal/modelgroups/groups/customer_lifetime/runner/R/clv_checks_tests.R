@@ -7,7 +7,8 @@
 
 .clv_check_fit <- function(model = "bg_nbd", par = c(r = 0.25, alpha = 4, a = 0.8, b = 2.5), spend = c(p = 6, q = 4, gamma = 15),
                            alpha = 0.05, p_value = 0.03, df = 3, holdout = -0.12, vcov = TRUE, converged = TRUE,
-                           edges = clv_no_edges(), spend_edges = clv_no_edges()) {
+                           edges = clv_no_edges(), spend_edges = clv_no_edges(), convcode = if (converged) 0L else 1L,
+                           spend_converged = TRUE, spend_vcov = TRUE) {
   set.seed(4)
   n <- 200
   x <- stats::rpois(n, 1.5)
@@ -15,8 +16,10 @@
   k <- length(par)
   list(model = model, alpha = alpha, plan = list(horizon = 52),
        s = list(x = x, m = m, T = stats::runif(n, 20, 40), n = n, has_holdout = !is.null(holdout)),
-       purchases = list(model = model, par = par, converged = converged, vcov_log = if (vcov) diag(0.01, k) else NULL, gradient = rep(1e-4, k), edges = edges),
-       spend = if (is.null(spend)) NULL else list(model = "gamma_gamma", par = spend, converged = TRUE, vcov_log = diag(0.01, 3), edges = spend_edges),
+       purchases = list(model = model, par = par, converged = converged, convcode = convcode, vcov_log = if (vcov) diag(0.01, k) else NULL,
+                        gradient = rep(1e-4, k), edges = edges),
+       spend = if (is.null(spend)) NULL else list(model = "gamma_gamma", par = spend, converged = spend_converged,
+                                                  vcov_log = if (spend_vcov) diag(0.01, 3) else NULL, edges = spend_edges),
        freq = list(statistic = 9.1, df = df, p_value = p_value, max_share_gap = 0.021, n_classes = df + 1 + k),
        holdout = if (is.null(holdout)) NULL else list(rel_error = holdout))
 }
@@ -87,6 +90,30 @@ TAB_COMMON_TESTS[["customer_lifetime: a verdict is a p-value against the node's 
   .tab_expect(identical(g(a, "convergence", "verdict"), "doubtful") && identical(g(a, "convergence", "advice_id"), "convergence_edge"), "an edge with a Hessian")
   a <- .clv_check_frame(.clv_check_fit(spend_edges = .clv_edge("p", "high")))
   .tab_expect(identical(g(a, "convergence", "verdict"), "doubtful"), "the spend at an edge")
+  # a line search that failed (L-BFGS-B's 51, 52) at an edge is the edge's: doubtful; without an edge, failed
+  pair <- rbind(.clv_edge("a", "high", "dropout"), .clv_edge("b", "high", "dropout"))
+  for (code_ in c(51L, 52L)) {
+    a <- .clv_check_frame(.clv_check_fit(converged = FALSE, convcode = code_, edges = pair))
+    .tab_expect(identical(g(a, "convergence", "verdict"), "doubtful") && identical(g(a, "convergence", "advice_id"), "convergence_edge"),
+                "code ", code_, " at the pair's edge: ", g(a, "convergence", "verdict"))
+    a <- .clv_check_frame(.clv_check_fit(converged = FALSE, convcode = code_))
+    .tab_expect(identical(g(a, "convergence", "verdict"), "failed"), "code ", code_, " without an edge")
+  }
+  .tab_expect(clv_code_converged(52L, pair) && !clv_code_converged(52L, clv_no_edges()) && !clv_code_converged(1L, pair) &&
+              clv_code_converged(0L, clv_no_edges()), "clv_code_converged")
+}
+
+TAB_COMMON_TESTS[["customer_lifetime: a pair's edge is found by longer steps along it, not by the Hessian's flat direction"]] <- function(code) {
+  lp0 <- log(c(0.5, 4, 300, 900))
+  t_ <- function(lp) mean(lp[3:4] - lp0[3:4])
+  # along the dropout's pair (a, b up together) the likelihood is a little lower one step of e away, higher at e⁴
+  nll <- function(lp) sum((lp[1:2] - lp0[1:2])^2) + (lp[[3L]] - lp[[4L]] - (lp0[[3L]] - lp0[[4L]]))^2 + 0.01 * t_(lp)^2 - 0.004 * t_(lp)^3
+  e <- clv_edges(nll, lp0, "bg_nbd")
+  .tab_expect(all(c("a", "b") %in% e$param[e$pair == "dropout"]), "the longer steps: ", paste(e$param, e$pair, collapse = "; "))
+  # a saddle on the ridge: lower at every step towards the limit, higher the other way (more spread): no edge
+  nll2 <- function(lp) sum((lp[1:2] - lp0[1:2])^2) + (lp[[3L]] - lp[[4L]] - (lp0[[3L]] - lp0[[4L]]))^2 + 0.05 * t_(lp) - 0.01 * t_(lp)^2 +
+    0.02 * max(t_(lp), 0)^2
+  .tab_expect(!nrow(clv_edges(nll2, lp0, "bg_nbd")), "a saddle is no edge")
 }
 
 TAB_COMMON_TESTS[["customer_lifetime: an edge is where the likelihood keeps growing, found on the likelihood and not on the estimate's size"]] <- function(code) {

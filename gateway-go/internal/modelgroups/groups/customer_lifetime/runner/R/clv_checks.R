@@ -84,18 +84,23 @@ clv_checks <- function(rows, fit) {
 # positive definite to the last digits: the maximum is the limit, not a point, and a standard error there
 # means little. Why the edge is not «failed» (B2): customers who never drop out push the dropout's parameter
 # to its limit, a legitimate limit of the model, and their fit came out failed. `value`: the Newton step left
-# at the purchase model's estimates, in its standard errors.
+# at the purchase model's estimates, in its standard errors. At an edge a line search that failed (L-BFGS-B's
+# codes 51, 52) is the edge's, not a failure (clv_code_converged): the likelihood flattens towards the limit.
 clv_check_convergence <- function(rows, fit) {
+  failed <- function(f) {
+    if (is.null(f)) return(FALSE)
+    edge <- !is.null(f$edges) && nrow(f$edges) > 0L
+    stopped <- !isTRUE(f$converged) && !(edge && clv_code_converged(f$convcode, f$edges))
+    stopped || (is.null(f$vcov_log) && !edge)
+  }
   parts <- Filter(Negate(is.null), list(fit$purchases, fit$spend))
-  stopped <- vapply(parts, function(f) !isTRUE(f$converged), logical(1))
-  flat <- vapply(parts, function(f) is.null(f$vcov_log), logical(1))
   edge <- vapply(parts, function(f) !is.null(f$edges) && nrow(f$edges) > 0L, logical(1))
   p <- fit$purchases
   step <- NULL
   if (!is.null(p$vcov_log) && !is.null(p$gradient) && all(is.finite(p$gradient))) {
     step <- max(abs(drop(p$vcov_log %*% p$gradient)) / sqrt(pmax(diag(p$vcov_log), 1e-300)))
   }
-  if (any(stopped | (flat & !edge))) {
+  if (failed(fit$purchases) || failed(fit$spend)) {
     clv_check_rows(rows, "convergence", "failed", value = step,
                    advice = "the estimates may not be the best ones: the data may hold too few repeat customers for this model; try another purchase model")
   } else if (any(edge)) {

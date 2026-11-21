@@ -831,9 +831,21 @@ clv_add_inference <- function(p, s, comp, alpha = 0.05) {
   # converged as the convergence check says it (clv_check_convergence): the optimizer's code 0 and a positive
   # definite Hessian, or no such Hessian because an estimate is at an edge (where the maximum is a limit). A
   # code 0 on a flat ridge with every estimate inside its range is not a maximum: `auto` does not take it for
-  # one, and the rows (and MLflow's `converged`) say 0, as the check says failed
-  p$converged <- isTRUE(p$converged) && (!is.null(p$vcov_log) || nrow(p$edges) > 0L)
+  # one, and the rows (and MLflow's `converged`) say 0, as the check says failed. At an edge L-BFGS-B's line
+  # search may fail (codes 51, 52): the likelihood flattens towards the limit; that is the edge, not a failure
+  p$converged <- clv_code_converged(p$convcode, p$edges) && (!is.null(p$vcov_log) || nrow(p$edges) > 0L)
   p
+}
+
+# L-BFGS-B's codes of a line search that failed (51 a warning, 52 an error): at an edge, where the likelihood
+# flattens towards a limit, it fails for that reason (the abandon shared by every customer: γ and δ of BG/BB
+# at 1e5–1e7, the log-likelihood moving by ±0.004 along the pair, rounding).
+CLV_LINE_SEARCH <- c(51L, 52L)
+
+# Whether an optimizer's code says it converged: 0, or a failed line search at an edge (`edges` not empty).
+clv_code_converged <- function(code, edges) {
+  code <- suppressWarnings(as.integer(code %||% NA_integer_))
+  isTRUE(code == 0L) || (isTRUE(code %in% CLV_LINE_SEARCH) && !is.null(edges) && nrow(edges) > 0L)
 }
 
 # ── the edges: where the likelihood keeps growing ────────────────────────────────
@@ -855,6 +867,13 @@ clv_no_edges <- function() data.frame(param = character(), side = character(), p
 # interior maximum every step lowers it; at an edge the maximum is the limit, not a point, so the step does
 # not. Returns one row per parameter at an edge: `side` low or high, `pair` the pair's kind when it is the
 # pair's direction. 2k + pairs evaluations of the likelihood, once, for the chosen model and the spend.
+# Along a pair the likelihood can be so flat towards its limit that one step of e is a little lower than the
+# estimate and a longer one is not (the dropout shared by every customer: MBG/NBD's a and b at 8e5 and 2.5e6
+# were 5.6e-6 lower one step away, 9.2 higher at e¹⁶): the pair is also tried at factors e² and e⁴
+# (CLV_PAIR_STEPS). The Hessian's flat direction is not read as an edge: where it lies along a pair with the
+# likelihood lower at every step towards the limit, the optimizer stopped on a saddle of the ridge, and the
+# likelihood still grows the other way (more spread), towards an interior maximum: that is not converged.
+CLV_PAIR_STEPS <- c(1, 2, 4)
 clv_edges <- function(nll, lp, model) {
   names_ <- CLV_MODELS[[model]]$params
   v0 <- tryCatch(nll(lp), error = function(e) NA_real_)
@@ -875,10 +894,13 @@ clv_edges <- function(nll, lp, model) {
   for (kind in names(CLV_PAIRS[[model]])) {
     two <- CLV_PAIRS[[model]][[kind]]
     d <- as.numeric(names_ %in% two)
-    if (grows(d)) for (name in two) out[nrow(out) + 1L, ] <- list(name, "high", kind)
+    if (any(vapply(CLV_PAIR_STEPS, function(k) grows(k * d), logical(1)))) {
+      for (name in two) out[nrow(out) + 1L, ] <- list(name, "high", kind)
+    }
   }
   out
 }
+
 
 # ── Gamma–Gamma ──────────────────────────────────────────────────────────────────
 # Fitted on the repeaters with a spend, through CLVTools' gg_LL (the negative log-likelihood).
@@ -897,7 +919,7 @@ clv_fit_spend <- function(s, alpha = 0.05) {
                                        "and the CLV cannot be computed; look for extreme amounts, or leave out the spend column"),
                list(q = par[["q"]]))
   }
-  list(model = "gamma_gamma", par = par, log_par = fit$lp, log_lik = -fit$value, n = length(x), converged = fit$convcode == 0,
+  list(model = "gamma_gamma", par = par, log_par = fit$lp, log_lik = -fit$value, n = length(x), converged = clv_code_converged(fit$convcode, edges),
        kkt1 = fit$kkt1, kkt2 = fit$kkt2, convcode = fit$convcode, fallback = fit$fallback, optimizer = fit$optimizer,
        vcov_log = inf$vcov_log, se = inf$se, ci_low = inf$ci_low, ci_high = inf$ci_high, edges = edges)
 }

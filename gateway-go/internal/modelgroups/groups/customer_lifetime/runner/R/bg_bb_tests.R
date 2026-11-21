@@ -100,3 +100,31 @@ TAB_COMMON_TESTS[["customer_lifetime: BG/BB's expected transactions are exact fo
   }, 0)
   .tab_expect(.clv_rel(out$pred_transactions, want) < 1e-9, "the expected transactions are the sum written out: ", .clv_rel(out$pred_transactions, want))
 }
+
+TAB_COMMON_TESTS[["customer_lifetime: BG/BB with the same dropout for every donor is doubtful at the pair's edge, whatever the seed"]] <- function(code) {
+  # θ = 0.25 for everyone (γ 300, δ 900): γ and δ go up together to 1e5–1e7, where the likelihood is flat to its rounding
+  # and L-BFGS-B's line search fails (code 52). The limit is the pair's edge: doubtful, never failed by the seed
+  for (seed in 1:3) {
+    set.seed(seed)
+    n <- 2000
+    p <- stats::rbeta(n, 1.2, 0.75)
+    theta <- stats::rbeta(n, 300, 900)
+    opportunities <- sample(4:12, n, TRUE)
+    x <- tx <- integer(n)
+    for (i in seq_len(n)) for (t in seq_len(opportunities[[i]])) {
+      if (stats::runif(1) < theta[[i]]) break
+      if (stats::runif(1) < p[[i]]) {
+        x[[i]] <- x[[i]] + 1L
+        tx[[i]] <- t
+      }
+    }
+    d <- data.frame(id = paste0("d", seq_len(n)), x = x, tx = tx, T = opportunities)
+    res <- fit_bg_bb(.clv_task(.clv_params(list(horizon = 5, output = "results"), "bg_bb"), d, "bg_bb", variant = "purchases"))
+    df <- tab_results_frame(res$rows)
+    said <- function(key) df$text[match(key, df$key)]
+    .tab_expect(identical(said("assumption|convergence||verdict"), "doubtful") &&
+                identical(said("assumption|convergence||advice_id"), "convergence_edge") &&
+                identical(said("assumption|boundary|gamma|advice_id"), "boundary_homogeneous"),
+                "seed ", seed, ": ", said("assumption|convergence||verdict"), " ", said("assumption|boundary|gamma|advice_id"))
+  }
+}
