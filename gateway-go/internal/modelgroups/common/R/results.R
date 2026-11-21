@@ -134,50 +134,79 @@ tab_write_results <- function(rows, path = Sys.getenv("TABULARIA_RESULTS")) {
 }
 
 # ── the catalogue's declaration, checked here as the engine checks it ──────────
+# Whether each of `stat` is one of `names` (a name ending in «*» takes any stat it begins).
 .tab_declared <- function(stat, names) {
   names <- unlist(names)
-  if (!length(names)) return(FALSE)
-  exact <- stat %in% names
+  if (!length(names)) return(rep(FALSE, length(stat)))
+  out <- stat %in% names
   wild <- names[endsWith(names, "*")]
-  exact || any(startsWith(stat, substr(wild, 1L, nchar(wild) - 1L)))
+  for (prefix in substr(wild, 1L, nchar(wild) - 1L)) out <- out | startsWith(stat, prefix)
+  out
 }
 
-# What is wrong with `rows` for the model's variant, one sentence each (empty: nothing).
+# The most rows a model's results may hold: the engine refuses more (app/engine/models/results.py).
+tab_max_result_rows <- function() as.numeric(tab_catalog()$limits$max_result_rows)
+
+# What is wrong with `rows` for the model's variant, one sentence each (empty: nothing), in the
+# order of the rows. The rules are applied to each section's rows at once (a row at a time took
+# 18 s on 110,000 rows).
 tab_check_declared <- function(rows, model, variant) {
   df <- if (is.data.frame(rows)) rows else tab_results_frame(rows)
   cat_ <- tab_catalog()
   spec <- tab_variant_spec(model, variant)
   if (is.null(spec)) return(paste0("the catalogue has no variant ", variant, " of ", model))
   problems <- character()
+  most <- tab_max_result_rows()
+  if (nrow(df) > most) problems <- c(problems, paste0(nrow(df), " rows, more than the ", format(most, scientific = FALSE), " a model's results may hold"))
   if (anyDuplicated(df$key)) problems <- c(problems, paste0("the key ", df$key[anyDuplicated(df$key)], " is there twice"))
-  for (i in seq_len(nrow(df))) {
-    r <- df[i, ]
-    where <- paste0("the row ", r$key)
-    shape <- cat_$section_shapes[[r$section]]
-    decl <- spec$sections[[r$section]]
+  # one column per rule, in the order a row's problems are said; NA where the rule holds
+  rules <- c("section", "level_null", "level_required", "level_2_null", "level_2_required", "levels", "number_text",
+             "text_value", "verdict", "stat")
+  said <- matrix(NA_character_, nrow(df), length(rules), dimnames = list(NULL, rules))
+  where <- paste0("the row ", df$key)
+  verdicts <- unlist(cat_$verdicts)
+  for (section in unique(df$section)) {
+    i <- which(df$section == section)
+    shape <- cat_$section_shapes[[section]]
+    decl <- spec$sections[[section]]
     if (is.null(shape) || is.null(decl)) {
-      problems <- c(problems, paste0(where, ": the variant ", variant, " of ", model, " has no section ", r$section))
+      said[i, "section"] <- paste0(where[i], ": the variant ", variant, " of ", model, " has no section ", section)
       next
     }
     for (part in c("level", "level_2")) {
-      v <- r[[part]]
-      if (identical(shape[[part]], "null") && !is.na(v)) problems <- c(problems, paste0(where, ": ", part, " must be null"))
-      if (identical(shape[[part]], "required") && (is.na(v) || !nzchar(v))) problems <- c(problems, paste0(where, ": ", part, " is required"))
-    }
-    if (!is.null(decl$levels) && !(r$level %in% unlist(decl$levels))) {
-      problems <- c(problems, paste0(where, ": ", r$level, " is not one of the declared ", r$section, " rows"))
-    }
-    if (.tab_declared(r$stat, decl$numbers)) {
-      if (!is.na(r$text) && !r$section %in% c("point", "curve")) problems <- c(problems, paste0(where, ": a number's text must be null"))
-    } else if (.tab_declared(r$stat, decl$texts)) {
-      if (!is.na(r$value)) problems <- c(problems, paste0(where, ": a text's value must be null"))
-      if (r$section == "assumption" && r$stat == "verdict" && !r$text %in% unlist(cat_$verdicts)) {
-        problems <- c(problems, paste0(where, ": the verdict «", r$text, "» is not one of ", paste(unlist(cat_$verdicts), collapse = ", ")))
+      v <- df[[part]][i]
+      if (identical(shape[[part]], "null")) {
+        bad <- !is.na(v)
+        said[i[bad], paste0(part, "_null")] <- paste0(where[i[bad]], ": ", part, " must be null")
       }
-    } else {
-      problems <- c(problems, paste0(where, ": ", model, " (", variant, ") declares no ", r$stat, " in ", r$section))
+      if (identical(shape[[part]], "required")) {
+        bad <- is.na(v) | !nzchar(v)
+        said[i[bad], paste0(part, "_required")] <- paste0(where[i[bad]], ": ", part, " is required")
+      }
     }
+    if (!is.null(decl$levels)) {
+      bad <- !(df$level[i] %in% unlist(decl$levels))
+      said[i[bad], "levels"] <- paste0(where[i[bad]], ": ", df$level[i[bad]], " is not one of the declared ", section, " rows")
+    }
+    stat <- df$stat[i]
+    number <- .tab_declared(stat, decl$numbers)
+    text <- !number & .tab_declared(stat, decl$texts)
+    if (!section %in% c("point", "curve")) {
+      bad <- number & !is.na(df$text[i])
+      said[i[bad], "number_text"] <- paste0(where[i[bad]], ": a number's text must be null")
+    }
+    bad <- text & !is.na(df$value[i])
+    said[i[bad], "text_value"] <- paste0(where[i[bad]], ": a text's value must be null")
+    if (section == "assumption") {
+      bad <- text & stat == "verdict" & !(df$text[i] %in% verdicts)
+      said[i[bad], "verdict"] <- paste0(where[i[bad]], ": the verdict «", df$text[i[bad]], "» is not one of ",
+                                        paste(verdicts, collapse = ", "))
+    }
+    bad <- !number & !text
+    said[i[bad], "stat"] <- paste0(where[i[bad]], ": ", model, " (", variant, ") declares no ", stat[bad], " in ", section)
   }
+  found <- as.vector(t(said))
+  problems <- c(problems, found[!is.na(found)])
   for (key in c("model|||model", "model|||variant", "model|||n")) {
     if (!key %in% df$key) problems <- c(problems, paste0("the row ", key, " is missing"))
   }

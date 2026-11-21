@@ -5,6 +5,20 @@
 # residuals, a histogram counts all of them, a step curve keeps every step up to the cap and
 # its value at equally spaced times above it.
 
+# The points each series of a fit's charts may have: max_chart_points, or fewer, so that the
+# results stay within max_result_rows (the engine refuses the whole step above it:
+# app/engine/models/results.py). `series`: the series still to be written (every chart's, for
+# every group or stratum, the short ones too); `after`: rows the runner writes after its charts.
+# The rows already in `rows`, those and one more (the note of a card too large, which
+# tab_finish_fit may add) come off the limit first; the rest is shared evenly between the series.
+# At least one point a series: a fit that cannot keep even that is refused by tab_finish_fit.
+tab_chart_points <- function(task, rows, series, after = 0) {
+  most <- tab_limit(task, "max_chart_points")
+  if (series < 1) return(most)
+  room <- tab_limit(task, "max_result_rows") - rows$n - after - 1
+  as.integer(max(1, min(most, floor(room / series))))
+}
+
 # The indices of the points to draw: all up to `max`; above it the `keep` largest by
 # `score` (|standardized residual|, Cook's distance…) and a sample of the rest. In
 # increasing order. The seed is the node's (set by the caller with tab_seed).

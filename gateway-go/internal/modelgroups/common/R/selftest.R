@@ -294,6 +294,38 @@ TAB_COMMON_TESTS <- list(
       for (k in names(old)) if (is.na(old[[k]])) Sys.unsetenv(k) else do.call(Sys.setenv, stats::setNames(list(old[[k]]), k))
       unlink(dir, recursive = TRUE)
     })
+  "the results stay within max_result_rows: the charts' budget, every rule checked at once, the refusal" = function(code) {
+    task <- list(model = "linear", variant = "unpenalized", rows_from = "run", group_version = 1, limits = tab_catalog()$limits)
+    most <- tab_limit(task, "max_result_rows")
+    rows <- tab_rows_start(task)
+    tab_number(rows, "model", "n", 20)
+    # 9 strata × 7 series at max_chart_points would pass the limit: the budget shares what is left
+    per <- tab_chart_points(task, rows, series = 63, after = 2)
+    .tab_expect(per < tab_limit(task, "max_chart_points") && rows$n + 63 * per + 2 + 1 <= most, "the budget: ", per)
+    .tab_expect(tab_chart_points(task, rows, series = 3) == tab_limit(task, "max_chart_points"), "a few series keep max_chart_points")
+    # one row more than the engine takes: said by the check, refused before anything is written
+    n <- most - rows$n + 1
+    tab_points(rows, "point", "qq", "y", x = seq_len(n), y = seq_len(n))
+    tab_text(rows, "assumption", "verdict", "fine", level = "breusch_pagan")
+    total <- rows$n
+    took <- system.time(problems <- tab_check_declared(rows, "linear", "unpenalized"))[["elapsed"]]
+    .tab_expect(length(problems) == 2L && identical(problems[[1L]], paste0(total, " rows, more than the 100000 a model's results may hold")) &&
+                grepl("«fine» is not one of", problems[[2L]], fixed = TRUE), paste(head(problems, 3L), collapse = "; "))
+    # a row at a time took 0.15 ms each (15 s here): the rules are applied to a section's rows at once
+    .tab_expect(took < 3, "checking ", total, " rows took ", round(took, 1), " s")
+    m <- .tab_refused_with("too_many_results", tab_finish_fit(task, list(rows = rows, output = NULL, card = NULL)))
+    .tab_expect(grepl(paste0("the results would hold ", total, " rows, more than the 100000"), m, fixed = TRUE), m)
+    # the order of the problems is the rows' order, each row's in the order of its rules
+    bad <- tab_rows_start(task)
+    tab_number(bad, "model", "n", 20)
+    tab_text(bad, "coef", "estimate", "x", level = "price")
+    tab_number(bad, "nowhere", "y", 1)
+    tab_number(bad, "point", "y", 1)
+    got <- tab_check_declared(bad, "linear", "unpenalized")
+    want <- c("the row coef|price||estimate: a number's text must be null", "the row nowhere|||y: the variant unpenalized of linear has no section nowhere",
+              "the row point|||y: level is required", "the row point|||y: NA is not one of the declared point rows")
+    .tab_expect(identical(got, want), paste(got, collapse = " / "))
+  },
     Sys.setenv(TABULARIA_RESULTS = file.path(dir, "results.parquet"), TABULARIA_ARTIFACTS = file.path(dir, "artifacts"))
     said <- character()
     withCallingHandlers(tab_finish_fit(task, list(rows = rows, output = NULL, card = card, native = list(a = 1))),

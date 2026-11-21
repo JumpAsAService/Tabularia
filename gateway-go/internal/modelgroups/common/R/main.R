@@ -82,6 +82,15 @@ tab_main <- function(group, routes) {
 # and report are written, with a note; model.json, MLmodel and native.rds are not.
 tab_finish_fit <- function(task, result) {
   card <- if (is.null(result$card)) NULL else tab_card_fits(task, result$card, result$rows)
+  # more rows than the engine takes: the step would fail after the import, with every number
+  # computed; refused here with a sentence instead (the charts' budget, tab_chart_points, keeps
+  # a runner below it)
+  most <- tab_limit(task, "max_result_rows")
+  if (result$rows$n > most) {
+    tab_refuse("too_many_results", paste0("the results would hold ", result$rows$n, " rows, more than the ", format(most, scientific = FALSE), " a model's ",
+                                          "results may hold: fewer strata, predictors or levels"),
+               list(rows = result$rows$n, limit = most))
+  }
   problems <- tab_check_declared(result$rows, task$model, task$variant)
   if (length(problems)) stop("the results do not match the catalogue:\n  ", paste(head(problems, 20L), collapse = "\n  "))
   tab_write_results(result$rows)
