@@ -661,6 +661,8 @@ def flows(ds: dict[str, dict], outputs_in: int, groups: dict[str, dict] | None =
                     description="Average discount granted per channel and quarter, next to the revenue it bought."))
     if groups and "experiments" in groups:
         out.extend(experiment_flows(ds, outputs_in, groups["experiments"]))
+    if groups and "timeseries" in groups:
+        out.extend(timeseries_flows(ds, outputs_in, groups["timeseries"]))
     return out
 
 
@@ -696,6 +698,38 @@ def experiment_flows(ds: dict[str, dict], outputs_in: int, group: dict) -> list[
     c.chain("src", "plan", "out")
     out.append(dict(name="Experiment planning", cron=None, c=c, group=group,
                     description="How many visitors, and how many days, to see a 5% lift in revenue per visitor? The A/B test planning node on the eight weeks before the experiments."))
+    return out
+
+
+def timeseries_flows(ds: dict[str, dict], outputs_in: int, group: dict) -> list[dict]:
+    """The decomposition's flow (the time series group): the orders per day, seen as a trend, a weekly
+    and a yearly season. Never scheduled.
+
+    A Group by of the orders has no row for a day without orders, and the node refuses a series
+    with gaps, rightly: the calendar (one row per day) is the left side of a Left join, and the
+    days without an order get 0 (an empty day means none)."""
+    out = []
+
+    # 14. orders per day, decomposed by MSTL: weekly (7) and yearly (365) seasons
+    c = Builder(ds, outputs_in)
+    c.source("src-ordini", "orders", 40, 460)
+    c.op("agg", "group_by", {"by": ["data_ordine"], "aggregations": [{"column": "id", "func": "count", "alias": "ordini"}]}, 300, 460)
+    cal = c.table("cal", "calendar", ["giorno"], {"giorno": "data_ordine"}, 40, 200)
+    c.op("periodo", "filter", {"column": "data_ordine", "operator": "between", "value": ["2023-07-01", "2026-07-15"]}, 820, 200)
+    c.op("j", "join", {"how": "left", "on": ["data_ordine"]}, 1080, 200)
+    c.op("zero", "fill_null", {"columns": {"ordini": 0}}, 1340, 200)
+    c.nodes.append({"id": "dec", "type": "model", "position": {"x": 1600, "y": 200}, "data": {
+        "label": "Decomposition", "model": "decomposition", "timeoutSeconds": 900, "retries": 0, "params": {
+            "time": "data_ordine", "value": "ordini", "frequency": "day", "method": "mstl", "periods": [7, 365],
+            "robust": True, "output": "components"}}})
+    c.output("Orders: weekly and yearly seasons results", 1860, 200)
+    c.chain("src-ordini", "agg")
+    c.chain(cal, "periodo", "j", "zero", "dec", "out")
+    c.edge("agg", "j", "right")
+    out.append(dict(name="Orders: weekly and yearly seasons", cron=None, c=c, group=group,
+                    description="What is left of the orders per day once the weekly and the yearly cycles are taken out? The Decomposition node (MSTL, "
+                                "periods 7 and 365) on the orders of the calendar's days: a calendar Left join and Fill nulls with 0 make the days without an order a 0, "
+                                "because the node refuses a series with gaps."))
     return out
 
 

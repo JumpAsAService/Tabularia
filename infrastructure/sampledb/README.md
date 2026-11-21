@@ -45,6 +45,8 @@ are in Italian, as a real Italian ERP and CRM would have them.
 
 Only `small` is generated for the experiments (60,000 visitors planned, the shipping experiment losing some to its filter); the sizes of `medium` and `robust` are in `scales.py`. The seed imports the tables as private tables, and, when an administrator has enabled the *Experiments* model group, builds the flows «Experiment: checkout» and «Experiment planning» on them.
 
+When an administrator has enabled the *Time series* group, the seed also builds «Orders: weekly and yearly seasons» (no new data: the orders and the calendar): the calendar's days from 1 July 2023 to 15 July 2026 Left join the orders counted per day, Fill nulls with 0 (a day without orders has no row, and the Decomposition node refuses a series with gaps), then MSTL with periods 7 and 365.
+
 `ordini.cliente_id` and `ordini.agente_id` are **logical** keys into the CRM on
 ClickHouse: the cross-database join is the point of the dataset.
 
@@ -177,7 +179,7 @@ by name first (running it again duplicates nothing):
 | where | what |
 |---|---|
 | `Sample` | the two connections (order system, CRM), four saved views, the dashboard «Sales overview», with two parameters that follow each other and a click that filters, and two pixel-perfect reports: «Margin review» (for the directors: a period against the same months a year earlier, by category and month) and «Agent scorecard» (for a sales manager: an area and its agents, on revenue and on the contacts of the CRM) |
-| `Sample / Flows` | eleven flows; three scheduled (`0 6 1 * *`, `30 5 * * *`, `0 7 * * 1`) |
+| `Sample / Flows` | eleven flows, and one for each of the Experiments and Time series groups enabled; three scheduled (`0 6 1 * *`, `30 5 * * *`, `0 7 * * 1`) |
 | `Sample / Private tables` | the company's nine tables and the tables the flows produce |
 | `Sample / Public tables` | `ref.calendario` (days, ISO weeks, Italian holidays) and `ref.regioni` |
 
