@@ -545,6 +545,92 @@ func TestEnablingAGroupQueuesItsVersionAndHidesItsEnvironment(t *testing.T) {
 	}
 }
 
+// Two enables of a group never enabled, at the same time: the second waits for the first and finds
+// its environment, and both answer.
+func TestTwoEnablesAtOnceBothAnswer(t *testing.T) {
+	f := newModelsFixture(t)
+	g, _ := modelgroups.Get("timeseries")
+	// the first holds its transaction once it has made the environment
+	tx, err := f.db.Begin(f.ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(f.ctx) //nolint:errcheck
+	first, err := mgEnsureEnvironment(f.ctx, tx, g, f.admin.Email)
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan *httptest.ResponseRecorder)
+	go func() { done <- f.enable(f.admin, "timeseries") }()
+	for deadline := time.Now().Add(10 * time.Second); ; time.Sleep(20 * time.Millisecond) {
+		var waiting int
+		if err := f.db.QueryRow(f.ctx, `SELECT count(*) FROM pg_locks WHERE NOT granted`).Scan(&waiting); err != nil {
+			t.Fatal(err)
+		}
+		if waiting > 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the second enable does not wait for the first")
+		}
+	}
+	if err := tx.Commit(f.ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := answerOf(t, <-done).Group; !got.Enabled || len(got.Versions) != 1 || f.envOf("timeseries") != first {
+		t.Errorf("the second enable: %+v (environment %d, the first made %d)", got, f.envOf("timeseries"), first)
+	}
+	// a double click, with two real requests
+	for i := 0; i < 5; i++ {
+		f.clean()
+		codes := make([]int, 2)
+		var wg sync.WaitGroup
+		start := make(chan struct{})
+		for j := range codes {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				<-start
+				codes[j] = f.enable(f.admin, "timeseries").Code
+			}()
+		}
+		close(start)
+		wg.Wait()
+		if codes[0] != http.StatusOK || codes[1] != http.StatusOK || len(f.versions("timeseries")) != 1 {
+			t.Fatalf("double click %d: %v, %d versions", i, codes, len(f.versions("timeseries")))
+		}
+	}
+}
+
+// An ordinary environment that already has the name the group's environment takes does not stop
+// enabling: the managed one, shown nowhere, takes the next free name.
+func TestAnEnvironmentOfTheGroupsNameDoesNotStopEnabling(t *testing.T) {
+	f := newModelsFixture(t)
+	var ids []int64
+	for _, name := range []string{"Statistical models: timeseries", "statistical models: timeseries (2)"} {
+		var id int64
+		if err := f.db.QueryRow(f.ctx, `INSERT INTO script_environments (name, description, language, enabled, cpu_request, cpu_limit, memory_request,
+			memory_limit, max_timeout_seconds, created_at, created_by, updated_at, updated_by) VALUES ($1, '', 'r', true,
+			'500m', '1', '512Mi', '1Gi', 3600, now(), 'x', now(), 'x') RETURNING id`, name).Scan(&id); err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, id)
+	}
+	defer f.db.Exec(f.ctx, `DELETE FROM script_environments WHERE id = ANY($1)`, ids) //nolint:errcheck
+	if got := answerOf(t, f.enable(f.admin, "timeseries")).Group; !got.Enabled || len(got.Versions) != 1 {
+		t.Fatalf("enabled: %+v", got)
+	}
+	var name string
+	if err := f.db.QueryRow(f.ctx, `SELECT name FROM script_environments WHERE managed_by = 'model_group:timeseries'`).Scan(&name); err != nil ||
+		name != "Statistical models: timeseries (3)" {
+		t.Errorf("the managed environment's name: %q %v", name, err)
+	}
+	// the administrator's environment is untouched, and enabling again finds the managed one
+	if got := answerOf(t, f.enable(f.admin, "timeseries")).Group; len(got.Versions) != 1 {
+		t.Errorf("enabled again: %+v", got)
+	}
+}
+
 // Whoever may use a model group may not run code of their own in its image: the managed environment
 // is no Script node's environment, nor a saved script's, for a person in the group nor for an
 // administrator, and the access check of a run does not know it.

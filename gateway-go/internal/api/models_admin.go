@@ -611,7 +611,21 @@ func mgInFlight(ctx context.Context, tx pgx.Tx, envID int64) (int64, error) {
 }
 
 // mgEnsureEnvironment is the group's managed environment, made when there is none.
+//
+// Two enables of the same group at once (a double click, two administrators) wait for each other
+// on a lock of the group held until the transaction ends: the second finds the environment the
+// first made, instead of failing on the unique managed_by.
+//
+// The environment's name is unique among all the environments, and an administrator may have
+// named an ordinary one «Statistical models: <group>» before the group was enabled. The managed
+// environment's name is shown nowhere (the Scripting section hides it), so it takes the first
+// free one of «Statistical models: <group>», «… (2)», «… (3)»…: enabling never stops on a name
+// the administrator cannot see, and nobody has to rename anything.
 func mgEnsureEnvironment(ctx context.Context, tx pgx.Tx, g modelgroups.Group, who string) (int64, error) {
+	// the lock's two keys: the table's own oid and the group (a pair never used by another lock)
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock('script_environments'::regclass::oid::int, hashtext($1))`, mgManagedBy(g.ID)); err != nil {
+		return 0, err
+	}
 	var id int64
 	err := tx.QueryRow(ctx, `SELECT id FROM script_environments WHERE managed_by = $1`, mgManagedBy(g.ID)).Scan(&id)
 	if err == nil {
@@ -622,12 +636,35 @@ func mgEnsureEnvironment(ctx context.Context, tx pgx.Tx, g modelgroups.Group, wh
 	}
 	cpu, memory := g.Recipe.Resources.CPU, g.Recipe.Resources.Memory
 	now := time.Now().UTC()
-	err = tx.QueryRow(ctx, `INSERT INTO script_environments (name, description, language, enabled, current_version_id, cpu_request, cpu_limit,
-		memory_request, memory_limit, max_timeout_seconds, created_at, created_by, updated_at, updated_by, managed_by)
-		VALUES ($1, $2, $3, true, NULL, $4, $5, $6, $7, $8, $9, $10, $9, $10, $11) RETURNING id`,
-		"Statistical models: "+g.ID, "Managed by Tabularia: the image of the statistical model group "+g.ID, g.Recipe.Language,
-		mgHalf(cpu, true), cpu, mgHalf(memory, false), memory, mgDefaultSeconds(g), now, who, mgManagedBy(g.ID)).Scan(&id)
-	return id, err
+	base := "Statistical models: " + g.ID
+	for n := 1; ; n++ {
+		name := base
+		if n > 1 {
+			name = fmt.Sprintf("%s (%d)", base, n)
+		}
+		// taken also when it differs only in case: the rule of the environments' names (scEnvName)
+		var taken bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM script_environments WHERE lower(name) = lower($1))`, name).Scan(&taken); err != nil {
+			return 0, err
+		}
+		if taken {
+			continue
+		}
+		err = tx.QueryRow(ctx, `INSERT INTO script_environments (name, description, language, enabled, current_version_id, cpu_request, cpu_limit,
+			memory_request, memory_limit, max_timeout_seconds, created_at, created_by, updated_at, updated_by, managed_by)
+			VALUES ($1, $2, $3, true, NULL, $4, $5, $6, $7, $8, $9, $10, $9, $10, $11) ON CONFLICT DO NOTHING RETURNING id`,
+			name, "Managed by Tabularia: the image of the statistical model group "+g.ID, g.Recipe.Language,
+			mgHalf(cpu, true), cpu, mgHalf(memory, false), memory, mgDefaultSeconds(g), now, who, mgManagedBy(g.ID)).Scan(&id)
+		if !scNoRows(err) {
+			return id, err
+		}
+		// a conflict: the group's environment made meanwhile without the lock (a gateway of the
+		// previous version, during an upgrade), or one of that name by an administrator
+		err = tx.QueryRow(ctx, `SELECT id FROM script_environments WHERE managed_by = $1`, mgManagedBy(g.ID)).Scan(&id)
+		if !scNoRows(err) {
+			return id, err
+		}
+	}
 }
 
 // mgEnable is POST /admin/models/{group_id}/enable: the group's environment made (or enabled
