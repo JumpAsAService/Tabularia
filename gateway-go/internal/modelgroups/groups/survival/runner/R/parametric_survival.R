@@ -186,14 +186,8 @@ ps_prepare <- function(task) {
       tab_refuse("negative_start", paste0("the column «", start_col, "» holds a negative start (", tab_number_label(min(start)),
                                           "): a time is counted from the start, 0 or more"), list(column = start_col))
     }
-    # as Cox's: each row is an interval (start, time]
-    if (any(start >= time & !zero_time)) {
-      i <- which(start >= time & !zero_time)[[1L]]
-      tab_refuse("start_not_before_time", paste0("in row ", design$rows[[i]], " the start «", start_col, "» (",
-                                                 tab_number_label(start[[i]]), ") is not before the time «", time_col, "» (",
-                                                 tab_number_label(time[[i]]), "): each row is an interval (start, time]"),
-                 list(row = design$rows[[i]], start = start_col, time = time_col))
-    }
+    # as Cox's: each row is an interval (start, time], one that survival can tell apart
+    cox_refuse_start(start[!zero_time], time[!zero_time], design$rows[!zero_time], start_col, time_col)
   }
   if (any(w < 0)) {
     tab_refuse("negative_weight", paste0("the column «", weights_col, "» holds a negative weight (", tab_number_label(min(w)),

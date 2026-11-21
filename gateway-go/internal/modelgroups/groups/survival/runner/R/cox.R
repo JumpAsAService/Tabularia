@@ -102,13 +102,7 @@ fit_cox <- function(task) {
     tab_refuse("negative_time", paste0("the column «", time_col, "» holds a negative time (", tab_number_label(min(time)),
                                        "): a time is counted from the start, 0 or more"), list(column = time_col))
   }
-  if (!is.null(start) && any(start >= time)) {
-    i <- which(start >= time)[[1L]]
-    tab_refuse("start_not_before_time", paste0("in row ", design$rows[[i]], " the start «", start_col, "» (",
-                                               tab_number_label(start[[i]]), ") is not before the time «", time_col, "» (",
-                                               tab_number_label(time[[i]]), "): each row is an interval (start, time]"),
-               list(row = design$rows[[i]], start = start_col, time = time_col))
-  }
+  if (!is.null(start)) cox_refuse_start(start, time, design$rows, start_col, time_col)
   if (is.null(strata_col)) {
     strata_labels <- rep(COX_ALL, nrow(d))
     strata_levels <- COX_ALL
@@ -276,6 +270,39 @@ cox_coxph <- function(form, frame, ties, robust, clustered, notes = function(n) 
                  "merge the predictor, or its rare levels."))
   }
   fit
+}
+
+# Each row is an interval (start, time]: a start at or after its time is refused, naming the row.
+# So is a start that survival cannot tell from its time: its aeqSurv merges times closer than
+# sqrt(.Machine$double.eps) (absolute, or relative to the mean of the times) before coxph, survfit
+# or flexsurv see them, and stops with an R error, «an interval has effective length 0», when a
+# start and its time fall together (cox_empty_interval: the same rule on the same rows). Shared
+# with the parametric node. `rows`: the input's row numbers of the rows given.
+cox_refuse_start <- function(start, time, rows, start_col, time_col) {
+  i <- which(start >= time)
+  close <- !length(i)
+  i <- if (close) cox_empty_interval(start, time) else i[[1L]]
+  if (is.na(i)) return(invisible(TRUE))
+  tab_refuse("start_not_before_time", paste0("in row ", rows[[i]], " the start «", start_col, "» (", tab_number_label(start[[i]]),
+                                             ") is not before the time «", time_col, "» (", tab_number_label(time[[i]]), ")",
+                                             if (close) ", by more than survival tells apart" else "",
+                                             ": each row is an interval (start, time]"),
+             list(row = rows[[i]], start = start_col, time = time_col))
+}
+
+# The first of the intervals (start, time] that survival::aeqSurv makes empty, NA when none:
+# aeqSurv's own rule (survival 3.8), on the same rows.
+cox_empty_interval <- function(start, time) {
+  tolerance <- sqrt(.Machine$double.eps)
+  y <- sort(unique(c(start, time)))
+  y <- y[is.finite(y)]
+  if (length(y) < 2L) return(NA_integer_)
+  dy <- diff(y)
+  tied <- dy <= tolerance | dy / mean(abs(y)) <= tolerance
+  if (!any(tied)) return(NA_integer_)
+  cuts <- y[c(TRUE, !tied)]
+  empty <- which(findInterval(start, cuts) == findInterval(time, cuts) & start != time)
+  if (length(empty)) empty[[1L]] else NA_integer_
 }
 
 # A column constant over the rows, or a combination of the others and the baseline (which
@@ -706,3 +733,31 @@ TAB_COMMON_TESTS[["cox: native.rds holds no row of the input, and gives the fit'
                 type, ": predict differs from the fit's")
   }
 }
+
+.cox_test_task <- function(frame, params, limits = NULL) {
+  task <- list(model = "cox", variant = "default", group = "survival", group_version = "selftest", params = params, rows_from = "run",
+               limits = tab_catalog()$limits, .frame = frame)
+  if (!is.null(limits)) task$limits <- utils::modifyList(task$limits, limits)
+  task
+}
+
+TAB_COMMON_TESTS[["cox: a start that survival cannot tell from its time is refused with a sentence, here and in the parametric node"]] <- function(code) {
+  set.seed(4)
+  n <- 80L
+  x <- round(stats::rnorm(n), 2)
+  t <- stats::rweibull(n, 1.5, exp(3 + 0.3 * x))
+  cens <- stats::runif(n, 5, 60)
+  df <- data.frame(days = round(pmin(t, cens), 2), status = as.integer(t <= cens), x = x)
+  # a third of the rows enter 1e-9 before their time (86 µs in days: a start and an end taken from timestamps):
+  # survival's aeqSurv merges the two and stopped with an R error, «an interval has effective length 0»
+  df$s <- ifelse(seq_len(n) %% 3 == 0, df$days - 1e-9, 0)
+  params <- list(time = "days", event = "status", event_value = 1, predictors = list("x"), start = "s")
+  m <- .tab_refused_with("start_not_before_time", fit_cox(.cox_test_task(df, params)))
+  .tab_expect(grepl("^in row 3 the start «s» \\(13\\.729999999\\) is not before the time «days» \\(13\\.73\\), by more than survival tells apart", m), m)
+  m <- .tab_refused_with("start_not_before_time", fit_parametric_survival(.ps_test_task(df, c(params, list(distribution = "weibull")))))
+  .tab_expect(grepl("^in row 3 the start", m), m)
+  # 1e-6 before is an interval survival keeps: fitted
+  df$s <- ifelse(seq_len(n) %% 3 == 0, df$days - 1e-6, 0)
+  .tab_expect(!is.null(fit_cox(.cox_test_task(df, params))$card), "a start 1e-6 before its time was not fitted")
+}
+
