@@ -478,7 +478,9 @@ are «not computed» when there are too few. ADF and KPSS read their p-values fr
 stops at both ends (0.01 and 0.99 for ADF, 0.01 and 0.10 for KPSS): when the statistic is beyond an
 end, the test answers only the `alpha` on that side of it (a p-value below 0.01 rejects at any
 `alpha` of 0.01 or more), and for any other `alpha` (0.001, or 0.2 for KPSS) it is «not computed»,
-with its statistic shown, and so is the combined stationarity check.
+with its statistic shown, and so is the combined stationarity check. ADF's row says **rejected** when it rejects a
+unit root and **not rejected** when it does not, the words of the decomposition's report for the same test; not
+rejected is still a failed assumption of the fit here (difference once more).
 
 *Example:* `orders` with a **Group by** `data_ordine` and the *distinct count* of `id`: one row
 per day. ARIMA with the time `data_ordine`, the series the count, daily frequency, seasonal
@@ -966,7 +968,7 @@ p-value against the node's `alpha`**, never from a threshold of Tabularia's.
 | **Seasonality** (one per period) | verdict | Is there a seasonal pattern of this period? Friedman's test (the default) or Kruskal–Wallis, on the series detrended by a centred moving average, positions against complete cycles. **supported** (p below alpha) or **not supported** (p at or above alpha). *Not supported* is the absence of evidence, not a fault: it is drawn grey, with no red and no warning, and with few complete cycles (365 on two years of days) the test can see only a very strong pattern, which the reading says with the number of cycles. Choose *None* in **Test of the seasonality** to leave it out |
 | **Ljung–Box** on the remainder | verdict | Is there autocorrelation left up to the lag (**Ljung–Box lag**: *auto*, the smaller of twice the longest period and a fifth of the values, or ten without a season)? **failed** means structure is left in the remainder: another season, a narrower trend span, or a model of the remainder. On many values it rejects tiny autocorrelations, so the reading gives the largest one and its lag: weigh the size |
 | **ADF** and **KPSS** on the remainder | verdicts | Opposite null hypotheses (a unit root; stationarity). ADF reads **rejected** (the remainder has no unit root) or **not rejected**. Their p-values come from tables that stop at both ends: past an end the test answers only the `alpha` on that side, and for another `alpha` it is **not computed**, as in ARIMA. The reading says the four combinations in words |
-| **Trend strength** F_T, **seasonal strength** F_S of each period | measure | 1 − Var(remainder) / Var(trend + remainder), and the same with the season: from 0 (no more than the noise) to 1 (the noise is negligible). A number and a sentence, **no colour and no verdict**. They are never read against a threshold |
+| **Trend strength** F_T, **seasonal strength** F_S of each period | measure | 1 − Var(remainder) / Var(trend + remainder), and the same with the season: from 0 (the part varies no more than the remainder) to 1 (the remainder is negligible beside it). A number and a sentence, **no colour and no verdict**. They are never read against a threshold |
 | **Largest autocorrelation**, **weights at 0** (robust) | measures | How large the structure Ljung–Box finds is; the instants robust STL gave a weight of 0 |
 | EMD: **IMF condition**, **residue monotonic**, **orthogonality** | facts and a measure | Whether each mode is an IMF, whether the residue has at most one extremum («raise *Most IMFs to extract*», or only a longer series separates more modes), how far the modes are from orthogonal |
 
@@ -1007,7 +1009,8 @@ Rows before the first value and after the last are left out and counted.
 
 Other refusals say what to do and come before any fit: a series with two rows for one period («aggregate first with Group by»),
 times off the frequency's grid, a text or a true/false value, a value of 0 or below with a log, Box–Cox or multiplicative
-decomposition, a column constant everywhere, a series too short for a period («the series has 600 days; a period of
+decomposition, a column constant everywhere, values so large or so small that their squares leave the range of a
+number («rescale the column first»), a series too short for a period («the series has 600 days; a period of
 365 needs more than 730: drop it, or a longer series»), one seasonal span per period («give one seasonal span per period (2 periods, 3
 spans), or none»), a period for a yearly or whole-number series that has none, and IMFs read as noise beyond those
 found.
@@ -1021,6 +1024,7 @@ found.
 | Periods of MSTL | 4, distinct |
 | IMFs | 16 at most (ten by default) |
 | Ljung–Box lag | 1,000 |
+| Smoother spans | Whole numbers, 2,000,001 at most (STL's own periodic span for 200,000 rows); a period, a span or a lag of 7.5 is refused before the Job |
 | Time | A run on 100,000 rows takes under ten seconds of R with every option on; 200,000 rows about twenty |
 
 #### MLflow, and no model
