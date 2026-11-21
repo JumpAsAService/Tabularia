@@ -16,6 +16,7 @@ characters the PDF's font has (`app/reports/glyphs.py`).
 from __future__ import annotations
 
 import json
+import math
 import re
 from functools import lru_cache
 from pathlib import Path
@@ -67,7 +68,8 @@ def _words(model: str, variant: str, locale: str) -> dict:
     if variant == "penalized":  # the blocks both regressions share when a penalty is on
         own = _merged(own, _lang("penalized", locale))
     family = catalog.MODELS.get(model, {}).get("family")
-    if family in ("boosting", "customer_lifetime"):  # the words XGBoost and CatBoost share; those `clv` and `bg_bb` share
+    # the words XGBoost and CatBoost share; those `clv` and `bg_bb` share; those of the A/B test and its planning
+    if family in ("boosting", "customer_lifetime", "experiments"):
         own = _merged(_lang(family, locale), own)
     return _merged(_lang("common", locale), own)
 
@@ -164,6 +166,10 @@ def with_labels(model: str, params: Mapping[str, Any] | None, rows: list[dict], 
                 text = profile_said(w, text, loc)
             elif stat == "formula":
                 text = structured_note(w, text, loc, "formula_texts") if text.startswith("@") else formula_said(w, text, loc)
+            elif text.startswith("@") and text[1:].split(" ")[0] in w.get("note_texts", {}):  # a measure said as a note (A/B planning's history_short)
+                text = structured_note(w, text, loc)
+        elif section == "reading" and isinstance(text, str) and text.startswith("@"):
+            text, label = reading_said(w, r["level"], text, loc, checked, label)
         elif section == "hist" and isinstance(r.get("x0"), (int, float)) and isinstance(r.get("x1"), (int, float)):
             text = stats.edges_text(r["x0"], r["x1"], False, loc.decimal, loc.group)
         out.append({**r, "text": text, "label": label, "tiny": stats.tiny(r.get("value"), code(locale))})
@@ -171,9 +177,14 @@ def with_labels(model: str, params: Mapping[str, Any] | None, rows: list[dict], 
 
 
 NUMBER_IN_TEXT = re.compile(r"-?\d+(?:\.\d+)?(?:e[-+]?\d+)?")
-# The values of a note that are names (of a column, a stratum, a distribution, a purchase model, a unit), never
-# numbers: a stratum or a column called «2.5» stays «2.5» in every language, as in the tables
-NOTE_NAMES = frozenset({"stratum", "pairs", "cluster", "weights", "names", "distribution", "other", "models", "unit"})
+# The values of a note that are names (of a column, a stratum, a distribution, a purchase model, a unit, a variant of
+# an experiment), never numbers: a stratum or a column called «2.5» stays «2.5» in every language, as in the tables
+NOTE_NAMES = frozenset({"stratum", "pairs", "cluster", "weights", "names", "distribution", "other", "models", "unit",
+                        "variant", "variants", "control", "metric", "covariate", "treatments"})
+# The forms a template may ask a number in, «{x:pct}» (docs/specs/ab-testing.md, «Explaining the method in the report»):
+# only the sentences that ask for one change, so every other report says its numbers as before
+NUMBER_FORMS = ("pct", "spct", "int", "p", "num", "date")
+MINUS = "−"
 
 
 def _decimal(text: str, loc: Any) -> str:
@@ -181,6 +192,44 @@ def _decimal(text: str, loc: Any) -> str:
     if loc.decimal == ".":
         return text
     return re.sub(r"(\d)\.(\d)", lambda m: m.group(1) + loc.decimal + m.group(2), text)
+
+
+def number_form(x: float, form: str, loc: Any) -> str:
+    """A number in one of NUMBER_FORMS, in the language of `loc` (its decimal mark, its thousands' separator, its dates):
+    `pct` a share as a percent, three significant digits and two decimals at most, none it does not need («4.1 %»,
+    «20.6 %», «0.25 %», «< 0.01 %» for a share above zero the two decimals would write 0); `spct` the same with its
+    sign («+4.1 %», «−3.4 %»: a lift); `int` a whole number with the thousands' separator («12,480»); `p` a p-value as
+    the tables write it, four decimals and «< 0.0001» below; `num` four significant digits («41.2», «0.048»), a number of
+    a thousand or more whole with two decimals at most («1,840.5»); `date` a day counted from 1970-01-01 as the language
+    writes a date. A negative number takes the minus sign «−»."""
+    from datetime import date, timedelta
+
+    from app.reports import formats
+
+    def plain(v: float, pattern: str) -> str:
+        said = formats.format_number(abs(v), pattern, loc)
+        return (MINUS + said) if v < 0 and said.strip("0" + loc.decimal + loc.group) else said
+
+    if form == "date":
+        return formats.format_date(date(1970, 1, 1) + timedelta(days=int(round(x))), loc.date, loc)
+    if form == "int":
+        return plain(x, "#,##0")
+    if form == "p":
+        return "< " + formats.format_number(0.0001, "0.0000", loc) if x < 0.0001 else formats.format_number(x, "0.0000", loc)
+    if form == "num":
+        if x == 0 or abs(x) >= 1000:
+            return plain(x, "#,##0.##")
+        decimals = min(10, max(0, 3 - math.floor(math.log10(abs(x)))))
+        return plain(x, "#,##0" + ("." + "#" * decimals if decimals else ""))
+    v = x * 100.0  # pct, spct
+    if v != 0 and abs(v) < 0.005:
+        said = "< " + formats.format_number(0.01, "0.00", loc)
+    elif 99.995 <= abs(v) < 100:  # a probability just under 1 is not 100 %
+        said = "> " + formats.format_number(99.99, "0.00", loc)
+    else:
+        said = formats.format_number(abs(v), "#,##0" if abs(v) >= 100 else "#,##0.#" if 9.995 <= abs(v) < 99 else "#,##0.##", loc)
+    sign = (MINUS if v < 0 else "+" if v > 0 else "") if form == "spct" else (MINUS if v <= -0.005 else "")
+    return f"{sign}{said} %"
 
 
 def structured_note(w: dict, text: str, loc: Any, texts: str = "note_texts") -> str:
@@ -191,7 +240,8 @@ def structured_note(w: dict, text: str, loc: Any, texts: str = "note_texts") -> 
     read from `formula_texts`. A value that is a name (NOTE_NAMES: a stratum, a column, a distribution…) is never
     read as a number: a stratum «2.5» stays «2.5». A value's «%», « » and «,» come encoded (%25, %20, %2C: the survival runner's
     surv_note, so that a stratum «North Side» or «a,b» does not split the note) and are decoded here, after the
-    split on «,»."""
+    split on «,». «{name:pct}» and the other NUMBER_FORMS say a number in that form (number_form); a list of numbers in
+    a form is joined with « / » (a split of the units, «50.1 % / 49.9 %»); a name is never put in a form."""
     head, *rest = text[1:].split(" ")
     said = w.get(texts, {}).get(head)
     if said is None:
@@ -209,12 +259,41 @@ def structured_note(w: dict, text: str, loc: Any, texts: str = "note_texts") -> 
             return _decimal(v, loc)
         return forms[form].get(v, names.get(v, v)) if form else names.get(v, v)
 
+    def shaped(v: str, form: str, name: bool) -> str:
+        v = unquote(v)
+        if name:
+            return names.get(v, v)
+        # a list of numbers sent with its commas encoded («0.5%2C0.5») is a list too: a number holds no comma
+        items = v.split(",")
+        if not all(NUMBER_IN_TEXT.fullmatch(x) for x in items):
+            return names.get(v, v)
+        return " / ".join(number_form(float(x), form, loc) for x in items)
+
     out = said
     for k, v in parts.items():
         for form in ("", *forms):
             out = out.replace("{" + k + (":" + form if form else "") + "}",
                               ", ".join(word(x, form, k in NOTE_NAMES) for x in v.split(",")))
+        for form in NUMBER_FORMS:
+            mark = "{" + k + ":" + form + "}"
+            if mark in out:
+                out = out.replace(mark, " / ".join(shaped(x, form, k in NOTE_NAMES) for x in v.split(",")))
     return out
+
+
+def reading_said(w: dict, block: str | None, text: str, loc: Any, params: Mapping[str, Any], label: str) -> tuple[str, str]:
+    """A row of an experiment's explanation (section `reading`, «@id name=value…», docs/specs/ab-testing.md,
+    «Explaining the method in the report»): the sentence of `reading_texts.<id>` (of `formula_texts.<id>` in the
+    block `formulas`) with its numbers in their forms, and what the row is about as its label — the id's own name
+    (`reading_labels`), else its block's (`reading_blocks`). A sentence may depend on the node's settings, as a
+    check's words do (by_params: «higher_is_better=false»). An id the words do not have stays as the runner wrote it."""
+    kind = "formula_texts" if block == "formulas" else "reading_texts"
+    head = text[1:].split(" ")[0]
+    said = w.get(kind, {}).get(head)
+    if said is None:
+        return text, label
+    sentence = structured_note({**w, kind: {head: by_params(said, params) or ""}}, text, loc, kind)
+    return sentence, w.get("reading_labels", {}).get(head) or w.get("reading_blocks", {}).get(block or "") or label
 
 
 def profile_said(w: dict, text: str, loc: Any) -> str:
