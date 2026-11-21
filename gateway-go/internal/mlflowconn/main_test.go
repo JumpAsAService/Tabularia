@@ -66,3 +66,25 @@ func TestAPrivateAddressOfTheClusterOrTheNetworkIsAllowed(t *testing.T) {
 		}
 	}
 }
+
+// A proxy of the gateway's environment (HTTPS_PROXY, HTTP_PROXY) is not used: through it the dial
+// would be to the proxy's address, the rule would check that one, and the proxy would reach the
+// forbidden address for the gateway. The client calls the tracking server itself, as the SIEM does.
+func TestNoProxyOfTheEnvironmentStandsBetween(t *testing.T) {
+	hit := false
+	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hit = true
+		_, _ = io.WriteString(w, `{"experiments":[]}`)
+	}))
+	defer proxy.Close()
+	t.Setenv("HTTP_PROXY", proxy.URL)
+	t.Setenv("HTTPS_PROXY", proxy.URL)
+	t.Setenv("NO_PROXY", "")
+	if tr, ok := newClient(Config{}).Transport.(*http.Transport); !ok || tr.Proxy != nil {
+		t.Fatal("the client's transport takes a proxy")
+	}
+	res := Test(context.Background(), Config{URI: "http://169.254.169.254/latest", VerifyTLS: true, Timeout: 3 * time.Second})
+	if res.OK || hit {
+		t.Errorf("the metadata address reached through the proxy: %+v, proxy called %v", res, hit)
+	}
+}

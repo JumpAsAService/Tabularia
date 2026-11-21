@@ -253,6 +253,9 @@ func guardedDialer() *net.Dialer {
 
 func newClient(c Config) *http.Client {
 	t := http.DefaultTransport.(*http.Transport).Clone()
+	// no proxy of the gateway's environment (HTTPS_PROXY): the dial would be to the proxy, the
+	// guard would check the proxy's address, and the proxy would reach a forbidden one for us
+	t.Proxy = nil
 	t.DialContext = guardedDialer().DialContext
 	cfg := &tls.Config{MinVersion: tls.VersionTLS12}
 	switch {

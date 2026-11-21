@@ -35,7 +35,9 @@ Tabularia never calls the loopback, a link-local address (the clouds' metadata s
 a multicast or an unspecified address, whatever name leads to it: the check is made on the
 address the name resolves to, at the moment of connecting. A tracking server on a private
 network or in the cluster (`mlflow.mlflow.svc`, `10.x`, `192.168.x`) is the ordinary case and
-is allowed.
+is allowed. The gateway calls the tracking server itself, never through a proxy of its
+environment (`HTTPS_PROXY`, `HTTP_PROXY`): through a proxy the check would see only the
+proxy's address.
 
 ## Test connection
 
