@@ -206,6 +206,7 @@
       "filled_linear": "{count:int} instants without a value were filled by linear interpolation; the output marks them in its column «filled».",
       "filled_seasonal": "{count:int} instants without a value were filled by seasonal interpolation (the pattern plus a linear trend); the output marks them in its column «filled».",
       "strength": "The trend's strength is {trend:num} and the seasonal strength {seasonal:num} (period {period:int}), on a scale from 0, when the part varies no more than the remainder, to 1, when the remainder is negligible beside it.",
+      "strength_trend": "The trend's strength is {trend:num}, on a scale from 0, when the residue varies no more than the remainder (the IMFs read as noise), to 1, when the remainder is negligible beside it; with no seasonal period there is no seasonal strength.",
       "strength_not_computed": "The strengths of the trend and of the patterns are not computed: EMD separates no noise unless you say how many of the fastest IMFs are noise (noise_imfs).",
       "seasonality_supported": {
         "seasonality_test=kruskal_wallis": "A seasonal pattern of period {period} is supported: if the positions of the cycle did not differ, values this unequal from one position to another would appear by chance with probability {p_value:p}, below α = {alpha:num} (Kruskal–Wallis test on {cycles:int} complete cycles).",
@@ -254,6 +255,7 @@
         "": "IMF {imf} repeats about every {mean_period:num} steps."
       },
       "imfs_cut": "{max_imf:int} IMFs were not enough: the residue still turns {extrema:int} times, so slower oscillations are in it; raise max_imf.",
+      "imfs_cut_most": "A series of {n:int} values gives at most {most:int} IMFs: the residue still turns {extrema:int} times, so slower oscillations are in it, which only a longer series can separate.",
       "imfs_empty": "The output's columns imf_{first} to imf_{last} are empty: the series holds no further oscillation.",
       "robust_weights": "{count:int} instants received weight 0 in the robust fit: the trend and the patterns ignore them, and they stay whole in the remainder.",
       "method_stl": "STL (Seasonal-Trend decomposition by Loess; Cleveland, Cleveland, McRae and Terpenning 1990) estimates the seasonal pattern and the trend in turn with local regressions (loess). First the values at each position of the cycle are smoothed across the cycles: the seasonal window says how fast the pattern may change from one cycle to the next. Then what is left is smoothed in time: the trend window says how stiff the trend is. With the robust option the passes are repeated, each value weighed less when its remainder is large, so that a few outliers do not bend the trend or the pattern.",
@@ -277,6 +279,9 @@
       "stationarity_kpss_only_kpss_above": "Neither test rejects its hypothesis at α = {alpha:num}: ADF keeps a unit root (p-value {p_adf:p}) and KPSS keeps stationarity (p-value ≥ 0.10). The remainder is too short or too noisy for them to tell: read its chart.",
       "stationarity_adf_only_kpss_below": "ADF rejects a unit root (p-value {p_adf:p}), but KPSS rejects stationarity too (p-value ≤ 0.01), at α = {alpha:num}: the remainder moves around a level that drifts, a sign that the trend window is too wide.",
       "stationarity_neither_kpss_below": "ADF does not reject a unit root (p-value {p_adf:p}) and KPSS rejects stationarity (p-value ≤ 0.01), at α = {alpha:num}: the remainder wanders like a random walk, a slow movement the trend did not take; try a narrower trend window."
+    },
+    "note_texts": {
+      "window_made_odd": "A window of {given:num} steps was used as {used:int}: the loess windows are odd whole numbers of steps, so a window is taken to the next odd whole number."
     },
     "formula_texts": {
       "formula_stl": "Inner loop, repeated: S = loess across the cycles of y − T at each position (seasonal window), its slow part taken away by a low-pass filter; T = loess in time of y − S (trend window). Robust outer loop: weight ρ_t = B(|R_t| / (6 · median |R|)), B(u) = (1 − u²)² for u < 1, else 0;  R = y − T − S",
@@ -302,6 +307,7 @@
       "filled_linear",
       "filled_seasonal",
       "strength",
+      "strength_trend",
       "strength_not_computed",
       "season_shape",
       "season_shape_ratio",
@@ -554,7 +560,10 @@
       "residue_monotonic": {
         "name": "Residue without oscillation",
         "h0": "The residue has at most one extremum.",
-        "advice": "max_imf IMFs were not enough: the residue still oscillates; raise max_imf."
+        "advice": {
+          "emd_most_imfs": "A series of this length gives no more IMFs (libeemd's limit, the whole part of log₂ n, minus 1): the residue still oscillates; only a longer series separates its slower oscillations.",
+          "": "max_imf IMFs were not enough: the residue still oscillates; raise max_imf."
+        }
       },
       "trend_strength": {
         "name": "Trend strength F_T"
@@ -806,6 +815,7 @@
       "filled_linear": "{count:int} istanti senza valore sono stati riempiti per interpolazione lineare; l'output li segna nella sua colonna «filled».",
       "filled_seasonal": "{count:int} istanti senza valore sono stati riempiti per interpolazione stagionale (l'andamento più un trend lineare); l'output li segna nella sua colonna «filled».",
       "strength": "La forza del trend è {trend:num} e la forza stagionale {seasonal:num} (periodo {period:int}), su una scala da 0, quando la parte non varia più della componente residua, a 1, quando la componente residua è trascurabile al suo confronto.",
+      "strength_trend": "La forza del trend è {trend:num}, su una scala da 0, quando la tendenza residua non varia più della componente residua (le IMF lette come rumore), a 1, quando la componente residua è trascurabile al suo confronto; senza un periodo stagionale non c'è una forza stagionale.",
       "strength_not_computed": "Le forze del trend e degli andamenti non sono calcolate: EMD non separa alcun rumore se non dite quante delle IMF più rapide sono rumore (noise_imfs).",
       "seasonality_supported": {
         "seasonality_test=kruskal_wallis": "Un andamento stagionale di periodo {period} è sostenuto dal test: se le posizioni del ciclo non differissero, valori così diversi da una posizione all'altra comparirebbero per caso con probabilità {p_value:p}, sotto α = {alpha:num} (test di Kruskal–Wallis su {cycles:int} cicli completi).",
@@ -854,6 +864,7 @@
         "": "La IMF {imf} si ripete all'incirca ogni {mean_period:num} passi."
       },
       "imfs_cut": "{max_imf:int} IMF non sono bastate: la tendenza residua cambia ancora direzione {extrema:int} volte, quindi contiene oscillazioni più lente; alzate max_imf.",
+      "imfs_cut_most": "Una serie di {n:int} valori dà al più {most:int} IMF: la tendenza residua cambia ancora direzione {extrema:int} volte, quindi contiene oscillazioni più lente, che solo una serie più lunga può separare.",
       "imfs_empty": "Le colonne da imf_{first} a imf_{last} dell'output sono vuote: la serie non contiene altre oscillazioni.",
       "robust_weights": "{count:int} istanti hanno ricevuto peso 0 nella stima robusta: il trend e gli andamenti li ignorano, e restano interi nella componente residua.",
       "method_stl": "STL (Seasonal-Trend decomposition by Loess; Cleveland, Cleveland, McRae e Terpenning 1990) stima a turno l'andamento stagionale e il trend con regressioni locali (loess). Prima i valori di ciascuna posizione del ciclo sono lisciati attraverso i cicli: la finestra stagionale dice quanto in fretta l'andamento può cambiare da un ciclo all'altro. Poi ciò che rimane è lisciato nel tempo: la finestra del trend dice quanto il trend è rigido. Con l'opzione robusta i passaggi si ripetono, e ogni valore pesa meno quando la sua componente residua è grande, così pochi valori anomali non piegano il trend o l'andamento.",
@@ -877,6 +888,9 @@
       "stationarity_kpss_only_kpss_above": "Nessuno dei due test rifiuta la sua ipotesi ad α = {alpha:num}: l'ADF non esclude la radice unitaria (p-value {p_adf:p}) e il KPSS non esclude la stazionarietà (p-value ≥ 0,10). La componente residua è troppo corta o troppo rumorosa perché lo dicano: leggete il suo grafico.",
       "stationarity_adf_only_kpss_below": "L'ADF rifiuta la radice unitaria (p-value {p_adf:p}), ma anche il KPSS rifiuta la stazionarietà (p-value ≤ 0,01), ad α = {alpha:num}: la componente residua si muove attorno a un livello che deriva, segno che la finestra del trend è troppo larga.",
       "stationarity_neither_kpss_below": "L'ADF non rifiuta la radice unitaria (p-value {p_adf:p}) e il KPSS rifiuta la stazionarietà (p-value ≤ 0,01), ad α = {alpha:num}: la componente residua vaga come una passeggiata casuale, un movimento lento che il trend non ha preso; provate una finestra del trend più stretta."
+    },
+    "note_texts": {
+      "window_made_odd": "Una finestra di {given:num} passi è stata usata come {used:int}: le finestre del loess sono numeri interi dispari di passi, quindi una finestra passa al numero intero dispari successivo."
     },
     "formula_texts": {
       "formula_stl": "Ciclo interno, ripetuto: S = loess attraverso i cicli di y − T in ogni posizione (finestra stagionale), tolta la sua parte lenta con un filtro passa-basso; T = loess nel tempo di y − S (finestra del trend). Ciclo esterno robusto: peso ρ_t = B(|R_t| / (6 · mediana |R|)), B(u) = (1 − u²)² per u < 1, altrimenti 0;  R = y − T − S",
@@ -902,6 +916,7 @@
       "filled_linear",
       "filled_seasonal",
       "strength",
+      "strength_trend",
       "strength_not_computed",
       "season_shape",
       "season_shape_ratio",
@@ -1152,7 +1167,10 @@
       "residue_monotonic": {
         "name": "Tendenza residua senza oscillazioni",
         "h0": "La tendenza residua ha al più un estremo.",
-        "advice": "max_imf IMF non sono bastate: la tendenza residua oscilla ancora; alzate max_imf."
+        "advice": {
+          "emd_most_imfs": "Una serie di questa lunghezza non dà altre IMF (il limite di libeemd, la parte intera di log₂ n, meno 1): la tendenza residua oscilla ancora; solo una serie più lunga ne separa le oscillazioni più lente.",
+          "": "max_imf IMF non sono bastate: la tendenza residua oscilla ancora; alzate max_imf."
+        }
       },
       "trend_strength": {
         "name": "Forza del trend F_T"
@@ -1404,6 +1422,7 @@
       "filled_linear": "{count:int} Zeitpunkte ohne Wert wurden durch lineare Interpolation gefüllt; die Ausgabe markiert sie in ihrer Spalte «filled».",
       "filled_seasonal": "{count:int} Zeitpunkte ohne Wert wurden durch saisonale Interpolation gefüllt (das Muster plus ein linearer Trend); die Ausgabe markiert sie in ihrer Spalte «filled».",
       "strength": "Die Trendstärke ist {trend:num} und die Saisonstärke {seasonal:num} (Periode {period:int}), auf einer Skala von 0, wenn der Teil nicht mehr schwankt als die Restkomponente, bis 1, wenn die Restkomponente neben ihm vernachlässigbar ist.",
+      "strength_trend": "Die Trendstärke ist {trend:num}, auf einer Skala von 0, wenn der Residualtrend nicht mehr schwankt als die Restkomponente (die als Rauschen gelesenen IMFs), bis 1, wenn die Restkomponente neben ihm vernachlässigbar ist; ohne Saisonperiode gibt es keine Saisonstärke.",
       "strength_not_computed": "Die Stärken von Trend und Mustern sind nicht berechnet: EMD trennt kein Rauschen ab, solange Sie nicht angeben, wie viele der schnellsten IMFs Rauschen sind (noise_imfs).",
       "seasonality_supported": {
         "seasonality_test=kruskal_wallis": "Ein Saisonmuster der Periode {period} wird vom Test gestützt: Wenn sich die Positionen des Zyklus nicht unterschieden, träten so ungleiche Werte von Position zu Position mit Wahrscheinlichkeit {p_value:p} zufällig auf, unter α = {alpha:num} (Kruskal–Wallis-Test auf {cycles:int} vollständigen Zyklen).",
@@ -1452,6 +1471,7 @@
         "": "IMF {imf} wiederholt sich etwa alle {mean_period:num} Schritte."
       },
       "imfs_cut": "{max_imf:int} IMFs haben nicht ausgereicht: Der Residualtrend wechselt noch {extrema:int}-mal die Richtung, enthält also langsamere Schwingungen; erhöhen Sie max_imf.",
+      "imfs_cut_most": "Eine Reihe von {n:int} Werten ergibt höchstens {most:int} IMFs: Der Residualtrend wechselt noch {extrema:int}-mal die Richtung, enthält also langsamere Schwingungen, die nur eine längere Reihe trennen kann.",
       "imfs_empty": "Die Spalten imf_{first} bis imf_{last} der Ausgabe sind leer: Die Reihe enthält keine weitere Schwingung.",
       "robust_weights": "{count:int} Zeitpunkte erhielten in der robusten Schätzung das Gewicht 0: Trend und Muster übergehen sie, und sie bleiben ganz in der Restkomponente.",
       "method_stl": "STL (Seasonal-Trend decomposition by Loess; Cleveland, Cleveland, McRae und Terpenning 1990) schätzt Saisonmuster und Trend abwechselnd mit lokalen Regressionen (Loess). Zuerst werden die Werte jeder Position des Zyklus über die Zyklen geglättet: Das Saisonfenster sagt, wie schnell sich das Muster von Zyklus zu Zyklus ändern darf. Dann wird das Übrige in der Zeit geglättet: Das Trendfenster sagt, wie steif der Trend ist. Mit der Option robust werden die Durchläufe wiederholt und jeder Wert wird geringer gewichtet, wenn sein Rest groß ist, damit wenige Ausreißer Trend oder Muster nicht verbiegen.",
@@ -1475,6 +1495,9 @@
       "stationarity_kpss_only_kpss_above": "Keiner der beiden Tests verwirft seine Hypothese bei α = {alpha:num}: ADF behält die Einheitswurzel (p-Wert {p_adf:p}) und KPSS die Stationarität (p-Wert ≥ 0,10). Die Restkomponente ist zu kurz oder zu verrauscht, als dass sie es sagen könnten: Lesen Sie ihr Diagramm.",
       "stationarity_adf_only_kpss_below": "ADF verwirft eine Einheitswurzel (p-Wert {p_adf:p}), aber auch KPSS verwirft die Stationarität (p-Wert ≤ 0,01), bei α = {alpha:num}: Die Restkomponente bewegt sich um ein driftendes Niveau, ein Zeichen, dass das Trendfenster zu breit ist.",
       "stationarity_neither_kpss_below": "ADF verwirft keine Einheitswurzel (p-Wert {p_adf:p}) und KPSS verwirft die Stationarität (p-Wert ≤ 0,01), bei α = {alpha:num}: Die Restkomponente wandert wie ein Random Walk, eine langsame Bewegung, die der Trend nicht aufgenommen hat; versuchen Sie ein schmaleres Trendfenster."
+    },
+    "note_texts": {
+      "window_made_odd": "Ein Fenster von {given:num} Schritten wurde als {used:int} verwendet: Die Loess-Fenster sind ungerade ganze Zahlen von Schritten, daher wird ein Fenster auf die nächste ungerade ganze Zahl gebracht."
     },
     "formula_texts": {
       "formula_stl": "Innere Schleife, wiederholt: S = Loess über die Zyklen von y − T an jeder Position (Saisonfenster), sein langsamer Teil durch einen Tiefpassfilter entfernt; T = Loess in der Zeit von y − S (Trendfenster). Robuste äußere Schleife: Gewicht ρ_t = B(|R_t| / (6 · Median |R|)), B(u) = (1 − u²)² für u < 1, sonst 0;  R = y − T − S",
@@ -1500,6 +1523,7 @@
       "filled_linear",
       "filled_seasonal",
       "strength",
+      "strength_trend",
       "strength_not_computed",
       "season_shape",
       "season_shape_ratio",
@@ -1748,7 +1772,10 @@
       "residue_monotonic": {
         "name": "Residualtrend ohne Schwingung",
         "h0": "Der Residualtrend hat höchstens ein Extremum.",
-        "advice": "max_imf IMFs haben nicht ausgereicht: Der Residualtrend schwingt noch; erhöhen Sie max_imf."
+        "advice": {
+          "emd_most_imfs": "Eine Reihe dieser Länge ergibt keine weiteren IMFs (die Grenze von libeemd, der ganze Teil von log₂ n, minus 1): Der Residualtrend schwingt noch; nur eine längere Reihe trennt seine langsameren Schwingungen.",
+          "": "max_imf IMFs haben nicht ausgereicht: Der Residualtrend schwingt noch; erhöhen Sie max_imf."
+        }
       },
       "trend_strength": {
         "name": "Trendstärke F_T"
@@ -2000,6 +2027,7 @@
       "filled_linear": "{count:int} instantes sin valor se rellenaron por interpolación lineal; la salida los marca en su columna «filled».",
       "filled_seasonal": "{count:int} instantes sin valor se rellenaron por interpolación estacional (el patrón más una tendencia lineal); la salida los marca en su columna «filled».",
       "strength": "La fuerza de la tendencia es {trend:num} y la fuerza estacional {seasonal:num} (periodo {period:int}), en una escala de 0, cuando la parte no varía más que la componente residual, a 1, cuando la componente residual es despreciable a su lado.",
+      "strength_trend": "La fuerza de la tendencia es {trend:num}, en una escala de 0, cuando la tendencia residual no varía más que la componente residual (las IMF leídas como ruido), a 1, cuando la componente residual es despreciable a su lado; sin un periodo estacional no hay fuerza estacional.",
       "strength_not_computed": "Las fuerzas de la tendencia y de los patrones no se calculan: EMD no separa ningún ruido si no indica cuántas de las IMF más rápidas son ruido (noise_imfs).",
       "seasonality_supported": {
         "seasonality_test=kruskal_wallis": "La prueba respalda un patrón estacional de periodo {period}: si las posiciones del ciclo no difirieran, valores tan desiguales de una posición a otra aparecerían por azar con probabilidad {p_value:p}, por debajo de α = {alpha:num} (prueba de Kruskal–Wallis sobre {cycles:int} ciclos completos).",
@@ -2048,6 +2076,7 @@
         "": "La IMF {imf} se repite aproximadamente cada {mean_period:num} pasos."
       },
       "imfs_cut": "{max_imf:int} IMF no fueron suficientes: la tendencia residual aún cambia de dirección {extrema:int} veces, así que contiene oscilaciones más lentas; aumente max_imf.",
+      "imfs_cut_most": "Una serie de {n:int} valores da como mucho {most:int} IMF: la tendencia residual aún cambia de dirección {extrema:int} veces, así que contiene oscilaciones más lentas, que solo una serie más larga puede separar.",
       "imfs_empty": "Las columnas imf_{first} a imf_{last} de la salida están vacías: la serie no contiene más oscilaciones.",
       "robust_weights": "{count:int} instantes recibieron peso 0 en el ajuste robusto: la tendencia y los patrones los ignoran, y quedan enteros en la componente residual.",
       "method_stl": "STL (Seasonal-Trend decomposition by Loess; Cleveland, Cleveland, McRae y Terpenning 1990) estima por turnos el patrón estacional y la tendencia con regresiones locales (loess). Primero se suavizan los valores de cada posición del ciclo a través de los ciclos: la ventana estacional dice cuán rápido puede cambiar el patrón de un ciclo al siguiente. Después se suaviza en el tiempo lo que queda: la ventana de la tendencia dice cuán rígida es la tendencia. Con la opción robusta las pasadas se repiten y cada valor pesa menos cuando su residuo es grande, para que unos pocos valores atípicos no doblen la tendencia ni el patrón.",
@@ -2071,6 +2100,9 @@
       "stationarity_kpss_only_kpss_above": "Ninguna de las dos pruebas rechaza su hipótesis con α = {alpha:num}: ADF mantiene la raíz unitaria (p-valor {p_adf:p}) y KPSS la estacionariedad (p-valor ≥ 0,10). La componente residual es demasiado corta o ruidosa para que lo distingan: lea su gráfico.",
       "stationarity_adf_only_kpss_below": "ADF rechaza una raíz unitaria (p-valor {p_adf:p}), pero KPSS también rechaza la estacionariedad (p-valor ≤ 0,01), con α = {alpha:num}: la componente residual se mueve en torno a un nivel que deriva, señal de que la ventana de la tendencia es demasiado ancha.",
       "stationarity_neither_kpss_below": "ADF no rechaza una raíz unitaria (p-valor {p_adf:p}) y KPSS rechaza la estacionariedad (p-valor ≤ 0,01), con α = {alpha:num}: la componente residual vaga como un paseo aleatorio, un movimiento lento que la tendencia no recogió; pruebe una ventana de la tendencia más estrecha."
+    },
+    "note_texts": {
+      "window_made_odd": "Una ventana de {given:num} pasos se usó como {used:int}: las ventanas del loess son números enteros impares de pasos, así que una ventana pasa al siguiente número entero impar."
     },
     "formula_texts": {
       "formula_stl": "Bucle interno, repetido: S = loess a través de los ciclos de y − T en cada posición (ventana estacional), quitada su parte lenta con un filtro paso bajo; T = loess en el tiempo de y − S (ventana de la tendencia). Bucle externo robusto: peso ρ_t = B(|R_t| / (6 · mediana |R|)), B(u) = (1 − u²)² para u < 1, si no 0;  R = y − T − S",
@@ -2096,6 +2128,7 @@
       "filled_linear",
       "filled_seasonal",
       "strength",
+      "strength_trend",
       "strength_not_computed",
       "season_shape",
       "season_shape_ratio",
@@ -2345,7 +2378,10 @@
       "residue_monotonic": {
         "name": "Tendencia residual sin oscilación",
         "h0": "La tendencia residual tiene a lo sumo un extremo.",
-        "advice": "max_imf IMF no fueron suficientes: la tendencia residual aún oscila; aumente max_imf."
+        "advice": {
+          "emd_most_imfs": "Una serie de esta longitud no da más IMF (el límite de libeemd, la parte entera de log₂ n, menos 1): la tendencia residual aún oscila; solo una serie más larga separa sus oscilaciones más lentas.",
+          "": "max_imf IMF no fueron suficientes: la tendencia residual aún oscila; aumente max_imf."
+        }
       },
       "trend_strength": {
         "name": "Fuerza de la tendencia F_T"
@@ -2597,6 +2633,7 @@
       "filled_linear": "{count:int} instants sans valeur ont été complétés par interpolation linéaire ; la sortie les marque dans sa colonne «filled».",
       "filled_seasonal": "{count:int} instants sans valeur ont été complétés par interpolation saisonnière (le motif plus une tendance linéaire) ; la sortie les marque dans sa colonne «filled».",
       "strength": "La force de la tendance est {trend:num} et la force saisonnière {seasonal:num} (période {period:int}), sur une échelle de 0, quand la partie ne varie pas plus que la composante résiduelle, à 1, quand la composante résiduelle est négligeable à côté d'elle.",
+      "strength_trend": "La force de la tendance est {trend:num}, sur une échelle de 0, quand la tendance résiduelle ne varie pas plus que la composante résiduelle (les IMF lues comme bruit), à 1, quand la composante résiduelle est négligeable à côté d'elle ; sans période saisonnière il n'y a pas de force saisonnière.",
       "strength_not_computed": "Les forces de la tendance et des motifs ne sont pas calculées : EMD ne sépare aucun bruit tant que vous ne dites pas combien des IMF les plus rapides sont du bruit (noise_imfs).",
       "seasonality_supported": {
         "seasonality_test=kruskal_wallis": "Un motif saisonnier de période {period} est étayé par le test : si les positions du cycle ne différaient pas, des valeurs aussi inégales d'une position à l'autre apparaîtraient par hasard avec une probabilité de {p_value:p}, sous α = {alpha:num} (test de Kruskal–Wallis sur {cycles:int} cycles complets).",
@@ -2645,6 +2682,7 @@
         "": "L'IMF {imf} se répète environ tous les {mean_period:num} pas."
       },
       "imfs_cut": "{max_imf:int} IMF n'ont pas suffi : la tendance résiduelle change encore {extrema:int} fois de sens, elle contient donc des oscillations plus lentes ; augmentez max_imf.",
+      "imfs_cut_most": "Une série de {n:int} valeurs donne au plus {most:int} IMF : la tendance résiduelle change encore {extrema:int} fois de sens, elle contient donc des oscillations plus lentes, que seule une série plus longue peut séparer.",
       "imfs_empty": "Les colonnes imf_{first} à imf_{last} de la sortie sont vides : la série ne contient pas d'autre oscillation.",
       "robust_weights": "{count:int} instants ont reçu le poids 0 dans l'ajustement robuste : la tendance et les motifs les ignorent, et ils restent entiers dans la composante résiduelle.",
       "method_stl": "STL (Seasonal-Trend decomposition by Loess ; Cleveland, Cleveland, McRae et Terpenning 1990) estime tour à tour le motif saisonnier et la tendance par des régressions locales (loess). D'abord les valeurs de chaque position du cycle sont lissées à travers les cycles : la fenêtre saisonnière dit à quelle vitesse le motif peut changer d'un cycle à l'autre. Puis ce qui reste est lissé dans le temps : la fenêtre de la tendance dit à quel point la tendance est rigide. Avec l'option robuste les passes sont répétées et chaque valeur pèse moins quand son résidu est grand, afin que quelques valeurs aberrantes ne plient ni la tendance ni le motif.",
@@ -2668,6 +2706,9 @@
       "stationarity_kpss_only_kpss_above": "Aucun des deux tests ne rejette son hypothèse au seuil α = {alpha:num} : ADF garde la racine unitaire (p-valeur {p_adf:p}) et KPSS la stationnarité (p-valeur ≥ 0,10). La composante résiduelle est trop courte ou trop bruitée pour qu'ils tranchent : lisez son graphique.",
       "stationarity_adf_only_kpss_below": "ADF rejette une racine unitaire (p-valeur {p_adf:p}), mais KPSS rejette aussi la stationnarité (p-valeur ≤ 0,01), au seuil α = {alpha:num} : la composante résiduelle se déplace autour d'un niveau qui dérive, signe que la fenêtre de la tendance est trop large.",
       "stationarity_neither_kpss_below": "ADF ne rejette pas une racine unitaire (p-valeur {p_adf:p}) et KPSS rejette la stationnarité (p-valeur ≤ 0,01), au seuil α = {alpha:num} : la composante résiduelle erre comme une marche aléatoire, un mouvement lent que la tendance n'a pas pris ; essayez une fenêtre de la tendance plus étroite."
+    },
+    "note_texts": {
+      "window_made_odd": "Une fenêtre de {given:num} pas a été utilisée comme {used:int} : les fenêtres du loess sont des nombres entiers impairs de pas, une fenêtre passe donc au nombre entier impair suivant."
     },
     "formula_texts": {
       "formula_stl": "Boucle interne, répétée : S = loess à travers les cycles de y − T à chaque position (fenêtre saisonnière), sa partie lente retirée par un filtre passe-bas ; T = loess dans le temps de y − S (fenêtre de la tendance). Boucle externe robuste : poids ρ_t = B(|R_t| / (6 · médiane |R|)), B(u) = (1 − u²)² pour u < 1, sinon 0 ;  R = y − T − S",
@@ -2693,6 +2734,7 @@
       "filled_linear",
       "filled_seasonal",
       "strength",
+      "strength_trend",
       "strength_not_computed",
       "season_shape",
       "season_shape_ratio",
@@ -2941,7 +2983,10 @@
       "residue_monotonic": {
         "name": "Tendance résiduelle sans oscillation",
         "h0": "La tendance résiduelle a au plus un extremum.",
-        "advice": "max_imf IMF n'ont pas suffi : la tendance résiduelle oscille encore ; augmentez max_imf."
+        "advice": {
+          "emd_most_imfs": "Une série de cette longueur ne donne pas d'autres IMF (la limite de libeemd, la partie entière de log₂ n, moins 1) : la tendance résiduelle oscille encore ; seule une série plus longue sépare ses oscillations plus lentes.",
+          "": "max_imf IMF n'ont pas suffi : la tendance résiduelle oscille encore ; augmentez max_imf."
+        }
       },
       "trend_strength": {
         "name": "Force de la tendance F_T"

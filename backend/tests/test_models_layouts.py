@@ -1231,12 +1231,12 @@ DECOMPOSITION_CASES = [c for c in CASES if c.startswith("decomposition-")]
 # every template id the runner may write (the spec's «Explaining the method in the report» and D4's «As built»)
 DECOMPOSITION_READINGS = (
     "summary_stl", "summary_classical", "summary_mstl", "summary_emd", "transform_log", "transform_box_cox", "filled_linear",
-    "filled_seasonal", "strength", "strength_not_computed", "seasonality_supported", "seasonality_not_supported",
+    "filled_seasonal", "strength", "strength_trend", "strength_not_computed", "seasonality_supported", "seasonality_not_supported",
     "seasonality_not_computed", "season_shape", "season_shape_ratio", "remainder_white", "remainder_structure", "remainder_large_n",
     "remainder_not_computed_emd", "stationarity_both_ok", "stationarity_adf_only", "stationarity_kpss_only", "stationarity_neither",
     "stationarity_both_ok_kpss_above", "stationarity_kpss_only_kpss_above", "stationarity_adf_only_kpss_below",
     "stationarity_neither_kpss_below",
-    "kpss_table_end", "imfs_found", "imf_mode", "imfs_cut", "imfs_empty", "robust_weights", "method_stl", "method_classical",
+    "kpss_table_end", "imfs_found", "imf_mode", "imfs_cut", "imfs_cut_most", "imfs_empty", "robust_weights", "method_stl", "method_classical",
     "method_mstl", "method_emd", "method_transform", "method_filled", "method_seasonality", "method_strength", "method_remainder",
     "method_stationarity")
 DECOMPOSITION_FORMULAS = ("formula_stl", "formula_classical", "formula_mstl", "formula_emd", "formula_box_cox", "formula_strength",
@@ -1371,6 +1371,19 @@ def test_an_emd_decomposition_draws_its_oscillations_with_their_table_and_its_ti
     assert body["imf_1_steps"]["options"]["x_time"] is False and body["imf_1"]["options"]["x_time"] is True
     _, page = draw(tmp_path, chart_service, monkeypatch, "decomposition-emd", fmt="svg")
     said = set(strings(json.loads(page)))
+    # the residue still oscillating: max_imf's limit or the series' own (libeemd's, D3's advice_id emd_most_imfs)
+    for advice_id, starts in (("residue_monotonic_failed", "max_imf IMFs were not enough"), ("emd_most_imfs", "A series of this length")):
+        cut = [{**r, "text": "failed"} if r["key"] == "assumption|residue_monotonic||verdict" else r for r in rows]
+        cut += [{**rows[0], "section": "assumption", "level": "residue_monotonic", "level_2": None, "stat": stat, "value": None,
+                 "text": text, "key": f"assumption|residue_monotonic||{stat}"} for stat, text in (("advice", "x"), ("advice_id", advice_id))]
+        [advice] = [r["text"] for r in layouts.with_labels(model, params, cut, "en") if r["key"] == "assumption|residue_monotonic||advice"]
+        assert advice.startswith(starts), advice
+    lines = [{**rows[0], "section": "reading", "level": "strength", "level_2": None, "stat": "line_1", "value": None,
+              "text": "@strength_trend trend=0.7287", "key": "reading|strength||line_1"},
+             {**rows[0], "section": "reading", "level": "imfs", "level_2": None, "stat": "line_9", "value": None,
+              "text": "@imfs_cut_most n=64 most=4 extrema=3", "key": "reading|imfs||line_9"}]
+    read = [r["text"] for r in layouts.with_labels(model, params, lines, "it")]
+    assert read[0].startswith("La forza del trend è 0,7287, su una scala da 0") and read[1].startswith("Una serie di 64 valori dà al più 4 IMF")
     assert {"Oscillations (EMD)", "IMF 1", "IMF 3", "Residue", "Largest oscillation", "65.1 %", "of the variance, IMF 3"} <= said, \
         sorted(said)
     assert any(s.startswith("Reading: EMD found 3 oscillations (IMFs) of the 10 allowed") and "IMF 3 repeats about every 21.33 steps." in s
@@ -1389,3 +1402,15 @@ def test_the_decomposition_s_last_pages_explain_the_method_and_excel_keeps_the_c
     assert {"Checks of the decomposition", "Measures, not tests", "The seasonal patterns", "Mean pattern by position",
             "Reading of the seasonal pattern", "Checks of the remainder", "Reading"} <= set(sheets), sheets
 
+
+
+@pytest.mark.parametrize("locale", LOCALES)
+def test_a_decomposition_s_note_of_a_window_made_odd_is_a_sentence_with_its_numbers(locale):
+    """decomposition.R's note when an even or fractional window was taken to the next odd whole number (lot D2)."""
+    model, params, rows = fixture("decomposition-stl")
+    note = {**rows[0], "stat": "note_2", "text": "@window_made_odd given=12.5 used=13", "key": "model|||note_2"}
+    [said] = [r["text"] for r in layouts.with_labels(model, params, [*rows, note], locale) if r["stat"] == "note_2"]
+    decimal = formats.locale(locale).decimal
+    assert f"12{decimal}5" in said and "13" in said and not re.search(r"@|\{", said), said
+    w = common.words(model, "stl", locale)
+    assert not any(re.search(r"(?<!\w)" + re.escape(v) + r"(?!\w)", said, re.I) for v in w["verdict_words"]), said

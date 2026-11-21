@@ -147,3 +147,14 @@ TAB_COMMON_TESTS[["timeseries: EMD refuses with a sentence: too short, a constan
   .tab_expect(rows$value[rows$key == "model|||n_imfs"] == 0 && identical(rows$text[rows$key == "assumption|residue_monotonic||verdict"], "ok"),
               "a straight line")
 }
+
+TAB_COMMON_TESTS[["timeseries: EMD's reading says F_T alone without a period, and the series' own limit of IMFs (lot D4)"]] <- function(code) {
+  b <- emd_reading_strength(list(k = 1L, checks = list(trend_strength = list(value = 0.5)), p = NULL))
+  .tab_expect(identical(b$lines, "@strength_trend trend=0.5"), "F_T without a period: ", paste(b$lines, collapse = " | "))
+  d <- list(n_imfs = 4L, cut = TRUE, columns = 5L, most = 4L, residue_extrema = 3L)
+  b <- emd_reading_imfs(list(o = list(max_imf = 10L), s = list(n = 64L), d = d, measures = rep(list(list(mean_period = NA)), 4)))
+  .tab_expect(identical(b$lines, c("@imfs_found n_imfs=4 max_imf=10", "@imfs_cut_most n=64 most=4 extrema=3")),
+              "the series' own limit: ", paste(b$lines, collapse = " | "))
+  b <- emd_reading_imfs(list(o = list(max_imf = 4L), s = list(n = 64L), d = d, measures = rep(list(list(mean_period = NA)), 4)))
+  .tab_expect(identical(b$lines[2], "@imfs_cut max_imf=4 extrema=3"), "max_imf's limit: ", paste(b$lines, collapse = " | "))
+}

@@ -72,12 +72,13 @@ emd_reading_summary <- function(r) {
 }
 
 # The strengths need a remainder (noise_imfs > 0): F_T of the residue, F_S of the oscillations, said with the period
-# the seasonality test reads. Without noise_imfs they are not computed.
+# the seasonality test reads; without a period, F_T alone (strength_trend). Without noise_imfs they are not computed.
 emd_reading_strength <- function(r) {
   if (r$k == 0L) return(.emd_block("strength", list(emd_line("strength_not_computed"))))
   trend <- r$checks$trend_strength$value
   seasonal <- r$checks$seasonal_strength$value
-  if (is.null(seasonal) || is.na(trend) || is.na(seasonal)) return(NULL)
+  if (is.null(trend) || is.na(trend)) return(NULL)
+  if (is.null(seasonal) || is.na(seasonal)) return(.emd_block("strength", list(emd_line("strength_trend", trend = trend))))
   .emd_block("strength", list(emd_line("strength", trend = trend, seasonal = seasonal, period = r$p)))
 }
 
@@ -139,7 +140,9 @@ emd_reading_stationarity <- function(r) {
 emd_reading_imfs <- function(r) {
   d <- r$d
   lines <- list(emd_line("imfs_found", n_imfs = d$n_imfs, max_imf = r$o$max_imf))
-  if (d$cut) {
+  if (d$cut && d$columns - 1L < r$o$max_imf) {  # the series' own limit (libeemd's floor(log2 n) - 1), not max_imf
+    lines <- c(lines, emd_line("imfs_cut_most", n = r$s$n, most = d$most, extrema = d$residue_extrema))
+  } else if (d$cut) {
     lines <- c(lines, emd_line("imfs_cut", max_imf = r$o$max_imf, extrema = d$residue_extrema))
   } else if (d$n_imfs < r$o$max_imf) {
     lines <- c(lines, emd_line("imfs_empty", first = d$n_imfs + 1L, last = r$o$max_imf))
