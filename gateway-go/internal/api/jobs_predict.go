@@ -656,7 +656,9 @@ func (q *queue) runPredict(ctx context.Context, r *scriptNodeRun) (*flowresolver
 			return modelJobManifest(js, name, s.img, merge(base, pyjson.Object{{Key: "TABULARIA_ATTEMPT", Value: fmt.Sprint(attempt)}}),
 				labels, s.timeout, itemList, name+"-code", name+"-env", offline)
 		}
-		ok, refused, reason, err := q.modelAttempts(ctx, r.user, child, &s.modelStep, runID, storage, outKey, true, manifest, codeData, secret, ns, js)
+		// what an attempt writes: never the card or the model file it reads
+		attemptFiles := []string{outKey, artifacts + "run.json", artifacts + "error.json"}
+		ok, refused, reason, err := q.modelAttempts(ctx, r.user, child, &s.modelStep, runID, storage, attemptFiles, manifest, codeData, secret, ns, js)
 		if err != nil {
 			return nil, err
 		}

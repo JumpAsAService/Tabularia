@@ -571,6 +571,46 @@ func TestNoAttemptAfterTheGroupIsDisabledOrTakenAway(t *testing.T) {
 	}
 }
 
+// Between two attempts, what the first wrote goes: its output, its results and its artifacts (an
+// attempt that ends well without writing one of them must not have an earlier one's imported),
+// never its input.
+func TestAnAttemptsFilesGoBeforeTheNext(t *testing.T) {
+	f := newModelRunFixture(t)
+	f.script = []modelAttemptResult{{log: "Killed\n", exit: int64(137), reason: "it ended with exit code 137"}, {ok: true, exit: int64(0)}}
+	if _, err := f.run(f.ann, linearParams, true); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.attempts) != 2 {
+		t.Fatalf("%d attempts", len(f.attempts))
+	}
+	var calls []string
+	for _, c := range f.engine.calls {
+		if strings.HasPrefix(c, "/scripts/") {
+			calls = append(calls, c)
+		}
+	}
+	// the first delete is between the attempts, before any import
+	if len(calls) == 0 || !strings.HasPrefix(calls[0], "/scripts/objects/delete ") {
+		t.Fatalf("the engine was asked: %v", calls)
+	}
+	var body struct {
+		Keys []string `json:"keys"`
+	}
+	if err := json.Unmarshal([]byte(strings.TrimPrefix(calls[0], "/scripts/objects/delete ")), &body); err != nil {
+		t.Fatal(err)
+	}
+	keys := strings.Join(body.Keys, " ")
+	for _, want := range []string{"/output.parquet", "/results.parquet", "/artifacts/model.json", "/artifacts/run.json", "/artifacts/error.json",
+		"/artifacts/native.rds", "/artifacts/MLmodel", "/artifacts/xgboost.json"} {
+		if !strings.Contains(keys, want) {
+			t.Errorf("%s is left for the next attempt: %v", want, body.Keys)
+		}
+	}
+	if strings.Contains(keys, "/input.parquet") {
+		t.Errorf("the input is deleted before the next attempt: %v", body.Keys)
+	}
+}
+
 func TestATimeoutAndAFullQuotaSayWhy(t *testing.T) {
 	f := newModelRunFixture(t)
 	f.script = []modelAttemptResult{{log: "", exit: nil, reason: "it ran longer than its timeout (600 s)"}}
