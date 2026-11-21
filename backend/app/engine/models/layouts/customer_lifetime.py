@@ -195,7 +195,7 @@ def _p_alive(p: stats.Page, w: dict) -> None:
     f = '[section] = "cell" AND [stat] = "p_alive"'
     cell = c.Chart("p_alive_cell", "heatmap", ch["p_alive_cell"], {
         "filter": f, "category": "[level_2]", "split_by": "[level]", "series": [{"value": "SUM([value])", "name": s["p_alive"]}],
-        "options": {"labels": True, "format": "0.00", "min": 0, "max": 1}, "visible": c.exists(f)}, caption=how,
+        "options": {"labels": True, "format": "0.00", "fixed_scale": [0, 1]}, "visible": c.exists(f)}, caption=how,
         measured=w["p_alive_how"].replace("{age}", "999.9").replace("{unit}", max(w["values"]["time_unit_dative"].values(), key=len)))
     curves = c.xy("p_alive_recency", ch["p_alive_recency"], '[section] = "curve" AND [level] = "p_alive_recency"',
                   [{"value": "[value]", "as": "line", "name": ""}], {"min": 0, "max": 1, "legend": True, "format": "0.##"},

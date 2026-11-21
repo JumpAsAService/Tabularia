@@ -568,16 +568,16 @@ def test_a_heatmap_s_scale_says_its_lowest_and_highest_value():
     assert (o["visualMap"]["min"], o["visualMap"]["max"]) == (1.0, 30.0)  # no min or max: the data's own ends
 
 
-def test_a_heatmap_with_a_min_and_a_max_has_a_fixed_scale_whatever_its_values():
-    """A probability's map runs from 0 to 1 even when its cells run from 0.3 to 0.9; a bound that is not set stays the data's."""
+def test_a_heatmap_with_a_fixed_scale_keeps_it_whatever_its_values():
+    """A probability's map runs from 0 to 1 even when its cells run from 0.3 to 0.9 (`fixed_scale`, set by the
+    engine's layouts). A `min` and a `max` left from a gauge the chart was before (the designer hides them for a
+    heatmap) change nothing: the colours follow the data."""
     rows = [{"region": r, "kind": k, "amount": v} for r, k, v in (("N", "x", 0.3), ("N", "y", 0.9), ("S", "x", 0.5), ("S", "y", 0.6))]
-    both = _chart("heatmap", rows, split_by="[kind]", options={"format": "0.##", "min": 0, "max": 1})
-    assert both["visualMap"]["text"] == ["1", "0"] and (both["visualMap"]["min"], both["visualMap"]["max"]) == (0, 1)
-    assert sorted(c["value"][2] for c in both["series"][0]["data"]) == [0.3, 0.5, 0.6, 0.9]  # the cells are the data's
-    only_max = _chart("heatmap", rows, split_by="[kind]", options={"format": "0.##", "max": 1})
-    assert (only_max["visualMap"]["min"], only_max["visualMap"]["max"]) == (0.3, 1)
-    only_min = _chart("heatmap", rows, split_by="[kind]", options={"format": "0.##", "min": 0})
-    assert (only_min["visualMap"]["min"], only_min["visualMap"]["max"]) == (0, 0.9)
+    fixed = _chart("heatmap", rows, split_by="[kind]", options={"format": "0.##", "fixed_scale": [0, 1]})
+    assert fixed["visualMap"]["text"] == ["1", "0"] and (fixed["visualMap"]["min"], fixed["visualMap"]["max"]) == (0, 1)
+    assert sorted(c["value"][2] for c in fixed["series"][0]["data"]) == [0.3, 0.5, 0.6, 0.9]  # the cells are the data's
+    left = _chart("heatmap", rows, split_by="[kind]", options={"format": "0.##", "min": 0, "max": 100})
+    assert left["visualMap"]["text"] == ["0.9", "0.3"] and (left["visualMap"]["min"], left["visualMap"]["max"]) == (0.3, 0.9)
 
 
 # the long table of a hypothesis test, as the three kinds below read it: a number a row

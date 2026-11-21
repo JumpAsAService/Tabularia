@@ -381,10 +381,8 @@ def _option(data: ChartData, it: rd.ChartItem, theme: rd.Theme, loc: formats.Loc
                     cells.append({"value": [xi, yi, v], "t": t})
                     values.append(v)
         lo, hi = (min(values), max(values)) if values else (0, 1)
-        if o.min is not None:  # a fixed scale, as a probability's from 0 to 1: the colours do not follow the data's own ends
-            lo = o.min
-        if o.max is not None:
-            hi = o.max
+        if o.fixed_scale:  # a fixed scale, as a probability's from 0 to 1: the colours do not follow the data's own ends
+            lo, hi = o.fixed_scale
         base["grid"]["bottom"] = 30
         # the scale's ends written by the server, in the chart's format
         ends = [formats.display(hi, data.fmt, loc), formats.display(lo, data.fmt, loc)] if values else ["", ""]

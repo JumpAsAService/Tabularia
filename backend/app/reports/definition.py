@@ -281,6 +281,9 @@ class ChartOptions(_Model):
     y_categories: Expr | None = None
     # `interval`: its value axis on a logarithmic scale (odds and hazard ratios, a line at 1)
     log: bool = False
+    # `heatmap`: the colour scale's two ends whatever the cells' values (a probability's map from 0 to 1). The engine's
+    # layouts only: not `min` and `max`, which the designer hides for a heatmap but keeps from a gauge it was before
+    fixed_scale: list[Annotated[float, Field(allow_inf_nan=False)]] | None = Field(None, min_length=2, max_length=2)
 
     def targets_x(self) -> list[float | str]:
         t = self.target_x
