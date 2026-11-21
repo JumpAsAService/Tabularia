@@ -347,6 +347,47 @@ ps_log_density <- function(m, t, pars) do.call(m$d, c(list(x = t, log = TRUE), p
 ps_log_survival <- function(m, t, pars) do.call(m$p, c(list(q = t, lower.tail = FALSE, log.p = TRUE), pars))
 ps_quantile <- function(m, prob, pars) do.call(m$q, c(list(p = prob), pars))
 
+# The time t where log S(t) = `log_s`, from the upper tail's log: exact where S is far below 1e-16
+# (flexsurv's quantile functions take lower.tail and log.p but turn them back into 1 − exp(p), which
+# loses those digits; stats' keep them). Inf where the distribution never gets so low (a Gompertz
+# with a cure).
+ps_quantile_log_surv <- function(m, log_s, pars) {
+  switch(m$distribution,
+    weibull = stats::qweibull(log_s, pars$shape, pars$scale, lower.tail = FALSE, log.p = TRUE),
+    exponential = stats::qexp(log_s, pars$rate, lower.tail = FALSE, log.p = TRUE),
+    lognormal = stats::qlnorm(log_s, pars$meanlog, pars$sdlog, lower.tail = FALSE, log.p = TRUE),
+    # S = 1 / (1 + (t / scale)^shape): (t / scale)^shape = exp(−log S) − 1, its log −log S + log(1 − S)
+    loglogistic = pars$scale * exp((-log_s + log1p(-exp(log_s))) / pars$shape),
+    # Q > 0: the gamma's upper tail; Q < 0: its lower one; Q = 0 the log-normal (as flexsurv's qgengamma)
+    gengamma = {
+      Q <- rep(pars$Q, length.out = length(log_s))
+      mu <- rep(pars$mu, length.out = length(log_s))
+      sigma <- rep(pars$sigma, length.out = length(log_s))
+      out <- stats::qlnorm(log_s, mu, sigma, lower.tail = FALSE, log.p = TRUE)
+      q <- Q != 0
+      if (any(q)) {
+        g <- stats::qgamma(log_s[q], 1 / Q[q]^2, 1, lower.tail = Q[q] < 0, log.p = TRUE)
+        out[q] <- exp(mu[q] + sigma[q] * log(Q[q]^2 * g) / Q[q])
+      }
+      out
+    },
+    # log S = −(rate / shape)(exp(shape t) − 1): t = log(1 − shape log S / rate) / shape, never when
+    # that log has no argument above 0 (shape < 0: the share cured)
+    gompertz = {
+      shape <- rep(pars$shape, length.out = length(log_s))
+      rate <- rep(pars$rate, length.out = length(log_s))
+      inside <- -shape * log_s / rate
+      out <- rep(Inf, length(log_s))
+      out[is.na(inside)] <- NA_real_
+      flat <- !is.na(inside) & shape == 0
+      out[flat] <- -log_s[flat] / rate[flat]
+      bent <- !is.na(inside) & shape != 0 & inside > -1
+      out[bent] <- log1p(inside[bent]) / shape[bent]
+      out
+    },
+    stop("no distribution ", m$distribution))
+}
+
 # Each row's log-likelihood, δ log f(t) + (1 − δ) log S(t): the sum weighted by w is the model's.
 # With a start (delayed entry) the row's likelihood is conditional on lasting until it: minus
 # log S(start), exactly 0 where the start is 0 (the row is observed from the origin).
@@ -1517,7 +1558,9 @@ ps_predict <- function(model, X, strata, quantiles = numeric(), times = numeric(
     if (length(rows_)) {
       S0 <- ps_strata_dummies(strata, length(model$strata_levels))
       ls_a <- ps_log_survival(m, alive_at[rows_], ps_natural(m, par, X[rows_, , drop = FALSE], S0[rows_, , drop = FALSE]))
-      alive_dead[rows_] <- !is.finite(ls_a) | exp(ls_a) == 0
+      # S(a) = 0 (its log −Inf): no one lasts that long under the model. A finite log however small
+      # is kept: the time left is read from the log (ps_quantile_log_surv)
+      alive_dead[rows_] <- !is.finite(ls_a)
       ok <- ok & !alive_dead
     }
   }
@@ -1531,65 +1574,98 @@ ps_predict <- function(model, X, strata, quantiles = numeric(), times = numeric(
               surv_high = na_matrix(length(times)), hazard = na_matrix(length(hazard_times)),
               hazard_low = na_matrix(length(hazard_times)), hazard_high = na_matrix(length(hazard_times)))
   out$linear[usable] <- ps_linear(m, par, X[usable, , drop = FALSE], S[usable, , drop = FALSE])
+  alive_lost <- rep(FALSE, n)
   idx <- which(ok)
-  for (start in seq.int(1L, max(length(idx), 1L), by = PS_CHUNK)) {
-    rows_ <- idx[seq.int(start, min(start + PS_CHUNK - 1L, length(idx)))]
+  # Every number asked of a chunk of rows (the quantiles, the survival at each time, the hazard at
+  # each time) is one block of a single function of the parameters, so that the delta method takes
+  # one jacobian a chunk, not one a number: numDeriv evaluates the function 8 times a parameter
+  # whatever its length (the profile's chart, 100 times by 20 strata of 70 parameters, took 242 s
+  # with a jacobian a time). Each element is computed and differentiated on its own: a row's number
+  # does not depend on the rows or the numbers beside it. The chunks keep the jacobian at PS_CHUNK
+  # rows at most.
+  blocks <- length(probs) + length(times) + length(hazard_times)
+  chunk <- max(1L, PS_CHUNK %/% max(blocks, 1L))
+  for (start in seq.int(1L, max(length(idx), 1L), by = chunk)) {
+    rows_ <- idx[seq.int(start, min(start + chunk - 1L, length(idx)))]
     if (!length(rows_) || anyNA(rows_)) break
     Xc <- X[rows_, , drop = FALSE]
     Sc <- S[rows_, , drop = FALSE]
-    if (is.null(alive_at)) {
-      log_q <- function(p_) function(b) log(ps_quantile(m, p_, ps_natural(m, b, Xc, Sc)))
-      log_cumhaz <- function(t) function(b) log(-ps_log_survival(m, rep(t, length(rows_)), ps_natural(m, b, Xc, Sc)))
-    } else {
-      a_c <- alive_at[rows_]
-      # the time left at probability p: the unconditional quantile at 1 − (1 − p) S(a), less a
-      log_q <- function(p_) function(b) {
-        pars <- ps_natural(m, b, Xc, Sc)
-        up_to <- -expm1(log1p(-p_) + ps_log_survival(m, a_c, pars))
-        log(ps_quantile(m, up_to, pars) - a_c)
-      }
-      # the cumulative hazard accrued between a and a + t: S(a + t) / S(a) = exp(−that)
-      log_cumhaz <- function(t) function(b) {
-        pars <- ps_natural(m, b, Xc, Sc)
-        # (a difference below rounding, a cure far on: no hazard accrued, S stays at 1)
-        log(pmax(ps_log_survival(m, a_c, pars) - ps_log_survival(m, a_c + t, pars), 0))
-      }
-    }
-    log_hazard <- function(t) function(b) {
+    nr <- length(rows_)
+    a_c <- if (is.null(alive_at)) NULL else alive_at[rows_]
+    # the blocks in one vector: the quantiles, then the survival at each time, then the hazard at each
+    # time, each block the chunk's rows; the distribution's functions take them in one call a kind
+    # (an element is computed as it would be alone: they are vectorized element by element)
+    nq <- length(probs)
+    nt <- length(times)
+    nh <- length(hazard_times)
+    f <- function(b) {
       pars <- ps_natural(m, b, Xc, Sc)
-      tt <- rep(t, length(rows_))
-      ps_log_density(m, tt, pars) - ps_log_survival(m, tt, pars)
+      each <- function(k) lapply(pars, rep, times = k) # the rows' parameters, once a block
+      out <- numeric(0)
+      ls_a <- if (is.null(a_c)) NULL else ps_log_survival(m, a_c, pars)
+      if (nq) {
+        out <- if (is.null(a_c)) {
+          log(ps_quantile(m, rep(probs, each = nr), each(nq)))
+        } else {
+          # the time left at probability p: the time where log S is log(1 − p) + log S(a), less a; from
+          # the upper tail's log, so that a row far in the tail (S(a) of 1e-16 and below) keeps its digits
+          log(ps_quantile_log_surv(m, rep(log1p(-probs), each = nr) + rep(ls_a, nq), each(nq)) - rep(a_c, nq))
+        }
+      }
+      if (nt) {
+        out <- c(out, if (is.null(a_c)) {
+          log(-ps_log_survival(m, rep(times, each = nr), each(nt)))
+        } else {
+          # the cumulative hazard accrued between a and a + t: S(a + t) / S(a) = exp(−that)
+          # (a difference below rounding, a cure far on: no hazard accrued, S stays at 1)
+          log(pmax(rep(ls_a, nt) - ps_log_survival(m, rep(a_c, nt) + rep(times, each = nr), each(nt)), 0))
+        })
+      }
+      if (nh) {
+        tt <- rep(hazard_times, each = nr)
+        ph <- each(nh)
+        out <- c(out, ps_log_density(m, tt, ph) - ps_log_survival(m, tt, ph))
+      }
+      out
     }
+    v_all <- f(par)
+    s_all <- if (is.null(V)) NULL else ps_delta_se(f, par, V, v_all, ps_par_scale(m, model$last_time))
+    block <- function(j) (j - 1L) * nr + seq_len(nr)
     for (k in seq_along(probs)) {
-      f <- log_q(probs[[k]])
-      v <- f(par)
+      at <- block(k)
+      v <- v_all[at]
       out$quantile_all[rows_, k] <- exp(v)
       if (!is.null(V)) {
-        s <- ps_delta_se(f, par, V, v)
-        out$quantile_all_low[rows_, k] <- exp(v - z * s)
-        out$quantile_all_high[rows_, k] <- exp(v + z * s)
+        out$quantile_all_low[rows_, k] <- exp(v - z * s_all[at])
+        out$quantile_all_high[rows_, k] <- exp(v + z * s_all[at])
       }
     }
+    if (!is.null(alive_at)) {
+      # a time left that is empty though the model reaches its probability (not a cure that never
+      # does): too far in the tail for the distribution's functions, counted by Predict
+      pars <- ps_natural(m, par, Xc, Sc)
+      reachable <- log1p(-0.5) + ps_log_survival(m, a_c, pars) > ps_log_survival(m, rep(Inf, nr), pars)
+      alive_lost[rows_] <- reachable & !is.finite(v_all[block(1L)])
+    }
     for (k in seq_along(times)) {
-      f <- log_cumhaz(times[[k]])
-      v <- f(par)
+      at <- block(length(probs) + k)
+      v <- v_all[at]
       surv <- exp(-exp(v))
       out$surv[rows_, k] <- surv
       if (!is.null(V)) {
-        s <- ps_delta_se(f, par, V, v)
+        s <- s_all[at]
         flat <- !is.finite(v) # S = 1 at time 0 (or 0 at the end): no interval to spread
         out$surv_low[rows_, k] <- ifelse(flat, surv, exp(-exp(v + z * s)))
         out$surv_high[rows_, k] <- ifelse(flat, surv, exp(-exp(v - z * s)))
       }
     }
     for (k in seq_along(hazard_times)) {
-      f <- log_hazard(hazard_times[[k]])
-      v <- f(par)
+      at <- block(length(probs) + length(times) + k)
+      v <- v_all[at]
       out$hazard[rows_, k] <- exp(v)
       if (!is.null(V)) {
-        s <- ps_delta_se(f, par, V, v)
-        out$hazard_low[rows_, k] <- exp(v - z * s)
-        out$hazard_high[rows_, k] <- exp(v + z * s)
+        out$hazard_low[rows_, k] <- exp(v - z * s_all[at])
+        out$hazard_high[rows_, k] <- exp(v + z * s_all[at])
       }
     }
   }
@@ -1605,6 +1681,7 @@ ps_predict <- function(model, X, strata, quantiles = numeric(), times = numeric(
   out$intervals <- !is.null(V)
   out$alive_empty <- alive_empty
   out$alive_dead <- alive_dead
+  out$alive_lost <- alive_lost
   out
 }
 
@@ -1721,6 +1798,9 @@ predict_parametric_survival <- function(task, card) {
   beyond <- sum(d$ok & !pr$alive_empty & !pr$alive_dead & is.finite(furthest) & furthest > last, na.rm = TRUE)
   if (sum(pr$alive_empty) > 0L) {
     warning(sum(pr$alive_empty), " rows have an empty, negative or infinite time already survived (alive_at): their prediction is empty")
+  }
+  if (sum(pr$alive_lost) > 0L) {
+    warning(sum(pr$alive_lost), " rows have survived so far into the tail that the time left cannot be computed: their prediction is empty")
   }
   if (sum(pr$alive_dead) > 0L) {
     warning(sum(pr$alive_dead), " rows have survived beyond what the model allows (the probability of lasting that long is 0): their prediction is empty")
@@ -1956,22 +2036,32 @@ TAB_COMMON_TESTS[["parametric survival: alive_at on the exponential, which has n
   lambda <- events / sum(d$hours)
   z <- stats::qnorm(0.975)
   se <- 1 / sqrt(events) # the exponential's standard error on log rate, in closed form
-  rows_ <- d[1:7, ]
-  rows_$age <- c(0, 7.5, 40, 120, 250, 400, 600) # S(a) from 1 to 5e-5 (the rate is about 1/200)
-  got <- predict_parametric_survival(list(params = list(interval = TRUE, alive_at = "age", quantiles = list(0.25, 0.9),
-                                                         at_times = list(10, 50)), .frame = rows_), card)$output
+  rows_ <- d[1:10, ]
+  # S(a) from 1 to 5e-5 (the rate is about 1/200), then far in the tail: 4e-18, 4e-44, and below the smallest double
+  # (log S of −750): the time left is read from log S, where 1 − ½ S(a) had lost every digit (an interval from
+  # 0.0003 to 160 at 6e-16, an empty median at 3e-267)
+  rows_$age <- c(0, 7.5, 40, 120, 250, 400, 600, 8000, 20000, 150000)
+  said <- character()
+  got <- withCallingHandlers(predict_parametric_survival(list(params = list(interval = TRUE, alive_at = "age", quantiles = list(0.25, 0.9),
+                                                                            at_times = list(10, 50)), .frame = rows_), card)$output,
+                             warning = function(w) {
+                               said <<- c(said, conditionMessage(w))
+                               invokeRestart("muffleWarning")
+                             })
+  .tab_expect(!any(grepl("survived beyond|so far into the tail", said)), "rows of the tail counted as empty: ", paste(said, collapse = " | "))
+  k <- nrow(rows_)
   near <- function(x, want, tol, what) .tab_expect(max(abs(x / want - 1)) < tol, "alive_at, ", what, ": off by ", format(max(abs(x / want - 1)), digits = 3))
   # the median and the quantiles of the time left are the same whatever has been survived (closed forms, 1e-10)
-  near(got$prediction, rep(log(2) / lambda, 7L), 1e-10, "the median time left")
-  near(got$quantile_0.25, rep(-log(0.75) / lambda, 7L), 1e-10, "quantile 0.25")
-  near(got$quantile_0.9, rep(-log(0.1) / lambda, 7L), 1e-10, "quantile 0.9")
-  near(got$survival_at_10, rep(exp(-lambda * 10), 7L), 1e-10, "S(a + 10) / S(a)")
-  near(got$survival_at_50, rep(exp(-lambda * 50), 7L), 1e-10, "S(a + 50) / S(a)")
+  near(got$prediction, rep(log(2) / lambda, k), 1e-10, "the median time left")
+  near(got$quantile_0.25, rep(-log(0.75) / lambda, k), 1e-10, "quantile 0.25")
+  near(got$quantile_0.9, rep(-log(0.1) / lambda, k), 1e-10, "quantile 0.9")
+  near(got$survival_at_10, rep(exp(-lambda * 10), k), 1e-10, "S(a + 10) / S(a)")
+  near(got$survival_at_50, rep(exp(-lambda * 50), k), 1e-10, "S(a + 50) / S(a)")
   # and so are the intervals, by the delta method (1e-6: the gradient is numerical)
-  near(got$prediction_low, rep(log(2) / lambda * exp(-z * se), 7L), 1e-6, "the median's lower bound")
-  near(got$prediction_high, rep(log(2) / lambda * exp(z * se), 7L), 1e-6, "the median's upper bound")
-  near(got$survival_at_50_low, rep(exp(-exp(log(lambda * 50) + z * se)), 7L), 1e-6, "S's lower bound")
-  near(got$survival_at_50_high, rep(exp(-exp(log(lambda * 50) - z * se)), 7L), 1e-6, "S's upper bound")
+  near(got$prediction_low, rep(log(2) / lambda * exp(-z * se), k), 1e-6, "the median's lower bound")
+  near(got$prediction_high, rep(log(2) / lambda * exp(z * se), k), 1e-6, "the median's upper bound")
+  near(got$survival_at_50_low, rep(exp(-exp(log(lambda * 50) + z * se)), k), 1e-6, "S's lower bound")
+  near(got$survival_at_50_high, rep(exp(-exp(log(lambda * 50) - z * se)), k), 1e-6, "S's upper bound")
   # without alive_at the same rows give the same numbers again, and the survival of the first time unchanged
   plain <- predict_parametric_survival(list(params = list(quantiles = list(0.25, 0.9), at_times = list(10, 50)), .frame = rows_), card)$output
   near(plain$prediction, got$prediction, 1e-10, "the median from the start")
@@ -2243,6 +2333,33 @@ TAB_COMMON_TESTS[["parametric survival: a stratum «» (empty text) is predicted
   .tab_expect(!length(problems), paste(problems, collapse = "; "))
 }
 
+TAB_COMMON_TESTS[["parametric survival: Gompertz gives the same estimates, standard errors and median in days, hours and seconds"]] <- function(code) {
+  set.seed(4)
+  n <- 80L
+  x <- round(stats::rnorm(n), 2)
+  t <- stats::rweibull(n, 1.5, exp(3 + 0.3 * x))
+  cens <- stats::runif(n, 5, 60)
+  df <- data.frame(days = round(pmin(t, cens), 2), status = as.integer(t <= cens), x = x)
+  run <- function(k) {
+    d <- df
+    d$days <- d$days * k
+    f <- tab_results_frame(fit_parametric_survival(.ps_test_task(d, list(time = "days", event = "status", event_value = 1,
+                                                                         predictors = list("x"), distribution = "gompertz")))$rows)
+    v <- function(key) f$value[match(key, f$key)]
+    # the shape is per unit of time; the log-likelihood moves by the events' log k (each density is 1 / k)
+    c(coef = v("coef|x||estimate"), se = v("coef|x||std_error"), shape = v("parameter|shape||estimate") * k,
+      shape_se = v("parameter|shape||std_error") * k, log_lik = v("model|||log_lik") + sum(d$status) * log(k),
+      median = v("stratum|all||median") / k, median_low = v("stratum|all||median_ci_low") / k)
+  }
+  days <- run(1)
+  for (k in c(24, 86400)) {
+    other <- run(k)
+    gap <- max(abs(other - days) / pmax(abs(days), 1e-12))
+    # in hours the standard error was 5e-4 off; in seconds the fit stopped 5.85 below the maximum, the coefficient 36 % off
+    .tab_expect(is.finite(gap) && gap < 1e-6, "times × ", k, ": ", paste(names(days), signif(other / days, 9), sep = " ", collapse = ", "))
+  }
+}
+
 TAB_COMMON_TESTS[["parametric survival: a fit out of ps_within's time makes no second attempt"]] <- function(code) {
   df <- .ps_test_table(code)
   prepared <- ps_prepare(.ps_test_task(df, list(time = "days", event = "status", event_value = "failed", predictors = list("load"),
@@ -2267,3 +2384,36 @@ TAB_COMMON_TESTS[["parametric survival: a fit out of ps_within's time makes no s
   .tab_expect(!ps_out_of_time(), "the deadline outlived ps_within")
 }
 
+TAB_COMMON_TESTS[["parametric survival: the profile's chart takes one jacobian a stratum, with the numbers of one a time"]] <- function(code) {
+  df <- .ps_test_table(code)
+  task <- .ps_test_task(df, list(time = "days", event = "status", event_value = "failed", predictors = list("load", "line"), strata = "plant",
+                                 distribution = "weibull"))
+  fit <- fit_parametric_survival(task)
+  prepared <- ps_prepare(task)
+  model <- ps_model(fit$card)
+  ctx <- psc_context(task, prepared, list(spec = model$spec, distribution = "weibull", par = model$par), model)
+  real <- ps_delta_se
+  calls <- 0L
+  on.exit(assign("ps_delta_se", real, envir = globalenv()), add = TRUE)
+  assign("ps_delta_se", function(...) {
+    calls <<- calls + 1L
+    real(...)
+  }, envir = globalenv())
+  rows <- tab_rows()
+  psc_chart_profile(ctx, rows)
+  L <- length(prepared$strata_levels)
+  # a jacobian a time and a hazard was 200 a stratum: 242 s of a 283 s fit with 20 strata of 70 parameters
+  .tab_expect(calls == L, calls, " jacobians for ", L, " strata")
+  assign("ps_delta_se", real, envir = globalenv())
+  # the same numbers as each time alone, to the bit: an element's derivative does not depend on the others
+  f <- tab_results_frame(rows)
+  X <- tab_design_rows(model$card, as.data.frame(prepared$profile_row, check.names = FALSE, stringsAsFactors = FALSE))$X
+  last <- max(prepared$time[prepared$stratum == L])
+  grid <- seq(0, last, length.out = 101L)[-1L]
+  for (k in c(1L, 37L, 100L)) {
+    one <- ps_predict(model, X, L, numeric(), grid[[k]], interval = TRUE, hazard_times = grid[[k]])
+    at <- function(level, stat) f$value[f$section == "curve" & f$level == level & f$level_2 == prepared$strata_names[[L]] & f$stat == stat & f$x0 == grid[[k]]]
+    .tab_expect(identical(at("profile_survival", "lower"), one$surv_low[1L, 1L]) && identical(at("hazard", "upper"), one$hazard_high[1L, 1L]),
+                "time ", k, ": ", at("profile_survival", "lower"), " against ", one$surv_low[1L, 1L])
+  }
+}
