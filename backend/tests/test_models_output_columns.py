@@ -43,10 +43,9 @@ def test_every_column_an_output_declares_has_a_type():
     assert set(catalog.ROWS_INPUT_TYPES) == {g["language"] for g in catalog.GROUPS.values()}
 
 
-# The decomposition node's STL, classical and MSTL refuse «not built yet» until lot D2 (EMD is run: lot D3): their cases
-# join make_output_columns.py then (docs/specs/ts-decomposition.md, «The lots D0–D9»), and the test below holds the names
-# they must write until they do.
-NOT_RUN_YET: set[tuple[str, str]] = {("decomposition", "stl"), ("decomposition", "classical"), ("decomposition", "mstl")}
+# Variants whose runner is not built yet: their case joins make_output_columns.py when it is (none left: the decomposition's
+# EMD came with lot D3, docs/specs/ts-decomposition.md, «The lots D0–D9»).
+NOT_RUN_YET: set[tuple[str, str]] = set()
 
 
 def test_every_variant_that_hands_on_columns_was_run():

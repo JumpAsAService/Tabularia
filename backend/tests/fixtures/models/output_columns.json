@@ -1499,6 +1499,171 @@
    ]
   },
   {
+   "what": "decomposition, STL: the components",
+   "model": "decomposition",
+   "params": {
+    "time": "month",
+    "value": "sales",
+    "frequency": "month",
+    "method": "stl"
+   },
+   "input": [
+    [
+     "month",
+     "Date"
+    ],
+    [
+     "sales",
+     "Float64"
+    ]
+   ],
+   "columns": [
+    [
+     "time",
+     "Date"
+    ],
+    [
+     "observed",
+     "Float64"
+    ],
+    [
+     "filled",
+     "Boolean"
+    ],
+    [
+     "trend",
+     "Float64"
+    ],
+    [
+     "seasonal_12",
+     "Float64"
+    ],
+    [
+     "remainder",
+     "Float64"
+    ],
+    [
+     "deseasonalized",
+     "Float64"
+    ]
+   ]
+  },
+  {
+   "what": "decomposition, classical multiplicative: the components",
+   "model": "decomposition",
+   "params": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "method": "classical",
+    "type": "multiplicative"
+   },
+   "input": [
+    [
+     "month",
+     "Date"
+    ],
+    [
+     "boxes",
+     "Float64"
+    ]
+   ],
+   "columns": [
+    [
+     "time",
+     "Date"
+    ],
+    [
+     "observed",
+     "Float64"
+    ],
+    [
+     "filled",
+     "Boolean"
+    ],
+    [
+     "trend",
+     "Float64"
+    ],
+    [
+     "seasonal_12",
+     "Float64"
+    ],
+    [
+     "remainder",
+     "Float64"
+    ],
+    [
+     "deseasonalized",
+     "Float64"
+    ]
+   ]
+  },
+  {
+   "what": "decomposition, MSTL with a log: the components",
+   "model": "decomposition",
+   "params": {
+    "time": "day",
+    "value": "orders",
+    "frequency": "day",
+    "method": "mstl",
+    "periods": [
+     7,
+     365
+    ],
+    "robust": true,
+    "transform": "log"
+   },
+   "input": [
+    [
+     "day",
+     "Date"
+    ],
+    [
+     "orders",
+     "Float64"
+    ]
+   ],
+   "columns": [
+    [
+     "time",
+     "Date"
+    ],
+    [
+     "observed",
+     "Float64"
+    ],
+    [
+     "transformed",
+     "Float64"
+    ],
+    [
+     "filled",
+     "Boolean"
+    ],
+    [
+     "trend",
+     "Float64"
+    ],
+    [
+     "seasonal_7",
+     "Float64"
+    ],
+    [
+     "seasonal_365",
+     "Float64"
+    ],
+    [
+     "remainder",
+     "Float64"
+    ],
+    [
+     "deseasonalized",
+     "Float64"
+    ]
+   ]
+  },
+  {
    "what": "decomposition, EMD on dates: the components, imf_4 to imf_10 empty",
    "model": "decomposition",
    "params": {
