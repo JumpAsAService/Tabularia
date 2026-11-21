@@ -801,6 +801,9 @@ clv_fit_purchases <- function(model, s, comp = NULL, alpha = 0.05, inference = T
        optimizer = fit$optimizer, vcov_log = inf$vcov_log, se = inf$se, ci_low = inf$ci_low, ci_high = inf$ci_high)
 }
 
+# The numerical Hessian of a candidate's likelihood at its estimate (a function of its own: the self-test counts the calls).
+clv_hessian <- function(fn, lp) numDeriv::hessian(fn, lp)
+
 # The Hessian, the standard errors and the intervals of a fit made without them (`inference = FALSE`), at its
 # optimum: what the candidates not chosen never need. The KKT tests are optimx's: a small gradient, a positive
 # definite Hessian.
@@ -812,7 +815,7 @@ clv_add_inference <- function(p, s, comp, alpha = 0.05) {
     return(p)
   }
   nll <- clv_nll(p$model, comp, stable = isTRUE(p$fallback))
-  h <- tryCatch(numDeriv::hessian(nll, p$log_par), error = function(e) NULL)
+  h <- tryCatch(clv_hessian(nll, p$log_par), error = function(e) NULL)
   g <- tryCatch(numDeriv::grad(nll, p$log_par), error = function(e) NULL)
   inf <- clv_inference(list(lp = p$log_par, hessian = h), alpha)
   p$vcov_log <- inf$vcov_log
@@ -1353,6 +1356,25 @@ clv_choose <- function(candidates, asked) {
   pool[ll[pool] >= best - 1e-6][[1L]]
 }
 
+# Gives the candidates their Hessian and edges (clv_add_inference): all of them, or with `auto` only as many as it takes
+# to find the one it chooses. The candidates are taken from the highest log-likelihood down; the first whose check passes
+# is the choice, and the ones within 1e-6 of its log-likelihood are checked too (a tie keeps the first of the list,
+# clv_choose). A candidate never checked has `checked` FALSE and `converged` FALSE: it was not shown to be a maximum.
+clv_check_candidates <- function(candidates, s, comp, alpha, asked) {
+  for (k in seq_along(candidates)) candidates[[k]]$p$checked <- FALSE
+  todo <- if (identical(asked, "auto")) order(-vapply(candidates, function(c) c$p$log_lik, 0), seq_along(candidates)) else seq_along(candidates)
+  floor_ <- NULL
+  for (k in todo) {
+    ll <- candidates[[k]]$p$log_lik
+    if (!is.null(floor_) && ll < floor_ - 1e-6) break
+    candidates[[k]]$p <- clv_add_inference(candidates[[k]]$p, s, comp, alpha)
+    candidates[[k]]$p$checked <- TRUE
+    if (identical(asked, "auto") && is.null(floor_) && isTRUE(candidates[[k]]$p$converged) && !isTRUE(candidates[[k]]$p$fault)) floor_ <- ll
+  }
+  for (k in seq_along(candidates)) if (!candidates[[k]]$p$checked) candidates[[k]]$p$converged <- FALSE
+  candidates
+}
+
 # The whole fit of a node from the task: the summary, the candidates, the choice, the spend, the numbers of every customer.
 # Returns what the rows, the card and the output are made from (clv_results).
 clv_fit <- function(task, node, frame = NULL) {
@@ -1373,9 +1395,10 @@ clv_fit <- function(task, node, frame = NULL) {
   }
   candidates <- fitted[!failed]
   skipped <- models[failed]
-  # every candidate gets its Hessian and its edges before the choice: whether it converged is the convergence
-  # check's fact, which needs them
-  for (k in seq_along(candidates)) candidates[[k]]$p <- clv_add_inference(candidates[[k]]$p, s, comp, alpha)
+  # whether a candidate converged is the convergence check's fact, which needs its Hessian and its edges. `auto` checks
+  # them in the order of the log-likelihood, the best first, and stops at the first that passes: the others are never
+  # checked (`checked` FALSE, not converged). A single model, and `compare` (the user asked to see them all), are all checked.
+  candidates <- clv_check_candidates(candidates, s, comp, alpha, asked)
   chosen <- clv_choose(candidates, asked)
   best <- candidates[[chosen]]
   spend <- if (s$has_spend) clv_fit_spend(s, alpha) else NULL
@@ -1496,7 +1519,10 @@ clv_rows_candidates <- function(rows, fit) {
     c_ <- fit$candidates[[k]]
     p <- c_$p
     stats_ <- c(log_lik = p$log_lik, aic = p$aic, bic = p$bic, n_params = p$n_params, chi_square = c_$freq$statistic,
-                chi_square_p_value = c_$freq$p_value, converged = as.numeric(p$converged), chosen = as.numeric(k == fit$chosen))
+                chi_square_p_value = c_$freq$p_value, chosen = as.numeric(k == fit$chosen))
+    # a candidate `auto` never checked (clv_check_candidates) has no `converged` row: it was not shown to be a maximum,
+    # and a 0 would say it was shown not to be
+    if (!isFALSE(p$checked)) stats_[["converged"]] <- as.numeric(p$converged)
     if (!is.null(c_$holdout)) stats_ <- c(stats_, holdout_rel_error = c_$holdout$rel_error, holdout_mae = c_$holdout$mae)
     for (k2 in seq_along(p$par)) stats_[[paste0("param_", names(p$par)[[k2]])]] <- p$par[[k2]]
     tab_add(rows, "candidate", names(stats_), value = unname(stats_), level = c_$model)

@@ -223,3 +223,34 @@ TAB_COMMON_TESTS[["customer_lifetime: a candidate whose convergence check fails 
   .tab_expect(all(c("convergence", "frequency_fit", "spend_tail") %in% ok) && !any(a$level %in% ok & a$stat %in% c("advice", "advice_id")),
               "advice next to ok: ", paste(ok, collapse = ", "))
 }
+
+TAB_COMMON_TESTS[["customer_lifetime: auto computes the Hessian of the best candidate alone when it passes; the others are not checked"]] <- function(code) {
+  # 400 customers drawn from the Pareto/NBD (seed 2): it has the highest log-likelihood and passes its check, so one
+  # Hessian is computed and the other two have no converged row (never 1 without the check); compare checks all three
+  set.seed(2)
+  n <- 400
+  T <- stats::runif(n, 30, 100)
+  lambda <- stats::rgamma(n, 1.5, rate = 1.5 / 0.15)
+  end <- pmin(stats::rexp(n, stats::rgamma(n, 1.5, rate = 1.5 / 0.02)), T)
+  x <- stats::rpois(n, lambda * end)
+  tx <- ifelse(x > 0, end * vapply(x, function(k) if (k == 0) 0 else max(stats::runif(k)), 0), 0)
+  d <- data.frame(id = paste0("c", seq_len(n)), x = x, tx = tx, T = T)
+  counter <- new.env()
+  hessians <- function(params) {
+    counter$n <- 0L
+    original <- clv_hessian
+    assign("clv_hessian", function(fn, lp) { counter$n <- counter$n + 1L; original(fn, lp) }, envir = globalenv())
+    on.exit(assign("clv_hessian", original, envir = globalenv()))
+    res <- fit_clv(.clv_task(.clv_params(params), d, variant = "purchases"))
+    list(n = counter$n, df = tab_results_frame(res$rows))
+  }
+  a <- hessians(list(output = "results"))
+  cand <- a$df[a$df$section == "candidate" & a$df$stat %in% c("converged", "chosen"), ]
+  .tab_expect(a$n == 1L, "auto computed ", a$n, " Hessians, not 1")
+  .tab_expect(identical(cand$level[cand$stat == "converged"], cand$level[cand$stat == "chosen" & cand$value == 1]) &&
+              cand$value[cand$stat == "converged"] == 1, "only the chosen candidate has a converged row, and it says 1")
+  b <- hessians(list(output = "results", purchase_model = "bg_nbd", compare = TRUE))
+  .tab_expect(b$n == 3L, "compare computed ", b$n, " Hessians, not 3")
+  e <- hessians(list(output = "results", purchase_model = "bg_nbd"))
+  .tab_expect(e$n == 1L, "a single model computed ", e$n, " Hessians")
+}
