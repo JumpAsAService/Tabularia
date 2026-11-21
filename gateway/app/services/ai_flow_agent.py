@@ -668,6 +668,9 @@ def model_output_columns(model_id: str, params: Optional[dict],
         if dtype.startswith("@"):
             source = known.get(full.get(dtype[1:]) or "")
             dtype = "Unknown" if source is None else "Int32" if _WHOLE.match(source) else source
+        elif dtype.startswith("="):  # the column keeps its own type (no Int32 rule): the experiments' variant
+            source = known.get(full.get(dtype[1:]) or "")
+            dtype = "Unknown" if source is None else source
         out.append({"name": name, "dtype": dtype})
     if output == "rows" and input_columns:
         language = next(g["language"] for g in MODEL_CATALOG["groups"] if g["id"] == model["group"])
@@ -1016,7 +1019,7 @@ async def _expected_columns(deps: FlowDeps, node_id: str, depth: int = 0) -> Opt
         return None
     params = (node.get("data") or {}).get("params") or {}
     output = params.get("output") or MODELS[model_id]["defaults"].get("output") or "results"
-    needs_input = output == "rows" or any(t.startswith("@") for t in MODEL_CATALOG["output_types"][output].values())
+    needs_input = output == "rows" or any(t.startswith(("@", "=")) for t in MODEL_CATALOG["output_types"][output].values())
     input_id = draft.inputs(node["id"]).get("left")
     inputs = await _known_columns(deps, input_id, depth) if needs_input else []
     columns, later = model_output_columns(model_id, params, inputs)

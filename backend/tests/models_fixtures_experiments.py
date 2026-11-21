@@ -483,7 +483,7 @@ def _reading(metric_type, ex, an, checked, srm_p, chi2, expected, headline, winn
         out.append(("comparison", name, lines))
     if cuped:
         lines = [note("cuped_reduced", covariate=checked["covariate"], reduction=0.23, theta=0.41, correlation=0.48)]
-        lines.append(note("cuped_filled", count=4210, mean=12.3) if checked["covariate_missing"] == "fill" else note("cuped_excluded", count=605))
+        lines.append(note("cuped_filled", count=4210) if checked["covariate_missing"] == "fill" else note("cuped_excluded", count=605))
         out.append(("cuped", None, lines))
     if cap:
         out.append(("cap", None, [note("cap_applied", percentile=0.999, value=1840.5, count=96, variants="A,B")]))

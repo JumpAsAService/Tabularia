@@ -2315,6 +2315,579 @@
      "Float64"
     ]
    ]
+  },
+  {
+   "what": "A/B test, binary: the variants",
+   "model": "ab_test",
+   "params": {
+    "variant": "variant",
+    "control": "A",
+    "metric_type": "binary",
+    "metric": "converted",
+    "date": "day",
+    "bayes": false,
+    "sequential": false,
+    "output": "variants"
+   },
+   "input": [
+    [
+     "variant",
+     "String"
+    ],
+    [
+     "converted",
+     "Float64"
+    ],
+    [
+     "day",
+     "Date"
+    ]
+   ],
+   "columns": [
+    [
+     "metric",
+     "String"
+    ],
+    [
+     "role",
+     "String"
+    ],
+    [
+     "variant",
+     "String"
+    ],
+    [
+     "is_control",
+     "Boolean"
+    ],
+    [
+     "units",
+     "Int64"
+    ],
+    [
+     "share",
+     "Float64"
+    ],
+    [
+     "expected_share",
+     "Float64"
+    ],
+    [
+     "mean",
+     "Float64"
+    ],
+    [
+     "std_error",
+     "Float64"
+    ],
+    [
+     "ci_low",
+     "Float64"
+    ],
+    [
+     "ci_high",
+     "Float64"
+    ],
+    [
+     "difference",
+     "Float64"
+    ],
+    [
+     "difference_ci_low",
+     "Float64"
+    ],
+    [
+     "difference_ci_high",
+     "Float64"
+    ],
+    [
+     "lift",
+     "Float64"
+    ],
+    [
+     "lift_ci_low",
+     "Float64"
+    ],
+    [
+     "lift_ci_high",
+     "Float64"
+    ],
+    [
+     "p_value",
+     "Float64"
+    ],
+    [
+     "p_adjusted",
+     "Float64"
+    ],
+    [
+     "decision",
+     "String"
+    ],
+    [
+     "prob_beat_control",
+     "Float64"
+    ],
+    [
+     "prob_best",
+     "Float64"
+    ],
+    [
+     "expected_loss",
+     "Float64"
+    ],
+    [
+     "sequential_p_value",
+     "Float64"
+    ],
+    [
+     "sequential_p_adjusted",
+     "Float64"
+    ],
+    [
+     "sequential_lift_low",
+     "Float64"
+    ],
+    [
+     "sequential_lift_high",
+     "Float64"
+    ]
+   ]
+  },
+  {
+   "what": "A/B test, continuous with a cap: the variants",
+   "model": "ab_test",
+   "params": {
+    "variant": "variant",
+    "control": "A",
+    "metric_type": "continuous",
+    "metric": "revenue",
+    "cap_percentile": 0.99,
+    "correction": "benjamini_hochberg",
+    "bayes": false,
+    "sequential": false,
+    "output": "variants"
+   },
+   "input": [
+    [
+     "variant",
+     "String"
+    ],
+    [
+     "revenue",
+     "Float64"
+    ]
+   ],
+   "columns": [
+    [
+     "metric",
+     "String"
+    ],
+    [
+     "role",
+     "String"
+    ],
+    [
+     "variant",
+     "String"
+    ],
+    [
+     "is_control",
+     "Boolean"
+    ],
+    [
+     "units",
+     "Int64"
+    ],
+    [
+     "share",
+     "Float64"
+    ],
+    [
+     "expected_share",
+     "Float64"
+    ],
+    [
+     "mean",
+     "Float64"
+    ],
+    [
+     "std_error",
+     "Float64"
+    ],
+    [
+     "ci_low",
+     "Float64"
+    ],
+    [
+     "ci_high",
+     "Float64"
+    ],
+    [
+     "difference",
+     "Float64"
+    ],
+    [
+     "difference_ci_low",
+     "Float64"
+    ],
+    [
+     "difference_ci_high",
+     "Float64"
+    ],
+    [
+     "lift",
+     "Float64"
+    ],
+    [
+     "lift_ci_low",
+     "Float64"
+    ],
+    [
+     "lift_ci_high",
+     "Float64"
+    ],
+    [
+     "p_value",
+     "Float64"
+    ],
+    [
+     "p_adjusted",
+     "Float64"
+    ],
+    [
+     "decision",
+     "String"
+    ],
+    [
+     "prob_beat_control",
+     "Float64"
+    ],
+    [
+     "prob_best",
+     "Float64"
+    ],
+    [
+     "expected_loss",
+     "Float64"
+    ],
+    [
+     "sequential_p_value",
+     "Float64"
+    ],
+    [
+     "sequential_p_adjusted",
+     "Float64"
+    ],
+    [
+     "sequential_lift_low",
+     "Float64"
+    ],
+    [
+     "sequential_lift_high",
+     "Float64"
+    ]
+   ]
+  },
+  {
+   "what": "A/B test, ratio with CUPED: the variants",
+   "model": "ab_test",
+   "params": {
+    "variant": "variant",
+    "control": "A",
+    "metric_type": "ratio",
+    "numerator": "clicks",
+    "denominator": "impressions",
+    "covariate": "clicks_pre",
+    "bayes": false,
+    "sequential": false,
+    "output": "variants"
+   },
+   "input": [
+    [
+     "variant",
+     "String"
+    ],
+    [
+     "clicks",
+     "Float64"
+    ],
+    [
+     "impressions",
+     "Float64"
+    ],
+    [
+     "clicks_pre",
+     "Float64"
+    ]
+   ],
+   "columns": [
+    [
+     "metric",
+     "String"
+    ],
+    [
+     "role",
+     "String"
+    ],
+    [
+     "variant",
+     "String"
+    ],
+    [
+     "is_control",
+     "Boolean"
+    ],
+    [
+     "units",
+     "Int64"
+    ],
+    [
+     "share",
+     "Float64"
+    ],
+    [
+     "expected_share",
+     "Float64"
+    ],
+    [
+     "mean",
+     "Float64"
+    ],
+    [
+     "std_error",
+     "Float64"
+    ],
+    [
+     "ci_low",
+     "Float64"
+    ],
+    [
+     "ci_high",
+     "Float64"
+    ],
+    [
+     "difference",
+     "Float64"
+    ],
+    [
+     "difference_ci_low",
+     "Float64"
+    ],
+    [
+     "difference_ci_high",
+     "Float64"
+    ],
+    [
+     "lift",
+     "Float64"
+    ],
+    [
+     "lift_ci_low",
+     "Float64"
+    ],
+    [
+     "lift_ci_high",
+     "Float64"
+    ],
+    [
+     "p_value",
+     "Float64"
+    ],
+    [
+     "p_adjusted",
+     "Float64"
+    ],
+    [
+     "decision",
+     "String"
+    ],
+    [
+     "prob_beat_control",
+     "Float64"
+    ],
+    [
+     "prob_best",
+     "Float64"
+    ],
+    [
+     "expected_loss",
+     "Float64"
+    ],
+    [
+     "sequential_p_value",
+     "Float64"
+    ],
+    [
+     "sequential_p_adjusted",
+     "Float64"
+    ],
+    [
+     "sequential_lift_low",
+     "Float64"
+    ],
+    [
+     "sequential_lift_high",
+     "Float64"
+    ]
+   ]
+  },
+  {
+   "what": "A/B test, a whole-number variant keeps its own type: the variants",
+   "model": "ab_test",
+   "params": {
+    "variant": "v_int32",
+    "control": "-7",
+    "metric_type": "binary",
+    "metric": "converted",
+    "bayes": false,
+    "sequential": false,
+    "output": "variants"
+   },
+   "input": [
+    [
+     "row",
+     "String"
+    ],
+    [
+     "unit",
+     "String"
+    ],
+    [
+     "v_int64",
+     "String"
+    ],
+    [
+     "v_int32",
+     "Int64"
+    ],
+    [
+     "v_bool",
+     "String"
+    ],
+    [
+     "v_text",
+     "String"
+    ],
+    [
+     "v_date",
+     "String"
+    ],
+    [
+     "converted",
+     "Float64"
+    ]
+   ],
+   "columns": [
+    [
+     "metric",
+     "String"
+    ],
+    [
+     "role",
+     "String"
+    ],
+    [
+     "variant",
+     "Int64"
+    ],
+    [
+     "is_control",
+     "Boolean"
+    ],
+    [
+     "units",
+     "Int64"
+    ],
+    [
+     "share",
+     "Float64"
+    ],
+    [
+     "expected_share",
+     "Float64"
+    ],
+    [
+     "mean",
+     "Float64"
+    ],
+    [
+     "std_error",
+     "Float64"
+    ],
+    [
+     "ci_low",
+     "Float64"
+    ],
+    [
+     "ci_high",
+     "Float64"
+    ],
+    [
+     "difference",
+     "Float64"
+    ],
+    [
+     "difference_ci_low",
+     "Float64"
+    ],
+    [
+     "difference_ci_high",
+     "Float64"
+    ],
+    [
+     "lift",
+     "Float64"
+    ],
+    [
+     "lift_ci_low",
+     "Float64"
+    ],
+    [
+     "lift_ci_high",
+     "Float64"
+    ],
+    [
+     "p_value",
+     "Float64"
+    ],
+    [
+     "p_adjusted",
+     "Float64"
+    ],
+    [
+     "decision",
+     "String"
+    ],
+    [
+     "prob_beat_control",
+     "Float64"
+    ],
+    [
+     "prob_best",
+     "Float64"
+    ],
+    [
+     "expected_loss",
+     "Float64"
+    ],
+    [
+     "sequential_p_value",
+     "Float64"
+    ],
+    [
+     "sequential_p_adjusted",
+     "Float64"
+    ],
+    [
+     "sequential_lift_low",
+     "Float64"
+    ],
+    [
+     "sequential_lift_high",
+     "Float64"
+    ]
+   ]
   }
  ]
 }

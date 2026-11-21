@@ -67,6 +67,10 @@ CASES: list[tuple[str, str, str, dict[str, Any]]] = [
     ("customer lifetime value, the purchases only", "customer_lifetime", "clv Pareto/NBD customers, the purchases variant", {}),
     ("BG/BB with a spend and a holdout, the rows", "customer_lifetime", "bg_bb donors like the donations, value with a holdout", {}),
     ("BG/BB, the purchases only", "customer_lifetime", "bg_bb cohorts of different lengths, the purchases variant", {}),
+    ("A/B test, binary: the variants", "experiments", "binary_two", {"output": "variants"}),
+    ("A/B test, continuous with a cap: the variants", "experiments", "continuous_three_cap_bh", {"output": "variants"}),
+    ("A/B test, ratio with CUPED: the variants", "experiments", "cuped_ratio", {"output": "variants"}),
+    ("A/B test, a whole-number variant keeps its own type: the variants", "experiments", "types_int", {"output": "variants"}),
 ]
 
 POLARS = {"integer": pl.Int64, "number": pl.Float64, "text": pl.String, "boolean": pl.Boolean, "date": pl.Date,
