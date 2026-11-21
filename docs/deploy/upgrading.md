@@ -68,6 +68,20 @@ Deployments at the same time.
   as for an environment's build, a few minutes to tens of minutes per group, and do not
   upgrade in the middle of a run that matters. The states are in
   [Statistical models](../capabilities/models.md#turning-a-group-on-administrators).
+
+  While the old and the new gateway pods run side by side, both take turns on the loop that
+  builds the images, and each knows only its own release's recipe and runner. A version is
+  therefore built and self-tested only by a pod of the release that queued it: the new
+  release's version waits for a new pod, which takes it within seconds; the old pod leaves
+  it alone, and does not answer it with a version of its own recipe either. What a build or
+  a self-test found is read by whichever pod comes first, since the Job is the same
+  whoever reads it.
+
+  After a `helm rollback` in the middle of such a build no pod of the newer release is left
+  to finish it. The release rolled back to waits ten minutes after the version was queued
+  (an image already built: until its Job's TTL, `scripts.job_ttl_seconds`, takes the Job
+  away), then marks it **Failed** with *queued by another version of Tabularia … this
+  version of Tabularia builds its own*, and queues a version of its own recipe at once.
 - **The interface** rolls like the gateway. A browser tab left open keeps the old version
   until it is reloaded.
 
