@@ -737,6 +737,59 @@ async def test_an_assistant_puts_a_decomposition_after_a_calendar_join_and_a_wro
     assert any(e["source"] == "op-1" and e["target"] == "ctl-1" and e["targetHandle"] == "left" for e in canvas["edges"])
 
 
+def test_the_pre_trained_forecast_has_its_line_and_the_prompt_says_when_to_choose_it_over_arima_and_the_licence():
+    reference = ai_flow_agent.context(None, "en")
+    assert any(l.startswith("- model_timestral {time, value, frequency: hour|day|week|month|quarter|year|index, series?, season?: int, size?: 5m|28m|123m|209m")
+               and l.endswith("(foundation_forecast)") for l in reference.splitlines())
+    for sentence in ("model_timestral forecasts each series with a model trained in advance", "nothing is fitted on the data",
+                     "no model card, no `registerAs`, no Predict", "**Choose it over model_arima** when there are many series",
+                     "**choose model_arima** when the person wants a model to read", "register it and apply it with model_predict",
+                     "not given with `known_covariates`", "only the sizes the administrator downloaded exist", "**it refuses a series with gaps**",
+                     "have no verdict: say them as numbers, never as good or bad", "five series cannot reach 0.05",
+                     "Its weights are under a licence of their own", "Mistral AI's Modified MIT License", "$20 million",
+                     "it is not legal advice", "never accept it, enable the group"):
+        assert sentence in reference, sentence
+    # the rule that keeps the settings that shape a verdict out of the assistant's hands is still there, and the node's own
+    # reference does not tell it to change one
+    assert "Never change a setting of a hypothesis test or a model step that decides or shapes its verdict" in ai_flow_agent.SETTINGS_CONTEXT
+    assert "do not change it unless the person asks" in reference
+    given = {"time": "day", "value": "orders", "frequency": "day", "series": "channel", "size": "28m", "holdout": 28, "known_covariates": ["festivo"]}
+    assert clean_params("model_timestral", given) == given
+    with pytest.raises(ModelRetry) as e:
+        clean_params("model_timestral", {k: v for k, v in given.items() if k != "frequency"})
+    assert "'frequency' is required" in str(e.value)
+    with pytest.raises(ModelRetry) as e:
+        clean_params("model_timestral", {**given, "size": "1b"})
+    assert "size" in str(e.value)
+    with pytest.raises(ModelRetry) as e:
+        clean_params("model_timestral", {**given, "horizon": 28})  # with known covariates the future rows are the horizon
+    assert "horizon" in str(e.value) and "known_covariates" in str(e.value)
+
+
+@pytest.mark.anyio
+async def test_an_assistant_puts_a_pre_trained_forecast_after_a_calendar_join_and_a_wrong_one_is_sent_back(session, world, fake_engine, monkeypatch):
+    """A scripted model stands for the assistant: no call to a paid service."""
+    fake_engine.preview_response = (200, {"columns": COLUMNS, "rows": [{"country": "IT", "amount": 3.5}], "row_count": 1, "truncated": False})
+    given = {"time": "country", "value": "amount", "frequency": "day", "holdout": 28, "output": "quantile_forecast"}
+    events = await _turn(session, world, monkeypatch, world["editor"], [
+        ("add_source", {"datasource_id": world["orders"].id}),
+        ("add_step", {"after": "source", "operation": "fill_null", "params": {"columns": {"amount": 0}}}),
+        ("add_step", {"after": "op-1", "operation": "model_timestral", "params": {**given, "size": "2b"}}),
+        ("add_step", {"after": "op-1", "operation": "model_timestral", "params": given}),
+        ("add_step", {"after": "ctl-1", "operation": "filter", "params": {"column": "quantile_0.95", "operator": "gt", "value": 0}}),
+        "Added the forecast of the orders by channel (ctl-1); it runs with the flow.",
+    ], message="forecast the orders of each channel four weeks ahead")
+    assert "error" not in [n for n, _ in events]
+    steps = [d for n, d in events if n == "tool_result" and d["name"] == "add_step"]
+    assert [s["ok"] for s in steps] == [True, False, True, True]
+    assert "size" in steps[1]["error"]
+    canvas = json.loads(events[-1][1]["definition"])
+    node = next(n for n in canvas["nodes"] if n["id"] == "ctl-1")
+    assert node["type"] == "model" and node["data"]["model"] == "timestral" and node["data"]["params"]["holdout"] == 28
+    # its columns are known before a run, so the step after it may name a quantile column
+    assert any(e["source"] == "op-1" and e["target"] == "ctl-1" and e["targetHandle"] == "left" for e in canvas["edges"])
+
+
 def test_the_reference_tells_the_assistant_what_a_model_needs_to_run():
     reference = ai_flow_agent.context(None, "en")
     for sentence in ("Kubernetes", "group of models an administrator has enabled", "there is no preview",
