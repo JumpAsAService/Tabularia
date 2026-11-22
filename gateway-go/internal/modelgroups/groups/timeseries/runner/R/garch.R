@@ -24,6 +24,7 @@ GARCH_QQ_POINTS <- 200L
 GARCH_NEWS <- seq(-4, 4, by = 0.08)  # ε_{t−1} in units of the long-run σ: 101 points
 
 fit_garch <- function(task) {
+  ts_params_within("garch", task$params)
   loadNamespace("rugarch")
   o <- garch_params(task$params)
   d <- garch_series(task, o)
@@ -409,6 +410,14 @@ garch_model_rows <- function(rows, o, d, m, checks) {
   tab_note(rows, garch_note("garch_scale", scale = d$scale))
   if (!identical(m$solver, "solnp")) tab_note(rows, garch_note("garch_solver", solver = m$solver))
   for (a in attr(checks, "at_bound")) tab_note(rows, garch_note("garch_at_bound", parameter = a))
+  # a GJR whose α_i + γ_i is below 0 (rugarch allows it): a fall lowers the next variance, and a large enough one would make it
+  # negative. A fact of the fit, said in a note (lot G9); the risk simulation refuses to simulate it (negative_variance)
+  if (o$variance_model == "gjr") {
+    for (i in seq_len(o$q)) {
+      s <- m$theta[[paste0("alpha", i)]] + m$theta[[paste0("gamma", i)]]
+      if (s < 0) tab_note(rows, garch_note("garch_negative_news", lag = i, sum = s))
+    }
+  }
   invisible(rows)
 }
 
@@ -449,6 +458,11 @@ garch_charts <- function(task, rows, o, d, m, acf) {
   zt <- m$z[seq_len(d$train)]
   h <- tab_hist(zt)
   tab_points(rows, "hist", "std_residual", "count", x = h$x0, y = h$count, x1 = h$x1)
+  # the counts the fitted law expects in each interval, n·(F(x1) − F(x0)): the fitted density on the histogram's own scale, which
+  # the report draws over the counts (lot G9; a density row cannot share their axis, and the page computes nothing)
+  cdf <- function(q) rugarch::pdist(o$distribution, q, mu = 0, sigma = 1, skew = m$skew, shape = m$shape)
+  tab_points(rows, "hist", "std_residual", "count", x = h$x0, y = sum(is.finite(zt)) * (cdf(h$x1) - cdf(h$x0)), x1 = h$x1,
+             level_2 = "expected")
   grid <- seq(min(h$x0), max(h$x1), length.out = 101L)
   dens <- rugarch::ddist(o$distribution, grid, mu = 0, sigma = 1, skew = m$skew, shape = m$shape)
   tab_points(rows, "curve", "density", "y", x = grid, y = dens, level_2 = "density")
@@ -548,6 +562,7 @@ garch_native <- function(fit, scale) {
 #   garch_predict_rows(task, card)   the new rows, checked: times, values, and the returns (the first from the card's last price)
 #   garch_predict_filter(g, th, r)   σ, the conditional mean and the final state of the recursion, from the card's state
 predict_garch <- function(task, card) {
+  ts_params_within("garch", task$params[intersect(names(task$params), "horizon")])
   g <- card$garch
   p <- card$params
   th <- unlist(g$coefficients)

@@ -56,6 +56,39 @@ ts_backtest <- function(r, var, level, alpha) {
                                              n, longest_run = longest), days = T)
 }
 
+# The node's numeric options against the catalogue's kinds (min, max, above, below, whole, max_count), before anything is read,
+# fitted or allocated. The gateway checks them first (modelcatalog.Check) and writes task.json, so a task it made always passes;
+# a task written by hand, or by a gateway of another version, meets the same bounds here: paths, steps, levels, a threshold, a
+# position or a list of quantiles out of their kind is refused with a sentence, never handed to an allocation (lot G9).
+ts_params_within <- function(model, params) {
+  kinds <- tab_catalog()$kinds
+  takes <- tab_model_spec(model)$takes
+  for (key in names(takes)) {
+    v <- params[[key]]
+    k <- kinds[[takes[[key]]]]
+    if (is.null(v) || is.null(k) || !(k$control %in% c("number", "integer", "numbers", "number_or_choice"))) next
+    if (identical(k$control, "number_or_choice") && is.character(v) && length(v) == 1L && v %in% unlist(k$choices)) next
+    many <- identical(k$control, "numbers")
+    if (many && !is.null(k$max_count) && length(v) > k$max_count) {
+      tab_refuse("bad_option", paste0("the option ", key, " holds ", length(v), " numbers, more than its ", k$max_count),
+                 list(key = key))
+    }
+    x <- suppressWarnings(as.numeric(if (is.list(v)) vapply(v, function(e) if (is.numeric(e) && length(e) == 1L) e else NA_real_, 0) else v))
+    ok <- (many || length(x) == 1L) && all(is.finite(x)) &&
+      (is.null(k$min) || all(x >= k$min)) && (is.null(k$max) || all(x <= k$max)) &&
+      (is.null(k$above) || all(x > k$above)) && (is.null(k$below) || all(x < k$below)) &&
+      (!(identical(k$control, "integer") || isTRUE(k$whole)) || all(x == floor(x)))
+    if (!ok) {
+      said <- function(b) format(b, scientific = FALSE, trim = TRUE, digits = 15)
+      bounds <- c(if (!is.null(k$min)) paste0("at least ", said(k$min)), if (!is.null(k$above)) paste0("above ", said(k$above)),
+                  if (!is.null(k$max)) paste0("at most ", said(k$max)), if (!is.null(k$below)) paste0("below ", said(k$below)))
+      tab_refuse("bad_option", paste0("the option ", key, " is not ", if (many) "a list of numbers" else "a number", " ",
+                                      paste(bounds, collapse = " and ")), list(key = key))
+    }
+  }
+  invisible(TRUE)
+}
+
 ts_backtest_rows <- function(rows, bt) {
   for (t in bt$tests) {
     tab_text(rows, "backtest", "h0", t$h0, level = t$id)

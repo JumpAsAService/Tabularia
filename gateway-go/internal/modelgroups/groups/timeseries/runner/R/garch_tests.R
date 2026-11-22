@@ -182,6 +182,14 @@ TAB_COMMON_TESTS[["garch: a series it cannot fit is refused with a sentence"]] <
   tiny <- df
   tiny$gjr <- tiny$gjr * 1e-170
   .tab_refused_with("scale", run(tiny, list()))
+  # lot G9, the spec's extreme inputs: returns near the largest double, a price of 1e300, a step in the series
+  huge <- df
+  huge$gjr <- huge$gjr * 1e300
+  .tab_refused_with("scale", run(huge, list()))
+  step <- df
+  step$gjr[401:800] <- step$gjr[401:800] + 0.5
+  res <- tryCatch(run(step, list(distribution = "norm")), tabularia_refusal = function(e) e)
+  .tab_expect(inherits(res, "tabularia_refusal") || !is.null(res$rows), "a step in the series neither fits nor refuses")
   .tab_refused_with("duplicate_time", run(rbind(df, df[800, ]), list()))
 }
 
@@ -218,4 +226,24 @@ TAB_COMMON_TESTS[["garch: the node at 10,000 returns peaks below 1 GiB in a chil
   got <- as.numeric(readLines(out))
   message(sprintf("garch at %d returns: VmHWM %.0f MiB, %.1f s, %d rows", n, got[[1L]] / 2^20, got[[2L]], got[[3L]]))
   .tab_expect(got[[1L]] < 2^30, "VmHWM ", got[[1L]], " bytes at ", n, " returns")
+}
+
+# Lot G9: the histogram of z carries the counts the fitted law expects in each of its intervals, n·(F(x1) − F(x0)), so that the report
+# draws the fitted density on the counts' own axis without computing anything.
+TAB_COMMON_TESTS[["garch: the histogram of z holds the counts the fitted law expects in each interval"]] <- function(code) {
+  loadNamespace("rugarch")
+  for (dist in c("norm", "sstd")) {
+    res <- fit_garch(.garch_task(.garch_frame(code), list(distribution = dist, holdout = 100)))
+    rows <- tab_results_frame(res$rows)
+    seen <- rows[rows$section == "hist" & rows$level == "std_residual" & is.na(rows$level_2), ]
+    want <- rows[rows$section == "hist" & rows$level == "std_residual" & rows$level_2 %in% "expected", ]
+    .tab_expect(nrow(want) == nrow(seen) && nrow(seen) >= 5L && identical(want$x0, seen$x0) && identical(want$x1, seen$x1),
+                dist, ": one expected count an interval")
+    est <- res$native@fit$coef
+    sh <- if ("shape" %in% names(est)) est[["shape"]] else 0
+    sk <- if ("skew" %in% names(est)) est[["skew"]] else 0
+    cdf <- function(q) rugarch::pdist(dist, q, mu = 0, sigma = 1, skew = sk, shape = sh)
+    n <- sum(seen$value)
+    .tab_expect(.garch_rel(want$value, n * (cdf(want$x1) - cdf(want$x0))) < 1e-12 && sum(want$value) <= n, dist, ": n·(F(x1) − F(x0))")
+  }
 }

@@ -38,13 +38,15 @@ RISK_PATHS_FILE <- "/tmp/paths.parquet"
 # The memory constants of each model's batch (ts_sim.R: growth over R0 = F + 8·(φ·B_s·h + ρ·m·P·h)), MEASURED in fresh processes
 # with rugarch loaded (the spec's «As built / G3»): 50 runs, GARCH t on prices, GJR skewed t on returns, SARIMA with a log, parametric
 # and bootstrapped innovations, 10, 100, 250 and 1,000 steps, 1 block to the row group's cap a batch, three batches, both passes.
-# The engine's constants bound every one (the largest growth is 0.905 of the bound: SARIMA, 100 steps, 3 blocks), so they are kept.
+# The engine's constants bound every one (the largest growth is 0.905 of the bound: SARIMA, 100 steps, 3 blocks), so they are kept;
+# lot G9 raised the engine's F to 48 MB for its second pass (ts_sim.R), and these with it.
 RISK_MEMORY <- list(
-  garch = list(fixed_bytes = 12e6, block_factor = 31, batch_factor = 4),
-  arima = list(fixed_bytes = 12e6, block_factor = 31, batch_factor = 4)
+  garch = list(fixed_bytes = 48e6, block_factor = 31, batch_factor = 4),
+  arima = list(fixed_bytes = 48e6, block_factor = 31, batch_factor = 4)
 )
 
 fit_risk_simulation <- function(task) {
+  ts_params_within("risk_simulation", task$params)  # paths, steps, levels, threshold, position: bounded before anything is allocated
   o <- risk_params(task$params)
   # the fitted model's functions read the options from the task: the risk node's own, its defaults included
   for (k in c("horizon", "holdout", "var_level", "alpha", "seed", "mean")) task$params[[k]] <- o[[k]]
@@ -570,7 +572,8 @@ risk_fan_rows <- function(task, rows, o, fm, sim) {
   for (j in seq_len(ncol(H))) tab_points(rows, "curve", "fan", "y", x = x_all, y = c(start, a + b * H[, j]), level_2 = paste0("path_", j))
   tab_points(rows, "curve", "fan", "band_error", x = x, y = b * sim$steps$band_error, level_2 = "band_error")
   s <- sim$steps
-  for (k in c("var", "var_low", "var_high", "es", "es_low", "es_high")) tab_points(rows, "curve", "term", "y", x = x, y = s[[k]], level_2 = k)
+  # `es_quantile`: the VaR at the ES's level, the quantile the ES averages beyond (lot G9)
+  for (k in c("var", "var_low", "var_high", "es", "es_low", "es_high", "es_quantile")) tab_points(rows, "curve", "term", "y", x = x, y = s[[k]], level_2 = k)
   if (!is.null(o$threshold)) for (k in c("prob_crossed", "prob_beyond")) tab_points(rows, "curve", "term", "y", x = x, y = s[[k]], level_2 = k)
   for (k in c("horizon", "drawdown")) {
     bars <- sim$hist[[k]]

@@ -113,14 +113,26 @@ TAB_COMMON_TESTS[["risk: the node's measures are the whole matrix's of its own p
   out <- tempfile(fileext = ".parquet")
   Sys.setenv(TABULARIA_OUTPUT = out)
   on.exit({ Sys.unsetenv("TABULARIA_OUTPUT"); unlink(c(file, out)) }, add = TRUE)
-  task <- .risk_task(prices, c(p[setdiff(names(p), "output")], list(output = "paths")), output = "paths", sim = list(file = file))
+  # two blocks a batch: three batches, so three row groups in the file handed on (lot G9: the output `paths` as the next step reads it)
+  task <- .risk_task(prices, c(p[setdiff(names(p), "output")], list(output = "paths")), output = "paths", sim = list(file = file, batch_blocks = 2L))
   task$write_output <- TRUE
   res <- fit_risk_simulation(task)
   .tab_expect(is.null(res$output) && file.exists(out) && !file.exists(file), "the paths are copied to the output and the file deleted")
-  tab <- as.data.frame(arrow::read_parquet(out))
-  .tab_expect(identical(names(tab), c("path", "step", "time", "value", "cumulative", "price", "sigma")), "the paths' columns ", paste(names(tab), collapse = " "))
   h <- 8L
   N <- 6000
+  reader <- arrow::ParquetFileReader$create(out)
+  schema <- reader$GetSchema()
+  .tab_expect(reader$num_row_groups == 3L && identical(vapply(0:2, function(i) reader$ReadRowGroup(i)$num_rows, 0L), rep(2000L * h, 3L)),
+              "the paths: one row group a batch of two blocks (", reader$num_row_groups, ")")
+  .tab_expect(schema$path$type == arrow::int32() && schema$step$type == arrow::int32() && schema$time$type == arrow::date32() &&
+                all(vapply(c("value", "cumulative", "price", "sigma"), function(k) schema[[k]]$type == arrow::float64(), TRUE)),
+              "the paths' types: ", schema$ToString())
+  rm(reader)
+  tab <- as.data.frame(arrow::read_parquet(out))
+  .tab_expect(identical(names(tab), c("path", "step", "time", "value", "cumulative", "price", "sigma")), "the paths' columns ", paste(names(tab), collapse = " "))
+  .tab_expect(identical(tab$path, rep(seq_len(N), each = h)) && identical(tab$step, rep(seq_len(h), N)), "the paths' rows: sorted by path, then step")
+  .tab_expect(identical(tab$time, rep(tab$time[seq_len(h)], N)) && all(diff(as.numeric(tab$time[seq_len(h)])) > 0), "the time of each step")
+  .tab_expect(all(tab$sigma > 0) && stats::sd(tab$sigma) > 0, "σ of the paths changes with the shocks")
   H <- matrix(tab$cumulative, nrow = h)
   last <- prices$price[[nrow(prices)]]
   .tab_expect(.risk_rel(tab$price, last * (1 + tab$cumulative)) < 1e-15, "the price is P_T (1 + C)")
@@ -130,6 +142,7 @@ TAB_COMMON_TESTS[["risk: the node's measures are the whole matrix's of its own p
   rows <- tab_results_frame(res$rows)
   got <- function(key) rows$value[rows$key == key]
   .tab_expect(identical(got("risk|var||value"), x[[ceiling(round(N * 0.01, 6))]]), "the VaR")
+  .tab_expect(identical(got(paste0("curve|term|es_quantile|y|", h - 1L)), x[[ceiling(round(N * 0.025, 6))]]), "the quantile the ES averages beyond")
   ke <- N * 0.025
   .tab_expect(abs(got("risk|es||value") - mean(x[seq_len(ke)])) <= 1e-12 * abs(got("risk|es||value")), "the ES")
   thr <- 100 / last - 1
@@ -183,6 +196,45 @@ TAB_COMMON_TESTS[["risk: the summary and the paths keep the time's own type (Int
     }
   }
   .tab_expect(all(c("quantile_*", "var", "band_error") %in% unlist(spec$risk_summary)), "the catalogue's summary")
+}
+
+# Lot G9, security: options out of their kinds (a task not made by the gateway) are refused before the series is read or anything
+# allocated: paths and steps far beyond the catalogue, levels outside (0.5, 1), a threshold that is not a number, a list of
+# quantiles longer than nine. Quickly, and without memory: nothing of their size is ever made.
+TAB_COMMON_TESTS[["risk: options beyond their bounds are refused before anything is allocated"]] <- function(code) {
+  ar <- .risk_frame(code, "ar_index.csv", list(t = "integer", level = "number"))
+  base <- list(model = "arima", time = "t", value = "level", frequency = "index", p = 1)
+  hostile <- list(list(paths = 1e12), list(paths = 2^31), list(horizon = 1e9), list(horizon = 0), list(var_level = 1.5),
+                  list(es_level = 0.5), list(alpha = NaN), list(threshold = Inf), list(threshold = 1e300), list(position = -5),
+                  list(quantiles = as.list(seq(0.01, 0.99, length.out = 1e5))), list(quantiles = list(0.5, 1.2)), list(seed = -1),
+                  list(paths = 1000.5), list(lb_lag = "everything"))
+  t0 <- proc.time()[["elapsed"]]
+  before <- ts_sim_rss()
+  for (bad in hostile) {
+    msg <- .tab_refused_with("bad_option", fit_risk_simulation(.risk_task(ar, utils::modifyList(base, bad))))
+    .tab_expect(grepl(paste0("^the option ", names(bad)[[1L]], " "), msg), names(bad)[[1L]], ": ", msg)
+  }
+  .tab_expect(proc.time()[["elapsed"]] - t0 < 5, "the refusals took ", proc.time()[["elapsed"]] - t0, " s")
+  .tab_expect(is.na(before) || ts_sim_rss() - before < 64 * 2^20, "the refusals allocated ", (ts_sim_rss() - before) / 2^20, " MiB")
+  msg <- .tab_refused_with("bad_option", fit_garch(.garch_task(.garch_frame(code), list(horizon = 1e7))))
+  .tab_expect(grepl("^the option horizon is not a number at least 1 and at most 1000$", msg), msg)
+}
+
+# Lot G9: a GJR whose fitted γ₁ is below −α₁ (garch_prices.csv with a Student t: α₁ at 0, γ₁ negative) cannot be simulated, and
+# is refused with its numbers and the way out; the same series with a GARCH runs.
+TAB_COMMON_TESTS[["risk: a GJR whose variance a fall can make negative is refused with a sentence"]] <- function(code) {
+  prices <- .risk_prices(code)
+  p <- list(model = "garch", time = "day", value = "price", frequency = "index", input_kind = "prices", variance_model = "gjr",
+            distribution = "std", paths = 1000, horizon = 5)
+  msg <- .tab_refused_with("negative_variance", fit_risk_simulation(.risk_task(prices, p, sim = list(file = tempfile(fileext = ".parquet")))))
+  .tab_expect(grepl("^the fitted GJR-GARCH has α1 \\+ γ1 = -[0-9.e-]+, below 0: a large fall would make the variance negative, so no path can be simulated; choose GARCH or EGARCH$", msg), msg)
+  ok <- fit_risk_simulation(.risk_task(prices, utils::modifyList(p, list(variance_model = "garch")), sim = list(file = tempfile(fileext = ".parquet"))))
+  .tab_expect(!is.null(ok$output), "the same series with a GARCH")
+  # the GARCH node reports the same fit, and says the fact in a note
+  g <- fit_garch(.garch_task(prices, list(time = "day", value = "price", input_kind = "prices", variance_model = "gjr", distribution = "std")))
+  notes <- tab_results_frame(g$rows)
+  notes <- notes$text[grepl("^note_", notes$stat)]
+  .tab_expect(any(grepl("^@garch_negative_news lag=1 sum=-", notes)), "the GARCH node's note: ", paste(notes, collapse = " | "))
 }
 
 TAB_COMMON_TESTS[["risk: a position without a relative change, a relative change from 0, too few paths are refused with a sentence"]] <- function(code) {

@@ -129,25 +129,25 @@ TAB_COMMON_TESTS[["timeseries: the simulation's streamed measures equal the whol
   .ts_sim_check_whole(sim, ms, 10000, 1)
 }
 
-TAB_COMMON_TESTS[["timeseries: the simulation gives the same bits at every batch size and memory (64 MiB, 256 MiB, 2 GiB), and a run's first paths are a shorter run's"]] <- function(code) {
+TAB_COMMON_TESTS[["timeseries: the simulation gives the same bits at every batch size and memory (96 MiB, 256 MiB, 2 GiB), and a run's first paths are a shorter run's"]] <- function(code) {
   if (!requireNamespace("arrow", quietly = TRUE)) return("skipped")
   ms <- .ts_sim_measures_of(tail = "upper", threshold = 0.02)
   model <- ts_sim_toy("t")
   strip <- function(sim) sim[c("steps", "quantiles", "drawdown", "hist", "sample", "table")]
-  # baseline 0: the three budgets are what the batches may use; at 100 steps 64 MiB holds 3 blocks, the others 10 (a row
-  # group's 1,048,576 rows)
+  # baseline 0: the three budgets are what the batches may use; at 100 steps 96 MiB holds 2 blocks, the others 10 (a row
+  # group's 1,048,576 rows). (64 MiB until lot G9, whose F of 48 MB leaves no block in it.)
   runs <- list()
-  for (mb in c(64, 256, 2048)) {
+  for (mb in c(96, 256, 2048)) {
     runs[[paste0(mb, " MiB")]] <- .ts_sim_case(model, 10000, 100, seed = 11L, limits = .ts_sim_limits(memory_bytes = mb * 2^20),
                                               measures = ms, baseline_bytes = 0)
   }
   for (bb in c(1L, 3L)) runs[[paste0(bb, " blocks")]] <- .ts_sim_case(model, 10000, 100, seed = 11L, measures = ms, batch_blocks = bb)
   sizes <- unname(vapply(runs, function(r) r$run$batch_paths, 0))
-  want <- c(vapply(c(64, 256, 2048), function(mb) ts_sim_batch_paths(mb * 2^20, 100, 3, 1000, TS_SIM_BLOCK_FACTOR, TS_SIM_BATCH_FACTOR,
+  want <- c(vapply(c(96, 256, 2048), function(mb) ts_sim_batch_paths(mb * 2^20, 100, 3, 1000, TS_SIM_BLOCK_FACTOR, TS_SIM_BATCH_FACTOR,
                                                                     TS_SIM_FIXED_BYTES, 10000), 0), 1000, 3000)
   .tab_expect(identical(sizes, want) && sizes[[1L]] < sizes[[2L]], "batch sizes ", paste(sizes, collapse = " "))
   .tab_expect(identical(unname(vapply(runs, function(r) r$row_groups, 0L)), as.integer(ceiling(10000 / sizes))), "one row group a batch")
-  for (nm in names(runs)[-1L]) .tab_expect(identical(strip(runs[[nm]]), strip(runs[[1L]])), nm, " differs from 64 MiB")
+  for (nm in names(runs)[-1L]) .tab_expect(identical(strip(runs[[nm]]), strip(runs[[1L]])), nm, " differs from 96 MiB")
   # the prefix: the 2,000 paths of a run of 2,000 are the first 2,000 of a run of 10,000
   short <- .ts_sim_case(model, 2000, 100, seed = 11L, measures = ms)
   first <- lapply(runs[[1L]]$table, `[`, seq_len(2000 * 100))
@@ -220,27 +220,40 @@ TAB_COMMON_TESTS[["timeseries: the simulation refuses with its numbers (paths, m
   .tab_expect(!file.exists(file), "a refusal leaves no file")
 }
 
+# Two children, each a process of its own: 200,000 paths of 10 steps and 20,000 of 100 at memory_bytes = 256 MiB. Each stays below it
+# (VmHWM), over more than one batch, and the whole run's growth over R0, both passes, stays within the memory model the batch was
+# sized by (lot G9: the second pass passed it by 20 to 28 MB at 100 steps with F = 12 MB; the 100-step case caught it).
 TAB_COMMON_TESTS[["timeseries: the simulation stays below memory_bytes = 256 MiB in a process of its own, with more than one batch"]] <- function(code) {
   if (!requireNamespace("arrow", quietly = TRUE)) return("skipped")
-  out <- tempfile(fileext = ".json")
-  script <- tempfile(fileext = ".R")
   lib <- c(sort(list.files(file.path(code, "common", "R"), pattern = "[.]R$", full.names = TRUE)),
            file.path(code, "runner", "R", c("ts_sim.R", "ts_sim_tests.R")))
   # one line a file, each path a quoted string of its own: a ConfigMap's mount resolves to a long
   # «..<timestamp>» directory, and a deparsed vector of such paths breaks over lines the child cannot parse
   quoted <- function(path) encodeString(path, quote = '"')
-  writeLines(c(sprintf("source(%s)", quoted(lib)),
-               "suppressMessages(library(arrow))",
-               "limits <- .ts_sim_limits(memory_bytes = 256 * 2^20)",
-               sprintf("sim <- ts_sim_run(ts_sim_toy('t'), 200000, 10, 1L, limits, .ts_sim_measures_of(threshold = -0.05), file = %s)",
-                       quoted(tempfile(fileext = ".parquet"))),
-               sprintf("writeLines(jsonlite::toJSON(list(hwm = ts_sim_hwm(), batches = sim$run$batches, baseline = sim$run$baseline_bytes), auto_unbox = TRUE, digits = NA), %s)",
-                       quoted(out))),
-             script)
-  status <- system2(file.path(R.home("bin"), "Rscript"), c("--vanilla", script), stdout = FALSE, stderr = FALSE)
-  .tab_expect(identical(status, 0L) && file.exists(out), "the child process failed (", status, ")")
-  got <- jsonlite::fromJSON(out)
-  unlink(c(out, script))
-  .tab_expect(got$hwm < 256 * 2^20, sprintf("peak %.0f MB, above 256 MiB", got$hwm / 1e6))
-  .tab_expect(got$batches > 1L, "one batch: ", got$batches)
+  for (size in list(c(200000, 10), c(20000, 100))) {
+    out <- tempfile(fileext = ".json")
+    script <- tempfile(fileext = ".R")
+    writeLines(c(sprintf("source(%s)", quoted(lib)),
+                 "suppressMessages(library(arrow))",
+                 "limits <- .ts_sim_limits(memory_bytes = 256 * 2^20)",
+                 sprintf("sim <- ts_sim_run(ts_sim_toy('t'), %d, %dL, 1L, limits, .ts_sim_measures_of(threshold = -0.05), file = %s)",
+                         as.integer(size[[1L]]), as.integer(size[[2L]]), quoted(tempfile(fileext = ".parquet"))),
+                 "r <- sim$run",
+                 paste0("model <- ts_sim_batch_bytes(r$batch_paths, r$horizon, r$row_bytes / 8, r$seed_block, r$block_factor, r$batch_factor, ",
+                        "r$fixed_bytes)"),
+                 sprintf(paste0("writeLines(jsonlite::toJSON(list(hwm = ts_sim_hwm(), batches = r$batches, grown = r$peak_process_bytes - r$baseline_bytes, ",
+                                "model = model), auto_unbox = TRUE, digits = NA), %s)"), quoted(out))),
+               script)
+    status <- system2(file.path(R.home("bin"), "Rscript"), c("--vanilla", script), stdout = FALSE, stderr = FALSE)
+    .tab_expect(identical(status, 0L) && file.exists(out), "the child process failed (", status, ")")
+    got <- jsonlite::fromJSON(out)
+    unlink(c(out, script))
+    what <- sprintf("%s paths of %s steps: ", format(size[[1L]], scientific = FALSE), size[[2L]])
+    message(sprintf("%speak %.0f MB, growth %.0f MB of the model's %.0f MB, %d batches", what, got$hwm / 1e6, got$grown / 1e6, got$model / 1e6,
+                    as.integer(got$batches)))
+    .tab_expect(got$hwm < 256 * 2^20, sprintf("%speak %.0f MB, above 256 MiB", what, got$hwm / 1e6))
+    .tab_expect(got$batches > 1L, what, "one batch")
+    .tab_expect(got$grown <= got$model, sprintf("%sthe run grew by %.0f MB, beyond the %.0f MB its batch was sized for", what, got$grown / 1e6,
+                                                got$model / 1e6))
+  }
 }

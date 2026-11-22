@@ -31,6 +31,7 @@ TAB_COMMON_TESTS[["garch: Predict gives the fit's own σ and VaR on the rows aft
     list(df, list(variance_model = "garch", arch_order = 2, garch_order = 2, ar_order = 2, value = "ar_t", distribution = "std"), 700L),
     list(prices, list(time = "day", value = "price", input_kind = "prices", returns_type = "simple", distribution = "norm"), 250L),
     list(prices, list(time = "day", value = "price", input_kind = "prices", distribution = "std"), 250L))
+  moves <- list()
   for (cs in cases) {
     frame <- cs[[1L]]
     train <- seq_len(cs[[3L]])
@@ -57,6 +58,8 @@ TAB_COMMON_TESTS[["garch: Predict gives the fit's own σ and VaR on the rows aft
     got <- .garch_pred_col(pred, "prediction")
     var <- .garch_pred_col(pred, "prediction_var")
     .tab_expect(.garch_rel(got[seq_len(n)], sigma) < 1e-10, what, ": σ of the new rows is not the fit's filter's (", .garch_rel(got[seq_len(n)], sigma), ")")
+    # how much σ moves over the new rows (lot G9: kind's sample fit had α₁ at 0 and a flat σ, which proves little)
+    moves[[what]] <- diff(range(got[seq_len(n)])) / mean(got[seq_len(n)])
     .tab_expect(.garch_rel(var[seq_len(n)], mu + sigma * q) < 1e-10, what, ": the VaR of the new rows (", .garch_rel(var[seq_len(n)], mu + sigma * q), ")")
     # the forecast after the last row: the model's own recursion from the filter's state of the whole series
     eps <- r - as.numeric(rugarch::fitted(flt)) * s
@@ -79,6 +82,12 @@ TAB_COMMON_TESTS[["garch: Predict gives the fit's own σ and VaR on the rows aft
     only <- predict_garch(.garch_pred_task(new, list()), f$card)$output
     .tab_expect(only$num_rows == n, what, ": without a horizon the output is the new rows (", only$num_rows, ")")
   }
+  # the equalities above hold where σ changes from row to row: the six cases on garch_returns.csv move by 0.7 to 1.9 times their mean
+  # over the new rows; the two on garch_prices.csv barely move (α₁ at 0, as kind's sample fit), which proves the recursion less
+  moved <- unlist(moves)
+  .tab_expect(sum(moved > 1 / 3) >= 4 && moved[["GJR-GARCH(1,1), skewed t"]] > 1 / 3, "σ changes too little over the new rows: ",
+              paste(names(moved), signif(moved, 2), sep = " ", collapse = "; "))
+  message("garch Predict, σ's range over the new rows / its mean: ", paste(names(moved), signif(moved, 2), sep = " ", collapse = "; "))
 }
 
 TAB_COMMON_TESTS[["garch: Predict refuses rows that do not continue the card's series: before its last day, with a gap, twice, off the calendar"]] <- function(code) {

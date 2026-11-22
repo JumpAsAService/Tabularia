@@ -54,10 +54,13 @@ TS_SIM_ROW_GROUP_ROWS <- 1048576 # Arrow C++'s default maximum row group length 
 
 # The toy model's memory constants, measured (spec «As built / G2»): growth over R0 = F + 8·(φ·B_s·h + ρ·m·P·h), bounding
 # every measurement (10, 100, 250 and 1,000 steps; 1 to 104 blocks a batch; both passes). A model of G3 passes its own
-# (model$fixed_bytes, block_factor, batch_factor).
+# (model$fixed_bytes, block_factor, batch_factor). F was 12 MB until lot G9, which measured the second pass again over the
+# whole run (VmHWM − R0): it adds 20 to 28 MB beyond the model at 10, 100 and 250 steps (its sub-histograms, its slices'
+# selections and R's garbage between collections, nearly the same at every batch size), and at 256 MiB the process passed
+# memory_bytes by up to 17 MB. F = 48 MB bounds every point again, by 7.7 MB at least (the spec's «As built / G9»).
 TS_SIM_BLOCK_FACTOR <- 31
 TS_SIM_BATCH_FACTOR <- 4
-TS_SIM_FIXED_BYTES <- 12e6
+TS_SIM_FIXED_BYTES <- 48e6
 TS_SIM_GC_VALUES <- 65536
 
 # ── small helpers ──────────────────────────────────────────────────────────────
@@ -846,7 +849,7 @@ ts_sim_run <- function(model, paths, horizon, seed, limits, measures, time = NUL
   steps <- data.frame(step = seq_len(h))
   num <- function() rep(na, h)
   for (nm in c("mean", "mean_low", "mean_high", "sd", "skewness", "kurtosis", "var", "var_low", "var_high", "es", "es_low",
-               "es_high", "es_se", "band_error")) steps[[nm]] <- num()
+               "es_high", "es_se", "es_quantile", "band_error")) steps[[nm]] <- num()
   qmat <- matrix(na, h, length(qs), dimnames = list(NULL, format(qs, drop0trailing = TRUE, trim = TRUE)))
   for (k in seq_len(h)) {
     row <- plan$rows[[k]]
@@ -886,6 +889,8 @@ ts_sim_run <- function(model, paths, horizon, seed, limits, measures, time = NUL
       steps$es_high[[k]] <- -es_x + z * se
     }
     steps$es_se[[k]] <- se
+    # the quantile the ES averages beyond: the VaR at the ES's level, X_(⌈Np'⌉), on H's scale (lot G9)
+    steps$es_quantile[[k]] <- sgn * os[["es_var"]]
     if (length(qs)) {
       qmat[k, ] <- sgn * row$edges
       steps$band_error[[k]] <- max(row$edge_error)
