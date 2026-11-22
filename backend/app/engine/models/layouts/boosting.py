@@ -11,11 +11,13 @@ predictor, the charts: importance by the model's own measure and by mean |SHAP|,
 against predicted, or ROC, calibration, the predicted probabilities and the confusion matrix, or
 for several classes the confusion matrix and the ROC curves one class against the rest.
 
-Nothing is computed here: every number is a row the runner wrote, read by its key or section.
+Nothing is computed here: every number is a row the runner wrote, read by its key or section. The explanation
+(docs/specs/report-explanations.md, lot B3) is `readings`'s: measures only, no diagnostic being a test.
 """
 from __future__ import annotations
 
-from typing import Any
+import math
+from typing import Any, Mapping
 
 from app.engine.models import catalog
 from app.engine.models.layouts import common as c
@@ -142,6 +144,7 @@ def importance_block(task: str):
         ], p.y, visible=c.exists(f))
         table["sort"] = [{"by": "[value]"}]
         p.add(table, 10)
+        c.reading_under(p, w, "importance")
         if task == "multiclass":
             c.heading(p, "s_classes", w["sections"]["classes"])
             cs = w["stats"]["class"]
@@ -284,4 +287,118 @@ def report(model: str, params: dict[str, Any], locale: str, sample: list[dict] |
     blocks = (fit_block(model, checked, keys, formats.locale(c.code(locale)).decimal), importance_block(task), *((confusion_block(task),) if task != "regression" else ()))
     return c.page(model, params, locale, sample, step, name=name(model, params, locale), about=about(params, locale),
                   cards=cards(task, w), blocks=blocks, charts=tuple(charts), assumptions_note=w["diagnostics_note"],
-                  p_values=False, fit_skip=stat_names(task))
+                  p_values=False, fit_skip=stat_names(task), explained=("summary", "assumptions"))
+
+
+# ── the explanation (docs/specs/report-explanations.md, lot B3) ─────────────
+# No diagnostic of a boosting model is a test: each is a number read against a rule of thumb, with no p-value. So no
+# sentence here is a verdict: the summary says the validation numbers beside the baseline's, the diagnostics past
+# their threshold say their number and the threshold, the importance says the first predictors by their share of mean
+# |SHAP|. Everything is read from the rows the runner wrote.
+NAMED = 5  # the most predictors a sentence names
+DIAGNOSTIC_LINES = 7  # the most diagnostics the reading says one by one (a block holds READING_LINES sentences)
+# the validation's measure of fit the leakage check reads with the first predictor's share, by task
+FIT_OF_TASK = {"regression": "validation_r_squared", "binary": "validation_auc", "multiclass": "validation_macro_auc"}
+# the diagnostics whose sentence needs only their value and threshold
+SIMPLE = ("validation_size", "beats_baseline", "overfitting", "class_imbalance", "calibration", "importance_stability")
+TREES = {"trees_more": "diag_trees_more", "trees_few": "diag_trees_few", "trees_no_stop": "diag_trees_no_stop",
+         "trees_size": "diag_trees_size", "trees_time": "diag_trees_time", "stop_on_loss": "diag_stop_on_loss"}
+
+
+def _number(x: Any) -> float | None:
+    return float(x) if isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x) else None
+
+
+def _diagnostic(check: str, level_2: str | None, x: dict, model: dict, task: str) -> c.ReadingLine | None:
+    """The sentence of a diagnostic past its threshold: its number and the threshold the page uses, no verdict."""
+    value, threshold = _number(x.get("value")), _number(x.get("threshold"))
+    if check in SIMPLE:
+        if value is None or threshold is None:
+            return None
+        return ("assumptions", None, f"diag_{check}", {"value": value, "threshold": threshold})
+    if check == "trees_limit":
+        id_ = TREES.get(x.get("advice_id") or "")
+        if id_ is None:
+            return None
+        trees = model.get("trees")
+        values = {"trees": trees, "value": value, "threshold": threshold}
+        needed = {"diag_trees_more": ("trees",), "diag_trees_few": ("value", "threshold"), "diag_trees_no_stop": ("value", "threshold"),
+                  "diag_trees_size": ("trees",), "diag_trees_time": ("trees",), "diag_stop_on_loss": ("trees",)}[id_]
+        if any(values[k] is None for k in needed):
+            return None
+        return ("assumptions", None, id_, {k: values[k] for k in needed})
+    if check == "calibration_slope":
+        return ("assumptions", None, "diag_calibration_slope", {"value": value}) if value is not None else None
+    if check == "leakage":
+        fit = model.get(FIT_OF_TASK[task])
+        if value is None or threshold is None:
+            return None
+        if (model.get("n_predictors") or 0) < 2:  # with one predictor the value is the validation fit itself
+            return ("assumptions", None, "diag_leakage_one", {"value": value, "threshold": threshold})
+        if fit is None:
+            return None
+        side = "diag_leakage_share" if value >= threshold else "diag_leakage_fit"
+        return ("assumptions", None, side, {"covariate": level_2 or "", "value": value, "threshold": threshold, "fit": fit})
+    return None
+
+
+def readings(rows: list[dict], checked: Mapping[str, Any]) -> list[c.ReadingLine]:
+    task = checked["task"]
+    model = {r["stat"]: _number(r.get("value")) for r in rows if r["section"] == "model" and _number(r.get("value")) is not None}
+    texts = {r["stat"]: r.get("text") for r in rows if r["section"] == "model" and r.get("text")}
+    out: list[c.ReadingLine] = []
+    # summary: the parts, the trees, the validation's loss beside the baseline's
+    common_ = {"n_train": model.get("n_train"), "n_validation": model.get("n_validation"), "trees": model.get("trees")}
+    by_task = {"regression": {"rmse": model.get("validation_rmse"), "baseline": model.get("baseline_rmse"),
+                              "r2": model.get("validation_r_squared")},
+               "binary": {"logloss": model.get("validation_logloss"), "baseline": model.get("baseline_logloss"),
+                          "auc": model.get("validation_auc")},
+               "multiclass": {"logloss": model.get("validation_mlogloss"), "baseline": model.get("baseline_mlogloss"),
+                              "accuracy": model.get("validation_accuracy")}}[task]
+    summary = {**common_, **by_task}
+    if all(v is not None for v in summary.values()):
+        out.append(("summary", None, f"summary_boosting_{task}", summary))
+    # the diagnostics past their threshold (doubtful or failed), in the table's order; the predictors no split uses together
+    verdicts = [(r["level"], r.get("level_2"), r.get("text")) for r in rows if r["section"] == "assumption" and r["stat"] == "verdict"]
+    of = {}
+    for r in rows:
+        if r["section"] == "assumption":
+            of.setdefault((r["level"], r.get("level_2")), {})[r["stat"]] = r.get("value") if r["stat"] in ("value", "threshold") else r.get("text")
+    flagged = [(check, level_2) for check, level_2, verdict in verdicts if verdict in ("doubtful", "failed")]
+    lines: list[c.ReadingLine] = []
+    unused = [level_2 for check, level_2 in flagged if check == "zero_importance" and level_2]
+    for check, level_2 in flagged:
+        if check == "zero_importance":
+            continue
+        line = _diagnostic(check, level_2, of.get((check, level_2), {}), model, task)
+        if line:
+            lines.append(line)
+    if unused:
+        lines.append(("assumptions", None, "diag_zero_importance_more", {"names": unused[:NAMED], "more": len(unused) - NAMED})
+                     if len(unused) > NAMED else ("assumptions", None, "diag_zero_importance", {"names": unused}))
+    if len(lines) > DIAGNOSTIC_LINES:
+        lines = lines[:DIAGNOSTIC_LINES - 1] + [("assumptions", None, "diagnostics_more", {"more": len(lines) - DIAGNOSTIC_LINES + 1})]
+    if verdicts and not flagged:
+        lines.append(("assumptions", None, "diagnostics_none", {"total": len(verdicts)}))
+    out += lines
+    # the importance: the first predictors by their share of mean |SHAP|
+    shares = [(r["level"], _number(r.get("value"))) for r in rows
+              if r["section"] == "importance" and r["stat"] == "mean_abs_shap_share" and not r.get("level_2")]
+    shares = sorted(((-s, i, name) for i, (name, s) in enumerate(shares) if s is not None))
+    first = [(name, -s) for s, _, name in shares[:3]]
+    if len(first) == 1:
+        out.append(("importance", None, "importance_one", {"names": [first[0][0]]}))
+    elif first:
+        out.append(("importance", None, "importance_top", {"k": len(first), "names": [n for n, _ in first], "shares": [s for _, s in first]}))
+    # «How this report was computed»
+    validation = texts.get("validation") or "random"
+    method = ["method_boosting", "method_library", f"method_validation_{validation if validation in ('random', 'time', 'grouped') else 'random'}",
+              "method_early_stopping", "method_baseline"]
+    if task != "regression" and checked.get("class_weight") == "balanced":
+        method.append("method_class_weight")
+    if task == "binary":
+        method.append("method_threshold")
+    method += ["method_shap", "method_no_test"]
+    out += [("method", None, m, {}) for m in method]
+    out += [("formulas", None, f, {}) for f in ("formula_boosting", f"formula_loss_{task}", "formula_baseline", "formula_shap")]
+    return out

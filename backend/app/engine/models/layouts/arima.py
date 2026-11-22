@@ -12,10 +12,14 @@ The time's axis follows the runner's `time_kind`: dates for a date or datetime c
 days since 1970-01-01), plain numbers for an integer one (a month counted 1, 2, 3… is not a
 day of 1970). The definition is built before the rows are read, so each time chart is drawn
 twice in the same place, one of the two visible.
+
+The explanation (docs/specs/report-explanations.md, lot B3): a reading under the summary, the stationarity, the
+assumptions, the coefficients and the forecast, and «How this report was computed», chosen by `readings` from the rows.
 """
 from __future__ import annotations
 
-from typing import Any
+import math
+from typing import Any, Mapping
 
 from app.engine.models import catalog
 from app.engine.models.layouts import common as c
@@ -85,6 +89,7 @@ def _stationarity(params: dict[str, Any]):
                        weight="semibold" if marked else "normal", color=c.ACCENT if marked else c.MUTED,
                        visible=f"={computed} AND " + (this if marked else f"NOT ({this})"))
         p.text("cases_none", cases["none"], h=5, size=8, color=c.MUTED, visible=f"=NOT ({computed})")
+        c.reading_under(p, w, "stationarity")
     return block
 
 
@@ -110,6 +115,7 @@ def _forecast(params: dict[str, Any]):
                                             rmse=c.shown(c.num(c.model_key("holdout_rmse"))),
                                             mape=c.shown(c.num(c.model_key("holdout_mape")), "0.00")),
                h=5, size=8, color=c.MUTED, can_grow=True, visible=f"={holdout} > 0")
+        c.reading_under(p, w, "forecast")
         # the residuals over time, under the check of a changing variance
         r = '[section] = "curve" AND [level] = "residuals"'
         top, tall = p.y + 2, 58.0
@@ -273,11 +279,177 @@ def layout(model: str, params: dict[str, Any], locale: str, sample: list[dict] |
               lags("resid_pacf", "ljung_box_10"), c.histogram("c_residual", ch["residual"], "residual", s["count"]), qq)
     blocks = (_stationarity(params), _forecast(params)) + ((_candidates(params),) if variant == "auto" else ())
     doc = c.page(model, params, locale, sample, step, name=name(params, locale), about=about(params, locale), cards=cards,
-                 coef_tables=tables, blocks=blocks, charts=charts)
+                 coef_tables=tables, blocks=blocks, charts=charts, explained=("summary", "assumptions", "coefficients"))
     if variant == "auto":
         doc["datasets"][0]["calculated"] = _reasons(params, w)
     _adf_words(doc, w)
     return doc
 
 
+# ── the explanation (docs/specs/report-explanations.md, lot B3) ─────────────
+# The lines are chosen from the rows the runner wrote: a verdict only where a row has a p-value, read against the
+# node's alpha (ADF's and KPSS's at the ends of their tables by the side of the statistic, as the runner does: lot
+# D7); every other number is said as a measure. The words are the decomposition's for the same tests (ADF, KPSS,
+# Ljung–Box), said of the differenced series and of the residuals.
+RESIDUAL_TESTS = ("ljung_box_10", "ljung_box_2s", "arch_lm", "variance_ratio", "jarque_bera")
+NAMED = 5  # the most terms a sentence names (the table has them all)
+
+
+def _number(x: Any) -> float | None:
+    return float(x) if isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x) else None
+
+
+def table_rejects(check: str, p: float, alpha: float) -> bool | None:
+    """Whether ADF or KPSS rejects at alpha, with a p-value read from a table that stops at its ends (common.BOUNDED_P):
+    at the lower end p is at most that end and rejects at any alpha from it on, at the upper end p is at least that end
+    and keeps at any alpha up to it; beyond, the table cannot say (None). Inside, p against alpha."""
+    low, high = c.BOUNDED_P[check]
+    if p <= low:
+        return True if alpha >= low else None
+    if p >= high:
+        return False if alpha <= high else None
+    return p < alpha
+
+
+def _unit_root(check: str, row: dict, alpha: float) -> tuple[c.ReadingLine | None, bool | None]:
+    """The line of ADF or KPSS on the differenced series, and whether it rejects (None: no verdict)."""
+    low, high = c.BOUNDED_P[check]
+    p, statistic = _number(row.get("p_value")), _number(row.get("statistic"))
+    if p is None:
+        if row.get("verdict") == "not_computed" and row.get("advice_id") == "table_end" and statistic is not None:
+            # no p-value is written: alpha says which end it was (below the lower end, or above the upper one)
+            bound = low if alpha < low else high
+            return ("stationarity", None, f"{check}_table_end", {"bound": bound, "alpha": alpha, "statistic": statistic}), None
+        return None, None
+    rejects = table_rejects(check, p, alpha)
+    if rejects is None:
+        bound = low if p <= low else high
+        return ("stationarity", None, f"{check}_table_end", {"bound": bound, "alpha": alpha, "statistic": statistic}), None
+    if rejects:
+        line = (f"{check}_reject_end", {"bound": low, "alpha": alpha}) if p <= low else (f"{check}_reject", {"p": p, "alpha": alpha})
+    else:
+        line = (f"{check}_keep_end", {"bound": high, "alpha": alpha}) if p >= high else (f"{check}_keep", {"p": p, "alpha": alpha})
+    return ("stationarity", None, line[0], line[1]), rejects
+
+
+# the four cases of ADF and KPSS read together (the decomposition's words): (ADF rejects, KPSS rejects) → id
+CASES = {(True, False): "stationarity_both_ok", (True, True): "stationarity_adf_only", (False, False): "stationarity_kpss_only",
+         (False, True): "stationarity_neither"}
+
+
+def readings(rows: list[dict], checked: Mapping[str, Any]) -> list[c.ReadingLine]:
+    alpha = float(checked.get("alpha") or 0.05)
+    keyed = {r["key"]: r for r in rows if r.get("key")}
+
+    def num(key: str) -> float | None:
+        return _number(keyed.get(key, {}).get("value"))
+
+    def text(key: str) -> str | None:
+        return keyed.get(key, {}).get("text")
+
+    def check(name: str) -> dict:
+        return {s: (keyed.get(f"assumption|{name}||{s}") or {}).get("value" if s not in ("verdict", "advice_id") else "text")
+                for s in ("p_value", "statistic", "value", "threshold", "verdict", "advice_id")}
+
+    out: list[c.ReadingLine] = []
+    model = {k: num(c.model_key(k)) for k in ("n", "p", "d", "q", "P", "D", "Q", "s", "holdout", "horizon", "box_cox_lambda",
+                                              "candidates", "holdout_mape", "holdout_mase", "mape", "mase")}
+    n = int(model["n"] or 0)
+    seasonal = (model["s"] or 1) > 1 and any(model[k] for k in ("P", "D", "Q"))
+    orders = {k: int(model[k] or 0) for k in ("p", "d", "q", "P", "D", "Q")}
+    # summary: the orders in words, the transformation, the exogenous columns, the automatic choice
+    if seasonal:
+        out.append(("summary", None, "summary_sarima", {"n": n, **orders, "s": int(model["s"] or 0)}))
+    else:
+        out.append(("summary", None, "summary_arima", {"n": n, "p": orders["p"], "d": orders["d"], "q": orders["q"]}))
+    transform = text(c.model_key("transform"))
+    if transform == "log":
+        out.append(("summary", None, "summary_transform_log", {}))
+    elif transform == "box_cox" and model["box_cox_lambda"] is not None:
+        out.append(("summary", None, "summary_transform_box_cox", {"lambda": model["box_cox_lambda"]}))
+    exog = [str(e) for e in checked.get("exog") or []]
+    if len(exog) > NAMED:
+        out.append(("summary", None, "summary_exog_more", {"names": exog[:NAMED], "more": len(exog) - NAMED}))
+    elif exog:
+        out.append(("summary", None, "summary_exog", {"names": exog}))
+    if checked.get("orders") == "auto" and model["candidates"] is not None:
+        out.append(("summary", None, "auto_orders", {"n": int(model["candidates"])}))
+    # stationarity: ADF and KPSS on the differenced series, then their case read together
+    adf, kpss = check("adf"), check("kpss")
+    if adf["verdict"] == "not_computed" and not adf["advice_id"] and kpss["verdict"] == "not_computed" and not kpss["advice_id"]:
+        out.append(("stationarity", None, "stationarity_short", {}))
+    else:
+        adf_line, adf_rejects = _unit_root("adf", adf, alpha)
+        kpss_line, kpss_rejects = _unit_root("kpss", kpss, alpha)
+        out += [x for x in (adf_line, kpss_line) if x]
+        if adf_rejects is not None and kpss_rejects is not None:
+            out.append(("stationarity", None, CASES[(adf_rejects, kpss_rejects)], {}))
+        elif adf_line or kpss_line:
+            out.append(("stationarity", None, "stationarity_no_case", {}))
+    # the residuals' tests: each one that rejects by its own sentence, the others counted
+    tested = [(name, check(name)) for name in RESIDUAL_TESTS]
+    tested = [(name, x) for name, x in tested if _number(x["p_value"]) is not None]
+    rejected = [(name, x) for name, x in tested if x["p_value"] < alpha]
+    for name, x in rejected:
+        out.append(("assumptions", None, f"{name}_reject", {"p": x["p_value"], "alpha": alpha}))
+    if tested and not rejected:
+        out.append(("assumptions", None, "residuals_keep_all", {"total": len(tested), "alpha": alpha}))
+    elif len(tested) > len(rejected):
+        out.append(("assumptions", None, "residuals_keep_others", {"k": len(tested) - len(rejected), "alpha": alpha}))
+    roots = check("roots")
+    if roots["verdict"] in ("doubtful", "failed") and _number(roots["value"]) is not None and _number(roots["threshold"]) is not None:
+        out.append(("assumptions", None, "roots_threshold", {"value": roots["value"], "threshold": roots["threshold"]}))
+    if n > c.MANY_ROWS:
+        out.append(("assumptions", None, "assumptions_many_rows", {"n": n}))
+    # the coefficients whose p-value is below alpha, by their p-value
+    terms = [(r["level"], _number(r.get("value"))) for r in rows if r["section"] == "coef" and r["stat"] == "p_value"]
+    terms = [(t, pv) for t, pv in terms if pv is not None]
+    if terms:
+        below = sorted((pv, i, t) for i, (t, pv) in enumerate(terms) if pv < alpha)
+        names = [t for _, _, t in below[:NAMED]]
+        if not below:
+            out.append(("coefficients", None, "coef_none", {"total": len(terms), "alpha": alpha}))
+        elif len(below) > NAMED:
+            out.append(("coefficients", None, "coef_some_more", {"k": len(below), "total": len(terms), "names": names,
+                                                                  "more": len(below) - NAMED, "alpha": alpha}))
+        elif len(below) == 1:
+            out.append(("coefficients", None, "coef_one", {"total": len(terms), "names": names, "alpha": alpha}))
+        else:
+            out.append(("coefficients", None, "coef_some", {"k": len(below), "total": len(terms), "names": names, "alpha": alpha}))
+    # the forecast and the errors on the holdout (in sample without one)
+    forecast = any(r["section"] == "curve" and r["level"] == "forecast" and r["stat"] == "forecast" for r in rows)
+    if forecast and model["horizon"]:
+        out.append(("forecast", None, "forecast_horizon", {"horizon": int(model["horizon"]), "level": 1 - alpha}))
+    if (model["holdout"] or 0) > 0 and model["holdout_mape"] is not None and model["holdout_mase"] is not None:
+        out.append(("forecast", None, "holdout_errors", {"holdout": int(model["holdout"]), "mape": model["holdout_mape"],
+                                                         "mase": model["holdout_mase"]}))
+    elif not model["holdout"] and model["mape"] is not None and model["mase"] is not None:
+        out.append(("forecast", None, "sample_errors", {"mape": model["mape"], "mase": model["mase"]}))
+    # «How this report was computed»: the paragraphs, then the formulas
+    method = ["method_arima"]
+    if seasonal:
+        method.append("method_seasonal")
+    if orders["d"] or orders["D"]:
+        method.append("method_differencing")
+    if transform in ("log", "box_cox"):
+        method.append(f"method_transform_{transform}")
+    if exog:
+        method.append("method_exog")
+    if checked.get("orders") == "auto":
+        method.append("method_auto")
+    method += ["method_stationarity", "method_checks"]
+    if (model["holdout"] or 0) > 0:
+        method.append("method_holdout")
+    if forecast:
+        method.append("method_bands")
+    formulas = ["formula_sarima" if seasonal else "formula_arima", "formula_aicc"]
+    if transform == "box_cox":
+        formulas.append("formula_box_cox")
+    formulas += ["formula_adf", "formula_kpss", "formula_ljung_box", "formula_mape", "formula_mase"]
+    out += [("method", None, m, {}) for m in method]
+    out += [("formulas", None, f, {}) for f in formulas]
+    return out
+
+
+c.READINGS["arima"] = readings
 register("arima", layout, name, about)

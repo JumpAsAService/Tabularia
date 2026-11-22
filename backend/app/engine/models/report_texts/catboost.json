@@ -7,6 +7,12 @@
   "importance": {
    "gain_note": "PredictionValuesChange: how much a prediction changes, on average, when the predictor's value changes, as a share of all the predictors'. Mean |SHAP|: how far, on average, the predictor moves a prediction (exact for trees), on the SHAP sample.",
    "gain_share": "Share of the importance"
+  },
+  "reading_labels": {
+   "method_library": "CatBoost"
+  },
+  "reading_texts": {
+   "method_library": "CatBoost (Prokhorenkova et al. 2018) grows symmetric trees, the same split at every node of a level, up to max_depth. It turns each categorical column into numbers by ordered target statistics: a row's category is encoded from the outcomes of the rows before it in a random order (in time order with a validation part in time), so that a row's own outcome never enters its encoding."
   }
  },
  "it": {
@@ -17,6 +23,12 @@
   "importance": {
    "gain_note": "PredictionValuesChange: di quanto cambia in media una previsione quando cambia il valore del predittore, come quota di quella di tutti i predittori. |SHAP| medio: di quanto, in media, il predittore sposta una previsione (esatto per gli alberi), sul campione SHAP.",
    "gain_share": "Quota dell'importanza"
+  },
+  "reading_labels": {
+   "method_library": "CatBoost"
+  },
+  "reading_texts": {
+   "method_library": "CatBoost (Prokhorenkova et al. 2018) fa crescere alberi simmetrici, lo stesso split in ogni nodo di un livello, fino a max_depth. Trasforma ogni colonna categoriale in numeri con statistiche ordinate dell'esito: la categoria di una riga è codificata dagli esiti delle righe che la precedono in un ordine casuale (nell'ordine del tempo con una parte di validazione nel tempo), così che l'esito di una riga non entri mai nella sua codifica."
   }
  },
  "de": {
@@ -27,6 +39,12 @@
   "importance": {
    "gain_note": "PredictionValuesChange: wie stark sich eine Vorhersage im Mittel ändert, wenn sich der Wert des Prädiktors ändert, als Anteil an der Summe aller Prädiktoren. Mittleres |SHAP|: wie weit der Prädiktor eine Vorhersage im Mittel verschiebt (exakt für Bäume), in der SHAP-Stichprobe.",
    "gain_share": "Anteil an der Wichtigkeit"
+  },
+  "reading_labels": {
+   "method_library": "CatBoost"
+  },
+  "reading_texts": {
+   "method_library": "CatBoost (Prokhorenkova et al. 2018) lässt symmetrische Bäume wachsen, derselbe Split in jedem Knoten einer Ebene, bis max_depth. Es verwandelt jede kategoriale Spalte durch geordnete Zielstatistiken in Zahlen: Die Kategorie einer Zeile wird aus den Ergebnissen der Zeilen vor ihr in einer zufälligen Reihenfolge kodiert (in zeitlicher Reihenfolge bei einem Validierungsteil in der Zeit), sodass das eigene Ergebnis einer Zeile nie in ihre Kodierung eingeht."
   }
  },
  "es": {
@@ -37,6 +55,12 @@
   "importance": {
    "gain_note": "PredictionValuesChange: cuánto cambia, en promedio, una predicción cuando cambia el valor del predictor, como parte de la de todos los predictores. |SHAP| medio: cuánto desplaza, en promedio, el predictor una predicción (exacto para árboles), en la muestra SHAP.",
    "gain_share": "Parte de la importancia"
+  },
+  "reading_labels": {
+   "method_library": "CatBoost"
+  },
+  "reading_texts": {
+   "method_library": "CatBoost (Prokhorenkova et al. 2018) hace crecer árboles simétricos, la misma división en cada nodo de un nivel, hasta max_depth. Convierte cada columna categórica en números con estadísticos ordenados del resultado: la categoría de una fila se codifica con los resultados de las filas anteriores en un orden aleatorio (en orden temporal con una parte de validación en el tiempo), de modo que el resultado de una fila nunca entra en su codificación."
   }
  },
  "fr": {
@@ -47,6 +71,12 @@
   "importance": {
    "gain_note": "PredictionValuesChange : de combien une prédiction change, en moyenne, quand la valeur du prédicteur change, en part de celle de tous les prédicteurs. |SHAP| moyen : de combien, en moyenne, le prédicteur déplace une prédiction (exact pour les arbres), sur l'échantillon SHAP.",
    "gain_share": "Part de l'importance"
+  },
+  "reading_labels": {
+   "method_library": "CatBoost"
+  },
+  "reading_texts": {
+   "method_library": "CatBoost (Prokhorenkova et al. 2018) fait pousser des arbres symétriques, la même coupure à chaque nœud d'un niveau, jusqu'à max_depth. Il change chaque colonne catégorielle en nombres par des statistiques ordonnées de la cible : la catégorie d'une ligne est codée à partir des résultats des lignes qui la précèdent dans un ordre aléatoire (dans l'ordre du temps avec une partie de validation dans le temps), si bien que le résultat propre d'une ligne n'entre jamais dans son codage."
   }
  }
 }

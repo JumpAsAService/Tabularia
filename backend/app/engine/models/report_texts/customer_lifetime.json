@@ -261,8 +261,76 @@
   },
   "formula_texts": {
    "clv_formula": "x: frequency, t_x: recency, T: age, in {unit}",
-   "bgbb_formula": "x: transactions, t_x: opportunity of the last, n: opportunities, one opportunity a {unit:one}"
-  }
+   "bgbb_formula": "x: transactions, t_x: opportunity of the last, n: opportunities, one opportunity a {unit:one}",
+   "formula_chi_square": "χ² = Σ_k (O_k − E_k)² / E_k over the classes of repeat purchases 0, 1, 2, …, the top ones pooled until each expects 5 customers;  df = classes − 1 − the purchase model's parameters",
+   "formula_gamma_gamma": "z_ij ~ Gamma(p, ν_i), ν_i ~ Gamma(q, γ);  E(M_i | x_i, m̄_i) = (γ + m̄_i x_i) p / (p x_i + q − 1);  the population's mean spend p γ / (q − 1)",
+   "formula_clv": "CLV_i = margin · E(M_i) · Σ_(k=1)^(H) [CET_i(k) − CET_i(k − 1)] / (1 + d)^k;  CET_i(t): customer i's expected purchases in (T_i, T_i + t]; d = (1 + annual rate)^(1 / periods a year) − 1"
+  },
+  "reading_blocks": {
+   "summary": "Summary",
+   "assumptions": "Assumptions",
+   "fit_data": "Fit to the data",
+   "p_alive": "P(alive)",
+   "clv": "Value and purchases",
+   "method": "Method",
+   "formulas": "Formula"
+  },
+  "reading_labels": {
+   "method_auto": "Choice of the model",
+   "method_p_alive": "P(alive)",
+   "method_gamma_gamma": "Gamma–Gamma",
+   "method_clv": "CLV",
+   "method_holdout": "Holdout",
+   "method_tests": "Tests, facts, measures",
+   "formula_chi_square": "χ² of the purchases",
+   "formula_gamma_gamma": "Gamma–Gamma",
+   "formula_clv": "CLV",
+   "method_tests_purchases": "Tests, facts, measures"
+  },
+  "reading_texts": {
+   "summary_auto": "Of the three purchase models, {models} has the highest log-likelihood on these customers and was chosen: a ranking by the likelihood, not a test.",
+   "summary_spend": "Gamma–Gamma describes the average spend of the {spend_n:int} repeat customers who have one; the others get the population's expected spend.",
+   "frequency_fit_keep": "The χ² test does not reject the model's distribution of repeat purchases (χ² = {chi2:num} on {df:int} degrees of freedom, p-value {p:p}, not below α = {alpha:num}): the data do not show a departure from it, which does not prove there is none.",
+   "frequency_fit_reject": "The χ² test rejects the model's distribution of repeat purchases (χ² = {chi2:num} on {df:int} degrees of freedom, p-value {p:p}, below α = {alpha:num}): the model misses how many customers buy 0, 1, 2… times; compare the purchase models.",
+   "spend_independence_keep": "The test of the slope of the average spend on the frequency (robust HC3 errors) does not reject Gamma–Gamma's assumption that the spend does not move with the frequency (Pearson's r {r:num}, p-value {p:p}, not below α = {alpha:num}), which does not prove that it does not move.",
+   "spend_independence_reject": "The test of the slope of the average spend on the frequency (robust HC3 errors) rejects Gamma–Gamma's assumption that the spend does not move with the frequency (Pearson's r {r:num}, p-value {p:p}, below α = {alpha:num}): the CLV it computes is then biased.",
+   "convergence_edge": "An estimate lies at an edge of its range, where the likelihood keeps growing towards the limit: its standard error, if any, says little (the check of convergence).",
+   "convergence_not_reached": "The optimizer did not reach a maximum with a positive definite Hessian for these estimates: the check of convergence says what to do.",
+   "spend_tail_fact": "The spend model's q is {value:num}, at most 2: the variance of the average spend across customers is infinite, and a few large spenders move the mean.",
+   "horizon_beyond": "The horizon is {value:num} times the longest age the model learned from: past 1, the far periods rest on the model's form rather than on observed purchases.",
+   "assumptions_many_rows": "With {n:int} customers the tests detect departures too small to matter: read their size in the charts too.",
+   "holdout_compare": "Over the holdout, which the fit did not see, the model expected {expected:num} purchases and the customers made {observed:int}: a relative error of {error:spct}.",
+   "holdout_none": "Without a holdout column the purchases the model expects are compared only with those it learned from (the chart of repeat purchases).",
+   "p_alive_mean": "On average the model gives a customer a probability of {mean:num} of still being active, not yet lost, given their purchases and the time since the last one.",
+   "clv_totals": "Over a horizon of {horizon:num} {unit:dative}, discounted at {discount:pct} a year, the CLV totals {total:num}: {mean:num} for the average customer and {median:num} for the median one.",
+   "clv_totals_one": "Over a horizon of 1 {unit:one}, discounted at {discount:pct} a year, the CLV totals {total:num}: {mean:num} for the average customer and {median:num} for the median one.",
+   "transactions_total": "Over a horizon of {horizon:num} {unit:dative} the customers are expected to make {expected:num} purchases in all.",
+   "transactions_total_one": "Over a horizon of 1 {unit:one} the customers are expected to make {expected:num} purchases in all.",
+   "method_auto": "With purchase_model = auto the three purchase models (Pareto/NBD, BG/NBD, MBG/NBD) are fitted to the same customers and the one with the highest log-likelihood whose fit converged is kept; they have the same number of parameters, so AIC and BIC rank them the same way. The holdout never takes part in the choice.",
+   "method_p_alive": "P(alive) is the probability that a customer has not yet dropped out, given how many repeat purchases they made, when the last one was and how long they have been observed: a long silence after frequent purchases lowers it. The expected purchases over the horizon are those of a customer still active, weighted by that probability.",
+   "method_gamma_gamma": "Gamma–Gamma (Fader, Hardie and Lee 2005) describes the spend: each customer's purchases have a mean amount of their own, spread across customers by a gamma distribution, and the mean of a customer with few purchases is drawn towards the population's. It assumes the spend does not move with the frequency, which the slope test checks, and uses only the repeat customers with an average spend.",
+   "method_clv": "The CLV of a customer is the expected spend times the purchases expected in each future period, each discounted to today at the node's annual rate (converted to the period), summed over the horizon, times the margin. It is an expectation of the fitted model, not a forecast of what any one customer will buy.",
+   "method_holdout": "The holdout column holds the purchases each customer made in a period after the one the model learned from: the purchases the model expects for that period are compared with them, in total and by number of purchases, without the holdout taking part in the fit.",
+   "method_tests": "Two numbers are tests with a p-value read against α: the χ² of the repeat purchases (the customers counted by number of repeat purchases, against the model's expectation) and the slope of the average spend on the frequency (robust HC3 errors). A p-value below α rejects; above it, the data do not show a departure, which is not proof that there is none. The convergence and the spend's tail are facts of the fit, not tests; the other numbers (the customers, the holdout's error, the horizon) are measures with no verdict.",
+   "method_tests_purchases": "One number is a test with a p-value read against α: the χ² of the repeat purchases (the customers counted by number of repeat purchases, against the model's expectation). A p-value below α rejects; above it, the data do not show a departure, which is not proof that there is none. The convergence is a fact of the fit, not a test; the other numbers (the customers, the holdout's error, the horizon) are measures with no verdict."
+  },
+  "measure_readings": [
+   "summary_clv",
+   "summary_auto",
+   "summary_spend",
+   "convergence_edge",
+   "convergence_not_reached",
+   "spend_tail_fact",
+   "horizon_beyond",
+   "assumptions_many_rows",
+   "holdout_compare",
+   "holdout_none",
+   "p_alive_mean",
+   "clv_totals",
+   "clv_totals_one",
+   "transactions_total",
+   "transactions_total_one"
+  ]
  },
  "it": {
   "sections": {
@@ -526,8 +594,76 @@
   },
   "formula_texts": {
    "clv_formula": "x: frequenza, t_x: recency, T: età, in {unit}",
-   "bgbb_formula": "x: transazioni, t_x: occasione dell'ultima, n: occasioni, un'occasione per {unit:one}"
-  }
+   "bgbb_formula": "x: transazioni, t_x: occasione dell'ultima, n: occasioni, un'occasione per {unit:one}",
+   "formula_chi_square": "χ² = Σ_k (O_k − E_k)² / E_k sulle classi di acquisti ripetuti 0, 1, 2, …, le più alte raggruppate finché ciascuna attende 5 clienti;  gradi di libertà = classi − 1 − i parametri del modello d'acquisto",
+   "formula_gamma_gamma": "z_ij ~ Gamma(p, ν_i), ν_i ~ Gamma(q, γ);  E(M_i | x_i, m̄_i) = (γ + m̄_i x_i) p / (p x_i + q − 1);  la spesa media della popolazione p γ / (q − 1)",
+   "formula_clv": "CLV_i = margine · E(M_i) · Σ_(k=1)^(H) [CET_i(k) − CET_i(k − 1)] / (1 + d)^k;  CET_i(t): gli acquisti attesi del cliente i in (T_i, T_i + t]; d = (1 + tasso annuo)^(1 / periodi in un anno) − 1"
+  },
+  "reading_blocks": {
+   "summary": "Sintesi",
+   "assumptions": "Assunzioni",
+   "fit_data": "Adattamento ai dati",
+   "p_alive": "P(vivo)",
+   "clv": "Valore e acquisti",
+   "method": "Metodo",
+   "formulas": "Formula"
+  },
+  "reading_labels": {
+   "method_auto": "Scelta del modello",
+   "method_p_alive": "P(vivo)",
+   "method_gamma_gamma": "Gamma–Gamma",
+   "method_clv": "CLV",
+   "method_holdout": "Holdout",
+   "method_tests": "Test, fatti, misure",
+   "formula_chi_square": "χ² degli acquisti",
+   "formula_gamma_gamma": "Gamma–Gamma",
+   "formula_clv": "CLV",
+   "method_tests_purchases": "Test, fatti, misure"
+  },
+  "reading_texts": {
+   "summary_auto": "Dei tre modelli d'acquisto, {models} ha la log-verosimiglianza più alta su questi clienti ed è stato scelto: un ordinamento per verosimiglianza, non un test.",
+   "summary_spend": "Gamma–Gamma descrive la spesa media dei {spend_n:int} clienti con riacquisti che ne hanno una; gli altri ricevono la spesa attesa della popolazione.",
+   "frequency_fit_keep": "Il test χ² non rifiuta la distribuzione degli acquisti ripetuti del modello (χ² = {chi2:num} con {df:int} gradi di libertà, p-value {p:p}, non sotto α = {alpha:num}): i dati non mostrano uno scostamento da essa, il che non dimostra che non ci sia.",
+   "frequency_fit_reject": "Il test χ² rifiuta la distribuzione degli acquisti ripetuti del modello (χ² = {chi2:num} con {df:int} gradi di libertà, p-value {p:p}, sotto α = {alpha:num}): il modello sbaglia quanti clienti comprano 0, 1, 2… volte; confrontate i modelli d'acquisto.",
+   "spend_independence_keep": "Il test della pendenza della spesa media sulla frequenza (errori robusti HC3) non rifiuta l'assunzione di Gamma–Gamma che la spesa non si muova con la frequenza (r di Pearson {r:num}, p-value {p:p}, non sotto α = {alpha:num}), il che non dimostra che non si muova.",
+   "spend_independence_reject": "Il test della pendenza della spesa media sulla frequenza (errori robusti HC3) rifiuta l'assunzione di Gamma–Gamma che la spesa non si muova con la frequenza (r di Pearson {r:num}, p-value {p:p}, sotto α = {alpha:num}): il CLV che calcola è allora distorto.",
+   "convergence_edge": "Una stima sta a un estremo del suo intervallo, dove la verosimiglianza continua a crescere verso il limite: il suo errore standard, se c'è, dice poco (il controllo della convergenza).",
+   "convergence_not_reached": "L'ottimizzatore non ha raggiunto un massimo con un'hessiana definita positiva per queste stime: il controllo della convergenza dice che cosa fare.",
+   "spend_tail_fact": "La q del modello della spesa è {value:num}, al più 2: la varianza della spesa media tra i clienti è infinita, e pochi grandi acquirenti spostano la media.",
+   "horizon_beyond": "L'orizzonte è {value:num} volte l'età più lunga da cui il modello ha imparato: oltre 1, i periodi lontani poggiano sulla forma del modello più che sugli acquisti osservati.",
+   "assumptions_many_rows": "Con {n:int} clienti i test rilevano scostamenti troppo piccoli per contare: leggetene la grandezza anche nei grafici.",
+   "holdout_compare": "Sull'holdout, che la stima non ha visto, il modello attendeva {expected:num} acquisti e i clienti ne hanno fatti {observed:int}: un errore relativo del {error:spct}.",
+   "holdout_none": "Senza una colonna di holdout gli acquisti che il modello attende sono confrontati solo con quelli da cui ha imparato (il grafico degli acquisti ripetuti).",
+   "p_alive_mean": "In media il modello dà a un cliente una probabilità di {mean:num} di essere ancora attivo, non ancora perso, dati i suoi acquisti e il tempo dall'ultimo.",
+   "clv_totals": "Su un orizzonte di {horizon:num} {unit:dative}, scontato al {discount:pct} l'anno, il CLV totale è {total:num}: {mean:num} per il cliente medio e {median:num} per quello mediano.",
+   "clv_totals_one": "Su un orizzonte di 1 {unit:one}, scontato al {discount:pct} l'anno, il CLV totale è {total:num}: {mean:num} per il cliente medio e {median:num} per quello mediano.",
+   "transactions_total": "Su un orizzonte di {horizon:num} {unit:dative} si attendono dai clienti {expected:num} acquisti in tutto.",
+   "transactions_total_one": "Su un orizzonte di 1 {unit:one} si attendono dai clienti {expected:num} acquisti in tutto.",
+   "method_auto": "Con purchase_model = auto i tre modelli d'acquisto (Pareto/NBD, BG/NBD, MBG/NBD) sono stimati sugli stessi clienti e si tiene quello con la log-verosimiglianza più alta la cui stima è arrivata a convergenza; hanno lo stesso numero di parametri, quindi AIC e BIC li ordinano allo stesso modo. L'holdout non partecipa mai alla scelta.",
+   "method_p_alive": "P(vivo) è la probabilità che un cliente non abbia ancora abbandonato, dati quanti acquisti ripetuti ha fatto, quando è stato l'ultimo e da quanto tempo è osservato: un lungo silenzio dopo acquisti frequenti la abbassa. Gli acquisti attesi sull'orizzonte sono quelli di un cliente ancora attivo, pesati per quella probabilità.",
+   "method_gamma_gamma": "Gamma–Gamma (Fader, Hardie e Lee 2005) descrive la spesa: gli acquisti di ogni cliente hanno un importo medio suo, distribuito tra i clienti secondo una gamma, e la media di un cliente con pochi acquisti è tirata verso quella della popolazione. Assume che la spesa non si muova con la frequenza, cosa che il test della pendenza verifica, e usa solo i clienti con riacquisti con una spesa media.",
+   "method_clv": "Il CLV di un cliente è la spesa attesa per gli acquisti attesi in ogni periodo futuro, ciascuno scontato a oggi al tasso annuo del nodo (convertito al periodo), sommati sull'orizzonte, per il margine. È un valore atteso del modello stimato, non una previsione di ciò che comprerà un singolo cliente.",
+   "method_holdout": "La colonna di holdout contiene gli acquisti che ogni cliente ha fatto in un periodo successivo a quello da cui il modello ha imparato: gli acquisti che il modello attende per quel periodo sono confrontati con essi, in totale e per numero di acquisti, senza che l'holdout partecipi alla stima.",
+   "method_tests": "Due numeri sono test con un p-value letto contro α: il χ² degli acquisti ripetuti (i clienti contati per numero di acquisti ripetuti, contro l'attesa del modello) e la pendenza della spesa media sulla frequenza (errori robusti HC3). Un p-value sotto α rifiuta; sopra, i dati non mostrano uno scostamento, il che non dimostra che non ci sia. La convergenza e la coda della spesa sono fatti della stima, non test; gli altri numeri (i clienti, l'errore dell'holdout, l'orizzonte) sono misure senza verdetto.",
+   "method_tests_purchases": "Un numero è un test con un p-value letto contro α: il χ² degli acquisti ripetuti (i clienti contati per numero di acquisti ripetuti, contro l'attesa del modello). Un p-value sotto α rifiuta; sopra, i dati non mostrano uno scostamento, il che non dimostra che non ci sia. La convergenza è un fatto della stima, non un test; gli altri numeri (i clienti, l'errore dell'holdout, l'orizzonte) sono misure senza verdetto."
+  },
+  "measure_readings": [
+   "summary_clv",
+   "summary_auto",
+   "summary_spend",
+   "convergence_edge",
+   "convergence_not_reached",
+   "spend_tail_fact",
+   "horizon_beyond",
+   "assumptions_many_rows",
+   "holdout_compare",
+   "holdout_none",
+   "p_alive_mean",
+   "clv_totals",
+   "clv_totals_one",
+   "transactions_total",
+   "transactions_total_one"
+  ]
  },
  "de": {
   "sections": {
@@ -791,8 +927,76 @@
   },
   "formula_texts": {
    "clv_formula": "x: Häufigkeit, t_x: Recency, T: Alter, in {unit:dative}",
-   "bgbb_formula": "x: Transaktionen, t_x: Gelegenheit der letzten, n: Gelegenheiten, eine Gelegenheit pro {unit:one}"
-  }
+   "bgbb_formula": "x: Transaktionen, t_x: Gelegenheit der letzten, n: Gelegenheiten, eine Gelegenheit pro {unit:one}",
+   "formula_chi_square": "χ² = Σ_k (O_k − E_k)² / E_k über die Klassen der Wiederholungskäufe 0, 1, 2, …, die obersten zusammengelegt, bis jede 5 Kunden erwartet;  Freiheitsgrade = Klassen − 1 − die Parameter des Kaufmodells",
+   "formula_gamma_gamma": "z_ij ~ Gamma(p, ν_i), ν_i ~ Gamma(q, γ);  E(M_i | x_i, m̄_i) = (γ + m̄_i x_i) p / (p x_i + q − 1);  die mittlere Ausgabe der Population p γ / (q − 1)",
+   "formula_clv": "CLV_i = Marge · E(M_i) · Σ_(k=1)^(H) [CET_i(k) − CET_i(k − 1)] / (1 + d)^k;  CET_i(t): die erwarteten Käufe von Kunde i in (T_i, T_i + t]; d = (1 + Jahreszins)^(1 / Perioden im Jahr) − 1"
+  },
+  "reading_blocks": {
+   "summary": "Zusammenfassung",
+   "assumptions": "Annahmen",
+   "fit_data": "Anpassung an die Daten",
+   "p_alive": "P(aktiv)",
+   "clv": "Wert und Käufe",
+   "method": "Methode",
+   "formulas": "Formel"
+  },
+  "reading_labels": {
+   "method_auto": "Wahl des Modells",
+   "method_p_alive": "P(aktiv)",
+   "method_gamma_gamma": "Gamma–Gamma",
+   "method_clv": "CLV",
+   "method_holdout": "Holdout",
+   "method_tests": "Tests, Fakten, Maße",
+   "formula_chi_square": "χ² der Käufe",
+   "formula_gamma_gamma": "Gamma–Gamma",
+   "formula_clv": "CLV",
+   "method_tests_purchases": "Tests, Fakten, Maße"
+  },
+  "reading_texts": {
+   "summary_auto": "Von den drei Kaufmodellen hat {models} auf diesen Kunden die höchste Log-Likelihood und wurde gewählt: eine Rangfolge nach der Likelihood, kein Test.",
+   "summary_spend": "Gamma–Gamma beschreibt die durchschnittliche Ausgabe der {spend_n:int} Wiederkäufer, die eine haben; die übrigen erhalten die erwartete Ausgabe der Population.",
+   "frequency_fit_keep": "Der χ²-Test verwirft die Verteilung der Wiederholungskäufe des Modells nicht (χ² = {chi2:num} bei {df:int} Freiheitsgraden, p-Wert {p:p}, nicht unter α = {alpha:num}): Die Daten zeigen keine Abweichung davon, was nicht beweist, dass es keine gibt.",
+   "frequency_fit_reject": "Der χ²-Test verwirft die Verteilung der Wiederholungskäufe des Modells (χ² = {chi2:num} bei {df:int} Freiheitsgraden, p-Wert {p:p}, unter α = {alpha:num}): Das Modell verfehlt, wie viele Kunden 0, 1, 2… Mal kaufen; vergleichen Sie die Kaufmodelle.",
+   "spend_independence_keep": "Der Test der Steigung der durchschnittlichen Ausgabe auf die Frequenz (robuste HC3-Fehler) verwirft die Annahme von Gamma–Gamma, dass sich die Ausgabe nicht mit der Frequenz bewegt, nicht (Pearsons r {r:num}, p-Wert {p:p}, nicht unter α = {alpha:num}), was nicht beweist, dass sie sich nicht bewegt.",
+   "spend_independence_reject": "Der Test der Steigung der durchschnittlichen Ausgabe auf die Frequenz (robuste HC3-Fehler) verwirft die Annahme von Gamma–Gamma, dass sich die Ausgabe nicht mit der Frequenz bewegt (Pearsons r {r:num}, p-Wert {p:p}, unter α = {alpha:num}): Der CLV, den es berechnet, ist dann verzerrt.",
+   "convergence_edge": "Eine Schätzung liegt an einem Rand ihres Bereichs, wo die Likelihood zum Grenzwert hin weiter wächst: Ihr Standardfehler, falls vorhanden, sagt wenig (die Prüfung der Konvergenz).",
+   "convergence_not_reached": "Der Optimierer erreichte für diese Schätzungen kein Maximum mit positiv definiter Hesse-Matrix: Die Prüfung der Konvergenz sagt, was zu tun ist.",
+   "spend_tail_fact": "Das q des Ausgabemodells ist {value:num}, höchstens 2: Die Varianz der durchschnittlichen Ausgabe über die Kunden ist unendlich, und wenige große Käufer bewegen den Mittelwert.",
+   "horizon_beyond": "Der Horizont ist {value:num}-mal das längste Alter, aus dem das Modell gelernt hat: Über 1 beruhen die fernen Perioden eher auf der Form des Modells als auf beobachteten Käufen.",
+   "assumptions_many_rows": "Bei {n:int} Kunden erkennen die Tests Abweichungen, die zu klein sind, um ins Gewicht zu fallen: Lesen Sie ihre Größe auch in den Diagrammen.",
+   "holdout_compare": "Im Holdout, den die Anpassung nicht gesehen hat, erwartete das Modell {expected:num} Käufe, und die Kunden tätigten {observed:int}: ein relativer Fehler von {error:spct}.",
+   "holdout_none": "Ohne Holdout-Spalte werden die Käufe, die das Modell erwartet, nur mit denen verglichen, aus denen es gelernt hat (das Diagramm der Wiederholungskäufe).",
+   "p_alive_mean": "Im Mittel gibt das Modell einem Kunden eine Wahrscheinlichkeit von {mean:num}, noch aktiv und nicht verloren zu sein, gegeben seine Käufe und die Zeit seit dem letzten.",
+   "clv_totals": "Über einen Horizont von {horizon:num} {unit:dative}, mit {discount:pct} im Jahr abgezinst, beträgt der CLV insgesamt {total:num}: {mean:num} für den durchschnittlichen Kunden und {median:num} für den mittleren (Median).",
+   "clv_totals_one": "Über einen Horizont von 1 {unit:one}, mit {discount:pct} im Jahr abgezinst, beträgt der CLV insgesamt {total:num}: {mean:num} für den durchschnittlichen Kunden und {median:num} für den mittleren (Median).",
+   "transactions_total": "Über einen Horizont von {horizon:num} {unit:dative} werden von den Kunden insgesamt {expected:num} Käufe erwartet.",
+   "transactions_total_one": "Über einen Horizont von 1 {unit:one} werden von den Kunden insgesamt {expected:num} Käufe erwartet.",
+   "method_auto": "Mit purchase_model = auto werden die drei Kaufmodelle (Pareto/NBD, BG/NBD, MBG/NBD) an dieselben Kunden angepasst, und das mit der höchsten Log-Likelihood, dessen Anpassung konvergiert ist, wird behalten; sie haben gleich viele Parameter, daher ordnen AIC und BIC sie gleich. Der Holdout nimmt an der Wahl nie teil.",
+   "method_p_alive": "P(aktiv) ist die Wahrscheinlichkeit, dass ein Kunde noch nicht abgewandert ist, gegeben wie viele Wiederholungskäufe er tätigte, wann der letzte war und wie lange er beobachtet wird: Eine lange Stille nach häufigen Käufen senkt sie. Die erwarteten Käufe über den Horizont sind die eines noch aktiven Kunden, mit dieser Wahrscheinlichkeit gewichtet.",
+   "method_gamma_gamma": "Gamma–Gamma (Fader, Hardie und Lee 2005) beschreibt die Ausgabe: Die Käufe jedes Kunden haben einen eigenen mittleren Betrag, über die Kunden gamma-verteilt, und der Mittelwert eines Kunden mit wenigen Käufen wird zu dem der Population gezogen. Es nimmt an, dass sich die Ausgabe nicht mit der Frequenz bewegt, was der Steigungstest prüft, und verwendet nur die Wiederkäufer mit einer durchschnittlichen Ausgabe.",
+   "method_clv": "Der CLV eines Kunden ist die erwartete Ausgabe mal die in jeder künftigen Periode erwarteten Käufe, jede mit dem Jahreszins des Knotens (auf die Periode umgerechnet) auf heute abgezinst, über den Horizont summiert, mal die Marge. Er ist ein Erwartungswert des angepassten Modells, keine Prognose dessen, was ein einzelner Kunde kaufen wird.",
+   "method_holdout": "Die Holdout-Spalte enthält die Käufe, die jeder Kunde in einer Periode nach der getätigt hat, aus der das Modell gelernt hat: Die Käufe, die das Modell für diese Periode erwartet, werden mit ihnen verglichen, insgesamt und nach Zahl der Käufe, ohne dass der Holdout in die Anpassung eingeht.",
+   "method_tests": "Zwei Zahlen sind Tests mit einem p-Wert, der gegen α gelesen wird: das χ² der Wiederholungskäufe (die Kunden nach Zahl der Wiederholungskäufe gezählt, gegen die Erwartung des Modells) und die Steigung der durchschnittlichen Ausgabe auf die Frequenz (robuste HC3-Fehler). Ein p-Wert unter α verwirft; darüber zeigen die Daten keine Abweichung, was nicht beweist, dass es keine gibt. Die Konvergenz und der Rand der Ausgabeverteilung sind Fakten der Anpassung, keine Tests; die übrigen Zahlen (die Kunden, der Fehler des Holdouts, der Horizont) sind Maße ohne Urteil.",
+   "method_tests_purchases": "Eine Zahl ist ein Test mit einem p-Wert, der gegen α gelesen wird: das χ² der Wiederholungskäufe (die Kunden nach Zahl der Wiederholungskäufe gezählt, gegen die Erwartung des Modells). Ein p-Wert unter α verwirft; darüber zeigen die Daten keine Abweichung, was nicht beweist, dass es keine gibt. Die Konvergenz ist ein Faktum der Anpassung, kein Test; die übrigen Zahlen (die Kunden, der Fehler des Holdouts, der Horizont) sind Maße ohne Urteil."
+  },
+  "measure_readings": [
+   "summary_clv",
+   "summary_auto",
+   "summary_spend",
+   "convergence_edge",
+   "convergence_not_reached",
+   "spend_tail_fact",
+   "horizon_beyond",
+   "assumptions_many_rows",
+   "holdout_compare",
+   "holdout_none",
+   "p_alive_mean",
+   "clv_totals",
+   "clv_totals_one",
+   "transactions_total",
+   "transactions_total_one"
+  ]
  },
  "es": {
   "sections": {
@@ -1056,8 +1260,76 @@
   },
   "formula_texts": {
    "clv_formula": "x: frecuencia, t_x: recencia, T: edad, en {unit}",
-   "bgbb_formula": "x: transacciones, t_x: ocasión de la última, n: ocasiones, una ocasión por {unit:one}"
-  }
+   "bgbb_formula": "x: transacciones, t_x: ocasión de la última, n: ocasiones, una ocasión por {unit:one}",
+   "formula_chi_square": "χ² = Σ_k (O_k − E_k)² / E_k sobre las clases de compras repetidas 0, 1, 2, …, las más altas agrupadas hasta que cada una espera 5 clientes;  grados de libertad = clases − 1 − los parámetros del modelo de compra",
+   "formula_gamma_gamma": "z_ij ~ Gamma(p, ν_i), ν_i ~ Gamma(q, γ);  E(M_i | x_i, m̄_i) = (γ + m̄_i x_i) p / (p x_i + q − 1);  el gasto medio de la población p γ / (q − 1)",
+   "formula_clv": "CLV_i = margen · E(M_i) · Σ_(k=1)^(H) [CET_i(k) − CET_i(k − 1)] / (1 + d)^k;  CET_i(t): las compras esperadas del cliente i en (T_i, T_i + t]; d = (1 + tipo anual)^(1 / periodos al año) − 1"
+  },
+  "reading_blocks": {
+   "summary": "Resumen",
+   "assumptions": "Supuestos",
+   "fit_data": "Ajuste a los datos",
+   "p_alive": "P(vivo)",
+   "clv": "Valor y compras",
+   "method": "Método",
+   "formulas": "Fórmula"
+  },
+  "reading_labels": {
+   "method_auto": "Elección del modelo",
+   "method_p_alive": "P(vivo)",
+   "method_gamma_gamma": "Gamma–Gamma",
+   "method_clv": "CLV",
+   "method_holdout": "Holdout",
+   "method_tests": "Pruebas, hechos, medidas",
+   "formula_chi_square": "χ² de las compras",
+   "formula_gamma_gamma": "Gamma–Gamma",
+   "formula_clv": "CLV",
+   "method_tests_purchases": "Pruebas, hechos, medidas"
+  },
+  "reading_texts": {
+   "summary_auto": "De los tres modelos de compra, {models} tiene la log-verosimilitud más alta en estos clientes y fue elegido: una ordenación por la verosimilitud, no una prueba.",
+   "summary_spend": "Gamma–Gamma describe el gasto medio de los {spend_n:int} clientes con recompras que lo tienen; los demás reciben el gasto esperado de la población.",
+   "frequency_fit_keep": "La prueba χ² no rechaza la distribución de las compras repetidas del modelo (χ² = {chi2:num} con {df:int} grados de libertad, p-valor {p:p}, no por debajo de α = {alpha:num}): los datos no muestran una desviación de ella, lo que no demuestra que no la haya.",
+   "frequency_fit_reject": "La prueba χ² rechaza la distribución de las compras repetidas del modelo (χ² = {chi2:num} con {df:int} grados de libertad, p-valor {p:p}, por debajo de α = {alpha:num}): el modelo yerra cuántos clientes compran 0, 1, 2… veces; compare los modelos de compra.",
+   "spend_independence_keep": "La prueba de la pendiente del gasto medio sobre la frecuencia (errores robustos HC3) no rechaza el supuesto de Gamma–Gamma de que el gasto no se mueve con la frecuencia (r de Pearson {r:num}, p-valor {p:p}, no por debajo de α = {alpha:num}), lo que no demuestra que no se mueva.",
+   "spend_independence_reject": "La prueba de la pendiente del gasto medio sobre la frecuencia (errores robustos HC3) rechaza el supuesto de Gamma–Gamma de que el gasto no se mueve con la frecuencia (r de Pearson {r:num}, p-valor {p:p}, por debajo de α = {alpha:num}): el CLV que calcula está entonces sesgado.",
+   "convergence_edge": "Una estimación está en un extremo de su rango, donde la verosimilitud sigue creciendo hacia el límite: su error estándar, si lo hay, dice poco (la comprobación de la convergencia).",
+   "convergence_not_reached": "El optimizador no alcanzó un máximo con una hessiana definida positiva para estas estimaciones: la comprobación de la convergencia dice qué hacer.",
+   "spend_tail_fact": "La q del modelo del gasto es {value:num}, como mucho 2: la varianza del gasto medio entre los clientes es infinita, y unos pocos grandes compradores mueven la media.",
+   "horizon_beyond": "El horizonte es {value:num} veces la edad más larga de la que aprendió el modelo: pasado 1, los periodos lejanos descansan en la forma del modelo más que en compras observadas.",
+   "assumptions_many_rows": "Con {n:int} clientes las pruebas detectan desviaciones demasiado pequeñas para importar: lea también su tamaño en los gráficos.",
+   "holdout_compare": "En el holdout, que el ajuste no vio, el modelo esperaba {expected:num} compras y los clientes hicieron {observed:int}: un error relativo del {error:spct}.",
+   "holdout_none": "Sin una columna de holdout, las compras que el modelo espera se comparan solo con aquellas de las que aprendió (el gráfico de las compras repetidas).",
+   "p_alive_mean": "De media el modelo da a un cliente una probabilidad de {mean:num} de seguir activo, aún no perdido, dadas sus compras y el tiempo desde la última.",
+   "clv_totals": "En un horizonte de {horizon:num} {unit:dative}, descontado al {discount:pct} anual, el CLV suma {total:num}: {mean:num} para el cliente medio y {median:num} para el mediano.",
+   "clv_totals_one": "En un horizonte de 1 {unit:one}, descontado al {discount:pct} anual, el CLV suma {total:num}: {mean:num} para el cliente medio y {median:num} para el mediano.",
+   "transactions_total": "En un horizonte de {horizon:num} {unit:dative} se esperan de los clientes {expected:num} compras en total.",
+   "transactions_total_one": "En un horizonte de 1 {unit:one} se esperan de los clientes {expected:num} compras en total.",
+   "method_auto": "Con purchase_model = auto los tres modelos de compra (Pareto/NBD, BG/NBD, MBG/NBD) se ajustan a los mismos clientes y se conserva el de log-verosimilitud más alta cuyo ajuste convergió; tienen el mismo número de parámetros, así que AIC y BIC los ordenan igual. El holdout nunca participa en la elección.",
+   "method_p_alive": "P(vivo) es la probabilidad de que un cliente aún no haya abandonado, dado cuántas compras repetidas hizo, cuándo fue la última y cuánto tiempo lleva observado: un silencio largo tras compras frecuentes la baja. Las compras esperadas en el horizonte son las de un cliente aún activo, ponderadas por esa probabilidad.",
+   "method_gamma_gamma": "Gamma–Gamma (Fader, Hardie y Lee 2005) describe el gasto: las compras de cada cliente tienen un importe medio propio, repartido entre los clientes según una gamma, y la media de un cliente con pocas compras se acerca a la de la población. Supone que el gasto no se mueve con la frecuencia, lo que comprueba la prueba de la pendiente, y usa solo los clientes con recompras con un gasto medio.",
+   "method_clv": "El CLV de un cliente es el gasto esperado por las compras esperadas en cada periodo futuro, cada una descontada a hoy al tipo anual del nodo (convertido al periodo), sumadas en el horizonte, por el margen. Es una esperanza del modelo ajustado, no una previsión de lo que comprará un cliente concreto.",
+   "method_holdout": "La columna de holdout contiene las compras que cada cliente hizo en un periodo posterior a aquel del que aprendió el modelo: las compras que el modelo espera para ese periodo se comparan con ellas, en total y por número de compras, sin que el holdout participe en el ajuste.",
+   "method_tests": "Dos números son pruebas con un p-valor leído frente a α: el χ² de las compras repetidas (los clientes contados por número de compras repetidas, frente a lo que espera el modelo) y la pendiente del gasto medio sobre la frecuencia (errores robustos HC3). Un p-valor por debajo de α rechaza; por encima, los datos no muestran una desviación, lo que no demuestra que no la haya. La convergencia y la cola del gasto son hechos del ajuste, no pruebas; los demás números (los clientes, el error del holdout, el horizonte) son medidas sin veredicto.",
+   "method_tests_purchases": "Un número es una prueba con un p-valor leído frente a α: el χ² de las compras repetidas (los clientes contados por número de compras repetidas, frente a lo que espera el modelo). Un p-valor por debajo de α rechaza; por encima, los datos no muestran una desviación, lo que no demuestra que no la haya. La convergencia es un hecho del ajuste, no una prueba; los demás números (los clientes, el error del holdout, el horizonte) son medidas sin veredicto."
+  },
+  "measure_readings": [
+   "summary_clv",
+   "summary_auto",
+   "summary_spend",
+   "convergence_edge",
+   "convergence_not_reached",
+   "spend_tail_fact",
+   "horizon_beyond",
+   "assumptions_many_rows",
+   "holdout_compare",
+   "holdout_none",
+   "p_alive_mean",
+   "clv_totals",
+   "clv_totals_one",
+   "transactions_total",
+   "transactions_total_one"
+  ]
  },
  "fr": {
   "sections": {
@@ -1321,7 +1593,75 @@
   },
   "formula_texts": {
    "clv_formula": "x : fréquence, t_x : récence, T : âge, en {unit}",
-   "bgbb_formula": "x : transactions, t_x : occasion de la dernière, n : occasions, une occasion par {unit:one}"
-  }
+   "bgbb_formula": "x : transactions, t_x : occasion de la dernière, n : occasions, une occasion par {unit:one}",
+   "formula_chi_square": "χ² = Σ_k (O_k − E_k)² / E_k sur les classes d'achats répétés 0, 1, 2, …, les plus hautes regroupées jusqu'à ce que chacune attende 5 clients ;  degrés de liberté = classes − 1 − les paramètres du modèle d'achat",
+   "formula_gamma_gamma": "z_ij ~ Gamma(p, ν_i), ν_i ~ Gamma(q, γ) ;  E(M_i | x_i, m̄_i) = (γ + m̄_i x_i) p / (p x_i + q − 1) ;  la dépense moyenne de la population p γ / (q − 1)",
+   "formula_clv": "CLV_i = marge · E(M_i) · Σ_(k=1)^(H) [CET_i(k) − CET_i(k − 1)] / (1 + d)^k ;  CET_i(t) : les achats attendus du client i dans (T_i, T_i + t] ; d = (1 + taux annuel)^(1 / périodes par an) − 1"
+  },
+  "reading_blocks": {
+   "summary": "Synthèse",
+   "assumptions": "Hypothèses",
+   "fit_data": "Ajustement aux données",
+   "p_alive": "P(actif)",
+   "clv": "Valeur et achats",
+   "method": "Méthode",
+   "formulas": "Formule"
+  },
+  "reading_labels": {
+   "method_auto": "Choix du modèle",
+   "method_p_alive": "P(actif)",
+   "method_gamma_gamma": "Gamma–Gamma",
+   "method_clv": "CLV",
+   "method_holdout": "Holdout",
+   "method_tests": "Tests, faits, mesures",
+   "formula_chi_square": "χ² des achats",
+   "formula_gamma_gamma": "Gamma–Gamma",
+   "formula_clv": "CLV",
+   "method_tests_purchases": "Tests, faits, mesures"
+  },
+  "reading_texts": {
+   "summary_auto": "Des trois modèles d'achat, {models} a la log-vraisemblance la plus haute sur ces clients et a été choisi : un classement par la vraisemblance, pas un test.",
+   "summary_spend": "Gamma–Gamma décrit la dépense moyenne des {spend_n:int} clients avec rachats qui en ont une ; les autres reçoivent la dépense attendue de la population.",
+   "frequency_fit_keep": "Le test du χ² ne rejette pas la loi des achats répétés du modèle (χ² = {chi2:num} à {df:int} degrés de liberté, p-valeur {p:p}, pas sous α = {alpha:num}) : les données ne montrent pas d'écart à cette loi, ce qui ne démontre pas qu'il n'y en a pas.",
+   "frequency_fit_reject": "Le test du χ² rejette la loi des achats répétés du modèle (χ² = {chi2:num} à {df:int} degrés de liberté, p-valeur {p:p}, sous α = {alpha:num}) : le modèle manque combien de clients achètent 0, 1, 2… fois ; comparez les modèles d'achat.",
+   "spend_independence_keep": "Le test de la pente de la dépense moyenne sur la fréquence (erreurs robustes HC3) ne rejette pas l'hypothèse de Gamma–Gamma selon laquelle la dépense ne bouge pas avec la fréquence (r de Pearson {r:num}, p-valeur {p:p}, pas sous α = {alpha:num}), ce qui ne démontre pas qu'elle ne bouge pas.",
+   "spend_independence_reject": "Le test de la pente de la dépense moyenne sur la fréquence (erreurs robustes HC3) rejette l'hypothèse de Gamma–Gamma selon laquelle la dépense ne bouge pas avec la fréquence (r de Pearson {r:num}, p-valeur {p:p}, sous α = {alpha:num}) : la CLV qu'il calcule est alors biaisée.",
+   "convergence_edge": "Une estimation est à une borne de son domaine, où la vraisemblance continue de croître vers la limite : son erreur standard, s'il y en a une, dit peu de chose (le contrôle de la convergence).",
+   "convergence_not_reached": "L'optimiseur n'a pas atteint de maximum avec une hessienne définie positive pour ces estimations : le contrôle de la convergence dit quoi faire.",
+   "spend_tail_fact": "Le q du modèle de la dépense est de {value:num}, au plus 2 : la variance de la dépense moyenne entre les clients est infinie, et quelques gros acheteurs déplacent la moyenne.",
+   "horizon_beyond": "L'horizon vaut {value:num} fois l'âge le plus long dont le modèle a appris : au-delà de 1, les périodes lointaines reposent sur la forme du modèle plus que sur des achats observés.",
+   "assumptions_many_rows": "Avec {n:int} clients les tests détectent des écarts trop petits pour compter : lisez aussi leur taille dans les graphiques.",
+   "holdout_compare": "Sur le holdout, que l'ajustement n'a pas vu, le modèle attendait {expected:num} achats et les clients en ont fait {observed:int} : une erreur relative de {error:spct}.",
+   "holdout_none": "Sans colonne de holdout, les achats que le modèle attend ne sont comparés qu'à ceux dont il a appris (le graphique des achats répétés).",
+   "p_alive_mean": "En moyenne le modèle donne à un client une probabilité de {mean:num} d'être encore actif, pas encore perdu, compte tenu de ses achats et du temps depuis le dernier.",
+   "clv_totals": "Sur un horizon de {horizon:num} {unit:dative}, actualisée à {discount:pct} par an, la CLV totale est de {total:num} : {mean:num} pour le client moyen et {median:num} pour le client médian.",
+   "clv_totals_one": "Sur un horizon de 1 {unit:one}, actualisée à {discount:pct} par an, la CLV totale est de {total:num} : {mean:num} pour le client moyen et {median:num} pour le client médian.",
+   "transactions_total": "Sur un horizon de {horizon:num} {unit:dative}, on attend des clients {expected:num} achats en tout.",
+   "transactions_total_one": "Sur un horizon de 1 {unit:one}, on attend des clients {expected:num} achats en tout.",
+   "method_auto": "Avec purchase_model = auto, les trois modèles d'achat (Pareto/NBD, BG/NBD, MBG/NBD) sont ajustés aux mêmes clients et celui de plus haute log-vraisemblance dont l'ajustement a convergé est gardé ; ils ont le même nombre de paramètres, donc AIC et BIC les classent de la même façon. Le holdout ne prend jamais part au choix.",
+   "method_p_alive": "P(actif) est la probabilité qu'un client n'ait pas encore abandonné, compte tenu du nombre d'achats répétés, de la date du dernier et de la durée d'observation : un long silence après des achats fréquents la fait baisser. Les achats attendus sur l'horizon sont ceux d'un client encore actif, pondérés par cette probabilité.",
+   "method_gamma_gamma": "Gamma–Gamma (Fader, Hardie et Lee 2005) décrit la dépense : les achats de chaque client ont un montant moyen propre, réparti entre les clients selon une loi gamma, et la moyenne d'un client qui a peu d'achats est tirée vers celle de la population. Il suppose que la dépense ne bouge pas avec la fréquence, ce que le test de la pente vérifie, et n'utilise que les clients avec rachats qui ont une dépense moyenne.",
+   "method_clv": "La CLV d'un client est la dépense attendue multipliée par les achats attendus à chaque période future, chacun actualisé à aujourd'hui au taux annuel du nœud (converti à la période), sommés sur l'horizon, multipliée par la marge. C'est une espérance du modèle ajusté, pas une prévision de ce qu'achètera un client donné.",
+   "method_holdout": "La colonne de holdout contient les achats de chaque client dans une période postérieure à celle dont le modèle a appris : les achats que le modèle attend pour cette période leur sont comparés, au total et par nombre d'achats, sans que le holdout prenne part à l'ajustement.",
+   "method_tests": "Deux nombres sont des tests avec une p-valeur lue face à α : le χ² des achats répétés (les clients comptés par nombre d'achats répétés, face à l'attente du modèle) et la pente de la dépense moyenne sur la fréquence (erreurs robustes HC3). Une p-valeur sous α rejette ; au-dessus, les données ne montrent pas d'écart, ce qui ne démontre pas qu'il n'y en a pas. La convergence et la queue de la dépense sont des faits de l'ajustement, pas des tests ; les autres nombres (les clients, l'erreur du holdout, l'horizon) sont des mesures sans verdict.",
+   "method_tests_purchases": "Un nombre est un test avec une p-valeur lue face à α : le χ² des achats répétés (les clients comptés par nombre d'achats répétés, face à l'attente du modèle). Une p-valeur sous α rejette ; au-dessus, les données ne montrent pas d'écart, ce qui ne démontre pas qu'il n'y en a pas. La convergence est un fait de l'ajustement, pas un test ; les autres nombres (les clients, l'erreur du holdout, l'horizon) sont des mesures sans verdict."
+  },
+  "measure_readings": [
+   "summary_clv",
+   "summary_auto",
+   "summary_spend",
+   "convergence_edge",
+   "convergence_not_reached",
+   "spend_tail_fact",
+   "horizon_beyond",
+   "assumptions_many_rows",
+   "holdout_compare",
+   "holdout_none",
+   "p_alive_mean",
+   "clv_totals",
+   "clv_totals_one",
+   "transactions_total",
+   "transactions_total_one"
+  ]
  }
 }

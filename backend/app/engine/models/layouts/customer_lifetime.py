@@ -16,10 +16,14 @@ In the `purchases` variant the CLV's page is drawn on the expected transactions,
 The `hist|clv` edges are read as the numbers the page prints (the CLV, or the expected transactions):
 the runner chooses them equal on a logarithmic scale, with one bin for zero (`x0 = x1 = 0`), and the
 page labels each bin by its two edges.
+
+The explanation (docs/specs/report-explanations.md, lot B3) is `readings`'s: a reading under the summary, the checks,
+the fit to the data, P(alive) and the CLV, and «How this report was computed».
 """
 from __future__ import annotations
 
-from typing import Any
+import math
+from typing import Any, Mapping
 
 from app.engine.models import catalog
 from app.engine.models.layouts import common as c
@@ -185,6 +189,7 @@ def _fit_to_the_data(p: stats.Page, w: dict) -> None:
                                          error=_signed_percent(share), length=c.shown(c.num(c.model_key("holdout_length")), "#,##0"),
                                          unit=_unit(w, c.num(c.model_key("holdout_length")), True)),
            h=5, size=8, color=c.MUTED, can_grow=True, visible=f"=NOT ISNULL({share})")
+    c.reading_under(p, w, "fit_data")
 
 
 # ── P(alive) ────────────────────────────────────────────────────────────────
@@ -202,6 +207,7 @@ def _p_alive(p: stats.Page, w: dict) -> None:
                   split_by="[level_2]")
     distribution = c.histogram("p_alive", ch["p_alive"], "p_alive", s["customers"])._replace(wide=True)
     c.grid(p, w, (cell, curves, distribution), ("s_p_alive", w["sections"]["p_alive"]), tall=56.0)
+    c.reading_under(p, w, "p_alive")
 
 
 # ── the spend (variant `value`) ─────────────────────────────────────────────
@@ -238,6 +244,7 @@ def _clv(value: bool):
         p.text("concentration_reading", "=" + c.join(w["concentration" if value else "concentration_transactions"],
                                                      share=_percent(top10, "0")), h=5, size=8.5, can_grow=True,
                visible=f"=NOT ISNULL({top10})")
+        c.reading_under(p, w, "clv")
         one = '[section] = "customer" AND [stat] = "rank"'
         stat = lambda name, pattern, width: {"header": c.stat_label(w, "customer", name), "value": c.number_of_row("customer", name),  # noqa: E731
                                               "width": width, "align": "right", "format": pattern}
@@ -288,5 +295,92 @@ def build(model: str, params: dict[str, Any], locale: str, sample: list[dict] | 
     doc = c.page(model, params, locale, sample, step, name=name, about=about, cards=cards,
                  assumptions_note=c.alpha_said(w["alpha_note"], checked.get("alpha", 0.05), locale) + " " + w["assumptions_note"],
                  after_assumptions=(c.measures(MEASURES, COUNTED, SCIENTIFIC),), fit_skip=FIT_SKIP, fit_format=SMALL, summary_lines=(("business", line),),
-                 after_coefficients=(_parameters(value), *((_comparison,) if model == "clv" else ())), blocks=blocks)
+                 after_coefficients=(_parameters(value), *((_comparison,) if model == "clv" else ())), blocks=blocks,
+                 explained=("summary", "assumptions"))
     return doc
+
+
+# ── the explanation (docs/specs/report-explanations.md, lot B3) ─────────────
+# The runner's own distinction is kept (clv_checks.R): a verdict comes only from the two tests with a p-value
+# (frequency_fit, spend_independence), read against the node's alpha; convergence and spend_tail are facts, said
+# without a word of judgement; every other number is a measure. The sentences are chosen from the rows the runner wrote.
+
+
+def _number(x: Any) -> float | None:
+    return float(x) if isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x) else None
+
+
+def readings(rows: list[dict], checked: Mapping[str, Any]) -> list[c.ReadingLine]:
+    alpha = float(checked.get("alpha") or 0.05)
+    model = {r["stat"]: _number(r.get("value")) for r in rows if r["section"] == "model"}
+    texts = {r["stat"]: r.get("text") for r in rows if r["section"] == "model" and r.get("text")}
+    checks: dict[str, dict] = {}
+    for r in rows:
+        if r["section"] == "assumption" and not r.get("level_2"):
+            checks.setdefault(r["level"], {})[r["stat"]] = r.get("text") if r["stat"] in ("verdict", "advice_id") else _number(r.get("value"))
+    purchase = texts.get("purchase_model") or ""
+    value = model.get("clv_total") is not None
+    out: list[c.ReadingLine] = []
+    # summary: the customers, the repeat customers, the purchase model (with auto, the one the likelihood chose)
+    n = model.get("n")
+    if n is not None and model.get("share_repeaters") is not None:
+        out.append(("summary", None, "summary_clv", {"n": n, "share": model["share_repeaters"], "models": purchase}))
+    if texts.get("purchase_model_asked") == "auto" and purchase:
+        out.append(("summary", None, "summary_auto", {"models": purchase}))
+    if value and model.get("spend_n") is not None:
+        out.append(("summary", None, "summary_spend", {"spend_n": model["spend_n"]}))
+    # assumptions: the two tests, the two facts, the horizon's measure
+    fit = checks.get("frequency_fit", {})
+    if fit.get("p_value") is not None and fit.get("statistic") is not None and fit.get("df") is not None:
+        side = "reject" if fit["p_value"] < alpha else "keep"
+        out.append(("assumptions", None, f"frequency_fit_{side}", {"chi2": fit["statistic"], "df": fit["df"], "p": fit["p_value"],
+                                                                   "alpha": alpha}))
+    spend = checks.get("spend_independence", {})
+    if spend.get("p_value") is not None and spend.get("value") is not None:
+        side = "reject" if spend["p_value"] < alpha else "keep"
+        out.append(("assumptions", None, f"spend_independence_{side}", {"r": spend["value"], "p": spend["p_value"], "alpha": alpha}))
+    convergence = checks.get("convergence", {})
+    if convergence.get("verdict") in ("doubtful", "failed"):
+        out.append(("assumptions", None, "convergence_edge" if convergence.get("advice_id") == "convergence_edge" else "convergence_not_reached", {}))
+    tail = checks.get("spend_tail", {})
+    if tail.get("verdict") in ("doubtful", "failed") and tail.get("value") is not None:
+        out.append(("assumptions", None, "spend_tail_fact", {"value": tail["value"]}))
+    horizon_length = checks.get("horizon_length", {}).get("value")
+    if horizon_length is not None and horizon_length > 1:
+        out.append(("assumptions", None, "horizon_beyond", {"value": horizon_length}))
+    if n is not None and n > c.MANY_ROWS:
+        out.append(("assumptions", None, "assumptions_many_rows", {"n": n}))
+    # the fit to the data: the holdout's purchases, expected and observed
+    holdout = all(model.get(k) is not None for k in ("holdout_expected", "holdout_observed", "holdout_rel_error"))
+    if holdout:
+        out.append(("fit_data", None, "holdout_compare", {"expected": model["holdout_expected"], "observed": model["holdout_observed"],
+                                                          "error": model["holdout_rel_error"]}))
+    else:
+        out.append(("fit_data", None, "holdout_none", {}))
+    # P(alive), then the CLV (or, without a spend, the expected purchases) over the horizon
+    if model.get("mean_p_alive") is not None:
+        out.append(("p_alive", None, "p_alive_mean", {"mean": model["mean_p_alive"]}))
+    horizon, unit = model.get("horizon"), texts.get("time_unit")
+    one = "_one" if horizon == 1 else ""
+    if value and horizon is not None and unit and all(model.get(k) is not None for k in ("clv_mean", "clv_median", "discount_rate")):
+        out.append(("clv", None, "clv_totals" + one, {"total": model["clv_total"], "mean": model["clv_mean"], "median": model["clv_median"],
+                                                     "horizon": horizon, "unit": unit, "discount": model["discount_rate"]}))
+    elif not value and horizon is not None and unit and model.get("expected_transactions") is not None:
+        out.append(("clv", None, "transactions_total" + one, {"expected": model["expected_transactions"], "horizon": horizon, "unit": unit}))
+    # «How this report was computed»
+    method = [f"method_{purchase}"] if purchase else []
+    if texts.get("purchase_model_asked") == "auto":
+        method.append("method_auto")
+    method.append("method_p_alive")
+    if value:
+        method += ["method_gamma_gamma", "method_clv"]
+    if holdout:
+        method.append("method_holdout")
+    method.append("method_tests" if value else "method_tests_purchases")
+    formulas = [f"formula_{purchase}", f"formula_p_alive_{purchase}"] if purchase else []
+    formulas.append("formula_chi_square")
+    if value:
+        formulas += ["formula_gamma_gamma", "formula_clv"]
+    out += [("method", None, m, {}) for m in method]
+    out += [("formulas", None, f, {}) for f in formulas]
+    return out

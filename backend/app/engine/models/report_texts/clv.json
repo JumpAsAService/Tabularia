@@ -15,6 +15,31 @@
   "candidate_not_checked": {
    "cell": "not checked",
    "legend": "Not checked: the choice stopped at a better model whose convergence check passed."
+  },
+  "reading_labels": {
+   "method_pareto_nbd": "Pareto/NBD",
+   "method_bg_nbd": "BG/NBD",
+   "method_mbg_nbd": "MBG/NBD",
+   "formula_pareto_nbd": "Pareto/NBD",
+   "formula_bg_nbd": "BG/NBD",
+   "formula_mbg_nbd": "MBG/NBD",
+   "formula_p_alive_pareto_nbd": "P(alive), Pareto/NBD",
+   "formula_p_alive_bg_nbd": "P(alive), BG/NBD",
+   "formula_p_alive_mbg_nbd": "P(alive), MBG/NBD"
+  },
+  "reading_texts": {
+   "summary_clv": "Of the {n:int} customers, {share:pct} bought again after their first purchase (repeat customers); their purchases, at any moment in time, are described by {models}.",
+   "method_pareto_nbd": "Pareto/NBD (Schmittlein, Morrison and Colombo 1987): while a customer is active they buy at random at a rate of their own (a Poisson process), the rates varying across customers by a gamma distribution; each customer stays active for a time of their own (exponential), which varies by a gamma distribution too, and drops out unseen: the data never say when.",
+   "method_bg_nbd": "BG/NBD (Fader, Hardie and Lee 2005): purchases as in Pareto/NBD (Poisson at a rate of their own, gamma across customers), but a customer can drop out only right after a purchase, with a probability of their own that varies across customers by a beta distribution. A customer with no repeat purchase is therefore never counted as lost.",
+   "method_mbg_nbd": "MBG/NBD (Batislam, Denizel and Filiztekin 2007): as BG/NBD, but a customer may also drop out at the start, before any repeat purchase, so that one-time buyers can be lost too."
+  },
+  "formula_texts": {
+   "formula_pareto_nbd": "Purchases while active: Poisson(λ), λ ~ Gamma(r, α);  lifetime: Exponential(μ), μ ~ Gamma(s, β);  x: repeat purchases, t_x: the time of the last, T: the time observed",
+   "formula_bg_nbd": "Purchases while active: Poisson(λ), λ ~ Gamma(r, α);  after each purchase the customer drops out with probability p, p ~ Beta(a, b);  x: repeat purchases, t_x: the time of the last, T: the time observed",
+   "formula_mbg_nbd": "As BG/NBD, and the customer may drop out at time 0 too, with the same probability p ~ Beta(a, b)",
+   "formula_p_alive_pareto_nbd": "P(alive | x, t_x, T) = 1 / (1 + s / (r + x + s) · (α + T)^(r + x) (β + T)^s · A₀);  A₀: the difference of two Gauss hypergeometric terms, at t_x and at T (Fader and Hardie 2005)",
+   "formula_p_alive_bg_nbd": "P(alive | x, t_x, T) = 1 / (1 + 1_(x > 0) · a / (b + x − 1) · ((α + T) / (α + t_x))^(r + x))",
+   "formula_p_alive_mbg_nbd": "P(alive | x, t_x, T) = 1 / (1 + a / (b + x) · ((α + T) / (α + t_x))^(r + x))"
   }
  },
  "it": {
@@ -33,6 +58,31 @@
   "candidate_not_checked": {
    "cell": "non controllato",
    "legend": "Non controllato: la scelta si è fermata a un modello migliore il cui controllo di convergenza è passato."
+  },
+  "reading_labels": {
+   "method_pareto_nbd": "Pareto/NBD",
+   "method_bg_nbd": "BG/NBD",
+   "method_mbg_nbd": "MBG/NBD",
+   "formula_pareto_nbd": "Pareto/NBD",
+   "formula_bg_nbd": "BG/NBD",
+   "formula_mbg_nbd": "MBG/NBD",
+   "formula_p_alive_pareto_nbd": "P(vivo), Pareto/NBD",
+   "formula_p_alive_bg_nbd": "P(vivo), BG/NBD",
+   "formula_p_alive_mbg_nbd": "P(vivo), MBG/NBD"
+  },
+  "reading_texts": {
+   "summary_clv": "Dei {n:int} clienti, il {share:pct} ha comprato di nuovo dopo il primo acquisto (clienti con riacquisti); i loro acquisti, in qualunque momento, sono descritti da {models}.",
+   "method_pareto_nbd": "Pareto/NBD (Schmittlein, Morrison e Colombo 1987): finché è attivo un cliente compra a caso a un tasso suo (un processo di Poisson), con tassi che variano tra i clienti secondo una gamma; ogni cliente resta attivo per un tempo suo (esponenziale), anch'esso variabile secondo una gamma, e abbandona senza che si veda: i dati non dicono mai quando.",
+   "method_bg_nbd": "BG/NBD (Fader, Hardie e Lee 2005): acquisti come in Pareto/NBD (Poisson a un tasso suo, gamma tra i clienti), ma un cliente può abbandonare solo subito dopo un acquisto, con una probabilità sua che varia tra i clienti secondo una beta. Un cliente senza acquisti ripetuti non è quindi mai contato come perso.",
+   "method_mbg_nbd": "MBG/NBD (Batislam, Denizel e Filiztekin 2007): come BG/NBD, ma un cliente può abbandonare anche all'inizio, prima di qualunque acquisto ripetuto, così che anche chi compra una volta sola possa essere perso."
+  },
+  "formula_texts": {
+   "formula_pareto_nbd": "Acquisti finché attivo: Poisson(λ), λ ~ Gamma(r, α);  durata: Esponenziale(μ), μ ~ Gamma(s, β);  x: acquisti ripetuti, t_x: il tempo dell'ultimo, T: il tempo osservato",
+   "formula_bg_nbd": "Acquisti finché attivo: Poisson(λ), λ ~ Gamma(r, α);  dopo ogni acquisto il cliente abbandona con probabilità p, p ~ Beta(a, b);  x: acquisti ripetuti, t_x: il tempo dell'ultimo, T: il tempo osservato",
+   "formula_mbg_nbd": "Come BG/NBD, e il cliente può abbandonare anche al tempo 0, con la stessa probabilità p ~ Beta(a, b)",
+   "formula_p_alive_pareto_nbd": "P(vivo | x, t_x, T) = 1 / (1 + s / (r + x + s) · (α + T)^(r + x) (β + T)^s · A₀);  A₀: la differenza di due termini ipergeometrici di Gauss, a t_x e a T (Fader e Hardie 2005)",
+   "formula_p_alive_bg_nbd": "P(vivo | x, t_x, T) = 1 / (1 + 1_(x > 0) · a / (b + x − 1) · ((α + T) / (α + t_x))^(r + x))",
+   "formula_p_alive_mbg_nbd": "P(vivo | x, t_x, T) = 1 / (1 + a / (b + x) · ((α + T) / (α + t_x))^(r + x))"
   }
  },
  "de": {
@@ -51,6 +101,31 @@
   "candidate_not_checked": {
    "cell": "nicht geprüft",
    "legend": "Nicht geprüft: Die Wahl endete bei einem besseren Modell, dessen Konvergenzprüfung bestanden wurde."
+  },
+  "reading_labels": {
+   "method_pareto_nbd": "Pareto/NBD",
+   "method_bg_nbd": "BG/NBD",
+   "method_mbg_nbd": "MBG/NBD",
+   "formula_pareto_nbd": "Pareto/NBD",
+   "formula_bg_nbd": "BG/NBD",
+   "formula_mbg_nbd": "MBG/NBD",
+   "formula_p_alive_pareto_nbd": "P(aktiv), Pareto/NBD",
+   "formula_p_alive_bg_nbd": "P(aktiv), BG/NBD",
+   "formula_p_alive_mbg_nbd": "P(aktiv), MBG/NBD"
+  },
+  "reading_texts": {
+   "summary_clv": "Von den {n:int} Kunden kauften {share:pct} nach ihrem ersten Kauf erneut (Wiederkäufer); ihre Käufe, zu jedem beliebigen Zeitpunkt, beschreibt {models}.",
+   "method_pareto_nbd": "Pareto/NBD (Schmittlein, Morrison und Colombo 1987): Solange ein Kunde aktiv ist, kauft er zufällig mit einer eigenen Rate (ein Poisson-Prozess), die Raten über die Kunden gamma-verteilt; jeder Kunde bleibt eine eigene Zeit aktiv (exponentiell), ebenfalls gamma-verteilt, und wandert unbemerkt ab: Die Daten sagen nie, wann.",
+   "method_bg_nbd": "BG/NBD (Fader, Hardie und Lee 2005): Käufe wie bei Pareto/NBD (Poisson mit eigener Rate, gamma über die Kunden), aber ein Kunde kann nur direkt nach einem Kauf abwandern, mit einer eigenen Wahrscheinlichkeit, die über die Kunden beta-verteilt ist. Ein Kunde ohne Wiederholungskauf zählt daher nie als verloren.",
+   "method_mbg_nbd": "MBG/NBD (Batislam, Denizel und Filiztekin 2007): wie BG/NBD, aber ein Kunde kann auch am Anfang abwandern, vor jedem Wiederholungskauf, sodass auch Einmalkäufer verloren sein können."
+  },
+  "formula_texts": {
+   "formula_pareto_nbd": "Käufe, solange aktiv: Poisson(λ), λ ~ Gamma(r, α);  Lebensdauer: Exponential(μ), μ ~ Gamma(s, β);  x: Wiederholungskäufe, t_x: die Zeit des letzten, T: die beobachtete Zeit",
+   "formula_bg_nbd": "Käufe, solange aktiv: Poisson(λ), λ ~ Gamma(r, α);  nach jedem Kauf wandert der Kunde mit Wahrscheinlichkeit p ab, p ~ Beta(a, b);  x: Wiederholungskäufe, t_x: die Zeit des letzten, T: die beobachtete Zeit",
+   "formula_mbg_nbd": "Wie BG/NBD, und der Kunde kann auch zum Zeitpunkt 0 abwandern, mit derselben Wahrscheinlichkeit p ~ Beta(a, b)",
+   "formula_p_alive_pareto_nbd": "P(aktiv | x, t_x, T) = 1 / (1 + s / (r + x + s) · (α + T)^(r + x) (β + T)^s · A₀);  A₀: die Differenz zweier hypergeometrischer Terme nach Gauß, bei t_x und bei T (Fader und Hardie 2005)",
+   "formula_p_alive_bg_nbd": "P(aktiv | x, t_x, T) = 1 / (1 + 1_(x > 0) · a / (b + x − 1) · ((α + T) / (α + t_x))^(r + x))",
+   "formula_p_alive_mbg_nbd": "P(aktiv | x, t_x, T) = 1 / (1 + a / (b + x) · ((α + T) / (α + t_x))^(r + x))"
   }
  },
  "es": {
@@ -69,6 +144,31 @@
   "candidate_not_checked": {
    "cell": "no comprobado",
    "legend": "No comprobado: la elección se detuvo en un modelo mejor cuya comprobación de convergencia se superó."
+  },
+  "reading_labels": {
+   "method_pareto_nbd": "Pareto/NBD",
+   "method_bg_nbd": "BG/NBD",
+   "method_mbg_nbd": "MBG/NBD",
+   "formula_pareto_nbd": "Pareto/NBD",
+   "formula_bg_nbd": "BG/NBD",
+   "formula_mbg_nbd": "MBG/NBD",
+   "formula_p_alive_pareto_nbd": "P(vivo), Pareto/NBD",
+   "formula_p_alive_bg_nbd": "P(vivo), BG/NBD",
+   "formula_p_alive_mbg_nbd": "P(vivo), MBG/NBD"
+  },
+  "reading_texts": {
+   "summary_clv": "De los {n:int} clientes, el {share:pct} volvió a comprar tras su primera compra (clientes con recompras); sus compras, en cualquier momento, las describe {models}.",
+   "method_pareto_nbd": "Pareto/NBD (Schmittlein, Morrison y Colombo 1987): mientras está activo, un cliente compra al azar a una tasa propia (un proceso de Poisson), y las tasas varían entre los clientes según una gamma; cada cliente sigue activo durante un tiempo propio (exponencial), que también varía según una gamma, y abandona sin que se vea: los datos nunca dicen cuándo.",
+   "method_bg_nbd": "BG/NBD (Fader, Hardie y Lee 2005): compras como en Pareto/NBD (Poisson a una tasa propia, gamma entre los clientes), pero un cliente solo puede abandonar justo después de una compra, con una probabilidad propia que varía entre los clientes según una beta. Un cliente sin compras repetidas nunca se cuenta, por tanto, como perdido.",
+   "method_mbg_nbd": "MBG/NBD (Batislam, Denizel y Filiztekin 2007): como BG/NBD, pero un cliente puede abandonar también al principio, antes de cualquier compra repetida, de modo que también quien compra una sola vez puede perderse."
+  },
+  "formula_texts": {
+   "formula_pareto_nbd": "Compras mientras está activo: Poisson(λ), λ ~ Gamma(r, α);  vida: Exponencial(μ), μ ~ Gamma(s, β);  x: compras repetidas, t_x: el momento de la última, T: el tiempo observado",
+   "formula_bg_nbd": "Compras mientras está activo: Poisson(λ), λ ~ Gamma(r, α);  tras cada compra el cliente abandona con probabilidad p, p ~ Beta(a, b);  x: compras repetidas, t_x: el momento de la última, T: el tiempo observado",
+   "formula_mbg_nbd": "Como BG/NBD, y el cliente puede abandonar también en el tiempo 0, con la misma probabilidad p ~ Beta(a, b)",
+   "formula_p_alive_pareto_nbd": "P(vivo | x, t_x, T) = 1 / (1 + s / (r + x + s) · (α + T)^(r + x) (β + T)^s · A₀);  A₀: la diferencia de dos términos hipergeométricos de Gauss, en t_x y en T (Fader y Hardie 2005)",
+   "formula_p_alive_bg_nbd": "P(vivo | x, t_x, T) = 1 / (1 + 1_(x > 0) · a / (b + x − 1) · ((α + T) / (α + t_x))^(r + x))",
+   "formula_p_alive_mbg_nbd": "P(vivo | x, t_x, T) = 1 / (1 + a / (b + x) · ((α + T) / (α + t_x))^(r + x))"
   }
  },
  "fr": {
@@ -87,6 +187,31 @@
   "candidate_not_checked": {
    "cell": "non vérifié",
    "legend": "Non vérifié : le choix s'est arrêté à un meilleur modèle dont le contrôle de convergence a réussi."
+  },
+  "reading_labels": {
+   "method_pareto_nbd": "Pareto/NBD",
+   "method_bg_nbd": "BG/NBD",
+   "method_mbg_nbd": "MBG/NBD",
+   "formula_pareto_nbd": "Pareto/NBD",
+   "formula_bg_nbd": "BG/NBD",
+   "formula_mbg_nbd": "MBG/NBD",
+   "formula_p_alive_pareto_nbd": "P(actif), Pareto/NBD",
+   "formula_p_alive_bg_nbd": "P(actif), BG/NBD",
+   "formula_p_alive_mbg_nbd": "P(actif), MBG/NBD"
+  },
+  "reading_texts": {
+   "summary_clv": "Sur les {n:int} clients, {share:pct} ont racheté après leur premier achat (clients avec rachats) ; leurs achats, à tout moment, sont décrits par {models}.",
+   "method_pareto_nbd": "Pareto/NBD (Schmittlein, Morrison et Colombo 1987) : tant qu'il est actif, un client achète au hasard à un taux qui lui est propre (un processus de Poisson), les taux variant entre les clients selon une loi gamma ; chaque client reste actif pendant une durée propre (exponentielle), elle aussi variable selon une loi gamma, et abandonne sans qu'on le voie : les données ne disent jamais quand.",
+   "method_bg_nbd": "BG/NBD (Fader, Hardie et Lee 2005) : des achats comme dans Pareto/NBD (Poisson à un taux propre, gamma entre les clients), mais un client ne peut abandonner que juste après un achat, avec une probabilité propre qui varie entre les clients selon une loi bêta. Un client sans achat répété n'est donc jamais compté comme perdu.",
+   "method_mbg_nbd": "MBG/NBD (Batislam, Denizel et Filiztekin 2007) : comme BG/NBD, mais un client peut aussi abandonner au départ, avant tout achat répété, de sorte que ceux qui n'achètent qu'une fois peuvent aussi être perdus."
+  },
+  "formula_texts": {
+   "formula_pareto_nbd": "Achats tant qu'actif : Poisson(λ), λ ~ Gamma(r, α) ;  durée de vie : Exponentielle(μ), μ ~ Gamma(s, β) ;  x : achats répétés, t_x : la date du dernier, T : la durée observée",
+   "formula_bg_nbd": "Achats tant qu'actif : Poisson(λ), λ ~ Gamma(r, α) ;  après chaque achat le client abandonne avec la probabilité p, p ~ Beta(a, b) ;  x : achats répétés, t_x : la date du dernier, T : la durée observée",
+   "formula_mbg_nbd": "Comme BG/NBD, et le client peut aussi abandonner à l'instant 0, avec la même probabilité p ~ Beta(a, b)",
+   "formula_p_alive_pareto_nbd": "P(actif | x, t_x, T) = 1 / (1 + s / (r + x + s) · (α + T)^(r + x) (β + T)^s · A₀) ;  A₀ : la différence de deux termes hypergéométriques de Gauss, en t_x et en T (Fader et Hardie 2005)",
+   "formula_p_alive_bg_nbd": "P(actif | x, t_x, T) = 1 / (1 + 1_(x > 0) · a / (b + x − 1) · ((α + T) / (α + t_x))^(r + x))",
+   "formula_p_alive_mbg_nbd": "P(actif | x, t_x, T) = 1 / (1 + a / (b + x) · ((α + T) / (α + t_x))^(r + x))"
   }
  }
 }

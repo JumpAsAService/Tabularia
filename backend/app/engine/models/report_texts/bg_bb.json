@@ -9,6 +9,19 @@
     "gamma": "γ, first shape of the dropout probability",
     "delta": "δ, second shape of the dropout probability"
    }
+  },
+  "reading_labels": {
+   "method_bg_bb": "BG/BB",
+   "formula_bg_bb": "BG/BB",
+   "formula_p_alive_bg_bb": "P(alive), BG/BB"
+  },
+  "reading_texts": {
+   "summary_clv": "Of the {n:int} customers, {share:pct} bought again after their first purchase (repeat customers); their purchases, at discrete opportunities (one a period), are described by {models}.",
+   "method_bg_bb": "BG/BB (Fader, Hardie and Shang 2010) is for purchases that can happen only at discrete opportunities, one a period (a yearly donation, a monthly renewal): at each opportunity an active customer buys with a probability of their own, which varies across customers by a beta distribution, and before the next one drops out with a probability of their own, beta across customers too."
+  },
+  "formula_texts": {
+   "formula_bg_bb": "At each opportunity an active customer buys with probability p, p ~ Beta(α, β), and drops out before the next with probability θ, θ ~ Beta(γ, δ);  x: purchases, t_x: the opportunity of the last, n: the opportunities",
+   "formula_p_alive_bg_bb": "P(alive at n + 1 | x, t_x, n) = B(α + x, β + n − x) / B(α, β) · B(γ, δ + n + 1) / B(γ, δ) / L(α, β, γ, δ | x, t_x, n)"
   }
  },
  "it": {
@@ -21,6 +34,19 @@
     "gamma": "γ, prima forma della probabilità di abbandono",
     "delta": "δ, seconda forma della probabilità di abbandono"
    }
+  },
+  "reading_labels": {
+   "method_bg_bb": "BG/BB",
+   "formula_bg_bb": "BG/BB",
+   "formula_p_alive_bg_bb": "P(vivo), BG/BB"
+  },
+  "reading_texts": {
+   "summary_clv": "Dei {n:int} clienti, il {share:pct} ha comprato di nuovo dopo il primo acquisto (clienti con riacquisti); i loro acquisti, in occasioni discrete (una a periodo), sono descritti da {models}.",
+   "method_bg_bb": "BG/BB (Fader, Hardie e Shang 2010) è per acquisti che possono avvenire solo in occasioni discrete, una a periodo (una donazione annuale, un rinnovo mensile): a ogni occasione un cliente attivo compra con una probabilità sua, che varia tra i clienti secondo una beta, e prima della successiva abbandona con una probabilità sua, anch'essa beta tra i clienti."
+  },
+  "formula_texts": {
+   "formula_bg_bb": "A ogni occasione un cliente attivo compra con probabilità p, p ~ Beta(α, β), e abbandona prima della successiva con probabilità θ, θ ~ Beta(γ, δ);  x: acquisti, t_x: l'occasione dell'ultimo, n: le occasioni",
+   "formula_p_alive_bg_bb": "P(vivo a n + 1 | x, t_x, n) = B(α + x, β + n − x) / B(α, β) · B(γ, δ + n + 1) / B(γ, δ) / L(α, β, γ, δ | x, t_x, n)"
   }
  },
  "de": {
@@ -33,6 +59,19 @@
     "gamma": "γ, erste Form der Abwanderungswahrscheinlichkeit",
     "delta": "δ, zweite Form der Abwanderungswahrscheinlichkeit"
    }
+  },
+  "reading_labels": {
+   "method_bg_bb": "BG/BB",
+   "formula_bg_bb": "BG/BB",
+   "formula_p_alive_bg_bb": "P(aktiv), BG/BB"
+  },
+  "reading_texts": {
+   "summary_clv": "Von den {n:int} Kunden kauften {share:pct} nach ihrem ersten Kauf erneut (Wiederkäufer); ihre Käufe, bei diskreten Gelegenheiten (eine je Periode), beschreibt {models}.",
+   "method_bg_bb": "BG/BB (Fader, Hardie und Shang 2010) ist für Käufe, die nur bei diskreten Gelegenheiten stattfinden können, eine je Periode (eine jährliche Spende, eine monatliche Verlängerung): Bei jeder Gelegenheit kauft ein aktiver Kunde mit einer eigenen Wahrscheinlichkeit, die über die Kunden beta-verteilt ist, und wandert vor der nächsten mit einer eigenen Wahrscheinlichkeit ab, ebenfalls beta-verteilt über die Kunden."
+  },
+  "formula_texts": {
+   "formula_bg_bb": "Bei jeder Gelegenheit kauft ein aktiver Kunde mit Wahrscheinlichkeit p, p ~ Beta(α, β), und wandert vor der nächsten mit Wahrscheinlichkeit θ ab, θ ~ Beta(γ, δ);  x: Käufe, t_x: die Gelegenheit des letzten, n: die Gelegenheiten",
+   "formula_p_alive_bg_bb": "P(aktiv bei n + 1 | x, t_x, n) = B(α + x, β + n − x) / B(α, β) · B(γ, δ + n + 1) / B(γ, δ) / L(α, β, γ, δ | x, t_x, n)"
   }
  },
  "es": {
@@ -45,6 +84,19 @@
     "gamma": "γ, primera forma de la probabilidad de abandono",
     "delta": "δ, segunda forma de la probabilidad de abandono"
    }
+  },
+  "reading_labels": {
+   "method_bg_bb": "BG/BB",
+   "formula_bg_bb": "BG/BB",
+   "formula_p_alive_bg_bb": "P(vivo), BG/BB"
+  },
+  "reading_texts": {
+   "summary_clv": "De los {n:int} clientes, el {share:pct} volvió a comprar tras su primera compra (clientes con recompras); sus compras, en ocasiones discretas (una por periodo), las describe {models}.",
+   "method_bg_bb": "BG/BB (Fader, Hardie y Shang 2010) es para compras que solo pueden darse en ocasiones discretas, una por periodo (una donación anual, una renovación mensual): en cada ocasión un cliente activo compra con una probabilidad propia, que varía entre los clientes según una beta, y antes de la siguiente abandona con una probabilidad propia, también beta entre los clientes."
+  },
+  "formula_texts": {
+   "formula_bg_bb": "En cada ocasión un cliente activo compra con probabilidad p, p ~ Beta(α, β), y abandona antes de la siguiente con probabilidad θ, θ ~ Beta(γ, δ);  x: compras, t_x: la ocasión de la última, n: las ocasiones",
+   "formula_p_alive_bg_bb": "P(vivo en n + 1 | x, t_x, n) = B(α + x, β + n − x) / B(α, β) · B(γ, δ + n + 1) / B(γ, δ) / L(α, β, γ, δ | x, t_x, n)"
   }
  },
  "fr": {
@@ -57,6 +109,19 @@
     "gamma": "γ, première forme de la probabilité d'abandon",
     "delta": "δ, seconde forme de la probabilité d'abandon"
    }
+  },
+  "reading_labels": {
+   "method_bg_bb": "BG/BB",
+   "formula_bg_bb": "BG/BB",
+   "formula_p_alive_bg_bb": "P(actif), BG/BB"
+  },
+  "reading_texts": {
+   "summary_clv": "Sur les {n:int} clients, {share:pct} ont racheté après leur premier achat (clients avec rachats) ; leurs achats, à des occasions discrètes (une par période), sont décrits par {models}.",
+   "method_bg_bb": "BG/BB (Fader, Hardie et Shang 2010) vaut pour des achats qui ne peuvent se faire qu'à des occasions discrètes, une par période (un don annuel, un renouvellement mensuel) : à chaque occasion un client actif achète avec une probabilité qui lui est propre, variable entre les clients selon une loi bêta, et avant la suivante abandonne avec une probabilité propre, elle aussi bêta entre les clients."
+  },
+  "formula_texts": {
+   "formula_bg_bb": "À chaque occasion un client actif achète avec la probabilité p, p ~ Beta(α, β), et abandonne avant la suivante avec la probabilité θ, θ ~ Beta(γ, δ) ;  x : achats, t_x : l'occasion du dernier, n : les occasions",
+   "formula_p_alive_bg_bb": "P(actif à n + 1 | x, t_x, n) = B(α + x, β + n − x) / B(α, β) · B(γ, δ + n + 1) / B(γ, δ) / L(α, β, γ, δ | x, t_x, n)"
   }
  }
 }

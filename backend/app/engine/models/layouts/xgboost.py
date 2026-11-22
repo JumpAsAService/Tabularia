@@ -6,6 +6,7 @@ from functools import partial
 from typing import Any
 
 from app.engine.models.layouts import boosting, register
+from app.engine.models.layouts import common as c
 
 # the settings the page says, in the order of the node's form
 HYPERPARAMETERS = ("learning_rate", "max_depth", "min_child_weight", "subsample", "colsample_bytree", "reg_lambda", "reg_alpha",
@@ -20,4 +21,5 @@ def layout(model: str, params: dict[str, Any], locale: str, sample: list[dict] |
     return boosting.report(model, params, locale, sample, step, HYPERPARAMETERS)
 
 
+c.READINGS["xgboost"] = boosting.readings  # the explanation: boosting.py chooses its lines
 register("xgboost", layout, name, about)

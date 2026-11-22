@@ -25,4 +25,5 @@ def layout(model: str, params: dict[str, Any], locale: str, sample: list[dict] |
     return customer_lifetime.build(model, params, locale, sample, step, name=name(params, locale), about=about(params, locale))
 
 
+c.READINGS["clv"] = customer_lifetime.readings  # the explanation: customer_lifetime.py chooses its lines
 register("clv", layout, name, about)

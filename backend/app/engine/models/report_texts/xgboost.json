@@ -7,6 +7,12 @@
   "importance": {
    "gain_note": "Gain: the loss a predictor's splits remove, summed over all the trees, as a share of all the predictors'. Mean |SHAP|: how far, on average, the predictor moves a prediction (exact for trees), on the SHAP sample.",
    "gain_share": "Share of the gain"
+  },
+  "reading_labels": {
+   "method_library": "XGBoost"
+  },
+  "reading_texts": {
+   "method_library": "XGBoost (Chen and Guestrin 2016) grows each tree level by level up to max_depth, choosing each split by the gain of a second-order approximation of the loss, with penalties on the leaves' weights (reg_lambda, reg_alpha) and on each new leaf (gamma); each tree sees a share of the rows (subsample) and of the predictors (colsample_bytree). Categorical columns are split by their categories directly."
   }
  },
  "it": {
@@ -17,6 +23,12 @@
   "importance": {
    "gain_note": "Guadagno: la perdita che le divisioni di un predittore eliminano, sommata su tutti gli alberi, come quota di quella di tutti i predittori. |SHAP| medio: di quanto, in media, il predittore sposta una previsione (esatto per gli alberi), sul campione SHAP.",
    "gain_share": "Quota del guadagno"
+  },
+  "reading_labels": {
+   "method_library": "XGBoost"
+  },
+  "reading_texts": {
+   "method_library": "XGBoost (Chen e Guestrin 2016) fa crescere ogni albero livello per livello fino a max_depth, scegliendo ogni split dal guadagno di un'approssimazione al secondo ordine della perdita, con penalità sui pesi delle foglie (reg_lambda, reg_alpha) e su ogni nuova foglia (gamma); ogni albero vede una quota delle righe (subsample) e dei predittori (colsample_bytree). Le colonne categoriali sono divise direttamente per le loro categorie."
   }
  },
  "de": {
@@ -27,6 +39,12 @@
   "importance": {
    "gain_note": "Gain: der Verlust, den die Teilungen eines Prädiktors beseitigen, über alle Bäume summiert, als Anteil an der Summe aller Prädiktoren. Mittleres |SHAP|: wie weit der Prädiktor eine Vorhersage im Mittel verschiebt (exakt für Bäume), in der SHAP-Stichprobe.",
    "gain_share": "Anteil am Gain"
+  },
+  "reading_labels": {
+   "method_library": "XGBoost"
+  },
+  "reading_texts": {
+   "method_library": "XGBoost (Chen und Guestrin 2016) lässt jeden Baum Ebene für Ebene bis max_depth wachsen und wählt jeden Split nach dem Gewinn einer Näherung zweiter Ordnung des Verlusts, mit Straftermen auf den Gewichten der Blätter (reg_lambda, reg_alpha) und auf jedem neuen Blatt (gamma); jeder Baum sieht einen Anteil der Zeilen (subsample) und der Prädiktoren (colsample_bytree). Kategoriale Spalten werden direkt nach ihren Kategorien geteilt."
   }
  },
  "es": {
@@ -37,6 +55,12 @@
   "importance": {
    "gain_note": "Ganancia: la pérdida que eliminan las divisiones de un predictor, sumada en todos los árboles, como parte de la de todos los predictores. |SHAP| medio: cuánto desplaza, en promedio, el predictor una predicción (exacto para árboles), en la muestra SHAP.",
    "gain_share": "Parte de la ganancia"
+  },
+  "reading_labels": {
+   "method_library": "XGBoost"
+  },
+  "reading_texts": {
+   "method_library": "XGBoost (Chen y Guestrin 2016) hace crecer cada árbol nivel a nivel hasta max_depth, eligiendo cada división por la ganancia de una aproximación de segundo orden de la pérdida, con penalizaciones sobre los pesos de las hojas (reg_lambda, reg_alpha) y sobre cada hoja nueva (gamma); cada árbol ve una proporción de las filas (subsample) y de los predictores (colsample_bytree). Las columnas categóricas se dividen directamente por sus categorías."
   }
  },
  "fr": {
@@ -47,6 +71,12 @@
   "importance": {
    "gain_note": "Gain : la perte que suppriment les coupures d'un prédicteur, sommée sur tous les arbres, en part de celle de tous les prédicteurs. |SHAP| moyen : de combien, en moyenne, le prédicteur déplace une prédiction (exact pour les arbres), sur l'échantillon SHAP.",
    "gain_share": "Part du gain"
+  },
+  "reading_labels": {
+   "method_library": "XGBoost"
+  },
+  "reading_texts": {
+   "method_library": "XGBoost (Chen et Guestrin 2016) fait pousser chaque arbre niveau par niveau jusqu'à max_depth, en choisissant chaque coupure par le gain d'une approximation au second ordre de la perte, avec des pénalités sur les poids des feuilles (reg_lambda, reg_alpha) et sur chaque nouvelle feuille (gamma) ; chaque arbre voit une part des lignes (subsample) et des prédicteurs (colsample_bytree). Les colonnes catégorielles sont coupées directement selon leurs catégories."
   }
  }
 }

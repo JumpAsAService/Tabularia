@@ -6,6 +6,7 @@ from functools import partial
 from typing import Any
 
 from app.engine.models.layouts import boosting, register
+from app.engine.models.layouts import common as c
 
 # the settings the page says, in the order of the node's form
 HYPERPARAMETERS = ("learning_rate", "max_depth", "l2_leaf_reg", "rsm", "random_strength", "subsample",
@@ -20,4 +21,5 @@ def layout(model: str, params: dict[str, Any], locale: str, sample: list[dict] |
     return boosting.report(model, params, locale, sample, step, HYPERPARAMETERS)
 
 
+c.READINGS["catboost"] = boosting.readings  # the explanation: boosting.py chooses its lines
 register("catboost", layout, name, about)

@@ -306,7 +306,127 @@
      "": "Not computed: the validation part has fewer than 10 rows of a class; raise validation_share, or add rows."
     }
    }
-  }
+  },
+  "reading_blocks": {
+   "summary": "Summary",
+   "assumptions": "Diagnostics",
+   "importance": "Importance",
+   "method": "Method",
+   "formulas": "Formula"
+  },
+  "reading_labels": {
+   "method_boosting": "Gradient boosting",
+   "method_validation_random": "Validation part",
+   "method_validation_time": "Validation part",
+   "method_validation_grouped": "Validation part",
+   "method_early_stopping": "Early stopping",
+   "method_baseline": "Baseline",
+   "method_class_weight": "Balanced classes",
+   "method_threshold": "Threshold",
+   "method_shap": "SHAP",
+   "method_no_test": "No p-value",
+   "formula_boosting": "Boosting",
+   "formula_loss_regression": "Loss and metrics",
+   "formula_loss_binary": "Loss and metrics",
+   "formula_loss_multiclass": "Loss and metrics",
+   "formula_baseline": "Gain over the baseline",
+   "formula_shap": "Shapley values"
+  },
+  "reading_texts": {
+   "summary_boosting_regression": "The model was trained on {n_train:int} rows and measured on {n_validation:int} rows it did not learn from (the validation part); it keeps {trees:int} trees. On the validation part its RMSE is {rmse:num}, against {baseline:num} for the baseline that predicts every row with the training mean, and its R² is {r2:num}.",
+   "summary_boosting_binary": "The model was trained on {n_train:int} rows and measured on {n_validation:int} rows it did not learn from (the validation part); it keeps {trees:int} trees. On the validation part its log-loss is {logloss:num}, against {baseline:num} for the baseline that gives every row the event's share in the training rows, and its AUC is {auc:num}.",
+   "summary_boosting_multiclass": "The model was trained on {n_train:int} rows and measured on {n_validation:int} rows it did not learn from (the validation part); it keeps {trees:int} trees. On the validation part its log-loss is {logloss:num}, against {baseline:num} for the baseline that gives every row the classes' shares in the training rows, and its accuracy is {accuracy:pct}.",
+   "diag_validation_size": {
+    "task=regression": "The validation part holds {value:int} rows, below the threshold of {threshold:int} the page uses: every validation number rests on them.",
+    "task=binary": "The smallest class of the validation part holds {value:int} rows, below the threshold of {threshold:int} the page uses: what the validation numbers say of that class rests on these rows.",
+    "": "The smallest class of the validation part holds {value:int} rows, below the threshold of {threshold:int} the page uses: what the validation numbers say of that class rests on these rows."
+   },
+   "diag_beats_baseline": "One minus the ratio of the validation loss to the baseline's is {value:num}, below the threshold of {threshold:num} the page uses (0: the model's loss equals the baseline's).",
+   "diag_overfitting": "The tree kept gives back {value:pct} of the validation gain over the baseline reached at the tree of lowest validation loss, above the threshold of {threshold:pct} the page uses.",
+   "diag_trees_more": "The validation loss was still falling at the last of the {trees:int} trees: the boosting stopped at max_trees, not by early stopping.",
+   "diag_trees_few": "Early stopping kept {value:int} trees, below the threshold of {threshold:int} the page uses when the learning rate is above 0.05.",
+   "diag_trees_no_stop": "Early stopping is off: the validation loss at the last tree is {value:pct} above its lowest, above the threshold of {threshold:pct} the page uses.",
+   "diag_trees_size": "The boosting stopped at {trees:int} trees so that the model file stays within 64 MiB.",
+   "diag_trees_time": "The time budget stopped the boosting at {trees:int} trees.",
+   "diag_stop_on_loss": "Early stopping watched a metric other than the loss and stopped at {trees:int} trees while the validation loss was still falling.",
+   "diag_class_imbalance": "The largest class is {value:num} times the smallest, above the threshold of {threshold:num} the page uses.",
+   "diag_calibration": "The expected calibration error is {value:num}, above the threshold of {threshold:num}, the error that calibrated probabilities reach with this many rows.",
+   "diag_calibration_slope": "The calibration slope is {value:num}; its 95 % interval leaves the range from 0.8 to 1.25 the page uses.",
+   "diag_importance_stability": "Spearman's ρ between the predictors' mean |SHAP| on the training and on the validation rows is {value:num}, below the threshold of {threshold:num} the page uses.",
+   "diag_zero_importance": "No split of the trees uses {names}.",
+   "diag_zero_importance_more": "No split of the trees uses {names} and {more:int} more predictors.",
+   "diag_leakage_share": {
+    "task=regression": "The first predictor, {covariate}, holds {value:pct} of the mean |SHAP|, at or above the threshold of {threshold:pct} the page uses, and the validation R² is {fit:num}.",
+    "task=binary": "The first predictor, {covariate}, holds {value:pct} of the mean |SHAP|, at or above the threshold of {threshold:pct} the page uses, and the validation AUC is {fit:num}.",
+    "": "The first predictor, {covariate}, holds {value:pct} of the mean |SHAP|, at or above the threshold of {threshold:pct} the page uses, and the validation macro AUC is {fit:num}."
+   },
+   "diag_leakage_fit": {
+    "task=regression": "The validation R² is {fit:num}, a level the page flags from 0.98, or from 0.95 with a first predictor holding 60 % of the mean |SHAP|; here {covariate} holds {value:pct}.",
+    "task=binary": "The validation AUC is {fit:num}, a level the page flags from 0.98, or from 0.95 with a first predictor holding 60 % of the mean |SHAP|; here {covariate} holds {value:pct}.",
+    "": "The validation macro AUC is {fit:num}, a level the page flags from 0.98, or from 0.95 with a first predictor holding 60 % of the mean |SHAP|; here {covariate} holds {value:pct}."
+   },
+   "diag_leakage_one": {
+    "task=regression": "With one predictor the page reads the validation R² itself: {value:num}, at or above the threshold of {threshold:num}.",
+    "task=binary": "With one predictor the page reads the validation AUC itself: {value:num}, at or above the threshold of {threshold:num}.",
+    "": "With one predictor the page reads the validation macro AUC itself: {value:num}, at or above the threshold of {threshold:num}."
+   },
+   "diagnostics_more": "{more:int} more diagnostics are past their threshold: the table lists them.",
+   "diagnostics_none": "None of the {total:int} diagnostics is past the threshold the page uses; they are rules of thumb, not tests, and have no p-value.",
+   "importance_top": "By mean |SHAP|, the {k:int} predictors that move the predictions most are {names}, with {shares:pct} of the total.",
+   "importance_one": "The only predictor, {names}, holds all of the mean |SHAP|.",
+   "method_boosting": "Gradient boosting builds the prediction as a sum of small decision trees grown one after the other: each new tree is fitted to what the trees before it still get wrong (the gradient of the loss), and its step is shrunk by the learning rate. Many shallow trees follow non-linear patterns and interactions between the predictors without a formula given in advance; in exchange, no coefficient says what a predictor does.",
+   "method_validation_random": "A random share of the rows (validation_share; for a classification, the same share of each class) was kept out of the training: every validation number is measured on rows the trees did not learn from.",
+   "method_validation_time": "The last rows in time (by order_by) were kept out of the training: the validation part measures the model on rows later than those it learned from, as a forecast would meet them.",
+   "method_validation_grouped": "Whole groups of the column split_by were kept out of the training: the rows of a group are never on both sides, so the validation part measures the model on groups it did not see.",
+   "method_early_stopping": {
+    "early_stopping=false": "Early stopping is off: every tree up to max_trees is kept, and the learning curves show whether the validation loss rose after its lowest point.",
+    "": "Early stopping watched the validation part: the boosting stopped when the stop metric had not improved for early_stopping_rounds trees, and the model keeps the trees up to its best round. The validation part also chose the number of trees, so its numbers are slightly optimistic."
+   },
+   "method_baseline": {
+    "task=regression": "The baseline predicts every validation row with the training rows' mean: a model that learned nothing from the predictors. Its RMSE beside the model's says what the predictors bring.",
+    "task=binary": "The baseline gives every validation row the event's share in the training rows: a model that learned nothing from the predictors. Its log-loss beside the model's says what the predictors bring.",
+    "": "The baseline gives every validation row the classes' shares in the training rows: a model that learned nothing from the predictors. Its log-loss beside the model's says what the predictors bring."
+   },
+   "method_class_weight": "With class_weight = balanced each class weighs the same in the fit: the probabilities move away from the class shares, so they are not the rates to expect; early stopping and the comparison with the baseline read losses weighted the same way.",
+   "method_threshold": "A row is classified as the event when its predicted probability reaches the node's threshold: the accuracy, sensitivity, specificity, precision and F1 are at that threshold, while the AUC and the log-loss read the probabilities themselves.",
+   "method_shap": "SHAP values (Lundberg and Lee 2017; TreeSHAP, exact on trees) split each prediction into one contribution for each predictor, added to the average prediction, on the scale of the model's raw score (the log-odds for a binary outcome). A predictor's mean |SHAP| is how far, on average, it moves a prediction: how much the model uses it, not what causes the outcome.",
+   "method_no_test": "No p-value is given: the trees are chosen by the same data they are measured on, and the usual tests do not apply to them. The diagnostics are rules of thumb with a threshold, not tests: each says where to look, and the reading gives the number and the threshold."
+  },
+  "formula_texts": {
+   "formula_boosting": "F_m(x) = F_(m−1)(x) + η f_m(x), F_0 a constant;  f_m: the tree that most lowers Σ_i w_i L(y_i, F_(m−1)(x_i) + f(x_i)) + Ω(f), fitted to the loss's gradients, Ω the penalties on the trees;  η: learning_rate; the prediction is F_M(x), M the trees kept",
+   "formula_loss_regression": "L = (y − ŷ)²;  RMSE = √(Σ_i w_i (y_i − ŷ_i)² / Σ_i w_i);  R² = 1 − Σ_i w_i (y_i − ŷ_i)² / Σ_i w_i (y_i − m)²;  m: the weighted mean of y",
+   "formula_loss_binary": "L = −[y log p + (1 − y) log(1 − p)], p = 1 / (1 + e^(−F));  log-loss = Σ_i w_i L_i / Σ_i w_i;  AUC: the probability that a row of the event has a higher p than a row without it",
+   "formula_loss_multiclass": "L = −log p_y, p_k = e^(F_k) / Σ_j e^(F_j) (softmax);  log-loss = Σ_i w_i L_i / Σ_i w_i",
+   "formula_baseline": "u = 1 − L_validation / L_baseline, the diagnostic of the baseline;  L: the validation loss (RMSE or log-loss) of the model and of the baseline",
+   "formula_shap": "φ_j = Σ_S |S|! (P − |S| − 1)! / P! · [f(S and j) − f(S)], over every set S of the other predictors, P the predictors;  f(x) = E f + Σ_j φ_j(x);  mean |SHAP|_j = (1/n) Σ_i |φ_j(x_i)|"
+  },
+  "measure_readings": [
+   "summary_boosting_regression",
+   "summary_boosting_binary",
+   "summary_boosting_multiclass",
+   "diag_validation_size",
+   "diag_beats_baseline",
+   "diag_overfitting",
+   "diag_trees_more",
+   "diag_trees_few",
+   "diag_trees_no_stop",
+   "diag_trees_size",
+   "diag_trees_time",
+   "diag_stop_on_loss",
+   "diag_class_imbalance",
+   "diag_calibration",
+   "diag_calibration_slope",
+   "diag_importance_stability",
+   "diag_zero_importance",
+   "diag_zero_importance_more",
+   "diag_leakage_share",
+   "diag_leakage_fit",
+   "diag_leakage_one",
+   "diagnostics_more",
+   "diagnostics_none",
+   "importance_top",
+   "importance_one"
+  ]
  },
  "it": {
   "tasks": {
@@ -615,7 +735,127 @@
      "": "Non calcolato: la parte di validazione ha meno di 10 righe di una classe; aumentate validation_share o aggiungete righe."
     }
    }
-  }
+  },
+  "reading_blocks": {
+   "summary": "Sintesi",
+   "assumptions": "Diagnostica",
+   "importance": "Importanza",
+   "method": "Metodo",
+   "formulas": "Formula"
+  },
+  "reading_labels": {
+   "method_boosting": "Gradient boosting",
+   "method_validation_random": "Parte di validazione",
+   "method_validation_time": "Parte di validazione",
+   "method_validation_grouped": "Parte di validazione",
+   "method_early_stopping": "Arresto anticipato",
+   "method_baseline": "Riferimento",
+   "method_class_weight": "Classi bilanciate",
+   "method_threshold": "Soglia",
+   "method_shap": "SHAP",
+   "method_no_test": "Nessun p-value",
+   "formula_boosting": "Boosting",
+   "formula_loss_regression": "Perdita e metriche",
+   "formula_loss_binary": "Perdita e metriche",
+   "formula_loss_multiclass": "Perdita e metriche",
+   "formula_baseline": "Guadagno sul riferimento",
+   "formula_shap": "Valori di Shapley"
+  },
+  "reading_texts": {
+   "summary_boosting_regression": "Il modello è stato addestrato su {n_train:int} righe e misurato su {n_validation:int} righe da cui non ha imparato (la parte di validazione); tiene {trees:int} alberi. Sulla parte di validazione il suo RMSE è {rmse:num}, contro {baseline:num} del riferimento che prevede ogni riga con la media dell'addestramento, e il suo R² è {r2:num}.",
+   "summary_boosting_binary": "Il modello è stato addestrato su {n_train:int} righe e misurato su {n_validation:int} righe da cui non ha imparato (la parte di validazione); tiene {trees:int} alberi. Sulla parte di validazione la sua log-loss è {logloss:num}, contro {baseline:num} del riferimento che dà a ogni riga la quota dell'evento nelle righe di addestramento, e la sua AUC è {auc:num}.",
+   "summary_boosting_multiclass": "Il modello è stato addestrato su {n_train:int} righe e misurato su {n_validation:int} righe da cui non ha imparato (la parte di validazione); tiene {trees:int} alberi. Sulla parte di validazione la sua log-loss è {logloss:num}, contro {baseline:num} del riferimento che dà a ogni riga le quote delle classi nelle righe di addestramento, e la sua accuratezza è {accuracy:pct}.",
+   "diag_validation_size": {
+    "task=regression": "La parte di validazione ha {value:int} righe, sotto la soglia di {threshold:int} che la pagina usa: ogni numero di validazione poggia su di esse.",
+    "task=binary": "La classe più piccola della parte di validazione ha {value:int} righe, sotto la soglia di {threshold:int} che la pagina usa: quello che i numeri di validazione dicono di quella classe poggia su queste righe.",
+    "": "La classe più piccola della parte di validazione ha {value:int} righe, sotto la soglia di {threshold:int} che la pagina usa: quello che i numeri di validazione dicono di quella classe poggia su queste righe."
+   },
+   "diag_beats_baseline": "Uno meno il rapporto tra la perdita di validazione e quella del riferimento vale {value:num}, sotto la soglia di {threshold:num} che la pagina usa (0: la perdita del modello è uguale a quella del riferimento).",
+   "diag_overfitting": "L'albero tenuto restituisce il {value:pct} del guadagno di validazione sul riferimento raggiunto all'albero di perdita di validazione più bassa, sopra la soglia di {threshold:pct} che la pagina usa.",
+   "diag_trees_more": "La perdita di validazione scendeva ancora all'ultimo dei {trees:int} alberi: il boosting si è fermato a max_trees, non per arresto anticipato.",
+   "diag_trees_few": "L'arresto anticipato ha tenuto {value:int} alberi, sotto la soglia di {threshold:int} che la pagina usa quando il learning rate supera 0,05.",
+   "diag_trees_no_stop": "L'arresto anticipato è spento: la perdita di validazione all'ultimo albero è del {value:pct} sopra il suo minimo, sopra la soglia di {threshold:pct} che la pagina usa.",
+   "diag_trees_size": "Il boosting si è fermato a {trees:int} alberi perché il file del modello resti entro 64 MiB.",
+   "diag_trees_time": "Il tempo a disposizione ha fermato il boosting a {trees:int} alberi.",
+   "diag_stop_on_loss": "L'arresto anticipato guardava una metrica diversa dalla perdita e si è fermato a {trees:int} alberi mentre la perdita di validazione scendeva ancora.",
+   "diag_class_imbalance": "La classe più grande è {value:num} volte la più piccola, sopra la soglia di {threshold:num} che la pagina usa.",
+   "diag_calibration": "L'errore di calibrazione atteso è {value:num}, sopra la soglia di {threshold:num}, l'errore che probabilità calibrate raggiungono con queste righe.",
+   "diag_calibration_slope": "La pendenza di calibrazione è {value:num}; il suo intervallo al 95 % esce dall'intervallo da 0,8 a 1,25 che la pagina usa.",
+   "diag_importance_stability": "Il ρ di Spearman tra la media dei |SHAP| dei predittori sulle righe di addestramento e su quelle di validazione è {value:num}, sotto la soglia di {threshold:num} che la pagina usa.",
+   "diag_zero_importance": "Nessuno split degli alberi usa {names}.",
+   "diag_zero_importance_more": "Nessuno split degli alberi usa {names} e altri {more:int} predittori.",
+   "diag_leakage_share": {
+    "task=regression": "Il primo predittore, {covariate}, ha il {value:pct} della media dei |SHAP|, pari o sopra la soglia del {threshold:pct} che la pagina usa, e la R² di validazione è {fit:num}.",
+    "task=binary": "Il primo predittore, {covariate}, ha il {value:pct} della media dei |SHAP|, pari o sopra la soglia del {threshold:pct} che la pagina usa, e la AUC di validazione è {fit:num}.",
+    "": "Il primo predittore, {covariate}, ha il {value:pct} della media dei |SHAP|, pari o sopra la soglia del {threshold:pct} che la pagina usa, e la AUC macro di validazione è {fit:num}."
+   },
+   "diag_leakage_fit": {
+    "task=regression": "La R² di validazione è {fit:num}, un livello che la pagina segnala da 0,98, o da 0,95 con un primo predittore che ha il 60 % della media dei |SHAP|; qui {covariate} ne ha il {value:pct}.",
+    "task=binary": "La AUC di validazione è {fit:num}, un livello che la pagina segnala da 0,98, o da 0,95 con un primo predittore che ha il 60 % della media dei |SHAP|; qui {covariate} ne ha il {value:pct}.",
+    "": "La AUC macro di validazione è {fit:num}, un livello che la pagina segnala da 0,98, o da 0,95 con un primo predittore che ha il 60 % della media dei |SHAP|; qui {covariate} ne ha il {value:pct}."
+   },
+   "diag_leakage_one": {
+    "task=regression": "Con un solo predittore la pagina legge la R² di validazione stessa: {value:num}, pari o sopra la soglia di {threshold:num}.",
+    "task=binary": "Con un solo predittore la pagina legge la AUC di validazione stessa: {value:num}, pari o sopra la soglia di {threshold:num}.",
+    "": "Con un solo predittore la pagina legge la AUC macro di validazione stessa: {value:num}, pari o sopra la soglia di {threshold:num}."
+   },
+   "diagnostics_more": "Altre {more:int} diagnostiche superano la loro soglia: la tabella le elenca.",
+   "diagnostics_none": "Nessuna delle {total:int} diagnostiche supera la soglia che la pagina usa; sono regole pratiche, non test, e non hanno p-value.",
+   "importance_top": "Per media dei |SHAP|, i {k:int} predittori che spostano di più le previsioni sono {names}, con il {shares:pct} del totale.",
+   "importance_one": "L'unico predittore, {names}, ha tutta la media dei |SHAP|.",
+   "method_boosting": "Il gradient boosting costruisce la previsione come somma di piccoli alberi di decisione cresciuti uno dopo l'altro: ogni nuovo albero è adattato a ciò che gli alberi precedenti sbagliano ancora (il gradiente della perdita), e il suo passo è ridotto dal learning rate. Molti alberi poco profondi seguono andamenti non lineari e interazioni tra i predittori senza una formula data in anticipo; in cambio, nessun coefficiente dice che cosa fa un predittore.",
+   "method_validation_random": "Una quota casuale delle righe (validation_share; per una classificazione, la stessa quota di ogni classe) è stata tenuta fuori dall'addestramento: ogni numero di validazione è misurato su righe da cui gli alberi non hanno imparato.",
+   "method_validation_time": "Le ultime righe nel tempo (secondo order_by) sono state tenute fuori dall'addestramento: la parte di validazione misura il modello su righe successive a quelle da cui ha imparato, come le incontrerebbe una previsione.",
+   "method_validation_grouped": "Gruppi interi della colonna split_by sono stati tenuti fuori dall'addestramento: le righe di un gruppo non stanno mai da entrambe le parti, quindi la parte di validazione misura il modello su gruppi che non ha visto.",
+   "method_early_stopping": {
+    "early_stopping=false": "L'arresto anticipato è spento: ogni albero fino a max_trees è tenuto, e le curve di apprendimento mostrano se la perdita di validazione è risalita dopo il suo minimo.",
+    "": "L'arresto anticipato guardava la parte di validazione: il boosting si è fermato quando la metrica di arresto non era migliorata per early_stopping_rounds alberi, e il modello tiene gli alberi fino al suo turno migliore. La parte di validazione ha scelto anche il numero di alberi, quindi i suoi numeri sono un po' ottimisti."
+   },
+   "method_baseline": {
+    "task=regression": "Il riferimento prevede ogni riga di validazione con la media delle righe di addestramento: un modello che non ha imparato nulla dai predittori. Il suo RMSE accanto a quello del modello dice che cosa portano i predittori.",
+    "task=binary": "Il riferimento dà a ogni riga di validazione la quota dell'evento nelle righe di addestramento: un modello che non ha imparato nulla dai predittori. La sua log-loss accanto a quella del modello dice che cosa portano i predittori.",
+    "": "Il riferimento dà a ogni riga di validazione le quote delle classi nelle righe di addestramento: un modello che non ha imparato nulla dai predittori. La sua log-loss accanto a quella del modello dice che cosa portano i predittori."
+   },
+   "method_class_weight": "Con class_weight = balanced ogni classe pesa uguale nella stima: le probabilità si allontanano dalle quote delle classi, quindi non sono i tassi da attendersi; l'arresto anticipato e il confronto con il riferimento leggono perdite pesate allo stesso modo.",
+   "method_threshold": "Una riga è classificata come evento quando la sua probabilità prevista raggiunge la soglia del nodo: accuratezza, sensibilità, specificità, precisione e F1 sono a quella soglia, mentre la AUC e la log-loss leggono le probabilità stesse.",
+   "method_shap": "I valori SHAP (Lundberg e Lee 2017; TreeSHAP, esatto sugli alberi) dividono ogni previsione in un contributo per ogni predittore, sommato alla previsione media, sulla scala del punteggio grezzo del modello (i log-odds per un esito binario). La media dei |SHAP| di un predittore è quanto, in media, sposta una previsione: quanto il modello lo usa, non che cosa causa l'esito.",
+   "method_no_test": "Nessun p-value è dato: gli alberi sono scelti dagli stessi dati su cui sono misurati, e i test consueti non si applicano. Le diagnostiche sono regole pratiche con una soglia, non test: ognuna dice dove guardare, e la lettura dà il numero e la soglia."
+  },
+  "formula_texts": {
+   "formula_boosting": "F_m(x) = F_(m−1)(x) + η f_m(x), F_0 una costante;  f_m: l'albero che più abbassa Σ_i w_i L(y_i, F_(m−1)(x_i) + f(x_i)) + Ω(f), adattato ai gradienti della perdita, Ω le penalità sugli alberi;  η: learning_rate; la previsione è F_M(x), M gli alberi tenuti",
+   "formula_loss_regression": "L = (y − ŷ)²;  RMSE = √(Σ_i w_i (y_i − ŷ_i)² / Σ_i w_i);  R² = 1 − Σ_i w_i (y_i − ŷ_i)² / Σ_i w_i (y_i − m)²;  m: la media pesata di y",
+   "formula_loss_binary": "L = −[y log p + (1 − y) log(1 − p)], p = 1 / (1 + e^(−F));  log-loss = Σ_i w_i L_i / Σ_i w_i;  AUC: la probabilità che una riga con l'evento abbia una p più alta di una riga senza",
+   "formula_loss_multiclass": "L = −log p_y, p_k = e^(F_k) / Σ_j e^(F_j) (softmax);  log-loss = Σ_i w_i L_i / Σ_i w_i",
+   "formula_baseline": "u = 1 − L_validazione / L_riferimento, la diagnostica del riferimento;  L: la perdita di validazione (RMSE o log-loss) del modello e del riferimento",
+   "formula_shap": "φ_j = Σ_S |S|! (P − |S| − 1)! / P! · [f(S e j) − f(S)], su ogni insieme S degli altri predittori, P i predittori;  f(x) = E f + Σ_j φ_j(x);  media dei |SHAP|_j = (1/n) Σ_i |φ_j(x_i)|"
+  },
+  "measure_readings": [
+   "summary_boosting_regression",
+   "summary_boosting_binary",
+   "summary_boosting_multiclass",
+   "diag_validation_size",
+   "diag_beats_baseline",
+   "diag_overfitting",
+   "diag_trees_more",
+   "diag_trees_few",
+   "diag_trees_no_stop",
+   "diag_trees_size",
+   "diag_trees_time",
+   "diag_stop_on_loss",
+   "diag_class_imbalance",
+   "diag_calibration",
+   "diag_calibration_slope",
+   "diag_importance_stability",
+   "diag_zero_importance",
+   "diag_zero_importance_more",
+   "diag_leakage_share",
+   "diag_leakage_fit",
+   "diag_leakage_one",
+   "diagnostics_more",
+   "diagnostics_none",
+   "importance_top",
+   "importance_one"
+  ]
  },
  "de": {
   "tasks": {
@@ -924,7 +1164,127 @@
      "": "Nicht berechnet: der Validierungsteil hat weniger als 10 Zeilen einer Klasse; erhöhen Sie validation_share oder fügen Sie Zeilen hinzu."
     }
    }
-  }
+  },
+  "reading_blocks": {
+   "summary": "Zusammenfassung",
+   "assumptions": "Diagnosen",
+   "importance": "Wichtigkeit",
+   "method": "Methode",
+   "formulas": "Formel"
+  },
+  "reading_labels": {
+   "method_boosting": "Gradient Boosting",
+   "method_validation_random": "Validierungsteil",
+   "method_validation_time": "Validierungsteil",
+   "method_validation_grouped": "Validierungsteil",
+   "method_early_stopping": "Vorzeitiges Stoppen",
+   "method_baseline": "Referenz",
+   "method_class_weight": "Ausgewogene Klassen",
+   "method_threshold": "Schwelle",
+   "method_shap": "SHAP",
+   "method_no_test": "Kein p-Wert",
+   "formula_boosting": "Boosting",
+   "formula_loss_regression": "Verlust und Metriken",
+   "formula_loss_binary": "Verlust und Metriken",
+   "formula_loss_multiclass": "Verlust und Metriken",
+   "formula_baseline": "Gewinn gegenüber der Referenz",
+   "formula_shap": "Shapley-Werte"
+  },
+  "reading_texts": {
+   "summary_boosting_regression": "Das Modell wurde auf {n_train:int} Zeilen trainiert und auf {n_validation:int} Zeilen gemessen, aus denen es nicht gelernt hat (der Validierungsteil); es behält {trees:int} Bäume. Auf dem Validierungsteil ist sein RMSE {rmse:num}, gegenüber {baseline:num} für die Referenz, die jede Zeile mit dem Mittelwert des Trainings vorhersagt, und sein R² ist {r2:num}.",
+   "summary_boosting_binary": "Das Modell wurde auf {n_train:int} Zeilen trainiert und auf {n_validation:int} Zeilen gemessen, aus denen es nicht gelernt hat (der Validierungsteil); es behält {trees:int} Bäume. Auf dem Validierungsteil ist sein Log-Loss {logloss:num}, gegenüber {baseline:num} für die Referenz, die jeder Zeile den Anteil des Ereignisses in den Trainingszeilen gibt, und seine AUC ist {auc:num}.",
+   "summary_boosting_multiclass": "Das Modell wurde auf {n_train:int} Zeilen trainiert und auf {n_validation:int} Zeilen gemessen, aus denen es nicht gelernt hat (der Validierungsteil); es behält {trees:int} Bäume. Auf dem Validierungsteil ist sein Log-Loss {logloss:num}, gegenüber {baseline:num} für die Referenz, die jeder Zeile die Anteile der Klassen in den Trainingszeilen gibt, und seine Genauigkeit ist {accuracy:pct}.",
+   "diag_validation_size": {
+    "task=regression": "Der Validierungsteil hat {value:int} Zeilen, unter der Schwelle von {threshold:int}, die die Seite verwendet: Jede Validierungszahl beruht auf ihnen.",
+    "task=binary": "Die kleinste Klasse des Validierungsteils hat {value:int} Zeilen, unter der Schwelle von {threshold:int}, die die Seite verwendet: Was die Validierungszahlen über diese Klasse sagen, beruht auf diesen Zeilen.",
+    "": "Die kleinste Klasse des Validierungsteils hat {value:int} Zeilen, unter der Schwelle von {threshold:int}, die die Seite verwendet: Was die Validierungszahlen über diese Klasse sagen, beruht auf diesen Zeilen."
+   },
+   "diag_beats_baseline": "Eins minus das Verhältnis des Validierungsverlusts zu dem der Referenz ist {value:num}, unter der Schwelle von {threshold:num}, die die Seite verwendet (0: Der Verlust des Modells gleicht dem der Referenz).",
+   "diag_overfitting": "Der behaltene Baum gibt {value:pct} des Validierungsgewinns gegenüber der Referenz zurück, der beim Baum mit dem niedrigsten Validierungsverlust erreicht war, über der Schwelle von {threshold:pct}, die die Seite verwendet.",
+   "diag_trees_more": "Der Validierungsverlust fiel beim letzten der {trees:int} Bäume noch: Das Boosting hielt bei max_trees an, nicht durch vorzeitiges Stoppen.",
+   "diag_trees_few": "Das vorzeitige Stoppen behielt {value:int} Bäume, unter der Schwelle von {threshold:int}, die die Seite bei einer Lernrate über 0,05 verwendet.",
+   "diag_trees_no_stop": "Das vorzeitige Stoppen ist aus: Der Validierungsverlust beim letzten Baum liegt {value:pct} über seinem Minimum, über der Schwelle von {threshold:pct}, die die Seite verwendet.",
+   "diag_trees_size": "Das Boosting hielt bei {trees:int} Bäumen an, damit die Modelldatei innerhalb von 64 MiB bleibt.",
+   "diag_trees_time": "Das Zeitbudget hielt das Boosting bei {trees:int} Bäumen an.",
+   "diag_stop_on_loss": "Das vorzeitige Stoppen beobachtete eine andere Metrik als den Verlust und hielt bei {trees:int} Bäumen an, während der Validierungsverlust noch fiel.",
+   "diag_class_imbalance": "Die größte Klasse ist {value:num}-mal so groß wie die kleinste, über der Schwelle von {threshold:num}, die die Seite verwendet.",
+   "diag_calibration": "Der erwartete Kalibrierungsfehler ist {value:num}, über der Schwelle von {threshold:num}, dem Fehler, den kalibrierte Wahrscheinlichkeiten bei so vielen Zeilen erreichen.",
+   "diag_calibration_slope": "Die Kalibrierungssteigung ist {value:num}; ihr 95-%-Intervall verlässt den Bereich von 0,8 bis 1,25, den die Seite verwendet.",
+   "diag_importance_stability": "Spearmans ρ zwischen dem mittleren |SHAP| der Prädiktoren auf den Trainings- und auf den Validierungszeilen ist {value:num}, unter der Schwelle von {threshold:num}, die die Seite verwendet.",
+   "diag_zero_importance": "Kein Split der Bäume verwendet {names}.",
+   "diag_zero_importance_more": "Kein Split der Bäume verwendet {names} und {more:int} weitere Prädiktoren.",
+   "diag_leakage_share": {
+    "task=regression": "Der erste Prädiktor, {covariate}, hält {value:pct} des mittleren |SHAP|, auf oder über der Schwelle von {threshold:pct}, die die Seite verwendet, und das R² der Validierung ist {fit:num}.",
+    "task=binary": "Der erste Prädiktor, {covariate}, hält {value:pct} des mittleren |SHAP|, auf oder über der Schwelle von {threshold:pct}, die die Seite verwendet, und das AUC der Validierung ist {fit:num}.",
+    "": "Der erste Prädiktor, {covariate}, hält {value:pct} des mittleren |SHAP|, auf oder über der Schwelle von {threshold:pct}, die die Seite verwendet, und das Makro-AUC der Validierung ist {fit:num}."
+   },
+   "diag_leakage_fit": {
+    "task=regression": "Das R² der Validierung ist {fit:num}, ein Niveau, das die Seite ab 0,98 markiert, oder ab 0,95 mit einem ersten Prädiktor, der 60 % des mittleren |SHAP| hält; hier hält {covariate} {value:pct}.",
+    "task=binary": "Das AUC der Validierung ist {fit:num}, ein Niveau, das die Seite ab 0,98 markiert, oder ab 0,95 mit einem ersten Prädiktor, der 60 % des mittleren |SHAP| hält; hier hält {covariate} {value:pct}.",
+    "": "Das Makro-AUC der Validierung ist {fit:num}, ein Niveau, das die Seite ab 0,98 markiert, oder ab 0,95 mit einem ersten Prädiktor, der 60 % des mittleren |SHAP| hält; hier hält {covariate} {value:pct}."
+   },
+   "diag_leakage_one": {
+    "task=regression": "Mit einem Prädiktor liest die Seite das R² der Validierung selbst: {value:num}, auf oder über der Schwelle von {threshold:num}.",
+    "task=binary": "Mit einem Prädiktor liest die Seite das AUC der Validierung selbst: {value:num}, auf oder über der Schwelle von {threshold:num}.",
+    "": "Mit einem Prädiktor liest die Seite das Makro-AUC der Validierung selbst: {value:num}, auf oder über der Schwelle von {threshold:num}."
+   },
+   "diagnostics_more": "{more:int} weitere Diagnosen liegen jenseits ihrer Schwelle: Die Tabelle nennt sie.",
+   "diagnostics_none": "Keine der {total:int} Diagnosen liegt jenseits der Schwelle, die die Seite verwendet; es sind Faustregeln, keine Tests, und sie haben keinen p-Wert.",
+   "importance_top": "Nach mittlerem |SHAP| sind die {k:int} Prädiktoren, die die Vorhersagen am meisten bewegen, {names}, mit {shares:pct} der Summe.",
+   "importance_one": "Der einzige Prädiktor, {names}, hält das ganze mittlere |SHAP|.",
+   "method_boosting": "Gradient Boosting baut die Vorhersage als Summe kleiner Entscheidungsbäume auf, die nacheinander wachsen: Jeder neue Baum wird an das angepasst, was die Bäume davor noch falsch machen (der Gradient des Verlusts), und sein Schritt wird durch die Lernrate verkleinert. Viele flache Bäume folgen nichtlinearen Mustern und Wechselwirkungen zwischen den Prädiktoren ohne eine vorher gegebene Formel; dafür sagt kein Koeffizient, was ein Prädiktor bewirkt.",
+   "method_validation_random": "Ein zufälliger Anteil der Zeilen (validation_share; bei einer Klassifikation derselbe Anteil jeder Klasse) wurde aus dem Training herausgehalten: Jede Validierungszahl wird auf Zeilen gemessen, aus denen die Bäume nicht gelernt haben.",
+   "method_validation_time": "Die zeitlich letzten Zeilen (nach order_by) wurden aus dem Training herausgehalten: Der Validierungsteil misst das Modell auf Zeilen, die später liegen als die, aus denen es gelernt hat, so wie eine Prognose auf sie träfe.",
+   "method_validation_grouped": "Ganze Gruppen der Spalte split_by wurden aus dem Training herausgehalten: Die Zeilen einer Gruppe liegen nie auf beiden Seiten, daher misst der Validierungsteil das Modell an Gruppen, die es nicht gesehen hat.",
+   "method_early_stopping": {
+    "early_stopping=false": "Das vorzeitige Stoppen ist aus: Jeder Baum bis max_trees wird behalten, und die Lernkurven zeigen, ob der Validierungsverlust nach seinem Minimum wieder stieg.",
+    "": "Das vorzeitige Stoppen beobachtete den Validierungsteil: Das Boosting hielt an, wenn sich die Stoppmetrik über early_stopping_rounds Bäume nicht verbessert hatte, und das Modell behält die Bäume bis zu seiner besten Runde. Der Validierungsteil hat auch die Zahl der Bäume gewählt, daher sind seine Zahlen etwas optimistisch."
+   },
+   "method_baseline": {
+    "task=regression": "Die Referenz sagt jede Validierungszeile mit dem Mittelwert der Trainingszeilen vorher: ein Modell, das nichts aus den Prädiktoren gelernt hat. Ihr RMSE neben dem des Modells sagt, was die Prädiktoren beitragen.",
+    "task=binary": "Die Referenz gibt jeder Validierungszeile den Anteil des Ereignisses in den Trainingszeilen: ein Modell, das nichts aus den Prädiktoren gelernt hat. Ihr Log-Loss neben dem des Modells sagt, was die Prädiktoren beitragen.",
+    "": "Die Referenz gibt jeder Validierungszeile die Anteile der Klassen in den Trainingszeilen: ein Modell, das nichts aus den Prädiktoren gelernt hat. Ihr Log-Loss neben dem des Modells sagt, was die Prädiktoren beitragen."
+   },
+   "method_class_weight": "Mit class_weight = balanced wiegt jede Klasse in der Anpassung gleich: Die Wahrscheinlichkeiten entfernen sich von den Klassenanteilen, sie sind also nicht die zu erwartenden Raten; das vorzeitige Stoppen und der Vergleich mit der Referenz lesen auf dieselbe Weise gewichtete Verluste.",
+   "method_threshold": "Eine Zeile wird als Ereignis klassifiziert, wenn ihre vorhergesagte Wahrscheinlichkeit die Schwelle des Knotens erreicht: Genauigkeit, Sensitivität, Spezifität, Präzision und F1 gelten bei dieser Schwelle, während AUC und Log-Loss die Wahrscheinlichkeiten selbst lesen.",
+   "method_shap": "SHAP-Werte (Lundberg und Lee 2017; TreeSHAP, exakt für Bäume) teilen jede Vorhersage in einen Beitrag je Prädiktor auf, addiert zur mittleren Vorhersage, auf der Skala des Rohwerts des Modells (die Log-Odds bei einem binären Ergebnis). Das mittlere |SHAP| eines Prädiktors ist, wie weit er eine Vorhersage im Mittel bewegt: wie sehr das Modell ihn nutzt, nicht was das Ergebnis verursacht.",
+   "method_no_test": "Es wird kein p-Wert angegeben: Die Bäume werden von denselben Daten gewählt, an denen sie gemessen werden, und die üblichen Tests gelten für sie nicht. Die Diagnosen sind Faustregeln mit einer Schwelle, keine Tests: Jede sagt, wo man hinsehen kann, und die Lesart nennt die Zahl und die Schwelle."
+  },
+  "formula_texts": {
+   "formula_boosting": "F_m(x) = F_(m−1)(x) + η f_m(x), F_0 eine Konstante;  f_m: der Baum, der Σ_i w_i L(y_i, F_(m−1)(x_i) + f(x_i)) + Ω(f) am stärksten senkt, an die Gradienten des Verlusts angepasst, Ω die Strafterme der Bäume;  η: learning_rate; die Vorhersage ist F_M(x), M die behaltenen Bäume",
+   "formula_loss_regression": "L = (y − ŷ)²;  RMSE = √(Σ_i w_i (y_i − ŷ_i)² / Σ_i w_i);  R² = 1 − Σ_i w_i (y_i − ŷ_i)² / Σ_i w_i (y_i − m)²;  m: der gewichtete Mittelwert von y",
+   "formula_loss_binary": "L = −[y log p + (1 − y) log(1 − p)], p = 1 / (1 + e^(−F));  Log-Loss = Σ_i w_i L_i / Σ_i w_i;  AUC: die Wahrscheinlichkeit, dass eine Zeile mit dem Ereignis ein höheres p hat als eine ohne",
+   "formula_loss_multiclass": "L = −log p_y, p_k = e^(F_k) / Σ_j e^(F_j) (Softmax);  Log-Loss = Σ_i w_i L_i / Σ_i w_i",
+   "formula_baseline": "u = 1 − L_Validierung / L_Referenz, die Diagnose der Referenz;  L: der Validierungsverlust (RMSE oder Log-Loss) des Modells und der Referenz",
+   "formula_shap": "φ_j = Σ_S |S|! (P − |S| − 1)! / P! · [f(S und j) − f(S)], über jede Menge S der übrigen Prädiktoren, P die Prädiktoren;  f(x) = E f + Σ_j φ_j(x);  mittleres |SHAP|_j = (1/n) Σ_i |φ_j(x_i)|"
+  },
+  "measure_readings": [
+   "summary_boosting_regression",
+   "summary_boosting_binary",
+   "summary_boosting_multiclass",
+   "diag_validation_size",
+   "diag_beats_baseline",
+   "diag_overfitting",
+   "diag_trees_more",
+   "diag_trees_few",
+   "diag_trees_no_stop",
+   "diag_trees_size",
+   "diag_trees_time",
+   "diag_stop_on_loss",
+   "diag_class_imbalance",
+   "diag_calibration",
+   "diag_calibration_slope",
+   "diag_importance_stability",
+   "diag_zero_importance",
+   "diag_zero_importance_more",
+   "diag_leakage_share",
+   "diag_leakage_fit",
+   "diag_leakage_one",
+   "diagnostics_more",
+   "diagnostics_none",
+   "importance_top",
+   "importance_one"
+  ]
  },
  "es": {
   "tasks": {
@@ -1233,7 +1593,127 @@
      "": "No calculado: la parte de validación tiene menos de 10 filas de una clase; suba validation_share o añada filas."
     }
    }
-  }
+  },
+  "reading_blocks": {
+   "summary": "Resumen",
+   "assumptions": "Diagnósticos",
+   "importance": "Importancia",
+   "method": "Método",
+   "formulas": "Fórmula"
+  },
+  "reading_labels": {
+   "method_boosting": "Gradient boosting",
+   "method_validation_random": "Parte de validación",
+   "method_validation_time": "Parte de validación",
+   "method_validation_grouped": "Parte de validación",
+   "method_early_stopping": "Parada temprana",
+   "method_baseline": "Referencia",
+   "method_class_weight": "Clases equilibradas",
+   "method_threshold": "Umbral",
+   "method_shap": "SHAP",
+   "method_no_test": "Sin p-valor",
+   "formula_boosting": "Boosting",
+   "formula_loss_regression": "Pérdida y métricas",
+   "formula_loss_binary": "Pérdida y métricas",
+   "formula_loss_multiclass": "Pérdida y métricas",
+   "formula_baseline": "Ganancia sobre la referencia",
+   "formula_shap": "Valores de Shapley"
+  },
+  "reading_texts": {
+   "summary_boosting_regression": "El modelo se entrenó con {n_train:int} filas y se midió en {n_validation:int} filas de las que no aprendió (la parte de validación); conserva {trees:int} árboles. En la parte de validación su RMSE es {rmse:num}, frente a {baseline:num} de la referencia que predice cada fila con la media del entrenamiento, y su R² es {r2:num}.",
+   "summary_boosting_binary": "El modelo se entrenó con {n_train:int} filas y se midió en {n_validation:int} filas de las que no aprendió (la parte de validación); conserva {trees:int} árboles. En la parte de validación su log-loss es {logloss:num}, frente a {baseline:num} de la referencia que da a cada fila la proporción del evento en las filas de entrenamiento, y su AUC es {auc:num}.",
+   "summary_boosting_multiclass": "El modelo se entrenó con {n_train:int} filas y se midió en {n_validation:int} filas de las que no aprendió (la parte de validación); conserva {trees:int} árboles. En la parte de validación su log-loss es {logloss:num}, frente a {baseline:num} de la referencia que da a cada fila las proporciones de las clases en las filas de entrenamiento, y su exactitud es {accuracy:pct}.",
+   "diag_validation_size": {
+    "task=regression": "La parte de validación tiene {value:int} filas, por debajo del umbral de {threshold:int} que usa la página: cada número de validación descansa en ellas.",
+    "task=binary": "La clase más pequeña de la parte de validación tiene {value:int} filas, por debajo del umbral de {threshold:int} que usa la página: lo que los números de validación dicen de esa clase descansa en estas filas.",
+    "": "La clase más pequeña de la parte de validación tiene {value:int} filas, por debajo del umbral de {threshold:int} que usa la página: lo que los números de validación dicen de esa clase descansa en estas filas."
+   },
+   "diag_beats_baseline": "Uno menos el cociente entre la pérdida de validación y la de la referencia vale {value:num}, por debajo del umbral de {threshold:num} que usa la página (0: la pérdida del modelo es igual a la de la referencia).",
+   "diag_overfitting": "El árbol conservado devuelve el {value:pct} de la ganancia de validación sobre la referencia alcanzada en el árbol de menor pérdida de validación, por encima del umbral de {threshold:pct} que usa la página.",
+   "diag_trees_more": "La pérdida de validación aún bajaba en el último de los {trees:int} árboles: el boosting se detuvo en max_trees, no por parada temprana.",
+   "diag_trees_few": "La parada temprana conservó {value:int} árboles, por debajo del umbral de {threshold:int} que usa la página cuando la tasa de aprendizaje es mayor que 0,05.",
+   "diag_trees_no_stop": "La parada temprana está desactivada: la pérdida de validación en el último árbol está un {value:pct} por encima de su mínimo, por encima del umbral de {threshold:pct} que usa la página.",
+   "diag_trees_size": "El boosting se detuvo en {trees:int} árboles para que el archivo del modelo quede dentro de 64 MiB.",
+   "diag_trees_time": "El tiempo disponible detuvo el boosting en {trees:int} árboles.",
+   "diag_stop_on_loss": "La parada temprana vigilaba una métrica distinta de la pérdida y se detuvo en {trees:int} árboles mientras la pérdida de validación aún bajaba.",
+   "diag_class_imbalance": "La clase más grande es {value:num} veces la más pequeña, por encima del umbral de {threshold:num} que usa la página.",
+   "diag_calibration": "El error de calibración esperado es {value:num}, por encima del umbral de {threshold:num}, el error que alcanzan probabilidades calibradas con estas filas.",
+   "diag_calibration_slope": "La pendiente de calibración es {value:num}; su intervalo al 95 % sale del rango de 0,8 a 1,25 que usa la página.",
+   "diag_importance_stability": "La ρ de Spearman entre la media de |SHAP| de los predictores en las filas de entrenamiento y en las de validación es {value:num}, por debajo del umbral de {threshold:num} que usa la página.",
+   "diag_zero_importance": "Ninguna división de los árboles usa {names}.",
+   "diag_zero_importance_more": "Ninguna división de los árboles usa {names} ni {more:int} predictores más.",
+   "diag_leakage_share": {
+    "task=regression": "El primer predictor, {covariate}, tiene el {value:pct} de la media de |SHAP|, en o por encima del umbral del {threshold:pct} que usa la página, y el R² de validación es {fit:num}.",
+    "task=binary": "El primer predictor, {covariate}, tiene el {value:pct} de la media de |SHAP|, en o por encima del umbral del {threshold:pct} que usa la página, y el AUC de validación es {fit:num}.",
+    "": "El primer predictor, {covariate}, tiene el {value:pct} de la media de |SHAP|, en o por encima del umbral del {threshold:pct} que usa la página, y el AUC macro de validación es {fit:num}."
+   },
+   "diag_leakage_fit": {
+    "task=regression": "El R² de validación es {fit:num}, un nivel que la página señala desde 0,98, o desde 0,95 con un primer predictor que tiene el 60 % de la media de |SHAP|; aquí {covariate} tiene el {value:pct}.",
+    "task=binary": "El AUC de validación es {fit:num}, un nivel que la página señala desde 0,98, o desde 0,95 con un primer predictor que tiene el 60 % de la media de |SHAP|; aquí {covariate} tiene el {value:pct}.",
+    "": "El AUC macro de validación es {fit:num}, un nivel que la página señala desde 0,98, o desde 0,95 con un primer predictor que tiene el 60 % de la media de |SHAP|; aquí {covariate} tiene el {value:pct}."
+   },
+   "diag_leakage_one": {
+    "task=regression": "Con un solo predictor la página lee el propio R² de validación: {value:num}, en o por encima del umbral de {threshold:num}.",
+    "task=binary": "Con un solo predictor la página lee el propio AUC de validación: {value:num}, en o por encima del umbral de {threshold:num}.",
+    "": "Con un solo predictor la página lee el propio AUC macro de validación: {value:num}, en o por encima del umbral de {threshold:num}."
+   },
+   "diagnostics_more": "Otros {more:int} diagnósticos pasan su umbral: la tabla los enumera.",
+   "diagnostics_none": "Ninguno de los {total:int} diagnósticos pasa el umbral que usa la página; son reglas prácticas, no pruebas, y no tienen p-valor.",
+   "importance_top": "Por media de |SHAP|, los {k:int} predictores que más mueven las predicciones son {names}, con el {shares:pct} del total.",
+   "importance_one": "El único predictor, {names}, tiene toda la media de |SHAP|.",
+   "method_boosting": "El gradient boosting construye la predicción como suma de pequeños árboles de decisión que crecen uno tras otro: cada árbol nuevo se ajusta a lo que los árboles anteriores aún fallan (el gradiente de la pérdida), y su paso se reduce con la tasa de aprendizaje. Muchos árboles poco profundos siguen patrones no lineales e interacciones entre los predictores sin una fórmula dada de antemano; a cambio, ningún coeficiente dice qué hace un predictor.",
+   "method_validation_random": "Una proporción aleatoria de las filas (validation_share; en una clasificación, la misma proporción de cada clase) se dejó fuera del entrenamiento: cada número de validación se mide en filas de las que los árboles no aprendieron.",
+   "method_validation_time": "Las últimas filas en el tiempo (según order_by) se dejaron fuera del entrenamiento: la parte de validación mide el modelo en filas posteriores a aquellas de las que aprendió, como las encontraría una previsión.",
+   "method_validation_grouped": "Grupos enteros de la columna split_by se dejaron fuera del entrenamiento: las filas de un grupo nunca están en ambos lados, así que la parte de validación mide el modelo en grupos que no vio.",
+   "method_early_stopping": {
+    "early_stopping=false": "La parada temprana está desactivada: se conserva cada árbol hasta max_trees, y las curvas de aprendizaje muestran si la pérdida de validación volvió a subir tras su mínimo.",
+    "": "La parada temprana vigilaba la parte de validación: el boosting se detuvo cuando la métrica de parada no había mejorado durante early_stopping_rounds árboles, y el modelo conserva los árboles hasta su mejor ronda. La parte de validación eligió también el número de árboles, así que sus números son algo optimistas."
+   },
+   "method_baseline": {
+    "task=regression": "La referencia predice cada fila de validación con la media de las filas de entrenamiento: un modelo que no aprendió nada de los predictores. Su RMSE junto al del modelo dice lo que aportan los predictores.",
+    "task=binary": "La referencia da a cada fila de validación la proporción del evento en las filas de entrenamiento: un modelo que no aprendió nada de los predictores. Su log-loss junto a la del modelo dice lo que aportan los predictores.",
+    "": "La referencia da a cada fila de validación las proporciones de las clases en las filas de entrenamiento: un modelo que no aprendió nada de los predictores. Su log-loss junto a la del modelo dice lo que aportan los predictores."
+   },
+   "method_class_weight": "Con class_weight = balanced cada clase pesa lo mismo en el ajuste: las probabilidades se alejan de las proporciones de las clases, así que no son las tasas que cabe esperar; la parada temprana y la comparación con la referencia leen pérdidas ponderadas del mismo modo.",
+   "method_threshold": "Una fila se clasifica como evento cuando su probabilidad predicha alcanza el umbral del nodo: la exactitud, la sensibilidad, la especificidad, la precisión y el F1 están en ese umbral, mientras que el AUC y la log-loss leen las probabilidades mismas.",
+   "method_shap": "Los valores SHAP (Lundberg y Lee 2017; TreeSHAP, exacto en árboles) dividen cada predicción en una contribución por predictor, sumada a la predicción media, en la escala de la puntuación bruta del modelo (los log-odds para un resultado binario). La media de |SHAP| de un predictor es cuánto mueve, de media, una predicción: cuánto lo usa el modelo, no qué causa el resultado.",
+   "method_no_test": "No se da p-valor: los árboles se eligen con los mismos datos con que se miden, y las pruebas habituales no se les aplican. Los diagnósticos son reglas prácticas con un umbral, no pruebas: cada uno dice dónde mirar, y la lectura da el número y el umbral."
+  },
+  "formula_texts": {
+   "formula_boosting": "F_m(x) = F_(m−1)(x) + η f_m(x), F_0 una constante;  f_m: el árbol que más reduce Σ_i w_i L(y_i, F_(m−1)(x_i) + f(x_i)) + Ω(f), ajustado a los gradientes de la pérdida, Ω las penalizaciones de los árboles;  η: learning_rate; la predicción es F_M(x), M los árboles conservados",
+   "formula_loss_regression": "L = (y − ŷ)²;  RMSE = √(Σ_i w_i (y_i − ŷ_i)² / Σ_i w_i);  R² = 1 − Σ_i w_i (y_i − ŷ_i)² / Σ_i w_i (y_i − m)²;  m: la media ponderada de y",
+   "formula_loss_binary": "L = −[y log p + (1 − y) log(1 − p)], p = 1 / (1 + e^(−F));  log-loss = Σ_i w_i L_i / Σ_i w_i;  AUC: la probabilidad de que una fila con el evento tenga una p más alta que una fila sin él",
+   "formula_loss_multiclass": "L = −log p_y, p_k = e^(F_k) / Σ_j e^(F_j) (softmax);  log-loss = Σ_i w_i L_i / Σ_i w_i",
+   "formula_baseline": "u = 1 − L_validación / L_referencia, el diagnóstico de la referencia;  L: la pérdida de validación (RMSE o log-loss) del modelo y de la referencia",
+   "formula_shap": "φ_j = Σ_S |S|! (P − |S| − 1)! / P! · [f(S y j) − f(S)], sobre cada conjunto S de los demás predictores, P los predictores;  f(x) = E f + Σ_j φ_j(x);  media de |SHAP|_j = (1/n) Σ_i |φ_j(x_i)|"
+  },
+  "measure_readings": [
+   "summary_boosting_regression",
+   "summary_boosting_binary",
+   "summary_boosting_multiclass",
+   "diag_validation_size",
+   "diag_beats_baseline",
+   "diag_overfitting",
+   "diag_trees_more",
+   "diag_trees_few",
+   "diag_trees_no_stop",
+   "diag_trees_size",
+   "diag_trees_time",
+   "diag_stop_on_loss",
+   "diag_class_imbalance",
+   "diag_calibration",
+   "diag_calibration_slope",
+   "diag_importance_stability",
+   "diag_zero_importance",
+   "diag_zero_importance_more",
+   "diag_leakage_share",
+   "diag_leakage_fit",
+   "diag_leakage_one",
+   "diagnostics_more",
+   "diagnostics_none",
+   "importance_top",
+   "importance_one"
+  ]
  },
  "fr": {
   "tasks": {
@@ -1542,6 +2022,126 @@
      "": "Non calculé : la partie de validation a moins de 10 lignes d'une classe ; relevez validation_share ou ajoutez des lignes."
     }
    }
-  }
+  },
+  "reading_blocks": {
+   "summary": "Synthèse",
+   "assumptions": "Diagnostics",
+   "importance": "Importance",
+   "method": "Méthode",
+   "formulas": "Formule"
+  },
+  "reading_labels": {
+   "method_boosting": "Gradient boosting",
+   "method_validation_random": "Partie de validation",
+   "method_validation_time": "Partie de validation",
+   "method_validation_grouped": "Partie de validation",
+   "method_early_stopping": "Arrêt anticipé",
+   "method_baseline": "Référence",
+   "method_class_weight": "Classes équilibrées",
+   "method_threshold": "Seuil",
+   "method_shap": "SHAP",
+   "method_no_test": "Pas de p-valeur",
+   "formula_boosting": "Boosting",
+   "formula_loss_regression": "Perte et métriques",
+   "formula_loss_binary": "Perte et métriques",
+   "formula_loss_multiclass": "Perte et métriques",
+   "formula_baseline": "Gain sur la référence",
+   "formula_shap": "Valeurs de Shapley"
+  },
+  "reading_texts": {
+   "summary_boosting_regression": "Le modèle a été entraîné sur {n_train:int} lignes et mesuré sur {n_validation:int} lignes dont il n'a pas appris (la partie de validation) ; il garde {trees:int} arbres. Sur la partie de validation son RMSE est de {rmse:num}, contre {baseline:num} pour la référence qui prédit chaque ligne par la moyenne de l'entraînement, et son R² est de {r2:num}.",
+   "summary_boosting_binary": "Le modèle a été entraîné sur {n_train:int} lignes et mesuré sur {n_validation:int} lignes dont il n'a pas appris (la partie de validation) ; il garde {trees:int} arbres. Sur la partie de validation sa log-loss est de {logloss:num}, contre {baseline:num} pour la référence qui donne à chaque ligne la part de l'événement dans les lignes d'entraînement, et son AUC est de {auc:num}.",
+   "summary_boosting_multiclass": "Le modèle a été entraîné sur {n_train:int} lignes et mesuré sur {n_validation:int} lignes dont il n'a pas appris (la partie de validation) ; il garde {trees:int} arbres. Sur la partie de validation sa log-loss est de {logloss:num}, contre {baseline:num} pour la référence qui donne à chaque ligne les parts des classes dans les lignes d'entraînement, et son exactitude est de {accuracy:pct}.",
+   "diag_validation_size": {
+    "task=regression": "La partie de validation a {value:int} lignes, sous le seuil de {threshold:int} que la page utilise : chaque nombre de validation repose sur elles.",
+    "task=binary": "La plus petite classe de la partie de validation a {value:int} lignes, sous le seuil de {threshold:int} que la page utilise : ce que les nombres de validation disent de cette classe repose sur ces lignes.",
+    "": "La plus petite classe de la partie de validation a {value:int} lignes, sous le seuil de {threshold:int} que la page utilise : ce que les nombres de validation disent de cette classe repose sur ces lignes."
+   },
+   "diag_beats_baseline": "Un moins le rapport de la perte de validation à celle de la référence vaut {value:num}, sous le seuil de {threshold:num} que la page utilise (0 : la perte du modèle égale celle de la référence).",
+   "diag_overfitting": "L'arbre gardé rend {value:pct} du gain de validation sur la référence atteint à l'arbre de plus basse perte de validation, au-dessus du seuil de {threshold:pct} que la page utilise.",
+   "diag_trees_more": "La perte de validation baissait encore au dernier des {trees:int} arbres : le boosting s'est arrêté à max_trees, pas par arrêt anticipé.",
+   "diag_trees_few": "L'arrêt anticipé a gardé {value:int} arbres, sous le seuil de {threshold:int} que la page utilise quand le taux d'apprentissage dépasse 0,05.",
+   "diag_trees_no_stop": "L'arrêt anticipé est désactivé : la perte de validation au dernier arbre est {value:pct} au-dessus de son minimum, au-dessus du seuil de {threshold:pct} que la page utilise.",
+   "diag_trees_size": "Le boosting s'est arrêté à {trees:int} arbres pour que le fichier du modèle reste sous 64 Mio.",
+   "diag_trees_time": "Le budget de temps a arrêté le boosting à {trees:int} arbres.",
+   "diag_stop_on_loss": "L'arrêt anticipé surveillait une autre métrique que la perte et s'est arrêté à {trees:int} arbres alors que la perte de validation baissait encore.",
+   "diag_class_imbalance": "La plus grande classe vaut {value:num} fois la plus petite, au-dessus du seuil de {threshold:num} que la page utilise.",
+   "diag_calibration": "L'erreur de calibration attendue est de {value:num}, au-dessus du seuil de {threshold:num}, l'erreur que des probabilités calibrées atteignent avec ces lignes.",
+   "diag_calibration_slope": "La pente de calibration est de {value:num} ; son intervalle à 95 % sort de la plage de 0,8 à 1,25 que la page utilise.",
+   "diag_importance_stability": "Le ρ de Spearman entre la moyenne des |SHAP| des prédicteurs sur les lignes d'entraînement et sur celles de validation est de {value:num}, sous le seuil de {threshold:num} que la page utilise.",
+   "diag_zero_importance": "Aucune coupure des arbres n'utilise {names}.",
+   "diag_zero_importance_more": "Aucune coupure des arbres n'utilise {names} ni {more:int} autres prédicteurs.",
+   "diag_leakage_share": {
+    "task=regression": "Le premier prédicteur, {covariate}, tient {value:pct} de la moyenne des |SHAP|, au seuil de {threshold:pct} que la page utilise ou au-dessus, et le R² de validation est de {fit:num}.",
+    "task=binary": "Le premier prédicteur, {covariate}, tient {value:pct} de la moyenne des |SHAP|, au seuil de {threshold:pct} que la page utilise ou au-dessus, et le AUC de validation est de {fit:num}.",
+    "": "Le premier prédicteur, {covariate}, tient {value:pct} de la moyenne des |SHAP|, au seuil de {threshold:pct} que la page utilise ou au-dessus, et le AUC macro de validation est de {fit:num}."
+   },
+   "diag_leakage_fit": {
+    "task=regression": "Le R² de validation est de {fit:num}, un niveau que la page signale à partir de 0,98, ou de 0,95 avec un premier prédicteur qui tient 60 % de la moyenne des |SHAP| ; ici {covariate} en tient {value:pct}.",
+    "task=binary": "Le AUC de validation est de {fit:num}, un niveau que la page signale à partir de 0,98, ou de 0,95 avec un premier prédicteur qui tient 60 % de la moyenne des |SHAP| ; ici {covariate} en tient {value:pct}.",
+    "": "Le AUC macro de validation est de {fit:num}, un niveau que la page signale à partir de 0,98, ou de 0,95 avec un premier prédicteur qui tient 60 % de la moyenne des |SHAP| ; ici {covariate} en tient {value:pct}."
+   },
+   "diag_leakage_one": {
+    "task=regression": "Avec un seul prédicteur la page lit le R² de validation lui-même : {value:num}, au seuil de {threshold:num} ou au-dessus.",
+    "task=binary": "Avec un seul prédicteur la page lit le AUC de validation lui-même : {value:num}, au seuil de {threshold:num} ou au-dessus.",
+    "": "Avec un seul prédicteur la page lit le AUC macro de validation lui-même : {value:num}, au seuil de {threshold:num} ou au-dessus."
+   },
+   "diagnostics_more": "{more:int} autres diagnostics dépassent leur seuil : le tableau les liste.",
+   "diagnostics_none": "Aucun des {total:int} diagnostics ne dépasse le seuil que la page utilise ; ce sont des règles pratiques, pas des tests, et ils n'ont pas de p-valeur.",
+   "importance_top": "Par moyenne des |SHAP|, les {k:int} prédicteurs qui déplacent le plus les prédictions sont {names}, avec {shares:pct} du total.",
+   "importance_one": "Le seul prédicteur, {names}, tient toute la moyenne des |SHAP|.",
+   "method_boosting": "Le gradient boosting construit la prédiction comme une somme de petits arbres de décision qui poussent l'un après l'autre : chaque nouvel arbre est ajusté à ce que les arbres d'avant manquent encore (le gradient de la perte), et son pas est réduit par le taux d'apprentissage. Beaucoup d'arbres peu profonds suivent des motifs non linéaires et des interactions entre les prédicteurs sans formule donnée d'avance ; en échange, aucun coefficient ne dit ce que fait un prédicteur.",
+   "method_validation_random": "Une part aléatoire des lignes (validation_share ; pour une classification, la même part de chaque classe) a été tenue hors de l'entraînement : chaque nombre de validation est mesuré sur des lignes dont les arbres n'ont pas appris.",
+   "method_validation_time": "Les dernières lignes dans le temps (selon order_by) ont été tenues hors de l'entraînement : la partie de validation mesure le modèle sur des lignes postérieures à celles dont il a appris, comme une prévision les rencontrerait.",
+   "method_validation_grouped": "Des groupes entiers de la colonne split_by ont été tenus hors de l'entraînement : les lignes d'un groupe ne sont jamais des deux côtés, donc la partie de validation mesure le modèle sur des groupes qu'il n'a pas vus.",
+   "method_early_stopping": {
+    "early_stopping=false": "L'arrêt anticipé est désactivé : chaque arbre jusqu'à max_trees est gardé, et les courbes d'apprentissage montrent si la perte de validation est remontée après son minimum.",
+    "": "L'arrêt anticipé surveillait la partie de validation : le boosting s'est arrêté quand la métrique d'arrêt ne s'était pas améliorée pendant early_stopping_rounds arbres, et le modèle garde les arbres jusqu'à son tour optimal. La partie de validation a aussi choisi le nombre d'arbres, donc ses nombres sont un peu optimistes."
+   },
+   "method_baseline": {
+    "task=regression": "La référence prédit chaque ligne de validation par la moyenne des lignes d'entraînement : un modèle qui n'a rien appris des prédicteurs. Son RMSE à côté de celui du modèle dit ce que les prédicteurs apportent.",
+    "task=binary": "La référence donne à chaque ligne de validation la part de l'événement dans les lignes d'entraînement : un modèle qui n'a rien appris des prédicteurs. Sa log-loss à côté de celle du modèle dit ce que les prédicteurs apportent.",
+    "": "La référence donne à chaque ligne de validation les parts des classes dans les lignes d'entraînement : un modèle qui n'a rien appris des prédicteurs. Sa log-loss à côté de celle du modèle dit ce que les prédicteurs apportent."
+   },
+   "method_class_weight": "Avec class_weight = balanced chaque classe pèse autant dans l'ajustement : les probabilités s'éloignent des parts des classes, ce ne sont donc pas les taux à attendre ; l'arrêt anticipé et la comparaison avec la référence lisent des pertes pondérées de la même façon.",
+   "method_threshold": "Une ligne est classée comme événement quand sa probabilité prédite atteint le seuil du nœud : l'exactitude, la sensibilité, la spécificité, la précision et le F1 sont à ce seuil, tandis que l'AUC et la log-loss lisent les probabilités elles-mêmes.",
+   "method_shap": "Les valeurs SHAP (Lundberg et Lee 2017 ; TreeSHAP, exact sur les arbres) partagent chaque prédiction en une contribution par prédicteur, ajoutée à la prédiction moyenne, sur l'échelle du score brut du modèle (les log-odds pour un résultat binaire). La moyenne des |SHAP| d'un prédicteur est de combien, en moyenne, il déplace une prédiction : combien le modèle l'utilise, pas ce qui cause le résultat.",
+   "method_no_test": "Aucune p-valeur n'est donnée : les arbres sont choisis par les mêmes données sur lesquelles ils sont mesurés, et les tests usuels ne s'y appliquent pas. Les diagnostics sont des règles pratiques avec un seuil, pas des tests : chacun dit où regarder, et la lecture donne le nombre et le seuil."
+  },
+  "formula_texts": {
+   "formula_boosting": "F_m(x) = F_(m−1)(x) + η f_m(x), F_0 une constante ;  f_m : l'arbre qui abaisse le plus Σ_i w_i L(y_i, F_(m−1)(x_i) + f(x_i)) + Ω(f), ajusté aux gradients de la perte, Ω les pénalités des arbres ;  η : learning_rate ; la prédiction est F_M(x), M les arbres gardés",
+   "formula_loss_regression": "L = (y − ŷ)² ;  RMSE = √(Σ_i w_i (y_i − ŷ_i)² / Σ_i w_i) ;  R² = 1 − Σ_i w_i (y_i − ŷ_i)² / Σ_i w_i (y_i − m)² ;  m : la moyenne pondérée de y",
+   "formula_loss_binary": "L = −[y log p + (1 − y) log(1 − p)], p = 1 / (1 + e^(−F)) ;  log-loss = Σ_i w_i L_i / Σ_i w_i ;  AUC : la probabilité qu'une ligne avec l'événement ait un p plus élevé qu'une ligne sans",
+   "formula_loss_multiclass": "L = −log p_y, p_k = e^(F_k) / Σ_j e^(F_j) (softmax) ;  log-loss = Σ_i w_i L_i / Σ_i w_i",
+   "formula_baseline": "u = 1 − L_validation / L_référence, le diagnostic de la référence ;  L : la perte de validation (RMSE ou log-loss) du modèle et de la référence",
+   "formula_shap": "φ_j = Σ_S |S|! (P − |S| − 1)! / P! · [f(S et j) − f(S)], sur chaque ensemble S des autres prédicteurs, P les prédicteurs ;  f(x) = E f + Σ_j φ_j(x) ;  moyenne des |SHAP|_j = (1/n) Σ_i |φ_j(x_i)|"
+  },
+  "measure_readings": [
+   "summary_boosting_regression",
+   "summary_boosting_binary",
+   "summary_boosting_multiclass",
+   "diag_validation_size",
+   "diag_beats_baseline",
+   "diag_overfitting",
+   "diag_trees_more",
+   "diag_trees_few",
+   "diag_trees_no_stop",
+   "diag_trees_size",
+   "diag_trees_time",
+   "diag_stop_on_loss",
+   "diag_class_imbalance",
+   "diag_calibration",
+   "diag_calibration_slope",
+   "diag_importance_stability",
+   "diag_zero_importance",
+   "diag_zero_importance_more",
+   "diag_leakage_share",
+   "diag_leakage_fit",
+   "diag_leakage_one",
+   "diagnostics_more",
+   "diagnostics_none",
+   "importance_top",
+   "importance_one"
+  ]
  }
 }
