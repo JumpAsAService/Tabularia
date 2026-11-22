@@ -72,6 +72,12 @@ NOTES: dict[str, dict] = {
 BLOCK = {"summary": "summary", "filled": "summary", "missing": "summary", "forecast": "forecast", "holdout": "holdout",
          "coverage": "coverage", "comparison": "comparison", "limits": "limits", "licence": "licence", "method": "method"}
 VERDICTS = ("comparison_supported", "comparison_opposite", "comparison_not_supported")
+# words of judgement besides common.json's `verdict_words`, for the measures of this report (lot F9)
+JUDGEMENT = {"en": ("advantage", "too narrow", "too wide", "clear", "helps", "worse"),
+             "it": ("vantaggio", "netto", "troppo strette", "troppo larghe", "aiuta", "peggiore"),
+             "de": ("Vorsprung", "zu schmal", "zu breit", "klarer", "hilft", "schlechter"),
+             "fr": ("avance nette", "trop étroites", "trop larges", "nette", "aide", "pire"),
+             "es": ("ventaja", "demasiado estrechas", "demasiado anchas", "clara", "ayuda", "peor")}
 
 
 def _block(id_: str) -> str:
@@ -147,6 +153,14 @@ def test_no_sentence_of_a_measure_holds_a_word_of_judgement_and_each_verdict_hol
         assert not [v for v in w["verdict_words"] if _has(v, sentence)], (locale, sentence)
     for key in VERDICTS:
         assert any(_has(v, w["reading_texts"][key]) for v in w["verdict_words"]), (locale, key)
+    # lot F9: the explanations of the measures on the last page and their formulas are measures too, and a few
+    # words of judgement common.json does not list (a coverage «too narrow», a «clear advantage», a covariate that «helps»)
+    tests = ("method_wilcoxon", "method_p_value")  # the paragraphs of the test itself
+    explained = [s for key, said in w["reading_texts"].items() if key.startswith("method_") and key not in tests
+                 for s in _said(said)]
+    explained += [v for k, v in w["formula_texts"].items() if k != "formula_wilcoxon"]  # the alpha line explains the test
+    for sentence in explained + measures:
+        assert not [v for v in (*w["verdict_words"], *JUDGEMENT[locale]) if _has(v, sentence)], (locale, sentence)
     # no p-value after «=» («p = < 0.0001»)
     assert not [s for k in w["reading_texts"] for s in _said(w["reading_texts"][k]) if re.search(r"=\s*\{\w+:p\}", s)]
 
@@ -255,14 +269,21 @@ def test_one_series_without_a_holdout_has_one_slot_no_holdout_page_and_no_measur
     assert "orders ~ Timestral-28M · daily series · 14 days ahead" in said and "no holdout" in said
 
 
-@pytest.mark.parametrize(("verdict", "median", "words"), (("ok", -1.1, "ok"), ("failed", -1.1, "ahead"), ("failed", 0.4, "behind")))
+@pytest.mark.parametrize(("verdict", "median", "lean", "words"), (("ok", -1.1, None, "ok"), ("failed", -1.1, None, "ahead"),
+                                                            ("failed", 0.4, None, "behind"), ("failed", 0.01, -0.45, "ahead"),
+                                                            ("failed", -0.2, 0.3, "behind")))
 @pytest.mark.parametrize("locale", ("en", "it"))
-def test_the_comparison_says_its_verdict_in_its_own_words(tmp_path, chart_service, monkeypatch, verdict, median, words, locale):  # noqa: F811
+def test_the_comparison_says_its_verdict_in_its_own_words(tmp_path, chart_service, monkeypatch, verdict, median, lean, words, locale):  # noqa: F811
     """Not rejecting H0 is «not supported», in the muted colour (never a broken assumption's red); a rejection names the
-    forecast ahead by the sign of the median difference of MASE."""
+    forecast ahead by the side of the test, the sign of the rank-biserial correlation the runner writes since lot F9 (26
+    differences of +0.01 and 24 near −1: the median above 0, the ranks on Timestral's side), else of the median."""
     model, params, rows = fixture(CASE)
     rows = [{**r, "text": verdict} if r["key"] == "assumption|baseline_comparison||verdict" else
             {**r, "value": median} if r["key"] == "assumption|baseline_comparison||value" else r for r in rows]
+    if lean is not None:
+        value = next(r for r in rows if r["key"] == "assumption|baseline_comparison||value")
+        rows.append({**value, "stat": "rank_biserial", "value": lean, "ord": len(rows) + 100,
+                     "key": "assumption|baseline_comparison||rank_biserial"})
     rows.append({**next(r for r in rows if r["key"] == "assumption|baseline_comparison||h0"), "stat": "advice",
                  "text": "the runner's advice", "ord": len(rows), "key": "assumption|baseline_comparison||advice"})
     _with(monkeypatch, params, rows)
@@ -371,3 +392,78 @@ def test_the_runner_s_notes_by_their_rows_and_the_holdout_s_seasonal_naive(tmp_p
     assert len(holdouts) == 3
     for o in holdouts:
         assert any(x.get("name") == "Seasonal naïve" and x.get("data") for x in o["series"]), [x.get("name") for x in o["series"]]
+
+
+# ── lot F9 ──────────────────────────────────────────────────────────────────
+@pytest.mark.parametrize("locale", LOCALES)
+def test_the_first_page_s_licence_line_says_the_revenue_clause(locale):
+    """Whoever works for a large company is told on the first page: the clause of point 2 in one line, word for word in
+    English (a part of the vendored text), its threshold, the currency and the month in every language."""
+    line = _words(locale)["licence_line"]
+    text = common._file("timestral")["en"]["licence_text"]
+    assert "Modified MIT License" in line and "{model}" in line and "20" in line
+    if locale == "en":
+        quoted = re.search(r"«([^»]+)»", line).group(1)
+        assert quoted in text and "exceeds $20 million (or its equivalent in another currency) for the preceding month" in quoted
+    else:
+        assert re.search(r"20 (millions? de dollars|milioni di dollari|Millionen US-Dollar|millones de dólares)", line), line
+    model, params, _ = fixture(CASE)
+    [item] = [it for it in layouts.definition(model, params, locale)["sections"]["body"]["items"] if it["id"] == "licence_line"]
+    assert "Timestral-28M" in item["value"] and "20" in item["value"]
+
+
+def test_the_series_table_keeps_the_smape_and_its_sign_together_and_a_lone_holdout_chart_takes_the_width():
+    model, params, _ = fixture(CASE)
+    body = layouts.definition(model, params, "it")["sections"]["body"]["items"]
+    [table] = [it for it in body if it["id"] == "series"]
+    smape = next(col for col in table["columns"] if col["header"] == _words("it")["tables"]["smape"])
+    assert '"\u00a0%"' in smape["value"] and smape["width"] >= 19
+    assert sum(col.get("width") or 0 for col in table["columns"]) <= table["w"] - 15  # room left for the series' names
+    by = {it["id"]: it for it in body}
+    for k in range(1, layout.SLOTS + 1, 2):  # the left slot of each row has its form alone, across the width
+        for tail in ("", "_steps"):
+            alone, paired = by[f"holdout_{k}_alone{tail}"], by[f"holdout_{k}{tail}"]
+            assert alone["w"] == common.WIDTH and paired["w"] < common.WIDTH / 2 and alone["y"] == paired["y"]
+            assert alone.get("collapse_hidden") and f"NOT (COUNTIF(" in alone["visible"]
+        assert f"holdout_{k + 1}_alone" not in by
+    [relative] = [it for it in body if it["id"] == "relative_mase"]
+    assert relative["options"]["labels_above"] is True
+
+
+def test_a_lone_holdout_chart_is_drawn_once_across_the_width(tmp_path, chart_service, monkeypatch):  # noqa: F811
+    """Three series: the third holdout chart is alone on its row, drawn in its full-width form only; the relative MASE's
+    values above their dots, clear of the line at 1 (lot F9, seen on kind: «1,01» on the line)."""
+    del chart_service[1][:]
+    draw(tmp_path, chart_service, monkeypatch, CASE)
+    w = _words("en")
+    asked = [s for s in chart_service[1] if s["option"].get("title", {}).get("text") == w["charts"]["holdout"]]
+    assert len(asked) == 3
+    assert len({s.get("width") for s in asked}) == 2, [s.get("width") for s in asked]  # two halves and one whole
+    [relative] = [s["option"] for s in chart_service[1] if s["option"].get("title", {}).get("text") == w["charts"]["relative"]]
+    dots = next(x for x in relative["series"] if x.get("type") == "scatter")
+    assert dots["label"]["position"] == "top"
+
+
+@pytest.mark.parametrize("hostile", ("=HYPERLINK(\"https://example.invalid\",\"x\")", "@SUM(1+1)", "+1-1", "-2+3"))
+def test_a_series_named_like_a_formula_stays_text_in_the_pdf_and_the_workbook(tmp_path, chart_service, monkeypatch, hostile):  # noqa: F811
+    model, params, rows = fixture(CASE)
+
+    def renamed(r: dict) -> dict:
+        r = dict(r)
+        for f in ("level", "level_2"):
+            if r.get(f) == "Online":
+                r[f] = hostile
+        r["key"] = r["key"].replace("|Online|", f"|{hostile}|")
+        return r
+
+    rows = [renamed(r) for r in rows]
+    _with(monkeypatch, params, rows)
+    out, page = draw(tmp_path, chart_service, monkeypatch, CASE, fmt="svg")
+    assert hostile in " ".join(strings(json.loads(page)))
+    out, _ = draw(tmp_path, chart_service, monkeypatch, CASE, fmt="xlsx")
+    with zipfile.ZipFile(out.path) as z:
+        sheets = [z.read(n).decode() for n in z.namelist() if n.startswith("xl/worksheets/")]
+        shared = " ".join(z.read(n).decode() for n in z.namelist() if n.endswith(".xml"))
+    assert not [x for x in sheets if re.search(r"<f>(?!SUBTOTAL)", x)], "a cell became a formula"
+    from xml.sax.saxutils import escape
+    assert escape(hostile) in shared

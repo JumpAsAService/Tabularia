@@ -192,9 +192,14 @@ def _formula(w: dict, params: dict[str, Any], checked: dict[str, Any]) -> str:
 
 def _verdict_words(item: dict, w: dict, verdict: str = "[text]") -> None:
     """The comparison says its verdict in its own words: not rejecting H0 is «not supported» (muted, never the red of a
-    broken assumption), a rejection names the forecast ahead by the sign of the median difference (the row's value).
+    broken assumption), a rejection names the forecast ahead by the side of the test (the rank sums; the median of the
+    differences, the row's value, when the runner did not write it).
     `verdict`: the expression of the row's verdict (the row's own text in the checks' table, a LOOKUP in the advice's)."""
-    own, value = w["comparison_verdicts"], c.of_row("assumption", "value")
+    # the side is the test's: the sign of the rank-biserial correlation (W+ − W−) / (W+ + W−), which the runner writes
+    # since lot F9; a result without it (older) says the median's sign
+    side = c.of_row("assumption", "rank_biserial")
+    own, value = w["comparison_verdicts"], f'IF(ISNULL({side}), {c.of_row("assumption", "value")}, {side})'
+
     header = w["assumptions"]["verdict"]
     mine = '[level] = "baseline_comparison"'
     for col in item["columns"]:
@@ -282,15 +287,22 @@ def _holdout(p: stats.Page, w: dict) -> None:
         top = p.y + 1.5
         for column, k in enumerate((row + 1, row + 2)):
             x = column * (half + gap)
-            p.y = top
-            _name(p, w, f"holdout_name_{k}", k, x, half)
-            series = [*_bands(w, "holdout_"), _line("observed", s["observed"], c.MUTED),
-                      _line("holdout_baseline", s["baseline"], NAIVE), _line("holdout_median", s["median"], c.ACCENT)]
-            _twice(p, {"id": f"holdout_{k}", "type": "chart", "dataset": c.DATASET, "kind": "xy", "x": x, "y": top + NAME_TALL,
-                       "w": half, "h": HOLDOUT_TALL, "title": stats.fit(w["charts"]["holdout"], 7.5, half - 4, 700),
-                       "filter": _of(k, HOLDOUT_LINES), "category": "[x0]", "series": series,
-                       "options": {"format": "0.###", "legend": False, "target_x": _start(k, "holdout_median")},
-                       "visible": "=" + _has(k)}, w)
+            # the last series of an odd count is alone on its row: drawn across the whole width, not at half of it (lot F9);
+            # the two forms of the left slot are in the same place, one visible
+            forms = [(half, f"={_has(k)} AND {_has(k + 1)}", ""), (c.WIDTH, f"={_has(k)} AND NOT ({_has(k + 1)})", "_alone")] \
+                if column == 0 else [(half, "=" + _has(k), "")]
+            for width, shown, tail in forms:
+                p.y = top
+                _name(p, w, f"holdout_name_{k}{tail}", k, x, width)
+                p.items[-1]["visible"] = shown
+                series = [*_bands(w, "holdout_"), _line("observed", s["observed"], c.MUTED),
+                          _line("holdout_baseline", s["baseline"], NAIVE), _line("holdout_median", s["median"], c.ACCENT)]
+                _twice(p, {"id": f"holdout_{k}{tail}", "type": "chart", "dataset": c.DATASET, "kind": "xy", "x": x,
+                           "y": top + NAME_TALL, "w": width, "h": HOLDOUT_TALL,
+                           "title": stats.fit(w["charts"]["holdout"], 7.5, width - 4, 700),
+                           "filter": _of(k, HOLDOUT_LINES), "category": "[x0]", "series": series,
+                           "options": {"format": "0.###", "legend": False, "target_x": _start(k, "holdout_median")},
+                           "visible": shown}, w)
         p.items.append({"id": f"holdout_keep_{row // 2 + 1}", "type": "rect", "x": 0, "y": top, "w": 0.1,
                         "h": NAME_TALL + HOLDOUT_TALL, "style": {}, "visible": "=" + _has(row + 1), "collapse_hidden": True})
         p.y = top + NAME_TALL + HOLDOUT_TALL
@@ -313,9 +325,10 @@ def _holdout(p: stats.Page, w: dict) -> None:
         {"header": t["series"], "value": "[level]", "style": {"weight": "semibold"}},
         number(t["points"], "n", 15, "#,##0"), number(t["read"], "n_used", 15, "#,##0"),
         number(t["mase"], "mase", 14, "0.###"), number(t["baseline_mase"], "baseline_mase", 16, "0.###"),
-        number(t["relative"], "relative_mase", 17, "0.###"), number(t["smape"], "smape", 15, "0.##", " %"),
-        number(t["wql"], "wql", 18, "0.####"), share(t["coverage_80"], "coverage_80"), share(t["coverage_90"], "coverage_90"),
-        {"header": t["note"], "value": why, "width": 24, "style": {"size": 7}},
+        # «58,55 %» on one line: a no-break space before the sign, and the room for «199,99 %» (lot F9: the cell broke before «%»)
+        number(t["relative"], "relative_mase", 17, "0.###"), number(t["smape"], "smape", 19, "0.##", "\u00a0%"),
+        number(t["wql"], "wql", 16, "0.####"), share(t["coverage_80"], "coverage_80"), share(t["coverage_90"], "coverage_90"),
+        {"header": t["note"], "value": why, "width": 22, "style": {"size": 7}},
     ], p.y, visible=c.exists(one)), 10)
     drawn = " OR ".join(f"[level] = [drawn_{k}]" for k in range(1, SLOTS + 1))
     f = f'[section] = "series" AND [stat] = "relative_mase" AND ({drawn})'
@@ -325,6 +338,8 @@ def _holdout(p: stats.Page, w: dict) -> None:
                                                              for n in (s["relative"], "", "")],
                           "visible": c.exists(f)})
     relative.more["options"]["format"] = "0.##"
+    # a value written beside its dot crosses the line at 1 when it is near 1 («1,01»): above the dot instead (lot F9)
+    relative.more["options"]["labels_above"] = True
     c.grid(p, w, (relative._replace(wide=True),), None, tall=56.0)
     c.reading_under(p, w, "coverage")
 

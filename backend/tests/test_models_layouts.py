@@ -1432,6 +1432,24 @@ def test_arima_s_adf_says_rejected_or_not_rejected_as_the_decomposition_and_its_
         assert common.words("decomposition", "stl", locale)["check_verdicts"]["adf"]["ok"] == ok
 
 
+@pytest.mark.parametrize("case", ("arima-auto", "arima-manual"))
+def test_arima_s_four_cases_of_adf_and_kpss_stay_with_their_title(case):
+    """Lot F9 (the PDFs of the kind run, F8): the title «ADF and KPSS read together» and its line «The four cases…» were
+    left at the foot of a page and the cases started on the next. The title, its rule, the line and the first three cases
+    ask to be kept with what follows (`keep_with_next`), so the block moves whole; the fourth case closes it."""
+    model, params, _ = fixture(case)
+    for locale in LOCALES:
+        body = layouts.definition(model, params, locale)["sections"]["body"]["items"]
+        ids = [it["id"] for it in body]
+        start = ids.index("s_cases")
+        end = min(ids.index("case_4"), ids.index("case_4_this"))
+        block = body[start:end]
+        assert {"s_cases", "s_cases_rule", "cases_alpha", "case_1", "case_2", "case_3"} <= {it["id"] for it in block}
+        assert all(it.get("keep_with_next") for it in block), [it["id"] for it in block if not it.get("keep_with_next")]
+        assert not body[end].get("keep_with_next") and not body[ids.index("case_4_this")].get("keep_with_next")
+        assert not body[ids.index("cases_none")].get("keep_with_next")
+
+
 @pytest.mark.parametrize("case", DECOMPOSITION_CASES)
 def test_the_remainder_s_heading_goes_with_what_follows_and_an_emd_without_noise_keeps_no_room_for_its_charts(case):
     """Lot D9 (the PDFs of the kind run, D8): the heading «Remainder» was left alone at the foot of a page, and an EMD's

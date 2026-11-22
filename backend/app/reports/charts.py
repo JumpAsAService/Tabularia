@@ -554,7 +554,8 @@ def _interval(data: ChartData, it: rd.ChartItem, theme: rd.Theme, loc: formats.L
                     {"value": [v if a is None else a, v, v, v, v if b is None else b]})
         dots.append(None if v is None else {"value": v, "t": value.labels[i]})
     dot: dict[str, Any] = {"type": "scatter", "name": value.name, "data": dots, "symbolSize": 7, "z": 3,
-                           "itemStyle": {"color": theme.accent}, "label": {**_label(o, "right"), "distance": 9},
+                           "itemStyle": {"color": theme.accent},
+                           "label": {**_label(o, "top"), "distance": 6} if o.labels_above else {**_label(o, "right"), "distance": 9},
                            "labelLayout": HIDE_OVERLAP}
     series: list[dict] = [{"type": "boxplot", "silent": True, "data": bars, "boxWidth": [6, 14],
                            "itemStyle": {"color": theme.accent, "borderColor": theme.accent, "borderWidth": 1.3}}, dot]

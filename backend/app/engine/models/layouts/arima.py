@@ -88,6 +88,7 @@ def _stationarity(params: dict[str, Any]):
         adf, kpss = c.num("assumption|adf||p_value"), c.num("assumption|kpss||p_value")
         both = '[key] = "assumption|adf||p_value" OR [key] = "assumption|kpss||p_value"'
         computed = f"COUNTIF({both}) = 2"
+        start = len(p.items)
         c.heading(p, "s_cases", cases["title"])
         p.text("cases_alpha", "=" + c.join(cases["alpha"], alpha=c.shown(repr(alpha), "0.###")), h=5, size=8, color=c.MUTED,
                visible="=" + computed)
@@ -101,6 +102,11 @@ def _stationarity(params: dict[str, Any]):
                 p.text(f"case_{k}" + ("_this" if marked else ""), stats.static(value), h=5, advance=not marked, size=8.5,
                        weight="semibold" if marked else "normal", color=c.ACCENT if marked else c.MUTED,
                        visible=f"={computed} AND " + (this if marked else f"NOT ({this})"))
+        # the heading, its introduction and the first three cases go to the page of the fourth (`keep_with_next`): never
+        # the title and «The four cases…» at the foot of a page and the cases on the next (lot F9, seen on kind)
+        for item in p.items[start:]:
+            if not item["id"].startswith("case_4"):
+                item["keep_with_next"] = True
         p.text("cases_none", cases["none"], h=5, size=8, color=c.MUTED, visible=f"=NOT ({computed})")
         c.reading_under(p, w, "stationarity")
     return block
