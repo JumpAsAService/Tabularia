@@ -1130,6 +1130,76 @@ Every question was answered by the owner on 2026-11-22; the options stay for the
 *(Filled by the lots: deviations, timings at 1k/10k/100k returns and at 10k/1M/10M simulated values, peak
 memory of every memory test, the image's size and build time, the self-test's count.)*
 
+### G0 — contract, recipe, image (2026-11-22)
+
+**Catalogue.** `garch` and `risk_simulation` are in the group `timeseries` after the decomposition; GARCH has a card, the risk node
+`card: false`; one variant for `garch` (`default`), two for the risk node keyed on `model` (`garch`, `arima`), the latter with
+`max_rows` 20,000 (a variant's field, read by the engine's snapshot and by the gateway: `modelcatalog.MaxRowsOf`, `modelMaxRowsOf` in
+`jobs_models.go`; the smallest of the group's, the model's and the variant's). New kinds, sections `backtest` and `risk`, outputs
+`volatility`, `risk_summary`, `paths`, limits `seed_block` 1000, `risk_bins` 1024, `max_sample_paths` 20, `garch_name`, the three
+copies of the snapshot, 69 shared parameter cases (engine and Go answer word for word), three fixtures with their reading rows
+(`garch-default`, `risk_simulation-garch`, `risk_simulation-arima`). The gateway's task carries `limits.memory_bytes` (the group's
+limit, absent when unreadable), `tmp_bytes` (the Job's `/tmp`, `modelTmpLimit` in bytes: 2432 MiB for 2 GiB) and `started_unix`
+(the second the task is made, just before the Job is created), by `setRunLimits`. The runner's routes `garch` (fit, predict) and
+`risk_simulation` (fit) answer exit 3 `not_built`, checked in the image.
+
+**Deviations and corrections to this spec** (the rest unchanged):
+
+1. **`output` of the risk node is `risk_summary`, not `summary`**: a node's `output` is the key of `OUTPUT_TYPES` (as `components`, `quantile_forecast`), which the spec names `risk_summary`; the choices are `risk_summary`, `paths`, `results` (default `risk_summary`). The report and the words may still say «summary».
+2. **`quantile_<q>` is the same prefix as Timestral's but not the same rule**: Timestral leaves the 0.5 out (it is `forecast`); the risk summary has no other median column, so it keeps it. The names stay `quantile_<q>` and `price_quantile_<q>`; the rule is told apart by the node having an `es_level` (engine `_ROWS_WILDCARDS`, editor `wildcardLabels`, assistant `_ROWS_WILDCARDS`). The fallback name `sim_quantile_<q>` was not needed.
+3. **`position` and `drawdown` apply always**: `applies` is a conjunction and cannot say «`model = garch`, or `aggregate = relative_change`». The runner (G3) refuses a `position` with an ARIMA whose risk variable is not a relative change, and does not compute the drawdown there.
+4. **GARCH(p,q) naming**: `garch_name` writes Bollerslev's order, p lags of the variance (`garch_order`) then q of the shocks (`arch_order`): `GARCH(2,3)` is `garch_order` 2, `arch_order` 3.
+5. **Predict's contract is G0's, not G6's**: the catalogue test asks every model with a card for its Predict columns, so `PREDICT.columns.garch` = `prediction`, `prediction_var` and `applies_to.horizon` gains `garch` are here; the runner's `predict_garch` refuses `not_built` until G6. The flow assistant's line of options now reads «horizon for model_arima, model_garch, …».
+6. The gateway refuses `registerAs` on the risk node with «a risk simulation registers no model: register the GARCH or ARIMA node instead» (`jobs_models_mlflow.go`).
+7. `threshold` and `position` are bounded by 999,999,999,999,999 (1e15 less one), the last whole number the sentences write without an exponent in Go and Python.
+8. The editor's palette leaves both nodes out (`MODEL_NOT_IN_THE_PALETTE_YET`), the report tests skip them (`PENDING`), their columns are not in `output_columns.json` (`NOT_RUN_YET`): G5, G4 and G1/G3 take these away.
+
+**Image** `tabularia-models-timeseries:dev` from the new recipe (`pinned_on` 2026-11-22, the 23 packages of the table in its order,
+`system_libraries: ["libgsl-dev", "libgmp-dev"]`), two compilers, this machine, the apt layer rebuilt:
+
+| | Before (D0) | After |
+|---|---|---|
+| Build time | 592 s (9 min 52 s), packages only | **943 s (15 min 43 s)**, the whole package step (arrow included) and the apt layer |
+| Size | 1,485,040,325 bytes | **1,531,342,086 bytes (1.53 GB)**: +46.3 MB (estimated +60–90 MB; the R library is 286 MB, `rugarch` 8.1 MB, `Rsolnp` 7.3 MB, `mclust` 5.8 MB) |
+| Lock | 1 library | `libgsl-dev@2.7.1+dfsg-6ubuntu2`, `libgmp-dev@2:6.3.0+dfsg-2ubuntu6.1`; the 23 packages at the pinned versions (all equal to CRAN's of the day); R 4.6.0 |
+
+The other six groups' Dockerfiles are identical byte for byte before and after. The recommended packages `KernSmooth` 2.23-26, `Matrix`
+1.7-5, `mgcv` 1.9-4, `MASS` 7.3-65, `codetools` 0.2-20 are present. `rugarch` 1.5.6 and `gmp` load, and a GARCH fits, as uid 10001 on a
+read-only root with `/tmp` as tmpfs, `--network none` (`gmp` factorial of 20 exact). Licences as the DESCRIPTION files say: `rugarch` GPL-3;
+`Rsolnp`, `chron`, `kernlab`, `multicool`, `mvtnorm`, `numDeriv` GPL-2 (the six of the spec).
+**Self-test** (code of `cmd/modelgroup code timeseries`, read-only root, `--network none`, 1 CPU): **75 ok, 0 failed, 0 skipped, exit 0**
+(27 s); with one expected number of `arima_ar_index` changed by 50 %: 74 ok, 1 failed, **exit 4**.
+
+**Measurements** (one CPU, `--network none`, `--memory 2500m`, uid 10001; times are `system.time` elapsed; data from `ugarchpath` of a
+GJR-GARCH(1,1) skewed t, divided by its standard deviation as the runner will do; every fit `solver = "hybrid"`, convergence 0 in all 36):
+
+Load time (a process each, wall clock): bare `Rscript` 0.40–0.48 s; `arrow` + `forecast` 2.0–2.1 s; plus `rugarch` **3.3–3.6 s**
+(`rugarch` alone 1.7–1.8 s; in-process 1.33 s after `arrow` and `forecast`); resident size 55 MB bare, 177 MB after `arrow`+`forecast`,
+**286 MB after `rugarch`**. The spec assumed 1–3 s on top of 1.6 s: it is 1.3–1.5 s in the same process.
+
+`ugarchfit` (s) by variance model and distribution (`nyblom()` on each fit took under 0.01 s at 1k and 10k, 0.03–0.05 s at 100k: it reads
+the scores `ugarchfit` already holds, which are in the fit's time):
+
+| Model | Dist. | 1k | 10k | 100k |
+|---|---|---|---|---|
+| ARCH(1) | norm / t / skew t | 0.17 / 0.24 / 0.39 | 0.50 / 1.81 / 2.81 | 6.05 / 13.2 / 29.3 |
+| GARCH(1,1) | norm / t / skew t | 0.11 / 0.18 / 0.34 | 0.45 / 1.26 / 2.64 | 4.12 / 11.8 / 24.9 |
+| GJR(1,1) | norm / t / skew t | 0.33 / 0.61 / 0.88 | 0.92 / 2.15 / 3.76 | 6.78 / 15.0 / 31.6 |
+| EGARCH(1,1) | norm / t / skew t | 0.20 / 0.39 / 0.73 | 0.78 / 1.84 / 3.56 | 6.63 / 15.5 / 30.8 |
+
+The process peak (`VmHWM`) after all twelve fits: 274 MB at 1k, 280 MB at 10k, **413 MB at 100k** (G1's bound: below 1 GiB). The longest
+fit, GJR with skewed t at 100,000 returns, is 31.6 s: with the cheap checks the GARCH node stays under G1's 60 s, so **Open question 13 needs
+no model limit of rows** (the group's 200,000 stays; at 200,000 the longest fit would be about 65 s by linearity: G1 measures it).
+
+`ugarchpath` per seed block of 1,000 paths, Student t: h = 10: 0.01–0.02 s (the first call 0.6 s); h = 100: 0.06–0.08 s (0.6–0.8 µs a value);
+**h = 1000: 14–17 s (14–17 µs a value)**, two orders of magnitude slower per value, so `ugarchpath` is a reference for small cases of the
+self-test only, never for the simulation (which is the runner's own elementwise recursion, as the spec has it). `rdist` per million draws: `rnorm`
+0.077 s, `rdist("norm")` 0.069 s, `rdist("std")` **0.20 s**, `rdist("sstd")` **0.47 s** (the spec guessed 0.1–0.3 s for 1 M; 10 M skewed t would be
+about 4.7 s of draws). The process peak of the simulation script: 550 MB.
+
+**Tests**: engine 1,295 passed (catalogue, results, columns, layouts, explanations), `go test ./internal/...` green, the editor's 112 model tests, the
+assistant's 139. `model_catalog.py --check` green.
+
 ## References
 
 - Acerbi, C., Tasche, D. (2002). On the coherence of expected shortfall. *J. Banking & Finance* 26(7).
