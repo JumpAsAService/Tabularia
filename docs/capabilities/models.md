@@ -1315,7 +1315,11 @@ language of the interface (English, Italian, German, Spanish or French).
    values, the normal Q–Q chart, scale–location, residuals against leverage, the ROC curve,
    the calibration, Schoenfeld, martingale residuals, the correlograms, the forecast.
 7. Strata, pairs, the confusion matrix, the forecast or the candidates, where the model has them.
-8. The notes, the rows left out, the software and the group's version, and a footer.
+8. **The method explained**: under the summary, the checks, the coefficients and the model's own blocks, one to
+   three sentences in italics read the run's numbers (a verdict only from a p-value against the node's α, the checks
+   that reject named; every other number a measure, said without a word of judgement), and a last page **How this
+   report was computed** holds a paragraph for each analysis that ran and the formulas (the sheet «Reading» in Excel).
+9. The notes, the rows left out, the software and the group's version, and a footer.
 
 **−**, **+** and **Fit width** change the zoom, **Expand** raises the panel. **PDF** downloads
 the pages; **Excel** the tables of the assumptions, the coefficients, the fit and the strata or

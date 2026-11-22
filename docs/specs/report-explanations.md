@@ -1,6 +1,7 @@
 # Spec: the explanation of the method in every report (lots B0–B4)
 
-Status: **written by the agent on 2026-11-22; lot B0 built.** The owner decided the piece on 2026-11-21
+Status: **written by the agent on 2026-11-22; lots B0–B4 built** (the trial on kind is left for the next one,
+with the forecasting group's). The owner decided the piece on 2026-11-21
 («la stessa spiegazione anche nei report dei 21 test statistici e dei modelli esistenti, dopo l'A/B»);
 the questions this spec had to settle were answered by the agent while the owner was away, each marked
 «Decided by the agent, to confirm» in «Open questions».
@@ -484,3 +485,63 @@ row as before).
 `test_models_ab_review`, `test_stats_layouts`, `test_stats_explanations`, `test_explanations_regression_survival`:
 **1,204 passed, 3 failed** — the three tests of frozen files that B2 reported, which assume the linear regression
 and the parametric survival have no explanation.
+
+### B4 — the closing step (2026-11-22)
+
+The shared files were no longer frozen: B4 made the requests of B0–B3's «As built» in one serial step (`ba9a8d1a`), with
+the golden comparison before and after.
+
+**The three red tests of the shared files.** `test_report_explanations`: «a page with nothing explained» takes the linear
+regression out of `READINGS` and asks `page` for no reading place (every model now explains itself, so one stands for a
+model that does not); the toy explanation also clears `reading_labels` (the linear's own labels would name its rows).
+`test_stats_layouts`: the check that a chart's caption never keeps with the next item leaves out `s_how`, the heading of
+«How this report was computed», which keeps with its lead as every heading does (now asserted).
+
+**The checks named** (`common.structured_note`, `values.reading_names`). A reading names a check as `check:<id>`, and
+`check:<id>|<term>` for a check of each term (Schoenfeld's, Box–Tidwell's); `structured_note` says it as
+`values.reading_names` has it, and `words` fills that map from the checks' names in the table, in guillemets (a name may
+hold a comma: «Independence: Breusch–Godfrey, order 1»), the term after it in brackets; a model's own
+`values.reading_names` comes first. A user's name that does not start with `check:` is never translated.
+`assumptions_rejected` now counts **and names** the checks whose test rejects («4 of 9 — «Homoscedasticity:
+Breusch–Pagan», …»), five at most in the table's order, then `more_in_table`; ARIMA's `residuals_keep_others` names the
+residual tests that do not reject.
+
+**The lines several models say, in `common.json`** (Open question 4). Moved, with their identical texts in five languages:
+`assumptions_rejected`, `assumptions_none_rejected`, `assumptions_many_rows`, `coef_some`, `coef_all`, `coef_none`,
+`more_in_table`, `method_p_value`, `method_se_cluster`, `threshold_vif`, `threshold_epv`, `threshold_cooks_distance`,
+`threshold_leverage`, `coef_hazard`, `coef_hazard_level`, and the labels of `method_p_value` and `method_se_cluster`.
+ARIMA now chooses its coefficients' line with `shared_readings.coefficient_lines` (its own `coef_one`, `coef_some_more`
+and its `coef_*` words removed): the same ids and words as the regressions. `assumptions_many_rows` takes B3's wording,
+which has no verdict word («the tests detect departures too small to matter»: it is chosen by the number of rows, not
+by a p-value), with «rows», and joins every B2 model's `measure_readings`; ARIMA («observations») and the customer
+lifetime («customers») keep their own noun. A test checks that no model file holds these ids again.
+
+**ARIMA's box of the four cases** (`arima._stationarity`). Each test is read by the side of its table, as the runner and
+the reading read it: `_verdict_of_table` says `table_rejects` as two expressions of the p-value (rejects, keeps) with the
+node's α; a case is marked when both tests give its verdicts, and with a test beyond the end of its table no case is
+marked. At α = 0.01 with ADF's p at its lower end the box now marks «ADF rejects» as the reading says. The box's words
+(`arima.json`, `cases`) are the decomposition's: «both point to a constant level», «the level is not constant; try
+d + 1», «the level drifts, a trend or a break», «the two tests do not tell»; no more «the differences are enough» or
+«too short or too noisy». Each case, marked, fits the page's width on one line (a test measures it).
+
+**A chart's note under its verdict** (`common.grid`). A chart that illustrates a check and has a note on how to read it
+drew both on the same line (at HEAD as well): CatBoost multiclass with `class_weight = balanced` («Overfitting — ✓ ok» and
+the weighted curves), and a binary model whose stop metric is the error rate. The note is now under the verdict and the
+row of charts keeps room for both; a test checks every fixture.
+
+**Golden** (the scratch dump of B2, on clean copies of `00ac719d` and of `00ac719d` with this lot's files, the fake chart
+service): **465 of 500 renderings byte for byte as before** — every variant of every statistics test, and every other
+model's fixture; the 35 that change are seven fixtures in five languages, each for a reason of this lot, none with a
+warning, none with a page more or less: `linear-unpenalized`, `cox-default`, `kaplan_meier-default`,
+`parametric_survival-aft` (the rejected checks named; the PDF and the labelled rows), `arima-manual`, `arima-auto` (the
+box's words and its marking, the coefficients' shared line; the definition too), `catboost-multiclass` (the note under
+the verdict; the PDF and the definition). The fixtures with no rejected check (`logistic-*`,
+`parametric_survival-auto|ph`) and the many-rows sentence (no fixture has 5,000 rows) do not change.
+
+**Tests.** The engine suite as the CI runs it (`ci_tests.sh engine`: ClickHouse, PostgreSQL, MinIO, Valkey; each
+container's memory bounded on this machine, the tests' at 2.5 GB), on the clean copy with this lot: **6,551 passed, 194
+skipped**, every skip one the CI allows (BigQuery, Oracle, SQL Server).
+
+**Left for the trial on kind** (with the forecasting group's): drawing the reports of a test and of each model family
+from a real run, with the real chart service, in Chrome and Firefox; the reference PDF of the statistics
+(`GOLDEN_PDF_SHA256`) seen with the real charts.

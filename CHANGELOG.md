@@ -160,6 +160,20 @@ Development on `main` for the next minor version. The stable line stays 1.4.x
   calendar Left join and Fill nulls with 0, or an interpolation on request. Up to 200,000 rows. The sample
   data have a flow, **Orders: weekly and yearly seasons**, when the time series group is enabled; the assistants
   and the MCP tools know the node. [Decomposition](docs/capabilities/models.md#decomposition-r).
+- **Every test's and every model's report explains its method in words.** The 21 hypothesis tests and the ten
+  models (linear and logistic, also penalized; Kaplan–Meier, Cox, parametric survival; ARIMA; XGBoost and CatBoost;
+  customer lifetime value and BG/BB) read their result in one to three sentences in italics under each block, with the
+  run's numbers, and end on a page **How this report was computed**: a paragraph for each analysis that ran and, for
+  the models, the formulas, which Excel keeps as the sheet «Reading». As in the A/B test and the decomposition, a
+  sentence says «rejected» or «significant» only when a p-value is below the node's α, and «the data do not show…;
+  they do not prove there is none» when it is not; an R², an AUC, an effect size or a check read by a threshold (a
+  VIF, a boosting diagnostic) is said as a number, never as good or bad. The checks a test rejects are named as the
+  table names them. ARIMA's box of the four cases of ADF and KPSS marks the case the tests give, read at the ends of
+  their tables, and none when a test gives no verdict; its words are the decomposition's. Five languages, from
+  templates, no text written at run time. [The spec](docs/specs/report-explanations.md).
+- **A boosting chart's note no longer covers the verdict under it.** With `class_weight = balanced` (classes) the
+  learning curves' «Overfitting — ✓ ok» and the sentence on the weighted curves were drawn on the same line, as were
+  the stop metric's verdict and the note on a binary error rate; the note is now under the verdict.
 - **ARIMA keeps the time column's type, and says «not computed» at the ends of its tables.** The forecast's
   `time` (and Predict's) is no longer narrowed from `Int64` to `Int32`: it keeps the input column's exact type. ADF's
   and KPSS's p-values come from tables that stop at both ends, and ARIMA compared the clipped value with `alpha`

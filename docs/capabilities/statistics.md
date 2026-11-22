@@ -329,9 +329,13 @@ beside **Table** and **Chart**. It draws the pages of a report made for that tes
 7. charts: box plots by group, the means with their intervals, histograms, and the
    distribution of the statistic with the rejection region shaded and the observed value
    marked;
-8. the notes (an assumption worth a look, a fallback taken), the rows left out and the
+8. **How this report was computed**: a paragraph on the test's method, on what a p-value and α
+   are, and on the comparisons when they ran (the result's sentences, in italics under the
+   decision and under the comparisons, read the run's numbers: a verdict only from the p-value
+   against α, an effect size as a number, never as large or small);
+9. the notes (an assumption worth a look, a fallback taken), the rows left out and the
    engine;
-9. a footer.
+10. a footer.
 
 The page is in the language of the interface (English, Italian, German, Spanish or French).
 
