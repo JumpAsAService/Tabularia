@@ -368,7 +368,24 @@ func (w *mlflowWorld) serveEngine(rw http.ResponseWriter, r *http.Request) {
 	w.mu.Unlock()
 	switch {
 	case r.URL.Path == "/scripts/results/rows" && w.rows != "":
-		_, _ = rw.Write([]byte(w.rows))
+		// the engine's answer: only the rows of the sections asked (routes/scripts.py, results_rows)
+		var in struct {
+			Sections []string `json:"sections"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&in)
+		var all struct {
+			Rows []map[string]any `json:"rows"`
+		}
+		if err := json.Unmarshal([]byte(w.rows), &all); err != nil {
+			w.t.Error(err)
+		}
+		kept := []map[string]any{}
+		for _, row := range all.Rows {
+			if containsString(in.Sections, fmt.Sprint(row["section"])) {
+				kept = append(kept, row)
+			}
+		}
+		_ = json.NewEncoder(rw).Encode(map[string]any{"rows": kept})
 	case r.URL.Path == "/scripts/results/rows":
 		_, _ = rw.Write([]byte(`{"rows": [
 			{"section": "model", "level": null, "level_2": null, "stat": "formula", "value": null, "text": "quantity ~ price + channel"},
@@ -1171,5 +1188,39 @@ func TestTheSeriesMetricsAreTheHundredLargestOfTheTableThatIsThere(t *testing.T)
 	}
 	if len(metrics) != 201 {
 		t.Errorf("%d metrics", len(metrics))
+	}
+}
+
+// A flow run of the pre-trained forecast logs its series' numbers: the gateway asks the engine for the `series` section (lot F9: the
+// read-back left it out, so no `series.<label>.<stat>` reached MLflow), and the sections it does not log stay out.
+func TestAPretrainedFlowRunLogsItsSeriesMetrics(t *testing.T) {
+	w := newMLflowWorld(t)
+	w.rows = `{"rows": [
+		{"section": "model", "level": null, "level_2": null, "stat": "mase", "value": 0.87, "text": null},
+		{"section": "assumption", "level": "baseline_comparison", "level_2": null, "stat": "p_value", "value": 0.125, "text": null},
+		{"section": "series", "level": "Online", "level_2": null, "stat": "total", "value": 900, "text": null},
+		{"section": "series", "level": "Online", "level_2": null, "stat": "mase", "value": 0.62, "text": null},
+		{"section": "series", "level": "Online", "level_2": null, "stat": "not_measured", "value": null, "text": "too_short"},
+		{"section": "series", "level": "Shop", "level_2": null, "stat": "total", "value": 300, "text": null},
+		{"section": "series", "level": "Shop", "level_2": null, "stat": "coverage_80", "value": 0.75, "text": null},
+		{"section": "series_curve", "level": "Online", "level_2": "median", "stat": "y", "value": 41.2, "text": null},
+		{"section": "reading", "level": "summary", "level_2": null, "stat": "line_1", "value": null, "text": "@summary size=28m"},
+		{"section": "customer", "level": "c1", "level_2": null, "stat": "clv", "value": 12.5, "text": null}]}`
+	id, err := w.runWith(w.block(""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r := w.row(id); r.status != "SUCCESS" {
+		t.Fatalf("%+v", r)
+	}
+	run := w.ml.OnlyRun()
+	want := map[string]float64{"mase": 0.87, "assumption.baseline_comparison.p_value": 0.125, "series.Online.total": 900,
+		"series.Online.mase": 0.62, "series.Shop.total": 300, "series.Shop.coverage_80": 0.75}
+	if fmt.Sprint(run.Metrics) != fmt.Sprint(want) {
+		t.Errorf("metrics:\n got %v\nwant %v", run.Metrics, want)
+	}
+	// the other models' sections are the ones read before, plus `series`, which only this model writes
+	if got := fmt.Sprint(resultSectionsLogged); got != "[model assumption coef importance curve candidate parameter series]" {
+		t.Errorf("sections: %s", got)
 	}
 }

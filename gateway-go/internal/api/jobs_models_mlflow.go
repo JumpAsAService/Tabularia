@@ -1071,13 +1071,18 @@ func containsString(list []string, s string) bool {
 
 // ── the engine's part: the step's files ──────────────────────────────────────
 
-// modelResultRows are the model, assumption and coef sections of the step's results, read back
-// by the engine from the scripts bucket (small by construction).
+// resultSectionsLogged are the sections of a step's results MLflow reads: `series` is the
+// pre-trained forecast's table of series (the only model that writes it), whose first
+// maxSeriesMetrics series are logged as `series.<label>.<stat>`.
+var resultSectionsLogged = []any{"model", "assumption", "coef", "importance", "curve", "candidate", "parameter", "series"}
+
+// modelResultRows are the sections of the step's results MLflow reads (resultSectionsLogged),
+// read back by the engine from the scripts bucket (small by construction: the results' ceiling).
 func (d *Deps) modelResultRows(ctx context.Context, storage *scriptStorage, key string) ([]resultRow, error) {
 	cctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
 	res, raw, err := d.Engine.JSON(cctx, http.MethodPost, "/scripts/results/rows", pyjson.Object{{Key: "connection", Value: storage.payload()},
-		{Key: "key", Value: key}, {Key: "sections", Value: []any{"model", "assumption", "coef", "importance", "curve", "candidate", "parameter"}}})
+		{Key: "key", Value: key}, {Key: "sections", Value: resultSectionsLogged}})
 	if err != nil {
 		return nil, err
 	}
