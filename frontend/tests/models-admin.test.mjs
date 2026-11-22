@@ -186,15 +186,40 @@ test('Build again ticks the sizes of the version in use; a group with none in us
   assert.equal(licenceDraftOf({ ...licence, sizes_in_use: ['5m'] }).accept, false, 'the tick is never kept')
 })
 
-test('the clause is point 2 of the shipped text, cut around its threshold, never retyped', () => {
-  const clause = licenceClause(readFileSync(fileURLToPath(new URL(LICENCE_FILE, import.meta.url)), 'utf8'))
+test('the clause is point 2 of the shipped text, word for word, never retyped nor explained', () => {
+  const text = readFileSync(fileURLToPath(new URL(LICENCE_FILE, import.meta.url)), 'utf8')
+  const clause = licenceClause(text)
   assert.ok(clause)
-  assert.equal(clause.threshold, '$20 million')
-  assert.match(clause.before, /^You are not authorized to exercise any rights under this license if the global consolidated monthly revenue/)
-  assert.match(clause.after, /^ \(or its equivalent in another currency\) for the preceding month\./)
-  assert.match(clause.after, /commercial license, which Mistral AI may grant you at its sole discretion/)
+  assert.match(clause, /^You are not authorized to exercise any rights under this license if the global consolidated monthly revenue/)
+  assert.match(clause, /for the preceding month\./)
+  assert.match(clause, /commercial license, which Mistral AI may grant you at its sole discretion/)
+  assert.ok(text.includes(clause), 'a verbatim part of the shipped file')
   assert.equal(licenceClause('no numbered point'), null)
-  assert.deepEqual(licenceClause('2. Pay nothing.'), { before: 'Pay nothing.', threshold: '', after: '' })
+  assert.equal(licenceClause('2. Pay nothing.'), 'Pay nothing.')
+})
+
+test('the licence is quoted in English and said in one neutral sentence, never paraphrased, in the five languages', () => {
+  const NEUTRAL = {
+    en: "This is the clause of the licence of Mistral AI's weights; the official file is authoritative for its full text and its interpretation.",
+    it: 'Questa è la clausola della licenza dei pesi di Mistral AI; il file ufficiale fa fede per il suo testo completo e per la sua interpretazione.',
+    de: 'Dies ist die Klausel der Lizenz der Gewichte von Mistral AI; maßgeblich für ihren vollständigen Text und ihre Auslegung ist die offizielle Datei.',
+    es: 'Esta es la cláusula de la licencia de los pesos de Mistral AI; el archivo oficial es el que prevalece para su texto completo y su interpretación.',
+    fr: 'Voici la clause de la licence des poids de Mistral AI ; le fichier officiel fait foi pour son texte complet et son interprétation.',
+  }
+  // what would say the clause's meaning: its threshold, the kind of company, the money
+  const PARAPHRASE = /\b20\b|million|milion|millón|millones|revenue|ricav|fatturat|umsatz|ingreso|chiffre|employer|datore|arbeitgeber|empleador|employeur|commercial|commerciale|kommerziell|comercial|company|azienda|unternehmen|empresa|entreprise|threshold|soglia|schwelle|umbral|seuil|legal advice|consulenza|rechtsberatung|asesoramiento|avis juridique/i
+  for (const lang of ['en', 'it', 'de', 'es', 'fr']) {
+    const source = read(`i18n/locales/${lang}.gen.ts`)
+    const lines = source.split('\n')
+    const start = lines.findIndex((l, i) => /^ {4}"licence": \{/.test(l) && lines.slice(Math.max(0, i - 400), i).some((x) => /^ {2}"modelsAdmin": \{/.test(x)))
+    assert.ok(start > 0, lang)
+    const block = []
+    for (let i = start + 1; !/^ {4}\},?$/.test(lines[i]); i++) block.push(lines[i])
+    assert.ok(block.some((l) => l.includes(JSON.stringify(NEUTRAL[lang]))), `${lang}: the neutral sentence`)
+    const form = lines.find((l) => /^ {6}"licence": "(Weights|Pesos? |Pesi|Gewichte|Poids)/.test(l))
+    assert.ok(form, `${lang}: the form's line`)
+    for (const l of [...block, form]) assert.ok(!PARAPHRASE.test(l.replace(/^\s*"\w+": /, '')), `${lang}: ${l}`)
+  }
 })
 
 test('the card: Enable waits for the tick, a build again opens the box first, the box carries the acceptance', () => {

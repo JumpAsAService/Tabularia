@@ -214,16 +214,12 @@ export function licenceSizeLabel(s: { id: string; bytes: number }): string {
 export const licenceSizesText = (sizes: string[]): string => sizes.map((s) => s.toUpperCase()).join(', ')
 
 /**
- * Point 2 of the licence, verbatim, cut around its threshold («$20 million») so that the threshold can be
- * in bold: the clause is the text's own, found in it, never retyped. null when the text has no point 2.
+ * Point 2 of the licence, verbatim: the clause is the text's own, found in it, never retyped and never explained
+ * (the official file is the authority for its meaning). null when the text has no point 2.
  */
-export function licenceClause(text: string): { before: string; threshold: string; after: string } | null {
+export function licenceClause(text: string): string | null {
   const line = text.split('\n').map((l) => l.trim()).find((l) => /^2\.\s/.test(l))
-  if (!line) return null
-  const clause = line.replace(/^2\.\s+/, '')
-  const m = clause.match(/\$[\d.,]+\s*(?:million|billion|thousand)?/i)
-  if (!m || m.index === undefined) return { before: clause, threshold: '', after: '' }
-  return { before: clause.slice(0, m.index), threshold: m[0], after: clause.slice(m.index + m[0].length) }
+  return line ? line.replace(/^2\.\s+/, '') : null
 }
 
 // the first paragraph of a failure: the sentence the card shows; the rest is in the logs below it

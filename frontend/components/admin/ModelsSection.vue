@@ -308,13 +308,8 @@ const shortRef = (ref: string | null) => (ref ? ref.replace(/^(.*@sha256:)([0-9a
       <section v-if="boxShown(g) && licence[g.id]" :id="`mg-${g.id}-licence`" class="licence-box" :aria-labelledby="`mg-${g.id}-licence-title`">
         <h5 :id="`mg-${g.id}-licence-title`"><Info :size="14" /> {{ $t('modelsAdmin.licence.title') }}</h5>
         <p class="small">{{ $t('modelsAdmin.licence.intro') }}</p>
-        <template v-if="clauseOf(g)">
-          <p class="small muted">{{ $t('modelsAdmin.licence.clauseLead') }}</p>
-          <blockquote class="clause" lang="en">
-            {{ clauseOf(g)!.before }}<strong v-if="clauseOf(g)!.threshold">{{ clauseOf(g)!.threshold }}</strong>{{ clauseOf(g)!.after }}
-          </blockquote>
-        </template>
-        <p class="small">{{ $t('modelsAdmin.licence.means') }}</p>
+        <blockquote v-if="clauseOf(g)" class="clause" lang="en">{{ clauseOf(g) }}</blockquote>
+        <p class="small">{{ $t('modelsAdmin.licence.neutral') }}</p>
         <p class="small links">
           <a :href="shown(g).licence!.url" target="_blank" rel="noopener noreferrer">{{ $t('modelsAdmin.licence.officialText') }}</a>
         </p>
@@ -546,7 +541,6 @@ button.mini { padding: 2px 10px; min-height: 26px; font-size: 12px; display: inl
 .licence-box h5 { margin: 0; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text); }
 .licence-box p { margin: 0; line-height: 1.5; }
 .clause { margin: 0; padding: 6px 10px; border-left: 3px solid color-mix(in srgb, var(--accent) 55%, var(--border)); font-size: 12.5px; line-height: 1.55; overflow-wrap: anywhere; background: var(--panel); border-radius: 0 6px 6px 0; }
-.clause strong { font-weight: 700; }
 .size-list { display: flex; flex-wrap: wrap; gap: 6px 18px; }
 .licence-box .accept { align-items: flex-start; font-size: 13px; line-height: 1.5; }
 .licence-box .accept input { margin-top: 3px; flex: none; }

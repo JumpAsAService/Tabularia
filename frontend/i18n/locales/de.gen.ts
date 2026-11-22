@@ -6638,7 +6638,7 @@ export default {
     "timestral": {
       "name": "Prognose (Timestral)",
       "hint": "Prognostiziert jede Reihe aus ihrer eigenen Vergangenheit mit einem vortrainierten Modell (Timestral): ohne Anpassung, mit einem Bereich für jeden Schritt und, falls vorhanden, mit den Reihen, die dazugehören (ein Preis, eine Aktion). Die letzten beobachteten Werte lassen sich zurückhalten, um die Prognose an einer saisonalen naiven Prognose zu messen.",
-      "licence": "Gewichte unter der {licence}, für diese Installation von Ihrer Administration akzeptiert.",
+      "licence": "Gewichte unter der {licence}; maßgeblich für ihren vollständigen Text und ihre Auslegung ist die offizielle Datei.",
       "params": {
         "horizon": "Schritte voraus",
         "quantiles": "Quantilstufen",
@@ -7359,14 +7359,13 @@ export default {
     "licence": {
       "title": "Lizenz der Modellgewichte",
       "intro": "Die Gewichte von Timestral gehören Mistral AI und stehen unter der Modified MIT License. Tabularia liefert sie nicht mit: Das Aktivieren oder erneute Bauen dieser Gruppe lädt sie aus dem Repository von Mistral AI in Ihren Cluster.",
-      "clauseLead": "Punkt 2 der Lizenz im Originalwortlaut (der Rechtstext wird nicht übersetzt):",
-      "means": "Lag der weltweite konsolidierte Umsatz Ihres Unternehmens (oder Ihres Arbeitgebers) im letzten Monat über 20 Millionen US-Dollar, gibt Ihnen diese Lizenz kein Recht, die Gewichte zu nutzen: Sie benötigen eine kommerzielle Lizenz von Mistral AI. Das ist keine Rechtsberatung.",
+      "neutral": "Dies ist die Klausel der Lizenz der Gewichte von Mistral AI; maßgeblich für ihren vollständigen Text und ihre Auslegung ist die offizielle Datei.",
       "officialText": "Vollständiger Text im Repository von Mistral AI (die festgelegte Revision)",
       "shippedText": "Der vollständige Text, der mit Tabularia ausgeliefert wird",
       "sizesLegend": "Zu ladende Größen",
       "sizesHint": "Jede angehakte Größe wird beim Bau in das Image der Gruppe geladen. Haken Sie nur die an, die Ihre Abläufe nutzen; mindestens eine.",
       "sizesNone": "Haken Sie mindestens eine Größe an.",
-      "accept": "Ich habe die Lizenz der Timestral-Gewichte gelesen, und die Organisation, die diese Installation nutzt, darf sie danach verwenden oder besitzt eine gesonderte Lizenz von Mistral AI.",
+      "accept": "Ich habe die Lizenz der Gewichte gelesen und nehme sie im Namen meiner Organisation an.",
       "needsTick": "Haken Sie das Feld zur Lizenz und mindestens eine Größe an, um fortzufahren.",
       "cancel": "Abbrechen",
       "pendingHint": "Diese Version von Tabularia braucht eine neue Version dieser Gruppe und baut sie erst, nachdem ein Administrator die Lizenz ihrer Gewichte akzeptiert hat. Verwenden Sie «Neu bauen» und akzeptieren Sie sie. Eine bereits bereite Version bedient weiter.",

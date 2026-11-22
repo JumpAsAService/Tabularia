@@ -6638,7 +6638,7 @@ export default {
     "timestral": {
       "name": "Previsione (Timestral)",
       "hint": "Prevede ogni serie dal suo passato con un modello pre-addestrato (Timestral): nessun adattamento, un intervallo per ogni passo e, se le hai, le serie che l'accompagnano (un prezzo, una promozione). Gli ultimi valori osservati si possono tenere da parte per misurarla contro una previsione naïve stagionale.",
-      "licence": "Pesi con licenza {licence}, accettata per questa installazione dal tuo amministratore.",
+      "licence": "Pesi con licenza {licence}; il file ufficiale fa fede per il suo testo completo e per la sua interpretazione.",
       "params": {
         "horizon": "Passi in avanti",
         "quantiles": "Livelli dei quantili",
@@ -7359,14 +7359,13 @@ export default {
     "licence": {
       "title": "Licenza dei pesi del modello",
       "intro": "I pesi di Timestral sono di Mistral AI, con la Modified MIT License. Tabularia non li include: abilitare o ricostruire questo gruppo li scarica nel tuo cluster dal repository di Mistral AI.",
-      "clauseLead": "Il punto 2 della licenza, con le sue parole (il testo legale non si traduce):",
-      "means": "Se il fatturato consolidato globale della tua azienda (o di chi ti impiega) nell'ultimo mese è stato superiore a 20 milioni di dollari, questa licenza non ti dà alcun diritto di usare i pesi: serve una licenza commerciale di Mistral AI. Questa non è una consulenza legale.",
+      "neutral": "Questa è la clausola della licenza dei pesi di Mistral AI; il file ufficiale fa fede per il suo testo completo e per la sua interpretazione.",
       "officialText": "Testo completo nel repository di Mistral AI (la revisione fissata)",
       "shippedText": "Il testo completo che accompagna Tabularia",
       "sizesLegend": "Taglie da scaricare",
       "sizesHint": "Ogni taglia spuntata viene scaricata nell'immagine del gruppo quando la si costruisce. Spunta solo quelle che i tuoi flussi useranno; almeno una.",
       "sizesNone": "Spunta almeno una taglia.",
-      "accept": "Ho letto la licenza dei pesi di Timestral, e l'organizzazione che usa questa installazione può usarli secondo di essa, oppure ha una licenza separata di Mistral AI.",
+      "accept": "Ho letto la licenza dei pesi e la accetto a nome della mia organizzazione.",
       "needsTick": "Spunta la casella sulla licenza, e almeno una taglia, per proseguire.",
       "cancel": "Annulla",
       "pendingHint": "Questa versione di Tabularia ha bisogno di una nuova versione del gruppo e la costruisce solo dopo che un amministratore ha accettato la licenza dei suoi pesi. Usa «Ricostruisci» e accettala. Una versione già pronta continua a servire.",

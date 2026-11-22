@@ -6638,7 +6638,7 @@ export default {
     "timestral": {
       "name": "Prévision (Timestral)",
       "hint": "Prévoit chaque série à partir de son propre passé avec un modèle pré-entraîné (Timestral) : sans ajustement, avec un intervalle pour chaque pas et, si vous en avez, les séries qui l'accompagnent (un prix, une promotion). Les dernières valeurs observées peuvent être mises de côté pour la mesurer face à une prévision naïve saisonnière.",
-      "licence": "Poids sous la licence {licence}, acceptée pour cette installation par votre administrateur.",
+      "licence": "Poids sous la licence {licence} ; le fichier officiel fait foi pour son texte complet et son interprétation.",
       "params": {
         "horizon": "Pas à prévoir",
         "quantiles": "Niveaux des quantiles",
@@ -7359,14 +7359,13 @@ export default {
     "licence": {
       "title": "Licence des poids du modèle",
       "intro": "Les poids de Timestral appartiennent à Mistral AI, sous la Modified MIT License. Tabularia ne les fournit pas : activer ou reconstruire ce groupe les télécharge dans votre cluster depuis le dépôt de Mistral AI.",
-      "clauseLead": "Le point 2 de la licence, dans ses propres mots (le texte juridique n'est pas traduit) :",
-      "means": "Si le chiffre d'affaires consolidé mondial de votre entreprise (ou de votre employeur) a dépassé 20 millions de dollars le mois dernier, cette licence ne vous donne aucun droit d'utiliser les poids : il vous faut une licence commerciale de Mistral AI. Ceci n'est pas un avis juridique.",
+      "neutral": "Voici la clause de la licence des poids de Mistral AI ; le fichier officiel fait foi pour son texte complet et son interprétation.",
       "officialText": "Texte complet dans le dépôt de Mistral AI (la révision épinglée)",
       "shippedText": "Le texte complet livré avec Tabularia",
       "sizesLegend": "Tailles à télécharger",
       "sizesHint": "Chaque taille cochée est téléchargée dans l'image du groupe lors de sa construction. Cochez seulement celles que vos flux utiliseront ; au moins une.",
       "sizesNone": "Cochez au moins une taille.",
-      "accept": "J'ai lu la licence des poids de Timestral, et l'organisation qui utilise cette installation peut les utiliser selon celle-ci, ou détient une licence distincte de Mistral AI.",
+      "accept": "J'ai lu la licence des poids et je l'accepte au nom de mon organisation.",
       "needsTick": "Cochez la case sur la licence, et au moins une taille, pour continuer.",
       "cancel": "Annuler",
       "pendingHint": "Cette version de Tabularia a besoin d'une nouvelle version de ce groupe et ne la construit qu'après qu'un administrateur a accepté la licence de ses poids. Utilisez « Reconstruire » et acceptez-la. Une version déjà prête continue de servir.",

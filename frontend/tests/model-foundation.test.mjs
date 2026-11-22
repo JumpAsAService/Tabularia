@@ -227,7 +227,7 @@ test('known covariates take the horizon away: the future rows are it', async () 
 test('the licence is said under the size, in a sentence with a link that opens apart; nothing without one', async () => {
   const Form = await component('components/ui/ModelForm.vue')
   const html = await render(Form, node(SERIES, { licence: LICENCE }))
-  assert.ok(text(html).includes('Weights under the Modified MIT License, accepted for this installation by your administrator. Read the licence'), text(html))
+  assert.ok(text(html).includes('Weights under the Modified MIT License; the official file is authoritative for its full text and its interpretation. Read the licence'), text(html))
   assert.match(html, /<a href="https:\/\/example\.org\/licence" target="_blank" rel="noopener noreferrer">Read the licence<\/a>/)
   // under the size: after its buttons, before the horizon's box
   assert.ok(html.indexOf('model-ts-1-size') < html.indexOf('Weights under the') && html.indexOf('Weights under the') < html.indexOf('model-ts-1-horizon'))
