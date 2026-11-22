@@ -67,6 +67,7 @@ NOTES: dict[str, dict] = {
     "ends_early": {"count": 4, "last": 20649.0}, "context_cut": {"used": 32768, "n": 100000, "series": "site A"},
     "history_shrunk": {"points": 1500}, "future_left_out": {"count": 28},
     "covariate_missing": {"count": 2, "covariate": "promo"}, "time_budget": {"seconds": 41.2, "limit": 900},
+    "ends_early_steps": {"count": 1, "last": 39999}, "series_kept": {"kept": 5000, "total": 6123, "most": 100000},
 }
 BLOCK = {"summary": "summary", "filled": "summary", "missing": "summary", "forecast": "forecast", "holdout": "holdout",
          "coverage": "coverage", "comparison": "comparison", "limits": "limits", "licence": "licence", "method": "method"}
@@ -341,3 +342,32 @@ def test_the_report_s_name_says_the_model_s_size_and_the_series(monkeypatch):
     assert layouts.title("timestral", {**params, "size": "209m", "series": None}, "it") == \
         "Previsione (Timestral-209M) — «orders» nel tempo «day», serie giornaliera"
     assert catalog.LIMITS["max_series_charts"] == layout.SLOTS == 12
+
+
+def test_the_runner_s_notes_by_their_rows_and_the_holdout_s_seasonal_naive(tmp_path, chart_service, monkeypatch):  # noqa: F811
+    """What lot F3's runner writes: a note per cut context and per covariate with empty values (`note_context_cut_<k>`,
+    `note_covariate_missing_<k>`), each with its name; the series' end as a position for a time in steps
+    (`ends_early_steps`); the table of the series cut to the results' ceiling (`series_kept`); the seasonal naïve on the
+    holdout (`holdout_baseline`), drawn in the holdout's charts as on the horizon."""
+    model, params, rows = fixture(CASE)
+    notes = {"note_context_cut_1": "@context_cut used=32768 n=40000 series=long", "note_covariate_missing_1":
+             "@covariate_missing count=18 covariate=promo", "note_ends_early": "@ends_early_steps count=1 last=39999",
+             "note_series_left_out": "@series_kept kept=5000 total=6123 most=100000"}
+    last = max(r["ord"] for r in rows)
+    extra = [{"section": "model", "level": None, "level_2": None, "stat": k, "value": None, "text": v, "x0": None, "x1": None,
+              "ord": last + i + 1, "key": f"model|||{k}"} for i, (k, v) in enumerate(notes.items())]
+    naive = [{**r, "level_2": "holdout_baseline", "value": r["value"] + 1, "ord": last + 10 + i,
+              "key": r["key"].replace("|holdout_median|", "|holdout_baseline|")}
+             for i, r in enumerate(x for x in rows if x["section"] == "series_curve" and x["level_2"] == "holdout_median")]
+    rows = rows + extra + naive
+    for locale in LOCALES:
+        said = {r["stat"]: r for r in layouts.with_labels(model, params, rows, locale) if r["stat"] in notes}
+        assert len(said) == 4 and all(not re.search(r"^@|\{|%2", r["text"]) and r["label"] != r["stat"] for r in said.values()), said
+        assert "39999" in re.sub(r"\D", "", said["note_ends_early"]["text"])  # a position, never a date
+    _with(monkeypatch, params, rows)
+    del chart_service[1][:]
+    draw(tmp_path, chart_service, monkeypatch, CASE)
+    holdouts = [s["option"] for s in chart_service[1] if s["option"].get("title", {}).get("text") == _words("en")["charts"]["holdout"]]
+    assert len(holdouts) == 3
+    for o in holdouts:
+        assert any(x.get("name") == "Seasonal naïve" and x.get("data") for x in o["series"]), [x.get("name") for x in o["series"]]

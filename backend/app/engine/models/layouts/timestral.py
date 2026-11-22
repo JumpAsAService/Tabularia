@@ -38,7 +38,7 @@ SLOTS = int(catalog.LIMITS["max_series_charts"])  # the series the runner draws 
 FORECAST_TALL, HOLDOUT_TALL, NAME_TALL = 74.0, 52.0, 5.5
 CURVE = '[section] = "series_curve"'
 FORECAST_LINES = ("observed", "median", "baseline", "q0.05", "q0.1", "q0.9", "q0.95")
-HOLDOUT_LINES = ("observed", "holdout_median", "holdout_q0.05", "holdout_q0.1", "holdout_q0.9", "holdout_q0.95")
+HOLDOUT_LINES = ("observed", "holdout_median", "holdout_baseline", "holdout_q0.05", "holdout_q0.1", "holdout_q0.9", "holdout_q0.95")
 MEASURES = ("relative_mase", "coverage_80", "coverage_90")  # the assumption rows that are measures
 ACROSS = ("mase", "baseline_mase", "smape", "baseline_smape", "wql", "n_measured")  # the model's numbers beside them
 WEIGHTS = ("weights", "weights_sha256", "licence", "licence_sha256")  # the weights' part of the last page
@@ -284,7 +284,8 @@ def _holdout(p: stats.Page, w: dict) -> None:
             x = column * (half + gap)
             p.y = top
             _name(p, w, f"holdout_name_{k}", k, x, half)
-            series = [*_bands(w, "holdout_"), _line("observed", s["observed"], c.MUTED), _line("holdout_median", s["median"], c.ACCENT)]
+            series = [*_bands(w, "holdout_"), _line("observed", s["observed"], c.MUTED),
+                      _line("holdout_baseline", s["baseline"], NAIVE), _line("holdout_median", s["median"], c.ACCENT)]
             _twice(p, {"id": f"holdout_{k}", "type": "chart", "dataset": c.DATASET, "kind": "xy", "x": x, "y": top + NAME_TALL,
                        "w": half, "h": HOLDOUT_TALL, "title": stats.fit(w["charts"]["holdout"], 7.5, half - 4, 700),
                        "filter": _of(k, HOLDOUT_LINES), "category": "[x0]", "series": series,

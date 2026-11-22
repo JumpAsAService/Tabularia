@@ -68,7 +68,7 @@
     },
     "captions": {
       "forecast": "The dashed line marks the first instant forecast. The bands are the model's own quantiles: 0.1 to 0.9 and 0.05 to 0.95.",
-      "holdout": "In each chart the dashed line marks the first value kept out: from there the blue line is the median the model forecast without seeing those values, with its 80 % and 90 % bands; the grey line is what was observed."
+      "holdout": "In each chart the dashed line marks the first value kept out: from there the blue line is the median the model forecast without seeing those values, with its 80 % and 90 % bands; the grey line is what was observed, the amber one the seasonal naïve forecast from the same point."
     },
     "series_name": "«{series}»",
     "tables": {
@@ -178,7 +178,31 @@
         "weights_sha256": "sha256 of the weights",
         "licence": "Licence",
         "licence_sha256": "sha256 of the licence",
-        "cpu_capability": "CPU instructions"
+        "cpu_capability": "CPU instructions",
+        "note_ends_early": "Series ending early",
+        "note_future_left_out": "Rows after the end",
+        "note_history_shrunk": "History drawn",
+        "note_time_budget": "Time budget",
+        "note_series_left_out": "Series in the table",
+        "note_context_cut_1": "Context cut 1",
+        "note_context_cut_2": "Context cut 2",
+        "note_context_cut_3": "Context cut 3",
+        "note_covariate_missing_1": "Empty covariate values 1",
+        "note_covariate_missing_2": "Empty covariate values 2",
+        "note_covariate_missing_3": "Empty covariate values 3",
+        "note_covariate_missing_4": "Empty covariate values 4",
+        "note_covariate_missing_5": "Empty covariate values 5",
+        "note_covariate_missing_6": "Empty covariate values 6",
+        "note_covariate_missing_7": "Empty covariate values 7",
+        "note_covariate_missing_8": "Empty covariate values 8",
+        "note_covariate_missing_9": "Empty covariate values 9",
+        "note_covariate_missing_10": "Empty covariate values 10",
+        "note_covariate_missing_11": "Empty covariate values 11",
+        "note_covariate_missing_12": "Empty covariate values 12",
+        "note_covariate_missing_13": "Empty covariate values 13",
+        "note_covariate_missing_14": "Empty covariate values 14",
+        "note_covariate_missing_15": "Empty covariate values 15",
+        "note_covariate_missing_16": "Empty covariate values 16"
       },
       "series": {
         "n": "Points",
@@ -340,7 +364,7 @@
         "frequency=year": "On the last {holdout:int} years of each series, kept out and forecast from before them, the forecast missed by {mase:num} times the typical error of repeating the last season in the history (MASE, the mean over the series); the seasonal naïve forecast, which repeats the last season, missed by {baseline_mase:num} times it.",
         "": "On the last {holdout:int} steps of each series, kept out and forecast from before them, the forecast missed by {mase:num} times the typical error of repeating the last season in the history (MASE, the mean over the series); the seasonal naïve forecast, which repeats the last season, missed by {baseline_mase:num} times it."
       },
-      "holdout_not_measured": "{count:int} of {n_series:int} series are too short for the holdout and one season of history: they are forecast, not measured.",
+      "holdout_not_measured": "Series too short for the holdout and one season of history: {count:int} of {n_series:int}; they are forecast, not measured.",
       "holdout_none": "No value was kept out (holdout 0): there are no errors to measure and no comparison.",
       "coverage": "On the holdout the 80 % band held {in80:int} of {steps:int} values ({share80:pct}) and the 90 % band {in90:int} ({share90:pct}). With one forecast origin these shares move a lot by chance: read them as a hint about the width of the bands, not as a measurement of it.",
       "comparison_supported": "Timestral had the smaller error on {better:int} of {n_series:int} series. If neither forecast were better, differences this one-sided would appear by chance with probability {p_value:p}, below α = {alpha:num}: Timestral's advantage over the seasonal naïve is supported on these series.",
@@ -372,12 +396,14 @@
       "formula_wilcoxon": "d_i = MASE_i − MASE_i(naïve), the zeros left out;  W+ = Σ_(d_i > 0) rank(|d_i|), W− = Σ_(d_i < 0) rank(|d_i|);  W = min(W+, W−);  for many series z = (W+ − n(n+1)/4) / √(n(n+1)(2n+1)/24 − Σ(t³ − t)/48), t: the sizes of the ties"
     },
     "note_texts": {
-      "ends_early": "{count:int} series end before {last:date}: their forecasts start earlier.",
+      "ends_early": "Series that end before {last:date}, the latest end: {count:int}; their forecasts start earlier.",
       "context_cut": "The model read the last {used:int} of {n:int} values of «{series}».",
       "history_shrunk": "The history drawn was cut to {points:int} instants per series to keep the results within their limit; the measures use every value.",
       "future_left_out": "{count:int} rows after the last value of their series were left out: without known covariates they hold nothing to read.",
       "covariate_missing": "{count:int} empty values of «{covariate}» were handed to the model as missing.",
-      "time_budget": "The forecast took {seconds:num} s of the {limit:num} s the step allows."
+      "time_budget": "The forecast took {seconds:num} s of the {limit:num} s the step allows.",
+      "ends_early_steps": "Series that end before position {last:int}, the latest end: {count:int}; their forecasts start earlier.",
+      "series_kept": "The table of the series holds the {kept:int} of {total:int} series with the largest Σ|y|: the results may hold at most {most:int} rows; every series is in the output."
     },
     "measure_readings": [
       "summary",
@@ -473,7 +499,7 @@
     },
     "captions": {
       "forecast": "La linea tratteggiata segna il primo istante previsto. Le bande sono i quantili del modello stesso: da 0,1 a 0,9 e da 0,05 a 0,95.",
-      "holdout": "In ogni grafico la linea tratteggiata segna il primo valore tenuto da parte: da lì la linea blu è la mediana che il modello ha previsto senza vedere quei valori, con le bande all'80 % e al 90 %; la linea grigia è ciò che è stato osservato."
+      "holdout": "In ogni grafico la linea tratteggiata segna il primo valore tenuto da parte: da lì la linea blu è la mediana che il modello ha previsto senza vedere quei valori, con le bande all'80 % e al 90 %; la linea grigia è ciò che è stato osservato, quella ambra la previsione naïve stagionale dallo stesso punto."
     },
     "series_name": "«{series}»",
     "tables": {
@@ -583,7 +609,31 @@
         "weights_sha256": "sha256 dei pesi",
         "licence": "Licenza",
         "licence_sha256": "sha256 della licenza",
-        "cpu_capability": "Istruzioni della CPU"
+        "cpu_capability": "Istruzioni della CPU",
+        "note_ends_early": "Serie che finiscono prima",
+        "note_future_left_out": "Righe dopo la fine",
+        "note_history_shrunk": "Storia disegnata",
+        "note_time_budget": "Tempo concesso",
+        "note_series_left_out": "Serie nella tabella",
+        "note_context_cut_1": "Contesto tagliato 1",
+        "note_context_cut_2": "Contesto tagliato 2",
+        "note_context_cut_3": "Contesto tagliato 3",
+        "note_covariate_missing_1": "Valori vuoti di una covariata 1",
+        "note_covariate_missing_2": "Valori vuoti di una covariata 2",
+        "note_covariate_missing_3": "Valori vuoti di una covariata 3",
+        "note_covariate_missing_4": "Valori vuoti di una covariata 4",
+        "note_covariate_missing_5": "Valori vuoti di una covariata 5",
+        "note_covariate_missing_6": "Valori vuoti di una covariata 6",
+        "note_covariate_missing_7": "Valori vuoti di una covariata 7",
+        "note_covariate_missing_8": "Valori vuoti di una covariata 8",
+        "note_covariate_missing_9": "Valori vuoti di una covariata 9",
+        "note_covariate_missing_10": "Valori vuoti di una covariata 10",
+        "note_covariate_missing_11": "Valori vuoti di una covariata 11",
+        "note_covariate_missing_12": "Valori vuoti di una covariata 12",
+        "note_covariate_missing_13": "Valori vuoti di una covariata 13",
+        "note_covariate_missing_14": "Valori vuoti di una covariata 14",
+        "note_covariate_missing_15": "Valori vuoti di una covariata 15",
+        "note_covariate_missing_16": "Valori vuoti di una covariata 16"
       },
       "series": {
         "n": "Punti",
@@ -745,7 +795,7 @@
         "frequency=year": "Sugli ultimi {holdout:int} valori di ogni serie, tenuti da parte e previsti da prima, la previsione ha sbagliato di {mase:num} volte l'errore tipico del ripetere l'ultima stagione nella storia (MASE, la media sulle serie); la previsione naïve stagionale, che ripete l'ultima stagione, ha sbagliato di {baseline_mase:num} volte.",
         "": "Sugli ultimi {holdout:int} valori di ogni serie, tenuti da parte e previsti da prima, la previsione ha sbagliato di {mase:num} volte l'errore tipico del ripetere l'ultima stagione nella storia (MASE, la media sulle serie); la previsione naïve stagionale, che ripete l'ultima stagione, ha sbagliato di {baseline_mase:num} volte."
       },
-      "holdout_not_measured": "{count:int} serie su {n_series:int} sono troppo corte per il periodo di verifica e una stagione di storia: sono previste, non misurate.",
+      "holdout_not_measured": "Serie troppo corte per il periodo di verifica e una stagione di storia: {count:int} su {n_series:int}; sono previste, non misurate.",
       "holdout_none": "Nessun valore è stato tenuto da parte (verifica 0): non ci sono errori da misurare né un confronto.",
       "coverage": "Nel periodo di verifica la banda all'80 % ha contenuto {in80:int} valori su {steps:int} ({share80:pct}) e quella al 90 % {in90:int} ({share90:pct}). Con una sola origine di previsione queste quote si muovono molto per caso: leggetele come un indizio sulla larghezza delle bande, non come una sua misura.",
       "comparison_supported": "Timestral ha avuto l'errore più piccolo su {better:int} serie su {n_series:int}. Se nessuna delle due previsioni fosse migliore, differenze così sbilanciate comparirebbero per caso con probabilità {p_value:p}, sotto α = {alpha:num}: il vantaggio di Timestral sul naïve stagionale è sostenuto su queste serie.",
@@ -777,12 +827,14 @@
       "formula_wilcoxon": "d_i = MASE_i − MASE_i(naïve), gli zeri lasciati fuori;  W+ = Σ_(d_i > 0) rango(|d_i|), W− = Σ_(d_i < 0) rango(|d_i|);  W = min(W+, W−);  con molte serie z = (W+ − n(n+1)/4) / √(n(n+1)(2n+1)/24 − Σ(t³ − t)/48), t: le dimensioni dei pareggi"
     },
     "note_texts": {
-      "ends_early": "{count:int} serie finiscono prima del {last:date}: le loro previsioni cominciano prima.",
+      "ends_early": "Serie che finiscono prima del {last:date}, l'ultima fine: {count:int}; le loro previsioni cominciano prima.",
       "context_cut": "Il modello ha letto gli ultimi {used:int} di {n:int} valori di «{series}».",
       "history_shrunk": "La storia disegnata è stata ridotta a {points:int} istanti per serie per restare nel limite dei risultati; le misure usano tutti i valori.",
       "future_left_out": "{count:int} righe dopo l'ultimo valore della loro serie sono state lasciate fuori: senza covariate note non contengono nulla da leggere.",
       "covariate_missing": "{count:int} valori vuoti di «{covariate}» sono stati passati al modello come mancanti.",
-      "time_budget": "La previsione ha richiesto {seconds:num} s dei {limit:num} s che il passo concede."
+      "time_budget": "La previsione ha richiesto {seconds:num} s dei {limit:num} s che il passo concede.",
+      "ends_early_steps": "Serie che finiscono prima della posizione {last:int}, l'ultima fine: {count:int}; le loro previsioni cominciano prima.",
+      "series_kept": "La tabella delle serie contiene le {kept:int} serie su {total:int} con la Σ|y| più grande: i risultati possono avere al massimo {most:int} righe; ogni serie è nell'output."
     },
     "measure_readings": [
       "summary",
@@ -878,7 +930,7 @@
     },
     "captions": {
       "forecast": "Die gestrichelte Linie markiert den ersten vorhergesagten Zeitpunkt. Die Bänder sind die eigenen Quantile des Modells: 0,1 bis 0,9 und 0,05 bis 0,95.",
-      "holdout": "In jedem Diagramm markiert die gestrichelte Linie den ersten zurückgehaltenen Wert: Ab dort ist die blaue Linie der Median, den das Modell vorhersagte, ohne diese Werte zu sehen, mit seinen 80-%- und 90-%-Bändern; die graue Linie ist das Beobachtete."
+      "holdout": "In jedem Diagramm markiert die gestrichelte Linie den ersten zurückgehaltenen Wert: Ab dort ist die blaue Linie der Median, den das Modell vorhersagte, ohne diese Werte zu sehen, mit seinen 80-%- und 90-%-Bändern; die graue Linie ist das Beobachtete, die bernsteinfarbene die saisonal naive Prognose vom selben Punkt aus."
     },
     "series_name": "«{series}»",
     "tables": {
@@ -988,7 +1040,31 @@
         "weights_sha256": "sha256 der Gewichte",
         "licence": "Lizenz",
         "licence_sha256": "sha256 der Lizenz",
-        "cpu_capability": "CPU-Befehle"
+        "cpu_capability": "CPU-Befehle",
+        "note_ends_early": "Früher endende Reihen",
+        "note_future_left_out": "Zeilen nach dem Ende",
+        "note_history_shrunk": "Gezeichneter Verlauf",
+        "note_time_budget": "Zeitbudget",
+        "note_series_left_out": "Reihen in der Tabelle",
+        "note_context_cut_1": "Gekürzter Kontext 1",
+        "note_context_cut_2": "Gekürzter Kontext 2",
+        "note_context_cut_3": "Gekürzter Kontext 3",
+        "note_covariate_missing_1": "Leere Werte einer Kovariate 1",
+        "note_covariate_missing_2": "Leere Werte einer Kovariate 2",
+        "note_covariate_missing_3": "Leere Werte einer Kovariate 3",
+        "note_covariate_missing_4": "Leere Werte einer Kovariate 4",
+        "note_covariate_missing_5": "Leere Werte einer Kovariate 5",
+        "note_covariate_missing_6": "Leere Werte einer Kovariate 6",
+        "note_covariate_missing_7": "Leere Werte einer Kovariate 7",
+        "note_covariate_missing_8": "Leere Werte einer Kovariate 8",
+        "note_covariate_missing_9": "Leere Werte einer Kovariate 9",
+        "note_covariate_missing_10": "Leere Werte einer Kovariate 10",
+        "note_covariate_missing_11": "Leere Werte einer Kovariate 11",
+        "note_covariate_missing_12": "Leere Werte einer Kovariate 12",
+        "note_covariate_missing_13": "Leere Werte einer Kovariate 13",
+        "note_covariate_missing_14": "Leere Werte einer Kovariate 14",
+        "note_covariate_missing_15": "Leere Werte einer Kovariate 15",
+        "note_covariate_missing_16": "Leere Werte einer Kovariate 16"
       },
       "series": {
         "n": "Punkte",
@@ -1150,7 +1226,7 @@
         "frequency=year": "In den letzten {holdout:int} Jahren jeder Reihe, zurückgehalten und von vorher prognostiziert, lag die Prognose um das {mase:num}-Fache des typischen Fehlers daneben, die letzte Saison im Verlauf zu wiederholen (MASE, der Mittelwert über die Reihen); die saisonal naive Prognose, die die letzte Saison wiederholt, lag um das {baseline_mase:num}-Fache daneben.",
         "": "In den letzten {holdout:int} Schritten jeder Reihe, zurückgehalten und von vorher prognostiziert, lag die Prognose um das {mase:num}-Fache des typischen Fehlers daneben, die letzte Saison im Verlauf zu wiederholen (MASE, der Mittelwert über die Reihen); die saisonal naive Prognose, die die letzte Saison wiederholt, lag um das {baseline_mase:num}-Fache daneben."
       },
-      "holdout_not_measured": "{count:int} von {n_series:int} Reihen sind zu kurz für den Prüfzeitraum und eine Saison Verlauf: Sie werden prognostiziert, nicht gemessen.",
+      "holdout_not_measured": "Reihen, zu kurz für den Prüfzeitraum und eine Saison Verlauf: {count:int} von {n_series:int}; sie werden prognostiziert, nicht gemessen.",
       "holdout_none": "Es wurde kein Wert zurückgehalten (Prüfzeitraum 0): Es gibt keine Fehler zu messen und keinen Vergleich.",
       "coverage": "Im Prüfzeitraum enthielt das 80-%-Band {in80:int} von {steps:int} Werten ({share80:pct}) und das 90-%-Band {in90:int} ({share90:pct}). Mit einem einzigen Prognoseursprung schwanken diese Anteile durch Zufall erheblich: Lesen Sie sie als Hinweis auf die Breite der Bänder, nicht als deren Messung.",
       "comparison_supported": "Timestral hatte auf {better:int} von {n_series:int} Reihen den kleineren Fehler. Wäre keine der beiden Prognosen besser, träten so einseitige Differenzen mit Wahrscheinlichkeit {p_value:p} zufällig auf, unter α = {alpha:num}: Der Vorsprung von Timestral vor der saisonal naiven Prognose ist auf diesen Reihen gestützt.",
@@ -1182,12 +1258,14 @@
       "formula_wilcoxon": "d_i = MASE_i − MASE_i(naiv), die Nullen ausgelassen;  W+ = Σ_(d_i > 0) Rang(|d_i|), W− = Σ_(d_i < 0) Rang(|d_i|);  W = min(W+, W−);  bei vielen Reihen z = (W+ − n(n+1)/4) / √(n(n+1)(2n+1)/24 − Σ(t³ − t)/48), t: die Größen der Bindungen"
     },
     "note_texts": {
-      "ends_early": "{count:int} Reihen enden vor dem {last:date}: Ihre Prognosen beginnen früher.",
+      "ends_early": "Reihen, die vor dem {last:date} enden, dem spätesten Ende: {count:int}; ihre Prognosen beginnen früher.",
       "context_cut": "Das Modell hat die letzten {used:int} von {n:int} Werten von «{series}» gelesen.",
       "history_shrunk": "Der gezeichnete Verlauf wurde auf {points:int} Zeitpunkte je Reihe gekürzt, um die Ergebnisse in ihrer Grenze zu halten; die Maße verwenden jeden Wert.",
       "future_left_out": "{count:int} Zeilen nach dem letzten Wert ihrer Reihe wurden ausgelassen: Ohne bekannte Kovariaten enthalten sie nichts zu lesen.",
       "covariate_missing": "{count:int} leere Werte von «{covariate}» wurden dem Modell als fehlend übergeben.",
-      "time_budget": "Die Prognose dauerte {seconds:num} s der {limit:num} s, die der Schritt erlaubt."
+      "time_budget": "Die Prognose dauerte {seconds:num} s der {limit:num} s, die der Schritt erlaubt.",
+      "ends_early_steps": "Reihen, die vor Position {last:int} enden, dem spätesten Ende: {count:int}; ihre Prognosen beginnen früher.",
+      "series_kept": "Die Tabelle der Reihen enthält die {kept:int} von {total:int} Reihen mit der größten Σ|y|: Die Ergebnisse dürfen höchstens {most:int} Zeilen haben; jede Reihe steht in der Ausgabe."
     },
     "measure_readings": [
       "summary",
@@ -1283,7 +1361,7 @@
     },
     "captions": {
       "forecast": "La línea discontinua marca el primer instante pronosticado. Las bandas son los propios cuantiles del modelo: de 0,1 a 0,9 y de 0,05 a 0,95.",
-      "holdout": "En cada gráfico la línea discontinua marca el primer valor reservado: desde ahí la línea azul es la mediana que el modelo pronosticó sin ver esos valores, con sus bandas del 80 % y del 90 %; la línea gris es lo observado."
+      "holdout": "En cada gráfico la línea discontinua marca el primer valor reservado: desde ahí la línea azul es la mediana que el modelo pronosticó sin ver esos valores, con sus bandas del 80 % y del 90 %; la línea gris es lo observado, la ámbar el pronóstico ingenuo estacional desde el mismo punto."
     },
     "series_name": "«{series}»",
     "tables": {
@@ -1393,7 +1471,31 @@
         "weights_sha256": "sha256 de los pesos",
         "licence": "Licencia",
         "licence_sha256": "sha256 de la licencia",
-        "cpu_capability": "Instrucciones de la CPU"
+        "cpu_capability": "Instrucciones de la CPU",
+        "note_ends_early": "Series que terminan antes",
+        "note_future_left_out": "Filas tras el final",
+        "note_history_shrunk": "Historia dibujada",
+        "note_time_budget": "Tiempo permitido",
+        "note_series_left_out": "Series en la tabla",
+        "note_context_cut_1": "Contexto recortado 1",
+        "note_context_cut_2": "Contexto recortado 2",
+        "note_context_cut_3": "Contexto recortado 3",
+        "note_covariate_missing_1": "Valores vacíos de una covariable 1",
+        "note_covariate_missing_2": "Valores vacíos de una covariable 2",
+        "note_covariate_missing_3": "Valores vacíos de una covariable 3",
+        "note_covariate_missing_4": "Valores vacíos de una covariable 4",
+        "note_covariate_missing_5": "Valores vacíos de una covariable 5",
+        "note_covariate_missing_6": "Valores vacíos de una covariable 6",
+        "note_covariate_missing_7": "Valores vacíos de una covariable 7",
+        "note_covariate_missing_8": "Valores vacíos de una covariable 8",
+        "note_covariate_missing_9": "Valores vacíos de una covariable 9",
+        "note_covariate_missing_10": "Valores vacíos de una covariable 10",
+        "note_covariate_missing_11": "Valores vacíos de una covariable 11",
+        "note_covariate_missing_12": "Valores vacíos de una covariable 12",
+        "note_covariate_missing_13": "Valores vacíos de una covariable 13",
+        "note_covariate_missing_14": "Valores vacíos de una covariable 14",
+        "note_covariate_missing_15": "Valores vacíos de una covariable 15",
+        "note_covariate_missing_16": "Valores vacíos de una covariable 16"
       },
       "series": {
         "n": "Puntos",
@@ -1555,7 +1657,7 @@
         "frequency=year": "En los últimos {holdout:int} valores de cada serie, reservados y pronosticados desde antes, el pronóstico falló por {mase:num} veces el error típico de repetir la última estación en la historia (MASE, la media sobre las series); el pronóstico ingenuo estacional, que repite la última estación, falló por {baseline_mase:num} veces.",
         "": "En los últimos {holdout:int} valores de cada serie, reservados y pronosticados desde antes, el pronóstico falló por {mase:num} veces el error típico de repetir la última estación en la historia (MASE, la media sobre las series); el pronóstico ingenuo estacional, que repite la última estación, falló por {baseline_mase:num} veces."
       },
-      "holdout_not_measured": "{count:int} de {n_series:int} series son demasiado cortas para el periodo de prueba y una estación de historia: se pronostican, no se miden.",
+      "holdout_not_measured": "Series demasiado cortas para el periodo de prueba y una estación de historia: {count:int} de {n_series:int}; se pronostican, no se miden.",
       "holdout_none": "No se reservó ningún valor (periodo de prueba 0): no hay errores que medir ni comparación.",
       "coverage": "En el periodo de prueba la banda del 80 % contuvo {in80:int} de {steps:int} valores ({share80:pct}) y la del 90 % {in90:int} ({share90:pct}). Con un solo origen de pronóstico estas proporciones varían mucho por azar: léalas como un indicio sobre la anchura de las bandas, no como una medida de ella.",
       "comparison_supported": "Timestral tuvo el error menor en {better:int} de {n_series:int} series. Si ninguno de los dos pronósticos fuera mejor, diferencias tan desiguales aparecerían por azar con probabilidad {p_value:p}, por debajo de α = {alpha:num}: la ventaja de Timestral sobre el ingenuo estacional está respaldada en estas series.",
@@ -1587,12 +1689,14 @@
       "formula_wilcoxon": "d_i = MASE_i − MASE_i(ingenuo), los ceros fuera;  W+ = Σ_(d_i > 0) rango(|d_i|), W− = Σ_(d_i < 0) rango(|d_i|);  W = min(W+, W−);  con muchas series z = (W+ − n(n+1)/4) / √(n(n+1)(2n+1)/24 − Σ(t³ − t)/48), t: los tamaños de los empates"
     },
     "note_texts": {
-      "ends_early": "{count:int} series terminan antes del {last:date}: sus pronósticos empiezan antes.",
+      "ends_early": "Series que terminan antes del {last:date}, el último final: {count:int}; sus pronósticos empiezan antes.",
       "context_cut": "El modelo leyó los últimos {used:int} de {n:int} valores de «{series}».",
       "history_shrunk": "La historia dibujada se recortó a {points:int} instantes por serie para que los resultados quepan en su límite; las medidas usan todos los valores.",
       "future_left_out": "{count:int} filas posteriores al último valor de su serie se dejaron fuera: sin covariables conocidas no contienen nada que leer.",
       "covariate_missing": "{count:int} valores vacíos de «{covariate}» se pasaron al modelo como faltantes.",
-      "time_budget": "El pronóstico tardó {seconds:num} s de los {limit:num} s que permite el paso."
+      "time_budget": "El pronóstico tardó {seconds:num} s de los {limit:num} s que permite el paso.",
+      "ends_early_steps": "Series que terminan antes de la posición {last:int}, el último final: {count:int}; sus pronósticos empiezan antes.",
+      "series_kept": "La tabla de las series contiene las {kept:int} de {total:int} series con la mayor Σ|y|: los resultados pueden tener como mucho {most:int} filas; todas las series están en la salida."
     },
     "measure_readings": [
       "summary",
@@ -1688,7 +1792,7 @@
     },
     "captions": {
       "forecast": "La ligne pointillée marque le premier instant prévu. Les bandes sont les propres quantiles du modèle : de 0,1 à 0,9 et de 0,05 à 0,95.",
-      "holdout": "Dans chaque graphique, la ligne pointillée marque la première valeur mise de côté : à partir de là, la ligne bleue est la médiane que le modèle a prévue sans voir ces valeurs, avec ses bandes à 80 % et à 90 % ; la ligne grise est ce qui a été observé."
+      "holdout": "Dans chaque graphique, la ligne pointillée marque la première valeur mise de côté : à partir de là, la ligne bleue est la médiane que le modèle a prévue sans voir ces valeurs, avec ses bandes à 80 % et à 90 % ; la ligne grise est ce qui a été observé, la ligne ambre la prévision naïve saisonnière depuis le même point."
     },
     "series_name": "«{series}»",
     "tables": {
@@ -1798,7 +1902,31 @@
         "weights_sha256": "sha256 des poids",
         "licence": "Licence",
         "licence_sha256": "sha256 de la licence",
-        "cpu_capability": "Instructions de la CPU"
+        "cpu_capability": "Instructions de la CPU",
+        "note_ends_early": "Séries finissant plus tôt",
+        "note_future_left_out": "Lignes après la fin",
+        "note_history_shrunk": "Historique tracé",
+        "note_time_budget": "Temps accordé",
+        "note_series_left_out": "Séries dans le tableau",
+        "note_context_cut_1": "Contexte coupé 1",
+        "note_context_cut_2": "Contexte coupé 2",
+        "note_context_cut_3": "Contexte coupé 3",
+        "note_covariate_missing_1": "Valeurs vides d'une covariable 1",
+        "note_covariate_missing_2": "Valeurs vides d'une covariable 2",
+        "note_covariate_missing_3": "Valeurs vides d'une covariable 3",
+        "note_covariate_missing_4": "Valeurs vides d'une covariable 4",
+        "note_covariate_missing_5": "Valeurs vides d'une covariable 5",
+        "note_covariate_missing_6": "Valeurs vides d'une covariable 6",
+        "note_covariate_missing_7": "Valeurs vides d'une covariable 7",
+        "note_covariate_missing_8": "Valeurs vides d'une covariable 8",
+        "note_covariate_missing_9": "Valeurs vides d'une covariable 9",
+        "note_covariate_missing_10": "Valeurs vides d'une covariable 10",
+        "note_covariate_missing_11": "Valeurs vides d'une covariable 11",
+        "note_covariate_missing_12": "Valeurs vides d'une covariable 12",
+        "note_covariate_missing_13": "Valeurs vides d'une covariable 13",
+        "note_covariate_missing_14": "Valeurs vides d'une covariable 14",
+        "note_covariate_missing_15": "Valeurs vides d'une covariable 15",
+        "note_covariate_missing_16": "Valeurs vides d'une covariable 16"
       },
       "series": {
         "n": "Points",
@@ -1960,7 +2088,7 @@
         "frequency=year": "Sur les {holdout:int} dernières valeurs de chaque série, mises de côté et prévues d'avant, la prévision s'est trompée de {mase:num} fois l'erreur typique de répéter la dernière saison dans l'historique (MASE, la moyenne sur les séries) ; la prévision naïve saisonnière, qui répète la dernière saison, s'est trompée de {baseline_mase:num} fois.",
         "": "Sur les {holdout:int} dernières valeurs de chaque série, mises de côté et prévues d'avant, la prévision s'est trompée de {mase:num} fois l'erreur typique de répéter la dernière saison dans l'historique (MASE, la moyenne sur les séries) ; la prévision naïve saisonnière, qui répète la dernière saison, s'est trompée de {baseline_mase:num} fois."
       },
-      "holdout_not_measured": "{count:int} séries sur {n_series:int} sont trop courtes pour la période de test et une saison d'historique : elles sont prévues, non mesurées.",
+      "holdout_not_measured": "Séries trop courtes pour la période de test et une saison d'historique : {count:int} sur {n_series:int} ; elles sont prévues, non mesurées.",
       "holdout_none": "Aucune valeur n'a été mise de côté (période de test 0) : il n'y a pas d'erreurs à mesurer ni de comparaison.",
       "coverage": "Sur la période de test, la bande à 80 % a contenu {in80:int} valeurs sur {steps:int} ({share80:pct}) et celle à 90 % {in90:int} ({share90:pct}). Avec une seule origine de prévision, ces parts varient beaucoup par hasard : lisez-les comme un indice sur la largeur des bandes, pas comme une mesure de celle-ci.",
       "comparison_supported": "Timestral a eu la plus petite erreur sur {better:int} séries sur {n_series:int}. Si aucune des deux prévisions n'était meilleure, des différences aussi déséquilibrées apparaîtraient par hasard avec une probabilité de {p_value:p}, sous α = {alpha:num} : l'avance de Timestral sur la naïve saisonnière est étayée sur ces séries.",
@@ -1992,12 +2120,14 @@
       "formula_wilcoxon": "d_i = MASE_i − MASE_i(naïve), les zéros laissés de côté ;  W+ = Σ_(d_i > 0) rang(|d_i|), W− = Σ_(d_i < 0) rang(|d_i|) ;  W = min(W+, W−) ;  avec beaucoup de séries z = (W+ − n(n+1)/4) / √(n(n+1)(2n+1)/24 − Σ(t³ − t)/48), t : les tailles des ex aequo"
     },
     "note_texts": {
-      "ends_early": "{count:int} séries se terminent avant le {last:date} : leurs prévisions commencent plus tôt.",
+      "ends_early": "Séries qui se terminent avant le {last:date}, la fin la plus tardive : {count:int} ; leurs prévisions commencent plus tôt.",
       "context_cut": "Le modèle a lu les {used:int} dernières valeurs sur {n:int} de «{series}».",
       "history_shrunk": "L'historique tracé a été réduit à {points:int} instants par série pour que les résultats restent dans leur limite ; les mesures utilisent toutes les valeurs.",
       "future_left_out": "{count:int} lignes après la dernière valeur de leur série ont été laissées de côté : sans covariables connues, elles ne contiennent rien à lire.",
       "covariate_missing": "{count:int} valeurs vides de «{covariate}» ont été passées au modèle comme manquantes.",
-      "time_budget": "La prévision a pris {seconds:num} s des {limit:num} s que l'étape permet."
+      "time_budget": "La prévision a pris {seconds:num} s des {limit:num} s que l'étape permet.",
+      "ends_early_steps": "Séries qui se terminent avant la position {last:int}, la fin la plus tardive : {count:int} ; leurs prévisions commencent plus tôt.",
+      "series_kept": "Le tableau des séries contient les {kept:int} séries sur {total:int} ayant la plus grande Σ|y| : les résultats peuvent avoir au plus {most:int} lignes ; chaque série est dans la sortie."
     },
     "measure_readings": [
       "summary",
