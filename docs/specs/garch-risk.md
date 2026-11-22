@@ -1743,6 +1743,80 @@ inputs are the real orders per day (the generator's simulation counts the same o
 through the gateway, the first one's results as above (the same fit; a difference from the Job's numbers would be a bug), PDF and Excel, and the
 risk node's flow with `output = paths` is not made (the owner's rule of small data).
 
+### G8 — kind (2026-11-22)
+
+**Images and upgrades.** Built from clean worktrees and pushed to the cluster's private registry; `helm upgrade --reset-then-reuse-values`.
+
+| Upgrade | Images | What it did |
+|---|---|---|
+| 1 | `main-9980a793` (backend, gateway, gateway-go, frontend; the data API stays 1.4.7) | The new orchestrator queued **version 4 of the time series group, with the new recipe** (18 s after the upgrade started). The other six groups were re-checked because the common library changed, all `ready` again within four minutes (the recheck Jobs). The build took about 17 min (rugarch, compiled); its self-test **failed** (see the correction below). |
+| 2 | `main-0582b51c` (gateway-go only: the chart has one tag a component, the tests' fix lives in the gateway's embedded code) | No version was queued by itself (the recipe was unchanged since version 4), *Build again* made **version 5, queued 20:03:31 UTC, ready 20:23:15** (19 min 44 s with the check), self-test **116 ok, 0 failed, 0 skipped**. |
+
+**The orchestrator fix, proved with real upgrades** (commits `765fe10f`, `919fb389`, `c935a747`). The old pods' logs were kept with a loop that re-reads each
+pod's whole log every three seconds (`kubectl logs … | cat`): no log follower, no «too many open files». For both upgrades the old gateway and orchestrator
+pods' logs, read to the last second before their end, hold nothing about the new version: no `queued`, no `new recipe`, no `version 4`/`version 5`, no
+build or check Job name. The queuing line is in the **new** orchestrator's log only: `models: the group timeseries has a new recipe: version 4 queued`
+(19:21:33 UTC). The build Job's Dockerfile (`tabularia-build-e4-v4`, same recipe as version 5) holds `libgsl-dev libgmp-dev` in the `apt-get install`, the
+`dpkg-query … > /opt/tabularia/system-libraries.txt` line for both, and `rugarch@1.5-6` in the package list. When version 5 became ready, no other version was
+queued: the list stayed 5 ready, 4 failed, 3 ready, 2 failed, 1 ready, and the orchestrator logged nothing about the group, checked again about an hour later (after
+the three flows, the Jobs at two sizes and a memory change of the group, which does not queue anything).
+
+**Correction found by G8 and fixed in `0582b51c`.** The self-test «the simulation stays below memory_bytes = 256 MiB in a process of its own» built the child
+process's script with `deparse(lib, width.cutoff = 500L)`, which splits a long vector into several strings. On Kubernetes the code is a ConfigMap, `tab_code_dir()`
+resolves the symlinks to `/tabularia/code/..<timestamp>`, the twelve paths pass 500 characters and the child's script had a syntax error («unexpected
+symbol»): the check failed with «the child process failed (1)», and the group could not become ready. Docker's short paths hid it in G0–G7. The test now
+writes one `source("…")` line a file; checked with the code mounted as a ConfigMap in Docker (116 ok), and on kind by version 5.
+
+**The seed.** The Job `sampledb-init` (the image built from the worktree, loaded with `kind load`), run again on the filled database: «added the missing raw
+materials' prices» (`ensure_quotazioni`), «table imported: commodity_prices ← ref.quotazioni_materie_prime», the three flows created and run once (84 s the Job).
+
+**The three flows** (the Job's real results, through the gateway and the database), against G7's:
+
+| Flow | G7 (Docker, Job's runner) | kind |
+|---|---|---|
+| Durum wheat: volatility | 774 returns, 250 held out, persistence 0.909, half-life 7.2, γ₁ 0.121 (p 0.052), ARCH-LM p 0.099, Nyblom and sign bias `ok`, Kupiec p 0.76 (3 violations, 2.5 expected), 785 rows | **identical**: persistence 0.9088, half-life 7.2471, γ₁ 0.1213 (p 0.0523), ARCH-LM 18.5948 (p 0.0988), Kupiec 0.0949 (p 0.7580), 3 violations, 785 rows; step 11.9 s |
+| Durum wheat: risk of the next month | VaR 99 % −11.8 % (−11,790 euro), ES 97.5 % −11.9 %, 1.8 % below 378 at the horizon, 3.1 % at some step, drawdown 3.6 % | **identical**: VaR −11.79 % (−12.27 % to −11.27 %), ES −11.9 %, 1.82 %, 3.07 %, drawdown at the VaR level 13.82 %, median 3.59 %; 10,000 × 21, 6 MB; step 13.3 s |
+| Orders: will next month's orders exceed 1,000? | ARIMA(1,0,1)(0,1,1)[7] on 1,111 days, mean 929, VaR 1,297, 33.1 % (CP 32.1–34.0 %), ARCH-LM, Jarque–Bera and the variance ratio `failed` | **identical**: VaR 1,297.47, ES 1,303.22, mean 928.8, 33.06 % (32.14–33.99 %), the same three checks `failed`; step 10.8 s |
+
+The orders flow's Group by on the real database: the order table has 30,000 orders in 1,103 distinct days (largest day 82); the flow joins them to the calendar and
+fills the 8 empty days with 0, so the node reads 1,111 days (`n` 1111 in the report).
+
+**MLflow** (experiments `g8-garch`, `g8-risk`). A GARCH on prices with a connection and «Register the model as» `g8-garch`: run FINISHED, the registered model has its version;
+a **Predict** node on 20 new consecutive prices applied that version and gave the 3 columns the editor showed (`day`, `prediction`, `prediction_var`) for 20 rows,
+σ 0.0097 and the VaR −0.0247 on every row because the fit of this synthetic series has α₁ at its bound (the training's own σ is 0.0099 on every row too). The **risk
+node** with an experiment: run FINISHED, 30 parameters, 52 metrics, the `tabularia.*` tags, **no registered model**. With `registerAs` written in its MLflow block (the
+form does not draw the field) the flow is refused before any Job: «a risk simulation registers no model: register the GARCH or ARIMA node instead».
+
+**Timings and memory** (one CPU pool of the kind cluster; the Job's limit 2 GiB; the peak is the line the runner prints on stderr, the cgroup's `memory.peak`):
+
+| Run | Input | Job | Result |
+|---|---|---|---|
+| GARCH(1,1), Student t | 100,000 returns | container 21 s (start to end of the pod; R's start about 3.5 s of it) | persistence 0.98 (the generator's), 100,010 rows |
+| Risk simulation, GARCH | 800 returns, 1,000,000 paths × 10 steps = **10 million values** | container 28 s; simulation 15.47 s, second reading 6.58 s; 10 batches of 104,000 paths; 221 MB on disk | R0 439 MB, **peak 699 MB** (growth 260 MB, 248 MiB, under the 256 MiB the criterion asks), never near 2 GiB |
+| the same, group memory **1 GiB** | the same | simulation 15.59 s + 6.57 s; the same 10 batches | peak **660 MB**, exit 0, never OOM-killed |
+
+The three sample flows run again at 1 GiB: the English PDFs equal the 2 GiB ones line for line, but the two timings of the simulation (0.578 s → 0.591 s; 0.487 s → 0.477 s):
+the same numbers. The group's memory was put back to 2 GiB. `run.json` does not hold the peak (deviation 6 of G3); the pod's log does.
+
+**Reports.** PDF and Excel, Italian and English, of the three flows (7, 7 and 5 pages); the first pages, the charts' pages and the method page of the Italian ones, and the first and charts' pages of the English ones, were looked at as images.
+The charts are drawn (returns and the 95 % band, σ and its forecast, standardised residuals, the news-impact curve, ACF, histogram, Q–Q, the backtest with the violations marked, the
+fan with 20 sample paths and the threshold, the outcome's histogram with the VaR and ES lines, the drawdown, the VaR and ES by step with their intervals, the odds by step), the readings
+carry the run's numbers, the method page is there, decimals follow the language, no overlap. The Excel files have 13, 11 and 9 sheets, no embedded chart. Layout findings, none breaking:
+the interval column of the risk node's first table wraps before the last «%» («−12,27 % – −11,27 / %»); a table's last row or header is alone at a page's foot in places (the GARCH's measures, the
+coefficient intervals, the backtest's counts); the risk report's third page is half empty.
+
+**Editor, Chrome and Firefox** (Playwright, a new flow with the sample prices): *Volatility (GARCH)* and *Risk simulation* are in the palette; the GARCH form has the keys of its spec and the
+volatility table's columns show before any Run (`time`, `observed`, `mean`, `sigma`, `std_residual`, `var`, `violation`, `is_holdout`, `is_forecast`); the right-click ring on the GARCH node holds
+**«Simulate risk from this model»**, a click makes the Risk simulation node on the same input with the options copied (day, price, the frequency), no «Register» field, and its 18 to 20 columns
+(more with prices) show before the Run, the time keeping its `Date` type. Both browsers. No secret in the screenshots (the login page is not captured).
+
+**Criteria.** 1 passed (the group rebuilt from its recipe by the new release's pod, self-test 116, both nodes in the palette; the fix of the upgrade proved; ARIMA and the decomposition pass
+their reference cases in the same self-test); 2, 3 passed; 4 passed for `volatility` and `summary` (an Int64 time at 100,000 returns and at 10 million values; `paths` was not made on kind, by the
+rule of small data); 5 passed (peak 699 MB, 660 MB at 1 GiB, the same numbers); 6 passed in the self-test (the witnesses) and by the three flows against G7; 7 passed.
+
+**Not exercised.** The risk flow with `output = paths` on kind, a Predict node whose model has a varying σ (this table's fit has a flat one), a refusal of the `negative_variance` on the real table
+(none came), and the old pods during a build that needs several minutes (their logs hold nothing of it for the few seconds they live).
+
 ## References
 
 - Acerbi, C., Tasche, D. (2002). On the coherence of expected shortfall. *J. Banking & Finance* 26(7).
