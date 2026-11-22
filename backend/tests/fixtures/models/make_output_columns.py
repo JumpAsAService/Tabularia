@@ -80,6 +80,9 @@ CASES: list[tuple[str, str, str, dict[str, Any]]] = [
     ("A/B planning, binary: the plan", "experiments", "plan_binary_size", {"output": "plan"}),
     ("A/B planning, continuous with CUPED: the plan", "experiments", "plan_cuped_days", {"output": "plan"}),
     ("A/B planning, ratio: the plan", "experiments", "plan_ratio_arms4", {"output": "plan"}),
+    ("Forecast (Timestral), one series: the forecast", "foundation_forecast", "one", {}),
+    ("Forecast (Timestral), series of a text column with known and past covariates: the forecast", "foundation_forecast",
+     "covariates", {}),
 ]
 
 POLARS = {"integer": pl.Int64, "number": pl.Float64, "text": pl.String, "boolean": pl.Boolean, "date": pl.Date,
@@ -87,7 +90,10 @@ POLARS = {"integer": pl.Int64, "number": pl.Float64, "text": pl.String, "boolean
 
 
 def reference(group: str, case_id: str) -> dict[str, Any]:
-    cases = json.loads((GROUPS_DIR / "groups" / group / "reference" / "expected.json").read_text(encoding="utf-8"))["cases"]
+    """A reference case of the group: one of its `cases`, or of its `size_cases` (the pre-trained forecast's, whose expected
+    values are per size of the weights; the case's own size, else the node's default)."""
+    ref = json.loads((GROUPS_DIR / "groups" / group / "reference" / "expected.json").read_text(encoding="utf-8"))
+    cases = [*ref["cases"], *({"model": "timestral", **c} for c in ref.get("size_cases", []))]
     return next(c for c in cases if c["id"] == case_id)
 
 

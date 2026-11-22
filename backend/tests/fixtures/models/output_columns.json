@@ -3488,6 +3488,187 @@
      "Boolean"
     ]
    ]
+  },
+  {
+   "what": "Forecast (Timestral), one series: the forecast",
+   "model": "timestral",
+   "params": {
+    "time": "giorno",
+    "value": "ordini",
+    "frequency": "day",
+    "horizon": 28,
+    "holdout": 28,
+    "quantiles": [
+     0.01,
+     0.1,
+     0.9,
+     0.99
+    ]
+   },
+   "input": [
+    [
+     "giorno",
+     "Date"
+    ],
+    [
+     "ordini",
+     "Float64"
+    ]
+   ],
+   "columns": [
+    [
+     "time",
+     "Date"
+    ],
+    [
+     "observed",
+     "Float64"
+    ],
+    [
+     "forecast",
+     "Float64"
+    ],
+    [
+     "quantile_0.01",
+     "Float64"
+    ],
+    [
+     "quantile_0.1",
+     "Float64"
+    ],
+    [
+     "quantile_0.9",
+     "Float64"
+    ],
+    [
+     "quantile_0.99",
+     "Float64"
+    ],
+    [
+     "baseline",
+     "Float64"
+    ],
+    [
+     "filled",
+     "Boolean"
+    ],
+    [
+     "is_holdout",
+     "Boolean"
+    ],
+    [
+     "is_forecast",
+     "Boolean"
+    ]
+   ]
+  },
+  {
+   "what": "Forecast (Timestral), series of a text column with known and past covariates: the forecast",
+   "model": "timestral",
+   "params": {
+    "time": "giorno",
+    "value": "vendite",
+    "series": "negozio",
+    "frequency": "day",
+    "known_covariates": [
+     "festivo",
+     "tipo"
+    ],
+    "past_covariates": [
+     "prezzo",
+     "zona"
+    ],
+    "quantiles": [
+     0.01,
+     0.1,
+     0.9,
+     0.99
+    ]
+   },
+   "input": [
+    [
+     "negozio",
+     "String"
+    ],
+    [
+     "giorno",
+     "Date"
+    ],
+    [
+     "vendite",
+     "Float64"
+    ],
+    [
+     "festivo",
+     "Boolean"
+    ],
+    [
+     "tipo",
+     "String"
+    ],
+    [
+     "prezzo",
+     "Float64"
+    ],
+    [
+     "zona",
+     "String"
+    ],
+    [
+     "vuoto",
+     "String"
+    ]
+   ],
+   "columns": [
+    [
+     "series",
+     "String"
+    ],
+    [
+     "time",
+     "Date"
+    ],
+    [
+     "observed",
+     "Float64"
+    ],
+    [
+     "forecast",
+     "Float64"
+    ],
+    [
+     "quantile_0.01",
+     "Float64"
+    ],
+    [
+     "quantile_0.1",
+     "Float64"
+    ],
+    [
+     "quantile_0.9",
+     "Float64"
+    ],
+    [
+     "quantile_0.99",
+     "Float64"
+    ],
+    [
+     "baseline",
+     "Float64"
+    ],
+    [
+     "filled",
+     "Boolean"
+    ],
+    [
+     "is_holdout",
+     "Boolean"
+    ],
+    [
+     "is_forecast",
+     "Boolean"
+    ]
+   ]
   }
  ]
 }
