@@ -663,6 +663,8 @@ def flows(ds: dict[str, dict], outputs_in: int, groups: dict[str, dict] | None =
         out.extend(experiment_flows(ds, outputs_in, groups["experiments"]))
     if groups and "timeseries" in groups:
         out.extend(timeseries_flows(ds, outputs_in, groups["timeseries"]))
+    if groups and "foundation_forecast" in groups:
+        out.extend(foundation_flows(ds, outputs_in, groups["foundation_forecast"]))
     return out
 
 
@@ -731,6 +733,53 @@ def timeseries_flows(ds: dict[str, dict], outputs_in: int, group: dict) -> list[
                                 "periods 7 and 365) on the orders of the calendar's days: a calendar Left join and Fill nulls with 0 make the days without an order a 0, "
                                 "because the node refuses a series with gaps."))
     return out
+
+
+FORECAST_FLOW = "Orders by channel: four weeks ahead"
+
+
+def foundation_size(group: dict) -> str:
+    """The size of the pre-trained model the sample flow asks for: 28M when the version in use holds it, otherwise the
+    smallest it holds (`sizes` of `GET /models/groups`, as «5m», «28m»…). A group that does not say keeps 28M."""
+    sizes = [x for x in (group.get("sizes") or []) if isinstance(x, str) and x[:-1].isdigit() and x.endswith("m")]
+    if not sizes or "28m" in sizes:
+        return "28m"
+    return min(sizes, key=lambda x: int(x[:-1]))
+
+
+def foundation_flows(ds: dict[str, dict], outputs_in: int, group: dict) -> list[dict]:
+    """The pre-trained forecast's flow (the foundation_forecast group): the orders per day of each of the five channels, four
+    weeks ahead, with the public holidays as a covariate known in the future. Never scheduled.
+
+    The calendar (to 2026-08-12, 28 days past the data) is crossed with the channels; the orders per day and channel are
+    left-joined to it; a day up to 2026-07-15 without an order is a 0, the 28 days after are left empty: they are the future
+    rows, and the calendar's `festivo` is what the model knows about them."""
+    c = Builder(ds, outputs_in)
+    cal = c.table("cal", "calendar", ["giorno", "festivo"], {"giorno": "data_ordine"}, 40, 200)
+    c.op("periodo", "filter", {"column": "data_ordine", "operator": "between", "value": ["2023-07-01", "2026-08-12"]}, 820, 200)
+    ordini = c.table("ord", "orders", ["data_ordine", "canale", "id"], {}, 40, 460)
+    c.op("canali-sel", "select", {"columns": ["canale"]}, 300, 640)
+    c.op("canali", "unique", {"subset": ["canale"]}, 560, 640)
+    c.op("agg", "group_by", {"by": ["data_ordine", "canale"], "aggregations": [{"column": "id", "func": "count", "alias": "ordini"}]}, 300, 460)
+    c.op("x", "join", {"how": "cross"}, 1080, 200)
+    c.op("j", "join", {"how": "left", "on": ["data_ordine", "canale"]}, 1340, 200)
+    c.op("zero", "compute", {"columns": [{"name": "ordini",
+                                          "expr": "CASE WHEN data_ordine > DATE '2026-07-15' THEN NULL ELSE COALESCE(ordini, 0) END"}]}, 1600, 200)
+    c.nodes.append({"id": "ts", "type": "model", "position": {"x": 1860, "y": 200}, "data": {
+        "label": "Forecast (Timestral)", "model": "timestral", "timeoutSeconds": 1800, "retries": 0, "params": {
+            "time": "data_ordine", "value": "ordini", "series": "canale", "frequency": "day", "size": foundation_size(group),
+            "holdout": 28, "known_covariates": ["festivo"], "output": "quantile_forecast"}}})
+    c.output("Orders by channel: four weeks ahead results", 2120, 200)
+    c.chain(cal, "periodo", "x", "j", "zero", "ts", "out")
+    c.chain(ordini, "agg")
+    c.chain(ordini, "canali-sel", "canali")
+    c.edge("canali", "x", "right")
+    c.edge("agg", "j", "right")
+    return [dict(name=FORECAST_FLOW, cron=None, c=c, group=group,
+                 description="How many orders will each channel take in the next four weeks? The Forecast (Timestral) node, a pre-trained model that "
+                             "is not fitted on the data, reads the orders per day of the five channels and the public holidays it knows in advance; "
+                             "the last 28 days of the history are held out to measure it against the same-weekday forecast. The weights are under "
+                             "a licence an administrator accepted when enabling the group.")]
 
 
 def create_flows(project: int, engine: str, ds: dict[str, dict], outputs_in: int, groups: dict[str, dict] | None = None) -> list[dict]:
