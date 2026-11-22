@@ -6635,6 +6635,33 @@ export default {
       "name": "Zerlegung",
       "hint": "Zerlegt eine Reihe in Trend, saisonale Anteile und Rest (STL, klassisch, MSTL) oder in ihre intrinsischen Moden (EMD), prüft die Saison und kontrolliert, was übrig bleibt."
     },
+    "timestral": {
+      "name": "Prognose (Timestral)",
+      "hint": "Prognostiziert jede Reihe aus ihrer eigenen Vergangenheit mit einem vortrainierten Modell (Timestral): ohne Anpassung, mit einem Bereich für jeden Schritt und, falls vorhanden, mit den Reihen, die dazugehören (ein Preis, eine Aktion). Die letzten beobachteten Werte lassen sich zurückhalten, um die Prognose an einer saisonalen naiven Prognose zu messen.",
+      "licence": "Gewichte von Mistral AI unter der {licence}, für diese Installation von Ihrer Administration akzeptiert.",
+      "params": {
+        "horizon": "Schritte voraus",
+        "quantiles": "Quantilstufen",
+        "holdout": "Zum Test zurückgehaltene Schritte",
+        "missing": "Eine Periode ohne Wert",
+        "output": "Ausgabe"
+      },
+      "hints": {
+        "series": "Eine Reihe für jeden Wert dieser Spalte (ein Geschäft, ein Produkt). Leer: Die Tabelle ist eine einzige Reihe.",
+        "season": "Schritte einer Saison: Sie dienen der saisonalen naiven Prognose, mit der das Ergebnis verglichen wird, und der Skala der Fehler. Leer: die der Frequenz (24, 7, 52, 12, 4); 1: keine.",
+        "size": "Größere Modelle prognostizieren etwas besser und brauchen mehr Zeit und Speicher. 28M ist ein guter Anfang. Gelistet sind nur die Größen, die Ihre Administration heruntergeladen hat.",
+        "horizon": "Wie viele Schritte nach dem letzten beobachteten Wert jeder Reihe, von 1 bis 1.024. Bei bekannten Kovariaten entfällt das: Die künftigen Zeilen der Eingabe sind der Horizont.",
+        "quantiles": "Die Stufen, als Spalten geschrieben (quantile_0.05…). Der Median ist die Prognosespalte. Standard: 0.05, 0.1, 0.9 und 0.95, die 90-%- und 80-%-Bänder.",
+        "past_covariates": "Spalten, die nur bis zum letzten beobachteten Wert jeder Reihe bekannt sind (ein vergangener Preis). Zahlen, wahr oder falsch, oder Kategorien.",
+        "known_covariates": "Spalten, die auch in der Zukunft bekannt sind (eine geplante Aktion): Fügen Sie der Eingabe die künftigen Zeilen hinzu, mit leerer Reihe. Diese Zeilen sind der Horizont. Höchstens 16 Kovariaten, vergangene und bekannte zusammen.",
+        "holdout": "Die letzten k beobachteten Werte jeder Reihe werden zurückgehalten, von davor aus prognostiziert und gemessen. Leer: so viele wie die Schritte voraus. 0: kein Test und keine Maße.",
+        "missing": "Was mit einer Periode ohne Wert innerhalb einer Reihe geschieht. Ablehnen stoppt den Knoten; linear zieht eine Gerade zwischen den Nachbarn; das des Modells überlässt es dem Modell.",
+        "symmetric_averaging": "Prognostiziert die Reihe und ihre Negation und mittelt beide: stabiler, aber die doppelte Zeit. Der Standard der Bibliothek.",
+        "clip_nonnegative": "Eine Reihe, die nie negativ ist, bekommt keine negative Prognose. Der Standard der Bibliothek.",
+        "history": "Schreibt die beobachteten Zeilen vor die Prognose, sodass eine Tabelle beides zeichnet.",
+        "output": "Die Prognosetabelle (beobachtet, Prognose, Bänder) oder die Tabelle der Ergebnisse (die Maße und der Test)."
+      }
+    },
     "presets": {
       "ar": {
         "name": "AR",
@@ -6662,6 +6689,14 @@ export default {
       }
     },
     "params": {
+      "series": "Spalte der Reihen",
+      "season": "Saisonperiode",
+      "size": "Modellgröße",
+      "past_covariates": "Vergangene Kovariaten",
+      "known_covariates": "Bekannte Kovariaten",
+      "symmetric_averaging": "Mittel mit der negierten Reihe",
+      "clip_nonnegative": "Keine negative Prognose für eine nichtnegative Reihe",
+      "history": "Beobachtete Zeilen mitschreiben",
       "method": "Verfahren",
       "period": "Saisonale Periode",
       "periods": "Saisonale Perioden",
@@ -6944,6 +6979,12 @@ export default {
       "traffic_share": "Der Anteil aller neuen Einheiten, die ins Experiment gehen: über 0, bis 1. Er verlängert die Dauer."
     },
     "choice": {
+      "5m": "5M",
+      "28m": "28M",
+      "123m": "123M",
+      "209m": "209M",
+      "model": "Das des Modells",
+      "quantile_forecast": "Die Prognosetabelle",
       "higher": "Höher ist besser",
       "lower": "Niedriger ist besser",
       "stl": "STL",
@@ -7105,6 +7146,10 @@ export default {
       "days_need_date": "Der in einer Anzahl Tage erkennbare Anstieg braucht die Spalte des Tages, an dem jede Einheit zum ersten Mal auftrat."
     },
     "form": {
+      "sizeAbsent": "{size} wurde von dieser Installation nicht heruntergeladen: Wählen Sie eine andere Größe oder bitten Sie eine Administration, sie hinzuzufügen.",
+      "licenceRead": "Lizenz lesen",
+      "covariatesOver": "{n} Kovariaten gewählt, das Modell nimmt aber höchstens {max}, vergangene und bekannte zusammen.",
+      "medianIsForecast": "Der Median ({level}) ist die Prognosespalte selbst.",
       "periodsPlaceholder": "z. B. 7, 365",
       "notUsable": "hier nicht verwendbar",
       "notInInput": "nicht in der Eingabe des Schritts",

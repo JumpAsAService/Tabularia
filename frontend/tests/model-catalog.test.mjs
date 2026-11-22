@@ -100,9 +100,8 @@ test('the fields of a model in the catalogue\'s order, what it needs first', () 
   assert.equal(m.modelFields(ARIMA).find((f) => f.key === 'time').types.length, 3)
 })
 
-// The node the palette leaves out until lot F5 gives it a form and words (`MODEL_NOT_IN_THE_PALETTE_YET`): Forecast (Timestral)
-// (docs/specs/foundation-forecast.md). Its words are not asked for until then (the group's are). F5 takes this away.
-const WORDED = { ...m.MODEL_CATALOG, models: m.MODEL_CATALOG.models.filter((x) => x.id !== 'timestral') }
+// Every model of the catalogue has its words, the Forecast (Timestral) node's too (lot F5).
+const WORDED = m.MODEL_CATALOG
 
 test('every model, group, preset, field, choice and reason has its words in the five languages', () => {
   const wanted = m.modelWordKeys(WORDED)
@@ -1251,7 +1250,7 @@ test('Forecast (Timestral) says its columns before a run: a quantile column per 
   assert.equal(later.length, 0)
   assert.ok(!columns.some((c) => c.name === 'x'))
   assert.equal(m.modelOutputColumns(ts, { output: 'results' }, []).columns.length, 10)
-  // a model the palette does not show yet: lot F5 gives it a form
+  // a model the palette does not show yet: its runner is built by lot F3
   const palette = m.modelPalette(m.MODEL_CATALOG.groups, '', (k) => k)
   assert.ok(!palette.flatMap((g) => g.items).some((i) => i.model === 'timestral'))
 })

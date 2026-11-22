@@ -6635,6 +6635,33 @@ export default {
       "name": "Décomposition",
       "hint": "Sépare une série en tendance, parties saisonnières et reste (STL, classique, MSTL) ou en ses modes intrinsèques (EMD), teste la saison et vérifie ce qui reste."
     },
+    "timestral": {
+      "name": "Prévision (Timestral)",
+      "hint": "Prévoit chaque série à partir de son propre passé avec un modèle pré-entraîné (Timestral) : sans ajustement, avec un intervalle pour chaque pas et, si vous en avez, les séries qui l'accompagnent (un prix, une promotion). Les dernières valeurs observées peuvent être mises de côté pour la mesurer face à une prévision naïve saisonnière.",
+      "licence": "Poids de Mistral AI sous la licence {licence}, acceptée pour cette installation par votre administrateur.",
+      "params": {
+        "horizon": "Pas à prévoir",
+        "quantiles": "Niveaux des quantiles",
+        "holdout": "Pas mis de côté pour le test",
+        "missing": "Une période sans valeur",
+        "output": "Sortie"
+      },
+      "hints": {
+        "series": "Une série pour chaque valeur de cette colonne (un magasin, un produit). Vide : la table est une seule série.",
+        "season": "Pas d'une saison : elle sert à la prévision naïve saisonnière à laquelle on compare le résultat et à l'échelle des erreurs. Vide : celle de la fréquence (24, 7, 52, 12, 4) ; 1 : aucune.",
+        "size": "Les grandes tailles prévoient un peu mieux, et demandent plus de temps et de mémoire. 28M est un bon début. Seules les tailles que votre administrateur a téléchargées sont listées.",
+        "horizon": "Combien de pas après la dernière valeur observée de chaque série, de 1 à 1 024. Inutile avec des covariables connues : les lignes futures de l'entrée sont l'horizon.",
+        "quantiles": "Les niveaux écrits comme colonnes (quantile_0.05…). La médiane est la colonne de la prévision. Par défaut : 0.05, 0.1, 0.9 et 0.95, les bandes à 90 % et à 80 %.",
+        "past_covariates": "Colonnes connues seulement jusqu'à la dernière valeur observée de chaque série (un prix passé). Nombres, vrai ou faux, ou catégories.",
+        "known_covariates": "Colonnes connues aussi dans le futur (une promotion prévue) : ajoutez à l'entrée les lignes futures, avec la série vide. Ces lignes sont l'horizon. Au plus 16 covariables, passées et connues ensemble.",
+        "holdout": "Les k dernières valeurs observées de chaque série sont mises de côté, prévues depuis avant elles et mesurées. Vide : autant que les pas à prévoir. 0 : ni test ni mesures.",
+        "missing": "Ce qui arrive à une période sans valeur à l'intérieur d'une série. Refuser arrête le nœud ; linéaire trace une droite entre les voisines ; celle du modèle le laisse au modèle.",
+        "symmetric_averaging": "Prévoit la série et son opposée et fait la moyenne des deux : plus stable, et deux fois plus long. C'est le réglage par défaut de la bibliothèque.",
+        "clip_nonnegative": "Une série qui n'est jamais négative ne reçoit pas de prévision négative. C'est le réglage par défaut de la bibliothèque.",
+        "history": "Écrit les lignes observées avant la prévision, pour qu'une seule table dessine les deux.",
+        "output": "La table de la prévision (observé, prévision, bandes) ou la table des résultats (les mesures et le test)."
+      }
+    },
     "presets": {
       "ar": {
         "name": "AR",
@@ -6662,6 +6689,14 @@ export default {
       }
     },
     "params": {
+      "series": "Colonne des séries",
+      "season": "Période saisonnière",
+      "size": "Taille du modèle",
+      "past_covariates": "Covariables passées",
+      "known_covariates": "Covariables connues",
+      "symmetric_averaging": "Moyenne avec la série opposée",
+      "clip_nonnegative": "Aucune prévision négative pour une série non négative",
+      "history": "Écrire aussi les lignes observées",
       "method": "Méthode",
       "period": "Période saisonnière",
       "periods": "Périodes saisonnières",
@@ -6944,6 +6979,12 @@ export default {
       "traffic_share": "La part de toutes les nouvelles unités qui entre dans l'expérience : au-dessus de 0, jusqu'à 1. Elle allonge la durée."
     },
     "choice": {
+      "5m": "5M",
+      "28m": "28M",
+      "123m": "123M",
+      "209m": "209M",
+      "model": "Celle du modèle",
+      "quantile_forecast": "La table de la prévision",
       "higher": "Plus haut est mieux",
       "lower": "Plus bas est mieux",
       "stl": "STL",
@@ -7105,6 +7146,10 @@ export default {
       "days_need_date": "La hausse détectable en un nombre de jours demande la colonne du jour où chaque unité est apparue pour la première fois."
     },
     "form": {
+      "sizeAbsent": "{size} n'a pas été téléchargée par cette installation : choisissez une autre taille, ou demandez à un administrateur de l'ajouter.",
+      "licenceRead": "Lire la licence",
+      "covariatesOver": "{n} covariables choisies, mais le modèle en accepte au plus {max}, passées et connues ensemble.",
+      "medianIsForecast": "La médiane ({level}) est la colonne de la prévision elle-même.",
       "periodsPlaceholder": "p. ex. 7, 365",
       "notUsable": "inutilisable ici",
       "notInInput": "absente de l'entrée de l'étape",

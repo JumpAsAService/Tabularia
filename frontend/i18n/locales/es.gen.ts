@@ -6635,6 +6635,33 @@ export default {
       "name": "Descomposición",
       "hint": "Separa una serie en tendencia, partes estacionales y resto (STL, clásica, MSTL) o en sus modos intrínsecos (EMD), prueba la estación y revisa lo que queda."
     },
+    "timestral": {
+      "name": "Pronóstico (Timestral)",
+      "hint": "Pronostica cada serie a partir de su propio pasado con un modelo preentrenado (Timestral): sin ajuste, con un intervalo para cada paso y, si las tienes, con las series que lo acompañan (un precio, una promoción). Los últimos valores observados pueden reservarse para medirlo frente a un pronóstico ingenuo estacional.",
+      "licence": "Pesos de Mistral AI con la licencia {licence}, aceptada para esta instalación por tu administrador.",
+      "params": {
+        "horizon": "Pasos hacia delante",
+        "quantiles": "Niveles de los cuantiles",
+        "holdout": "Pasos reservados para la prueba",
+        "missing": "Un periodo sin valor",
+        "output": "Salida"
+      },
+      "hints": {
+        "series": "Una serie por cada valor de esta columna (una tienda, un producto). Vacía: la tabla es una sola serie.",
+        "season": "Pasos de una estación: sirve al pronóstico ingenuo estacional con el que se compara el resultado y a la escala de los errores. Vacío: el de la frecuencia (24, 7, 52, 12, 4); 1: ninguno.",
+        "size": "Los tamaños mayores pronostican algo mejor, y necesitan más tiempo y memoria. 28M es un buen comienzo. Solo se listan los tamaños que tu administrador descargó.",
+        "horizon": "Cuántos pasos después del último valor observado de cada serie, de 1 a 1.024. No se usa con covariables conocidas: las filas futuras de la entrada son el horizonte.",
+        "quantiles": "Los niveles escritos como columnas (quantile_0.05…). La mediana es la columna del pronóstico. Por defecto: 0.05, 0.1, 0.9 y 0.95, las bandas del 90 % y del 80 %.",
+        "past_covariates": "Columnas conocidas solo hasta el último valor observado de cada serie (un precio pasado). Números, verdadero o falso, o categorías.",
+        "known_covariates": "Columnas conocidas también en el futuro (una promoción planificada): añade a la entrada las filas futuras, con la serie vacía. Esas filas son el horizonte. Como máximo 16 covariables, pasadas y conocidas juntas.",
+        "holdout": "Los últimos k valores observados de cada serie se reservan, se pronostican desde antes de ellos y se miden. Vacío: tantos como los pasos hacia delante. 0: sin prueba ni medidas.",
+        "missing": "Qué ocurre con un periodo sin valor dentro de una serie. Rechazar detiene el nodo; lineal traza una recta entre los vecinos; el del modelo lo deja al modelo.",
+        "symmetric_averaging": "Pronostica la serie y su negación y promedia las dos: más estable, y el doble de tiempo. Es el valor por defecto de la biblioteca.",
+        "clip_nonnegative": "Una serie que nunca es negativa no recibe pronósticos negativos. Es el valor por defecto de la biblioteca.",
+        "history": "Escribe las filas observadas antes del pronóstico, para que una sola tabla dibuje ambos.",
+        "output": "La tabla del pronóstico (observado, pronóstico, bandas) o la tabla de los resultados (las medidas y la prueba)."
+      }
+    },
     "presets": {
       "ar": {
         "name": "AR",
@@ -6662,6 +6689,14 @@ export default {
       }
     },
     "params": {
+      "series": "Columna de las series",
+      "season": "Periodo estacional",
+      "size": "Tamaño del modelo",
+      "past_covariates": "Covariables pasadas",
+      "known_covariates": "Covariables conocidas",
+      "symmetric_averaging": "Promedio con la serie negada",
+      "clip_nonnegative": "Sin pronóstico negativo para una serie no negativa",
+      "history": "Escribir también las filas observadas",
       "method": "Método",
       "period": "Período estacional",
       "periods": "Períodos estacionales",
@@ -6944,6 +6979,12 @@ export default {
       "traffic_share": "La parte de todas las unidades nuevas que entra en el experimento: por encima de 0, hasta 1. Alarga la duración."
     },
     "choice": {
+      "5m": "5M",
+      "28m": "28M",
+      "123m": "123M",
+      "209m": "209M",
+      "model": "El del modelo",
+      "quantile_forecast": "La tabla del pronóstico",
       "higher": "Más alto es mejor",
       "lower": "Más bajo es mejor",
       "stl": "STL",
@@ -7105,6 +7146,10 @@ export default {
       "days_need_date": "El aumento detectable en un número de días necesita la columna del día en que cada unidad apareció por primera vez."
     },
     "form": {
+      "sizeAbsent": "{size} no fue descargado por esta instalación: elige otro tamaño, o pide a un administrador que lo añada.",
+      "licenceRead": "Leer la licencia",
+      "covariatesOver": "Has elegido {n} covariables, pero el modelo admite como máximo {max}, pasadas y conocidas juntas.",
+      "medianIsForecast": "La mediana ({level}) es la propia columna del pronóstico.",
       "periodsPlaceholder": "p. ej. 7, 365",
       "notUsable": "no utilizable aquí",
       "notInInput": "no está en la entrada del paso",

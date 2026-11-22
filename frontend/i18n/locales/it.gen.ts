@@ -6635,6 +6635,33 @@ export default {
       "name": "Decomposizione",
       "hint": "Scompone una serie in trend, parti stagionali e resto (STL, classica, MSTL) o nei suoi modi intrinseci (EMD), verifica la stagionalità e controlla ciò che resta."
     },
+    "timestral": {
+      "name": "Previsione (Timestral)",
+      "hint": "Prevede ogni serie dal suo passato con un modello pre-addestrato (Timestral): nessun adattamento, un intervallo per ogni passo e, se le hai, le serie che l'accompagnano (un prezzo, una promozione). Gli ultimi valori osservati si possono tenere da parte per misurarla contro una previsione naïve stagionale.",
+      "licence": "Pesi di Mistral AI con licenza {licence}, accettata per questa installazione dal tuo amministratore.",
+      "params": {
+        "horizon": "Passi in avanti",
+        "quantiles": "Livelli dei quantili",
+        "holdout": "Passi tenuti da parte per il test",
+        "missing": "Un periodo senza valore",
+        "output": "Output"
+      },
+      "hints": {
+        "series": "Una serie per ogni valore di questa colonna (un negozio, un prodotto). Vuota: la tabella è una sola serie.",
+        "season": "Passi di una stagione: serve alla previsione naïve stagionale con cui si confronta il risultato e alla scala degli errori. Vuoto: quello della frequenza (24, 7, 52, 12, 4); 1: nessuno.",
+        "size": "Le dimensioni maggiori prevedono un po' meglio, e richiedono più tempo e memoria. 28M è un buon inizio. Sono elencate solo le dimensioni che l'amministratore ha scaricato.",
+        "horizon": "Quanti passi dopo l'ultimo valore osservato di ogni serie, da 1 a 1.024. Non serve con le covariate note: le righe future dell'input sono l'orizzonte.",
+        "quantiles": "I livelli scritti come colonne (quantile_0.05…). La mediana è la colonna della previsione. Predefinito: 0.05, 0.1, 0.9 e 0.95, le bande al 90 % e all'80 %.",
+        "past_covariates": "Colonne note solo fino all'ultimo valore osservato di ogni serie (un prezzo passato). Numeri, vero o falso, o categorie.",
+        "known_covariates": "Colonne note anche nel futuro (una promozione pianificata): aggiungi all'input le righe future, con la serie vuota. Quelle righe sono l'orizzonte. Al massimo 16 covariate, passate e note insieme.",
+        "holdout": "Gli ultimi k valori osservati di ogni serie sono tenuti da parte, previsti da prima di loro e misurati. Vuoto: quanti i passi in avanti. 0: nessun test e nessuna misura.",
+        "missing": "Che cosa accade a un periodo senza valore dentro una serie. Rifiuta ferma il nodo; lineare traccia una retta tra i vicini; quello del modello lo lascia al modello.",
+        "symmetric_averaging": "Prevede la serie e la sua negazione e ne fa la media: più stabile, e il doppio del tempo. È il valore predefinito della libreria.",
+        "clip_nonnegative": "Una serie che non è mai negativa non riceve previsioni negative. È il valore predefinito della libreria.",
+        "history": "Scrive le righe osservate prima della previsione, così una sola tabella disegna entrambe.",
+        "output": "La tabella della previsione (osservato, previsione, bande) o la tabella dei risultati (le misure e il test)."
+      }
+    },
     "presets": {
       "ar": {
         "name": "AR",
@@ -6662,6 +6689,14 @@ export default {
       }
     },
     "params": {
+      "series": "Colonna delle serie",
+      "season": "Periodo stagionale",
+      "size": "Dimensione del modello",
+      "past_covariates": "Covariate passate",
+      "known_covariates": "Covariate note",
+      "symmetric_averaging": "Media con la serie cambiata di segno",
+      "clip_nonnegative": "Nessuna previsione negativa per una serie non negativa",
+      "history": "Scrivi anche le righe osservate",
       "method": "Metodo",
       "period": "Periodo stagionale",
       "periods": "Periodi stagionali",
@@ -6944,6 +6979,12 @@ export default {
       "traffic_share": "La quota di tutte le nuove unità che entra nell'esperimento: sopra 0, fino a 1. Allunga la durata."
     },
     "choice": {
+      "5m": "5M",
+      "28m": "28M",
+      "123m": "123M",
+      "209m": "209M",
+      "model": "Quello del modello",
+      "quantile_forecast": "La tabella della previsione",
       "higher": "Più alto è meglio",
       "lower": "Più basso è meglio",
       "stl": "STL",
@@ -7105,6 +7146,10 @@ export default {
       "days_need_date": "L'incremento rilevabile in un certo numero di giorni richiede la colonna del giorno in cui ogni unità è comparsa per la prima volta."
     },
     "form": {
+      "sizeAbsent": "{size} non è stata scaricata da questa installazione: scegli un'altra dimensione, o chiedi a un amministratore di aggiungerla.",
+      "licenceRead": "Leggi la licenza",
+      "covariatesOver": "Hai scelto {n} covariate, ma il modello ne accetta al massimo {max}, passate e note insieme.",
+      "medianIsForecast": "La mediana ({level}) è la colonna della previsione stessa.",
       "periodsPlaceholder": "es. 7, 365",
       "notUsable": "non utilizzabile qui",
       "notInInput": "non presente nell'ingresso del passo",

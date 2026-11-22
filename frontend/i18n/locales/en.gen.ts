@@ -6635,6 +6635,33 @@ export default {
       "name": "Decomposition",
       "hint": "Splits a series into trend, seasonal parts and remainder (STL, classical, MSTL) or into its intrinsic modes (EMD), tests the season and checks what is left."
     },
+    "timestral": {
+      "name": "Forecast (Timestral)",
+      "hint": "Forecasts each series from its own past with a pre-trained model (Timestral): no fitting, a range for each step, and the series that go with it (a price, a promotion) when you have them. The last observed values can be kept out to measure it against a seasonal naïve forecast.",
+      "licence": "Weights by Mistral AI under the {licence}, accepted for this installation by your administrator.",
+      "params": {
+        "horizon": "Steps ahead",
+        "quantiles": "Quantile levels",
+        "holdout": "Steps kept out to test",
+        "missing": "A period without a value",
+        "output": "Output"
+      },
+      "hints": {
+        "series": "One series for each value of this column (a shop, a product). Empty: the table is one series.",
+        "season": "Steps in one season: it serves the seasonal naïve forecast the result is compared with, and the scale of the errors. Empty: the frequency's own (24, 7, 52, 12, 4); 1: none.",
+        "size": "Bigger sizes forecast a little better, and take more time and memory. 28M is a good start. Only the sizes your administrator downloaded are listed.",
+        "horizon": "How many steps after each series' last observed value, from 1 to 1,024. Not used with known covariates: the future rows of the input are the horizon.",
+        "quantiles": "The levels written as columns (quantile_0.05…). The median is the forecast column. Default: 0.05, 0.1, 0.9 and 0.95, the 90 % and 80 % bands.",
+        "past_covariates": "Columns known only up to each series' last observed value (a past price). Numbers, true or false, or categories.",
+        "known_covariates": "Columns known also in the future (a planned promotion): add the future rows to the input, with the series empty in them. Those rows are the horizon. At most 16 covariates, past and known together.",
+        "holdout": "The last k observed values of each series are kept out, forecast from before them and measured. Empty: as many as the steps ahead. 0: no test and no measures.",
+        "missing": "What happens to a period with no value inside a series. Refuse stops the node; linear draws a line between the neighbours; the model's own leaves it to the model.",
+        "symmetric_averaging": "Forecasts the series and its negation and averages the two: steadier, and twice the time. The library's default.",
+        "clip_nonnegative": "A series that is never negative gets no negative forecast. The library's default.",
+        "history": "Writes the observed rows before the forecast, so that one table draws both.",
+        "output": "The forecast table (observed, forecast, bands) or the table of the results (the measures and the test)."
+      }
+    },
     "presets": {
       "ar": {
         "name": "AR",
@@ -6662,6 +6689,14 @@ export default {
       }
     },
     "params": {
+      "series": "Series column",
+      "season": "Seasonal period",
+      "size": "Model size",
+      "past_covariates": "Past covariates",
+      "known_covariates": "Known covariates",
+      "symmetric_averaging": "Average with the negated series",
+      "clip_nonnegative": "No negative forecast for a non-negative series",
+      "history": "Write the observed rows too",
       "method": "Method",
       "period": "Seasonal period",
       "periods": "Seasonal periods",
@@ -6944,6 +6979,12 @@ export default {
       "traffic_share": "The share of all the new units that go into the experiment: above 0, up to 1. It lengthens the duration."
     },
     "choice": {
+      "5m": "5M",
+      "28m": "28M",
+      "123m": "123M",
+      "209m": "209M",
+      "model": "The model's own",
+      "quantile_forecast": "The forecast table",
       "higher": "Higher is better",
       "lower": "Lower is better",
       "stl": "STL",
@@ -7105,6 +7146,10 @@ export default {
       "days_need_date": "The lift detectable in a number of days needs the column of the day each unit first appeared."
     },
     "form": {
+      "sizeAbsent": "{size} was not downloaded by this installation: choose another size, or ask an administrator to add it.",
+      "licenceRead": "Read the licence",
+      "covariatesOver": "{n} covariates chosen, but the model takes at most {max}, past and known together.",
+      "medianIsForecast": "The median ({level}) is the forecast column itself.",
       "periodsPlaceholder": "e.g. 7, 365",
       "notUsable": "not usable here",
       "notInInput": "not in the step's input",

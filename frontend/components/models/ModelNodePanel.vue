@@ -9,7 +9,7 @@ import { useI18n } from 'vue-i18n'
 import { Sparkles, Trash2 } from 'lucide-vue-next'
 import type { Node } from '@vue-flow/core'
 import type { ColumnInfo } from '~/composables/useApi'
-import { modelArimaTitle, modelNameKey, modelOff, modelOf, modelUnset } from '~/composables/modelCatalog'
+import { modelArimaTitle, modelGroupLicence, modelGroupSizes, modelNameKey, modelOff, modelOf, modelUnset } from '~/composables/modelCatalog'
 import { modelIconOf } from '~/composables/modelIcons'
 import { useModelGroups } from '~/composables/useModelGroups'
 import type { ScriptOutputs } from '~/composables/useScripting'
@@ -42,6 +42,9 @@ const isPredict = computed(() => props.node.type === 'model_predict')
 const model = computed(() => modelOf(props.node.data?.model))
 const off = computed(() => (model.value ? modelOff(model.value.group, groups.state.value) : ''))
 const maxTimeout = computed(() => groups.state.value?.groups.find((g) => g.id === model.value?.group)?.max_timeout_seconds ?? null)
+// the sizes of the weights the group's ready version holds, and their licence: the form says them under the size
+const sizes = computed(() => (model.value ? modelGroupSizes(model.value.group, groups.state.value) : null))
+const licence = computed(() => (model.value ? modelGroupLicence(model.value.group, groups.state.value) : null))
 const title = computed(() => {
   if (isPredict.value) return t('models.predict.title')
   if (!model.value) return t('models.node.title')
@@ -92,6 +95,8 @@ const icon = computed(() => (isPredict.value ? Sparkles : modelIconOf(props.node
       :connections="connections"
       :off="off"
       :max-timeout="maxTimeout"
+      :sizes="sizes"
+      :licence="licence"
       :read-only="readOnly"
       @update="emit('update', $event)"
     >

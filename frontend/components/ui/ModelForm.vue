@@ -13,7 +13,7 @@
 // Every control is a native one or the app's Select: Tab and Shift+Tab move, Space and Enter
 // choose, the arrows move among the buttons of a choice. No key of this form needs F, Home, End or
 // Menu, on a Mac or on a laptop without them.
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Info, TriangleAlert, Plus, X } from 'lucide-vue-next'
 import type { ColumnInfo } from '~/composables/useApi'
@@ -23,7 +23,8 @@ import { vDraft } from '~/composables/draftField'
 import { useModelNumbersBox } from '~/composables/modelNumbersBox'
 import {
   modelApplies, modelChoiceWordKey, modelColumnFits, modelFieldWordKey, modelFields, modelForbiddenOption, modelFull, modelLevelNumbersMissing, modelLevelShares, modelGiven, modelParams, modelRowsColumns, modelGroupKey,
-  modelHintKey, modelIsCategorical, modelMlflow, modelMlflowProblem, modelNumber, modelNumberProblem, modelOf,
+  modelHintKey, modelIsCategorical, modelChoicesOffered, modelCovariatesOver, modelLevelsChosen, modelNumbersAmong, modelSizeAbsent, MODEL_MEDIAN_LEVEL,
+  modelDecimalComma, modelNumberText, type ModelGroupLicence, modelMlflow, modelMlflowProblem, modelNumber, modelNumberProblem, modelOf,
   modelNumbersPlaceholderKey, MODEL_CATALOG, modelOverlaps, modelReasonKey, modelRequiredReason, modelSeason, modelSet, modelTaken, modelUnset,
   MODEL_RETRIES_MAX, MODEL_TIMEOUT_MIN, MODEL_TIMEOUT_SECONDS, type ModelField, type ModelOff,
 } from '~/composables/modelCatalog'
@@ -43,10 +44,14 @@ const props = defineProps<{
   off?: ModelOff
   // the group's longest run, when the administrator set one
   maxTimeout?: number | null
+  // the sizes of the group's weights its ready version holds (the form offers only those; none given: all the catalogue's) and the licence
+  // of those weights, said under the size with a link
+  sizes?: string[] | null
+  licence?: ModelGroupLicence | null
   readOnly?: boolean
 }>()
 const emit = defineEmits<{ (e: 'update', patch: Record<string, any>): void }>()
-const { t, te } = useI18n()
+const { t, te, locale } = useI18n()
 
 const model = computed(() => modelOf(props.data?.model))
 const params = computed<Record<string, any>>(() => props.data?.params ?? {})
@@ -309,6 +314,8 @@ function numberProblem(f: ModelField, value: unknown = params.value[f.key]): str
 const defaultOf = (f: ModelField) => {
   const d = model.value?.defaults[f.key]
   if (f.key === 's') return String(modelSeason(params.value) ?? '')
+  // the season of the node that has none of its own: the frequency's
+  if (f.key === 'season') return String(MODEL_CATALOG.season_of_frequency[String(params.value.frequency ?? '')] ?? '')
   return d === null || d === undefined || Array.isArray(d) ? '' : String(d)
 }
 // a number written in the box: the node keeps it as a number when it is one, and the box says what is
@@ -336,6 +343,26 @@ const numberOr = (f: ModelField): number => {
   return f.min !== undefined && f.min > 1 ? f.min : 1
 }
 
+// ── some numbers among a fixed set (the quantile levels the model forecasts) ──
+// A box for each level, as the engine takes them (sorted, once each). The ones in effect are ticked, the default's while none is
+// given: unticking the last one gives the default back, so what is ticked is always what the node asks for. The median is the
+// forecast column itself: shown, ticked-off and grey, with the reason.
+const among = (f: ModelField) => modelNumbersAmong(f)
+const decimalComma = computed(() => modelDecimalComma(locale.value))
+const levelText = (n: number) => modelNumberText(n, decimalComma.value)
+const levelsChosen = (f: ModelField): number[] => (model.value ? modelLevelsChosen(model.value, f.key, params.value) : [])
+async function toggleLevel(f: ModelField, level: number, box: HTMLInputElement) {
+  const now = levelsChosen(f)
+  const next = box.checked ? [...new Set([...now, level])] : now.filter((x) => x !== level)
+  set(f.key, next.sort((a, b) => a - b))
+  // unticking the last one gives the default back, and the box may be in it: the box the person just unticked is ticked again,
+  // but Vue sees «ticked» before and after and leaves the page's own state alone, so the box is set to what the node asks for
+  await nextTick()
+  box.checked = levelsChosen(f).includes(level)
+}
+const levelsMax = (f: ModelField) => f.max_count ?? Infinity
+const covariatesOver = computed(() => modelCovariatesOver(params.value))
+
 // ── a list of numbers (the times to report survival at) ──────────────────────
 const numbersBox = useModelNumbersBox((key) => params.value[key], (key, values) => set(key, values))
 const timesText = (f: ModelField) => numbersBox.text(f)
@@ -352,8 +379,12 @@ function forbidden(f: ModelField, value: unknown): string {
 }
 // a few choices are buttons (the arrows move among them); many are a list to search
 const FEW = 4
-const asButtons = (f: ModelField) => f.choices.length <= FEW
-const choiceOptions = (f: ModelField) => f.choices.map((c) => ({ value: c, label: choiceLabel(f, c), hint: forbidden(f, c) || undefined }))
+// (the sizes the group's ready version does not hold are not offered; the one the node has stays, with what is wrong)
+const choicesOf = (f: ModelField) => modelChoicesOffered(f, params.value[f.key], props.sizes)
+const asButtons = (f: ModelField) => choicesOf(f).length <= FEW
+const choiceOptions = (f: ModelField) => choicesOf(f).map((c) => ({ value: c, label: choiceLabel(f, c), hint: forbidden(f, c) || undefined }))
+const sizeAbsent = (f: ModelField) => modelSizeAbsent(f, params.value[f.key], props.sizes)
+const licenceLabel = computed(() => props.licence?.name ?? '')
 
 // what a key asks for when it is not given yet (WLS needs the weights): the sentence, with the
 // words of the language when there are some
@@ -425,6 +456,9 @@ function limit(key: 'timeoutSeconds' | 'retries', raw: string, min: number, max:
 
     <p v-if="lacking.length" class="note" role="status">
       <Info :size="13" aria-hidden="true" /> {{ $t('models.form.toSet', { keys: lacking.map(fieldLabel).join(', ') }) }}
+    </p>
+    <p v-if="covariatesOver" class="note warn" role="alert">
+      <TriangleAlert :size="13" aria-hidden="true" /> {{ $t('models.form.covariatesOver', { n: covariatesOver.n, max: covariatesOver.max }) }}
     </p>
     <p v-for="o in overlaps" :key="o.column" class="note warn" role="alert">
       <TriangleAlert :size="13" aria-hidden="true" /> {{ $t('models.form.overlap', { column: o.column, keys: o.keys.map(fieldLabel).join(' / ') }) }}
@@ -648,6 +682,25 @@ function limit(key: 'timeoutSeconds' | 'retries', raw: string, min: number, max:
         <p v-else-if="hintOf(f)" :id="idOf(f.key, 'hint')" class="hint">{{ hintOf(f) }}</p>
       </div>
 
+      <!-- some numbers among a fixed set: a box for each -->
+      <fieldset v-else-if="f.control === 'numbers' && among(f)" class="field choices">
+        <legend class="lbl">{{ labelOf(f) }}</legend>
+        <div class="levels" role="group" :aria-label="labelOf(f)">
+          <label v-for="n in among(f)!" :key="n" class="chk lv" :class="{ off: n === MODEL_MEDIAN_LEVEL }">
+            <input
+              type="checkbox"
+              :checked="n !== MODEL_MEDIAN_LEVEL && levelsChosen(f).includes(n)"
+              :disabled="n === MODEL_MEDIAN_LEVEL || (!levelsChosen(f).includes(n) && levelsChosen(f).length >= levelsMax(f))"
+              :aria-describedby="n === MODEL_MEDIAN_LEVEL ? idOf(f.key, 'median') : hintOf(f) ? idOf(f.key, 'hint') : undefined"
+              @change="toggleLevel(f, n, $event.target as HTMLInputElement)"
+            />
+            <span>{{ levelText(n) }}</span>
+          </label>
+        </div>
+        <p :id="idOf(f.key, 'median')" class="hint">{{ $t('models.form.medianIsForecast', { level: levelText(MODEL_MEDIAN_LEVEL) }) }}</p>
+        <p v-if="hintOf(f)" :id="idOf(f.key, 'hint')" class="hint">{{ hintOf(f) }}</p>
+      </fieldset>
+
       <!-- a list of numbers -->
       <div v-else-if="f.control === 'numbers'" class="field">
         <label :for="idOf(f.key)" class="lbl">{{ labelOf(f) }}</label>
@@ -699,7 +752,7 @@ function limit(key: 'timeoutSeconds' | 'retries', raw: string, min: number, max:
       <!-- one of a few choices: native radio buttons, the arrows move among them; of many: a list -->
       <fieldset v-else-if="f.control === 'choice' && asButtons(f)" class="field choices">
         <legend class="lbl">{{ labelOf(f) }}</legend>
-        <label v-for="c in f.choices" :key="c" class="chk" :class="{ off: !!forbidden(f, c) && chosen(f) !== c }">
+        <label v-for="c in choicesOf(f)" :key="c" class="chk" :class="{ off: !!forbidden(f, c) && chosen(f) !== c }">
           <input
             type="radio"
             :name="idOf(f.key)"
@@ -712,6 +765,7 @@ function limit(key: 'timeoutSeconds' | 'retries', raw: string, min: number, max:
           <span>
             {{ choiceLabel(f, c) }}
             <span v-if="forbidden(f, c)" class="why" :class="{ warn: chosen(f) === c }">{{ forbidden(f, c) }}</span>
+            <span v-else-if="sizeAbsent(f) && chosen(f) === c" class="why warn">{{ $t('models.form.sizeAbsent', { size: choiceLabel(f, c) }) }}</span>
           </span>
         </label>
         <p v-if="hintOf(f)" class="hint">{{ hintOf(f) }}</p>
@@ -731,6 +785,12 @@ function limit(key: 'timeoutSeconds' | 'retries', raw: string, min: number, max:
         <p v-if="forbidden(f, chosen(f))" class="note warn"><TriangleAlert :size="13" aria-hidden="true" /> {{ forbidden(f, chosen(f)) }}</p>
         <p v-else-if="hintOf(f)" :id="idOf(f.key, 'hint')" class="hint">{{ hintOf(f) }}</p>
       </div>
+
+      <!-- the weights' licence, said under the size they are chosen by -->
+      <p v-if="licence && f.kind === 'foundation_size'" class="hint licence">
+        {{ $t(`models.${model.id}.licence`, { licence: licenceLabel }) }}
+        <a v-if="licence.url" :href="licence.url" target="_blank" rel="noopener noreferrer">{{ $t('models.form.licenceRead') }}</a>
+      </p>
     </template>
 
     <!-- MLflow: where the run of the flow is logged, and the model registered -->
@@ -835,6 +895,10 @@ legend.lbl { margin-bottom: 4px; }
 .chk input { width: auto; flex-shrink: 0; margin-top: 2px; }
 .chk.off { color: var(--muted); }
 .why { display: block; font-size: 11.5px; color: var(--muted); }
+.levels { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 4px 8px; padding: 2px; }
+.lv { align-items: center; }
+.lv input { margin-top: 0; }
+.licence a { color: var(--accent, inherit); text-decoration: underline; }
 .colist { display: flex; flex-direction: column; gap: 4px; max-height: 190px; overflow-y: auto; padding: 4px 2px; }
 .place { display: flex; align-items: center; gap: 6px; }
 .place > :deep(.sel-trigger) { flex: 1; min-width: 0; }

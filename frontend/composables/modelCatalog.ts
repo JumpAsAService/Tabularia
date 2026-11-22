@@ -548,6 +548,42 @@ export function modelLevelShares(value: unknown, labels: readonly string[]): num
  *  the flag the engine and the Go gateway read to refuse «365.25» (an `integer` kind is whole by its control). */
 export const modelWhole = (field: { whole?: boolean }): boolean => field.whole === true
 
+/** The levels Timestral forecasts (its 21 quantiles): the form draws the quantiles key as a box for each, not as a free list. */
+export const MODEL_QUANTILE_LEVELS: readonly number[] = [0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 0.99]
+/** The level that is the forecast column itself, not a quantile column. */
+export const MODEL_MEDIAN_LEVEL = 0.5
+
+/** The numbers of a list a kind lets be chosen among (a fixed set, not written), or null: the form then draws a box for each. */
+export function modelNumbersAmong(field: Pick<ModelField, 'kind'>): readonly number[] | null {
+  return field.kind === 'foundation_quantiles' ? MODEL_QUANTILE_LEVELS : null
+}
+
+/** The levels a node asks for now: the ones it holds, else the model's default; as the engine reads them (sorted, once each). */
+export function modelLevelsChosen(model: ModelDef, key: string, params: Params | null | undefined): number[] {
+  const given = modelNumbers((params ?? {})[key])
+  return given.length ? given : modelNumbers(model.defaults[key])
+}
+
+/** The choices of a key the form offers: the kind's own, except the sizes the group's ready version does not hold (`sizes`: null
+ *  when the route did not say). The one the node already has stays, so the form never shows a node with nothing chosen. */
+export function modelChoicesOffered(field: Pick<ModelField, 'kind' | 'choices'>, current: unknown, sizes: readonly string[] | null | undefined): string[] {
+  if (field.kind !== 'foundation_size' || !sizes) return field.choices
+  return field.choices.filter((c) => sizes.includes(c) || c === current)
+}
+
+/** Whether a size is chosen that the ready version does not hold (the gateway refuses it at the run: say it before). */
+export function modelSizeAbsent(field: Pick<ModelField, 'kind'>, current: unknown, sizes: readonly string[] | null | undefined): boolean {
+  return field.kind === 'foundation_size' && !!sizes && typeof current === 'string' && !sizes.includes(current)
+}
+
+/** Covariates the node holds in both lists, against the model's bound for the two together (the catalogue bounds each alone). */
+export function modelCovariatesOver(params: Params | null | undefined, catalog: ModelCatalog = MODEL_CATALOG): { n: number; max: number } | null {
+  const p = params ?? {}
+  const n = ['past_covariates', 'known_covariates'].reduce((sum, k) => sum + (Array.isArray(p[k]) ? p[k].length : 0), 0)
+  const max = catalog.limits.max_covariates
+  return max !== undefined && n > max ? { n, max } : null
+}
+
 /** What is wrong with a list of numbers against its field's bounds (the quantiles in (0, 1), the times from 0,
  *  at most `max_count` of them): '' when nothing, else the first number's problem or 'tooMany'. */
 export function modelNumbersProblem(field: Pick<ModelField, 'above' | 'below' | 'min' | 'max' | 'max_count'> & { whole?: boolean }, value: unknown): ReturnType<typeof modelNumberProblem> | 'tooMany' {
@@ -677,6 +713,11 @@ export function modelSummary(id: string, params: Params | null | undefined, cata
     const name = method === 'classical' ? (p.type === 'multiplicative' ? 'classical ×' : 'classical') : method.toUpperCase()
     return [shown ? `${name} (${shown})` : name, typeof p.value === 'string' ? p.value : ''].filter(Boolean).join(' · ')
   }
+  if (id === 'timestral') {
+    // the size over the series: «28M · orders», the series column after a tilde
+    const size = typeof p.size === 'string' ? p.size.toUpperCase() : String(model.defaults.size ?? '').toUpperCase()
+    return [size, typeof p.value === 'string' ? p.value : '', typeof p.series === 'string' && p.series ? `~ ${p.series}` : ''].filter(Boolean).join(' · ')
+  }
   if (id === 'cox') {
     const left = [p.time, p.event].filter((x) => typeof x === 'string').join(', ')
     return [left, list(p.predictors)].filter(Boolean).join(' ~ ')
@@ -722,6 +763,37 @@ export interface ModelGroupState {
   ready?: boolean
   max_timeout_seconds?: number | null
   max_rows?: number | null
+  // a group with weights under their own licence (docs/specs/foundation-forecast.md): the sizes its ready version holds
+  // (the node's form offers only those; absent: every size the catalogue has) and the licence the administrator accepted
+  sizes?: string[] | null
+  licence?: ModelGroupLicence | null
+}
+
+/** The licence of a group's weights as the node's form says it under the size: its name and where to read it. */
+export interface ModelGroupLicence {
+  name?: string
+  url?: string
+}
+
+/** What the form says of a licence when the route does not (an older gateway): the one the group ships. */
+export const MODEL_GROUP_LICENCES: Readonly<Record<string, ModelGroupLicence>> = {
+  foundation_forecast: { name: 'Modified MIT License', url: 'https://huggingface.co/mistralai/Timestral-28M/blob/main/LICENSE' },
+}
+
+/** The licence line's data for a group: what the route says, else what the group ships; null for a group with no licence of its own. */
+export function modelGroupLicence(group: string, state: ModelGroupsState | null | undefined): ModelGroupLicence | null {
+  const said = state?.groups.find((g) => g.id === group)?.licence
+  const own = MODEL_GROUP_LICENCES[group]
+  if (!said && !own) return null
+  const url = said?.url ?? own?.url
+  // only an https address is made a link (the route's text is data)
+  return { name: said?.name || own?.name, url: typeof url === 'string' && /^https:\/\//.test(url) ? url : undefined }
+}
+
+/** The sizes the ready version of a group holds, or null when the route does not say (every one of the catalogue then). */
+export function modelGroupSizes(group: string, state: ModelGroupsState | null | undefined): string[] | null {
+  const sizes = state?.groups.find((g) => g.id === group)?.sizes
+  return Array.isArray(sizes) ? sizes.filter((x) => typeof x === 'string') : null
 }
 
 /** What the route answers. `disabled_reason`: 'kubernetes' on an installation without it, 'not_configured'
@@ -786,9 +858,10 @@ export const modelPresetNameKey = (preset: string): string => `models.presets.${
 export const modelPresetHintKey = (preset: string): string => `models.presets.${preset}.hint`
 export const modelGroupKey = (group: string): string => `models.groups.${group}`
 
-// Models whose form and words the editor has, but whose runner is not built yet: the palette leaves them out. Empty now: the A/B
-// nodes (lot E9) and the decomposition (lot D6) are in; a model being built goes here until its runner runs. Forecast (Timestral)
-// (docs/specs/foundation-forecast.md) is in the catalogue and has no form nor words yet: lot F5 gives them and takes it away.
+// Models whose form and words the editor has, but whose runner is not built yet: the palette leaves them out. The A/B nodes
+// (lot E9) and the decomposition (lot D6) are in; a model being built goes here until its runner runs. Forecast (Timestral)
+// (docs/specs/foundation-forecast.md) has its form and words (lot F5) and a runner that refuses «not built yet» until lot F3:
+// lot F7 takes it away from this list.
 export const MODEL_NOT_IN_THE_PALETTE_YET: ReadonlySet<string> = new Set<string>(['timestral'])
 
 /** The palette's Models group: the shown groups in the catalogue's order, each with its models
