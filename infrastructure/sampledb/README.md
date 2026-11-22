@@ -47,6 +47,14 @@ Only `small` is generated for the experiments (60,000 visitors planned, the ship
 
 When an administrator has enabled the *Time series* group, the seed also builds «Orders: weekly and yearly seasons» (no new data: the orders and the calendar): the calendar's days from 1 July 2023 to 15 July 2026 Left join the orders counted per day, Fill nulls with 0 (a day without orders has no row, and the Decomposition node refuses a series with gaps), then MSTL with periods 7 and 365.
 
+**Postgres `shop` — the raw materials' prices** (schema `ref`, public data)
+
+| table | description |
+|---|---|
+| `ref.quotazioni_materie_prime` | the daily prices of three raw materials on the days the market is open (Monday to Friday, without 1 January, Good Friday, Easter Monday, 1 May, 25 and 26 December), from 3 July 2023 to 15 July 2026: `grano_duro` (euro a tonne), `olio_evo` and `caffe_verde` (euro a kilo); 2,325 rows at every scale |
+
+The returns are those of a GJR-GARCH(1,1) with skewed Student t errors, one set of parameters for each material (persistence 0.96 to 0.99, falls agitating more than rises, ν 5 to 8; the olive oil starts agitated and calms down), drawn by a generator of its own (a PCG64 on the seed plus 2000, `build_quotazioni`), so every other table is byte for byte what it was (`test_generate_quotazioni.py` pins their hash). The series needs a few hundred kilobytes (peak measured with `tracemalloc`: about 250 KiB). `ensure_quotazioni` adds the table to a database filled before it existed. When an administrator has enabled the *Time series* group, the seed builds three flows on it: «Durum wheat: volatility» (Volatility (GARCH): GJR, skewed t, the last 250 days held out), «Durum wheat: risk of the next month» (Risk simulation of the same model, 10,000 paths, 21 steps, a position of 100,000 euro) and «Orders: will next month's orders exceed 1,000?» (Risk simulation of an ARIMA(1,0,1)(0,1,1)[7] on the orders per day, the upper tail).
+
 `ordini.cliente_id` and `ordini.agente_id` are **logical** keys into the CRM on
 ClickHouse: the cross-database join is the point of the dataset.
 

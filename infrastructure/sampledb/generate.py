@@ -36,6 +36,7 @@ The random seed is fixed, so the data is the same at every run.
 from __future__ import annotations
 
 import io
+import math
 import os
 import sys
 import time
@@ -386,6 +387,7 @@ def ensure_ref(pg) -> bool:
             return False
         run_sql_file(cur, os.path.join(HERE, "schema_ref.sql"))
         gen_ref(cur)
+        gen_quotazioni(cur)
     pg.commit()
     return True
 
@@ -1113,6 +1115,120 @@ def ensure_experiments(ch) -> bool:
     return True
 
 
+# ── the raw materials' prices ───────────────────────────────────────────────────
+# A separate part of the generator (docs/specs/garch-risk.md, «Sample data»): the daily prices the
+# company pays for three raw materials, in the public `ref` schema (market prices are public data).
+# A series with clustered volatility is what the volatility and risk nodes need and no other table has.
+# It draws from a generator of its OWN (a PCG64 on SEED + 2000) and never from `rng` or Faker, so
+# every other table is byte for byte what it was (test_generate_quotazioni pins their hash at small).
+#
+# The log returns of each material follow a GJR-GARCH(1,1) with skewed Student t innovations
+# (Fernández & Steel, standardized: mean 0, variance 1):
+#     r_t = mu + e_t,  e_t = s_t z_t,  s_t^2 = omega + (alpha + gamma 1[e_{t-1} < 0]) e_{t-1}^2 + beta s_{t-1}^2
+# `persistence` = alpha + gamma/2 + beta (0.96 to 0.99); omega is set from the long-run daily volatility
+# `vol`; the olive oil starts at `vol0`, well above it, and calms down: the intercept carries the excess
+# variance (vol0^2 - vol^2, times 1 - persistence) and loses QUOT_CALM_DECAY of it a day (a half-life of 69 days), because the
+# variance recursion alone forgets its start in a few days. The series is the same size at every scale
+# (about 2,300 rows): the owner's rule of small data.
+QUOT_SEED_OFFSET = 2000
+QUOT_START = date(2023, 7, 3)
+QUOT_END = END_DATE
+QUOT_MATERIALS = [
+    #   material        unit price at the start, drift, long-run daily vol, starting vol, alpha, gamma, beta, nu, xi
+    dict(materia="grano_duro",  p0=395.0, mu=0.00010, vol=0.0130, vol0=0.0130, alpha=0.040, gamma=0.100, beta=0.890, nu=6.0, xi=0.90),
+    dict(materia="olio_evo",    p0=7.20,  mu=0.00030, vol=0.0100, vol0=0.0350, alpha=0.060, gamma=0.050, beta=0.900, nu=5.0, xi=0.92),
+    dict(materia="caffe_verde", p0=4.10,  mu=0.00020, vol=0.0180, vol0=0.0180, alpha=0.080, gamma=0.050, beta=0.865, nu=8.0, xi=0.95),
+]
+QUOT_CALM_DECAY = 0.99
+QUOT_COLUMNS = ["data", "materia", "prezzo"]
+
+
+def quotazioni_rng() -> np.random.Generator:
+    """The prices' own random generator: the same at every run, and apart from `rng`."""
+    return np.random.Generator(np.random.PCG64(SEED + QUOT_SEED_OFFSET))
+
+
+def trading_days(start: date = QUOT_START, end: date = QUOT_END) -> list[date]:
+    """Monday to Friday, without 1 January, Good Friday, Easter Monday, 1 May, 25 and 26 December."""
+    from datetime import timedelta
+
+    closed = set()
+    for year in range(start.year, end.year + 1):
+        easter = _easter(year)
+        closed |= {date(year, 1, 1), date(year, 5, 1), date(year, 12, 25), date(year, 12, 26),
+                   easter - timedelta(days=2), easter + timedelta(days=1)}
+    days, d = [], start
+    while d <= end:
+        if d.weekday() < 5 and d not in closed:
+            days.append(d)
+        d += timedelta(days=1)
+    return days
+
+
+def _skew_t(r: np.random.Generator, n: int, nu: float, xi: float) -> np.ndarray:
+    """n draws of the standardized skewed Student t (Fernández & Steel 1998: the t split at 0 and the
+    two sides scaled by xi and 1/xi), with mean 0 and variance 1."""
+    t = np.abs(r.standard_t(nu, size=n))
+    positive = r.random(n) < xi * xi / (1 + xi * xi)
+    x = np.where(positive, xi * t, -t / xi)
+    e_abs = 2 * np.sqrt(nu) * math.gamma((nu + 1) / 2) / (np.sqrt(np.pi) * (nu - 1) * math.gamma(nu / 2))
+    mean = e_abs * (xi - 1 / xi)
+    second = (xi ** 3 + xi ** -3) / (xi + 1 / xi) * nu / (nu - 2)
+    return (x - mean) / np.sqrt(second - mean * mean)
+
+
+def _gjr_returns(r: np.random.Generator, spec: dict, n: int) -> np.ndarray:
+    """n log returns of the material's GJR-GARCH(1,1)."""
+    a, g, b = spec["alpha"], spec["gamma"], spec["beta"]
+    omega = spec["vol"] ** 2 * (1 - (a + g / 2 + b))
+    z = _skew_t(r, n, spec["nu"], spec["xi"])
+    out = np.empty(n)
+    excess = (spec["vol0"] ** 2 - spec["vol"] ** 2) * (1 - (a + g / 2 + b))   # what the recursion turns into the start's excess variance
+    var = spec["vol0"] ** 2
+    for i in range(n):
+        e = math.sqrt(var) * z[i]
+        out[i] = spec["mu"] + e
+        var = omega + excess * QUOT_CALM_DECAY ** (i + 1) + (a + (g if e < 0 else 0.0)) * e * e + b * var
+    return out
+
+
+def build_quotazioni() -> pd.DataFrame:
+    """The prices, by day and material: data, materia, prezzo (4 decimals)."""
+    r = quotazioni_rng()
+    days = trading_days()
+    frames = []
+    for spec in QUOT_MATERIALS:
+        returns = _gjr_returns(r, spec, len(days) - 1)
+        price = spec["p0"] * np.exp(np.concatenate([[0.0], np.cumsum(returns)]))
+        frames.append(pd.DataFrame({"data": days, "materia": spec["materia"], "prezzo": np.round(price, 4)}))
+    return pd.concat(frames, ignore_index=True)[QUOT_COLUMNS]
+
+
+def gen_quotazioni(cur) -> None:
+    """Fills ref.quotazioni_materie_prime (its table exists: schema_ref.sql)."""
+    df = build_quotazioni()
+    copy_df(cur, "ref.quotazioni_materie_prime", df)
+    log(f"  raw materials' prices: {len(df):,} rows")
+
+
+def ensure_quotazioni(pg) -> bool:
+    """For databases filled before the prices existed: creates and fills their table when it is missing, without
+    touching the others. True when it did."""
+    with pg.cursor() as cur:
+        cur.execute("SELECT to_regclass('ref.quotazioni_materie_prime')")
+        if cur.fetchone()[0] is not None:
+            return False
+        with open(os.path.join(HERE, "schema_ref.sql"), encoding="utf-8") as f:
+            script = "\n".join(line.split("--")[0] for line in f.read().splitlines())
+        cur.execute("CREATE SCHEMA IF NOT EXISTS ref")
+        for stmt in script.split(";"):
+            if "quotazioni_materie_prime" in stmt:
+                cur.execute(stmt)
+        gen_quotazioni(cur)
+    pg.commit()
+    return True
+
+
 # ── main ─────────────────────────────────────────────────────────────────────
 def main() -> None:
     t0 = time.time()
@@ -1152,6 +1268,7 @@ def main() -> None:
     log("Generating the public reference data (calendar, regions)…")
     with pg.cursor() as cur:
         gen_ref(cur)
+        gen_quotazioni(cur)
     pg.commit()
 
     log("Generating the product catalogue, price list and production costs…")

@@ -22,7 +22,7 @@ NAME = "Orders by channel: four weeks ahead"
 def datasources():
     return {n: {"bucket": "b", "key": f"k/{n}", "name": n, "rows": 10, "columns": [], "id": i}
             for i, n in enumerate(("orders", "order_rows", "products", "price_list", "production_costs", "commercial_costs",
-                                   "customers", "sales_network", "crm_activities", "calendar", "regions"), 1)}
+                                   "customers", "sales_network", "crm_activities", "calendar", "regions", "commodity_prices"), 1)}
 
 
 class Flow(unittest.TestCase):

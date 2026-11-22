@@ -132,4 +132,4 @@ jobs:
         working-directory: .
         run: |
           docker build -q -t tabularia-sampledb:ci infrastructure/sampledb
-          docker run --rm -e SAMPLEDB_REQUIRE_LIBS=1 --entrypoint python tabularia-sampledb:ci -m unittest -v test_generate_lifecycle test_generate_experiments
+          docker run --rm -e SAMPLEDB_REQUIRE_LIBS=1 --entrypoint python tabularia-sampledb:ci -m unittest -v test_generate_lifecycle test_generate_experiments test_generate_quotazioni

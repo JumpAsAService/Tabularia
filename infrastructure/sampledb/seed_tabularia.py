@@ -172,6 +172,8 @@ def prepare_databases() -> None:
 
     if generate.ensure_ref(pg):
         log("added the missing public tables (calendar, regions)")
+    if generate.ensure_quotazioni(pg):
+        log("added the missing raw materials' prices (the volatility and risk nodes' series)")
     pg.close()
     import clickhouse_connect
 
@@ -231,6 +233,8 @@ PUBLIC = [
      "One row per day: year, quarter, month, ISO week, weekday, weekend and Italian public holidays."),
     ("regions", "pg", "ref.regioni",
      "The twenty Italian regions with macro-area, capital, population and surface."),
+    ("commodity_prices", "pg", "ref.quotazioni_materie_prime",
+     "The daily prices of three raw materials on the days the market is open: durum wheat, extra virgin olive oil and green coffee."),
 ]
 COLUMNS = {
     "orders": {"id": "Order identifier. Order rows link back to this.", "numero": "Human-readable order number.",
@@ -287,6 +291,9 @@ COLUMNS = {
                  "settimana_iso": "ISO week number.", "giorno_settimana": "1 = Monday … 7 = Sunday.",
                  "nome_giorno": "Weekday name, in Italian.", "fine_settimana": "True on Saturday and Sunday.",
                  "festivo": "True on an Italian public holiday.", "nome_festa": "Name of the holiday, when it is one."},
+    "commodity_prices": {"data": "The trading day: Monday to Friday, without the holidays the market is closed.",
+                         "materia": "The raw material: grano_duro (euro a tonne), olio_evo (euro a kilo), caffe_verde (euro a kilo).",
+                         "prezzo": "The price that day, in the unit of the material."},
     "regions": {"regione": "Region name. Joins to customers.regione.", "macroarea": "Nord-Ovest, Nord-Est, Centro, Sud, Isole.",
                 "capoluogo": "Regional capital.", "popolazione": "Inhabitants, rounded.", "superficie_kmq": "Surface in km²."},
 }
@@ -663,6 +670,7 @@ def flows(ds: dict[str, dict], outputs_in: int, groups: dict[str, dict] | None =
         out.extend(experiment_flows(ds, outputs_in, groups["experiments"]))
     if groups and "timeseries" in groups:
         out.extend(timeseries_flows(ds, outputs_in, groups["timeseries"]))
+        out.extend(risk_flows(ds, outputs_in, groups["timeseries"]))
     if groups and "foundation_forecast" in groups:
         out.extend(foundation_flows(ds, outputs_in, groups["foundation_forecast"]))
     return out
@@ -732,6 +740,80 @@ def timeseries_flows(ds: dict[str, dict], outputs_in: int, group: dict) -> list[
                     description="What is left of the orders per day once the weekly and the yearly cycles are taken out? The Decomposition node (MSTL, "
                                 "periods 7 and 365) on the orders of the calendar's days: a calendar Left join and Fill nulls with 0 make the days without an order a 0, "
                                 "because the node refuses a series with gaps."))
+    return out
+
+
+DURUM_VOLATILITY = "Durum wheat: volatility"
+DURUM_RISK = "Durum wheat: risk of the next month"
+ORDERS_RISK = "Orders: will next month's orders exceed 1,000?"
+# 10 % below the last durum wheat price of the sample data (generate.py: 419.9064 at the seed's default), to the euro
+DURUM_THRESHOLD = 378.0
+
+
+def risk_flows(ds: dict[str, dict], outputs_in: int, group: dict) -> list[dict]:
+    """The volatility and risk nodes' three flows (the time series group; docs/specs/garch-risk.md, «Sample data»), never
+    scheduled: the durum wheat's prices on the trading days, which have no gaps to fill (the time is only an order:
+    `frequency = index`), and the orders per day, which need the calendar as the decomposition's flow does."""
+    out = []
+
+    def durum(c: Builder) -> None:
+        c.source("src", "commodity_prices", 40, 200)
+        c.op("grano", "filter", {"column": "materia", "operator": "eq", "value": "grano_duro"}, 300, 200)
+        c.op("num", "cast", {"columns": {"prezzo": "float"}}, 560, 200)
+        c.op("ord", "sort", {"by": "data", "descending": False}, 820, 200)
+
+    # 15. the durum wheat's volatility: a GJR-GARCH(1,1) with skewed t errors on the prices, the last 250 days held out
+    c = Builder(ds, outputs_in)
+    durum(c)
+    c.nodes.append({"id": "garch", "type": "model", "position": {"x": 1080, "y": 200}, "data": {
+        "label": "Volatility (GARCH)", "model": "garch", "timeoutSeconds": 900, "retries": 0, "params": {
+            "time": "data", "value": "prezzo", "frequency": "index", "input_kind": "prices", "returns_type": "log",
+            "variance_model": "gjr", "arch_order": 1, "garch_order": 1, "distribution": "sstd", "holdout": 250,
+            "output": "volatility"}}})
+    c.output(f"{DURUM_VOLATILITY} results", 1340, 200)
+    c.chain("src", "grano", "num", "ord", "garch", "out")
+    out.append(dict(name=DURUM_VOLATILITY, cron=None, c=c, group=group,
+                    description="How agitated is the price of durum wheat, and for how long does an agitation last? The Volatility (GARCH) node on the daily "
+                                "prices: a GJR-GARCH(1,1) with skewed Student t errors, the persistence and half-life of a shock, whether falls agitate more than "
+                                "rises, the shape of the tails, and a backtest of the 1-day VaR on the last 250 days held out."))
+
+    # 16. the durum wheat's risk over the next month: the same model, simulated forward
+    c = Builder(ds, outputs_in)
+    durum(c)
+    c.nodes.append({"id": "risk", "type": "model", "position": {"x": 1080, "y": 200}, "data": {
+        "label": "Risk simulation", "model": "risk_simulation", "timeoutSeconds": 900, "retries": 0, "params": {
+            "time": "data", "value": "prezzo", "frequency": "index", "model": "garch", "input_kind": "prices", "returns_type": "log",
+            "variance_model": "gjr", "arch_order": 1, "garch_order": 1, "distribution": "sstd", "paths": 10000, "horizon": 21,
+            "position": 100000, "threshold": DURUM_THRESHOLD, "holdout": 250, "output": "risk_summary"}}})
+    c.output(f"{DURUM_RISK} results", 1340, 200)
+    c.chain("src", "grano", "num", "ord", "risk", "out")
+    out.append(dict(name=DURUM_RISK, cron=None, c=c, group=group,
+                    description="How much could a 100,000 euro stock of durum wheat lose in the next 21 trading days? The Risk simulation node fits the "
+                                "same GJR-GARCH(1,1) and simulates 10,000 paths of the price: the VaR and the expected shortfall with their Monte Carlo "
+                                "intervals, in money, the chance that the price crosses a level 10 % below today's, the worst drawdown, and the fan of "
+                                "the prices to come."))
+
+    # 17. the orders next month: an ARIMA on the orders per day, simulated, the upper tail (too many orders to ship)
+    c = Builder(ds, outputs_in)
+    c.source("src-ordini", "orders", 40, 460)
+    c.op("agg", "group_by", {"by": ["data_ordine"], "aggregations": [{"column": "id", "func": "count", "alias": "ordini"}]}, 300, 460)
+    cal = c.table("cal", "calendar", ["giorno"], {"giorno": "data_ordine"}, 40, 200)
+    c.op("periodo", "filter", {"column": "data_ordine", "operator": "between", "value": ["2023-07-01", "2026-07-15"]}, 820, 200)
+    c.op("j", "join", {"how": "left", "on": ["data_ordine"]}, 1080, 200)
+    c.op("zero", "fill_null", {"columns": {"ordini": 0}}, 1340, 200)
+    c.nodes.append({"id": "risk", "type": "model", "position": {"x": 1600, "y": 200}, "data": {
+        "label": "Risk simulation", "model": "risk_simulation", "timeoutSeconds": 900, "retries": 0, "params": {
+            "time": "data_ordine", "value": "ordini", "frequency": "day", "model": "arima", "s": 7, "p": 1, "d": 0, "q": 1,
+            "P": 0, "D": 1, "Q": 1, "aggregate": "sum", "tail": "upper", "threshold": 1000, "paths": 10000, "horizon": 30,
+            "output": "risk_summary"}}})
+    c.output(f"{ORDERS_RISK} results", 1860, 200)
+    c.chain("src-ordini", "agg")
+    c.chain(cal, "periodo", "j", "zero", "risk", "out")
+    c.edge("agg", "j", "right")
+    out.append(dict(name=ORDERS_RISK, cron=None, c=c, group=group,
+                    description="What is the chance that the next 30 days bring more than 1,000 orders? The Risk simulation node on a business series, not a "
+                                "market one: an ARIMA(1,0,1)(0,1,1)[7] on the orders per day (the calendar fills the empty days with 0), 10,000 simulated "
+                                "months summed, the upper tail as the risk, and the probability of exceeding 1,000 with its interval."))
     return out
 
 
@@ -1209,7 +1291,7 @@ def main() -> None:
                     "Everything here is generated. Who can see it is up to the administrator.")
     flows_dir = folder("Flows", sample, "The sample pipelines. Three of them are scheduled.")
     private = folder("Private tables", sample, "The company's own data from the ERP and the CRM, and what the flows derive from it.")
-    public = folder("Public tables", sample, "Reference data anyone could publish: a calendar with Italian holidays, the twenty regions.")
+    public = folder("Public tables", sample, "Reference data anyone could publish: a calendar with Italian holidays, the twenty regions, the prices of three raw materials.")
 
     conn_pg = connection(sample, "Sample ERP (Postgres)", {
         "description": "The order management system: orders, order lines, products, prices, costs. Fake data.",

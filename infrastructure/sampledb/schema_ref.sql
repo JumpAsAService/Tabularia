@@ -5,6 +5,7 @@
 CREATE SCHEMA IF NOT EXISTS ref;
 DROP TABLE IF EXISTS ref.calendario CASCADE;
 DROP TABLE IF EXISTS ref.regioni CASCADE;
+DROP TABLE IF EXISTS ref.quotazioni_materie_prime CASCADE;
 
 -- ── public reference data ─────────────────────────────────────────────────────
 CREATE TABLE ref.calendario (
@@ -27,4 +28,14 @@ CREATE TABLE ref.regioni (
     capoluogo         varchar(30) NOT NULL,
     popolazione       integer NOT NULL,       -- inhabitants, rounded (ISTAT, order of magnitude)
     superficie_kmq    integer NOT NULL
+);
+
+-- The daily prices of three raw materials, on the days the market is open (Monday to Friday, without 1 January,
+-- Good Friday, Easter Monday, 1 May, 25 and 26 December): the series with clustered volatility the volatility and
+-- risk nodes are shown on. Drawn by a generator of its own (generate.py, «The raw materials' prices»).
+CREATE TABLE ref.quotazioni_materie_prime (
+    data              date NOT NULL,
+    materia           text NOT NULL,          -- grano_duro (euro a tonne), olio_evo (euro a kilo), caffe_verde (euro a kilo)
+    prezzo            numeric(12, 4) NOT NULL,
+    PRIMARY KEY (data, materia)
 );
