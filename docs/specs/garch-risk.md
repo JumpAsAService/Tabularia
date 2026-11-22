@@ -1458,6 +1458,109 @@ GARCH's ARCH LM (the ARIMA's writes none); `variance_stationary`: `value` = P, `
 - Tests: 1,884 passed (the models' layouts, catalogue, results, output columns, the explanations of the models and of the
   statistics tests, Timestral's report, `test_models_garch_report.py` with 59 of them), in the backend image, one CPU.
 
+### G2 — the simulation engine (2026-11-22)
+
+**What is in.** `runner/R/ts_sim.R`: `ts_sim_run` (seed blocks on L'Ecuyer-CMRG streams, the batch from `memory_bytes`, the Parquet writer with one
+row group a batch, pass 1's counts and moments, pass 2's selection and sub-histograms, VaR, ES, their Monte Carlo intervals, the drawdown, the
+threshold's probabilities, the disk and time projections and their refusals), `ts_sim_copy` (the chunked copy to a path or an `s3://` address),
+`ts_sim_bars` (a histogram merged to at most 60 bars), `ts_sim_batch_paths`, `ts_sim_batch_bytes`, `ts_sim_peak`. `runner/R/ts_sim_tests.R`: the
+toy model `ts_sim_toy` (i.i.d. returns, normal or Student t scaled to unit variance, H_k = exp(r_1 + … + r_k) − 1) and five self-test checks. No
+shared file was touched: the tests register themselves in `TAB_COMMON_TESTS`, `run.R` sources every file of `runner/R`.
+
+**The API G3 calls.**
+
+```r
+sim <- ts_sim_run(model, paths, horizon, seed, limits = task$limits, measures, time = NULL,
+                  file = "/tmp/paths.parquet", keep = (output == "paths"), after_seconds = 0)
+# model    = list(columns = c("value", "cumulative", "price", "sigma"),   # the file's Float64 columns, `cumulative` = H
+#                 draw = function(n, h) list(value = <h × n>, cumulative = <h × n>, …),  # one seed block, path by path;
+#                                                                                    # .Random.seed is already the block's stream
+#                 fixed_bytes, block_factor, batch_factor)                # G3's measured constants (the toy's by default)
+# measures = list(var_level, es_level, tail = "lower" | "upper", quantiles, threshold = <on H's scale> or NULL,
+#                 alpha, drawdown = TRUE when W_k = 1 + H_k, max_sample_paths)
+# time     = an Arrow Array of length h (ts_time_array of the future times): the file's `time`, of the input's type
+if (keep) ts_sim_copy(sim$file, Sys.getenv("TABULARIA_OUTPUT"))
+```
+
+It returns `steps` (per step: `mean`, `mean_low`, `mean_high`, `sd`, `skewness`, `kurtosis`, `var`, `var_low`, `var_high`, `es`, `es_low`,
+`es_high`, `es_se`, `band_error`; with a threshold `count_beyond`, `prob_beyond`, `prob_beyond_low`, `prob_beyond_high` and the same for
+`crossed`), `quantiles` (h × the quantiles: the fan), `drawdown` (`mean`, `sd`, `median` and its interval, `var` and its interval, or NULL),
+`hist` (`horizon`, `drawdown`: `low`, `high`, `count`), `sample` (paths 1 … 20 of every column, h × 20), `run` (for `run.json` and the notes:
+paths, horizon, seed, `seed_block`, bins, batches, `batch_paths`, `row_bytes`, the memory constants, `baseline_bytes`, `memory_bytes`,
+`tmp_bytes`, `simulated_values`, `paths_bytes`, `pass_2_reads`, `selected_values`, the seconds of each part, `peak_bytes` with its source,
+`peak_pass_1_bytes`) and `file`. Every number is on H's scale; the price and the money are G3's increasing linear maps. A threshold G3 gives
+in a price or in money is mapped to H first. A refusal (`too_few_paths`, `horizon_memory`, `too_many_values`, `too_slow`, `not_finite`,
+`values_memory`) deletes the file. `limits$group_max_seconds`, when G3 passes the group's `max_seconds`, ends the `too_slow` sentence with
+«, up to the group's 30 minutes».
+
+**Deviations and corrections to this spec** (the rest as written):
+
+1. **The memory model has three measured terms, not one ρ.** One ratio cannot hold both a block's fixed work (a block of 1,000 paths of 1,000
+   steps is a million values, whatever the batch) and R's garbage between collections. The growth over R0 is modelled as
+   F + 8·(φ·B_s·h + ρ·m·P·h), m the file's row bytes divided by 8 (3 for the toy: two Int32 and two Float64; Arrow wraps R's vectors without a
+   copy, so the batch's data is R's memory). Measured in fresh processes on a grid (10, 100, 250 and 1,000 steps; 1 to 104 blocks a batch;
+   both passes): **F = 12 MB, φ = 31, ρ = 4** bound every point (the largest ρ the points ask is 3.24, at 100 steps and 3 blocks). R0 is read
+   after a warm-up of the writer and the reader on one row (Arrow's Parquet code costs about 17 MB the first time).
+2. **Collections are the engine's.** Measured without them: the resident size crept up batch after batch (55 MB over R0 at 100 steps,
+   1-block batches, against 23 MB with them): the record batches survive the batch's minor collections, are promoted, and only a full one
+   frees them. So: a **full** collection after each batch and after each row group read in pass 2 (45 ms each in a process with Arrow; 160 ms
+   in one with `rugarch` loaded, G0's image: G3 counts it), a minor one after every 65,536 values made, the engine's own work on a block a
+   slice of at most 65,536 values (bit-identical: every sum is per step), the reader not memory-mapped (mapped pages count in the resident
+   size), `arrow.use_threads` off during the run. The pass-2 helpers are plain functions: closures made per quantity were compiled anew by R's
+   JIT, 19.5 MB of garbage at 100 steps.
+3. **The batch is mostly bounded by the row group.** Arrow 26.0.1's maximum row group length is **1,048,576 rows** (a `WriteTable` of 3,000,000
+   rows wrote 1,048,576 + 1,048,576 + 902,848): at 10 steps 104 blocks, at 100 steps 10, from 250 steps one. Memory binds below that: at
+   `memory_bytes` 256 MiB it gives 69 blocks at 10 steps and 4 at 100.
+4. **A bin at the minimum.** B + 3 bins per quantity: below the first block's minimum, **at it** (a point mass: one step's drawdown is 0 on half
+   the paths, and its median needs no selection), the B equal bins, above the maximum. A = (h + 1)·(B + 3)·8 bytes.
+5. **Pass 1 counts; pass 2 sums.** Pass 1 keeps per bin the count only (no Σx, Σx²: `rowsum` and its row names were half of pass 1's time);
+   pass 2 sums, per step and block by block in block order, the values below the bins of the ES's two ranks (⌊Np'⌋ and ⌈Np'⌉), and the
+   selected values do the rest. Exact (1e-12) and batch-invariant as before; pass 1 went from 6.9 s to 3.5 s at 10 million values.
+6. **The fan's edges**: the middle of their sub-bin, `band_error` the widest sub-bin of the step (the true error is at most half of it); 0 when the
+   edge falls in a selected bin or at the minimum. The bins below and above the first block's range are cut between the run's minimum (maximum)
+   and the edge.
+7. **New refusals**: `not_finite` (a simulated value that is not a finite number: the path and the step), `values_memory` (one quantity's selected
+   values would not fit the memory left: never met at the sizes measured, 16,476 values at 10 million).
+8. **Formulas fixed by the code**: the upper tail is the lower tail of X = −H (negation is exact); p = 1 − c rounded to 12 decimals and ranks
+   ⌈round(Np, 6)⌉ (10,000 × (1 − 0.99) is 100, not 101); ES's standard error with the k = ⌈Np'⌉ smallest values and their sample variance (k − 1);
+   skewness g1 and excess kurtosis g2 (population moments); a VaR bound whose rank falls outside 1 … N (l = 0) is null.
+9. **Time**: pass 2 is projected as the batches' write plus measure time, the copy at the write rate; the clock starts at `started_unix` or at the
+   process's own start. A missing `memory_bytes` falls back to the cgroup's `memory.max`, then the machine's available memory.
+10. **The self-test's budgets.** 64 MiB is below what R with Arrow holds before any path (R0 ≈ 188 MB), so the invariance check gives the
+    engine a baseline of 0 and the three budgets as the batches' memory: 3, 10 and 10 blocks at 100 steps, and forced batches of 1 and 3 blocks;
+    the five runs are `identical()` (measures, histograms, sample paths, the whole file). The real budgets are in the measurements below.
+11. **A tight cgroup slows the disk**: the page cache counts in the cgroup, so writing 154 MB under a 300 MB limit took 8–9 s against 1.3 s under
+    2.5 GB (the kernel writes back synchronously). The Job's `emptyDir` is the node's disk: the same applies on kind with a small group.
+12. **For G3**: with `rugarch` loaded R0 is 286 MB (G0), above 256 MiB: the end-to-end node cannot meet a 256 MiB `memory_bytes`; the engine
+    alone does (below). G3's acceptance at 256 MiB needs reading as «the engine's growth within the budget left after the fit», or 512 MiB.
+
+**Criteria** (toy model; image `tabularia-models-timeseries:dev` with the code mounted, uid 10001, read-only root, `--network none`):
+
+| Criterion | Result |
+|---|---|
+| Exact against the whole matrix | 10,000 paths × 10 steps (normal, lower tail, threshold, drawdown, 4 batches; Student t 4, upper tail, N·p not whole) and × 1 step (N·p' = 2.5, the drawdown's point mass): VaR and its interval, the drawdown's median and VaR **identical**; ES, mean, sd 1e-12; skewness, kurtosis 1e-10; ES's se 1e-9; Clopper–Pearson 1e-12; every fan edge within its `band_error` |
+| Batch invariance | self-test: 64 MiB / 256 MiB / 2 GiB and 1- and 3-block batches at 10,000 × 100: `identical()`; 10 million values: 256 MiB (69 and 4 blocks), 512 MiB and 2 GiB (104 and 10) give the same digest at 10 and at 100 steps |
+| Prefix | the 2,000 paths of a run of 2,000 are the first 2,000 of a run of 10,000, file and sample paths; block 3 is the seed's third stream |
+| Refusals | `too_few_paths` (exact sentence), `horizon_memory` (exact, «needs about 356 MB … leaves 40 MB» at 1,000 steps), `too_many_values`, `too_slow` («about 20 minutes … the node's timeout is 10 minutes … up to the group's 30 minutes»), `not_finite`; no file left |
+| Memory (self-test) | a child `Rscript` at `memory_bytes` 256 MiB, 2 million values (200,000 × 10): VmHWM below 256 MiB, more than one batch |
+| **Memory at 10 million values** | `memory_bytes` 256 MiB = 268.4 MB, container limit 300 MB, paths on disk: **241.4 MB** peak (VmHWM; 1,000,000 × 10, 15 batches of 69,000 paths) and **250.8 MB** (100,000 × 100, 25 batches of 4,000); R0 187.4 and 188.1 MB |
+| Self-test | 98 ok, 0 failed (the five checks of G2 take about 20 s) |
+
+**Timings** (one process, the paths file on disk, Student t / normal, 10 steps, `memory_bytes` 2 GiB; the R start and the libraries, about
+2 s, not counted):
+
+| Values | Paths × steps | Simulation (pass 1) | of which measures / write | Pass 2 | Total | File | Peak (VmHWM) |
+|---|---|---|---|---|---|---|---|
+| 10 thousand | 1,000 × 10 | 0.19 / 0.17 s | 0.11 / 0.06 s | 0.52 s | 1.36 / 1.35 s | 0.2 MB | 196 MB |
+| 1 million | 100,000 × 10 | 0.99 / 0.86 s | 0.42 / 0.13 s | 0.79 / 0.81 s | 2.47 / 2.29 s | 15.4 MB | 248 MB |
+| 10 million | 1,000,000 × 10 | 9.12 / 7.65 s | 3.52 / 1.27 s | 4.54 / 4.47 s | 14.3 / 12.8 s | 154.3 MB | 267 / 264 MB |
+| 10 million | 100,000 × 100 (t) | 6.47 s | 1.90 / 1.22 s | 3.83 s | 10.95 s | 153.5 MB | 295 MB |
+| 10 million, 256 MiB | 1,000,000 × 10 (t) | 17.7 s | 3.69 / 9.44 s | 5.30 s | 23.7 s | 154.3 MB | 241 MB |
+
+The spec's estimate for 10 million values was 6–13 s beyond the fit; the engine alone takes 11–14 s at 2 GiB, of which the toy's draws 2.9–4.3 s:
+G3's models draw more slowly (`rdist("sstd")` 0.47 s a million, G0) and recurse, so its 30 s bound is tight. 15.4 bytes a row on disk for the toy's
+two Float64 columns (the spec assumed 26–30 with a time and a third Float64).
+
 ## References
 
 - Acerbi, C., Tasche, D. (2002). On the coherence of expected shortfall. *J. Banking & Finance* 26(7).
