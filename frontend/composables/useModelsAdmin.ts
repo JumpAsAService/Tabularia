@@ -5,8 +5,9 @@
 // Routes: gateway-go/internal/api/models_admin.go.
 
 // rechecking, recheck_retrying: the version in use serves while its self-test runs again with a new
-// runner (a recheck the cluster stopped before it reported is tried again a few times)
-export type ModelGroupState = 'not_enabled' | 'building' | 'checking' | 'ready' | 'failed' | 'rebuild_needed' | 'rechecking' | 'recheck_retrying'
+// runner (a recheck the cluster stopped before it reported is tried again a few times); licence_pending:
+// a build is due and the licence of the group's weights has no acceptance in the audit, so none is queued
+export type ModelGroupState = 'not_enabled' | 'building' | 'checking' | 'ready' | 'failed' | 'rebuild_needed' | 'rechecking' | 'recheck_retrying' | 'licence_pending'
 export type ModelVersionStatus = 'queued' | 'building' | 'checking' | 'ready' | 'failed'
 // where the self-test with a new runner is, on the version in use: running, to be tried again,
 // stopped (none could run: it serves, self-tested with its previous runner), or none
@@ -55,6 +56,36 @@ export function systemLibraryLabel(lib: ModelGroupSystemLibrary): string {
   return lib.version ? `${lib.name} ${lib.version}` : lib.name
 }
 
+/** The acceptance a version was built under, read from the version's own lines (it outlives the audit's retention). */
+export interface ModelGroupLicenceLine {
+  version: number
+  licence_sha256: string
+  accepted_by: string
+  accepted_at: string
+  audit: number
+  sizes: string[]
+  current: boolean // the licence of the line is the text this Tabularia ships
+}
+
+/** The licence of a group's weights (a group with weights only: docs/specs/foundation-forecast.md). */
+export interface ModelGroupLicence {
+  name: string
+  sha256: string
+  url: string // the text at the pinned revision, on the repository's host
+  text: string // the text shipped with Tabularia, the bytes the sha256 names
+  sizes: { id: string; bytes: number }[]
+  pending: boolean // no valid acceptance in the audit
+  line: ModelGroupLicenceLine | null
+  audit_expires_at: string | null // when the audit's retention removes the acceptance (null: it keeps it)
+}
+
+/** What Enable and Build again send for a group with weights: the licence read (its sha256), the acceptance, the sizes. */
+export interface ModelLicenceInput {
+  licence_sha256: string
+  accept: boolean
+  sizes: string[]
+}
+
 export interface ModelGroupAdmin {
   id: string
   language: 'r' | 'python'
@@ -75,6 +106,7 @@ export interface ModelGroupAdmin {
   enabled_by: string | null
   enabled_at: string | null
   versions: ModelGroupVersion[]
+  licence?: ModelGroupLicence | null
 }
 
 export interface ModelsAdminState {
@@ -147,6 +179,47 @@ export function limitsInputOf(d: LimitsDraft): ModelLimitsInput {
   }
 }
 
+/** The box's draft: the tick, the sizes asked for, whether a build again is being asked. */
+export interface LicenceDraft {
+  accept: boolean
+  sizes: string[]
+  open: boolean
+}
+
+/** All the sizes ticked, the box unticked: the draft of a group's licence box. */
+export function licenceDraftOf(l: Pick<ModelGroupLicence, 'sizes'>): LicenceDraft {
+  return { accept: false, sizes: l.sizes.map((s) => s.id), open: false }
+}
+
+/** The body of an Enable or Build again: the sizes in the recipe's order, the licence read by its sha256. */
+export function licenceInputOf(l: Pick<ModelGroupLicence, 'sizes' | 'sha256'>, d: LicenceDraft): ModelLicenceInput {
+  return { licence_sha256: l.sha256, accept: d.accept, sizes: l.sizes.map((s) => s.id).filter((id) => d.sizes.includes(id)) }
+}
+
+/** The box lets the person go on only with the tick and at least one size. */
+export const licenceReady = (d: LicenceDraft): boolean => d.accept && d.sizes.length > 0
+
+/** «28M · 111 MB»: a size of the weights and what it weighs (decimal megabytes, as the Hub lists them). */
+export function licenceSizeLabel(s: { id: string; bytes: number }): string {
+  return `${s.id.toUpperCase()} · ${Math.round(s.bytes / 1e6)} MB`
+}
+
+/** The sizes as a list for a sentence: «28M, 123M». */
+export const licenceSizesText = (sizes: string[]): string => sizes.map((s) => s.toUpperCase()).join(', ')
+
+/**
+ * Point 2 of the licence, verbatim, cut around its threshold («$20 million») so that the threshold can be
+ * in bold: the clause is the text's own, found in it, never retyped. null when the text has no point 2.
+ */
+export function licenceClause(text: string): { before: string; threshold: string; after: string } | null {
+  const line = text.split('\n').map((l) => l.trim()).find((l) => /^2\.\s/.test(l))
+  if (!line) return null
+  const clause = line.replace(/^2\.\s+/, '')
+  const m = clause.match(/\$[\d.,]+\s*(?:million|billion|thousand)?/i)
+  if (!m || m.index === undefined) return { before: clause, threshold: '', after: '' }
+  return { before: clause.slice(0, m.index), threshold: m[0], after: clause.slice(m.index + m[0].length) }
+}
+
 // the first paragraph of a failure: the sentence the card shows; the rest is in the logs below it
 export function failureSentence(error: string | null | undefined): string {
   if (!error) return ''
@@ -159,9 +232,10 @@ export function useModelsAdmin() {
   return {
     get: () => apiFetch<ModelsAdminState>('/admin/models'),
     group: (id: string) => apiFetch<ModelGroupAnswer>(one(id)),
-    enable: (id: string) => apiFetch<ModelGroupAnswer>(`${one(id)}/enable`, { method: 'POST' }),
+    // a group with weights: the licence's acceptance and the sizes (the gateway refuses the click without them)
+    enable: (id: string, body?: ModelLicenceInput) => apiFetch<ModelGroupAnswer>(`${one(id)}/enable`, { method: 'POST', ...(body ? { body } : {}) }),
     disable: (id: string) => apiFetch<ModelGroupAnswer>(`${one(id)}/disable`, { method: 'POST' }),
-    rebuild: (id: string) => apiFetch<ModelGroupAnswer>(`${one(id)}/rebuild`, { method: 'POST' }),
+    rebuild: (id: string, body?: ModelLicenceInput) => apiFetch<ModelGroupAnswer>(`${one(id)}/rebuild`, { method: 'POST', ...(body ? { body } : {}) }),
     saveLimits: (id: string, body: ModelLimitsInput) => apiFetch<ModelGroupAnswer>(`${one(id)}/settings`, { method: 'PUT', body }),
     saveAccess: (id: string, body: ModelAccessInput) => apiFetch<ModelGroupAnswer>(`${one(id)}/access`, { method: 'PUT', body }),
   }

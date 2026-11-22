@@ -5,15 +5,18 @@
 // queues its build), disables it, builds it again, sets its resources and limits and says who may
 // use it. Kubernetes only: on Compose the section says so. Observers read it all and change
 // nothing. Every control is a native button, field or disclosure: Tab, Enter and Space reach all.
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+// A group with weights (docs/specs/foundation-forecast.md) shows the licence of its weights before any
+// build an administrator queues: the clause, the sizes to download and the tick that accepts it.
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { CheckCircle2, CircleDot, LoaderCircle, Power, RotateCcw, Sigma, TriangleAlert, XCircle } from 'lucide-vue-next'
+import { CheckCircle2, CircleDot, Info, LoaderCircle, Power, RotateCcw, ShieldCheck, Sigma, TriangleAlert, XCircle } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
 import { useFormat } from '~/composables/useFormat'
 import type { GroupOut } from '~/composables/useProjects'
 import {
-  failureSentence, groupBusy, groupFollowed, limitsDraftOf, limitsInputOf, recheckOf, systemLibraryLabel, useModelsAdmin,
-  type LimitsDraft, type ModelGroupAdmin, type ModelGroupAnswer, type ModelsAdminState,
+  failureSentence, groupBusy, groupFollowed, licenceClause, licenceDraftOf, licenceInputOf, licenceReady, licenceSizeLabel, licenceSizesText,
+  limitsDraftOf, limitsInputOf, recheckOf, systemLibraryLabel, useModelsAdmin,
+  type LicenceDraft, type LimitsDraft, type ModelGroupAdmin, type ModelGroupAnswer, type ModelsAdminState,
 } from '~/composables/useModelsAdmin'
 
 const props = defineProps<{ groups: GroupOut[] }>()
@@ -34,6 +37,8 @@ const limitsBase = reactive<Record<string, string>>({})
 const access = reactive<Record<string, { everyone: boolean; group_ids: number[] }>>({})
 const accessBase = reactive<Record<string, string>>({})
 const busy = reactive<Record<string, string>>({}) // the action in progress, by group
+// the licence box of the groups with weights: the tick (never kept: every build asks again), the sizes, whether Build again is being asked
+const licence = reactive<Record<string, LicenceDraft>>({})
 
 const off = computed(() => state.value?.disabled_reason ?? null)
 const editable = computed(() => !!state.value?.editable)
@@ -41,6 +46,7 @@ const shown = (g: ModelGroupAdmin): ModelGroupAdmin => detail[g.id] ?? g
 
 // the forms follow the server's numbers until the person changes them
 function fillDrafts(g: ModelGroupAdmin, force = false) {
+  if (g.licence && !licence[g.id]) licence[g.id] = licenceDraftOf(g.licence)
   const l = JSON.stringify(limitsDraftOf(g))
   if (force || !limits[g.id] || JSON.stringify(limits[g.id]) === limitsBase[g.id]) {
     limits[g.id] = limitsDraftOf(g)
@@ -108,16 +114,45 @@ function onToggle(g: ModelGroupAdmin, ev: Event) {
 async function act(g: ModelGroupAdmin, what: 'enable' | 'disable' | 'rebuild') {
   if (busy[g.id]) return
   if (what === 'disable' && !confirm(t('modelsAdmin.confirmDisable', { name: groupName(g.id) }))) return
+  // a click that queues a build of a group with weights carries the acceptance the box holds
+  const asks = what !== 'disable' && boxShown(g)
+  if (asks && !(licence[g.id] && licenceReady(licence[g.id]))) return
   busy[g.id] = what
   try {
-    take(await api[what](g.id), true)
+    if (what === 'disable') take(await api.disable(g.id), true)
+    else take(await api[what](g.id, asks ? licenceInputOf(g.licence!, licence[g.id]) : undefined), true)
     toast.success(t(`modelsAdmin.done.${what}`, { name: groupName(g.id) }))
+    if (g.licence) licence[g.id] = licenceDraftOf(g.licence)
+    if (what === 'rebuild') focusSoon(`mg-${g.id}-rebuild`)
   } catch (e) {
     toast.error(errMessage(e))
   } finally {
     delete busy[g.id]
   }
 }
+
+// ── the licence of the weights ──────────────────────────────────────────────
+
+// the box is shown at every build an administrator queues: Enable when the group has no ready version to serve
+// (enabling one that has serves it at once, no build), Build again once asked for
+const boxShown = (g: ModelGroupAdmin): boolean => {
+  const x = shown(g)
+  return editable.value && !!x.licence && (x.enabled ? !!licence[g.id]?.open : !x.ready)
+}
+const canGo = (g: ModelGroupAdmin): boolean => !boxShown(g) || (!!licence[g.id] && licenceReady(licence[g.id]))
+const focusSoon = (id: string) => nextTick(() => document.getElementById(id)?.focus())
+function askRebuild(g: ModelGroupAdmin) {
+  if (!licence[g.id] && g.licence) licence[g.id] = licenceDraftOf(g.licence)
+  licence[g.id].open = true
+  focusSoon(`mg-${g.id}-accept`)
+}
+function cancelRebuild(g: ModelGroupAdmin) {
+  if (g.licence) licence[g.id] = licenceDraftOf(g.licence)
+  focusSoon(`mg-${g.id}-rebuild`)
+}
+const clauseOf = (g: ModelGroupAdmin) => licenceClause(shown(g).licence?.text ?? '')
+// the line under the card: who accepted the licence the version in use was built under, and when
+const lineOf = (g: ModelGroupAdmin) => shown(g).licence?.line ?? null
 
 async function saveLimits(g: ModelGroupAdmin) {
   if (busy[g.id]) return
@@ -161,7 +196,7 @@ const languageLabel = (g: ModelGroupAdmin) => `${g.language === 'r' ? 'R' : 'Pyt
 
 const stateIcon = (s: ModelGroupAdmin['state']) =>
   ({ ready: CheckCircle2, failed: XCircle, building: LoaderCircle, checking: LoaderCircle, rebuild_needed: TriangleAlert, not_enabled: CircleDot,
-    rechecking: LoaderCircle, recheck_retrying: TriangleAlert })[s]
+    rechecking: LoaderCircle, recheck_retrying: TriangleAlert, licence_pending: TriangleAlert })[s]
 // a version in use with a new runner (a recheck) shows its version number too: it serves
 const serving = (g: ModelGroupAdmin) => ['ready', 'rechecking', 'recheck_retrying'].includes(g.state) && !!g.current_version
 
@@ -226,6 +261,9 @@ const shortRef = (ref: string | null) => (ref ? ref.replace(/^(.*@sha256:)([0-9a
         <code>{{ failureSentence(shown(g).versions[0].error) }}</code>
       </p>
       <p v-else-if="shown(g).state === 'rebuild_needed'" class="hint muted small">{{ $t('modelsAdmin.rebuildNeededHint') }}</p>
+      <p v-else-if="shown(g).state === 'licence_pending'" class="notice" role="status">
+        <TriangleAlert :size="13" /> <span>{{ $t('modelsAdmin.licence.pendingHint') }}</span>
+      </p>
       <p v-else-if="shown(g).state === 'checking'" class="hint muted small">{{ $t('modelsAdmin.checkingHint') }}</p>
       <p v-else-if="shown(g).state === 'rechecking'" class="hint muted small">{{ $t('modelsAdmin.recheckingHint') }}</p>
       <!-- a recheck the cluster stopped: the version serves on; when it is tried again, and why -->
@@ -243,12 +281,69 @@ const shortRef = (ref: string | null) => (ref ? ref.replace(/^(.*@sha256:)([0-9a
         <span>{{ $t('modelsAdmin.recheckStoppedHint', { why: recheckOf(shown(g))!.recheck_error ?? '', n: recheckOf(shown(g))!.recheck_attempts ?? 0 }) }}</span>
       </p>
 
+      <!-- the licence the version in use was built under: from the version's own lines, so it stays when the audit's retention removes the row -->
+      <p v-if="lineOf(g)" class="licence-line small" :class="{ earlier: !lineOf(g)!.current }">
+        <ShieldCheck :size="13" />
+        <span>
+          {{ $t('modelsAdmin.licence.line', {
+            licence: shown(g).licence!.name,
+            by: lineOf(g)!.accepted_by,
+            date: fmt.date(lineOf(g)!.accepted_at),
+            n: lineOf(g)!.version,
+            sizes: licenceSizesText(lineOf(g)!.sizes),
+          }) }}
+          <a :href="shown(g).licence!.url" target="_blank" rel="noopener noreferrer">{{ $t('modelsAdmin.licence.readIt') }}</a>
+          <template v-if="!lineOf(g)!.current"> {{ $t('modelsAdmin.licence.earlier') }}</template>
+        </span>
+      </p>
+      <p v-if="lineOf(g) && shown(g).licence!.audit_expires_at" class="notice" role="status">
+        <TriangleAlert :size="13" />
+        <span>{{ $t('modelsAdmin.licence.retention', { date: fmt.date(lineOf(g)!.accepted_at), until: fmt.dateTime(shown(g).licence!.audit_expires_at) }) }}</span>
+      </p>
+
+      <!-- before a build an administrator queues: the clause, the sizes, the tick -->
+      <section v-if="boxShown(g) && licence[g.id]" :id="`mg-${g.id}-licence`" class="licence-box" :aria-labelledby="`mg-${g.id}-licence-title`">
+        <h5 :id="`mg-${g.id}-licence-title`"><Info :size="14" /> {{ $t('modelsAdmin.licence.title') }}</h5>
+        <p class="small">{{ $t('modelsAdmin.licence.intro') }}</p>
+        <template v-if="clauseOf(g)">
+          <p class="small muted">{{ $t('modelsAdmin.licence.clauseLead') }}</p>
+          <blockquote class="clause" lang="en">
+            {{ clauseOf(g)!.before }}<strong v-if="clauseOf(g)!.threshold">{{ clauseOf(g)!.threshold }}</strong>{{ clauseOf(g)!.after }}
+          </blockquote>
+        </template>
+        <p class="small">{{ $t('modelsAdmin.licence.means') }}</p>
+        <p class="small links">
+          <a :href="shown(g).licence!.url" target="_blank" rel="noopener noreferrer">{{ $t('modelsAdmin.licence.officialText') }}</a>
+        </p>
+        <details class="shipped">
+          <summary>{{ $t('modelsAdmin.licence.shippedText') }}</summary>
+          <pre lang="en">{{ shown(g).licence!.text }}</pre>
+        </details>
+        <fieldset class="field-group sizes">
+          <legend>{{ $t('modelsAdmin.licence.sizesLegend') }}</legend>
+          <p class="hint muted small">{{ $t('modelsAdmin.licence.sizesHint') }}</p>
+          <div class="size-list">
+            <label v-for="z in shown(g).licence!.sizes" :key="z.id" class="tick">
+              <input v-model="licence[g.id].sizes" type="checkbox" :value="z.id" />
+              <span>{{ licenceSizeLabel(z) }}</span>
+            </label>
+          </div>
+          <p v-if="!licence[g.id].sizes.length" class="muted small" role="status">{{ $t('modelsAdmin.licence.sizesNone') }}</p>
+        </fieldset>
+        <label class="tick accept">
+          <input :id="`mg-${g.id}-accept`" v-model="licence[g.id].accept" type="checkbox" :aria-describedby="`mg-${g.id}-needs`" />
+          <span>{{ $t('modelsAdmin.licence.accept') }}</span>
+        </label>
+        <p :id="`mg-${g.id}-needs`" class="muted small">{{ licenceReady(licence[g.id]) ? '' : $t('modelsAdmin.licence.needsTick') }}</p>
+      </section>
+
       <div v-if="editable" class="actions">
         <button
           v-if="!shown(g).enabled"
           type="button"
           class="primary"
-          :disabled="!!busy[g.id]"
+          :disabled="!!busy[g.id] || !canGo(g)"
+          :title="canGo(g) ? undefined : $t('modelsAdmin.licence.needsTick')"
           @click="act(g, 'enable')"
         >
           <LoaderCircle v-if="busy[g.id] === 'enable'" :size="13" class="spin" /><Power v-else :size="13" /> {{ $t('modelsAdmin.enable') }}
@@ -257,7 +352,35 @@ const shortRef = (ref: string | null) => (ref ? ref.replace(/^(.*@sha256:)([0-9a
           <button type="button" :disabled="!!busy[g.id]" @click="act(g, 'disable')">
             <LoaderCircle v-if="busy[g.id] === 'disable'" :size="13" class="spin" /><Power v-else :size="13" /> {{ $t('modelsAdmin.disable') }}
           </button>
-          <button type="button" :disabled="!!busy[g.id] || groupBusy(shown(g))" @click="act(g, 'rebuild')">
+          <!-- a group with weights asks for the licence first: the button opens the box, the box's own button builds -->
+          <button
+            v-if="shown(g).licence && !licence[g.id]?.open"
+            :id="`mg-${g.id}-rebuild`"
+            type="button"
+            aria-haspopup="true"
+            :aria-controls="`mg-${g.id}-licence`"
+            aria-expanded="false"
+            :disabled="!!busy[g.id] || groupBusy(shown(g))"
+            @click="askRebuild(g)"
+          >
+            <RotateCcw :size="13" /> {{ $t('modelsAdmin.rebuild') }}
+          </button>
+          <template v-else-if="shown(g).licence">
+            <button
+              :id="`mg-${g.id}-rebuild-go`"
+              type="button"
+              class="primary"
+              aria-expanded="true"
+              :aria-controls="`mg-${g.id}-licence`"
+              :disabled="!!busy[g.id] || groupBusy(shown(g)) || !canGo(g)"
+              :title="canGo(g) ? undefined : $t('modelsAdmin.licence.needsTick')"
+              @click="act(g, 'rebuild')"
+            >
+              <LoaderCircle v-if="busy[g.id] === 'rebuild'" :size="13" class="spin" /><RotateCcw v-else :size="13" /> {{ $t('modelsAdmin.rebuild') }}
+            </button>
+            <button type="button" :disabled="!!busy[g.id]" @click="cancelRebuild(g)">{{ $t('modelsAdmin.licence.cancel') }}</button>
+          </template>
+          <button v-else type="button" :disabled="!!busy[g.id] || groupBusy(shown(g))" @click="act(g, 'rebuild')">
             <LoaderCircle v-if="busy[g.id] === 'rebuild'" :size="13" class="spin" /><RotateCcw v-else :size="13" /> {{ $t('modelsAdmin.rebuild') }}
           </button>
         </template>
@@ -388,7 +511,7 @@ const shortRef = (ref: string | null) => (ref ? ref.replace(/^(.*@sha256:)([0-9a
 .version-state { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; }
 .version-state.ready svg, .versions li.ready > .version-row svg { color: var(--accent-2); }
 .version-state.failed, .version-state.failed svg, .versions li.failed > .version-row svg { color: var(--danger); }
-.version-state.rebuild_needed svg, .version-state.recheck_retrying svg { color: var(--warning); }
+.version-state.rebuild_needed svg, .version-state.recheck_retrying svg, .version-state.licence_pending svg { color: var(--warning); }
 .version-state.rechecking svg { color: var(--accent-2); }
 .actions { display: flex; gap: 8px; flex-wrap: wrap; }
 button.mini { padding: 2px 10px; min-height: 26px; font-size: 12px; display: inline-flex; align-items: center; gap: 5px; }
@@ -412,6 +535,19 @@ button.mini { padding: 2px 10px; min-height: 26px; font-size: 12px; display: inl
 .label.current { border-color: color-mix(in srgb, var(--accent-2) 55%, var(--border)); color: var(--accent-2); }
 .label.stale { border-color: color-mix(in srgb, var(--warning) 55%, var(--border)); color: var(--warning); }
 .label.recheck { border-color: color-mix(in srgb, var(--warning) 55%, var(--border)); color: var(--warning); }
+.licence-line { margin: 0; display: flex; gap: 6px; align-items: flex-start; color: var(--muted); line-height: 1.5; }
+.licence-line svg { flex: none; margin-top: 2px; color: var(--accent-2); }
+.licence-line.earlier svg { color: var(--warning); }
+.licence-line a, .licence-box a { color: var(--accent); }
+.licence-box { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: 8px; background: color-mix(in srgb, var(--accent) 7%, var(--panel)); border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border)); }
+.licence-box h5 { margin: 0; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text); }
+.licence-box p { margin: 0; line-height: 1.5; }
+.clause { margin: 0; padding: 6px 10px; border-left: 3px solid color-mix(in srgb, var(--accent) 55%, var(--border)); font-size: 12.5px; line-height: 1.55; overflow-wrap: anywhere; background: var(--panel); border-radius: 0 6px 6px 0; }
+.clause strong { font-weight: 700; }
+.size-list { display: flex; flex-wrap: wrap; gap: 6px 18px; }
+.licence-box .accept { align-items: flex-start; font-size: 13px; line-height: 1.5; }
+.licence-box .accept input { margin-top: 3px; flex: none; }
+.licence-box input:focus-visible, .actions button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .version-error { margin: 0; }
 .version-error code { display: block; font-size: 11.5px; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--danger); }
 details summary { cursor: pointer; font-size: 12px; color: var(--muted); }

@@ -8,7 +8,10 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
-import { failureSentence, groupBusy, groupFollowed, limitsDraftOf, limitsInputOf, recheckOf, systemLibraryLabel } from '../composables/useModelsAdmin.ts'
+import {
+  failureSentence, groupBusy, groupFollowed, licenceClause, licenceDraftOf, licenceInputOf, licenceReady, licenceSizeLabel, licenceSizesText,
+  limitsDraftOf, limitsInputOf, recheckOf, systemLibraryLabel,
+} from '../composables/useModelsAdmin.ts'
 
 const FRONTEND = fileURLToPath(new URL('..', import.meta.url))
 const read = (p) => readFileSync(join(FRONTEND, p), 'utf8')
@@ -78,7 +81,7 @@ test('every word the section uses exists in the five languages, with the same ke
   for (const m of component.matchAll(/\$?t\(\s*['"`](modelsAdmin\.[A-Za-z_.]+)['"`]/g)) used.add(m[1])
   // keys built from a state, a status, an action or a group
   const dynamic = {
-    'modelsAdmin.state.': ['not_enabled', 'building', 'checking', 'ready', 'failed', 'rebuild_needed', 'rechecking', 'recheck_retrying'],
+    'modelsAdmin.state.': ['not_enabled', 'building', 'checking', 'ready', 'failed', 'rebuild_needed', 'rechecking', 'recheck_retrying', 'licence_pending'],
     'modelsAdmin.recheck.': ['rechecking', 'recheck_retrying', 'recheck_stopped'],
     'modelsAdmin.status.': ['queued', 'building', 'checking', 'ready', 'failed'],
     'modelsAdmin.done.': ['enable', 'disable', 'rebuild'],
@@ -154,4 +157,60 @@ test('Predict\'s horizon is worded for the customer lifetime models too, in five
     const hint = source.match(/\n  "predict": \{[\s\S]*?"hints": \{[\s\S]*?"horizon": "([^"]+)"/)
     assert.ok(hint && hint[1].length > 80, `${lang}: the horizon hint`)
   }
+})
+
+// ── the licence of the weights (lot F1 of docs/specs/foundation-forecast.md) ──
+
+const LICENCE_FILE = '../../gateway-go/internal/modelgroups/groups/foundation_forecast/licence/LICENSE.txt'
+const licence = { sha256: '648194727930df730890e9f9affdbcc5c930d406d6829559b25ca3d5a973fc8c',
+  sizes: [{ id: '5m', bytes: 21e6 }, { id: '28m', bytes: 111e6 }, { id: '123m', bytes: 490e6 }, { id: '209m', bytes: 837e6 }] }
+
+test('the licence box starts unticked with every size ticked, and sends the recipe\'s order', () => {
+  const d = licenceDraftOf(licence)
+  assert.deepEqual(d, { accept: false, sizes: ['5m', '28m', '123m', '209m'], open: false })
+  assert.equal(licenceReady(d), false, 'the tick is required')
+  assert.equal(licenceReady({ ...d, accept: true }), true)
+  assert.equal(licenceReady({ ...d, accept: true, sizes: [] }), false, 'at least one size')
+  assert.deepEqual(licenceInputOf(licence, { accept: true, sizes: ['209m', '28m'], open: true }),
+    { licence_sha256: licence.sha256, accept: true, sizes: ['28m', '209m'] })
+  assert.deepEqual(licenceSizeLabel(licence.sizes[1]), '28M · 111 MB')
+  assert.equal(licenceSizesText(['28m', '123m']), '28M, 123M')
+})
+
+test('the clause is point 2 of the shipped text, cut around its threshold, never retyped', () => {
+  const clause = licenceClause(readFileSync(fileURLToPath(new URL(LICENCE_FILE, import.meta.url)), 'utf8'))
+  assert.ok(clause)
+  assert.equal(clause.threshold, '$20 million')
+  assert.match(clause.before, /^You are not authorized to exercise any rights under this license if the global consolidated monthly revenue/)
+  assert.match(clause.after, /^ \(or its equivalent in another currency\) for the preceding month\./)
+  assert.match(clause.after, /commercial license, which Mistral AI may grant you at its sole discretion/)
+  assert.equal(licenceClause('no numbered point'), null)
+  assert.deepEqual(licenceClause('2. Pay nothing.'), { before: 'Pay nothing.', threshold: '', after: '' })
+})
+
+test('the card: Enable waits for the tick, a build again opens the box first, the box carries the acceptance', () => {
+  const c = read('components/admin/ModelsSection.vue')
+  // Enable is disabled until the box is ticked and says why
+  assert.match(c, /:disabled="!!busy\[g\.id\] \|\| !canGo\(g\)"\s+:title="canGo\(g\) \? undefined : \$t\('modelsAdmin\.licence\.needsTick'\)"\s+@click="act\(g, 'enable'\)"/)
+  // the box is a checkbox and sizes, native controls; the tick is a field of its own with the words that say why
+  assert.match(c, /<input :id="`mg-\$\{g\.id\}-accept`" v-model="licence\[g\.id\]\.accept" type="checkbox"/)
+  assert.match(c, /v-model="licence\[g\.id\]\.sizes" type="checkbox"/)
+  assert.match(c, /aria-describedby/)
+  // the click that queues a build sends the acceptance; a disable does not
+  assert.match(c, /api\[what\]\(g\.id, asks \? licenceInputOf\(g\.licence!, licence\[g\.id\]\) : undefined\)/)
+  // Build again of a group with weights opens the box (and moves the focus into it), the box's own button builds, Cancel gives the focus back
+  assert.match(c, /@click="askRebuild\(g\)"/)
+  assert.match(c, /focusSoon\(`mg-\$\{g\.id\}-accept`\)/)
+  assert.match(c, /focusSoon\(`mg-\$\{g\.id\}-rebuild`\)/)
+  // the line of the version in use, and the warning of the audit's retention
+  assert.match(c, /modelsAdmin\.licence\.line/)
+  assert.match(c, /modelsAdmin\.licence\.retention/)
+  assert.match(c, /licence_pending/)
+})
+
+test('the gateway answers what the card reads: the licence of a group with weights, and the body of Enable and Build again', () => {
+  const api = read('composables/useModelsAdmin.ts')
+  assert.match(api, /enable: \(id: string, body\?: ModelLicenceInput\)/)
+  assert.match(api, /rebuild: \(id: string, body\?: ModelLicenceInput\)/)
+  assert.match(api, /licence_pending/)
 })
