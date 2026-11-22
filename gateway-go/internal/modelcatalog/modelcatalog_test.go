@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 // The copy is the engine's snapshot (backend/app/engine/models/catalog.json), byte for byte:
@@ -357,6 +359,59 @@ func TestLevelNumbersAreReadAsTheEngineReadsThem(t *testing.T) {
 	checked, _ := Check("ab_test", with(map[string]any{"A": 1.0, "B": 1.0}))
 	if cols := Columns("ab_test", checked); !reflect.DeepEqual(cols, []string{"arm", "converted"}) {
 		t.Errorf("columns: %v", cols)
+	}
+}
+
+// A map a person types is bounded by the catalogue's limits (the variants, the secondary metrics, max_key_chars),
+// counted before any value is read: an object of a million keys, or a key of a million characters, is refused at
+// once with a short sentence. A snapshot whose map lacks its bounds is refused.
+func TestEveryMapAPersonTypesIsBoundedByTheCataloguesLimits(t *testing.T) {
+	for name, k := range data.kinds {
+		if k.Control != "level_numbers" && k.Control != "column_choices" {
+			continue
+		}
+		if k.MaxCount == nil || k.MaxChars == nil || *k.MaxChars != Limit("max_key_chars") {
+			t.Errorf("%s: max_count %v, max_chars %v", name, k.MaxCount, k.MaxChars)
+		}
+	}
+	if *data.kinds["variant_shares"].MaxCount != Limit("max_variants") || *data.kinds["metric_directions"].MaxCount != Limit("max_secondary_metrics") {
+		t.Error("the maps' counts are not the catalogue's limits")
+	}
+	base := func(extra map[string]any) map[string]any {
+		p := map[string]any{"variant": "arm", "control": "A", "metric_type": "binary", "metric": "converted"}
+		for k, v := range extra {
+			p[k] = v
+		}
+		return p
+	}
+	huge := make(map[string]any, 1_000_000)
+	for i := range 1_000_000 {
+		huge[strconv.Itoa(i)] = "not a number"
+	}
+	start := time.Now()
+	_, err := Check("ab_test", base(map[string]any{"expected_shares": huge}))
+	if err == nil || err.Error() != "ab_test: 'expected_shares' may give a number to at most 20 values" {
+		t.Errorf("a million shares: %v", err)
+	}
+	if time.Since(start) > time.Second {
+		t.Errorf("a million shares took %v", time.Since(start))
+	}
+	long := strings.Repeat("x", 1_000_000)
+	for _, c := range []struct {
+		params map[string]any
+		want   string
+	}{
+		{map[string]any{"expected_shares": map[string]any{long: 1.0}}, "ab_test: 'expected_shares' names a value longer than 255 characters"},
+		{map[string]any{"secondary_metrics": []any{"m"}, "secondary_directions": map[string]any{long: "lower"}},
+			"ab_test: 'secondary_directions' names a column longer than 255 characters"},
+	} {
+		if _, err := Check("ab_test", base(c.params)); err == nil || err.Error() != c.want {
+			t.Errorf("a key of a million characters: %v", err)
+		}
+	}
+	broken := strings.Replace(string(Raw()), `"max_chars": 255`, `"max_chars": null`, 1)
+	if _, err := parse([]byte(broken)); err == nil {
+		t.Error("a map without its bound was accepted")
 	}
 }
 

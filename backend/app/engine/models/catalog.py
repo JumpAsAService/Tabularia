@@ -91,6 +91,10 @@ LIMITS: dict[str, int] = {
     "max_variants": 20,          # values of the variant column, the control included
     "max_looks": 1000,           # days of the sequential looks; beyond it, equal periods of days
     "max_secondary_metrics": 10, # secondary metrics of an A/B node
+    # a key of a map a person types ({value: number}, {column: choice}: a value of the variant column, a column's
+    # name), in characters: as long as a file's name may be (255, the placeholders' MAX_NAME_BYTES), so that the
+    # gateway and the engine bound what they read before the runner meets the data
+    "max_key_chars": 255,
     "posterior_points": 200,     # points of a posterior density
     "power_points": 50,          # points of a power curve
     # the decomposition node's (docs/specs/ts-decomposition.md, «Performance and limits»)
@@ -134,6 +138,8 @@ GROUPS: dict[str, dict[str, Any]] = {
 #                     number field each; the values themselves are the data's, known at the run)
 #   column_choices    {column of the key `of`: one of `choices`}; a column it does not name keeps the
 #                     node's own setting (the A/B test's direction of each secondary metric)
+# `max_count` and `max_chars` (level_numbers, column_choices: both required): at most `max_count` keys, each at most
+# `max_chars` characters long, read before any value (a limit of LIMITS each: the keys a map can usefully hold)
 CONTROLS = ("column", "columns", "level", "reference", "pairs", "choice", "number", "integer",
             "boolean", "numbers", "number_or_choice", "level_numbers", "column_choices")
 
@@ -236,8 +242,10 @@ KINDS: dict[str, dict[str, Any]] = {
     "correction_ab": _choice("holm", "benjamini_hochberg", "bonferroni", "none"),
     "covariate_missing": _choice("fill", "exclude"),
     "cap_percentile": {"control": "number", "above": 0.5, "below": 1},
-    "variant_shares": {"control": "level_numbers", "of": "variant", "above": 0},
-    "metric_directions": {"control": "column_choices", "of": "secondary_metrics", "choices": ["higher", "lower"]},
+    "variant_shares": {"control": "level_numbers", "of": "variant", "above": 0, "max_count": LIMITS["max_variants"],
+                       "max_chars": LIMITS["max_key_chars"]},
+    "metric_directions": {"control": "column_choices", "of": "secondary_metrics", "choices": ["higher", "lower"],
+                          "max_count": LIMITS["max_secondary_metrics"], "max_chars": LIMITS["max_key_chars"]},
     "relative": {"control": "number", "min": 0},
     "tau": {"control": "number", "above": 0},
     "share_open": {"control": "number", "above": 0, "max": 1},
@@ -1595,12 +1603,22 @@ def read_value(model: str, key: str, kind: str, v: Any) -> Any:
             raise refusal(model, f"'{key}' holds a number twice")
         return sorted(float(x) for x in v)
     if control == "level_numbers":
+        # the count first, then the keys' length: an object of a million keys, or one key of a million characters, is
+        # refused before one value is read (and before a key is put in a sentence)
+        if isinstance(v, dict) and len(v) > how["max_count"]:
+            raise refusal(model, f"'{key}' may give a number to at most {how['max_count']} values")
         if not isinstance(v, dict) or not all(isinstance(c, str) and c for c in v):
             raise refusal(model, f"'{key}' must give a number to each value of the column, as {{value: number}}")
+        if any(len(c) > how["max_chars"] for c in v):
+            raise refusal(model, f"'{key}' names a value longer than {how['max_chars']} characters")
         return {c: _read_number(model, f"{key}.{c}", how, v[c]) for c in sorted(v)}
     if control == "column_choices":
+        if isinstance(v, dict) and len(v) > how["max_count"]:
+            raise refusal(model, f"'{key}' may name at most {how['max_count']} columns")
         if not isinstance(v, dict) or not all(isinstance(c, str) and c for c in v):
             raise refusal(model, f"'{key}' must give a column one of {', '.join(how['choices'])}, as {{column: choice}}")
+        if any(len(c) > how["max_chars"] for c in v):
+            raise refusal(model, f"'{key}' names a column longer than {how['max_chars']} characters")
         for c in sorted(v):
             if not isinstance(v[c], str) or v[c] not in how["choices"]:
                 raise refusal(model, f"'{key}.{c}' must be one of {', '.join(how['choices'])}")

@@ -171,7 +171,7 @@ def test_the_experiments_group_and_its_two_nodes():
     assert not any(k.startswith(("ab_test", "ab_plan")) for k in catalog.PREDICT["columns"])
     assert list(test["needs"]) == ["variant", "control", "metric_type"] and list(plan["needs"]) == ["metric_type"]
     assert test["takes"]["expected_shares"] == "variant_shares" and catalog.KINDS["variant_shares"] == {
-        "control": "level_numbers", "of": "variant", "above": 0}
+        "control": "level_numbers", "of": "variant", "above": 0, "max_count": 20, "max_chars": 255}
     assert catalog.KINDS["control_level"] == {"control": "level", "of": "variant"}
     # one primary metric and no random number: no seed
     assert "seed" not in test["takes"] and "seed" not in plan["takes"]
@@ -332,7 +332,8 @@ def test_every_kind_has_a_control_and_only_the_control_s_options():
         "number": {"above", "below", "min", "max"}, "integer": {"min", "max"}, "boolean": set(),
         "numbers": {"above", "below", "min", "max", "max_count", "whole"},
         "number_or_choice": {"choices", "above", "below", "min", "max", "whole"},
-        "level_numbers": {"of", "above", "below", "min", "max"}, "column_choices": {"of", "choices"},
+        "level_numbers": {"of", "above", "below", "min", "max", "max_count", "max_chars"},
+        "column_choices": {"of", "choices", "max_count", "max_chars"},
     }
     assert set(options) == set(catalog.CONTROLS)
     for kind, how in catalog.KINDS.items():
@@ -342,6 +343,29 @@ def test_every_kind_has_a_control_and_only_the_control_s_options():
             assert t in catalog.COLUMN_KINDS, kind
     used = {how["control"] for how in catalog.KINDS.values()}
     assert used == set(catalog.CONTROLS)
+
+
+def test_every_map_a_person_types_is_bounded_by_the_catalogue_s_limits():
+    """A `level_numbers` or `column_choices` map holds at most as many keys as its `of` can have (the variants, the
+    secondary metrics), each at most `max_key_chars` long: the numbers are the catalogue's limits, read before any value,
+    so that neither an object of a million keys nor a key of a million characters is read, sorted or put in a sentence."""
+    maps = {kind: how for kind, how in catalog.KINDS.items() if how["control"] in ("level_numbers", "column_choices")}
+    assert maps
+    for kind, how in maps.items():
+        assert how["max_chars"] == catalog.LIMITS["max_key_chars"], kind
+    assert catalog.KINDS["variant_shares"]["max_count"] == catalog.LIMITS["max_variants"]
+    assert catalog.KINDS["metric_directions"]["max_count"] == catalog.LIMITS["max_secondary_metrics"]
+    assert catalog.KINDS["metric_columns"]["max"] == catalog.LIMITS["max_secondary_metrics"]  # a direction per metric at most
+    base = {"variant": "arm", "control": "A", "metric_type": "binary", "metric": "converted"}
+    huge = {f"v{i}": "not a number" for i in range(1_000_000)}
+    with pytest.raises(EngineError, match=r"^ab_test: 'expected_shares' may give a number to at most 20 values$"):
+        check_params("ab_test", {**base, "expected_shares": huge})
+    long_key = "x" * 1_000_000
+    for params, sentence in (({"expected_shares": {long_key: 1}}, "a value"),
+                             ({"secondary_metrics": ["m"], "secondary_directions": {long_key: "lower"}}, "a column")):
+        with pytest.raises(EngineError) as e:
+            check_params("ab_test", {**base, **params})
+        assert str(e.value).endswith(f"names {sentence} longer than 255 characters") and len(str(e.value)) < 200
 
 
 def test_every_model_s_keys_defaults_and_rules_are_consistent():

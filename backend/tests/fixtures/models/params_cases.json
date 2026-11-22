@@ -2935,6 +2935,148 @@
    }
   },
   {
+   "what": "at most max_variants shares: an object of 21 values is refused before one is read",
+   "model": "ab_test",
+   "params": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "binary",
+    "metric": "converted",
+    "expected_shares": {
+     "v00": "half",
+     "v01": 1,
+     "v02": 1,
+     "v03": 1,
+     "v04": 1,
+     "v05": 1,
+     "v06": 1,
+     "v07": 1,
+     "v08": 1,
+     "v09": 1,
+     "v10": 1,
+     "v11": 1,
+     "v12": 1,
+     "v13": 1,
+     "v14": 1,
+     "v15": 1,
+     "v16": 1,
+     "v17": 1,
+     "v18": 1,
+     "v19": 1,
+     "v20": 1
+    }
+   },
+   "error": "ab_test: 'expected_shares' may give a number to at most 20 values"
+  },
+  {
+   "what": "a value of the variant column longer than max_key_chars is refused, not put in a sentence",
+   "model": "ab_test",
+   "params": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "binary",
+    "metric": "converted",
+    "expected_shares": {
+     "A": 1,
+     "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 1
+    }
+   },
+   "error": "ab_test: 'expected_shares' names a value longer than 255 characters"
+  },
+  {
+   "what": "the length of a value is counted in characters, not bytes: 256 «é» are too long",
+   "model": "ab_test",
+   "params": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "binary",
+    "metric": "converted",
+    "expected_shares": {
+     "A": 1,
+     "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé": 1
+    }
+   },
+   "error": "ab_test: 'expected_shares' names a value longer than 255 characters"
+  },
+  {
+   "what": "20 shares, one keyed by a value of 255 «é»: the limits are reached, not passed",
+   "model": "ab_test",
+   "params": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "binary",
+    "metric": "converted",
+    "expected_shares": {
+     "v00": 1,
+     "v01": 1,
+     "v02": 1,
+     "v03": 1,
+     "v04": 1,
+     "v05": 1,
+     "v06": 1,
+     "v07": 1,
+     "v08": 1,
+     "v09": 1,
+     "v10": 1,
+     "v11": 1,
+     "v12": 1,
+     "v13": 1,
+     "v14": 1,
+     "v15": 1,
+     "v16": 1,
+     "v17": 1,
+     "v18": 1,
+     "ééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé": 2
+    }
+   },
+   "checked": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "binary",
+    "input_shape": "units",
+    "unit": null,
+    "metric": "converted",
+    "higher_is_better": true,
+    "alternative": "two_sided",
+    "alpha": 0.05,
+    "correction": "holm",
+    "covariate": null,
+    "srm_alpha": 0.001,
+    "expected_shares": {
+     "v00": 1.0,
+     "v01": 1.0,
+     "v02": 1.0,
+     "v03": 1.0,
+     "v04": 1.0,
+     "v05": 1.0,
+     "v06": 1.0,
+     "v07": 1.0,
+     "v08": 1.0,
+     "v09": 1.0,
+     "v10": 1.0,
+     "v11": 1.0,
+     "v12": 1.0,
+     "v13": 1.0,
+     "v14": 1.0,
+     "v15": 1.0,
+     "v16": 1.0,
+     "v17": 1.0,
+     "v18": 1.0,
+     "ééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé": 2.0
+    },
+    "min_lift": 0.02,
+    "power": 0.8,
+    "bayes": true,
+    "prior_alpha": 1.0,
+    "prior_beta": 1.0,
+    "loss_threshold": 0.001,
+    "date": null,
+    "sequential": false,
+    "secondary_metrics": [],
+    "output": "results"
+   }
+  },
+  {
    "what": "the always-valid p-value is two-sided, the other side too",
    "model": "ab_test",
    "params": {
@@ -3178,6 +3320,50 @@
     }
    },
    "error": "ab_test: 'secondary_directions' only applies when 'secondary_metrics' is given"
+  },
+  {
+   "what": "at most max_secondary_metrics directions: an object of 11 columns is refused before one is read",
+   "model": "ab_test",
+   "params": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "binary",
+    "metric": "converted",
+    "secondary_metrics": [
+     "latency"
+    ],
+    "secondary_directions": {
+     "m00": "lower",
+     "m01": "lower",
+     "m02": "lower",
+     "m03": "lower",
+     "m04": "lower",
+     "m05": "lower",
+     "m06": "lower",
+     "m07": "lower",
+     "m08": "lower",
+     "m09": "lower",
+     "m10": "lower"
+    }
+   },
+   "error": "ab_test: 'secondary_directions' may name at most 10 columns"
+  },
+  {
+   "what": "a column's name longer than max_key_chars in the directions is refused, not put in a sentence",
+   "model": "ab_test",
+   "params": {
+    "variant": "arm",
+    "control": "A",
+    "metric_type": "binary",
+    "metric": "converted",
+    "secondary_metrics": [
+     "latency"
+    ],
+    "secondary_directions": {
+     "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé": "lower"
+    }
+   },
+   "error": "ab_test: 'secondary_directions' names a column longer than 255 characters"
   },
   {
    "what": "the smallest planning node",

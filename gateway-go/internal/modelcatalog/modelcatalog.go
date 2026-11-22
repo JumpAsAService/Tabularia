@@ -23,6 +23,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 )
 
 //go:embed catalog.json
@@ -69,6 +70,8 @@ type Kind struct {
 	Min       *float64 `json:"min"`
 	Max       *float64 `json:"max"`
 	MaxCount  *int     `json:"max_count"`
+	// MaxChars: the longest key of a `level_numbers` or `column_choices` map, in characters
+	MaxChars *int `json:"max_chars"`
 	// Whole: each number of a `numbers` or `number_or_choice` kind is a whole one (a period, a window, a lag)
 	Whole bool `json:"whole"`
 }
@@ -694,11 +697,19 @@ func readValue(model, key string, k Kind, v any) (any, error) {
 		return out, nil
 	case "level_numbers":
 		obj, ok := v.(map[string]any)
+		// the count first, then the keys' length: an object of a million keys, or one key of a million characters,
+		// is refused before one value is read (and before a key is put in a sentence)
+		if ok && len(obj) > *k.MaxCount {
+			return nil, refuse(model, "'%s' may give a number to at most %d values", key, *k.MaxCount)
+		}
 		for c := range obj {
 			ok = ok && c != ""
 		}
 		if !ok {
 			return nil, refuse(model, "'%s' must give a number to each value of the column, as {value: number}", key)
+		}
+		if longestKey(obj) > *k.MaxChars {
+			return nil, refuse(model, "'%s' names a value longer than %d characters", key, *k.MaxChars)
 		}
 		names := make([]string, 0, len(obj))
 		for c := range obj {
@@ -717,11 +728,17 @@ func readValue(model, key string, k Kind, v any) (any, error) {
 	case "column_choices":
 		// {column of the key `of`: one of the choices} (the A/B test's direction of each secondary metric)
 		obj, ok := v.(map[string]any)
+		if ok && len(obj) > *k.MaxCount {
+			return nil, refuse(model, "'%s' may name at most %d columns", key, *k.MaxCount)
+		}
 		for c := range obj {
 			ok = ok && c != ""
 		}
 		if !ok {
 			return nil, refuse(model, "'%s' must give a column one of %s, as {column: choice}", key, strings.Join(k.Choices, ", "))
+		}
+		if longestKey(obj) > *k.MaxChars {
+			return nil, refuse(model, "'%s' names a column longer than %d characters", key, *k.MaxChars)
 		}
 		names := make([]string, 0, len(obj))
 		for c := range obj {
@@ -751,6 +768,15 @@ func readValue(model, key string, k Kind, v any) (any, error) {
 		return nil, refuse(model, "%s", withBounds(fmt.Sprintf("'%s' must be one of %s, or a %s", key, strings.Join(k.Choices, ", "), numberWord(k)), k))
 	}
 	panic("modelcatalog: unknown control " + k.Control)
+}
+
+// longestKey is the length of an object's longest key in characters (code points, as Python's len counts them).
+func longestKey(obj map[string]any) int {
+	most := 0
+	for c := range obj {
+		most = max(most, utf8.RuneCountInString(c))
+	}
+	return most
 }
 
 // ── parsing the snapshot ────────────────────────────────────────────────────
@@ -837,6 +863,12 @@ func parse(b []byte) (*catalogue, error) {
 		return nil, err
 	}
 	c := &catalogue{groups: top.Groups, kinds: top.Kinds, limits: top.Limits, predict: top.Predict, byID: map[string]*Model{}}
+	for name, k := range top.Kinds {
+		// a map a person types is always bounded: its keys' count and length (readValue reads both)
+		if (k.Control == "level_numbers" || k.Control == "column_choices") && (k.MaxCount == nil || k.MaxChars == nil) {
+			return nil, fmt.Errorf("kind %s: a %s needs max_count and max_chars", name, k.Control)
+		}
+	}
 	for _, rm := range top.Models {
 		m := &Model{Needs: map[string]bool{}, KindOf: map[string]string{}, Applies: map[string][]cond{}, Card: true}
 		if card, ok := rm["card"]; ok { // absent: a model makes its card

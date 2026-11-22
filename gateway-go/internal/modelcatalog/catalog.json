@@ -65,6 +65,7 @@
     "max_variants": 20,
     "max_looks": 1000,
     "max_secondary_metrics": 10,
+    "max_key_chars": 255,
     "posterior_points": 200,
     "power_points": 50,
     "max_period": 10000,
@@ -638,7 +639,9 @@
     "variant_shares": {
       "control": "level_numbers",
       "of": "variant",
-      "above": 0
+      "above": 0,
+      "max_count": 20,
+      "max_chars": 255
     },
     "metric_directions": {
       "control": "column_choices",
@@ -646,7 +649,9 @@
       "choices": [
         "higher",
         "lower"
-      ]
+      ],
+      "max_count": 10,
+      "max_chars": 255
     },
     "relative": {
       "control": "number",
