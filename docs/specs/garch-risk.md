@@ -1541,6 +1541,41 @@ The spec's estimate for 10 million values was 6–13 s beyond the fit; the engin
 G3's models draw more slowly (`rdist("sstd")` 0.47 s a million, G0) and recurse, so its 30 s bound is tight. 15.4 bytes a row on disk for the toy's
 two Float64 columns (the spec assumed 26–30 with a time and a third Float64).
 
+### G6 — GARCH Predict (2026-11-22)
+
+**What is in.** `predict_garch` in `runner/R/garch.R` (the route in `run.R` was G0's), `garch_predict_tests.R` (four self-tests), the gateway's card
+check (`predictGarch`, `garchProblem` in `jobs_predict.go`) with its tests, `s.output = "forecast"` for `garch` as for `arima`. The catalogue's
+contract (`PREDICT.columns.garch`, `horizon` for `garch`) is G0's and unchanged (only its comment); the copies are up to date.
+
+**Behaviour.** The card alone: the rows need the card's `params.time` and `params.value` columns, no other. The new rows are sorted by time and
+checked: no empty time (dropped as the fit does), no empty value (`gaps`), a time held twice (`duplicate_time`), the first not after the card's last
+instant (`predict_before_last`: «the rows start before the model's last day … Predict continues a series»), and each the period after the one before
+it, the first the period after the card's last (`predict_gap`); a time of another kind than the card's is `predict_column`; a card without its
+`garch` object `bad_card`. A frequency `index` on dates has no calendar: only the order is checked (as the fit, which lays trading days one after the
+other). With prices the first return is from the card's `last.price`; the output has one row per new price. The recursion is the model's own, row by row
+from the card's state, in the series' units (mean, then σ² from the shocks and the variances before it, or ln σ² from z and ln σ² for EGARCH, then ε and
+z); a non-finite σ is refused (`filter_diverged`). Output: the time (the input's own Arrow type: Int64 stays Int64 to the last digit), `prediction` = σ_t,
+`prediction_var` = μ_t + σ_t·`var_quantile`. `horizon`: forecast rows after the last one (`garch_forecast`, the fit's own function, from the filter's
+last state); their `prediction_var` is the 1-step VaR of the first, empty after it (as the fit's `volatility` output). **Without `horizon`**: no forecast
+rows when there are new rows; when there are none, the card's own `horizon` (the node's default, 10), so the node never returns an empty table.
+
+**Deviations.** (1) The recursion is the runner's own, not `ugarchfilter`: rugarch's filter cannot start from a state; the self-test checks it against
+`ugarchfilter` with the fitted parameters fixed, for eight cases (GARCH with AR(1) and AR(2), GJR with the skewed t, EGARCH with MA(1) and with ARCH order
+2, ARCH(2)-MA(1) without a mean, two with prices, simple and log). (2) The new rows are read whole (two columns): at 100,000 rows it is 2.4 MB of
+doubles, the loop keeps vectors of the rows only. (3) The gateway refuses a card with a missing or null parameter, too few values of the state, an
+unknown variance model or distribution, with a sentence that says what to fit again.
+
+**Criteria.** σ of the new rows equal to `ugarchfilter`'s of the whole series (parameters fixed, recursion started as the fit's) and the VaR to `μ + σ·q`,
+relative difference below 1e-10 in the eight cases; the forecast rows equal `garch_forecast` of the whole series' state to 1e-10; the forecast from the
+card alone (no new row) has σ_{T+1} equal to the card's `sigma_next` to 1e-12; the time type is kept (Int64 above 2^31, Int32, date32, timestamp UTC, the
+horizon's times too). **Memory and time** (the image `tabularia-models-timeseries:dev`, code mounted, `--memory 2500m --cpus 1`, a process of its own that
+loads the card and the Parquet file, filters and writes the output): 20,000 new rows VmHWM 309 MiB, 2.6 s; **100,000 new rows `VmHWM` 324 MiB, 3.0 s**
+(R, arrow and rugarch alone are about 290 MiB). `TABULARIA_GARCH_PREDICT_N` sets the rows of the self-test.
+
+**For G7.** A flow with a GARCH registered and a Predict node needs the new rows to be the consecutive trading days after the card's last day (for the
+sample data on `index`, in order, none missing); the Predict output has only the time, `prediction` and `prediction_var` (no input column), as ARIMA's.
+The assistants' line «horizon for model_arima, model_garch, …» is already G0's.
+
 ## References
 
 - Acerbi, C., Tasche, D. (2002). On the coherence of expected shortfall. *J. Banking & Finance* 26(7).

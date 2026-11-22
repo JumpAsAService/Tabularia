@@ -816,3 +816,100 @@ func TestAVersionOfACustomerLifetimeModelThatCannotBeAppliedIsRefused(t *testing
 		t.Errorf("disabled: %v", err)
 	}
 }
+
+// ── volatility (docs/specs/garch-risk.md, lot G6) ───────────────────────────
+
+const garchCardText = `{"format": "tabularia-model", "format_version": 1, "model": "garch", "variant": "default", "group": "timeseries",
+ "group_version": 1, "params": {"time": "day", "value": "close", "frequency": "day", "input_kind": "prices", "horizon": 10},
+ "inputs": [{"name": "day", "type": "time"}, {"name": "close", "type": "number"}],
+ "garch": {"variance_model": "gjr", "arch_order": 1, "garch_order": 1, "ar_order": 1, "ma_order": 0, "mean": true, "distribution": "sstd",
+   "input_kind": "prices", "returns_type": "log", "var_level": 0.99, "frequency": "day", "var_quantile": -2.3,
+   "coefficients": {"mu": 0.0002, "ar1": 0.1, "omega": 4e-06, "alpha1": 0.03, "gamma1": 0.1, "beta1": 0.88, "skew": 0.85, "shape": 7},
+   "last": {"time_kind": "date", "time": "2026-11-20", "price": 101.5, "returns": [0.001], "residuals": [-0.0004], "sigma2": [0.0001],
+            "z": [-0.04], "sigma_next": 0.0101, "mean_next": 0.0003}}}`
+
+func TestAVolatilityCardIsAppliedOnlyWithTheStateItsFilterNeeds(t *testing.T) {
+	read := func(text string) predictCard {
+		var c predictCard
+		if err := json.Unmarshal([]byte(text), &c); err != nil {
+			t.Fatal(err)
+		}
+		return c
+	}
+	good := read(garchCardText)
+	if why := good.incompatible("garch", "timeseries"); why != "" {
+		t.Fatal(why)
+	}
+	// the columns the model reads are the time and the value: a prediction column of theirs is refused as for ARIMA
+	if cols := good.columns(); !cols["day"] || !cols["close"] || len(cols) != 2 {
+		t.Errorf("columns: %v", cols)
+	}
+	egarch := strings.NewReplacer(`"variance_model": "gjr"`, `"variance_model": "egarch"`, `"sigma2": [0.0001]`, `"log_sigma2": [-9.2]`).Replace(garchCardText)
+	eg := read(egarch)
+	if why := eg.incompatible("garch", "timeseries"); why != "" {
+		t.Errorf("an EGARCH card: %s", why)
+	}
+	for what, c := range map[string]struct{ text, want string }{
+		"no volatility object":  {strings.Replace(garchCardText, `"garch": {`, `"other": {`, 1), "holds no volatility model (garch)"},
+		"no time column":        {strings.Replace(garchCardText, `"time": "day", `, "", 1), "does not say which column is its time (params.time)"},
+		"an unknown model":      {strings.Replace(garchCardText, `"variance_model": "gjr"`, `"variance_model": "figarch"`, 1), "the variance model «figarch»"},
+		"no parameter":          {strings.Replace(garchCardText, `"omega": 4e-06, `, "", 1), "no usable parameter «omega»"},
+		"a null parameter":      {strings.Replace(garchCardText, `"beta1": 0.88`, `"beta1": null`, 1), "no usable parameter «beta1»"},
+		"no skew":               {strings.Replace(garchCardText, `"skew": 0.85, `, "", 1), "no usable parameter «skew»"},
+		"no quantile":           {strings.Replace(garchCardText, `"var_quantile": -2.3,`, "", 1), "holds no VaR level or its quantile"},
+		"no last instant":       {strings.Replace(garchCardText, `"time": "2026-11-20", `, "", 1), "holds no last instant to continue from"},
+		"no residual":           {strings.Replace(garchCardText, `"residuals": [-0.0004]`, `"residuals": []`, 1), "holds 0 of the 1 values of the filter's state it needs (garch.last.residuals)"},
+		"no variance":           {strings.Replace(garchCardText, `"sigma2": [0.0001]`, `"x": [0.0001]`, 1), "(garch.last.sigma2)"},
+		"no log variance":       {strings.Replace(egarch, `"log_sigma2": [-9.2]`, `"sigma2": [0.0001]`, 1), "(garch.last.log_sigma2)"},
+		"too few returns":       {strings.Replace(strings.Replace(garchCardText, `"ar_order": 1`, `"ar_order": 2`, 1), `"ar1": 0.1,`, `"ar1": 0.1, "ar2": 0.0,`, 1), "holds 1 of the 2 values of the filter's state it needs (garch.last.returns)"},
+		"no last price":         {strings.Replace(garchCardText, `"price": 101.5, `, "", 1), "holds no last price"},
+		"another model's group": {strings.Replace(garchCardText, `"group": "timeseries"`, `"group": "survival"`, 1), "says the group «survival», but the model «garch» is in «timeseries»"},
+	} {
+		got := read(c.text)
+		if why := got.incompatible("garch", "timeseries"); !strings.Contains(why, c.want) {
+			t.Errorf("%s: %q", what, why)
+		}
+	}
+}
+
+func (w *predictWorld) registerGARCH(model string, card string, tags map[string]string) {
+	t := map[string]string{"tabularia.model": "garch", "tabularia.group": "timeseries", "tabularia.group_version": "1", "tabularia.variant": "default"}
+	for k, v := range tags {
+		t[k] = v
+	}
+	w.register("Pasta/price elasticity", model, []byte(card), t)
+}
+
+// A registered volatility version is applied by a Predict node in the timeseries group's Job: the horizon is its option, the columns the
+// catalogue's (the volatility of each row and the VaR), and a card without the state its filter continues from is refused before any Job.
+func TestAPredictOfAVolatilityVersion(t *testing.T) {
+	w := newPredictWorld(t)
+	w.enableGroup("timeseries")
+	w.registerGARCH("volatility", garchCardText, nil)
+	w.registerGARCH("nostate", strings.Replace(garchCardText, `"sigma2": [0.0001]`, `"sigma2": []`, 1), nil)
+	w.registerGARCH("clash", strings.Replace(garchCardText, `{"name": "close", "type": "number"}`, `{"name": "prediction_var", "type": "number"}`, 1), nil)
+	id, _, err := w.predict(`"registeredModel": "volatility", "version": "1", "params": {"horizon": 5}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r := w.row(id); r.status != "SUCCESS" {
+		t.Fatalf("%+v", r)
+	}
+	task := taskOf(t, w.attempts[0])
+	if task.Mode != "predict" || task.Group != "timeseries" || task.Model != "garch" || task.Variant != "default" || fmt.Sprint(task.Params) != "map[horizon:5]" {
+		t.Errorf("task.json: %+v", task)
+	}
+	w.attempts = nil
+	for what, c := range map[string]struct{ data, want string }{
+		"an option of another model": {`"registeredModel": "volatility", "version": "1", "params": {"threshold": 0.5}`, "Predict's option 'threshold' applies to"},
+		"no state":                   {`"registeredModel": "nostate", "version": "1"`, "holds 0 of the 1 values of the filter's state it needs (garch.last.sigma2): fit the model again"},
+		"a column the model reads":   {`"registeredModel": "clash", "version": "1"`, "the model reads a column «prediction_var», which the prediction would overwrite"},
+	} {
+		if _, _, err := w.predict(c.data); err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Errorf("%s: %v", what, err)
+		}
+	}
+	if len(w.attempts) != 0 {
+		t.Errorf("%d Jobs made by refusals", len(w.attempts))
+	}
+}

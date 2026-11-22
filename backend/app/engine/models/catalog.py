@@ -1690,7 +1690,8 @@ PREDICT: dict[str, Any] = {
                                 "at_times+interval": ["survival_at_*_low", "survival_at_*_high"]},
         "arima": {"always": ["prediction"], "interval": ["lower_80", "upper_80", "lower", "upper"]},
         # the volatility of each new row given the rows before it, and the 1-step VaR at the card's level; with `horizon`, forecast
-        # rows after the last (docs/specs/garch-risk.md, «Card, MLflow and Predict»: the runner is lot G6's, the contract G0's)
+        # rows after the last (docs/specs/garch-risk.md, «Card, MLflow and Predict»: the contract is lot G0's, the runner's `predict_garch` lot G6's;
+        # `prediction_var` of the forecast rows is the 1-step VaR of the first, empty after it)
         "garch": {"always": ["prediction", "prediction_var"]},
         # the expected transactions over the horizon, P(alive); with a spend part the expected spend and the CLV
         **{f"{m}:{v}": cols for m in ("clv", "bg_bb") for v, cols in (

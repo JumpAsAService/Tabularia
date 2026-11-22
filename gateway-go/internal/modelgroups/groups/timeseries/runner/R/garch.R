@@ -1,4 +1,4 @@
-# Volatility (GARCH) (docs/specs/garch-risk.md, «Part 1 — the node `garch`»; lot G1): fit_garch(task); predict_garch is lot G6's.
+# Volatility (GARCH) (docs/specs/garch-risk.md, «Part 1 — the node `garch`»; lot G1): fit_garch(task), predict_garch(task, card) (lot G6).
 #
 #   garch_params(params)          the node's options, the catalogue's defaults where a key is not given
 #   garch_series(task, o)         the series (ts_series.R) and its returns, the training part, the scale s
@@ -41,7 +41,6 @@ fit_garch <- function(task) {
   list(rows = rows, output = output, card = garch_card(task, o, d, m), native = garch_native(fit, d$scale))
 }
 
-predict_garch <- function(task, card) tab_not_built("Predict with Volatility (GARCH)")
 
 garch_params <- function(params) {
   o <- tab_model_spec("garch")$defaults
@@ -535,4 +534,197 @@ garch_native <- function(fit, scale) {
   for (k in c("sigma", "z", "residuals", "fitted.values", "log.likelihoods", "scores", "condH")) fit@fit[[k]] <- NULL
   attr(fit, "scale") <- scale
   fit
+}
+
+# ── Predict (lot G6) ────────────────────────────────────────────────────────────────────────────────────────────
+# A registered GARCH applied to the rows after the card's last instant (docs/specs/garch-risk.md, «Card, MLflow and Predict»): the
+# filter runs the card's parameters, fixed, from the card's state (the last returns, shocks, variances and z the recursions read)
+# through the new rows, one row at a time, so that the series is never held beyond the rows themselves: per row `prediction` is σ_t
+# given the rows before it and `prediction_var` the 1-step VaR μ_t + σ_t·q at the card's level. With `horizon` (or with no new row at
+# all, the card's own) the forecast rows follow, from the filter's last state (garch_forecast): their σ, and the 1-step VaR of the
+# first of them. The rows must continue the card's series: the first one the period after its last instant, none missing, none twice.
+#
+#   predict_garch(task, card)        the output table: time (the input's own type), prediction, prediction_var
+#   garch_predict_rows(task, card)   the new rows, checked: times, values, and the returns (the first from the card's last price)
+#   garch_predict_filter(g, th, r)   σ, the conditional mean and the final state of the recursion, from the card's state
+predict_garch <- function(task, card) {
+  g <- card$garch
+  p <- card$params
+  th <- unlist(g$coefficients)
+  if (is.null(g) || is.null(g$last) || !length(th) || is.null(p$time) || is.null(p$value)) {
+    tab_refuse("bad_card", "the model card holds no volatility model to continue (its `garch` object): fit the model again")
+  }
+  rows <- garch_predict_rows(task, card)
+  o <- list(variance_model = g$variance_model, ar_order = g$ar_order, ma_order = g$ma_order, q = g$arch_order, p = g$garch_order,
+            distribution = g$distribution)
+  fl <- garch_predict_filter(o, th, g, rows$r)
+  n <- length(rows$r)
+  h <- task$params$horizon
+  h <- if (!is.null(h)) as.integer(h) else if (n == 0L) as.integer(p$horizon %||% 10L) else 0L
+  shape <- if ("shape" %in% names(th)) th[["shape"]] else 0
+  skew <- if ("skew" %in% names(th)) th[["skew"]] else 0
+  q <- g$var_quantile
+  sigma <- fl$sigma
+  var <- fl$mean + sigma * q
+  times <- if (n) ts_time_array(rows$times, rows$type) else NULL
+  if (h > 0L) {
+    kappa <- garch_kappa(o$distribution, shape, skew)
+    eabs <- garch_abs_mean(o$distribution, shape, skew)
+    fc <- garch_forecast(o, th, kappa, eabs, fl$state$r, fl$state$r - fl$state$e, fl$state$sigma, h)
+    future <- ts_time_after(rows$last, seq_len(h), rows$kind, g$frequency)
+    if (rows$kind == "datetime") attr(future, "tzone") <- attr(rows$last, "tzone")
+    future <- ts_time_array(future, rows$type)
+    times <- if (is.null(times)) future else arrow::concat_arrays(times, future)
+    sigma <- c(sigma, fc$sigma)
+    var <- c(var, fc$mean[[1L]] + fc$sigma[[1L]] * q, rep(NA_real_, h - 1L))
+  }
+  sigma[!is.finite(sigma)] <- NA_real_
+  var[!is.finite(var)] <- NA_real_
+  tbl <- arrow::arrow_table(c0 = times, c1 = sigma, c2 = var)  # named after: a time column called «schema» would be arrow_table's own argument
+  names(tbl) <- c(p$time, "prediction", "prediction_var")
+  list(output = tbl)
+}
+
+# The new rows: the card's two columns, sorted by time, checked against the card's last instant. `times` (the input's class, an
+# Int64 as a double), `type` (the input's Arrow type, for the output), `kind`, `last` (the last time: the card's, or the last row's),
+# `r` the returns (with prices, the first from the card's last price).
+garch_predict_rows <- function(task, card) {
+  g <- card$garch
+  time <- card$params$time
+  value <- card$params$value
+  read <- ts_read(task, c(time, value))
+  df <- read$df
+  # an Int64 arrives as a 64-bit integer: its digits are kept in the output's type, the computation needs the number
+  if (inherits(df[[time]], "integer64")) df[[time]] <- as.numeric(df[[time]])
+  kind <- ts_time_kind(df[[time]], time, g$frequency)
+  if (!identical(kind, g$last$time_kind)) {
+    tab_refuse("predict_column", paste0("the column «", time, "» holds ", c(date = "dates", datetime = "datetimes", integer = "whole numbers")[[kind]],
+                                        ", and the model was fitted with ", c(date = "dates", datetime = "datetimes", integer = "whole numbers")[[g$last$time_kind]]),
+               list(column = time))
+  }
+  if (!tab_kind(df[[value]]) %in% c("number", "integer")) {
+    tab_refuse("not_a_number", paste0("the column «", value, "» is not a number"), list(column = value))
+  }
+  df[[value]] <- as.numeric(df[[value]])
+  tab_complete_rows(df, value)
+  df <- df[!is.na(df[[time]]), , drop = FALSE]
+  last <- switch(kind, date = as.Date(g$last$time), datetime = as.POSIXct(g$last$time, tz = "UTC"), as.numeric(g$last$time))
+  out <- list(kind = kind, type = read$type[[time]], times = df[[time]][0L], last = last, r = numeric())
+  n <- nrow(df)
+  if (!n) return(out)
+  df <- df[order(as.numeric(df[[time]]), method = "radix"), , drop = FALSE]
+  tt <- df[[time]]
+  if (kind == "datetime") attr(tt, "tzone") <- attr(df[[time]], "tzone")
+  what <- if (g$input_kind == "prices") "price" else "return"
+  empty <- which(is.na(df[[value]]))
+  if (length(empty)) {
+    tab_refuse("gaps", paste0("the rows have ", length(empty), " ", if (length(empty) == 1L) "period" else "periods", " without a ", what,
+                              " (the first: ", tab_label(tt[[empty[[1L]]]]), "): filter out the rows without a ", what,
+                              ", or fill them in the flow; a missing return is not interpolated"),
+               list(n = length(empty), time = tab_label(tt[[empty[[1L]]]])))
+  }
+  twice <- which(duplicated(as.numeric(tt)))
+  if (length(twice)) {
+    at <- tab_label(tt[[twice[[1L]]]])
+    tab_refuse("duplicate_time", paste0("the column «", time, "» holds two rows for the period of ", at, ": a series has one row per ",
+                                        "period; aggregate first with Group by"), list(column = time, time = at))
+  }
+  if (as.numeric(tt[[1L]]) <= as.numeric(last)) {
+    tab_refuse("predict_before_last", paste0("the rows start before the model's last day (", tab_label(last), "): Predict continues a ",
+                                             "series, so the first row must be the period after it (", tab_label(tt[[1L]]), " is not)"),
+               list(first = tab_label(tt[[1L]]), last = tab_label(last)))
+  }
+  # one row a period after the card's last instant, none missing: a frequency `index` has no calendar, so only the order counts
+  if (kind == "integer" || g$frequency != "index") {
+    gap <- ts_period(tt, kind, g$frequency) - ts_period(last, kind, g$frequency) - seq_len(n)
+    off <- which(abs(gap) > 1e-9)
+    if (length(off)) {
+      at <- tab_label(tt[[off[[1L]]]])
+      tab_refuse("predict_gap", paste0("the rows do not continue the model's series (its last day is ", tab_label(last), "): the row of ", at,
+                                       " is not the period ", if (off[[1L]] == 1L) "right after it" else "after the row before it",
+                                       "; Predict needs one row per period, none missing: fill them in the flow"),
+                 list(time = at, last = tab_label(last)))
+    }
+  }
+  y <- df[[value]]
+  if (g$input_kind == "prices") {
+    if (any(y <= 0)) {
+      tab_refuse("not_positive", paste0("the column «", value, "» holds 0 or a negative price: returns need positive prices"),
+                 list(column = value))
+    }
+    prev <- c(g$last$price, y[-n])
+    out$r <- if (identical(g$returns_type, "simple")) y / prev - 1 else log(y / prev)
+  } else {
+    out$r <- y
+  }
+  out$times <- tt
+  out$last <- tt[[n]]
+  out
+}
+
+# The recursion of the model on the series' units from the card's state, row by row (the same as rugarch's filter with the parameters
+# fixed: the self-test checks it equal to 1e-10): the conditional mean μ_t = μ + Σ φ_i (r_{t−i} − μ) + Σ θ_j ε_{t−j}, then σ²_t from
+# the shocks, the variances before (EGARCH: ln σ²_t from the z and ln σ²), then ε_t = r_t − μ_t and z_t = ε_t / σ_t. Returns σ_t and
+# μ_t of each row and the last `L` values of r, ε and σ, which the forecast reads.
+garch_predict_filter <- function(o, th, g, r) {
+  egarch <- identical(o$variance_model, "egarch")
+  get <- function(nm) if (nm %in% names(th)) th[[nm]] else 0
+  coef <- function(stem, k) vapply(seq_len(k), function(i) get(paste0(stem, i)), 0)
+  mu0 <- get("mu")
+  omega <- get("omega")
+  phi <- coef("ar", o$ar_order)
+  theta <- coef("ma", o$ma_order)
+  alpha <- coef("alpha", o$q)
+  gamma <- coef("gamma", o$q)
+  beta <- coef("beta", o$p)
+  L <- max(o$ar_order, o$ma_order, o$q, o$p, 1L)
+  n <- length(r)
+  # the card's state, right-aligned in vectors of L (the lags beyond what the card holds are never read)
+  tail_of <- function(x, fill) {
+    x <- as.numeric(unlist(x))
+    c(rep(fill, max(L - length(x), 0L)), utils::tail(x, L))
+  }
+  eps <- tail_of(g$last$residuals, 0)
+  z0 <- tail_of(g$last$z, 0)
+  sg <- ifelse(z0 != 0, abs(eps / z0), 1)  # a lag the variances do not cover (EGARCH, q > p): its z fixes it
+  var_state <- if (egarch) exp(as.numeric(unlist(g$last$log_sigma2))) else as.numeric(unlist(g$last$sigma2))
+  have <- min(length(var_state), L)
+  if (have) sg[seq.int(L - have + 1L, L)] <- sqrt(utils::tail(var_state, have))
+  X <- c(tail_of(g$last$returns, 0), numeric(n))
+  E <- c(eps, numeric(n))
+  S <- c(sg, numeric(n))
+  Z <- c(z0, numeric(n))
+  MU <- numeric(n)
+  ar <- seq_len(o$ar_order)
+  ma <- seq_len(o$ma_order)
+  qi <- seq_len(o$q)
+  pj <- seq_len(o$p)
+  eabs <- if (egarch) {
+    sh <- if ("shape" %in% names(th)) th[["shape"]] else 0
+    sk <- if ("skew" %in% names(th)) th[["skew"]] else 0
+    garch_abs_mean(o$distribution, sh, sk)
+  } else 0
+  for (t in seq_len(n)) {
+    i <- L + t
+    m <- mu0 + sum(phi * (X[i - ar] - mu0)) + sum(theta * E[i - ma])
+    if (egarch) {
+      z <- Z[i - qi]
+      s2 <- exp(omega + sum(alpha * z + gamma * (abs(z) - eabs)) + sum(beta * log(S[i - pj]^2)))
+    } else {
+      e <- E[i - qi]
+      s2 <- omega + sum((alpha + gamma * (e < 0)) * e^2) + sum(beta * S[i - pj]^2)
+    }
+    s <- sqrt(s2)
+    if (!is.finite(s)) {
+      tab_refuse("filter_diverged", paste0("the variance of the row ", t, " of the new rows is not a number: the model's recursion leaves ",
+                                           "the range of a number on these values; check the column"), list(row = t))
+    }
+    X[i] <- r[[t]]
+    MU[t] <- m
+    E[i] <- r[[t]] - m
+    S[i] <- s
+    Z[i] <- E[i] / s
+  }
+  keep <- seq.int(n + 1L, n + L)
+  list(sigma = S[L + seq_len(n)], mean = MU, state = list(r = X[keep], e = E[keep], sigma = S[keep]))
 }

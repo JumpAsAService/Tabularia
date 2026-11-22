@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -297,7 +298,7 @@ func (q *queue) planPredict(ctx context.Context, user *auth.User, node pyjson.Ob
 			return refuse("the model reads a column «%s», which the prediction would overwrite: rename it before the node", c)
 		}
 	}
-	if s.model == "arima" {
+	if s.model == "arima" || s.model == "garch" {
 		s.output = "forecast"
 	}
 	// the Job's limits, as a model node's
@@ -364,6 +365,8 @@ type predictCard struct {
 		Time  string `json:"time_column"`
 		Start string `json:"start_column"`
 	} `json:"cox"`
+	// a volatility card's own object: the filter's parameters and the state Predict continues it from
+	Garch *predictGarch `json:"garch"`
 	// a customer lifetime card's own object: what its prediction is computed from
 	CustomerLifetime *struct {
 		Node      string          `json:"node"`
@@ -388,6 +391,131 @@ func (c *predictCard) incompatible(model, group string) string {
 		return fmt.Sprintf("was fitted with the variant «%s», which this version of Tabularia does not know", c.Variant)
 	case group == customerLifetimeGroup:
 		return c.customerLifetimeProblem(model)
+	case model == "garch":
+		return c.garchProblem()
+	}
+	return ""
+}
+
+// predictGarch is the card's `garch` object (card.schema.json): the specification, the parameters on the series' units, and the state
+// of the filter at the last instant (oldest first). A null number is a value the fit could not write: it is kept as nil to be refused.
+type predictGarch struct {
+	VarianceModel string              `json:"variance_model"`
+	ArchOrder     int                 `json:"arch_order"`
+	GarchOrder    int                 `json:"garch_order"`
+	ArOrder       int                 `json:"ar_order"`
+	MaOrder       int                 `json:"ma_order"`
+	Mean          bool                `json:"mean"`
+	Distribution  string              `json:"distribution"`
+	InputKind     string              `json:"input_kind"`
+	Frequency     string              `json:"frequency"`
+	VarLevel      *float64            `json:"var_level"`
+	VarQuantile   *float64            `json:"var_quantile"`
+	Coefficients  map[string]*float64 `json:"coefficients"`
+	Last          struct {
+		TimeKind  string     `json:"time_kind"`
+		Time      string     `json:"time"`
+		Price     *float64   `json:"price"`
+		Returns   []*float64 `json:"returns"`
+		Residuals []*float64 `json:"residuals"`
+		Sigma2    []*float64 `json:"sigma2"`
+		LogSigma2 []*float64 `json:"log_sigma2"`
+		Z         []*float64 `json:"z"`
+	} `json:"last"`
+}
+
+// garchProblem is why a volatility card cannot be continued ("" when it can): Predict filters new rows from the card alone, so the card
+// must hold every parameter its recursion reads and as many values of the state as its orders reach back.
+func (c *predictCard) garchProblem() string {
+	g := c.Garch
+	if g == nil {
+		return "holds no volatility model (garch): fit the model again"
+	}
+	for _, k := range []string{"time", "value"} {
+		if s, ok := c.Params[k].(string); !ok || s == "" {
+			return fmt.Sprintf("does not say which column is its %s (params.%s): fit the model again", k, k)
+		}
+	}
+	finite := func(v *float64) bool { return v != nil && !math.IsNaN(*v) && !math.IsInf(*v, 0) }
+	if g.VarianceModel != "arch" && g.VarianceModel != "garch" && g.VarianceModel != "gjr" && g.VarianceModel != "egarch" {
+		return fmt.Sprintf("has the variance model «%s», which this version of Tabularia does not know", g.VarianceModel)
+	}
+	if g.ArchOrder < 1 || g.GarchOrder < 0 || g.ArOrder < 0 || g.MaOrder < 0 || g.ArchOrder > 20 || g.GarchOrder > 20 || g.ArOrder > 20 || g.MaOrder > 20 {
+		return "has orders out of range: fit the model again"
+	}
+	if g.Frequency == "" || (g.InputKind != "returns" && g.InputKind != "prices") {
+		return "does not say its frequency or whether it was fitted on returns or prices: fit the model again"
+	}
+	if g.VarLevel == nil || !finite(g.VarLevel) || *g.VarLevel <= 0.5 || *g.VarLevel >= 1 || !finite(g.VarQuantile) {
+		return "holds no VaR level or its quantile (garch.var_level, garch.var_quantile): fit the model again"
+	}
+	need := []string{"omega"}
+	if g.Mean {
+		need = append(need, "mu")
+	}
+	for i := 1; i <= g.ArchOrder; i++ {
+		need = append(need, fmt.Sprintf("alpha%d", i))
+		if g.VarianceModel == "gjr" || g.VarianceModel == "egarch" {
+			need = append(need, fmt.Sprintf("gamma%d", i))
+		}
+	}
+	if g.VarianceModel != "arch" {
+		for j := 1; j <= g.GarchOrder; j++ {
+			need = append(need, fmt.Sprintf("beta%d", j))
+		}
+	}
+	for i := 1; i <= g.ArOrder; i++ {
+		need = append(need, fmt.Sprintf("ar%d", i))
+	}
+	for j := 1; j <= g.MaOrder; j++ {
+		need = append(need, fmt.Sprintf("ma%d", j))
+	}
+	if g.Distribution == "std" || g.Distribution == "sstd" {
+		need = append(need, "shape")
+	}
+	if g.Distribution == "sstd" {
+		need = append(need, "skew")
+	}
+	for _, k := range need {
+		if !finite(g.Coefficients[k]) {
+			return fmt.Sprintf("holds no usable parameter «%s» (garch.coefficients): fit the model again", k)
+		}
+	}
+	if g.Distribution != "norm" && g.Distribution != "std" && g.Distribution != "sstd" {
+		return fmt.Sprintf("has the distribution «%s», which this version of Tabularia does not know", g.Distribution)
+	}
+	if g.Last.Time == "" || (g.Last.TimeKind != "date" && g.Last.TimeKind != "datetime" && g.Last.TimeKind != "integer") {
+		return "holds no last instant to continue from (garch.last.time, garch.last.time_kind): fit the model again"
+	}
+	maxInt := func(a, b int) int {
+		if a > b {
+			return a
+		}
+		return b
+	}
+	variance, name := g.Last.Sigma2, "sigma2"
+	if g.VarianceModel == "egarch" {
+		variance, name = g.Last.LogSigma2, "log_sigma2"
+	}
+	for _, s := range []struct {
+		name string
+		v    []*float64
+		want int
+	}{
+		{"returns", g.Last.Returns, maxInt(g.ArOrder, 1)}, {"residuals", g.Last.Residuals, maxInt(maxInt(g.ArchOrder, g.MaOrder), 1)},
+		{"z", g.Last.Z, maxInt(maxInt(g.ArchOrder, g.MaOrder), 1)}, {name, variance, maxInt(g.GarchOrder, 1)},
+	} {
+		if len(s.v) < s.want {
+			return fmt.Sprintf("holds %d of the %d values of the filter's state it needs (garch.last.%s): fit the model again", len(s.v), s.want, s.name)
+		}
+		for _, v := range s.v {
+			if !finite(v) {
+				return fmt.Sprintf("holds a value of the filter's state that is not a number (garch.last.%s): fit the model again", s.name)
+			}
+		}
+	}
+	if g.InputKind == "prices" && (!finite(g.Last.Price) || *g.Last.Price <= 0) {
+		return "was fitted on prices but holds no last price (garch.last.price): fit the model again"
 	}
 	return ""
 }
