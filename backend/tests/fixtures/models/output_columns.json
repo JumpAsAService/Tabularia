@@ -1853,6 +1853,138 @@
    ]
   },
   {
+   "what": "volatility (GARCH) on returns with a holdout, a whole-number time: the volatility",
+   "model": "garch",
+   "params": {
+    "time": "t",
+    "value": "ar_t",
+    "frequency": "index",
+    "ar_order": 1,
+    "holdout": 200,
+    "output": "volatility"
+   },
+   "input": [
+    [
+     "t",
+     "Int64"
+    ],
+    [
+     "ar_t",
+     "Float64"
+    ],
+    [
+     "gjr",
+     "Float64"
+    ],
+    [
+     "brk",
+     "Float64"
+    ]
+   ],
+   "columns": [
+    [
+     "time",
+     "Int64"
+    ],
+    [
+     "observed",
+     "Float64"
+    ],
+    [
+     "mean",
+     "Float64"
+    ],
+    [
+     "sigma",
+     "Float64"
+    ],
+    [
+     "std_residual",
+     "Float64"
+    ],
+    [
+     "var",
+     "Float64"
+    ],
+    [
+     "violation",
+     "Boolean"
+    ],
+    [
+     "is_holdout",
+     "Boolean"
+    ],
+    [
+     "is_forecast",
+     "Boolean"
+    ]
+   ]
+  },
+  {
+   "what": "volatility (GARCH) on prices of trading days: the volatility, with the returns",
+   "model": "garch",
+   "params": {
+    "time": "day",
+    "value": "price",
+    "frequency": "index",
+    "input_kind": "prices",
+    "holdout": 50,
+    "output": "volatility"
+   },
+   "input": [
+    [
+     "day",
+     "Date"
+    ],
+    [
+     "price",
+     "Float64"
+    ]
+   ],
+   "columns": [
+    [
+     "time",
+     "Date"
+    ],
+    [
+     "observed",
+     "Float64"
+    ],
+    [
+     "return",
+     "Float64"
+    ],
+    [
+     "mean",
+     "Float64"
+    ],
+    [
+     "sigma",
+     "Float64"
+    ],
+    [
+     "std_residual",
+     "Float64"
+    ],
+    [
+     "var",
+     "Float64"
+    ],
+    [
+     "violation",
+     "Boolean"
+    ],
+    [
+     "is_holdout",
+     "Boolean"
+    ],
+    [
+     "is_forecast",
+     "Boolean"
+    ]
+   ]
+  },
+  {
    "what": "XGBoost regression, the rows",
    "model": "xgboost",
    "params": {
