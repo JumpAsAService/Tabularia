@@ -1,9 +1,10 @@
 // The notices of the npm packages (scripts/third-party-notices.mjs).
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { collect, render } from '../scripts/third-party-notices.mjs'
 
 function project() {
@@ -46,4 +47,19 @@ test('the file holds the notices, and says when a package ships none', () => {
     assert.ok(text.includes(piece), piece)
   assert.match(text, /bare 2\.0\.0\nLicence: ISC\n\n\(the package ships no licence file\)/)
   assert.ok(!text.includes('Copyright Tool'))
+})
+
+test('the vendored Timestral code is in the notices, with the same NOTICE and Apache licence the gateway embeds', () => {
+  const here = dirname(fileURLToPath(import.meta.url))
+  const mine = readFileSync(join(here, '../assets/third-party/timestral.txt'), 'utf8')
+  const vendored = join(here, '../../gateway-go/internal/modelgroups/groups/foundation_forecast/runner/py/timestral')
+  // the repository is beside the frontend here; in a build of the frontend alone it is not, and the file stands on its own
+  if (existsSync(vendored))
+    for (const name of ['NOTICE', 'LICENSE']) assert.ok(mine.includes(readFileSync(join(vendored, name), 'utf8').trim()), name)
+  assert.ok(mine.includes('Apache License') && mine.includes('Mistral AI'))
+  for (const manifest of ['../package.json', '../../website/package.json']) {
+    const scripts = JSON.parse(readFileSync(join(here, manifest), 'utf8')).scripts
+    const line = scripts.prebuild ?? scripts.pregenerate
+    assert.ok(line.includes('Timestral inference code') && line.includes('timestral.txt'), manifest)
+  }
 })
