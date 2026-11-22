@@ -7,6 +7,12 @@
 #   a continuous or ratio metric, CUPED   the mean ~ N(m_j, v_j), a flat prior on the mean (the estimates of
 #                                          ab_estimates: with CUPED the adjusted ones; a binary metric with CUPED too)
 #
+# With CUPED a variant's own posterior is wider than v_j: m_j = ȳ_j − θ̂(x̄_j − x̄) also carries x̄, the covariate's mean
+# over all the units, an estimate too (lot E10, `est$v_level` = v_j + θ̂² s²_x / N). That term is the same for every
+# variant: it moves all the means together and cancels in a difference. So a variant's own numbers (its sd, its credible
+# interval, its curve) read v_level, and the measures, which are all of differences (P(beat), P(best), the losses), read
+# v_j: P(t ahead of c) = P(μ_t − μ_c > 0) does not see a shift common to both. Without CUPED v_level is v_j.
+#
 # «Ahead» is in the direction of `higher_is_better`: with it false, a treatment is ahead where its value is lower, the
 # best variant is the lowest, and the losses are the mirrored ones. Write B_j(x) = P(variant j is behind x) (F_j when
 # higher is better, the survival function 1 − F_j when lower) and A_j = 1 − B_j; then, with the posteriors independent,
@@ -49,7 +55,17 @@ ab_bayes_posteriors <- function(r) {
     return(list(kind = "beta", a = a, b = b, mean = a / s, sd = sqrt(a * b / (s^2 * (s + 1))), k = est$k, prior = c(a0, b0)))
   }
   if (!all(is.finite(est$m)) || !all(is.finite(est$v)) || any(est$v <= 0)) return(NULL)
-  list(kind = "normal", m = est$m, s = sqrt(est$v), mean = est$m, sd = sqrt(est$v), k = est$k)
+  level <- est$v_level %||% est$v
+  if (length(level) != length(est$v) || !all(is.finite(level))) level <- est$v
+  level <- pmax(level, est$v)  # θ̂² s²_x / N is never negative: a variant's own variance is never below v_j
+  list(kind = "normal", m = est$m, s = sqrt(est$v), s_level = sqrt(level), mean = est$m, sd = sqrt(level), k = est$k)
+}
+
+# A variant's own posterior: with CUPED its sd is the level's (see the top of this file); the Beta, and a normal
+# posterior without CUPED, are their own.
+.abb_level <- function(post) {
+  if (identical(post$kind, "normal") && !is.null(post$s_level)) post$s <- post$s_level
+  post
 }
 
 # The distribution function of variant j at x, lower tail or upper (the upper tail for the far end of the range).
@@ -134,7 +150,7 @@ ab_bayes_best <- function(post, higher) {
   list(prob = prob, loss = loss)
 }
 
-# The posterior's density of variant j on `x`, and the grid the curves share.
+# The grid the curves of the variants' own posteriors (`.abb_level`) share.
 ab_bayes_grid <- function(post, points) {
   lo <- min(vapply(seq_len(post$k), function(j) .abb_quantile(post, j, 5e-4), 0))
   hi <- max(vapply(seq_len(post$k), function(j) .abb_quantile(post, j, 5e-4, lower = FALSE), 0))
@@ -149,12 +165,13 @@ ab_bayes_measures <- function(r, post) {
   ctrl <- est$control
   alpha <- r$ctx$alpha
   best <- ab_bayes_best(post, higher)
+  own <- .abb_level(post)  # the sd and the credible interval are a variant's own; the measures are of differences
   base <- abs(post$mean[[ctrl]])
   rel <- function(x) if (is.finite(base) && base > 0) x / base else NA_real_
   out <- vector("list", k)
   for (j in seq_len(k)) {
-    out[[j]] <- list(j = j, mean = post$mean[[j]], sd = post$sd[[j]], low = .abb_quantile(post, j, alpha / 2),
-                     high = .abb_quantile(post, j, alpha / 2, lower = FALSE), prob_best = best$prob[[j]],
+    out[[j]] <- list(j = j, mean = post$mean[[j]], sd = post$sd[[j]], low = .abb_quantile(own, j, alpha / 2),
+                     high = .abb_quantile(own, j, alpha / 2, lower = FALSE), prob_best = best$prob[[j]],
                      loss_best = best$loss[[j]], loss_best_relative = rel(best$loss[[j]]))
     if (j != ctrl) {
       out[[j]]$prob_beat <- ab_bayes_prob_beat(post, j, ctrl, higher)
@@ -205,8 +222,9 @@ ab_part_bayes <- function(r) {
       tab_number(rows, "model", "prior_beta", post$prior[[2L]])
     }
     tab_number(rows, "model", "loss_threshold", threshold)
-    grid <- ab_bayes_grid(post, as.integer(tab_limit(r$task, "posterior_points")))
-    for (j in seq_len(est$k)) tab_points(rows, "curve", "posterior", "y", x = grid, y = .abb_pdf(post, j, grid), level_2 = labels[[j]])
+    own <- .abb_level(post)
+    grid <- ab_bayes_grid(own, as.integer(tab_limit(r$task, "posterior_points")))
+    for (j in seq_len(est$k)) tab_points(rows, "curve", "posterior", "y", x = grid, y = .abb_pdf(own, j, grid), level_2 = labels[[j]])
   }
 
   reading <- lapply(m[treatments], function(x) {

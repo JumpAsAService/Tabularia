@@ -26,6 +26,29 @@ TAB_COMMON_TESTS[["experiments: CUPED's variant interval counts the covariate's 
   .tab_expect(is.finite(w1$value("model|||theta")) && is.finite(w1$value("comparison|C|A|p_value")), "one unit of C with its own covariate")
 }
 
+# With CUPED the Bayesian part draws and states a variant's own posterior with v_level (its sd, its credible interval,
+# its curve) and measures the differences with v_j (P(beat), the losses: the covariate's grand mean cancels in them).
+TAB_COMMON_TESTS[["experiments: with CUPED a variant's own posterior (sd, interval, curve) reads v_level, P(beat) and the losses v_j"]] <- function(code) {
+  w <- .abc_fit(list(metric_type = "continuous", metric = "rev", covariate = "pre", covariate_missing = "fill", correction = "none", bayes = TRUE),
+                .abc_table())
+  val <- function(l, s, part = "bayes") vapply(l, function(x) w$value(paste0(part, "|", x, "||", s)), 0)
+  own <- val(c("A", "B", "C"), "std_error", "variant")  # sqrt(v_level): the test above
+  m <- val(c("A", "B", "C"), "posterior_mean")
+  .tab_expect(.abc_rel(val(c("A", "B", "C"), "posterior_sd"), own) < 1e-12, "the posterior sds are the variants' own")
+  .tab_expect(.abc_rel(val("B", "cred_high") - val("B", "cred_low"), 2 * stats::qnorm(0.975) * own[["B"]]) < 1e-10, "B's credible interval")
+  g <- w$frame[w$frame$section == "curve" & w$frame$level == "posterior" & w$frame$level_2 == "B", ]
+  .tab_expect(nrow(g) == 200L && .abc_rel(g$value, stats::dnorm(g$x0, m[["B"]], own[["B"]])) < 1e-10, "B's curve is N(m, v_level)")
+  all_x <- w$frame$x0[w$frame$section == "curve" & w$frame$level == "posterior"]
+  .tab_expect(min(all_x) <= min(stats::qnorm(5e-4, m, own)) + 1e-9 && max(all_x) >= max(stats::qnorm(5e-4, m, own, lower.tail = FALSE)) - 1e-9,
+              "the grid reaches the widest posterior's 0.05 % quantiles")
+  for (t in c("B", "C")) {
+    s <- w$value(paste0("comparison|", t, "|A|difference_std_error"))  # sqrt(v_t + v_A): v_j, not v_level
+    d <- m[[t]] - m[["A"]]
+    .tab_expect(.abc_rel(val(t, "prob_beat_control"), stats::pnorm(d / s)) < 1e-12, t, ": P(beat) reads v_j")
+    .tab_expect(.abc_rel(val(t, "expected_loss"), s * stats::dnorm(d / s) - d * stats::pnorm(-d / s)) < 1e-10, t, ": the loss reads v_j")
+  }
+}
+
 # Bonferroni: the family is the comparisons computed, as p.adjust counts them; the interval at 1 − alpha/that, so that
 # the lift's interval and the decision agree. Every comparison not computed: no verdict, the decision `not_computed`.
 TAB_COMMON_TESTS[["experiments: a comparison not computed is not in the family, and none computed is no verdict"]] <- function(code) {

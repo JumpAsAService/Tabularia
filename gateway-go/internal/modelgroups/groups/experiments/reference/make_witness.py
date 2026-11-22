@@ -481,6 +481,13 @@ def witness_bayes(case: dict[str, Any]) -> None:
             var = np.array([np.var((lin - theta * c)[g == j], ddof=1) / n[j] for j in range(k)])
         sd = np.sqrt(var)
         frozen = [stats.norm(mean[j], sd[j]) for j in range(k)]
+        if cuped:
+            # a variant's own posterior (its sd, its credible interval) also carries the covariate's grand mean: θ² s²_x / N
+            # more (lot E10's v_level); the measures, all of differences, keep the comparisons' sd
+            own_sd = np.sqrt(var + theta ** 2 * np.var(c, ddof=1) / len(c))
+            own = [stats.norm(mean[j], own_sd[j]) for j in range(k)]
+    if beta or not cuped:
+        own_sd, own = sd, frozen
 
     mp.mp.dps = 30
 
@@ -512,9 +519,9 @@ def witness_bayes(case: dict[str, Any]) -> None:
         best_l.append(lb_j)
         pre = f"bayes|{labels[j]}||"
         check(cid, pre + "posterior_mean", float(mean[j]), want.get(pre + "posterior_mean"), 1e-12, "scipy/numpy")
-        check(cid, pre + "posterior_sd", float(sd[j]), want.get(pre + "posterior_sd"), 1e-12, "scipy/numpy")
-        check(cid, pre + "cred_low", float(frozen[j].ppf(alpha / 2)), want.get(pre + "cred_low"), 1e-12, "scipy ppf")
-        check(cid, pre + "cred_high", float(frozen[j].isf(alpha / 2)), want.get(pre + "cred_high"), 1e-12, "scipy isf")
+        check(cid, pre + "posterior_sd", float(own_sd[j]), want.get(pre + "posterior_sd"), 1e-12, "scipy/numpy")
+        check(cid, pre + "cred_low", float(own[j].ppf(alpha / 2)), want.get(pre + "cred_low"), 1e-12, "scipy ppf")
+        check(cid, pre + "cred_high", float(own[j].isf(alpha / 2)), want.get(pre + "cred_high"), 1e-12, "scipy isf")
         check_abs(cid, pre + "prob_best", pb_j, want.get(pre + "prob_best"), 1e-10, "mpmath quad")
         check_abs(cid, pre + "expected_loss_best", lb_j, want.get(pre + "expected_loss_best"), 1e-10, "mpmath quad")
         check_abs(cid, pre + "expected_loss_best_relative", lb_j / base, want.get(pre + "expected_loss_best_relative"), 1e-10, "mpmath quad")

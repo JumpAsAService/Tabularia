@@ -46,7 +46,8 @@ p_greater <- function(ax, bx, ay, by) {
 }
 
 # ── the measures of a case ───────────────────────────────────────────────────────
-# post: kind, per variant a, b (Beta) or m, s (normal); higher; control (an index).
+# post: kind, per variant a, b (Beta) or m, s (normal: the comparisons' sd) and s_level (a variant's own sd, with CUPED
+# wider: its sd and its credible interval read it, every measure of differences reads s); higher; control (an index).
 bayes_reference <- function(post, labels, control, higher, alpha, threshold) {
   k <- length(labels)
   beta <- post$kind == "beta"
@@ -54,7 +55,8 @@ bayes_reference <- function(post, labels, control, higher, alpha, threshold) {
   pdf <- function(j, x) if (beta) dbeta(x, post$a[[j]], post$b[[j]]) else dnorm(x, post$m[[j]], post$s[[j]])
   qf <- function(j, p, lower = TRUE) if (beta) qbeta(p, post$a[[j]], post$b[[j]], lower.tail = lower) else qnorm(p, post$m[[j]], post$s[[j]], lower.tail = lower)
   mean_j <- if (beta) post$a / (post$a + post$b) else post$m
-  sd_j <- if (beta) sqrt(post$a * post$b / ((post$a + post$b)^2 * (post$a + post$b + 1))) else post$s
+  sd_j <- if (beta) sqrt(post$a * post$b / ((post$a + post$b)^2 * (post$a + post$b + 1))) else post$s_level
+  qf_own <- function(j, p, lower = TRUE) if (beta) qf(j, p, lower) else qnorm(p, post$m[[j]], post$s_level[[j]], lower.tail = lower)
   behind <- function(j, x) cdf(j, x, lower = higher)
   ahead <- function(j, x) cdf(j, x, lower = !higher)
   span <- function(js) c(min(vapply(js, function(j) qf(j, 1e-15), 0)), max(vapply(js, function(j) qf(j, 1e-15, lower = FALSE), 0)))
@@ -66,7 +68,7 @@ bayes_reference <- function(post, labels, control, higher, alpha, threshold) {
     others <- setdiff(seq_len(k), j)
     pb <- integral(function(x) { v <- pdf(j, x); for (o in others) v <- v * behind(o, x); v }, seq_len(k))
     lb <- integral(function(x) { v <- rep(1, length(x)); for (o in seq_len(k)) v <- v * behind(o, x); behind(j, x) - v }, seq_len(k))
-    x <- list(label = labels[[j]], mean = mean_j[[j]], sd = sd_j[[j]], low = qf(j, alpha / 2), high = qf(j, alpha / 2, lower = FALSE),
+    x <- list(label = labels[[j]], mean = mean_j[[j]], sd = sd_j[[j]], low = qf_own(j, alpha / 2), high = qf_own(j, alpha / 2, lower = FALSE),
               prob_best = pb, loss_best = lb, loss_best_relative = lb / base)
     if (j != control) {
       t <- j
@@ -118,12 +120,14 @@ bayes_case <- function(id, data, types, params, note = NULL) {
   m <- vapply(labels, function(l) have(paste0("variant|", l, "||mean")), 0)
   se <- vapply(labels, function(l) REF_SE_COMPARE[[id]][[l]], 0)  # with CUPED the comparisons' v_j, not a variant's own interval
   cuped <- !is.null(p[["covariate"]])
+  # a variant's own sd: with CUPED the variant's standard error of E2's case (v_level, from the raw rows), else v_j's
+  own <- if (cuped) vapply(labels, function(l) have(paste0("variant|", l, "||std_error")), 0) else se
   binary <- identical(p[["metric_type"]], "binary") && !cuped
   post <- if (binary) {
     k <- round(m * n)
     list(kind = "beta", a = p$prior_alpha + k, b = p$prior_beta + n - k)
   } else {
-    list(kind = "normal", m = m, s = se)
+    list(kind = "normal", m = m, s = se, s_level = own)
   }
   ms <- bayes_reference(post, labels, control, isTRUE(p$higher_is_better), p$alpha, p$loss_threshold)
   ex <- list()
