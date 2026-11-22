@@ -749,7 +749,9 @@ def _imf_labels(full: dict) -> list[str]:
 # the names with a `*` that the node's options fill: the prefix and the function that gives its labels (the other
 # names with a `*`, «pred_prob_*», one per class, are the data's)
 _ROWS_WILDCARDS = {"pred_quantile_": _labels_of("quantiles"), "pred_surv_at_": _labels_of("times"),
-                   "seasonal_": _seasonal_labels, "imf_": _imf_labels}
+                   "seasonal_": _seasonal_labels, "imf_": _imf_labels,
+                   # the pre-trained forecast's quantile columns: the same list, the median left out
+                   "quantile_": _labels_of("quantiles")}
 _CAST_TYPES = {"int": "Int64", "int64": "Int64", "int32": "Int32", "float": "Float64", "float64": "Float64",
                "float32": "Float32", "str": "String", "string": "String", "utf8": "String", "bool": "Boolean",
                "boolean": "Boolean", "date": "Date", "datetime": "Datetime(time_unit='us', time_zone=None)"}

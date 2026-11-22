@@ -62,8 +62,8 @@ const ARIMA = m.modelOf('arima')
 test('the catalogue the editor reads is the engine\'s snapshot, byte for byte', () => {
   assert.equal(read('../assets/model-catalog.json'), read('../../backend/app/engine/models/catalog.json'),
     'run python3 .github/scripts/model_catalog.py')
-  assert.deepEqual(m.MODEL_CATALOG.models.map((x) => x.id), ['linear', 'logistic', 'kaplan_meier', 'cox', 'parametric_survival', 'arima', 'decomposition', 'xgboost', 'catboost', 'clv', 'bg_bb', 'ab_test', 'ab_plan'])
-  assert.deepEqual(m.MODEL_CATALOG.groups.map((g) => g.id), ['regression', 'survival', 'timeseries', 'boosting', 'customer_lifetime', 'experiments'])
+  assert.deepEqual(m.MODEL_CATALOG.models.map((x) => x.id), ['linear', 'logistic', 'kaplan_meier', 'cox', 'parametric_survival', 'arima', 'decomposition', 'xgboost', 'catboost', 'clv', 'bg_bb', 'ab_test', 'ab_plan', 'timestral'])
+  assert.deepEqual(m.MODEL_CATALOG.groups.map((g) => g.id), ['regression', 'survival', 'timeseries', 'boosting', 'customer_lifetime', 'experiments', 'foundation_forecast'])
 })
 
 test('every key of every model has a control the form draws', () => {
@@ -100,7 +100,9 @@ test('the fields of a model in the catalogue\'s order, what it needs first', () 
   assert.equal(m.modelFields(ARIMA).find((f) => f.key === 'time').types.length, 3)
 })
 
-const WORDED = m.MODEL_CATALOG
+// The node the palette leaves out until lot F5 gives it a form and words (`MODEL_NOT_IN_THE_PALETTE_YET`): Forecast (Timestral)
+// (docs/specs/foundation-forecast.md). Its words are not asked for until then (the group's are). F5 takes this away.
+const WORDED = { ...m.MODEL_CATALOG, models: m.MODEL_CATALOG.models.filter((x) => x.id !== 'timestral') }
 
 test('every model, group, preset, field, choice and reason has its words in the five languages', () => {
   const wanted = m.modelWordKeys(WORDED)
@@ -165,7 +167,7 @@ test('the palette shows the groups the person may use: not a disabled one, not o
   assert.deepEqual(m.modelShownGroups(null), [])
   assert.deepEqual(m.modelShownGroups({ disabled_reason: 'not_configured', groups: [] }), [])
   // Compose: all of them, to be shown greyed out
-  assert.equal(m.modelShownGroups({ disabled_reason: 'kubernetes', groups: [] }).length, 6)
+  assert.equal(m.modelShownGroups({ disabled_reason: 'kubernetes', groups: [] }).length, 7)
   assert.equal(m.modelOff('linear' && 'regression', { disabled_reason: 'kubernetes', groups: [] }), 'kubernetes')
   assert.equal(m.modelOff('survival', STATE), 'not_enabled')
   assert.equal(m.modelOff('regression', STATE), '')
@@ -1235,6 +1237,23 @@ test('the decomposition says its columns before a run: a seasonal column per per
   // its runner is built (lot D6): the palette shows it
   const palette = m.modelPalette(m.MODEL_CATALOG.groups, '', (k) => k)
   assert.ok(palette.flatMap((g) => g.items).some((i) => i.model === 'decomposition'))
+})
+
+test('Forecast (Timestral) says its columns before a run: a quantile column per level asked, the series only with a series column, the types as they are', () => {
+  const ts = m.modelOf('timestral')
+  const names = (params, input = []) => m.modelOutputColumns(ts, params, input).columns.map((c) => c.name)
+  assert.deepEqual(names({ frequency: 'day' }),
+    ['time', 'observed', 'forecast', 'quantile_0.05', 'quantile_0.1', 'quantile_0.9', 'quantile_0.95', 'baseline', 'filled', 'is_holdout', 'is_forecast'])
+  assert.deepEqual(names({ frequency: 'day', series: 'channel', quantiles: [0.95, 0.5, 0.25, 0.25] }),
+    ['series', 'time', 'observed', 'forecast', 'quantile_0.25', 'quantile_0.95', 'baseline', 'filled', 'is_holdout', 'is_forecast'])
+  const { columns, later } = m.modelOutputColumns(ts, { time: 'day', series: 'channel' }, [{ name: 'day', dtype: 'Int64' }, { name: 'channel', dtype: 'String' }, { name: 'x', dtype: 'Float64' }])
+  assert.deepEqual(columns.slice(0, 2).map((c) => c.dtype), ['String', 'Int64'])
+  assert.equal(later.length, 0)
+  assert.ok(!columns.some((c) => c.name === 'x'))
+  assert.equal(m.modelOutputColumns(ts, { output: 'results' }, []).columns.length, 10)
+  // a model the palette does not show yet: lot F5 gives it a form
+  const palette = m.modelPalette(m.MODEL_CATALOG.groups, '', (k) => k)
+  assert.ok(!palette.flatMap((g) => g.items).some((i) => i.model === 'timestral'))
 })
 
 test('the steps after a model that only keep, drop, order, rename, cast or filter say their columns; the others do not', () => {

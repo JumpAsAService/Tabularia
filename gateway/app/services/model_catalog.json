@@ -72,7 +72,11 @@
     "max_periods": 4,
     "max_imfs": 16,
     "max_lb_lags": 1000,
-    "max_window": 2000001
+    "max_window": 2000001,
+    "max_series": 10000,
+    "max_foundation_horizon": 1024,
+    "max_covariates": 16,
+    "max_series_charts": 12
   },
   "controls": [
     "column",
@@ -812,6 +816,70 @@
         "components",
         "results"
       ]
+    },
+    "series_column": {
+      "control": "column",
+      "types": [
+        "text",
+        "integer",
+        "boolean"
+      ]
+    },
+    "season_steps": {
+      "control": "integer",
+      "min": 1,
+      "max": 10000
+    },
+    "foundation_size": {
+      "control": "choice",
+      "choices": [
+        "5m",
+        "28m",
+        "123m",
+        "209m"
+      ]
+    },
+    "foundation_horizon": {
+      "control": "integer",
+      "min": 1,
+      "max": 1024
+    },
+    "foundation_holdout": {
+      "control": "integer",
+      "min": 0,
+      "max": 1024
+    },
+    "foundation_quantiles": {
+      "control": "numbers",
+      "above": 0,
+      "below": 1,
+      "max_count": 20
+    },
+    "covariate_columns": {
+      "control": "columns",
+      "min": 0,
+      "max": 16,
+      "types": [
+        "number",
+        "integer",
+        "boolean",
+        "text"
+      ]
+    },
+    "missing_foundation": {
+      "control": "choice",
+      "choices": [
+        "refuse",
+        "linear",
+        "model"
+      ]
+    },
+    "output_quantile_forecast": {
+      "control": "choice",
+      "choices": [
+        "quantile_forecast",
+        "results"
+      ]
     }
   },
   "season_of_frequency": {
@@ -945,6 +1013,17 @@
       "imf_*": "Float64",
       "residue": "Float64",
       "filled": "Boolean"
+    },
+    "quantile_forecast": {
+      "series": "=series",
+      "time": "=time",
+      "observed": "Float64",
+      "forecast": "Float64",
+      "quantile_*": "Float64",
+      "baseline": "Float64",
+      "filled": "Boolean",
+      "is_holdout": "Boolean",
+      "is_forecast": "Boolean"
     }
   },
   "rows_input_types": {
@@ -1081,6 +1160,16 @@
       "level": "required",
       "level_2": "null",
       "indexed": false
+    },
+    "series": {
+      "level": "required",
+      "level_2": "null",
+      "indexed": false
+    },
+    "series_curve": {
+      "level": "required",
+      "level_2": "required",
+      "indexed": true
     }
   },
   "verdicts": [
@@ -1143,6 +1232,14 @@
       "models": [
         "ab_test",
         "ab_plan"
+      ]
+    },
+    {
+      "id": "foundation_forecast",
+      "language": "python",
+      "label": "models.groups.foundation_forecast",
+      "models": [
+        "timestral"
       ]
     }
   ],
@@ -9188,6 +9285,239 @@
               "days_cuped",
               "asked"
             ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "timestral",
+      "group": "foundation_forecast",
+      "family": "timeseries",
+      "label": "models.timestral.name",
+      "card": false,
+      "max_rows": null,
+      "needs": {
+        "time": "time_column",
+        "value": "number_column",
+        "frequency": "frequency"
+      },
+      "takes": {
+        "series": "series_column",
+        "season": "season_steps",
+        "size": "foundation_size",
+        "horizon": "foundation_horizon",
+        "quantiles": "foundation_quantiles",
+        "past_covariates": "covariate_columns",
+        "known_covariates": "covariate_columns",
+        "holdout": "foundation_holdout",
+        "missing": "missing_foundation",
+        "symmetric_averaging": "boolean",
+        "clip_nonnegative": "boolean",
+        "history": "boolean",
+        "alpha": "alpha",
+        "output": "output_quantile_forecast"
+      },
+      "defaults": {
+        "series": null,
+        "season": null,
+        "size": "28m",
+        "horizon": 28,
+        "quantiles": [
+          0.05,
+          0.1,
+          0.9,
+          0.95
+        ],
+        "past_covariates": [],
+        "known_covariates": [],
+        "holdout": null,
+        "missing": "refuse",
+        "symmetric_averaging": true,
+        "clip_nonnegative": true,
+        "history": true,
+        "alpha": 0.05,
+        "output": "quantile_forecast"
+      },
+      "applies": {
+        "horizon": {
+          "known_covariates": false
+        },
+        "history": {
+          "output": [
+            "quantile_forecast"
+          ]
+        }
+      },
+      "requires": [],
+      "forbids": [],
+      "disjoint": [
+        "time",
+        "value",
+        "series",
+        "past_covariates",
+        "known_covariates"
+      ],
+      "presets": {},
+      "variants": [
+        {
+          "id": "default",
+          "when": {},
+          "sections": {
+            "model": {
+              "levels": null,
+              "texts": [
+                "model",
+                "variant",
+                "formula",
+                "software",
+                "group_version",
+                "rows_from",
+                "note_*",
+                "frequency",
+                "time_kind",
+                "missing",
+                "size",
+                "weights",
+                "weights_sha256",
+                "licence",
+                "licence_sha256",
+                "cpu_capability"
+              ],
+              "numbers": [
+                "n",
+                "n_series",
+                "n_points",
+                "n_missing",
+                "n_filled",
+                "n_model_missing",
+                "n_future_rows",
+                "horizon",
+                "holdout",
+                "season",
+                "alpha",
+                "threads",
+                "batches",
+                "seconds_load",
+                "seconds_forecast",
+                "n_quantiles",
+                "mase",
+                "baseline_mase",
+                "relative_mase_geomean",
+                "smape",
+                "baseline_smape",
+                "wql",
+                "coverage_80",
+                "coverage_90",
+                "n_measured"
+              ]
+            },
+            "series": {
+              "levels": null,
+              "numbers": [
+                "n",
+                "n_used",
+                "n_missing",
+                "n_filled",
+                "first",
+                "last",
+                "horizon",
+                "scale",
+                "mase",
+                "baseline_mase",
+                "relative_mase",
+                "smape",
+                "baseline_smape",
+                "pinball",
+                "wql",
+                "coverage_80",
+                "coverage_90",
+                "total"
+              ],
+              "texts": [
+                "not_measured"
+              ]
+            },
+            "assumption": {
+              "levels": [
+                "baseline_comparison",
+                "coverage_80",
+                "coverage_90",
+                "relative_mase"
+              ],
+              "numbers": [
+                "statistic",
+                "df",
+                "df_2",
+                "p_value",
+                "threshold",
+                "value",
+                "count"
+              ],
+              "texts": [
+                "h0",
+                "verdict",
+                "advice",
+                "significance",
+                "rows",
+                "advice_id"
+              ]
+            },
+            "series_curve": {
+              "levels": null,
+              "numbers": [
+                "y"
+              ],
+              "texts": []
+            },
+            "reading": {
+              "levels": [
+                "summary",
+                "forecast",
+                "holdout",
+                "coverage",
+                "comparison",
+                "limits",
+                "licence",
+                "method",
+                "formulas"
+              ],
+              "numbers": [],
+              "texts": [
+                "line_*"
+              ]
+            }
+          },
+          "charts": [
+            {
+              "id": "forecast",
+              "under": null
+            },
+            {
+              "id": "holdout",
+              "under": null
+            },
+            {
+              "id": "relative_mase",
+              "under": "baseline_comparison"
+            }
+          ],
+          "outputs": {
+            "quantile_forecast": [
+              "series",
+              "time",
+              "observed",
+              "forecast",
+              "quantile_*",
+              "baseline",
+              "filled",
+              "is_holdout",
+              "is_forecast"
+            ]
+          },
+          "rows_when": {
+            "series": {
+              "series": true
+            }
           }
         }
       ]

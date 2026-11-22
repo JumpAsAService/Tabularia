@@ -906,6 +906,20 @@ def test_the_decomposition_says_its_columns_before_a_run():
         "name": "time", "dtype": "Unknown"}
 
 
+def test_the_pre_trained_forecast_says_its_columns_before_a_run():
+    """A quantile column per level asked, the series only with a series column, the types as they are (docs/specs/foundation-forecast.md)."""
+    def names(params, inputs=None):
+        return [c["name"] for c in ai_flow_agent.model_output_columns("timestral", params, inputs)[0]]
+
+    assert names({"frequency": "day"}) == ["time", "observed", "forecast", "quantile_0.05", "quantile_0.1", "quantile_0.9", "quantile_0.95",
+                                           "baseline", "filled", "is_holdout", "is_forecast"]
+    assert names({"series": "channel", "quantiles": [0.95, 0.5, 0.25, 0.25]}) == [
+        "series", "time", "observed", "forecast", "quantile_0.25", "quantile_0.95", "baseline", "filled", "is_holdout", "is_forecast"]
+    columns, later = ai_flow_agent.model_output_columns("timestral", {"time": "day", "series": "channel"},
+                                                        [{"name": "day", "dtype": "Int64"}, {"name": "channel", "dtype": "String"}])
+    assert columns[:2] == [{"name": "series", "dtype": "String"}, {"name": "time", "dtype": "Int64"}] and later == []
+
+
 def test_the_steps_that_only_keep_rename_cast_or_filter_columns_say_them_after_a_model():
     cols = [{"name": "a", "dtype": "Int32"}, {"name": "b", "dtype": "Float64"}]
     after = ai_flow_agent.columns_after_step

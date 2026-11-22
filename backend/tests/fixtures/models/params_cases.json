@@ -1168,7 +1168,7 @@
    "what": "a model that does not exist",
    "model": "survival_forest",
    "params": {},
-   "error": "there is no model 'survival_forest' (the models: linear, logistic, kaplan_meier, cox, parametric_survival, arima, decomposition, xgboost, catboost, clv, bg_bb, ab_test, ab_plan)"
+   "error": "there is no model 'survival_forest' (the models: linear, logistic, kaplan_meier, cox, parametric_survival, arima, decomposition, xgboost, catboost, clv, bg_bb, ab_test, ab_plan, timestral)"
   },
   {
    "what": "the answer given back to the check: an empty exog is none, not an error",
@@ -4689,6 +4689,511 @@
     "alpha": 0.05,
     "output": "components"
    }
+  },
+  {
+   "what": "the smallest forecast with a pre-trained model: the size, the horizon, the quantiles and the output have their defaults (lot F0)",
+   "model": "timestral",
+   "params": {
+    "time": "day",
+    "value": "orders",
+    "frequency": "day"
+   },
+   "checked": {
+    "time": "day",
+    "value": "orders",
+    "frequency": "day",
+    "series": null,
+    "season": null,
+    "size": "28m",
+    "horizon": 28,
+    "quantiles": [
+     0.05,
+     0.1,
+     0.9,
+     0.95
+    ],
+    "past_covariates": [],
+    "known_covariates": [],
+    "holdout": null,
+    "missing": "refuse",
+    "symmetric_averaging": true,
+    "clip_nonnegative": true,
+    "history": true,
+    "alpha": 0.05,
+    "output": "quantile_forecast"
+   }
+  },
+  {
+   "what": "a series column, a size, a holdout and a season of the node's own (lot F0)",
+   "model": "timestral",
+   "params": {
+    "time": "day",
+    "value": "orders",
+    "frequency": "day",
+    "series": "channel",
+    "size": "123m",
+    "holdout": 7,
+    "season": 1,
+    "horizon": 56
+   },
+   "checked": {
+    "time": "day",
+    "value": "orders",
+    "frequency": "day",
+    "series": "channel",
+    "season": 1,
+    "size": "123m",
+    "horizon": 56,
+    "quantiles": [
+     0.05,
+     0.1,
+     0.9,
+     0.95
+    ],
+    "past_covariates": [],
+    "known_covariates": [],
+    "holdout": 7,
+    "missing": "refuse",
+    "symmetric_averaging": true,
+    "clip_nonnegative": true,
+    "history": true,
+    "alpha": 0.05,
+    "output": "quantile_forecast"
+   }
+  },
+  {
+   "what": "the quantiles are sorted by the runner's names, the median is the forecast itself (lot F0)",
+   "model": "timestral",
+   "params": {
+    "time": "day",
+    "value": "orders",
+    "frequency": "day",
+    "quantiles": [
+     0.9,
+     0.1,
+     0.5
+    ]
+   },
+   "checked": {
+    "time": "day",
+    "value": "orders",
+    "frequency": "day",
+    "series": null,
+    "season": null,
+    "size": "28m",
+    "horizon": 28,
+    "quantiles": [
+     0.1,
+     0.5,
+     0.9
+    ],
+    "past_covariates": [],
+    "known_covariates": [],
+    "holdout": null,
+    "missing": "refuse",
+    "symmetric_averaging": true,
+    "clip_nonnegative": true,
+    "history": true,
+    "alpha": 0.05,
+    "output": "quantile_forecast"
+   }
+  },
+  {
+   "what": "a horizon given with known covariates is refused: the future rows are the horizon (lot F0)",
+   "model": "timestral",
+   "params": {
+    "time": "day",
+    "value": "orders",
+    "frequency": "day",
+    "known_covariates": [
+     "holiday"
+    ],
+    "horizon": 14
+   },
+   "error": "timestral: 'horizon' only applies when 'known_covariates' is not given"
+  },
+  {
+   "what": "covariates, past and known, in the two lists (lot F0)",
+   "model": "timestral",
+   "params": {
+    "time": "day",
+    "value": "orders",
+    "frequency": "day",
+    "series": "channel",
+    "past_covariates": [
+     "price",
+     "region"
+    ],
+    "known_covariates": [
+     "holiday"
+    ]
+   },
+   "checked": {
+    "time": "day",
+    "value": "orders",
+    "frequency": "day",
+    "series": "channel",
+    "season": null,
+    "size": "28m",
+    "quantiles": [
+     0.05,
+     0.1,
+     0.9,
+     0.95
+    ],
+    "past_covariates": [
+     "price",
+     "region"
+    ],
+    "known_covariates": [
+     "holiday"
+    ],
+    "holdout": null,
+    "missing": "refuse",
+    "symmetric_averaging": true,
+    "clip_nonnegative": true,
+    "history": true,
+    "alpha": 0.05,
+    "output": "quantile_forecast"
+   }
+  },
+  {
+   "what": "a history given with the results output is refused: it is the forecast output's (lot F0)",
+   "model": "timestral",
+   "params": {
+    "time": "day",
+    "value": "orders",
+    "frequency": "day",
+    "output": "results",
+    "history": false
+   },
+   "error": "timestral: 'history' only applies when output = quantile_forecast"
+  },
+  {
+   "what": "the history with the forecast output (lot F0)",
+   "model": "timestral",
+   "params": {
+    "time": "day",
+    "value": "orders",
+    "frequency": "day",
+    "history": false
+   },
+   "checked": {
+    "time": "day",
+    "value": "orders",
+    "frequency": "day",
+    "series": null,
+    "season": null,
+    "size": "28m",
+    "horizon": 28,
+    "quantiles": [
+     0.05,
+     0.1,
+     0.9,
+     0.95
+    ],
+    "past_covariates": [],
+    "known_covariates": [],
+    "holdout": null,
+    "missing": "refuse",
+    "symmetric_averaging": true,
+    "clip_nonnegative": true,
+    "history": false,
+    "alpha": 0.05,
+    "output": "quantile_forecast"
+   }
+  },
+  {
+   "what": "the library's two defaults, off (lot F0)",
+   "model": "timestral",
+   "params": {
+    "time": "day",
+    "value": "orders",
+    "frequency": "day",
+    "symmetric_averaging": false,
+    "clip_nonnegative": false
+   },
+   "checked": {
+    "time": "day",
+    "value": "orders",
+    "frequency": "day",
+    "series": null,
+    "season": null,
+    "size": "28m",
+    "horizon": 28,
+    "quantiles": [
+     0.05,
+     0.1,
+     0.9,
+     0.95
+    ],
+    "past_covariates": [],
+    "known_covariates": [],
+    "holdout": null,
+    "missing": "refuse",
+    "symmetric_averaging": false,
+    "clip_nonnegative": false,
+    "history": true,
+    "alpha": 0.05,
+    "output": "quantile_forecast"
+   }
+  },
+  {
+   "what": "a size the model does not have (lot F0)",
+   "model": "timestral",
+   "params": {
+    "time": "day",
+    "value": "orders",
+    "frequency": "day",
+    "size": "7m"
+   },
+   "error": "timestral: 'size' must be one of 5m, 28m, 123m, 209m"
+  },
+  {
+   "what": "a horizon past one forward pass (lot F0)",
+   "model": "timestral",
+   "params": {
+    "time": "day",
+    "value": "orders",
+    "frequency": "day",
+    "horizon": 1025
+   },
+   "error": "timestral: 'horizon' must be a whole number from 1 to 1024"
+  },
+  {
+   "what": "a holdout past one forward pass (lot F0)",
+   "model": "timestral",
+   "params": {
+    "time": "day",
+    "value": "orders",
+    "frequency": "day",
+    "holdout": 1025
+   },
+   "error": "timestral: 'holdout' must be a whole number from 0 to 1024"
+  },
+  {
+   "what": "a season of 0 (lot F0)",
+   "model": "timestral",
+   "params": {
+    "time": "day",
+    "value": "orders",
+    "frequency": "day",
+    "season": 0
+   },
+   "error": "timestral: 'season' must be a whole number from 1 to 10000"
+  },
+  {
+   "what": "a missing-value policy the node does not have: the seasonal fill is an MSTL (lot F0)",
+   "model": "timestral",
+   "params": {
+    "time": "day",
+    "value": "orders",
+    "frequency": "day",
+    "missing": "seasonal"
+   },
+   "error": "timestral: 'missing' must be one of refuse, linear, model"
+  },
+  {
+   "what": "the missing values handed to the model (lot F0)",
+   "model": "timestral",
+   "params": {
+    "time": "day",
+    "value": "orders",
+    "frequency": "day",
+    "missing": "model"
+   },
+   "checked": {
+    "time": "day",
+    "value": "orders",
+    "frequency": "day",
+    "series": null,
+    "season": null,
+    "size": "28m",
+    "horizon": 28,
+    "quantiles": [
+     0.05,
+     0.1,
+     0.9,
+     0.95
+    ],
+    "past_covariates": [],
+    "known_covariates": [],
+    "holdout": null,
+    "missing": "model",
+    "symmetric_averaging": true,
+    "clip_nonnegative": true,
+    "history": true,
+    "alpha": 0.05,
+    "output": "quantile_forecast"
+   }
+  },
+  {
+   "what": "a quantile of 1 (lot F0)",
+   "model": "timestral",
+   "params": {
+    "time": "day",
+    "value": "orders",
+    "frequency": "day",
+    "quantiles": [
+     0.05,
+     1
+    ]
+   },
+   "error": "timestral: 'quantiles' must be a list of numbers, each above 0 and below 1"
+  },
+  {
+   "what": "more quantiles than the model has levels besides the median (lot F0)",
+   "model": "timestral",
+   "params": {
+    "time": "day",
+    "value": "orders",
+    "frequency": "day",
+    "quantiles": [
+     0.01,
+     0.02,
+     0.03,
+     0.04,
+     0.05,
+     0.06,
+     0.07,
+     0.08,
+     0.09,
+     0.1,
+     0.11,
+     0.12,
+     0.13,
+     0.14,
+     0.15,
+     0.16,
+     0.17,
+     0.18,
+     0.19,
+     0.2,
+     0.21
+    ]
+   },
+   "error": "timestral: 'quantiles' may hold at most 20 numbers"
+  },
+  {
+   "what": "a value column named twice among the covariates (lot F0)",
+   "model": "timestral",
+   "params": {
+    "time": "day",
+    "value": "orders",
+    "frequency": "day",
+    "known_covariates": [
+     "orders"
+    ]
+   },
+   "error": "timestral: the column «orders» is both 'value' and 'known_covariates': choose another"
+  },
+  {
+   "what": "the series column is the time column (lot F0)",
+   "model": "timestral",
+   "params": {
+    "time": "day",
+    "value": "orders",
+    "frequency": "day",
+    "series": "day"
+   },
+   "error": "timestral: the column «day» is both 'time' and 'series': choose another"
+  },
+  {
+   "what": "a covariate in both lists (lot F0)",
+   "model": "timestral",
+   "params": {
+    "time": "day",
+    "value": "orders",
+    "frequency": "day",
+    "past_covariates": [
+     "price"
+    ],
+    "known_covariates": [
+     "price"
+    ]
+   },
+   "error": "timestral: the column «price» is both 'past_covariates' and 'known_covariates': choose another"
+  },
+  {
+   "what": "too many covariates in one list (lot F0)",
+   "model": "timestral",
+   "params": {
+    "time": "day",
+    "value": "orders",
+    "frequency": "day",
+    "past_covariates": [
+     "c0",
+     "c1",
+     "c2",
+     "c3",
+     "c4",
+     "c5",
+     "c6",
+     "c7",
+     "c8",
+     "c9",
+     "c10",
+     "c11",
+     "c12",
+     "c13",
+     "c14",
+     "c15",
+     "c16"
+    ]
+   },
+   "error": "timestral: 'past_covariates' may name at most 16 columns"
+  },
+  {
+   "what": "the output is the forecast, never `forecast` (lot F0)",
+   "model": "timestral",
+   "params": {
+    "time": "day",
+    "value": "orders",
+    "frequency": "day",
+    "output": "forecast"
+   },
+   "error": "timestral: 'output' must be one of quantile_forecast, results"
+  },
+  {
+   "what": "an alpha of 1 (lot F0)",
+   "model": "timestral",
+   "params": {
+    "time": "day",
+    "value": "orders",
+    "frequency": "day",
+    "alpha": 1
+   },
+   "error": "timestral: 'alpha' must be a number above 0 and below 1"
+  },
+  {
+   "what": "a seed: nothing here is random (lot F0)",
+   "model": "timestral",
+   "params": {
+    "time": "day",
+    "value": "orders",
+    "frequency": "day",
+    "seed": 1
+   },
+   "error": "timestral: there is no parameter 'seed' (it takes: time, value, frequency, series, season, size, horizon, quantiles, past_covariates, known_covariates, holdout, missing, symmetric_averaging, clip_nonnegative, history, alpha, output)"
+  },
+  {
+   "what": "the frequency is needed (lot F0)",
+   "model": "timestral",
+   "params": {
+    "time": "day",
+    "value": "orders"
+   },
+   "error": "timestral: 'frequency' is required"
+  },
+  {
+   "what": "a frequency the node does not have (lot F0)",
+   "model": "timestral",
+   "params": {
+    "time": "day",
+    "value": "orders",
+    "frequency": "minute"
+   },
+   "error": "timestral: 'frequency' must be one of hour, day, week, month, quarter, year, index"
   }
  ]
 }

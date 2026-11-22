@@ -6504,7 +6504,8 @@ export default {
       "timeseries": "Zeitreihen",
       "boosting": "Boosting",
       "customer_lifetime": "Kundenlebensdauer",
-      "experiments": "Experimente"
+      "experiments": "Experimente",
+      "foundation_forecast": "Prognosen mit vortrainierten Modellen"
     },
     "linear": {
       "name": "Lineare Regression",
@@ -7283,6 +7284,7 @@ export default {
       "boosting": { "name": "Boosting", "description": "Gradient Boosting: XGBoost und CatBoost, mit Wichtigkeiten nach Gain und SHAP." },
       "customer_lifetime": { "name": "Kundenlebensdauer", "description": "Kunden, die gehen, ohne es zu sagen: erwartete Käufe, Wahrscheinlichkeit, noch aktiv zu sein, und abgezinster Wert (CLV), mit Pareto/NBD, BG/NBD, MBG/NBD, BG/BB und Gamma–Gamma." },
       "experiments": { "name": "Experimente", "description": "A/B-Tests: ob eine Variante eine Kennzahl bewegt hat, ob die Aufteilung der Einheiten vertrauenswürdig ist und wie sicher das Ergebnis ist, sowie der Umfang, den ein Experiment braucht, aus Ihren eigenen Daten." },
+      "foundation_forecast": { "name": "Prognosen mit vortrainierten Modellen", "description": "Prognosen einer Zeitreihe aus einem vorab trainierten Modell, mit Spanne und ohne Anpassung; seine Gewichte stehen unter einer eigenen Lizenz, die ein Administrator beim Aktivieren der Gruppe liest und annimmt." },
     },
     "modelsIn": "Modelle:",
     "packagesPinned": "{n} Pakete in festgelegter Version",

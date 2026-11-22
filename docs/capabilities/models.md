@@ -1251,6 +1251,17 @@ control; the free shipping experiment (`spedizione_gratuita`) opens with the spl
 low-engagement visitors from day 12 on: B looks better than it is, which is what the check is for. Change the **Filter** of the checkout flow to
 `esperimento_id` = `spedizione_gratuita` to see it.
 
+### Pre-trained forecasting (Python): being built
+
+Model id in the catalogue: `timestral`, in its own group, **Pre-trained forecasting**. It will forecast the next
+weeks of a series, with a range, from a model trained in advance (Timestral, by Mistral AI): nothing is fitted on
+your data, so there is no model card, no registration and no Predict, and a flow run logs to MLflow like any other.
+**The weights of that model are under a licence of their own, the Modified MIT License, which withholds every right
+from a company whose global consolidated monthly revenue is above $20 million: the group's image downloads them
+from Mistral AI into your cluster only when an administrator enables the group, and this page will say the clause
+word for word when the node is built.** This is not legal advice.
+In this version the node does not run yet: it stops with «… is not built yet in this version of Tabularia».
+
 ## The output
 
 Every model writes the same **ten columns** as the [statistical tests](statistics.md#the-output):

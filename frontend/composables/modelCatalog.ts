@@ -787,8 +787,9 @@ export const modelPresetHintKey = (preset: string): string => `models.presets.${
 export const modelGroupKey = (group: string): string => `models.groups.${group}`
 
 // Models whose form and words the editor has, but whose runner is not built yet: the palette leaves them out. Empty now: the A/B
-// nodes (lot E9) and the decomposition (lot D6) are in; a model being built goes here until its runner runs.
-export const MODEL_NOT_IN_THE_PALETTE_YET: ReadonlySet<string> = new Set<string>()
+// nodes (lot E9) and the decomposition (lot D6) are in; a model being built goes here until its runner runs. Forecast (Timestral)
+// (docs/specs/foundation-forecast.md) is in the catalogue and has no form nor words yet: lot F5 gives them and takes it away.
+export const MODEL_NOT_IN_THE_PALETTE_YET: ReadonlySet<string> = new Set<string>(['timestral'])
 
 /** The palette's Models group: the shown groups in the catalogue's order, each with its models
  *  and, after ARIMA, the six presets of that same node. With a search, only the items whose
@@ -926,14 +927,15 @@ export function predictColumns(modelId: string | null | undefined, params: Param
 }
 
 /** The labels a name with a `*` is made of, as the engine writes them (catalog.py `_ROWS_WILDCARDS`): `pred_quantile_`, `pred_surv_at_`
- *  one per number of a list of the node's options (increasing, each once; the quantile 0.5 is the median: no column of its own;
+ *  one per number of a list of the node's options (`quantile_` too: the pre-trained forecast's; increasing, each once; the quantile 0.5 is the median: no column of its own;
  *  a number as its shortest form, 12 and not 12.0); `seasonal_` one per seasonal period of a decomposition (an MSTL's `periods`,
  *  else the node's `period`, else the frequency's own; whole numbers above 1); `imf_` one per IMF up to `max_imf`. null: a name
  *  the data fill (`pred_prob_*`, one per class), not known before a run. */
 function wildcardLabels(prefix: string, full: Params, catalog: ModelCatalog): string[] | null {
   const numbers = (key: string): number[] =>
     Array.isArray(full[key]) ? [...new Set((full[key] as unknown[]).filter((v): v is number => typeof v === 'number' && Number.isFinite(v)))].sort((a, b) => a - b) : []
-  if (prefix === 'pred_quantile_') return numbers('quantiles').filter((v) => v !== 0.5).map(numberLabel)
+  // `quantile_` is the pre-trained forecast's: the same list, the same median left out
+  if (prefix === 'pred_quantile_' || prefix === 'quantile_') return numbers('quantiles').filter((v) => v !== 0.5).map(numberLabel)
   if (prefix === 'pred_surv_at_') return numbers('times').map(numberLabel)
   if (prefix === 'seasonal_') {
     const frequency = typeof full.frequency === 'string' ? catalog.season_of_frequency[full.frequency] : undefined

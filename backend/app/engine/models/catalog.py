@@ -105,6 +105,12 @@ LIMITS: dict[str, int] = {
     # a smoother's span (STL's seasonal and trend windows): stl's own periodic window for the group's longest series
     # (10 · 200,000 + 1); wider is no other smoother, and a larger number would not fit the Fortran's integers
     "max_window": 2_000_001,
+    # the foundation forecast node's (docs/specs/foundation-forecast.md, «Performance and limits»). `max_horizon` is ARIMA's and
+    # the lifetime nodes' 1,000 steps; Timestral's forecast is one forward pass of 32 patches of 32 steps
+    "max_series": 10_000,            # series of one forecast (the values of the series column)
+    "max_foundation_horizon": 1024,  # steps of a forecast, and of a holdout, of a pre-trained model
+    "max_covariates": 16,            # covariate columns of a forecast, past and known together
+    "max_series_charts": 12,         # series drawn in the report, the rest are in the table
 }
 
 # ── groups: one image each, built when an administrator enables it ─────────
@@ -115,6 +121,7 @@ GROUPS: dict[str, dict[str, Any]] = {
     "boosting": {"language": "python", "label": "models.groups.boosting", "models": ["xgboost", "catboost"]},
     "customer_lifetime": {"language": "r", "label": "models.groups.customer_lifetime", "models": ["clv", "bg_bb"]},
     "experiments": {"language": "r", "label": "models.groups.experiments", "models": ["ab_test", "ab_plan"]},
+    "foundation_forecast": {"language": "python", "label": "models.groups.foundation_forecast", "models": ["timestral"]},
 }
 
 # ── controls and kinds ──────────────────────────────────────────────────────
@@ -272,6 +279,20 @@ KINDS: dict[str, dict[str, Any]] = {
     "seasonality_test": _choice("friedman", "kruskal_wallis", "none"),
     "lb_lag": {"control": "number_or_choice", "choices": ["auto"], "min": 1, "max": LIMITS["max_lb_lags"], "whole": True},
     "output_components": _choice("components", "results"),
+    # the foundation forecast node's (docs/specs/foundation-forecast.md, «The form»)
+    "series_column": {"control": "column", "types": ["text", "integer", "boolean"]},
+    "season_steps": _int(1, LIMITS["max_period"]),
+    "foundation_size": _choice("5m", "28m", "123m", "209m"),
+    "foundation_horizon": _int(1, LIMITS["max_foundation_horizon"]),
+    "foundation_holdout": _int(0, LIMITS["max_foundation_horizon"]),
+    # the 21 levels the model forecasts, the median (its own column) left out: 20 at most. That a level is one of them is
+    # the runner's refusal (`quantile_level`): a list of numbers has no set of values to choose from
+    "foundation_quantiles": {"control": "numbers", "above": 0, "below": 1, "max_count": 20},
+    # the covariate columns of both lists: at most 16 each here; 16 together is the runner's and the gateway's check
+    "covariate_columns": {"control": "columns", "min": 0, "max": LIMITS["max_covariates"],
+                          "types": ["number", "integer", "boolean", "text"]},
+    "missing_foundation": _choice("refuse", "linear", "model"),
+    "output_quantile_forecast": _choice("quantile_forecast", "results"),
 }
 
 # The seasonal period a frequency implies when `s` is not given.
@@ -313,6 +334,9 @@ SECTION_SHAPES: dict[str, dict[str, Any]] = {
     # the decomposition node's: a seasonal period; an intrinsic mode function (or the residue)
     "season": {"level": "required", "level_2": "null", "indexed": False},
     "imf": {"level": "required", "level_2": "null", "indexed": False},
+    # the foundation forecast's: a series (its measures); a line of a series' chart: the series, then the line
+    "series": {"level": "required", "level_2": "null", "indexed": False},
+    "series_curve": {"level": "required", "level_2": "required", "indexed": True},
 }
 
 VERDICTS = ("ok", "doubtful", "failed", "not_computed")
@@ -1357,6 +1381,64 @@ MODELS["ab_plan"] = {
     "variants": [_ab_plan_variant(t) for t in _AB_METRIC_TYPES],
 }
 
+# ── the foundation forecast node (docs/specs/foundation-forecast.md, «The node `timestral`») ────────────────────────────
+# Forecast with a pre-trained model: nothing is fitted, so `card: false` (nothing registered, no Predict) and MLflow logs the
+# run. One variant: what the runner may write is the same whatever the options; the sections that depend on the holdout and on
+# the series' count are declared here and written when the run has them (a variant declares what the runner MAY write).
+_FF_READING_BLOCKS = ["summary", "forecast", "holdout", "coverage", "comparison", "limits", "licence", "method", "formulas"]
+_FF_MEASURES = ["coverage_80", "coverage_90", "relative_mase"]  # assumption rows that are measures, with no verdict
+_FF_MODEL_TEXTS = [*_MODEL_TEXTS, "frequency", "time_kind", "missing", "size", "weights", "weights_sha256", "licence",
+                   "licence_sha256", "cpu_capability"]
+_FF_MODEL_NUMBERS = ["n", "n_series", "n_points", "n_missing", "n_filled", "n_model_missing", "n_future_rows", "horizon", "holdout",
+                     "season", "alpha", "threads", "batches", "seconds_load", "seconds_forecast", "n_quantiles", "mase",
+                     "baseline_mase", "relative_mase_geomean", "smape", "baseline_smape", "wql", "coverage_80", "coverage_90",
+                     "n_measured"]
+_FF_SERIES_NUMBERS = ["n", "n_used", "n_missing", "n_filled", "first", "last", "horizon", "scale", "mase", "baseline_mase",
+                      "relative_mase", "smape", "baseline_smape", "pinball", "wql", "coverage_80", "coverage_90", "total"]
+_FF_OUTPUT = ["series", "time", "observed", "forecast", "quantile_*", "baseline", "filled", "is_holdout", "is_forecast"]
+
+MODELS["timestral"] = {
+    "group": "foundation_forecast",
+    "family": "timeseries",
+    "card": False,
+    "needs": {"time": "time_column", "value": "number_column", "frequency": "frequency"},
+    "takes": {
+        "series": "series_column", "season": "season_steps", "size": "foundation_size", "horizon": "foundation_horizon",
+        "quantiles": "foundation_quantiles", "past_covariates": "covariate_columns", "known_covariates": "covariate_columns",
+        "holdout": "foundation_holdout", "missing": "missing_foundation", "symmetric_averaging": "boolean",
+        "clip_nonnegative": "boolean", "history": "boolean", "alpha": "alpha", "output": "output_quantile_forecast",
+    },
+    # `season`: None is the frequency's own; `holdout`: None is the horizon (with known covariates, the future rows' count)
+    "defaults": {
+        "series": None, "season": None, "size": "28m", "horizon": 28, "quantiles": [0.05, 0.1, 0.9, 0.95], "past_covariates": [],
+        "known_covariates": [], "holdout": None, "missing": "refuse", "symmetric_averaging": True, "clip_nonnegative": True,
+        "history": True, "alpha": 0.05, "output": "quantile_forecast",
+    },
+    "applies": {
+        # with known covariates the horizon is the future rows the input holds
+        "horizon": {"known_covariates": False},
+        "history": {"output": ["quantile_forecast"]},
+    },
+    "requires": [],
+    "forbids": [],
+    "disjoint": ["time", "value", "series", "past_covariates", "known_covariates"],
+    "variants": [{
+        "id": "default",
+        "when": {},
+        "sections": {
+            "model": {"levels": None, "texts": _FF_MODEL_TEXTS, "numbers": _FF_MODEL_NUMBERS},
+            "series": {"levels": None, "numbers": _FF_SERIES_NUMBERS, "texts": ["not_measured"]},
+            "assumption": {**_assumptions("baseline_comparison", *_FF_MEASURES), "texts": [*_ASSUMPTION["texts"], "advice_id"]},
+            "series_curve": {"levels": None, "numbers": ["y"], "texts": []},
+            "reading": {"levels": list(_FF_READING_BLOCKS), "numbers": [], "texts": ["line_*"]},
+        },
+        "charts": [{"id": "forecast", "under": None}, {"id": "holdout", "under": None},
+                   {"id": "relative_mase", "under": "baseline_comparison"}],
+        "outputs": {"quantile_forecast": list(_FF_OUTPUT)},
+        "rows_when": {"series": {"series": True}},
+    }],
+}
+
 # the models in the order of their groups: the palette, the sentences and the snapshot list them so
 MODELS = {m: MODELS[m] for g in GROUPS.values() for m in g["models"]}
 
@@ -1444,6 +1526,10 @@ OUTPUT_TYPES: dict[str, dict[str, str]] = {
     "components": {"time": "=time", **{name: "Float64" for name in (
         "observed", "transformed", "trend", "seasonal_*", "remainder", "deseasonalized", "imf_*", "residue")},
         "filled": "Boolean"},
+    # the foundation forecast's: one row per instant and series (docs/specs/foundation-forecast.md, «The output»). The time and the
+    # series keep the input columns' own types (`=time`, `=series`); `quantile_*` is one column per level asked, 0.5 left out
+    "quantile_forecast": {"series": "=series", "time": "=time", **{name: "Float64" for name in (
+        "observed", "forecast", "quantile_*", "baseline")}, "filled": "Boolean", "is_holdout": "Boolean", "is_forecast": "Boolean"},
 }
 
 # How a runner writes the input's own columns back in the rows output, by their kind, where the type
@@ -1801,7 +1887,9 @@ def _imf_labels(full: Mapping[str, Any]) -> list[str]:
 
 
 _ROWS_WILDCARDS = {"pred_quantile_": _labels_of("quantiles"), "pred_surv_at_": _labels_of("times"),
-                   "seasonal_": _seasonal_labels, "imf_": _imf_labels}
+                   "seasonal_": _seasonal_labels, "imf_": _imf_labels,
+                   # the foundation forecast's quantile columns: the same function as `pred_quantile_`, 0.5 left out (it is `forecast`)
+                   "quantile_": _labels_of("quantiles")}
 
 
 def _rows_columns(names: list[str], full: Mapping[str, Any], when: Mapping[str, Mapping[str, Any]] | None = None) -> list[str]:

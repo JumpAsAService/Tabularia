@@ -35,13 +35,13 @@ def test_the_snapshot_is_what_the_catalogue_says():
 
 def test_groups_and_models_point_at_each_other():
     snap = catalog.snapshot()
-    assert [g["id"] for g in snap["groups"]] == ["regression", "survival", "timeseries", "boosting", "customer_lifetime", "experiments"]
-    assert [m["id"] for m in snap["models"]] == ["linear", "logistic", "kaplan_meier", "cox", "parametric_survival", "arima", "decomposition", "xgboost", "catboost", "clv", "bg_bb", "ab_test", "ab_plan"]
+    assert [g["id"] for g in snap["groups"]] == ["regression", "survival", "timeseries", "boosting", "customer_lifetime", "experiments", "foundation_forecast"]
+    assert [m["id"] for m in snap["models"]] == ["linear", "logistic", "kaplan_meier", "cox", "parametric_survival", "arima", "decomposition", "xgboost", "catboost", "clv", "bg_bb", "ab_test", "ab_plan", "timestral"]
     listed = [m for g in catalog.GROUPS.values() for m in g["models"]]
     assert sorted(listed) == sorted(catalog.MODELS) and len(listed) == len(set(listed))
     for model, spec in catalog.MODELS.items():
         assert model in catalog.GROUPS[spec["group"]]["models"], model
-        assert catalog.GROUPS[spec["group"]]["language"] == ("python" if spec["group"] == "boosting" else "r")
+        assert catalog.GROUPS[spec["group"]]["language"] == ("python" if spec["group"] in ("boosting", "foundation_forecast") else "r")
     # Predict's columns and options name a model, or `model:variant` (the card's variant)
     variants = {f"{m}:{v['id']}" for m, spec in catalog.MODELS.items() for v in spec["variants"]}
     keyed = set(catalog.PREDICT["columns"])
@@ -165,7 +165,7 @@ def test_the_experiments_group_and_its_two_nodes():
     test, plan = catalog.MODELS["ab_test"], catalog.MODELS["ab_plan"]
     # neither makes a model: no card, so no registration and no Predict
     assert test["card"] is False and plan["card"] is False
-    assert all(spec.get("card", True) for m, spec in catalog.MODELS.items() if m not in ("ab_test", "ab_plan", "decomposition"))
+    assert all(spec.get("card", True) for m, spec in catalog.MODELS.items() if m not in ("ab_test", "ab_plan", "decomposition", "timestral"))
     snap = {m["id"]: m for m in catalog.snapshot()["models"]}
     assert [snap[m]["card"] for m in ("linear", "clv", "ab_test", "ab_plan")] == [True, True, False, False]
     assert not any(k.startswith(("ab_test", "ab_plan")) for k in catalog.PREDICT["columns"])
@@ -239,6 +239,73 @@ def test_the_experiments_nodes_rules():
     # the output «variants» is the same list of columns whichever metric: the variant of the metric type is not needed to know it
     assert catalog.output_columns("ab_test", {"output": "variants"}, [])[0] == catalog.output_columns(
         "ab_test", {"metric_type": "ratio", "output": "variants"}, [])[0]
+
+
+def test_the_foundation_forecast_group_and_its_node():
+    """docs/specs/foundation-forecast.md, «The group `foundation_forecast`», «The node `timestral`»: a Python group of one node, no
+    card, one variant, the limits and the rules of the form."""
+    assert catalog.GROUPS["foundation_forecast"] == {"language": "python", "label": "models.groups.foundation_forecast", "models": ["timestral"]}
+    for key, value in {"max_series": 10_000, "max_foundation_horizon": 1024, "max_covariates": 16, "max_series_charts": 12}.items():
+        assert catalog.LIMITS[key] == value, key
+    assert catalog.LIMITS["max_horizon"] == 1000  # ARIMA's and the lifetime nodes', unchanged
+    spec = catalog.MODELS["timestral"]
+    assert spec["card"] is False and spec["group"] == "foundation_forecast" and "max_rows" not in spec
+    assert list(spec["needs"]) == ["time", "value", "frequency"] and "seed" not in spec["takes"]  # nothing is random
+    assert not any(k.startswith("timestral") for k in catalog.PREDICT["columns"])
+    assert [v["id"] for v in spec["variants"]] == ["default"] and catalog.variant("timestral", {}) == "default"
+    d = spec["defaults"]
+    assert (d["size"], d["horizon"], d["quantiles"], d["holdout"], d["missing"], d["symmetric_averaging"], d["clip_nonnegative"],
+            d["history"], d["alpha"], d["output"]) == ("28m", 28, [0.05, 0.1, 0.9, 0.95], None, "refuse", True, True, True, 0.05,
+                                                       "quantile_forecast")
+    assert spec["disjoint"] == ["time", "value", "series", "past_covariates", "known_covariates"]
+    base = {"time": "day", "value": "orders", "frequency": "day"}
+    for params, message in [
+        ({**base, "size": "7m"}, "timestral: 'size' must be one of 5m, 28m, 123m, 209m"),
+        ({**base, "horizon": 1025}, "timestral: 'horizon' must be a whole number from 1 to 1024"),
+        ({**base, "holdout": 1025}, "timestral: 'holdout' must be a whole number from 0 to 1024"),
+        ({**base, "known_covariates": ["x"], "horizon": 7}, "timestral: 'horizon' only applies when 'known_covariates' is not given"),
+        ({**base, "output": "results", "history": False}, "timestral: 'history' only applies when output = quantile_forecast"),
+        ({**base, "missing": "seasonal"}, "timestral: 'missing' must be one of refuse, linear, model"),
+        ({**base, "series": "orders"}, "timestral: the column «orders» is both 'value' and 'series': choose another"),
+        ({**base, "past_covariates": ["p"], "known_covariates": ["p"]}, "timestral: the column «p» is both 'past_covariates' and 'known_covariates': choose another"),
+        ({**base, "seed": 1}, "timestral: there is no parameter 'seed'"),
+    ]:
+        with pytest.raises(EngineError) as e:
+            catalog.check_params("timestral", params)
+        assert str(e.value).startswith(message), (params, str(e.value))
+    # the series and the covariates read the kinds of the columns
+    columns = {"day": "Date", "orders": "Float64", "channel": "String", "flag": "Boolean", "price": "Float64", "when": "Datetime(time_unit='us', time_zone=None)", "label": "String"}
+    ok = catalog.check_params("timestral", {**base, "series": "channel", "past_covariates": ["price", "label"], "known_covariates": ["flag"]}, columns)
+    assert ok["series"] == "channel" and ok["past_covariates"] == ["price", "label"]
+    with pytest.raises(EngineError):
+        catalog.check_params("timestral", {**base, "series": "price"}, columns)  # a number is no series
+    with pytest.raises(EngineError):
+        catalog.check_params("timestral", {**base, "known_covariates": ["when"]}, columns)  # a date is no covariate
+
+
+def test_the_foundation_forecast_s_columns_before_a_run():
+    """`quantile_forecast`: the series and the time keep the input's own types (`=series`, `=time`), the series only with a series
+    column, one `quantile_<level>` per level asked, the median left out (it is `forecast`)."""
+    def names(params, inputs=()):
+        return [n for n, _ in catalog.output_columns("timestral", params, list(inputs))[0]]
+
+    assert names({}) == ["time", "observed", "forecast", "quantile_0.05", "quantile_0.1", "quantile_0.9", "quantile_0.95", "baseline",
+                        "filled", "is_holdout", "is_forecast"]
+    assert names({"series": "channel", "quantiles": [0.95, 0.5, 0.25, 0.25, 0.01]}) == [
+        "series", "time", "observed", "forecast", "quantile_0.01", "quantile_0.25", "quantile_0.95", "baseline", "filled", "is_holdout", "is_forecast"]
+    cols, unknown = catalog.output_columns("timestral", {"time": "day", "series": "channel"},
+                                           [("day", "Int64"), ("channel", "String"), ("other", "Float64")])
+    assert unknown == [] and dict(cols) == {
+        "series": "String", "time": "Int64", "observed": "Float64", "forecast": "Float64", "quantile_0.05": "Float64",
+        "quantile_0.1": "Float64", "quantile_0.9": "Float64", "quantile_0.95": "Float64", "baseline": "Float64", "filled": "Boolean",
+        "is_holdout": "Boolean", "is_forecast": "Boolean"}
+    for own in ("Int64", "Int32", "Date", "Datetime(time_unit='ns', time_zone='UTC')", "Datetime(time_unit='us', time_zone=None)"):
+        cols, _ = catalog.output_columns("timestral", {"time": "day", "series": "s"}, [("day", own), ("s", own)])
+        assert dict(cols)["time"] == own and dict(cols)["series"] == own, own  # the input's own types, no Int32 rule
+    assert dict(catalog.output_columns("timestral", {"time": "gone"}, [("day", "Int64")])[0])["time"] == "Unknown"
+    assert catalog.output_columns("timestral", {"output": "results"}, [])[0] == list(catalog.OUTPUT_TYPES["results"].items())
+    assert catalog.output_type("quantile_forecast", "quantile_0.05") == "Float64" and catalog.output_type("quantile_forecast", "quantile_") is None
+    assert catalog.output_type("quantile_forecast", "series") == "=series" and catalog.output_type("quantile_forecast", "is_holdout") == "Boolean"
 
 
 def test_the_decomposition_node_and_its_four_variants():

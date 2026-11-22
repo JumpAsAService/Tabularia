@@ -6504,7 +6504,8 @@ export default {
       "timeseries": "Series temporales",
       "boosting": "Boosting",
       "customer_lifetime": "Ciclo de vida del cliente",
-      "experiments": "Experimentos"
+      "experiments": "Experimentos",
+      "foundation_forecast": "Previsiones con modelos preentrenados"
     },
     "linear": {
       "name": "Regresión lineal",
@@ -7283,6 +7284,7 @@ export default {
       "boosting": { "name": "Boosting", "description": "Gradient boosting: XGBoost y CatBoost, con importancias por ganancia y SHAP." },
       "customer_lifetime": { "name": "Ciclo de vida del cliente", "description": "Clientes que se van sin avisar: compras esperadas, probabilidad de seguir activo y valor descontado (CLV), con Pareto/NBD, BG/NBD, MBG/NBD, BG/BB y Gamma–Gamma." },
       "experiments": { "name": "Experimentos", "description": "Pruebas A/B: si una variante movió una métrica, si el reparto de las unidades es fiable y cuán seguro es el resultado, y el tamaño que necesita un experimento, a partir de tus propios datos." },
+      "foundation_forecast": { "name": "Previsiones con modelos preentrenados", "description": "Previsiones de una serie temporal con un modelo entrenado de antemano, con un rango y sin ajuste; sus pesos tienen una licencia propia, que un administrador lee y acepta al habilitar el grupo." },
     },
     "modelsIn": "Modelos:",
     "packagesPinned": "{n} paquetes en versión fija",

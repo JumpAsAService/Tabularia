@@ -68,12 +68,12 @@ func TestTheSharedCases(t *testing.T) {
 }
 
 func TestGroupsModelsAndVariants(t *testing.T) {
-	if got := Models(); !reflect.DeepEqual(got, []string{"linear", "logistic", "kaplan_meier", "cox", "parametric_survival", "arima", "decomposition", "xgboost", "catboost", "clv", "bg_bb", "ab_test", "ab_plan"}) {
+	if got := Models(); !reflect.DeepEqual(got, []string{"linear", "logistic", "kaplan_meier", "cox", "parametric_survival", "arima", "decomposition", "xgboost", "catboost", "clv", "bg_bb", "ab_test", "ab_plan", "timestral"}) {
 		t.Fatalf("models: %v", got)
 	}
 	groups := map[string]string{}
 	for _, g := range Groups() {
-		if want := map[bool]string{true: "python", false: "r"}[g.ID == "boosting"]; g.Language != want {
+		if want := map[bool]string{true: "python", false: "r"}[g.ID == "boosting" || g.ID == "foundation_forecast"]; g.Language != want {
 			t.Errorf("%s: language %q", g.ID, g.Language)
 		}
 		for _, m := range g.Models {
@@ -92,7 +92,8 @@ func TestGroupsModelsAndVariants(t *testing.T) {
 		Limit("max_quantiles") != 9 || Limit("min_customers") != 20 || Limit("min_repeaters") != 5 || Limit("max_opportunities") != 1000 ||
 		Limit("max_clv_steps") != 520 || Limit("max_top_customers") != 20 || Limit("palive_grid_frequency") != 10 || Limit("shap_cost_budget") != 20_000_000_000 || Limit("max_model_file_bytes") != 64<<20 ||
 		Limit("max_variants") != 20 || Limit("max_looks") != 1000 || Limit("max_secondary_metrics") != 10 || Limit("posterior_points") != 200 || Limit("power_points") != 50 ||
-		Limit("max_period") != 10_000 || Limit("max_periods") != 4 || Limit("max_imfs") != 16 || Limit("max_lb_lags") != 1000 {
+		Limit("max_period") != 10_000 || Limit("max_periods") != 4 || Limit("max_imfs") != 16 || Limit("max_lb_lags") != 1000 ||
+		Limit("max_series") != 10_000 || Limit("max_foundation_horizon") != 1024 || Limit("max_covariates") != 16 || Limit("max_series_charts") != 12 || Limit("max_horizon") != 1000 {
 		t.Error("limits")
 	}
 	cases := []struct {
