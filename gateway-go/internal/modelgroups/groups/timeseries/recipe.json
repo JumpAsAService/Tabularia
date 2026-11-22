@@ -1,9 +1,10 @@
 {
   "language": "r",
   "base": "4.6",
-  "pinned_on": "2026-11-21",
+  "pinned_on": "2026-11-22",
   "system_libraries": [
-    "libgsl-dev"
+    "libgsl-dev",
+    "libgmp-dev"
   ],
   "packages": [
     "assertthat@0.2.1",
@@ -48,7 +49,30 @@
     "quantmod@0.4.29",
     "tseries@0.10-63",
     "FinTS@0.4-9",
-    "Rlibeemd@1.4.4"
+    "Rlibeemd@1.4.4",
+    "numDeriv@2016.8-1.1",
+    "truncnorm@1.0-9",
+    "globals@0.20.0",
+    "listenv@1.1.0",
+    "parallelly@1.50.0",
+    "future@1.82.0",
+    "future.apply@1.21.0",
+    "Rsolnp@2.0.1",
+    "nloptr@2.2.1",
+    "FNN@1.1.4.1",
+    "kernlab@0.9-33",
+    "mclust@6.1.4",
+    "gmp@0.7-5.1",
+    "multicool@1.0.2",
+    "mvtnorm@1.4-2",
+    "pracma@2.4.6",
+    "ks@1.15.3",
+    "spd@2.0-1",
+    "chron@2.3-63",
+    "DistributionUtils@0.6-2",
+    "GeneralizedHyperbolic@0.8-7",
+    "SkewHyperbolic@0.4-2",
+    "rugarch@1.5-6"
   ],
   "resources": {
     "cpu": "1",

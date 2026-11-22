@@ -31,8 +31,13 @@ func TestTheSystemLibrariesAGroupsCardShows(t *testing.T) {
 	}
 	// the time series group's Rlibeemd links GSL too: the card shows the library there
 	ts, _ := Get("timeseries")
-	if got := say(ts.SystemLibraries(&lock)); got != `[{"package":"libgsl-dev","name":"GSL","version":"2.9.9","package_version":"2.9.9+test-1"}]` {
+	// and its `gmp` (rugarch's) the GMP: a lock that has recorded only GSL gives GMP's name without a version
+	if got := say(ts.SystemLibraries(&lock)); got != `[{"package":"libgsl-dev","name":"GSL","version":"2.9.9","package_version":"2.9.9+test-1"},{"package":"libgmp-dev","name":"GMP"}]` {
 		t.Errorf("timeseries: %s", got)
+	}
+	both := lock + "\nlibgmp-dev@2:6.3.0+dfsg-2ubuntu6"
+	if got := say(ts.SystemLibraries(&both)); got != `[{"package":"libgsl-dev","name":"GSL","version":"2.9.9","package_version":"2.9.9+test-1"},{"package":"libgmp-dev","name":"GMP","version":"6.3.0","package_version":"2:6.3.0+dfsg-2ubuntu6"}]` {
+		t.Errorf("timeseries with both: %s", got)
 	}
 	for _, other := range []string{"regression", "survival", "boosting", "experiments"} {
 		g, ok := Get(other)

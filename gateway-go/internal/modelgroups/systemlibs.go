@@ -43,6 +43,7 @@ func UpstreamVersion(v string) string {
 
 var systemLibraryLabels = map[string]string{
 	"libgsl-dev": "GSL", // the GNU Scientific Library
+	"libgmp-dev": "GMP", // the GNU Multiple Precision Arithmetic Library (rugarch's `gmp`, for the time series group)
 }
 
 // SystemLibraries are the group's system libraries as its card shows them, in the recipe's order;

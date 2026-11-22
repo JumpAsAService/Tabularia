@@ -218,10 +218,12 @@ func TestTheDockerfileIsTheScriptingEnvironmentsOne(t *testing.T) {
 
 // The GNU Scientific Library is the customer lifetime group's and, for Rlibeemd (the EMD of the decomposition node), the time
 // series group's: their Dockerfiles add libgsl-dev to the fixed libraries of every R image, and no other group's image changes
-// (docs/specs/customer-lifetime-models.md, «The recipe»; docs/specs/ts-decomposition.md, «The EMD package»).
+// (docs/specs/customer-lifetime-models.md, «The recipe»; docs/specs/ts-decomposition.md, «The EMD package»). The time series
+// group's also has the GNU Multiple Precision library, libgmp-dev, for `rugarch`'s `gmp` (docs/specs/garch-risk.md, «The recipe»).
 func TestOnlyTheCustomerLifetimeAndTheTimeSeriesImagesInstallGSL(t *testing.T) {
-	// the package of each that needs the library
+	// the package of each that needs the library, and the libraries of each
 	needs := map[string]string{"customer_lifetime": "CLVTools@0.12.1", "timeseries": "Rlibeemd@1.4.4"}
+	libraries := map[string][]string{"customer_lifetime": {"libgsl-dev"}, "timeseries": {"libgsl-dev", "libgmp-dev"}}
 	s := scriptimage.Settings{CRANURL: "https://cran.r-project.org", Jobs: 2}
 	for _, g := range Groups() {
 		d, err := Dockerfile(g.ID, scriptcfg.DefaultBaseImages, s)
@@ -235,17 +237,18 @@ func TestOnlyTheCustomerLifetimeAndTheTimeSeriesImagesInstallGSL(t *testing.T) {
 			continue
 		}
 		fixed := strings.Join(scriptimage.RSystemLibraries, " ")
-		if !reflect.DeepEqual(g.Recipe.SystemLibraries, []string{"libgsl-dev"}) ||
-			!strings.Contains(d, "install -y --no-install-recommends "+fixed+" libgsl-dev && rm -rf /var/lib/apt/lists/*\n") ||
+		extra := strings.Join(libraries[g.ID], " ")
+		if !reflect.DeepEqual(g.Recipe.SystemLibraries, libraries[g.ID]) ||
+			!strings.Contains(d, "install -y --no-install-recommends "+fixed+" "+extra+" && rm -rf /var/lib/apt/lists/*\n") ||
 			!strings.Contains(d, "\n"+needs[g.ID]+"\n") {
 			t.Errorf("%s:\n%s", g.ID, d)
 		}
 		// the same recipe without its system library is what every other R group's Dockerfile is made of
 		plain, _ := scriptimage.Dockerfile("r", "rocker/r-ver:4.6.0", g.Recipe.Packages, scriptimage.Settings{CRANURL: s.CRANURL, Jobs: 2, Managed: true})
 		// and the step that records the versions installed, which the card reads from the lock
-		record := "RUN mkdir -p /opt/tabularia && dpkg-query -W -f '${Package}@${Version}\\n' libgsl-dev > " + scriptimage.SystemLibrariesFile + "\n"
-		if strings.Replace(strings.Replace(d, record, "", 1), " libgsl-dev", "", 1) != plain || !strings.Contains(d, record) {
-			t.Error("libgsl-dev and the record of its version are not the only difference")
+		record := "RUN mkdir -p /opt/tabularia && dpkg-query -W -f '${Package}@${Version}\\n' " + extra + " > " + scriptimage.SystemLibrariesFile + "\n"
+		if strings.Replace(strings.Replace(d, record, "", 1), " "+extra, "", 1) != plain || !strings.Contains(d, record) {
+			t.Errorf("%s and the record of their versions are not the only difference", extra)
 		}
 	}
 	// a Job's group copy is not the shipped one
