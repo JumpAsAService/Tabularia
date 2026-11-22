@@ -746,14 +746,16 @@ def test_the_pre_trained_forecast_has_its_line_and_the_prompt_says_when_to_choos
                      "**choose model_arima** when the person wants a model to read", "register it and apply it with model_predict",
                      "not given with `known_covariates`", "only the sizes the administrator downloaded exist", "**it refuses a series with gaps**",
                      "have no verdict: say them as numbers, never as good or bad", "five series cannot reach 0.05",
-                     "Its weights are under a licence of their own", "Mistral AI's Modified MIT License", "$20 million",
-                     "it is not legal advice", "never accept it, enable the group"):
+                     "Its weights are under a licence of their own", "Mistral AI's Modified MIT License",
+                     "do not interpret it, paraphrase it", "the text is in the official file", "never accept it, enable the group"):
         assert sentence in reference, sentence
-    # lot F9: the clause as the licence says it (the employer, the currency, the preceding month, derivatives), and no claim
-    # that the administrator read it, only that they accepted it
-    for part in ("(or of their employer)", "or its equivalent in another currency", "in the preceding month",
-                 "derivatives and combined works included", "an administrator accepted it when enabling the group"):
+    # the licence is quoted by the interface and never explained: the prompt holds no word of its terms (the owner's decision of
+    # 2026-11-22), only that an administrator accepted it and that the official file holds the text
+    for part in ("an administrator accepted it when enabling the group", "the text is in the official file"):
         assert part in reference, part
+    line = next(l for l in reference.splitlines() if l.startswith("- model_timestral forecasts"))
+    for word in ("$20", "20 million", "revenue", "employer", "commercial licence", "legal advice", "derivatives", "threshold"):
+        assert word not in line, word
     assert "read and accepted" not in reference
     assert "the holdout and the season of model_timestral" in ai_flow_agent.SETTINGS_CONTEXT
     # the rule that keeps the settings that shape a verdict out of the assistant's hands is still there, and the node's own
