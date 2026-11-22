@@ -1,0 +1,2027 @@
+{
+  "en": {
+    "name": "Forecast ({model})",
+    "series_of": "«{value}» over «{time}»{by}, {frequency}",
+    "by": " by «{series}»",
+    "frequency_series": {
+      "hour": "hourly series",
+      "day": "daily series",
+      "week": "weekly series",
+      "month": "monthly series",
+      "quarter": "quarterly series",
+      "year": "yearly series",
+      "index": "series in steps"
+    },
+    "units": {
+      "hour": "hours",
+      "day": "days",
+      "week": "weeks",
+      "month": "months",
+      "quarter": "quarters",
+      "year": "years",
+      "index": "steps"
+    },
+    "comparison_verdicts": {
+      "ok": "– not supported",
+      "ahead": "✓ Timestral ahead",
+      "behind": "✓ seasonal naïve ahead"
+    },
+    "sections": {
+      "summary": "Summary",
+      "assumptions": "Check",
+      "forecasts": "Forecasts",
+      "holdout": "The holdout: the forecast measured",
+      "limits": "What the model cannot know",
+      "fit": "Numbers of the forecast",
+      "notes": "Notes",
+      "licence": "Licence of the weights"
+    },
+    "kpi": {
+      "series": "Series",
+      "points": "{n} points",
+      "model": "Model",
+      "cpu": "CPU {cpu} · {threads} threads",
+      "horizon": "Horizon",
+      "horizon_value": "{h} {unit}",
+      "holdout": "holdout {k}",
+      "no_holdout": "no holdout",
+      "mase": "Holdout MASE",
+      "mase_under": "against {b} for the seasonal naïve",
+      "not_measured": "not measured"
+    },
+    "formula_many": "{value} ~ {model} · {n} series by «{series}» · {frequency} · {horizon} {unit} ahead",
+    "formula_one": "{value} ~ {model} · {frequency} · {horizon} {unit} ahead",
+    "licence_line": "Forecast by {model}, weights by Mistral AI under the Modified MIT License: the licence's full text is on the last page.",
+    "alpha_line": "The only verdict comes from Wilcoxon's signed-rank test across the series, read against α = {alpha} (the node's option); its value is the median of the differences of MASE, below 0 when Timestral's errors are the smaller. The errors on the holdout and the coverage of the bands are measures with no verdict: they are listed under the check.",
+    "charts": {
+      "forecast": "History, forecast with its 80 % and 90 % bands, seasonal naïve",
+      "holdout": "Holdout: observed, and forecast from before",
+      "relative": "Relative MASE of the series drawn (log scale; the line at 1 is the seasonal naïve)"
+    },
+    "series": {
+      "observed": "Observed",
+      "median": "Median",
+      "band80": "80 % band",
+      "band90": "90 % band",
+      "baseline": "Seasonal naïve",
+      "relative": "Relative MASE"
+    },
+    "captions": {
+      "forecast": "The dashed line marks the first instant forecast. The bands are the model's own quantiles: 0.1 to 0.9 and 0.05 to 0.95.",
+      "holdout": "In each chart the dashed line marks the first value kept out: from there the blue line is the median the model forecast without seeing those values, with its 80 % and 90 % bands; the grey line is what was observed."
+    },
+    "series_name": "«{series}»",
+    "tables": {
+      "title": "The series on the holdout",
+      "series": "Series",
+      "points": "Points",
+      "read": "Read",
+      "mase": "MASE",
+      "baseline_mase": "Naïve MASE",
+      "relative": "Relative MASE",
+      "smape": "sMAPE",
+      "wql": "Scaled pinball",
+      "coverage_80": "80 % band",
+      "coverage_90": "90 % band",
+      "note": "Not measured"
+    },
+    "not_measured": {
+      "too_short": "too short for the holdout and one season",
+      "no_holdout": "no holdout",
+      "zero_scale": "a constant history: no scale",
+      "other": "not measured"
+    },
+    "measures": {
+      "title": "Measures, not tests",
+      "group": "Group"
+    },
+    "measure_texts": {
+      "relative_mase": "Timestral's MASE divided by the seasonal naïve's, series by series, then their geometric mean: below 1 Timestral's errors on the holdout are the smaller.",
+      "coverage_80": "The share of the values kept out that fell between the quantiles 0.1 and 0.9, pooled over the series; the band's nominal share is 80 %.",
+      "coverage_90": "The share of the values kept out that fell between the quantiles 0.05 and 0.95, pooled over the series; the band's nominal share is 90 %."
+    },
+    "across": {
+      "title": "Errors on the holdout, over the series",
+      "measure": "Measure",
+      "value": "Value",
+      "what": "What it is"
+    },
+    "across_texts": {
+      "mase": "Timestral's mean absolute error on the holdout over the typical error of repeating the last season in the history (the scale); the mean over the series.",
+      "baseline_mase": "The same for the seasonal naïve forecast, which repeats the last season.",
+      "smape": "Timestral's symmetric mean absolute percentage error on the holdout, in %; the mean over the series.",
+      "baseline_smape": "The same for the seasonal naïve forecast.",
+      "wql": "The pinball loss over the 21 quantiles divided by the mean absolute value of the series (the weighted quantile loss); the series weighted by their scale.",
+      "n_measured": "The series whose errors were measured: those at least as long as the holdout and one season."
+    },
+    "assumptions": {
+      "title": "Check of the forecast",
+      "many_rows": "With {n} points the test still compares series, one difference per series."
+    },
+    "checks": {
+      "baseline_comparison": {
+        "name": "Timestral against the seasonal naïve: Wilcoxon",
+        "h0": "Across the series, the differences of MASE between Timestral and the seasonal naïve are symmetric around 0: neither forecast has the smaller errors.",
+        "advice": "The test says that the difference between the two forecasts is beyond chance on these series, not by how much nor on which ones: read the table of the series on the holdout's page.",
+        "not_computed": {
+          "one_series": "One series gives one comparison: the test needs several series (or several forecast origins).",
+          "no_holdout": "No value was kept out: there are no errors to compare.",
+          "": "Fewer than two series have their errors on the holdout: the test needs at least two."
+        },
+        "count": {
+          "one": "{n} series compared",
+          "other": "{n} series compared"
+        }
+      },
+      "coverage_80": {
+        "name": "Coverage of the 80 % band"
+      },
+      "coverage_90": {
+        "name": "Coverage of the 90 % band"
+      },
+      "relative_mase": {
+        "name": "Relative MASE, geometric mean"
+      }
+    },
+    "stats": {
+      "model": {
+        "n": "Points",
+        "n_series": "Series",
+        "n_points": "Points",
+        "n_missing": "Empty values",
+        "n_filled": "Filled values",
+        "n_model_missing": "Values left empty for the model",
+        "n_future_rows": "Future rows",
+        "horizon": "Horizon (steps)",
+        "holdout": "Holdout (steps)",
+        "season": "Season (steps)",
+        "alpha": "α of the test",
+        "threads": "CPU threads",
+        "batches": "Batches",
+        "seconds_load": "Loading the weights (s)",
+        "seconds_forecast": "Forecasting (s)",
+        "n_quantiles": "Quantiles written",
+        "mase": "MASE",
+        "baseline_mase": "MASE of the seasonal naïve",
+        "relative_mase_geomean": "Relative MASE, geometric mean",
+        "smape": "sMAPE (%)",
+        "baseline_smape": "sMAPE of the seasonal naïve (%)",
+        "wql": "Weighted quantile loss",
+        "coverage_80": "Coverage of the 80 % band",
+        "coverage_90": "Coverage of the 90 % band",
+        "n_measured": "Series measured",
+        "frequency": "Frequency",
+        "time_kind": "Time",
+        "missing": "Empty values handled by",
+        "size": "Size",
+        "weights": "Weights",
+        "weights_sha256": "sha256 of the weights",
+        "licence": "Licence",
+        "licence_sha256": "sha256 of the licence",
+        "cpu_capability": "CPU instructions"
+      },
+      "series": {
+        "n": "Points",
+        "n_used": "Points read",
+        "n_missing": "Empty values",
+        "n_filled": "Filled values",
+        "first": "First instant",
+        "last": "Last instant",
+        "horizon": "Horizon",
+        "scale": "Scale",
+        "mase": "MASE",
+        "baseline_mase": "MASE of the seasonal naïve",
+        "relative_mase": "Relative MASE",
+        "smape": "sMAPE (%)",
+        "baseline_smape": "sMAPE of the seasonal naïve (%)",
+        "pinball": "Pinball loss",
+        "wql": "Weighted quantile loss",
+        "coverage_80": "Coverage of the 80 % band",
+        "coverage_90": "Coverage of the 90 % band",
+        "total": "Σ|y|",
+        "not_measured": "Not measured"
+      }
+    },
+    "values": {
+      "frequency": {
+        "hour": "hour",
+        "day": "day",
+        "week": "week",
+        "month": "month",
+        "quarter": "quarter",
+        "year": "year",
+        "index": "steps"
+      },
+      "time_kind": {
+        "date": "date",
+        "datetime": "date and time",
+        "integer": "integer (steps)"
+      },
+      "missing": {
+        "refuse": "refusing them",
+        "linear": "linear interpolation",
+        "model": "leaving them to the model"
+      },
+      "size": {
+        "5m": "Timestral-5M",
+        "28m": "Timestral-28M",
+        "123m": "Timestral-123M",
+        "209m": "Timestral-209M"
+      }
+    },
+    "covariates": {
+      "title": "Columns the model read besides the series",
+      "known": "Known in the future: {names}.",
+      "past": "Known up to the last value of each series: {names}.",
+      "none": "No covariate: the model read only the values of the series."
+    },
+    "licence": {
+      "weights_title": "The weights used",
+      "item": "Item",
+      "value": "Value",
+      "text_title": "The licence, verbatim",
+      "text_header": "The file LICENSE of the weights, as Mistral AI publishes it (its official English text, not translated)"
+    },
+    "notes": {
+      "rows": "The series hold {n} points; {missing} rows of the input had no value and were left out."
+    },
+    "fit": {
+      "title": "Numbers of the forecast",
+      "settings_title": "How it was forecast"
+    },
+    "reading": {
+      "variant": "Series",
+      "how_lead": "One paragraph for each part of the forecast that ran: what it assumes, why this method, what it did to the numbers. The formulas follow, with their symbols."
+    },
+    "reading_blocks": {
+      "summary": "Summary",
+      "forecast": "Forecast",
+      "holdout": "Holdout",
+      "coverage": "Coverage",
+      "comparison": "Comparison",
+      "limits": "Limits",
+      "licence": "Licence",
+      "method": "Method",
+      "formulas": "Formula"
+    },
+    "reading_labels": {
+      "method_zero_shot": "Pre-trained model",
+      "method_quantiles": "Quantiles",
+      "method_holdout": "Holdout and errors",
+      "method_baseline": "Seasonal naïve",
+      "method_coverage": "Coverage",
+      "method_wilcoxon": "Wilcoxon's test",
+      "method_limits": "Limits",
+      "method_missing": "Missing values",
+      "formula_naive": "Seasonal naïve",
+      "formula_mase": "MASE",
+      "formula_smape": "sMAPE",
+      "formula_pinball": "Pinball loss and WQL",
+      "formula_coverage": "Coverage",
+      "formula_wilcoxon": "Wilcoxon's W"
+    },
+    "reading_texts": {
+      "summary": {
+        "frequency=hour": "{size} forecast {n_series:int} series of «{value}» by «{series}», {horizon:int} hours ahead from the last hour observed. It is a model trained in advance, by its authors, on many other series, and not fitted on yours: it reads the recent history of each series (up to {context:int} hours here) and continues it.",
+        "frequency=day": "{size} forecast {n_series:int} series of «{value}» by «{series}», {horizon:int} days ahead from {last:date}. It is a model trained in advance, by its authors, on many other series, and not fitted on yours: it reads the recent history of each series (up to {context:int} days here) and continues it.",
+        "frequency=week": "{size} forecast {n_series:int} series of «{value}» by «{series}», {horizon:int} weeks ahead from {last:date}. It is a model trained in advance, by its authors, on many other series, and not fitted on yours: it reads the recent history of each series (up to {context:int} weeks here) and continues it.",
+        "frequency=month": "{size} forecast {n_series:int} series of «{value}» by «{series}», {horizon:int} months ahead from {last:date}. It is a model trained in advance, by its authors, on many other series, and not fitted on yours: it reads the recent history of each series (up to {context:int} months here) and continues it.",
+        "frequency=quarter": "{size} forecast {n_series:int} series of «{value}» by «{series}», {horizon:int} quarters ahead from {last:date}. It is a model trained in advance, by its authors, on many other series, and not fitted on yours: it reads the recent history of each series (up to {context:int} quarters here) and continues it.",
+        "frequency=year": "{size} forecast {n_series:int} series of «{value}» by «{series}», {horizon:int} years ahead from {last:date}. It is a model trained in advance, by its authors, on many other series, and not fitted on yours: it reads the recent history of each series (up to {context:int} years here) and continues it.",
+        "": "{size} forecast {n_series:int} series of «{value}» by «{series}», {horizon:int} steps ahead from {last:date}. It is a model trained in advance, by its authors, on many other series, and not fitted on yours: it reads the recent history of each series (up to {context:int} steps here) and continues it."
+      },
+      "summary_one": {
+        "frequency=hour": "{size} forecast «{value}» {horizon:int} hours ahead from the last hour observed. It is a model trained in advance, by its authors, on many other series, and not fitted on yours: it reads the recent history of the series ({context:int} hours here) and continues it.",
+        "frequency=day": "{size} forecast «{value}» {horizon:int} days ahead from {last:date}. It is a model trained in advance, by its authors, on many other series, and not fitted on yours: it reads the recent history of the series ({context:int} days here) and continues it.",
+        "frequency=week": "{size} forecast «{value}» {horizon:int} weeks ahead from {last:date}. It is a model trained in advance, by its authors, on many other series, and not fitted on yours: it reads the recent history of the series ({context:int} weeks here) and continues it.",
+        "frequency=month": "{size} forecast «{value}» {horizon:int} months ahead from {last:date}. It is a model trained in advance, by its authors, on many other series, and not fitted on yours: it reads the recent history of the series ({context:int} months here) and continues it.",
+        "frequency=quarter": "{size} forecast «{value}» {horizon:int} quarters ahead from {last:date}. It is a model trained in advance, by its authors, on many other series, and not fitted on yours: it reads the recent history of the series ({context:int} quarters here) and continues it.",
+        "frequency=year": "{size} forecast «{value}» {horizon:int} years ahead from {last:date}. It is a model trained in advance, by its authors, on many other series, and not fitted on yours: it reads the recent history of the series ({context:int} years here) and continues it.",
+        "": "{size} forecast «{value}» {horizon:int} steps ahead from {last:date}. It is a model trained in advance, by its authors, on many other series, and not fitted on yours: it reads the recent history of the series ({context:int} steps here) and continues it."
+      },
+      "summary_steps": {
+        "frequency=hour": "{size} forecast {n_series:int} series of «{value}» by «{series}», {horizon:int} hours ahead from position {last:int}. It is a model trained in advance, by its authors, on many other series, and not fitted on yours: it reads the recent history of each series (up to {context:int} hours here) and continues it.",
+        "frequency=day": "{size} forecast {n_series:int} series of «{value}» by «{series}», {horizon:int} days ahead from position {last:int}. It is a model trained in advance, by its authors, on many other series, and not fitted on yours: it reads the recent history of each series (up to {context:int} days here) and continues it.",
+        "frequency=week": "{size} forecast {n_series:int} series of «{value}» by «{series}», {horizon:int} weeks ahead from position {last:int}. It is a model trained in advance, by its authors, on many other series, and not fitted on yours: it reads the recent history of each series (up to {context:int} weeks here) and continues it.",
+        "frequency=month": "{size} forecast {n_series:int} series of «{value}» by «{series}», {horizon:int} months ahead from position {last:int}. It is a model trained in advance, by its authors, on many other series, and not fitted on yours: it reads the recent history of each series (up to {context:int} months here) and continues it.",
+        "frequency=quarter": "{size} forecast {n_series:int} series of «{value}» by «{series}», {horizon:int} quarters ahead from position {last:int}. It is a model trained in advance, by its authors, on many other series, and not fitted on yours: it reads the recent history of each series (up to {context:int} quarters here) and continues it.",
+        "frequency=year": "{size} forecast {n_series:int} series of «{value}» by «{series}», {horizon:int} years ahead from position {last:int}. It is a model trained in advance, by its authors, on many other series, and not fitted on yours: it reads the recent history of each series (up to {context:int} years here) and continues it.",
+        "": "{size} forecast {n_series:int} series of «{value}» by «{series}», {horizon:int} steps ahead from position {last:int}. It is a model trained in advance, by its authors, on many other series, and not fitted on yours: it reads the recent history of each series (up to {context:int} steps here) and continues it."
+      },
+      "summary_one_steps": {
+        "frequency=hour": "{size} forecast «{value}» {horizon:int} hours ahead from position {last:int}. It is a model trained in advance, by its authors, on many other series, and not fitted on yours: it reads the recent history of the series ({context:int} hours here) and continues it.",
+        "frequency=day": "{size} forecast «{value}» {horizon:int} days ahead from position {last:int}. It is a model trained in advance, by its authors, on many other series, and not fitted on yours: it reads the recent history of the series ({context:int} days here) and continues it.",
+        "frequency=week": "{size} forecast «{value}» {horizon:int} weeks ahead from position {last:int}. It is a model trained in advance, by its authors, on many other series, and not fitted on yours: it reads the recent history of the series ({context:int} weeks here) and continues it.",
+        "frequency=month": "{size} forecast «{value}» {horizon:int} months ahead from position {last:int}. It is a model trained in advance, by its authors, on many other series, and not fitted on yours: it reads the recent history of the series ({context:int} months here) and continues it.",
+        "frequency=quarter": "{size} forecast «{value}» {horizon:int} quarters ahead from position {last:int}. It is a model trained in advance, by its authors, on many other series, and not fitted on yours: it reads the recent history of the series ({context:int} quarters here) and continues it.",
+        "frequency=year": "{size} forecast «{value}» {horizon:int} years ahead from position {last:int}. It is a model trained in advance, by its authors, on many other series, and not fitted on yours: it reads the recent history of the series ({context:int} years here) and continues it.",
+        "": "{size} forecast «{value}» {horizon:int} steps ahead from position {last:int}. It is a model trained in advance, by its authors, on many other series, and not fitted on yours: it reads the recent history of the series ({context:int} steps here) and continues it."
+      },
+      "summary_known": "It also read {covariate}, known in the future: the rows after the last value of each series hold them.",
+      "summary_past": "It also read {covariate}, known only up to the last value of each series.",
+      "filled_linear": "{count:int} values missing inside the series were filled by linear interpolation; the output marks them in its column «filled».",
+      "missing_model": "{count:int} values missing inside the series were handed to the model as missing, which it is built to read; the output leaves them empty.",
+      "forecast_bands": {
+        "frequency=hour": "The median says {median:num} for the first hour forecast; by the model's own reckoning there is an 80 % chance that the value falls between {low80:num} and {high80:num}, and 90 % between {low90:num} and {high90:num}.",
+        "frequency=day": "The median says {median:num} for {at:date}; by the model's own reckoning there is an 80 % chance that the value falls between {low80:num} and {high80:num}, and 90 % between {low90:num} and {high90:num}.",
+        "frequency=week": "The median says {median:num} for {at:date}; by the model's own reckoning there is an 80 % chance that the value falls between {low80:num} and {high80:num}, and 90 % between {low90:num} and {high90:num}.",
+        "frequency=month": "The median says {median:num} for {at:date}; by the model's own reckoning there is an 80 % chance that the value falls between {low80:num} and {high80:num}, and 90 % between {low90:num} and {high90:num}.",
+        "frequency=quarter": "The median says {median:num} for {at:date}; by the model's own reckoning there is an 80 % chance that the value falls between {low80:num} and {high80:num}, and 90 % between {low90:num} and {high90:num}.",
+        "frequency=year": "The median says {median:num} for {at:date}; by the model's own reckoning there is an 80 % chance that the value falls between {low80:num} and {high80:num}, and 90 % between {low90:num} and {high90:num}.",
+        "": "The median says {median:num} for {at:date}; by the model's own reckoning there is an 80 % chance that the value falls between {low80:num} and {high80:num}, and 90 % between {low90:num} and {high90:num}."
+      },
+      "forecast_bands_steps": "The median says {median:num} at position {at:int}; by the model's own reckoning there is an 80 % chance that the value falls between {low80:num} and {high80:num}, and 90 % between {low90:num} and {high90:num}.",
+      "holdout_mase": {
+        "frequency=hour": "On the last {holdout:int} hours of each series, kept out and forecast from before them, the forecast missed by {mase:num} times the typical error of repeating the last season in the history (MASE, the mean over the series); the seasonal naïve forecast, which repeats the last season, missed by {baseline_mase:num} times it.",
+        "frequency=day": "On the last {holdout:int} days of each series, kept out and forecast from before them, the forecast missed by {mase:num} times the typical error of repeating the last season in the history (MASE, the mean over the series); the seasonal naïve forecast, which repeats the last season, missed by {baseline_mase:num} times it.",
+        "frequency=week": "On the last {holdout:int} weeks of each series, kept out and forecast from before them, the forecast missed by {mase:num} times the typical error of repeating the last season in the history (MASE, the mean over the series); the seasonal naïve forecast, which repeats the last season, missed by {baseline_mase:num} times it.",
+        "frequency=month": "On the last {holdout:int} months of each series, kept out and forecast from before them, the forecast missed by {mase:num} times the typical error of repeating the last season in the history (MASE, the mean over the series); the seasonal naïve forecast, which repeats the last season, missed by {baseline_mase:num} times it.",
+        "frequency=quarter": "On the last {holdout:int} quarters of each series, kept out and forecast from before them, the forecast missed by {mase:num} times the typical error of repeating the last season in the history (MASE, the mean over the series); the seasonal naïve forecast, which repeats the last season, missed by {baseline_mase:num} times it.",
+        "frequency=year": "On the last {holdout:int} years of each series, kept out and forecast from before them, the forecast missed by {mase:num} times the typical error of repeating the last season in the history (MASE, the mean over the series); the seasonal naïve forecast, which repeats the last season, missed by {baseline_mase:num} times it.",
+        "": "On the last {holdout:int} steps of each series, kept out and forecast from before them, the forecast missed by {mase:num} times the typical error of repeating the last season in the history (MASE, the mean over the series); the seasonal naïve forecast, which repeats the last season, missed by {baseline_mase:num} times it."
+      },
+      "holdout_not_measured": "{count:int} of {n_series:int} series are too short for the holdout and one season of history: they are forecast, not measured.",
+      "holdout_none": "No value was kept out (holdout 0): there are no errors to measure and no comparison.",
+      "coverage": "On the holdout the 80 % band held {in80:int} of {steps:int} values ({share80:pct}) and the 90 % band {in90:int} ({share90:pct}). With one forecast origin these shares move a lot by chance: read them as a hint about the width of the bands, not as a measurement of it.",
+      "comparison_supported": "Timestral had the smaller error on {better:int} of {n_series:int} series. If neither forecast were better, differences this one-sided would appear by chance with probability {p_value:p}, below α = {alpha:num}: Timestral's advantage over the seasonal naïve is supported on these series.",
+      "comparison_opposite": "Timestral had the smaller error on only {better:int} of {n_series:int} series. If neither forecast were better, differences this one-sided would appear by chance with probability {p_value:p}, below α = {alpha:num}: the seasonal naïve's advantage is supported on these series, and Timestral is worse here than repeating the last season.",
+      "comparison_not_supported": "Timestral had the smaller error on {better:int} of {n_series:int} series. If neither forecast were better, differences like these would appear by chance with probability {p_value:p}, not below α = {alpha:num}: the data do not show that either forecast is better. «Not supported» does not mean that the two are equal.",
+      "comparison_few_series": "With {n_series:int} series the smallest p-value this test can give is {min_p:p}, not below α = {alpha:num}: no difference could be supported here, whatever the errors; more series are needed.",
+      "comparison_one_series": "With one series the comparison is a measure, not a test: Timestral's MASE on the holdout is {mase:num}, the seasonal naïve's {baseline_mase:num}. A test needs several series (or several forecast origins).",
+      "comparison_not_computed": "The comparison was not computed: {n_measured:int} series have their errors on the holdout, and the test needs at least two.",
+      "limits": "Timestral does not know your business: a promotion, a price change, a new shop or a closure is invisible to it unless a column says so, known in the future. It reads only the series and the columns given.",
+      "limits_context": "It read the last {used:int} of {n:int} values of «{series}»: the model's context stops at 32,768.",
+      "limits_clip": "A series never negative in its history gets no negative forecast: the library sets such values to 0 (the node's option «clip_nonnegative»).",
+      "licence": "The weights of the model are Mistral AI's, under the {licence}; the licence's full text closes this report.",
+      "licence_accepted": "An administrator ({by}) accepted it for this installation on {on:date}, before the group was built.",
+      "method_zero_shot": "What a pre-trained («zero-shot») model is: Timestral was trained once, by Mistral AI, on a large collection of synthetic and observed series, to continue a series from its recent past. Here it only reads: nothing of your data is learned or kept, and the same input gives the same forecast. That is why there is nothing to fit or tune and why many series are forecast quickly; it is also why the model knows only what the series and the columns given say.",
+      "method_quantiles": "What a quantile is: for each future instant the model gives 21 quantiles, from 0.01 to 0.99, rather than one number. The quantile 0.9 is a value the model expects to be exceeded one time in ten; the median (0.5) one time in two. A band is a pair of quantiles: by the model's reckoning the one from 0.1 to 0.9 holds 8 values in 10, the one from 0.05 to 0.95 holds 9 in 10. The bands widen with the distance, because the further ahead, the less the past says.",
+      "method_holdout": "Why a holdout: a forecast is measured on values it did not see. The last values of each series were kept out, forecast from before them and compared with what was observed. MASE divides the mean absolute error by the typical error of repeating the last season in the history, so that series of different sizes compare: below 1, the forecast missed by less than that habit. sMAPE says the error as a percentage of the values. The pinball loss measures the quantiles: a value below the quantile q costs q times the gap, one above it 1 − q times; divided by the mean of the values it is the weighted quantile loss (WQL).",
+      "method_baseline": "The reference is the seasonal naïve forecast: each future value is the value one season before (the last value when there is no season). It needs no fit, costs nothing and is the forecast MASE is built on: Timestral is compared with it series by series.",
+      "method_coverage": "How to read a coverage: a share close to the band's nominal one (80 %, 90 %) says the bands were about as wide as the errors; far below, they were too narrow for this series; far above, wider than the errors needed. No test is made: the errors of one forecast origin are not independent (a forecast too low on one day is usually too low on the next), so a test of «80 % inside» would claim far more certainty than the data hold.",
+      "method_wilcoxon": "The comparison is Wilcoxon's signed-rank test on the differences d = MASE of Timestral − MASE of the seasonal naïve, one per series. It ranks the differences by their size and adds the ranks of the positive ones and of the negative ones; if neither forecast were better, the two sums would be close. The series are the independent units here (assumed: the report cannot check it). The distribution is exact up to 50 series without ties, the normal approximation otherwise; a difference of exactly 0 is left out. «Not supported» means the data do not show a difference, not that there is none: with few series even a clear advantage cannot reach α.",
+      "method_limits": "What a pre-trained model cannot know: anything that is not in the series or in the columns given. A covariate helps only when it is truly known ahead (a holiday, a planned promotion); a past covariate is read only up to the last value. The model reads at most the last 32,768 values of each series. The library forecasts each series and its negation and averages the two (symmetric averaging), and sets to 0 the negative forecasts of a series never negative: both are options of the node, on by default.",
+      "method_missing": "Values missing inside a series were filled by a straight line between their neighbours (linear), or handed to the model as missing values, which it reads with an indicator (model). The output marks the filled ones."
+    },
+    "formula_texts": {
+      "formula_naive": "ŷ_(T+h) = y_(T+h−m·k), k = the smallest whole number with m·k ≥ h;  m: the season (1: the last value repeated)",
+      "formula_mase": "s_i = (1/(T − m)) Σ_(t=m+1)^(T) |y_t − y_(t−m)|;  MASE_i = (1/k) Σ_(h=1)^(k) |y_(T+h) − ŷ_(T+h)| / s_i;  relative MASE_i = MASE_i / MASE_i(naïve), summed up by their geometric mean",
+      "formula_smape": "sMAPE = (1/k) Σ_h 200 |y_h − ŷ_h| / (|y_h| + |ŷ_h|), in %;  the steps where both are 0 are left out",
+      "formula_pinball": "ρ_q(u) = max(q u, (q − 1) u), u = y − ŷ_q;  pinball = the mean of ρ_q over the 21 levels and the k steps;  WQL = pinball / ((1/k) Σ_h |y_h|)",
+      "formula_coverage": "coverage 80 % = (1/k) Σ_h 1[ŷ_0.1 ≤ y_h ≤ ŷ_0.9];  coverage 90 % the same with 0.05 and 0.95",
+      "formula_wilcoxon": "d_i = MASE_i − MASE_i(naïve), the zeros left out;  W+ = Σ_(d_i > 0) rank(|d_i|), W− = Σ_(d_i < 0) rank(|d_i|);  W = min(W+, W−);  for many series z = (W+ − n(n+1)/4) / √(n(n+1)(2n+1)/24 − Σ(t³ − t)/48), t: the sizes of the ties"
+    },
+    "note_texts": {
+      "ends_early": "{count:int} series end before {last:date}: their forecasts start earlier.",
+      "context_cut": "The model read the last {used:int} of {n:int} values of «{series}».",
+      "history_shrunk": "The history drawn was cut to {points:int} instants per series to keep the results within their limit; the measures use every value.",
+      "future_left_out": "{count:int} rows after the last value of their series were left out: without known covariates they hold nothing to read.",
+      "covariate_missing": "{count:int} empty values of «{covariate}» were handed to the model as missing.",
+      "time_budget": "The forecast took {seconds:num} s of the {limit:num} s the step allows."
+    },
+    "measure_readings": [
+      "summary",
+      "summary_one",
+      "summary_steps",
+      "summary_one_steps",
+      "summary_known",
+      "summary_past",
+      "filled_linear",
+      "missing_model",
+      "forecast_bands",
+      "forecast_bands_steps",
+      "holdout_mase",
+      "holdout_not_measured",
+      "holdout_none",
+      "coverage",
+      "comparison_one_series",
+      "comparison_not_computed",
+      "limits",
+      "limits_context",
+      "limits_clip",
+      "licence",
+      "licence_accepted"
+    ],
+    "licence_text": "Modified MIT License \n\nAttribution notice: 2026 - Mistral AI\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of the weights of this model and associated documentation files (the “Model”), to deal in the Model without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Model, and to permit persons to whom the Model is furnished to do so, subject to the following conditions: \n\n1. The above attribution notice and this permission notice shall be included in all copies or substantial portions of the Model. \n2. You are not authorized to exercise any rights under this license if the global consolidated monthly revenue of your company (or that of your employer) exceeds $20 million (or its equivalent in another currency) for the preceding month. This restriction in (b) applies to the Model and any derivatives, modifications, or combined works based on it, whether provided by Mistral AI or by a third party. You may contact Mistral AI (sales@mistral.ai) to request a commercial license, which Mistral AI may grant you at its sole discretion, or choose to use the Model on Mistral AI's hosted services available at https://mistral.ai/.\n\nTHE MODEL IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL MISTRAL AI BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE MODEL OR THE USE OR OTHER DEALINGS IN THE MODEL."
+  },
+  "it": {
+    "name": "Previsione ({model})",
+    "series_of": "«{value}» nel tempo «{time}»{by}, {frequency}",
+    "by": " per «{series}»",
+    "frequency_series": {
+      "hour": "serie oraria",
+      "day": "serie giornaliera",
+      "week": "serie settimanale",
+      "month": "serie mensile",
+      "quarter": "serie trimestrale",
+      "year": "serie annuale",
+      "index": "serie a passi"
+    },
+    "units": {
+      "hour": "ore",
+      "day": "giorni",
+      "week": "settimane",
+      "month": "mesi",
+      "quarter": "trimestri",
+      "year": "anni",
+      "index": "passi"
+    },
+    "comparison_verdicts": {
+      "ok": "– non sostenuto",
+      "ahead": "✓ Timestral in vantaggio",
+      "behind": "✓ naïve stagionale in vantaggio"
+    },
+    "sections": {
+      "summary": "Sintesi",
+      "assumptions": "Verifica",
+      "forecasts": "Previsioni",
+      "holdout": "Il periodo di verifica: la previsione misurata",
+      "limits": "Che cosa il modello non può sapere",
+      "fit": "Numeri della previsione",
+      "notes": "Note",
+      "licence": "Licenza dei pesi"
+    },
+    "kpi": {
+      "series": "Serie",
+      "points": "{n} punti",
+      "model": "Modello",
+      "cpu": "CPU {cpu} · {threads} thread",
+      "horizon": "Orizzonte",
+      "horizon_value": "{h} {unit}",
+      "holdout": "verifica {k}",
+      "no_holdout": "nessuna verifica",
+      "mase": "MASE di verifica",
+      "mase_under": "contro {b} del naïve stagionale",
+      "not_measured": "non misurato"
+    },
+    "formula_many": "{value} ~ {model} · {n} serie per «{series}» · {frequency} · {horizon} {unit} in avanti",
+    "formula_one": "{value} ~ {model} · {frequency} · {horizon} {unit} in avanti",
+    "licence_line": "Previsione di {model}, pesi di Mistral AI sotto la Modified MIT License: il testo completo della licenza è nell'ultima pagina.",
+    "alpha_line": "L'unico verdetto viene dal test dei ranghi con segno di Wilcoxon fra le serie, letto contro α = {alpha} (l'opzione del nodo); il suo valore è la mediana delle differenze di MASE, sotto 0 quando gli errori di Timestral sono i più piccoli. Gli errori nel periodo di verifica e la copertura delle bande sono misure senza verdetto: sono elencate sotto la verifica.",
+    "charts": {
+      "forecast": "Storia, previsione con le bande all'80 % e al 90 %, naïve stagionale",
+      "holdout": "Verifica: osservato e previsione da prima",
+      "relative": "MASE relativo delle serie disegnate (scala logaritmica; la linea a 1 è il naïve stagionale)"
+    },
+    "series": {
+      "observed": "Osservato",
+      "median": "Mediana",
+      "band80": "Banda all'80 %",
+      "band90": "Banda al 90 %",
+      "baseline": "Naïve stagionale",
+      "relative": "MASE relativo"
+    },
+    "captions": {
+      "forecast": "La linea tratteggiata segna il primo istante previsto. Le bande sono i quantili del modello stesso: da 0,1 a 0,9 e da 0,05 a 0,95.",
+      "holdout": "In ogni grafico la linea tratteggiata segna il primo valore tenuto da parte: da lì la linea blu è la mediana che il modello ha previsto senza vedere quei valori, con le bande all'80 % e al 90 %; la linea grigia è ciò che è stato osservato."
+    },
+    "series_name": "«{series}»",
+    "tables": {
+      "title": "Le serie nel periodo di verifica",
+      "series": "Serie",
+      "points": "Punti",
+      "read": "Letti",
+      "mase": "MASE",
+      "baseline_mase": "MASE naïve",
+      "relative": "MASE relativo",
+      "smape": "sMAPE",
+      "wql": "Pinball scalata",
+      "coverage_80": "Banda 80 %",
+      "coverage_90": "Banda 90 %",
+      "note": "Non misurata"
+    },
+    "not_measured": {
+      "too_short": "troppo corta per la verifica e una stagione",
+      "no_holdout": "nessuna verifica",
+      "zero_scale": "storia costante: nessuna scala",
+      "other": "non misurata"
+    },
+    "measures": {
+      "title": "Misure, non test",
+      "group": "Gruppo"
+    },
+    "measure_texts": {
+      "relative_mase": "Il MASE di Timestral diviso per quello del naïve stagionale, serie per serie, poi la loro media geometrica: sotto 1 gli errori di Timestral nel periodo di verifica sono i più piccoli.",
+      "coverage_80": "La quota dei valori tenuti da parte caduti fra i quantili 0,1 e 0,9, su tutte le serie insieme; la quota nominale della banda è 80 %.",
+      "coverage_90": "La quota dei valori tenuti da parte caduti fra i quantili 0,05 e 0,95, su tutte le serie insieme; la quota nominale della banda è 90 %."
+    },
+    "across": {
+      "title": "Errori nel periodo di verifica, sulle serie",
+      "measure": "Misura",
+      "value": "Valore",
+      "what": "Che cos'è"
+    },
+    "across_texts": {
+      "mase": "L'errore assoluto medio di Timestral nel periodo di verifica diviso per l'errore tipico del ripetere l'ultima stagione nella storia (la scala); la media sulle serie.",
+      "baseline_mase": "Lo stesso per la previsione naïve stagionale, che ripete l'ultima stagione.",
+      "smape": "L'errore percentuale assoluto medio simmetrico di Timestral nel periodo di verifica, in %; la media sulle serie.",
+      "baseline_smape": "Lo stesso per la previsione naïve stagionale.",
+      "wql": "La perdita pinball sui 21 quantili divisa per il valore assoluto medio della serie (la perdita quantilica pesata); le serie pesate per la loro scala.",
+      "n_measured": "Le serie i cui errori sono stati misurati: quelle lunghe almeno quanto il periodo di verifica più una stagione."
+    },
+    "assumptions": {
+      "title": "Verifica della previsione",
+      "many_rows": "Con {n} punti il test confronta comunque le serie, una differenza per serie."
+    },
+    "checks": {
+      "baseline_comparison": {
+        "name": "Timestral contro il naïve stagionale: Wilcoxon",
+        "h0": "Fra le serie, le differenze di MASE fra Timestral e il naïve stagionale sono simmetriche attorno a 0: nessuna delle due previsioni ha gli errori più piccoli.",
+        "advice": "Il test dice che la differenza fra le due previsioni va oltre il caso su queste serie, non di quanto né su quali: leggete la tabella delle serie nella pagina del periodo di verifica.",
+        "not_computed": {
+          "one_series": "Una serie dà un solo confronto: il test richiede più serie (o più origini di previsione).",
+          "no_holdout": "Nessun valore è stato tenuto da parte: non ci sono errori da confrontare.",
+          "": "Meno di due serie hanno i loro errori nel periodo di verifica: il test ne richiede almeno due."
+        },
+        "count": {
+          "one": "{n} serie confrontata",
+          "other": "{n} serie confrontate"
+        }
+      },
+      "coverage_80": {
+        "name": "Copertura della banda all'80 %"
+      },
+      "coverage_90": {
+        "name": "Copertura della banda al 90 %"
+      },
+      "relative_mase": {
+        "name": "MASE relativo, media geometrica"
+      }
+    },
+    "stats": {
+      "model": {
+        "n": "Punti",
+        "n_series": "Serie",
+        "n_points": "Punti",
+        "n_missing": "Valori vuoti",
+        "n_filled": "Valori riempiti",
+        "n_model_missing": "Valori lasciati vuoti al modello",
+        "n_future_rows": "Righe future",
+        "horizon": "Orizzonte (passi)",
+        "holdout": "Verifica (passi)",
+        "season": "Stagione (passi)",
+        "alpha": "α del test",
+        "threads": "Thread della CPU",
+        "batches": "Lotti",
+        "seconds_load": "Caricamento dei pesi (s)",
+        "seconds_forecast": "Previsione (s)",
+        "n_quantiles": "Quantili scritti",
+        "mase": "MASE",
+        "baseline_mase": "MASE del naïve stagionale",
+        "relative_mase_geomean": "MASE relativo, media geometrica",
+        "smape": "sMAPE (%)",
+        "baseline_smape": "sMAPE del naïve stagionale (%)",
+        "wql": "Perdita quantilica pesata",
+        "coverage_80": "Copertura della banda all'80 %",
+        "coverage_90": "Copertura della banda al 90 %",
+        "n_measured": "Serie misurate",
+        "frequency": "Frequenza",
+        "time_kind": "Tempo",
+        "missing": "Valori vuoti trattati con",
+        "size": "Dimensione",
+        "weights": "Pesi",
+        "weights_sha256": "sha256 dei pesi",
+        "licence": "Licenza",
+        "licence_sha256": "sha256 della licenza",
+        "cpu_capability": "Istruzioni della CPU"
+      },
+      "series": {
+        "n": "Punti",
+        "n_used": "Punti letti",
+        "n_missing": "Valori vuoti",
+        "n_filled": "Valori riempiti",
+        "first": "Primo istante",
+        "last": "Ultimo istante",
+        "horizon": "Orizzonte",
+        "scale": "Scala",
+        "mase": "MASE",
+        "baseline_mase": "MASE del naïve stagionale",
+        "relative_mase": "MASE relativo",
+        "smape": "sMAPE (%)",
+        "baseline_smape": "sMAPE del naïve stagionale (%)",
+        "pinball": "Perdita pinball",
+        "wql": "Perdita quantilica pesata",
+        "coverage_80": "Copertura della banda all'80 %",
+        "coverage_90": "Copertura della banda al 90 %",
+        "total": "Σ|y|",
+        "not_measured": "Non misurata"
+      }
+    },
+    "values": {
+      "frequency": {
+        "hour": "ora",
+        "day": "giorno",
+        "week": "settimana",
+        "month": "mese",
+        "quarter": "trimestre",
+        "year": "anno",
+        "index": "passi"
+      },
+      "time_kind": {
+        "date": "data",
+        "datetime": "data e ora",
+        "integer": "intero (passi)"
+      },
+      "missing": {
+        "refuse": "rifiuto",
+        "linear": "interpolazione lineare",
+        "model": "lasciati al modello"
+      },
+      "size": {
+        "5m": "Timestral-5M",
+        "28m": "Timestral-28M",
+        "123m": "Timestral-123M",
+        "209m": "Timestral-209M"
+      }
+    },
+    "covariates": {
+      "title": "Colonne lette dal modello oltre alla serie",
+      "known": "Note nel futuro: {names}.",
+      "past": "Note fino all'ultimo valore di ogni serie: {names}.",
+      "none": "Nessuna covariata: il modello ha letto solo i valori della serie."
+    },
+    "licence": {
+      "weights_title": "I pesi usati",
+      "item": "Voce",
+      "value": "Valore",
+      "text_title": "La licenza, testo integrale",
+      "text_header": "Il file LICENSE dei pesi, come lo pubblica Mistral AI (il testo ufficiale in inglese, non tradotto)"
+    },
+    "notes": {
+      "rows": "Le serie hanno {n} punti; {missing} righe dell'input non avevano valore e sono state lasciate fuori."
+    },
+    "fit": {
+      "title": "Numeri della previsione",
+      "settings_title": "Come è stata fatta la previsione"
+    },
+    "reading": {
+      "variant": "Serie",
+      "how_lead": "Un paragrafo per ogni parte della previsione eseguita: che cosa assume, perché questo metodo, che cosa ha fatto ai numeri. Seguono le formule, con i loro simboli."
+    },
+    "reading_blocks": {
+      "summary": "Sintesi",
+      "forecast": "Previsione",
+      "holdout": "Periodo di verifica",
+      "coverage": "Copertura",
+      "comparison": "Confronto",
+      "limits": "Limiti",
+      "licence": "Licenza",
+      "method": "Metodo",
+      "formulas": "Formula"
+    },
+    "reading_labels": {
+      "method_zero_shot": "Modello pre-addestrato",
+      "method_quantiles": "Quantili",
+      "method_holdout": "Verifica ed errori",
+      "method_baseline": "Naïve stagionale",
+      "method_coverage": "Copertura",
+      "method_wilcoxon": "Test di Wilcoxon",
+      "method_limits": "Limiti",
+      "method_missing": "Valori mancanti",
+      "formula_naive": "Naïve stagionale",
+      "formula_mase": "MASE",
+      "formula_smape": "sMAPE",
+      "formula_pinball": "Pinball e WQL",
+      "formula_coverage": "Copertura",
+      "formula_wilcoxon": "W di Wilcoxon"
+    },
+    "reading_texts": {
+      "summary": {
+        "frequency=hour": "{size} ha previsto {n_series:int} serie di «{value}» per «{series}», {horizon:int} ore in avanti dall'ultima ora osservata. È un modello addestrato in anticipo, dai suoi autori, su molte altre serie, e non adattato alle vostre: legge la storia recente di ogni serie (fino a {context:int} ore qui) e la prosegue.",
+        "frequency=day": "{size} ha previsto {n_series:int} serie di «{value}» per «{series}», {horizon:int} giorni in avanti dal {last:date}. È un modello addestrato in anticipo, dai suoi autori, su molte altre serie, e non adattato alle vostre: legge la storia recente di ogni serie (fino a {context:int} giorni qui) e la prosegue.",
+        "frequency=week": "{size} ha previsto {n_series:int} serie di «{value}» per «{series}», {horizon:int} settimane in avanti dal {last:date}. È un modello addestrato in anticipo, dai suoi autori, su molte altre serie, e non adattato alle vostre: legge la storia recente di ogni serie (fino a {context:int} settimane qui) e la prosegue.",
+        "frequency=month": "{size} ha previsto {n_series:int} serie di «{value}» per «{series}», {horizon:int} mesi in avanti dal {last:date}. È un modello addestrato in anticipo, dai suoi autori, su molte altre serie, e non adattato alle vostre: legge la storia recente di ogni serie (fino a {context:int} mesi qui) e la prosegue.",
+        "frequency=quarter": "{size} ha previsto {n_series:int} serie di «{value}» per «{series}», {horizon:int} trimestri in avanti dal {last:date}. È un modello addestrato in anticipo, dai suoi autori, su molte altre serie, e non adattato alle vostre: legge la storia recente di ogni serie (fino a {context:int} trimestri qui) e la prosegue.",
+        "frequency=year": "{size} ha previsto {n_series:int} serie di «{value}» per «{series}», {horizon:int} anni in avanti dal {last:date}. È un modello addestrato in anticipo, dai suoi autori, su molte altre serie, e non adattato alle vostre: legge la storia recente di ogni serie (fino a {context:int} anni qui) e la prosegue.",
+        "": "{size} ha previsto {n_series:int} serie di «{value}» per «{series}», {horizon:int} passi in avanti dal {last:date}. È un modello addestrato in anticipo, dai suoi autori, su molte altre serie, e non adattato alle vostre: legge la storia recente di ogni serie (fino a {context:int} passi qui) e la prosegue."
+      },
+      "summary_one": {
+        "frequency=hour": "{size} ha previsto «{value}» {horizon:int} ore in avanti dall'ultima ora osservata. È un modello addestrato in anticipo, dai suoi autori, su molte altre serie, e non adattato alla vostra: legge la storia recente della serie ({context:int} ore qui) e la prosegue.",
+        "frequency=day": "{size} ha previsto «{value}» {horizon:int} giorni in avanti dal {last:date}. È un modello addestrato in anticipo, dai suoi autori, su molte altre serie, e non adattato alla vostra: legge la storia recente della serie ({context:int} giorni qui) e la prosegue.",
+        "frequency=week": "{size} ha previsto «{value}» {horizon:int} settimane in avanti dal {last:date}. È un modello addestrato in anticipo, dai suoi autori, su molte altre serie, e non adattato alla vostra: legge la storia recente della serie ({context:int} settimane qui) e la prosegue.",
+        "frequency=month": "{size} ha previsto «{value}» {horizon:int} mesi in avanti dal {last:date}. È un modello addestrato in anticipo, dai suoi autori, su molte altre serie, e non adattato alla vostra: legge la storia recente della serie ({context:int} mesi qui) e la prosegue.",
+        "frequency=quarter": "{size} ha previsto «{value}» {horizon:int} trimestri in avanti dal {last:date}. È un modello addestrato in anticipo, dai suoi autori, su molte altre serie, e non adattato alla vostra: legge la storia recente della serie ({context:int} trimestri qui) e la prosegue.",
+        "frequency=year": "{size} ha previsto «{value}» {horizon:int} anni in avanti dal {last:date}. È un modello addestrato in anticipo, dai suoi autori, su molte altre serie, e non adattato alla vostra: legge la storia recente della serie ({context:int} anni qui) e la prosegue.",
+        "": "{size} ha previsto «{value}» {horizon:int} passi in avanti dal {last:date}. È un modello addestrato in anticipo, dai suoi autori, su molte altre serie, e non adattato alla vostra: legge la storia recente della serie ({context:int} passi qui) e la prosegue."
+      },
+      "summary_steps": {
+        "frequency=hour": "{size} ha previsto {n_series:int} serie di «{value}» per «{series}», {horizon:int} ore in avanti dalla posizione {last:int}. È un modello addestrato in anticipo, dai suoi autori, su molte altre serie, e non adattato alle vostre: legge la storia recente di ogni serie (fino a {context:int} ore qui) e la prosegue.",
+        "frequency=day": "{size} ha previsto {n_series:int} serie di «{value}» per «{series}», {horizon:int} giorni in avanti dalla posizione {last:int}. È un modello addestrato in anticipo, dai suoi autori, su molte altre serie, e non adattato alle vostre: legge la storia recente di ogni serie (fino a {context:int} giorni qui) e la prosegue.",
+        "frequency=week": "{size} ha previsto {n_series:int} serie di «{value}» per «{series}», {horizon:int} settimane in avanti dalla posizione {last:int}. È un modello addestrato in anticipo, dai suoi autori, su molte altre serie, e non adattato alle vostre: legge la storia recente di ogni serie (fino a {context:int} settimane qui) e la prosegue.",
+        "frequency=month": "{size} ha previsto {n_series:int} serie di «{value}» per «{series}», {horizon:int} mesi in avanti dalla posizione {last:int}. È un modello addestrato in anticipo, dai suoi autori, su molte altre serie, e non adattato alle vostre: legge la storia recente di ogni serie (fino a {context:int} mesi qui) e la prosegue.",
+        "frequency=quarter": "{size} ha previsto {n_series:int} serie di «{value}» per «{series}», {horizon:int} trimestri in avanti dalla posizione {last:int}. È un modello addestrato in anticipo, dai suoi autori, su molte altre serie, e non adattato alle vostre: legge la storia recente di ogni serie (fino a {context:int} trimestri qui) e la prosegue.",
+        "frequency=year": "{size} ha previsto {n_series:int} serie di «{value}» per «{series}», {horizon:int} anni in avanti dalla posizione {last:int}. È un modello addestrato in anticipo, dai suoi autori, su molte altre serie, e non adattato alle vostre: legge la storia recente di ogni serie (fino a {context:int} anni qui) e la prosegue.",
+        "": "{size} ha previsto {n_series:int} serie di «{value}» per «{series}», {horizon:int} passi in avanti dalla posizione {last:int}. È un modello addestrato in anticipo, dai suoi autori, su molte altre serie, e non adattato alle vostre: legge la storia recente di ogni serie (fino a {context:int} passi qui) e la prosegue."
+      },
+      "summary_one_steps": {
+        "frequency=hour": "{size} ha previsto «{value}» {horizon:int} ore in avanti dalla posizione {last:int}. È un modello addestrato in anticipo, dai suoi autori, su molte altre serie, e non adattato alla vostra: legge la storia recente della serie ({context:int} ore qui) e la prosegue.",
+        "frequency=day": "{size} ha previsto «{value}» {horizon:int} giorni in avanti dalla posizione {last:int}. È un modello addestrato in anticipo, dai suoi autori, su molte altre serie, e non adattato alla vostra: legge la storia recente della serie ({context:int} giorni qui) e la prosegue.",
+        "frequency=week": "{size} ha previsto «{value}» {horizon:int} settimane in avanti dalla posizione {last:int}. È un modello addestrato in anticipo, dai suoi autori, su molte altre serie, e non adattato alla vostra: legge la storia recente della serie ({context:int} settimane qui) e la prosegue.",
+        "frequency=month": "{size} ha previsto «{value}» {horizon:int} mesi in avanti dalla posizione {last:int}. È un modello addestrato in anticipo, dai suoi autori, su molte altre serie, e non adattato alla vostra: legge la storia recente della serie ({context:int} mesi qui) e la prosegue.",
+        "frequency=quarter": "{size} ha previsto «{value}» {horizon:int} trimestri in avanti dalla posizione {last:int}. È un modello addestrato in anticipo, dai suoi autori, su molte altre serie, e non adattato alla vostra: legge la storia recente della serie ({context:int} trimestri qui) e la prosegue.",
+        "frequency=year": "{size} ha previsto «{value}» {horizon:int} anni in avanti dalla posizione {last:int}. È un modello addestrato in anticipo, dai suoi autori, su molte altre serie, e non adattato alla vostra: legge la storia recente della serie ({context:int} anni qui) e la prosegue.",
+        "": "{size} ha previsto «{value}» {horizon:int} passi in avanti dalla posizione {last:int}. È un modello addestrato in anticipo, dai suoi autori, su molte altre serie, e non adattato alla vostra: legge la storia recente della serie ({context:int} passi qui) e la prosegue."
+      },
+      "summary_known": "Ha letto anche {covariate}, note nel futuro: le righe dopo l'ultimo valore di ogni serie le contengono.",
+      "summary_past": "Ha letto anche {covariate}, note solo fino all'ultimo valore di ogni serie.",
+      "filled_linear": "{count:int} valori mancanti dentro le serie sono stati riempiti per interpolazione lineare; l'output li segna nella sua colonna «filled».",
+      "missing_model": "{count:int} valori mancanti dentro le serie sono stati passati al modello come mancanti, e il modello è costruito per leggerli; l'output li lascia vuoti.",
+      "forecast_bands": {
+        "frequency=hour": "La mediana dice {median:num} per la prima ora prevista; secondo il modello stesso c'è una probabilità dell'80 % che il valore cada fra {low80:num} e {high80:num}, e del 90 % fra {low90:num} e {high90:num}.",
+        "frequency=day": "La mediana dice {median:num} per il {at:date}; secondo il modello stesso c'è una probabilità dell'80 % che il valore cada fra {low80:num} e {high80:num}, e del 90 % fra {low90:num} e {high90:num}.",
+        "frequency=week": "La mediana dice {median:num} per il {at:date}; secondo il modello stesso c'è una probabilità dell'80 % che il valore cada fra {low80:num} e {high80:num}, e del 90 % fra {low90:num} e {high90:num}.",
+        "frequency=month": "La mediana dice {median:num} per il {at:date}; secondo il modello stesso c'è una probabilità dell'80 % che il valore cada fra {low80:num} e {high80:num}, e del 90 % fra {low90:num} e {high90:num}.",
+        "frequency=quarter": "La mediana dice {median:num} per il {at:date}; secondo il modello stesso c'è una probabilità dell'80 % che il valore cada fra {low80:num} e {high80:num}, e del 90 % fra {low90:num} e {high90:num}.",
+        "frequency=year": "La mediana dice {median:num} per il {at:date}; secondo il modello stesso c'è una probabilità dell'80 % che il valore cada fra {low80:num} e {high80:num}, e del 90 % fra {low90:num} e {high90:num}.",
+        "": "La mediana dice {median:num} per il {at:date}; secondo il modello stesso c'è una probabilità dell'80 % che il valore cada fra {low80:num} e {high80:num}, e del 90 % fra {low90:num} e {high90:num}."
+      },
+      "forecast_bands_steps": "La mediana dice {median:num} alla posizione {at:int}; secondo il modello stesso c'è una probabilità dell'80 % che il valore cada fra {low80:num} e {high80:num}, e del 90 % fra {low90:num} e {high90:num}.",
+      "holdout_mase": {
+        "frequency=hour": "Sugli ultimi {holdout:int} valori di ogni serie, tenuti da parte e previsti da prima, la previsione ha sbagliato di {mase:num} volte l'errore tipico del ripetere l'ultima stagione nella storia (MASE, la media sulle serie); la previsione naïve stagionale, che ripete l'ultima stagione, ha sbagliato di {baseline_mase:num} volte.",
+        "frequency=day": "Sugli ultimi {holdout:int} valori di ogni serie, tenuti da parte e previsti da prima, la previsione ha sbagliato di {mase:num} volte l'errore tipico del ripetere l'ultima stagione nella storia (MASE, la media sulle serie); la previsione naïve stagionale, che ripete l'ultima stagione, ha sbagliato di {baseline_mase:num} volte.",
+        "frequency=week": "Sugli ultimi {holdout:int} valori di ogni serie, tenuti da parte e previsti da prima, la previsione ha sbagliato di {mase:num} volte l'errore tipico del ripetere l'ultima stagione nella storia (MASE, la media sulle serie); la previsione naïve stagionale, che ripete l'ultima stagione, ha sbagliato di {baseline_mase:num} volte.",
+        "frequency=month": "Sugli ultimi {holdout:int} valori di ogni serie, tenuti da parte e previsti da prima, la previsione ha sbagliato di {mase:num} volte l'errore tipico del ripetere l'ultima stagione nella storia (MASE, la media sulle serie); la previsione naïve stagionale, che ripete l'ultima stagione, ha sbagliato di {baseline_mase:num} volte.",
+        "frequency=quarter": "Sugli ultimi {holdout:int} valori di ogni serie, tenuti da parte e previsti da prima, la previsione ha sbagliato di {mase:num} volte l'errore tipico del ripetere l'ultima stagione nella storia (MASE, la media sulle serie); la previsione naïve stagionale, che ripete l'ultima stagione, ha sbagliato di {baseline_mase:num} volte.",
+        "frequency=year": "Sugli ultimi {holdout:int} valori di ogni serie, tenuti da parte e previsti da prima, la previsione ha sbagliato di {mase:num} volte l'errore tipico del ripetere l'ultima stagione nella storia (MASE, la media sulle serie); la previsione naïve stagionale, che ripete l'ultima stagione, ha sbagliato di {baseline_mase:num} volte.",
+        "": "Sugli ultimi {holdout:int} valori di ogni serie, tenuti da parte e previsti da prima, la previsione ha sbagliato di {mase:num} volte l'errore tipico del ripetere l'ultima stagione nella storia (MASE, la media sulle serie); la previsione naïve stagionale, che ripete l'ultima stagione, ha sbagliato di {baseline_mase:num} volte."
+      },
+      "holdout_not_measured": "{count:int} serie su {n_series:int} sono troppo corte per il periodo di verifica e una stagione di storia: sono previste, non misurate.",
+      "holdout_none": "Nessun valore è stato tenuto da parte (verifica 0): non ci sono errori da misurare né un confronto.",
+      "coverage": "Nel periodo di verifica la banda all'80 % ha contenuto {in80:int} valori su {steps:int} ({share80:pct}) e quella al 90 % {in90:int} ({share90:pct}). Con una sola origine di previsione queste quote si muovono molto per caso: leggetele come un indizio sulla larghezza delle bande, non come una sua misura.",
+      "comparison_supported": "Timestral ha avuto l'errore più piccolo su {better:int} serie su {n_series:int}. Se nessuna delle due previsioni fosse migliore, differenze così sbilanciate comparirebbero per caso con probabilità {p_value:p}, sotto α = {alpha:num}: il vantaggio di Timestral sul naïve stagionale è sostenuto su queste serie.",
+      "comparison_opposite": "Timestral ha avuto l'errore più piccolo solo su {better:int} serie su {n_series:int}. Se nessuna delle due previsioni fosse migliore, differenze così sbilanciate comparirebbero per caso con probabilità {p_value:p}, sotto α = {alpha:num}: il vantaggio del naïve stagionale è sostenuto su queste serie, e qui Timestral è peggiore del ripetere l'ultima stagione.",
+      "comparison_not_supported": "Timestral ha avuto l'errore più piccolo su {better:int} serie su {n_series:int}. Se nessuna delle due previsioni fosse migliore, differenze come queste comparirebbero per caso con probabilità {p_value:p}, non sotto α = {alpha:num}: i dati non mostrano che una delle due sia migliore. «Non sostenuto» non vuol dire che le due siano uguali.",
+      "comparison_few_series": "Con {n_series:int} serie il p-value più piccolo che questo test può dare è {min_p:p}, non sotto α = {alpha:num}: qui nessuna differenza potrebbe risultare sostenuta, quali che siano gli errori; servono più serie.",
+      "comparison_one_series": "Con una sola serie il confronto è una misura, non un test: il MASE di Timestral nel periodo di verifica è {mase:num}, quello del naïve stagionale {baseline_mase:num}. Un test richiede più serie (o più origini di previsione).",
+      "comparison_not_computed": "Il confronto non è stato calcolato: {n_measured:int} serie hanno i loro errori nel periodo di verifica, e il test ne richiede almeno due.",
+      "limits": "Timestral non conosce la vostra attività: una promozione, un cambio di prezzo, un nuovo negozio o una chiusura gli sono invisibili a meno che una colonna non li dica, nota nel futuro. Legge solo la serie e le colonne date.",
+      "limits_context": "Ha letto gli ultimi {used:int} di {n:int} valori di «{series}»: il contesto del modello si ferma a 32.768.",
+      "limits_clip": "Una serie mai negativa nella sua storia non riceve previsioni negative: la libreria porta a 0 quei valori (l'opzione «clip_nonnegative» del nodo).",
+      "licence": "I pesi del modello sono di Mistral AI, sotto la {licence}; il testo completo della licenza chiude questo report.",
+      "licence_accepted": "Un amministratore ({by}) l'ha accettata per questa installazione il {on:date}, prima che il gruppo fosse costruito.",
+      "method_zero_shot": "Che cos'è un modello pre-addestrato («zero-shot»): Timestral è stato addestrato una volta, da Mistral AI, su una grande raccolta di serie sintetiche e osservate, per proseguire una serie dal suo passato recente. Qui legge soltanto: nulla dei vostri dati viene appreso o conservato, e lo stesso input dà la stessa previsione. Per questo non c'è niente da adattare o da regolare e molte serie si prevedono in fretta; ed è anche per questo che il modello sa solo ciò che dicono la serie e le colonne date.",
+      "method_quantiles": "Che cos'è un quantile: per ogni istante futuro il modello dà 21 quantili, da 0,01 a 0,99, invece di un solo numero. Il quantile 0,9 è un valore che il modello si aspetta venga superato una volta su dieci; la mediana (0,5) una volta su due. Una banda è una coppia di quantili: secondo il modello quella da 0,1 a 0,9 contiene 8 valori su 10, quella da 0,05 a 0,95 ne contiene 9 su 10. Le bande si allargano con la distanza, perché più si guarda avanti, meno il passato dice.",
+      "method_holdout": "Perché un periodo di verifica: una previsione si misura su valori che non ha visto. Gli ultimi valori di ogni serie sono stati tenuti da parte, previsti da prima e confrontati con ciò che è stato osservato. Il MASE divide l'errore assoluto medio per l'errore tipico del ripetere l'ultima stagione nella storia, così che serie di grandezze diverse si possano confrontare: sotto 1, la previsione ha sbagliato meno di quella abitudine. Lo sMAPE dice l'errore in percentuale dei valori. La perdita pinball misura i quantili: un valore sotto il quantile q costa q volte la distanza, uno sopra 1 − q volte; divisa per la media dei valori è la perdita quantilica pesata (WQL).",
+      "method_baseline": "Il riferimento è la previsione naïve stagionale: ogni valore futuro è il valore di una stagione prima (l'ultimo valore quando non c'è stagione). Non richiede adattamento, non costa nulla ed è la previsione su cui è costruito il MASE: Timestral è confrontato con essa serie per serie.",
+      "method_coverage": "Come leggere una copertura: una quota vicina a quella nominale della banda (80 %, 90 %) dice che le bande erano larghe circa quanto gli errori; molto sotto, erano troppo strette per questa serie; molto sopra, più larghe di quanto gli errori richiedessero. Nessun test viene fatto: gli errori di una sola origine di previsione non sono indipendenti (una previsione troppo bassa un giorno di solito lo è anche il giorno dopo), e un test di «80 % dentro» pretenderebbe una certezza molto maggiore di quella che i dati hanno.",
+      "method_wilcoxon": "Il confronto è il test dei ranghi con segno di Wilcoxon sulle differenze d = MASE di Timestral − MASE del naïve stagionale, una per serie. Ordina le differenze per grandezza e somma i ranghi di quelle positive e di quelle negative; se nessuna delle due previsioni fosse migliore, le due somme sarebbero vicine. Qui le unità indipendenti sono le serie (un'assunzione: il report non può verificarla). La distribuzione è esatta fino a 50 serie senza pareggi, altrimenti si usa l'approssimazione normale; una differenza esattamente 0 è lasciata fuori. «Non sostenuto» vuol dire che i dati non mostrano una differenza, non che non ci sia: con poche serie anche un vantaggio netto non può raggiungere α.",
+      "method_limits": "Che cosa un modello pre-addestrato non può sapere: tutto ciò che non è nella serie o nelle colonne date. Una covariata aiuta solo quando è davvero nota in anticipo (una festività, una promozione programmata); una covariata passata è letta solo fino all'ultimo valore. Il modello legge al massimo gli ultimi 32.768 valori di ogni serie. La libreria prevede ogni serie e la sua opposta e fa la media delle due (media simmetrica), e porta a 0 le previsioni negative di una serie mai negativa: sono due opzioni del nodo, attive per impostazione predefinita.",
+      "method_missing": "I valori mancanti dentro una serie sono stati riempiti con una retta fra i loro vicini (linear), oppure passati al modello come mancanti, che il modello legge con un indicatore (model). L'output segna quelli riempiti."
+    },
+    "formula_texts": {
+      "formula_naive": "ŷ_(T+h) = y_(T+h−m·k), k = il più piccolo intero con m·k ≥ h;  m: la stagione (1: l'ultimo valore ripetuto)",
+      "formula_mase": "s_i = (1/(T − m)) Σ_(t=m+1)^(T) |y_t − y_(t−m)|;  MASE_i = (1/k) Σ_(h=1)^(k) |y_(T+h) − ŷ_(T+h)| / s_i;  MASE relativo_i = MASE_i / MASE_i(naïve), riassunti dalla loro media geometrica",
+      "formula_smape": "sMAPE = (1/k) Σ_h 200 |y_h − ŷ_h| / (|y_h| + |ŷ_h|), in %;  i passi in cui entrambi sono 0 sono lasciati fuori",
+      "formula_pinball": "ρ_q(u) = max(q u, (q − 1) u), u = y − ŷ_q;  pinball = la media di ρ_q sui 21 livelli e sui k passi;  WQL = pinball / ((1/k) Σ_h |y_h|)",
+      "formula_coverage": "copertura 80 % = (1/k) Σ_h 1[ŷ_0,1 ≤ y_h ≤ ŷ_0,9];  copertura 90 % lo stesso con 0,05 e 0,95",
+      "formula_wilcoxon": "d_i = MASE_i − MASE_i(naïve), gli zeri lasciati fuori;  W+ = Σ_(d_i > 0) rango(|d_i|), W− = Σ_(d_i < 0) rango(|d_i|);  W = min(W+, W−);  con molte serie z = (W+ − n(n+1)/4) / √(n(n+1)(2n+1)/24 − Σ(t³ − t)/48), t: le dimensioni dei pareggi"
+    },
+    "note_texts": {
+      "ends_early": "{count:int} serie finiscono prima del {last:date}: le loro previsioni cominciano prima.",
+      "context_cut": "Il modello ha letto gli ultimi {used:int} di {n:int} valori di «{series}».",
+      "history_shrunk": "La storia disegnata è stata ridotta a {points:int} istanti per serie per restare nel limite dei risultati; le misure usano tutti i valori.",
+      "future_left_out": "{count:int} righe dopo l'ultimo valore della loro serie sono state lasciate fuori: senza covariate note non contengono nulla da leggere.",
+      "covariate_missing": "{count:int} valori vuoti di «{covariate}» sono stati passati al modello come mancanti.",
+      "time_budget": "La previsione ha richiesto {seconds:num} s dei {limit:num} s che il passo concede."
+    },
+    "measure_readings": [
+      "summary",
+      "summary_one",
+      "summary_steps",
+      "summary_one_steps",
+      "summary_known",
+      "summary_past",
+      "filled_linear",
+      "missing_model",
+      "forecast_bands",
+      "forecast_bands_steps",
+      "holdout_mase",
+      "holdout_not_measured",
+      "holdout_none",
+      "coverage",
+      "comparison_one_series",
+      "comparison_not_computed",
+      "limits",
+      "limits_context",
+      "limits_clip",
+      "licence",
+      "licence_accepted"
+    ],
+    "licence_text": "Modified MIT License \n\nAttribution notice: 2026 - Mistral AI\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of the weights of this model and associated documentation files (the “Model”), to deal in the Model without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Model, and to permit persons to whom the Model is furnished to do so, subject to the following conditions: \n\n1. The above attribution notice and this permission notice shall be included in all copies or substantial portions of the Model. \n2. You are not authorized to exercise any rights under this license if the global consolidated monthly revenue of your company (or that of your employer) exceeds $20 million (or its equivalent in another currency) for the preceding month. This restriction in (b) applies to the Model and any derivatives, modifications, or combined works based on it, whether provided by Mistral AI or by a third party. You may contact Mistral AI (sales@mistral.ai) to request a commercial license, which Mistral AI may grant you at its sole discretion, or choose to use the Model on Mistral AI's hosted services available at https://mistral.ai/.\n\nTHE MODEL IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL MISTRAL AI BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE MODEL OR THE USE OR OTHER DEALINGS IN THE MODEL."
+  },
+  "de": {
+    "name": "Prognose ({model})",
+    "series_of": "«{value}» über «{time}»{by}, {frequency}",
+    "by": " nach «{series}»",
+    "frequency_series": {
+      "hour": "stündliche Reihe",
+      "day": "tägliche Reihe",
+      "week": "wöchentliche Reihe",
+      "month": "monatliche Reihe",
+      "quarter": "vierteljährliche Reihe",
+      "year": "jährliche Reihe",
+      "index": "Reihe in Schritten"
+    },
+    "units": {
+      "hour": "Stunden",
+      "day": "Tage",
+      "week": "Wochen",
+      "month": "Monate",
+      "quarter": "Quartale",
+      "year": "Jahre",
+      "index": "Schritte"
+    },
+    "comparison_verdicts": {
+      "ok": "– nicht gestützt",
+      "ahead": "✓ Timestral vorn",
+      "behind": "✓ saisonal naive Prognose vorn"
+    },
+    "sections": {
+      "summary": "Zusammenfassung",
+      "assumptions": "Prüfung",
+      "forecasts": "Prognosen",
+      "holdout": "Der Prüfzeitraum: die Prognose gemessen",
+      "limits": "Was das Modell nicht wissen kann",
+      "fit": "Zahlen der Prognose",
+      "notes": "Hinweise",
+      "licence": "Lizenz der Gewichte"
+    },
+    "kpi": {
+      "series": "Reihen",
+      "points": "{n} Punkte",
+      "model": "Modell",
+      "cpu": "CPU {cpu} · {threads} Threads",
+      "horizon": "Horizont",
+      "horizon_value": "{h} {unit}",
+      "holdout": "Prüfzeitraum {k}",
+      "no_holdout": "kein Prüfzeitraum",
+      "mase": "MASE im Prüfzeitraum",
+      "mase_under": "gegenüber {b} der saisonal naiven Prognose",
+      "not_measured": "nicht gemessen"
+    },
+    "formula_many": "{value} ~ {model} · {n} Reihen nach «{series}» · {frequency} · {horizon} {unit} voraus",
+    "formula_one": "{value} ~ {model} · {frequency} · {horizon} {unit} voraus",
+    "licence_line": "Prognose von {model}, Gewichte von Mistral AI unter der Modified MIT License: Der vollständige Text der Lizenz steht auf der letzten Seite.",
+    "alpha_line": "Das einzige Urteil kommt aus dem Vorzeichen-Rang-Test von Wilcoxon über die Reihen, gelesen gegen α = {alpha} (die Option des Knotens); sein Wert ist der Median der Differenzen des MASE, unter 0, wenn die Fehler von Timestral die kleineren sind. Die Fehler im Prüfzeitraum und die Überdeckung der Bänder sind Maße ohne Urteil: Sie stehen unter der Prüfung.",
+    "charts": {
+      "forecast": "Verlauf, Prognose mit ihren 80-%- und 90-%-Bändern, saisonal naive Prognose",
+      "holdout": "Prüfzeitraum: beobachtet und Prognose davor",
+      "relative": "Relativer MASE der gezeichneten Reihen (logarithmische Skala; die Linie bei 1 ist die saisonal naive Prognose)"
+    },
+    "series": {
+      "observed": "Beobachtet",
+      "median": "Median",
+      "band80": "80-%-Band",
+      "band90": "90-%-Band",
+      "baseline": "Saisonal naiv",
+      "relative": "Relativer MASE"
+    },
+    "captions": {
+      "forecast": "Die gestrichelte Linie markiert den ersten vorhergesagten Zeitpunkt. Die Bänder sind die eigenen Quantile des Modells: 0,1 bis 0,9 und 0,05 bis 0,95.",
+      "holdout": "In jedem Diagramm markiert die gestrichelte Linie den ersten zurückgehaltenen Wert: Ab dort ist die blaue Linie der Median, den das Modell vorhersagte, ohne diese Werte zu sehen, mit seinen 80-%- und 90-%-Bändern; die graue Linie ist das Beobachtete."
+    },
+    "series_name": "«{series}»",
+    "tables": {
+      "title": "Die Reihen im Prüfzeitraum",
+      "series": "Reihe",
+      "points": "Punkte",
+      "read": "Gelesen",
+      "mase": "MASE",
+      "baseline_mase": "MASE naiv",
+      "relative": "Relativer MASE",
+      "smape": "sMAPE",
+      "wql": "Skalierter Pinball",
+      "coverage_80": "Band 80 %",
+      "coverage_90": "Band 90 %",
+      "note": "Nicht gemessen"
+    },
+    "not_measured": {
+      "too_short": "zu kurz für den Prüfzeitraum und eine Saison",
+      "no_holdout": "kein Prüfzeitraum",
+      "zero_scale": "konstanter Verlauf: keine Skala",
+      "other": "nicht gemessen"
+    },
+    "measures": {
+      "title": "Maße, keine Tests",
+      "group": "Gruppe"
+    },
+    "measure_texts": {
+      "relative_mase": "Der MASE von Timestral geteilt durch den der saisonal naiven Prognose, Reihe für Reihe, dann ihr geometrisches Mittel: unter 1 sind die Fehler von Timestral im Prüfzeitraum die kleineren.",
+      "coverage_80": "Der Anteil der zurückgehaltenen Werte zwischen den Quantilen 0,1 und 0,9, über alle Reihen zusammen; der nominale Anteil des Bands ist 80 %.",
+      "coverage_90": "Der Anteil der zurückgehaltenen Werte zwischen den Quantilen 0,05 und 0,95, über alle Reihen zusammen; der nominale Anteil des Bands ist 90 %."
+    },
+    "across": {
+      "title": "Fehler im Prüfzeitraum, über die Reihen",
+      "measure": "Maß",
+      "value": "Wert",
+      "what": "Was es ist"
+    },
+    "across_texts": {
+      "mase": "Der mittlere absolute Fehler von Timestral im Prüfzeitraum geteilt durch den typischen Fehler, die letzte Saison im Verlauf zu wiederholen (die Skala); der Mittelwert über die Reihen.",
+      "baseline_mase": "Dasselbe für die saisonal naive Prognose, die die letzte Saison wiederholt.",
+      "smape": "Der symmetrische mittlere absolute prozentuale Fehler von Timestral im Prüfzeitraum, in %; der Mittelwert über die Reihen.",
+      "baseline_smape": "Dasselbe für die saisonal naive Prognose.",
+      "wql": "Der Pinball-Verlust über die 21 Quantile geteilt durch den mittleren Absolutwert der Reihe (der gewichtete Quantilverlust); die Reihen nach ihrer Skala gewichtet.",
+      "n_measured": "Die Reihen, deren Fehler gemessen wurden: die mindestens so lang wie der Prüfzeitraum und eine Saison sind."
+    },
+    "assumptions": {
+      "title": "Prüfung der Prognose",
+      "many_rows": "Bei {n} Punkten vergleicht der Test dennoch Reihen, eine Differenz je Reihe."
+    },
+    "checks": {
+      "baseline_comparison": {
+        "name": "Timestral gegen die saisonal naive Prognose: Wilcoxon",
+        "h0": "Über die Reihen sind die Differenzen des MASE zwischen Timestral und der saisonal naiven Prognose symmetrisch um 0: Keine der beiden Prognosen hat die kleineren Fehler.",
+        "advice": "Der Test sagt, dass der Unterschied zwischen den beiden Prognosen auf diesen Reihen über den Zufall hinausgeht, nicht wie groß er ist und auf welchen Reihen: Lesen Sie die Tabelle der Reihen auf der Seite des Prüfzeitraums.",
+        "not_computed": {
+          "one_series": "Eine Reihe ergibt einen Vergleich: Der Test braucht mehrere Reihen (oder mehrere Prognoseursprünge).",
+          "no_holdout": "Es wurde kein Wert zurückgehalten: Es gibt keine Fehler zu vergleichen.",
+          "": "Weniger als zwei Reihen haben ihre Fehler im Prüfzeitraum: Der Test braucht mindestens zwei."
+        },
+        "count": {
+          "one": "{n} Reihe verglichen",
+          "other": "{n} Reihen verglichen"
+        }
+      },
+      "coverage_80": {
+        "name": "Überdeckung des 80-%-Bands"
+      },
+      "coverage_90": {
+        "name": "Überdeckung des 90-%-Bands"
+      },
+      "relative_mase": {
+        "name": "Relativer MASE, geometrisches Mittel"
+      }
+    },
+    "stats": {
+      "model": {
+        "n": "Punkte",
+        "n_series": "Reihen",
+        "n_points": "Punkte",
+        "n_missing": "Leere Werte",
+        "n_filled": "Gefüllte Werte",
+        "n_model_missing": "Für das Modell leer gelassene Werte",
+        "n_future_rows": "Zukünftige Zeilen",
+        "horizon": "Horizont (Schritte)",
+        "holdout": "Prüfzeitraum (Schritte)",
+        "season": "Saison (Schritte)",
+        "alpha": "α des Tests",
+        "threads": "CPU-Threads",
+        "batches": "Stapel",
+        "seconds_load": "Laden der Gewichte (s)",
+        "seconds_forecast": "Prognose (s)",
+        "n_quantiles": "Geschriebene Quantile",
+        "mase": "MASE",
+        "baseline_mase": "MASE der saisonal naiven Prognose",
+        "relative_mase_geomean": "Relativer MASE, geometrisches Mittel",
+        "smape": "sMAPE (%)",
+        "baseline_smape": "sMAPE der saisonal naiven Prognose (%)",
+        "wql": "Gewichteter Quantilverlust",
+        "coverage_80": "Überdeckung des 80-%-Bands",
+        "coverage_90": "Überdeckung des 90-%-Bands",
+        "n_measured": "Gemessene Reihen",
+        "frequency": "Frequenz",
+        "time_kind": "Zeit",
+        "missing": "Leere Werte behandelt durch",
+        "size": "Größe",
+        "weights": "Gewichte",
+        "weights_sha256": "sha256 der Gewichte",
+        "licence": "Lizenz",
+        "licence_sha256": "sha256 der Lizenz",
+        "cpu_capability": "CPU-Befehle"
+      },
+      "series": {
+        "n": "Punkte",
+        "n_used": "Gelesene Punkte",
+        "n_missing": "Leere Werte",
+        "n_filled": "Gefüllte Werte",
+        "first": "Erster Zeitpunkt",
+        "last": "Letzter Zeitpunkt",
+        "horizon": "Horizont",
+        "scale": "Skala",
+        "mase": "MASE",
+        "baseline_mase": "MASE der saisonal naiven Prognose",
+        "relative_mase": "Relativer MASE",
+        "smape": "sMAPE (%)",
+        "baseline_smape": "sMAPE der saisonal naiven Prognose (%)",
+        "pinball": "Pinball-Verlust",
+        "wql": "Gewichteter Quantilverlust",
+        "coverage_80": "Überdeckung des 80-%-Bands",
+        "coverage_90": "Überdeckung des 90-%-Bands",
+        "total": "Σ|y|",
+        "not_measured": "Nicht gemessen"
+      }
+    },
+    "values": {
+      "frequency": {
+        "hour": "Stunde",
+        "day": "Tag",
+        "week": "Woche",
+        "month": "Monat",
+        "quarter": "Quartal",
+        "year": "Jahr",
+        "index": "Schritte"
+      },
+      "time_kind": {
+        "date": "Datum",
+        "datetime": "Datum und Uhrzeit",
+        "integer": "ganze Zahl (Schritte)"
+      },
+      "missing": {
+        "refuse": "Ablehnung",
+        "linear": "lineare Interpolation",
+        "model": "Überlassen an das Modell"
+      },
+      "size": {
+        "5m": "Timestral-5M",
+        "28m": "Timestral-28M",
+        "123m": "Timestral-123M",
+        "209m": "Timestral-209M"
+      }
+    },
+    "covariates": {
+      "title": "Spalten, die das Modell neben der Reihe gelesen hat",
+      "known": "In der Zukunft bekannt: {names}.",
+      "past": "Bis zum letzten Wert jeder Reihe bekannt: {names}.",
+      "none": "Keine Kovariate: Das Modell hat nur die Werte der Reihe gelesen."
+    },
+    "licence": {
+      "weights_title": "Die verwendeten Gewichte",
+      "item": "Angabe",
+      "value": "Wert",
+      "text_title": "Die Lizenz im Wortlaut",
+      "text_header": "Die Datei LICENSE der Gewichte, wie Mistral AI sie veröffentlicht (ihr offizieller englischer Text, nicht übersetzt)"
+    },
+    "notes": {
+      "rows": "Die Reihen haben {n} Punkte; {missing} Zeilen der Eingabe hatten keinen Wert und wurden ausgelassen."
+    },
+    "fit": {
+      "title": "Zahlen der Prognose",
+      "settings_title": "Wie prognostiziert wurde"
+    },
+    "reading": {
+      "variant": "Reihe",
+      "how_lead": "Ein Absatz für jeden Teil der Prognose, der gelaufen ist: was er voraussetzt, warum diese Methode, was er mit den Zahlen gemacht hat. Danach folgen die Formeln mit ihren Symbolen."
+    },
+    "reading_blocks": {
+      "summary": "Zusammenfassung",
+      "forecast": "Prognose",
+      "holdout": "Prüfzeitraum",
+      "coverage": "Überdeckung",
+      "comparison": "Vergleich",
+      "limits": "Grenzen",
+      "licence": "Lizenz",
+      "method": "Methode",
+      "formulas": "Formel"
+    },
+    "reading_labels": {
+      "method_zero_shot": "Vortrainiertes Modell",
+      "method_quantiles": "Quantile",
+      "method_holdout": "Prüfzeitraum und Fehler",
+      "method_baseline": "Saisonal naiv",
+      "method_coverage": "Überdeckung",
+      "method_wilcoxon": "Test von Wilcoxon",
+      "method_limits": "Grenzen",
+      "method_missing": "Fehlende Werte",
+      "formula_naive": "Saisonal naiv",
+      "formula_mase": "MASE",
+      "formula_smape": "sMAPE",
+      "formula_pinball": "Pinball und WQL",
+      "formula_coverage": "Überdeckung",
+      "formula_wilcoxon": "W von Wilcoxon"
+    },
+    "reading_texts": {
+      "summary": {
+        "frequency=hour": "{size} hat {n_series:int} Reihen von «{value}» nach «{series}» {horizon:int} Stunden voraus prognostiziert ab der letzten beobachteten Stunde. Es ist ein Modell, das seine Autoren vorab an vielen anderen Reihen trainiert haben, und es wurde nicht an Ihre angepasst: Es liest den jüngsten Verlauf jeder Reihe (hier bis zu {context:int} Stunden) und setzt ihn fort.",
+        "frequency=day": "{size} hat {n_series:int} Reihen von «{value}» nach «{series}» {horizon:int} Tage voraus prognostiziert ab dem {last:date}. Es ist ein Modell, das seine Autoren vorab an vielen anderen Reihen trainiert haben, und es wurde nicht an Ihre angepasst: Es liest den jüngsten Verlauf jeder Reihe (hier bis zu {context:int} Tage) und setzt ihn fort.",
+        "frequency=week": "{size} hat {n_series:int} Reihen von «{value}» nach «{series}» {horizon:int} Wochen voraus prognostiziert ab dem {last:date}. Es ist ein Modell, das seine Autoren vorab an vielen anderen Reihen trainiert haben, und es wurde nicht an Ihre angepasst: Es liest den jüngsten Verlauf jeder Reihe (hier bis zu {context:int} Wochen) und setzt ihn fort.",
+        "frequency=month": "{size} hat {n_series:int} Reihen von «{value}» nach «{series}» {horizon:int} Monate voraus prognostiziert ab dem {last:date}. Es ist ein Modell, das seine Autoren vorab an vielen anderen Reihen trainiert haben, und es wurde nicht an Ihre angepasst: Es liest den jüngsten Verlauf jeder Reihe (hier bis zu {context:int} Monate) und setzt ihn fort.",
+        "frequency=quarter": "{size} hat {n_series:int} Reihen von «{value}» nach «{series}» {horizon:int} Quartale voraus prognostiziert ab dem {last:date}. Es ist ein Modell, das seine Autoren vorab an vielen anderen Reihen trainiert haben, und es wurde nicht an Ihre angepasst: Es liest den jüngsten Verlauf jeder Reihe (hier bis zu {context:int} Quartale) und setzt ihn fort.",
+        "frequency=year": "{size} hat {n_series:int} Reihen von «{value}» nach «{series}» {horizon:int} Jahre voraus prognostiziert ab dem {last:date}. Es ist ein Modell, das seine Autoren vorab an vielen anderen Reihen trainiert haben, und es wurde nicht an Ihre angepasst: Es liest den jüngsten Verlauf jeder Reihe (hier bis zu {context:int} Jahre) und setzt ihn fort.",
+        "": "{size} hat {n_series:int} Reihen von «{value}» nach «{series}» {horizon:int} Schritte voraus prognostiziert ab dem {last:date}. Es ist ein Modell, das seine Autoren vorab an vielen anderen Reihen trainiert haben, und es wurde nicht an Ihre angepasst: Es liest den jüngsten Verlauf jeder Reihe (hier bis zu {context:int} Schritte) und setzt ihn fort."
+      },
+      "summary_one": {
+        "frequency=hour": "{size} hat «{value}» {horizon:int} Stunden voraus prognostiziert ab der letzten beobachteten Stunde. Es ist ein Modell, das seine Autoren vorab an vielen anderen Reihen trainiert haben, und es wurde nicht an Ihre angepasst: Es liest den jüngsten Verlauf der Reihe (hier {context:int} Stunden) und setzt ihn fort.",
+        "frequency=day": "{size} hat «{value}» {horizon:int} Tage voraus prognostiziert ab dem {last:date}. Es ist ein Modell, das seine Autoren vorab an vielen anderen Reihen trainiert haben, und es wurde nicht an Ihre angepasst: Es liest den jüngsten Verlauf der Reihe (hier {context:int} Tage) und setzt ihn fort.",
+        "frequency=week": "{size} hat «{value}» {horizon:int} Wochen voraus prognostiziert ab dem {last:date}. Es ist ein Modell, das seine Autoren vorab an vielen anderen Reihen trainiert haben, und es wurde nicht an Ihre angepasst: Es liest den jüngsten Verlauf der Reihe (hier {context:int} Wochen) und setzt ihn fort.",
+        "frequency=month": "{size} hat «{value}» {horizon:int} Monate voraus prognostiziert ab dem {last:date}. Es ist ein Modell, das seine Autoren vorab an vielen anderen Reihen trainiert haben, und es wurde nicht an Ihre angepasst: Es liest den jüngsten Verlauf der Reihe (hier {context:int} Monate) und setzt ihn fort.",
+        "frequency=quarter": "{size} hat «{value}» {horizon:int} Quartale voraus prognostiziert ab dem {last:date}. Es ist ein Modell, das seine Autoren vorab an vielen anderen Reihen trainiert haben, und es wurde nicht an Ihre angepasst: Es liest den jüngsten Verlauf der Reihe (hier {context:int} Quartale) und setzt ihn fort.",
+        "frequency=year": "{size} hat «{value}» {horizon:int} Jahre voraus prognostiziert ab dem {last:date}. Es ist ein Modell, das seine Autoren vorab an vielen anderen Reihen trainiert haben, und es wurde nicht an Ihre angepasst: Es liest den jüngsten Verlauf der Reihe (hier {context:int} Jahre) und setzt ihn fort.",
+        "": "{size} hat «{value}» {horizon:int} Schritte voraus prognostiziert ab dem {last:date}. Es ist ein Modell, das seine Autoren vorab an vielen anderen Reihen trainiert haben, und es wurde nicht an Ihre angepasst: Es liest den jüngsten Verlauf der Reihe (hier {context:int} Schritte) und setzt ihn fort."
+      },
+      "summary_steps": {
+        "frequency=hour": "{size} hat {n_series:int} Reihen von «{value}» nach «{series}» {horizon:int} Stunden voraus prognostiziert, ab Position {last:int}. Es ist ein Modell, das seine Autoren vorab an vielen anderen Reihen trainiert haben, und es wurde nicht an Ihre angepasst: Es liest den jüngsten Verlauf jeder Reihe (hier bis zu {context:int} Stunden) und setzt ihn fort.",
+        "frequency=day": "{size} hat {n_series:int} Reihen von «{value}» nach «{series}» {horizon:int} Tage voraus prognostiziert, ab Position {last:int}. Es ist ein Modell, das seine Autoren vorab an vielen anderen Reihen trainiert haben, und es wurde nicht an Ihre angepasst: Es liest den jüngsten Verlauf jeder Reihe (hier bis zu {context:int} Tage) und setzt ihn fort.",
+        "frequency=week": "{size} hat {n_series:int} Reihen von «{value}» nach «{series}» {horizon:int} Wochen voraus prognostiziert, ab Position {last:int}. Es ist ein Modell, das seine Autoren vorab an vielen anderen Reihen trainiert haben, und es wurde nicht an Ihre angepasst: Es liest den jüngsten Verlauf jeder Reihe (hier bis zu {context:int} Wochen) und setzt ihn fort.",
+        "frequency=month": "{size} hat {n_series:int} Reihen von «{value}» nach «{series}» {horizon:int} Monate voraus prognostiziert, ab Position {last:int}. Es ist ein Modell, das seine Autoren vorab an vielen anderen Reihen trainiert haben, und es wurde nicht an Ihre angepasst: Es liest den jüngsten Verlauf jeder Reihe (hier bis zu {context:int} Monate) und setzt ihn fort.",
+        "frequency=quarter": "{size} hat {n_series:int} Reihen von «{value}» nach «{series}» {horizon:int} Quartale voraus prognostiziert, ab Position {last:int}. Es ist ein Modell, das seine Autoren vorab an vielen anderen Reihen trainiert haben, und es wurde nicht an Ihre angepasst: Es liest den jüngsten Verlauf jeder Reihe (hier bis zu {context:int} Quartale) und setzt ihn fort.",
+        "frequency=year": "{size} hat {n_series:int} Reihen von «{value}» nach «{series}» {horizon:int} Jahre voraus prognostiziert, ab Position {last:int}. Es ist ein Modell, das seine Autoren vorab an vielen anderen Reihen trainiert haben, und es wurde nicht an Ihre angepasst: Es liest den jüngsten Verlauf jeder Reihe (hier bis zu {context:int} Jahre) und setzt ihn fort.",
+        "": "{size} hat {n_series:int} Reihen von «{value}» nach «{series}» {horizon:int} Schritte voraus prognostiziert, ab Position {last:int}. Es ist ein Modell, das seine Autoren vorab an vielen anderen Reihen trainiert haben, und es wurde nicht an Ihre angepasst: Es liest den jüngsten Verlauf jeder Reihe (hier bis zu {context:int} Schritte) und setzt ihn fort."
+      },
+      "summary_one_steps": {
+        "frequency=hour": "{size} hat «{value}» {horizon:int} Stunden voraus prognostiziert, ab Position {last:int}. Es ist ein Modell, das seine Autoren vorab an vielen anderen Reihen trainiert haben, und es wurde nicht an Ihre angepasst: Es liest den jüngsten Verlauf der Reihe (hier {context:int} Stunden) und setzt ihn fort.",
+        "frequency=day": "{size} hat «{value}» {horizon:int} Tage voraus prognostiziert, ab Position {last:int}. Es ist ein Modell, das seine Autoren vorab an vielen anderen Reihen trainiert haben, und es wurde nicht an Ihre angepasst: Es liest den jüngsten Verlauf der Reihe (hier {context:int} Tage) und setzt ihn fort.",
+        "frequency=week": "{size} hat «{value}» {horizon:int} Wochen voraus prognostiziert, ab Position {last:int}. Es ist ein Modell, das seine Autoren vorab an vielen anderen Reihen trainiert haben, und es wurde nicht an Ihre angepasst: Es liest den jüngsten Verlauf der Reihe (hier {context:int} Wochen) und setzt ihn fort.",
+        "frequency=month": "{size} hat «{value}» {horizon:int} Monate voraus prognostiziert, ab Position {last:int}. Es ist ein Modell, das seine Autoren vorab an vielen anderen Reihen trainiert haben, und es wurde nicht an Ihre angepasst: Es liest den jüngsten Verlauf der Reihe (hier {context:int} Monate) und setzt ihn fort.",
+        "frequency=quarter": "{size} hat «{value}» {horizon:int} Quartale voraus prognostiziert, ab Position {last:int}. Es ist ein Modell, das seine Autoren vorab an vielen anderen Reihen trainiert haben, und es wurde nicht an Ihre angepasst: Es liest den jüngsten Verlauf der Reihe (hier {context:int} Quartale) und setzt ihn fort.",
+        "frequency=year": "{size} hat «{value}» {horizon:int} Jahre voraus prognostiziert, ab Position {last:int}. Es ist ein Modell, das seine Autoren vorab an vielen anderen Reihen trainiert haben, und es wurde nicht an Ihre angepasst: Es liest den jüngsten Verlauf der Reihe (hier {context:int} Jahre) und setzt ihn fort.",
+        "": "{size} hat «{value}» {horizon:int} Schritte voraus prognostiziert, ab Position {last:int}. Es ist ein Modell, das seine Autoren vorab an vielen anderen Reihen trainiert haben, und es wurde nicht an Ihre angepasst: Es liest den jüngsten Verlauf der Reihe (hier {context:int} Schritte) und setzt ihn fort."
+      },
+      "summary_known": "Es hat auch {covariate} gelesen, in der Zukunft bekannt: Die Zeilen nach dem letzten Wert jeder Reihe enthalten sie.",
+      "summary_past": "Es hat auch {covariate} gelesen, nur bis zum letzten Wert jeder Reihe bekannt.",
+      "filled_linear": "{count:int} fehlende Werte innerhalb der Reihen wurden durch lineare Interpolation gefüllt; die Ausgabe markiert sie in ihrer Spalte «filled».",
+      "missing_model": "{count:int} fehlende Werte innerhalb der Reihen wurden dem Modell als fehlend übergeben, das dafür gebaut ist, sie zu lesen; die Ausgabe lässt sie leer.",
+      "forecast_bands": {
+        "frequency=hour": "Der Median sagt {median:num} für die erste vorhergesagte Stunde; nach der eigenen Rechnung des Modells liegt der Wert mit 80 % Wahrscheinlichkeit zwischen {low80:num} und {high80:num} und mit 90 % zwischen {low90:num} und {high90:num}.",
+        "frequency=day": "Der Median sagt {median:num} für den {at:date}; nach der eigenen Rechnung des Modells liegt der Wert mit 80 % Wahrscheinlichkeit zwischen {low80:num} und {high80:num} und mit 90 % zwischen {low90:num} und {high90:num}.",
+        "frequency=week": "Der Median sagt {median:num} für den {at:date}; nach der eigenen Rechnung des Modells liegt der Wert mit 80 % Wahrscheinlichkeit zwischen {low80:num} und {high80:num} und mit 90 % zwischen {low90:num} und {high90:num}.",
+        "frequency=month": "Der Median sagt {median:num} für den {at:date}; nach der eigenen Rechnung des Modells liegt der Wert mit 80 % Wahrscheinlichkeit zwischen {low80:num} und {high80:num} und mit 90 % zwischen {low90:num} und {high90:num}.",
+        "frequency=quarter": "Der Median sagt {median:num} für den {at:date}; nach der eigenen Rechnung des Modells liegt der Wert mit 80 % Wahrscheinlichkeit zwischen {low80:num} und {high80:num} und mit 90 % zwischen {low90:num} und {high90:num}.",
+        "frequency=year": "Der Median sagt {median:num} für den {at:date}; nach der eigenen Rechnung des Modells liegt der Wert mit 80 % Wahrscheinlichkeit zwischen {low80:num} und {high80:num} und mit 90 % zwischen {low90:num} und {high90:num}.",
+        "": "Der Median sagt {median:num} für den {at:date}; nach der eigenen Rechnung des Modells liegt der Wert mit 80 % Wahrscheinlichkeit zwischen {low80:num} und {high80:num} und mit 90 % zwischen {low90:num} und {high90:num}."
+      },
+      "forecast_bands_steps": "Der Median sagt {median:num} an Position {at:int}; nach der eigenen Rechnung des Modells liegt der Wert mit 80 % Wahrscheinlichkeit zwischen {low80:num} und {high80:num} und mit 90 % zwischen {low90:num} und {high90:num}.",
+      "holdout_mase": {
+        "frequency=hour": "In den letzten {holdout:int} Stunden jeder Reihe, zurückgehalten und von vorher prognostiziert, lag die Prognose um das {mase:num}-Fache des typischen Fehlers daneben, die letzte Saison im Verlauf zu wiederholen (MASE, der Mittelwert über die Reihen); die saisonal naive Prognose, die die letzte Saison wiederholt, lag um das {baseline_mase:num}-Fache daneben.",
+        "frequency=day": "In den letzten {holdout:int} Tagen jeder Reihe, zurückgehalten und von vorher prognostiziert, lag die Prognose um das {mase:num}-Fache des typischen Fehlers daneben, die letzte Saison im Verlauf zu wiederholen (MASE, der Mittelwert über die Reihen); die saisonal naive Prognose, die die letzte Saison wiederholt, lag um das {baseline_mase:num}-Fache daneben.",
+        "frequency=week": "In den letzten {holdout:int} Wochen jeder Reihe, zurückgehalten und von vorher prognostiziert, lag die Prognose um das {mase:num}-Fache des typischen Fehlers daneben, die letzte Saison im Verlauf zu wiederholen (MASE, der Mittelwert über die Reihen); die saisonal naive Prognose, die die letzte Saison wiederholt, lag um das {baseline_mase:num}-Fache daneben.",
+        "frequency=month": "In den letzten {holdout:int} Monaten jeder Reihe, zurückgehalten und von vorher prognostiziert, lag die Prognose um das {mase:num}-Fache des typischen Fehlers daneben, die letzte Saison im Verlauf zu wiederholen (MASE, der Mittelwert über die Reihen); die saisonal naive Prognose, die die letzte Saison wiederholt, lag um das {baseline_mase:num}-Fache daneben.",
+        "frequency=quarter": "In den letzten {holdout:int} Quartalen jeder Reihe, zurückgehalten und von vorher prognostiziert, lag die Prognose um das {mase:num}-Fache des typischen Fehlers daneben, die letzte Saison im Verlauf zu wiederholen (MASE, der Mittelwert über die Reihen); die saisonal naive Prognose, die die letzte Saison wiederholt, lag um das {baseline_mase:num}-Fache daneben.",
+        "frequency=year": "In den letzten {holdout:int} Jahren jeder Reihe, zurückgehalten und von vorher prognostiziert, lag die Prognose um das {mase:num}-Fache des typischen Fehlers daneben, die letzte Saison im Verlauf zu wiederholen (MASE, der Mittelwert über die Reihen); die saisonal naive Prognose, die die letzte Saison wiederholt, lag um das {baseline_mase:num}-Fache daneben.",
+        "": "In den letzten {holdout:int} Schritten jeder Reihe, zurückgehalten und von vorher prognostiziert, lag die Prognose um das {mase:num}-Fache des typischen Fehlers daneben, die letzte Saison im Verlauf zu wiederholen (MASE, der Mittelwert über die Reihen); die saisonal naive Prognose, die die letzte Saison wiederholt, lag um das {baseline_mase:num}-Fache daneben."
+      },
+      "holdout_not_measured": "{count:int} von {n_series:int} Reihen sind zu kurz für den Prüfzeitraum und eine Saison Verlauf: Sie werden prognostiziert, nicht gemessen.",
+      "holdout_none": "Es wurde kein Wert zurückgehalten (Prüfzeitraum 0): Es gibt keine Fehler zu messen und keinen Vergleich.",
+      "coverage": "Im Prüfzeitraum enthielt das 80-%-Band {in80:int} von {steps:int} Werten ({share80:pct}) und das 90-%-Band {in90:int} ({share90:pct}). Mit einem einzigen Prognoseursprung schwanken diese Anteile durch Zufall erheblich: Lesen Sie sie als Hinweis auf die Breite der Bänder, nicht als deren Messung.",
+      "comparison_supported": "Timestral hatte auf {better:int} von {n_series:int} Reihen den kleineren Fehler. Wäre keine der beiden Prognosen besser, träten so einseitige Differenzen mit Wahrscheinlichkeit {p_value:p} zufällig auf, unter α = {alpha:num}: Der Vorsprung von Timestral vor der saisonal naiven Prognose ist auf diesen Reihen gestützt.",
+      "comparison_opposite": "Timestral hatte nur auf {better:int} von {n_series:int} Reihen den kleineren Fehler. Wäre keine der beiden Prognosen besser, träten so einseitige Differenzen mit Wahrscheinlichkeit {p_value:p} zufällig auf, unter α = {alpha:num}: Der Vorsprung der saisonal naiven Prognose ist auf diesen Reihen gestützt, und Timestral ist hier schlechter, als die letzte Saison zu wiederholen.",
+      "comparison_not_supported": "Timestral hatte auf {better:int} von {n_series:int} Reihen den kleineren Fehler. Wäre keine der beiden Prognosen besser, träten Differenzen wie diese mit Wahrscheinlichkeit {p_value:p} zufällig auf, nicht unter α = {alpha:num}: Die Daten zeigen nicht, dass eine der beiden Prognosen besser ist. «Nicht gestützt» heißt nicht, dass beide gleich sind.",
+      "comparison_few_series": "Mit {n_series:int} Reihen ist der kleinste p-Wert, den dieser Test geben kann, {min_p:p}, nicht unter α = {alpha:num}: Hier könnte kein Unterschied gestützt werden, wie auch immer die Fehler aussehen; es braucht mehr Reihen.",
+      "comparison_one_series": "Mit einer Reihe ist der Vergleich ein Maß, kein Test: Der MASE von Timestral im Prüfzeitraum ist {mase:num}, der der saisonal naiven Prognose {baseline_mase:num}. Ein Test braucht mehrere Reihen (oder mehrere Prognoseursprünge).",
+      "comparison_not_computed": "Der Vergleich wurde nicht berechnet: {n_measured:int} Reihen haben ihre Fehler im Prüfzeitraum, und der Test braucht mindestens zwei.",
+      "limits": "Timestral kennt Ihr Geschäft nicht: Eine Aktion, eine Preisänderung, eine neue Filiale oder eine Schließung ist für das Modell unsichtbar, außer eine Spalte sagt es, in der Zukunft bekannt. Es liest nur die Reihe und die angegebenen Spalten.",
+      "limits_context": "Es hat die letzten {used:int} von {n:int} Werten von «{series}» gelesen: Der Kontext des Modells endet bei 32.768.",
+      "limits_clip": "Eine Reihe, die in ihrem Verlauf nie negativ war, erhält keine negative Prognose: Die Bibliothek setzt solche Werte auf 0 (die Option «clip_nonnegative» des Knotens).",
+      "licence": "Die Gewichte des Modells gehören Mistral AI und stehen unter der {licence}; der vollständige Text der Lizenz schließt diesen Bericht ab.",
+      "licence_accepted": "Ein Administrator ({by}) hat sie für diese Installation am {on:date} angenommen, bevor die Gruppe gebaut wurde.",
+      "method_zero_shot": "Was ein vortrainiertes («Zero-Shot»-)Modell ist: Timestral wurde einmal, von Mistral AI, an einer großen Sammlung synthetischer und beobachteter Reihen trainiert, um eine Reihe aus ihrer jüngsten Vergangenheit fortzusetzen. Hier liest es nur: Nichts aus Ihren Daten wird gelernt oder behalten, und dieselbe Eingabe ergibt dieselbe Prognose. Deshalb gibt es nichts anzupassen oder einzustellen, und viele Reihen werden schnell prognostiziert; deshalb weiß das Modell aber auch nur, was die Reihe und die angegebenen Spalten sagen.",
+      "method_quantiles": "Was ein Quantil ist: Für jeden zukünftigen Zeitpunkt gibt das Modell 21 Quantile von 0,01 bis 0,99 statt einer einzigen Zahl. Das Quantil 0,9 ist ein Wert, von dem das Modell erwartet, dass er einmal von zehn überschritten wird; der Median (0,5) einmal von zwei. Ein Band ist ein Paar von Quantilen: Nach der Rechnung des Modells enthält das von 0,1 bis 0,9 8 von 10 Werten, das von 0,05 bis 0,95 9 von 10. Die Bänder werden mit dem Abstand breiter, denn je weiter voraus, desto weniger sagt die Vergangenheit.",
+      "method_holdout": "Warum ein Prüfzeitraum: Eine Prognose wird an Werten gemessen, die sie nicht gesehen hat. Die letzten Werte jeder Reihe wurden zurückgehalten, von vorher prognostiziert und mit dem Beobachteten verglichen. Der MASE teilt den mittleren absoluten Fehler durch den typischen Fehler, die letzte Saison im Verlauf zu wiederholen, sodass Reihen verschiedener Größe vergleichbar sind: unter 1 lag die Prognose weniger daneben als diese Gewohnheit. Der sMAPE gibt den Fehler in Prozent der Werte an. Der Pinball-Verlust misst die Quantile: Ein Wert unter dem Quantil q kostet das q-Fache des Abstands, einer darüber das (1 − q)-Fache; geteilt durch den Mittelwert der Werte ist er der gewichtete Quantilverlust (WQL).",
+      "method_baseline": "Die Referenz ist die saisonal naive Prognose: Jeder zukünftige Wert ist der Wert eine Saison davor (der letzte Wert, wenn es keine Saison gibt). Sie braucht keine Anpassung, kostet nichts und ist die Prognose, auf der der MASE aufbaut: Timestral wird Reihe für Reihe mit ihr verglichen.",
+      "method_coverage": "Wie man eine Überdeckung liest: Ein Anteil nahe dem nominalen des Bands (80 %, 90 %) sagt, dass die Bänder etwa so breit waren wie die Fehler; weit darunter waren sie für diese Reihe zu schmal; weit darüber breiter, als die Fehler verlangten. Es wird kein Test gemacht: Die Fehler eines einzigen Prognoseursprungs sind nicht unabhängig (eine an einem Tag zu niedrige Prognose ist meist auch am nächsten zu niedrig), und ein Test von «80 % innerhalb» würde weit mehr Sicherheit behaupten, als die Daten haben.",
+      "method_wilcoxon": "Der Vergleich ist der Vorzeichen-Rang-Test von Wilcoxon auf den Differenzen d = MASE von Timestral − MASE der saisonal naiven Prognose, eine je Reihe. Er ordnet die Differenzen nach ihrer Größe und summiert die Ränge der positiven und der negativen; wäre keine der beiden Prognosen besser, lägen die beiden Summen nahe beieinander. Die unabhängigen Einheiten sind hier die Reihen (angenommen: Der Bericht kann es nicht prüfen). Die Verteilung ist exakt bis 50 Reihen ohne Bindungen, sonst gilt die Normalapproximation; eine Differenz von genau 0 wird ausgelassen. «Nicht gestützt» heißt, dass die Daten keinen Unterschied zeigen, nicht dass es keinen gibt: Mit wenigen Reihen kann selbst ein klarer Vorsprung α nicht erreichen.",
+      "method_limits": "Was ein vortrainiertes Modell nicht wissen kann: alles, was nicht in der Reihe oder in den angegebenen Spalten steht. Eine Kovariate hilft nur, wenn sie wirklich im Voraus bekannt ist (ein Feiertag, eine geplante Aktion); eine vergangene Kovariate wird nur bis zum letzten Wert gelesen. Das Modell liest höchstens die letzten 32.768 Werte jeder Reihe. Die Bibliothek prognostiziert jede Reihe und ihr Negativ und mittelt beide (symmetrische Mittelung) und setzt die negativen Prognosen einer nie negativen Reihe auf 0: Beides sind Optionen des Knotens, standardmäßig eingeschaltet.",
+      "method_missing": "Fehlende Werte innerhalb einer Reihe wurden durch eine Gerade zwischen ihren Nachbarn gefüllt (linear) oder dem Modell als fehlende Werte übergeben, die es mit einem Indikator liest (model). Die Ausgabe markiert die gefüllten."
+    },
+    "formula_texts": {
+      "formula_naive": "ŷ_(T+h) = y_(T+h−m·k), k = die kleinste ganze Zahl mit m·k ≥ h;  m: die Saison (1: der letzte Wert wiederholt)",
+      "formula_mase": "s_i = (1/(T − m)) Σ_(t=m+1)^(T) |y_t − y_(t−m)|;  MASE_i = (1/k) Σ_(h=1)^(k) |y_(T+h) − ŷ_(T+h)| / s_i;  relativer MASE_i = MASE_i / MASE_i(naiv), zusammengefasst durch ihr geometrisches Mittel",
+      "formula_smape": "sMAPE = (1/k) Σ_h 200 |y_h − ŷ_h| / (|y_h| + |ŷ_h|), in %;  die Schritte, in denen beide 0 sind, werden ausgelassen",
+      "formula_pinball": "ρ_q(u) = max(q u, (q − 1) u), u = y − ŷ_q;  Pinball = der Mittelwert von ρ_q über die 21 Niveaus und die k Schritte;  WQL = Pinball / ((1/k) Σ_h |y_h|)",
+      "formula_coverage": "Überdeckung 80 % = (1/k) Σ_h 1[ŷ_0,1 ≤ y_h ≤ ŷ_0,9];  Überdeckung 90 % ebenso mit 0,05 und 0,95",
+      "formula_wilcoxon": "d_i = MASE_i − MASE_i(naiv), die Nullen ausgelassen;  W+ = Σ_(d_i > 0) Rang(|d_i|), W− = Σ_(d_i < 0) Rang(|d_i|);  W = min(W+, W−);  bei vielen Reihen z = (W+ − n(n+1)/4) / √(n(n+1)(2n+1)/24 − Σ(t³ − t)/48), t: die Größen der Bindungen"
+    },
+    "note_texts": {
+      "ends_early": "{count:int} Reihen enden vor dem {last:date}: Ihre Prognosen beginnen früher.",
+      "context_cut": "Das Modell hat die letzten {used:int} von {n:int} Werten von «{series}» gelesen.",
+      "history_shrunk": "Der gezeichnete Verlauf wurde auf {points:int} Zeitpunkte je Reihe gekürzt, um die Ergebnisse in ihrer Grenze zu halten; die Maße verwenden jeden Wert.",
+      "future_left_out": "{count:int} Zeilen nach dem letzten Wert ihrer Reihe wurden ausgelassen: Ohne bekannte Kovariaten enthalten sie nichts zu lesen.",
+      "covariate_missing": "{count:int} leere Werte von «{covariate}» wurden dem Modell als fehlend übergeben.",
+      "time_budget": "Die Prognose dauerte {seconds:num} s der {limit:num} s, die der Schritt erlaubt."
+    },
+    "measure_readings": [
+      "summary",
+      "summary_one",
+      "summary_steps",
+      "summary_one_steps",
+      "summary_known",
+      "summary_past",
+      "filled_linear",
+      "missing_model",
+      "forecast_bands",
+      "forecast_bands_steps",
+      "holdout_mase",
+      "holdout_not_measured",
+      "holdout_none",
+      "coverage",
+      "comparison_one_series",
+      "comparison_not_computed",
+      "limits",
+      "limits_context",
+      "limits_clip",
+      "licence",
+      "licence_accepted"
+    ],
+    "licence_text": "Modified MIT License \n\nAttribution notice: 2026 - Mistral AI\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of the weights of this model and associated documentation files (the “Model”), to deal in the Model without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Model, and to permit persons to whom the Model is furnished to do so, subject to the following conditions: \n\n1. The above attribution notice and this permission notice shall be included in all copies or substantial portions of the Model. \n2. You are not authorized to exercise any rights under this license if the global consolidated monthly revenue of your company (or that of your employer) exceeds $20 million (or its equivalent in another currency) for the preceding month. This restriction in (b) applies to the Model and any derivatives, modifications, or combined works based on it, whether provided by Mistral AI or by a third party. You may contact Mistral AI (sales@mistral.ai) to request a commercial license, which Mistral AI may grant you at its sole discretion, or choose to use the Model on Mistral AI's hosted services available at https://mistral.ai/.\n\nTHE MODEL IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL MISTRAL AI BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE MODEL OR THE USE OR OTHER DEALINGS IN THE MODEL."
+  },
+  "es": {
+    "name": "Pronóstico ({model})",
+    "series_of": "«{value}» a lo largo de «{time}»{by}, {frequency}",
+    "by": " por «{series}»",
+    "frequency_series": {
+      "hour": "serie horaria",
+      "day": "serie diaria",
+      "week": "serie semanal",
+      "month": "serie mensual",
+      "quarter": "serie trimestral",
+      "year": "serie anual",
+      "index": "serie por pasos"
+    },
+    "units": {
+      "hour": "horas",
+      "day": "días",
+      "week": "semanas",
+      "month": "meses",
+      "quarter": "trimestres",
+      "year": "años",
+      "index": "pasos"
+    },
+    "comparison_verdicts": {
+      "ok": "– no respaldado",
+      "ahead": "✓ Timestral por delante",
+      "behind": "✓ ingenuo estacional por delante"
+    },
+    "sections": {
+      "summary": "Resumen",
+      "assumptions": "Comprobación",
+      "forecasts": "Pronósticos",
+      "holdout": "El periodo de prueba: el pronóstico medido",
+      "limits": "Lo que el modelo no puede saber",
+      "fit": "Números del pronóstico",
+      "notes": "Notas",
+      "licence": "Licencia de los pesos"
+    },
+    "kpi": {
+      "series": "Series",
+      "points": "{n} puntos",
+      "model": "Modelo",
+      "cpu": "CPU {cpu} · {threads} hilos",
+      "horizon": "Horizonte",
+      "horizon_value": "{h} {unit}",
+      "holdout": "prueba {k}",
+      "no_holdout": "sin periodo de prueba",
+      "mase": "MASE de prueba",
+      "mase_under": "frente a {b} del ingenuo estacional",
+      "not_measured": "no medido"
+    },
+    "formula_many": "{value} ~ {model} · {n} series por «{series}» · {frequency} · {horizon} {unit} hacia delante",
+    "formula_one": "{value} ~ {model} · {frequency} · {horizon} {unit} hacia delante",
+    "licence_line": "Pronóstico de {model}, pesos de Mistral AI bajo la Modified MIT License: el texto completo de la licencia está en la última página.",
+    "alpha_line": "El único veredicto viene de la prueba de rangos con signo de Wilcoxon entre las series, leída contra α = {alpha} (la opción del nodo); su valor es la mediana de las diferencias de MASE, por debajo de 0 cuando los errores de Timestral son los menores. Los errores en el periodo de prueba y la cobertura de las bandas son medidas sin veredicto: se listan bajo la comprobación.",
+    "charts": {
+      "forecast": "Historia, pronóstico con sus bandas del 80 % y del 90 %, ingenuo estacional",
+      "holdout": "Prueba: observado y pronóstico desde antes",
+      "relative": "MASE relativo de las series dibujadas (escala logarítmica; la línea en 1 es el ingenuo estacional)"
+    },
+    "series": {
+      "observed": "Observado",
+      "median": "Mediana",
+      "band80": "Banda del 80 %",
+      "band90": "Banda del 90 %",
+      "baseline": "Ingenuo estacional",
+      "relative": "MASE relativo"
+    },
+    "captions": {
+      "forecast": "La línea discontinua marca el primer instante pronosticado. Las bandas son los propios cuantiles del modelo: de 0,1 a 0,9 y de 0,05 a 0,95.",
+      "holdout": "En cada gráfico la línea discontinua marca el primer valor reservado: desde ahí la línea azul es la mediana que el modelo pronosticó sin ver esos valores, con sus bandas del 80 % y del 90 %; la línea gris es lo observado."
+    },
+    "series_name": "«{series}»",
+    "tables": {
+      "title": "Las series en el periodo de prueba",
+      "series": "Serie",
+      "points": "Puntos",
+      "read": "Leídos",
+      "mase": "MASE",
+      "baseline_mase": "MASE ingenuo",
+      "relative": "MASE relativo",
+      "smape": "sMAPE",
+      "wql": "Pinball escalado",
+      "coverage_80": "Banda 80 %",
+      "coverage_90": "Banda 90 %",
+      "note": "No medida"
+    },
+    "not_measured": {
+      "too_short": "demasiado corta para la prueba y una estación",
+      "no_holdout": "sin periodo de prueba",
+      "zero_scale": "historia constante: sin escala",
+      "other": "no medida"
+    },
+    "measures": {
+      "title": "Medidas, no pruebas",
+      "group": "Grupo"
+    },
+    "measure_texts": {
+      "relative_mase": "El MASE de Timestral dividido entre el del ingenuo estacional, serie a serie, y luego su media geométrica: por debajo de 1 los errores de Timestral en el periodo de prueba son los menores.",
+      "coverage_80": "La proporción de los valores reservados que cayeron entre los cuantiles 0,1 y 0,9, con todas las series juntas; la proporción nominal de la banda es 80 %.",
+      "coverage_90": "La proporción de los valores reservados que cayeron entre los cuantiles 0,05 y 0,95, con todas las series juntas; la proporción nominal de la banda es 90 %."
+    },
+    "across": {
+      "title": "Errores en el periodo de prueba, sobre las series",
+      "measure": "Medida",
+      "value": "Valor",
+      "what": "Qué es"
+    },
+    "across_texts": {
+      "mase": "El error absoluto medio de Timestral en el periodo de prueba dividido entre el error típico de repetir la última estación en la historia (la escala); la media sobre las series.",
+      "baseline_mase": "Lo mismo para el pronóstico ingenuo estacional, que repite la última estación.",
+      "smape": "El error porcentual absoluto medio simétrico de Timestral en el periodo de prueba, en %; la media sobre las series.",
+      "baseline_smape": "Lo mismo para el pronóstico ingenuo estacional.",
+      "wql": "La pérdida pinball sobre los 21 cuantiles dividida entre el valor absoluto medio de la serie (la pérdida cuantílica ponderada); las series ponderadas por su escala.",
+      "n_measured": "Las series cuyos errores se midieron: las que son al menos tan largas como el periodo de prueba más una estación."
+    },
+    "assumptions": {
+      "title": "Comprobación del pronóstico",
+      "many_rows": "Con {n} puntos la prueba sigue comparando series, una diferencia por serie."
+    },
+    "checks": {
+      "baseline_comparison": {
+        "name": "Timestral frente al ingenuo estacional: Wilcoxon",
+        "h0": "Entre las series, las diferencias de MASE entre Timestral y el ingenuo estacional son simétricas en torno a 0: ninguno de los dos pronósticos tiene los errores menores.",
+        "advice": "La prueba dice que la diferencia entre los dos pronósticos va más allá del azar en estas series, no cuánto ni en cuáles: lea la tabla de las series en la página del periodo de prueba.",
+        "not_computed": {
+          "one_series": "Una serie da una sola comparación: la prueba necesita varias series (o varios orígenes de pronóstico).",
+          "no_holdout": "No se reservó ningún valor: no hay errores que comparar.",
+          "": "Menos de dos series tienen sus errores en el periodo de prueba: la prueba necesita al menos dos."
+        },
+        "count": {
+          "one": "{n} serie comparada",
+          "other": "{n} series comparadas"
+        }
+      },
+      "coverage_80": {
+        "name": "Cobertura de la banda del 80 %"
+      },
+      "coverage_90": {
+        "name": "Cobertura de la banda del 90 %"
+      },
+      "relative_mase": {
+        "name": "MASE relativo, media geométrica"
+      }
+    },
+    "stats": {
+      "model": {
+        "n": "Puntos",
+        "n_series": "Series",
+        "n_points": "Puntos",
+        "n_missing": "Valores vacíos",
+        "n_filled": "Valores rellenados",
+        "n_model_missing": "Valores dejados vacíos para el modelo",
+        "n_future_rows": "Filas futuras",
+        "horizon": "Horizonte (pasos)",
+        "holdout": "Prueba (pasos)",
+        "season": "Estación (pasos)",
+        "alpha": "α de la prueba",
+        "threads": "Hilos de CPU",
+        "batches": "Lotes",
+        "seconds_load": "Carga de los pesos (s)",
+        "seconds_forecast": "Pronóstico (s)",
+        "n_quantiles": "Cuantiles escritos",
+        "mase": "MASE",
+        "baseline_mase": "MASE del ingenuo estacional",
+        "relative_mase_geomean": "MASE relativo, media geométrica",
+        "smape": "sMAPE (%)",
+        "baseline_smape": "sMAPE del ingenuo estacional (%)",
+        "wql": "Pérdida cuantílica ponderada",
+        "coverage_80": "Cobertura de la banda del 80 %",
+        "coverage_90": "Cobertura de la banda del 90 %",
+        "n_measured": "Series medidas",
+        "frequency": "Frecuencia",
+        "time_kind": "Tiempo",
+        "missing": "Valores vacíos tratados por",
+        "size": "Tamaño",
+        "weights": "Pesos",
+        "weights_sha256": "sha256 de los pesos",
+        "licence": "Licencia",
+        "licence_sha256": "sha256 de la licencia",
+        "cpu_capability": "Instrucciones de la CPU"
+      },
+      "series": {
+        "n": "Puntos",
+        "n_used": "Puntos leídos",
+        "n_missing": "Valores vacíos",
+        "n_filled": "Valores rellenados",
+        "first": "Primer instante",
+        "last": "Último instante",
+        "horizon": "Horizonte",
+        "scale": "Escala",
+        "mase": "MASE",
+        "baseline_mase": "MASE del ingenuo estacional",
+        "relative_mase": "MASE relativo",
+        "smape": "sMAPE (%)",
+        "baseline_smape": "sMAPE del ingenuo estacional (%)",
+        "pinball": "Pérdida pinball",
+        "wql": "Pérdida cuantílica ponderada",
+        "coverage_80": "Cobertura de la banda del 80 %",
+        "coverage_90": "Cobertura de la banda del 90 %",
+        "total": "Σ|y|",
+        "not_measured": "No medida"
+      }
+    },
+    "values": {
+      "frequency": {
+        "hour": "hora",
+        "day": "día",
+        "week": "semana",
+        "month": "mes",
+        "quarter": "trimestre",
+        "year": "año",
+        "index": "pasos"
+      },
+      "time_kind": {
+        "date": "fecha",
+        "datetime": "fecha y hora",
+        "integer": "entero (pasos)"
+      },
+      "missing": {
+        "refuse": "rechazo",
+        "linear": "interpolación lineal",
+        "model": "dejarlos al modelo"
+      },
+      "size": {
+        "5m": "Timestral-5M",
+        "28m": "Timestral-28M",
+        "123m": "Timestral-123M",
+        "209m": "Timestral-209M"
+      }
+    },
+    "covariates": {
+      "title": "Columnas que el modelo leyó además de la serie",
+      "known": "Conocidas en el futuro: {names}.",
+      "past": "Conocidas hasta el último valor de cada serie: {names}.",
+      "none": "Ninguna covariable: el modelo leyó solo los valores de la serie."
+    },
+    "licence": {
+      "weights_title": "Los pesos usados",
+      "item": "Elemento",
+      "value": "Valor",
+      "text_title": "La licencia, texto íntegro",
+      "text_header": "El archivo LICENSE de los pesos, tal como lo publica Mistral AI (su texto oficial en inglés, sin traducir)"
+    },
+    "notes": {
+      "rows": "Las series tienen {n} puntos; {missing} filas de la entrada no tenían valor y se dejaron fuera."
+    },
+    "fit": {
+      "title": "Números del pronóstico",
+      "settings_title": "Cómo se pronosticó"
+    },
+    "reading": {
+      "variant": "Serie",
+      "how_lead": "Un párrafo por cada parte del pronóstico que se ejecutó: qué supone, por qué este método, qué hizo con los números. Después vienen las fórmulas, con sus símbolos."
+    },
+    "reading_blocks": {
+      "summary": "Resumen",
+      "forecast": "Pronóstico",
+      "holdout": "Periodo de prueba",
+      "coverage": "Cobertura",
+      "comparison": "Comparación",
+      "limits": "Límites",
+      "licence": "Licencia",
+      "method": "Método",
+      "formulas": "Fórmula"
+    },
+    "reading_labels": {
+      "method_zero_shot": "Modelo preentrenado",
+      "method_quantiles": "Cuantiles",
+      "method_holdout": "Prueba y errores",
+      "method_baseline": "Ingenuo estacional",
+      "method_coverage": "Cobertura",
+      "method_wilcoxon": "Prueba de Wilcoxon",
+      "method_limits": "Límites",
+      "method_missing": "Valores faltantes",
+      "formula_naive": "Ingenuo estacional",
+      "formula_mase": "MASE",
+      "formula_smape": "sMAPE",
+      "formula_pinball": "Pinball y WQL",
+      "formula_coverage": "Cobertura",
+      "formula_wilcoxon": "W de Wilcoxon"
+    },
+    "reading_texts": {
+      "summary": {
+        "frequency=hour": "{size} pronosticó {n_series:int} series de «{value}» por «{series}», {horizon:int} horas hacia delante desde la última hora observada. Es un modelo entrenado de antemano, por sus autores, con muchas otras series, y no ajustado a las suyas: lee la historia reciente de cada serie (hasta {context:int} horas aquí) y la continúa.",
+        "frequency=day": "{size} pronosticó {n_series:int} series de «{value}» por «{series}», {horizon:int} días hacia delante desde el {last:date}. Es un modelo entrenado de antemano, por sus autores, con muchas otras series, y no ajustado a las suyas: lee la historia reciente de cada serie (hasta {context:int} días aquí) y la continúa.",
+        "frequency=week": "{size} pronosticó {n_series:int} series de «{value}» por «{series}», {horizon:int} semanas hacia delante desde el {last:date}. Es un modelo entrenado de antemano, por sus autores, con muchas otras series, y no ajustado a las suyas: lee la historia reciente de cada serie (hasta {context:int} semanas aquí) y la continúa.",
+        "frequency=month": "{size} pronosticó {n_series:int} series de «{value}» por «{series}», {horizon:int} meses hacia delante desde el {last:date}. Es un modelo entrenado de antemano, por sus autores, con muchas otras series, y no ajustado a las suyas: lee la historia reciente de cada serie (hasta {context:int} meses aquí) y la continúa.",
+        "frequency=quarter": "{size} pronosticó {n_series:int} series de «{value}» por «{series}», {horizon:int} trimestres hacia delante desde el {last:date}. Es un modelo entrenado de antemano, por sus autores, con muchas otras series, y no ajustado a las suyas: lee la historia reciente de cada serie (hasta {context:int} trimestres aquí) y la continúa.",
+        "frequency=year": "{size} pronosticó {n_series:int} series de «{value}» por «{series}», {horizon:int} años hacia delante desde el {last:date}. Es un modelo entrenado de antemano, por sus autores, con muchas otras series, y no ajustado a las suyas: lee la historia reciente de cada serie (hasta {context:int} años aquí) y la continúa.",
+        "": "{size} pronosticó {n_series:int} series de «{value}» por «{series}», {horizon:int} pasos hacia delante desde el {last:date}. Es un modelo entrenado de antemano, por sus autores, con muchas otras series, y no ajustado a las suyas: lee la historia reciente de cada serie (hasta {context:int} pasos aquí) y la continúa."
+      },
+      "summary_one": {
+        "frequency=hour": "{size} pronosticó «{value}» {horizon:int} horas hacia delante desde la última hora observada. Es un modelo entrenado de antemano, por sus autores, con muchas otras series, y no ajustado a la suya: lee la historia reciente de la serie ({context:int} horas aquí) y la continúa.",
+        "frequency=day": "{size} pronosticó «{value}» {horizon:int} días hacia delante desde el {last:date}. Es un modelo entrenado de antemano, por sus autores, con muchas otras series, y no ajustado a la suya: lee la historia reciente de la serie ({context:int} días aquí) y la continúa.",
+        "frequency=week": "{size} pronosticó «{value}» {horizon:int} semanas hacia delante desde el {last:date}. Es un modelo entrenado de antemano, por sus autores, con muchas otras series, y no ajustado a la suya: lee la historia reciente de la serie ({context:int} semanas aquí) y la continúa.",
+        "frequency=month": "{size} pronosticó «{value}» {horizon:int} meses hacia delante desde el {last:date}. Es un modelo entrenado de antemano, por sus autores, con muchas otras series, y no ajustado a la suya: lee la historia reciente de la serie ({context:int} meses aquí) y la continúa.",
+        "frequency=quarter": "{size} pronosticó «{value}» {horizon:int} trimestres hacia delante desde el {last:date}. Es un modelo entrenado de antemano, por sus autores, con muchas otras series, y no ajustado a la suya: lee la historia reciente de la serie ({context:int} trimestres aquí) y la continúa.",
+        "frequency=year": "{size} pronosticó «{value}» {horizon:int} años hacia delante desde el {last:date}. Es un modelo entrenado de antemano, por sus autores, con muchas otras series, y no ajustado a la suya: lee la historia reciente de la serie ({context:int} años aquí) y la continúa.",
+        "": "{size} pronosticó «{value}» {horizon:int} pasos hacia delante desde el {last:date}. Es un modelo entrenado de antemano, por sus autores, con muchas otras series, y no ajustado a la suya: lee la historia reciente de la serie ({context:int} pasos aquí) y la continúa."
+      },
+      "summary_steps": {
+        "frequency=hour": "{size} pronosticó {n_series:int} series de «{value}» por «{series}», {horizon:int} horas hacia delante desde la posición {last:int}. Es un modelo entrenado de antemano, por sus autores, con muchas otras series, y no ajustado a las suyas: lee la historia reciente de cada serie (hasta {context:int} horas aquí) y la continúa.",
+        "frequency=day": "{size} pronosticó {n_series:int} series de «{value}» por «{series}», {horizon:int} días hacia delante desde la posición {last:int}. Es un modelo entrenado de antemano, por sus autores, con muchas otras series, y no ajustado a las suyas: lee la historia reciente de cada serie (hasta {context:int} días aquí) y la continúa.",
+        "frequency=week": "{size} pronosticó {n_series:int} series de «{value}» por «{series}», {horizon:int} semanas hacia delante desde la posición {last:int}. Es un modelo entrenado de antemano, por sus autores, con muchas otras series, y no ajustado a las suyas: lee la historia reciente de cada serie (hasta {context:int} semanas aquí) y la continúa.",
+        "frequency=month": "{size} pronosticó {n_series:int} series de «{value}» por «{series}», {horizon:int} meses hacia delante desde la posición {last:int}. Es un modelo entrenado de antemano, por sus autores, con muchas otras series, y no ajustado a las suyas: lee la historia reciente de cada serie (hasta {context:int} meses aquí) y la continúa.",
+        "frequency=quarter": "{size} pronosticó {n_series:int} series de «{value}» por «{series}», {horizon:int} trimestres hacia delante desde la posición {last:int}. Es un modelo entrenado de antemano, por sus autores, con muchas otras series, y no ajustado a las suyas: lee la historia reciente de cada serie (hasta {context:int} trimestres aquí) y la continúa.",
+        "frequency=year": "{size} pronosticó {n_series:int} series de «{value}» por «{series}», {horizon:int} años hacia delante desde la posición {last:int}. Es un modelo entrenado de antemano, por sus autores, con muchas otras series, y no ajustado a las suyas: lee la historia reciente de cada serie (hasta {context:int} años aquí) y la continúa.",
+        "": "{size} pronosticó {n_series:int} series de «{value}» por «{series}», {horizon:int} pasos hacia delante desde la posición {last:int}. Es un modelo entrenado de antemano, por sus autores, con muchas otras series, y no ajustado a las suyas: lee la historia reciente de cada serie (hasta {context:int} pasos aquí) y la continúa."
+      },
+      "summary_one_steps": {
+        "frequency=hour": "{size} pronosticó «{value}» {horizon:int} horas hacia delante desde la posición {last:int}. Es un modelo entrenado de antemano, por sus autores, con muchas otras series, y no ajustado a la suya: lee la historia reciente de la serie ({context:int} horas aquí) y la continúa.",
+        "frequency=day": "{size} pronosticó «{value}» {horizon:int} días hacia delante desde la posición {last:int}. Es un modelo entrenado de antemano, por sus autores, con muchas otras series, y no ajustado a la suya: lee la historia reciente de la serie ({context:int} días aquí) y la continúa.",
+        "frequency=week": "{size} pronosticó «{value}» {horizon:int} semanas hacia delante desde la posición {last:int}. Es un modelo entrenado de antemano, por sus autores, con muchas otras series, y no ajustado a la suya: lee la historia reciente de la serie ({context:int} semanas aquí) y la continúa.",
+        "frequency=month": "{size} pronosticó «{value}» {horizon:int} meses hacia delante desde la posición {last:int}. Es un modelo entrenado de antemano, por sus autores, con muchas otras series, y no ajustado a la suya: lee la historia reciente de la serie ({context:int} meses aquí) y la continúa.",
+        "frequency=quarter": "{size} pronosticó «{value}» {horizon:int} trimestres hacia delante desde la posición {last:int}. Es un modelo entrenado de antemano, por sus autores, con muchas otras series, y no ajustado a la suya: lee la historia reciente de la serie ({context:int} trimestres aquí) y la continúa.",
+        "frequency=year": "{size} pronosticó «{value}» {horizon:int} años hacia delante desde la posición {last:int}. Es un modelo entrenado de antemano, por sus autores, con muchas otras series, y no ajustado a la suya: lee la historia reciente de la serie ({context:int} años aquí) y la continúa.",
+        "": "{size} pronosticó «{value}» {horizon:int} pasos hacia delante desde la posición {last:int}. Es un modelo entrenado de antemano, por sus autores, con muchas otras series, y no ajustado a la suya: lee la historia reciente de la serie ({context:int} pasos aquí) y la continúa."
+      },
+      "summary_known": "También leyó {covariate}, conocidas en el futuro: las filas posteriores al último valor de cada serie las contienen.",
+      "summary_past": "También leyó {covariate}, conocidas solo hasta el último valor de cada serie.",
+      "filled_linear": "{count:int} valores que faltaban dentro de las series se rellenaron por interpolación lineal; la salida los marca en su columna «filled».",
+      "missing_model": "{count:int} valores que faltaban dentro de las series se pasaron al modelo como faltantes, y el modelo está hecho para leerlos; la salida los deja vacíos.",
+      "forecast_bands": {
+        "frequency=hour": "La mediana dice {median:num} para la primera hora prevista; según el propio modelo hay una probabilidad del 80 % de que el valor caiga entre {low80:num} y {high80:num}, y del 90 % entre {low90:num} y {high90:num}.",
+        "frequency=day": "La mediana dice {median:num} para el {at:date}; según el propio modelo hay una probabilidad del 80 % de que el valor caiga entre {low80:num} y {high80:num}, y del 90 % entre {low90:num} y {high90:num}.",
+        "frequency=week": "La mediana dice {median:num} para el {at:date}; según el propio modelo hay una probabilidad del 80 % de que el valor caiga entre {low80:num} y {high80:num}, y del 90 % entre {low90:num} y {high90:num}.",
+        "frequency=month": "La mediana dice {median:num} para el {at:date}; según el propio modelo hay una probabilidad del 80 % de que el valor caiga entre {low80:num} y {high80:num}, y del 90 % entre {low90:num} y {high90:num}.",
+        "frequency=quarter": "La mediana dice {median:num} para el {at:date}; según el propio modelo hay una probabilidad del 80 % de que el valor caiga entre {low80:num} y {high80:num}, y del 90 % entre {low90:num} y {high90:num}.",
+        "frequency=year": "La mediana dice {median:num} para el {at:date}; según el propio modelo hay una probabilidad del 80 % de que el valor caiga entre {low80:num} y {high80:num}, y del 90 % entre {low90:num} y {high90:num}.",
+        "": "La mediana dice {median:num} para el {at:date}; según el propio modelo hay una probabilidad del 80 % de que el valor caiga entre {low80:num} y {high80:num}, y del 90 % entre {low90:num} y {high90:num}."
+      },
+      "forecast_bands_steps": "La mediana dice {median:num} en la posición {at:int}; según el propio modelo hay una probabilidad del 80 % de que el valor caiga entre {low80:num} y {high80:num}, y del 90 % entre {low90:num} y {high90:num}.",
+      "holdout_mase": {
+        "frequency=hour": "En los últimos {holdout:int} valores de cada serie, reservados y pronosticados desde antes, el pronóstico falló por {mase:num} veces el error típico de repetir la última estación en la historia (MASE, la media sobre las series); el pronóstico ingenuo estacional, que repite la última estación, falló por {baseline_mase:num} veces.",
+        "frequency=day": "En los últimos {holdout:int} valores de cada serie, reservados y pronosticados desde antes, el pronóstico falló por {mase:num} veces el error típico de repetir la última estación en la historia (MASE, la media sobre las series); el pronóstico ingenuo estacional, que repite la última estación, falló por {baseline_mase:num} veces.",
+        "frequency=week": "En los últimos {holdout:int} valores de cada serie, reservados y pronosticados desde antes, el pronóstico falló por {mase:num} veces el error típico de repetir la última estación en la historia (MASE, la media sobre las series); el pronóstico ingenuo estacional, que repite la última estación, falló por {baseline_mase:num} veces.",
+        "frequency=month": "En los últimos {holdout:int} valores de cada serie, reservados y pronosticados desde antes, el pronóstico falló por {mase:num} veces el error típico de repetir la última estación en la historia (MASE, la media sobre las series); el pronóstico ingenuo estacional, que repite la última estación, falló por {baseline_mase:num} veces.",
+        "frequency=quarter": "En los últimos {holdout:int} valores de cada serie, reservados y pronosticados desde antes, el pronóstico falló por {mase:num} veces el error típico de repetir la última estación en la historia (MASE, la media sobre las series); el pronóstico ingenuo estacional, que repite la última estación, falló por {baseline_mase:num} veces.",
+        "frequency=year": "En los últimos {holdout:int} valores de cada serie, reservados y pronosticados desde antes, el pronóstico falló por {mase:num} veces el error típico de repetir la última estación en la historia (MASE, la media sobre las series); el pronóstico ingenuo estacional, que repite la última estación, falló por {baseline_mase:num} veces.",
+        "": "En los últimos {holdout:int} valores de cada serie, reservados y pronosticados desde antes, el pronóstico falló por {mase:num} veces el error típico de repetir la última estación en la historia (MASE, la media sobre las series); el pronóstico ingenuo estacional, que repite la última estación, falló por {baseline_mase:num} veces."
+      },
+      "holdout_not_measured": "{count:int} de {n_series:int} series son demasiado cortas para el periodo de prueba y una estación de historia: se pronostican, no se miden.",
+      "holdout_none": "No se reservó ningún valor (periodo de prueba 0): no hay errores que medir ni comparación.",
+      "coverage": "En el periodo de prueba la banda del 80 % contuvo {in80:int} de {steps:int} valores ({share80:pct}) y la del 90 % {in90:int} ({share90:pct}). Con un solo origen de pronóstico estas proporciones varían mucho por azar: léalas como un indicio sobre la anchura de las bandas, no como una medida de ella.",
+      "comparison_supported": "Timestral tuvo el error menor en {better:int} de {n_series:int} series. Si ninguno de los dos pronósticos fuera mejor, diferencias tan desiguales aparecerían por azar con probabilidad {p_value:p}, por debajo de α = {alpha:num}: la ventaja de Timestral sobre el ingenuo estacional está respaldada en estas series.",
+      "comparison_opposite": "Timestral tuvo el error menor solo en {better:int} de {n_series:int} series. Si ninguno de los dos pronósticos fuera mejor, diferencias tan desiguales aparecerían por azar con probabilidad {p_value:p}, por debajo de α = {alpha:num}: la ventaja del ingenuo estacional está respaldada en estas series, y aquí Timestral es peor que repetir la última estación.",
+      "comparison_not_supported": "Timestral tuvo el error menor en {better:int} de {n_series:int} series. Si ninguno de los dos pronósticos fuera mejor, diferencias como estas aparecerían por azar con probabilidad {p_value:p}, no por debajo de α = {alpha:num}: los datos no muestran que uno de los dos sea mejor. «No respaldado» no quiere decir que los dos sean iguales.",
+      "comparison_few_series": "Con {n_series:int} series el p-valor más pequeño que esta prueba puede dar es {min_p:p}, no por debajo de α = {alpha:num}: aquí ninguna diferencia podría quedar respaldada, sean cuales sean los errores; hacen falta más series.",
+      "comparison_one_series": "Con una sola serie la comparación es una medida, no una prueba: el MASE de Timestral en el periodo de prueba es {mase:num}, el del ingenuo estacional {baseline_mase:num}. Una prueba necesita varias series (o varios orígenes de pronóstico).",
+      "comparison_not_computed": "La comparación no se calculó: {n_measured:int} series tienen sus errores en el periodo de prueba, y la prueba necesita al menos dos.",
+      "limits": "Timestral no conoce su negocio: una promoción, un cambio de precio, una tienda nueva o un cierre le son invisibles a menos que una columna lo diga, conocida en el futuro. Lee solo la serie y las columnas dadas.",
+      "limits_context": "Leyó los últimos {used:int} de {n:int} valores de «{series}»: el contexto del modelo se detiene en 32.768.",
+      "limits_clip": "Una serie nunca negativa en su historia no recibe pronósticos negativos: la biblioteca lleva esos valores a 0 (la opción «clip_nonnegative» del nodo).",
+      "licence": "Los pesos del modelo son de Mistral AI, bajo la {licence}; el texto completo de la licencia cierra este informe.",
+      "licence_accepted": "Un administrador ({by}) la aceptó para esta instalación el {on:date}, antes de que se construyera el grupo.",
+      "method_zero_shot": "Qué es un modelo preentrenado («zero-shot»): Timestral fue entrenado una vez, por Mistral AI, con una gran colección de series sintéticas y observadas, para continuar una serie a partir de su pasado reciente. Aquí solo lee: nada de sus datos se aprende ni se guarda, y la misma entrada da el mismo pronóstico. Por eso no hay nada que ajustar ni que afinar y muchas series se pronostican deprisa; y por eso también el modelo solo sabe lo que dicen la serie y las columnas dadas.",
+      "method_quantiles": "Qué es un cuantil: para cada instante futuro el modelo da 21 cuantiles, de 0,01 a 0,99, en lugar de un solo número. El cuantil 0,9 es un valor que el modelo espera que se exceda una vez de cada diez; la mediana (0,5) una vez de cada dos. Una banda es un par de cuantiles: según el modelo, la de 0,1 a 0,9 contiene 8 valores de cada 10, la de 0,05 a 0,95, 9 de cada 10. Las bandas se ensanchan con la distancia, porque cuanto más lejos, menos dice el pasado.",
+      "method_holdout": "Por qué un periodo de prueba: un pronóstico se mide con valores que no vio. Los últimos valores de cada serie se reservaron, se pronosticaron desde antes y se compararon con lo observado. El MASE divide el error absoluto medio entre el error típico de repetir la última estación en la historia, para que series de tamaños distintos se puedan comparar: por debajo de 1, el pronóstico falló menos que esa costumbre. El sMAPE da el error en porcentaje de los valores. La pérdida pinball mide los cuantiles: un valor por debajo del cuantil q cuesta q veces la distancia, uno por encima 1 − q veces; dividida entre la media de los valores es la pérdida cuantílica ponderada (WQL).",
+      "method_baseline": "La referencia es el pronóstico ingenuo estacional: cada valor futuro es el valor de una estación antes (el último valor cuando no hay estación). No necesita ajuste, no cuesta nada y es el pronóstico sobre el que se construye el MASE: Timestral se compara con él serie a serie.",
+      "method_coverage": "Cómo leer una cobertura: una proporción cercana a la nominal de la banda (80 %, 90 %) dice que las bandas eran más o menos tan anchas como los errores; muy por debajo, eran demasiado estrechas para esta serie; muy por encima, más anchas de lo que los errores pedían. No se hace ninguna prueba: los errores de un solo origen de pronóstico no son independientes (un pronóstico demasiado bajo un día suele serlo también al día siguiente), y una prueba de «80 % dentro» afirmaría mucha más certeza de la que tienen los datos.",
+      "method_wilcoxon": "La comparación es la prueba de rangos con signo de Wilcoxon sobre las diferencias d = MASE de Timestral − MASE del ingenuo estacional, una por serie. Ordena las diferencias por su tamaño y suma los rangos de las positivas y de las negativas; si ninguno de los dos pronósticos fuera mejor, las dos sumas estarían cerca. Aquí las unidades independientes son las series (un supuesto: el informe no puede comprobarlo). La distribución es exacta hasta 50 series sin empates, si no se usa la aproximación normal; una diferencia de exactamente 0 se deja fuera. «No respaldado» quiere decir que los datos no muestran una diferencia, no que no la haya: con pocas series ni siquiera una ventaja clara puede alcanzar α.",
+      "method_limits": "Lo que un modelo preentrenado no puede saber: todo lo que no está en la serie ni en las columnas dadas. Una covariable ayuda solo cuando se conoce de verdad de antemano (un festivo, una promoción planificada); una covariable pasada se lee solo hasta el último valor. El modelo lee como mucho los últimos 32.768 valores de cada serie. La biblioteca pronostica cada serie y su opuesta y promedia las dos (promedio simétrico), y lleva a 0 los pronósticos negativos de una serie nunca negativa: las dos son opciones del nodo, activadas por defecto.",
+      "method_missing": "Los valores que faltaban dentro de una serie se rellenaron con una recta entre sus vecinos (linear), o se pasaron al modelo como valores faltantes, que el modelo lee con un indicador (model). La salida marca los rellenados."
+    },
+    "formula_texts": {
+      "formula_naive": "ŷ_(T+h) = y_(T+h−m·k), k = el menor entero con m·k ≥ h;  m: la estación (1: el último valor repetido)",
+      "formula_mase": "s_i = (1/(T − m)) Σ_(t=m+1)^(T) |y_t − y_(t−m)|;  MASE_i = (1/k) Σ_(h=1)^(k) |y_(T+h) − ŷ_(T+h)| / s_i;  MASE relativo_i = MASE_i / MASE_i(ingenuo), resumidos por su media geométrica",
+      "formula_smape": "sMAPE = (1/k) Σ_h 200 |y_h − ŷ_h| / (|y_h| + |ŷ_h|), en %;  los pasos en que ambos son 0 se dejan fuera",
+      "formula_pinball": "ρ_q(u) = max(q u, (q − 1) u), u = y − ŷ_q;  pinball = la media de ρ_q sobre los 21 niveles y los k pasos;  WQL = pinball / ((1/k) Σ_h |y_h|)",
+      "formula_coverage": "cobertura 80 % = (1/k) Σ_h 1[ŷ_0,1 ≤ y_h ≤ ŷ_0,9];  cobertura 90 % lo mismo con 0,05 y 0,95",
+      "formula_wilcoxon": "d_i = MASE_i − MASE_i(ingenuo), los ceros fuera;  W+ = Σ_(d_i > 0) rango(|d_i|), W− = Σ_(d_i < 0) rango(|d_i|);  W = min(W+, W−);  con muchas series z = (W+ − n(n+1)/4) / √(n(n+1)(2n+1)/24 − Σ(t³ − t)/48), t: los tamaños de los empates"
+    },
+    "note_texts": {
+      "ends_early": "{count:int} series terminan antes del {last:date}: sus pronósticos empiezan antes.",
+      "context_cut": "El modelo leyó los últimos {used:int} de {n:int} valores de «{series}».",
+      "history_shrunk": "La historia dibujada se recortó a {points:int} instantes por serie para que los resultados quepan en su límite; las medidas usan todos los valores.",
+      "future_left_out": "{count:int} filas posteriores al último valor de su serie se dejaron fuera: sin covariables conocidas no contienen nada que leer.",
+      "covariate_missing": "{count:int} valores vacíos de «{covariate}» se pasaron al modelo como faltantes.",
+      "time_budget": "El pronóstico tardó {seconds:num} s de los {limit:num} s que permite el paso."
+    },
+    "measure_readings": [
+      "summary",
+      "summary_one",
+      "summary_steps",
+      "summary_one_steps",
+      "summary_known",
+      "summary_past",
+      "filled_linear",
+      "missing_model",
+      "forecast_bands",
+      "forecast_bands_steps",
+      "holdout_mase",
+      "holdout_not_measured",
+      "holdout_none",
+      "coverage",
+      "comparison_one_series",
+      "comparison_not_computed",
+      "limits",
+      "limits_context",
+      "limits_clip",
+      "licence",
+      "licence_accepted"
+    ],
+    "licence_text": "Modified MIT License \n\nAttribution notice: 2026 - Mistral AI\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of the weights of this model and associated documentation files (the “Model”), to deal in the Model without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Model, and to permit persons to whom the Model is furnished to do so, subject to the following conditions: \n\n1. The above attribution notice and this permission notice shall be included in all copies or substantial portions of the Model. \n2. You are not authorized to exercise any rights under this license if the global consolidated monthly revenue of your company (or that of your employer) exceeds $20 million (or its equivalent in another currency) for the preceding month. This restriction in (b) applies to the Model and any derivatives, modifications, or combined works based on it, whether provided by Mistral AI or by a third party. You may contact Mistral AI (sales@mistral.ai) to request a commercial license, which Mistral AI may grant you at its sole discretion, or choose to use the Model on Mistral AI's hosted services available at https://mistral.ai/.\n\nTHE MODEL IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL MISTRAL AI BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE MODEL OR THE USE OR OTHER DEALINGS IN THE MODEL."
+  },
+  "fr": {
+    "name": "Prévision ({model})",
+    "series_of": "«{value}» selon «{time}»{by}, {frequency}",
+    "by": " par «{series}»",
+    "frequency_series": {
+      "hour": "série horaire",
+      "day": "série quotidienne",
+      "week": "série hebdomadaire",
+      "month": "série mensuelle",
+      "quarter": "série trimestrielle",
+      "year": "série annuelle",
+      "index": "série par pas"
+    },
+    "units": {
+      "hour": "heures",
+      "day": "jours",
+      "week": "semaines",
+      "month": "mois",
+      "quarter": "trimestres",
+      "year": "années",
+      "index": "pas"
+    },
+    "comparison_verdicts": {
+      "ok": "– non étayé",
+      "ahead": "✓ Timestral en tête",
+      "behind": "✓ naïve saisonnière en tête"
+    },
+    "sections": {
+      "summary": "Synthèse",
+      "assumptions": "Vérification",
+      "forecasts": "Prévisions",
+      "holdout": "La période de test : la prévision mesurée",
+      "limits": "Ce que le modèle ne peut pas savoir",
+      "fit": "Nombres de la prévision",
+      "notes": "Notes",
+      "licence": "Licence des poids"
+    },
+    "kpi": {
+      "series": "Séries",
+      "points": "{n} points",
+      "model": "Modèle",
+      "cpu": "CPU {cpu} · {threads} threads",
+      "horizon": "Horizon",
+      "horizon_value": "{h} {unit}",
+      "holdout": "test {k}",
+      "no_holdout": "pas de période de test",
+      "mase": "MASE du test",
+      "mase_under": "contre {b} pour la naïve saisonnière",
+      "not_measured": "non mesuré"
+    },
+    "formula_many": "{value} ~ {model} · {n} séries par «{series}» · {frequency} · {horizon} {unit} en avant",
+    "formula_one": "{value} ~ {model} · {frequency} · {horizon} {unit} en avant",
+    "licence_line": "Prévision par {model}, poids de Mistral AI sous la Modified MIT License : le texte complet de la licence est en dernière page.",
+    "alpha_line": "Le seul verdict vient du test des rangs signés de Wilcoxon entre les séries, lu contre α = {alpha} (l'option du nœud) ; sa valeur est la médiane des différences de MASE, sous 0 quand les erreurs de Timestral sont les plus petites. Les erreurs sur la période de test et la couverture des bandes sont des mesures sans verdict : elles sont listées sous la vérification.",
+    "charts": {
+      "forecast": "Historique, prévision avec ses bandes à 80 % et à 90 %, naïve saisonnière",
+      "holdout": "Test : observé et prévision faite avant",
+      "relative": "MASE relatif des séries tracées (échelle logarithmique ; la ligne à 1 est la naïve saisonnière)"
+    },
+    "series": {
+      "observed": "Observé",
+      "median": "Médiane",
+      "band80": "Bande à 80 %",
+      "band90": "Bande à 90 %",
+      "baseline": "Naïve saisonnière",
+      "relative": "MASE relatif"
+    },
+    "captions": {
+      "forecast": "La ligne pointillée marque le premier instant prévu. Les bandes sont les propres quantiles du modèle : de 0,1 à 0,9 et de 0,05 à 0,95.",
+      "holdout": "Dans chaque graphique, la ligne pointillée marque la première valeur mise de côté : à partir de là, la ligne bleue est la médiane que le modèle a prévue sans voir ces valeurs, avec ses bandes à 80 % et à 90 % ; la ligne grise est ce qui a été observé."
+    },
+    "series_name": "«{series}»",
+    "tables": {
+      "title": "Les séries sur la période de test",
+      "series": "Série",
+      "points": "Points",
+      "read": "Lus",
+      "mase": "MASE",
+      "baseline_mase": "MASE naïve",
+      "relative": "MASE relatif",
+      "smape": "sMAPE",
+      "wql": "Pinball mis à l'échelle",
+      "coverage_80": "Bande 80 %",
+      "coverage_90": "Bande 90 %",
+      "note": "Non mesurée"
+    },
+    "not_measured": {
+      "too_short": "trop courte pour le test et une saison",
+      "no_holdout": "pas de période de test",
+      "zero_scale": "historique constant : pas d'échelle",
+      "other": "non mesurée"
+    },
+    "measures": {
+      "title": "Mesures, pas des tests",
+      "group": "Groupe"
+    },
+    "measure_texts": {
+      "relative_mase": "Le MASE de Timestral divisé par celui de la naïve saisonnière, série par série, puis leur moyenne géométrique : sous 1, les erreurs de Timestral sur la période de test sont les plus petites.",
+      "coverage_80": "La part des valeurs mises de côté tombées entre les quantiles 0,1 et 0,9, toutes séries réunies ; la part nominale de la bande est 80 %.",
+      "coverage_90": "La part des valeurs mises de côté tombées entre les quantiles 0,05 et 0,95, toutes séries réunies ; la part nominale de la bande est 90 %."
+    },
+    "across": {
+      "title": "Erreurs sur la période de test, sur les séries",
+      "measure": "Mesure",
+      "value": "Valeur",
+      "what": "Ce que c'est"
+    },
+    "across_texts": {
+      "mase": "L'erreur absolue moyenne de Timestral sur la période de test divisée par l'erreur typique de répéter la dernière saison dans l'historique (l'échelle) ; la moyenne sur les séries.",
+      "baseline_mase": "La même chose pour la prévision naïve saisonnière, qui répète la dernière saison.",
+      "smape": "L'erreur absolue moyenne en pourcentage symétrique de Timestral sur la période de test, en % ; la moyenne sur les séries.",
+      "baseline_smape": "La même chose pour la prévision naïve saisonnière.",
+      "wql": "La perte pinball sur les 21 quantiles divisée par la valeur absolue moyenne de la série (la perte quantile pondérée) ; les séries pondérées par leur échelle.",
+      "n_measured": "Les séries dont les erreurs ont été mesurées : celles au moins aussi longues que la période de test plus une saison."
+    },
+    "assumptions": {
+      "title": "Vérification de la prévision",
+      "many_rows": "Avec {n} points, le test compare toujours des séries, une différence par série."
+    },
+    "checks": {
+      "baseline_comparison": {
+        "name": "Timestral contre la naïve saisonnière : Wilcoxon",
+        "h0": "Entre les séries, les différences de MASE entre Timestral et la naïve saisonnière sont symétriques autour de 0 : aucune des deux prévisions n'a les plus petites erreurs.",
+        "advice": "Le test dit que la différence entre les deux prévisions va au-delà du hasard sur ces séries, pas de combien ni sur lesquelles : lisez le tableau des séries sur la page de la période de test.",
+        "not_computed": {
+          "one_series": "Une série donne une seule comparaison : le test demande plusieurs séries (ou plusieurs origines de prévision).",
+          "no_holdout": "Aucune valeur n'a été mise de côté : il n'y a pas d'erreurs à comparer.",
+          "": "Moins de deux séries ont leurs erreurs sur la période de test : le test en demande au moins deux."
+        },
+        "count": {
+          "one": "{n} série comparée",
+          "other": "{n} séries comparées"
+        }
+      },
+      "coverage_80": {
+        "name": "Couverture de la bande à 80 %"
+      },
+      "coverage_90": {
+        "name": "Couverture de la bande à 90 %"
+      },
+      "relative_mase": {
+        "name": "MASE relatif, moyenne géométrique"
+      }
+    },
+    "stats": {
+      "model": {
+        "n": "Points",
+        "n_series": "Séries",
+        "n_points": "Points",
+        "n_missing": "Valeurs vides",
+        "n_filled": "Valeurs remplies",
+        "n_model_missing": "Valeurs laissées vides pour le modèle",
+        "n_future_rows": "Lignes futures",
+        "horizon": "Horizon (pas)",
+        "holdout": "Test (pas)",
+        "season": "Saison (pas)",
+        "alpha": "α du test",
+        "threads": "Threads de la CPU",
+        "batches": "Lots",
+        "seconds_load": "Chargement des poids (s)",
+        "seconds_forecast": "Prévision (s)",
+        "n_quantiles": "Quantiles écrits",
+        "mase": "MASE",
+        "baseline_mase": "MASE de la naïve saisonnière",
+        "relative_mase_geomean": "MASE relatif, moyenne géométrique",
+        "smape": "sMAPE (%)",
+        "baseline_smape": "sMAPE de la naïve saisonnière (%)",
+        "wql": "Perte quantile pondérée",
+        "coverage_80": "Couverture de la bande à 80 %",
+        "coverage_90": "Couverture de la bande à 90 %",
+        "n_measured": "Séries mesurées",
+        "frequency": "Fréquence",
+        "time_kind": "Temps",
+        "missing": "Valeurs vides traitées par",
+        "size": "Taille",
+        "weights": "Poids",
+        "weights_sha256": "sha256 des poids",
+        "licence": "Licence",
+        "licence_sha256": "sha256 de la licence",
+        "cpu_capability": "Instructions de la CPU"
+      },
+      "series": {
+        "n": "Points",
+        "n_used": "Points lus",
+        "n_missing": "Valeurs vides",
+        "n_filled": "Valeurs remplies",
+        "first": "Premier instant",
+        "last": "Dernier instant",
+        "horizon": "Horizon",
+        "scale": "Échelle",
+        "mase": "MASE",
+        "baseline_mase": "MASE de la naïve saisonnière",
+        "relative_mase": "MASE relatif",
+        "smape": "sMAPE (%)",
+        "baseline_smape": "sMAPE de la naïve saisonnière (%)",
+        "pinball": "Perte pinball",
+        "wql": "Perte quantile pondérée",
+        "coverage_80": "Couverture de la bande à 80 %",
+        "coverage_90": "Couverture de la bande à 90 %",
+        "total": "Σ|y|",
+        "not_measured": "Non mesurée"
+      }
+    },
+    "values": {
+      "frequency": {
+        "hour": "heure",
+        "day": "jour",
+        "week": "semaine",
+        "month": "mois",
+        "quarter": "trimestre",
+        "year": "année",
+        "index": "pas"
+      },
+      "time_kind": {
+        "date": "date",
+        "datetime": "date et heure",
+        "integer": "entier (pas)"
+      },
+      "missing": {
+        "refuse": "refus",
+        "linear": "interpolation linéaire",
+        "model": "les laisser au modèle"
+      },
+      "size": {
+        "5m": "Timestral-5M",
+        "28m": "Timestral-28M",
+        "123m": "Timestral-123M",
+        "209m": "Timestral-209M"
+      }
+    },
+    "covariates": {
+      "title": "Colonnes que le modèle a lues en plus de la série",
+      "known": "Connues dans le futur : {names}.",
+      "past": "Connues jusqu'à la dernière valeur de chaque série : {names}.",
+      "none": "Aucune covariable : le modèle n'a lu que les valeurs de la série."
+    },
+    "licence": {
+      "weights_title": "Les poids utilisés",
+      "item": "Élément",
+      "value": "Valeur",
+      "text_title": "La licence, texte intégral",
+      "text_header": "Le fichier LICENSE des poids, tel que Mistral AI le publie (son texte officiel en anglais, non traduit)"
+    },
+    "notes": {
+      "rows": "Les séries ont {n} points ; {missing} lignes de l'entrée n'avaient pas de valeur et ont été laissées de côté."
+    },
+    "fit": {
+      "title": "Nombres de la prévision",
+      "settings_title": "Comment la prévision a été faite"
+    },
+    "reading": {
+      "variant": "Série",
+      "how_lead": "Un paragraphe pour chaque partie de la prévision qui a été exécutée : ce qu'elle suppose, pourquoi cette méthode, ce qu'elle a fait aux chiffres. Suivent les formules, avec leurs symboles."
+    },
+    "reading_blocks": {
+      "summary": "Synthèse",
+      "forecast": "Prévision",
+      "holdout": "Période de test",
+      "coverage": "Couverture",
+      "comparison": "Comparaison",
+      "limits": "Limites",
+      "licence": "Licence",
+      "method": "Méthode",
+      "formulas": "Formule"
+    },
+    "reading_labels": {
+      "method_zero_shot": "Modèle pré-entraîné",
+      "method_quantiles": "Quantiles",
+      "method_holdout": "Test et erreurs",
+      "method_baseline": "Naïve saisonnière",
+      "method_coverage": "Couverture",
+      "method_wilcoxon": "Test de Wilcoxon",
+      "method_limits": "Limites",
+      "method_missing": "Valeurs manquantes",
+      "formula_naive": "Naïve saisonnière",
+      "formula_mase": "MASE",
+      "formula_smape": "sMAPE",
+      "formula_pinball": "Pinball et WQL",
+      "formula_coverage": "Couverture",
+      "formula_wilcoxon": "W de Wilcoxon"
+    },
+    "reading_texts": {
+      "summary": {
+        "frequency=hour": "{size} a prévu {n_series:int} séries de «{value}» par «{series}», {horizon:int} heures en avant à partir de la dernière heure observée. C'est un modèle entraîné à l'avance, par ses auteurs, sur beaucoup d'autres séries, et non ajusté aux vôtres : il lit l'historique récent de chaque série (jusqu'à {context:int} heures ici) et le prolonge.",
+        "frequency=day": "{size} a prévu {n_series:int} séries de «{value}» par «{series}», {horizon:int} jours en avant à partir du {last:date}. C'est un modèle entraîné à l'avance, par ses auteurs, sur beaucoup d'autres séries, et non ajusté aux vôtres : il lit l'historique récent de chaque série (jusqu'à {context:int} jours ici) et le prolonge.",
+        "frequency=week": "{size} a prévu {n_series:int} séries de «{value}» par «{series}», {horizon:int} semaines en avant à partir du {last:date}. C'est un modèle entraîné à l'avance, par ses auteurs, sur beaucoup d'autres séries, et non ajusté aux vôtres : il lit l'historique récent de chaque série (jusqu'à {context:int} semaines ici) et le prolonge.",
+        "frequency=month": "{size} a prévu {n_series:int} séries de «{value}» par «{series}», {horizon:int} mois en avant à partir du {last:date}. C'est un modèle entraîné à l'avance, par ses auteurs, sur beaucoup d'autres séries, et non ajusté aux vôtres : il lit l'historique récent de chaque série (jusqu'à {context:int} mois ici) et le prolonge.",
+        "frequency=quarter": "{size} a prévu {n_series:int} séries de «{value}» par «{series}», {horizon:int} trimestres en avant à partir du {last:date}. C'est un modèle entraîné à l'avance, par ses auteurs, sur beaucoup d'autres séries, et non ajusté aux vôtres : il lit l'historique récent de chaque série (jusqu'à {context:int} trimestres ici) et le prolonge.",
+        "frequency=year": "{size} a prévu {n_series:int} séries de «{value}» par «{series}», {horizon:int} années en avant à partir du {last:date}. C'est un modèle entraîné à l'avance, par ses auteurs, sur beaucoup d'autres séries, et non ajusté aux vôtres : il lit l'historique récent de chaque série (jusqu'à {context:int} années ici) et le prolonge.",
+        "": "{size} a prévu {n_series:int} séries de «{value}» par «{series}», {horizon:int} pas en avant à partir du {last:date}. C'est un modèle entraîné à l'avance, par ses auteurs, sur beaucoup d'autres séries, et non ajusté aux vôtres : il lit l'historique récent de chaque série (jusqu'à {context:int} pas ici) et le prolonge."
+      },
+      "summary_one": {
+        "frequency=hour": "{size} a prévu «{value}» {horizon:int} heures en avant à partir de la dernière heure observée. C'est un modèle entraîné à l'avance, par ses auteurs, sur beaucoup d'autres séries, et non ajusté à la vôtre : il lit l'historique récent de la série ({context:int} heures ici) et le prolonge.",
+        "frequency=day": "{size} a prévu «{value}» {horizon:int} jours en avant à partir du {last:date}. C'est un modèle entraîné à l'avance, par ses auteurs, sur beaucoup d'autres séries, et non ajusté à la vôtre : il lit l'historique récent de la série ({context:int} jours ici) et le prolonge.",
+        "frequency=week": "{size} a prévu «{value}» {horizon:int} semaines en avant à partir du {last:date}. C'est un modèle entraîné à l'avance, par ses auteurs, sur beaucoup d'autres séries, et non ajusté à la vôtre : il lit l'historique récent de la série ({context:int} semaines ici) et le prolonge.",
+        "frequency=month": "{size} a prévu «{value}» {horizon:int} mois en avant à partir du {last:date}. C'est un modèle entraîné à l'avance, par ses auteurs, sur beaucoup d'autres séries, et non ajusté à la vôtre : il lit l'historique récent de la série ({context:int} mois ici) et le prolonge.",
+        "frequency=quarter": "{size} a prévu «{value}» {horizon:int} trimestres en avant à partir du {last:date}. C'est un modèle entraîné à l'avance, par ses auteurs, sur beaucoup d'autres séries, et non ajusté à la vôtre : il lit l'historique récent de la série ({context:int} trimestres ici) et le prolonge.",
+        "frequency=year": "{size} a prévu «{value}» {horizon:int} années en avant à partir du {last:date}. C'est un modèle entraîné à l'avance, par ses auteurs, sur beaucoup d'autres séries, et non ajusté à la vôtre : il lit l'historique récent de la série ({context:int} années ici) et le prolonge.",
+        "": "{size} a prévu «{value}» {horizon:int} pas en avant à partir du {last:date}. C'est un modèle entraîné à l'avance, par ses auteurs, sur beaucoup d'autres séries, et non ajusté à la vôtre : il lit l'historique récent de la série ({context:int} pas ici) et le prolonge."
+      },
+      "summary_steps": {
+        "frequency=hour": "{size} a prévu {n_series:int} séries de «{value}» par «{series}», {horizon:int} heures en avant à partir de la position {last:int}. C'est un modèle entraîné à l'avance, par ses auteurs, sur beaucoup d'autres séries, et non ajusté aux vôtres : il lit l'historique récent de chaque série (jusqu'à {context:int} heures ici) et le prolonge.",
+        "frequency=day": "{size} a prévu {n_series:int} séries de «{value}» par «{series}», {horizon:int} jours en avant à partir de la position {last:int}. C'est un modèle entraîné à l'avance, par ses auteurs, sur beaucoup d'autres séries, et non ajusté aux vôtres : il lit l'historique récent de chaque série (jusqu'à {context:int} jours ici) et le prolonge.",
+        "frequency=week": "{size} a prévu {n_series:int} séries de «{value}» par «{series}», {horizon:int} semaines en avant à partir de la position {last:int}. C'est un modèle entraîné à l'avance, par ses auteurs, sur beaucoup d'autres séries, et non ajusté aux vôtres : il lit l'historique récent de chaque série (jusqu'à {context:int} semaines ici) et le prolonge.",
+        "frequency=month": "{size} a prévu {n_series:int} séries de «{value}» par «{series}», {horizon:int} mois en avant à partir de la position {last:int}. C'est un modèle entraîné à l'avance, par ses auteurs, sur beaucoup d'autres séries, et non ajusté aux vôtres : il lit l'historique récent de chaque série (jusqu'à {context:int} mois ici) et le prolonge.",
+        "frequency=quarter": "{size} a prévu {n_series:int} séries de «{value}» par «{series}», {horizon:int} trimestres en avant à partir de la position {last:int}. C'est un modèle entraîné à l'avance, par ses auteurs, sur beaucoup d'autres séries, et non ajusté aux vôtres : il lit l'historique récent de chaque série (jusqu'à {context:int} trimestres ici) et le prolonge.",
+        "frequency=year": "{size} a prévu {n_series:int} séries de «{value}» par «{series}», {horizon:int} années en avant à partir de la position {last:int}. C'est un modèle entraîné à l'avance, par ses auteurs, sur beaucoup d'autres séries, et non ajusté aux vôtres : il lit l'historique récent de chaque série (jusqu'à {context:int} années ici) et le prolonge.",
+        "": "{size} a prévu {n_series:int} séries de «{value}» par «{series}», {horizon:int} pas en avant à partir de la position {last:int}. C'est un modèle entraîné à l'avance, par ses auteurs, sur beaucoup d'autres séries, et non ajusté aux vôtres : il lit l'historique récent de chaque série (jusqu'à {context:int} pas ici) et le prolonge."
+      },
+      "summary_one_steps": {
+        "frequency=hour": "{size} a prévu «{value}» {horizon:int} heures en avant à partir de la position {last:int}. C'est un modèle entraîné à l'avance, par ses auteurs, sur beaucoup d'autres séries, et non ajusté à la vôtre : il lit l'historique récent de la série ({context:int} heures ici) et le prolonge.",
+        "frequency=day": "{size} a prévu «{value}» {horizon:int} jours en avant à partir de la position {last:int}. C'est un modèle entraîné à l'avance, par ses auteurs, sur beaucoup d'autres séries, et non ajusté à la vôtre : il lit l'historique récent de la série ({context:int} jours ici) et le prolonge.",
+        "frequency=week": "{size} a prévu «{value}» {horizon:int} semaines en avant à partir de la position {last:int}. C'est un modèle entraîné à l'avance, par ses auteurs, sur beaucoup d'autres séries, et non ajusté à la vôtre : il lit l'historique récent de la série ({context:int} semaines ici) et le prolonge.",
+        "frequency=month": "{size} a prévu «{value}» {horizon:int} mois en avant à partir de la position {last:int}. C'est un modèle entraîné à l'avance, par ses auteurs, sur beaucoup d'autres séries, et non ajusté à la vôtre : il lit l'historique récent de la série ({context:int} mois ici) et le prolonge.",
+        "frequency=quarter": "{size} a prévu «{value}» {horizon:int} trimestres en avant à partir de la position {last:int}. C'est un modèle entraîné à l'avance, par ses auteurs, sur beaucoup d'autres séries, et non ajusté à la vôtre : il lit l'historique récent de la série ({context:int} trimestres ici) et le prolonge.",
+        "frequency=year": "{size} a prévu «{value}» {horizon:int} années en avant à partir de la position {last:int}. C'est un modèle entraîné à l'avance, par ses auteurs, sur beaucoup d'autres séries, et non ajusté à la vôtre : il lit l'historique récent de la série ({context:int} années ici) et le prolonge.",
+        "": "{size} a prévu «{value}» {horizon:int} pas en avant à partir de la position {last:int}. C'est un modèle entraîné à l'avance, par ses auteurs, sur beaucoup d'autres séries, et non ajusté à la vôtre : il lit l'historique récent de la série ({context:int} pas ici) et le prolonge."
+      },
+      "summary_known": "Il a aussi lu {covariate}, connues dans le futur : les lignes après la dernière valeur de chaque série les contiennent.",
+      "summary_past": "Il a aussi lu {covariate}, connues seulement jusqu'à la dernière valeur de chaque série.",
+      "filled_linear": "{count:int} valeurs manquantes à l'intérieur des séries ont été remplies par interpolation linéaire ; la sortie les marque dans sa colonne «filled».",
+      "missing_model": "{count:int} valeurs manquantes à l'intérieur des séries ont été passées au modèle comme manquantes, qu'il est fait pour lire ; la sortie les laisse vides.",
+      "forecast_bands": {
+        "frequency=hour": "La médiane dit {median:num} pour la première heure prévue ; selon le modèle lui-même, il y a 80 % de chances que la valeur tombe entre {low80:num} et {high80:num}, et 90 % entre {low90:num} et {high90:num}.",
+        "frequency=day": "La médiane dit {median:num} pour le {at:date} ; selon le modèle lui-même, il y a 80 % de chances que la valeur tombe entre {low80:num} et {high80:num}, et 90 % entre {low90:num} et {high90:num}.",
+        "frequency=week": "La médiane dit {median:num} pour le {at:date} ; selon le modèle lui-même, il y a 80 % de chances que la valeur tombe entre {low80:num} et {high80:num}, et 90 % entre {low90:num} et {high90:num}.",
+        "frequency=month": "La médiane dit {median:num} pour le {at:date} ; selon le modèle lui-même, il y a 80 % de chances que la valeur tombe entre {low80:num} et {high80:num}, et 90 % entre {low90:num} et {high90:num}.",
+        "frequency=quarter": "La médiane dit {median:num} pour le {at:date} ; selon le modèle lui-même, il y a 80 % de chances que la valeur tombe entre {low80:num} et {high80:num}, et 90 % entre {low90:num} et {high90:num}.",
+        "frequency=year": "La médiane dit {median:num} pour le {at:date} ; selon le modèle lui-même, il y a 80 % de chances que la valeur tombe entre {low80:num} et {high80:num}, et 90 % entre {low90:num} et {high90:num}.",
+        "": "La médiane dit {median:num} pour le {at:date} ; selon le modèle lui-même, il y a 80 % de chances que la valeur tombe entre {low80:num} et {high80:num}, et 90 % entre {low90:num} et {high90:num}."
+      },
+      "forecast_bands_steps": "La médiane dit {median:num} à la position {at:int} ; selon le modèle lui-même, il y a 80 % de chances que la valeur tombe entre {low80:num} et {high80:num}, et 90 % entre {low90:num} et {high90:num}.",
+      "holdout_mase": {
+        "frequency=hour": "Sur les {holdout:int} dernières valeurs de chaque série, mises de côté et prévues d'avant, la prévision s'est trompée de {mase:num} fois l'erreur typique de répéter la dernière saison dans l'historique (MASE, la moyenne sur les séries) ; la prévision naïve saisonnière, qui répète la dernière saison, s'est trompée de {baseline_mase:num} fois.",
+        "frequency=day": "Sur les {holdout:int} dernières valeurs de chaque série, mises de côté et prévues d'avant, la prévision s'est trompée de {mase:num} fois l'erreur typique de répéter la dernière saison dans l'historique (MASE, la moyenne sur les séries) ; la prévision naïve saisonnière, qui répète la dernière saison, s'est trompée de {baseline_mase:num} fois.",
+        "frequency=week": "Sur les {holdout:int} dernières valeurs de chaque série, mises de côté et prévues d'avant, la prévision s'est trompée de {mase:num} fois l'erreur typique de répéter la dernière saison dans l'historique (MASE, la moyenne sur les séries) ; la prévision naïve saisonnière, qui répète la dernière saison, s'est trompée de {baseline_mase:num} fois.",
+        "frequency=month": "Sur les {holdout:int} dernières valeurs de chaque série, mises de côté et prévues d'avant, la prévision s'est trompée de {mase:num} fois l'erreur typique de répéter la dernière saison dans l'historique (MASE, la moyenne sur les séries) ; la prévision naïve saisonnière, qui répète la dernière saison, s'est trompée de {baseline_mase:num} fois.",
+        "frequency=quarter": "Sur les {holdout:int} dernières valeurs de chaque série, mises de côté et prévues d'avant, la prévision s'est trompée de {mase:num} fois l'erreur typique de répéter la dernière saison dans l'historique (MASE, la moyenne sur les séries) ; la prévision naïve saisonnière, qui répète la dernière saison, s'est trompée de {baseline_mase:num} fois.",
+        "frequency=year": "Sur les {holdout:int} dernières valeurs de chaque série, mises de côté et prévues d'avant, la prévision s'est trompée de {mase:num} fois l'erreur typique de répéter la dernière saison dans l'historique (MASE, la moyenne sur les séries) ; la prévision naïve saisonnière, qui répète la dernière saison, s'est trompée de {baseline_mase:num} fois.",
+        "": "Sur les {holdout:int} dernières valeurs de chaque série, mises de côté et prévues d'avant, la prévision s'est trompée de {mase:num} fois l'erreur typique de répéter la dernière saison dans l'historique (MASE, la moyenne sur les séries) ; la prévision naïve saisonnière, qui répète la dernière saison, s'est trompée de {baseline_mase:num} fois."
+      },
+      "holdout_not_measured": "{count:int} séries sur {n_series:int} sont trop courtes pour la période de test et une saison d'historique : elles sont prévues, non mesurées.",
+      "holdout_none": "Aucune valeur n'a été mise de côté (période de test 0) : il n'y a pas d'erreurs à mesurer ni de comparaison.",
+      "coverage": "Sur la période de test, la bande à 80 % a contenu {in80:int} valeurs sur {steps:int} ({share80:pct}) et celle à 90 % {in90:int} ({share90:pct}). Avec une seule origine de prévision, ces parts varient beaucoup par hasard : lisez-les comme un indice sur la largeur des bandes, pas comme une mesure de celle-ci.",
+      "comparison_supported": "Timestral a eu la plus petite erreur sur {better:int} séries sur {n_series:int}. Si aucune des deux prévisions n'était meilleure, des différences aussi déséquilibrées apparaîtraient par hasard avec une probabilité de {p_value:p}, sous α = {alpha:num} : l'avance de Timestral sur la naïve saisonnière est étayée sur ces séries.",
+      "comparison_opposite": "Timestral n'a eu la plus petite erreur que sur {better:int} séries sur {n_series:int}. Si aucune des deux prévisions n'était meilleure, des différences aussi déséquilibrées apparaîtraient par hasard avec une probabilité de {p_value:p}, sous α = {alpha:num} : l'avance de la naïve saisonnière est étayée sur ces séries, et Timestral fait ici pire que répéter la dernière saison.",
+      "comparison_not_supported": "Timestral a eu la plus petite erreur sur {better:int} séries sur {n_series:int}. Si aucune des deux prévisions n'était meilleure, des différences comme celles-ci apparaîtraient par hasard avec une probabilité de {p_value:p}, pas sous α = {alpha:num} : les données ne montrent pas que l'une des deux soit meilleure. «Non étayé» ne veut pas dire que les deux sont égales.",
+      "comparison_few_series": "Avec {n_series:int} séries, la plus petite p-valeur que ce test peut donner est {min_p:p}, pas sous α = {alpha:num} : aucune différence ne pourrait être étayée ici, quelles que soient les erreurs ; il faut plus de séries.",
+      "comparison_one_series": "Avec une seule série, la comparaison est une mesure, pas un test : le MASE de Timestral sur la période de test est {mase:num}, celui de la naïve saisonnière {baseline_mase:num}. Un test demande plusieurs séries (ou plusieurs origines de prévision).",
+      "comparison_not_computed": "La comparaison n'a pas été calculée : {n_measured:int} séries ont leurs erreurs sur la période de test, et le test en demande au moins deux.",
+      "limits": "Timestral ne connaît pas votre activité : une promotion, un changement de prix, une nouvelle boutique ou une fermeture lui sont invisibles, sauf si une colonne le dit, connue dans le futur. Il ne lit que la série et les colonnes données.",
+      "limits_context": "Il a lu les {used:int} dernières valeurs sur {n:int} de «{series}» : le contexte du modèle s'arrête à 32 768.",
+      "limits_clip": "Une série jamais négative dans son historique ne reçoit pas de prévision négative : la bibliothèque ramène ces valeurs à 0 (l'option «clip_nonnegative» du nœud).",
+      "licence": "Les poids du modèle sont ceux de Mistral AI, sous la {licence} ; le texte complet de la licence clôt ce rapport.",
+      "licence_accepted": "Un administrateur ({by}) l'a acceptée pour cette installation le {on:date}, avant la construction du groupe.",
+      "method_zero_shot": "Ce qu'est un modèle pré-entraîné («zero-shot») : Timestral a été entraîné une fois, par Mistral AI, sur une grande collection de séries synthétiques et observées, pour prolonger une série à partir de son passé récent. Ici il ne fait que lire : rien de vos données n'est appris ni conservé, et la même entrée donne la même prévision. C'est pourquoi il n'y a rien à ajuster ni à régler et que beaucoup de séries sont prévues rapidement ; c'est aussi pourquoi le modèle ne sait que ce que disent la série et les colonnes données.",
+      "method_quantiles": "Ce qu'est un quantile : pour chaque instant futur, le modèle donne 21 quantiles, de 0,01 à 0,99, au lieu d'un seul nombre. Le quantile 0,9 est une valeur que le modèle s'attend à voir dépassée une fois sur dix ; la médiane (0,5) une fois sur deux. Une bande est une paire de quantiles : selon le modèle, celle de 0,1 à 0,9 contient 8 valeurs sur 10, celle de 0,05 à 0,95 en contient 9 sur 10. Les bandes s'élargissent avec la distance, parce que plus on regarde loin, moins le passé en dit.",
+      "method_holdout": "Pourquoi une période de test : une prévision se mesure sur des valeurs qu'elle n'a pas vues. Les dernières valeurs de chaque série ont été mises de côté, prévues d'avant et comparées à ce qui a été observé. Le MASE divise l'erreur absolue moyenne par l'erreur typique de répéter la dernière saison dans l'historique, pour que des séries de tailles différentes se comparent : sous 1, la prévision s'est moins trompée que cette habitude. Le sMAPE donne l'erreur en pourcentage des valeurs. La perte pinball mesure les quantiles : une valeur sous le quantile q coûte q fois l'écart, une valeur au-dessus 1 − q fois ; divisée par la moyenne des valeurs, c'est la perte quantile pondérée (WQL).",
+      "method_baseline": "La référence est la prévision naïve saisonnière : chaque valeur future est la valeur d'une saison avant (la dernière valeur quand il n'y a pas de saison). Elle ne demande aucun ajustement, ne coûte rien et c'est la prévision sur laquelle le MASE est construit : Timestral lui est comparé série par série.",
+      "method_coverage": "Comment lire une couverture : une part proche de la part nominale de la bande (80 %, 90 %) dit que les bandes étaient à peu près aussi larges que les erreurs ; très en dessous, elles étaient trop étroites pour cette série ; très au-dessus, plus larges que les erreurs ne le demandaient. Aucun test n'est fait : les erreurs d'une seule origine de prévision ne sont pas indépendantes (une prévision trop basse un jour l'est d'habitude aussi le lendemain), et un test de «80 % à l'intérieur» prétendrait à bien plus de certitude que les données n'en ont.",
+      "method_wilcoxon": "La comparaison est le test des rangs signés de Wilcoxon sur les différences d = MASE de Timestral − MASE de la naïve saisonnière, une par série. Il classe les différences par taille et additionne les rangs des positives et ceux des négatives ; si aucune des deux prévisions n'était meilleure, les deux sommes seraient proches. Ici, les unités indépendantes sont les séries (une hypothèse : le rapport ne peut pas la vérifier). La distribution est exacte jusqu'à 50 séries sans ex aequo, sinon c'est l'approximation normale ; une différence d'exactement 0 est laissée de côté. «Non étayé» veut dire que les données ne montrent pas de différence, pas qu'il n'y en a pas : avec peu de séries, même une avance nette ne peut pas atteindre α.",
+      "method_limits": "Ce qu'un modèle pré-entraîné ne peut pas savoir : tout ce qui n'est pas dans la série ni dans les colonnes données. Une covariable n'aide que si elle est vraiment connue à l'avance (un jour férié, une promotion prévue) ; une covariable passée n'est lue que jusqu'à la dernière valeur. Le modèle lit au plus les 32 768 dernières valeurs de chaque série. La bibliothèque prévoit chaque série et son opposée et fait la moyenne des deux (moyenne symétrique), et ramène à 0 les prévisions négatives d'une série jamais négative : ce sont deux options du nœud, activées par défaut.",
+      "method_missing": "Les valeurs manquantes à l'intérieur d'une série ont été remplies par une droite entre leurs voisines (linear), ou passées au modèle comme valeurs manquantes, qu'il lit avec un indicateur (model). La sortie marque celles qui ont été remplies."
+    },
+    "formula_texts": {
+      "formula_naive": "ŷ_(T+h) = y_(T+h−m·k), k = le plus petit entier avec m·k ≥ h ;  m : la saison (1 : la dernière valeur répétée)",
+      "formula_mase": "s_i = (1/(T − m)) Σ_(t=m+1)^(T) |y_t − y_(t−m)| ;  MASE_i = (1/k) Σ_(h=1)^(k) |y_(T+h) − ŷ_(T+h)| / s_i ;  MASE relatif_i = MASE_i / MASE_i(naïve), résumés par leur moyenne géométrique",
+      "formula_smape": "sMAPE = (1/k) Σ_h 200 |y_h − ŷ_h| / (|y_h| + |ŷ_h|), en % ;  les pas où les deux valent 0 sont laissés de côté",
+      "formula_pinball": "ρ_q(u) = max(q u, (q − 1) u), u = y − ŷ_q ;  pinball = la moyenne de ρ_q sur les 21 niveaux et les k pas ;  WQL = pinball / ((1/k) Σ_h |y_h|)",
+      "formula_coverage": "couverture 80 % = (1/k) Σ_h 1[ŷ_0,1 ≤ y_h ≤ ŷ_0,9] ;  couverture 90 % de même avec 0,05 et 0,95",
+      "formula_wilcoxon": "d_i = MASE_i − MASE_i(naïve), les zéros laissés de côté ;  W+ = Σ_(d_i > 0) rang(|d_i|), W− = Σ_(d_i < 0) rang(|d_i|) ;  W = min(W+, W−) ;  avec beaucoup de séries z = (W+ − n(n+1)/4) / √(n(n+1)(2n+1)/24 − Σ(t³ − t)/48), t : les tailles des ex aequo"
+    },
+    "note_texts": {
+      "ends_early": "{count:int} séries se terminent avant le {last:date} : leurs prévisions commencent plus tôt.",
+      "context_cut": "Le modèle a lu les {used:int} dernières valeurs sur {n:int} de «{series}».",
+      "history_shrunk": "L'historique tracé a été réduit à {points:int} instants par série pour que les résultats restent dans leur limite ; les mesures utilisent toutes les valeurs.",
+      "future_left_out": "{count:int} lignes après la dernière valeur de leur série ont été laissées de côté : sans covariables connues, elles ne contiennent rien à lire.",
+      "covariate_missing": "{count:int} valeurs vides de «{covariate}» ont été passées au modèle comme manquantes.",
+      "time_budget": "La prévision a pris {seconds:num} s des {limit:num} s que l'étape permet."
+    },
+    "measure_readings": [
+      "summary",
+      "summary_one",
+      "summary_steps",
+      "summary_one_steps",
+      "summary_known",
+      "summary_past",
+      "filled_linear",
+      "missing_model",
+      "forecast_bands",
+      "forecast_bands_steps",
+      "holdout_mase",
+      "holdout_not_measured",
+      "holdout_none",
+      "coverage",
+      "comparison_one_series",
+      "comparison_not_computed",
+      "limits",
+      "limits_context",
+      "limits_clip",
+      "licence",
+      "licence_accepted"
+    ],
+    "licence_text": "Modified MIT License \n\nAttribution notice: 2026 - Mistral AI\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of the weights of this model and associated documentation files (the “Model”), to deal in the Model without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Model, and to permit persons to whom the Model is furnished to do so, subject to the following conditions: \n\n1. The above attribution notice and this permission notice shall be included in all copies or substantial portions of the Model. \n2. You are not authorized to exercise any rights under this license if the global consolidated monthly revenue of your company (or that of your employer) exceeds $20 million (or its equivalent in another currency) for the preceding month. This restriction in (b) applies to the Model and any derivatives, modifications, or combined works based on it, whether provided by Mistral AI or by a third party. You may contact Mistral AI (sales@mistral.ai) to request a commercial license, which Mistral AI may grant you at its sole discretion, or choose to use the Model on Mistral AI's hosted services available at https://mistral.ai/.\n\nTHE MODEL IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL MISTRAL AI BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE MODEL OR THE USE OR OTHER DEALINGS IN THE MODEL."
+  }
+}
