@@ -2,6 +2,8 @@ package api
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -993,4 +995,85 @@ func TestAModelMayHaveALimitOfRowsBelowItsGroups(t *testing.T) {
 			t.Errorf("%s in a group of %d: %d, want %d", c.model, c.group, got, c.wants)
 		}
 	}
+}
+
+// The check of a group with weights (docs/specs/foundation-forecast.md, «Changes to the machinery»): the lock gets a line a size and the
+// check stops, before the self-test, on an image whose files are not the recipe's, or that holds a size the recipe has not.
+func TestTheChecksScriptRecomputesTheWeights(t *testing.T) {
+	g, _ := modelgroups.Get("foundation_forecast")
+	script := mgCheckScriptOf("foundation_forecast", "python")
+	for _, w := range []string{`python -I -c "$TABULARIA_PY_MANAGED_CHECK"`, "ls /opt/tabularia/weights", "sha256sum /opt/tabularia/weights/$s/$name",
+		"28m) wanted=\"config.json:0cdf44b8ea981191de53078e0a5ecbbd437046bd939a546d5dbe17868f71281f model.safetensors:dfc83c6220937ce5fc6687b35a4df94cd25e28a2cfe6fb92a23dad6301b2015d LICENSE:648194727930df730890e9f9affdbcc5c930d406d6829559b25ca3d5a973fc8c\";;",
+		"echo TABULARIA_SELFTEST_BEGIN\n", "python -I -B /tabularia/code/runner/run.py --selftest\n"} {
+		if !strings.Contains(script, w) {
+			t.Errorf("no %q in\n%s", w, script)
+		}
+	}
+	if strings.Index(script, "sha256sum") > strings.Index(script, "TABULARIA_SELFTEST_BEGIN") {
+		t.Error("the weights are checked after the mark")
+	}
+	// the other groups' scripts are what they were
+	for _, other := range []string{"regression", "survival", "timeseries", "boosting", "customer_lifetime", "experiments"} {
+		lang := modelgroupsLanguage(other)
+		if mgCheckScriptOf(other, lang) != mgCheckScriptWith(lang, hasSystemLibraries(other)) || strings.Contains(mgCheckScriptOf(other, lang), "weights") {
+			t.Errorf("%s: its check changed", other)
+		}
+	}
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("no sh")
+	}
+	if _, err := exec.LookPath("sha256sum"); err != nil {
+		t.Skip("no sha256sum")
+	}
+	// the script under sh, on a folder of small files whose sha256 are the recipe's (a recipe made here)
+	sum := func(s string) string { x := sha256.Sum256([]byte(s)); return hex.EncodeToString(x[:]) }
+	w := &modelgroups.Weights{Sizes: map[string]modelgroups.WeightSize{
+		"5m":  {Files: map[string]modelgroups.WeightFile{"config.json": {SHA256: sum("c5")}, "model.safetensors": {SHA256: sum("m5")}, "LICENSE": {SHA256: sum("l")}}},
+		"28m": {Files: map[string]modelgroups.WeightFile{"config.json": {SHA256: sum("c28")}, "model.safetensors": {SHA256: sum("m28")}, "LICENSE": {SHA256: sum("l")}}}}}
+	dir := t.TempDir()
+	put := func(size, name, body string) {
+		if err := os.MkdirAll(filepath.Join(dir, size), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, size, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	run := func() (string, error) {
+		script := strings.NewReplacer(`python -I -c "$TABULARIA_PY_MANAGED_CHECK"`, "echo lock", "cd /tabularia/code", "cd "+dir,
+			"python -I -B /tabularia/code/runner/run.py --selftest", "echo selftest ran").Replace(mgCheckScriptFor("python", false, w, dir))
+		out, err := exec.Command("sh", "-c", script).CombinedOutput()
+		return string(out), err
+	}
+	if out, err := run(); err == nil || !strings.Contains(out, "holds no weights") && !strings.Contains(out, "No such file") && !strings.Contains(out, "impossibile") {
+		t.Errorf("an empty folder: %v\n%s", err, out)
+	}
+	put("28m", "config.json", "c28")
+	put("28m", "model.safetensors", "m28")
+	put("28m", "LICENSE", "l")
+	out, err := run()
+	if err != nil || out != "lock\nweights-28m@"+sum("m28")+"\n\nTABULARIA_SELFTEST_BEGIN\nselftest ran\n" {
+		t.Errorf("one size present: %v\n%s", err, out)
+	}
+	put("5m", "config.json", "c5")
+	put("5m", "model.safetensors", "m5")
+	put("5m", "LICENSE", "l")
+	if out, err := run(); err != nil || !strings.Contains(out, "weights-28m@"+sum("m28")+"\nweights-5m@"+sum("m5")+"\n") && !strings.Contains(out, "weights-5m@"+sum("m5")+"\nweights-28m@"+sum("m28")+"\n") {
+		t.Errorf("two sizes present: %v\n%s", err, out)
+	}
+	put("5m", "model.safetensors", "m5!")
+	if out, err := run(); err == nil || !strings.Contains(out, "weights 5m/model.safetensors: sha256 "+sum("m5!")+", the recipe says "+sum("m5")) || strings.Contains(out, "selftest ran") {
+		t.Errorf("a different byte: %v\n%s", err, out)
+	}
+	put("5m", "model.safetensors", "m5")
+	put("5m", "LICENSE", "another licence")
+	if out, err := run(); err == nil || !strings.Contains(out, "weights 5m/LICENSE") || strings.Contains(out, "selftest ran") {
+		t.Errorf("a different licence: %v\n%s", err, out)
+	}
+	put("5m", "LICENSE", "l")
+	put("209m", "model.safetensors", "x")
+	if out, err := run(); err == nil || !strings.Contains(out, "the weights of size 209m are not in the recipe") {
+		t.Errorf("a size the recipe has not: %v\n%s", err, out)
+	}
+	_ = g
 }

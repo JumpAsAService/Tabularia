@@ -19,13 +19,22 @@
 //
 // Subcommands:
 //
-//	dockerfile <group>                   the image's Dockerfile (base image from SCRIPTS__BASE_IMAGES or
+//	dockerfile <group> [--sizes 5m,28m]  the image's Dockerfile (base image from SCRIPTS__BASE_IMAGES or
 //	                                     Tabularia's defaults, CRAN from SCRIPTS__CRAN_URL, PyPI from
-//	                                     SCRIPTS__PYPI_INDEX_URL; -jobs compilers)
+//	                                     SCRIPTS__PYPI_INDEX_URL; -jobs compilers). A group that downloads
+//	                                     weights (foundation_forecast) takes the sizes to download, all of the
+//	                                     recipe's when none is given, and the mirrors MODELS__WHEELS_BASE_URL and
+//	                                     MODELS__WEIGHTS_BASE_URL (--wheels-base-url, --weights-base-url)
 //	code <group> <dir> [<task.json>]     writes the Job's /tabularia/code into <dir>: the runner, the common
 //	                                     library, the schema, the catalogue, the reference cases, the task
 //	task <model> <params.json>           the task.json of a fit with those parameters (checked by the catalogue)
 //	groups                               each group's recipe hash, runner hash and reference hash
+//
+// The image of the pre-trained forecasting group is built the same way, with the weights of the sizes wanted (a download of
+// 0.02 to 0.84 GB each, checked by sha256), and its self-test runs on a read-only root as the Job's does:
+//
+//	go run ./cmd/modelgroup dockerfile foundation_forecast --sizes 5m,28m > /tmp/ff.Dockerfile
+//	docker build -f /tmp/ff.Dockerfile -t tabularia-models-foundation_forecast:dev /tmp
 //
 // The directory written by `code` is what the Job's ConfigMap holds; a laptop with R (and
 // jsonlite) also runs an R group's self-test without Docker:
@@ -41,6 +50,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/config"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/modelgroups"
@@ -63,20 +73,39 @@ func run(args []string, out io.Writer) error {
 	}
 	args = fl.Args()
 	if len(args) == 0 {
-		return errors.New("usage: modelgroup [-jobs n] dockerfile <group> | code <group> <dir> [<task.json>] | task <model> <params.json> | groups")
+		return errors.New("usage: modelgroup [-jobs n] dockerfile <group> [--sizes 5m,28m] | code <group> <dir> [<task.json>] | task <model> <params.json> | groups")
 	}
 	switch args[0] {
 	case "dockerfile":
-		if len(args) != 2 {
-			return errors.New("usage: modelgroup dockerfile <group>")
+		// `dockerfile <group> [--sizes …]`: the flags may follow the group's name, as they may lead
+		df := flag.NewFlagSet("dockerfile", flag.ContinueOnError)
+		sizes := df.String("sizes", "", "sizes of the weights to download, e.g. 5m,28m (every size of the recipe when empty)")
+		wheelsBase := df.String("wheels-base-url", os.Getenv("MODELS__WHEELS_BASE_URL"), "mirror of the wheels' host (MODELS__WHEELS_BASE_URL)")
+		weightsBase := df.String("weights-base-url", os.Getenv("MODELS__WEIGHTS_BASE_URL"), "mirror of the weights' host (MODELS__WEIGHTS_BASE_URL)")
+		if err := df.Parse(args[1:]); err != nil {
+			return err
+		}
+		rest := df.Args()
+		if len(rest) == 0 {
+			return errors.New("usage: modelgroup dockerfile <group> [--sizes 5m,28m]")
+		}
+		group := rest[0]
+		if err := df.Parse(rest[1:]); err != nil || df.NArg() != 0 {
+			return errors.New("usage: modelgroup dockerfile <group> [--sizes 5m,28m]")
+		}
+		build := modelgroups.Build{WheelsBaseURL: *wheelsBase, WeightsBaseURL: *weightsBase}
+		for _, size := range strings.Split(*sizes, ",") {
+			if size = strings.TrimSpace(size); size != "" {
+				build.Sizes = append(build.Sizes, strings.ToLower(size))
+			}
 		}
 		s := scriptcfg.Load(config.FromOS())
 		images, err := s.Images()
 		if err != nil {
 			return err
 		}
-		d, err := modelgroups.Dockerfile(args[1], images, scriptimage.Settings{
-			PyPIIndexURL: s.Scripts.PyPIIndexURL, CRANURL: s.Scripts.CRANURL, Jobs: *jobs})
+		d, err := modelgroups.DockerfileFor(group, images, scriptimage.Settings{
+			PyPIIndexURL: s.Scripts.PyPIIndexURL, CRANURL: s.Scripts.CRANURL, Jobs: *jobs}, build)
 		if err != nil {
 			return err
 		}

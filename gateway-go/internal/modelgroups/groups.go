@@ -29,6 +29,7 @@ import (
 	"fmt"
 	"io/fs"
 	"path"
+	"regexp"
 	"sort"
 	"strings"
 	"sync/atomic"
@@ -38,7 +39,10 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/scriptimage"
 )
 
-//go:embed card.schema.json common groups
+// The vendored inference package of the group `foundation_forecast` is a Python package: its `__init__.py` starts with «_»,
+// which a plain pattern leaves out (the `all:` prefix keeps it, for that folder only).
+//
+//go:embed card.schema.json common groups all:groups/foundation_forecast/runner/py/timestral
 var files embed.FS
 
 // Protocol is the version of task.json the runners speak (TAB_PROTOCOL in protocol.R).
@@ -104,9 +108,58 @@ type Recipe struct {
 		CPU    string `json:"cpu"`    // the limit; the request is half
 		Memory string `json:"memory"` // the limit; the request is half
 	} `json:"resources"`
-	MaxRows    int64 `json:"max_rows"`
-	MaxSeconds int64 `json:"max_seconds"` // the longest run
+	// Wheels: files the image installs by their address, each checked by its sha256, besides Packages (the CPU-only build of
+	// PyTorch, which is on no index a plain `pip install` would reach: docs/specs/foundation-forecast.md, «The recipe»); the
+	// build installs the one of its machine. A Python group's only.
+	Wheels []Wheel `json:"wheels,omitempty"`
+	// Weights: the files of a pre-trained model the image downloads when the group is built, from pinned revisions and checked by
+	// sha256, and the licence they come under. A Python group's only; nil for every other group.
+	Weights    *Weights `json:"weights,omitempty"`
+	MaxRows    int64    `json:"max_rows"`
+	MaxSeconds int64    `json:"max_seconds"` // the longest run
 }
+
+// Wheel is a wheel installed by its address: `pip install "<url>#sha256=<sha256>"`, for the machine (uname -m) it is for.
+type Wheel struct {
+	Name    string `json:"name"`
+	Version string `json:"version"`
+	Machine string `json:"machine"` // x86_64 or aarch64
+	URL     string `json:"url"`
+	SHA256  string `json:"sha256"`
+}
+
+// Weights are the pre-trained weights of a group: their licence and, per size, the repository, the revision and the files.
+type Weights struct {
+	Licence WeightsLicence        `json:"licence"`
+	Sizes   map[string]WeightSize `json:"sizes"`
+}
+
+// WeightsLicence is the licence the weights are under: its name, the sha256 of its text, and where the text is shipped
+// (a path under the group's folder: the bytes the administrator reads, the bytes that travel with every copy of the weights).
+type WeightsLicence struct {
+	Name   string `json:"name"`
+	SHA256 string `json:"sha256"`
+	Text   string `json:"text"`
+}
+
+// WeightSize is one size of the weights: the Hugging Face repository, the revision pinned and its files.
+type WeightSize struct {
+	Repo     string                `json:"repo"`
+	Revision string                `json:"revision"`
+	Files    map[string]WeightFile `json:"files"`
+}
+
+// WeightFile is a file of a size: its length and its sha256.
+type WeightFile struct {
+	Bytes  int64  `json:"bytes"`
+	SHA256 string `json:"sha256"`
+}
+
+// WeightSizes are the sizes a recipe's weights may have, from the smallest; the files every size holds.
+var (
+	WeightSizes = []string{"5m", "28m", "123m", "209m"}
+	WeightFiles = []string{"config.json", "model.safetensors", "LICENSE"}
+)
 
 // Group is a group as shipped: its recipe, its models and the hashes that say when its
 // image must be built again (RecipeHash) or its self-test run again (RunnerHash,
@@ -158,6 +211,7 @@ func Groups() []Group {
 		out[i].Models = append([]string(nil), g.Models...)
 		out[i].Recipe.Packages = append([]string(nil), g.Recipe.Packages...)
 		out[i].Recipe.SystemLibraries = append([]string(nil), g.Recipe.SystemLibraries...)
+		out[i].Recipe.Wheels = append([]Wheel(nil), g.Recipe.Wheels...)
 	}
 	return out
 }
@@ -272,8 +326,80 @@ func BaseImage(r Recipe, images map[string][]scriptcfg.Image) (string, error) {
 // Dockerfile is the group's image as the build loop of the scripting environments makes it for
 // a managed environment: R, the base image, arrow, then the recipe's packages in their order;
 // Python, the base image and the recipe's packages only, wheels without their dependencies (the
-// recipe is the whole closure), then pip check.
+// recipe is the whole closure), then pip check. A group with wheels or weights gets them too, every size
+// of the weights (DockerfileFor says which sizes).
 func Dockerfile(group string, images map[string][]scriptcfg.Image, s scriptimage.Settings) (string, error) {
+	return DockerfileFor(group, images, s, Build{})
+}
+
+// Build is what a version's build adds to the recipe: the sizes of the weights it holds and the mirrors it downloads from.
+type Build struct {
+	// Sizes of the weights to download, among the recipe's: none (nil) is every size the recipe has, as a version recorded
+	// without a `# tabularia:weights` line is built (docs/specs/foundation-forecast.md, «Changes to the machinery»).
+	Sizes []string
+	// WheelsBaseURL replaces the host of the recipe's wheels (MODELS__WHEELS_BASE_URL), WeightsBaseURL the Hugging Face host of
+	// its weights (MODELS__WEIGHTS_BASE_URL), for a cluster that may not reach them; empty keeps the official ones. The paths,
+	// the file names and the checksums stay: a mirror holds the same files.
+	WheelsBaseURL, WeightsBaseURL string
+}
+
+// The official hosts a mirror replaces.
+const (
+	OfficialWheelsBaseURL  = "https://download.pytorch.org/whl/cpu/"
+	OfficialWeightsBaseURL = "https://huggingface.co/"
+	// WeightsDir is where an image keeps the weights it holds: <WeightsDir>/<size>/{config.json,model.safetensors,LICENSE}
+	WeightsDir = "/opt/tabularia/weights"
+)
+
+func withBase(address, official, mirror string) string {
+	mirror = strings.TrimSpace(mirror)
+	if mirror == "" || !strings.HasPrefix(address, official) {
+		return address
+	}
+	return strings.TrimRight(mirror, "/") + "/" + strings.TrimPrefix(address, official)
+}
+
+// BuildInputs are the wheels and the files of the group's image: every wheel of the recipe (the Dockerfile picks the one of its
+// machine) and the files of the sizes asked for, each with the checksum the recipe holds. An error names a size the recipe does
+// not have, or asked for twice.
+func (g Group) BuildInputs(b Build) ([]scriptimage.Wheel, []scriptimage.File, error) {
+	var wheels []scriptimage.Wheel
+	for _, w := range g.Recipe.Wheels {
+		wheels = append(wheels, scriptimage.Wheel{Machine: w.Machine, URL: withBase(w.URL, OfficialWheelsBaseURL, b.WheelsBaseURL), SHA256: w.SHA256})
+	}
+	if g.Recipe.Weights == nil {
+		if len(b.Sizes) > 0 {
+			return nil, nil, fmt.Errorf("the group %s has no weights: no size to download", g.ID)
+		}
+		return wheels, nil, nil
+	}
+	sizes := b.Sizes
+	if len(sizes) == 0 {
+		for _, size := range WeightSizes {
+			if _, ok := g.Recipe.Weights.Sizes[size]; ok {
+				sizes = append(sizes, size)
+			}
+		}
+	}
+	seen := map[string]bool{}
+	var files []scriptimage.File
+	for _, size := range sizes {
+		w, ok := g.Recipe.Weights.Sizes[size]
+		if !ok || seen[size] {
+			return nil, nil, fmt.Errorf("the group %s has no size «%s» of weights (or it is asked for twice)", g.ID, size)
+		}
+		seen[size] = true
+		for _, name := range WeightFiles {
+			files = append(files, scriptimage.File{
+				URL:    withBase(OfficialWeightsBaseURL+w.Repo+"/resolve/"+w.Revision+"/"+name, OfficialWeightsBaseURL, b.WeightsBaseURL),
+				SHA256: w.Files[name].SHA256, Path: WeightsDir + "/" + size + "/" + name})
+		}
+	}
+	return wheels, files, nil
+}
+
+// DockerfileFor is Dockerfile for a version built with the sizes and the mirrors of b.
+func DockerfileFor(group string, images map[string][]scriptcfg.Image, s scriptimage.Settings, b Build) (string, error) {
 	g, ok := Get(group)
 	if !ok {
 		return "", fmt.Errorf("no model group %q", group)
@@ -284,6 +410,9 @@ func Dockerfile(group string, images map[string][]scriptcfg.Image, s scriptimage
 	}
 	s.Managed = true
 	s.SystemLibraries = g.Recipe.SystemLibraries
+	if s.Wheels, s.Files, err = g.BuildInputs(b); err != nil {
+		return "", err
+	}
 	return scriptimage.Dockerfile(g.Recipe.Language, base, g.Recipe.Packages, s)
 }
 
@@ -470,6 +599,89 @@ func hashOf(parts []File) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
+var (
+	sha256Hex = regexp.MustCompile(`^[0-9a-f]{64}$`)
+	// a revision of a Hugging Face repository is a commit
+	revisionHex = regexp.MustCompile(`^[0-9a-f]{40}$`)
+	repoName    = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$`)
+)
+
+// checkDownloads checks what a recipe says it downloads: the wheels (an https address, 64 hexadecimal digits of sha256, a machine,
+// the file named by the address), the weights' sizes (among WeightSizes, a repository, a commit, the three files with their
+// sha256) and the licence (its text shipped under the group's folder and of the sha256 the recipe says, which the LICENSE of each
+// size repeats: the text an administrator reads is, byte for byte, the file that travels with every copy of the weights).
+func (r Recipe) checkDownloads(group string) error {
+	fail := func(format string, a ...any) error {
+		return fmt.Errorf("%s/recipe.json: %s", group, fmt.Sprintf(format, a...))
+	}
+	if (len(r.Wheels) > 0 || r.Weights != nil) && r.Language != "python" {
+		return fail("wheels and weights are for a Python image")
+	}
+	machines := map[string]bool{}
+	for _, w := range r.Wheels {
+		if !strings.HasPrefix(w.URL, "https://") || strings.ContainsAny(w.URL, " \t\n\"'\\#`$") || w.Name == "" || w.Version == "" {
+			return fail("the wheel «%s» %s has no https address, or a name or a version is missing", w.Name, w.URL)
+		}
+		if w.Machine != "x86_64" && w.Machine != "aarch64" {
+			return fail("the wheel «%s»: machine «%s» (x86_64 or aarch64)", w.Name, w.Machine)
+		}
+		if machines[w.Name+" "+w.Machine] {
+			return fail("the wheel «%s» is given twice for %s", w.Name, w.Machine)
+		}
+		machines[w.Name+" "+w.Machine] = true
+		if !sha256Hex.MatchString(w.SHA256) {
+			return fail("the sha256 of the wheel «%s» (%s) is not 64 hexadecimal digits", w.Name, w.Machine)
+		}
+		// the file the address names is the wheel of that name and version, for a machine of that name
+		file := w.URL[strings.LastIndex(w.URL, "/")+1:]
+		if !strings.HasSuffix(file, "_"+w.Machine+".whl") || !strings.HasPrefix(strings.ReplaceAll(file, "%2B", "+"), w.Name+"-"+w.Version+"-") {
+			return fail("the wheel «%s» %s (%s) is not the file its address names", w.Name, w.Version, w.Machine)
+		}
+	}
+	if r.Weights == nil {
+		return nil
+	}
+	l := r.Weights.Licence
+	if l.Name == "" || !sha256Hex.MatchString(l.SHA256) || l.Text == "" {
+		return fail("the weights' licence needs a name, a sha256 and the path of its text")
+	}
+	text, err := files.ReadFile(path.Join("groups", group, l.Text))
+	if err != nil {
+		return fail("the text of the weights' licence (%s) is not shipped: %v", l.Text, err)
+	}
+	if sum := sha256.Sum256(text); hex.EncodeToString(sum[:]) != l.SHA256 {
+		return fail("the text of the weights' licence (%s) is not the one its sha256 names", l.Text)
+	}
+	if len(r.Weights.Sizes) == 0 {
+		return fail("the weights have no size")
+	}
+	for size, w := range r.Weights.Sizes {
+		known := false
+		for _, s := range WeightSizes {
+			known = known || s == size
+		}
+		if !known {
+			return fail("«%s» is not a size of weights (%s)", size, strings.Join(WeightSizes, ", "))
+		}
+		if !repoName.MatchString(w.Repo) || !revisionHex.MatchString(w.Revision) {
+			return fail("the size %s needs a repository (org/name) and a revision (a commit of 40 hexadecimal digits)", size)
+		}
+		for _, name := range WeightFiles {
+			f, ok := w.Files[name]
+			if !ok || f.Bytes <= 0 || !sha256Hex.MatchString(f.SHA256) {
+				return fail("the size %s needs the file %s with its length and its 64-digit sha256", size, name)
+			}
+		}
+		if len(w.Files) != len(WeightFiles) {
+			return fail("the size %s lists a file besides %s", size, strings.Join(WeightFiles, ", "))
+		}
+		if w.Files["LICENSE"].SHA256 != l.SHA256 || w.Files["LICENSE"].Bytes != int64(len(text)) {
+			return fail("the LICENSE of the size %s is not the text the weights' licence ships", size)
+		}
+	}
+	return nil
+}
+
 func mustLoad() []Group {
 	groups, err := load()
 	if err != nil {
@@ -503,6 +715,9 @@ func load() ([]Group, error) {
 		}
 		if _, err := fs.Stat(files, path.Join("groups", cg.ID, entry)); err != nil {
 			return nil, fmt.Errorf("the group %s has no %s", cg.ID, entry)
+		}
+		if err := r.checkDownloads(cg.ID); err != nil {
+			return nil, err
 		}
 		sum := sha256.Sum256(raw)
 		g := Group{ID: cg.ID, Models: cg.Models, Recipe: r, RecipeHash: hex.EncodeToString(sum[:])}

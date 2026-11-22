@@ -175,7 +175,11 @@ through the egress proxy only. The images are large (an R image with compiled pa
 weighs more than a gigabyte): on a big cluster pre-pull them, because the first run on a node
 pulls the image. Two variables are read from the gateway's environment (`extraEnv`), and are in
 no chart value: `MODELS__ENABLED=false` switches the models off, and `MODELS__MAX_CHART_POINTS`
-changes the points a report chart keeps (2,000).
+changes the points a report chart keeps (2,000). Two more, empty by default, point the build of a group that
+downloads files (the pre-trained forecasting group's PyTorch wheels and model weights) at a mirror of your own for a
+cluster that may not reach the official hosts: `MODELS__WHEELS_BASE_URL` replaces `https://download.pytorch.org/whl/cpu/`
+and `MODELS__WEIGHTS_BASE_URL` replaces `https://huggingface.co/`; the paths, the file names and the checksums stay, so the
+mirror must hold the same files.
 
 ## Backend image (`backend/Dockerfile`)
 

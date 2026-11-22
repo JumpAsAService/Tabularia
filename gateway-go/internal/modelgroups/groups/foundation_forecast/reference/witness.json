@@ -1,0 +1,14 @@
+{
+  "about": "The witnesses of the reference values: packages that compute the same numbers outside Tabularia, run by hand by make_reference.py with uv on these pins (docs/specs/foundation-forecast.md, «Self-test, reference values, witnesses»). The official, unmodified `timestral` package is installed from the Git commit; the weights are read from a local directory filled once from the pinned revisions and checked by sha256 (never committed). Never installed in the group's image; not part of the recipe, so changing them builds nothing.",
+  "checked_on": "2026-11-22",
+  "python": [
+    "timestral @ git+https://github.com/mistralai/timestral.git@a534bdbd244d64f3d9d743f46c7bf6fc330ed4ff",
+    "torch==2.14.1+cpu",
+    "numpy==2.5.5",
+    "safetensors==0.8.0",
+    "huggingface_hub==2.2.0",
+    "scipy==1.18.1",
+    "pyarrow==26.0.1"
+  ],
+  "index": "https://download.pytorch.org/whl/cpu"
+}

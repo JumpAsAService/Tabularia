@@ -33,6 +33,13 @@ var (
 	url          = regexp.MustCompile(`^https?://[^\s"'\\]+\n?$`)
 	// a Debian package's name, as a recipe may name one
 	debianPackage = regexp.MustCompile(`^[a-z0-9][a-z0-9+.-]+$`)
+	sha256Hex     = regexp.MustCompile(`^[0-9a-f]{64}$`)
+	// where an image keeps the files it downloads: an absolute path of plain names (nothing a shell or a Dockerfile reads)
+	filePath = regexp.MustCompile(`^/[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$`)
+	// the line of a managed environment's packages that says which sizes of a pre-trained model its image holds
+	weightsLine = regexp.MustCompile(`(?m)^#[ \t]*tabularia:weights[ \t]+(\S+)[ \t]*$`)
+	// the architectures of BuildKit (TARGETARCH) and the machines (uname -m) a wheel is built for
+	machines = map[string]string{"x86_64": "amd64", "aarch64": "arm64"}
 )
 
 // ValueError is what script_builds raises for packages or settings that cannot become a
@@ -58,6 +65,45 @@ type Settings struct {
 	// Library of the customer lifetime group). Never taken from a user's input. None: the
 	// Dockerfile is the one every R image has had.
 	SystemLibraries []string
+	// Wheels: wheels a managed Python image installs by their address, before the requirements, each checked by its sha256
+	// (`pip install "<url>#sha256=<hex>"`); one RUN per machine, guarded by BuildKit's TARGETARCH, so that one Dockerfile
+	// serves x86_64 and aarch64. A recipe's `wheels`, the mirror setting already applied. None: the Dockerfile is the one
+	// every managed Python image has had.
+	Wheels []Wheel
+	// Files: files a managed Python image downloads (`ADD --checksum=sha256:<hex> <url> <path>`), after the requirements: the
+	// weights of a pre-trained model. The build fails on a different byte. A recipe's `weights` of the sizes chosen.
+	Files []File
+}
+
+// Wheel is a wheel of a recipe, for one machine (`uname -m`: x86_64 or aarch64).
+type Wheel struct {
+	Machine, URL, SHA256 string
+}
+
+// File is a file an image downloads while it is built: its address, its sha256 (hex) and the absolute path it lands at, readable
+// by the user the scripts run as.
+type File struct {
+	URL, SHA256, Path string
+}
+
+// WeightsSizes are the sizes a managed environment's packages text asks for in its `# tabularia:weights 5m,28m` line (docs/specs/
+// foundation-forecast.md, «Where the acceptance is kept, without a migration»); false when it has no such line, which the build
+// reads as every size the recipe holds. The package parser drops everything after a `#`, so the line changes no other build. The
+// sizes are as written, lower-cased and without repeats; the recipe says which of them exist.
+func WeightsSizes(packages string) ([]string, bool) {
+	m := weightsLine.FindStringSubmatch(packages)
+	if m == nil {
+		return nil, false
+	}
+	var out []string
+	seen := map[string]bool{}
+	for _, size := range strings.Split(strings.ToLower(m[1]), ",") {
+		if size = strings.TrimSpace(size); size != "" && !seen[size] {
+			seen[size] = true
+			out = append(out, size)
+		}
+	}
+	return out, true
 }
 
 func heredoc(path string, lines []string, mark string) string {
@@ -67,6 +113,61 @@ func heredoc(path string, lines []string, mark string) string {
 		sb.WriteString(x + "\n")
 	}
 	return sb.String() + mark + "\n"
+}
+
+// wheelSteps are the RUNs that install the recipe's wheels: one a machine, guarded by `ARG TARGETARCH` (BuildKit's: amd64, arm64)
+// so that the one Dockerfile builds for both; pip checks each file against its sha256 and takes none of its dependencies (the
+// recipe's packages are the closure, and `pip check` after them says what is missing).
+func wheelSteps(wheels []Wheel) (string, error) {
+	if len(wheels) == 0 {
+		return "", nil
+	}
+	var sb strings.Builder
+	sb.WriteString("ARG TARGETARCH\n")
+	for _, w := range wheels {
+		arch, ok := machines[w.Machine]
+		if !ok {
+			return "", ValueError(fmt.Sprintf("«%s» is not a machine a wheel is built for (x86_64 or aarch64)", w.Machine))
+		}
+		if !url.MatchString(w.URL) || strings.ContainsAny(w.URL, "#`$") {
+			return "", ValueError(fmt.Sprintf("«%s» is not the address of a wheel", w.URL))
+		}
+		if !sha256Hex.MatchString(w.SHA256) {
+			return "", ValueError(fmt.Sprintf("the sha256 of «%s» is not 64 hexadecimal digits", w.URL))
+		}
+		fmt.Fprintf(&sb, "RUN if [ \"$TARGETARCH\" = \"%s\" ]; then pip install --no-deps --only-binary=:all: \"%s#sha256=%s\"; fi\n", arch, strings.TrimSpace(w.URL), w.SHA256)
+	}
+	return sb.String(), nil
+}
+
+// fileSteps are the steps that download the recipe's files: the folders first (`mkdir -p`: an ADD with --chmod gives the folders it
+// creates the file's mode too, which has no x bit, and the user the scripts run as could not enter them), then one ADD a file, where
+// BuildKit fails the build on a byte that is not the sha256's, and the file is readable by that user (an ADD of an address is
+// owner-only by default).
+func fileSteps(files []File) (string, error) {
+	var dirs []string
+	var adds strings.Builder
+	seen := map[string]bool{}
+	for _, f := range files {
+		if !url.MatchString(f.URL) || strings.ContainsAny(f.URL, " `$") {
+			return "", ValueError(fmt.Sprintf("«%s» is not the address of a file", f.URL))
+		}
+		if !sha256Hex.MatchString(f.SHA256) {
+			return "", ValueError(fmt.Sprintf("the sha256 of «%s» is not 64 hexadecimal digits", f.URL))
+		}
+		if !filePath.MatchString(f.Path) {
+			return "", ValueError(fmt.Sprintf("«%s» is not a path an image can keep a file at", f.Path))
+		}
+		if dir := f.Path[:strings.LastIndex(f.Path, "/")]; dir != "" && !seen[dir] {
+			seen[dir] = true
+			dirs = append(dirs, dir)
+		}
+		fmt.Fprintf(&adds, "ADD --checksum=sha256:%s --chmod=0644 %s %s\n", f.SHA256, strings.TrimSpace(f.URL), f.Path)
+	}
+	if len(dirs) == 0 {
+		return "", nil
+	}
+	return "RUN mkdir -p " + strings.Join(dirs, " ") + "\n" + adds.String(), nil
 }
 
 // Dockerfile is script_builds.dockerfile: the image of `language` on `baseImage` with the
@@ -88,13 +189,21 @@ func Dockerfile(language, baseImage string, packages []string, s Settings) (stri
 			env += ` PIP_INDEX_URL="` + index + `"`
 		}
 		install := fmt.Sprintf("RUN MAKEFLAGS=-j%d pip install -r /opt/tabularia/requirements.txt\n", s.Jobs)
+		before, after := "", ""
 		if s.Managed {
 			// wheels only (nothing compiles), from PyPI or its mirror, without what the wheels
 			// ask for: the recipe is the closure, and pip check says what it lacks
 			install = "RUN pip install --no-deps --only-binary=:all: -r /opt/tabularia/requirements.txt && pip check\n"
+			var err error
+			if before, err = wheelSteps(s.Wheels); err != nil {
+				return "", err
+			}
+			if after, err = fileSteps(s.Files); err != nil {
+				return "", err
+			}
 		}
 		return "FROM " + baseImage + "\n" + env + "\n" +
-			heredoc("/opt/tabularia/requirements.txt", wanted, "TABULARIA_PACKAGES") + install + user, nil
+			heredoc("/opt/tabularia/requirements.txt", wanted, "TABULARIA_PACKAGES") + before + install + after + user, nil
 	}
 	cran := pyd.Strip(s.CRANURL)
 	if !url.MatchString(cran) {

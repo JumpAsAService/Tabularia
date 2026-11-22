@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -189,15 +190,24 @@ func (b *scriptBuilds) buildJobs() int64 {
 // holds only its recipe's packages and whose R image installs the system libraries its recipe names
 // (`system_libraries`); nil for every other environment, whose Dockerfile is what it has always been.
 // The system libraries are the recipe's this gateway ships: it builds only the versions queued with
-// that recipe (mgOfAnotherRelease), whose packages in the row are the same recipe's.
-func (b *scriptBuilds) dockerfile(language, baseImage string, packages []string, managedBy *string) (string, error) {
-	var systemLibraries []string
+// that recipe (mgOfAnotherRelease), whose packages in the row are the same recipe's. A group whose
+// recipe has wheels or weights (docs/specs/foundation-forecast.md) gets them too: the wheels, and the
+// weights of the sizes the version's packages text names in its `# tabularia:weights` line (every size
+// the recipe has when it has none), from the official hosts or from the mirrors of
+// MODELS__WHEELS_BASE_URL and MODELS__WEIGHTS_BASE_URL.
+func (b *scriptBuilds) dockerfile(language, baseImage string, packages []string, packagesText string, managedBy *string) (string, error) {
+	settings := scriptimage.Settings{
+		PyPIIndexURL: b.s.Scripts.PyPIIndexURL, CRANURL: b.s.Scripts.CRANURL, Jobs: b.buildJobs(), Managed: managedBy != nil}
 	if g, ok := modelgroups.Get(mgGroupOfManaged(managedBy)); ok {
-		systemLibraries = g.Recipe.SystemLibraries
+		settings.SystemLibraries = g.Recipe.SystemLibraries
+		build := modelgroups.Build{WheelsBaseURL: os.Getenv("MODELS__WHEELS_BASE_URL"), WeightsBaseURL: os.Getenv("MODELS__WEIGHTS_BASE_URL")}
+		build.Sizes, _ = scriptimage.WeightsSizes(packagesText)
+		var err error
+		if settings.Wheels, settings.Files, err = g.BuildInputs(build); err != nil {
+			return "", sbValueError(err.Error())
+		}
 	}
-	d, err := scriptimage.Dockerfile(language, baseImage, packages, scriptimage.Settings{
-		PyPIIndexURL: b.s.Scripts.PyPIIndexURL, CRANURL: b.s.Scripts.CRANURL, Jobs: b.buildJobs(), Managed: managedBy != nil,
-		SystemLibraries: systemLibraries})
+	d, err := scriptimage.Dockerfile(language, baseImage, packages, settings)
 	var bad scriptimage.ValueError
 	if errors.As(err, &bad) {
 		// a setting that cannot become a Dockerfile fails the version (advance), as before
@@ -307,7 +317,7 @@ func (b *scriptBuilds) buildJob(v *sbVersion, language string, managedBy *string
 	if err != nil {
 		return nil, err
 	}
-	dockerfile, err := b.dockerfile(language, v.BaseImage, packages, managedBy)
+	dockerfile, err := b.dockerfile(language, v.BaseImage, packages, v.Packages, managedBy)
 	if err != nil {
 		return nil, err
 	}

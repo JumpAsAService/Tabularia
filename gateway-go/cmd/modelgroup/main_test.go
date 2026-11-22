@@ -54,7 +54,7 @@ func TestTheSubcommands(t *testing.T) {
 		t.Errorf("a refused task: %v", err)
 	}
 	out.Reset()
-	if err := run([]string{"groups"}, &out); err != nil || strings.Count(out.String(), "\n") != 6 {
+	if err := run([]string{"groups"}, &out); err != nil || strings.Count(out.String(), "\n") != 7 {
 		t.Errorf("groups: %v\n%s", err, out.String())
 	}
 	// a Python group: its Dockerfile and its code, the library of its language only
@@ -75,6 +75,40 @@ func TestTheSubcommands(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(py, "common", "R")); err == nil {
 		t.Error("the R library in a Python group's code")
+	}
+	// the pre-trained forecasting group: its Dockerfile takes the sizes, before or after the group's name, and the mirrors
+	for _, args := range [][]string{{"dockerfile", "foundation_forecast", "--sizes", "28m,5m"}, {"dockerfile", "--sizes=28m,5m", "foundation_forecast"}} {
+		out.Reset()
+		if err := run(args, &out); err != nil || strings.Count(out.String(), "ADD --checksum=") != 6 || strings.Contains(out.String(), "Timestral-123M") ||
+			!strings.Contains(out.String(), "ARG TARGETARCH\n") || !strings.Contains(out.String(), "https://huggingface.co/mistralai/Timestral-28M/resolve/") {
+			t.Errorf("dockerfile foundation_forecast %v: %v\n%s", args, err, out.String())
+		}
+	}
+	out.Reset()
+	if err := run([]string{"dockerfile", "foundation_forecast"}, &out); err != nil || strings.Count(out.String(), "ADD --checksum=") != 12 {
+		t.Errorf("every size when none is asked for: %v\n%s", err, out.String())
+	}
+	out.Reset()
+	if err := run([]string{"dockerfile", "foundation_forecast", "--sizes", "5m", "--weights-base-url", "https://hub.example/", "--wheels-base-url", "https://pt.example/cpu"}, &out); err != nil ||
+		!strings.Contains(out.String(), "https://hub.example/mistralai/Timestral-5M/resolve/") || !strings.Contains(out.String(), `"https://pt.example/cpu/torch-2.14.1%2Bcpu-`) ||
+		strings.Contains(out.String(), "huggingface.co") {
+		t.Errorf("mirrors: %v\n%s", err, out.String())
+	}
+	// the code of the group: the runner, the vendored package with its __init__.py, the library of its language
+	fcode := filepath.Join(dir, "ff")
+	if err := run([]string{"code", "foundation_forecast", fcode}, &out); err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range []string{"runner/run.py", "runner/py/ff_timestral.py", "runner/py/timestral/__init__.py", "runner/py/timestral/NOTICE",
+		"runner/py/timestral/LICENSE", "runner/py/timestral/vendor.json", "common/py/tab_main.py", "reference/expected.json"} {
+		if _, err := os.Stat(filepath.Join(fcode, f)); err != nil {
+			t.Errorf("no %s: %v", f, err)
+		}
+	}
+	for _, bad := range [][]string{{"dockerfile", "foundation_forecast", "--sizes", "7m"}, {"dockerfile", "boosting", "--sizes", "28m"}, {"dockerfile", "foundation_forecast", "extra"}} {
+		if err := run(bad, &out); err == nil {
+			t.Errorf("%v: no error", bad)
+		}
 	}
 	for _, bad := range [][]string{{}, {"nope"}, {"dockerfile"}, {"dockerfile", "nope"}, {"code", "nope", dir}} {
 		if err := run(bad, &out); err == nil {

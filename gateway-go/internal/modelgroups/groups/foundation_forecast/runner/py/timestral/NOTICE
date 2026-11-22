@@ -1,0 +1,16 @@
+Timestral (the inference package `timestral`, version 1.0.0)
+Copyright 2026 Mistral AI
+https://github.com/mistralai/timestral, commit a534bdbd244d64f3d9d743f46c7bf6fc330ed4ff (2026-10-15)
+
+This directory holds the nine Python files of src/timestral/ at that commit, under the Apache License,
+Version 2.0 (the file LICENSE beside this one).
+
+Modified by Tabularia: the import of huggingface_hub moved into resolve_checkpoint (loading.py); nothing else
+changed. A comment above the moved import says so. The modification lets a local directory of weights be
+loaded without huggingface_hub installed.
+
+vendor.json holds, for each file, its sha256 at the commit and the sha256 of the file as it is here; a test
+compares the files with those hashes.
+
+The weights are not part of this package, nor of Tabularia: they are Mistral AI's, under their own licence
+(the Modified MIT License), downloaded by the group's image build from Mistral AI's repositories.

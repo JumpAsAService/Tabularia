@@ -1,0 +1,46 @@
+{
+  "about": "The vendored inference package: where it comes from and the hash of each file, at the commit and as vendored (the only difference is loading.py's moved import, said in NOTICE). Never edit a file here without changing this one: a test compares them.",
+  "source": "https://github.com/mistralai/timestral",
+  "commit": "a534bdbd244d64f3d9d743f46c7bf6fc330ed4ff",
+  "package": "timestral",
+  "version": "1.0.0",
+  "licence": "Apache-2.0",
+  "files": {
+    "__init__.py": {
+      "upstream_sha256": "46777bcb15b903f7721a3d6d91a6cb93463fc454816da238799eb8d5360e5ab5",
+      "sha256": "46777bcb15b903f7721a3d6d91a6cb93463fc454816da238799eb8d5360e5ab5"
+    },
+    "config.py": {
+      "upstream_sha256": "d46e37020875c536e7a75e1b6ace3f67419ba2f2c9d9e8465f4b07f837e92ed6",
+      "sha256": "d46e37020875c536e7a75e1b6ace3f67419ba2f2c9d9e8465f4b07f837e92ed6"
+    },
+    "covariate_encoding.py": {
+      "upstream_sha256": "1c7f5c320fa4b7622d3705f765f53ab9676b829cb1d4fd68f839ec593b8404c0",
+      "sha256": "1c7f5c320fa4b7622d3705f765f53ab9676b829cb1d4fd68f839ec593b8404c0"
+    },
+    "forecaster.py": {
+      "upstream_sha256": "12a712f9be777d1e160513b7f8c81d545b991fcfe6cd4a46004a03533b7cb8fd",
+      "sha256": "12a712f9be777d1e160513b7f8c81d545b991fcfe6cd4a46004a03533b7cb8fd"
+    },
+    "layers.py": {
+      "upstream_sha256": "480ba93e7e3681dea185e5fa08a96dcce327cf938931c715ae54e6b02934527d",
+      "sha256": "480ba93e7e3681dea185e5fa08a96dcce327cf938931c715ae54e6b02934527d"
+    },
+    "loading.py": {
+      "upstream_sha256": "179257fa74e798c207887e2fed162e9a2fef9c37cadadb9437fabfeae68b3d6f",
+      "sha256": "8fe928e9fe133dae31b8f41524ce5d37a8f49e4ea4a04d00d89b65acfc1b0164"
+    },
+    "masks.py": {
+      "upstream_sha256": "1792898d809b99034bb70e2cc1ab74f897ce8478886f83140e705fc67e6762b3",
+      "sha256": "1792898d809b99034bb70e2cc1ab74f897ce8478886f83140e705fc67e6762b3"
+    },
+    "model.py": {
+      "upstream_sha256": "988121c6a089e843c4941732cbc5c64b10cb0eccd9310e228abe38ecf2dfb668",
+      "sha256": "988121c6a089e843c4941732cbc5c64b10cb0eccd9310e228abe38ecf2dfb668"
+    },
+    "scaler.py": {
+      "upstream_sha256": "838da836f70b1640bcaed7701a70a1a358e30442693e63522a93f878e157a8ca",
+      "sha256": "838da836f70b1640bcaed7701a70a1a358e30442693e63522a93f878e157a8ca"
+    }
+  }
+}

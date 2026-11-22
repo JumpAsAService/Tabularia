@@ -42,6 +42,14 @@ func mgCheckScript(language string) string { return mgCheckScriptWith(language, 
 // `set -e` does not stop the check (and the self-test) on a missing record; the card then shows
 // the library without a version.
 func mgCheckScriptWith(language string, systemLibraries bool) string {
+	return mgCheckScriptFor(language, systemLibraries, nil, modelgroups.WeightsDir)
+}
+
+// mgCheckScriptFor is mgCheckScriptWith for a group that may also hold weights: with `weights`, the check recomputes the sha256 of every
+// file of every size the image holds (`dir`/<size>/…) and stops on a difference (a second check, after the build's own: the image is
+// what the recipe says, byte for byte, before the self-test loads it), and the lock gets one `weights-<size>@<sha256>` line a size, the
+// sizes the image holds. `dir` is /opt/tabularia/weights (a test points it elsewhere).
+func mgCheckScriptFor(language string, systemLibraries bool, weights *modelgroups.Weights, dir string) string {
 	check := `Rscript -e "$TABULARIA_R_CHECK"`
 	if language == "python" {
 		check = `python -I -c "$TABULARIA_PY_MANAGED_CHECK"`
@@ -51,11 +59,55 @@ func mgCheckScriptWith(language string, systemLibraries bool) string {
 		f := scriptimage.SystemLibrariesFile
 		check += "\n[ -f " + f + " ] && cat " + f + " || true"
 	}
+	if weights != nil {
+		check += "\n" + mgWeightsCheck(weights, dir)
+	}
 	return "set -e\n" + check + "\n" +
 		"echo\n" +
 		"echo " + mgSelftestMark + "\n" +
 		"cd " + modelgroups.CodeDir + "\n" +
 		strings.Join(selftest, " ") + "\n"
+}
+
+// mgWeightsCheck is the part of a check Job's script that checks the weights of the image: for each size present under dir, each
+// file's sha256 against the recipe's (all three: the LICENSE is the text the administrator accepted, byte for byte), then the lock's line
+// of the size. A size the recipe does not have, an empty folder or a different byte stops the check, with a sentence in the log. Every
+// value comes from the recipe (validated: hexadecimal digits and the names of a size and its files), never from the data.
+func mgWeightsCheck(w *modelgroups.Weights, dir string) string {
+	var sizes []string
+	for _, size := range modelgroups.WeightSizes {
+		if _, ok := w.Sizes[size]; ok {
+			sizes = append(sizes, size)
+		}
+	}
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "[ -n \"$(ls %s)\" ] || { echo \"the image holds no weights\" >&2; exit 1; }\n", dir)
+	fmt.Fprintf(&sb, "for s in $(ls %s); do\n  case \"$s\" in\n", dir)
+	for _, size := range sizes {
+		fmt.Fprintf(&sb, "    %s) wanted=\"", size)
+		for i, name := range modelgroups.WeightFiles {
+			if i > 0 {
+				sb.WriteString(" ")
+			}
+			fmt.Fprintf(&sb, "%s:%s", name, w.Sizes[size].Files[name].SHA256)
+		}
+		sb.WriteString("\";;\n")
+	}
+	sb.WriteString("    *) echo \"the weights of size $s are not in the recipe\" >&2; exit 1;;\n  esac\n")
+	fmt.Fprintf(&sb, "  for f in $wanted; do\n    name=${f%%%%:*}; want=${f#*:}\n"+
+		"    got=$(sha256sum %s/$s/$name | cut -d' ' -f1)\n"+
+		"    [ \"$got\" = \"$want\" ] || { echo \"weights $s/$name: sha256 $got, the recipe says $want\" >&2; exit 1; }\n"+
+		"    [ \"$name\" != model.safetensors ] || echo \"weights-$s@$got\"\n  done\ndone", dir)
+	return sb.String()
+}
+
+// mgCheckScriptOf is the check's script of a group: the language's, with its system libraries and its weights when its recipe has them.
+func mgCheckScriptOf(group, language string) string {
+	var weights *modelgroups.Weights
+	if g, ok := modelgroups.Get(group); ok {
+		weights = g.Recipe.Weights
+	}
+	return mgCheckScriptFor(language, hasSystemLibraries(group), weights, modelgroups.WeightsDir)
 }
 
 // hasSystemLibraries says whether the group's recipe names system libraries (its image records them).
@@ -123,7 +175,7 @@ func (b *scriptBuilds) managedCheckJob(v *sbVersion, env *sbEnvironment, group s
 		environment = append(environment, pyjson.Object{{Key: "name", Value: "TABULARIA_R_CHECK"}, {Key: "value", Value: sbRCheck}})
 	}
 	container := pyjson.Object{
-		{Key: "name", Value: "check"}, {Key: "image", Value: image}, {Key: "command", Value: []any{"sh", "-c", mgCheckScriptWith(language, hasSystemLibraries(group))}},
+		{Key: "name", Value: "check"}, {Key: "image", Value: image}, {Key: "command", Value: []any{"sh", "-c", mgCheckScriptOf(group, language)}},
 		{Key: "workingDir", Value: modelgroups.CodeDir},
 		{Key: "env", Value: environment},
 		{Key: "resources", Value: pyjson.Object{

@@ -1,6 +1,8 @@
 package modelgroups
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io/fs"
@@ -25,7 +27,7 @@ var pinned = map[string]*regexp.Regexp{
 
 func TestEveryGroupOfTheCatalogueHasARecipeAndARunner(t *testing.T) {
 	groups := Groups()
-	if len(groups) != len(modelcatalog.Groups()) || len(groups) != 6 {
+	if len(groups) != len(modelcatalog.Groups()) || len(groups) != 7 {
 		t.Fatalf("groups: %d", len(groups))
 	}
 	for _, g := range groups {
@@ -103,8 +105,14 @@ func TestEveryGroupOfTheCatalogueHasARecipeAndARunner(t *testing.T) {
 				if !strings.Contains(run, `"`+m+`": {"fit": `) {
 					t.Errorf("%s: run.py has no route for %s", g.ID, m)
 				}
-				if !paths["runner/py/"+g.ID+"_"+m+".py"] || paths["runner/py/"+m+".py"] {
-					t.Errorf("%s: runner/py/%s_%s.py, never runner/py/%s.py", g.ID, g.ID, m, m)
+				// the foundation forecast's own module is runner/py/ff_<model>.py (its package, `timestral`, is vendored beside it:
+				// a module never has the package's name)
+				module := "runner/py/" + g.ID + "_" + m + ".py"
+				if g.ID == "foundation_forecast" {
+					module = "runner/py/ff_" + m + ".py"
+				}
+				if !paths[module] || paths["runner/py/"+m+".py"] {
+					t.Errorf("%s: %s, never runner/py/%s.py", g.ID, module, m)
 				}
 			}
 		}
@@ -385,6 +393,7 @@ func TestTheRLibrarySpeaksTheSameProtocol(t *testing.T) {
 // //go:embed leaves out the files and folders whose name starts with «_» or «.»: none may be in
 // a runner or a library, and every file of them in the source tree is among the Job's files.
 func TestEveryFileOfTheSourceTreeIsInTheJobsCode(t *testing.T) {
+	vendoredPackage := "groups/foundation_forecast/runner/py/timestral"
 	for _, g := range Groups() {
 		code, err := CodeFiles(g.ID, nil, false)
 		if err != nil {
@@ -404,7 +413,8 @@ func TestEveryFileOfTheSourceTreeIsInTheJobsCode(t *testing.T) {
 				if d.Name() == "__pycache__" && d.IsDir() {
 					return filepath.SkipDir // bytecode of a local run, never shipped
 				}
-				if strings.HasPrefix(d.Name(), "_") || strings.HasPrefix(d.Name(), ".") {
+				// the vendored package alone is embedded with the `all:` prefix: its `__init__.py` is in the Job's files
+				if (strings.HasPrefix(d.Name(), "_") || strings.HasPrefix(d.Name(), ".")) && !strings.HasPrefix(filepath.ToSlash(p), vendoredPackage+"/") {
 					t.Errorf("%s: %s starts with «_» or «.»: //go:embed leaves it out", g.ID, p)
 				}
 				if d.IsDir() {
@@ -512,5 +522,272 @@ func TestSwapIsAnotherReleaseUntilRestored(t *testing.T) {
 	restore()
 	if g, _ := Get("timeseries"); !reflect.DeepEqual(g, before) {
 		t.Errorf("not restored: %s", g.RecipeHash)
+	}
+}
+
+// ── the foundation forecast group: wheels, weights, the vendored package (docs/specs/foundation-forecast.md) ──────────────────────
+
+func TestTheFoundationForecastRecipe(t *testing.T) {
+	g, ok := Get("foundation_forecast")
+	if !ok || g.Recipe.Language != "python" || g.Recipe.Base != "3.14" || strings.Join(g.Models, ",") != "timestral" {
+		t.Fatalf("the group: %+v", g)
+	}
+	r := g.Recipe
+	// torch's CPU build by its address and its sha256, for the two machines; no CUDA package among the packages
+	if len(r.Wheels) != 2 || r.Wheels[0].Machine != "x86_64" || r.Wheels[1].Machine != "aarch64" {
+		t.Fatalf("the wheels: %+v", r.Wheels)
+	}
+	for _, w := range r.Wheels {
+		if w.Name != "torch" || w.Version != "2.14.1+cpu" || !strings.HasPrefix(w.URL, OfficialWheelsBaseURL+"torch-2.14.1%2Bcpu-cp314-cp314-manylinux_2_28_"+w.Machine+".whl") {
+			t.Errorf("the wheel: %+v", w)
+		}
+	}
+	for _, p := range r.Packages {
+		if strings.HasPrefix(p, "torch") || strings.HasPrefix(p, "nvidia") || strings.HasPrefix(p, "triton") || strings.HasPrefix(p, "huggingface") ||
+			strings.HasPrefix(p, "scipy") || strings.HasPrefix(p, "statsmodels") {
+			t.Errorf("%s is no package of this recipe", p)
+		}
+	}
+	// the weights: four sizes at the revisions of the spec, each with its three files, the LICENSE of each the licence's text
+	w := r.Weights
+	if w == nil || w.Licence.SHA256 != "648194727930df730890e9f9affdbcc5c930d406d6829559b25ca3d5a973fc8c" || w.Licence.Text != "licence/LICENSE.txt" {
+		t.Fatalf("the weights: %+v", w)
+	}
+	want := map[string][3]string{
+		"5m":   {"mistralai/Timestral-5M", "bdd20cfc15a3fea0e4cb5ccef37f8d3ca7aa335f", "7ace108c4987e7f2a99a75a445240019d1d31c2117139d1bd05ffdfd25aca738"},
+		"28m":  {"mistralai/Timestral-28M", "49b26409ac87b5935539a5d8ffe7f397b720db47", "dfc83c6220937ce5fc6687b35a4df94cd25e28a2cfe6fb92a23dad6301b2015d"},
+		"123m": {"mistralai/Timestral-123M", "5a147287addda85f6acd8da3fb8858fe9af7e8f7", "599fafa73cadbbc800b5a346ca900fa741ee3e5fd22e3b4a4430e151e74f4bc2"},
+		"209m": {"mistralai/Timestral-209M", "9874d252ab0aae16f7f7c999f98f98d6ad7d8365", "1456effb9927e3daa8c7234f10497e3424233869245a9c72b8ecebaf7ad2b7fa"},
+	}
+	bytes := map[string]int64{"5m": 20843960, "28m": 111296464, "123m": 490445904, "209m": 837271648}
+	if len(w.Sizes) != 4 {
+		t.Fatalf("sizes: %v", w.Sizes)
+	}
+	for size, x := range want {
+		got := w.Sizes[size]
+		if got.Repo != x[0] || got.Revision != x[1] || got.Files["model.safetensors"].SHA256 != x[2] || got.Files["model.safetensors"].Bytes != bytes[size] ||
+			got.Files["LICENSE"].SHA256 != w.Licence.SHA256 || got.Files["LICENSE"].Bytes != 1695 {
+			t.Errorf("%s: %+v", size, got)
+		}
+	}
+}
+
+// checkDownloads refuses a recipe that names a download it cannot check: each failure is one sentence.
+func TestARecipeThatDownloadsIsChecked(t *testing.T) {
+	g, _ := Get("foundation_forecast")
+	clone := func() Recipe {
+		raw, err := files.ReadFile("groups/foundation_forecast/recipe.json")
+		if err != nil {
+			t.Fatal(err)
+		}
+		var r Recipe
+		if err := json.Unmarshal(raw, &r); err != nil {
+			t.Fatal(err)
+		}
+		return r
+	}
+	if err := clone().checkDownloads(g.ID); err != nil {
+		t.Fatal(err)
+	}
+	for what, mutate := range map[string]func(r *Recipe){
+		"an R image":            func(r *Recipe) { r.Language = "r" },
+		"a wheel over http":     func(r *Recipe) { r.Wheels[0].URL = strings.Replace(r.Wheels[0].URL, "https://", "http://", 1) },
+		"a wheel with a hash":   func(r *Recipe) { r.Wheels[0].URL += "#sha256=" + r.Wheels[0].SHA256 },
+		"a wheel's sha256":      func(r *Recipe) { r.Wheels[0].SHA256 = r.Wheels[0].SHA256[:63] },
+		"a wheel's machine":     func(r *Recipe) { r.Wheels[0].Machine = "riscv64" },
+		"a wheel of the other":  func(r *Recipe) { r.Wheels[1].Machine = "x86_64" },
+		"a wheel given twice":   func(r *Recipe) { r.Wheels = append(r.Wheels, r.Wheels[0]) },
+		"a size":                func(r *Recipe) { r.Weights.Sizes["7m"] = r.Weights.Sizes["5m"] },
+		"a revision that moves": func(r *Recipe) { x := r.Weights.Sizes["5m"]; x.Revision = "main"; r.Weights.Sizes["5m"] = x },
+		"a repository":          func(r *Recipe) { x := r.Weights.Sizes["5m"]; x.Repo = "Timestral-5M"; r.Weights.Sizes["5m"] = x },
+		"a file's sha256": func(r *Recipe) {
+			x := r.Weights.Sizes["5m"]
+			x.Files = map[string]WeightFile{"model.safetensors": {Bytes: 1, SHA256: "nope"}, "config.json": x.Files["config.json"], "LICENSE": x.Files["LICENSE"]}
+			r.Weights.Sizes["5m"] = x
+		},
+		"a file the group does not know": func(r *Recipe) {
+			x := r.Weights.Sizes["5m"]
+			x.Files = map[string]WeightFile{"model.safetensors": x.Files["model.safetensors"], "config.json": x.Files["config.json"],
+				"LICENSE": x.Files["LICENSE"], "pytorch_model.bin": {Bytes: 1, SHA256: x.Files["LICENSE"].SHA256}}
+			r.Weights.Sizes["5m"] = x
+		},
+		"a licence sha256 that is not the text's": func(r *Recipe) { r.Weights.Licence.SHA256 = r.Weights.Sizes["5m"].Files["config.json"].SHA256 },
+		"a LICENSE that is not the licence's": func(r *Recipe) {
+			x := r.Weights.Sizes["5m"]
+			x.Files = map[string]WeightFile{"model.safetensors": x.Files["model.safetensors"], "config.json": x.Files["config.json"],
+				"LICENSE": x.Files["config.json"]}
+			r.Weights.Sizes["5m"] = x
+		},
+		"a licence text that is not shipped": func(r *Recipe) { r.Weights.Licence.Text = "licence/nope.txt" },
+		"no size":                            func(r *Recipe) { r.Weights.Sizes = map[string]WeightSize{} },
+	} {
+		r := clone()
+		mutate(&r)
+		if err := r.checkDownloads(g.ID); err == nil {
+			t.Errorf("%s: no error", what)
+		}
+	}
+}
+
+// The Dockerfile of the foundation forecast group: torch's wheels by address and checksum, the packages, the weights of the sizes
+// asked for downloaded and checked (every size when none is asked for), the mirrors; and every other group's Dockerfile is what the
+// scripting machinery makes of its recipe, with nothing more.
+func TestTheFoundationForecastDockerfile(t *testing.T) {
+	s := scriptimage.Settings{Jobs: 2}
+	d, err := Dockerfile("foundation_forecast", scriptcfg.DefaultBaseImages, s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"FROM python:3.14-slim\n", "ARG TARGETARCH\n",
+		`RUN if [ "$TARGETARCH" = "amd64" ]; then pip install --no-deps --only-binary=:all: "https://download.pytorch.org/whl/cpu/torch-2.14.1%2Bcpu-cp314-cp314-manylinux_2_28_x86_64.whl#sha256=35103e180214793207f95d7e12e100ecba3ace6f5fb37e1fcefbb07e096ed180"; fi` + "\n",
+		`RUN if [ "$TARGETARCH" = "arm64" ]; then pip install --no-deps --only-binary=:all: "https://download.pytorch.org/whl/cpu/torch-2.14.1%2Bcpu-cp314-cp314-manylinux_2_28_aarch64.whl#sha256=f56cd23a3bf003bfbed3da0645ba09b3ccc66c0a2f2ac726a9b98f34e0e4926f"; fi` + "\n",
+		"RUN pip install --no-deps --only-binary=:all: -r /opt/tabularia/requirements.txt && pip check\n",
+		"ADD --checksum=sha256:dfc83c6220937ce5fc6687b35a4df94cd25e28a2cfe6fb92a23dad6301b2015d --chmod=0644 https://huggingface.co/mistralai/Timestral-28M/resolve/49b26409ac87b5935539a5d8ffe7f397b720db47/model.safetensors /opt/tabularia/weights/28m/model.safetensors\n",
+		"ADD --checksum=sha256:648194727930df730890e9f9affdbcc5c930d406d6829559b25ca3d5a973fc8c --chmod=0644 https://huggingface.co/mistralai/Timestral-5M/resolve/bdd20cfc15a3fea0e4cb5ccef37f8d3ca7aa335f/LICENSE /opt/tabularia/weights/5m/LICENSE\n",
+		"\nnumpy==2.5.5\n", "USER 10001\n"} {
+		if !strings.Contains(d, want) {
+			t.Errorf("no %q in\n%s", want, d)
+		}
+	}
+	// the folders exist, with the mode of a folder, before the files are added (an ADD with --chmod would give them the file's)
+	if !strings.Contains(d, "RUN mkdir -p /opt/tabularia/weights/5m /opt/tabularia/weights/28m /opt/tabularia/weights/123m /opt/tabularia/weights/209m\nADD --checksum=") {
+		t.Errorf("the folders of the weights are not made before the files:\n%s", d)
+	}
+	if n := strings.Count(d, "ADD --checksum="); n != 12 {
+		t.Errorf("%d downloads: every size has three files", n)
+	}
+	// the order: the wheels, the requirements, the weights, the user
+	order := []string{"ARG TARGETARCH", "pip install --no-deps --only-binary=:all: -r", "ADD --checksum", "USER 10001"}
+	at := -1
+	for _, mark := range order {
+		i := strings.Index(d, mark)
+		if i <= at {
+			t.Errorf("%q is not after the step before it", mark)
+		}
+		at = i
+	}
+	// the sizes of a version: its line says them, the recipe's order is kept whatever the line's
+	two, err := DockerfileFor("foundation_forecast", scriptcfg.DefaultBaseImages, s, Build{Sizes: []string{"28m", "5m"}})
+	if err != nil || strings.Count(two, "ADD --checksum=") != 6 || strings.Contains(two, "Timestral-123M") || strings.Contains(two, "Timestral-209M") {
+		t.Errorf("two sizes: %v\n%s", err, two)
+	}
+	for _, bad := range [][]string{{"7m"}, {"28m", "28m"}, {"28M"}} {
+		if _, err := DockerfileFor("foundation_forecast", scriptcfg.DefaultBaseImages, s, Build{Sizes: bad}); err == nil {
+			t.Errorf("sizes %v: no error", bad)
+		}
+	}
+	// the mirrors replace the hosts and keep the paths, the file names and the checksums
+	m, err := DockerfileFor("foundation_forecast", scriptcfg.DefaultBaseImages, s,
+		Build{Sizes: []string{"5m"}, WheelsBaseURL: "https://mirror.example/torch", WeightsBaseURL: "https://hub.mirror.example/"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`"https://mirror.example/torch/torch-2.14.1%2Bcpu-cp314-cp314-manylinux_2_28_x86_64.whl#sha256=35103e18`,
+		"--chmod=0644 https://hub.mirror.example/mistralai/Timestral-5M/resolve/bdd20cfc15a3fea0e4cb5ccef37f8d3ca7aa335f/model.safetensors /opt/tabularia/weights/5m/model.safetensors\n"} {
+		if !strings.Contains(m, want) {
+			t.Errorf("no %q in\n%s", want, m)
+		}
+	}
+	if strings.Contains(m, "download.pytorch.org") || strings.Contains(m, "huggingface.co") {
+		t.Errorf("an official host with a mirror:\n%s", m)
+	}
+	// every other group: what the scripting machinery makes of its recipe, nothing more (no wheel, no file, no ARG)
+	for _, other := range Groups() {
+		if other.ID == "foundation_forecast" {
+			continue
+		}
+		got, err := Dockerfile(other.ID, scriptcfg.DefaultBaseImages, scriptimage.Settings{CRANURL: "https://cran.r-project.org", Jobs: 2})
+		if err != nil {
+			t.Fatal(err)
+		}
+		base, _ := BaseImage(other.Recipe, scriptcfg.DefaultBaseImages)
+		want, _ := scriptimage.Dockerfile(other.Recipe.Language, base, other.Recipe.Packages,
+			scriptimage.Settings{CRANURL: "https://cran.r-project.org", Jobs: 2, Managed: true, SystemLibraries: other.Recipe.SystemLibraries})
+		if got != want || strings.Contains(got, "TARGETARCH") || strings.Contains(got, "ADD --checksum") || len(other.Recipe.Wheels) != 0 || other.Recipe.Weights != nil {
+			t.Errorf("%s: its Dockerfile changed", other.ID)
+		}
+		if w, f, err := other.BuildInputs(Build{}); err != nil || len(f) != 0 || len(w) != 0 {
+			t.Errorf("%s: build inputs %v %v %v", other.ID, w, f, err)
+		}
+		if _, _, err := other.BuildInputs(Build{Sizes: []string{"28m"}}); err == nil {
+			t.Errorf("%s: sizes of no weights", other.ID)
+		}
+	}
+}
+
+// The vendored package: the nine files of the commit named in vendor.json, byte for byte but for the one moved import of loading.py, whose
+// hash is the patched one's; with Mistral AI's LICENSE and the NOTICE that says what was changed (Apache 2.0, §4).
+func TestTheVendoredTimestralPackageIsTheCommitsButForOneImport(t *testing.T) {
+	const dir = "groups/foundation_forecast/runner/py/timestral/"
+	raw, err := files.ReadFile(dir + "vendor.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var v struct {
+		Source, Commit, Package, Version, Licence string
+		Files                                     map[string]struct{ Upstream_sha256, Sha256 string }
+	}
+	if err := json.Unmarshal(raw, &v); err != nil {
+		t.Fatal(err)
+	}
+	if v.Commit != "a534bdbd244d64f3d9d743f46c7bf6fc330ed4ff" || v.Version != "1.0.0" || v.Licence != "Apache-2.0" || len(v.Files) != 9 {
+		t.Fatalf("vendor.json: %+v", v)
+	}
+	for name, h := range v.Files {
+		b, err := files.ReadFile(dir + name)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if sum := sha256.Sum256(b); hex.EncodeToString(sum[:]) != h.Sha256 {
+			t.Errorf("%s is not the file vendor.json hashes", name)
+		}
+		// the files are the commit's, but loading.py
+		if (h.Upstream_sha256 == h.Sha256) == (name == "loading.py") {
+			t.Errorf("%s: upstream %s, vendored %s", name, h.Upstream_sha256, h.Sha256)
+		}
+	}
+	loading, _ := files.ReadFile(dir + "loading.py")
+	head, _, _ := strings.Cut(string(loading), "def resolve_checkpoint")
+	if strings.Contains(head, "huggingface_hub") || !strings.Contains(string(loading), "    from huggingface_hub import snapshot_download\n") {
+		t.Errorf("loading.py imports huggingface_hub at the top of the module:\n%s", head)
+	}
+	notice, _ := files.ReadFile(dir + "NOTICE")
+	if !strings.Contains(string(notice), "Modified by Tabularia: the import of huggingface_hub moved into resolve_checkpoint") {
+		t.Error("NOTICE does not say the change")
+	}
+	licence, _ := files.ReadFile(dir + "LICENSE")
+	if sum := sha256.Sum256(licence); hex.EncodeToString(sum[:]) != "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30" {
+		t.Error("LICENSE is not Mistral AI's Apache 2.0 text")
+	}
+	// the other files of the package carry no import of the Hub: only loading.py ever did
+	for name := range v.Files {
+		if name == "loading.py" {
+			continue
+		}
+		b, _ := files.ReadFile(dir + name)
+		if strings.Contains(string(b), "huggingface_hub") {
+			t.Errorf("%s imports huggingface_hub", name)
+		}
+	}
+}
+
+// The node's task: the forecast is the output the next step receives (`quantile_forecast`), written only when a node follows; the
+// results table is the node's own. Nothing is registered: the card is the catalogue's `card: false`.
+func TestTheFoundationForecastTask(t *testing.T) {
+	g, _ := Get("foundation_forecast")
+	params := map[string]any{"time": "day", "value": "orders", "frequency": "day", "series": "channel"}
+	task, err := FitTask("timestral", params, true, 0)
+	if err != nil || task.Group != "foundation_forecast" || task.Variant != "default" || task.Output != "quantile_forecast" || !task.WriteOutput ||
+		task.RecipeHash != g.RecipeHash || task.Limits["max_series"] != 10_000 || task.Limits["max_foundation_horizon"] != 1024 {
+		t.Errorf("the task: %+v %v", task, err)
+	}
+	if task, err := FitTask("timestral", params, false, 0); err != nil || task.WriteOutput {
+		t.Errorf("no node after it: %+v %v", task, err)
+	}
+	if task, err := FitTask("timestral", map[string]any{"time": "day", "value": "orders", "frequency": "day", "output": "results"}, true, 0); err != nil || task.WriteOutput || task.Output != "results" {
+		t.Errorf("the results table: %+v %v", task, err)
+	}
+	if _, err := FitTask("timestral", map[string]any{"time": "day", "value": "orders"}, true, 0); err == nil || err.Error() != "timestral: 'frequency' is required" {
+		t.Errorf("a refusal of the catalogue: %v", err)
 	}
 }

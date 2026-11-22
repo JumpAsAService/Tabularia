@@ -127,3 +127,94 @@ func TestAManagedPythonImage(t *testing.T) {
 		}
 	}
 }
+
+// A managed Python image with wheels and files (docs/specs/foundation-forecast.md, «Changes to the machinery»): the wheels of both
+// machines in one Dockerfile, each guarded by BuildKit's TARGETARCH and checked by its sha256, before the requirements; the files
+// downloaded and checked after them; and, with neither, the very Dockerfile every managed Python image had.
+func TestAManagedPythonImageWithWheelsAndFiles(t *testing.T) {
+	const sum = "35103e180214793207f95d7e12e100ecba3ace6f5fb37e1fcefbb07e096ed180"
+	const sum2 = "f56cd23a3bf003bfbed3da0645ba09b3ccc66c0a2f2ac726a9b98f34e0e4926f"
+	plain, err := Dockerfile("python", "python:3.14-slim", []string{"numpy==2.5.5"}, Settings{Jobs: 2, Managed: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := Settings{Jobs: 2, Managed: true,
+		Wheels: []Wheel{{"x86_64", "https://torch.example/whl/torch-2.14.1%2Bcpu-cp314-x86_64.whl", sum},
+			{"aarch64", "https://torch.example/whl/torch-2.14.1%2Bcpu-cp314-aarch64.whl", sum2}},
+		Files: []File{{"https://hub.example/org/m/resolve/abc/model.safetensors", sum, "/opt/tabularia/weights/28m/model.safetensors"},
+			{"https://hub.example/org/m/resolve/abc/LICENSE", sum2, "/opt/tabularia/weights/28m/LICENSE"}}}
+	d, err := Dockerfile("python", "python:3.14-slim", []string{"numpy==2.5.5"}, s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "FROM python:3.14-slim\n" + strings.SplitN(plain, "\n", 3)[1] + "\n" +
+		"COPY <<'TABULARIA_PACKAGES' /opt/tabularia/requirements.txt\nnumpy==2.5.5\nTABULARIA_PACKAGES\n" +
+		"ARG TARGETARCH\n" +
+		"RUN if [ \"$TARGETARCH\" = \"amd64\" ]; then pip install --no-deps --only-binary=:all: \"https://torch.example/whl/torch-2.14.1%2Bcpu-cp314-x86_64.whl#sha256=" + sum + "\"; fi\n" +
+		"RUN if [ \"$TARGETARCH\" = \"arm64\" ]; then pip install --no-deps --only-binary=:all: \"https://torch.example/whl/torch-2.14.1%2Bcpu-cp314-aarch64.whl#sha256=" + sum2 + "\"; fi\n" +
+		"RUN pip install --no-deps --only-binary=:all: -r /opt/tabularia/requirements.txt && pip check\n" +
+		"RUN mkdir -p /opt/tabularia/weights/28m\n" +
+		"ADD --checksum=sha256:" + sum + " --chmod=0644 https://hub.example/org/m/resolve/abc/model.safetensors /opt/tabularia/weights/28m/model.safetensors\n" +
+		"ADD --checksum=sha256:" + sum2 + " --chmod=0644 https://hub.example/org/m/resolve/abc/LICENSE /opt/tabularia/weights/28m/LICENSE\n" +
+		"RUN useradd --uid 10001 --create-home --shell /usr/sbin/nologin tabularia\nUSER 10001\nWORKDIR /home/tabularia\n"
+	if d != want {
+		t.Errorf("the image with wheels and files:\n%s\nwanted:\n%s", d, want)
+	}
+	// only the wheels, only the files: the steps of each, the other's absent
+	onlyFiles := s
+	onlyFiles.Wheels = nil
+	if d, _ := Dockerfile("python", "python:3.14-slim", []string{"numpy==2.5.5"}, onlyFiles); strings.Contains(d, "TARGETARCH") || !strings.Contains(d, "ADD --checksum") {
+		t.Errorf("files without wheels:\n%s", d)
+	}
+	// a script environment that is not managed takes neither: its Dockerfile is what it was
+	notManaged := s
+	notManaged.Managed = false
+	a, _ := Dockerfile("python", "python:3.14-slim", []string{"numpy==2.5.5"}, notManaged)
+	notManaged.Wheels, notManaged.Files = nil, nil
+	b, _ := Dockerfile("python", "python:3.14-slim", []string{"numpy==2.5.5"}, notManaged)
+	if a != b {
+		t.Error("a scripting environment takes no wheel and no file")
+	}
+	// an R image takes neither
+	r1, _ := Dockerfile("r", "rocker/r-ver:4.6.0", nil, Settings{CRANURL: "https://cran.example/", Jobs: 3, Managed: true, Wheels: s.Wheels, Files: s.Files})
+	r2, _ := Dockerfile("r", "rocker/r-ver:4.6.0", nil, Settings{CRANURL: "https://cran.example/", Jobs: 3, Managed: true})
+	if r1 != r2 {
+		t.Error("an R image takes no wheel and no file")
+	}
+	for name, bad := range map[string]Settings{
+		"a machine":                  {Managed: true, Wheels: []Wheel{{"riscv64", "https://x.example/a.whl", sum}}},
+		"a wheel's address":          {Managed: true, Wheels: []Wheel{{"x86_64", "ftp://x.example/a.whl", sum}}},
+		"an address with a fragment": {Managed: true, Wheels: []Wheel{{"x86_64", "https://x.example/a.whl#sha256=" + sum, sum}}},
+		"a wheel's sha256":           {Managed: true, Wheels: []Wheel{{"x86_64", "https://x.example/a.whl", "ABC"}}},
+		"a file's address":           {Managed: true, Files: []File{{"https://x.example/a b", sum, "/opt/a"}}},
+		"a file's sha256":            {Managed: true, Files: []File{{"https://x.example/a", "sha256:" + sum, "/opt/a"}}},
+		"a path":                     {Managed: true, Files: []File{{"https://x.example/a", sum, "/opt/a; rm -rf /"}}},
+		"a relative path":            {Managed: true, Files: []File{{"https://x.example/a", sum, "opt/a"}}},
+	} {
+		if _, err := Dockerfile("python", "python:3.14-slim", nil, bad); err == nil {
+			t.Errorf("%s: no error", name)
+		} else if _, ok := err.(ValueError); !ok {
+			t.Errorf("%s: %v is not a ValueError", name, err)
+		}
+	}
+}
+
+// The sizes of a version's weights are its `# tabularia:weights` line; without one the build takes every size the recipe has.
+func TestTheSizesOfTheWeightsAreTheirLine(t *testing.T) {
+	for text, want := range map[string][]string{
+		"numpy==2.5.5\n# tabularia:weights 5m,28m\n# tabularia:licence abc\n": {"5m", "28m"},
+		"# tabularia:weights 28M\nnumpy==2.5.5\n":                             {"28m"},
+		"# tabularia:weights   209m,123m,209m  \n":                            {"209m", "123m"},
+		"# tabularia:weights ,\n":                                             nil,
+	} {
+		got, ok := WeightsSizes(text)
+		if !ok || strings.Join(got, ",") != strings.Join(want, ",") {
+			t.Errorf("%q: %v %v, wanted %v", text, got, ok, want)
+		}
+	}
+	for _, text := range []string{"", "numpy==2.5.5\n", "# tabularia:licence 5m\n", "numpy # tabularia:weights 5m\n", "#tabularia:weights\n"} {
+		if got, ok := WeightsSizes(text); ok {
+			t.Errorf("%q: sizes %v from no line", text, got)
+		}
+	}
+}
