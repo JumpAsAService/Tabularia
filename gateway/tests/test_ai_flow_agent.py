@@ -799,6 +799,73 @@ async def test_an_assistant_puts_a_pre_trained_forecast_after_a_calendar_join_an
     assert any(e["source"] == "op-1" and e["target"] == "ctl-1" and e["targetHandle"] == "left" for e in canvas["edges"])
 
 
+def test_the_volatility_and_risk_nodes_have_their_lines_and_the_prompt_says_when_to_choose_each_and_what_is_a_measure():
+    reference = ai_flow_agent.context(None, "en")
+    assert any(l.startswith("- model_garch {time, value, frequency: hour|day|week|month|quarter|year|index, input_kind?: returns|prices")
+               and l.endswith("(timeseries)") for l in reference.splitlines())
+    assert any(l.startswith("- model_risk_simulation {time, value, frequency: hour|day|week|month|quarter|year|index, model?: garch|arima")
+               and l.endswith("(timeseries)") for l in reference.splitlines())
+    for sentence in ("model_garch describes how the **volatility** of a series changes", "`index` for trading days: each row a step",
+                     "**Choose it** when the question is how agitated the series is", "`variance_model: gjr` or `egarch`",
+                     "**choose model_arima** to forecast the level of the series, and model_risk_simulation for the risk over the next days",
+                     "model_predict continues its volatility over new rows that are the trading days right after the last one it saw",
+                     "give a verdict only from a p-value read against `alpha`", "are measures with no verdict: say them as numbers, never as good or bad",
+                     "never lower a limit or change a setting that shapes a verdict",
+                     "model_risk_simulation answers", "makes no model (no model card, no `registerAs`, no Predict",
+                     "`model: garch`", "`model: arima` (the ARIMA keys, with no `exog`", "the same `seed` gives the same numbers",
+                     "`tail: lower` is the risk of a fall", "`threshold` is a level in the unit of the series (a price with `input_kind: prices`, never a return)",
+                     "`position` is an amount invested", "`aggregate: relative_change`", "is a large table: give it only when the person asks",
+                     "are measures with an interval, not verdicts", "does not carry the uncertainty of the model's parameters",
+                     "lower `paths` or `horizon`", "«Simulate risk from this model»", "give model_risk_simulation the keys of the model node"):
+        assert sentence in reference, sentence
+    # the node of the risk takes no model card, and no word of a limit or a threshold is the assistant's to move
+    assert "Never change a setting of a hypothesis test or a model step that decides or shapes its verdict" in ai_flow_agent.SETTINGS_CONTEXT
+    assert "any other threshold or margin" in ai_flow_agent.SETTINGS_CONTEXT
+    given = {"time": "day", "value": "price", "frequency": "index", "input_kind": "prices", "variance_model": "gjr", "distribution": "sstd", "holdout": 250}
+    assert clean_params("model_garch", given)["variance_model"] == "gjr"
+    with pytest.raises(ModelRetry) as e:
+        clean_params("model_garch", {**given, "distribution": "laplace"})
+    assert "distribution" in str(e.value)
+    with pytest.raises(ModelRetry) as e:
+        clean_params("model_garch", {k: v for k, v in given.items() if k != "frequency"})
+    assert "'frequency' is required" in str(e.value)
+    risk = {**given, "model": "garch", "paths": 10000, "horizon": 21, "position": 100000, "threshold": 378}
+    assert clean_params("model_risk_simulation", risk)["position"] == 100000
+    with pytest.raises(ModelRetry) as e:
+        clean_params("model_risk_simulation", {**risk, "paths": 50})
+    assert "paths" in str(e.value)
+    with pytest.raises(ModelRetry) as e:
+        clean_params("model_risk_simulation", {**risk, "model": "arima", "exog": ["x"]})
+    assert "exog" in str(e.value)
+
+
+@pytest.mark.anyio
+async def test_an_assistant_adds_a_volatility_node_and_a_risk_node_on_the_same_input_and_a_wrong_one_is_sent_back(session, world, fake_engine, monkeypatch):
+    """A scripted model stands for the assistant: no call to a paid service."""
+    fake_engine.preview_response = (200, {"columns": COLUMNS, "rows": [{"country": "IT", "amount": 3.5}], "row_count": 1, "truncated": False})
+    garch = {"time": "country", "value": "amount", "frequency": "index", "input_kind": "prices", "variance_model": "gjr", "distribution": "sstd", "holdout": 250}
+    events = await _turn(session, world, monkeypatch, world["editor"], [
+        ("add_source", {"datasource_id": world["orders"].id}),
+        ("add_step", {"after": "source", "operation": "model_garch", "params": {**garch, "distribution": "laplace"}}),
+        ("add_step", {"after": "source", "operation": "model_garch", "params": garch}),
+        ("add_step", {"after": "source", "operation": "model_risk_simulation", "params": {**garch, "model": "garch", "paths": 10000, "horizon": 21, "threshold": 3}}),
+        ("add_step", {"after": "ctl-2", "operation": "filter", "params": {"column": "quantile_0.01", "operator": "lt", "value": 0}}),
+        "Added the volatility of the prices (ctl-1) and, on the same prices, the risk of the next 21 days (ctl-2); they run with the flow.",
+    ], message="how volatile are the prices, and how much could I lose in the next month")
+    assert "error" not in [n for n, _ in events]
+    steps = [d for n, d in events if n == "tool_result" and d["name"] == "add_step"]
+    assert [s["ok"] for s in steps] == [False, True, True, True]
+    assert "distribution" in steps[0]["error"]
+    canvas = json.loads(events[-1][1]["definition"])
+    nodes = {n["id"]: n for n in canvas["nodes"]}
+    assert nodes["ctl-1"]["data"]["model"] == "garch" and nodes["ctl-2"]["data"]["model"] == "risk_simulation"
+    assert nodes["ctl-2"]["data"]["params"]["variance_model"] == "gjr" and nodes["ctl-2"]["data"]["params"]["horizon"] == 21
+    # both read the source: one branch each, as the editor's «Simulate risk from this model» makes it
+    assert {e["source"] for e in canvas["edges"] if e["target"] in ("ctl-1", "ctl-2")} == {"source"}
+    # the risk node's columns are known before a run, so the step after it may name a quantile
+    assert any(e["source"] == "ctl-2" for e in canvas["edges"])
+
+
 def test_the_reference_tells_the_assistant_what_a_model_needs_to_run():
     reference = ai_flow_agent.context(None, "en")
     for sentence in ("Kubernetes", "group of models an administrator has enabled", "there is no preview",
