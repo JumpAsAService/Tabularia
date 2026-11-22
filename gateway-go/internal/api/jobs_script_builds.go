@@ -65,7 +65,9 @@ var (
 	sbUnknownAuthority = regexp.MustCompile(`x509: certificate signed by unknown authority|certificate is not trusted`)
 	sbPlainHTTP        = regexp.MustCompile(`server gave HTTP response to HTTPS client`)
 	sbPushDenied       = regexp.MustCompile(`(?s)failed to push.*(401 Unauthorized|403 Forbidden|insufficient_scope|authorization failed)`)
-	sbOutOfMemory      = regexp.MustCompile(`Killed signal terminated program|internal compiler error: Killed|OOMKilled`)
+	// a network failure on the way to the registry: before a 401, the token may have expired while it lasted
+	sbNetworkTrouble = regexp.MustCompile(`i/o timeout|connection reset by peer|connection refused|TLS handshake timeout|no route to host|context deadline exceeded|broken pipe`)
+	sbOutOfMemory    = regexp.MustCompile(`Killed signal terminated program|internal compiler error: Killed|OOMKilled`)
 )
 
 func init() {
@@ -636,8 +638,7 @@ func (b *scriptBuilds) advance(ctx context.Context, tx pgx.Tx, v *sbVersion) err
 				b.fail(v, "The image was built but not pushed: the registry answers in plain HTTP. Set "+
 					"scripts.registry.insecure (the nodes must allow that registry over HTTP too)", &log)
 			case sbPushDenied.MatchString(log):
-				b.fail(v, "The image was built but not pushed: the registry refused the credentials. Check the "+
-					"Secret of scripts.registry.pushSecret and its rights on the repository", &log)
+				b.fail(v, sbPushDeniedSentence(log), &log)
 			case sbOutOfMemory.MatchString(log) || ended == "OOMKilled" || isExit137(exitCode):
 				// the compiler's own line, or (cgroup v2) only the exit code
 				b.fail(v, fmt.Sprintf("The image build ran out of memory: a compiler was killed. Raise SCRIPTS__BUILD_MEMORY "+
@@ -811,3 +812,23 @@ const sbPyCheck = "import importlib, importlib.metadata as m, json, signal\nimpo
 
 // sbRCheck is script_builds._R_CHECK.
 const sbRCheck = "library(arrow)\nif (!arrow::arrow_with_s3()) stop('the arrow package of this image has no S3 support')\nip <- installed.packages()[, c('Package', 'Version'), drop = FALSE]\nwriteLines(sort(unique(paste0(ip[, 1], '@', ip[, 2]))))\nq <- function(x) paste0('\"', gsub('\"', '\\\\\"', gsub('\\\\', '\\\\\\\\', x, fixed = TRUE), fixed = TRUE), '\"')\nexports <- function(p) tryCatch(head(sort(getNamespaceExports(p)), 400), error = function(e) character())\npk <- sort(unique(ip[, 1]))\nparts <- vapply(pk, function(p) paste0(q(p), ':[', paste(q(exports(p)), collapse = ','), ']'), character(1))\ncat('TABULARIA_COMPLETIONS ', '{', paste(parts, collapse = ','), '}', '\\n', sep = '')\n"
+
+// sbPushDeniedSentence says why a push was denied. Only what the log shows: a 401 or 403 after network errors
+// (a build that waited minutes on a registry it could not reach, then got a 401 when its token had expired) may be
+// either refused credentials or credentials that expired during the slow or interrupted connection, and the first
+// thing to check is that the build reaches the registry; without network errors the registry refused them.
+func sbPushDeniedSentence(log string) string {
+	denied := sbPushDenied.FindStringSubmatchIndex(log)
+	if denied != nil {
+		if net := sbNetworkTrouble.FindStringIndex(log[:denied[2]]); net != nil {
+			return "The image was built but not pushed: the registry answered «" + log[denied[2]:denied[3]] + "» after network errors " +
+				"on the way to it («" + log[net[0]:net[1]] + "» in the build log). The credentials were refused, or they expired " +
+				"while the connection was slow or interrupted. Check first that the build reaches the registry: its address, " +
+				"and networkPolicy.userCodePrivateCIDRs when the registry is on a private address (the kind guide: the " +
+				"registry's address can change when the computer restarts); then the Secret of scripts.registry.pushSecret " +
+				"and its rights on the repository"
+		}
+	}
+	return "The image was built but not pushed: the registry refused the credentials. Check the " +
+		"Secret of scripts.registry.pushSecret and its rights on the repository"
+}
