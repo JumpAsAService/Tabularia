@@ -349,3 +349,57 @@ stay on three. The reference report (Welch, English) stays on two pages: its has
 `test_models_ab_review`: **1,091 passed**. The verdict follows α (the same data at an α just above and just below
 the p-value), a one-sided test names its H1, a name that looks like a template stays as written, the rows a report
 reads leave room for the explanation, the reads-only test accepts the reading's places.
+
+### B2 — regressions and survival (2026-11-22)
+
+**Files.** Each model's file registers its `readings(rows, checked)` in `common.READINGS` and names its explained blocks
+in `page(explained=…)`: `linear.py` (summary, assumptions, coefficients, fit), `penalized.py` (summary, assumptions;
+called by `linear.readings` and `logistic.readings` when a penalty is on), `logistic.py` (summary, assumptions,
+coefficients; its own block `confusion` places its reading under the confusion table), `kaplan_meier.py` (summary,
+assumptions; its own blocks place `curves` under the number at risk, `rmst` under the restricted means, `pairs` under the
+pairs), `cox.py` and `parametric_survival.py` (summary, assumptions, coefficients). The lines the five share are in a new
+file of this lot, `layouts/shared_readings.py`: the checks (`assumptions_rejected` / `assumptions_none_rejected` by each
+check's p-value against α, `threshold_<check>` for a check without a p-value that the table marks past its threshold,
+`assumptions_many_rows`), the terms (`coef_some` / `coef_all` / `coef_none` by each term's p-value, the intercept left
+out; five names at most by p-value, then `more_in_table`), the first significant term's ratio with its interval at
+1 − α (`coef_odds`, `coef_hazard`, `coef_time_ratio`, and `_level` for a level against the reference; an interaction is
+skipped). The words: in each of the six `report_texts` files `reading_blocks`, `reading_labels`, `reading_texts`,
+`formula_texts`, `measure_readings`; the shared lines written in each model's file with the same text (Open question 4).
+Test: `backend/tests/test_explanations_regression_survival.py` (new).
+
+**Verdicts** come from `f_p_value`, `lr_p_value`, `test_p_value`, the pairs' `p_adjusted`, the checks' and the terms'
+`p_value`, each compared with the node's α by the layout (so the same fixture at an α just above and just below a p-value
+reads both ways, criterion 8). A check that has a p-value is read by it even when the runner's table marks it
+«doubtful» rather than «failed» (Kaplan–Meier's censoring by stratum). The thresholds (VIF, condition number, Cook's
+distance, leverage, deviance residuals, dfbeta, events per coefficient, rows at risk) are said as «above / below the
+threshold of …, a convention of the literature, not a test»; the table keeps its verdict column (Open question 3).
+A penalized fit has no verdict anywhere; its method says why no p-value is given.
+
+**Deviations and requests for the serial step (B4).**
+- The checks rejected are **counted, not named** («4 of 9, marked in the table»): the layout does not know the page's
+  language, and naming a check in it needs `structured_note` to translate an id the readings choose. Request: in
+  `common.structured_note`, add `values.reading_names` to the names it translates (one line); then
+  `assumptions_rejected` can list `check:<id>` names, as the spec's table asks.
+- The penalized fit names its cross-validation measure in a sentence of its own, chosen by the node's `measure`
+  (`penalized_measure`, `by_params`), for the same reason.
+- `tests/test_report_explanations.py` (frozen during B1–B3) has two tests that take the linear regression as the model
+  *without* an explanation and fail now that it has one: `test_a_page_with_nothing_explained_is_the_page_as_before…`
+  (it should remove `READINGS["linear"]` and force `explained=()` with `monkeypatch`, as `only_additions` does) and
+  `test_a_model_that_registers_its_readings…` (its toy words should also clear `reading_labels`, which now name
+  `method_ols`). Every other test of that file passes over the five models.
+- `tests/test_stats_layouts.py::test_a_model_report_keeps_its_headings_and_the_coefficients_note_with_their_tables`
+  (B1's, on the parametric survival) refuses `keep_with_next` on any item whose id ends with «_how» (the charts'
+  captions): the heading of «How this report was computed», `s_how`, matches and keeps with its lead as every heading
+  does. Request: leave `s_how` out of that check (or name the captions' suffix more narrowly).
+- With several strata the medians are listed without their intervals (the table beside them has them); with one,
+  the median is said with its interval.
+
+**Golden** (the scratch dump of B0, on clean copies of `f4159f67` and of `f4159f67` with this lot's files): **450 of 500
+renderings byte for byte as before** (PDF, definition, labelled rows) — every other model's fixture and every variant of
+every statistics test; the 50 that change are exactly this lot's ten fixtures in five languages, none with a warning,
+all within twelve pages (three to six; 30 gain a page: the readings and «How this report was computed»).
+
+**Tests** (the CI image, `--memory=2500m --cpus=1`, on the clean copy with this lot):
+`test_explanations_regression_survival` (new), `test_report_explanations`, `test_models_layouts`, `test_reports_model`,
+`test_models_ab_review`, `test_stats_layouts`, `test_stats_explanations`: **1,185 passed, 3 failed** — the three tests
+of frozen files above, which assume the linear regression and the parametric survival have no explanation.
