@@ -467,3 +467,33 @@ def test_a_series_named_like_a_formula_stays_text_in_the_pdf_and_the_workbook(tm
     assert not [x for x in sheets if re.search(r"<f>(?!SUBTOTAL)", x)], "a cell became a formula"
     from xml.sax.saxutils import escape
     assert escape(hostile) in shared
+
+
+@pytest.mark.parametrize("locale", LOCALES)
+def test_wql_is_twice_the_pinball_and_what_the_means_leave_out_is_said(tmp_path, chart_service, monkeypatch, locale):  # noqa: F811
+    """Lot F9 (the owner's choice): WQL as usually defined, 2 Σ pinball / Σ|y|, in the formula box and the words; the steps
+    sMAPE leaves out (the value and the forecast both 0) and the series the geometric mean of the relative MASE leaves out
+    are counted by the runner and said under the mean errors, each with what it is, only when there is one."""
+    w = _words(locale)
+    assert "WQL = 2 · " in w["formula_texts"]["formula_pinball"]
+    assert "2" in w["across_texts"]["wql"] or re.search(r"(?i)twice|doppio|doppelte|doble|double", w["across_texts"]["wql"])
+    for stat in layout.LEFT_OUT:
+        assert w["stats"]["model"][stat] and w["across_texts"][stat], stat
+    model, params, rows = fixture(CASE)
+    body = layouts.definition(model, params, locale)["sections"]["body"]["items"]
+    [across] = [it for it in body if it["id"] == "across"]
+    assert all(f'[stat] = "{s}"' in across["filter"] for s in layout.LEFT_OUT) and "[value] > 0" in across["filter"]
+    last = max(r["ord"] for r in rows)
+    n_measured = next(r for r in rows if r["key"] == "model|||n_measured")
+    counts = {"n_smape_zero": 3, "n_baseline_smape_zero": 0, "n_relative_left_out": 1}
+    extra = [{**n_measured, "stat": k, "value": float(v), "ord": last + i + 1, "key": f"model|||{k}"} for i, (k, v) in enumerate(counts.items())]
+    _with(monkeypatch, params, rows + extra)
+    _, page = draw(tmp_path, chart_service, monkeypatch, CASE, fmt="svg", locale=locale)
+    said = set(strings(json.loads(page)))
+    assert w["stats"]["model"]["n_smape_zero"] in said and w["across_texts"]["n_smape_zero"] in said
+    assert w["stats"]["model"]["n_relative_left_out"] in said and w["across_texts"]["n_relative_left_out"] in said
+    assert w["stats"]["model"]["n_baseline_smape_zero"] not in said, "a count of 0 is not a row"
+    # without the counts (a result of before), the table is as it was
+    _with(monkeypatch, params, rows)
+    _, page = draw(tmp_path / "before", chart_service, monkeypatch, CASE, fmt="svg", locale=locale)
+    assert not {w["stats"]["model"][s] for s in layout.LEFT_OUT} & set(strings(json.loads(page)))

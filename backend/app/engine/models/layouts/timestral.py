@@ -41,9 +41,12 @@ FORECAST_LINES = ("observed", "median", "baseline", "q0.05", "q0.1", "q0.9", "q0
 HOLDOUT_LINES = ("observed", "holdout_median", "holdout_baseline", "holdout_q0.05", "holdout_q0.1", "holdout_q0.9", "holdout_q0.95")
 MEASURES = ("relative_mase", "coverage_80", "coverage_90")  # the assumption rows that are measures
 ACROSS = ("mase", "baseline_mase", "smape", "baseline_smape", "wql", "n_measured")  # the model's numbers beside them
+# what the means leave out, counted by the runner (lot F9): a row each under the mean errors, only when not 0
+LEFT_OUT = ("n_smape_zero", "n_baseline_smape_zero", "n_relative_left_out")
 WEIGHTS = ("weights", "weights_sha256", "licence", "licence_sha256")  # the weights' part of the last page
 # the numbers the fit's table leaves out: the measures' tables say them, with what they are
-FIT_SKIP = ("mase", "baseline_mase", "relative_mase_geomean", "smape", "baseline_smape", "wql", "coverage_80", "coverage_90")
+FIT_SKIP = ("mase", "baseline_mase", "relative_mase_geomean", "smape", "baseline_smape", "wql", "coverage_80", "coverage_90",
+            *LEFT_OUT)
 BAND = "#3b5bdb"  # the bands: the accent, light (the engine's band opacity), darker where the 80 % lies over the 90 %
 NAIVE = c.MID  # the seasonal naïve: the amber of what is compared, not of a verdict
 
@@ -216,10 +219,12 @@ def _verdict_words(item: dict, w: dict, verdict: str = "[text]") -> None:
 def _across(p: stats.Page, w: dict) -> None:
     """The mean errors over the series (the model's numbers), each with what it is: measures, no verdict."""
     a = w["across"]
-    one = '[section] = "model" AND (' + " OR ".join(f'[stat] = "{s}"' for s in ACROSS) + ") AND NOT ISNULL([value])"
-    shown = (f'IFS([stat] = "n_measured", FORMAT([value], "#,##0"), '
+    left_out = " OR ".join(f'[stat] = "{s}"' for s in LEFT_OUT)
+    one = ('[section] = "model" AND NOT ISNULL([value]) AND ((' + " OR ".join(f'[stat] = "{s}"' for s in ACROSS) + ")"
+           + f" OR (({left_out}) AND [value] > 0))")
+    shown = (f'IFS([stat] = "n_measured" OR {left_out}, FORMAT([value], "#,##0"), '
              f'[stat] = "smape" OR [stat] = "baseline_smape", FORMAT([value], "0.##") & " %", TRUE, FORMAT([value], "0.####"))')
-    what = "IFS(" + ", ".join(f'[stat] = "{s}", {c.q(w["across_texts"][s])}' for s in ACROSS) + ', TRUE, "")'
+    what = "IFS(" + ", ".join(f'[stat] = "{s}", {c.q(w["across_texts"][s])}' for s in (*ACROSS, *LEFT_OUT)) + ', TRUE, "")'
     p.add(stats.table("across", a["title"], one, [
         {"header": a["measure"], "value": "[label]", "width": 52},
         {"header": a["value"], "value": shown, "width": 24, "align": "right"},
