@@ -277,6 +277,15 @@ func modelMaxRows(model string, group int64) int64 {
 	return group
 }
 
+// modelMaxRowsOf is modelMaxRows for a run with its checked parameters: the smallest of the group's limit, the model's own and
+// its variant's (the risk simulation's ARIMA variant reads 20,000 rows, its GARCH variant the group's); 0 for no limit.
+func modelMaxRowsOf(model string, checked map[string]any, group int64) int64 {
+	if own := modelcatalog.MaxRowsOf(model, checked); own > 0 && (group <= 0 || own < group) {
+		return own
+	}
+	return group
+}
+
 // thousands writes a count as the sentences of the limits do: 3,400,000.
 func thousands(n int64) string {
 	s := strconv.FormatInt(n, 10)
@@ -612,7 +621,7 @@ func (q *queue) runModel(ctx context.Context, r *scriptNodeRun) (*flowresolver.S
 		if err := child.save(ctx); err != nil {
 			return nil, err
 		}
-		if most := modelMaxRows(s.model, s.img.MaxRows); in.rows != nil && most > 0 && *in.rows > most {
+		if most := modelMaxRowsOf(s.model, s.checked, s.img.MaxRows); in.rows != nil && most > 0 && *in.rows > most {
 			return nil, &scriptFailed{fmt.Sprintf("model «%s»: the model would read %s rows; the group «%s» allows %s: filter or sample "+
 				"before the node, or ask an administrator", s.label, thousands(*in.rows), s.group, thousands(most))}
 		}
@@ -639,7 +648,7 @@ func (q *queue) runModel(ctx context.Context, r *scriptNodeRun) (*flowresolver.S
 		}
 		task.MLflow = s.mlflow != nil // the runner writes MLmodel and native.rds; the gateway logs them
 		// the runner stops its boosting in time for its results to be written within the step's timeout
-		task.Limits["time_budget_seconds"] = int(s.timeout)
+		setRunLimits(task.Limits, s.timeout, s.img, time.Now())
 		code, err := modelgroups.CodeFiles(s.group, task.JSON(), false)
 		if err != nil {
 			return nil, err
@@ -731,19 +740,37 @@ func pyjsonOf(v any) any {
 	return out
 }
 
+// setRunLimits adds to a task's limits what the runner measures its run against: `time_budget_seconds` (the step's timeout),
+// `memory_bytes` (the group's memory limit: a runner that holds data in batches sizes them from it, never from a number of
+// its own), `tmp_bytes` (the Job's /tmp, `modelTmpLimit`: what it may write to disk) and `started_unix` (the second the Job is
+// created: the runner counts its time from it, not from its own start, which the pod's scheduling would delay).
+// A memory limit the gateway cannot read adds no `memory_bytes`: the runner then has none to size from.
+func setRunLimits(limits map[string]int, timeout int64, img *ModelGroupImage, now time.Time) {
+	limits["time_budget_seconds"] = int(timeout)
+	if memory := mgBytes(img.MemoryLimit); memory > 0 {
+		limits["memory_bytes"] = int(memory)
+	}
+	limits["tmp_bytes"] = int(modelTmpMiB(img)) << 20
+	limits["started_unix"] = int(now.Unix())
+}
+
+// modelTmpMiB is the size of a model Job's /tmp in MiB; modelTmpLimit says it as a Kubernetes quantity.
+func modelTmpMiB(img *ModelGroupImage) int64 {
+	const margin = 256 << 20
+	input := mgBytes(img.MemoryLimit)
+	if input <= 0 {
+		input = 1 << 30
+	}
+	return int64((2*float64(maxModelFileBytes()) + input + margin + (1 << 20) - 1) / (1 << 20))
+}
+
 // modelTmpLimit is the size of a model Job's /tmp (an emptyDir: the node's disk, which the kubelet
 // evicts the pod over when it is exceeded): twice the largest model file (the one downloaded and
 // the one the library writes), the input (a parquet the runner reads whole, so it is no larger than
 // the group's memory) and a margin for the calculations' scratch files. It follows the group's
 // memory limit, which the administrator sets in Administration -> Statistical models.
 func modelTmpLimit(img *ModelGroupImage) string {
-	const margin = 256 << 20
-	input := mgBytes(img.MemoryLimit)
-	if input <= 0 {
-		input = 1 << 30
-	}
-	mi := int64((2*float64(maxModelFileBytes()) + input + margin + (1 << 20) - 1) / (1 << 20))
-	return fmt.Sprintf("%dMi", mi)
+	return fmt.Sprintf("%dMi", modelTmpMiB(img))
 }
 
 // modelJobManifest is a model step's Job: the group's image by digest, Tabularia's runner,

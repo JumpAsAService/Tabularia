@@ -97,14 +97,17 @@ func (q *queue) planMLflow(ctx context.Context, user *auth.User, node pyjson.Obj
 	register = strings.TrimSpace(register)
 	// a node that makes no model card (`card: false`, the experiments' and the decomposition) has no model to register: its run is logged and no more
 	if model, _ := nodeData(node).Value("model").(string); register != "" && modelcatalog.GroupOf(model) != "" && !modelcatalog.HasCard(model) {
-		what := "an A/B test"
+		what, instead := "an A/B test", "its run is logged to MLflow"
 		switch model {
 		case "decomposition":
 			what = "a decomposition"
 		case "timestral":
 			what = "a pre-trained forecast"
+		case "risk_simulation":
+			// its fitted model is the GARCH or ARIMA node's to register (docs/specs/garch-risk.md, «MLflow, and no model»)
+			what, instead = "a risk simulation", "register the GARCH or ARIMA node instead"
 		}
-		return refuse(what + " registers no model: its run is logged to MLflow")
+		return refuse(what + " registers no model: " + instead)
 	}
 	conn, err := q.d.mlflowConnection(ctx, user, id)
 	var refused *mlflowConnRefused

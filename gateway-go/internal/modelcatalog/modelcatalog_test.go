@@ -68,7 +68,7 @@ func TestTheSharedCases(t *testing.T) {
 }
 
 func TestGroupsModelsAndVariants(t *testing.T) {
-	if got := Models(); !reflect.DeepEqual(got, []string{"linear", "logistic", "kaplan_meier", "cox", "parametric_survival", "arima", "decomposition", "xgboost", "catboost", "clv", "bg_bb", "ab_test", "ab_plan", "timestral"}) {
+	if got := Models(); !reflect.DeepEqual(got, []string{"linear", "logistic", "kaplan_meier", "cox", "parametric_survival", "arima", "decomposition", "garch", "risk_simulation", "xgboost", "catboost", "clv", "bg_bb", "ab_test", "ab_plan", "timestral"}) {
 		t.Fatalf("models: %v", got)
 	}
 	groups := map[string]string{}
@@ -452,6 +452,37 @@ func TestARIMAKeepsALimitOfRowsOfItsOwn(t *testing.T) {
 	}
 	if GroupOf("decomposition") != "timeseries" || GroupOf("arima") != "timeseries" {
 		t.Error("the decomposition is a node of the time series group")
+	}
+}
+
+// The volatility and risk nodes (docs/specs/garch-risk.md): the group's two new nodes, the card of the first and not of the
+// second, the limit of rows of the risk node's ARIMA variant, its limits.
+func TestTheVolatilityAndRiskNodes(t *testing.T) {
+	if GroupOf("garch") != "timeseries" || GroupOf("risk_simulation") != "timeseries" || !HasCard("garch") || HasCard("risk_simulation") {
+		t.Error("garch makes a card, the risk simulation none: both are nodes of the time series group")
+	}
+	if MaxRows("garch") != 0 || MaxRows("risk_simulation") != 0 {
+		t.Error("neither has a limit of rows of its own: the risk node's ARIMA variant has one")
+	}
+	for _, c := range []struct {
+		params map[string]any
+		want   int64
+	}{{map[string]any{"model": "arima"}, 20_000}, {map[string]any{"model": "garch"}, 0}, {nil, 0}} {
+		if got := MaxRowsOf("risk_simulation", c.params); got != c.want {
+			t.Errorf("MaxRowsOf(risk_simulation, %v) = %d, want %d", c.params, got, c.want)
+		}
+	}
+	if MaxRowsOf("arima", nil) != 20_000 || MaxRowsOf("garch", nil) != 0 || MaxRowsOf("nope", nil) != 0 {
+		t.Error("a model's own limit counts as before")
+	}
+	if Limit("seed_block") != 1000 || Limit("risk_bins") != 1024 || Limit("max_sample_paths") != 20 {
+		t.Error("limits")
+	}
+	if v := VariantOf("risk_simulation", map[string]any{"model": "arima"}); v == nil || v.ID != "arima" || len(v.Outputs["risk_summary"]) == 0 || len(v.Outputs["paths"]) != 7 {
+		t.Errorf("the risk node's ARIMA variant: %+v", v)
+	}
+	if v := VariantOf("garch", nil); v == nil || v.ID != "default" || len(v.Outputs["volatility"]) != 10 {
+		t.Errorf("the GARCH node's variant: %+v", v)
 	}
 }
 

@@ -1124,9 +1124,14 @@ func TestANodeWithoutACardRefusesRegisterAs(t *testing.T) {
 		return pyjson.Object{{Key: "data", Value: pyjson.Object{{Key: "model", Value: model}, {Key: "mlflow", Value: block}}}}
 	}
 	q := &queue{}
-	for model, what := range map[string]string{"ab_test": "an A/B test", "ab_plan": "an A/B test", "decomposition": "a decomposition", "timestral": "a pre-trained forecast"} {
+	for model, what := range map[string]string{"ab_test": "an A/B test", "ab_plan": "an A/B test", "decomposition": "a decomposition", "timestral": "a pre-trained forecast",
+		"risk_simulation": "a risk simulation"} {
 		_, err := q.planMLflow(context.Background(), nil, node(model, " checkout-test "), "A/B")
-		if err == nil || err.Error() != "model «A/B»: "+what+" registers no model: its run is logged to MLflow" {
+		instead := "its run is logged to MLflow"
+		if model == "risk_simulation" {
+			instead = "register the GARCH or ARIMA node instead" // its fitted model is the GARCH or ARIMA node's to register
+		}
+		if err == nil || err.Error() != "model «A/B»: "+what+" registers no model: "+instead {
 			t.Errorf("%s: %v", model, err)
 		}
 	}

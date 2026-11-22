@@ -98,6 +98,7 @@ type Variant struct {
 	When     []cond
 	Sections map[string]Section
 	Outputs  map[string][]string
+	MaxRows  int64 // the most input rows of this variant, below its model's and its group's (the risk simulation's ARIMA: 20,000); 0: theirs
 }
 
 // Section is what a variant writes in a section of the ten columns.
@@ -176,6 +177,17 @@ func MaxRows(model string) int64 {
 		return m.MaxRows
 	}
 	return 0
+}
+
+// MaxRowsOf is the most input rows a model reads with these checked parameters: the smaller of the model's own limit and its
+// variant's (the risk simulation's ARIMA variant reads 20,000, its GARCH variant the group's alone); 0 for none of them, or for
+// no model. The group's limit is the caller's.
+func MaxRowsOf(model string, checked map[string]any) int64 {
+	most := MaxRows(model)
+	if v := VariantOf(model, checked); v != nil && v.MaxRows > 0 && (most <= 0 || v.MaxRows < most) {
+		most = v.MaxRows
+	}
+	return most
 }
 
 // Limit is one of the catalogue's limits (max_terms, max_chart_points…), 0 for none.
@@ -933,6 +945,7 @@ func parse(b []byte) (*catalogue, error) {
 			When     json.RawMessage     `json:"when"`
 			Sections map[string]Section  `json:"sections"`
 			Outputs  map[string][]string `json:"outputs"`
+			MaxRows  *int64              `json:"max_rows"` // absent or null: the model's, then the group's
 		}
 		if err := json.Unmarshal(rm["variants"], &variants); err != nil {
 			return nil, fmt.Errorf("%s.variants: %v", m.ID, err)
@@ -942,7 +955,14 @@ func parse(b []byte) (*catalogue, error) {
 			if err != nil {
 				return nil, err
 			}
-			m.Variants = append(m.Variants, Variant{ID: v.ID, When: when, Sections: v.Sections, Outputs: v.Outputs})
+			own := Variant{ID: v.ID, When: when, Sections: v.Sections, Outputs: v.Outputs}
+			if v.MaxRows != nil {
+				if *v.MaxRows < 1 {
+					return nil, fmt.Errorf("%s: a variant's max_rows: a whole number from 1", m.ID)
+				}
+				own.MaxRows = *v.MaxRows
+			}
+			m.Variants = append(m.Variants, own)
 		}
 		if m.ID == "" || len(m.Variants) == 0 {
 			return nil, fmt.Errorf("a model without id or variants")

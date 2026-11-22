@@ -997,6 +997,51 @@ func TestAModelMayHaveALimitOfRowsBelowItsGroups(t *testing.T) {
 	}
 }
 
+// A limit of rows may be a variant's: the risk simulation's ARIMA variant reads 20,000 rows, its GARCH variant what its group
+// allows (docs/specs/garch-risk.md, «Combinations and refusals»); the smallest of the group's, the model's and the variant's wins.
+func TestAVariantMayHaveALimitOfRowsBelowItsModelsAndItsGroups(t *testing.T) {
+	arima := map[string]any{"model": "arima"}
+	garch := map[string]any{"model": "garch"}
+	for _, c := range []struct {
+		model   string
+		checked map[string]any
+		group   int64
+		wants   int64
+	}{
+		{"risk_simulation", arima, 200_000, 20_000}, {"risk_simulation", arima, 5_000, 5_000}, {"risk_simulation", arima, 0, 20_000},
+		{"risk_simulation", garch, 200_000, 200_000}, {"risk_simulation", nil, 200_000, 200_000}, // no key: the default, garch
+		{"garch", nil, 200_000, 200_000}, {"arima", nil, 200_000, 20_000}, {"decomposition", nil, 200_000, 200_000},
+		{"linear", nil, 0, 0},
+	} {
+		if got := modelMaxRowsOf(c.model, c.checked, c.group); got != c.wants {
+			t.Errorf("%s %v in a group of %d: %d, want %d", c.model, c.checked, c.group, got, c.wants)
+		}
+	}
+}
+
+// What the runner measures its run against (docs/specs/garch-risk.md, «Batches from the memory limit», «Time»): the step's timeout,
+// the group's memory limit and the Job's /tmp in bytes, and the second the Job is created.
+func TestTheTaskCarriesTheRunsLimits(t *testing.T) {
+	now := time.Unix(1_795_000_000, 123)
+	img := &ModelGroupImage{Group: "timeseries", MemoryLimit: "2Gi"}
+	limits := map[string]int{"max_horizon": 1000}
+	setRunLimits(limits, 600, img, now)
+	// 2 × 64 MiB (a model file) + 2 GiB + 256 MiB = 2432 MiB
+	if limits["time_budget_seconds"] != 600 || limits["memory_bytes"] != 2<<30 || limits["started_unix"] != 1_795_000_000 ||
+		limits["tmp_bytes"] != 2432<<20 || limits["max_horizon"] != 1000 {
+		t.Errorf("limits: %v", limits)
+	}
+	if got := modelTmpLimit(img); got != "2432Mi" || limits["tmp_bytes"] != 2432<<20 {
+		t.Errorf("the tmp limit %s and tmp_bytes %d say two things", got, limits["tmp_bytes"])
+	}
+	// a memory limit the gateway cannot read: no memory_bytes (the runner has none to size from), /tmp from the default of 1 GiB
+	limits = map[string]int{}
+	setRunLimits(limits, 30, &ModelGroupImage{Group: "timeseries"}, now)
+	if _, ok := limits["memory_bytes"]; ok || limits["tmp_bytes"] != 1408<<20 || limits["time_budget_seconds"] != 30 {
+		t.Errorf("limits without a memory limit: %v", limits)
+	}
+}
+
 // The check of a group with weights (docs/specs/foundation-forecast.md, «Changes to the machinery»): the lock gets a line a size and the
 // check stops, before the self-test, on an image whose files are not the recipe's, or that holds a size the recipe has not.
 func TestTheChecksScriptRecomputesTheWeights(t *testing.T) {
