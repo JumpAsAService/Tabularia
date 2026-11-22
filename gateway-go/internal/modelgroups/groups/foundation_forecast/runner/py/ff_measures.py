@@ -83,6 +83,7 @@ class Measured:
     in90: int = 0
     abs_sum: float = 0.0           # Σ|y_t| over the steps measured
     smape_zero: int = 0            # steps left out of sMAPE: the value and the forecast both 0
+    baseline_smape_zero: int = 0   # the same for the seasonal naïve's sMAPE
     reason: str | None = None      # why it is not measured: too_short, zero_scale, other
 
     @classmethod
@@ -110,12 +111,15 @@ class Measured:
         in80 = int(np.count_nonzero((q[:, LOW80] <= y) & (y <= q[:, HIGH80])))
         in90 = int(np.count_nonzero((q[:, LOW90] <= y) & (y <= q[:, HIGH90])))
         smape, zero = _smape(y, med)
-        bsmape, _ = _smape(y, b)
+        bsmape, bzero = _smape(y, b)
         n = int(y.size)
         mean_abs = abs_sum / n
         return cls(scale=s, mase=mase, baseline_mase=bmase, relative_mase=mase / bmase if bmase > 0 else math.nan,
-                   smape=smape, baseline_smape=bsmape, pinball=pinball, wql=pinball / mean_abs if mean_abs > 0 else math.nan,
-                   coverage_80=in80 / n, coverage_90=in90 / n, steps=n, in80=in80, in90=in90, abs_sum=abs_sum, smape_zero=zero)
+                   smape=smape, baseline_smape=bsmape, pinball=pinball,
+                   # the weighted quantile loss as it is usually defined: 2 Σ pinball / Σ|y| (lot F9: the factor 2 was missing)
+                   wql=2.0 * pinball / mean_abs if mean_abs > 0 else math.nan,
+                   coverage_80=in80 / n, coverage_90=in90 / n, steps=n, in80=in80, in90=in90, abs_sum=abs_sum, smape_zero=zero,
+                   baseline_smape_zero=bzero)
 
     @property
     def measured(self) -> bool:
@@ -135,8 +139,10 @@ def _smape(y: np.ndarray, f: np.ndarray) -> tuple[float, int]:
 @dataclass
 class Across:
     """The measures across the series, added series by series: the means of MASE and sMAPE, the geometric mean of the
-    relative MASE, the pooled coverages, the pooled weighted quantile loss Σ pinball·steps / Σ|y| (each series' WQL weighted
-    by the size of its values), and one difference of MASE per series for the test."""
+    relative MASE, the pooled coverages, the pooled weighted quantile loss 2 Σ pinball·steps / Σ|y| (each series' WQL
+    weighted by the size of its values), and one difference of MASE per series for the test. What the means leave out is
+    counted: the steps of sMAPE where the value and the forecast are both 0, and the series whose relative MASE has no
+    logarithm (the seasonal naïve's MASE, or Timestral's, is 0)."""
 
     n: int = 0
     mase: float = 0.0
@@ -147,6 +153,8 @@ class Across:
     baseline_smape_n: int = 0
     log_relative: float = 0.0
     relative_n: int = 0
+    smape_zero: int = 0
+    baseline_smape_zero: int = 0
     pinball_steps: float = 0.0
     abs_sum: float = 0.0
     steps: int = 0
@@ -167,6 +175,8 @@ class Across:
         if math.isfinite(m.baseline_smape):
             self.baseline_smape += m.baseline_smape
             self.baseline_smape_n += 1
+        self.smape_zero += m.smape_zero
+        self.baseline_smape_zero += m.baseline_smape_zero
         if math.isfinite(m.relative_mase) and m.relative_mase > 0:
             self.log_relative += math.log(m.relative_mase)
             self.relative_n += 1
@@ -188,8 +198,10 @@ class Across:
         return {"mase": mean(self.mase, self.n), "baseline_mase": mean(self.baseline_mase, self.n),
                 "relative_mase_geomean": math.exp(self.log_relative / self.relative_n) if self.relative_n else nan,
                 "smape": mean(self.smape, self.smape_n), "baseline_smape": mean(self.baseline_smape, self.baseline_smape_n),
-                "wql": self.pinball_steps / self.abs_sum if self.abs_sum > 0 else nan,
-                "coverage_80": mean(self.in80, self.steps), "coverage_90": mean(self.in90, self.steps), "n_measured": self.n}
+                "wql": 2.0 * self.pinball_steps / self.abs_sum if self.abs_sum > 0 else nan,
+                "coverage_80": mean(self.in80, self.steps), "coverage_90": mean(self.in90, self.steps), "n_measured": self.n,
+                "n_smape_zero": self.smape_zero, "n_baseline_smape_zero": self.baseline_smape_zero,
+                "n_relative_left_out": self.n - self.relative_n}
 
 
 # ── Wilcoxon's signed-rank test ─────────────────────────────────────────────────

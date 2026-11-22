@@ -9408,7 +9408,10 @@
                 "wql",
                 "coverage_80",
                 "coverage_90",
-                "n_measured"
+                "n_measured",
+                "n_smape_zero",
+                "n_baseline_smape_zero",
+                "n_relative_left_out"
               ]
             },
             "series": {

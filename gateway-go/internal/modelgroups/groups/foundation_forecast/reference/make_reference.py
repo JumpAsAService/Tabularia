@@ -250,13 +250,18 @@ def measures(history: np.ndarray, actual: np.ndarray, q: np.ndarray, base: np.nd
         terms = [200 * abs(actual[t] - f[t]) / (abs(actual[t]) + abs(f[t])) for t in keep if abs(actual[t]) + abs(f[t]) > 0]
         return sum(terms) / len(terms) if terms else math.nan
 
+    def zeros(f):  # the steps sMAPE leaves out: the value and the forecast both 0
+        return sum(1 for t in keep if actual[t] == 0 and f[t] == 0)
+
     pin = sum(max(lv * (actual[t] - q[t, j]), (lv - 1) * (actual[t] - q[t, j])) for t in keep for j, lv in enumerate(LEVELS)) / (k * 21)
     mean_abs = sum(abs(actual[t]) for t in keep) / k
     in80 = int(sum(bool(q[t, LEVELS.index(0.1)] <= actual[t] <= q[t, LEVELS.index(0.9)]) for t in keep))
     in90 = int(sum(bool(q[t, LEVELS.index(0.05)] <= actual[t] <= q[t, LEVELS.index(0.95)]) for t in keep))
-    return {"reason": None, "scale": float(s), "mase": float(mase), "baseline_mase": bmase, "relative_mase": mase / bmase,
+    return {"reason": None, "scale": float(s), "mase": float(mase), "baseline_mase": bmase,
+            "relative_mase": mase / bmase if bmase > 0 else math.nan,
             "smape": smape([q[t, med] for t in range(len(actual))]), "baseline_smape": smape(base), "pinball": pin,
-            "wql": pin / mean_abs, "coverage_80": in80 / k, "coverage_90": in90 / k, "steps": k, "in80": in80, "in90": in90,
+            "smape_zero": zeros([q[t, med] for t in range(len(actual))]), "baseline_smape_zero": zeros(base),
+            "wql": 2 * pin / mean_abs, "coverage_80": in80 / k, "coverage_90": in90 / k, "steps": k, "in80": in80, "in90": in90,
             "abs_sum": mean_abs * k}
 
 
@@ -388,10 +393,14 @@ def run_case(fc, case: dict) -> dict:
         expect.append({"key": "model|||mase", "value": _r(sum(x["mase"] for x in measured) / n), "rel": TOL_FORECAST})
         expect.append({"key": "model|||coverage_80", "value": _r(sum(x["in80"] for x in measured) / steps), "rel": TOL_FORECAST,
                        "abs": 1e-9})
-        expect.append({"key": "model|||wql", "value": _r(sum(x["pinball"] * x["steps"] for x in measured)
+        expect.append({"key": "model|||n_smape_zero", "value": sum(x["smape_zero"] for x in measured), "rel": TOL_DATA})
+        expect.append({"key": "model|||wql", "value": _r(2 * sum(x["pinball"] * x["steps"] for x in measured)
                                                         / sum(x["abs_sum"] for x in measured)), "rel": TOL_FORECAST})
-        expect.append({"key": "model|||relative_mase_geomean",
-                       "value": _r(math.exp(sum(math.log(x["relative_mase"]) for x in measured) / n)), "rel": TOL_FORECAST})
+        logged = [math.log(x["relative_mase"]) for x in measured if x["relative_mase"] > 0]  # NaN > 0 is False
+        if logged:
+            expect.append({"key": "model|||relative_mase_geomean", "value": _r(math.exp(sum(logged) / len(logged))),
+                           "rel": TOL_FORECAST})
+        expect.append({"key": "model|||n_relative_left_out", "value": n - len(logged), "rel": TOL_DATA})
     if n >= 2:
         r = wilcoxon(diffs, zero_method="wilcox", correction=False, method="auto")
         expect.append({"key": "assumption|baseline_comparison||statistic", "value": _r(float(r.statistic)), "rel": TOL_FORECAST})

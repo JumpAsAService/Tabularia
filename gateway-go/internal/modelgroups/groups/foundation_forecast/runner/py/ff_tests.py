@@ -105,6 +105,7 @@ def _weights(code: Path) -> None:
 def _measures(code: Path) -> None:
     cases = _expected(code)["measures"]
     _expect(cases, "no measures' case")
+    measured: list[fm.Measured] = []
     for c in cases:
         hist = np.array([math.nan if x is None else x for x in c["history"]])
         base = fm.seasonal_naive(hist, len(c["actual"]), c["season"])
@@ -117,6 +118,24 @@ def _measures(code: Path) -> None:
                 continue
             v = getattr(got, k)
             _expect(abs(v - want) <= 1e-12 * max(1.0, abs(want)), f"m = {c['season']}, {k}: {v!r}, expected {want!r}")
+        measured.append(got)
+    # lot F9: across the series, WQL is 2 Σ pinball·k / Σ|y| (the usual definition), and what the means leave out is counted:
+    # each case has one step where the value and the median are both 0; a series whose seasonal naïve has a MASE of 0 has
+    # no relative MASE to take the logarithm of
+    a = fm.Across()
+    for m in measured:
+        a.add(m)
+    a.add(fm.Measured(scale=1.0, mase=0.5, baseline_mase=0.0, relative_mase=math.nan, smape=10.0, baseline_smape=0.0, pinball=0.1,
+                      wql=0.2, coverage_80=1.0, coverage_90=1.0, steps=2, in80=2, in90=2, abs_sum=1.0, smape_zero=0,
+                      baseline_smape_zero=2))
+    n = a.numbers()
+    want_wql = 2 * (sum(m.pinball * m.steps for m in measured) + 0.2) / (sum(m.abs_sum for m in measured) + 1.0)
+    _expect(abs(n["wql"] - want_wql) <= 1e-12 * want_wql, f"WQL across: {n['wql']!r}, expected {want_wql!r}")
+    _expect(all(abs(m.wql - 2 * m.pinball * m.steps / m.abs_sum) <= 1e-12 * m.wql for m in measured), "a series' WQL")
+    _expect((n["n_smape_zero"], n["n_baseline_smape_zero"], n["n_relative_left_out"]) == (len(measured), 2, 1),
+            f"left out: {n['n_smape_zero']}, {n['n_baseline_smape_zero']}, {n['n_relative_left_out']}")
+    want_geo = math.exp(sum(math.log(m.relative_mase) for m in measured) / len(measured))
+    _expect(abs(n["relative_mase_geomean"] - want_geo) <= 1e-12 * want_geo, "the geometric mean leaves the series out")
 
 
 @register("foundation_forecast: Wilcoxon's signed-rank test against scipy (exact, sign patterns, normal)")

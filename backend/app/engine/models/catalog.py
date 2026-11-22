@@ -1392,7 +1392,10 @@ _FF_MODEL_TEXTS = [*_MODEL_TEXTS, "frequency", "time_kind", "missing", "size", "
 _FF_MODEL_NUMBERS = ["n", "n_series", "n_points", "n_missing", "n_filled", "n_model_missing", "n_future_rows", "horizon", "holdout",
                      "season", "alpha", "threads", "batches", "seconds_load", "seconds_forecast", "n_quantiles", "mase",
                      "baseline_mase", "relative_mase_geomean", "smape", "baseline_smape", "wql", "coverage_80", "coverage_90",
-                     "n_measured"]
+                     "n_measured",
+                     # what the means leave out, counted (lot F9): sMAPE's steps where the value and the forecast are both 0
+                     # (Timestral's, the seasonal naïve's), the series whose relative MASE the geometric mean cannot take
+                     "n_smape_zero", "n_baseline_smape_zero", "n_relative_left_out"]
 _FF_SERIES_NUMBERS = ["n", "n_used", "n_missing", "n_filled", "first", "last", "horizon", "scale", "mase", "baseline_mase",
                       "relative_mase", "smape", "baseline_smape", "pinball", "wql", "coverage_80", "coverage_90", "total"]
 _FF_OUTPUT = ["series", "time", "observed", "forecast", "quantile_*", "baseline", "filled", "is_holdout", "is_forecast"]
