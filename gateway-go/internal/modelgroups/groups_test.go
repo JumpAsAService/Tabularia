@@ -791,3 +791,39 @@ func TestTheFoundationForecastTask(t *testing.T) {
 		t.Errorf("a refusal of the catalogue: %v", err)
 	}
 }
+
+// The runner's own table of the sizes (ff_timestral.SIZES: the repository, the revision, the weights' and the config's sha256,
+// what the results and MLflow say of the weights) is the recipe's, size for size, and its licence the recipe's (lot F9: the two
+// were equal by hand, no test tied them).
+func TestTheRunnersSizesAreTheRecipes(t *testing.T) {
+	g, ok := Get("foundation_forecast")
+	if !ok {
+		t.Fatal("no group")
+	}
+	raw, err := files.ReadFile("groups/foundation_forecast/runner/py/ff_timestral.py")
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := string(raw)
+	start := strings.Index(src, "\nSIZES = {")
+	end := strings.Index(src[start:], "\n}\n")
+	if start < 0 || end < 0 {
+		t.Fatal("no SIZES in ff_timestral.py")
+	}
+	table := src[start : start+end]
+	entry := regexp.MustCompile(`"(\w+)": \{"name": "Timestral-\w+", "repo": "([^"]+)", "revision": "([0-9a-f]{40})",\s*"sha256": "([0-9a-f]{64})",\s*"config": "([0-9a-f]{64})"\}`)
+	found := entry.FindAllStringSubmatch(table, -1)
+	if len(found) != len(g.Recipe.Weights.Sizes) {
+		t.Fatalf("%d sizes in the runner, %d in the recipe", len(found), len(g.Recipe.Weights.Sizes))
+	}
+	for _, m := range found {
+		z, has := g.Recipe.Weights.Sizes[m[1]]
+		if !has || z.Repo != m[2] || z.Revision != m[3] || z.Files["model.safetensors"].SHA256 != m[4] || z.Files["config.json"].SHA256 != m[5] {
+			t.Errorf("size %s: the runner says %v, the recipe %+v", m[1], m[2:], z)
+		}
+	}
+	if !strings.Contains(src, `"sha256": "`+g.Recipe.Weights.Licence.SHA256+`"}`) ||
+		!strings.Contains(src, `LICENCE = {"name": "`+g.Recipe.Weights.Licence.Name+`"`) {
+		t.Error("the runner's licence is not the recipe's")
+	}
+}
