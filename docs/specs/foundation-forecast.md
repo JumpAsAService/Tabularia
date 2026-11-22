@@ -511,6 +511,8 @@ gateway-go/internal/modelgroups/
 The group's card, before **Enable**, holds a box **«Licence of the model weights»** (its own colour, an
 info icon, not an error):
 
+> **Superseded (owner's decision of 2026-11-22, F9).** The interface no longer explains or paraphrases the licence of the weights: the sentences of this spec that say what the clause means (the threshold, the company, the employer, the commercial licence, "not legal advice", the bold threshold, the checkbox's words about a separate licence) describe what was first decided, not what is built. Where it is shown (the panel, the node's form, the first and last pages of the report and the workbook, the assistants, the documentation) the licence is *quoted*: point 2 word for word in English in every language, its link, and one neutral sentence in the page's language; see the last paragraph of «As built / F9».
+
 1. **One sentence**: «The Timestral weights are Mistral AI's, under the Modified MIT License. Tabularia
    does not ship them: enabling this group downloads them into your cluster from Mistral AI's
    repository.»
@@ -1889,6 +1891,8 @@ the labels above the dots, a series named like a formula in the PDF and the work
 **138 passed, 2 skipped**. The group's self-test in its image with this lot's files mounted (no network, read-only, 2 CPUs,
 2.5 GB): the sha256 of the four sizes' files, then **36 checks, none failed or skipped** (new: the side of the test on the
 example above; WQL and the counts across the series). The golden after point 11: the same 490 renderings identical.
+
+**The licence is quoted, never explained (2026-11-22, owner).** No lawyer reads Tabularia's texts, so Tabularia does not explain or paraphrase the licence of the weights: it quotes it. In every language only the original English clause (point 2, word for word from the vendored `LICENSE`, sha256 `648194727930df730890e9f9affdbcc5c930d406d6829559b25ca3d5a973fc8c`) appears, with the link to the official file at the pinned revision and one neutral sentence in the page's language («This is the clause of the licence of Mistral AI's weights; the official file is authoritative for its full text and its interpretation.»; in the node's form, which shows no clause, the same without «This is the clause»). Out went the threshold, the kind of company, the commercial licence and «not legal advice», in the administrator's panel (the box now reads «I have read the licence of the weights and accept it on behalf of my organisation.»; still required, still the sha256 and the audit row), the node's form, the first page of the report (the model, the clause, the neutral sentence, the pointer to the last page), the last page and the workbook's sheet (the whole text, as before), the assistants' prompt (only that the weights are under Mistral AI's licence, that an administrator accepted it and that the text is in the official file) and the documentation. A test looks in the five languages for words of paraphrase outside the English quotation.
 
 ## References
 

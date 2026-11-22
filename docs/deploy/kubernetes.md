@@ -192,9 +192,9 @@ that holds the same paths and files (a copy of `mistralai/Timestral-<size>` at t
 default of the sample flow is 28M), **2.8 GB with the four sizes** (5M 21 MB, 28M 111 MB, 123M 490 MB, 209M 837 MB of weights, on a base of about 1.3 GB
 of Python, PyTorch and the numeric libraries). The build takes about a minute and a half of work on a good link; pre-pull the image on a large cluster
 as for the others. At run time a Job of this group asks for 2 CPUs and up to 4 GiB, and the largest size peaks at about 2 GB. **The weights' licence**:
-enabling the group, building it again or changing its sizes asks an administrator to accept the licence of the weights (it
-withholds every right from a company above $20 million of monthly revenue, unless it holds a commercial licence from
-Mistral AI); the acceptance is in the [audit log](../governance/audit-log.md) as `models.licence_accept`, and an installation that
+enabling the group, building it again or changing its sizes asks an administrator to accept the licence of the weights (the
+official file of Mistral AI's weights is the authority for its text and its interpretation; Tabularia quotes it and does
+not explain it); the acceptance is in the [audit log](../governance/audit-log.md) as `models.licence_accept`, and an installation that
 keeps its audit for a limited time should know that, once the row is gone, the next build asks again.
 
 ## Backend image (`backend/Dockerfile`)

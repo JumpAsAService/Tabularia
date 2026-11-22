@@ -1263,7 +1263,7 @@ Model id in the catalogue: `timestral`, in its own group, **Pre-trained forecast
 
 The model's weights are Mistral AI's, not Tabularia's, and they come under a licence of their own, the *Modified MIT
 License*. **Tabularia does not ship them**: the group's image downloads them from Mistral AI's repositories on Hugging Face,
-into your cluster, when an administrator enables the group. The clause that matters is point 2 of the licence, quoted here
+into your cluster, when an administrator enables the group. The clause below is point 2 of the licence, quoted here
 word for word:
 
 > 2. You are not authorized to exercise any rights under this license if the global consolidated
@@ -1280,16 +1280,13 @@ The full text is the file `LICENSE` of the four repositories (`mistralai/Timestr
 1,695 bytes, sha256 `648194727930df730890e9f9affdbcc5c930d406d6829559b25ca3d5a973fc8c`), and Tabularia keeps the same bytes
 beside the group's recipe and in every image it builds.
 
-What it means: **above the threshold of $20 million of global consolidated monthly revenue** (the company's or the
-employer's, for the preceding month) **the licence gives no right to use the weights, and a commercial licence from Mistral AI
-is needed**. Below it, the other condition of the licence (the attribution notice and the permission notice kept in every copy) is
-met by the files Tabularia keeps with the weights and prints in each report. **The administrator decides, and takes the
-responsibility**: when enabling the group (or building it again, or changing the sizes) the panel shows the clause, the sizes
-to download (on a group already built, **Build again** ticks the sizes of the version in use; a group never built ticks all
-four), and a box «I have read the licence of the Timestral weights, and the organisation that uses this installation may
-use them under it, or holds a separate licence from Mistral AI.», which stays unticked until a person ticks it; **Enable** is
-disabled before. Tabularia does not ask about revenue and does not check it. **This is not legal advice**: have your own
-counsel read the licence before enabling the group.
+This is the clause of the licence of Mistral AI's weights; the official file is authoritative for its full text and its
+interpretation. **Tabularia quotes the licence and never explains it**: the panel, the form of the node, the reports and the
+assistants say the clause word for word, in English in every language, or point to the official file. **The administrator
+decides, and takes the responsibility**: when enabling the group (or building it again, or changing the sizes) the panel shows
+the clause, the sizes to download (on a group already built, **Build again** ticks the sizes of the version in use; a group never
+built ticks all four), and a box «I have read the licence of the weights and accept it on behalf of my organisation.», which
+stays unticked until a person ticks it; **Enable** is disabled before.
 
 The acceptance is recorded in the [audit log](../governance/audit-log.md) as `models.licence_accept` (the licence's sha256, the
 sizes, who and when), and each version of the group keeps a line saying under which acceptance it was built, shown on the group's

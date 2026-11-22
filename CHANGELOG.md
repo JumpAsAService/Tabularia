@@ -170,12 +170,12 @@ Development on `main` for the next minor version. The stable line stays 1.4.x
   why five series can never reach 0.05. Up to 10,000 series and 1,024 steps; four sizes (5M, 28M, 123M, 209M); a run stops at once,
   with the speed it measured, when it will not fit its timeout. The report and the Excel run in five languages and end with the
   licence; a flow run is logged to MLflow with the weights' tags and the series' metrics, with no model to register and no Predict.
-  **The weights are under a licence of their own**: Mistral AI's Modified MIT License gives no right to a company whose
-  global consolidated monthly revenue is above $20 million, unless it holds a commercial licence. **Tabularia does not ship
+  **The weights are under a licence of their own**: Mistral AI's Modified MIT License, which the panel, the node and the reports
+  quote word for word and never explain: the official file is authoritative for its text and its interpretation. **Tabularia does not ship
   the weights**: the group's image downloads them, at pinned revisions and checked by sha256, from Hugging Face (or your
   mirror, `MODELS__WEIGHTS_BASE_URL`) when an administrator enables the group, and **enabling it, building it again or changing its sizes
-  asks the administrator to read and accept the licence** (`models.licence_accept` in the audit log). This is not legal advice:
-  read the licence before enabling. The sample data have a flow, **Orders by channel: four weeks ahead**, when the group is
+  asks the administrator to read and accept the licence** (`models.licence_accept` in the audit log): read the official file
+  before enabling. The sample data have a flow, **Orders by channel: four weeks ahead**, when the group is
   enabled; the assistants and the MCP tools know the node.
   [Pre-trained forecasting](docs/capabilities/models.md#pre-trained-forecasting-timestral).
 - **Every test's and every model's report explains its method in words.** The 21 hypothesis tests and the ten
