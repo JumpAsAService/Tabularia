@@ -919,11 +919,10 @@ export const modelPresetNameKey = (preset: string): string => `models.presets.${
 export const modelPresetHintKey = (preset: string): string => `models.presets.${preset}.hint`
 export const modelGroupKey = (group: string): string => `models.groups.${group}`
 
-// Models whose form and words the editor has, but whose runner is not built yet: the palette leaves them out. The A/B nodes
-// (lot E9), the decomposition (lot D6) and Forecast (Timestral) (lot F7) are in; a model being built goes here until its runner runs.
-// Volatility (GARCH) and Risk simulation (docs/specs/garch-risk.md) are in the catalogue and have no form nor words yet: lot G5
-// gives them and takes them away.
-export const MODEL_NOT_IN_THE_PALETTE_YET: ReadonlySet<string> = new Set<string>(['garch', 'risk_simulation'])
+// Models whose form and words the editor has, but whose runner is not built yet: the palette leaves them out. Nothing is
+// in it now: the A/B nodes (lot E9), the decomposition (lot D6), Forecast (Timestral) (lot F7) and Volatility (GARCH) and
+// Risk simulation (lot G7) are all in. A model being built goes here until its runner runs.
+export const MODEL_NOT_IN_THE_PALETTE_YET: ReadonlySet<string> = new Set<string>()
 
 /** The palette's Models group: the shown groups in the catalogue's order, each with its models
  *  and, after ARIMA, the six presets of that same node. With a search, only the items whose

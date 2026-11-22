@@ -395,7 +395,7 @@ test('a volatility node is named by its variance model, as the engine\'s report 
   assert.equal(m.modelSummary('risk_simulation', { ...SERIES, model: 'arima', p: 2, d: 1, q: 0, paths: 250000 }), 'ARIMA(2,1,0) · close · N=250,000')
 })
 
-test('the two nodes have icons of their own, and the palette still leaves them out until their runners are built; with them in, each is one entry under Time series', () => {
+test('the two nodes have icons of their own, and the palette shows them (lot G7): each is one entry under Time series', () => {
   assert.notEqual(icons.modelIconOf('garch'), icons.modelIconOf('arima'))
   assert.notEqual(icons.modelIconOf('risk_simulation'), icons.modelIconOf('arima'))
   assert.notEqual(icons.modelIconOf('garch'), icons.modelIconOf('risk_simulation'))
@@ -403,12 +403,14 @@ test('the two nodes have icons of their own, and the palette still leaves them o
   assert.notEqual(icons.modelIconOf('risk_simulation'), icons.modelIconOf('linear'))
   const t = (k) => WORDS.en[k] ?? k
   const shown = m.MODEL_CATALOG.groups.filter((g) => g.id === 'timeseries')
-  // hidden by default (lots G1 and G3 give them their runners, lot G7 takes them off this list)
-  assert.deepEqual([...m.MODEL_NOT_IN_THE_PALETTE_YET].filter((id) => id === 'garch' || id === 'risk_simulation').sort(), ['garch', 'risk_simulation'])
-  const hidden = m.modelPalette(shown, '', t)
+  // their runners are built (lots G1 and G3), and lot G7 took them off the list of the models the palette leaves out
+  assert.ok(!m.MODEL_NOT_IN_THE_PALETTE_YET.has('garch') && !m.MODEL_NOT_IN_THE_PALETTE_YET.has('risk_simulation'))
+  assert.equal(m.MODEL_NOT_IN_THE_PALETTE_YET.size, 0)
+  // shown by default: the two entries, in the catalogue's order after the decomposition, found by their names
+  const open = m.modelPalette(shown, '', t)
+  // and a list that does name them (the parameter is still there for the next model being built) leaves them out
+  const hidden = m.modelPalette(shown, '', t, m.MODEL_CATALOG, new Set(['garch', 'risk_simulation']))
   assert.ok(!hidden.flatMap((g) => g.items).some((i) => i.model === 'garch' || i.model === 'risk_simulation'))
-  // shown: the two entries, in the catalogue's order after the decomposition, found by their names
-  const open = m.modelPalette(shown, '', t, m.MODEL_CATALOG, new Set())
   assert.deepEqual(open.map((g) => g.group), ['timeseries'])
   const items = open[0].items
   const ids = items.map((i) => i.model)
@@ -421,8 +423,8 @@ test('the two nodes have icons of their own, and the palette still leaves them o
   assert.equal(entry('garch').preset, undefined)
   assert.equal(t(entry('garch').nameKey), 'Volatility (GARCH)')
   assert.equal(t(entry('risk_simulation').nameKey), 'Risk simulation')
-  assert.equal(m.modelPalette(shown, 'volatility (g', t, m.MODEL_CATALOG, new Set())[0].items.length, 1)
-  assert.equal(m.modelPalette(shown, 'risk simulation', t, m.MODEL_CATALOG, new Set())[0].items.length, 1)
+  assert.equal(m.modelPalette(shown, 'volatility (g', t)[0].items.length, 1)
+  assert.equal(m.modelPalette(shown, 'risk simulation', t)[0].items.length, 1)
   // a node dropped from the palette starts from the defaults
   assert.deepEqual(m.modelFromKind('model:garch'), { model: 'garch' })
   assert.equal(m.modelNodeData('risk_simulation').params.paths, 10000)

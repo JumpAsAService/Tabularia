@@ -181,7 +181,7 @@ test('the palette\'s entries: the models by group, the six presets after ARIMA, 
   assert.deepEqual(all[1].items.map((i) => i.kind), ['model:kaplan_meier', 'model:cox', 'model:parametric_survival'])
   assert.deepEqual(all[4].items.map((i) => i.kind), ['model:clv', 'model:bg_bb'])
   assert.deepEqual(all[6].items.map((i) => i.kind), ['model:timestral'])
-  assert.deepEqual(all[2].items.map((i) => i.kind), ['model:arima', 'model:arima:ar', 'model:arima:ma', 'model:arima:arma', 'model:arima:arima', 'model:arima:sarima', 'model:arima:sarimax', 'model:decomposition'])
+  assert.deepEqual(all[2].items.map((i) => i.kind), ['model:arima', 'model:arima:ar', 'model:arima:ma', 'model:arima:arma', 'model:arima:arima', 'model:arima:sarima', 'model:arima:sarimax', 'model:decomposition', 'model:garch', 'model:risk_simulation'])
   assert.deepEqual(m.modelPalette(m.modelShownGroups(STATE), '', en).map((g) => g.group), ['regression', 'timeseries'])
   // a search by name, by hint, by group
   assert.deepEqual(m.modelPalette(m.MODEL_CATALOG.groups, 'cox', en).flatMap((g) => g.items.map((i) => i.model)), ['cox'])
@@ -777,10 +777,10 @@ test('the palette: the Models group after Statistics, closed, by group, with Pre
   assert.match(html, /id="palette-models"[^>]*style="display:none;"/)
   const inside = text('<' + html.slice(html.indexOf('id="palette-models"'), html.indexOf('Control')))
   assert.ok(inside.includes('Predict') && inside.includes('Regression Linear regression Logistic regression'), inside)
-  assert.ok(inside.includes('Time series ARIMA AR MA ARMA ARIMA (p, d, q) SARIMA SARIMAX Decomposition'), inside)
+  assert.ok(inside.includes('Time series ARIMA AR MA ARMA ARIMA (p, d, q) SARIMA SARIMAX Decomposition Volatility (GARCH) Risk simulation'), inside)
   assert.ok(!inside.includes('Survival') && !inside.includes('Kaplan'))
-  // 1 Predict + 2 + 8 entries
-  assert.match(html, /class="group-count"[^>]*>11</)
+  // 1 Predict + 2 + 10 entries
+  assert.match(html, /class="group-count"[^>]*>13</)
   // each entry is draggable and reached with Tab, Enter and Space add it
   assert.match(html, /class="item"[^>]*draggable="true"[^>]*role="button"[^>]*tabindex="0"[^>]*title="Explains a number with other columns/)
   // without an MLflow connection: no Predict
@@ -1052,11 +1052,11 @@ test('the palette lists the three nodes under their groups, searchable, with an 
   assert.ok(inside.includes('Customer lifetime Customer lifetime value BG/BB'), inside)
   assert.ok(inside.includes('Experiments A/B test A/B test planning'), inside)
   assert.ok(inside.includes('Pre-trained forecasting Forecast (Timestral)'), inside)
-  // 1 Predict + 2 + 3 + 8 + 2 + 2 + 2 + 1
-  assert.match(html, /class="group-count"[^>]*>21</)
+  // 1 Predict + 2 + 3 + 10 + 2 + 2 + 2 + 1
+  assert.match(html, /class="group-count"[^>]*>23</)
   // every item is a button reached with Tab, Enter and Space add it (not a mouse-only control)
   const items = [...html.slice(html.indexOf('id="palette-models"'), html.indexOf('Control')).matchAll(/<div class="item[^"]*"[^>]*>/g)].map((x) => x[0]).filter((x) => x.includes('role="button"'))
-  assert.equal(items.length, 21)
+  assert.equal(items.length, 23)
   assert.ok( items.every((x) => x.includes('tabindex="0"') && x.includes('role="button"')))
   groups.state.value = null
 })
@@ -1279,9 +1279,9 @@ test('Risk simulation and Volatility (GARCH) say their columns before a run: a q
   assert.ok(!m.modelOutputColumns(m.modelOf('timestral'), { quantiles: [0.05, 0.5, 0.95] }, []).columns.some((c) => c.name === 'quantile_0.5'))
   // the engine's snapshot gives the variants' limits of rows: the risk node's ARIMA reads 20,000
   assert.deepEqual(risk.variants.map((v) => v.max_rows ?? null), [null, 20000])
-  // the palette leaves the two nodes out until their runners are built (lots G1 and G3): lot G5 gave them the form
+  // the palette shows the two nodes (lot G7: their runners are built, lots G1 and G3, and lot G5 gave them the form)
   const palette = m.modelPalette(m.MODEL_CATALOG.groups, '', (k) => k)
-  assert.ok(!palette.flatMap((g) => g.items).some((i) => i.model === 'garch' || i.model === 'risk_simulation'))
+  assert.ok(palette.flatMap((g) => g.items).some((i) => i.model === 'garch') && palette.flatMap((g) => g.items).some((i) => i.model === 'risk_simulation'))
 })
 
 test('the steps after a model that only keep, drop, order, rename, cast or filter say their columns; the others do not', () => {

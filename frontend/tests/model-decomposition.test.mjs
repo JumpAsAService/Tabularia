@@ -317,7 +317,8 @@ test('the decomposition has its icon and its summary, and is in the palette afte
   assert.equal(entries[0].preset, undefined)
   assert.equal(entries[0].kind, 'model:decomposition')
   assert.equal(t(entries[0].nameKey), 'Decomposition')
-  assert.equal(open[0].items.at(-1).model, 'decomposition')
+  // Volatility (GARCH) and Risk simulation (lot G7) follow it
+  assert.deepEqual(open[0].items.slice(-3).map((i) => i.model), ['decomposition', 'garch', 'risk_simulation'])
   assert.equal(m.modelPalette(shown, 'decomp', t)[0].items.length, 1)
   // the canvas: the method over the series
   assert.equal(m.modelSummary('decomposition', { ...SERIES }), 'STL · orders')
