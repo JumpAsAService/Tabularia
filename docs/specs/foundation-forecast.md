@@ -1527,6 +1527,9 @@ is a sentence in the five languages, no `@`, `{` or `%2` left, every note row ha
 most=…` (today an English sentence, said as it is in every language). The id is `series_kept`, not `series_left_out`, so that the English
 sentence of today's runner is still said whole rather than through a template whose numbers it does not send.
 
+Golden on clean copies of `e6f18587` and of it with these files: **500 of 500 renderings byte for byte as before**. Tests: `test_models_timestral_report`
+(55), `test_models_layouts`, `test_report_explanations`, `test_models_results`: **810 passed** (the CI image, `--memory=2500m --cpus=1`).
+
 ### F3 — the runner
 
 **Built (2026-11-22).** `runner/py/ff_series.py` (the options, the covariates, the survey of every series, the plan of blocks and batches, a
