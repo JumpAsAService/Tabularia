@@ -18,10 +18,11 @@ probabilities and confusion matrix out of fold (logistic), the ROC the mean of t
 """
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Mapping
 
 from app.engine.models import catalog
 from app.engine.models.layouts import common as c
+from app.engine.models.layouts import shared_readings as sr
 
 # the series of the paths that sums up the terms not drawn one by one (the runner's name for it)
 OTHERS = "(others)"
@@ -98,4 +99,33 @@ def page(model: str, params: dict[str, Any], locale: str, sample: list[dict] | N
     return c.page(model, params, locale, sample, step, name=name, about=about, cards=cards,
                   coef_tables=(c.CoefTable("coef", ct["at_lambda"], stats_, width=30),), coef_note=coef_note(w, checked["penalty"]),
                   charts=charts, blocks=(logistic.confusion_block,) if model == "logistic" else (),
-                  assumptions_note=w["diagnostics_note"][model], p_values=False)
+                  assumptions_note=w["diagnostics_note"][model], p_values=False, explained=("summary", "assumptions"))
+
+
+def readings(rows: list[dict], checked: Mapping[str, Any], model: str) -> list[c.ReadingLine]:
+    """The explanation of a penalized fit (docs/specs/report-explanations.md, «B2»): measures only, no verdict (no
+    p-value exists after a penalized selection). What the penalty kept, the fit out of fold, the choice of λ; the
+    diagnostics past their thresholds; for the logistic the classification out of fold. The method says why there is no
+    p-value."""
+    k = sr.keyed(rows)
+    terms = [r for r in rows if r["section"] == "coef" and r["stat"] == "selected" and r["level"] != sr.INTERCEPT]
+    lines: list[c.ReadingLine] = [("summary", None, "summary_penalized", {
+        "n": sr.model(k, "n"), "selected": sr.model(k, "n_selected"), "total": len(terms), "mixing": sr.model(k, "mixing")})]
+    if model == "linear":
+        lines.append(("summary", None, "summary_penalized_r2", {"r2": sr.model(k, "r_squared"),
+                                                                "outcome": str(checked.get("outcome") or "")}))
+    elif sr.model(k, "auc") is not None:
+        lines.append(("summary", None, "summary_penalized_auc", {"auc": sr.model(k, "auc"), "se": sr.model(k, "auc_se"),
+                                                                 "folds": sr.model(k, "auc_folds")}))
+    lines += [("summary", None, "penalized_measure", {}),  # the measure by the node's `measure` (its words choose)
+              ("summary", None, "penalized_lambda", {"lambda": sr.model(k, "lambda"), "cv": sr.model(k, "cv_value"),
+                                                     "cv_se": sr.model(k, "cv_se")})]
+    lines += sr.assumption_lines(rows, checked, tests=False)
+    if model == "logistic":
+        from app.engine.models.layouts import logistic
+
+        lines += logistic.confusion_lines(rows, checked)
+    lines += sr.method_lines("method_" + str(checked["penalty"]), "method_cv", "method_no_inference",
+                             *(("method_auc_folds", "method_threshold") if model == "logistic" else ()))
+    lines += sr.formula_lines("formula_penalized", "formula_cv")
+    return lines

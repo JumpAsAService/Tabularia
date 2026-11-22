@@ -130,7 +130,92 @@
    "epv": {
     "advice": "Few events for the number of terms: use fewer terms; Firth's estimation or a penalty reduce the bias, and with one already chosen read the intervals with care."
    }
-  }
+  },
+  "reading_blocks": {
+   "summary": "Summary",
+   "assumptions": "Assumptions",
+   "coefficients": "Coefficients",
+   "fit": "Fit",
+   "confusion": "Classification",
+   "curves": "Survival curves",
+   "pairs": "Pairs of strata",
+   "rmst": "Restricted mean",
+   "method": "Method",
+   "formulas": "Formula"
+  },
+  "reading_labels": {
+   "method_p_value": "p-values and α",
+   "method_logit": "Logistic regression",
+   "method_probit": "Probit",
+   "method_firth": "Firth's correction",
+   "method_se_hc": "Robust standard errors",
+   "method_se_cluster": "Clustered standard errors",
+   "method_auc": "AUC, Brier, R²",
+   "method_threshold": "Threshold",
+   "method_checks": "The checks",
+   "formula_logit": "Logit",
+   "formula_probit": "Probit",
+   "formula_lr": "Likelihood ratio",
+   "formula_wald": "Wald test and interval",
+   "formula_auc": "AUC",
+   "formula_brier": "Brier and R²"
+  },
+  "reading_texts": {
+   "assumptions_rejected": "Checks whose test rejects its hypothesis at α = {alpha:num}, its p-value below α: {count:int} of {total:int}, marked in the table, which says what each departure means and what to do.",
+   "assumptions_none_rejected": "Checks that are tests: {total:int}; at α = {alpha:num} none rejects its hypothesis, every p-value is at or above α. The data do not show a departure from these assumptions; they do not prove there is none.",
+   "assumptions_many_rows": "With {n:int} rows a test rejects even departures too small to matter: weigh the size of each departure in the charts before acting on a verdict.",
+   "more_in_table": "And {more:int} more: the table lists them all.",
+   "method_p_value": "A p-value is the probability that chance alone, if the hypothesis under test were true, gives a result at least as far from it as the one observed. It is compared with α, the node's setting: below α the hypothesis is rejected, and α is the risk, accepted in advance, of rejecting a true one. Not rejecting is not proving: with few rows an existing departure may go unseen. Each test is read on its own; with many tests, some reject by chance alone.",
+   "coef_some": "Terms whose coefficient is significantly different from 0 at α = {alpha:num} (p-value below α), the other terms held fixed: {count:int} of {total:int} — {names}. For the others the data do not show an effect; they do not prove there is none.",
+   "coef_all": "Every term's coefficient is significantly different from 0 at α = {alpha:num} (p-value below α), the other terms held fixed: {names}.",
+   "coef_none": "No term's coefficient is significantly different from 0 at α = {alpha:num}: each of the {total:int} p-values is at or above α. The data do not show an effect of any term; they do not prove there is none.",
+   "threshold_vif": "Variance inflation (VIF) above the threshold of {threshold:num} the table uses: {names}, at {values:num}. A VIF says how many times the other terms inflate the variance of a coefficient; the threshold is a convention of the literature, not a test.",
+   "threshold_epv": "Events for each coefficient: {value:num}, below the threshold of {threshold:num} the table uses. With few events per coefficient the estimates and their intervals rest on little information; the threshold is a convention of the literature, not a test.",
+   "threshold_cooks_distance": "The largest Cook's distance is {value:num}, above the threshold of {threshold:num} (the median of F(p, n − p)); rows above it: {count:int}, named in the table. Cook's distance measures how much the fitted values move when a row is left out; the threshold is a convention, not a test.",
+   "threshold_leverage": "The largest leverage is {value:num}, above the threshold of {threshold:num}; rows above it: {count:int}, named in the table. Leverage measures how unusual a row's combination of predictors is; the threshold is a convention, not a test.",
+   "threshold_deviance_residuals": "Rows with a deviance residual beyond ±{threshold:num}: {count:int}, named in the table. They are rows the model finds unlikely, given their predictors; the threshold is a convention, not a test.",
+   "summary_logistic": "Of {n:int} rows, {events:int} have «{event}». The AUC is {auc:num} (its {conf:pct} interval {low:num} to {high:num}): the probability that a row with the event gets a higher predicted probability than one without it, 0.5 being chance. McFadden's R² is {r2:num} and the Brier score, the mean squared gap between predicted probability and outcome, {brier:num}.",
+   "summary_logistic_no_ci": "Of {n:int} rows, {events:int} have «{event}». The AUC is {auc:num}: the probability that a row with the event gets a higher predicted probability than one without it, 0.5 being chance. McFadden's R² is {r2:num} and the Brier score, the mean squared gap between predicted probability and outcome, {brier:num}.",
+   "fit_lr_reject": "If no term changed the odds of «{event}», a likelihood-ratio statistic of {lr:num} or more ({df:int} degrees of freedom) would appear by chance with probability {p:p}, below α = {alpha:num}: the terms together are significant.",
+   "fit_lr_keep": "If no term changed the odds of «{event}», a likelihood-ratio statistic of {lr:num} or more ({df:int} degrees of freedom) would appear by chance with probability {p:p}, not below α = {alpha:num}: the terms together are not significant. The data do not show that they change the odds; they do not prove they do not.",
+   "coef_robust": {
+    "se=cluster": "The terms' tests and intervals use standard errors robust within clusters: rows of the same cluster may be correlated.",
+    "": "The terms' tests and intervals use standard errors robust to an unequal variance of the residuals ({kind})."
+   },
+   "coef_odds": "Among them, «{covariate}»: each unit more multiplies the odds of the event by {ratio:num} (its {conf:pct} interval {low:num} to {high:num}), the other terms held fixed.",
+   "coef_odds_level": "Among them, «{covariate}»: the level «{variant}» multiplies the odds of the event by {ratio:num} against the reference level (its {conf:pct} interval {low:num} to {high:num}), the other terms held fixed.",
+   "confusion_at": "A row is classified as «{event}» when its predicted probability is at least {threshold:num}. Then {accuracy:pct} of the rows are classified as observed; of the rows with the event {sensitivity:pct} are found (sensitivity), of those without it {specificity:pct} are classified without it (specificity), and of the rows classified with it {precision:pct} have it (precision).",
+   "method_logit": "Logistic regression takes the log odds of the event, log(p / (1 − p)), as a sum of the terms, each times its coefficient, and fits the coefficients by maximum likelihood. A coefficient is the change of the log odds for one unit more of its term, the other terms held fixed; its exponential, the odds ratio, multiplies the odds. A level of a category is compared with the reference level.",
+   "method_probit": "The probit model takes the probability of the event as the standard normal distribution's cumulative probability of a sum of the terms, each times its coefficient, fitted by maximum likelihood. A coefficient moves that sum by its value for one unit more of its term; a probit's coefficients have no odds ratio.",
+   "method_firth": "Firth's correction penalizes the likelihood by half the logarithm of the determinant of the information matrix: it removes most of the coefficients' bias in small samples and gives finite estimates even when a term separates the rows with the event from those without.",
+   "method_se_hc": "The standard errors are sandwich ones (HC0 to HC3): they do not rely on the variance the model implies, for example when the data vary more than a binomial allows.",
+   "method_se_cluster": "The standard errors are clustered: rows of the same cluster may be correlated with each other, rows of different clusters are taken as independent. With few clusters they are themselves imprecise.",
+   "method_auc": "The AUC (area under the ROC curve) is the probability that a row with the event gets a higher predicted probability than one without it, ties counting half; its interval is DeLong's. The Brier score is the mean of (predicted probability − outcome)²; McFadden's R² is 1 minus the ratio of the model's log-likelihood to that of the model without terms. All three are computed on the rows the model was fitted on.",
+   "method_threshold": "The classification turns each predicted probability into a class at the node's threshold: at or above it, the event. Accuracy, sensitivity, specificity and precision depend on that threshold; the AUC does not.",
+   "method_checks": "The checks test the calibration (Hosmer–Lemeshow: the predicted and the observed share of events in ten groups of rows) and the linearity of the log odds in each numeric term (Box–Tidwell). Separation, the events per term, multicollinearity (VIF) and influence (Cook's distance, leverage, deviance residuals) are measured, not tested, and compared with thresholds of the literature."
+  },
+  "formula_texts": {
+   "formula_logit": "log(p_i / (1 − p_i)) = η_i = β_0 + β_1 x_i1 + … + β_k x_ik;  p_i = 1 / (1 + e^(−η_i));  odds ratio of term j = e^(β_j)",
+   "formula_probit": "p_i = Φ(β_0 + β_1 x_i1 + … + β_k x_ik);  Φ: the standard normal cumulative distribution",
+   "formula_lr": "LR = 2 (ℓ(β̂) − ℓ_0) = null deviance − deviance, χ² with k degrees of freedom;  ℓ: the log-likelihood, ℓ_0 that of the model with the intercept alone",
+   "formula_wald": "z_j = β̂_j / se(β̂_j), against the standard normal;  the interval β̂_j ± z_(1−α/2) · se(β̂_j) (Wald; the profile likelihood's when ci = profile), and e^(…) of its ends for the odds ratio",
+   "formula_auc": "AUC = P(p̂ of a row with the event > p̂ of a row without) + ½ P(equal);  its interval by DeLong's variance",
+   "formula_brier": "Brier = (1 / n) Σ_i (p̂_i − y_i)², y_i = 1 for the event and 0 otherwise;  McFadden's R² = 1 − ℓ(β̂) / ℓ_0"
+  },
+  "measure_readings": [
+   "coef_odds",
+   "coef_odds_level",
+   "coef_robust",
+   "confusion_at",
+   "more_in_table",
+   "summary_logistic",
+   "summary_logistic_no_ci",
+   "threshold_cooks_distance",
+   "threshold_deviance_residuals",
+   "threshold_epv",
+   "threshold_leverage",
+   "threshold_vif"
+  ]
  },
  "it": {
   "name": "Regressione logistica",
@@ -263,7 +348,92 @@
    "epv": {
     "advice": "Pochi eventi per il numero di termini: usate meno termini; la stima di Firth o una penalizzazione riducono la distorsione, e se ne avete già scelta una leggete gli intervalli con cautela."
    }
-  }
+  },
+  "reading_blocks": {
+   "summary": "Sintesi",
+   "assumptions": "Assunzioni",
+   "coefficients": "Coefficienti",
+   "fit": "Adattamento",
+   "confusion": "Classificazione",
+   "curves": "Curve di sopravvivenza",
+   "pairs": "Coppie di strati",
+   "rmst": "Media ristretta",
+   "method": "Metodo",
+   "formulas": "Formula"
+  },
+  "reading_labels": {
+   "method_p_value": "p-value e α",
+   "method_logit": "Regressione logistica",
+   "method_probit": "Probit",
+   "method_firth": "Correzione di Firth",
+   "method_se_hc": "Errori standard robusti",
+   "method_se_cluster": "Errori standard per cluster",
+   "method_auc": "AUC, Brier, R²",
+   "method_threshold": "Soglia",
+   "method_checks": "I controlli",
+   "formula_logit": "Logit",
+   "formula_probit": "Probit",
+   "formula_lr": "Rapporto di verosimiglianza",
+   "formula_wald": "Test di Wald e intervallo",
+   "formula_auc": "AUC",
+   "formula_brier": "Brier e R²"
+  },
+  "reading_texts": {
+   "assumptions_rejected": "Controlli il cui test rifiuta la propria ipotesi ad α = {alpha:num}, con p-value sotto α: {count:int} su {total:int}, segnati nella tabella, che dice che cosa significa ogni scostamento e che cosa fare.",
+   "assumptions_none_rejected": "Controlli che sono test: {total:int}; ad α = {alpha:num} nessuno rifiuta la propria ipotesi, ogni p-value è pari o sopra α. I dati non mostrano uno scostamento da queste assunzioni; non dimostrano che non ce ne sia.",
+   "assumptions_many_rows": "Con {n:int} righe un test rifiuta anche scostamenti troppo piccoli per contare: valuta la loro ampiezza nei grafici prima di agire su un verdetto.",
+   "more_in_table": "E altri {more:int}: la tabella li elenca tutti.",
+   "method_p_value": "Un p-value è la probabilità che il solo caso, se l'ipotesi sotto esame fosse vera, dia un risultato lontano da essa almeno quanto quello osservato. Si confronta con α, impostato nel nodo: sotto α l'ipotesi è rifiutata, e α è il rischio, accettato in anticipo, di rifiutarne una vera. Non rifiutare non è dimostrare: con poche righe uno scostamento esistente può passare inosservato. Ogni test si legge da solo; con molti test, qualcuno rifiuta per puro caso.",
+   "coef_some": "Termini il cui coefficiente è significativamente diverso da 0 ad α = {alpha:num} (p-value sotto α), a parità degli altri termini: {count:int} su {total:int} — {names}. Per gli altri i dati non mostrano un effetto; non dimostrano che non ci sia.",
+   "coef_all": "Il coefficiente di ogni termine è significativamente diverso da 0 ad α = {alpha:num} (p-value sotto α), a parità degli altri termini: {names}.",
+   "coef_none": "Nessun coefficiente è significativamente diverso da 0 ad α = {alpha:num}: ciascuno dei {total:int} p-value è pari o sopra α. I dati non mostrano un effetto di alcun termine; non dimostrano che non ci sia.",
+   "threshold_vif": "Inflazione della varianza (VIF) sopra la soglia di {threshold:num} usata dalla tabella: {names}, a {values:num}. Un VIF dice quante volte gli altri termini gonfiano la varianza di un coefficiente; la soglia è una convenzione della letteratura, non un test.",
+   "threshold_epv": "Eventi per coefficiente: {value:num}, sotto la soglia di {threshold:num} usata dalla tabella. Con pochi eventi per coefficiente le stime e i loro intervalli poggiano su poca informazione; la soglia è una convenzione della letteratura, non un test.",
+   "threshold_cooks_distance": "La distanza di Cook più grande è {value:num}, sopra la soglia di {threshold:num} (la mediana di F(p, n − p)); righe sopra la soglia: {count:int}, indicate nella tabella. La distanza di Cook misura quanto si spostano i valori stimati togliendo una riga; la soglia è una convenzione, non un test.",
+   "threshold_leverage": "La leva più grande è {value:num}, sopra la soglia di {threshold:num}; righe sopra la soglia: {count:int}, indicate nella tabella. La leva misura quanto è insolita la combinazione dei predittori di una riga; la soglia è una convenzione, non un test.",
+   "threshold_deviance_residuals": "Righe con un residuo di devianza oltre ±{threshold:num}: {count:int}, indicate nella tabella. Sono righe che il modello trova improbabili, dati i loro predittori; la soglia è una convenzione, non un test.",
+   "summary_logistic": "Su {n:int} righe, {events:int} hanno «{event}». L'AUC è {auc:num} (intervallo al {conf:pct} da {low:num} a {high:num}): la probabilità che una riga con l'evento riceva una probabilità prevista più alta di una senza, 0,5 essendo il caso. L'R² di McFadden è {r2:num} e il Brier score, lo scarto quadratico medio tra probabilità prevista ed esito, {brier:num}.",
+   "summary_logistic_no_ci": "Su {n:int} righe, {events:int} hanno «{event}». L'AUC è {auc:num}: la probabilità che una riga con l'evento riceva una probabilità prevista più alta di una senza, 0,5 essendo il caso. L'R² di McFadden è {r2:num} e il Brier score, lo scarto quadratico medio tra probabilità prevista ed esito, {brier:num}.",
+   "fit_lr_reject": "Se nessun termine cambiasse le odds di «{event}», una statistica del rapporto di verosimiglianza di {lr:num} o più ({df:int} gradi di libertà) comparirebbe per caso con probabilità {p:p}, sotto α = {alpha:num}: i termini nel loro insieme sono significativi.",
+   "fit_lr_keep": "Se nessun termine cambiasse le odds di «{event}», una statistica del rapporto di verosimiglianza di {lr:num} o più ({df:int} gradi di libertà) comparirebbe per caso con probabilità {p:p}, non sotto α = {alpha:num}: i termini nel loro insieme non sono significativi. I dati non mostrano che cambino le odds; non dimostrano che non lo facciano.",
+   "coef_robust": {
+    "se=cluster": "I test e gli intervalli dei termini usano errori standard robusti entro i cluster: le righe dello stesso cluster possono essere correlate.",
+    "": "I test e gli intervalli dei termini usano errori standard robusti a una varianza disuguale dei residui ({kind})."
+   },
+   "coef_odds": "Tra questi, «{covariate}»: ogni unità in più moltiplica le odds dell'evento per {ratio:num} (intervallo al {conf:pct} da {low:num} a {high:num}), a parità degli altri termini.",
+   "coef_odds_level": "Tra questi, «{covariate}»: il livello «{variant}» moltiplica le odds dell'evento per {ratio:num} rispetto al livello di riferimento (intervallo al {conf:pct} da {low:num} a {high:num}), a parità degli altri termini.",
+   "confusion_at": "Una riga è classificata come «{event}» quando la sua probabilità prevista è almeno {threshold:num}. Così il {accuracy:pct} delle righe è classificato come osservato; delle righe con l'evento è trovato il {sensitivity:pct} (sensibilità), di quelle senza è classificato senza evento il {specificity:pct} (specificità), e delle righe classificate con l'evento lo ha il {precision:pct} (precisione).",
+   "method_logit": "La regressione logistica prende il logaritmo delle odds dell'evento, log(p / (1 − p)), come una somma dei termini, ciascuno per il suo coefficiente, e stima i coefficienti per massima verosimiglianza. Un coefficiente è la variazione del logaritmo delle odds per un'unità in più del suo termine, a parità degli altri; il suo esponenziale, l'odds ratio, moltiplica le odds. Un livello di una categoria è confrontato con il livello di riferimento.",
+   "method_probit": "Il modello probit prende la probabilità dell'evento come la probabilità cumulata della normale standard di una somma dei termini, ciascuno per il suo coefficiente, stimata per massima verosimiglianza. Un coefficiente sposta quella somma del suo valore per un'unità in più del suo termine; i coefficienti di un probit non hanno odds ratio.",
+   "method_firth": "La correzione di Firth penalizza la verosimiglianza con metà del logaritmo del determinante della matrice d'informazione: toglie gran parte della distorsione dei coefficienti nei piccoli campioni e dà stime finite anche quando un termine separa le righe con l'evento da quelle senza.",
+   "method_se_hc": "Gli errori standard sono di tipo sandwich (da HC0 a HC3): non dipendono dalla varianza implicata dal modello, per esempio quando i dati variano più di quanto una binomiale consenta.",
+   "method_se_cluster": "Gli errori standard sono per cluster: le righe dello stesso cluster possono essere correlate tra loro, quelle di cluster diversi sono prese come indipendenti. Con pochi cluster sono essi stessi imprecisi.",
+   "method_auc": "L'AUC (area sotto la curva ROC) è la probabilità che una riga con l'evento riceva una probabilità prevista più alta di una senza, con i pareggi contati a metà; il suo intervallo è quello di DeLong. Il Brier score è la media di (probabilità prevista − esito)²; l'R² di McFadden è 1 meno il rapporto tra la log-verosimiglianza del modello e quella del modello senza termini. Tutti e tre sono calcolati sulle righe su cui il modello è stato stimato.",
+   "method_threshold": "La classificazione trasforma ogni probabilità prevista in una classe alla soglia del nodo: pari o sopra di essa, l'evento. Accuratezza, sensibilità, specificità e precisione dipendono da quella soglia; l'AUC no.",
+   "method_checks": "I controlli verificano la calibrazione (Hosmer–Lemeshow: la quota prevista e quella osservata di eventi in dieci gruppi di righe) e la linearità del logaritmo delle odds in ogni termine numerico (Box–Tidwell). Separazione, eventi per termine, multicollinearità (VIF) e influenza (distanza di Cook, leva, residui di devianza) sono misurate, non testate, e confrontate con soglie della letteratura."
+  },
+  "formula_texts": {
+   "formula_logit": "log(p_i / (1 − p_i)) = η_i = β_0 + β_1 x_i1 + … + β_k x_ik;  p_i = 1 / (1 + e^(−η_i));  odds ratio del termine j = e^(β_j)",
+   "formula_probit": "p_i = Φ(β_0 + β_1 x_i1 + … + β_k x_ik);  Φ: la funzione di ripartizione della normale standard",
+   "formula_lr": "LR = 2 (ℓ(β̂) − ℓ_0) = devianza nulla − devianza, χ² con k gradi di libertà;  ℓ: la log-verosimiglianza, ℓ_0 quella del modello con la sola intercetta",
+   "formula_wald": "z_j = β̂_j / se(β̂_j), rispetto alla normale standard;  l'intervallo β̂_j ± z_(1−α/2) · se(β̂_j) (Wald; quello della verosimiglianza profilo con ci = profile), ed e^(…) dei suoi estremi per l'odds ratio",
+   "formula_auc": "AUC = P(p̂ di una riga con l'evento > p̂ di una riga senza) + ½ P(uguali);  il suo intervallo con la varianza di DeLong",
+   "formula_brier": "Brier = (1 / n) Σ_i (p̂_i − y_i)², y_i = 1 per l'evento e 0 altrimenti;  R² di McFadden = 1 − ℓ(β̂) / ℓ_0"
+  },
+  "measure_readings": [
+   "coef_odds",
+   "coef_odds_level",
+   "coef_robust",
+   "confusion_at",
+   "more_in_table",
+   "summary_logistic",
+   "summary_logistic_no_ci",
+   "threshold_cooks_distance",
+   "threshold_deviance_residuals",
+   "threshold_epv",
+   "threshold_leverage",
+   "threshold_vif"
+  ]
  },
  "de": {
   "name": "Logistische Regression",
@@ -396,7 +566,92 @@
    "epv": {
     "advice": "Wenige Ereignisse für die Zahl der Terme: Verwenden Sie weniger Terme; die Firth-Schätzung oder eine Penalisierung verringern die Verzerrung, und ist eine davon bereits gewählt, lesen Sie die Intervalle mit Vorsicht."
    }
-  }
+  },
+  "reading_blocks": {
+   "summary": "Zusammenfassung",
+   "assumptions": "Annahmen",
+   "coefficients": "Koeffizienten",
+   "fit": "Anpassung",
+   "confusion": "Klassifikation",
+   "curves": "Überlebenskurven",
+   "pairs": "Paare von Strata",
+   "rmst": "Restringierter Mittelwert",
+   "method": "Methode",
+   "formulas": "Formel"
+  },
+  "reading_labels": {
+   "method_p_value": "p-Werte und α",
+   "method_logit": "Logistische Regression",
+   "method_probit": "Probit",
+   "method_firth": "Firth-Korrektur",
+   "method_se_hc": "Robuste Standardfehler",
+   "method_se_cluster": "Geclusterte Standardfehler",
+   "method_auc": "AUC, Brier, R²",
+   "method_threshold": "Schwelle",
+   "method_checks": "Die Prüfungen",
+   "formula_logit": "Logit",
+   "formula_probit": "Probit",
+   "formula_lr": "Likelihood-Quotient",
+   "formula_wald": "Wald-Test und Intervall",
+   "formula_auc": "AUC",
+   "formula_brier": "Brier und R²"
+  },
+  "reading_texts": {
+   "assumptions_rejected": "Prüfungen, deren Test seine Hypothese bei α = {alpha:num} verwirft, mit p-Wert unter α: {count:int} von {total:int}, in der Tabelle markiert, die sagt, was jede Abweichung bedeutet und was zu tun ist.",
+   "assumptions_none_rejected": "Prüfungen, die Tests sind: {total:int}; bei α = {alpha:num} verwirft keiner seine Hypothese, jeder p-Wert liegt bei oder über α. Die Daten zeigen keine Abweichung von diesen Annahmen; sie beweisen nicht, dass es keine gibt.",
+   "assumptions_many_rows": "Mit {n:int} Zeilen verwirft ein Test auch Abweichungen, die zu klein sind, um ins Gewicht zu fallen: Wägen Sie ihre Größe in den Diagrammen ab, bevor Sie auf ein Urteil hin handeln.",
+   "more_in_table": "Und {more:int} weitere: Die Tabelle führt alle auf.",
+   "method_p_value": "Ein p-Wert ist die Wahrscheinlichkeit, dass der Zufall allein, wenn die geprüfte Hypothese wahr wäre, ein Ergebnis liefert, das mindestens so weit von ihr entfernt ist wie das beobachtete. Er wird mit α verglichen, der Einstellung des Knotens: Unter α wird die Hypothese verworfen, und α ist das im Voraus akzeptierte Risiko, eine wahre zu verwerfen. Nicht verwerfen heißt nicht beweisen: Mit wenigen Zeilen kann eine bestehende Abweichung unbemerkt bleiben. Jeder Test wird für sich gelesen; bei vielen Tests verwerfen einige allein durch Zufall.",
+   "coef_some": "Terme, deren Koeffizient sich bei α = {alpha:num} signifikant von 0 unterscheidet (p-Wert unter α), bei festgehaltenen übrigen Termen: {count:int} von {total:int} — {names}. Für die übrigen zeigen die Daten keinen Effekt; sie beweisen nicht, dass es keinen gibt.",
+   "coef_all": "Der Koeffizient jedes Terms unterscheidet sich bei α = {alpha:num} signifikant von 0 (p-Wert unter α), bei festgehaltenen übrigen Termen: {names}.",
+   "coef_none": "Kein Koeffizient unterscheidet sich bei α = {alpha:num} signifikant von 0: Jeder der {total:int} p-Werte liegt bei oder über α. Die Daten zeigen keinen Effekt eines Terms; sie beweisen nicht, dass es keinen gibt.",
+   "threshold_vif": "Varianzinflation (VIF) über der Schwelle von {threshold:num}, die die Tabelle verwendet: {names}, bei {values:num}. Ein VIF gibt an, um das Wievielfache die übrigen Terme die Varianz eines Koeffizienten aufblähen; die Schwelle ist eine Konvention der Literatur, kein Test.",
+   "threshold_epv": "Ereignisse je Koeffizient: {value:num}, unter der Schwelle von {threshold:num}, die die Tabelle verwendet. Mit wenigen Ereignissen je Koeffizient beruhen die Schätzungen und ihre Intervalle auf wenig Information; die Schwelle ist eine Konvention der Literatur, kein Test.",
+   "threshold_cooks_distance": "Die größte Cook-Distanz ist {value:num}, über der Schwelle von {threshold:num} (dem Median von F(p, n − p)); Zeilen darüber: {count:int}, in der Tabelle genannt. Die Cook-Distanz misst, wie weit sich die angepassten Werte verschieben, wenn eine Zeile weggelassen wird; die Schwelle ist eine Konvention, kein Test.",
+   "threshold_leverage": "Die größte Hebelwirkung ist {value:num}, über der Schwelle von {threshold:num}; Zeilen darüber: {count:int}, in der Tabelle genannt. Die Hebelwirkung misst, wie ungewöhnlich die Kombination der Prädiktoren einer Zeile ist; die Schwelle ist eine Konvention, kein Test.",
+   "threshold_deviance_residuals": "Zeilen mit einem Devianzresiduum jenseits von ±{threshold:num}: {count:int}, in der Tabelle genannt. Es sind Zeilen, die das Modell bei ihren Prädiktoren für unwahrscheinlich hält; die Schwelle ist eine Konvention, kein Test.",
+   "summary_logistic": "Von {n:int} Zeilen haben {events:int} «{event}». Die AUC ist {auc:num} (ihr {conf:pct}-Intervall {low:num} bis {high:num}): die Wahrscheinlichkeit, dass eine Zeile mit dem Ereignis eine höhere vorhergesagte Wahrscheinlichkeit erhält als eine ohne, wobei 0,5 dem Zufall entspricht. McFaddens R² ist {r2:num} und der Brier-Score, die mittlere quadrierte Abweichung zwischen vorhergesagter Wahrscheinlichkeit und Ergebnis, {brier:num}.",
+   "summary_logistic_no_ci": "Von {n:int} Zeilen haben {events:int} «{event}». Die AUC ist {auc:num}: die Wahrscheinlichkeit, dass eine Zeile mit dem Ereignis eine höhere vorhergesagte Wahrscheinlichkeit erhält als eine ohne, wobei 0,5 dem Zufall entspricht. McFaddens R² ist {r2:num} und der Brier-Score, die mittlere quadrierte Abweichung zwischen vorhergesagter Wahrscheinlichkeit und Ergebnis, {brier:num}.",
+   "fit_lr_reject": "Veränderte kein Term die Odds von «{event}», träte eine Likelihood-Quotienten-Statistik von {lr:num} oder mehr ({df:int} Freiheitsgrade) mit Wahrscheinlichkeit {p:p} zufällig auf, unter α = {alpha:num}: Die Terme zusammen sind signifikant.",
+   "fit_lr_keep": "Veränderte kein Term die Odds von «{event}», träte eine Likelihood-Quotienten-Statistik von {lr:num} oder mehr ({df:int} Freiheitsgrade) mit Wahrscheinlichkeit {p:p} zufällig auf, nicht unter α = {alpha:num}: Die Terme zusammen sind nicht signifikant. Die Daten zeigen nicht, dass sie die Odds verändern; sie beweisen nicht das Gegenteil.",
+   "coef_robust": {
+    "se=cluster": "Die Tests und Intervalle der Terme verwenden innerhalb von Clustern robuste Standardfehler: Zeilen desselben Clusters dürfen korreliert sein.",
+    "": "Die Tests und Intervalle der Terme verwenden Standardfehler, die gegen eine ungleiche Varianz der Residuen robust sind ({kind})."
+   },
+   "coef_odds": "Darunter «{covariate}»: Jede Einheit mehr multipliziert die Odds des Ereignisses mit {ratio:num} (ihr {conf:pct}-Intervall {low:num} bis {high:num}), bei festgehaltenen übrigen Termen.",
+   "coef_odds_level": "Darunter «{covariate}»: Die Stufe «{variant}» multipliziert die Odds des Ereignisses gegenüber der Referenzstufe mit {ratio:num} (ihr {conf:pct}-Intervall {low:num} bis {high:num}), bei festgehaltenen übrigen Termen.",
+   "confusion_at": "Eine Zeile wird als «{event}» klassifiziert, wenn ihre vorhergesagte Wahrscheinlichkeit mindestens {threshold:num} ist. Dann sind {accuracy:pct} der Zeilen wie beobachtet klassifiziert; von den Zeilen mit dem Ereignis werden {sensitivity:pct} gefunden (Sensitivität), von denen ohne werden {specificity:pct} als ohne klassifiziert (Spezifität), und von den als mit Ereignis klassifizierten haben es {precision:pct} (Präzision).",
+   "method_logit": "Die logistische Regression setzt die logarithmierten Odds des Ereignisses, log(p / (1 − p)), als Summe der Terme an, jeder mal seinem Koeffizienten, und schätzt die Koeffizienten nach der Maximum-Likelihood-Methode. Ein Koeffizient ist die Änderung der logarithmierten Odds für eine Einheit mehr seines Terms, bei festgehaltenen übrigen Termen; seine Exponentialfunktion, das Odds Ratio, multipliziert die Odds. Eine Stufe einer Kategorie wird mit der Referenzstufe verglichen.",
+   "method_probit": "Das Probit-Modell setzt die Wahrscheinlichkeit des Ereignisses als kumulierte Wahrscheinlichkeit der Standardnormalverteilung einer Summe der Terme an, jeder mal seinem Koeffizienten, geschätzt nach der Maximum-Likelihood-Methode. Ein Koeffizient verschiebt diese Summe um seinen Wert für eine Einheit mehr seines Terms; die Koeffizienten eines Probit haben kein Odds Ratio.",
+   "method_firth": "Firths Korrektur bestraft die Likelihood mit dem halben Logarithmus der Determinante der Informationsmatrix: Sie beseitigt den Großteil der Verzerrung der Koeffizienten in kleinen Stichproben und liefert endliche Schätzungen, auch wenn ein Term die Zeilen mit dem Ereignis von denen ohne trennt.",
+   "method_se_hc": "Die Standardfehler sind Sandwich-Standardfehler (HC0 bis HC3): Sie hängen nicht von der Varianz ab, die das Modell unterstellt, etwa wenn die Daten stärker streuen, als eine Binomialverteilung erlaubt.",
+   "method_se_cluster": "Die Standardfehler sind geclustert: Zeilen desselben Clusters dürfen miteinander korreliert sein, Zeilen verschiedener Cluster gelten als unabhängig. Bei wenigen Clustern sind sie selbst ungenau.",
+   "method_auc": "Die AUC (Fläche unter der ROC-Kurve) ist die Wahrscheinlichkeit, dass eine Zeile mit dem Ereignis eine höhere vorhergesagte Wahrscheinlichkeit erhält als eine ohne, Gleichstände halb gezählt; ihr Intervall ist das von DeLong. Der Brier-Score ist der Mittelwert von (vorhergesagte Wahrscheinlichkeit − Ergebnis)²; McFaddens R² ist 1 minus das Verhältnis der Log-Likelihood des Modells zu der des Modells ohne Terme. Alle drei werden auf den Zeilen berechnet, auf denen das Modell angepasst wurde.",
+   "method_threshold": "Die Klassifikation macht aus jeder vorhergesagten Wahrscheinlichkeit eine Klasse an der Schwelle des Knotens: auf oder über ihr das Ereignis. Genauigkeit, Sensitivität, Spezifität und Präzision hängen von dieser Schwelle ab; die AUC nicht.",
+   "method_checks": "Die Prüfungen testen die Kalibrierung (Hosmer–Lemeshow: vorhergesagter und beobachteter Anteil der Ereignisse in zehn Gruppen von Zeilen) und die Linearität der logarithmierten Odds in jedem numerischen Term (Box–Tidwell). Separation, Ereignisse je Term, Multikollinearität (VIF) und Einfluss (Cook-Distanz, Hebelwirkung, Devianzresiduen) werden gemessen, nicht getestet, und mit Schwellen der Literatur verglichen."
+  },
+  "formula_texts": {
+   "formula_logit": "log(p_i / (1 − p_i)) = η_i = β_0 + β_1 x_i1 + … + β_k x_ik;  p_i = 1 / (1 + e^(−η_i));  Odds Ratio von Term j = e^(β_j)",
+   "formula_probit": "p_i = Φ(β_0 + β_1 x_i1 + … + β_k x_ik);  Φ: die Verteilungsfunktion der Standardnormalverteilung",
+   "formula_lr": "LR = 2 (ℓ(β̂) − ℓ_0) = Null-Devianz − Devianz, χ² mit k Freiheitsgraden;  ℓ: die Log-Likelihood, ℓ_0 die des Modells nur mit Achsenabschnitt",
+   "formula_wald": "z_j = β̂_j / se(β̂_j), gegen die Standardnormalverteilung;  das Intervall β̂_j ± z_(1−α/2) · se(β̂_j) (Wald; das der Profil-Likelihood bei ci = profile), und e^(…) seiner Enden für das Odds Ratio",
+   "formula_auc": "AUC = P(p̂ einer Zeile mit dem Ereignis > p̂ einer Zeile ohne) + ½ P(gleich);  ihr Intervall mit der Varianz von DeLong",
+   "formula_brier": "Brier = (1 / n) Σ_i (p̂_i − y_i)², y_i = 1 für das Ereignis und sonst 0;  McFaddens R² = 1 − ℓ(β̂) / ℓ_0"
+  },
+  "measure_readings": [
+   "coef_odds",
+   "coef_odds_level",
+   "coef_robust",
+   "confusion_at",
+   "more_in_table",
+   "summary_logistic",
+   "summary_logistic_no_ci",
+   "threshold_cooks_distance",
+   "threshold_deviance_residuals",
+   "threshold_epv",
+   "threshold_leverage",
+   "threshold_vif"
+  ]
  },
  "es": {
   "name": "Regresión logística",
@@ -529,7 +784,92 @@
    "epv": {
     "advice": "Pocos eventos para el número de términos: use menos términos; la estimación de Firth o una penalización reducen el sesgo, y si ya eligió una, lea los intervalos con cautela."
    }
-  }
+  },
+  "reading_blocks": {
+   "summary": "Resumen",
+   "assumptions": "Supuestos",
+   "coefficients": "Coeficientes",
+   "fit": "Ajuste",
+   "confusion": "Clasificación",
+   "curves": "Curvas de supervivencia",
+   "pairs": "Pares de estratos",
+   "rmst": "Media restringida",
+   "method": "Método",
+   "formulas": "Fórmula"
+  },
+  "reading_labels": {
+   "method_p_value": "p-valores y α",
+   "method_logit": "Regresión logística",
+   "method_probit": "Probit",
+   "method_firth": "Corrección de Firth",
+   "method_se_hc": "Errores estándar robustos",
+   "method_se_cluster": "Errores estándar por clúster",
+   "method_auc": "AUC, Brier, R²",
+   "method_threshold": "Umbral",
+   "method_checks": "Las comprobaciones",
+   "formula_logit": "Logit",
+   "formula_probit": "Probit",
+   "formula_lr": "Razón de verosimilitudes",
+   "formula_wald": "Contraste de Wald e intervalo",
+   "formula_auc": "AUC",
+   "formula_brier": "Brier y R²"
+  },
+  "reading_texts": {
+   "assumptions_rejected": "Comprobaciones cuyo contraste rechaza su hipótesis con α = {alpha:num}, con p-valor por debajo de α: {count:int} de {total:int}, marcadas en la tabla, que dice qué significa cada desviación y qué hacer.",
+   "assumptions_none_rejected": "Comprobaciones que son contrastes: {total:int}; con α = {alpha:num} ninguno rechaza su hipótesis, todo p-valor es igual o superior a α. Los datos no muestran una desviación de estos supuestos; no prueban que no la haya.",
+   "assumptions_many_rows": "Con {n:int} filas un contraste rechaza incluso desviaciones demasiado pequeñas para importar: valore su tamaño en los gráficos antes de actuar según un veredicto.",
+   "more_in_table": "Y {more:int} más: la tabla los recoge todos.",
+   "method_p_value": "Un p-valor es la probabilidad de que el azar por sí solo, si la hipótesis contrastada fuera cierta, dé un resultado al menos tan alejado de ella como el observado. Se compara con α, el ajuste del nodo: por debajo de α la hipótesis se rechaza, y α es el riesgo, aceptado de antemano, de rechazar una cierta. No rechazar no es probar: con pocas filas una desviación existente puede pasar inadvertida. Cada contraste se lee por separado; con muchos contrastes, algunos rechazan solo por azar.",
+   "coef_some": "Términos cuyo coeficiente es significativamente distinto de 0 con α = {alpha:num} (p-valor por debajo de α), con los demás términos fijos: {count:int} de {total:int} — {names}. Para los demás los datos no muestran un efecto; no prueban que no lo haya.",
+   "coef_all": "El coeficiente de cada término es significativamente distinto de 0 con α = {alpha:num} (p-valor por debajo de α), con los demás términos fijos: {names}.",
+   "coef_none": "Ningún coeficiente es significativamente distinto de 0 con α = {alpha:num}: cada uno de los {total:int} p-valores es igual o superior a α. Los datos no muestran un efecto de ningún término; no prueban que no lo haya.",
+   "threshold_vif": "Inflación de la varianza (VIF) por encima del umbral de {threshold:num} que usa la tabla: {names}, con {values:num}. Un VIF indica cuántas veces los demás términos inflan la varianza de un coeficiente; el umbral es una convención de la literatura, no un contraste.",
+   "threshold_epv": "Eventos por coeficiente: {value:num}, por debajo del umbral de {threshold:num} que usa la tabla. Con pocos eventos por coeficiente, las estimaciones y sus intervalos descansan en poca información; el umbral es una convención de la literatura, no un contraste.",
+   "threshold_cooks_distance": "La mayor distancia de Cook es {value:num}, por encima del umbral de {threshold:num} (la mediana de F(p, n − p)); filas por encima: {count:int}, nombradas en la tabla. La distancia de Cook mide cuánto se mueven los valores ajustados al dejar fuera una fila; el umbral es una convención, no un contraste.",
+   "threshold_leverage": "El mayor apalancamiento es {value:num}, por encima del umbral de {threshold:num}; filas por encima: {count:int}, nombradas en la tabla. El apalancamiento mide lo inusual que es la combinación de predictores de una fila; el umbral es una convención, no un contraste.",
+   "threshold_deviance_residuals": "Filas con un residuo de desviación más allá de ±{threshold:num}: {count:int}, nombradas en la tabla. Son filas que el modelo considera improbables, dados sus predictores; el umbral es una convención, no un contraste.",
+   "summary_logistic": "De {n:int} filas, {events:int} tienen «{event}». El AUC es {auc:num} (intervalo al {conf:pct} de {low:num} a {high:num}): la probabilidad de que una fila con el evento reciba una probabilidad prevista mayor que una sin él, siendo 0,5 el azar. El R² de McFadden es {r2:num} y la puntuación de Brier, la diferencia cuadrática media entre probabilidad prevista y resultado, {brier:num}.",
+   "summary_logistic_no_ci": "De {n:int} filas, {events:int} tienen «{event}». El AUC es {auc:num}: la probabilidad de que una fila con el evento reciba una probabilidad prevista mayor que una sin él, siendo 0,5 el azar. El R² de McFadden es {r2:num} y la puntuación de Brier, la diferencia cuadrática media entre probabilidad prevista y resultado, {brier:num}.",
+   "fit_lr_reject": "Si ningún término cambiara las odds de «{event}», un estadístico de razón de verosimilitudes de {lr:num} o más ({df:int} grados de libertad) aparecería por azar con probabilidad {p:p}, por debajo de α = {alpha:num}: los términos en conjunto son significativos.",
+   "fit_lr_keep": "Si ningún término cambiara las odds de «{event}», un estadístico de razón de verosimilitudes de {lr:num} o más ({df:int} grados de libertad) aparecería por azar con probabilidad {p:p}, no por debajo de α = {alpha:num}: los términos en conjunto no son significativos. Los datos no muestran que cambien las odds; no prueban que no lo hagan.",
+   "coef_robust": {
+    "se=cluster": "Los contrastes y los intervalos de los términos usan errores estándar robustos dentro de los clústeres: las filas del mismo clúster pueden estar correlacionadas.",
+    "": "Los contrastes y los intervalos de los términos usan errores estándar robustos a una varianza desigual de los residuos ({kind})."
+   },
+   "coef_odds": "Entre ellos, «{covariate}»: cada unidad más multiplica las odds del evento por {ratio:num} (intervalo al {conf:pct} de {low:num} a {high:num}), con los demás términos fijos.",
+   "coef_odds_level": "Entre ellos, «{covariate}»: el nivel «{variant}» multiplica las odds del evento por {ratio:num} frente al nivel de referencia (intervalo al {conf:pct} de {low:num} a {high:num}), con los demás términos fijos.",
+   "confusion_at": "Una fila se clasifica como «{event}» cuando su probabilidad prevista es al menos {threshold:num}. Así el {accuracy:pct} de las filas se clasifica como se observó; de las filas con el evento se encuentra el {sensitivity:pct} (sensibilidad), de las que no lo tienen se clasifica sin él el {specificity:pct} (especificidad), y de las filas clasificadas con el evento lo tiene el {precision:pct} (precisión).",
+   "method_logit": "La regresión logística toma el logaritmo de las odds del evento, log(p / (1 − p)), como una suma de los términos, cada uno por su coeficiente, y estima los coeficientes por máxima verosimilitud. Un coeficiente es el cambio del logaritmo de las odds por una unidad más de su término, con los demás fijos; su exponencial, la razón de odds, multiplica las odds. Un nivel de una categoría se compara con el nivel de referencia.",
+   "method_probit": "El modelo probit toma la probabilidad del evento como la probabilidad acumulada de la normal estándar de una suma de los términos, cada uno por su coeficiente, estimada por máxima verosimilitud. Un coeficiente desplaza esa suma en su valor por una unidad más de su término; los coeficientes de un probit no tienen razón de odds.",
+   "method_firth": "La corrección de Firth penaliza la verosimilitud con la mitad del logaritmo del determinante de la matriz de información: elimina la mayor parte del sesgo de los coeficientes en muestras pequeñas y da estimaciones finitas aun cuando un término separa las filas con el evento de las que no lo tienen.",
+   "method_se_hc": "Los errores estándar son de tipo sándwich (de HC0 a HC3): no dependen de la varianza que implica el modelo, por ejemplo cuando los datos varían más de lo que una binomial permite.",
+   "method_se_cluster": "Los errores estándar son por clúster: las filas del mismo clúster pueden estar correlacionadas entre sí, las de clústeres distintos se toman como independientes. Con pocos clústeres son ellos mismos imprecisos.",
+   "method_auc": "El AUC (área bajo la curva ROC) es la probabilidad de que una fila con el evento reciba una probabilidad prevista mayor que una sin él, con los empates contados a la mitad; su intervalo es el de DeLong. La puntuación de Brier es la media de (probabilidad prevista − resultado)²; el R² de McFadden es 1 menos el cociente entre la log-verosimilitud del modelo y la del modelo sin términos. Los tres se calculan en las filas sobre las que se ajustó el modelo.",
+   "method_threshold": "La clasificación convierte cada probabilidad prevista en una clase en el umbral del nodo: igual o por encima de él, el evento. La exactitud, la sensibilidad, la especificidad y la precisión dependen de ese umbral; el AUC no.",
+   "method_checks": "Las comprobaciones contrastan la calibración (Hosmer–Lemeshow: la proporción prevista y la observada de eventos en diez grupos de filas) y la linealidad del logaritmo de las odds en cada término numérico (Box–Tidwell). La separación, los eventos por término, la multicolinealidad (VIF) y la influencia (distancia de Cook, apalancamiento, residuos de desviación) se miden, no se contrastan, y se comparan con umbrales de la literatura."
+  },
+  "formula_texts": {
+   "formula_logit": "log(p_i / (1 − p_i)) = η_i = β_0 + β_1 x_i1 + … + β_k x_ik;  p_i = 1 / (1 + e^(−η_i));  razón de odds del término j = e^(β_j)",
+   "formula_probit": "p_i = Φ(β_0 + β_1 x_i1 + … + β_k x_ik);  Φ: la función de distribución de la normal estándar",
+   "formula_lr": "LR = 2 (ℓ(β̂) − ℓ_0) = desviación nula − desviación, χ² con k grados de libertad;  ℓ: la log-verosimilitud, ℓ_0 la del modelo con solo el intercepto",
+   "formula_wald": "z_j = β̂_j / se(β̂_j), frente a la normal estándar;  el intervalo β̂_j ± z_(1−α/2) · se(β̂_j) (Wald; el de la verosimilitud perfil con ci = profile), y e^(…) de sus extremos para la razón de odds",
+   "formula_auc": "AUC = P(p̂ de una fila con el evento > p̂ de una fila sin él) + ½ P(iguales);  su intervalo con la varianza de DeLong",
+   "formula_brier": "Brier = (1 / n) Σ_i (p̂_i − y_i)², y_i = 1 para el evento y 0 en otro caso;  R² de McFadden = 1 − ℓ(β̂) / ℓ_0"
+  },
+  "measure_readings": [
+   "coef_odds",
+   "coef_odds_level",
+   "coef_robust",
+   "confusion_at",
+   "more_in_table",
+   "summary_logistic",
+   "summary_logistic_no_ci",
+   "threshold_cooks_distance",
+   "threshold_deviance_residuals",
+   "threshold_epv",
+   "threshold_leverage",
+   "threshold_vif"
+  ]
  },
  "fr": {
   "name": "Régression logistique",
@@ -662,6 +1002,91 @@
    "epv": {
     "advice": "Peu d'événements pour le nombre de termes : utilisez moins de termes ; l'estimation de Firth ou une pénalisation réduisent le biais, et si l'une est déjà choisie, lisez les intervalles avec prudence."
    }
-  }
+  },
+  "reading_blocks": {
+   "summary": "Synthèse",
+   "assumptions": "Hypothèses",
+   "coefficients": "Coefficients",
+   "fit": "Ajustement",
+   "confusion": "Classification",
+   "curves": "Courbes de survie",
+   "pairs": "Paires de strates",
+   "rmst": "Moyenne restreinte",
+   "method": "Méthode",
+   "formulas": "Formule"
+  },
+  "reading_labels": {
+   "method_p_value": "p-valeurs et α",
+   "method_logit": "Régression logistique",
+   "method_probit": "Probit",
+   "method_firth": "Correction de Firth",
+   "method_se_hc": "Erreurs standard robustes",
+   "method_se_cluster": "Erreurs standard par grappe",
+   "method_auc": "AUC, Brier, R²",
+   "method_threshold": "Seuil",
+   "method_checks": "Les contrôles",
+   "formula_logit": "Logit",
+   "formula_probit": "Probit",
+   "formula_lr": "Rapport de vraisemblance",
+   "formula_wald": "Test de Wald et intervalle",
+   "formula_auc": "AUC",
+   "formula_brier": "Brier et R²"
+  },
+  "reading_texts": {
+   "assumptions_rejected": "Contrôles dont le test rejette son hypothèse au seuil α = {alpha:num}, leur p-valeur étant sous α : {count:int} sur {total:int}, marqués dans le tableau, qui dit ce que signifie chaque écart et que faire.",
+   "assumptions_none_rejected": "Contrôles qui sont des tests : {total:int} ; au seuil α = {alpha:num}, aucun ne rejette son hypothèse, chaque p-valeur est égale ou supérieure à α. Les données ne montrent pas d'écart à ces hypothèses ; elles ne prouvent pas qu'il n'y en a pas.",
+   "assumptions_many_rows": "Avec {n:int} lignes, un test rejette même des écarts trop petits pour compter : pesez leur taille dans les graphiques avant d'agir sur un verdict.",
+   "more_in_table": "Et {more:int} de plus : le tableau les donne tous.",
+   "method_p_value": "Une p-valeur est la probabilité que le hasard seul, si l'hypothèse testée était vraie, donne un résultat au moins aussi éloigné d'elle que celui observé. On la compare à α, le réglage du nœud : sous α, l'hypothèse est rejetée, et α est le risque, accepté d'avance, d'en rejeter une vraie. Ne pas rejeter n'est pas prouver : avec peu de lignes, un écart existant peut passer inaperçu. Chaque test se lit seul ; avec beaucoup de tests, certains rejettent par le seul hasard.",
+   "coef_some": "Termes dont le coefficient diffère significativement de 0 au seuil α = {alpha:num} (p-valeur sous α), les autres termes étant fixés : {count:int} sur {total:int} — {names}. Pour les autres, les données ne montrent pas d'effet ; elles ne prouvent pas qu'il n'y en a pas.",
+   "coef_all": "Le coefficient de chaque terme diffère significativement de 0 au seuil α = {alpha:num} (p-valeur sous α), les autres termes étant fixés : {names}.",
+   "coef_none": "Aucun coefficient ne diffère significativement de 0 au seuil α = {alpha:num} : chacune des {total:int} p-valeurs est égale ou supérieure à α. Les données ne montrent d'effet d'aucun terme ; elles ne prouvent pas qu'il n'y en a pas.",
+   "threshold_vif": "Inflation de la variance (VIF) au-dessus du seuil de {threshold:num} qu'utilise le tableau : {names}, à {values:num}. Un VIF dit combien de fois les autres termes gonflent la variance d'un coefficient ; le seuil est une convention de la littérature, pas un test.",
+   "threshold_epv": "Événements par coefficient : {value:num}, sous le seuil de {threshold:num} qu'utilise le tableau. Avec peu d'événements par coefficient, les estimations et leurs intervalles reposent sur peu d'information ; le seuil est une convention de la littérature, pas un test.",
+   "threshold_cooks_distance": "La plus grande distance de Cook vaut {value:num}, au-dessus du seuil de {threshold:num} (la médiane de F(p, n − p)) ; lignes au-dessus : {count:int}, nommées dans le tableau. La distance de Cook mesure combien les valeurs ajustées bougent quand on retire une ligne ; le seuil est une convention, pas un test.",
+   "threshold_leverage": "Le plus grand levier vaut {value:num}, au-dessus du seuil de {threshold:num} ; lignes au-dessus : {count:int}, nommées dans le tableau. Le levier mesure combien la combinaison des prédicteurs d'une ligne est inhabituelle ; le seuil est une convention, pas un test.",
+   "threshold_deviance_residuals": "Lignes dont le résidu de déviance dépasse ±{threshold:num} : {count:int}, nommées dans le tableau. Ce sont des lignes que le modèle trouve improbables, vu leurs prédicteurs ; le seuil est une convention, pas un test.",
+   "summary_logistic": "Sur {n:int} lignes, {events:int} ont «{event}». L'AUC vaut {auc:num} (intervalle à {conf:pct} de {low:num} à {high:num}) : la probabilité qu'une ligne avec l'événement reçoive une probabilité prédite plus haute qu'une ligne sans, 0,5 étant le hasard. Le R² de McFadden vaut {r2:num} et le score de Brier, l'écart quadratique moyen entre probabilité prédite et résultat, {brier:num}.",
+   "summary_logistic_no_ci": "Sur {n:int} lignes, {events:int} ont «{event}». L'AUC vaut {auc:num} : la probabilité qu'une ligne avec l'événement reçoive une probabilité prédite plus haute qu'une ligne sans, 0,5 étant le hasard. Le R² de McFadden vaut {r2:num} et le score de Brier, l'écart quadratique moyen entre probabilité prédite et résultat, {brier:num}.",
+   "fit_lr_reject": "Si aucun terme ne changeait la cote de «{event}», une statistique du rapport de vraisemblance de {lr:num} ou plus ({df:int} degrés de liberté) apparaîtrait par hasard avec une probabilité de {p:p}, sous α = {alpha:num} : les termes ensemble sont significatifs.",
+   "fit_lr_keep": "Si aucun terme ne changeait la cote de «{event}», une statistique du rapport de vraisemblance de {lr:num} ou plus ({df:int} degrés de liberté) apparaîtrait par hasard avec une probabilité de {p:p}, pas sous α = {alpha:num} : les termes ensemble ne sont pas significatifs. Les données ne montrent pas qu'ils changent la cote ; elles ne prouvent pas le contraire.",
+   "coef_robust": {
+    "se=cluster": "Les tests et les intervalles des termes utilisent des erreurs standard robustes au sein des grappes : les lignes d'une même grappe peuvent être corrélées.",
+    "": "Les tests et les intervalles des termes utilisent des erreurs standard robustes à une variance inégale des résidus ({kind})."
+   },
+   "coef_odds": "Parmi eux, «{covariate}» : chaque unité de plus multiplie la cote de l'événement par {ratio:num} (intervalle à {conf:pct} de {low:num} à {high:num}), les autres termes étant fixés.",
+   "coef_odds_level": "Parmi eux, «{covariate}» : le niveau «{variant}» multiplie la cote de l'événement par {ratio:num} face au niveau de référence (intervalle à {conf:pct} de {low:num} à {high:num}), les autres termes étant fixés.",
+   "confusion_at": "Une ligne est classée «{event}» quand sa probabilité prédite est au moins {threshold:num}. Alors {accuracy:pct} des lignes sont classées comme observé ; des lignes avec l'événement, {sensitivity:pct} sont trouvées (sensibilité), de celles sans, {specificity:pct} sont classées sans (spécificité), et des lignes classées avec l'événement, {precision:pct} l'ont (précision).",
+   "method_logit": "La régression logistique prend le logarithme de la cote de l'événement, log(p / (1 − p)), comme une somme des termes, chacun multiplié par son coefficient, et estime les coefficients par maximum de vraisemblance. Un coefficient est la variation du logarithme de la cote pour une unité de plus de son terme, les autres étant fixés ; son exponentielle, le rapport de cotes, multiplie la cote. Un niveau d'une catégorie est comparé au niveau de référence.",
+   "method_probit": "Le modèle probit prend la probabilité de l'événement comme la probabilité cumulée de la loi normale centrée réduite d'une somme des termes, chacun multiplié par son coefficient, estimée par maximum de vraisemblance. Un coefficient déplace cette somme de sa valeur pour une unité de plus de son terme ; les coefficients d'un probit n'ont pas de rapport de cotes.",
+   "method_firth": "La correction de Firth pénalise la vraisemblance par la moitié du logarithme du déterminant de la matrice d'information : elle retire l'essentiel du biais des coefficients dans les petits échantillons et donne des estimations finies même quand un terme sépare les lignes avec l'événement de celles sans.",
+   "method_se_hc": "Les erreurs standard sont de type sandwich (de HC0 à HC3) : elles ne dépendent pas de la variance qu'implique le modèle, par exemple quand les données varient plus qu'une binomiale ne le permet.",
+   "method_se_cluster": "Les erreurs standard sont par grappe : les lignes d'une même grappe peuvent être corrélées entre elles, celles de grappes différentes sont prises comme indépendantes. Avec peu de grappes, elles sont elles-mêmes imprécises.",
+   "method_auc": "L'AUC (aire sous la courbe ROC) est la probabilité qu'une ligne avec l'événement reçoive une probabilité prédite plus haute qu'une ligne sans, les égalités comptant pour moitié ; son intervalle est celui de DeLong. Le score de Brier est la moyenne de (probabilité prédite − résultat)² ; le R² de McFadden vaut 1 moins le rapport entre la log-vraisemblance du modèle et celle du modèle sans termes. Les trois sont calculés sur les lignes sur lesquelles le modèle a été ajusté.",
+   "method_threshold": "La classification transforme chaque probabilité prédite en une classe au seuil du nœud : égale ou au-dessus, l'événement. L'exactitude, la sensibilité, la spécificité et la précision dépendent de ce seuil ; l'AUC non.",
+   "method_checks": "Les contrôles testent la calibration (Hosmer–Lemeshow : la part prédite et la part observée d'événements dans dix groupes de lignes) et la linéarité du logarithme de la cote dans chaque terme numérique (Box–Tidwell). La séparation, les événements par terme, la multicolinéarité (VIF) et l'influence (distance de Cook, levier, résidus de déviance) sont mesurées, pas testées, et comparées à des seuils de la littérature."
+  },
+  "formula_texts": {
+   "formula_logit": "log(p_i / (1 − p_i)) = η_i = β_0 + β_1 x_i1 + … + β_k x_ik ;  p_i = 1 / (1 + e^(−η_i)) ;  rapport de cotes du terme j = e^(β_j)",
+   "formula_probit": "p_i = Φ(β_0 + β_1 x_i1 + … + β_k x_ik) ;  Φ : la fonction de répartition de la loi normale centrée réduite",
+   "formula_lr": "LR = 2 (ℓ(β̂) − ℓ_0) = déviance nulle − déviance, χ² à k degrés de liberté ;  ℓ : la log-vraisemblance, ℓ_0 celle du modèle avec la seule constante",
+   "formula_wald": "z_j = β̂_j / se(β̂_j), face à la loi normale centrée réduite ;  l'intervalle β̂_j ± z_(1−α/2) · se(β̂_j) (Wald ; celui de la vraisemblance profilée avec ci = profile), et e^(…) de ses bornes pour le rapport de cotes",
+   "formula_auc": "AUC = P(p̂ d'une ligne avec l'événement > p̂ d'une ligne sans) + ½ P(égales) ;  son intervalle par la variance de DeLong",
+   "formula_brier": "Brier = (1 / n) Σ_i (p̂_i − y_i)², y_i = 1 pour l'événement et 0 sinon ;  R² de McFadden = 1 − ℓ(β̂) / ℓ_0"
+  },
+  "measure_readings": [
+   "coef_odds",
+   "coef_odds_level",
+   "coef_robust",
+   "confusion_at",
+   "more_in_table",
+   "summary_logistic",
+   "summary_logistic_no_ci",
+   "threshold_cooks_distance",
+   "threshold_deviance_residuals",
+   "threshold_epv",
+   "threshold_leverage",
+   "threshold_vif"
+  ]
  }
 }

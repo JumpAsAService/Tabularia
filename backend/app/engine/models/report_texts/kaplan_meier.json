@@ -148,7 +148,87 @@
    "median_not_reached": "The median of {stratum} is not reached: fewer than half its rows had the event by the end of its follow-up; read its survival at a time, or its restricted mean.",
    "survival_not_estimated": "Survival of {stratum} at {times} is not estimated: its follow-up ends at {last}.",
    "curves_cross": "The curves cross ({pairs}): the log-rank and Peto's tests lose power there; compare the restricted means, and read the curves themselves."
-  }
+  },
+  "reading_blocks": {
+   "summary": "Summary",
+   "assumptions": "Assumptions",
+   "coefficients": "Coefficients",
+   "fit": "Fit",
+   "confusion": "Classification",
+   "curves": "Survival curves",
+   "pairs": "Pairs of strata",
+   "rmst": "Restricted mean",
+   "method": "Method",
+   "formulas": "Formula"
+  },
+  "reading_labels": {
+   "method_p_value": "p-values and α",
+   "method_km": "Kaplan–Meier",
+   "method_censoring": "Censoring",
+   "method_logrank": "Log-rank test",
+   "method_peto": "Peto's test",
+   "method_pairs": "Pairs of strata",
+   "method_rmst": "Restricted mean",
+   "formula_km": "Kaplan–Meier",
+   "formula_greenwood": "Greenwood",
+   "formula_logrank": "Test of the curves",
+   "formula_rmst": "Restricted mean"
+  },
+  "reading_texts": {
+   "assumptions_rejected": "Checks whose test rejects its hypothesis at α = {alpha:num}, its p-value below α: {count:int} of {total:int}, marked in the table, which says what each departure means and what to do.",
+   "assumptions_none_rejected": "Checks that are tests: {total:int}; at α = {alpha:num} none rejects its hypothesis, every p-value is at or above α. The data do not show a departure from these assumptions; they do not prove there is none.",
+   "assumptions_many_rows": "With {n:int} rows a test rejects even departures too small to matter: weigh the size of each departure in the charts before acting on a verdict.",
+   "more_in_table": "And {more:int} more: the table lists them all.",
+   "method_p_value": "A p-value is the probability that chance alone, if the hypothesis under test were true, gives a result at least as far from it as the one observed. It is compared with α, the node's setting: below α the hypothesis is rejected, and α is the risk, accepted in advance, of rejecting a true one. Not rejecting is not proving: with few rows an existing departure may go unseen. Each test is read on its own; with many tests, some reject by chance alone.",
+   "threshold_few_at_risk": "Strata with a number reported where fewer than {threshold:int} rows are still at risk: {count:int}; the smallest number at risk there is {value:int}. At the end of a curve few rows determine it, so its numbers have wide intervals; the threshold is a convention, not a test.",
+   "summary_km": "{n:int} rows in {strata:int} strata: {events:int} had the event and {censored:int} are censored: their observation ended before any event, so they count only while they were followed.",
+   "summary_km_one": "{n:int} rows: {events:int} had the event and {censored:int} are censored: their observation ended before any event, so they count only while they were followed.",
+   "km_medians": "Median time to the event, by which half the rows of a stratum had it: {names}, at {values:num} (their intervals in the table).",
+   "km_not_reached": "Median not reached, fewer than half the rows had the event within the follow-up: {names}.",
+   "km_test_reject": {
+    "test=peto": "If the {count:int} strata had the same survival curve, a Peto–Peto statistic of {statistic:num} or more ({df:int} degrees of freedom) would appear by chance with probability {p:p}, below α = {alpha:num}: the curves differ significantly.",
+    "": "If the {count:int} strata had the same survival curve, a log-rank statistic of {statistic:num} or more ({df:int} degrees of freedom) would appear by chance with probability {p:p}, below α = {alpha:num}: the curves differ significantly."
+   },
+   "km_test_keep": {
+    "test=peto": "If the {count:int} strata had the same survival curve, a Peto–Peto statistic of {statistic:num} or more ({df:int} degrees of freedom) would appear by chance with probability {p:p}, not below α = {alpha:num}: the difference between the curves is not significant. The data do not show a difference; they do not prove there is none.",
+    "": "If the {count:int} strata had the same survival curve, a log-rank statistic of {statistic:num} or more ({df:int} degrees of freedom) would appear by chance with probability {p:p}, not below α = {alpha:num}: the difference between the curves is not significant. The data do not show a difference; they do not prove there is none."
+   },
+   "km_median_one": "Half the rows had the event by time {median:num}, the median (its {conf:pct} interval {low:num} to {high:num}).",
+   "km_median_one_open": "Half the rows had the event by time {median:num}, the median; its {conf:pct} interval stays open at one end, where the curve's band does not cross 0.5 (the table shows it).",
+   "km_median_not_reached": "The curve stays above 0.5 to the end of the follow-up: fewer than half the rows had the event, so the median is not reached.",
+   "pairs_some": "Pairs of strata whose curves differ significantly at α = {alpha:num}, by their p-value adjusted for the {total:int} comparisons (Holm): {count:int} of {total:int} — {names}.",
+   "pairs_none": "No pair of strata differs significantly at α = {alpha:num} once the p-values are adjusted for the {total:int} comparisons (Holm). The data do not show a difference between any two curves; they do not prove there is none.",
+   "rmst": "Up to time {tau:num}, the mean time without the event (the restricted mean, the area under the curve) is, for {names}, {values:num}.",
+   "rmst_one": "Up to time {tau:num}, the mean time without the event (the restricted mean, the area under the curve) is {value:num}, with standard error {se:num}.",
+   "method_km": "The Kaplan–Meier estimate multiplies, at each time an event happens, the share of the rows still at risk that did not have it: the curve steps down at each event and stays flat between them. Its pointwise interval uses Greenwood's variance, on the scale the node sets (conf_type, the log by default).",
+   "method_censoring": "A censored row left the observation without the event: it counts as at risk until then and is not counted after. The estimate is valid only if being censored says nothing of the time to the event (non-informative censoring), which the data cannot test: ask how the rows came to be censored.",
+   "method_logrank": "The log-rank test compares, at each event time, the events each stratum had with those it would have had if all the strata shared one curve, and sums the differences over time. It weighs every time alike and is most sensitive to a difference that keeps the same direction over time (proportional hazards).",
+   "method_peto": "Peto's test (Peto–Peto) compares, at each event time, the events each stratum had with those it would have had if all the strata shared one curve, each time weighted by the survival there: early differences, when many rows are at risk, count more than late ones.",
+   "method_pairs": "Each pair of strata is compared by the same test on its two strata alone; the p-values are adjusted for the number of pairs by Holm's method, so that the chance of rejecting at least one pair with no difference stays at most α.",
+   "method_rmst": "The restricted mean survival time up to τ is the area under the curve from 0 to τ: the mean time without the event over that window, in units of time. It needs no proportional hazards; τ is the node's rmst_tau or, by default, the shortest of the strata's follow-ups."
+  },
+  "formula_texts": {
+   "formula_km": "Ŝ(t) = Π_(t_i ≤ t) (1 − d_i / n_i);  d_i: the events at time t_i, n_i: the rows still at risk just before it",
+   "formula_greenwood": "Var(Ŝ(t)) = Ŝ(t)² Σ_(t_i ≤ t) d_i / (n_i (n_i − d_i))",
+   "formula_logrank": {
+    "test=peto": "χ² = (O − E)′ V^(−1) (O − E) with k − 1 degrees of freedom, each event time weighted by Ŝ(t_i), the survival of all the rows just before it;  O_j, E_j: the observed and expected events of stratum j, E_j = Σ_i n_ij d_i / n_i",
+    "": "χ² = (O − E)′ V^(−1) (O − E) with k − 1 degrees of freedom;  O_j, E_j: the observed and expected events of stratum j, E_j = Σ_i n_ij d_i / n_i, n_ij the rows of stratum j at risk at time t_i"
+   },
+   "formula_rmst": "RMST(τ) = ∫_0^τ Ŝ(t) dt, a sum of rectangles under the steps;  its standard error from Greenwood's variance"
+  },
+  "measure_readings": [
+   "km_median_not_reached",
+   "km_median_one",
+   "km_median_one_open",
+   "km_medians",
+   "km_not_reached",
+   "more_in_table",
+   "rmst",
+   "rmst_one",
+   "summary_km",
+   "summary_km_one",
+   "threshold_few_at_risk"
+  ]
  },
  "it": {
   "name": "Kaplan–Meier",
@@ -299,7 +379,87 @@
    "median_not_reached": "La mediana di {stratum} non è raggiunta: meno della metà delle sue righe ha avuto l'evento entro la fine del suo follow-up; leggete la sua sopravvivenza a un tempo, o la sua media ristretta.",
    "survival_not_estimated": "La sopravvivenza di {stratum} a {times} non è stimata: il suo follow-up finisce a {last}.",
    "curves_cross": "Le curve si incrociano ({pairs}): lì i test log-rank e di Peto perdono potenza; confrontate le medie ristrette e leggete le curve stesse."
-  }
+  },
+  "reading_blocks": {
+   "summary": "Sintesi",
+   "assumptions": "Assunzioni",
+   "coefficients": "Coefficienti",
+   "fit": "Adattamento",
+   "confusion": "Classificazione",
+   "curves": "Curve di sopravvivenza",
+   "pairs": "Coppie di strati",
+   "rmst": "Media ristretta",
+   "method": "Metodo",
+   "formulas": "Formula"
+  },
+  "reading_labels": {
+   "method_p_value": "p-value e α",
+   "method_km": "Kaplan–Meier",
+   "method_censoring": "Censura",
+   "method_logrank": "Test log-rank",
+   "method_peto": "Test di Peto",
+   "method_pairs": "Coppie di strati",
+   "method_rmst": "Media ristretta",
+   "formula_km": "Kaplan–Meier",
+   "formula_greenwood": "Greenwood",
+   "formula_logrank": "Test delle curve",
+   "formula_rmst": "Media ristretta"
+  },
+  "reading_texts": {
+   "assumptions_rejected": "Controlli il cui test rifiuta la propria ipotesi ad α = {alpha:num}, con p-value sotto α: {count:int} su {total:int}, segnati nella tabella, che dice che cosa significa ogni scostamento e che cosa fare.",
+   "assumptions_none_rejected": "Controlli che sono test: {total:int}; ad α = {alpha:num} nessuno rifiuta la propria ipotesi, ogni p-value è pari o sopra α. I dati non mostrano uno scostamento da queste assunzioni; non dimostrano che non ce ne sia.",
+   "assumptions_many_rows": "Con {n:int} righe un test rifiuta anche scostamenti troppo piccoli per contare: valuta la loro ampiezza nei grafici prima di agire su un verdetto.",
+   "more_in_table": "E altri {more:int}: la tabella li elenca tutti.",
+   "method_p_value": "Un p-value è la probabilità che il solo caso, se l'ipotesi sotto esame fosse vera, dia un risultato lontano da essa almeno quanto quello osservato. Si confronta con α, impostato nel nodo: sotto α l'ipotesi è rifiutata, e α è il rischio, accettato in anticipo, di rifiutarne una vera. Non rifiutare non è dimostrare: con poche righe uno scostamento esistente può passare inosservato. Ogni test si legge da solo; con molti test, qualcuno rifiuta per puro caso.",
+   "threshold_few_at_risk": "Strati con un numero riportato dove restano a rischio meno di {threshold:int} righe: {count:int}; il numero a rischio più piccolo lì è {value:int}. Alla fine di una curva poche righe la determinano, quindi i suoi numeri hanno intervalli ampi; la soglia è una convenzione, non un test.",
+   "summary_km": "{n:int} righe in {strata:int} strati: {events:int} hanno avuto l'evento e {censored:int} sono censurate: la loro osservazione è finita prima di un evento, quindi contano solo finché sono state seguite.",
+   "summary_km_one": "{n:int} righe: {events:int} hanno avuto l'evento e {censored:int} sono censurate: la loro osservazione è finita prima di un evento, quindi contano solo finché sono state seguite.",
+   "km_medians": "Tempo mediano all'evento, entro cui metà delle righe di uno strato lo ha avuto: {names}, a {values:num} (gli intervalli nella tabella).",
+   "km_not_reached": "Mediana non raggiunta, meno di metà delle righe ha avuto l'evento entro il follow-up: {names}.",
+   "km_test_reject": {
+    "test=peto": "Se i {count:int} strati avessero la stessa curva di sopravvivenza, una statistica di Peto–Peto di {statistic:num} o più ({df:int} gradi di libertà) comparirebbe per caso con probabilità {p:p}, sotto α = {alpha:num}: le curve differiscono in modo significativo.",
+    "": "Se i {count:int} strati avessero la stessa curva di sopravvivenza, una statistica log-rank di {statistic:num} o più ({df:int} gradi di libertà) comparirebbe per caso con probabilità {p:p}, sotto α = {alpha:num}: le curve differiscono in modo significativo."
+   },
+   "km_test_keep": {
+    "test=peto": "Se i {count:int} strati avessero la stessa curva di sopravvivenza, una statistica di Peto–Peto di {statistic:num} o più ({df:int} gradi di libertà) comparirebbe per caso con probabilità {p:p}, non sotto α = {alpha:num}: la differenza tra le curve non è significativa. I dati non mostrano una differenza; non dimostrano che non ci sia.",
+    "": "Se i {count:int} strati avessero la stessa curva di sopravvivenza, una statistica log-rank di {statistic:num} o più ({df:int} gradi di libertà) comparirebbe per caso con probabilità {p:p}, non sotto α = {alpha:num}: la differenza tra le curve non è significativa. I dati non mostrano una differenza; non dimostrano che non ci sia."
+   },
+   "km_median_one": "Metà delle righe ha avuto l'evento entro il tempo {median:num}, la mediana (intervallo al {conf:pct} da {low:num} a {high:num}).",
+   "km_median_one_open": "Metà delle righe ha avuto l'evento entro il tempo {median:num}, la mediana; il suo intervallo al {conf:pct} resta aperto a un estremo, dove la banda della curva non attraversa 0,5 (la tabella lo mostra).",
+   "km_median_not_reached": "La curva resta sopra 0,5 fino alla fine del follow-up: meno di metà delle righe ha avuto l'evento, quindi la mediana non è raggiunta.",
+   "pairs_some": "Coppie di strati le cui curve differiscono in modo significativo ad α = {alpha:num}, secondo il p-value corretto per i {total:int} confronti (Holm): {count:int} su {total:int} — {names}.",
+   "pairs_none": "Nessuna coppia di strati differisce in modo significativo ad α = {alpha:num} una volta corretti i p-value per i {total:int} confronti (Holm). I dati non mostrano una differenza tra due curve; non dimostrano che non ci sia.",
+   "rmst": "Fino al tempo {tau:num}, il tempo medio senza l'evento (la media ristretta, l'area sotto la curva) è, per {names}, {values:num}.",
+   "rmst_one": "Fino al tempo {tau:num}, il tempo medio senza l'evento (la media ristretta, l'area sotto la curva) è {value:num}, con errore standard {se:num}.",
+   "method_km": "La stima di Kaplan–Meier moltiplica, a ogni tempo in cui avviene un evento, la quota delle righe ancora a rischio che non lo hanno avuto: la curva scende a gradino a ogni evento e resta piatta tra l'uno e l'altro. Il suo intervallo puntuale usa la varianza di Greenwood, sulla scala impostata nel nodo (conf_type, il logaritmo di base).",
+   "method_censoring": "Una riga censurata è uscita dall'osservazione senza l'evento: conta come a rischio fino ad allora e non è contata dopo. La stima è valida solo se l'essere censurati non dice nulla del tempo all'evento (censura non informativa), cosa che i dati non possono verificare: chiedi come le righe sono diventate censurate.",
+   "method_logrank": "Il test log-rank confronta, a ogni tempo di evento, gli eventi che ogni strato ha avuto con quelli che avrebbe avuto se tutti gli strati avessero una sola curva, e somma le differenze nel tempo. Pesa ogni tempo allo stesso modo ed è più sensibile a una differenza che mantiene la stessa direzione nel tempo (rischi proporzionali).",
+   "method_peto": "Il test di Peto (Peto–Peto) confronta, a ogni tempo di evento, gli eventi che ogni strato ha avuto con quelli che avrebbe avuto se tutti gli strati avessero una sola curva, pesando ogni tempo con la sopravvivenza lì: le differenze iniziali, quando molte righe sono a rischio, contano più di quelle tardive.",
+   "method_pairs": "Ogni coppia di strati è confrontata con lo stesso test sui soli due strati; i p-value sono corretti per il numero di coppie con il metodo di Holm, così che la probabilità di rifiutare almeno una coppia senza differenza resti al più α.",
+   "method_rmst": "Il tempo medio di sopravvivenza ristretto fino a τ è l'area sotto la curva da 0 a τ: il tempo medio senza l'evento in quella finestra, in unità di tempo. Non richiede rischi proporzionali; τ è il rmst_tau del nodo o, di base, il più breve dei follow-up degli strati."
+  },
+  "formula_texts": {
+   "formula_km": "Ŝ(t) = Π_(t_i ≤ t) (1 − d_i / n_i);  d_i: gli eventi al tempo t_i, n_i: le righe ancora a rischio appena prima",
+   "formula_greenwood": "Var(Ŝ(t)) = Ŝ(t)² Σ_(t_i ≤ t) d_i / (n_i (n_i − d_i))",
+   "formula_logrank": {
+    "test=peto": "χ² = (O − E)′ V^(−1) (O − E) con k − 1 gradi di libertà, ogni tempo di evento pesato con Ŝ(t_i), la sopravvivenza di tutte le righe appena prima;  O_j, E_j: gli eventi osservati e attesi dello strato j, E_j = Σ_i n_ij d_i / n_i",
+    "": "χ² = (O − E)′ V^(−1) (O − E) con k − 1 gradi di libertà;  O_j, E_j: gli eventi osservati e attesi dello strato j, E_j = Σ_i n_ij d_i / n_i, n_ij le righe dello strato j a rischio al tempo t_i"
+   },
+   "formula_rmst": "RMST(τ) = ∫_0^τ Ŝ(t) dt, una somma di rettangoli sotto i gradini;  il suo errore standard dalla varianza di Greenwood"
+  },
+  "measure_readings": [
+   "km_median_not_reached",
+   "km_median_one",
+   "km_median_one_open",
+   "km_medians",
+   "km_not_reached",
+   "more_in_table",
+   "rmst",
+   "rmst_one",
+   "summary_km",
+   "summary_km_one",
+   "threshold_few_at_risk"
+  ]
  },
  "de": {
   "name": "Kaplan–Meier",
@@ -450,7 +610,87 @@
    "median_not_reached": "Der Median von {stratum} wird nicht erreicht: Weniger als die Hälfte ihrer Zeilen hatte das Ereignis bis zum Ende der Nachbeobachtung; lesen Sie ihr Überleben zu einer Zeit oder ihr eingeschränktes Mittel.",
    "survival_not_estimated": "Das Überleben von {stratum} bei {times} wird nicht geschätzt: Ihre Nachbeobachtung endet bei {last}.",
    "curves_cross": "Die Kurven kreuzen sich ({pairs}): Dort verlieren der Log-Rank-Test und der von Peto an Trennschärfe; vergleichen Sie die eingeschränkten Mittel und lesen Sie die Kurven selbst."
-  }
+  },
+  "reading_blocks": {
+   "summary": "Zusammenfassung",
+   "assumptions": "Annahmen",
+   "coefficients": "Koeffizienten",
+   "fit": "Anpassung",
+   "confusion": "Klassifikation",
+   "curves": "Überlebenskurven",
+   "pairs": "Paare von Strata",
+   "rmst": "Restringierter Mittelwert",
+   "method": "Methode",
+   "formulas": "Formel"
+  },
+  "reading_labels": {
+   "method_p_value": "p-Werte und α",
+   "method_km": "Kaplan–Meier",
+   "method_censoring": "Zensierung",
+   "method_logrank": "Log-Rank-Test",
+   "method_peto": "Peto-Test",
+   "method_pairs": "Paare von Strata",
+   "method_rmst": "Restringierter Mittelwert",
+   "formula_km": "Kaplan–Meier",
+   "formula_greenwood": "Greenwood",
+   "formula_logrank": "Test der Kurven",
+   "formula_rmst": "Restringierter Mittelwert"
+  },
+  "reading_texts": {
+   "assumptions_rejected": "Prüfungen, deren Test seine Hypothese bei α = {alpha:num} verwirft, mit p-Wert unter α: {count:int} von {total:int}, in der Tabelle markiert, die sagt, was jede Abweichung bedeutet und was zu tun ist.",
+   "assumptions_none_rejected": "Prüfungen, die Tests sind: {total:int}; bei α = {alpha:num} verwirft keiner seine Hypothese, jeder p-Wert liegt bei oder über α. Die Daten zeigen keine Abweichung von diesen Annahmen; sie beweisen nicht, dass es keine gibt.",
+   "assumptions_many_rows": "Mit {n:int} Zeilen verwirft ein Test auch Abweichungen, die zu klein sind, um ins Gewicht zu fallen: Wägen Sie ihre Größe in den Diagrammen ab, bevor Sie auf ein Urteil hin handeln.",
+   "more_in_table": "Und {more:int} weitere: Die Tabelle führt alle auf.",
+   "method_p_value": "Ein p-Wert ist die Wahrscheinlichkeit, dass der Zufall allein, wenn die geprüfte Hypothese wahr wäre, ein Ergebnis liefert, das mindestens so weit von ihr entfernt ist wie das beobachtete. Er wird mit α verglichen, der Einstellung des Knotens: Unter α wird die Hypothese verworfen, und α ist das im Voraus akzeptierte Risiko, eine wahre zu verwerfen. Nicht verwerfen heißt nicht beweisen: Mit wenigen Zeilen kann eine bestehende Abweichung unbemerkt bleiben. Jeder Test wird für sich gelesen; bei vielen Tests verwerfen einige allein durch Zufall.",
+   "threshold_few_at_risk": "Strata mit einer berichteten Zahl, wo weniger als {threshold:int} Zeilen noch unter Risiko stehen: {count:int}; die kleinste Zahl unter Risiko dort ist {value:int}. Am Ende einer Kurve bestimmen sie wenige Zeilen, daher haben ihre Zahlen weite Intervalle; die Schwelle ist eine Konvention, kein Test.",
+   "summary_km": "{n:int} Zeilen in {strata:int} Strata: {events:int} hatten das Ereignis und {censored:int} sind zensiert: Ihre Beobachtung endete vor einem Ereignis, daher zählen sie nur, solange sie verfolgt wurden.",
+   "summary_km_one": "{n:int} Zeilen: {events:int} hatten das Ereignis und {censored:int} sind zensiert: Ihre Beobachtung endete vor einem Ereignis, daher zählen sie nur, solange sie verfolgt wurden.",
+   "km_medians": "Mediane Zeit bis zum Ereignis, bis zu der die Hälfte der Zeilen eines Stratums es hatte: {names}, bei {values:num} (ihre Intervalle in der Tabelle).",
+   "km_not_reached": "Median nicht erreicht, weniger als die Hälfte der Zeilen hatte das Ereignis innerhalb der Nachbeobachtung: {names}.",
+   "km_test_reject": {
+    "test=peto": "Hätten die {count:int} Strata dieselbe Überlebenskurve, träte eine Peto–Peto-Statistik von {statistic:num} oder mehr ({df:int} Freiheitsgrade) mit Wahrscheinlichkeit {p:p} zufällig auf, unter α = {alpha:num}: Die Kurven unterscheiden sich signifikant.",
+    "": "Hätten die {count:int} Strata dieselbe Überlebenskurve, träte eine Log-Rank-Statistik von {statistic:num} oder mehr ({df:int} Freiheitsgrade) mit Wahrscheinlichkeit {p:p} zufällig auf, unter α = {alpha:num}: Die Kurven unterscheiden sich signifikant."
+   },
+   "km_test_keep": {
+    "test=peto": "Hätten die {count:int} Strata dieselbe Überlebenskurve, träte eine Peto–Peto-Statistik von {statistic:num} oder mehr ({df:int} Freiheitsgrade) mit Wahrscheinlichkeit {p:p} zufällig auf, nicht unter α = {alpha:num}: Der Unterschied zwischen den Kurven ist nicht signifikant. Die Daten zeigen keinen Unterschied; sie beweisen nicht, dass es keinen gibt.",
+    "": "Hätten die {count:int} Strata dieselbe Überlebenskurve, träte eine Log-Rank-Statistik von {statistic:num} oder mehr ({df:int} Freiheitsgrade) mit Wahrscheinlichkeit {p:p} zufällig auf, nicht unter α = {alpha:num}: Der Unterschied zwischen den Kurven ist nicht signifikant. Die Daten zeigen keinen Unterschied; sie beweisen nicht, dass es keinen gibt."
+   },
+   "km_median_one": "Die Hälfte der Zeilen hatte das Ereignis bis zur Zeit {median:num}, dem Median (sein {conf:pct}-Intervall {low:num} bis {high:num}).",
+   "km_median_one_open": "Die Hälfte der Zeilen hatte das Ereignis bis zur Zeit {median:num}, dem Median; sein {conf:pct}-Intervall bleibt an einem Ende offen, wo das Band der Kurve 0,5 nicht kreuzt (die Tabelle zeigt es).",
+   "km_median_not_reached": "Die Kurve bleibt bis zum Ende der Nachbeobachtung über 0,5: Weniger als die Hälfte der Zeilen hatte das Ereignis, daher ist der Median nicht erreicht.",
+   "pairs_some": "Paare von Strata, deren Kurven sich bei α = {alpha:num} signifikant unterscheiden, nach dem für die {total:int} Vergleiche korrigierten p-Wert (Holm): {count:int} von {total:int} — {names}.",
+   "pairs_none": "Kein Paar von Strata unterscheidet sich bei α = {alpha:num} signifikant, sobald die p-Werte für die {total:int} Vergleiche korrigiert sind (Holm). Die Daten zeigen keinen Unterschied zwischen zwei Kurven; sie beweisen nicht, dass es keinen gibt.",
+   "rmst": "Bis zur Zeit {tau:num} beträgt die mittlere Zeit ohne das Ereignis (der restringierte Mittelwert, die Fläche unter der Kurve) für {names} {values:num}.",
+   "rmst_one": "Bis zur Zeit {tau:num} beträgt die mittlere Zeit ohne das Ereignis (der restringierte Mittelwert, die Fläche unter der Kurve) {value:num}, mit Standardfehler {se:num}.",
+   "method_km": "Der Kaplan–Meier-Schätzer multipliziert zu jedem Zeitpunkt, an dem ein Ereignis eintritt, den Anteil der noch unter Risiko stehenden Zeilen, die es nicht hatten: Die Kurve fällt bei jedem Ereignis um eine Stufe und bleibt dazwischen flach. Ihr punktweises Intervall verwendet die Varianz von Greenwood, auf der Skala, die der Knoten festlegt (conf_type, standardmäßig der Logarithmus).",
+   "method_censoring": "Eine zensierte Zeile hat die Beobachtung ohne das Ereignis verlassen: Bis dahin zählt sie als unter Risiko, danach nicht mehr. Die Schätzung ist nur gültig, wenn die Zensierung nichts über die Zeit bis zum Ereignis aussagt (nicht informative Zensierung), was die Daten nicht prüfen können: Fragen Sie, wie die Zeilen zensiert wurden.",
+   "method_logrank": "Der Log-Rank-Test vergleicht zu jedem Ereigniszeitpunkt die Ereignisse jedes Stratums mit denen, die es hätte, wenn alle Strata eine Kurve teilten, und summiert die Differenzen über die Zeit. Er gewichtet jeden Zeitpunkt gleich und ist am empfindlichsten für einen Unterschied, der über die Zeit dieselbe Richtung behält (proportionale Hazards).",
+   "method_peto": "Petos Test (Peto–Peto) vergleicht zu jedem Ereigniszeitpunkt die Ereignisse jedes Stratums mit denen, die es hätte, wenn alle Strata eine Kurve teilten, wobei jeder Zeitpunkt mit dem dortigen Überleben gewichtet wird: Frühe Unterschiede, wenn viele Zeilen unter Risiko stehen, zählen mehr als späte.",
+   "method_pairs": "Jedes Paar von Strata wird mit demselben Test nur auf seinen zwei Strata verglichen; die p-Werte werden mit der Methode von Holm für die Zahl der Paare korrigiert, sodass die Wahrscheinlichkeit, mindestens ein Paar ohne Unterschied zu verwerfen, höchstens α bleibt.",
+   "method_rmst": "Die restringierte mittlere Überlebenszeit bis τ ist die Fläche unter der Kurve von 0 bis τ: die mittlere Zeit ohne das Ereignis in diesem Fenster, in Zeiteinheiten. Sie braucht keine proportionalen Hazards; τ ist das rmst_tau des Knotens oder standardmäßig die kürzeste Nachbeobachtung der Strata."
+  },
+  "formula_texts": {
+   "formula_km": "Ŝ(t) = Π_(t_i ≤ t) (1 − d_i / n_i);  d_i: die Ereignisse zur Zeit t_i, n_i: die unmittelbar davor noch unter Risiko stehenden Zeilen",
+   "formula_greenwood": "Var(Ŝ(t)) = Ŝ(t)² Σ_(t_i ≤ t) d_i / (n_i (n_i − d_i))",
+   "formula_logrank": {
+    "test=peto": "χ² = (O − E)′ V^(−1) (O − E) mit k − 1 Freiheitsgraden, jeder Ereigniszeitpunkt mit Ŝ(t_i) gewichtet, dem Überleben aller Zeilen unmittelbar davor;  O_j, E_j: die beobachteten und erwarteten Ereignisse von Stratum j, E_j = Σ_i n_ij d_i / n_i",
+    "": "χ² = (O − E)′ V^(−1) (O − E) mit k − 1 Freiheitsgraden;  O_j, E_j: die beobachteten und erwarteten Ereignisse von Stratum j, E_j = Σ_i n_ij d_i / n_i, n_ij die Zeilen von Stratum j unter Risiko zur Zeit t_i"
+   },
+   "formula_rmst": "RMST(τ) = ∫_0^τ Ŝ(t) dt, eine Summe von Rechtecken unter den Stufen;  sein Standardfehler aus der Varianz von Greenwood"
+  },
+  "measure_readings": [
+   "km_median_not_reached",
+   "km_median_one",
+   "km_median_one_open",
+   "km_medians",
+   "km_not_reached",
+   "more_in_table",
+   "rmst",
+   "rmst_one",
+   "summary_km",
+   "summary_km_one",
+   "threshold_few_at_risk"
+  ]
  },
  "es": {
   "name": "Kaplan–Meier",
@@ -601,7 +841,87 @@
    "median_not_reached": "La mediana de {stratum} no se alcanza: menos de la mitad de sus filas tuvo el evento antes del final de su seguimiento; lea su supervivencia en un tiempo, o su media restringida.",
    "survival_not_estimated": "La supervivencia de {stratum} en {times} no se estima: su seguimiento termina en {last}.",
    "curves_cross": "Las curvas se cruzan ({pairs}): allí las pruebas log-rank y de Peto pierden potencia; compare las medias restringidas y lea las curvas mismas."
-  }
+  },
+  "reading_blocks": {
+   "summary": "Resumen",
+   "assumptions": "Supuestos",
+   "coefficients": "Coeficientes",
+   "fit": "Ajuste",
+   "confusion": "Clasificación",
+   "curves": "Curvas de supervivencia",
+   "pairs": "Pares de estratos",
+   "rmst": "Media restringida",
+   "method": "Método",
+   "formulas": "Fórmula"
+  },
+  "reading_labels": {
+   "method_p_value": "p-valores y α",
+   "method_km": "Kaplan–Meier",
+   "method_censoring": "Censura",
+   "method_logrank": "Contraste log-rank",
+   "method_peto": "Contraste de Peto",
+   "method_pairs": "Pares de estratos",
+   "method_rmst": "Media restringida",
+   "formula_km": "Kaplan–Meier",
+   "formula_greenwood": "Greenwood",
+   "formula_logrank": "Contraste de las curvas",
+   "formula_rmst": "Media restringida"
+  },
+  "reading_texts": {
+   "assumptions_rejected": "Comprobaciones cuyo contraste rechaza su hipótesis con α = {alpha:num}, con p-valor por debajo de α: {count:int} de {total:int}, marcadas en la tabla, que dice qué significa cada desviación y qué hacer.",
+   "assumptions_none_rejected": "Comprobaciones que son contrastes: {total:int}; con α = {alpha:num} ninguno rechaza su hipótesis, todo p-valor es igual o superior a α. Los datos no muestran una desviación de estos supuestos; no prueban que no la haya.",
+   "assumptions_many_rows": "Con {n:int} filas un contraste rechaza incluso desviaciones demasiado pequeñas para importar: valore su tamaño en los gráficos antes de actuar según un veredicto.",
+   "more_in_table": "Y {more:int} más: la tabla los recoge todos.",
+   "method_p_value": "Un p-valor es la probabilidad de que el azar por sí solo, si la hipótesis contrastada fuera cierta, dé un resultado al menos tan alejado de ella como el observado. Se compara con α, el ajuste del nodo: por debajo de α la hipótesis se rechaza, y α es el riesgo, aceptado de antemano, de rechazar una cierta. No rechazar no es probar: con pocas filas una desviación existente puede pasar inadvertida. Cada contraste se lee por separado; con muchos contrastes, algunos rechazan solo por azar.",
+   "threshold_few_at_risk": "Estratos con un número informado donde quedan en riesgo menos de {threshold:int} filas: {count:int}; el menor número en riesgo allí es {value:int}. Al final de una curva pocas filas la determinan, así que sus números tienen intervalos amplios; el umbral es una convención, no un contraste.",
+   "summary_km": "{n:int} filas en {strata:int} estratos: {events:int} tuvieron el evento y {censored:int} están censuradas: su observación terminó antes de un evento, así que cuentan solo mientras se siguieron.",
+   "summary_km_one": "{n:int} filas: {events:int} tuvieron el evento y {censored:int} están censuradas: su observación terminó antes de un evento, así que cuentan solo mientras se siguieron.",
+   "km_medians": "Tiempo mediano hasta el evento, en el que la mitad de las filas de un estrato lo había tenido: {names}, en {values:num} (sus intervalos en la tabla).",
+   "km_not_reached": "Mediana no alcanzada, menos de la mitad de las filas tuvo el evento dentro del seguimiento: {names}.",
+   "km_test_reject": {
+    "test=peto": "Si los {count:int} estratos tuvieran la misma curva de supervivencia, un estadístico de Peto–Peto de {statistic:num} o más ({df:int} grados de libertad) aparecería por azar con probabilidad {p:p}, por debajo de α = {alpha:num}: las curvas difieren significativamente.",
+    "": "Si los {count:int} estratos tuvieran la misma curva de supervivencia, un estadístico log-rank de {statistic:num} o más ({df:int} grados de libertad) aparecería por azar con probabilidad {p:p}, por debajo de α = {alpha:num}: las curvas difieren significativamente."
+   },
+   "km_test_keep": {
+    "test=peto": "Si los {count:int} estratos tuvieran la misma curva de supervivencia, un estadístico de Peto–Peto de {statistic:num} o más ({df:int} grados de libertad) aparecería por azar con probabilidad {p:p}, no por debajo de α = {alpha:num}: la diferencia entre las curvas no es significativa. Los datos no muestran una diferencia; no prueban que no la haya.",
+    "": "Si los {count:int} estratos tuvieran la misma curva de supervivencia, un estadístico log-rank de {statistic:num} o más ({df:int} grados de libertad) aparecería por azar con probabilidad {p:p}, no por debajo de α = {alpha:num}: la diferencia entre las curvas no es significativa. Los datos no muestran una diferencia; no prueban que no la haya."
+   },
+   "km_median_one": "La mitad de las filas tuvo el evento hasta el tiempo {median:num}, la mediana (intervalo al {conf:pct} de {low:num} a {high:num}).",
+   "km_median_one_open": "La mitad de las filas tuvo el evento hasta el tiempo {median:num}, la mediana; su intervalo al {conf:pct} queda abierto en un extremo, donde la banda de la curva no cruza 0,5 (la tabla lo muestra).",
+   "km_median_not_reached": "La curva se mantiene por encima de 0,5 hasta el final del seguimiento: menos de la mitad de las filas tuvo el evento, así que la mediana no se alcanza.",
+   "pairs_some": "Pares de estratos cuyas curvas difieren significativamente con α = {alpha:num}, según el p-valor corregido por las {total:int} comparaciones (Holm): {count:int} de {total:int} — {names}.",
+   "pairs_none": "Ningún par de estratos difiere significativamente con α = {alpha:num} una vez corregidos los p-valores por las {total:int} comparaciones (Holm). Los datos no muestran una diferencia entre dos curvas; no prueban que no la haya.",
+   "rmst": "Hasta el tiempo {tau:num}, el tiempo medio sin el evento (la media restringida, el área bajo la curva) es, para {names}, {values:num}.",
+   "rmst_one": "Hasta el tiempo {tau:num}, el tiempo medio sin el evento (la media restringida, el área bajo la curva) es {value:num}, con error estándar {se:num}.",
+   "method_km": "La estimación de Kaplan–Meier multiplica, en cada tiempo en que ocurre un evento, la proporción de las filas aún en riesgo que no lo tuvieron: la curva baja un escalón en cada evento y queda plana entre ellos. Su intervalo puntual usa la varianza de Greenwood, en la escala que fija el nodo (conf_type, el logaritmo por defecto).",
+   "method_censoring": "Una fila censurada salió de la observación sin el evento: cuenta como en riesgo hasta entonces y no se cuenta después. La estimación solo es válida si estar censurado no dice nada del tiempo hasta el evento (censura no informativa), algo que los datos no pueden contrastar: pregunte cómo llegaron las filas a estar censuradas.",
+   "method_logrank": "El contraste log-rank compara, en cada tiempo de evento, los eventos que tuvo cada estrato con los que habría tenido si todos los estratos compartieran una curva, y suma las diferencias en el tiempo. Pesa cada tiempo por igual y es más sensible a una diferencia que mantiene la misma dirección en el tiempo (riesgos proporcionales).",
+   "method_peto": "El contraste de Peto (Peto–Peto) compara, en cada tiempo de evento, los eventos que tuvo cada estrato con los que habría tenido si todos los estratos compartieran una curva, ponderando cada tiempo por la supervivencia allí: las diferencias tempranas, cuando muchas filas están en riesgo, cuentan más que las tardías.",
+   "method_pairs": "Cada par de estratos se compara con el mismo contraste sobre sus dos estratos solos; los p-valores se corrigen por el número de pares con el método de Holm, de modo que la probabilidad de rechazar al menos un par sin diferencia se mantenga como mucho en α.",
+   "method_rmst": "El tiempo medio de supervivencia restringido hasta τ es el área bajo la curva de 0 a τ: el tiempo medio sin el evento en esa ventana, en unidades de tiempo. No necesita riesgos proporcionales; τ es el rmst_tau del nodo o, por defecto, el más corto de los seguimientos de los estratos."
+  },
+  "formula_texts": {
+   "formula_km": "Ŝ(t) = Π_(t_i ≤ t) (1 − d_i / n_i);  d_i: los eventos en el tiempo t_i, n_i: las filas aún en riesgo justo antes",
+   "formula_greenwood": "Var(Ŝ(t)) = Ŝ(t)² Σ_(t_i ≤ t) d_i / (n_i (n_i − d_i))",
+   "formula_logrank": {
+    "test=peto": "χ² = (O − E)′ V^(−1) (O − E) con k − 1 grados de libertad, cada tiempo de evento ponderado por Ŝ(t_i), la supervivencia de todas las filas justo antes;  O_j, E_j: los eventos observados y esperados del estrato j, E_j = Σ_i n_ij d_i / n_i",
+    "": "χ² = (O − E)′ V^(−1) (O − E) con k − 1 grados de libertad;  O_j, E_j: los eventos observados y esperados del estrato j, E_j = Σ_i n_ij d_i / n_i, n_ij las filas del estrato j en riesgo en el tiempo t_i"
+   },
+   "formula_rmst": "RMST(τ) = ∫_0^τ Ŝ(t) dt, una suma de rectángulos bajo los escalones;  su error estándar a partir de la varianza de Greenwood"
+  },
+  "measure_readings": [
+   "km_median_not_reached",
+   "km_median_one",
+   "km_median_one_open",
+   "km_medians",
+   "km_not_reached",
+   "more_in_table",
+   "rmst",
+   "rmst_one",
+   "summary_km",
+   "summary_km_one",
+   "threshold_few_at_risk"
+  ]
  },
  "fr": {
   "name": "Kaplan–Meier",
@@ -752,6 +1072,86 @@
    "median_not_reached": "La médiane de {stratum} n'est pas atteinte : moins de la moitié de ses lignes ont eu l'événement avant la fin de leur suivi ; lisez sa survie à un temps, ou sa moyenne restreinte.",
    "survival_not_estimated": "La survie de {stratum} à {times} n'est pas estimée : son suivi s'arrête à {last}.",
    "curves_cross": "Les courbes se croisent ({pairs}) : les tests du log-rank et de Peto y perdent de la puissance ; comparez les moyennes restreintes et lisez les courbes elles-mêmes."
-  }
+  },
+  "reading_blocks": {
+   "summary": "Synthèse",
+   "assumptions": "Hypothèses",
+   "coefficients": "Coefficients",
+   "fit": "Ajustement",
+   "confusion": "Classification",
+   "curves": "Courbes de survie",
+   "pairs": "Paires de strates",
+   "rmst": "Moyenne restreinte",
+   "method": "Méthode",
+   "formulas": "Formule"
+  },
+  "reading_labels": {
+   "method_p_value": "p-valeurs et α",
+   "method_km": "Kaplan–Meier",
+   "method_censoring": "Censure",
+   "method_logrank": "Test du log-rank",
+   "method_peto": "Test de Peto",
+   "method_pairs": "Paires de strates",
+   "method_rmst": "Moyenne restreinte",
+   "formula_km": "Kaplan–Meier",
+   "formula_greenwood": "Greenwood",
+   "formula_logrank": "Test des courbes",
+   "formula_rmst": "Moyenne restreinte"
+  },
+  "reading_texts": {
+   "assumptions_rejected": "Contrôles dont le test rejette son hypothèse au seuil α = {alpha:num}, leur p-valeur étant sous α : {count:int} sur {total:int}, marqués dans le tableau, qui dit ce que signifie chaque écart et que faire.",
+   "assumptions_none_rejected": "Contrôles qui sont des tests : {total:int} ; au seuil α = {alpha:num}, aucun ne rejette son hypothèse, chaque p-valeur est égale ou supérieure à α. Les données ne montrent pas d'écart à ces hypothèses ; elles ne prouvent pas qu'il n'y en a pas.",
+   "assumptions_many_rows": "Avec {n:int} lignes, un test rejette même des écarts trop petits pour compter : pesez leur taille dans les graphiques avant d'agir sur un verdict.",
+   "more_in_table": "Et {more:int} de plus : le tableau les donne tous.",
+   "method_p_value": "Une p-valeur est la probabilité que le hasard seul, si l'hypothèse testée était vraie, donne un résultat au moins aussi éloigné d'elle que celui observé. On la compare à α, le réglage du nœud : sous α, l'hypothèse est rejetée, et α est le risque, accepté d'avance, d'en rejeter une vraie. Ne pas rejeter n'est pas prouver : avec peu de lignes, un écart existant peut passer inaperçu. Chaque test se lit seul ; avec beaucoup de tests, certains rejettent par le seul hasard.",
+   "threshold_few_at_risk": "Strates dont un nombre rapporté est lu là où moins de {threshold:int} lignes restent à risque : {count:int} ; le plus petit nombre à risque y est {value:int}. En fin de courbe, peu de lignes la déterminent, d'où des intervalles larges ; le seuil est une convention, pas un test.",
+   "summary_km": "{n:int} lignes en {strata:int} strates : {events:int} ont eu l'événement et {censored:int} sont censurées : leur observation a pris fin avant un événement, elles ne comptent donc que tant qu'elles ont été suivies.",
+   "summary_km_one": "{n:int} lignes : {events:int} ont eu l'événement et {censored:int} sont censurées : leur observation a pris fin avant un événement, elles ne comptent donc que tant qu'elles ont été suivies.",
+   "km_medians": "Temps médian jusqu'à l'événement, auquel la moitié des lignes d'une strate l'avait eu : {names}, à {values:num} (leurs intervalles dans le tableau).",
+   "km_not_reached": "Médiane non atteinte, moins de la moitié des lignes a eu l'événement pendant le suivi : {names}.",
+   "km_test_reject": {
+    "test=peto": "Si les {count:int} strates avaient la même courbe de survie, une statistique de Peto–Peto de {statistic:num} ou plus ({df:int} degrés de liberté) apparaîtrait par hasard avec une probabilité de {p:p}, sous α = {alpha:num} : les courbes diffèrent significativement.",
+    "": "Si les {count:int} strates avaient la même courbe de survie, une statistique du log-rank de {statistic:num} ou plus ({df:int} degrés de liberté) apparaîtrait par hasard avec une probabilité de {p:p}, sous α = {alpha:num} : les courbes diffèrent significativement."
+   },
+   "km_test_keep": {
+    "test=peto": "Si les {count:int} strates avaient la même courbe de survie, une statistique de Peto–Peto de {statistic:num} ou plus ({df:int} degrés de liberté) apparaîtrait par hasard avec une probabilité de {p:p}, pas sous α = {alpha:num} : la différence entre les courbes n'est pas significative. Les données ne montrent pas de différence ; elles ne prouvent pas qu'il n'y en a pas.",
+    "": "Si les {count:int} strates avaient la même courbe de survie, une statistique du log-rank de {statistic:num} ou plus ({df:int} degrés de liberté) apparaîtrait par hasard avec une probabilité de {p:p}, pas sous α = {alpha:num} : la différence entre les courbes n'est pas significative. Les données ne montrent pas de différence ; elles ne prouvent pas qu'il n'y en a pas."
+   },
+   "km_median_one": "La moitié des lignes a eu l'événement au temps {median:num}, la médiane (intervalle à {conf:pct} de {low:num} à {high:num}).",
+   "km_median_one_open": "La moitié des lignes a eu l'événement au temps {median:num}, la médiane ; son intervalle à {conf:pct} reste ouvert à une borne, là où la bande de la courbe ne croise pas 0,5 (le tableau le montre).",
+   "km_median_not_reached": "La courbe reste au-dessus de 0,5 jusqu'à la fin du suivi : moins de la moitié des lignes a eu l'événement, la médiane n'est donc pas atteinte.",
+   "pairs_some": "Paires de strates dont les courbes diffèrent significativement au seuil α = {alpha:num}, selon la p-valeur corrigée pour les {total:int} comparaisons (Holm) : {count:int} sur {total:int} — {names}.",
+   "pairs_none": "Aucune paire de strates ne diffère significativement au seuil α = {alpha:num} une fois les p-valeurs corrigées pour les {total:int} comparaisons (Holm). Les données ne montrent pas de différence entre deux courbes ; elles ne prouvent pas qu'il n'y en a pas.",
+   "rmst": "Jusqu'au temps {tau:num}, le temps moyen sans l'événement (la moyenne restreinte, l'aire sous la courbe) vaut, pour {names}, {values:num}.",
+   "rmst_one": "Jusqu'au temps {tau:num}, le temps moyen sans l'événement (la moyenne restreinte, l'aire sous la courbe) vaut {value:num}, avec une erreur standard de {se:num}.",
+   "method_km": "L'estimateur de Kaplan–Meier multiplie, à chaque temps où survient un événement, la part des lignes encore à risque qui ne l'ont pas eu : la courbe descend d'une marche à chaque événement et reste plate entre eux. Son intervalle ponctuel utilise la variance de Greenwood, sur l'échelle que fixe le nœud (conf_type, le logarithme par défaut).",
+   "method_censoring": "Une ligne censurée a quitté l'observation sans l'événement : elle compte comme à risque jusque-là et n'est plus comptée ensuite. L'estimation n'est valide que si être censuré ne dit rien du temps jusqu'à l'événement (censure non informative), ce que les données ne peuvent tester : demandez comment les lignes ont été censurées.",
+   "method_logrank": "Le test du log-rank compare, à chaque temps d'événement, les événements qu'a eus chaque strate avec ceux qu'elle aurait eus si toutes les strates partageaient une courbe, et somme les différences dans le temps. Il pèse chaque temps de la même façon et est le plus sensible à une différence qui garde la même direction dans le temps (risques proportionnels).",
+   "method_peto": "Le test de Peto (Peto–Peto) compare, à chaque temps d'événement, les événements qu'a eus chaque strate avec ceux qu'elle aurait eus si toutes les strates partageaient une courbe, chaque temps pondéré par la survie à cet instant : les différences précoces, quand beaucoup de lignes sont à risque, comptent plus que les tardives.",
+   "method_pairs": "Chaque paire de strates est comparée par le même test sur ses deux seules strates ; les p-valeurs sont corrigées pour le nombre de paires par la méthode de Holm, de sorte que la probabilité de rejeter au moins une paire sans différence reste au plus α.",
+   "method_rmst": "Le temps moyen de survie restreint jusqu'à τ est l'aire sous la courbe de 0 à τ : le temps moyen sans l'événement sur cette fenêtre, en unités de temps. Il ne demande pas de risques proportionnels ; τ est le rmst_tau du nœud ou, par défaut, le plus court des suivis des strates."
+  },
+  "formula_texts": {
+   "formula_km": "Ŝ(t) = Π_(t_i ≤ t) (1 − d_i / n_i) ;  d_i : les événements au temps t_i, n_i : les lignes encore à risque juste avant",
+   "formula_greenwood": "Var(Ŝ(t)) = Ŝ(t)² Σ_(t_i ≤ t) d_i / (n_i (n_i − d_i))",
+   "formula_logrank": {
+    "test=peto": "χ² = (O − E)′ V^(−1) (O − E) à k − 1 degrés de liberté, chaque temps d'événement pondéré par Ŝ(t_i), la survie de toutes les lignes juste avant ;  O_j, E_j : les événements observés et attendus de la strate j, E_j = Σ_i n_ij d_i / n_i",
+    "": "χ² = (O − E)′ V^(−1) (O − E) à k − 1 degrés de liberté ;  O_j, E_j : les événements observés et attendus de la strate j, E_j = Σ_i n_ij d_i / n_i, n_ij les lignes de la strate j à risque au temps t_i"
+   },
+   "formula_rmst": "RMST(τ) = ∫_0^τ Ŝ(t) dt, une somme de rectangles sous les marches ;  son erreur standard à partir de la variance de Greenwood"
+  },
+  "measure_readings": [
+   "km_median_not_reached",
+   "km_median_one",
+   "km_median_one_open",
+   "km_medians",
+   "km_not_reached",
+   "more_in_table",
+   "rmst",
+   "rmst_one",
+   "summary_km",
+   "summary_km_one",
+   "threshold_few_at_risk"
+  ]
  }
 }

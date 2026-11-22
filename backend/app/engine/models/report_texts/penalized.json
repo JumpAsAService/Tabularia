@@ -168,7 +168,61 @@
    "epv": {
     "advice": "Few events for the number of terms: the penalty steadies the estimates; fewer terms steady them more."
    }
-  }
+  },
+  "reading_labels": {
+   "method_ridge": "Ridge",
+   "method_lasso": "Lasso",
+   "method_elastic_net": "Elastic net",
+   "method_cv": "Cross-validation",
+   "method_no_inference": "Why no p-value",
+   "method_auc_folds": "AUC out of fold",
+   "formula_penalized": "Penalized fit",
+   "formula_cv": "Cross-validation"
+  },
+  "reading_texts": {
+   "more_in_table": "And {more:int} more: the table lists them all.",
+   "threshold_epv": "Events for each coefficient: {value:num}, below the threshold of {threshold:num} the table uses. With few events per coefficient the estimates and their intervals rest on little information; the threshold is a convention of the literature, not a test.",
+   "summary_penalized": {
+    "penalty=ridge": "The ridge penalty shrinks every coefficient towards 0 and sets none to 0: all {total:int} terms stay, fitted on {n:int} rows.",
+    "penalty=lasso": "The lasso penalty set some coefficients to exactly 0: it kept {selected:int} of the {total:int} terms, fitted on {n:int} rows.",
+    "": "The elastic net (mixing {mixing:num}, from 0 for the ridge to 1 for the lasso) kept {selected:int} of the {total:int} terms, fitted on {n:int} rows."
+   },
+   "summary_penalized_r2": "Out of fold, on rows each fit had not seen, the model explains {r2:pct} of the variance of «{outcome}».",
+   "summary_penalized_auc": "Out of fold, the AUC is {auc:num}, the mean of {folds:int} folds (standard error {se:num} between them): the probability that a row with the event gets a higher predicted probability than a row without it, 0.5 being chance.",
+   "penalized_lambda": {
+    "lambda=cv_min": "λ = {lambda:num} is where the cross-validation's measure reaches its optimum, {cv:num} (standard error {cv_se:num} between the folds).",
+    "lambda=cv_1se": "λ = {lambda:num} follows the one-standard-error rule: the largest λ whose cross-validation's measure lies within one standard error of the optimum. There it is {cv:num} (standard error {cv_se:num} between the folds), and the coefficients are shrunk more than at the optimum.",
+    "": "λ = {lambda:num} was set in the node; there the cross-validation's measure is {cv:num} (standard error {cv_se:num} between the folds)."
+   },
+   "penalized_measure": {
+    "measure=mae": "The cross-validation scores each λ by the mean absolute error of the out-of-fold predictions.",
+    "measure=deviance": "The cross-validation scores each λ by the deviance of the out-of-fold predictions, −2 times their log-likelihood.",
+    "measure=auc": "The cross-validation scores each λ by the AUC of the out-of-fold predictions; its optimum is its largest value.",
+    "measure=class": "The cross-validation scores each λ by the share of out-of-fold predictions in the wrong class.",
+    "": "The cross-validation scores each λ by the mean squared error of the out-of-fold predictions."
+   },
+   "confusion_at": "Out of fold, a row is classified as «{event}» when its predicted probability is at least {threshold:num}. Then {accuracy:pct} of the rows are classified as observed; of the rows with the event {sensitivity:pct} are found (sensitivity), of those without it {specificity:pct} are classified without it (specificity), and of the rows classified with it {precision:pct} have it (precision).",
+   "method_ridge": "Ridge regression adds to the fit's criterion (the squared residuals of the linear, minus the log-likelihood of the logistic) a penalty, λ times the sum of the squared coefficients: the coefficients shrink towards 0, which steadies them when predictors are correlated, but none becomes exactly 0. The predictors are standardized first, unless the node says otherwise, so that the penalty weighs them alike; the coefficients are reported on the original scale.",
+   "method_lasso": "The lasso adds to the fit's criterion (the squared residuals of the linear, minus the log-likelihood of the logistic) a penalty, λ times the sum of the absolute coefficients: some become exactly 0 and their terms leave the model, a selection made by the data. The predictors are standardized first, unless the node says otherwise, so that the penalty weighs them alike; the coefficients are reported on the original scale.",
+   "method_elastic_net": "The elastic net adds to the fit's criterion a mixture of the ridge's and the lasso's penalties, set by mixing (0 the ridge, 1 the lasso): it sets some coefficients to 0 like the lasso, while keeping groups of correlated predictors together like the ridge. The predictors are standardized first, unless the node says otherwise; the coefficients are reported on the original scale.",
+   "method_cv": "λ is chosen by k-fold cross-validation: the rows are split into folds, each fold is predicted by a fit on the others at every λ of the path, and the measure of those out-of-fold predictions is averaged over the folds. «cv_min» takes the λ at the optimum; «cv_1se» the largest λ within one standard error of it, a model that shrinks more for a measure the folds cannot tell from the optimum. The numbers «out of fold» of this report come from those predictions.",
+   "method_no_inference": "No p-value, standard error or interval is given: once the data have chosen which terms to keep and how far to shrink them, the usual tests would treat that choice as fixed in advance and their p-values would come out too small. The checks are diagnostics, not tests.",
+   "method_auc_folds": "The AUC out of fold is the mean of the folds' AUCs, each computed on the rows its fold's fit had not seen, with its standard error between the folds: the folds' fits have different intercepts, so pooling their predictions would mix their scales. The Brier score out of fold is the mean squared gap between those predictions and the outcome."
+  },
+  "formula_texts": {
+   "formula_penalized": "β̂ = argmin_β ( L(β) + λ · ((1 − a) / 2 · Σ_j β_j² + a · Σ_j |β_j|) );  L: the mean squared residual (linear) or minus the mean log-likelihood (logistic);  a = 0 ridge, a = 1 lasso, between them the elastic net (mixing)",
+   "formula_cv": "CV(λ) = (1 / K) Σ_k E_k(λ), E_k the measure on fold k of the fit on the other K − 1 folds;  SE(λ) = sd_k E_k(λ) / √K;  λ_1se = the largest λ with CV(λ) within SE(λ_min) of CV(λ_min)"
+  },
+  "measure_readings": [
+   "confusion_at",
+   "more_in_table",
+   "penalized_lambda",
+   "penalized_measure",
+   "summary_penalized",
+   "summary_penalized_auc",
+   "summary_penalized_r2",
+   "threshold_epv"
+  ]
  },
  "it": {
   "penalties": {
@@ -339,7 +393,61 @@
    "epv": {
     "advice": "Pochi eventi per il numero di termini: la penalizzazione stabilizza le stime; meno termini le stabilizzano di più."
    }
-  }
+  },
+  "reading_labels": {
+   "method_ridge": "Ridge",
+   "method_lasso": "Lasso",
+   "method_elastic_net": "Elastic net",
+   "method_cv": "Validazione incrociata",
+   "method_no_inference": "Perché nessun p-value",
+   "method_auc_folds": "AUC fuori fold",
+   "formula_penalized": "Adattamento penalizzato",
+   "formula_cv": "Validazione incrociata"
+  },
+  "reading_texts": {
+   "more_in_table": "E altri {more:int}: la tabella li elenca tutti.",
+   "threshold_epv": "Eventi per coefficiente: {value:num}, sotto la soglia di {threshold:num} usata dalla tabella. Con pochi eventi per coefficiente le stime e i loro intervalli poggiano su poca informazione; la soglia è una convenzione della letteratura, non un test.",
+   "summary_penalized": {
+    "penalty=ridge": "La penalità ridge restringe ogni coefficiente verso 0 senza portarne nessuno a 0: restano tutti i {total:int} termini, stimati su {n:int} righe.",
+    "penalty=lasso": "La penalità lasso ha portato alcuni coefficienti esattamente a 0: ha tenuto {selected:int} dei {total:int} termini, stimati su {n:int} righe.",
+    "": "L'elastic net (mixing {mixing:num}, da 0 per la ridge a 1 per il lasso) ha tenuto {selected:int} dei {total:int} termini, stimati su {n:int} righe."
+   },
+   "summary_penalized_r2": "Fuori fold, su righe che ciascun adattamento non aveva visto, il modello spiega il {r2:pct} della varianza di «{outcome}».",
+   "summary_penalized_auc": "Fuori fold, l'AUC è {auc:num}, la media di {folds:int} fold (errore standard {se:num} tra di essi): la probabilità che una riga con l'evento riceva una probabilità prevista più alta di una riga senza, 0,5 essendo il caso.",
+   "penalized_lambda": {
+    "lambda=cv_min": "λ = {lambda:num} è dove la misura della validazione incrociata raggiunge il suo ottimo, {cv:num} (errore standard {cv_se:num} tra i fold).",
+    "lambda=cv_1se": "λ = {lambda:num} segue la regola di un errore standard: il λ più grande la cui misura della validazione incrociata sta entro un errore standard dall'ottimo. Lì vale {cv:num} (errore standard {cv_se:num} tra i fold), e i coefficienti sono ristretti più che all'ottimo.",
+    "": "λ = {lambda:num} è stato fissato nel nodo; lì la misura della validazione incrociata è {cv:num} (errore standard {cv_se:num} tra i fold)."
+   },
+   "penalized_measure": {
+    "measure=mae": "La validazione incrociata valuta ogni λ con l'errore assoluto medio delle previsioni fuori fold.",
+    "measure=deviance": "La validazione incrociata valuta ogni λ con la devianza delle previsioni fuori fold, −2 volte la loro log-verosimiglianza.",
+    "measure=auc": "La validazione incrociata valuta ogni λ con l'AUC delle previsioni fuori fold; il suo ottimo è il valore più grande.",
+    "measure=class": "La validazione incrociata valuta ogni λ con la quota di previsioni fuori fold nella classe sbagliata.",
+    "": "La validazione incrociata valuta ogni λ con l'errore quadratico medio delle previsioni fuori fold."
+   },
+   "confusion_at": "Fuori fold, una riga è classificata come «{event}» quando la sua probabilità prevista è almeno {threshold:num}. Così il {accuracy:pct} delle righe è classificato come osservato; delle righe con l'evento è trovato il {sensitivity:pct} (sensibilità), di quelle senza è classificato senza evento il {specificity:pct} (specificità), e delle righe classificate con l'evento lo ha il {precision:pct} (precisione).",
+   "method_ridge": "La regressione ridge aggiunge al criterio dell'adattamento (i residui al quadrato della lineare, meno la log-verosimiglianza della logistica) una penalità, λ volte la somma dei coefficienti al quadrato: i coefficienti si restringono verso 0, il che li stabilizza quando i predittori sono correlati, ma nessuno diventa esattamente 0. I predittori sono prima standardizzati, salvo diversa indicazione del nodo, perché la penalità li pesi allo stesso modo; i coefficienti sono riportati sulla scala originale.",
+   "method_lasso": "Il lasso aggiunge al criterio dell'adattamento (i residui al quadrato della lineare, meno la log-verosimiglianza della logistica) una penalità, λ volte la somma dei coefficienti in valore assoluto: alcuni diventano esattamente 0 e i loro termini escono dal modello, una selezione fatta dai dati. I predittori sono prima standardizzati, salvo diversa indicazione del nodo, perché la penalità li pesi allo stesso modo; i coefficienti sono riportati sulla scala originale.",
+   "method_elastic_net": "L'elastic net aggiunge al criterio dell'adattamento una miscela delle penalità ridge e lasso, regolata da mixing (0 la ridge, 1 il lasso): porta alcuni coefficienti a 0 come il lasso, tenendo insieme gruppi di predittori correlati come la ridge. I predittori sono prima standardizzati, salvo diversa indicazione del nodo; i coefficienti sono riportati sulla scala originale.",
+   "method_cv": "λ è scelto con la validazione incrociata a k fold: le righe sono divise in fold, ogni fold è previsto da un adattamento sugli altri a ogni λ del percorso, e la misura di queste previsioni fuori fold è mediata sui fold. «cv_min» prende il λ all'ottimo; «cv_1se» il λ più grande entro un errore standard da esso, un modello che restringe di più per una misura che i fold non distinguono dall'ottimo. I numeri «fuori fold» di questo report vengono da quelle previsioni.",
+   "method_no_inference": "Non è dato alcun p-value, errore standard o intervallo: una volta che i dati hanno scelto quali termini tenere e quanto restringerli, i test usuali tratterebbero quella scelta come fissata in anticipo e i loro p-value risulterebbero troppo piccoli. I controlli sono diagnostiche, non test.",
+   "method_auc_folds": "L'AUC fuori fold è la media delle AUC dei fold, ciascuna calcolata sulle righe che l'adattamento del suo fold non aveva visto, con il suo errore standard tra i fold: gli adattamenti dei fold hanno intercette diverse, quindi riunirne le previsioni mescolerebbe le loro scale. Il Brier score fuori fold è lo scarto quadratico medio tra quelle previsioni e l'esito."
+  },
+  "formula_texts": {
+   "formula_penalized": "β̂ = argmin_β ( L(β) + λ · ((1 − a) / 2 · Σ_j β_j² + a · Σ_j |β_j|) );  L: il residuo quadratico medio (lineare) o meno la log-verosimiglianza media (logistica);  a = 0 ridge, a = 1 lasso, in mezzo l'elastic net (mixing)",
+   "formula_cv": "CV(λ) = (1 / K) Σ_k E_k(λ), E_k la misura sul fold k dell'adattamento sugli altri K − 1 fold;  SE(λ) = sd_k E_k(λ) / √K;  λ_1se = il λ più grande con CV(λ) entro SE(λ_min) da CV(λ_min)"
+  },
+  "measure_readings": [
+   "confusion_at",
+   "more_in_table",
+   "penalized_lambda",
+   "penalized_measure",
+   "summary_penalized",
+   "summary_penalized_auc",
+   "summary_penalized_r2",
+   "threshold_epv"
+  ]
  },
  "de": {
   "penalties": {
@@ -510,7 +618,61 @@
    "epv": {
     "advice": "Wenige Ereignisse für die Zahl der Terme: die Penalisierung stabilisiert die Schätzungen; weniger Terme stabilisieren sie mehr."
    }
-  }
+  },
+  "reading_labels": {
+   "method_ridge": "Ridge",
+   "method_lasso": "Lasso",
+   "method_elastic_net": "Elastic Net",
+   "method_cv": "Kreuzvalidierung",
+   "method_no_inference": "Warum kein p-Wert",
+   "method_auc_folds": "AUC außerhalb der Folds",
+   "formula_penalized": "Bestrafte Anpassung",
+   "formula_cv": "Kreuzvalidierung"
+  },
+  "reading_texts": {
+   "more_in_table": "Und {more:int} weitere: Die Tabelle führt alle auf.",
+   "threshold_epv": "Ereignisse je Koeffizient: {value:num}, unter der Schwelle von {threshold:num}, die die Tabelle verwendet. Mit wenigen Ereignissen je Koeffizient beruhen die Schätzungen und ihre Intervalle auf wenig Information; die Schwelle ist eine Konvention der Literatur, kein Test.",
+   "summary_penalized": {
+    "penalty=ridge": "Die Ridge-Strafe schrumpft jeden Koeffizienten gegen 0 und setzt keinen auf 0: Alle {total:int} Terme bleiben, angepasst auf {n:int} Zeilen.",
+    "penalty=lasso": "Die Lasso-Strafe hat einige Koeffizienten genau auf 0 gesetzt: Sie hat {selected:int} der {total:int} Terme behalten, angepasst auf {n:int} Zeilen.",
+    "": "Das Elastic Net (Mischung {mixing:num}, von 0 für Ridge bis 1 für Lasso) hat {selected:int} der {total:int} Terme behalten, angepasst auf {n:int} Zeilen."
+   },
+   "summary_penalized_r2": "Außerhalb der Folds, auf Zeilen, die die jeweilige Anpassung nicht gesehen hatte, erklärt das Modell {r2:pct} der Varianz von «{outcome}».",
+   "summary_penalized_auc": "Außerhalb der Folds ist die AUC {auc:num}, der Mittelwert von {folds:int} Folds (Standardfehler {se:num} zwischen ihnen): die Wahrscheinlichkeit, dass eine Zeile mit dem Ereignis eine höhere vorhergesagte Wahrscheinlichkeit erhält als eine ohne, wobei 0,5 dem Zufall entspricht.",
+   "penalized_lambda": {
+    "lambda=cv_min": "λ = {lambda:num} ist dort, wo das Maß der Kreuzvalidierung sein Optimum erreicht, {cv:num} (Standardfehler {cv_se:num} zwischen den Folds).",
+    "lambda=cv_1se": "λ = {lambda:num} folgt der Ein-Standardfehler-Regel: das größte λ, dessen Maß der Kreuzvalidierung innerhalb eines Standardfehlers vom Optimum liegt. Dort beträgt es {cv:num} (Standardfehler {cv_se:num} zwischen den Folds), und die Koeffizienten sind mehr geschrumpft als am Optimum.",
+    "": "λ = {lambda:num} wurde im Knoten festgelegt; dort beträgt das Maß der Kreuzvalidierung {cv:num} (Standardfehler {cv_se:num} zwischen den Folds)."
+   },
+   "penalized_measure": {
+    "measure=mae": "Die Kreuzvalidierung bewertet jedes λ mit dem mittleren absoluten Fehler der Vorhersagen außerhalb der Folds.",
+    "measure=deviance": "Die Kreuzvalidierung bewertet jedes λ mit der Devianz der Vorhersagen außerhalb der Folds, −2 mal ihre Log-Likelihood.",
+    "measure=auc": "Die Kreuzvalidierung bewertet jedes λ mit der AUC der Vorhersagen außerhalb der Folds; ihr Optimum ist ihr größter Wert.",
+    "measure=class": "Die Kreuzvalidierung bewertet jedes λ mit dem Anteil der Vorhersagen außerhalb der Folds in der falschen Klasse.",
+    "": "Die Kreuzvalidierung bewertet jedes λ mit dem mittleren quadratischen Fehler der Vorhersagen außerhalb der Folds."
+   },
+   "confusion_at": "Außerhalb der Folds wird eine Zeile als «{event}» klassifiziert, wenn ihre vorhergesagte Wahrscheinlichkeit mindestens {threshold:num} ist. Dann sind {accuracy:pct} der Zeilen wie beobachtet klassifiziert; von den Zeilen mit dem Ereignis werden {sensitivity:pct} gefunden (Sensitivität), von denen ohne werden {specificity:pct} als ohne klassifiziert (Spezifität), und von den als mit Ereignis klassifizierten haben es {precision:pct} (Präzision).",
+   "method_ridge": "Die Ridge-Regression fügt dem Kriterium der Anpassung (den quadrierten Residuen der linearen, der negativen Log-Likelihood der logistischen) eine Strafe hinzu, λ mal die Summe der quadrierten Koeffizienten: Die Koeffizienten schrumpfen gegen 0, was sie bei korrelierten Prädiktoren stabilisiert, aber keiner wird genau 0. Die Prädiktoren werden zuerst standardisiert, sofern der Knoten nichts anderes sagt, damit die Strafe sie gleich gewichtet; die Koeffizienten werden auf der ursprünglichen Skala berichtet.",
+   "method_lasso": "Das Lasso fügt dem Kriterium der Anpassung (den quadrierten Residuen der linearen, der negativen Log-Likelihood der logistischen) eine Strafe hinzu, λ mal die Summe der Absolutbeträge der Koeffizienten: Einige werden genau 0 und ihre Terme verlassen das Modell, eine Auswahl durch die Daten. Die Prädiktoren werden zuerst standardisiert, sofern der Knoten nichts anderes sagt, damit die Strafe sie gleich gewichtet; die Koeffizienten werden auf der ursprünglichen Skala berichtet.",
+   "method_elastic_net": "Das Elastic Net fügt dem Kriterium der Anpassung eine Mischung der Ridge- und der Lasso-Strafe hinzu, eingestellt durch mixing (0 Ridge, 1 Lasso): Es setzt wie das Lasso einige Koeffizienten auf 0 und hält wie Ridge Gruppen korrelierter Prädiktoren zusammen. Die Prädiktoren werden zuerst standardisiert, sofern der Knoten nichts anderes sagt; die Koeffizienten werden auf der ursprünglichen Skala berichtet.",
+   "method_cv": "λ wird durch k-fache Kreuzvalidierung gewählt: Die Zeilen werden in Folds geteilt, jeder Fold wird von einer Anpassung auf den übrigen bei jedem λ des Pfads vorhergesagt, und das Maß dieser Vorhersagen außerhalb der Folds wird über die Folds gemittelt. «cv_min» nimmt das λ am Optimum; «cv_1se» das größte λ innerhalb eines Standardfehlers davon, ein Modell, das stärker schrumpft, bei einem Maß, das die Folds nicht vom Optimum unterscheiden können. Die Zahlen «außerhalb der Folds» dieses Berichts stammen aus diesen Vorhersagen.",
+   "method_no_inference": "Es werden kein p-Wert, kein Standardfehler und kein Intervall angegeben: Haben die Daten einmal gewählt, welche Terme bleiben und wie weit sie schrumpfen, würden die üblichen Tests diese Wahl als im Voraus festgelegt behandeln, und ihre p-Werte fielen zu klein aus. Die Prüfungen sind Diagnosen, keine Tests.",
+   "method_auc_folds": "Die AUC außerhalb der Folds ist der Mittelwert der AUCs der Folds, jede auf den Zeilen berechnet, die die Anpassung ihres Folds nicht gesehen hatte, mit ihrem Standardfehler zwischen den Folds: Die Anpassungen der Folds haben verschiedene Achsenabschnitte, daher würde das Zusammenlegen ihrer Vorhersagen ihre Skalen vermischen. Der Brier-Score außerhalb der Folds ist die mittlere quadrierte Abweichung zwischen diesen Vorhersagen und dem Ergebnis."
+  },
+  "formula_texts": {
+   "formula_penalized": "β̂ = argmin_β ( L(β) + λ · ((1 − a) / 2 · Σ_j β_j² + a · Σ_j |β_j|) );  L: das mittlere quadrierte Residuum (linear) oder die negative mittlere Log-Likelihood (logistisch);  a = 0 Ridge, a = 1 Lasso, dazwischen das Elastic Net (mixing)",
+   "formula_cv": "CV(λ) = (1 / K) Σ_k E_k(λ), E_k das Maß auf Fold k der Anpassung auf den übrigen K − 1 Folds;  SE(λ) = sd_k E_k(λ) / √K;  λ_1se = das größte λ mit CV(λ) innerhalb von SE(λ_min) um CV(λ_min)"
+  },
+  "measure_readings": [
+   "confusion_at",
+   "more_in_table",
+   "penalized_lambda",
+   "penalized_measure",
+   "summary_penalized",
+   "summary_penalized_auc",
+   "summary_penalized_r2",
+   "threshold_epv"
+  ]
  },
  "es": {
   "penalties": {
@@ -681,7 +843,61 @@
    "epv": {
     "advice": "Pocos eventos para el número de términos: la penalización estabiliza las estimaciones; menos términos las estabilizan más."
    }
-  }
+  },
+  "reading_labels": {
+   "method_ridge": "Ridge",
+   "method_lasso": "Lasso",
+   "method_elastic_net": "Red elástica",
+   "method_cv": "Validación cruzada",
+   "method_no_inference": "Por qué no hay p-valor",
+   "method_auc_folds": "AUC fuera de pliegue",
+   "formula_penalized": "Ajuste penalizado",
+   "formula_cv": "Validación cruzada"
+  },
+  "reading_texts": {
+   "more_in_table": "Y {more:int} más: la tabla los recoge todos.",
+   "threshold_epv": "Eventos por coeficiente: {value:num}, por debajo del umbral de {threshold:num} que usa la tabla. Con pocos eventos por coeficiente, las estimaciones y sus intervalos descansan en poca información; el umbral es una convención de la literatura, no un contraste.",
+   "summary_penalized": {
+    "penalty=ridge": "La penalización ridge contrae cada coeficiente hacia 0 sin llevar ninguno a 0: quedan los {total:int} términos, ajustados sobre {n:int} filas.",
+    "penalty=lasso": "La penalización lasso llevó algunos coeficientes exactamente a 0: conservó {selected:int} de los {total:int} términos, ajustados sobre {n:int} filas.",
+    "": "La red elástica (mezcla {mixing:num}, de 0 para ridge a 1 para lasso) conservó {selected:int} de los {total:int} términos, ajustados sobre {n:int} filas."
+   },
+   "summary_penalized_r2": "Fuera de pliegue, en filas que cada ajuste no había visto, el modelo explica el {r2:pct} de la varianza de «{outcome}».",
+   "summary_penalized_auc": "Fuera de pliegue, el AUC es {auc:num}, la media de {folds:int} pliegues (error estándar {se:num} entre ellos): la probabilidad de que una fila con el evento reciba una probabilidad prevista mayor que una fila sin él, siendo 0,5 el azar.",
+   "penalized_lambda": {
+    "lambda=cv_min": "λ = {lambda:num} es donde la medida de la validación cruzada alcanza su óptimo, {cv:num} (error estándar {cv_se:num} entre los pliegues).",
+    "lambda=cv_1se": "λ = {lambda:num} sigue la regla de un error estándar: el mayor λ cuya medida de la validación cruzada está a menos de un error estándar del óptimo. Allí vale {cv:num} (error estándar {cv_se:num} entre los pliegues), y los coeficientes se contraen más que en el óptimo.",
+    "": "λ = {lambda:num} se fijó en el nodo; allí la medida de la validación cruzada es {cv:num} (error estándar {cv_se:num} entre los pliegues)."
+   },
+   "penalized_measure": {
+    "measure=mae": "La validación cruzada puntúa cada λ con el error absoluto medio de las predicciones fuera de pliegue.",
+    "measure=deviance": "La validación cruzada puntúa cada λ con la desviación de las predicciones fuera de pliegue, −2 veces su log-verosimilitud.",
+    "measure=auc": "La validación cruzada puntúa cada λ con el AUC de las predicciones fuera de pliegue; su óptimo es su mayor valor.",
+    "measure=class": "La validación cruzada puntúa cada λ con la proporción de predicciones fuera de pliegue en la clase equivocada.",
+    "": "La validación cruzada puntúa cada λ con el error cuadrático medio de las predicciones fuera de pliegue."
+   },
+   "confusion_at": "Fuera de pliegue, una fila se clasifica como «{event}» cuando su probabilidad prevista es al menos {threshold:num}. Así el {accuracy:pct} de las filas se clasifica como se observó; de las filas con el evento se encuentra el {sensitivity:pct} (sensibilidad), de las que no lo tienen se clasifica sin él el {specificity:pct} (especificidad), y de las filas clasificadas con el evento lo tiene el {precision:pct} (precisión).",
+   "method_ridge": "La regresión ridge añade al criterio del ajuste (los residuos al cuadrado de la lineal, menos la log-verosimilitud de la logística) una penalización, λ por la suma de los coeficientes al cuadrado: los coeficientes se contraen hacia 0, lo que los estabiliza cuando los predictores están correlacionados, pero ninguno llega exactamente a 0. Los predictores se estandarizan primero, salvo que el nodo diga otra cosa, para que la penalización los pese por igual; los coeficientes se informan en la escala original.",
+   "method_lasso": "El lasso añade al criterio del ajuste (los residuos al cuadrado de la lineal, menos la log-verosimilitud de la logística) una penalización, λ por la suma de los coeficientes en valor absoluto: algunos llegan exactamente a 0 y sus términos salen del modelo, una selección hecha por los datos. Los predictores se estandarizan primero, salvo que el nodo diga otra cosa, para que la penalización los pese por igual; los coeficientes se informan en la escala original.",
+   "method_elastic_net": "La red elástica añade al criterio del ajuste una mezcla de las penalizaciones ridge y lasso, regulada por mixing (0 ridge, 1 lasso): lleva algunos coeficientes a 0 como el lasso, manteniendo juntos grupos de predictores correlacionados como ridge. Los predictores se estandarizan primero, salvo que el nodo diga otra cosa; los coeficientes se informan en la escala original.",
+   "method_cv": "λ se elige por validación cruzada de k pliegues: las filas se dividen en pliegues, cada pliegue se predice con un ajuste sobre los demás en cada λ de la ruta, y la medida de esas predicciones fuera de pliegue se promedia sobre los pliegues. «cv_min» toma el λ en el óptimo; «cv_1se» el mayor λ a menos de un error estándar de él, un modelo que contrae más con una medida que los pliegues no distinguen del óptimo. Los números «fuera de pliegue» de este informe vienen de esas predicciones.",
+   "method_no_inference": "No se da ningún p-valor, error estándar ni intervalo: una vez que los datos han elegido qué términos conservar y cuánto contraerlos, los contrastes habituales tratarían esa elección como fijada de antemano y sus p-valores saldrían demasiado pequeños. Las comprobaciones son diagnósticos, no contrastes.",
+   "method_auc_folds": "El AUC fuera de pliegue es la media de los AUC de los pliegues, cada uno calculado en las filas que el ajuste de su pliegue no había visto, con su error estándar entre los pliegues: los ajustes de los pliegues tienen interceptos distintos, así que juntar sus predicciones mezclaría sus escalas. La puntuación de Brier fuera de pliegue es la diferencia cuadrática media entre esas predicciones y el resultado."
+  },
+  "formula_texts": {
+   "formula_penalized": "β̂ = argmin_β ( L(β) + λ · ((1 − a) / 2 · Σ_j β_j² + a · Σ_j |β_j|) );  L: el residuo cuadrático medio (lineal) o menos la log-verosimilitud media (logística);  a = 0 ridge, a = 1 lasso, entre ambos la red elástica (mixing)",
+   "formula_cv": "CV(λ) = (1 / K) Σ_k E_k(λ), E_k la medida en el pliegue k del ajuste sobre los otros K − 1 pliegues;  SE(λ) = sd_k E_k(λ) / √K;  λ_1se = el mayor λ con CV(λ) a menos de SE(λ_min) de CV(λ_min)"
+  },
+  "measure_readings": [
+   "confusion_at",
+   "more_in_table",
+   "penalized_lambda",
+   "penalized_measure",
+   "summary_penalized",
+   "summary_penalized_auc",
+   "summary_penalized_r2",
+   "threshold_epv"
+  ]
  },
  "fr": {
   "penalties": {
@@ -852,6 +1068,60 @@
    "epv": {
     "advice": "Peu d'événements pour le nombre de termes : la pénalité stabilise les estimations ; moins de termes les stabilisent davantage."
    }
-  }
+  },
+  "reading_labels": {
+   "method_ridge": "Ridge",
+   "method_lasso": "Lasso",
+   "method_elastic_net": "Filet élastique",
+   "method_cv": "Validation croisée",
+   "method_no_inference": "Pourquoi pas de p-valeur",
+   "method_auc_folds": "AUC hors pli",
+   "formula_penalized": "Ajustement pénalisé",
+   "formula_cv": "Validation croisée"
+  },
+  "reading_texts": {
+   "more_in_table": "Et {more:int} de plus : le tableau les donne tous.",
+   "threshold_epv": "Événements par coefficient : {value:num}, sous le seuil de {threshold:num} qu'utilise le tableau. Avec peu d'événements par coefficient, les estimations et leurs intervalles reposent sur peu d'information ; le seuil est une convention de la littérature, pas un test.",
+   "summary_penalized": {
+    "penalty=ridge": "La pénalité ridge rétrécit chaque coefficient vers 0 sans en mettre aucun à 0 : les {total:int} termes restent, ajustés sur {n:int} lignes.",
+    "penalty=lasso": "La pénalité lasso a mis certains coefficients exactement à 0 : elle a gardé {selected:int} des {total:int} termes, ajustés sur {n:int} lignes.",
+    "": "Le filet élastique (mélange {mixing:num}, de 0 pour ridge à 1 pour lasso) a gardé {selected:int} des {total:int} termes, ajustés sur {n:int} lignes."
+   },
+   "summary_penalized_r2": "Hors pli, sur des lignes que chaque ajustement n'avait pas vues, le modèle explique {r2:pct} de la variance de «{outcome}».",
+   "summary_penalized_auc": "Hors pli, l'AUC vaut {auc:num}, la moyenne de {folds:int} plis (erreur standard {se:num} entre eux) : la probabilité qu'une ligne avec l'événement reçoive une probabilité prédite plus haute qu'une ligne sans, 0,5 étant le hasard.",
+   "penalized_lambda": {
+    "lambda=cv_min": "λ = {lambda:num} est là où la mesure de la validation croisée atteint son optimum, {cv:num} (erreur standard {cv_se:num} entre les plis).",
+    "lambda=cv_1se": "λ = {lambda:num} suit la règle d'une erreur standard : le plus grand λ dont la mesure de la validation croisée reste à moins d'une erreur standard de l'optimum. Là, elle vaut {cv:num} (erreur standard {cv_se:num} entre les plis), et les coefficients sont plus rétrécis qu'à l'optimum.",
+    "": "λ = {lambda:num} a été fixé dans le nœud ; là, la mesure de la validation croisée vaut {cv:num} (erreur standard {cv_se:num} entre les plis)."
+   },
+   "penalized_measure": {
+    "measure=mae": "La validation croisée note chaque λ par l'erreur absolue moyenne des prédictions hors pli.",
+    "measure=deviance": "La validation croisée note chaque λ par la déviance des prédictions hors pli, −2 fois leur log-vraisemblance.",
+    "measure=auc": "La validation croisée note chaque λ par l'AUC des prédictions hors pli ; son optimum est sa plus grande valeur.",
+    "measure=class": "La validation croisée note chaque λ par la part des prédictions hors pli dont la classe diffère de l'observée.",
+    "": "La validation croisée note chaque λ par l'erreur quadratique moyenne des prédictions hors pli."
+   },
+   "confusion_at": "Hors pli, une ligne est classée «{event}» quand sa probabilité prédite est au moins {threshold:num}. Alors {accuracy:pct} des lignes sont classées comme observé ; des lignes avec l'événement, {sensitivity:pct} sont trouvées (sensibilité), de celles sans, {specificity:pct} sont classées sans (spécificité), et des lignes classées avec l'événement, {precision:pct} l'ont (précision).",
+   "method_ridge": "La régression ridge ajoute au critère de l'ajustement (les carrés des résidus de la linéaire, moins la log-vraisemblance de la logistique) une pénalité, λ fois la somme des carrés des coefficients : les coefficients rétrécissent vers 0, ce qui les stabilise quand les prédicteurs sont corrélés, mais aucun ne devient exactement 0. Les prédicteurs sont d'abord standardisés, sauf avis contraire du nœud, pour que la pénalité les pèse de la même façon ; les coefficients sont rapportés sur l'échelle d'origine.",
+   "method_lasso": "Le lasso ajoute au critère de l'ajustement (les carrés des résidus de la linéaire, moins la log-vraisemblance de la logistique) une pénalité, λ fois la somme des valeurs absolues des coefficients : certains deviennent exactement 0 et leurs termes quittent le modèle, une sélection faite par les données. Les prédicteurs sont d'abord standardisés, sauf avis contraire du nœud, pour que la pénalité les pèse de la même façon ; les coefficients sont rapportés sur l'échelle d'origine.",
+   "method_elastic_net": "Le filet élastique ajoute au critère de l'ajustement un mélange des pénalités ridge et lasso, réglé par mixing (0 ridge, 1 lasso) : il met certains coefficients à 0 comme le lasso, tout en gardant ensemble des groupes de prédicteurs corrélés comme ridge. Les prédicteurs sont d'abord standardisés, sauf avis contraire du nœud ; les coefficients sont rapportés sur l'échelle d'origine.",
+   "method_cv": "λ est choisi par validation croisée à k plis : les lignes sont réparties en plis, chaque pli est prédit par un ajustement sur les autres à chaque λ du chemin, et la mesure de ces prédictions hors pli est moyennée sur les plis. «cv_min» prend le λ à l'optimum ; «cv_1se» le plus grand λ à moins d'une erreur standard de lui, un modèle qui rétrécit davantage pour une mesure que les plis ne distinguent pas de l'optimum. Les nombres «hors pli» de ce rapport viennent de ces prédictions.",
+   "method_no_inference": "Aucune p-valeur, erreur standard ou intervalle n'est donné : une fois que les données ont choisi quels termes garder et de combien les rétrécir, les tests usuels traiteraient ce choix comme fixé d'avance et leurs p-valeurs sortiraient trop petites. Les contrôles sont des diagnostics, pas des tests.",
+   "method_auc_folds": "L'AUC hors pli est la moyenne des AUC des plis, chacune calculée sur les lignes que l'ajustement de son pli n'avait pas vues, avec son erreur standard entre les plis : les ajustements des plis ont des constantes différentes, donc réunir leurs prédictions mélangerait leurs échelles. Le score de Brier hors pli est l'écart quadratique moyen entre ces prédictions et le résultat."
+  },
+  "formula_texts": {
+   "formula_penalized": "β̂ = argmin_β ( L(β) + λ · ((1 − a) / 2 · Σ_j β_j² + a · Σ_j |β_j|) ) ;  L : le résidu quadratique moyen (linéaire) ou moins la log-vraisemblance moyenne (logistique) ;  a = 0 ridge, a = 1 lasso, entre les deux le filet élastique (mixing)",
+   "formula_cv": "CV(λ) = (1 / K) Σ_k E_k(λ), E_k la mesure sur le pli k de l'ajustement sur les K − 1 autres plis ;  SE(λ) = sd_k E_k(λ) / √K ;  λ_1se = le plus grand λ avec CV(λ) à moins de SE(λ_min) de CV(λ_min)"
+  },
+  "measure_readings": [
+   "confusion_at",
+   "more_in_table",
+   "penalized_lambda",
+   "penalized_measure",
+   "summary_penalized",
+   "summary_penalized_auc",
+   "summary_penalized_r2",
+   "threshold_epv"
+  ]
  }
 }

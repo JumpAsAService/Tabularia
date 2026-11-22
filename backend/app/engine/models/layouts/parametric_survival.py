@@ -17,11 +17,12 @@ Without strata the runner names the one stratum «all»: the page says it in its
 """
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Mapping
 
 from app.engine.models import catalog
 from app.engine.models.layouts import common as c
 from app.engine.models.layouts import register
+from app.engine.models.layouts import shared_readings as sr
 from app.engine.stats import layouts as stats
 from app.engine.stats.catalog import label_of
 
@@ -358,7 +359,73 @@ def layout(model: str, params: dict[str, Any], locale: str, sample: list[dict] |
                   coef_tables=tables, coef_note=note, assumptions_note=alpha_note, fit_format=SMALL,
                   after_assumptions=(c.measures(MEASURES, more=_measure_more(w)),), coef_first=(_ratio_charts(variant),) if predictors else (),
                   after_coefficients=(_parameters,),
-                  blocks=blocks)
+                  blocks=blocks, explained=("summary", "assumptions", "coefficients"))
+
+
+def _auto_lines(rows: list[dict], k: Mapping[str, dict]) -> list[c.ReadingLine]:
+    """With `auto`, the choice said as a choice, not a verdict: the distribution chosen, its Akaike weight, and the next
+    candidate by AIC with its ΔAIC (`auto_chosen`); chosen for its fewer parameters within the margin (`auto_parsimony`)."""
+    def of(d: str, stat: str) -> float | None:
+        return sr.number(k, f"candidate|{d}||{stat}")
+
+    candidates = [r["level"] for r in rows if r["section"] == "candidate" and r["stat"] == "n_parameters"]
+    chosen = next((d for d in candidates if of(d, "chosen") == 1), None)
+    if chosen is None:
+        return []
+    weight = of(chosen, "akaike_weight")
+    if of(chosen, "parsimony") == 1:
+        return [("summary", None, "auto_parsimony", {"distribution": chosen, "weight": weight, "delta": of(chosen, "delta_aic"),
+                                                     "margin": sr.model(k, "aic_margin")})]
+    others = sorted((d for d in candidates if d != chosen and of(d, "delta_aic") is not None), key=lambda d: of(d, "delta_aic"))
+    if not others:
+        return [("summary", None, "auto_alone", {"distribution": chosen, "weight": weight})]
+    return [("summary", None, "auto_chosen", {"distribution": chosen, "weight": weight, "other": others[0],
+                                              "delta": of(others[0], "delta_aic"), "count": len(others) + 1})]
+
+
+def readings(rows: list[dict], checked: Mapping[str, Any]) -> list[c.ReadingLine]:
+    """The explanation (docs/specs/report-explanations.md, «B2»): the distribution and the profile's median; with `auto`
+    the choice; the likelihood-ratio test; the checks (the distribution against the generalized gamma and the
+    proportional hazards are tests, the rest measures); the terms' tests and the first significant term's time ratio
+    (or hazard ratio); the method's paragraphs and formulas."""
+    k, a = sr.keyed(rows), sr.alpha(checked)
+    distribution = sr.text(k, c.model_key("distribution")) or str(checked.get("distribution") or "")
+    counts = {"distribution": distribution, "n": sr.model(k, "n"), "events": sr.model(k, "events")}
+    strata = sr.model(k, "n_strata") or 1
+    median, low, high = (sr.number(k, f"stratum|{ALL}||{s}") for s in ("median", "median_ci_low", "median_ci_high"))
+    if strata > 1:
+        line = ("summary", None, "summary_parametric_strata", {**counts, "strata": strata})
+    elif median is None:
+        line = ("summary", None, "summary_parametric_never", counts)
+    elif low is None or high is None:
+        line = ("summary", None, "summary_parametric_no_ci", {**counts, "median": median})
+    else:
+        line = ("summary", None, "summary_parametric", {**counts, "median": median, "low": low, "high": high,
+                                                         "conf": sr.conf(checked)})
+    lines: list[c.ReadingLine] = [line]
+    auto = checked.get("distribution") == "auto"
+    if auto:
+        lines += _auto_lines(rows, k)
+    p = sr.model(k, "lr_p_value")
+    if p is not None:
+        lines.append(("summary", None, "fit_lr_reject" if p < a else "fit_lr_keep", {
+            "lr": sr.model(k, "lr_statistic"), "df": sr.model(k, "lr_df"), "p": p, "alpha": a}))
+    lines += sr.assumption_lines(rows, checked)
+    coef, significant = sr.coefficient_lines(rows, checked)
+    time_ratios = any(r["section"] == "coef" and r["stat"] == "time_ratio" for r in rows)
+    hazard_ratios = any(r["section"] == "coef" and r["stat"] == "hazard_ratio" for r in rows)
+    if time_ratios:
+        coef += sr.ratio_line(rows, checked, significant, ("time_ratio", "tr_ci_low", "tr_ci_high"), "coef_time_ratio")
+    elif hazard_ratios:
+        coef += sr.ratio_line(rows, checked, significant, ("hazard_ratio", "hr_ci_low", "hr_ci_high"), "coef_hazard")
+    lines += coef
+    lines += sr.method_lines("method_aft" if time_ratios or not hazard_ratios else "", "method_ph" if hazard_ratios else "",
+                             f"method_{distribution}" if distribution in DISTRIBUTIONS else "", "method_auto" if auto else "",
+                             "method_km_agreement", "method_p_value")
+    lines += sr.formula_lines("formula_aft" if time_ratios or not hazard_ratios else "", "formula_ph" if hazard_ratios else "",
+                              "formula_aic" if auto else "", "formula_akaike_weight" if auto else "")
+    return lines
 
 
 register("parametric_survival", layout, name, about)
+c.READINGS["parametric_survival"] = readings

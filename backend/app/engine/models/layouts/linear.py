@@ -9,11 +9,12 @@ their intervals.
 """
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Mapping
 
 from app.engine.models import catalog
 from app.engine.models.layouts import common as c
 from app.engine.models.layouts import penalized, register
+from app.engine.models.layouts import shared_readings as sr
 
 
 def name(params: dict[str, Any], locale: str) -> str:
@@ -78,7 +79,41 @@ def layout(model: str, params: dict[str, Any], locale: str, sample: list[dict] |
                               filter_='[section] = "coef" AND [level] <> "(Intercept)"'))
     charts = tuple(ch_._replace(wide=True) if ch_.id == "coef_interval" else ch_ for ch_ in charts)
     return c.page(model, params, locale, sample, step, name=name(params, locale), about=about(params, locale), cards=cards,
-                  coef_tables=tables, charts=charts)
+                  coef_tables=tables, charts=charts, explained=("summary", "assumptions", "coefficients", "fit"))
+
+
+# the standard errors that are not the classical ones: their method's paragraph (HC0 to HC3 share one)
+SE_METHOD = {"hc0": "hc", "hc1": "hc", "hc2": "hc", "hc3": "hc", "hac": "hac", "cluster": "cluster"}
+
+
+def readings(rows: list[dict], checked: Mapping[str, Any]) -> list[c.ReadingLine]:
+    """The explanation (docs/specs/report-explanations.md, «B2»): what R² and the F test say, the checks, the terms'
+    tests, the errors of the fit; the method's paragraphs and formulas. With a penalty, `penalized.readings`."""
+    if checked.get("penalty", "none") != "none":
+        return penalized.readings(rows, checked, "linear")
+    k, a = sr.keyed(rows), sr.alpha(checked)
+    outcome = str(checked.get("outcome") or "")
+    lines: list[c.ReadingLine] = [("summary", None, "summary_linear", {
+        "n": sr.model(k, "n"), "outcome": outcome, "r2": sr.model(k, "r_squared"), "adj": sr.model(k, "adj_r_squared")})]
+    p = sr.model(k, "f_p_value")
+    if p is not None:
+        lines.append(("summary", None, "fit_f_reject" if p < a else "fit_f_keep", {
+            "f": sr.model(k, "f_statistic"), "df1": sr.model(k, "f_df_1"), "df2": sr.model(k, "f_df_2"), "p": p, "alpha": a,
+            "outcome": outcome}))
+    lines += sr.assumption_lines(rows, checked)
+    coef, _ = sr.coefficient_lines(rows, checked)
+    se = str(checked.get("se") or "classical")
+    if coef and se in SE_METHOD:
+        coef.append(("coefficients", None, "coef_robust", {"kind": se.upper()}))
+    lines += coef
+    lines.append(("fit", None, "fit_errors", {"rmse": sr.model(k, "rmse"), "mae": sr.model(k, "mae"),
+                                              "sigma": sr.model(k, "sigma"), "outcome": outcome}))
+    lines += sr.method_lines("method_wls" if checked.get("estimation") == "wls" else "method_ols",
+                             "method_se_" + SE_METHOD.get(se, "classical"), "method_checks", "method_vif", "method_p_value")
+    lines += sr.formula_lines("formula_ols", "formula_r2", "formula_f", "formula_t",
+                              "formula_sandwich" if se in SE_METHOD else "", "formula_vif")
+    return lines
 
 
 register("linear", layout, name, about)
+c.READINGS["linear"] = readings

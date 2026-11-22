@@ -13,10 +13,11 @@ Without strata the runner names the one curve «all»: the page says it in its l
 """
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Mapping
 
 from app.engine.models.layouts import common as c
 from app.engine.models.layouts import register
+from app.engine.models.layouts import shared_readings as sr
 from app.engine.stats.catalog import label_of
 
 MAX_TERMS_CHARTED = 12  # the Schoenfeld and martingale charts drawn, one a predictor
@@ -88,7 +89,8 @@ def layout(model: str, params: dict[str, Any], locale: str, sample: list[dict] |
                     [c.mark("surv", "step")], {"min": 0, "max": 1},
                     split_by=f'IF([level_2] = "{ALL}", {c.q(w["all"])}, [level_2])', wide=True)
     return c.page(model, params, locale, sample, step, name=name(params, locale), about=about(params, locale), cards=cards,
-                  coef_tables=tables, charts=(hr, adjusted, *_by_predictor(w, params), deviance))
+                  coef_tables=tables, charts=(hr, adjusted, *_by_predictor(w, params), deviance),
+                  explained=("summary", "assumptions", "coefficients"))
 
 
 def _by_predictor(w: dict, params: dict[str, Any]) -> tuple[c.Chart, ...]:
@@ -97,4 +99,29 @@ def _by_predictor(w: dict, params: dict[str, Any]) -> tuple[c.Chart, ...]:
     return tuple(chart for pair in zip(_schoenfeld(w, params), _martingale(w, params)) for chart in pair)
 
 
+def readings(rows: list[dict], checked: Mapping[str, Any]) -> list[c.ReadingLine]:
+    """The explanation (docs/specs/report-explanations.md, «B2»): the concordance and the likelihood-ratio test; the
+    checks (Schoenfeld's among them); the terms' tests and the first significant term's hazard ratio; the method's
+    paragraphs and formulas."""
+    k, a = sr.keyed(rows), sr.alpha(checked)
+    lines: list[c.ReadingLine] = [("summary", None, "summary_cox", {
+        "n": sr.model(k, "n"), "events": sr.model(k, "events"), "concordance": sr.model(k, "concordance"),
+        "se": sr.model(k, "concordance_se")})]
+    p = sr.model(k, "lr_p_value")
+    if p is not None:
+        lines.append(("summary", None, "fit_lr_reject" if p < a else "fit_lr_keep", {
+            "lr": sr.model(k, "lr_statistic"), "df": sr.model(k, "lr_df"), "p": p, "alpha": a}))
+    lines += sr.assumption_lines(rows, checked)
+    coef, significant = sr.coefficient_lines(rows, checked)
+    robust = checked.get("se") == "robust"
+    if coef and robust:
+        coef.append(("coefficients", None, "coef_robust", {}))
+    lines += coef + sr.ratio_line(rows, checked, significant, ("hazard_ratio", "hr_ci_low", "hr_ci_high"), "coef_hazard")
+    lines += sr.method_lines("method_cox", "method_ties_" + str(checked.get("ties") or "efron"),
+                             "method_se_robust" if robust else "", "method_schoenfeld", "method_checks", "method_p_value")
+    lines += sr.formula_lines("formula_cox", "formula_partial_likelihood", "formula_hr", "formula_schoenfeld")
+    return lines
+
+
 register("cox", layout, name, about)
+c.READINGS["cox"] = readings

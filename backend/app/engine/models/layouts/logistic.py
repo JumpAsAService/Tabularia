@@ -9,11 +9,12 @@ ratios on a logarithmic axis.
 """
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Mapping
 
 from app.engine.models import catalog
 from app.engine.models.layouts import common as c
 from app.engine.models.layouts import penalized, register
+from app.engine.models.layouts import shared_readings as sr
 from app.engine.stats import layouts as stats
 from app.engine.stats.catalog import label_of
 
@@ -87,6 +88,7 @@ def confusion_block(p: stats.Page, w: dict) -> None:
            "columns": [{"header": t["observed_predicted"], "width": 50}],
            "matrix": {"columns_by": "[level_2]", "value": "SUM([value])", "total": True, "format": "#,##0", "width": 22},
            "style": {"size": 8}, "visible": c.exists(f)}, 10)
+    c.reading_under(p, w, "confusion")
 
 
 def layout(model: str, params: dict[str, Any], locale: str, sample: list[dict] | None, step: str | None) -> dict:
@@ -112,7 +114,61 @@ def layout(model: str, params: dict[str, Any], locale: str, sample: list[dict] |
     # a probit's coefficients have no odds ratios: no chart, rather than an empty place for one
     charts = (*classification_charts(w), resid, *((odds,) if checked.get("link", "logit") == "logit" else ()))
     return c.page(model, params, locale, sample, step, name=name(params, locale), about=about(params, locale), cards=cards,
-                  coef_tables=tables, blocks=(confusion_block,), charts=charts)
+                  coef_tables=tables, blocks=(confusion_block,), charts=charts, explained=("summary", "assumptions", "coefficients"))
+
+
+def event(checked: Mapping[str, Any]) -> str:
+    """The event as the header says it: «churned = yes»."""
+    outcome, value = checked.get("outcome"), checked.get("event_value")
+    return f"{outcome} = {label_of(value)}" if outcome and value is not None else str(outcome or "")
+
+
+def confusion_lines(rows: list[dict], checked: Mapping[str, Any]) -> list[c.ReadingLine]:
+    """The classification at the threshold, in words (`confusion_at`): four shares, measures."""
+    k = sr.keyed(rows)
+    shares = {s: sr.model(k, s) for s in ("threshold", "accuracy", "sensitivity", "specificity", "precision")}
+    if any(v is None for v in shares.values()):
+        return []
+    return [("confusion", None, "confusion_at", {**shares, "event": event(checked)})]
+
+
+# the standard errors that are not the classical ones: their method's paragraph (HC0 to HC3 share one)
+SE_METHOD = {"hc0": "hc", "hc1": "hc", "hc2": "hc", "hc3": "hc", "cluster": "cluster"}
+
+
+def readings(rows: list[dict], checked: Mapping[str, Any]) -> list[c.ReadingLine]:
+    """The explanation (docs/specs/report-explanations.md, «B2»): the AUC, McFadden's R², the Brier score and the
+    likelihood-ratio test; the checks; the terms' tests and the first significant term's odds ratio; the classification
+    at the threshold; the method's paragraphs and formulas. With a penalty, `penalized.readings`."""
+    if checked.get("penalty", "none") != "none":
+        return penalized.readings(rows, checked, "logistic")
+    k, a = sr.keyed(rows), sr.alpha(checked)
+    low, high = sr.model(k, "auc_ci_low"), sr.model(k, "auc_ci_high")
+    lines: list[c.ReadingLine] = [("summary", None, "summary_logistic" if low is not None and high is not None else "summary_logistic_no_ci", {
+        "n": sr.model(k, "n"), "events": sr.model(k, "events"), "event": event(checked), "auc": sr.model(k, "auc"),
+        "low": low, "high": high, "conf": sr.conf(checked), "r2": sr.model(k, "mcfadden_r2"), "brier": sr.model(k, "brier")})]
+    p = sr.model(k, "lr_p_value")
+    if p is not None:
+        lines.append(("summary", None, "fit_lr_reject" if p < a else "fit_lr_keep", {
+            "lr": sr.model(k, "lr_statistic"), "df": sr.model(k, "lr_df"), "p": p, "alpha": a, "event": event(checked)}))
+    lines += sr.assumption_lines(rows, checked)
+    coef, significant = sr.coefficient_lines(rows, checked)
+    se = str(checked.get("se") or "classical")
+    if coef and se in SE_METHOD:
+        coef.append(("coefficients", None, "coef_robust", {"kind": se.upper()}))
+    if checked.get("link", "logit") == "logit":
+        coef += sr.ratio_line(rows, checked, significant, ("odds_ratio", "or_ci_low", "or_ci_high"), "coef_odds")
+    lines += coef
+    lines += confusion_lines(rows, checked)
+    probit = checked.get("link") == "probit"
+    lines += sr.method_lines("method_probit" if probit else "method_logit",
+                             "method_firth" if checked.get("estimation") == "firth" else "",
+                             "method_se_" + SE_METHOD[se] if se in SE_METHOD else "", "method_auc", "method_threshold",
+                             "method_checks", "method_p_value")
+    lines += sr.formula_lines("formula_probit" if probit else "formula_logit", "formula_lr", "formula_wald", "formula_auc",
+                              "formula_brier")
+    return lines
 
 
 register("logistic", layout, name, about)
+c.READINGS["logistic"] = readings

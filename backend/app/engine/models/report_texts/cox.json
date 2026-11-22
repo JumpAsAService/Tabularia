@@ -100,7 +100,75 @@
    "not_converged": "The fit did not converge in the iterations allowed: read its numbers with care.",
    "monotone_likelihood": "The likelihood keeps growing as a coefficient grows (monotone likelihood: a predictor separates the rows that have the event from the others at some time): that coefficient and its interval mean nothing; drop or merge the predictor, or its rare levels.",
    "baseline_thinned": "The card keeps the baseline hazard at {times} of its event times per stratum: survival predicted between them is read at the nearest earlier one."
-  }
+  },
+  "reading_blocks": {
+   "summary": "Summary",
+   "assumptions": "Assumptions",
+   "coefficients": "Coefficients",
+   "fit": "Fit",
+   "confusion": "Classification",
+   "curves": "Survival curves",
+   "pairs": "Pairs of strata",
+   "rmst": "Restricted mean",
+   "method": "Method",
+   "formulas": "Formula"
+  },
+  "reading_labels": {
+   "method_p_value": "p-values and α",
+   "method_cox": "Cox model",
+   "method_ties_efron": "Ties",
+   "method_ties_breslow": "Ties",
+   "method_ties_exact": "Ties",
+   "method_se_robust": "Robust standard errors",
+   "method_schoenfeld": "Proportional hazards",
+   "method_checks": "The other checks",
+   "formula_cox": "Cox model",
+   "formula_partial_likelihood": "Partial likelihood",
+   "formula_hr": "Hazard ratio",
+   "formula_schoenfeld": "Schoenfeld"
+  },
+  "reading_texts": {
+   "assumptions_rejected": "Checks whose test rejects its hypothesis at α = {alpha:num}, its p-value below α: {count:int} of {total:int}, marked in the table, which says what each departure means and what to do.",
+   "assumptions_none_rejected": "Checks that are tests: {total:int}; at α = {alpha:num} none rejects its hypothesis, every p-value is at or above α. The data do not show a departure from these assumptions; they do not prove there is none.",
+   "assumptions_many_rows": "With {n:int} rows a test rejects even departures too small to matter: weigh the size of each departure in the charts before acting on a verdict.",
+   "more_in_table": "And {more:int} more: the table lists them all.",
+   "method_p_value": "A p-value is the probability that chance alone, if the hypothesis under test were true, gives a result at least as far from it as the one observed. It is compared with α, the node's setting: below α the hypothesis is rejected, and α is the risk, accepted in advance, of rejecting a true one. Not rejecting is not proving: with few rows an existing departure may go unseen. Each test is read on its own; with many tests, some reject by chance alone.",
+   "coef_some": "Terms whose coefficient is significantly different from 0 at α = {alpha:num} (p-value below α), the other terms held fixed: {count:int} of {total:int} — {names}. For the others the data do not show an effect; they do not prove there is none.",
+   "coef_all": "Every term's coefficient is significantly different from 0 at α = {alpha:num} (p-value below α), the other terms held fixed: {names}.",
+   "coef_none": "No term's coefficient is significantly different from 0 at α = {alpha:num}: each of the {total:int} p-values is at or above α. The data do not show an effect of any term; they do not prove there is none.",
+   "threshold_vif": "Variance inflation (VIF) above the threshold of {threshold:num} the table uses: {names}, at {values:num}. A VIF says how many times the other terms inflate the variance of a coefficient; the threshold is a convention of the literature, not a test.",
+   "threshold_epv": "Events for each coefficient: {value:num}, below the threshold of {threshold:num} the table uses. With few events per coefficient the estimates and their intervals rest on little information; the threshold is a convention of the literature, not a test.",
+   "threshold_dfbeta": "The largest change a single row makes to a coefficient, in its standard errors (dfbeta), is above the threshold of {threshold:num} for {names}, at {values:num}; the table names the rows. The threshold is a convention, not a test.",
+   "summary_cox": "{n:int} rows and {events:int} events. The concordance is {concordance:num} (standard error {se:num}): of two rows, the probability that the one with the higher predicted risk has its event first, 0.5 being chance.",
+   "fit_lr_reject": "If no term changed the hazard, a likelihood-ratio statistic of {lr:num} or more ({df:int} degrees of freedom) would appear by chance with probability {p:p}, below α = {alpha:num}: the terms together are significant.",
+   "fit_lr_keep": "If no term changed the hazard, a likelihood-ratio statistic of {lr:num} or more ({df:int} degrees of freedom) would appear by chance with probability {p:p}, not below α = {alpha:num}: the terms together are not significant. The data do not show that they change it; they do not prove they do not.",
+   "coef_robust": "The terms' tests and intervals use robust standard errors (the sandwich), which allow the rows of a cluster to be correlated.",
+   "coef_hazard": "Among them, «{covariate}»: each unit more multiplies the hazard, the instantaneous risk of the event, by {ratio:num} (its {conf:pct} interval {low:num} to {high:num}), the other terms held fixed.",
+   "coef_hazard_level": "Among them, «{covariate}»: the level «{variant}» multiplies the hazard, the instantaneous risk of the event, by {ratio:num} against the reference level (its {conf:pct} interval {low:num} to {high:num}), the other terms held fixed.",
+   "method_cox": "The Cox model leaves the hazard over time, the baseline, unspecified and models how the terms multiply it: the hazard of a row is the baseline times e^(β·x). It is fitted by the partial likelihood, which uses only the order of the event times. Its central assumption is that each term multiplies the hazard by the same ratio at every time (proportional hazards).",
+   "method_ties_efron": "Rows with their event at the same time (ties) are handled by Efron's approximation, close to the exact partial likelihood.",
+   "method_ties_breslow": "Rows with their event at the same time (ties) are handled by Breslow's approximation, the simplest, which pulls the coefficients towards 0 when ties are many.",
+   "method_ties_exact": "Rows with their event at the same time (ties) are handled exactly, by the exact partial likelihood, which is slow when ties are many.",
+   "method_se_robust": "The standard errors are robust (Lin and Wei's sandwich): they allow the rows of a cluster to be correlated and do not rely on the model being exactly right.",
+   "method_schoenfeld": "The proportional hazards are tested by the scaled Schoenfeld residuals (Grambsch and Therneau): if a term's ratio changed over time, its residuals would trend with time. There is one test for each term and a global one; the charts show the residuals with their smooth.",
+   "method_checks": "The linear form of each numeric term is tested by a spline (the martingale residuals of the model without terms show its shape); influence (dfbeta), multicollinearity (VIF) and the events per coefficient are measured, not tested, and compared with thresholds of the literature."
+  },
+  "formula_texts": {
+   "formula_cox": "h(t | x) = h_0(t) · exp(β_1 x_1 + … + β_k x_k);  h_0: the baseline hazard, not estimated by the coefficients",
+   "formula_partial_likelihood": "L(β) = Π_(events i) exp(β′x_i) / Σ_(j at risk at t_i) exp(β′x_j)",
+   "formula_hr": "HR_j = e^(β̂_j), its interval e^(β̂_j ± z_(1−α/2) · se(β̂_j));  z_j = β̂_j / se(β̂_j) against the standard normal",
+   "formula_schoenfeld": "r*_ij: the scaled Schoenfeld residual of term j at event i;  the test regresses r*_j on g(t), the Kaplan–Meier transform of time: χ² with the term's degrees of freedom, and their sum for the global test"
+  },
+  "measure_readings": [
+   "coef_hazard",
+   "coef_hazard_level",
+   "coef_robust",
+   "more_in_table",
+   "summary_cox",
+   "threshold_dfbeta",
+   "threshold_epv",
+   "threshold_vif"
+  ]
  },
  "it": {
   "name": "Rischi proporzionali di Cox",
@@ -203,7 +271,75 @@
    "not_converged": "L'adattamento non è arrivato a convergenza nelle iterazioni concesse: leggetene i numeri con cautela.",
    "monotone_likelihood": "La verosimiglianza continua a crescere al crescere di un coefficiente (verosimiglianza monotona: un predittore separa a qualche tempo le righe con l'evento dalle altre): quel coefficiente e il suo intervallo non significano nulla; togliete o accorpate il predittore, o i suoi livelli rari.",
    "baseline_thinned": "La scheda tiene il rischio di base a {times} dei suoi tempi di evento per strato: la sopravvivenza prevista fra due di essi si legge al più vicino precedente."
-  }
+  },
+  "reading_blocks": {
+   "summary": "Sintesi",
+   "assumptions": "Assunzioni",
+   "coefficients": "Coefficienti",
+   "fit": "Adattamento",
+   "confusion": "Classificazione",
+   "curves": "Curve di sopravvivenza",
+   "pairs": "Coppie di strati",
+   "rmst": "Media ristretta",
+   "method": "Metodo",
+   "formulas": "Formula"
+  },
+  "reading_labels": {
+   "method_p_value": "p-value e α",
+   "method_cox": "Modello di Cox",
+   "method_ties_efron": "Pareggi",
+   "method_ties_breslow": "Pareggi",
+   "method_ties_exact": "Pareggi",
+   "method_se_robust": "Errori standard robusti",
+   "method_schoenfeld": "Rischi proporzionali",
+   "method_checks": "Gli altri controlli",
+   "formula_cox": "Modello di Cox",
+   "formula_partial_likelihood": "Verosimiglianza parziale",
+   "formula_hr": "Hazard ratio",
+   "formula_schoenfeld": "Schoenfeld"
+  },
+  "reading_texts": {
+   "assumptions_rejected": "Controlli il cui test rifiuta la propria ipotesi ad α = {alpha:num}, con p-value sotto α: {count:int} su {total:int}, segnati nella tabella, che dice che cosa significa ogni scostamento e che cosa fare.",
+   "assumptions_none_rejected": "Controlli che sono test: {total:int}; ad α = {alpha:num} nessuno rifiuta la propria ipotesi, ogni p-value è pari o sopra α. I dati non mostrano uno scostamento da queste assunzioni; non dimostrano che non ce ne sia.",
+   "assumptions_many_rows": "Con {n:int} righe un test rifiuta anche scostamenti troppo piccoli per contare: valuta la loro ampiezza nei grafici prima di agire su un verdetto.",
+   "more_in_table": "E altri {more:int}: la tabella li elenca tutti.",
+   "method_p_value": "Un p-value è la probabilità che il solo caso, se l'ipotesi sotto esame fosse vera, dia un risultato lontano da essa almeno quanto quello osservato. Si confronta con α, impostato nel nodo: sotto α l'ipotesi è rifiutata, e α è il rischio, accettato in anticipo, di rifiutarne una vera. Non rifiutare non è dimostrare: con poche righe uno scostamento esistente può passare inosservato. Ogni test si legge da solo; con molti test, qualcuno rifiuta per puro caso.",
+   "coef_some": "Termini il cui coefficiente è significativamente diverso da 0 ad α = {alpha:num} (p-value sotto α), a parità degli altri termini: {count:int} su {total:int} — {names}. Per gli altri i dati non mostrano un effetto; non dimostrano che non ci sia.",
+   "coef_all": "Il coefficiente di ogni termine è significativamente diverso da 0 ad α = {alpha:num} (p-value sotto α), a parità degli altri termini: {names}.",
+   "coef_none": "Nessun coefficiente è significativamente diverso da 0 ad α = {alpha:num}: ciascuno dei {total:int} p-value è pari o sopra α. I dati non mostrano un effetto di alcun termine; non dimostrano che non ci sia.",
+   "threshold_vif": "Inflazione della varianza (VIF) sopra la soglia di {threshold:num} usata dalla tabella: {names}, a {values:num}. Un VIF dice quante volte gli altri termini gonfiano la varianza di un coefficiente; la soglia è una convenzione della letteratura, non un test.",
+   "threshold_epv": "Eventi per coefficiente: {value:num}, sotto la soglia di {threshold:num} usata dalla tabella. Con pochi eventi per coefficiente le stime e i loro intervalli poggiano su poca informazione; la soglia è una convenzione della letteratura, non un test.",
+   "threshold_dfbeta": "Il cambiamento più grande che una sola riga produce su un coefficiente, in errori standard (dfbeta), è sopra la soglia di {threshold:num} per {names}, a {values:num}; la tabella indica le righe. La soglia è una convenzione, non un test.",
+   "summary_cox": "{n:int} righe e {events:int} eventi. La concordanza è {concordance:num} (errore standard {se:num}): di due righe, la probabilità che quella con il rischio previsto più alto abbia l'evento per prima, 0,5 essendo il caso.",
+   "fit_lr_reject": "Se nessun termine cambiasse il rischio istantaneo, una statistica del rapporto di verosimiglianza di {lr:num} o più ({df:int} gradi di libertà) comparirebbe per caso con probabilità {p:p}, sotto α = {alpha:num}: i termini nel loro insieme sono significativi.",
+   "fit_lr_keep": "Se nessun termine cambiasse il rischio istantaneo, una statistica del rapporto di verosimiglianza di {lr:num} o più ({df:int} gradi di libertà) comparirebbe per caso con probabilità {p:p}, non sotto α = {alpha:num}: i termini nel loro insieme non sono significativi. I dati non mostrano che lo cambino; non dimostrano che non lo facciano.",
+   "coef_robust": "I test e gli intervalli dei termini usano errori standard robusti (il sandwich), che ammettono righe correlate nello stesso cluster.",
+   "coef_hazard": "Tra questi, «{covariate}»: ogni unità in più moltiplica il rischio istantaneo dell'evento per {ratio:num} (intervallo al {conf:pct} da {low:num} a {high:num}), a parità degli altri termini.",
+   "coef_hazard_level": "Tra questi, «{covariate}»: il livello «{variant}» moltiplica il rischio istantaneo dell'evento per {ratio:num} rispetto al livello di riferimento (intervallo al {conf:pct} da {low:num} a {high:num}), a parità degli altri termini.",
+   "method_cox": "Il modello di Cox lascia non specificato il rischio nel tempo, la base, e modella come i termini lo moltiplicano: il rischio di una riga è la base per e^(β·x). È stimato con la verosimiglianza parziale, che usa solo l'ordine dei tempi degli eventi. La sua assunzione centrale è che ogni termine moltiplichi il rischio per lo stesso rapporto a ogni tempo (rischi proporzionali).",
+   "method_ties_efron": "Le righe con l'evento allo stesso tempo (pareggi) sono trattate con l'approssimazione di Efron, vicina alla verosimiglianza parziale esatta.",
+   "method_ties_breslow": "Le righe con l'evento allo stesso tempo (pareggi) sono trattate con l'approssimazione di Breslow, la più semplice, che tira i coefficienti verso 0 quando i pareggi sono molti.",
+   "method_ties_exact": "Le righe con l'evento allo stesso tempo (pareggi) sono trattate in modo esatto, con la verosimiglianza parziale esatta, lenta quando i pareggi sono molti.",
+   "method_se_robust": "Gli errori standard sono robusti (il sandwich di Lin e Wei): ammettono righe correlate nello stesso cluster e non dipendono dal fatto che il modello sia esattamente giusto.",
+   "method_schoenfeld": "I rischi proporzionali sono verificati con i residui di Schoenfeld scalati (Grambsch e Therneau): se il rapporto di un termine cambiasse nel tempo, i suoi residui avrebbero un andamento nel tempo. C'è un test per ogni termine e uno globale; i grafici mostrano i residui con la loro curva lisciata.",
+   "method_checks": "La forma lineare di ogni termine numerico è verificata con una spline (i residui martingala del modello senza termini ne mostrano la forma); influenza (dfbeta), multicollinearità (VIF) ed eventi per coefficiente sono misurati, non testati, e confrontati con soglie della letteratura."
+  },
+  "formula_texts": {
+   "formula_cox": "h(t | x) = h_0(t) · exp(β_1 x_1 + … + β_k x_k);  h_0: il rischio di base, non stimato dai coefficienti",
+   "formula_partial_likelihood": "L(β) = Π_(eventi i) exp(β′x_i) / Σ_(j a rischio a t_i) exp(β′x_j)",
+   "formula_hr": "HR_j = e^(β̂_j), il suo intervallo e^(β̂_j ± z_(1−α/2) · se(β̂_j));  z_j = β̂_j / se(β̂_j) rispetto alla normale standard",
+   "formula_schoenfeld": "r*_ij: il residuo di Schoenfeld scalato del termine j all'evento i;  il test regredisce r*_j su g(t), la trasformazione di Kaplan–Meier del tempo: χ² con i gradi di libertà del termine, e la loro somma per il test globale"
+  },
+  "measure_readings": [
+   "coef_hazard",
+   "coef_hazard_level",
+   "coef_robust",
+   "more_in_table",
+   "summary_cox",
+   "threshold_dfbeta",
+   "threshold_epv",
+   "threshold_vif"
+  ]
  },
  "de": {
   "name": "Cox-Modell der proportionalen Hazards",
@@ -306,7 +442,75 @@
    "not_converged": "Die Anpassung ist in den erlaubten Iterationen nicht konvergiert: Lesen Sie ihre Zahlen mit Vorsicht.",
    "monotone_likelihood": "Die Likelihood wächst weiter, solange ein Koeffizient wächst (monotone Likelihood: Ein Prädiktor trennt zu einer Zeit die Zeilen mit Ereignis von den anderen): Dieser Koeffizient und sein Intervall bedeuten nichts; entfernen oder vereinen Sie den Prädiktor oder seine seltenen Stufen.",
    "baseline_thinned": "Die Karte behält das Basis-Hazard an {times} seiner Ereigniszeiten je Schicht: Ein Überleben dazwischen wird bei der nächstfrüheren gelesen."
-  }
+  },
+  "reading_blocks": {
+   "summary": "Zusammenfassung",
+   "assumptions": "Annahmen",
+   "coefficients": "Koeffizienten",
+   "fit": "Anpassung",
+   "confusion": "Klassifikation",
+   "curves": "Überlebenskurven",
+   "pairs": "Paare von Strata",
+   "rmst": "Restringierter Mittelwert",
+   "method": "Methode",
+   "formulas": "Formel"
+  },
+  "reading_labels": {
+   "method_p_value": "p-Werte und α",
+   "method_cox": "Cox-Modell",
+   "method_ties_efron": "Bindungen",
+   "method_ties_breslow": "Bindungen",
+   "method_ties_exact": "Bindungen",
+   "method_se_robust": "Robuste Standardfehler",
+   "method_schoenfeld": "Proportionale Hazards",
+   "method_checks": "Die übrigen Prüfungen",
+   "formula_cox": "Cox-Modell",
+   "formula_partial_likelihood": "Partielle Likelihood",
+   "formula_hr": "Hazard Ratio",
+   "formula_schoenfeld": "Schoenfeld"
+  },
+  "reading_texts": {
+   "assumptions_rejected": "Prüfungen, deren Test seine Hypothese bei α = {alpha:num} verwirft, mit p-Wert unter α: {count:int} von {total:int}, in der Tabelle markiert, die sagt, was jede Abweichung bedeutet und was zu tun ist.",
+   "assumptions_none_rejected": "Prüfungen, die Tests sind: {total:int}; bei α = {alpha:num} verwirft keiner seine Hypothese, jeder p-Wert liegt bei oder über α. Die Daten zeigen keine Abweichung von diesen Annahmen; sie beweisen nicht, dass es keine gibt.",
+   "assumptions_many_rows": "Mit {n:int} Zeilen verwirft ein Test auch Abweichungen, die zu klein sind, um ins Gewicht zu fallen: Wägen Sie ihre Größe in den Diagrammen ab, bevor Sie auf ein Urteil hin handeln.",
+   "more_in_table": "Und {more:int} weitere: Die Tabelle führt alle auf.",
+   "method_p_value": "Ein p-Wert ist die Wahrscheinlichkeit, dass der Zufall allein, wenn die geprüfte Hypothese wahr wäre, ein Ergebnis liefert, das mindestens so weit von ihr entfernt ist wie das beobachtete. Er wird mit α verglichen, der Einstellung des Knotens: Unter α wird die Hypothese verworfen, und α ist das im Voraus akzeptierte Risiko, eine wahre zu verwerfen. Nicht verwerfen heißt nicht beweisen: Mit wenigen Zeilen kann eine bestehende Abweichung unbemerkt bleiben. Jeder Test wird für sich gelesen; bei vielen Tests verwerfen einige allein durch Zufall.",
+   "coef_some": "Terme, deren Koeffizient sich bei α = {alpha:num} signifikant von 0 unterscheidet (p-Wert unter α), bei festgehaltenen übrigen Termen: {count:int} von {total:int} — {names}. Für die übrigen zeigen die Daten keinen Effekt; sie beweisen nicht, dass es keinen gibt.",
+   "coef_all": "Der Koeffizient jedes Terms unterscheidet sich bei α = {alpha:num} signifikant von 0 (p-Wert unter α), bei festgehaltenen übrigen Termen: {names}.",
+   "coef_none": "Kein Koeffizient unterscheidet sich bei α = {alpha:num} signifikant von 0: Jeder der {total:int} p-Werte liegt bei oder über α. Die Daten zeigen keinen Effekt eines Terms; sie beweisen nicht, dass es keinen gibt.",
+   "threshold_vif": "Varianzinflation (VIF) über der Schwelle von {threshold:num}, die die Tabelle verwendet: {names}, bei {values:num}. Ein VIF gibt an, um das Wievielfache die übrigen Terme die Varianz eines Koeffizienten aufblähen; die Schwelle ist eine Konvention der Literatur, kein Test.",
+   "threshold_epv": "Ereignisse je Koeffizient: {value:num}, unter der Schwelle von {threshold:num}, die die Tabelle verwendet. Mit wenigen Ereignissen je Koeffizient beruhen die Schätzungen und ihre Intervalle auf wenig Information; die Schwelle ist eine Konvention der Literatur, kein Test.",
+   "threshold_dfbeta": "Die größte Änderung, die eine einzelne Zeile an einem Koeffizienten bewirkt, in seinen Standardfehlern (dfbeta), liegt über der Schwelle von {threshold:num} für {names}, bei {values:num}; die Tabelle nennt die Zeilen. Die Schwelle ist eine Konvention, kein Test.",
+   "summary_cox": "{n:int} Zeilen und {events:int} Ereignisse. Die Konkordanz ist {concordance:num} (Standardfehler {se:num}): von zwei Zeilen die Wahrscheinlichkeit, dass die mit dem höheren vorhergesagten Risiko ihr Ereignis zuerst hat, wobei 0,5 dem Zufall entspricht.",
+   "fit_lr_reject": "Veränderte kein Term das Hazard, träte eine Likelihood-Quotienten-Statistik von {lr:num} oder mehr ({df:int} Freiheitsgrade) mit Wahrscheinlichkeit {p:p} zufällig auf, unter α = {alpha:num}: Die Terme zusammen sind signifikant.",
+   "fit_lr_keep": "Veränderte kein Term das Hazard, träte eine Likelihood-Quotienten-Statistik von {lr:num} oder mehr ({df:int} Freiheitsgrade) mit Wahrscheinlichkeit {p:p} zufällig auf, nicht unter α = {alpha:num}: Die Terme zusammen sind nicht signifikant. Die Daten zeigen nicht, dass sie etwas verändern; sie beweisen nicht das Gegenteil.",
+   "coef_robust": "Die Tests und Intervalle der Terme verwenden robuste Standardfehler (das Sandwich), die korrelierte Zeilen innerhalb eines Clusters zulassen.",
+   "coef_hazard": "Darunter «{covariate}»: Jede Einheit mehr multipliziert das Hazard, das momentane Risiko des Ereignisses, mit {ratio:num} (sein {conf:pct}-Intervall {low:num} bis {high:num}), bei festgehaltenen übrigen Termen.",
+   "coef_hazard_level": "Darunter «{covariate}»: Die Stufe «{variant}» multipliziert das Hazard, das momentane Risiko des Ereignisses, gegenüber der Referenzstufe mit {ratio:num} (sein {conf:pct}-Intervall {low:num} bis {high:num}), bei festgehaltenen übrigen Termen.",
+   "method_cox": "Das Cox-Modell lässt das Hazard über die Zeit, die Baseline, unbestimmt und modelliert, wie die Terme es multiplizieren: Das Hazard einer Zeile ist die Baseline mal e^(β·x). Es wird mit der partiellen Likelihood geschätzt, die nur die Reihenfolge der Ereigniszeiten verwendet. Seine zentrale Annahme ist, dass jeder Term das Hazard zu jeder Zeit mit demselben Faktor multipliziert (proportionale Hazards).",
+   "method_ties_efron": "Zeilen mit ihrem Ereignis zur selben Zeit (Bindungen) werden mit der Näherung von Efron behandelt, nahe an der exakten partiellen Likelihood.",
+   "method_ties_breslow": "Zeilen mit ihrem Ereignis zur selben Zeit (Bindungen) werden mit der Näherung von Breslow behandelt, der einfachsten, die die Koeffizienten bei vielen Bindungen gegen 0 zieht.",
+   "method_ties_exact": "Zeilen mit ihrem Ereignis zur selben Zeit (Bindungen) werden exakt behandelt, mit der exakten partiellen Likelihood, die bei vielen Bindungen langsam ist.",
+   "method_se_robust": "Die Standardfehler sind robust (das Sandwich von Lin und Wei): Sie lassen korrelierte Zeilen innerhalb eines Clusters zu und hängen nicht davon ab, dass das Modell genau stimmt.",
+   "method_schoenfeld": "Die proportionalen Hazards werden mit den skalierten Schoenfeld-Residuen getestet (Grambsch und Therneau): Änderte sich der Faktor eines Terms über die Zeit, hätten seine Residuen einen Trend in der Zeit. Es gibt einen Test je Term und einen globalen; die Diagramme zeigen die Residuen mit ihrer Glättung.",
+   "method_checks": "Die lineare Form jedes numerischen Terms wird mit einem Spline getestet (die Martingal-Residuen des Modells ohne Terme zeigen ihre Gestalt); Einfluss (dfbeta), Multikollinearität (VIF) und Ereignisse je Koeffizient werden gemessen, nicht getestet, und mit Schwellen der Literatur verglichen."
+  },
+  "formula_texts": {
+   "formula_cox": "h(t | x) = h_0(t) · exp(β_1 x_1 + … + β_k x_k);  h_0: das Baseline-Hazard, nicht von den Koeffizienten geschätzt",
+   "formula_partial_likelihood": "L(β) = Π_(Ereignisse i) exp(β′x_i) / Σ_(j unter Risiko zu t_i) exp(β′x_j)",
+   "formula_hr": "HR_j = e^(β̂_j), sein Intervall e^(β̂_j ± z_(1−α/2) · se(β̂_j));  z_j = β̂_j / se(β̂_j) gegen die Standardnormalverteilung",
+   "formula_schoenfeld": "r*_ij: das skalierte Schoenfeld-Residuum von Term j beim Ereignis i;  der Test regressiert r*_j auf g(t), die Kaplan–Meier-Transformation der Zeit: χ² mit den Freiheitsgraden des Terms, und ihrer Summe für den globalen Test"
+  },
+  "measure_readings": [
+   "coef_hazard",
+   "coef_hazard_level",
+   "coef_robust",
+   "more_in_table",
+   "summary_cox",
+   "threshold_dfbeta",
+   "threshold_epv",
+   "threshold_vif"
+  ]
  },
  "es": {
   "name": "Riesgos proporcionales de Cox",
@@ -409,7 +613,75 @@
    "not_converged": "El ajuste no convergió en las iteraciones permitidas: lea sus números con cautela.",
    "monotone_likelihood": "La verosimilitud sigue creciendo al crecer un coeficiente (verosimilitud monótona: un predictor separa en algún tiempo las filas con el evento de las demás): ese coeficiente y su intervalo no significan nada; quite o agrupe el predictor, o sus niveles raros.",
    "baseline_thinned": "La ficha guarda el riesgo base en {times} de sus tiempos de evento por estrato: la supervivencia predicha entre dos de ellos se lee en el anterior más cercano."
-  }
+  },
+  "reading_blocks": {
+   "summary": "Resumen",
+   "assumptions": "Supuestos",
+   "coefficients": "Coeficientes",
+   "fit": "Ajuste",
+   "confusion": "Clasificación",
+   "curves": "Curvas de supervivencia",
+   "pairs": "Pares de estratos",
+   "rmst": "Media restringida",
+   "method": "Método",
+   "formulas": "Fórmula"
+  },
+  "reading_labels": {
+   "method_p_value": "p-valores y α",
+   "method_cox": "Modelo de Cox",
+   "method_ties_efron": "Empates",
+   "method_ties_breslow": "Empates",
+   "method_ties_exact": "Empates",
+   "method_se_robust": "Errores estándar robustos",
+   "method_schoenfeld": "Riesgos proporcionales",
+   "method_checks": "Las demás comprobaciones",
+   "formula_cox": "Modelo de Cox",
+   "formula_partial_likelihood": "Verosimilitud parcial",
+   "formula_hr": "Razón de riesgos",
+   "formula_schoenfeld": "Schoenfeld"
+  },
+  "reading_texts": {
+   "assumptions_rejected": "Comprobaciones cuyo contraste rechaza su hipótesis con α = {alpha:num}, con p-valor por debajo de α: {count:int} de {total:int}, marcadas en la tabla, que dice qué significa cada desviación y qué hacer.",
+   "assumptions_none_rejected": "Comprobaciones que son contrastes: {total:int}; con α = {alpha:num} ninguno rechaza su hipótesis, todo p-valor es igual o superior a α. Los datos no muestran una desviación de estos supuestos; no prueban que no la haya.",
+   "assumptions_many_rows": "Con {n:int} filas un contraste rechaza incluso desviaciones demasiado pequeñas para importar: valore su tamaño en los gráficos antes de actuar según un veredicto.",
+   "more_in_table": "Y {more:int} más: la tabla los recoge todos.",
+   "method_p_value": "Un p-valor es la probabilidad de que el azar por sí solo, si la hipótesis contrastada fuera cierta, dé un resultado al menos tan alejado de ella como el observado. Se compara con α, el ajuste del nodo: por debajo de α la hipótesis se rechaza, y α es el riesgo, aceptado de antemano, de rechazar una cierta. No rechazar no es probar: con pocas filas una desviación existente puede pasar inadvertida. Cada contraste se lee por separado; con muchos contrastes, algunos rechazan solo por azar.",
+   "coef_some": "Términos cuyo coeficiente es significativamente distinto de 0 con α = {alpha:num} (p-valor por debajo de α), con los demás términos fijos: {count:int} de {total:int} — {names}. Para los demás los datos no muestran un efecto; no prueban que no lo haya.",
+   "coef_all": "El coeficiente de cada término es significativamente distinto de 0 con α = {alpha:num} (p-valor por debajo de α), con los demás términos fijos: {names}.",
+   "coef_none": "Ningún coeficiente es significativamente distinto de 0 con α = {alpha:num}: cada uno de los {total:int} p-valores es igual o superior a α. Los datos no muestran un efecto de ningún término; no prueban que no lo haya.",
+   "threshold_vif": "Inflación de la varianza (VIF) por encima del umbral de {threshold:num} que usa la tabla: {names}, con {values:num}. Un VIF indica cuántas veces los demás términos inflan la varianza de un coeficiente; el umbral es una convención de la literatura, no un contraste.",
+   "threshold_epv": "Eventos por coeficiente: {value:num}, por debajo del umbral de {threshold:num} que usa la tabla. Con pocos eventos por coeficiente, las estimaciones y sus intervalos descansan en poca información; el umbral es una convención de la literatura, no un contraste.",
+   "threshold_dfbeta": "El mayor cambio que una sola fila produce en un coeficiente, en sus errores estándar (dfbeta), está por encima del umbral de {threshold:num} para {names}, con {values:num}; la tabla nombra las filas. El umbral es una convención, no un contraste.",
+   "summary_cox": "{n:int} filas y {events:int} eventos. La concordancia es {concordance:num} (error estándar {se:num}): de dos filas, la probabilidad de que la de mayor riesgo previsto tenga su evento primero, siendo 0,5 el azar.",
+   "fit_lr_reject": "Si ningún término cambiara el riesgo instantáneo, un estadístico de razón de verosimilitudes de {lr:num} o más ({df:int} grados de libertad) aparecería por azar con probabilidad {p:p}, por debajo de α = {alpha:num}: los términos en conjunto son significativos.",
+   "fit_lr_keep": "Si ningún término cambiara el riesgo instantáneo, un estadístico de razón de verosimilitudes de {lr:num} o más ({df:int} grados de libertad) aparecería por azar con probabilidad {p:p}, no por debajo de α = {alpha:num}: los términos en conjunto no son significativos. Los datos no muestran que lo cambien; no prueban que no lo hagan.",
+   "coef_robust": "Los contrastes y los intervalos de los términos usan errores estándar robustos (el sándwich), que admiten filas correlacionadas dentro de un clúster.",
+   "coef_hazard": "Entre ellos, «{covariate}»: cada unidad más multiplica el riesgo instantáneo del evento por {ratio:num} (intervalo al {conf:pct} de {low:num} a {high:num}), con los demás términos fijos.",
+   "coef_hazard_level": "Entre ellos, «{covariate}»: el nivel «{variant}» multiplica el riesgo instantáneo del evento por {ratio:num} frente al nivel de referencia (intervalo al {conf:pct} de {low:num} a {high:num}), con los demás términos fijos.",
+   "method_cox": "El modelo de Cox deja sin especificar el riesgo en el tiempo, la base, y modela cómo lo multiplican los términos: el riesgo de una fila es la base por e^(β·x). Se ajusta con la verosimilitud parcial, que usa solo el orden de los tiempos de los eventos. Su supuesto central es que cada término multiplica el riesgo por la misma razón en todo tiempo (riesgos proporcionales).",
+   "method_ties_efron": "Las filas con su evento en el mismo tiempo (empates) se tratan con la aproximación de Efron, cercana a la verosimilitud parcial exacta.",
+   "method_ties_breslow": "Las filas con su evento en el mismo tiempo (empates) se tratan con la aproximación de Breslow, la más simple, que lleva los coeficientes hacia 0 cuando los empates son muchos.",
+   "method_ties_exact": "Las filas con su evento en el mismo tiempo (empates) se tratan de forma exacta, con la verosimilitud parcial exacta, lenta cuando los empates son muchos.",
+   "method_se_robust": "Los errores estándar son robustos (el sándwich de Lin y Wei): admiten filas correlacionadas dentro de un clúster y no dependen de que el modelo sea exactamente correcto.",
+   "method_schoenfeld": "Los riesgos proporcionales se contrastan con los residuos de Schoenfeld escalados (Grambsch y Therneau): si la razón de un término cambiara en el tiempo, sus residuos tendrían una tendencia en el tiempo. Hay un contraste por término y uno global; los gráficos muestran los residuos con su suavizado.",
+   "method_checks": "La forma lineal de cada término numérico se contrasta con un spline (los residuos martingala del modelo sin términos muestran su forma); la influencia (dfbeta), la multicolinealidad (VIF) y los eventos por coeficiente se miden, no se contrastan, y se comparan con umbrales de la literatura."
+  },
+  "formula_texts": {
+   "formula_cox": "h(t | x) = h_0(t) · exp(β_1 x_1 + … + β_k x_k);  h_0: el riesgo base, no estimado por los coeficientes",
+   "formula_partial_likelihood": "L(β) = Π_(eventos i) exp(β′x_i) / Σ_(j en riesgo en t_i) exp(β′x_j)",
+   "formula_hr": "HR_j = e^(β̂_j), su intervalo e^(β̂_j ± z_(1−α/2) · se(β̂_j));  z_j = β̂_j / se(β̂_j) frente a la normal estándar",
+   "formula_schoenfeld": "r*_ij: el residuo de Schoenfeld escalado del término j en el evento i;  el contraste regresa r*_j sobre g(t), la transformación de Kaplan–Meier del tiempo: χ² con los grados de libertad del término, y su suma para el contraste global"
+  },
+  "measure_readings": [
+   "coef_hazard",
+   "coef_hazard_level",
+   "coef_robust",
+   "more_in_table",
+   "summary_cox",
+   "threshold_dfbeta",
+   "threshold_epv",
+   "threshold_vif"
+  ]
  },
  "fr": {
   "name": "Risques proportionnels de Cox",
@@ -512,6 +784,74 @@
    "not_converged": "L'ajustement n'a pas convergé dans les itérations permises : lisez ses nombres avec prudence.",
    "monotone_likelihood": "La vraisemblance croît sans fin quand un coefficient croît (vraisemblance monotone : un prédicteur sépare à un certain temps les lignes qui ont l'événement des autres) : ce coefficient et son intervalle ne veulent rien dire ; retirez ou regroupez le prédicteur, ou ses niveaux rares.",
    "baseline_thinned": "La fiche garde le risque de base à {times} de ses temps d'événement par strate : une survie prédite entre deux d'entre eux se lit au plus proche précédent."
-  }
+  },
+  "reading_blocks": {
+   "summary": "Synthèse",
+   "assumptions": "Hypothèses",
+   "coefficients": "Coefficients",
+   "fit": "Ajustement",
+   "confusion": "Classification",
+   "curves": "Courbes de survie",
+   "pairs": "Paires de strates",
+   "rmst": "Moyenne restreinte",
+   "method": "Méthode",
+   "formulas": "Formule"
+  },
+  "reading_labels": {
+   "method_p_value": "p-valeurs et α",
+   "method_cox": "Modèle de Cox",
+   "method_ties_efron": "Ex aequo",
+   "method_ties_breslow": "Ex aequo",
+   "method_ties_exact": "Ex aequo",
+   "method_se_robust": "Erreurs standard robustes",
+   "method_schoenfeld": "Risques proportionnels",
+   "method_checks": "Les autres contrôles",
+   "formula_cox": "Modèle de Cox",
+   "formula_partial_likelihood": "Vraisemblance partielle",
+   "formula_hr": "Rapport de risques",
+   "formula_schoenfeld": "Schoenfeld"
+  },
+  "reading_texts": {
+   "assumptions_rejected": "Contrôles dont le test rejette son hypothèse au seuil α = {alpha:num}, leur p-valeur étant sous α : {count:int} sur {total:int}, marqués dans le tableau, qui dit ce que signifie chaque écart et que faire.",
+   "assumptions_none_rejected": "Contrôles qui sont des tests : {total:int} ; au seuil α = {alpha:num}, aucun ne rejette son hypothèse, chaque p-valeur est égale ou supérieure à α. Les données ne montrent pas d'écart à ces hypothèses ; elles ne prouvent pas qu'il n'y en a pas.",
+   "assumptions_many_rows": "Avec {n:int} lignes, un test rejette même des écarts trop petits pour compter : pesez leur taille dans les graphiques avant d'agir sur un verdict.",
+   "more_in_table": "Et {more:int} de plus : le tableau les donne tous.",
+   "method_p_value": "Une p-valeur est la probabilité que le hasard seul, si l'hypothèse testée était vraie, donne un résultat au moins aussi éloigné d'elle que celui observé. On la compare à α, le réglage du nœud : sous α, l'hypothèse est rejetée, et α est le risque, accepté d'avance, d'en rejeter une vraie. Ne pas rejeter n'est pas prouver : avec peu de lignes, un écart existant peut passer inaperçu. Chaque test se lit seul ; avec beaucoup de tests, certains rejettent par le seul hasard.",
+   "coef_some": "Termes dont le coefficient diffère significativement de 0 au seuil α = {alpha:num} (p-valeur sous α), les autres termes étant fixés : {count:int} sur {total:int} — {names}. Pour les autres, les données ne montrent pas d'effet ; elles ne prouvent pas qu'il n'y en a pas.",
+   "coef_all": "Le coefficient de chaque terme diffère significativement de 0 au seuil α = {alpha:num} (p-valeur sous α), les autres termes étant fixés : {names}.",
+   "coef_none": "Aucun coefficient ne diffère significativement de 0 au seuil α = {alpha:num} : chacune des {total:int} p-valeurs est égale ou supérieure à α. Les données ne montrent d'effet d'aucun terme ; elles ne prouvent pas qu'il n'y en a pas.",
+   "threshold_vif": "Inflation de la variance (VIF) au-dessus du seuil de {threshold:num} qu'utilise le tableau : {names}, à {values:num}. Un VIF dit combien de fois les autres termes gonflent la variance d'un coefficient ; le seuil est une convention de la littérature, pas un test.",
+   "threshold_epv": "Événements par coefficient : {value:num}, sous le seuil de {threshold:num} qu'utilise le tableau. Avec peu d'événements par coefficient, les estimations et leurs intervalles reposent sur peu d'information ; le seuil est une convention de la littérature, pas un test.",
+   "threshold_dfbeta": "Le plus grand changement qu'une seule ligne produit sur un coefficient, en erreurs standard (dfbeta), dépasse le seuil de {threshold:num} pour {names}, à {values:num} ; le tableau nomme les lignes. Le seuil est une convention, pas un test.",
+   "summary_cox": "{n:int} lignes et {events:int} événements. La concordance vaut {concordance:num} (erreur standard {se:num}) : de deux lignes, la probabilité que celle au risque prédit le plus haut ait son événement la première, 0,5 étant le hasard.",
+   "fit_lr_reject": "Si aucun terme ne changeait le risque instantané, une statistique du rapport de vraisemblance de {lr:num} ou plus ({df:int} degrés de liberté) apparaîtrait par hasard avec une probabilité de {p:p}, sous α = {alpha:num} : les termes ensemble sont significatifs.",
+   "fit_lr_keep": "Si aucun terme ne changeait le risque instantané, une statistique du rapport de vraisemblance de {lr:num} ou plus ({df:int} degrés de liberté) apparaîtrait par hasard avec une probabilité de {p:p}, pas sous α = {alpha:num} : les termes ensemble ne sont pas significatifs. Les données ne montrent pas qu'ils le changent ; elles ne prouvent pas le contraire.",
+   "coef_robust": "Les tests et les intervalles des termes utilisent des erreurs standard robustes (le sandwich), qui admettent des lignes corrélées au sein d'une grappe.",
+   "coef_hazard": "Parmi eux, «{covariate}» : chaque unité de plus multiplie le risque instantané de l'événement par {ratio:num} (intervalle à {conf:pct} de {low:num} à {high:num}), les autres termes étant fixés.",
+   "coef_hazard_level": "Parmi eux, «{covariate}» : le niveau «{variant}» multiplie le risque instantané de l'événement par {ratio:num} face au niveau de référence (intervalle à {conf:pct} de {low:num} à {high:num}), les autres termes étant fixés.",
+   "method_cox": "Le modèle de Cox laisse non spécifié le risque au cours du temps, la base, et modélise comment les termes le multiplient : le risque d'une ligne est la base fois e^(β·x). Il est ajusté par la vraisemblance partielle, qui n'utilise que l'ordre des temps d'événement. Son hypothèse centrale est que chaque terme multiplie le risque par le même rapport à tout instant (risques proportionnels).",
+   "method_ties_efron": "Les lignes dont l'événement survient au même temps (ex aequo) sont traitées par l'approximation d'Efron, proche de la vraisemblance partielle exacte.",
+   "method_ties_breslow": "Les lignes dont l'événement survient au même temps (ex aequo) sont traitées par l'approximation de Breslow, la plus simple, qui tire les coefficients vers 0 quand les ex aequo sont nombreux.",
+   "method_ties_exact": "Les lignes dont l'événement survient au même temps (ex aequo) sont traitées exactement, par la vraisemblance partielle exacte, lente quand les ex aequo sont nombreux.",
+   "method_se_robust": "Les erreurs standard sont robustes (le sandwich de Lin et Wei) : elles admettent des lignes corrélées au sein d'une grappe et ne dépendent pas d'un modèle exactement juste.",
+   "method_schoenfeld": "Les risques proportionnels sont testés par les résidus de Schoenfeld standardisés (Grambsch et Therneau) : si le rapport d'un terme changeait dans le temps, ses résidus auraient une tendance dans le temps. Il y a un test par terme et un global ; les graphiques montrent les résidus avec leur lissage.",
+   "method_checks": "La forme linéaire de chaque terme numérique est testée par une spline (les résidus de martingale du modèle sans termes en montrent la forme) ; l'influence (dfbeta), la multicolinéarité (VIF) et les événements par coefficient sont mesurés, pas testés, et comparés à des seuils de la littérature."
+  },
+  "formula_texts": {
+   "formula_cox": "h(t | x) = h_0(t) · exp(β_1 x_1 + … + β_k x_k) ;  h_0 : le risque de base, non estimé par les coefficients",
+   "formula_partial_likelihood": "L(β) = Π_(événements i) exp(β′x_i) / Σ_(j à risque en t_i) exp(β′x_j)",
+   "formula_hr": "HR_j = e^(β̂_j), son intervalle e^(β̂_j ± z_(1−α/2) · se(β̂_j)) ;  z_j = β̂_j / se(β̂_j) face à la loi normale centrée réduite",
+   "formula_schoenfeld": "r*_ij : le résidu de Schoenfeld standardisé du terme j à l'événement i ;  le test régresse r*_j sur g(t), la transformation de Kaplan–Meier du temps : χ² aux degrés de liberté du terme, et leur somme pour le test global"
+  },
+  "measure_readings": [
+   "coef_hazard",
+   "coef_hazard_level",
+   "coef_robust",
+   "more_in_table",
+   "summary_cox",
+   "threshold_dfbeta",
+   "threshold_epv",
+   "threshold_vif"
+  ]
  }
 }

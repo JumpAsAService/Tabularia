@@ -11,10 +11,11 @@ Without strata the runner names the one stratum «all»: the page says it in its
 """
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Mapping
 
 from app.engine.models.layouts import common as c
 from app.engine.models.layouts import register
+from app.engine.models.layouts import shared_readings as sr
 from app.engine.stats import layouts as stats
 from app.engine.stats.catalog import label_of
 
@@ -67,6 +68,7 @@ def _curves(p: stats.Page, w: dict) -> None:
            "columns": [{"header": t["stratum_time"], "width": 34}],
            "matrix": {"columns_by": "[x0]", "value": "SUM([value])", "total": False, "format": "#,##0"},
            "style": {"size": 7.5}, "visible": c.exists(at_risk)}, 10)
+    c.reading_under(p, w, "curves")
 
 
 def _strata(p: stats.Page, w: dict) -> None:
@@ -107,6 +109,7 @@ def _strata(p: stats.Page, w: dict) -> None:
     p.add(stats.table("strata_rmst", t["rmst"], one, [
         stratum, {"header": t["horizon"], "value": c.num(c.model_key("rmst_tau")), "width": 30, "align": "right", "format": "0.###"},
         *numbers("rmst", "rmst_se", width=30)], p.y, visible=c.exists(one)), 10)
+    c.reading_under(p, w, "rmst")
     pair = '[section] = "pair" AND [stat] = "p_value"'
     p.add(stats.table("pairs", t["pairs"], pair, [
         {"header": t["pair"], "value": '[level] & " – " & [level_2]'},
@@ -117,6 +120,7 @@ def _strata(p: stats.Page, w: dict) -> None:
          "align": "right"},
         {"header": w["signif"]["column"], "value": c.of_row("pair", "significance", "text"), "width": 14},
     ], p.y, visible=c.exists(pair)), 10)
+    c.reading_under(p, w, "pairs")
 
 
 def layout(model: str, params: dict[str, Any], locale: str, sample: list[dict] | None, step: str | None) -> dict:
@@ -143,7 +147,66 @@ def layout(model: str, params: dict[str, Any], locale: str, sample: list[dict] |
               c.xy("loglog", ch["loglog"], by_stratum.format("loglog"), [c.mark("y", "line")], split_by=_stratum(w, "[level_2]"),
                    under="proportional_hazards"))
     return c.page(model, params, locale, sample, step, name=name(params, locale), about=about(params, locale), cards=cards,
-                  blocks=(_curves, _strata), charts=charts)
+                  blocks=(_curves, _strata), charts=charts, explained=("summary", "assumptions"))
+
+
+def readings(rows: list[dict], checked: Mapping[str, Any]) -> list[c.ReadingLine]:
+    """The explanation (docs/specs/report-explanations.md, «B2»): the rows, events and censored; each stratum's median
+    (five named at most) and the test of the curves; the pairs by their adjusted p-values; the restricted means; the
+    checks; the method's paragraphs and formulas."""
+    k, a = sr.keyed(rows), sr.alpha(checked)
+    strata = [r["level"] for r in rows if r["section"] == "stratum" and r["stat"] == "n"]
+    several = len(strata) > 1
+    counts = {"n": sr.model(k, "n"), "events": sr.model(k, "events"), "censored": sr.model(k, "censored")}
+    lines: list[c.ReadingLine] = [("summary", None, "summary_km" if several else "summary_km_one", {**counts, "strata": len(strata)})]
+    lines += sr.assumption_lines(rows, checked)
+
+    def of(stratum: str, stat: str) -> float | None:
+        return sr.number(k, f"stratum|{stratum}||{stat}")
+
+    if several:
+        reached = [s for s in strata if of(s, "median") is not None]
+        if reached:
+            shown, more = sr.listed("curves", reached)
+            lines += [("curves", None, "km_medians", {"names": shown, "values": [of(s, "median") for s in shown]}), *more]
+        never = [s for s in strata if of(s, "median") is None]
+        if never:
+            shown, more = sr.listed("curves", never)
+            lines += [("curves", None, "km_not_reached", {"names": shown}), *more]
+        p = sr.model(k, "test_p_value")
+        if p is not None:
+            lines.append(("curves", None, "km_test_reject" if p < a else "km_test_keep", {
+                "statistic": sr.model(k, "test_statistic"), "df": sr.model(k, "test_df"), "p": p, "alpha": a,
+                "count": len(strata)}))
+    elif strata:
+        median, low, high = (of(strata[0], s) for s in ("median", "median_ci_low", "median_ci_high"))
+        if median is None:
+            lines.append(("curves", None, "km_median_not_reached", {}))
+        else:
+            lines.append(("curves", None, "km_median_one" if low is not None and high is not None else "km_median_one_open",
+                          {"median": median, "low": low, "high": high, "conf": sr.conf(checked)}))
+    pairs = [r for r in rows if r["section"] == "pair" and r["stat"] == "p_adjusted" and sr.is_number(r.get("value"))]
+    if pairs:
+        apart = sorted((r for r in pairs if r["value"] < a), key=lambda r: r["value"])
+        if apart:
+            shown, more = sr.listed("pairs", [f"{r['level']} – {r['level_2']}" for r in apart])
+            lines += [("pairs", None, "pairs_some", {"count": len(apart), "total": len(pairs), "names": shown, "alpha": a}), *more]
+        else:
+            lines.append(("pairs", None, "pairs_none", {"total": len(pairs), "alpha": a}))
+    tau = sr.model(k, "rmst_tau")
+    means = [s for s in strata if of(s, "rmst") is not None]
+    if tau is not None and means:
+        if several:
+            shown, more = sr.listed("rmst", means)
+            lines += [("rmst", None, "rmst", {"tau": tau, "names": shown, "values": [of(s, "rmst") for s in shown]}), *more]
+        else:
+            lines.append(("rmst", None, "rmst_one", {"tau": tau, "value": of(means[0], "rmst"), "se": of(means[0], "rmst_se")}))
+    peto = checked.get("test") == "peto"
+    lines += sr.method_lines("method_km", "method_censoring", ("method_peto" if peto else "method_logrank") if several else "",
+                             "method_pairs" if pairs else "", "method_rmst", "method_p_value")
+    lines += sr.formula_lines("formula_km", "formula_greenwood", "formula_logrank" if several else "", "formula_rmst")
+    return lines
 
 
 register("kaplan_meier", layout, name, about)
+c.READINGS["kaplan_meier"] = readings
