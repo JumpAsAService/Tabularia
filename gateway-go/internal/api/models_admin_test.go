@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -1220,14 +1221,24 @@ func TestAGroupsVersionIsBuiltCheckedAndSelfTested(t *testing.T) {
 	if !strings.Contains(string(data), `"ownerReferences"`) || !strings.Contains(string(data), "uid-"+check) {
 		t.Errorf("the ConfigMap does not go with the Job: %.300s", data)
 	}
-	// the Job maps the ConfigMap's keys to the runner's paths and the reference cases
-	for _, want := range []string{`"path":"runner/run.R"`, `"path":"reference/expected.json"`, `"path":"common/R/main.R"`, `"path":"card.schema.json"`} {
+	// the Job maps the ConfigMap's keys to the runner's paths and the reference cases (gzipped)
+	for _, want := range []string{`"path":"runner/run.R"`, `"path":"reference/expected.json.gz"`, `"path":"common/R/main.R"`, `"path":"card.schema.json"`} {
 		if !strings.Contains(string(text), want) {
 			t.Errorf("the check Job does not mount %s", want)
 		}
 	}
 	if files, _ := cm["data"].(map[string]any); len(files) < 10 {
 		t.Errorf("the ConfigMap holds %d files", len(files))
+	}
+	// the reference cases in binaryData: base64 of gzip
+	if gz, _ := cm["binaryData"].(map[string]any); len(gz) < 2 {
+		t.Errorf("the ConfigMap holds %d gzipped reference files", len(gz))
+	} else {
+		for k, v := range gz {
+			if b, err := base64.StdEncoding.DecodeString(fmt.Sprint(v)); err != nil || len(b) < 2 || b[0] != 0x1f || b[1] != 0x8b {
+				t.Errorf("binaryData %s is not base64 of gzip", k)
+			}
+		}
 	}
 	if v := f.versions("regression")[0]; v.Status != "checking" || v.ImageRef == nil || !strings.HasSuffix(*v.ImageRef, "@"+digest) || v.Arch == nil || *v.Arch != "amd64" {
 		t.Errorf("the version after the build: %+v", v)

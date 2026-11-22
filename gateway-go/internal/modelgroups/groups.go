@@ -22,8 +22,10 @@ package modelgroups
 import (
 	"bufio"
 	"bytes"
+	"compress/gzip"
 	"crypto/sha256"
 	"embed"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -242,10 +244,22 @@ func CardSchema() []byte {
 	return b
 }
 
-// File is one file of a model Job's code, its path under CodeDir.
+// File is one file of a model Job's code, its path under CodeDir. Binary: Content is gzip (a reference file, Path ending in
+// .gz), held in the ConfigMap's binaryData; every other file is text, in its data.
 type File struct {
 	Path    string
 	Content []byte
+	Binary  bool
+}
+
+// gzipped is b compressed with gzip, the same bytes every time for the same input: no name and no time in the header (MTIME 0),
+// this Go's compress/flate at its best compression.
+func gzipped(b []byte) []byte {
+	var buf bytes.Buffer
+	w, _ := gzip.NewWriterLevel(&buf, gzip.BestCompression)
+	_, _ = w.Write(b)
+	_ = w.Close()
+	return buf.Bytes()
 }
 
 // CodeFiles are the files a model Job of the group finds in CodeDir, in a fixed order: the
@@ -253,7 +267,10 @@ type File struct {
 // the group's language (common/R/*.R or common/py/*.py), common/selftest/*, card.schema.json,
 // catalog.json, then task.json when given, and the reference cases (reference/expected.json,
 // reference/data/*) when withReference (the self-test). A ConfigMap holds them as
-// f0, f1… with items mapping each key to its path, as a Script node's files.
+// f0, f1… with items mapping each key to its path, as a Script node's files. The reference files are
+// gzipped, as <path>.gz (Binary): a ConfigMap holds at most 1 MiB, and the reference tables are most of a
+// self-test's; the runners read them through the common library (tab_ref_path, ref_path), which takes the
+// .gz twin of a path. The runner's code stays text.
 func CodeFiles(group string, task []byte, withReference bool) ([]File, error) {
 	g, ok := Get(group)
 	if !ok {
@@ -306,20 +323,31 @@ func codeFiles(group, language string, task []byte, withReference bool) ([]File,
 				return nil, err
 			}
 		}
+		for i := range out {
+			if strings.HasPrefix(out[i].Path, "reference/") {
+				out[i] = File{Path: out[i].Path + ".gz", Content: gzipped(out[i].Content), Binary: true}
+			}
+		}
 	}
 	return out, nil
 }
 
-// ConfigMap is the data and the volume's items of CodeFiles: keys f0, f1… (a ConfigMap's
-// key may hold no slash), each item mapping a key to its path.
-func ConfigMap(code []File) (data map[string]string, items []map[string]string) {
-	data = map[string]string{}
+// ConfigMap is the data, the binaryData (base64, as the API takes it) and the volume's items of
+// CodeFiles: keys f0, f1… (a ConfigMap's key may hold no slash), each item mapping a key to its path.
+// A text file is in data, a gzipped reference file in binaryData: the volume gives its bytes back as
+// they were.
+func ConfigMap(code []File) (data, binary map[string]string, items []map[string]string) {
+	data, binary = map[string]string{}, map[string]string{}
 	for i, f := range code {
 		k := fmt.Sprintf("f%d", i)
-		data[k] = string(f.Content)
+		if f.Binary {
+			binary[k] = base64.StdEncoding.EncodeToString(f.Content)
+		} else {
+			data[k] = string(f.Content)
+		}
 		items = append(items, map[string]string{"key": k, "path": f.Path})
 	}
-	return data, items
+	return data, binary, items
 }
 
 // BaseImage is the image the recipe's base names, among the scripting environments' base

@@ -127,7 +127,7 @@ TAB_COMMON_TESTS[["customer_lifetime: a pair's edge is found by longer steps alo
 TAB_COMMON_TESTS[["customer_lifetime: an edge is where the likelihood keeps growing, found on the likelihood and not on the estimate's size"]] <- function(code) {
   # customers who never drop out (Poisson purchases: the reference case F, clv_no_dropout.csv): MBG/NBD's a goes towards 0, and
   # the likelihood keeps growing that way
-  f0 <- utils::read.csv(file.path(code, "reference", "data", "clv_no_dropout.csv"))
+  f0 <- tab_ref_table(file.path(code, "reference", "data", "clv_no_dropout.csv"))
   comp <- clv_compress(f0$frequency, f0$recency, f0$age)
   f <- clv_fit_purchases("mbg_nbd", list(x = f0$frequency, tx = f0$recency, T = f0$age, n = nrow(f0)), comp)
   e <- clv_edges(clv_nll("mbg_nbd", comp), f$log_par, "mbg_nbd")

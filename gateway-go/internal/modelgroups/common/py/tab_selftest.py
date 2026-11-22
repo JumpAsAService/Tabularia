@@ -40,7 +40,7 @@ import numpy as np
 
 from tab_card import CARD_FORMAT, NOTE_CARD_TOO_LARGE, NOTE_MODEL_FILE_TOO_LARGE, card, card_fits, mlmodel, model_file_entry, versions
 from tab_charts import cap, extreme_labels, hist, thin
-from tab_columns import complete_rows, kind, label, read_csv, read_input, rename, sort_labels
+from tab_columns import complete_rows, kind, label, read_csv, read_input, read_ref_text, ref_path, rename, sort_labels
 from tab_protocol import (EXIT_OK, EXIT_SELFTEST_FAILED, PROTOCOL, Refusal, catalog, read_text, rng, to_json, variant_of,
                           write_text)
 from tab_results import COLUMNS, Rows, add, check_declared, frame, number, p_value, points, rows_start, table, text
@@ -77,9 +77,9 @@ def selftest(group: str, routes: dict[str, Any], code: Path) -> int:
 
     for name, test in list(COMMON_TESTS.items()):
         run(name, lambda test=test: test(code))
-    expected = code / "reference" / "expected.json"
-    if expected.exists():
-        ref = json.loads(expected.read_text(encoding="utf-8"))
+    expected = code / "reference" / "expected.json"  # expected.json.gz in the check Job's ConfigMap (ref_path)
+    if os.path.exists(ref_path(expected)):
+        ref = json.loads(read_ref_text(expected))
         for case in ref.get("cases", []):
             run(f"reference {case['id']}", lambda case=case: reference_case(case, routes, code, group))
         if not ref.get("cases"):

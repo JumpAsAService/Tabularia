@@ -152,7 +152,7 @@ TAB_COMMON_TESTS[["experiments: the planning node refuses a history it cannot pl
 }
 
 TAB_COMMON_TESTS[["experiments: every planning case's explanation holds the template ids of expected.json, row by row, as «@id name=value…»"]] <- function(code) {
-  ref <- jsonlite::fromJSON(file.path(code, "reference", "expected.json"), simplifyVector = FALSE)
+  ref <- tab_ref_json(file.path(code, "reference", "expected.json"), simplifyVector = FALSE)
   seen <- 0L
   for (case in ref$cases) {
     if (!identical(case$model, "ab_plan") || is.null(case$reading)) next

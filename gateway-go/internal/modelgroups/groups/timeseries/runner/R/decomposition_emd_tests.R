@@ -2,7 +2,7 @@
 # reference/data/emd_witness.json (make_witness_emd.py: a transcription of libeemd in Python with SciPy's splines, the
 # runner's cut written again, numpy's measures, PyEMD), the tables make_reference_emd.R's.
 
-.emd_witness <- function(code) jsonlite::fromJSON(file.path(code, "reference", "data", "emd_witness.json"), simplifyVector = FALSE)
+.emd_witness <- function(code) tab_ref_json(file.path(code, "reference", "data", "emd_witness.json"), simplifyVector = FALSE)
 
 .emd_near <- function(got, want, rel = 1e-12, abs = 1e-15) {
   got <- as.numeric(got)

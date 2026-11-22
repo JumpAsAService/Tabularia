@@ -1,15 +1,20 @@
 package modelgroups
 
 import (
+	"bytes"
+	"compress/gzip"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -121,15 +126,15 @@ func TestEveryGroupOfTheCatalogueHasARecipeAndARunner(t *testing.T) {
 			t.Fatal(err)
 		}
 		// a ConfigMap holds at most 1 MiB, and a Job's receives either the code with its task or the
-		// self-test's (the code with the reference cases, no task), never both: measure each one as
-		// ConfigMap() makes it (the keys and the data, and the items that map them), the biggest of
-		// the two against the limit, with room for the metadata
+		// self-test's (the code with the reference cases gzipped, no task), never both: measure each one
+		// as ConfigMap() makes it (the keys and the data, the base64 of the binaryData, and the items that
+		// map them), the biggest of the two against the limit, with room for the metadata
 		for what, code := range map[string][]File{"job": mustCode(t, g.ID, []byte("{}"), false), "self-test": mustCode(t, g.ID, nil, true)} {
 			if size := configMapSize(code); size > 900<<10 {
 				t.Errorf("%s: the %s ConfigMap is %d bytes", g.ID, what, size)
 			}
 		}
-		if string(mustFile(t, withRef, "task.json")) != "{}" || len(mustFile(t, withRef, "reference/expected.json")) == 0 {
+		if string(mustFile(t, withRef, "task.json")) != "{}" || len(mustFile(t, withRef, "reference/expected.json.gz")) == 0 {
 			t.Errorf("%s: task.json or the reference cases are missing", g.ID)
 		}
 	}
@@ -150,9 +155,12 @@ func mustCode(t *testing.T, group string, task []byte, withReference bool) []Fil
 // configMapSize is the size of the ConfigMap ConfigMap(code) makes: its keys and values, and the
 // items (key and path) of the volume that mounts it.
 func configMapSize(code []File) int {
-	data, items := ConfigMap(code)
+	data, binary, items := ConfigMap(code)
 	size := 0
 	for k, v := range data {
+		size += len(k) + len(v)
+	}
+	for k, v := range binary {
 		size += len(k) + len(v)
 	}
 	for _, it := range items {
@@ -190,9 +198,53 @@ func TestTheJobReceivesTheCatalogue(t *testing.T) {
 	if err := json.Unmarshal(CardSchema(), &schema); err != nil || schema["title"] != "Tabularia model card" {
 		t.Errorf("card.schema.json: %v", err)
 	}
-	data, items := ConfigMap(code)
-	if len(data) != len(code) || len(items) != len(code) || items[0]["key"] != "f0" || items[0]["path"] != code[0].Path {
-		t.Errorf("ConfigMap: %d %d %v", len(data), len(items), items[0])
+	data, binary, items := ConfigMap(code)
+	if len(data) != len(code) || len(binary) != 0 || len(items) != len(code) || items[0]["key"] != "f0" || items[0]["path"] != code[0].Path {
+		t.Errorf("ConfigMap: %d %d %d %v", len(data), len(binary), len(items), items[0])
+	}
+}
+
+// The self-test's reference files travel gzipped, as <path>.gz in the binaryData, the same bytes every time (no name, no time in
+// the header): they give back the files of the repository; the runner's code stays text, and a run's code holds no reference file.
+func TestTheReferenceCasesTravelGzipped(t *testing.T) {
+	for _, g := range Groups() {
+		code := mustCode(t, g.ID, nil, true)
+		again := mustCode(t, g.ID, nil, true)
+		data, binary, _ := ConfigMap(code)
+		seen := 0
+		for i, f := range code {
+			k := "f" + strconv.Itoa(i)
+			isRef := strings.HasPrefix(f.Path, "reference/")
+			if isRef != f.Binary || isRef != strings.HasSuffix(f.Path, ".gz") || (f.Binary && binary[k] == "") || (!f.Binary && data[k] == "" && len(f.Content) > 0) {
+				t.Errorf("%s: %s binary %v", g.ID, f.Path, f.Binary)
+				continue
+			}
+			if !isRef {
+				continue
+			}
+			seen++
+			if !bytes.Equal(f.Content, again[i].Content) || f.Content[4] != 0 || f.Content[5] != 0 || f.Content[6] != 0 || f.Content[7] != 0 || f.Content[3]&0x08 != 0 {
+				t.Errorf("%s: %s is not the same gzip every time, or it holds a time or a name", g.ID, f.Path)
+			}
+			b64, _ := base64.StdEncoding.DecodeString(binary[k])
+			r, err := gzip.NewReader(bytes.NewReader(b64))
+			if err != nil {
+				t.Fatal(err)
+			}
+			plain, err := io.ReadAll(r)
+			want, _ := files.ReadFile("groups/" + g.ID + "/" + strings.TrimSuffix(f.Path, ".gz"))
+			if err != nil || !bytes.Equal(plain, want) || len(want) == 0 {
+				t.Errorf("%s: %s does not give back the repository's file", g.ID, f.Path)
+			}
+		}
+		if seen < 2 {
+			t.Errorf("%s: %d reference files", g.ID, seen)
+		}
+		for _, f := range mustCode(t, g.ID, []byte("{}"), false) {
+			if f.Binary || strings.HasPrefix(f.Path, "reference/") {
+				t.Errorf("%s: a run's code holds %s", g.ID, f.Path)
+			}
+		}
 	}
 }
 

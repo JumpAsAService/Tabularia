@@ -341,7 +341,7 @@ TAB_COMMON_TESTS[["experiments: SRM is Pearson's chi-squared on the assigned uni
 TAB_COMMON_TESTS[["experiments: the `variants` output's variant has the input column's own type, and joins back to the input"]] <- function(code) {
   skip <- identical(Sys.getenv("TABULARIA_SELFTEST_NO_ARROW"), "1") || !requireNamespace("arrow", quietly = TRUE)
   if (skip) return("skipped")
-  raw <- utils::read.csv(file.path(code, "reference", "data", "types.csv"), colClasses = "character", encoding = "UTF-8", stringsAsFactors = FALSE)
+  raw <- tab_ref_table(file.path(code, "reference", "data", "types.csv"), colClasses = "character", encoding = "UTF-8", stringsAsFactors = FALSE)
   .tab_expect(nrow(raw) == 200L, "types.csv has 200 rows")
   cols <- list(
     v_int64 = list(x = bit64::as.integer64(raw$v_int64), type = arrow::int64(), control = "5000000001"),

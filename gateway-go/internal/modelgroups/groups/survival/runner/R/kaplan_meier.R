@@ -570,7 +570,7 @@ predict_kaplan_meier <- function(task, card) {
 # ── the runner's own tests, run by the group's self-test with the common library's ──
 TAB_COMMON_TESTS[["kaplan_meier: column names that look like code, and predicting the fitted rows"]] <- function(code) {
   path <- file.path(code, "reference", "data", "kaplan_meier_strata.csv")
-  if (!file.exists(path)) stop("no reference table ", path)
+  if (!tab_ref_exists(path)) stop("no reference table ", path)
   df <- tab_read_csv(path, list(days = "number", status = "text", line = "text"))
   params <- list(time = "days", event = "status", event_value = "failed", strata = "line", times = list(30, 90), output = "table")
   task <- function(frame, params) list(model = "kaplan_meier", variant = "default", group = "survival", group_version = "selftest",

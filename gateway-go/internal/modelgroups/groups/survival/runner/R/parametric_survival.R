@@ -1948,7 +1948,7 @@ ps_check_card <- function(task, card, prepared, fitted) {
 # ── the runner's own tests, run by the group's self-test with the common library's ──
 .ps_test_table <- function(code) {
   path <- file.path(code, "reference", "data", "ps_weibull.csv")
-  if (!file.exists(path)) stop("no reference table ", path)
+  if (!tab_ref_exists(path)) stop("no reference table ", path)
   tab_read_csv(path, list(days = "number", status = "text", load = "number", line = "text", plant = "text", w = "integer"))
 }
 

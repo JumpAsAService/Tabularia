@@ -72,7 +72,7 @@ TAB_COMMON_TESTS[["timeseries: STL, classical and MSTL equal stats::stl, stats::
 }
 
 TAB_COMMON_TESTS[["timeseries: every decomposition case's explanation holds the template ids of expected.json, row by row, as «@id name=value…», and its rows are the catalogue's"]] <- function(code) {
-  ref <- jsonlite::fromJSON(file.path(code, "reference", "expected.json"), simplifyVector = FALSE)
+  ref <- tab_ref_json(file.path(code, "reference", "expected.json"), simplifyVector = FALSE)
   seen <- 0L
   for (case in ref$cases) {
     if (!identical(case$model, "decomposition") || is.null(case$reading)) next

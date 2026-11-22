@@ -164,12 +164,33 @@ def frame_of(table: Any) -> pd.DataFrame:
     return df
 
 
+def ref_path(path: str | os.PathLike) -> str:
+    """A file of the reference cases: the check Job's ConfigMap holds reference/expected.json and reference/data/* gzipped, as
+    <path>.gz (the gateway's modelgroups.CodeFiles: a ConfigMap holds at most 1 MiB); a repository's copy has the plain file.
+    The path given, or its .gz twin. Every reader of a reference file goes through it (read_csv, read_ref_text)."""
+    path = os.fspath(path)
+    return path if os.path.exists(path) or not os.path.exists(path + ".gz") else path + ".gz"
+
+
+def read_ref_text(path: str | os.PathLike) -> str:
+    """A reference file's text, read through gzip when it is the .gz twin, never uncompressed on disk."""
+    import gzip
+
+    found = ref_path(path)
+    if found.endswith(".gz"):
+        with gzip.open(found, "rt", encoding="utf-8") as f:
+            return f.read()
+    with open(found, encoding="utf-8") as f:
+        return f.read()
+
+
 def read_csv(path: str, types: Mapping[str, str]) -> pd.DataFrame:
     """A CSV of the reference cases or of the self-test, typed by `types` (column → kind: number,
-    integer, text, boolean, date, datetime): a CSV says no type. An empty cell is NULL."""
+    integer, text, boolean, date, datetime): a CSV says no type. An empty cell is NULL. A reference
+    table may be its .gz twin (ref_path): pandas reads it through gzip."""
     import pandas as pd
 
-    raw = pd.read_csv(path, dtype=str, keep_default_na=False, na_values=[""], encoding="utf-8")
+    raw = pd.read_csv(ref_path(path), dtype=str, keep_default_na=False, na_values=[""], encoding="utf-8", compression="infer")
     df = pd.DataFrame(index=raw.index)
     for name in raw.columns:
         df[name] = pd.Series([None if is_missing(v) else str(v) for v in raw[name]], index=raw.index, dtype=object)

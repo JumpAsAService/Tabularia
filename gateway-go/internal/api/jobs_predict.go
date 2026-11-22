@@ -616,7 +616,7 @@ func (q *queue) runPredict(ctx context.Context, r *scriptNodeRun) (*flowresolver
 		if err != nil {
 			return nil, err
 		}
-		cm, items := modelgroups.ConfigMap(code)
+		cm, _, items := modelgroups.ConfigMap(code) // a run's code holds no reference file: text only
 		codeData := pyjson.Object{}
 		for i := range code {
 			k := fmt.Sprintf("f%d", i)

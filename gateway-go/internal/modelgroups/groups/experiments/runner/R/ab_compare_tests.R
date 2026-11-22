@@ -24,7 +24,7 @@
 .abc_rel <- function(got, want) max(abs(got - want) / pmax(abs(want), 1e-300))
 
 .abc_cases <- function(code) {
-  ref <- jsonlite::fromJSON(file.path(code, "reference", "expected.json"), simplifyVector = FALSE)
+  ref <- tab_ref_json(file.path(code, "reference", "expected.json"), simplifyVector = FALSE)
   Filter(function(c) identical(c$model, "ab_test") && is.null(c$refuses), ref$cases)
 }
 
@@ -267,7 +267,7 @@ TAB_COMMON_TESTS[["experiments: a reading's values: a number reads back as the s
 TAB_COMMON_TESTS[["experiments: the expected shares keyed as the editor labels them meet their variants; the variants output keeps the variant's type"]] <- function(code) {
   skip <- identical(Sys.getenv("TABULARIA_SELFTEST_NO_ARROW"), "1") || !requireNamespace("arrow", quietly = TRUE)
   if (skip) return("skipped")
-  raw <- utils::read.csv(file.path(code, "reference", "data", "types.csv"), colClasses = "character", encoding = "UTF-8", stringsAsFactors = FALSE)
+  raw <- tab_ref_table(file.path(code, "reference", "data", "types.csv"), colClasses = "character", encoding = "UTF-8", stringsAsFactors = FALSE)
   cols <- list(
     v_int64 = list(x = bit64::as.integer64(raw$v_int64), type = arrow::int64(), control = "5000000001",
                    shares = list("4294967303" = 1, "5000000001" = 2, "5000000002" = 5)),

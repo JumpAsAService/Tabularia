@@ -146,20 +146,28 @@ func mgCheckStage(recheck bool) string {
 	return "check"
 }
 
-// managedCheckJob is the check Job of a model group's version, and the ConfigMap's data of its code
-// (the ConfigMap codeName).
+// managedCheckJob is the check Job of a model group's version, and the ConfigMap's fields of its code
+// (the ConfigMap codeName): data, the runner's text, and binaryData, the reference cases gzipped.
 func (b *scriptBuilds) managedCheckJob(v *sbVersion, env *sbEnvironment, group string, recheck bool, codeName string) (pyjson.Object, pyjson.Object, error) {
 	files, err := modelgroups.CodeFiles(group, nil, true)
 	if err != nil {
 		return nil, nil, err
 	}
-	data, items := modelgroups.ConfigMap(files)
-	code := pyjson.Object{}
+	data, binary, items := modelgroups.ConfigMap(files)
+	text, gz := pyjson.Object{}, pyjson.Object{}
 	itemList := []any{}
-	for i := range files {
+	for i, f := range files {
 		k := fmt.Sprintf("f%d", i)
-		code = append(code, pyjson.KV{Key: k, Value: data[k]})
+		if f.Binary {
+			gz = append(gz, pyjson.KV{Key: k, Value: binary[k]})
+		} else {
+			text = append(text, pyjson.KV{Key: k, Value: data[k]})
+		}
 		itemList = append(itemList, pyjson.Object{{Key: "key", Value: items[i]["key"]}, {Key: "path", Value: items[i]["path"]}})
+	}
+	code := pyjson.Object{{Key: "data", Value: text}}
+	if len(gz) > 0 {
+		code = append(code, pyjson.KV{Key: "binaryData", Value: gz})
 	}
 	var image any
 	if v.ImageRef != nil {
@@ -203,12 +211,13 @@ func (b *scriptBuilds) managedCheckJob(v *sbVersion, env *sbEnvironment, group s
 	return b.job(sbJobName(mgCheckStage(recheck), v), sbLabels(mgCheckStage(recheck), v), max(b.panel.CheckTimeout(), 900), pod), code, nil
 }
 
-// createSelftestCode makes the ConfigMap codeName of the check's code, owned by its Job (it goes with it).
+// createSelftestCode makes the ConfigMap codeName of the check's code (its data and binaryData, managedCheckJob's), owned by its
+// Job (it goes with it).
 func (b *scriptBuilds) createSelftestCode(ctx context.Context, k scriptcfg.Kubernetes, manifest pyjson.Object, job any, code pyjson.Object, codeName string) error {
 	labels := pyjson.Obj(pyjson.Obj(manifest.Value("metadata")).Value("labels"))
-	return kube.CreateObject(ctx, k, b.s.Scripts.Namespace, "configmaps", pyjson.Object{{Key: "apiVersion", Value: "v1"}, {Key: "kind", Value: "ConfigMap"},
-		{Key: "metadata", Value: pyjson.Object{{Key: "name", Value: codeName}, {Key: "labels", Value: labels}, {Key: "ownerReferences", Value: kube.OwnedBy(job)}}},
-		{Key: "data", Value: code}})
+	return kube.CreateObject(ctx, k, b.s.Scripts.Namespace, "configmaps", append(pyjson.Object{{Key: "apiVersion", Value: "v1"}, {Key: "kind", Value: "ConfigMap"},
+		{Key: "metadata", Value: pyjson.Object{{Key: "name", Value: codeName}, {Key: "labels", Value: labels}, {Key: "ownerReferences", Value: kube.OwnedBy(job)}}}},
+		code...))
 }
 
 // finishManagedCheck ends a model group's check: ready if the image starts and the self-test

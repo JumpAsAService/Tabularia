@@ -26,7 +26,8 @@
 //	                                     recipe's when none is given, and the mirrors MODELS__WHEELS_BASE_URL and
 //	                                     MODELS__WEIGHTS_BASE_URL (--wheels-base-url, --weights-base-url)
 //	code <group> <dir> [<task.json>]     writes the Job's /tabularia/code into <dir>: the runner, the common
-//	                                     library, the schema, the catalogue, the reference cases, the task
+//	                                     library, the schema, the catalogue, the reference cases (gzipped, <path>.gz,
+//	                                     as the check Job's ConfigMap holds them), the task
 //	task <model> <params.json>           the task.json of a fit with those parameters (checked by the catalogue)
 //	groups                               each group's recipe hash, runner hash and reference hash
 //

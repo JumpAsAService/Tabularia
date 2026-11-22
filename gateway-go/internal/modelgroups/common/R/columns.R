@@ -58,11 +58,30 @@ tab_read_input <- function(path = Sys.getenv("TABULARIA_INPUT"), columns = NULL)
   df
 }
 
+# ── the reference cases' files ─────────────────────────────────────────────────
+# The check Job's ConfigMap holds reference/expected.json and reference/data/* gzipped, as <path>.gz
+# (the gateway's modelgroups.CodeFiles: a ConfigMap holds at most 1 MiB); a repository's copy, or a
+# laptop's, has the plain file. Every reader of a reference file goes through these: the path given,
+# or its .gz twin, read by gzfile (which reads a plain file as it is), never uncompressed on disk.
+tab_ref_path <- function(path) if (file.exists(path) || !file.exists(paste0(path, ".gz"))) path else paste0(path, ".gz")
+
+tab_ref_exists <- function(path) file.exists(tab_ref_path(path))
+
+# A reference JSON file, as jsonlite::fromJSON reads it (`...`: its options).
+tab_ref_json <- function(path, ...) {
+  con <- gzfile(tab_ref_path(path), open = "rt", encoding = "UTF-8")
+  on.exit(close(con))
+  jsonlite::fromJSON(paste(readLines(con, warn = FALSE), collapse = "\n"), ...)
+}
+
+# A reference CSV as utils::read.csv reads it (`...`: its options).
+tab_ref_table <- function(path, ...) utils::read.csv(gzfile(tab_ref_path(path)), ...)
+
 # A CSV of the reference cases or of the self-test, typed by `types` (column → kind: number,
 # integer, text, boolean, date, datetime): a CSV says no type. An empty cell is NULL.
 tab_read_csv <- function(path, types) {
-  df <- utils::read.csv(path, colClasses = "character", check.names = FALSE, na.strings = "",
-                        encoding = "UTF-8", stringsAsFactors = FALSE)
+  df <- tab_ref_table(path, colClasses = "character", check.names = FALSE, na.strings = "",
+                      encoding = "UTF-8", stringsAsFactors = FALSE)
   for (name in names(types)) {
     if (!name %in% names(df)) stop("the reference table ", path, " has no column ", name)
     x <- df[[name]]

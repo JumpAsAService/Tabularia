@@ -43,7 +43,7 @@ func TestTheSubcommands(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, f := range []string{"runner/run.R", "runner/R/linear.R", "common/R/main.R", "common/selftest/table.csv",
-		"catalog.json", "card.schema.json", "task.json", "reference/expected.json"} {
+		"catalog.json", "card.schema.json", "task.json", "reference/expected.json.gz"} {
 		if _, err := os.Stat(filepath.Join(code, f)); err != nil {
 			t.Errorf("no %s: %v", f, err)
 		}
@@ -68,7 +68,7 @@ func TestTheSubcommands(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, f := range []string{"runner/run.py", "runner/py/boosting_xgboost.py", "common/py/tab_main.py", "common/selftest/table.csv",
-		"catalog.json", "card.schema.json", "reference/expected.json"} {
+		"catalog.json", "card.schema.json", "reference/expected.json.gz"} {
 		if _, err := os.Stat(filepath.Join(py, f)); err != nil {
 			t.Errorf("no %s: %v", f, err)
 		}
@@ -100,7 +100,7 @@ func TestTheSubcommands(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, f := range []string{"runner/run.py", "runner/py/ff_timestral.py", "runner/py/timestral/__init__.py", "runner/py/timestral/NOTICE",
-		"runner/py/timestral/LICENSE", "runner/py/timestral/vendor.json", "common/py/tab_main.py", "reference/expected.json"} {
+		"runner/py/timestral/LICENSE", "runner/py/timestral/vendor.json", "common/py/tab_main.py", "reference/expected.json.gz"} {
 		if _, err := os.Stat(filepath.Join(fcode, f)); err != nil {
 			t.Errorf("no %s: %v", f, err)
 		}

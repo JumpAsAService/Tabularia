@@ -11,7 +11,7 @@
 # then «TABULARIA_SELFTEST_REPORT {"ok": n, "failed": n, "skipped": n, "checks": […]}»
 # last, and exits 0 when nothing failed, 4 otherwise.
 #
-# reference/expected.json:
+# reference/expected.json (expected.json.gz in the check Job's ConfigMap, as every reference file: tab_ref_path):
 #   {"format_version": 1, "generated": {"by": "make_reference.R", "R": "4.6.1", "packages": {…}},
 #    "cases": [{"id": "linear_categorical", "model": "linear", "data": "data/linear_categorical.csv",
 #               "types": {"quantity": "number", "channel": "text"}, "params": {…},
@@ -38,8 +38,8 @@ tab_selftest <- function(group, routes, code = tab_code_dir()) {
   }
   for (name in names(TAB_COMMON_TESTS)) run(name, function() TAB_COMMON_TESTS[[name]](code))
   expected <- file.path(code, "reference", "expected.json")
-  if (file.exists(expected)) {
-    ref <- jsonlite::fromJSON(expected, simplifyVector = FALSE)
+  if (tab_ref_exists(expected)) {
+    ref <- tab_ref_json(expected, simplifyVector = FALSE)
     for (case in ref$cases) run(paste0("reference ", case$id), function() tab_reference_case(case, routes, code, group))
     if (!length(ref$cases)) record("reference cases", "ok", "none yet")
   } else {

@@ -1,7 +1,7 @@
 # The self-test of the series (ts_series.R, lot D1): added to TAB_COMMON_TESTS. The witnesses are
 # reference/data/series_witness.json (make_witness_series.py: pandas, SciPy), the tables make_reference_series.R's.
 
-.ts_witness <- function(code) jsonlite::fromJSON(file.path(code, "reference", "data", "series_witness.json"), simplifyVector = FALSE)
+.ts_witness <- function(code) tab_ref_json(file.path(code, "reference", "data", "series_witness.json"), simplifyVector = FALSE)
 
 .ts_near <- function(got, want, rel = 1e-12, abs = 1e-15) {
   got <- as.numeric(got)
@@ -57,7 +57,7 @@ TAB_COMMON_TESTS[["timeseries: the series' gaps are refused with a sentence, or 
 TAB_COMMON_TESTS[["timeseries: the series keeps the time's own type (dec_types), and ARIMA still reads with its own setting"]] <- function(code) {
   skip <- identical(Sys.getenv("TABULARIA_SELFTEST_NO_ARROW"), "1") || !requireNamespace("arrow", quietly = TRUE)
   if (skip) return("skipped")
-  raw <- utils::read.csv(file.path(code, "reference", "data", "dec_types.csv"), colClasses = "character", encoding = "UTF-8")
+  raw <- tab_ref_table(file.path(code, "reference", "data", "dec_types.csv"), colClasses = "character", encoding = "UTF-8")
   .tab_expect(nrow(raw) == 100L, "dec_types.csv has 100 rows")
   keep <- -60L  # a day without a row; the values of rows 30 and 31 are empty: three periods to fill
   hours <- as.POSIXct(raw$t_hour, tz = "UTC")

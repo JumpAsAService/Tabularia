@@ -686,7 +686,7 @@ predict_cox <- function(task, card) {
 # ── the runner's own tests, run by the group's self-test with the common library's ──
 TAB_COMMON_TESTS[["cox: column names that look like code, and the card's survival against survfit"]] <- function(code) {
   path <- file.path(code, "reference", "data", "cox_categorical.csv")
-  if (!file.exists(path)) stop("no reference table ", path)
+  if (!tab_ref_exists(path)) stop("no reference table ", path)
   df <- tab_read_csv(path, list(days = "number", status = "text", load = "number", line = "text", night = "boolean"))
   params <- list(time = "days", event = "status", event_value = "failed", predictors = list("load", "line"), output = "rows")
   task <- function(frame, params) list(model = "cox", variant = "default", group = "survival", group_version = "selftest",
@@ -725,7 +725,7 @@ TAB_COMMON_TESTS[["cox: column names that look like code, and the card's surviva
 
 TAB_COMMON_TESTS[["cox: strata, and the survival of each row in its stratum from the card"]] <- function(code) {
   path <- file.path(code, "reference", "data", "cox_strata.csv")
-  if (!file.exists(path)) stop("no reference table ", path)
+  if (!tab_ref_exists(path)) stop("no reference table ", path)
   df <- tab_read_csv(path, list(months = "number", churned = "integer", price = "number", premium = "boolean",
                                 region = "text", customer = "text"))
   params <- list(time = "months", event = "churned", event_value = 1, predictors = list("price", "premium"), strata = "region")

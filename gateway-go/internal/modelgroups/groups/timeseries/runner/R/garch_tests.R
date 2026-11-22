@@ -139,7 +139,7 @@ TAB_COMMON_TESTS[["garch: Kupiec's and Christoffersen's tests are rugarch::VaRTe
 TAB_COMMON_TESTS[["garch: the volatility output keeps the time's own type (Int64 above 2^31, Int32, date32, timestamp UTC) and the catalogue's columns"]] <- function(code) {
   skip <- identical(Sys.getenv("TABULARIA_SELFTEST_NO_ARROW"), "1") || !requireNamespace("arrow", quietly = TRUE)
   if (skip) return("skipped")
-  raw <- utils::read.csv(file.path(code, "reference", "data", "dec_types.csv"), colClasses = "character", encoding = "UTF-8")
+  raw <- tab_ref_table(file.path(code, "reference", "data", "dec_types.csv"), colClasses = "character", encoding = "UTF-8")
   value <- .garch_frame(code)$gjr[seq_len(nrow(raw))]
   types <- list(int64 = list(bit64::as.integer64(raw$t_int64), arrow::int64(), "day"), int32 = list(as.integer(raw$t_int), arrow::int32(), "day"),
                 date32 = list(as.Date(raw$t_date), arrow::date32(), "index"), ts = list(as.POSIXct(raw$t_hour, tz = "UTC"), arrow::timestamp("us", "UTC"), "hour"))

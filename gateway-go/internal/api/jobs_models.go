@@ -653,7 +653,7 @@ func (q *queue) runModel(ctx context.Context, r *scriptNodeRun) (*flowresolver.S
 		if err != nil {
 			return nil, err
 		}
-		data, items := modelgroups.ConfigMap(code)
+		data, _, items := modelgroups.ConfigMap(code) // a run's code holds no reference file: text only
 		codeData := pyjson.Object{}
 		for i := range code {
 			k := fmt.Sprintf("f%d", i)

@@ -37,7 +37,9 @@ _CACHE: dict[str, Any] = {}
 
 def _expected(code: Path) -> dict[str, Any]:
     if "expected" not in _CACHE:
-        _CACHE["expected"] = json.loads((code / "reference" / "expected.json").read_text(encoding="utf-8"))
+        from tab_columns import read_ref_text  # expected.json.gz in the check Job's ConfigMap
+
+        _CACHE["expected"] = json.loads(read_ref_text(code / "reference" / "expected.json"))
     return _CACHE["expected"]
 
 
