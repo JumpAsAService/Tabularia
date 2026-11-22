@@ -138,7 +138,7 @@ def _holdout(ctx: Context) -> list[Block]:
     if ctx.test is not None and ctx.verdict != "not_computed":
         t = ctx.test
         head = ("comparison_not_supported" if ctx.verdict == "ok" else
-                "comparison_supported" if ctx.median_d < 0 else "comparison_opposite")
+                "comparison_supported" if t.rank_biserial < 0 else "comparison_opposite")
         lines = [line(head, better=ctx.better, n_series=n, p_value=t.p_value, alpha=ctx.alpha)]
         if t.min_p >= ctx.alpha:
             lines.append(line("comparison_few_series", n_series=n, min_p=t.min_p, alpha=ctx.alpha))

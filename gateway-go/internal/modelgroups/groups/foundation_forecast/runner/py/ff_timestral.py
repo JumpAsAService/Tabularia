@@ -509,6 +509,8 @@ def results(run: Run, seconds_load: float, threads: int, budget: Budget) -> Rows
     if test is not None:
         number(rows, "assumption", "statistic", test.statistic, level=lv)
         p_value(rows, "assumption", test.p_value, level=lv)
+        # the side of the test: the report's «ahead» reads it, never the median's sign
+        number(rows, "assumption", "rank_biserial", test.rank_biserial, level=lv)
     text(rows, "assumption", "verdict", verdict, level=lv)
     if verdict == "not_computed":
         text(rows, "assumption", "advice", ADVICE[advice_id or ""], level=lv)

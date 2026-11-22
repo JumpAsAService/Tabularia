@@ -130,6 +130,11 @@ def _wilcoxon(code: Path) -> None:
         _expect(abs(w.p_value - c["p_value"]) <= 1e-12, f"n {len(c['d'])} ({w.method}): p {w.p_value!r}, scipy {c['p_value']!r}")
     _expect(methods == {"exact", "permutation", "normal"}, f"paths: {sorted(methods)}")
     _expect(fm.wilcoxon(np.zeros(3)) is None, "only zeros")
+    # the side is the test's (the larger rank sum), not the median's: 26 differences of +0.01 and 24 near −1 have a median
+    # above 0 and W− = 924 against W+ = 351, p ≈ 0.0049 (scipy's): Timestral's errors are the smaller ones the test sees
+    lean = fm.wilcoxon(np.array([0.01] * 26 + [-1 - 0.001 * i for i in range(24)]))
+    _expect(lean.w_plus == 351 and lean.w_minus == 924 and abs(lean.p_value - 0.004892648019470942) <= 1e-12, f"the lean: {lean}")
+    _expect(abs(lean.rank_biserial - (351 - 924) / 1275) <= 1e-15 and lean.rank_biserial < 0, f"rank-biserial {lean.rank_biserial}")
 
 
 @register("foundation_forecast: the plan: contexts on a ladder, batches of one constant size a shape")

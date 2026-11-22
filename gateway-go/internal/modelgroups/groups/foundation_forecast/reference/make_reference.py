@@ -398,8 +398,11 @@ def run_case(fc, case: dict) -> dict:
         expect.append({"key": "assumption|baseline_comparison||p_value", "value": _r(float(r.pvalue)), "rel": TOL_FORECAST})
         verdict = "failed" if r.pvalue < p.get("alpha", 0.05) else "ok"
         expect.append({"key": "assumption|baseline_comparison||verdict", "text": verdict})
-        median_d = float(np.median(diffs))
-        head = "comparison_not_supported" if verdict == "ok" else "comparison_supported" if median_d < 0 else "comparison_opposite"
+        # the side of a rejection: the larger of the rank sums (scipy's one-sided statistic is W+), not the median's sign
+        w_plus = float(wilcoxon(diffs, zero_method="wilcox", correction=False, method="auto", alternative="greater").statistic)
+        nz = len([d for d in diffs if d != 0])
+        head = ("comparison_not_supported" if verdict == "ok" else
+                "comparison_supported" if w_plus < nz * (nz + 1) / 4 else "comparison_opposite")
         expect.append({"key": "reading|comparison||line_1", "id": head})
         expect.append({"key": "assumption|baseline_comparison||count", "value": len([d for d in diffs if d != 0]), "rel": TOL_DATA})
     else:

@@ -1428,7 +1428,9 @@ MODELS["timestral"] = {
         "sections": {
             "model": {"levels": None, "texts": _FF_MODEL_TEXTS, "numbers": _FF_MODEL_NUMBERS},
             "series": {"levels": None, "numbers": _FF_SERIES_NUMBERS, "texts": ["not_measured"]},
-            "assumption": {**_assumptions("baseline_comparison", *_FF_MEASURES), "texts": [*_ASSUMPTION["texts"], "advice_id"]},
+            # rank_biserial: (W+ − W−) / (W+ + W−) of the comparison, whose sign is the side the test leans to (lot F9)
+            "assumption": {**_assumptions("baseline_comparison", *_FF_MEASURES), "texts": [*_ASSUMPTION["texts"], "advice_id"],
+                           "numbers": [*_ASSUMPTION["numbers"], "rank_biserial"]},
             "series_curve": {"levels": None, "numbers": ["y"], "texts": []},
             "reading": {"levels": list(_FF_READING_BLOCKS), "numbers": [], "texts": ["line_*"]},
         },

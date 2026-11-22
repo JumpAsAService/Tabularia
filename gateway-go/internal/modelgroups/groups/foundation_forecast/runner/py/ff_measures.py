@@ -211,6 +211,14 @@ class Wilcoxon:
     min_p: float
     z: float = math.nan
 
+    @property
+    def rank_biserial(self) -> float:
+        """(W+ − W−) / (W+ + W−), the matched-pairs rank-biserial correlation: its sign is the side the test leans to
+        (negative: the negative differences have the larger ranks). The side of a rejection is read here, not from the
+        median of the differences, which can lie on the other side when the large differences are few (lot F9)."""
+        total = self.w_plus + self.w_minus
+        return (self.w_plus - self.w_minus) / total if total > 0 else 0.0
+
 
 def _ranks(a: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """The average ranks of a (1 = the smallest) and the sizes of the groups of ties."""

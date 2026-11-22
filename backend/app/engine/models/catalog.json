@@ -9451,7 +9451,8 @@
                 "p_value",
                 "threshold",
                 "value",
-                "count"
+                "count",
+                "rank_biserial"
               ],
               "texts": [
                 "h0",
