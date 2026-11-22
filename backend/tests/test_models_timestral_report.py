@@ -306,7 +306,7 @@ def test_the_licence_is_the_vendored_file_byte_for_byte_and_never_translated():
     text = texts["en"]
     assert hashlib.sha256(text.encode("utf-8")).hexdigest() == LICENCE_SHA256
     assert text.startswith("Modified MIT License \n\nAttribution notice: 2026 - Mistral AI\n")
-    assert "global consolidated monthly revenue of your company (or that of your employer) exceeds $20 million" in text
+    assert "global consolidated monthly revenue of your company (or that of your employer) exceeds $20 million" in text  # quoted, never explained
     if VENDORED.exists():
         assert VENDORED.read_bytes() == text.encode("utf-8")
     _, _, rows = fixture(CASE)
@@ -395,21 +395,51 @@ def test_the_runner_s_notes_by_their_rows_and_the_holdout_s_seasonal_naive(tmp_p
 
 
 # ── lot F9 ──────────────────────────────────────────────────────────────────
+# the neutral sentence of the licence, in the five languages (the owner's decision of 2026-11-22: the licence is quoted,
+# never explained or paraphrased)
+NEUTRAL = {
+    "en": "This is the clause of the licence of Mistral AI's weights; the official file is authoritative for its full text and its interpretation.",
+    "it": "Questa è la clausola della licenza dei pesi di Mistral AI; il file ufficiale fa fede per il suo testo completo e per la sua interpretazione.",
+    "de": "Dies ist die Klausel der Lizenz der Gewichte von Mistral AI; maßgeblich für ihren vollständigen Text und ihre Auslegung ist die offizielle Datei.",
+    "es": "Esta es la cláusula de la licencia de los pesos de Mistral AI; el archivo oficial es el que prevalece para su texto completo y su interpretación.",
+    "fr": "Voici la clause de la licence des poids de Mistral AI ; le fichier officiel fait foi pour son texte complet et son interprétation.",
+}
+# words that would say what the clause means (its threshold, the kind of company, the money) outside the quotation
+PARAPHRASE = re.compile(r"\b20\b|million|milion|millón|millones|revenue|ricav|fatturat|umsatz|ingreso|chiffre|employer|datore|"
+                        r"arbeitgeber|empleador|employeur|commercial|commerciale|kommerziell|comercial|company|azienda|"
+                        r"unternehmen|empresa|entreprise|threshold|soglia|schwelle|umbral|seuil|legal advice", re.I)
+
+
+def _licence_texts(locale: str) -> list[str]:
+    """Every text of the words that speaks of the licence, in its language, with the English quotation taken out."""
+    w = _words(locale)
+    quote = layout.clause(w["licence_text"])
+    own = [w["licence_line"], w["licence_neutral"], *w["licence"].values(), w["sections"]["licence"],
+           w["reading_texts"]["licence"], w["reading_texts"]["licence_accepted"]]
+    return [t.replace("{clause}", "").replace(quote, "") for t in own if isinstance(t, str)]
+
+
 @pytest.mark.parametrize("locale", LOCALES)
-def test_the_first_page_s_licence_line_says_the_revenue_clause(locale):
-    """Whoever works for a large company is told on the first page: the clause of point 2 in one line, word for word in
-    English (a part of the vendored text), its threshold, the currency and the month in every language."""
-    line = _words(locale)["licence_line"]
+def test_the_first_page_quotes_the_clause_and_says_one_neutral_sentence(locale):
+    """The first page names the model, quotes point 2 of the licence word for word (English in every language, found in the
+    vendored text), says one neutral sentence in the page's language and points to the last page: nothing explains it."""
+    w = _words(locale)
     text = common._file("timestral")["en"]["licence_text"]
-    assert "Modified MIT License" in line and "{model}" in line and "20" in line
-    if locale == "en":
-        quoted = re.search(r"«([^»]+)»", line).group(1)
-        assert quoted in text and "exceeds $20 million (or its equivalent in another currency) for the preceding month" in quoted
-    else:
-        assert re.search(r"20 (millions? de dollars|milioni di dollari|Millionen US-Dollar|millones de dólares)", line), line
+    quote = layout.clause(text)
+    assert quote in text and quote.startswith("You are not authorized to exercise any rights under this license")
+    assert w["licence_neutral"] == NEUTRAL[locale]
+    assert "Modified MIT License" in w["licence_line"] and "{model}" in w["licence_line"]
+    assert "{clause}" in w["licence_line"] and "{neutral}" in w["licence_line"]
     model, params, _ = fixture(CASE)
     [item] = [it for it in layouts.definition(model, params, locale)["sections"]["body"]["items"] if it["id"] == "licence_line"]
-    assert "Timestral-28M" in item["value"] and "20" in item["value"]
+    assert "Timestral-28M" in item["value"] and quote in item["value"] and NEUTRAL[locale] in item["value"]
+    assert "{" not in item["value"].replace("{{", "")
+
+
+@pytest.mark.parametrize("locale", LOCALES)
+def test_no_text_of_the_licence_paraphrases_it_outside_the_english_quotation(locale):
+    for t in _licence_texts(locale):
+        assert not PARAPHRASE.search(t), (locale, t)
 
 
 def test_the_series_table_keeps_the_smape_and_its_sign_together_and_a_lone_holdout_chart_takes_the_width():

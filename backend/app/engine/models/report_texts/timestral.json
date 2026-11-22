@@ -51,7 +51,8 @@
     },
     "formula_many": "{value} ~ {model} · {n} series by «{series}» · {frequency} · {horizon} {unit} ahead",
     "formula_one": "{value} ~ {model} · {frequency} · {horizon} {unit} ahead",
-    "licence_line": "Forecast by {model}, weights by Mistral AI under the Modified MIT License, which grants no rights «if the global consolidated monthly revenue of your company (or that of your employer) exceeds $20 million (or its equivalent in another currency) for the preceding month»: the licence's full text is on the last page.",
+    "licence_line": "Forecast by {model}, weights by Mistral AI under the Modified MIT License. «{clause}» {neutral} The licence's full text is on the last page.",
+    "licence_neutral": "This is the clause of the licence of Mistral AI's weights; the official file is authoritative for its full text and its interpretation.",
     "alpha_line": "The only verdict comes from Wilcoxon's signed-rank test across the series, read against α = {alpha} (the node's option); its value is the median of the differences of MASE, below 0 when Timestral's errors are the smaller. The errors on the holdout and the coverage of the bands are measures with no verdict: they are listed under the check.",
     "charts": {
       "forecast": "History, forecast with its 80 % and 90 % bands, seasonal naïve",
@@ -488,7 +489,8 @@
     },
     "formula_many": "{value} ~ {model} · {n} serie per «{series}» · {frequency} · {horizon} {unit} in avanti",
     "formula_one": "{value} ~ {model} · {frequency} · {horizon} {unit} in avanti",
-    "licence_line": "Previsione di {model}, pesi di Mistral AI sotto la Modified MIT License, che non concede alcun diritto se i ricavi mensili globali consolidati della vostra azienda (o del vostro datore di lavoro) superano 20 milioni di dollari, o l'equivalente in un'altra valuta, nel mese precedente: il testo completo della licenza è nell'ultima pagina.",
+    "licence_line": "Previsione di {model}, pesi di Mistral AI sotto la Modified MIT License. «{clause}» {neutral} Il testo completo della licenza è nell'ultima pagina.",
+    "licence_neutral": "Questa è la clausola della licenza dei pesi di Mistral AI; il file ufficiale fa fede per il suo testo completo e per la sua interpretazione.",
     "alpha_line": "L'unico verdetto viene dal test dei ranghi con segno di Wilcoxon fra le serie, letto contro α = {alpha} (l'opzione del nodo); il suo valore è la mediana delle differenze di MASE, sotto 0 quando gli errori di Timestral sono i più piccoli. Gli errori nel periodo di verifica e la copertura delle bande sono misure senza verdetto: sono elencate sotto la verifica.",
     "charts": {
       "forecast": "Storia, previsione con le bande all'80 % e al 90 %, naïve stagionale",
@@ -925,7 +927,8 @@
     },
     "formula_many": "{value} ~ {model} · {n} Reihen nach «{series}» · {frequency} · {horizon} {unit} voraus",
     "formula_one": "{value} ~ {model} · {frequency} · {horizon} {unit} voraus",
-    "licence_line": "Prognose von {model}, Gewichte von Mistral AI unter der Modified MIT License, die keine Rechte gewährt, wenn der weltweite konsolidierte Monatsumsatz Ihres Unternehmens (oder Ihres Arbeitgebers) im Vormonat 20 Millionen US-Dollar oder den Gegenwert in einer anderen Währung übersteigt: Der vollständige Text der Lizenz steht auf der letzten Seite.",
+    "licence_line": "Prognose von {model}, Gewichte von Mistral AI unter der Modified MIT License. «{clause}» {neutral} Der vollständige Text der Lizenz steht auf der letzten Seite.",
+    "licence_neutral": "Dies ist die Klausel der Lizenz der Gewichte von Mistral AI; maßgeblich für ihren vollständigen Text und ihre Auslegung ist die offizielle Datei.",
     "alpha_line": "Das einzige Urteil kommt aus dem Vorzeichen-Rang-Test von Wilcoxon über die Reihen, gelesen gegen α = {alpha} (die Option des Knotens); sein Wert ist der Median der Differenzen des MASE, unter 0, wenn die Fehler von Timestral die kleineren sind. Die Fehler im Prüfzeitraum und die Überdeckung der Bänder sind Maße ohne Urteil: Sie stehen unter der Prüfung.",
     "charts": {
       "forecast": "Verlauf, Prognose mit ihren 80-%- und 90-%-Bändern, saisonal naive Prognose",
@@ -1362,7 +1365,8 @@
     },
     "formula_many": "{value} ~ {model} · {n} series por «{series}» · {frequency} · {horizon} {unit} hacia delante",
     "formula_one": "{value} ~ {model} · {frequency} · {horizon} {unit} hacia delante",
-    "licence_line": "Pronóstico de {model}, pesos de Mistral AI bajo la Modified MIT License, que no concede ningún derecho si los ingresos mensuales globales consolidados de su empresa (o de su empleador) exceden los 20 millones de dólares, o su equivalente en otra moneda, en el mes anterior: el texto completo de la licencia está en la última página.",
+    "licence_line": "Pronóstico de {model}, pesos de Mistral AI bajo la Modified MIT License. «{clause}» {neutral} El texto completo de la licencia está en la última página.",
+    "licence_neutral": "Esta es la cláusula de la licencia de los pesos de Mistral AI; el archivo oficial es el que prevalece para su texto completo y su interpretación.",
     "alpha_line": "El único veredicto viene de la prueba de rangos con signo de Wilcoxon entre las series, leída contra α = {alpha} (la opción del nodo); su valor es la mediana de las diferencias de MASE, por debajo de 0 cuando los errores de Timestral son los menores. Los errores en el periodo de prueba y la cobertura de las bandas son medidas sin veredicto: se listan bajo la comprobación.",
     "charts": {
       "forecast": "Historia, pronóstico con sus bandas del 80 % y del 90 %, ingenuo estacional",
@@ -1799,7 +1803,8 @@
     },
     "formula_many": "{value} ~ {model} · {n} séries par «{series}» · {frequency} · {horizon} {unit} en avant",
     "formula_one": "{value} ~ {model} · {frequency} · {horizon} {unit} en avant",
-    "licence_line": "Prévision par {model}, poids de Mistral AI sous la Modified MIT License, qui n'accorde aucun droit si le chiffre d'affaires mensuel mondial consolidé de votre entreprise (ou de votre employeur) dépasse 20 millions de dollars, ou l'équivalent dans une autre devise, pour le mois précédent : le texte complet de la licence est en dernière page.",
+    "licence_line": "Prévision par {model}, poids de Mistral AI sous la Modified MIT License. «{clause}» {neutral} Le texte complet de la licence est en dernière page.",
+    "licence_neutral": "Voici la clause de la licence des poids de Mistral AI ; le fichier officiel fait foi pour son texte complet et son interprétation.",
     "alpha_line": "Le seul verdict vient du test des rangs signés de Wilcoxon entre les séries, lu contre α = {alpha} (l'option du nœud) ; sa valeur est la médiane des différences de MASE, sous 0 quand les erreurs de Timestral sont les plus petites. Les erreurs sur la période de test et la couverture des bandes sont des mesures sans verdict : elles sont listées sous la vérification.",
     "charts": {
       "forecast": "Historique, prévision avec ses bandes à 80 % et à 90 %, naïve saisonnière",

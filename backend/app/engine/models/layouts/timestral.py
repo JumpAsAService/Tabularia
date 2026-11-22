@@ -232,6 +232,12 @@ def _across(p: stats.Page, w: dict) -> None:
     ], p.y, visible=c.exists(one)), 10)
 
 
+def clause(text: str) -> str:
+    """Point 2 of the licence, word for word: the line of the vendored text that starts with «2.», found in it and never
+    retyped. The report quotes it and never explains it: the official file is the authority for its meaning."""
+    return next(ln.strip()[2:].strip() for ln in text.split("\n") if ln.strip().startswith("2. "))
+
+
 def _summary(p: stats.Page, w: dict, lang: str, params: dict[str, Any], checked: dict[str, Any], holdout: bool) -> None:
     p.heading("s_summary", w["sections"]["summary"])
     _cards(p, w, checked, holdout)
@@ -239,8 +245,8 @@ def _summary(p: stats.Page, w: dict, lang: str, params: dict[str, Any], checked:
     p.text("formula", "=" + _formula(w, params, checked), h=6.5, size=9.5, weight="semibold", background=c.PANEL, padding=1.5,
            can_grow=True)
     p.items[-1]["dataset"] = c.DATASET
-    p.text("licence_line", stats.static(w["licence_line"].replace("{model}", _size(checked))), h=5, size=8, color=c.MUTED,
-           can_grow=True)
+    line = w["licence_line"].replace("{neutral}", w["licence_neutral"]).replace("{clause}", clause(w["licence_text"]))
+    p.text("licence_line", stats.static(line.replace("{model}", _size(checked))), h=5, size=8, color=c.MUTED, can_grow=True)
     c.reading_under(p, w, "summary")
     c._assumptions(p, w, lang, _numbers(w["alpha_line"], lang, alpha=float(checked.get("alpha", 0.05))), True)
     # the test compares series, one difference each: «many rows» says nothing about it
