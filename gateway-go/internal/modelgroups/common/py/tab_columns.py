@@ -6,18 +6,25 @@ the engine writes them (catalog.label_of, operations.pivot_label: «true», «fa
 A frame read here carries its columns' kinds in `df.attrs["kinds"]` (column → the catalogue's
 kind: integer, number, text, boolean, date, datetime, other), taken from the Parquet file's own
 types: pandas turns an integer column with a NULL into floats, and a kind must not follow that.
+
+pandas is imported where a function needs it, never when the module is, so that the library runs
+in an image without pandas (a runner that reads its input with pyarrow alone, tab_series). Where
+pandas is installed, pyarrow imports it by itself on its first array or Parquet read.
 """
 from __future__ import annotations
 
 import datetime as dt
 import math
 import os
-from typing import Any, Iterable, Mapping
+import sys
+from typing import TYPE_CHECKING, Any, Iterable, Mapping
 
 import numpy as np
-import pandas as pd
 
 from tab_protocol import ENV_INPUT, Refusal
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 KINDS_ATTR = "kinds"
 
@@ -44,6 +51,8 @@ def kind_of_arrow(t: Any) -> str:
 
 def kind(df: pd.DataFrame, name: str) -> str:
     """The kind of a column of a frame: the one it was read with, else from its dtype."""
+    import pandas as pd
+
     kinds = df.attrs.get(KINDS_ATTR) or {}
     if name in kinds:
         return kinds[name]
@@ -71,8 +80,11 @@ def kind(df: pd.DataFrame, name: str) -> str:
 
 # ── labels ────────────────────────────────────────────────────────────────────
 def is_missing(v: Any) -> bool:
-    """NULL or NaN (pandas' NA and NaT included)."""
-    if v is None or v is pd.NA or v is pd.NaT:
+    """NULL or NaN (pandas' NA and NaT included: they exist only once pandas is imported)."""
+    if v is None:
+        return True
+    pd = sys.modules.get("pandas")
+    if pd is not None and (v is pd.NA or v is pd.NaT):
         return True
     try:
         return bool(isinstance(v, (float, np.floating)) and math.isnan(v))
@@ -87,9 +99,12 @@ def label(v: Any) -> str | None:
         return None
     if isinstance(v, (bool, np.bool_)):
         return "true" if v else "false"
-    if isinstance(v, pd.Timestamp):
+    pd = sys.modules.get("pandas")
+    if pd is not None and isinstance(v, pd.Timestamp):
         v = v.to_pydatetime()
     if isinstance(v, np.datetime64):
+        import pandas as pd
+
         v = pd.Timestamp(v).to_pydatetime()
     if isinstance(v, dt.datetime):
         if v.tzinfo is not None:
@@ -136,6 +151,8 @@ def read_input(path: str | None = None, columns: list[str] | None = None) -> pd.
 
 def frame_of(table: Any) -> pd.DataFrame:
     """A pyarrow table as a frame, its kinds kept: dates as datetime.date, texts as Python's str."""
+    import pandas as pd
+
     kinds = {f.name: kind_of_arrow(f.type) for f in table.schema}
     df = table.to_pandas(date_as_object=True)
     for name, k in kinds.items():
@@ -150,6 +167,8 @@ def frame_of(table: Any) -> pd.DataFrame:
 def read_csv(path: str, types: Mapping[str, str]) -> pd.DataFrame:
     """A CSV of the reference cases or of the self-test, typed by `types` (column → kind: number,
     integer, text, boolean, date, datetime): a CSV says no type. An empty cell is NULL."""
+    import pandas as pd
+
     raw = pd.read_csv(path, dtype=str, keep_default_na=False, na_values=[""], encoding="utf-8")
     df = pd.DataFrame(index=raw.index)
     for name in raw.columns:
@@ -184,6 +203,8 @@ def read_csv(path: str, types: Mapping[str, str]) -> pd.DataFrame:
 def complete_rows(df: pd.DataFrame, columns: Iterable[str]) -> dict[str, Any]:
     """Rows that the model can use: no NULL or NaN in `columns` (the count is n_missing); an
     infinite number stops the node and names the column."""
+    import pandas as pd
+
     keep = np.ones(len(df), dtype=bool)
     for name in columns:
         x = df[name]

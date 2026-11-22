@@ -495,3 +495,7 @@ def _exits(code: Path) -> None:
                 last = [line for line in out.stdout.splitlines() if line.startswith("TABULARIA_SELFTEST_REPORT ")]
                 report = json.loads(last[-1].removeprefix("TABULARIA_SELFTEST_REPORT ")) if last else {}
                 _expect(report.get("failed", 0) >= 1 and report.get("group") == "selftest", f"the report: {report}")
+
+
+# the series' own tests (tab_series.py) register themselves; imported last, once register and _expect exist
+import tab_series_tests  # noqa: E402,F401
