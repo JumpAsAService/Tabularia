@@ -185,6 +185,16 @@ func (g Group) Ships(recipeHash, runnerHash *string) bool {
 	return g.ID != "" && recipeHash != nil && runnerHash != nil && *recipeHash == g.RecipeHash && *runnerHash == g.RunnerHash
 }
 
+// LicenceText is the text of the licence the group's weights come under, the bytes shipped with this Tabularia (their sha256 is
+// the recipe's `licence.sha256`: load checks it); "" for a group without weights.
+func (g Group) LicenceText() string {
+	if g.Recipe.Weights == nil {
+		return ""
+	}
+	b, _ := files.ReadFile(path.Join("groups", g.ID, g.Recipe.Weights.Licence.Text))
+	return string(b)
+}
+
 var shipped atomic.Pointer[[]Group]
 
 func init() {

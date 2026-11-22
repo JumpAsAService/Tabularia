@@ -22,7 +22,7 @@ func TestTheGroupsAnswerCarriesItsSystemLibraries(t *testing.T) {
 			s.Versions = []mgVersion{{ID: id, Number: 1, Status: "ready", Lock: lock}}
 			s.CurrentID = &id
 		}
-		out, err := mgOut(context.Background(), nil, s)
+		out, err := mgOut(context.Background(), nil, s, 0)
 		if err != nil {
 			t.Fatal(err)
 		}

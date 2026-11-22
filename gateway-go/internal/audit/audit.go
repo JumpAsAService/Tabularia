@@ -40,6 +40,17 @@ type Event struct {
 
 // Record writes the event; an error is logged, never returned (record_audit never raises).
 func Record(ctx context.Context, db Execer, log *slog.Logger, e Event) {
+	_, _ = write(ctx, db, log, e)
+}
+
+// RecordID is Record that says the id of the row written (0 when it could not be written): for a
+// caller that writes the event in its own transaction and names it in what it writes beside it.
+func RecordID(ctx context.Context, db Execer, log *slog.Logger, e Event) int64 {
+	id, _ := write(ctx, db, log, e)
+	return id
+}
+
+func write(ctx context.Context, db Execer, log *slog.Logger, e Event) (int64, error) {
 	info := reqinfo.From(ctx)
 	minimize := false
 	if e.Actor != nil {
@@ -92,10 +103,12 @@ func Record(ctx context.Context, db Execer, log *slog.Logger, e Event) {
 	if e.At != nil {
 		at = e.At.UTC()
 	}
-	_, err := db.Exec(ctx, `INSERT INTO audit_logs (ts, actor_id, actor_label, action, outcome, target_type, target_id,
-			target_label, detail, ip, user_agent) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-		at, actorID, label, e.Action, outcome, e.TargetType, e.TargetID, e.TargetLabel, detailText, ip, agent)
+	var id int64
+	err := db.QueryRow(ctx, `INSERT INTO audit_logs (ts, actor_id, actor_label, action, outcome, target_type, target_id,
+			target_label, detail, ip, user_agent) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
+		at, actorID, label, e.Action, outcome, e.TargetType, e.TargetID, e.TargetLabel, detailText, ip, agent).Scan(&id)
 	if err != nil {
 		log.Error("record_audit: cannot write the event", "action", e.Action, "err", err)
 	}
+	return id, err
 }

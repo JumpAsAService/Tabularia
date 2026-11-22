@@ -396,7 +396,16 @@ func mgQueueStale(ctx context.Context, tx pgx.Tx, log *slog.Logger, otherRelease
 			log.Warn("models: the group " + g.ID + " cannot be built again: " + why)
 			continue
 		}
-		n, err := mgNewVersion(ctx, tx, env, g, "tabularia")
+		// a group with weights is built again by Tabularia only on an acceptance of its licence the audit still holds
+		acc, err := mgAutomaticAcceptance(ctx, tx, env, g)
+		if err != nil {
+			return queued, err
+		}
+		if g.Recipe.Weights != nil && acc == nil {
+			log.Warn("models: the group " + g.ID + " waits for an administrator to accept the licence of its weights: no version is queued")
+			continue
+		}
+		n, err := mgNewVersion(ctx, tx, env, g, "tabularia", acc)
 		if err != nil {
 			return queued, err
 		}

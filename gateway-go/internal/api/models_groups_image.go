@@ -71,6 +71,8 @@ func ReadyModelGroupImage(ctx context.Context, q perm.Querier, group string) (*M
 				why = ": " + firstLine(*s.Versions[0].Error)
 			}
 			return nil, &ModelGroupUnavailable{group, "failed", fmt.Sprintf("the model group %s has no working image: its last build failed%s", group, why)}
+		case "licence_pending":
+			return nil, &ModelGroupUnavailable{group, "licence_pending", fmt.Sprintf("the model group %q waits for an administrator to accept the licence of its weights", group)}
 		case "rebuild_needed", "ready":
 			return nil, &ModelGroupUnavailable{group, "rebuilding", fmt.Sprintf("the model group %s is being rebuilt for this version of Tabularia", group)}
 		}

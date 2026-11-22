@@ -17,6 +17,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"net/http"
@@ -113,6 +114,7 @@ type mgVersion struct {
 	CreatedAt             time.Time
 	CreatedBy             *string
 	StartedAt, FinishedAt *time.Time
+	PackagesText          string // the packages as queued: for a group with weights, with its `# tabularia:` lines
 }
 
 // mgState is a group as the database has it: the row of model_groups, its managed
@@ -131,6 +133,8 @@ type mgState struct {
 	MaxSeconds int64
 	CurrentID  *int64
 	Versions   []mgVersion
+	// Accepted: the valid acceptance of the licence of the weights the audit holds (nil: none, and for a group without weights)
+	Accepted *mgAcceptance
 }
 
 // mgLoad reads a group. withText: the versions' lock, build log and self-test as well; keep:
@@ -139,9 +143,13 @@ type mgState struct {
 // since, the version in use still serves, and the list, the palette and the detail say the same.
 func mgLoad(ctx context.Context, q perm.Querier, g modelgroups.Group, withText bool, keep int) (*mgState, error) {
 	s := &mgState{Group: g, Everyone: true}
+	var err error
+	if s.Accepted, err = mgAuditAcceptance(ctx, q, g); err != nil {
+		return nil, err
+	}
 	var env, seconds *int64
 	var cpu, memory *string
-	err := q.QueryRow(ctx, `SELECT m.enabled, m.everyone, m.environment_id, m.max_rows, m.enabled_by, m.enabled_at,
+	err = q.QueryRow(ctx, `SELECT m.enabled, m.everyone, m.environment_id, m.max_rows, m.enabled_by, m.enabled_at,
 		e.cpu_limit, e.memory_limit, e.max_timeout_seconds, e.current_version_id
 		FROM model_groups m LEFT JOIN script_environments e ON e.id = m.environment_id WHERE m.id = $1`, g.ID).Scan(
 		&s.Enabled, &s.Everyone, &env, &s.MaxRows, &s.EnabledBy, &s.EnabledAt, &cpu, &memory, &seconds, &s.CurrentID)
@@ -182,7 +190,8 @@ func mgLoad(ctx context.Context, q perm.Querier, g modelgroups.Group, withText b
 	columns := `SELECT id, number, status, recipe_hash, runner_hash, image_ref, arch, error,
 		coalesce(array_length(regexp_split_to_array(nullif(lock, ''), E'\n'), 1), 0), ` + text + `,
 		(SELECT string_agg(l, E'\n') FROM unnest(regexp_split_to_array(coalesce(lock, ''), E'\n')) AS l WHERE l LIKE ANY ($2)),
-		job_name, recheck_runner, recheck_attempts, recheck_after, recheck_error, created_at, created_by, started_at, finished_at
+		job_name, recheck_runner, recheck_attempts, recheck_after, recheck_error, created_at, created_by, started_at, finished_at,
+		coalesce(packages, '')
 		FROM script_environment_versions`
 	rows, err := q.Query(ctx, columns+` WHERE environment_id = $1 ORDER BY number DESC`+limit, s.EnvID, sysLike)
 	if err != nil {
@@ -193,7 +202,7 @@ func mgLoad(ctx context.Context, q perm.Querier, g modelgroups.Group, withText b
 		var v mgVersion
 		err := row.Scan(&v.ID, &v.Number, &v.Status, &v.RecipeHash, &v.RunnerHash, &v.ImageRef, &v.Arch, &v.Error, &v.Packages,
 			&v.Lock, &v.BuildLog, &v.Selftest, &v.SystemLock, &v.JobName, &v.RecheckRunner, &v.RecheckAttempts, &v.RecheckAfter, &v.RecheckError,
-			&v.CreatedAt, &v.CreatedBy, &v.StartedAt, &v.FinishedAt)
+			&v.CreatedAt, &v.CreatedBy, &v.StartedAt, &v.FinishedAt, &v.PackagesText)
 		return v, err
 	}
 	hasCurrent := false
@@ -257,7 +266,9 @@ func (v *mgVersion) recheck(g modelgroups.Group) string {
 }
 
 // state is what the card says: not_enabled, building, checking, ready, failed or
-// rebuild_needed (the shipped recipe changed and the new version is not queued yet); for a ready
+// rebuild_needed (the shipped recipe changed and the new version is not queued yet), licence_pending
+// (the same, for a group whose weights have a licence no administrator has accepted: nothing is
+// queued until one does); for a ready
 // group whose version in use is being self-tested again with a new runner, rechecking or
 // recheck_retrying (it serves meanwhile).
 func (s *mgState) state() string {
@@ -279,6 +290,10 @@ func (s *mgState) state() string {
 		return "ready"
 	case latest.Status == "failed":
 		return "failed"
+	}
+	if s.Group.Recipe.Weights != nil && s.Accepted == nil {
+		// a build is due and Tabularia does not start one without an acceptance of the licence in the audit
+		return "licence_pending"
 	}
 	return "rebuild_needed"
 }
@@ -362,9 +377,12 @@ type mgGroupOut struct {
 
 	// the Debian libraries the group's image installs besides the fixed list (an empty list for most groups)
 	SystemLibraries []modelgroups.SystemLibrary `json:"system_libraries"`
+
+	// the licence of the group's weights (docs/specs/foundation-forecast.md); null for a group without weights
+	Licence *mgLicenceOut `json:"licence"`
 }
 
-func mgOut(ctx context.Context, q perm.Querier, s *mgState) (mgGroupOut, error) {
+func mgOut(ctx context.Context, q perm.Querier, s *mgState, retentionMinutes int) (mgGroupOut, error) {
 	g := s.Group
 	def := mgLimits{CPULimit: g.Recipe.Resources.CPU, MemoryLimit: g.Recipe.Resources.Memory,
 		MaxTimeoutSeconds: mgDefaultSeconds(g), MaxRows: g.Recipe.MaxRows}
@@ -375,7 +393,7 @@ func mgOut(ctx context.Context, q perm.Querier, s *mgState) (mgGroupOut, error) 
 	out := mgGroupOut{ID: g.ID, Language: g.Recipe.Language, Base: g.Recipe.Base, Models: g.Models, Packages: len(g.Recipe.Packages),
 		Enabled: s.Enabled, State: s.state(), Limits: lim, Defaults: def, Everyone: s.Everyone, GroupIDs: []int64{}, Groups: []string{},
 		EnabledBy: s.EnabledBy, EnabledAt: isoPtr(s.EnabledAt), Versions: []mgVersionOut{},
-		SystemLibraries: g.SystemLibraries(nil)}
+		SystemLibraries: g.SystemLibraries(nil), Licence: mgLicenceView(s, retentionMinutes)}
 	cur := s.current()
 	out.Ready = cur != nil
 	if cur != nil {
@@ -494,6 +512,10 @@ func mgPalette(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principa
 		Ready             bool   `json:"ready"`
 		MaxTimeoutSeconds int64  `json:"max_timeout_seconds"`
 		MaxRows           int64  `json:"max_rows"`
+		// Sizes: the sizes of the weights the version in use holds (what the node's form offers); null for a
+		// group without weights. LicencePending: it waits for an administrator to accept the licence
+		Sizes          []string `json:"sizes"`
+		LicencePending bool     `json:"licence_pending"`
 	}
 	groups := []entry{}
 	for _, g := range modelgroups.Groups() {
@@ -505,6 +527,12 @@ func mgPalette(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principa
 		e := entry{ID: g.ID, Enabled: s.Enabled && reason == "", Ready: s.current() != nil, MaxTimeoutSeconds: mgDefaultSeconds(g), MaxRows: g.Recipe.MaxRows}
 		if s.EnvID != 0 {
 			e.MaxTimeoutSeconds, e.MaxRows = s.maxSeconds(), s.maxRows()
+		}
+		if g.Recipe.Weights != nil {
+			e.LicencePending = s.state() == "licence_pending"
+			if cur := s.current(); cur != nil {
+				e.Sizes = mgSizesOfVersion(g, cur)
+			}
 		}
 		if e.Enabled {
 			e.Usable = s.Everyone || admin
@@ -534,7 +562,7 @@ func mgList(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal) 
 			fail(d, w, "models: a group", err)
 			return
 		}
-		o, err := mgOut(ctx, d.DB, s)
+		o, err := mgOut(ctx, d.DB, s, d.Config.AuditRetentionMinutes)
 		if err != nil {
 			fail(d, w, "models: a group", err)
 			return
@@ -585,7 +613,7 @@ func mgAnswer(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal
 		fail(d, w, "models: the group", err)
 		return
 	}
-	o, err := mgOut(ctx, d.DB, s)
+	o, err := mgOut(ctx, d.DB, s, d.Config.AuditRetentionMinutes)
 	if err != nil {
 		fail(d, w, "models: the group", err)
 		return
@@ -619,7 +647,14 @@ func mgCores(cpu string) float64 { return sbCores(cpu) }
 // mgNewVersion queues the group's next version in the transaction: the environment's row held,
 // the next number, built from the recipe this Tabularia ships. Without internet: a model Job
 // reaches the scripts bucket and nothing else.
-func mgNewVersion(ctx context.Context, tx pgx.Tx, envID int64, g modelgroups.Group, who string) (int64, error) {
+//
+// A group with weights records, in the packages text, the sizes it is built with and the acceptance
+// of the licence it relies on (acc, which it needs); for the others acc is ignored and the packages
+// are the recipe's.
+func mgNewVersion(ctx context.Context, tx pgx.Tx, envID int64, g modelgroups.Group, who string, acc *mgAcceptance) (int64, error) {
+	if g.Recipe.Weights != nil && acc == nil {
+		return 0, errors.New("a group with weights is queued with the acceptance of its licence")
+	}
 	if _, err := tx.Exec(ctx, `SELECT id FROM script_environments WHERE id = $1 FOR UPDATE`, envID); err != nil {
 		return 0, err
 	}
@@ -637,7 +672,7 @@ func mgNewVersion(ctx context.Context, tx pgx.Tx, envID int64, g modelgroups.Gro
 	}
 	_, err = tx.Exec(ctx, `INSERT INTO script_environment_versions (environment_id, number, language_version, base_image, packages, status,
 		created_at, created_by, internet_access, recipe_hash, runner_hash) VALUES ($1, $2, $3, $4, $5, 'queued', $6, $7, false, $8, $9)`,
-		envID, number, g.Recipe.Base, base, strings.Join(g.Recipe.Packages, "\n"), time.Now().UTC(), who, g.RecipeHash, g.RunnerHash)
+		envID, number, g.Recipe.Base, base, mgPackagesText(g, acc), time.Now().UTC(), who, g.RecipeHash, g.RunnerHash)
 	return number, err
 }
 
@@ -769,6 +804,14 @@ func mgEnable(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal
 		detail(w, http.StatusConflict, why)
 		return
 	}
+	var act *mgLicenceAct
+	if g.Recipe.Weights != nil {
+		in, ok := mgDecodeBuild(w, r)
+		if !ok {
+			return
+		}
+		act = &mgLicenceAct{in: in, actor: &p.User, log: d.Log}
+	}
 	ctx := r.Context()
 	who := p.User.Email
 	var queued int64
@@ -787,10 +830,13 @@ func mgEnable(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal
 		if _, err := tx.Exec(ctx, `UPDATE script_environments SET enabled = true, updated_at = $1, updated_by = $2 WHERE id = $3`, now, who, envID); err != nil {
 			return err
 		}
-		queued, reused, err = mgQueueIfNeeded(ctx, tx, envID, g, who)
+		queued, reused, err = mgQueueIfNeeded(ctx, tx, envID, g, who, act)
 		return err
 	})
 	if err != nil {
+		if mgAnswerRefusal(w, err) {
+			return
+		}
 		fail(d, w, "models: enabling a group", err)
 		return
 	}
@@ -801,8 +847,10 @@ func mgEnable(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal
 
 // mgQueueIfNeeded queues a version when the environment has no ready current version built from
 // the shipped recipe and none is being built. It returns the number queued (0: none) and
-// whether the version in use already serves.
-func mgQueueIfNeeded(ctx context.Context, tx pgx.Tx, envID int64, g modelgroups.Group, who string) (int64, bool, error) {
+// whether the version in use already serves. A group with weights needs the click's acceptance
+// (act) to queue one: written in the audit here, in this transaction, so that the version's lines and
+// the audit's row name the same act; a refusal (*mgRefusal) undoes the enabling.
+func mgQueueIfNeeded(ctx context.Context, tx pgx.Tx, envID int64, g modelgroups.Group, who string, act *mgLicenceAct) (int64, bool, error) {
 	if err := mgLockEnvironment(ctx, tx, envID); err != nil {
 		return 0, false, err
 	}
@@ -815,7 +863,14 @@ func mgQueueIfNeeded(ctx context.Context, tx pgx.Tx, envID int64, g modelgroups.
 	if n, err := mgInFlight(ctx, tx, envID); err != nil || n != 0 {
 		return 0, false, err
 	}
-	n, err := mgNewVersion(ctx, tx, envID, g, who)
+	var acc *mgAcceptance
+	if g.Recipe.Weights != nil {
+		var err error
+		if acc, err = act.accept(ctx, tx, g); err != nil {
+			return 0, false, err
+		}
+	}
+	n, err := mgNewVersion(ctx, tx, envID, g, who, acc)
 	return n, false, err
 }
 
@@ -865,6 +920,14 @@ func mgRebuild(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principa
 		detail(w, http.StatusConflict, why)
 		return
 	}
+	var act *mgLicenceAct
+	if g.Recipe.Weights != nil {
+		in, ok := mgDecodeBuild(w, r)
+		if !ok {
+			return
+		}
+		act = &mgLicenceAct{in: in, actor: &p.User, log: d.Log}
+	}
 	ctx := r.Context()
 	var number, busy int64
 	var enabled bool
@@ -884,13 +947,22 @@ func mgRebuild(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principa
 		if busy, err = mgInFlight(ctx, tx, env); err != nil || busy != 0 {
 			return err
 		}
-		if number, err = mgNewVersion(ctx, tx, env, g, p.User.Email); err != nil {
+		var acc *mgAcceptance
+		if act != nil {
+			if acc, err = act.accept(ctx, tx, g); err != nil {
+				return err
+			}
+		}
+		if number, err = mgNewVersion(ctx, tx, env, g, p.User.Email, acc); err != nil {
 			return err
 		}
 		_, err = tx.Exec(ctx, `UPDATE model_groups SET updated_by = $2, updated_at = $3 WHERE id = $1`, g.ID, p.User.Email, time.Now().UTC())
 		return err
 	})
 	if err != nil {
+		if mgAnswerRefusal(w, err) {
+			return
+		}
 		fail(d, w, "models: building a group again", err)
 		return
 	}
