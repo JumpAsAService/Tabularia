@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/masking"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/modelgroups"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/scriptimage"
 )
@@ -412,5 +413,37 @@ func TestThePaletteSaysTheLicenceAtThePinnedRevisions(t *testing.T) {
 		if o.Recipe.Weights == nil && mgPaletteLicenceOf(o, nil) != nil {
 			t.Errorf("%s has a licence", o.ID)
 		}
+	}
+}
+
+// An observer and nothing else (a public demo's guest) reads the people of the section masked, as everywhere else in
+// Administration: who enabled a group, who queued each version and who accepted the licence of its weights. An
+// administrator reads them whole.
+func TestAnObserverReadsThePeopleOfTheGroupsMasked(t *testing.T) {
+	f := newModelsFixture(t)
+	g := weightsGroup(t)
+	if w := f.enableWith(mgWeightsGroup, acceptBody(g, true, "28m")); w.Code != http.StatusOK {
+		t.Fatalf("enabling: %d %s", w.Code, w.Body)
+	}
+	masked := masking.Email(f.admin.Email)
+	for _, c := range []struct {
+		name string
+		h    func(*Deps, http.ResponseWriter, *http.Request, *auth.Principal)
+	}{{"list", mgList}, {"detail", mgDetail}} {
+		w := f.call(f.observer, "GET", mgWeightsGroup, "", "", false, c.h)
+		if w.Code != http.StatusOK {
+			t.Fatalf("%s: %d %s", c.name, w.Code, w.Body)
+		}
+		if strings.Contains(w.Body.String(), f.admin.Email) || !strings.Contains(w.Body.String(), masked) {
+			t.Errorf("%s as an observer: the administrator's email is not masked", c.name)
+		}
+		if a := f.call(f.admin, "GET", mgWeightsGroup, "", "", false, c.h); !strings.Contains(a.Body.String(), f.admin.Email) {
+			t.Errorf("%s as an administrator: the email is masked", c.name)
+		}
+	}
+	got := answerOf(t, f.call(f.observer, "GET", mgWeightsGroup, "", "", false, mgDetail)).Group
+	if got.EnabledBy == nil || *got.EnabledBy != masked || got.Versions[0].CreatedBy == nil || *got.Versions[0].CreatedBy != masked ||
+		got.Licence == nil || got.Licence.Line == nil || got.Licence.Line.By != masked {
+		t.Errorf("the observer's group: %+v", got)
 	}
 }

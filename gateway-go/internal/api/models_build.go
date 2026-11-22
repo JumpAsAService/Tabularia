@@ -414,7 +414,7 @@ func mgQueueStale(ctx context.Context, tx pgx.Tx, log *slog.Logger, otherRelease
 			log.Warn("models: the group " + g.ID + " waits for an administrator to accept the licence of its weights: no version is queued")
 			continue
 		}
-		n, err := mgNewVersion(ctx, tx, env, g, "tabularia", acc)
+		n, err := mgNewVersion(ctx, tx, env, g, mgSystemActor, acc)
 		if err != nil {
 			return queued, err
 		}

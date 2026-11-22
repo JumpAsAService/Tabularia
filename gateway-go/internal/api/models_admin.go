@@ -29,6 +29,7 @@ import (
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/audit"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/masking"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/modelgroups"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/perm"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
@@ -576,13 +577,27 @@ func mgList(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal) 
 	mgSend(d, w, r, p, map[string]any{"groups": out})
 }
 
-// mgSend adds what every answer of the section says besides its groups.
+// mgSend adds what every answer of the section says besides its groups. An observer and nothing else
+// (a public demo's guest) reads its people masked, as everywhere else in Administration (mgMaskPeople).
 func mgSend(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal, body map[string]any) {
 	ctx := r.Context()
-	admin, err := perm.For(d.DB, &p.User).IsAdmin(ctx)
+	roles, err := perm.For(d.DB, &p.User).Roles(ctx)
 	if err != nil {
 		fail(d, w, "models: the roles", err)
 		return
+	}
+	admin := roles.Admin
+	if roles.ObserverOnly() {
+		if g, ok := body["group"].(mgGroupOut); ok {
+			body["group"] = mgMaskPeople(g)
+		}
+		if gs, ok := body["groups"].([]mgGroupOut); ok {
+			masked := make([]mgGroupOut, len(gs))
+			for i, g := range gs {
+				masked[i] = mgMaskPeople(g)
+			}
+			body["groups"] = masked
+		}
 	}
 	ready, err := mgStorageReady(ctx, d.DB)
 	if err != nil {
@@ -597,6 +612,38 @@ func mgSend(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal, 
 	body["storage_ready"] = ready
 	body["editable"] = admin && p.TokenName == "" && why == nil
 	server.JSON(w, http.StatusOK, body)
+}
+
+// mgSystemActor is who Tabularia's own builds are queued by (mgQueueStale): no person, never masked.
+const mgSystemActor = "tabularia"
+
+// mgMaskPeople is a group as an observer-only account reads it: who enabled it, who queued each version and who
+// accepted the licence of its weights, masked (masking.Email: «a***@example.com»).
+func mgMaskPeople(g mgGroupOut) mgGroupOut {
+	mask := func(who *string) *string {
+		if who == nil || *who == mgSystemActor {
+			return who
+		}
+		m := masking.Email(*who)
+		return &m
+	}
+	g.EnabledBy = mask(g.EnabledBy)
+	versions := make([]mgVersionOut, len(g.Versions))
+	for i, v := range g.Versions {
+		v.CreatedBy = mask(v.CreatedBy)
+		versions[i] = v
+	}
+	g.Versions = versions
+	if g.Licence != nil {
+		licence := *g.Licence
+		if licence.Line != nil {
+			line := *licence.Line
+			line.By = *mask(&line.By)
+			licence.Line = &line
+		}
+		g.Licence = &licence
+	}
+	return g
 }
 
 // mgDetail is GET /admin/models/{group_id}: one group with all its versions, their lock, build
