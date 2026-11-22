@@ -1437,6 +1437,78 @@ the word and palette tests of `model-catalog` and `model-experiments` no longer 
 `ModelForm.vue` with made-up data, keyboard alone (Tab, Shift+Tab, Space, Enter, the arrows; no F, Home, End or Menu): the selects, the size, the licence link, the levels (the median skipped by Tab), the
 covariates, MLflow, the sizes offered, five languages.
 
+### F4 — the report and its explanation
+
+**Built (2026-11-22).** `layouts/timestral.py` (registered in `layouts/__init__.py`), its words `report_texts/timestral.json` in the five languages
+(written by one generator, not committed: the same keys in each language, every sentence that names a unit of time expanded by `frequency`), `NOTE_NAMES`
+gains `series` and `size`. The runner writes the explanation (`ff_reading.py`, lot F3), as the A/B's and the decomposition's do: the model registers
+nothing in `READINGS`, the layout places the rows with `common.reading_under` and `common.how_computed`.
+
+The report, in the order of «The report (pixel perfect)»: (1) the summary — four cards (series and points; the model and its CPU; the horizon in the
+frequency's words and the holdout; the holdout's MASE beside the seasonal naïve's, no colour), the formula line in the page's words, the licence line, the
+summary's reading, the check (Wilcoxon across the series, the only verdict, in its own words: «– not supported» muted, «✓ Timestral ahead» or «✓ seasonal
+naïve ahead» by the sign of the median difference), «Measures, not tests» (relative MASE, coverage 80 % and 90 %) and the mean errors over the series
+(MASE, the naïve's MASE, sMAPE, the naïve's sMAPE, WQL, the series measured), each with what it is, then the readings of the holdout and of the comparison;
+(2) the forecasts — one chart a series drawn, full width, two a page: the 90 % and the 80 % bands, the history, the seasonal naïve, the median, a dashed line
+at the first instant forecast, the series' reading under it; (3) the holdout (not drawn with `holdout = 0`) — two charts a row (the observed values, the
+holdout's median and bands, a dashed line at the first value kept out), the table of every series (points, points read, MASE, the naïve's, relative MASE,
+sMAPE, scaled pinball, coverage 80/90, why not measured), the relative MASE of the series drawn on a log scale with a line at 1, the coverage's reading;
+(4) what the model cannot know — its readings and the covariates the node read; (5) how this report was computed, the numbers of the forecast, the notes;
+(6) the licence, last — its reading, the weights used (repository@revision, sha256 of the weights and of the licence) and the licence's text **verbatim**:
+the vendored `licence/LICENSE.txt`, the same bytes in the five languages (sha256 `648194…3fc8c`), in one cell of a one-row table so that the workbook has it
+as its own sheet. Excel's sheets: the check, the measures, the mean errors, the series, «Reading», the numbers, the notes, the weights, the licence.
+
+**The template ids and the names the runner sends** (the contract with F3; `tests/test_models_timestral_report.py`, `READINGS` and `NOTES`, holds them
+with example values). Summary: `summary` (size, n_series, value, series, horizon, last, context), `summary_one` (the same without n_series and series),
+`summary_steps` and `summary_one_steps` (`last` a position: for a time in steps), `summary_known` and `summary_past` (covariate: a list), `filled_linear`
+and `missing_model` (count). Forecast, level_2 = the series: `forecast_bands` (median, low80, high80, low90, high90, at) and `forecast_bands_steps`.
+Holdout: `holdout_mase` (holdout, mase, baseline_mase), `holdout_not_measured` (count, n_series), `holdout_none`. Coverage: `coverage` (in80, in90, steps,
+share80, share90). Comparison: `comparison_supported`, `comparison_opposite`, `comparison_not_supported` (better, n_series, p_value, alpha),
+`comparison_few_series` (n_series, min_p, alpha: the smallest p-value the test can reach, the sample flow's five series), `comparison_one_series` (mase,
+baseline_mase), `comparison_not_computed` (n_measured). Limits: `limits`, `limits_context` (used, n, series), `limits_clip`. Licence: `licence` (licence),
+`licence_accepted` (by, on). Method: `method_zero_shot`, `method_quantiles`, `method_holdout`, `method_baseline`, `method_coverage`, `method_wilcoxon`,
+`method_limits`, `method_missing`; formulas: `formula_naive`, `formula_mase`, `formula_smape`, `formula_pinball`, `formula_coverage`, `formula_wilcoxon`.
+Notes (`note_<k>` = `@id …`): `ends_early` (count, last), `context_cut` (used, n, series), `history_shrunk` (points), `future_left_out` (count),
+`covariate_missing` (count, covariate), `time_budget` (seconds, limit). The verdict row of the check: `ok` when p ≥ α, `failed` when p < α (the fixture's
+reading of «not rejected» and «rejected»), `value` the median of the differences; its `advice_id` may say `one_series`, `no_holdout` (the not-computed
+sentences). A series' `not_measured` reason: `too_short`, `no_holdout`, `zero_scale` (any other id is said «not measured»).
+
+**Where the spec was silent, or the machinery decided** (nothing else of the spec was changed):
+
+1. **The charts are slots.** A definition is made from the node's settings, never from the rows, so the layout cannot name the series it draws: the k-th
+   of twelve slots (`max_series_charts`) shows the k-th series whose `median` line the runner wrote, found by 24 calculated fields (`drawn_<k>`, an
+   aggregate over the whole dataset and a LOOKUP); a slot without a series takes no room (`collapse_hidden`). The runner's order of the `series_curve`
+   rows is the order of the charts.
+2. **The relative MASE is drawn for the series drawn**, not «the first 20 by total»: the page cannot rank the series by `total` (the same reason), and the
+   table beside it holds every series. It is a dot per series with its line at 1 (the engine's interval chart: a bar chart has no line), on a log scale.
+3. **The baseline is a line in amber, not dashed**: the engine's `xy` chart draws dashes only for its reference lines.
+4. **The holdout's charts have no baseline**: `series_curve` holds one `baseline` line, which the fixture writes on the forecast's instants. A
+   `holdout_baseline` line from F3 would need one mark in `_holdout` (a request, not done: a line with no rows would still enter the legend).
+5. **The licence on the first page is its line** («Forecast by …, weights by Mistral AI under the Modified MIT License: the licence's full text is on the
+   last page»), the text verbatim on the last page, as «Where else the note appears» says; the text is never translated (Boundaries).
+6. **Two summary ids and one forecast id more than the spec's list** (`summary_one`, `summary_*_steps`, `forecast_bands_steps`), and `comparison_few_series`:
+   a sentence cannot see `time_kind` (a model row, not a setting), and a number of days written as a date would be wrong for a time in steps. Without a
+   series column the summary says one series. An hourly series' sentences say «the last hour observed» instead of a date (the `date` form writes days).
+7. **`level` is not a note name**: ARIMA's readings send a band's level as a number (`{level:pct}`); the spec's third name would have changed its page.
+   `value` neither (the A/B's cap note): a value column called «2024» would take the language's decimal mark in the summary's sentence, an edge case.
+8. **«Many rows» is not drawn** under the check: the test compares series, one difference each, whatever the points.
+
+**Criteria.** Every fixture in five languages: `reports.definition.check` clean, the PDF drawn (five pages with the fixture's readings, six with a line of
+every template), no warning, no «= <». No sentence of a measure holds a word of `verdict_words` in any language (`measure_readings`, 21 ids, the measures'
+and the mean errors' sentences, the captions, the cards, the notes), and each of the three verdicts holds one. The licence: the words' text is the vendored
+file byte for byte (by its sha256 in the engine's suite, which holds only the backend; by the file itself when the repository is beside it) and is handed
+whole to the last page. **Golden** (a scratch dump on clean copies of `f08266c9` and of `f08266c9` with this lot's files, the fake chart service):
+**500 of 500 renderings byte for byte as before** (the PDF, the definition, the labelled rows) — every other model's
+fixture (32) and every variant of every statistics test (68), in the five languages; none with a warning. The slots' calculated fields on about
+100,000 rows (twelve series of some 8,000 points drawn, the results' ceiling): the report in 13.9 s on one CPU, every field in DuckDB (none by the
+interpreter), eleven pages.
+
+**Tests.** `tests/test_models_timestral_report.py` (new, 54) and `test_models_layouts.py` (the node is no longer pending; it is explained, as the
+decomposition). Run together with `test_report_explanations`,
+`test_explanations_regression_survival`, `test_explanations_ts_trees_clv`, `test_models_ab_review`, `test_models_catalog`,
+`test_models_output_columns`, `test_models_results`, `test_reports_model`, `test_stats_explanations` and `test_stats_layouts`, **1,798 passed**
+(the CI image, `--memory=2500m --cpus=1`).
+
 ## References
 
 - Mistral AI, *Timestral* model cards and `LICENSE`, `https://huggingface.co/mistralai/Timestral-{5M,28M,123M,209M}`
