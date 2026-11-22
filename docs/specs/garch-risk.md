@@ -544,8 +544,9 @@ test writes. The runner sizes the batch after the fit:
   Administration → Statistical models»).
 
 After each batch: write, free (`rm`, `gc(full = FALSE)`). R reuses the freed memory, so the resident size
-stays at the first batch's peak. `run.json` records the peak read from the cgroup (`memory.peak`, cgroup
-v2) or `VmHWM`, the batch size and the number of batches.
+stays at the first batch's peak. The Job's log records the peak read from the cgroup (`memory.peak`, cgroup
+v2) or `VmHWM`, the batch size and the number of batches; the rows hold the batches, their size and the file's
+size (`run.json` does not hold them: «As built / G3», deviation 6, and «As built / G9», point 6).
 
 ### The Parquet file of the paths
 
@@ -940,7 +941,7 @@ seeds; ≤ 5,000 rows each):
 - **the streaming measures equal the same measures on the whole matrix** for the small cases (the test
   alone holds 10,000 × 10 values): VaR, ES, probabilities, drawdown quantiles, moments **exactly** (to
   1e-12), the fan's edges within their `band_error`;
-- **batch invariance**: `memory_bytes` 64 MiB, 256 MiB, 2 GiB → `identical()` results and paths;
+- **batch invariance**: `memory_bytes` 64 MiB (96 MiB since lot G9), 256 MiB, 2 GiB → `identical()` results and paths;
   the prefix property;
 - **memory**: each runner case is run in a child `Rscript` that writes its `VmHWM`; the simulation cases
   with `memory_bytes` = 256 MiB must stay below it (and must have used more than one batch);
@@ -1005,7 +1006,7 @@ seeds; ≤ 5,000 rows each):
    their Monte Carlo intervals, the fan with 20 sample paths, the backtest.
 4. The output columns equal what the editor showed before the Run; an Int64 time stays Int64 in
    `volatility`, `summary` and `paths`.
-5. 10 million simulated values within the group's 2 GiB: the Job's cgroup peak (in `run.json`) below the
+5. 10 million simulated values within the group's 2 GiB: the Job's cgroup peak (in the Job's log) below the
    limit, never OOM-killed; the same seed with the group's memory set to 1 GiB gives the same numbers.
 6. The numbers equal the witnesses within the table's tolerances.
 7. GARCH Predict on the next month's prices of a registered model gives σ and VaR per row.
@@ -1816,6 +1817,113 @@ rule of small data); 5 passed (peak 699 MB, 660 MB at 1 GiB, the same numbers); 
 
 **Not exercised.** The risk flow with `output = paths` on kind, a Predict node whose model has a varying σ (this table's fit has a flat one), a refusal of the `negative_variance` on the real table
 (none came), and the old pods during a build that needs several minutes (their logs hold nothing of it for the few seconds they live).
+
+### G9 — final review (2026-11-22)
+
+**What was reviewed.** This spec with every «As built» from G0 to G8 against the code: the catalogue (`garch`, `risk_simulation`, their
+kinds and bounds in the Go gateway's copy), the runner (`garch.R`, `ts_risk.R`, `ts_nyblom.R`, `ts_sim.R`, `risk_simulation.R`, the move in
+`arima.R`) and its tests, the Go gateway (the task's limits, the card's checks, the refusal of `registerAs`), the two layouts and their
+words, the editor (G5), the flow assistant and its snapshots, the docs. The formulas were read again against their references: Kupiec's and
+Christoffersen's likelihood ratios, Nyblom's statistics and the Laplace transform of ∫B² (Talbot's contour as Abate & Valkó give it), Fisher
+& Gallagher's gamma approximation, Engle & Ng's regression, κ = E[z² 1(z < 0)], the half-life, the long-run σ (rugarch's for EGARCH),
+Pébay's merge of the third and fourth moments, the type-1 VaR and its order-statistics interval, Acerbi & Tasche's ES and Manistre &
+Hancock's standard error, Clopper–Pearson, the drawdown: each is what the code computes. The readings in five languages against the owner's
+rule: every measure's sentence (the new ones too) holds no word of judgement, every verdict comes from a p-value against `alpha` (the
+tests of G4, run again). **Not changed**: the recipe, the catalogue (the other six groups' runner hashes are the same; the time series
+group's changes, so the cluster self-tests it again), the image (the code mounted on `tabularia-models-timeseries:dev`, as the Job does).
+
+**Findings and corrections** (severity for this repository and its owner: no installation in the field):
+
+| # | Finding | Severity | Correction | Test |
+|---|---|---|---|---|
+| 1 | **The engine's memory model left out most of the second pass.** Measured again over the whole run (VmHWM − R0, the toy model, the paths on disk): at 100 steps the run grew 20 to 28 MB beyond F + 8(φB_s h + ρmPh) at every batch size (1 to 10 blocks), at 10 steps 26 MB beyond it with 40 blocks, at 250 steps 0.4 MB with one block; G2's acceptance at 10 million values and `memory_bytes` 256 MiB (268.4 MB) **failed** when run again: VmHWM 266.2 MB (1,000,000 × 10) and 285.7 MB (100,000 × 100, one run of three: 268.8 and 276.2 MB the others). The excess is the second pass (its sub-histograms, the slices' selections, R's garbage between collections), nearly the same at every batch size and slowly growing with the row groups read (71.7, 70.8, 76.3 MB of growth over 50, 100, 200 one-block row groups at 100 steps). A Job whose group's memory leaves little after the fit could have been killed by the cgroup instead of sized or refused; at the group's 2 GiB the row group bounds the batch first and nothing changed (G8's peaks). | medium | `F` 12 MB → **48 MB** (`TS_SIM_FIXED_BYTES`, `RISK_MEMORY`): it bounds every point again, by 7.7 MB at least. The results do not change (the batch invariance); only the batches at a tight budget are smaller and `horizon_memory` asks 36 MB more (about 392 MB for a toy's block of 1,000 paths of 1,000 steps, 356 before). The self-test's invariance check moves from 64 MiB, which no longer holds a block, to 96 MiB | the engine's memory self-test runs a second child at 100 steps (20,000 paths) and checks the growth against the model the batch was sized by; with F = 12 MB it would fail |
+| 2 | **A GJR whose α_i + γ_i is below 0 was reported without a word.** rugarch lets γ_i go below −α_i: a fall then lowers the next variance and a large one would make it negative. The risk node refuses it (`negative_variance`, G3); the GARCH node fitted it (the reference prices with a skewed t: α₁ at 0, γ₁ = −0.036) and its asymmetry reading says only «only a fall's squared shock has a weight, γ₁ = −0.03585» | medium | a note `@garch_negative_news lag=… sum=…` (a fact, no verdict), its sentence in five languages | the `negative_variance` self-test fits the same series with the GARCH node and finds the note; the report tests say it |
+| 3 | **Options were bounded by the gateway only.** The runner trusted task.json: a task not made by the gateway (by hand, or by another version) with `paths` 1e12, `horizon` 1e9, levels outside (0.5, 1), `NaN`, `Inf`, a threshold of 1e300 or 100,000 quantiles reached the engine's allocations | low (defence in depth: task.json is the gateway's, the user's options pass `modelcatalog.Check`) | `ts_params_within(model, params)` (`ts_risk.R`): every numeric option of the node against its kind in the catalogue (min, max, above, below, whole, max_count), first thing in `fit_garch`, `predict_garch` (its horizon) and `fit_risk_simulation`; refused `bad_option` with a sentence | 15 hostile options refused in 0.1 s, the resident size grown by less than 64 MiB; a GARCH horizon of 10 million refused with its bounds |
+| 4 | The assistant's paragraph said the GARCH node refuses «a variance that can go negative» (the risk node does) and that a position puts every measure in money (only the VaR and the ES) | low | `ai_flow_agent.py`, `prompts.json` and `tools.json` written again | the assistant's tests |
+| 5 | The docs said the simulation's refusals come «before the Job» and «before anything is allocated» (the disk and the time are checked after the first batch), that the report's notes give the memory peak (the Job's log does), that a position gives every measure in money; the GARCH node's refusals listed «a model whose variance can go negative»; the method's paragraph of the risk report said every measure in money | low | `docs/capabilities/models.md`, `method_variable` in five languages | — |
+| 6 | The Predict self-test compared σ in eight cases, two of which (on `garch_prices.csv`, α₁ at 0) have a nearly flat σ, as kind's sample fit | low | it now says how much σ moves in each case (0.69 to 1.9 times its mean in the six on `garch_returns.csv`) and fails unless at least four, the GJR with the skewed t among them, move by more than a third | itself |
+
+**Security, checked.** Names: a value column called `=HYPERLINK("http://x","y") #set ] 1% <b>` goes through the header, the summary's
+reading, an ARIMA's formula, the PDF and Excel as text, for the three fixtures (a test each; nothing had to change). No `eval`, `parse`,
+`str2lang`, `source` or `system` on a user's text in the runner's files (`do.call` only on functions the code names). The paths file is
+`/tmp/paths.parquet`, a constant; the output is `TABULARIA_OUTPUT` (the Job's manifest), copied in chunks; the self-test's hooks
+(`task$.sim`: the file, the baseline, the batch) cannot come from task.json, which the gateway writes from a struct without them. The
+options: finding 3. The assistant: the two new nodes add no path from a name or a row into a prompt; the rule that names and rows are
+data (`DATA_NOTE`) is untouched.
+
+**The points of the brief.**
+
+1. **Pagination (G8's findings).** (a) The measures' interval column: the «%» of a percent is held to its number by a no-break space
+   (`risk_simulation.pct`) and the column is 40 mm (the measure's 42, the value's 21): «−12,27 % – −11,27 %» stays on one line. (b) A
+   table's header and a row or two at a page's foot: a new field of a report's table, `keep_whole` (the engine's own layouts only, as
+   `keep_with_next`; ignored in a user's report): the template measures the table where it is laid out and, when it is at most half a
+   page, makes it unbreakable, so it starts on the next page whole; a longer table breaks as any. The two layouts set it on their short
+   tables (`garch.WHOLE`: the checks, the advice, the backtest's tests and counts, the measures, the facts, the coefficients and their
+   intervals, Nyblom's, the settings, the notes); no other layout sets it, and the template is unchanged for a table without it. (c) The
+   risk report's half-empty page: the model simulated comes before the backtest, whose chart is 60 mm in this report (the GARCH report keeps
+   90 mm): the model's short tables fill the page the charts leave. On the runners' fixtures (below) the reports have 7, 7 and 6 pages,
+   looked at as images in Italian and English: no table split at a page's foot, no half-empty page before the method's. A layout of
+   unbreakable charts still leaves a page's foot empty where the next chart does not fit; which page depends on the run's first page.
+2. **The risk runner's notes.** `returns_below_minus_one`, `box_cox_domain` and the ARIMA's own notes in the risk node (`ml_only`, `gap`,
+   `gaps`, `drift_dropped`, `not_converged`, in the ARIMA report's words) have their sentences in five languages; the runner's notes of
+   the fixtures are sentences too.
+3. **The money of the VaR and the ES.** With a position the measures' table has two rows more, «Value at risk, in money» and «Expected
+   shortfall, in money», the runner's `risk|var||money` and `risk|es||money` as numbers (no %, no interval: the runner writes the money of
+   the value only), and the readings `var_money`, `es_money` («With the position of 100,000, the value at risk in money is −6,951.87»).
+   The name is `amount`: `position` is a name of the notes (a season's), which a sentence never reads as a number.
+4. **Numbers the runner did not write** (G4's list). *The fitted density*: **yes**, a row a bin of the histogram of z,
+   `hist|std_residual|expected|count` = n·(F(x1) − F(x0)) under the fitted law, 5 to 30 rows; the histogram is a combo chart, the expected
+   counts a line over the bars. *The VaR at `es_level`*: **yes**, `curve|term|es_quantile` (the engine's `X₍⌈Np'⌉₎`, which it located
+   already for the ES's standard error: one more column of `steps`), a row a step; the ES's reading names it (`es_<tail>[_level]_quantile`;
+   the sentence without it for results written before). Neither needed a catalogue change (`level_2` of `curve` and `hist` is free), so
+   the other groups are not checked again. The group's code (the ConfigMap, the references gzipped) is 725,162 bytes of the 921,600
+   the gateway's test allows.
+   *The EGARCH's news impact ratio*: **no**. For EGARCH σ²(−x)/σ²(+x) = exp(−2α₁x) depends on the size of the shock chosen, a number of
+   ours the owner's rule forbids; for a GJR the ratio of the increases, (α₁ + γ₁)/α₁, is infinite whenever α₁ is at its bound 0 (the sample
+   flow's fit, and this table's): the coefficients the readings already say carry it, and the news impact curve draws it.
+5. **What kind did not exercise.**
+   - *The output `paths`*, run as the Job runs it (the group's code written by `cmd/modelgroup code` with a task of `cmd/modelgroup task`,
+     the gateway's limits added: 2 GiB, the Job's 2,432 MiB of `/tmp`, a 600 s timeout; the image not rebuilt, uid 10001, read-only root,
+     `--network none`, one CPU): a GARCH of prices, 300,000 paths × 10 steps, a threshold; exit 0 in 13.7 s; **three row groups, one a
+     batch of 104 blocks** (1,040,000, 1,040,000, 920,000 rows: the row group's cap), `path` and `step` Int32, `time` date32 (the input's),
+     `value`, `cumulative`, `price`, `sigma` Float64, zstd; read back by pyarrow outside R, the rows sorted by path then step across the
+     row groups, 3,000,000 of 3,000,000; 73.6 MB (24.5 bytes a row), the rows' `paths_bytes` the same; R0 436 MB, the cgroup's peak 657 MB.
+     The self-test checks the same with two blocks a batch (three row groups, the types, the order, σ changing).
+   - *Predict with a σ that changes*: six of the self-test's eight cases (finding 6).
+   - *`negative_variance`*: a self-test case built on the reference prices (a GJR with a Student t: refused with its sentence; the same
+     series with a GARCH runs; the GARCH node's note).
+6. **`run.json`: not changed.** Putting the peak and the batches in it means changing `tab_main`, the common R library, so every group's
+   runner hash, a recheck of the seven groups and a self-test of each image; and it would buy nothing durable: a fit's `run.json` is read
+   by nobody (the gateway reads only a Predict's warnings from it), it is deleted with the step's files at the step's end
+   (`modelStepKeys`) and MLflow does not log it — it lives as long as the Job's log, which already holds the line. The durable numbers are
+   the rows (`batches`, `batch_paths`, `paths_bytes`, the seconds), logged to MLflow. If the owner wants the peak kept, the way is a number
+   of the `model` section (a catalogue change, every group checked again), not `run.json`.
+
+**The fixtures are the runners' own.** `risk_simulation-garch` (a GARCH(1,1) t of `garch_prices.csv`, 10,000 × 10, 50 held out, a
+threshold of 100, a position of 100,000) and `risk_simulation-arima` (the SARIMA(1,1,1)(0,1,1)[12] of `sarima_monthly.csv`, the running total
+on its upper tail, 3,000 × 12, 12 held out) replace G0's placeholders, and `garch-default` is written again with the expected counts (its
+other rows identical): `tests.models_fixtures --from-results`, in `FROM_RUNNER`.
+
+**Memory, run again** (G2's and G3's tests at 10 million values; the image, the code mounted, the paths on disk):
+
+| Test | Before (F = 12 MB) | After (F = 48 MB) |
+|---|---|---|
+| G2, the engine alone, `memory_bytes` 256 MiB = 268.4 MB, container 300 MB, 1,000,000 × 10 | VmHWM 266.2 MB, 12 batches of 86,000 | **251.3 MB**, 21 batches of 48,000, 19.0 s |
+| the same, 100,000 × 100 | **285.7 MB** (268.8, 276.2 in two more runs), 17 batches of 6,000 | **256.0 MB**, 50 batches of 2,000, 20.4 s |
+| G3, the node (GJR skewed t on 800 returns), 256 MiB for the batches, 1,000,000 × 10 | — | **55 MiB** over 410 MiB, 10 batches (the row group's cap), 26.4 s |
+| the same, 100,000 × 100 | — | **103 MiB** over 410 MiB, 10 batches, 21.3 s |
+| the self-test's children | 200,000 × 10: below 256 MiB | 200,000 × 10: peak 219 MB, growth 40 of the model's 89 MB, 5 batches; 20,000 × 100: peak 214 MB, 34 of 82 MB, 20 batches |
+
+**Hashes.** `cmd/modelgroup groups` before and after: the time series group's runner hash changes (405c6349fee5 → 1b3a9fa17028), its
+recipe and references do not; the other six groups' three hashes are the same.
+
+**Tests.** Self-test of the image (the group's code mounted, read-only root, `/tmp` a tmpfs, `--network none`, uid 10001, one CPU, 2 min 22 s):
+**119 ok, 0 failed, 0 skipped, exit 0** (G8's 116 and three new: the bounds, `negative_variance`, the expected counts). Engine (the
+models' layouts, catalogue, results, output columns, A/B and Timestral reports, the reports' engine and render, the statistics tests'
+layouts, the explanations), in the backend's image, one CPU: **2,377 passed**. Go: `go test ./internal/...` 51 packages ok, and
+`./cmd/modelgroup`. Frontend: `npm test` **614 passed**, `vue-tsc` no error. Assistant: the flow assistant's, prompts' and MCP tests **178
+passed**, the Go snapshots' tests ok. **The other reports**: the 33 fixtures of the other models and the 68 variants of the statistics
+tests, five languages: **505 PDFs, their definitions and labelled rows, 1,175 sha256 identical** before and after this lot.
 
 ## References
 
