@@ -856,8 +856,9 @@ model gets its own `max_rows` (Open question 13). ARIMA's own 20,000 holds in th
 | 1 million | 0.1–0.3 s | 0.1–0.2 s | 0.2–0.4 s | 0.2–0.4 s | under 2 s beyond the fit |
 | 10 million | 1–3 s (t, skewed t the slowest) | 1–2 s | 2–4 s | 2–4 s | 6–13 s beyond the fit, about 300 MB on `/tmp` |
 
-Acceptance bound of G3: 10 million values (100,000 paths × 100 steps, GJR skewed t) under **30 s** of R in
-all, peak memory under the given `memory_bytes` at 256 MiB, 512 MiB and 2 GiB.
+Acceptance bound of G3 (corrected by G3, «As built / G3»): 10 million values (100,000 paths × 100 steps, GJR skewed t) measured, the
+30 s of this draft being an estimate (the bound is the node's timeout, refused `too_slow` before it is reached); the simulation's
+growth over R0 under 256 MiB at `memory_bytes` 256 MiB and 2 GiB, the whole node within the group's limit (R with `rugarch` alone is 286 MB).
 
 ### Limits
 
@@ -1041,7 +1042,7 @@ G0 contract, recipe, task limits, image, measurements (first, alone; after Times
 | **G0** Contract, recipe, image | Catalogue: `garch` and `risk_simulation` in the group (kinds `risk_level`, `garch_distribution`, `variance_model`, `se_garch`, `input_kind`, `returns_type`, `aggregate`, `innovations`, `tail`, `paths`), variants (`garch`: one; `risk_simulation`: `garch`, `arima`), `applies`, sections `backtest`, `risk`, charts, `OUTPUT_TYPES` `volatility`, `risk_summary`, `paths`, wildcards `quantile_`, `price_quantile_` (three copies), `rows_when`, a variant's `max_rows` (engine and gateway), `LIMITS` (`seed_block`, `risk_bins`, `max_sample_paths`), `card: false` for the risk node, `garch_name`; fixtures per variant with reading rows; `params_cases.json`; **gateway**: `task.limits.memory_bytes`, `tmp_bytes`, `started_unix`; `recipe.json`; `run.R` routes and stubs «not built yet»; **the image**: time, size, lock, the recommended packages present, `rugarch` loads as uid 10001 on a read-only root; **measurements**: load time, `ugarchfit` for the four models × three distributions at 1k/10k/100k, `nyblom`, `ugarchpath` per block, `rdist` per million | `catalog.py`, `catalog.json` and copies, the catalogue tests, `fixtures/models/{garch,risk_simulation}_*.json`, `params_cases.json`; `jobs_models.go` and its test (limits, variant rows); `groups/timeseries/{recipe.json,runner/run.R,runner/R/garch.R,runner/R/risk_simulation.R}` (stubs) | Timestral F9 committed | `--check` green; `output_columns` gives `quantile_0.01…` and `price_quantile_*` before a run; the image builds; the self-test passes ARIMA's and the decomposition's cases and exits 4 when one is made to fail; other groups' Dockerfiles byte for byte | the image's idle RSS after `library(rugarch)`; `ugarchfit` at 100k: `VmHWM` | **yes**: the build (alone) | sonnet; **opus** for the measurements |
 | **G1** The GARCH node | `garch.R`: series and returns, the scale and its exact back-transform, `ugarchfit`, coefficients, measures, the checks (weighted portmanteau, ARCH-LM, Nyblom with the bridge-law p-value, sign bias), facts, forecasts, 1-step VaR, `ts_risk.R` (holdout, Kupiec, Christoffersen), the `volatility` output, the card; references and witnesses | `runner/R/garch.R`, `ts_risk.R`, `ts_nyblom.R`, their `*_tests.R`, `reference/` (their cases), `make_reference_garch.R`, `make_witness_garch.py`, `witness.json` (`arch` added) | G0 | the witnesses' table; ARIMA's and the decomposition's `expected.json` untouched; timings at 1k/10k/100k | the fit and checks at 100k in a child process: `VmHWM` below 1 GiB | no | **opus** |
 | **G2** The simulation engine | `ts_sim.R`: seed blocks and L'Ecuyer streams, the batch from `memory_bytes`, `ρ` measured, the Parquet writer (one row group a batch), pass-1 accumulators (moments, histograms, counts), pass 2 (selection and sub-histograms), VaR, ES, intervals, drawdown, threshold probabilities, the disk and time projections, the chunked copy to the bucket; on a toy model (i.i.d. normal, i.i.d. t) | `runner/R/ts_sim.R`, `ts_sim_tests.R` | G0 | exact against the whole matrix; batch invariance at 64 MiB / 256 MiB / 2 GiB; the prefix property; refusals with their numbers; timings at 10k, 1M, 10M values | **peak below `memory_bytes` = 256 MiB at 10 M values**, more than one batch used | no (the 10 M timing run alone) | **opus** |
-| **G3** The risk node | `risk_simulation.R`: the model fit by G1's functions or ARIMA's (`arima_fit_core` moved out of `fit_arima` without changing ARIMA's results), the end state, the GARCH and ARIMA recursions (parametric and bootstrap), the risk variable and its maps, the summary and paths outputs, the rows, the backtest | `risk_simulation.R`, `risk_simulation_tests.R`, `arima.R` (the move only), their cases | G1, G2 | `ugarchpath` 1e-12; `simulate.Arima` 1e-10; ARIMA's `expected.json` byte for byte; 10 M values under 30 s | the end-to-end node at 10 M values: cgroup-equivalent `VmHWM` below 256 MiB and 2 GiB budgets | no | **opus** |
+| **G3** The risk node | `risk_simulation.R`: the model fit by G1's functions or ARIMA's (`arima_fit_core` moved out of `fit_arima` without changing ARIMA's results), the end state, the GARCH and ARIMA recursions (parametric and bootstrap), the risk variable and its maps, the summary and paths outputs, the rows, the backtest | `risk_simulation.R`, `risk_simulation_tests.R`, `arima.R` (the move only), their cases | G1, G2 | `ugarchpath` 1e-12; `simulate.Arima` 1e-10; ARIMA's `expected.json` byte for byte; the timings at 10 k, 1 M and 10 M values measured (the 30 s of the first draft were an estimate, not a bound: the bound is the node's timeout, `too_slow`) | at 10 M values, `memory_bytes` 256 MiB and 2 GiB, more than one batch: the simulation's growth (VmHWM − R0, R0 after the fit) below 256 MiB, the whole node within the group's limit (corrected by G3: `rugarch` loaded is already 286 MB, so the whole node cannot fit 256 MiB; see «As built / G3») | no | **opus** |
 | **G4** Reports and explanations | `layouts/garch.py`, `layouts/risk_simulation.py`, `READINGS`, `report_texts/{garch,risk_simulation}.json` (five languages: page words, `reading_texts`, `formula_texts`, `measure_readings`, `verdict_words`, advice), `NOTE_NAMES`; golden PDFs | the two layouts, `layouts/__init__.py`, `layouts/common.py` (`NOTE_NAMES` only), the two words files, `test_models_layouts.py`, `test_report_explanations.py` (registration only) | G0 (fixtures); G1, G3 for real outputs | every fixture in five languages passes `reports.definition.check`; no measure sentence holds a verdict word; other PDFs byte for byte | the report task on the largest fixture: `tracemalloc` peak recorded, under 200 MB | **yes**: engine suite | sonnet (layout), **opus** (texts) |
 | **G5** Editor | the two palette entries under *Time series*, the forms (`model`-dependent keys, ARIMA's and GARCH's sections reused, the quantiles list), «Register» hidden for the risk node, the action «Simulate risk from this model» on ARIMA and GARCH nodes, five languages | `OpSidebar.vue`, `useOpIcons.ts`, `ModelForm.vue`, the node menu, `modelCatalog.ts` (wildcards if not in G0), locales (`models`), `frontend/tests/model-*.test.mjs` | G0 | Chrome and Firefox, mouse and keyboard alone (Mac, a laptop without F/Home/End keys); the copied options equal the source node's; columns after the node before Run | none: no data path (the lot says so) | no | sonnet |
 | **G6** GARCH Predict | `predict_garch`, `PREDICT` entries, the continuity refusal, the card's checks in the gateway | `garch.R` (predict), `run.R` (route), `catalog.py` (`PREDICT`), `jobs_predict.go` and its test | G1 | Predict equals the fit's own σ and VaR on the fit's last rows (1e-10); Int64 time kept | Predict on 100k new rows: `VmHWM` | no | sonnet |
@@ -1575,6 +1576,122 @@ loads the card and the Parquet file, filters and writes the output): 20,000 new 
 **For G7.** A flow with a GARCH registered and a Predict node needs the new rows to be the consecutive trading days after the card's last day (for the
 sample data on `index`, in order, none missing); the Predict output has only the time, `prediction` and `prediction_var` (no input column), as ARIMA's.
 The assistants' line «horizon for model_arima, model_garch, …» is already G0's.
+
+### G3 — the risk node (2026-11-22)
+
+**What is in.** `runner/R/risk_simulation.R`: the options, the model fitted by the GARCH node's functions (`garch_series`, `garch_fit`,
+`garch_model`, `garch_checks` and its rows) or by ARIMA's (`arima_prepare`, `arima_fit_core`; with automatic orders `arima_auto_search`
+and `arima_auto_rows`), the end state, the two recursions, the risk variable and its maps, the engine of G2 (`ts_sim_run`), the rows,
+the backtest, the outputs `risk_summary` and `paths`. `arima.R`: `arima_fit_core` (the orders checked, λ, the fit with CSS-ML then ML)
+moved out of `arima_fit_orders`, which calls it; ARIMA's 14 cases of `expected.json` are byte for byte what they were and pass.
+`runner/R/risk_simulation_tests.R` (six self-tests), `reference/make_reference_risk.R` and eight cases `risk_*` in `expected.json`, merged
+right after the `garch_*` cases (pure insertions), four cases in `output_columns.json` (`NOT_RUN_YET` is empty), the stat `money` in the
+catalogue's `risk` section (its three copies regenerated). The stub «not built yet» is gone.
+
+**How it works.**
+
+- **The GARCH paths**: the filter of the fitted node runs through the holdout to T; the state is the last returns, shocks ε = r − μ_t,
+  variances (log-variances for EGARCH) and z, on the series' units. The recursion is rugarch's, step by step over a block's paths,
+  elementwise: σ²_k = ω + Σ(α_i + γ_i 1(ε < 0)) ε² + Σ β_j σ² (ARCH, GARCH, GJR), ln σ²_k = ω + Σ(α_i z + γ_i(|z| − E|z|)) + Σ β_j ln σ²
+  (EGARCH), ε_k = σ_k z_k, r_k = μ + Σ φ_i (r − μ) + Σ θ_j ε + ε_k. Innovations: `rnorm`, `rugarch::rdist("std" | "sstd")` with the fitted
+  shape and skew, or the training's z resampled (`sample.int`). H_k = exp(Σ r) − 1 (log returns) or Π(1 + r) − 1 (simple).
+- **The ARIMA paths**, `forecast:::simulate.Arima(future = TRUE)` written out: u = BoxCox(y) − (intercept + drift·t) on the span, its
+  differences v; w_k = e_k + Σ θ*_j e_{k−j} (θ* = θ(B)Θ(B^s) expanded, `refit$model$theta`; the past e are the residuals of the fit applied
+  with its coefficients fixed to the whole span), v_k = w_k + Σ φ*_j v_{k−j}, u_k = v_k + Σ δ_j u_{k−j} with 1 − Σ δ_j B^j = (1 − B)^d (1 − B^s)^D,
+  y_k = InvBoxCox(u_k + the regression at T + k). Innovations N(0, σ̂²) or the training's residuals resampled. H_k = y, the running total,
+  or y / y_T − 1.
+- **The maps**: the fan's unit is a + b·H (a price P_T(1 + H), y_T(1 + H) for an ARIMA's relative change, H otherwise); the threshold is
+  brought to H before the engine counts it; `risk_summary` is on H's scale with `price_quantile_<q>`, `price_mean` = P_T(1 + ·) for prices;
+  the money is position × H (`risk|var||money`, `risk|es||money`).
+- **The rows** are G4's contract (the risk layout's table of «As built / G4»): the fitted model's own model, coefficient and check rows as its
+  node writes them, then `risk_variable`, `tail`, `innovations`, `aggregate`, the simulation's numbers; `risk` at the horizon (`var`, `es`
+  with `se` and `count`, `prob_beyond`, `prob_crossed` with `count`, `drawdown` with `median`, `mean`, `sd`, `moments`); `curve|fan` in the
+  fan's unit, starting at the last observation (H_0), with `history` when it is on the fan's scale (a GARCH of prices, an ARIMA's value or
+  relative change) and the 20 sample paths; `curve|term` per step; `curve|backtest` (`violation` only on the days it broke); `hist|horizon`,
+  `hist|drawdown`. No `reading` row.
+- **The backtest** is on the node's tail (the upper one tests −r against −VaR). A GARCH's 1-step VaR is μ_t + σ_t q; an ARIMA's is
+  x_t − e_t + σ̂ q on the transformed scale, brought back by InvBoxCox: the innovation's variance is taken at its steady state σ̂²
+  (stats::arima's residuals are already divided by the square root of the Kalman gain, which is 1 to many digits after the training part).
+- **`output = paths`**: the engine keeps the file, `ts_sim_copy` copies it in chunks to `TABULARIA_OUTPUT`, the file is deleted.
+
+**Deviations and corrections to this spec** (the rest as written):
+
+1. **The memory criterion is reformulated** (the owner's coordinator, 2026-11-22): R with `arrow`, `forecast` and `rugarch` loaded is 286 MB
+   (G0), and after the fit and the engine's warm-up R0 is **444–469 MB**, so the whole node can never sit under 256 MiB. The criterion is
+   the simulation's **growth** over R0 below 256 MiB at 10 million values, and the whole node within the group's limit. Corrected in the
+   lots' table and in «Performance and limits». The «30 s at 10 M» was an estimate, not a bound: the bound is the node's timeout, refused
+   `too_slow` by the engine before it is reached.
+2. **The memory constants are G2's** (F = 12 MB, φ = 31, ρ = 4): measured on the risk node's own models they bound every point (below).
+3. **`money`**: a stat of the catalogue's `risk` section (a minimal change, the copies regenerated), written for `var` and `es` with a
+   `position`; the page does not say it yet (G4 removed `var_money`, `es_money`; G9 puts the sentences back).
+4. **New refusals**: `negative_variance` — rugarch lets a GJR's γ_i go below −α_i, and then a large fall makes the variance negative, so no
+   path can be simulated (it happens on `garch_prices.csv` with GJR and a t or skewed t law: α₁ at 0, γ₁ = −0.036 to −0.047); `position_not_relative`
+   (a position with an ARIMA whose risk variable is not a relative change); `zero_last` for a last value 0 **or negative** (a relative
+   change needs a positive base); `last_missing` (an ARIMA whose last values, which the differences and the AR start from, are empty).
+5. **Notes without words yet**: `@returns_below_minus_one n=…` (simple returns below −100 %), `@box_cox_domain n=…` (λ·x + 1 < 0, kept as
+   forecast's InvBoxCox gives it), and the ARIMA's own notes in the risk node (`@ml_only`, `@gap`/`@gaps`, `@drift_dropped`, `@not_converged`):
+   `report_texts/risk_simulation.json` has words only for the GARCH's `@garch_*`; until then the page shows them as sent.
+6. **run.json does not hold the simulation's numbers**: `tab_main` writes a fixed run.json and adding a field means changing the common R
+   library (every group's runner hash). The runner prints one line on stderr (paths, steps, batches and their size, the file's size, R0,
+   the peak and its source, the seconds), which the Job's log keeps; the rows hold `batches`, `batch_paths`, `paths_bytes`, the seconds.
+7. **The group's `max_seconds` is not in the task**, so `too_slow` ends without «up to the group's 30 minutes».
+8. **A pure MA without differences**: `simulate.Arima` adds a level correction (the mean of the last 20 differences between the series and
+   its filtered residuals) where the runner follows the model's recursion; the self-test compares the cases with an AR term or a difference.
+9. **The risk rows are at the horizon only** (`level_2` null): the values per step are in `curve|term` and in `risk_summary`; the fixtures'
+   placeholder rows `risk|var|1|value` are not written. The GARCH's weighted Ljung–Box writes no `df` (G1, deviation 4), which the fixture
+   has. Beyond the fixtures the runner writes `drawdown` `mean`, `sd`, `money`, `term` `es_low` and `es_high`, and the ARIMA's every check
+   (`adf`, `kpss`, `stationarity`, `roots`, `variance_ratio`). The layout's readings run on the real rows in English and Italian with
+   nothing left as `@` or `{`.
+10. **Returns given as returns** are compounded by `returns_type` (log by default), the key the form shows only with prices.
+
+**Criteria** (the image of G0 with the files mounted, not rebuilt; uid 10001, read-only root, `/tmp` a tmpfs, `--network none`, 1 CPU):
+
+| Criterion | Result |
+|---|---|
+| `ugarchpath` 1e-12 | the returns and σ of 7 paths × 12 steps equal `ugarchpath`'s with the same innovations (`custom.dist = "sample"`, the pre-sample from the filter) for ARMA(1,1)-GARCH(1,1) t, MA(1)-ARCH(2) normal without mean, AR(2)-GJR skewed t, ARMA(1,2)-EGARCH(2,1) normal |
+| `simulate.Arima` 1e-10 | 6 paths × 9 steps equal `simulate.Arima(future = TRUE, innov)`'s for AR(2) with a mean, SARIMA(1,1,1)(0,1,1)[12] with a log and a holdout, ARIMA(1,1,1) with a drift and Box–Cox |
+| Reference cases | 8 `risk_*` cases (3 GARCH, 3 ARIMA, 2 refusals) computed outside the runner (ugarchpath and simulate.Arima per seed block on the same streams, the measures on the whole matrix): VaR, its interval, ES and its interval, moments, the threshold's counts and Clopper–Pearson, the drawdown, the backtest, the coefficients; all pass at 1e-8 (1e-7 for the ES's interval) |
+| Exact on the node's own file | VaR identical, ES 1e-12, the price threshold's counts and the drawdown's median identical, the price P_T(1 + C) and C = exp(Σr) − 1 to 1e-15, the 95 % band within its `band_error` at every step |
+| Batch invariance | one block a batch (6 batches) and one batch: rows (but the batches' own numbers) and the summary `identical()` |
+| ARIMA's `expected.json` | byte for byte (the risk cases are insertions only) |
+| Self-test | **116 ok, 0 failed, 0 skipped, exit 0** (the code of `cmd/modelgroup code timeseries`, the references gzipped: 860 KB) |
+
+**Memory.** The constants measured in 50 fresh processes (GARCH(1,1) t on 300 prices, GJR skewed t on 800 returns, SARIMA with a log;
+parametric and bootstrap; 10, 100, 250, 1,000 steps; 1 block to the row group's cap a batch; three batches; both passes): the largest
+growth over R0 is 0.905 of G2's bound (SARIMA, 100 steps, 3 blocks; 63.7 MB against 70.4 MB), so G2's constants stay. At 10 million values,
+GJR skewed t on 800 returns (`memory_bytes` 2 GiB with the real R0; «256 MiB» as the engine's budget for its batches, baseline 0):
+
+| Values | `memory_bytes` | Batches | Growth over R0 | Growth over the size before the engine | Process VmHWM | Cgroup `memory.peak` |
+|---|---|---|---|---|---|---|
+| 1,000,000 × 10 | 2 GiB | 10 of 104,000 | **84 MB** | 100 MB | 548 MB | 727 MB |
+| 100,000 × 100 | 2 GiB | 10 of 10,000 | **117 MB** | 133 MB | 581 MB | 763 MB |
+| 1,000,000 × 10 | 256 MiB | 10 of 104,000 | — | **105 MB** | 554 MB | 763 MB |
+| 100,000 × 100 | 256 MiB | 10 of 10,000 | — | **131 MB** | 580 MB | 763 MB |
+| ARIMA 100,000 × 100 | 256 MiB | 10 of 10,000 | — | **105 MB** | 542 MB | 763 MB |
+
+The batch is bounded by Arrow's row group (1,048,576 rows) at both budgets: 256 MiB for the batches does not bind before it. The cgroup's
+peak counts the page cache of the 150–230 MB file; everything stays far below the group's 2 GiB. The self-test runs the check at 2 million
+values in a child process (55 MiB over 410 MiB, 2 batches); `TABULARIA_RISK_MEMORY_PATHS` and `_STEPS` set another size.
+
+**Timings** (one CPU, the node in one process: the fit, the checks, the simulation, pass 2, the rows; R's start and the libraries, about
+3.5 s, not counted; GJR(1,1) skewed t on 800 returns, the fit and checks about 3.2 s):
+
+| Values | Paths × steps | Simulation (pass 1, with the write) | Pass 2 | Node | File |
+|---|---|---|---|---|---|
+| 10 thousand | 1,000 × 10 | 0.36 s | 0.73 s | 4.3 s | 0.2 MB |
+| 1 million | 100,000 × 10 | 1.89 s | 1.10 s | 6.2 s | 22 MB |
+| 10 million | 1,000,000 × 10 | 16.9 s | 6.4 s | 26.5 s | 220 MB |
+| 10 million | 100,000 × 100 | 12.8 s | 5.2 s | 21.3 s | 228 MB |
+| 10 million, SARIMA | 1,000,000 × 10 | 12.1 s | 6.6 s | 20.5 s | 151 MB |
+
+The skewed t's draws are most of the simulation at 10 steps (`rdist("sstd")`, 0.47 s a million, G0). 22 bytes a row on disk for a GARCH of
+returns (time, value, cumulative, sigma), 15 for an ARIMA.
+
+**For G7 and G8.** A GJR fitted to a short or calm series may come back with α₁ + γ₁ < 0 and be refused `negative_variance`: the sample flow
+«Durum wheat: risk of the next month» should be checked on the real table (GARCH or EGARCH otherwise). A position needs a relative change
+with an ARIMA. The notes of deviation 5 need their words. On kind the Job's log, not run.json, carries the simulation's peak (deviation 6),
+and the cgroup's `memory.peak` includes the page cache of the paths file; the same seed with the group's memory at 1 GiB gives the same
+numbers (the batches are bounded by the row group at 1 GiB too).
 
 ## References
 
