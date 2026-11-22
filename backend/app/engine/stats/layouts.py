@@ -41,9 +41,11 @@ DEV_SAMPLE_MARK = "_dev_sample"
 # (some 45), then for each of at most MAX_STAT_GROUPS groups its 13 numbers and up to
 # MAX_BINS intervals, the three series of the curve, and the 11 rows of each of the 190 pairs
 # of a post-hoc; or, for a contingency table of MAX_STAT_LEVELS categories a side, the 9 rows
-# of each of its 2,500 cells (with the post-hoc of the cells) and the 4 of each margin.
+# of each of its 2,500 cells (with the post-hoc of the cells) and the 4 of each margin. And the
+# rows of the explanation `with_labels` adds (READING_ROWS at most).
+READING_ROWS = 16
 MAX_REPORT_ROWS = max(64 + MAX_STAT_GROUPS * (13 + MAX_BINS) + 3 * CURVE_POINTS + 190 * 11,
-                      64 + MAX_STAT_LEVELS * MAX_STAT_LEVELS * 9 + 4 * MAX_STAT_LEVELS + 3 * CURVE_POINTS)
+                      64 + MAX_STAT_LEVELS * MAX_STAT_LEVELS * 9 + 4 * MAX_STAT_LEVELS + 3 * CURVE_POINTS) + READING_ROWS
 
 WIDTH = 186.0  # the body of an A4 page between its side margins, mm
 ACCENT, INK, MUTED, RULE, PANEL, SAMPLE = "#3b5bdb", "#1f2933", "#6b7590", "#d9dde5", "#f1f3f5", "#8a5a00"
@@ -178,16 +180,195 @@ def with_labels(test: str, rows: list[dict], locale: str | None) -> list[dict]:
     of each `stat`, and `tiny`, what a number's cell writes in its place — «< 2.2e-308» for a
     p-value below the smallest double (`underflow`), nothing for the others, which the tables
     write in the General format (a very small one by its exponent, a number in Excel); the
-    numbers written as text are in the page's language (`_said`). None of it is a
-    computation: it is how a row is said."""
-    return [{**r, "label": stat_label(test, r["section"], r["stat"], locale), "tiny": underflow(r, locale)}
-            for r in _said(test, rows, locale)]
+    numbers written as text are in the page's language (`_said`). Then the explanation of the
+    test (`readings`: rows of the section `reading`, each a sentence of the page's language).
+    None of it is a computation: it is how a row is said."""
+    said = _said(test, rows, locale)
+    return [*({**r, "label": stat_label(test, r["section"], r["stat"], locale), "tiny": underflow(r, locale)} for r in said),
+            *_reading_said(test, said, locale)]
 
 
 def columns() -> list[dict[str, str]]:
     """The columns of the dataset `result`: the output's ten, `label` and `tiny`."""
     return [*({"name": name, "type": kind} for name, kind, _ in OUTPUT_COLUMNS),
             {"name": "label", "type": "String"}, {"name": "tiny", "type": "String"}]
+
+
+# ── the explanation of the method (docs/specs/report-explanations.md, lot B1) ─
+# The sentences are chosen here, from the rows the test wrote: its `decision` (already its p-value
+# against α), its `alternative` and `variant`, its numbers, its groups, its pairs' decisions. The
+# statistics engine does not change: its rows are the node's output table. A sentence one of whose
+# numbers is missing is not written; no number is computed (the largest of the groups' means is
+# chosen among them, the pairs below α are counted).
+MAX_NAMED = 5  # the pairs (cells) a sentence names; «and k more» after them
+_ESTIMATED = ("t_one_sample", "t_two_sample", "t_paired", "var_f", "pearson", "prop_one_sample", "prop_two_sample")
+_EFFECTS = {  # test → (template, {name in the template: stat of the section `test`})
+    "t_one_sample": ("effect_cohen_d_one", {"d": "cohen_d", "mu": "null_value"}),
+    "t_two_sample": ("effect_cohen_d_two", {"d": "cohen_d"}),
+    "t_paired": ("effect_cohen_dz", {"d": "cohen_dz"}),
+    "anova": ("effect_eta_squared", {"eta": "eta_squared", "omega": "omega_squared"}),
+    "pearson": ("effect_r_squared", {"r2": "r_squared"}),
+    "spearman": ("effect_rho_squared", {"r2": "rho_squared"}),
+    "prop_one_sample": ("effect_cohen_h", {"h": "cohen_h"}),
+    "prop_two_sample": ("effect_cohen_h", {"h": "cohen_h"}),
+    "chi2_independence": ("effect_cramers_v", {"v": "cramers_v"}),
+    "g_test": ("effect_cramers_v", {"v": "cramers_v"}),
+    "chi2_gof": ("effect_cohen_w", {"w": "cohen_w"}),
+    "mann_whitney": ("effect_rank_biserial_two", {"r": "rank_biserial"}),
+    "wilcoxon_signed_rank": ("effect_rank_biserial_paired", {"r": "rank_biserial"}),
+    "kruskal_wallis": ("effect_epsilon_squared", {"e": "epsilon_squared"}),
+}
+# the variants whose method has a paragraph of its own
+_METHOD_VARIANTS = {"t_two_sample", "anova", "prop_one_sample", "normality"}
+
+
+def readings(test: str, rows: list[dict]) -> list[tuple[str, str | None, str, dict[str, Any]]]:
+    """The lines of the explanation of a test's report, (block, level_2, template id, {name: value}): under the
+    result its estimate (a measure), its p-value read against α (a verdict) and its effect size (a measure); under the
+    comparisons how many pairs (cells) differ; on the last page the method's paragraphs."""
+    at = {(r["section"], r.get("level"), r.get("level_2"), r["stat"]): r for r in rows}
+
+    def num(stat: str, section: str = "test", level: str | None = None) -> Any:
+        r = at.get((section, level, None, stat))
+        return r["value"] if r is not None and _is_number(r.get("value")) else None
+
+    def txt(stat: str) -> str | None:
+        r = at.get(("test", None, None, stat))
+        return r.get("text") if r is not None else None
+
+    decision = txt("decision")
+    if decision not in ("reject_h0", "fail_to_reject_h0"):
+        return []
+    variant, two = txt("variant"), (txt("alternative") or "two_sided") == "two_sided"
+    groups = [r.get("level") for r in rows if r["section"] == "group" and r["stat"] == "n"]
+    first, last = (groups[0], groups[-1]) if groups else (None, None)
+    alpha, conf = num("alpha"), num("conf_level")
+    lines: list[tuple[str, str | None, str, dict[str, Any]]] = []
+
+    def say(block: str, id_: str, level_2: str | None = None, **values: Any) -> None:
+        if all(v is not None for v in values.values()):
+            lines.append((block, level_2, id_, values))
+
+    def extremes(stat: str) -> dict[str, Any]:
+        """The groups with the largest and the smallest `stat` (the first of equals), and those numbers."""
+        found = [(g, num(stat, "group", g)) for g in groups]
+        found = [(g, v) for g, v in found if v is not None]
+        if not found:
+            return {"top": None}
+        top, bottom = max(found, key=lambda x: x[1]), min(found, key=lambda x: x[1])
+        return {"top": top[0], "top_value": top[1], "bottom": bottom[0], "bottom_value": bottom[1]}
+
+    # the estimate (a measure)
+    interval = {"conf": conf, "low": num("ci_low"), "high": num("ci_high")} if two else {}
+    suffix = "" if two else "_one_sided"
+    common = {"estimate": num("estimate"), **interval}
+    two_by_two = num("rows") == 2 and num("cols") == 2
+    if test in ("t_one_sample", "t_paired"):
+        say("result", f"{test}_estimate{suffix}", column=first if test == "t_one_sample" else last, n=num("n"), **common)
+    elif test == "t_two_sample":
+        say("result", f"{test}_estimate{suffix}", g1=first, g2=last, m1=num("mean", "group", first), m2=num("mean", "group", last), **common)
+    elif test == "var_f":
+        say("result", f"{test}_estimate{suffix}", g1=first, g2=last, **common)
+    elif test == "pearson":
+        say("result", f"{test}_estimate{suffix}", x=first, y=groups[1] if len(groups) > 1 else None, n=num("n"), **common)
+    elif test == "spearman":
+        say("result", "spearman_estimate", x=first, y=groups[1] if len(groups) > 1 else None, n=num("n"), estimate=num("estimate"))
+    elif test == "prop_one_sample":
+        say("result", f"{test}_estimate{suffix}", column=first, successes=num("successes"), n=num("n"), **common)
+    elif test == "prop_two_sample":
+        say("result", f"{test}_estimate{suffix}", g1=first, g2=last, p1=num("proportion", "group", first),
+            p2=num("proportion", "group", last), **common)
+    elif test in ("anova", "levene", "kruskal_wallis"):
+        say("result", f"{test}_estimate", k=num("k"), n=num("n"),
+            **extremes({"anova": "mean", "levene": "dev_mean", "kruskal_wallis": "mean_rank"}[test]))
+    elif test in ("chi2_independence", "g_test") or (test == "fisher_exact" and not two_by_two):
+        say("result", "contingency_estimate", rows=num("rows"), cols=num("cols"), n=num("n"))
+    elif test == "fisher_exact":
+        say("result", f"fisher_exact_estimate{suffix}", n=num("n"), **common)
+    elif test == "chi2_gof":
+        say("result", "chi2_gof_estimate", k=num("k"), n=num("n"))
+    elif test == "mcnemar" and num("categories") == 2:
+        say("result", "mcnemar_estimate", n=num("n"), discordant=num("discordant"), b=num("b"), c=num("c"))
+    elif test == "mcnemar":
+        say("result", "mcnemar_estimate_larger", n=num("n"), categories=num("categories"), discordant=num("discordant"))
+    elif test == "cmh" and two_by_two:
+        say("result", "cmh_estimate", strata=num("strata"), n=num("n"), **common)
+    elif test == "cmh":
+        say("result", "cmh_estimate_larger", rows=num("rows"), cols=num("cols"), strata=num("strata"), n=num("n"))
+    elif test == "mann_whitney":
+        say("result", "mann_whitney_estimate", g1=first, g2=last, m1=num("median", "group", first), m2=num("median", "group", last))
+    elif test == "wilcoxon_signed_rank":
+        say("result", "wilcoxon_signed_rank_estimate", column=last, n=num("n"), median=num("median", "group", last))
+    elif test == "ks_two_sample":
+        say("result", "ks_two_sample_estimate", g1=first, g2=last, d=num("statistic"))
+    elif test == "normality":
+        say("result", "normality_estimate", column=first, n=num("n"), skewness=num("skewness"), kurtosis=num("excess_kurtosis"))
+
+    # the p-value against α (a verdict: the test's own decision)
+    verdict = "reject" if decision == "reject_h0" else "keep"
+    p = {"p": num("p_value"), "alpha": alpha}
+    if not two:
+        say("result", f"one_sided_{verdict}", h1=txt("h1"), **p)
+    else:
+        names: dict[str, Any] = {}
+        if test in ("t_one_sample", "wilcoxon_signed_rank", "normality"):
+            names["column"] = first if test != "wilcoxon_signed_rank" else last
+        if test in ("t_two_sample", "prop_two_sample", "mann_whitney", "ks_two_sample"):
+            names.update(g1=first, g2=last)
+        if test in ("pearson", "spearman"):
+            names.update(x=first, y=groups[1] if len(groups) > 1 else None)
+        if test in ("anova", "levene", "kruskal_wallis"):
+            names["k"] = num("k")
+        if test in ("t_one_sample", "t_two_sample", "t_paired", "var_f", "prop_one_sample", "wilcoxon_signed_rank"):
+            names["mu"] = num("null_value")
+        say("result", f"{test}_{verdict}", **names, **p)
+
+    # the effect size (a measure)
+    if test in _EFFECTS:
+        id_, stats_ = _EFFECTS[test]
+        say("result", id_, **{k: num(v) for k, v in stats_.items()}, **({"g1": first, "g2": last} if test == "mann_whitney" else {}))
+
+    # the comparisons (verdicts: each pair's or cell's own decision, its adjusted p against α)
+    for section, kind in (("pair", "pairs"), ("cell", "cells")):
+        decided = sorted((r for r in rows if r["section"] == section and r["stat"] == "decision"), key=lambda r: r.get("ord") or 0)
+        if not decided:
+            continue
+        named = [f'{r["level"]} – {r["level_2"]}' for r in decided if r.get("text") == "reject_h0"]
+        if not named:
+            say("pairs", f"{kind}_none", total=len(decided), alpha=alpha)
+        elif len(named) <= MAX_NAMED:
+            say("pairs", f"{kind}_some", k=len(named), total=len(decided), pairs=named, alpha=alpha)
+        else:
+            say("pairs", f"{kind}_some_more", k=len(named), total=len(decided), pairs=named[:MAX_NAMED], more=len(named) - MAX_NAMED,
+                alpha=alpha)
+        break
+
+    # how this report was computed: the method's paragraphs
+    say("method", f"method_{test}_{variant}" if test in _METHOD_VARIANTS else f"method_{test}")
+    say("method", "method_p_value")
+    if not two:
+        say("method", "method_one_sided")
+    if variant == "exact" and test != "fisher_exact":
+        say("method", "method_exact")
+    posthoc = txt("posthoc")
+    if posthoc and posthoc != "none" and any(r["section"] in ("pair", "cell") and r["stat"] == "decision" for r in rows):
+        say("method", f"method_posthoc_{posthoc}")
+    return lines
+
+
+def _reading_said(test: str, rows: list[dict], locale: str | None) -> list[dict]:
+    """The lines of `readings` as rows of the section `reading` after the test's, each said in the page's language:
+    its sentence (the numbers in their forms) and, as its label, what it is about."""
+    from app.engine.models.layouts import common
+    from app.reports import formats
+
+    code = locale if locale in LOCALES else "en"
+    t, loc = texts(code), formats.locale(code)
+    out = []
+    for r in common.reading_rows(readings(test, rows), rows):
+        text, label = common.reading_said(t, r["level"], r["text"], loc, {}, r["stat"])
+        out.append({**r, "text": text, "label": label, "tiny": None})
+    return out
 
 
 # ── the development sample a chain says of itself ───────────────────────────
@@ -575,6 +756,7 @@ def _page(test: str, params: dict[str, Any], locale: str, sample: str | None, st
     computed (the formula, its symbols, the distribution, every number), the groups, the
     comparisons of the pairs, the charts, the notes. `interval`: the estimate's card says its
     interval; `alternative`: the test has one; `region_low`: it writes a lower critical value."""
+    from app.engine.models.layouts import common as explained  # (it imports this module: here, not at the top)
     from app.reports import formats
 
     t = texts(locale)
@@ -610,6 +792,7 @@ def _page(test: str, params: dict[str, Any], locale: str, sample: str | None, st
             for d in ("reject_h0", "fail_to_reject_h0")}
     p.text("decision", f'=IF({_text("test|||decision")} = "reject_h0", {said["reject_h0"]}, {said["fail_to_reject_h0"]})',
            h=6, size=10.5, weight="semibold")
+    explained.reading_under(p, t, "result")  # the estimate, the p-value in words, the effect size
 
     # the hypotheses
     p.heading("s_hypotheses", t["sections"]["hypotheses"])
@@ -684,6 +867,7 @@ def _page(test: str, params: dict[str, Any], locale: str, sample: str | None, st
 
     if pairs is not None:
         _comparisons(p, t, own, pairs, locale)
+        explained.reading_under(p, t, "pairs")
 
     # the charts, two by two (one alone across the page); a place may hold alternatives, of
     # which the rows make one visible
@@ -721,6 +905,9 @@ def _page(test: str, params: dict[str, Any], locale: str, sample: str | None, st
         p.text("c_curve_caption", t["charts"]["density_caption"], h=4, x=caption_x, w=width, size=7, color=MUTED,
                visible='=COUNTIF([section] = "curve") > 0')
     p.keep()
+
+    # how this report was computed: the method's paragraphs (the formula is above, «How it is computed»)
+    explained.how_computed(p, t)
 
     # the notes, the rows left out, the engine
     p.heading("s_notes", t["sections"]["notes"])

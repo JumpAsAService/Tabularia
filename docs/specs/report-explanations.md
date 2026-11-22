@@ -304,3 +304,48 @@ until a model registers its readings).
 `test_report_explanations` (37) and `test_stats_layouts`, **1,071 passed** on the hooks. The test of «only
 additions» was itself checked: on the toy explanation it caught the charts' invisible rows renamed by their
 place (`row_<n>_keep`), which it now reads as the same item.
+
+### B1 — the statistics tests (2026-11-22)
+
+**Files.** `backend/app/engine/stats/layouts.py`: `readings(test, rows)` chooses the lines from the test's rows (its
+`decision`, `alternative`, `variant`, numbers, groups, pairs' and cells' decisions); `with_labels` appends them as rows
+of the section `reading`, said through `models/layouts/common.py`'s `reading_rows` and `reading_said` (imported inside
+the function: `common.py` imports this module); `_page` places `reading_under(…, "result")` under the decision,
+`reading_under(…, "pairs")` after the comparisons and `how_computed` before the notes. `READING_ROWS = 16` is added to
+`MAX_REPORT_ROWS` (23,383, was 23,367): the rows a report reads leave room for the explanation. `report_texts.json`:
+in each language `sections.how`, `reading`, `reading_blocks`, `reading_labels` (34), `reading_texts` (126 ids),
+`measure_readings` (42: every estimate and effect), `verdict_words` (`common.json`'s). Tests:
+`backend/tests/test_stats_explanations.py` (new) and `test_stats_layouts.py` (the reference PDF's hash; the
+reference report stays on two pages; the sheet «Reading» in Excel, the reads-only test accepts the eight places of a reading).
+
+**Template ids.** Estimates: `<test>_estimate` and `<test>_estimate_one_sided` for the tests with an interval
+(t one sample, two samples, paired, var_f, pearson, the two proportions, Fisher 2 × 2), `contingency_estimate`
+(χ², G, Fisher larger), `chi2_gof_estimate`, `anova|levene|kruskal_wallis_estimate` (the groups with the largest and
+the smallest mean, mean distance, mean rank: chosen among the groups' rows), `mcnemar_estimate(_larger)`,
+`cmh_estimate(_larger)`, `spearman_estimate`, `mann_whitney_estimate`, `wilcoxon_signed_rank_estimate`,
+`ks_two_sample_estimate`, `normality_estimate`. Verdicts: `<test>_reject|keep` for each of the 21 tests (two-sided,
+H0 in plain words: a contingency table's columns are not in its rows, so they are «the two columns»),
+`one_sided_reject|keep` (H1 as the page writes it). Effects: `effect_cohen_d_one|two`, `effect_cohen_dz`,
+`effect_eta_squared`, `effect_r_squared`, `effect_rho_squared`, `effect_cohen_h`, `effect_cramers_v`, `effect_cohen_w`,
+`effect_rank_biserial_two|paired`, `effect_epsilon_squared`. Comparisons: `pairs_some|some_more|none`,
+`cells_some|some_more|none`. Method: one paragraph per test (per variant for t two samples, ANOVA, one proportion,
+normality), `method_p_value`, `method_one_sided`, `method_exact`, `method_posthoc_tukey|games_howell|pairwise_t|dunn|cells|pairs`.
+
+**Deviations.** «Success» is a verdict word: the proportion tests' measures say «the value counted», not «a
+success». Two method labels were shortened to fit the 40 mm column «Part» (`Mantel–Haenszel (CMH)`, de
+`Kolmogorov–Smirnov`); a test now checks every label's words against that column. The Spanish texts say «valor p»,
+as the page's card.
+After the first review of the sentences on the reference data: the normality test's verdict says «excess kurtosis»
+(the number its estimate gives, 0 for a normal distribution), and the German one-proportion verdict names its noun.
+
+**Golden** (the scratch dump of B0, on clean copies of `db954510` and of this lot): the 160 renderings of the model
+fixtures are **byte for byte as before**; the 340 of the statistics tests all change (the reading under the decision,
+«How this report was computed»), none with a warning; 248 stay on two pages, 52 go from two to three, 40 were and
+stay on three. The reference report (Welch, English) stays on two pages: its hash is the new
+`GOLDEN_PDF_SHA256`, drawn with the fake chart service (to be seen with the real one, as the test's comment asks).
+
+**Tests** (the CI image, the other lane's uncommitted files left out): `test_stats_explanations` (20),
+`test_stats_layouts`, `test_report_explanations`, `test_models_layouts`, `test_reports_model`,
+`test_models_ab_review`: **1,091 passed**. The verdict follows α (the same data at an α just above and just below
+the p-value), a one-sided test names its H1, a name that looks like a template stays as written, the rows a report
+reads leave room for the explanation, the reads-only test accepts the reading's places.

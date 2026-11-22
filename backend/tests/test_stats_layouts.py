@@ -40,7 +40,7 @@ NOW = datetime(2026, 11, 19, 15, 30, tzinfo=timezone.utc)
 # The reference test's report (Welch, two-sided, English), byte for byte. It changes with the
 # layout, its words, the template, the fonts or Typst's version: look at the new PDF with the
 # real chart service, then update the hash.
-GOLDEN_PDF_SHA256 = "b4d047242b5b2f66ebc151980cad51816ea35be762b4a86fbc0cf28d1fa59c5a"
+GOLDEN_PDF_SHA256 = "658e6061947d233cb42fca5085436120eadb2e956463eec0cafc08df8c05fb5b"
 
 A = [5.1, 4.9, 6.2, 5.8, 6.0, 5.5, 5.3, 6.7]
 B = [6.9, 7.2, 6.5, 7.8, 7.1, 6.4, 8.0]
@@ -264,9 +264,15 @@ def test_a_layout_reads_only_rows_the_test_writes(test):
     one-sided alternative leaves open is a row too, with no number)."""
     for params in VARIANTS[test]:
         rows = rows_of(test, **params)
+        # the explanation's rows are the layout's own (`with_labels`, docs/specs/report-explanations.md)
+        rows += [r for r in layouts.with_labels(test, rows, "en") if r["section"] == "reading"]
         written = {r["key"] for r in rows}
         text = json.dumps(layouts.definition(test, {**REFERENCE[test], **params}, "en"), ensure_ascii=False)
         named = set(re.findall(r'LOOKUP\(\\"([^"\\]+)\\", \[key\]', text))
+        # a reading is read line by line until there is none: its eight places, of which a run writes a few
+        said = {k for k in named if k.startswith("reading|")}
+        assert said and all(re.fullmatch(r"reading\|(result|pairs)\|\|line_[1-8]", k) for k in said), sorted(said)
+        named -= said
         assert named and named <= written, sorted(named - written)
         # a level in a key is escaped as the output escapes it (`_key_part`): read here as the level itself
         for field in ("[level]", "[level_2]"):
@@ -503,6 +509,7 @@ def test_large_numbers_and_long_names_fit_the_page(tmp_path, chart_service, monk
 def test_the_report_renders_in_the_five_languages(tmp_path, chart_service, monkeypatch, locale):  # noqa: F811
     for i, params in enumerate(({}, {"var_equal": True, "alternative": "greater"})):
         out, page = draw(tmp_path / str(i), chart_service, monkeypatch, locale=locale, sample=[{"fraction": 0.1}], **params)
+        # («How this report was computed» fits the second page: docs/specs/report-explanations.md)
         assert out.pages == 2 and out.warnings == []  # no character the font lacks, no value wider than its card
         said = set(strings(json.loads(page)))
         words = layouts.texts(locale)
@@ -529,7 +536,9 @@ def test_excel_holds_the_tables_one_sheet_each(tmp_path, chart_service, monkeypa
         book = z.read("xl/workbook.xml").decode()
         cells = "".join(z.read(n).decode() for n in z.namelist() if n.startswith("xl/worksheets/"))
     # the variances differ by less than four times: no note, so no sheet of notes
-    assert re.findall(r'<sheet name="([^"]+)"', book) == ["Numbers of the test", "Groups", "Intervals of the means", "Five-number summary", "Parameters"]
+    # (and «Reading», the method's paragraphs: docs/specs/report-explanations.md)
+    assert re.findall(r'<sheet name="([^"]+)"', book) == ["Numbers of the test", "Groups", "Intervals of the means", "Five-number summary",
+                                                          "Reading", "Parameters"]
     # the numbers as numbers, whole (an engine's last digit may differ between two runs)
     [written] = re.findall(r"<t>Pooled variance \(sp²\)</t></is></c><c [^>]*><is><t>pooled_var</t></is></c><c [^>]*><v>([^<]+)</v>", cells)
     assert math.isclose(float(written), pooled, rel_tol=1e-12)
