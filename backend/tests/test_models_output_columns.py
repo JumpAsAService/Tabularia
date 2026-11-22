@@ -43,8 +43,9 @@ def test_every_column_an_output_declares_has_a_type():
     assert set(catalog.ROWS_INPUT_TYPES) == {g["language"] for g in catalog.GROUPS.values()}
 
 
-# Variants whose runner is not built yet: their case joins make_output_columns.py when it is.
-NOT_RUN_YET: set[tuple[str, str]] = set()
+# Variants whose runner is not built yet: their case joins make_output_columns.py when it is (the volatility node's and the risk simulation's,
+# lots G1 and G3 of docs/specs/garch-risk.md; their columns before a run are tested in test_models_catalog.py until then).
+NOT_RUN_YET: set[tuple[str, str]] = {("garch", "default"), ("risk_simulation", "garch"), ("risk_simulation", "arima")}
 
 
 def test_every_variant_that_hands_on_columns_was_run():

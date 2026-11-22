@@ -1168,7 +1168,7 @@
    "what": "a model that does not exist",
    "model": "survival_forest",
    "params": {},
-   "error": "there is no model 'survival_forest' (the models: linear, logistic, kaplan_meier, cox, parametric_survival, arima, decomposition, xgboost, catboost, clv, bg_bb, ab_test, ab_plan, timestral)"
+   "error": "there is no model 'survival_forest' (the models: linear, logistic, kaplan_meier, cox, parametric_survival, arima, decomposition, garch, risk_simulation, xgboost, catboost, clv, bg_bb, ab_test, ab_plan, timestral)"
   },
   {
    "what": "the answer given back to the check: an empty exog is none, not an error",
@@ -5194,6 +5194,1447 @@
     "frequency": "minute"
    },
    "error": "timestral: 'frequency' must be one of hour, day, week, month, quarter, year, index"
+  },
+  {
+   "what": "the smallest volatility model: GARCH(1,1) with Student t errors, a 10-step forecast, the 99 % VaR (lot G0)",
+   "model": "garch",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index"
+   },
+   "checked": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "input_kind": "returns",
+    "variance_model": "garch",
+    "arch_order": 1,
+    "garch_order": 1,
+    "ar_order": 0,
+    "ma_order": 0,
+    "mean": true,
+    "distribution": "std",
+    "se_type": "robust",
+    "horizon": 10,
+    "holdout": 0,
+    "var_level": 0.99,
+    "lb_lag": "auto",
+    "arch_lags": "auto",
+    "alpha": 0.05,
+    "seed": 1,
+    "output": "volatility"
+   }
+  },
+  {
+   "what": "prices: the node computes the returns, log or simple (lot G0)",
+   "model": "garch",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "input_kind": "prices",
+    "returns_type": "simple"
+   },
+   "checked": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "input_kind": "prices",
+    "returns_type": "simple",
+    "variance_model": "garch",
+    "arch_order": 1,
+    "garch_order": 1,
+    "ar_order": 0,
+    "ma_order": 0,
+    "mean": true,
+    "distribution": "std",
+    "se_type": "robust",
+    "horizon": 10,
+    "holdout": 0,
+    "var_level": 0.99,
+    "lb_lag": "auto",
+    "arch_lags": "auto",
+    "alpha": 0.05,
+    "seed": 1,
+    "output": "volatility"
+   }
+  },
+  {
+   "what": "a return type with returns is refused: only prices are turned into returns (lot G0)",
+   "model": "garch",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "returns_type": "log"
+   },
+   "error": "garch: 'returns_type' only applies when input_kind = prices"
+  },
+  {
+   "what": "a GJR-GARCH with an ARMA mean, skewed t errors, classical standard errors and a holdout (lot G0)",
+   "model": "garch",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "variance_model": "gjr",
+    "arch_order": 2,
+    "garch_order": 2,
+    "ar_order": 1,
+    "ma_order": 1,
+    "mean": false,
+    "distribution": "sstd",
+    "se_type": "classical",
+    "holdout": 250,
+    "horizon": 20,
+    "var_level": 0.95
+   },
+   "checked": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "input_kind": "returns",
+    "variance_model": "gjr",
+    "arch_order": 2,
+    "garch_order": 2,
+    "ar_order": 1,
+    "ma_order": 1,
+    "mean": false,
+    "distribution": "sstd",
+    "se_type": "classical",
+    "horizon": 20,
+    "holdout": 250,
+    "var_level": 0.95,
+    "lb_lag": "auto",
+    "arch_lags": "auto",
+    "alpha": 0.05,
+    "seed": 1,
+    "output": "volatility"
+   }
+  },
+  {
+   "what": "an EGARCH with normal errors (lot G0)",
+   "model": "garch",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "variance_model": "egarch",
+    "distribution": "norm"
+   },
+   "checked": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "input_kind": "returns",
+    "variance_model": "egarch",
+    "arch_order": 1,
+    "garch_order": 1,
+    "ar_order": 0,
+    "ma_order": 0,
+    "mean": true,
+    "distribution": "norm",
+    "se_type": "robust",
+    "horizon": 10,
+    "holdout": 0,
+    "var_level": 0.99,
+    "lb_lag": "auto",
+    "arch_lags": "auto",
+    "alpha": 0.05,
+    "seed": 1,
+    "output": "volatility"
+   }
+  },
+  {
+   "what": "an ARCH has no variance lags: the key is refused (lot G0)",
+   "model": "garch",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "variance_model": "arch",
+    "garch_order": 1
+   },
+   "error": "garch: 'garch_order' only applies when variance_model = garch or gjr or egarch"
+  },
+  {
+   "what": "an ARCH(3) (lot G0)",
+   "model": "garch",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "variance_model": "arch",
+    "arch_order": 3
+   },
+   "checked": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "input_kind": "returns",
+    "variance_model": "arch",
+    "arch_order": 3,
+    "ar_order": 0,
+    "ma_order": 0,
+    "mean": true,
+    "distribution": "std",
+    "se_type": "robust",
+    "horizon": 10,
+    "holdout": 0,
+    "var_level": 0.99,
+    "lb_lag": "auto",
+    "arch_lags": "auto",
+    "alpha": 0.05,
+    "seed": 1,
+    "output": "volatility"
+   }
+  },
+  {
+   "what": "an ARCH order of 0 (lot G0)",
+   "model": "garch",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "arch_order": 0
+   },
+   "error": "garch: 'arch_order' must be a whole number from 1 to 3"
+  },
+  {
+   "what": "an ARCH order of 4 (lot G0)",
+   "model": "garch",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "arch_order": 4
+   },
+   "error": "garch: 'arch_order' must be a whole number from 1 to 3"
+  },
+  {
+   "what": "a variance order of 4 (lot G0)",
+   "model": "garch",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "garch_order": 4
+   },
+   "error": "garch: 'garch_order' must be a whole number from 0 to 3"
+  },
+  {
+   "what": "an AR order of 6 (lot G0)",
+   "model": "garch",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "ar_order": 6
+   },
+   "error": "garch: 'ar_order' must be a whole number from 0 to 5"
+  },
+  {
+   "what": "an MA order of 2.5 (lot G0)",
+   "model": "garch",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "ma_order": 2.5
+   },
+   "error": "garch: 'ma_order' must be a whole number from 0 to 5"
+  },
+  {
+   "what": "a variance model the node does not have (lot G0)",
+   "model": "garch",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "variance_model": "figarch"
+   },
+   "error": "garch: 'variance_model' must be one of arch, garch, gjr, egarch"
+  },
+  {
+   "what": "a distribution the node does not have (lot G0)",
+   "model": "garch",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "distribution": "ged"
+   },
+   "error": "garch: 'distribution' must be one of norm, std, sstd"
+  },
+  {
+   "what": "a standard error the node does not have (lot G0)",
+   "model": "garch",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "se_type": "hc3"
+   },
+   "error": "garch: 'se_type' must be one of robust, classical"
+  },
+  {
+   "what": "a VaR level of 0.5: a level above one half (lot G0)",
+   "model": "garch",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "var_level": 0.5
+   },
+   "error": "garch: 'var_level' must be a number above 0.5 and below 1"
+  },
+  {
+   "what": "a VaR level of 1 (lot G0)",
+   "model": "garch",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "var_level": 1
+   },
+   "error": "garch: 'var_level' must be a number above 0.5 and below 1"
+  },
+  {
+   "what": "a VaR level of 0.999 (lot G0)",
+   "model": "garch",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "var_level": 0.999
+   },
+   "checked": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "input_kind": "returns",
+    "variance_model": "garch",
+    "arch_order": 1,
+    "garch_order": 1,
+    "ar_order": 0,
+    "ma_order": 0,
+    "mean": true,
+    "distribution": "std",
+    "se_type": "robust",
+    "horizon": 10,
+    "holdout": 0,
+    "var_level": 0.999,
+    "lb_lag": "auto",
+    "arch_lags": "auto",
+    "alpha": 0.05,
+    "seed": 1,
+    "output": "volatility"
+   }
+  },
+  {
+   "what": "a horizon of 0 (lot G0)",
+   "model": "garch",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "horizon": 0
+   },
+   "error": "garch: 'horizon' must be a whole number from 1 to 1000"
+  },
+  {
+   "what": "a horizon of 1001 (lot G0)",
+   "model": "garch",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "horizon": 1001
+   },
+   "error": "garch: 'horizon' must be a whole number from 1 to 1000"
+  },
+  {
+   "what": "a holdout of 1001 (lot G0)",
+   "model": "garch",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "holdout": 1001
+   },
+   "error": "garch: 'holdout' must be a whole number from 0 to 1000"
+  },
+  {
+   "what": "the lags of the portmanteau tests and of the ARCH-LM, given (lot G0)",
+   "model": "garch",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "lb_lag": 12,
+    "arch_lags": 20
+   },
+   "checked": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "input_kind": "returns",
+    "variance_model": "garch",
+    "arch_order": 1,
+    "garch_order": 1,
+    "ar_order": 0,
+    "ma_order": 0,
+    "mean": true,
+    "distribution": "std",
+    "se_type": "robust",
+    "horizon": 10,
+    "holdout": 0,
+    "var_level": 0.99,
+    "lb_lag": 12.0,
+    "arch_lags": 20.0,
+    "alpha": 0.05,
+    "seed": 1,
+    "output": "volatility"
+   }
+  },
+  {
+   "what": "a lag of 0 (lot G0)",
+   "model": "garch",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "lb_lag": 0
+   },
+   "error": "garch: 'lb_lag' must be one of auto, or a whole number at least 1 and at most 1000"
+  },
+  {
+   "what": "a lag of 1001 (lot G0)",
+   "model": "garch",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "arch_lags": 1001
+   },
+   "error": "garch: 'arch_lags' must be one of auto, or a whole number at least 1 and at most 1000"
+  },
+  {
+   "what": "a lag of 7.5 (lot G0)",
+   "model": "garch",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "lb_lag": 7.5
+   },
+   "error": "garch: 'lb_lag' must be one of auto, or a whole number at least 1 and at most 1000"
+  },
+  {
+   "what": "the results table instead of the volatility (lot G0)",
+   "model": "garch",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "output": "results"
+   },
+   "checked": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "input_kind": "returns",
+    "variance_model": "garch",
+    "arch_order": 1,
+    "garch_order": 1,
+    "ar_order": 0,
+    "ma_order": 0,
+    "mean": true,
+    "distribution": "std",
+    "se_type": "robust",
+    "horizon": 10,
+    "holdout": 0,
+    "var_level": 0.99,
+    "lb_lag": "auto",
+    "arch_lags": "auto",
+    "alpha": 0.05,
+    "seed": 1,
+    "output": "results"
+   }
+  },
+  {
+   "what": "an output the node does not have (lot G0)",
+   "model": "garch",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "output": "summary"
+   },
+   "error": "garch: 'output' must be one of volatility, results"
+  },
+  {
+   "what": "an alpha of 0 (lot G0)",
+   "model": "garch",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "alpha": 0
+   },
+   "error": "garch: 'alpha' must be a number above 0 and below 1"
+  },
+  {
+   "what": "a seed (the solver's fallback restarts from random points) (lot G0)",
+   "model": "garch",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "seed": 7
+   },
+   "checked": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "input_kind": "returns",
+    "variance_model": "garch",
+    "arch_order": 1,
+    "garch_order": 1,
+    "ar_order": 0,
+    "ma_order": 0,
+    "mean": true,
+    "distribution": "std",
+    "se_type": "robust",
+    "horizon": 10,
+    "holdout": 0,
+    "var_level": 0.99,
+    "lb_lag": "auto",
+    "arch_lags": "auto",
+    "alpha": 0.05,
+    "seed": 7,
+    "output": "volatility"
+   }
+  },
+  {
+   "what": "a key the node does not take: no paths, nothing is simulated here (lot G0)",
+   "model": "garch",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "paths": 1000
+   },
+   "error": "garch: there is no parameter 'paths' (it takes: time, value, frequency, input_kind, returns_type, variance_model, arch_order, garch_order, ar_order, ma_order, mean, distribution, se_type, horizon, holdout, var_level, lb_lag, arch_lags, alpha, seed, output)"
+  },
+  {
+   "what": "the time column is the value column (lot G0)",
+   "model": "garch",
+   "params": {
+    "time": "day",
+    "value": "day",
+    "frequency": "index"
+   },
+   "error": "garch: the column «day» is both 'time' and 'value': choose another"
+  },
+  {
+   "what": "the frequency is needed (lot G0)",
+   "model": "garch",
+   "params": {
+    "time": "day",
+    "value": "close"
+   },
+   "error": "garch: 'frequency' is required"
+  },
+  {
+   "what": "the value column is needed (lot G0)",
+   "model": "garch",
+   "params": {
+    "time": "day",
+    "frequency": "day"
+   },
+   "error": "garch: 'value' is required"
+  },
+  {
+   "what": "the smallest risk simulation: a GARCH(1,1) of returns, 10,000 paths of 10 steps, VaR 0.99 and ES 0.975, the summary (lot G0)",
+   "model": "risk_simulation",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index"
+   },
+   "checked": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "model": "garch",
+    "input_kind": "returns",
+    "variance_model": "garch",
+    "arch_order": 1,
+    "garch_order": 1,
+    "ar_order": 0,
+    "ma_order": 0,
+    "distribution": "std",
+    "se_type": "robust",
+    "mean": true,
+    "paths": 10000,
+    "horizon": 10,
+    "innovations": "parametric",
+    "var_level": 0.99,
+    "es_level": 0.975,
+    "tail": "lower",
+    "quantiles": [
+     0.01,
+     0.05,
+     0.25,
+     0.5,
+     0.75,
+     0.95,
+     0.99
+    ],
+    "threshold": null,
+    "position": null,
+    "drawdown": true,
+    "holdout": 0,
+    "alpha": 0.05,
+    "seed": 1,
+    "lb_lag": "auto",
+    "arch_lags": "auto",
+    "output": "risk_summary"
+   }
+  },
+  {
+   "what": "a risk simulation of prices with a threshold, a position, a holdout and the paths as output (lot G0)",
+   "model": "risk_simulation",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "input_kind": "prices",
+    "variance_model": "gjr",
+    "distribution": "sstd",
+    "paths": 50000,
+    "horizon": 21,
+    "threshold": 280.5,
+    "position": 100000,
+    "holdout": 250,
+    "seed": 7,
+    "output": "paths",
+    "innovations": "bootstrap"
+   },
+   "checked": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "model": "garch",
+    "input_kind": "prices",
+    "returns_type": "log",
+    "variance_model": "gjr",
+    "arch_order": 1,
+    "garch_order": 1,
+    "ar_order": 0,
+    "ma_order": 0,
+    "distribution": "sstd",
+    "se_type": "robust",
+    "mean": true,
+    "paths": 50000,
+    "horizon": 21,
+    "innovations": "bootstrap",
+    "var_level": 0.99,
+    "es_level": 0.975,
+    "tail": "lower",
+    "quantiles": [
+     0.01,
+     0.05,
+     0.25,
+     0.5,
+     0.75,
+     0.95,
+     0.99
+    ],
+    "threshold": 280.5,
+    "position": 100000.0,
+    "drawdown": true,
+    "holdout": 250,
+    "alpha": 0.05,
+    "seed": 7,
+    "lb_lag": "auto",
+    "arch_lags": "auto",
+    "output": "paths"
+   }
+  },
+  {
+   "what": "a risk simulation of an ARIMA, the upper tail of a running total (lot G0)",
+   "model": "risk_simulation",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "day",
+    "model": "arima",
+    "p": 1,
+    "q": 1,
+    "P": 0,
+    "D": 1,
+    "Q": 1,
+    "d": 0,
+    "aggregate": "sum",
+    "tail": "upper",
+    "threshold": 1000,
+    "horizon": 30
+   },
+   "checked": {
+    "time": "day",
+    "value": "close",
+    "frequency": "day",
+    "model": "arima",
+    "s": null,
+    "orders": "manual",
+    "p": 1,
+    "d": 0,
+    "q": 1,
+    "P": 0,
+    "D": 1,
+    "Q": 1,
+    "drift": false,
+    "transform": "none",
+    "mean": true,
+    "aggregate": "sum",
+    "paths": 10000,
+    "horizon": 30,
+    "innovations": "parametric",
+    "var_level": 0.99,
+    "es_level": 0.975,
+    "tail": "upper",
+    "quantiles": [
+     0.01,
+     0.05,
+     0.25,
+     0.5,
+     0.75,
+     0.95,
+     0.99
+    ],
+    "threshold": 1000.0,
+    "position": null,
+    "drawdown": true,
+    "holdout": 0,
+    "alpha": 0.05,
+    "seed": 1,
+    "lb_lag": "auto",
+    "arch_lags": "auto",
+    "output": "risk_summary"
+   }
+  },
+  {
+   "what": "an ARIMA with automatic orders and a Box–Cox transform (lot G0)",
+   "model": "risk_simulation",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "month",
+    "model": "arima",
+    "orders": "auto",
+    "criterion": "bic",
+    "transform": "box_cox",
+    "box_cox_lambda": 0.5
+   },
+   "checked": {
+    "time": "day",
+    "value": "close",
+    "frequency": "month",
+    "model": "arima",
+    "s": null,
+    "orders": "auto",
+    "criterion": "bic",
+    "stepwise": true,
+    "max_p": 5,
+    "max_q": 5,
+    "max_P": 2,
+    "max_Q": 2,
+    "max_d": 2,
+    "max_D": 1,
+    "unit_root_test": "kpss",
+    "seasonal_test": "seas",
+    "drift": false,
+    "transform": "box_cox",
+    "box_cox_lambda": 0.5,
+    "mean": true,
+    "aggregate": "last",
+    "paths": 10000,
+    "horizon": 10,
+    "innovations": "parametric",
+    "var_level": 0.99,
+    "es_level": 0.975,
+    "tail": "lower",
+    "quantiles": [
+     0.01,
+     0.05,
+     0.25,
+     0.5,
+     0.75,
+     0.95,
+     0.99
+    ],
+    "threshold": null,
+    "position": null,
+    "drawdown": true,
+    "holdout": 0,
+    "alpha": 0.05,
+    "seed": 1,
+    "lb_lag": "auto",
+    "arch_lags": "auto",
+    "output": "risk_summary"
+   }
+  },
+  {
+   "what": "an ARIMA's order with automatic orders is refused: the orders are searched (lot G0)",
+   "model": "risk_simulation",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "model": "arima",
+    "orders": "auto",
+    "p": 2
+   },
+   "error": "risk_simulation: 'p' only applies when model = arima and orders = manual"
+  },
+  {
+   "what": "a Box–Cox lambda without the transform (lot G0)",
+   "model": "risk_simulation",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "model": "arima",
+    "box_cox_lambda": 0.5
+   },
+   "error": "risk_simulation: 'box_cox_lambda' only applies when model = arima and transform = box_cox"
+  },
+  {
+   "what": "an ARIMA key with a GARCH model is refused (lot G0)",
+   "model": "risk_simulation",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "p": 2
+   },
+   "error": "risk_simulation: 'p' only applies when model = arima and orders = manual"
+  },
+  {
+   "what": "a GARCH key with an ARIMA model is refused (lot G0)",
+   "model": "risk_simulation",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "model": "arima",
+    "variance_model": "gjr"
+   },
+   "error": "risk_simulation: 'variance_model' only applies when model = garch"
+  },
+  {
+   "what": "an ARCH order with an ARIMA model is refused (lot G0)",
+   "model": "risk_simulation",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "model": "arima",
+    "arch_order": 2
+   },
+   "error": "risk_simulation: 'arch_order' only applies when model = garch"
+  },
+  {
+   "what": "the aggregate belongs to the ARIMA: a GARCH's risk variable is always the relative change (lot G0)",
+   "model": "risk_simulation",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "aggregate": "sum"
+   },
+   "error": "risk_simulation: 'aggregate' only applies when model = arima"
+  },
+  {
+   "what": "a relative change of an ARIMA with a position (lot G0)",
+   "model": "risk_simulation",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "model": "arima",
+    "aggregate": "relative_change",
+    "position": 5000,
+    "drawdown": false
+   },
+   "checked": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "model": "arima",
+    "s": null,
+    "orders": "manual",
+    "p": 1,
+    "d": 0,
+    "q": 0,
+    "P": 0,
+    "D": 0,
+    "Q": 0,
+    "drift": false,
+    "transform": "none",
+    "mean": true,
+    "aggregate": "relative_change",
+    "paths": 10000,
+    "horizon": 10,
+    "innovations": "parametric",
+    "var_level": 0.99,
+    "es_level": 0.975,
+    "tail": "lower",
+    "quantiles": [
+     0.01,
+     0.05,
+     0.25,
+     0.5,
+     0.75,
+     0.95,
+     0.99
+    ],
+    "threshold": null,
+    "position": 5000.0,
+    "drawdown": false,
+    "holdout": 0,
+    "alpha": 0.05,
+    "seed": 1,
+    "lb_lag": "auto",
+    "arch_lags": "auto",
+    "output": "risk_summary"
+   }
+  },
+  {
+   "what": "exogenous columns cannot be simulated: the key is not there (lot G0)",
+   "model": "risk_simulation",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "model": "arima",
+    "exog": [
+     "x"
+    ]
+   },
+   "error": "risk_simulation: there is no parameter 'exog' (it takes: time, value, frequency, model, input_kind, returns_type, variance_model, arch_order, garch_order, ar_order, ma_order, distribution, se_type, s, orders, p, d, q, P, D, Q, criterion, stepwise, max_p, max_q, max_P, max_Q, max_d, max_D, unit_root_test, seasonal_test, drift, transform, box_cox_lambda, mean, aggregate, paths, horizon, innovations, var_level, es_level, tail, quantiles, threshold, position, drawdown, holdout, alpha, seed, lb_lag, arch_lags, output)"
+  },
+  {
+   "what": "an ARCH has no variance lags (lot G0)",
+   "model": "risk_simulation",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "variance_model": "arch",
+    "garch_order": 2
+   },
+   "error": "risk_simulation: 'garch_order' only applies when model = garch and variance_model = garch or gjr or egarch"
+  },
+  {
+   "what": "a return type with returns is refused (lot G0)",
+   "model": "risk_simulation",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "returns_type": "simple"
+   },
+   "error": "risk_simulation: 'returns_type' only applies when model = garch and input_kind = prices"
+  },
+  {
+   "what": "99 paths (lot G0)",
+   "model": "risk_simulation",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "paths": 99
+   },
+   "error": "risk_simulation: 'paths' must be a whole number from 100 to 10000000"
+  },
+  {
+   "what": "10,000,001 paths (lot G0)",
+   "model": "risk_simulation",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "paths": 10000001
+   },
+   "error": "risk_simulation: 'paths' must be a whole number from 100 to 10000000"
+  },
+  {
+   "what": "10,000,000 paths (lot G0)",
+   "model": "risk_simulation",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "paths": 10000000
+   },
+   "checked": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "model": "garch",
+    "input_kind": "returns",
+    "variance_model": "garch",
+    "arch_order": 1,
+    "garch_order": 1,
+    "ar_order": 0,
+    "ma_order": 0,
+    "distribution": "std",
+    "se_type": "robust",
+    "mean": true,
+    "paths": 10000000,
+    "horizon": 10,
+    "innovations": "parametric",
+    "var_level": 0.99,
+    "es_level": 0.975,
+    "tail": "lower",
+    "quantiles": [
+     0.01,
+     0.05,
+     0.25,
+     0.5,
+     0.75,
+     0.95,
+     0.99
+    ],
+    "threshold": null,
+    "position": null,
+    "drawdown": true,
+    "holdout": 0,
+    "alpha": 0.05,
+    "seed": 1,
+    "lb_lag": "auto",
+    "arch_lags": "auto",
+    "output": "risk_summary"
+   }
+  },
+  {
+   "what": "2,500.5 paths (lot G0)",
+   "model": "risk_simulation",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "paths": 2500.5
+   },
+   "error": "risk_simulation: 'paths' must be a whole number from 100 to 10000000"
+  },
+  {
+   "what": "an ES level of 0.5 (lot G0)",
+   "model": "risk_simulation",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "es_level": 0.5
+   },
+   "error": "risk_simulation: 'es_level' must be a number above 0.5 and below 1"
+  },
+  {
+   "what": "a VaR level of 1 (lot G0)",
+   "model": "risk_simulation",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "var_level": 1
+   },
+   "error": "risk_simulation: 'var_level' must be a number above 0.5 and below 1"
+  },
+  {
+   "what": "the two levels apart: VaR 0.95, ES 0.99 (lot G0)",
+   "model": "risk_simulation",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "var_level": 0.95,
+    "es_level": 0.99
+   },
+   "checked": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "model": "garch",
+    "input_kind": "returns",
+    "variance_model": "garch",
+    "arch_order": 1,
+    "garch_order": 1,
+    "ar_order": 0,
+    "ma_order": 0,
+    "distribution": "std",
+    "se_type": "robust",
+    "mean": true,
+    "paths": 10000,
+    "horizon": 10,
+    "innovations": "parametric",
+    "var_level": 0.95,
+    "es_level": 0.99,
+    "tail": "lower",
+    "quantiles": [
+     0.01,
+     0.05,
+     0.25,
+     0.5,
+     0.75,
+     0.95,
+     0.99
+    ],
+    "threshold": null,
+    "position": null,
+    "drawdown": true,
+    "holdout": 0,
+    "alpha": 0.05,
+    "seed": 1,
+    "lb_lag": "auto",
+    "arch_lags": "auto",
+    "output": "risk_summary"
+   }
+  },
+  {
+   "what": "a tail the node does not have (lot G0)",
+   "model": "risk_simulation",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "tail": "both"
+   },
+   "error": "risk_simulation: 'tail' must be one of lower, upper"
+  },
+  {
+   "what": "innovations the node does not have (lot G0)",
+   "model": "risk_simulation",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "innovations": "copula"
+   },
+   "error": "risk_simulation: 'innovations' must be one of parametric, bootstrap"
+  },
+  {
+   "what": "the fan's quantiles, the median among them (lot G0)",
+   "model": "risk_simulation",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "quantiles": [
+     0.5,
+     0.025,
+     0.975,
+     0.25,
+     0.75
+    ]
+   },
+   "checked": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "model": "garch",
+    "input_kind": "returns",
+    "variance_model": "garch",
+    "arch_order": 1,
+    "garch_order": 1,
+    "ar_order": 0,
+    "ma_order": 0,
+    "distribution": "std",
+    "se_type": "robust",
+    "mean": true,
+    "paths": 10000,
+    "horizon": 10,
+    "innovations": "parametric",
+    "var_level": 0.99,
+    "es_level": 0.975,
+    "tail": "lower",
+    "quantiles": [
+     0.025,
+     0.25,
+     0.5,
+     0.75,
+     0.975
+    ],
+    "threshold": null,
+    "position": null,
+    "drawdown": true,
+    "holdout": 0,
+    "alpha": 0.05,
+    "seed": 1,
+    "lb_lag": "auto",
+    "arch_lags": "auto",
+    "output": "risk_summary"
+   }
+  },
+  {
+   "what": "ten quantiles (lot G0)",
+   "model": "risk_simulation",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "quantiles": [
+     0.05,
+     0.1,
+     0.2,
+     0.3,
+     0.4,
+     0.5,
+     0.6,
+     0.7,
+     0.8,
+     0.9
+    ]
+   },
+   "error": "risk_simulation: 'quantiles' may hold at most 9 numbers"
+  },
+  {
+   "what": "a quantile of 1 (lot G0)",
+   "model": "risk_simulation",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "quantiles": [
+     0.5,
+     1
+    ]
+   },
+   "error": "risk_simulation: 'quantiles' must be a list of numbers, each above 0 and below 1"
+  },
+  {
+   "what": "a threshold beyond 1e15 (lot G0)",
+   "model": "risk_simulation",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "threshold": 1e+16
+   },
+   "error": "risk_simulation: 'threshold' must be a number at least -999999999999999 and at most 999999999999999"
+  },
+  {
+   "what": "a negative threshold: a return of minus ten per cent (lot G0)",
+   "model": "risk_simulation",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "threshold": -0.1
+   },
+   "checked": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "model": "garch",
+    "input_kind": "returns",
+    "variance_model": "garch",
+    "arch_order": 1,
+    "garch_order": 1,
+    "ar_order": 0,
+    "ma_order": 0,
+    "distribution": "std",
+    "se_type": "robust",
+    "mean": true,
+    "paths": 10000,
+    "horizon": 10,
+    "innovations": "parametric",
+    "var_level": 0.99,
+    "es_level": 0.975,
+    "tail": "lower",
+    "quantiles": [
+     0.01,
+     0.05,
+     0.25,
+     0.5,
+     0.75,
+     0.95,
+     0.99
+    ],
+    "threshold": -0.1,
+    "position": null,
+    "drawdown": true,
+    "holdout": 0,
+    "alpha": 0.05,
+    "seed": 1,
+    "lb_lag": "auto",
+    "arch_lags": "auto",
+    "output": "risk_summary"
+   }
+  },
+  {
+   "what": "a position of 0 (lot G0)",
+   "model": "risk_simulation",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "position": 0
+   },
+   "error": "risk_simulation: 'position' must be a number above 0 and at most 999999999999999"
+  },
+  {
+   "what": "a position beyond 1e15 (lot G0)",
+   "model": "risk_simulation",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "position": 1e+16
+   },
+   "error": "risk_simulation: 'position' must be a number above 0 and at most 999999999999999"
+  },
+  {
+   "what": "the summary is `risk_summary`, the paths `paths` (lot G0)",
+   "model": "risk_simulation",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "output": "risk_summary"
+   },
+   "checked": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "model": "garch",
+    "input_kind": "returns",
+    "variance_model": "garch",
+    "arch_order": 1,
+    "garch_order": 1,
+    "ar_order": 0,
+    "ma_order": 0,
+    "distribution": "std",
+    "se_type": "robust",
+    "mean": true,
+    "paths": 10000,
+    "horizon": 10,
+    "innovations": "parametric",
+    "var_level": 0.99,
+    "es_level": 0.975,
+    "tail": "lower",
+    "quantiles": [
+     0.01,
+     0.05,
+     0.25,
+     0.5,
+     0.75,
+     0.95,
+     0.99
+    ],
+    "threshold": null,
+    "position": null,
+    "drawdown": true,
+    "holdout": 0,
+    "alpha": 0.05,
+    "seed": 1,
+    "lb_lag": "auto",
+    "arch_lags": "auto",
+    "output": "risk_summary"
+   }
+  },
+  {
+   "what": "an output the node does not have (lot G0)",
+   "model": "risk_simulation",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "output": "summary"
+   },
+   "error": "risk_simulation: 'output' must be one of risk_summary, paths, results"
+  },
+  {
+   "what": "the results table (lot G0)",
+   "model": "risk_simulation",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "output": "results"
+   },
+   "checked": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "model": "garch",
+    "input_kind": "returns",
+    "variance_model": "garch",
+    "arch_order": 1,
+    "garch_order": 1,
+    "ar_order": 0,
+    "ma_order": 0,
+    "distribution": "std",
+    "se_type": "robust",
+    "mean": true,
+    "paths": 10000,
+    "horizon": 10,
+    "innovations": "parametric",
+    "var_level": 0.99,
+    "es_level": 0.975,
+    "tail": "lower",
+    "quantiles": [
+     0.01,
+     0.05,
+     0.25,
+     0.5,
+     0.75,
+     0.95,
+     0.99
+    ],
+    "threshold": null,
+    "position": null,
+    "drawdown": true,
+    "holdout": 0,
+    "alpha": 0.05,
+    "seed": 1,
+    "lb_lag": "auto",
+    "arch_lags": "auto",
+    "output": "results"
+   }
+  },
+  {
+   "what": "a model the node does not fit (lot G0)",
+   "model": "risk_simulation",
+   "params": {
+    "time": "day",
+    "value": "close",
+    "frequency": "index",
+    "model": "ets"
+   },
+   "error": "risk_simulation: 'model' must be one of garch, arima"
+  },
+  {
+   "what": "the time column is the value column (lot G0)",
+   "model": "risk_simulation",
+   "params": {
+    "time": "day",
+    "value": "day",
+    "frequency": "index"
+   },
+   "error": "risk_simulation: the column «day» is both 'time' and 'value': choose another"
+  },
+  {
+   "what": "the frequency is needed (lot G0)",
+   "model": "risk_simulation",
+   "params": {
+    "time": "day",
+    "value": "close"
+   },
+   "error": "risk_simulation: 'frequency' is required"
   }
  ]
 }

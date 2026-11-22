@@ -36,7 +36,7 @@ def test_the_snapshot_is_what_the_catalogue_says():
 def test_groups_and_models_point_at_each_other():
     snap = catalog.snapshot()
     assert [g["id"] for g in snap["groups"]] == ["regression", "survival", "timeseries", "boosting", "customer_lifetime", "experiments", "foundation_forecast"]
-    assert [m["id"] for m in snap["models"]] == ["linear", "logistic", "kaplan_meier", "cox", "parametric_survival", "arima", "decomposition", "xgboost", "catboost", "clv", "bg_bb", "ab_test", "ab_plan", "timestral"]
+    assert [m["id"] for m in snap["models"]] == ["linear", "logistic", "kaplan_meier", "cox", "parametric_survival", "arima", "decomposition", "garch", "risk_simulation", "xgboost", "catboost", "clv", "bg_bb", "ab_test", "ab_plan", "timestral"]
     listed = [m for g in catalog.GROUPS.values() for m in g["models"]]
     assert sorted(listed) == sorted(catalog.MODELS) and len(listed) == len(set(listed))
     for model, spec in catalog.MODELS.items():
@@ -145,7 +145,7 @@ def test_the_customer_lifetime_nodes_and_their_two_variants():
     with pytest.raises(EngineError, match="both 'frequency' and 'recency'"):
         catalog.check_params("clv", {**base, "recency": "x"})
     # what Predict says of them
-    assert catalog.PREDICT["applies_to"]["horizon"] == ["arima", "clv", "bg_bb"]
+    assert catalog.PREDICT["applies_to"]["horizon"] == ["arima", "garch", "clv", "bg_bb"]
     for model in ("clv", "bg_bb"):
         assert catalog.PREDICT["columns"][f"{model}:purchases"] == {"always": ["prediction", "prediction_p_alive"]}
         assert catalog.PREDICT["columns"][f"{model}:value"]["always"][-2:] == ["prediction_spend", "prediction_clv"]
@@ -165,7 +165,7 @@ def test_the_experiments_group_and_its_two_nodes():
     test, plan = catalog.MODELS["ab_test"], catalog.MODELS["ab_plan"]
     # neither makes a model: no card, so no registration and no Predict
     assert test["card"] is False and plan["card"] is False
-    assert all(spec.get("card", True) for m, spec in catalog.MODELS.items() if m not in ("ab_test", "ab_plan", "decomposition", "timestral"))
+    assert all(spec.get("card", True) for m, spec in catalog.MODELS.items() if m not in ("ab_test", "ab_plan", "decomposition", "timestral", "risk_simulation"))
     snap = {m["id"]: m for m in catalog.snapshot()["models"]}
     assert [snap[m]["card"] for m in ("linear", "clv", "ab_test", "ab_plan")] == [True, True, False, False]
     assert not any(k.startswith(("ab_test", "ab_plan")) for k in catalog.PREDICT["columns"])
@@ -308,10 +308,108 @@ def test_the_foundation_forecast_s_columns_before_a_run():
     assert catalog.output_type("quantile_forecast", "series") == "=series" and catalog.output_type("quantile_forecast", "is_holdout") == "Boolean"
 
 
+def test_the_volatility_node_and_the_risk_simulation_node():
+    """docs/specs/garch-risk.md, «The form», «The risk variable and the fan»: two nodes of the group `timeseries`, the first with a
+    card (it registers and predicts), the second without; the limits, the kinds and the rules between the options."""
+    for key, value in {"seed_block": 1000, "risk_bins": 1024, "max_sample_paths": 20}.items():
+        assert catalog.LIMITS[key] == value, key
+    garch, risk = catalog.MODELS["garch"], catalog.MODELS["risk_simulation"]
+    assert garch.get("card", True) is True and risk["card"] is False and "max_rows" not in garch and "max_rows" not in risk
+    assert not any(k.startswith("risk_simulation") for k in catalog.PREDICT["columns"])  # no card: nothing to predict with
+    # a registered GARCH is applied to new rows: the volatility and the 1-step VaR of each, a forecast with `horizon` (lot G6 writes it)
+    assert catalog.PREDICT["columns"]["garch"] == {"always": ["prediction", "prediction_var"]}
+    assert "garch" in catalog.PREDICT["applies_to"]["horizon"] and not any("garch" in v for k, v in catalog.PREDICT["applies_to"].items() if k != "horizon")
+    assert [v["id"] for v in garch["variants"]] == ["default"] and [v["id"] for v in risk["variants"]] == ["garch", "arima"]
+    assert [v.get("max_rows") for v in risk["variants"]] == [None, 20_000] and "max_rows" not in garch["variants"][0]
+    snap = {m["id"]: m for m in catalog.snapshot()["models"]}
+    assert snap["garch"]["card"] is True and snap["risk_simulation"]["card"] is False
+    assert [v.get("max_rows") for v in snap["risk_simulation"]["variants"]] == [None, 20_000]
+    assert list(garch["needs"]) == list(risk["needs"]) == ["time", "value", "frequency"]
+    d = garch["defaults"]
+    assert (d["input_kind"], d["returns_type"], d["variance_model"], d["arch_order"], d["garch_order"], d["ar_order"], d["ma_order"],
+            d["mean"], d["distribution"], d["se_type"], d["horizon"], d["holdout"], d["var_level"], d["lb_lag"], d["arch_lags"],
+            d["alpha"], d["seed"], d["output"]) == ("returns", "log", "garch", 1, 1, 0, 0, True, "std", "robust", 10, 0, 0.99, "auto",
+                                                    "auto", 0.05, 1, "volatility")
+    d = risk["defaults"]
+    assert (d["model"], d["paths"], d["horizon"], d["innovations"], d["var_level"], d["es_level"], d["tail"], d["quantiles"], d["threshold"],
+            d["position"], d["drawdown"], d["seed"], d["output"], d["aggregate"]) == (
+        "garch", 10_000, 10, "parametric", 0.99, 0.975, "lower", [0.01, 0.05, 0.25, 0.5, 0.75, 0.95, 0.99], None, None, True, 1,
+        "risk_summary", "last")
+    assert "exog" not in risk["takes"] and "seed" in risk["takes"]
+    # the ARIMA keys follow the ARIMA node's own kinds and defaults; GARCH's keys and ARIMA's apply by `model`
+    for key in ("p", "d", "q", "P", "D", "Q", "criterion", "orders", "transform", "box_cox_lambda", "s", "drift"):
+        assert risk["takes"][key] == catalog.MODELS["arima"]["takes"][key] and risk["defaults"][key] == catalog.MODELS["arima"]["defaults"][key], key
+        assert risk["applies"][key]["model"] == ["arima"], key
+    for key in ("input_kind", "variance_model", "arch_order", "ar_order", "distribution", "se_type"):
+        assert risk["applies"][key]["model"] == ["garch"], key
+    assert catalog.variant("risk_simulation", {"model": "arima"}) == "arima" and catalog.variant("risk_simulation", {}) == "garch"
+    base = {"time": "day", "value": "close", "frequency": "index"}
+    for model, params, message in [
+        ("garch", {**base, "var_level": 0.5}, "garch: 'var_level' must be a number above 0.5 and below 1"),
+        ("garch", {**base, "distribution": "ged"}, "garch: 'distribution' must be one of norm, std, sstd"),
+        ("garch", {**base, "variance_model": "arch", "garch_order": 1}, "garch: 'garch_order' only applies when variance_model = garch or gjr or egarch"),
+        ("garch", {**base, "returns_type": "simple"}, "garch: 'returns_type' only applies when input_kind = prices"),
+        ("garch", {**base, "paths": 1000}, "garch: there is no parameter 'paths'"),
+        ("risk_simulation", {**base, "paths": 99}, "risk_simulation: 'paths' must be a whole number from 100 to 10000000"),
+        ("risk_simulation", {**base, "model": "arima", "arch_order": 2}, "risk_simulation: 'arch_order' only applies when model = garch"),
+        ("risk_simulation", {**base, "aggregate": "sum"}, "risk_simulation: 'aggregate' only applies when model = arima"),
+        ("risk_simulation", {**base, "model": "arima", "exog": ["x"]}, "risk_simulation: there is no parameter 'exog'"),
+        ("risk_simulation", {**base, "position": 0}, "risk_simulation: 'position' must be a number above 0 and at most 999999999999999"),
+        ("risk_simulation", {**base, "threshold": 1e16}, "risk_simulation: 'threshold' must be a number at least -999999999999999"),
+    ]:
+        with pytest.raises(EngineError) as e:
+            catalog.check_params(model, params)
+        assert str(e.value).startswith(message), (params, str(e.value))
+    # the ARIMA variant of the risk node keeps its own limit of rows; the check answers `position` and `drawdown` always (an
+    # `applies` cannot say «or»): the runner says when a position needs a relative change
+    assert catalog.check_params("risk_simulation", {**base, "model": "arima", "position": 5})["position"] == 5
+
+
+def test_the_volatility_node_s_name_and_the_risk_node_s_columns_before_a_run():
+    """`garch_name` says the model as the title does; `volatility`, `risk_summary` and `paths` say their columns before a run: the
+    time as the input has it, a `quantile_<q>` per level of `quantiles` (the median kept), the prices' columns only with prices."""
+    name = catalog.garch_name
+    assert name({}) == "GARCH(1,1), t"
+    assert name({"variance_model": "gjr", "distribution": "sstd"}) == "GJR-GARCH(1,1), skewed t"
+    assert name({"variance_model": "egarch", "ar_order": 1, "distribution": "norm"}) == "AR(1)-EGARCH(1,1), normal"
+    assert name({"variance_model": "arch", "arch_order": 2}) == "ARCH(2), t"
+    assert name({"ar_order": 1, "ma_order": 2, "garch_order": 2, "arch_order": 3}) == "ARMA(1,2)-GARCH(2,3), t"  # Bollerslev's (p, q)
+    assert name({"ma_order": 1, "distribution": "norm"}) == "MA(1)-GARCH(1,1), normal"
+
+    def names(model, params, inputs=()):
+        return [n for n, _ in catalog.output_columns(model, params, list(inputs))[0]]
+
+    assert names("garch", {}) == ["time", "observed", "mean", "sigma", "std_residual", "var", "violation", "is_holdout", "is_forecast"]
+    assert names("garch", {"input_kind": "prices"}) == ["time", "observed", "return", "mean", "sigma", "std_residual", "var", "violation",
+                                                        "is_holdout", "is_forecast"]
+    cols, unknown = catalog.output_columns("garch", {"time": "day"}, [("day", "Int64"), ("close", "Float64")])
+    assert unknown == [] and dict(cols)["time"] == "Int64" and dict(cols)["is_forecast"] == "Boolean" and dict(cols)["sigma"] == "Float64"
+    assert names("risk_simulation", {}) == ["step", "time", "mean", "sd", "quantile_0.01", "quantile_0.05", "quantile_0.25", "quantile_0.5",
+                                            "quantile_0.75", "quantile_0.95", "quantile_0.99", "var", "var_low", "var_high", "es", "es_low",
+                                            "es_high", "band_error"]
+    assert names("risk_simulation", {"input_kind": "prices", "threshold": 280, "quantiles": [0.95, 0.5, 0.05, 0.05]}) == [
+        "step", "time", "mean", "sd", "quantile_0.05", "quantile_0.5", "quantile_0.95", "price_quantile_0.05", "price_quantile_0.5",
+        "price_quantile_0.95", "price_mean", "var", "var_low", "var_high", "es", "es_low", "es_high", "prob_beyond", "prob_crossed", "band_error"]
+    # prices with an ARIMA: no price columns; a threshold with any model
+    assert "price_mean" not in names("risk_simulation", {"model": "arima", "input_kind": "prices"})
+    assert "prob_crossed" in names("risk_simulation", {"model": "arima", "threshold": 1000})
+    assert names("risk_simulation", {"output": "paths"}) == ["path", "step", "time", "value", "cumulative", "sigma"]
+    assert names("risk_simulation", {"output": "paths", "model": "arima"}) == ["path", "step", "time", "value", "cumulative"]
+    assert names("risk_simulation", {"output": "paths", "input_kind": "prices"}) == ["path", "step", "time", "value", "cumulative", "price", "sigma"]
+    cols, unknown = catalog.output_columns("risk_simulation", {"time": "day", "output": "paths"}, [("day", "Date")])
+    assert unknown == [] and dict(cols) == {"path": "Int32", "step": "Int32", "time": "Date", "value": "Float64", "cumulative": "Float64",
+                                            "sigma": "Float64"}
+    assert catalog.output_columns("risk_simulation", {"output": "results"}, [])[0] == list(catalog.OUTPUT_TYPES["results"].items())
+    assert catalog.output_type("risk_summary", "quantile_0.5") == "Float64" and catalog.output_type("risk_summary", "price_quantile_0.99") == "Float64"
+    assert catalog.output_type("risk_summary", "step") == "Int32" and catalog.output_type("paths", "path") == "Int32"
+    # the foundation forecast's `quantile_<level>` leaves the median out (it is `forecast`): the same prefix, the other node's rule
+    assert "quantile_0.5" not in names("timestral", {"quantiles": [0.05, 0.5, 0.95]})
+
+
 def test_the_decomposition_node_and_its_four_variants():
     """docs/specs/ts-decomposition.md, «The node `decomposition`»: one node of the group `timeseries`, four variants keyed on
     `method`, no card, the limits of the form, the rules between the options."""
-    assert catalog.GROUPS["timeseries"]["models"] == ["arima", "decomposition"]
+    assert catalog.GROUPS["timeseries"]["models"] == ["arima", "decomposition", "garch", "risk_simulation"]
     for key, value in {"max_period": 10_000, "max_periods": 4, "max_imfs": 16, "max_lb_lags": 1000}.items():
         assert catalog.LIMITS[key] == value, key
     spec = catalog.MODELS["decomposition"]
@@ -327,7 +425,7 @@ def test_the_decomposition_node_and_its_four_variants():
         "stl", 11.0, "auto", 2, 10, 4, 50, 0, "refuse", "friedman", "auto", 0.05, "components")
     # the ARIMA node keeps a limit of its own below the group's
     assert catalog.MODELS["arima"]["max_rows"] == 20_000
-    assert all("max_rows" not in s for m, s in catalog.MODELS.items() if m != "arima")
+    assert all("max_rows" not in s for m, s in catalog.MODELS.items() if m != "arima")  # a variant's own is the risk node's (below)
     snap = {m["id"]: m for m in catalog.snapshot()["models"]}
     assert snap["arima"]["max_rows"] == 20_000 and snap["decomposition"]["max_rows"] is None and snap["decomposition"]["card"] is False
     # the sections: a season and the checks in every variant, the IMFs in EMD alone, its facts and the robust weights

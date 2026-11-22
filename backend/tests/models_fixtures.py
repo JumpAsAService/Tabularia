@@ -21,6 +21,7 @@ from app.engine.models import catalog
 from app.engine.stats.output import OUTPUT_NAMES
 from tests import models_fixtures_decomposition as decomposition
 from tests import models_fixtures_experiments as experiments
+from tests import models_fixtures_garch as garch
 from tests import models_fixtures_timestral as timestral
 
 HERE = Path(__file__).resolve().parent / "fixtures" / "models"
@@ -70,6 +71,8 @@ PARAMS: dict[tuple[str, str], dict[str, Any]] = {
     **decomposition.PARAMS,
     # the foundation forecast node: three imaginary series of orders per day (tests/models_fixtures_timestral.py)
     **timestral.PARAMS,
+    # the volatility node and the risk simulation node: imaginary series of prices and of orders (tests/models_fixtures_garch.py)
+    **garch.PARAMS,
 }
 
 # Fixtures that are a runner's real output (`from_results`): main() leaves them alone.
@@ -155,6 +158,10 @@ def build(model: str, variant: str) -> dict[str, Any]:
     if model == "decomposition":
         made = decomposition.build(model, variant, params, spec, checked)
         return {**made, "fixture": "placeholder numbers: one imaginary series, the spec's formulas on its components",
+                "columns": list(OUTPUT_NAMES), "rows": made["rows"]}
+    if model in ("garch", "risk_simulation"):
+        made = garch.build(model, variant, params, spec, checked)
+        return {**made, "fixture": "placeholder numbers: imaginary returns of a GJR-GARCH recursion and imaginary paths, the spec's formulas on them",
                 "columns": list(OUTPUT_NAMES), "rows": made["rows"]}
     if model == "timestral":
         made = timestral.build(model, variant, params, spec, checked)

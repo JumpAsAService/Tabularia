@@ -62,7 +62,7 @@ const ARIMA = m.modelOf('arima')
 test('the catalogue the editor reads is the engine\'s snapshot, byte for byte', () => {
   assert.equal(read('../assets/model-catalog.json'), read('../../backend/app/engine/models/catalog.json'),
     'run python3 .github/scripts/model_catalog.py')
-  assert.deepEqual(m.MODEL_CATALOG.models.map((x) => x.id), ['linear', 'logistic', 'kaplan_meier', 'cox', 'parametric_survival', 'arima', 'decomposition', 'xgboost', 'catboost', 'clv', 'bg_bb', 'ab_test', 'ab_plan', 'timestral'])
+  assert.deepEqual(m.MODEL_CATALOG.models.map((x) => x.id), ['linear', 'logistic', 'kaplan_meier', 'cox', 'parametric_survival', 'arima', 'decomposition', 'garch', 'risk_simulation', 'xgboost', 'catboost', 'clv', 'bg_bb', 'ab_test', 'ab_plan', 'timestral'])
   assert.deepEqual(m.MODEL_CATALOG.groups.map((g) => g.id), ['regression', 'survival', 'timeseries', 'boosting', 'customer_lifetime', 'experiments', 'foundation_forecast'])
 })
 
@@ -101,7 +101,9 @@ test('the fields of a model in the catalogue\'s order, what it needs first', () 
 })
 
 // Every model of the catalogue has its words, the Forecast (Timestral) node's too (lot F5).
-const WORDED = m.MODEL_CATALOG
+// The nodes the palette leaves out until their lot gives them a form and words (`MODEL_NOT_IN_THE_PALETTE_YET`): Volatility (GARCH) and
+// Risk simulation (docs/specs/garch-risk.md, lot G5). Their words are not asked for until then (the group's are). G5 takes this away.
+const WORDED = { ...m.MODEL_CATALOG, models: m.MODEL_CATALOG.models.filter((x) => !['garch', 'risk_simulation'].includes(x.id)) }
 
 test('every model, group, preset, field, choice and reason has its words in the five languages', () => {
   const wanted = m.modelWordKeys(WORDED)
@@ -1255,6 +1257,33 @@ test('Forecast (Timestral) says its columns before a run: a quantile column per 
   // in the palette since lot F7: its runner is built
   const palette = m.modelPalette(m.MODEL_CATALOG.groups, '', (k) => k)
   assert.ok(palette.flatMap((g) => g.items).some((i) => i.kind === 'model:timestral'))
+})
+
+test('Risk simulation and Volatility (GARCH) say their columns before a run: a quantile column per level asked, the median kept, the prices\' columns with prices, the time as it is', () => {
+  const risk = m.modelOf('risk_simulation')
+  const names = (params, input = []) => m.modelOutputColumns(risk, params, input).columns.map((c) => c.name)
+  assert.deepEqual(names({}), ['step', 'time', 'mean', 'sd', 'quantile_0.01', 'quantile_0.05', 'quantile_0.25', 'quantile_0.5', 'quantile_0.75', 'quantile_0.95', 'quantile_0.99',
+    'var', 'var_low', 'var_high', 'es', 'es_low', 'es_high', 'band_error'])
+  assert.deepEqual(names({ input_kind: 'prices', threshold: 280, quantiles: [0.95, 0.5, 0.05, 0.05] }), ['step', 'time', 'mean', 'sd', 'quantile_0.05', 'quantile_0.5', 'quantile_0.95',
+    'price_quantile_0.05', 'price_quantile_0.5', 'price_quantile_0.95', 'price_mean', 'var', 'var_low', 'var_high', 'es', 'es_low', 'es_high', 'prob_beyond', 'prob_crossed', 'band_error'])
+  assert.ok(!names({ model: 'arima', input_kind: 'prices' }).includes('price_mean'))
+  assert.deepEqual(names({ output: 'paths' }), ['path', 'step', 'time', 'value', 'cumulative', 'sigma'])
+  assert.deepEqual(names({ output: 'paths', model: 'arima' }), ['path', 'step', 'time', 'value', 'cumulative'])
+  const { columns, later } = m.modelOutputColumns(risk, { time: 'day', output: 'paths' }, [{ name: 'day', dtype: 'Int64' }, { name: 'x', dtype: 'Float64' }])
+  assert.deepEqual(columns.map((c) => c.dtype), ['Int32', 'Int32', 'Int64', 'Float64', 'Float64', 'Float64'])
+  assert.equal(later.length, 0)
+  const garch = m.modelOf('garch')
+  const gnames = (params) => m.modelOutputColumns(garch, params, []).columns.map((c) => c.name)
+  assert.deepEqual(gnames({}), ['time', 'observed', 'mean', 'sigma', 'std_residual', 'var', 'violation', 'is_holdout', 'is_forecast'])
+  assert.deepEqual(gnames({ input_kind: 'prices' }).slice(0, 4), ['time', 'observed', 'return', 'mean'])
+  assert.equal(m.modelOutputColumns(garch, { output: 'results' }, []).columns.length, 10)
+  // the pre-trained forecast's `quantile_<level>` leaves the median out: the same prefix, the other node's rule
+  assert.ok(!m.modelOutputColumns(m.modelOf('timestral'), { quantiles: [0.05, 0.5, 0.95] }, []).columns.some((c) => c.name === 'quantile_0.5'))
+  // the engine's snapshot gives the variants' limits of rows: the risk node's ARIMA reads 20,000
+  assert.deepEqual(risk.variants.map((v) => v.max_rows ?? null), [null, 20000])
+  // the palette leaves the two nodes out until lot G5 gives them a form
+  const palette = m.modelPalette(m.MODEL_CATALOG.groups, '', (k) => k)
+  assert.ok(!palette.flatMap((g) => g.items).some((i) => i.model === 'garch' || i.model === 'risk_simulation'))
 })
 
 test('the steps after a model that only keep, drop, order, rename, cast or filter say their columns; the others do not', () => {

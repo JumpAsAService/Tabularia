@@ -31,7 +31,8 @@ never other models. Per model:
 - `variants`: in order, the first whose `when` holds is the variant (`variant()`); each
   says which `sections` the runner writes and which rows (`results.py` refuses any other),
   the `assumptions` it checks, the `charts` of its report, and its `outputs` (the model's
-  columns of the rows, table or forecast output).
+  columns of the rows, table or forecast output); optionally a `max_rows` of its own, below
+  its model's and its group's (the risk simulation's ARIMA variant reads 20,000 rows).
 
 `OUTPUT_TYPES` gives those columns their types, and `output_columns` what a node hands on
 before it has run (the editor's and the assistants' columns of the steps after a model).
@@ -111,13 +112,18 @@ LIMITS: dict[str, int] = {
     "max_foundation_horizon": 1024,  # steps of a forecast, and of a holdout, of a pre-trained model
     "max_covariates": 16,            # covariate columns of a forecast, past and known together
     "max_series_charts": 12,         # series drawn in the report, the rest are in the table
+    # the volatility (GARCH) and risk simulation nodes' (docs/specs/garch-risk.md, «Limits»). `seed_block` is part of the method,
+    # like the seed: the paths are cut into blocks of this many, each drawn from its own stream; changing it changes the draws
+    "seed_block": 1000,              # paths of a seed block
+    "risk_bins": 1024,               # bins of the pass-1 histograms: only memory and the fan's declared error, never an exact measure
+    "max_sample_paths": 20,          # paths 1…20 drawn in the fan
 }
 
 # ── groups: one image each, built when an administrator enables it ─────────
 GROUPS: dict[str, dict[str, Any]] = {
     "regression": {"language": "r", "label": "models.groups.regression", "models": ["linear", "logistic"]},
     "survival": {"language": "r", "label": "models.groups.survival", "models": ["kaplan_meier", "cox", "parametric_survival"]},
-    "timeseries": {"language": "r", "label": "models.groups.timeseries", "models": ["arima", "decomposition"]},
+    "timeseries": {"language": "r", "label": "models.groups.timeseries", "models": ["arima", "decomposition", "garch", "risk_simulation"]},
     "boosting": {"language": "python", "label": "models.groups.boosting", "models": ["xgboost", "catboost"]},
     "customer_lifetime": {"language": "r", "label": "models.groups.customer_lifetime", "models": ["clv", "bg_bb"]},
     "experiments": {"language": "r", "label": "models.groups.experiments", "models": ["ab_test", "ab_plan"]},
@@ -293,6 +299,27 @@ KINDS: dict[str, dict[str, Any]] = {
                           "types": ["number", "integer", "boolean", "text"]},
     "missing_foundation": _choice("refuse", "linear", "model"),
     "output_quantile_forecast": _choice("quantile_forecast", "results"),
+    # the volatility (GARCH) and risk simulation nodes' (docs/specs/garch-risk.md, «The form»)
+    "input_kind": _choice("returns", "prices"),
+    "returns_type": _choice("log", "simple"),
+    "variance_model": _choice("arch", "garch", "gjr", "egarch"),
+    "arch_order": _int(1, 3),        # lags of the shocks: rugarch's garchOrder[1], q
+    "garch_order": _int(0, 3),       # lags of the variance: rugarch's garchOrder[2], p
+    "arma_order": _int(0, 5),        # AR and MA lags of the mean
+    "garch_distribution": _choice("norm", "std", "sstd"),
+    "se_garch": _choice("robust", "classical"),
+    "risk_level": {"control": "number", "above": 0.5, "below": 1},
+    "output_volatility": _choice("volatility", "results"),
+    "risk_model": _choice("garch", "arima"),
+    "aggregate": _choice("last", "sum", "relative_change"),
+    "paths": _int(100, 10_000_000),
+    "innovations": _choice("parametric", "bootstrap"),
+    "tail": _choice("lower", "upper"),
+    # a level in the fan's unit and an amount invested: finite, within ±1e15 less one (a bound of the kind, never an overflow; the
+    # last whole number the sentences write without an exponent)
+    "risk_threshold": {"control": "number", "min": -999_999_999_999_999, "max": 999_999_999_999_999},
+    "risk_position": {"control": "number", "above": 0, "max": 999_999_999_999_999},
+    "output_risk": _choice("risk_summary", "paths", "results"),
 }
 
 # The seasonal period a frequency implies when `s` is not given.
@@ -337,6 +364,10 @@ SECTION_SHAPES: dict[str, dict[str, Any]] = {
     # the foundation forecast's: a series (its measures); a line of a series' chart: the series, then the line
     "series": {"level": "required", "level_2": "null", "indexed": False},
     "series_curve": {"level": "required", "level_2": "required", "indexed": True},
+    # the volatility and risk nodes': a backtest's test or count (a test per level); a risk measure, at the horizon (no level_2)
+    # or at a step (level_2 the step)
+    "backtest": {"level": "required", "level_2": "null", "indexed": False},
+    "risk": {"level": "required", "level_2": "optional", "indexed": False},
 }
 
 VERDICTS = ("ok", "doubtful", "failed", "not_computed")
@@ -819,6 +850,191 @@ MODELS["decomposition"] = {
     "disjoint": ["time", "value"],
     "variants": [_dec_variant(m) for m in _DEC_METHODS],
 }
+
+# ── the volatility (GARCH) node and the risk simulation node (docs/specs/garch-risk.md) ──────────────────────────────
+# Both are in the group `timeseries`. GARCH makes a model (a card, so it registers and predicts: lot G6); the risk simulation
+# fits its own ARIMA or GARCH with the same options and the same runner code, simulates paths and makes no model:
+# `card: false`, MLflow logs the run. The GARCH node draws nothing; the risk node's simulation is its product.
+_GARCH_KEYS = {
+    "input_kind": "input_kind", "returns_type": "returns_type", "variance_model": "variance_model", "arch_order": "arch_order",
+    "garch_order": "garch_order", "ar_order": "arma_order", "ma_order": "arma_order", "distribution": "garch_distribution",
+    "se_type": "se_garch",
+}
+_GARCH_DEFAULTS = {"input_kind": "returns", "returns_type": "log", "variance_model": "garch", "arch_order": 1, "garch_order": 1,
+                   "ar_order": 0, "ma_order": 0, "distribution": "std", "se_type": "robust"}
+# `returns_type` matters with prices (the node computes the returns); `garch_order` is 0 for an ARCH, so it is not asked
+_GARCH_APPLIES = {"returns_type": {"input_kind": ["prices"]}, "garch_order": {"variance_model": ["garch", "gjr", "egarch"]}}
+_GARCH_CHECKS = ["ljung_box_z", "ljung_box_z2", "arch_lm", "nyblom", "sign_bias", "at_bound", "variance_stationary"]
+_GARCH_MODEL_TEXTS = [*_MODEL_TEXTS, "model_name", "variance_model", "distribution", "input_kind", "returns_type", "se_type",
+                      "frequency", "time_kind", "solver"]
+_GARCH_MODEL_NUMBERS = ["n", "n_missing", "first", "last", "alpha", "scale", "holdout", "horizon", "var_level", "log_lik", "aic",
+                        "bic", "persistence", "half_life", "half_life_time", "uncond_sigma", "sigma_last", "sigma_next",
+                        "lb_lag_used", "arch_lags_used", "kappa"]
+# Nyblom's individual rows are one per parameter (`level_2`), Holm-adjusted; `lag` is the portmanteau tests' m
+_GARCH_ASSUMPTION = {"levels": _GARCH_CHECKS, "numbers": [*_ASSUMPTION["numbers"], "lag", "p_adjusted"],
+                     "texts": [*_ASSUMPTION["texts"], "advice_id"]}
+_BACKTEST = {"levels": ["kupiec", "christoffersen_ind", "christoffersen_cc", "counts"],
+             "numbers": ["statistic", "df", "p_value", "violations", "expected_violations", "violation_rate", "n00", "n01", "n10",
+                         "n11", "longest_run"],
+             "texts": ["significance", "verdict", "h0"]}
+_GARCH_COEF = {"levels": None, "numbers": ["estimate", "std_error", "statistic", "p_value", "ci_low", "ci_high"],
+               "texts": ["significance"]}
+_GARCH_READING_BLOCKS = ["summary", "persistence", "asymmetry", "distribution", "residuals", "stability", "backtest", "method",
+                         "formulas"]
+_GARCH_SECTIONS: dict[str, Any] = {
+    "model": {"levels": None, "texts": _GARCH_MODEL_TEXTS, "numbers": _GARCH_MODEL_NUMBERS},
+    "coef": _GARCH_COEF,
+    "assumption": _GARCH_ASSUMPTION,
+    "backtest": _BACKTEST,
+    # a chart per level; a line of it per series (`level_2`), its value `y`, the time (or ε, for the news impact) in x0
+    "curve": _chart("returns", "sigma", "news_impact", "backtest", "density", stats=["y"]),
+    "point": _chart("std_residual", "violation", "qq", stats=["y"]),
+    "lag": _chart("z_acf", "z2_acf", stats=["acf", "bound"]),
+    "hist": _chart("std_residual", stats=["count"]),
+    "reading": {"levels": _GARCH_READING_BLOCKS, "numbers": [], "texts": ["line_*"]},
+}
+_GARCH_CHARTS = [
+    {"id": "returns", "under": None}, {"id": "sigma", "under": None}, {"id": "std_residual", "under": None},
+    {"id": "news_impact", "under": None}, {"id": "z_acf", "under": "ljung_box_z"}, {"id": "z2_acf", "under": "ljung_box_z2"},
+    {"id": "std_residual_hist", "under": "arch_lm"}, {"id": "qq", "under": "arch_lm"}, {"id": "backtest", "under": None},
+]
+# the columns the next step receives (output `volatility`): the time keeps the input's own type; `return` only with prices
+_GARCH_OUTPUT = ["time", "observed", "return", "mean", "sigma", "std_residual", "var", "violation", "is_holdout", "is_forecast"]
+
+MODELS["garch"] = {
+    "group": "timeseries",
+    "family": "timeseries",
+    "needs": {"time": "time_column", "value": "number_column", "frequency": "frequency"},
+    "takes": {
+        **{k: _GARCH_KEYS[k] for k in ("input_kind", "returns_type", "variance_model", "arch_order", "garch_order", "ar_order", "ma_order")},
+        "mean": "boolean", "distribution": _GARCH_KEYS["distribution"], "se_type": _GARCH_KEYS["se_type"],
+        "horizon": "horizon", "holdout": "holdout", "var_level": "risk_level", "lb_lag": "lb_lag", "arch_lags": "lb_lag",
+        "alpha": "alpha", "seed": "seed", "output": "output_volatility",
+    },
+    "defaults": {**_GARCH_DEFAULTS, "mean": True, "horizon": 10, "holdout": 0, "var_level": 0.99, "lb_lag": "auto",
+                 "arch_lags": "auto", "alpha": 0.05, "seed": 1, "output": "volatility"},
+    "applies": dict(_GARCH_APPLIES),
+    "requires": [],
+    "forbids": [],
+    "disjoint": ["time", "value"],
+    "variants": [
+        {
+            "id": "default",
+            "when": {},
+            "sections": _GARCH_SECTIONS,
+            "charts": _GARCH_CHARTS,
+            "outputs": {"volatility": list(_GARCH_OUTPUT)},
+            "rows_when": {"return": {"input_kind": ["prices"]}},
+        },
+    ],
+}
+
+# The risk node's model keys are the two nodes' own: ARIMA's (but for `exog`: a future exogenous value cannot be simulated,
+# and `horizon`, which the risk node has of its own) shown when `model = arima`, GARCH's when `model = garch`; `mean` is one key.
+_RISK_ARIMA_KEYS = ("s", "orders", "p", "d", "q", "P", "D", "Q", "criterion", "stepwise", "max_p", "max_q", "max_P", "max_Q",
+                    "max_d", "max_D", "unit_root_test", "seasonal_test", "drift", "transform", "box_cox_lambda")
+_RISK_ARIMA = MODELS["arima"]
+_RISK_RESULT_TEXTS = ["risk_variable", "tail", "innovations", "aggregate"]
+_RISK_RESULT_NUMBERS = ["paths", "horizon", "seed", "seed_block", "batches", "batch_paths", "bins", "var_level", "es_level",
+                        "threshold", "position", "last_value", "simulated_values", "paths_bytes", "seconds_simulation",
+                        "seconds_pass_2"]
+_RISK_READING_BLOCKS = ["summary", "var", "es", "threshold", "drawdown", "shape", "fan", "backtest", "model", "method", "formulas"]
+# the risk measures, at the horizon (no level_2) or at a step (level_2 = the step); the moments and the drawdown's are of H_h
+_RISK = {"levels": ["var", "es", "prob_beyond", "prob_crossed", "drawdown", "moments"],
+         "numbers": ["value", "low", "high", "se", "count", "mean", "sd", "skewness", "kurtosis", "median"], "texts": []}
+# the fan (nested bands, the median, the history, the sample paths `path_<i>`), the measures per step, the backtest's VaR;
+# `band_error`: the declared error of the fan's band edges at that step
+_RISK_CURVE = _chart("fan", "term", "backtest", stats=["y", "band_error"])
+_RISK_HIST = _chart("horizon", "drawdown", stats=["count"])
+_RISK_CHARTS = [{"id": "fan", "under": None}, {"id": "horizon", "under": None}, {"id": "drawdown", "under": None},
+                {"id": "term", "under": None}, {"id": "backtest", "under": None}]
+_RISK_SUMMARY_OUTPUT = ["step", "time", "mean", "sd", "quantile_*", "price_quantile_*", "price_mean", "var", "var_low", "var_high",
+                        "es", "es_low", "es_high", "prob_beyond", "prob_crossed", "band_error"]
+_RISK_PATHS_OUTPUT = ["path", "step", "time", "value", "cumulative", "price", "sigma"]
+# columns written only with their rule: the prices' columns for a GARCH of prices, the threshold's two with a threshold
+_RISK_ROWS_WHEN = {
+    "price_quantile_*": {"model": ["garch"], "input_kind": ["prices"]}, "price_mean": {"model": ["garch"], "input_kind": ["prices"]},
+    "price": {"model": ["garch"], "input_kind": ["prices"]}, "sigma": {"model": ["garch"]},
+    "prob_beyond": {"threshold": True}, "prob_crossed": {"threshold": True},
+}
+
+
+def _risk_sections(model: str) -> dict[str, Any]:
+    """The sections of the risk node's `garch` or `arima` variant: the fitted model's own (compact) and the risk's."""
+    if model == "garch":
+        fit = {"model": {"levels": None, "texts": [*_GARCH_MODEL_TEXTS, *_RISK_RESULT_TEXTS],
+                         "numbers": [*_GARCH_MODEL_NUMBERS, *(n for n in _RISK_RESULT_NUMBERS if n not in _GARCH_MODEL_NUMBERS)]},
+               "coef": _GARCH_COEF, "assumption": _GARCH_ASSUMPTION}
+    else:
+        arima = _ARIMA_AUTO_SECTIONS
+        fit = {"model": {"levels": None, "texts": [*arima["model"]["texts"], *_RISK_RESULT_TEXTS],
+                         "numbers": [*arima["model"]["numbers"], *(n for n in _RISK_RESULT_NUMBERS if n not in arima["model"]["numbers"])]},
+               "coef": arima["coef"], "assumption": arima["assumption"], "candidate": arima["candidate"]}
+    return {**fit, "risk": _RISK, "backtest": _BACKTEST, "curve": _RISK_CURVE, "hist": _RISK_HIST,
+            "reading": {"levels": _RISK_READING_BLOCKS, "numbers": [], "texts": ["line_*"]}}
+
+
+def _risk_variant(model: str) -> dict[str, Any]:
+    out: dict[str, Any] = {
+        "id": model, "when": {"model": [model]}, "sections": _risk_sections(model), "charts": list(_RISK_CHARTS),
+        "outputs": {"risk_summary": list(_RISK_SUMMARY_OUTPUT), "paths": list(_RISK_PATHS_OUTPUT)},
+        "rows_when": {k: dict(v) for k, v in _RISK_ROWS_WHEN.items()},
+    }
+    if model == "arima":
+        # ARIMA's own limit of rows, as its cost (decided 2026-11-21): the node of the GARCH variant has the group's alone
+        out["max_rows"] = _RISK_ARIMA["max_rows"]
+    return out
+
+
+MODELS["risk_simulation"] = {
+    "group": "timeseries",
+    "family": "timeseries",
+    "card": False,
+    "needs": {"time": "time_column", "value": "number_column", "frequency": "frequency"},
+    "takes": {
+        "model": "risk_model",
+        **_GARCH_KEYS,
+        **{k: _RISK_ARIMA["takes"][k] for k in _RISK_ARIMA_KEYS},
+        "mean": "boolean", "aggregate": "aggregate", "paths": "paths", "horizon": "horizon", "innovations": "innovations",
+        "var_level": "risk_level", "es_level": "risk_level", "tail": "tail", "quantiles": "quantiles",
+        "threshold": "risk_threshold", "position": "risk_position", "drawdown": "boolean", "holdout": "holdout",
+        "alpha": "alpha", "seed": "seed", "lb_lag": "lb_lag", "arch_lags": "lb_lag", "output": "output_risk",
+    },
+    "defaults": {
+        "model": "garch", **_GARCH_DEFAULTS, **{k: _RISK_ARIMA["defaults"][k] for k in _RISK_ARIMA_KEYS},
+        "mean": True, "aggregate": "last", "paths": 10_000, "horizon": 10, "innovations": "parametric", "var_level": 0.99,
+        "es_level": 0.975, "tail": "lower", "quantiles": [0.01, 0.05, 0.25, 0.5, 0.75, 0.95, 0.99], "threshold": None,
+        "position": None, "drawdown": True, "holdout": 0, "alpha": 0.05, "seed": 1, "lb_lag": "auto", "arch_lags": "auto",
+        "output": "risk_summary",
+    },
+    "applies": {
+        **{k: {"model": ["garch"], **_GARCH_APPLIES.get(k, {})} for k in _GARCH_KEYS},
+        **{k: {"model": ["arima"], **_RISK_ARIMA["applies"].get(k, {})} for k in _RISK_ARIMA_KEYS},
+        "aggregate": {"model": ["arima"]},
+        # `position` and `drawdown` matter when the risk variable is a relative change: a GARCH's always, an ARIMA's with
+        # `aggregate = relative_change`. `applies` holds only when every rule does, so it cannot say «or»: they apply
+        # always, and the runner says, with a sentence, that a position needs a relative change (G3)
+    },
+    "requires": [],
+    "forbids": [],
+    "disjoint": ["time", "value"],
+    "variants": [_risk_variant("garch"), _risk_variant("arima")],
+}
+
+
+def garch_name(params: Mapping[str, Any]) -> str:
+    """What a GARCH node's options make of it, as its title says: «GARCH(1,1), t», «GJR-GARCH(1,1), skewed t»,
+    «AR(1)-EGARCH(1,1), normal», «ARCH(2), t». The orders are Bollerslev's, GARCH(p, q): p lags of the variance
+    (`garch_order`), q of the shocks (`arch_order`); an ARCH has q alone."""
+    full = {**MODELS["garch"]["defaults"], **{k: v for k, v in params.items() if v is not None}}
+    q, p = int(full["arch_order"]), int(full["garch_order"])
+    m, n = int(full["ar_order"]), int(full["ma_order"])
+    kind = full["variance_model"]
+    core = f"ARCH({q})" if kind == "arch" else {"garch": "GARCH", "gjr": "GJR-GARCH", "egarch": "EGARCH"}[kind] + f"({p},{q})"
+    mean = "" if not (m or n) else f"AR({m})" if not n else f"MA({n})" if not m else f"ARMA({m},{n})"
+    law = {"norm": "normal", "std": "t", "sstd": "skewed t"}[full["distribution"]]
+    return f"{mean + '-' if mean else ''}{core}, {law}"
+
 
 # ── parametric survival (docs: «The node «Parametric survival»») ────────────
 # One node, four variants keyed on `distribution`, because what the runner writes differs: the
@@ -1457,7 +1673,7 @@ PREDICT: dict[str, Any] = {
     # entry is a model, or `model:variant` for one variant of it (the card's variant)
     "applies_to": {"interval": ["linear", "kaplan_meier", "arima", "parametric_survival"],
                    "threshold": ["logistic", "xgboost:binary", "catboost:binary"],
-                   "horizon": ["arima", "clv", "bg_bb"], "at_times": ["cox", "parametric_survival"],
+                   "horizon": ["arima", "garch", "clv", "bg_bb"], "at_times": ["cox", "parametric_survival"],
                    "quantiles": ["parametric_survival"], "alive_at": ["parametric_survival"]},
     # the columns Predict adds, per model of the card (or `model:variant`, which comes first):
     # always, and with each key given. `prediction_prob_*`: one column per class of the card
@@ -1473,6 +1689,9 @@ PREDICT: dict[str, Any] = {
                                 "quantiles+interval": ["quantile_*_low", "quantile_*_high"],
                                 "at_times+interval": ["survival_at_*_low", "survival_at_*_high"]},
         "arima": {"always": ["prediction"], "interval": ["lower_80", "upper_80", "lower", "upper"]},
+        # the volatility of each new row given the rows before it, and the 1-step VaR at the card's level; with `horizon`, forecast
+        # rows after the last (docs/specs/garch-risk.md, «Card, MLflow and Predict»: the runner is lot G6's, the contract G0's)
+        "garch": {"always": ["prediction", "prediction_var"]},
         # the expected transactions over the horizon, P(alive); with a spend part the expected spend and the CLV
         **{f"{m}:{v}": cols for m in ("clv", "bg_bb") for v, cols in (
             ("purchases", {"always": ["prediction", "prediction_p_alive"]}),
@@ -1535,6 +1754,18 @@ OUTPUT_TYPES: dict[str, dict[str, str]] = {
     # series keep the input columns' own types (`=time`, `=series`); `quantile_*` is one column per level asked, 0.5 left out
     "quantile_forecast": {"series": "=series", "time": "=time", **{name: "Float64" for name in (
         "observed", "forecast", "quantile_*", "baseline")}, "filled": "Boolean", "is_holdout": "Boolean", "is_forecast": "Boolean"},
+    # the volatility node's: one row per instant of the series, then the forecast's (docs/specs/garch-risk.md, «The output»); the time
+    # keeps the input column's own type
+    "volatility": {"time": "=time", **{name: "Float64" for name in ("observed", "return", "mean", "sigma", "std_residual", "var")},
+                   **{name: "Boolean" for name in ("violation", "is_holdout", "is_forecast")}},
+    # the risk node's summary: one row per step of the risk variable's distribution; `quantile_*` one per level asked (the median
+    # kept: it has no column of its own here), `price_quantile_*` the same on the price, `prob_*` with a threshold
+    "risk_summary": {"step": "Int32", "time": "=time", **{name: "Float64" for name in (
+        "mean", "sd", "quantile_*", "price_quantile_*", "price_mean", "var", "var_low", "var_high", "es", "es_low", "es_high",
+        "prob_beyond", "prob_crossed", "band_error")}},
+    # the simulated paths, rows sorted by path then step (docs/specs/garch-risk.md, «The Parquet file of the paths»)
+    "paths": {"path": "Int32", "step": "Int32", "time": "=time", **{name: "Float64" for name in (
+        "value", "cumulative", "price", "sigma")}},
 }
 
 # How a runner writes the input's own columns back in the rows output, by their kind, where the type
@@ -1872,6 +2103,11 @@ def _labels_of(key: str):
     return labels
 
 
+def _risk_quantile_labels(full: Mapping[str, Any]) -> list[str]:
+    """`quantile_<q>` of a risk summary: the levels of `quantiles`, increasing, each once, the 0.5 too (no other column says the median)."""
+    return [_number_label(v) for v in sorted({float(x) for x in full.get("quantiles") or [] if _is_number(x)})]
+
+
 def _seasonal_labels(full: Mapping[str, Any]) -> list[str]:
     """The seasonal periods of a decomposition, as the runner names its columns (`seasonal_7`): the periods of an MSTL, else
     the node's period, else the frequency's own; whole numbers, increasing, each once."""
@@ -1893,8 +2129,11 @@ def _imf_labels(full: Mapping[str, Any]) -> list[str]:
 
 _ROWS_WILDCARDS = {"pred_quantile_": _labels_of("quantiles"), "pred_surv_at_": _labels_of("times"),
                    "seasonal_": _seasonal_labels, "imf_": _imf_labels,
-                   # the foundation forecast's quantile columns: the same function as `pred_quantile_`, 0.5 left out (it is `forecast`)
-                   "quantile_": _labels_of("quantiles")}
+                   # the foundation forecast's quantile columns: the same function as `pred_quantile_`, 0.5 left out (it is `forecast`);
+                   # the risk simulation's summary has no median column besides its quantiles, so it keeps the 0.5 (the node is the one
+                   # with an `es_level`): the same prefix, the rule of the node whose columns they are (docs/specs/garch-risk.md, G0)
+                   "quantile_": lambda full: _risk_quantile_labels(full) if "es_level" in full else _labels_of("quantiles")(full),
+                   "price_quantile_": lambda full: _risk_quantile_labels(full)}
 
 
 def _rows_columns(names: list[str], full: Mapping[str, Any], when: Mapping[str, Mapping[str, Any]] | None = None) -> list[str]:

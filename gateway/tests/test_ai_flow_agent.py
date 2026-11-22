@@ -645,7 +645,7 @@ def test_the_customer_lifetime_nodes_have_their_line_of_reference_and_the_prompt
     assert ("purchase_model?: auto|pareto_nbd|bg_nbd|mbg_nbd" in line) == (model_id == "clv")
     assert "one row per customer, never transactions" in reference and "the CLV is of revenue unless `margin` is set" in reference
     assert "a probability from the model, not an observed churn" in reference
-    assert "horizon for model_arima, model_clv, model_bg_bb" in reference
+    assert "horizon for model_arima, model_garch, model_clv, model_bg_bb" in reference
     key = "age" if model_id == "clv" else "opportunities"
     given = {**{k: v for k, v in _CUSTOMER.items() if k not in ("age", "time_unit")}, key: "n", unit_key: "month"}
     assert clean_params(f"model_{model_id}", given) == given
@@ -980,6 +980,27 @@ def test_the_pre_trained_forecast_says_its_columns_before_a_run():
     columns, later = ai_flow_agent.model_output_columns("timestral", {"time": "day", "series": "channel"},
                                                         [{"name": "day", "dtype": "Int64"}, {"name": "channel", "dtype": "String"}])
     assert columns[:2] == [{"name": "series", "dtype": "String"}, {"name": "time", "dtype": "Int64"}] and later == []
+
+
+def test_the_risk_simulation_and_the_volatility_node_say_their_columns_before_a_run():
+    """A quantile column per level asked, the median kept (the foundation forecast's leaves it out), the prices' columns with prices,
+    the time as the input has it (docs/specs/garch-risk.md)."""
+    def names(model, params, inputs=None):
+        return [c["name"] for c in ai_flow_agent.model_output_columns(model, params, inputs)[0]]
+
+    assert names("risk_simulation", {}) == ["step", "time", "mean", "sd", "quantile_0.01", "quantile_0.05", "quantile_0.25", "quantile_0.5",
+                                            "quantile_0.75", "quantile_0.95", "quantile_0.99", "var", "var_low", "var_high", "es", "es_low",
+                                            "es_high", "band_error"]
+    assert names("risk_simulation", {"input_kind": "prices", "threshold": 280, "quantiles": [0.95, 0.5, 0.05, 0.05]}) == [
+        "step", "time", "mean", "sd", "quantile_0.05", "quantile_0.5", "quantile_0.95", "price_quantile_0.05", "price_quantile_0.5",
+        "price_quantile_0.95", "price_mean", "var", "var_low", "var_high", "es", "es_low", "es_high", "prob_beyond", "prob_crossed", "band_error"]
+    assert "price_mean" not in names("risk_simulation", {"model": "arima", "input_kind": "prices"})
+    assert names("risk_simulation", {"output": "paths", "model": "arima"}) == ["path", "step", "time", "value", "cumulative"]
+    columns, later = ai_flow_agent.model_output_columns("risk_simulation", {"time": "day", "output": "paths"}, [{"name": "day", "dtype": "Int64"}])
+    assert [c["dtype"] for c in columns] == ["Int32", "Int32", "Int64", "Float64", "Float64", "Float64"] and later == []
+    assert names("garch", {}) == ["time", "observed", "mean", "sigma", "std_residual", "var", "violation", "is_holdout", "is_forecast"]
+    assert names("garch", {"input_kind": "prices"})[:3] == ["time", "observed", "return"]
+    assert "quantile_0.5" not in names("timestral", {"quantiles": [0.05, 0.5, 0.95]})
 
 
 def test_the_steps_that_only_keep_rename_cast_or_filter_columns_say_them_after_a_model():

@@ -1397,6 +1397,19 @@ without an order is a 0, the 28 days after are left empty (the future rows), and
 holidays, Ferragosto among them) goes in as a **known covariate**. Forecast (Timestral) forecasts the five series, with the last 28
 days held out. It is never scheduled.
 
+### Volatility (GARCH) and Risk simulation (R): being built
+
+Model ids in the catalogue: `garch` and `risk_simulation`, in the group **Time series** beside ARIMA. **Volatility (GARCH)**
+will estimate the volatility of each day of a series of returns or prices (ARCH, GARCH, GJR-GARCH and EGARCH, with normal,
+Student t or skewed Student t errors, by the R package `rugarch`), forecast it, and report which checks the model passes
+(each a test with a p-value against the node's alpha) and how many days broke its 1-step value at risk. It makes a model
+card, so it can be registered and applied with Predict. **Risk simulation** will fit its own ARIMA or GARCH to the same
+series and simulate thousands of future paths from it, to give the value at risk, the expected shortfall, the probability of
+crossing a level and the drawdown, each with the error of the simulation said; it never holds all the paths in memory, gives
+the same numbers for the same seed whatever the memory, and makes no model: no card, no registration and no Predict, and a
+flow run logs to MLflow like any other.
+In this version neither node runs yet: they stop with «… is not built yet in this version of Tabularia».
+
 ## The output
 
 Every model writes the same **ten columns** as the [statistical tests](statistics.md#the-output):

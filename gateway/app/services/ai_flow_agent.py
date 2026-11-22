@@ -746,12 +746,20 @@ def _imf_labels(full: dict) -> list[str]:
     return [str(i) for i in range(1, min(max(n, 0), MODEL_CATALOG["limits"]["max_imfs"]) + 1)]
 
 
+def _risk_quantile_labels(full: dict) -> list[str]:
+    """`quantile_<q>` of a risk summary: the levels of `quantiles`, increasing, each once, the 0.5 too (no other column says
+    the median)."""
+    return [_number_label(v) for v in sorted({float(x) for x in full.get("quantiles") or [] if _is_number(x)})]
+
+
 # the names with a `*` that the node's options fill: the prefix and the function that gives its labels (the other
 # names with a `*`, «pred_prob_*», one per class, are the data's)
 _ROWS_WILDCARDS = {"pred_quantile_": _labels_of("quantiles"), "pred_surv_at_": _labels_of("times"),
                    "seasonal_": _seasonal_labels, "imf_": _imf_labels,
-                   # the pre-trained forecast's quantile columns: the same list, the median left out
-                   "quantile_": _labels_of("quantiles")}
+                   # the pre-trained forecast's quantile columns: the same list, the median left out; the risk simulation's summary
+                   # (the node with an `es_level`) keeps it: no other column says the median
+                   "quantile_": lambda full: _risk_quantile_labels(full) if "es_level" in full else _labels_of("quantiles")(full),
+                   "price_quantile_": _risk_quantile_labels}
 _CAST_TYPES = {"int": "Int64", "int64": "Int64", "int32": "Int32", "float": "Float64", "float64": "Float64",
                "float32": "Float32", "str": "String", "string": "String", "utf8": "String", "bool": "Boolean",
                "boolean": "Boolean", "date": "Date", "datetime": "Datetime(time_unit='us', time_zone=None)"}

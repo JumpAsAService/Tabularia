@@ -76,7 +76,10 @@
     "max_series": 10000,
     "max_foundation_horizon": 1024,
     "max_covariates": 16,
-    "max_series_charts": 12
+    "max_series_charts": 12,
+    "seed_block": 1000,
+    "risk_bins": 1024,
+    "max_sample_paths": 20
   },
   "controls": [
     "column",
@@ -880,6 +883,123 @@
         "quantile_forecast",
         "results"
       ]
+    },
+    "input_kind": {
+      "control": "choice",
+      "choices": [
+        "returns",
+        "prices"
+      ]
+    },
+    "returns_type": {
+      "control": "choice",
+      "choices": [
+        "log",
+        "simple"
+      ]
+    },
+    "variance_model": {
+      "control": "choice",
+      "choices": [
+        "arch",
+        "garch",
+        "gjr",
+        "egarch"
+      ]
+    },
+    "arch_order": {
+      "control": "integer",
+      "min": 1,
+      "max": 3
+    },
+    "garch_order": {
+      "control": "integer",
+      "min": 0,
+      "max": 3
+    },
+    "arma_order": {
+      "control": "integer",
+      "min": 0,
+      "max": 5
+    },
+    "garch_distribution": {
+      "control": "choice",
+      "choices": [
+        "norm",
+        "std",
+        "sstd"
+      ]
+    },
+    "se_garch": {
+      "control": "choice",
+      "choices": [
+        "robust",
+        "classical"
+      ]
+    },
+    "risk_level": {
+      "control": "number",
+      "above": 0.5,
+      "below": 1
+    },
+    "output_volatility": {
+      "control": "choice",
+      "choices": [
+        "volatility",
+        "results"
+      ]
+    },
+    "risk_model": {
+      "control": "choice",
+      "choices": [
+        "garch",
+        "arima"
+      ]
+    },
+    "aggregate": {
+      "control": "choice",
+      "choices": [
+        "last",
+        "sum",
+        "relative_change"
+      ]
+    },
+    "paths": {
+      "control": "integer",
+      "min": 100,
+      "max": 10000000
+    },
+    "innovations": {
+      "control": "choice",
+      "choices": [
+        "parametric",
+        "bootstrap"
+      ]
+    },
+    "tail": {
+      "control": "choice",
+      "choices": [
+        "lower",
+        "upper"
+      ]
+    },
+    "risk_threshold": {
+      "control": "number",
+      "min": -999999999999999,
+      "max": 999999999999999
+    },
+    "risk_position": {
+      "control": "number",
+      "above": 0,
+      "max": 999999999999999
+    },
+    "output_risk": {
+      "control": "choice",
+      "choices": [
+        "risk_summary",
+        "paths",
+        "results"
+      ]
     }
   },
   "season_of_frequency": {
@@ -1024,6 +1144,45 @@
       "filled": "Boolean",
       "is_holdout": "Boolean",
       "is_forecast": "Boolean"
+    },
+    "volatility": {
+      "time": "=time",
+      "observed": "Float64",
+      "return": "Float64",
+      "mean": "Float64",
+      "sigma": "Float64",
+      "std_residual": "Float64",
+      "var": "Float64",
+      "violation": "Boolean",
+      "is_holdout": "Boolean",
+      "is_forecast": "Boolean"
+    },
+    "risk_summary": {
+      "step": "Int32",
+      "time": "=time",
+      "mean": "Float64",
+      "sd": "Float64",
+      "quantile_*": "Float64",
+      "price_quantile_*": "Float64",
+      "price_mean": "Float64",
+      "var": "Float64",
+      "var_low": "Float64",
+      "var_high": "Float64",
+      "es": "Float64",
+      "es_low": "Float64",
+      "es_high": "Float64",
+      "prob_beyond": "Float64",
+      "prob_crossed": "Float64",
+      "band_error": "Float64"
+    },
+    "paths": {
+      "path": "Int32",
+      "step": "Int32",
+      "time": "=time",
+      "value": "Float64",
+      "cumulative": "Float64",
+      "price": "Float64",
+      "sigma": "Float64"
     }
   },
   "rows_input_types": {
@@ -1170,6 +1329,16 @@
       "level": "required",
       "level_2": "required",
       "indexed": true
+    },
+    "backtest": {
+      "level": "required",
+      "level_2": "null",
+      "indexed": false
+    },
+    "risk": {
+      "level": "required",
+      "level_2": "optional",
+      "indexed": false
     }
   },
   "verdicts": [
@@ -1204,7 +1373,9 @@
       "label": "models.groups.timeseries",
       "models": [
         "arima",
-        "decomposition"
+        "decomposition",
+        "garch",
+        "risk_simulation"
       ]
     },
     {
@@ -5102,6 +5273,1276 @@
               ]
             }
           }
+        }
+      ]
+    },
+    {
+      "id": "garch",
+      "group": "timeseries",
+      "family": "timeseries",
+      "label": "models.garch.name",
+      "card": true,
+      "max_rows": null,
+      "needs": {
+        "time": "time_column",
+        "value": "number_column",
+        "frequency": "frequency"
+      },
+      "takes": {
+        "input_kind": "input_kind",
+        "returns_type": "returns_type",
+        "variance_model": "variance_model",
+        "arch_order": "arch_order",
+        "garch_order": "garch_order",
+        "ar_order": "arma_order",
+        "ma_order": "arma_order",
+        "mean": "boolean",
+        "distribution": "garch_distribution",
+        "se_type": "se_garch",
+        "horizon": "horizon",
+        "holdout": "holdout",
+        "var_level": "risk_level",
+        "lb_lag": "lb_lag",
+        "arch_lags": "lb_lag",
+        "alpha": "alpha",
+        "seed": "seed",
+        "output": "output_volatility"
+      },
+      "defaults": {
+        "input_kind": "returns",
+        "returns_type": "log",
+        "variance_model": "garch",
+        "arch_order": 1,
+        "garch_order": 1,
+        "ar_order": 0,
+        "ma_order": 0,
+        "distribution": "std",
+        "se_type": "robust",
+        "mean": true,
+        "horizon": 10,
+        "holdout": 0,
+        "var_level": 0.99,
+        "lb_lag": "auto",
+        "arch_lags": "auto",
+        "alpha": 0.05,
+        "seed": 1,
+        "output": "volatility"
+      },
+      "applies": {
+        "returns_type": {
+          "input_kind": [
+            "prices"
+          ]
+        },
+        "garch_order": {
+          "variance_model": [
+            "garch",
+            "gjr",
+            "egarch"
+          ]
+        }
+      },
+      "requires": [],
+      "forbids": [],
+      "disjoint": [
+        "time",
+        "value"
+      ],
+      "presets": {},
+      "variants": [
+        {
+          "id": "default",
+          "when": {},
+          "sections": {
+            "model": {
+              "levels": null,
+              "texts": [
+                "model",
+                "variant",
+                "formula",
+                "software",
+                "group_version",
+                "rows_from",
+                "note_*",
+                "model_name",
+                "variance_model",
+                "distribution",
+                "input_kind",
+                "returns_type",
+                "se_type",
+                "frequency",
+                "time_kind",
+                "solver"
+              ],
+              "numbers": [
+                "n",
+                "n_missing",
+                "first",
+                "last",
+                "alpha",
+                "scale",
+                "holdout",
+                "horizon",
+                "var_level",
+                "log_lik",
+                "aic",
+                "bic",
+                "persistence",
+                "half_life",
+                "half_life_time",
+                "uncond_sigma",
+                "sigma_last",
+                "sigma_next",
+                "lb_lag_used",
+                "arch_lags_used",
+                "kappa"
+              ]
+            },
+            "coef": {
+              "levels": null,
+              "numbers": [
+                "estimate",
+                "std_error",
+                "statistic",
+                "p_value",
+                "ci_low",
+                "ci_high"
+              ],
+              "texts": [
+                "significance"
+              ]
+            },
+            "assumption": {
+              "levels": [
+                "ljung_box_z",
+                "ljung_box_z2",
+                "arch_lm",
+                "nyblom",
+                "sign_bias",
+                "at_bound",
+                "variance_stationary"
+              ],
+              "numbers": [
+                "statistic",
+                "df",
+                "df_2",
+                "p_value",
+                "threshold",
+                "value",
+                "count",
+                "lag",
+                "p_adjusted"
+              ],
+              "texts": [
+                "h0",
+                "verdict",
+                "advice",
+                "significance",
+                "rows",
+                "advice_id"
+              ]
+            },
+            "backtest": {
+              "levels": [
+                "kupiec",
+                "christoffersen_ind",
+                "christoffersen_cc",
+                "counts"
+              ],
+              "numbers": [
+                "statistic",
+                "df",
+                "p_value",
+                "violations",
+                "expected_violations",
+                "violation_rate",
+                "n00",
+                "n01",
+                "n10",
+                "n11",
+                "longest_run"
+              ],
+              "texts": [
+                "significance",
+                "verdict",
+                "h0"
+              ]
+            },
+            "curve": {
+              "levels": [
+                "returns",
+                "sigma",
+                "news_impact",
+                "backtest",
+                "density"
+              ],
+              "numbers": [
+                "y"
+              ],
+              "texts": []
+            },
+            "point": {
+              "levels": [
+                "std_residual",
+                "violation",
+                "qq"
+              ],
+              "numbers": [
+                "y"
+              ],
+              "texts": []
+            },
+            "lag": {
+              "levels": [
+                "z_acf",
+                "z2_acf"
+              ],
+              "numbers": [
+                "acf",
+                "bound"
+              ],
+              "texts": []
+            },
+            "hist": {
+              "levels": [
+                "std_residual"
+              ],
+              "numbers": [
+                "count"
+              ],
+              "texts": []
+            },
+            "reading": {
+              "levels": [
+                "summary",
+                "persistence",
+                "asymmetry",
+                "distribution",
+                "residuals",
+                "stability",
+                "backtest",
+                "method",
+                "formulas"
+              ],
+              "numbers": [],
+              "texts": [
+                "line_*"
+              ]
+            }
+          },
+          "charts": [
+            {
+              "id": "returns",
+              "under": null
+            },
+            {
+              "id": "sigma",
+              "under": null
+            },
+            {
+              "id": "std_residual",
+              "under": null
+            },
+            {
+              "id": "news_impact",
+              "under": null
+            },
+            {
+              "id": "z_acf",
+              "under": "ljung_box_z"
+            },
+            {
+              "id": "z2_acf",
+              "under": "ljung_box_z2"
+            },
+            {
+              "id": "std_residual_hist",
+              "under": "arch_lm"
+            },
+            {
+              "id": "qq",
+              "under": "arch_lm"
+            },
+            {
+              "id": "backtest",
+              "under": null
+            }
+          ],
+          "outputs": {
+            "volatility": [
+              "time",
+              "observed",
+              "return",
+              "mean",
+              "sigma",
+              "std_residual",
+              "var",
+              "violation",
+              "is_holdout",
+              "is_forecast"
+            ]
+          },
+          "rows_when": {
+            "return": {
+              "input_kind": [
+                "prices"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "risk_simulation",
+      "group": "timeseries",
+      "family": "timeseries",
+      "label": "models.risk_simulation.name",
+      "card": false,
+      "max_rows": null,
+      "needs": {
+        "time": "time_column",
+        "value": "number_column",
+        "frequency": "frequency"
+      },
+      "takes": {
+        "model": "risk_model",
+        "input_kind": "input_kind",
+        "returns_type": "returns_type",
+        "variance_model": "variance_model",
+        "arch_order": "arch_order",
+        "garch_order": "garch_order",
+        "ar_order": "arma_order",
+        "ma_order": "arma_order",
+        "distribution": "garch_distribution",
+        "se_type": "se_garch",
+        "s": "season",
+        "orders": "orders",
+        "p": "order_pq",
+        "d": "order_d",
+        "q": "order_pq",
+        "P": "order_seasonal",
+        "D": "order_seasonal_d",
+        "Q": "order_seasonal",
+        "criterion": "criterion",
+        "stepwise": "boolean",
+        "max_p": "order_pq",
+        "max_q": "order_pq",
+        "max_P": "order_seasonal",
+        "max_Q": "order_seasonal",
+        "max_d": "order_d",
+        "max_D": "order_seasonal_d",
+        "unit_root_test": "unit_root_test",
+        "seasonal_test": "seasonal_test",
+        "drift": "boolean",
+        "transform": "transform",
+        "box_cox_lambda": "box_cox_lambda",
+        "mean": "boolean",
+        "aggregate": "aggregate",
+        "paths": "paths",
+        "horizon": "horizon",
+        "innovations": "innovations",
+        "var_level": "risk_level",
+        "es_level": "risk_level",
+        "tail": "tail",
+        "quantiles": "quantiles",
+        "threshold": "risk_threshold",
+        "position": "risk_position",
+        "drawdown": "boolean",
+        "holdout": "holdout",
+        "alpha": "alpha",
+        "seed": "seed",
+        "lb_lag": "lb_lag",
+        "arch_lags": "lb_lag",
+        "output": "output_risk"
+      },
+      "defaults": {
+        "model": "garch",
+        "input_kind": "returns",
+        "returns_type": "log",
+        "variance_model": "garch",
+        "arch_order": 1,
+        "garch_order": 1,
+        "ar_order": 0,
+        "ma_order": 0,
+        "distribution": "std",
+        "se_type": "robust",
+        "s": null,
+        "orders": "manual",
+        "p": 1,
+        "d": 0,
+        "q": 0,
+        "P": 0,
+        "D": 0,
+        "Q": 0,
+        "criterion": "aicc",
+        "stepwise": true,
+        "max_p": 5,
+        "max_q": 5,
+        "max_P": 2,
+        "max_Q": 2,
+        "max_d": 2,
+        "max_D": 1,
+        "unit_root_test": "kpss",
+        "seasonal_test": "seas",
+        "drift": false,
+        "transform": "none",
+        "box_cox_lambda": "auto",
+        "mean": true,
+        "aggregate": "last",
+        "paths": 10000,
+        "horizon": 10,
+        "innovations": "parametric",
+        "var_level": 0.99,
+        "es_level": 0.975,
+        "tail": "lower",
+        "quantiles": [
+          0.01,
+          0.05,
+          0.25,
+          0.5,
+          0.75,
+          0.95,
+          0.99
+        ],
+        "threshold": null,
+        "position": null,
+        "drawdown": true,
+        "holdout": 0,
+        "alpha": 0.05,
+        "seed": 1,
+        "lb_lag": "auto",
+        "arch_lags": "auto",
+        "output": "risk_summary"
+      },
+      "applies": {
+        "input_kind": {
+          "model": [
+            "garch"
+          ]
+        },
+        "returns_type": {
+          "model": [
+            "garch"
+          ],
+          "input_kind": [
+            "prices"
+          ]
+        },
+        "variance_model": {
+          "model": [
+            "garch"
+          ]
+        },
+        "arch_order": {
+          "model": [
+            "garch"
+          ]
+        },
+        "garch_order": {
+          "model": [
+            "garch"
+          ],
+          "variance_model": [
+            "garch",
+            "gjr",
+            "egarch"
+          ]
+        },
+        "ar_order": {
+          "model": [
+            "garch"
+          ]
+        },
+        "ma_order": {
+          "model": [
+            "garch"
+          ]
+        },
+        "distribution": {
+          "model": [
+            "garch"
+          ]
+        },
+        "se_type": {
+          "model": [
+            "garch"
+          ]
+        },
+        "s": {
+          "model": [
+            "arima"
+          ]
+        },
+        "orders": {
+          "model": [
+            "arima"
+          ]
+        },
+        "p": {
+          "model": [
+            "arima"
+          ],
+          "orders": [
+            "manual"
+          ]
+        },
+        "d": {
+          "model": [
+            "arima"
+          ],
+          "orders": [
+            "manual"
+          ]
+        },
+        "q": {
+          "model": [
+            "arima"
+          ],
+          "orders": [
+            "manual"
+          ]
+        },
+        "P": {
+          "model": [
+            "arima"
+          ],
+          "orders": [
+            "manual"
+          ]
+        },
+        "D": {
+          "model": [
+            "arima"
+          ],
+          "orders": [
+            "manual"
+          ]
+        },
+        "Q": {
+          "model": [
+            "arima"
+          ],
+          "orders": [
+            "manual"
+          ]
+        },
+        "criterion": {
+          "model": [
+            "arima"
+          ],
+          "orders": [
+            "auto"
+          ]
+        },
+        "stepwise": {
+          "model": [
+            "arima"
+          ],
+          "orders": [
+            "auto"
+          ]
+        },
+        "max_p": {
+          "model": [
+            "arima"
+          ],
+          "orders": [
+            "auto"
+          ]
+        },
+        "max_q": {
+          "model": [
+            "arima"
+          ],
+          "orders": [
+            "auto"
+          ]
+        },
+        "max_P": {
+          "model": [
+            "arima"
+          ],
+          "orders": [
+            "auto"
+          ]
+        },
+        "max_Q": {
+          "model": [
+            "arima"
+          ],
+          "orders": [
+            "auto"
+          ]
+        },
+        "max_d": {
+          "model": [
+            "arima"
+          ],
+          "orders": [
+            "auto"
+          ]
+        },
+        "max_D": {
+          "model": [
+            "arima"
+          ],
+          "orders": [
+            "auto"
+          ]
+        },
+        "unit_root_test": {
+          "model": [
+            "arima"
+          ],
+          "orders": [
+            "auto"
+          ]
+        },
+        "seasonal_test": {
+          "model": [
+            "arima"
+          ],
+          "orders": [
+            "auto"
+          ]
+        },
+        "drift": {
+          "model": [
+            "arima"
+          ]
+        },
+        "transform": {
+          "model": [
+            "arima"
+          ]
+        },
+        "box_cox_lambda": {
+          "model": [
+            "arima"
+          ],
+          "transform": [
+            "box_cox"
+          ]
+        },
+        "aggregate": {
+          "model": [
+            "arima"
+          ]
+        }
+      },
+      "requires": [],
+      "forbids": [],
+      "disjoint": [
+        "time",
+        "value"
+      ],
+      "presets": {},
+      "variants": [
+        {
+          "id": "garch",
+          "when": {
+            "model": [
+              "garch"
+            ]
+          },
+          "sections": {
+            "model": {
+              "levels": null,
+              "texts": [
+                "model",
+                "variant",
+                "formula",
+                "software",
+                "group_version",
+                "rows_from",
+                "note_*",
+                "model_name",
+                "variance_model",
+                "distribution",
+                "input_kind",
+                "returns_type",
+                "se_type",
+                "frequency",
+                "time_kind",
+                "solver",
+                "risk_variable",
+                "tail",
+                "innovations",
+                "aggregate"
+              ],
+              "numbers": [
+                "n",
+                "n_missing",
+                "first",
+                "last",
+                "alpha",
+                "scale",
+                "holdout",
+                "horizon",
+                "var_level",
+                "log_lik",
+                "aic",
+                "bic",
+                "persistence",
+                "half_life",
+                "half_life_time",
+                "uncond_sigma",
+                "sigma_last",
+                "sigma_next",
+                "lb_lag_used",
+                "arch_lags_used",
+                "kappa",
+                "paths",
+                "seed",
+                "seed_block",
+                "batches",
+                "batch_paths",
+                "bins",
+                "es_level",
+                "threshold",
+                "position",
+                "last_value",
+                "simulated_values",
+                "paths_bytes",
+                "seconds_simulation",
+                "seconds_pass_2"
+              ]
+            },
+            "coef": {
+              "levels": null,
+              "numbers": [
+                "estimate",
+                "std_error",
+                "statistic",
+                "p_value",
+                "ci_low",
+                "ci_high"
+              ],
+              "texts": [
+                "significance"
+              ]
+            },
+            "assumption": {
+              "levels": [
+                "ljung_box_z",
+                "ljung_box_z2",
+                "arch_lm",
+                "nyblom",
+                "sign_bias",
+                "at_bound",
+                "variance_stationary"
+              ],
+              "numbers": [
+                "statistic",
+                "df",
+                "df_2",
+                "p_value",
+                "threshold",
+                "value",
+                "count",
+                "lag",
+                "p_adjusted"
+              ],
+              "texts": [
+                "h0",
+                "verdict",
+                "advice",
+                "significance",
+                "rows",
+                "advice_id"
+              ]
+            },
+            "risk": {
+              "levels": [
+                "var",
+                "es",
+                "prob_beyond",
+                "prob_crossed",
+                "drawdown",
+                "moments"
+              ],
+              "numbers": [
+                "value",
+                "low",
+                "high",
+                "se",
+                "count",
+                "mean",
+                "sd",
+                "skewness",
+                "kurtosis",
+                "median"
+              ],
+              "texts": []
+            },
+            "backtest": {
+              "levels": [
+                "kupiec",
+                "christoffersen_ind",
+                "christoffersen_cc",
+                "counts"
+              ],
+              "numbers": [
+                "statistic",
+                "df",
+                "p_value",
+                "violations",
+                "expected_violations",
+                "violation_rate",
+                "n00",
+                "n01",
+                "n10",
+                "n11",
+                "longest_run"
+              ],
+              "texts": [
+                "significance",
+                "verdict",
+                "h0"
+              ]
+            },
+            "curve": {
+              "levels": [
+                "fan",
+                "term",
+                "backtest"
+              ],
+              "numbers": [
+                "y",
+                "band_error"
+              ],
+              "texts": []
+            },
+            "hist": {
+              "levels": [
+                "horizon",
+                "drawdown"
+              ],
+              "numbers": [
+                "count"
+              ],
+              "texts": []
+            },
+            "reading": {
+              "levels": [
+                "summary",
+                "var",
+                "es",
+                "threshold",
+                "drawdown",
+                "shape",
+                "fan",
+                "backtest",
+                "model",
+                "method",
+                "formulas"
+              ],
+              "numbers": [],
+              "texts": [
+                "line_*"
+              ]
+            }
+          },
+          "charts": [
+            {
+              "id": "fan",
+              "under": null
+            },
+            {
+              "id": "horizon",
+              "under": null
+            },
+            {
+              "id": "drawdown",
+              "under": null
+            },
+            {
+              "id": "term",
+              "under": null
+            },
+            {
+              "id": "backtest",
+              "under": null
+            }
+          ],
+          "outputs": {
+            "risk_summary": [
+              "step",
+              "time",
+              "mean",
+              "sd",
+              "quantile_*",
+              "price_quantile_*",
+              "price_mean",
+              "var",
+              "var_low",
+              "var_high",
+              "es",
+              "es_low",
+              "es_high",
+              "prob_beyond",
+              "prob_crossed",
+              "band_error"
+            ],
+            "paths": [
+              "path",
+              "step",
+              "time",
+              "value",
+              "cumulative",
+              "price",
+              "sigma"
+            ]
+          },
+          "rows_when": {
+            "price_quantile_*": {
+              "model": [
+                "garch"
+              ],
+              "input_kind": [
+                "prices"
+              ]
+            },
+            "price_mean": {
+              "model": [
+                "garch"
+              ],
+              "input_kind": [
+                "prices"
+              ]
+            },
+            "price": {
+              "model": [
+                "garch"
+              ],
+              "input_kind": [
+                "prices"
+              ]
+            },
+            "sigma": {
+              "model": [
+                "garch"
+              ]
+            },
+            "prob_beyond": {
+              "threshold": true
+            },
+            "prob_crossed": {
+              "threshold": true
+            }
+          }
+        },
+        {
+          "id": "arima",
+          "when": {
+            "model": [
+              "arima"
+            ]
+          },
+          "sections": {
+            "model": {
+              "levels": null,
+              "texts": [
+                "model",
+                "variant",
+                "formula",
+                "software",
+                "group_version",
+                "rows_from",
+                "note_*",
+                "model_name",
+                "frequency",
+                "transform",
+                "time_kind",
+                "criterion",
+                "orders_reason_*",
+                "risk_variable",
+                "tail",
+                "innovations",
+                "aggregate"
+              ],
+              "numbers": [
+                "n",
+                "n_missing",
+                "p",
+                "d",
+                "q",
+                "P",
+                "D",
+                "Q",
+                "s",
+                "log_lik",
+                "aic",
+                "aicc",
+                "bic",
+                "sigma2",
+                "rmse",
+                "mae",
+                "mape",
+                "mase",
+                "holdout",
+                "holdout_rmse",
+                "holdout_mae",
+                "holdout_mape",
+                "holdout_mase",
+                "box_cox_lambda",
+                "horizon",
+                "ar_root_modulus_*",
+                "ma_root_modulus_*",
+                "candidates",
+                "order_test_*",
+                "paths",
+                "seed",
+                "seed_block",
+                "batches",
+                "batch_paths",
+                "bins",
+                "var_level",
+                "es_level",
+                "threshold",
+                "position",
+                "last_value",
+                "simulated_values",
+                "paths_bytes",
+                "seconds_simulation",
+                "seconds_pass_2"
+              ]
+            },
+            "coef": {
+              "levels": null,
+              "numbers": [
+                "estimate",
+                "std_error",
+                "statistic",
+                "p_value",
+                "ci_low",
+                "ci_high"
+              ],
+              "texts": [
+                "significance"
+              ]
+            },
+            "assumption": {
+              "levels": [
+                "adf",
+                "kpss",
+                "stationarity",
+                "roots",
+                "ljung_box_10",
+                "ljung_box_2s",
+                "arch_lm",
+                "variance_ratio",
+                "jarque_bera"
+              ],
+              "numbers": [
+                "statistic",
+                "df",
+                "df_2",
+                "p_value",
+                "threshold",
+                "value",
+                "count"
+              ],
+              "texts": [
+                "h0",
+                "verdict",
+                "advice",
+                "significance",
+                "rows",
+                "advice_id"
+              ]
+            },
+            "candidate": {
+              "levels": null,
+              "numbers": [
+                "aicc",
+                "aic",
+                "bic",
+                "converged",
+                "chosen"
+              ],
+              "texts": []
+            },
+            "risk": {
+              "levels": [
+                "var",
+                "es",
+                "prob_beyond",
+                "prob_crossed",
+                "drawdown",
+                "moments"
+              ],
+              "numbers": [
+                "value",
+                "low",
+                "high",
+                "se",
+                "count",
+                "mean",
+                "sd",
+                "skewness",
+                "kurtosis",
+                "median"
+              ],
+              "texts": []
+            },
+            "backtest": {
+              "levels": [
+                "kupiec",
+                "christoffersen_ind",
+                "christoffersen_cc",
+                "counts"
+              ],
+              "numbers": [
+                "statistic",
+                "df",
+                "p_value",
+                "violations",
+                "expected_violations",
+                "violation_rate",
+                "n00",
+                "n01",
+                "n10",
+                "n11",
+                "longest_run"
+              ],
+              "texts": [
+                "significance",
+                "verdict",
+                "h0"
+              ]
+            },
+            "curve": {
+              "levels": [
+                "fan",
+                "term",
+                "backtest"
+              ],
+              "numbers": [
+                "y",
+                "band_error"
+              ],
+              "texts": []
+            },
+            "hist": {
+              "levels": [
+                "horizon",
+                "drawdown"
+              ],
+              "numbers": [
+                "count"
+              ],
+              "texts": []
+            },
+            "reading": {
+              "levels": [
+                "summary",
+                "var",
+                "es",
+                "threshold",
+                "drawdown",
+                "shape",
+                "fan",
+                "backtest",
+                "model",
+                "method",
+                "formulas"
+              ],
+              "numbers": [],
+              "texts": [
+                "line_*"
+              ]
+            }
+          },
+          "charts": [
+            {
+              "id": "fan",
+              "under": null
+            },
+            {
+              "id": "horizon",
+              "under": null
+            },
+            {
+              "id": "drawdown",
+              "under": null
+            },
+            {
+              "id": "term",
+              "under": null
+            },
+            {
+              "id": "backtest",
+              "under": null
+            }
+          ],
+          "outputs": {
+            "risk_summary": [
+              "step",
+              "time",
+              "mean",
+              "sd",
+              "quantile_*",
+              "price_quantile_*",
+              "price_mean",
+              "var",
+              "var_low",
+              "var_high",
+              "es",
+              "es_low",
+              "es_high",
+              "prob_beyond",
+              "prob_crossed",
+              "band_error"
+            ],
+            "paths": [
+              "path",
+              "step",
+              "time",
+              "value",
+              "cumulative",
+              "price",
+              "sigma"
+            ]
+          },
+          "rows_when": {
+            "price_quantile_*": {
+              "model": [
+                "garch"
+              ],
+              "input_kind": [
+                "prices"
+              ]
+            },
+            "price_mean": {
+              "model": [
+                "garch"
+              ],
+              "input_kind": [
+                "prices"
+              ]
+            },
+            "price": {
+              "model": [
+                "garch"
+              ],
+              "input_kind": [
+                "prices"
+              ]
+            },
+            "sigma": {
+              "model": [
+                "garch"
+              ]
+            },
+            "prob_beyond": {
+              "threshold": true
+            },
+            "prob_crossed": {
+              "threshold": true
+            }
+          },
+          "max_rows": 20000
         }
       ]
     },
@@ -9558,6 +10999,7 @@
       ],
       "horizon": [
         "arima",
+        "garch",
         "clv",
         "bg_bb"
       ],
@@ -9639,6 +11081,12 @@
           "upper_80",
           "lower",
           "upper"
+        ]
+      },
+      "garch": {
+        "always": [
+          "prediction",
+          "prediction_var"
         ]
       },
       "clv:purchases": {

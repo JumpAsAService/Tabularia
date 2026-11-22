@@ -34,8 +34,9 @@ from tests.test_reports_render import chart_service  # noqa: F401 — the fake c
 
 NOW = datetime(2026, 11, 19, 23, 30, tzinfo=timezone.utc)
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "models"
-# a model whose fixture exists (results.py checks it) before its report does: none now (lot F4 drew the pre-trained forecast's)
-PENDING: set[str] = set()
+# a model whose fixture exists (results.py checks it) before its report does: the volatility and the risk simulation nodes' (lot G4 of
+# docs/specs/garch-risk.md draws them and takes this away; the pre-trained forecast's was drawn by lot F4)
+PENDING: set[str] = {"garch", "risk_simulation"}
 CASES = sorted(p.stem for p in FIXTURES.glob("*-*.json") if p.stem.split("-")[0] not in PENDING)
 DRAWN = {m: spec for m, spec in catalog.MODELS.items() if m not in PENDING}
 # the experiments' reports open with their decision, not with the checks, and the planning node has no check at all
