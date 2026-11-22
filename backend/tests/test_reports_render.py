@@ -281,6 +281,25 @@ def test_a_hotspot_carries_the_box_of_its_cell(tmp_path, chart_service):
 
 
 
+def test_a_short_table_asked_whole_starts_on_the_next_page_rather_than_leave_its_header_at_the_foot(tmp_path, chart_service):
+    """Lot G9 (the GARCH and risk reports, G8's finding): a table with `keep_whole` that does not fit what is left of a page
+    starts on the next page whole, where without it the page's foot kept its header and a row or two; a table longer than
+    half a page breaks as any table, asked or not. The page of each repetition of the header: where a click sorts it."""
+    def pages(n: int, keep: bool) -> list[int]:
+        d = samples.definition()
+        d["sections"]["body"]["items"] = [
+            {"id": "tall", "type": "text", "x": 0, "y": 0, "w": 186, "h": 222, "value": "Above the table"},
+            {"id": "t", "type": "table", "dataset": "orders", "x": 0, "y": 224, "w": 186, "h": 8,
+             "columns": [{"header": "Ordine", "value": "[order]"}, {"header": "Qtà", "value": "[qty]", "width": 20}],
+             "sort": [{"by": "[order]"}], "interactive": {"sort": True}, **({"keep_whole": True} if keep else {})}]
+        r = run(tmp_path / f"{n}-{keep}", chart_service, "svg", rows=n, definition=d)
+        return sorted({h["page"] for h in json.loads(r.path.read_text())["hotspots"] if h["kind"] == "sort"})
+
+    assert pages(8, False) == [1, 2]  # split: the header and a row or two at page 1's foot
+    assert pages(8, True) == [2]  # whole, on page 2
+    assert pages(70, True) == pages(70, False) == [1, 2, 3]  # longer than half a page: it breaks as before
+
+
 def test_a_closed_group_ends_the_repetition_of_the_header_before_it(tmp_path):
     """The Sample margins with «Dolci da ricorrenza» closed: «Biscotti» ends at the foot
     of page 1, and page 2 opened again with its header — nothing under it — because a closed

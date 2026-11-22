@@ -251,6 +251,11 @@ class TableItem(_Item):
     zebra: bool = False
     matrix: Matrix | None = None
     interactive: Interactive = Field(default_factory=Interactive)
+    # a short table is never split across two pages: when it does not fit what is left of a page, it starts on the next one
+    # whole, rather than leave its header and a row or two at the page's foot. Only a table of at most half a page (measured
+    # where it is laid out); a longer one breaks as any table. Set by the engine's own layouts on their short tables (the
+    # models' GARCH and risk reports), as keep_with_next; the designer does not offer it
+    keep_whole: bool = False
 
 
 class Series(_Model):

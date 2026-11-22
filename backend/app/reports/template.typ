@@ -311,7 +311,16 @@
   for (i, rows) in stretches.enumerate() {
     if i > 0 { pagebreak(weak: true) }
     if i == 0 or rows.len() > 0 {
-      pad(left: t.x * 1mm, block(width: t.w * 1mm, table-part(t, rows)))
+      let body = pad(left: t.x * 1mm, block(width: t.w * 1mm, table-part(t, rows)))
+      if t.at("whole", default: false) and page-room != none {
+        // a short table asked to stay whole (keep_whole): unbreakable when it is at most half a page, so it starts on the
+        // next page rather than leave its header and a row at this one's foot; a longer one breaks as any table
+        context {
+          if measure(body).height <= page-room / 2 { block(breakable: false, body) } else { body }
+        }
+      } else {
+        body
+      }
     }
   }
 }

@@ -889,12 +889,15 @@ class _Builder:
                            c=[c.text if not c.style else {"t": c.text, "st": c.style} for c in row.cells[row.span:]])
             rows.append(out)
         widths = self.column_widths(t)
-        return {"x": _round_mm(it.x), "w": _round_mm(it.w), "id": it.id,
-                "cols": [{"w": w, "align": c.align or ("right" if c.kind == "number" else "left"), "st": c.style}
-                         for w, c in zip(widths, t.cols)],
-                "head": t.head, "rows": rows, "repeat": it.repeat_header, "levels": t.levels,
-                "hot": self.hot(it, sortable) if self.interactive else None,
-                "sorted": sorted_by}
+        out = {"x": _round_mm(it.x), "w": _round_mm(it.w), "id": it.id,
+               "cols": [{"w": w, "align": c.align or ("right" if c.kind == "number" else "left"), "st": c.style}
+                        for w, c in zip(widths, t.cols)],
+               "head": t.head, "rows": rows, "repeat": it.repeat_header, "levels": t.levels,
+               "hot": self.hot(it, sortable) if self.interactive else None,
+               "sorted": sorted_by}
+        if it.keep_whole:  # only when asked: every other table's model is what it was
+            out["whole"] = True
+        return out
 
 
     @staticmethod
