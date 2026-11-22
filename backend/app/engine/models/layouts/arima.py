@@ -24,6 +24,7 @@ from typing import Any, Mapping
 from app.engine.models import catalog
 from app.engine.models.layouts import common as c
 from app.engine.models.layouts import register
+from app.engine.models.layouts import shared_readings as shared
 from app.engine.stats import layouts as stats
 
 
@@ -67,8 +68,19 @@ def _caption(p: stats.Page, w: dict, id_: str, check: str, x: float, y: float, w
            "style": {"size": 7, "color": c.MUTED}, "visible": f"=COUNTIF([key] = {c.q(key)}) > 0"})
 
 
+def _verdict_of_table(check: str, p: str, alpha: float) -> tuple[str, str]:
+    """When ADF or KPSS rejects and when it keeps, as expressions of its p-value `p`: `table_rejects` said for the page
+    (alpha is the node's, known here). Beyond the end of its table neither holds: the test gives no verdict."""
+    low, high = c.BOUNDED_P[check]
+    inside = f"{p} > {low!r} AND {p} < {high!r}"
+    rejects = [f"({inside} AND {p} < {alpha!r})"] + ([f"{p} <= {low!r}"] if alpha >= low else [])
+    keeps = [f"({inside} AND {p} >= {alpha!r})"] + ([f"{p} >= {high!r}"] if alpha <= high else [])
+    return "(" + " OR ".join(rejects) + ")", "(" + " OR ".join(keeps) + ")"
+
+
 def _stationarity(params: dict[str, Any]):
-    """ADF and KPSS read together: the four cases, this series' one marked."""
+    """ADF and KPSS read together: the four cases, this series' one marked, each test read by the side of its table as
+    the reading reads it (`table_rejects`); with a test that gives no verdict, none is marked."""
     alpha = float(params.get("alpha") or 0.05)
 
     def block(p: stats.Page, w: dict) -> None:
@@ -81,8 +93,9 @@ def _stationarity(params: dict[str, Any]):
                visible="=" + computed)
         p.keep()
         rule = {"1": (True, False), "2": (False, True), "3": (True, True), "4": (False, False)}
+        sides = {"adf": _verdict_of_table("adf", adf, alpha), "kpss": _verdict_of_table("kpss", kpss, alpha)}
         for k, (adf_rejects, kpss_rejects) in rule.items():
-            this = (f"({adf} {'<' if adf_rejects else '>='} {alpha!r}) AND ({kpss} {'<' if kpss_rejects else '>='} {alpha!r})")
+            this = f"{sides['adf'][0 if adf_rejects else 1]} AND {sides['kpss'][0 if kpss_rejects else 1]}"
             for marked in (True, False):
                 value = ("» " if marked else "   ") + cases[k] + (" — " + cases["this_series"] if marked else "")
                 p.text(f"case_{k}" + ("_this" if marked else ""), stats.static(value), h=5, advance=not marked, size=8.5,
@@ -394,28 +407,16 @@ def readings(rows: list[dict], checked: Mapping[str, Any]) -> list[c.ReadingLine
         out.append(("assumptions", None, f"{name}_reject", {"p": x["p_value"], "alpha": alpha}))
     if tested and not rejected:
         out.append(("assumptions", None, "residuals_keep_all", {"total": len(tested), "alpha": alpha}))
-    elif len(tested) > len(rejected):
-        out.append(("assumptions", None, "residuals_keep_others", {"k": len(tested) - len(rejected), "alpha": alpha}))
+    elif len(tested) > len(rejected):  # named as the table names them, in its order (five tests at most)
+        others = [f"check:{name}" for name, x in tested if x["p_value"] >= alpha]
+        out.append(("assumptions", None, "residuals_keep_others", {"k": len(others), "names": others, "alpha": alpha}))
     roots = check("roots")
     if roots["verdict"] in ("doubtful", "failed") and _number(roots["value"]) is not None and _number(roots["threshold"]) is not None:
         out.append(("assumptions", None, "roots_threshold", {"value": roots["value"], "threshold": roots["threshold"]}))
     if n > c.MANY_ROWS:
         out.append(("assumptions", None, "assumptions_many_rows", {"n": n}))
-    # the coefficients whose p-value is below alpha, by their p-value
-    terms = [(r["level"], _number(r.get("value"))) for r in rows if r["section"] == "coef" and r["stat"] == "p_value"]
-    terms = [(t, pv) for t, pv in terms if pv is not None]
-    if terms:
-        below = sorted((pv, i, t) for i, (t, pv) in enumerate(terms) if pv < alpha)
-        names = [t for _, _, t in below[:NAMED]]
-        if not below:
-            out.append(("coefficients", None, "coef_none", {"total": len(terms), "alpha": alpha}))
-        elif len(below) > NAMED:
-            out.append(("coefficients", None, "coef_some_more", {"k": len(below), "total": len(terms), "names": names,
-                                                                  "more": len(below) - NAMED, "alpha": alpha}))
-        elif len(below) == 1:
-            out.append(("coefficients", None, "coef_one", {"total": len(terms), "names": names, "alpha": alpha}))
-        else:
-            out.append(("coefficients", None, "coef_some", {"k": len(below), "total": len(terms), "names": names, "alpha": alpha}))
+    # the coefficients whose p-value is below alpha, by their p-value: the lines every model shares (common.json's words)
+    out += shared.coefficient_lines(rows, checked)[0]
     # the forecast and the errors on the holdout (in sample without one)
     forecast = any(r["section"] == "curve" and r["level"] == "forecast" and r["stat"] == "forecast" for r in rows)
     if forecast and model["horizon"]:

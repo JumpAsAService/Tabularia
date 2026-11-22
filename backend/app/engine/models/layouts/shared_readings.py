@@ -3,8 +3,8 @@ lines every model shares», lot B2): the checks of the assumptions and the tests
 the runner wrote. A verdict comes only from a p-value compared with the node's α; a check read by a threshold is said
 by its number and its threshold, never as a verdict. Nothing is computed: the lines select, count and sort rows.
 
-Every model's file calls these from the function it registers in `common.READINGS`; the words are each model's
-(`report_texts/<model>.json`: `assumptions_*`, `threshold_*`, `coef_*`, `more_in_table`).
+Every model's file calls these from the function it registers in `common.READINGS`; the words they share are in
+`report_texts/common.json` (`assumptions_*`, `threshold_*`, `coef_*`, `more_in_table`, lot B4), a model's own over them.
 """
 from __future__ import annotations
 
@@ -63,13 +63,19 @@ def listed(block: str, names: list[str]) -> tuple[list[str], list[c.ReadingLine]
     return names[:LISTED], ([(block, None, "more_in_table", {"more": more})] if more > 0 else [])
 
 
+def check_id(r: Mapping[str, Any]) -> str:
+    """A check as a reading names it: «check:<id>», «check:<id>|<term>» for a check of each term (Schoenfeld's); the page
+    says it in its words (`common.structured_note`, `values.reading_names`)."""
+    return f"check:{r['level']}" + (f"|{r['level_2']}" if r.get("level_2") not in (None, "") else "")
+
+
 def is_number(v: Any) -> bool:
     return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
 
 
 def assumption_lines(rows: list[dict], checked: Mapping[str, Any], *, tests: bool = True) -> list[c.ReadingLine]:
     """The reading of the checks: those that are tests, by their p-values against α (`assumptions_rejected`, the checks
-    whose test rejects its hypothesis, counted; `assumptions_none_rejected`); those read
+    whose test rejects its hypothesis, counted and named, five at most; `assumptions_none_rejected`); those read
     by a threshold and marked past it, by their numbers (`threshold_<check>`); with many rows, that a test then rejects
     departures too small to matter (`assumptions_many_rows`)."""
     a, k = alpha(checked), keyed(rows)
@@ -77,8 +83,10 @@ def assumption_lines(rows: list[dict], checked: Mapping[str, Any], *, tests: boo
     tested = [r for r in rows if r["section"] == "assumption" and r["stat"] == "p_value" and is_number(r.get("value"))]
     if tests and tested:
         rejected = [r for r in tested if r["value"] < a]
-        if rejected:  # counted, not named: the table marks them (a check's name in the page's words is not the layout's)
-            lines.append(("assumptions", None, "assumptions_rejected", {"count": len(rejected), "total": len(tested), "alpha": a}))
+        if rejected:  # named as the table names them (`check:<id>`, said by `values.reading_names`), in the table's order
+            shown, more = listed("assumptions", [check_id(r) for r in rejected])
+            lines += [("assumptions", None, "assumptions_rejected", {"count": len(rejected), "total": len(tested), "names": shown,
+                                                                     "alpha": a}), *more]
         else:
             lines.append(("assumptions", None, "assumptions_none_rejected", {"total": len(tested), "alpha": a}))
     with_p = {(r["level"], r.get("level_2")) for r in tested}

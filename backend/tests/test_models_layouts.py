@@ -439,6 +439,26 @@ def test_the_learning_curve_of_the_stop_metric_is_drawn_only_when_it_is_not_the_
     assert stop["options"]["target_x"] == [common.num(common.model_key("best_iteration")) + " + 1"]
 
 
+@pytest.mark.parametrize("case, params", [("catboost-multiclass", {}), ("xgboost-binary", {"stop_metric": "error"}),
+                                           *((c, {}) for c in CASES)])
+def test_a_chart_s_note_is_under_the_verdict_of_its_check_never_on_it(case, params):
+    """A chart with both a verdict (the check it illustrates) and a note on how to read it (CatBoost multiclass with
+    balanced weights: «Overfitting — ✓ ok» and the weighted curves; a binary error rate) draws the note under the
+    verdict, and the row of charts keeps room for both (lot B4)."""
+    model, fixed, _ = fixture(case)
+    items = layouts.definition(model, {**fixed, **params}, "en")["sections"]["body"]["items"]
+    by_id = {it["id"]: it for it in items}
+    for it in items:
+        chart = by_id.get(it["id"][:-len("_how")]) if it["id"].endswith("_how") else None
+        verdict = by_id.get(chart["id"] + "_caption") if chart and chart["type"] == "chart" else None
+        if verdict is None or verdict["x"] != it["x"] or it["y"] < chart["y"] + chart["h"]:  # not a note under the chart
+            continue
+        assert it["y"] >= verdict["y"] + verdict["h"], (case, it["id"])
+        for row in [r for r in items if r["type"] == "rect" and r["id"].endswith("_keep") and r["y"] == chart["y"]]:
+            # the row keeps the note with it (the captions start 0.3 mm under the charts, as they always did)
+            assert row["y"] + row["h"] >= it["y"] + it["h"] - 0.31, (case, it["id"])
+
+
 def test_the_hyperparameters_are_the_nodes_with_the_defaults_filled_in(tmp_path, chart_service, monkeypatch):  # noqa: F811
     _, page = draw(tmp_path, chart_service, monkeypatch, "xgboost-regression")
     line = next(s for s in strings(json.loads(page)) if s.startswith("Hyperparameters: "))

@@ -185,10 +185,10 @@
   "cases": {
    "title": "ADF and KPSS read together",
    "alpha": "The four cases of the two tests at α = {alpha}, on the differenced series:",
-   "1": "ADF rejects a unit root, KPSS keeps stationarity: the differences are enough.",
-   "2": "ADF keeps a unit root, KPSS rejects stationarity: difference once more (d + 1).",
-   "3": "Both reject: a trend or a break, look at the series.",
-   "4": "Neither rejects: the series is too short or too noisy for them to tell; read the correlograms.",
+   "1": "ADF rejects a unit root, KPSS does not reject stationarity: both point to a constant level.",
+   "2": "ADF does not reject a unit root, KPSS rejects stationarity: the level is not constant; try d + 1.",
+   "3": "Both reject: the level drifts, a trend or a break; look at the series.",
+   "4": "Neither rejects: the two tests do not tell; read the correlograms.",
    "this_series": "this series",
    "none": "The two tests were not computed: the differenced series is too short."
   },
@@ -324,13 +324,9 @@
    "variance_ratio_reject": "The F test rejects the same variance of the residuals in the first and in the last third of the series (p-value {p:p}, below α = {alpha:num}): the bands assume a constant one.",
    "jarque_bera_reject": "Jarque–Bera rejects normal residuals (p-value {p:p}, below α = {alpha:num}): the bands, which assume normal errors, are approximate.",
    "residuals_keep_all": "None of the {total:int} tests on the residuals rejects its hypothesis at α = {alpha:num}: the data do not show autocorrelation, a changing variance or errors far from normal, which does not prove there are none.",
-   "residuals_keep_others": "The other {k:int} tests on the residuals do not reject theirs at α = {alpha:num}.",
+   "residuals_keep_others": "The other {k:int} tests on the residuals do not reject theirs at α = {alpha:num}: {names}.",
    "roots_threshold": "The smallest modulus of the roots of the AR and MA polynomials is {value:num}, below the threshold of {threshold:num} the page uses; at 1 the fit would have a unit root (AR) or could not be inverted (MA).",
    "assumptions_many_rows": "With {n:int} observations the tests detect departures too small to matter: read their size in the charts too.",
-   "coef_one": "1 of the {total:int} coefficients is significant at α = {alpha:num} (its p-value is below it): {names}.",
-   "coef_some": "{k:int} of the {total:int} coefficients are significant at α = {alpha:num} (their p-value is below it): {names}.",
-   "coef_some_more": "{k:int} of the {total:int} coefficients are significant at α = {alpha:num} (their p-value is below it): {names} and {more:int} more.",
-   "coef_none": "None of the {total:int} coefficients is significant at α = {alpha:num}: the data do not show that any differs from zero, which does not prove that they are zero.",
    "forecast_horizon": "The forecast covers {horizon:int} periods after the last observation; the two bands would hold a future value with probability 80 % and {level:pct} if the model were right and its errors normal, and they widen with the distance.",
    "holdout_errors": "On the last {holdout:int} observations, kept out of the fit, the forecast misses the observed values by {mape:num} % on average (MAPE), and its mean absolute error is {mase:num} times the in-sample error of the naive forecast (MASE).",
    "sample_errors": "Without a holdout only the errors in sample are known: MAPE {mape:num} %, MASE {mase:num}; they describe how the model fits the past, not how it forecasts.",
@@ -373,7 +369,8 @@
    "assumptions_many_rows",
    "forecast_horizon",
    "holdout_errors",
-   "sample_errors"
+   "sample_errors",
+   "more_in_table"
   ]
  },
  "it": {
@@ -562,10 +559,10 @@
   "cases": {
    "title": "ADF e KPSS letti insieme",
    "alpha": "I quattro casi dei due test con α = {alpha}, sulla serie differenziata:",
-   "1": "L'ADF rifiuta la radice unitaria, il KPSS non rifiuta la stazionarietà: le differenze bastano.",
-   "2": "L'ADF non rifiuta la radice unitaria, il KPSS rifiuta la stazionarietà: differenziate ancora (d + 1).",
-   "3": "Rifiutano entrambi: un trend o una rottura, guardate la serie.",
-   "4": "Non rifiuta nessuno dei due: la serie è troppo corta o troppo rumorosa per dirlo; leggete i correlogrammi.",
+   "1": "L'ADF rifiuta la radice unitaria, il KPSS non rifiuta la stazionarietà: entrambi indicano un livello costante.",
+   "2": "L'ADF non rifiuta la radice unitaria, il KPSS rifiuta la stazionarietà: il livello non è costante; provate d + 1.",
+   "3": "Rifiutano entrambi: il livello deriva, un trend o una rottura; guardate la serie.",
+   "4": "Nessuno dei due rifiuta: i due test non decidono; leggete i correlogrammi.",
    "this_series": "questa serie",
    "none": "I due test non sono stati calcolati: la serie differenziata è troppo corta."
   },
@@ -701,13 +698,9 @@
    "variance_ratio_reject": "Il test F rifiuta la stessa varianza dei residui nel primo e nell'ultimo terzo della serie (p-value {p:p}, sotto α = {alpha:num}): le bande ne assumono una costante.",
    "jarque_bera_reject": "Jarque–Bera rifiuta residui normali (p-value {p:p}, sotto α = {alpha:num}): le bande, che assumono errori normali, sono approssimate.",
    "residuals_keep_all": "Nessuno dei {total:int} test sui residui rifiuta la sua ipotesi ad α = {alpha:num}: i dati non mostrano autocorrelazione, una varianza che cambia o errori lontani dalla normale, il che non dimostra che non ce ne siano.",
-   "residuals_keep_others": "Gli altri {k:int} test sui residui non rifiutano la loro ipotesi ad α = {alpha:num}.",
+   "residuals_keep_others": "Gli altri {k:int} test sui residui non rifiutano la loro ipotesi ad α = {alpha:num}: {names}.",
    "roots_threshold": "Il modulo più piccolo delle radici dei polinomi AR e MA è {value:num}, sotto la soglia di {threshold:num} che la pagina usa; a 1 il modello avrebbe una radice unitaria (AR) o non sarebbe invertibile (MA).",
    "assumptions_many_rows": "Con {n:int} osservazioni i test rilevano scostamenti troppo piccoli per contare: leggetene la grandezza anche nei grafici.",
-   "coef_one": "1 dei {total:int} coefficienti è significativo ad α = {alpha:num} (il suo p-value è sotto): {names}.",
-   "coef_some": "{k:int} dei {total:int} coefficienti sono significativi ad α = {alpha:num} (il loro p-value è sotto): {names}.",
-   "coef_some_more": "{k:int} dei {total:int} coefficienti sono significativi ad α = {alpha:num} (il loro p-value è sotto): {names} e altri {more:int}.",
-   "coef_none": "Nessuno dei {total:int} coefficienti è significativo ad α = {alpha:num}: i dati non mostrano che uno di essi sia diverso da zero, il che non dimostra che siano zero.",
    "forecast_horizon": "La previsione copre {horizon:int} periodi dopo l'ultima osservazione; le due bande conterrebbero un valore futuro con probabilità 80 % e {level:pct} se il modello fosse giusto e i suoi errori normali, e si allargano con la distanza.",
    "holdout_errors": "Sulle ultime {holdout:int} osservazioni, tenute fuori dalla stima, la previsione si scosta dai valori osservati del {mape:num} % in media (MAPE), e il suo errore assoluto medio è {mase:num} volte l'errore nel campione della previsione ingenua (MASE).",
    "sample_errors": "Senza un periodo di verifica si conoscono solo gli errori nel campione: MAPE {mape:num} %, MASE {mase:num}; descrivono come il modello si adatta al passato, non come prevede.",
@@ -750,7 +743,8 @@
    "assumptions_many_rows",
    "forecast_horizon",
    "holdout_errors",
-   "sample_errors"
+   "sample_errors",
+   "more_in_table"
   ]
  },
  "de": {
@@ -939,10 +933,10 @@
   "cases": {
    "title": "ADF und KPSS zusammen gelesen",
    "alpha": "Die vier Fälle der beiden Tests bei α = {alpha}, auf der differenzierten Reihe:",
-   "1": "ADF verwirft eine Einheitswurzel, KPSS behält die Stationarität: die Differenzen genügen.",
-   "2": "ADF behält eine Einheitswurzel, KPSS verwirft die Stationarität: noch einmal differenzieren (d + 1).",
-   "3": "Beide verwerfen: ein Trend oder ein Bruch, sehen Sie sich die Reihe an.",
-   "4": "Keiner verwirft: die Reihe ist zu kurz oder zu verrauscht für eine Aussage; lesen Sie die Korrelogramme.",
+   "1": "ADF verwirft eine Einheitswurzel, KPSS die Stationarität nicht: Beide deuten auf ein konstantes Niveau.",
+   "2": "ADF verwirft die Einheitswurzel nicht, KPSS die Stationarität: Das Niveau ist nicht konstant; versuchen Sie d + 1.",
+   "3": "Beide verwerfen: Das Niveau driftet, ein Trend oder ein Bruch; sehen Sie sich die Reihe an.",
+   "4": "Keiner verwirft: Die beiden Tests entscheiden nicht; lesen Sie die Korrelogramme.",
    "this_series": "diese Reihe",
    "none": "Die beiden Tests wurden nicht berechnet: die differenzierte Reihe ist zu kurz."
   },
@@ -1078,13 +1072,9 @@
    "variance_ratio_reject": "Der F-Test verwirft dieselbe Varianz der Residuen im ersten und im letzten Drittel der Reihe (p-Wert {p:p}, unter α = {alpha:num}): Die Bänder nehmen eine konstante an.",
    "jarque_bera_reject": "Jarque–Bera verwirft normalverteilte Residuen (p-Wert {p:p}, unter α = {alpha:num}): Die Bänder, die normalverteilte Fehler annehmen, sind Näherungen.",
    "residuals_keep_all": "Keiner der {total:int} Tests der Residuen verwirft seine Hypothese bei α = {alpha:num}: Die Daten zeigen keine Autokorrelation, keine sich ändernde Varianz und keine Fehler fern der Normalverteilung, was nicht beweist, dass es keine gibt.",
-   "residuals_keep_others": "Die übrigen {k:int} Tests der Residuen verwerfen ihre Hypothese bei α = {alpha:num} nicht.",
+   "residuals_keep_others": "Die übrigen {k:int} Tests der Residuen verwerfen ihre Hypothese bei α = {alpha:num} nicht: {names}.",
    "roots_threshold": "Der kleinste Betrag der Wurzeln der AR- und MA-Polynome ist {value:num}, unter der Schwelle von {threshold:num}, die die Seite verwendet; bei 1 hätte das Modell eine Einheitswurzel (AR) oder wäre nicht invertierbar (MA).",
    "assumptions_many_rows": "Bei {n:int} Beobachtungen erkennen die Tests Abweichungen, die zu klein sind, um ins Gewicht zu fallen: Lesen Sie ihre Größe auch in den Diagrammen.",
-   "coef_one": "1 der {total:int} Koeffizienten ist bei α = {alpha:num} signifikant (sein p-Wert liegt darunter): {names}.",
-   "coef_some": "{k:int} der {total:int} Koeffizienten sind bei α = {alpha:num} signifikant (ihr p-Wert liegt darunter): {names}.",
-   "coef_some_more": "{k:int} der {total:int} Koeffizienten sind bei α = {alpha:num} signifikant (ihr p-Wert liegt darunter): {names} und {more:int} weitere.",
-   "coef_none": "Keiner der {total:int} Koeffizienten ist bei α = {alpha:num} signifikant: Die Daten zeigen nicht, dass einer von null verschieden ist, was nicht beweist, dass sie null sind.",
    "forecast_horizon": "Die Prognose reicht {horizon:int} Perioden über die letzte Beobachtung hinaus; die beiden Bänder enthielten einen künftigen Wert mit Wahrscheinlichkeit 80 % und {level:pct}, wenn das Modell zuträfe und seine Fehler normalverteilt wären, und sie werden mit dem Abstand breiter.",
    "holdout_errors": "Auf den letzten {holdout:int} Beobachtungen, die nicht in die Anpassung eingingen, weicht die Prognose im Mittel um {mape:num} % von den beobachteten Werten ab (MAPE), und ihr mittlerer absoluter Fehler ist {mase:num}-mal der Fehler der naiven Prognose in der Stichprobe (MASE).",
    "sample_errors": "Ohne Testzeitraum sind nur die Fehler in der Stichprobe bekannt: MAPE {mape:num} %, MASE {mase:num}; sie beschreiben, wie das Modell die Vergangenheit abbildet, nicht wie es prognostiziert.",
@@ -1127,7 +1117,8 @@
    "assumptions_many_rows",
    "forecast_horizon",
    "holdout_errors",
-   "sample_errors"
+   "sample_errors",
+   "more_in_table"
   ]
  },
  "es": {
@@ -1316,10 +1307,10 @@
   "cases": {
    "title": "ADF y KPSS leídos juntos",
    "alpha": "Los cuatro casos de las dos pruebas con α = {alpha}, sobre la serie diferenciada:",
-   "1": "ADF rechaza una raíz unitaria, KPSS mantiene la estacionariedad: las diferencias bastan.",
-   "2": "ADF mantiene una raíz unitaria, KPSS rechaza la estacionariedad: diferencie una vez más (d + 1).",
-   "3": "Las dos rechazan: una tendencia o una ruptura, mire la serie.",
-   "4": "Ninguna rechaza: la serie es demasiado corta o ruidosa para decirlo; lea los correlogramas.",
+   "1": "ADF rechaza una raíz unitaria, KPSS no rechaza la estacionariedad: ambas apuntan a un nivel constante.",
+   "2": "ADF no rechaza una raíz unitaria, KPSS rechaza la estacionariedad: el nivel no es constante; pruebe d + 1.",
+   "3": "Las dos rechazan: el nivel deriva, una tendencia o una ruptura; mire la serie.",
+   "4": "Ninguna rechaza: las dos pruebas no deciden; lea los correlogramas.",
    "this_series": "esta serie",
    "none": "Las dos pruebas no se calcularon: la serie diferenciada es demasiado corta."
   },
@@ -1455,13 +1446,9 @@
    "variance_ratio_reject": "La prueba F rechaza la misma varianza de los residuos en el primer y en el último tercio de la serie (p-valor {p:p}, por debajo de α = {alpha:num}): las bandas suponen una constante.",
    "jarque_bera_reject": "Jarque–Bera rechaza residuos normales (p-valor {p:p}, por debajo de α = {alpha:num}): las bandas, que suponen errores normales, son aproximadas.",
    "residuals_keep_all": "Ninguna de las {total:int} pruebas de los residuos rechaza su hipótesis con α = {alpha:num}: los datos no muestran autocorrelación, una varianza que cambia ni errores lejos de la normal, lo que no demuestra que no los haya.",
-   "residuals_keep_others": "Las otras {k:int} pruebas de los residuos no rechazan la suya con α = {alpha:num}.",
+   "residuals_keep_others": "Las otras {k:int} pruebas de los residuos no rechazan la suya con α = {alpha:num}: {names}.",
    "roots_threshold": "El módulo más pequeño de las raíces de los polinomios AR y MA es {value:num}, por debajo del umbral de {threshold:num} que usa la página; en 1 el modelo tendría una raíz unitaria (AR) o no sería invertible (MA).",
    "assumptions_many_rows": "Con {n:int} observaciones las pruebas detectan desviaciones demasiado pequeñas para importar: lea también su tamaño en los gráficos.",
-   "coef_one": "1 de los {total:int} coeficientes es significativo con α = {alpha:num} (su p-valor está por debajo): {names}.",
-   "coef_some": "{k:int} de los {total:int} coeficientes son significativos con α = {alpha:num} (su p-valor está por debajo): {names}.",
-   "coef_some_more": "{k:int} de los {total:int} coeficientes son significativos con α = {alpha:num} (su p-valor está por debajo): {names} y {more:int} más.",
-   "coef_none": "Ninguno de los {total:int} coeficientes es significativo con α = {alpha:num}: los datos no muestran que alguno difiera de cero, lo que no demuestra que sean cero.",
    "forecast_horizon": "La previsión cubre {horizon:int} periodos tras la última observación; las dos bandas contendrían un valor futuro con probabilidad 80 % y {level:pct} si el modelo fuera correcto y sus errores normales, y se ensanchan con la distancia.",
    "holdout_errors": "En las últimas {holdout:int} observaciones, dejadas fuera del ajuste, la previsión se aparta de los valores observados un {mape:num} % de media (MAPE), y su error absoluto medio es {mase:num} veces el error en la muestra de la previsión ingenua (MASE).",
    "sample_errors": "Sin periodo de prueba solo se conocen los errores en la muestra: MAPE {mape:num} %, MASE {mase:num}; describen cómo el modelo se ajusta al pasado, no cómo prevé.",
@@ -1504,7 +1491,8 @@
    "assumptions_many_rows",
    "forecast_horizon",
    "holdout_errors",
-   "sample_errors"
+   "sample_errors",
+   "more_in_table"
   ]
  },
  "fr": {
@@ -1693,10 +1681,10 @@
   "cases": {
    "title": "ADF et KPSS lus ensemble",
    "alpha": "Les quatre cas des deux tests à α = {alpha}, sur la série différenciée :",
-   "1": "ADF rejette une racine unitaire, KPSS garde la stationnarité : les différences suffisent.",
-   "2": "ADF garde une racine unitaire, KPSS rejette la stationnarité : différenciez une fois de plus (d + 1).",
-   "3": "Les deux rejettent : une tendance ou une rupture, regardez la série.",
-   "4": "Aucun ne rejette : la série est trop courte ou trop bruitée pour trancher ; lisez les corrélogrammes.",
+   "1": "ADF rejette une racine unitaire, KPSS ne rejette pas la stationnarité : tous deux indiquent un niveau constant.",
+   "2": "ADF ne rejette pas la racine unitaire, KPSS rejette la stationnarité : le niveau n'est pas constant ; essayez d + 1.",
+   "3": "Les deux rejettent : le niveau dérive, une tendance ou une rupture ; regardez la série.",
+   "4": "Aucun ne rejette : les deux tests ne tranchent pas ; lisez les corrélogrammes.",
    "this_series": "cette série",
    "none": "Les deux tests n'ont pas été calculés : la série différenciée est trop courte."
   },
@@ -1832,13 +1820,9 @@
    "variance_ratio_reject": "Le test F rejette une même variance des résidus dans le premier et le dernier tiers de la série (p-valeur {p:p}, sous α = {alpha:num}) : les bandes en supposent une constante.",
    "jarque_bera_reject": "Jarque–Bera rejette des résidus normaux (p-valeur {p:p}, sous α = {alpha:num}) : les bandes, qui supposent des erreurs normales, sont approchées.",
    "residuals_keep_all": "Aucun des {total:int} tests des résidus ne rejette son hypothèse au seuil α = {alpha:num} : les données ne montrent ni autocorrélation, ni variance qui change, ni erreurs éloignées de la loi normale, ce qui ne démontre pas qu'il n'y en a pas.",
-   "residuals_keep_others": "Les {k:int} autres tests des résidus ne rejettent pas la leur au seuil α = {alpha:num}.",
+   "residuals_keep_others": "Les {k:int} autres tests des résidus ne rejettent pas la leur au seuil α = {alpha:num} : {names}.",
    "roots_threshold": "Le plus petit module des racines des polynômes AR et MA est {value:num}, sous le seuil de {threshold:num} que la page utilise ; à 1 le modèle aurait une racine unitaire (AR) ou ne serait pas inversible (MA).",
    "assumptions_many_rows": "Avec {n:int} observations les tests détectent des écarts trop petits pour compter : lisez aussi leur taille dans les graphiques.",
-   "coef_one": "1 des {total:int} coefficients est significatif au seuil α = {alpha:num} (sa p-valeur est en dessous) : {names}.",
-   "coef_some": "{k:int} des {total:int} coefficients sont significatifs au seuil α = {alpha:num} (leur p-valeur est en dessous) : {names}.",
-   "coef_some_more": "{k:int} des {total:int} coefficients sont significatifs au seuil α = {alpha:num} (leur p-valeur est en dessous) : {names} et {more:int} autres.",
-   "coef_none": "Aucun des {total:int} coefficients n'est significatif au seuil α = {alpha:num} : les données ne montrent pas que l'un d'eux diffère de zéro, ce qui ne démontre pas qu'ils sont nuls.",
    "forecast_horizon": "La prévision couvre {horizon:int} périodes après la dernière observation ; les deux bandes contiendraient une valeur future avec une probabilité de 80 % et {level:pct} si le modèle était juste et ses erreurs normales, et elles s'élargissent avec la distance.",
    "holdout_errors": "Sur les {holdout:int} dernières observations, tenues hors de l'ajustement, la prévision s'écarte des valeurs observées de {mape:num} % en moyenne (MAPE), et son erreur absolue moyenne vaut {mase:num} fois l'erreur dans l'échantillon de la prévision naïve (MASE).",
    "sample_errors": "Sans période de test, seules les erreurs dans l'échantillon sont connues : MAPE {mape:num} %, MASE {mase:num} ; elles décrivent comment le modèle suit le passé, pas comment il prévoit.",
@@ -1881,7 +1865,8 @@
    "assumptions_many_rows",
    "forecast_horizon",
    "holdout_errors",
-   "sample_errors"
+   "sample_errors",
+   "more_in_table"
   ]
  }
 }

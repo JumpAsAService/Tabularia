@@ -266,7 +266,28 @@
    "significance",
    "reliable",
    "must"
-  ]
+  ],
+  "reading_texts": {
+   "assumptions_none_rejected": "Checks that are tests: {total:int}; at α = {alpha:num} none rejects its hypothesis, every p-value is at or above α. The data do not show a departure from these assumptions; they do not prove there is none.",
+   "coef_some": "Terms whose coefficient is significantly different from 0 at α = {alpha:num} (p-value below α), the other terms held fixed: {count:int} of {total:int} — {names}. For the others the data do not show an effect; they do not prove there is none.",
+   "coef_all": "Every term's coefficient is significantly different from 0 at α = {alpha:num} (p-value below α), the other terms held fixed: {names}.",
+   "coef_none": "No term's coefficient is significantly different from 0 at α = {alpha:num}: each of the {total:int} p-values is at or above α. The data do not show an effect of any term; they do not prove there is none.",
+   "more_in_table": "And {more:int} more: the table lists them all.",
+   "method_p_value": "A p-value is the probability that chance alone, if the hypothesis under test were true, gives a result at least as far from it as the one observed. It is compared with α, the node's setting: below α the hypothesis is rejected, and α is the risk, accepted in advance, of rejecting a true one. Not rejecting is not proving: with few rows an existing departure may go unseen. Each test is read on its own; with many tests, some reject by chance alone.",
+   "method_se_cluster": "The standard errors are clustered: rows of the same cluster may be correlated with each other, rows of different clusters are taken as independent. With few clusters they are themselves imprecise.",
+   "threshold_vif": "Variance inflation (VIF) above the threshold of {threshold:num} the table uses: {names}, at {values:num}. A VIF says how many times the other terms inflate the variance of a coefficient; the threshold is a convention of the literature, not a test.",
+   "threshold_epv": "Events for each coefficient: {value:num}, below the threshold of {threshold:num} the table uses. With few events per coefficient the estimates and their intervals rest on little information; the threshold is a convention of the literature, not a test.",
+   "threshold_cooks_distance": "The largest Cook's distance is {value:num}, above the threshold of {threshold:num} (the median of F(p, n − p)); rows above it: {count:int}, named in the table. Cook's distance measures how much the fitted values move when a row is left out; the threshold is a convention, not a test.",
+   "threshold_leverage": "The largest leverage is {value:num}, above the threshold of {threshold:num}; rows above it: {count:int}, named in the table. Leverage measures how unusual a row's combination of predictors is; the threshold is a convention, not a test.",
+   "coef_hazard": "Among them, «{covariate}»: each unit more multiplies the hazard, the instantaneous risk of the event, by {ratio:num} (its {conf:pct} interval {low:num} to {high:num}), the other terms held fixed.",
+   "coef_hazard_level": "Among them, «{covariate}»: the level «{variant}» multiplies the hazard, the instantaneous risk of the event, by {ratio:num} against the reference level (its {conf:pct} interval {low:num} to {high:num}), the other terms held fixed.",
+   "assumptions_rejected": "Checks whose test rejects its hypothesis at α = {alpha:num}, its p-value below α: {count:int} of {total:int} — {names}. The table says what each departure means and what to do.",
+   "assumptions_many_rows": "With {n:int} rows the tests detect departures too small to matter: read their size in the charts too."
+  },
+  "reading_labels": {
+   "method_p_value": "p-values and α",
+   "method_se_cluster": "Clustered standard errors"
+  }
  },
  "it": {
   "footer": "Calcolato da Tabularia",
@@ -550,7 +571,28 @@
    "sufficienti",
    "insufficiente",
    "dovrebbero"
-  ]
+  ],
+  "reading_texts": {
+   "assumptions_none_rejected": "Controlli che sono test: {total:int}; ad α = {alpha:num} nessuno rifiuta la propria ipotesi, ogni p-value è pari o sopra α. I dati non mostrano uno scostamento da queste assunzioni; non dimostrano che non ce ne sia.",
+   "coef_some": "Termini il cui coefficiente è significativamente diverso da 0 ad α = {alpha:num} (p-value sotto α), a parità degli altri termini: {count:int} su {total:int} — {names}. Per gli altri i dati non mostrano un effetto; non dimostrano che non ci sia.",
+   "coef_all": "Il coefficiente di ogni termine è significativamente diverso da 0 ad α = {alpha:num} (p-value sotto α), a parità degli altri termini: {names}.",
+   "coef_none": "Nessun coefficiente è significativamente diverso da 0 ad α = {alpha:num}: ciascuno dei {total:int} p-value è pari o sopra α. I dati non mostrano un effetto di alcun termine; non dimostrano che non ci sia.",
+   "more_in_table": "E altri {more:int}: la tabella li elenca tutti.",
+   "method_p_value": "Un p-value è la probabilità che il solo caso, se l'ipotesi sotto esame fosse vera, dia un risultato lontano da essa almeno quanto quello osservato. Si confronta con α, impostato nel nodo: sotto α l'ipotesi è rifiutata, e α è il rischio, accettato in anticipo, di rifiutarne una vera. Non rifiutare non è dimostrare: con poche righe uno scostamento esistente può passare inosservato. Ogni test si legge da solo; con molti test, qualcuno rifiuta per puro caso.",
+   "method_se_cluster": "Gli errori standard sono per cluster: le righe dello stesso cluster possono essere correlate tra loro, quelle di cluster diversi sono prese come indipendenti. Con pochi cluster sono essi stessi imprecisi.",
+   "threshold_vif": "Inflazione della varianza (VIF) sopra la soglia di {threshold:num} usata dalla tabella: {names}, a {values:num}. Un VIF dice quante volte gli altri termini gonfiano la varianza di un coefficiente; la soglia è una convenzione della letteratura, non un test.",
+   "threshold_epv": "Eventi per coefficiente: {value:num}, sotto la soglia di {threshold:num} usata dalla tabella. Con pochi eventi per coefficiente le stime e i loro intervalli poggiano su poca informazione; la soglia è una convenzione della letteratura, non un test.",
+   "threshold_cooks_distance": "La distanza di Cook più grande è {value:num}, sopra la soglia di {threshold:num} (la mediana di F(p, n − p)); righe sopra la soglia: {count:int}, indicate nella tabella. La distanza di Cook misura quanto si spostano i valori stimati togliendo una riga; la soglia è una convenzione, non un test.",
+   "threshold_leverage": "La leva più grande è {value:num}, sopra la soglia di {threshold:num}; righe sopra la soglia: {count:int}, indicate nella tabella. La leva misura quanto è insolita la combinazione dei predittori di una riga; la soglia è una convenzione, non un test.",
+   "coef_hazard": "Tra questi, «{covariate}»: ogni unità in più moltiplica il rischio istantaneo dell'evento per {ratio:num} (intervallo al {conf:pct} da {low:num} a {high:num}), a parità degli altri termini.",
+   "coef_hazard_level": "Tra questi, «{covariate}»: il livello «{variant}» moltiplica il rischio istantaneo dell'evento per {ratio:num} rispetto al livello di riferimento (intervallo al {conf:pct} da {low:num} a {high:num}), a parità degli altri termini.",
+   "assumptions_rejected": "Controlli il cui test rifiuta la propria ipotesi ad α = {alpha:num}, con p-value sotto α: {count:int} su {total:int} — {names}. La tabella dice che cosa significa ogni scostamento e che cosa fare.",
+   "assumptions_many_rows": "Con {n:int} righe i test rilevano scostamenti troppo piccoli per contare: leggetene la grandezza anche nei grafici."
+  },
+  "reading_labels": {
+   "method_p_value": "p-value e α",
+   "method_se_cluster": "Errori standard per cluster"
+  }
  },
  "de": {
   "footer": "Berechnet von Tabularia",
@@ -842,7 +884,28 @@
    "guter",
    "gutes",
    "schlechten"
-  ]
+  ],
+  "reading_texts": {
+   "assumptions_none_rejected": "Prüfungen, die Tests sind: {total:int}; bei α = {alpha:num} verwirft keiner seine Hypothese, jeder p-Wert liegt bei oder über α. Die Daten zeigen keine Abweichung von diesen Annahmen; sie beweisen nicht, dass es keine gibt.",
+   "coef_some": "Terme, deren Koeffizient sich bei α = {alpha:num} signifikant von 0 unterscheidet (p-Wert unter α), bei festgehaltenen übrigen Termen: {count:int} von {total:int} — {names}. Für die übrigen zeigen die Daten keinen Effekt; sie beweisen nicht, dass es keinen gibt.",
+   "coef_all": "Der Koeffizient jedes Terms unterscheidet sich bei α = {alpha:num} signifikant von 0 (p-Wert unter α), bei festgehaltenen übrigen Termen: {names}.",
+   "coef_none": "Kein Koeffizient unterscheidet sich bei α = {alpha:num} signifikant von 0: Jeder der {total:int} p-Werte liegt bei oder über α. Die Daten zeigen keinen Effekt eines Terms; sie beweisen nicht, dass es keinen gibt.",
+   "more_in_table": "Und {more:int} weitere: Die Tabelle führt alle auf.",
+   "method_p_value": "Ein p-Wert ist die Wahrscheinlichkeit, dass der Zufall allein, wenn die geprüfte Hypothese wahr wäre, ein Ergebnis liefert, das mindestens so weit von ihr entfernt ist wie das beobachtete. Er wird mit α verglichen, der Einstellung des Knotens: Unter α wird die Hypothese verworfen, und α ist das im Voraus akzeptierte Risiko, eine wahre zu verwerfen. Nicht verwerfen heißt nicht beweisen: Mit wenigen Zeilen kann eine bestehende Abweichung unbemerkt bleiben. Jeder Test wird für sich gelesen; bei vielen Tests verwerfen einige allein durch Zufall.",
+   "method_se_cluster": "Die Standardfehler sind geclustert: Zeilen desselben Clusters dürfen miteinander korreliert sein, Zeilen verschiedener Cluster gelten als unabhängig. Bei wenigen Clustern sind sie selbst ungenau.",
+   "threshold_vif": "Varianzinflation (VIF) über der Schwelle von {threshold:num}, die die Tabelle verwendet: {names}, bei {values:num}. Ein VIF gibt an, um das Wievielfache die übrigen Terme die Varianz eines Koeffizienten aufblähen; die Schwelle ist eine Konvention der Literatur, kein Test.",
+   "threshold_epv": "Ereignisse je Koeffizient: {value:num}, unter der Schwelle von {threshold:num}, die die Tabelle verwendet. Mit wenigen Ereignissen je Koeffizient beruhen die Schätzungen und ihre Intervalle auf wenig Information; die Schwelle ist eine Konvention der Literatur, kein Test.",
+   "threshold_cooks_distance": "Die größte Cook-Distanz ist {value:num}, über der Schwelle von {threshold:num} (dem Median von F(p, n − p)); Zeilen darüber: {count:int}, in der Tabelle genannt. Die Cook-Distanz misst, wie weit sich die angepassten Werte verschieben, wenn eine Zeile weggelassen wird; die Schwelle ist eine Konvention, kein Test.",
+   "threshold_leverage": "Die größte Hebelwirkung ist {value:num}, über der Schwelle von {threshold:num}; Zeilen darüber: {count:int}, in der Tabelle genannt. Die Hebelwirkung misst, wie ungewöhnlich die Kombination der Prädiktoren einer Zeile ist; die Schwelle ist eine Konvention, kein Test.",
+   "coef_hazard": "Darunter «{covariate}»: Jede Einheit mehr multipliziert das Hazard, das momentane Risiko des Ereignisses, mit {ratio:num} (sein {conf:pct}-Intervall {low:num} bis {high:num}), bei festgehaltenen übrigen Termen.",
+   "coef_hazard_level": "Darunter «{covariate}»: Die Stufe «{variant}» multipliziert das Hazard, das momentane Risiko des Ereignisses, gegenüber der Referenzstufe mit {ratio:num} (sein {conf:pct}-Intervall {low:num} bis {high:num}), bei festgehaltenen übrigen Termen.",
+   "assumptions_rejected": "Prüfungen, deren Test seine Hypothese bei α = {alpha:num} verwirft, mit p-Wert unter α: {count:int} von {total:int} — {names}. Die Tabelle sagt, was jede Abweichung bedeutet und was zu tun ist.",
+   "assumptions_many_rows": "Bei {n:int} Zeilen erkennen die Tests Abweichungen, die zu klein sind, um ins Gewicht zu fallen: Lesen Sie ihre Größe auch in den Diagrammen."
+  },
+  "reading_labels": {
+   "method_p_value": "p-Werte und α",
+   "method_se_cluster": "Geclusterte Standardfehler"
+  }
  },
  "es": {
   "footer": "Calculado por Tabularia",
@@ -1127,7 +1190,28 @@
    "insuficiente",
    "sostiene",
    "apoya"
-  ]
+  ],
+  "reading_texts": {
+   "assumptions_none_rejected": "Comprobaciones que son contrastes: {total:int}; con α = {alpha:num} ninguno rechaza su hipótesis, todo p-valor es igual o superior a α. Los datos no muestran una desviación de estos supuestos; no prueban que no la haya.",
+   "coef_some": "Términos cuyo coeficiente es significativamente distinto de 0 con α = {alpha:num} (p-valor por debajo de α), con los demás términos fijos: {count:int} de {total:int} — {names}. Para los demás los datos no muestran un efecto; no prueban que no lo haya.",
+   "coef_all": "El coeficiente de cada término es significativamente distinto de 0 con α = {alpha:num} (p-valor por debajo de α), con los demás términos fijos: {names}.",
+   "coef_none": "Ningún coeficiente es significativamente distinto de 0 con α = {alpha:num}: cada uno de los {total:int} p-valores es igual o superior a α. Los datos no muestran un efecto de ningún término; no prueban que no lo haya.",
+   "more_in_table": "Y {more:int} más: la tabla los recoge todos.",
+   "method_p_value": "Un p-valor es la probabilidad de que el azar por sí solo, si la hipótesis contrastada fuera cierta, dé un resultado al menos tan alejado de ella como el observado. Se compara con α, el ajuste del nodo: por debajo de α la hipótesis se rechaza, y α es el riesgo, aceptado de antemano, de rechazar una cierta. No rechazar no es probar: con pocas filas una desviación existente puede pasar inadvertida. Cada contraste se lee por separado; con muchos contrastes, algunos rechazan solo por azar.",
+   "method_se_cluster": "Los errores estándar son por clúster: las filas del mismo clúster pueden estar correlacionadas entre sí, las de clústeres distintos se toman como independientes. Con pocos clústeres son ellos mismos imprecisos.",
+   "threshold_vif": "Inflación de la varianza (VIF) por encima del umbral de {threshold:num} que usa la tabla: {names}, con {values:num}. Un VIF indica cuántas veces los demás términos inflan la varianza de un coeficiente; el umbral es una convención de la literatura, no un contraste.",
+   "threshold_epv": "Eventos por coeficiente: {value:num}, por debajo del umbral de {threshold:num} que usa la tabla. Con pocos eventos por coeficiente, las estimaciones y sus intervalos descansan en poca información; el umbral es una convención de la literatura, no un contraste.",
+   "threshold_cooks_distance": "La mayor distancia de Cook es {value:num}, por encima del umbral de {threshold:num} (la mediana de F(p, n − p)); filas por encima: {count:int}, nombradas en la tabla. La distancia de Cook mide cuánto se mueven los valores ajustados al dejar fuera una fila; el umbral es una convención, no un contraste.",
+   "threshold_leverage": "El mayor apalancamiento es {value:num}, por encima del umbral de {threshold:num}; filas por encima: {count:int}, nombradas en la tabla. El apalancamiento mide lo inusual que es la combinación de predictores de una fila; el umbral es una convención, no un contraste.",
+   "coef_hazard": "Entre ellos, «{covariate}»: cada unidad más multiplica el riesgo instantáneo del evento por {ratio:num} (intervalo al {conf:pct} de {low:num} a {high:num}), con los demás términos fijos.",
+   "coef_hazard_level": "Entre ellos, «{covariate}»: el nivel «{variant}» multiplica el riesgo instantáneo del evento por {ratio:num} frente al nivel de referencia (intervalo al {conf:pct} de {low:num} a {high:num}), con los demás términos fijos.",
+   "assumptions_rejected": "Comprobaciones cuyo contraste rechaza su hipótesis con α = {alpha:num}, con p-valor por debajo de α: {count:int} de {total:int} — {names}. La tabla dice qué significa cada desviación y qué hacer.",
+   "assumptions_many_rows": "Con {n:int} filas las pruebas detectan desviaciones demasiado pequeñas para importar: lea también su tamaño en los gráficos."
+  },
+  "reading_labels": {
+   "method_p_value": "p-valores y α",
+   "method_se_cluster": "Errores estándar por clúster"
+  }
  },
  "fr": {
   "footer": "Calculé par Tabularia",
@@ -1423,6 +1507,27 @@
    "insuffisant",
    "devraient",
    "soutient"
-  ]
+  ],
+  "reading_texts": {
+   "assumptions_none_rejected": "Contrôles qui sont des tests : {total:int} ; au seuil α = {alpha:num}, aucun ne rejette son hypothèse, chaque p-valeur est égale ou supérieure à α. Les données ne montrent pas d'écart à ces hypothèses ; elles ne prouvent pas qu'il n'y en a pas.",
+   "coef_some": "Termes dont le coefficient diffère significativement de 0 au seuil α = {alpha:num} (p-valeur sous α), les autres termes étant fixés : {count:int} sur {total:int} — {names}. Pour les autres, les données ne montrent pas d'effet ; elles ne prouvent pas qu'il n'y en a pas.",
+   "coef_all": "Le coefficient de chaque terme diffère significativement de 0 au seuil α = {alpha:num} (p-valeur sous α), les autres termes étant fixés : {names}.",
+   "coef_none": "Aucun coefficient ne diffère significativement de 0 au seuil α = {alpha:num} : chacune des {total:int} p-valeurs est égale ou supérieure à α. Les données ne montrent d'effet d'aucun terme ; elles ne prouvent pas qu'il n'y en a pas.",
+   "more_in_table": "Et {more:int} de plus : le tableau les donne tous.",
+   "method_p_value": "Une p-valeur est la probabilité que le hasard seul, si l'hypothèse testée était vraie, donne un résultat au moins aussi éloigné d'elle que celui observé. On la compare à α, le réglage du nœud : sous α, l'hypothèse est rejetée, et α est le risque, accepté d'avance, d'en rejeter une vraie. Ne pas rejeter n'est pas prouver : avec peu de lignes, un écart existant peut passer inaperçu. Chaque test se lit seul ; avec beaucoup de tests, certains rejettent par le seul hasard.",
+   "method_se_cluster": "Les erreurs standard sont par grappe : les lignes d'une même grappe peuvent être corrélées entre elles, celles de grappes différentes sont prises comme indépendantes. Avec peu de grappes, elles sont elles-mêmes imprécises.",
+   "threshold_vif": "Inflation de la variance (VIF) au-dessus du seuil de {threshold:num} qu'utilise le tableau : {names}, à {values:num}. Un VIF dit combien de fois les autres termes gonflent la variance d'un coefficient ; le seuil est une convention de la littérature, pas un test.",
+   "threshold_epv": "Événements par coefficient : {value:num}, sous le seuil de {threshold:num} qu'utilise le tableau. Avec peu d'événements par coefficient, les estimations et leurs intervalles reposent sur peu d'information ; le seuil est une convention de la littérature, pas un test.",
+   "threshold_cooks_distance": "La plus grande distance de Cook vaut {value:num}, au-dessus du seuil de {threshold:num} (la médiane de F(p, n − p)) ; lignes au-dessus : {count:int}, nommées dans le tableau. La distance de Cook mesure combien les valeurs ajustées bougent quand on retire une ligne ; le seuil est une convention, pas un test.",
+   "threshold_leverage": "Le plus grand levier vaut {value:num}, au-dessus du seuil de {threshold:num} ; lignes au-dessus : {count:int}, nommées dans le tableau. Le levier mesure combien la combinaison des prédicteurs d'une ligne est inhabituelle ; le seuil est une convention, pas un test.",
+   "coef_hazard": "Parmi eux, «{covariate}» : chaque unité de plus multiplie le risque instantané de l'événement par {ratio:num} (intervalle à {conf:pct} de {low:num} à {high:num}), les autres termes étant fixés.",
+   "coef_hazard_level": "Parmi eux, «{covariate}» : le niveau «{variant}» multiplie le risque instantané de l'événement par {ratio:num} face au niveau de référence (intervalle à {conf:pct} de {low:num} à {high:num}), les autres termes étant fixés.",
+   "assumptions_rejected": "Contrôles dont le test rejette son hypothèse au seuil α = {alpha:num}, leur p-valeur étant sous α : {count:int} sur {total:int} — {names}. Le tableau dit ce que signifie chaque écart et que faire.",
+   "assumptions_many_rows": "Avec {n:int} lignes les tests détectent des écarts trop petits pour compter : lisez aussi leur taille dans les graphiques."
+  },
+  "reading_labels": {
+   "method_p_value": "p-valeurs et α",
+   "method_se_cluster": "Erreurs standard par grappe"
+  }
  }
 }

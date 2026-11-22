@@ -180,8 +180,6 @@
    "formula_cv": "Cross-validation"
   },
   "reading_texts": {
-   "more_in_table": "And {more:int} more: the table lists them all.",
-   "threshold_epv": "Events for each coefficient: {value:num}, below the threshold of {threshold:num} the table uses. With few events per coefficient the estimates and their intervals rest on little information; the threshold is a convention of the literature, not a test.",
    "summary_penalized": {
     "penalty=ridge": "The ridge penalty shrinks every coefficient towards 0 and sets none to 0: all {total:int} terms stay, fitted on {n:int} rows.",
     "penalty=lasso": "The lasso penalty set some coefficients to exactly 0: it kept {selected:int} of the {total:int} terms, fitted on {n:int} rows.",
@@ -405,8 +403,6 @@
    "formula_cv": "Validazione incrociata"
   },
   "reading_texts": {
-   "more_in_table": "E altri {more:int}: la tabella li elenca tutti.",
-   "threshold_epv": "Eventi per coefficiente: {value:num}, sotto la soglia di {threshold:num} usata dalla tabella. Con pochi eventi per coefficiente le stime e i loro intervalli poggiano su poca informazione; la soglia è una convenzione della letteratura, non un test.",
    "summary_penalized": {
     "penalty=ridge": "La penalità ridge restringe ogni coefficiente verso 0 senza portarne nessuno a 0: restano tutti i {total:int} termini, stimati su {n:int} righe.",
     "penalty=lasso": "La penalità lasso ha portato alcuni coefficienti esattamente a 0: ha tenuto {selected:int} dei {total:int} termini, stimati su {n:int} righe.",
@@ -630,8 +626,6 @@
    "formula_cv": "Kreuzvalidierung"
   },
   "reading_texts": {
-   "more_in_table": "Und {more:int} weitere: Die Tabelle führt alle auf.",
-   "threshold_epv": "Ereignisse je Koeffizient: {value:num}, unter der Schwelle von {threshold:num}, die die Tabelle verwendet. Mit wenigen Ereignissen je Koeffizient beruhen die Schätzungen und ihre Intervalle auf wenig Information; die Schwelle ist eine Konvention der Literatur, kein Test.",
    "summary_penalized": {
     "penalty=ridge": "Die Ridge-Strafe schrumpft jeden Koeffizienten gegen 0 und setzt keinen auf 0: Alle {total:int} Terme bleiben, angepasst auf {n:int} Zeilen.",
     "penalty=lasso": "Die Lasso-Strafe hat einige Koeffizienten genau auf 0 gesetzt: Sie hat {selected:int} der {total:int} Terme behalten, angepasst auf {n:int} Zeilen.",
@@ -855,8 +849,6 @@
    "formula_cv": "Validación cruzada"
   },
   "reading_texts": {
-   "more_in_table": "Y {more:int} más: la tabla los recoge todos.",
-   "threshold_epv": "Eventos por coeficiente: {value:num}, por debajo del umbral de {threshold:num} que usa la tabla. Con pocos eventos por coeficiente, las estimaciones y sus intervalos descansan en poca información; el umbral es una convención de la literatura, no un contraste.",
    "summary_penalized": {
     "penalty=ridge": "La penalización ridge contrae cada coeficiente hacia 0 sin llevar ninguno a 0: quedan los {total:int} términos, ajustados sobre {n:int} filas.",
     "penalty=lasso": "La penalización lasso llevó algunos coeficientes exactamente a 0: conservó {selected:int} de los {total:int} términos, ajustados sobre {n:int} filas.",
@@ -1080,8 +1072,6 @@
    "formula_cv": "Validation croisée"
   },
   "reading_texts": {
-   "more_in_table": "Et {more:int} de plus : le tableau les donne tous.",
-   "threshold_epv": "Événements par coefficient : {value:num}, sous le seuil de {threshold:num} qu'utilise le tableau. Avec peu d'événements par coefficient, les estimations et leurs intervalles reposent sur peu d'information ; le seuil est une convention de la littérature, pas un test.",
    "summary_penalized": {
     "penalty=ridge": "La pénalité ridge rétrécit chaque coefficient vers 0 sans en mettre aucun à 0 : les {total:int} termes restent, ajustés sur {n:int} lignes.",
     "penalty=lasso": "La pénalité lasso a mis certains coefficients exactement à 0 : elle a gardé {selected:int} des {total:int} termes, ajustés sur {n:int} lignes.",

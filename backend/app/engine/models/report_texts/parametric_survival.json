@@ -314,7 +314,6 @@
    "formulas": "Formula"
   },
   "reading_labels": {
-   "method_p_value": "p-values and α",
    "method_aft": "Accelerated failure time",
    "method_ph": "Proportional hazards",
    "method_weibull": "Weibull",
@@ -331,14 +330,6 @@
    "formula_akaike_weight": "Akaike weight"
   },
   "reading_texts": {
-   "assumptions_rejected": "Checks whose test rejects its hypothesis at α = {alpha:num}, its p-value below α: {count:int} of {total:int}, marked in the table, which says what each departure means and what to do.",
-   "assumptions_none_rejected": "Checks that are tests: {total:int}; at α = {alpha:num} none rejects its hypothesis, every p-value is at or above α. The data do not show a departure from these assumptions; they do not prove there is none.",
-   "assumptions_many_rows": "With {n:int} rows a test rejects even departures too small to matter: weigh the size of each departure in the charts before acting on a verdict.",
-   "more_in_table": "And {more:int} more: the table lists them all.",
-   "method_p_value": "A p-value is the probability that chance alone, if the hypothesis under test were true, gives a result at least as far from it as the one observed. It is compared with α, the node's setting: below α the hypothesis is rejected, and α is the risk, accepted in advance, of rejecting a true one. Not rejecting is not proving: with few rows an existing departure may go unseen. Each test is read on its own; with many tests, some reject by chance alone.",
-   "coef_some": "Terms whose coefficient is significantly different from 0 at α = {alpha:num} (p-value below α), the other terms held fixed: {count:int} of {total:int} — {names}. For the others the data do not show an effect; they do not prove there is none.",
-   "coef_all": "Every term's coefficient is significantly different from 0 at α = {alpha:num} (p-value below α), the other terms held fixed: {names}.",
-   "coef_none": "No term's coefficient is significantly different from 0 at α = {alpha:num}: each of the {total:int} p-values is at or above α. The data do not show an effect of any term; they do not prove there is none.",
    "summary_parametric": "The distribution fitted, {distribution}, on {n:int} rows and {events:int} events, puts the median time to the event of the profile, the values listed under its heading, at {median:num} (its {conf:pct} interval {low:num} to {high:num}).",
    "summary_parametric_no_ci": "The distribution fitted, {distribution}, on {n:int} rows and {events:int} events, puts the median time to the event of the profile, the values listed under its heading, at {median:num}.",
    "summary_parametric_never": "The distribution fitted, {distribution}, on {n:int} rows and {events:int} events, keeps the survival of the profile above 0.5 at every time: its median is never reached.",
@@ -350,8 +341,6 @@
    "fit_lr_keep": "If no term changed the time to the event, a likelihood-ratio statistic of {lr:num} or more ({df:int} degrees of freedom) would appear by chance with probability {p:p}, not below α = {alpha:num}: the terms together are not significant. The data do not show that they change it; they do not prove they do not.",
    "coef_time_ratio": "Among them, «{covariate}»: each unit more multiplies the time to the event by {ratio:num} (its {conf:pct} interval {low:num} to {high:num}), the other terms held fixed.",
    "coef_time_ratio_level": "Among them, «{covariate}»: the level «{variant}» multiplies the time to the event by {ratio:num} against the reference level (its {conf:pct} interval {low:num} to {high:num}), the other terms held fixed.",
-   "coef_hazard": "Among them, «{covariate}»: each unit more multiplies the hazard, the instantaneous risk of the event, by {ratio:num} (its {conf:pct} interval {low:num} to {high:num}), the other terms held fixed.",
-   "coef_hazard_level": "Among them, «{covariate}»: the level «{variant}» multiplies the hazard, the instantaneous risk of the event, by {ratio:num} against the reference level (its {conf:pct} interval {low:num} to {high:num}), the other terms held fixed.",
    "method_aft": "An accelerated failure time model stretches or compresses time: each term multiplies the time to the event by its time ratio, e^(β); above 1 the event comes later, below 1 sooner. The coefficients are on the logarithm of time.",
    "method_ph": "Read as a proportional hazards model, each term multiplies the hazard by its hazard ratio at every time; the table's Cox column gives the semiparametric Cox model's ratios on the same rows, for comparison.",
    "method_weibull": "The Weibull distribution has a hazard that rises (shape above 1), falls (below 1) or stays constant (1) over time; it is both an accelerated failure time and a proportional hazards model.",
@@ -381,7 +370,8 @@
    "summary_parametric",
    "summary_parametric_never",
    "summary_parametric_no_ci",
-   "summary_parametric_strata"
+   "summary_parametric_strata",
+   "assumptions_many_rows"
   ]
  },
  "it": {
@@ -699,7 +689,6 @@
    "formulas": "Formula"
   },
   "reading_labels": {
-   "method_p_value": "p-value e α",
    "method_aft": "Tempo di guasto accelerato",
    "method_ph": "Rischi proporzionali",
    "method_weibull": "Weibull",
@@ -716,14 +705,6 @@
    "formula_akaike_weight": "Peso di Akaike"
   },
   "reading_texts": {
-   "assumptions_rejected": "Controlli il cui test rifiuta la propria ipotesi ad α = {alpha:num}, con p-value sotto α: {count:int} su {total:int}, segnati nella tabella, che dice che cosa significa ogni scostamento e che cosa fare.",
-   "assumptions_none_rejected": "Controlli che sono test: {total:int}; ad α = {alpha:num} nessuno rifiuta la propria ipotesi, ogni p-value è pari o sopra α. I dati non mostrano uno scostamento da queste assunzioni; non dimostrano che non ce ne sia.",
-   "assumptions_many_rows": "Con {n:int} righe un test rifiuta anche scostamenti troppo piccoli per contare: valuta la loro ampiezza nei grafici prima di agire su un verdetto.",
-   "more_in_table": "E altri {more:int}: la tabella li elenca tutti.",
-   "method_p_value": "Un p-value è la probabilità che il solo caso, se l'ipotesi sotto esame fosse vera, dia un risultato lontano da essa almeno quanto quello osservato. Si confronta con α, impostato nel nodo: sotto α l'ipotesi è rifiutata, e α è il rischio, accettato in anticipo, di rifiutarne una vera. Non rifiutare non è dimostrare: con poche righe uno scostamento esistente può passare inosservato. Ogni test si legge da solo; con molti test, qualcuno rifiuta per puro caso.",
-   "coef_some": "Termini il cui coefficiente è significativamente diverso da 0 ad α = {alpha:num} (p-value sotto α), a parità degli altri termini: {count:int} su {total:int} — {names}. Per gli altri i dati non mostrano un effetto; non dimostrano che non ci sia.",
-   "coef_all": "Il coefficiente di ogni termine è significativamente diverso da 0 ad α = {alpha:num} (p-value sotto α), a parità degli altri termini: {names}.",
-   "coef_none": "Nessun coefficiente è significativamente diverso da 0 ad α = {alpha:num}: ciascuno dei {total:int} p-value è pari o sopra α. I dati non mostrano un effetto di alcun termine; non dimostrano che non ci sia.",
    "summary_parametric": "La distribuzione stimata, {distribution}, su {n:int} righe e {events:int} eventi, pone il tempo mediano all'evento del profilo, i valori elencati sotto il suo titolo, a {median:num} (intervallo al {conf:pct} da {low:num} a {high:num}).",
    "summary_parametric_no_ci": "La distribuzione stimata, {distribution}, su {n:int} righe e {events:int} eventi, pone il tempo mediano all'evento del profilo, i valori elencati sotto il suo titolo, a {median:num}.",
    "summary_parametric_never": "La distribuzione stimata, {distribution}, su {n:int} righe e {events:int} eventi, tiene la sopravvivenza del profilo sopra 0,5 a ogni tempo: la sua mediana non è mai raggiunta.",
@@ -735,8 +716,6 @@
    "fit_lr_keep": "Se nessun termine cambiasse il tempo all'evento, una statistica del rapporto di verosimiglianza di {lr:num} o più ({df:int} gradi di libertà) comparirebbe per caso con probabilità {p:p}, non sotto α = {alpha:num}: i termini nel loro insieme non sono significativi. I dati non mostrano che lo cambino; non dimostrano che non lo facciano.",
    "coef_time_ratio": "Tra questi, «{covariate}»: ogni unità in più moltiplica il tempo all'evento per {ratio:num} (intervallo al {conf:pct} da {low:num} a {high:num}), a parità degli altri termini.",
    "coef_time_ratio_level": "Tra questi, «{covariate}»: il livello «{variant}» moltiplica il tempo all'evento per {ratio:num} rispetto al livello di riferimento (intervallo al {conf:pct} da {low:num} a {high:num}), a parità degli altri termini.",
-   "coef_hazard": "Tra questi, «{covariate}»: ogni unità in più moltiplica il rischio istantaneo dell'evento per {ratio:num} (intervallo al {conf:pct} da {low:num} a {high:num}), a parità degli altri termini.",
-   "coef_hazard_level": "Tra questi, «{covariate}»: il livello «{variant}» moltiplica il rischio istantaneo dell'evento per {ratio:num} rispetto al livello di riferimento (intervallo al {conf:pct} da {low:num} a {high:num}), a parità degli altri termini.",
    "method_aft": "Un modello a tempo di guasto accelerato allunga o accorcia il tempo: ogni termine moltiplica il tempo all'evento per il suo rapporto di tempi, e^(β); sopra 1 l'evento arriva più tardi, sotto 1 prima. I coefficienti sono sul logaritmo del tempo.",
    "method_ph": "Letto come modello a rischi proporzionali, ogni termine moltiplica il rischio per il suo hazard ratio a ogni tempo; la colonna Cox della tabella dà i rapporti del modello semiparametrico di Cox sulle stesse righe, per confronto.",
    "method_weibull": "La distribuzione di Weibull ha un rischio che sale (forma sopra 1), scende (sotto 1) o resta costante (1) nel tempo; è insieme un modello a tempo di guasto accelerato e a rischi proporzionali.",
@@ -766,7 +745,8 @@
    "summary_parametric",
    "summary_parametric_never",
    "summary_parametric_no_ci",
-   "summary_parametric_strata"
+   "summary_parametric_strata",
+   "assumptions_many_rows"
   ]
  },
  "de": {
@@ -1084,7 +1064,6 @@
    "formulas": "Formel"
   },
   "reading_labels": {
-   "method_p_value": "p-Werte und α",
    "method_aft": "Beschleunigte Ausfallzeit",
    "method_ph": "Proportionale Hazards",
    "method_weibull": "Weibull",
@@ -1101,14 +1080,6 @@
    "formula_akaike_weight": "Akaike-Gewicht"
   },
   "reading_texts": {
-   "assumptions_rejected": "Prüfungen, deren Test seine Hypothese bei α = {alpha:num} verwirft, mit p-Wert unter α: {count:int} von {total:int}, in der Tabelle markiert, die sagt, was jede Abweichung bedeutet und was zu tun ist.",
-   "assumptions_none_rejected": "Prüfungen, die Tests sind: {total:int}; bei α = {alpha:num} verwirft keiner seine Hypothese, jeder p-Wert liegt bei oder über α. Die Daten zeigen keine Abweichung von diesen Annahmen; sie beweisen nicht, dass es keine gibt.",
-   "assumptions_many_rows": "Mit {n:int} Zeilen verwirft ein Test auch Abweichungen, die zu klein sind, um ins Gewicht zu fallen: Wägen Sie ihre Größe in den Diagrammen ab, bevor Sie auf ein Urteil hin handeln.",
-   "more_in_table": "Und {more:int} weitere: Die Tabelle führt alle auf.",
-   "method_p_value": "Ein p-Wert ist die Wahrscheinlichkeit, dass der Zufall allein, wenn die geprüfte Hypothese wahr wäre, ein Ergebnis liefert, das mindestens so weit von ihr entfernt ist wie das beobachtete. Er wird mit α verglichen, der Einstellung des Knotens: Unter α wird die Hypothese verworfen, und α ist das im Voraus akzeptierte Risiko, eine wahre zu verwerfen. Nicht verwerfen heißt nicht beweisen: Mit wenigen Zeilen kann eine bestehende Abweichung unbemerkt bleiben. Jeder Test wird für sich gelesen; bei vielen Tests verwerfen einige allein durch Zufall.",
-   "coef_some": "Terme, deren Koeffizient sich bei α = {alpha:num} signifikant von 0 unterscheidet (p-Wert unter α), bei festgehaltenen übrigen Termen: {count:int} von {total:int} — {names}. Für die übrigen zeigen die Daten keinen Effekt; sie beweisen nicht, dass es keinen gibt.",
-   "coef_all": "Der Koeffizient jedes Terms unterscheidet sich bei α = {alpha:num} signifikant von 0 (p-Wert unter α), bei festgehaltenen übrigen Termen: {names}.",
-   "coef_none": "Kein Koeffizient unterscheidet sich bei α = {alpha:num} signifikant von 0: Jeder der {total:int} p-Werte liegt bei oder über α. Die Daten zeigen keinen Effekt eines Terms; sie beweisen nicht, dass es keinen gibt.",
    "summary_parametric": "Die angepasste Verteilung, {distribution}, auf {n:int} Zeilen und {events:int} Ereignissen, setzt die mediane Zeit bis zum Ereignis des Profils, der unter seiner Überschrift genannten Werte, auf {median:num} (ihr {conf:pct}-Intervall {low:num} bis {high:num}).",
    "summary_parametric_no_ci": "Die angepasste Verteilung, {distribution}, auf {n:int} Zeilen und {events:int} Ereignissen, setzt die mediane Zeit bis zum Ereignis des Profils, der unter seiner Überschrift genannten Werte, auf {median:num}.",
    "summary_parametric_never": "Die angepasste Verteilung, {distribution}, auf {n:int} Zeilen und {events:int} Ereignissen, hält das Überleben des Profils zu jeder Zeit über 0,5: Sein Median wird nie erreicht.",
@@ -1120,8 +1091,6 @@
    "fit_lr_keep": "Veränderte kein Term die Zeit bis zum Ereignis, träte eine Likelihood-Quotienten-Statistik von {lr:num} oder mehr ({df:int} Freiheitsgrade) mit Wahrscheinlichkeit {p:p} zufällig auf, nicht unter α = {alpha:num}: Die Terme zusammen sind nicht signifikant. Die Daten zeigen nicht, dass sie etwas verändern; sie beweisen nicht das Gegenteil.",
    "coef_time_ratio": "Darunter «{covariate}»: Jede Einheit mehr multipliziert die Zeit bis zum Ereignis mit {ratio:num} (ihr {conf:pct}-Intervall {low:num} bis {high:num}), bei festgehaltenen übrigen Termen.",
    "coef_time_ratio_level": "Darunter «{covariate}»: Die Stufe «{variant}» multipliziert die Zeit bis zum Ereignis gegenüber der Referenzstufe mit {ratio:num} (ihr {conf:pct}-Intervall {low:num} bis {high:num}), bei festgehaltenen übrigen Termen.",
-   "coef_hazard": "Darunter «{covariate}»: Jede Einheit mehr multipliziert das Hazard, das momentane Risiko des Ereignisses, mit {ratio:num} (sein {conf:pct}-Intervall {low:num} bis {high:num}), bei festgehaltenen übrigen Termen.",
-   "coef_hazard_level": "Darunter «{covariate}»: Die Stufe «{variant}» multipliziert das Hazard, das momentane Risiko des Ereignisses, gegenüber der Referenzstufe mit {ratio:num} (sein {conf:pct}-Intervall {low:num} bis {high:num}), bei festgehaltenen übrigen Termen.",
    "method_aft": "Ein Modell mit beschleunigter Ausfallzeit dehnt oder staucht die Zeit: Jeder Term multipliziert die Zeit bis zum Ereignis mit seinem Zeitverhältnis, e^(β); über 1 kommt das Ereignis später, unter 1 früher. Die Koeffizienten liegen auf dem Logarithmus der Zeit.",
    "method_ph": "Als Modell proportionaler Hazards gelesen, multipliziert jeder Term das Hazard zu jeder Zeit mit seinem Hazard Ratio; die Cox-Spalte der Tabelle gibt zum Vergleich die Faktoren des semiparametrischen Cox-Modells auf denselben Zeilen.",
    "method_weibull": "Die Weibull-Verteilung hat ein Hazard, das über die Zeit steigt (Form über 1), fällt (unter 1) oder konstant bleibt (1); sie ist zugleich ein Modell mit beschleunigter Ausfallzeit und mit proportionalen Hazards.",
@@ -1151,7 +1120,8 @@
    "summary_parametric",
    "summary_parametric_never",
    "summary_parametric_no_ci",
-   "summary_parametric_strata"
+   "summary_parametric_strata",
+   "assumptions_many_rows"
   ]
  },
  "es": {
@@ -1469,7 +1439,6 @@
    "formulas": "Fórmula"
   },
   "reading_labels": {
-   "method_p_value": "p-valores y α",
    "method_aft": "Tiempo de fallo acelerado",
    "method_ph": "Riesgos proporcionales",
    "method_weibull": "Weibull",
@@ -1486,14 +1455,6 @@
    "formula_akaike_weight": "Peso de Akaike"
   },
   "reading_texts": {
-   "assumptions_rejected": "Comprobaciones cuyo contraste rechaza su hipótesis con α = {alpha:num}, con p-valor por debajo de α: {count:int} de {total:int}, marcadas en la tabla, que dice qué significa cada desviación y qué hacer.",
-   "assumptions_none_rejected": "Comprobaciones que son contrastes: {total:int}; con α = {alpha:num} ninguno rechaza su hipótesis, todo p-valor es igual o superior a α. Los datos no muestran una desviación de estos supuestos; no prueban que no la haya.",
-   "assumptions_many_rows": "Con {n:int} filas un contraste rechaza incluso desviaciones demasiado pequeñas para importar: valore su tamaño en los gráficos antes de actuar según un veredicto.",
-   "more_in_table": "Y {more:int} más: la tabla los recoge todos.",
-   "method_p_value": "Un p-valor es la probabilidad de que el azar por sí solo, si la hipótesis contrastada fuera cierta, dé un resultado al menos tan alejado de ella como el observado. Se compara con α, el ajuste del nodo: por debajo de α la hipótesis se rechaza, y α es el riesgo, aceptado de antemano, de rechazar una cierta. No rechazar no es probar: con pocas filas una desviación existente puede pasar inadvertida. Cada contraste se lee por separado; con muchos contrastes, algunos rechazan solo por azar.",
-   "coef_some": "Términos cuyo coeficiente es significativamente distinto de 0 con α = {alpha:num} (p-valor por debajo de α), con los demás términos fijos: {count:int} de {total:int} — {names}. Para los demás los datos no muestran un efecto; no prueban que no lo haya.",
-   "coef_all": "El coeficiente de cada término es significativamente distinto de 0 con α = {alpha:num} (p-valor por debajo de α), con los demás términos fijos: {names}.",
-   "coef_none": "Ningún coeficiente es significativamente distinto de 0 con α = {alpha:num}: cada uno de los {total:int} p-valores es igual o superior a α. Los datos no muestran un efecto de ningún término; no prueban que no lo haya.",
    "summary_parametric": "La distribución ajustada, {distribution}, sobre {n:int} filas y {events:int} eventos, sitúa el tiempo mediano hasta el evento del perfil, los valores indicados bajo su título, en {median:num} (intervalo al {conf:pct} de {low:num} a {high:num}).",
    "summary_parametric_no_ci": "La distribución ajustada, {distribution}, sobre {n:int} filas y {events:int} eventos, sitúa el tiempo mediano hasta el evento del perfil, los valores indicados bajo su título, en {median:num}.",
    "summary_parametric_never": "La distribución ajustada, {distribution}, sobre {n:int} filas y {events:int} eventos, mantiene la supervivencia del perfil por encima de 0,5 en todo tiempo: su mediana nunca se alcanza.",
@@ -1505,8 +1466,6 @@
    "fit_lr_keep": "Si ningún término cambiara el tiempo hasta el evento, un estadístico de razón de verosimilitudes de {lr:num} o más ({df:int} grados de libertad) aparecería por azar con probabilidad {p:p}, no por debajo de α = {alpha:num}: los términos en conjunto no son significativos. Los datos no muestran que lo cambien; no prueban que no lo hagan.",
    "coef_time_ratio": "Entre ellos, «{covariate}»: cada unidad más multiplica el tiempo hasta el evento por {ratio:num} (intervalo al {conf:pct} de {low:num} a {high:num}), con los demás términos fijos.",
    "coef_time_ratio_level": "Entre ellos, «{covariate}»: el nivel «{variant}» multiplica el tiempo hasta el evento por {ratio:num} frente al nivel de referencia (intervalo al {conf:pct} de {low:num} a {high:num}), con los demás términos fijos.",
-   "coef_hazard": "Entre ellos, «{covariate}»: cada unidad más multiplica el riesgo instantáneo del evento por {ratio:num} (intervalo al {conf:pct} de {low:num} a {high:num}), con los demás términos fijos.",
-   "coef_hazard_level": "Entre ellos, «{covariate}»: el nivel «{variant}» multiplica el riesgo instantáneo del evento por {ratio:num} frente al nivel de referencia (intervalo al {conf:pct} de {low:num} a {high:num}), con los demás términos fijos.",
    "method_aft": "Un modelo de tiempo de fallo acelerado estira o comprime el tiempo: cada término multiplica el tiempo hasta el evento por su razón de tiempos, e^(β); por encima de 1 el evento llega más tarde, por debajo de 1 antes. Los coeficientes están en el logaritmo del tiempo.",
    "method_ph": "Leído como modelo de riesgos proporcionales, cada término multiplica el riesgo por su razón de riesgos en todo tiempo; la columna Cox de la tabla da las razones del modelo semiparamétrico de Cox sobre las mismas filas, para comparar.",
    "method_weibull": "La distribución de Weibull tiene un riesgo que sube (forma por encima de 1), baja (por debajo de 1) o se mantiene constante (1) en el tiempo; es a la vez un modelo de tiempo de fallo acelerado y de riesgos proporcionales.",
@@ -1536,7 +1495,8 @@
    "summary_parametric",
    "summary_parametric_never",
    "summary_parametric_no_ci",
-   "summary_parametric_strata"
+   "summary_parametric_strata",
+   "assumptions_many_rows"
   ]
  },
  "fr": {
@@ -1854,7 +1814,6 @@
    "formulas": "Formule"
   },
   "reading_labels": {
-   "method_p_value": "p-valeurs et α",
    "method_aft": "Temps de défaillance accéléré",
    "method_ph": "Risques proportionnels",
    "method_weibull": "Weibull",
@@ -1871,14 +1830,6 @@
    "formula_akaike_weight": "Poids d'Akaike"
   },
   "reading_texts": {
-   "assumptions_rejected": "Contrôles dont le test rejette son hypothèse au seuil α = {alpha:num}, leur p-valeur étant sous α : {count:int} sur {total:int}, marqués dans le tableau, qui dit ce que signifie chaque écart et que faire.",
-   "assumptions_none_rejected": "Contrôles qui sont des tests : {total:int} ; au seuil α = {alpha:num}, aucun ne rejette son hypothèse, chaque p-valeur est égale ou supérieure à α. Les données ne montrent pas d'écart à ces hypothèses ; elles ne prouvent pas qu'il n'y en a pas.",
-   "assumptions_many_rows": "Avec {n:int} lignes, un test rejette même des écarts trop petits pour compter : pesez leur taille dans les graphiques avant d'agir sur un verdict.",
-   "more_in_table": "Et {more:int} de plus : le tableau les donne tous.",
-   "method_p_value": "Une p-valeur est la probabilité que le hasard seul, si l'hypothèse testée était vraie, donne un résultat au moins aussi éloigné d'elle que celui observé. On la compare à α, le réglage du nœud : sous α, l'hypothèse est rejetée, et α est le risque, accepté d'avance, d'en rejeter une vraie. Ne pas rejeter n'est pas prouver : avec peu de lignes, un écart existant peut passer inaperçu. Chaque test se lit seul ; avec beaucoup de tests, certains rejettent par le seul hasard.",
-   "coef_some": "Termes dont le coefficient diffère significativement de 0 au seuil α = {alpha:num} (p-valeur sous α), les autres termes étant fixés : {count:int} sur {total:int} — {names}. Pour les autres, les données ne montrent pas d'effet ; elles ne prouvent pas qu'il n'y en a pas.",
-   "coef_all": "Le coefficient de chaque terme diffère significativement de 0 au seuil α = {alpha:num} (p-valeur sous α), les autres termes étant fixés : {names}.",
-   "coef_none": "Aucun coefficient ne diffère significativement de 0 au seuil α = {alpha:num} : chacune des {total:int} p-valeurs est égale ou supérieure à α. Les données ne montrent d'effet d'aucun terme ; elles ne prouvent pas qu'il n'y en a pas.",
    "summary_parametric": "La loi ajustée, {distribution}, sur {n:int} lignes et {events:int} événements, place le temps médian jusqu'à l'événement du profil, les valeurs données sous son titre, à {median:num} (intervalle à {conf:pct} de {low:num} à {high:num}).",
    "summary_parametric_no_ci": "La loi ajustée, {distribution}, sur {n:int} lignes et {events:int} événements, place le temps médian jusqu'à l'événement du profil, les valeurs données sous son titre, à {median:num}.",
    "summary_parametric_never": "La loi ajustée, {distribution}, sur {n:int} lignes et {events:int} événements, garde la survie du profil au-dessus de 0,5 à tout instant : sa médiane n'est jamais atteinte.",
@@ -1890,8 +1841,6 @@
    "fit_lr_keep": "Si aucun terme ne changeait le temps jusqu'à l'événement, une statistique du rapport de vraisemblance de {lr:num} ou plus ({df:int} degrés de liberté) apparaîtrait par hasard avec une probabilité de {p:p}, pas sous α = {alpha:num} : les termes ensemble ne sont pas significatifs. Les données ne montrent pas qu'ils le changent ; elles ne prouvent pas le contraire.",
    "coef_time_ratio": "Parmi eux, «{covariate}» : chaque unité de plus multiplie le temps jusqu'à l'événement par {ratio:num} (intervalle à {conf:pct} de {low:num} à {high:num}), les autres termes étant fixés.",
    "coef_time_ratio_level": "Parmi eux, «{covariate}» : le niveau «{variant}» multiplie le temps jusqu'à l'événement par {ratio:num} face au niveau de référence (intervalle à {conf:pct} de {low:num} à {high:num}), les autres termes étant fixés.",
-   "coef_hazard": "Parmi eux, «{covariate}» : chaque unité de plus multiplie le risque instantané de l'événement par {ratio:num} (intervalle à {conf:pct} de {low:num} à {high:num}), les autres termes étant fixés.",
-   "coef_hazard_level": "Parmi eux, «{covariate}» : le niveau «{variant}» multiplie le risque instantané de l'événement par {ratio:num} face au niveau de référence (intervalle à {conf:pct} de {low:num} à {high:num}), les autres termes étant fixés.",
    "method_aft": "Un modèle à temps de défaillance accéléré étire ou comprime le temps : chaque terme multiplie le temps jusqu'à l'événement par son rapport de temps, e^(β) ; au-dessus de 1 l'événement arrive plus tard, en dessous de 1 plus tôt. Les coefficients sont sur le logarithme du temps.",
    "method_ph": "Lu comme un modèle à risques proportionnels, chaque terme multiplie le risque par son rapport de risques à tout instant ; la colonne Cox du tableau donne les rapports du modèle semi-paramétrique de Cox sur les mêmes lignes, pour comparaison.",
    "method_weibull": "La loi de Weibull a un risque qui monte (forme au-dessus de 1), descend (en dessous de 1) ou reste constant (1) dans le temps ; c'est à la fois un modèle à temps de défaillance accéléré et à risques proportionnels.",
@@ -1921,7 +1870,8 @@
    "summary_parametric",
    "summary_parametric_never",
    "summary_parametric_no_ci",
-   "summary_parametric_strata"
+   "summary_parametric_strata",
+   "assumptions_many_rows"
   ]
  }
 }

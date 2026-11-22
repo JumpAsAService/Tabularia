@@ -114,13 +114,11 @@
    "formulas": "Formula"
   },
   "reading_labels": {
-   "method_p_value": "p-values and α",
    "method_ols": "Least squares",
    "method_wls": "Weighted least squares",
    "method_se_classical": "Standard errors",
    "method_se_hc": "Robust standard errors",
    "method_se_hac": "HAC standard errors",
-   "method_se_cluster": "Clustered standard errors",
    "method_checks": "The checks",
    "method_vif": "VIF",
    "formula_ols": "Coefficients",
@@ -131,18 +129,7 @@
    "formula_vif": "VIF"
   },
   "reading_texts": {
-   "assumptions_rejected": "Checks whose test rejects its hypothesis at α = {alpha:num}, its p-value below α: {count:int} of {total:int}, marked in the table, which says what each departure means and what to do.",
-   "assumptions_none_rejected": "Checks that are tests: {total:int}; at α = {alpha:num} none rejects its hypothesis, every p-value is at or above α. The data do not show a departure from these assumptions; they do not prove there is none.",
-   "assumptions_many_rows": "With {n:int} rows a test rejects even departures too small to matter: weigh the size of each departure in the charts before acting on a verdict.",
-   "more_in_table": "And {more:int} more: the table lists them all.",
-   "method_p_value": "A p-value is the probability that chance alone, if the hypothesis under test were true, gives a result at least as far from it as the one observed. It is compared with α, the node's setting: below α the hypothesis is rejected, and α is the risk, accepted in advance, of rejecting a true one. Not rejecting is not proving: with few rows an existing departure may go unseen. Each test is read on its own; with many tests, some reject by chance alone.",
-   "coef_some": "Terms whose coefficient is significantly different from 0 at α = {alpha:num} (p-value below α), the other terms held fixed: {count:int} of {total:int} — {names}. For the others the data do not show an effect; they do not prove there is none.",
-   "coef_all": "Every term's coefficient is significantly different from 0 at α = {alpha:num} (p-value below α), the other terms held fixed: {names}.",
-   "coef_none": "No term's coefficient is significantly different from 0 at α = {alpha:num}: each of the {total:int} p-values is at or above α. The data do not show an effect of any term; they do not prove there is none.",
-   "threshold_vif": "Variance inflation (VIF) above the threshold of {threshold:num} the table uses: {names}, at {values:num}. A VIF says how many times the other terms inflate the variance of a coefficient; the threshold is a convention of the literature, not a test.",
    "threshold_condition_number": "The condition number of the predictors is {value:num}, above the threshold of {threshold:num} the table uses: some predictors nearly repeat a combination of the others. The threshold is a convention of the literature, not a test.",
-   "threshold_cooks_distance": "The largest Cook's distance is {value:num}, above the threshold of {threshold:num} (the median of F(p, n − p)); rows above it: {count:int}, named in the table. Cook's distance measures how much the fitted values move when a row is left out; the threshold is a convention, not a test.",
-   "threshold_leverage": "The largest leverage is {value:num}, above the threshold of {threshold:num}; rows above it: {count:int}, named in the table. Leverage measures how unusual a row's combination of predictors is; the threshold is a convention, not a test.",
    "summary_linear": "On {n:int} rows, the model explains {r2:pct} of the variance of «{outcome}» (R²); adjusted for the number of terms, {adj:pct}.",
    "fit_f_reject": "If no term were related to «{outcome}», an F statistic of {f:num} or more (on {df1:int} and {df2:int} degrees of freedom) would appear by chance with probability {p:p}, below α = {alpha:num}: the model as a whole is significant.",
    "fit_f_keep": "If no term were related to «{outcome}», an F statistic of {f:num} or more (on {df1:int} and {df2:int} degrees of freedom) would appear by chance with probability {p:p}, not below α = {alpha:num}: the model as a whole is not significant. The data do not show that the terms explain «{outcome}»; they do not prove they do not.",
@@ -157,7 +144,6 @@
    "method_se_classical": "The classical standard errors assume residuals of the same variance everywhere and independent of each other; when a check of constant variance or of independence rejects, the node's robust standard errors (se) do without that assumption.",
    "method_se_hc": "The standard errors are heteroskedasticity-consistent (the sandwich estimator, HC0 to HC3; HC3 is the most cautious with rows of high leverage): they stay valid when the residuals' variance changes from row to row, so the terms' tests do not rely on constant variance.",
    "method_se_hac": "The standard errors are HAC (Newey–West): they stay valid when the residuals are correlated with their neighbours in the node's order of the rows and their variance changes, so the terms' tests do not rely on independence or constant variance.",
-   "method_se_cluster": "The standard errors are clustered: rows of the same cluster may be correlated with each other, rows of different clusters are taken as independent. With few clusters they are themselves imprecise.",
    "method_checks": "The checks test the assumptions one at a time: linearity (RESET), constant variance (Breusch–Pagan, White), normality of the residuals (Shapiro–Wilk or Anderson–Darling, Jarque–Bera), independence in the order of the rows (Durbin–Watson, Breusch–Godfrey) and outliers (Bonferroni). Multicollinearity and influence are measured, not tested: the VIF, the condition number, Cook's distance and leverage are compared with thresholds of the literature.",
    "method_vif": "The VIF of a term is 1 / (1 − R²) of the regression of that term on the other terms: 1 when no other term explains it. A VIF widens the term's interval by its square root and leaves its estimate unbiased."
   },
@@ -180,7 +166,8 @@
    "threshold_condition_number",
    "threshold_cooks_distance",
    "threshold_leverage",
-   "threshold_vif"
+   "threshold_vif",
+   "assumptions_many_rows"
   ]
  },
  "it": {
@@ -298,13 +285,11 @@
    "formulas": "Formula"
   },
   "reading_labels": {
-   "method_p_value": "p-value e α",
    "method_ols": "Minimi quadrati",
    "method_wls": "Minimi quadrati pesati",
    "method_se_classical": "Errori standard",
    "method_se_hc": "Errori standard robusti",
    "method_se_hac": "Errori standard HAC",
-   "method_se_cluster": "Errori standard per cluster",
    "method_checks": "I controlli",
    "method_vif": "VIF",
    "formula_ols": "Coefficienti",
@@ -315,18 +300,7 @@
    "formula_vif": "VIF"
   },
   "reading_texts": {
-   "assumptions_rejected": "Controlli il cui test rifiuta la propria ipotesi ad α = {alpha:num}, con p-value sotto α: {count:int} su {total:int}, segnati nella tabella, che dice che cosa significa ogni scostamento e che cosa fare.",
-   "assumptions_none_rejected": "Controlli che sono test: {total:int}; ad α = {alpha:num} nessuno rifiuta la propria ipotesi, ogni p-value è pari o sopra α. I dati non mostrano uno scostamento da queste assunzioni; non dimostrano che non ce ne sia.",
-   "assumptions_many_rows": "Con {n:int} righe un test rifiuta anche scostamenti troppo piccoli per contare: valuta la loro ampiezza nei grafici prima di agire su un verdetto.",
-   "more_in_table": "E altri {more:int}: la tabella li elenca tutti.",
-   "method_p_value": "Un p-value è la probabilità che il solo caso, se l'ipotesi sotto esame fosse vera, dia un risultato lontano da essa almeno quanto quello osservato. Si confronta con α, impostato nel nodo: sotto α l'ipotesi è rifiutata, e α è il rischio, accettato in anticipo, di rifiutarne una vera. Non rifiutare non è dimostrare: con poche righe uno scostamento esistente può passare inosservato. Ogni test si legge da solo; con molti test, qualcuno rifiuta per puro caso.",
-   "coef_some": "Termini il cui coefficiente è significativamente diverso da 0 ad α = {alpha:num} (p-value sotto α), a parità degli altri termini: {count:int} su {total:int} — {names}. Per gli altri i dati non mostrano un effetto; non dimostrano che non ci sia.",
-   "coef_all": "Il coefficiente di ogni termine è significativamente diverso da 0 ad α = {alpha:num} (p-value sotto α), a parità degli altri termini: {names}.",
-   "coef_none": "Nessun coefficiente è significativamente diverso da 0 ad α = {alpha:num}: ciascuno dei {total:int} p-value è pari o sopra α. I dati non mostrano un effetto di alcun termine; non dimostrano che non ci sia.",
-   "threshold_vif": "Inflazione della varianza (VIF) sopra la soglia di {threshold:num} usata dalla tabella: {names}, a {values:num}. Un VIF dice quante volte gli altri termini gonfiano la varianza di un coefficiente; la soglia è una convenzione della letteratura, non un test.",
    "threshold_condition_number": "Il numero di condizione dei predittori è {value:num}, sopra la soglia di {threshold:num} usata dalla tabella: alcuni predittori ripetono quasi una combinazione degli altri. La soglia è una convenzione della letteratura, non un test.",
-   "threshold_cooks_distance": "La distanza di Cook più grande è {value:num}, sopra la soglia di {threshold:num} (la mediana di F(p, n − p)); righe sopra la soglia: {count:int}, indicate nella tabella. La distanza di Cook misura quanto si spostano i valori stimati togliendo una riga; la soglia è una convenzione, non un test.",
-   "threshold_leverage": "La leva più grande è {value:num}, sopra la soglia di {threshold:num}; righe sopra la soglia: {count:int}, indicate nella tabella. La leva misura quanto è insolita la combinazione dei predittori di una riga; la soglia è una convenzione, non un test.",
    "summary_linear": "Su {n:int} righe il modello spiega il {r2:pct} della varianza di «{outcome}» (R²); corretto per il numero di termini, il {adj:pct}.",
    "fit_f_reject": "Se nessun termine fosse legato a «{outcome}», una statistica F di {f:num} o più (con {df1:int} e {df2:int} gradi di libertà) comparirebbe per caso con probabilità {p:p}, sotto α = {alpha:num}: il modello nel suo insieme è significativo.",
    "fit_f_keep": "Se nessun termine fosse legato a «{outcome}», una statistica F di {f:num} o più (con {df1:int} e {df2:int} gradi di libertà) comparirebbe per caso con probabilità {p:p}, non sotto α = {alpha:num}: il modello nel suo insieme non è significativo. I dati non mostrano che i termini spieghino «{outcome}»; non dimostrano che non lo facciano.",
@@ -341,7 +315,6 @@
    "method_se_classical": "Gli errori standard classici assumono residui di uguale varianza ovunque e indipendenti tra loro; quando un controllo di varianza costante o di indipendenza rifiuta, gli errori standard robusti del nodo (se) fanno a meno di quell'assunzione.",
    "method_se_hc": "Gli errori standard sono consistenti all'eteroschedasticità (lo stimatore sandwich, da HC0 a HC3; HC3 è il più prudente con le righe ad alta leva): restano validi quando la varianza dei residui cambia da riga a riga, quindi i test dei termini non dipendono dalla varianza costante.",
    "method_se_hac": "Gli errori standard sono HAC (Newey–West): restano validi quando i residui sono correlati con i vicini nell'ordine delle righe del nodo e la loro varianza cambia, quindi i test dei termini non dipendono dall'indipendenza né dalla varianza costante.",
-   "method_se_cluster": "Gli errori standard sono per cluster: le righe dello stesso cluster possono essere correlate tra loro, quelle di cluster diversi sono prese come indipendenti. Con pochi cluster sono essi stessi imprecisi.",
    "method_checks": "I controlli verificano le assunzioni una alla volta: linearità (RESET), varianza costante (Breusch–Pagan, White), normalità dei residui (Shapiro–Wilk o Anderson–Darling, Jarque–Bera), indipendenza nell'ordine delle righe (Durbin–Watson, Breusch–Godfrey) e valori anomali (Bonferroni). Multicollinearità e influenza sono misurate, non testate: VIF, numero di condizione, distanza di Cook e leva sono confrontati con soglie della letteratura.",
    "method_vif": "Il VIF di un termine è 1 / (1 − R²) della regressione di quel termine sugli altri: 1 quando nessun altro termine lo spiega. Un VIF allarga l'intervallo del termine della sua radice quadrata e lascia la stima non distorta."
   },
@@ -364,7 +337,8 @@
    "threshold_condition_number",
    "threshold_cooks_distance",
    "threshold_leverage",
-   "threshold_vif"
+   "threshold_vif",
+   "assumptions_many_rows"
   ]
  },
  "de": {
@@ -482,13 +456,11 @@
    "formulas": "Formel"
   },
   "reading_labels": {
-   "method_p_value": "p-Werte und α",
    "method_ols": "Kleinste Quadrate",
    "method_wls": "Gewichtete kleinste Quadrate",
    "method_se_classical": "Standardfehler",
    "method_se_hc": "Robuste Standardfehler",
    "method_se_hac": "HAC-Standardfehler",
-   "method_se_cluster": "Geclusterte Standardfehler",
    "method_checks": "Die Prüfungen",
    "method_vif": "VIF",
    "formula_ols": "Koeffizienten",
@@ -499,18 +471,7 @@
    "formula_vif": "VIF"
   },
   "reading_texts": {
-   "assumptions_rejected": "Prüfungen, deren Test seine Hypothese bei α = {alpha:num} verwirft, mit p-Wert unter α: {count:int} von {total:int}, in der Tabelle markiert, die sagt, was jede Abweichung bedeutet und was zu tun ist.",
-   "assumptions_none_rejected": "Prüfungen, die Tests sind: {total:int}; bei α = {alpha:num} verwirft keiner seine Hypothese, jeder p-Wert liegt bei oder über α. Die Daten zeigen keine Abweichung von diesen Annahmen; sie beweisen nicht, dass es keine gibt.",
-   "assumptions_many_rows": "Mit {n:int} Zeilen verwirft ein Test auch Abweichungen, die zu klein sind, um ins Gewicht zu fallen: Wägen Sie ihre Größe in den Diagrammen ab, bevor Sie auf ein Urteil hin handeln.",
-   "more_in_table": "Und {more:int} weitere: Die Tabelle führt alle auf.",
-   "method_p_value": "Ein p-Wert ist die Wahrscheinlichkeit, dass der Zufall allein, wenn die geprüfte Hypothese wahr wäre, ein Ergebnis liefert, das mindestens so weit von ihr entfernt ist wie das beobachtete. Er wird mit α verglichen, der Einstellung des Knotens: Unter α wird die Hypothese verworfen, und α ist das im Voraus akzeptierte Risiko, eine wahre zu verwerfen. Nicht verwerfen heißt nicht beweisen: Mit wenigen Zeilen kann eine bestehende Abweichung unbemerkt bleiben. Jeder Test wird für sich gelesen; bei vielen Tests verwerfen einige allein durch Zufall.",
-   "coef_some": "Terme, deren Koeffizient sich bei α = {alpha:num} signifikant von 0 unterscheidet (p-Wert unter α), bei festgehaltenen übrigen Termen: {count:int} von {total:int} — {names}. Für die übrigen zeigen die Daten keinen Effekt; sie beweisen nicht, dass es keinen gibt.",
-   "coef_all": "Der Koeffizient jedes Terms unterscheidet sich bei α = {alpha:num} signifikant von 0 (p-Wert unter α), bei festgehaltenen übrigen Termen: {names}.",
-   "coef_none": "Kein Koeffizient unterscheidet sich bei α = {alpha:num} signifikant von 0: Jeder der {total:int} p-Werte liegt bei oder über α. Die Daten zeigen keinen Effekt eines Terms; sie beweisen nicht, dass es keinen gibt.",
-   "threshold_vif": "Varianzinflation (VIF) über der Schwelle von {threshold:num}, die die Tabelle verwendet: {names}, bei {values:num}. Ein VIF gibt an, um das Wievielfache die übrigen Terme die Varianz eines Koeffizienten aufblähen; die Schwelle ist eine Konvention der Literatur, kein Test.",
    "threshold_condition_number": "Die Konditionszahl der Prädiktoren ist {value:num}, über der Schwelle von {threshold:num}, die die Tabelle verwendet: Einige Prädiktoren wiederholen fast eine Kombination der anderen. Die Schwelle ist eine Konvention der Literatur, kein Test.",
-   "threshold_cooks_distance": "Die größte Cook-Distanz ist {value:num}, über der Schwelle von {threshold:num} (dem Median von F(p, n − p)); Zeilen darüber: {count:int}, in der Tabelle genannt. Die Cook-Distanz misst, wie weit sich die angepassten Werte verschieben, wenn eine Zeile weggelassen wird; die Schwelle ist eine Konvention, kein Test.",
-   "threshold_leverage": "Die größte Hebelwirkung ist {value:num}, über der Schwelle von {threshold:num}; Zeilen darüber: {count:int}, in der Tabelle genannt. Die Hebelwirkung misst, wie ungewöhnlich die Kombination der Prädiktoren einer Zeile ist; die Schwelle ist eine Konvention, kein Test.",
    "summary_linear": "Auf {n:int} Zeilen erklärt das Modell {r2:pct} der Varianz von «{outcome}» (R²); bereinigt um die Zahl der Terme {adj:pct}.",
    "fit_f_reject": "Wäre kein Term mit «{outcome}» verbunden, träte eine F-Statistik von {f:num} oder mehr (mit {df1:int} und {df2:int} Freiheitsgraden) mit Wahrscheinlichkeit {p:p} zufällig auf, unter α = {alpha:num}: Das Modell als Ganzes ist signifikant.",
    "fit_f_keep": "Wäre kein Term mit «{outcome}» verbunden, träte eine F-Statistik von {f:num} oder mehr (mit {df1:int} und {df2:int} Freiheitsgraden) mit Wahrscheinlichkeit {p:p} zufällig auf, nicht unter α = {alpha:num}: Das Modell als Ganzes ist nicht signifikant. Die Daten zeigen nicht, dass die Terme «{outcome}» erklären; sie beweisen nicht das Gegenteil.",
@@ -525,7 +486,6 @@
    "method_se_classical": "Die klassischen Standardfehler setzen Residuen mit überall gleicher Varianz voraus, die voneinander unabhängig sind; verwirft eine Prüfung der konstanten Varianz oder der Unabhängigkeit, kommen die robusten Standardfehler des Knotens (se) ohne diese Annahme aus.",
    "method_se_hc": "Die Standardfehler sind heteroskedastizitätskonsistent (der Sandwich-Schätzer, HC0 bis HC3; HC3 ist der vorsichtigste bei Zeilen mit hoher Hebelwirkung): Sie bleiben gültig, wenn sich die Varianz der Residuen von Zeile zu Zeile ändert, sodass die Tests der Terme nicht von konstanter Varianz abhängen.",
    "method_se_hac": "Die Standardfehler sind HAC (Newey–West): Sie bleiben gültig, wenn die Residuen mit ihren Nachbarn in der Zeilenordnung des Knotens korreliert sind und sich ihre Varianz ändert, sodass die Tests der Terme weder von Unabhängigkeit noch von konstanter Varianz abhängen.",
-   "method_se_cluster": "Die Standardfehler sind geclustert: Zeilen desselben Clusters dürfen miteinander korreliert sein, Zeilen verschiedener Cluster gelten als unabhängig. Bei wenigen Clustern sind sie selbst ungenau.",
    "method_checks": "Die Prüfungen testen die Annahmen einzeln: Linearität (RESET), konstante Varianz (Breusch–Pagan, White), Normalverteilung der Residuen (Shapiro–Wilk oder Anderson–Darling, Jarque–Bera), Unabhängigkeit in der Zeilenordnung (Durbin–Watson, Breusch–Godfrey) und Ausreißer (Bonferroni). Multikollinearität und Einfluss werden gemessen, nicht getestet: VIF, Konditionszahl, Cook-Distanz und Hebelwirkung werden mit Schwellen der Literatur verglichen.",
    "method_vif": "Der VIF eines Terms ist 1 / (1 − R²) der Regression dieses Terms auf die übrigen Terme: 1, wenn kein anderer Term ihn erklärt. Ein VIF verbreitert das Intervall des Terms um seine Quadratwurzel und lässt die Schätzung unverzerrt."
   },
@@ -548,7 +508,8 @@
    "threshold_condition_number",
    "threshold_cooks_distance",
    "threshold_leverage",
-   "threshold_vif"
+   "threshold_vif",
+   "assumptions_many_rows"
   ]
  },
  "es": {
@@ -666,13 +627,11 @@
    "formulas": "Fórmula"
   },
   "reading_labels": {
-   "method_p_value": "p-valores y α",
    "method_ols": "Mínimos cuadrados",
    "method_wls": "Mínimos cuadrados ponderados",
    "method_se_classical": "Errores estándar",
    "method_se_hc": "Errores estándar robustos",
    "method_se_hac": "Errores estándar HAC",
-   "method_se_cluster": "Errores estándar por clúster",
    "method_checks": "Las comprobaciones",
    "method_vif": "VIF",
    "formula_ols": "Coeficientes",
@@ -683,18 +642,7 @@
    "formula_vif": "VIF"
   },
   "reading_texts": {
-   "assumptions_rejected": "Comprobaciones cuyo contraste rechaza su hipótesis con α = {alpha:num}, con p-valor por debajo de α: {count:int} de {total:int}, marcadas en la tabla, que dice qué significa cada desviación y qué hacer.",
-   "assumptions_none_rejected": "Comprobaciones que son contrastes: {total:int}; con α = {alpha:num} ninguno rechaza su hipótesis, todo p-valor es igual o superior a α. Los datos no muestran una desviación de estos supuestos; no prueban que no la haya.",
-   "assumptions_many_rows": "Con {n:int} filas un contraste rechaza incluso desviaciones demasiado pequeñas para importar: valore su tamaño en los gráficos antes de actuar según un veredicto.",
-   "more_in_table": "Y {more:int} más: la tabla los recoge todos.",
-   "method_p_value": "Un p-valor es la probabilidad de que el azar por sí solo, si la hipótesis contrastada fuera cierta, dé un resultado al menos tan alejado de ella como el observado. Se compara con α, el ajuste del nodo: por debajo de α la hipótesis se rechaza, y α es el riesgo, aceptado de antemano, de rechazar una cierta. No rechazar no es probar: con pocas filas una desviación existente puede pasar inadvertida. Cada contraste se lee por separado; con muchos contrastes, algunos rechazan solo por azar.",
-   "coef_some": "Términos cuyo coeficiente es significativamente distinto de 0 con α = {alpha:num} (p-valor por debajo de α), con los demás términos fijos: {count:int} de {total:int} — {names}. Para los demás los datos no muestran un efecto; no prueban que no lo haya.",
-   "coef_all": "El coeficiente de cada término es significativamente distinto de 0 con α = {alpha:num} (p-valor por debajo de α), con los demás términos fijos: {names}.",
-   "coef_none": "Ningún coeficiente es significativamente distinto de 0 con α = {alpha:num}: cada uno de los {total:int} p-valores es igual o superior a α. Los datos no muestran un efecto de ningún término; no prueban que no lo haya.",
-   "threshold_vif": "Inflación de la varianza (VIF) por encima del umbral de {threshold:num} que usa la tabla: {names}, con {values:num}. Un VIF indica cuántas veces los demás términos inflan la varianza de un coeficiente; el umbral es una convención de la literatura, no un contraste.",
    "threshold_condition_number": "El número de condición de los predictores es {value:num}, por encima del umbral de {threshold:num} que usa la tabla: algunos predictores casi repiten una combinación de los demás. El umbral es una convención de la literatura, no un contraste.",
-   "threshold_cooks_distance": "La mayor distancia de Cook es {value:num}, por encima del umbral de {threshold:num} (la mediana de F(p, n − p)); filas por encima: {count:int}, nombradas en la tabla. La distancia de Cook mide cuánto se mueven los valores ajustados al dejar fuera una fila; el umbral es una convención, no un contraste.",
-   "threshold_leverage": "El mayor apalancamiento es {value:num}, por encima del umbral de {threshold:num}; filas por encima: {count:int}, nombradas en la tabla. El apalancamiento mide lo inusual que es la combinación de predictores de una fila; el umbral es una convención, no un contraste.",
    "summary_linear": "Sobre {n:int} filas, el modelo explica el {r2:pct} de la varianza de «{outcome}» (R²); ajustado por el número de términos, el {adj:pct}.",
    "fit_f_reject": "Si ningún término estuviera relacionado con «{outcome}», un estadístico F de {f:num} o más (con {df1:int} y {df2:int} grados de libertad) aparecería por azar con probabilidad {p:p}, por debajo de α = {alpha:num}: el modelo en su conjunto es significativo.",
    "fit_f_keep": "Si ningún término estuviera relacionado con «{outcome}», un estadístico F de {f:num} o más (con {df1:int} y {df2:int} grados de libertad) aparecería por azar con probabilidad {p:p}, no por debajo de α = {alpha:num}: el modelo en su conjunto no es significativo. Los datos no muestran que los términos expliquen «{outcome}»; no prueban que no lo hagan.",
@@ -709,7 +657,6 @@
    "method_se_classical": "Los errores estándar clásicos suponen residuos de igual varianza en todas partes e independientes entre sí; cuando una comprobación de varianza constante o de independencia rechaza, los errores estándar robustos del nodo (se) prescinden de ese supuesto.",
    "method_se_hc": "Los errores estándar son consistentes ante heterocedasticidad (el estimador sándwich, de HC0 a HC3; HC3 es el más prudente con las filas de alto apalancamiento): siguen siendo válidos cuando la varianza de los residuos cambia de una fila a otra, así que los contrastes de los términos no dependen de una varianza constante.",
    "method_se_hac": "Los errores estándar son HAC (Newey–West): siguen siendo válidos cuando los residuos están correlacionados con sus vecinos en el orden de las filas del nodo y su varianza cambia, así que los contrastes de los términos no dependen de la independencia ni de una varianza constante.",
-   "method_se_cluster": "Los errores estándar son por clúster: las filas del mismo clúster pueden estar correlacionadas entre sí, las de clústeres distintos se toman como independientes. Con pocos clústeres son ellos mismos imprecisos.",
    "method_checks": "Las comprobaciones contrastan los supuestos uno a uno: linealidad (RESET), varianza constante (Breusch–Pagan, White), normalidad de los residuos (Shapiro–Wilk o Anderson–Darling, Jarque–Bera), independencia en el orden de las filas (Durbin–Watson, Breusch–Godfrey) y valores atípicos (Bonferroni). La multicolinealidad y la influencia se miden, no se contrastan: el VIF, el número de condición, la distancia de Cook y el apalancamiento se comparan con umbrales de la literatura.",
    "method_vif": "El VIF de un término es 1 / (1 − R²) de la regresión de ese término sobre los demás: 1 cuando ningún otro término lo explica. Un VIF ensancha el intervalo del término en su raíz cuadrada y deja la estimación sin sesgo."
   },
@@ -732,7 +679,8 @@
    "threshold_condition_number",
    "threshold_cooks_distance",
    "threshold_leverage",
-   "threshold_vif"
+   "threshold_vif",
+   "assumptions_many_rows"
   ]
  },
  "fr": {
@@ -850,13 +798,11 @@
    "formulas": "Formule"
   },
   "reading_labels": {
-   "method_p_value": "p-valeurs et α",
    "method_ols": "Moindres carrés",
    "method_wls": "Moindres carrés pondérés",
    "method_se_classical": "Erreurs standard",
    "method_se_hc": "Erreurs standard robustes",
    "method_se_hac": "Erreurs standard HAC",
-   "method_se_cluster": "Erreurs standard par grappe",
    "method_checks": "Les contrôles",
    "method_vif": "VIF",
    "formula_ols": "Coefficients",
@@ -867,18 +813,7 @@
    "formula_vif": "VIF"
   },
   "reading_texts": {
-   "assumptions_rejected": "Contrôles dont le test rejette son hypothèse au seuil α = {alpha:num}, leur p-valeur étant sous α : {count:int} sur {total:int}, marqués dans le tableau, qui dit ce que signifie chaque écart et que faire.",
-   "assumptions_none_rejected": "Contrôles qui sont des tests : {total:int} ; au seuil α = {alpha:num}, aucun ne rejette son hypothèse, chaque p-valeur est égale ou supérieure à α. Les données ne montrent pas d'écart à ces hypothèses ; elles ne prouvent pas qu'il n'y en a pas.",
-   "assumptions_many_rows": "Avec {n:int} lignes, un test rejette même des écarts trop petits pour compter : pesez leur taille dans les graphiques avant d'agir sur un verdict.",
-   "more_in_table": "Et {more:int} de plus : le tableau les donne tous.",
-   "method_p_value": "Une p-valeur est la probabilité que le hasard seul, si l'hypothèse testée était vraie, donne un résultat au moins aussi éloigné d'elle que celui observé. On la compare à α, le réglage du nœud : sous α, l'hypothèse est rejetée, et α est le risque, accepté d'avance, d'en rejeter une vraie. Ne pas rejeter n'est pas prouver : avec peu de lignes, un écart existant peut passer inaperçu. Chaque test se lit seul ; avec beaucoup de tests, certains rejettent par le seul hasard.",
-   "coef_some": "Termes dont le coefficient diffère significativement de 0 au seuil α = {alpha:num} (p-valeur sous α), les autres termes étant fixés : {count:int} sur {total:int} — {names}. Pour les autres, les données ne montrent pas d'effet ; elles ne prouvent pas qu'il n'y en a pas.",
-   "coef_all": "Le coefficient de chaque terme diffère significativement de 0 au seuil α = {alpha:num} (p-valeur sous α), les autres termes étant fixés : {names}.",
-   "coef_none": "Aucun coefficient ne diffère significativement de 0 au seuil α = {alpha:num} : chacune des {total:int} p-valeurs est égale ou supérieure à α. Les données ne montrent d'effet d'aucun terme ; elles ne prouvent pas qu'il n'y en a pas.",
-   "threshold_vif": "Inflation de la variance (VIF) au-dessus du seuil de {threshold:num} qu'utilise le tableau : {names}, à {values:num}. Un VIF dit combien de fois les autres termes gonflent la variance d'un coefficient ; le seuil est une convention de la littérature, pas un test.",
    "threshold_condition_number": "Le conditionnement des prédicteurs vaut {value:num}, au-dessus du seuil de {threshold:num} qu'utilise le tableau : certains prédicteurs répètent presque une combinaison des autres. Le seuil est une convention de la littérature, pas un test.",
-   "threshold_cooks_distance": "La plus grande distance de Cook vaut {value:num}, au-dessus du seuil de {threshold:num} (la médiane de F(p, n − p)) ; lignes au-dessus : {count:int}, nommées dans le tableau. La distance de Cook mesure combien les valeurs ajustées bougent quand on retire une ligne ; le seuil est une convention, pas un test.",
-   "threshold_leverage": "Le plus grand levier vaut {value:num}, au-dessus du seuil de {threshold:num} ; lignes au-dessus : {count:int}, nommées dans le tableau. Le levier mesure combien la combinaison des prédicteurs d'une ligne est inhabituelle ; le seuil est une convention, pas un test.",
    "summary_linear": "Sur {n:int} lignes, le modèle explique {r2:pct} de la variance de «{outcome}» (R²) ; ajusté pour le nombre de termes, {adj:pct}.",
    "fit_f_reject": "Si aucun terme n'était lié à «{outcome}», une statistique F de {f:num} ou plus (à {df1:int} et {df2:int} degrés de liberté) apparaîtrait par hasard avec une probabilité de {p:p}, sous α = {alpha:num} : le modèle dans son ensemble est significatif.",
    "fit_f_keep": "Si aucun terme n'était lié à «{outcome}», une statistique F de {f:num} ou plus (à {df1:int} et {df2:int} degrés de liberté) apparaîtrait par hasard avec une probabilité de {p:p}, pas sous α = {alpha:num} : le modèle dans son ensemble n'est pas significatif. Les données ne montrent pas que les termes expliquent «{outcome}» ; elles ne prouvent pas le contraire.",
@@ -893,7 +828,6 @@
    "method_se_classical": "Les erreurs standard classiques supposent des résidus de même variance partout et indépendants entre eux ; quand un contrôle de variance constante ou d'indépendance rejette, les erreurs standard robustes du nœud (se) se passent de cette hypothèse.",
    "method_se_hc": "Les erreurs standard sont robustes à l'hétéroscédasticité (l'estimateur sandwich, de HC0 à HC3 ; HC3 est le plus prudent avec les lignes à fort levier) : elles restent valides quand la variance des résidus change d'une ligne à l'autre, de sorte que les tests des termes ne dépendent pas d'une variance constante.",
    "method_se_hac": "Les erreurs standard sont HAC (Newey–West) : elles restent valides quand les résidus sont corrélés avec leurs voisins dans l'ordre des lignes du nœud et que leur variance change, de sorte que les tests des termes ne dépendent ni de l'indépendance ni d'une variance constante.",
-   "method_se_cluster": "Les erreurs standard sont par grappe : les lignes d'une même grappe peuvent être corrélées entre elles, celles de grappes différentes sont prises comme indépendantes. Avec peu de grappes, elles sont elles-mêmes imprécises.",
    "method_checks": "Les contrôles testent les hypothèses une à une : linéarité (RESET), variance constante (Breusch–Pagan, White), normalité des résidus (Shapiro–Wilk ou Anderson–Darling, Jarque–Bera), indépendance dans l'ordre des lignes (Durbin–Watson, Breusch–Godfrey) et valeurs aberrantes (Bonferroni). La multicolinéarité et l'influence sont mesurées, pas testées : le VIF, le conditionnement, la distance de Cook et le levier sont comparés à des seuils de la littérature.",
    "method_vif": "Le VIF d'un terme est 1 / (1 − R²) de la régression de ce terme sur les autres : 1 quand aucun autre terme ne l'explique. Un VIF élargit l'intervalle du terme de sa racine carrée et laisse l'estimation sans biais."
   },
@@ -916,7 +850,8 @@
    "threshold_condition_number",
    "threshold_cooks_distance",
    "threshold_leverage",
-   "threshold_vif"
+   "threshold_vif",
+   "assumptions_many_rows"
   ]
  }
 }

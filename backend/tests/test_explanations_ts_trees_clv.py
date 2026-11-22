@@ -61,12 +61,21 @@ def test_arima_s_residual_test_reads_rejected_or_not_by_alpha_around_its_p_value
     below = ids("arima-manual", alpha=round(p - 0.001, 4))
     assert "ljung_box_10_reject" not in below and "residuals_keep_all" not in below and "residuals_keep_others" in below
     assert "residuals_keep_all" in ids("arima-manual", alpha=0.05)
+    # the tests that do not reject are named as the table names them (lot B4)
+    others = next(v for _, id_, v in lines("arima-manual", alpha=round(p + 0.001, 4)) if id_ == "residuals_keep_others")
+    # (Ljung–Box at 2·s lags rejects at that alpha too)
+    assert others["k"] == 3 and others["names"] == ["check:arch_lm", "check:variance_ratio", "check:jarque_bera"]
+    said = [r["text"] for r in layouts.with_labels("arima", {**fixture("arima-manual")[1], "alpha": round(p + 0.001, 4)}, rows, "en")
+            if r["section"] == "reading" and r["level"] == "assumptions"]
+    assert any("«Constant variance: ARCH LM», " in x and "«Normality of residuals: Jarque–Bera»." in x for x in said), said
 
 
 def test_arima_s_coefficients_read_significant_or_not_by_alpha_and_name_five_at_most():
     _, _, rows = fixture("arima-manual")
     p = next(r["value"] for r in rows if r["key"] == "coef|ma1||p_value")
-    assert [x for x in ids("arima-manual", alpha=round(p + 0.001, 4)) if x.startswith("coef_")] == ["coef_some"]
+    # the lines every model shares (common.json's words, lot B4): all three terms below alpha, then none
+    assert [x for x in ids("arima-manual", alpha=round(p + 0.001, 4)) if x.startswith("coef_")] == ["coef_all"]
+    assert [x for x in ids("arima-manual") if x.startswith("coef_")] == ["coef_some"]
     assert [x for x in ids("arima-manual", alpha=1e-12) if x.startswith("coef_")] == ["coef_none"]
     many = copy.deepcopy(rows)
     template = [r for r in rows if r["section"] == "coef" and r["level"] == "ar1"]
@@ -74,9 +83,9 @@ def test_arima_s_coefficients_read_significant_or_not_by_alpha_and_name_five_at_
         for r in template:
             many.append({**r, "level": f"ar{k}", "key": r["key"].replace("|ar1|", f"|ar{k}|"),
                          "value": 1e-12 * k if r["stat"] == "p_value" else r["value"]})
-    said = next(v for _, id_, v in lines("arima-manual", many) if id_ == "coef_some_more")
-    assert said["names"] == ["ar2", "ar3", "ar4", "ar5", "ar6"]  # by their p-value
-    assert said["k"] == 9 and said["more"] == 4 and said["total"] == 10
+    chosen = [(id_, v) for block, id_, v in lines("arima-manual", many) if block == "coefficients"]
+    assert chosen[0][0] == "coef_some" and chosen[0][1]["names"] == ["ar2", "ar3", "ar4", "ar5", "ar6"]  # by their p-value
+    assert chosen[0][1]["count"] == 9 and chosen[0][1]["total"] == 10 and chosen[1] == ("more_in_table", {"more": 4})
 
 
 def test_adf_and_kpss_follow_the_side_of_their_table_as_the_runner_reads_it():
@@ -104,6 +113,46 @@ def test_adf_and_kpss_follow_the_side_of_their_table_as_the_runner_reads_it():
                "key": "assumption|kpss||advice_id"})
     said = {id_: v for _, id_, v in lines("arima-manual", nc, alpha=0.2)}
     assert said["kpss_table_end"]["bound"] == 0.1 and "stationarity_no_case" in said
+
+
+def _marked(tmp_path, chart_service, monkeypatch, rows: list[dict], alpha: float) -> list[str]:  # noqa: F811
+    """The cases of ADF and KPSS read together that ARIMA's page marks as this series' (none, or one)."""
+    from tests import test_models_layouts as tml
+
+    model, params, _ = fixture("arima-manual")
+    monkeypatch.setattr(tml, "fixture", lambda case: (model, {**params, "alpha": alpha}, rows))
+    _, page = draw(tmp_path, chart_service, monkeypatch, "arima-manual", fmt="svg")
+    cases = common.words("arima", "manual", "en")["cases"]
+    return [k for k in "1234" if f"{cases[k]} — {cases['this_series']}" in page]
+
+
+def test_arima_s_box_of_the_four_cases_marks_the_case_the_reading_reads(tmp_path, chart_service, monkeypatch):  # noqa: F811
+    """The box reads ADF and KPSS by the side of their tables, as the runner and the reading do (`table_rejects`), and
+    marks no case when a test gives no verdict (lot B4)."""
+    _, _, rows = fixture("arima-manual")
+    assert _marked(tmp_path / "a", chart_service, monkeypatch, rows, 0.05) == ["4"]  # neither rejects (KPSS at its end)
+    assert _marked(tmp_path / "b", chart_service, monkeypatch, rows, 0.21) == []  # 0.21 is beyond KPSS's table
+    ends = with_value(rows, "assumption|adf||p_value", 0.01)
+    # ADF's p at the end of its table, α = 0.01: it rejects (p < α would keep), KPSS keeps at its upper end
+    assert "adf_reject_end" in ids("arima-manual", ends, alpha=0.01)
+    assert _marked(tmp_path / "c", chart_service, monkeypatch, ends, 0.01) == ["1"]
+    assert _marked(tmp_path / "d", chart_service, monkeypatch, ends, 0.005) == []  # 0.005 is beyond ADF's table
+    both = with_value(ends, "assumption|kpss||p_value", 0.01)
+    assert _marked(tmp_path / "e", chart_service, monkeypatch, both, 0.05) == ["3"]
+
+
+def test_the_box_of_the_four_cases_says_the_decomposition_s_words_and_fits_its_line():
+    """The box says what the two tests say, as the decomposition does since D9: not «the differences are enough», not
+    «too short or too noisy»; each case, marked, fits the page's width on one line."""
+    from app.engine.stats.layouts import WIDTH
+
+    gone = {"en": ("enough", "noisy"), "it": ("bastano", "rumorosa"), "de": ("genügen", "verrauscht"),
+            "es": ("bastan", "ruidosa"), "fr": ("suffisent", "bruitée")}
+    for locale in LOCALES:
+        cases = common.words("arima", "manual", locale)["cases"]
+        for k in "1234":
+            assert not [x for x in gone[locale] if x in cases[k]], (locale, k)
+            assert glyphs.width_mm(f"» {cases[k]} — {cases['this_series']}", 8.5, 600) < WIDTH, (locale, k)
 
 
 def test_arima_says_adf_and_kpss_in_the_decomposition_s_words():

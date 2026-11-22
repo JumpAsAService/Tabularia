@@ -71,7 +71,12 @@ def _words(model: str, variant: str, locale: str) -> dict:
     # the words XGBoost and CatBoost share; those `clv` and `bg_bb` share; those of the A/B test and its planning
     if family in ("boosting", "customer_lifetime", "experiments"):
         own = _merged(_lang(family, locale), own)
-    return _merged(_lang("common", locale), own)
+    w = _merged(_lang("common", locale), own)
+    # a check a reading names (`check:<id>`, «check:<id>|<term>» for a check of each term) is said as the table names it,
+    # in guillemets (a check's name may hold a comma); `values.reading_names` of the words, when it has one, first
+    named = {f"check:{k}": f"«{v['name']}»" for k, v in w.get("checks", {}).items() if isinstance(v, Mapping) and v.get("name")}
+    values = w.get("values", {})
+    return {**w, "values": {**values, "reading_names": {**named, **values.get("reading_names", {})}}}
 
 
 def words(model: str, variant: str, locale: str | None) -> dict:
@@ -241,7 +246,8 @@ def structured_note(w: dict, text: str, loc: Any, texts: str = "note_texts") -> 
     of `note_texts.<id>`, each «{name}» replaced by its value, a number with the language's decimal, a name of a
     distribution, of a purchase model or of a unit of time in the page's words (`values.distribution`,
     `values.purchase_model`, `values.time_unit`). A formula sent the same way (BG/BB's «@bgbb_formula unit=year») is
-    read from `formula_texts`. A value that is a name (NOTE_NAMES: a stratum, a column, a distribution…) is never
+    read from `formula_texts`. A name a reading chooses («check:<id>») is said as `values.reading_names` has it (the
+    check's name in the table, `words`). A value that is a name (NOTE_NAMES: a stratum, a column, a distribution…) is never
     read as a number: a stratum «2.5» stays «2.5». A value's «%», « » and «,» come encoded (%25, %20, %2C: the survival runner's
     surv_note, so that a stratum «North Side» or «a,b» does not split the note) and are decoded here, after the
     split on «,». «{name:pct}» and the other NUMBER_FORMS say a number in that form (number_form); a list of numbers in
@@ -252,25 +258,37 @@ def structured_note(w: dict, text: str, loc: Any, texts: str = "note_texts") -> 
         return text
     values = w.get("values", {})
     names = {**values.get("purchase_model", {}), **values.get("distribution", {}), **values.get("time_unit", {})}
+    reading_names = values.get("reading_names", {})
     # a unit of time in another form: «{unit:one}» its singular («one opportunity a year»), «{unit:dative}» the plural
     # after a preposition (German's dative, «in Monaten»; the plural in the other languages)
     forms = {"one": values.get("time_unit_one", {}), "dative": values.get("time_unit_dative", {})}
     parts = dict(r.partition("=")[::2] for r in rest if "=" in r)
 
+    def named(v: str) -> str:
+        """A name in the page's words: a distribution, a purchase model, a unit; a name a reading chooses
+        (`values.reading_names`: «check:breusch_pagan»), with its term after it for a check of each term
+        («check:schoenfeld|load» → «Proportional hazards: Schoenfeld» (load))."""
+        if v in reading_names:
+            return reading_names[v]
+        head, bar, term = v.partition("|")
+        if bar and head in reading_names:
+            return f"{reading_names[head]} ({term})"
+        return names.get(v, v)
+
     def word(v: str, form: str = "", name: bool = False) -> str:
         v = unquote(v)
         if not name and NUMBER_IN_TEXT.fullmatch(v):
             return _decimal(v, loc)
-        return forms[form].get(v, names.get(v, v)) if form else names.get(v, v)
+        return forms[form].get(v, named(v)) if form else named(v)
 
     def shaped(v: str, form: str, name: bool) -> str:
         v = unquote(v)
         if name:
-            return names.get(v, v)
+            return named(v)
         # a list of numbers sent with its commas encoded («0.5%2C0.5») is a list too: a number holds no comma
         items = v.split(",")
         if not all(NUMBER_IN_TEXT.fullmatch(x) for x in items):
-            return names.get(v, v)
+            return named(v)
         return " / ".join(number_form(float(x), form, loc) for x in items)
 
     def placed(m: re.Match) -> str:
@@ -846,8 +864,11 @@ def grid(p: stats.Page, w: dict, charts: tuple[Chart, ...], heading: tuple[str, 
             said = chart.caption.startswith("=")
             lines = -(-int(glyphs.width_mm(chart.measured or chart.caption.lstrip("="), 7)) // int(width - 2)) or 1
             height = round(3.1 * lines + 1.4, 2)
-            room = max(room, height)
-            p.items.append({"id": chart.id + "_how", "type": "text", "x": x, "y": top + tall + 0.3, "w": width, "h": height,
+            # under the verdict of the check the chart illustrates, when it has one (the two would share a line)
+            below_verdict = caption if chart.under else 0.0
+            room = max(room, below_verdict + height)
+            p.items.append({"id": chart.id + "_how", "type": "text", "x": x, "y": top + tall + 0.3 + below_verdict, "w": width,
+                            "h": height,
                             "value": chart.caption if said else stats.static(chart.caption), "style": {"size": 7, "color": MUTED},
                             "visible": chart.more.get("visible")})
         if chart.under:  # «check», or «check|term» for a check of each term

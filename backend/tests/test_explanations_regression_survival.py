@@ -111,7 +111,9 @@ def test_the_linear_regression_reads_r2_the_f_test_the_checks_the_terms_and_its_
     assert {"threshold_vif", "coef_all", "coef_robust", "fit_errors", "method_se_hc", "formula_sandwich"} <= set(got)
     text = {r["key"]: r["text"] for r in said(model, params, rows)}
     assert text["reading|summary||line_1"].startswith("On 117 rows, the model explains 74.6 % of the variance of «quantity»")
-    assert "4 of 9" in text["reading|assumptions||line_1"]
+    # the checks that reject, counted and named as the table names them (lot B4)
+    assert "4 of 9 — «Homoscedasticity: Breusch–Pagan», «Homoscedasticity: White», «Independence: Durbin–Watson», " \
+           "«Independence: Breusch–Godfrey, order 1»." in text["reading|assumptions||line_1"]
     # the VIF is a measure against its threshold: the number and the threshold, never «failed»
     assert "channel, price × channel, at 9.342 / 10.12" in text["reading|assumptions||line_2"]
     assert "failed" not in text["reading|assumptions||line_2"]
@@ -225,6 +227,12 @@ def test_many_rows_and_a_long_list_are_said_and_capped():
     many = [{**r, "value": 12000} if r["key"] == "model|||n" else r for r in rows]
     assert "assumptions_many_rows" in ids(model, params, many)
     complete(model, params, many)
+    # nine checks that reject: five named in the table's order, «and 4 more»
+    rejecting = [{**r, "value": 0.001} if r["section"] == "assumption" and r["stat"] == "p_value" else r for r in rows]
+    checks = [x for x in common.READINGS[model](rejecting, catalog.check_params(model, params)) if x[0] == "assumptions"]
+    assert checks[0][2] == "assumptions_rejected" and checks[0][3]["count"] == 9 and len(checks[0][3]["names"]) == 5
+    assert checks[0][3]["names"][0] == "check:reset" and checks[1][2:] == ("more_in_table", {"more": 4})
+    complete(model, params, rejecting)
     # seven significant terms: five named, «and 2 more»
     extra = []
     for i in range(4):
@@ -332,3 +340,10 @@ def test_the_words_left_by_the_runner_s_english_are_untouched_by_the_readings():
         assert w["checks"] and "reading_texts" in w and "formula_texts" in w
         plain = [r for r in layouts.with_labels(model, params, rows, "en") if r["section"] != "reading"]
         assert len(plain) == len(rows)
+
+
+def test_a_check_of_each_term_is_named_with_its_term():
+    model, params, rows = fixture("cox-default")
+    text = {r["key"]: r["text"] for r in said(model, params, rows, "it")}
+    assert "2 su 4 — «Rischi proporzionali: Schoenfeld» (line), «Rischi proporzionali: test globale»." in \
+        text["reading|assumptions||line_1"]

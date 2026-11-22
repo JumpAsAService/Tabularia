@@ -1115,4 +1115,6 @@ def test_a_model_report_keeps_its_headings_and_the_coefficients_note_with_their_
     for id_ in ("s_fit", "s_fit_rule", "s_notes", "s_notes_rule", "notes_lines", "coef_note"):
         assert items[id_].get("keep_with_next"), id_
     assert not any(i.get("keep_with_next") for i in items.values() if i["type"] not in ("text", "line", "rect"))
-    assert not any(i.get("keep_with_next") for id_, i in items.items() if id_.endswith(("_how", "_caption")))
+    # a chart's «how to read it» ends with «_how»; the heading of «How this report was computed», `s_how`, is a heading
+    assert not any(i.get("keep_with_next") for id_, i in items.items() if id_.endswith(("_how", "_caption")) and id_ != "s_how")
+    assert items["s_how"].get("keep_with_next")

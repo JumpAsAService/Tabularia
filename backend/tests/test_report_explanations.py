@@ -63,11 +63,15 @@ def test_a_line_s_values_are_written_as_the_runners_write_them_and_said_back_onc
         assert common.reading_said(w, "result", out[0]["text"], formats.locale(locale), {}, "line_1") == (said, "Result")
 
 
-def test_a_page_with_nothing_explained_is_the_page_as_before_and_an_unknown_place_is_refused():
+def test_a_page_with_nothing_explained_is_the_page_as_before_and_an_unknown_place_is_refused(monkeypatch):
+    """Every model now explains its method: the linear regression stands for one that does not, its readings taken out
+    and its page asked for no reading place."""
     model, params, _ = fixture("linear-unpenalized")
+    monkeypatch.delitem(common.READINGS, model)
+    monkeypatch.setattr(common, "page", lambda *a, **k: PAGE(*a, **{**k, "explained": ()}))
     assert not [it for it in layouts.definition(model, params, "en")["sections"]["body"]["items"] if EXPLANATION_IDS.match(it["id"])]
     with pytest.raises(ValueError, match="no reading place"):
-        common.page(model, params, "en", None, None, name="x", about="", cards=(), explained=("charts",))
+        PAGE(model, params, "en", None, None, name="x", about="", cards=(), explained=("charts",))
 
 
 def test_a_model_that_registers_its_readings_gets_their_rows_and_their_places(monkeypatch):
@@ -80,6 +84,7 @@ def test_a_model_that_registers_its_readings_gets_their_rows_and_their_places(mo
         w = copy.deepcopy(words(m, variant, locale))
         w["reading_texts"] = {"fit_r2": "R² is {r2:num}.", "method_ols": "Least squares."}
         w["reading_blocks"] = {"fit": "Fit", "method": "Method"}
+        w["reading_labels"] = {}  # the model's own labels (`method_ols`) would name the toy's rows
         return w
 
     monkeypatch.setattr(common, "words", with_texts)
@@ -199,3 +204,46 @@ def only_additions(case: str, monkeypatch) -> None:
 def test_an_explained_report_is_the_report_as_before_with_the_explanation_added(monkeypatch):
     for case in explained_cases():
         only_additions(case, monkeypatch)
+
+
+# ── lot B4: the names a reading chooses, the lines every model shares ───────
+# the sentences several models say, written once in common.json (the spec's Open question 4); a model keeps its own only
+# where its noun differs (ARIMA's observations, the customer lifetime's customers)
+SHARED_LINES = ("assumptions_rejected", "assumptions_none_rejected", "assumptions_many_rows", "coef_some", "coef_all",
+                "coef_none", "more_in_table", "method_p_value", "method_se_cluster", "threshold_vif", "threshold_epv",
+                "threshold_cooks_distance", "threshold_leverage", "coef_hazard", "coef_hazard_level")
+OWN_NOUN = {("arima", "assumptions_many_rows"), ("customer_lifetime", "assumptions_many_rows")}
+
+
+@pytest.mark.parametrize("locale", LOCALES)
+def test_a_check_a_reading_names_is_said_as_the_table_names_it(locale):
+    """`check:<id>` in a reading's list is the check's name in the table, in the page's language and in guillemets (a
+    name may hold a comma); a check of each term has its term after it; any other name stays as it is."""
+    model, params, _ = fixture("cox-default")
+    w = common.words(model, catalog.variant(model, catalog.check_params(model, params)), locale)
+    names = w["values"]["reading_names"]
+    assert names["check:schoenfeld_global"] == f"«{w['checks']['schoenfeld_global']['name']}»"
+    note = {**w, "note_texts": {"x": "{names}"}}
+    said = common.structured_note(note, "@x names=check:schoenfeld_global,check:schoenfeld|North%20Side,check:2.5,price",
+                                  formats.locale(locale))
+    assert said == ", ".join([names["check:schoenfeld_global"], names["check:schoenfeld"] + " (North Side)", "check:2.5", "price"])
+    # the words' own `values.reading_names` come first
+    own = {**w, "values": {**w["values"], "reading_names": {**names, "check:vif": "VIF"}}, "note_texts": {"x": "{names}"}}
+    assert common.structured_note(own, "@x names=check:vif", formats.locale(locale)) == "VIF"
+
+
+@pytest.mark.parametrize("locale", LOCALES)
+def test_the_lines_several_models_say_are_written_once_in_common_json(locale):
+    shared = common._file("common")[locale]["reading_texts"]
+    assert set(SHARED_LINES) <= set(shared)
+    for name in WORDS_FILES:
+        if name == "common":
+            continue
+        own = set(common._file(name)[locale].get("reading_texts", {})) & set(SHARED_LINES)
+        assert own <= {k for m, k in OWN_NOUN if m == name}, (name, sorted(own))
+    for model in explained():  # and a model says common.json's sentence
+        w = common.words(model, catalog.variant(model, catalog.check_params(model, fixture(next(
+            c for c in CASES if c.split("-")[0] == model))[1])), locale)
+        for key in SHARED_LINES:
+            if (model, key) not in OWN_NOUN and (catalog.MODELS[model].get("family"), key) not in OWN_NOUN:
+                assert w["reading_texts"][key] == shared[key], (model, key)
