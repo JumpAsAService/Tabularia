@@ -1200,6 +1200,54 @@ about 4.7 s of draws). The process peak of the simulation script: 550 MB.
 **Tests**: engine 1,295 passed (catalogue, results, columns, layouts, explanations), `go test ./internal/...` green, the editor's 112 model tests, the
 assistant's 139. `model_catalog.py --check` green.
 
+### G5 — editor: two nodes, «Simulate risk from this model» (2026-11-22)
+
+**What is in.** Both nodes have their form, words (five languages, namespace `models`), icons (`Activity` for the volatility, `Dices` for the risk
+simulation: lucide, no new dependency), one-line summaries and the node menu's action. The forms are the catalogue's, drawn by the same controls as the
+other models: the keys change with `model` (GARCH's sections or ARIMA's, by `applies`), with the variance model (`garch_order` leaves an ARCH) and with the
+input (`returns_type` with prices); the risk node reuses the two nodes' sections because it takes the same keys with the same kinds and defaults (a test
+compares them). The quantiles are the existing list of numbers (up to nine, in (0, 1), kept sorted and once each, said back under the box). The risk node
+has `card: false`: «Register the model as» is not drawn and the form says the node writes no model. The columns after each node (the summary's
+`quantile_<q>`, the prices' and the threshold's, the paths' `sigma` with a GARCH only) are known before any Run, from the form as it is, and the steps after
+the node keep them (select, rename, drop).
+
+**The action.** The node's menu is the right-click ring (`FlowQuickMenu.vue`; its keyboard way is Shift+F10 on a PC and `m` on a Mac, then the arrows and
+Enter). It takes an `actions` prop: what the node it was opened on can do, drawn after the steps on the ring and emitted as `action`, not `pick`.
+`modelActionsOf` gives `simulate_risk` to an ARIMA or GARCH model node and nothing else. `onQuickAction` in the editor reads `modelRiskFrom(node.data)`
+and drops a Risk simulation node **on the same input** as the source node (its upstream, one more branch there: the source's own output is its forecast
+table, not the series), selected and focused. `modelRiskFrom` copies every key the two nodes have in common with the value the source has **in effect**
+(a default the source relies on is written as that value: an ARIMA's horizon of 12 is carried, not the simulation's 10), only the keys that apply to the
+source, plus the time limit and the retries; `output` is the risk node's own, MLflow and the label are not carried. The test compares `modelFull` of both
+for every shared key, for a GARCH, for ARIMAs by hand, searched for and bare.
+
+**Hidden.** `MODEL_NOT_IN_THE_PALETTE_YET` still holds `garch` and `risk_simulation` (their runners come with G1 and G3; G7 takes them away). With the
+set emptied the palette shows one entry for each under *Time series*, after the decomposition (tested).
+
+**Deviations and corrections.**
+
+1. **An ARIMA with exogenous columns is refused** by the action with a sentence (`models.actions.simulateRiskRefused.exog`): the risk form has no `exog`, so
+   the copy would fit another model. A node with no input is refused too (`simulateRiskNoInput`).
+2. **The titles of the nodes are one function**, `modelCodeTitle`: an ARIMA's orders, a GARCH's `garch_name` (`GJR-GARCH(1,1), skewed t`: codes and the law's
+   English name, as the report's title); the canvas, the panel and the table's header read it. The risk node is named by its words, its summary says the
+   model fitted and `N=<paths>`.
+3. **Own hints for `mean`, `distribution`, `lb_lag`, `holdout`, `horizon`, `seed`, `output`** (and the risk node's `quantiles` and `threshold`, with their own
+   labels), because the words the other models share say another thing («the median is always given», «exogenous columns»).
+4. **The wildcards and the copies were G0's**: nothing of the catalogue, the engine, the gateway or the assistant changed.
+
+**Tests.** The editor's model tests 109 → 126 (`frontend/tests/model-volatility.test.mjs`, 17 new: keys, defaults, quantiles, forms in words, keyboard,
+the action's copies, titles, palette, columns before the Run, words in five languages); the exclusions of G0 (`WORDED`, the experiments' words) are gone.
+The whole `npm test` (614 tests) and the typecheck (`vue-tsc`, no error) are green.
+
+**On screen** (a scratch Vite server outside the repo mounting the real `ModelForm.vue` and `FlowQuickMenu.vue` with the real catalogue and made-up data,
+the node menu's wiring mimicked: the editor itself needs the whole app; Playwright, headless): Chromium and Firefox, 13 checks each, no console error.
+Mouse: right click on an ARIMA and on a GARCH node, the ring holds the four steps, the action and the hub, the new node has the copied options; an ARIMA
+with exogenous columns is refused with its sentence and a linear node has no action; the form follows the model, the variance model and the prices; the
+quantiles box reads «0.95, 0.05, 0.5» as 0.05, 0.5, 0.95 and refuses 1.2; the columns of both nodes show before any Run; Italian, German, Spanish and French draw both
+forms with no key shown. Keys alone, twice (Shift+F10 as on a PC; `m` as on a Mac and on a laptop without F, Home, End or Menu keys, with a macOS user
+agent): Tab to the node, the ring opens on the first step, ArrowLeft reaches the action, Enter makes the node and focuses it, Escape closes the ring and
+returns the focus, Tab moves between the ring and its hub, the form's choices by the arrows and the quantiles typed. A real keyboard of a Mac was not
+available: the key events are the same ones the editor reads (`m`, `Shift+F10`, arrows, Enter, Escape).
+
 ## References
 
 - Acerbi, C., Tasche, D. (2002). On the coherence of expected shortfall. *J. Banking & Finance* 26(7).
