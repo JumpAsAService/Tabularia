@@ -226,13 +226,16 @@ TAB_COMMON_TESTS[["timeseries: the simulation stays below memory_bytes = 256 MiB
   script <- tempfile(fileext = ".R")
   lib <- c(sort(list.files(file.path(code, "common", "R"), pattern = "[.]R$", full.names = TRUE)),
            file.path(code, "runner", "R", c("ts_sim.R", "ts_sim_tests.R")))
-  writeLines(c(sprintf("for (f in %s) source(f)", deparse(lib, width.cutoff = 500L)),
+  # one line a file, each path a quoted string of its own: a ConfigMap's mount resolves to a long
+  # «..<timestamp>» directory, and a deparsed vector of such paths breaks over lines the child cannot parse
+  quoted <- function(path) encodeString(path, quote = '"')
+  writeLines(c(sprintf("source(%s)", quoted(lib)),
                "suppressMessages(library(arrow))",
                "limits <- .ts_sim_limits(memory_bytes = 256 * 2^20)",
                sprintf("sim <- ts_sim_run(ts_sim_toy('t'), 200000, 10, 1L, limits, .ts_sim_measures_of(threshold = -0.05), file = %s)",
-                       deparse(tempfile(fileext = ".parquet"))),
+                       quoted(tempfile(fileext = ".parquet"))),
                sprintf("writeLines(jsonlite::toJSON(list(hwm = ts_sim_hwm(), batches = sim$run$batches, baseline = sim$run$baseline_bytes), auto_unbox = TRUE, digits = NA), %s)",
-                       deparse(out))),
+                       quoted(out))),
              script)
   status <- system2(file.path(R.home("bin"), "Rscript"), c("--vanilla", script), stdout = FALSE, stderr = FALSE)
   .tab_expect(identical(status, 0L) && file.exists(out), "the child process failed (", status, ")")
