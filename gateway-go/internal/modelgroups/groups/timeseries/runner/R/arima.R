@@ -298,7 +298,10 @@ arima_filter <- function(model, prep, span, levels) {
 }
 
 # ── the fit and its rows ────────────────────────────────────────────────────
-arima_fit_orders <- function(task, prep, orders, extra = NULL) {
+# The fit alone, shared with the risk simulation (risk_simulation.R): the orders checked against the series, the transform's λ,
+# forecast::Arima on the training part (CSS-ML, then ML alone when CSS gives no start). It returns the fit, the model as
+# arima_filter applies it (its coefficients and σ² set), the model's name, the observations fitted and the notes so far.
+arima_fit_core <- function(prep, orders) {
   o <- prep$params
   s <- o$s
   name <- arima_model_name(orders, s, o$exog)
@@ -316,7 +319,6 @@ arima_fit_orders <- function(task, prep, orders, extra = NULL) {
   }
   lambda <- arima_lambda(prep)
   model <- arima_spec(o, orders, lambda)
-  rows <- tab_rows_start(task)
   notes <- character()
   method <- "CSS-ML"
   fit <- tryCatch(arima_call(model, prep, prep$train, method = method), error = function(e) e)
@@ -332,6 +334,20 @@ arima_fit_orders <- function(task, prep, orders, extra = NULL) {
   }
   model$coef <- fit$coef
   model$sigma2 <- fit$sigma2
+  list(fit = fit, model = model, name = name, n = n, lambda = lambda, notes = notes)
+}
+
+arima_fit_orders <- function(task, prep, orders, extra = NULL) {
+  o <- prep$params
+  s <- o$s
+  core <- arima_fit_core(prep, orders)
+  fit <- core$fit
+  model <- core$model
+  name <- core$name
+  n <- core$n
+  lambda <- core$lambda
+  notes <- core$notes
+  rows <- tab_rows_start(task)
   levels <- arima_levels(o$alpha)
   whole <- arima_filter(model, prep, prep$span, levels)
 

@@ -1985,6 +1985,369 @@
    ]
   },
   {
+   "what": "risk simulation, GARCH on prices with a threshold: the summary, with the prices' columns",
+   "model": "risk_simulation",
+   "params": {
+    "model": "garch",
+    "time": "day",
+    "value": "price",
+    "frequency": "index",
+    "input_kind": "prices",
+    "holdout": 50,
+    "threshold": 100,
+    "position": 100000,
+    "output": "risk_summary"
+   },
+   "input": [
+    [
+     "day",
+     "Date"
+    ],
+    [
+     "price",
+     "Float64"
+    ]
+   ],
+   "columns": [
+    [
+     "step",
+     "Int32"
+    ],
+    [
+     "time",
+     "Date"
+    ],
+    [
+     "mean",
+     "Float64"
+    ],
+    [
+     "sd",
+     "Float64"
+    ],
+    [
+     "quantile_0.01",
+     "Float64"
+    ],
+    [
+     "quantile_0.05",
+     "Float64"
+    ],
+    [
+     "quantile_0.25",
+     "Float64"
+    ],
+    [
+     "quantile_0.5",
+     "Float64"
+    ],
+    [
+     "quantile_0.75",
+     "Float64"
+    ],
+    [
+     "quantile_0.95",
+     "Float64"
+    ],
+    [
+     "quantile_0.99",
+     "Float64"
+    ],
+    [
+     "price_quantile_0.01",
+     "Float64"
+    ],
+    [
+     "price_quantile_0.05",
+     "Float64"
+    ],
+    [
+     "price_quantile_0.25",
+     "Float64"
+    ],
+    [
+     "price_quantile_0.5",
+     "Float64"
+    ],
+    [
+     "price_quantile_0.75",
+     "Float64"
+    ],
+    [
+     "price_quantile_0.95",
+     "Float64"
+    ],
+    [
+     "price_quantile_0.99",
+     "Float64"
+    ],
+    [
+     "price_mean",
+     "Float64"
+    ],
+    [
+     "var",
+     "Float64"
+    ],
+    [
+     "var_low",
+     "Float64"
+    ],
+    [
+     "var_high",
+     "Float64"
+    ],
+    [
+     "es",
+     "Float64"
+    ],
+    [
+     "es_low",
+     "Float64"
+    ],
+    [
+     "es_high",
+     "Float64"
+    ],
+    [
+     "prob_beyond",
+     "Float64"
+    ],
+    [
+     "prob_crossed",
+     "Float64"
+    ],
+    [
+     "band_error",
+     "Float64"
+    ]
+   ]
+  },
+  {
+   "what": "risk simulation, GARCH on prices: the paths, with the price and σ",
+   "model": "risk_simulation",
+   "params": {
+    "model": "garch",
+    "time": "day",
+    "value": "price",
+    "frequency": "index",
+    "input_kind": "prices",
+    "holdout": 50,
+    "threshold": 100,
+    "position": 100000,
+    "output": "paths",
+    "paths": 1000
+   },
+   "input": [
+    [
+     "day",
+     "Date"
+    ],
+    [
+     "price",
+     "Float64"
+    ]
+   ],
+   "columns": [
+    [
+     "path",
+     "Int32"
+    ],
+    [
+     "step",
+     "Int32"
+    ],
+    [
+     "time",
+     "Date"
+    ],
+    [
+     "value",
+     "Float64"
+    ],
+    [
+     "cumulative",
+     "Float64"
+    ],
+    [
+     "price",
+     "Float64"
+    ],
+    [
+     "sigma",
+     "Float64"
+    ]
+   ]
+  },
+  {
+   "what": "risk simulation, ARIMA's running total on dates with a threshold: the summary",
+   "model": "risk_simulation",
+   "params": {
+    "model": "arima",
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "p": 1,
+    "d": 1,
+    "q": 1,
+    "P": 0,
+    "D": 1,
+    "Q": 1,
+    "transform": "log",
+    "aggregate": "sum",
+    "tail": "upper",
+    "horizon": 12,
+    "holdout": 12,
+    "threshold": 20000,
+    "paths": 3000,
+    "output": "risk_summary"
+   },
+   "input": [
+    [
+     "month",
+     "Date"
+    ],
+    [
+     "boxes",
+     "Float64"
+    ]
+   ],
+   "columns": [
+    [
+     "step",
+     "Int32"
+    ],
+    [
+     "time",
+     "Date"
+    ],
+    [
+     "mean",
+     "Float64"
+    ],
+    [
+     "sd",
+     "Float64"
+    ],
+    [
+     "quantile_0.01",
+     "Float64"
+    ],
+    [
+     "quantile_0.05",
+     "Float64"
+    ],
+    [
+     "quantile_0.25",
+     "Float64"
+    ],
+    [
+     "quantile_0.5",
+     "Float64"
+    ],
+    [
+     "quantile_0.75",
+     "Float64"
+    ],
+    [
+     "quantile_0.95",
+     "Float64"
+    ],
+    [
+     "quantile_0.99",
+     "Float64"
+    ],
+    [
+     "var",
+     "Float64"
+    ],
+    [
+     "var_low",
+     "Float64"
+    ],
+    [
+     "var_high",
+     "Float64"
+    ],
+    [
+     "es",
+     "Float64"
+    ],
+    [
+     "es_low",
+     "Float64"
+    ],
+    [
+     "es_high",
+     "Float64"
+    ],
+    [
+     "prob_beyond",
+     "Float64"
+    ],
+    [
+     "prob_crossed",
+     "Float64"
+    ],
+    [
+     "band_error",
+     "Float64"
+    ]
+   ]
+  },
+  {
+   "what": "risk simulation, ARIMA on a whole-number time: the paths",
+   "model": "risk_simulation",
+   "params": {
+    "model": "arima",
+    "time": "t",
+    "value": "level",
+    "frequency": "index",
+    "p": 2,
+    "aggregate": "relative_change",
+    "position": 1000,
+    "innovations": "bootstrap",
+    "var_level": 0.995,
+    "es_level": 0.99,
+    "threshold": 40,
+    "holdout": 20,
+    "paths": 1000,
+    "output": "paths"
+   },
+   "input": [
+    [
+     "t",
+     "Int64"
+    ],
+    [
+     "level",
+     "Float64"
+    ]
+   ],
+   "columns": [
+    [
+     "path",
+     "Int32"
+    ],
+    [
+     "step",
+     "Int32"
+    ],
+    [
+     "time",
+     "Int64"
+    ],
+    [
+     "value",
+     "Float64"
+    ],
+    [
+     "cumulative",
+     "Float64"
+    ]
+   ]
+  },
+  {
    "what": "XGBoost regression, the rows",
    "model": "xgboost",
    "params": {

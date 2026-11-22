@@ -939,9 +939,10 @@ _RISK_RESULT_NUMBERS = ["paths", "horizon", "seed", "seed_block", "batches", "ba
                         "threshold", "position", "last_value", "simulated_values", "paths_bytes", "seconds_simulation",
                         "seconds_pass_2"]
 _RISK_READING_BLOCKS = ["summary", "var", "es", "threshold", "drawdown", "shape", "fan", "backtest", "model", "method", "formulas"]
-# the risk measures, at the horizon (no level_2) or at a step (level_2 = the step); the moments and the drawdown's are of H_h
+# the risk measures, at the horizon (no level_2) or at a step (level_2 = the step); the moments and the drawdown's are of H_h;
+# `money`: the VaR's and the ES's value times the node's position (a relative change only)
 _RISK = {"levels": ["var", "es", "prob_beyond", "prob_crossed", "drawdown", "moments"],
-         "numbers": ["value", "low", "high", "se", "count", "mean", "sd", "skewness", "kurtosis", "median"], "texts": []}
+         "numbers": ["value", "low", "high", "se", "count", "mean", "sd", "skewness", "kurtosis", "median", "money"], "texts": []}
 # the fan (nested bands, the median, the history, the sample paths `path_<i>`), the measures per step, the backtest's VaR;
 # `band_error`: the declared error of the fan's band edges at that step
 _RISK_CURVE = _chart("fan", "term", "backtest", stats=["y", "band_error"])

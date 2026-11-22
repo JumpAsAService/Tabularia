@@ -6071,7 +6071,8 @@
                 "sd",
                 "skewness",
                 "kurtosis",
-                "median"
+                "median",
+                "money"
               ],
               "texts": []
             },
@@ -6382,7 +6383,8 @@
                 "sd",
                 "skewness",
                 "kurtosis",
-                "median"
+                "median",
+                "money"
               ],
               "texts": []
             },
