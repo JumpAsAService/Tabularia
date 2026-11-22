@@ -1664,6 +1664,47 @@ and past covariates); the engine's `test_models_output_columns`, `test_models_la
 weights; the environment, the licence of the task and its JSON with and without an acceptance; the five tags; the series' metrics (130 series, 100
 logged, text left out); `registerAs` for `timestral`.
 
+### F7 — sample flow, documentation, assistants
+
+**Built (2026-11-22).** No change to the engine, the runner or the gateway's code.
+
+1. **The palette.** `MODEL_NOT_IN_THE_PALETTE_YET` is empty: Forecast (Timestral) is under its group's header, «Pre-trained forecasting». The tests that held it back
+   now expect it (`model-foundation.test.mjs`; in `model-catalog.test.mjs` the groups' list, the palette's group count 21 and its 21 buttons).
+2. **The sample flow** **«Orders by channel: four weeks ahead»** (`foundation_flows` in `seed_tabularia.py`), made only when `GET /models/groups` answers the group
+   enabled and usable, never scheduled, after the other flows. The calendar (`festivo` kept, 2023-07-01 … 2026-08-12) **Cross join** the channels (the orders'
+   `canale`, once each) → **Left join** the orders counted by day and channel → a **Compute** (`CASE WHEN data_ordine > DATE '2026-07-15' THEN NULL ELSE COALESCE(ordini, 0) END`:
+   the days up to the data's end are 0, the 28 after are the empty future rows) → Forecast (Timestral) with `series` = channel, `frequency` day, `holdout` 28, `known_covariates`
+   `festivo`, `output` `quantile_forecast`. **The size** is 28M when `sizes` of the group's answer holds `28m`, otherwise the smallest it holds (`foundation_size`); a group
+   that sends no list keeps 28M. Its test, `test_seed_foundation.py` (7 tests), pins the group condition, the order, the schedule, the size rule, the cross and left joins, the
+   empty future, and that the parameters pass the catalogue's `check_params` (skipped where the backend is not importable, as the decomposition's).
+3. **Documentation.** `docs/capabilities/models.md`: the section «Pre-trained forecasting (Timestral)», which opens with the licence: the clause quoted word for word, the
+   file's sha256 in a comment, the threshold, who decides, «not legal advice», the audit entry, what happens with a retention; then what the node does, when to choose it over ARIMA,
+   the form, the output, the report with the measures without verdict and Wilcoxon, the limits, the measured times (F3's tables), MLflow and no Predict, and the sample flow;
+   `docs/governance/audit-log.md`: a row for the models' actions, `models.licence_accept` among them (the file had none); `docs/deploy/kubernetes.md`: the hosts of the build,
+   the redirect, the mirrors, the image's size by sizes, the Job's limits, the licence; `docs/configuration.md`: where the two mirror variables are needed; `CHANGELOG.md`.
+   **A Go test** (`modelgroups/licence_docs_test.go`) fails when the licence's sha256 in the recipe no longer matches the comment in `models.md`, or when the clause (the licence's point 2)
+   is not in the page word for word, as «When the licence changes» says; it skips where the documentation is not beside the gateway.
+4. **The notices.** The vendored Apache code lives in the gateway's group folder, which no notices file covers. `frontend/assets/third-party/timestral.txt` (the package's `NOTICE`, then its Apache
+   licence, byte for byte) is added to `third-party-notices.txt`, the file the app and the website serve, with the same `--extra` the IBM Plex font uses, in the frontend's `predev` and
+   `prebuild` and the website's `pregenerate`. A test compares it with the vendored files (when the repository is beside the frontend) and checks that the three scripts name it.
+5. **The assistant.** `_MODELS_INTRO` gets a bullet for `model_timestral`: no fitting, no card, no `registerAs`, no Predict; one row per period and series; **when to choose it over `model_arima`**
+   (many series, a short history, no time to look for orders, bands wanted) **and when ARIMA** (a model to read, to register and apply with `model_predict`, explanatory columns of its own choice, or no
+   pre-trained model); the horizon and known covariates; the size left as it is; the gaps; the output's columns; the measures without verdict and Wilcoxon read against `alpha`, five series
+   cannot reach 0.05; **the licence sentence** (Mistral AI's Modified MIT License, $20 million, accepted by an administrator, not legal advice, never accept it or enable the group). `SETTINGS_CONTEXT` is unchanged:
+   the rule that no threshold or critical setting changes without the person's request stays. Tested with a scripted model (no call to a paid service): the reference's line, the sentences, `clean_params`'
+   refusals, and a turn that adds the node after a Fill nulls and is sent back once for a wrong `size`. `prompts.json` and `tools.json` regenerated: the only differences are the bullet in the five
+   languages' flow contexts, and `model_timestral` in the tools' list of operations (the file had been generated before the catalogue's copy knew the node).
+
+**Where the spec was not followed.** (1) The orders carry their `canale`, so the flow does not join them to the customers. (2) With known covariates `horizon` does not apply (the catalogue refuses
+it): the 28 future rows of the calendar are the horizon; the node's timeout is 1,800 s. (3) The gateway's notices are those of the frontend's file (the one served by the app and the website); the
+Go gateway has no notices file of its own. (4) The frontend's typecheck ran locally (`nuxi prepare`, then `vue-tsc`), not in the container, which is not running.
+
+**Tests.** Frontend `npm test`: 593 pass, none fail (`third-party-notices` 3); `vue-tsc`: no error; sampledb `unittest`: 89 tests OK (39 skipped, as before: numpy); the assistant's `test_ai_flow_agent.py`: 138 passed, 2
+skipped (the agents' MCP, chat and script tests: 52 passed); `go test ./internal/aiprompts/ ./internal/mcp/ ./internal/modelgroups/...`.
+
+**For F8 (kind).** The sample flow is created by the seed's next start with the group enabled and ready (it is not run if the group has no ready version: «not run … starting the container again runs it»);
+check its run with 28M and with a version that holds only 5M; the first page must show five series, the holdout's MASE, and the comparison's row with p = 0.0625 at best.
+
 ## References
 
 - Mistral AI, *Timestral* model cards and `LICENSE`, `https://huggingface.co/mistralai/Timestral-{5M,28M,123M,209M}`
