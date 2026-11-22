@@ -24,6 +24,9 @@ A sixth group, **experiments**, is not a model: its two nodes, **A/B test** and 
 result of a randomized experiment and size the next one ([below](#ab-tests-r)). They run as Jobs, are enabled like the
 others, and have no model card and no Predict.
 
+A seventh group, **pre-trained forecasting**, forecasts series with a model trained in advance, **Forecast (Timestral)**. Its weights
+come under a licence of their own, which an administrator accepts when enabling the group ([below](#pre-trained-forecasting-timestral)).
+
 **They need Kubernetes.** A model is not computed by an engine: it runs as a Job in your
 cluster, in an image built from a recipe Tabularia ships, with R (or Python, for boosting). On Docker Compose the
 models are in the palette greyed out (the tooltip says «Needs Kubernetes, with this feature turned on in the Helm chart: not available on this installation»), the section in Administration says
@@ -45,11 +48,11 @@ statistics that works everywhere.
 
 ## Turning a group on (administrators)
 
-**Administration → Statistical models** lists the six groups Tabularia ships, each with its
+**Administration → Statistical models** lists the seven groups Tabularia ships, each with its
 models, the number of packages its image pins and its state. Only an administrator acts, and
 not with an API token; an observer reads the section. Every action is in the
 [audit log](../governance/audit-log.md) (`models.group_enable`, `models.group_disable`,
-`models.group_rebuild`, `models.group_settings`, `models.group_access`).
+`models.group_rebuild`, `models.group_settings`, `models.group_access`, and `models.licence_accept` for a group whose weights have a licence).
 
 What it takes first is the same as for the Python and R of [scripting](../scripting.md): the
 chart's `scripts.enabled` with its registry (see [Kubernetes](../deploy/kubernetes.md#statistical-models)),
@@ -1251,16 +1254,147 @@ control; the free shipping experiment (`spedizione_gratuita`) opens with the spl
 low-engagement visitors from day 12 on: B looks better than it is, which is what the check is for. Change the **Filter** of the checkout flow to
 `esperimento_id` = `spedizione_gratuita` to see it.
 
-### Pre-trained forecasting (Python): being built
+### Pre-trained forecasting (Timestral)
 
-Model id in the catalogue: `timestral`, in its own group, **Pre-trained forecasting**. It will forecast the next
-weeks of a series, with a range, from a model trained in advance (Timestral, by Mistral AI): nothing is fitted on
-your data, so there is no model card, no registration and no Predict, and a flow run logs to MLflow like any other.
-**The weights of that model are under a licence of their own, the Modified MIT License, which withholds every right
-from a company whose global consolidated monthly revenue is above $20 million: the group's image downloads them
-from Mistral AI into your cluster only when an administrator enables the group, and this page will say the clause
-word for word when the node is built.** This is not legal advice.
-In this version the node does not run yet: it stops with «… is not built yet in this version of Tabularia».
+Model id in the catalogue: `timestral`, in its own group, **Pre-trained forecasting** (Python). Node name in the palette:
+**Forecast (Timestral)**.
+
+#### The licence of the weights, first
+
+The model's weights are Mistral AI's, not Tabularia's, and they come under a licence of their own, the *Modified MIT
+License*. **Tabularia does not ship them**: the group's image downloads them from Mistral AI's repositories on Hugging Face,
+into your cluster, when an administrator enables the group. The clause that matters is point 2 of the licence, quoted here
+word for word:
+
+> 2. You are not authorized to exercise any rights under this license if the global consolidated
+>    monthly revenue of your company (or that of your employer) exceeds $20 million (or its equivalent
+>    in another currency) for the preceding month. This restriction in (b) applies to the Model and
+>    any derivatives, modifications, or combined works based on it, whether provided by Mistral AI or
+>    by a third party. You may contact Mistral AI (sales@mistral.ai) to request a commercial license,
+>    which Mistral AI may grant you at its sole discretion, or choose to use the Model on Mistral AI's
+>    hosted services available at https://mistral.ai/.
+
+<!-- licence-sha256: 648194727930df730890e9f9affdbcc5c930d406d6829559b25ca3d5a973fc8c -->
+
+The full text is the file `LICENSE` of the four repositories (`mistralai/Timestral-5M`, `-28M`, `-123M`, `-209M`: the same
+1,695 bytes, sha256 `648194727930df730890e9f9affdbcc5c930d406d6829559b25ca3d5a973fc8c`), and Tabularia keeps the same bytes
+beside the group's recipe and in every image it builds.
+
+What it means: **above the threshold of $20 million of global consolidated monthly revenue** (the company's or the
+employer's, for the preceding month) **the licence gives no right to use the weights, and a commercial licence from Mistral AI
+is needed**. Below it, the other condition of the licence (the attribution notice and the permission notice kept in every copy) is
+met by the files Tabularia keeps with the weights and prints in each report. **The administrator decides, and takes the
+responsibility**: when enabling the group (or building it again, or changing the sizes) the panel shows the clause, the sizes
+to download, and a box «I have read the licence of the Timestral weights, and the organisation that uses this installation may
+use them under it, or holds a separate licence from Mistral AI.», which stays unticked until a person ticks it; **Enable** is
+disabled before. Tabularia does not ask about revenue and does not check it. **This is not legal advice**: have your own
+counsel read the licence before enabling the group.
+
+The acceptance is recorded in the [audit log](../governance/audit-log.md) as `models.licence_accept` (the licence's sha256, the
+sizes, who and when), and each version of the group keeps a line saying under which acceptance it was built, shown on the group's
+card («Weights licence: Modified MIT (Mistral AI), accepted by … on …»). A version in use keeps running whatever the audit
+holds later; but with an audit retention set, once the row is gone the next build, including the automatic one after an
+upgrade, asks again, and until an administrator does the group waits as **Licence to accept** and its steps stop with a
+sentence. A Tabularia release that changes the licence's text always asks again. **Disable** stops the nodes; it does not
+withdraw a past acceptance. Each report ends with the licence's text, the weights used (repository, revision, sha256) and who
+accepted it, and each MLflow run is tagged with the weights and the licence's sha256.
+
+#### What it does
+
+**Forecast (Timestral)** forecasts each series from its own past with a model trained in advance, by its authors, on a very large
+collection of other series: **nothing is fitted on your data** and nothing about it is learned or kept. For each series it
+writes the median forecast and bands (by default the 90 % and the 80 % ones) for the next steps, and it can read series that go with
+it: **past covariates** (known up to the last observed value, such as a price) and **known covariates** (known also in the
+future, such as a planned promotion or the holidays).
+
+**Choose it instead of [ARIMA](#arima)** when you have many series (a series for each shop, product or channel, up to 10,000
+of them), a short history, a series that changes shape, or no time to look for orders: it forecasts all of them with the same
+settings in seconds, with bands, and tells you how it did on the last steps it was not shown. **Keep ARIMA** when you want a model
+you can read (its coefficients, its residual checks), a model you register and apply with [Predict](#predict), or when the
+weights' licence does not suit you: ARIMA is Tabularia's own and free of any such condition. The two can run on the same table in
+the same flow; the Timestral report compares its forecast with a plain seasonal one, not with ARIMA's.
+
+#### The form
+
+| Option | What it is |
+|---|---|
+| **Time column**, **Value column**, **Frequency** | One row per period (per series); hourly (a date-time column), daily, weekly, monthly, quarterly, yearly or whole numbers. The value is empty in the future rows that carry known covariates |
+| **Series column** | One series for each value of this column; none: the table is one series |
+| **Seasonal period** | Steps in a season, for the seasonal naïve forecast and the scale of the errors (24, 7, 52, 12, 4 by default); 1: none |
+| **Model size** | 5M, 28M (the default), 123M or 209M: the sizes your administrator downloaded. A larger size is a little better on the authors' benchmarks, slower and heavier in memory |
+| **Steps ahead** | 1 to 1,024 (28 by default), after each series' last observed value. Not used with known covariates: their future rows are the horizon |
+| **Quantile levels** | The levels written as columns `quantile_0.05`… from the 21 the model has (0.01, 0.05, 0.1 … 0.9, 0.95, 0.99); the median is the `forecast` column |
+| **Past covariates**, **Known covariates** | Up to 16 columns together (numbers, true or false, or categories). With known covariates the input holds the future rows, with the value empty |
+| **Steps kept out to test** | The last k observed values of each series are kept out, forecast from before them and measured. Empty: as many as the steps ahead; 0: no test and no measures |
+| **A period without a value** | *Refuse* (the default; fill it in the flow with a calendar Left join and Fill nulls), *linear* (a line between the neighbours) or *the model's own* (left to the model) |
+| **Average with the negated series**, **No negative forecast…** | The library's defaults, both on: steadier and twice the time; a series that is never negative gets no negative forecast |
+| **Alpha** | The comparison's test (0.05) |
+| **Output** | The forecast table, or the table of the results |
+
+#### The output
+
+**The forecast table** (the default) is one row per series and period: `series`, `time`, `observed`, `forecast` (the median),
+the quantile columns, `baseline` (the seasonal naïve forecast), `filled`, `is_holdout` and `is_forecast`; with **Write the observed rows
+too** on, the history comes first so that one table draws both. The time and the series keep the exact type of the input's columns.
+The **results table** has the across-series measures and a row for each series.
+
+#### What the report says
+
+The first page has the licence line, the series, the model and its size, the horizon and the holdout, and:
+
+- **Measures, with no verdict**: the **MASE** of the forecast and of the seasonal naïve forecast on the held-out steps (a MASE
+  below 1 beats the in-sample seasonal naïve), the **relative MASE** (the two divided: below 1, Timestral did better), the
+  **sMAPE**, the **scaled pinball loss** (the quantile loss, comparable across series) and the **coverage** of the 80 % and 90 % bands
+  (the share of the held-out steps inside them). The coverage has no test on purpose: the steps of one forecast are not independent,
+  and a test would claim more certainty than the data hold. A series too short for its measures is forecast and says so.
+- **One test, Wilcoxon's signed-rank test**, on the series' differences between the two MASEs (the pre-trained forecast against the
+  seasonal naïve), two-sided, at the node's alpha: *is its advantage more than the luck of these series?* It needs at least two series
+  with their measures; with one series there is no test and the measures stay. With few series the test cannot reach a small p-value:
+  five series give 0.0625 at the best, so they can never be «supported» at 0.05, and the reading says so. This is the only
+  verdict the page gives.
+
+The next pages draw each series (the history, the bands, the median and the baseline, up to 12 of them), the holdout, the table of
+every series' measures, the limits and how the report was computed, and end with the notes and the licence. The Excel has the sheets
+*Series*, *Checks*, *Reading* and *Licence*; the forecast itself is the node's output.
+
+#### Limits and refusals
+
+| Limit | Value |
+|---|---|
+| Input rows | 1,000,000 (the group's setting, which an administrator may change) |
+| Series | 10,000: more is refused («filter or aggregate first») |
+| Context per series | the model reads the last 32,768 values; a longer series is cut for the model, and noted |
+| Horizon, holdout | 1,024 steps; with known covariates, the future rows must follow the last value without a hole |
+| Covariates | 16, past and known together; a text one at most 1,000 values |
+| Memory, CPU, time | 4 GiB and 2 CPUs, up to 60 minutes (the group's settings); the node's own timeout within it |
+| Sizes | only those the administrator downloaded; asking for another stops the step **before** the Job with «Timestral-209M was not downloaded by this installation…» |
+
+After its first batch the node projects the total time, and **if it will not fit the step's timeout it stops at once**, with the speed it
+measured and what to choose (a smaller size, fewer series, a longer timeout), instead of running to the time-out. It also refuses a series
+with gaps (unless you choose to fill them), a duplicated time, a time off the frequency's grid, and covariates it cannot read.
+
+**Measured** (2 CPUs of a 2018 laptop, the weights warm in memory; a forecast and a holdout of 28 daily steps, which are two forecasts
+a series; add about 2 seconds for Python and PyTorch): 100 series of 1,000 points take from 2 seconds (5M) to 48 seconds (209M), and
+7.5 seconds with 28M; 1,000 series of 100 points take from 4 to 72 seconds (28M: 12); 10,000 series of 100 points take 38 seconds with
+5M; one series of 100,000 points (the model reads 32,768) takes 1 to 16 seconds. The memory does not grow with the table: 28M peaks at
+about 0.4 GB, 209M at about 1.3 GB. The image weighs **about 1.5 GB with 5M and 28M and 2.8 GB with the four sizes** (see
+[Kubernetes](../deploy/kubernetes.md#statistical-models)).
+
+#### MLflow, and no model
+
+A flow run is logged to MLflow like any other: the parameters, the measures of `model` and of the comparison, `series.<label>.<measure>`
+for the first 100 series, the results table and the report, and the tags `tabularia.weights.repo`, `.revision`, `.sha256`,
+`tabularia.weights.licence_sha256` and `tabularia.size`. **There is no model to register**: a *Register the model as* is not
+offered, and a run that sends one is refused with «a pre-trained forecast registers no model: its run is logged to MLflow». **There is no
+[Predict](#predict) for it either**: nothing is estimated from your data, the «model» is Mistral AI's weights, and forecasting new
+rows is running this node again on them.
+
+*Example:* the sample flow **Orders by channel: four weeks ahead** (created with the sample data when the group is enabled, with
+28M when the installation holds it and otherwise its smallest size): the **calendar**'s days from 1 July 2023 to 12 August 2026 are crossed
+with the five sales channels and **Left join** the orders counted by **Group by** on the day and the channel; a day up to 15 July 2026
+without an order is a 0, the 28 days after are left empty (the future rows), and the calendar's `festivo` column (the Italian public
+holidays, Ferragosto among them) goes in as a **known covariate**. Forecast (Timestral) forecasts the five series, with the last 28
+days held out. It is never scheduled.
 
 ## The output
 

@@ -181,6 +181,22 @@ cluster that may not reach the official hosts: `MODELS__WHEELS_BASE_URL` replace
 and `MODELS__WEIGHTS_BASE_URL` replaces `https://huggingface.co/`; the paths, the file names and the checksums stay, so the
 mirror must hold the same files.
 
+**The pre-trained forecasting group** (Python 3.14, CPU-only PyTorch, the vendored Timestral code and the model weights) builds a
+different image from the others, and needs these hosts, **at build time only**: `download.pytorch.org` (the `torch` wheel, 196 MB for
+x86-64 and 159 MB for arm64, chosen by the build's architecture), PyPI or your mirror (`SCRIPTS__PYPI_INDEX_URL`) for the rest of the packages, and
+`huggingface.co` **with the storage host it redirects the large files to** (the Hub's content delivery network; allow
+the redirect, not only the first host) for the weights. Every file is checked by its sha256, pinned in the recipe, and a wrong byte fails the build; nothing is
+fetched when a model runs. **An air-gapped cluster** points `MODELS__WHEELS_BASE_URL` and `MODELS__WEIGHTS_BASE_URL` at a mirror
+that holds the same paths and files (a copy of `mistralai/Timestral-<size>` at the pinned revision, for the sizes you choose).
+**The image's size** depends on the sizes an administrator ticks when enabling the group: about **1.5 GB with 5M and 28M only** (the
+default of the sample flow is 28M), **2.8 GB with the four sizes** (5M 21 MB, 28M 111 MB, 123M 490 MB, 209M 837 MB of weights, on a base of about 1.3 GB
+of Python, PyTorch and the numeric libraries). The build takes about a minute and a half of work on a good link; pre-pull the image on a large cluster
+as for the others. At run time a Job of this group asks for 2 CPUs and up to 4 GiB, and the largest size peaks at about 2 GB. **The weights' licence**:
+enabling the group, building it again or changing its sizes asks an administrator to accept the licence of the weights (it
+withholds every right from a company above $20 million of monthly revenue, unless it holds a commercial licence from
+Mistral AI); the acceptance is in the [audit log](../governance/audit-log.md) as `models.licence_accept`, and an installation that
+keeps its audit for a limited time should know that, once the row is gone, the next build asks again.
+
 ## Backend image (`backend/Dockerfile`)
 
 One Dockerfile for the four backend roles and for both development and production.
