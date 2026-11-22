@@ -221,8 +221,13 @@ def number_form(x: float, form: str, loc: Any) -> str:
         said = formats.format_number(abs(v), pattern, loc)
         return (MINUS + said) if v < 0 and said.strip("0" + loc.decimal + loc.group) else said
 
+    if not math.isfinite(x):  # a number the runner wrote that a float cannot hold («1e999»): said, never a failed page
+        return "NaN" if math.isnan(x) else (MINUS if x < 0 else "") + "∞"
     if form == "date":
-        return formats.format_date(date(1970, 1, 1) + timedelta(days=int(round(x))), loc.date, loc)
+        try:
+            return formats.format_date(date(1970, 1, 1) + timedelta(days=int(round(x))), loc.date, loc)
+        except (OverflowError, ValueError):  # a day outside Python's calendar (years 1 to 9999): the number, as it came
+            form = "int"
     if form == "int":
         return plain(x, "#,##0")
     if form == "p":

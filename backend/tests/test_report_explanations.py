@@ -247,3 +247,15 @@ def test_the_lines_several_models_say_are_written_once_in_common_json(locale):
         for key in SHARED_LINES:
             if (model, key) not in OWN_NOUN and (catalog.MODELS[model].get("family"), key) not in OWN_NOUN:
                 assert w["reading_texts"][key] == shared[key], (model, key)
+
+
+@pytest.mark.parametrize("form", common.NUMBER_FORMS)
+@pytest.mark.parametrize("value", ["1e999", "-1e999", "1e300", "99999999", "-99999999"])
+def test_a_number_out_of_range_in_a_note_never_fails_the_report(value, form):
+    """A note's number comes from the runner, which took it from the data: a day counted from 1970-01-01 of a date column
+    of year 20000, or a number too large for a float («1e999», read as infinity), is still a number of the note
+    («@id last=…»). The report says it instead of failing (OverflowError, ValueError) and losing the whole page."""
+    loc = formats.locale("en")
+    said = common.structured_note({"note_texts": {"x": "until {last:%s}" % form}}, f"@x last={value}", loc)
+    assert said.startswith("until ") and len(said) > len("until ")
+    assert common.number_form(float(value), form, loc)
