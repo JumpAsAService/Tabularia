@@ -1705,6 +1705,86 @@ skipped (the agents' MCP, chat and script tests: 52 passed); `go test ./internal
 **For F8 (kind).** The sample flow is created by the seed's next start with the group enabled and ready (it is not run if the group has no ready version: «not run … starting the container again runs it»);
 check its run with 28M and with a version that holds only 5M; the first page must show five series, the holdout's MASE, and the comparison's row with p = 0.0625 at best.
 
+### F8 (2026-11-22): kind
+
+**Images.** Built from a clean worktree at `916fa9ce` and pushed to the local registry as `main-916fa9ce` (backend, gateway, gateway-go, frontend);
+`helm upgrade --reset-then-reuse-values` with the four tags. After it the six groups already enabled were checked again by the new gateway (the
+runners' hashes changed: six `recheck` Jobs, all started within ten seconds of the first new gateway; the self-tests: regression 67, survival
+114, time series 75, boosting 56, customer lifetime 72, experiments 103 checks, none failed). **No recipe changed** since the images before
+(`stale` false everywhere), so this upgrade queued no build: the three corrections about which gateway builds during an upgrade (the previous
+replica must not make the Job of a version the new one queued) were **not exercised** by it, only that nothing was queued and nothing was
+built twice; the Dockerfiles of the time series and the customer lifetime groups still hold GSL (`cmd/modelgroup dockerfile`), the others do not.
+The previous gateways' logs could not be kept (the log follower failed with «too many open files» and the pods were gone within a minute).
+
+**Enabling.** From the API (the panel's call): without the tick, with a wrong sha256 and with no size the request is refused with the three
+sentences of the spec and nothing is queued; with the tick, the licence's sha256 and the sizes 5M and 28M it queues version 1. That build first
+**failed**, for a cause of the machine, not of the code: the registry's address had changed since the cluster restarted, so the build Job's
+network policy (`userCodePrivateCIDRs`) did not let it push (`dial tcp … i/o timeout` for two minutes); after the CIDR was fixed with
+`helm upgrade --reuse-values` the same build ended with a `401 Unauthorized` (BuildKit's token had expired during the timeouts), which the
+gateway words as «the registry refused the credentials» (`sbPushDenied` matches `401` after `failed to push`). *Build again* (ticking the licence
+and the two sizes) made version 2, **ready in 2 min 13 s** (queued 13:51:49 UTC, ready 13:54:02): torch's wheel 23 s, the pinned packages 32 s,
+the six `ADD` of the weights (5M and 28M, `config.json`, `model.safetensors`, `LICENSE`; the checksum of each verified by BuildKit) 0.0 to 3.2 s,
+the export of the layers 31 s, the push 1.4 s, then the check. BuildKit `moby/buildkit:v0.33.1-rootless` **reaches Hugging Face and its redirect**
+(the `ADD --checksum` lines of both sizes completed) and `download.pytorch.org`. Self-test **34 checks, 0 failed**. Image: **513 MB** on a node
+(`crictl images`); **pull on a node that had not got it: 11.7 s** (local registry). Audit: `models.licence_accept` (id 655 for the enabling, 681
+for the second build) with the licence's sha256, the sizes and the recipe's hash; the card says «accepted by … on Nov 22 for version 2 (sizes
+5M, 28M)»; the weights' licence is on the first and last page of the report.
+
+**The sample flow.** The seed (the Job `sampledb-init` with the image built from the worktree) created «Orders by channel: four weeks ahead»
+and ran it once in 19 s (the model step 12 s). 28M, five series of 1,111 days, holdout 28, known covariate `festivo`: the model's output has the
+12 columns the editor shows before the Run, in the same order and types (`series` String, `time` Date, the quantiles, `baseline`, `filled`,
+`is_holdout`, `is_forecast`). Report: five forecasts with their bands (80 % and 90 %), the holdout's MASE 0.8719 against 1.0903 of the seasonal
+naive, relative MASE 0.7902 (geometric mean), coverage 75.7 % and 87.9 %, Wilcoxon W = 1, **p = 0.1250** (five series can reach 0.0625 at best:
+the reading says so), «Not supported». **MLflow** (experiment `f8-timestral`): run FINISHED, tags `tabularia.weights.repo` (`mistralai/Timestral-28M`),
+`.revision`, `.sha256` (the `model.safetensors` of 28M), `.licence_sha256`, `tabularia.size` = 28m, `tabularia.group_version` 2 and the
+image digest; 16 parameters; 27 metrics; artifacts `tabularia/report.pdf` and `tabularia/results.parquet`; **no model registered**. With
+«Register as» filled the step is refused: «a pre-trained forecast registers no model: its run is logged to MLflow».
+
+**Refusals.** 123M and 209M (not built here): the flow fails at once, «Timestral-123M was not downloaded by this installation: choose 5M or
+28M, or ask an administrator to add it», with **no model run and no Job** (the run list shows only the orchestration).
+
+**Timings** (one CPU pool of the kind cluster, 2 threads, the container time of the model step from start to end of the pod, which includes the
+Python start and the Parquet read; the flow's total is 2 to 3 s more). *Load* and *forecast* are the runner's own metrics.
+
+| input | size | step | load | forecast | batches |
+|---|---|---|---|---|---|
+| 5 series × 1,111 days (the sample, 5,555 points) | 28M | 12 s | 0.26–0.40 s | 2.3–2.4 s | 4 |
+| 1 series of 100,000 hourly points | 28M | 12.5 s | 0.29 s | 1.35 s | 1 |
+| 1 series of 100,000 hourly points | 5M | 11.3 s | 0.06 s | 0.43 s | 1 |
+| 1,000 series × 120 days (120,000 points) | 28M | 31.4 s | 0.27 s | 13.3 s | 126 |
+| 1,000 series × 120 days (120,000 points) | 5M | 21.9 s | 0.11 s | 4.0 s | 126 |
+
+Not measured here: 1,000 and 10,000 points, 100 and 10,000 series, the sizes not built (123M, 209M), and the refusal after the first batch of a
+10,000-series run on a short timeout.
+
+**Reports.** PDF and Excel, Italian and English, of the sample flow's run: 7 pages; the charts are drawn (history, forecast, bands, seasonal
+naive, the holdout's grid, the relative MASE of each series), the words in the language, decimals with the language's separator; first page: the
+four figures, the note «weights by Mistral AI under the Modified MIT License: the full text is on the last page», the check, the measures with
+their words, the reading; last page: the weights (repository, revision, sha256), the licence's name and sha256 and the **full text of the LICENSE**
+in English with a caption saying it is not translated. Excel: 11 sheets («The licence, verbatim» among them), no embedded chart or image. Layout findings: in the table of the series the sMAPE's cells wrap before the «%» («58.55 / %»); the last chart of the holdout grid sits
+alone at half the width; the label of the point «1.01» touches the line at 1 in the relative MASE chart.
+
+**Findings.** (1) **Series metrics are not logged to MLflow**: `modelResultRows` (`jobs_models_mlflow.go`) reads the sections `model`,
+`assumption`, `coef`, `importance`, `curve`, `candidate`, `parameter` and not `series`, so `series.<label>.<stat>` (spec F6, item 4) never
+appears: the sample run has the 27 aggregate metrics and none of the 5 series' (the results do hold 90 `series` rows). To reproduce: run the
+sample flow with an MLflow connection on its Forecast node and list the run's metrics. (2) The *Build again* panel opens with the four sizes
+ticked, also those that were not built; a click on «Build again» with the default would download 123M and 209M (837 MB) too. (3) The message of
+a push that ends in `401` after timeouts blames the credentials (see above).
+
+**UI (Chromium and Firefox, Playwright).** *Build again* of the card: the panel with the licence, point 2 in its own words, the link to the
+pinned revision, the text shipped with Tabularia, the four sizes with their megabytes and the box; the button is disabled until the box is ticked
+and at least one size is, with the hint «Tick the box about the licence, and at least one size, to go on.»; Tab moves 5M, 28M, 123M, 209M, the
+box, the buttons; Space ticks and unticks each; the focus ring is drawn; Cancel closes the panel and the group stays «Ready · v2». The form of the
+node: the model sizes offered are 5M and 28M only, the licence line with its link, «Register the model as» absent. The Table tab before any Run
+shows the twelve columns with their types and «No rows before the model runs»; a Filter connected after the node lists the same twelve columns
+in its Column select, in both browsers.
+
+**Criteria.** 1 passed except two parts: the ready version keeps its acceptance line after the audit's row is gone, and the next build asks again
+(`licence_pending`), were **not tried** (it needs the audit's row removed, which would destroy data); 2 not tried (it needs a Tabularia built with
+another `LICENSE.txt`); 3 passed (the readings seen in English and Italian only); 4 passed; 5 not tried by hand (the self-test's 34 checks,
+which hold the reference cases, pass); 6 partly: 100,000 points and 1,000 series with two sizes, the rest not measured; 7 passed on kind (no
+recipe of another group changed, no rebuild started, every current version not stale).
+
 ## References
 
 - Mistral AI, *Timestral* model cards and `LICENSE`, `https://huggingface.co/mistralai/Timestral-{5M,28M,123M,209M}`

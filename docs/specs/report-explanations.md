@@ -545,3 +545,11 @@ skipped**, every skip one the CI allows (BigQuery, Oracle, SQL Server).
 **Left for the trial on kind** (with the forecasting group's): drawing the reports of a test and of each model family
 from a real run, with the real chart service, in Chrome and Firefox; the reference PDF of the statistics
 (`GOLDEN_PDF_SHA256`) seen with the real charts.
+
+**On kind (2026-11-22).** Reports of real runs on the cluster at `main-916fa9ce`, PDF in Italian and English, looked at page by page: Welch's t test
+(a table of two groups), linear, logistic, Cox, Kaplan–Meier, ARIMA, XGBoost, CatBoost, customer lifetime, A/B test and decomposition. Every
+model has its readings under the blocks, the page «How this report was computed» (the paragraphs and the formulas with their symbols) and drawn
+charts; no text overlaps another, no `{name}` or `@id` is left. ARIMA's box of the four cases (ADF and KPSS) is there, but its heading and
+lead line sit at the bottom of page 2 and its four rows begin page 3 (no keep-with-next for the box). CatBoost's page of the learning curves is
+clean (importance, SHAP summary, the curve with the best round marked, observed against predicted); the charts' page has no reading under it
+(the readings of the importance are with its table, on page 2). Welch's page 2 keeps «How this report was computed» with its two paragraphs.
