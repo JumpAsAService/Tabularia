@@ -1188,6 +1188,115 @@ Every question was answered by the owner on 2026-11-21: every recommendation app
 points and on 100, 1,000 and 10,000 series per size with the loading apart, the peak memory, the determinism
 measurements, the self-test's count, the ConfigMap's size.)*
 
+### F0 — contract, machinery, image
+
+**Built (2026-11-22).** The catalogue (the group `foundation_forecast`, the node `timestral`, `card: false`, the kinds, the rules, the
+section `series` and `series_curve`, the output `quantile_forecast`, the wildcard `quantile_`, the limits) with its snapshot and three copies,
+a results fixture (`timestral-default.json`: three imaginary series, 702 rows, the comparison's p-value computed from the sign patterns) and 25
+shared parameter cases the engine and the Go gateway answer word for word; the recipe (`wheels`, `weights`), the Dockerfile machinery
+(`scriptimage.Settings.Wheels` and `.Files`, `WeightsSizes`, `modelgroups.Build`/`BuildInputs`/`DockerfileFor`, `cmd/modelgroup dockerfile
+foundation_forecast --sizes …`, the gateway's `dockerfile()` reading the version's `# tabularia:weights` line and the two mirror variables), the
+check script (`mgWeightsCheck`), the vendored package (`runner/py/timestral/`, `NOTICE`, `LICENSE`, `vendor.json`), `run.py` and a stub that refuses
+«… is not built yet», the group's `licence/LICENSE.txt` (sha256 `648194…3fc8c`), the image and the measurements below. The palette leaves the node out
+(`MODEL_NOT_IN_THE_PALETTE_YET`, lot F5 takes it away) and the group's name and description are in the five languages.
+
+**Where the spec was wrong, or silent, and what was done** (nothing else of the spec was changed):
+
+1. **pandas is in the image.** «Not installed: … `pandas`» cannot hold: the shared library `common/py` imports pandas at module level
+   (`tab_columns.py`, read by `tab_selftest.py`, read by `tab_main.py`), so a runner without it does not start, and the library's own self-test
+   (reading a CSV, the column kinds) uses it. The recipe gains `pandas==3.1.1`, `python-dateutil==4.0.0` and `tzdata==2026.6` (the closure
+   `uv pip compile` gives; the boosting recipe's pins; `six` is not needed). Cost, measured: `import pandas` 0.5 s and 49 MB of resident memory
+   (`import torch` 2.5 s, 244 MB; with pyarrow and pandas 3.0 s, 321 MB), 83 MB on disk. The way back, if the owner prefers the lighter image: make
+   the library's pandas import lazy and let the group's self-test skip the tests that need it (a change to the shared library, and `Passed()` forbids a
+   skipped check today); F3 decides with the runner.
+2. **`LIMITS["max_horizon"]` already exists** (1,000: ARIMA's and the lifetime nodes') and stays. The node's own limit is `max_foundation_horizon` (1,024),
+   which the kinds `foundation_horizon` and `foundation_holdout` read. The other three limits are as named (`max_series`, `max_covariates`,
+   `max_series_charts`).
+3. **The output's value is `quantile_forecast`, not `forecast`.** `OUTPUT_TYPES` is keyed by the value of the node's `output` (`components`, `variants`,
+   `plan`), and `forecast` is ARIMA's; so the choice is `quantile_forecast` | `results`, the default `quantile_forecast`, and `history` applies with it.
+   The form's label for it is lot F5's.
+4. **`model|||n` is required of every model** (`results.py`): the model section declares `n` (the points) besides the spec's `n_points`.
+5. **What a list of numbers cannot say in the catalogue** stays with the runner: that a quantile is one of the 21 levels (`quantile_level`), and that the two
+   covariate lists hold 16 columns together (each list is bounded at 16 by the kind). The catalogue refuses a number outside 0 and 1, a number given twice and more than 20 of them by its `numbers` control; 0.5 and 0.3 pass it (the
+   runner refuses 0.3, and drops 0.5, the median being `forecast`).
+6. **Section declarations are a superset**: a variant declares what the runner MAY write (there is no `when` on a section); `series_curve` has no declared
+   levels (a level is a series' label) and `holdout`'s default is `None`, read as «the horizon» (with known covariates, the future rows' count) by the runner.
+7. **`season` is 1 to `max_period` (10,000)**, a kind of its own (`season_steps`): ARIMA's kind stops at `max_season` (60).
+8. **The fixture's name is `timestral-default.json`** (`<model>-<variant>.json`, as the tests glob), not `timestral_*.json`. `output_columns.json` has no case for the
+   node until its runner exists (`NOT_RUN_YET`); the columns before a run are tested in `test_models_catalog.py`, in `model-catalog.test.mjs` and in the assistant's test.
+9. **`ADD --chmod=0644` also gives the folders it creates the mode 0644** (no `x`: user 10001 could not enter them; found by running the check, not by the build). The
+   Dockerfile makes the folders first (`RUN mkdir -p /opt/tabularia/weights/<size> …`), then adds the files. Symbolic modes (`a+rX`) also work with BuildKit here, but the
+   builder in the cluster is another version; plain octal needs no frontend feature.
+10. **`filelock`**: the resolver now answers 4.3.0; the recipe keeps the 4.2.12 of the spec (its licence was read; `pip check` passes).
+11. **A constant, padded batch is what makes a series' forecast independent of the others** (the measurements below): the spec's assumption «a series alone and in a
+    batch of 16 give the same bits» is false, and «a batch holds only series with the same number of patches» is not enough.
+
+**The image** (`tabularia-models-foundation_forecast:dev`, `go run ./cmd/modelgroup dockerfile foundation_forecast`, the four sizes, x86_64): built **from scratch
+(`--no-cache`, base image pulled) in 69 seconds** (a first build, 72 s), about 1.7 GB downloaded from `download.pytorch.org`, `pypi.org` and `huggingface.co`; **2.79 GB**
+(layers: Python 0.12, torch 0.78, the other packages 0.43, weights 0.02 + 0.11 + 0.49 + 0.84 with their `config.json` and `LICENSE`). The lock is 17 lines: filelock 4.2.12,
+fsspec 2026.9.0, Jinja2 3.1.6, MarkupSafe 3.0.4, mpmath 1.3.0, networkx 3.7, numpy 2.5.5, pandas 3.1.1, pip 26.2.2, pyarrow 26.0.1, python-dateutil 4.0.0, safetensors 0.8.0, setuptools
+84.2.1, sympy 1.14.0, torch 2.14.1+cpu, typing_extensions 4.16.0, tzdata 2026.6; `pip check` passes in the build. **`ADD --checksum` works with the Hub's redirect** to its storage in
+BuildKit's default Dockerfile frontend without a `# syntax=` line (checked with the engine's BuildKit and its `docker build`; the in-cluster builder, `moby/buildkit:v0.33.1-rootless`, is
+F8's to run), and a wrong checksum fails the build («digest mismatch»); pip's `#sha256=` on the wheel's address fails on a wrong hash too. The check script (the lock, then each file of each
+size's sha256 against the recipe's, one `weights-<size>@<sha256>` line a size in the lock, then the self-test) takes **12 s** on 2 CPUs; the stub's self-test passes with **14 checks, none
+failed or skipped** (the library's own; the reference cases are lot F3's); the job's ConfigMap is 296 KB (the limit 900 KiB). The other groups' Dockerfiles and recipe hashes are unchanged
+(tests: every group but this one has the Dockerfile `scriptimage` makes of its recipe, no `ARG`, no `ADD`; the R image's sha256 is the old one).
+
+**Measurements** (this machine: Intel Core i5-8350U, 4 cores / 8 threads, AVX2 (`torch.backends.cpu.get_cpu_capability()`), 16 GB, kind clusters idle beside; the image on Docker with
+`--cpus 2 --memory 4g --memory-swap 4g --read-only`, `torch.set_num_threads(2)`, PyTorch 2.14.1+cpu, **float32, no `torch.compile`, symmetric averaging and clamping on (the library's defaults), the
+page cache warm** (a cold first load is slower by the disk's time to read the file; not measured). Context = the series' points, horizon 28, **one forecast** (double it with a holdout), series
+generated and forecast in batches of 16 and written by blocks (nothing kept but a checksum), so the resident memory is the model's plus one batch's. Seconds of the forecast alone, the load apart.)
+
+| Part | 5M | 28M | 123M | 209M |
+|---|---|---|---|---|
+| `import torch` + numpy | 2.2–2.5 s | 2.2–2.5 s | 2.2–2.5 s | 2.2–2.5 s |
+| `import pandas` / `pyarrow` / `timestral` | 0.41 / 0.03 / 0.04 s | same | same | same |
+| Loading the weights (warm cache) | 0.07 s | 0.31 s | 1.1 s | 1.8 s |
+| 1 series, 1,000 points | 0.09 s | 0.08 s | 0.23 s | 0.36 s |
+| 1 series, 10,000 points | 0.18 s | 0.39 s | 1.3 s | 2.2 s |
+| 1 series, 100,000 points (the model reads 32,768) | 0.47 s | 1.4 s | 4.9 s | 7.7 s |
+| 100 series × 1,000 points (100,000 points) | 0.95 s | 3.5 s | 12.6 s | 21.0 s |
+| 1,000 series × 100 points (100,000 points) | 2.1 s | 6.5 s | 24.6 s* | 41.2 s* |
+| 10,000 series × 100 points (1,000,000 points) | 20.4 s | 68 s* | 250 s* | 415 s* |
+| Peak resident memory of the process (`VmHWM`: the weights twice while loading) | 293 MB | 466 MB | 1,190 MB | 1,851 MB |
+| Peak charged to the container (`memory.peak`) | 181–217 MB | 267–306 MB | 634–693 MB | 962–1,256 MB |
+
+\* extrapolated, linearly, from the first 320 (123M and 209M, 1,000 series; 28M's 1,000 are measured) or 640 series (28M, 123M and 209M, 10,000 series) of the table, at the speed measured
+for them (every batch had the same cost); 5M's 10,000 series and the 1,000 of 28M are measured whole. The table's first row of each size includes the thread pool's warm-up (about 0.05 s: 28M's
+single series at 1,000 points is not faster than 5M's). The estimates of «Performance and limits» were pessimistic by a factor of 2 to 3.5 (the paper's compiled bfloat16 numbers, halved):
+the unit cost of a series of 100 points is **2 ms (5M), 6.5 ms (28M), 25 ms (123M), 41 ms (209M)**, of 1,000 points 9.5, 35, 126 and 210 ms. **A 10,000-series run with 209M fits a 15-minute step
+(about 7 minutes); the time budget's refusal, `too_slow`, has to be measured on a shorter timeout (F3).**
+
+Threads (100 series × 1,000 points, batch 16, the container's `--cpus` = the threads; seconds; the memory is the same):
+
+| Threads | 5M | 28M | 123M | 209M |
+|---|---|---|---|---|
+| 1 | 1.39 | 5.40 | 22.0 | 35.7 |
+| 2 | 1.07 | 3.51 | 12.5 | 20.4 |
+| 4 | 0.86 | 2.69 | 9.25 | 15.0 |
+
+Two threads cost 0.57–0.77 of one, four 0.42–0.62: the second CPU is worth taking, the third and fourth much less.
+
+**The memory of a batch** (the container's peak against a batch of one, per series and per patch of 32 steps of context): about **22 KB (5M) to 70 KB (209M)**, i.e. about **100 × `d_model` bytes**
+(192, 384, 640, 768): 64 series of 1,000 points add 37 MB with 5M and 145 MB with 209M; three more series of 32,768 points add 67 MB with 5M and 215 MB with 209M. The runner's rule is `batch_rows` ≤ ¼ of the memory limit ÷ (patches of the context × 100 ×
+`d_model`), at most 16 (4 GiB: 13 series of the longest context with 209M, 16 of every shorter one).
+
+**Determinism** (every size; 16 series of 400 points, 28 steps; the quantiles compared as float32):
+
+| Comparison | Result |
+|---|---|
+| The same input twice in one process | bit for bit equal, all sizes |
+| The same input, 1, 2 and 4 threads | **not always equal**: the largest gap is 1.5 × 10⁻⁵ (1.2 × 10⁻⁷ of the largest quantile, one float32 unit in the last place); some pairs are equal |
+| A series alone against the same series inside a batch of 16 | **not equal**: the same gap, 1.2 × 10⁻⁷ relative; two batches of 8 against one of 16 the same; the first 4 of 16 against a batch of 4 equal for 28M, 123M and 209M, not for 5M |
+| The order of the series inside a batch (reversed) | bit for bit equal, all sizes |
+| A short batch **padded with copies to the constant size 16**, its rows against the same rows of the full batch (the padding after them, or before them) | **bit for bit equal**, all sizes and threads |
+
+So the library's kernels choose their blocking by the batch's shape, and nothing else of a batch changes a row: **F3 runs every forecast in batches of one constant size (16, or the smaller constant the memory rule gives for a long context) and pads the last one with copies**, and a
+series' bits then depend on nothing but the input, the group version, the thread count and the CPU family. The self-test's «a series alone against inside a batch» check compares the padded one, bit for bit, and the
+comparison with the values computed outside the image has a **tolerance of 1e-6 of the largest quantile of the series** (the spec's first estimate was 1e-4; the gap between thread counts and batch shapes measured is 1.2e-7, one float32 unit in the last place, so ten times that is enough). The gap between CPU
+families (AVX2 against AVX-512 or NEON, the dev machine against the image on kind) could not be measured here: the machine has one family (kind runs on the same CPU), so the report writes the family
+(`cpu_capability`) and F3's tolerance holds until another family shows more.
+
 ## References
 
 - Mistral AI, *Timestral* model cards and `LICENSE`, `https://huggingface.co/mistralai/Timestral-{5M,28M,123M,209M}`
