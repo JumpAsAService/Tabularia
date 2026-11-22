@@ -12,6 +12,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path[:0] = [str(HERE.parent / "common" / "py"), str(HERE / "py")]
 
+import ff_tests  # noqa: E402,F401 — the runner's own self-test checks register themselves
 import ff_timestral  # noqa: E402
 import tab_main  # noqa: E402
 

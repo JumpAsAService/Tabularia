@@ -1,5 +1,5 @@
 {
-  "about": "The witnesses of the reference values: packages that compute the same numbers outside Tabularia, run by hand by make_reference.py with uv on these pins (docs/specs/foundation-forecast.md, «Self-test, reference values, witnesses»). The official, unmodified `timestral` package is installed from the Git commit; the weights are read from a local directory filled once from the pinned revisions and checked by sha256 (never committed). Never installed in the group's image; not part of the recipe, so changing them builds nothing.",
+  "about": "The witnesses of the reference values: packages that compute the same numbers outside Tabularia, run by hand by make_reference.py with uv on these pins («python»; «closure» is what uv resolved besides them on 2026-11-22) (docs/specs/foundation-forecast.md, «Self-test, reference values, witnesses»). The official, unmodified `timestral` package is installed from the Git commit; the weights are read from a local directory filled once from the pinned revisions and checked by sha256 (never committed). Never installed in the group's image; not part of the recipe, so changing them builds nothing.",
   "checked_on": "2026-11-22",
   "python": [
     "timestral @ git+https://github.com/mistralai/timestral.git@a534bdbd244d64f3d9d743f46c7bf6fc330ed4ff",
@@ -10,5 +10,28 @@
     "scipy==1.18.1",
     "pyarrow==26.0.1"
   ],
-  "index": "https://download.pytorch.org/whl/cpu"
+  "index": "https://download.pytorch.org/whl/cpu",
+  "closure": [
+    "anyio==4.16.0",
+    "click==8.5.1",
+    "filelock==4.3.0",
+    "fsspec==2026.9.0",
+    "h11==0.16.0",
+    "hf-xet==1.8.0",
+    "httpcore2==2.16.2",
+    "httpx2==2.16.2",
+    "idna==3.20",
+    "jinja2==3.1.6",
+    "markupsafe==3.0.4",
+    "mpmath==1.3.0",
+    "networkx==3.7",
+    "packaging==26.3",
+    "pyyaml==6.0.4",
+    "setuptools==84.2.1",
+    "sympy==1.14.0",
+    "tqdm==4.70.1",
+    "truststore==0.10.5",
+    "typing-extensions==4.16.0"
+  ],
+  "python_version": "3.14.7"
 }
