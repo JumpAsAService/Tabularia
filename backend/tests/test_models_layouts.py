@@ -34,9 +34,9 @@ from tests.test_reports_render import chart_service  # noqa: F401 — the fake c
 
 NOW = datetime(2026, 11, 19, 23, 30, tzinfo=timezone.utc)
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "models"
-# a model whose fixture exists (results.py checks it) before its report does: the volatility and the risk simulation nodes' (lot G4 of
-# docs/specs/garch-risk.md draws them and takes this away; the pre-trained forecast's was drawn by lot F4)
-PENDING: set[str] = {"garch", "risk_simulation"}
+# a model whose fixture exists (results.py checks it) before its report does: none now (the pre-trained forecast's was drawn by lot
+# F4, the volatility and the risk simulation nodes' by lot G4 of docs/specs/garch-risk.md)
+PENDING: set[str] = set()
 CASES = sorted(p.stem for p in FIXTURES.glob("*-*.json") if p.stem.split("-")[0] not in PENDING)
 DRAWN = {m: spec for m, spec in catalog.MODELS.items() if m not in PENDING}
 # the experiments' reports open with their decision, not with the checks, and the planning node has no check at all
@@ -44,8 +44,9 @@ DRAWN = {m: spec for m, spec in catalog.MODELS.items() if m not in PENDING}
 EXPERIMENTS = {m for m, spec in catalog.MODELS.items() if spec.get("family") == "experiments"}
 # the reports that explain their method in words (the A/B's mechanism: docs/specs/ts-decomposition.md, «Explaining the
 # method in the report»; for the others, the readings their layout chooses: docs/specs/report-explanations.md): a page
-# or two more, and no «= <» in a sentence. The pre-trained forecast's runner writes its own, as the decomposition's
-EXPLAINED = EXPERIMENTS | {"decomposition", "timestral"} | set(common.READINGS)
+# or two more, and no «= <» in a sentence. The pre-trained forecast's runner writes its own, as the decomposition's, and so do the
+# volatility's and the risk simulation's (docs/specs/garch-risk.md, «As built / G4»)
+EXPLAINED = EXPERIMENTS | {"decomposition", "timestral", "garch", "risk_simulation"} | set(common.READINGS)
 
 
 def fixture(case: str) -> tuple[str, dict, list[dict]]:

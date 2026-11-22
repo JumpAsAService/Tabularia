@@ -1,0 +1,2262 @@
+{
+  "en": {
+    "name_kind": "Volatility",
+    "series_of": "«{value}» over «{time}», {kind}",
+    "kind": {
+      "returns": "returns",
+      "prices": "prices"
+    },
+    "sections": {
+      "summary": "Summary",
+      "assumptions": "Checks",
+      "volatility": "Volatility",
+      "coefficients": "Coefficients and news impact",
+      "checks": "Checks of the residuals",
+      "backtest": "Backtest of the value at risk",
+      "fit": "Numbers of the fit",
+      "notes": "Notes"
+    },
+    "kpi": {
+      "n": "Returns",
+      "span": "{first} – {last}",
+      "model": "Model",
+      "persistence": "Persistence",
+      "half_life": "half-life {h} {unit}",
+      "no_half_life": "P ≥ 1: no half-life",
+      "sigma": "Volatility, next step",
+      "uncond": "long run {u}",
+      "no_uncond": "no long-run level"
+    },
+    "alpha_line": "Verdicts come only from the tests' p-values, read against α = {alpha} (the node's option); persistence, half-life, volatility, ν and ξ are measures and have none.",
+    "measures_title": "Measures, not tests",
+    "facts_title": "Facts of the fit",
+    "measure_names": {
+      "persistence": "Persistence P",
+      "half_life": "Half-life",
+      "uncond_sigma": "Long-run volatility",
+      "sigma_next": "Volatility, next step",
+      "sigma_last": "Volatility, last instant",
+      "kappa": "κ (GJR)",
+      "shape": "ν, degrees of freedom",
+      "skew": "ξ, skewness"
+    },
+    "measure_what": {
+      "persistence": "The share of a shock to the variance that is still there one step later.",
+      "half_life": "The steps after which half of a shock to the variance is gone: ln(1/2) / ln P.",
+      "uncond_sigma": "The level the volatility returns to when no shock comes: √(ω / (1 − P)).",
+      "sigma_next": "The volatility the model gives the next step, from everything up to the last instant.",
+      "sigma_last": "The volatility the model gives the last instant of the series.",
+      "kappa": "The mean of z² when z < 0 under the fitted distribution: how much γ adds to the persistence.",
+      "shape": "The Student t's degrees of freedom: the smaller, the heavier the tails; the normal is the limit.",
+      "skew": "The skewness of the t: 1 is symmetric, below 1 the left tail is the longer."
+    },
+    "charts": {
+      "returns": "Returns with the band μ ± z σ of each instant",
+      "sigma": "Conditional volatility σ and its forecast",
+      "std_residual": "Standardized residuals z",
+      "news_impact": "News impact: the next variance after a shock of ε, in long-run σ",
+      "z_acf": "ACF of z",
+      "z2_acf": "ACF of z²",
+      "hist": "Histogram of z and the fitted density",
+      "qq": "Q–Q of z against the fitted distribution",
+      "backtest": "Holdout: returns, 1-step VaR and its breaks"
+    },
+    "series": {
+      "return": "Return",
+      "band": "Band at {level} %",
+      "sigma": "σ",
+      "forecast": "Forecast",
+      "z": "z",
+      "news": "Next variance",
+      "acf": "ACF",
+      "count": "Count",
+      "density": "Fitted density",
+      "qq": "z",
+      "var": "1-step VaR",
+      "violation": "Break"
+    },
+    "captions": {
+      "volatility": "The dashed vertical line marks the first observation kept out; the dashed horizontal line on σ is its long-run level.",
+      "news": "The curve is symmetric for an ARCH or GARCH, kinked at 0 for a GJR, tilted for an EGARCH.",
+      "backtest": "Each point is an observation kept out; the line is the VaR computed from the observations before it; the highlighted points broke it."
+    },
+    "coef": {
+      "title": "Coefficients in the series' units",
+      "robust": "Standard errors: robust (QML sandwich).",
+      "classical": "Standard errors: classical (inverse Hessian)."
+    },
+    "formula_law": "z ~ {law}",
+    "notes": {
+      "rows": "{n} returns were used; {missing} rows had an empty value."
+    },
+    "values": {
+      "variance_model": {
+        "arch": "ARCH",
+        "garch": "GARCH",
+        "gjr": "GJR-GARCH",
+        "egarch": "EGARCH"
+      },
+      "distribution": {
+        "norm": "normal",
+        "std": "Student t",
+        "sstd": "skewed Student t"
+      },
+      "input_kind": {
+        "returns": "returns",
+        "prices": "prices"
+      },
+      "returns_type": {
+        "log": "log returns",
+        "simple": "simple returns"
+      },
+      "se_type": {
+        "robust": "robust (QML sandwich)",
+        "classical": "classical (inverse Hessian)"
+      },
+      "solver": {
+        "solnp": "solnp",
+        "nlminb": "nlminb",
+        "gosolnp": "gosolnp (random restarts)",
+        "lbfgs": "L-BFGS",
+        "hybrid": "hybrid"
+      },
+      "frequency": {
+        "hour": "hour",
+        "day": "day",
+        "week": "week",
+        "month": "month",
+        "quarter": "quarter",
+        "year": "year",
+        "index": "steps"
+      },
+      "time_kind": {
+        "date": "date",
+        "datetime": "date and time",
+        "integer": "integer (steps)"
+      },
+      "time_unit": {
+        "hour": "hours",
+        "day": "days",
+        "week": "weeks",
+        "month": "months",
+        "quarter": "quarters",
+        "year": "years",
+        "index": "steps"
+      },
+      "reading_names": {
+        "mu": "μ",
+        "omega": "ω",
+        "shape": "ν",
+        "skew": "ξ",
+        "alpha1": "α₁",
+        "alpha2": "α₂",
+        "alpha3": "α₃",
+        "beta1": "β₁",
+        "beta2": "β₂",
+        "beta3": "β₃",
+        "gamma1": "γ₁",
+        "gamma2": "γ₂",
+        "gamma3": "γ₃",
+        "ar1": "φ₁",
+        "ar2": "φ₂",
+        "ar3": "φ₃",
+        "ar4": "φ₄",
+        "ar5": "φ₅",
+        "ma1": "θ₁",
+        "ma2": "θ₂",
+        "ma3": "θ₃",
+        "ma4": "θ₄",
+        "ma5": "θ₅"
+      }
+    },
+    "checks": {
+      "ljung_box_z": {
+        "name": "Mean: weighted Ljung–Box on z",
+        "h0": "The standardized residuals are not autocorrelated up to the lag of the test.",
+        "advice": "Structure is left in the mean: raise the AR or MA order.",
+        "not_computed": "Too few residuals for the lag of the test."
+      },
+      "ljung_box_z2": {
+        "name": "Variance: weighted Ljung–Box on z²",
+        "h0": "The squared standardized residuals are not autocorrelated up to the lag of the test: no ARCH effect is left.",
+        "advice": "Volatility the model misses: raise an order, or try GJR or EGARCH.",
+        "not_computed": "Too few residuals for the lag of the test."
+      },
+      "arch_lm": {
+        "name": "Variance: ARCH LM on z",
+        "h0": "No ARCH effect is left in the standardized residuals.",
+        "advice": "Volatility the model misses: raise an order, or try GJR or EGARCH.",
+        "not_computed": "Too few residuals for the test's lags."
+      },
+      "nyblom": {
+        "name": "Stability: Nyblom",
+        "h0": "Every parameter is constant over the sample.",
+        "advice": "The parameters move over the sample: fit a shorter, more recent period, or read the parameters in the stability table.",
+        "not_computed": "The scores of the fit were not available."
+      },
+      "sign_bias": {
+        "name": "Asymmetry: Engle–Ng sign bias",
+        "h0": "The volatility responds alike to falls and rises, once the model is taken into account.",
+        "advice": {
+          "sign_bias_failed": "Falls and rises move the volatility differently: choose GJR or EGARCH.",
+          "sign_bias_left": "The asymmetry left is not captured by the model's terms: try the other asymmetric model, or more lags.",
+          "": "Falls and rises move the volatility differently from what the model holds."
+        },
+        "not_computed": "Too few residuals for the regression."
+      },
+      "at_bound": {
+        "name": "Parameters at a bound of the solver",
+        "count": {
+          "one": "{n} parameter at a bound",
+          "other": "{n} parameters at a bound"
+        }
+      },
+      "variance_stationary": {
+        "name": "Persistence of the variance"
+      }
+    },
+    "measure_texts": {
+      "at_bound": "The parameters the solver left at one of its bounds (α + β at 1, ν at its lowest): their standard errors are not computed the usual way.",
+      "variance_stationary": "The persistence P: below 1 the variance returns to a long-run level; at 1 or above it does not, and the half-life and the long-run volatility are not computed."
+    },
+    "stats": {
+      "model": {
+        "n": "Returns in the fit",
+        "n_missing": "Empty values",
+        "first": "First instant",
+        "last": "Last instant",
+        "alpha": "α of the tests",
+        "scale": "Scale of the fit (sd of the returns)",
+        "holdout": "Holdout (observations)",
+        "horizon": "Horizon (steps)",
+        "var_level": "VaR level",
+        "log_lik": "Log-likelihood",
+        "aic": "AIC",
+        "bic": "BIC",
+        "persistence": "Persistence P",
+        "half_life": "Half-life (steps)",
+        "half_life_time": "Half-life (time unit)",
+        "uncond_sigma": "Long-run volatility",
+        "sigma_last": "Volatility at the last instant",
+        "sigma_next": "Volatility forecast for the next step",
+        "lb_lag_used": "Lag of the portmanteau tests",
+        "arch_lags_used": "Lags of the ARCH LM",
+        "kappa": "κ of GJR",
+        "model_name": "Model",
+        "variance_model": "Variance model",
+        "distribution": "Distribution of z",
+        "input_kind": "Input",
+        "returns_type": "Returns",
+        "se_type": "Standard errors",
+        "frequency": "Frequency",
+        "time_kind": "Time",
+        "solver": "Solver"
+      },
+      "backtest": {
+        "statistic": "Statistic",
+        "df": "df",
+        "p_value": "p-value",
+        "violations": "Breaks of the VaR",
+        "expected_violations": "Breaks expected",
+        "violation_rate": "Rate of breaks",
+        "n00": "No break, then no break (n00)",
+        "n01": "No break, then a break (n01)",
+        "n10": "A break, then no break (n10)",
+        "n11": "A break, then a break (n11)",
+        "longest_run": "Longest run of breaks",
+        "verdict": "Verdict",
+        "h0": "Null hypothesis",
+        "significance": "Signif."
+      }
+    },
+    "backtest": {
+      "title": "Backtest of the 1-step VaR at α = {alpha}",
+      "test": "Test",
+      "counts_title": "Breaks of the VaR on the holdout",
+      "quantity": "Quantity",
+      "value": "Value",
+      "names": {
+        "kupiec": "Coverage: Kupiec",
+        "christoffersen_ind": "Independence: Christoffersen",
+        "christoffersen_cc": "Conditional coverage: Christoffersen"
+      },
+      "h0": {
+        "kupiec": "The VaR is broken at the rate its level asks, {rate}.",
+        "christoffersen_ind": "A break does not change the chance of a break the next time.",
+        "christoffersen_cc": "The rate is {rate} and the breaks are independent."
+      },
+      "advice": {
+        "kupiec": "The VaR is broken more or less often than its level asks: try another distribution, or another variance model.",
+        "christoffersen_ind": "The breaks come in clusters: the model reacts too slowly to a change of volatility.",
+        "christoffersen_cc": "Rate and independence together: read the two tests above."
+      }
+    },
+    "nyblom": {
+      "title": "Stability of the parameters: Nyblom",
+      "parameter": "Parameter",
+      "joint": "All, jointly",
+      "statistic": "L",
+      "p_value": "p-value",
+      "p_adjusted": "Holm-adjusted p",
+      "verdict": "Verdict"
+    },
+    "reading_blocks": {
+      "summary": "Summary",
+      "persistence": "Persistence",
+      "asymmetry": "Asymmetry",
+      "distribution": "Distribution",
+      "residuals": "Residuals",
+      "stability": "Stability",
+      "backtest": "Backtest",
+      "method": "Method",
+      "formulas": "Formula"
+    },
+    "reading_labels": {
+      "method_backtest": "Backtest of the VaR",
+      "formula_var_1step": "1-step VaR",
+      "formula_kupiec": "Kupiec's LR",
+      "formula_christoffersen": "Christoffersen's LR",
+      "method_garch": "Conditional variance",
+      "method_scale": "The scale of the fit",
+      "method_estimation": "Estimation",
+      "method_distribution": "Distribution of the shocks",
+      "method_checks": "Checks of the residuals",
+      "method_nyblom": "Nyblom's test",
+      "method_sign_bias": "Sign bias",
+      "method_forecast": "Volatility forecast",
+      "formula_mean": "Mean",
+      "formula_variance": "Variance",
+      "formula_distribution": "Density of z",
+      "formula_likelihood": "Likelihood",
+      "formula_persistence": "Persistence, half-life",
+      "formula_portmanteau": "Weighted Ljung–Box",
+      "formula_arch_lm": "ARCH LM",
+      "formula_nyblom": "Nyblom's L",
+      "formula_sign_bias": "Sign bias regression"
+    },
+    "reading_texts": {
+      "lb_z_ok": "The weighted Ljung–Box test does not reject that the standardized residuals are free of autocorrelation up to lag {lag:int} (p-value {p_value:p}, α = {alpha:num}): the data do not show structure left in the mean, which does not prove there is none.",
+      "lb_z_failed": "The weighted Ljung–Box test rejects that the standardized residuals are free of autocorrelation up to lag {lag:int} (p-value {p_value:p}, below α = {alpha:num}): structure is left in the mean that the AR and MA terms did not take.",
+      "lb_z2_ok": "On the squared standardized residuals the weighted Ljung–Box test does not reject the absence of autocorrelation up to lag {lag:int} (p-value {p_value:p}, α = {alpha:num}): the model captures the clusters of volatility as far as this test can see.",
+      "lb_z2_failed": "On the squared standardized residuals the weighted Ljung–Box test rejects the absence of autocorrelation up to lag {lag:int} (p-value {p_value:p}, below α = {alpha:num}): clusters of volatility are left that the model misses.",
+      "arch_lm_ok": "The ARCH LM test with {lag:int} lags does not reject that no ARCH effect is left in the standardized residuals (p-value {p_value:p}, α = {alpha:num}).",
+      "arch_lm_failed": "The ARCH LM test with {lag:int} lags rejects that no ARCH effect is left in the standardized residuals (p-value {p_value:p}, below α = {alpha:num}): the variance equation misses part of how the volatility moves.",
+      "z2_largest_acf": "The largest autocorrelation of the squared standardized residuals is {acf:num}, at lag {lag:int}.",
+      "nyblom_stable": "Nyblom's joint test does not reject that every parameter is constant over the sample (p-value {p_value:p}, α = {alpha:num}); this does not prove that they are.",
+      "nyblom_moves": "Nyblom's joint test rejects that every parameter is constant over the sample (p-value {p_value:p}, below α = {alpha:num}); {parameter} moves the most (Holm-adjusted p-value {p_adjusted:p}).",
+      "nyblom_moves_none": "Nyblom's joint test rejects that every parameter is constant over the sample (p-value {p_value:p}, below α = {alpha:num}), but no single parameter's test rejects after Holm's adjustment.",
+      "sign_bias_supported": {
+        "variance_model=arch": "Engle and Ng's sign bias test rejects that the volatility responds alike to falls and rises (p-value {p_value:p}, below α = {alpha:num}): a GJR or EGARCH model has the terms for it.",
+        "variance_model=garch": "Engle and Ng's sign bias test rejects that the volatility responds alike to falls and rises (p-value {p_value:p}, below α = {alpha:num}): a GJR or EGARCH model has the terms for it.",
+        "": "Engle and Ng's sign bias test rejects that the volatility responds alike to falls and rises once the model is taken into account (p-value {p_value:p}, below α = {alpha:num}): some asymmetry is left that the model's terms do not capture."
+      },
+      "sign_bias_not_supported": "Engle and Ng's sign bias test does not reject that the volatility responds alike to falls and rises once the model is taken into account (p-value {p_value:p}, α = {alpha:num}); this does not prove the response is the same.",
+      "backtest_coverage_ok": "In the {holdout:int} {unit} kept out, the 1-step VaR at {level:pct} was broken on {violations:int} of them, against {expected:num} expected: Kupiec's test does not reject the rate its level asks (p-value {p_value:p}, α = {alpha:num}).",
+      "backtest_coverage_failed": "In the {holdout:int} {unit} kept out, the 1-step VaR at {level:pct} was broken on {violations:int} of them, against {expected:num} expected: Kupiec's test rejects the rate its level asks (p-value {p_value:p}, below α = {alpha:num}).",
+      "backtest_independence_ok": "Christoffersen's test does not reject that the breaks come independently of each other (p-value {p_value:p}, α = {alpha:num}; {expected:num} breaks expected).",
+      "backtest_independence_failed": "Christoffersen's test rejects that the breaks come independently of each other (p-value {p_value:p}, below α = {alpha:num}; {expected:num} breaks expected): they come in clusters.",
+      "backtest_independence_not_computed": "No observation broke the VaR, against {expected:num} expected: there is no cluster of breaks to test.",
+      "backtest_cc_ok": "Christoffersen's conditional coverage test, rate and independence together, does not reject (p-value {p_value:p}, α = {alpha:num}; {expected:num} breaks expected).",
+      "backtest_cc_failed": "Christoffersen's conditional coverage test, rate and independence together, rejects (p-value {p_value:p}, below α = {alpha:num}; {expected:num} breaks expected).",
+      "backtest_expected": "With {expected:num} breaks expected, these tests can tell only a VaR level far from the one asked; a longer holdout lets them see smaller errors.",
+      "backtest_short": "With {holdout:int} observation kept out the backtest is not computed: it needs at least 2.",
+      "method_backtest": "With a holdout, the last observations are kept out of the fit; the fitted parameters, fixed, are run through them one step at a time, so that each gets a 1-step VaR from the observations before it only. A break is an observation beyond its VaR. Kupiec's test compares the rate of breaks with the rate the level asks, Christoffersen's whether a break makes the next one more likely, and his third test both together. With few breaks expected (the holdout times 1 − c) their χ² laws are rough and they see only large errors: each sentence says how many breaks were expected.",
+      "summary": "A {model} with {distribution} errors was fitted to {n:int} returns of «{series}», from {first:date} to {last:date}.",
+      "summary_steps": "A {model} with {distribution} errors was fitted to {n:int} returns of «{series}», from step {first:int} to step {last:int}.",
+      "summary_holdout": "A {model} with {distribution} errors was fitted to {n:int} returns of «{series}», from {first:date} to {last:date}; the last {holdout:int} were kept out of the fit to test the value at risk.",
+      "summary_holdout_steps": "A {model} with {distribution} errors was fitted to {n:int} returns of «{series}», from step {first:int} to step {last:int}; the last {holdout:int} were kept out of the fit to test the value at risk.",
+      "summary_prices": {
+        "returns_type=simple": "The returns were computed from the prices as simple returns, P_t / P_(t−1) − 1.",
+        "": "The returns were computed from the prices as log returns, ln(P_t / P_(t−1))."
+      },
+      "summary_scale": "The fit ran on the returns divided by their standard deviation, {scale:num}; every parameter is given back in the series' units.",
+      "persistence": "The volatility keeps {persistence:pct} of a shock from one step to the next: half of a shock is gone after about {half_life:num} {unit}.",
+      "persistence_integrated": "The persistence is {persistence:num}, 1 or more: the variance does not return to a long-run level, so the half-life and the long-run volatility are not computed.",
+      "sigma_now_above": {
+        "input_kind=prices": "The volatility forecast for the next step, {sigma:pct}, is above its long-run level, {uncond:pct}.",
+        "": "The volatility forecast for the next step, {sigma:num}, is above its long-run level, {uncond:num}."
+      },
+      "sigma_now_below": {
+        "input_kind=prices": "The volatility forecast for the next step, {sigma:pct}, is below its long-run level, {uncond:pct}.",
+        "": "The volatility forecast for the next step, {sigma:num}, is below its long-run level, {uncond:num}."
+      },
+      "sigma_now_equal": {
+        "input_kind=prices": "The volatility forecast for the next step is at its long-run level, {uncond:pct}.",
+        "": "The volatility forecast for the next step is at its long-run level, {uncond:num}."
+      },
+      "asymmetry_gjr": "A fall raises the next variance {ratio:num} times as much as a rise of the same size (Σγ = {gamma:num}).",
+      "asymmetry_gjr_falls_only": "Only falls move the next variance: the α terms are 0, and Σγ = {gamma:num}.",
+      "asymmetry_egarch": "After a fall of {shock:num} standard deviations the next variance is {ratio:num} times what it is after a rise of the same size (sign effect α₁ = {alpha:num}, size effect γ₁ = {gamma:num}).",
+      "asymmetry_none": "This model lets the size of a shock move the variance, not its sign: a fall and a rise of the same size move it alike.",
+      "distribution_norm": "The errors are taken as normal: the model has no parameter for tails heavier than a normal's.",
+      "distribution_std": "The errors' Student t has ν = {shape:num} degrees of freedom ({level:pct} interval {low:num} – {high:num}); the normal is its limit as ν grows, and a smaller ν means heavier tails.",
+      "distribution_sstd": "The errors' skewed Student t has ν = {shape:num} degrees of freedom ({level:pct} interval {low:num} – {high:num}) and skewness ξ = {skew:num} ({skew_low:num} – {skew_high:num}); ξ = 1 is symmetric, below 1 the left tail is the longer.",
+      "method_garch": "A conditional variance is the variance of the next return given everything up to now. A GARCH writes it as a constant plus the recent squared shocks plus the variance before: a large move raises the next variance, which then decays back to its long-run level. An ARCH has the shocks only; a GJR-GARCH adds a term for falls, an EGARCH models the logarithm of the variance, so that falls and rises can move it differently and it stays positive. The mean of the returns is a constant, with AR and MA terms when the node asks.",
+      "method_scale": "The fit runs on the returns divided by their sample standard deviation, because the solver's tolerances are absolute and daily returns would put ω near 0.000001. The parameters and their covariance are brought back exactly to the series' units: μ times the scale, ω times its square, and for an EGARCH ω moved by a term in the logarithm of the scale.",
+      "method_estimation": {
+        "se_type=classical": "The parameters maximize the likelihood of the chosen distribution, the variance recursion started at the sample mean of the squared shocks, the variance kept positive and stationary by the solver's constraints. Their standard errors come from the inverse of the likelihood's Hessian, which holds when the distribution is the true one; z is the estimate over its standard error, and the p-values are two-sided.",
+        "": "The parameters maximize the likelihood of the chosen distribution (quasi-maximum likelihood: the estimates stay consistent when the distribution is not the true one), the variance recursion started at the sample mean of the squared shocks, the variance kept positive and stationary by the solver's constraints. Their standard errors are Bollerslev and Wooldridge's robust sandwich, which holds in that case too; z is the estimate over its standard error, and the p-values are two-sided."
+      },
+      "method_distribution": "The standardized shocks z have mean 0 and variance 1 under each of the three laws: the normal; Student's t scaled to variance 1, whose ν degrees of freedom set the weight of the tails, the normal being its limit; Fernández and Steel's skewed t, whose ξ makes one tail longer than the other. ν and ξ are estimated with the other parameters, with their intervals.",
+      "method_checks": "The standardized residuals z = ε / σ are what the model leaves. If the mean equation is right, z has no autocorrelation; if the variance equation is right, z² has none either. Fisher and Gallagher's weighted Ljung–Box test reads both (on z², the plain Ljung–Box does not have its nominal law), and Engle's ARCH LM regresses z² on its own past. A p-value below α rejects the hypothesis; above it, the data do not show a departure, which does not prove there is none. These tests read the residuals of a fitted model, so their laws are approximations, and with many observations they detect departures too small to matter.",
+      "method_nyblom": "Nyblom's test asks whether the parameters were the same over the whole sample: the scores of the likelihood, summed along time, stay near 0 when the parameters are constant and drift away when one moves. The p-value is computed from the test's asymptotic law (Imhof's inversion, with a truncation error below 0.0000001), so that any α can be read; the tests of the single parameters are Holm-adjusted for their number.",
+      "method_sign_bias": "Engle and Ng's sign bias test regresses z² on whether the last shock was a fall, and on the size of the last fall and of the last rise: if the model has taken how falls and rises move the volatility, none of the three terms counts. The verdict is their joint Wald test.",
+      "method_forecast": "The volatility forecast continues the variance recursion from the last instant, the future shocks replaced by their expected value: it moves from the present level towards the long-run level at the pace of the persistence. The output's 1-step VaR of the first step ahead uses that forecast."
+    },
+    "formula_texts": {
+      "formula_var_1step": "VaR_t = μ_t + σ_t q_(1−c), q the quantile of the fitted distribution, c the VaR level;  a break when r_t < VaR_t (for an ARIMA's upper tail, when y_t > VaR_t)",
+      "formula_kupiec": "LR_uc = −2 ln[(1 − p)^(T−x) p^x] + 2 ln[(1 − x/T)^(T−x) (x/T)^x], p = 1 − c, x breaks in T observations (0 · ln 0 = 0);  χ² with 1 degree of freedom",
+      "formula_christoffersen": "π_01 = n_01 / (n_00 + n_01), π_11 = n_11 / (n_10 + n_11), π = (n_01 + n_11) / (T − 1);  LR_ind = −2 ln[(1 − π)^(n_00 + n_10) π^(n_01 + n_11)] + 2 ln[(1 − π_01)^(n_00) π_01^(n_01) (1 − π_11)^(n_10) π_11^(n_11)], χ² with 1 degree of freedom;  LR_cc = LR_uc on T − 1 observations + LR_ind, χ² with 2",
+      "formula_mean": "r_t = μ + Σ_(i=1)^(m) φ_i (r_(t−i) − μ) + Σ_(j=1)^(n) θ_j ε_(t−j) + ε_t;  ε_t = σ_t z_t, z_t independent with mean 0 and variance 1",
+      "formula_variance": {
+        "variance_model=arch": "σ²_t = ω + Σ_(i=1)^(q) α_i ε²_(t−i)",
+        "variance_model=gjr": "σ²_t = ω + Σ_(i=1)^(q) (α_i + γ_i I_(t−i)) ε²_(t−i) + Σ_(j=1)^(p) β_j σ²_(t−j);  I_(t−i) = 1 when ε_(t−i) < 0, else 0",
+        "variance_model=egarch": "ln σ²_t = ω + Σ_(i=1)^(q) (α_i z_(t−i) + γ_i (|z_(t−i)| − E|z|)) + Σ_(j=1)^(p) β_j ln σ²_(t−j)",
+        "": "σ²_t = ω + Σ_(i=1)^(q) α_i ε²_(t−i) + Σ_(j=1)^(p) β_j σ²_(t−j)"
+      },
+      "formula_distribution": {
+        "distribution=norm": "f(z) = exp(−z²/2) / √(2π)",
+        "distribution=sstd": "f(z) = 2 / (ξ + 1/ξ) · f*(z/ξ) for z ≥ 0 and f*(z ξ) for z < 0, f* the Student t with ν degrees of freedom; then moved and scaled to mean 0 and variance 1 (Fernández and Steel)",
+        "": "z = t √((ν − 2) / ν), t a Student t with ν > 2 degrees of freedom: mean 0, variance 1"
+      },
+      "formula_likelihood": "ℓ(θ) = Σ_t [ln f(z_t) − ln σ_t], z_t = ε_t / σ_t;  robust covariance H^(−1) S H^(−1), H the Hessian of −ℓ, S the sum of the scores' outer products;  AIC = −2ℓ + 2k, BIC = −2ℓ + k ln n",
+      "formula_persistence": "P = Σα + Σβ (ARCH, GARCH);  Σα + Σβ + κ Σγ with κ = E[z² 1(z < 0)] (GJR);  Σβ (EGARCH);  half-life = ln(1/2) / ln P;  long-run σ = √(ω / (1 − P))",
+      "formula_portmanteau": "Q_W = n (n + 2) Σ_(k=1)^(m) ((m − k + 1) / m) ρ̂_k² / (n − k), its p-value from Fisher and Gallagher's gamma approximation;  ρ̂_k the autocorrelation of z (of z²) at lag k",
+      "formula_arch_lm": "z²_t = a_0 + Σ_(l=1)^(L) a_l z²_(t−l) + u_t;  LM = n R², χ² with L degrees of freedom",
+      "formula_nyblom": "L = (1/n) Σ_t S_t' V^(−1) S_t, S_t the scores summed up to t, V their variance;  p = P(W_k > L), W_k = Σ_(j≥1) χ²_(k,j) / (j² π²), by Imhof's inversion;  the k single tests Holm-adjusted",
+      "formula_sign_bias": "z²_t = b_0 + b_1 N_(t−1) + b_2 N_(t−1) z_(t−1) + b_3 (1 − N_(t−1)) z_(t−1) + u_t, N = 1 when z < 0;  Wald test of b_1 = b_2 = b_3 = 0, χ² with 3 degrees of freedom"
+    },
+    "measure_readings": [
+      "summary",
+      "summary_steps",
+      "summary_holdout",
+      "summary_holdout_steps",
+      "summary_prices",
+      "summary_scale",
+      "persistence",
+      "persistence_integrated",
+      "sigma_now_above",
+      "sigma_now_below",
+      "sigma_now_equal",
+      "asymmetry_gjr",
+      "asymmetry_gjr_falls_only",
+      "asymmetry_egarch",
+      "asymmetry_none",
+      "distribution_norm",
+      "distribution_std",
+      "distribution_sstd",
+      "z2_largest_acf",
+      "backtest_independence_not_computed",
+      "backtest_expected",
+      "backtest_short"
+    ]
+  },
+  "it": {
+    "name_kind": "Volatilità",
+    "series_of": "«{value}» su «{time}», {kind}",
+    "kind": {
+      "returns": "rendimenti",
+      "prices": "prezzi"
+    },
+    "sections": {
+      "summary": "Sintesi",
+      "assumptions": "Verifiche",
+      "volatility": "Volatilità",
+      "coefficients": "Coefficienti e impatto delle notizie",
+      "checks": "Verifiche dei residui",
+      "backtest": "Backtest del valore a rischio",
+      "fit": "Numeri della stima",
+      "notes": "Note"
+    },
+    "kpi": {
+      "n": "Rendimenti",
+      "span": "{first} – {last}",
+      "model": "Modello",
+      "persistence": "Persistenza",
+      "half_life": "emivita {h} {unit}",
+      "no_half_life": "P ≥ 1: nessuna emivita",
+      "sigma": "Volatilità, passo successivo",
+      "uncond": "lungo periodo {u}",
+      "no_uncond": "nessun livello di lungo periodo"
+    },
+    "alpha_line": "I verdetti vengono solo dai p-value dei test, letti contro α = {alpha} (l'opzione del nodo); persistenza, emivita, volatilità, ν e ξ sono misure e non ne hanno.",
+    "measures_title": "Misure, non test",
+    "facts_title": "Fatti della stima",
+    "measure_names": {
+      "persistence": "Persistenza P",
+      "half_life": "Emivita",
+      "uncond_sigma": "Volatilità di lungo periodo",
+      "sigma_next": "Volatilità, passo successivo",
+      "sigma_last": "Volatilità, ultimo istante",
+      "kappa": "κ (GJR)",
+      "shape": "ν, gradi di libertà",
+      "skew": "ξ, asimmetria"
+    },
+    "measure_what": {
+      "persistence": "La quota di uno shock alla varianza che c'è ancora un passo dopo.",
+      "half_life": "I passi dopo i quali metà di uno shock alla varianza è svanita: ln(1/2) / ln P.",
+      "uncond_sigma": "Il livello a cui la volatilità torna quando non arrivano shock: √(ω / (1 − P)).",
+      "sigma_next": "La volatilità che il modello dà al passo successivo, da tutto ciò che precede fino all'ultimo istante.",
+      "sigma_last": "La volatilità che il modello dà all'ultimo istante della serie.",
+      "kappa": "La media di z² quando z < 0 secondo la distribuzione stimata: quanto γ aggiunge alla persistenza.",
+      "shape": "I gradi di libertà della t di Student: più sono pochi, più le code sono pesanti; la normale è il limite.",
+      "skew": "L'asimmetria della t: 1 è simmetrica, sotto 1 la coda sinistra è la più lunga."
+    },
+    "charts": {
+      "returns": "Rendimenti con la banda μ ± z σ di ogni istante",
+      "sigma": "Volatilità condizionata σ e la sua previsione",
+      "std_residual": "Residui standardizzati z",
+      "news_impact": "Impatto delle notizie: la varianza successiva dopo uno shock ε, in σ di lungo periodo",
+      "z_acf": "ACF di z",
+      "z2_acf": "ACF di z²",
+      "hist": "Istogramma di z e densità stimata",
+      "qq": "Q–Q di z contro la distribuzione stimata",
+      "backtest": "Periodo di verifica: rendimenti, VaR a un passo e violazioni"
+    },
+    "series": {
+      "return": "Rendimento",
+      "band": "Banda al {level} %",
+      "sigma": "σ",
+      "forecast": "Previsione",
+      "z": "z",
+      "news": "Varianza successiva",
+      "acf": "ACF",
+      "count": "Conteggio",
+      "density": "Densità stimata",
+      "qq": "z",
+      "var": "VaR a un passo",
+      "violation": "Violazione"
+    },
+    "captions": {
+      "volatility": "La linea verticale tratteggiata segna la prima osservazione tenuta fuori; la linea orizzontale tratteggiata su σ è il suo livello di lungo periodo.",
+      "news": "La curva è simmetrica per un ARCH o un GARCH, piegata in 0 per un GJR, inclinata per un EGARCH.",
+      "backtest": "Ogni punto è un'osservazione tenuta fuori; la linea è il VaR calcolato dalle osservazioni precedenti; i punti evidenziati lo hanno violato."
+    },
+    "coef": {
+      "title": "Coefficienti nelle unità della serie",
+      "robust": "Errori standard: robusti (sandwich QML).",
+      "classical": "Errori standard: classici (inversa dell'Hessiana)."
+    },
+    "formula_law": "z ~ {law}",
+    "notes": {
+      "rows": "Sono stati usati {n} rendimenti; {missing} righe avevano un valore vuoto."
+    },
+    "values": {
+      "variance_model": {
+        "arch": "ARCH",
+        "garch": "GARCH",
+        "gjr": "GJR-GARCH",
+        "egarch": "EGARCH"
+      },
+      "distribution": {
+        "norm": "normale",
+        "std": "t di Student",
+        "sstd": "t di Student asimmetrica"
+      },
+      "input_kind": {
+        "returns": "rendimenti",
+        "prices": "prezzi"
+      },
+      "returns_type": {
+        "log": "rendimenti logaritmici",
+        "simple": "rendimenti semplici"
+      },
+      "se_type": {
+        "robust": "robusti (sandwich QML)",
+        "classical": "classici (inversa dell'Hessiana)"
+      },
+      "solver": {
+        "solnp": "solnp",
+        "nlminb": "nlminb",
+        "gosolnp": "gosolnp (ripartenze casuali)",
+        "lbfgs": "L-BFGS",
+        "hybrid": "ibrido"
+      },
+      "frequency": {
+        "hour": "ora",
+        "day": "giorno",
+        "week": "settimana",
+        "month": "mese",
+        "quarter": "trimestre",
+        "year": "anno",
+        "index": "passi"
+      },
+      "time_kind": {
+        "date": "data",
+        "datetime": "data e ora",
+        "integer": "intero (passi)"
+      },
+      "time_unit": {
+        "hour": "ore",
+        "day": "giorni",
+        "week": "settimane",
+        "month": "mesi",
+        "quarter": "trimestri",
+        "year": "anni",
+        "index": "passi"
+      },
+      "reading_names": {
+        "mu": "μ",
+        "omega": "ω",
+        "shape": "ν",
+        "skew": "ξ",
+        "alpha1": "α₁",
+        "alpha2": "α₂",
+        "alpha3": "α₃",
+        "beta1": "β₁",
+        "beta2": "β₂",
+        "beta3": "β₃",
+        "gamma1": "γ₁",
+        "gamma2": "γ₂",
+        "gamma3": "γ₃",
+        "ar1": "φ₁",
+        "ar2": "φ₂",
+        "ar3": "φ₃",
+        "ar4": "φ₄",
+        "ar5": "φ₅",
+        "ma1": "θ₁",
+        "ma2": "θ₂",
+        "ma3": "θ₃",
+        "ma4": "θ₄",
+        "ma5": "θ₅"
+      }
+    },
+    "checks": {
+      "ljung_box_z": {
+        "name": "Media: Ljung–Box pesato su z",
+        "h0": "I residui standardizzati non sono autocorrelati fino al ritardo del test.",
+        "advice": "Nella media resta una struttura: alzate l'ordine AR o MA.",
+        "not_computed": "Troppo pochi residui per il ritardo del test."
+      },
+      "ljung_box_z2": {
+        "name": "Varianza: Ljung–Box pesato su z²",
+        "h0": "I quadrati dei residui standardizzati non sono autocorrelati fino al ritardo del test: non resta un effetto ARCH.",
+        "advice": "Volatilità che il modello non coglie: alzate un ordine, o provate GJR o EGARCH.",
+        "not_computed": "Troppo pochi residui per il ritardo del test."
+      },
+      "arch_lm": {
+        "name": "Varianza: ARCH LM su z",
+        "h0": "Nei residui standardizzati non resta un effetto ARCH.",
+        "advice": "Volatilità che il modello non coglie: alzate un ordine, o provate GJR o EGARCH.",
+        "not_computed": "Troppo pochi residui per i ritardi del test."
+      },
+      "nyblom": {
+        "name": "Stabilità: Nyblom",
+        "h0": "Ogni parametro è costante nel campione.",
+        "advice": "I parametri si muovono nel campione: stimate un periodo più breve e più recente, o leggete i parametri nella tabella della stabilità.",
+        "not_computed": "Gli score della stima non erano disponibili."
+      },
+      "sign_bias": {
+        "name": "Asimmetria: sign bias di Engle–Ng",
+        "h0": "La volatilità risponde allo stesso modo a discese e salite, tenuto conto del modello.",
+        "advice": {
+          "sign_bias_failed": "Discese e salite muovono la volatilità in modo diverso: scegliete GJR o EGARCH.",
+          "sign_bias_left": "L'asimmetria che resta non è colta dai termini del modello: provate l'altro modello asimmetrico, o più ritardi.",
+          "": "Discese e salite muovono la volatilità in modo diverso da quello che il modello prevede."
+        },
+        "not_computed": "Troppo pochi residui per la regressione."
+      },
+      "at_bound": {
+        "name": "Parametri a un limite del solutore",
+        "count": {
+          "one": "{n} parametro a un limite",
+          "other": "{n} parametri a un limite"
+        }
+      },
+      "variance_stationary": {
+        "name": "Persistenza della varianza"
+      }
+    },
+    "measure_texts": {
+      "at_bound": "I parametri che il solutore ha lasciato a uno dei suoi limiti (α + β a 1, ν al minimo): i loro errori standard non sono calcolati nel modo consueto.",
+      "variance_stationary": "La persistenza P: sotto 1 la varianza torna a un livello di lungo periodo; a 1 o sopra non torna, e l'emivita e la volatilità di lungo periodo non sono calcolate."
+    },
+    "stats": {
+      "model": {
+        "n": "Rendimenti nella stima",
+        "n_missing": "Valori vuoti",
+        "first": "Primo istante",
+        "last": "Ultimo istante",
+        "alpha": "α dei test",
+        "scale": "Scala della stima (dev. std. dei rendimenti)",
+        "holdout": "Periodo di verifica (osservazioni)",
+        "horizon": "Orizzonte (passi)",
+        "var_level": "Livello del VaR",
+        "log_lik": "Log-verosimiglianza",
+        "aic": "AIC",
+        "bic": "BIC",
+        "persistence": "Persistenza P",
+        "half_life": "Emivita (passi)",
+        "half_life_time": "Emivita (unità di tempo)",
+        "uncond_sigma": "Volatilità di lungo periodo",
+        "sigma_last": "Volatilità all'ultimo istante",
+        "sigma_next": "Volatilità prevista per il passo successivo",
+        "lb_lag_used": "Ritardo dei test portmanteau",
+        "arch_lags_used": "Ritardi dell'ARCH LM",
+        "kappa": "κ del GJR",
+        "model_name": "Modello",
+        "variance_model": "Modello della varianza",
+        "distribution": "Distribuzione di z",
+        "input_kind": "Ingresso",
+        "returns_type": "Rendimenti",
+        "se_type": "Errori standard",
+        "frequency": "Frequenza",
+        "time_kind": "Tempo",
+        "solver": "Solutore"
+      },
+      "backtest": {
+        "statistic": "Statistica",
+        "df": "gdl",
+        "p_value": "p-value",
+        "violations": "Violazioni del VaR",
+        "expected_violations": "Violazioni attese",
+        "violation_rate": "Tasso di violazioni",
+        "n00": "Nessuna violazione, poi nessuna (n00)",
+        "n01": "Nessuna violazione, poi una (n01)",
+        "n10": "Una violazione, poi nessuna (n10)",
+        "n11": "Una violazione, poi un'altra (n11)",
+        "longest_run": "Serie più lunga di violazioni",
+        "verdict": "Verdetto",
+        "h0": "Ipotesi nulla",
+        "significance": "Signif."
+      }
+    },
+    "backtest": {
+      "title": "Backtest del VaR a un passo ad α = {alpha}",
+      "test": "Test",
+      "counts_title": "Violazioni del VaR nel periodo di verifica",
+      "quantity": "Quantità",
+      "value": "Valore",
+      "names": {
+        "kupiec": "Copertura: Kupiec",
+        "christoffersen_ind": "Indipendenza: Christoffersen",
+        "christoffersen_cc": "Copertura condizionata: Christoffersen"
+      },
+      "h0": {
+        "kupiec": "Il VaR è violato con la frequenza che il suo livello chiede, {rate}.",
+        "christoffersen_ind": "Una violazione non cambia la probabilità di una violazione la volta dopo.",
+        "christoffersen_cc": "La frequenza è {rate} e le violazioni sono indipendenti."
+      },
+      "advice": {
+        "kupiec": "Il VaR è violato più o meno spesso di quanto chiede il suo livello: provate un'altra distribuzione, o un altro modello della varianza.",
+        "christoffersen_ind": "Le violazioni arrivano a grappoli: il modello reagisce troppo lentamente a un cambio di volatilità.",
+        "christoffersen_cc": "Frequenza e indipendenza insieme: leggete i due test sopra."
+      }
+    },
+    "nyblom": {
+      "title": "Stabilità dei parametri: Nyblom",
+      "parameter": "Parametro",
+      "joint": "Tutti, insieme",
+      "statistic": "L",
+      "p_value": "p-value",
+      "p_adjusted": "p corretto (Holm)",
+      "verdict": "Verdetto"
+    },
+    "reading_blocks": {
+      "summary": "Sintesi",
+      "persistence": "Persistenza",
+      "asymmetry": "Asimmetria",
+      "distribution": "Distribuzione",
+      "residuals": "Residui",
+      "stability": "Stabilità",
+      "backtest": "Backtest",
+      "method": "Metodo",
+      "formulas": "Formula"
+    },
+    "reading_labels": {
+      "method_backtest": "Backtest del VaR",
+      "formula_var_1step": "VaR a un passo",
+      "formula_kupiec": "LR di Kupiec",
+      "formula_christoffersen": "LR di Christoffersen",
+      "method_garch": "Varianza condizionata",
+      "method_scale": "La scala della stima",
+      "method_estimation": "Stima",
+      "method_distribution": "Distribuzione degli shock",
+      "method_checks": "Verifiche dei residui",
+      "method_nyblom": "Test di Nyblom",
+      "method_sign_bias": "Sign bias",
+      "method_forecast": "Previsione della volatilità",
+      "formula_mean": "Media",
+      "formula_variance": "Varianza",
+      "formula_distribution": "Densità di z",
+      "formula_likelihood": "Verosimiglianza",
+      "formula_persistence": "Persistenza, emivita",
+      "formula_portmanteau": "Ljung–Box pesato",
+      "formula_arch_lm": "ARCH LM",
+      "formula_nyblom": "L di Nyblom",
+      "formula_sign_bias": "Regressione del sign bias"
+    },
+    "reading_texts": {
+      "lb_z_ok": "Il test di Ljung–Box pesato non rifiuta che i residui standardizzati siano privi di autocorrelazione fino al ritardo {lag:int} (p-value {p_value:p}, α = {alpha:num}): i dati non mostrano una struttura rimasta nella media, il che non dimostra che non ci sia.",
+      "lb_z_failed": "Il test di Ljung–Box pesato rifiuta che i residui standardizzati siano privi di autocorrelazione fino al ritardo {lag:int} (p-value {p_value:p}, sotto α = {alpha:num}): nella media resta una struttura che i termini AR e MA non hanno preso.",
+      "lb_z2_ok": "Sui quadrati dei residui standardizzati il test di Ljung–Box pesato non rifiuta l'assenza di autocorrelazione fino al ritardo {lag:int} (p-value {p_value:p}, α = {alpha:num}): il modello coglie i grappoli di volatilità per quanto questo test può vedere.",
+      "lb_z2_failed": "Sui quadrati dei residui standardizzati il test di Ljung–Box pesato rifiuta l'assenza di autocorrelazione fino al ritardo {lag:int} (p-value {p_value:p}, sotto α = {alpha:num}): restano grappoli di volatilità che il modello non coglie.",
+      "arch_lm_ok": "Il test ARCH LM con {lag:int} ritardi non rifiuta che nei residui standardizzati non resti un effetto ARCH (p-value {p_value:p}, α = {alpha:num}).",
+      "arch_lm_failed": "Il test ARCH LM con {lag:int} ritardi rifiuta che nei residui standardizzati non resti un effetto ARCH (p-value {p_value:p}, sotto α = {alpha:num}): l'equazione della varianza non coglie una parte di come si muove la volatilità.",
+      "z2_largest_acf": "L'autocorrelazione massima dei quadrati dei residui standardizzati è {acf:num}, al ritardo {lag:int}.",
+      "nyblom_stable": "Il test congiunto di Nyblom non rifiuta che ogni parametro sia costante nel campione (p-value {p_value:p}, α = {alpha:num}); questo non dimostra che lo sia.",
+      "nyblom_moves": "Il test congiunto di Nyblom rifiuta che ogni parametro sia costante nel campione (p-value {p_value:p}, sotto α = {alpha:num}); quello che si muove di più è {parameter} (p-value corretto con Holm {p_adjusted:p}).",
+      "nyblom_moves_none": "Il test congiunto di Nyblom rifiuta che ogni parametro sia costante nel campione (p-value {p_value:p}, sotto α = {alpha:num}), ma dopo la correzione di Holm nessun test sul singolo parametro rifiuta.",
+      "sign_bias_supported": {
+        "variance_model=arch": "Il test sign bias di Engle e Ng rifiuta che la volatilità risponda allo stesso modo a discese e salite (p-value {p_value:p}, sotto α = {alpha:num}): un modello GJR o EGARCH ha i termini per farlo.",
+        "variance_model=garch": "Il test sign bias di Engle e Ng rifiuta che la volatilità risponda allo stesso modo a discese e salite (p-value {p_value:p}, sotto α = {alpha:num}): un modello GJR o EGARCH ha i termini per farlo.",
+        "": "Il test sign bias di Engle e Ng rifiuta che la volatilità risponda allo stesso modo a discese e salite, tenuto conto del modello (p-value {p_value:p}, sotto α = {alpha:num}): resta un'asimmetria che i termini del modello non colgono."
+      },
+      "sign_bias_not_supported": "Il test sign bias di Engle e Ng non rifiuta che la volatilità risponda allo stesso modo a discese e salite, tenuto conto del modello (p-value {p_value:p}, α = {alpha:num}); questo non dimostra che la risposta sia la stessa.",
+      "backtest_coverage_ok": "Nei {holdout:int} {unit} tenuti fuori, il VaR a un passo al {level:pct} è stato violato in {violations:int} di essi, contro {expected:num} violazioni attese: il test di Kupiec non rifiuta la frequenza che il suo livello chiede (p-value {p_value:p}, α = {alpha:num}).",
+      "backtest_coverage_failed": "Nei {holdout:int} {unit} tenuti fuori, il VaR a un passo al {level:pct} è stato violato in {violations:int} di essi, contro {expected:num} violazioni attese: il test di Kupiec rifiuta la frequenza che il suo livello chiede (p-value {p_value:p}, sotto α = {alpha:num}).",
+      "backtest_independence_ok": "Il test di Christoffersen non rifiuta che le violazioni arrivino indipendenti l'una dall'altra (p-value {p_value:p}, α = {alpha:num}; {expected:num} violazioni attese).",
+      "backtest_independence_failed": "Il test di Christoffersen rifiuta che le violazioni arrivino indipendenti l'una dall'altra (p-value {p_value:p}, sotto α = {alpha:num}; {expected:num} violazioni attese): arrivano a grappoli.",
+      "backtest_independence_not_computed": "Nessuna osservazione ha violato il VaR, contro {expected:num} violazioni attese: non c'è un grappolo di violazioni da verificare.",
+      "backtest_cc_ok": "Il test di copertura condizionata di Christoffersen, frequenza e indipendenza insieme, non rifiuta (p-value {p_value:p}, α = {alpha:num}; {expected:num} violazioni attese).",
+      "backtest_cc_failed": "Il test di copertura condizionata di Christoffersen, frequenza e indipendenza insieme, rifiuta (p-value {p_value:p}, sotto α = {alpha:num}; {expected:num} violazioni attese).",
+      "backtest_expected": "Con {expected:num} violazioni attese, questi test distinguono solo un livello del VaR lontano da quello chiesto; un periodo di verifica più lungo fa vedere loro scarti più piccoli.",
+      "backtest_short": "Con {holdout:int} osservazione tenuta fuori il backtest non è calcolato: ne servono almeno 2.",
+      "method_backtest": "Con un periodo di verifica, le ultime osservazioni restano fuori dalla stima; i parametri stimati, fissi, vengono applicati a esse un passo alla volta, così che ciascuna abbia un VaR a un passo calcolato solo dalle osservazioni precedenti. Una violazione è un'osservazione oltre il suo VaR. Il test di Kupiec confronta la frequenza delle violazioni con quella che il livello chiede, quello di Christoffersen se una violazione rende più probabile la successiva, e il suo terzo test le due cose insieme. Con poche violazioni attese (il periodo di verifica per 1 − c) le loro leggi χ² sono approssimative e vedono solo scarti grandi: ogni frase dice quante violazioni erano attese.",
+      "summary": "Un {model} con errori {distribution} è stato stimato su {n:int} rendimenti di «{series}», dal {first:date} al {last:date}.",
+      "summary_steps": "Un {model} con errori {distribution} è stato stimato su {n:int} rendimenti di «{series}», dal passo {first:int} al passo {last:int}.",
+      "summary_holdout": "Un {model} con errori {distribution} è stato stimato su {n:int} rendimenti di «{series}», dal {first:date} al {last:date}; gli ultimi {holdout:int} sono stati tenuti fuori dalla stima per verificare il valore a rischio.",
+      "summary_holdout_steps": "Un {model} con errori {distribution} è stato stimato su {n:int} rendimenti di «{series}», dal passo {first:int} al passo {last:int}; gli ultimi {holdout:int} sono stati tenuti fuori dalla stima per verificare il valore a rischio.",
+      "summary_prices": {
+        "returns_type=simple": "I rendimenti sono stati calcolati dai prezzi come rendimenti semplici, P_t / P_(t−1) − 1.",
+        "": "I rendimenti sono stati calcolati dai prezzi come rendimenti logaritmici, ln(P_t / P_(t−1))."
+      },
+      "summary_scale": "La stima è stata fatta sui rendimenti divisi per la loro deviazione standard, {scale:num}; ogni parametro è riportato nelle unità della serie.",
+      "persistence": "La volatilità conserva il {persistence:pct} di uno shock da un passo al successivo: metà di uno shock è svanita dopo circa {half_life:num} {unit}.",
+      "persistence_integrated": "La persistenza è {persistence:num}, 1 o più: la varianza non torna a un livello di lungo periodo, quindi l'emivita e la volatilità di lungo periodo non sono calcolate.",
+      "sigma_now_above": {
+        "input_kind=prices": "La volatilità prevista per il passo successivo, {sigma:pct}, è sopra il suo livello di lungo periodo, {uncond:pct}.",
+        "": "La volatilità prevista per il passo successivo, {sigma:num}, è sopra il suo livello di lungo periodo, {uncond:num}."
+      },
+      "sigma_now_below": {
+        "input_kind=prices": "La volatilità prevista per il passo successivo, {sigma:pct}, è sotto il suo livello di lungo periodo, {uncond:pct}.",
+        "": "La volatilità prevista per il passo successivo, {sigma:num}, è sotto il suo livello di lungo periodo, {uncond:num}."
+      },
+      "sigma_now_equal": {
+        "input_kind=prices": "La volatilità prevista per il passo successivo è al suo livello di lungo periodo, {uncond:pct}.",
+        "": "La volatilità prevista per il passo successivo è al suo livello di lungo periodo, {uncond:num}."
+      },
+      "asymmetry_gjr": "Una discesa alza la varianza successiva {ratio:num} volte quanto una salita della stessa ampiezza (Σγ = {gamma:num}).",
+      "asymmetry_gjr_falls_only": "Solo le discese muovono la varianza successiva: i termini α sono 0, e Σγ = {gamma:num}.",
+      "asymmetry_egarch": "Dopo una discesa di {shock:num} deviazioni standard la varianza successiva è {ratio:num} volte quella dopo una salita della stessa ampiezza (effetto del segno α₁ = {alpha:num}, effetto dell'ampiezza γ₁ = {gamma:num}).",
+      "asymmetry_none": "Questo modello fa muovere la varianza dall'ampiezza di uno shock, non dal suo segno: una discesa e una salita della stessa ampiezza la muovono allo stesso modo.",
+      "distribution_norm": "Gli errori sono presi come normali: il modello non ha un parametro per code più pesanti di quelle di una normale.",
+      "distribution_std": "La t di Student degli errori ha ν = {shape:num} gradi di libertà (intervallo al {level:pct} {low:num} – {high:num}); la normale è il suo limite al crescere di ν, e un ν minore vuol dire code più pesanti.",
+      "distribution_sstd": "La t di Student asimmetrica degli errori ha ν = {shape:num} gradi di libertà (intervallo al {level:pct} {low:num} – {high:num}) e asimmetria ξ = {skew:num} ({skew_low:num} – {skew_high:num}); ξ = 1 è simmetrica, sotto 1 la coda sinistra è la più lunga.",
+      "method_garch": "Una varianza condizionata è la varianza del prossimo rendimento dato tutto ciò che è successo fino a ora. Un GARCH la scrive come una costante più gli shock recenti al quadrato più la varianza precedente: un movimento ampio alza la varianza successiva, che poi decade verso il suo livello di lungo periodo. Un ARCH ha solo gli shock; un GJR-GARCH aggiunge un termine per le discese, un EGARCH modella il logaritmo della varianza, così che discese e salite possano muoverla in modo diverso e resti positiva. La media dei rendimenti è una costante, con termini AR e MA quando il nodo li chiede.",
+      "method_scale": "La stima lavora sui rendimenti divisi per la loro deviazione standard campionaria, perché le tolleranze del solutore sono assolute e i rendimenti giornalieri porterebbero ω vicino a 0,000001. I parametri e la loro covarianza sono riportati esattamente nelle unità della serie: μ per la scala, ω per il suo quadrato, e per un EGARCH ω spostato di un termine nel logaritmo della scala.",
+      "method_estimation": {
+        "se_type=classical": "I parametri massimizzano la verosimiglianza della distribuzione scelta, la ricorsione della varianza partita dalla media campionaria degli shock al quadrato, la varianza tenuta positiva e stazionaria dai vincoli del solutore. I loro errori standard vengono dall'inversa dell'Hessiana della verosimiglianza, che vale quando la distribuzione è quella vera; z è la stima diviso il suo errore standard, e i p-value sono bilaterali.",
+        "": "I parametri massimizzano la verosimiglianza della distribuzione scelta (quasi-massima verosimiglianza: le stime restano consistenti quando la distribuzione non è quella vera), la ricorsione della varianza partita dalla media campionaria degli shock al quadrato, la varianza tenuta positiva e stazionaria dai vincoli del solutore. I loro errori standard sono il sandwich robusto di Bollerslev e Wooldridge, che vale anche in quel caso; z è la stima diviso il suo errore standard, e i p-value sono bilaterali."
+      },
+      "method_distribution": "Gli shock standardizzati z hanno media 0 e varianza 1 con ciascuna delle tre leggi: la normale; la t di Student riscalata a varianza 1, i cui ν gradi di libertà fissano il peso delle code, con la normale come limite; la t asimmetrica di Fernández e Steel, il cui ξ rende una coda più lunga dell'altra. ν e ξ sono stimati con gli altri parametri, con i loro intervalli.",
+      "method_checks": "I residui standardizzati z = ε / σ sono ciò che il modello lascia. Se l'equazione della media è giusta, z non ha autocorrelazione; se lo è quella della varianza, non ne ha nemmeno z². Il test di Ljung–Box pesato di Fisher e Gallagher legge entrambi (su z² il Ljung–Box semplice non ha la sua legge nominale), e l'ARCH LM di Engle regredisce z² sul suo passato. Un p-value sotto α rifiuta l'ipotesi; sopra, i dati non mostrano uno scostamento, il che non dimostra che non ci sia. Questi test leggono i residui di un modello stimato, quindi le loro leggi sono approssimazioni, e con molte osservazioni rilevano scostamenti troppo piccoli per contare.",
+      "method_nyblom": "Il test di Nyblom chiede se i parametri sono stati gli stessi in tutto il campione: gli score della verosimiglianza, sommati lungo il tempo, restano vicini a 0 quando i parametri sono costanti e se ne allontanano quando uno si muove. Il p-value è calcolato dalla legge asintotica del test (inversione di Imhof, con un errore di troncamento sotto 0,0000001), così che si possa leggere ogni α; i test dei singoli parametri sono corretti con Holm per il loro numero.",
+      "method_sign_bias": "Il test sign bias di Engle e Ng regredisce z² sul fatto che l'ultimo shock sia stato una discesa, e sull'ampiezza dell'ultima discesa e dell'ultima salita: se il modello ha preso il modo in cui discese e salite muovono la volatilità, nessuno dei tre termini conta. Il verdetto è il loro test di Wald congiunto.",
+      "method_forecast": "La previsione della volatilità prosegue la ricorsione della varianza dall'ultimo istante, con gli shock futuri sostituiti dal loro valore atteso: va dal livello attuale verso quello di lungo periodo al ritmo della persistenza. Il VaR a un passo dell'output per il primo passo avanti usa quella previsione."
+    },
+    "formula_texts": {
+      "formula_var_1step": "VaR_t = μ_t + σ_t q_(1−c), q il quantile della distribuzione stimata, c il livello del VaR;  una violazione quando r_t < VaR_t (per la coda superiore di un ARIMA, quando y_t > VaR_t)",
+      "formula_kupiec": "LR_uc = −2 ln[(1 − p)^(T−x) p^x] + 2 ln[(1 − x/T)^(T−x) (x/T)^x], p = 1 − c, x violazioni in T osservazioni (0 · ln 0 = 0);  χ² con 1 grado di libertà",
+      "formula_christoffersen": "π_01 = n_01 / (n_00 + n_01), π_11 = n_11 / (n_10 + n_11), π = (n_01 + n_11) / (T − 1);  LR_ind = −2 ln[(1 − π)^(n_00 + n_10) π^(n_01 + n_11)] + 2 ln[(1 − π_01)^(n_00) π_01^(n_01) (1 − π_11)^(n_10) π_11^(n_11)], χ² con 1 grado di libertà;  LR_cc = LR_uc su T − 1 osservazioni + LR_ind, χ² con 2",
+      "formula_mean": "r_t = μ + Σ_(i=1)^(m) φ_i (r_(t−i) − μ) + Σ_(j=1)^(n) θ_j ε_(t−j) + ε_t;  ε_t = σ_t z_t, z_t indipendenti con media 0 e varianza 1",
+      "formula_variance": {
+        "variance_model=arch": "σ²_t = ω + Σ_(i=1)^(q) α_i ε²_(t−i)",
+        "variance_model=gjr": "σ²_t = ω + Σ_(i=1)^(q) (α_i + γ_i I_(t−i)) ε²_(t−i) + Σ_(j=1)^(p) β_j σ²_(t−j);  I_(t−i) = 1 quando ε_(t−i) < 0, altrimenti 0",
+        "variance_model=egarch": "ln σ²_t = ω + Σ_(i=1)^(q) (α_i z_(t−i) + γ_i (|z_(t−i)| − E|z|)) + Σ_(j=1)^(p) β_j ln σ²_(t−j)",
+        "": "σ²_t = ω + Σ_(i=1)^(q) α_i ε²_(t−i) + Σ_(j=1)^(p) β_j σ²_(t−j)"
+      },
+      "formula_distribution": {
+        "distribution=norm": "f(z) = exp(−z²/2) / √(2π)",
+        "distribution=sstd": "f(z) = 2 / (ξ + 1/ξ) · f*(z/ξ) per z ≥ 0 e f*(z ξ) per z < 0, f* la t di Student con ν gradi di libertà; poi spostata e riscalata a media 0 e varianza 1 (Fernández e Steel)",
+        "": "z = t √((ν − 2) / ν), t una t di Student con ν > 2 gradi di libertà: media 0, varianza 1"
+      },
+      "formula_likelihood": "ℓ(θ) = Σ_t [ln f(z_t) − ln σ_t], z_t = ε_t / σ_t;  covarianza robusta H^(−1) S H^(−1), H l'Hessiana di −ℓ, S la somma dei prodotti esterni degli score;  AIC = −2ℓ + 2k, BIC = −2ℓ + k ln n",
+      "formula_persistence": "P = Σα + Σβ (ARCH, GARCH);  Σα + Σβ + κ Σγ con κ = E[z² 1(z < 0)] (GJR);  Σβ (EGARCH);  emivita = ln(1/2) / ln P;  σ di lungo periodo = √(ω / (1 − P))",
+      "formula_portmanteau": "Q_W = n (n + 2) Σ_(k=1)^(m) ((m − k + 1) / m) ρ̂_k² / (n − k), il p-value dall'approssimazione gamma di Fisher e Gallagher;  ρ̂_k l'autocorrelazione di z (di z²) al ritardo k",
+      "formula_arch_lm": "z²_t = a_0 + Σ_(l=1)^(L) a_l z²_(t−l) + u_t;  LM = n R², χ² con L gradi di libertà",
+      "formula_nyblom": "L = (1/n) Σ_t S_t' V^(−1) S_t, S_t gli score sommati fino a t, V la loro varianza;  p = P(W_k > L), W_k = Σ_(j≥1) χ²_(k,j) / (j² π²), con l'inversione di Imhof;  i k test singoli corretti con Holm",
+      "formula_sign_bias": "z²_t = b_0 + b_1 N_(t−1) + b_2 N_(t−1) z_(t−1) + b_3 (1 − N_(t−1)) z_(t−1) + u_t, N = 1 quando z < 0;  test di Wald di b_1 = b_2 = b_3 = 0, χ² con 3 gradi di libertà"
+    },
+    "measure_readings": [
+      "summary",
+      "summary_steps",
+      "summary_holdout",
+      "summary_holdout_steps",
+      "summary_prices",
+      "summary_scale",
+      "persistence",
+      "persistence_integrated",
+      "sigma_now_above",
+      "sigma_now_below",
+      "sigma_now_equal",
+      "asymmetry_gjr",
+      "asymmetry_gjr_falls_only",
+      "asymmetry_egarch",
+      "asymmetry_none",
+      "distribution_norm",
+      "distribution_std",
+      "distribution_sstd",
+      "z2_largest_acf",
+      "backtest_independence_not_computed",
+      "backtest_expected",
+      "backtest_short"
+    ]
+  },
+  "de": {
+    "name_kind": "Volatilität",
+    "series_of": "«{value}» über «{time}», {kind}",
+    "kind": {
+      "returns": "Renditen",
+      "prices": "Preise"
+    },
+    "sections": {
+      "summary": "Überblick",
+      "assumptions": "Prüfungen",
+      "volatility": "Volatilität",
+      "coefficients": "Koeffizienten und Nachrichteneinfluss",
+      "checks": "Prüfungen der Residuen",
+      "backtest": "Backtest des Value at Risk",
+      "fit": "Zahlen der Anpassung",
+      "notes": "Hinweise"
+    },
+    "kpi": {
+      "n": "Renditen",
+      "span": "{first} – {last}",
+      "model": "Modell",
+      "persistence": "Persistenz",
+      "half_life": "Halbwertszeit {h} {unit}",
+      "no_half_life": "P ≥ 1: keine Halbwertszeit",
+      "sigma": "Volatilität, nächster Schritt",
+      "uncond": "langfristig {u}",
+      "no_uncond": "kein langfristiges Niveau"
+    },
+    "alpha_line": "Urteile kommen nur aus den p-Werten der Tests, gelesen gegen α = {alpha} (die Option des Knotens); Persistenz, Halbwertszeit, Volatilität, ν und ξ sind Messgrößen und haben keines.",
+    "measures_title": "Messgrößen, keine Tests",
+    "facts_title": "Fakten der Anpassung",
+    "measure_names": {
+      "persistence": "Persistenz P",
+      "half_life": "Halbwertszeit",
+      "uncond_sigma": "Langfristige Volatilität",
+      "sigma_next": "Volatilität, nächster Schritt",
+      "sigma_last": "Volatilität, letzter Zeitpunkt",
+      "kappa": "κ (GJR)",
+      "shape": "ν, Freiheitsgrade",
+      "skew": "ξ, Schiefe"
+    },
+    "measure_what": {
+      "persistence": "Der Anteil eines Schocks auf die Varianz, der einen Schritt später noch da ist.",
+      "half_life": "Die Schritte, nach denen die Hälfte eines Schocks auf die Varianz abgeklungen ist: ln(1/2) / ln P.",
+      "uncond_sigma": "Das Niveau, zu dem die Volatilität zurückkehrt, wenn kein Schock kommt: √(ω / (1 − P)).",
+      "sigma_next": "Die Volatilität, die das Modell dem nächsten Schritt gibt, aus allem bis zum letzten Zeitpunkt.",
+      "sigma_last": "Die Volatilität, die das Modell dem letzten Zeitpunkt der Reihe gibt.",
+      "kappa": "Der Mittelwert von z² für z < 0 unter der angepassten Verteilung: wie viel γ zur Persistenz beiträgt.",
+      "shape": "Die Freiheitsgrade der Student-t-Verteilung: Je kleiner, desto schwerer die Ränder; die Normalverteilung ist der Grenzfall.",
+      "skew": "Die Schiefe der t-Verteilung: 1 ist symmetrisch, unter 1 ist der linke Rand der längere."
+    },
+    "charts": {
+      "returns": "Renditen mit dem Band μ ± z σ jedes Zeitpunkts",
+      "sigma": "Bedingte Volatilität σ und ihre Prognose",
+      "std_residual": "Standardisierte Residuen z",
+      "news_impact": "Nachrichteneinfluss: die nächste Varianz nach einem Schock ε, in langfristigen σ",
+      "z_acf": "ACF von z",
+      "z2_acf": "ACF von z²",
+      "hist": "Histogramm von z und angepasste Dichte",
+      "qq": "Q–Q von z gegen die angepasste Verteilung",
+      "backtest": "Testzeitraum: Renditen, 1-Schritt-VaR und seine Überschreitungen"
+    },
+    "series": {
+      "return": "Rendite",
+      "band": "Band zu {level} %",
+      "sigma": "σ",
+      "forecast": "Prognose",
+      "z": "z",
+      "news": "Nächste Varianz",
+      "acf": "ACF",
+      "count": "Anzahl",
+      "density": "Angepasste Dichte",
+      "qq": "z",
+      "var": "1-Schritt-VaR",
+      "violation": "Überschreitung"
+    },
+    "captions": {
+      "volatility": "Die gestrichelte senkrechte Linie markiert die erste zurückgehaltene Beobachtung; die gestrichelte waagrechte Linie bei σ ist ihr langfristiges Niveau.",
+      "news": "Die Kurve ist symmetrisch bei einem ARCH oder GARCH, bei 0 geknickt bei einem GJR, geneigt bei einem EGARCH.",
+      "backtest": "Jeder Punkt ist eine zurückgehaltene Beobachtung; die Linie ist der VaR, berechnet aus den Beobachtungen davor; die hervorgehobenen Punkte haben ihn überschritten."
+    },
+    "coef": {
+      "title": "Koeffizienten in den Einheiten der Reihe",
+      "robust": "Standardfehler: robust (QML-Sandwich).",
+      "classical": "Standardfehler: klassisch (inverse Hesse-Matrix)."
+    },
+    "formula_law": "z ~ {law}",
+    "notes": {
+      "rows": "{n} Renditen wurden verwendet; {missing} Zeilen hatten einen leeren Wert."
+    },
+    "values": {
+      "variance_model": {
+        "arch": "ARCH",
+        "garch": "GARCH",
+        "gjr": "GJR-GARCH",
+        "egarch": "EGARCH"
+      },
+      "distribution": {
+        "norm": "Normalverteilung",
+        "std": "Student-t-Verteilung",
+        "sstd": "schiefe Student-t-Verteilung"
+      },
+      "input_kind": {
+        "returns": "Renditen",
+        "prices": "Preise"
+      },
+      "returns_type": {
+        "log": "logarithmische Renditen",
+        "simple": "einfache Renditen"
+      },
+      "se_type": {
+        "robust": "robust (QML-Sandwich)",
+        "classical": "klassisch (inverse Hesse-Matrix)"
+      },
+      "solver": {
+        "solnp": "solnp",
+        "nlminb": "nlminb",
+        "gosolnp": "gosolnp (zufällige Neustarts)",
+        "lbfgs": "L-BFGS",
+        "hybrid": "hybrid"
+      },
+      "frequency": {
+        "hour": "Stunde",
+        "day": "Tag",
+        "week": "Woche",
+        "month": "Monat",
+        "quarter": "Quartal",
+        "year": "Jahr",
+        "index": "Schritte"
+      },
+      "time_kind": {
+        "date": "Datum",
+        "datetime": "Datum und Uhrzeit",
+        "integer": "ganze Zahl (Schritte)"
+      },
+      "time_unit": {
+        "hour": "Stunden",
+        "day": "Tage",
+        "week": "Wochen",
+        "month": "Monate",
+        "quarter": "Quartale",
+        "year": "Jahre",
+        "index": "Schritte"
+      },
+      "reading_names": {
+        "mu": "μ",
+        "omega": "ω",
+        "shape": "ν",
+        "skew": "ξ",
+        "alpha1": "α₁",
+        "alpha2": "α₂",
+        "alpha3": "α₃",
+        "beta1": "β₁",
+        "beta2": "β₂",
+        "beta3": "β₃",
+        "gamma1": "γ₁",
+        "gamma2": "γ₂",
+        "gamma3": "γ₃",
+        "ar1": "φ₁",
+        "ar2": "φ₂",
+        "ar3": "φ₃",
+        "ar4": "φ₄",
+        "ar5": "φ₅",
+        "ma1": "θ₁",
+        "ma2": "θ₂",
+        "ma3": "θ₃",
+        "ma4": "θ₄",
+        "ma5": "θ₅"
+      }
+    },
+    "checks": {
+      "ljung_box_z": {
+        "name": "Mittelwert: gewichteter Ljung–Box auf z",
+        "h0": "Die standardisierten Residuen sind bis zum Lag des Tests nicht autokorreliert.",
+        "advice": "Im Mittelwert bleibt Struktur: Erhöhen Sie die AR- oder MA-Ordnung.",
+        "not_computed": "Zu wenige Residuen für den Lag des Tests."
+      },
+      "ljung_box_z2": {
+        "name": "Varianz: gewichteter Ljung–Box auf z²",
+        "h0": "Die quadrierten standardisierten Residuen sind bis zum Lag des Tests nicht autokorreliert: Es bleibt kein ARCH-Effekt.",
+        "advice": "Volatilität, die das Modell verfehlt: Erhöhen Sie eine Ordnung oder versuchen Sie GJR oder EGARCH.",
+        "not_computed": "Zu wenige Residuen für den Lag des Tests."
+      },
+      "arch_lm": {
+        "name": "Varianz: ARCH-LM auf z",
+        "h0": "In den standardisierten Residuen bleibt kein ARCH-Effekt.",
+        "advice": "Volatilität, die das Modell verfehlt: Erhöhen Sie eine Ordnung oder versuchen Sie GJR oder EGARCH.",
+        "not_computed": "Zu wenige Residuen für die Lags des Tests."
+      },
+      "nyblom": {
+        "name": "Stabilität: Nyblom",
+        "h0": "Jeder Parameter ist über die Stichprobe konstant.",
+        "advice": "Die Parameter bewegen sich über die Stichprobe: Passen Sie einen kürzeren, jüngeren Zeitraum an oder lesen Sie die Parameter in der Stabilitätstabelle.",
+        "not_computed": "Die Scores der Anpassung waren nicht verfügbar."
+      },
+      "sign_bias": {
+        "name": "Asymmetrie: Sign-Bias nach Engle–Ng",
+        "h0": "Die Volatilität reagiert auf Rückgänge und Anstiege gleich, sobald das Modell berücksichtigt ist.",
+        "advice": {
+          "sign_bias_failed": "Rückgänge und Anstiege bewegen die Volatilität unterschiedlich: Wählen Sie GJR oder EGARCH.",
+          "sign_bias_left": "Die verbleibende Asymmetrie erfassen die Terme des Modells nicht: Versuchen Sie das andere asymmetrische Modell oder mehr Lags.",
+          "": "Rückgänge und Anstiege bewegen die Volatilität anders, als das Modell annimmt."
+        },
+        "not_computed": "Zu wenige Residuen für die Regression."
+      },
+      "at_bound": {
+        "name": "Parameter an einer Grenze des Lösers",
+        "count": {
+          "one": "{n} Parameter an einer Grenze",
+          "other": "{n} Parameter an einer Grenze"
+        }
+      },
+      "variance_stationary": {
+        "name": "Persistenz der Varianz"
+      }
+    },
+    "measure_texts": {
+      "at_bound": "Die Parameter, die der Löser an einer seiner Grenzen gelassen hat (α + β bei 1, ν an seinem kleinsten Wert): Ihre Standardfehler werden nicht auf die übliche Weise berechnet.",
+      "variance_stationary": "Die Persistenz P: Unter 1 kehrt die Varianz zu einem langfristigen Niveau zurück; bei 1 oder darüber nicht, und Halbwertszeit und langfristige Volatilität werden nicht berechnet."
+    },
+    "stats": {
+      "model": {
+        "n": "Renditen in der Anpassung",
+        "n_missing": "Leere Werte",
+        "first": "Erster Zeitpunkt",
+        "last": "Letzter Zeitpunkt",
+        "alpha": "α der Tests",
+        "scale": "Skala der Anpassung (Sd der Renditen)",
+        "holdout": "Zurückgehaltene Beobachtungen",
+        "horizon": "Horizont (Schritte)",
+        "var_level": "VaR-Niveau",
+        "log_lik": "Log-Likelihood",
+        "aic": "AIC",
+        "bic": "BIC",
+        "persistence": "Persistenz P",
+        "half_life": "Halbwertszeit (Schritte)",
+        "half_life_time": "Halbwertszeit (Zeiteinheit)",
+        "uncond_sigma": "Langfristige Volatilität",
+        "sigma_last": "Volatilität am letzten Zeitpunkt",
+        "sigma_next": "Volatilitätsprognose für den nächsten Schritt",
+        "lb_lag_used": "Lag der Portmanteau-Tests",
+        "arch_lags_used": "Lags des ARCH-LM",
+        "kappa": "κ von GJR",
+        "model_name": "Modell",
+        "variance_model": "Varianzmodell",
+        "distribution": "Verteilung von z",
+        "input_kind": "Eingabe",
+        "returns_type": "Renditen",
+        "se_type": "Standardfehler",
+        "frequency": "Frequenz",
+        "time_kind": "Zeit",
+        "solver": "Löser"
+      },
+      "backtest": {
+        "statistic": "Statistik",
+        "df": "FG",
+        "p_value": "p-Wert",
+        "violations": "Überschreitungen des VaR",
+        "expected_violations": "Erwartete Überschreitungen",
+        "violation_rate": "Überschreitungsrate",
+        "n00": "Keine, dann keine Überschreitung (n00)",
+        "n01": "Keine, dann eine Überschreitung (n01)",
+        "n10": "Eine, dann keine Überschreitung (n10)",
+        "n11": "Eine, dann eine Überschreitung (n11)",
+        "longest_run": "Längste Folge von Überschreitungen",
+        "verdict": "Urteil",
+        "h0": "Nullhypothese",
+        "significance": "Signif."
+      }
+    },
+    "backtest": {
+      "title": "Backtest des 1-Schritt-VaR bei α = {alpha}",
+      "test": "Test",
+      "counts_title": "Überschreitungen des VaR im Testzeitraum",
+      "quantity": "Größe",
+      "value": "Wert",
+      "names": {
+        "kupiec": "Abdeckung: Kupiec",
+        "christoffersen_ind": "Unabhängigkeit: Christoffersen",
+        "christoffersen_cc": "Bedingte Abdeckung: Christoffersen"
+      },
+      "h0": {
+        "kupiec": "Der VaR wird mit der Rate überschritten, die sein Niveau verlangt, {rate}.",
+        "christoffersen_ind": "Eine Überschreitung ändert die Wahrscheinlichkeit einer Überschreitung beim nächsten Mal nicht.",
+        "christoffersen_cc": "Die Rate ist {rate} und die Überschreitungen sind unabhängig."
+      },
+      "advice": {
+        "kupiec": "Der VaR wird öfter oder seltener überschritten, als sein Niveau verlangt: Versuchen Sie eine andere Verteilung oder ein anderes Varianzmodell.",
+        "christoffersen_ind": "Die Überschreitungen kommen gehäuft: Das Modell reagiert zu langsam auf eine Änderung der Volatilität.",
+        "christoffersen_cc": "Rate und Unabhängigkeit zusammen: Lesen Sie die beiden Tests darüber."
+      }
+    },
+    "nyblom": {
+      "title": "Stabilität der Parameter: Nyblom",
+      "parameter": "Parameter",
+      "joint": "Alle gemeinsam",
+      "statistic": "L",
+      "p_value": "p-Wert",
+      "p_adjusted": "p nach Holm",
+      "verdict": "Urteil"
+    },
+    "reading_blocks": {
+      "summary": "Überblick",
+      "persistence": "Persistenz",
+      "asymmetry": "Asymmetrie",
+      "distribution": "Verteilung",
+      "residuals": "Residuen",
+      "stability": "Stabilität",
+      "backtest": "Backtest",
+      "method": "Methode",
+      "formulas": "Formel"
+    },
+    "reading_labels": {
+      "method_backtest": "Backtest des VaR",
+      "formula_var_1step": "1-Schritt-VaR",
+      "formula_kupiec": "LR von Kupiec",
+      "formula_christoffersen": "LR von Christoffersen",
+      "method_garch": "Bedingte Varianz",
+      "method_scale": "Die Skala der Anpassung",
+      "method_estimation": "Schätzung",
+      "method_distribution": "Verteilung der Schocks",
+      "method_checks": "Prüfungen der Residuen",
+      "method_nyblom": "Nybloms Test",
+      "method_sign_bias": "Sign-Bias",
+      "method_forecast": "Volatilitätsprognose",
+      "formula_mean": "Mittelwert",
+      "formula_variance": "Varianz",
+      "formula_distribution": "Dichte von z",
+      "formula_likelihood": "Likelihood",
+      "formula_persistence": "Persistenz, Halbwertszeit",
+      "formula_portmanteau": "Gewichteter Ljung–Box",
+      "formula_arch_lm": "ARCH-LM",
+      "formula_nyblom": "Nybloms L",
+      "formula_sign_bias": "Sign-Bias-Regression"
+    },
+    "reading_texts": {
+      "lb_z_ok": "Der gewichtete Ljung–Box-Test verwirft nicht, dass die standardisierten Residuen bis Lag {lag:int} frei von Autokorrelation sind (p-Wert {p_value:p}, α = {alpha:num}): Die Daten zeigen keine im Mittelwert verbliebene Struktur, was nicht beweist, dass es keine gibt.",
+      "lb_z_failed": "Der gewichtete Ljung–Box-Test verwirft, dass die standardisierten Residuen bis Lag {lag:int} frei von Autokorrelation sind (p-Wert {p_value:p}, unter α = {alpha:num}): Im Mittelwert bleibt Struktur, die die AR- und MA-Terme nicht aufgenommen haben.",
+      "lb_z2_ok": "Auf den quadrierten standardisierten Residuen verwirft der gewichtete Ljung–Box-Test das Fehlen von Autokorrelation bis Lag {lag:int} nicht (p-Wert {p_value:p}, α = {alpha:num}): Das Modell erfasst die Häufungen der Volatilität, soweit dieser Test sehen kann.",
+      "lb_z2_failed": "Auf den quadrierten standardisierten Residuen verwirft der gewichtete Ljung–Box-Test das Fehlen von Autokorrelation bis Lag {lag:int} (p-Wert {p_value:p}, unter α = {alpha:num}): Es bleiben Häufungen der Volatilität, die das Modell verfehlt.",
+      "arch_lm_ok": "Der ARCH-LM-Test mit {lag:int} Lags verwirft nicht, dass in den standardisierten Residuen kein ARCH-Effekt bleibt (p-Wert {p_value:p}, α = {alpha:num}).",
+      "arch_lm_failed": "Der ARCH-LM-Test mit {lag:int} Lags verwirft, dass in den standardisierten Residuen kein ARCH-Effekt bleibt (p-Wert {p_value:p}, unter α = {alpha:num}): Die Varianzgleichung verfehlt einen Teil dessen, wie sich die Volatilität bewegt.",
+      "z2_largest_acf": "Die größte Autokorrelation der quadrierten standardisierten Residuen ist {acf:num}, bei Lag {lag:int}.",
+      "nyblom_stable": "Nybloms gemeinsamer Test verwirft nicht, dass jeder Parameter über die Stichprobe konstant ist (p-Wert {p_value:p}, α = {alpha:num}); das beweist nicht, dass sie es sind.",
+      "nyblom_moves": "Nybloms gemeinsamer Test verwirft, dass jeder Parameter über die Stichprobe konstant ist (p-Wert {p_value:p}, unter α = {alpha:num}); {parameter} bewegt sich am meisten (p-Wert nach Holm {p_adjusted:p}).",
+      "nyblom_moves_none": "Nybloms gemeinsamer Test verwirft, dass jeder Parameter über die Stichprobe konstant ist (p-Wert {p_value:p}, unter α = {alpha:num}), aber kein Test eines einzelnen Parameters verwirft nach Holms Anpassung.",
+      "sign_bias_supported": {
+        "variance_model=arch": "Der Sign-Bias-Test von Engle und Ng verwirft, dass die Volatilität auf Rückgänge und Anstiege gleich reagiert (p-Wert {p_value:p}, unter α = {alpha:num}): Ein GJR- oder EGARCH-Modell hat die Terme dafür.",
+        "variance_model=garch": "Der Sign-Bias-Test von Engle und Ng verwirft, dass die Volatilität auf Rückgänge und Anstiege gleich reagiert (p-Wert {p_value:p}, unter α = {alpha:num}): Ein GJR- oder EGARCH-Modell hat die Terme dafür.",
+        "": "Der Sign-Bias-Test von Engle und Ng verwirft, dass die Volatilität auf Rückgänge und Anstiege gleich reagiert, sobald das Modell berücksichtigt ist (p-Wert {p_value:p}, unter α = {alpha:num}): Es bleibt eine Asymmetrie, die die Terme des Modells nicht erfassen."
+      },
+      "sign_bias_not_supported": "Der Sign-Bias-Test von Engle und Ng verwirft nicht, dass die Volatilität auf Rückgänge und Anstiege gleich reagiert, sobald das Modell berücksichtigt ist (p-Wert {p_value:p}, α = {alpha:num}); das beweist nicht, dass die Reaktion dieselbe ist.",
+      "backtest_coverage_ok": "Über die {holdout:int} zurückgehaltenen {unit} wurde der 1-Schritt-VaR zu {level:pct} {violations:int}-mal überschritten, bei {expected:num} erwarteten: Kupiecs Test verwirft die Rate, die sein Niveau verlangt, nicht (p-Wert {p_value:p}, α = {alpha:num}).",
+      "backtest_coverage_failed": "Über die {holdout:int} zurückgehaltenen {unit} wurde der 1-Schritt-VaR zu {level:pct} {violations:int}-mal überschritten, bei {expected:num} erwarteten: Kupiecs Test verwirft die Rate, die sein Niveau verlangt (p-Wert {p_value:p}, unter α = {alpha:num}).",
+      "backtest_independence_ok": "Christoffersens Test verwirft nicht, dass die Überschreitungen unabhängig voneinander auftreten (p-Wert {p_value:p}, α = {alpha:num}; {expected:num} Überschreitungen erwartet).",
+      "backtest_independence_failed": "Christoffersens Test verwirft, dass die Überschreitungen unabhängig voneinander auftreten (p-Wert {p_value:p}, unter α = {alpha:num}; {expected:num} Überschreitungen erwartet): Sie kommen gehäuft.",
+      "backtest_independence_not_computed": "Keine Beobachtung hat den VaR überschritten, bei {expected:num} erwarteten: Es gibt keine Häufung von Überschreitungen zu testen.",
+      "backtest_cc_ok": "Christoffersens Test der bedingten Abdeckung, Rate und Unabhängigkeit zusammen, verwirft nicht (p-Wert {p_value:p}, α = {alpha:num}; {expected:num} Überschreitungen erwartet).",
+      "backtest_cc_failed": "Christoffersens Test der bedingten Abdeckung, Rate und Unabhängigkeit zusammen, verwirft (p-Wert {p_value:p}, unter α = {alpha:num}; {expected:num} Überschreitungen erwartet).",
+      "backtest_expected": "Bei {expected:num} erwarteten Überschreitungen können diese Tests nur ein VaR-Niveau erkennen, das weit vom verlangten entfernt ist; ein längerer Testzeitraum lässt sie kleinere Fehler sehen.",
+      "backtest_short": "Mit {holdout:int} zurückgehaltener Beobachtung wird der Backtest nicht berechnet: Er braucht mindestens 2.",
+      "method_backtest": "Mit einem Testzeitraum bleiben die letzten Beobachtungen außerhalb der Anpassung; die angepassten Parameter laufen, fest, Schritt für Schritt durch sie, sodass jede einen 1-Schritt-VaR allein aus den Beobachtungen davor erhält. Eine Überschreitung ist eine Beobachtung jenseits ihres VaR. Kupiecs Test vergleicht die Rate der Überschreitungen mit der Rate, die das Niveau verlangt, Christoffersens Test, ob eine Überschreitung die nächste wahrscheinlicher macht, und sein dritter Test beides zusammen. Bei wenigen erwarteten Überschreitungen (der Testzeitraum mal 1 − c) sind ihre χ²-Verteilungen grob und sie sehen nur große Fehler: Jeder Satz sagt, wie viele Überschreitungen erwartet waren.",
+      "summary": "Ein {model} (Fehlerverteilung: {distribution}) wurde an {n:int} Renditen von «{series}» angepasst, vom {first:date} bis zum {last:date}.",
+      "summary_steps": "Ein {model} (Fehlerverteilung: {distribution}) wurde an {n:int} Renditen von «{series}» angepasst, von Schritt {first:int} bis Schritt {last:int}.",
+      "summary_holdout": "Ein {model} (Fehlerverteilung: {distribution}) wurde an {n:int} Renditen von «{series}» angepasst, vom {first:date} bis zum {last:date}; die letzten {holdout:int} blieben außerhalb der Anpassung, um den Value at Risk zu testen.",
+      "summary_holdout_steps": "Ein {model} (Fehlerverteilung: {distribution}) wurde an {n:int} Renditen von «{series}» angepasst, von Schritt {first:int} bis Schritt {last:int}; die letzten {holdout:int} blieben außerhalb der Anpassung, um den Value at Risk zu testen.",
+      "summary_prices": {
+        "returns_type=simple": "Die Renditen wurden aus den Preisen als einfache Renditen berechnet, P_t / P_(t−1) − 1.",
+        "": "Die Renditen wurden aus den Preisen als logarithmische Renditen berechnet, ln(P_t / P_(t−1))."
+      },
+      "summary_scale": "Die Anpassung lief auf den Renditen, geteilt durch ihre Standardabweichung {scale:num}; jeder Parameter wird in den Einheiten der Reihe zurückgegeben.",
+      "persistence": "Die Volatilität behält {persistence:pct} eines Schocks von einem Schritt zum nächsten: Die Hälfte eines Schocks ist etwa {half_life:num} {unit} später abgeklungen.",
+      "persistence_integrated": "Die Persistenz ist {persistence:num}, also 1 oder mehr: Die Varianz kehrt zu keinem langfristigen Niveau zurück, daher werden Halbwertszeit und langfristige Volatilität nicht berechnet.",
+      "sigma_now_above": {
+        "input_kind=prices": "Die Volatilitätsprognose für den nächsten Schritt, {sigma:pct}, liegt über ihrem langfristigen Niveau, {uncond:pct}.",
+        "": "Die Volatilitätsprognose für den nächsten Schritt, {sigma:num}, liegt über ihrem langfristigen Niveau, {uncond:num}."
+      },
+      "sigma_now_below": {
+        "input_kind=prices": "Die Volatilitätsprognose für den nächsten Schritt, {sigma:pct}, liegt unter ihrem langfristigen Niveau, {uncond:pct}.",
+        "": "Die Volatilitätsprognose für den nächsten Schritt, {sigma:num}, liegt unter ihrem langfristigen Niveau, {uncond:num}."
+      },
+      "sigma_now_equal": {
+        "input_kind=prices": "Die Volatilitätsprognose für den nächsten Schritt liegt auf ihrem langfristigen Niveau, {uncond:pct}.",
+        "": "Die Volatilitätsprognose für den nächsten Schritt liegt auf ihrem langfristigen Niveau, {uncond:num}."
+      },
+      "asymmetry_gjr": "Ein Rückgang hebt die nächste Varianz {ratio:num}-mal so viel wie ein gleich großer Anstieg (Σγ = {gamma:num}).",
+      "asymmetry_gjr_falls_only": "Nur Rückgänge bewegen die nächste Varianz: Die α-Terme sind 0, und Σγ = {gamma:num}.",
+      "asymmetry_egarch": "Nach einem Rückgang um {shock:num} Standardabweichungen beträgt die nächste Varianz das {ratio:num}-Fache der Varianz nach einem Anstieg derselben Höhe (Vorzeicheneffekt α₁ = {alpha:num}, Größeneffekt γ₁ = {gamma:num}).",
+      "asymmetry_none": "Bei diesem Modell bewegt die Größe eines Schocks die Varianz, nicht sein Vorzeichen: Ein Rückgang und ein gleich großer Anstieg bewegen sie gleich.",
+      "distribution_norm": "Die Fehler werden als normalverteilt angenommen: Das Modell hat keinen Parameter für Ränder, die schwerer sind als die einer Normalverteilung.",
+      "distribution_std": "Die Student-t-Verteilung der Fehler hat ν = {shape:num} Freiheitsgrade (Intervall zu {level:pct}: {low:num} – {high:num}); die Normalverteilung ist ihr Grenzfall für wachsendes ν, und ein kleineres ν bedeutet schwerere Ränder.",
+      "distribution_sstd": "Die schiefe Student-t-Verteilung der Fehler hat ν = {shape:num} Freiheitsgrade (Intervall zu {level:pct}: {low:num} – {high:num}) und die Schiefe ξ = {skew:num} ({skew_low:num} – {skew_high:num}); ξ = 1 ist symmetrisch, unter 1 ist der linke Rand der längere.",
+      "method_garch": "Eine bedingte Varianz ist die Varianz der nächsten Rendite, gegeben alles bis jetzt. Ein GARCH schreibt sie als Konstante plus die jüngsten quadrierten Schocks plus die Varianz davor: Eine große Bewegung hebt die nächste Varianz, die dann zu ihrem langfristigen Niveau zurückklingt. Ein ARCH hat nur die Schocks; ein GJR-GARCH fügt einen Term für Rückgänge hinzu, ein EGARCH modelliert den Logarithmus der Varianz, sodass Rückgänge und Anstiege sie unterschiedlich bewegen können und sie positiv bleibt. Der Mittelwert der Renditen ist eine Konstante, mit AR- und MA-Termen, wenn der Knoten sie verlangt.",
+      "method_scale": "Die Anpassung läuft auf den Renditen, geteilt durch ihre Stichproben-Standardabweichung, weil die Toleranzen des Lösers absolut sind und Tagesrenditen ω nahe 0,000001 legen würden. Die Parameter und ihre Kovarianz werden exakt in die Einheiten der Reihe zurückgeführt: μ mal die Skala, ω mal ihr Quadrat, und bei einem EGARCH ω um einen Term im Logarithmus der Skala verschoben.",
+      "method_estimation": {
+        "se_type=classical": "Die Parameter maximieren die Likelihood der gewählten Verteilung; die Varianzrekursion beginnt beim Stichprobenmittel der quadrierten Schocks, die Varianz bleibt durch die Nebenbedingungen des Lösers positiv und stationär. Ihre Standardfehler stammen aus der Inversen der Hesse-Matrix der Likelihood, was gilt, wenn die Verteilung die der Daten ist; z ist die Schätzung durch ihren Standardfehler, und die p-Werte sind zweiseitig.",
+        "": "Die Parameter maximieren die Likelihood der gewählten Verteilung (Quasi-Maximum-Likelihood: Die Schätzungen bleiben konsistent, wenn die Verteilung nicht die der Daten ist); die Varianzrekursion beginnt beim Stichprobenmittel der quadrierten Schocks, die Varianz bleibt durch die Nebenbedingungen des Lösers positiv und stationär. Ihre Standardfehler sind das robuste Sandwich von Bollerslev und Wooldridge, das auch in diesem Fall gilt; z ist die Schätzung durch ihren Standardfehler, und die p-Werte sind zweiseitig."
+      },
+      "method_distribution": "Die standardisierten Schocks z haben unter jeder der drei Verteilungen Mittelwert 0 und Varianz 1: die Normalverteilung; Students t, skaliert auf Varianz 1, deren ν Freiheitsgrade das Gewicht der Ränder bestimmen, mit der Normalverteilung als Grenzfall; das schiefe t von Fernández und Steel, dessen ξ einen Rand länger macht als den anderen. ν und ξ werden mit den anderen Parametern geschätzt, mit ihren Intervallen.",
+      "method_checks": "Die standardisierten Residuen z = ε / σ sind das, was das Modell übrig lässt. Stimmt die Mittelwertgleichung, hat z keine Autokorrelation; stimmt die Varianzgleichung, hat auch z² keine. Der gewichtete Ljung–Box-Test von Fisher und Gallagher liest beides (auf z² hat der einfache Ljung–Box nicht seine nominale Verteilung), und Engles ARCH-LM regressiert z² auf seine eigene Vergangenheit. Ein p-Wert unter α verwirft die Hypothese; darüber zeigen die Daten keine Abweichung, was nicht beweist, dass es keine gibt. Diese Tests lesen die Residuen eines angepassten Modells, daher sind ihre Verteilungen Näherungen, und bei vielen Beobachtungen erkennen sie Abweichungen, die zu klein sind, um ins Gewicht zu fallen.",
+      "method_nyblom": "Nybloms Test fragt, ob die Parameter über die ganze Stichprobe dieselben waren: Die Scores der Likelihood, entlang der Zeit aufsummiert, bleiben nahe 0, wenn die Parameter konstant sind, und driften weg, wenn sich einer bewegt. Der p-Wert wird aus der asymptotischen Verteilung des Tests berechnet (Imhofs Inversion, mit einem Abbruchfehler unter 0,0000001), sodass jedes α gelesen werden kann; die Tests der einzelnen Parameter sind nach Holm für ihre Anzahl angepasst.",
+      "method_sign_bias": "Der Sign-Bias-Test von Engle und Ng regressiert z² darauf, ob der letzte Schock ein Rückgang war, und auf die Größe des letzten Rückgangs und des letzten Anstiegs: Hat das Modell erfasst, wie Rückgänge und Anstiege die Volatilität bewegen, zählt keiner der drei Terme. Das Urteil ist ihr gemeinsamer Wald-Test.",
+      "method_forecast": "Die Volatilitätsprognose setzt die Varianzrekursion vom letzten Zeitpunkt fort, die künftigen Schocks durch ihren Erwartungswert ersetzt: Sie bewegt sich vom aktuellen Niveau zum langfristigen Niveau im Tempo der Persistenz. Der 1-Schritt-VaR des ersten Schritts voraus in der Ausgabe verwendet diese Prognose."
+    },
+    "formula_texts": {
+      "formula_var_1step": "VaR_t = μ_t + σ_t q_(1−c), q das Quantil der angepassten Verteilung, c das VaR-Niveau;  eine Überschreitung, wenn r_t < VaR_t (für das obere Ende eines ARIMA, wenn y_t > VaR_t)",
+      "formula_kupiec": "LR_uc = −2 ln[(1 − p)^(T−x) p^x] + 2 ln[(1 − x/T)^(T−x) (x/T)^x], p = 1 − c, x Überschreitungen in T Beobachtungen (0 · ln 0 = 0);  χ² mit 1 Freiheitsgrad",
+      "formula_christoffersen": "π_01 = n_01 / (n_00 + n_01), π_11 = n_11 / (n_10 + n_11), π = (n_01 + n_11) / (T − 1);  LR_ind = −2 ln[(1 − π)^(n_00 + n_10) π^(n_01 + n_11)] + 2 ln[(1 − π_01)^(n_00) π_01^(n_01) (1 − π_11)^(n_10) π_11^(n_11)], χ² mit 1 Freiheitsgrad;  LR_cc = LR_uc auf T − 1 Beobachtungen + LR_ind, χ² mit 2",
+      "formula_mean": "r_t = μ + Σ_(i=1)^(m) φ_i (r_(t−i) − μ) + Σ_(j=1)^(n) θ_j ε_(t−j) + ε_t;  ε_t = σ_t z_t, z_t unabhängig mit Mittelwert 0 und Varianz 1",
+      "formula_variance": {
+        "variance_model=arch": "σ²_t = ω + Σ_(i=1)^(q) α_i ε²_(t−i)",
+        "variance_model=gjr": "σ²_t = ω + Σ_(i=1)^(q) (α_i + γ_i I_(t−i)) ε²_(t−i) + Σ_(j=1)^(p) β_j σ²_(t−j);  I_(t−i) = 1, wenn ε_(t−i) < 0, sonst 0",
+        "variance_model=egarch": "ln σ²_t = ω + Σ_(i=1)^(q) (α_i z_(t−i) + γ_i (|z_(t−i)| − E|z|)) + Σ_(j=1)^(p) β_j ln σ²_(t−j)",
+        "": "σ²_t = ω + Σ_(i=1)^(q) α_i ε²_(t−i) + Σ_(j=1)^(p) β_j σ²_(t−j)"
+      },
+      "formula_distribution": {
+        "distribution=norm": "f(z) = exp(−z²/2) / √(2π)",
+        "distribution=sstd": "f(z) = 2 / (ξ + 1/ξ) · f*(z/ξ) für z ≥ 0 und f*(z ξ) für z < 0, f* die Student-t-Verteilung mit ν Freiheitsgraden; dann verschoben und skaliert auf Mittelwert 0 und Varianz 1 (Fernández und Steel)",
+        "": "z = t √((ν − 2) / ν), t eine Student-t-Variable mit ν > 2 Freiheitsgraden: Mittelwert 0, Varianz 1"
+      },
+      "formula_likelihood": "ℓ(θ) = Σ_t [ln f(z_t) − ln σ_t], z_t = ε_t / σ_t;  robuste Kovarianz H^(−1) S H^(−1), H die Hesse-Matrix von −ℓ, S die Summe der äußeren Produkte der Scores;  AIC = −2ℓ + 2k, BIC = −2ℓ + k ln n",
+      "formula_persistence": "P = Σα + Σβ (ARCH, GARCH);  Σα + Σβ + κ Σγ mit κ = E[z² 1(z < 0)] (GJR);  Σβ (EGARCH);  Halbwertszeit = ln(1/2) / ln P;  langfristiges σ = √(ω / (1 − P))",
+      "formula_portmanteau": "Q_W = n (n + 2) Σ_(k=1)^(m) ((m − k + 1) / m) ρ̂_k² / (n − k), sein p-Wert aus der Gamma-Näherung von Fisher und Gallagher;  ρ̂_k die Autokorrelation von z (von z²) bei Lag k",
+      "formula_arch_lm": "z²_t = a_0 + Σ_(l=1)^(L) a_l z²_(t−l) + u_t;  LM = n R², χ² mit L Freiheitsgraden",
+      "formula_nyblom": "L = (1/n) Σ_t S_t' V^(−1) S_t, S_t die bis t aufsummierten Scores, V ihre Varianz;  p = P(W_k > L), W_k = Σ_(j≥1) χ²_(k,j) / (j² π²), durch Imhofs Inversion;  die k Einzeltests nach Holm angepasst",
+      "formula_sign_bias": "z²_t = b_0 + b_1 N_(t−1) + b_2 N_(t−1) z_(t−1) + b_3 (1 − N_(t−1)) z_(t−1) + u_t, N = 1, wenn z < 0;  Wald-Test von b_1 = b_2 = b_3 = 0, χ² mit 3 Freiheitsgraden"
+    },
+    "measure_readings": [
+      "summary",
+      "summary_steps",
+      "summary_holdout",
+      "summary_holdout_steps",
+      "summary_prices",
+      "summary_scale",
+      "persistence",
+      "persistence_integrated",
+      "sigma_now_above",
+      "sigma_now_below",
+      "sigma_now_equal",
+      "asymmetry_gjr",
+      "asymmetry_gjr_falls_only",
+      "asymmetry_egarch",
+      "asymmetry_none",
+      "distribution_norm",
+      "distribution_std",
+      "distribution_sstd",
+      "z2_largest_acf",
+      "backtest_independence_not_computed",
+      "backtest_expected",
+      "backtest_short"
+    ]
+  },
+  "es": {
+    "name_kind": "Volatilidad",
+    "series_of": "«{value}» según «{time}», {kind}",
+    "kind": {
+      "returns": "rendimientos",
+      "prices": "precios"
+    },
+    "sections": {
+      "summary": "Resumen",
+      "assumptions": "Pruebas",
+      "volatility": "Volatilidad",
+      "coefficients": "Coeficientes e impacto de las noticias",
+      "checks": "Pruebas de los residuos",
+      "backtest": "Backtest del valor en riesgo",
+      "fit": "Números del ajuste",
+      "notes": "Notas"
+    },
+    "kpi": {
+      "n": "Rendimientos",
+      "span": "{first} – {last}",
+      "model": "Modelo",
+      "persistence": "Persistencia",
+      "half_life": "vida media {h} {unit}",
+      "no_half_life": "P ≥ 1: sin vida media",
+      "sigma": "Volatilidad, paso siguiente",
+      "uncond": "largo plazo {u}",
+      "no_uncond": "sin nivel de largo plazo"
+    },
+    "alpha_line": "Los veredictos vienen solo de los p-valores de las pruebas, leídos con α = {alpha} (la opción del nodo); la persistencia, la vida media, la volatilidad, ν y ξ son medidas y no tienen veredicto.",
+    "measures_title": "Medidas, no pruebas",
+    "facts_title": "Hechos del ajuste",
+    "measure_names": {
+      "persistence": "Persistencia P",
+      "half_life": "Vida media",
+      "uncond_sigma": "Volatilidad de largo plazo",
+      "sigma_next": "Volatilidad, paso siguiente",
+      "sigma_last": "Volatilidad, último instante",
+      "kappa": "κ (GJR)",
+      "shape": "ν, grados de libertad",
+      "skew": "ξ, asimetría"
+    },
+    "measure_what": {
+      "persistence": "La parte de un choque sobre la varianza que sigue presente un paso después.",
+      "half_life": "Los pasos tras los cuales la mitad de un choque sobre la varianza ha desaparecido: ln(1/2) / ln P.",
+      "uncond_sigma": "El nivel al que vuelve la volatilidad cuando no llega ningún choque: √(ω / (1 − P)).",
+      "sigma_next": "La volatilidad que el modelo da al paso siguiente, con todo lo ocurrido hasta el último instante.",
+      "sigma_last": "La volatilidad que el modelo da al último instante de la serie.",
+      "kappa": "La media de z² cuando z < 0 bajo la distribución ajustada: cuánto añade γ a la persistencia.",
+      "shape": "Los grados de libertad de la t de Student: cuanto menores, más pesadas las colas; la normal es el límite.",
+      "skew": "La asimetría de la t: 1 es simétrica, por debajo de 1 la cola izquierda es la más larga."
+    },
+    "charts": {
+      "returns": "Rendimientos con la banda μ ± z σ de cada instante",
+      "sigma": "Volatilidad condicional σ y su previsión",
+      "std_residual": "Residuos estandarizados z",
+      "news_impact": "Impacto de las noticias: la varianza siguiente tras un choque ε, en σ de largo plazo",
+      "z_acf": "ACF de z",
+      "z2_acf": "ACF de z²",
+      "hist": "Histograma de z y densidad ajustada",
+      "qq": "Q–Q de z frente a la distribución ajustada",
+      "backtest": "Periodo de prueba: rendimientos, VaR a 1 paso y sus rebases"
+    },
+    "series": {
+      "return": "Rendimiento",
+      "band": "Banda al {level} %",
+      "sigma": "σ",
+      "forecast": "Previsión",
+      "z": "z",
+      "news": "Varianza siguiente",
+      "acf": "ACF",
+      "count": "Frecuencia",
+      "density": "Densidad ajustada",
+      "qq": "z",
+      "var": "VaR a 1 paso",
+      "violation": "Rebase"
+    },
+    "captions": {
+      "volatility": "La línea vertical discontinua marca la primera observación reservada; la línea horizontal discontinua sobre σ es su nivel de largo plazo.",
+      "news": "La curva es simétrica para un ARCH o un GARCH, quebrada en 0 para un GJR, inclinada para un EGARCH.",
+      "backtest": "Cada punto es una observación reservada; la línea es el VaR calculado con las observaciones anteriores; los puntos resaltados lo rebasaron."
+    },
+    "coef": {
+      "title": "Coeficientes en las unidades de la serie",
+      "robust": "Errores estándar: robustos (sándwich QML).",
+      "classical": "Errores estándar: clásicos (inversa de la hessiana)."
+    },
+    "formula_law": "z ~ {law}",
+    "notes": {
+      "rows": "Se usaron {n} rendimientos; {missing} filas tenían un valor vacío."
+    },
+    "values": {
+      "variance_model": {
+        "arch": "ARCH",
+        "garch": "GARCH",
+        "gjr": "GJR-GARCH",
+        "egarch": "EGARCH"
+      },
+      "distribution": {
+        "norm": "normal",
+        "std": "t de Student",
+        "sstd": "t de Student asimétrica"
+      },
+      "input_kind": {
+        "returns": "rendimientos",
+        "prices": "precios"
+      },
+      "returns_type": {
+        "log": "rendimientos logarítmicos",
+        "simple": "rendimientos simples"
+      },
+      "se_type": {
+        "robust": "robustos (sándwich QML)",
+        "classical": "clásicos (inversa de la hessiana)"
+      },
+      "solver": {
+        "solnp": "solnp",
+        "nlminb": "nlminb",
+        "gosolnp": "gosolnp (reinicios aleatorios)",
+        "lbfgs": "L-BFGS",
+        "hybrid": "híbrido"
+      },
+      "frequency": {
+        "hour": "hora",
+        "day": "día",
+        "week": "semana",
+        "month": "mes",
+        "quarter": "trimestre",
+        "year": "año",
+        "index": "pasos"
+      },
+      "time_kind": {
+        "date": "fecha",
+        "datetime": "fecha y hora",
+        "integer": "entero (pasos)"
+      },
+      "time_unit": {
+        "hour": "horas",
+        "day": "días",
+        "week": "semanas",
+        "month": "meses",
+        "quarter": "trimestres",
+        "year": "años",
+        "index": "pasos"
+      },
+      "reading_names": {
+        "mu": "μ",
+        "omega": "ω",
+        "shape": "ν",
+        "skew": "ξ",
+        "alpha1": "α₁",
+        "alpha2": "α₂",
+        "alpha3": "α₃",
+        "beta1": "β₁",
+        "beta2": "β₂",
+        "beta3": "β₃",
+        "gamma1": "γ₁",
+        "gamma2": "γ₂",
+        "gamma3": "γ₃",
+        "ar1": "φ₁",
+        "ar2": "φ₂",
+        "ar3": "φ₃",
+        "ar4": "φ₄",
+        "ar5": "φ₅",
+        "ma1": "θ₁",
+        "ma2": "θ₂",
+        "ma3": "θ₃",
+        "ma4": "θ₄",
+        "ma5": "θ₅"
+      }
+    },
+    "checks": {
+      "ljung_box_z": {
+        "name": "Media: Ljung–Box ponderado sobre z",
+        "h0": "Los residuos estandarizados no están autocorrelacionados hasta el retardo de la prueba.",
+        "advice": "Queda estructura en la media: aumente el orden AR o MA.",
+        "not_computed": "Muy pocos residuos para el retardo de la prueba."
+      },
+      "ljung_box_z2": {
+        "name": "Varianza: Ljung–Box ponderado sobre z²",
+        "h0": "Los cuadrados de los residuos estandarizados no están autocorrelacionados hasta el retardo de la prueba: no queda efecto ARCH.",
+        "advice": "Volatilidad que el modelo no recoge: aumente un orden, o pruebe GJR o EGARCH.",
+        "not_computed": "Muy pocos residuos para el retardo de la prueba."
+      },
+      "arch_lm": {
+        "name": "Varianza: ARCH LM sobre z",
+        "h0": "No queda efecto ARCH en los residuos estandarizados.",
+        "advice": "Volatilidad que el modelo no recoge: aumente un orden, o pruebe GJR o EGARCH.",
+        "not_computed": "Muy pocos residuos para los retardos de la prueba."
+      },
+      "nyblom": {
+        "name": "Estabilidad: Nyblom",
+        "h0": "Cada parámetro es constante a lo largo de la muestra.",
+        "advice": "Los parámetros se mueven a lo largo de la muestra: ajuste un periodo más corto y más reciente, o lea los parámetros en la tabla de estabilidad.",
+        "not_computed": "Los scores del ajuste no estaban disponibles."
+      },
+      "sign_bias": {
+        "name": "Asimetría: sesgo de signo de Engle–Ng",
+        "h0": "La volatilidad responde igual a las caídas y a las subidas, una vez tenido en cuenta el modelo.",
+        "advice": {
+          "sign_bias_failed": "Las caídas y las subidas mueven la volatilidad de forma distinta: elija GJR o EGARCH.",
+          "sign_bias_left": "La asimetría que queda no la recogen los términos del modelo: pruebe el otro modelo asimétrico, o más retardos.",
+          "": "Las caídas y las subidas mueven la volatilidad de forma distinta a como lo supone el modelo."
+        },
+        "not_computed": "Muy pocos residuos para la regresión."
+      },
+      "at_bound": {
+        "name": "Parámetros en un límite del optimizador",
+        "count": {
+          "one": "{n} parámetro en un límite",
+          "other": "{n} parámetros en un límite"
+        }
+      },
+      "variance_stationary": {
+        "name": "Persistencia de la varianza"
+      }
+    },
+    "measure_texts": {
+      "at_bound": "Los parámetros que el optimizador dejó en uno de sus límites (α + β en 1, ν en su valor más bajo): sus errores estándar no se calculan de la forma habitual.",
+      "variance_stationary": "La persistencia P: por debajo de 1 la varianza vuelve a un nivel de largo plazo; en 1 o por encima no vuelve, y la vida media y la volatilidad de largo plazo no se calculan."
+    },
+    "stats": {
+      "model": {
+        "n": "Rendimientos del ajuste",
+        "n_missing": "Valores vacíos",
+        "first": "Primer instante",
+        "last": "Último instante",
+        "alpha": "α de las pruebas",
+        "scale": "Escala del ajuste (desviación típica de los rendimientos)",
+        "holdout": "Observaciones reservadas",
+        "horizon": "Horizonte (pasos)",
+        "var_level": "Nivel del VaR",
+        "log_lik": "Log-verosimilitud",
+        "aic": "AIC",
+        "bic": "BIC",
+        "persistence": "Persistencia P",
+        "half_life": "Vida media (pasos)",
+        "half_life_time": "Vida media (unidad de tiempo)",
+        "uncond_sigma": "Volatilidad de largo plazo",
+        "sigma_last": "Volatilidad en el último instante",
+        "sigma_next": "Previsión de la volatilidad para el paso siguiente",
+        "lb_lag_used": "Retardo de las pruebas portmanteau",
+        "arch_lags_used": "Retardos del ARCH LM",
+        "kappa": "κ del GJR",
+        "model_name": "Modelo",
+        "variance_model": "Modelo de varianza",
+        "distribution": "Distribución de z",
+        "input_kind": "Entrada",
+        "returns_type": "Rendimientos",
+        "se_type": "Errores estándar",
+        "frequency": "Frecuencia",
+        "time_kind": "Tiempo",
+        "solver": "Optimizador"
+      },
+      "backtest": {
+        "statistic": "Estadístico",
+        "df": "gl",
+        "p_value": "p-valor",
+        "violations": "Rebases del VaR",
+        "expected_violations": "Rebases esperados",
+        "violation_rate": "Tasa de rebases",
+        "n00": "Ninguno, luego ningún rebase (n00)",
+        "n01": "Ninguno, luego un rebase (n01)",
+        "n10": "Uno, luego ningún rebase (n10)",
+        "n11": "Uno, luego un rebase (n11)",
+        "longest_run": "Racha más larga de rebases",
+        "verdict": "Veredicto",
+        "h0": "Hipótesis nula",
+        "significance": "Signif."
+      }
+    },
+    "backtest": {
+      "title": "Backtest del VaR a 1 paso con α = {alpha}",
+      "test": "Prueba",
+      "counts_title": "Rebases del VaR en el periodo de prueba",
+      "quantity": "Magnitud",
+      "value": "Valor",
+      "names": {
+        "kupiec": "Cobertura: Kupiec",
+        "christoffersen_ind": "Independencia: Christoffersen",
+        "christoffersen_cc": "Cobertura condicional: Christoffersen"
+      },
+      "h0": {
+        "kupiec": "El VaR se rebasa a la tasa que pide su nivel, {rate}.",
+        "christoffersen_ind": "Un rebase no cambia la probabilidad de un rebase la vez siguiente.",
+        "christoffersen_cc": "La tasa es {rate} y los rebases son independientes."
+      },
+      "advice": {
+        "kupiec": "El VaR se rebasa más o menos a menudo de lo que pide su nivel: pruebe otra distribución, u otro modelo de varianza.",
+        "christoffersen_ind": "Los rebases llegan agrupados: el modelo reacciona demasiado despacio a un cambio de volatilidad.",
+        "christoffersen_cc": "Tasa e independencia juntas: lea las dos pruebas de arriba."
+      }
+    },
+    "nyblom": {
+      "title": "Estabilidad de los parámetros: Nyblom",
+      "parameter": "Parámetro",
+      "joint": "Todos, conjuntamente",
+      "statistic": "L",
+      "p_value": "p-valor",
+      "p_adjusted": "p ajustado (Holm)",
+      "verdict": "Veredicto"
+    },
+    "reading_blocks": {
+      "summary": "Resumen",
+      "persistence": "Persistencia",
+      "asymmetry": "Asimetría",
+      "distribution": "Distribución",
+      "residuals": "Residuos",
+      "stability": "Estabilidad",
+      "backtest": "Backtest",
+      "method": "Método",
+      "formulas": "Fórmula"
+    },
+    "reading_labels": {
+      "method_backtest": "Backtest del VaR",
+      "formula_var_1step": "VaR a 1 paso",
+      "formula_kupiec": "LR de Kupiec",
+      "formula_christoffersen": "LR de Christoffersen",
+      "method_garch": "Varianza condicional",
+      "method_scale": "La escala del ajuste",
+      "method_estimation": "Estimación",
+      "method_distribution": "Distribución de los choques",
+      "method_checks": "Pruebas de los residuos",
+      "method_nyblom": "Prueba de Nyblom",
+      "method_sign_bias": "Sesgo de signo",
+      "method_forecast": "Previsión de la volatilidad",
+      "formula_mean": "Media",
+      "formula_variance": "Varianza",
+      "formula_distribution": "Densidad de z",
+      "formula_likelihood": "Verosimilitud",
+      "formula_persistence": "Persistencia, vida media",
+      "formula_portmanteau": "Ljung–Box ponderado",
+      "formula_arch_lm": "ARCH LM",
+      "formula_nyblom": "L de Nyblom",
+      "formula_sign_bias": "Regresión del sesgo de signo"
+    },
+    "reading_texts": {
+      "lb_z_ok": "La prueba de Ljung–Box ponderada no rechaza que los residuos estandarizados estén libres de autocorrelación hasta el retardo {lag:int} (p-valor {p_value:p}, α = {alpha:num}): los datos no muestran estructura que quede en la media, lo que no demuestra que no la haya.",
+      "lb_z_failed": "La prueba de Ljung–Box ponderada rechaza que los residuos estandarizados estén libres de autocorrelación hasta el retardo {lag:int} (p-valor {p_value:p}, por debajo de α = {alpha:num}): queda en la media una estructura que los términos AR y MA no recogieron.",
+      "lb_z2_ok": "Sobre los cuadrados de los residuos estandarizados, la prueba de Ljung–Box ponderada no rechaza la ausencia de autocorrelación hasta el retardo {lag:int} (p-valor {p_value:p}, α = {alpha:num}): el modelo recoge los agrupamientos de volatilidad hasta donde esta prueba puede ver.",
+      "lb_z2_failed": "Sobre los cuadrados de los residuos estandarizados, la prueba de Ljung–Box ponderada rechaza la ausencia de autocorrelación hasta el retardo {lag:int} (p-valor {p_value:p}, por debajo de α = {alpha:num}): quedan agrupamientos de volatilidad que el modelo no recoge.",
+      "arch_lm_ok": "La prueba ARCH LM con {lag:int} retardos no rechaza que no quede efecto ARCH en los residuos estandarizados (p-valor {p_value:p}, α = {alpha:num}).",
+      "arch_lm_failed": "La prueba ARCH LM con {lag:int} retardos rechaza que no quede efecto ARCH en los residuos estandarizados (p-valor {p_value:p}, por debajo de α = {alpha:num}): la ecuación de la varianza no recoge parte de cómo se mueve la volatilidad.",
+      "z2_largest_acf": "La mayor autocorrelación de los cuadrados de los residuos estandarizados es {acf:num}, en el retardo {lag:int}.",
+      "nyblom_stable": "La prueba conjunta de Nyblom no rechaza que cada parámetro sea constante a lo largo de la muestra (p-valor {p_value:p}, α = {alpha:num}); esto no demuestra que lo sean.",
+      "nyblom_moves": "La prueba conjunta de Nyblom rechaza que cada parámetro sea constante a lo largo de la muestra (p-valor {p_value:p}, por debajo de α = {alpha:num}); {parameter} es el que más se mueve (p-valor ajustado por Holm {p_adjusted:p}).",
+      "nyblom_moves_none": "La prueba conjunta de Nyblom rechaza que cada parámetro sea constante a lo largo de la muestra (p-valor {p_value:p}, por debajo de α = {alpha:num}), pero ninguna prueba de un solo parámetro rechaza tras el ajuste de Holm.",
+      "sign_bias_supported": {
+        "variance_model=arch": "La prueba de sesgo de signo de Engle y Ng rechaza que la volatilidad responda igual a las caídas y a las subidas (p-valor {p_value:p}, por debajo de α = {alpha:num}): un modelo GJR o EGARCH tiene los términos para ello.",
+        "variance_model=garch": "La prueba de sesgo de signo de Engle y Ng rechaza que la volatilidad responda igual a las caídas y a las subidas (p-valor {p_value:p}, por debajo de α = {alpha:num}): un modelo GJR o EGARCH tiene los términos para ello.",
+        "": "La prueba de sesgo de signo de Engle y Ng rechaza que la volatilidad responda igual a las caídas y a las subidas una vez tenido en cuenta el modelo (p-valor {p_value:p}, por debajo de α = {alpha:num}): queda una asimetría que los términos del modelo no recogen."
+      },
+      "sign_bias_not_supported": "La prueba de sesgo de signo de Engle y Ng no rechaza que la volatilidad responda igual a las caídas y a las subidas una vez tenido en cuenta el modelo (p-valor {p_value:p}, α = {alpha:num}); esto no demuestra que la respuesta sea la misma.",
+      "backtest_coverage_ok": "En el periodo reservado ({holdout:int} {unit}), los rebases del VaR a 1 paso al {level:pct} fueron {violations:int}, frente a {expected:num} esperados: la prueba de Kupiec no rechaza la tasa que pide su nivel (p-valor {p_value:p}, α = {alpha:num}).",
+      "backtest_coverage_failed": "En el periodo reservado ({holdout:int} {unit}), los rebases del VaR a 1 paso al {level:pct} fueron {violations:int}, frente a {expected:num} esperados: la prueba de Kupiec rechaza la tasa que pide su nivel (p-valor {p_value:p}, por debajo de α = {alpha:num}).",
+      "backtest_independence_ok": "La prueba de Christoffersen no rechaza que los rebases lleguen de forma independiente unos de otros (p-valor {p_value:p}, α = {alpha:num}; {expected:num} rebases esperados).",
+      "backtest_independence_failed": "La prueba de Christoffersen rechaza que los rebases lleguen de forma independiente unos de otros (p-valor {p_value:p}, por debajo de α = {alpha:num}; {expected:num} rebases esperados): llegan agrupados.",
+      "backtest_independence_not_computed": "Ninguna observación rebasó el VaR, frente a {expected:num} rebases esperados: no hay agrupamiento de rebases que probar.",
+      "backtest_cc_ok": "La prueba de cobertura condicional de Christoffersen, tasa e independencia juntas, no rechaza (p-valor {p_value:p}, α = {alpha:num}; {expected:num} rebases esperados).",
+      "backtest_cc_failed": "La prueba de cobertura condicional de Christoffersen, tasa e independencia juntas, rechaza (p-valor {p_value:p}, por debajo de α = {alpha:num}; {expected:num} rebases esperados).",
+      "backtest_expected": "Con {expected:num} rebases esperados, estas pruebas solo pueden distinguir un nivel del VaR lejano al pedido; un periodo de prueba más largo les deja ver errores más pequeños.",
+      "backtest_short": "Con {holdout:int} observación reservada el backtest no se calcula: necesita al menos 2.",
+      "method_backtest": "Con un periodo de prueba, las últimas observaciones quedan fuera del ajuste; los parámetros ajustados, fijos, las recorren paso a paso, de modo que cada una recibe un VaR a 1 paso calculado solo con las observaciones anteriores. Un rebase es una observación más allá de su VaR. La prueba de Kupiec compara la tasa de rebases con la tasa que pide el nivel, la de Christoffersen si un rebase hace más probable el siguiente, y su tercera prueba las dos cosas juntas. Con pocos rebases esperados (el periodo de prueba por 1 − c) sus leyes χ² son toscas y solo ven errores grandes: cada frase dice cuántos rebases se esperaban.",
+      "summary": "Se ajustó un {model} con errores de distribución {distribution} a {n:int} rendimientos de «{series}», del {first:date} al {last:date}.",
+      "summary_steps": "Se ajustó un {model} con errores de distribución {distribution} a {n:int} rendimientos de «{series}», del paso {first:int} al paso {last:int}.",
+      "summary_holdout": "Se ajustó un {model} con errores de distribución {distribution} a {n:int} rendimientos de «{series}», del {first:date} al {last:date}; los {holdout:int} últimos quedaron fuera del ajuste para probar el valor en riesgo.",
+      "summary_holdout_steps": "Se ajustó un {model} con errores de distribución {distribution} a {n:int} rendimientos de «{series}», del paso {first:int} al paso {last:int}; los {holdout:int} últimos quedaron fuera del ajuste para probar el valor en riesgo.",
+      "summary_prices": {
+        "returns_type=simple": "Los rendimientos se calcularon a partir de los precios como rendimientos simples, P_t / P_(t−1) − 1.",
+        "": "Los rendimientos se calcularon a partir de los precios como rendimientos logarítmicos, ln(P_t / P_(t−1))."
+      },
+      "summary_scale": "El ajuste se hizo sobre los rendimientos divididos por su desviación típica, {scale:num}; cada parámetro se devuelve en las unidades de la serie.",
+      "persistence": "La volatilidad conserva el {persistence:pct} de un choque de un paso al siguiente: la mitad de un choque desaparece tras unos {half_life:num} {unit}.",
+      "persistence_integrated": "La persistencia es {persistence:num}, 1 o más: la varianza no vuelve a un nivel de largo plazo, así que la vida media y la volatilidad de largo plazo no se calculan.",
+      "sigma_now_above": {
+        "input_kind=prices": "La previsión de la volatilidad para el paso siguiente, {sigma:pct}, está por encima de su nivel de largo plazo, {uncond:pct}.",
+        "": "La previsión de la volatilidad para el paso siguiente, {sigma:num}, está por encima de su nivel de largo plazo, {uncond:num}."
+      },
+      "sigma_now_below": {
+        "input_kind=prices": "La previsión de la volatilidad para el paso siguiente, {sigma:pct}, está por debajo de su nivel de largo plazo, {uncond:pct}.",
+        "": "La previsión de la volatilidad para el paso siguiente, {sigma:num}, está por debajo de su nivel de largo plazo, {uncond:num}."
+      },
+      "sigma_now_equal": {
+        "input_kind=prices": "La previsión de la volatilidad para el paso siguiente está en su nivel de largo plazo, {uncond:pct}.",
+        "": "La previsión de la volatilidad para el paso siguiente está en su nivel de largo plazo, {uncond:num}."
+      },
+      "asymmetry_gjr": "Una caída eleva la varianza siguiente {ratio:num} veces lo que la eleva una subida del mismo tamaño (Σγ = {gamma:num}).",
+      "asymmetry_gjr_falls_only": "Solo las caídas mueven la varianza siguiente: los términos α son 0, y Σγ = {gamma:num}.",
+      "asymmetry_egarch": "Tras una caída de {shock:num} desviaciones típicas la varianza siguiente es {ratio:num} veces la que sigue a una subida del mismo tamaño (efecto del signo α₁ = {alpha:num}, efecto del tamaño γ₁ = {gamma:num}).",
+      "asymmetry_none": "En este modelo el tamaño de un choque mueve la varianza, no su signo: una caída y una subida del mismo tamaño la mueven igual.",
+      "distribution_norm": "Los errores se toman como normales: el modelo no tiene ningún parámetro para colas más pesadas que las de una normal.",
+      "distribution_std": "La t de Student de los errores tiene ν = {shape:num} grados de libertad (intervalo al {level:pct}: {low:num} – {high:num}); la normal es su límite cuando ν crece, y un ν menor significa colas más pesadas.",
+      "distribution_sstd": "La t de Student asimétrica de los errores tiene ν = {shape:num} grados de libertad (intervalo al {level:pct}: {low:num} – {high:num}) y asimetría ξ = {skew:num} ({skew_low:num} – {skew_high:num}); ξ = 1 es simétrica, por debajo de 1 la cola izquierda es la más larga.",
+      "method_garch": "Una varianza condicional es la varianza del próximo rendimiento dado todo lo ocurrido hasta ahora. Un GARCH la escribe como una constante más los choques recientes al cuadrado más la varianza anterior: un movimiento grande eleva la varianza siguiente, que luego vuelve a su nivel de largo plazo. Un ARCH tiene solo los choques; un GJR-GARCH añade un término para las caídas, un EGARCH modela el logaritmo de la varianza, para que caídas y subidas puedan moverla de forma distinta y siga siendo positiva. La media de los rendimientos es una constante, con términos AR y MA cuando el nodo los pide.",
+      "method_scale": "El ajuste se hace sobre los rendimientos divididos por su desviación típica muestral, porque las tolerancias del optimizador son absolutas y unos rendimientos diarios pondrían ω cerca de 0,000001. Los parámetros y su covarianza se devuelven exactamente a las unidades de la serie: μ por la escala, ω por su cuadrado, y en un EGARCH ω desplazado por un término en el logaritmo de la escala.",
+      "method_estimation": {
+        "se_type=classical": "Los parámetros maximizan la verosimilitud de la distribución elegida; la recursión de la varianza parte de la media muestral de los choques al cuadrado, y las restricciones del optimizador mantienen la varianza positiva y estacionaria. Sus errores estándar vienen de la inversa de la hessiana de la verosimilitud, lo que vale cuando la distribución es la de los datos; z es la estimación entre su error estándar, y los p-valores son bilaterales.",
+        "": "Los parámetros maximizan la verosimilitud de la distribución elegida (cuasi máxima verosimilitud: las estimaciones siguen siendo consistentes cuando la distribución no es la de los datos); la recursión de la varianza parte de la media muestral de los choques al cuadrado, y las restricciones del optimizador mantienen la varianza positiva y estacionaria. Sus errores estándar son el sándwich robusto de Bollerslev y Wooldridge, que vale también en ese caso; z es la estimación entre su error estándar, y los p-valores son bilaterales."
+      },
+      "method_distribution": "Los choques estandarizados z tienen media 0 y varianza 1 bajo cada una de las tres leyes: la normal; la t de Student escalada a varianza 1, cuyos ν grados de libertad fijan el peso de las colas, con la normal como límite; la t asimétrica de Fernández y Steel, cuyo ξ alarga una cola respecto a la otra. ν y ξ se estiman con los demás parámetros, con sus intervalos.",
+      "method_checks": "Los residuos estandarizados z = ε / σ son lo que el modelo deja. Si la ecuación de la media es correcta, z no tiene autocorrelación; si la ecuación de la varianza es correcta, z² tampoco. La prueba de Ljung–Box ponderada de Fisher y Gallagher lee las dos (sobre z², el Ljung–Box ordinario no tiene su ley nominal), y el ARCH LM de Engle regresa z² sobre su propio pasado. Un p-valor por debajo de α rechaza la hipótesis; por encima, los datos no muestran una desviación, lo que no demuestra que no la haya. Estas pruebas leen los residuos de un modelo ajustado, así que sus leyes son aproximaciones, y con muchas observaciones detectan desviaciones demasiado pequeñas para importar.",
+      "method_nyblom": "La prueba de Nyblom pregunta si los parámetros fueron los mismos en toda la muestra: los scores de la verosimilitud, acumulados en el tiempo, se quedan cerca de 0 cuando los parámetros son constantes y se alejan cuando uno se mueve. El p-valor se calcula a partir de la ley asintótica de la prueba (inversión de Imhof, con un error de truncamiento por debajo de 0,0000001), para que pueda leerse cualquier α; las pruebas de cada parámetro se ajustan por Holm según su número.",
+      "method_sign_bias": "La prueba de sesgo de signo de Engle y Ng regresa z² sobre si el último choque fue una caída, y sobre el tamaño de la última caída y de la última subida: si el modelo ha recogido cómo mueven la volatilidad las caídas y las subidas, ninguno de los tres términos cuenta. El veredicto es su prueba de Wald conjunta.",
+      "method_forecast": "La previsión de la volatilidad continúa la recursión de la varianza desde el último instante, con los choques futuros sustituidos por su valor esperado: va del nivel actual hacia el nivel de largo plazo al ritmo de la persistencia. El VaR a 1 paso del primer paso futuro, en la salida, usa esa previsión."
+    },
+    "formula_texts": {
+      "formula_var_1step": "VaR_t = μ_t + σ_t q_(1−c), q el cuantil de la distribución ajustada, c el nivel del VaR;  un rebase cuando r_t < VaR_t (para la cola superior de un ARIMA, cuando y_t > VaR_t)",
+      "formula_kupiec": "LR_uc = −2 ln[(1 − p)^(T−x) p^x] + 2 ln[(1 − x/T)^(T−x) (x/T)^x], p = 1 − c, x rebases en T observaciones (0 · ln 0 = 0);  χ² con 1 grado de libertad",
+      "formula_christoffersen": "π_01 = n_01 / (n_00 + n_01), π_11 = n_11 / (n_10 + n_11), π = (n_01 + n_11) / (T − 1);  LR_ind = −2 ln[(1 − π)^(n_00 + n_10) π^(n_01 + n_11)] + 2 ln[(1 − π_01)^(n_00) π_01^(n_01) (1 − π_11)^(n_10) π_11^(n_11)], χ² con 1 grado de libertad;  LR_cc = LR_uc sobre T − 1 observaciones + LR_ind, χ² con 2",
+      "formula_mean": "r_t = μ + Σ_(i=1)^(m) φ_i (r_(t−i) − μ) + Σ_(j=1)^(n) θ_j ε_(t−j) + ε_t;  ε_t = σ_t z_t, z_t independientes con media 0 y varianza 1",
+      "formula_variance": {
+        "variance_model=arch": "σ²_t = ω + Σ_(i=1)^(q) α_i ε²_(t−i)",
+        "variance_model=gjr": "σ²_t = ω + Σ_(i=1)^(q) (α_i + γ_i I_(t−i)) ε²_(t−i) + Σ_(j=1)^(p) β_j σ²_(t−j);  I_(t−i) = 1 cuando ε_(t−i) < 0, si no 0",
+        "variance_model=egarch": "ln σ²_t = ω + Σ_(i=1)^(q) (α_i z_(t−i) + γ_i (|z_(t−i)| − E|z|)) + Σ_(j=1)^(p) β_j ln σ²_(t−j)",
+        "": "σ²_t = ω + Σ_(i=1)^(q) α_i ε²_(t−i) + Σ_(j=1)^(p) β_j σ²_(t−j)"
+      },
+      "formula_distribution": {
+        "distribution=norm": "f(z) = exp(−z²/2) / √(2π)",
+        "distribution=sstd": "f(z) = 2 / (ξ + 1/ξ) · f*(z/ξ) para z ≥ 0 y f*(z ξ) para z < 0, f* la t de Student con ν grados de libertad; luego desplazada y escalada a media 0 y varianza 1 (Fernández y Steel)",
+        "": "z = t √((ν − 2) / ν), t una t de Student con ν > 2 grados de libertad: media 0, varianza 1"
+      },
+      "formula_likelihood": "ℓ(θ) = Σ_t [ln f(z_t) − ln σ_t], z_t = ε_t / σ_t;  covarianza robusta H^(−1) S H^(−1), H la hessiana de −ℓ, S la suma de los productos exteriores de los scores;  AIC = −2ℓ + 2k, BIC = −2ℓ + k ln n",
+      "formula_persistence": "P = Σα + Σβ (ARCH, GARCH);  Σα + Σβ + κ Σγ con κ = E[z² 1(z < 0)] (GJR);  Σβ (EGARCH);  vida media = ln(1/2) / ln P;  σ de largo plazo = √(ω / (1 − P))",
+      "formula_portmanteau": "Q_W = n (n + 2) Σ_(k=1)^(m) ((m − k + 1) / m) ρ̂_k² / (n − k), su p-valor por la aproximación gamma de Fisher y Gallagher;  ρ̂_k la autocorrelación de z (de z²) en el retardo k",
+      "formula_arch_lm": "z²_t = a_0 + Σ_(l=1)^(L) a_l z²_(t−l) + u_t;  LM = n R², χ² con L grados de libertad",
+      "formula_nyblom": "L = (1/n) Σ_t S_t' V^(−1) S_t, S_t los scores acumulados hasta t, V su varianza;  p = P(W_k > L), W_k = Σ_(j≥1) χ²_(k,j) / (j² π²), por la inversión de Imhof;  las k pruebas individuales ajustadas por Holm",
+      "formula_sign_bias": "z²_t = b_0 + b_1 N_(t−1) + b_2 N_(t−1) z_(t−1) + b_3 (1 − N_(t−1)) z_(t−1) + u_t, N = 1 cuando z < 0;  prueba de Wald de b_1 = b_2 = b_3 = 0, χ² con 3 grados de libertad"
+    },
+    "measure_readings": [
+      "summary",
+      "summary_steps",
+      "summary_holdout",
+      "summary_holdout_steps",
+      "summary_prices",
+      "summary_scale",
+      "persistence",
+      "persistence_integrated",
+      "sigma_now_above",
+      "sigma_now_below",
+      "sigma_now_equal",
+      "asymmetry_gjr",
+      "asymmetry_gjr_falls_only",
+      "asymmetry_egarch",
+      "asymmetry_none",
+      "distribution_norm",
+      "distribution_std",
+      "distribution_sstd",
+      "z2_largest_acf",
+      "backtest_independence_not_computed",
+      "backtest_expected",
+      "backtest_short"
+    ]
+  },
+  "fr": {
+    "name_kind": "Volatilité",
+    "series_of": "«{value}» selon «{time}», {kind}",
+    "kind": {
+      "returns": "rendements",
+      "prices": "prix"
+    },
+    "sections": {
+      "summary": "Synthèse",
+      "assumptions": "Tests",
+      "volatility": "Volatilité",
+      "coefficients": "Coefficients et impact des nouvelles",
+      "checks": "Tests des résidus",
+      "backtest": "Backtest de la valeur à risque",
+      "fit": "Chiffres de l'ajustement",
+      "notes": "Notes"
+    },
+    "kpi": {
+      "n": "Rendements",
+      "span": "{first} – {last}",
+      "model": "Modèle",
+      "persistence": "Persistance",
+      "half_life": "demi-vie {h} {unit}",
+      "no_half_life": "P ≥ 1 : pas de demi-vie",
+      "sigma": "Volatilité, pas suivant",
+      "uncond": "long terme {u}",
+      "no_uncond": "pas de niveau de long terme"
+    },
+    "alpha_line": "Les verdicts viennent seulement des p-valeurs des tests, lues au seuil α = {alpha} (l'option du nœud) ; la persistance, la demi-vie, la volatilité, ν et ξ sont des mesures et n'en ont pas.",
+    "measures_title": "Mesures, pas des tests",
+    "facts_title": "Faits de l'ajustement",
+    "measure_names": {
+      "persistence": "Persistance P",
+      "half_life": "Demi-vie",
+      "uncond_sigma": "Volatilité de long terme",
+      "sigma_next": "Volatilité, pas suivant",
+      "sigma_last": "Volatilité, dernier instant",
+      "kappa": "κ (GJR)",
+      "shape": "ν, degrés de liberté",
+      "skew": "ξ, asymétrie"
+    },
+    "measure_what": {
+      "persistence": "La part d'un choc sur la variance encore présente un pas plus tard.",
+      "half_life": "Les pas après lesquels la moitié d'un choc sur la variance a disparu : ln(1/2) / ln P.",
+      "uncond_sigma": "Le niveau auquel la volatilité revient quand aucun choc n'arrive : √(ω / (1 − P)).",
+      "sigma_next": "La volatilité que le modèle donne au pas suivant, à partir de tout ce qui précède le dernier instant inclus.",
+      "sigma_last": "La volatilité que le modèle donne au dernier instant de la série.",
+      "kappa": "La moyenne de z² quand z < 0 sous la loi ajustée : ce que γ ajoute à la persistance.",
+      "shape": "Les degrés de liberté de la loi de Student : plus ils sont petits, plus les queues sont lourdes ; la loi normale est la limite.",
+      "skew": "L'asymétrie de la loi t : 1 est symétrique, sous 1 la queue gauche est la plus longue."
+    },
+    "charts": {
+      "returns": "Rendements avec la bande μ ± z σ de chaque instant",
+      "sigma": "Volatilité conditionnelle σ et sa prévision",
+      "std_residual": "Résidus standardisés z",
+      "news_impact": "Impact des nouvelles : la variance suivante après un choc ε, en σ de long terme",
+      "z_acf": "ACF de z",
+      "z2_acf": "ACF de z²",
+      "hist": "Histogramme de z et densité ajustée",
+      "qq": "Q–Q de z contre la loi ajustée",
+      "backtest": "Période de test : rendements, VaR à 1 pas et ses dépassements"
+    },
+    "series": {
+      "return": "Rendement",
+      "band": "Bande à {level} %",
+      "sigma": "σ",
+      "forecast": "Prévision",
+      "z": "z",
+      "news": "Variance suivante",
+      "acf": "ACF",
+      "count": "Effectif",
+      "density": "Densité ajustée",
+      "qq": "z",
+      "var": "VaR à 1 pas",
+      "violation": "Dépassement"
+    },
+    "captions": {
+      "volatility": "La ligne verticale en tirets marque la première observation mise de côté ; la ligne horizontale en tirets sur σ est son niveau de long terme.",
+      "news": "La courbe est symétrique pour un ARCH ou un GARCH, coudée en 0 pour un GJR, inclinée pour un EGARCH.",
+      "backtest": "Chaque point est une observation mise de côté ; la ligne est la VaR calculée sur les observations d'avant ; les points mis en évidence l'ont dépassée."
+    },
+    "coef": {
+      "title": "Coefficients dans les unités de la série",
+      "robust": "Erreurs standard : robustes (sandwich QML).",
+      "classical": "Erreurs standard : classiques (inverse de la hessienne)."
+    },
+    "formula_law": "z ~ {law}",
+    "notes": {
+      "rows": "{n} rendements ont été utilisés ; {missing} lignes avaient une valeur vide."
+    },
+    "values": {
+      "variance_model": {
+        "arch": "ARCH",
+        "garch": "GARCH",
+        "gjr": "GJR-GARCH",
+        "egarch": "EGARCH"
+      },
+      "distribution": {
+        "norm": "loi normale",
+        "std": "loi de Student",
+        "sstd": "loi de Student asymétrique"
+      },
+      "input_kind": {
+        "returns": "rendements",
+        "prices": "prix"
+      },
+      "returns_type": {
+        "log": "rendements logarithmiques",
+        "simple": "rendements simples"
+      },
+      "se_type": {
+        "robust": "robustes (sandwich QML)",
+        "classical": "classiques (inverse de la hessienne)"
+      },
+      "solver": {
+        "solnp": "solnp",
+        "nlminb": "nlminb",
+        "gosolnp": "gosolnp (redémarrages aléatoires)",
+        "lbfgs": "L-BFGS",
+        "hybrid": "hybride"
+      },
+      "frequency": {
+        "hour": "heure",
+        "day": "jour",
+        "week": "semaine",
+        "month": "mois",
+        "quarter": "trimestre",
+        "year": "année",
+        "index": "pas"
+      },
+      "time_kind": {
+        "date": "date",
+        "datetime": "date et heure",
+        "integer": "entier (pas)"
+      },
+      "time_unit": {
+        "hour": "heures",
+        "day": "jours",
+        "week": "semaines",
+        "month": "mois",
+        "quarter": "trimestres",
+        "year": "années",
+        "index": "pas"
+      },
+      "reading_names": {
+        "mu": "μ",
+        "omega": "ω",
+        "shape": "ν",
+        "skew": "ξ",
+        "alpha1": "α₁",
+        "alpha2": "α₂",
+        "alpha3": "α₃",
+        "beta1": "β₁",
+        "beta2": "β₂",
+        "beta3": "β₃",
+        "gamma1": "γ₁",
+        "gamma2": "γ₂",
+        "gamma3": "γ₃",
+        "ar1": "φ₁",
+        "ar2": "φ₂",
+        "ar3": "φ₃",
+        "ar4": "φ₄",
+        "ar5": "φ₅",
+        "ma1": "θ₁",
+        "ma2": "θ₂",
+        "ma3": "θ₃",
+        "ma4": "θ₄",
+        "ma5": "θ₅"
+      }
+    },
+    "checks": {
+      "ljung_box_z": {
+        "name": "Moyenne : Ljung–Box pondéré sur z",
+        "h0": "Les résidus standardisés ne sont pas autocorrélés jusqu'au retard du test.",
+        "advice": "Il reste de la structure dans la moyenne : augmentez l'ordre AR ou MA.",
+        "not_computed": "Trop peu de résidus pour le retard du test."
+      },
+      "ljung_box_z2": {
+        "name": "Variance : Ljung–Box pondéré sur z²",
+        "h0": "Les carrés des résidus standardisés ne sont pas autocorrélés jusqu'au retard du test : il ne reste aucun effet ARCH.",
+        "advice": "Une volatilité que le modèle manque : augmentez un ordre, ou essayez GJR ou EGARCH.",
+        "not_computed": "Trop peu de résidus pour le retard du test."
+      },
+      "arch_lm": {
+        "name": "Variance : ARCH LM sur z",
+        "h0": "Il ne reste aucun effet ARCH dans les résidus standardisés.",
+        "advice": "Une volatilité que le modèle manque : augmentez un ordre, ou essayez GJR ou EGARCH.",
+        "not_computed": "Trop peu de résidus pour les retards du test."
+      },
+      "nyblom": {
+        "name": "Stabilité : Nyblom",
+        "h0": "Chaque paramètre est constant sur l'échantillon.",
+        "advice": "Les paramètres bougent sur l'échantillon : ajustez une période plus courte et plus récente, ou lisez les paramètres dans la table de stabilité.",
+        "not_computed": "Les scores de l'ajustement n'étaient pas disponibles."
+      },
+      "sign_bias": {
+        "name": "Asymétrie : biais de signe d'Engle–Ng",
+        "h0": "La volatilité réagit de la même façon aux baisses et aux hausses, une fois le modèle pris en compte.",
+        "advice": {
+          "sign_bias_failed": "Les baisses et les hausses font bouger la volatilité différemment : choisissez GJR ou EGARCH.",
+          "sign_bias_left": "L'asymétrie qui reste n'est pas captée par les termes du modèle : essayez l'autre modèle asymétrique, ou plus de retards.",
+          "": "Les baisses et les hausses font bouger la volatilité autrement que ne le prévoit le modèle."
+        },
+        "not_computed": "Trop peu de résidus pour la régression."
+      },
+      "at_bound": {
+        "name": "Paramètres à une borne du solveur",
+        "count": {
+          "one": "{n} paramètre à une borne",
+          "other": "{n} paramètres à une borne"
+        }
+      },
+      "variance_stationary": {
+        "name": "Persistance de la variance"
+      }
+    },
+    "measure_texts": {
+      "at_bound": "Les paramètres que le solveur a laissés à l'une de ses bornes (α + β à 1, ν à sa valeur la plus basse) : leurs erreurs standard ne sont pas calculées de la manière habituelle.",
+      "variance_stationary": "La persistance P : sous 1, la variance revient à un niveau de long terme ; à 1 ou au-dessus elle n'y revient pas, et la demi-vie et la volatilité de long terme ne sont pas calculées."
+    },
+    "stats": {
+      "model": {
+        "n": "Rendements de l'ajustement",
+        "n_missing": "Valeurs vides",
+        "first": "Premier instant",
+        "last": "Dernier instant",
+        "alpha": "α des tests",
+        "scale": "Échelle de l'ajustement (écart-type des rendements)",
+        "holdout": "Observations mises de côté",
+        "horizon": "Horizon (pas)",
+        "var_level": "Niveau de la VaR",
+        "log_lik": "Log-vraisemblance",
+        "aic": "AIC",
+        "bic": "BIC",
+        "persistence": "Persistance P",
+        "half_life": "Demi-vie (pas)",
+        "half_life_time": "Demi-vie (unité de temps)",
+        "uncond_sigma": "Volatilité de long terme",
+        "sigma_last": "Volatilité au dernier instant",
+        "sigma_next": "Prévision de la volatilité pour le pas suivant",
+        "lb_lag_used": "Retard des tests portmanteau",
+        "arch_lags_used": "Retards de l'ARCH LM",
+        "kappa": "κ du GJR",
+        "model_name": "Modèle",
+        "variance_model": "Modèle de variance",
+        "distribution": "Loi de z",
+        "input_kind": "Entrée",
+        "returns_type": "Rendements",
+        "se_type": "Erreurs standard",
+        "frequency": "Fréquence",
+        "time_kind": "Temps",
+        "solver": "Solveur"
+      },
+      "backtest": {
+        "statistic": "Statistique",
+        "df": "ddl",
+        "p_value": "p-valeur",
+        "violations": "Dépassements de la VaR",
+        "expected_violations": "Dépassements attendus",
+        "violation_rate": "Taux de dépassements",
+        "n00": "Aucun, puis aucun dépassement (n00)",
+        "n01": "Aucun, puis un dépassement (n01)",
+        "n10": "Un, puis aucun dépassement (n10)",
+        "n11": "Un, puis un dépassement (n11)",
+        "longest_run": "Plus longue suite de dépassements",
+        "verdict": "Verdict",
+        "h0": "Hypothèse nulle",
+        "significance": "Signif."
+      }
+    },
+    "backtest": {
+      "title": "Backtest de la VaR à 1 pas au seuil α = {alpha}",
+      "test": "Test",
+      "counts_title": "Dépassements de la VaR sur la période de test",
+      "quantity": "Grandeur",
+      "value": "Valeur",
+      "names": {
+        "kupiec": "Couverture : Kupiec",
+        "christoffersen_ind": "Indépendance : Christoffersen",
+        "christoffersen_cc": "Couverture conditionnelle : Christoffersen"
+      },
+      "h0": {
+        "kupiec": "La VaR est dépassée au taux que demande son niveau, {rate}.",
+        "christoffersen_ind": "Un dépassement ne change pas la probabilité d'un dépassement la fois suivante.",
+        "christoffersen_cc": "Le taux est {rate} et les dépassements sont indépendants."
+      },
+      "advice": {
+        "kupiec": "La VaR est dépassée plus ou moins souvent que ne le demande son niveau : essayez une autre loi, ou un autre modèle de variance.",
+        "christoffersen_ind": "Les dépassements arrivent en grappes : le modèle réagit trop lentement à un changement de volatilité.",
+        "christoffersen_cc": "Taux et indépendance ensemble : lisez les deux tests ci-dessus."
+      }
+    },
+    "nyblom": {
+      "title": "Stabilité des paramètres : Nyblom",
+      "parameter": "Paramètre",
+      "joint": "Tous, conjointement",
+      "statistic": "L",
+      "p_value": "p-valeur",
+      "p_adjusted": "p ajustée (Holm)",
+      "verdict": "Verdict"
+    },
+    "reading_blocks": {
+      "summary": "Synthèse",
+      "persistence": "Persistance",
+      "asymmetry": "Asymétrie",
+      "distribution": "Loi",
+      "residuals": "Résidus",
+      "stability": "Stabilité",
+      "backtest": "Backtest",
+      "method": "Méthode",
+      "formulas": "Formule"
+    },
+    "reading_labels": {
+      "method_backtest": "Backtest de la VaR",
+      "formula_var_1step": "VaR à 1 pas",
+      "formula_kupiec": "LR de Kupiec",
+      "formula_christoffersen": "LR de Christoffersen",
+      "method_garch": "Variance conditionnelle",
+      "method_scale": "L'échelle de l'ajustement",
+      "method_estimation": "Estimation",
+      "method_distribution": "Loi des chocs",
+      "method_checks": "Tests des résidus",
+      "method_nyblom": "Test de Nyblom",
+      "method_sign_bias": "Biais de signe",
+      "method_forecast": "Prévision de la volatilité",
+      "formula_mean": "Moyenne",
+      "formula_variance": "Variance",
+      "formula_distribution": "Densité de z",
+      "formula_likelihood": "Vraisemblance",
+      "formula_persistence": "Persistance, demi-vie",
+      "formula_portmanteau": "Ljung–Box pondéré",
+      "formula_arch_lm": "ARCH LM",
+      "formula_nyblom": "L de Nyblom",
+      "formula_sign_bias": "Régression du biais de signe"
+    },
+    "reading_texts": {
+      "lb_z_ok": "Le test de Ljung–Box pondéré ne rejette pas l'absence d'autocorrélation des résidus standardisés jusqu'au retard {lag:int} (p-valeur {p_value:p}, α = {alpha:num}) : les données ne montrent pas de structure restée dans la moyenne, ce qui ne démontre pas qu'il n'y en a pas.",
+      "lb_z_failed": "Le test de Ljung–Box pondéré rejette l'absence d'autocorrélation des résidus standardisés jusqu'au retard {lag:int} (p-valeur {p_value:p}, sous α = {alpha:num}) : il reste dans la moyenne une structure que les termes AR et MA n'ont pas prise.",
+      "lb_z2_ok": "Sur les carrés des résidus standardisés, le test de Ljung–Box pondéré ne rejette pas l'absence d'autocorrélation jusqu'au retard {lag:int} (p-valeur {p_value:p}, α = {alpha:num}) : le modèle capte les grappes de volatilité, autant que ce test peut le voir.",
+      "lb_z2_failed": "Sur les carrés des résidus standardisés, le test de Ljung–Box pondéré rejette l'absence d'autocorrélation jusqu'au retard {lag:int} (p-valeur {p_value:p}, sous α = {alpha:num}) : il reste des grappes de volatilité que le modèle manque.",
+      "arch_lm_ok": "Le test ARCH LM à {lag:int} retards ne rejette pas qu'il ne reste aucun effet ARCH dans les résidus standardisés (p-valeur {p_value:p}, α = {alpha:num}).",
+      "arch_lm_failed": "Le test ARCH LM à {lag:int} retards rejette qu'il ne reste aucun effet ARCH dans les résidus standardisés (p-valeur {p_value:p}, sous α = {alpha:num}) : l'équation de variance manque une partie de la façon dont la volatilité bouge.",
+      "z2_largest_acf": "La plus grande autocorrélation des carrés des résidus standardisés vaut {acf:num}, au retard {lag:int}.",
+      "nyblom_stable": "Le test conjoint de Nyblom ne rejette pas que chaque paramètre soit constant sur l'échantillon (p-valeur {p_value:p}, α = {alpha:num}) ; cela ne démontre pas qu'ils le sont.",
+      "nyblom_moves": "Le test conjoint de Nyblom rejette que chaque paramètre soit constant sur l'échantillon (p-valeur {p_value:p}, sous α = {alpha:num}) ; {parameter} est celui qui bouge le plus (p-valeur ajustée par Holm {p_adjusted:p}).",
+      "nyblom_moves_none": "Le test conjoint de Nyblom rejette que chaque paramètre soit constant sur l'échantillon (p-valeur {p_value:p}, sous α = {alpha:num}), mais aucun test d'un paramètre seul ne rejette après l'ajustement de Holm.",
+      "sign_bias_supported": {
+        "variance_model=arch": "Le test du biais de signe d'Engle et Ng rejette que la volatilité réagisse de la même façon aux baisses et aux hausses (p-valeur {p_value:p}, sous α = {alpha:num}) : un modèle GJR ou EGARCH a les termes pour cela.",
+        "variance_model=garch": "Le test du biais de signe d'Engle et Ng rejette que la volatilité réagisse de la même façon aux baisses et aux hausses (p-valeur {p_value:p}, sous α = {alpha:num}) : un modèle GJR ou EGARCH a les termes pour cela.",
+        "": "Le test du biais de signe d'Engle et Ng rejette que la volatilité réagisse de la même façon aux baisses et aux hausses une fois le modèle pris en compte (p-valeur {p_value:p}, sous α = {alpha:num}) : il reste une asymétrie que les termes du modèle ne captent pas."
+      },
+      "sign_bias_not_supported": "Le test du biais de signe d'Engle et Ng ne rejette pas que la volatilité réagisse de la même façon aux baisses et aux hausses une fois le modèle pris en compte (p-valeur {p_value:p}, α = {alpha:num}) ; cela ne démontre pas que la réaction est la même.",
+      "backtest_coverage_ok": "Sur la période de test ({holdout:int} {unit}), la VaR à 1 pas au niveau {level:pct} a été dépassée {violations:int} fois, pour {expected:num} attendues : le test de Kupiec ne rejette pas le taux que demande son niveau (p-valeur {p_value:p}, α = {alpha:num}).",
+      "backtest_coverage_failed": "Sur la période de test ({holdout:int} {unit}), la VaR à 1 pas au niveau {level:pct} a été dépassée {violations:int} fois, pour {expected:num} attendues : le test de Kupiec rejette le taux que demande son niveau (p-valeur {p_value:p}, sous α = {alpha:num}).",
+      "backtest_independence_ok": "Le test de Christoffersen ne rejette pas que les dépassements arrivent indépendamment les uns des autres (p-valeur {p_value:p}, α = {alpha:num} ; {expected:num} dépassements attendus).",
+      "backtest_independence_failed": "Le test de Christoffersen rejette que les dépassements arrivent indépendamment les uns des autres (p-valeur {p_value:p}, sous α = {alpha:num} ; {expected:num} dépassements attendus) : ils arrivent en grappes.",
+      "backtest_independence_not_computed": "Aucune observation n'a dépassé la VaR, pour {expected:num} dépassements attendus : il n'y a pas de grappe de dépassements à tester.",
+      "backtest_cc_ok": "Le test de couverture conditionnelle de Christoffersen, taux et indépendance ensemble, ne rejette pas (p-valeur {p_value:p}, α = {alpha:num} ; {expected:num} dépassements attendus).",
+      "backtest_cc_failed": "Le test de couverture conditionnelle de Christoffersen, taux et indépendance ensemble, rejette (p-valeur {p_value:p}, sous α = {alpha:num} ; {expected:num} dépassements attendus).",
+      "backtest_expected": "Avec {expected:num} dépassements attendus, ces tests ne peuvent distinguer qu'un niveau de VaR éloigné de celui demandé ; une période de test plus longue leur fait voir des erreurs plus petites.",
+      "backtest_short": "Avec {holdout:int} observation mise de côté, le backtest n'est pas calculé : il en faut au moins 2.",
+      "method_backtest": "Avec une période de test, les dernières observations sont tenues hors de l'ajustement ; les paramètres ajustés, fixés, les parcourent un pas à la fois, de sorte que chacune reçoit une VaR à 1 pas calculée sur les seules observations d'avant. Un dépassement est une observation au-delà de sa VaR. Le test de Kupiec compare le taux de dépassements au taux que demande le niveau, celui de Christoffersen regarde si un dépassement rend le suivant plus probable, et son troisième test les deux ensemble. Avec peu de dépassements attendus (la période de test fois 1 − c), leurs lois du χ² sont grossières et ils ne voient que de grandes erreurs : chaque phrase dit combien de dépassements étaient attendus.",
+      "summary": "Un {model} avec des erreurs suivant une {distribution} a été ajusté sur {n:int} rendements de «{series}», du {first:date} au {last:date}.",
+      "summary_steps": "Un {model} avec des erreurs suivant une {distribution} a été ajusté sur {n:int} rendements de «{series}», du pas {first:int} au pas {last:int}.",
+      "summary_holdout": "Un {model} avec des erreurs suivant une {distribution} a été ajusté sur {n:int} rendements de «{series}», du {first:date} au {last:date} ; les {holdout:int} derniers ont été tenus hors de l'ajustement pour tester la valeur à risque.",
+      "summary_holdout_steps": "Un {model} avec des erreurs suivant une {distribution} a été ajusté sur {n:int} rendements de «{series}», du pas {first:int} au pas {last:int} ; les {holdout:int} derniers ont été tenus hors de l'ajustement pour tester la valeur à risque.",
+      "summary_prices": {
+        "returns_type=simple": "Les rendements ont été calculés à partir des prix comme rendements simples, P_t / P_(t−1) − 1.",
+        "": "Les rendements ont été calculés à partir des prix comme rendements logarithmiques, ln(P_t / P_(t−1))."
+      },
+      "summary_scale": "L'ajustement a porté sur les rendements divisés par leur écart-type, {scale:num} ; chaque paramètre est rendu dans les unités de la série.",
+      "persistence": "La volatilité garde {persistence:pct} d'un choc d'un pas au suivant : la moitié d'un choc a disparu après environ {half_life:num} {unit}.",
+      "persistence_integrated": "La persistance vaut {persistence:num}, 1 ou plus : la variance ne revient pas à un niveau de long terme, si bien que la demi-vie et la volatilité de long terme ne sont pas calculées.",
+      "sigma_now_above": {
+        "input_kind=prices": "La prévision de la volatilité pour le pas suivant, {sigma:pct}, est au-dessus de son niveau de long terme, {uncond:pct}.",
+        "": "La prévision de la volatilité pour le pas suivant, {sigma:num}, est au-dessus de son niveau de long terme, {uncond:num}."
+      },
+      "sigma_now_below": {
+        "input_kind=prices": "La prévision de la volatilité pour le pas suivant, {sigma:pct}, est au-dessous de son niveau de long terme, {uncond:pct}.",
+        "": "La prévision de la volatilité pour le pas suivant, {sigma:num}, est au-dessous de son niveau de long terme, {uncond:num}."
+      },
+      "sigma_now_equal": {
+        "input_kind=prices": "La prévision de la volatilité pour le pas suivant est à son niveau de long terme, {uncond:pct}.",
+        "": "La prévision de la volatilité pour le pas suivant est à son niveau de long terme, {uncond:num}."
+      },
+      "asymmetry_gjr": "Une baisse augmente la variance suivante {ratio:num} fois autant qu'une hausse de même taille (Σγ = {gamma:num}).",
+      "asymmetry_gjr_falls_only": "Seules les baisses font bouger la variance suivante : les termes α valent 0, et Σγ = {gamma:num}.",
+      "asymmetry_egarch": "Après une baisse de {shock:num} écarts-types, la variance suivante vaut {ratio:num} fois ce qu'elle vaut après une hausse de même taille (effet du signe α₁ = {alpha:num}, effet de la taille γ₁ = {gamma:num}).",
+      "asymmetry_none": "Dans ce modèle, la taille d'un choc fait bouger la variance, pas son signe : une baisse et une hausse de même taille la font bouger de la même façon.",
+      "distribution_norm": "Les erreurs sont supposées normales : le modèle n'a pas de paramètre pour des queues plus lourdes que celles d'une loi normale.",
+      "distribution_std": "La loi de Student des erreurs a ν = {shape:num} degrés de liberté (intervalle à {level:pct} : {low:num} – {high:num}) ; la loi normale est sa limite quand ν grandit, et un ν plus bas veut dire des queues plus lourdes.",
+      "distribution_sstd": "La loi de Student asymétrique des erreurs a ν = {shape:num} degrés de liberté (intervalle à {level:pct} : {low:num} – {high:num}) et une asymétrie ξ = {skew:num} ({skew_low:num} – {skew_high:num}) ; ξ = 1 est symétrique, sous 1 la queue gauche est la plus longue.",
+      "method_garch": "Une variance conditionnelle est la variance du prochain rendement sachant tout ce qui s'est passé jusqu'ici. Un GARCH l'écrit comme une constante plus les chocs récents au carré plus la variance précédente : un grand mouvement augmente la variance suivante, qui redescend ensuite vers son niveau de long terme. Un ARCH n'a que les chocs ; un GJR-GARCH ajoute un terme pour les baisses, un EGARCH modélise le logarithme de la variance, pour que baisses et hausses puissent la faire bouger différemment et qu'elle reste positive. La moyenne des rendements est une constante, avec des termes AR et MA quand le nœud le demande.",
+      "method_scale": "L'ajustement porte sur les rendements divisés par leur écart-type empirique, parce que les tolérances du solveur sont absolues et que des rendements journaliers placeraient ω près de 0,000001. Les paramètres et leur covariance sont ramenés exactement aux unités de la série : μ fois l'échelle, ω fois son carré, et pour un EGARCH ω déplacé d'un terme dans le logarithme de l'échelle.",
+      "method_estimation": {
+        "se_type=classical": "Les paramètres maximisent la vraisemblance de la loi choisie ; la récursion de la variance part de la moyenne empirique des chocs au carré, et les contraintes du solveur gardent la variance positive et stationnaire. Leurs erreurs standard viennent de l'inverse de la hessienne de la vraisemblance, ce qui vaut quand la loi est celle des données ; z est l'estimation divisée par son erreur standard, et les p-valeurs sont bilatérales.",
+        "": "Les paramètres maximisent la vraisemblance de la loi choisie (quasi-maximum de vraisemblance : les estimations restent convergentes quand la loi n'est pas celle des données) ; la récursion de la variance part de la moyenne empirique des chocs au carré, et les contraintes du solveur gardent la variance positive et stationnaire. Leurs erreurs standard sont le sandwich robuste de Bollerslev et Wooldridge, qui vaut aussi dans ce cas ; z est l'estimation divisée par son erreur standard, et les p-valeurs sont bilatérales."
+      },
+      "method_distribution": "Les chocs standardisés z ont une moyenne 0 et une variance 1 sous chacune des trois lois : la loi normale ; la loi de Student ramenée à une variance 1, dont les ν degrés de liberté fixent le poids des queues, la loi normale étant sa limite ; la loi de Student asymétrique de Fernández et Steel, dont le ξ allonge une queue par rapport à l'autre. ν et ξ sont estimés avec les autres paramètres, avec leurs intervalles.",
+      "method_checks": "Les résidus standardisés z = ε / σ sont ce que le modèle laisse. Si l'équation de la moyenne est juste, z n'a pas d'autocorrélation ; si l'équation de la variance est juste, z² n'en a pas non plus. Le test de Ljung–Box pondéré de Fisher et Gallagher lit les deux (sur z², le Ljung–Box ordinaire n'a pas sa loi nominale), et l'ARCH LM d'Engle régresse z² sur son propre passé. Une p-valeur sous α rejette l'hypothèse ; au-dessus, les données ne montrent pas d'écart, ce qui ne démontre pas qu'il n'y en a pas. Ces tests lisent les résidus d'un modèle ajusté, leurs lois sont donc des approximations, et avec beaucoup d'observations ils détectent des écarts trop petits pour compter.",
+      "method_nyblom": "Le test de Nyblom demande si les paramètres ont été les mêmes sur tout l'échantillon : les scores de la vraisemblance, cumulés dans le temps, restent près de 0 quand les paramètres sont constants et s'en éloignent quand l'un d'eux bouge. La p-valeur est calculée à partir de la loi asymptotique du test (inversion d'Imhof, avec une erreur de troncature sous 0,0000001), pour que tout α puisse être lu ; les tests des paramètres seuls sont ajustés par Holm pour leur nombre.",
+      "method_sign_bias": "Le test du biais de signe d'Engle et Ng régresse z² sur le fait que le dernier choc était une baisse, et sur la taille de la dernière baisse et de la dernière hausse : si le modèle a pris la façon dont baisses et hausses font bouger la volatilité, aucun des trois termes ne compte. Le verdict est leur test de Wald conjoint.",
+      "method_forecast": "La prévision de la volatilité prolonge la récursion de la variance à partir du dernier instant, les chocs futurs remplacés par leur espérance : elle va du niveau actuel vers le niveau de long terme au rythme de la persistance. La VaR à 1 pas du premier pas à venir, dans la sortie, utilise cette prévision."
+    },
+    "formula_texts": {
+      "formula_var_1step": "VaR_t = μ_t + σ_t q_(1−c), q le quantile de la loi ajustée, c le niveau de la VaR ;  un dépassement quand r_t < VaR_t (pour la queue haute d'un ARIMA, quand y_t > VaR_t)",
+      "formula_kupiec": "LR_uc = −2 ln[(1 − p)^(T−x) p^x] + 2 ln[(1 − x/T)^(T−x) (x/T)^x], p = 1 − c, x dépassements sur T observations (0 · ln 0 = 0) ;  χ² à 1 degré de liberté",
+      "formula_christoffersen": "π_01 = n_01 / (n_00 + n_01), π_11 = n_11 / (n_10 + n_11), π = (n_01 + n_11) / (T − 1) ;  LR_ind = −2 ln[(1 − π)^(n_00 + n_10) π^(n_01 + n_11)] + 2 ln[(1 − π_01)^(n_00) π_01^(n_01) (1 − π_11)^(n_10) π_11^(n_11)], χ² à 1 degré de liberté ;  LR_cc = LR_uc sur T − 1 observations + LR_ind, χ² à 2",
+      "formula_mean": "r_t = μ + Σ_(i=1)^(m) φ_i (r_(t−i) − μ) + Σ_(j=1)^(n) θ_j ε_(t−j) + ε_t ;  ε_t = σ_t z_t, z_t indépendants de moyenne 0 et de variance 1",
+      "formula_variance": {
+        "variance_model=arch": "σ²_t = ω + Σ_(i=1)^(q) α_i ε²_(t−i)",
+        "variance_model=gjr": "σ²_t = ω + Σ_(i=1)^(q) (α_i + γ_i I_(t−i)) ε²_(t−i) + Σ_(j=1)^(p) β_j σ²_(t−j) ;  I_(t−i) = 1 quand ε_(t−i) < 0, 0 sinon",
+        "variance_model=egarch": "ln σ²_t = ω + Σ_(i=1)^(q) (α_i z_(t−i) + γ_i (|z_(t−i)| − E|z|)) + Σ_(j=1)^(p) β_j ln σ²_(t−j)",
+        "": "σ²_t = ω + Σ_(i=1)^(q) α_i ε²_(t−i) + Σ_(j=1)^(p) β_j σ²_(t−j)"
+      },
+      "formula_distribution": {
+        "distribution=norm": "f(z) = exp(−z²/2) / √(2π)",
+        "distribution=sstd": "f(z) = 2 / (ξ + 1/ξ) · f*(z/ξ) pour z ≥ 0 et f*(z ξ) pour z < 0, f* la loi de Student à ν degrés de liberté ; puis déplacée et mise à l'échelle pour une moyenne 0 et une variance 1 (Fernández et Steel)",
+        "": "z = t √((ν − 2) / ν), t une variable de Student à ν > 2 degrés de liberté : moyenne 0, variance 1"
+      },
+      "formula_likelihood": "ℓ(θ) = Σ_t [ln f(z_t) − ln σ_t], z_t = ε_t / σ_t ;  covariance robuste H^(−1) S H^(−1), H la hessienne de −ℓ, S la somme des produits extérieurs des scores ;  AIC = −2ℓ + 2k, BIC = −2ℓ + k ln n",
+      "formula_persistence": "P = Σα + Σβ (ARCH, GARCH) ;  Σα + Σβ + κ Σγ avec κ = E[z² 1(z < 0)] (GJR) ;  Σβ (EGARCH) ;  demi-vie = ln(1/2) / ln P ;  σ de long terme = √(ω / (1 − P))",
+      "formula_portmanteau": "Q_W = n (n + 2) Σ_(k=1)^(m) ((m − k + 1) / m) ρ̂_k² / (n − k), sa p-valeur par l'approximation gamma de Fisher et Gallagher ;  ρ̂_k l'autocorrélation de z (de z²) au retard k",
+      "formula_arch_lm": "z²_t = a_0 + Σ_(l=1)^(L) a_l z²_(t−l) + u_t ;  LM = n R², χ² à L degrés de liberté",
+      "formula_nyblom": "L = (1/n) Σ_t S_t' V^(−1) S_t, S_t les scores cumulés jusqu'à t, V leur variance ;  p = P(W_k > L), W_k = Σ_(j≥1) χ²_(k,j) / (j² π²), par l'inversion d'Imhof ;  les k tests individuels ajustés par Holm",
+      "formula_sign_bias": "z²_t = b_0 + b_1 N_(t−1) + b_2 N_(t−1) z_(t−1) + b_3 (1 − N_(t−1)) z_(t−1) + u_t, N = 1 quand z < 0 ;  test de Wald de b_1 = b_2 = b_3 = 0, χ² à 3 degrés de liberté"
+    },
+    "measure_readings": [
+      "summary",
+      "summary_steps",
+      "summary_holdout",
+      "summary_holdout_steps",
+      "summary_prices",
+      "summary_scale",
+      "persistence",
+      "persistence_integrated",
+      "sigma_now_above",
+      "sigma_now_below",
+      "sigma_now_equal",
+      "asymmetry_gjr",
+      "asymmetry_gjr_falls_only",
+      "asymmetry_egarch",
+      "asymmetry_none",
+      "distribution_norm",
+      "distribution_std",
+      "distribution_sstd",
+      "z2_largest_acf",
+      "backtest_independence_not_computed",
+      "backtest_expected",
+      "backtest_short"
+    ]
+  }
+}
