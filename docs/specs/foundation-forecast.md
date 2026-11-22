@@ -1482,8 +1482,7 @@ sentences). A series' `not_measured` reason: `too_short`, `no_holdout`, `zero_sc
 2. **The relative MASE is drawn for the series drawn**, not «the first 20 by total»: the page cannot rank the series by `total` (the same reason), and the
    table beside it holds every series. It is a dot per series with its line at 1 (the engine's interval chart: a bar chart has no line), on a log scale.
 3. **The baseline is a line in amber, not dashed**: the engine's `xy` chart draws dashes only for its reference lines.
-4. **The holdout's charts have no baseline**: `series_curve` holds one `baseline` line, which the fixture writes on the forecast's instants. A
-   `holdout_baseline` line from F3 would need one mark in `_holdout` (a request, not done: a line with no rows would still enter the legend).
+4. **The holdout's charts draw the seasonal naïve** from the line `holdout_baseline` that lot F3 writes beside the holdout's (see «After F3»).
 5. **The licence on the first page is its line** («Forecast by …, weights by Mistral AI under the Modified MIT License: the licence's full text is on the
    last page»), the text verbatim on the last page, as «Where else the note appears» says; the text is never translated (Boundaries).
 6. **Two summary ids and one forecast id more than the spec's list** (`summary_one`, `summary_*_steps`, `forecast_bands_steps`), and `comparison_few_series`:
@@ -1508,6 +1507,25 @@ decomposition). Run together with `test_report_explanations`,
 `test_explanations_regression_survival`, `test_explanations_ts_trees_clv`, `test_models_ab_review`, `test_models_catalog`,
 `test_models_output_columns`, `test_models_results`, `test_reports_model`, `test_stats_explanations` and `test_stats_layouts`, **1,798 passed**
 (the CI image, `--memory=2500m --cpus=1`).
+
+**After F3 (2026-11-22).** Checked on three real runs of F3's runner in the group's image (Timestral-5M: three daily series of different ends with a
+past covariate with empty values; one series in steps without a series column; two series in steps, one of 40,000 values): every reading and note
+is a sentence in the five languages, no `@`, `{` or `%2` left, every note row has its name, the PDFs have five or six pages and no warning. Changed:
+
+- the holdout's charts draw `holdout_baseline` (amber, as on the horizon), and their caption says so;
+- the notes' rows are named in the five languages, those with a number too (`note_context_cut_1…3`, `note_covariate_missing_1…16`,
+  `note_ends_early`, `note_future_left_out`, `note_history_shrunk`, `note_time_budget`, `note_series_left_out`); their sentences were already said
+  by their `@id`, whatever the row's name;
+- new note templates: `ends_early_steps` (count, last: a position) for a time in steps, and `series_kept` (kept, total, most) for the table of the
+  series cut to the results' ceiling; a count is said after a colon («Series that end before 26 Jul 2022, the latest end: 1»), so that one is not
+  «1 series end»; the same for `holdout_not_measured`;
+- without a series column the one series is named after the value column: the slot's name, the series' table and `summary_one` read right
+  («Timestral-5M forecast «boxes» 24 steps ahead from position 150»).
+
+**Requests to the runner** (`ff_timestral.py`, not this lot's file): (1) with a time in steps, write the note as `@ends_early_steps count=… last=…`
+(today `@ends_early` says the position as a date: «… before 7 Jul 2079»); (2) write `note_series_left_out` as `@series_kept kept=… total=…
+most=…` (today an English sentence, said as it is in every language). The id is `series_kept`, not `series_left_out`, so that the English
+sentence of today's runner is still said whole rather than through a template whose numbers it does not send.
 
 ### F3 — the runner
 
@@ -1614,6 +1632,34 @@ and past covariates); the engine's `test_models_output_columns`, `test_models_la
 `test_models_results`: **1,184 passed** (the CI image, 2.5 GB, 1 CPU); the editor's `model-catalog.test.mjs` (54); `go test ./internal/modelgroups/
 ./cmd/modelgroup/`. The runner's real results of three runs (three series, two shops with known and past covariates, gaps filled) pass the engine's
 `check_table` and F4's report in English and Italian with no sentence left as an id.
+
+### F6 — gateway checks and MLflow
+
+**Built (2026-11-22).** No migration, no change to the runner.
+
+1. **`size_absent` before the Job.** `ReadyModelGroupImage` now carries `Sizes` (the version's `# tabularia:weights` line, the recipe's sizes
+   when it has none) and `Licence` (its `# tabularia:licence` line) for a group with weights. `planModel`, «Before anything», calls
+   `modelSizeRefusal`: a `size` the version was not built with fails the step with the runner's sentence («model «Forecast»: Timestral-209M was not
+   downloaded by this installation: choose 5M or 28M, or ask an administrator to add it»; one size: «choose 28M, or»; none: «ask an
+   administrator…»), before any input, ConfigMap or Job, and before the refusals about the data. The runner's own refusal stays as the second line
+   of defence.
+2. **`registerAs`** is refused for `timestral` as for the A/B and the decomposition (it has `card: false`): «a pre-trained forecast registers no
+   model: its run is logged to MLflow».
+3. **The task** carries `licence: {"by", "at"}` (`modelgroups.TaskLicence`, `at` ISO UTC) from the version in use's acceptance line, and only for a
+   group with weights and an acceptance line; the runner then writes `licence_accepted`. `task.limits` gains `weights_<size>: 1` for each size
+   present (the runner reads the disk, so these are for the record; the limits are integers).
+4. **MLflow tags** (`weightsTags`): `tabularia.weights.repo`, `.revision`, `.sha256` (the size's `model.safetensors`), `.licence_sha256` (the
+   licence's, from the recipe) and `tabularia.size`; they are also on the run of a failed step. **Metrics per series**: `series.<label>.<stat>`
+   for every numeric statistic of the first 100 series by `total` (ties by label) *of the rows that are there*: a table the runner cut above about
+   5,000 series (`note_series_left_out`) logs the largest 100 it kept; the key rules (250 characters, collisions suffixed) are the existing ones.
+   The text `not_measured` is not a metric.
+5. **The Job's environment** for a group with weights: `HF_HUB_OFFLINE=1`, `TORCH_HOME=/tmp/torch`, `MKL_NUM_THREADS` (with the `OMP_NUM_THREADS` and
+   `HOME=/tmp` that every model Job has) equal to the threads. `/tmp`'s `sizeLimit` is the boosting's rule unchanged: the weights are in the
+   image, not in `/tmp`, so the input and the margin are what it holds.
+
+**Tests** (gateway, `jobs_models_test.go`, `jobs_models_mlflow_test.go`): the sizes refusal for each count of sizes present and for a group without
+weights; the environment, the licence of the task and its JSON with and without an acceptance; the five tags; the series' metrics (130 series, 100
+logged, text left out); `registerAs` for `timestral`.
 
 ## References
 
