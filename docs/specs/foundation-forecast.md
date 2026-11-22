@@ -1,6 +1,6 @@
 # Spec: forecasting with a pre-trained model — the group `foundation_forecast` (Timestral)
 
-Status: **approved by the owner on 2026-11-21. This file is not committed.** Nothing is built. The
+Status: **approved by the owner on 2026-11-21; built in lots F0–F8 and reviewed in F9 (2026-11-22): «As built».** The
 same day the owner answered «Open questions for the owner» (each marked «Decided 2026-11-21»): every
 recommendation approved, with **one change — no migration**: there is no table
 `model_group_licences`; the acceptance is the audit entry `models.licence_accept`, and each version of
@@ -523,7 +523,8 @@ info icon, not an error):
    (`https://huggingface.co/mistralai/Timestral-28M/blob/49b26409…/LICENSE`), and the full text shipped
    with Tabularia, expandable in place (`licence/LICENSE.txt`, the same bytes).
 5. **The sizes to download**, checkboxes with their sizes («5M · 21 MB», «28M · 111 MB», «123M · 490 MB»,
-   «209M · 837 MB»), all ticked by default (decided 2026-11-21); at least one.
+   «209M · 837 MB»), all ticked by default on a group never built (decided 2026-11-21); **Build again** ticks the sizes of
+   the version in use (lot F9); at least one.
 6. **The checkbox**, unticked, required: «I have read the licence of the Timestral weights, and the
    organisation that uses this installation may use them under it, or holds a separate licence from
    Mistral AI.» (decided 2026-11-21: these words; no question on revenue).
@@ -616,8 +617,8 @@ help):
 | Where | What |
 |---|---|
 | The group's card | The line above (from the current version's record), with the link, while the group exists |
-| The node's form | Under the size: «Weights by Mistral AI under the Modified MIT License, accepted for this installation by your administrator» and the link |
-| The report | First page: one line under the cards («Forecast by Timestral-28M, weights by Mistral AI under the Modified MIT License: see the last page»); the last page: the attribution notice and the licence's text verbatim, the repository, the revision and the sha256 of the weights used |
+| The node's form | Under the size: «Weights under the Modified MIT License (Mistral AI), accepted for this installation by your administrator» and the link to the licence at the pinned revision of the node's size, both from the gateway (`/models/groups`, lot F9) |
+| The report | First page: one line under the cards («Forecast by Timestral-28M, weights by Mistral AI under the Modified MIT License, which grants no rights "if the global consolidated monthly revenue of your company (or that of your employer) exceeds $20 million (or its equivalent in another currency) for the preceding month": the licence's full text is on the last page», the clause quoted in English, said in the other four languages, lot F9); the last page: the attribution notice and the licence's text verbatim, the repository, the revision and the sha256 of the weights used |
 | MLflow | Tags `tabularia.weights.repo`, `.revision`, `.sha256`, `tabularia.weights.licence_sha256` |
 | Documentation | `docs/capabilities/models.md` «Pre-trained forecasting (Timestral)» opens with the licence: the clause quoted, the threshold, who decides, «not legal advice», the link; `docs/governance/audit-log.md` gains `models.licence_accept`; `docs/deploy/kubernetes.md` the hosts and mirrors |
 
@@ -766,7 +767,7 @@ All on the holdout (the last k observed values of each series), **measures, with
 | sMAPE | mean_t 200 \|y_t − ŷ_t\| / (\|y_t\| + \|ŷ_t\|) in %, steps where both are 0 left out and counted |
 | Pinball loss | ρ_q(u) = max(q u, (q − 1) u), u = y − ŷ_q; mean over the 21 levels and the steps; also **scaled** (÷ mean \|y_t\|, the «weighted quantile loss») so that series of different sizes compare |
 | Coverage | share of steps inside the 80 % band (0.1–0.9) and the 90 % band (0.05–0.95) |
-| Across series | the mean MASE and sMAPE, the geometric mean of the relative MASE, the pooled coverage, the scaled pinball loss weighted by each series' scale |
+| Across series | the mean MASE and sMAPE, the geometric mean of the relative MASE, the pooled coverage, the scaled pinball loss of the series together (Σ of each series' pinball × its steps ÷ Σ\|y\|: weighted by the size of each series' values, not by its MASE scale; F9) |
 
 **The baseline** is the **seasonal naïve** forecast, the last season repeated: ŷ_{T+h} = y_{T+h−m⌈h/m⌉}
 (the naïve, the last value, when m = 1). It needs no fit, costs nothing, and is the reference MASE is
@@ -788,8 +789,10 @@ two-sided, against the node's `alpha`. Exact null distribution without ties and 
 (the counts of the 2ⁿ sign patterns by dynamic programming, numpy), normal approximation with the tie
 correction above or with ties — as `scipy.stats.wilcoxon` with `method = "auto"`, its witness; a zero
 difference is dropped (`zero_method = "wilcox"`) and counted. Verdict: `supported` (Timestral better,
-p < alpha and the median d < 0), `opposite` (the baseline better, p < alpha and median d > 0),
-`not_supported` (p ≥ alpha). The row also writes how many series each side won.
+p < alpha and W− > W+), `opposite` (the baseline better, p < alpha and W+ > W−), `not_supported` (p ≥ alpha):
+the side is the test's, the sign of the rank-biserial correlation (W+ − W−) / (W+ + W−), written as
+`rank_biserial`; the median of d (`value`) is a description and can lie on the other side (lot F9). The row
+also writes how many series each side won.
 
 Why this test: the question «is the pre-trained model's advantage over the seasonal naïve more than the
 luck of these series?» is a test's question, and the series are the independent units the data hold
@@ -1784,6 +1787,101 @@ in its Column select, in both browsers.
 another `LICENSE.txt`); 3 passed (the readings seen in English and Italian only); 4 passed; 5 not tried by hand (the self-test's 34 checks,
 which hold the reference cases, pass); 6 partly: 100,000 points and 1,000 series with two sizes, the rest not measured; 7 passed on kind (no
 recipe of another group changed, no rebuild started, every current version not stale).
+
+### F9 (2026-11-22): final review
+
+**What was read.** This spec against the catalogue, the runner and its vendored package, the gateway (`models_admin.go`,
+`models_licence.go`, `jobs_models*.go`, `models_build.go`, `scriptimage.go`), the editor (`ModelsSection.vue`, `ModelForm.vue`,
+`modelCatalog.ts`), the report's layout and words, the assistant and the documentation. The licence's quote in the spec, the
+documentation and the report is the file of the four repositories (sha256 `648194…3fc8c`, the vendored `licence/LICENSE.txt`,
+tested byte for byte). The formulas were checked against the witnesses: the `measures` of `expected.json` against `ff_measures`
+and against numpy written again (largest relative gap 7.3e-16), the ten `wilcoxon` cases and 3,000 random ones with ties and zeros
+against `scipy.stats.wilcoxon` 1.18.1 (`correction=False`, `method="auto"`: the exact, sign-pattern and normal paths; the same
+statistics, p-values equal or within 1.1e-14). The readings in the five languages against the owner's rule.
+
+**Corrected** (each with its test):
+
+1. **The series' metrics reach MLflow.** The gateway's read-back of the results asked for every section but `series`, so no
+   `series.<label>.<stat>` was ever logged (F8, finding 1). It now asks for `series` too (`resultSectionsLogged`): only this model
+   writes that section, so the other models' metrics are the same. The fake engine of the tests now answers only the sections
+   asked, as the engine does, which is why the gap was invisible.
+2. **Build again ticks the sizes of the version in use** (its `# tabularia:weights` line, answered as `licence.sizes_in_use` by
+   `GET /admin/models`); a group with no version in use ticks the four, as decided. The box is drafted afresh at each Build again.
+3. **A push denied after network errors** (a 401 after minutes of `i/o timeout`, the token expired meanwhile: F8, finding 3) now
+   says what the log shows: the registry answered «401 Unauthorized» after network errors (the first named), the credentials were
+   refused or expired while the connection was slow or interrupted; check first that the build reaches the registry (its address,
+   `networkPolicy.userCodePrivateCIDRs`), then the push Secret. A 401 without network errors keeps its sentence.
+4. **The reports' layout** (F8's findings): the sMAPE cells keep «%» with their number (a no-break space, a wider column);
+   the last holdout chart of an odd count takes the whole width (each left slot has a full-width form, visible when the slot on
+   its right is empty); the relative MASE's values are written above their dots (`labels_above`, a new option of the engine's
+   interval chart, off by default), clear of the line at 1. ARIMA: the title «ADF and KPSS read together», its line «The four
+   cases…» and the first three cases ask to be kept with what follows (`keep_with_next`), so the block moves whole to the next
+   page instead of leaving its title at the foot of one.
+5. **The form's licence line comes from the gateway**: `/models/groups` answers `licence` (`name`, and `urls`, the licence's text
+   at the pinned revision of each size the version in use holds); the editor's constant `MODEL_GROUP_LICENCES`, whose link pointed
+   at the Hub's moving `main`, is gone, and the link follows the node's size. The sentence no longer repeats «by Mistral AI» (the
+   name says it).
+6. **The first page says the clause**: the licence line now quotes it in English, word for word from the licence («…which grants
+   no rights "if the global consolidated monthly revenue of your company (or that of your employer) exceeds $20 million (or its
+   equivalent in another currency) for the preceding month"…»), and says it faithfully in the four other languages (the employer,
+   the currency, the preceding month). A test holds the English quote to the vendored file.
+
+**Found by the review, and corrected:**
+
+7. **The side of a rejection was the median's, not the test's** (medium). The verdict «Timestral ahead» or «seasonal naïve
+   ahead» was read from the sign of the median difference, which can lie on the other side of the test: 26 differences of +0.01
+   and 24 near −1 give W+ = 351, W− = 924, p = 0.0049 and a median of +0.01, and the report said the baseline was ahead. The
+   runner now writes `rank_biserial` = (W+ − W−) / (W+ + W−) beside the test (a new number of the section `assumption`, in the
+   catalogue and its copies) and chooses the sentence by it; the layout reads it (a result without it falls back to the median);
+   the witness (`make_reference.py`) takes the side from scipy's W+. The four cases of `expected.json` that reject agree with both
+   rules. A self-test check holds the example.
+8. **Sentences of measures that judged** (medium, five languages): the explanation of the coverage («too narrow», «wider than
+   needed») now says only where the share lies against the nominal one and what that means about the quantiles; «a clear
+   advantage» became «a large difference», a covariate that «helps» one that «is read for the future»; the opposite verdict lost
+   «Timestral is worse here than repeating the last season» and «only»; the relative MASE's sentence says what a geometric mean
+   says. The verdicts say «this lopsided, in either direction» (the test is two-sided). The explanation of Wilcoxon names its third
+   path (the sign patterns counted with ties or zeros, up to 13 differences) and the side rule. Italian, French and Spanish named
+   «values» where English and German name the unit of the holdout (days, hours…): now the unit. The test of the measures' words now
+   covers the method's paragraphs, the alpha line and the formulas, with a list of words of judgement of its own per language.
+9. **The assistant's licence sentence** now follows the clause (the employer, the currency, the preceding month, derivatives) and
+   says that an administrator accepted it, not that they read it; the rule on the settings that shape a verdict names the holdout
+   and the season of the node. `prompts.json` regenerated.
+10. **The runner's table of the sizes** (`ff_timestral.SIZES`: repository, revision, weights' and config's sha256) and its licence
+    are tied to the recipe by a Go test (they were equal by hand).
+
+**Checked, nothing to correct.** Security: no `pickle`, `torch.load`, `eval`, `exec` or `allow_pickle` in the runner or the
+vendored package; the weights are read by `safetensors.load_file` (strict) from `/opt/tabularia/weights/<size>`, `size` one of four
+(the catalogue's choice, checked again by the runner before any path is made: «../x» is `size_absent`); the vendored files equal
+`vendor.json`, and `loading.py` differs from the commit's by the moved import only; the Hub's branch cannot be reached (no
+`huggingface_hub` in the image, a Go test forbids it, `HF_HUB_OFFLINE=1`); the check Job recomputes the sha256 of each size's three
+files. Hostile values: quantiles out of the 21, NaN, strings or repeated are refused by the catalogue or the runner; covariates are
+column names used only as names; a series' or a column's name inside a reading row is percent-encoded and cannot add a parameter;
+a series named like a formula («=HYPERLINK(…)», «@SUM(…)», «+1-1») stays text in the PDF and the workbook (the engine writes every
+string as a string; a new test). The assistant: the data stay between their markers with the rule that a request in them is not the
+person's, for this node too; no tool accepts the licence or enables a group. The licence: no build of a group with weights without
+a valid `models.licence_accept` (F1's tests).
+
+**Golden.** On clean copies of `c58ea39f` and of it with this lot's files, the fake chart service, every fixture and every variant
+of the statistics tests in five languages, the PDF, the definition, the labelled rows and the charts asked: **505 renderings, 490
+identical**; ARIMA's ten definitions changed (`keep_with_next`; one PDF, German `arima-manual`, moves the block to the next page),
+Timestral's five changed (the layout and the words). No warning.
+
+**Left to the owner.** (a) WQL is written as Σ pinball ÷ Σ|y| without the factor 2 of the usual definition (2 Σ ρ ÷ Σ|y|): half of
+the published figures; the formula box says it as it is computed. (b) `smape` leaves out the steps where the value and the forecast
+are both 0 but does not count them anywhere (the spec says «counted»). (c) A series whose seasonal naïve has a MASE of 0 leaves the
+geometric mean of the relative MASE silently (`relative_n`). (d) A lawyer's reading of the new first-page line, with the panel and
+the documentation, before the release (Boundaries).
+
+**Tests.** Gateway (Go): `go vet` clean, `gofmt` clean, **53 packages, 524 tests passed, 3 skipped, none failed** (on a
+database migrated by the gateway's image; new: the series' metrics of a flow run, the sections asked, the push denied after network
+errors and alone, the sizes of the version in use, the palette's licence at the pinned revisions, the runner's sizes against the
+recipe). Engine: the model and report tests (13 files, the CI image, `--memory=2500m --cpus=1`) **1,860 passed** (new: the licence
+line in five languages, the measures' words, the side of the verdict by `rank_biserial`, the sMAPE cell, the lone holdout chart,
+the labels above the dots, a series named like a formula in the PDF and the workbook, ARIMA's four cases). Editor: **595 of 595**,
+`vue-tsc` no error (new: Build again's sizes, the licence read from the gateway and the link of the node's size). Assistant:
+**138 passed, 2 skipped**. The group's self-test in its image with this lot's files mounted (no network, read-only, 2 CPUs,
+2.5 GB): the sha256 of the four sizes' files, then **36 checks, none failed or skipped** (new: the side of the test on the
+example above).
 
 ## References
 

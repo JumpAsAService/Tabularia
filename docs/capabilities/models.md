@@ -1285,7 +1285,8 @@ employer's, for the preceding month) **the licence gives no right to use the wei
 is needed**. Below it, the other condition of the licence (the attribution notice and the permission notice kept in every copy) is
 met by the files Tabularia keeps with the weights and prints in each report. **The administrator decides, and takes the
 responsibility**: when enabling the group (or building it again, or changing the sizes) the panel shows the clause, the sizes
-to download, and a box «I have read the licence of the Timestral weights, and the organisation that uses this installation may
+to download (on a group already built, **Build again** ticks the sizes of the version in use; a group never built ticks all
+four), and a box «I have read the licence of the Timestral weights, and the organisation that uses this installation may
 use them under it, or holds a separate licence from Mistral AI.», which stays unticked until a person ticks it; **Enable** is
 disabled before. Tabularia does not ask about revenue and does not check it. **This is not legal advice**: have your own
 counsel read the licence before enabling the group.
@@ -1350,7 +1351,9 @@ The first page has the licence line, the series, the model and its size, the hor
 - **One test, Wilcoxon's signed-rank test**, on the series' differences between the two MASEs (the pre-trained forecast against the
   seasonal naïve), two-sided, at the node's alpha: *is its advantage more than the luck of these series?* It needs at least two series
   with their measures; with one series there is no test and the measures stay. With few series the test cannot reach a small p-value:
-  five series give 0.0625 at the best, so they can never be «supported» at 0.05, and the reading says so. This is the only
+  five series give 0.0625 at the best, so they can never be «supported» at 0.05, and the reading says so. When it rejects, the
+  forecast ahead is the one whose ranks add up to more (the sign of the rank-biserial correlation, written as `rank_biserial`),
+  not the sign of the median difference, which a few large differences can put on the other side. This is the only
   verdict the page gives.
 
 The next pages draw each series (the history, the bands, the median and the baseline, up to 12 of them), the holdout, the table of
