@@ -33,6 +33,10 @@ type ModelGroupImage struct {
 	MaxTimeoutSeconds int64
 	MaxRows           int64
 	InternetAccess    bool // false: the Job carries the label that keeps it off the internet
+	// Sizes are the sizes of the weights the version was built with (its `# tabularia:weights` line); Licence is the acceptance
+	// its packages text holds (`# tabularia:licence`): both empty for a group without weights.
+	Sizes   []string
+	Licence *mgAcceptance
 }
 
 // ModelGroupUnavailable is why a group cannot run a step now. Message is the sentence the step
@@ -91,6 +95,10 @@ func ReadyModelGroupImage(ctx context.Context, q perm.Querier, group string) (*M
 	}
 	if cur.Arch != nil {
 		img.Arch = *cur.Arch
+	}
+	if g.Recipe.Weights != nil {
+		img.Sizes = mgSizesOfVersion(g, cur)
+		img.Licence = mgAcceptanceOfPackages(cur.PackagesText)
 	}
 	img.CPURequest, img.MemoryRequest = mgHalf(s.CPULimit, true), mgHalf(s.Memory, false)
 	return img, nil

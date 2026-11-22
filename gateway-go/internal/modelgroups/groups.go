@@ -436,6 +436,12 @@ type IDs struct {
 	StepRunID int64  `json:"step_run_id,omitempty"`
 }
 
+// TaskLicence is who accepted the weights' licence and when (ISO, UTC): the audit row's actor and time.
+type TaskLicence struct {
+	By string `json:"by"`
+	At string `json:"at"`
+}
+
 // Task is task.json, what a model Job is asked to do (protocol.R).
 type Task struct {
 	Protocol     int            `json:"protocol"`
@@ -452,8 +458,10 @@ type Task struct {
 	Limits       map[string]int `json:"limits"`
 	InputRows    int64          `json:"input_rows,omitempty"`
 	IDs          IDs            `json:"ids"`
-	RecipeHash   string         `json:"recipe_hash"`
-	RunnerHash   string         `json:"runner_hash"`
+	// Licence is the acceptance of the weights' licence of the version in use (a group with weights): who and when
+	Licence    *TaskLicence `json:"licence,omitempty"`
+	RecipeHash string       `json:"recipe_hash"`
+	RunnerHash string       `json:"runner_hash"`
 }
 
 // FitTask is the task of a model node: its parameters checked by the catalogue (a refusal

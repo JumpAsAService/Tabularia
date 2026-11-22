@@ -10,6 +10,7 @@ import (
 	"math"
 	"net/http"
 	"os"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -215,6 +216,9 @@ func (q *queue) planModel(ctx context.Context, user *auth.User, node pyjson.Obje
 	case delay < 0:
 		delay = 0
 	}
+	if why := modelSizeRefusal(group, checked, img); why != "" {
+		return nil, &scriptFailed{fmt.Sprintf("model «%s»: %s", label, why)}
+	}
 	budget, err := budgetSeconds(data)
 	if err != nil {
 		return nil, err
@@ -225,6 +229,42 @@ func (q *queue) planModel(ctx context.Context, user *auth.User, node pyjson.Obje
 	}
 	return &modelStep{label: label, model: model, group: group, checked: checked, output: output, img: img,
 		timeout: timeout, retries: retries, delay: delay, budget: budget}, nil
+}
+
+// modelSizeRefusal is why a model of a group with weights cannot run its size: the version in use was not built with it
+// (the runner refuses it too, but only after the refusals about the data, and after a Job was started). "" when it can.
+func modelSizeRefusal(group string, checked map[string]any, img *ModelGroupImage) string {
+	g, ok := modelgroups.Get(group)
+	size, _ := checked["size"].(string)
+	if !ok || g.Recipe.Weights == nil || size == "" {
+		return ""
+	}
+	if slices.Contains(img.Sizes, size) {
+		return ""
+	}
+	name := "Timestral-" + strings.ToUpper(size)
+	var present []string
+	for _, s := range img.Sizes {
+		present = append(present, strings.ToUpper(s))
+	}
+	choose := ""
+	switch {
+	case len(present) == 1:
+		choose = "choose " + present[0] + ", or "
+	case len(present) > 1:
+		choose = "choose " + strings.Join(present[:len(present)-1], ", ") + " or " + present[len(present)-1] + ", or "
+	}
+	return name + " was not downloaded by this installation: " + choose + "ask an administrator to add it"
+}
+
+// weightsEnv is the environment of a Job of a group with weights: the weights are in the image, so nothing is fetched, and the
+// libraries' caches and threads stay inside /tmp and the Job's CPU.
+func weightsEnv(group, threads string) pyjson.Object {
+	if g, ok := modelgroups.Get(group); !ok || g.Recipe.Weights == nil {
+		return nil
+	}
+	return pyjson.Object{{Key: "HF_HUB_OFFLINE", Value: "1"}, {Key: "TORCH_HOME", Value: "/tmp/torch"},
+		{Key: "MKL_NUM_THREADS", Value: threads}}
 }
 
 // modelMaxRows is the most input rows a model reads: its group's (the recipe's, or what an administrator set), or the model's
@@ -587,6 +627,12 @@ func (q *queue) runModel(ctx context.Context, r *scriptNodeRun) (*flowresolver.S
 		if in.rows != nil {
 			task.InputRows = *in.rows
 		}
+		if g, ok := modelgroups.Get(s.group); ok && g.Recipe.Weights != nil {
+			task.Licence = licenceOfTask(s.img)
+			for _, size := range s.img.Sizes {
+				task.Limits["weights_"+size] = 1 // the sizes this installation holds
+			}
+		}
 		task.RowsFrom = "run"
 		if trial {
 			task.RowsFrom = "trial"
@@ -619,7 +665,7 @@ func (q *queue) runModel(ctx context.Context, r *scriptNodeRun) (*flowresolver.S
 			{Key: "TABULARIA_STEP_ID", Value: stepID}, {Key: "TABULARIA_RUN_ID", Value: fmt.Sprint(runID)},
 			{Key: "TABULARIA_FLOW_ID", Value: fmt.Sprint(r.flow.ID)}, {Key: "TABULARIA_NODE_ID", Value: pyjson.Str(nodeID)},
 			{Key: "OMP_NUM_THREADS", Value: threads}, {Key: "OPENBLAS_NUM_THREADS", Value: threads},
-			{Key: "HOME", Value: "/tmp"}, {Key: "TMPDIR", Value: "/tmp"}}, storage.env())
+			{Key: "HOME", Value: "/tmp"}, {Key: "TMPDIR", Value: "/tmp"}}, weightsEnv(s.group, threads), storage.env())
 		key, err := d.Fernet.Decrypt(storage.SecretEnc)
 		if err != nil {
 			return nil, err
@@ -654,6 +700,14 @@ func (q *queue) runModel(ctx context.Context, r *scriptNodeRun) (*flowresolver.S
 		q.logFailedModel(ctx, r, s, child, err)
 	}
 	return q.closeChild(ctx, child, out, err, "model «"+s.label+"»")
+}
+
+// licenceOfTask is the acceptance the version in use holds, as task.json says it; nil without one.
+func licenceOfTask(img *ModelGroupImage) *modelgroups.TaskLicence {
+	if img.Licence == nil || img.Licence.By == "" {
+		return nil
+	}
+	return &modelgroups.TaskLicence{By: img.Licence.By, At: img.Licence.At.UTC().Format("2006-01-02T15:04:05Z")}
 }
 
 // modelgroupsLanguage is the group's language («r»), for the run page.

@@ -1077,3 +1077,61 @@ func TestTheChecksScriptRecomputesTheWeights(t *testing.T) {
 	}
 	_ = g
 }
+
+// A run on a size the version in use was not built with is refused before any Job, in the runner's own words.
+func TestASizeTheVersionWasNotBuiltWithIsRefusedBeforeTheJob(t *testing.T) {
+	img := &ModelGroupImage{Group: "foundation_forecast", Sizes: []string{"5m", "28m"}}
+	for size, want := range map[string]string{
+		"5m": "", "28m": "",
+		"209m": "Timestral-209M was not downloaded by this installation: choose 5M or 28M, or ask an administrator to add it",
+		"123m": "Timestral-123M was not downloaded by this installation: choose 5M or 28M, or ask an administrator to add it",
+	} {
+		if got := modelSizeRefusal("foundation_forecast", map[string]any{"size": size}, img); got != want {
+			t.Errorf("%s: %q", size, got)
+		}
+	}
+	if got := modelSizeRefusal("foundation_forecast", map[string]any{"size": "5m"}, &ModelGroupImage{Sizes: []string{"28m"}}); got !=
+		"Timestral-5M was not downloaded by this installation: choose 28M, or ask an administrator to add it" {
+		t.Errorf("one size: %q", got)
+	}
+	if got := modelSizeRefusal("foundation_forecast", map[string]any{"size": "5m"}, &ModelGroupImage{}); got !=
+		"Timestral-5M was not downloaded by this installation: ask an administrator to add it" {
+		t.Errorf("no size: %q", got)
+	}
+	three := modelSizeRefusal("foundation_forecast", map[string]any{"size": "209m"}, &ModelGroupImage{Sizes: []string{"5m", "28m", "123m"}})
+	if !strings.Contains(three, "choose 5M, 28M or 123M, or ask") {
+		t.Errorf("three sizes: %q", three)
+	}
+	// a group without weights has no size to check
+	if got := modelSizeRefusal("boosting", map[string]any{"size": "209m"}, img); got != "" {
+		t.Errorf("boosting: %q", got)
+	}
+}
+
+// The Job of a group with weights reads nothing from the network and keeps its caches and threads in /tmp and its CPU.
+func TestAWeightsGroupsJobIsOfflineWithItsThreads(t *testing.T) {
+	env := weightsEnv("foundation_forecast", "3")
+	want := map[string]string{"HF_HUB_OFFLINE": "1", "TORCH_HOME": "/tmp/torch", "MKL_NUM_THREADS": "3"}
+	for k, v := range want {
+		if env.Value(k) != v {
+			t.Errorf("%s = %v", k, env.Value(k))
+		}
+	}
+	if weightsEnv("boosting", "3") != nil || weightsEnv("regression", "3") != nil {
+		t.Error("another group has the weights' environment")
+	}
+	at := time.Date(2026, 11, 21, 10, 14, 3, 0, time.UTC)
+	lic := licenceOfTask(&ModelGroupImage{Licence: &mgAcceptance{By: "ada@example.com", At: at}})
+	if lic == nil || lic.By != "ada@example.com" || lic.At != "2026-11-21T10:14:03Z" {
+		t.Errorf("licence %+v", lic)
+	}
+	if licenceOfTask(&ModelGroupImage{}) != nil {
+		t.Error("a licence without an acceptance")
+	}
+	if got := string(modelgroups.Task{Licence: lic}.JSON()); !strings.Contains(got, `"licence":{"by":"ada@example.com","at":"2026-11-21T10:14:03Z"}`) {
+		t.Errorf("task.json %s", got)
+	}
+	if got := string(modelgroups.Task{}.JSON()); strings.Contains(got, "licence") {
+		t.Errorf("task.json without an acceptance: %s", got)
+	}
+}

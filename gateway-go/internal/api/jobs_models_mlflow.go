@@ -22,6 +22,7 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/mlflowconn"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/modelcatalog"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/modelgroups"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/sharelinks"
 )
@@ -97,8 +98,11 @@ func (q *queue) planMLflow(ctx context.Context, user *auth.User, node pyjson.Obj
 	// a node that makes no model card (`card: false`, the experiments' and the decomposition) has no model to register: its run is logged and no more
 	if model, _ := nodeData(node).Value("model").(string); register != "" && modelcatalog.GroupOf(model) != "" && !modelcatalog.HasCard(model) {
 		what := "an A/B test"
-		if model == "decomposition" {
+		switch model {
+		case "decomposition":
 			what = "a decomposition"
+		case "timestral":
+			what = "a pre-trained forecast"
 		}
 		return refuse(what + " registers no model: its run is logged to MLflow")
 	}
@@ -574,8 +578,32 @@ func (q *queue) mlflowTags(ctx context.Context, r *scriptNodeRun, s *modelStep, 
 	if n, ok := pyInt(child.info.Value("input_rows")); ok && child.info.Value("input_rows") != nil {
 		tags = append(tags, mlflowconn.Tag{Key: "tabularia.input_rows", Value: strconv.FormatInt(n, 10)})
 	}
-	return tags, nil
+	return append(tags, weightsTags(s)...), nil
 }
+
+// weightsTags say which pre-trained weights a run read: the repository, the revision and the sha256 of the size's model file, the
+// size, and the licence's sha256 (docs/specs/foundation-forecast.md, «MLflow, and no Predict»). Nothing for a group without weights.
+func weightsTags(s *modelStep) []mlflowconn.Tag {
+	g, ok := modelgroups.Get(s.group)
+	if !ok || g.Recipe.Weights == nil {
+		return nil
+	}
+	size, _ := s.checked["size"].(string)
+	w, ok := g.Recipe.Weights.Sizes[size]
+	if !ok {
+		return nil
+	}
+	return []mlflowconn.Tag{
+		{Key: "tabularia.weights.repo", Value: w.Repo},
+		{Key: "tabularia.weights.revision", Value: w.Revision},
+		{Key: "tabularia.weights.sha256", Value: w.Files["model.safetensors"].SHA256},
+		{Key: "tabularia.weights.licence_sha256", Value: g.Recipe.Weights.Licence.SHA256},
+		{Key: "tabularia.size", Value: size},
+	}
+}
+
+// maxSeriesMetrics is how many series a run logs the numbers of (the largest by their total).
+const maxSeriesMetrics = 100
 
 // ── the content ──────────────────────────────────────────────────────────────
 
@@ -915,11 +943,14 @@ func modelMetricsChecked(rows []resultRow, at time.Time) ([]mlflowconn.Metric, [
 	// a customer lifetime model's checks are also measures with a value and no verdict
 	withValue := boosting || isCustomerLifetime(rows)
 	predictors := map[string]bool{}
+	logged := seriesLogged(rows)
 	for _, r := range rows {
 		if r.Value == nil {
 			continue
 		}
 		switch {
+		case r.Section == "series" && r.Level != nil && logged[*r.Level]:
+			add("series."+*r.Level+"."+r.Stat, *r.Value)
 		case r.Section == "model":
 			add(r.Stat, *r.Value)
 		case r.Section == "assumption" && (r.Stat == "statistic" || r.Stat == "p_value" || (withValue && r.Stat == "value")) && r.Level != nil:
@@ -954,6 +985,36 @@ func modelMetricsChecked(rows []resultRow, at time.Time) ([]mlflowconn.Metric, [
 		out[i].Key = names.key(out[i].Key)
 	}
 	return out, names.warnings()
+}
+
+// seriesLogged are the labels of the series whose numbers are logged: the first maxSeriesMetrics of the `series` section by their
+// `total` (then by their label), among the rows the runner wrote: a run past the results' ceiling holds only the series it kept
+// (its note_series_left_out), so what is logged is what is there.
+func seriesLogged(rows []resultRow) map[string]bool {
+	type entry struct {
+		label string
+		total float64
+	}
+	var all []entry
+	for _, r := range rows {
+		if r.Section == "series" && r.Stat == "total" && r.Level != nil && r.Value != nil {
+			all = append(all, entry{*r.Level, *r.Value})
+		}
+	}
+	sort.SliceStable(all, func(i, j int) bool {
+		if all[i].total != all[j].total {
+			return all[i].total > all[j].total
+		}
+		return all[i].label < all[j].label
+	})
+	if len(all) > maxSeriesMetrics {
+		all = all[:maxSeriesMetrics]
+	}
+	out := map[string]bool{}
+	for _, e := range all {
+		out[e.label] = true
+	}
+	return out
 }
 
 // coefficientsCSV is the `coef` section as a table: term, level, then one column per

@@ -1107,7 +1107,7 @@ func TestANodeWithoutACardRefusesRegisterAs(t *testing.T) {
 		return pyjson.Object{{Key: "data", Value: pyjson.Object{{Key: "model", Value: model}, {Key: "mlflow", Value: block}}}}
 	}
 	q := &queue{}
-	for model, what := range map[string]string{"ab_test": "an A/B test", "ab_plan": "an A/B test", "decomposition": "a decomposition"} {
+	for model, what := range map[string]string{"ab_test": "an A/B test", "ab_plan": "an A/B test", "decomposition": "a decomposition", "timestral": "a pre-trained forecast"} {
 		_, err := q.planMLflow(context.Background(), nil, node(model, " checkout-test "), "A/B")
 		if err == nil || err.Error() != "model «A/B»: "+what+" registers no model: its run is logged to MLflow" {
 			t.Errorf("%s: %v", model, err)
@@ -1120,4 +1120,56 @@ func TestANodeWithoutACardRefusesRegisterAs(t *testing.T) {
 		}
 	}()
 	_, _ = q.planMLflow(context.Background(), nil, node("linear", "price-elasticity"), "linear")
+}
+
+// The run of the pre-trained forecast says which weights it read.
+func TestAPretrainedRunsTagsNameItsWeights(t *testing.T) {
+	g, ok := modelgroups.Get("foundation_forecast")
+	if !ok {
+		t.Fatal("no group")
+	}
+	w := g.Recipe.Weights.Sizes["28m"]
+	tags := weightsTags(&modelStep{group: "foundation_forecast", checked: map[string]any{"size": "28m"}})
+	got := map[string]string{}
+	for _, tg := range tags {
+		got[tg.Key] = tg.Value
+	}
+	want := map[string]string{"tabularia.weights.repo": w.Repo, "tabularia.weights.revision": w.Revision,
+		"tabularia.weights.sha256": w.Files["model.safetensors"].SHA256, "tabularia.weights.licence_sha256": g.Recipe.Weights.Licence.SHA256,
+		"tabularia.size": "28m"}
+	for k, v := range want {
+		if v == "" || got[k] != v {
+			t.Errorf("%s = %q, want %q", k, got[k], v)
+		}
+	}
+	if len(tags) != 5 {
+		t.Errorf("%d tags", len(tags))
+	}
+	if weightsTags(&modelStep{group: "boosting", checked: map[string]any{}}) != nil {
+		t.Error("tags of a group without weights")
+	}
+}
+
+// The numbers of the series are logged for the first 100 by total, the table that is there (a run past the results' ceiling holds only
+// the series it kept), and not the text of a series that was not measured.
+func TestTheSeriesMetricsAreTheHundredLargestOfTheTableThatIsThere(t *testing.T) {
+	var rows []resultRow
+	for i := 0; i < 130; i++ {
+		label := fmt.Sprintf("s%03d", i)
+		rows = append(rows, resultRow{Section: "series", Level: ptr(label), Stat: "total", Value: ptr(float64(1000 - i))},
+			resultRow{Section: "series", Level: ptr(label), Stat: "mase", Value: ptr(0.5)},
+			resultRow{Section: "series", Level: ptr(label), Stat: "not_measured", Text: ptr("short")})
+	}
+	rows = append(rows, resultRow{Section: "model", Stat: "n_series", Value: ptr(130.0)})
+	metrics, _ := modelMetricsChecked(rows, time.Now())
+	keys := map[string]bool{}
+	for _, m := range metrics {
+		keys[m.Key] = true
+	}
+	if !keys["series.s000.mase"] || !keys["series.s099.total"] || keys["series.s100.mase"] || !keys["n_series"] {
+		t.Errorf("keys: %d", len(keys))
+	}
+	if len(metrics) != 201 {
+		t.Errorf("%d metrics", len(metrics))
+	}
 }
