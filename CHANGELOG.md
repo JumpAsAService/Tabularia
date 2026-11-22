@@ -178,6 +178,28 @@ Development on `main` for the next minor version. The stable line stays 1.4.x
   before enabling. The sample data have a flow, **Orders by channel: four weeks ahead**, when the group is
   enabled; the assistants and the MCP tools know the node.
   [Pre-trained forecasting](docs/capabilities/models.md#pre-trained-forecasting-timestral).
+- **Volatility (GARCH) and Risk simulation.** Two nodes of the Models palette's **Time series** group, beside ARIMA, from the
+  R package `rugarch`. **Volatility (GARCH)** estimates how large each day's movement of a series of prices or returns is
+  expected to be: ARCH, GARCH, GJR-GARCH and EGARCH, with normal, Student t or skewed Student t errors, the persistence and
+  half-life of a shock, the asymmetry and the tails, a forecast and a 1-day value at risk backtested on the last returns
+  kept out (Kupiec and Christoffersen). Its checks (the weighted Ljung–Box tests, ARCH-LM, Nyblom's stability test, the
+  sign-bias test) give a verdict only from a p-value against the node's alpha; persistence, half-life, VaR and the
+  rest are measures. It makes a model card, so it can be registered and applied with **Predict** to the consecutive days
+  after the model's last one (the volatility and the 1-day VaR of each new row, and forecast rows), without refitting.
+  **Risk simulation** fits its own ARIMA or GARCH and simulates up to 10 million paths: the value at risk and the
+  expected shortfall with Monte Carlo intervals, in money with a position, the probability of passing a level, the maximum
+  drawdown and the fan, for the risk of a fall or of a rise. **The paths are never held in memory**: batches are written to
+  a Parquet file in the Job's disk and the measures are computed in streaming, so the peak does not depend on the
+  number of paths (at 10 million values the simulation grew by under 256 MiB); the same seed gives the same numbers bit for
+  bit, whatever the memory. It makes no model (no card, no Predict). The editor's node menu has **Simulate risk from this
+  model** on an ARIMA or a GARCH node. Reports and Excel in five languages. New R packages in the time series image (`rugarch`
+  and 22 dependencies, the licences each declares in the docs; six declare GPL-2 only), installed in your cluster when
+  the group is built. The sample data have a table of the **prices of three raw materials** (`ref.quotazioni_materie_prime`,
+  `small` only, from a generator of its own: the other tables are byte for byte what they were) and, with the group
+  enabled, three flows: **Durum wheat: volatility**, **Durum wheat: risk of the next month** and **Orders: will next
+  month's orders exceed 1,000?**; the assistants and the MCP tools know the nodes.
+  [Volatility (GARCH)](docs/capabilities/models.md#volatility-garch-r),
+  [Risk simulation](docs/capabilities/models.md#risk-simulation-r), [the spec](docs/specs/garch-risk.md).
 - **Every test's and every model's report explains its method in words.** The 21 hypothesis tests and the ten
   models (linear and logistic, also penalized; Kaplan–Meier, Cox, parametric survival; ARIMA; XGBoost and CatBoost;
   customer lifetime value and BG/BB) read their result in one to three sentences in italics under each block, with the

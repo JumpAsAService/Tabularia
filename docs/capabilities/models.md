@@ -18,7 +18,10 @@ still being active and the discounted value of each customer). An eleventh node,
 applies a model you registered in MLflow to new rows.
 
 The time series group also has **Decomposition**, which splits a series into a trend, seasons and a remainder and
-makes no model ([below](#decomposition-r)).
+makes no model ([below](#decomposition-r)), **Volatility (GARCH)**, which estimates how large the day's movement of a
+series of prices or returns is expected to be and makes a model Predict can apply ([below](#volatility-garch-r)), and
+**Risk simulation**, which simulates thousands of futures of a series to measure its value at risk, its expected shortfall,
+the chance of passing a level and its drawdown, and makes no model ([below](#risk-simulation-r)).
 
 A sixth group, **experiments**, is not a model: its two nodes, **A/B test** and **A/B test planning**, read the
 result of a randomized experiment and size the next one ([below](#ab-tests-r)). They run as Jobs, are enabled like the
@@ -1397,18 +1400,291 @@ without an order is a 0, the 28 days after are left empty (the future rows), and
 holidays, Ferragosto among them) goes in as a **known covariate**. Forecast (Timestral) forecasts the five series, with the last 28
 days held out. It is never scheduled.
 
-### Volatility (GARCH) and Risk simulation (R): being built
+### Volatility (GARCH) (R)
 
-Model ids in the catalogue: `garch` and `risk_simulation`, in the group **Time series** beside ARIMA. **Volatility (GARCH)**
-will estimate the volatility of each day of a series of returns or prices (ARCH, GARCH, GJR-GARCH and EGARCH, with normal,
-Student t or skewed Student t errors, by the R package `rugarch`), forecast it, and report which checks the model passes
-(each a test with a p-value against the node's alpha) and how many days broke its 1-step value at risk. It makes a model
-card, so it can be registered and applied with Predict. **Risk simulation** will fit its own ARIMA or GARCH to the same
-series and simulate thousands of future paths from it, to give the value at risk, the expected shortfall, the probability of
-crossing a level and the drawdown, each with the error of the simulation said; it never holds all the paths in memory, gives
-the same numbers for the same seed whatever the memory, and makes no model: no card, no registration and no Predict, and a
-flow run logs to MLflow like any other.
-In this version neither node runs yet: they stop with «… is not built yet in this version of Tabularia».
+Model id in the catalogue: `garch`, in the group **Time series** beside ARIMA. The R package is `rugarch`.
+
+The prices of a market do not move by the same amount every day: calm weeks are followed by calm weeks and a bad day by
+more bad days. **Volatility (GARCH)** estimates how large the day's movement is *expected* to be, day by day, from the
+series of prices or of returns, and says how long an agitation lasts, whether falls agitate more than rises, how heavy
+the tails are, and how many days broke the 1-day value at risk it computes. It makes a **model**: a model card, so it
+can be registered with *Register the model as* and applied with [Predict](#predict) (below). To forecast the *level* of a
+series use [ARIMA](#arima); to measure the risk over the next days by simulation use [Risk simulation](#risk-simulation-r).
+
+The node asks for the **Time column**, the **Series** (a price or a return) and the **Frequency of the series**;
+**Trading days** is the frequency *Whole numbers (steps)*, `index`: each row is a step and the dates are only labels, so a series
+with no weekends and no holidays has no gap to fill.
+
+| Option | What it does | Default |
+|---|---|---|
+| **The series holds** | *Returns*, or *Prices*: with prices the node computes the returns, **log** (ln P<sub>t</sub> / P<sub>t−1</sub>) or **simple** (P<sub>t</sub> / P<sub>t−1</sub> − 1) | Returns, log |
+| **Variance model** | **ARCH**, **GARCH** (Bollerslev), **GJR-GARCH** (a fall adds to the variance more than a rise; Glosten, Jagannathan and Runkle) or **EGARCH** (Nelson: the log of the variance, so no sign constraints) | GARCH |
+| **Orders** | ARCH lags 1 to 3, GARCH lags 0 to 3, AR and MA lags of the mean 0 to 5, a constant in the mean | (1, 1), no AR or MA, a constant |
+| **Distribution** | **Normal**, **Student t** or **skewed Student t** of the errors (standardized: mean 0, variance 1) | Student t |
+| **Standard errors** | **Robust** (the quasi-maximum-likelihood sandwich, valid when the distribution is wrong) or **classical** | Robust |
+| **Steps ahead** | Forecasts of the volatility after the last row | 10 |
+| **Last returns kept out to test the VaR** | The last *k* returns (0 to 1,000) are not used by the fit: the 1-day VaR is computed on them and backtested (Kupiec, Christoffersen) | 0 |
+| **VaR level** | The level of the 1-day value at risk | 99 % |
+| **Output** | The volatility, one row per instant (default), or the results table | The volatility |
+
+**The estimation scale.** The fit runs on the returns divided by their standard deviation and the results are brought
+back to the series' units; the notes of the report say the scale.
+
+#### What it reports
+
+On the **first page**, before any number is trusted:
+
+- **Persistence** (how much of today's variance carries to tomorrow) and the **half-life** of a shock, in steps and in the
+  frequency's own unit («about 23 trading days»); a persistence at 1 or above (an integrated variance) is said, and the
+  half-life and the long-run volatility are *not computed*.
+- The **volatility now** (σ<sub>T+1</sub>) and the **long-run volatility** under it.
+- For GJR and EGARCH, the **asymmetry**, with its p-value; the **tail** (ν, the degrees of freedom, and for the skewed t the
+  skew ξ, each with its interval); the news-impact curve in the pages after.
+- **The checks**, each a test whose p-value is read against the node's **alpha** (0.05):
+  the weighted Ljung–Box test (Fisher and Gallagher) of the standardized residuals and of their squares (is there
+  autocorrelation left in the mean, or ARCH left in the variance), the ARCH-LM test, **Nyblom's stability test** (the
+  joint test and one per parameter, Holm-adjusted: do the parameters stay put over the sample), the sign-bias test (Engle
+  and Ng), and with held-out returns the backtest of the 1-day VaR: **Kupiec** (does the VaR break as often as its level
+  says), **Christoffersen's independence** and **conditional coverage**. A check that fails never stops the node: it is a row
+  with its verdict and its advice («volatility the model misses: raise an order, or try GJR or EGARCH»).
+
+**Verdicts only come from the tests.** The persistence, the half-life, the long-run volatility, the estimates, the
+information criteria and the count of violations are **measures**: the report states them and never calls one good or
+bad. The VaR is a measure too; the verdict on it is Kupiec's test. Nyblom's p-values are computed by the node (the
+package gives only three critical values, which would answer only three levels of alpha). With few violations expected
+(250 days at 99 % expect 2.5) the tests can see only a large error, and the report says the expected count beside each
+verdict. A parameter at a bound of its range (an ARCH coefficient of exactly 0 is the usual case) is a **fact** the
+report names, not a failure.
+
+#### The output
+
+The default output **Volatility** is one row per instant and then the forecast rows: `time` (the input's own type, kept to
+the last digit), `observed`, `return` (with prices), `mean`, `sigma`, `std_residual`, `var` (the 1-day VaR), `violation`,
+`is_holdout`, `is_forecast`. The first price has no return: its row is kept with the model's columns empty. The **results
+table** has the ten columns of the other models: sections `model`, `coef`, `assumption`, `backtest`, `curve`, `hist` and
+`reading`. The report is the same **PDF** and **Excel** as every model's.
+
+#### Predict: a volatility every day, without refitting
+
+A registered GARCH is applied with [Predict](#predict) to the returns (or prices) that come **after** the last day it
+saw. The filter runs the model's parameters, fixed, from the state the card keeps (a few hundred bytes: the last shocks,
+variances and returns, no series), and adds to each row `prediction` (the volatility σ<sub>t</sub> of that day given the days
+before it) and `prediction_var` (the 1-day VaR at the card's level). With **Steps ahead** it appends forecast rows after
+the last one. The rules of continuity, checked before the Job:
+
+- the rows are the **consecutive periods right after the card's last day**, in order and **none missing**; the first
+  not after the card's last day is refused («the rows start before the model's last day: Predict continues a series»), a
+  gap is refused, a time held twice is refused, an empty value is refused, and a time of another kind than the model's too;
+- with the frequency *Whole numbers (steps)* on dates only the order is checked, as the fit does;
+- with prices the first return is from the card's last price; the output has one row per new price and no input column;
+- without **Steps ahead**, a Predict with new rows adds no forecast rows, and one with none gives the card's own horizon,
+  so the table is never empty; a variance that diverges is refused.
+
+Predicting the rows a model was fitted on gives the fit's own volatility to within 1e-10. This is the daily use of the
+model: fitted monthly, applied each day.
+
+#### Limits and refusals
+
+| Limit | Value |
+|---|---|
+| Rows | The group's 200,000 returns, an administrator may lower it; fewer than **100** returns are refused («too short»), and so is a training part shorter than the held-out part |
+| Time | **1,000 returns 2.6 s, 10,000 returns 7.8 s, 100,000 returns 59 s** of R (the heaviest combination, AR(1)-GJR with a skewed t and 250 held out; GARCH(1,1) with a t takes 19 s at 100,000), on one CPU; the fit is most of it |
+| Memory | 364 MiB at 1,000 returns, 466 MiB at 100,000 |
+| Steps ahead, held out, lags of the tests | 1,000 each |
+
+The node refuses, with a sentence and the way out: a series with gaps (the decomposition's rule), a constant series, a price
+that is zero or negative, a series too short, a model whose variance can go negative. **Not in this node:** several series at
+once (a portfolio), regressors in the variance, a GARCH in the mean, long memory, regime switching, a trading calendar for
+the future dates (with the frequency *Whole numbers (steps)* on dates, the forecast's times are calendar days: the step number is
+the reliable one).
+
+#### MLflow
+
+The run is logged as every model's: the parameters, the numbers of `model`, `coef`, `assumption` and `backtest`, the results
+table, the report and the model card (`model.json`, with the `MLmodel`); **Register the model as** makes the version
+Predict applies.
+
+*Example:* the sample flow **Durum wheat: volatility** (created with the sample data when the time series group is
+enabled): **Filter** on `materia` = `grano_duro`, **Change type** of the price to a decimal, **Sort** by the day, then
+Volatility (GARCH) on the prices: log returns, **GJR-GARCH(1,1)**, skewed Student t, frequency *Whole numbers (steps)* (`index`), 250
+returns held out ([below](#trying-them-on-the-sample-data)).
+
+### Risk simulation (R)
+
+Model id in the catalogue: `risk_simulation`, in the group **Time series** beside ARIMA.
+
+The question of a risk office or of a purchasing office is not «what is the volatility» but **«how much could I lose, and
+how likely is a level, over the next *h* days»**. **Risk simulation** fits its own ARIMA or GARCH to the series, with the
+same options and the same code as those nodes (the same options give the same estimates), and simulates thousands of
+future paths from the end of the series. From the paths it measures the risk: the **value at risk** and the **expected
+shortfall** at the horizon and at each step, the **probability of passing a level** (and of ever having passed it before
+the horizon), the **maximum drawdown**, and the **fan** of the series. A risk simulation **makes no model**: no model card,
+no *Register the model as* (a run that sends one is refused with «a risk simulation registers no model: register the GARCH
+or ARIMA node instead»), no [Predict](#predict); the run is logged to MLflow like any other.
+
+**From a model on the canvas, in one click.** The menu of an ARIMA or of a GARCH node (right click, or `Shift+F10` on a
+PC and `m` on a Mac, then the arrows and Enter) has **Simulate risk from this model**: it drops a Risk simulation node on
+the **same input** as the model, selected, with the model's options copied (a default the model relies on is written as its
+value). An ARIMA with explanatory columns is refused with a sentence: the future values of the columns cannot be simulated.
+
+| Option | What it does | Default |
+|---|---|---|
+| **Model** | **GARCH** (its options as in [Volatility (GARCH)](#volatility-garch-r)) or **ARIMA** (its options as in [ARIMA](#arima), with orders given or searched for, and no explanatory columns) | GARCH |
+| **Simulated paths** | The number of simulated futures, 100 to **10,000,000** | 10,000 |
+| **Steps ahead** | The horizon, 1 to 1,000 | 10 |
+| **Innovations** | **Parametric** (draws from the model's distribution) or **resampled** (the model's own standardized residuals resampled: filtered historical simulation, Barone-Adesi, Giannopoulos and Vosper; an ARIMA's residuals) | Parametric |
+| **Which side is the risk** | **Falls** (a return, a stock, a cash balance) or **rises** (demand, costs, claims) | Falls |
+| **VaR level**, **Expected shortfall level** | The levels of the two measures | 99 %, 97.5 % |
+| **Quantiles** | The fan's bands and the summary's `quantile_<q>` columns, up to nine, each in (0, 1) | 1, 5, 25, 50, 75, 95, 99 % |
+| **Level to watch** | A level, **in the series' unit** (a price when the series is prices, a return when it is returns, never a return for prices), whose crossing is counted | none |
+| **Position (an amount)** | An amount invested: every measure of the risk variable is also given in money (position × the relative change) | none |
+| **Maximum drawdown** | The maximum drawdown of each path | on |
+| **Risk variable** (ARIMA) | What an ARIMA's risk is measured on: the **last** value, the running **sum** (a month's demand) or the **relative change** from the last observed value | Last |
+| **Last returns kept out to test the VaR** | The backtest of the 1-day VaR, as in the GARCH node | 0 |
+| **Seed** | Drives every draw | 1 |
+| **Output** | **Summary**, one row per step (default); **the paths** (*The simulated paths*); or the results table | Summary |
+
+**The risk variable.** One quantity per path and step carries every measure: with a GARCH, the cumulative simple return
+(and with prices the fan is drawn in prices, an exact linear map of it); with an ARIMA, the last value, the running total
+or the relative change, as chosen. A **position** needs a relative change, so it is given with a GARCH or with an ARIMA whose
+risk variable is *relative change*; an ARIMA's other risk variables have no money to put it in, and the node refuses the combination.
+
+#### What it reports
+
+- **VaR** at the horizon and per step: the lower empirical quantile of the paths, with a **distribution-free Monte Carlo
+  interval**; **expected shortfall** (Acerbi and Tasche), with its interval. They are written as **values of the risk
+  variable** («the 21-day return falls below −11.8 % with probability 1 %; when it does it averages −11.9 %»; a price; a
+  demand), and with a position in money, without a sign convention to learn. The upper tail mirrors them.
+- **The probability of passing the threshold** at each step, and of having passed it at any step before, each with a
+  Clopper–Pearson interval.
+- The **maximum drawdown** (mean, median, VaR), the **moments** of the outcome (mean, sd, skewness, kurtosis) and the **fan**:
+  the bands, the median, the last observations and 20 sample paths. The bands are located within a printed error
+  (`band_error`: «the bands are drawn within 0.0004 % of the price»).
+- The **model's own checks** and, with held-out returns, the **backtest**.
+
+**Verdicts only come from the tests.** The VaR, the ES, the probabilities and the drawdown are **measures** with the
+precision of the simulation said beside them, and the report never calls one good or bad («with 10,000 paths the 99 % VaR
+is known within −12.3 % … −11.3 %; four times the paths would halve that»). The verdicts are the model's own checks and
+the backtest's Kupiec and Christoffersen tests, read against alpha. **The simulation takes the fitted parameters as
+exact**: it does not carry their uncertainty, and the report says so.
+
+#### The output
+
+The default **Summary** is one row per step: `step`, `time`, `mean`, `sd`, one `quantile_<q>` per quantile asked, with a GARCH
+of prices a `price_quantile_<q>` for each and `price_mean`, `var` with `var_low` and `var_high`, `es` with its interval,
+`prob_beyond` and `prob_crossed` when there is a threshold, and `band_error`. The **Paths** output is the table of every
+simulated value, sorted by path and step: `path`, `step`, `time`, `value`, `cumulative`, and with a GARCH `sigma` (and
+`price` with prices). It is **large** (10 million values are about 300 MB on disk): choose it only when the next step reads
+the paths, with a few thousand of them.
+
+#### The memory rule, the seed and what is reproducible
+
+**The node never holds the paths in memory.** The paths are simulated in **batches** sized from the Job's memory, written to
+a Parquet file in the Job's disk (one row group a batch), and the measures are computed in streaming: a first pass while
+simulating (counts, moments by pairwise merge, histograms) and a second pass over the file (the exact order statistics
+the VaR and the ES need). So **the peak does not depend on the number of paths**: at 10 million simulated values the
+simulation's own growth stayed below 256 MiB, with the file of the paths on disk (the whole process, with R, the packages and
+the model's fit, peaked at 550 to 580 MB of the group's 2 GiB). A batch is also bounded by the file's row group
+(1,048,576 rows). Before anything is allocated, the node checks that one block of paths fits the memory, that the file will fit the
+Job's disk and that the projected time will fit the node's timeout, and refuses with a sentence if not.
+
+**The seed.** The draws come from independent streams, one per **block of 1,000 paths** (L'Ecuyer's combined recursive
+generator), so a path depends on the seed and its position only: **the same seed gives the same numbers bit for bit**,
+whatever the memory, the batch size or the machine's speed, and the first 2,000 paths of a run of 10,000 are the 2,000
+paths of a run of 2,000. A different seed is a different, equally valid sample. The report's notes give the seed, the
+blocks, the batches and their size, the peak and the size of the file.
+
+#### Limits and refusals
+
+| Limit | Value |
+|---|---|
+| Paths, steps | 100 to 10,000,000 paths; 1 to 1,000 steps; at most nine quantiles; the fan draws 20 sample paths |
+| Rows of the series | The GARCH variant: the group's 200,000; the ARIMA variant: 20,000 (ARIMA's own) |
+| Refused before the Job | `too_few_paths` (with 100 paths and a 99.9 % level no simulated value lies beyond the VaR: at least 1,000 paths); `horizon_memory` (one block of 1,000 paths of 1,000 steps needs about 356 MB: fewer steps); `too_many_values` (the file would not fit the Job's disk); `too_slow` (the projection passes the node's timeout: fewer paths or steps, or a longer timeout, up to the group's) |
+| Refused by the model | `negative_variance`: the package lets a GJR's γ go below −α, and then a large fall makes the variance negative and no path can be simulated: use GARCH or EGARCH; `position_not_relative`; `zero_last` (a relative change from a last value of 0 or below); `last_missing` |
+| Time | The node, fit and checks included (about 3 s): 4.3 s at 10,000 simulated values, 6.2 s at a million, 26.5 s at 10 million, on one CPU (table below) |
+| Not in this node | Several series at once, exogenous columns, the uncertainty of the parameters, an ES backtest, a multi-step VaR backtest, a trading calendar for the future dates |
+
+**Measured** (one CPU, a GJR(1,1) with a skewed t on 800 returns, the node in one process, the paths on disk, R's start
+not counted; the fit and the checks take about 3 s of the node):
+
+| Values | Paths × steps | Simulation (first pass, with the write) | Second pass | The node | File | Growth of memory |
+|---|---|---|---|---|---|---|
+| 10 thousand | 1,000 × 10 | 0.36 s | 0.73 s | 4.3 s | 0.2 MB | |
+| 1 million | 100,000 × 10 | 1.9 s | 1.1 s | 6.2 s | 22 MB | |
+| 10 million | 1,000,000 × 10 | 16.9 s | 6.4 s | 26.5 s | 220 MB | 84 MB |
+| 10 million | 100,000 × 100 | 12.8 s | 5.2 s | 21.3 s | 228 MB | 117 MB |
+| 10 million, SARIMA | 1,000,000 × 10 | 12.1 s | 6.6 s | 20.5 s | 151 MB | |
+
+The skewed t's draws are most of the simulation. With the paths as output, 22 bytes a row on disk for a GARCH of returns
+and 15 for an ARIMA.
+
+#### MLflow, and no model
+
+A flow run is logged to MLflow: the parameters, the numbers of the measures at the horizon, of the backtest and of the fitted
+model's coefficients and checks, the results table and the report. **The paths are not logged** (they are the flow's data
+when the output is the paths).
+
+#### Trying them on the sample data
+
+The sample data have a table of the **prices of three raw materials** the company buys, in the public tables:
+`commodity_prices` (`ref.quotazioni_materie_prime` in the sample Postgres), the daily prices of durum wheat (euro a
+tonne), extra virgin olive oil and green coffee (euro a kilo) on the days the market is open, from 3 July 2023 to 15 July 2026.
+The series is made to have volatility that clusters (the returns of a GJR-GARCH(1,1) with skewed Student t errors, one
+set of parameters for each material; the olive oil starts agitated and calms down). When the time series group is enabled,
+the seed creates three flows:
+
+- **Durum wheat: volatility**: Volatility (GARCH) on the durum wheat's prices, a GJR-GARCH(1,1) with a skewed t and the last
+  250 days held out: the persistence and half-life, whether falls agitate more than rises, the tail, and the backtest of
+  the 1-day VaR.
+- **Durum wheat: risk of the next month**: Risk simulation of the same model, 10,000 paths of 21 days, a **position** of
+  100,000 euro and a **level to watch** 10 % below the last price: the 99 % VaR and the expected shortfall in percent and in money,
+  the probability of ending or passing below the threshold, the drawdown and the fan.
+- **Orders: will next month's orders exceed 1,000?**: Risk simulation on a business series, the orders per day (the
+  calendar's days Left join the orders, **Fill nulls** with 0, as the decomposition's flow does): an
+  **ARIMA(1,0,1)(0,1,1)[7]**, the aggregate **sum** over 30 days, the **upper** tail, a level to watch of 1,000.
+
+They are never scheduled. Change the **Filter** of the first two to `olio_evo` or `caffe_verde` to see another material; a
+GJR fitted to a short or calm series can come back with a negative α + γ and the risk node then refuses it
+(`negative_variance`): fit a GARCH or an EGARCH.
+
+#### Licences of the packages
+
+The group's R packages are installed from CRAN in your cluster, at the versions the recipe pins, when an administrator
+enables or rebuilds the group; **Tabularia does not distribute them**. `rugarch` 1.5-6 (licence declared on CRAN: GPL-3) and
+the packages it needs that no other image of Tabularia had are listed with the licence **each declares on CRAN**; Tabularia
+quotes them and does not interpret them.
+
+| Package | Version | Declared licence |
+|---|---|---|
+| `rugarch` | 1.5-6 | GPL-3 |
+| `Rsolnp` | 2.0.1 | GPL-2 |
+| `ks` | 1.15.3 | GPL-2 \| GPL-3 |
+| `spd` | 2.0-1 | GPL |
+| `chron` | 2.3-63 | GPL-2 |
+| `SkewHyperbolic` | 0.4-2 | GPL (≥ 2) |
+| `GeneralizedHyperbolic` | 0.8-7 | GPL (≥ 2) |
+| `DistributionUtils` | 0.6-2 | GPL (≥ 2) |
+| `nloptr` | 2.2.1 | LGPL (≥ 3) |
+| `numDeriv` | 2016.8-1.1 | GPL-2 |
+| `truncnorm` | 1.0-9 | GPL (≥ 2) |
+| `future` | 1.82.0 | Apache-2.0 |
+| `future.apply` | 1.21.0 | GPL (≥ 2) |
+| `globals` | 0.20.0 | LGPL (≥ 2.1) |
+| `listenv` | 1.1.0 | Apache-2.0 |
+| `parallelly` | 1.50.0 | LGPL (≥ 2.1) |
+| `FNN` | 1.1.4.1 | GPL (≥ 2) |
+| `kernlab` | 0.9-33 | GPL-2 |
+| `mclust` | 6.1.4 | GPL (≥ 2) |
+| `gmp` | 0.7-5.1 | GPL (≥ 2) |
+| `multicool` | 1.0.2 | GPL-2 |
+| `mvtnorm` | 1.4-2 | GPL-2 |
+| `pracma` | 2.4.6 | GPL (≥ 3) |
+
+Six of them declare **GPL-2** only: `Rsolnp`, `kernlab`, `multicool`, `mvtnorm`, `chron` and `numDeriv`; `numDeriv` and
+`mvtnorm` were already in two images of Tabularia. The group also installs the system library `libgmp-dev` (GMP). The
+specification of this piece (`docs/specs/garch-risk.md` in the repository, «The package and the image») has the same list and the method of the check; it advises
+a legal reading before a built image is distributed, as for the pre-trained forecasting group.
 
 ## The output
 
@@ -1438,6 +1714,8 @@ What the node hands to the step after it is the **Output** option:
 | Parametric survival | **The results table** (the default), or **the rows**: the input's columns with the median time, the quantiles and the survival at the times asked, each with its interval, and the residuals (`pred_median`, `pred_quantile_<p>`, `pred_surv_at_<t>`, `_low`, `_high`, `pred_cox_snell`…) |
 | ARIMA | **The results table**, or **the series and its forecast** |
 | Decomposition | **The decomposed series** (the default: the trend, the seasons and the remainder, one row per instant), or **the results table** |
+| Volatility (GARCH) | **The volatility** (the default: one row per instant with its σ, residual and 1-day VaR, then the forecast rows), or **the results table** |
+| Risk simulation | **The summary** (the default: one row per step, with the quantiles, the VaR and the expected shortfall and their intervals), **the paths** (every simulated value) or **the results table** |
 | Customer lifetime value, BG/BB | **The rows** (the default, unlike the others): the input's columns with `pred_p_alive`, `pred_transactions`, `pred_clv` and the rest, or **the results table** |
 
 The model's own results are kept with the run whatever the output is, so the report can always
@@ -1691,6 +1969,7 @@ which each group's self-test checks.
 | Cox | The risk score, relative to the means of the fit | **Survival at times**: `survival_at_<t>` for each time |
 | Parametric survival | The **median time** | **Survival at times**: `survival_at_<t>`; **Quantiles**: `quantile_<p>`; **Prediction interval**: `prediction_low`, `prediction_high`, and `_low`, `_high` for each quantile and time; **Time already survived**: a column of the rows, and then every answer is the time left |
 | ARIMA | The forecast, with the fitted coefficients, no re-estimation | **Forecast steps**; **Prediction interval**: `lower_80`, `upper_80`, `lower`, `upper` |
+| Volatility (GARCH) | `prediction`: the volatility σ of each new row, and `prediction_var`: its 1-day VaR, from the card's state ([rules of continuity](#predict-a-volatility-every-day-without-refitting)) | **Steps ahead**: forecast rows after the last one |
 | Customer lifetime value, BG/BB | The expected purchases over the horizon | **Periods ahead** (the card's when empty, in the fit's unit); also `prediction_p_alive`, and with a spend `prediction_spend` and `prediction_clv` |
 | XGBoost, CatBoost | A regression's value, a binary model's probability of the event, a multiclass model's likeliest class | Binary: **Class threshold** gives `prediction_class`; multiclass adds `prediction_probability` and `prediction_prob_<class>` |
 
@@ -1725,6 +2004,8 @@ and needs its connection and version chosen first.
 | Periods ahead; opportunities of BG/BB | 1,000 each; above 520 steps the CLV is summed in coarser steps, with a note |
 | Seasonal period | 60 |
 | Forecast steps | 1,000 |
+| Volatility (GARCH): returns; held out; steps ahead | At least 100 returns; 1,000 held out; 1,000 steps ahead |
+| Risk simulation: paths; steps | 100 to 10,000,000 paths; 1 to 1,000 steps (and what the Job's memory, disk and the node's timeout allow, said before it runs) |
 | Rows | More than terms plus one; with a penalty, 3 per fold, at least 2 terms, and with the AUC measure 10 per fold; at least one event; for ARIMA enough observations for its orders and season |
 | Run time | The group's longest run (30 minutes by default, 60 for boosting); the node's timeout, 900 seconds unless you change it, must be within it |
 | Rows of the results table | 100,000: the charts share what the other sections leave; a fit still above it is refused, «fewer strata, predictors or levels» |
