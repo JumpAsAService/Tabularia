@@ -1200,6 +1200,84 @@ about 4.7 s of draws). The process peak of the simulation script: 550 MB.
 **Tests**: engine 1,295 passed (catalogue, results, columns, layouts, explanations), `go test ./internal/...` green, the editor's 112 model tests, the
 assistant's 139. `model_catalog.py --check` green.
 
+### G1 — the GARCH node (2026-11-22)
+
+**What is in.** `runner/R/garch.R` (the series and the returns, the scale and its back-transform, the fit, the coefficients, the measures, the checks,
+the facts, the forecasts, the 1-step VaR, the holdout and its backtest, the charts, the `volatility` output, the card, the native object without its
+data), `ts_nyblom.R` (the statistics from the scores, the bridge law's p-value, Holm), `ts_risk.R` (`ts_backtest`, `ts_backtest_rows`: Kupiec,
+Christoffersen, the counts, for the risk node too), `garch_tests.R` (seven self-tests), `card.schema.json` (`garch` and its block), the reference
+cases (`make_reference_garch.R`, `data/garch_returns.csv`, `data/garch_prices.csv`, eleven cases `garch_*`, four of them refusals), the witness
+(`make_witness_garch.py`, `arch` 9.0.0 added to `witness.json`), two cases of `output_columns.json`. The stub «not built yet» of the fit is gone;
+Predict still refuses until G6. ARIMA's and the decomposition's cases of `expected.json` are byte for byte what they were: the GARCH cases are merged
+before the first of them, and no line after them changes.
+
+**Deviations and corrections to this spec** (the rest as written):
+
+1. **The runner writes no reading.** The explanation is `layouts/garch.py`'s (`common.READINGS`, lot G4), as ARIMA's: the GARCH cases of
+   `expected.json` hold no reading ids. Notes are `@garch_scale scale=…` (always), `@garch_solver solver=…` (when it is not solnp),
+   `@garch_at_bound parameter=…` (one per parameter at a bound): their words are G4's.
+2. **κ = E[z² 1(z < 0)], as this spec defines it; rugarch uses P(z < 0).** rugarch 1.5-6's `persistence()`, `uncvariance()`, `newsimpact()` and its
+   GJR forecasts weigh γ by `pneg`, the probability of a negative z: the same ½ for a symmetric law, not for the skewed t (ξ = 0.85, ν = 7: P(z < 0) =
+   0.470, E[z² 1(z < 0)] = 0.555). The runner computes κ by quadrature of the fitted density, and from it the persistence, the half-life, the long-run σ,
+   the news impact (every other lag at its long-run level) and the forecasts (`garch_forecast`, its own recursion from the filter's last state). The
+   self-test checks the forecasts equal `ugarchforecast` to 1e-10 for the normal, the t and EGARCH, the first step for GJR with the skewed t, and that
+   rugarch's persistence is the one with P(z < 0). EGARCH's long-run σ is √exp(ω / (1 − Σβ)) (rugarch's `.uncegarch1`).
+3. **Robust standard errors: the sandwich H⁻¹(GᵀG)H⁻¹ from rugarch's Hessian and its per-observation scores** (`fit@fit$hessian`,
+   `fit@fit$scores`, the scores Nyblom's test reads). rugarch's own `robust.cvar` takes its meat from other scores (`robustvcv`), which differ from
+   these by 6–30 % on the reference cases while the witness's scores agree with these to 2e-8.
+4. **The weighted portmanteau** is rugarch's transcription of Fisher & Gallagher (`Weighted.Box.test`: shape (3/4)(m + 1)² m / (2m² + 3m + 1 − 6mK),
+   scale (2/3)(2m² + 3m + 1 − 6mK) / (m(m + 1))); it needs m ≥ 3K − 1, so `auto` is max(min(10, ⌊n/5⌋) + K, 3K − 1) (the same for K ≤ 5) and a lag
+   given below it is «not computed». K is `ar_order + ma_order` on z and `arch_order + garch_order` on z², as this spec says (rugarch's own test of z²
+   passes K = 0). No `df` row: the law is a gamma.
+5. **Nyblom's p-value by Talbot's inversion of the exact Laplace transform** E e^{−sW_k} = (√(2s) / sinh √(2s))^{k/2} (24 nodes, no eigenvalue
+   truncated), not Imhof's: the witness takes Imhof's road (2,000 eigenvalues, the tail's mean added) and agrees to 6e-7; Anderson & Darling's
+   quantiles are given back to their five digits. Hansen's table (rugarch's `.nyblomCritical`, simulated on finite samples, two or three digits) is met
+   within 3.5 % of the level at 10 %, 5 % at 5 %, 10 % at 1 % (the self-test allows 12 %). EGARCH's individual tests read the scores of the parameters
+   reported (g J⁻¹: ω's back-transform involves β); the joint statistic is rugarch's to 1e-10 for every model.
+6. **The break of the reference data is in the mean, not in ω.** A tripled ω halfway is absorbed by the persistence (the fit goes to the 0.999
+   constraint and Nyblom does not reject, p 0.18–0.44 over eight designs): `brk`'s mean falls from +0.002 to −0.002, and Nyblom rejects (p 1e−9) and
+   names μ.
+7. **Sign bias** regresses on z_{t−1} (Engle & Ng's standardized regressors); `rugarch::signbias` uses ε_{t−1}, and with ε the runner's statistic is its
+   «Joint Effect» to 1e-8 (self-test). Only the joint Wald row is written (the verdict's): the three t-tests have no row.
+8. **The backtest.** Kupiec's and Christoffersen's independence statistics equal `rugarch::VaRTest`'s to 1e-10; its conditional coverage is LR_uc on
+   the T days + LR_ind, this spec's is LR_uc on the T − 1 transitions + LR_ind (the self-test checks both relations).
+9. **`too_short`** is below 100 returns for the fit: rugarch 1.5-6 only warns there; or a training part shorter than the holdout.
+10. **`at_bound`**: an estimate within 1e-6 of the bounds' range from rugarch's LB or UB, or rugarch's persistence within 1e-6 of its 0.999
+    constraint; the row `at_bound` holds the count, one row per parameter (`level_2`) its estimate.
+11. **The reference data are smaller than planned** (the self-test's ConfigMap): `garch_returns.csv` 800 instants of three series, `garch_prices.csv`
+    301 prices; the time types reuse `dec_types.csv`, the edge cases are built in the self-test, the refusals reuse `dec_no_season.csv`, `dec_gaps.csv`,
+    `duplicate_monthly.csv`.
+12. **A witness's finding**: on the 300 simple returns of `garch_prices_simple` rugarch's solvers stop at the persistence constraint (α₁ = 0, P =
+    0.999) with a log-likelihood 0.0138 below an interior maximum (α₁ = 0, β₁ = 0.967) that SciPy finds; the node says the bound with `at_bound`, the
+    case keeps rugarch's numbers and the witness prints it as a known gap. EGARCH's standard errors are not compared by the witness: rugarch's
+    Hessian starts Richardson's steps at 10 % of each parameter, which moves β₁ = 0.97 past 1, where its recursion and a transcription part.
+
+**Witnesses** (`make_witness_garch.py`, outside R; worst difference over the seven fitted cases, against the spec's tolerance):
+
+| Check | Worst | Tolerance |
+|---|---|---|
+| log-likelihood at rugarch's estimates, transcription / Python `arch` (3 cases, backcast set to rugarch's first variance) | 2.2e-15 / 1.6e-15 | 1e-8 |
+| estimates, SciPy from 10 % away (relative to the estimate, or to ten standard errors on a flat ridge) | 4.1e-5 | 1e-4 |
+| SciPy's maximum above rugarch's | 3.5e-9 | 1e-8 |
+| standard errors, the sandwich of numDeriv's Richardson scores and Hessian transcribed (cases not at a bound, not EGARCH) | 5.9e-8 | 1e-3 |
+| persistence, κ by quadrature, half-life, long-run σ, σ_T, σ_{T+1} | 3.3e-13 | 1e-6 |
+| weighted Ljung–Box on z and z², ARCH-LM, sign bias (statistics; p-values absolute) | 4.7e-14 | 1e-6 |
+| Nyblom's statistic from the transcription's scores / its p-value by Imhof | 1.8e-8 / 6.2e-7 | 1e-5 |
+| Kupiec, Christoffersen, the violations | 4.9e-17 | 1e-10 |
+
+**Timings and memory** (one CPU, `--memory 2500m`, the image of G0 with the files mounted; the node in a child `Rscript`: the series, the fit, the
+filter, the forecasts, every check, the charts, the output; `VmHWM` of the child): AR(1)-GJR-GARCH(1,1) with skewed t errors and a holdout of 250, the
+heaviest combination — **1,000 returns 2.6 s, 364 MiB; 10,000 returns 7.8 s, 357 MiB; 100,000 returns 59.0 s, 466 MiB**. GARCH(1,1) t with the same
+holdout at 100,000 returns: the fit 13.6 s, the node 19 s. The fit is most of it (48.4 s of 52 s for the GJR at 100,000); the checks take 0.7–1.2 s,
+the filter 0.1 s, the charts 0.2 s. **The acceptance bound holds** (GARCH(1,1) t under 60 s at 100,000) and the peak stays under 1 GiB: no model limit
+of rows (Open question 13); the group's 200,000 would take the GJR with the skewed t about two minutes. The self-test runs the memory test at 10,000
+returns (`TABULARIA_GARCH_MEMORY_N` sets another size: the 100,000 above).
+
+**Self-test** (the group's code with the files of this lot mounted on the image of G0, not rebuilt; read-only root, `/tmp` a tmpfs, `--network none`,
+uid 10001, 1 CPU): **93 ok, 0 failed, 0 skipped, exit 0** — the 75 of G0, the seven tests of `garch_tests.R`, the eleven `garch_*` cases. The
+self-test's ConfigMap grows by about 110 KB (the R files 56 KB, the cases 22 KB, the data 31 KB): 864 KB of the 900 KiB (921,600 bytes) the gateway's test allows,
+before the files of G2 and G3 (G2's `ts_sim.R` and its tests, about 61 KB as they stand, would take it past the limit).
+
 ### G5 — editor: two nodes, «Simulate risk from this model» (2026-11-22)
 
 **What is in.** Both nodes have their form, words (five languages, namespace `models`), icons (`Activity` for the volatility, `Dices` for the risk
