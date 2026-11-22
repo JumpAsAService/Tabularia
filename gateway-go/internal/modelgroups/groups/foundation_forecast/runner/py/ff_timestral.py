@@ -540,7 +540,9 @@ def _notes(run: Run, rows: Rows, budget: Budget) -> None:
     last = max(m.last_x0 for m in metas)
     early = sum(m.last_x0 < last for m in metas)
     if early:
-        note(rows, "ends_early", ff_reading.line("ends_early", count=early, last=last))
+        # a time of positions has no date: its own sentence, as the summary's «_steps» ones
+        said = "ends_early_steps" if run.cols.axis.kind == "integer" else "ends_early"
+        note(rows, "ends_early", ff_reading.line(said, count=early, last=last))
     if not opts.known:
         after = sum(m.n_after for m in metas)
         if after:
@@ -620,9 +622,8 @@ def _series_and_curves(run: Run, rows: Rows, reading_rows: int) -> None:
                 break
             used += each[i]
             chosen.add(i)
-        # no template of the report's words yet: an English sentence, said as it is
-        note(rows, "series_left_out", f"The table of the series holds the {len(chosen):,} with the largest Σ|y| of the "
-                                      f"{len(done):,}: the results may hold at most {most:,} rows; every series is in the output.")
+        # said in the page's language by the report's template «series_kept»
+        note(rows, "series_left_out", ff_reading.line("series_kept", kept=len(chosen), total=len(done), most=most))
         done_kept = [(d, v) for i, (d, v) in enumerate(zip(done, values)) if i in chosen]
     room -= used
     # then the series drawn whose lines fit with two points of history each, in the order of Σ|y|; their history shares the rest
