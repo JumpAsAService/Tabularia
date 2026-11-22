@@ -1330,133 +1330,113 @@ available: the key events are the same ones the editor reads (`m`, `Shift+F10`, 
 
 **What was built.** `layouts/garch.py` and `layouts/risk_simulation.py`, registered in `layouts/__init__.py`; their words in
 `report_texts/garch.json` and `report_texts/risk_simulation.json` in five languages (page words, `reading_texts`, `formula_texts`,
-`reading_labels`, `measure_readings`, the checks' names, H0 and advice, the backtest's words; the risk node's file also carries the ARIMA
-checks' words, since a model's words are one file for all its variants); `common.NOTE_NAMES` gains `model` and `parameter`.
-`PENDING` is gone from `test_models_layouts.py` and both nodes are in its `EXPLAINED`; `tests/test_models_garch_report.py` is new. The
-pages are those of «The report (pixel perfect)», with the deviations below.
+`reading_labels`, `measure_readings`, `note_texts` for the runner's notes, the checks' names, H0 and advice, the backtest's words; the risk
+node's file also carries the ARIMA checks' words, since a model's words are one file for all its variants); `common.NOTE_NAMES` gains
+`model` and `parameter`. `PENDING` is gone from `test_models_layouts.py`; `tests/test_models_garch_report.py` is new. The pages are those
+of «The report (pixel perfect)», with the deviations below. `garch-default.json` is now the GARCH runner's own output (`garch.R` on
+`garch_prices.csv`, GJR-GARCH(1,1) with skewed t errors, the last 50 returns kept out, written with `--from-results`); the risk node's
+two fixtures stay lot G0's placeholders, without reading rows.
 
-**The explanation is the runners'** (as the decomposition's and Timestral's): `garch.R` (G1) and `risk_simulation.R` (G3) write the
-`reading` rows, `reading|<block>||line_<k>` = `@<id> name=value…`, encoded as `common.reading_rows` encodes (a number as R prints it
-back exactly, a name with `%`, space and comma encoded, a list joined by `,`). The page only places them. The verdict ids are chosen by
-the runner from the p-value against the node's `alpha`; everything else is a measure (`measure_readings`).
+**The explanation is the layouts'** (the rule of lot B0 for the models, as ARIMA's): `common.READINGS["garch"]` and
+`common.READINGS["risk_simulation"]` choose the sentences from the numeric rows the runners write. **The runners write no reading and no
+sentence.** A verdict is chosen by the row's p-value against the node's `alpha` (a test without a p-value has no line); every other number
+is a measure, said as the row holds it (`measure_readings`). The page computes nothing: it selects (a comparison with α, which of two
+numbers is the larger, the largest of a set) and says the rows' numbers. The runner's notes `@garch_scale scale=…`,
+`@garch_solver solver=…`, `@garch_at_bound parameter=…` are sentences of `note_texts`.
 
-Names used by many ids: `unit` = the node's `frequency` (`hour` … `year`, `index`: said «steps»); `model` = the model without its law
-(`catalog.garch_name` before its comma, «GJR-GARCH(1,1)», or the ARIMA's name); `distribution` = `norm` | `std` | `sstd`;
-`variable` = `variable:<id>`, the id one of `cumulative_return`, `price`, `value`, `running_total`, `relative_change`; `parameter` = a
-coefficient's name (`mu`, `ar1`, `omega`, `alpha1`, `beta1`, `gamma1`, `shape`, `skew`…; the page says its symbol); `check` =
-`check:<assumption id>` (the page says the check's name); `first`, `last` = days since 1970-01-01 (the `_steps` ids: integers);
-`p_value`, `p_adjusted` = p-values; `alpha` = the node's; shares and levels as fractions (0.99, not 99).
+**The rows the GARCH layout reads** (what `garch.R` writes since lot G1; checked on three runs of the runner in the image, below):
 
-**The contract of the readings: the GARCH node** (`garch.R`, G1):
+| Reading (block: ids) | Rows |
+|---|---|
+| `summary`: `summary` / `summary_steps` / `summary_holdout` / `summary_holdout_steps`, `summary_prices`, `summary_scale` | `model|||n`, `first`, `last`, `holdout`, `scale`, the text `time_kind` (`integer` → `_steps`); the node's `variance_model`, orders, `distribution`, `input_kind`, `value` |
+| `persistence`: `persistence` / `persistence_integrated`, `sigma_now_above` / `_below` / `_equal` | `model|||persistence` (≥ 1: integrated), `half_life`, `uncond_sigma`, `sigma_next`; the node's `frequency` as the unit |
+| `asymmetry`: `asymmetry_gjr` (α₁, γ₁), `asymmetry_gjr_falls_only` (γ₁: α₁ at its bound), `asymmetry_egarch` (α₁, γ₁), `asymmetry_none`; `sign_bias_supported` / `_not_supported` | `coef|alpha1||estimate`, `coef|gamma1||estimate`, the row `assumption|at_bound|alpha1|value`; `assumption|sign_bias||p_value` |
+| `distribution`: `distribution_norm` / `_std` / `_sstd` | `coef|shape||estimate`, `ci_low`, `ci_high`; `coef|skew||…`; the level 1 − α |
+| `residuals`: `lb_z_ok` / `_failed`, `lb_z2_ok` / `_failed`, `arch_lm_ok` / `_failed`, `z2_largest_acf` | `assumption|ljung_box_z||p_value`, `lag`; the same for `ljung_box_z2`, `arch_lm`; after a test on z² that rejects, the `lag|z2_acf` row of the largest \|acf\| and its `x0` |
+| `stability`: `nyblom_stable`, `nyblom_moves` (the parameter with the smallest Holm-adjusted p, when below α), `nyblom_moves_none` | `assumption|nyblom||p_value`, `assumption|nyblom|<parameter>|p_adjusted` |
+| `backtest`: `backtest_coverage_*`, `backtest_independence_*` (`_not_computed` with no break), `backtest_cc_*`, `backtest_expected`, `backtest_short` | `backtest|kupiec||p_value`, `christoffersen_ind`, `christoffersen_cc`; `backtest|counts||violations`, `expected_violations`; `model|||holdout`, the node's `var_level` |
+| `method`, `formulas` | the node's options and the holdout |
 
-| Block | Id | Names | When |
-|---|---|---|---|
-| `summary` | `summary` / `summary_steps` | `model`, `distribution`, `n`, `series`, `first`, `last` | no holdout; time as dates / as integers |
-| `summary` | `summary_holdout` / `summary_holdout_steps` | the same + `holdout` | `holdout > 0` |
-| `summary` | `summary_prices` | — (the sentence follows `returns_type`) | `input_kind = prices` |
-| `summary` | `summary_scale` | `scale` | always |
-| `persistence` | `persistence` | `persistence`, `half_life` (steps), `unit` | P < 1 |
-| `persistence` | `persistence_integrated` | `persistence` | P ≥ 1 |
-| `persistence` | `sigma_now_above` / `_below` / `_equal` | `sigma` (σ_{T+1}), `uncond` (`_equal`: `uncond` only) | P < 1; as % with prices, the series' number with returns |
-| `asymmetry` | `asymmetry_gjr` | `ratio` = (Σα + Σγ) / Σα, `gamma` = Σγ | GJR, Σα > 0 |
-| `asymmetry` | `asymmetry_gjr_falls_only` | `gamma` | GJR, Σα = 0 |
-| `asymmetry` | `asymmetry_egarch` | `shock` (in σ, 2), `ratio` (news impact of −shock over +shock), `alpha` (α₁), `gamma` (γ₁) | EGARCH |
-| `asymmetry` | `asymmetry_none` | — | ARCH, GARCH |
-| `asymmetry` | `sign_bias_supported` / `sign_bias_not_supported` | `p_value`, `alpha` | the joint Wald test's p against α |
-| `distribution` | `distribution_norm` / `_std` / `_sstd` | `_std`: `shape`, `low`, `high`, `level` (1 − α); `_sstd`: + `skew`, `skew_low`, `skew_high` | by `distribution` |
-| `residuals` | `lb_z_ok` / `lb_z_failed` | `lag`, `p_value`, `alpha` | weighted Ljung–Box on z |
-| `residuals` | `lb_z2_ok` / `lb_z2_failed` | `lag`, `p_value`, `alpha` | weighted Ljung–Box on z² |
-| `residuals` | `arch_lm_ok` / `arch_lm_failed` | `lag` (L), `p_value`, `alpha` | ARCH LM on z |
-| `residuals` | `z2_largest_acf` | `acf`, `lag` | after a test on z² that rejects (the size) |
-| `stability` | `nyblom_stable` | `p_value`, `alpha` | joint p ≥ α |
-| `stability` | `nyblom_moves` | `p_value`, `alpha`, `parameter`, `p_adjusted` | joint p < α; the parameter with the smallest Holm-adjusted p, when that p < α |
-| `stability` | `nyblom_moves_none` | `p_value`, `alpha` | joint p < α, no adjusted p < α |
-| `backtest` | `backtest_coverage_ok` / `_failed` | `holdout`, `unit`, `level` (`var_level`), `violations`, `expected`, `p_value`, `alpha` | Kupiec |
-| `backtest` | `backtest_independence_ok` / `_failed` | `p_value`, `alpha`, `expected` | Christoffersen, independence |
-| `backtest` | `backtest_independence_not_computed` | `expected` | no violation |
-| `backtest` | `backtest_cc_ok` / `_failed` | `p_value`, `alpha`, `expected` | Christoffersen, conditional coverage |
-| `backtest` | `backtest_expected` | `expected` | always with a backtest |
-| `backtest` | `backtest_short` | `holdout` | holdout < 2 |
-| `method` | `method_garch`, `method_scale`, `method_estimation`, `method_distribution`, `method_checks`, `method_nyblom`, `method_sign_bias`, `method_backtest` (with a holdout), `method_forecast` | — | the parts that ran |
-| `formulas` | `formula_mean`, `formula_variance`, `formula_distribution`, `formula_likelihood`, `formula_persistence`, `formula_portmanteau`, `formula_arch_lm`, `formula_nyblom`, `formula_sign_bias`; with a holdout `formula_var_1step`, `formula_kupiec`, `formula_christoffersen` | — | the variance's and the distribution's sentence follow the node's options |
+The pages read besides: the `curve` rows `returns`, `sigma` (`sigma`, `forecast`), `news_impact`, `backtest` (`return`, `var`); the
+`point` rows `std_residual`, `qq`, and `violation` (1 on a break, its index the held-out return's: the page draws that return in red);
+`lag` `z_acf`, `z2_acf` with their `bound`; `hist|std_residual`; `assumption|at_bound` (the count; the rows per parameter are left to
+the notes) and `variance_stationary`; Nyblom's joint `count` (said «7 parameters»); the coefficients.
 
-**The contract of the readings: the risk node** (`risk_simulation.R`, G3). The scale of a measure is in its id: without a suffix a
-relative change (a GARCH's cumulative return, an ARIMA's `relative_change`), said in %; `_level` the series' units (an ARIMA's `last`
-or `sum`). `_lower` / `_upper` follow `tail`. `p` is the tail's probability (1 − `var_level`, 1 − `es_level`).
+**The rows the risk layout reads: what G3 writes** (the names of the catalogue's sections, no sentence, no reading):
 
-| Block | Id | Names | When |
-|---|---|---|---|
-| `summary` | `summary_garch` | `paths`, `steps`, `unit`, `model`, `distribution`, `series`, `seed` | `model = garch` |
-| `summary` | `summary_arima` | `paths`, `steps`, `unit`, `model`, `series`, `seed` | `model = arima` |
-| `summary` | `summary_bootstrap` | — | `innovations = bootstrap` |
-| `summary` | `summary_variable` | `variable`, `steps`, `unit` | always |
-| `summary` | `summary_holdout` | `holdout`, `unit` | `holdout > 0` |
-| `var` | `var_lower`, `var_lower_level`, `var_upper`, `var_upper_level` | `p`, `variable`, `steps`, `unit`, `value`, `low`, `high`, `paths`, `confidence` (1 − α) | always |
-| `var` | `var_money` | `amount` (the position), `money` (position × VaR) | with `position` |
-| `es` | `es_lower`, `es_lower_level`, `es_upper`, `es_upper_level` | `p`, `variable`, `quantile` (the VaR at `es_level`), `value`, `low`, `high` | always |
-| `es` | `es_money` | `amount`, `money` | with `position` |
-| `threshold` | `threshold_lower`, `threshold_lower_level`, `threshold_upper`, `threshold_upper_level` | `variable` (the fan's: `price` for a GARCH of prices), `threshold`, `steps`, `unit`, `prob_crossed`, `low`, `high` (its interval), `prob_beyond` | with `threshold`; `_level` when the threshold is not a return |
-| `drawdown` | `drawdown` | `median`, `tail` (the drawdown exceeded with probability `p`), `p`, `steps`, `unit` | with `drawdown` on a relative change |
-| `shape` | `shape` | `variable`, `steps`, `unit`, `skewness`, `kurtosis` (excess) | always |
-| `fan` | `fan` | `shares` (the bands' shares, a list), `error` (the largest `band_error`), `sample` (paths drawn) | always |
-| `model` | the GARCH node's `lb_z_*`, `lb_z2_*`, `arch_lm_*`, `z2_largest_acf`, `nyblom_*`, `sign_bias_*` | as there | `model = garch` |
-| `model` | `arima_checks_ok` | `total`, `alpha` | `model = arima`, no test on the residuals rejects |
-| `model` | `arima_check_failed` | `check`, `p_value`, `alpha` | one line per ARIMA test that rejects |
-| `backtest` | the GARCH node's `backtest_*` | as there | `holdout > 0` |
-| `method` | `method_simulation`, `method_seed`, `method_innovations`, `method_variable`, `method_var`, `method_es`, `method_threshold`, `method_drawdown`, `method_passes`, `method_backtest`, `method_model_garch` / `method_model_arima` | — | the parts that ran |
-| `formulas` | `formula_garch_path` / `formula_arima_path`, `formula_variable`, `formula_var`, `formula_es`, `formula_clopper_pearson`, `formula_drawdown`, `formula_moments`, `formula_band_error`, `formula_var_1step`, `formula_kupiec`, `formula_christoffersen` | — | the parts that ran |
+| Section | Rows |
+|---|---|
+| `model` numbers | `n`, `n_missing`, `holdout`, `horizon`, `paths`, `seed`, `threshold` (when given), `position` (when given), `simulated_values`, `seed_block`, `batches`, `batch_paths`, `bins`, `var_level`, `es_level`, `last_value`, `paths_bytes`, `seconds_simulation`, `seconds_pass_2`, and the fitted model's own numbers (the GARCH node's or ARIMA's) |
+| `model` texts | `model_name` (an ARIMA's by its orders as chosen, «SARIMA(1,0,1)(0,1,1)[7]»; the page names a GARCH from the options), `formula` (shown for an ARIMA), `time_kind`, `risk_variable` as an id (`cumulative_return`, `price`, `value`, `running_total`, `relative_change`), `tail`, `innovations`, `aggregate`, the notes (the GARCH's `@garch_*`) |
+| `risk` at the horizon (`level_2` null) | `var`: `value`, `low`, `high`; `es`: `value`, `low`, `high` (`se`, `count` shown in the fit's numbers); `prob_crossed`: `value`, `low`, `high`; `prob_beyond`: `value`, `low`, `high`; `drawdown`: `value` (the drawdown exceeded with probability 1 − `var_level`, a positive share), `median`, `low`, `high`; `moments`: `mean`, `sd`, `skewness`, `kurtosis` (excess) — in the risk variable's units (a relative change as a fraction) |
+| `assumption` | the fitted model's checks as its node writes them: a GARCH's `ljung_box_z`, `ljung_box_z2` (with `lag`), `arch_lm` (with `lag`), `nyblom` (joint and per parameter with `p_adjusted`), `sign_bias`, `at_bound`, `variance_stationary`; an ARIMA's `ljung_box_10`, `ljung_box_2s`, `arch_lm`, `variance_ratio`, `jarque_bera` (each with its `p_value`), `adf`, `kpss`, `roots` |
+| `coef` | the fitted model's coefficients with `ci_low`, `ci_high` |
+| `backtest` | as the GARCH node (`ts_backtest_rows`), with a holdout |
+| `curve|fan` | `level_2` `quantile_<q>` (the catalogue's labels of `quantiles`), `history` (only when on the fan's scale), `path_<i>` (the sample paths), `band_error`; in the fan's unit |
+| `curve|term` | `var`, `var_low`, `var_high`, `es`, `es_low`, `es_high`, `prob_crossed`, `prob_beyond`, one row per step |
+| `curve|backtest` | `return` (the held-out observation), `var`, `violation` (the observation, only on the days it broke the VaR: the risk node has no `point` section) |
+| `hist` | `horizon` and `drawdown`: `x0`, `x1`, `count` |
 
-**The rows the pages read besides the readings** (both runners): the model text `risk_variable` is an id (`cumulative_return`,
-`price`, `value`, `running_total`, `relative_change`), not a sentence; `curve|backtest` holds `return` (the held-out observation),
-`var` and `violation` (the observation, only on the days it broke the VaR); `curve|density|density` is in the histogram's units (the
-count expected in a bin: n × bin width × f(z)); `curve|fan` holds `quantile_<q>` (the catalogue's labels), `history` (only when it is
-on the fan's scale), `path_<i>`, `band_error`, in the fan's unit; `curve|term` holds `var`, `var_low`, `var_high`, `es`, `es_low`,
-`es_high`, `prob_crossed`, `prob_beyond`; `risk|drawdown||value` is the drawdown exceeded with probability 1 − `var_level` (a positive
-share), with `median`; the advice ids `sign_bias_failed` (ARCH, GARCH) and `sign_bias_left` (GJR, EGARCH), `arch_lm_failed` for the
-GARCH's ARCH LM (the ARIMA's writes none); `variance_stationary`: `value` = P, `count` 1 when P < 1; `at_bound`: `count`.
-`point|violation` is not read by the page.
+From them the risk layout says: `summary_garch` / `summary_arima`, `summary_bootstrap`, `summary_variable`, `summary_holdout`;
+`var_lower` / `var_upper`, with `_level` when the risk variable is not a relative change; `es_lower` / `es_upper` (`_level`);
+`threshold_lower` / `threshold_upper` (`_level` unless a GARCH of returns); `drawdown`; `shape`; `fan` (the shares of the bands from
+the node's `quantiles`, the largest `band_error`, the number of sample paths), `fan_bands` without sample paths; the model's checks
+(`model` block: the GARCH's ids above, or `arima_checks_ok` / `arima_check_failed` naming the check); the backtest's ids; the
+paragraphs and formulas of what ran.
+
+**Numbers the runners do not write** (each a sentence or a mark the page leaves out, never computes):
+
+1. **The fitted density in the histogram's units** (n × bin width × f(z)): `garch.R` writes it as a density, which an `xy` chart cannot
+   put on its own axis beside counts; the histogram of z is drawn alone. A row `curve|density|count` would bring the curve back.
+2. **The money of the VaR and the ES** (position × the value): the catalogue's `risk` section has no stat for it, so the sentences
+   `var_money` and `es_money` were removed and the cards say the Monte Carlo interval instead. A stat (e.g. `risk|var||money`, a catalogue
+   change) would bring them back.
+3. **The VaR at `es_level`** (the quantile the ES averages beyond): not a row; the ES sentence names its probability only.
+4. **The EGARCH's news impact ratio**: the sentence says α₁ and γ₁ and how they act, no ratio.
+
+**Three runs of the real runner** (the image `tabularia-models-timeseries:dev` with the files mounted, one CPU, `--memory 2500m`, the task
+made by `modelgroup task`): GJR-GARCH(1,1) skewed t on `garch_prices.csv` with a holdout of 50 (the fixture: α₁ at its bound, every test
+keeps its hypothesis, 2 breaks against 0.5 expected), GARCH(1,1) normal on `garch_returns.csv`'s `brk` (Nyblom rejects, p < 0.0001, μ
+named, Holm-adjusted p < 0.0001; the Ljung–Box on z rejects), AR(1)-EGARCH(1,1) t with a holdout of 100: every reading a sentence in the
+five languages, no `@`, `{` or `%2` left.
 
 **Deviations and corrections to this spec** (the rest unchanged):
 
-1. **The runners write the readings; `common.READINGS` registers nothing** for these nodes (the spec said the layout chooses them):
-   G0's fixtures already carry `reading` rows, and the decomposition and Timestral work the same way. The explanations spec's criteria
-   are checked by `test_models_garch_report.py` instead of `test_report_explanations.py`; its criterion 8 (the same rows read with α
-   just above and just below a p-value) is the runners', who choose the verdict ids.
-2. **`NOTE_NAMES`**: `model` and `parameter` only. `distribution` was there; `paths`, `steps`, `level`, `threshold` are numbers (and
-   `level` is ARIMA's number already), so they are not names. `position` and `size` were already names (a season's position,
-   Timestral's size): the contract sends the position as `amount` and EGARCH's shock as `shock`.
-3. **Template ids** are those of the tables above: the spec's list is kept where it said one (`summary_holdout`, `persistence`,
-   `persistence_integrated`, `sigma_now_*`, `asymmetry_*`, `sign_bias_*`, `distribution_*`, `nyblom_stable|moves`,
-   `backtest_expected`), the `lb_z_*`, `lb_z2_*`, `arch_lm_*`, `backtest_coverage_*`, `backtest_independence_*` are `_ok` / `_failed`,
-   and some are new (`summary_steps`, `summary_holdout_steps`, `summary_prices`, `summary_scale`, `asymmetry_gjr_falls_only`,
-   `z2_largest_acf`, `nyblom_moves_none`, `backtest_cc_*`, `backtest_short`). G0's placeholders of the risk node (`summary_paths`,
-   `var_loss`, `es_gain`, `model_checks`…) are replaced; the fixtures' generator (`tests/models_fixtures_garch.py`) writes the contract.
-4. **Every backtest verdict says the breaks expected** beside it (`expected` in each of the six sentences), as the owner asked; the
-   coverage sentence also says how many breaks there were.
-5. **The formula line is the page's**, built from the node's options with the distribution in the page's words («r_t = μ + ε_t,
-   σ²_t = ω + (α₁ + γ₁·I(ε_(t−1) < 0))·ε²_(t−1) + β₁σ²_(t−1), z ~ skewed Student t»); the runner's `formula` stays the English of MLflow.
-   The PDF's font has no subscript minus, so lags are written `_(t−1)`.
-6. **The volatility forecast is a line of its own colour**, not dashed (an `xy` chart has no dash); the long-run σ is the dashed
-   horizontal line. The sample paths of the fan are grey lines drawn by `split_by` (one per path), the fan's legend off.
-7. **No money on the cards**: the page computes nothing; the VaR's and the ES's money are the runner's (`var_money`, `es_money`).
-8. **The simulation card** says «10,000 × 10» under the label «Paths × steps» (with the unit in its words): «10,000 paths × 10 steps»
-   did not fit the card in French and Spanish. The model card says the law only: the holdout is in the summary's reading.
+1. **Readings chosen by the layouts**, as the spec said; the first version of this lot had the runners write them, and is replaced.
+2. **`NOTE_NAMES`**: `model` and `parameter` only. `distribution` was there; `paths`, `steps`, `level`, `threshold` are numbers (and `level`
+   is ARIMA's number already). `position` and `size` were already names (a season's position, Timestral's size): no line sends them.
+3. **Template ids**: the spec's list where it gave one (`summary_holdout`, `persistence`, `persistence_integrated`, `sigma_now_*`,
+   `asymmetry_*`, `sign_bias_*`, `distribution_*`, `nyblom_stable|moves`, `backtest_expected`), `_ok` / `_failed` for the portmanteau,
+   ARCH LM and backtest tests, and new ones (`summary_steps`, `summary_holdout_steps`, `summary_prices`, `summary_scale`,
+   `asymmetry_gjr_falls_only`, `z2_largest_acf`, `nyblom_moves_none`, `backtest_cc_*`, `backtest_short`, `fan_bands`, the risk node's).
+4. **Every backtest verdict says the breaks expected** beside it, as the owner asked; the coverage sentence also says how many there were.
+5. **The asymmetry is said by the model's own coefficients** (α₁, γ₁ and what each does), not by a ratio the page would compute.
+6. **The formula line is the page's**, built from the node's options with the distribution in the page's words; the runner's `formula`
+   stays the English of MLflow. The PDF's font has no subscript minus, so lags are written `_(t−1)`.
+7. **The volatility forecast is a line of its own colour**, not dashed (an `xy` chart has no dash); the long-run σ is the dashed
+   horizontal line. The fan's sample paths are grey lines drawn by `split_by`, the fan's legend off.
+8. **Cards**: the simulation card says «10,000 × 10» under «Paths × steps» (the long form did not fit in French and Spanish); the model
+   card says the law only, the holdout is in the summary's reading. The coefficients are two tables, estimates and intervals, as ARIMA's:
+   the runner's statistics («192.014141») did not fit one table.
 
 **Checks.**
 
-- Every fixture in five languages passes `reports.definition.check` (`test_a_layout_is_a_definition_the_report_engine_accepts`, and
-  every variant of the options in `test_every_variant_of_the_options_is_a_definition_the_engine_accepts`: EGARCH normal without
-  holdout, ARCH(2) with ARMA(1,1) and no mean, GARCH(2,3) t; the risk node with returns, no threshold, an upper tail, 10 million paths
-  of 1,000 steps, an ARIMA relative change with a position, automatic orders).
-- No sentence of a measure holds a verdict word: `measure_readings` (VaR, ES, persistence, half-life, the probabilities, the drawdown
-  are required among them) against common.json's `verdict_words` and a list of judgement words of these reports, in five languages;
-  each verdict holds one; no «= {x:p}».
-- The other reports: 505 renderings identical byte for byte before and after (sha256 of the PDF, of the definition and of the labelled
-  rows, and the page count: the 33 fixtures of the other models and the 68 variants of the statistics tests, in five languages, the
-  tests' fake chart service).
-- Memory: the report on `garch-default` with every reading, in German: `tracemalloc` peak **5.0 MiB** (under 200 MB).
-- Tests: 1,884 passed (the models' layouts, catalogue, results, output columns, the explanations of the models and of the
-  statistics tests, Timestral's report, `test_models_garch_report.py` with 59 of them), in the backend image, one CPU.
+- Every fixture in five languages passes `reports.definition.check`, and so do ten variants of the options (EGARCH normal without
+  holdout, ARCH(2) with ARMA(1,1) and no mean, GARCH(2,3) t; the risk node with returns, no threshold, an upper tail, 10 million paths of
+  1,000 steps, an ARIMA relative change with a position, automatic orders).
+- No sentence of a measure holds a verdict word (common.json's `verdict_words` and a list of judgement words of these reports, five
+  languages; VaR, ES, persistence, half-life, the probabilities and the drawdown required among the measures); each verdict holds one; no
+  «= {x:p}». The explanations' general tests (`test_report_explanations.py`) now run on both nodes, «only additions» included.
+- **A verdict follows α** (criterion 8): on the runner's output, each of the eight tests read with α just above and just below its p-value
+  gives the rejecting and the keeping sentence; so does the ARIMA risk fixture's Ljung–Box.
+- The other reports: 505 renderings identical byte for byte before lot G4 and after this version (sha256 of the PDF, of the definition
+  and of the labelled rows, and the page count: the 33 fixtures of the other models and the 68 variants of the statistics tests, in five
+  languages, the tests' fake chart service).
+- Memory: the report on `garch-default` (the runner's output, its readings chosen), in German: `tracemalloc` peak **7.0 MiB** (under
+  200 MB).
+- Tests: 1,888 passed (the models' layouts, catalogue, results, output columns, the explanations of the models and of the statistics
+  tests, Timestral's report, `test_models_garch_report.py`), then 861 after the last corrections of the GARCH layout; in the backend
+  image, one CPU.
 
 ### G2 — the simulation engine (2026-11-22)
 
