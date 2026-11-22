@@ -1493,7 +1493,9 @@ model: fitted monthly, applied each day.
 | Steps ahead, held out, lags of the tests | 1,000 each |
 
 The node refuses, with a sentence and the way out: a series with gaps (the decomposition's rule), a constant series, a price
-that is zero or negative, a series too short, a model whose variance can go negative. **Not in this node:** several series at
+that is zero or negative, returns too small or too large to square, a series too short, a model no solver can fit. (A GJR whose
+fit lets a fall lower the variance is reported here; it is the [Risk simulation](#risk-simulation-r) that cannot simulate it.)
+**Not in this node:** several series at
 once (a portfolio), regressors in the variance, a GARCH in the mean, long memory, regime switching, a trading calendar for
 the future dates (with the frequency *Whole numbers (steps)* on dates, the forecast's times are calendar days: the step number is
 the reliable one).
@@ -1537,7 +1539,7 @@ value). An ARIMA with explanatory columns is refused with a sentence: the future
 | **VaR level**, **Expected shortfall level** | The levels of the two measures | 99 %, 97.5 % |
 | **Quantiles** | The fan's bands and the summary's `quantile_<q>` columns, up to nine, each in (0, 1) | 1, 5, 25, 50, 75, 95, 99 % |
 | **Level to watch** | A level, **in the series' unit** (a price when the series is prices, a return when it is returns, never a return for prices), whose crossing is counted | none |
-| **Position (an amount)** | An amount invested: every measure of the risk variable is also given in money (position × the relative change) | none |
+| **Position (an amount)** | An amount invested: the VaR and the expected shortfall are also given in money (position × the relative change), in the measures' table and in their readings | none |
 | **Maximum drawdown** | The maximum drawdown of each path | on |
 | **Risk variable** (ARIMA) | What an ARIMA's risk is measured on: the **last** value, the running **sum** (a month's demand) or the **relative change** from the last observed value | Last |
 | **Last returns kept out to test the VaR** | The backtest of the 1-day VaR, as in the GARCH node | 0 |
@@ -1554,7 +1556,8 @@ risk variable is *relative change*; an ARIMA's other risk variables have no mone
 - **VaR** at the horizon and per step: the lower empirical quantile of the paths, with a **distribution-free Monte Carlo
   interval**; **expected shortfall** (Acerbi and Tasche), with its interval. They are written as **values of the risk
   variable** («the 21-day return falls below −11.8 % with probability 1 %; when it does it averages −11.9 %»; a price; a
-  demand), and with a position in money, without a sign convention to learn. The upper tail mirrors them.
+  demand), and with a position in money, without a sign convention to learn; the expected shortfall's reading also says the
+  quantile it averages beyond (the VaR at the expected shortfall's level). The upper tail mirrors them.
 - **The probability of passing the threshold** at each step, and of having passed it at any step before, each with a
   Clopper–Pearson interval.
 - The **maximum drawdown** (mean, median, VaR), the **moments** of the outcome (mean, sd, skewness, kurtosis) and the **fan**:
@@ -1585,14 +1588,16 @@ simulating (counts, moments by pairwise merge, histograms) and a second pass ove
 the VaR and the ES need). So **the peak does not depend on the number of paths**: at 10 million simulated values the
 simulation's own growth stayed below 256 MiB, with the file of the paths on disk (the whole process, with R, the packages and
 the model's fit, peaked at 550 to 580 MB of the group's 2 GiB). A batch is also bounded by the file's row group
-(1,048,576 rows). Before anything is allocated, the node checks that one block of paths fits the memory, that the file will fit the
-Job's disk and that the projected time will fit the node's timeout, and refuses with a sentence if not.
+(1,048,576 rows). Before anything is allocated, the node checks its options against their bounds and that one block of paths
+fits the memory; after the first batch, before the second, it checks that the file will fit the Job's disk and that the projected
+time will fit the node's timeout. Each refuses with a sentence and its numbers, and leaves no file.
 
 **The seed.** The draws come from independent streams, one per **block of 1,000 paths** (L'Ecuyer's combined recursive
 generator), so a path depends on the seed and its position only: **the same seed gives the same numbers bit for bit**,
 whatever the memory, the batch size or the machine's speed, and the first 2,000 paths of a run of 10,000 are the 2,000
-paths of a run of 2,000. A different seed is a different, equally valid sample. The report's notes give the seed, the
-blocks, the batches and their size, the peak and the size of the file.
+paths of a run of 2,000. A different seed is a different, equally valid sample. The report's numbers of the fit give the
+seed, the blocks, the batches and their size and the size of the file; the memory peak is in the Job's log (one line: the
+paths, the batches, the file, the memory before the simulation and the peak, the seconds).
 
 #### Limits and refusals
 
@@ -1600,7 +1605,7 @@ blocks, the batches and their size, the peak and the size of the file.
 |---|---|
 | Paths, steps | 100 to 10,000,000 paths; 1 to 1,000 steps; at most nine quantiles; the fan draws 20 sample paths |
 | Rows of the series | The GARCH variant: the group's 200,000; the ARIMA variant: 20,000 (ARIMA's own) |
-| Refused before the Job | `too_few_paths` (with 100 paths and a 99.9 % level no simulated value lies beyond the VaR: at least 1,000 paths); `horizon_memory` (one block of 1,000 paths of 1,000 steps needs about 356 MB: fewer steps); `too_many_values` (the file would not fit the Job's disk); `too_slow` (the projection passes the node's timeout: fewer paths or steps, or a longer timeout, up to the group's) |
+| Refused by the simulation | Before it starts: `too_few_paths` (with 100 paths and a 99.9 % level no simulated value lies beyond the VaR: at least 1,000 paths); `horizon_memory` (one block of 1,000 paths of 1,000 steps needs about 400 MB besides the fitted model: fewer steps). After its first batch: `too_many_values` (the file would not fit the Job's disk); `too_slow` (the projection passes the node's timeout: fewer paths or steps, or a longer timeout, up to the group's) |
 | Refused by the model | `negative_variance`: the package lets a GJR's γ go below −α, and then a large fall makes the variance negative and no path can be simulated: use GARCH or EGARCH; `position_not_relative`; `zero_last` (a relative change from a last value of 0 or below); `last_missing` |
 | Time | The node, fit and checks included (about 3 s): 4.3 s at 10,000 simulated values, 6.2 s at a million, 26.5 s at 10 million, on one CPU (table below) |
 | Not in this node | Several series at once, exogenous columns, the uncertainty of the parameters, an ES backtest, a multi-step VaR backtest, a trading calendar for the future dates |
