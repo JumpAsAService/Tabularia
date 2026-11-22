@@ -1509,6 +1509,112 @@ decomposition). Run together with `test_report_explanations`,
 `test_models_output_columns`, `test_models_results`, `test_reports_model`, `test_stats_explanations` and `test_stats_layouts`, **1,798 passed**
 (the CI image, `--memory=2500m --cpus=1`).
 
+### F3 — the runner
+
+**Built (2026-11-22).** `runner/py/ff_series.py` (the options, the covariates, the survey of every series, the plan of blocks and batches, a
+batch's arrays), `ff_timestral.py` (`fit_timestral`: loading, threads, the time budget, the forecasts block by block, the output by row groups, the
+results), `ff_measures.py` (the seasonal naïve, the scale, MASE, sMAPE, pinball, WQL, coverage, the sums across the series, Wilcoxon), `ff_reading.py`
+(the `@id name=value` rows, F4's contract word for word), `ff_tests.py` (the group's self-test checks); `reference/make_reference.py` (the tables of
+`reference/data/ff_*.csv` and `expected.json`, computed with the official package outside the image), `witness.json` (the pins and the closure uv
+resolved), `reference/measure.py` (one run's time and memory peak in the image); the stub «not built yet» is gone; `make_output_columns.py` has two
+Timestral cases and `test_models_output_columns.py` no longer leaves the node out.
+
+**How it runs.** (1) The options with the catalogue's defaults (`quantile_level`, `too_many_covariates`: the two lists together past
+`max_covariates`), the table read once as Arrow columns, the covariates as one array each over the table's rows (a number as it is, a boolean 0/1,
+a text the code of its label in the text order of the whole column, `empty_covariate`, `too_many_levels`, `covariate_type`); (2) **the survey**:
+every series built and checked in text order (the series rules of `tab_series`, `too_many_series`, `known_future_missing`, `known_future_gap`,
+`known_future_long`), a few numbers kept of each (`Meta`), its arrays dropped — every refusal of the data comes before anything is loaded or
+forecast, and `size_absent` after them; (3) the size's weights from the image's folder, `torch.set_num_threads` = the Job's threads, one interop
+thread; (4) **blocks** of consecutive series (at most 400,000 places of span, holdout and horizon; at least one series), each rebuilt, forecast in its
+batches, measured, written to the output as **one row group** of a `ParquetWriter` kept open, its series' numbers added to the totals
+(`ff_measures.Across`: sums and counts), and dropped; (5) the results: the model's numbers, the series' table, the comparison and the measures, the
+curves of the series drawn, the reading.
+
+**Where the spec was silent, or wrong, and what was done** (nothing else of the spec was changed):
+
+1. **The batches.** F0 found that only a batch of one constant size makes a series' bits independent of the others. Here the constant size is a
+   function of the batch's shape alone, and the shape of the series alone: the context is padded on the left with missing values to the next rung of
+   a ladder of patch counts (1 … 8, then four rungs a doubling: 10, 12, 14, 16, 20 … 1,024; at most a quarter more patches than it needs; leading
+   missing patches are never keys of the model's attention), the horizon is the forecast's own, and the size is `min(16, 256 // (rows × (patches +
+   horizon patches)))`, at least 1 (rows = the series and its covariates), the last batch of a shape filled with copies of its last series. Measured
+   (one batch, 2 threads): with 128 values a batch of 16 costs 1.8 (5M) to 3.1 (209M) times a batch of one; with 1,024 values a batch of 7–8 costs
+   within 5–15 % per series of a batch of 16 and half its time when it holds one series alone (209M: 1.78 s against 3.39 s), longer contexts gain
+   nothing from batching (F0). So the same series gives the same bits whatever the table, the series beside it, its place and the blocks (a
+   self-test check runs every series in a block of its own and compares bit for bit), and `batches` counts the library's calls.
+2. **The tolerance against the official package is 5e-5 of the series' largest quantile**, not 1e-6. Measured on the reference cases, the four
+   sizes: at most 6.4e-7 of it, except one series of Timestral-5M (level 0.01, first step of its holdout) at 1.15e-5. The batch's shape alone moves
+   that series by 7e-6 inside the image (a batch of 2 against 1), and the witness's process (a venv, the same CPU, the same torch wheel) differs from
+   the image's already for a batch of one (2e-6 of it): the kernels' blocking, not the code. A measure made of the forecasts is checked within 1e-3 of
+   itself (the quantiles' gap divided by the series' scale); every number made of the data alone, and the measures and the test on fixed numbers, within 1e-12.
+3. **A constant series is forecast flat**, not refused (`degenerate` stays for the library's own error, named per series): its holdout is not
+   measured (`zero_scale`). One value is forecast flat too, its holdout `too_short`. A series never negative gets no negative quantile (the library's
+   clamping, said by `limits_clip`); a negative series is not clamped.
+4. **The holdout, per series.** `holdout` empty means the horizon (with known covariates: the series' own future rows). A series shorter than
+   holdout + season + 1 places is forecast but has no holdout forecast: its last places are history rows (`is_holdout` false), `not_measured =
+   too_short`. The measures read the holdout's observed values only (a filled or a missing value is not measured) whose seasonal naïve exists; the
+   scale reads the pairs of observed values of the history; the seasonal naïve reads the series as the model reads it (filled by `linear`) and, at a
+   value left missing (`model`), the value one season earlier. `model|||holdout` and `horizon` are the largest of the series'.
+5. **Wilcoxon is `scipy.stats.wilcoxon(method="auto")` exactly**, including its third path the spec did not name: with ties or zeros and at most 13
+   differences, scipy counts the 2ⁿ sign patterns (a permutation test, exact) rather than the normal approximation. The statistic is the smaller of
+   W+ and W−; `count` the non-zero differences; `value` the median of every difference; the verdict `ok` (p ≥ α) or `failed` (p < α), `not_computed`
+   with `advice_id` `one_series`, `no_holdout` or none; `comparison_few_series` follows the verdict's line when the smallest p-value the test can give
+   (2/2ⁿ, or the normal approximation's at W = 0) is not below α.
+6. **The time budget** is projected after every batch, not only the first (the first one decides a run too slow at once; the later ones catch a
+   table whose first shapes are cheap), at the speed measured so far by the unit «patches × rows the model reads», against 85 % of the time left from
+   the runner's start (`task["_started"]`, `limits.time_budget_seconds`). The sentence counts forecasts, not series (a holdout doubles them):
+   «at the speed of the first 16 forecasts (0.031 s each with Timestral-209M on 2 CPUs), the 10,000 series need about 12 minutes; the step allows 60
+   seconds: …». **The output is removed** when a refusal or a crash comes after a block was written (a self-test check: none is left).
+7. **The results stay within `max_result_rows`** (the engine refuses a step above it): the series' table comes first; the series drawn (twelve,
+   by Σ|y|) keep their lines and share what is left for their history (`note_history_shrunk`), fewer are drawn when even their lines do not fit, and
+   when the series' table alone does not fit (above about 5,000 series of 18 numbers) it keeps the series with the largest Σ|y| and says so in
+   `note_series_left_out` — an English sentence: F4's words have no template for it. The series' rows are written statistic by statistic (one call
+   each: 0.03 s for 1,000 series instead of 1.4 s).
+8. **Notes**: `note_ends_early`, `note_future_left_out`, `note_context_cut_<k>` (the first three series cut to 32,768 values; the reading's
+   `limits_context` names the same), `note_covariate_missing_<k>` (the empty values the forecasts from the end read, per column), `note_time_budget`
+   (with a budget), `note_history_shrunk`, `note_series_left_out`. A line `holdout_baseline` is written beside the holdout's lines (F4 does not draw it
+   yet: its note 4). Without a series column the one series is named after the value column (the curves' and the series' `level`).
+9. **The licence's acceptance in the reading** (`licence_accepted`) is said when the task carries `licence: {"by", "at"}` (the audit row's actor and
+   time, ISO): lot F6 passes it; without it the line is not written.
+10. **pandas stays in the image** (F0 and F2 left it to this lot): the library's self-test and `reference_case` read the CSVs into frames, and pyarrow
+    imports it anyway. The runner itself never makes a frame.
+11. **`expected.json`** holds `cases` (five refusals, any size, run by the library's self-test), `size_cases` and `sizes` (ten cases, each size's
+    expected quantiles at the first, middle and last step of five levels for three series a case, the measures, the test, the counts, the reading's ids),
+    `measures` and `wilcoxon` (fixed numbers; the test's three paths). `ff_wilcoxon.csv` is twelve series of 60 days (the exact path end to end); the
+    zeros and the ties are in the fixed differences. 149 KB; the Job's code folder is 667 KB (the 900 KiB ceiling's test passes).
+
+**The self-test**: 36 checks, none failed or skipped (the library's 19, `tab_series`' six among them; the five refusals of `expected.json`; the
+group's 12: the weights' `config.json` and `LICENSE`, the measures and Wilcoxon against their witnesses, the plan, the reference cases of each size present, the same bits twice,
+a series alone in its blocks, the vendored package called directly on hand-made arrays bit for bit, sorted quantiles and odd symmetric averaging, the
+types of the time and the series, `size_absent`, `too_many_series`, `too_slow` with nothing left, the results' ceiling); **32 s** with the four sizes
+(2 CPUs, 2.5 GB; the edge cases and the determinism checks run with the smallest size present).
+
+**Time and memory** (`reference/measure.py` in the image, 2 CPUs, `--memory 2500m` for 5M and 28M, `4g` for 123M and 209M; daily series, horizon and
+holdout 28, so **two forecasts a series**; seconds of the forecasts, the whole fit with the import of torch (about 2 s) and the loading in brackets;
+peak: the container's `memory.peak` / the process's `VmHWM`, the input's generation included):
+
+| Run | 5M | 28M | 123M | 209M |
+|---|---|---|---|---|
+| Loading the weights | 0.06–0.09 s | 0.24–0.28 s | 1.0–1.4 s | 1.7–2.0 s |
+| 1 series, 1,000 points | 0.07 (1.9) | 0.26 (2.2) | 1.14 (4.3) | 1.65 (5.4) |
+| 1 series, 10,000 points | 0.20 (2.1) | 0.84 (2.9) | 2.62 (5.4) | 4.66 (8.4) |
+| 1 series, 100,000 points (reads 32,768) | 0.91 (2.8) | 2.80 (4.8) | 9.29 (12.1) | 15.9 (19.6) |
+| 100 series × 1,000 points | 1.74 (3.7) | 7.53 (9.7) | 27.8 (30.7) | 47.7 (51.3) |
+| 1,000 series × 100 points | 3.83 (6.5) | 11.9 (14.9) | 42.3 (46.1) | 71.8 (76.4) |
+| 10,000 series × 100 points | 37.7 (47.9) | — | — | — |
+| Peak, container / process | 235–325 / 384–456 MB (10,000 series: 515 / 580) | 325–409 / 557–594 MB | 692–793 / 1,281–1,315 MB | 1,088–1,290 / 1,942–1,976 MB |
+
+The work around the model (survey, blocks, measures, output, results) is about 0.8 ms a series of 100 points: 8 s of the 10,000 series' 48. **The
+memory does not grow with the table**: 1,000 series of 28M peak at **407 MB** in the 2.5 GB container (`peak_mb=1000` passes), 10,000 series of 5M at
+515 MB against 324 MB for 1,000; the output of 1.28 million rows is written in four row groups. **`too_slow`, measured**: 10,000 series × 100 points with
+209M and a 60 s budget refuse after the first batch, 5.4 s into the fit («… need about 12 minutes; the step allows 60 seconds …»; F0's rate makes it
+13.8 minutes), with no output left; 1,000 series with 28M and 10 s refuse at 2.3 s («about 17 seconds»; the run takes 15).
+
+**Tests.** The image's self-test above; `make_output_columns.py foundation_forecast` (two cases: one series, and series of a text column with known
+and past covariates); the engine's `test_models_output_columns`, `test_models_layouts`, `test_models_timestral_report`, `test_models_catalog`,
+`test_models_results`: **1,184 passed** (the CI image, 2.5 GB, 1 CPU); the editor's `model-catalog.test.mjs` (54); `go test ./internal/modelgroups/
+./cmd/modelgroup/`. The runner's real results of three runs (three series, two shops with known and past covariates, gaps filled) pass the engine's
+`check_table` and F4's report in English and Italian with no sentence left as an id.
+
 ## References
 
 - Mistral AI, *Timestral* model cards and `LICENSE`, `https://huggingface.co/mistralai/Timestral-{5M,28M,123M,209M}`
