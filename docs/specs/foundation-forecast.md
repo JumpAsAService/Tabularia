@@ -1334,6 +1334,33 @@ tests (the draft, the clause cut from the real text, the card's wiring, the comp
 audit retention's and is tested there. Browsers: Chromium and Firefox headless on the real component with a stand-in for the API, mouse and keyboard alone (Tab, Shift+Tab, Space, Enter): 98
 checks, in five languages, at 390 px and in the dark theme.
 
+### F5 — the node in the editor
+
+**Built (2026-11-22).** The form of Forecast (Timestral) is drawn from the catalogue by `ModelForm.vue`, with four additions that name a kind, not the model:
+
+- **Sizes.** `ModelForm` takes `sizes` (the sizes the group's ready version holds) and offers only those; the size the node already has stays, ticked, with the sentence
+  «… was not downloaded by this installation». No `sizes` (a route that does not say): the four. `ModelNodePanel` reads them from `/models/groups` (`groups[].sizes`, which F1 answers).
+- **Quantiles.** The kind `foundation_quantiles` is drawn as a box for each of the 21 levels, in a labelled group (the levels as the language writes them, comma included); the median
+  is shown grey and never ticked («the forecast column itself»). The boxes show what the node asks for: with none given, the default four. Unticking the last one gives the default
+  back, and the box is set by hand after the change (Vue sees «ticked» before and after and would leave the unticked box as it is: found in the browser).
+- **Covariates.** The two lists are the existing boxes of columns (a column of one is not offered to the other, nor the time, the series' value or the series column); a note says when
+  the two together pass `max_covariates` (the catalogue bounds each alone). Known covariates take the horizon away.
+- **Licence.** One sentence under the size, with a link that opens apart (`noopener noreferrer`); the node's own words (`models.timestral.licence`). The name and the address are the route's,
+  else the group's shipped ones (`MODEL_GROUP_LICENCES`); only an https address becomes a link.
+
+«Register» is not drawn: the node has `card: false`, so the MLflow block says there is no model to register. The icon is a lucide `Telescope`, the summary «28M · orders · ~ shop». The
+columns after the node (`quantile_0.05`…) were already known before the Run through the wildcard of F0: now tested down to the steps after it. The words are in the five languages under
+`models` (own words for the keys the other models read differently: horizon, quantiles, holdout, missing, output).
+
+**Deviations.** (1) The palette entry stays hidden (`MODEL_NOT_IN_THE_PALETTE_YET`) until the runner (F3): F7 takes it away. It sits under its group's header, «Pre-trained forecasting», as the spec says, not
+under «Time series». (2) `/models/groups` answers `sizes` but no licence, so the line's name and link come from the shipped constant until a route says them; the link points at the licence file of the
+28M repository on the Hub, whose text is identical in the four. (3) The catalogue still says `numbers` for the quantiles; the 21 levels are the editor's constant, and the runner refuses any other (`quantile_level`).
+
+**Tests.** `frontend/tests/model-foundation.test.mjs` (14): keys, sizes, quantiles, covariates, licence, no registration, keyboard, columns, palette, icon, summary, words in five languages;
+the word and palette tests of `model-catalog` and `model-experiments` no longer leave the node out. Frontend suite 589 of 589; typecheck with no error. Chromium and Firefox headless on the real
+`ModelForm.vue` with made-up data, keyboard alone (Tab, Shift+Tab, Space, Enter, the arrows; no F, Home, End or Menu): the selects, the size, the licence link, the levels (the median skipped by Tab), the
+covariates, MLflow, the sizes offered, five languages.
+
 ## References
 
 - Mistral AI, *Timestral* model cards and `LICENSE`, `https://huggingface.co/mistralai/Timestral-{5M,28M,123M,209M}`
