@@ -9,8 +9,8 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import {
-  failureSentence, groupBusy, groupFollowed, licenceClause, licenceDraftOf, licenceInputOf, licenceReady, licenceSizeLabel, licenceSizesText,
-  limitsDraftOf, limitsInputOf, recheckOf, systemLibraryLabel,
+  failureSentence, groupBusy, groupFollowed, licenceClause, licenceDraftOf, licenceHref, licenceInputOf, licenceReady, licenceSizeLabel,
+  licenceSizesText, limitsDraftOf, limitsInputOf, recheckOf, systemLibraryLabel,
 } from '../composables/useModelsAdmin.ts'
 
 const FRONTEND = fileURLToPath(new URL('..', import.meta.url))
@@ -247,4 +247,15 @@ test('the gateway answers what the card reads: the licence of a group with weigh
   assert.match(api, /enable: \(id: string, body\?: ModelLicenceInput\)/)
   assert.match(api, /rebuild: \(id: string, body\?: ModelLicenceInput\)/)
   assert.match(api, /licence_pending/)
+})
+
+test('the licence link: only an https address becomes a link, the route\'s text is data', () => {
+  assert.equal(licenceHref('https://huggingface.co/x/blob/abc/LICENSE'), 'https://huggingface.co/x/blob/abc/LICENSE')
+  for (const bad of ['javascript:alert(1)', 'JAVASCRIPT:alert(1)', ' javascript:alert(1)', 'data:text/html,x', 'http://example.com/LICENSE',
+    '//example.com', '', null, undefined, 42]) {
+    assert.equal(licenceHref(bad), undefined, String(bad))
+  }
+  const section = read('components/admin/ModelsSection.vue')
+  assert.ok(!/:href="shown\(g\)\.licence!?\.url"/.test(section), 'the section binds the licence link through licenceHref')
+  assert.equal((section.match(/:href="licenceHref\(shown\(g\)\.licence!?\.url\)"/g) || []).length, 2)
 })

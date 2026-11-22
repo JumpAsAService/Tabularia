@@ -14,8 +14,8 @@ import { errMessage } from '~/composables/useApi'
 import { useFormat } from '~/composables/useFormat'
 import type { GroupOut } from '~/composables/useProjects'
 import {
-  failureSentence, groupBusy, groupFollowed, licenceClause, licenceDraftOf, licenceInputOf, licenceReady, licenceSizeLabel, licenceSizesText,
-  limitsDraftOf, limitsInputOf, recheckOf, systemLibraryLabel, useModelsAdmin,
+  failureSentence, groupBusy, groupFollowed, licenceClause, licenceDraftOf, licenceHref, licenceInputOf, licenceReady, licenceSizeLabel,
+  licenceSizesText, limitsDraftOf, limitsInputOf, recheckOf, systemLibraryLabel, useModelsAdmin,
   type LicenceDraft, type LimitsDraft, type ModelGroupAdmin, type ModelGroupAnswer, type ModelsAdminState,
 } from '~/composables/useModelsAdmin'
 
@@ -295,7 +295,7 @@ const shortRef = (ref: string | null) => (ref ? ref.replace(/^(.*@sha256:)([0-9a
             n: lineOf(g)!.version,
             sizes: licenceSizesText(lineOf(g)!.sizes),
           }) }}
-          <a :href="shown(g).licence!.url" target="_blank" rel="noopener noreferrer">{{ $t('modelsAdmin.licence.readIt') }}</a>
+          <a :href="licenceHref(shown(g).licence!.url)" target="_blank" rel="noopener noreferrer">{{ $t('modelsAdmin.licence.readIt') }}</a>
           <template v-if="!lineOf(g)!.current"> {{ $t('modelsAdmin.licence.earlier') }}</template>
         </span>
       </p>
@@ -311,7 +311,7 @@ const shortRef = (ref: string | null) => (ref ? ref.replace(/^(.*@sha256:)([0-9a
         <blockquote v-if="clauseOf(g)" class="clause" lang="en">{{ clauseOf(g) }}</blockquote>
         <p class="small">{{ $t('modelsAdmin.licence.neutral') }}</p>
         <p class="small links">
-          <a :href="shown(g).licence!.url" target="_blank" rel="noopener noreferrer">{{ $t('modelsAdmin.licence.officialText') }}</a>
+          <a :href="licenceHref(shown(g).licence!.url)" target="_blank" rel="noopener noreferrer">{{ $t('modelsAdmin.licence.officialText') }}</a>
         </p>
         <details class="shipped">
           <summary>{{ $t('modelsAdmin.licence.shippedText') }}</summary>

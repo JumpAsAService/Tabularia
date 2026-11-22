@@ -210,6 +210,11 @@ export function licenceSizeLabel(s: { id: string; bytes: number }): string {
   return `${s.id.toUpperCase()} · ${Math.round(s.bytes / 1e6)} MB`
 }
 
+/** The licence's link: only an https address becomes one (the route's text is data, as the node's form reads it). */
+export function licenceHref(url: unknown): string | undefined {
+  return typeof url === 'string' && /^https:\/\//.test(url) ? url : undefined
+}
+
 /** The sizes as a list for a sentence: «28M, 123M». */
 export const licenceSizesText = (sizes: string[]): string => sizes.map((s) => s.toUpperCase()).join(', ')
 
