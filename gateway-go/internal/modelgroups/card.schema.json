@@ -9,7 +9,7 @@
   "properties": {
     "format": {"const": "tabularia-model"},
     "format_version": {"const": 1},
-    "model": {"enum": ["linear", "logistic", "kaplan_meier", "cox", "parametric_survival", "arima", "xgboost", "catboost", "clv", "bg_bb"]},
+    "model": {"enum": ["linear", "logistic", "kaplan_meier", "cox", "parametric_survival", "arima", "garch", "xgboost", "catboost", "clv", "bg_bb"]},
     "variant": {"type": "string", "minLength": 1},
     "group": {"enum": ["regression", "survival", "timeseries", "boosting", "customer_lifetime"]},
     "group_version": {"type": ["integer", "string"]},
@@ -221,6 +221,29 @@
         "last": {"type": "object", "description": "the last observations, residuals and times the filter needs to forecast"}
       }
     },
+    "garch": {
+      "type": "object",
+      "description": "a volatility model's: the specification, the parameters on the series' units, and the state the filter continues from (the last returns, residuals, variances or log-variances, standardized residuals, the last price)",
+      "required": ["variance_model", "arch_order", "garch_order", "ar_order", "ma_order", "mean", "distribution", "input_kind", "var_level",
+                   "frequency", "coefficients", "last"],
+      "properties": {
+        "variance_model": {"enum": ["arch", "garch", "gjr", "egarch"]},
+        "arch_order": {"type": "integer", "minimum": 1},
+        "garch_order": {"type": "integer", "minimum": 0},
+        "ar_order": {"type": "integer", "minimum": 0},
+        "ma_order": {"type": "integer", "minimum": 0},
+        "mean": {"type": "boolean"},
+        "distribution": {"enum": ["norm", "std", "sstd"]},
+        "input_kind": {"enum": ["returns", "prices"]},
+        "returns_type": {"enum": ["log", "simple"]},
+        "var_level": {"type": "number", "exclusiveMinimum": 0.5, "exclusiveMaximum": 1},
+        "var_quantile": {"type": "number", "description": "the fitted law's quantile at 1 − var_level: VaR = μ + σ·var_quantile"},
+        "frequency": {"type": "string"},
+        "coefficients": {"type": "object", "additionalProperties": {"type": "number"}},
+        "last": {"type": "object", "required": ["time_kind", "time", "returns", "residuals", "z"],
+                 "description": "the state at the last instant: the series' units, oldest first"}
+      }
+    },
     "boosting": {
       "type": "object",
       "description": "a boosting model's: the library, the task, the classes, and the model file beside the card (XGBoost's JSON, CatBoost's cbm: data the library parses, never code), tied to the card by its sha256",
@@ -262,6 +285,7 @@
     {"if": {"properties": {"model": {"const": "kaplan_meier"}}}, "then": {"required": ["kaplan_meier", "outcome"]}},
     {"if": {"properties": {"model": {"const": "parametric_survival"}}}, "then": {"required": ["parametric_survival", "outcome"]}},
     {"if": {"properties": {"model": {"const": "arima"}}}, "then": {"required": ["arima"]}},
+    {"if": {"properties": {"model": {"const": "garch"}}}, "then": {"required": ["garch"]}},
     {"if": {"properties": {"model": {"enum": ["clv", "bg_bb"]}}}, "then": {"required": ["customer_lifetime"]}},
     {"if": {"properties": {"group": {"const": "boosting"}}, "required": ["group"]},
      "then": {"required": ["boosting"], "properties": {"software": {"required": ["Python"]}}},
