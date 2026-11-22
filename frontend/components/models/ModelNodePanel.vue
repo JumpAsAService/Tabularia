@@ -9,7 +9,7 @@ import { useI18n } from 'vue-i18n'
 import { Sparkles, Trash2 } from 'lucide-vue-next'
 import type { Node } from '@vue-flow/core'
 import type { ColumnInfo } from '~/composables/useApi'
-import { modelArimaTitle, modelDefaults, modelGroupLicence, modelGroupSizes, modelNameKey, modelOff, modelOf, modelUnset } from '~/composables/modelCatalog'
+import { modelCodeTitle, modelDefaults, modelGroupLicence, modelGroupSizes, modelNameKey, modelOff, modelOf, modelUnset } from '~/composables/modelCatalog'
 import { modelIconOf } from '~/composables/modelIcons'
 import { useModelGroups } from '~/composables/useModelGroups'
 import type { ScriptOutputs } from '~/composables/useScripting'
@@ -53,7 +53,7 @@ const licence = computed(() => (model.value ? modelGroupLicence(model.value.grou
 const title = computed(() => {
   if (isPredict.value) return t('models.predict.title')
   if (!model.value) return t('models.node.title')
-  return model.value.id === 'arima' ? modelArimaTitle(props.node.data?.params) : t(modelNameKey(model.value.id))
+  return modelCodeTitle(model.value.id, props.node.data?.params) ?? t(modelNameKey(model.value.id))
 })
 // Run waits for the group (the form says why it is off) and for what the node still lacks
 const lacking = computed(() => (model.value ? modelUnset(model.value, props.node.data?.params) : []))

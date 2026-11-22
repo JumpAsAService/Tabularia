@@ -8,15 +8,19 @@ import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { SlidersHorizontal } from 'lucide-vue-next'
 import { opMeta } from '~/composables/useOpIcons'
+import { MODEL_ACTIONS, type ModelActionId } from '~/composables/modelIcons'
 import {
   QUICK_MENU_RADIUS, radialItemOffset, radialLabelSide, radialMenuCenter, radialMenuExtent,
   type QuickMenuBox,
 } from '~/composables/flowShortcuts'
 
-const props = defineProps<{ items: string[] }>()
+// `actions`: what the node the menu is opened on can do besides a step after it («Simulate risk from this model»): they come
+// after the steps on the ring, and a choice of one is `action`, not `pick`
+const props = defineProps<{ items: string[]; actions?: ModelActionId[] }>()
 const emit = defineEmits<{
   // `branch`: Shift was held — the step starts a branch instead of going into the chain
   (e: 'pick', op: string, branch: boolean): void
+  (e: 'action', id: ModelActionId): void
   (e: 'customize'): void
   (e: 'close', reason: 'escape' | 'outside' | 'other'): void
 }>()
@@ -45,9 +49,14 @@ const still = ref(false)
 // item) until a key is pressed, so two items never look current at once
 let quietFocus = false
 
-const ring = computed(() => props.items.map((op, i) => {
-  const at = radialItemOffset(i, props.items.length)
-  return { op, i, x: at.x, y: at.y, side: radialLabelSide(at.angle), meta: opMeta(op) }
+// the ring: the steps, then the node's actions
+const entries = computed(() => [
+  ...props.items.map((op) => ({ op, action: null as ModelActionId | null, meta: opMeta(op) })),
+  ...(props.actions ?? []).map((id) => ({ op: `action:${id}`, action: id as ModelActionId | null, meta: MODEL_ACTIONS[id] })),
+])
+const ring = computed(() => entries.value.map((e, i) => {
+  const at = radialItemOffset(i, entries.value.length)
+  return { ...e, i, x: at.x, y: at.y, side: radialLabelSide(at.angle) }
 }))
 const circumference = 2 * Math.PI * QUICK_MENU_RADIUS
 
@@ -73,8 +82,8 @@ async function show(click: { x: number; y: number }, bounds: QuickMenuBox, keybo
   await nextTick()
   // the labels are laid out (invisible) from the start: their sizes say how far the open
   // menu reaches, and the ring moves inwards before the first frame is painted
-  const sizes = props.items.map((_, i) => ({ width: labelEls[i]?.offsetWidth ?? 0, height: labelEls[i]?.offsetHeight ?? 0 }))
-  center.value = radialMenuCenter(click, radialMenuExtent(props.items.length, sizes), bounds)
+  const sizes = entries.value.map((_, i) => ({ width: labelEls[i]?.offsetWidth ?? 0, height: labelEls[i]?.offsetHeight ?? 0 }))
+  center.value = radialMenuCenter(click, radialMenuExtent(entries.value.length, sizes), bounds)
   focusItem(0)
   // the right button's press may still hand the focus to the canvas after this: the ring
   // takes it back on the next frame
@@ -104,12 +113,13 @@ function hide(reason: 'escape' | 'outside' | 'other' = 'other') {
 
 function choose(i: number, branch = false) {
   if (phase.value !== 'open') return
-  const op = props.items[i]
-  if (!op) return
+  const entry = entries.value[i]
+  if (!entry) return
   picked.value = i
   // the node is born at once; the chosen item's pulse plays while the menu fades
   leave('picking')
-  emit('pick', op, branch)
+  if (entry.action) emit('action', entry.action)
+  else emit('pick', entry.op, branch)
 }
 
 function customize() {
@@ -127,11 +137,11 @@ function focusHub() {
 }
 
 function focusItem(i: number) {
-  if (!props.items.length) {
+  if (!entries.value.length) {
     focusHub()
     return
   }
-  active.value = (i + props.items.length) % props.items.length
+  active.value = (i + entries.value.length) % entries.value.length
   focusEl(itemEls[active.value])
 }
 
@@ -154,7 +164,7 @@ function onKey(ev: KeyboardEvent) {
     case 'ArrowRight': case 'ArrowDown': ev.preventDefault(); focusItem(active.value + 1); return
     case 'ArrowLeft': case 'ArrowUp': ev.preventDefault(); focusItem(active.value - 1); return
     case 'Home': ev.preventDefault(); focusItem(0); return
-    case 'End': ev.preventDefault(); focusItem(props.items.length - 1); return
+    case 'End': ev.preventDefault(); focusItem(entries.value.length - 1); return
     case 'Tab':
       // the menu keeps the focus: the ring's current item ↔ the hub
       ev.preventDefault()

@@ -6662,6 +6662,41 @@ export default {
         "output": "La tabella della previsione (osservato, previsione, bande) o la tabella dei risultati (le misure e il test)."
       }
     },
+    "garch": {
+      "name": "Volatilità (GARCH)",
+      "hint": "Modella come cambia nel tempo la dispersione di un rendimento (ARCH, GARCH, GJR-GARCH, EGARCH), verifica ciò che resta, prevede la volatilità e il valore a rischio, e mette alla prova il VaR a un passo sugli ultimi rendimenti tenuti fuori.",
+      "params": {
+        "holdout": "Ultimi rendimenti tenuti fuori per provare il VaR"
+      },
+      "hints": {
+        "mean": "Una costante μ nella media del modello.",
+        "distribution": "La legge degli shock, standardizzata. La t di Student ha le code spesse dei rendimenti e il rapporto ne mostra i gradi di libertà stimati; la normale ne è il limite.",
+        "lb_lag": "Il ritardo dei test portmanteau sui residui. Automatico: il minore tra 10 e un quinto delle righe, più i parametri che il test conta.",
+        "holdout": "Gli ultimi rendimenti restano fuori dall'adattamento e il VaR a un passo di ciascuno è confrontato con ciò che è successo (Kupiec, Christoffersen). 0: nessuna prova.",
+        "horizon": "Passi in avanti della previsione della volatilità, da 1 a 1.000. 10 sono i dieci giorni delle regole sul rischio di mercato.",
+        "seed": "Lo usano solo i riavvii casuali del risolutore: stessi dati e stesso seme danno lo stesso adattamento.",
+        "output": "La tabella della volatilità (una riga per periodo e per passo di previsione) o la tabella dei risultati (le misure e le verifiche)."
+      }
+    },
+    "risk_simulation": {
+      "name": "Simulazione del rischio",
+      "hint": "Adatta un modello GARCH o ARIMA e simula migliaia di futuri dalla fine della serie: valore a rischio, expected shortfall, la probabilità di superare un livello, la perdita massima e un ventaglio di quantili. Gli ultimi rendimenti si possono tenere fuori per mettere alla prova il VaR del modello.",
+      "params": {
+        "quantiles": "Livelli dei quantili",
+        "threshold": "Livello da sorvegliare"
+      },
+      "hints": {
+        "mean": "Una costante μ nella media del modello.",
+        "distribution": "La legge degli shock, standardizzata. La t di Student ha le code spesse dei rendimenti e il rapporto ne mostra i gradi di libertà stimati; la normale ne è il limite.",
+        "lb_lag": "Il ritardo dei test portmanteau sui residui. Automatico: il minore tra 10 e un quinto delle righe, più i parametri che il test conta.",
+        "holdout": "Gli ultimi rendimenti restano fuori dall'adattamento e il VaR a un passo di ciascuno è confrontato con ciò che è successo (Kupiec, Christoffersen). 0: nessuna prova.",
+        "horizon": "Passi simulati dalla fine della serie, da 1 a 1.000. 10 sono i dieci giorni delle regole sul rischio di mercato.",
+        "seed": "Lo usa ogni estrazione della simulazione: stessi dati e stesso seme danno gli stessi percorsi.",
+        "output": "Il riepilogo (una riga per passo: media, quantili, VaR, ES), i percorsi simulati (una riga per percorso e passo: può essere grande) o la tabella dei risultati.",
+        "quantiles": "Fino a 9 livelli tra 0 e 1 per il ventaglio e per le colonne dei quantili del riepilogo, per esempio 0,05; 0,5; 0,95.",
+        "threshold": "Un livello di cui si conta il superamento, nell'unità del ventaglio (un prezzo, un rendimento cumulato, un livello, un totale cumulato). Vuoto: nessuno."
+      }
+    },
     "presets": {
       "ar": {
         "name": "AR",
@@ -6847,7 +6882,25 @@ export default {
       "days": "Giorni",
       "arms": "Varianti, controllo incluso",
       "control_share": "Quota di traffico del controllo",
-      "traffic_share": "Quota di traffico nell'esperimento"
+      "traffic_share": "Quota di traffico nell'esperimento",
+      "input_kind": "La serie contiene",
+      "returns_type": "Rendimenti calcolati come",
+      "variance_model": "Modello della varianza",
+      "arch_order": "Ritardi degli shock (q)",
+      "garch_order": "Ritardi della varianza (p)",
+      "ar_order": "Ritardi AR della media",
+      "ma_order": "Ritardi MA della media",
+      "se_type": "Errori standard",
+      "var_level": "Livello del VaR",
+      "arch_lags": "Ritardi del test ARCH",
+      "model": "Modello della serie",
+      "aggregate": "Variabile di rischio",
+      "paths": "Percorsi simulati",
+      "innovations": "Innovazioni",
+      "es_level": "Livello dell'expected shortfall",
+      "tail": "Quale lato è il rischio",
+      "position": "Posizione (un importo)",
+      "drawdown": "Massimo drawdown"
     },
     "hints": {
       "method": "STL: una stagione, robusta agli outlier. Classica: medie mobili, additiva o moltiplicativa. MSTL: più stagioni insieme. EMD: modi intrinseci, nessun periodo richiesto.",
@@ -6976,7 +7029,25 @@ export default {
       "days": "Quanti giorni dura l'esperimento: un numero intero da 1 a 3650. Richiede la colonna della data.",
       "arms": "Quante varianti ha l'esperimento, controllo incluso: da 2 a 20.",
       "control_share": "La quota di unità del controllo, sopra 0 e sotto 1; i trattamenti si dividono il resto in parti uguali. Vuoto: tutte le varianti uguali.",
-      "traffic_share": "La quota di tutte le nuove unità che entra nell'esperimento: sopra 0, fino a 1. Allunga la durata."
+      "traffic_share": "La quota di tutte le nuove unità che entra nell'esperimento: sopra 0, fino a 1. Allunga la durata.",
+      "input_kind": "Rendimenti: la colonna contiene già rendimenti (una variazione giornaliera). Prezzi: contiene un prezzo e il nodo calcola i rendimenti, una riga in meno.",
+      "returns_type": "Logaritmico: ln(P / P precedente), che si somma nel tempo. Semplice: P / P precedente − 1.",
+      "variance_model": "ARCH: la varianza segue solo gli ultimi shock. GARCH: anche il suo passato. GJR-GARCH: un calo la alza più di un rialzo. EGARCH: lo stesso, modellato sul logaritmo della varianza.",
+      "arch_order": "A quanti shock passati reagisce la varianza (q), da 1 a 3. Di solito 1.",
+      "garch_order": "Quante varianze passate ricorda (p), da 0 a 3. Di solito 1.",
+      "ar_order": "Rendimenti passati che spiegano il successivo (AR), da 0 a 5. 0: la media è solo una costante.",
+      "ma_order": "Errori passati che spiegano il rendimento successivo (MA), da 0 a 5.",
+      "se_type": "Robusti: validi anche quando la distribuzione è sbagliata, come spesso accade. Classici: dall'Hessiana, validi solo se la distribuzione è giusta.",
+      "var_level": "Il livello del valore a rischio: 0,99 è la perdita superata un giorno su cento. Un numero sopra 0,5 e sotto 1.",
+      "arch_lags": "I ritardi del test ARCH sui residui. Automatico: la stagione della frequenza, se ne ha una, altrimenti 12.",
+      "model": "GARCH adatta la volatilità dei rendimenti; ARIMA una serie di livelli (una domanda, un saldo). Ognuno ha qui sotto le sue opzioni.",
+      "aggregate": "Su che cosa si misura il rischio: il valore a ogni passo; il totale cumulato sui passi (la domanda di un mese); o la variazione rispetto all'ultimo valore osservato. Un GARCH usa sempre il rendimento cumulato.",
+      "paths": "Quanti futuri si simulano, da 100 a 10.000.000. Un VaR al 99 % su 10.000 percorsi poggia su 100 di essi: con il quadruplo dei percorsi l'errore si dimezza.",
+      "innovations": "Parametriche: estrae dalla distribuzione del modello. Ricampionate: rimette in gioco i residui standardizzati (simulazione storica filtrata), così le code sono quelle dei dati.",
+      "es_level": "L'expected shortfall: la perdita media oltre il valore a rischio di questo livello. 0,975 è il livello delle regole sul rischio di mercato.",
+      "tail": "Quale lato è il rischio: un calo (un rendimento, un saldo) o un rialzo (una domanda, un costo, i sinistri).",
+      "position": "Un importo investito: ogni misura è data anche in denaro (l'importo × la variazione). Vuoto: nell'unità della serie.",
+      "drawdown": "La peggiore discesa da un massimo lungo ogni percorso, con la sua distribuzione."
     },
     "choice": {
       "5m": "5M",
@@ -7090,7 +7161,27 @@ export default {
       "sample_size": "La dimensione del campione",
       "mde_for_units": "L'incremento rilevabile con queste unità",
       "mde_for_days": "L'incremento rilevabile in questi giorni",
-      "plan": "La griglia di pianificazione"
+      "plan": "La griglia di pianificazione",
+      "returns": "Rendimenti",
+      "prices": "Prezzi",
+      "simple": "Semplice",
+      "arch": "ARCH",
+      "garch": "GARCH",
+      "gjr": "GJR-GARCH",
+      "egarch": "EGARCH",
+      "norm": "Normale",
+      "std": "t di Student",
+      "sstd": "t di Student asimmetrica",
+      "volatility": "La tabella della volatilità",
+      "arima": "ARIMA",
+      "last": "Il valore",
+      "sum": "Il totale cumulato",
+      "relative_change": "La variazione relativa",
+      "parametric": "La distribuzione del modello",
+      "bootstrap": "Residui ricampionati",
+      "upper": "Superiore",
+      "risk_summary": "Il riepilogo del rischio",
+      "paths": "I percorsi simulati"
     },
     "choices": {
       "penalty": {
@@ -7117,6 +7208,15 @@ export default {
       },
       "correction_ab": {
         "none": "Nessuna correzione"
+      },
+      "tail": {
+        "lower": "Cali (un rendimento, un saldo)",
+        "upper": "Rialzi (una domanda, un costo, i sinistri)"
+      },
+      "aggregate": {
+        "last": "Il valore a ogni passo",
+        "sum": "Il totale cumulato",
+        "relative_change": "La variazione dall'ultimo valore"
       }
     },
     "reasons": {
@@ -7144,6 +7244,14 @@ export default {
       "units_per_variant_needed": "L'incremento rilevabile con un certo numero di unità richiede le unità per variante.",
       "days_needed": "L'incremento rilevabile in un certo numero di giorni richiede i giorni.",
       "days_need_date": "L'incremento rilevabile in un certo numero di giorni richiede la colonna del giorno in cui ogni unità è comparsa per la prima volta."
+    },
+    "actions": {
+      "simulateRisk": "Simula il rischio da questo modello",
+      "simulateRiskNoInput": "Questo nodo non ha un ingresso: collegagli prima la serie.",
+      "simulateRiskRefused": {
+        "model": "Solo un nodo ARIMA o GARCH può avviare una simulazione del rischio.",
+        "exog": "Questo ARIMA ha colonne esogene e i loro valori futuri non si possono simulare: toglile, oppure avvia a mano la simulazione del rischio."
+      }
     },
     "form": {
       "sizeAbsent": "{size} non è stata scaricata da questa installazione: scegli un'altra dimensione, o chiedi a un amministratore di aggiungerla.",

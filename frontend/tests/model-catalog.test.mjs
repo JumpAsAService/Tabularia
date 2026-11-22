@@ -100,10 +100,8 @@ test('the fields of a model in the catalogue\'s order, what it needs first', () 
   assert.equal(m.modelFields(ARIMA).find((f) => f.key === 'time').types.length, 3)
 })
 
-// Every model of the catalogue has its words, the Forecast (Timestral) node's too (lot F5).
-// The nodes the palette leaves out until their lot gives them a form and words (`MODEL_NOT_IN_THE_PALETTE_YET`): Volatility (GARCH) and
-// Risk simulation (docs/specs/garch-risk.md, lot G5). Their words are not asked for until then (the group's are). G5 takes this away.
-const WORDED = { ...m.MODEL_CATALOG, models: m.MODEL_CATALOG.models.filter((x) => !['garch', 'risk_simulation'].includes(x.id)) }
+// Every model of the catalogue has its words: Volatility (GARCH) and Risk simulation too (lot G5).
+const WORDED = m.MODEL_CATALOG
 
 test('every model, group, preset, field, choice and reason has its words in the five languages', () => {
   const wanted = m.modelWordKeys(WORDED)
@@ -1281,7 +1279,7 @@ test('Risk simulation and Volatility (GARCH) say their columns before a run: a q
   assert.ok(!m.modelOutputColumns(m.modelOf('timestral'), { quantiles: [0.05, 0.5, 0.95] }, []).columns.some((c) => c.name === 'quantile_0.5'))
   // the engine's snapshot gives the variants' limits of rows: the risk node's ARIMA reads 20,000
   assert.deepEqual(risk.variants.map((v) => v.max_rows ?? null), [null, 20000])
-  // the palette leaves the two nodes out until lot G5 gives them a form
+  // the palette leaves the two nodes out until their runners are built (lots G1 and G3): lot G5 gave them the form
   const palette = m.modelPalette(m.MODEL_CATALOG.groups, '', (k) => k)
   assert.ok(!palette.flatMap((g) => g.items).some((i) => i.model === 'garch' || i.model === 'risk_simulation'))
 })

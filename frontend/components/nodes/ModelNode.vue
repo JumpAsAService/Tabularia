@@ -8,7 +8,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Handle, Position } from '@vue-flow/core'
-import { modelArimaTitle, modelGroupOf, modelNameKey, modelOff, modelOf, modelSummary } from '~/composables/modelCatalog'
+import { modelCodeTitle, modelGroupOf, modelNameKey, modelOff, modelOf, modelSummary } from '~/composables/modelCatalog'
 import { modelIconOf } from '~/composables/modelIcons'
 import { useModelGroups } from '~/composables/useModelGroups'
 
@@ -32,11 +32,11 @@ const reason = computed(() => {
 })
 const greyed = computed(() => !!reason.value)
 const icon = computed(() => modelIconOf(props.data?.model))
-// an ARIMA node is named by what its orders make: «SARIMA(1,1,1)(0,1,1)[12]»
+// an ARIMA node is named by what its orders make («SARIMA(1,1,1)(0,1,1)[12]»), a GARCH node by its variance model («GJR-GARCH(1,1), t»)
 const title = computed(() => {
   if (props.data?.label) return props.data.label as string
   if (!model.value) return t('models.node.title')
-  return model.value.id === 'arima' ? modelArimaTitle(props.data?.params) : t(modelNameKey(model.value.id))
+  return modelCodeTitle(model.value.id, props.data?.params) ?? t(modelNameKey(model.value.id))
 })
 const summary = computed(() => (model.value ? modelSummary(model.value.id, props.data?.params, undefined, { unit: (u: string) => (te(`models.node.units.${u}`) ? t(`models.node.units.${u}`) : u) }) || t('models.node.setIt') : ''))
 </script>

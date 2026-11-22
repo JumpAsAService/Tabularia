@@ -6662,6 +6662,41 @@ export default {
         "output": "Die Prognosetabelle (beobachtet, Prognose, Bänder) oder die Tabelle der Ergebnisse (die Maße und der Test)."
       }
     },
+    "garch": {
+      "name": "Volatilität (GARCH)",
+      "hint": "Modelliert, wie sich die Streuung einer Rendite im Zeitverlauf ändert (ARCH, GARCH, GJR-GARCH, EGARCH), prüft den Rest, prognostiziert Volatilität und Value at Risk und testet das Ein-Schritt-VaR an den letzten, zurückgehaltenen Renditen.",
+      "params": {
+        "holdout": "Letzte Renditen zum Testen des VaR zurückgehalten"
+      },
+      "hints": {
+        "mean": "Eine Konstante μ im Mittelwert des Modells.",
+        "distribution": "Das Gesetz der Schocks, standardisiert. Die Student-t hat die dicken Ränder der Renditen, und der Bericht zeigt ihre geschätzten Freiheitsgrade; die Normalverteilung ist ihr Grenzfall.",
+        "lb_lag": "Der Lag der Portmanteau-Tests an den Residuen. Automatisch: das Kleinere aus 10 und einem Fünftel der Zeilen, plus die Parameter, die der Test zählt.",
+        "holdout": "Die letzten Renditen bleiben außerhalb der Anpassung, und das Ein-Schritt-VaR jeder wird mit dem Geschehenen verglichen (Kupiec, Christoffersen). 0: kein Test.",
+        "horizon": "Schritte der Volatilitätsprognose, von 1 bis 1.000. 10 sind die zehn Tage der Marktrisiko-Regeln.",
+        "seed": "Nur die zufälligen Neustarts des Lösers nutzen ihn: gleiche Daten und gleicher Seed ergeben dieselbe Anpassung.",
+        "output": "Die Volatilitätstabelle (eine Zeile je Zeitraum und Prognoseschritt) oder die Ergebnistabelle (die Maße und die Prüfungen)."
+      }
+    },
+    "risk_simulation": {
+      "name": "Risikosimulation",
+      "hint": "Passt ein GARCH- oder ARIMA-Modell an und simuliert Tausende von Zukünften vom Ende der Reihe aus: Value at Risk, Expected Shortfall, die Wahrscheinlichkeit, eine Marke zu überschreiten, der schlimmste Rückgang und ein Fächer von Quantilen. Die letzten Renditen lassen sich zurückhalten, um das VaR des Modells zu testen.",
+      "params": {
+        "quantiles": "Quantilniveaus",
+        "threshold": "Zu beobachtende Marke"
+      },
+      "hints": {
+        "mean": "Eine Konstante μ im Mittelwert des Modells.",
+        "distribution": "Das Gesetz der Schocks, standardisiert. Die Student-t hat die dicken Ränder der Renditen, und der Bericht zeigt ihre geschätzten Freiheitsgrade; die Normalverteilung ist ihr Grenzfall.",
+        "lb_lag": "Der Lag der Portmanteau-Tests an den Residuen. Automatisch: das Kleinere aus 10 und einem Fünftel der Zeilen, plus die Parameter, die der Test zählt.",
+        "holdout": "Die letzten Renditen bleiben außerhalb der Anpassung, und das Ein-Schritt-VaR jeder wird mit dem Geschehenen verglichen (Kupiec, Christoffersen). 0: kein Test.",
+        "horizon": "Vom Ende der Reihe aus simulierte Schritte, von 1 bis 1.000. 10 sind die zehn Tage der Marktrisiko-Regeln.",
+        "seed": "Jede Ziehung der Simulation nutzt ihn: gleiche Daten und gleicher Seed ergeben dieselben Pfade.",
+        "output": "Die Zusammenfassung (eine Zeile je Schritt: Mittelwert, Quantile, VaR, ES), die simulierten Pfade (eine Zeile je Pfad und Schritt: kann groß werden) oder die Ergebnistabelle.",
+        "quantiles": "Bis zu 9 Niveaus zwischen 0 und 1 für den Fächer und die Quantilspalten der Zusammenfassung, z. B. 0,05; 0,5; 0,95.",
+        "threshold": "Eine Marke, deren Überschreiten gezählt wird, in der Einheit des Fächers (ein Preis, eine kumulierte Rendite, ein Niveau, eine laufende Summe). Leer: keine."
+      }
+    },
     "presets": {
       "ar": {
         "name": "AR",
@@ -6847,7 +6882,25 @@ export default {
       "days": "Tage",
       "arms": "Varianten, Kontrolle eingeschlossen",
       "control_share": "Anteil der Kontrolle am Verkehr",
-      "traffic_share": "Anteil des Verkehrs im Experiment"
+      "traffic_share": "Anteil des Verkehrs im Experiment",
+      "input_kind": "Die Reihe enthält",
+      "returns_type": "Renditen berechnet als",
+      "variance_model": "Varianzmodell",
+      "arch_order": "Schock-Lags (q)",
+      "garch_order": "Varianz-Lags (p)",
+      "ar_order": "AR-Lags des Mittelwerts",
+      "ma_order": "MA-Lags des Mittelwerts",
+      "se_type": "Standardfehler",
+      "var_level": "VaR-Niveau",
+      "arch_lags": "Lags des ARCH-Tests",
+      "model": "Modell der Reihe",
+      "aggregate": "Risikovariable",
+      "paths": "Simulierte Pfade",
+      "innovations": "Innovationen",
+      "es_level": "Niveau des Expected Shortfall",
+      "tail": "Welche Seite das Risiko ist",
+      "position": "Position (ein Betrag)",
+      "drawdown": "Maximaler Drawdown"
     },
     "hints": {
       "method": "STL: eine Saison, robust gegen Ausreißer. Klassisch: gleitende Durchschnitte, additiv oder multiplikativ. MSTL: mehrere Saisons zugleich. EMD: intrinsische Moden, keine Periode nötig.",
@@ -6976,7 +7029,25 @@ export default {
       "days": "Wie viele Tage das Experiment läuft: eine ganze Zahl von 1 bis 3650. Es braucht die Datumsspalte.",
       "arms": "Wie viele Varianten das Experiment hat, die Kontrolle eingeschlossen: 2 bis 20.",
       "control_share": "Der Anteil der Kontrolle an den Einheiten, über 0 und unter 1; die Behandlungen teilen den Rest gleichmäßig. Leer: alle Varianten gleich.",
-      "traffic_share": "Der Anteil aller neuen Einheiten, die ins Experiment gehen: über 0, bis 1. Er verlängert die Dauer."
+      "traffic_share": "Der Anteil aller neuen Einheiten, die ins Experiment gehen: über 0, bis 1. Er verlängert die Dauer.",
+      "input_kind": "Renditen: Die Spalte enthält schon Renditen (eine tägliche Veränderung). Preise: Sie enthält einen Preis, und der Knoten berechnet die Renditen daraus, eine Zeile weniger.",
+      "returns_type": "Log: ln(P / vorheriges P), das sich über die Zeit addiert. Einfach: P / vorheriges P − 1.",
+      "variance_model": "ARCH: Die Varianz folgt nur den letzten Schocks. GARCH: auch ihrer eigenen Vergangenheit. GJR-GARCH: Ein Rückgang erhöht sie stärker als ein Anstieg. EGARCH: dasselbe, modelliert auf dem Logarithmus der Varianz.",
+      "arch_order": "Auf wie viele vergangene Schocks die Varianz reagiert (q), von 1 bis 3. Üblich ist 1.",
+      "garch_order": "Wie viele vergangene Varianzen sie behält (p), von 0 bis 3. Üblich ist 1.",
+      "ar_order": "Vergangene Renditen, die die nächste erklären (AR), von 0 bis 5. 0: Der Mittelwert ist nur eine Konstante.",
+      "ma_order": "Vergangene Fehler, die die nächste Rendite erklären (MA), von 0 bis 5.",
+      "se_type": "Robust: gültig auch bei falscher Verteilung, wie es oft der Fall ist. Klassisch: aus der Hesse-Matrix, nur bei richtiger Verteilung gültig.",
+      "var_level": "Das Niveau des Value at Risk: 0,99 ist der Verlust, der an einem von hundert Tagen überschritten wird. Eine Zahl über 0,5 und unter 1.",
+      "arch_lags": "Die Lags des ARCH-Tests an den Residuen. Automatisch: die Saison der Frequenz, wenn sie eine hat, sonst 12.",
+      "model": "GARCH passt die Volatilität von Renditen an, ARIMA eine Reihe von Niveaus (eine Nachfrage, ein Saldo). Jedes hat unten seine eigenen Optionen.",
+      "aggregate": "Woran das Risiko gemessen wird: der Wert in jedem Schritt; die laufende Summe über die Schritte (die Nachfrage eines Monats); oder die Veränderung gegenüber dem letzten beobachteten Wert. Ein GARCH nutzt immer die kumulierte Rendite.",
+      "paths": "Wie viele Zukünfte simuliert werden, von 100 bis 10.000.000. Ein 99-%-VaR auf 10.000 Pfaden beruht auf 100 davon: mit der vierfachen Zahl Pfade halbiert sich der Fehler.",
+      "innovations": "Parametrisch: zieht aus der Verteilung des Modells. Neu gezogen: zieht die standardisierten Residuen zurück (gefilterte historische Simulation), die Ränder sind also die der Daten.",
+      "es_level": "Der Expected Shortfall: der mittlere Verlust jenseits des Value at Risk dieses Niveaus. 0,975 ist das Niveau der Marktrisiko-Regeln.",
+      "tail": "Welche Seite das Risiko ist: ein Rückgang (eine Rendite, ein Saldo) oder ein Anstieg (eine Nachfrage, ein Kostenpunkt, Schäden).",
+      "position": "Ein investierter Betrag: Jedes Maß wird dann auch in Geld angegeben (Betrag × Veränderung). Leer: in der Einheit der Reihe.",
+      "drawdown": "Der schlimmste Rückgang von einem Höchststand entlang jedes Pfads, mit seiner Verteilung."
     },
     "choice": {
       "5m": "5M",
@@ -7090,7 +7161,27 @@ export default {
       "sample_size": "Die Stichprobengröße",
       "mde_for_units": "Der mit diesen Einheiten erkennbare Anstieg",
       "mde_for_days": "Der in diesen Tagen erkennbare Anstieg",
-      "plan": "Das Planungsraster"
+      "plan": "Das Planungsraster",
+      "returns": "Renditen",
+      "prices": "Preise",
+      "simple": "Einfach",
+      "arch": "ARCH",
+      "garch": "GARCH",
+      "gjr": "GJR-GARCH",
+      "egarch": "EGARCH",
+      "norm": "Normal",
+      "std": "Student-t",
+      "sstd": "Schiefe Student-t",
+      "volatility": "Die Volatilitätstabelle",
+      "arima": "ARIMA",
+      "last": "Der Wert",
+      "sum": "Die laufende Summe",
+      "relative_change": "Die relative Veränderung",
+      "parametric": "Die Verteilung des Modells",
+      "bootstrap": "Neu gezogene Residuen",
+      "upper": "Obere",
+      "risk_summary": "Die Risikozusammenfassung",
+      "paths": "Die simulierten Pfade"
     },
     "choices": {
       "penalty": {
@@ -7117,6 +7208,15 @@ export default {
       },
       "correction_ab": {
         "none": "Keine Korrektur"
+      },
+      "tail": {
+        "lower": "Rückgänge (eine Rendite, ein Saldo)",
+        "upper": "Anstiege (eine Nachfrage, ein Kostenpunkt, Schäden)"
+      },
+      "aggregate": {
+        "last": "Der Wert in jedem Schritt",
+        "sum": "Die laufende Summe",
+        "relative_change": "Die Veränderung gegenüber dem letzten Wert"
       }
     },
     "reasons": {
@@ -7144,6 +7244,14 @@ export default {
       "units_per_variant_needed": "Der mit einer Anzahl Einheiten erkennbare Anstieg braucht die Einheiten je Variante.",
       "days_needed": "Der in einer Anzahl Tage erkennbare Anstieg braucht die Tage.",
       "days_need_date": "Der in einer Anzahl Tage erkennbare Anstieg braucht die Spalte des Tages, an dem jede Einheit zum ersten Mal auftrat."
+    },
+    "actions": {
+      "simulateRisk": "Risiko aus diesem Modell simulieren",
+      "simulateRiskNoInput": "Dieser Knoten hat keinen Eingang: Verbinde zuerst die Reihe mit ihm.",
+      "simulateRiskRefused": {
+        "model": "Nur ein ARIMA- oder GARCH-Knoten kann eine Risikosimulation starten.",
+        "exog": "Dieses ARIMA hat exogene Spalten, deren künftige Werte sich nicht simulieren lassen: Entferne sie oder starte die Risikosimulation von Hand."
+      }
     },
     "form": {
       "sizeAbsent": "{size} wurde von dieser Installation nicht heruntergeladen: Wählen Sie eine andere Größe oder bitten Sie eine Administration, sie hinzuzufügen.",

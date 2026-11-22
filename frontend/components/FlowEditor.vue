@@ -25,7 +25,8 @@ import ScriptNode from '~/components/nodes/ScriptNode.vue'
 import ContainerNode from '~/components/nodes/ContainerNode.vue'
 import ModelNode from '~/components/nodes/ModelNode.vue'
 import PredictNode from '~/components/nodes/PredictNode.vue'
-import { MODEL_COLOR, MODEL_NODE_TYPE, modelArimaTitle, modelColumnsAfterStep, modelFromKind, modelNameKey, modelNodeData, modelOf, modelOutputColumns, predictNodeData } from '~/composables/modelCatalog'
+import { MODEL_COLOR, MODEL_NODE_TYPE, modelCodeTitle, modelColumnsAfterStep, modelFromKind, modelNameKey, modelNodeData, modelOf, modelOutputColumns, modelRiskFrom, predictNodeData } from '~/composables/modelCatalog'
+import { modelActionsOf, type ModelActionId } from '~/composables/modelIcons'
 import { useModelGroups } from '~/composables/useModelGroups'
 import { useScriptingEditor, type ScriptOutputs } from '~/composables/useScripting'
 import { useRegistriesEditor } from '~/composables/useRegistries'
@@ -1501,6 +1502,14 @@ let quickAt: { x: number; y: number } | null = null // the click, in flow coordi
 // node, the keyboard, «+ Operation») or at the click (a right click on the empty canvas)
 let quickParent: string | null = null
 let quickBeside = false
+// what the node the menu is opened on can do besides a step after it (an ARIMA or a GARCH node: «Simulate risk from this model»), and which node
+const quickActions = ref<ModelActionId[]>([])
+let quickActionNode: string | null = null
+function setQuickActions(nodeId: string | null | undefined) {
+  const node = nodeId ? findNode(nodeId) : undefined
+  quickActions.value = node ? modelActionsOf(node) : []
+  quickActionNode = quickActions.value.length ? node!.id : null
+}
 // node types whose data output an operation can read (the «out» handle)
 const DATA_PARENTS = new Set(['source', 'operation', 'foreach', 'script', 'container', 'model', 'model_predict'])
 
@@ -1521,6 +1530,7 @@ function openQuickMenu(ev: MouseEvent, onNode?: string) {
   const beside = onNode && findNode(onNode)?.type !== 'foreach' ? onNode : null
   quickParent = beside ?? selectedId.value
   quickBeside = !!beside
+  setQuickActions(beside)
   quickMenu.value?.show({ x: ev.clientX, y: ev.clientY }, canvasBounds())
 }
 // Without a pointer on the canvas (the Menu key, Shift+F10, «+ Operation») the menu opens
@@ -1537,6 +1547,7 @@ function openQuickMenuBeside(parentId: string | null, keyboard = false) {
     : screenToFlowCoordinate({ x: p.left + p.width / 2, y: p.top + p.height / 2 })
   quickParent = parent?.id ?? null
   quickBeside = !!parent
+  setQuickActions(parent?.id)
   quickMenu.value?.show({ x: p.left + x + quickAt.x * zoom, y: p.top + y + quickAt.y * zoom }, canvasBounds(), keyboard)
 }
 function openQuickMenuFromKeyboard() {
@@ -1579,6 +1590,25 @@ function onCanvasContextMenu(ev: MouseEvent) {
     selectOnCanvas(id)
   }
   openQuickMenuFromKeyboard()
+}
+
+/** A choice of the node's own actions on the ring. «Simulate risk from this model» drops a Risk simulation node on the same input as
+ *  the ARIMA or GARCH node, a branch of its own, with the options of the model copied (`modelRiskFrom`). */
+function onQuickAction(id: ModelActionId) {
+  const source = quickActionNode ? findNode(quickActionNode) : undefined
+  if (id !== 'simulate_risk' || !source || loadBlocked.value || deniedToObserver()) return
+  const made = modelRiskFrom(source.data)
+  if ('refused' in made) {
+    setStatus(t(`models.actions.simulateRiskRefused.${made.refused}`), 'error')
+    return
+  }
+  const input = chainNeighbour(chainNodes(), chainEdges(), source.id, 'upstream')
+  if (!input || !findNode(input)) {
+    setStatus(t('models.actions.simulateRiskNoInput'), 'error')
+    return
+  }
+  const node = addStep(input, 'model:risk_simulation', {}, { branch: true, reveal: true, step: { type: MODEL_NODE_TYPE, data: made.data } })
+  if (node) focusNewNode(node)
 }
 
 function onQuickMenuClose(reason: string) {
@@ -2374,7 +2404,7 @@ function nodeFullName(id: string | null): string {
   if (n.type === 'source') return String(n.data?.filename || n.data?.dsName || t('dataGrid.sourceNode'))
   if (n.type === 'model' && !given) {
     const model = modelOf(n.data?.model)
-    if (model) return model.id === 'arima' ? modelArimaTitle(n.data?.params) : t(modelNameKey(model.id))
+    if (model) return modelCodeTitle(model.id, n.data?.params) ?? t(modelNameKey(model.id))
   }
   if (n.type === 'model_predict' && !given) return t('models.predict.title')
   return String(given || n.data?.name || n.type || '')
@@ -3999,7 +4029,7 @@ async function pollTask(id: string) {
         <ChartPanel v-else :columns="preview?.columns ?? []" :query="chartQuery" />
       </div>
     </div>
-    <FlowQuickMenu ref="quickMenu" :items="shortcutItems" @pick="addOperationAt" @customize="shortcutsOpen = true" @close="onQuickMenuClose" />
+    <FlowQuickMenu ref="quickMenu" :items="shortcutItems" :actions="quickActions" @pick="addOperationAt" @action="onQuickAction" @customize="shortcutsOpen = true" @close="onQuickMenuClose" />
     <FlowShortcutsDialog
       :open="shortcutsOpen"
       :available="operations"

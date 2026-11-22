@@ -417,9 +417,8 @@ test('the variants output keeps the variant column\'s own type, as the engine sa
 
 // ── the words ────────────────────────────────────────────────────────────────
 
-// the volatility and risk nodes' words are lot G5's (docs/specs/garch-risk.md): the palette leaves them out until then
 test('every word the experiments\' form asks for is in the five languages, with the same holes', () => {
-  const keys = [...m.modelWordKeys({ ...m.MODEL_CATALOG, models: m.MODEL_CATALOG.models.filter((x) => !['garch', 'risk_simulation'].includes(x.id)) })].filter((k) => /ab_|reasons\.(ratio|sequential|metric|numerator|denominator|units|sum_squares|days)/.test(k) || k.startsWith('models.params.') || k.startsWith('models.choice.'))
+  const keys = [...m.modelWordKeys(m.MODEL_CATALOG)].filter((k) => /ab_|reasons\.(ratio|sequential|metric|numerator|denominator|units|sum_squares|days)/.test(k) || k.startsWith('models.params.') || k.startsWith('models.choice.'))
   assert.ok(keys.length > 60)
   const missing = []
   for (const lang of LANGS) for (const key of keys) if (!WORDS[lang][key]?.trim()) missing.push(`${lang} ${key}`)

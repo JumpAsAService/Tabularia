@@ -6662,6 +6662,41 @@ export default {
         "output": "The forecast table (observed, forecast, bands) or the table of the results (the measures and the test)."
       }
     },
+    "garch": {
+      "name": "Volatility (GARCH)",
+      "hint": "Models how the spread of a return changes over time (ARCH, GARCH, GJR-GARCH, EGARCH), checks what is left, forecasts the volatility and the value at risk, and tests the one-step VaR on the last returns kept out.",
+      "params": {
+        "holdout": "Last returns kept out to test the VaR"
+      },
+      "hints": {
+        "mean": "A constant μ in the mean of the model.",
+        "distribution": "The law of the shocks, standardised. Student t has the fat tails returns have, and the report shows its estimated degrees of freedom; the normal is its limit.",
+        "lb_lag": "The lag of the portmanteau tests on the residuals. Automatic: the smaller of 10 and a fifth of the rows, plus the parameters the test counts.",
+        "holdout": "The last returns are kept out of the fit, and the one-step VaR of each is tested against what happened (Kupiec, Christoffersen). 0: no test.",
+        "horizon": "Steps ahead of the volatility forecast, from 1 to 1,000. 10 is the ten days of the market-risk rules.",
+        "seed": "Only the solver's random restarts use it: the same data and seed give the same fit.",
+        "output": "The volatility table (a row for each period and each forecast step) or the table of the results (the measures and the checks)."
+      }
+    },
+    "risk_simulation": {
+      "name": "Risk simulation",
+      "hint": "Fits a GARCH or an ARIMA model and simulates thousands of futures from the end of the series: value at risk, expected shortfall, the odds of crossing a level, the worst fall, and a fan of quantiles. The last returns can be kept out to test the model's VaR.",
+      "params": {
+        "quantiles": "Quantile levels",
+        "threshold": "Level to watch"
+      },
+      "hints": {
+        "mean": "A constant μ in the mean of the model.",
+        "distribution": "The law of the shocks, standardised. Student t has the fat tails returns have, and the report shows its estimated degrees of freedom; the normal is its limit.",
+        "lb_lag": "The lag of the portmanteau tests on the residuals. Automatic: the smaller of 10 and a fifth of the rows, plus the parameters the test counts.",
+        "holdout": "The last returns are kept out of the fit, and the one-step VaR of each is tested against what happened (Kupiec, Christoffersen). 0: no test.",
+        "horizon": "Steps simulated from the end of the series, from 1 to 1,000. 10 is the ten days of the market-risk rules.",
+        "seed": "Every draw of the simulation uses it: the same data and seed give the same paths.",
+        "output": "The summary (a row for each step: mean, quantiles, VaR, ES), the simulated paths (a row for each path and step: it can be large), or the table of the results.",
+        "quantiles": "Up to 9 levels between 0 and 1 for the fan and for the summary's quantile columns, e.g. 0.05, 0.5, 0.95.",
+        "threshold": "A level whose crossing is counted, in the unit of the fan (a price, a cumulative return, a level, a running total). Empty: none."
+      }
+    },
     "presets": {
       "ar": {
         "name": "AR",
@@ -6847,7 +6882,25 @@ export default {
       "days": "Days",
       "arms": "Variants, control included",
       "control_share": "Control's share of the traffic",
-      "traffic_share": "Share of the traffic in the experiment"
+      "traffic_share": "Share of the traffic in the experiment",
+      "input_kind": "The series holds",
+      "returns_type": "Returns computed as",
+      "variance_model": "Variance model",
+      "arch_order": "Shock lags (q)",
+      "garch_order": "Variance lags (p)",
+      "ar_order": "AR lags of the mean",
+      "ma_order": "MA lags of the mean",
+      "se_type": "Standard errors",
+      "var_level": "VaR level",
+      "arch_lags": "ARCH test lags",
+      "model": "Model of the series",
+      "aggregate": "Risk variable",
+      "paths": "Simulated paths",
+      "innovations": "Innovations",
+      "es_level": "Expected shortfall level",
+      "tail": "Which side is the risk",
+      "position": "Position (an amount)",
+      "drawdown": "Maximum drawdown"
     },
     "hints": {
       "method": "STL: one season, robust to outliers. Classical: moving averages, additive or multiplicative. MSTL: several seasons at once. EMD: intrinsic modes, no period needed.",
@@ -6976,7 +7029,25 @@ export default {
       "days": "How many days the experiment runs: a whole number from 1 to 3650. It needs the date column.",
       "arms": "How many variants the experiment has, the control included: 2 to 20.",
       "control_share": "The control's share of the units, above 0 and below 1; the treatments share the rest equally. Empty: all variants alike.",
-      "traffic_share": "The share of all the new units that go into the experiment: above 0, up to 1. It lengthens the duration."
+      "traffic_share": "The share of all the new units that go into the experiment: above 0, up to 1. It lengthens the duration.",
+      "input_kind": "Returns: the column already holds returns (a daily change). Prices: it holds a price, and the node computes the returns from it, one row fewer.",
+      "returns_type": "Log: ln(P / previous P), which adds up over time. Simple: P / previous P − 1.",
+      "variance_model": "ARCH: the variance follows the last shocks only. GARCH: also its own past. GJR-GARCH: a fall raises it more than a rise. EGARCH: the same, modelled on the log of the variance.",
+      "arch_order": "How many past shocks the variance reacts to (q), from 1 to 3. 1 is usual.",
+      "garch_order": "How many past variances it remembers (p), from 0 to 3. 1 is usual.",
+      "ar_order": "Past returns that explain the next one (AR), from 0 to 5. 0: the mean is only a constant.",
+      "ma_order": "Past errors that explain the next return (MA), from 0 to 5.",
+      "se_type": "Robust: valid even when the distribution is wrong, as it often is. Classical: from the Hessian, valid only if the distribution is right.",
+      "var_level": "The level of the value at risk: 0.99 is the loss exceeded one day in a hundred. A number above 0.5 and below 1.",
+      "arch_lags": "The lags of the ARCH test on the residuals. Automatic: the season of the frequency when it has one, else 12.",
+      "model": "GARCH fits the volatility of returns; ARIMA a series of levels (a demand, a balance). Each has its own options below.",
+      "aggregate": "What the risk is measured on: the value at each step; the running total over the steps (a month's demand); or the change from the last observed value. A GARCH always uses the cumulative return.",
+      "paths": "How many futures are simulated, from 100 to 10,000,000. A 99 % VaR on 10,000 paths rests on 100 of them: four times the paths halve its error.",
+      "innovations": "Parametric: draws from the model's own distribution. Resampled: draws the standardised residuals back (filtered historical simulation), so the tails are the data's.",
+      "es_level": "The expected shortfall: the mean loss beyond the value at risk of this level. 0.975 is the market-risk rules' level.",
+      "tail": "Which side is the risk: a fall (a return, a balance) or a rise (a demand, a cost, claims).",
+      "position": "An amount invested: every measure is then also given in money (the amount × the change). Empty: in the series' own unit.",
+      "drawdown": "The worst fall from a peak along each path, with its distribution."
     },
     "choice": {
       "5m": "5M",
@@ -7090,7 +7161,27 @@ export default {
       "sample_size": "The sample size",
       "mde_for_units": "The lift detectable with these units",
       "mde_for_days": "The lift detectable in these days",
-      "plan": "The planning grid"
+      "plan": "The planning grid",
+      "returns": "Returns",
+      "prices": "Prices",
+      "simple": "Simple",
+      "arch": "ARCH",
+      "garch": "GARCH",
+      "gjr": "GJR-GARCH",
+      "egarch": "EGARCH",
+      "norm": "Normal",
+      "std": "Student t",
+      "sstd": "Skewed Student t",
+      "volatility": "The volatility table",
+      "arima": "ARIMA",
+      "last": "The value",
+      "sum": "The running total",
+      "relative_change": "The relative change",
+      "parametric": "The model's distribution",
+      "bootstrap": "Resampled residuals",
+      "upper": "Upper",
+      "risk_summary": "The risk summary",
+      "paths": "The simulated paths"
     },
     "choices": {
       "penalty": {
@@ -7117,6 +7208,15 @@ export default {
       },
       "correction_ab": {
         "none": "No correction"
+      },
+      "tail": {
+        "lower": "Falls (a return, a balance)",
+        "upper": "Rises (a demand, a cost, claims)"
+      },
+      "aggregate": {
+        "last": "The value at each step",
+        "sum": "The running total",
+        "relative_change": "The change from the last value"
       }
     },
     "reasons": {
@@ -7144,6 +7244,14 @@ export default {
       "units_per_variant_needed": "The lift detectable with a number of units needs the units per variant.",
       "days_needed": "The lift detectable in a number of days needs the days.",
       "days_need_date": "The lift detectable in a number of days needs the column of the day each unit first appeared."
+    },
+    "actions": {
+      "simulateRisk": "Simulate risk from this model",
+      "simulateRiskNoInput": "This node has no input: connect the series to it first.",
+      "simulateRiskRefused": {
+        "model": "Only an ARIMA or a GARCH node can start a risk simulation.",
+        "exog": "This ARIMA has exogenous columns, and their future values cannot be simulated: remove them, or start the risk simulation by hand."
+      }
     },
     "form": {
       "sizeAbsent": "{size} was not downloaded by this installation: choose another size, or ask an administrator to add it.",

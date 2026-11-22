@@ -670,6 +670,30 @@ export function modelArimaTitle(params: Params | null | undefined, catalog: Mode
   return `ARIMA${x}(${p},${d},${q})`
 }
 
+/** What a GARCH node's options make of it, as the engine's `garch_name` writes it (the title of its report): «GARCH(1,1), t»,
+ *  «GJR-GARCH(1,1), skewed t», «AR(1)-EGARCH(1,1), normal», «ARCH(2), t». Bollerslev's order: p lags of the variance
+ *  (`garch_order`), then q of the shocks (`arch_order`). Codes and the law's name only, no language. */
+export function modelGarchTitle(params: Params | null | undefined, catalog: ModelCatalog = MODEL_CATALOG): string {
+  const model = modelOf('garch', catalog)
+  const full = modelFull(model ?? ({ needs: {}, takes: {}, defaults: {} } as unknown as ModelDef), params)
+  const whole = (k: string, fallback: number) => (Number.isFinite(modelNumber(full[k])) ? Math.trunc(modelNumber(full[k])) : fallback)
+  const [q, p, ar, ma] = [whole('arch_order', 1), whole('garch_order', 1), whole('ar_order', 0), whole('ma_order', 0)]
+  const kind = typeof full.variance_model === 'string' ? full.variance_model : 'garch'
+  const names: Record<string, string> = { garch: 'GARCH', gjr: 'GJR-GARCH', egarch: 'EGARCH' }
+  const core = kind === 'arch' ? `ARCH(${q})` : `${names[kind] ?? 'GARCH'}(${p},${q})`
+  const mean = !(ar || ma) ? '' : !ma ? `AR(${ar})` : !ar ? `MA(${ma})` : `ARMA(${ar},${ma})`
+  const law = ({ norm: 'normal', std: 't', sstd: 'skewed t' } as Record<string, string>)[String(full.distribution)] ?? 't'
+  return `${mean ? `${mean}-` : ''}${core}, ${law}`
+}
+
+/** The title a node of a model says by what its options make of it, or null when the model's own name is the title: an
+ *  ARIMA's orders, a GARCH's variance model. The one place the canvas, the panel and the table's header read it from. */
+export function modelCodeTitle(id: unknown, params: Params | null | undefined, catalog: ModelCatalog = MODEL_CATALOG): string | null {
+  if (id === 'arima') return modelArimaTitle(params, catalog)
+  if (id === 'garch') return modelGarchTitle(params, catalog)
+  return null
+}
+
 // The distributions of a parametric survival node as its one line names them: the names of the
 // distributions, not words of a language («auto» as ARIMA's «(auto)»).
 const DISTRIBUTION_NAMES: Record<string, string> = {
@@ -686,6 +710,13 @@ export function modelSummary(id: string, params: Params | null | undefined, cata
   const p = modelParams(model, params, catalog)
   const list = (v: unknown) => (Array.isArray(v) ? v.join(' + ') : '')
   if (id === 'arima') return [modelArimaTitle(p, catalog), typeof p.value === 'string' ? p.value : ''].filter(Boolean).join(' · ')
+  if (id === 'garch') return [modelGarchTitle(p, catalog), typeof p.value === 'string' ? p.value : ''].filter(Boolean).join(' · ')
+  if (id === 'risk_simulation') {
+    // the model it fits over the series, and the paths: «GARCH(1,1), t · returns · N=10,000»
+    const full = modelFull(model, p)
+    const fitted = full.model === 'arima' ? modelArimaTitle(p, catalog) : modelGarchTitle(p, catalog)
+    return [fitted, typeof p.value === 'string' ? p.value : '', `N=${modelNumber(full.paths).toLocaleString('en-US')}`].filter(Boolean).join(' · ')
+  }
   if (id === 'kaplan_meier') {
     const left = [p.time, p.event].filter((x) => typeof x === 'string').join(', ')
     return [left, p.strata].filter((x) => typeof x === 'string' && x).join(' ~ ')
@@ -730,6 +761,36 @@ export function modelSummary(id: string, params: Params | null | undefined, cata
 /** The data of a new model node: what the gateway reads (`nodes.model.data` of the catalogue). */
 export function modelNodeData(id: string, preset?: string, catalog: ModelCatalog = MODEL_CATALOG): Params {
   return { model: id, params: modelDefaults(id, preset, catalog), timeoutSeconds: MODEL_TIMEOUT_SECONDS, retries: 0 }
+}
+
+/** The models a Risk simulation node can start from: the two it fits. */
+export const MODEL_RISK_FROM: readonly string[] = ['arima', 'garch']
+
+/** The Risk simulation node that starts from an ARIMA or a GARCH node («Simulate risk from this model»): its model, and every option
+ *  the two nodes have in common with the values the source node has (a default it relies on is copied as the value it is, so the two
+ *  fit the same model), the same series columns, its time limit and retries. What only the simulation has starts as the catalogue says.
+ *  `refused`: 'model' for a node that is neither of the two, 'exog' for an ARIMA with exogenous columns (their future values cannot
+ *  be simulated: the spec's form has none). */
+export function modelRiskFrom(source: Params | null | undefined, catalog: ModelCatalog = MODEL_CATALOG): { data: Params } | { refused: 'model' | 'exog' } {
+  const from = modelOf(source?.model, catalog)
+  const risk = modelOf('risk_simulation', catalog)
+  if (!from || !risk || !MODEL_RISK_FROM.includes(from.id)) return { refused: 'model' }
+  const own = modelParams(from, source?.params, catalog)
+  if (from.id === 'arima' && modelGiven(own.exog)) return { refused: 'exog' }
+  const full = modelFull(from, own)
+  const start: Params = { model: from.id }
+  // `output` is each node's own (a table of the series, or the risk's)
+  for (const key of [...Object.keys(risk.needs), ...Object.keys(risk.takes)]) {
+    if (key === 'model' || key === 'output' || !(key in from.needs || key in from.takes)) continue
+    // an option that does not apply to the source is not copied
+    if (!modelApplies(from, key, own)) continue
+    if (!modelGiven(full[key])) continue
+    start[key] = full[key]
+  }
+  const data = modelNodeData('risk_simulation', undefined, catalog)
+  data.params = modelParams(risk, { ...data.params, ...start }, catalog)
+  for (const key of ['timeoutSeconds', 'retries']) if (typeof source?.[key] === 'number') data[key] = source[key]
+  return { data }
 }
 
 /** The data of a new Predict node. */
