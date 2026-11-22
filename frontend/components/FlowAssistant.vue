@@ -10,7 +10,7 @@
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { AlertTriangle, Check, CircleAlert, LoaderCircle, Plus, Send, ShieldCheck, Sparkles, Square, Trash2, Undo2 } from 'lucide-vue-next'
-import { aiModelLabel, aiModelOptions, aiProviderOf, aiProviders, useAi, type AiDone, type AiStatus, type AiTable, type AiUsage } from '~/composables/useAi'
+import { aiModelLabel, aiModelOptions, aiProviderOf, aiProviders, useAi, type AiDone, type AiStatus, type AiTable, type AiUsage, type FlowSettingChange } from '~/composables/useAi'
 import { useAiDisclosure } from '~/composables/useAiDisclosure'
 import { useLocale } from '~/composables/useLocale'
 import AiDisclosure from '~/components/ui/AiDisclosure.vue'
@@ -58,6 +58,8 @@ interface Turn {
   usage?: AiUsage
   change?: { definition: string; touched: string[] }
   outcome?: 'applied' | 'pending' | 'discarded' | 'none'
+  /** The settings of test and model steps this turn changed, as the gateway read them from the canvas. */
+  settings?: FlowSettingChange[]
 }
 
 const MODEL_KEY = 'tabularia.flowAssistant.model'
@@ -201,7 +203,10 @@ async function send(text?: string) {
           // the model declined: what it wrote before that is not an answer
           if (extra?.discard) turn.text = ''
           // a turn stopped halfway still hands back what it built
-          if (extra?.definition) offer(turn, { definition: extra.definition, touched: extra.touched ?? [] }, sent)
+          if (extra?.definition) {
+            turn.settings = extra.settings_changed ?? []
+            offer(turn, { definition: extra.definition, touched: extra.touched ?? [] }, sent)
+          }
         },
       },
       controller.signal,
@@ -225,6 +230,7 @@ function finish(turn: Turn, done: AiDone, sent: string) {
     turn.outcome = 'none'
     return
   }
+  turn.settings = done.settings_changed ?? []
   offer(turn, { definition: done.definition, touched: done.touched ?? [] }, sent)
 }
 
@@ -278,6 +284,18 @@ function onKey(e: KeyboardEvent) {
     e.preventDefault()
     send()
   }
+}
+
+// a setting's value in a line: JSON, cut short (a list of shares can be long); «—» where it was not given
+function settingValue(v: unknown): string {
+  if (v === null || v === undefined) return '—'
+  const text = typeof v === 'string' ? v : JSON.stringify(v)
+  return text.length > 80 ? `${text.slice(0, 79)}…` : text
+}
+
+function settingLine(c: FlowSettingChange): string {
+  if (c.removed) return t('flowAssistant.settingRemoved', { node: c.node, operation: c.operation })
+  return t('flowAssistant.settingLine', { node: c.node, key: c.key ?? '', before: settingValue(c.before), after: settingValue(c.after) })
 }
 
 function stepLabel(s: Step): string {
@@ -382,6 +400,14 @@ function stepLabel(s: Step): string {
           <MarkdownLite v-if="turn.text" :text="turn.text" />
           <p v-if="turn.streaming" class="fa-activity"><LoaderCircle :size="12" class="spin" /> {{ $t('flowAssistant.working') }}</p>
           <p v-if="turn.error" class="fa-note err"><CircleAlert :size="13" /> <span>{{ turn.error }}</span></p>
+          <!-- read from the canvas, not from the model's words: no threshold changes without the person seeing it -->
+          <div v-if="turn.settings?.length" class="fa-note warn fa-settings" role="note">
+            <AlertTriangle :size="13" />
+            <span>{{ $t('flowAssistant.settingsChanged') }}</span>
+            <ul>
+              <li v-for="(c, ci) in turn.settings" :key="ci">{{ settingLine(c) }}</li>
+            </ul>
+          </div>
           <p v-if="turn.outcome === 'applied'" class="fa-note ok"><Undo2 :size="13" /> <span>{{ $t('flowAssistant.applied') }}</span></p>
           <div v-else-if="turn.outcome === 'pending'" class="fa-note warn" role="alert">
             <AlertTriangle :size="13" />
@@ -491,6 +517,8 @@ function stepLabel(s: Step): string {
 .fa-note.err { border-color: color-mix(in srgb, var(--danger) 45%, transparent); color: var(--text); }
 .fa-note.err svg { color: var(--danger); }
 .fa-note-actions { display: flex; gap: 6px; width: 100%; padding-left: 19px; }
+.fa-settings ul { width: 100%; margin: 0; padding-left: 37px; }
+.fa-settings li { overflow-wrap: anywhere; }
 .fa-mini { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; min-height: 24px; font-size: 12px; }
 .fa-mini.danger:hover:not(:disabled) { color: var(--danger-text); border-color: color-mix(in srgb, var(--danger) 45%, transparent); }
 .fa-composer { padding: 8px 12px 10px; border-top: 1px solid var(--border-soft); }

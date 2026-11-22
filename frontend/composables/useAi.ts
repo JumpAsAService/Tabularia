@@ -192,6 +192,8 @@ export interface AiDone {
   // the flow editor's assistant: the new canvas (null when nothing changed) and the nodes it touched
   definition?: string | null
   touched?: string[]
+  // and every setting of a test or model step on the canvas the turn changed, from the canvas itself
+  settings_changed?: FlowSettingChange[]
   // the script editor's assistant: the files it proposes (null when it proposed none), and
   // that it did not get the error of the failed run (metadata-only mode)
   proposal?: ScriptProposal | null
@@ -203,6 +205,17 @@ export interface AiDone {
   truncated?: boolean
   // with an error: the model declined, and what it wrote before is not an answer
   discard?: boolean
+}
+
+/** A setting of a hypothesis test, a model or a Predict step the flow assistant changed (`key`, from `before` to
+ *  `after`, null where it was not given), or such a step it removed. */
+export interface FlowSettingChange {
+  node: string
+  operation: string
+  key?: string
+  before?: unknown
+  after?: unknown
+  removed?: boolean
 }
 
 export interface ScriptProposal {

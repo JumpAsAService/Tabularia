@@ -711,7 +711,8 @@ async def flow_assist(
     """One turn of the flow editor's assistant. It changes the canvas the editor
     sent and returns it in `done.definition` (null when nothing changed), with the
     nodes it added or changed in `done.touched`: the editor applies it as one Undo
-    step. It never saves, runs or schedules the flow."""
+    step, and lists `done.settings_changed` (the settings of test and model steps the
+    turn changed). It never saves, runs or schedules the flow."""
     ai_models.refuse_unless_usable(session, body.model)
     cfg = get_settings().ai
     if is_observer_only(session, user):
@@ -743,8 +744,11 @@ async def flow_assist(
     )
 
     def changes() -> dict[str, Any]:
+        # `settings_changed`: every setting of a test or model step on the canvas the turn changed, worked out from the
+        # canvas (not from the model's words): the editor lists them under the answer
         return {"definition": json.dumps(draft.definition()) if draft.changed() else None,
-                "touched": [n for n in draft.touched if any(x["id"] == n for x in draft.nodes)]}
+                "touched": [n for n in draft.touched if any(x["id"] == n for x in draft.nodes)],
+                "settings_changed": draft.settings_changed()}
 
     stream = _turn_stream(
         agent=ai_flow_agent.flow_agent, message=body.message, history=history, deps=deps,
