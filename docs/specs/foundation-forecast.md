@@ -1297,6 +1297,43 @@ comparison with the values computed outside the image has a **tolerance of 1e-6 
 families (AVX2 against AVX-512 or NEON, the dev machine against the image on kind) could not be measured here: the machine has one family (kind runs on the same CPU), so the report writes the family
 (`cpu_capability`) and F3's tolerance holds until another family shows more.
 
+### F1 — licence and enabling (no migration)
+
+**Built (2026-11-22).** `models_licence.go` (new, beside `models_admin.go`), `audit.RecordID`, `Group.LicenceText`, the panel's box and the five languages; no file under
+`gateway/app/db/migrations`.
+
+- **The click's body** (Enable and Build again; a change of sizes is a Build again with the new sizes, there is no route of its own): `{licence_sha256, accept, sizes}`.
+  Checked in the order of the spec: `accept` missing or false, 409 «enabling this group requires accepting the licence of its weights»; a `licence_sha256` other than the
+  shipped one, 409 «the licence shown is not the one this Tabularia ships: reload the page»; sizes empty, unknown or repeated, 422. A refusal rolls back the whole
+  transaction (an Enable that was making the environment leaves nothing behind). **Enable asks for the acceptance only when it would queue a version**: a group disabled
+  with a ready version on the shipped recipe is enabled again with no body (nothing is built, nothing to accept), and the panel shows no box for it. A group without weights
+  ignores the body, as before.
+- **`models.licence_accept`** is written by `audit.RecordID` in the transaction that queues the version (the audit's insert now returns its id; `Record` is unchanged for
+  everyone else), with `licence_name`, `licence_sha256`, `sizes` (in the recipe's order) and `recipe_hash`; the version's `# tabularia:licence` line names the same row.
+  `mgNewVersion` takes the acceptance and refuses a group with weights without one; the other groups' `packages` are the recipe's text, byte for byte (a test).
+- **A valid acceptance** is the newest `models.licence_accept` row of the group, success, whose `detail.licence_sha256` is the shipped one (a `LIKE` on the hash narrows the
+  rows, the JSON decides). `mgLoad` reads it for a group with weights; `state()` answers **`licence_pending`** where it would answer `rebuild_needed` and there is none.
+  `mgQueueStale` (the loop's automatic build) queues nothing without one, logs it, and with one copies it (actor, time, row) with the sizes of the version in use (the current
+  version's line, else the newest's, else every size). `ReadyModelGroupImage` answers the reason `licence_pending` and «the model group "foundation_forecast" waits for an
+  administrator to accept the licence of its weights» (one sentence; the spec's «new licence» variant is not told apart from the plain one: when the audit holds a row of an
+  earlier text, the group is as pending as with none).
+- **`GET /admin/models`** answers `licence` for a group with weights (name, sha256, the link at the pinned revision of the smallest size, the shipped text, the sizes with
+  their bytes, `pending`, `line` read from the version in use or else the newest that has one, `audit_expires_at` = the valid row's time plus `AUDIT__RETENTION_MINUTES`, null
+  when the audit is kept forever); the palette entry has `sizes` (the version in use's line, else all) and `licence_pending`. `jobs_script_builds.go` needed no change: F0's
+  `dockerfile()` already reads the sizes.
+- **The panel**: the box (introduction, point 2 cut from the shipped text around its threshold, never retyped, the not-legal-advice line, the link, the shipped text in a
+  disclosure, the sizes all ticked, the tick) is shown by Enable of a group with nothing ready to serve and by **Build again**, which opens it, moves the focus to the tick,
+  and builds from the box's own button (Cancel gives the focus back to Build again). The tick is never kept. The line of the version in use is shown whenever there is one, with
+  «read it» and a warning when its licence text is not the shipped one; the retention warning under it when `audit_expires_at` is set; `licence_pending` has a label, an icon and
+  a hint. Observers read the line and see no box.
+
+**Tests.** Gateway: 5 new tests (the lines written and read back, the build's parser unmoved, the other groups' text unchanged, the state with and without the row, the 409/422 table,
+nothing left by a refusal, the version's line equal to the audit row, a rebuild with other sizes, the row deleted: the version serves, its line shows, the loop queues nothing and the step
+says why, then an administrator accepts and the next recipe is queued by itself on that row with the sizes of the version in use, a row of another licence is no acceptance). Frontend: 4 new
+tests (the draft, the clause cut from the real text, the card's wiring, the composable). Retention is tested by deleting the row, which is what the retention job does; its own job is the
+audit retention's and is tested there. Browsers: Chromium and Firefox headless on the real component with a stand-in for the API, mouse and keyboard alone (Tab, Shift+Tab, Space, Enter): 98
+checks, in five languages, at 390 px and in the dark theme.
+
 ## References
 
 - Mistral AI, *Timestral* model cards and `LICENSE`, `https://huggingface.co/mistralai/Timestral-{5M,28M,123M,209M}`
