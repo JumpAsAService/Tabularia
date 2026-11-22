@@ -131,6 +131,9 @@ def with_labels(model: str, params: Mapping[str, Any] | None, rows: list[dict], 
     checked = catalog.check_params(model, dict(params or {}))
     w = words(model, catalog.variant(model, checked), locale)
     loc = formats.locale(code(locale))
+    chosen = READINGS.get(model)
+    if chosen is not None:  # the explanation a layout chooses from the rows the runner wrote (docs/specs/report-explanations.md)
+        rows = [*rows, *reading_rows(chosen(rows, checked), rows)]
     model_numbers = {r["stat"]: r["value"] for r in rows if r["section"] == "model" and isinstance(r.get("value"), (int, float))}
     verdicts = {(r["level"], r["level_2"]): r.get("text") for r in rows
                 if r["section"] == "assumption" and r["stat"] == "verdict"}
@@ -533,7 +536,7 @@ def page(model: str, params: Mapping[str, Any], locale: str, sample: list[dict] 
          coef_note: str | tuple[str, str] | None = None, blocks: tuple[Block, ...] = (), charts: tuple[Chart, ...] = (),
          assumptions_note: str | None = None, p_values: bool = True, fit_skip: tuple[str, ...] = (),
          summary_lines: tuple[tuple[str, str], ...] = (), fit_format: str = EXACT, after_assumptions: tuple[Block, ...] = (), coef_first: tuple[Block, ...] = (),
-         after_coefficients: tuple[Block, ...] = ()) -> dict:
+         after_coefficients: tuple[Block, ...] = (), explained: tuple[str, ...] = ()) -> dict:
     """A model's report: the summary (four cards, the formula), the assumptions (first page),
     the coefficients, the fit, the model's own blocks (strata, forecast…), the diagnostics,
     the notes. `name`: the model as the header says it; `about`: what it is about;
@@ -544,9 +547,15 @@ def page(model: str, params: Mapping[str, Any], locale: str, sample: list[dict] 
     `fit_format`: the pattern of the fit's numbers (all their digits by default); `summary_lines`: (id, expression) of lines under the formula (a customer lifetime's business
     settings); `coef_first`: blocks drawn under the coefficients' heading and note, before their tables
     and kept with the heading on one page; `after_coefficients`: blocks under the tables, before the fit;
-    `coef_note` may be a (text, visible) pair."""
+    `coef_note` may be a (text, visible) pair. `explained`: the blocks of this page that have a reading under them
+    (EXPLAINED_BLOCKS: `summary`, `assumptions`, `coefficients`, `fit`), read from the rows the model's `READINGS`
+    chooses; with any, the page «How this report was computed» before the notes. Empty (the default): the page as it
+    was before the explanations, item for item."""
     from app.reports import formats
 
+    unknown = set(explained) - set(EXPLAINED_BLOCKS)
+    if unknown:
+        raise ValueError(f"no reading place for {sorted(unknown)}")
     lang = code(locale)
     checked = catalog.check_params(model, dict(params))
     variant = catalog.variant(model, checked)
@@ -555,18 +564,28 @@ def page(model: str, params: Mapping[str, Any], locale: str, sample: list[dict] 
     header, footer = stats.bands(name, " · ".join(x for x in (about, step) if x), w, formats.locale(lang).texts, sample_text)
     p = stats.Page()
     _summary(p, w, cards, summary_lines)
+    if "summary" in explained:
+        reading_under(p, w, "summary")
     _assumptions(p, w, lang, assumptions_note, p_values)
+    if "assumptions" in explained:
+        reading_under(p, w, "assumptions")
     for block in after_assumptions:
         block(p, w)
     if coef_tables:
         _coefficients(p, w, lang, coef_tables, coef_note, coef_first)
+        if "coefficients" in explained:
+            reading_under(p, w, "coefficients")
     for block in after_coefficients:
         block(p, w)
     _fit(p, w, p_values, fit_skip, fit_format)
+    if "fit" in explained:
+        reading_under(p, w, "fit")
     for block in blocks:
         block(p, w)
     if charts:
         _diagnostics(p, w, charts)
+    if explained:
+        how_computed(p, w)
     _notes(p, w)
     return stats.document(header, p.items, footer, lang)
 
@@ -890,6 +909,46 @@ def accent() -> str:
 READING_LINES = 8  # the sentences a block of the whole report may hold (a runner writes three at most)
 FORMULA_PANEL = "#eef1f6"  # the formula box's ground: the panel's, a shade darker so that it reads as a box
 FORMULA_RULE = "#c5ccd8"
+# the blocks of `page` that may have a reading under them (its `explained`); a model's own blocks place theirs
+EXPLAINED_BLOCKS = ("summary", "assumptions", "coefficients", "fit")
+
+# A line of the explanation as a layout chooses it: (block, level_2 or None, template id, {name: value}).
+ReadingLine = tuple[str, str | None, str, Mapping[str, Any]]
+# model → readings(rows, checked params) → its lines: the ids of the sentences that fit the rows the model's runner
+# already wrote (its verdicts, its options), with the numbers as the rows hold them. Registered by the model's own file
+# (`READINGS["linear"] = readings`) for a runner that does not write its explanation itself (the A/B test's and the
+# decomposition's do: they register nothing). `with_labels` adds the lines as rows of the section `reading`.
+READINGS: dict[str, Callable[[list[dict], Mapping[str, Any]], list[ReadingLine]]] = {}
+
+
+def encoded(v: Any) -> str:
+    """A value of a reading's line as the runners write one: a number whole («12») or as Python writes it back exactly
+    («0.05», «1e-300»; `structured_note` puts it in its form), a boolean «true» / «false», a name with its «%», « »
+    and «,» encoded (decoded once by `structured_note`), a list its items joined by «,»."""
+    if isinstance(v, (list, tuple)):
+        return ",".join(encoded(x) for x in v)
+    if isinstance(v, bool):
+        return "true" if v else "false"
+    if isinstance(v, (int, float)):
+        x = float(v)
+        return str(int(x)) if x.is_integer() and abs(x) < 1e15 else repr(x)
+    return str(v).replace("%", "%25").replace(" ", "%20").replace(",", "%2C")
+
+
+def reading_rows(lines: list[ReadingLine], rows: list[dict]) -> list[dict]:
+    """The lines as rows of the section `reading`, after `rows`: «reading|<block>|<level_2>|line_<k>» = «@id name=value…»,
+    k counted within each block and level, `ord` after the last of `rows`. A value that is None leaves its name out (the
+    sentence keeps its «{name}» and the tests see it)."""
+    out: list[dict] = []
+    count: dict[tuple[str, str | None], int] = {}
+    last = max((r["ord"] for r in rows if isinstance(r.get("ord"), int)), default=-1)
+    for block, level_2, id_, values in lines:
+        k = count[(block, level_2)] = count.get((block, level_2), 0) + 1
+        text = " ".join(["@" + id_, *(f"{name}={encoded(v)}" for name, v in values.items() if v is not None)])
+        out.append({"section": "reading", "level": block, "level_2": level_2, "stat": f"line_{k}", "value": None,
+                    "text": text, "x0": None, "x1": None, "ord": last + len(out) + 1,
+                    "key": f"reading|{block}|{level_2 or ''}|line_{k}"})
+    return out
 
 
 def document(header: dict, items: list[dict], footer: dict, lang: str, calculated: list[dict] | None = None) -> dict:

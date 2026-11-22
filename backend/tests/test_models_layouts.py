@@ -40,8 +40,9 @@ DRAWN = dict(catalog.MODELS)
 # (docs/specs/ab-testing.md, «The report (pixel perfect)»)
 EXPERIMENTS = {m for m, spec in catalog.MODELS.items() if spec.get("family") == "experiments"}
 # the reports that explain their method in words (the A/B's mechanism: docs/specs/ts-decomposition.md, «Explaining the
-# method in the report»): a page or two more, and no «= <» in a sentence
-EXPLAINED = EXPERIMENTS | {"decomposition"}
+# method in the report»; for the others, the readings their layout chooses: docs/specs/report-explanations.md): a page
+# or two more, and no «= <» in a sentence
+EXPLAINED = EXPERIMENTS | {"decomposition"} | set(common.READINGS)
 
 
 def fixture(case: str) -> tuple[str, dict, list[dict]]:
