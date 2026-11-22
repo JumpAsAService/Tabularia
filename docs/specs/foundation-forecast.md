@@ -765,9 +765,9 @@ All on the holdout (the last k observed values of each series), **measures, with
 | MASE | mean_t \|y_t − ŷ_t\| / sᵢ; the baseline's the same with its forecast |
 | Relative MASE | MASE / baseline's MASE; across series their **geometric mean** (the usual summary of ratios) |
 | sMAPE | mean_t 200 \|y_t − ŷ_t\| / (\|y_t\| + \|ŷ_t\|) in %, steps where both are 0 left out and counted |
-| Pinball loss | ρ_q(u) = max(q u, (q − 1) u), u = y − ŷ_q; mean over the 21 levels and the steps; also **scaled** (÷ mean \|y_t\|, the «weighted quantile loss») so that series of different sizes compare |
+| Pinball loss | ρ_q(u) = max(q u, (q − 1) u), u = y − ŷ_q; mean over the 21 levels and the steps; also **scaled**: WQL = 2 × pinball ÷ mean \|y_t\|, the «weighted quantile loss» as usually defined (the factor 2 since lot F9), so that series of different sizes compare |
 | Coverage | share of steps inside the 80 % band (0.1–0.9) and the 90 % band (0.05–0.95) |
-| Across series | the mean MASE and sMAPE, the geometric mean of the relative MASE, the pooled coverage, the scaled pinball loss of the series together (Σ of each series' pinball × its steps ÷ Σ\|y\|: weighted by the size of each series' values, not by its MASE scale; F9) |
+| Across series | the mean MASE and sMAPE, the geometric mean of the relative MASE, the pooled coverage, the WQL of the series together (2 × Σ of each series' pinball × its steps ÷ Σ\|y\|: weighted by the size of each series' values, not by its MASE scale; F9); counted (F9): `n_smape_zero` and `n_baseline_smape_zero`, the steps sMAPE leaves out, and `n_relative_left_out`, the series measured whose relative MASE the geometric mean cannot take (a MASE of 0) |
 
 **The baseline** is the **seasonal naïve** forecast, the last season repeated: ŷ_{T+h} = y_{T+h−m⌈h/m⌉}
 (the naïve, the last value, when m = 1). It needs no fit, costs nothing, and is the reference MASE is
@@ -840,7 +840,7 @@ The ten columns. Sections:
 
 | Section | `level` | `level_2` | Holds |
 |---|---|---|---|
-| `model` | null | null | texts `model`, `variant`, `formula` («orders ~ Timestral-28M · 5 series by channel · daily · 28 days ahead»), `software` («Python 3.14.x; torch 2.14.1+cpu; timestral 1.0.0 (a534bdbd)»), `weights` («mistralai/Timestral-28M@49b26409»), `weights_sha256`, `licence` («Modified MIT License (Mistral AI)»), `licence_sha256`, `group_version`, `rows_from`, `note_*`, `frequency`, `time_kind`, `missing`, `size`, `cpu_capability`; numbers `n_series`, `n_points`, `n_missing`, `n_filled`, `n_model_missing`, `n_future_rows`, `horizon` (the largest), `holdout`, `season`, `alpha`, `threads`, `batches`, `seconds_load`, `seconds_forecast`, `n_quantiles`, the across-series measures (`mase`, `baseline_mase`, `relative_mase_geomean`, `smape`, `baseline_smape`, `wql`, `coverage_80`, `coverage_90`, `n_measured`) |
+| `model` | null | null | texts `model`, `variant`, `formula` («orders ~ Timestral-28M · 5 series by channel · daily · 28 days ahead»), `software` («Python 3.14.x; torch 2.14.1+cpu; timestral 1.0.0 (a534bdbd)»), `weights` («mistralai/Timestral-28M@49b26409»), `weights_sha256`, `licence` («Modified MIT License (Mistral AI)»), `licence_sha256`, `group_version`, `rows_from`, `note_*`, `frequency`, `time_kind`, `missing`, `size`, `cpu_capability`; numbers `n_series`, `n_points`, `n_missing`, `n_filled`, `n_model_missing`, `n_future_rows`, `horizon` (the largest), `holdout`, `season`, `alpha`, `threads`, `batches`, `seconds_load`, `seconds_forecast`, `n_quantiles`, the across-series measures (`mase`, `baseline_mase`, `relative_mase_geomean`, `smape`, `baseline_smape`, `wql`, `coverage_80`, `coverage_90`, `n_measured`) and what they leave out (`n_smape_zero`, `n_baseline_smape_zero`, `n_relative_left_out`, lot F9) |
 | `series` (new: level required, level_2 null) | the series' label | — | numbers `n`, `n_used` (the context the model read), `n_missing`, `n_filled`, `first`, `last` (x0), `horizon`, `scale`, `mase`, `baseline_mase`, `relative_mase`, `smape`, `baseline_smape`, `pinball`, `wql`, `coverage_80`, `coverage_90`, `total` (Σ\|y\|, the order of the charts); text `not_measured` (a reason id) |
 | `assumption` | `baseline_comparison` | null | the test: `h0`, `statistic` (W), `p_value`, `significance`, `verdict`, `advice`, `advice_id`, `count` (series compared), `value` (the median of d); and the measures with `value`, no verdict: `coverage_80`, `coverage_90`, `relative_mase` |
 | `series_curve` (new: level and level_2 required) | the series' label | the line: `observed`, `median`, `q0.05`, `q0.1`, `q0.9`, `q0.95`, `baseline`, `holdout_median`, `holdout_q0.1`, `holdout_q0.9`, `holdout_q0.05`, `holdout_q0.95` | stat `y`, `x0` = the time's axis (ARIMA's `x0`) |
@@ -1866,22 +1866,29 @@ of the statistics tests in five languages, the PDF, the definition, the labelled
 identical**; ARIMA's ten definitions changed (`keep_with_next`; one PDF, German `arima-manual`, moves the block to the next page),
 Timestral's five changed (the layout and the words). No warning.
 
-**Left to the owner.** (a) WQL is written as Σ pinball ÷ Σ|y| without the factor 2 of the usual definition (2 Σ ρ ÷ Σ|y|): half of
-the published figures; the formula box says it as it is computed. (b) `smape` leaves out the steps where the value and the forecast
-are both 0 but does not count them anywhere (the spec says «counted»). (c) A series whose seasonal naïve has a MASE of 0 leaves the
-geometric mean of the relative MASE silently (`relative_n`). (d) A lawyer's reading of the new first-page line, with the panel and
-the documentation, before the release (Boundaries).
+11. **The measures' three details** (the owner's choice after the review): **WQL** is the usual 2 Σ pinball ÷ Σ|y| (the
+    runner, the witness, `expected.json`, the formula box and the words in five languages; it was half of it); the steps where
+    the value and the forecast are both 0, which **sMAPE** leaves out, are counted (`n_smape_zero`, and `n_baseline_smape_zero` for
+    the seasonal naïve's), and so are the series that the **geometric mean of the relative MASE** leaves out because a MASE is 0
+    (`n_relative_left_out`): three numbers of the model section, said under the mean errors with what each is, only when not 0.
+    `expected.json` was not made again with the model: its `measures` were written again by the witness (`make_reference.measure_cases`,
+    numbers only: each case has one step where the value and the median are both 0) and the size cases' WQL doubled with the
+    witness's rounding; the next full run of `make_reference.py` also writes the two counts of each size case. A self-test check
+    adds a series whose seasonal naïve has a MASE of 0 to the cases.
+
+**Left to the owner.** A lawyer's reading of the new first-page line, with the panel and the documentation, before the release
+(Boundaries).
 
 **Tests.** Gateway (Go): `go vet` clean, `gofmt` clean, **53 packages, 524 tests passed, 3 skipped, none failed** (on a
 database migrated by the gateway's image; new: the series' metrics of a flow run, the sections asked, the push denied after network
 errors and alone, the sizes of the version in use, the palette's licence at the pinned revisions, the runner's sizes against the
-recipe). Engine: the model and report tests (13 files, the CI image, `--memory=2500m --cpus=1`) **1,860 passed** (new: the licence
+recipe). Engine: the model and report tests (13 files, the CI image, `--memory=2500m --cpus=1`) **1,865 passed** (new: the licence
 line in five languages, the measures' words, the side of the verdict by `rank_biserial`, the sMAPE cell, the lone holdout chart,
-the labels above the dots, a series named like a formula in the PDF and the workbook, ARIMA's four cases). Editor: **595 of 595**,
+the labels above the dots, a series named like a formula in the PDF and the workbook, ARIMA's four cases, WQL and the counts of what the means leave out in five languages). Editor: **595 of 595**,
 `vue-tsc` no error (new: Build again's sizes, the licence read from the gateway and the link of the node's size). Assistant:
 **138 passed, 2 skipped**. The group's self-test in its image with this lot's files mounted (no network, read-only, 2 CPUs,
 2.5 GB): the sha256 of the four sizes' files, then **36 checks, none failed or skipped** (new: the side of the test on the
-example above).
+example above; WQL and the counts across the series). The golden after point 11: the same 490 renderings identical.
 
 ## References
 

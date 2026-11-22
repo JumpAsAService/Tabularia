@@ -1344,9 +1344,10 @@ The **results table** has the across-series measures and a row for each series.
 The first page has the licence line, the series, the model and its size, the horizon and the holdout, and:
 
 - **Measures, with no verdict**: the **MASE** of the forecast and of the seasonal naïve forecast on the held-out steps (a MASE
-  below 1 beats the in-sample seasonal naïve), the **relative MASE** (the two divided: below 1, Timestral did better), the
-  **sMAPE**, the **scaled pinball loss** (the quantile loss, comparable across series) and the **coverage** of the 80 % and 90 % bands
-  (the share of the held-out steps inside them). The coverage has no test on purpose: the steps of one forecast are not independent,
+  below 1: an error smaller than the in-sample seasonal naïve's), the **relative MASE** (the two divided: below 1, Timestral's errors are the smaller), the
+  **sMAPE**, the **scaled pinball loss** (the weighted quantile loss, WQL = 2 × the pinball loss ÷ the mean absolute value, comparable across series) and the **coverage** of the 80 % and 90 % bands
+  (the share of the held-out steps inside them). What the means leave out is counted under them: the steps where the value and
+  the forecast are both 0 (sMAPE cannot say them) and the series whose relative MASE has no logarithm (a MASE of 0). The coverage has no test on purpose: the steps of one forecast are not independent,
   and a test would claim more certainty than the data hold. A series too short for its measures is forecast and says so.
 - **One test, Wilcoxon's signed-rank test**, on the series' differences between the two MASEs (the pre-trained forecast against the
   seasonal naïve), two-sided, at the node's alpha: *is its advantage more than the luck of these series?* It needs at least two series
