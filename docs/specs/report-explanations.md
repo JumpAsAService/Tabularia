@@ -403,3 +403,84 @@ all within twelve pages (three to six; 30 gain a page: the readings and «How th
 `test_explanations_regression_survival` (new), `test_report_explanations`, `test_models_layouts`, `test_reports_model`,
 `test_models_ab_review`, `test_stats_layouts`, `test_stats_explanations`: **1,185 passed, 3 failed** — the three tests
 of frozen files above, which assume the linear regression and the parametric survival have no explanation.
+
+### B3 — time series, trees, customer lifetime (2026-11-22)
+
+**Files.** `layouts/arima.py`: `readings` (in `READINGS`) and `table_rejects` (ADF and KPSS at the ends of tseries'
+tables, read by the side as the runner reads them, lot D7); a reading under `summary`, `assumptions`, `coefficients`
+(`page(explained=…)`) and under its own blocks `stationarity` (after the four cases) and `forecast` (after the holdout's
+line). `layouts/boosting.py`: `readings`, registered by `xgboost.py` and `catboost.py`; under `summary`, `assumptions`
+and its own `importance`. `layouts/customer_lifetime.py`: `readings`, registered by `clv.py` and `bg_bb.py`; under
+`summary`, `assumptions` and its own `fit_data`, `p_alive` and `clv`. Words: `arima.json`; `boosting.json` (each
+library's `method_library` in `xgboost.json` and `catboost.json`); `customer_lifetime.json` (the summary and the purchase
+models' paragraphs and formulas in `clv.json` and `bg_bb.json`). Test: `backend/tests/test_explanations_ts_trees_clv.py`
+(new, 19). No runner, no shared file and not `shared_readings.py` changed (its check lines name a regression's checks;
+ARIMA's residual tests and the customer lifetime's two tests are read by their own ids).
+
+**Template ids.** ARIMA — summary: `summary_arima|sarima` (the orders, n), `summary_transform_log|box_cox`,
+`summary_exog(_more)`, `auto_orders` (by the node's criterion: a ranking, not a test); stationarity:
+`adf_reject|reject_end|keep|keep_end|table_end`, the same for `kpss`, then the case `stationarity_both_ok|adf_only|
+kpss_only|neither` (the decomposition's ids and words), `stationarity_no_case`, `stationarity_short`; assumptions:
+`<check>_reject` for each residual test whose p-value is below α (Ljung–Box 10 and 2s, ARCH, the variance ratio,
+Jarque–Bera), `residuals_keep_all|keep_others`, `roots_threshold`, `assumptions_many_rows`; coefficients:
+`coef_one|some|some_more|none`; forecast: `forecast_horizon` (the bands 80 % and 1 − α), `holdout_errors` (MAPE, MASE),
+`sample_errors` without a holdout. Method: `method_arima|seasonal|differencing|transform_log|transform_box_cox|exog|auto|
+stationarity|checks|holdout|bands`; formulas: `formula_arima|sarima|aicc|box_cox|adf|kpss|ljung_box|mape|mase` (ADF's
+regression with trend, as `tseries::adf.test` fits it; both p-values from the tables of Banerjee et al. and
+Kwiatkowski et al.). Boosting — `summary_boosting_<task>` (the parts, the trees, the validation loss beside the
+baseline's, R², AUC or accuracy); `diag_<check>` for each diagnostic past its threshold, its number and the threshold
+(`diag_trees_more|few|no_stop|size|time`, `diag_stop_on_loss` by the advice the runner wrote, `diag_leakage_share|fit|
+one`, `diag_zero_importance(_more)`), `diagnostics_more`, `diagnostics_none`; `importance_top|one` (the first three by
+their share of mean |SHAP|). Method: `method_boosting|library|validation_<random|time|grouped>|early_stopping|baseline|
+class_weight|threshold|shap|no_test`; formulas: `formula_boosting|loss_<task>|baseline|shap`. Customer lifetime —
+`summary_clv` (each model's own words), `summary_auto`, `summary_spend`; `frequency_fit_reject|keep`,
+`spend_independence_reject|keep` (the only verdicts); `convergence_edge|not_reached`, `spend_tail_fact` (facts),
+`horizon_beyond`, `assumptions_many_rows` (measures); `holdout_compare|none`; `p_alive_mean`;
+`clv_totals(_one)`, `transactions_total(_one)` (a unit after 1 in the singular). Method: `method_<purchase model>|auto|
+p_alive|gamma_gamma|clv|holdout|tests|tests_purchases`; formulas: `formula_<purchase model>`,
+`formula_p_alive_<purchase model>`, `formula_chi_square|gamma_gamma|clv`.
+
+**Choices.** The verdict is chosen by the row's p-value against the node's α (ADF and KPSS by the side of their table,
+as the runner does), not by the row's verdict: the same as the runner's at the node's α, and it lets the test read
+«rejected» and «not rejected» around the p-value (criterion 8). Where the table cannot say (α beyond its end, the
+runner's «not computed»), the sentence is the decomposition's `kpss_table_end` («the test gives no verdict») and the
+four cases are not read. Every boosting line is a measure (listed in `measure_readings`): a diagnostic says its number
+and the threshold the page uses, «below / above the threshold of …», never «doubtful» or «failed»; `method_no_test` says
+why no p-value is given. The customer lifetime keeps its runner's distinction: the χ² of the repeat purchases and the
+spend's slope are the only verdicts; convergence and the spend's tail are facts, the horizon's ratio a measure, all in
+`measure_readings`, which the verdict words' test then covers. The words of ADF and KPSS are the decomposition's
+(«rejects a unit root», «a unit root is not excluded», «the two tests do not tell»), checked by a test; the page's own
+terms are kept (it «periodo di verifica» for ARIMA's holdout, «arresto anticipato», «riferimento», «P(vivo)», «clienti
+con riacquisti»).
+
+**Deviations.** (1) ARIMA's assumptions say one sentence per residual test that rejects and count the others, in
+place of `assumptions_rejected` naming them: the same reason as B2's (`structured_note` does not translate a check's
+name chosen by the readings). ADF, KPSS and their four cases are read under «ADF and KPSS read together», not in the
+assumptions. (2) The holdout's sentence is under «Fit to the data», next to its chart, not under «Fit». (3) The SHAP
+formula writes «S and j» and R² a weighted mean `m`: ∖, ∪, ⊆ and ȳ are not in the report's font.
+
+**Found, not fixed (each would change an existing page; for B4).**
+- ARIMA's four-case box (`arima._stationarity`) marks the series' case by `p < α`; the runner and the reading read ADF
+  and KPSS at the ends of their tables by the side (D7). At α = 0.01 with ADF's p clipped at 0.01 the reading says
+  «rejects», the box marks «ADF keeps». Request: mark the box by `table_rejects`, and leave no case marked when a test
+  gives no verdict.
+- The box's words (`arima.json`, `cases`) still say «the differences are enough» and «Neither rejects: the series is
+  too short or too noisy for them to tell», the wording D9 removed from the decomposition as saying more than the tests;
+  the reading under it says «the two tests do not tell». Request: the decomposition's words in the box.
+- Boosting, multiclass with `class_weight = balanced` (fixture `catboost-multiclass`, at HEAD as well): the caption
+  «Overfitting — ✓ ok» and the note on the weighted curves are drawn on the same line under the learning curves.
+- Open question 4: `coef_*` and `assumptions_many_rows` are in B3's words as B2's are in theirs, to be moved to
+  `common.json`.
+
+**Golden** (B2's scratch dump, on clean copies of `a775fed8` and of `a775fed8` with this lot's files, the fake chart
+service): **440 of 500 renderings byte for byte as before** (PDF, definition, labelled rows) — every other model's
+fixture and every variant of every statistics test; the 60 that change are exactly this lot's twelve fixtures in five
+languages, none with a warning, all within seven pages (18 keep their pages, 39 gain one, 3 gain two: ARIMA with
+automatic orders in German, Spanish and French). `only_additions` holds on the twelve (every item and every labelled
+row as before).
+
+**Tests** (the CI image, `--memory=2500m --cpus=1`, on the clean copy with this lot):
+`test_explanations_ts_trees_clv` (new), `test_report_explanations`, `test_models_layouts`, `test_reports_model`,
+`test_models_ab_review`, `test_stats_layouts`, `test_stats_explanations`, `test_explanations_regression_survival`:
+**1,204 passed, 3 failed** — the three tests of frozen files that B2 reported, which assume the linear regression
+and the parametric survival have no explanation.
