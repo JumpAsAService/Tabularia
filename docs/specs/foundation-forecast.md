@@ -1334,6 +1334,82 @@ tests (the draft, the clause cut from the real text, the card's wiring, the comp
 audit retention's and is tested there. Browsers: Chromium and Firefox headless on the real component with a stand-in for the API, mouse and keyboard alone (Tab, Shift+Tab, Space, Enter): 98
 checks, in five languages, at 390 px and in the dark theme.
 
+### F2 — the series in Python
+
+**Built (2026-11-22).** `common/py/tab_series.py` (the twin of `ts_series.R`), its self-test `common/py/tab_series_tests.py` (registered by `tab_selftest`
+with the library's own tests, so every Python group's image checks the module it ships), `reference/data/ff_types.csv` and its generator
+`reference/make_reference_series.py`, and the comparison with R: `reference/compare_series.py` (the cases, the Python side, the comparison), `compare_series.R`
+(the R side) and `compare_series.sh`, which runs them in the two images with the files mounted (`sh gateway-go/internal/modelgroups/groups/foundation_forecast/reference/compare_series.sh`
+from the repository's root; no image is rebuilt). The module needs numpy and pyarrow, never pandas.
+
+**What F3 calls** (each a function of the module; the docstrings say the rest):
+
+```python
+table = tab_series.read_table(task, [time, value, series, *covariates])   # the schema first: no_column before any data
+cols = tab_series.columns(table, time, value, frequency)                  # once per table: time_type, frequency_hour, not_a_number, infinite
+labels, rows, no_series = tab_series.split(table.column(series))         # text order, the engine's labels; rows: views of one argsort
+s = tab_series.series(cols, rows[k], missing, label=labels[k], max_periods=…)   # no_values, duplicate_time, irregular_time, too_many_periods, gaps
+s.z, s.y, s.filled, s.n_missing, s.n_before, s.n_after, s.n_filled, s.n_model_missing
+s.after_rows, s.after_pos          # the rows after the last observed value and their places after it (1 = the next): the known covariates' future,
+                                   # complete on the grid when after_pos is 1…m (otherwise known_future_gap at the first missing place)
+s.span_rows                        # the input row of each place of the span (−1 where none): the covariates' values on the span
+s.time_array(); s.time_array(s.after(np.arange(1, h + 1)))   # the span's and the future's times, in the input's own Arrow type
+tab_series.envelope(y, max_points)  # the places to draw (0-based)
+```
+
+**Where the spec was silent, and what was done:**
+
+1. **The sentences are `ts_series.R`'s, word for word, with two parameters**: the `gaps` sentence's way out names the node's own other choices (`fills`; Timestral's
+   «missing = linear or model», the decomposition's «linear or seasonal» in the comparison), and with a series column the series is named — «the series «Online» has 3 periods
+   without a value …», and « in the series «Online»» after the time in `duplicate_time`, `irregular_time`, `too_many_periods` and `no_values`, whose params gain `series`. The
+   spec's example «3 days» is R's «3 periods».
+2. **The grid is decided in R's doubles**: seconds as a double, days = seconds / 86400, an hour's period = days × 24, a week's days / 7, the months of a datetime in UTC, the same
+   tolerance of 1e-9 of a period; so a time R calls off the grid is off the grid here. Times themselves are held as integer «ticks» (an integer's value, a date's days, a timestamp's
+   units), so the times written back are exact (an Int64 above 2⁵³ keeps every digit; the grid of such a time is R's double, as R's). **The linear fill is `stats::approx`'s formula**,
+   `y[i] + (y[j] − y[i]) · ((v − x[i]) / (x[j] − x[i]))`, not `numpy.interp`'s order of operations: bit for bit equal to R's.
+3. **`missing = model`**: the places stay NaN and `z` *is* `y` (no copy), `filled` is false everywhere, the count is `n_model_missing`; `n_filled` counts the linear fill only.
+4. **`max_periods`** defaults to `ts_series.R`'s 200,000 places a series; F3 passes its own when a series may be longer (the group's `max_rows` is 1,000,000).
+5. **Not ported** (Timestral uses none of them): the Box–Cox and log transforms, the seasonal fill (an MSTL), `ts_positions`.
+6. **`ff_types.csv`** is written by `make_reference_series.py` (by formula, no random numbers), not by F3's `make_reference.py`: 60 rows, three series (Online
+   3000000001, Negozio 3000000002, Telefono 3000000003) in an order that is not the time's, a value empty before the span, two gaps (an empty value and a missing row), three future rows,
+   the hours across Rome's change of the clock of 2026-03-29. The comparison writes its time as Int64 (above 2³¹), Int32, date32, timestamp[us, UTC], timestamp[ns] and timestamp[ms, Europe/Rome].
+7. **pandas stays in the image.** The library's import of pandas is now lazy (`tab_columns.py`: inside the functions that take or make a frame; the boosting group's
+   self-test is green, 56 checks), but **pyarrow imports pandas by itself whenever it is installed** — on `pa.array` of a numpy array, on a Parquet read — so the lazy import alone
+   saves nothing: measured in the image, a 1,000-row read and series costs **1.36 s and 136 MB with pandas installed, 1.02 s and 102 MB with pandas hidden** (one CPU; with
+   2.5 GB). The library and the series work without it (a self-test check hides pandas and reads, splits, fills and writes a series). Removing it from the recipe is F3's to decide
+   with the runner: the library's own self-test (`read_csv` and `read_input`, which make frames, and the checks that use them) and `reference_case` (a CSV read into a frame) need pandas, and
+   `Passed()` forbids a skipped check, so they would have to be written with pyarrow first.
+8. **R's one difference: an Int64 time's label.** `tab_label` (`common/R/columns.R`) writes bit64's `integer64` — which `ts_read` asks arrow for — as a double: the decomposition
+   says «(the first: 5000000029.0)» where the engine, ARIMA (which reads a small Int64 as an R integer) and `tab_series` say «5000000029». The Python twin keeps the engine's label;
+   the comparison lists the four cases as *known*, separately, and counts any other difference. The fix belongs to R's library (`inherits(x, "integer64")` →
+   `as.character(x)` in `tab_label`), which every R group ships: not done in this lot.
+
+**The comparison** (`compare_series.sh`; R 4.6.0 and arrow 26.0.1 in `tabularia-models-timeseries:dev`, Python 3.14 in `tabularia-models-foundation_forecast:dev`; each step one container, one CPU):
+**100 cases** — `dec_types.csv` as eight Arrow types (Int64, Int32, Int16, date32, timestamp[us, UTC], timestamp[ns], timestamp[ms, Europe/Rome], double) with linear
+and model, four of them with refuse too; `dec_gaps.csv` with refuse, linear and model; 14 refusal cases (the self-test's of `ts_series.R` and more: a boolean or fractional time, a day of datetimes off the
+hour, two instants in one month, an Int64 twice, a column missing, an infinite value, a grid too long); empty times; the calendar (the end of a month, a datetime at a month's end in
+Rome, quarters and years from mid-period dates, weeks of seconds, an index of doubles and of dates, hours across the change of the clock); `ff_types.csv` read as one table and split
+(Python) against each series alone (R), six types × three series × refuse, linear and model — and **7 envelopes** (the self-test's walk at 100, 401 and 3 points, with empty values,
+a spike in 100,000 points, ties at 50 and 51). Compared exactly: the counts, the codes, the sentences and their params, the span's times as Arrow arrays (type and values), `y`, `z`
+and the chart's `x` bit for bit, `filled`; a `model` case against R's linear case of the same input. **69 series with 2,842 places (27 of them `model`), 31 refusals, 0
+differences, 4 known** (point 8).
+
+**The self-test**: six checks (the types, the gaps, the refusals word for word, many series, the envelope, the library without pandas), every table built in the check with its
+answer written by hand; **foundation_forecast 20 checks, boosting 56, none failed or skipped**.
+
+**Memory and time** (the image, `--memory 2500m --cpus 1`, `VmHWM`; one daily series, 1 % of the values empty and 1 % of the rows missing, the rows shuffled; read, columns,
+split, series with the linear fill, its time array and its envelope; the peak above the same run on 10 rows, i.e. what the data costs):
+
+| Points | Series | Peak above 10 rows | of which the Parquet read | the series (all of them) | Time (pandas installed / hidden) |
+|---|---|---|---|---|---|
+| 100,000 | 1 | +41 MB | +24 MB | +9 MB | 0.56 s / 0.22 s |
+| 200,000 | 1 | +47 MB | +22 MB | +19 MB | 0.65 s / 0.30 s |
+| 200,000 | 100 | +29 MB | +20 MB | +0 MB (one series at a time) | 0.59 s / 0.22 s |
+
+The 10-row run itself peaks at 137 MB (67 MB of Python, numpy and pyarrow, 31 MB of pyarrow's Parquet machinery, 34 MB of pandas, which pyarrow imports). A series costs
+about 95 bytes a place at its peak (its own arrays — times, y, z, filled, span_rows: 33 bytes a place — and the argsort and the grid's arrays, freed as it goes); the table is held once,
+as Arrow columns, with one numpy array of ticks and one of values beside it.
+
 ### F5 — the node in the editor
 
 **Built (2026-11-22).** The form of Forecast (Timestral) is drawn from the catalogue by `ModelForm.vue`, with four additions that name a kind, not the model:
