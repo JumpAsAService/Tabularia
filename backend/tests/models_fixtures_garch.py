@@ -12,7 +12,7 @@ tail) and placeholders where they are not (Nyblom's L, the sign bias); the risk 
 distribution is a Student t scaled by the horizon. Every verdict is a p-value against the node's alpha. Every row the catalogue
 declares for the variant that a run with these parameters writes is here, but no `reading` row: the layouts choose the explanation
 from these rows (`common.READINGS`, docs/specs/garch-risk.md, «As built / G4»). The GARCH node's fixture is its runner's output
-(lot G1), written with `--from-results`.
+(lot G1), and so are the risk node's two since lot G9 (the placeholders below are no longer written): `--from-results`.
 """
 from __future__ import annotations
 
@@ -29,13 +29,15 @@ PARAMS: dict[tuple[str, str], dict[str, Any]] = {
     # the runner's own output (lot G1) on its reference prices (`garch_prices.csv`, 301 trading days), the last 50 kept out
     ("garch", "default"): {"time": "day", "value": "price", "frequency": "index", "input_kind": "prices", "variance_model": "gjr",
                            "distribution": "sstd", "holdout": 50, "output": "volatility"},
-    ("risk_simulation", "garch"): {"time": "data", "value": "prezzo", "frequency": "index", "model": "garch", "input_kind": "prices",
-                                   "variance_model": "gjr", "distribution": "sstd", "paths": 10_000, "horizon": 10, "holdout": 250,
-                                   "threshold": 280.0, "position": 100000, "output": "risk_summary"},
-    # a business series on its upper tail: next month's orders, the running total of a SARIMA
-    ("risk_simulation", "arima"): {"time": "giorno", "value": "ordini", "frequency": "day", "model": "arima", "p": 1, "d": 0, "q": 1,
-                                   "P": 0, "D": 1, "Q": 1, "aggregate": "sum", "tail": "upper", "threshold": 1000, "paths": 10_000,
-                                   "horizon": 30, "output": "risk_summary"},
+    # the runner's own output (lot G9) on the same prices: a GARCH(1,1) with t errors, 10,000 paths of 10 steps, the last 50 returns
+    # kept out, a price threshold and a position (the money of the VaR and the ES)
+    ("risk_simulation", "garch"): {"time": "day", "value": "price", "frequency": "index", "model": "garch", "input_kind": "prices",
+                                   "holdout": 50, "threshold": 100, "position": 100000, "output": "risk_summary"},
+    # the runner's own output (lot G9): a business series on its upper tail, the running total of a SARIMA(1,1,1)(0,1,1)[12] with a
+    # log on `sarima_monthly.csv`, 12 months kept out, 3,000 paths of 12 months
+    ("risk_simulation", "arima"): {"model": "arima", "time": "month", "value": "boxes", "frequency": "month", "p": 1, "d": 1, "q": 1,
+                                   "P": 0, "D": 1, "Q": 1, "transform": "log", "aggregate": "sum", "tail": "upper", "horizon": 12,
+                                   "holdout": 12, "threshold": 20000, "paths": 3000, "output": "risk_summary"},
 }
 
 _Z_LOW = -2.5  # the 1 % quantile of the imaginary standardized distribution (a skewed t with 5.8 degrees of freedom)

@@ -227,7 +227,8 @@
     "note_texts": {
       "garch_scale": "The fit ran on the returns divided by {scale:num}, their standard deviation; the parameters are given in the series' units.",
       "garch_solver": "The solver that converged: {solver} (solnp did not).",
-      "garch_at_bound": "{parameter} is at a bound of the solver: its standard error is not computed the usual way."
+      "garch_at_bound": "{parameter} is at a bound of the solver: its standard error is not computed the usual way.",
+      "garch_negative_news": "α{lag:int} + γ{lag:int} = {sum:num}, below 0: a fall lowers the next variance, and a large enough fall would make it negative. The Risk simulation does not simulate such a fit; GARCH or EGARCH have no such term."
     },
     "stats": {
       "model": {
@@ -689,7 +690,8 @@
     "note_texts": {
       "garch_scale": "La stima è stata fatta sui rendimenti divisi per {scale:num}, la loro deviazione standard; i parametri sono dati nelle unità della serie.",
       "garch_solver": "Il solutore che è arrivato a convergenza: {solver} (solnp no).",
-      "garch_at_bound": "{parameter} è a un limite del solutore: il suo errore standard non è calcolato nel modo consueto."
+      "garch_at_bound": "{parameter} è a un limite del solutore: il suo errore standard non è calcolato nel modo consueto.",
+      "garch_negative_news": "α{lag:int} + γ{lag:int} = {sum:num}, sotto 0: una discesa abbassa la varianza successiva, e una discesa abbastanza ampia la renderebbe negativa. La Simulazione del rischio non simula un modello così; GARCH ed EGARCH non hanno questo termine."
     },
     "stats": {
       "model": {
@@ -1151,7 +1153,8 @@
     "note_texts": {
       "garch_scale": "Die Schätzung lief auf den Renditen geteilt durch {scale:num}, ihre Standardabweichung; die Parameter sind in den Einheiten der Reihe angegeben.",
       "garch_solver": "Konvergiert ist der Löser {solver} (solnp nicht).",
-      "garch_at_bound": "{parameter} liegt an einer Grenze des Lösers: sein Standardfehler wird nicht auf dem üblichen Weg berechnet."
+      "garch_at_bound": "{parameter} liegt an einer Grenze des Lösers: sein Standardfehler wird nicht auf dem üblichen Weg berechnet.",
+      "garch_negative_news": "α{lag:int} + γ{lag:int} = {sum:num}, unter 0: Ein Rückgang senkt die nächste Varianz, und ein hinreichend starker Rückgang würde sie negativ machen. Die Risikosimulation simuliert ein solches Modell nicht; GARCH und EGARCH haben diesen Term nicht."
     },
     "stats": {
       "model": {
@@ -1613,7 +1616,8 @@
     "note_texts": {
       "garch_scale": "El ajuste se hizo sobre los rendimientos divididos por {scale:num}, su desviación típica; los parámetros se dan en las unidades de la serie.",
       "garch_solver": "El optimizador que convergió: {solver} (solnp no).",
-      "garch_at_bound": "{parameter} está en un límite del optimizador: su error típico no se calcula de la forma habitual."
+      "garch_at_bound": "{parameter} está en un límite del optimizador: su error típico no se calcula de la forma habitual.",
+      "garch_negative_news": "α{lag:int} + γ{lag:int} = {sum:num}, por debajo de 0: una caída baja la varianza siguiente, y una caída suficientemente amplia la haría negativa. La Simulación del riesgo no simula un ajuste así; GARCH y EGARCH no tienen ese término."
     },
     "stats": {
       "model": {
@@ -2075,7 +2079,8 @@
     "note_texts": {
       "garch_scale": "L'estimation a porté sur les rendements divisés par {scale:num}, leur écart-type ; les paramètres sont donnés dans les unités de la série.",
       "garch_solver": "Le solveur qui a convergé : {solver} (solnp non).",
-      "garch_at_bound": "{parameter} est à une borne du solveur : son erreur type n'est pas calculée de la manière habituelle."
+      "garch_at_bound": "{parameter} est à une borne du solveur : son erreur type n'est pas calculée de la manière habituelle.",
+      "garch_negative_news": "α{lag:int} + γ{lag:int} = {sum:num}, sous 0 : une baisse diminue la variance suivante, et une baisse assez forte la rendrait négative. La Simulation du risque ne simule pas un tel ajustement ; GARCH et EGARCH n'ont pas ce terme."
     },
     "stats": {
       "model": {

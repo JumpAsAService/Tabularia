@@ -39,7 +39,9 @@
       "mean": "Mean",
       "sd": "Standard deviation",
       "skewness": "Skewness",
-      "kurtosis": "Excess kurtosis"
+      "kurtosis": "Excess kurtosis",
+      "var_money": "Value at risk, in money",
+      "es_money": "Expected shortfall, in money"
     },
     "risk_what": {
       "var": "The simulated value with probability 1 − c beyond it, at the horizon.",
@@ -50,7 +52,9 @@
       "mean": "The mean of the risk variable at the horizon.",
       "sd": "Its standard deviation.",
       "skewness": "Its skewness: 0 for a symmetric distribution.",
-      "kurtosis": "Its excess kurtosis: 0 for a normal distribution."
+      "kurtosis": "Its excess kurtosis: 0 for a normal distribution.",
+      "var_money": "The value at risk times the position.",
+      "es_money": "The expected shortfall times the position."
     },
     "charts": {
       "fan": "The last observations and the simulated futures: bands, median and sample paths",
@@ -324,7 +328,14 @@
     "note_texts": {
       "garch_scale": "The fit ran on the returns divided by {scale:num}, their standard deviation; the parameters are given in the series' units.",
       "garch_solver": "The solver that converged: {solver} (solnp did not).",
-      "garch_at_bound": "{parameter} is at a bound of the solver: its standard error is not computed the usual way."
+      "garch_at_bound": "{parameter} is at a bound of the solver: its standard error is not computed the usual way.",
+      "returns_below_minus_one": "{n:int} simulated simple returns fall below −100 %, which a price cannot do: the fitted law's tails allow them, and the paths keep them as drawn; log returns never fall below it.",
+      "box_cox_domain": "{n:int} simulated values fall outside the range of the Box–Cox transform (λ·x + 1 < 0): they are kept as its inverse gives them.",
+      "ml_only": "The conditional sum of squares gave no start for these orders: the model was fitted by maximum likelihood alone.",
+      "gap": "{n} period has no value: the likelihood skips it; ADF, KPSS and the correlograms read the series without it.",
+      "gaps": "{n} periods have no value: the likelihood skips them; ADF, KPSS and the correlograms read the series without them.",
+      "drift_dropped": "The drift is left out: with d + D = 2 the model has no drift.",
+      "not_converged": "The optimizer did not report convergence (code {code}): read the coefficients with care."
     },
     "stats": {
       "model": {
@@ -570,14 +581,20 @@
         "innovations=bootstrap": "The shocks are drawn, with replacement, from the standardized residuals of the fit (filtered historical simulation, Barone-Adesi, Giannopoulos and Vosper): the tails are the data's own, the volatility the model's.",
         "": "The shocks are drawn from the fitted distribution: the normal, the Student t or the skewed t of a GARCH, a normal with the residuals' variance for an ARIMA."
       },
-      "method_variable": "One quantity is followed along each path, the risk variable: for a GARCH the cumulative return (the price is the last price times one plus it); for an ARIMA the value, its running total or its change relative to the last value, as the node asks. With a position, every measure of a relative change is also said in money, the position times the change.",
+      "method_variable": "One quantity is followed along each path, the risk variable: for a GARCH the cumulative return (the price is the last price times one plus it); for an ARIMA the value, its running total or its change relative to the last value, as the node asks. With a position, the VaR and the ES of a relative change are also said in money, the position times the change.",
       "method_var": "The value at risk at level c is the simulated value with probability 1 − c beyond it: the empirical quantile, exact on the N paths. Its Monte Carlo interval comes from the binomial law of the order statistics, with no assumption on the distribution; four times the paths about halve it.",
       "method_es": "The expected shortfall at level c' is the mean of the values beyond the quantile of probability 1 − c', with the fraction of the boundary value Acerbi and Tasche define; its interval uses its standard error. The VaR says where the tail starts, the ES how far it goes on average.",
       "method_threshold": "With a threshold the page gives two probabilities: that a path is beyond it on the last step, and that it crossed it at any step up to then. The second is a first-passage probability, which no quantile at the horizon gives. Their intervals are Clopper and Pearson's.",
       "method_drawdown": "The drawdown of a path is its deepest fall from a previous peak within the horizon: a path can fall deep and recover by the end, a loss the horizon's VaR does not see.",
       "method_passes": "The paths are never all in memory: they are written in batches to a file while counts, sums and moments are accumulated, and a second reading of the file picks the values the exact quantiles need. VaR, ES, probabilities and drawdowns are exact; the edges of the fan's bands are drawn within the error written for each step.",
       "method_model_garch": "The model is fitted as the Volatility (GARCH) node fits it, with the same options and functions, and its checks are that node's.",
-      "method_model_arima": "The model is fitted as the ARIMA node fits it, with the same options and functions, and its checks are that node's."
+      "method_model_arima": "The model is fitted as the ARIMA node fits it, with the same options and functions, and its checks are that node's.",
+      "var_money": "With the position of {amount:num}, the value at risk in money is {money:num}.",
+      "es_money": "With the position of {amount:num}, the expected shortfall in money is {money:num}.",
+      "es_lower_quantile": "When {variable} is at or below its {p:pct} quantile ({quantile:pct}), it averages {value:pct} (interval {low:pct} to {high:pct}).",
+      "es_lower_level_quantile": "When {variable} is at or below its {p:pct} quantile ({quantile:num}), it averages {value:num} (interval {low:num} to {high:num}).",
+      "es_upper_quantile": "When {variable} is at or above its {p:pct} upper quantile ({quantile:pct}), it averages {value:pct} (interval {low:pct} to {high:pct}).",
+      "es_upper_level_quantile": "When {variable} is at or above its {p:pct} upper quantile ({quantile:num}), it averages {value:num} (interval {low:num} to {high:num})."
     },
     "formula_texts": {
       "formula_var_1step": "VaR_t = μ_t + σ_t q_(1−c), q the quantile of the fitted distribution, c the VaR level;  a break when r_t < VaR_t (for an ARIMA's upper tail, when y_t > VaR_t)",
@@ -618,7 +635,13 @@
       "z2_largest_acf",
       "backtest_independence_not_computed",
       "backtest_expected",
-      "backtest_short"
+      "backtest_short",
+      "var_money",
+      "es_money",
+      "es_lower_quantile",
+      "es_lower_level_quantile",
+      "es_upper_quantile",
+      "es_upper_level_quantile"
     ]
   },
   "it": {
@@ -661,7 +684,9 @@
       "mean": "Media",
       "sd": "Deviazione standard",
       "skewness": "Asimmetria",
-      "kurtosis": "Curtosi in eccesso"
+      "kurtosis": "Curtosi in eccesso",
+      "var_money": "Valore a rischio, in denaro",
+      "es_money": "Expected shortfall, in denaro"
     },
     "risk_what": {
       "var": "Il valore simulato con probabilità 1 − c oltre di esso, all'orizzonte.",
@@ -672,7 +697,9 @@
       "mean": "La media della variabile di rischio all'orizzonte.",
       "sd": "La sua deviazione standard.",
       "skewness": "La sua asimmetria: 0 per una distribuzione simmetrica.",
-      "kurtosis": "La sua curtosi in eccesso: 0 per una distribuzione normale."
+      "kurtosis": "La sua curtosi in eccesso: 0 per una distribuzione normale.",
+      "var_money": "Il valore a rischio moltiplicato per la posizione.",
+      "es_money": "L'expected shortfall moltiplicato per la posizione."
     },
     "charts": {
       "fan": "Le ultime osservazioni e i futuri simulati: bande, mediana e percorsi d'esempio",
@@ -946,7 +973,14 @@
     "note_texts": {
       "garch_scale": "La stima è stata fatta sui rendimenti divisi per {scale:num}, la loro deviazione standard; i parametri sono dati nelle unità della serie.",
       "garch_solver": "Il solutore che è arrivato a convergenza: {solver} (solnp no).",
-      "garch_at_bound": "{parameter} è a un limite del solutore: il suo errore standard non è calcolato nel modo consueto."
+      "garch_at_bound": "{parameter} è a un limite del solutore: il suo errore standard non è calcolato nel modo consueto.",
+      "returns_below_minus_one": "{n:int} rendimenti semplici simulati scendono sotto −100 %, cosa che un prezzo non può fare: le code della legge stimata li ammettono e i percorsi li tengono come estratti; i rendimenti logaritmici non scendono mai sotto quel valore.",
+      "box_cox_domain": "{n:int} valori simulati cadono fuori dal campo della trasformazione di Box–Cox (λ·x + 1 < 0): sono tenuti come li dà la sua inversa.",
+      "ml_only": "La somma condizionata dei quadrati non ha dato un punto di partenza per questi ordini: il modello è stato adattato con la sola massima verosimiglianza.",
+      "gap": "{n} periodo non ha valore: la verosimiglianza lo salta; ADF, KPSS e i correlogrammi leggono la serie senza di esso.",
+      "gaps": "{n} periodi non hanno valore: la verosimiglianza li salta; ADF, KPSS e i correlogrammi leggono la serie senza di essi.",
+      "drift_dropped": "Il drift è escluso: con d + D = 2 il modello non ha drift.",
+      "not_converged": "L'ottimizzatore non ha segnalato la convergenza (codice {code}): leggete i coefficienti con cautela."
     },
     "stats": {
       "model": {
@@ -1192,14 +1226,20 @@
         "innovations=bootstrap": "Gli shock sono estratti, con reinserimento, dai residui standardizzati della stima (simulazione storica filtrata, Barone-Adesi, Giannopoulos e Vosper): le code sono quelle dei dati, la volatilità quella del modello.",
         "": "Gli shock sono estratti dalla distribuzione stimata: la normale, la t di Student o la t asimmetrica di un GARCH, una normale con la varianza dei residui per un ARIMA."
       },
-      "method_variable": "Lungo ogni percorso si segue una quantità, la variabile di rischio: per un GARCH il rendimento cumulato (il prezzo è l'ultimo prezzo per uno più il rendimento); per un ARIMA il valore, il suo totale progressivo o la sua variazione rispetto all'ultimo valore, come chiede il nodo. Con una posizione, ogni misura di una variazione relativa è detta anche in denaro, la posizione per la variazione.",
+      "method_variable": "Lungo ogni percorso si segue una quantità, la variabile di rischio: per un GARCH il rendimento cumulato (il prezzo è l'ultimo prezzo per uno più il rendimento); per un ARIMA il valore, il suo totale progressivo o la sua variazione rispetto all'ultimo valore, come chiede il nodo. Con una posizione, il VaR e l'ES di una variazione relativa sono detti anche in denaro, la posizione per la variazione.",
       "method_var": "Il valore a rischio al livello c è il valore simulato con probabilità 1 − c oltre di esso: il quantile empirico, esatto sugli N percorsi. Il suo intervallo Monte Carlo viene dalla legge binomiale delle statistiche d'ordine, senza ipotesi sulla distribuzione; quattro volte i percorsi lo dimezzano circa.",
       "method_es": "L'expected shortfall al livello c' è la media dei valori oltre il quantile di probabilità 1 − c', con la frazione del valore di confine che definiscono Acerbi e Tasche; il suo intervallo usa il suo errore standard. Il VaR dice dove comincia la coda, l'ES fin dove arriva in media.",
       "method_threshold": "Con una soglia la pagina dà due probabilità: che un percorso sia oltre la soglia all'ultimo passo, e che l'abbia superata a un passo qualsiasi fino ad allora. La seconda è una probabilità di primo passaggio, che nessun quantile all'orizzonte dà. I loro intervalli sono quelli di Clopper e Pearson.",
       "method_drawdown": "Il drawdown di un percorso è la sua discesa più profonda da un picco precedente entro l'orizzonte: un percorso può scendere molto e risalire entro la fine, una perdita che il VaR all'orizzonte non vede.",
       "method_passes": "I percorsi non sono mai tutti in memoria: vengono scritti a lotti in un file mentre si accumulano conteggi, somme e momenti, e una seconda lettura del file prende i valori che servono ai quantili esatti. VaR, ES, probabilità e drawdown sono esatti; i bordi delle bande del ventaglio sono disegnati entro l'errore scritto per ogni passo.",
       "method_model_garch": "Il modello è stimato come lo stima il nodo Volatilità (GARCH), con le stesse opzioni e funzioni, e le sue verifiche sono quelle di quel nodo.",
-      "method_model_arima": "Il modello è stimato come lo stima il nodo ARIMA, con le stesse opzioni e funzioni, e le sue verifiche sono quelle di quel nodo."
+      "method_model_arima": "Il modello è stimato come lo stima il nodo ARIMA, con le stesse opzioni e funzioni, e le sue verifiche sono quelle di quel nodo.",
+      "var_money": "Con la posizione di {amount:num}, il valore a rischio in denaro è {money:num}.",
+      "es_money": "Con la posizione di {amount:num}, l'expected shortfall in denaro è {money:num}.",
+      "es_lower_quantile": "Quando {variable} sta al suo quantile del {p:pct} ({quantile:pct}) o sotto, vale in media {value:pct} (intervallo da {low:pct} a {high:pct}).",
+      "es_lower_level_quantile": "Quando {variable} sta al suo quantile del {p:pct} ({quantile:num}) o sotto, vale in media {value:num} (intervallo da {low:num} a {high:num}).",
+      "es_upper_quantile": "Quando {variable} sta al suo quantile superiore del {p:pct} ({quantile:pct}) o sopra, vale in media {value:pct} (intervallo da {low:pct} a {high:pct}).",
+      "es_upper_level_quantile": "Quando {variable} sta al suo quantile superiore del {p:pct} ({quantile:num}) o sopra, vale in media {value:num} (intervallo da {low:num} a {high:num})."
     },
     "formula_texts": {
       "formula_var_1step": "VaR_t = μ_t + σ_t q_(1−c), q il quantile della distribuzione stimata, c il livello del VaR;  una violazione quando r_t < VaR_t (per la coda superiore di un ARIMA, quando y_t > VaR_t)",
@@ -1240,7 +1280,13 @@
       "z2_largest_acf",
       "backtest_independence_not_computed",
       "backtest_expected",
-      "backtest_short"
+      "backtest_short",
+      "var_money",
+      "es_money",
+      "es_lower_quantile",
+      "es_lower_level_quantile",
+      "es_upper_quantile",
+      "es_upper_level_quantile"
     ]
   },
   "de": {
@@ -1283,7 +1329,9 @@
       "mean": "Mittelwert",
       "sd": "Standardabweichung",
       "skewness": "Schiefe",
-      "kurtosis": "Exzess-Kurtosis"
+      "kurtosis": "Exzess-Kurtosis",
+      "var_money": "Value at Risk, in Geld",
+      "es_money": "Expected Shortfall, in Geld"
     },
     "risk_what": {
       "var": "Der simulierte Wert, jenseits dessen die Wahrscheinlichkeit 1 − c liegt, am Horizont.",
@@ -1294,7 +1342,9 @@
       "mean": "Der Mittelwert der Risikovariablen am Horizont.",
       "sd": "Ihre Standardabweichung.",
       "skewness": "Ihre Schiefe: 0 für eine symmetrische Verteilung.",
-      "kurtosis": "Ihre Exzess-Kurtosis: 0 für eine Normalverteilung."
+      "kurtosis": "Ihre Exzess-Kurtosis: 0 für eine Normalverteilung.",
+      "var_money": "Der Value at Risk mal die Position.",
+      "es_money": "Der Expected Shortfall mal die Position."
     },
     "charts": {
       "fan": "Die letzten Beobachtungen und die simulierten Zukunftspfade: Bänder, Median und Beispielpfade",
@@ -1568,7 +1618,14 @@
     "note_texts": {
       "garch_scale": "Die Schätzung lief auf den Renditen geteilt durch {scale:num}, ihre Standardabweichung; die Parameter sind in den Einheiten der Reihe angegeben.",
       "garch_solver": "Konvergiert ist der Löser {solver} (solnp nicht).",
-      "garch_at_bound": "{parameter} liegt an einer Grenze des Lösers: sein Standardfehler wird nicht auf dem üblichen Weg berechnet."
+      "garch_at_bound": "{parameter} liegt an einer Grenze des Lösers: sein Standardfehler wird nicht auf dem üblichen Weg berechnet.",
+      "returns_below_minus_one": "{n:int} simulierte einfache Renditen liegen unter −100 %, was ein Preis nicht kann: Die Ränder der geschätzten Verteilung lassen sie zu, und die Pfade behalten sie wie gezogen; logarithmische Renditen fallen nie darunter.",
+      "box_cox_domain": "{n:int} simulierte Werte liegen außerhalb des Bereichs der Box-Cox-Transformation (λ·x + 1 < 0): Sie bleiben, wie ihre Umkehrung sie liefert.",
+      "ml_only": "Die bedingte Quadratsumme lieferte für diese Ordnungen keinen Startwert: Das Modell wurde allein nach Maximum Likelihood angepasst.",
+      "gap": "{n} Periode hat keinen Wert: Die Likelihood überspringt sie; ADF, KPSS und die Korrelogramme lesen die Reihe ohne sie.",
+      "gaps": "{n} Perioden haben keinen Wert: Die Likelihood überspringt sie; ADF, KPSS und die Korrelogramme lesen die Reihe ohne sie.",
+      "drift_dropped": "Der Drift wird ausgelassen: Mit d + D = 2 hat das Modell keinen Drift.",
+      "not_converged": "Der Optimierer meldete keine Konvergenz (Code {code}): Lesen Sie die Koeffizienten mit Vorsicht."
     },
     "stats": {
       "model": {
@@ -1814,14 +1871,20 @@
         "innovations=bootstrap": "Die Schocks werden mit Zurücklegen aus den standardisierten Residuen der Anpassung gezogen (gefilterte historische Simulation, Barone-Adesi, Giannopoulos und Vosper): Die Ränder sind die der Daten, die Volatilität die des Modells.",
         "": "Die Schocks werden aus der angepassten Verteilung gezogen: aus der Normalverteilung, der Student-t- oder der schiefen t-Verteilung eines GARCH, aus einer Normalverteilung mit der Varianz der Residuen bei einem ARIMA."
       },
-      "method_variable": "Entlang jedes Pfads wird eine Größe verfolgt, die Risikovariable: bei einem GARCH die kumulierte Rendite (der Preis ist der letzte Preis mal eins plus sie); bei einem ARIMA der Wert, seine laufende Summe oder seine Änderung gegenüber dem letzten Wert, wie der Knoten es verlangt. Mit einer Position wird jedes Maß einer relativen Änderung auch in Geld angegeben, die Position mal die Änderung.",
+      "method_variable": "Entlang jedes Pfads wird eine Größe verfolgt, die Risikovariable: bei einem GARCH die kumulierte Rendite (der Preis ist der letzte Preis mal eins plus sie); bei einem ARIMA der Wert, seine laufende Summe oder seine Änderung gegenüber dem letzten Wert, wie der Knoten es verlangt. Mit einer Position werden der VaR und der ES einer relativen Änderung auch in Geld angegeben, die Position mal die Änderung.",
       "method_var": "Der Value at Risk zum Niveau c ist der simulierte Wert, jenseits dessen die Wahrscheinlichkeit 1 − c liegt: das empirische Quantil, exakt auf den N Pfaden. Sein Monte-Carlo-Intervall kommt aus der Binomialverteilung der Ordnungsstatistiken, ohne Annahme über die Verteilung; viermal so viele Pfade halbieren es etwa.",
       "method_es": "Der Expected Shortfall zum Niveau c' ist der Mittelwert der Werte jenseits des Quantils zur Wahrscheinlichkeit 1 − c', mit dem Bruchteil des Grenzwerts, den Acerbi und Tasche definieren; sein Intervall nutzt seinen Standardfehler. Der VaR sagt, wo das Ende der Verteilung beginnt, der ES, wie weit es im Mittel reicht.",
       "method_threshold": "Mit einer Schwelle gibt die Seite zwei Wahrscheinlichkeiten: dass ein Pfad am letzten Schritt jenseits von ihr liegt, und dass er sie an irgendeinem Schritt bis dahin überquert hat. Die zweite ist eine Wahrscheinlichkeit des ersten Durchgangs, die kein Quantil am Horizont liefert. Ihre Intervalle sind die von Clopper und Pearson.",
       "method_drawdown": "Der Drawdown eines Pfads ist sein tiefster Fall von einem vorherigen Höchststand innerhalb des Horizonts: Ein Pfad kann tief fallen und sich bis zum Ende erholen, ein Verlust, den der VaR am Horizont nicht sieht.",
       "method_passes": "Die Pfade sind nie alle im Speicher: Sie werden stapelweise in eine Datei geschrieben, während Anzahlen, Summen und Momente gesammelt werden, und ein zweites Lesen der Datei holt die Werte, die die exakten Quantile brauchen. VaR, ES, Wahrscheinlichkeiten und Drawdowns sind exakt; die Ränder der Bänder des Fächers sind innerhalb des für jeden Schritt angegebenen Fehlers gezeichnet.",
       "method_model_garch": "Das Modell wird angepasst, wie der Knoten «Volatilität (GARCH)» es anpasst, mit denselben Optionen und Funktionen, und seine Prüfungen sind die dieses Knotens.",
-      "method_model_arima": "Das Modell wird angepasst, wie der ARIMA-Knoten es anpasst, mit denselben Optionen und Funktionen, und seine Prüfungen sind die dieses Knotens."
+      "method_model_arima": "Das Modell wird angepasst, wie der ARIMA-Knoten es anpasst, mit denselben Optionen und Funktionen, und seine Prüfungen sind die dieses Knotens.",
+      "var_money": "Bei der Position von {amount:num} beträgt der Value at Risk in Geld {money:num}.",
+      "es_money": "Bei der Position von {amount:num} beträgt der Expected Shortfall in Geld {money:num}.",
+      "es_lower_quantile": "Wenn {variable} höchstens beim Quantil {p:pct} ({quantile:pct}) liegt, beträgt der Mittelwert {value:pct} (Intervall {low:pct} bis {high:pct}).",
+      "es_lower_level_quantile": "Wenn {variable} höchstens beim Quantil {p:pct} ({quantile:num}) liegt, beträgt der Mittelwert {value:num} (Intervall {low:num} bis {high:num}).",
+      "es_upper_quantile": "Wenn {variable} mindestens beim oberen Quantil {p:pct} ({quantile:pct}) liegt, beträgt der Mittelwert {value:pct} (Intervall {low:pct} bis {high:pct}).",
+      "es_upper_level_quantile": "Wenn {variable} mindestens beim oberen Quantil {p:pct} ({quantile:num}) liegt, beträgt der Mittelwert {value:num} (Intervall {low:num} bis {high:num})."
     },
     "formula_texts": {
       "formula_var_1step": "VaR_t = μ_t + σ_t q_(1−c), q das Quantil der angepassten Verteilung, c das VaR-Niveau;  eine Überschreitung, wenn r_t < VaR_t (für das obere Ende eines ARIMA, wenn y_t > VaR_t)",
@@ -1862,7 +1925,13 @@
       "z2_largest_acf",
       "backtest_independence_not_computed",
       "backtest_expected",
-      "backtest_short"
+      "backtest_short",
+      "var_money",
+      "es_money",
+      "es_lower_quantile",
+      "es_lower_level_quantile",
+      "es_upper_quantile",
+      "es_upper_level_quantile"
     ]
   },
   "es": {
@@ -1905,7 +1974,9 @@
       "mean": "Media",
       "sd": "Desviación típica",
       "skewness": "Asimetría",
-      "kurtosis": "Curtosis en exceso"
+      "kurtosis": "Curtosis en exceso",
+      "var_money": "Valor en riesgo, en dinero",
+      "es_money": "Expected shortfall, en dinero"
     },
     "risk_what": {
       "var": "El valor simulado más allá del cual queda la probabilidad 1 − c, en el horizonte.",
@@ -1916,7 +1987,9 @@
       "mean": "La media de la variable de riesgo en el horizonte.",
       "sd": "Su desviación típica.",
       "skewness": "Su asimetría: 0 para una distribución simétrica.",
-      "kurtosis": "Su curtosis en exceso: 0 para una distribución normal."
+      "kurtosis": "Su curtosis en exceso: 0 para una distribución normal.",
+      "var_money": "El valor en riesgo multiplicado por la posición.",
+      "es_money": "El expected shortfall multiplicado por la posición."
     },
     "charts": {
       "fan": "Las últimas observaciones y los futuros simulados: bandas, mediana y trayectorias de muestra",
@@ -2190,7 +2263,14 @@
     "note_texts": {
       "garch_scale": "El ajuste se hizo sobre los rendimientos divididos por {scale:num}, su desviación típica; los parámetros se dan en las unidades de la serie.",
       "garch_solver": "El optimizador que convergió: {solver} (solnp no).",
-      "garch_at_bound": "{parameter} está en un límite del optimizador: su error típico no se calcula de la forma habitual."
+      "garch_at_bound": "{parameter} está en un límite del optimizador: su error típico no se calcula de la forma habitual.",
+      "returns_below_minus_one": "{n:int} rendimientos simples simulados quedan por debajo de −100 %, algo que un precio no puede hacer: las colas de la ley ajustada los admiten y las trayectorias los conservan tal como se extrajeron; los rendimientos logarítmicos nunca bajan de ese valor.",
+      "box_cox_domain": "{n:int} valores simulados caen fuera del dominio de la transformación de Box–Cox (λ·x + 1 < 0): se conservan tal como los da su inversa.",
+      "ml_only": "La suma condicional de cuadrados no dio un punto de partida para estos órdenes: el modelo se ajustó solo por máxima verosimilitud.",
+      "gap": "{n} período no tiene valor: la verosimilitud lo salta; ADF, KPSS y los correlogramas leen la serie sin él.",
+      "gaps": "{n} períodos no tienen valor: la verosimilitud los salta; ADF, KPSS y los correlogramas leen la serie sin ellos.",
+      "drift_dropped": "La deriva queda fuera: con d + D = 2 el modelo no tiene deriva.",
+      "not_converged": "El optimizador no informó de la convergencia (código {code}): lea los coeficientes con cautela."
     },
     "stats": {
       "model": {
@@ -2436,14 +2516,20 @@
         "innovations=bootstrap": "Los choques se extraen, con reemplazo, de los residuos estandarizados del ajuste (simulación histórica filtrada, Barone-Adesi, Giannopoulos y Vosper): las colas son las de los datos, la volatilidad la del modelo.",
         "": "Los choques se extraen de la distribución ajustada: la normal, la t de Student o la t asimétrica de un GARCH, una normal con la varianza de los residuos para un ARIMA."
       },
-      "method_variable": "A lo largo de cada trayectoria se sigue una magnitud, la variable de riesgo: para un GARCH el rendimiento acumulado (el precio es el último precio por uno más él); para un ARIMA el valor, su total acumulado o su cambio respecto al último valor, según pida el nodo. Con una posición, cada medida de un cambio relativo se da también en dinero, la posición por el cambio.",
+      "method_variable": "A lo largo de cada trayectoria se sigue una magnitud, la variable de riesgo: para un GARCH el rendimiento acumulado (el precio es el último precio por uno más él); para un ARIMA el valor, su total acumulado o su cambio respecto al último valor, según pida el nodo. Con una posición, el VaR y el ES de un cambio relativo se dan también en dinero, la posición por el cambio.",
       "method_var": "El valor en riesgo al nivel c es el valor simulado más allá del cual queda la probabilidad 1 − c: el cuantil empírico, exacto sobre las N trayectorias. Su intervalo de Montecarlo viene de la ley binomial de los estadísticos de orden, sin supuestos sobre la distribución; cuatro veces más trayectorias lo reducen aproximadamente a la mitad.",
       "method_es": "El expected shortfall al nivel c' es la media de los valores más allá del cuantil de probabilidad 1 − c', con la fracción del valor límite que definen Acerbi y Tasche; su intervalo usa su error estándar. El VaR dice dónde empieza la cola, el ES hasta dónde llega en promedio.",
       "method_threshold": "Con un umbral la página da dos probabilidades: que una trayectoria esté más allá de él en el último paso, y que lo haya cruzado en algún paso hasta entonces. La segunda es una probabilidad de primer paso, que ningún cuantil en el horizonte da. Sus intervalos son los de Clopper y Pearson.",
       "method_drawdown": "El drawdown de una trayectoria es su caída más profunda desde un máximo anterior dentro del horizonte: una trayectoria puede caer mucho y recuperarse antes del final, una pérdida que el VaR en el horizonte no ve.",
       "method_passes": "Las trayectorias nunca están todas en memoria: se escriben por lotes en un archivo mientras se acumulan recuentos, sumas y momentos, y una segunda lectura del archivo toma los valores que necesitan los cuantiles exactos. VaR, ES, probabilidades y drawdowns son exactos; los bordes de las bandas del abanico se dibujan dentro del error indicado para cada paso.",
       "method_model_garch": "El modelo se ajusta como lo ajusta el nodo «Volatilidad (GARCH)», con las mismas opciones y funciones, y sus pruebas son las de ese nodo.",
-      "method_model_arima": "El modelo se ajusta como lo ajusta el nodo ARIMA, con las mismas opciones y funciones, y sus pruebas son las de ese nodo."
+      "method_model_arima": "El modelo se ajusta como lo ajusta el nodo ARIMA, con las mismas opciones y funciones, y sus pruebas son las de ese nodo.",
+      "var_money": "Con la posición de {amount:num}, el valor en riesgo en dinero es {money:num}.",
+      "es_money": "Con la posición de {amount:num}, el expected shortfall en dinero es {money:num}.",
+      "es_lower_quantile": "Cuando {variable} está en su cuantil del {p:pct} ({quantile:pct}) o por debajo, su media es {value:pct} (intervalo {low:pct} a {high:pct}).",
+      "es_lower_level_quantile": "Cuando {variable} está en su cuantil del {p:pct} ({quantile:num}) o por debajo, su media es {value:num} (intervalo {low:num} a {high:num}).",
+      "es_upper_quantile": "Cuando {variable} está en su cuantil superior del {p:pct} ({quantile:pct}) o por encima, su media es {value:pct} (intervalo {low:pct} a {high:pct}).",
+      "es_upper_level_quantile": "Cuando {variable} está en su cuantil superior del {p:pct} ({quantile:num}) o por encima, su media es {value:num} (intervalo {low:num} a {high:num})."
     },
     "formula_texts": {
       "formula_var_1step": "VaR_t = μ_t + σ_t q_(1−c), q el cuantil de la distribución ajustada, c el nivel del VaR;  un rebase cuando r_t < VaR_t (para la cola superior de un ARIMA, cuando y_t > VaR_t)",
@@ -2484,7 +2570,13 @@
       "z2_largest_acf",
       "backtest_independence_not_computed",
       "backtest_expected",
-      "backtest_short"
+      "backtest_short",
+      "var_money",
+      "es_money",
+      "es_lower_quantile",
+      "es_lower_level_quantile",
+      "es_upper_quantile",
+      "es_upper_level_quantile"
     ]
   },
   "fr": {
@@ -2527,7 +2619,9 @@
       "mean": "Moyenne",
       "sd": "Écart-type",
       "skewness": "Asymétrie",
-      "kurtosis": "Kurtosis en excès"
+      "kurtosis": "Kurtosis en excès",
+      "var_money": "Valeur à risque, en argent",
+      "es_money": "Expected shortfall, en argent"
     },
     "risk_what": {
       "var": "La valeur simulée au-delà de laquelle se trouve la probabilité 1 − c, à l'horizon.",
@@ -2538,7 +2632,9 @@
       "mean": "La moyenne de la variable de risque à l'horizon.",
       "sd": "Son écart-type.",
       "skewness": "Son asymétrie : 0 pour une loi symétrique.",
-      "kurtosis": "Sa kurtosis en excès : 0 pour une loi normale."
+      "kurtosis": "Sa kurtosis en excès : 0 pour une loi normale.",
+      "var_money": "La valeur à risque multipliée par la position.",
+      "es_money": "L'expected shortfall multiplié par la position."
     },
     "charts": {
       "fan": "Les dernières observations et les futurs simulés : bandes, médiane et trajectoires d'exemple",
@@ -2812,7 +2908,14 @@
     "note_texts": {
       "garch_scale": "L'estimation a porté sur les rendements divisés par {scale:num}, leur écart-type ; les paramètres sont donnés dans les unités de la série.",
       "garch_solver": "Le solveur qui a convergé : {solver} (solnp non).",
-      "garch_at_bound": "{parameter} est à une borne du solveur : son erreur type n'est pas calculée de la manière habituelle."
+      "garch_at_bound": "{parameter} est à une borne du solveur : son erreur type n'est pas calculée de la manière habituelle.",
+      "returns_below_minus_one": "{n:int} rendements simples simulés passent sous −100 %, ce qu'un prix ne peut pas faire : les queues de la loi ajustée les admettent et les trajectoires les gardent tels que tirés ; les rendements logarithmiques ne descendent jamais sous cette valeur.",
+      "box_cox_domain": "{n:int} valeurs simulées tombent hors du domaine de la transformation de Box–Cox (λ·x + 1 < 0) : elles sont gardées telles que les donne son inverse.",
+      "ml_only": "La somme conditionnelle des carrés n'a pas donné de point de départ pour ces ordres : le modèle a été ajusté par le seul maximum de vraisemblance.",
+      "gap": "{n} période n'a pas de valeur : la vraisemblance la saute ; ADF, KPSS et les corrélogrammes lisent la série sans elle.",
+      "gaps": "{n} périodes n'ont pas de valeur : la vraisemblance les saute ; ADF, KPSS et les corrélogrammes lisent la série sans elles.",
+      "drift_dropped": "La dérive est écartée : avec d + D = 2 le modèle n'a pas de dérive.",
+      "not_converged": "L'optimiseur n'a pas signalé la convergence (code {code}) : lisez les coefficients avec prudence."
     },
     "stats": {
       "model": {
@@ -3058,14 +3161,20 @@
         "innovations=bootstrap": "Les chocs sont tirés, avec remise, parmi les résidus standardisés de l'ajustement (simulation historique filtrée, Barone-Adesi, Giannopoulos et Vosper) : les queues sont celles des données, la volatilité celle du modèle.",
         "": "Les chocs sont tirés de la loi ajustée : la loi normale, la loi de Student ou la loi de Student asymétrique d'un GARCH, une loi normale avec la variance des résidus pour un ARIMA."
       },
-      "method_variable": "Une grandeur est suivie le long de chaque trajectoire, la variable de risque : pour un GARCH le rendement cumulé (le prix est le dernier prix fois un plus ce rendement) ; pour un ARIMA la valeur, son total cumulé ou sa variation par rapport à la dernière valeur, selon ce que demande le nœud. Avec une position, chaque mesure d'une variation relative est aussi donnée en argent, la position fois la variation.",
+      "method_variable": "Une grandeur est suivie le long de chaque trajectoire, la variable de risque : pour un GARCH le rendement cumulé (le prix est le dernier prix fois un plus ce rendement) ; pour un ARIMA la valeur, son total cumulé ou sa variation par rapport à la dernière valeur, selon ce que demande le nœud. Avec une position, la VaR et l'ES d'une variation relative sont aussi donnés en argent, la position fois la variation.",
       "method_var": "La valeur à risque au niveau c est la valeur simulée au-delà de laquelle se trouve la probabilité 1 − c : le quantile empirique, exact sur les N trajectoires. Son intervalle de Monte-Carlo vient de la loi binomiale des statistiques d'ordre, sans hypothèse sur la loi ; quatre fois plus de trajectoires le divisent environ par deux.",
       "method_es": "L'expected shortfall au niveau c' est la moyenne des valeurs au-delà du quantile de probabilité 1 − c', avec la fraction de la valeur limite que définissent Acerbi et Tasche ; son intervalle utilise son erreur standard. La VaR dit où commence la queue, l'ES jusqu'où elle va en moyenne.",
       "method_threshold": "Avec un seuil, la page donne deux probabilités : qu'une trajectoire soit au-delà au dernier pas, et qu'elle l'ait franchi à un pas quelconque jusque-là. La seconde est une probabilité de premier passage, qu'aucun quantile à l'horizon ne donne. Leurs intervalles sont ceux de Clopper et Pearson.",
       "method_drawdown": "Le drawdown d'une trajectoire est sa chute la plus profonde depuis un sommet précédent dans l'horizon : une trajectoire peut chuter profondément et remonter avant la fin, une perte que la VaR à l'horizon ne voit pas.",
       "method_passes": "Les trajectoires ne sont jamais toutes en mémoire : elles sont écrites par lots dans un fichier pendant que comptes, sommes et moments s'accumulent, et une seconde lecture du fichier prend les valeurs dont les quantiles exacts ont besoin. VaR, ES, probabilités et drawdowns sont exacts ; les bords des bandes de l'éventail sont tracés à l'erreur près donnée pour chaque pas.",
       "method_model_garch": "Le modèle est ajusté comme l'ajuste le nœud «Volatilité (GARCH)», avec les mêmes options et fonctions, et ses tests sont ceux de ce nœud.",
-      "method_model_arima": "Le modèle est ajusté comme l'ajuste le nœud ARIMA, avec les mêmes options et fonctions, et ses tests sont ceux de ce nœud."
+      "method_model_arima": "Le modèle est ajusté comme l'ajuste le nœud ARIMA, avec les mêmes options et fonctions, et ses tests sont ceux de ce nœud.",
+      "var_money": "Avec la position de {amount:num}, la valeur à risque en argent est {money:num}.",
+      "es_money": "Avec la position de {amount:num}, l'expected shortfall en argent est {money:num}.",
+      "es_lower_quantile": "Lorsque {variable} ne dépasse pas son quantile de {p:pct} ({quantile:pct}), sa moyenne est {value:pct} (intervalle {low:pct} à {high:pct}).",
+      "es_lower_level_quantile": "Lorsque {variable} ne dépasse pas son quantile de {p:pct} ({quantile:num}), sa moyenne est {value:num} (intervalle {low:num} à {high:num}).",
+      "es_upper_quantile": "Lorsque {variable} atteint au moins son quantile supérieur de {p:pct} ({quantile:pct}), sa moyenne est {value:pct} (intervalle {low:pct} à {high:pct}).",
+      "es_upper_level_quantile": "Lorsque {variable} atteint au moins son quantile supérieur de {p:pct} ({quantile:num}), sa moyenne est {value:num} (intervalle {low:num} à {high:num})."
     },
     "formula_texts": {
       "formula_var_1step": "VaR_t = μ_t + σ_t q_(1−c), q le quantile de la loi ajustée, c le niveau de la VaR ;  un dépassement quand r_t < VaR_t (pour la queue haute d'un ARIMA, quand y_t > VaR_t)",
@@ -3106,7 +3215,13 @@
       "z2_largest_acf",
       "backtest_independence_not_computed",
       "backtest_expected",
-      "backtest_short"
+      "backtest_short",
+      "var_money",
+      "es_money",
+      "es_lower_quantile",
+      "es_lower_level_quantile",
+      "es_upper_quantile",
+      "es_upper_level_quantile"
     ]
   }
 }

@@ -14,6 +14,10 @@ the model's 1-step value at risk on the holdout.
 6. The model simulated: its coefficients, and the line that sends to the full report of the GARCH or ARIMA node.
 7. How this report was computed (`common.how_computed`), the numbers of the simulation, the notes.
 
+The model simulated comes before the backtest, whose chart is 60 mm (lot G9): the model's short tables fill the page the
+charts above leave, where the backtest's chart, a block of 90 mm, left half a page empty. With a position the measures' table says the
+VaR and the ES in money too (the runner's `risk|var||money`, `risk|es||money`), and their readings say it.
+
 A measure of a relative change (a GARCH's cumulative return, an ARIMA's change relative to the last value) is written as a
 percentage; the value or the running total of an ARIMA in the series' units. The explanation is the runner's (`reading`
 rows; the contract is docs/specs/garch-risk.md, «As built / G4»). The words are in `report_texts/risk_simulation.json`.
@@ -29,7 +33,8 @@ from app.engine.models.layouts import register
 from app.engine.stats import layouts as stats
 
 WORDS = "risk_simulation"
-MEASURES = ("var", "es", "prob_beyond", "prob_crossed", "drawdown", "mean", "sd", "skewness", "kurtosis")
+MEASURES = ("var", "var_money", "es", "es_money", "prob_beyond", "prob_crossed", "drawdown", "mean", "sd", "skewness", "kurtosis")
+NBSP = "\u00a0"
 FAN = '[section] = "curve" AND [level] = "fan" AND [level_2] <> "band_error"'
 BAND = "#3b5bdb"
 HISTORY = "#495057"
@@ -69,9 +74,14 @@ def relative(checked: dict[str, Any]) -> bool:
     return checked.get("model") == "garch" or checked.get("aggregate") == "relative_change"
 
 
+def pct(x: str) -> str:
+    """A share as a percent, its «%» held to the number by a no-break space: a narrow column never ends a line with it alone."""
+    return c.pct(x, "0.##").replace('" %"', f'"{NBSP}%"')
+
+
 def said(x: str, rel: bool) -> str:
     """A value of the risk variable as the page writes it, «–» for none."""
-    return f'IF(ISNULL({x}), "–", {c.pct(x, "0.##") if rel else c.shown(x, "#,##0.##")})'
+    return f'IF(ISNULL({x}), "–", {pct(x) if rel else c.shown(x, "#,##0.##")})'
 
 
 def unit_of(w: dict, checked: dict[str, Any]) -> str:
@@ -112,25 +122,27 @@ def _measures(p: stats.Page, w: dict, checked: dict[str, Any]) -> None:
     """The risk measures at the horizon, each with its Monte Carlo interval and what it is: no verdict, no colour."""
     m = w["measures"]
     rel = relative(checked)
+    # with a position, the VaR's and the ES's money (position × the value) on rows of their own, in the series' money: a
+    # number with no % and no interval (the runner writes the money of the value only)
     one = ('[section] = "risk" AND (ISNULL([level_2]) OR [level_2] = "") AND '
-           '(([stat] = "value" AND [level] <> "moments") OR ([level] = "moments" AND ([stat] = "mean" OR [stat] = "sd" '
-           'OR [stat] = "skewness" OR [stat] = "kurtosis")))')
-    key = 'IF([level] = "moments", [stat], [level])'
+           '(([stat] = "value" AND [level] <> "moments") OR [stat] = "money" OR ([level] = "moments" AND ([stat] = "mean" OR '
+           '[stat] = "sd" OR [stat] = "skewness" OR [stat] = "kurtosis")))')
+    key = 'IFS([level] = "moments", [stat], [stat] = "money", [level] & "_money", TRUE, [level])'
     label = "IFS(" + ", ".join(f'{key} = "{s}", {c.q(w["risk_names"][s])}' for s in MEASURES) + ", TRUE, [level])"
     share = 'OR '.join(f'{key} = "{s}" ' for s in ("prob_beyond", "prob_crossed", "drawdown"))
 
     def shown(x: str) -> str:
-        return (f'IF(ISNULL({x}), "", IFS({share}, {c.pct(x, "0.##")}, {key} = "skewness" OR {key} = "kurtosis", '
-                f'FORMAT({x}, "0.###"), TRUE, {said(x, rel)}))')
+        return (f'IF(ISNULL({x}), "", IFS({share}, {pct(x)}, {key} = "skewness" OR {key} = "kurtosis", '
+                f'FORMAT({x}, "0.###"), [stat] = "money", {c.shown(x, "#,##0.##")}, TRUE, {said(x, rel)}))')
 
     low = 'LOOKUP("risk|" & [level] & "||low", [key], [value])'
     high = 'LOOKUP("risk|" & [level] & "||high", [key], [value])'
-    interval = f'IF([level] = "moments" OR ISNULL({low}), "", {shown(low)} & " – " & {shown(high)})'
+    interval = f'IF([level] = "moments" OR [stat] = "money" OR ISNULL({low}), "", {shown(low)} & " – " & {shown(high)})'
     what = "IFS(" + ", ".join(f'{key} = "{s}", {c.q(w["risk_what"][s])}' for s in MEASURES) + ', TRUE, "")'
     t = stats.table("measures", m["title"], one, [
-        {"header": m["measure"], "value": label, "width": 44},
-        {"header": m["value"], "value": shown("[value]"), "width": 22, "align": "right"},
-        {"header": m["interval"], "value": interval, "width": 34, "align": "right"},
+        {"header": m["measure"], "value": label, "width": 42},
+        {"header": m["value"], "value": shown("[value]"), "width": 21, "align": "right"},
+        {"header": m["interval"], "value": interval, "width": 40, "align": "right"},
         {"header": m["what"], "value": what, "style": {"size": 7.5}},
     ], p.y, visible=c.exists(one))
     t["sort"] = [{"by": "IFS(" + ", ".join(f'{key} = "{s}", {i}' for i, s in enumerate(MEASURES)) + ", TRUE, 99)"}]
@@ -261,12 +273,14 @@ def layout(model: str, params: dict[str, Any], locale: str, sample: list[dict] |
     _fan(p, w, lang, checked)
     _outcome(p, w, checked)
     _term(p, w)
-    if (checked.get("holdout") or 0) > 0:
-        g.backtest_page(p, w, w["series"]["observed"])
     _model(p, w, lang, checked)
+    if (checked.get("holdout") or 0) > 0:
+        # 60 mm, as the charts through the horizon: the GARCH report's 90 mm left the page above it half empty (lot G9)
+        g.backtest_page(p, w, w["series"]["observed"], 60.0)
     c.how_computed(p, w)
     c._fit(p, w, False, FIT_SKIP)
     c._notes(p, w)
+    g.whole_tables(p)
     return c.document(header, p.items, footer, lang)
 
 
@@ -312,14 +326,26 @@ def readings(rows: list[dict], checked: Mapping[str, Any]) -> list[c.ReadingLine
     side = "upper" if checked.get("tail") == "upper" else "lower"
     scale = "" if relative(dict(checked)) else "_level"
     risk = lambda level, stat: r.num(f"risk|{level}||{stat}")  # noqa: E731
+    position = num("position")
     if risk("var", "value") is not None:
         out.append(("var", None, f"var_{side}{scale}", {"p": 1 - float(checked.get("var_level") or 0.99), "variable": variable,
                                                         "steps": steps, "unit": unit, "value": risk("var", "value"),
                                                         "low": risk("var", "low"), "high": risk("var", "high"),
                                                         "paths": head["paths"], "confidence": 1 - alpha}))
+        if position is not None and risk("var", "money") is not None:
+            # «amount», not «position»: a position is a name of the notes (a season's), never read as a number
+            out.append(("var", None, "var_money", {"amount": position, "money": risk("var", "money")}))
     if risk("es", "value") is not None:
-        out.append(("es", None, f"es_{side}{scale}", {"p": 1 - float(checked.get("es_level") or 0.975), "variable": variable,
-                                                      "value": risk("es", "value"), "low": risk("es", "low"), "high": risk("es", "high")}))
+        es = {"p": 1 - float(checked.get("es_level") or 0.975), "variable": variable, "value": risk("es", "value"),
+              "low": risk("es", "low"), "high": risk("es", "high")}
+        # the quantile the ES averages beyond (the VaR at the ES's level): the last step of its curve (runners since lot G9)
+        quantile = [(x.get("x0"), v) for x in rows if x["section"] == "curve" and x["level"] == "term"
+                    and x.get("level_2") == "es_quantile" and (v := g.number(x.get("value"))) is not None]
+        if quantile:
+            es["quantile"] = max(quantile, key=lambda a: a[0] if isinstance(a[0], (int, float)) else float("-inf"))[1]
+        out.append(("es", None, f"es_{side}{scale}" + ("_quantile" if quantile else ""), es))
+        if position is not None and risk("es", "money") is not None:
+            out.append(("es", None, "es_money", {"amount": position, "money": risk("es", "money")}))
     threshold = num("threshold")
     if threshold is not None and risk("prob_crossed", "value") is not None:
         on = ("variable:price" if checked.get("input_kind") == "prices" else variable) if garch else \

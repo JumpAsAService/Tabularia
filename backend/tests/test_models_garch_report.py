@@ -4,8 +4,9 @@ verdicts (only the tests with a p-value against α: the weighted Ljung–Box, AR
 Christoffersen; VaR, ES, persistence, half-life and probabilities are measures, with no word of judgement), each verdict
 following α, the backtest's sentences saying how many breaks were expected, the pages, and the memory of the report.
 
-`garch-default` is the GARCH runner's own output (lot G1, on its reference prices); the risk node's fixtures are lot G0's
-placeholders, the rows lot G3 writes («As built / G4»). READINGS lists every template with the names a layout sends."""
+`garch-default` is the GARCH runner's own output (lot G1, on its reference prices), and so are the risk node's two fixtures
+since lot G9 (a GARCH of prices with a position, a SARIMA's running total on its upper tail). READINGS lists every template with
+the names a layout sends."""
 from __future__ import annotations
 
 import json
@@ -81,6 +82,7 @@ SHAPE = {"p": 0.01, "variable": "variable:cumulative_return", "steps": 10, "unit
 LEVEL = {**SHAPE, "variable": "variable:running_total", "unit": "day", "value": 1538.6, "low": 1537.1, "high": 1540.1}
 ES = {"p": 0.025, "variable": "variable:cumulative_return", "value": -0.0868, "low": -0.0901, "high": -0.0835}
 ES_LEVEL = {**ES, "variable": "variable:running_total", "value": 1557.1, "low": 1555.1, "high": 1559.0}
+MONEY = {"amount": 100000, "money": -7120.4}
 THRESHOLD = {"variable": "variable:cumulative_return", "threshold": -0.1, "steps": 10, "unit": "index", "prob_crossed": 0.073,
              "low": 0.068, "high": 0.078, "prob_beyond": 0.049}
 # every template the risk runner (lot G3) may write: block → id → names
@@ -92,8 +94,11 @@ RISK_READINGS: dict[str, dict[str, dict]] = {
         "summary_bootstrap": {}, "summary_variable": {"variable": "variable:price", "steps": 10, "unit": "index"},
         "summary_holdout": {"holdout": 250, "unit": "index"},
     },
-    "var": {"var_lower": SHAPE, "var_lower_level": LEVEL, "var_upper": SHAPE, "var_upper_level": LEVEL},
-    "es": {"es_lower": ES, "es_lower_level": ES_LEVEL, "es_upper": ES, "es_upper_level": ES_LEVEL},
+    "var": {"var_lower": SHAPE, "var_lower_level": LEVEL, "var_upper": SHAPE, "var_upper_level": LEVEL, "var_money": MONEY},
+    "es": {"es_lower": ES, "es_lower_level": ES_LEVEL, "es_upper": ES, "es_upper_level": ES_LEVEL,
+           "es_lower_quantile": {**ES, "quantile": -0.0731}, "es_lower_level_quantile": {**ES_LEVEL, "quantile": 1541.2},
+           "es_upper_quantile": {**ES, "quantile": 0.0731}, "es_upper_level_quantile": {**ES_LEVEL, "quantile": 1541.2},
+           "es_money": {**MONEY, "money": -8680.0}},
     "threshold": {"threshold_lower": THRESHOLD, "threshold_lower_level": {**THRESHOLD, "variable": "variable:price", "threshold": 280},
                   "threshold_upper": THRESHOLD, "threshold_upper_level": {**THRESHOLD, "variable": "variable:value", "threshold": 1000}},
     "drawdown": {"drawdown": {"median": 0.021, "tail": 0.087, "p": 0.01, "steps": 10, "unit": "index"}},
@@ -117,7 +122,9 @@ VERDICTS = {k for k in (*CHECK_LINES, *BACKTEST_LINES, "arima_checks_ok", "arima
 NAMED_MEASURES = {"garch": {"persistence", "persistence_integrated", "sigma_now_above", "sigma_now_below", "sigma_now_equal"},
                   "risk_simulation": {"var_lower", "var_lower_level", "var_upper", "var_upper_level", "es_lower",
                                       "es_lower_level", "es_upper", "es_upper_level", "threshold_lower",
-                                      "threshold_lower_level", "threshold_upper", "threshold_upper_level", "drawdown"}}
+                                      "threshold_lower_level", "threshold_upper", "threshold_upper_level", "drawdown",
+                                      "var_money", "es_money", "es_lower_quantile", "es_lower_level_quantile",
+                                      "es_upper_quantile", "es_upper_level_quantile"}}
 # words of judgement besides common.json's `verdict_words`, for the measures of these two reports
 JUDGEMENT = {"en": ("large", "small", "high risk", "low risk", "safe", "risky", "dangerous", "worrying", "acceptable", "too"),
              "it": ("grande", "piccolo", "piccola", "rischioso", "rischiosa", "sicuro", "pericoloso", "preoccupante", "accettabile", "troppo"),
@@ -264,7 +271,9 @@ VERDICT_ROWS = {GARCH: [("assumption|ljung_box_z||p_value", "lb_z_ok", "lb_z_fai
                         ("backtest|kupiec||p_value", "backtest_coverage_ok", "backtest_coverage_failed"),
                         ("backtest|christoffersen_ind||p_value", "backtest_independence_ok", "backtest_independence_failed"),
                         ("backtest|christoffersen_cc||p_value", "backtest_cc_ok", "backtest_cc_failed")],
-                RISK_ARIMA: [("assumption|ljung_box_10||p_value", "arima_checks_ok", "arima_check_failed")]}
+                # the SARIMA's checks all keep at 0.05 (the runner's output since lot G9): the smallest p-value, Ljung–Box at 2s
+                # lags, decides between «all keep» and «one rejects»
+                RISK_ARIMA: [("assumption|ljung_box_2s||p_value", "arima_checks_ok", "arima_check_failed")]}
 
 
 @pytest.mark.parametrize("case", sorted(VERDICT_ROWS))
@@ -345,7 +354,7 @@ def test_the_formula_line_is_the_model_of_the_node_s_options():
     assert layouts.title("garch", {"time": "data", "value": "prezzo", "frequency": "index", "variance_model": "gjr",
                                    "distribution": "sstd", "input_kind": "prices"}, "en") == \
         "GJR-GARCH(1,1), skewed Student t — «prezzo» over «data», prices"
-    assert layouts.title("risk_simulation", fixture(RISK_ARIMA)[1], "it").startswith("Simulazione del rischio · SARIMA(1,0,1)(0,1,1)[7]")
+    assert layouts.title("risk_simulation", fixture(RISK_ARIMA)[1], "it").startswith("Simulazione del rischio · SARIMA(1,1,1)(0,1,1)[12]")
 
 
 def test_the_first_page_holds_the_checks_of_the_whole_model_the_backtest_and_the_measures():
@@ -416,3 +425,119 @@ def test_the_report_of_the_largest_fixture_stays_well_under_200_mb(tmp_path, cha
         tracemalloc.stop()
     assert out.pages >= 4 and peak < 200 * 2**20, peak
     print(f"tracemalloc peak of the report on {GARCH}: {peak / 2**20:.1f} MiB")
+
+
+# ── lot G9: the final review's corrections ─────────────────────────────────
+def test_the_risk_runner_s_own_results_say_the_money_and_the_quantile_the_es_averages_beyond():
+    """The risk fixtures are the runner's output: with a position the VaR's and the ES's money (`risk|…||money`, position ×
+    the value) is read as the rows hold it, said by `var_money` and `es_money`; the ES's sentence names the quantile it
+    averages beyond (the last step of `curve|term|es_quantile`), never a number the page computes."""
+    model, params, rows = fixture(RISK)
+    r = garch_layout.Rows(rows)
+    lines = common.READINGS[model](rows, catalog.check_params(model, params))
+    by = {x[2]: x[3] for x in lines}
+    assert by["var_money"] == {"amount": 100000, "money": r.num("risk|var||money")}
+    assert r.num("risk|var||money") == pytest.approx(100000 * r.num("risk|var||value"), rel=1e-12)
+    assert by["es_money"]["money"] == pytest.approx(100000 * r.num("risk|es||value"), rel=1e-12)
+    term = [x for x in rows if x["section"] == "curve" and x["level"] == "term" and x.get("level_2") == "es_quantile"]
+    last = max(term, key=lambda x: x["x0"])["value"]
+    # on the lower tail the ES averages the values at or below that quantile, and the 99 % VaR lies below the 97.5 % quantile
+    assert by["es_lower_quantile"]["quantile"] == last and by["es_lower_quantile"]["value"] <= last and r.num("risk|var||value") <= last
+    # an ARIMA's running total on its upper tail: in its units, no money, the ES above the quantile it averages beyond
+    model, params, rows = fixture(RISK_ARIMA)
+    by = {x[2]: x[3] for x in common.READINGS[model](rows, catalog.check_params(model, params))}
+    assert "var_money" not in by and "es_money" not in by
+    assert by["es_upper_level_quantile"]["value"] >= by["es_upper_level_quantile"]["quantile"]
+    # results of a runner before lot G9 (no es_quantile row): the sentence without the quantile, never an empty «{quantile}»
+    older = [x for x in rows if x.get("level_2") != "es_quantile"]
+    assert "es_upper_level" in [x[2] for x in common.READINGS[model](older, catalog.check_params(model, params))]
+
+
+@pytest.mark.parametrize("locale", LOCALES)
+def test_the_risk_runner_s_notes_are_sentences_in_every_language(locale):
+    """Lot G3's notes without words: the simple returns below −100 %, the values out of Box–Cox's range, and the ARIMA's own
+    notes in the risk node (as the ARIMA report says them); the GARCH's notes of the fixture too. No «@», no «{»."""
+    model, params, rows = fixture(RISK_ARIMA)
+    last = max(r["ord"] for r in rows)
+    notes = ["@returns_below_minus_one n=1234", "@box_cox_domain n=3", "@ml_only", "@gap n=1", "@gaps n=4", "@drift_dropped",
+             "@not_converged code=1"]
+    added = [{"section": "model", "level": None, "level_2": None, "stat": f"note_{90 + i}", "value": None, "text": t, "x0": None,
+              "x1": None, "ord": last + 1 + i, "key": f"model|||note_{90 + i}"} for i, t in enumerate(notes)]
+    said = {r["stat"]: r["text"] for r in layouts.with_labels(model, params, rows + added, locale) if r["stat"].startswith("note_")}
+    for i, t in enumerate(notes):
+        text = said[f"note_{90 + i}"]
+        assert "@" not in text and "{" not in text and text != t, (locale, t, text)
+    assert common.number_form(1234.0, "int", formats.locale(locale)) in said["note_90"] and "3" in said["note_91"], said
+    arima = common.words("arima", catalog.variant("arima", {"p": 1}), locale)["note_texts"]
+    assert said["note_92"] == arima["ml_only"] and said["note_95"] == arima["drift_dropped"]
+    model, params, rows = fixture(RISK)
+    garch_notes = [r["text"] for r in layouts.with_labels(model, params, rows, locale) if r["stat"].startswith("note_")]
+    assert garch_notes and not [n for n in garch_notes if "@" in n or "{" in n], garch_notes
+
+
+def test_with_a_position_the_measures_table_says_the_var_and_the_es_in_money_and_a_percent_keeps_its_sign_on_its_line(
+        tmp_path, chart_service, monkeypatch):  # noqa: F811
+    """The money rows of the measures' table: their names, the number as the runner wrote it (no %, no interval); a percent's
+    «%» is held to its number by a no-break space, so the interval column never ends a line with «%» alone (G8's finding)."""
+    model, params, rows = fixture(RISK)
+    body = {it["id"]: it for it in layouts.definition(model, params, "it")["sections"]["body"]["items"]}
+    measures = body["measures"]
+    assert '[stat] = "money"' in measures["filter"] and " %" in measures["columns"][2]["value"]
+    assert [c.get("width") for c in measures["columns"]] == [42, 21, 40, None]
+    out, page = draw(tmp_path, chart_service, monkeypatch, RISK, fmt="svg", locale="en")
+    said = " ".join(strings(json.loads(page)))
+    w = _words(model, "en")
+    money = garch_layout.Rows(rows).num("risk|var||money")
+    assert w["risk_names"]["var_money"] in said and w["risk_names"]["es_money"] in said
+    assert formats.format_number(abs(money), "#,##0.##", formats.locale("en")) in said
+    assert out.warnings == []
+
+
+def test_the_short_tables_of_both_reports_are_never_split_and_no_other_report_asks_it():
+    """G8's finding: a table's header and a row or two left at a page's foot. The two layouts ask their short tables to stay
+    whole (`keep_whole`, at most half a page: the template measures it); the other models' layouts ask nothing."""
+    for case in (GARCH, RISK, RISK_ARIMA):
+        model, params, _ = fixture(case)
+        tables = [it for it in layouts.definition(model, params, "en")["sections"]["body"]["items"] if it["type"] == "table"]
+        whole = {it["id"] for it in tables if it.get("keep_whole")}
+        assert whole and whole <= set(garch_layout.WHOLE) and "reading" not in whole and "fit" not in whole, (case, whole)
+        assert {"measures", "coef", "coef_ci", "notes"} <= whole, (case, whole)
+    model, params, _ = fixture("arima-manual")
+    assert not [it for it in layouts.definition(model, params, "en")["sections"]["body"]["items"] if it.get("keep_whole")]
+
+
+def test_the_risk_report_puts_the_model_simulated_before_the_backtest_and_garch_draws_the_fitted_law_on_the_histogram():
+    """The model's tables (they break by rows) fill the page the charts leave, before the backtest's 90 mm chart (G8: the
+    third page half empty). The histogram of z has the counts the fitted law expects (`hist|std_residual|expected`) as a line."""
+    model, params, _ = fixture(RISK)
+    ids = [it["id"] for it in layouts.definition(model, params, "en")["sections"]["body"]["items"]]
+    assert ids.index("probabilities") < ids.index("coef") < ids.index("coef_ci") < ids.index("s_backtest") < ids.index("backtest")
+    model, params, rows = fixture(GARCH)
+    hist = {it["id"]: it for it in layouts.definition(model, params, "en")["sections"]["body"]["items"]}["hist"]
+    assert hist["kind"] == "combo" and [s.get("as") for s in hist["series"]] == [None, "line"]
+    expected = [r for r in rows if r["section"] == "hist" and r.get("level_2") == "expected"]
+    seen = [r for r in rows if r["section"] == "hist" and r["level"] == "std_residual" and not r.get("level_2")]
+    assert len(expected) == len(seen) >= 5 and sum(r["value"] for r in expected) <= sum(r["value"] for r in seen)
+
+
+@pytest.mark.parametrize("case", (GARCH, RISK, RISK_ARIMA))
+def test_a_column_named_like_a_formula_or_markup_stays_text_in_the_pdf_and_in_excel(tmp_path, chart_service, monkeypatch, case):  # noqa: F811
+    """Security (the decomposition's D9 test, for both nodes): the value column's name travels into the header, the
+    summary's reading (`«{series}»`), an ARIMA's formula and the Excel workbook. It stays a text everywhere: no Excel formula,
+    no report expression, no Typst markup."""
+    hostile = '=HYPERLINK("http://x","y") #set ] 1% <b>'
+    model, params, rows = fixture(case)
+    old = params["value"]
+    rows = [{**r, "text": r["text"].replace(old, hostile)} if r["key"] == "model|||formula" and isinstance(r.get("text"), str) else r
+            for r in rows]
+    _with(monkeypatch, model, {**params, "value": hostile}, rows)
+    _, page = draw(tmp_path / "svg", chart_service, monkeypatch, case, fmt="svg")
+    said = " ".join(strings(json.loads(page)))
+    assert f"«{hostile}»" in said  # the header and the summary's reading
+    out, _ = draw(tmp_path / "pdf", chart_service, monkeypatch, case)
+    assert out.path.read_bytes().startswith(b"%PDF-") and out.warnings == []
+    out, _ = draw(tmp_path / "xlsx", chart_service, monkeypatch, case, fmt="xlsx")
+    with zipfile.ZipFile(out.path) as z:
+        xml = " ".join(z.read(n).decode() for n in z.namelist() if n.startswith("xl/worksheets/") or n == "xl/sharedStrings.xml")
+    assert "HYPERLINK" in xml and not re.search(r"<f>[^<]*HYPERLINK", xml)
+    assert not [f for f in re.findall(r"<f>([^<]+)</f>", xml) if not f.startswith("SUBTOTAL(")]

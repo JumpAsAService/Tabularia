@@ -385,9 +385,16 @@ def _checks(p: stats.Page, w: dict) -> None:
         return c.xy(id_, ch[id_], f + ' AND [stat] = "acf"', [c.mark("acf", "stem", s["acf"])],
                     {"target": c.num(f"lag|{id_}||bound"), "mirror": True, "legend": False, "format": "0.##"}, under=under)
 
-    # the histogram of z: its counts only. The runner writes the fitted density as a density (`curve|density`), which an xy
-    # chart cannot draw on its own axis beside counts, and the page computes nothing (docs/specs/garch-risk.md, «As built / G4»)
-    histogram = c.histogram("hist", ch["hist"], "std_residual", s["count"], under="arch_lm")
+    # the histogram of z, and over its bars the counts the fitted law expects in each interval: the runner writes them beside
+    # the counts (`hist|std_residual|expected`, n·(F(x1) − F(x0)), lot G9), so the fitted density is drawn on the counts' own
+    # axis and the page computes nothing
+    f = '[section] = "hist" AND [level] = "std_residual"'
+    seen = 'ISNULL([level_2]) OR [level_2] = ""'
+    histogram = c.Chart("hist", "combo", ch["hist"], {
+        "filter": f, "category": "[text]",
+        "series": [{"value": f"SUM(IF({seen}, [value], NULL))", "name": s["count"]},
+                   {"value": f"SUM(IF({seen}, NULL, [value]))", "name": s["density"], "as": "line"}],
+        "options": {"legend": True, "format": "#,##0.#"}, "visible": c.exists(f)}, "arch_lm")
     qq = '[section] = "point" AND [level] = "qq"'
     quantiles = c.Chart("qq", "xy", ch["qq"], {"filter": qq, "category": "[x0]",
                                                "series": [{"value": "[value]", "as": "point", "name": s["qq"]}],
@@ -417,9 +424,9 @@ def _nyblom(p: stats.Page, w: dict) -> None:
 
 
 # ── page 5: the backtest ────────────────────────────────────────────────────
-def backtest_page(p: stats.Page, w: dict, observed: str) -> None:
+def backtest_page(p: stats.Page, w: dict, observed: str, tall: float = 90.0) -> None:
     """The held-out observations, their 1-step VaR and the breaks; the counts; the reading. `observed`: the name of the
-    observations' series (a return, or an ARIMA's value)."""
+    observations' series (a return, or an ARIMA's value); `tall`: the chart's height (the risk report's is lower)."""
     s = w["series"]
     heading(p, "s_backtest", w["sections"]["backtest"])
     f = '([section] = "curve" AND [level] = "backtest") OR ([section] = "point" AND [level] = "violation")'
@@ -429,14 +436,26 @@ def backtest_page(p: stats.Page, w: dict, observed: str) -> None:
     breaks = {"value": f'IF([section] = "point", IF([value] = 1, {flagged}, NULL), IF([level_2] = "violation", [value], NULL))',
               "as": "point", "name": s["violation"], "color": BAD}
     twice(p, chart("backtest", w["charts"]["backtest"], f, [
-        line("return", observed, "point", c.MUTED), line("var", s["var"], colour=c.ACCENT), breaks], p.y, 90), w)
-    p.y += 91.5
+        line("return", observed, "point", c.MUTED), line("var", s["var"], colour=c.ACCENT), breaks], p.y, tall), w)
+    p.y += tall + 1.5
     caption(p, "backtest_how", w["captions"]["backtest"], visible=c.exists(f))
     counts_table(p, w)
     c.reading_under(p, w, "backtest")
 
 
 # ── the page ────────────────────────────────────────────────────────────────
+# the tables a page never splits (`keep_whole`, lot G9): short ones, of a fixed size at most (the checks, the measures, the
+# coefficients, Nyblom's, the backtest's, the settings and the notes), which a page's foot left with their header and a row
+WHOLE = ("assumptions", "advice", "backtest_tests", "backtest_advice", "measures", "facts", "coef", "coef_ci", "nyblom",
+         "backtest_counts", "settings", "notes")
+
+
+def whole_tables(p: stats.Page) -> None:
+    for it in p.items:
+        if it.get("type") == "table" and it["id"] in WHOLE:
+            it["keep_whole"] = True
+
+
 def layout(model: str, params: dict[str, Any], locale: str, sample: list[dict] | None, step: str | None) -> dict:
     from app.reports import formats
 
@@ -456,6 +475,7 @@ def layout(model: str, params: dict[str, Any], locale: str, sample: list[dict] |
     c.how_computed(p, w)
     c._fit(p, w, False, FIT_SKIP)
     c._notes(p, w)
+    whole_tables(p)
     return c.document(header, p.items, footer, lang)
 
 

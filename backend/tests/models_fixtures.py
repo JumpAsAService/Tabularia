@@ -80,7 +80,8 @@ FROM_RUNNER: set[tuple[str, str]] = {("linear", "unpenalized"), ("logistic", "un
                                       ("cox", "default"), ("linear", "penalized"), ("logistic", "penalized"), ("clv", "value"),
                                       ("clv", "purchases"), ("bg_bb", "value"), ("bg_bb", "purchases"),
                                       ("parametric_survival", "ph_aft"), ("parametric_survival", "aft"),
-                                      ("parametric_survival", "ph"), ("parametric_survival", "auto"), ("garch", "default")}
+                                      ("parametric_survival", "ph"), ("parametric_survival", "auto"), ("garch", "default"),
+                                      ("risk_simulation", "garch"), ("risk_simulation", "arima")}
 
 # The example a declared stat ending in «*» is written as.
 WILDCARDS = {"note_*": ["note_1"], "surv_at_*": ["surv_at_30", "surv_at_30_low", "surv_at_30_high"],
