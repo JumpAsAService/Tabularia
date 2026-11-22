@@ -749,6 +749,13 @@ def test_the_pre_trained_forecast_has_its_line_and_the_prompt_says_when_to_choos
                      "Its weights are under a licence of their own", "Mistral AI's Modified MIT License", "$20 million",
                      "it is not legal advice", "never accept it, enable the group"):
         assert sentence in reference, sentence
+    # lot F9: the clause as the licence says it (the employer, the currency, the preceding month, derivatives), and no claim
+    # that the administrator read it, only that they accepted it
+    for part in ("(or of their employer)", "or its equivalent in another currency", "in the preceding month",
+                 "derivatives and combined works included", "an administrator accepted it when enabling the group"):
+        assert part in reference, part
+    assert "read and accepted" not in reference
+    assert "the holdout and the season of model_timestral" in ai_flow_agent.SETTINGS_CONTEXT
     # the rule that keeps the settings that shape a verdict out of the assistant's hands is still there, and the node's own
     # reference does not tell it to change one
     assert "Never change a setting of a hypothesis test or a model step that decides or shapes its verdict" in ai_flow_agent.SETTINGS_CONTEXT
