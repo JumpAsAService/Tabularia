@@ -20,7 +20,7 @@ rows; the contract is docs/specs/garch-risk.md, «As built / G4»). The words ar
 """
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Mapping
 
 from app.engine.models import catalog
 from app.engine.models.layouts import common as c
@@ -235,9 +235,13 @@ def _term(p: stats.Page, w: dict) -> None:
 
 # ── page 6: the model ───────────────────────────────────────────────────────
 def _model(p: stats.Page, w: dict, lang: str, checked: dict[str, Any]) -> None:
-    table = c.CoefTable("coef", w["coef_title"], ("estimate", "std_error", "statistic", "p_value", "ci_low", "ci_high"), width=19)
-    c._coefficients(p, {**w, "sections": {**w["sections"], "coefficients": w["sections"]["model"]}}, lang, (table,), None)
-    next(it for it in p.items if it["id"] == "coef")["columns"][0]["value"] = g.symbol_of("[level]", w)
+    level = g.numbers("{x}", lang, x=(1 - float(checked.get("alpha") or 0.05)) * 100)
+    tables = (c.CoefTable("coef", w["coef_title"], ("estimate", "std_error", "statistic", "p_value")),
+              c.CoefTable("coef_ci", w["coef_intervals"].replace("{level}", level), ("ci_low", "ci_high"), width=34))
+    c._coefficients(p, {**w, "sections": {**w["sections"], "coefficients": w["sections"]["model"]}}, lang, tables, None)
+    for it in p.items:
+        if it["id"] in ("coef", "coef_ci"):
+            it["columns"][0]["value"] = g.symbol_of("[level]", w)
     p.text("full_report", stats.static(w["full_report"][str(checked.get("model") or "garch")]), h=5, size=8.5, color=c.MUTED,
            can_grow=True)
     c.reading_under(p, w, "model")
@@ -265,5 +269,112 @@ def layout(model: str, params: dict[str, Any], locale: str, sample: list[dict] |
     c._notes(p, w)
     return c.document(header, p.items, footer, lang)
 
+
+# ── the explanation (docs/specs/garch-risk.md, «As built / G4») ─────────────
+# Chosen from the rows the runner (lot G3) writes, as the GARCH node's: the risk measures at the horizon are measures, said
+# as the rows hold them, in % for a relative change and in the series' units otherwise (the id's `_level`); the fitted
+# model's checks and the backtest are verdicts against the node's alpha (`garch.check_lines`, `garch.backtest_lines`).
+ARIMA_TESTS = ("ljung_box_10", "ljung_box_2s", "arch_lm", "variance_ratio", "jarque_bera")
+
+
+def variable_of(checked: Mapping[str, Any]) -> str:
+    """The risk variable: a GARCH's cumulative return, an ARIMA's value, running total or relative change."""
+    if checked.get("model") == "garch":
+        return "cumulative_return"
+    return {"last": "value", "sum": "running_total"}.get(str(checked.get("aggregate") or "last"), "relative_change")
+
+
+def readings(rows: list[dict], checked: Mapping[str, Any]) -> list[c.ReadingLine]:
+    alpha = float(checked.get("alpha") or 0.05)
+    r = g.Rows(rows)
+    num = lambda stat: r.num(c.model_key(stat))  # noqa: E731
+    garch = checked.get("model") == "garch"
+    unit = checked.get("frequency") or "index"
+    steps = num("horizon") or checked.get("horizon")
+    variable = "variable:" + variable_of(checked)
+    out: list[c.ReadingLine] = []
+    # summary
+    # the model by its orders: a GARCH's from the options, an ARIMA's as the runner chose them (automatic orders too)
+    model = (g.core({k: v for k, v in checked.items() if k in catalog.MODELS["garch"]["takes"]}) if garch
+             else r.text(c.model_key("model_name")) or catalog.arima_name(dict(checked)))
+    head = {"paths": num("paths") or checked.get("paths"), "steps": steps, "unit": unit, "model": model}
+    if garch:
+        head["distribution"] = checked.get("distribution") or "std"
+    out.append(("summary", None, "summary_garch" if garch else "summary_arima",
+                {**head, "series": checked.get("value"), "seed": num("seed") if num("seed") is not None else checked.get("seed")}))
+    if checked.get("innovations") == "bootstrap":
+        out.append(("summary", None, "summary_bootstrap", {}))
+    out.append(("summary", None, "summary_variable", {"variable": variable, "steps": steps, "unit": unit}))
+    holdout = int(num("holdout") or 0)
+    if holdout > 0:
+        out.append(("summary", None, "summary_holdout", {"holdout": holdout, "unit": unit}))
+    # the risk measures at the horizon
+    side = "upper" if checked.get("tail") == "upper" else "lower"
+    scale = "" if relative(dict(checked)) else "_level"
+    risk = lambda level, stat: r.num(f"risk|{level}||{stat}")  # noqa: E731
+    if risk("var", "value") is not None:
+        out.append(("var", None, f"var_{side}{scale}", {"p": 1 - float(checked.get("var_level") or 0.99), "variable": variable,
+                                                        "steps": steps, "unit": unit, "value": risk("var", "value"),
+                                                        "low": risk("var", "low"), "high": risk("var", "high"),
+                                                        "paths": head["paths"], "confidence": 1 - alpha}))
+    if risk("es", "value") is not None:
+        out.append(("es", None, f"es_{side}{scale}", {"p": 1 - float(checked.get("es_level") or 0.975), "variable": variable,
+                                                      "value": risk("es", "value"), "low": risk("es", "low"), "high": risk("es", "high")}))
+    threshold = num("threshold")
+    if threshold is not None and risk("prob_crossed", "value") is not None:
+        on = ("variable:price" if checked.get("input_kind") == "prices" else variable) if garch else \
+            ("variable:running_total" if checked.get("aggregate") == "sum" else "variable:value")
+        level = "" if garch and checked.get("input_kind") != "prices" else "_level"
+        out.append(("threshold", None, f"threshold_{side}{level}", {
+            "variable": on, "threshold": threshold, "steps": steps, "unit": unit, "prob_crossed": risk("prob_crossed", "value"),
+            "low": risk("prob_crossed", "low"), "high": risk("prob_crossed", "high"), "prob_beyond": risk("prob_beyond", "value")}))
+    if risk("drawdown", "value") is not None and risk("drawdown", "median") is not None:
+        out.append(("drawdown", None, "drawdown", {"median": risk("drawdown", "median"), "tail": risk("drawdown", "value"),
+                                                   "p": 1 - float(checked.get("var_level") or 0.99), "steps": steps, "unit": unit}))
+    if risk("moments", "skewness") is not None:
+        out.append(("shape", None, "shape", {"variable": variable, "steps": steps, "unit": unit,
+                                             "skewness": risk("moments", "skewness"), "kurtosis": risk("moments", "kurtosis")}))
+    # the fan: its bands' shares (the node's quantiles), the largest error of their edges, the sample paths drawn
+    pairs, _ = bands(dict(checked))
+    errors = [v for x in rows if x["section"] == "curve" and x["level"] == "fan" and x.get("level_2") == "band_error"
+              and (v := g.number(x.get("value"))) is not None]
+    sample = {x["level_2"] for x in rows if x["section"] == "curve" and x["level"] == "fan" and str(x.get("level_2") or "").startswith("path_")}
+    if pairs and errors:
+        shares = {"shares": sorted(round(share, 10) for _, _, share in pairs), "error": max(errors)}
+        out.append(("fan", None, "fan", {**shares, "sample": len(sample)}) if sample else ("fan", None, "fan_bands", shares))
+    # the model's checks
+    if garch:
+        out += g.check_lines(r, alpha, "model", "model", "model")
+    else:
+        tested = [(t, p) for t in ARIMA_TESTS if (p := r.p(t)) is not None]
+        rejected = [(t, p) for t, p in tested if p < alpha]
+        out += [("model", None, "arima_check_failed", {"check": f"check:{t}", "p_value": p, "alpha": alpha}) for t, p in rejected]
+        if tested and not rejected:
+            out.append(("model", None, "arima_checks_ok", {"total": len(tested), "alpha": alpha}))
+    out += g.backtest_lines(r, checked, alpha)
+    # «How this report was computed»
+    method = ["method_simulation", "method_seed", "method_innovations", "method_variable", "method_var", "method_es"]
+    if threshold is not None:
+        method.append("method_threshold")
+    if risk("drawdown", "value") is not None:
+        method.append("method_drawdown")
+    method.append("method_passes")
+    if holdout > 0:
+        method.append("method_backtest")
+    method.append("method_model_garch" if garch else "method_model_arima")
+    formulas = ["formula_garch_path" if garch else "formula_arima_path", "formula_variable", "formula_var", "formula_es"]
+    if threshold is not None:
+        formulas.append("formula_clopper_pearson")
+    if risk("drawdown", "value") is not None:
+        formulas.append("formula_drawdown")
+    formulas += ["formula_moments", "formula_band_error"]
+    if holdout > 0:
+        formulas += ["formula_var_1step", "formula_kupiec", "formula_christoffersen"]
+    out += [("method", None, m, {}) for m in method]
+    out += [("formulas", None, x, {}) for x in formulas]
+    return out
+
+
+c.READINGS["risk_simulation"] = readings
 
 register("risk_simulation", layout, name, about)

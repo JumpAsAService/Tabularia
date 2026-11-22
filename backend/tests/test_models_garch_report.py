@@ -1,12 +1,11 @@
-"""The reports of «Volatility (GARCH)» and «Risk simulation» (docs/specs/garch-risk.md, lot G4): every sentence the runners
-may write in the five languages, the owner's rule on verdicts (only the tests with a p-value against α: the weighted
-Ljung–Box, ARCH LM, Nyblom, the sign bias, Kupiec, Christoffersen; VaR, ES, persistence, half-life and probabilities are
-measures, with no word of judgement), the backtest's sentences saying how many breaks were expected, the pages of each
-report, and the memory of the report on the largest fixture.
+"""The reports of «Volatility (GARCH)» and «Risk simulation» (docs/specs/garch-risk.md, lot G4): the readings each layout
+chooses from the rows its runner wrote (`common.READINGS`), every sentence in the five languages, the owner's rule on
+verdicts (only the tests with a p-value against α: the weighted Ljung–Box, ARCH LM, Nyblom, the sign bias, Kupiec,
+Christoffersen; VaR, ES, persistence, half-life and probabilities are measures, with no word of judgement), each verdict
+following α, the backtest's sentences saying how many breaks were expected, the pages, and the memory of the report.
 
-The fixtures (`garch-default`, `risk_simulation-garch`, `risk_simulation-arima`, lot G0, their readings the contract of lot
-G4) hold a few readings each; `full_rows` puts a line of every template in their place, with the names the runners (lots G1
-and G3) write: the contract of «As built / G4»."""
+`garch-default` is the GARCH runner's own output (lot G1, on its reference prices); the risk node's fixtures are lot G0's
+placeholders, the rows lot G3 writes («As built / G4»). READINGS lists every template with the names a layout sends."""
 from __future__ import annotations
 
 import json
@@ -60,8 +59,8 @@ GARCH_READINGS: dict[str, dict[str, dict]] = {
         "sigma_now_equal": {"uncond": 0.0115},
     },
     "asymmetry": {
-        "asymmetry_gjr": {"ratio": 3.25, "gamma": 0.09}, "asymmetry_gjr_falls_only": {"gamma": 0.12},
-        "asymmetry_egarch": {"shock": 2, "ratio": 1.4, "alpha": -0.08, "gamma": 0.15}, "asymmetry_none": {},
+        "asymmetry_gjr": {"alpha": 0.04, "gamma": 0.09}, "asymmetry_gjr_falls_only": {"gamma": 0.12},
+        "asymmetry_egarch": {"alpha": -0.08, "gamma": 0.15}, "asymmetry_none": {},
         "sign_bias_supported": TEST, "sign_bias_not_supported": TEST,
     },
     "distribution": {
@@ -80,8 +79,8 @@ GARCH_READINGS: dict[str, dict[str, dict]] = {
 SHAPE = {"p": 0.01, "variable": "variable:cumulative_return", "steps": 10, "unit": "index", "value": -0.0712, "low": -0.0753,
          "high": -0.067, "paths": 10000, "confidence": 0.95}
 LEVEL = {**SHAPE, "variable": "variable:running_total", "unit": "day", "value": 1538.6, "low": 1537.1, "high": 1540.1}
-ES = {"p": 0.025, "variable": "variable:cumulative_return", "quantile": -0.0569, "value": -0.0868, "low": -0.0901, "high": -0.0835}
-ES_LEVEL = {**ES, "variable": "variable:running_total", "quantile": 1520.5, "value": 1557.1, "low": 1555.1, "high": 1559.0}
+ES = {"p": 0.025, "variable": "variable:cumulative_return", "value": -0.0868, "low": -0.0901, "high": -0.0835}
+ES_LEVEL = {**ES, "variable": "variable:running_total", "value": 1557.1, "low": 1555.1, "high": 1559.0}
 THRESHOLD = {"variable": "variable:cumulative_return", "threshold": -0.1, "steps": 10, "unit": "index", "prob_crossed": 0.073,
              "low": 0.068, "high": 0.078, "prob_beyond": 0.049}
 # every template the risk runner (lot G3) may write: block → id → names
@@ -93,15 +92,13 @@ RISK_READINGS: dict[str, dict[str, dict]] = {
         "summary_bootstrap": {}, "summary_variable": {"variable": "variable:price", "steps": 10, "unit": "index"},
         "summary_holdout": {"holdout": 250, "unit": "index"},
     },
-    "var": {"var_lower": SHAPE, "var_lower_level": LEVEL, "var_upper": SHAPE, "var_upper_level": LEVEL,
-            "var_money": {"amount": 100000, "money": -7115.18}},
-    "es": {"es_lower": ES, "es_lower_level": ES_LEVEL, "es_upper": ES, "es_upper_level": ES_LEVEL,
-           "es_money": {"amount": 100000, "money": -8680.52}},
+    "var": {"var_lower": SHAPE, "var_lower_level": LEVEL, "var_upper": SHAPE, "var_upper_level": LEVEL},
+    "es": {"es_lower": ES, "es_lower_level": ES_LEVEL, "es_upper": ES, "es_upper_level": ES_LEVEL},
     "threshold": {"threshold_lower": THRESHOLD, "threshold_lower_level": {**THRESHOLD, "variable": "variable:price", "threshold": 280},
                   "threshold_upper": THRESHOLD, "threshold_upper_level": {**THRESHOLD, "variable": "variable:value", "threshold": 1000}},
     "drawdown": {"drawdown": {"median": 0.021, "tail": 0.087, "p": 0.01, "steps": 10, "unit": "index"}},
     "shape": {"shape": {"variable": "variable:relative_change", "steps": 10, "unit": "index", "skewness": -0.4, "kurtosis": 2.1}},
-    "fan": {"fan": {"shares": [0.5, 0.9, 0.98], "error": 4e-06, "sample": 20}},
+    "fan": {"fan": {"shares": [0.5, 0.9, 0.98], "error": 4e-06, "sample": 20}, "fan_bands": {"shares": [0.5, 0.9, 0.98], "error": 0.002}},
     "model": {**CHECK_LINES, "arima_checks_ok": {"total": 4, "alpha": 0.05},
               "arima_check_failed": {"check": "check:ljung_box_10", **TEST}},
     "backtest": BACKTEST_LINES,
@@ -118,8 +115,8 @@ VERDICTS = {k for k in (*CHECK_LINES, *BACKTEST_LINES, "arima_checks_ok", "arima
             if k not in ("z2_largest_acf", "backtest_independence_not_computed", "backtest_expected", "backtest_short")}
 # the measures the owner named: their ids must be declared measures (and so hold no word of judgement)
 NAMED_MEASURES = {"garch": {"persistence", "persistence_integrated", "sigma_now_above", "sigma_now_below", "sigma_now_equal"},
-                  "risk_simulation": {"var_lower", "var_lower_level", "var_upper", "var_upper_level", "var_money", "es_lower",
-                                      "es_lower_level", "es_upper", "es_upper_level", "es_money", "threshold_lower",
+                  "risk_simulation": {"var_lower", "var_lower_level", "var_upper", "var_upper_level", "es_lower",
+                                      "es_lower_level", "es_upper", "es_upper_level", "threshold_lower",
                                       "threshold_lower_level", "threshold_upper", "threshold_upper_level", "drawdown"}}
 # words of judgement besides common.json's `verdict_words`, for the measures of these two reports
 JUDGEMENT = {"en": ("large", "small", "high risk", "low risk", "safe", "risky", "dangerous", "worrying", "acceptable", "too"),
@@ -143,11 +140,15 @@ def _words(model: str, locale: str, case: str | None = None) -> dict:
 
 
 def full_rows(model: str, rows: list[dict], only: set[str] | None = None) -> list[dict]:
-    """The fixture's rows with a line of every template (of those in `only`) in place of its readings."""
-    kept = [r for r in rows if r["section"] != "reading"]
+    """The fixture's rows with a line of every template (of those in `only`): with the layout's own readings left out
+    (`no_readings`), every sentence is said and drawn."""
     lines = [(block, None, id_, values) for block, ids in READINGS[model].items() for id_, values in ids.items()
              if only is None or id_ in only]
-    return kept + common.reading_rows(lines, kept)
+    return rows + common.reading_rows(lines, rows)
+
+
+def no_readings(monkeypatch, model: str) -> None:
+    monkeypatch.delitem(common.READINGS, model)
 
 
 def _with(monkeypatch, model: str, params: dict, rows: list[dict]) -> None:
@@ -159,7 +160,7 @@ def _with(monkeypatch, model: str, params: dict, rows: list[dict]) -> None:
 
 # ── the words ───────────────────────────────────────────────────────────────
 @pytest.mark.parametrize("model", sorted(READINGS))
-def test_every_template_the_runner_may_write_has_its_sentence_its_names_and_a_label(model):
+def test_every_template_a_layout_may_choose_has_its_sentence_its_names_and_a_label(model):
     words = common._file(model)
     ids = {i: v for block in READINGS[model].values() for i, v in block.items()}
     english = words["en"]
@@ -210,34 +211,96 @@ def test_beside_each_verdict_of_the_backtest_the_sentence_says_how_many_breaks_w
             assert all("{expected:num}" in s for s in _said(texts[key])), (code, key)
 
 
-# ── the readings said ───────────────────────────────────────────────────────
+# ── the readings the layouts choose ─────────────────────────────────────
 @pytest.mark.parametrize("case", (GARCH, RISK, RISK_ARIMA))
 @pytest.mark.parametrize("locale", LOCALES)
-def test_every_reading_is_a_sentence_of_the_page_s_language(case, locale):
+def test_every_reading_is_a_sentence_of_the_page_s_language(case, locale, monkeypatch):
     model, params, rows = fixture(case)
-    for given in (rows, full_rows(model, rows)):
-        said = [r for r in layouts.with_labels(model, params, given, locale) if r["section"] == "reading"]
-        assert said and {r["level"] for r in said} >= {"summary", "method", "formulas"}, case
-        for r in said:
+    said = [r for r in layouts.with_labels(model, params, rows, locale) if r["section"] == "reading"]
+    ids = {i for block in READINGS[model].values() for i in block}
+    assert {r["level"] for r in said} >= {"summary", "method", "formulas"}, case
+    chosen = [r for r in rows if r["section"] == "reading"]
+    assert not chosen, "the runners write no reading: the layout chooses them"
+    assert {line[2] for line in common.READINGS[model](rows, catalog.check_params(model, params))} <= ids
+    no_readings(monkeypatch, model)
+    for given in (said, [r for r in layouts.with_labels(model, params, full_rows(model, rows), locale) if r["section"] == "reading"]):
+        for r in given:
             assert not re.search(r"@|\{|%2", r["text"]), (case, r["text"])
             assert not re.search(r"=\s*[<>]", r["text"]), (case, r["text"])
             assert r["label"] not in ("", r["stat"]), (case, r)
-    decimal = formats.locale(locale).decimal
     if model == "garch":  # a parameter is said by its symbol, a distribution in the page's words
-        said = {r["text"] for r in layouts.with_labels(model, params, full_rows(model, rows, {"nyblom_moves", "summary"}), locale)
-                if r["section"] == "reading"}
-        assert any(" ω " in s and f"0{decimal}031" in s for s in said), said
-        assert any(_words(model, locale)["values"]["distribution"]["sstd"] in s for s in said), said
+        lines = {r["text"] for r in layouts.with_labels(model, params, full_rows(model, rows, {"nyblom_moves", "summary"}), locale)
+                 if r["section"] == "reading"}
+        decimal = formats.locale(locale).decimal
+        assert any(" ω " in x and f"0{decimal}031" in x for x in lines), lines
+        assert any(_words(model, locale)["values"]["distribution"]["sstd"] in x for x in lines), lines
+
+
+def test_the_garch_runner_s_own_results_are_read_as_the_contract_says():
+    """`garch-default` is garch.R's output (a GJR-GARCH(1,1) with skewed t errors on 300 log returns of prices, 50 kept out):
+    α₁ is at its bound, every test keeps its hypothesis at 0.05, two breaks against 0.5 expected."""
+    model, params, rows = fixture(GARCH)
+    lines = common.READINGS[model](rows, catalog.check_params(model, params))
+    ids = [x[2] for x in lines]
+    assert ids[:3] == ["summary_holdout", "summary_prices", "summary_scale"]
+    assert {"persistence", "sigma_now_below", "asymmetry_gjr_falls_only", "sign_bias_not_supported", "distribution_sstd", "lb_z_ok",
+            "lb_z2_ok", "arch_lm_ok", "nyblom_stable", "backtest_coverage_ok", "backtest_independence_ok", "backtest_cc_ok",
+            "backtest_expected"} <= set(ids)
+    by = {x[2]: x[3] for x in lines}
+    assert by["summary_holdout"]["model"] == "GJR-GARCH(1,1)" and by["summary_holdout"]["holdout"] == 50
+    assert by["backtest_coverage_ok"]["violations"] == 2 and by["backtest_coverage_ok"]["expected"] == pytest.approx(0.5)
+    assert ids.index("method_backtest") < ids.index("method_forecast") and "formula_kupiec" in ids
+    # the runner's notes are sentences: its scale, a parameter at a bound by its symbol
+    notes = [r["text"] for r in layouts.with_labels(model, params, rows, "it") if r["stat"].startswith("note_")]
+    assert notes and all("@" not in n for n in notes) and any(n.startswith("α₁ è a un limite") for n in notes), notes
+
+
+# the checks whose verdict a reading says: the row of its p-value, the ids when it keeps and when it rejects
+VERDICT_ROWS = {GARCH: [("assumption|ljung_box_z||p_value", "lb_z_ok", "lb_z_failed"),
+                        ("assumption|ljung_box_z2||p_value", "lb_z2_ok", "lb_z2_failed"),
+                        ("assumption|arch_lm||p_value", "arch_lm_ok", "arch_lm_failed"),
+                        ("assumption|nyblom||p_value", "nyblom_stable", "nyblom_moves_none"),
+                        ("assumption|sign_bias||p_value", "sign_bias_not_supported", "sign_bias_supported"),
+                        ("backtest|kupiec||p_value", "backtest_coverage_ok", "backtest_coverage_failed"),
+                        ("backtest|christoffersen_ind||p_value", "backtest_independence_ok", "backtest_independence_failed"),
+                        ("backtest|christoffersen_cc||p_value", "backtest_cc_ok", "backtest_cc_failed")],
+                RISK_ARIMA: [("assumption|ljung_box_10||p_value", "arima_checks_ok", "arima_check_failed")]}
+
+
+@pytest.mark.parametrize("case", sorted(VERDICT_ROWS))
+def test_a_verdict_follows_alpha_just_above_and_just_below_its_p_value(case):
+    """The explanations spec's criterion 8: the same rows read with α just above a test's p-value say it rejects, just
+    below say it does not; the measures do not change."""
+    model, params, rows = fixture(case)
+    keyed = {r["key"]: r for r in rows}
+    for key, keeps, rejects in VERDICT_ROWS[case]:
+        p = keyed[key]["value"]
+        for alpha, want, other in ((p * 1.001, rejects, keeps), (p * 0.999, keeps, rejects)):
+            checked = {**catalog.check_params(model, params), "alpha": alpha}
+            ids = [x[2] for x in common.READINGS[model](rows, checked)]
+            assert want in ids and other not in ids, (case, key, alpha, ids)
+
+
+def test_nyblom_names_the_parameter_that_moves_most_when_its_adjusted_p_value_is_below_alpha():
+    model, params, rows = fixture(GARCH)
+    moved = [{**r, "value": 0.001} if r["key"] in ("assumption|nyblom||p_value", "assumption|nyblom|skew|p_adjusted") else r
+             for r in rows]
+    by = {x[2]: x[3] for x in common.READINGS[model](moved, catalog.check_params(model, params))}
+    assert by["nyblom_moves"]["parameter"] == "skew" and by["nyblom_moves"]["p_adjusted"] == 0.001
+    # a test of z² that rejects brings the size of the largest autocorrelation of z²
+    rejected = [{**r, "value": 0.001} if r["key"] == "assumption|arch_lm||p_value" else r for r in rows]
+    by = {x[2]: x[3] for x in common.READINGS[model](rejected, catalog.check_params(model, params))}
+    acf = [r for r in rows if r["section"] == "lag" and r["level"] == "z2_acf" and r["stat"] == "acf"]
+    assert abs(by["z2_largest_acf"]["acf"]) == max(abs(r["value"]) for r in acf) and "arch_lm_failed" in by
 
 
 @pytest.mark.parametrize("locale", LOCALES)
 def test_a_risk_variable_is_named_in_the_page_s_words_and_a_list_of_shares_in_percent(locale):
     model, params, rows = fixture(RISK)
-    said = {r["level"]: r["text"] for r in layouts.with_labels(model, params, full_rows(model, rows, {"summary_variable", "fan"}), locale)
-            if r["section"] == "reading"}
-    assert _words(model, locale)["values"]["reading_names"]["variable:price"] in said["summary"]
-    decimal = formats.locale(locale).decimal
-    assert "50 % / 90 % / 98 %" in said["fan"] and f"0{decimal}000004" in said["fan"], said["fan"]
+    said = {r["level"]: r["text"] for r in layouts.with_labels(model, params, rows, locale) if r["section"] == "reading"
+            and r["level"] in ("threshold", "fan")}
+    assert _words(model, locale)["values"]["reading_names"]["variable:price"] in said["threshold"]
+    assert "50 % / 90 % / 98 %" in said["fan"], said["fan"]
 
 
 # ── the pages ───────────────────────────────────────────────────────────────
@@ -320,6 +383,7 @@ def test_the_fan_nests_its_bands_from_the_widest_and_draws_the_sample_paths_apar
 @pytest.mark.parametrize("locale", LOCALES)
 def test_the_report_with_every_reading_renders_in_twelve_pages_at_most(tmp_path, chart_service, monkeypatch, case, locale):  # noqa: F811
     model, params, rows = fixture(case)
+    no_readings(monkeypatch, model)
     _with(monkeypatch, model, params, full_rows(model, rows))
     out, page = draw(tmp_path, chart_service, monkeypatch, case, locale=locale)
     assert out.path.read_bytes().startswith(b"%PDF-") and 4 <= out.pages <= 12 and out.warnings == [], (out.pages, out.warnings)
@@ -341,10 +405,9 @@ def test_excel_keeps_the_checks_the_backtest_the_measures_and_the_reading(tmp_pa
 
 
 def test_the_report_of_the_largest_fixture_stays_well_under_200_mb(tmp_path, chart_service, monkeypatch):  # noqa: F811
-    """The report task on the largest fixture of the two nodes, every reading in it: `tracemalloc`'s peak, recorded in the
-    spec's «As built / G4»."""
+    """The report on the largest fixture of the two nodes (the GARCH runner's output, its readings chosen by the layout):
+    `tracemalloc`'s peak, recorded in the spec's «As built / G4»."""
     model, params, rows = fixture(GARCH)
-    _with(monkeypatch, model, params, full_rows(model, rows))
     tracemalloc.start()
     try:
         out, _ = draw(tmp_path, chart_service, monkeypatch, GARCH, locale="de")

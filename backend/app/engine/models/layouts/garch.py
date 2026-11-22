@@ -9,7 +9,7 @@ the standardized residuals and of the parameters' stability, and the backtest of
 2. Volatility: the returns with the band μ ± z σ, σ with its forecast and its long-run level, the standardized residuals;
    the holdout's first instant marked.
 3. Coefficients (in the series' units) and the news impact curve; the readings of the asymmetry and of the distribution.
-4. Checks: the ACF of z and of z², the histogram of z with the fitted density, the Q–Q of z, Nyblom's table; the readings
+4. Checks: the ACF of z and of z², the histogram of z, the Q–Q of z, Nyblom's table; the readings
    of the residuals and of the stability.
 5. Backtest (with a holdout): the held-out observations, their 1-step VaR and the breaks, the counts, the reading.
 6. How this report was computed (`common.how_computed`), the numbers of the fit, the notes.
@@ -22,7 +22,8 @@ pieces are the risk simulation's too (`layouts/risk_simulation.py`).
 """
 from __future__ import annotations
 
-from typing import Any
+import math
+from typing import Any, Mapping
 
 from app.engine.models import catalog
 from app.engine.models.layouts import common as c
@@ -304,7 +305,9 @@ def _measures(p: stats.Page, w: dict, checked: dict[str, Any]) -> None:
     p.add(t, 10)
     c.measures(FACTS, counted=("at_bound",))(p, w)
     facts = p.items[-1]
-    facts.update({"id": "facts", "title": w["facts_title"]})
+    # the facts of the whole fit: the parameters at a bound are named by the runner's notes, not as rows of their own
+    facts["filter"] = f'({facts["filter"]}) AND ISNULL([level_2])'
+    facts.update({"id": "facts", "title": w["facts_title"], "visible": c.exists(facts["filter"])})
 
 
 def _summary(p: stats.Page, w: dict, lang: str, params: dict[str, Any], checked: dict[str, Any]) -> None:
@@ -354,9 +357,13 @@ def coefficients(p: stats.Page, w: dict, lang: str, checked: dict[str, Any], tit
     note says whether the standard errors are robust or classical."""
     co = w["coef"]
     se = co["classical"] if checked.get("se_type") == "classical" else co["robust"]
-    table = c.CoefTable("coef", title, ("estimate", "std_error", "statistic", "p_value", "ci_low", "ci_high"), width=19)
-    c._coefficients(p, w, lang, (table,), se)
-    next(it for it in p.items if it["id"] == "coef")["columns"][0]["value"] = symbol_of("[level]", w)
+    level = numbers("{x}", lang, x=(1 - float(checked.get("alpha") or 0.05)) * 100)
+    tables = (c.CoefTable("coef", title, ("estimate", "std_error", "statistic", "p_value")),
+              c.CoefTable("coef_ci", w["coef"]["intervals"].replace("{level}", level), ("ci_low", "ci_high"), width=34))
+    c._coefficients(p, w, lang, tables, se)
+    for it in p.items:
+        if it["id"] in ("coef", "coef_ci"):
+            it["columns"][0]["value"] = symbol_of("[level]", w)
 
 
 def _news(p: stats.Page, w: dict) -> None:
@@ -378,12 +385,9 @@ def _checks(p: stats.Page, w: dict) -> None:
         return c.xy(id_, ch[id_], f + ' AND [stat] = "acf"', [c.mark("acf", "stem", s["acf"])],
                     {"target": c.num(f"lag|{id_}||bound"), "mirror": True, "legend": False, "format": "0.##"}, under=under)
 
-    hist = '([section] = "hist" AND [level] = "std_residual") OR ([section] = "curve" AND [level] = "density")'
-    histogram = c.Chart("hist", "xy", ch["hist"], {
-        "filter": hist, "category": 'IF([section] = "hist", ([x0] + [x1]) / 2, [x0])',
-        "series": [{"value": 'IF([section] = "hist", [value], NULL)', "as": "stem", "name": s["count"]},
-                   {"value": 'IF([section] = "curve", [value], NULL)', "as": "line", "name": s["density"]}],
-        "options": {"format": "#,##0.#", "legend": False}, "visible": c.exists(hist)}, under="arch_lm")
+    # the histogram of z: its counts only. The runner writes the fitted density as a density (`curve|density`), which an xy
+    # chart cannot draw on its own axis beside counts, and the page computes nothing (docs/specs/garch-risk.md, «As built / G4»)
+    histogram = c.histogram("hist", ch["hist"], "std_residual", s["count"], under="arch_lm")
     qq = '[section] = "point" AND [level] = "qq"'
     quantiles = c.Chart("qq", "xy", ch["qq"], {"filter": qq, "category": "[x0]",
                                                "series": [{"value": "[value]", "as": "point", "name": s["qq"]}],
@@ -418,10 +422,14 @@ def backtest_page(p: stats.Page, w: dict, observed: str) -> None:
     observations' series (a return, or an ARIMA's value)."""
     s = w["series"]
     heading(p, "s_backtest", w["sections"]["backtest"])
-    f = '[section] = "curve" AND [level] = "backtest"'
+    f = '([section] = "curve" AND [level] = "backtest") OR ([section] = "point" AND [level] = "violation")'
+    # the breaks: the GARCH node flags each held-out day (`point|violation`, 1 on a break, its index the return's), the risk
+    # node writes the observation of each break (`curve|backtest|violation`)
+    flagged = f'LOOKUP("curve|backtest|return|y|" & MID([key], {len("point|violation||y|") + 1}, 12), [key], [value])'
+    breaks = {"value": f'IF([section] = "point", IF([value] = 1, {flagged}, NULL), IF([level_2] = "violation", [value], NULL))',
+              "as": "point", "name": s["violation"], "color": BAD}
     twice(p, chart("backtest", w["charts"]["backtest"], f, [
-        line("return", observed, "point", c.MUTED), line("var", s["var"], colour=c.ACCENT), line("violation", s["violation"], "point", BAD)],
-        p.y, 90), w)
+        line("return", observed, "point", c.MUTED), line("var", s["var"], colour=c.ACCENT), breaks], p.y, 90), w)
     p.y += 91.5
     caption(p, "backtest_how", w["captions"]["backtest"], visible=c.exists(f))
     counts_table(p, w)
@@ -450,5 +458,167 @@ def layout(model: str, params: dict[str, Any], locale: str, sample: list[dict] |
     c._notes(p, w)
     return c.document(header, p.items, footer, lang)
 
+
+# ── the explanation (docs/specs/garch-risk.md, «As built / G4») ─────────────
+# The lines are chosen from the rows the runner wrote (lot G1 writes no reading), as ARIMA's are: a verdict only where a row
+# has a p-value, read against the node's alpha (a test the runner could not compute has none, and no line); every other
+# number is a measure, said as the row holds it. The risk simulation's model and backtest lines are these functions'.
+def number(x: Any) -> float | None:
+    return float(x) if isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x) else None
+
+
+class Rows:
+    """The rows by their key, a number or a text of one."""
+
+    def __init__(self, rows: list[dict]):
+        self.keyed = {r["key"]: r for r in rows if r.get("key")}
+        self.rows = rows
+
+    def num(self, key: str) -> float | None:
+        return number(self.keyed.get(key, {}).get("value"))
+
+    def text(self, key: str) -> str | None:
+        return self.keyed.get(key, {}).get("text")
+
+    def p(self, check: str, level_2: str = "") -> float | None:
+        return self.num(f"assumption|{check}|{level_2}|p_value")
+
+
+def check_lines(rows: Rows, alpha: float, residuals: str = "residuals", asymmetry: str = "asymmetry",
+                stability: str = "stability") -> list[c.ReadingLine]:
+    """The checks of a fitted GARCH: the weighted Ljung–Box on z and z², ARCH LM, the size of the largest autocorrelation
+    of z² when a test on z² rejects, Nyblom's joint test and the parameter that moves most, the sign bias."""
+    out: list[c.ReadingLine] = []
+    rejects_z2 = False
+    for check, id_ in (("ljung_box_z", "lb_z"), ("ljung_box_z2", "lb_z2"), ("arch_lm", "arch_lm")):
+        p = rows.p(check)
+        if p is None:
+            continue
+        lag = rows.num(f"assumption|{check}||lag")
+        out.append((residuals, None, f"{id_}_failed" if p < alpha else f"{id_}_ok", {"lag": lag, "p_value": p, "alpha": alpha}))
+        rejects_z2 |= check != "ljung_box_z" and p < alpha
+    if rejects_z2:  # the size behind the verdict: the largest autocorrelation of z², by its absolute value
+        acf = [(abs(v), v, r.get("x0")) for r in rows.rows if r["section"] == "lag" and r["level"] == "z2_acf" and r["stat"] == "acf"
+               and (v := number(r.get("value"))) is not None]
+        if acf:
+            _, v, lag = max(acf, key=lambda a: a[0])
+            out.append((residuals, None, "z2_largest_acf", {"acf": v, "lag": lag}))
+    p = rows.p("nyblom")
+    if p is not None:
+        if p >= alpha:
+            out.append((stability, None, "nyblom_stable", {"p_value": p, "alpha": alpha}))
+        else:
+            adjusted = [(a, r["level_2"]) for r in rows.rows if r["section"] == "assumption" and r["level"] == "nyblom"
+                        and r.get("level_2") and r["stat"] == "p_adjusted" and (a := number(r.get("value"))) is not None]
+            low = min(adjusted, default=None)
+            if low is not None and low[0] < alpha:
+                out.append((stability, None, "nyblom_moves", {"p_value": p, "alpha": alpha, "parameter": low[1], "p_adjusted": low[0]}))
+            else:
+                out.append((stability, None, "nyblom_moves_none", {"p_value": p, "alpha": alpha}))
+    p = rows.p("sign_bias")
+    if p is not None:
+        out.append((asymmetry, None, "sign_bias_supported" if p < alpha else "sign_bias_not_supported", {"p_value": p, "alpha": alpha}))
+    return out
+
+
+def backtest_lines(rows: Rows, checked: Mapping[str, Any], alpha: float) -> list[c.ReadingLine]:
+    """The backtest of the 1-step VaR on the holdout: each test against alpha, the breaks expected beside each verdict."""
+    holdout = rows.num(c.model_key("holdout")) or 0
+    if holdout <= 0:
+        return []
+    if holdout < 2:
+        return [("backtest", None, "backtest_short", {"holdout": holdout})]
+    expected = rows.num("backtest|counts||expected_violations")
+    violations = rows.num("backtest|counts||violations")
+    out: list[c.ReadingLine] = []
+    p = rows.num("backtest|kupiec||p_value")
+    if p is not None:
+        out.append(("backtest", None, "backtest_coverage_failed" if p < alpha else "backtest_coverage_ok",
+                    {"holdout": holdout, "unit": checked.get("frequency") or "index", "level": checked.get("var_level"),
+                     "violations": violations, "expected": expected, "p_value": p, "alpha": alpha}))
+    p = rows.num("backtest|christoffersen_ind||p_value")
+    if p is not None:
+        out.append(("backtest", None, "backtest_independence_failed" if p < alpha else "backtest_independence_ok",
+                    {"p_value": p, "alpha": alpha, "expected": expected}))
+    elif violations == 0:
+        out.append(("backtest", None, "backtest_independence_not_computed", {"expected": expected}))
+    p = rows.num("backtest|christoffersen_cc||p_value")
+    if p is not None:
+        out.append(("backtest", None, "backtest_cc_failed" if p < alpha else "backtest_cc_ok", {"p_value": p, "alpha": alpha, "expected": expected}))
+    if expected is not None:
+        out.append(("backtest", None, "backtest_expected", {"expected": expected}))
+    return out
+
+
+def readings(rows: list[dict], checked: Mapping[str, Any]) -> list[c.ReadingLine]:
+    alpha = float(checked.get("alpha") or 0.05)
+    r = Rows(rows)
+    num = lambda stat: r.num(c.model_key(stat))  # noqa: E731
+    out: list[c.ReadingLine] = []
+    # summary: the model, its data, the holdout, the returns from prices, the scale
+    steps = r.text(c.model_key("time_kind")) == "integer"
+    holdout = int(num("holdout") or 0)
+    said = {"model": core(dict(checked)), "distribution": checked.get("distribution") or "std", "n": num("n"),
+            "series": checked.get("value"), "first": num("first"), "last": num("last")}
+    if holdout > 0:
+        said["holdout"] = holdout
+    out.append(("summary", None, "summary" + ("_holdout" if holdout > 0 else "") + ("_steps" if steps else ""), said))
+    if checked.get("input_kind") == "prices":
+        out.append(("summary", None, "summary_prices", {}))
+    if num("scale") is not None:
+        out.append(("summary", None, "summary_scale", {"scale": num("scale")}))
+    # persistence: a measure, and the volatility now against its long-run level
+    persistence, half, uncond, sigma = num("persistence"), num("half_life"), num("uncond_sigma"), num("sigma_next")
+    if persistence is not None and persistence >= 1:
+        out.append(("persistence", None, "persistence_integrated", {"persistence": persistence}))
+    elif persistence is not None and half is not None:
+        out.append(("persistence", None, "persistence", {"persistence": persistence, "half_life": half,
+                                                         "unit": checked.get("frequency") or "index"}))
+    if uncond is not None and sigma is not None:
+        side = "above" if sigma > uncond else "below" if sigma < uncond else "equal"
+        out.append(("persistence", None, f"sigma_now_{side}", {"uncond": uncond} if side == "equal" else {"sigma": sigma, "uncond": uncond}))
+    # asymmetry: the model's own terms, then the sign bias test
+    kind = checked.get("variance_model") or "garch"
+    alpha1, gamma1 = r.num("coef|alpha1||estimate"), r.num("coef|gamma1||estimate")
+    if kind == "gjr" and gamma1 is not None:
+        if "assumption|at_bound|alpha1|value" in r.keyed:  # α₁ at its bound, 0: only falls move the variance
+            out.append(("asymmetry", None, "asymmetry_gjr_falls_only", {"gamma": gamma1}))
+        else:
+            out.append(("asymmetry", None, "asymmetry_gjr", {"alpha": alpha1, "gamma": gamma1}))
+    elif kind == "egarch" and alpha1 is not None and gamma1 is not None:
+        out.append(("asymmetry", None, "asymmetry_egarch", {"alpha": alpha1, "gamma": gamma1}))
+    elif kind in ("arch", "garch"):
+        out.append(("asymmetry", None, "asymmetry_none", {}))
+    lines = check_lines(r, alpha)
+    out += [x for x in lines if x[0] == "asymmetry"]
+    # the distribution of z: ν and ξ with their intervals at 1 − alpha
+    dist = checked.get("distribution") or "std"
+    shape = {"shape": r.num("coef|shape||estimate"), "low": r.num("coef|shape||ci_low"), "high": r.num("coef|shape||ci_high"),
+             "level": 1 - alpha}
+    if dist == "norm":
+        out.append(("distribution", None, "distribution_norm", {}))
+    elif dist == "std" and shape["shape"] is not None:
+        out.append(("distribution", None, "distribution_std", shape))
+    elif dist == "sstd" and shape["shape"] is not None:
+        out.append(("distribution", None, "distribution_sstd", {**shape, "skew": r.num("coef|skew||estimate"),
+                                                                "skew_low": r.num("coef|skew||ci_low"),
+                                                                "skew_high": r.num("coef|skew||ci_high")}))
+    out += [x for x in lines if x[0] != "asymmetry"]
+    out += backtest_lines(r, checked, alpha)
+    # «How this report was computed»
+    method = ["method_garch", "method_scale", "method_estimation", "method_distribution", "method_checks", "method_nyblom",
+              "method_sign_bias"]
+    formulas = ["formula_mean", "formula_variance", "formula_distribution", "formula_likelihood", "formula_persistence",
+                "formula_portmanteau", "formula_arch_lm", "formula_nyblom", "formula_sign_bias"]
+    if holdout > 0:
+        method.append("method_backtest")
+        formulas += ["formula_var_1step", "formula_kupiec", "formula_christoffersen"]
+    method.append("method_forecast")
+    out += [("method", None, m, {}) for m in method]
+    out += [("formulas", None, x, {}) for x in formulas]
+    return out
+
+
+c.READINGS["garch"] = readings
 
 register("garch", layout, name, about)

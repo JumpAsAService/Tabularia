@@ -44,9 +44,8 @@ DRAWN = {m: spec for m, spec in catalog.MODELS.items() if m not in PENDING}
 EXPERIMENTS = {m for m, spec in catalog.MODELS.items() if spec.get("family") == "experiments"}
 # the reports that explain their method in words (the A/B's mechanism: docs/specs/ts-decomposition.md, «Explaining the
 # method in the report»; for the others, the readings their layout chooses: docs/specs/report-explanations.md): a page
-# or two more, and no «= <» in a sentence. The pre-trained forecast's runner writes its own, as the decomposition's, and so do the
-# volatility's and the risk simulation's (docs/specs/garch-risk.md, «As built / G4»)
-EXPLAINED = EXPERIMENTS | {"decomposition", "timestral", "garch", "risk_simulation"} | set(common.READINGS)
+# or two more, and no «= <» in a sentence. The pre-trained forecast's runner writes its own, as the decomposition's
+EXPLAINED = EXPERIMENTS | {"decomposition", "timestral"} | set(common.READINGS)
 
 
 def fixture(case: str) -> tuple[str, dict, list[dict]]:

@@ -57,7 +57,7 @@
       "news_impact": "News impact: the next variance after a shock of ε, in long-run σ",
       "z_acf": "ACF of z",
       "z2_acf": "ACF of z²",
-      "hist": "Histogram of z and the fitted density",
+      "hist": "Histogram of z",
       "qq": "Q–Q of z against the fitted distribution",
       "backtest": "Holdout: returns, 1-step VaR and its breaks"
     },
@@ -82,6 +82,7 @@
     },
     "coef": {
       "title": "Coefficients in the series' units",
+      "intervals": "Intervals at {level} %",
       "robust": "Standard errors: robust (QML sandwich).",
       "classical": "Standard errors: classical (inverse Hessian)."
     },
@@ -192,7 +193,11 @@
         "name": "Stability: Nyblom",
         "h0": "Every parameter is constant over the sample.",
         "advice": "The parameters move over the sample: fit a shorter, more recent period, or read the parameters in the stability table.",
-        "not_computed": "The scores of the fit were not available."
+        "not_computed": "The scores of the fit were not available.",
+        "count": {
+          "one": "{n} parameter",
+          "other": "{n} parameters"
+        }
       },
       "sign_bias": {
         "name": "Asymmetry: Engle–Ng sign bias",
@@ -218,6 +223,11 @@
     "measure_texts": {
       "at_bound": "The parameters the solver left at one of its bounds (α + β at 1, ν at its lowest): their standard errors are not computed the usual way.",
       "variance_stationary": "The persistence P: below 1 the variance returns to a long-run level; at 1 or above it does not, and the half-life and the long-run volatility are not computed."
+    },
+    "note_texts": {
+      "garch_scale": "The fit ran on the returns divided by {scale:num}, their standard deviation; the parameters are given in the series' units.",
+      "garch_solver": "The solver that converged: {solver} (solnp did not).",
+      "garch_at_bound": "{parameter} is at a bound of the solver: its standard error is not computed the usual way."
     },
     "stats": {
       "model": {
@@ -353,18 +363,18 @@
       "sign_bias_not_supported": "Engle and Ng's sign bias test does not reject that the volatility responds alike to falls and rises once the model is taken into account (p-value {p_value:p}, α = {alpha:num}); this does not prove the response is the same.",
       "backtest_coverage_ok": "In the {holdout:int} {unit} kept out, the 1-step VaR at {level:pct} was broken on {violations:int} of them, against {expected:num} expected: Kupiec's test does not reject the rate its level asks (p-value {p_value:p}, α = {alpha:num}).",
       "backtest_coverage_failed": "In the {holdout:int} {unit} kept out, the 1-step VaR at {level:pct} was broken on {violations:int} of them, against {expected:num} expected: Kupiec's test rejects the rate its level asks (p-value {p_value:p}, below α = {alpha:num}).",
-      "backtest_independence_ok": "Christoffersen's test does not reject that the breaks come independently of each other (p-value {p_value:p}, α = {alpha:num}; {expected:num} breaks expected).",
-      "backtest_independence_failed": "Christoffersen's test rejects that the breaks come independently of each other (p-value {p_value:p}, below α = {alpha:num}; {expected:num} breaks expected): they come in clusters.",
+      "backtest_independence_ok": "Christoffersen's test does not reject that the breaks come independently of each other (p-value {p_value:p}, α = {alpha:num}; breaks expected: {expected:num}).",
+      "backtest_independence_failed": "Christoffersen's test rejects that the breaks come independently of each other (p-value {p_value:p}, below α = {alpha:num}; breaks expected: {expected:num}): they come in clusters.",
       "backtest_independence_not_computed": "No observation broke the VaR, against {expected:num} expected: there is no cluster of breaks to test.",
-      "backtest_cc_ok": "Christoffersen's conditional coverage test, rate and independence together, does not reject (p-value {p_value:p}, α = {alpha:num}; {expected:num} breaks expected).",
-      "backtest_cc_failed": "Christoffersen's conditional coverage test, rate and independence together, rejects (p-value {p_value:p}, below α = {alpha:num}; {expected:num} breaks expected).",
-      "backtest_expected": "With {expected:num} breaks expected, these tests can tell only a VaR level far from the one asked; a longer holdout lets them see smaller errors.",
+      "backtest_cc_ok": "Christoffersen's conditional coverage test, rate and independence together, does not reject (p-value {p_value:p}, α = {alpha:num}; breaks expected: {expected:num}).",
+      "backtest_cc_failed": "Christoffersen's conditional coverage test, rate and independence together, rejects (p-value {p_value:p}, below α = {alpha:num}; breaks expected: {expected:num}).",
+      "backtest_expected": "With an expected number of breaks of {expected:num}, these tests can tell only a VaR level far from the one asked; a longer holdout lets them see smaller errors.",
       "backtest_short": "With {holdout:int} observation kept out the backtest is not computed: it needs at least 2.",
       "method_backtest": "With a holdout, the last observations are kept out of the fit; the fitted parameters, fixed, are run through them one step at a time, so that each gets a 1-step VaR from the observations before it only. A break is an observation beyond its VaR. Kupiec's test compares the rate of breaks with the rate the level asks, Christoffersen's whether a break makes the next one more likely, and his third test both together. With few breaks expected (the holdout times 1 − c) their χ² laws are rough and they see only large errors: each sentence says how many breaks were expected.",
-      "summary": "A {model} with {distribution} errors was fitted to {n:int} returns of «{series}», from {first:date} to {last:date}.",
-      "summary_steps": "A {model} with {distribution} errors was fitted to {n:int} returns of «{series}», from step {first:int} to step {last:int}.",
-      "summary_holdout": "A {model} with {distribution} errors was fitted to {n:int} returns of «{series}», from {first:date} to {last:date}; the last {holdout:int} were kept out of the fit to test the value at risk.",
-      "summary_holdout_steps": "A {model} with {distribution} errors was fitted to {n:int} returns of «{series}», from step {first:int} to step {last:int}; the last {holdout:int} were kept out of the fit to test the value at risk.",
+      "summary": "The {model} with {distribution} errors was fitted to {n:int} returns of «{series}», from {first:date} to {last:date}.",
+      "summary_steps": "The {model} with {distribution} errors was fitted to {n:int} returns of «{series}», from step {first:int} to step {last:int}.",
+      "summary_holdout": "The {model} with {distribution} errors was fitted to {n:int} returns of «{series}», from {first:date} to {last:date}; the last {holdout:int} were kept out of the fit to test the value at risk.",
+      "summary_holdout_steps": "The {model} with {distribution} errors was fitted to {n:int} returns of «{series}», from step {first:int} to step {last:int}; the last {holdout:int} were kept out of the fit to test the value at risk.",
       "summary_prices": {
         "returns_type=simple": "The returns were computed from the prices as simple returns, P_t / P_(t−1) − 1.",
         "": "The returns were computed from the prices as log returns, ln(P_t / P_(t−1))."
@@ -384,9 +394,9 @@
         "input_kind=prices": "The volatility forecast for the next step is at its long-run level, {uncond:pct}.",
         "": "The volatility forecast for the next step is at its long-run level, {uncond:num}."
       },
-      "asymmetry_gjr": "A fall raises the next variance {ratio:num} times as much as a rise of the same size (Σγ = {gamma:num}).",
-      "asymmetry_gjr_falls_only": "Only falls move the next variance: the α terms are 0, and Σγ = {gamma:num}.",
-      "asymmetry_egarch": "After a fall of {shock:num} standard deviations the next variance is {ratio:num} times what it is after a rise of the same size (sign effect α₁ = {alpha:num}, size effect γ₁ = {gamma:num}).",
+      "asymmetry_gjr": "In the next variance a rise's squared shock weighs α₁ = {alpha:num}, a fall's weighs α₁ + γ₁, with γ₁ = {gamma:num}.",
+      "asymmetry_gjr_falls_only": "α₁ is at its bound, 0: in the next variance only a fall's squared shock has a weight, γ₁ = {gamma:num}.",
+      "asymmetry_egarch": "After a shock z the next log-variance moves by α₁ z + γ₁ (|z| − E|z|): the sign effect α₁ = {alpha:num} makes a fall and a rise of the same size move it differently, the size effect γ₁ = {gamma:num} moves it by the size alone.",
       "asymmetry_none": "This model lets the size of a shock move the variance, not its sign: a fall and a rise of the same size move it alike.",
       "distribution_norm": "The errors are taken as normal: the model has no parameter for tails heavier than a normal's.",
       "distribution_std": "The errors' Student t has ν = {shape:num} degrees of freedom ({level:pct} interval {low:num} – {high:num}); the normal is its limit as ν grows, and a smaller ν means heavier tails.",
@@ -509,7 +519,7 @@
       "news_impact": "Impatto delle notizie: la varianza successiva dopo uno shock ε, in σ di lungo periodo",
       "z_acf": "ACF di z",
       "z2_acf": "ACF di z²",
-      "hist": "Istogramma di z e densità stimata",
+      "hist": "Istogramma di z",
       "qq": "Q–Q di z contro la distribuzione stimata",
       "backtest": "Periodo di verifica: rendimenti, VaR a un passo e violazioni"
     },
@@ -534,6 +544,7 @@
     },
     "coef": {
       "title": "Coefficienti nelle unità della serie",
+      "intervals": "Intervalli al {level} %",
       "robust": "Errori standard: robusti (sandwich QML).",
       "classical": "Errori standard: classici (inversa dell'Hessiana)."
     },
@@ -644,7 +655,11 @@
         "name": "Stabilità: Nyblom",
         "h0": "Ogni parametro è costante nel campione.",
         "advice": "I parametri si muovono nel campione: stimate un periodo più breve e più recente, o leggete i parametri nella tabella della stabilità.",
-        "not_computed": "Gli score della stima non erano disponibili."
+        "not_computed": "Gli score della stima non erano disponibili.",
+        "count": {
+          "one": "{n} parametro",
+          "other": "{n} parametri"
+        }
       },
       "sign_bias": {
         "name": "Asimmetria: sign bias di Engle–Ng",
@@ -670,6 +685,11 @@
     "measure_texts": {
       "at_bound": "I parametri che il solutore ha lasciato a uno dei suoi limiti (α + β a 1, ν al minimo): i loro errori standard non sono calcolati nel modo consueto.",
       "variance_stationary": "La persistenza P: sotto 1 la varianza torna a un livello di lungo periodo; a 1 o sopra non torna, e l'emivita e la volatilità di lungo periodo non sono calcolate."
+    },
+    "note_texts": {
+      "garch_scale": "La stima è stata fatta sui rendimenti divisi per {scale:num}, la loro deviazione standard; i parametri sono dati nelle unità della serie.",
+      "garch_solver": "Il solutore che è arrivato a convergenza: {solver} (solnp no).",
+      "garch_at_bound": "{parameter} è a un limite del solutore: il suo errore standard non è calcolato nel modo consueto."
     },
     "stats": {
       "model": {
@@ -803,14 +823,14 @@
         "": "Il test sign bias di Engle e Ng rifiuta che la volatilità risponda allo stesso modo a discese e salite, tenuto conto del modello (p-value {p_value:p}, sotto α = {alpha:num}): resta un'asimmetria che i termini del modello non colgono."
       },
       "sign_bias_not_supported": "Il test sign bias di Engle e Ng non rifiuta che la volatilità risponda allo stesso modo a discese e salite, tenuto conto del modello (p-value {p_value:p}, α = {alpha:num}); questo non dimostra che la risposta sia la stessa.",
-      "backtest_coverage_ok": "Nei {holdout:int} {unit} tenuti fuori, il VaR a un passo al {level:pct} è stato violato in {violations:int} di essi, contro {expected:num} violazioni attese: il test di Kupiec non rifiuta la frequenza che il suo livello chiede (p-value {p_value:p}, α = {alpha:num}).",
-      "backtest_coverage_failed": "Nei {holdout:int} {unit} tenuti fuori, il VaR a un passo al {level:pct} è stato violato in {violations:int} di essi, contro {expected:num} violazioni attese: il test di Kupiec rifiuta la frequenza che il suo livello chiede (p-value {p_value:p}, sotto α = {alpha:num}).",
-      "backtest_independence_ok": "Il test di Christoffersen non rifiuta che le violazioni arrivino indipendenti l'una dall'altra (p-value {p_value:p}, α = {alpha:num}; {expected:num} violazioni attese).",
-      "backtest_independence_failed": "Il test di Christoffersen rifiuta che le violazioni arrivino indipendenti l'una dall'altra (p-value {p_value:p}, sotto α = {alpha:num}; {expected:num} violazioni attese): arrivano a grappoli.",
-      "backtest_independence_not_computed": "Nessuna osservazione ha violato il VaR, contro {expected:num} violazioni attese: non c'è un grappolo di violazioni da verificare.",
-      "backtest_cc_ok": "Il test di copertura condizionata di Christoffersen, frequenza e indipendenza insieme, non rifiuta (p-value {p_value:p}, α = {alpha:num}; {expected:num} violazioni attese).",
-      "backtest_cc_failed": "Il test di copertura condizionata di Christoffersen, frequenza e indipendenza insieme, rifiuta (p-value {p_value:p}, sotto α = {alpha:num}; {expected:num} violazioni attese).",
-      "backtest_expected": "Con {expected:num} violazioni attese, questi test distinguono solo un livello del VaR lontano da quello chiesto; un periodo di verifica più lungo fa vedere loro scarti più piccoli.",
+      "backtest_coverage_ok": "Nei {holdout:int} {unit} tenuti fuori, il VaR a un passo al {level:pct} è stato violato in {violations:int} di essi, contro un numero atteso di {expected:num}: il test di Kupiec non rifiuta la frequenza che il suo livello chiede (p-value {p_value:p}, α = {alpha:num}).",
+      "backtest_coverage_failed": "Nei {holdout:int} {unit} tenuti fuori, il VaR a un passo al {level:pct} è stato violato in {violations:int} di essi, contro un numero atteso di {expected:num}: il test di Kupiec rifiuta la frequenza che il suo livello chiede (p-value {p_value:p}, sotto α = {alpha:num}).",
+      "backtest_independence_ok": "Il test di Christoffersen non rifiuta che le violazioni arrivino indipendenti l'una dall'altra (p-value {p_value:p}, α = {alpha:num}; violazioni attese: {expected:num}).",
+      "backtest_independence_failed": "Il test di Christoffersen rifiuta che le violazioni arrivino indipendenti l'una dall'altra (p-value {p_value:p}, sotto α = {alpha:num}; violazioni attese: {expected:num}): arrivano a grappoli.",
+      "backtest_independence_not_computed": "Nessuna osservazione ha violato il VaR, contro un numero atteso di {expected:num}: non c'è un grappolo di violazioni da verificare.",
+      "backtest_cc_ok": "Il test di copertura condizionata di Christoffersen, frequenza e indipendenza insieme, non rifiuta (p-value {p_value:p}, α = {alpha:num}; violazioni attese: {expected:num}).",
+      "backtest_cc_failed": "Il test di copertura condizionata di Christoffersen, frequenza e indipendenza insieme, rifiuta (p-value {p_value:p}, sotto α = {alpha:num}; violazioni attese: {expected:num}).",
+      "backtest_expected": "Con un numero atteso di violazioni pari a {expected:num}, questi test distinguono solo un livello del VaR lontano da quello chiesto; un periodo di verifica più lungo fa vedere loro scarti più piccoli.",
       "backtest_short": "Con {holdout:int} osservazione tenuta fuori il backtest non è calcolato: ne servono almeno 2.",
       "method_backtest": "Con un periodo di verifica, le ultime osservazioni restano fuori dalla stima; i parametri stimati, fissi, vengono applicati a esse un passo alla volta, così che ciascuna abbia un VaR a un passo calcolato solo dalle osservazioni precedenti. Una violazione è un'osservazione oltre il suo VaR. Il test di Kupiec confronta la frequenza delle violazioni con quella che il livello chiede, quello di Christoffersen se una violazione rende più probabile la successiva, e il suo terzo test le due cose insieme. Con poche violazioni attese (il periodo di verifica per 1 − c) le loro leggi χ² sono approssimative e vedono solo scarti grandi: ogni frase dice quante violazioni erano attese.",
       "summary": "Un {model} con errori {distribution} è stato stimato su {n:int} rendimenti di «{series}», dal {first:date} al {last:date}.",
@@ -836,9 +856,9 @@
         "input_kind=prices": "La volatilità prevista per il passo successivo è al suo livello di lungo periodo, {uncond:pct}.",
         "": "La volatilità prevista per il passo successivo è al suo livello di lungo periodo, {uncond:num}."
       },
-      "asymmetry_gjr": "Una discesa alza la varianza successiva {ratio:num} volte quanto una salita della stessa ampiezza (Σγ = {gamma:num}).",
-      "asymmetry_gjr_falls_only": "Solo le discese muovono la varianza successiva: i termini α sono 0, e Σγ = {gamma:num}.",
-      "asymmetry_egarch": "Dopo una discesa di {shock:num} deviazioni standard la varianza successiva è {ratio:num} volte quella dopo una salita della stessa ampiezza (effetto del segno α₁ = {alpha:num}, effetto dell'ampiezza γ₁ = {gamma:num}).",
+      "asymmetry_gjr": "Nella varianza successiva il quadrato di uno shock in salita pesa α₁ = {alpha:num}, quello di uno shock in discesa α₁ + γ₁, con γ₁ = {gamma:num}.",
+      "asymmetry_gjr_falls_only": "α₁ è al suo limite, 0: nella varianza successiva pesa solo il quadrato di uno shock in discesa, con γ₁ = {gamma:num}.",
+      "asymmetry_egarch": "Dopo uno shock z la log-varianza successiva si muove di α₁ z + γ₁ (|z| − E|z|): l'effetto del segno α₁ = {alpha:num} fa muovere in modo diverso una discesa e una salita della stessa ampiezza, l'effetto dell'ampiezza γ₁ = {gamma:num} la muove con la sola ampiezza.",
       "asymmetry_none": "Questo modello fa muovere la varianza dall'ampiezza di uno shock, non dal suo segno: una discesa e una salita della stessa ampiezza la muovono allo stesso modo.",
       "distribution_norm": "Gli errori sono presi come normali: il modello non ha un parametro per code più pesanti di quelle di una normale.",
       "distribution_std": "La t di Student degli errori ha ν = {shape:num} gradi di libertà (intervallo al {level:pct} {low:num} – {high:num}); la normale è il suo limite al crescere di ν, e un ν minore vuol dire code più pesanti.",
@@ -961,7 +981,7 @@
       "news_impact": "Nachrichteneinfluss: die nächste Varianz nach einem Schock ε, in langfristigen σ",
       "z_acf": "ACF von z",
       "z2_acf": "ACF von z²",
-      "hist": "Histogramm von z und angepasste Dichte",
+      "hist": "Histogramm von z",
       "qq": "Q–Q von z gegen die angepasste Verteilung",
       "backtest": "Testzeitraum: Renditen, 1-Schritt-VaR und seine Überschreitungen"
     },
@@ -986,6 +1006,7 @@
     },
     "coef": {
       "title": "Koeffizienten in den Einheiten der Reihe",
+      "intervals": "Intervalle zu {level} %",
       "robust": "Standardfehler: robust (QML-Sandwich).",
       "classical": "Standardfehler: klassisch (inverse Hesse-Matrix)."
     },
@@ -1096,7 +1117,11 @@
         "name": "Stabilität: Nyblom",
         "h0": "Jeder Parameter ist über die Stichprobe konstant.",
         "advice": "Die Parameter bewegen sich über die Stichprobe: Passen Sie einen kürzeren, jüngeren Zeitraum an oder lesen Sie die Parameter in der Stabilitätstabelle.",
-        "not_computed": "Die Scores der Anpassung waren nicht verfügbar."
+        "not_computed": "Die Scores der Anpassung waren nicht verfügbar.",
+        "count": {
+          "one": "{n} Parameter",
+          "other": "{n} Parameter"
+        }
       },
       "sign_bias": {
         "name": "Asymmetrie: Sign-Bias nach Engle–Ng",
@@ -1122,6 +1147,11 @@
     "measure_texts": {
       "at_bound": "Die Parameter, die der Löser an einer seiner Grenzen gelassen hat (α + β bei 1, ν an seinem kleinsten Wert): Ihre Standardfehler werden nicht auf die übliche Weise berechnet.",
       "variance_stationary": "Die Persistenz P: Unter 1 kehrt die Varianz zu einem langfristigen Niveau zurück; bei 1 oder darüber nicht, und Halbwertszeit und langfristige Volatilität werden nicht berechnet."
+    },
+    "note_texts": {
+      "garch_scale": "Die Schätzung lief auf den Renditen geteilt durch {scale:num}, ihre Standardabweichung; die Parameter sind in den Einheiten der Reihe angegeben.",
+      "garch_solver": "Konvergiert ist der Löser {solver} (solnp nicht).",
+      "garch_at_bound": "{parameter} liegt an einer Grenze des Lösers: sein Standardfehler wird nicht auf dem üblichen Weg berechnet."
     },
     "stats": {
       "model": {
@@ -1257,12 +1287,12 @@
       "sign_bias_not_supported": "Der Sign-Bias-Test von Engle und Ng verwirft nicht, dass die Volatilität auf Rückgänge und Anstiege gleich reagiert, sobald das Modell berücksichtigt ist (p-Wert {p_value:p}, α = {alpha:num}); das beweist nicht, dass die Reaktion dieselbe ist.",
       "backtest_coverage_ok": "Über die {holdout:int} zurückgehaltenen {unit} wurde der 1-Schritt-VaR zu {level:pct} {violations:int}-mal überschritten, bei {expected:num} erwarteten: Kupiecs Test verwirft die Rate, die sein Niveau verlangt, nicht (p-Wert {p_value:p}, α = {alpha:num}).",
       "backtest_coverage_failed": "Über die {holdout:int} zurückgehaltenen {unit} wurde der 1-Schritt-VaR zu {level:pct} {violations:int}-mal überschritten, bei {expected:num} erwarteten: Kupiecs Test verwirft die Rate, die sein Niveau verlangt (p-Wert {p_value:p}, unter α = {alpha:num}).",
-      "backtest_independence_ok": "Christoffersens Test verwirft nicht, dass die Überschreitungen unabhängig voneinander auftreten (p-Wert {p_value:p}, α = {alpha:num}; {expected:num} Überschreitungen erwartet).",
-      "backtest_independence_failed": "Christoffersens Test verwirft, dass die Überschreitungen unabhängig voneinander auftreten (p-Wert {p_value:p}, unter α = {alpha:num}; {expected:num} Überschreitungen erwartet): Sie kommen gehäuft.",
+      "backtest_independence_ok": "Christoffersens Test verwirft nicht, dass die Überschreitungen unabhängig voneinander auftreten (p-Wert {p_value:p}, α = {alpha:num}; erwartete Überschreitungen: {expected:num}).",
+      "backtest_independence_failed": "Christoffersens Test verwirft, dass die Überschreitungen unabhängig voneinander auftreten (p-Wert {p_value:p}, unter α = {alpha:num}; erwartete Überschreitungen: {expected:num}): Sie kommen gehäuft.",
       "backtest_independence_not_computed": "Keine Beobachtung hat den VaR überschritten, bei {expected:num} erwarteten: Es gibt keine Häufung von Überschreitungen zu testen.",
-      "backtest_cc_ok": "Christoffersens Test der bedingten Abdeckung, Rate und Unabhängigkeit zusammen, verwirft nicht (p-Wert {p_value:p}, α = {alpha:num}; {expected:num} Überschreitungen erwartet).",
-      "backtest_cc_failed": "Christoffersens Test der bedingten Abdeckung, Rate und Unabhängigkeit zusammen, verwirft (p-Wert {p_value:p}, unter α = {alpha:num}; {expected:num} Überschreitungen erwartet).",
-      "backtest_expected": "Bei {expected:num} erwarteten Überschreitungen können diese Tests nur ein VaR-Niveau erkennen, das weit vom verlangten entfernt ist; ein längerer Testzeitraum lässt sie kleinere Fehler sehen.",
+      "backtest_cc_ok": "Christoffersens Test der bedingten Abdeckung, Rate und Unabhängigkeit zusammen, verwirft nicht (p-Wert {p_value:p}, α = {alpha:num}; erwartete Überschreitungen: {expected:num}).",
+      "backtest_cc_failed": "Christoffersens Test der bedingten Abdeckung, Rate und Unabhängigkeit zusammen, verwirft (p-Wert {p_value:p}, unter α = {alpha:num}; erwartete Überschreitungen: {expected:num}).",
+      "backtest_expected": "Bei einer erwarteten Zahl von Überschreitungen von {expected:num} können diese Tests nur ein VaR-Niveau erkennen, das weit vom verlangten entfernt ist; ein längerer Testzeitraum lässt sie kleinere Fehler sehen.",
       "backtest_short": "Mit {holdout:int} zurückgehaltener Beobachtung wird der Backtest nicht berechnet: Er braucht mindestens 2.",
       "method_backtest": "Mit einem Testzeitraum bleiben die letzten Beobachtungen außerhalb der Anpassung; die angepassten Parameter laufen, fest, Schritt für Schritt durch sie, sodass jede einen 1-Schritt-VaR allein aus den Beobachtungen davor erhält. Eine Überschreitung ist eine Beobachtung jenseits ihres VaR. Kupiecs Test vergleicht die Rate der Überschreitungen mit der Rate, die das Niveau verlangt, Christoffersens Test, ob eine Überschreitung die nächste wahrscheinlicher macht, und sein dritter Test beides zusammen. Bei wenigen erwarteten Überschreitungen (der Testzeitraum mal 1 − c) sind ihre χ²-Verteilungen grob und sie sehen nur große Fehler: Jeder Satz sagt, wie viele Überschreitungen erwartet waren.",
       "summary": "Ein {model} (Fehlerverteilung: {distribution}) wurde an {n:int} Renditen von «{series}» angepasst, vom {first:date} bis zum {last:date}.",
@@ -1288,9 +1318,9 @@
         "input_kind=prices": "Die Volatilitätsprognose für den nächsten Schritt liegt auf ihrem langfristigen Niveau, {uncond:pct}.",
         "": "Die Volatilitätsprognose für den nächsten Schritt liegt auf ihrem langfristigen Niveau, {uncond:num}."
       },
-      "asymmetry_gjr": "Ein Rückgang hebt die nächste Varianz {ratio:num}-mal so viel wie ein gleich großer Anstieg (Σγ = {gamma:num}).",
-      "asymmetry_gjr_falls_only": "Nur Rückgänge bewegen die nächste Varianz: Die α-Terme sind 0, und Σγ = {gamma:num}.",
-      "asymmetry_egarch": "Nach einem Rückgang um {shock:num} Standardabweichungen beträgt die nächste Varianz das {ratio:num}-Fache der Varianz nach einem Anstieg derselben Höhe (Vorzeicheneffekt α₁ = {alpha:num}, Größeneffekt γ₁ = {gamma:num}).",
+      "asymmetry_gjr": "In der nächsten Varianz wiegt das Quadrat eines Anstiegs α₁ = {alpha:num}, das eines Rückgangs α₁ + γ₁, mit γ₁ = {gamma:num}.",
+      "asymmetry_gjr_falls_only": "α₁ liegt an seiner Grenze, 0: in der nächsten Varianz wiegt nur das Quadrat eines Rückgangs, mit γ₁ = {gamma:num}.",
+      "asymmetry_egarch": "Nach einem Schock z ändert sich die nächste Log-Varianz um α₁ z + γ₁ (|z| − E|z|): der Vorzeicheneffekt α₁ = {alpha:num} lässt einen Rückgang und einen Anstieg derselben Höhe verschieden wirken, der Größeneffekt γ₁ = {gamma:num} wirkt allein über die Höhe.",
       "asymmetry_none": "Bei diesem Modell bewegt die Größe eines Schocks die Varianz, nicht sein Vorzeichen: Ein Rückgang und ein gleich großer Anstieg bewegen sie gleich.",
       "distribution_norm": "Die Fehler werden als normalverteilt angenommen: Das Modell hat keinen Parameter für Ränder, die schwerer sind als die einer Normalverteilung.",
       "distribution_std": "Die Student-t-Verteilung der Fehler hat ν = {shape:num} Freiheitsgrade (Intervall zu {level:pct}: {low:num} – {high:num}); die Normalverteilung ist ihr Grenzfall für wachsendes ν, und ein kleineres ν bedeutet schwerere Ränder.",
@@ -1413,7 +1443,7 @@
       "news_impact": "Impacto de las noticias: la varianza siguiente tras un choque ε, en σ de largo plazo",
       "z_acf": "ACF de z",
       "z2_acf": "ACF de z²",
-      "hist": "Histograma de z y densidad ajustada",
+      "hist": "Histograma de z",
       "qq": "Q–Q de z frente a la distribución ajustada",
       "backtest": "Periodo de prueba: rendimientos, VaR a 1 paso y sus rebases"
     },
@@ -1438,6 +1468,7 @@
     },
     "coef": {
       "title": "Coeficientes en las unidades de la serie",
+      "intervals": "Intervalos al {level} %",
       "robust": "Errores estándar: robustos (sándwich QML).",
       "classical": "Errores estándar: clásicos (inversa de la hessiana)."
     },
@@ -1548,7 +1579,11 @@
         "name": "Estabilidad: Nyblom",
         "h0": "Cada parámetro es constante a lo largo de la muestra.",
         "advice": "Los parámetros se mueven a lo largo de la muestra: ajuste un periodo más corto y más reciente, o lea los parámetros en la tabla de estabilidad.",
-        "not_computed": "Los scores del ajuste no estaban disponibles."
+        "not_computed": "Los scores del ajuste no estaban disponibles.",
+        "count": {
+          "one": "{n} parámetro",
+          "other": "{n} parámetros"
+        }
       },
       "sign_bias": {
         "name": "Asimetría: sesgo de signo de Engle–Ng",
@@ -1574,6 +1609,11 @@
     "measure_texts": {
       "at_bound": "Los parámetros que el optimizador dejó en uno de sus límites (α + β en 1, ν en su valor más bajo): sus errores estándar no se calculan de la forma habitual.",
       "variance_stationary": "La persistencia P: por debajo de 1 la varianza vuelve a un nivel de largo plazo; en 1 o por encima no vuelve, y la vida media y la volatilidad de largo plazo no se calculan."
+    },
+    "note_texts": {
+      "garch_scale": "El ajuste se hizo sobre los rendimientos divididos por {scale:num}, su desviación típica; los parámetros se dan en las unidades de la serie.",
+      "garch_solver": "El optimizador que convergió: {solver} (solnp no).",
+      "garch_at_bound": "{parameter} está en un límite del optimizador: su error típico no se calcula de la forma habitual."
     },
     "stats": {
       "model": {
@@ -1709,12 +1749,12 @@
       "sign_bias_not_supported": "La prueba de sesgo de signo de Engle y Ng no rechaza que la volatilidad responda igual a las caídas y a las subidas una vez tenido en cuenta el modelo (p-valor {p_value:p}, α = {alpha:num}); esto no demuestra que la respuesta sea la misma.",
       "backtest_coverage_ok": "En el periodo reservado ({holdout:int} {unit}), los rebases del VaR a 1 paso al {level:pct} fueron {violations:int}, frente a {expected:num} esperados: la prueba de Kupiec no rechaza la tasa que pide su nivel (p-valor {p_value:p}, α = {alpha:num}).",
       "backtest_coverage_failed": "En el periodo reservado ({holdout:int} {unit}), los rebases del VaR a 1 paso al {level:pct} fueron {violations:int}, frente a {expected:num} esperados: la prueba de Kupiec rechaza la tasa que pide su nivel (p-valor {p_value:p}, por debajo de α = {alpha:num}).",
-      "backtest_independence_ok": "La prueba de Christoffersen no rechaza que los rebases lleguen de forma independiente unos de otros (p-valor {p_value:p}, α = {alpha:num}; {expected:num} rebases esperados).",
-      "backtest_independence_failed": "La prueba de Christoffersen rechaza que los rebases lleguen de forma independiente unos de otros (p-valor {p_value:p}, por debajo de α = {alpha:num}; {expected:num} rebases esperados): llegan agrupados.",
-      "backtest_independence_not_computed": "Ninguna observación rebasó el VaR, frente a {expected:num} rebases esperados: no hay agrupamiento de rebases que probar.",
-      "backtest_cc_ok": "La prueba de cobertura condicional de Christoffersen, tasa e independencia juntas, no rechaza (p-valor {p_value:p}, α = {alpha:num}; {expected:num} rebases esperados).",
-      "backtest_cc_failed": "La prueba de cobertura condicional de Christoffersen, tasa e independencia juntas, rechaza (p-valor {p_value:p}, por debajo de α = {alpha:num}; {expected:num} rebases esperados).",
-      "backtest_expected": "Con {expected:num} rebases esperados, estas pruebas solo pueden distinguir un nivel del VaR lejano al pedido; un periodo de prueba más largo les deja ver errores más pequeños.",
+      "backtest_independence_ok": "La prueba de Christoffersen no rechaza que los rebases lleguen de forma independiente unos de otros (p-valor {p_value:p}, α = {alpha:num}; rebases esperados: {expected:num}).",
+      "backtest_independence_failed": "La prueba de Christoffersen rechaza que los rebases lleguen de forma independiente unos de otros (p-valor {p_value:p}, por debajo de α = {alpha:num}; rebases esperados: {expected:num}): llegan agrupados.",
+      "backtest_independence_not_computed": "Ninguna observación rebasó el VaR, frente a un número esperado de {expected:num}: no hay agrupamiento de rebases que probar.",
+      "backtest_cc_ok": "La prueba de cobertura condicional de Christoffersen, tasa e independencia juntas, no rechaza (p-valor {p_value:p}, α = {alpha:num}; rebases esperados: {expected:num}).",
+      "backtest_cc_failed": "La prueba de cobertura condicional de Christoffersen, tasa e independencia juntas, rechaza (p-valor {p_value:p}, por debajo de α = {alpha:num}; rebases esperados: {expected:num}).",
+      "backtest_expected": "Con un número esperado de rebases de {expected:num}, estas pruebas solo pueden distinguir un nivel del VaR lejano al pedido; un periodo de prueba más largo les deja ver errores más pequeños.",
       "backtest_short": "Con {holdout:int} observación reservada el backtest no se calcula: necesita al menos 2.",
       "method_backtest": "Con un periodo de prueba, las últimas observaciones quedan fuera del ajuste; los parámetros ajustados, fijos, las recorren paso a paso, de modo que cada una recibe un VaR a 1 paso calculado solo con las observaciones anteriores. Un rebase es una observación más allá de su VaR. La prueba de Kupiec compara la tasa de rebases con la tasa que pide el nivel, la de Christoffersen si un rebase hace más probable el siguiente, y su tercera prueba las dos cosas juntas. Con pocos rebases esperados (el periodo de prueba por 1 − c) sus leyes χ² son toscas y solo ven errores grandes: cada frase dice cuántos rebases se esperaban.",
       "summary": "Se ajustó un {model} con errores de distribución {distribution} a {n:int} rendimientos de «{series}», del {first:date} al {last:date}.",
@@ -1740,9 +1780,9 @@
         "input_kind=prices": "La previsión de la volatilidad para el paso siguiente está en su nivel de largo plazo, {uncond:pct}.",
         "": "La previsión de la volatilidad para el paso siguiente está en su nivel de largo plazo, {uncond:num}."
       },
-      "asymmetry_gjr": "Una caída eleva la varianza siguiente {ratio:num} veces lo que la eleva una subida del mismo tamaño (Σγ = {gamma:num}).",
-      "asymmetry_gjr_falls_only": "Solo las caídas mueven la varianza siguiente: los términos α son 0, y Σγ = {gamma:num}.",
-      "asymmetry_egarch": "Tras una caída de {shock:num} desviaciones típicas la varianza siguiente es {ratio:num} veces la que sigue a una subida del mismo tamaño (efecto del signo α₁ = {alpha:num}, efecto del tamaño γ₁ = {gamma:num}).",
+      "asymmetry_gjr": "En la varianza siguiente, el cuadrado de una subida pesa α₁ = {alpha:num} y el de una caída α₁ + γ₁, con γ₁ = {gamma:num}.",
+      "asymmetry_gjr_falls_only": "α₁ está en su límite, 0: en la varianza siguiente solo pesa el cuadrado de una caída, con γ₁ = {gamma:num}.",
+      "asymmetry_egarch": "Tras un choque z, la log-varianza siguiente varía en α₁ z + γ₁ (|z| − E|z|): el efecto del signo α₁ = {alpha:num} hace que una caída y una subida del mismo tamaño actúen de forma distinta, el efecto del tamaño γ₁ = {gamma:num} actúa solo por el tamaño.",
       "asymmetry_none": "En este modelo el tamaño de un choque mueve la varianza, no su signo: una caída y una subida del mismo tamaño la mueven igual.",
       "distribution_norm": "Los errores se toman como normales: el modelo no tiene ningún parámetro para colas más pesadas que las de una normal.",
       "distribution_std": "La t de Student de los errores tiene ν = {shape:num} grados de libertad (intervalo al {level:pct}: {low:num} – {high:num}); la normal es su límite cuando ν crece, y un ν menor significa colas más pesadas.",
@@ -1865,7 +1905,7 @@
       "news_impact": "Impact des nouvelles : la variance suivante après un choc ε, en σ de long terme",
       "z_acf": "ACF de z",
       "z2_acf": "ACF de z²",
-      "hist": "Histogramme de z et densité ajustée",
+      "hist": "Histogramme de z",
       "qq": "Q–Q de z contre la loi ajustée",
       "backtest": "Période de test : rendements, VaR à 1 pas et ses dépassements"
     },
@@ -1890,6 +1930,7 @@
     },
     "coef": {
       "title": "Coefficients dans les unités de la série",
+      "intervals": "Intervalles à {level} %",
       "robust": "Erreurs standard : robustes (sandwich QML).",
       "classical": "Erreurs standard : classiques (inverse de la hessienne)."
     },
@@ -2000,7 +2041,11 @@
         "name": "Stabilité : Nyblom",
         "h0": "Chaque paramètre est constant sur l'échantillon.",
         "advice": "Les paramètres bougent sur l'échantillon : ajustez une période plus courte et plus récente, ou lisez les paramètres dans la table de stabilité.",
-        "not_computed": "Les scores de l'ajustement n'étaient pas disponibles."
+        "not_computed": "Les scores de l'ajustement n'étaient pas disponibles.",
+        "count": {
+          "one": "{n} paramètre",
+          "other": "{n} paramètres"
+        }
       },
       "sign_bias": {
         "name": "Asymétrie : biais de signe d'Engle–Ng",
@@ -2026,6 +2071,11 @@
     "measure_texts": {
       "at_bound": "Les paramètres que le solveur a laissés à l'une de ses bornes (α + β à 1, ν à sa valeur la plus basse) : leurs erreurs standard ne sont pas calculées de la manière habituelle.",
       "variance_stationary": "La persistance P : sous 1, la variance revient à un niveau de long terme ; à 1 ou au-dessus elle n'y revient pas, et la demi-vie et la volatilité de long terme ne sont pas calculées."
+    },
+    "note_texts": {
+      "garch_scale": "L'estimation a porté sur les rendements divisés par {scale:num}, leur écart-type ; les paramètres sont donnés dans les unités de la série.",
+      "garch_solver": "Le solveur qui a convergé : {solver} (solnp non).",
+      "garch_at_bound": "{parameter} est à une borne du solveur : son erreur type n'est pas calculée de la manière habituelle."
     },
     "stats": {
       "model": {
@@ -2161,12 +2211,12 @@
       "sign_bias_not_supported": "Le test du biais de signe d'Engle et Ng ne rejette pas que la volatilité réagisse de la même façon aux baisses et aux hausses une fois le modèle pris en compte (p-valeur {p_value:p}, α = {alpha:num}) ; cela ne démontre pas que la réaction est la même.",
       "backtest_coverage_ok": "Sur la période de test ({holdout:int} {unit}), la VaR à 1 pas au niveau {level:pct} a été dépassée {violations:int} fois, pour {expected:num} attendues : le test de Kupiec ne rejette pas le taux que demande son niveau (p-valeur {p_value:p}, α = {alpha:num}).",
       "backtest_coverage_failed": "Sur la période de test ({holdout:int} {unit}), la VaR à 1 pas au niveau {level:pct} a été dépassée {violations:int} fois, pour {expected:num} attendues : le test de Kupiec rejette le taux que demande son niveau (p-valeur {p_value:p}, sous α = {alpha:num}).",
-      "backtest_independence_ok": "Le test de Christoffersen ne rejette pas que les dépassements arrivent indépendamment les uns des autres (p-valeur {p_value:p}, α = {alpha:num} ; {expected:num} dépassements attendus).",
-      "backtest_independence_failed": "Le test de Christoffersen rejette que les dépassements arrivent indépendamment les uns des autres (p-valeur {p_value:p}, sous α = {alpha:num} ; {expected:num} dépassements attendus) : ils arrivent en grappes.",
-      "backtest_independence_not_computed": "Aucune observation n'a dépassé la VaR, pour {expected:num} dépassements attendus : il n'y a pas de grappe de dépassements à tester.",
-      "backtest_cc_ok": "Le test de couverture conditionnelle de Christoffersen, taux et indépendance ensemble, ne rejette pas (p-valeur {p_value:p}, α = {alpha:num} ; {expected:num} dépassements attendus).",
-      "backtest_cc_failed": "Le test de couverture conditionnelle de Christoffersen, taux et indépendance ensemble, rejette (p-valeur {p_value:p}, sous α = {alpha:num} ; {expected:num} dépassements attendus).",
-      "backtest_expected": "Avec {expected:num} dépassements attendus, ces tests ne peuvent distinguer qu'un niveau de VaR éloigné de celui demandé ; une période de test plus longue leur fait voir des erreurs plus petites.",
+      "backtest_independence_ok": "Le test de Christoffersen ne rejette pas que les dépassements arrivent indépendamment les uns des autres (p-valeur {p_value:p}, α = {alpha:num} ; dépassements attendus : {expected:num}).",
+      "backtest_independence_failed": "Le test de Christoffersen rejette que les dépassements arrivent indépendamment les uns des autres (p-valeur {p_value:p}, sous α = {alpha:num} ; dépassements attendus : {expected:num}) : ils arrivent en grappes.",
+      "backtest_independence_not_computed": "Aucune observation n'a dépassé la VaR, pour un nombre attendu de {expected:num} : il n'y a pas de grappe de dépassements à tester.",
+      "backtest_cc_ok": "Le test de couverture conditionnelle de Christoffersen, taux et indépendance ensemble, ne rejette pas (p-valeur {p_value:p}, α = {alpha:num} ; dépassements attendus : {expected:num}).",
+      "backtest_cc_failed": "Le test de couverture conditionnelle de Christoffersen, taux et indépendance ensemble, rejette (p-valeur {p_value:p}, sous α = {alpha:num} ; dépassements attendus : {expected:num}).",
+      "backtest_expected": "Avec un nombre attendu de dépassements de {expected:num}, ces tests ne peuvent distinguer qu'un niveau de VaR éloigné de celui demandé ; une période de test plus longue leur fait voir des erreurs plus petites.",
       "backtest_short": "Avec {holdout:int} observation mise de côté, le backtest n'est pas calculé : il en faut au moins 2.",
       "method_backtest": "Avec une période de test, les dernières observations sont tenues hors de l'ajustement ; les paramètres ajustés, fixés, les parcourent un pas à la fois, de sorte que chacune reçoit une VaR à 1 pas calculée sur les seules observations d'avant. Un dépassement est une observation au-delà de sa VaR. Le test de Kupiec compare le taux de dépassements au taux que demande le niveau, celui de Christoffersen regarde si un dépassement rend le suivant plus probable, et son troisième test les deux ensemble. Avec peu de dépassements attendus (la période de test fois 1 − c), leurs lois du χ² sont grossières et ils ne voient que de grandes erreurs : chaque phrase dit combien de dépassements étaient attendus.",
       "summary": "Un {model} avec des erreurs suivant une {distribution} a été ajusté sur {n:int} rendements de «{series}», du {first:date} au {last:date}.",
@@ -2192,9 +2242,9 @@
         "input_kind=prices": "La prévision de la volatilité pour le pas suivant est à son niveau de long terme, {uncond:pct}.",
         "": "La prévision de la volatilité pour le pas suivant est à son niveau de long terme, {uncond:num}."
       },
-      "asymmetry_gjr": "Une baisse augmente la variance suivante {ratio:num} fois autant qu'une hausse de même taille (Σγ = {gamma:num}).",
-      "asymmetry_gjr_falls_only": "Seules les baisses font bouger la variance suivante : les termes α valent 0, et Σγ = {gamma:num}.",
-      "asymmetry_egarch": "Après une baisse de {shock:num} écarts-types, la variance suivante vaut {ratio:num} fois ce qu'elle vaut après une hausse de même taille (effet du signe α₁ = {alpha:num}, effet de la taille γ₁ = {gamma:num}).",
+      "asymmetry_gjr": "Dans la variance suivante, le carré d'une hausse pèse α₁ = {alpha:num}, celui d'une baisse α₁ + γ₁, avec γ₁ = {gamma:num}.",
+      "asymmetry_gjr_falls_only": "α₁ est à sa borne, 0 : dans la variance suivante, seul le carré d'une baisse a un poids, γ₁ = {gamma:num}.",
+      "asymmetry_egarch": "Après un choc z, la log-variance suivante varie de α₁ z + γ₁ (|z| − E|z|) : l'effet du signe α₁ = {alpha:num} fait agir différemment une baisse et une hausse de même taille, l'effet de la taille γ₁ = {gamma:num} agit par la seule taille.",
       "asymmetry_none": "Dans ce modèle, la taille d'un choc fait bouger la variance, pas son signe : une baisse et une hausse de même taille la font bouger de la même façon.",
       "distribution_norm": "Les erreurs sont supposées normales : le modèle n'a pas de paramètre pour des queues plus lourdes que celles d'une loi normale.",
       "distribution_std": "La loi de Student des erreurs a ν = {shape:num} degrés de liberté (intervalle à {level:pct} : {low:num} – {high:num}) ; la loi normale est sa limite quand ν grandit, et un ν plus bas veut dire des queues plus lourdes.",

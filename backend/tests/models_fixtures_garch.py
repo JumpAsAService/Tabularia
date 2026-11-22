@@ -10,8 +10,9 @@ lots G1 and G3): a GJR-GARCH(1,1) recursion on deterministic shocks gives the re
 spec's formulas applied to them where they are simple (Kupiec's and Christoffersen's likelihood ratios, the portmanteau Q with a χ²
 tail) and placeholders where they are not (Nyblom's L, the sign bias); the risk measures are those of 10,000 imaginary paths whose
 distribution is a Student t scaled by the horizon. Every verdict is a p-value against the node's alpha. Every row the catalogue
-declares for the variant that a run with these parameters writes is here, and the `reading` rows are lines of the contract the
-runners write (docs/specs/garch-risk.md, «As built / G4»), as `@id name=value` (the notes' format).
+declares for the variant that a run with these parameters writes is here, but no `reading` row: the layouts choose the explanation
+from these rows (`common.READINGS`, docs/specs/garch-risk.md, «As built / G4»). The GARCH node's fixture is its runner's output
+(lot G1), written with `--from-results`.
 """
 from __future__ import annotations
 
@@ -19,30 +20,15 @@ import math
 from datetime import date, timedelta
 from typing import Any
 
-from tests.models_fixtures_decomposition import Table, _chi2_sf, _stars, note
+from tests.models_fixtures_decomposition import Table, _chi2_sf, _stars
 
 EPOCH = date(1970, 1, 1)
 ALPHA = 0.05
-# the paragraphs and the formulas of «How this report was computed» a run with these options writes (the contract of lot G4)
-GARCH_METHODS = ("method_garch", "method_scale", "method_estimation", "method_distribution", "method_checks", "method_nyblom",
-                 "method_sign_bias", "method_backtest", "method_forecast")
-GARCH_FORMULAS = ("formula_mean", "formula_variance", "formula_distribution", "formula_likelihood", "formula_persistence",
-                  "formula_portmanteau", "formula_arch_lm", "formula_nyblom", "formula_sign_bias", "formula_var_1step", "formula_kupiec",
-                  "formula_christoffersen")
-RISK_METHODS_GARCH = ("method_simulation", "method_seed", "method_innovations", "method_variable", "method_var", "method_es",
-                      "method_threshold", "method_drawdown", "method_passes", "method_backtest", "method_model_garch")
-RISK_FORMULAS_GARCH = ("formula_garch_path", "formula_variable", "formula_var", "formula_es", "formula_clopper_pearson",
-                       "formula_drawdown", "formula_moments", "formula_band_error", "formula_var_1step", "formula_kupiec",
-                       "formula_christoffersen")
-RISK_METHODS_ARIMA = ("method_simulation", "method_seed", "method_innovations", "method_variable", "method_var", "method_es",
-                      "method_threshold", "method_passes", "method_model_arima")
-RISK_FORMULAS_ARIMA = ("formula_arima_path", "formula_variable", "formula_var", "formula_es", "formula_clopper_pearson",
-                       "formula_moments", "formula_band_error")
 
 PARAMS: dict[tuple[str, str], dict[str, Any]] = {
-    # three years of a durum wheat's daily prices (a trading-day series: `index`, the dates are labels), the last 250 kept out
-    ("garch", "default"): {"time": "data", "value": "prezzo", "frequency": "index", "input_kind": "prices", "returns_type": "log",
-                           "variance_model": "gjr", "distribution": "sstd", "holdout": 250, "horizon": 10, "output": "volatility"},
+    # the runner's own output (lot G1) on its reference prices (`garch_prices.csv`, 301 trading days), the last 50 kept out
+    ("garch", "default"): {"time": "day", "value": "price", "frequency": "index", "input_kind": "prices", "variance_model": "gjr",
+                           "distribution": "sstd", "holdout": 50, "output": "volatility"},
     ("risk_simulation", "garch"): {"time": "data", "value": "prezzo", "frequency": "index", "model": "garch", "input_kind": "prices",
                                    "variance_model": "gjr", "distribution": "sstd", "paths": 10_000, "horizon": 10, "holdout": 250,
                                    "threshold": 280.0, "position": 100000, "output": "risk_summary"},
@@ -146,10 +132,7 @@ def build(model: str, variant: str, params: dict[str, Any], spec: dict[str, Any]
     alpha, level = checked["alpha"], checked["var_level"]
     lb_lag = min(10, n // 5) + 3
     arch_lags = 12
-    notes: list[tuple[str, str | None, str]] = []
 
-    def say(block: str, level_2: str | None, id_: str, **values: Any) -> None:
-        notes.append((block, level_2, note(id_, **values)))
 
     name = "GJR-GARCH(1,1), skewed t"
     nu, xi = 5.8, 0.93
@@ -239,26 +222,6 @@ def build(model: str, variant: str, params: dict[str, Any], spec: dict[str, Any]
     t.add("assumption", "count", 0, level="at_bound")
     t.add("assumption", "value", s["persistence"], level="variance_stationary")
     t.add("assumption", "count", 1, level="variance_stationary")
-    # the fitted model's lines: the GARCH node's own blocks, the risk node's `model` block (its verdicts only)
-    checks = "model" if risk else "residuals"
-    if not risk:
-        say("summary", None, "summary_holdout", model="GJR-GARCH(1,1)", distribution=checked["distribution"], n=n,
-            series=checked["value"], first=float(days[0]), last=float(days[-1]), holdout=holdout)
-        say("summary", None, "summary_prices")
-        say("summary", None, "summary_scale", scale=0.0152)
-        say("persistence", None, "persistence", persistence=s["persistence"], half_life=half_life, unit=checked["frequency"])
-        say("persistence", None, "sigma_now_above" if s["sigma_next"] > s["uncond"] else "sigma_now_below", sigma=s["sigma_next"],
-            uncond=s["uncond"])
-        say("asymmetry", None, "asymmetry_gjr", ratio=(s["alpha"] + s["gamma"]) / s["alpha"], gamma=s["gamma"])
-    say("asymmetry" if not risk else checks, None, "sign_bias_not_supported" if p_sb >= alpha else "sign_bias_supported", p_value=p_sb,
-        alpha=alpha)
-    if not risk:
-        say("distribution", None, "distribution_sstd", shape=nu, low=nu - 1.96 * 1.3, high=nu + 1.96 * 1.3, skew=xi, skew_low=xi - 1.96 * 0.04,
-            skew_high=xi + 1.96 * 0.04, level=1 - alpha)
-    say(checks, None, "lb_z_ok" if p_z >= alpha else "lb_z_failed", lag=lb_lag, p_value=p_z, alpha=alpha)
-    say(checks, None, "lb_z2_ok" if p_z2 >= alpha else "lb_z2_failed", lag=lb_lag, p_value=p_z2, alpha=alpha)
-    say(checks, None, "arch_lm_ok" if p_lm >= alpha else "arch_lm_failed", lag=arch_lags, p_value=p_lm, alpha=alpha)
-    say("stability" if not risk else checks, None, "nyblom_stable" if p_ny >= alpha else "nyblom_moves", p_value=p_ny, alpha=alpha)
 
     # ── the backtest of the 1-step VaR on the holdout ───────────────────────────────────────────────────────────────────
     hold = s["violations"][cut:]
@@ -282,14 +245,6 @@ def build(model: str, variant: str, params: dict[str, Any], spec: dict[str, Any]
     for stat, value in (("violations", x), ("expected_violations", big_t * p_exp), ("violation_rate", x / big_t), ("n00", n00), ("n01", n01),
                         ("n10", n10), ("n11", n11), ("longest_run", _longest_run(hold))):
         t.add("backtest", stat, value, level="counts")
-    expected = big_t * p_exp
-    say("backtest", None, "backtest_coverage_ok" if rows[0][4] >= alpha else "backtest_coverage_failed", holdout=big_t,
-        unit=checked["frequency"], level=level, violations=x, expected=expected, p_value=rows[0][4], alpha=alpha)
-    say("backtest", None, "backtest_independence_ok" if rows[1][4] >= alpha else "backtest_independence_failed", p_value=rows[1][4],
-        alpha=alpha, expected=expected)
-    say("backtest", None, "backtest_cc_ok" if rows[2][4] >= alpha else "backtest_cc_failed", p_value=rows[2][4], alpha=alpha,
-        expected=expected)
-    say("backtest", None, "backtest_expected", expected=expected)
 
     # ── the charts' lines ───────────────────────────────────────────────────────────────────────────────────────────────
     if "curve" in sec and not risk:
@@ -312,17 +267,7 @@ def build(model: str, variant: str, params: dict[str, Any], spec: dict[str, Any]
             q = (i + 0.5) / 60
             t.add("point", "y", sorted(z)[int(q * len(z))], level="qq", x0=_probit(q), index=i)
     if risk:
-        _risk_rows(t, say, s, checked, days, n, alpha, horizon, level, holdout, name)
-    # the method's and the formulas' readings
-    for id_ in (RISK_METHODS_GARCH if risk else GARCH_METHODS):
-        say("method", None, id_)
-    for id_ in (RISK_FORMULAS_GARCH if risk else GARCH_FORMULAS):
-        say("formulas", None, id_)
-    counters: dict[tuple[str, str | None], int] = {}
-    for block, level_2, text in notes:
-        counters[(block, level_2)] = counters.get((block, level_2), 0) + 1
-        if block in sec["reading"]["levels"]:
-            t.add("reading", f"line_{counters[(block, level_2)]}", text=text, level=block, level_2=level_2)
+        _risk_rows(t, s, checked, days, n, alpha, horizon, level, holdout, name)
     return {"model": model, "variant": variant, "params": params, "rows": t.rows}
 
 
@@ -374,12 +319,12 @@ def _garch_charts(t: Table, s: dict[str, Any], days: list[int], cut: int, n: int
         eps = (-4 + 0.08 * i) * s["uncond"]
         t.add("curve", "y", s["omega"] + (s["alpha"] + (s["gamma"] if eps < 0 else 0)) * eps * eps + s["beta"] * s["uncond"] ** 2,
               level="news_impact", level_2="sigma2", x0=eps / s["uncond"], index=i)
-    for i in range(101):  # the fitted density in the histogram's units: the count expected in a bin of 0.4 around v
+    for i in range(101):  # the fitted density (a density, as the runner writes it: the chart draws it on its own axis)
         v = -4 + 0.08 * i
-        t.add("curve", "y", cut * 0.4 * math.exp(-v * v / 2) / math.sqrt(2 * math.pi), level="density", level_2="density", x0=v, index=i)
+        t.add("curve", "y", math.exp(-v * v / 2) / math.sqrt(2 * math.pi), level="density", level_2="density", x0=v, index=i)
 
 
-def _risk_rows(t: Table, say, s: dict[str, Any], checked: dict[str, Any], days: list[int], n: int, alpha: float, horizon: int,
+def _risk_rows(t: Table, s: dict[str, Any], checked: dict[str, Any], days: list[int], n: int, alpha: float, horizon: int,
                level: float, holdout: int, name: str) -> None:
     """The risk section, the fan and the histograms of the GARCH variant: 10,000 imaginary paths of ten days."""
     paths, es_level = checked["paths"], checked["es_level"]
@@ -440,22 +385,6 @@ def _risk_rows(t: Table, say, s: dict[str, Any], checked: dict[str, Any], days: 
             mid = (-4 + 8 * (i + 0.5) / 60)
             count = paths * 0.133 * math.exp(-mid * mid / 2) / 7.5 if chart == "horizon" else paths * 0.1 * math.exp(-i / 9)
             t.add("hist", "count", round(count), level=chart, x0=x0, x1=x1, index=i)
-    unit, position = checked["frequency"], float(checked["position"] or 0.0)
-    say("summary", None, "summary_garch", paths=paths, steps=horizon, unit=unit, model="GJR-GARCH(1,1)",
-        distribution=checked["distribution"], series=checked["value"], seed=checked["seed"])
-    say("summary", None, "summary_variable", variable="variable:cumulative_return", steps=horizon, unit=unit)
-    say("summary", None, "summary_holdout", holdout=holdout, unit=unit)
-    say("var", None, "var_lower", p=1 - level, variable="variable:cumulative_return", steps=horizon, unit=unit, value=q_var,
-        low=q_var - 1.96 * se_mc, high=q_var + 1.96 * se_mc, paths=paths, confidence=1 - alpha)
-    say("var", None, "var_money", amount=position, money=q_var * position)
-    say("es", None, "es_lower", p=1 - es_level, variable="variable:cumulative_return", quantile=q_var * 0.8, value=es,
-        low=es - 1.96 * se_mc * 0.8, high=es + 1.96 * se_mc * 0.8)
-    say("es", None, "es_money", amount=position, money=es * position)
-    say("threshold", None, "threshold_lower_level", variable="variable:price", threshold=checked["threshold"], steps=horizon, unit=unit,
-        prob_crossed=cross, low=0.068, high=0.078, prob_beyond=0.049)
-    say("drawdown", None, "drawdown", median=0.021, tail=0.087, p=1 - level, steps=horizon, unit=unit)
-    say("shape", None, "shape", variable="variable:cumulative_return", steps=horizon, unit=unit, skewness=-0.4, kurtosis=2.1)
-    say("fan", None, "fan", shares="0.5,0.9,0.98", error=4.0e-6, sample=3)
 
 
 def _build_arima_risk(model: str, variant: str, params: dict[str, Any], spec: dict[str, Any], checked: dict[str, Any]) -> dict[str, Any]:
@@ -469,10 +398,7 @@ def _build_arima_risk(model: str, variant: str, params: dict[str, Any], spec: di
     y = [40 + 8 * math.sin(2 * math.pi * i / 7) + 0.02 * i + 5 * _noise(i) for i in range(n)]
     total_mean = sum(y[-7:]) / 7 * horizon
     sd_total = 4.1 * math.sqrt(horizon) * 2.2
-    notes: list[tuple[str, str | None, str]] = []
 
-    def say(block: str, level_2: str | None, id_: str, **values: Any) -> None:
-        notes.append((block, level_2, note(id_, **values)))
 
     texts = {"model": model, "variant": variant, "formula": "(1 − φ₁B)(1 − B⁷)y = (1 + θ₁B)(1 + Θ₁B⁷)ε",
              "software": "R 4.6.0; forecast 9.0.2", "group_version": "1", "rows_from": "trial",
@@ -537,25 +463,4 @@ def _build_arima_risk(model: str, variant: str, params: dict[str, Any], spec: di
         mid = -4 + 8 * (i + 0.5) / 60
         t.add("hist", "count", round(paths * 0.133 * math.exp(-mid * mid / 2) / 7.5), level="horizon",
               x0=total_mean + (-4 + 8 * i / 60) * sd_total, x1=total_mean + (-4 + 8 * (i + 1) / 60) * sd_total, index=i)
-    unit, total = checked["frequency"], "variable:running_total"
-    say("summary", None, "summary_arima", paths=paths, steps=horizon, unit=unit, model="SARIMA(1,0,1)(0,1,1)[7]", series=checked["value"],
-        seed=checked["seed"])
-    say("summary", None, "summary_variable", variable=total, steps=horizon, unit=unit)
-    say("var", None, "var_upper_level", p=1 - level, variable=total, steps=horizon, unit=unit, value=upper, low=upper - 0.03 * sd_total,
-        high=upper + 0.03 * sd_total, paths=paths, confidence=1 - alpha)
-    say("es", None, "es_upper_level", p=1 - es_level, variable=total, quantile=total_mean + 1.96 * sd_total, value=es,
-        low=es - 0.04 * sd_total, high=es + 0.04 * sd_total)
-    say("threshold", None, "threshold_upper_level", variable=total, threshold=checked["threshold"], steps=horizon, unit=unit,
-        prob_crossed=cross, low=0.301, high=0.319, prob_beyond=cross * 0.9)
-    say("shape", None, "shape", variable=total, steps=horizon, unit=unit, skewness=0.05, kurtosis=0.1)
-    say("fan", None, "fan", shares="0.5,0.9,0.98", error=0.002, sample=20)
-    say("model", None, "arima_checks_ok", total=4, alpha=alpha)
-    for id_ in RISK_METHODS_ARIMA:
-        say("method", None, id_)
-    for id_ in RISK_FORMULAS_ARIMA:
-        say("formulas", None, id_)
-    counters: dict[tuple[str, str | None], int] = {}
-    for block, level_2, text in notes:
-        counters[(block, level_2)] = counters.get((block, level_2), 0) + 1
-        t.add("reading", f"line_{counters[(block, level_2)]}", text=text, level=block, level_2=level_2)
     return {"model": model, "variant": variant, "params": params, "rows": t.rows}

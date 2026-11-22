@@ -85,6 +85,7 @@
       "arima": "The full report of this model is the ARIMA node's: the same options give the same estimates."
     },
     "coef_title": "Coefficients of the model simulated",
+    "coef_intervals": "Intervals at {level} %",
     "notes": {
       "rows": "{n} observations were used; {missing} rows had an empty value."
     },
@@ -289,7 +290,11 @@
         "name": "Stability: Nyblom",
         "h0": "Every parameter is constant over the sample.",
         "advice": "The parameters move over the sample: fit a shorter, more recent period, or read the parameters in the stability table.",
-        "not_computed": "The scores of the fit were not available."
+        "not_computed": "The scores of the fit were not available.",
+        "count": {
+          "one": "{n} parameter",
+          "other": "{n} parameters"
+        }
       },
       "sign_bias": {
         "name": "Asymmetry: Engle–Ng sign bias",
@@ -315,6 +320,11 @@
     "measure_texts": {
       "at_bound": "The parameters the solver left at one of its bounds (α + β at 1, ν at its lowest): their standard errors are not computed the usual way.",
       "variance_stationary": "The persistence P: below 1 the variance returns to a long-run level; at 1 or above it does not, and the half-life and the long-run volatility are not computed."
+    },
+    "note_texts": {
+      "garch_scale": "The fit ran on the returns divided by {scale:num}, their standard deviation; the parameters are given in the series' units.",
+      "garch_solver": "The solver that converged: {solver} (solnp did not).",
+      "garch_at_bound": "{parameter} is at a bound of the solver: its standard error is not computed the usual way."
     },
     "stats": {
       "model": {
@@ -523,16 +533,16 @@
       "sign_bias_not_supported": "Engle and Ng's sign bias test does not reject that the volatility responds alike to falls and rises once the model is taken into account (p-value {p_value:p}, α = {alpha:num}); this does not prove the response is the same.",
       "backtest_coverage_ok": "In the {holdout:int} {unit} kept out, the 1-step VaR at {level:pct} was broken on {violations:int} of them, against {expected:num} expected: Kupiec's test does not reject the rate its level asks (p-value {p_value:p}, α = {alpha:num}).",
       "backtest_coverage_failed": "In the {holdout:int} {unit} kept out, the 1-step VaR at {level:pct} was broken on {violations:int} of them, against {expected:num} expected: Kupiec's test rejects the rate its level asks (p-value {p_value:p}, below α = {alpha:num}).",
-      "backtest_independence_ok": "Christoffersen's test does not reject that the breaks come independently of each other (p-value {p_value:p}, α = {alpha:num}; {expected:num} breaks expected).",
-      "backtest_independence_failed": "Christoffersen's test rejects that the breaks come independently of each other (p-value {p_value:p}, below α = {alpha:num}; {expected:num} breaks expected): they come in clusters.",
+      "backtest_independence_ok": "Christoffersen's test does not reject that the breaks come independently of each other (p-value {p_value:p}, α = {alpha:num}; breaks expected: {expected:num}).",
+      "backtest_independence_failed": "Christoffersen's test rejects that the breaks come independently of each other (p-value {p_value:p}, below α = {alpha:num}; breaks expected: {expected:num}): they come in clusters.",
       "backtest_independence_not_computed": "No observation broke the VaR, against {expected:num} expected: there is no cluster of breaks to test.",
-      "backtest_cc_ok": "Christoffersen's conditional coverage test, rate and independence together, does not reject (p-value {p_value:p}, α = {alpha:num}; {expected:num} breaks expected).",
-      "backtest_cc_failed": "Christoffersen's conditional coverage test, rate and independence together, rejects (p-value {p_value:p}, below α = {alpha:num}; {expected:num} breaks expected).",
-      "backtest_expected": "With {expected:num} breaks expected, these tests can tell only a VaR level far from the one asked; a longer holdout lets them see smaller errors.",
+      "backtest_cc_ok": "Christoffersen's conditional coverage test, rate and independence together, does not reject (p-value {p_value:p}, α = {alpha:num}; breaks expected: {expected:num}).",
+      "backtest_cc_failed": "Christoffersen's conditional coverage test, rate and independence together, rejects (p-value {p_value:p}, below α = {alpha:num}; breaks expected: {expected:num}).",
+      "backtest_expected": "With an expected number of breaks of {expected:num}, these tests can tell only a VaR level far from the one asked; a longer holdout lets them see smaller errors.",
       "backtest_short": "With {holdout:int} observation kept out the backtest is not computed: it needs at least 2.",
       "method_backtest": "With a holdout, the last observations are kept out of the fit; the fitted parameters, fixed, are run through them one step at a time, so that each gets a 1-step VaR from the observations before it only. A break is an observation beyond its VaR. Kupiec's test compares the rate of breaks with the rate the level asks, Christoffersen's whether a break makes the next one more likely, and his third test both together. With few breaks expected (the holdout times 1 − c) their χ² laws are rough and they see only large errors: each sentence says how many breaks were expected.",
-      "summary_garch": "{paths:int} futures of {steps:int} {unit} were simulated from a {model} with {distribution} errors fitted to «{series}» (seed {seed:int}).",
-      "summary_arima": "{paths:int} futures of {steps:int} {unit} were simulated from a {model} fitted to «{series}» (seed {seed:int}).",
+      "summary_garch": "{paths:int} futures of {steps:int} {unit} were simulated from the {model} with {distribution} errors fitted to «{series}» (seed {seed:int}).",
+      "summary_arima": "{paths:int} futures of {steps:int} {unit} were simulated from the {model} fitted to «{series}» (seed {seed:int}).",
       "summary_bootstrap": "The shocks of the futures were drawn from the model's own standardized residuals (filtered historical simulation), not from a distribution.",
       "summary_variable": "Every measure below is of {variable} over the {steps:int} {unit}.",
       "summary_holdout": "The last {holdout:int} {unit} were kept out of the fit to test the 1-step VaR; the futures start from the last observation.",
@@ -540,12 +550,10 @@
       "var_lower_level": "With probability {p:pct}, {variable} after {steps:int} {unit} is {value:num} or less; with {paths:int} paths this value lies within {low:num} to {high:num} ({confidence:pct} interval), and four times the paths would about halve that interval.",
       "var_upper": "With probability {p:pct}, {variable} after {steps:int} {unit} is {value:pct} or more; with {paths:int} paths this value lies within {low:pct} to {high:pct} ({confidence:pct} interval), and four times the paths would about halve that interval.",
       "var_upper_level": "With probability {p:pct}, {variable} after {steps:int} {unit} is {value:num} or more; with {paths:int} paths this value lies within {low:num} to {high:num} ({confidence:pct} interval), and four times the paths would about halve that interval.",
-      "var_money": "On the position of {amount:num}, this change is {money:num}.",
-      "es_lower": "When {variable} is at or below its {p:pct} quantile, {quantile:pct}, it averages {value:pct} (interval {low:pct} to {high:pct}).",
-      "es_lower_level": "When {variable} is at or below its {p:pct} quantile, {quantile:num}, it averages {value:num} (interval {low:num} to {high:num}).",
-      "es_upper": "When {variable} is at or above its {p:pct} upper quantile, {quantile:pct}, it averages {value:pct} (interval {low:pct} to {high:pct}).",
-      "es_upper_level": "When {variable} is at or above its {p:pct} upper quantile, {quantile:num}, it averages {value:num} (interval {low:num} to {high:num}).",
-      "es_money": "On the position of {amount:num}, this mean change is {money:num}.",
+      "es_lower": "When {variable} is at or below its {p:pct} quantile, it averages {value:pct} (interval {low:pct} to {high:pct}).",
+      "es_lower_level": "When {variable} is at or below its {p:pct} quantile, it averages {value:num} (interval {low:num} to {high:num}).",
+      "es_upper": "When {variable} is at or above its {p:pct} upper quantile, it averages {value:pct} (interval {low:pct} to {high:pct}).",
+      "es_upper_level": "When {variable} is at or above its {p:pct} upper quantile, it averages {value:num} (interval {low:num} to {high:num}).",
       "threshold_lower": "With probability {prob_crossed:pct} (interval {low:pct} to {high:pct}), {variable} goes below {threshold:pct} at some step of the next {steps:int} {unit}; with probability {prob_beyond:pct} it is below it on the last step.",
       "threshold_lower_level": "With probability {prob_crossed:pct} (interval {low:pct} to {high:pct}), {variable} goes below {threshold:num} at some step of the next {steps:int} {unit}; with probability {prob_beyond:pct} it is below it on the last step.",
       "threshold_upper": "With probability {prob_crossed:pct} (interval {low:pct} to {high:pct}), {variable} goes above {threshold:pct} at some step of the next {steps:int} {unit}; with probability {prob_beyond:pct} it is above it on the last step.",
@@ -553,6 +561,7 @@
       "drawdown": "Half the paths fall at least {median:pct} from a peak within the {steps:int} {unit}; with probability {p:pct} the fall is deeper than {tail:pct}.",
       "shape": "After {steps:int} {unit}, {variable} has skewness {skewness:num} and excess kurtosis {kurtosis:num}; a normal distribution has 0 and 0.",
       "fan": "The bands hold {shares:pct} of the paths at each step; their edges are drawn within {error:num} in the chart's units, and the thin grey lines are the first {sample:int} paths.",
+      "fan_bands": "The bands hold {shares:pct} of the paths at each step; their edges are drawn within {error:num} in the chart's units.",
       "arima_checks_ok": "None of the {total:int} tests on the ARIMA's residuals rejects its hypothesis at α = {alpha:num}: the data do not show a departure that the futures would carry, which does not prove there is none.",
       "arima_check_failed": "{check} rejects its hypothesis on the ARIMA's residuals (p-value {p_value:p}, below α = {alpha:num}): the futures carry what the model misses; the ARIMA node's report has that check in full.",
       "method_simulation": "A path is one possible future of the series: the fitted model is run forward step by step, each step with a new random shock. Many paths together give the distribution of every quantity of the future, and each risk measure is read from it. The parameters stay at their estimates: the uncertainty of the estimates is not in the paths.",
@@ -594,12 +603,10 @@
       "var_lower_level",
       "var_upper",
       "var_upper_level",
-      "var_money",
       "es_lower",
       "es_lower_level",
       "es_upper",
       "es_upper_level",
-      "es_money",
       "threshold_lower",
       "threshold_lower_level",
       "threshold_upper",
@@ -607,6 +614,7 @@
       "drawdown",
       "shape",
       "fan",
+      "fan_bands",
       "z2_largest_acf",
       "backtest_independence_not_computed",
       "backtest_expected",
@@ -699,6 +707,7 @@
       "arima": "Il report completo di questo modello è quello del nodo ARIMA: le stesse opzioni danno le stesse stime."
     },
     "coef_title": "Coefficienti del modello simulato",
+    "coef_intervals": "Intervalli al {level} %",
     "notes": {
       "rows": "Sono state usate {n} osservazioni; {missing} righe avevano un valore vuoto."
     },
@@ -903,7 +912,11 @@
         "name": "Stabilità: Nyblom",
         "h0": "Ogni parametro è costante nel campione.",
         "advice": "I parametri si muovono nel campione: stimate un periodo più breve e più recente, o leggete i parametri nella tabella della stabilità.",
-        "not_computed": "Gli score della stima non erano disponibili."
+        "not_computed": "Gli score della stima non erano disponibili.",
+        "count": {
+          "one": "{n} parametro",
+          "other": "{n} parametri"
+        }
       },
       "sign_bias": {
         "name": "Asimmetria: sign bias di Engle–Ng",
@@ -929,6 +942,11 @@
     "measure_texts": {
       "at_bound": "I parametri che il solutore ha lasciato a uno dei suoi limiti (α + β a 1, ν al minimo): i loro errori standard non sono calcolati nel modo consueto.",
       "variance_stationary": "La persistenza P: sotto 1 la varianza torna a un livello di lungo periodo; a 1 o sopra non torna, e l'emivita e la volatilità di lungo periodo non sono calcolate."
+    },
+    "note_texts": {
+      "garch_scale": "La stima è stata fatta sui rendimenti divisi per {scale:num}, la loro deviazione standard; i parametri sono dati nelle unità della serie.",
+      "garch_solver": "Il solutore che è arrivato a convergenza: {solver} (solnp no).",
+      "garch_at_bound": "{parameter} è a un limite del solutore: il suo errore standard non è calcolato nel modo consueto."
     },
     "stats": {
       "model": {
@@ -1135,14 +1153,14 @@
         "": "Il test sign bias di Engle e Ng rifiuta che la volatilità risponda allo stesso modo a discese e salite, tenuto conto del modello (p-value {p_value:p}, sotto α = {alpha:num}): resta un'asimmetria che i termini del modello non colgono."
       },
       "sign_bias_not_supported": "Il test sign bias di Engle e Ng non rifiuta che la volatilità risponda allo stesso modo a discese e salite, tenuto conto del modello (p-value {p_value:p}, α = {alpha:num}); questo non dimostra che la risposta sia la stessa.",
-      "backtest_coverage_ok": "Nei {holdout:int} {unit} tenuti fuori, il VaR a un passo al {level:pct} è stato violato in {violations:int} di essi, contro {expected:num} violazioni attese: il test di Kupiec non rifiuta la frequenza che il suo livello chiede (p-value {p_value:p}, α = {alpha:num}).",
-      "backtest_coverage_failed": "Nei {holdout:int} {unit} tenuti fuori, il VaR a un passo al {level:pct} è stato violato in {violations:int} di essi, contro {expected:num} violazioni attese: il test di Kupiec rifiuta la frequenza che il suo livello chiede (p-value {p_value:p}, sotto α = {alpha:num}).",
-      "backtest_independence_ok": "Il test di Christoffersen non rifiuta che le violazioni arrivino indipendenti l'una dall'altra (p-value {p_value:p}, α = {alpha:num}; {expected:num} violazioni attese).",
-      "backtest_independence_failed": "Il test di Christoffersen rifiuta che le violazioni arrivino indipendenti l'una dall'altra (p-value {p_value:p}, sotto α = {alpha:num}; {expected:num} violazioni attese): arrivano a grappoli.",
-      "backtest_independence_not_computed": "Nessuna osservazione ha violato il VaR, contro {expected:num} violazioni attese: non c'è un grappolo di violazioni da verificare.",
-      "backtest_cc_ok": "Il test di copertura condizionata di Christoffersen, frequenza e indipendenza insieme, non rifiuta (p-value {p_value:p}, α = {alpha:num}; {expected:num} violazioni attese).",
-      "backtest_cc_failed": "Il test di copertura condizionata di Christoffersen, frequenza e indipendenza insieme, rifiuta (p-value {p_value:p}, sotto α = {alpha:num}; {expected:num} violazioni attese).",
-      "backtest_expected": "Con {expected:num} violazioni attese, questi test distinguono solo un livello del VaR lontano da quello chiesto; un periodo di verifica più lungo fa vedere loro scarti più piccoli.",
+      "backtest_coverage_ok": "Nei {holdout:int} {unit} tenuti fuori, il VaR a un passo al {level:pct} è stato violato in {violations:int} di essi, contro un numero atteso di {expected:num}: il test di Kupiec non rifiuta la frequenza che il suo livello chiede (p-value {p_value:p}, α = {alpha:num}).",
+      "backtest_coverage_failed": "Nei {holdout:int} {unit} tenuti fuori, il VaR a un passo al {level:pct} è stato violato in {violations:int} di essi, contro un numero atteso di {expected:num}: il test di Kupiec rifiuta la frequenza che il suo livello chiede (p-value {p_value:p}, sotto α = {alpha:num}).",
+      "backtest_independence_ok": "Il test di Christoffersen non rifiuta che le violazioni arrivino indipendenti l'una dall'altra (p-value {p_value:p}, α = {alpha:num}; violazioni attese: {expected:num}).",
+      "backtest_independence_failed": "Il test di Christoffersen rifiuta che le violazioni arrivino indipendenti l'una dall'altra (p-value {p_value:p}, sotto α = {alpha:num}; violazioni attese: {expected:num}): arrivano a grappoli.",
+      "backtest_independence_not_computed": "Nessuna osservazione ha violato il VaR, contro un numero atteso di {expected:num}: non c'è un grappolo di violazioni da verificare.",
+      "backtest_cc_ok": "Il test di copertura condizionata di Christoffersen, frequenza e indipendenza insieme, non rifiuta (p-value {p_value:p}, α = {alpha:num}; violazioni attese: {expected:num}).",
+      "backtest_cc_failed": "Il test di copertura condizionata di Christoffersen, frequenza e indipendenza insieme, rifiuta (p-value {p_value:p}, sotto α = {alpha:num}; violazioni attese: {expected:num}).",
+      "backtest_expected": "Con un numero atteso di violazioni pari a {expected:num}, questi test distinguono solo un livello del VaR lontano da quello chiesto; un periodo di verifica più lungo fa vedere loro scarti più piccoli.",
       "backtest_short": "Con {holdout:int} osservazione tenuta fuori il backtest non è calcolato: ne servono almeno 2.",
       "method_backtest": "Con un periodo di verifica, le ultime osservazioni restano fuori dalla stima; i parametri stimati, fissi, vengono applicati a esse un passo alla volta, così che ciascuna abbia un VaR a un passo calcolato solo dalle osservazioni precedenti. Una violazione è un'osservazione oltre il suo VaR. Il test di Kupiec confronta la frequenza delle violazioni con quella che il livello chiede, quello di Christoffersen se una violazione rende più probabile la successiva, e il suo terzo test le due cose insieme. Con poche violazioni attese (il periodo di verifica per 1 − c) le loro leggi χ² sono approssimative e vedono solo scarti grandi: ogni frase dice quante violazioni erano attese.",
       "summary_garch": "{paths:int} futuri di {steps:int} {unit} sono stati simulati da un {model} con errori {distribution} stimato su «{series}» (seme {seed:int}).",
@@ -1154,12 +1172,10 @@
       "var_lower_level": "Con probabilità {p:pct}, {variable} dopo {steps:int} {unit} vale {value:num} o meno; con {paths:int} percorsi questo valore sta tra {low:num} e {high:num} (intervallo al {confidence:pct}), e quattro volte i percorsi dimezzerebbero circa quell'intervallo.",
       "var_upper": "Con probabilità {p:pct}, {variable} dopo {steps:int} {unit} vale {value:pct} o più; con {paths:int} percorsi questo valore sta tra {low:pct} e {high:pct} (intervallo al {confidence:pct}), e quattro volte i percorsi dimezzerebbero circa quell'intervallo.",
       "var_upper_level": "Con probabilità {p:pct}, {variable} dopo {steps:int} {unit} vale {value:num} o più; con {paths:int} percorsi questo valore sta tra {low:num} e {high:num} (intervallo al {confidence:pct}), e quattro volte i percorsi dimezzerebbero circa quell'intervallo.",
-      "var_money": "Sulla posizione di {amount:num}, questa variazione vale {money:num}.",
-      "es_lower": "Quando {variable} sta al suo quantile del {p:pct}, {quantile:pct}, o sotto, vale in media {value:pct} (intervallo da {low:pct} a {high:pct}).",
-      "es_lower_level": "Quando {variable} sta al suo quantile del {p:pct}, {quantile:num}, o sotto, vale in media {value:num} (intervallo da {low:num} a {high:num}).",
-      "es_upper": "Quando {variable} sta al suo quantile superiore del {p:pct}, {quantile:pct}, o sopra, vale in media {value:pct} (intervallo da {low:pct} a {high:pct}).",
-      "es_upper_level": "Quando {variable} sta al suo quantile superiore del {p:pct}, {quantile:num}, o sopra, vale in media {value:num} (intervallo da {low:num} a {high:num}).",
-      "es_money": "Sulla posizione di {amount:num}, questa variazione media vale {money:num}.",
+      "es_lower": "Quando {variable} sta al suo quantile del {p:pct} o sotto, vale in media {value:pct} (intervallo da {low:pct} a {high:pct}).",
+      "es_lower_level": "Quando {variable} sta al suo quantile del {p:pct} o sotto, vale in media {value:num} (intervallo da {low:num} a {high:num}).",
+      "es_upper": "Quando {variable} sta al suo quantile superiore del {p:pct} o sopra, vale in media {value:pct} (intervallo da {low:pct} a {high:pct}).",
+      "es_upper_level": "Quando {variable} sta al suo quantile superiore del {p:pct} o sopra, vale in media {value:num} (intervallo da {low:num} a {high:num}).",
       "threshold_lower": "Con probabilità {prob_crossed:pct} (intervallo da {low:pct} a {high:pct}), {variable} scende sotto {threshold:pct} in qualche passo dei prossimi {steps:int} {unit}; con probabilità {prob_beyond:pct} è sotto all'ultimo passo.",
       "threshold_lower_level": "Con probabilità {prob_crossed:pct} (intervallo da {low:pct} a {high:pct}), {variable} scende sotto {threshold:num} in qualche passo dei prossimi {steps:int} {unit}; con probabilità {prob_beyond:pct} è sotto all'ultimo passo.",
       "threshold_upper": "Con probabilità {prob_crossed:pct} (intervallo da {low:pct} a {high:pct}), {variable} sale sopra {threshold:pct} in qualche passo dei prossimi {steps:int} {unit}; con probabilità {prob_beyond:pct} è sopra all'ultimo passo.",
@@ -1167,6 +1183,7 @@
       "drawdown": "Metà dei percorsi scende di almeno il {median:pct} da un picco entro i {steps:int} {unit}; con probabilità {p:pct} la discesa è più profonda di {tail:pct}.",
       "shape": "Dopo {steps:int} {unit}, {variable} ha asimmetria {skewness:num} e curtosi in eccesso {kurtosis:num}; una distribuzione normale ha 0 e 0.",
       "fan": "Le bande contengono il {shares:pct} dei percorsi a ogni passo; i loro bordi sono disegnati entro {error:num} nelle unità del grafico, e le linee grigie sottili sono i primi {sample:int} percorsi.",
+      "fan_bands": "Le bande contengono il {shares:pct} dei percorsi a ogni passo; i loro bordi sono disegnati entro {error:num} nelle unità del grafico.",
       "arima_checks_ok": "Nessuno dei {total:int} test sui residui dell'ARIMA rifiuta la sua ipotesi ad α = {alpha:num}: i dati non mostrano uno scostamento che i futuri porterebbero con sé, il che non dimostra che non ci sia.",
       "arima_check_failed": "{check} rifiuta la sua ipotesi sui residui dell'ARIMA (p-value {p_value:p}, sotto α = {alpha:num}): i futuri portano con sé ciò che il modello non coglie; il report del nodo ARIMA ha quella verifica per intero.",
       "method_simulation": "Un percorso è un futuro possibile della serie: il modello stimato viene fatto avanzare passo dopo passo, ogni passo con un nuovo shock casuale. Molti percorsi insieme danno la distribuzione di ogni quantità del futuro, e ogni misura di rischio si legge da essa. I parametri restano alle loro stime: l'incertezza delle stime non è nei percorsi.",
@@ -1208,12 +1225,10 @@
       "var_lower_level",
       "var_upper",
       "var_upper_level",
-      "var_money",
       "es_lower",
       "es_lower_level",
       "es_upper",
       "es_upper_level",
-      "es_money",
       "threshold_lower",
       "threshold_lower_level",
       "threshold_upper",
@@ -1221,6 +1236,7 @@
       "drawdown",
       "shape",
       "fan",
+      "fan_bands",
       "z2_largest_acf",
       "backtest_independence_not_computed",
       "backtest_expected",
@@ -1313,6 +1329,7 @@
       "arima": "Der vollständige Bericht dieses Modells ist der des ARIMA-Knotens: Dieselben Optionen ergeben dieselben Schätzungen."
     },
     "coef_title": "Koeffizienten des simulierten Modells",
+    "coef_intervals": "Intervalle zu {level} %",
     "notes": {
       "rows": "{n} Beobachtungen wurden verwendet; {missing} Zeilen hatten einen leeren Wert."
     },
@@ -1517,7 +1534,11 @@
         "name": "Stabilität: Nyblom",
         "h0": "Jeder Parameter ist über die Stichprobe konstant.",
         "advice": "Die Parameter bewegen sich über die Stichprobe: Passen Sie einen kürzeren, jüngeren Zeitraum an oder lesen Sie die Parameter in der Stabilitätstabelle.",
-        "not_computed": "Die Scores der Anpassung waren nicht verfügbar."
+        "not_computed": "Die Scores der Anpassung waren nicht verfügbar.",
+        "count": {
+          "one": "{n} Parameter",
+          "other": "{n} Parameter"
+        }
       },
       "sign_bias": {
         "name": "Asymmetrie: Sign-Bias nach Engle–Ng",
@@ -1543,6 +1564,11 @@
     "measure_texts": {
       "at_bound": "Die Parameter, die der Löser an einer seiner Grenzen gelassen hat (α + β bei 1, ν an seinem kleinsten Wert): Ihre Standardfehler werden nicht auf die übliche Weise berechnet.",
       "variance_stationary": "Die Persistenz P: Unter 1 kehrt die Varianz zu einem langfristigen Niveau zurück; bei 1 oder darüber nicht, und Halbwertszeit und langfristige Volatilität werden nicht berechnet."
+    },
+    "note_texts": {
+      "garch_scale": "Die Schätzung lief auf den Renditen geteilt durch {scale:num}, ihre Standardabweichung; die Parameter sind in den Einheiten der Reihe angegeben.",
+      "garch_solver": "Konvergiert ist der Löser {solver} (solnp nicht).",
+      "garch_at_bound": "{parameter} liegt an einer Grenze des Lösers: sein Standardfehler wird nicht auf dem üblichen Weg berechnet."
     },
     "stats": {
       "model": {
@@ -1751,12 +1777,12 @@
       "sign_bias_not_supported": "Der Sign-Bias-Test von Engle und Ng verwirft nicht, dass die Volatilität auf Rückgänge und Anstiege gleich reagiert, sobald das Modell berücksichtigt ist (p-Wert {p_value:p}, α = {alpha:num}); das beweist nicht, dass die Reaktion dieselbe ist.",
       "backtest_coverage_ok": "Über die {holdout:int} zurückgehaltenen {unit} wurde der 1-Schritt-VaR zu {level:pct} {violations:int}-mal überschritten, bei {expected:num} erwarteten: Kupiecs Test verwirft die Rate, die sein Niveau verlangt, nicht (p-Wert {p_value:p}, α = {alpha:num}).",
       "backtest_coverage_failed": "Über die {holdout:int} zurückgehaltenen {unit} wurde der 1-Schritt-VaR zu {level:pct} {violations:int}-mal überschritten, bei {expected:num} erwarteten: Kupiecs Test verwirft die Rate, die sein Niveau verlangt (p-Wert {p_value:p}, unter α = {alpha:num}).",
-      "backtest_independence_ok": "Christoffersens Test verwirft nicht, dass die Überschreitungen unabhängig voneinander auftreten (p-Wert {p_value:p}, α = {alpha:num}; {expected:num} Überschreitungen erwartet).",
-      "backtest_independence_failed": "Christoffersens Test verwirft, dass die Überschreitungen unabhängig voneinander auftreten (p-Wert {p_value:p}, unter α = {alpha:num}; {expected:num} Überschreitungen erwartet): Sie kommen gehäuft.",
+      "backtest_independence_ok": "Christoffersens Test verwirft nicht, dass die Überschreitungen unabhängig voneinander auftreten (p-Wert {p_value:p}, α = {alpha:num}; erwartete Überschreitungen: {expected:num}).",
+      "backtest_independence_failed": "Christoffersens Test verwirft, dass die Überschreitungen unabhängig voneinander auftreten (p-Wert {p_value:p}, unter α = {alpha:num}; erwartete Überschreitungen: {expected:num}): Sie kommen gehäuft.",
       "backtest_independence_not_computed": "Keine Beobachtung hat den VaR überschritten, bei {expected:num} erwarteten: Es gibt keine Häufung von Überschreitungen zu testen.",
-      "backtest_cc_ok": "Christoffersens Test der bedingten Abdeckung, Rate und Unabhängigkeit zusammen, verwirft nicht (p-Wert {p_value:p}, α = {alpha:num}; {expected:num} Überschreitungen erwartet).",
-      "backtest_cc_failed": "Christoffersens Test der bedingten Abdeckung, Rate und Unabhängigkeit zusammen, verwirft (p-Wert {p_value:p}, unter α = {alpha:num}; {expected:num} Überschreitungen erwartet).",
-      "backtest_expected": "Bei {expected:num} erwarteten Überschreitungen können diese Tests nur ein VaR-Niveau erkennen, das weit vom verlangten entfernt ist; ein längerer Testzeitraum lässt sie kleinere Fehler sehen.",
+      "backtest_cc_ok": "Christoffersens Test der bedingten Abdeckung, Rate und Unabhängigkeit zusammen, verwirft nicht (p-Wert {p_value:p}, α = {alpha:num}; erwartete Überschreitungen: {expected:num}).",
+      "backtest_cc_failed": "Christoffersens Test der bedingten Abdeckung, Rate und Unabhängigkeit zusammen, verwirft (p-Wert {p_value:p}, unter α = {alpha:num}; erwartete Überschreitungen: {expected:num}).",
+      "backtest_expected": "Bei einer erwarteten Zahl von Überschreitungen von {expected:num} können diese Tests nur ein VaR-Niveau erkennen, das weit vom verlangten entfernt ist; ein längerer Testzeitraum lässt sie kleinere Fehler sehen.",
       "backtest_short": "Mit {holdout:int} zurückgehaltener Beobachtung wird der Backtest nicht berechnet: Er braucht mindestens 2.",
       "method_backtest": "Mit einem Testzeitraum bleiben die letzten Beobachtungen außerhalb der Anpassung; die angepassten Parameter laufen, fest, Schritt für Schritt durch sie, sodass jede einen 1-Schritt-VaR allein aus den Beobachtungen davor erhält. Eine Überschreitung ist eine Beobachtung jenseits ihres VaR. Kupiecs Test vergleicht die Rate der Überschreitungen mit der Rate, die das Niveau verlangt, Christoffersens Test, ob eine Überschreitung die nächste wahrscheinlicher macht, und sein dritter Test beides zusammen. Bei wenigen erwarteten Überschreitungen (der Testzeitraum mal 1 − c) sind ihre χ²-Verteilungen grob und sie sehen nur große Fehler: Jeder Satz sagt, wie viele Überschreitungen erwartet waren.",
       "summary_garch": "{paths:int} Zukunftspfade über {steps:int} {unit} wurden aus einem {model} (Fehlerverteilung: {distribution}) simuliert, angepasst an «{series}» (Seed {seed:int}).",
@@ -1768,12 +1794,10 @@
       "var_lower_level": "Mit Wahrscheinlichkeit {p:pct} liegt {variable} {steps:int} {unit} später bei {value:num} oder darunter; mit {paths:int} Pfaden liegt dieser Wert zwischen {low:num} und {high:num} (Intervall zu {confidence:pct}), und viermal so viele Pfade würden dieses Intervall etwa halbieren.",
       "var_upper": "Mit Wahrscheinlichkeit {p:pct} liegt {variable} {steps:int} {unit} später bei {value:pct} oder darüber; mit {paths:int} Pfaden liegt dieser Wert zwischen {low:pct} und {high:pct} (Intervall zu {confidence:pct}), und viermal so viele Pfade würden dieses Intervall etwa halbieren.",
       "var_upper_level": "Mit Wahrscheinlichkeit {p:pct} liegt {variable} {steps:int} {unit} später bei {value:num} oder darüber; mit {paths:int} Pfaden liegt dieser Wert zwischen {low:num} und {high:num} (Intervall zu {confidence:pct}), und viermal so viele Pfade würden dieses Intervall etwa halbieren.",
-      "var_money": "Auf die Position von {amount:num} beträgt diese Änderung {money:num}.",
-      "es_lower": "Wenn {variable} höchstens beim Quantil {p:pct} liegt, {quantile:pct}, beträgt der Mittelwert {value:pct} (Intervall {low:pct} bis {high:pct}).",
-      "es_lower_level": "Wenn {variable} höchstens beim Quantil {p:pct} liegt, {quantile:num}, beträgt der Mittelwert {value:num} (Intervall {low:num} bis {high:num}).",
-      "es_upper": "Wenn {variable} mindestens beim oberen Quantil {p:pct} liegt, {quantile:pct}, beträgt der Mittelwert {value:pct} (Intervall {low:pct} bis {high:pct}).",
-      "es_upper_level": "Wenn {variable} mindestens beim oberen Quantil {p:pct} liegt, {quantile:num}, beträgt der Mittelwert {value:num} (Intervall {low:num} bis {high:num}).",
-      "es_money": "Auf die Position von {amount:num} beträgt diese mittlere Änderung {money:num}.",
+      "es_lower": "Wenn {variable} höchstens beim Quantil {p:pct} liegt, beträgt der Mittelwert {value:pct} (Intervall {low:pct} bis {high:pct}).",
+      "es_lower_level": "Wenn {variable} höchstens beim Quantil {p:pct} liegt, beträgt der Mittelwert {value:num} (Intervall {low:num} bis {high:num}).",
+      "es_upper": "Wenn {variable} mindestens beim oberen Quantil {p:pct} liegt, beträgt der Mittelwert {value:pct} (Intervall {low:pct} bis {high:pct}).",
+      "es_upper_level": "Wenn {variable} mindestens beim oberen Quantil {p:pct} liegt, beträgt der Mittelwert {value:num} (Intervall {low:num} bis {high:num}).",
       "threshold_lower": "Mit Wahrscheinlichkeit {prob_crossed:pct} (Intervall {low:pct} bis {high:pct}) fällt {variable} im Lauf der nächsten {steps:int} {unit} an irgendeinem Schritt unter {threshold:pct}; mit Wahrscheinlichkeit {prob_beyond:pct} liegt der Wert am letzten Schritt darunter.",
       "threshold_lower_level": "Mit Wahrscheinlichkeit {prob_crossed:pct} (Intervall {low:pct} bis {high:pct}) fällt {variable} im Lauf der nächsten {steps:int} {unit} an irgendeinem Schritt unter {threshold:num}; mit Wahrscheinlichkeit {prob_beyond:pct} liegt der Wert am letzten Schritt darunter.",
       "threshold_upper": "Mit Wahrscheinlichkeit {prob_crossed:pct} (Intervall {low:pct} bis {high:pct}) steigt {variable} im Lauf der nächsten {steps:int} {unit} an irgendeinem Schritt über {threshold:pct}; mit Wahrscheinlichkeit {prob_beyond:pct} liegt der Wert am letzten Schritt darüber.",
@@ -1781,6 +1805,7 @@
       "drawdown": "Die Hälfte der Pfade fällt innerhalb der {steps:int} {unit} um mindestens {median:pct} von einem Höchststand; mit Wahrscheinlichkeit {p:pct} ist der Fall tiefer als {tail:pct}.",
       "shape": "Am Ende der {steps:int} {unit} hat {variable} die Schiefe {skewness:num} und die Exzess-Kurtosis {kurtosis:num}; eine Normalverteilung hat 0 und 0.",
       "fan": "Die Bänder enthalten an jedem Schritt {shares:pct} der Pfade; ihre Ränder sind auf {error:num} in den Einheiten des Diagramms genau gezeichnet, und die dünnen grauen Linien sind die ersten {sample:int} Pfade.",
+      "fan_bands": "Die Bänder enthalten an jedem Schritt {shares:pct} der Pfade; ihre Ränder sind auf {error:num} in den Einheiten des Diagramms genau gezeichnet.",
       "arima_checks_ok": "Keiner der {total:int} Tests auf den Residuen des ARIMA verwirft seine Hypothese bei α = {alpha:num}: Die Daten zeigen keine Abweichung, die die Zukunftspfade mittragen würden, was nicht beweist, dass es keine gibt.",
       "arima_check_failed": "{check} verwirft seine Hypothese auf den Residuen des ARIMA (p-Wert {p_value:p}, unter α = {alpha:num}): Die Zukunftspfade tragen mit, was das Modell verfehlt; der Bericht des ARIMA-Knotens enthält diese Prüfung vollständig.",
       "method_simulation": "Ein Pfad ist eine mögliche Zukunft der Reihe: Das angepasste Modell läuft Schritt für Schritt vorwärts, jeder Schritt mit einem neuen zufälligen Schock. Viele Pfade zusammen ergeben die Verteilung jeder künftigen Größe, und jedes Risikomaß wird aus ihr gelesen. Die Parameter bleiben bei ihren Schätzungen: Die Unsicherheit der Schätzungen ist nicht in den Pfaden.",
@@ -1822,12 +1847,10 @@
       "var_lower_level",
       "var_upper",
       "var_upper_level",
-      "var_money",
       "es_lower",
       "es_lower_level",
       "es_upper",
       "es_upper_level",
-      "es_money",
       "threshold_lower",
       "threshold_lower_level",
       "threshold_upper",
@@ -1835,6 +1858,7 @@
       "drawdown",
       "shape",
       "fan",
+      "fan_bands",
       "z2_largest_acf",
       "backtest_independence_not_computed",
       "backtest_expected",
@@ -1927,6 +1951,7 @@
       "arima": "El informe completo de este modelo es el del nodo ARIMA: las mismas opciones dan las mismas estimaciones."
     },
     "coef_title": "Coeficientes del modelo simulado",
+    "coef_intervals": "Intervalos al {level} %",
     "notes": {
       "rows": "Se usaron {n} observaciones; {missing} filas tenían un valor vacío."
     },
@@ -2131,7 +2156,11 @@
         "name": "Estabilidad: Nyblom",
         "h0": "Cada parámetro es constante a lo largo de la muestra.",
         "advice": "Los parámetros se mueven a lo largo de la muestra: ajuste un periodo más corto y más reciente, o lea los parámetros en la tabla de estabilidad.",
-        "not_computed": "Los scores del ajuste no estaban disponibles."
+        "not_computed": "Los scores del ajuste no estaban disponibles.",
+        "count": {
+          "one": "{n} parámetro",
+          "other": "{n} parámetros"
+        }
       },
       "sign_bias": {
         "name": "Asimetría: sesgo de signo de Engle–Ng",
@@ -2157,6 +2186,11 @@
     "measure_texts": {
       "at_bound": "Los parámetros que el optimizador dejó en uno de sus límites (α + β en 1, ν en su valor más bajo): sus errores estándar no se calculan de la forma habitual.",
       "variance_stationary": "La persistencia P: por debajo de 1 la varianza vuelve a un nivel de largo plazo; en 1 o por encima no vuelve, y la vida media y la volatilidad de largo plazo no se calculan."
+    },
+    "note_texts": {
+      "garch_scale": "El ajuste se hizo sobre los rendimientos divididos por {scale:num}, su desviación típica; los parámetros se dan en las unidades de la serie.",
+      "garch_solver": "El optimizador que convergió: {solver} (solnp no).",
+      "garch_at_bound": "{parameter} está en un límite del optimizador: su error típico no se calcula de la forma habitual."
     },
     "stats": {
       "model": {
@@ -2365,12 +2399,12 @@
       "sign_bias_not_supported": "La prueba de sesgo de signo de Engle y Ng no rechaza que la volatilidad responda igual a las caídas y a las subidas una vez tenido en cuenta el modelo (p-valor {p_value:p}, α = {alpha:num}); esto no demuestra que la respuesta sea la misma.",
       "backtest_coverage_ok": "En el periodo reservado ({holdout:int} {unit}), los rebases del VaR a 1 paso al {level:pct} fueron {violations:int}, frente a {expected:num} esperados: la prueba de Kupiec no rechaza la tasa que pide su nivel (p-valor {p_value:p}, α = {alpha:num}).",
       "backtest_coverage_failed": "En el periodo reservado ({holdout:int} {unit}), los rebases del VaR a 1 paso al {level:pct} fueron {violations:int}, frente a {expected:num} esperados: la prueba de Kupiec rechaza la tasa que pide su nivel (p-valor {p_value:p}, por debajo de α = {alpha:num}).",
-      "backtest_independence_ok": "La prueba de Christoffersen no rechaza que los rebases lleguen de forma independiente unos de otros (p-valor {p_value:p}, α = {alpha:num}; {expected:num} rebases esperados).",
-      "backtest_independence_failed": "La prueba de Christoffersen rechaza que los rebases lleguen de forma independiente unos de otros (p-valor {p_value:p}, por debajo de α = {alpha:num}; {expected:num} rebases esperados): llegan agrupados.",
-      "backtest_independence_not_computed": "Ninguna observación rebasó el VaR, frente a {expected:num} rebases esperados: no hay agrupamiento de rebases que probar.",
-      "backtest_cc_ok": "La prueba de cobertura condicional de Christoffersen, tasa e independencia juntas, no rechaza (p-valor {p_value:p}, α = {alpha:num}; {expected:num} rebases esperados).",
-      "backtest_cc_failed": "La prueba de cobertura condicional de Christoffersen, tasa e independencia juntas, rechaza (p-valor {p_value:p}, por debajo de α = {alpha:num}; {expected:num} rebases esperados).",
-      "backtest_expected": "Con {expected:num} rebases esperados, estas pruebas solo pueden distinguir un nivel del VaR lejano al pedido; un periodo de prueba más largo les deja ver errores más pequeños.",
+      "backtest_independence_ok": "La prueba de Christoffersen no rechaza que los rebases lleguen de forma independiente unos de otros (p-valor {p_value:p}, α = {alpha:num}; rebases esperados: {expected:num}).",
+      "backtest_independence_failed": "La prueba de Christoffersen rechaza que los rebases lleguen de forma independiente unos de otros (p-valor {p_value:p}, por debajo de α = {alpha:num}; rebases esperados: {expected:num}): llegan agrupados.",
+      "backtest_independence_not_computed": "Ninguna observación rebasó el VaR, frente a un número esperado de {expected:num}: no hay agrupamiento de rebases que probar.",
+      "backtest_cc_ok": "La prueba de cobertura condicional de Christoffersen, tasa e independencia juntas, no rechaza (p-valor {p_value:p}, α = {alpha:num}; rebases esperados: {expected:num}).",
+      "backtest_cc_failed": "La prueba de cobertura condicional de Christoffersen, tasa e independencia juntas, rechaza (p-valor {p_value:p}, por debajo de α = {alpha:num}; rebases esperados: {expected:num}).",
+      "backtest_expected": "Con un número esperado de rebases de {expected:num}, estas pruebas solo pueden distinguir un nivel del VaR lejano al pedido; un periodo de prueba más largo les deja ver errores más pequeños.",
       "backtest_short": "Con {holdout:int} observación reservada el backtest no se calcula: necesita al menos 2.",
       "method_backtest": "Con un periodo de prueba, las últimas observaciones quedan fuera del ajuste; los parámetros ajustados, fijos, las recorren paso a paso, de modo que cada una recibe un VaR a 1 paso calculado solo con las observaciones anteriores. Un rebase es una observación más allá de su VaR. La prueba de Kupiec compara la tasa de rebases con la tasa que pide el nivel, la de Christoffersen si un rebase hace más probable el siguiente, y su tercera prueba las dos cosas juntas. Con pocos rebases esperados (el periodo de prueba por 1 − c) sus leyes χ² son toscas y solo ven errores grandes: cada frase dice cuántos rebases se esperaban.",
       "summary_garch": "{paths:int} futuros de {steps:int} {unit} se simularon a partir de un {model} con errores de distribución {distribution}, ajustado a «{series}» (semilla {seed:int}).",
@@ -2382,12 +2416,10 @@
       "var_lower_level": "Con probabilidad {p:pct}, {variable} tras {steps:int} {unit} vale {value:num} o menos; con {paths:int} trayectorias este valor está entre {low:num} y {high:num} (intervalo al {confidence:pct}), y cuatro veces más trayectorias reducirían ese intervalo a la mitad, aproximadamente.",
       "var_upper": "Con probabilidad {p:pct}, {variable} tras {steps:int} {unit} vale {value:pct} o más; con {paths:int} trayectorias este valor está entre {low:pct} y {high:pct} (intervalo al {confidence:pct}), y cuatro veces más trayectorias reducirían ese intervalo a la mitad, aproximadamente.",
       "var_upper_level": "Con probabilidad {p:pct}, {variable} tras {steps:int} {unit} vale {value:num} o más; con {paths:int} trayectorias este valor está entre {low:num} y {high:num} (intervalo al {confidence:pct}), y cuatro veces más trayectorias reducirían ese intervalo a la mitad, aproximadamente.",
-      "var_money": "Sobre la posición de {amount:num}, este cambio es {money:num}.",
-      "es_lower": "Cuando {variable} está en su cuantil del {p:pct} o por debajo, {quantile:pct}, su media es {value:pct} (intervalo {low:pct} a {high:pct}).",
-      "es_lower_level": "Cuando {variable} está en su cuantil del {p:pct} o por debajo, {quantile:num}, su media es {value:num} (intervalo {low:num} a {high:num}).",
-      "es_upper": "Cuando {variable} está en su cuantil superior del {p:pct} o por encima, {quantile:pct}, su media es {value:pct} (intervalo {low:pct} a {high:pct}).",
-      "es_upper_level": "Cuando {variable} está en su cuantil superior del {p:pct} o por encima, {quantile:num}, su media es {value:num} (intervalo {low:num} a {high:num}).",
-      "es_money": "Sobre la posición de {amount:num}, este cambio medio es {money:num}.",
+      "es_lower": "Cuando {variable} está en su cuantil del {p:pct} o por debajo, su media es {value:pct} (intervalo {low:pct} a {high:pct}).",
+      "es_lower_level": "Cuando {variable} está en su cuantil del {p:pct} o por debajo, su media es {value:num} (intervalo {low:num} a {high:num}).",
+      "es_upper": "Cuando {variable} está en su cuantil superior del {p:pct} o por encima, su media es {value:pct} (intervalo {low:pct} a {high:pct}).",
+      "es_upper_level": "Cuando {variable} está en su cuantil superior del {p:pct} o por encima, su media es {value:num} (intervalo {low:num} a {high:num}).",
       "threshold_lower": "Con probabilidad {prob_crossed:pct} (intervalo {low:pct} a {high:pct}), {variable} baja de {threshold:pct} en algún paso a lo largo del horizonte de {steps:int} {unit}; con probabilidad {prob_beyond:pct} queda por debajo en el último paso.",
       "threshold_lower_level": "Con probabilidad {prob_crossed:pct} (intervalo {low:pct} a {high:pct}), {variable} baja de {threshold:num} en algún paso a lo largo del horizonte de {steps:int} {unit}; con probabilidad {prob_beyond:pct} queda por debajo en el último paso.",
       "threshold_upper": "Con probabilidad {prob_crossed:pct} (intervalo {low:pct} a {high:pct}), {variable} sube por encima de {threshold:pct} en algún paso a lo largo del horizonte de {steps:int} {unit}; con probabilidad {prob_beyond:pct} queda por encima en el último paso.",
@@ -2395,6 +2427,7 @@
       "drawdown": "La mitad de las trayectorias cae al menos un {median:pct} desde un máximo dentro del horizonte de {steps:int} {unit}; con probabilidad {p:pct} la caída es más profunda que {tail:pct}.",
       "shape": "Tras {steps:int} {unit}, {variable} tiene asimetría {skewness:num} y curtosis en exceso {kurtosis:num}; una distribución normal tiene 0 y 0.",
       "fan": "Las bandas contienen el {shares:pct} de las trayectorias en cada paso; sus bordes se dibujan con un error de hasta {error:num} en las unidades del gráfico, y las líneas grises finas son las {sample:int} primeras trayectorias.",
+      "fan_bands": "Las bandas contienen el {shares:pct} de las trayectorias en cada paso; sus bordes se dibujan con un error de hasta {error:num} en las unidades del gráfico.",
       "arima_checks_ok": "Ninguna de las {total:int} pruebas sobre los residuos del ARIMA rechaza su hipótesis con α = {alpha:num}: los datos no muestran una desviación que los futuros arrastrarían, lo que no demuestra que no la haya.",
       "arima_check_failed": "{check} rechaza su hipótesis sobre los residuos del ARIMA (p-valor {p_value:p}, por debajo de α = {alpha:num}): los futuros arrastran lo que el modelo no recoge; el informe del nodo ARIMA tiene esa prueba completa.",
       "method_simulation": "Una trayectoria es un futuro posible de la serie: el modelo ajustado avanza paso a paso, cada paso con un nuevo choque aleatorio. Muchas trayectorias juntas dan la distribución de cada magnitud del futuro, y cada medida del riesgo se lee en ella. Los parámetros se quedan en sus estimaciones: la incertidumbre de las estimaciones no está en las trayectorias.",
@@ -2436,12 +2469,10 @@
       "var_lower_level",
       "var_upper",
       "var_upper_level",
-      "var_money",
       "es_lower",
       "es_lower_level",
       "es_upper",
       "es_upper_level",
-      "es_money",
       "threshold_lower",
       "threshold_lower_level",
       "threshold_upper",
@@ -2449,6 +2480,7 @@
       "drawdown",
       "shape",
       "fan",
+      "fan_bands",
       "z2_largest_acf",
       "backtest_independence_not_computed",
       "backtest_expected",
@@ -2541,6 +2573,7 @@
       "arima": "Le rapport complet de ce modèle est celui du nœud ARIMA : les mêmes options donnent les mêmes estimations."
     },
     "coef_title": "Coefficients du modèle simulé",
+    "coef_intervals": "Intervalles à {level} %",
     "notes": {
       "rows": "{n} observations ont été utilisées ; {missing} lignes avaient une valeur vide."
     },
@@ -2745,7 +2778,11 @@
         "name": "Stabilité : Nyblom",
         "h0": "Chaque paramètre est constant sur l'échantillon.",
         "advice": "Les paramètres bougent sur l'échantillon : ajustez une période plus courte et plus récente, ou lisez les paramètres dans la table de stabilité.",
-        "not_computed": "Les scores de l'ajustement n'étaient pas disponibles."
+        "not_computed": "Les scores de l'ajustement n'étaient pas disponibles.",
+        "count": {
+          "one": "{n} paramètre",
+          "other": "{n} paramètres"
+        }
       },
       "sign_bias": {
         "name": "Asymétrie : biais de signe d'Engle–Ng",
@@ -2771,6 +2808,11 @@
     "measure_texts": {
       "at_bound": "Les paramètres que le solveur a laissés à l'une de ses bornes (α + β à 1, ν à sa valeur la plus basse) : leurs erreurs standard ne sont pas calculées de la manière habituelle.",
       "variance_stationary": "La persistance P : sous 1, la variance revient à un niveau de long terme ; à 1 ou au-dessus elle n'y revient pas, et la demi-vie et la volatilité de long terme ne sont pas calculées."
+    },
+    "note_texts": {
+      "garch_scale": "L'estimation a porté sur les rendements divisés par {scale:num}, leur écart-type ; les paramètres sont donnés dans les unités de la série.",
+      "garch_solver": "Le solveur qui a convergé : {solver} (solnp non).",
+      "garch_at_bound": "{parameter} est à une borne du solveur : son erreur type n'est pas calculée de la manière habituelle."
     },
     "stats": {
       "model": {
@@ -2979,12 +3021,12 @@
       "sign_bias_not_supported": "Le test du biais de signe d'Engle et Ng ne rejette pas que la volatilité réagisse de la même façon aux baisses et aux hausses une fois le modèle pris en compte (p-valeur {p_value:p}, α = {alpha:num}) ; cela ne démontre pas que la réaction est la même.",
       "backtest_coverage_ok": "Sur la période de test ({holdout:int} {unit}), la VaR à 1 pas au niveau {level:pct} a été dépassée {violations:int} fois, pour {expected:num} attendues : le test de Kupiec ne rejette pas le taux que demande son niveau (p-valeur {p_value:p}, α = {alpha:num}).",
       "backtest_coverage_failed": "Sur la période de test ({holdout:int} {unit}), la VaR à 1 pas au niveau {level:pct} a été dépassée {violations:int} fois, pour {expected:num} attendues : le test de Kupiec rejette le taux que demande son niveau (p-valeur {p_value:p}, sous α = {alpha:num}).",
-      "backtest_independence_ok": "Le test de Christoffersen ne rejette pas que les dépassements arrivent indépendamment les uns des autres (p-valeur {p_value:p}, α = {alpha:num} ; {expected:num} dépassements attendus).",
-      "backtest_independence_failed": "Le test de Christoffersen rejette que les dépassements arrivent indépendamment les uns des autres (p-valeur {p_value:p}, sous α = {alpha:num} ; {expected:num} dépassements attendus) : ils arrivent en grappes.",
-      "backtest_independence_not_computed": "Aucune observation n'a dépassé la VaR, pour {expected:num} dépassements attendus : il n'y a pas de grappe de dépassements à tester.",
-      "backtest_cc_ok": "Le test de couverture conditionnelle de Christoffersen, taux et indépendance ensemble, ne rejette pas (p-valeur {p_value:p}, α = {alpha:num} ; {expected:num} dépassements attendus).",
-      "backtest_cc_failed": "Le test de couverture conditionnelle de Christoffersen, taux et indépendance ensemble, rejette (p-valeur {p_value:p}, sous α = {alpha:num} ; {expected:num} dépassements attendus).",
-      "backtest_expected": "Avec {expected:num} dépassements attendus, ces tests ne peuvent distinguer qu'un niveau de VaR éloigné de celui demandé ; une période de test plus longue leur fait voir des erreurs plus petites.",
+      "backtest_independence_ok": "Le test de Christoffersen ne rejette pas que les dépassements arrivent indépendamment les uns des autres (p-valeur {p_value:p}, α = {alpha:num} ; dépassements attendus : {expected:num}).",
+      "backtest_independence_failed": "Le test de Christoffersen rejette que les dépassements arrivent indépendamment les uns des autres (p-valeur {p_value:p}, sous α = {alpha:num} ; dépassements attendus : {expected:num}) : ils arrivent en grappes.",
+      "backtest_independence_not_computed": "Aucune observation n'a dépassé la VaR, pour un nombre attendu de {expected:num} : il n'y a pas de grappe de dépassements à tester.",
+      "backtest_cc_ok": "Le test de couverture conditionnelle de Christoffersen, taux et indépendance ensemble, ne rejette pas (p-valeur {p_value:p}, α = {alpha:num} ; dépassements attendus : {expected:num}).",
+      "backtest_cc_failed": "Le test de couverture conditionnelle de Christoffersen, taux et indépendance ensemble, rejette (p-valeur {p_value:p}, sous α = {alpha:num} ; dépassements attendus : {expected:num}).",
+      "backtest_expected": "Avec un nombre attendu de dépassements de {expected:num}, ces tests ne peuvent distinguer qu'un niveau de VaR éloigné de celui demandé ; une période de test plus longue leur fait voir des erreurs plus petites.",
       "backtest_short": "Avec {holdout:int} observation mise de côté, le backtest n'est pas calculé : il en faut au moins 2.",
       "method_backtest": "Avec une période de test, les dernières observations sont tenues hors de l'ajustement ; les paramètres ajustés, fixés, les parcourent un pas à la fois, de sorte que chacune reçoit une VaR à 1 pas calculée sur les seules observations d'avant. Un dépassement est une observation au-delà de sa VaR. Le test de Kupiec compare le taux de dépassements au taux que demande le niveau, celui de Christoffersen regarde si un dépassement rend le suivant plus probable, et son troisième test les deux ensemble. Avec peu de dépassements attendus (la période de test fois 1 − c), leurs lois du χ² sont grossières et ils ne voient que de grandes erreurs : chaque phrase dit combien de dépassements étaient attendus.",
       "summary_garch": "{paths:int} futurs de {steps:int} {unit} ont été simulés à partir d'un {model} avec des erreurs suivant une {distribution}, ajusté sur «{series}» (graine {seed:int}).",
@@ -2996,12 +3038,10 @@
       "var_lower_level": "Avec une probabilité de {p:pct}, {variable} après {steps:int} {unit} vaut {value:num} ou moins ; avec {paths:int} trajectoires cette valeur se situe entre {low:num} et {high:num} (intervalle à {confidence:pct}), et quatre fois plus de trajectoires diviseraient environ cet intervalle par deux.",
       "var_upper": "Avec une probabilité de {p:pct}, {variable} après {steps:int} {unit} vaut {value:pct} ou plus ; avec {paths:int} trajectoires cette valeur se situe entre {low:pct} et {high:pct} (intervalle à {confidence:pct}), et quatre fois plus de trajectoires diviseraient environ cet intervalle par deux.",
       "var_upper_level": "Avec une probabilité de {p:pct}, {variable} après {steps:int} {unit} vaut {value:num} ou plus ; avec {paths:int} trajectoires cette valeur se situe entre {low:num} et {high:num} (intervalle à {confidence:pct}), et quatre fois plus de trajectoires diviseraient environ cet intervalle par deux.",
-      "var_money": "Sur la position de {amount:num}, cette variation vaut {money:num}.",
-      "es_lower": "Lorsque {variable} ne dépasse pas son quantile de {p:pct}, {quantile:pct}, sa moyenne est {value:pct} (intervalle {low:pct} à {high:pct}).",
-      "es_lower_level": "Lorsque {variable} ne dépasse pas son quantile de {p:pct}, {quantile:num}, sa moyenne est {value:num} (intervalle {low:num} à {high:num}).",
-      "es_upper": "Lorsque {variable} atteint au moins son quantile supérieur de {p:pct}, {quantile:pct}, sa moyenne est {value:pct} (intervalle {low:pct} à {high:pct}).",
-      "es_upper_level": "Lorsque {variable} atteint au moins son quantile supérieur de {p:pct}, {quantile:num}, sa moyenne est {value:num} (intervalle {low:num} à {high:num}).",
-      "es_money": "Sur la position de {amount:num}, cette variation moyenne vaut {money:num}.",
+      "es_lower": "Lorsque {variable} ne dépasse pas son quantile de {p:pct}, sa moyenne est {value:pct} (intervalle {low:pct} à {high:pct}).",
+      "es_lower_level": "Lorsque {variable} ne dépasse pas son quantile de {p:pct}, sa moyenne est {value:num} (intervalle {low:num} à {high:num}).",
+      "es_upper": "Lorsque {variable} atteint au moins son quantile supérieur de {p:pct}, sa moyenne est {value:pct} (intervalle {low:pct} à {high:pct}).",
+      "es_upper_level": "Lorsque {variable} atteint au moins son quantile supérieur de {p:pct}, sa moyenne est {value:num} (intervalle {low:num} à {high:num}).",
       "threshold_lower": "Avec une probabilité de {prob_crossed:pct} (intervalle {low:pct} à {high:pct}), {variable} passe sous {threshold:pct} à un pas quelconque au cours des {steps:int} {unit} à venir ; la probabilité d'être en dessous au dernier pas est de {prob_beyond:pct}.",
       "threshold_lower_level": "Avec une probabilité de {prob_crossed:pct} (intervalle {low:pct} à {high:pct}), {variable} passe sous {threshold:num} à un pas quelconque au cours des {steps:int} {unit} à venir ; la probabilité d'être en dessous au dernier pas est de {prob_beyond:pct}.",
       "threshold_upper": "Avec une probabilité de {prob_crossed:pct} (intervalle {low:pct} à {high:pct}), {variable} passe au-dessus de {threshold:pct} à un pas quelconque au cours des {steps:int} {unit} à venir ; la probabilité d'être au-dessus au dernier pas est de {prob_beyond:pct}.",
@@ -3009,6 +3049,7 @@
       "drawdown": "La moitié des trajectoires chute d'au moins {median:pct} depuis un sommet dans les {steps:int} {unit} ; avec une probabilité de {p:pct}, la chute est plus profonde que {tail:pct}.",
       "shape": "Après {steps:int} {unit}, {variable} a une asymétrie de {skewness:num} et une kurtosis en excès de {kurtosis:num} ; une loi normale a 0 et 0.",
       "fan": "Les bandes contiennent {shares:pct} des trajectoires à chaque pas ; leurs bords sont tracés à {error:num} près dans les unités du graphique, et les fines lignes grises sont les {sample:int} premières trajectoires.",
+      "fan_bands": "Les bandes contiennent {shares:pct} des trajectoires à chaque pas ; leurs bords sont tracés à {error:num} près dans les unités du graphique.",
       "arima_checks_ok": "Aucun des {total:int} tests sur les résidus de l'ARIMA ne rejette son hypothèse au seuil α = {alpha:num} : les données ne montrent pas d'écart que les futurs porteraient, ce qui ne démontre pas qu'il n'y en a pas.",
       "arima_check_failed": "{check} rejette son hypothèse sur les résidus de l'ARIMA (p-valeur {p_value:p}, sous α = {alpha:num}) : les futurs portent ce que le modèle manque ; le rapport du nœud ARIMA donne ce test en entier.",
       "method_simulation": "Une trajectoire est un futur possible de la série : le modèle ajusté avance pas à pas, chaque pas avec un nouveau choc aléatoire. Beaucoup de trajectoires ensemble donnent la loi de chaque grandeur du futur, et chaque mesure du risque y est lue. Les paramètres restent à leurs estimations : l'incertitude des estimations n'est pas dans les trajectoires.",
@@ -3050,12 +3091,10 @@
       "var_lower_level",
       "var_upper",
       "var_upper_level",
-      "var_money",
       "es_lower",
       "es_lower_level",
       "es_upper",
       "es_upper_level",
-      "es_money",
       "threshold_lower",
       "threshold_lower_level",
       "threshold_upper",
@@ -3063,6 +3102,7 @@
       "drawdown",
       "shape",
       "fan",
+      "fan_bands",
       "z2_largest_acf",
       "backtest_independence_not_computed",
       "backtest_expected",
