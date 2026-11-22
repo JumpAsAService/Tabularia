@@ -859,10 +859,8 @@ export const modelPresetHintKey = (preset: string): string => `models.presets.${
 export const modelGroupKey = (group: string): string => `models.groups.${group}`
 
 // Models whose form and words the editor has, but whose runner is not built yet: the palette leaves them out. The A/B nodes
-// (lot E9) and the decomposition (lot D6) are in; a model being built goes here until its runner runs. Forecast (Timestral)
-// (docs/specs/foundation-forecast.md) has its form and words (lot F5) and a runner that refuses «not built yet» until lot F3:
-// lot F7 takes it away from this list.
-export const MODEL_NOT_IN_THE_PALETTE_YET: ReadonlySet<string> = new Set<string>(['timestral'])
+// (lot E9), the decomposition (lot D6) and Forecast (Timestral) (lot F7) are in; a model being built goes here until its runner runs.
+export const MODEL_NOT_IN_THE_PALETTE_YET: ReadonlySet<string> = new Set<string>()
 
 /** The palette's Models group: the shown groups in the catalogue's order, each with its models
  *  and, after ARIMA, the six presets of that same node. With a search, only the items whose

@@ -1,8 +1,7 @@
 // The Forecast (Timestral) node in the editor (lot F5 of docs/specs/foundation-forecast.md), without a browser: its form in its words,
 // the sizes the group's ready version holds, the quantiles as a box for each of the model's levels, the covariates (past and known,
 // 16 together), the licence line with its link, no model to register, the columns it hands on before the Run (quantile_0.05…) down
-// to the steps after it, the icon, the summary, the palette that still leaves the node out (its runner refuses «not built yet»
-// until lot F3), the form with the keyboard alone, and the words in the five languages.
+// to the steps after it, the icon, the summary, the palette entry (in since lot F7), the form with the keyboard alone, and the words in the five languages.
 // Run: npm test
 import { test, after } from 'node:test'
 import assert from 'node:assert/strict'
@@ -302,17 +301,16 @@ test('the columns the node hands on are known before the Run, as the form edits 
 
 // ── the palette, the canvas ──────────────────────────────────────────────────
 
-test('Forecast (Timestral) has its icon and its summary, and one palette entry that stays hidden until its runner is built', () => {
+test('Forecast (Timestral) has its icon and its summary, and one palette entry', () => {
   assert.notEqual(icons.modelIconOf('timestral'), icons.modelIconOf('arima'))
   assert.notEqual(icons.modelIconOf('timestral'), icons.modelIconOf('decomposition'))
   assert.notEqual(icons.modelIconOf('timestral'), icons.modelIconOf('linear'))
   const t = (k) => WORDS.en[k] ?? k
   const shown = m.MODEL_CATALOG.groups.filter((g) => g.id === 'foundation_forecast')
-  // held back while the runner refuses «not built yet» (lot F3): the palette leaves it out
-  assert.ok(m.MODEL_NOT_IN_THE_PALETTE_YET.has('timestral'))
-  assert.deepEqual(m.modelPalette(shown, '', t), [])
-  // let in, one entry, named «Forecast (Timestral)», found by its name and by its group's, with no presets
-  const open = m.modelPalette(shown, '', t, m.MODEL_CATALOG, new Set())
+  // in the palette since lot F7: one entry, named «Forecast (Timestral)», found by its name and by its group's, with no presets
+  assert.ok(!m.MODEL_NOT_IN_THE_PALETTE_YET.has('timestral'))
+  const open = m.modelPalette(shown, '', t)
+  assert.deepEqual(m.modelPalette(shown, '', t, m.MODEL_CATALOG, new Set()), open)
   assert.deepEqual(open.map((g) => g.group), ['foundation_forecast'])
   assert.deepEqual(open[0].items.map((i) => i.kind), ['model:timestral'])
   assert.equal(t(open[0].items[0].nameKey), 'Forecast (Timestral)')

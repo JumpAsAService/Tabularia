@@ -176,10 +176,11 @@ test('the palette shows the groups the person may use: not a disabled one, not o
 
 test('the palette\'s entries: the models by group, the six presets after ARIMA, a search, the drag\'s kinds', () => {
   const all = m.modelPalette(m.MODEL_CATALOG.groups, '', en)
-  assert.deepEqual(all.map((g) => g.group), ['regression', 'survival', 'timeseries', 'boosting', 'customer_lifetime', 'experiments'])
+  assert.deepEqual(all.map((g) => g.group), ['regression', 'survival', 'timeseries', 'boosting', 'customer_lifetime', 'experiments', 'foundation_forecast'])
   assert.deepEqual(all[0].items.map((i) => i.kind), ['model:linear', 'model:logistic'])
   assert.deepEqual(all[1].items.map((i) => i.kind), ['model:kaplan_meier', 'model:cox', 'model:parametric_survival'])
   assert.deepEqual(all[4].items.map((i) => i.kind), ['model:clv', 'model:bg_bb'])
+  assert.deepEqual(all[6].items.map((i) => i.kind), ['model:timestral'])
   assert.deepEqual(all[2].items.map((i) => i.kind), ['model:arima', 'model:arima:ar', 'model:arima:ma', 'model:arima:arma', 'model:arima:arima', 'model:arima:sarima', 'model:arima:sarimax', 'model:decomposition'])
   assert.deepEqual(m.modelPalette(m.modelShownGroups(STATE), '', en).map((g) => g.group), ['regression', 'timeseries'])
   // a search by name, by hint, by group
@@ -1050,11 +1051,12 @@ test('the palette lists the three nodes under their groups, searchable, with an 
   assert.ok(inside.includes('Survival Kaplan–Meier Cox proportional hazards Parametric survival'), inside)
   assert.ok(inside.includes('Customer lifetime Customer lifetime value BG/BB'), inside)
   assert.ok(inside.includes('Experiments A/B test A/B test planning'), inside)
-  // 1 Predict + 2 + 3 + 8 + 2 + 2 + 2
-  assert.match(html, /class="group-count"[^>]*>20</)
+  assert.ok(inside.includes('Pre-trained forecasting Forecast (Timestral)'), inside)
+  // 1 Predict + 2 + 3 + 8 + 2 + 2 + 2 + 1
+  assert.match(html, /class="group-count"[^>]*>21</)
   // every item is a button reached with Tab, Enter and Space add it (not a mouse-only control)
   const items = [...html.slice(html.indexOf('id="palette-models"'), html.indexOf('Control')).matchAll(/<div class="item[^"]*"[^>]*>/g)].map((x) => x[0]).filter((x) => x.includes('role="button"'))
-  assert.equal(items.length, 20)
+  assert.equal(items.length, 21)
   assert.ok( items.every((x) => x.includes('tabindex="0"') && x.includes('role="button"')))
   groups.state.value = null
 })
@@ -1250,9 +1252,9 @@ test('Forecast (Timestral) says its columns before a run: a quantile column per 
   assert.equal(later.length, 0)
   assert.ok(!columns.some((c) => c.name === 'x'))
   assert.equal(m.modelOutputColumns(ts, { output: 'results' }, []).columns.length, 10)
-  // a model the palette does not show yet: its runner is built by lot F3
+  // in the palette since lot F7: its runner is built
   const palette = m.modelPalette(m.MODEL_CATALOG.groups, '', (k) => k)
-  assert.ok(!palette.flatMap((g) => g.items).some((i) => i.model === 'timestral'))
+  assert.ok(palette.flatMap((g) => g.items).some((i) => i.kind === 'model:timestral'))
 })
 
 test('the steps after a model that only keep, drop, order, rename, cast or filter say their columns; the others do not', () => {
