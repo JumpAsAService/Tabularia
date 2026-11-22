@@ -77,6 +77,7 @@ export interface ModelGroupLicence {
   pending: boolean // no valid acceptance in the audit
   line: ModelGroupLicenceLine | null
   audit_expires_at: string | null // when the audit's retention removes the acceptance (null: it keeps it)
+  sizes_in_use?: string[] // the sizes the version in use was built with (empty: no version in use)
 }
 
 /** What Enable and Build again send for a group with weights: the licence read (its sha256), the acceptance, the sizes. */
@@ -186,9 +187,14 @@ export interface LicenceDraft {
   open: boolean
 }
 
-/** All the sizes ticked, the box unticked: the draft of a group's licence box. */
-export function licenceDraftOf(l: Pick<ModelGroupLicence, 'sizes'>): LicenceDraft {
-  return { accept: false, sizes: l.sizes.map((s) => s.id), open: false }
+/**
+ * The box unticked, and the sizes of the version in use ticked (Build again: a click downloads nothing more than what
+ * is already there unless the person ticks it); a group with no version in use ticks every size.
+ */
+export function licenceDraftOf(l: Pick<ModelGroupLicence, 'sizes' | 'sizes_in_use'>): LicenceDraft {
+  const all = l.sizes.map((s) => s.id)
+  const inUse = all.filter((id) => (l.sizes_in_use ?? []).includes(id))
+  return { accept: false, sizes: inUse.length ? inUse : all, open: false }
 }
 
 /** The body of an Enable or Build again: the sizes in the recipe's order, the licence read by its sha256. */

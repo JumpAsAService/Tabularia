@@ -275,6 +275,10 @@ type mgLicenceOut struct {
 	// AuditExpiresAt: when the audit's retention removes the valid acceptance (null: it keeps it); after it
 	// the next build asks again, the version in use keeps running
 	AuditExpiresAt *string `json:"audit_expires_at"`
+	// SizesInUse: the sizes the version in use was built with (its `# tabularia:weights` line), the ones the box
+	// ticks for Build again, so that a click does not download sizes nobody chose; empty without a version in use
+	// (a group never built ticks every size)
+	SizesInUse []string `json:"sizes_in_use"`
 }
 
 // mgLicenceView is the licence part of a group's answer; nil for a group without weights.
@@ -284,13 +288,16 @@ func mgLicenceView(s *mgState, retentionMinutes int) *mgLicenceOut {
 	if w == nil {
 		return nil
 	}
-	out := &mgLicenceOut{Name: w.Licence.Name, SHA256: w.Licence.SHA256, Text: g.LicenceText(), Sizes: []mgLicenceSize{}, Pending: s.Accepted == nil}
+	out := &mgLicenceOut{Name: w.Licence.Name, SHA256: w.Licence.SHA256, Text: g.LicenceText(), Sizes: []mgLicenceSize{}, Pending: s.Accepted == nil,
+		SizesInUse: []string{}}
+	if v := s.inUse(); v != nil {
+		out.SizesInUse = mgSizesOfVersion(g, v)
+	}
 	for _, id := range mgAllSizes(g) {
 		out.Sizes = append(out.Sizes, mgLicenceSize{ID: id, Bytes: w.Sizes[id].Files["model.safetensors"].Bytes})
 	}
 	if first := mgAllSizes(g); len(first) > 0 {
-		z := w.Sizes[first[0]]
-		out.URL = modelgroups.OfficialWeightsBaseURL + z.Repo + "/blob/" + z.Revision + "/LICENSE"
+		out.URL = mgLicenceURL(g, first[0])
 	}
 	// the version in use first, then the newest: the line survives the audit's retention
 	pick := func(v *mgVersion) bool {
@@ -331,4 +338,48 @@ func mgSizesOfVersion(g modelgroups.Group, v *mgVersion) []string {
 		}
 	}
 	return mgAllSizes(g)
+}
+
+// mgLicenceURL is the licence's text on the repository's host at the revision of a size's weights: the file the weights
+// were downloaded with, never a moving branch.
+func mgLicenceURL(g modelgroups.Group, size string) string {
+	z := g.Recipe.Weights.Sizes[size]
+	return modelgroups.OfficialWeightsBaseURL + z.Repo + "/blob/" + z.Revision + "/LICENSE"
+}
+
+// inUse is the version the group's environment serves (its current version), whatever its recipe: nil when none.
+func (s *mgState) inUse() *mgVersion {
+	for i := range s.Versions {
+		if v := &s.Versions[i]; s.CurrentID != nil && v.ID == *s.CurrentID {
+			return v
+		}
+	}
+	return nil
+}
+
+// mgPaletteLicence is what the node's form says of a group's licence under the size: its name and the licence's text
+// at the pinned revision of each size the version in use holds (`url`: the first one's).
+type mgPaletteLicence struct {
+	Name string            `json:"name"`
+	URL  string            `json:"url"`
+	URLs map[string]string `json:"urls"`
+}
+
+func mgPaletteLicenceOf(g modelgroups.Group, sizes []string) *mgPaletteLicence {
+	if g.Recipe.Weights == nil {
+		return nil
+	}
+	if len(sizes) == 0 {
+		sizes = mgAllSizes(g)
+	}
+	out := &mgPaletteLicence{Name: g.Recipe.Weights.Licence.Name, URLs: map[string]string{}}
+	for _, z := range sizes {
+		if _, has := g.Recipe.Weights.Sizes[z]; has {
+			out.URLs[z] = mgLicenceURL(g, z)
+			if out.URL == "" {
+				out.URL = out.URLs[z]
+			}
+		}
+	}
+	return out
 }

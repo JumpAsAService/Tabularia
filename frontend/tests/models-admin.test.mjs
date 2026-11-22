@@ -177,6 +177,15 @@ test('the licence box starts unticked with every size ticked, and sends the reci
   assert.equal(licenceSizesText(['28m', '123m']), '28M, 123M')
 })
 
+test('Build again ticks the sizes of the version in use; a group with none in use ticks them all (lot F9)', () => {
+  assert.deepEqual(licenceDraftOf({ ...licence, sizes_in_use: ['5m', '28m'] }).sizes, ['5m', '28m'])
+  // in the recipe's order, a size the recipe no longer has left out
+  assert.deepEqual(licenceDraftOf({ ...licence, sizes_in_use: ['28m', '5m', '1b'] }).sizes, ['5m', '28m'])
+  assert.deepEqual(licenceDraftOf({ ...licence, sizes_in_use: [] }).sizes, ['5m', '28m', '123m', '209m'])
+  assert.deepEqual(licenceDraftOf({ ...licence, sizes_in_use: ['1b'] }).sizes, ['5m', '28m', '123m', '209m'])
+  assert.equal(licenceDraftOf({ ...licence, sizes_in_use: ['5m'] }).accept, false, 'the tick is never kept')
+})
+
 test('the clause is point 2 of the shipped text, cut around its threshold, never retyped', () => {
   const clause = licenceClause(readFileSync(fileURLToPath(new URL(LICENCE_FILE, import.meta.url)), 'utf8'))
   assert.ok(clause)

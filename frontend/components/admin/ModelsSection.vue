@@ -142,7 +142,10 @@ const boxShown = (g: ModelGroupAdmin): boolean => {
 const canGo = (g: ModelGroupAdmin): boolean => !boxShown(g) || (!!licence[g.id] && licenceReady(licence[g.id]))
 const focusSoon = (id: string) => nextTick(() => document.getElementById(id)?.focus())
 function askRebuild(g: ModelGroupAdmin) {
-  if (!licence[g.id] && g.licence) licence[g.id] = licenceDraftOf(g.licence)
+  // a fresh draft from what the server says now: the sizes of the version in use ticked, the box unticked
+  const l = shown(g).licence
+  if (l) licence[g.id] = licenceDraftOf(l)
+  if (!licence[g.id]) return
   licence[g.id].open = true
   focusSoon(`mg-${g.id}-accept`)
 }

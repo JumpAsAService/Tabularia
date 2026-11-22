@@ -120,9 +120,18 @@ test('the sizes offered are those the ready version holds, the one the node has 
   assert.equal(m.modelGroupSizes('foundation_forecast', null), null)
   assert.deepEqual(m.modelGroupLicence('foundation_forecast', state), LICENCE)
   assert.equal(m.modelGroupLicence('regression', state), null)
-  // a route that does not say (an older gateway): what the group ships; an address that is not https is no link
-  assert.match(m.modelGroupLicence('foundation_forecast', { disabled_reason: null, groups: [] }).url, /^https:\/\//)
+  // the gateway's words only (lot F9: no constant in the editor): a route that does not say gives no line; the link of the
+  // node's size, at its pinned revision; an address that is not https is no link
+  assert.equal(m.MODEL_GROUP_LICENCES, undefined)
+  assert.equal(m.modelGroupLicence('foundation_forecast', { disabled_reason: null, groups: [] }), null)
+  const pinned = { name: 'Modified MIT License (Mistral AI)', url: 'https://huggingface.co/mistralai/Timestral-5M/blob/bdd20cfc/LICENSE',
+    urls: { '5m': 'https://huggingface.co/mistralai/Timestral-5M/blob/bdd20cfc/LICENSE', '28m': 'https://huggingface.co/mistralai/Timestral-28M/blob/49b26409/LICENSE' } }
+  const said = { disabled_reason: null, groups: [{ id: 'foundation_forecast', enabled: true, usable: true, licence: pinned }] }
+  assert.deepEqual(m.modelGroupLicence('foundation_forecast', said, '28m'), { name: pinned.name, url: pinned.urls['28m'] })
+  assert.deepEqual(m.modelGroupLicence('foundation_forecast', said, '209m'), { name: pinned.name, url: pinned.url })
+  assert.deepEqual(m.modelGroupLicence('foundation_forecast', said), { name: pinned.name, url: pinned.url })
   assert.equal(m.modelGroupLicence('foundation_forecast', { disabled_reason: null, groups: [{ id: 'foundation_forecast', enabled: true, usable: true, licence: { name: 'X', url: 'javascript:alert(1)' } }] }).url, undefined)
+  assert.equal(m.modelGroupLicence('foundation_forecast', { disabled_reason: null, groups: [{ id: 'foundation_forecast', enabled: true, usable: true, licence: { name: 'X', url: 'https://a.example/', urls: { '28m': 'javascript:alert(1)' } } }] }, '28m').url, undefined)
 })
 
 test('the size is drawn as four buttons in the words of the language, the default 28M chosen; only the downloaded ones are offered', async () => {
@@ -218,18 +227,19 @@ test('known covariates take the horizon away: the future rows are it', async () 
 test('the licence is said under the size, in a sentence with a link that opens apart; nothing without one', async () => {
   const Form = await component('components/ui/ModelForm.vue')
   const html = await render(Form, node(SERIES, { licence: LICENCE }))
-  assert.ok(text(html).includes('Weights by Mistral AI under the Modified MIT License, accepted for this installation by your administrator. Read the licence'), text(html))
+  assert.ok(text(html).includes('Weights under the Modified MIT License, accepted for this installation by your administrator. Read the licence'), text(html))
   assert.match(html, /<a href="https:\/\/example\.org\/licence" target="_blank" rel="noopener noreferrer">Read the licence<\/a>/)
   // under the size: after its buttons, before the horizon's box
-  assert.ok(html.indexOf('model-ts-1-size') < html.indexOf('Weights by Mistral AI') && html.indexOf('Weights by Mistral AI') < html.indexOf('model-ts-1-horizon'))
+  assert.ok(html.indexOf('model-ts-1-size') < html.indexOf('Weights under the') && html.indexOf('Weights under the') < html.indexOf('model-ts-1-horizon'))
   // no address: the sentence without a link; no licence: no sentence
   const nolink = await render(Form, node(SERIES, { licence: { name: 'Modified MIT License' } }))
-  assert.ok(text(nolink).includes('Weights by Mistral AI') && !nolink.includes('<a '))
-  assert.ok(!text(await render(Form, node(SERIES))).includes('Weights by Mistral AI'))
-  // the panel hands the form the group's own: the route's, else the shipped
+  assert.ok(text(nolink).includes('Weights under the') && !nolink.includes('<a '))
+  assert.ok(!text(await render(Form, node(SERIES))).includes('Weights under the'))
+  // the panel hands the form the gateway's, with the link of the node's size
   const panel = read('../components/models/ModelNodePanel.vue')
   assert.match(panel, /:sizes="sizes"/)
   assert.match(panel, /:licence="licence"/)
+  assert.match(panel, /modelGroupLicence\(model\.value\.group, groups\.state\.value, size\.value\)/)
 })
 
 // ── no model to register ─────────────────────────────────────────────────────
@@ -354,7 +364,7 @@ test('every word of the form is in the five languages, with the same holes, and 
     }
   }
   // every group with a licence of its own says it in a sentence of the node of that group
-  for (const group of Object.keys(m.MODEL_GROUP_LICENCES)) {
+  for (const group of ['foundation_forecast']) {
     for (const model of m.MODEL_CATALOG.models.filter((x) => x.group === group)) for (const lang of LANGS) assert.ok(WORDS[lang][`models.${model.id}.licence`]?.includes('{licence}'), `${lang} ${model.id}`)
   }
 })

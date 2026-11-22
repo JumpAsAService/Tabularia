@@ -6638,7 +6638,7 @@ export default {
     "timestral": {
       "name": "Prognose (Timestral)",
       "hint": "Prognostiziert jede Reihe aus ihrer eigenen Vergangenheit mit einem vortrainierten Modell (Timestral): ohne Anpassung, mit einem Bereich für jeden Schritt und, falls vorhanden, mit den Reihen, die dazugehören (ein Preis, eine Aktion). Die letzten beobachteten Werte lassen sich zurückhalten, um die Prognose an einer saisonalen naiven Prognose zu messen.",
-      "licence": "Gewichte von Mistral AI unter der {licence}, für diese Installation von Ihrer Administration akzeptiert.",
+      "licence": "Gewichte unter der {licence}, für diese Installation von Ihrer Administration akzeptiert.",
       "params": {
         "horizon": "Schritte voraus",
         "quantiles": "Quantilstufen",

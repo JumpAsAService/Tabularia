@@ -9,7 +9,7 @@ import { useI18n } from 'vue-i18n'
 import { Sparkles, Trash2 } from 'lucide-vue-next'
 import type { Node } from '@vue-flow/core'
 import type { ColumnInfo } from '~/composables/useApi'
-import { modelArimaTitle, modelGroupLicence, modelGroupSizes, modelNameKey, modelOff, modelOf, modelUnset } from '~/composables/modelCatalog'
+import { modelArimaTitle, modelDefaults, modelGroupLicence, modelGroupSizes, modelNameKey, modelOff, modelOf, modelUnset } from '~/composables/modelCatalog'
 import { modelIconOf } from '~/composables/modelIcons'
 import { useModelGroups } from '~/composables/useModelGroups'
 import type { ScriptOutputs } from '~/composables/useScripting'
@@ -44,7 +44,12 @@ const off = computed(() => (model.value ? modelOff(model.value.group, groups.sta
 const maxTimeout = computed(() => groups.state.value?.groups.find((g) => g.id === model.value?.group)?.max_timeout_seconds ?? null)
 // the sizes of the weights the group's ready version holds, and their licence: the form says them under the size
 const sizes = computed(() => (model.value ? modelGroupSizes(model.value.group, groups.state.value) : null))
-const licence = computed(() => (model.value ? modelGroupLicence(model.value.group, groups.state.value) : null))
+// the link of the node's size: the licence's text at the revision of the weights it runs
+const size = computed(() => {
+  const own = props.node.data?.params?.size ?? (model.value ? modelDefaults(model.value.id)?.size : undefined)
+  return typeof own === 'string' ? own : null
+})
+const licence = computed(() => (model.value ? modelGroupLicence(model.value.group, groups.state.value, size.value) : null))
 const title = computed(() => {
   if (isPredict.value) return t('models.predict.title')
   if (!model.value) return t('models.node.title')

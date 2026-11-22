@@ -769,25 +769,23 @@ export interface ModelGroupState {
   licence?: ModelGroupLicence | null
 }
 
-/** The licence of a group's weights as the node's form says it under the size: its name and where to read it. */
+/** The licence of a group's weights as the node's form says it under the size: its name and where to read it, the
+ *  gateway's (`/models/groups`): the text at the pinned revision of each size (`urls`), `url` the first one's. */
 export interface ModelGroupLicence {
   name?: string
   url?: string
+  urls?: Record<string, string>
 }
 
-/** What the form says of a licence when the route does not (an older gateway): the one the group ships. */
-export const MODEL_GROUP_LICENCES: Readonly<Record<string, ModelGroupLicence>> = {
-  foundation_forecast: { name: 'Modified MIT License', url: 'https://huggingface.co/mistralai/Timestral-28M/blob/main/LICENSE' },
-}
-
-/** The licence line's data for a group: what the route says, else what the group ships; null for a group with no licence of its own. */
-export function modelGroupLicence(group: string, state: ModelGroupsState | null | undefined): ModelGroupLicence | null {
+/** The licence line's data for a group, as the gateway says it, the link of the node's size when it has one; null for a group
+ *  with no licence of its own (or a gateway that does not say). Only an https address becomes a link: the route's text is data. */
+export function modelGroupLicence(group: string, state: ModelGroupsState | null | undefined, size?: string | null): ModelGroupLicence | null {
   const said = state?.groups.find((g) => g.id === group)?.licence
-  const own = MODEL_GROUP_LICENCES[group]
-  if (!said && !own) return null
-  const url = said?.url ?? own?.url
-  // only an https address is made a link (the route's text is data)
-  return { name: said?.name || own?.name, url: typeof url === 'string' && /^https:\/\//.test(url) ? url : undefined }
+  if (!said || typeof said !== 'object') return null
+  const own = size && said.urls && typeof said.urls === 'object' ? said.urls[size] : undefined
+  const url = typeof own === 'string' ? own : said.url
+  const name = typeof said.name === 'string' ? said.name : undefined
+  return { name, url: typeof url === 'string' && /^https:\/\//.test(url) ? url : undefined }
 }
 
 /** The sizes the ready version of a group holds, or null when the route does not say (every one of the catalogue then). */

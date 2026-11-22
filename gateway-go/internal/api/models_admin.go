@@ -516,6 +516,9 @@ func mgPalette(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principa
 		// group without weights. LicencePending: it waits for an administrator to accept the licence
 		Sizes          []string `json:"sizes"`
 		LicencePending bool     `json:"licence_pending"`
+		// Licence: the name of the weights' licence and its text at the pinned revision of each size (the form's line);
+		// null for a group without weights
+		Licence *mgPaletteLicence `json:"licence"`
 	}
 	groups := []entry{}
 	for _, g := range modelgroups.Groups() {
@@ -533,6 +536,7 @@ func mgPalette(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principa
 			if cur := s.current(); cur != nil {
 				e.Sizes = mgSizesOfVersion(g, cur)
 			}
+			e.Licence = mgPaletteLicenceOf(g, e.Sizes)
 		}
 		if e.Enabled {
 			e.Usable = s.Everyone || admin

@@ -6638,7 +6638,7 @@ export default {
     "timestral": {
       "name": "Forecast (Timestral)",
       "hint": "Forecasts each series from its own past with a pre-trained model (Timestral): no fitting, a range for each step, and the series that go with it (a price, a promotion) when you have them. The last observed values can be kept out to measure it against a seasonal naïve forecast.",
-      "licence": "Weights by Mistral AI under the {licence}, accepted for this installation by your administrator.",
+      "licence": "Weights under the {licence}, accepted for this installation by your administrator.",
       "params": {
         "horizon": "Steps ahead",
         "quantiles": "Quantile levels",

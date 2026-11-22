@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -355,5 +356,61 @@ func TestWhenTheAuditRowIsGoneTheVersionRunsAndNothingIsBuiltBySelf(t *testing.T
 	s, err := mgLoad(f.ctx, f.db, g, false, 5)
 	if err != nil || s.Accepted != nil {
 		t.Errorf("an acceptance of another licence is valid: %v %v", s.Accepted, err)
+	}
+}
+
+// Build again ticks the sizes of the version in use, never sizes nobody chose (lot F9: on kind the box opened with the four
+// sizes ticked on a version built with two, and one click would have downloaded 123M and 209M too); a group never built
+// ticks them all (the panel's rule for an empty list).
+func TestBuildAgainTicksTheSizesOfTheVersionInUse(t *testing.T) {
+	g := weightsGroup(t)
+	cur := int64(7)
+	built := mgPackagesText(g, &mgAcceptance{SHA256: g.Recipe.Weights.Licence.SHA256, By: "ada@example.com", At: time.Now(), Audit: 5,
+		Sizes: []string{"5m", "28m"}})
+	newer := mgPackagesText(g, &mgAcceptance{SHA256: g.Recipe.Weights.Licence.SHA256, By: "ada@example.com", At: time.Now(), Audit: 6,
+		Sizes: []string{"209m"}})
+	s := mgState{Group: g, Enabled: true, CurrentID: &cur, Versions: []mgVersion{
+		{ID: 8, Number: 8, Status: "failed", PackagesText: newer}, {ID: 7, Number: 7, Status: "ready", RecipeHash: &g.RecipeHash, PackagesText: built}}}
+	if got := fmt.Sprint(mgLicenceView(&s, 0).SizesInUse); got != "[5m 28m]" {
+		t.Errorf("the version in use's sizes: %s", got)
+	}
+	// a version in use on an older recipe is still the one serving: its sizes
+	old := "old"
+	s.Versions[1].RecipeHash = &old
+	if got := fmt.Sprint(mgLicenceView(&s, 0).SizesInUse); got != "[5m 28m]" {
+		t.Errorf("an older recipe: %s", got)
+	}
+	// nothing in use (a group never built, or whose first build failed): none, and the panel ticks them all
+	s.CurrentID = nil
+	if lic := mgLicenceView(&s, 0); lic.SizesInUse == nil || len(lic.SizesInUse) != 0 {
+		t.Errorf("no version in use: %v", lic.SizesInUse)
+	}
+}
+
+// The node's form reads the licence's name and its text at the pinned revision of each size from the gateway (lot F9: the
+// editor kept them in a constant whose link pointed at the Hub's moving `main`).
+func TestThePaletteSaysTheLicenceAtThePinnedRevisions(t *testing.T) {
+	g := weightsGroup(t)
+	l := mgPaletteLicenceOf(g, []string{"5m", "28m"})
+	w := g.Recipe.Weights
+	if l == nil || l.Name != w.Licence.Name || len(l.URLs) != 2 {
+		t.Fatalf("%+v", l)
+	}
+	for _, z := range []string{"5m", "28m"} {
+		want := "https://huggingface.co/" + w.Sizes[z].Repo + "/blob/" + w.Sizes[z].Revision + "/LICENSE"
+		if l.URLs[z] != want || len(w.Sizes[z].Revision) != 40 {
+			t.Errorf("%s: %s", z, l.URLs[z])
+		}
+	}
+	if l.URL != l.URLs["5m"] || strings.Contains(l.URL, "/main/") {
+		t.Errorf("url: %s", l.URL)
+	}
+	if all := mgPaletteLicenceOf(g, nil); len(all.URLs) != len(w.Sizes) {
+		t.Errorf("no version in use: every size, %d", len(all.URLs))
+	}
+	for _, o := range modelgroups.Groups() {
+		if o.Recipe.Weights == nil && mgPaletteLicenceOf(o, nil) != nil {
+			t.Errorf("%s has a licence", o.ID)
+		}
 	}
 }

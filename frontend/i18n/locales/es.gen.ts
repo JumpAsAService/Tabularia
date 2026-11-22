@@ -6638,7 +6638,7 @@ export default {
     "timestral": {
       "name": "Pronóstico (Timestral)",
       "hint": "Pronostica cada serie a partir de su propio pasado con un modelo preentrenado (Timestral): sin ajuste, con un intervalo para cada paso y, si las tienes, con las series que lo acompañan (un precio, una promoción). Los últimos valores observados pueden reservarse para medirlo frente a un pronóstico ingenuo estacional.",
-      "licence": "Pesos de Mistral AI con la licencia {licence}, aceptada para esta instalación por tu administrador.",
+      "licence": "Pesos con la licencia {licence}, aceptada para esta instalación por tu administrador.",
       "params": {
         "horizon": "Pasos hacia delante",
         "quantiles": "Niveles de los cuantiles",
