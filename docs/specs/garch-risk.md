@@ -1693,6 +1693,56 @@ with an ARIMA. The notes of deviation 5 need their words. On kind the Job's log,
 and the cgroup's `memory.peak` includes the page cache of the paths file; the same seed with the group's memory at 1 GiB gives the same
 numbers (the batches are bounded by the row group at 1 GiB too).
 
+### G7 — sample data, flows, palette, docs, assistants (2026-11-22)
+
+**What is in.** `generate.py`: `build_quotazioni` (the series, from a generator of its own, a PCG64 on SEED + 2000), `trading_days`, `gen_quotazioni`,
+`ensure_quotazioni` (creates and fills only the missing table, without touching the calendar and the regions); `schema_ref.sql`: the table;
+`seed_tabularia.py`: the table as a public datasource `commodity_prices` with its columns described, `ensure_quotazioni` in `prepare_databases`, and
+`risk_flows`, called with the time series group (after the decomposition's flow); `test_generate_quotazioni.py` (16 tests, in the CI's sampledb
+step) and the seed's tests. The palette: `MODEL_NOT_IN_THE_PALETTE_YET` is empty (the two nodes are one entry each under Time series, after the
+decomposition). `docs/capabilities/models.md`: «Volatility (GARCH)» and «Risk simulation» replace the «being built» section, with the
+licences of the packages, the memory rule, the seed, the limits and the timings; `CHANGELOG.md`. The flow assistant's prompt (`ai_flow_agent.py`:
+a paragraph for each node, when to choose each, the measures that are no verdicts, the editor's action; the settings rule untouched),
+`internal/aiprompts/prompts.json` and `internal/mcp/tools.json` regenerated, a test of the prompt and a scripted assistant (no call to a paid service).
+
+**Deviations and corrections to this spec** (the rest as written):
+
+1. **775 trading days, 2,325 rows**, not ≈765 and ≈2,300: Monday to Friday from 2023-07-03 to 2026-07-15 without 1 January, Good Friday, Easter Monday,
+   1 May, 25 and 26 December (2 June and 15 August are market days, as the table says).
+2. **The olive oil's calming is in the intercept.** A starting volatility above the long-run one decays with β^t, a few days: the intercept
+   carries the excess variance (σ₀² − σ²)(1 − persistence), losing 1 % a day (half-life 69 days), so the first hundred days have a volatility of
+   1.95 % and the last hundred 1.1 %. Parameters of the three materials in `QUOT_MATERIALS`; the durum wheat's are α 0.04, γ 0.10, β 0.89 (persistence
+   0.98, a first set with γ 0.06 gave a γ the fit could not tell from 0 on 524 returns), ν 6, ξ 0.9.
+3. **`output` of the risk flows is `risk_summary`**, the catalogue's id (this spec wrote `summary`).
+4. **The orders flow has no `position`** (a sum of orders has no money to put it in; the node would refuse it). The durum wheat's threshold is a
+   constant, 378 (10 % below the last price, 419.9064, to the euro): the seed has no numpy; a test of the generator checks it stays within 0.25 of it.
+5. **Where the flows were run.** The three flows were run on the real table, the runners in `tabularia-models-timeseries:dev` as the Job starts them
+   (the group's code written by `cmd/modelgroup code`, a read-only root, `/tmp` a tmpfs, `--network none`, 1 CPU, uid 10001, `--memory 2500m`), on the
+   input the flow's steps give (the durum wheat's prices; the orders per day of the generator's own simulation, 8 empty days at 0). Not through the
+   gateway and the database: that is G8 on kind.
+
+**The flows' real results** (the table at the seed's default):
+
+| Flow | Result | Time |
+|---|---|---|
+| Durum wheat: volatility | exit 0; 774 returns, 250 held out; GJR-GARCH(1,1) skewed t: persistence 0.909, half-life 7.2 days, α₁ at its bound (note `at_bound`), γ₁ 0.121 (p 0.052), ξ 0.889, ν 7.2; Ljung–Box on z and z², ARCH-LM (p 0.099), Nyblom and sign bias: `ok`; Kupiec p 0.76 (3 violations, 2.5 expected), Christoffersen `ok`; 785 output rows (774 + 10 forecast + the first price) | 7.5 s, wall, with R's start |
+| Durum wheat: risk of the next month | exit 0; the same fit; 10,000 paths × 21 steps, one batch, 6 MB on disk; VaR 99 % −11.8 % (−11,790 euro on 100,000), ES 97.5 % −11.9 %; below 378 at the horizon 1.8 %, below it at some step 3.1 %; median drawdown 3.6 % | 5.7 s |
+| Orders: will next month's orders exceed 1,000? | exit 0; ARIMA(1,0,1)(0,1,1)[7] on 1,111 days; the 30-day sum: mean 929, VaR (upper tail, 99 %) 1,297; the chance that it exceeds 1,000 is 33.1 % (Clopper–Pearson 32.1–34.0 %); the ARIMA's checks say what the data are: ARCH-LM and Jarque–Bera `failed`, the variance ratio `failed` | 5.7 s |
+
+**No flow was refused.** The `negative_variance` the G3 note feared did not come on this table with a GJR and a skewed t (α₁ is 0 and γ₁ positive), so the flow
+stays GJR; on another material or a shorter window it can (the docs say so): GARCH or EGARCH then.
+
+**Criteria.** `small` only, and the generator needs the same memory at every scale: **tracemalloc's peak 252 KiB** to build the 2,325 rows (the test's
+bound is 2 MiB). The other tables' hash (agents, customers, the lifecycles, the orders' skeleton) is the experiments' `98c0687f…` and does not move. Tests:
+sampledb 113 (4 skipped for libraries the sampledb image lacks; the catalogue's check of the three flows ran green from the backend's folder), frontend 614, the flow assistant's 141, the Go gateway.
+
+**For G8.** The table is added to a database filled before it by `ensure_quotazioni` (a new datasource `commodity_prices` in «Public tables»); on kind the seed
+needs the time series group enabled **and its image rebuilt with `rugarch`**, else the flows are not created. In the flows the price column is cast to
+`float` first (a `numeric(12, 4)` becomes a decimal, which the models do not take); the durum wheat's rows are sorted by `data`; the orders flow's
+inputs are the real orders per day (the generator's simulation counts the same orders: 30,000 in 1,111 days at `small`). Check on kind: the three flows run
+through the gateway, the first one's results as above (the same fit; a difference from the Job's numbers would be a bug), PDF and Excel, and the
+risk node's flow with `output = paths` is not made (the owner's rule of small data).
+
 ## References
 
 - Acerbi, C., Tasche, D. (2002). On the coherence of expected shortfall. *J. Banking & Finance* 26(7).
