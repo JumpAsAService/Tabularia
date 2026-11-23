@@ -482,6 +482,20 @@ heavy (no image, no cluster).
 | The limits of the language and of the graph: catalogue constants or administrator settings | **Documented constants of the catalogue**; the run's limits stay administrator settings (answer 10) | Owner, 2026-11-23 |
 | Uniform with parameter bounds | **Constants only** in the first release | Spec decision, 2026-11-23, owner may revisit |
 
+## Correction of 2026-11-24 from the step-4 specs
+
+From `bayes-stan-compile.md`, `bayes-diagnostics.md` and `bayes-predictive-checks.md`, approved by the owner on
+2026-11-24. Where this section and the text above differ, this section holds.
+
+1. **`stan.quantile`** per prior distribution: the form of Stan's quantile a truncated prior's ancestral draw uses in the
+   program (normal: `inv_Phi`; lognormal: `exp` of it; Cauchy: `tan`; Student-t and beta: `inv_inc_beta`; exponential:
+   `log1m`; uniform: linear), and **none for `gamma` and `inv_gamma`** (Stan 2.40 has no quantile for them, assumed): such a
+   prior truncated inside its support has no ancestral draw in Stan (`bayes-predictive-checks.md`, «Truncated priors»).
+2. **`finite_variance`** per distribution, for its constant arguments: normal, exponential, gamma, lognormal, beta,
+   uniform always; Cauchy never; Student-t only with ν > 2; inverse-gamma only with α > 2; a truncation to a bounded range
+   always. `bayes-diagnostics` leaves the contraction NULL when a node's marginal, or a node its arguments read, has none
+   (the owner, 2026-11-24).
+
 ## Open questions
 
 None.

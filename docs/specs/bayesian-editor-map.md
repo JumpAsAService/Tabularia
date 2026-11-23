@@ -8,7 +8,8 @@ measured before its spec, the results of the research with their licences and so
 to the interview («Interview answers»), which came **before** any module spec. The answers moved one boundary: a
 module `expression-language` was added between `distribution-catalog` and `model-graph` (answer 3). Each module
 spec is written by module id (`docs/specs/bayes-<module-id>.md`). Approved on 2026-11-23:
-`bayes-distribution-catalog.md`, `bayes-expression-language.md`, `bayes-model-graph.md`, `bayes-image.md`.
+`bayes-distribution-catalog.md`, `bayes-expression-language.md`, `bayes-model-graph.md`, `bayes-image.md`; approved on
+2026-11-24: `bayes-stan-compile.md`, `bayes-diagnostics.md`, `bayes-predictive-checks.md` (Correction of 2026-11-24 from the step-4 specs).
 
 Words, as in the other specs: **checked online** = read on the project's own page, registry or repository on
 2026-11-23; **verified** = read in this repository's code on 2026-11-23; **assumed** = known from the
@@ -332,7 +333,10 @@ Each entry: **choices** (the large ones; the rest belongs to the module's spec),
 - **Risks.** A program with `generated quantities` that draws N values per draw costs time proportional to
   N × draws; bounded by thinning the draws used for the checks. A chart read as a verdict: the report's words
   say what the chart shows and never whether the model «passes».
-- **Measure first.** The added time of the generated quantities at 1,000, 10,000 and 100,000 rows.
+- **Measure first.** The added time of the generated quantities at 1,000, 10,000 and 100,000 rows. (Correction of 2026-11-24 from the step-4 specs): lot
+  P0 of `bayes-predictive-checks.md`, which also decides between the owner's (b) — the checks in a
+  `generate_quantities` run on 1,000 thinned draws — and the fallback (a), inline; the statistics, bins and units are
+  fixed there.
 
 ### `stan-compile`
 
@@ -348,7 +352,9 @@ Each entry: **choices** (the large ones; the rest belongs to the module's spec),
   Tabularia's own storage (not the scripts bucket), checks that hash and records it in Postgres; a sampling Job
   receives the binary in its step prefix and the expected sha256 in `task.json` (its ConfigMap, written by the
   gateway), and refuses to execute a file whose hash differs. A poisoned binary in the scripts bucket is
-  therefore never executed.
+  therefore never executed. (Correction of 2026-11-24 from the step-4 specs): Tabularia's storage is the engine's bucket under `bayes-binaries/`, outside the
+  managed prefixes a client may name; the engine (Python, `backend/`) gains three internal routes for the bytes
+  (`/scripts/binary/keep`, `place`, `delete`); the cache and its states are `bayes-stan-compile.md`'s.
 - **Risks.** Compile time and memory (assumed: tens of seconds to a minute, one to a few GB; to measure).
 - **Measure first.** As `bayes-image`; and the binary's size (tens of MB, assumed).
 - **Correction of 2026-11-24 from E4** (the expression language's security review, finding 1; Owner, 2026-11-24).
@@ -369,7 +375,8 @@ Each entry: **choices** (the large ones; the rest belongs to the module's spec),
   for the charts. Everything is a **measure or a fact** (answer 11): no reference option, no mark, no stop.
 - **Risks.** A posterior correlation matrix for pair charts is quadratic in the parameters: limited to the
   parameters the report shows.
-- **Measure first.** Time and memory of the diagnostics for 20,000 parameters × 4,000 draws.
+- **Measure first.** Time and memory of the diagnostics for 20,000 parameters × 4,000 draws. (Correction of 2026-11-24 from the step-4 specs): done,
+  `bayes-diagnostics.md`, «Measured on 2026-11-24» (a prototype: 63.6 s of computation, peak 248 MiB).
 
 ### `bayes-runner`
 

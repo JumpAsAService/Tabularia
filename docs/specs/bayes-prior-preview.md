@@ -234,7 +234,9 @@ gives it the browser half and the test's shape:
   in prior mode (`Mode = 1`, `stan-codegen`'s extension point, `bayes-contract`'s mode `prior_predictive`), 4 chains ×
   1,000 draws, fixed seed, run **in the group's image by a command of `predictive-checks`** and committed as a fixture
   (`frontend/tests/fixtures/bayes-prior/<case>.json`: the draws of each quantity's representative unit, with the
-  CmdStan version and the seed in its header) — the suite never runs CmdStan.
+  CmdStan version and the seed in its header) — the suite never runs CmdStan. (Correction of 2026-11-24 from the step-4 specs): the draws are the program's
+  `Prior_m_<k>` columns (`prior_marginal`, `bayes-predictive-checks.md`); a case with a truncated `gamma` or `inv_gamma`
+  has no Stan half.
 - **The comparison**: for each quantity of each case, a **two-sample Kolmogorov–Smirnov test** of the 4,000 browser
   draws against the 4,000 Stan draws (the asymptotic distribution of the statistic, written in the test; n and m are
   large enough for it), the p-values **Holm-adjusted over all the comparisons of the suite**, each compared with the
@@ -376,6 +378,18 @@ None is heavy except a `nuxt build`.
 | Question | Decision | By |
 |---|---|---|
 | Transformed values in the preview | **Yes**: a `transformed` node with no data on any path is shown like a parameter (a log-odds prior seen as probabilities); nodes that need data stay out, as answer 13 says | Owner, 2026-11-23 |
+
+## Correction of 2026-11-24 from the step-4 specs
+
+From `bayes-stan-compile.md`, `bayes-diagnostics.md` and `bayes-predictive-checks.md`, approved by the owner on
+2026-11-24. Where this section and the text above differ, this section holds.
+
+1. **The browser half's name** is `bayesDrawMarginals(plan, seed, n)` (verified in `bayesPriorCore.ts`), the
+   `drawMarginals` of «The golden test against Stan».
+2. **The Stan half** reads the `Prior_m_<k>` columns (`prior_marginal`: one ancestral draw a draw of each quantity node,
+   a plate's representative unit) that `predictive-checks` writes in every program; its lot P4 writes the fixtures.
+3. **A truncated `gamma` or `inv_gamma`** prior has no Stan half (Stan 2.40 has no quantile for them, assumed): its case
+   is compared only with the closed forms of «Without fixtures».
 
 ## Open questions
 

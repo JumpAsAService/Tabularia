@@ -183,7 +183,8 @@ All under the gateway's authentication (`server.Authed`), registered with `regis
    mirror's with them.
 3. **An error among the findings: the save is refused** (422, the findings in the answer, nothing stored, no version;
    owner, 2026-11-23). Warnings do not block. Then `Generate` → program, mapping, manifests, `CodegenVersion`; sha256 of
-   the program. A `Generate` error is
+   the program. `Generate` is called with `predictive-checks`' extension (`bayeschecks.Extension{}`), so every stored
+   program can run both predictive checks (Correction of 2026-11-24 from the step-4 specs). A `Generate` error is
    a bug of the generator: the save fails with 500 and the log says which rule, nothing is stored (the codegen spec:
    «`Generate` returns an error, never a program»).
 4. `Canonical(g)` and `SemanticHash(g)`. When the canonical bytes equal the current version's, nothing is saved (200 with
@@ -233,7 +234,7 @@ type CompileRequest struct {
 }
 
 type CompileState struct {
-	State  string    // "none", "queued", "running", "ready", "failed"
+	State  string    // "none", "queued", "running", "ready", "failed", "timeout" (Correction of 2026-11-24 from the step-4 specs)
 	Detail string    // a sentence for the page (stan-compile's words)
 	At     time.Time // when the state was reached
 }
@@ -406,6 +407,22 @@ Applied by the owner's decision of 2026-11-23, marked in the map «Correction of
 - `model-store`'s «Choices»: the version also holds **the two manifests** and the catalogue's sha256 beside the program.
 - `model-store`'s «Choices»: the compile starts in the background **only after the version's transaction commits**.
 - «What exists and is reused»: the `versioned` **pattern** is reused, not `versioned.Kind` itself.
+
+## Correction of 2026-11-24 from the step-4 specs
+
+From `bayes-stan-compile.md`, `bayes-diagnostics.md` and `bayes-predictive-checks.md`, approved by the owner on
+2026-11-24. Where this section and the text above differ, this section holds.
+
+1. **`timeout`.** `CompileState.State` gains `timeout` (a program that passed the compile deadline, or was killed for
+   memory, is not compiled again under the same limits: the owner, 2026-11-24); `afterCommit` skips it as it skips
+   `ready`, `queued` and `running`, and skips a `failed` the compiler caused; the route `POST …/versions/{v}/compile`
+   answers 409 for `timeout` too, with the state's sentence.
+2. **The state of the current image.** The list's and the detail's compile state is the state of the program **for the
+   group's current image** (`stan-compile`'s cache key holds the image's digest).
+3. **`CompileRequest.Again`**: set only by «Compile now», which asks again for a program the compiler refused.
+4. **The extension in every stored program.** `Generate(m, bayeschecks.Extension{})` at every save; `CodegenVersion`
+   becomes 2; the golden sha256 of the templates' saved programs change once (their tests' fixtures written again and
+   reviewed). A version stored by generator 1 runs as stored, without predictive checks.
 
 ## Decisions of 2026-11-23 (the answers to this spec's questions)
 

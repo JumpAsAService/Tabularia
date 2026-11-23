@@ -89,7 +89,7 @@ It produces no program (`stan-codegen`), validates nothing on its own authority 
 As `pages/scripting.vue`: a card with the models this person sees — name (link) with its description, folder, family
 (**derived from the saved graph**, `model-store`'s `family`; the template it was opened from on a line under it), version,
 «used by N flows», the compile state of the current version (`model-store`'s `CompileState` in words: compiled, compiling,
-to compile, failed with its detail), last save and who — and no «has errors» state: a graph with errors is never saved
+to compile, failed with its detail, and «too long to compile» for `timeout` (Correction of 2026-11-24 from the step-4 specs)), last save and who — and no «has errors» state: a graph with errors is never saved
 (Correction of 2026-11-24 from the mockups); a filter past five
 rows, and **«New model»**, which asks for a folder (EDIT checked when the model is created) and opens the editor on the
 empty canvas with its templates. An intro paragraph says what the space is for, in one sentence for a reader who does not
@@ -554,7 +554,8 @@ through screens 3 to 5.
    (title with count, a filter field, «New model» as the primary). The table: name (an icon and the name as a link, the
    description under it), folder, family (derived from the graph, «opened from «…»» under it), version, «used by N
    flows» (a link with the flow icon; «no flow» in muted), compile state (icon and words: compiled `accent-2`; compiling
-   with the spinner; to compile «compiled the first time it runs»; failed in `danger` with its detail), last save (when,
+   with the spinner; to compile «compiled the first time it runs»; failed in `danger` with its detail; «too long to compile» in `danger`
+   with its sentence for `timeout` (Correction of 2026-11-24 from the step-4 specs)), last save (when,
    and who under it), and three mini icon buttons (duplicate, versions, more: rename, move, delete — delete refused while a
    flow uses it). A line under the table says how the family is derived and that a flow runs the version it pins. The
    empty state: one sentence of what a model is, the four families with their counts of templates, «New model» and
@@ -626,6 +627,15 @@ layout's drawing, «Empty model») and the template dialog with its table of pri
 versions and sha256, the stale notice, the tokenizer, the mapping table under the code), `BayesProblems.vue` (findings as
 cards with «Show in the graph»), `BayesGlossary.vue`; in the app: the menu items' written keys (`AppShell.vue`) and the
 list's family and compile-state cells.
+
+## Correction of 2026-11-24 from the step-4 specs
+
+From `bayes-stan-compile.md`, `bayes-diagnostics.md` and `bayes-predictive-checks.md`, approved by the owner on
+2026-11-24. Where this section and the text above differ, this section holds.
+
+1. **A fifth compile state, `timeout`** (`bayes-stan-compile.md`): «too long to compile», in `danger`, with the state's
+   sentence (the limit and the date; «a simpler model, or a longer limit set by an administrator, compiles anew»), in the
+   list and in the editor's header; the client's `BayesCompileState` gains `'timeout'`.
 
 ## Open questions
 

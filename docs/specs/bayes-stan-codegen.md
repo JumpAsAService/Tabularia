@@ -403,6 +403,8 @@ type Scope interface {
   quantities as a local vector»).
 - A program generated **without** an extension and **with** a test extension are both golden files: the point is
   pinned before `predictive-checks` exists.
+- (Correction of 2026-11-24 from the step-4 specs) `Scope` gains `SlotOn` and `ValueOn` (a value on the rows an extension's index array names), `Expr` gains
+  `Add` and `Mul`, and `internal_functions` grows (`bayes-predictive-checks.md`, «What the codegen gains»).
 
 ## Safety checks on the output
 
@@ -618,6 +620,23 @@ S5 after S2 (it writes the locals S1 and S2 write), before `stan-compile` compil
 | Question | Decision | By |
 |---|---|---|
 | A valid graph whose program does not compile in the compile Job's 300 s (the expression language's E4, finding 1: one per-row expression of 249 nodes 106 s, three of them more than 330 s, with 1 CPU and 3 GiB) | **The generator splits large vector expressions into locals** (lot S5). The rule: an expression over a plate (a vector) of more than **64 nodes** is written bottom-up as a chain of locals of the block it belongs to, each holding at most 64 nodes of the tree (`vector[N] E_<node id>_<k> = …;`, generated identifiers, in the mapping table as `internal`), the statement then using the last; a scalar expression is never split. Measured by hand: the 249-node mean 23 s split instead of 106 s, the 747-node program 62 s instead of more than 330 s; a local of 8 nodes or of 63 compiles in the same time, so 64 bounds the expression templates without multiplying the locals. Accepted by the golden `split_large` and the measure of S5. The catalogue's limits do not change; the program's vector nodes are bounded by `max_program_vector_nodes` (1,500, the owner's budget: split, 1,494 compile in 133 s, 3,984 still pass 330 s), checked by the graph's validator | Owner, 2026-11-24 (the splitting); the threshold and the form: spec, from the measures |
+
+## Correction of 2026-11-24 from the step-4 specs
+
+From `bayes-stan-compile.md`, `bayes-diagnostics.md` and `bayes-predictive-checks.md`, approved by the owner on
+2026-11-24. Where this section and the text above differ, this section holds.
+
+1. **The extension point** gains `Scope.SlotOn(key, ids, rows)` and `Scope.ValueOn(node, ids, rows)` (a value emitted on
+   the rows an extension's index array names, as `RowsSubset` writes a lagged statement), and two typed constructors,
+   `Add` and `Mul`, fully parenthesized; the alphabet and the refused words do not change.
+2. **`internal_functions`** gains `mean`, `sd`, `min`, `max`, `quantile`, `floor`, `fmin`, `fmax`, `to_int`,
+   `append_array`, `rep_array`, `inv_Phi`, `inv_inc_beta`, `tan`, `log1m`, `uniform_rng` and the priors' `_cdf` names,
+   each in `CrossCheck`'s allow-list.
+3. **`CodegenVersion` = 2**: the stored programs hold `predictive-checks`' extension; the stored programs of generator 1
+   keep running, without predictive checks. New golden cases `checks_*`; the cases without an extension are unchanged.
+4. **The test extension draws the half-normal `tau` untruncated** (`normal_rng(0.0, 1.0)` in `extension_fake`): a test of
+   the point's shape, not of the priors; a real extension draws a truncated prior by inversion (`bayes-predictive-checks.md`,
+   «Truncated priors»).
 
 ## As built — lot S5 (the splitting)
 

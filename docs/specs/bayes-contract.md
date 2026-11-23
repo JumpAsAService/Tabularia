@@ -125,7 +125,8 @@ The common keys of `tab_protocol` (protocol 1), with `group` `bayes`, `model` `b
     "data": [ … the data manifest … ],
     "quantities": [ … the quantity manifest … ],
     "checks": { … what predictive-checks asks … },
-    "replicated": null
+    "replicated": null,
+    "series": {"by": "p1", "time": "week"}
   } }
 ```
 
@@ -141,10 +142,14 @@ The common keys of `tab_protocol` (protocol 1), with `group` `bayes`, `model` `b
   under «Advanced». `refresh` is the runner's, not the person's (how often CmdStan prints its progress).
 - **`bayes.data`** and **`bayes.quantities`**: the two manifests `stan-codegen` writes from the validated model
   (below). The runner never reads the graph; it reads what the program declares.
-- **`bayes.checks`**: the statistics and bins `predictive-checks` asks the runner to accumulate (its spec); here
-  only its place and its cap (`max_check_columns`, «Limits»).
+- **`bayes.checks`**: the statistics and bins `predictive-checks` asks the runner to accumulate: `{"format": 1, "on",
+  "outcomes", "value_bins", "stat_bins", "density_draws", "max_units", "ppc_draws"}` (`bayes-predictive-checks.md`);
+  its cap is `max_check_columns` («Limits») (Correction of 2026-11-24 from the step-4 specs).
 - **`bayes.replicated`**: null, or the thinning of the replicated output (`{"draws_per_chain": 50}`) when the node's
   output is `replicated`.
+- **`bayes.series`** (left out when the model has no series): `{"by": a group plate's id or null, "time": the input column
+  of the series' time or null}`, written by `flow-node` from the binding; the runner checks the rows' order with it (the
+  data entries of a series carry neither) (Correction of 2026-11-24 from the step-4 specs).
 
 Every number in `task.json` is checked by the gateway before the Job starts; the runner checks again the ones it
 depends on (types, ranges) and refuses a task it cannot run (`task_value`, a bug of the gateway).
@@ -189,7 +194,10 @@ quantities`), in the order of the CSV's columns:
 - **`role`**: `quantity` (a node of the graph: in the draws, the summary, the report), `internal` (read and dropped),
   `check` (a generated quantity of `predictive-checks`: written to the checks file, never to the draws), `prior_draw`
   (in the prior predictive, the ancestral draw of a quantity, with `of` naming it: it replaces the parameter's own
-  column, which `fixed_param` leaves at its initial value).
+  column, which `fixed_param` leaves at its initial value), `prior_marginal` (one ancestral draw a draw of a quantity node,
+  a plate's representative unit, `of` naming it: written in every mode to the checks file, read by `bayes-diagnostics`
+  for the prior's density and the contraction) (Correction of 2026-11-24 from the step-4 specs). A `check` names its outcome in `of` (the observed data
+  node's id), and an extension's data entry may name its outcome in `node` (Correction of 2026-11-24 from the step-4 specs).
 - **`dims`** say how the CSV names a variable's elements: CmdStan writes `name.i.j` (assumed from the CmdStan guide,
   «MCMC sampling», output; checked by lot K1 on the pinned CmdStan). The runner expands the dims with the data's sizes
   and **checks the CSV header against the expanded list, name for name and in order**; a header that differs is a
@@ -394,7 +402,10 @@ R-hat, the bulk and tail ESS (Vehtari et al. 2021), and the thinned draws of the
 **appended** to `/tmp/run/summary.parquet` (one row group a block of quantities) and to the results writer as they
 come. Measured: the long file of 20,000 quantities × 4,000 draws read back in 20 passes of 32 MiB in 26.5 s with a
 peak of 113 MB above the start; with `pass_bytes` = 512 MiB it is two passes. The time of the second pass is projected
-from the first row group's read rate before it starts («Time and disk»).
+from the first row group's read rate before it starts («Time and disk»). (Correction of 2026-11-24 from the step-4 specs): the pass reads the `value` column
+alone, at offsets computed from the order (checked once against the first row group's `quantity` column), and the
+computation has a budget of its own, `compute_bytes` = `memory_bytes` / 8, beside `pass_bytes` (`bayes-diagnostics.md`,
+«The second pass»).
 
 ## The outputs
 
@@ -410,8 +421,9 @@ texts are data. `results.parquet` is written in every mode, as for every model n
 
 ## The results (the ten columns)
 
-The statistics' ten columns, the same names, types and order; `ord` 0 to N−1; `key` unique and escaped part by part
-(`output.key_part`); a non-finite number NULL. Written by a **streaming writer** with `tab_results.schema()` (one row
+The statistics' ten columns, the same names, types and order; `ord` 0 to N−1; `key` unique, its parts joined by `|` exactly as
+the engine checks it (`backend/app/engine/models/results.py`: `key == "|".join(parts)`, then `|` and the index for a
+chart's point), **without `key_part`'s escape** (Correction of 2026-11-24 from the step-4 specs); a non-finite number NULL. Written by a **streaming writer** with `tab_results.schema()` (one row
 group per block of rows, `ord` continuing), not by `tab_results.Rows`, which keeps every row in Python lists
 (verified): the rows are bounded anyway (below), but the second pass produces them block by block and nothing is
 gained by holding them.
@@ -434,8 +446,10 @@ gained by holding them.
 
 Keys, exactly: `model|||n`, `quantity|tau||rhat_max`, `summary|alpha_school|Liceo Galilei|rhat`,
 `summary|tau||mean`, `sampler|2||divergences`, `ppc|mean||observed`, `ppc|mean||count|7`,
-`curve|trace:tau|3|value|41`, `point|units:alpha_school|median|y|12`. A unit holding a bar or a backslash is escaped
-by `key_part` like every label (the statistics spec).
+`curve|trace:tau|3|value|41`, `point|units:alpha_school|median|y|12`. A unit holding a bar or a backslash is written as
+it is: the engine's check joins the parts without escaping them (verified by lot K1) (Correction of 2026-11-24 from the step-4 specs). The `ppc` and
+`prior_check` level is `<outcome>:<statistic>` (`ppc|y:mean||observed`) and the density chart `ppc_density:<outcome>`
+(`bayes-predictive-checks.md`) (Correction of 2026-11-24 from the step-4 specs).
 
 Every `ppc`/`prior_check` row is a chart's data: the report draws them (`bayes-report`), and its words say what the
 chart shows and never whether the model «passes» (the map).
@@ -466,7 +480,9 @@ node's summary output has them all»).
 **The arithmetic** (asserted by a test of the catalogue), at the most chains the node allows (8): 34,000 (summary)
 + 12 × (8 × 200 + 8 × 20 + 2 × 200) = 25,920 (charts) + 8 × 3 × 1,000 = 24,000 (units) + `quantity` and `data` (at
 most `max_nodes` = 200 nodes × 8 rows each: 3,200) + `sampler` (9 × 10) + `model` (about 60) + `ppc` and
-`prior_check` (`predictive-checks`' caps, at most 5,000) ≈ **92,300 rows, under 100,000**. A change of any cap, or of
+`prior_check` (`predictive-checks`' caps, at most 5,000) ≈ **92,300 rows, under 100,000**. (Correction of 2026-11-24 from the step-4 specs): the code's formula
+(`bayescontract.MaxResultRows`, with `bayes_max_quantity_entries` 600 × 10 for the `quantity` section) gives **96,690**;
+the pair charts of `bayes-diagnostics` add 6 × 300 = 1,800, **98,490**. A change of any cap, or of
 the chains' maximum, re-runs the test.
 
 ### The catalogue's declaration
@@ -681,7 +697,7 @@ measurement above are never in the suite.
     chunked copy equal to the file;
   - the data passes: every refusal of «Refusals» on a tiny input; standardization by Welford against numpy on the
     same column; the units in text order; lags and subsets; NULLs and non-finite values counted;
-  - the results: the ten columns' types; keys unique and escaped (a unit named `a|b`, a backslash); the caps; the
+  - the results: the ten columns' types; keys unique and joined as the engine checks them (a unit named `a|b`, a backslash); the caps; the
     arithmetic of «The report's scope and the caps»;
   - the refusals leave `/tmp/run` empty and nothing at the output addresses (a fake bucket directory);
   - `binary_hash`: a binary with one byte changed is never executed (a test checks that `os.chmod` and `Popen` are
@@ -704,7 +720,7 @@ measurement above are never in the suite.
 - **Always**: draws appended while sampling, one row group a block, chains interlaced in the fixed order; offsets
   kept, nothing read twice; summaries from accumulators or the second pass by blocks; every file under `/tmp` until
   the last check; the binary's sha256 checked before it runs; only the termination message trusted for hashes; units
-  and labels as data, keys escaped; every limit a setting with its default visible.
+  and labels as data, keys joined as the engine checks them; every limit a setting with its default visible.
 - **Ask first**: a new mode, section, output or column; changing a cap of the results; another layout of the draws; a
   package beyond `numpy` and `pyarrow`; any change to `common/py` (it changes every Python group's runner hash).
 - **Never**: a whole CSV, a whole chain or a whole draws table in memory (`read_csv`, `read_table`, `write_table` of
@@ -815,6 +831,33 @@ what the sections above left open. Where this section and the text above differ,
     object to `card.schema.json` changes the bytes of all seven other groups and starts their recheck. K0 did not add
     the catalogue's entry; the owner chose the filtered view (lot K0b, «Decisions of 2026-11-24 (K0)»). K1 does not edit
     `card.schema.json` before K0b (the card's `bayes` object is in `bayescontract.Card` meanwhile).
+
+## Correction of 2026-11-24 from the step-4 specs
+
+From `bayes-stan-compile.md`, `bayes-diagnostics.md` and `bayes-predictive-checks.md`, approved by the owner on
+2026-11-24, and the coordinator's checks of lot K1. Where this section and the text above differ, this section holds.
+
+1. **The compile's task.** A compile is not a step of a flow: its `ids` are **empty**, and its `limits` are the compile's
+   (`time_budget_seconds` the deadline, `memory_bytes` and `tmp_bytes` the compile's), not the sampling ones of
+   `testdata/tasks/compile.json`'s example (to be rewritten by the lot that next writes the testdata).
+2. **Keys.** The engine's check wants `key == "|".join(parts)` (then `|` and the index for a chart's point) **without**
+   `key_part`'s escape (verified by lot K1 in `backend/app/engine/models/results.py`); the text of «The results» is
+   corrected.
+3. **`bayes.series`** = `{by, time}`, left out (`omitempty`) when the model has no series: the runner of K1 reads it
+   already; `flow-node` writes it.
+4. **Roles and manifests.** A role `prior_marginal` (`of` its node; in every mode, to the checks file); a `check` names its
+   outcome in `of`; an extension's data entry may name its outcome in `node` (`checkQuantity` and `checkDataEntry` refuse
+   both today: their lot changes them).
+5. **The checks.** `bayes.checks` is `predictive-checks`' object; the `ppc`/`prior_check` level is
+   `<outcome>:<statistic>`, the density chart `ppc_density:<outcome>`; the `replicated` output comes from a
+   `generate_quantities` run on the thinned draws (the «assumed: its spec» of «The outputs»), and so do the posterior
+   checks if lot P0 confirms that CmdStan reads the follower's thinned CSV, otherwise they are inline (the owner,
+   2026-11-24).
+6. **The summary and the charts.** `summary` gains the number `contraction` (and the `summary` output its column),
+   NULL when the prior's marginal has no finite variance (the owner, 2026-11-24); `curve` gains the charts
+   `pairs:<a>:<b>` (series `draw`, `divergent`); the catalogue's `limits` gain `bayes_max_pair_quantities` (4) and
+   `bayes_pair_points` (300). The arithmetic: 96,690 rows by the code's formula, 98,490 with the pairs, under 100,000.
+7. **The second pass** reads the `value` column alone, with a computation budget `compute_bytes` (`memory_bytes` / 8).
 
 ## As built — lot K0
 

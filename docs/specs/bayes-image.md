@@ -448,8 +448,9 @@ every group has (state, Enable, Disable, Rebuild, Resources, Who may use it) and
   process), memory (default **3 GiB**: measured peaks 1.3–1.9 GiB), the longest compile (default **300 s**:
   measured 11–45 s), `/tmp` (default **512 MiB**: measured 3 MB). Each with its default visible and a
   «Reset to default».
+- **Compiles at once** (new, default **2**) (Correction of 2026-11-24 from the step-4 specs).
 - **Cache of binaries** (new): the limit (default **2 GiB**, about 700 binaries of the measured size), the
-  space used and the number of binaries, the date of the oldest use; **Empty the cache** (with a
+  space used and the number of binaries, the date of the oldest use, the binaries of an older image if any (Correction of 2026-11-24 from the step-4 specs); **Empty the cache** (with a
   confirmation; the next run of each model compiles again). Eviction is least-recently-used when a new
   binary would pass the limit. The cache itself — key, storage, integrity — is `stan-compile`'s.
 - **The note**: «Each saved model is compiled once, in the background, in a Job of its own (about 10–30 s on
@@ -741,6 +742,15 @@ As in the models spec and the map, plus:
 | **Stan's CDFs differ from the witness's in the tails** | Check 7 fails on a correct image | The tolerance of the log-CDF is declared wider than the density's; a case that needs more gets its tolerance and reason in `points.json`, never a silent skip |
 | **GitHub's release downloads unreachable** from the build namespace | The build fails | `MODELS__SOURCES_BASE_URL` (a mirror with the same paths and sha256) |
 | **Compile time on the real cluster** | The trial waits for a compile when the background compile has not finished | Measured 11–28 s with the header on a 2018 laptop CPU; the card's limit (300 s) and the note set expectations |
+
+## Correction of 2026-11-24 from the step-4 specs
+
+From `bayes-stan-compile.md`, `bayes-diagnostics.md` and `bayes-predictive-checks.md`, approved by the owner on
+2026-11-24. Where this section and the text above differ, this section holds.
+
+1. **The card** gains «Compiles at once» (default 2) beside the compile limits, and the cache lists the binaries of an
+   image that is no longer current (evicted first). The card's fields and routes are `stan-compile`'s lot C4
+   (`bayes-stan-compile.md`, «The administration card»), with the sampling Job's `/tmp` stored in `bayes_settings`.
 
 ## Open questions
 
