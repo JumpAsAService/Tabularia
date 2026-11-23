@@ -1144,7 +1144,6 @@
     "atan",
     "inc_beta",
     "step",
-    "fabs",
     "inv"
   ],
   "limits": {

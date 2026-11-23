@@ -127,7 +127,8 @@ const (
 	QuantileTan Quantile = "tan"
 	// QuantileIncBetaT (Student-t): with w = square(z) * inv(nu + square(z)),
 	// F = 0.5 + (step(z) - 0.5) * inc_beta(0.5, 0.5 * nu, w); Q = mu + sigma * s * sqrt(nu * v * inv(1 - v))
-	// with v = inv_inc_beta(0.5, 0.5 * nu, |2u - 1|) and s = 2 * step(u - 0.5) - 1.
+	// with v = inv_inc_beta(0.5, 0.5 * nu, |2u - 1|) and s = 2 * step(u - 0.5) - 1 (|2u - 1| written
+	// s * (2u - 1): Stan 2.40 has no fabs).
 	QuantileIncBetaT Quantile = "inv_inc_beta_t"
 	// QuantileIncBeta (beta): F = inc_beta(alpha, beta, x); Q = inv_inc_beta(alpha, beta, u).
 	QuantileIncBeta Quantile = "inv_inc_beta"
@@ -144,7 +145,7 @@ var QuantileFunctions = map[Quantile][]string{
 	QuantileInvPhi:    {"Phi", "inv", "inv_Phi", "uniform_rng"},
 	QuantileExpInvPhi: {"Phi", "inv", "log", "exp", "inv_Phi", "uniform_rng"},
 	QuantileTan:       {"atan", "inv", "tan", "uniform_rng"},
-	QuantileIncBetaT:  {"step", "square", "inv", "inc_beta", "inv_inc_beta", "sqrt", "fabs", "uniform_rng"},
+	QuantileIncBetaT:  {"step", "square", "inv", "inc_beta", "inv_inc_beta", "sqrt", "uniform_rng"},
 	QuantileIncBeta:   {"inc_beta", "inv_inc_beta", "uniform_rng"},
 	QuantileLog1m:     {"expm1", "log1m", "inv", "uniform_rng"},
 	QuantileLinear:    {"uniform_rng"},

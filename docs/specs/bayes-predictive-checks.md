@@ -466,7 +466,8 @@ lands:
   `inc_beta` (beta; Student-t with `step` for the sign), `expm1` (exponential, a function of the language), and `inv` for
   a division. `internal_functions` gains, after `std_normal`: `mean`, `sd`, `min`, `max`, `quantile`, `floor`, `fmin`,
   `fmax`, `to_int`, `append_array`, `rep_array`, `inv_Phi`, `inv_inc_beta`, `tan`, `log1m`, `uniform_rng`, `Phi`, `atan`,
-  `inc_beta`, `step`, `fabs`, `inv`. They are names a person's node no longer takes (renamed as every callable name is).
+  `inc_beta`, `step`, `inv` (P1 listed `fabs` too, which Stan 2.40 does not have: removed on 2026-11-23, see «As built —
+  lot P2»). They are names a person's node no longer takes (renamed as every callable name is).
   stanc 2.40.0 types `quantile`, `to_int(fmin(fmax(floor(…), 1.0), n))`, `append_array` with an empty array and
   multi-indexing on parameter-dependent values in the generated quantities (measured on the golden programs below).
 - **`stan.quantile`** (the catalogue's correction 1): `inv_Phi` (normal), `exp_inv_Phi` (lognormal), `tan` (Cauchy),
@@ -642,7 +643,8 @@ codegen's golden programs without an extension keep their bytes).
   out** (the correlation matrices; a transformed node the likelihoods do not read and whose draw is not written).
 - **Truncation by inversion** with the catalogue's forms, `F` at a bound inside the support and 0 or 1 at the support's
   ends; the arguments held in locals first (a value is written once). **Stan 2.40.0 has no `fabs`** (stanc refuses it,
-  measured; P1's catalogue lists it among `internal_functions` and `QuantileFunctions`, unused): the Student-t's `|2u − 1|`
+  measured; P1's catalogue listed it among `internal_functions` and `QuantileFunctions`, unused, and lost it on 2026-11-23:
+  a test of the catalogue now runs every internal function through stanc): the Student-t's `|2u − 1|`
   is written `s · (2u − 1)` with `s = 2 step(u − 0.5) − 1`. A truncated `uniform` is `uniform_rng(L, U)` of its range.
 - **An ancestral draw never throws** (measured on the image: an exception in the generated quantities makes CmdStan write
   **every** generated quantity of that draw as NaN, the parameters kept; the first version of this lot lost 9 of 200 draws

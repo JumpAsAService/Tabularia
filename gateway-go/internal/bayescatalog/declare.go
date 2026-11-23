@@ -351,13 +351,15 @@ var declared = Catalog{
 	// what predictive-checks writes in the generated quantities (lot P1): the statistics of the
 	// replicated data, the bins without a branch, the arrays, and the truncated priors' draws by
 	// inversion (Quantile: Stan's _cdf needs a vertical bar, so the cumulative distributions are
-	// written with Phi, atan, inc_beta and step, and a division with inv).
+	// written with Phi, atan, inc_beta and step, and a division with inv). Stan 2.40 has no fabs
+	// (stanc refuses it); an absolute value is abs, or a sign times the value as predictive-checks
+	// writes it. Every name here is checked with stanc (stanc_test.go).
 	InternalFunctions: []string{
 		"to_vector", "rep_vector", "append_row", "diag_pre_multiply",
 		"multiply_lower_tri_self_transpose", "inv_logit", "std_normal",
 		"mean", "sd", "min", "max", "quantile", "floor", "fmin", "fmax", "to_int",
 		"append_array", "rep_array", "inv_Phi", "inv_inc_beta", "tan", "log1m", "uniform_rng",
-		"Phi", "atan", "inc_beta", "step", "fabs", "inv",
+		"Phi", "atan", "inc_beta", "step", "inv",
 	},
 
 	Limits: Limits{
