@@ -211,12 +211,12 @@ func (d *Deps) createFlow(w http.ResponseWriter, r *http.Request, p *auth.Princi
 	if q.refused(ref, err) {
 		return
 	}
-	flow, err := q.insertFlow(&flowRow{Name: name, Description: body.Get("description").(string), Definition: definition,
+	flow, ref, err := q.insertFlow(&flowRow{Name: name, Description: body.Get("description").(string), Definition: definition,
 		ProjectID: pid, OwnerID: &p.User.ID, Engine: engine, ProductionEngine: prod})
-	if err == nil {
-		_, err = q.snapshotVersion(flow.ID, "created")
+	if q.refused(ref, err) {
+		return
 	}
-	if err != nil {
+	if _, err = q.snapshotVersion(flow.ID, "created"); err != nil {
 		q.fail(err)
 		return
 	}
@@ -295,6 +295,7 @@ func (d *Deps) updateFlow(w http.ResponseWriter, r *http.Request, p *auth.Princi
 			return
 		}
 	}
+	before := f.Definition
 	off := q.guardSomeoneElsesSchedule(f, definition, moved)
 	if moved {
 		f.ProjectID = *projectID
@@ -322,8 +323,7 @@ func (d *Deps) updateFlow(w http.ResponseWriter, r *http.Request, p *auth.Princi
 		}
 		f.ProductionEngine = e
 	}
-	if err := q.saveFlow(f); err != nil {
-		q.fail(err)
+	if q.refused(q.saveFlow(f, before)) {
 		return
 	}
 	if definition != nil { // only DAG changes make a version
@@ -344,14 +344,17 @@ func (d *Deps) updateFlow(w http.ResponseWriter, r *http.Request, p *auth.Princi
 	server.JSON(w, http.StatusOK, g.detail())
 }
 
-// saveFlow writes the flow's editable columns, with a new updated_at.
-func (q *request) saveFlow(f *flowRow) error {
-	_, err := q.d.DB.Exec(q.ctx, `UPDATE flows SET name = $2, description = $3, definition = $4, project_id = $5, engine = $6,
+// saveFlow writes the flow's editable columns, with a new updated_at, under the locks of the Bayesian
+// models its definition pins (writePinned; `before` is the definition the flow had).
+func (q *request) saveFlow(f *flowRow, before string) (*auth.Refusal, error) {
+	return q.writePinned(before, f.Definition, func(tx pgx.Tx) error {
+		_, err := tx.Exec(q.ctx, `UPDATE flows SET name = $2, description = $3, definition = $4, project_id = $5, engine = $6,
 		production_engine = $7, run_schedule = $8, run_scheduled_by = $9, next_run_at = $10, notify_emails = $11,
 		notify_connection_id = $12, updated_at = $13 WHERE id = $1`, f.ID, f.Name, f.Description, f.Definition, f.ProjectID,
-		f.Engine, f.ProductionEngine, f.RunSchedule, f.RunScheduledBy, f.NextRunAt, f.NotifyEmails, f.NotifyConnectionID,
-		time.Now().UTC())
-	return err
+			f.Engine, f.ProductionEngine, f.RunSchedule, f.RunScheduledBy, f.NextRunAt, f.NotifyEmails, f.NotifyConnectionID,
+			time.Now().UTC())
+		return err
+	})
 }
 
 // presence: services/flow_presence.py
@@ -673,8 +676,8 @@ func (d *Deps) setFlowSchedule(w http.ResponseWriter, r *http.Request, p *auth.P
 			return
 		}
 	}
-	if err := q.saveFlow(f); err != nil {
-		q.fail(err)
+	// the definition written back as read: its pins are unchanged, only their existence is checked
+	if q.refused(q.saveFlow(f, f.Definition)) {
 		return
 	}
 	g, err := q.reread(f.ID)

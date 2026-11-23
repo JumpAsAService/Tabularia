@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/audit"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayesmodels"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/copynames"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/enginepolicy"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/flowaccess"
@@ -484,13 +486,142 @@ func (q *request) checkSave(before, after string) (*auth.Refusal, error) {
 	return q.acc.RegistryCheckDefinition(q.ctx, before, after)
 }
 
-// insertFlow writes a new flow and returns it as read back.
-func (q *request) insertFlow(f *flowRow) (*flowRow, error) {
+// insertFlow writes a new flow and returns it as read back; a refusal when it pins a Bayesian model
+// it may not (writePinned: every pin of a new flow is new).
+func (q *request) insertFlow(f *flowRow) (*flowRow, *auth.Refusal, error) {
 	now := time.Now().UTC()
-	return scanFlow(q.d.DB.QueryRow(q.ctx, `INSERT INTO flows (name, description, project_id, owner_id, definition, engine,
+	var out *flowRow
+	ref, err := q.writePinned("", f.Definition, func(tx pgx.Tx) error {
+		var err error
+		out, err = scanFlow(tx.QueryRow(q.ctx, `INSERT INTO flows (name, description, project_id, owner_id, definition, engine,
 		production_engine, run_schedule, run_scheduled_by, next_run_at, notify_emails, notify_connection_id, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, NULL, NULL, NULL, NULL, NULL, $8, $8) RETURNING `+flowColumns,
-		f.Name, f.Description, f.ProjectID, f.OwnerID, f.Definition, f.Engine, f.ProductionEngine, now))
+			f.Name, f.Description, f.ProjectID, f.OwnerID, f.Definition, f.Engine, f.ProductionEngine, now))
+		return err
+	})
+	return out, ref, err
+}
+
+// errPinRefused rolls back a write of a definition whose pins lockPins refused.
+var errPinRefused = errors.New("a Bayesian model pin refused")
+
+// writePinned runs a write of flows.definition (saveFlow, insertFlow, the promotion of a version) in
+// one transaction after lockPins: a Bayesian model the new definition pins is never deleted under
+// it, and is never one that is gone or, for a new pin, one the saver cannot see
+// (docs/specs/bayes-flow-node.md, «Saving a flow that pins a model»). `before` is the definition
+// the flow had ("" for a new one).
+func (q *request) writePinned(before, after string, write func(pgx.Tx) error) (*auth.Refusal, error) {
+	var refusal *auth.Refusal
+	err := pgx.BeginFunc(q.ctx, q.d.DB, func(tx pgx.Tx) error {
+		ref, err := q.lockPins(tx, before, after)
+		if err != nil {
+			return err
+		}
+		if ref != nil {
+			refusal = ref
+			return errPinRefused
+		}
+		return write(tx)
+	})
+	if refusal != nil {
+		return refusal, nil
+	}
+	return nil, err
+}
+
+// lockPins takes, in the save's transaction, the advisory lock of every model the definition pins, in
+// increasing id order (two saves never wait on each other in a circle), and then checks each pin
+// under the locks: a Delete waits for the commit and finds the flow among the references, or has
+// committed and the model is gone here. A pin that is new or changed (another model or another
+// version than the node of the same id had in `before`, as ScriptCheckDefinition compares) needs a
+// model the saver sees, with the same sentence whether it is absent or not seen; an unchanged pin
+// stays when its saver lost sight of the model (a flow is not broken by a change of rights), as long
+// as its version still exists.
+func (q *request) lockPins(tx pgx.Tx, before, after string) (*auth.Refusal, error) {
+	pins := bayesmodels.Pinned(after)
+	if len(pins) == 0 {
+		return nil, nil
+	}
+	// an id out of the column's range names no model (and would not fit the lock's key): absent below
+	inRange := func(id int64) bool { return id > 0 && id <= math.MaxInt32 }
+	ids := map[int64]bool{}
+	for _, p := range pins {
+		if inRange(p.ModelID) {
+			ids[p.ModelID] = true
+		}
+	}
+	for _, id := range perm.Sorted(ids) {
+		if _, err := tx.Exec(q.ctx, `SELECT pg_advisory_xact_lock($1::integer, $2::integer)`, bayesmodels.Lock, id); err != nil {
+			return nil, err
+		}
+	}
+	old := map[string]bayesmodels.Pin{}
+	for _, p := range bayesmodels.Pinned(before) {
+		old[p.NodeID] = p
+	}
+	labels := pinLabels(after)
+	var usable *bool
+	for _, p := range pins {
+		var m *bayesmodels.Model
+		if inRange(p.ModelID) {
+			var err error
+			if m, err = bayesmodels.Get(q.ctx, tx, p.ModelID); err != nil {
+				return nil, err
+			}
+		}
+		if prev, had := old[p.NodeID]; !had || prev.ModelID != p.ModelID || prev.Version != p.Version {
+			see := false
+			if m != nil {
+				if usable == nil {
+					u, err := ModelGroupUsable(q.ctx, tx, q.c, q.p.User.ID, bayesmodels.Group)
+					if err != nil {
+						return nil, err
+					}
+					usable = &u
+				}
+				var err error
+				if see, err = bayesmodels.CanSee(q.ctx, q.c, m, *usable); err != nil {
+					return nil, err
+				}
+			}
+			if !see {
+				return pinRefusal(labels[p.NodeID], "choose a model you may see"), nil
+			}
+		}
+		exists := false
+		if m != nil {
+			if err := tx.QueryRow(q.ctx, `SELECT EXISTS (SELECT 1 FROM bayes_model_versions WHERE model_id = $1 AND version = $2)`,
+				p.ModelID, p.Version).Scan(&exists); err != nil {
+				return nil, err
+			}
+		}
+		if !exists {
+			return pinRefusal(labels[p.NodeID], "the model or its version no longer exists: choose another"), nil
+		}
+	}
+	return nil, nil
+}
+
+func pinRefusal(label, message string) *auth.Refusal {
+	return &auth.Refusal{Status: http.StatusUnprocessableEntity, Detail: fmt.Sprintf("Bayesian model «%s»: %s", label, message)}
+}
+
+// pinLabels is the label of each node by id, as the step's sentences name it (modelLabel).
+func pinLabels(definition string) map[string]string {
+	out := map[string]string{}
+	parsed, err := pyjson.Loads(definition)
+	if err != nil {
+		return out
+	}
+	nodes, _ := pyjson.Obj(parsed).Value("nodes").([]any)
+	for _, n := range nodes {
+		if node := pyjson.Obj(n); node != nil {
+			if id, ok := node.Value("id").(string); ok {
+				out[id] = modelLabel(node)
+			}
+		}
+	}
+	return out
 }
 
 // snapshotVersion is _snapshot_version: the flow's current definition as a new version,
@@ -549,10 +680,9 @@ func (d *Deps) duplicateFlow(w http.ResponseWriter, r *http.Request, p *auth.Pri
 	if q.refused(ref, err) {
 		return
 	}
-	flow, err := q.insertFlow(&flowRow{Name: name, Description: src.Description, Definition: src.Definition,
+	flow, ref, err := q.insertFlow(&flowRow{Name: name, Description: src.Description, Definition: src.Definition,
 		ProjectID: src.ProjectID, OwnerID: &p.User.ID, Engine: engine, ProductionEngine: prod})
-	if err != nil {
-		q.fail(err)
+	if q.refused(ref, err) {
 		return
 	}
 	if _, err := q.snapshotVersion(flow.ID, fmt.Sprintf("copy of '%s'", src.Name)); err != nil {
@@ -651,14 +781,13 @@ func (d *Deps) promoteFlowVersion(w http.ResponseWriter, r *http.Request, p *aut
 		q.refused(q.acc.EnsureCanOpen(q.ctx, target)) || q.refused(q.checkSave(f.Definition, target)) {
 		return
 	}
+	before := f.Definition
 	off := q.guardSomeoneElsesSchedule(f, &target, false)
-	err = pgx.BeginFunc(q.ctx, d.DB, func(tx pgx.Tx) error {
+	if q.refused(q.writePinned(before, target, func(tx pgx.Tx) error {
 		_, err := tx.Exec(q.ctx, `UPDATE flows SET definition = $2, updated_at = $3, run_schedule = $4, run_scheduled_by = $5,
 			next_run_at = $6 WHERE id = $1`, f.ID, target, time.Now().UTC(), f.RunSchedule, f.RunScheduledBy, f.NextRunAt)
 		return err
-	})
-	if err != nil {
-		q.fail(err)
+	})) {
 		return
 	}
 	f, err = q.snapshotVersion(f.ID, fmt.Sprintf("promoted from v%d", ids[1]))

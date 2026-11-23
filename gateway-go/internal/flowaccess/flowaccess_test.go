@@ -1,6 +1,10 @@
 package flowaccess
 
-import "testing"
+import (
+	"strconv"
+	"strings"
+	"testing"
+)
 
 func TestWidens(t *testing.T) {
 	before := `{"nodes": [{"type": "source", "data": {"datasourceId": 3, "key": "datasets/a.parquet"}}]}`
@@ -52,7 +56,7 @@ func TestAModelNodeWidens(t *testing.T) {
 }
 
 // A Bayesian model node is one of the model nodes (the lists that read them), but it names no catalogue model:
-// its reach is the pinned version's, added with the save.
+// its reach is the version it pins (TestABayesModelPinIsReach).
 func TestABayesModelNodeIsAModelNode(t *testing.T) {
 	def := `{"nodes": [{"id": "s", "type": "source", "data": {"datasourceId": 1}},
 		{"id": "b", "type": "bayes_model", "data": {"bayesModelId": 3, "bayesModelVersion": 1}}]}`
@@ -62,6 +66,46 @@ func TestABayesModelNodeIsAModelNode(t *testing.T) {
 	for r := range ReachOf(def) {
 		if r.Kind == "model" {
 			t.Errorf("a Bayesian node is not a catalogue model: %v", r)
+		}
+	}
+}
+
+// A Bayesian model node reaches the (model, version) it pins: adding one or moving its pin widens
+// (someone else's schedule stops), its bindings and sampler do not.
+func TestABayesModelPinIsReach(t *testing.T) {
+	node := func(id string, model, version int, extra string) string {
+		return `{"id": "` + id + `", "type": "bayes_model", "data": {"bayesModelId": ` + strconv.Itoa(model) +
+			`, "bayesModelVersion": ` + strconv.Itoa(version) + extra + `}}`
+	}
+	def := func(nodes ...string) string {
+		return `{"nodes": [{"id": "s", "type": "source", "data": {"datasourceId": 1}}` + strings.Join(append([]string{""}, nodes...), ", ") + `]}`
+	}
+	base := def()
+	pinned := def(node("b", 3, 1, ""))
+	if !ReachOf(pinned)[Ref{"bayes_model", "3@1"}] {
+		t.Fatalf("the pin is not reach: %v", ReachOf(pinned))
+	}
+	for _, c := range []struct {
+		name          string
+		before, after string
+		want          []Ref
+	}{
+		{"a node added", base, pinned, []Ref{{"bayes_model", "3@1"}}},
+		{"the version moved", pinned, def(node("b", 3, 2, "")), []Ref{{"bayes_model", "3@2"}}},
+		{"another model", pinned, def(node("b", 4, 1, "")), []Ref{{"bayes_model", "4@1"}}},
+		{"the bindings and the sampler", pinned, def(node("b", 3, 1, `, "bindings": {"n1": "x"}, "sampler": {"chains": 2}, "label": "L"`)), nil},
+		{"a node removed", pinned, base, nil},
+		{"a second node of the same pin", pinned, def(node("b", 3, 1, ""), node("c", 3, 1, "")), nil},
+	} {
+		got := Widens(c.before, c.after)
+		if len(got) != len(c.want) || (len(got) == 1 && got[0] != c.want[0]) {
+			t.Errorf("%s: widens %v, want %v", c.name, got, c.want)
+		}
+	}
+	// a model named by text is no pin (bayesmodels.Pinned: an integer id), and names no catalogue model either
+	for r := range ReachOf(def(`{"id": "b", "type": "bayes_model", "data": {"bayesModelId": "3", "bayesModelVersion": 1}}`)) {
+		if r.Kind == "bayes_model" || r.Kind == "model" {
+			t.Errorf("a text id reaches %v", r)
 		}
 	}
 }

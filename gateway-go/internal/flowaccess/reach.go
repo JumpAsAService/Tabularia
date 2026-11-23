@@ -3,6 +3,7 @@ package flowaccess
 import (
 	"strconv"
 
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayesmodels"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/objects"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
 )
@@ -83,10 +84,17 @@ func ReachOf(definition string) map[Ref]bool {
 	// someone else stops when a model node is added (docs/specs/statistical-models.md,
 	// «Security»); its MLflow connection is a connectionId, above
 	for _, n := range ModelNodes(obj) {
-		if n.Value("type") == "bayes_model" {
-			continue // its reach is the pinned (model, version), added with the save (bayes-flow-node, F1)
+		if n.Value("type") == bayesmodels.NodeType {
+			continue // it names no catalogue model: its reach is the pin, below
 		}
 		found[Ref{"model", pyjson.Str(pyjson.Or(data(n).Value("model"), ""))}] = true
+	}
+	// a Bayesian model reaches the cluster with the program of the version it pins: someone else's
+	// edit that adds a pin or moves one switches the author's schedule off (docs/specs/bayes-flow-node.md,
+	// «The schedule's authority»); the bindings and the sampler are settings, not reach. Every node
+	// that pins counts, whatever its type, as for the lock of the save and the delete (bayesmodels.Pinned).
+	for _, p := range bayesmodels.Pinned(definition) {
+		found[Ref{bayesmodels.NodeType, strconv.FormatInt(p.ModelID, 10) + "@" + strconv.FormatInt(p.Version, 10)}] = true
 	}
 	return found
 }
