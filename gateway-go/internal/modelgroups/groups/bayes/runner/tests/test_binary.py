@@ -156,10 +156,11 @@ class TestDispatcherOrder(BinaryCase):
         bad[0] ^= 1
         self.source.write_bytes(bytes(bad))
         for mode in ("sample", "prior_predictive"):
-            fake = types.ModuleType("bayes_follow")
+            fake = types.ModuleType("bayes_run")
+            fake.begin = lambda task: (None, "sample")
             fake.run = mock.Mock(return_value=0)
             env = {"TABULARIA_BINARY_IN": str(self.source), "TABULARIA_INPUT": self.input}
-            with mock.patch.dict(sys.modules, {"bayes_follow": fake}), mock.patch.dict(os.environ, env), \
+            with mock.patch.dict(sys.modules, {"bayes_run": fake}), mock.patch.dict(os.environ, env), \
                     mock.patch.object(bayes_data, "pass_a") as pass_a, mock.patch.object(bayes_data, "pass_b") as pass_b, \
                     mock.patch.object(pq, "ParquetFile") as parquet_file, mock.patch.object(pq, "read_table") as read_table, \
                     mock.patch("subprocess.Popen") as popen, mock.patch.object(bayes_binary.os, "chmod") as chmod:
@@ -172,7 +173,8 @@ class TestDispatcherOrder(BinaryCase):
 
     def test_the_right_binary_is_in_the_hands_of_the_follower_after_the_data(self):
         order = []
-        fake = types.ModuleType("bayes_follow")
+        fake = types.ModuleType("bayes_run")
+        fake.begin = lambda task: (None, "sample")
 
         def follow(task, prepared):
             order.append(("follow", prepared.binary_path, stat.S_IMODE(prepared.binary_path.stat().st_mode), prepared.data_path.exists()))
@@ -180,14 +182,14 @@ class TestDispatcherOrder(BinaryCase):
 
         fake.run = follow
 
-        def prepare(task, workdir):  # what the data passes need is R1's: here only that the binary is already there
+        def prepare(task, workdir, checks=None, run="sample"):  # here only that the binary is already there
             order.append(("data", (workdir / "model").exists()))
             return bayes_main.Prepared(task, workdir, None, None, workdir / "data.json")
 
         env = {"TABULARIA_BINARY_IN": str(self.source), "TABULARIA_INPUT": self.input}
         for mode in ("sample", "prior_predictive"):
             order.clear()
-            with mock.patch.dict(sys.modules, {"bayes_follow": fake}), mock.patch.dict(os.environ, env), \
+            with mock.patch.dict(sys.modules, {"bayes_run": fake}), mock.patch.dict(os.environ, env), \
                     mock.patch.object(bayes_main, "prepare_run", prepare), \
                     mock.patch.object(Path, "exists", lambda self: True if self.name == "data.json" else os.path.exists(self)):
                 self.assertEqual(bayes_main.run_task(self.task(mode, sha(BINARY)), self.dir, self.dir / "run"), 0)

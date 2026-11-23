@@ -55,6 +55,9 @@ class Facts:
     seconds_pass_a: float = 0.0
     seconds_pass_b: float = 0.0
     data_bytes: int = 0
+    # the byte offset in data.json where the first entry of the predictive checks' extension begins (None without one): the data file of a
+    # generate_quantities run is data.json's bytes before it, then that run's own extension entries (bayes-runner, «The runs of CmdStan»)
+    extension_offset: int | None = None
 
     @property
     def n_dropped(self) -> int:
@@ -519,7 +522,10 @@ def _array_json(values: Any) -> str:
 
 def _assemble(task: Task, facts: Facts, state: dict[str, Any], parts: dict[str, _Part], path: Path, extension_values: dict[str, Any]) -> None:
     """data.json: the variables in the manifest's order, the parts concatenated 8 MiB at a time."""
+    from bayes_checks import EXTENSION_KINDS
+
     plan: _Plan = state["plan"]
+    facts.extension_offset = None
     with open(path, "wb") as out:
         out.write(b"{")
         first = True
@@ -528,6 +534,8 @@ def _assemble(task: Task, facts: Facts, state: dict[str, Any], parts: dict[str, 
             if not first:
                 out.write(b",\n")
             first = False
+            if kind in EXTENSION_KINDS and facts.extension_offset is None:
+                facts.extension_offset = out.tell()
             out.write(f'"{stan}": '.encode("ascii"))
             if stan in parts:
                 out.write(b"[")

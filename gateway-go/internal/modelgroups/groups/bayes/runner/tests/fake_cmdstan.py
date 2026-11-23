@@ -4,6 +4,11 @@ each file in random pieces cut anywhere (in the middle of a line, of a number), 
 chains sample.
 
     python -I fake_cmdstan.py <spec.json>
+    python -I fake_cmdstan.py --cmdstan <spec.json> <CmdStan's arguments…>
+
+The second form is the binary of a whole sampling Job's test (lot R1 of bayes-runner): a shell script fetched and hashed as the compiled
+model is, which hands CmdStan's own argument list over (`num_samples=`, `num_warmup=`, `num_chains=`, `algorithm=fixed_param`, the data
+and output `file=`, `seed=`, `refresh=`); the spec file gives what a real binary knows by itself (the program's columns, their means).
 
 The spec (JSON), every key optional but `out`, `chains`, `draws`:
 
@@ -14,6 +19,7 @@ The spec (JSON), every key optional but `out`, `chains`, `draws`:
     speeds       iterations a tick for each chain (default 1 each; fractions allowed); `start` the tick each chain starts at
     tick         seconds a tick sleeps (default 0.001); `piece_seed` the seed of the cuts (default 0); `max_piece` the longest piece
     special      [[chain, draw, column (1-based among the program's columns), "nan" | "inf" | "-inf"], …]
+    means        a mean for each of the program's columns (default 0): the values are normal around it, sd 1
     pool         draw lines are taken in turn from a pool of this many lines a chain (the memory test: fast, still distinct lines)
     init_fail    true: each chain writes its configuration's comments only, «Initialization failed.» goes to stderr, exit 1
     die          {"chain", "after", "exit"}: once that chain has written `after` draws, exit with `exit` (default 70), stderr says so
@@ -110,11 +116,12 @@ class Draws:
         self.special = {(int(d), int(c)): v for k, d, c, v in spec.get("special", []) if int(k) == chain}
         malformed = spec.get("malformed") or {}
         self.malformed = int(malformed["draw"]) if int(malformed.get("chain", 0)) == chain else None
+        self.means = np.asarray(spec.get("means") or [0.0] * self.p, dtype=np.float64)
         pool = int(spec.get("pool", 0))
         self.pool = [self._make(d) for d in range(1, pool + 1)] if pool else None
 
     def _make(self, draw: int) -> str:
-        values = self.rng.normal(size=self.p)
+        values = self.rng.normal(size=self.p) + self.means
         if self.fixed:
             fields = ["0", "0"]
         else:
@@ -258,5 +265,38 @@ def main(spec_path: str) -> int:
     return 0
 
 
+def cmdstan_spec(spec_path: str, args: list[str]) -> str:
+    """The spec of a run from CmdStan's argument list and the binary's own spec file; written beside the output, its path returned."""
+    spec = json.loads(Path(spec_path).read_text())
+    section = ""
+    for arg in args:
+        if "=" not in arg:
+            section = arg
+            continue
+        key, value = arg.split("=", 1)
+        if key == "num_samples":
+            spec["draws"] = int(value)
+        elif key == "num_warmup":
+            spec["warmup"] = int(value)
+        elif key == "num_chains":
+            spec["chains"] = int(value)
+        elif key == "algorithm" and value == "fixed_param":
+            spec["fixed_param"] = True
+        elif key == "seed":
+            spec["seed"] = int(value)
+        elif key == "refresh":
+            spec["refresh"] = int(value)
+        elif key == "file" and section == "data":
+            json.loads(Path(value).read_text())          # a real binary reads its data first: a broken file fails here
+        elif key == "file" and section == "output":
+            spec["out"] = value
+    spec.setdefault("chains", 1)
+    path = Path(spec["out"]).with_name("fake_spec.json")
+    path.write_text(json.dumps(spec))
+    return str(path)
+
+
 if __name__ == "__main__":
+    if sys.argv[1] == "--cmdstan":
+        sys.exit(main(cmdstan_spec(sys.argv[2], sys.argv[3:])))
     sys.exit(main(sys.argv[1]))

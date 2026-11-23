@@ -44,12 +44,14 @@ import pyarrow.parquet as pq
 
 import bayes_charts
 import bayes_diag
+from bayes_card import summary_kind
 from bayes_draws import read_metadata
 from bayes_task import DEFAULT_LIMITS, Entry, Layout, ManifestMismatch, report_order
 from tab_protocol import Refusal
 
 NO_FINITE_VARIANCE = "no_finite_variance"
 NO_PRIOR_DRAWS = "no_prior_draws"
+NOT_DECIDED = "variance_not_decided"   # the task does not say which priors have a finite variance (bayes.finite_variance absent)
 SUMMARY_FLUSH = 4096
 SUMMARY_NUMBERS = (*bayes_diag.NUMBERS, "contraction")
 SUMMARY_COLUMNS = ("quantity", "node", "label", "unit", "index", "index_2", "kind", "scale", *SUMMARY_NUMBERS)
@@ -155,7 +157,7 @@ class _SummaryFile:
         r["unit"].append(element.unit)
         r["index"].append(element.index)
         r["index_2"].append(element.index_2)
-        r["kind"].append((entry.kind if entry else "") or "parameter")
+        r["kind"].append(summary_kind(entry.kind) if entry and entry.kind else "parameter")
         r["scale"].append("model")
         for name in SUMMARY_NUMBERS:
             v = float(measures[name][i]) if name in measures else math.nan
@@ -397,7 +399,8 @@ def _finish(writer: Any, report: PassReport, layout: Layout, limits: Mapping[str
                 writer.number("quantity", stat, v if math.isfinite(v) else None, level=e.stan)
     nulls = {k: v for k, v in report.contraction.items() if k != "computed"}
     if nulls:
-        said = {NO_FINITE_VARIANCE: "the prior has no finite variance", NO_PRIOR_DRAWS: "the run has no draws of the prior"}
+        said = {NO_FINITE_VARIANCE: "the prior has no finite variance", NO_PRIOR_DRAWS: "the run has no draws of the prior",
+                NOT_DECIDED: "the model's version does not say whether the prior has a finite variance"}
         writer.note("contraction_null", "The contraction is empty for " + "; ".join(
             f"{n} quantities ({said.get(k, k)})" for k, n in sorted(nulls.items())) + ".")
     if report.density_cut:

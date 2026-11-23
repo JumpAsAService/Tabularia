@@ -7,9 +7,10 @@ other exception is a bug of the runner, exit 1, the log's tail says what.
 
 The modes after the task reader are other lots' and are loaded when they exist (a missing module is the refusal `not_built`):
 
-  sample, prior_predictive   bayes_follow.run(task, prepared)   lot K2: starts CmdStan on prepared.data_path, follows the CSVs, appends the
-                                                                draws with bayes_draws.DrawsWriter, writes the results (bayes_rows) and the
-                                                                card (bayes_card), copies the outputs
+  sample, prior_predictive   bayes_run.begin(task)              lot R1: the allocator, the checks' plan, the refusal of what later lots build
+                             bayes_run.run(task, prepared)      lot R1: CmdStan on the verified binary and prepared.data_path, the CSVs
+                                                                followed into the draws and prior files, the projections, the second pass,
+                                                                the results, the card, run.json, and the copies after the last check
   compile                    bayes_compile.run(task)            lot K3
   selftest                   bayes_selftest.main(code_dir)      lot B0
 
@@ -47,6 +48,7 @@ class Prepared:
     layout: Layout
     data_path: Path
     binary_path: Path | None = None
+    checks: Any = None          # the checks' plan (bayes_checks.Plan) pass A observed with
 
 
 def prepare_run(task: Task, workdir: Path = WORKDIR, input_path: str | None = None, batch_rows: int = bayes_data.BATCH_ROWS,
@@ -91,12 +93,14 @@ def run_task(task: Task, here: Path, workdir: Path = WORKDIR) -> int:
         return bayes_selftest.main(here)
     if task.mode == "compile":
         return _stage("bayes_compile", "compiling a Bayesian model").run(task)
-    follow = _stage("bayes_follow", "sampling a Bayesian model")
+    stage = _stage("bayes_run", "sampling a Bayesian model")
     try:
+        plan, data_run = stage.begin(task)    # the allocator first; what a later lot builds is refused before anything is fetched
         binary = bayes_binary.fetch_binary(workdir, task.model["binary_sha256"])  # the binary first: a poisoned one is refused before a row is read
-        prepared = prepare_run(task, workdir)
+        prepared = prepare_run(task, workdir, checks=plan, run=data_run)
         prepared.binary_path = binary
-        return follow.run(task, prepared)
+        prepared.checks = plan
+        return stage.run(task, prepared)
     except BaseException:
         shutil.rmtree(workdir, ignore_errors=True)  # a refusal or a crash leaves no partial result
         raise

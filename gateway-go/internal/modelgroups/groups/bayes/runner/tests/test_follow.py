@@ -526,11 +526,6 @@ class TestCmdStanArguments(unittest.TestCase):
         with self.assertRaises(TypeError):
             bf.cmdstan_args("m", {**self.SAMPLER, "init": "2; rm"}, "nuts", "d", "o", 1)
 
-    def test_run_is_not_built_yet(self):
-        with self.assertRaises(Refusal) as e:
-            bf.run(None, None)
-        self.assertEqual(e.exception.code, "not_built")
-
 
 class TestFailingRuns(unittest.TestCase):
     """The fake sampler failing as CmdStan does: the refusal's code, CmdStan stopped, no file left."""

@@ -79,6 +79,9 @@ class Task:
     checks: Any
     replicated: dict[str, Any] | None
     series: dict[str, Any] | None  # optional, not written by the gateway yet: {"by": a group plate id or null, "time": a column or null}
+    # the `of` of every prior marginal whose prior has a finite variance (bayeschecks.FiniteVariance, written by flow-node); None when
+    # the task does not say (every contraction NULL, with its note)
+    finite_variance: frozenset[str] | None = None
 
     def limit(self, name: str) -> int:
         return int(self.limits[name])
@@ -175,8 +178,11 @@ def parse_task(raw: Any) -> Task:
     if series is not None and not (isinstance(series, dict) and (series.get("by") is None or isinstance(series.get("by"), str))
                                    and (series.get("time") is None or isinstance(series.get("time"), str))):
         raise task_value("bayes.series")
+    finite = bayes.get("finite_variance")
+    if finite is not None and not (isinstance(finite, list) and all(isinstance(x, str) for x in finite)):
+        raise task_value("bayes.finite_variance")
     return Task(raw, mode, mode, output, limits, model, sampler, lists["plates"], lists["mapping"], lists["data"], lists["quantities"],
-                bayes.get("checks"), replicated, series)
+                bayes.get("checks"), replicated, series, frozenset(finite) if finite is not None else None)
 
 
 def _sampler(s: Any, mode: str) -> dict[str, Any]:
@@ -240,6 +246,8 @@ class Layout:
     checks: list[Element]
     entries: list[Entry] = field(default_factory=list)
     n_sampler: int = 0
+    marginal_columns: np.ndarray = field(default_factory=lambda: np.zeros(0, dtype=np.int64))
+    marginals: list[Element] = field(default_factory=list)   # the prior marginals (/tmp/run/prior.parquet): `node` is their `of`
 
     @property
     def n_quantities(self) -> int:
@@ -358,10 +366,19 @@ def build_layout(task: Task, sizes: dict[str, int], units: dict[str, list[str]] 
     check_cols: list[int] = []
     checks: list[Element] = []
     entries: list[Entry] = []
+    marginal_cols: list[int] = []
+    marginals: list[Element] = []
     for v in variables:
         q = v["q"]
         role = q.get("role")
-        if role == "check":
+        if role == "prior_marginal":
+            # one column a quantity node, a component, a correlation (the checks spec): named by its Stan identifier, its node the `of`
+            # the second pass looks it up by (the contraction, the prior's density)
+            for col, (_, element) in zip(v["cols"], v["elements"]):
+                if element is not None:
+                    marginal_cols.append(col)
+                    marginals.append(Element(element.quantity, q.get("of") or q["stan"], element.unit, element.index, element.index_2))
+        elif role == "check":
             for col, (_, element) in zip(v["cols"], v["elements"]):
                 if element is not None:
                     check_cols.append(col)
@@ -384,7 +401,7 @@ def build_layout(task: Task, sizes: dict[str, int], units: dict[str, list[str]] 
         dup = next(n for i, n in enumerate(names) if n in names[:i])
         raise ManifestMismatch(f"two quantities are named {dup}")
     return Layout(task.mode, header, len(header), np.asarray(draw_cols, dtype=np.int64), draws, np.asarray(check_cols, dtype=np.int64),
-                  checks, entries, len(sampler))
+                  checks, entries, len(sampler), np.asarray(marginal_cols, dtype=np.int64), marginals)
 
 
 # the quantities' order in a report and in the capped sections: the scalars first (the hyperparameters and the population-level

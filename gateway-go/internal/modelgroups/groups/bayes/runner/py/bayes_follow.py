@@ -29,9 +29,8 @@ terminated», «# Step size = …», «# Diagonal elements of inverse mass matri
 configuration's comments alone and CmdStan exits 1 with «Initialization failed.» on standard error; progress reads «Chain [k]
 Iteration: i / n [ p%]  (Warmup|Sampling)», without «Chain [k] » with one chain.
 
-`sample` starts CmdStan with the fixed argument list («The CSV files») and follows it; `run`, the sampling modes as bayes_main calls
-them, is refused as not built until the rest of a sampling Job (the binary's fetch and hash, the summary's second pass, the results,
-the card) comes with the later lots.
+`sample` starts CmdStan with the fixed argument list («The CSV files») and follows it; the sampling Job around it (the binary, the
+sinks, the projections, the second pass, the results, the card, the copies) is bayes_run's (lot R1 of bayes-runner).
 """
 from __future__ import annotations
 
@@ -46,7 +45,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterator, Protocol, Sequence
 
 import numpy as np
-from tab_protocol import Refusal, not_built
+from tab_protocol import Refusal
 
 # The sampler's fields CmdStan writes first on every draw line: NUTS, and fixed_param (the prior predictive).
 SAMPLER_NUTS = ("lp__", "accept_stat__", "stepsize__", "treedepth__", "n_leapfrog__", "divergent__", "energy__")
@@ -565,11 +564,3 @@ def sample(binary: str | Path, sampler: dict[str, Any], algorithm: str, header: 
                         block_values=block_values, process=process, stdout=workdir / "stdout.txt",
                         stderr=workdir / "stderr.txt", check_header=check_header, **hooks)
     return follower.follow(*sinks)
-
-
-def run(task: Any, prepared: Any) -> int:
-    """The sampling modes as bayes_main calls them. This lot (K2) gives the follower and `sample`; the rest of a sampling Job —
-    the binary fetched from TABULARIA_BINARY_IN with its sha256 checked before it runs, the sampler's accumulators, the summary's
-    second pass, the results, the card and the outputs' copy — comes with the lots of bayes-diagnostics and the runner's sampling
-    mode: until then the step is refused as not built, never half run."""
-    raise not_built("sampling a Bayesian model")

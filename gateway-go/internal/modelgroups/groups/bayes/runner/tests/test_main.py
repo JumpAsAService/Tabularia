@@ -89,25 +89,27 @@ class TestDispatch(MainCase):
 
     def test_the_follower_is_given_the_task_and_what_the_passes_made(self):
         calls = []
-        fake = types.ModuleType("bayes_follow")
+        fake = types.ModuleType("bayes_run")
+        fake.begin = lambda task: (None, "sample")
         fake.run = lambda task, prepared: calls.append((task.mode, prepared.facts.n, prepared.data_path.exists())) or 0
         task = bayes_task.parse_task(go_task())
-        with mock.patch.dict(sys.modules, {"bayes_follow": fake}), mock.patch.dict(os.environ, {"TABULARIA_INPUT": self.input}), \
+        with mock.patch.dict(sys.modules, {"bayes_run": fake}), mock.patch.dict(os.environ, {"TABULARIA_INPUT": self.input}), \
                     mock.patch.object(bayes_binary, "fetch_binary", lambda workdir, expected: workdir / "model"):
             self.assertEqual(bayes_main.run_task(task, self.dir, self.dir / "run"), 0)
         self.assertEqual(calls, [("sample", 6, True)])
 
     def test_a_refusal_after_the_passes_leaves_no_run_folder_and_a_crash_too(self):
         for error in (Refusal("too_slow", "about 41 minutes"), RuntimeError("a bug")):
-            fake = types.ModuleType("bayes_follow")
+            fake = types.ModuleType("bayes_run")
 
             def run(task, prepared, error=error):
                 (prepared.workdir / "draws.parquet").write_bytes(b"x")
                 raise error
 
+            fake.begin = lambda task: (None, "sample")
             fake.run = run
             task = bayes_task.parse_task(go_task())
-            with mock.patch.dict(sys.modules, {"bayes_follow": fake}), mock.patch.dict(os.environ, {"TABULARIA_INPUT": self.input}), \
+            with mock.patch.dict(sys.modules, {"bayes_run": fake}), mock.patch.dict(os.environ, {"TABULARIA_INPUT": self.input}), \
                     mock.patch.object(bayes_binary, "fetch_binary", lambda workdir, expected: workdir / "model"):
                 with self.assertRaises(type(error)):
                     bayes_main.run_task(task, self.dir, self.dir / "run")
