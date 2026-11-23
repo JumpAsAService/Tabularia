@@ -233,9 +233,10 @@ in every key («The results») and never part of a program.
   `/opt/cmdstan/bin/stanc --info /tmp/c/model.stan` for the cross-check of `stan-codegen`.
 - The binary is hashed while it is read and uploaded **in chunks** (8 MiB, as garch's `ts_sim_copy`) to
   `TABULARIA_BINARY_OUT` (an address in the step's prefix of the scripts bucket).
-- `artifacts/compile.json`: `{"program_sha256", "binary_sha256", "binary_bytes", "info_sha256", "info" (stanc's
+- `artifacts/compile.json`: `{"program_sha256", "binary_sha256", "binary_bytes", "info" (stanc's
   --info JSON), "stanc": "stanc3 v2.40.0 (Unix)", "seconds", "warnings": [the lines stanc printed as warnings, at
-  most 50]}`.
+  most 50]}`. Correction of 2026-11-24 from C2: it holds no `info_sha256` of its own (a file cannot hold its own hash);
+  the message's `info_sha256` is the sha256 of this file's bytes as uploaded.
 - **The termination message** (`/dev/termination-log`, Kubernetes' default path, at most 4,096 bytes; assumed
   writable with a read-only root: lot K3 checks it on kind): `{"program_sha256": "…", "binary_sha256": "…",
   "info_sha256": "…"}`. Another pod cannot write it; the scripts bucket can be written by any user script

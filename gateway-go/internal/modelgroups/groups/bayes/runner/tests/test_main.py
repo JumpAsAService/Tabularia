@@ -72,10 +72,18 @@ class TestPrepareRun(MainCase):
 
 
 class TestDispatch(MainCase):
-    def test_a_mode_whose_lot_is_not_built_is_not_built(self):
+    def test_the_compile_mode_is_handed_to_bayes_compile(self):
+        import bayes_compile
         task = bayes_task.parse_task(go_task("compile"))
-        with self.assertRaises(Refusal) as e:
-            bayes_main.run_task(task, self.dir)
+        with mock.patch.object(bayes_compile, "run", return_value=0) as run:
+            self.assertEqual(bayes_main.run_task(task, self.dir), 0)
+        run.assert_called_once_with(task)
+
+    def test_a_missing_module_is_not_built(self):
+        task = bayes_task.parse_task(go_task("compile"))
+        with mock.patch.object(bayes_main.importlib, "import_module", side_effect=ModuleNotFoundError(name="bayes_compile")):
+            with self.assertRaises(Refusal) as e:
+                bayes_main.run_task(task, self.dir)
         self.assertEqual(e.exception.code, "not_built")
 
     def test_the_follower_is_given_the_task_and_what_the_passes_made(self):
@@ -130,7 +138,8 @@ class TestDispatch(MainCase):
         (code / "task.json").write_text(json.dumps(go_task("compile")), encoding="utf-8")
         done = subprocess.run([sys.executable, "-I", "-B", str(code / "runner" / "run.py")], capture_output=True, text=True, timeout=60, env=env)
         self.assertEqual(done.returncode, 3, done.stderr)
-        self.assertIn('"code":"not_built"', done.stdout)
+        # the compile mode is built (lot K3): without the Job's addresses it refuses as a fault of the Job
+        self.assertIn('"code":"task_value"', done.stdout)
 
 
 if __name__ == "__main__":
