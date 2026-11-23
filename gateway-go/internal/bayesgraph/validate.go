@@ -29,12 +29,19 @@ type SlotKey struct {
 //
 // The bounds are open ends: every prior is continuous, so an end carries no mass, and Stan's
 // transform for <lower=L> never reaches L. A range reduced to a point is therefore empty.
+//
+// Role and NonCentred are the model's (BuildModel): Role is "prior", or "hyperprior" when the
+// parameter's value feeds another prior; NonCentred is true when the parameter is written in the
+// non-centred form, which asks for a group plate whose form is non-centred, a location-scale prior
+// and no bounds (graph.form_centred says when it cannot be).
 type Param struct {
 	Dist              string
 	Support           bayesexpr.Interval
 	Range             bayesexpr.Interval
 	Truncated         bool
 	TruncateInProgram bool
+	Role              string
+	NonCentred        bool
 }
 
 // Validate checks a graph: CheckStructure first, then the rules of nodes, data, priors, bounds and
@@ -52,6 +59,7 @@ type validation struct {
 	specs  []*slotSpec
 	slots  map[SlotKey]TypedSlot
 	params map[string]Param
+	deps   *deps
 	out    []Finding
 }
 
@@ -84,6 +92,7 @@ func validate(g *Graph) *validation {
 	v.env = newGraphEnv(g, ranges)
 	v.typeSlots()
 	v.priorData()
+	v.modelRules()
 	SortFindings(v.out)
 	return v
 }

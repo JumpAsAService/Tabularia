@@ -18,7 +18,7 @@ import (
 //
 //	parameter          prior.<arg>          the parameter's plate
 //	transformed        value (required)     the node's plate
-//	linear_predictor   intercept (or null), terms[<i>].coef
+//	linear_predictor   intercept (or null), terms[<i>].coef (on the levels plate of a category's term)
 //	likelihood         args.<arg>           the observed data node's plate (the likelihood's own when
 //	                                        it observes no data node: graph.likelihood says why)
 //	state              init.<arg>, scale (required, a single value)
@@ -89,7 +89,12 @@ func (v *validation) collectSlots() {
 				v.spec(&slotSpec{key: SlotKey{n.ID, "intercept"}, owner: n, slot: n.Intercept, ctx: ctx})
 			}
 			for i := range n.Terms {
-				v.spec(&slotSpec{key: SlotKey{n.ID, "terms[" + strconv.Itoa(i) + "].coef"}, owner: n, slot: &n.Terms[i].Coef, ctx: ctx})
+				// a category's coefficient is a parameter on the category's levels plate
+				tctx := ctx
+				if d, ok := v.env.nodes[n.Terms[i].Data]; ok && d.Kind == "data" && d.Type == "category" {
+					tctx = bayesexpr.Plate(LevelsPlate(d.ID))
+				}
+				v.spec(&slotSpec{key: SlotKey{n.ID, "terms[" + strconv.Itoa(i) + "].coef"}, owner: n, slot: &n.Terms[i].Coef, ctx: tctx})
 			}
 		case "likelihood":
 			if obs, ok := v.env.nodes[n.Observed]; ok && obs.Kind == "data" {

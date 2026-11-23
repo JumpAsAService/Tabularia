@@ -78,6 +78,17 @@ func wantClean(t *testing.T, what string, fs []Finding) {
 	}
 }
 
+// withoutUnused drops the findings about nodes a test's edit left unused, which that test is not about.
+func withoutUnused(fs []Finding) []Finding {
+	var out []Finding
+	for _, f := range fs {
+		if f.Code != "graph.unused_data" && f.Code != "graph.unused_parameter" {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
 func TestExampleValidatesClean(t *testing.T) {
 	v := validated(t, func(map[string]any) {})
 	wantClean(t, "example", v.out)
@@ -413,7 +424,7 @@ func TestSlot(t *testing.T) {
 		t.Errorf("missing value: %+v", f)
 	}
 	// beside: a ref to a named parameter, to a component, a transformed with its value
-	wantClean(t, "ref to a named node", vfind(t, func(m map[string]any) { nodeByID(m, "n9")["args"].(map[string]any)["sigma"] = ref("n5") }))
+	wantClean(t, "ref to a named node", withoutUnused(vfind(t, func(m map[string]any) { nodeByID(m, "n9")["args"].(map[string]any)["sigma"] = ref("n5") })))
 	fs = vfind(t, func(m map[string]any) {
 		addNodes(m, effects("p1", "2"), map[string]any{"id": "t1", "kind": "transformed", "label": "T", "plate": "p1", "value": ref("e1.c1")})
 	})
@@ -444,9 +455,9 @@ func TestExprFindings(t *testing.T) {
 	})
 	want(t, "a correlation in an expression", fs, "expr.not_number", "t1", "value")
 	// beside: the same with the index, the component by name
-	wantClean(t, "indexed", vfind(t, func(m map[string]any) {
+	wantClean(t, "indexed", withoutUnused(vfind(t, func(m map[string]any) {
 		nodeByID(m, "n9")["args"].(map[string]any)["mu"] = expr("alpha_school[school] + beta")
-	}))
+	})))
 	fs = vfind(t, func(m map[string]any) {
 		addNodes(m, effects("p1", "2"), map[string]any{"id": "t1", "kind": "transformed", "label": "T", "plate": "p1", "value": expr("icpt + 1")})
 	})
@@ -521,9 +532,9 @@ func TestSlotIntervals(t *testing.T) {
 	want(t, "a real parameter", vfind(t, sigma(expr("mu"))), "graph.slot_maybe", "n6", "prior.sigma")
 	// beside
 	for _, s := range []string{"tau", "tau + 1", "exp(mu)", "square(mu) + 0.1", "0.5"} {
-		wantClean(t, s, vfind(t, sigma(expr(s))))
+		wantClean(t, s, withoutUnused(vfind(t, sigma(expr(s)))))
 	}
-	wantClean(t, "a ref to a positive parameter", vfind(t, sigma(ref("n8"))))
+	wantClean(t, "a ref to a positive parameter", withoutUnused(vfind(t, sigma(ref("n8")))))
 	// a likelihood's sigma, a component's scale, a correlation's eta
 	fs = vfind(t, func(m map[string]any) { nodeByID(m, "n9")["args"].(map[string]any)["sigma"] = expr("beta") })
 	want(t, "likelihood sigma", fs, "graph.slot_maybe", "n9", "args.sigma")
@@ -626,7 +637,7 @@ func TestNestedPlatesCategoryAndSeries(t *testing.T) {
 
 	g := mustDecode(t, strings.Replace(strings.Replace(nested, `"label": "School", "plate": "rows"`, `"name": "school", "label": "School", "plate": "rows"`, 1), "d2x", "school", 1))
 	v = validate(g)
-	wantClean(t, "nested", v.out)
+	wantClean(t, "nested", withoutUnused(v.out))
 	s := v.slots[SlotKey{"m3", "prior.mu"}]
 	if s.Context != "p2" || len(s.Expr.Lifts) != 1 || s.Expr.Lifts[0].ID != "d1" || s.Expr.Lifts[0].Context != "p2" ||
 		!reflect.DeepEqual(s.Indices, []string{"d1"}) || !reflect.DeepEqual(s.Refs, []string{"m2"}) {
