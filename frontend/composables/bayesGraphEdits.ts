@@ -598,3 +598,149 @@ export function bayesSetTarget (doc: BayesDoc, id: string, target: string): void
   const n = doc.nodes.find(x => x.id === id)
   if (n && n.kind === 'data' && n.type === 'group_index') n.target = target
 }
+
+// ---------------------------------------------------------------- a node's own fields (the inspector, lot G2)
+
+/** Where a node holds a distribution: a parameter's prior, a state's first value, a likelihood. */
+export type BayesDistPart = 'prior' | 'init' | 'likelihood'
+
+/** The plainest value of an argument of a prior, by its constraint: 1 where it must be positive, else 0. */
+function plainArg (dist: string, arg: string, constraint: string): BayesTemplateSlot {
+  // uniform's two ends: 0 and 1, so that the upper one is above the lower one
+  if (dist === 'uniform') return { expr: arg === 'beta' ? '1' : '0' }
+  return { expr: constraint === 'positive' ? '1' : '0' }
+}
+
+/**
+ * The distribution of a prior, of a state's first value or of a likelihood. The arguments of the same
+ * name keep what they hold; a prior's new arguments get the plainest value that fits (written in the
+ * open, as a new node's), a likelihood's are left empty for the person to connect. Returns whether
+ * anything changed.
+ */
+export function bayesSetDist (doc: BayesDoc, id: string, part: BayesDistPart, dist: string): boolean {
+  const n = doc.nodes.find(x => x.id === id)
+  const d = bayesDistribution(dist)
+  if (!n || !d) return false
+  const old = part === 'likelihood' ? (n.args ?? {}) : (part === 'prior' ? n.prior : n.init)?.args ?? {}
+  const current = part === 'likelihood' ? String(n.dist ?? '') : (part === 'prior' ? n.prior : n.init)?.dist
+  if (current === dist) return false
+  const args: Record<string, BayesTemplateSlot> = {}
+  for (const p of d.params) {
+    if (old[p.name] && slotText(old[p.name])) args[p.name] = clone(old[p.name]!)
+    else args[p.name] = part === 'likelihood' ? {} : plainArg(dist, p.name, p.constraint)
+  }
+  if (part === 'likelihood') { n.dist = dist; n.args = args } else if (part === 'prior') n.prior = { dist, args }
+  else n.init = { dist, args }
+  return true
+}
+
+/** The data types, in the palette's order. */
+export const BAYES_DATA_TYPES = ['real', 'int', 'group_index', 'category', 'time'] as const
+/** The whole numbers an integer data node may hold. */
+export const BAYES_INT_SUPPORTS = ['any', 'nonnegative', 'binary'] as const
+
+/**
+ * A data node's type. The fields of the old type go (an integer's support, a group index's box, a
+ * number's standardization) and the new type's come with their defaults: an integer holds any whole
+ * number, a group index has no box yet, a number that no likelihood observes is standardized (answer 6).
+ */
+export function bayesSetDataType (doc: BayesDoc, id: string, type: string): boolean {
+  const n = doc.nodes.find(x => x.id === id)
+  if (!n || n.kind !== 'data' || n.type === type) return false
+  n.type = type
+  delete n.support
+  delete n.target
+  delete n.standardize
+  if (type === 'int') n.support = 'any'
+  if (type === 'group_index') n.target = ''
+  if (type === 'real' && !doc.nodes.some(x => x.kind === 'likelihood' && x.observed === id)) n.standardize = true
+  return true
+}
+
+/** An integer data node's support: any whole number, 0 or more, or only 0 and 1. */
+export function bayesSetSupport (doc: BayesDoc, id: string, support: string): void {
+  const n = doc.nodes.find(x => x.id === id)
+  if (n && n.kind === 'data') n.support = support
+}
+
+/** Whether a number column is standardized (the flow node centres it and divides it by its sd). */
+export function bayesSetStandardize (doc: BayesDoc, id: string, on: boolean): void {
+  const n = doc.nodes.find(x => x.id === id)
+  if (!n || n.kind !== 'data') return
+  if (on) n.standardize = true
+  else delete n.standardize
+}
+
+/** A latent state's form: non-centred (the default) or centred. */
+export function bayesSetStateForm (doc: BayesDoc, id: string, nonCentred: boolean): void {
+  const n = doc.nodes.find(x => x.id === id)
+  if (n && n.kind === 'state') n.form = nonCentred ? 'non_centred' : 'centred'
+}
+
+/** A new term of a linear predictor's sum: its data and its coefficient still to choose. */
+export function bayesAddTerm (doc: BayesDoc, id: string): number {
+  const n = doc.nodes.find(x => x.id === id)
+  if (!n || n.kind !== 'linear_predictor') return -1
+  const terms = (n.terms ??= []) as Array<{ data: string, coef: BayesTemplateSlot }>
+  terms.push({ data: '', coef: {} })
+  return terms.length - 1
+}
+
+/** A term of a linear predictor's sum removed, its coefficient with it. */
+export function bayesRemoveTerm (doc: BayesDoc, id: string, index: number): void {
+  const n = doc.nodes.find(x => x.id === id)
+  const terms = n?.terms as unknown[] | undefined
+  if (terms && index >= 0 && index < terms.length) terms.splice(index, 1)
+}
+
+/**
+ * A new component of correlated effects: its label, its name proposed from it and unique, a mean of 0
+ * and a scale of 1 in the open (as a new node's). Returns its id, or '' past `max` components.
+ */
+export function bayesAddComponent (doc: BayesDoc, id: string, label: string, max: number): string {
+  const n = doc.nodes.find(x => x.id === id)
+  if (!n || n.kind !== 'correlated_effects') return ''
+  const comps = (n.components ??= [])
+  if (comps.length >= max) return ''
+  // a component's id is unique among the node's components and is never a node's or a box's id
+  const used = new Set<string>([...comps.map(c => c.id), ...doc.nodes.map(x => x.id), ...doc.plates.map(p => p.id)])
+  let k = 1
+  while (used.has(`c${k}`)) k++
+  const cid = `c${k}`
+  const name = bayesUniqueName(label, bayesTakenNames(doc))
+  comps.push({ id: cid, name, label, mean: { expr: '0' }, scale: { expr: '1' } })
+  return cid
+}
+
+/** A component of correlated effects removed (the mirror says when fewer than two are left). */
+export function bayesRemoveComponent (doc: BayesDoc, id: string, component: string): void {
+  const n = doc.nodes.find(x => x.id === id)
+  const comps = n?.components
+  if (!comps) return
+  const i = comps.findIndex(c => c.id === component)
+  if (i >= 0) comps.splice(i, 1)
+}
+
+/**
+ * A component's or the correlation's label or name, as typed. A component's name follows its label
+ * while it is still the one proposed from it, as a node's does.
+ */
+export function bayesSetEffectsText (doc: BayesDoc, id: string, part: string, field: 'label' | 'name', text: string): void {
+  const n = doc.nodes.find(x => x.id === id)
+  if (!n || n.kind !== 'correlated_effects') return
+  const holder = part === 'correlation' ? n.correlation : n.components?.find(c => c.id === part)
+  if (!holder) return
+  if (field === 'name') { holder.name = text; return }
+  const taken = bayesTakenNames(doc)
+  taken.delete(holder.name)
+  if (holder.name === bayesUniqueName(holder.label, taken)) holder.name = bayesUniqueName(text, taken)
+  holder.label = text
+}
+
+/** A node's or a box's note; '' removes it. */
+export function bayesSetNote (doc: BayesDoc, id: string, text: string): void {
+  const holder = doc.nodes.find(x => x.id === id) ?? doc.plates.find(p => p.id === id)
+  if (!holder) return
+  if (text === '') delete holder.note
+  else holder.note = text
+}

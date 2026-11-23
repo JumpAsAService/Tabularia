@@ -1,6 +1,6 @@
 // What the editor of Bayesian models writes about a graph (docs/specs/bayes-graph-editor.md): the key
 // of each finding's message and its placeholders with the plates' labels in place of their ids (the
-// mirror's findings name plates by id: «the UI substitutes labels before formatting messages»), a
+// mirror's findings name plates and nodes by id: «the UI substitutes labels before formatting messages»), a
 // prior written as text (`normal(0, 2.5)`), a parameter's bounds, a constraint's words.
 //
 // Pure functions: the words are in i18n/locales/*.gen.ts, under the keys these return. Every export
@@ -29,14 +29,18 @@ function exprVariant (code: string, args: Record<string, unknown>): string {
   }
 }
 
-/** The placeholders that hold a plate's id, written with the plate's label. */
-const PLATE_ARGS = new Set(['plate', 'context', 'rows', 'target'])
+/**
+ * The placeholders that hold a plate's or a node's id, written with its label: the plates of the
+ * expression's messages, and the data, the node a prior reaches them through, the observed data, the
+ * lagged value of the graph's (`prior_data`, `self_predictor`, `lag_nested`, `terms`, `likelihood`).
+ */
+const ID_ARGS = new Set(['plate', 'context', 'rows', 'target', 'data', 'through', 'observed', 'value', 'expected'])
 
 function params (args: Record<string, unknown> | undefined, label: (id: string) => string | undefined): Record<string, string> {
   const out: Record<string, string> = {}
   for (const [k, v] of Object.entries(args ?? {})) {
     if (Array.isArray(v)) out[k] = v.map(String).join(', ')
-    else if (PLATE_ARGS.has(k) && typeof v === 'string') out[k] = label(v) ?? v
+    else if (ID_ARGS.has(k) && typeof v === 'string') out[k] = label(v) ?? v
     else out[k] = String(v)
   }
   return out
@@ -45,7 +49,8 @@ function params (args: Record<string, unknown> | undefined, label: (id: string) 
 /**
  * The message of a finding of the mirror (or of the gateway): `bayes.graph.<…>` for the graph's
  * codes, `bayes.expr.<…>` for an expression's (a hint's message is the catalogue's own key). Plate
- * ids in the placeholders become the plates' labels.
+ * and node ids in the placeholders become their labels (`label` returns undefined for an id it does
+ * not know, which then stays as it is).
  */
 export function bayesFindingText (f: Pick<BayesGraphFinding, 'code' | 'args' | 'slot' | 'node' | 'severity'>, label: (id: string) => string | undefined = () => undefined): BayesText {
   const args = (f.args ?? {}) as Record<string, unknown>

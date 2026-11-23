@@ -10,17 +10,22 @@
 // width follows what it shows (600 px for a chart where the canvas keeps 560 px) until the person
 // sets it with its handle (320 to 640 px).
 //
+// Lot G2 gives every kind of node its own fields in the inspector, the Problems tab (every finding,
+// «Show in the graph») and the glossary; the side panel's tabs are a row of tabs `,` and `.` walk.
+//
 // The graph document is the truth: every edit changes it (useBayesEditor), and the mirror
 // (bayesGraph.ts) reads it again at once — the findings on the nodes, the expressions' errors at
 // their span, the prior plan the chart draws from.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Info, LayoutTemplate, Redo2, SlidersHorizontal, Undo2 } from 'lucide-vue-next'
+import { Info, LayoutTemplate, Redo2, SlidersHorizontal, TriangleAlert, Undo2 } from 'lucide-vue-next'
 import BrandMark from '~/components/ui/BrandMark.vue'
 import GridKeys from '~/components/ui/GridKeys.vue'
 import BayesCanvas from '~/components/bayes/BayesCanvas.vue'
+import BayesGlossary from '~/components/bayes/BayesGlossary.vue'
 import BayesInspector from '~/components/bayes/BayesInspector.vue'
 import BayesPalette from '~/components/bayes/BayesPalette.vue'
+import BayesProblems from '~/components/bayes/BayesProblems.vue'
 import BayesTemplateDialog from '~/components/bayes/BayesTemplateDialog.vue'
 import { useKeyGroups, useKeyHelp } from '~/composables/useKeyHelp'
 import { useToast } from '~/composables/useToast'
@@ -47,20 +52,33 @@ const { doc, selected, model, findings, plan, canUndo, canRedo, restored } = edi
 onBeforeUnmount(() => editor.dispose())
 
 const dialogOpen = ref(false)
+// the template as it was opened: its explanation of a node stands while the node is as it wrote it
+const origin = ref<BayesDoc | null>(null)
 function emptyModel (): BayesDoc {
   return { format_version: 1, plates: [{ id: 'rows', kind: 'rows', label: t('bayes.editor.newNode.rows') }], nodes: [], layout: { rows: { x: 260, y: 40, w: 760, h: 420 } } }
 }
 watch(templateId, (id) => {
   dialogOpen.value = !!template.value
+  origin.value = null
   editor.load(id === EMPTY ? emptyModel() : null)
 }, { immediate: true })
 
 const texts = (key: string): string | undefined => (te(key) ? t(key) : undefined)
 function openModel (options: BayesOpenOptions) {
   if (!template.value) return
-  editor.load(bayesOpenTemplate(template.value.id, options, texts))
+  const opened = bayesOpenTemplate(template.value.id, options, texts)
+  origin.value = JSON.parse(JSON.stringify(opened)) as BayesDoc
+  editor.load(opened)
   dialogOpen.value = false
   canvas.value?.refit()
+}
+/** The template's `why.<node>` while the node's slots still equal the template's (the templates spec). */
+function why (id: string): string | undefined {
+  const key = template.value ? `bayes.templates.${template.value.id}.why.${id}` : ''
+  if (!key || !te(key)) return undefined
+  const strip = (n: object | undefined) => (n ? JSON.stringify({ ...n, label: '', note: '' }) : '')
+  const was = origin.value?.nodes.find(n => n.id === id)
+  return was && strip(was) === strip(nodeOf(id)) ? t(key) : undefined
 }
 
 const title = computed(() => (template.value ? t(`bayes.templates.${template.value.id}.title`) : templateId.value === EMPTY ? t('bayes.editor.start.emptyTitle') : t('bayes.editor.title')))
@@ -111,6 +129,7 @@ function add (kind: BayesPaletteKind, at: { x: number, y: number } | null, plate
   }))
   if (!id) return
   selected.value = id
+  tab.value = 'inspector'
   focusInspector(id)
   // in sight once Vue Flow has measured it
   setTimeout(() => canvas.value?.bringIntoView(id), 120)
@@ -151,24 +170,27 @@ const setPlate = (id: string, plate: string | null) => editor.edit(g => bayesSet
 const setParent = (id: string, parent: string | null) => editor.edit(g => bayesSetParent(g, id, parent))
 const setKey = (id: string, key: string) => editor.edit(g => bayesSetKey(g, id, key))
 const setTarget = (id: string, target: string) => editor.edit(g => bayesSetTarget(g, id, target))
-function setArg (id: string, arg: string, text: string) {
-  editor.edit(g => bayesWriteSlot(g, id, `prior.${arg}`, { expr: text }), false)
-}
-function setBound (id: string, which: 'lower' | 'upper', value: number | null) {
-  editor.edit((g) => {
-    const n = g.nodes.find(x => x.id === id)
-    if (!n) return
-    const b = { ...((n.bounds as Record<string, number> | undefined) ?? {}) }
-    if (value === null) delete b[which]
-    else b[which] = value
-    if (Object.keys(b).length) n.bounds = b
-    else delete n.bounds
-  }, false)
-}
+/** A change of a node's own fields (the inspector's): a choice is a step at once, typing one when it stops. */
+const change = (fn: (d: BayesDoc) => unknown, step: boolean) => editor.edit(fn, step)
 function undo () { editor.undo() }
 function redo () { editor.redo() }
 
 // ---------------------------------------------------------------- the panel
+
+type PanelTab = 'inspector' | 'problems' | 'glossary'
+const tab = ref<PanelTab>('inspector')
+const errorCount = computed(() => findings.value.filter(f => f.severity === 'error').length)
+const problemCount = computed(() => findings.value.length)
+/** A node selected on the canvas opens its inspector. */
+function selectFromCanvas (id: string | null) {
+  selected.value = id
+  if (id) tab.value = 'inspector'
+}
+/** «Show in the graph»: the node selected and brought into sight; the list stays open. */
+function showInGraph (id: string) {
+  selected.value = id
+  nextTick(() => canvas.value?.bringIntoView(id))
+}
 
 const selectedKind = computed(() => (selected.value ? nodeOf(selected.value)?.kind : undefined))
 // the panel opens at 600 px for a node with a chart, where the canvas keeps 560 px (a window of 1400 px or more)
@@ -177,7 +199,8 @@ let roomyQuery: MediaQueryList | null = null
 const onRoomy = () => { roomy.value = !!roomyQuery?.matches }
 onMounted(() => { roomyQuery = window.matchMedia('(min-width: 1400px)'); onRoomy(); roomyQuery.addEventListener('change', onRoomy) })
 onBeforeUnmount(() => roomyQuery?.removeEventListener('change', onRoomy))
-const wide = computed(() => selectedKind.value === 'parameter' && roomy.value)
+const CHARTED = ['parameter', 'state', 'correlated_effects']
+const wide = computed(() => tab.value === 'inspector' && CHARTED.includes(selectedKind.value ?? '') && roomy.value)
 // a width the person set by the handle wins until the page is left
 const PANEL_MIN = 320
 const PANEL_MAX = 640
@@ -230,6 +253,7 @@ useKeyGroups(() => {
       [undoKeys.value, t('bayes.editor.keys.undo')],
       [redoKeys.value, t('bayes.editor.keys.redo')],
       ['+ · - · 0', t('bayes.editor.keys.zoom')],
+      [', · .', t('bayes.editor.keys.tabs')],
       ['Esc', t('bayes.editor.keys.escape')],
     ],
   }]
@@ -290,7 +314,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onPageKeys))
             :findings="findings"
             :selected="selected"
             :restored="restored"
-            @select="(id: string | null) => (selected = id)"
+            @select="selectFromCanvas"
             @form="setForm"
             @series="setSeries"
             @drop="drop"
@@ -301,7 +325,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onPageKeys))
             @disconnect="disconnect"
             @remove="remove"
             @duplicate="duplicate"
-            @inspect="(id: string) => { selected = id; focusInspector(id) }"
+            @inspect="(id: string) => { selected = id; tab = 'inspector'; focusInspector(id) }"
             @palette="palette?.focusFirst()"
           />
         </main>
@@ -319,16 +343,43 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onPageKeys))
             @mousedown="startPanelResize"
             @keydown="panelKeys"
           />
-          <div class="tabs"><span class="tab">{{ t('bayes.editor.inspector.title') }}</span></div>
-          <div class="sbody">
+          <div v-roving.main class="tabs" role="tablist" :aria-label="t('bayes.editor.panel.tabs')">
+            <button id="bt-inspector" type="button" role="tab" class="tab" :aria-selected="tab === 'inspector'" aria-controls="bp-inspector" @click="tab = 'inspector'">
+              <SlidersHorizontal :size="13" aria-hidden="true" />{{ t('bayes.editor.inspector.title') }}
+            </button>
+            <button id="bt-problems" type="button" role="tab" class="tab" :aria-selected="tab === 'problems'" aria-controls="bp-problems" @click="tab = 'problems'">
+              <TriangleAlert :size="13" aria-hidden="true" />{{ t('bayes.editor.problems.title') }}
+              <span v-if="problemCount" class="cnt" :class="{ e: errorCount > 0 }" :aria-label="t('bayes.editor.problems.count', { n: problemCount })">{{ problemCount }}</span>
+            </button>
+            <button
+              id="bt-glossary"
+              type="button"
+              role="tab"
+              class="tab gl"
+              :aria-selected="tab === 'glossary'"
+              aria-controls="bp-glossary"
+              :aria-label="t('bayes.editor.glossary.title')"
+              :title="t('bayes.editor.glossary.title')"
+              @click="tab = 'glossary'"
+            >
+              <Info :size="14" aria-hidden="true" />
+            </button>
+          </div>
+          <div v-if="tab === 'problems'" id="bp-problems" class="sbody" role="tabpanel" aria-labelledby="bt-problems">
+            <BayesProblems :doc="doc" :findings="findings" :selected="selected" @show="showInGraph" />
+          </div>
+          <div v-else-if="tab === 'glossary'" id="bp-glossary" class="sbody" role="tabpanel" aria-labelledby="bt-glossary">
+            <BayesGlossary />
+          </div>
+          <div v-else id="bp-inspector" class="sbody" role="tabpanel" aria-labelledby="bt-inspector">
             <BayesInspector
               :doc="doc"
               :model="model"
               :findings="findings"
               :plan="plan"
               :selected="selected"
-              @arg="setArg"
-              @bound="setBound"
+              :why="why"
+              @change="change"
               @form="setForm"
               @select="(id: string) => (selected = id)"
               @escape="backToCanvas"
@@ -415,11 +466,23 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onPageKeys))
 .cv { grid-area: canvas; min-width: 0; min-height: 0; position: relative; }
 .side { grid-area: panel; position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--panel); }
 .tabs { display: flex; align-items: flex-end; gap: 4px; padding: 8px 10px 0; border-bottom: 1px solid var(--border-soft); flex: none; }
+/* the editor's view tabs: a small button whose bottom edge turns accent over a tint when chosen */
 .tab {
-  display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; font-size: 12px; color: var(--text);
-  border: 1px solid var(--border); border-bottom: 2px solid var(--accent); border-radius: 6px 6px 0 0; background: var(--tint-accent);
+  display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; font-size: 12px; color: var(--muted);
+  border: 1px solid transparent; border-bottom: 2px solid transparent; border-radius: 6px 6px 0 0; background: none;
+  transition: color var(--dur-1), background var(--dur-1), border-color var(--dur-1);
 }
-.sbody { flex: 1; min-height: 0; overflow-y: auto; padding: 14px 16px 18px; }
+.tab[aria-selected="true"] { color: var(--text); border-color: var(--border); border-bottom-color: var(--accent); background: var(--tint-accent); }
+@media (hover: hover) and (pointer: fine) { .tab:not([aria-selected="true"]):hover { color: var(--text); } }
+.tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.tab .cnt {
+  font-size: 10.5px; font-weight: 600; line-height: 15px; padding: 0 5px; border-radius: 999px;
+  background: var(--panel); border: 1px solid var(--border); color: var(--muted); font-variant-numeric: tabular-nums;
+}
+.tab .cnt.e { color: var(--danger-text); border-color: color-mix(in srgb, var(--danger) 50%, var(--border)); }
+.tab.gl { margin-left: auto; padding: 5px 8px; }
+/* the panel's body is the container the inspector's two columns read (600 px: beside; less: under) */
+.sbody { flex: 1; min-height: 0; overflow-y: auto; padding: 14px 16px 18px; container: bayes-panel / inline-size; }
 .start { grid-column: 1 / -1; grid-row: 2; background: var(--bg); overflow-y: auto; padding: 40px 24px; }
 .card { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
 .card h2 { margin: 0; font-size: 19px; font-weight: 700; }

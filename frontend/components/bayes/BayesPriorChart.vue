@@ -121,6 +121,17 @@ const marks = computed(() => {
     { at: g.sx(q.q95), label: '95 %' },
   ].map(m => ({ ...m, at: Math.min(Math.max(m.at, 0), W) }))
 })
+// the marks' words, spread apart where the marks crowd (a skewed prior puts 5 % and 50 % side by side):
+// each at least 11 % of the width from the one before, all within the drawing
+const labelAt = computed(() => {
+  const GAP = 11
+  const at = marks.value.map(m => (m.at / W) * 100)
+  for (let i = 1; i < at.length; i++) at[i] = Math.max(at[i]!, at[i - 1]! + GAP)
+  const over = (at[at.length - 1] ?? 0) - 96
+  if (over > 0) for (let i = at.length - 1; i >= 0; i--) at[i] = Math.min(at[i]!, 96 - (at.length - 1 - i) * GAP)
+  for (let i = 0; i < at.length; i++) at[i] = Math.max(at[i]!, 4 + i * GAP)
+  return at
+})
 const cuts = computed(() => {
   const a = shown.value
   if (!a) return { below: false, above: false }
@@ -189,7 +200,7 @@ const headSub = computed(() => {
         </svg>
         <!-- the marks' and the axis' words in HTML, so that the stretched drawing never stretches them -->
         <div class="qlabels" aria-hidden="true">
-          <span v-for="m in marks" :key="m.label" :style="{ left: `${(m.at / W) * 100}%` }">{{ m.label }}</span>
+          <span v-for="(m, i) in marks" :key="m.label" :style="{ left: `${labelAt[i]}%` }">{{ m.label }}</span>
         </div>
         <div class="axis" aria-hidden="true">
           <span>{{ fmt(geometry.x0) }}</span>

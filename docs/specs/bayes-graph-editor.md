@@ -709,3 +709,58 @@ plus one: boxes get their depth, nodes 1000, and `elevate-nodes-on-select` is of
 - `/bayes-model?template=empty` opens a model with only its rows' box (the store's «new model» is lot G3).
 - Not in this lot: the other kinds' own fields in the inspector (G2), copy and paste (not in the first release), the
   warning before leaving with unsaved changes and the save (G3).
+
+### Lot G2 (2026-11-24)
+
+- **The inspector of every kind** (`BayesInspector.vue`, `BayesKindFields.vue`, `BayesSlotField.vue`): under the label,
+  name and box of lot G1, a parameter's distribution (a `Select` of the catalogue's priors, each with its sentence;
+  the LKJ only inside correlated effects), its arguments and bounds; a computed value's formula; a linear predictor's
+  intercept (empty is none) and its terms (the data, the coefficient, «Add a predictor», the term removed by its ×,
+  and «reported on both scales» for a standardized number); a likelihood's observed data, its distribution and its
+  arguments; a latent state's process in words, its first value's distribution and arguments, the scale of its
+  steps and its switch non-centred / centred; correlated effects' components (label, name, mean, spread between
+  groups; «Add an effect» up to `max_effect_components`, removed down to two) and their correlation (label, name,
+  η); a data node's type, its whole numbers, its switch «standardized» with its sentence, and the likelihood that
+  observes it. Every change is a function of the document handed to the page (`bayesGraphEdits.ts`: `bayesSetDist`,
+  `bayesSetDataType`, `bayesSetSupport`, `bayesSetStandardize`, `bayesSetStateForm`, `bayesAddTerm`,
+  `bayesRemoveTerm`, `bayesAddComponent`, `bayesRemoveComponent`, `bayesSetEffectsText`, `bayesSetNote`): a choice is
+  a step of the history at once, typing one when it stops. A new distribution keeps the arguments of the same name and
+  writes the plainest value in the open for a prior's new ones (1 where it must be positive, else 0; uniform 0 and 1);
+  a likelihood's new ones are left empty for the person to connect. A new type drops the old type's fields.
+- **Every slot** is read from the mirror the same way (`bayesInspector.ts`, `bayesSlotView`): its first error
+  underlined at its span (the whole text when the finding has none), a warning said under it in the warning's tint,
+  the type in words when it checks (a single number, one per row, one per unit of a box, one per level of a category),
+  the «hyperprior» tag when it reads one hyperprior alone. The node's problems list the ones on a field as «In σ of the
+  prior: the message is under the field».
+- **The charts**: a parameter and a state (its first value) keep the two columns of lot G0 at 600 px; correlated
+  effects open the panel at 600 px too, with their fields at the whole width and a row of cards under them, one per
+  effect and one for the correlation; a computed value has the chart of its values before the data (or the preview's
+  «needs data» sentence). The two columns are a container query on the panel's body, so a width set by the handle
+  decides as the window does. The marks' words of a skewed prior are spread apart so they never overlap.
+- **The names at the caret** (`BayesExprField.vue`): an ARIA `combobox` with a `listbox` under the field: the graph's
+  names (components included; no correlation, no time node, no likelihood, never the node itself) and the language's
+  functions, each with its kind and its type in words or the function's sentence; data and `lag` are left out of a slot
+  read before any data. Typing a name opens it, ↓ opens it on an empty word, ↑ ↓ walk, Enter or Tab writes the choice
+  (a function with its parenthesis), Esc closes it and a second Esc returns to the canvas.
+- **The Problems tab** (`BayesProblems.vue`): the counts of errors and warnings, one sentence (errors keep the model
+  from being saved, warnings block nothing), then every finding as a card, errors first, the model's own first, then in
+  the document's order: what it is on (label and kind), the field in words, the message, and «Show in the graph», which
+  selects the node or box and brings it into sight while the list stays open. The tab's badge counts them, in danger
+  while there is an error.
+- **The glossary** (`BayesGlossary.vue`, the panel's ⓘ tab): prior, likelihood, posterior, hyperprior, box,
+  non-centred, standardized, then data, parameter, linear predictor, latent state, correlated effects and `lag`, two
+  sentences each. **What it is**: each node and box has its kind's two sentences (a data node's by its type), and the
+  distribution's sentence; the template's `why.<node>` takes their place while the node is as the template wrote it
+  (the page compares it with the template as opened), once lot T2 writes those keys.
+- The side panel's tabs are a `tablist` with `v-roving.main`: `,` and `.` walk Inspector, Problems and the glossary; a
+  node selected on the canvas opens the inspector.
+- **Messages**: the placeholders that hold a node's id (`data`, `through`, `observed`, `value`, `expected`) are written
+  with the node's label, as the plates' were (`bayesFindingText`); a levels plate is «the levels of Channel».
+- **The mirror's time**, decode, validation and prior plan of the corpus's largest graph (29 nodes, 12.7 kB), 50 runs
+  after 10, on the development machine: Node 22 median 4.5 ms (p90 6.2 ms), Chromium median 3.2 ms (p90 4 ms),
+  Firefox median 8 ms (p90 14 ms; the timer's resolution is 1 ms). Within the 100 ms target.
+- Tests: `tests/bayes-inspector.test.mjs` (the edits of each kind, the slot's view, the plate's words, the names at the
+  caret, the Problems' order, node labels in messages, every finding of the corpus on a node or box of its graph or on
+  the model); the words test covers the new keys in five languages.
+- Not in this lot: a docs page for the glossary's words to link (the `docs` module has none yet); the templates'
+  `why.<node>` texts (lot T2).
