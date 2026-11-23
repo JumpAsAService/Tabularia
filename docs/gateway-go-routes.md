@@ -619,7 +619,7 @@ Python gateway as FastAPI serves it, and whether the Go gateway answers it
 | DELETE | `/admin/workers/{kind}/scaling` | `give_back` | **Go** |
 | PUT | `/admin/workers/{kind}/scaling` | `scala` | **Go** |
 
-## Go only (49)
+## Go only (82)
 
 | Method | Path | Served by |
 |---|---|---|
@@ -627,9 +627,27 @@ Python gateway as FastAPI serves it, and whether the Go gateway answers it
 | DELETE | `/admin/data-apis/{api_id}` | **Go** |
 | POST | `/admin/data-apis/{api_id}/pause` | **Go** |
 | PUT | `/admin/data-apis/{api_id}/runtime` | **Go** |
+| GET | `/admin/models` | **Go** |
+| GET | `/admin/models/{group_id}` | **Go** |
+| PUT | `/admin/models/{group_id}/access` | **Go** |
+| POST | `/admin/models/{group_id}/disable` | **Go** |
+| POST | `/admin/models/{group_id}/enable` | **Go** |
+| POST | `/admin/models/{group_id}/rebuild` | **Go** |
+| PUT | `/admin/models/{group_id}/settings` | **Go** |
 | PATCH | `/admin/scripting/environments/{environment_id}/versions/{version_id}` | **Go** |
 | GET | `/admin/share-links` | **Go** |
 | PUT | `/admin/share-links/settings` | **Go** |
+| GET | `/bayes-models` | **Go** |
+| POST | `/bayes-models/check` | **Go** |
+| DELETE | `/bayes-models/{model_id}` | **Go** |
+| GET | `/bayes-models/{model_id}` | **Go** |
+| PATCH | `/bayes-models/{model_id}` | **Go** |
+| POST | `/bayes-models/{model_id}/duplicate` | **Go** |
+| GET | `/bayes-models/{model_id}/uses` | **Go** |
+| GET | `/bayes-models/{model_id}/versions` | **Go** |
+| GET | `/bayes-models/{model_id}/versions/{version}` | **Go** |
+| POST | `/bayes-models/{model_id}/versions/{version}/compile` | **Go** |
+| POST | `/bayes-models/{model_id}/versions/{version}/restore` | **Go** |
 | GET | `/data-apis` | **Go** |
 | GET | `/data-apis/limits` | **Go** |
 | DELETE | `/data-apis/{api_id}` | **Go** |
@@ -648,8 +666,21 @@ Python gateway as FastAPI serves it, and whether the Go gateway answers it
 | GET | `/data-apis/{api_id}/versions/{version}` | **Go** |
 | POST | `/data-apis/{api_id}/versions/{version}/restore` | **Go** |
 | GET | `/explore/recent` | **Go** |
+| GET | `/home` | **Go** |
+| PUT | `/home` | **Go** |
+| GET | `/home/favourites` | **Go** |
+| DELETE | `/home/favourites/{kind}/{object_id}` | **Go** |
+| PUT | `/home/favourites/{kind}/{object_id}` | **Go** |
+| GET | `/home/flow-runs` | **Go** |
+| GET | `/home/next-runs` | **Go** |
+| POST | `/home/reset` | **Go** |
 | GET | `/internal/data-apis/{api_id}/manifest` | **Go** |
 | POST | `/internal/data-apis/{api_id}/usage` | **Go** |
+| GET | `/models/groups` | **Go** |
+| GET | `/models/mlflow/{connection_id}/experiments` | **Go** |
+| GET | `/models/mlflow/{connection_id}/versions` | **Go** |
+| GET | `/projects/{project_id}/bayes-models` | **Go** |
+| POST | `/projects/{project_id}/bayes-models` | **Go** |
 | GET | `/projects/{project_id}/data-apis` | **Go** |
 | POST | `/projects/{project_id}/data-apis` | **Go** |
 | GET | `/share-links` | **Go** |
@@ -667,6 +698,8 @@ Python gateway as FastAPI serves it, and whether the Go gateway answers it
 | POST | `/share/{token}/render` | **Go** |
 | POST | `/share/{token}/session` | **Go** |
 | POST | `/tasks/count` | **Go** |
+| POST | `/tasks/exports/{task_id}/cancel` | **Go** |
+| POST | `/tasks/model-report` | **Go** |
 | POST | `/tasks/preview/cancel` | **Go** |
 | POST | `/tasks/profile` | **Go** |
 | POST | `/tasks/stat-report` | **Go** |

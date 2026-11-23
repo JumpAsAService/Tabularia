@@ -9,6 +9,7 @@ import (
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/aisvc"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayesmodels"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/config"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/engine"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/openlineage"
@@ -32,6 +33,9 @@ type Deps struct {
 	SQL       *aisvc.Client
 	// Lineage sends the OpenLineage events (services/openlineage.py); nil or off: nothing
 	Lineage *openlineage.Emitter
+	// BayesCompiler is what stan-compile gives the saved Bayesian models (bayesmodels.Compiler);
+	// nil: one that enqueues nothing and answers «none» (bayesmodels.NoCompiler)
+	BayesCompiler bayesmodels.Compiler
 }
 
 // Each file of this package registers its routes in an init(), one module of the Python

@@ -93,6 +93,17 @@ var goOnlyRoutes = []struct {
 	// a Predict node's lists: the experiments and the versions Tabularia registered (api/models_mlflow.go)
 	{after: "/admin/models/{group_id}/access", route: pyRoute{path: "/models/mlflow/{connection_id}/experiments", methods: []string{"GET"}, regex: `^/models/mlflow/(?P<connection_id>[^/]+)/experiments$`}},
 	{after: "/models/mlflow/{connection_id}/experiments", route: pyRoute{path: "/models/mlflow/{connection_id}/versions", methods: []string{"GET"}, regex: `^/models/mlflow/(?P<connection_id>[^/]+)/versions$`}},
+	// the saved Bayesian models: the object, its versions and its uses (api/bayes_models.go)
+	{after: "/models/mlflow/{connection_id}/versions", route: pyRoute{path: "/bayes-models/check", methods: []string{"POST"}, regex: `^/bayes\-models/check$`}},
+	{after: "/bayes-models/check", route: pyRoute{path: "/bayes-models", methods: []string{"GET"}, regex: `^/bayes\-models$`}},
+	{after: "/bayes-models", route: pyRoute{path: "/projects/{project_id}/bayes-models", methods: []string{"GET", "POST"}, regex: `^/projects/(?P<project_id>[^/]+)/bayes\-models$`}},
+	{after: "/projects/{project_id}/bayes-models", route: pyRoute{path: "/bayes-models/{model_id}", methods: []string{"GET", "PATCH", "DELETE"}, regex: `^/bayes\-models/(?P<model_id>[^/]+)$`}},
+	{after: "/bayes-models/{model_id}", route: pyRoute{path: "/bayes-models/{model_id}/duplicate", methods: []string{"POST"}, regex: `^/bayes\-models/(?P<model_id>[^/]+)/duplicate$`}},
+	{after: "/bayes-models/{model_id}/duplicate", route: pyRoute{path: "/bayes-models/{model_id}/versions", methods: []string{"GET"}, regex: `^/bayes\-models/(?P<model_id>[^/]+)/versions$`}},
+	{after: "/bayes-models/{model_id}/versions", route: pyRoute{path: "/bayes-models/{model_id}/versions/{version}", methods: []string{"GET"}, regex: `^/bayes\-models/(?P<model_id>[^/]+)/versions/(?P<version>[^/]+)$`}},
+	{after: "/bayes-models/{model_id}/versions/{version}", route: pyRoute{path: "/bayes-models/{model_id}/versions/{version}/restore", methods: []string{"POST"}, regex: `^/bayes\-models/(?P<model_id>[^/]+)/versions/(?P<version>[^/]+)/restore$`}},
+	{after: "/bayes-models/{model_id}/versions/{version}/restore", route: pyRoute{path: "/bayes-models/{model_id}/versions/{version}/compile", methods: []string{"POST"}, regex: `^/bayes\-models/(?P<model_id>[^/]+)/versions/(?P<version>[^/]+)/compile$`}},
+	{after: "/bayes-models/{model_id}/versions/{version}/compile", route: pyRoute{path: "/bayes-models/{model_id}/uses", methods: []string{"GET"}, regex: `^/bayes\-models/(?P<model_id>[^/]+)/uses$`}},
 }
 
 // mainRoutes is the main application's table: FastAPI's, with the Go-only routes in place.

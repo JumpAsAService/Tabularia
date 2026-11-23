@@ -69,7 +69,7 @@ type SearchOut struct {
 
 // kindOrder is search._KIND_ORDER: the containers first, then what is opened most often.
 var kindOrder = map[string]int{"folder": 0, "flow": 1, "group": 2, "datasource": 3, "view": 4, "script": 5, "sql": 6,
-	"notebook": 7, "report": 8, "dashboard": 9, "connection": 10, "dataapi": 11}
+	"notebook": 7, "report": 8, "dashboard": 9, "connection": 10, "dataapi": 11, "bayes_model": 12}
 
 func init() {
 	register("search", func(d *Deps) []server.Route {
@@ -309,6 +309,20 @@ func searchHits(ctx context.Context, d *Deps, p *auth.Principal, term string) ([
 		if err := visible("dataapi", "data_apis", false); err != nil {
 			return nil, err
 		}
+	}
+	// Bayesian models: VIEW on the folder AND the use of the group `bayes` (read once); an administrator sees them all
+	if !admin {
+		usable, err := bayesUsable(ctx, d, checker, p)
+		if err != nil {
+			return nil, err
+		}
+		if usable {
+			if err := visible("bayes_model", "bayes_models", false); err != nil {
+				return nil, err
+			}
+		}
+	} else if err := visible("bayes_model", "bayes_models", false); err != nil {
+		return nil, err
 	}
 	// CONNECT is orthogonal to VIEW: another set
 	if len(connectable) > 0 {

@@ -56,6 +56,8 @@ type recentScope struct {
 	envs      []int64
 	// dataAPIsOn: the installation has data APIs (Kubernetes, switched on)
 	dataAPIsOn bool
+	// bayesOn: the person sees the Bayesian models (the group `bayes` is theirs to use; an administrator always)
+	bayesOn bool
 }
 
 type rowsQuerier interface {
@@ -81,6 +83,8 @@ WITH touched AS (
 	UNION ALL SELECT 'dashboard', dashboard_id, max(created_at) FROM dashboard_versions WHERE created_by = $1 GROUP BY dashboard_id
 	UNION ALL SELECT 'dataapi', id, updated_at FROM data_apis WHERE creator_id = $1
 	UNION ALL SELECT 'dataapi', data_api_id, max(created_at) FROM data_api_versions WHERE created_by = $1 GROUP BY data_api_id
+	UNION ALL SELECT 'bayes', id, updated_at FROM bayes_models WHERE owner_id = $1
+	UNION ALL SELECT 'bayes', model_id, max(created_at) FROM bayes_model_versions WHERE created_by = $1 GROUP BY model_id
 ), last AS (
 	SELECT kind, id, max(at) AS at FROM touched GROUP BY kind, id
 ), objects AS (
@@ -94,12 +98,14 @@ WITH touched AS (
 	UNION ALL SELECT 'report', id, name, project_id, NULL FROM reports
 	UNION ALL SELECT 'dashboard', id, name, project_id, NULL FROM dashboards
 	UNION ALL SELECT 'dataapi', id, name, project_id, NULL FROM data_apis
+	UNION ALL SELECT 'bayes', id, name, project_id, NULL FROM bayes_models
 )
 SELECT l.kind, l.id, o.name, o.project_id, l.at
 FROM last l JOIN objects o ON o.kind = l.kind AND o.id = l.id
 WHERE ($2 OR o.project_id = ANY($3))
 	AND (o.kind NOT IN ('script', 'notebook') OR ($4 AND ($2 OR o.env = ANY($5))))
 	AND (o.kind <> 'dataapi' OR $7)
+	AND (o.kind <> 'bayes' OR $2 OR $8)
 ORDER BY l.at DESC NULLS LAST, l.kind, l.id
 LIMIT $6`
 
@@ -112,7 +118,7 @@ func recentObjects(ctx context.Context, q rowsQuerier, userID int64, s recentSco
 	if envs == nil {
 		envs = []int64{}
 	}
-	rows, err := q.Query(ctx, recentSQL, userID, s.admin, readable, s.scriptsOn, envs, limit, s.dataAPIsOn)
+	rows, err := q.Query(ctx, recentSQL, userID, s.admin, readable, s.scriptsOn, envs, limit, s.dataAPIsOn, s.bayesOn)
 	if err != nil {
 		return nil, err
 	}
@@ -148,7 +154,12 @@ func exploreRecent(d *Deps) authedFunc {
 		}
 		scope := recentScope{admin: admin, scriptsOn: d.Config.ScriptsEnabled && d.Config.ScriptsNamespace != "" && d.Config.ScriptsRegistry != "",
 			dataAPIsOn: dataAPIsOn(d)}
+		scope.bayesOn = admin
 		if !admin {
+			if scope.bayesOn, err = bayesUsable(ctx, d, checker, p); err != nil {
+				fail(d, w, "recent: the models' group", err)
+				return
+			}
 			readable, err := checker.Readable(ctx)
 			if err != nil {
 				fail(d, w, "recent: the readable folders", err)
