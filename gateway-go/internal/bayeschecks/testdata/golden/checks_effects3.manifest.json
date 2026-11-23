@@ -1,0 +1,498 @@
+{
+  "codegen_version": 2,
+  "semantic_hash": "85a806f47205aa9e7f6584cf743ae4237179e14a695e75eb9bbf67d2c6fcc177",
+  "program_sha256": "bba3c116db7d5c940aba4e1f1605a1fd753104d98a4d2350e787fcc903c4ee23",
+  "data": [
+    {
+      "stan": "N",
+      "kind": "size",
+      "of": "rows"
+    },
+    {
+      "stan": "J_grp",
+      "kind": "size",
+      "of": "grp"
+    },
+    {
+      "stan": "g",
+      "kind": "group_index",
+      "plate": "rows",
+      "node": "g",
+      "target": "grp"
+    },
+    {
+      "stan": "w",
+      "kind": "real",
+      "plate": "rows",
+      "node": "w"
+    },
+    {
+      "stan": "x",
+      "kind": "real",
+      "plate": "rows",
+      "node": "x"
+    },
+    {
+      "stan": "y",
+      "kind": "real",
+      "plate": "rows",
+      "node": "y"
+    },
+    {
+      "stan": "Mode",
+      "kind": "mode"
+    },
+    {
+      "stan": "Ppc_on",
+      "kind": "checks_on"
+    },
+    {
+      "stan": "Ppc_o1_n",
+      "kind": "post_count",
+      "node": "y"
+    },
+    {
+      "stan": "Ppc_o1_rows",
+      "kind": "post_rows",
+      "node": "y"
+    },
+    {
+      "stan": "Prior_o1_n",
+      "kind": "prior_count",
+      "node": "y"
+    },
+    {
+      "stan": "Prior_o1_rows",
+      "kind": "prior_rows",
+      "node": "y"
+    },
+    {
+      "stan": "Ppc_o1_m",
+      "kind": "replicated_count",
+      "node": "y"
+    },
+    {
+      "stan": "Ppc_o1_slots",
+      "kind": "bin_slots",
+      "node": "y"
+    },
+    {
+      "stan": "Ppc_o1_scale",
+      "kind": "bin_scale",
+      "node": "y"
+    },
+    {
+      "stan": "Ppc_o1_shift",
+      "kind": "bin_shift",
+      "node": "y"
+    },
+    {
+      "stan": "Ppc_o1_binned",
+      "kind": "binned_count",
+      "node": "y"
+    },
+    {
+      "stan": "Ppc_o1_units",
+      "kind": "unit_count",
+      "node": "y"
+    },
+    {
+      "stan": "Ppc_o1_slot",
+      "kind": "unit_slot",
+      "node": "g"
+    },
+    {
+      "stan": "Ppc_o1_rep",
+      "kind": "replicated_rows",
+      "node": "y"
+    }
+  ],
+  "quantities": [
+    {
+      "stan": "mu_a",
+      "role": "quantity",
+      "node": "ma",
+      "dims": []
+    },
+    {
+      "stan": "mu_b",
+      "role": "quantity",
+      "node": "mb",
+      "dims": []
+    },
+    {
+      "stan": "mu_c",
+      "role": "quantity",
+      "node": "mc",
+      "dims": []
+    },
+    {
+      "stan": "s",
+      "role": "quantity",
+      "node": "s",
+      "dims": []
+    },
+    {
+      "stan": "tau_a",
+      "role": "quantity",
+      "node": "ta",
+      "dims": []
+    },
+    {
+      "stan": "tau_b",
+      "role": "quantity",
+      "node": "tb",
+      "dims": []
+    },
+    {
+      "stan": "tau_c",
+      "role": "quantity",
+      "node": "tc",
+      "dims": []
+    },
+    {
+      "stan": "Z_eff",
+      "role": "internal",
+      "dims": [
+        {
+          "component": "eff"
+        },
+        {
+          "plate": "grp"
+        }
+      ]
+    },
+    {
+      "stan": "L_eff",
+      "role": "internal",
+      "dims": [
+        {
+          "component": "eff"
+        },
+        {
+          "component": "eff"
+        }
+      ]
+    },
+    {
+      "stan": "a_g",
+      "role": "quantity",
+      "node": "eff.ca",
+      "dims": [
+        {
+          "plate": "grp"
+        }
+      ]
+    },
+    {
+      "stan": "b_g",
+      "role": "quantity",
+      "node": "eff.cb",
+      "dims": [
+        {
+          "plate": "grp"
+        }
+      ]
+    },
+    {
+      "stan": "c_g",
+      "role": "quantity",
+      "node": "eff.cc",
+      "dims": [
+        {
+          "plate": "grp"
+        }
+      ]
+    },
+    {
+      "stan": "rho_g",
+      "role": "quantity",
+      "node": "eff.correlation",
+      "dims": [
+        {
+          "component": "eff"
+        },
+        {
+          "component": "eff"
+        }
+      ],
+      "triangle": "strict_lower"
+    },
+    {
+      "stan": "Prior_m_2",
+      "role": "prior_marginal",
+      "dims": [],
+      "of": "ma"
+    },
+    {
+      "stan": "Prior_d_2",
+      "role": "prior_draw",
+      "dims": [],
+      "of": "ma"
+    },
+    {
+      "stan": "Prior_m_3",
+      "role": "prior_marginal",
+      "dims": [],
+      "of": "mb"
+    },
+    {
+      "stan": "Prior_d_3",
+      "role": "prior_draw",
+      "dims": [],
+      "of": "mb"
+    },
+    {
+      "stan": "Prior_m_4",
+      "role": "prior_marginal",
+      "dims": [],
+      "of": "mc"
+    },
+    {
+      "stan": "Prior_d_4",
+      "role": "prior_draw",
+      "dims": [],
+      "of": "mc"
+    },
+    {
+      "stan": "Prior_m_5",
+      "role": "prior_marginal",
+      "dims": [],
+      "of": "s"
+    },
+    {
+      "stan": "Prior_d_5",
+      "role": "prior_draw",
+      "dims": [],
+      "of": "s"
+    },
+    {
+      "stan": "Prior_m_6",
+      "role": "prior_marginal",
+      "dims": [],
+      "of": "ta"
+    },
+    {
+      "stan": "Prior_d_6",
+      "role": "prior_draw",
+      "dims": [],
+      "of": "ta"
+    },
+    {
+      "stan": "Prior_m_7",
+      "role": "prior_marginal",
+      "dims": [],
+      "of": "tb"
+    },
+    {
+      "stan": "Prior_d_7",
+      "role": "prior_draw",
+      "dims": [],
+      "of": "tb"
+    },
+    {
+      "stan": "Prior_m_8",
+      "role": "prior_marginal",
+      "dims": [],
+      "of": "tc"
+    },
+    {
+      "stan": "Prior_d_8",
+      "role": "prior_draw",
+      "dims": [],
+      "of": "tc"
+    },
+    {
+      "stan": "Prior_m_9_1",
+      "role": "prior_marginal",
+      "dims": [],
+      "of": "eff.ca"
+    },
+    {
+      "stan": "Prior_m_9_2",
+      "role": "prior_marginal",
+      "dims": [],
+      "of": "eff.cb"
+    },
+    {
+      "stan": "Prior_m_9_3",
+      "role": "prior_marginal",
+      "dims": [],
+      "of": "eff.cc"
+    },
+    {
+      "stan": "Prior_m_9_rho",
+      "role": "prior_marginal",
+      "dims": [],
+      "of": "eff.correlation"
+    },
+    {
+      "stan": "Prior_p_9_1",
+      "role": "prior_draw",
+      "dims": [
+        {
+          "plate": "grp"
+        }
+      ],
+      "of": "eff.ca"
+    },
+    {
+      "stan": "Prior_p_9_2",
+      "role": "prior_draw",
+      "dims": [
+        {
+          "plate": "grp"
+        }
+      ],
+      "of": "eff.cb"
+    },
+    {
+      "stan": "Prior_p_9_3",
+      "role": "prior_draw",
+      "dims": [
+        {
+          "plate": "grp"
+        }
+      ],
+      "of": "eff.cc"
+    },
+    {
+      "stan": "Ppc_o1_mean",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_on"
+        }
+      ],
+      "check": "mean",
+      "of": "y"
+    },
+    {
+      "stan": "Ppc_o1_sd",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_on"
+        }
+      ],
+      "check": "sd",
+      "of": "y"
+    },
+    {
+      "stan": "Ppc_o1_min",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_on"
+        }
+      ],
+      "check": "min",
+      "of": "y"
+    },
+    {
+      "stan": "Ppc_o1_max",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_on"
+        }
+      ],
+      "check": "max",
+      "of": "y"
+    },
+    {
+      "stan": "Ppc_o1_q10",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_on"
+        }
+      ],
+      "check": "q10",
+      "of": "y"
+    },
+    {
+      "stan": "Ppc_o1_q50",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_on"
+        }
+      ],
+      "check": "q50",
+      "of": "y"
+    },
+    {
+      "stan": "Ppc_o1_q90",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_on"
+        }
+      ],
+      "check": "q90",
+      "of": "y"
+    },
+    {
+      "stan": "Ppc_o1_count",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_o1_slots"
+        }
+      ],
+      "check": "bin_count",
+      "of": "y"
+    },
+    {
+      "stan": "Ppc_o1_usum",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_o1_units"
+        }
+      ],
+      "check": "unit_sum",
+      "of": "y"
+    },
+    {
+      "stan": "Ppc_o1_yrep",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_o1_rep"
+        }
+      ],
+      "check": "replicated",
+      "of": "y"
+    }
+  ],
+  "checks": {
+    "outcomes": [
+      {
+        "k": 1,
+        "node": "lik",
+        "observed": "y",
+        "dist": "normal",
+        "kind": "continuous",
+        "unit_index": "g",
+        "unit_plate": "grp"
+      }
+    ],
+    "likelihoods": 1,
+    "prior_predictive": true,
+    "marginals": [
+      "ma",
+      "mb",
+      "mc",
+      "s",
+      "ta",
+      "tb",
+      "tc",
+      "eff.ca",
+      "eff.cb",
+      "eff.cc",
+      "eff.correlation"
+    ]
+  }
+}

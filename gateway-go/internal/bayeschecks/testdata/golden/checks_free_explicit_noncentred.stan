@@ -1,0 +1,100 @@
+data {
+  int<lower=0> N;
+  int<lower=1> J_grp;
+  array[N] int<lower=1, upper=J_grp> g;
+  vector[N] y;
+  int<lower=0, upper=1> Mode;
+  int<lower=0> Ppc_on;
+  int<lower=0> Ppc_o1_n;
+  array[Ppc_o1_n] int<lower=0> Ppc_o1_rows;
+  int<lower=0> Prior_o1_n;
+  array[Prior_o1_n] int<lower=0> Prior_o1_rows;
+  int<lower=0> Ppc_o1_m;
+  int<lower=0> Ppc_o1_slots;
+  real Ppc_o1_scale;
+  real Ppc_o1_shift;
+  int<lower=0> Ppc_o1_binned;
+  int<lower=0> Ppc_o1_units;
+  array[Ppc_o1_binned] int<lower=0> Ppc_o1_slot;
+  int<lower=0> Ppc_o1_rep;
+}
+parameters {
+  real log_m;
+  real<lower=0.0> sigma;
+  real<lower=0.0> tau;
+  vector[J_grp] Z_ag;
+}
+transformed parameters {
+  real m = exp(log_m);
+  vector[J_grp] a_g = (m + (tau * Z_ag));
+}
+model {
+  log_m ~ normal(0.0, 1.0);
+  sigma ~ exponential(1.0);
+  tau ~ normal(0.0, 1.0);
+  Z_ag ~ std_normal();
+  y ~ normal((a_g[g]), sigma);
+}
+generated quantities {
+  real Prior_m_2;
+  real Prior_d_2;
+  real Prior_m_3;
+  real Prior_d_3;
+  real Prior_m_4;
+  real Prior_d_4;
+  real Prior_m_5;
+  real Prior_d_5;
+  real Prior_m_6;
+  vector[Mode == 1 ? J_grp : 0] Prior_p_6;
+  array[Ppc_on] real Ppc_o1_mean;
+  array[Ppc_on] real Ppc_o1_sd;
+  array[Ppc_on] real Ppc_o1_min;
+  array[Ppc_on] real Ppc_o1_max;
+  array[Ppc_on] real Ppc_o1_q10;
+  array[Ppc_on] real Ppc_o1_q50;
+  array[Ppc_on] real Ppc_o1_q90;
+  array[Ppc_o1_slots] int Ppc_o1_count;
+  vector[Ppc_o1_units] Ppc_o1_usum;
+  array[Ppc_o1_rep] real Ppc_o1_yrep;
+  {
+    Prior_m_2 = normal_rng(0.0, 1.0);
+    Prior_d_2 = Prior_m_2;
+    Prior_m_3 = exp(Prior_m_2);
+    Prior_d_3 = Prior_m_3;
+    Prior_m_4 = exponential_rng(1.0);
+    Prior_d_4 = Prior_m_4;
+    real Prior_u_m5 = (Phi(((0.0 + ((-1.0) * 0.0)) * inv(1.0))) + ((1.0 + ((-1.0) * Phi(((0.0 + ((-1.0) * 0.0)) * inv(1.0))))) * uniform_rng(0.0, 1.0)));
+    Prior_m_5 = (0.0 + (1.0 * inv_Phi(fmin(fmax(Prior_u_m5, 0.0), 1.0))));
+    Prior_d_5 = Prior_m_5;
+    real Prior_g_m6_1 = Prior_m_3;
+    real Prior_g_m6_2 = Prior_m_5;
+    Prior_m_6 = (normal_rng(fmin(fmax(Prior_g_m6_1, (-1e+300)), 1e+300), fmin(fmax(Prior_g_m6_2, 1e-300), 1e+300)) + (0.0 * (Prior_g_m6_1 + Prior_g_m6_2)));
+    real Prior_a_p6_1 = Prior_m_3;
+    real Prior_a_p6_2 = Prior_m_5;
+    for (I in 1:(Mode == 1 ? J_grp : 0)) {
+      Prior_p_6[I] = (normal_rng(fmin(fmax(Prior_a_p6_1, (-1e+300)), 1e+300), fmin(fmax(Prior_a_p6_2, 1e-300), 1e+300)) + (0.0 * (Prior_a_p6_1 + Prior_a_p6_2)));
+    }
+    array[Ppc_o1_n] real Ppc_o1_post = normal_rng((a_g[g[Ppc_o1_rows]]), sigma);
+    array[Prior_o1_n] real Prior_o1_draw = normal_rng((Prior_p_6[g[Prior_o1_rows]]), Prior_m_4);
+    vector[Ppc_o1_m] Ppc_o1_y = to_vector(append_array(Ppc_o1_post, Prior_o1_draw));
+    Ppc_o1_count = rep_array(0, Ppc_o1_slots);
+    Ppc_o1_usum = rep_vector(0.0, Ppc_o1_units);
+    for (I in 1:Ppc_on) {
+      Ppc_o1_mean[I] = mean(Ppc_o1_y);
+      Ppc_o1_sd[I] = sd(Ppc_o1_y);
+      Ppc_o1_min[I] = min(Ppc_o1_y);
+      Ppc_o1_max[I] = max(Ppc_o1_y);
+      Ppc_o1_q10[I] = quantile(Ppc_o1_y, 0.1);
+      Ppc_o1_q50[I] = quantile(Ppc_o1_y, 0.5);
+      Ppc_o1_q90[I] = quantile(Ppc_o1_y, 0.9);
+    }
+    for (I in 1:Ppc_o1_binned) {
+      int Ppc_o1_b = to_int(fmin(fmax(floor(((Ppc_o1_y[I] * Ppc_o1_scale) + Ppc_o1_shift)), 1.0), Ppc_o1_slots));
+      Ppc_o1_count[Ppc_o1_b] = (Ppc_o1_count[Ppc_o1_b] + 1);
+      Ppc_o1_usum[Ppc_o1_slot[I]] = (Ppc_o1_usum[Ppc_o1_slot[I]] + Ppc_o1_y[I]);
+    }
+    for (I in 1:Ppc_o1_rep) {
+      Ppc_o1_yrep[I] = Ppc_o1_y[I];
+    }
+  }
+}

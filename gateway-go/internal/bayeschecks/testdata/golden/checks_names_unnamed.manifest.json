@@ -1,0 +1,256 @@
+{
+  "codegen_version": 2,
+  "semantic_hash": "297e9f581c741786e0e5a392317c4d8524278008afff72793cdbfd5dedd98269",
+  "program_sha256": "c731e6eb21a41065b8bad67226e6fb8d98623f4c1243f2bb0b2f547731c540e0",
+  "data": [
+    {
+      "stan": "N",
+      "kind": "size",
+      "of": "rows"
+    },
+    {
+      "stan": "score",
+      "kind": "real",
+      "plate": "rows",
+      "node": "n1"
+    },
+    {
+      "stan": "V_n2",
+      "kind": "real",
+      "plate": "rows",
+      "node": "n2",
+      "standardize": true
+    },
+    {
+      "stan": "Mode",
+      "kind": "mode"
+    },
+    {
+      "stan": "Ppc_on",
+      "kind": "checks_on"
+    },
+    {
+      "stan": "Ppc_o1_n",
+      "kind": "post_count",
+      "node": "n1"
+    },
+    {
+      "stan": "Ppc_o1_rows",
+      "kind": "post_rows",
+      "node": "n1"
+    },
+    {
+      "stan": "Prior_o1_n",
+      "kind": "prior_count",
+      "node": "n1"
+    },
+    {
+      "stan": "Prior_o1_rows",
+      "kind": "prior_rows",
+      "node": "n1"
+    },
+    {
+      "stan": "Ppc_o1_m",
+      "kind": "replicated_count",
+      "node": "n1"
+    },
+    {
+      "stan": "Ppc_o1_slots",
+      "kind": "bin_slots",
+      "node": "n1"
+    },
+    {
+      "stan": "Ppc_o1_scale",
+      "kind": "bin_scale",
+      "node": "n1"
+    },
+    {
+      "stan": "Ppc_o1_shift",
+      "kind": "bin_shift",
+      "node": "n1"
+    },
+    {
+      "stan": "Ppc_o1_binned",
+      "kind": "binned_count",
+      "node": "n1"
+    },
+    {
+      "stan": "Ppc_o1_rep",
+      "kind": "replicated_rows",
+      "node": "n1"
+    }
+  ],
+  "quantities": [
+    {
+      "stan": "V_n3",
+      "role": "quantity",
+      "node": "n3",
+      "dims": []
+    },
+    {
+      "stan": "V_n4",
+      "role": "quantity",
+      "node": "n4",
+      "dims": []
+    },
+    {
+      "stan": "V_n5",
+      "role": "quantity",
+      "node": "n5",
+      "dims": []
+    },
+    {
+      "stan": "Prior_m_3",
+      "role": "prior_marginal",
+      "dims": [],
+      "of": "n3"
+    },
+    {
+      "stan": "Prior_d_3",
+      "role": "prior_draw",
+      "dims": [],
+      "of": "n3"
+    },
+    {
+      "stan": "Prior_m_4",
+      "role": "prior_marginal",
+      "dims": [],
+      "of": "n4"
+    },
+    {
+      "stan": "Prior_d_4",
+      "role": "prior_draw",
+      "dims": [],
+      "of": "n4"
+    },
+    {
+      "stan": "Prior_m_5",
+      "role": "prior_marginal",
+      "dims": [],
+      "of": "n5"
+    },
+    {
+      "stan": "Prior_d_5",
+      "role": "prior_draw",
+      "dims": [],
+      "of": "n5"
+    },
+    {
+      "stan": "Ppc_o1_mean",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_on"
+        }
+      ],
+      "check": "mean",
+      "of": "n1"
+    },
+    {
+      "stan": "Ppc_o1_sd",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_on"
+        }
+      ],
+      "check": "sd",
+      "of": "n1"
+    },
+    {
+      "stan": "Ppc_o1_min",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_on"
+        }
+      ],
+      "check": "min",
+      "of": "n1"
+    },
+    {
+      "stan": "Ppc_o1_max",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_on"
+        }
+      ],
+      "check": "max",
+      "of": "n1"
+    },
+    {
+      "stan": "Ppc_o1_q10",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_on"
+        }
+      ],
+      "check": "q10",
+      "of": "n1"
+    },
+    {
+      "stan": "Ppc_o1_q50",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_on"
+        }
+      ],
+      "check": "q50",
+      "of": "n1"
+    },
+    {
+      "stan": "Ppc_o1_q90",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_on"
+        }
+      ],
+      "check": "q90",
+      "of": "n1"
+    },
+    {
+      "stan": "Ppc_o1_count",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_o1_slots"
+        }
+      ],
+      "check": "bin_count",
+      "of": "n1"
+    },
+    {
+      "stan": "Ppc_o1_yrep",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_o1_rep"
+        }
+      ],
+      "check": "replicated",
+      "of": "n1"
+    }
+  ],
+  "checks": {
+    "outcomes": [
+      {
+        "k": 1,
+        "node": "n7",
+        "observed": "n1",
+        "dist": "normal",
+        "kind": "continuous"
+      }
+    ],
+    "likelihoods": 1,
+    "prior_predictive": true,
+    "marginals": [
+      "n3",
+      "n4",
+      "n5"
+    ]
+  }
+}

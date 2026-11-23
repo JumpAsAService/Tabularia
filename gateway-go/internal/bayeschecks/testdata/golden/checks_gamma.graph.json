@@ -1,0 +1,82 @@
+{
+  "format_version": 1,
+  "plates": [
+    {
+      "id": "rows",
+      "kind": "rows",
+      "label": "Rows"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "y",
+      "kind": "data",
+      "name": "y",
+      "label": "y",
+      "plate": "rows",
+      "type": "real"
+    },
+    {
+      "id": "x",
+      "kind": "data",
+      "name": "x",
+      "label": "x",
+      "plate": "rows",
+      "type": "real"
+    },
+    {
+      "id": "a",
+      "kind": "parameter",
+      "name": "a",
+      "label": "a",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "1"
+          }
+        }
+      }
+    },
+    {
+      "id": "s",
+      "kind": "parameter",
+      "name": "s",
+      "label": "s",
+      "plate": null,
+      "prior": {
+        "dist": "gamma",
+        "args": {
+          "alpha": {
+            "expr": "2"
+          },
+          "beta": {
+            "expr": "1"
+          }
+        }
+      },
+      "bounds": {
+        "upper": 5
+      }
+    },
+    {
+      "id": "lik",
+      "kind": "likelihood",
+      "label": "Likelihood of y",
+      "observed": "y",
+      "dist": "normal",
+      "args": {
+        "mu": {
+          "expr": "a * x"
+        },
+        "sigma": {
+          "expr": "s"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,186 @@
+{
+  "format_version": 1,
+  "plates": [
+    {
+      "id": "rows",
+      "kind": "rows",
+      "label": "Rows"
+    },
+    {
+      "id": "grp",
+      "kind": "group",
+      "label": "Group",
+      "parent": null,
+      "key": "g",
+      "form": "non_centred"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "y",
+      "kind": "data",
+      "name": "y",
+      "label": "y",
+      "plate": "rows",
+      "type": "real"
+    },
+    {
+      "id": "k",
+      "kind": "data",
+      "name": "k",
+      "label": "k",
+      "plate": "rows",
+      "type": "int",
+      "support": "nonnegative"
+    },
+    {
+      "id": "z",
+      "kind": "data",
+      "name": "z",
+      "label": "z",
+      "plate": "rows",
+      "type": "int",
+      "support": "binary"
+    },
+    {
+      "id": "g",
+      "kind": "data",
+      "name": "g",
+      "label": "g",
+      "plate": "rows",
+      "type": "group_index",
+      "target": "grp"
+    },
+    {
+      "id": "x",
+      "kind": "data",
+      "name": "x",
+      "label": "x",
+      "plate": "rows",
+      "type": "real"
+    },
+    {
+      "id": "mu",
+      "kind": "parameter",
+      "name": "mu",
+      "label": "mu",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "1"
+          }
+        }
+      }
+    },
+    {
+      "id": "tau",
+      "kind": "parameter",
+      "name": "tau",
+      "label": "tau",
+      "plate": null,
+      "prior": {
+        "dist": "exponential",
+        "args": {
+          "beta": {
+            "expr": "1"
+          }
+        }
+      }
+    },
+    {
+      "id": "ag",
+      "kind": "parameter",
+      "name": "a_g",
+      "label": "a_g",
+      "plate": "grp",
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "mu"
+          },
+          "sigma": {
+            "expr": "tau"
+          }
+        }
+      }
+    },
+    {
+      "id": "b",
+      "kind": "parameter",
+      "name": "b",
+      "label": "b",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "1"
+          }
+        }
+      }
+    },
+    {
+      "id": "s",
+      "kind": "parameter",
+      "name": "s",
+      "label": "s",
+      "plate": null,
+      "prior": {
+        "dist": "exponential",
+        "args": {
+          "beta": {
+            "expr": "1"
+          }
+        }
+      }
+    },
+    {
+      "id": "ly",
+      "kind": "likelihood",
+      "label": "Likelihood of y",
+      "observed": "y",
+      "dist": "normal",
+      "args": {
+        "mu": {
+          "expr": "a_g[g] + b * x"
+        },
+        "sigma": {
+          "expr": "s"
+        }
+      }
+    },
+    {
+      "id": "lk",
+      "kind": "likelihood",
+      "label": "Likelihood of k",
+      "observed": "k",
+      "dist": "poisson_log",
+      "args": {
+        "alpha": {
+          "expr": "a_g[g]"
+        }
+      }
+    },
+    {
+      "id": "lz",
+      "kind": "likelihood",
+      "label": "Likelihood of z",
+      "observed": "z",
+      "dist": "bernoulli_logit",
+      "args": {
+        "alpha": {
+          "expr": "b * x"
+        }
+      }
+    }
+  ]
+}

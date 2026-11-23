@@ -1,0 +1,527 @@
+{
+  "codegen_version": 2,
+  "semantic_hash": "3079cd115e5fb599e000133665357a2d2343cad3cb5aefcfb07995b9b0f491a7",
+  "program_sha256": "0f709910100ed3ca0c292698f25a46a28a987c95899a8596c888869422aa410a",
+  "data": [
+    {
+      "stan": "N",
+      "kind": "size",
+      "of": "rows"
+    },
+    {
+      "stan": "bought",
+      "kind": "int",
+      "plate": "rows",
+      "node": "bin",
+      "support": "binary"
+    },
+    {
+      "stan": "visits",
+      "kind": "int",
+      "plate": "rows",
+      "node": "cnt",
+      "support": "nonnegative"
+    },
+    {
+      "stan": "k",
+      "kind": "int",
+      "plate": "rows",
+      "node": "k",
+      "support": "nonnegative"
+    },
+    {
+      "stan": "trials",
+      "kind": "int",
+      "plate": "rows",
+      "node": "n",
+      "support": "nonnegative"
+    },
+    {
+      "stan": "x",
+      "kind": "real",
+      "plate": "rows",
+      "node": "x",
+      "standardize": true
+    },
+    {
+      "stan": "y",
+      "kind": "real",
+      "plate": "rows",
+      "node": "y"
+    },
+    {
+      "stan": "Mode",
+      "kind": "mode"
+    },
+    {
+      "stan": "Ppc_on",
+      "kind": "checks_on"
+    },
+    {
+      "stan": "Ppc_o1_n",
+      "kind": "post_count",
+      "node": "bin"
+    },
+    {
+      "stan": "Ppc_o1_rows",
+      "kind": "post_rows",
+      "node": "bin"
+    },
+    {
+      "stan": "Prior_o1_n",
+      "kind": "prior_count",
+      "node": "bin"
+    },
+    {
+      "stan": "Prior_o1_rows",
+      "kind": "prior_rows",
+      "node": "bin"
+    },
+    {
+      "stan": "Ppc_o1_m",
+      "kind": "replicated_count",
+      "node": "bin"
+    },
+    {
+      "stan": "Ppc_o1_slots",
+      "kind": "bin_slots",
+      "node": "bin"
+    },
+    {
+      "stan": "Ppc_o1_scale",
+      "kind": "bin_scale",
+      "node": "bin"
+    },
+    {
+      "stan": "Ppc_o1_shift",
+      "kind": "bin_shift",
+      "node": "bin"
+    },
+    {
+      "stan": "Ppc_o1_binned",
+      "kind": "binned_count",
+      "node": "bin"
+    },
+    {
+      "stan": "Ppc_o1_rep",
+      "kind": "replicated_rows",
+      "node": "bin"
+    },
+    {
+      "stan": "Ppc_o2_n",
+      "kind": "post_count",
+      "node": "cnt"
+    },
+    {
+      "stan": "Ppc_o2_rows",
+      "kind": "post_rows",
+      "node": "cnt"
+    },
+    {
+      "stan": "Prior_o2_n",
+      "kind": "prior_count",
+      "node": "cnt"
+    },
+    {
+      "stan": "Prior_o2_rows",
+      "kind": "prior_rows",
+      "node": "cnt"
+    },
+    {
+      "stan": "Ppc_o2_m",
+      "kind": "replicated_count",
+      "node": "cnt"
+    },
+    {
+      "stan": "Ppc_o2_slots",
+      "kind": "bin_slots",
+      "node": "cnt"
+    },
+    {
+      "stan": "Ppc_o2_scale",
+      "kind": "bin_scale",
+      "node": "cnt"
+    },
+    {
+      "stan": "Ppc_o2_shift",
+      "kind": "bin_shift",
+      "node": "cnt"
+    },
+    {
+      "stan": "Ppc_o2_binned",
+      "kind": "binned_count",
+      "node": "cnt"
+    },
+    {
+      "stan": "Ppc_o2_rep",
+      "kind": "replicated_rows",
+      "node": "cnt"
+    },
+    {
+      "stan": "Ppc_o3_n",
+      "kind": "post_count",
+      "node": "k"
+    },
+    {
+      "stan": "Ppc_o3_rows",
+      "kind": "post_rows",
+      "node": "k"
+    },
+    {
+      "stan": "Prior_o3_n",
+      "kind": "prior_count",
+      "node": "k"
+    },
+    {
+      "stan": "Prior_o3_rows",
+      "kind": "prior_rows",
+      "node": "k"
+    },
+    {
+      "stan": "Ppc_o3_m",
+      "kind": "replicated_count",
+      "node": "k"
+    },
+    {
+      "stan": "Ppc_o3_slots",
+      "kind": "bin_slots",
+      "node": "k"
+    },
+    {
+      "stan": "Ppc_o3_scale",
+      "kind": "bin_scale",
+      "node": "k"
+    },
+    {
+      "stan": "Ppc_o3_shift",
+      "kind": "bin_shift",
+      "node": "k"
+    },
+    {
+      "stan": "Ppc_o3_binned",
+      "kind": "binned_count",
+      "node": "k"
+    },
+    {
+      "stan": "Ppc_o3_rep",
+      "kind": "replicated_rows",
+      "node": "k"
+    }
+  ],
+  "quantities": [
+    {
+      "stan": "alpha",
+      "role": "quantity",
+      "node": "a",
+      "dims": []
+    },
+    {
+      "stan": "b_x",
+      "role": "quantity",
+      "node": "bx",
+      "dims": []
+    },
+    {
+      "stan": "phi",
+      "role": "quantity",
+      "node": "phi",
+      "dims": []
+    },
+    {
+      "stan": "sigma",
+      "role": "quantity",
+      "node": "s",
+      "dims": []
+    },
+    {
+      "stan": "Prior_m_1",
+      "role": "prior_marginal",
+      "dims": [],
+      "of": "a"
+    },
+    {
+      "stan": "Prior_d_1",
+      "role": "prior_draw",
+      "dims": [],
+      "of": "a"
+    },
+    {
+      "stan": "Prior_m_3",
+      "role": "prior_marginal",
+      "dims": [],
+      "of": "bx"
+    },
+    {
+      "stan": "Prior_d_3",
+      "role": "prior_draw",
+      "dims": [],
+      "of": "bx"
+    },
+    {
+      "stan": "Prior_m_8",
+      "role": "prior_marginal",
+      "dims": [],
+      "of": "phi"
+    },
+    {
+      "stan": "Prior_d_8",
+      "role": "prior_draw",
+      "dims": [],
+      "of": "phi"
+    },
+    {
+      "stan": "Prior_m_9",
+      "role": "prior_marginal",
+      "dims": [],
+      "of": "s"
+    },
+    {
+      "stan": "Prior_d_9",
+      "role": "prior_draw",
+      "dims": [],
+      "of": "s"
+    },
+    {
+      "stan": "Ppc_o1_mean",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_on"
+        }
+      ],
+      "check": "mean",
+      "of": "bin"
+    },
+    {
+      "stan": "Ppc_o1_count",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_o1_slots"
+        }
+      ],
+      "check": "bin_count",
+      "of": "bin"
+    },
+    {
+      "stan": "Ppc_o1_yrep",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_o1_rep"
+        }
+      ],
+      "check": "replicated",
+      "of": "bin"
+    },
+    {
+      "stan": "Ppc_o2_mean",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_on"
+        }
+      ],
+      "check": "mean",
+      "of": "cnt"
+    },
+    {
+      "stan": "Ppc_o2_sd",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_on"
+        }
+      ],
+      "check": "sd",
+      "of": "cnt"
+    },
+    {
+      "stan": "Ppc_o2_max",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_on"
+        }
+      ],
+      "check": "max",
+      "of": "cnt"
+    },
+    {
+      "stan": "Ppc_o2_q50",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_on"
+        }
+      ],
+      "check": "q50",
+      "of": "cnt"
+    },
+    {
+      "stan": "Ppc_o2_q90",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_on"
+        }
+      ],
+      "check": "q90",
+      "of": "cnt"
+    },
+    {
+      "stan": "Ppc_o2_zeros",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_on"
+        }
+      ],
+      "check": "zeros",
+      "of": "cnt"
+    },
+    {
+      "stan": "Ppc_o2_count",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_o2_slots"
+        }
+      ],
+      "check": "bin_count",
+      "of": "cnt"
+    },
+    {
+      "stan": "Ppc_o2_yrep",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_o2_rep"
+        }
+      ],
+      "check": "replicated",
+      "of": "cnt"
+    },
+    {
+      "stan": "Ppc_o3_mean",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_on"
+        }
+      ],
+      "check": "mean",
+      "of": "k"
+    },
+    {
+      "stan": "Ppc_o3_sd",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_on"
+        }
+      ],
+      "check": "sd",
+      "of": "k"
+    },
+    {
+      "stan": "Ppc_o3_max",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_on"
+        }
+      ],
+      "check": "max",
+      "of": "k"
+    },
+    {
+      "stan": "Ppc_o3_q50",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_on"
+        }
+      ],
+      "check": "q50",
+      "of": "k"
+    },
+    {
+      "stan": "Ppc_o3_q90",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_on"
+        }
+      ],
+      "check": "q90",
+      "of": "k"
+    },
+    {
+      "stan": "Ppc_o3_zeros",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_on"
+        }
+      ],
+      "check": "zeros",
+      "of": "k"
+    },
+    {
+      "stan": "Ppc_o3_count",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_o3_slots"
+        }
+      ],
+      "check": "bin_count",
+      "of": "k"
+    },
+    {
+      "stan": "Ppc_o3_yrep",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_o3_rep"
+        }
+      ],
+      "check": "replicated",
+      "of": "k"
+    }
+  ],
+  "checks": {
+    "outcomes": [
+      {
+        "k": 1,
+        "node": "l3",
+        "observed": "bin",
+        "dist": "bernoulli_logit",
+        "kind": "binary"
+      },
+      {
+        "k": 2,
+        "node": "l2",
+        "observed": "cnt",
+        "dist": "neg_binomial_2_log",
+        "kind": "counts"
+      },
+      {
+        "k": 3,
+        "node": "l4",
+        "observed": "k",
+        "dist": "binomial_logit",
+        "kind": "counts"
+      }
+    ],
+    "likelihoods": 4,
+    "prior_predictive": true,
+    "marginals": [
+      "a",
+      "bx",
+      "phi",
+      "s"
+    ]
+  }
+}

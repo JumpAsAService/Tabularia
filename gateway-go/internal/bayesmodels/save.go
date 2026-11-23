@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayescatalog"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayeschecks"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayescodegen"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayesgraph"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayestemplates"
@@ -106,7 +107,9 @@ func Prepare(graph []byte) (*Content, []bayesgraph.Finding, error) {
 	if !m.Valid() {
 		return nil, fs, &Refused{Findings: fs}
 	}
-	p, err := bayescodegen.Generate(m, nil)
+	// every stored program holds predictive-checks' extension, so that a saved version can run both
+	// checks with its own program (docs/specs/bayes-predictive-checks.md, «Decisions»)
+	p, err := bayescodegen.Generate(m, bayeschecks.Extension{})
 	if err != nil {
 		return nil, fs, fmt.Errorf("%w: %w", ErrGenerate, err)
 	}

@@ -1,0 +1,338 @@
+{
+  "codegen_version": 2,
+  "semantic_hash": "a4da216001d820eddde6b95f90e1eb371e9bf32c609f8cdb98009c15ca4cc709",
+  "program_sha256": "2710f8c367e02c4caf7ef09109afbb48ff791dde9a0e725d7c601bbf7fa01e9e",
+  "data": [
+    {
+      "stan": "N",
+      "kind": "size",
+      "of": "rows"
+    },
+    {
+      "stan": "J_dst",
+      "kind": "size",
+      "of": "dst"
+    },
+    {
+      "stan": "J_sch",
+      "kind": "size",
+      "of": "sch"
+    },
+    {
+      "stan": "d",
+      "kind": "group_index",
+      "plate": "rows",
+      "node": "d",
+      "target": "dst"
+    },
+    {
+      "stan": "s",
+      "kind": "group_index",
+      "plate": "rows",
+      "node": "s",
+      "target": "sch"
+    },
+    {
+      "stan": "y",
+      "kind": "real",
+      "plate": "rows",
+      "node": "y"
+    },
+    {
+      "stan": "Up_d_sch",
+      "kind": "lift",
+      "plate": "sch",
+      "node": "d",
+      "target": "dst"
+    },
+    {
+      "stan": "Mode",
+      "kind": "mode"
+    },
+    {
+      "stan": "Ppc_on",
+      "kind": "checks_on"
+    },
+    {
+      "stan": "Ppc_o1_n",
+      "kind": "post_count",
+      "node": "y"
+    },
+    {
+      "stan": "Ppc_o1_rows",
+      "kind": "post_rows",
+      "node": "y"
+    },
+    {
+      "stan": "Prior_o1_n",
+      "kind": "prior_count",
+      "node": "y"
+    },
+    {
+      "stan": "Prior_o1_rows",
+      "kind": "prior_rows",
+      "node": "y"
+    },
+    {
+      "stan": "Ppc_o1_m",
+      "kind": "replicated_count",
+      "node": "y"
+    },
+    {
+      "stan": "Ppc_o1_slots",
+      "kind": "bin_slots",
+      "node": "y"
+    },
+    {
+      "stan": "Ppc_o1_scale",
+      "kind": "bin_scale",
+      "node": "y"
+    },
+    {
+      "stan": "Ppc_o1_shift",
+      "kind": "bin_shift",
+      "node": "y"
+    },
+    {
+      "stan": "Ppc_o1_binned",
+      "kind": "binned_count",
+      "node": "y"
+    },
+    {
+      "stan": "Ppc_o1_units",
+      "kind": "unit_count",
+      "node": "y"
+    },
+    {
+      "stan": "Ppc_o1_slot",
+      "kind": "unit_slot",
+      "node": "d"
+    },
+    {
+      "stan": "Ppc_o1_rep",
+      "kind": "replicated_rows",
+      "node": "y"
+    }
+  ],
+  "quantities": [
+    {
+      "stan": "s_hyper",
+      "role": "quantity",
+      "node": "sh",
+      "dims": []
+    },
+    {
+      "stan": "tau",
+      "role": "quantity",
+      "node": "tau",
+      "dims": []
+    },
+    {
+      "stan": "mu_district",
+      "role": "quantity",
+      "node": "mud",
+      "dims": [
+        {
+          "plate": "dst"
+        }
+      ]
+    },
+    {
+      "stan": "sigma_school",
+      "role": "quantity",
+      "node": "sigs",
+      "dims": [
+        {
+          "plate": "sch"
+        }
+      ]
+    },
+    {
+      "stan": "Prior_m_3",
+      "role": "prior_marginal",
+      "dims": [],
+      "of": "sh"
+    },
+    {
+      "stan": "Prior_d_3",
+      "role": "prior_draw",
+      "dims": [],
+      "of": "sh"
+    },
+    {
+      "stan": "Prior_m_4",
+      "role": "prior_marginal",
+      "dims": [],
+      "of": "tau"
+    },
+    {
+      "stan": "Prior_d_4",
+      "role": "prior_draw",
+      "dims": [],
+      "of": "tau"
+    },
+    {
+      "stan": "Prior_m_5",
+      "role": "prior_marginal",
+      "dims": [],
+      "of": "mud"
+    },
+    {
+      "stan": "Prior_p_5",
+      "role": "prior_draw",
+      "dims": [
+        {
+          "plate": "dst"
+        }
+      ],
+      "of": "mud"
+    },
+    {
+      "stan": "Prior_m_6",
+      "role": "prior_marginal",
+      "dims": [],
+      "of": "sigs"
+    },
+    {
+      "stan": "Prior_p_6",
+      "role": "prior_draw",
+      "dims": [
+        {
+          "plate": "sch"
+        }
+      ],
+      "of": "sigs"
+    },
+    {
+      "stan": "Ppc_o1_mean",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_on"
+        }
+      ],
+      "check": "mean",
+      "of": "y"
+    },
+    {
+      "stan": "Ppc_o1_sd",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_on"
+        }
+      ],
+      "check": "sd",
+      "of": "y"
+    },
+    {
+      "stan": "Ppc_o1_min",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_on"
+        }
+      ],
+      "check": "min",
+      "of": "y"
+    },
+    {
+      "stan": "Ppc_o1_max",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_on"
+        }
+      ],
+      "check": "max",
+      "of": "y"
+    },
+    {
+      "stan": "Ppc_o1_q10",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_on"
+        }
+      ],
+      "check": "q10",
+      "of": "y"
+    },
+    {
+      "stan": "Ppc_o1_q50",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_on"
+        }
+      ],
+      "check": "q50",
+      "of": "y"
+    },
+    {
+      "stan": "Ppc_o1_q90",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_on"
+        }
+      ],
+      "check": "q90",
+      "of": "y"
+    },
+    {
+      "stan": "Ppc_o1_count",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_o1_slots"
+        }
+      ],
+      "check": "bin_count",
+      "of": "y"
+    },
+    {
+      "stan": "Ppc_o1_usum",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_o1_units"
+        }
+      ],
+      "check": "unit_sum",
+      "of": "y"
+    },
+    {
+      "stan": "Ppc_o1_yrep",
+      "role": "check",
+      "dims": [
+        {
+          "size": "Ppc_o1_rep"
+        }
+      ],
+      "check": "replicated",
+      "of": "y"
+    }
+  ],
+  "checks": {
+    "outcomes": [
+      {
+        "k": 1,
+        "node": "lik",
+        "observed": "y",
+        "dist": "normal",
+        "kind": "continuous",
+        "unit_index": "d",
+        "unit_plate": "dst"
+      }
+    ],
+    "likelihoods": 1,
+    "prior_predictive": true,
+    "marginals": [
+      "sh",
+      "tau",
+      "mud",
+      "sigs"
+    ]
+  }
+}

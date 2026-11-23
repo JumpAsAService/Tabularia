@@ -87,11 +87,16 @@ const (
 	RoleQuantity = "quantity"
 	// RoleInternal is the program's own (Z_, L_, V_ of a non-centred or centred form): read from the CSV and dropped.
 	RoleInternal = "internal"
-	// RoleCheck is a statistic of predictive-checks (Check names it): to the checks file, never to the draws.
+	// RoleCheck is a statistic of predictive-checks (Check names it, Of its outcome: the observed data node): to the checks
+	// file, never to the draws.
 	RoleCheck = "check"
 	// RolePriorDraw is the prior predictive's ancestral draw of the quantity Of: it replaces Of's own columns in
 	// prior_predictive; in sample it is read and dropped (with a dimension it has no element there: its size is by the mode).
 	RolePriorDraw = "prior_draw"
+	// RolePriorMarginal is one ancestral draw a draw of the quantity Of (a plate's representative unit), a single value written
+	// in every mode: to the checks file, read by bayes-diagnostics for the prior's density and the contraction, and by the
+	// golden fixtures of prior-preview (bayes-predictive-checks.md).
+	RolePriorMarginal = "prior_marginal"
 )
 
 // TriangleStrictLower is a correlation matrix's triangle: only the elements below the diagonal are quantities.

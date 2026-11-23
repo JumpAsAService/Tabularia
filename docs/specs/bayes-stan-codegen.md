@@ -407,6 +407,9 @@ type Scope interface {
   `Add` and `Mul`, and `internal_functions` grows (`bayes-predictive-checks.md`, «What the codegen gains»). Built by lot P1
   of predictive-checks (its «As built — lot P1»): no `_cdf` name (stanc writes it only with `|`), and with `ids` a value per
   row reading a replaced node is rebuilt with the draws, any other such node not answered is `ErrExtension`.
+  Lot P2 (its «As built — lot P2») adds: an extension's datum may name a data node (`Decl.Of`, the manifest's `node`), a
+  check its outcome; the role `prior_marginal`; check names `[a-z][a-z0-9_]*[a-z0-9]`; `Scope.PlateSize` of a levels plate is
+  `K_<c> - 1` (its elements) and `Scope.Levels` is `K_<c>`.
 
 ## Safety checks on the output
 

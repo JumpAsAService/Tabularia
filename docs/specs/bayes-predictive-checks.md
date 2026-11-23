@@ -588,6 +588,107 @@ E the same as the follower writes it (4 files of 250, run one chain after the ot
   measured either: the linear one bounds the checks' cost per row (the checks are the same code; the sampling run of a
   hierarchical model costs more, so the share is smaller).
 
+## As built — lot P2 (the extension)
+
+`gateway-go/internal/bayeschecks/` (`outcomes.go`: the analysis, `priors.go`: the ancestral draws, `extension.go`: the data
+and the checks; golden cases in `testdata/golden`), `internal/bayesmodels/save.go` (`Generate(m, bayeschecks.Extension{})`),
+and what the extension needed from `bayescodegen` and `bayescontract` (below). Every program a save writes holds the
+extension: **the stored bytes of every model change once**, under `CodegenVersion` 2 (P1 raised it for both lots; nothing
+was released in between). The store's test now compares a save with `bayeschecks/testdata/golden/checks_<case>` (the
+codegen's golden programs without an extension keep their bytes).
+
+- **`bayeschecks.Analyze(m)`** is what the extension writes for a model, from the validated model alone: the checked
+  outcomes (the first 3 likelihoods in `Model.Order`, `Likelihoods` all of them for the note), whether the program can run
+  the prior predictive (`PriorPredictive`, `NoPrior` `truncated_without_quantile` or `structure`), the quantities with a
+  prior marginal (`Marginals`). The panel offers «Prior predictive check» on `PriorPredictive`; the runner reads the same
+  from the manifests (a program without a prior predictive has no `Prior_o<k>_*` datum and no `prior_draw`).
+  `bayeschecks.TaskChecks(on)` is `bayes.checks` with the constants (`format` 1, 3 outcomes, 40 value bins, 30 statistic
+  bins, 20 densities, 8 units, 1,000 draws).
+- **The data** (after `Mode`; kinds and names): `Ppc_on` (`checks_on`); for each outcome k, `Ppc_o<k>_n`/`Ppc_o<k>_rows`
+  (`post_count`/`post_rows`), `Prior_o<k>_n`/`Prior_o<k>_rows` (`prior_count`/`prior_rows`, only with a prior predictive),
+  `Ppc_o<k>_m` (`replicated_count`), `Ppc_o<k>_slots` (`bin_slots`), `Ppc_o<k>_scale`/`Ppc_o<k>_shift`
+  (`bin_scale`/`bin_shift`), **`Ppc_o<k>_binned` (`binned_count`)**, `Ppc_o<k>_units` (`unit_count`) and `Ppc_o<k>_slot`
+  (`unit_slot`, sized by `Ppc_o<k>_binned`) only when the outcome reads a group plate, `Ppc_o<k>_rep` (`replicated_rows`);
+  with a state on the prior's path, `Prior_first_n`, `Prior_first`, `Prior_next_n`, `Prior_next`, `Prior_prev`
+  (`first_count`, `prior_first`, `next_count`, `prior_next`, `prior_previous`). Each outcome's datum names its outcome (the
+  observed data node) in the manifest's `node`; `unit_slot` names the group index of the units it slots.
+- **The bins loop over `Ppc_o<k>_binned`** (P1's open point): the rows binned, summed and counted for the zeros, `Ppc_o<k>_m`
+  when the checks are on and 0 otherwise. A loop over `Ppc_o<k>_m` would index `Ppc_o<k>_count[0]` in the `replicated` run
+  (`Ppc_on` 0, slots 0, rows replicated). The runner keeps `binned` > 0 only with `Ppc_on` 1.
+- **The checks**: `Ppc_o<k>_<statistic>` (`array[Ppc_on] real`, `check` the statistic: `mean`, `sd`, `min`, `max`, `q10`,
+  `q50`, `q90`, `zeros` by kind as «Decisions» says; the check names now admit digits after the first letter,
+  `[a-z][a-z0-9_]*[a-z0-9]`), `Ppc_o<k>_count` (`bin_count`), `Ppc_o<k>_usum` (`unit_sum`, with a group plate),
+  `Ppc_o<k>_yrep` (`replicated`); each names its outcome in `of`. The zeros are summed in the bins' loop. The outcome's
+  units are the first group plate (in the model's plates' order) that the likelihood reads through a group index on the
+  rows, directly or through the values per row it reads (nested plates: the schools, not the districts).
+- **The prior marginals** (`prior_marginal`, every run): `Prior_m_<k>` for a parameter, a transformed node or a linear
+  predictor single or on a group plate that reads no data, and a state (its first value); `Prior_m_<k>_<c>` for a
+  component (`normal(mean, scale)`, which a correlation does not change); `Prior_m_<k>_rho` for the correlation's Ω[2,1],
+  `2 u − 1` with `u ~ beta(η − 1 + K/2, η − 1 + K/2)` (the LKJ's marginal of one correlation). A plate's representative
+  unit: a parent over a group plate read by a value that varies is the vector `Prior_r_<k>` of its representative (filled
+  in every run, J numbers), so the reader's value is that of its first unit (`Prior_v_<k>_<j>[1]`); a category's
+  coefficients read by a prior, data and values per row have none (nor what reads them).
+- **The prior's path** (only in the prior predictive): a single value is its marginal, written again as its `prior_draw`
+  `Prior_d_<k>` (the runner replaces the quantity's column with it); a value over a plate is `Prior_p_<k>`
+  (`vector[Mode == 1 ? J : 0]`, `prior_draw`), drawn unit by unit in a loop of the mode's size; an argument that varies by
+  unit is computed in a loop of one iteration in the prior predictive and none otherwise (`for (I in 1:(Mode == 1 ? 1 : 0))`),
+  so a draw sized 0 is never indexed; a category's coefficients are drawn on their K − 1 levels and read by the values per
+  row through `Prior_f_<k>` (`append_row(0.0, …)`, the codegen's `Full_`); correlated effects by the onion method
+  (Lewandowski, Kurowicka and Joe 2009: the Cholesky factor's rows from `beta_rng` and normal directions, unrolled for the
+  K ≤ 10 components) then `mean + scale · (L z)` a unit; a random-walk state along the series' rows the runner copies into
+  `Prior_first`, `Prior_next`, `Prior_prev`. The replicated outcome reads them through `SlotOn` with the prior's rows (the
+  codegen rebuilds the values per row). The correlation matrix has no `prior_draw` (a matrix is not an extension's
+  declaration): in the prior predictive, **a quantity without a `prior_draw` has no ancestral draw and the runner leaves it
+  out** (the correlation matrices; a transformed node the likelihoods do not read and whose draw is not written).
+- **Truncation by inversion** with the catalogue's forms, `F` at a bound inside the support and 0 or 1 at the support's
+  ends; the arguments held in locals first (a value is written once). **Stan 2.40.0 has no `fabs`** (stanc refuses it,
+  measured; P1's catalogue lists it among `internal_functions` and `QuantileFunctions`, unused): the Student-t's `|2u − 1|`
+  is written `s · (2u − 1)` with `s = 2 step(u − 0.5) − 1`. A truncated `uniform` is `uniform_rng(L, U)` of its range.
+- **An ancestral draw never throws** (measured on the image: an exception in the generated quantities makes CmdStan write
+  **every** generated quantity of that draw as NaN, the parameters kept; the first version of this lot lost 9 of 200 draws
+  of `checks_truncated`'s sampling run that way, every marginal of the draw, from `uniform_rng(F(L), F(U))` with equal bounds
+  where a truncation had no mass at its parents' draw — a loss that biases the marginals, since it is likeliest at extreme
+  parents). So: the uniform of an inversion is `F(L) + (F(U) − F(L)) · uniform_rng(0, 1)` (no mass gives an infinite draw,
+  not a refusal); a generator's non-constant arguments are clamped into its domain (`fmin`/`fmax`, which return the other
+  argument for a NaN: reals to ±1e300, positives to [1e-300, 1e300]) and `0 · (their sum)` is added, so a draw whose
+  argument is not finite is NaN — the browser's rejected draw — and its children NaN, never a refusal; the checking
+  functions' arguments are clamped when they are not constants (`Phi`'s to ±40, `inc_beta`'s and `inv_inc_beta`'s shapes to
+  [1e-8, 1e8], the probabilities of `inv_Phi`, `log1m`, `inv_inc_beta` to [0, 1]); a beta's inversion adds the same `0 ·`
+  term. The replicated outcome's generators are left as they are: a refusal there (`poisson_log_rng` above a log rate of
+  20.79, an argument not finite) costs that draw's generated quantities, which the runner counts.
+- **No prior predictive** (`NoPrior`): a truncated `gamma` or `inv_gamma` anywhere in the model (the spec), and
+  `structure`, when a quantity a likelihood reads has no ancestral draw this extension writes: a state whose first value's
+  or scale's arguments vary by row (a state's init reading another state, a value per row), a category's coefficients read
+  by a prior, a single value read from a plate. On the graphs at hand: 175 of the 177 valid graphs of the corpora (golden,
+  templates, opened templates, the validator's corpus; the two are the truncated gamma and a state's init reading a value
+  per row) and 461 of the codegen's 500 random graphs (the 39 others: states reading states). Every template has it.
+- **What the codegen and the contract gained** (small, at the extension point): a data `Decl` may name a data node (`Of`,
+  the manifest's `node`); a check may name its outcome (`Of`: a data node a likelihood observes); the role
+  **`prior_marginal`** (`bayescontract.RolePriorMarginal`: a single value of a quantity, every mode; `CheckManifests`
+  checks it, and that a check's `of` and an extension datum's `node` are data nodes the data reads); `Scope.PlateSize` of a
+  levels plate is now `K_<c> - 1` with the plate's dimension (it was `K_<c>`, whose dimension disagreed with the
+  manifest's K − 1 elements), and `Scope.Levels(plate)` is `K_<c>`.
+- **Checked**: gofmt, vet; `go test` of bayeschecks, bayescodegen, bayesmodels, bayesgraph, bayestemplates, bayescontract;
+  stanc 2.40.0 (`--info`, `CrossCheck`, `--o` for the golden ones) on the 28 golden `checks_*` programs, on 176 programs of
+  the corpora with the extension and on 300 of the codegen's random graphs (`TestChecksExtensionStanc`, in bayescodegen's
+  directory as an external test: the generator of graphs is that package's); every program's manifests pass
+  `CheckManifests`, every check and outcome datum names its outcome, at most 3 outcomes and 177 check columns;
+  `FuzzChecksExtension` 2 minutes (`-parallel 2 -fuzzminimizetime=2s`): 2,795 executions, no failure. The onion method
+  simulated outside Stan (K = 3, η = 1.5, 40,000 draws): each correlation's variance 0.199–0.200 against the LKJ's 0.2. On
+  the image (`tabularia-bayes-b0`, 1 CPU, 3 GiB, read-only root, no network, `PRECOMPILED_HEADERS=false` as the Job):
+  `checks_hier_slopes` compiles in **27.9 s against 26.2 s** for `hier_slopes` without the extension (+1.7 s),
+  `checks_truncated` in 26.5 s; both ran as the prior predictive (`fixed_param`, 1,000 draws), the sampling with the checks
+  off, with them on and the `replicated` output (300 + 500 draws), with no draw of the sampling runs losing its generated
+  quantities. The marginals agree with the truncated forms' medians computed by hand (beta(2, 3) on [0.1, 0.9]: 0.39–0.41
+  for 0.39; the half-Cauchy: 0.93–1.04 for 1; exponential(1) under 4: 0.62–0.71 for 0.675; lognormal(0, 1) under 5:
+  0.84–0.93 for 0.935; LKJ(2)'s Ω[2,1] at 5% and 95%: −0.73 and 0.73–0.75 for ∓0.729). 5% of `checks_truncated`'s draws
+  have an infinite `u_g` marginal (a truncation with no mass at extreme parents: the browser's rejected draw) and so its
+  child's; in the prior predictive those 50 of 1,000 draws lose their generated quantities to the outcome's `normal_rng`
+  with an infinite mean (the runner counts them).
+- **Found, not of this lot**: the corpus graph `lag-nested-state-init-without-lag` (a state's init reading a value per row)
+  gives a program stanc refuses **without the extension too** (`prev` read in the transformed parameters, declared in the
+  model block): a codegen fault, left out of the stanc check here and said to its owner.
+
 ## Open questions
 
 None.

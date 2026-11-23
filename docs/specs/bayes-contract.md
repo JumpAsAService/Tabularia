@@ -848,7 +848,9 @@ From `bayes-stan-compile.md`, `bayes-diagnostics.md` and `bayes-predictive-check
    already; `flow-node` writes it.
 4. **Roles and manifests.** A role `prior_marginal` (`of` its node; in every mode, to the checks file); a `check` names its
    outcome in `of`; an extension's data entry may name its outcome in `node` (`checkQuantity` and `checkDataEntry` refuse
-   both today: their lot changes them).
+   both today: their lot changes them). Done by lot P2 of predictive-checks (its «As built — lot P2»):
+   `RolePriorMarginal`, and `CheckManifests` wants a check's `of` and an extension datum's `node` to be data nodes the data
+   reads (the units' slots name their group index).
 5. **The checks.** `bayes.checks` is `predictive-checks`' object; the `ppc`/`prior_check` level is
    `<outcome>:<statistic>`, the density chart `ppc_density:<outcome>`; the `replicated` output comes from a
    `generate_quantities` run on the thinned draws (the «assumed: its spec» of «The outputs»), and so do the posterior

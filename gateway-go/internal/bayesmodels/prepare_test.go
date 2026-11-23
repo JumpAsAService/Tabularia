@@ -20,6 +20,9 @@ import (
 
 const (
 	goldenDir = "../bayescodegen/testdata/golden"
+	// checksDir holds the programs a save writes: the golden graphs with predictive-checks'
+	// extension (checks_<case>)
+	checksDir = "../bayeschecks/testdata/golden"
 	corpusDir = "../bayesgraph/testdata/corpus"
 )
 
@@ -33,7 +36,8 @@ func mustPrepare(t *testing.T, graph []byte) (*Content, []bayesgraph.Finding) {
 }
 
 // Every golden graph of the generator (the templates opened, and the free models) saves with the
-// golden program: its bytes, its sha256, its semantic hash, its manifests and mapping table.
+// golden program with predictive-checks' extension (bayeschecks' checks_<case>): its bytes, its
+// sha256, its semantic hash, its manifests and mapping table.
 func TestPrepareGivesTheGoldenProgram(t *testing.T) {
 	graphs, err := filepath.Glob(filepath.Join(goldenDir, "*.graph.json"))
 	if err != nil || len(graphs) == 0 {
@@ -57,12 +61,13 @@ func TestPrepareGivesTheGoldenProgram(t *testing.T) {
 				Data           json.RawMessage `json:"data"`
 				Quantities     json.RawMessage `json:"quantities"`
 			}
-			readJSON(t, filepath.Join(goldenDir, name+".manifest.json"), &man)
+			golden := filepath.Join(checksDir, "checks_"+name)
+			readJSON(t, golden+".manifest.json", &man)
 			if c.ProgramSHA256 != man.ProgramSHA256 || c.SemanticHash != man.SemanticHash || c.CodegenVersion != man.CodegenVersion {
 				t.Fatalf("sha256 %s, hash %s, codegen %d; golden %s, %s, %d", c.ProgramSHA256, c.SemanticHash, c.CodegenVersion,
 					man.ProgramSHA256, man.SemanticHash, man.CodegenVersion)
 			}
-			stan, err := os.ReadFile(filepath.Join(goldenDir, name+".stan"))
+			stan, err := os.ReadFile(golden + ".stan")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -71,7 +76,7 @@ func TestPrepareGivesTheGoldenProgram(t *testing.T) {
 			}
 			sameJSON(t, "data manifest", c.DataManifest, man.Data)
 			sameJSON(t, "quantity manifest", c.QuantityManifest, man.Quantities)
-			mapping, err := os.ReadFile(filepath.Join(goldenDir, name+".mapping.json"))
+			mapping, err := os.ReadFile(golden + ".mapping.json")
 			if err != nil {
 				t.Fatal(err)
 			}

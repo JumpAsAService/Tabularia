@@ -1,0 +1,230 @@
+{
+  "format_version": 1,
+  "plates": [
+    {
+      "id": "rows",
+      "kind": "rows",
+      "label": "Rows"
+    },
+    {
+      "id": "grp",
+      "kind": "group",
+      "label": "Group",
+      "parent": null,
+      "key": "g",
+      "form": "non_centred"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "y",
+      "kind": "data",
+      "name": "y",
+      "label": "y",
+      "plate": "rows",
+      "type": "real"
+    },
+    {
+      "id": "g",
+      "kind": "data",
+      "name": "g",
+      "label": "g",
+      "plate": "rows",
+      "type": "group_index",
+      "target": "grp"
+    },
+    {
+      "id": "x",
+      "kind": "data",
+      "name": "x",
+      "label": "x",
+      "plate": "rows",
+      "type": "real"
+    },
+    {
+      "id": "w",
+      "kind": "data",
+      "name": "w",
+      "label": "w",
+      "plate": "rows",
+      "type": "real"
+    },
+    {
+      "id": "ma",
+      "kind": "parameter",
+      "name": "mu_a",
+      "label": "mu_a",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "1"
+          }
+        }
+      }
+    },
+    {
+      "id": "mb",
+      "kind": "parameter",
+      "name": "mu_b",
+      "label": "mu_b",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "1"
+          }
+        }
+      }
+    },
+    {
+      "id": "mc",
+      "kind": "parameter",
+      "name": "mu_c",
+      "label": "mu_c",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "1"
+          }
+        }
+      }
+    },
+    {
+      "id": "ta",
+      "kind": "parameter",
+      "name": "tau_a",
+      "label": "tau_a",
+      "plate": null,
+      "prior": {
+        "dist": "exponential",
+        "args": {
+          "beta": {
+            "expr": "1"
+          }
+        }
+      }
+    },
+    {
+      "id": "tb",
+      "kind": "parameter",
+      "name": "tau_b",
+      "label": "tau_b",
+      "plate": null,
+      "prior": {
+        "dist": "exponential",
+        "args": {
+          "beta": {
+            "expr": "1"
+          }
+        }
+      }
+    },
+    {
+      "id": "tc",
+      "kind": "parameter",
+      "name": "tau_c",
+      "label": "tau_c",
+      "plate": null,
+      "prior": {
+        "dist": "exponential",
+        "args": {
+          "beta": {
+            "expr": "1"
+          }
+        }
+      }
+    },
+    {
+      "id": "eff",
+      "kind": "correlated_effects",
+      "label": "Effects",
+      "plate": "grp",
+      "components": [
+        {
+          "id": "ca",
+          "name": "a_g",
+          "label": "a",
+          "mean": {
+            "expr": "mu_a"
+          },
+          "scale": {
+            "expr": "tau_a"
+          }
+        },
+        {
+          "id": "cb",
+          "name": "b_g",
+          "label": "b",
+          "mean": {
+            "expr": "mu_b"
+          },
+          "scale": {
+            "expr": "tau_b"
+          }
+        },
+        {
+          "id": "cc",
+          "name": "c_g",
+          "label": "c",
+          "mean": {
+            "expr": "mu_c"
+          },
+          "scale": {
+            "expr": "tau_c"
+          }
+        }
+      ],
+      "correlation": {
+        "name": "rho_g",
+        "label": "rho",
+        "eta": {
+          "expr": "1.5"
+        }
+      }
+    },
+    {
+      "id": "s",
+      "kind": "parameter",
+      "name": "s",
+      "label": "s",
+      "plate": null,
+      "prior": {
+        "dist": "exponential",
+        "args": {
+          "beta": {
+            "expr": "1"
+          }
+        }
+      }
+    },
+    {
+      "id": "lik",
+      "kind": "likelihood",
+      "label": "Likelihood of y",
+      "observed": "y",
+      "dist": "normal",
+      "args": {
+        "mu": {
+          "expr": "a_g[g] + b_g[g] * x + c_g[g] * w"
+        },
+        "sigma": {
+          "expr": "s"
+        }
+      }
+    }
+  ]
+}

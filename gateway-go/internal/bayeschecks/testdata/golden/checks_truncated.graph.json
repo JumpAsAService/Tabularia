@@ -1,0 +1,276 @@
+{
+  "format_version": 1,
+  "plates": [
+    {
+      "id": "rows",
+      "kind": "rows",
+      "label": "Rows"
+    },
+    {
+      "id": "grp",
+      "kind": "group",
+      "label": "Group",
+      "parent": null,
+      "key": "g",
+      "form": "non_centred"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "y",
+      "kind": "data",
+      "name": "y",
+      "label": "y",
+      "plate": "rows",
+      "type": "real"
+    },
+    {
+      "id": "g",
+      "kind": "data",
+      "name": "g",
+      "label": "g",
+      "plate": "rows",
+      "type": "group_index",
+      "target": "grp"
+    },
+    {
+      "id": "x",
+      "kind": "data",
+      "name": "x",
+      "label": "x",
+      "plate": "rows",
+      "type": "real"
+    },
+    {
+      "id": "an",
+      "kind": "parameter",
+      "name": "a_n",
+      "label": "a_n",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "2"
+          }
+        }
+      },
+      "bounds": {
+        "lower": -1,
+        "upper": 3
+      }
+    },
+    {
+      "id": "aln",
+      "kind": "parameter",
+      "name": "a_ln",
+      "label": "a_ln",
+      "plate": null,
+      "prior": {
+        "dist": "lognormal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "1"
+          }
+        }
+      },
+      "bounds": {
+        "upper": 5
+      }
+    },
+    {
+      "id": "ac",
+      "kind": "parameter",
+      "name": "a_c",
+      "label": "a_c",
+      "plate": null,
+      "prior": {
+        "dist": "cauchy",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "1"
+          }
+        }
+      },
+      "bounds": {
+        "lower": 0
+      }
+    },
+    {
+      "id": "at",
+      "kind": "parameter",
+      "name": "a_t",
+      "label": "a_t",
+      "plate": null,
+      "prior": {
+        "dist": "student_t",
+        "args": {
+          "nu": {
+            "expr": "3"
+          },
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "1"
+          }
+        }
+      },
+      "bounds": {
+        "lower": -2,
+        "upper": 2
+      }
+    },
+    {
+      "id": "ae",
+      "kind": "parameter",
+      "name": "a_e",
+      "label": "a_e",
+      "plate": null,
+      "prior": {
+        "dist": "exponential",
+        "args": {
+          "beta": {
+            "expr": "1"
+          }
+        }
+      },
+      "bounds": {
+        "upper": 4
+      }
+    },
+    {
+      "id": "ab",
+      "kind": "parameter",
+      "name": "a_b",
+      "label": "a_b",
+      "plate": null,
+      "prior": {
+        "dist": "beta",
+        "args": {
+          "alpha": {
+            "expr": "2"
+          },
+          "beta": {
+            "expr": "3"
+          }
+        }
+      },
+      "bounds": {
+        "lower": 0.1,
+        "upper": 0.9
+      }
+    },
+    {
+      "id": "au",
+      "kind": "parameter",
+      "name": "a_u",
+      "label": "a_u",
+      "plate": null,
+      "prior": {
+        "dist": "uniform",
+        "args": {
+          "alpha": {
+            "expr": "0"
+          },
+          "beta": {
+            "expr": "10"
+          }
+        }
+      },
+      "bounds": {
+        "upper": 5
+      }
+    },
+    {
+      "id": "st",
+      "kind": "parameter",
+      "name": "s_t",
+      "label": "s_t",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "a_e"
+          }
+        }
+      },
+      "bounds": {
+        "lower": 0
+      }
+    },
+    {
+      "id": "ug",
+      "kind": "parameter",
+      "name": "u_g",
+      "label": "u_g",
+      "plate": "grp",
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "a_n"
+          },
+          "sigma": {
+            "expr": "s_t"
+          }
+        }
+      },
+      "bounds": {
+        "lower": 0
+      }
+    },
+    {
+      "id": "vg",
+      "kind": "parameter",
+      "name": "v_g",
+      "label": "v_g",
+      "plate": "grp",
+      "prior": {
+        "dist": "student_t",
+        "args": {
+          "nu": {
+            "expr": "3"
+          },
+          "mu": {
+            "expr": "u_g"
+          },
+          "sigma": {
+            "expr": "1"
+          }
+        }
+      },
+      "bounds": {
+        "lower": 0
+      }
+    },
+    {
+      "id": "lik",
+      "kind": "likelihood",
+      "label": "Likelihood of y",
+      "observed": "y",
+      "dist": "normal",
+      "args": {
+        "mu": {
+          "expr": "a_c + a_ln * x + u_g[g] + v_g[g] + a_t + a_b + a_u"
+        },
+        "sigma": {
+          "expr": "s_t"
+        }
+      }
+    }
+  ]
+}

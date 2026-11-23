@@ -74,8 +74,13 @@ type Scope interface {
 	// Call is a call of a name the catalogue lists (a density, a generator, a function, an
 	// internal function); anything else is an error.
 	Call(name string, args ...Expr) (Expr, error)
-	// PlateSize is the number of units of a plate (N, J_<plate>, K_<category>).
+	// PlateSize is the number of units of a plate as the manifests count them: N, J_<plate>, and
+	// K_<category> - 1 for a category's levels plate (the levels after the reference, as its
+	// coefficients are declared).
 	PlateSize(plate string) (Size, error)
+	// Levels is the number of levels of a category's levels plate, the reference included
+	// (K_<category>): the size of the coefficients with the reference's 0 in front (Full_).
+	Levels(plate string) (Size, error)
 	// Rows is the number of rows a likelihood's statement or a per-row value runs on: N, or N_lag
 	// when it is lagged.
 	Rows(node string) (Size, error)
@@ -163,9 +168,10 @@ func (s Size) bound() string {
 	return s.String()
 }
 
-// Decl is a declaration of the extension: in data (Kind its kind in the data manifest), written in
-// the generated quantities (Role check or prior_draw, with Check or Of), or local to the nested
-// block (Declare).
+// Decl is a declaration of the extension: in data (Kind its kind in the data manifest; Of a data
+// node of the model it is about, the manifest's node: an outcome, a group index), written in the
+// generated quantities (Role check, prior_draw or prior_marginal, with Check and Of), or local to
+// the nested block (Declare).
 type Decl struct {
 	Name        string
 	Elem        Elem
@@ -173,9 +179,12 @@ type Decl struct {
 	Size        Size
 	NonNegative bool   // an integer at least 0
 	Kind        string // data: the data manifest's kind
-	Role        string // written: RoleCheck or RolePriorDraw
+	Role        string // written: RoleCheck, RolePriorDraw or RolePriorMarginal
 	Check       string // RoleCheck: the statistic
-	Of          string // RolePriorDraw: the node or component drawn
+	// Of is, for RolePriorDraw and RolePriorMarginal, the node or component drawn; for RoleCheck, the
+	// observed data node of the outcome it checks (optional); for data, a data node of the model
+	// (optional).
+	Of string
 }
 
 // Ref is the declaration's identifier as a value. A name outside the extension's form gives a
@@ -325,6 +334,26 @@ func lowerWord(s string) bool {
 	return true
 }
 
+// checkName reports a statistic's name: [a-z][a-z0-9_]*[a-z0-9] (q10, low_quantile), at most 40
+// bytes (lot P2 of predictive-checks: the spec names its quantiles q10, q50, q90).
+func checkName(s string) bool {
+	if len(s) < 2 || len(s) > 40 || s[0] < 'a' || s[0] > 'z' || s[len(s)-1] == '_' {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if c := s[i]; !(c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '_') {
+			return false
+		}
+	}
+	return true
+}
+
+// dataNode reports a data node of the model (what an extension's data or a check may name).
+func (g *gen) dataNode(id string) bool {
+	n := g.node(id)
+	return n != nil && n.Kind == "data"
+}
+
 func extErr(format string, a ...any) error {
 	return fmt.Errorf("%w: %s", ErrExtension, fmt.Sprintf(format, a...))
 }
@@ -394,8 +423,9 @@ func (g *gen) writeExtensionData() error {
 		return nil
 	}
 	for _, d := range g.ext.Data(g.m) {
-		if !lowerWord(d.Kind) || coreDataKinds[d.Kind] || d.Role != "" || d.Check != "" || d.Of != "" || d.Size.prior {
-			return extErr("the data %s: a kind of its own in the data manifest, no role, a size not by the mode", strconv.Quote(d.Name))
+		if !lowerWord(d.Kind) || coreDataKinds[d.Kind] || d.Role != "" || d.Check != "" || d.Size.prior ||
+			(d.Of != "" && !g.dataNode(d.Of)) {
+			return extErr("the data %s: a kind of its own in the data manifest, no role, a size not by the mode, a data node or none", strconv.Quote(d.Name))
 		}
 		s, err := g.declText(d)
 		if err != nil {
@@ -404,7 +434,7 @@ func (g *gen) writeExtensionData() error {
 		g.w.line(s + ";")
 		g.extNames[d.Name] = d
 		g.mapping = append(g.mapping, bayescontract.MappingEntry{Stan: d.Name, Block: blockData, Kind: bayescontract.KindExtension})
-		g.data = append(g.data, bayescontract.DataEntry{Stan: d.Name, Kind: d.Kind})
+		g.data = append(g.data, bayescontract.DataEntry{Stan: d.Name, Kind: d.Kind, Node: d.Of})
 	}
 	return nil
 }
@@ -437,8 +467,8 @@ func (g *gen) writeGenerated() error {
 		}
 		switch d.Role {
 		case bayescontract.RoleCheck:
-			if !lowerWord(d.Check) || d.Of != "" {
-				return extErr("the check %s: a statistic, no node", strconv.Quote(d.Name))
+			if !checkName(d.Check) || (d.Of != "" && !g.observed(d.Of)) {
+				return extErr("the check %s: a statistic, of an observed data node or none", strconv.Quote(d.Name))
 			}
 		case bayescontract.RolePriorDraw:
 			if d.Check != "" || !g.drawable(d.Of) {
@@ -448,6 +478,11 @@ func (g *gen) writeGenerated() error {
 			// manifest»): the runner expects none of its columns in the sample mode
 			if d.Shape != Scalar && !d.Size.prior {
 				return extErr("the prior draw %s: a size by the mode (WhenPrior)", strconv.Quote(d.Name))
+			}
+		case bayescontract.RolePriorMarginal:
+			// one draw a draw of a quantity, in every run: a single value
+			if d.Check != "" || !g.drawable(d.Of) || d.Shape != Scalar {
+				return extErr("the prior marginal %s: a single value of a node or component of the model", strconv.Quote(d.Name))
 			}
 		default:
 			return extErr("the written %s has the role %s", strconv.Quote(d.Name), strconv.Quote(d.Role))
@@ -475,6 +510,16 @@ func (g *gen) writeGenerated() error {
 	}
 	g.w.close()
 	return nil
+}
+
+// observed reports a data node a likelihood observes (the outcome a check names).
+func (g *gen) observed(id string) bool {
+	for _, n := range g.m.Graph.Nodes {
+		if n.Kind == "likelihood" && n.Observed == id {
+			return g.dataNode(id)
+		}
+	}
+	return false
 }
 
 // drawable reports a node or component a prior draw may be of: a parameter, a transformed node,
@@ -916,7 +961,19 @@ func (s *scope) PlateSize(plate string) (Size, error) {
 	if !ok {
 		return Size{}, extErr("%s is not a plate of the model", strconv.Quote(plate))
 	}
+	if p, ok := s.g.plates[plate]; ok && p.Kind == bayesgraph.PlateLevels {
+		// a levels plate has K - 1 elements (bayes-contract, «Correction of 2026-11-24 from K0» 1)
+		sz += " - 1"
+	}
 	return Size{text: sz, dim: bayescontract.Dim{Plate: plate}}, nil
+}
+
+func (s *scope) Levels(plate string) (Size, error) {
+	sz, ok := s.g.size[plate]
+	if p, isPlate := s.g.plates[plate]; !ok || !isPlate || p.Kind != bayesgraph.PlateLevels {
+		return Size{}, extErr("%s is not the levels plate of a category", strconv.Quote(plate))
+	}
+	return Size{text: sz, dim: bayescontract.Dim{Size: sz}}, nil
 }
 
 func (s *scope) Rows(node string) (Size, error) {

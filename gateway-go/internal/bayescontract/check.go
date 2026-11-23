@@ -102,6 +102,18 @@ func CheckManifests(plates []Plate, mapping []MappingEntry, data []DataEntry, qu
 			nodes[q.Node] = true
 		}
 	}
+	// the data nodes the data manifest reads (an outcome a check names, a node an extension's data names)
+	dataNodes := map[string]bool{}
+	for _, d := range data {
+		if DataReadsColumn(d.Kind) {
+			dataNodes[d.Node] = true
+		}
+	}
+	for i, d := range data {
+		if !coreKinds[d.Kind] && d.Node != "" && !dataNodes[d.Node] {
+			return fmt.Errorf("bayes.data[%d] %s: the node %q is not a data node the data reads", i, d.Stan, d.Node)
+		}
+	}
 	for i, q := range quantities {
 		at := fmt.Sprintf("bayes.quantities[%d] %s", i, q.Stan)
 		if !stanName.MatchString(q.Stan) {
@@ -113,6 +125,9 @@ func CheckManifests(plates []Plate, mapping []MappingEntry, data []DataEntry, qu
 		names[q.Stan] = ""
 		if q.Dims == nil {
 			return fmt.Errorf("%s: dims is null ([] for a single value)", at)
+		}
+		if q.Role == RoleCheck && q.Of != "" && !dataNodes[q.Of] {
+			return fmt.Errorf("%s: the outcome %q is not a data node the data reads", at, q.Of)
 		}
 		if err := checkQuantity(q, nodes); err != nil {
 			return fmt.Errorf("%s: %w", at, err)
@@ -197,8 +212,9 @@ func checkDataEntry(d DataEntry, plateKind map[string]string) error {
 			return errors.New("a lag of k ≥ 1 steps")
 		}
 	default:
+		// an extension's datum may name a data node (its outcome, a group index): checked against the data in CheckManifests
 		if !extensionKind.MatchString(d.Kind) || !extensionName.MatchString(d.Stan) ||
-			!none(d.Of, d.Plate, d.Node, d.Target, d.Column) {
+			!none(d.Of, d.Plate, d.Target, d.Column) {
 			return fmt.Errorf("the kind %q", d.Kind)
 		}
 	}
@@ -216,12 +232,16 @@ func checkQuantity(q Quantity, nodes map[string]bool) error {
 			return errors.New("an internal variable has no node")
 		}
 	case RoleCheck:
-		if q.Check == "" || q.Node != "" || q.Of != "" || !extensionName.MatchString(q.Stan) {
+		if q.Check == "" || q.Node != "" || !extensionName.MatchString(q.Stan) {
 			return errors.New("a check: a statistic, no node")
 		}
 	case RolePriorDraw:
 		if q.Of == "" || !nodes[q.Of] || q.Node != "" || q.Check != "" || !extensionName.MatchString(q.Stan) {
 			return errors.New("a prior draw: of a quantity of the program")
+		}
+	case RolePriorMarginal:
+		if q.Of == "" || !nodes[q.Of] || q.Node != "" || q.Check != "" || len(q.Dims) != 0 || !extensionName.MatchString(q.Stan) {
+			return errors.New("a prior marginal: a single value, of a quantity of the program")
 		}
 	default:
 		return fmt.Errorf("the role %q", q.Role)

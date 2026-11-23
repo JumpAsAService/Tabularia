@@ -185,6 +185,20 @@ func TestBrokenManifestsAreRefused(t *testing.T) {
 			m.Mapping = slices.DeleteFunc(m.Mapping, func(e bayescontract.MappingEntry) bool { return e.Stan == "mu" })
 		},
 		"a plate listed twice": func(m *manifestFile) { m.Plates = append(m.Plates, m.Plates[0]) },
+		// predictive-checks, lot P2: a check names a data node the data reads, a prior marginal is a single value of a
+		// quantity, an extension's datum names a data node the data reads
+		"a check of no outcome": func(m *manifestFile) {
+			for i := range m.Quantities {
+				if m.Quantities[i].Role == bayescontract.RoleCheck {
+					m.Quantities[i].Of = "mu"
+				}
+			}
+		},
+		"a prior marginal with a dimension": func(m *manifestFile) { m.Quantities[7].Role = bayescontract.RolePriorMarginal },
+		"a prior marginal of nothing": func(m *manifestFile) {
+			m.Quantities[1].Role, m.Quantities[1].Of, m.Quantities[1].Node = bayescontract.RolePriorMarginal, "nope", ""
+		},
+		"an extension's datum of no data node": func(m *manifestFile) { m.Data[len(m.Data)-1].Node = "mu" },
 	}
 	for name, mutate := range cases {
 		t.Run(name, func(t *testing.T) {
