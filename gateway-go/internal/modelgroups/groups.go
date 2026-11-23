@@ -36,6 +36,7 @@ import (
 	"strings"
 	"sync/atomic"
 
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayescontract"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/modelcatalog"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/scriptcfg"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/scriptimage"
@@ -572,7 +573,7 @@ type TaskLicence struct {
 // Task is task.json, what a model Job is asked to do (protocol.R).
 type Task struct {
 	Protocol     int            `json:"protocol"`
-	Mode         string         `json:"mode"` // fit | predict | selftest
+	Mode         string         `json:"mode"` // fit | predict | selftest; the group bayes: compile | prior_predictive | sample | selftest
 	Group        string         `json:"group"`
 	GroupVersion int64          `json:"group_version"`
 	Model        string         `json:"model,omitempty"`
@@ -589,6 +590,9 @@ type Task struct {
 	Licence    *TaskLicence `json:"licence,omitempty"`
 	RecipeHash string       `json:"recipe_hash"`
 	RunnerHash string       `json:"runner_hash"`
+	// Bayes is the group `bayes`'s object (docs/specs/bayes-contract.md, «task.json»); nil, and left out, for every other group,
+	// whose task.json keeps its bytes
+	Bayes *bayescontract.Task `json:"bayes,omitempty"`
 }
 
 // FitTask is the task of a model node: its parameters checked by the catalogue (a refusal

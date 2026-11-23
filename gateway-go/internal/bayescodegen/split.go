@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayescontract"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayesexpr"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayesgraph"
 )
@@ -175,7 +176,7 @@ type splitSink struct {
 	// fresh: the locals of a value the extension asks for, numbered after the node's others.
 	fresh   bool
 	lines   []string
-	entries []MappingEntry
+	entries []bayescontract.MappingEntry
 }
 
 func (s *splitSink) empty() bool { return s == nil || len(s.lines) == 0 }
@@ -231,7 +232,7 @@ func (g *gen) localName(s *splitSink, memo, owner string, i int) (string, error)
 		g.splitNames[memo] = append(g.splitNames[memo], ident)
 	}
 	if s.block != "" {
-		e := MappingEntry{Stan: ident, Block: s.block, NodeID: strp(owner), Kind: KindInternal}
+		e := bayescontract.MappingEntry{Stan: ident, Block: s.block, NodeID: strp(owner), Kind: bayescontract.KindInternal}
 		if n := g.node(owner); n != nil && n.Plate != nil {
 			e.Plate = strp(*n.Plate)
 		}

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayescatalog"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayescontract"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayesexpr"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayesgraph"
 )
@@ -143,10 +144,10 @@ func optName(s string) *string {
 }
 
 // componentEntry is the mapping entry of a component of correlated effects.
-func (g *gen) componentEntry(n *bayesgraph.Node, key string) MappingEntry {
+func (g *gen) componentEntry(n *bayesgraph.Node, key string) bayescontract.MappingEntry {
 	c := g.comps[key]
-	e := MappingEntry{Stan: g.ident[key], Block: blockTransformed, NodeID: strp(n.ID), Component: strp(c.ID),
-		Name: optName(c.Name), Label: strp(c.Label), Kind: KindComponent, Plate: strp(*n.Plate), Role: strp(RoleQuantity)}
+	e := bayescontract.MappingEntry{Stan: g.ident[key], Block: blockTransformed, NodeID: strp(n.ID), Component: strp(c.ID),
+		Name: optName(c.Name), Label: strp(c.Label), Kind: bayescontract.KindComponent, Plate: strp(*n.Plate), Role: strp(bayescontract.RoleQuantity)}
 	if r, ok := g.renamed[key]; ok {
 		e.Renamed = strp(r[0])
 		e.Word = r[1]
@@ -161,16 +162,16 @@ func (g *gen) writeEffectParameters(n *bayesgraph.Node) {
 	k, j := strconv.Itoa(e.k), g.size[e.plate]
 	if e.nonCentred {
 		g.w.line("matrix[" + k + ", " + j + "] " + e.z + ";")
-		g.mapping = append(g.mapping, g.internal(n, e.z, blockParameters, RoleInternal))
-		g.quantities = append(g.quantities, Quantity{Stan: e.z, Role: RoleInternal, Dims: []Dim{{Component: n.ID}, {Plate: e.plate}}})
+		g.mapping = append(g.mapping, g.internal(n, e.z, blockParameters, bayescontract.RoleInternal))
+		g.quantities = append(g.quantities, bayescontract.Quantity{Stan: e.z, Role: bayescontract.RoleInternal, Dims: []bayescontract.Dim{{Component: n.ID}, {Plate: e.plate}}})
 	} else {
 		g.w.line("array[" + j + "] vector[" + k + "] " + e.v + ";")
-		g.mapping = append(g.mapping, g.internal(n, e.v, blockParameters, RoleInternal))
-		g.quantities = append(g.quantities, Quantity{Stan: e.v, Role: RoleInternal, Dims: []Dim{{Plate: e.plate}, {Component: n.ID}}})
+		g.mapping = append(g.mapping, g.internal(n, e.v, blockParameters, bayescontract.RoleInternal))
+		g.quantities = append(g.quantities, bayescontract.Quantity{Stan: e.v, Role: bayescontract.RoleInternal, Dims: []bayescontract.Dim{{Plate: e.plate}, {Component: n.ID}}})
 	}
 	g.w.line("cholesky_factor_corr[" + k + "] " + e.l + ";")
-	g.mapping = append(g.mapping, g.internal(n, e.l, blockParameters, RoleInternal))
-	g.quantities = append(g.quantities, Quantity{Stan: e.l, Role: RoleInternal, Dims: []Dim{{Component: n.ID}, {Component: n.ID}}})
+	g.mapping = append(g.mapping, g.internal(n, e.l, blockParameters, bayescontract.RoleInternal))
+	g.quantities = append(g.quantities, bayescontract.Quantity{Stan: e.l, Role: bayescontract.RoleInternal, Dims: []bayescontract.Dim{{Component: n.ID}, {Component: n.ID}}})
 }
 
 // effectSlots are the texts of the components' means and scales, in the node's order.
@@ -246,7 +247,7 @@ func (g *gen) writeEffectTransformed(n *bayesgraph.Node) error {
 
 func (g *gen) componentWritten(n *bayesgraph.Node, key string) {
 	g.mapping = append(g.mapping, g.componentEntry(n, key))
-	g.quantities = append(g.quantities, Quantity{Stan: g.ident[key], Role: RoleQuantity, Node: key, Dims: []Dim{{Plate: *n.Plate}}})
+	g.quantities = append(g.quantities, bayescontract.Quantity{Stan: g.ident[key], Role: bayescontract.RoleQuantity, Node: key, Dims: []bayescontract.Dim{{Plate: *n.Plate}}})
 }
 
 // writeEffectStatements writes the statements of the effects: the standard normals (non-centred)
@@ -321,15 +322,15 @@ func (g *gen) writeCorrelation(n *bayesgraph.Node) error {
 	}
 	k := strconv.Itoa(e.k)
 	g.w.line("matrix[" + k + ", " + k + "] " + e.corr + " = " + v + ";")
-	entry := MappingEntry{Stan: e.corr, Block: blockGenerated, NodeID: strp(n.ID), Name: optName(n.Correlation.Name),
-		Label: strp(n.Correlation.Label), Kind: KindCorrelation, Role: strp(RoleQuantity)}
+	entry := bayescontract.MappingEntry{Stan: e.corr, Block: blockGenerated, NodeID: strp(n.ID), Name: optName(n.Correlation.Name),
+		Label: strp(n.Correlation.Label), Kind: bayescontract.KindCorrelation, Role: strp(bayescontract.RoleQuantity)}
 	if r, ok := g.renamed[n.ID+".correlation"]; ok {
 		entry.Renamed = strp(r[0])
 		entry.Word = r[1]
 	}
 	g.mapping = append(g.mapping, entry)
-	g.quantities = append(g.quantities, Quantity{Stan: e.corr, Role: RoleQuantity, Node: n.ID + ".correlation",
-		Dims: []Dim{{Component: n.ID}, {Component: n.ID}}, Triangle: "strict_lower"})
+	g.quantities = append(g.quantities, bayescontract.Quantity{Stan: e.corr, Role: bayescontract.RoleQuantity, Node: n.ID + ".correlation",
+		Dims: []bayescontract.Dim{{Component: n.ID}, {Component: n.ID}}, Triangle: "strict_lower"})
 	return nil
 }
 
@@ -339,13 +340,13 @@ func (g *gen) writeStateParameter(n *bayesgraph.Node) {
 	s := g.states[n.ID]
 	if s.nonCentred {
 		g.w.line("vector[" + identRows + "] " + s.z + ";")
-		g.mapping = append(g.mapping, g.internal(n, s.z, blockParameters, RoleInternal))
-		g.quantities = append(g.quantities, Quantity{Stan: s.z, Role: RoleInternal, Dims: []Dim{{Plate: g.rows.ID}}})
+		g.mapping = append(g.mapping, g.internal(n, s.z, blockParameters, bayescontract.RoleInternal))
+		g.quantities = append(g.quantities, bayescontract.Quantity{Stan: s.z, Role: bayescontract.RoleInternal, Dims: []bayescontract.Dim{{Plate: g.rows.ID}}})
 		return
 	}
 	g.w.line("vector[" + identRows + "] " + g.ident[n.ID] + ";")
-	g.mapping = append(g.mapping, g.entry(n, blockParameters, RoleQuantity))
-	g.quantities = append(g.quantities, Quantity{Stan: g.ident[n.ID], Role: RoleQuantity, Node: n.ID, Dims: []Dim{{Plate: g.rows.ID}}})
+	g.mapping = append(g.mapping, g.entry(n, blockParameters, bayescontract.RoleQuantity))
+	g.quantities = append(g.quantities, bayescontract.Quantity{Stan: g.ident[n.ID], Role: bayescontract.RoleQuantity, Node: n.ID, Dims: []bayescontract.Dim{{Plate: g.rows.ID}}})
 }
 
 // initDist is a state's init distribution.
@@ -425,8 +426,8 @@ func (g *gen) writeStateTransformed(n *bayesgraph.Node) error {
 	}
 	x := g.ident[n.ID]
 	g.w.line("vector[" + identRows + "] " + x + ";")
-	g.mapping = append(g.mapping, g.entry(n, blockTransformed, RoleQuantity))
-	g.quantities = append(g.quantities, Quantity{Stan: x, Role: RoleQuantity, Node: n.ID, Dims: []Dim{{Plate: g.rows.ID}}})
+	g.mapping = append(g.mapping, g.entry(n, blockTransformed, bayescontract.RoleQuantity))
+	g.quantities = append(g.quantities, bayescontract.Quantity{Stan: x, Role: bayescontract.RoleQuantity, Node: n.ID, Dims: []bayescontract.Dim{{Plate: g.rows.ID}}})
 	first := x + "[" + identRowsFirst + "] = (" + loc + " + (" + scale + op + s.z + "[" + identRowsFirst + "]));"
 	if sink.empty() {
 		g.w.line(first)

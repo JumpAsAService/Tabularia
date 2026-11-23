@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayescontract"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayesgraph"
 )
 
@@ -60,7 +61,7 @@ func TestLagSubsets(t *testing.T) {
 	)
 	var lags []int
 	for _, d := range p.Data {
-		if d.Kind == DataLag {
+		if d.Kind == bayescontract.DataLag {
 			lags = append(lags, d.Lag)
 		}
 	}

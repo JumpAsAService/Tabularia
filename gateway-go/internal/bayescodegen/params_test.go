@@ -3,6 +3,8 @@ package bayescodegen
 import (
 	"strings"
 	"testing"
+
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayescontract"
 )
 
 // groupGraphJSON is a graph on the rows plate and one group plate grp (key g, form form: "" for
@@ -93,7 +95,7 @@ func TestGroupPlateForms(t *testing.T) {
 		)
 		var internal []string
 		for _, q := range p.Quantities {
-			if q.Role == RoleInternal {
+			if q.Role == bayescontract.RoleInternal {
 				internal = append(internal, q.Stan)
 			}
 		}

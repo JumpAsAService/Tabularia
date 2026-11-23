@@ -16,6 +16,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayescontract"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayesgraph"
 )
 
@@ -64,11 +65,11 @@ func goldenExtension(name string) Extension {
 // goldenManifest is a case's <case>.manifest.json: the two manifests, with the version of the
 // generator that wrote them, the graph's semantic hash and the program's sha256.
 type goldenManifest struct {
-	CodegenVersion int         `json:"codegen_version"`
-	SemanticHash   string      `json:"semantic_hash"`
-	ProgramSHA256  string      `json:"program_sha256"`
-	Data           []DataEntry `json:"data"`
-	Quantities     []Quantity  `json:"quantities"`
+	CodegenVersion int                       `json:"codegen_version"`
+	SemanticHash   string                    `json:"semantic_hash"`
+	ProgramSHA256  string                    `json:"program_sha256"`
+	Data           []bayescontract.DataEntry `json:"data"`
+	Quantities     []bayescontract.Quantity  `json:"quantities"`
 }
 
 func indentJSON(t *testing.T, v any) []byte {
@@ -315,8 +316,8 @@ func writeShuffled(b *bytes.Buffer, v any, r *rand.Rand) {
 
 // withoutLabels is the mapping table with its labels left out (they are the person's, and change
 // with them).
-func withoutLabels(m []MappingEntry) []MappingEntry {
-	out := append([]MappingEntry(nil), m...)
+func withoutLabels(m []bayescontract.MappingEntry) []bayescontract.MappingEntry {
+	out := append([]bayescontract.MappingEntry(nil), m...)
 	for i := range out {
 		out[i].Label = nil
 	}
@@ -422,7 +423,7 @@ func TestGoldenProgramsPassTheChecks(t *testing.T) {
 		if err := CheckProgram(string(b)); err != nil {
 			t.Errorf("%s: %v", name, err)
 		}
-		var mapping []MappingEntry
+		var mapping []bayescontract.MappingEntry
 		mb, err := os.ReadFile(filepath.Join(goldenDir, name+".mapping.json"))
 		if err != nil {
 			t.Fatal(err)

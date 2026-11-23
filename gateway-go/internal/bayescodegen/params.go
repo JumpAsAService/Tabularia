@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayescatalog"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayescontract"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayesexpr"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayesgraph"
 )
@@ -21,25 +22,6 @@ import (
 // location-scale, a bounded parameter: Param.NonCentred). A parameter on a category's levels has
 // K - 1 coefficients, the reference level none. A truncated statement on a plate is written for one
 // unit, in a loop.
-
-// Quantity is one variable the program writes, in the order of the CSV's columns (bayes-contract,
-// «The quantity manifest»). Dims is never null: [] for a single value.
-type Quantity struct {
-	Stan     string `json:"stan"`
-	Role     string `json:"role"`
-	Node     string `json:"node,omitempty"`
-	Dims     []Dim  `json:"dims"`
-	Triangle string `json:"triangle,omitempty"`
-	Check    string `json:"check,omitempty"`
-	Of       string `json:"of,omitempty"`
-}
-
-// Dim is one dimension of a written variable: over a plate's units, a size, or a node's components.
-type Dim struct {
-	Plate     string `json:"plate,omitempty"`
-	Size      string `json:"size,omitempty"`
-	Component string `json:"component,omitempty"`
-}
 
 // rangeConstraint is a range as Stan's bounds, "<lower=…, upper=…>", an unbounded side left out;
 // "" for the real line.
@@ -162,8 +144,8 @@ func (g *gen) units(n *bayesgraph.Node) (bayesgraph.ModelPlate, string, error) {
 
 // internal is the mapping entry of an identifier the program declares for a node of its own (Z_,
 // Full_, Arg<k>_): the node, no name, no label.
-func (g *gen) internal(n *bayesgraph.Node, ident, block string, role string) MappingEntry {
-	e := MappingEntry{Stan: ident, Block: block, NodeID: strp(n.ID), Kind: KindInternal, Role: optp(role)}
+func (g *gen) internal(n *bayesgraph.Node, ident, block string, role string) bayescontract.MappingEntry {
+	e := bayescontract.MappingEntry{Stan: ident, Block: block, NodeID: strp(n.ID), Kind: bayescontract.KindInternal, Role: optp(role)}
 	if n.Plate != nil {
 		e.Plate = strp(*n.Plate)
 	}
@@ -197,8 +179,8 @@ func (g *gen) writeParameters() error {
 		x := g.ident[id]
 		if n.Plate == nil {
 			w.line("real" + bounds + " " + x + ";")
-			g.mapping = append(g.mapping, g.entry(n, blockParameters, RoleQuantity))
-			g.quantities = append(g.quantities, Quantity{Stan: x, Role: RoleQuantity, Node: id, Dims: []Dim{}})
+			g.mapping = append(g.mapping, g.entry(n, blockParameters, bayescontract.RoleQuantity))
+			g.quantities = append(g.quantities, bayescontract.Quantity{Stan: x, Role: bayescontract.RoleQuantity, Node: id, Dims: []bayescontract.Dim{}})
 			continue
 		}
 		plate, size, err := g.units(n)
@@ -209,8 +191,8 @@ func (g *gen) writeParameters() error {
 			// The explicit form: the standard normals are the parameter; the person's value is a
 			// transformed parameter (writeTransformedParameters).
 			w.line("vector[" + size + "] " + z + ";")
-			g.mapping = append(g.mapping, g.internal(n, z, blockParameters, RoleInternal))
-			g.quantities = append(g.quantities, Quantity{Stan: z, Role: RoleInternal, Dims: []Dim{{Plate: plate.ID}}})
+			g.mapping = append(g.mapping, g.internal(n, z, blockParameters, bayescontract.RoleInternal))
+			g.quantities = append(g.quantities, bayescontract.Quantity{Stan: z, Role: bayescontract.RoleInternal, Dims: []bayescontract.Dim{{Plate: plate.ID}}})
 			continue
 		}
 		if p.NonCentred {
@@ -225,8 +207,8 @@ func (g *gen) writeParameters() error {
 			bounds = "<offset=" + loc + ", multiplier=" + scale + ">"
 		}
 		w.line("vector" + bounds + "[" + size + "] " + x + ";")
-		g.mapping = append(g.mapping, g.entry(n, blockParameters, RoleQuantity))
-		g.quantities = append(g.quantities, Quantity{Stan: x, Role: RoleQuantity, Node: id, Dims: []Dim{{Plate: plate.ID}}})
+		g.mapping = append(g.mapping, g.entry(n, blockParameters, bayescontract.RoleQuantity))
+		g.quantities = append(g.quantities, bayescontract.Quantity{Stan: x, Role: bayescontract.RoleQuantity, Node: id, Dims: []bayescontract.Dim{{Plate: plate.ID}}})
 	}
 	w.close()
 	return nil
@@ -252,7 +234,7 @@ func (g *gen) locationScale(n *bayesgraph.Node, d bayescatalog.Distribution) (lo
 // plus its scale times its standard normals, elementwise when the scale is a vector. When the
 // location and the scale together hold more than maxLocalNodes vector nodes, the larger becomes a
 // local (lot S5): the parameter is declared, then assigned in a nested block holding the locals.
-func (g *gen) writeExplicit(n *bayesgraph.Node, self *MappingEntry) error {
+func (g *gen) writeExplicit(n *bayesgraph.Node, self *bayescontract.MappingEntry) error {
 	_, d, err := g.param(n.ID)
 	if err != nil {
 		return err

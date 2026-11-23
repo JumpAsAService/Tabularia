@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayescatalog"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayescontract"
 )
 
 // This file is the check of the output (docs/specs/bayes-stan-codegen.md, «Safety checks on the
@@ -200,7 +201,7 @@ func scanNumber(s string, i int) (int, error) {
 // lexically Stan's, unique, not a reserved name nor ending with a reserved suffix nor with "__";
 // one that starts with a lower-case letter is the person's name of its node, never renamed; one
 // that starts with an upper-case letter is generated.
-func CheckIdentifiers(mapping []MappingEntry) error {
+func CheckIdentifiers(mapping []bayescontract.MappingEntry) error {
 	seen := map[string]bool{}
 	for _, e := range mapping {
 		s := e.Stan
@@ -332,9 +333,9 @@ func parseInfo(info []byte) (vars map[string][]infoVar, lists map[string][]strin
 // codegen does not know the shape of (an extension's).
 func dataDims(kind string) int {
 	switch kind {
-	case DataSize, DataMode:
+	case bayescontract.DataSize, bayescontract.DataMode:
 		return 0
-	case DataReal, DataInt, DataGroupIndex, DataCategory, DataLift, DataRowsSubset, DataLag, DataFirst, DataNext, DataPrevious:
+	case bayescontract.DataReal, bayescontract.DataInt, bayescontract.DataGroupIndex, bayescontract.DataCategory, bayescontract.DataLift, bayescontract.DataRowsSubset, bayescontract.DataLag, bayescontract.DataFirst, bayescontract.DataNext, bayescontract.DataPrevious:
 		return 1
 	}
 	return -1
@@ -363,7 +364,7 @@ func CrossCheck(info []byte, p *Program) []Mismatch {
 	if p == nil {
 		return []Mismatch{{Where: "program", What: "no program"}}
 	}
-	byStan := map[string]MappingEntry{}
+	byStan := map[string]bayescontract.MappingEntry{}
 	for _, e := range p.Mapping {
 		byStan[e.Stan] = e
 	}
@@ -383,7 +384,7 @@ func CrossCheck(info []byte, p *Program) []Mismatch {
 	}
 	for _, v := range vars["inputs"] {
 		want := dataDims(kinds[v.Name])
-		if e, ok := byStan[v.Name]; ok && e.Kind == KindExtension {
+		if e, ok := byStan[v.Name]; ok && e.Kind == bayescontract.KindExtension {
 			want = -1
 		}
 		if want >= 0 && v.Dims != want {
@@ -393,7 +394,7 @@ func CrossCheck(info []byte, p *Program) []Mismatch {
 
 	// the written variables: parameters, then transformed parameters, then generated quantities
 	blocks := []string{"parameters", "transformed parameters", "generated quantities"}
-	want := map[string][]Quantity{}
+	want := map[string][]bayescontract.Quantity{}
 	var order []string
 	for _, q := range p.Quantities {
 		e, ok := byStan[q.Stan]

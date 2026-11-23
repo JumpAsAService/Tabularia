@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayescatalog"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayescontract"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayesexpr"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayesgraph"
 )
@@ -397,27 +398,27 @@ func (g *gen) writeTransformedParameters() error {
 		if p != placeTransformed {
 			continue
 		}
-		self := g.entry(n, blockTransformed, RoleQuantity)
-		var dims []Dim
+		self := g.entry(n, blockTransformed, bayescontract.RoleQuantity)
+		var dims []bayescontract.Dim
 		switch {
 		case n.Kind == "parameter":
 			if err := g.writeExplicit(n, &self); err != nil {
 				return err
 			}
-			dims = []Dim{{Plate: *n.Plate}}
+			dims = []bayescontract.Dim{{Plate: *n.Plate}}
 		case n.Plate == nil:
 			if err := g.writeSingleValue(n); err != nil {
 				return err
 			}
 			g.mapping = append(g.mapping, self)
-			dims = []Dim{}
+			dims = []bayescontract.Dim{}
 		default:
 			if err := g.writeVectorValue(n, emitEnv{g: g}, blockTransformed, &self); err != nil {
 				return err
 			}
-			dims = []Dim{{Plate: *n.Plate}}
+			dims = []bayescontract.Dim{{Plate: *n.Plate}}
 		}
-		g.quantities = append(g.quantities, Quantity{Stan: g.ident[id], Role: RoleQuantity, Node: id, Dims: dims})
+		g.quantities = append(g.quantities, bayescontract.Quantity{Stan: g.ident[id], Role: bayescontract.RoleQuantity, Node: id, Dims: dims})
 	}
 	return nil
 }
@@ -429,7 +430,7 @@ func (g *gen) writeTransformedParameters() error {
 // declaration of the block is a variable of the block, the value is declared, then assigned in a
 // nested block that holds the locals. block "" is the extension's nested block, where the model
 // block's per-row locals are written again with the same names (self nil: no entry).
-func (g *gen) writeVectorValue(n *bayesgraph.Node, env emitEnv, block string, self *MappingEntry) error {
+func (g *gen) writeVectorValue(n *bayesgraph.Node, env emitEnv, block string, self *bayescontract.MappingEntry) error {
 	sink := &splitSink{block: block, rebuild: block == ""}
 	env.sink = sink
 	v, t, err := g.vectorValue(n, env)

@@ -1,0 +1,57 @@
+{
+  "protocol": 1,
+  "mode": "compile",
+  "group": "bayes",
+  "group_version": 3,
+  "model": "bayes_model",
+  "variant": "compile",
+  "params": {},
+  "write_output": false,
+  "mlflow": false,
+  "limits": {
+    "bayes_density_points": 200,
+    "bayes_max_chart_quantities": 12,
+    "bayes_max_check_rows": 5000,
+    "bayes_max_quantity_entries": 600,
+    "bayes_max_summary_quantities": 2000,
+    "bayes_max_unit_charts": 8,
+    "bayes_rank_bins": 20,
+    "bayes_trace_points": 200,
+    "bayes_unit_points": 1000,
+    "block_values": 1048576,
+    "max_chart_points": 2000,
+    "max_check_columns": 200,
+    "max_quantities": 20000,
+    "max_result_rows": 100000,
+    "max_units": 20000,
+    "memory_bytes": 2147483648,
+    "started_unix": 1795000000,
+    "time_budget_seconds": 1800,
+    "tmp_bytes": 2147483648
+  },
+  "ids": {
+    "flow_id": 42,
+    "node_id": "n7",
+    "run_id": 9811,
+    "step_run_id": 9812
+  },
+  "recipe_hash": "e1d8e552330911f9f779f85b6f2c00a15e790dcc3fbb3b28f5da1d660a30c5b8",
+  "runner_hash": "527aa9f431539da8e151d5434d1d5e611d973f601d8e970790882624554146b0",
+  "bayes": {
+    "model": {
+      "id": 17,
+      "version": 4,
+      "semantic_hash": "da0a93000eb52a147e33d2480a930b534ec425e1b9d77f6f6ff05a33e8a9c7eb",
+      "program_sha256": "3f0705ddee2ee3f4115b6b94f9b56cf8aeb941aca68ab76e8546c8d400eb3a1a",
+      "codegen_version": 1,
+      "cmdstan": "2.40.0"
+    },
+    "sampler": null,
+    "plates": [],
+    "mapping": [],
+    "data": [],
+    "quantities": [],
+    "checks": null,
+    "replicated": null
+  }
+}

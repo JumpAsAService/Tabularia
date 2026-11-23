@@ -24,6 +24,7 @@ import (
 	"fmt"
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayescatalog"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayescontract"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayesgraph"
 )
 
@@ -59,9 +60,9 @@ type Program struct {
 	Text           []byte
 	SHA256         string // hex of Text's sha256
 	CodegenVersion int
-	Mapping        []MappingEntry
-	Data           []DataEntry
-	Quantities     []Quantity
+	Mapping        []bayescontract.MappingEntry
+	Data           []bayescontract.DataEntry
+	Quantities     []bayescontract.Quantity
 }
 
 // Generate writes the program of a validated model, with what ext adds (nil: nothing). A model
@@ -161,9 +162,9 @@ type gen struct {
 	extPre map[string]bool
 
 	w          *writer
-	mapping    []MappingEntry
-	data       []DataEntry
-	quantities []Quantity
+	mapping    []bayescontract.MappingEntry
+	data       []bayescontract.DataEntry
+	quantities []bayescontract.Quantity
 }
 
 func newGen(m *bayesgraph.Model) (*gen, error) {
@@ -293,8 +294,8 @@ func (g *gen) optionalBlock(head string, body func() error) error {
 func (g *gen) node(id string) *bayesgraph.Node { return g.nodes[id] }
 
 // entry is the mapping table's entry of a node's identifier, declared in block.
-func (g *gen) entry(n *bayesgraph.Node, block, role string) MappingEntry {
-	e := MappingEntry{Stan: g.ident[n.ID], Block: block, NodeID: strp(n.ID), Label: strp(n.Label),
+func (g *gen) entry(n *bayesgraph.Node, block, role string) bayescontract.MappingEntry {
+	e := bayescontract.MappingEntry{Stan: g.ident[n.ID], Block: block, NodeID: strp(n.ID), Label: strp(n.Label),
 		Kind: n.Kind, Role: optp(role)}
 	if n.Plate != nil {
 		e.Plate = strp(*n.Plate)

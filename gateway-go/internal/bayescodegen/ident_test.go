@@ -4,6 +4,8 @@ import (
 	"errors"
 	"strings"
 	"testing"
+
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayescontract"
 )
 
 func TestNodeIdentifier(t *testing.T) {
@@ -108,8 +110,8 @@ func TestGeneratedNeverCollidesWithANameThatPasses(t *testing.T) {
 
 func TestCheckIdentifiers(t *testing.T) {
 	n := func(s string) *string { return &s }
-	ok := []MappingEntry{
-		{Stan: "N", Kind: KindSize},
+	ok := []bayescontract.MappingEntry{
+		{Stan: "N", Kind: bayescontract.KindSize},
 		{Stan: "b_x", Name: n("b_x"), Kind: "parameter"},
 		{Stan: "V_n1", Kind: "parameter"},
 		{Stan: "V_n2", Name: n("lower"), Renamed: n(RenamedReserved), Kind: "parameter"},
@@ -118,7 +120,7 @@ func TestCheckIdentifiers(t *testing.T) {
 	if err := CheckIdentifiers(ok); err != nil {
 		t.Fatal(err)
 	}
-	bad := map[string][]MappingEntry{
+	bad := map[string][]bayescontract.MappingEntry{
 		"twice":           {{Stan: "N"}, {Stan: "N"}},
 		"reserved":        {{Stan: "lower", Name: n("lower")}},
 		"suffix":          {{Stan: "x_lpdf", Name: n("x_lpdf")}},

@@ -1,0 +1,489 @@
+{
+  "protocol": 1,
+  "mode": "prior_predictive",
+  "group": "bayes",
+  "group_version": 3,
+  "model": "bayes_model",
+  "variant": "prior_predictive",
+  "params": {
+    "mode": "prior_predictive",
+    "output": "results"
+  },
+  "output": "results",
+  "write_output": false,
+  "rows_from": "trial",
+  "mlflow": false,
+  "limits": {
+    "bayes_density_points": 200,
+    "bayes_max_chart_quantities": 12,
+    "bayes_max_check_rows": 5000,
+    "bayes_max_quantity_entries": 600,
+    "bayes_max_summary_quantities": 2000,
+    "bayes_max_unit_charts": 8,
+    "bayes_rank_bins": 20,
+    "bayes_trace_points": 200,
+    "bayes_unit_points": 1000,
+    "block_values": 1048576,
+    "max_chart_points": 2000,
+    "max_check_columns": 200,
+    "max_quantities": 20000,
+    "max_result_rows": 100000,
+    "max_units": 20000,
+    "memory_bytes": 2147483648,
+    "started_unix": 1795000000,
+    "time_budget_seconds": 1800,
+    "tmp_bytes": 2147483648
+  },
+  "input_rows": 600,
+  "ids": {
+    "flow_id": 42,
+    "node_id": "n7",
+    "run_id": 9811,
+    "step_run_id": 9812
+  },
+  "recipe_hash": "e1d8e552330911f9f779f85b6f2c00a15e790dcc3fbb3b28f5da1d660a30c5b8",
+  "runner_hash": "527aa9f431539da8e151d5434d1d5e611d973f601d8e970790882624554146b0",
+  "bayes": {
+    "model": {
+      "id": 17,
+      "version": 4,
+      "semantic_hash": "637a6a0dbf3ef99f01c4de0a673f5daeafa4842036ad7a85f6395cad5872b286",
+      "program_sha256": "93ec8646036811bbd9cbedfb5f435d3736b3ee82560663f8651206dbaf1ee251",
+      "binary_sha256": "c9798c8b717225ba988b01e15f41967cbab9a4974dc4ac448866bd06a0619259",
+      "codegen_version": 1,
+      "cmdstan": "2.40.0"
+    },
+    "sampler": {
+      "chains": 4,
+      "warmup": 0,
+      "draws": 500,
+      "seed": 20261123,
+      "adapt_delta": 0.8,
+      "max_treedepth": 10,
+      "init": null,
+      "refresh": 100
+    },
+    "plates": [
+      {
+        "id": "rows",
+        "kind": "rows",
+        "label": "Rows"
+      },
+      {
+        "id": "grp",
+        "kind": "group",
+        "label": "Group"
+      },
+      {
+        "id": "levels:c",
+        "kind": "levels",
+        "label": "Channel"
+      }
+    ],
+    "mapping": [
+      {
+        "stan": "N",
+        "block": "data",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "size",
+        "plate": "rows",
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "J_grp",
+        "block": "data",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "size",
+        "plate": "grp",
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "K_c",
+        "block": "data",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "size",
+        "plate": "levels:c",
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "c",
+        "block": "data",
+        "node_id": "c",
+        "component": null,
+        "name": "c",
+        "label": "Channel",
+        "kind": "data",
+        "plate": "rows",
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "g",
+        "block": "data",
+        "node_id": "g",
+        "component": null,
+        "name": "g",
+        "label": "Group of the row",
+        "kind": "data",
+        "plate": "rows",
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "x",
+        "block": "data",
+        "node_id": "x",
+        "component": null,
+        "name": "x",
+        "label": "Predictor",
+        "kind": "data",
+        "plate": "rows",
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "y",
+        "block": "data",
+        "node_id": "y",
+        "component": null,
+        "name": "y",
+        "label": "Outcome",
+        "kind": "data",
+        "plate": "rows",
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "Mode",
+        "block": "data",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "mode",
+        "plate": null,
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "Ppc_bins",
+        "block": "data",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "Ppc_edges",
+        "block": "data",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "b_c",
+        "block": "parameters",
+        "node_id": "bc",
+        "component": null,
+        "name": "b_c",
+        "label": "Effect of the channel",
+        "kind": "parameter",
+        "plate": "levels:c",
+        "role": "quantity",
+        "renamed": null
+      },
+      {
+        "stan": "b_x",
+        "block": "parameters",
+        "node_id": "bx",
+        "component": null,
+        "name": "b_x",
+        "label": "Effect of the predictor",
+        "kind": "parameter",
+        "plate": null,
+        "role": "quantity",
+        "renamed": null
+      },
+      {
+        "stan": "mu",
+        "block": "parameters",
+        "node_id": "mu",
+        "component": null,
+        "name": "mu",
+        "label": "Typical level",
+        "kind": "parameter",
+        "plate": null,
+        "role": "quantity",
+        "renamed": null
+      },
+      {
+        "stan": "s",
+        "block": "parameters",
+        "node_id": "s",
+        "component": null,
+        "name": "s",
+        "label": "Spread within a group",
+        "kind": "parameter",
+        "plate": null,
+        "role": "quantity",
+        "renamed": null
+      },
+      {
+        "stan": "tau",
+        "block": "parameters",
+        "node_id": "tau",
+        "component": null,
+        "name": "tau",
+        "label": "Spread between groups",
+        "kind": "parameter",
+        "plate": null,
+        "role": "quantity",
+        "renamed": null
+      },
+      {
+        "stan": "a",
+        "block": "parameters",
+        "node_id": "a",
+        "component": null,
+        "name": "a",
+        "label": "Level of a group",
+        "kind": "parameter",
+        "plate": "grp",
+        "role": "quantity",
+        "renamed": null
+      },
+      {
+        "stan": "Full_bc",
+        "block": "model",
+        "node_id": "bc",
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "internal",
+        "plate": "levels:c",
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "eta",
+        "block": "model",
+        "node_id": "eta",
+        "component": null,
+        "name": "eta",
+        "label": "Expected outcome",
+        "kind": "linear_predictor",
+        "plate": "rows",
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "Ppc_first_rep",
+        "block": "generated quantities",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": "check",
+        "renamed": null
+      },
+      {
+        "stan": "Prior_a",
+        "block": "generated quantities",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": "prior_draw",
+        "renamed": null
+      },
+      {
+        "stan": "Prior_mu",
+        "block": "generated quantities",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "Prior_tau",
+        "block": "generated quantities",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": null,
+        "renamed": null
+      },
+      {
+        "stan": "Ppc_yrep",
+        "block": "generated quantities",
+        "node_id": null,
+        "component": null,
+        "name": null,
+        "label": null,
+        "kind": "extension",
+        "plate": null,
+        "role": null,
+        "renamed": null
+      }
+    ],
+    "data": [
+      {
+        "stan": "N",
+        "kind": "size",
+        "of": "rows"
+      },
+      {
+        "stan": "J_grp",
+        "kind": "size",
+        "of": "grp"
+      },
+      {
+        "stan": "K_c",
+        "kind": "size",
+        "of": "levels:c"
+      },
+      {
+        "stan": "c",
+        "kind": "category",
+        "plate": "rows",
+        "column": "col_c",
+        "node": "c"
+      },
+      {
+        "stan": "g",
+        "kind": "group_index",
+        "plate": "rows",
+        "column": "col_g",
+        "node": "g",
+        "target": "grp"
+      },
+      {
+        "stan": "x",
+        "kind": "real",
+        "plate": "rows",
+        "column": "col_x",
+        "node": "x",
+        "standardize": true
+      },
+      {
+        "stan": "y",
+        "kind": "real",
+        "plate": "rows",
+        "column": "col_y",
+        "node": "y"
+      },
+      {
+        "stan": "Mode",
+        "kind": "mode"
+      },
+      {
+        "stan": "Ppc_bins",
+        "kind": "bins"
+      },
+      {
+        "stan": "Ppc_edges",
+        "kind": "bin_edges"
+      }
+    ],
+    "quantities": [
+      {
+        "stan": "b_c",
+        "role": "quantity",
+        "node": "bc",
+        "dims": [
+          {
+            "plate": "levels:c"
+          }
+        ]
+      },
+      {
+        "stan": "b_x",
+        "role": "quantity",
+        "node": "bx",
+        "dims": []
+      },
+      {
+        "stan": "mu",
+        "role": "quantity",
+        "node": "mu",
+        "dims": []
+      },
+      {
+        "stan": "s",
+        "role": "quantity",
+        "node": "s",
+        "dims": []
+      },
+      {
+        "stan": "tau",
+        "role": "quantity",
+        "node": "tau",
+        "dims": []
+      },
+      {
+        "stan": "a",
+        "role": "quantity",
+        "node": "a",
+        "dims": [
+          {
+            "plate": "grp"
+          }
+        ]
+      },
+      {
+        "stan": "Ppc_first_rep",
+        "role": "check",
+        "dims": [],
+        "check": "first"
+      },
+      {
+        "stan": "Prior_a",
+        "role": "prior_draw",
+        "dims": [
+          {
+            "plate": "grp"
+          }
+        ],
+        "of": "a"
+      }
+    ],
+    "checks": {
+      "statistics": [
+        "first"
+      ]
+    },
+    "replicated": null
+  }
+}

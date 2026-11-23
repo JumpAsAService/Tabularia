@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayescatalog"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayescontract"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayesgraph"
 )
 
@@ -63,12 +64,6 @@ type Scope interface {
 	Rows(node string) (Size, error)
 }
 
-// Roles of what an extension writes (bayes-contract, «The quantity manifest»).
-const (
-	RoleCheck     = "check"
-	RolePriorDraw = "prior_draw"
-)
-
 // Elem is the element type of a declaration.
 type Elem int
 
@@ -91,7 +86,7 @@ const (
 // posterior run writes nothing of what only the prior predictive fills.
 type Size struct {
 	text  string
-	dim   Dim
+	dim   bayescontract.Dim
 	prior bool
 	ext   string // the extension's data integer it is, when it is one
 }
@@ -101,7 +96,7 @@ func (d Decl) AsSize() Size {
 	if !extensionName(d.Name) {
 		return Size{}
 	}
-	return Size{text: d.Name, dim: Dim{Size: d.Name}, ext: d.Name}
+	return Size{text: d.Name, dim: bayescontract.Dim{Size: d.Name}, ext: d.Name}
 }
 
 // sizeOK checks a size: set, and an integer of the extension's data when it names one.
@@ -127,7 +122,7 @@ func Count(n int) (Size, error) {
 		return Size{}, fmt.Errorf("%w: the count %d", ErrExtension, n)
 	}
 	s := strconv.Itoa(n)
-	return Size{text: s, dim: Dim{Size: s}}, nil
+	return Size{text: s, dim: bayescontract.Dim{Size: s}}, nil
 }
 
 // WhenPrior is the size in the prior predictive (Mode 1), 0 in the posterior.
@@ -185,7 +180,7 @@ type Expr struct {
 	// pre are the locals of a split value (lot S5), written before the statement that uses it,
 	// with their mapping entries.
 	pre     []string
-	entries []MappingEntry
+	entries []bayescontract.MappingEntry
 }
 
 func (e Expr) ok() bool { return e.text != "" }
@@ -219,7 +214,7 @@ func Index(e, i Expr) (Expr, error) {
 		return Expr{}, fmt.Errorf("%w: an indexing of what is not a variable", ErrExtension)
 	}
 	return Expr{text: e.text + "[" + i.text + "]", root: e.root, ext: join(e.ext, i.ext), loop: e.loop || i.loop,
-		pre: join(e.pre, i.pre), entries: append(append([]MappingEntry(nil), e.entries...), i.entries...)}, nil
+		pre: join(e.pre, i.pre), entries: append(append([]bayescontract.MappingEntry(nil), e.entries...), i.entries...)}, nil
 }
 
 func join(a, b []string) []string { return append(append([]string(nil), a...), b...) }
@@ -345,11 +340,11 @@ func (g *gen) declText(d Decl) (string, error) {
 	return "", extErr("%s has no shape", d.Name)
 }
 
-func (d Decl) dims() []Dim {
+func (d Decl) dims() []bayescontract.Dim {
 	if d.Shape == Scalar {
-		return []Dim{}
+		return []bayescontract.Dim{}
 	}
-	return []Dim{d.Size.dim}
+	return []bayescontract.Dim{d.Size.dim}
 }
 
 // writeExtensionData declares the extension's data, after Mode.
@@ -367,8 +362,8 @@ func (g *gen) writeExtensionData() error {
 		}
 		g.w.line(s + ";")
 		g.extNames[d.Name] = d
-		g.mapping = append(g.mapping, MappingEntry{Stan: d.Name, Block: blockData, Kind: KindExtension})
-		g.data = append(g.data, DataEntry{Stan: d.Name, Kind: d.Kind})
+		g.mapping = append(g.mapping, bayescontract.MappingEntry{Stan: d.Name, Block: blockData, Kind: bayescontract.KindExtension})
+		g.data = append(g.data, bayescontract.DataEntry{Stan: d.Name, Kind: d.Kind})
 	}
 	return nil
 }
@@ -400,13 +395,18 @@ func (g *gen) writeGenerated() error {
 			return extErr("the written %s has a data kind", strconv.Quote(d.Name))
 		}
 		switch d.Role {
-		case RoleCheck:
+		case bayescontract.RoleCheck:
 			if !lowerWord(d.Check) || d.Of != "" {
 				return extErr("the check %s: a statistic, no node", strconv.Quote(d.Name))
 			}
-		case RolePriorDraw:
+		case bayescontract.RolePriorDraw:
 			if d.Check != "" || !g.drawable(d.Of) {
 				return extErr("the prior draw %s: of a node or component of the model", strconv.Quote(d.Name))
+			}
+			// the posterior run writes no element of a prior draw with a dimension (bayes-contract, «The quantity
+			// manifest»): the runner expects none of its columns in the sample mode
+			if d.Shape != Scalar && !d.Size.prior {
+				return extErr("the prior draw %s: a size by the mode (WhenPrior)", strconv.Quote(d.Name))
 			}
 		default:
 			return extErr("the written %s has the role %s", strconv.Quote(d.Name), strconv.Quote(d.Role))
@@ -417,8 +417,8 @@ func (g *gen) writeGenerated() error {
 		}
 		g.w.line(s + ";")
 		g.extNames[d.Name] = d
-		g.mapping = append(g.mapping, MappingEntry{Stan: d.Name, Block: blockGenerated, Kind: KindExtension, Role: strp(d.Role)})
-		g.quantities = append(g.quantities, Quantity{Stan: d.Name, Role: d.Role, Dims: d.dims(), Check: d.Check, Of: d.Of})
+		g.mapping = append(g.mapping, bayescontract.MappingEntry{Stan: d.Name, Block: blockGenerated, Kind: bayescontract.KindExtension, Role: strp(d.Role)})
+		g.quantities = append(g.quantities, bayescontract.Quantity{Stan: d.Name, Role: d.Role, Dims: d.dims(), Check: d.Check, Of: d.Of})
 	}
 	if len(sc.locals) == 0 && len(stmts) == 0 {
 		return nil
@@ -505,7 +505,7 @@ func (g *gen) writeStmt(s Stmt, inLoop bool) error {
 		}
 		g.w.line(text + ";")
 		g.extNames[d.Name] = d
-		g.mapping = append(g.mapping, MappingEntry{Stan: d.Name, Block: blockGenerated, Kind: KindExtension})
+		g.mapping = append(g.mapping, bayescontract.MappingEntry{Stan: d.Name, Block: blockGenerated, Kind: bayescontract.KindExtension})
 	default:
 		return extErr("a statement of no kind")
 	}
@@ -708,7 +708,7 @@ func (s *scope) PlateSize(plate string) (Size, error) {
 	if !ok {
 		return Size{}, extErr("%s is not a plate of the model", strconv.Quote(plate))
 	}
-	return Size{text: sz, dim: Dim{Plate: plate}}, nil
+	return Size{text: sz, dim: bayescontract.Dim{Plate: plate}}, nil
 }
 
 func (s *scope) Rows(node string) (Size, error) {
@@ -731,9 +731,9 @@ func (s *scope) Rows(node string) (Size, error) {
 		return Size{}, extErr("%s is not on the rows", strconv.Quote(node))
 	}
 	if s.g.lagged[node] {
-		return Size{text: identNLag, dim: Dim{Size: identNLag}}, nil
+		return Size{text: identNLag, dim: bayescontract.Dim{Size: identNLag}}, nil
 	}
-	return Size{text: identRows, dim: Dim{Plate: plate}}, nil
+	return Size{text: identRows, dim: bayescontract.Dim{Plate: plate}}, nil
 }
 
 // writeLocals rebuilds in the nested block the Full_ and the per-row locals asked for, in Order,

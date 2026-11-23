@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayescontract"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayesgraph"
 )
 
@@ -19,7 +20,7 @@ type fakeExtension struct{}
 var (
 	fakeBins  = Decl{Name: "Ppc_bins", Elem: Int, Shape: Scalar, NonNegative: true, Kind: "bins"}
 	fakeEdges = Decl{Name: "Ppc_edges", Elem: Real, Shape: Vector, Size: fakeBins.AsSize(), Kind: "bin_edges"}
-	fakeFirst = Decl{Name: "Ppc_first_rep", Elem: Real, Shape: Scalar, Role: RoleCheck, Check: "first"}
+	fakeFirst = Decl{Name: "Ppc_first_rep", Elem: Real, Shape: Scalar, Role: bayescontract.RoleCheck, Check: "first"}
 	fakeMu    = Decl{Name: "Prior_mu", Elem: Real, Shape: Scalar}
 	fakeTau   = Decl{Name: "Prior_tau", Elem: Real, Shape: Scalar}
 )
@@ -39,7 +40,7 @@ func (fakeExtension) Generated(m *bayesgraph.Model, s Scope) ([]Decl, []Stmt, er
 	errs = append(errs, err)
 	rows, err := s.Rows("lik")
 	errs = append(errs, err)
-	priorA := Decl{Name: "Prior_a", Elem: Real, Shape: Array, Size: groups.WhenPrior(), Role: RolePriorDraw, Of: "a"}
+	priorA := Decl{Name: "Prior_a", Elem: Real, Shape: Array, Size: groups.WhenPrior(), Role: bayescontract.RolePriorDraw, Of: "a"}
 	yrep := Decl{Name: "Ppc_yrep", Elem: Real, Shape: Array, Size: rows}
 	draws := func(id string) (Expr, bool) {
 		switch id {
@@ -102,7 +103,7 @@ func TestExtensionFakePlacement(t *testing.T) {
 	}
 	var roles []string
 	for _, q := range p.Quantities {
-		if q.Role == RoleCheck || q.Role == RolePriorDraw {
+		if q.Role == bayescontract.RoleCheck || q.Role == bayescontract.RolePriorDraw {
 			roles = append(roles, q.Stan+":"+q.Role+":"+q.Check+q.Of)
 		}
 	}
@@ -120,7 +121,7 @@ func TestExtensionFakePlacement(t *testing.T) {
 func TestExtensionRefusals(t *testing.T) {
 	_, m := modelOf(t, readGraph(t, "extension_fake"))
 	real := func(name string) Decl { return Decl{Name: name, Elem: Real, Shape: Scalar} }
-	written := func(d Decl) Decl { d.Role, d.Check = RoleCheck, "stat"; return d }
+	written := func(d Decl) Decl { d.Role, d.Check = bayescontract.RoleCheck, "stat"; return d }
 	cases := map[string]extFunc{
 		"a data name outside the prefixes": {data: func() []Decl { return []Decl{{Name: "bins", Elem: Int, Shape: Scalar, Kind: "bins"}} }},
 		"a data name with text":            {data: func() []Decl { return []Decl{{Name: "Ppc_x; print(1)", Elem: Int, Shape: Scalar, Kind: "bins"}} }},
@@ -141,10 +142,14 @@ func TestExtensionRefusals(t *testing.T) {
 		}},
 		"a written declaration without a role": {gen: func(Scope) ([]Decl, []Stmt, error) { return []Decl{real("Ppc_x")}, nil, nil }},
 		"a prior draw of nothing": {gen: func(Scope) ([]Decl, []Stmt, error) {
-			return []Decl{{Name: "Prior_x", Elem: Real, Shape: Scalar, Role: RolePriorDraw, Of: "nope"}}, nil, nil
+			return []Decl{{Name: "Prior_x", Elem: Real, Shape: Scalar, Role: bayescontract.RolePriorDraw, Of: "nope"}}, nil, nil
 		}},
 		"a prior draw of data": {gen: func(Scope) ([]Decl, []Stmt, error) {
-			return []Decl{{Name: "Prior_x", Elem: Real, Shape: Scalar, Role: RolePriorDraw, Of: "y"}}, nil, nil
+			return []Decl{{Name: "Prior_x", Elem: Real, Shape: Scalar, Role: bayescontract.RolePriorDraw, Of: "y"}}, nil, nil
+		}},
+		"a prior draw with a size not by the mode": {gen: func(s Scope) ([]Decl, []Stmt, error) {
+			n, _ := s.PlateSize("grp")
+			return []Decl{{Name: "Prior_x", Elem: Real, Shape: Array, Size: n, Role: bayescontract.RolePriorDraw, Of: "a"}}, nil, nil
 		}},
 		"an assignment to a parameter": {gen: func(s Scope) ([]Decl, []Stmt, error) {
 			mu, _ := s.Identifier("mu")
@@ -161,7 +166,7 @@ func TestExtensionRefusals(t *testing.T) {
 			return []Decl{x}, []Stmt{Assign(x.Ref(), real("Ppc_later").Ref())}, nil
 		}},
 		"the loop's index outside a loop": {gen: func(Scope) ([]Decl, []Stmt, error) {
-			x := Decl{Name: "Ppc_x", Elem: Real, Shape: Array, Role: RoleCheck, Check: "stat"}
+			x := Decl{Name: "Ppc_x", Elem: Real, Shape: Array, Role: bayescontract.RoleCheck, Check: "stat"}
 			x.Size, _ = Count(3)
 			ix, _ := Index(x.Ref(), LoopIndex())
 			one, _ := Num(1)

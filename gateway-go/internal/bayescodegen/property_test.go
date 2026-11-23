@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayescontract"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayesgraph"
 )
 
@@ -299,7 +300,7 @@ func TestPropertyRenameOneNode(t *testing.T) {
 			t.Fatal(err)
 		}
 		// the nodes that carry their own name into the program
-		var cands []MappingEntry
+		var cands []bayescontract.MappingEntry
 		for _, e := range before.Mapping {
 			if e.NodeID != nil && e.Component == nil && e.Name != nil && e.Renamed == nil && *e.Name == e.Stan &&
 				(e.Kind == "data" || e.Kind == "parameter" || e.Kind == "transformed" || e.Kind == "linear_predictor" || e.Kind == "state") {

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayescontract"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayesexpr"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayesgraph"
 )
@@ -229,7 +230,7 @@ func TestSplitBound(t *testing.T) {
 		"  y ~ normal((E_lik_1 + x), s);")
 	var internal []string
 	for _, e := range p.Mapping {
-		if e.Kind == KindInternal {
+		if e.Kind == bayescontract.KindInternal {
 			internal = append(internal, e.Stan+"@"+e.Block+"@"+*e.NodeID)
 		}
 	}
@@ -381,7 +382,7 @@ func TestSplitExtension(t *testing.T) {
 		"\n    vector[N] E_lik_2 = (+m + ", "\n    array[N] real Ppc_yrep = normal_rng((+E_lik_2 - ")
 	var entries []string
 	for _, e := range p.Mapping {
-		if e.Kind == KindInternal {
+		if e.Kind == bayescontract.KindInternal {
 			entries = append(entries, e.Stan+"@"+e.Block)
 		}
 	}

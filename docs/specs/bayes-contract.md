@@ -738,6 +738,96 @@ measurement above are never in the suite.
 K0 first (it needs `model-graph`'s M2 for the validated model); K1 and K2 in parallel after it; K3 after
 `bayes-image`'s B0. Only K2's memory test and K3 are heavy: one at a time.
 
+## Correction of 2026-11-24 from K0
+
+Lot K0 read stan-codegen's manifests as built (lots S0–S5), measured CmdStan 2.40.0 in the image of `bayes-image`'s B0
+(a two-variable program compiled and run with NUTS and `fixed_param`, `--memory 3g --cpus 1`, read-only root), and fixes
+what the sections above left open. Where this section and the text above differ, this section holds.
+
+1. **A levels plate has K − 1 elements.** A dimension `{"plate": "levels:<c>"}` runs over the levels **after the
+   reference** (the second to the K-th in text order): `K_<c>` is the number of levels, the vector has `K_<c> - 1`
+   elements. No field is added (stan-codegen's manifests keep their bytes). Such a quantity's `unit` is the level's text
+   and its `index` the level's position among all the levels (2…K), the same number the data's category code gives it.
+2. **A `prior_draw` in the sample mode.** Its `dims` are the prior predictive's. A prior draw with a dimension is sized
+   `Mode == 1 ? s : 0`, so in `sample` it has **no column** (measured: a zero-size array writes none); stan-codegen now
+   refuses (`ErrExtension`) a prior draw with a dimension whose size is not by the mode. A single-valued prior draw has
+   its one column in both modes: in `sample` it is read and dropped, never checked for finiteness. In
+   `prior_predictive` a prior draw's columns replace those of the quantity it is `of`.
+3. **The data manifest, complete.** Kinds: `size` (`of`: `rows`, a group plate's id, `levels:<c>`, or the series' array
+   it sizes: `N_lag` of `Rows_lag`, `N_first` of `Rows_first`, `N_next` of `Rows_next`), `real` and `int` (`plate` the
+   rows or a group plate, `node`, `int` with `support` `any` | `nonnegative` | `binary`, `standardize`), `group_index`
+   (`plate` rows, `node`, `target` the group plate), `category` (`plate` rows, `node`; its levels plate
+   `levels:<node>`), `lift` (`plate` the inner group plate, `node` the group index lifted, `target` the outer plate),
+   `rows_subset` (`Rows_lag`), `lag` (`Lag<k>`, with the field **`lag`: k**), `first` (`Rows_first`), **`next`**
+   (`Rows_next`, new), `previous` (`Prev`), all four on the rows; `mode` (`Mode`, once); and an extension's kinds (a
+   lower-case word, names `Ppc_…` or `Prior_…`, defined by `predictive-checks`). `column` is written by flow-node, and
+   only for `real`, `int`, `group_index` and `category` (`DataReadsColumn`); the others the runner derives. The order
+   is stan-codegen's: `N` first, then the group plates' `J`, the categories' `K`, the data nodes, the lifts, the series'
+   arrays, `Mode`, the extension's data.
+4. **The quantity manifest, complete.** A dimension is exactly one of `plate`, `size` (a `size` entry or an integer of
+   the extension's data) or `component` (an effect node's id: its components, in the order of the mapping's
+   `component` entries). An effect's Cholesky factor is `L_<id>` with dims `[{"component": id}, {"component": id}]`
+   (not `{"size": "K_…"}`: `K_` is a category's size), its standard normals `Z_<id>` `[{"component"}, {"plate"}]`, a
+   centred effect `V_<id>` `[{"plate"}, {"component"}]`; a component's quantity has `node` `<id>.<component>`, the
+   correlation `<id>.correlation` with `triangle` `strict_lower`. **Units**: a group plate's unit is the group column's
+   value as text; a levels plate's as in 1; a component's unit is the component's Stan identifier; a quantity on the rows
+   plate (a state, a value per row) has `unit` null and `index` the kept row's number (1…N, as the replicated output's
+   `row`); a `size` dimension has `unit` null and `index` the position.
+5. **The CSV, measured on CmdStan 2.40.0.** Elements are named `name.i.j` with **the first index fastest**
+   (column-major), for a `matrix` and for an `array[] vector` alike (`M.1.1, M.2.1, M.1.2, …`). With `num_chains=C ≥ 2`
+   the files are `out_1.csv … out_C.csv`; **with one chain the file is `out.csv`, without a suffix**. Under
+   `fixed_param` the sampler's fields are only `lp__` and `accept_stat__` (both 0). Progress lines with one chain read
+   `Iteration:  21 / 23 [ 91%]  (Sampling)`. `bayescontract.Header` writes the expected header (the runner checks its
+   own against `testdata/tasks/<mode>.header.json`).
+6. **The default precision is 8 significant digits, not 6.** CmdStan 2.40.0 writes `sig_figs = 8 (Default)` in the CSV's
+   configuration and 8 digits a value (`-0.29838641`); with `sig_figs=6` it writes `-0.298386`. «6, CmdStan's default»
+   (Decisions of 2026-11-23) holds two things that differ: see «Open questions». It is also why `bayes-image` measured
+   10.3 bytes a value where this spec assumed 8.5. Nothing of K0 depends on it; the argument list of K1/K2 and the disk
+   estimate do.
+7. **`task.json`'s `bayes` object, as built** (`bayescontract.Task`, the Go name; «BayesTask» above): `model`, `sampler`,
+   **`plates`** (`[{id, kind, label}]`: the `quantity` section's `plate_label`), **`mapping`** (stan-codegen's mapping
+   table as saved with the version: the labels, names, kinds and components the summary and the `quantity` section
+   write; the runner still never reads the graph), `data`, `quantities`, `checks`, `replicated`. Every key is always
+   written (lists as `[]`, absent objects as `null`); `binary_sha256` is left out in the compile mode. The compile mode
+   reads **`model` alone** (no sampler, no manifest; `output` none); `prior_predictive` runs **without warm-up**
+   (`warmup` 0) and its output is `results`; `replicated` is set exactly when the output is `replicated`, with
+   `draws_per_chain` in 1…draws (default 50); `selftest` has no `bayes` object. Ranges: chains 1–8 (4), warmup
+   0–10,000 (1,000), draws 1–10,000 (1,000), `adapt_delta` strictly between 0 and 1 (0.8), `max_treedepth` 1–15 (10),
+   `seed` 0…2³²−1 (CmdStan's unsigned seed), `refresh` 1–10,000 (100); `init` null, a radius ≥ 0, or an object of
+   finite values (a number for a single value, a list for a vector) keyed by a quantity's Stan identifier. The gateway
+   checks all of it before a Job (`Task.Check`, with `CheckManifests`).
+8. **The caps, recounted.** The `quantity` section has a row group per quantity *entry* (a node, each component of an
+   effect, a correlation: up to 11 a node), not per node: 200 nodes × 11 × 10 rows would pass 100,000 alone. A cap is
+   added, **`bayes_max_quantity_entries` = 600** (in the report's order; the rest counted in `note_quantities_capped`,
+   and in the summary output); the `ppc`/`prior_check` cap is named **`bayes_max_check_rows` = 5,000**. The arithmetic
+   (`MaxResultRows`, asserted against the catalogue's `max_result_rows`): 34,000 (summary) + 25,920 (charts) + 24,000
+   (units) + 6,000 (`quantity`) + 1,600 (`data`, 200 entries × 8) + 90 (`sampler`) + 80 (`model`) + 5,000 (checks) =
+   **96,690**.
+9. **Shapes.** `diagnostic` is not declared: no section uses it. `summary` (level required, level_2 optional),
+   `quantity`, `data`, `sampler` (level required, level_2 null), `ppc` and `prior_check` (indexed, `observed`
+   unindexed). The variant `prior_predictive` writes `model`, `quantity`, `summary` (mean, sd and the five quantiles of
+   the prior draws), `data`, `prior_check`, `curve` and the layout's `reading`.
+10. **What every group's ConfigMap holds.** `catalog.json` **and `card.schema.json`** are in the ConfigMap of every
+    model group (`modelgroups.codeFiles`) and in its `RunnerHash`: adding `bayes_model` to the catalogue or the `bayes`
+    object to `card.schema.json` changes the bytes of all seven other groups and starts their recheck. K0 did not add
+    the catalogue's entry («Open questions»); K1 must not edit `card.schema.json` until the same question is answered
+    (the card's `bayes` object is in `bayescontract.Card` meanwhile).
+
+## As built — lot K0
+
+`gateway-go/internal/bayescontract/`: `task.go` (the constants, `Task`, `ModelRef`, `Sampler`, `Init`, `Replicated`,
+`Plate`, `Task.Check`), `manifest.go` (`DataEntry`, `Quantity`, `Dim`, `MappingEntry` and their kinds and roles, moved
+from `bayescodegen`, which now uses them: the golden manifests and mappings keep their bytes), `check.go`
+(`CheckManifests`, `Header`, `Sizes`, the sampler's columns), `declaration.go` (the columns of the draws, summary and
+replicated outputs, the limits with their defaults, the shapes, the sections of both variants, `MaxResultRows`, the
+refusals and the exit codes), `card.go` (`Card`). `testdata/tasks/{compile,prior_predictive,sample,selftest}.json`
+(written by Go from stan-codegen's golden `hier_slopes` and `extension_fake`) with `<mode>.header.json`, and
+`testdata/contract.json` (the declaration): `BAYES_CONTRACT_WRITE=1 go test ./internal/bayescontract/` rewrites them.
+`modelgroups.Task` gains `Bayes *bayescontract.Task` (`omitempty`): a test keeps another group's task.json byte for byte.
+Tests: every golden case and every valid graph of model-graph's corpus and of the opened templates gives manifests that
+hold together; broken manifests and tasks refused; the header against the measured CmdStan; the caps under 100,000.
+The models' catalogue is unchanged (no `bayes_model` yet), and the seven groups' golden bytes are as they were.
+
 ## Decisions of 2026-11-23 (the answers to this spec's questions)
 
 | Question | Decision | By |
@@ -747,4 +837,16 @@ K0 first (it needs `model-graph`'s M2 for the validated model); K1 and K2 in par
 
 ## Open questions
 
-None.
+Opened by lot K0 (2026-11-24), for the owner:
+
+1. **The precision of the draws** («Correction of 2026-11-24 from K0», 6): CmdStan's default is 8 significant digits.
+   Either keep CmdStan's default (no argument: 8 digits, about 10.5 bytes a value of CSV, the reference size about
+   1.5 GB of `/tmp`, still under the 2 GiB default) or keep 6 digits (`sig_figs=6` in the fixed argument list). The
+   recommendation: CmdStan's default, 8 digits — it is what «CmdStan's default» meant to keep, it makes the rounding
+   of «Risks» a hundred times smaller (5·10⁻⁸ of a draw instead of 5·10⁻⁶), and the disk default holds it.
+2. **The entry `bayes_model` of the models' catalogue** («Correction of 2026-11-24 from K0», 10): it is not only the
+   ConfigMaps. The catalogue is copied byte for byte to the interface (`frontend/assets/model-catalog.json`), whose
+   tests ask every model for its words in five languages and whose Models palette lists every model of a shown group
+   (the Bayesian node is a step node of its own, flow-node); the engine's tests ask every model and variant for a layout,
+   a fixture and the report's texts (bayes-report). The entry needs those in the same commit, and a choice for the
+   ConfigMaps (the options are in the lot's report).

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayescontract"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayesexpr"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/bayesgraph"
 )
@@ -12,42 +13,6 @@ import (
 // docs/specs/bayes-contract.md, «The data manifest»): the sizes first, then the data nodes in Order,
 // the lifted indices, the arrays of a series (its lags, its states' first and next rows), then
 // Mode, then the extension's data. The manifest lists the same variables in the same order.
-
-// DataEntry is one variable of the program's data block, as the runner writes it. Column is the
-// input column the flow node binds (answer 6): the codegen does not know it and leaves it empty;
-// flow-node fills it from the binding of Node when it writes the task.
-type DataEntry struct {
-	Stan        string `json:"stan"`
-	Kind        string `json:"kind"`
-	Of          string `json:"of,omitempty"`
-	Plate       string `json:"plate,omitempty"`
-	Column      string `json:"column,omitempty"`
-	Node        string `json:"node,omitempty"`
-	Standardize bool   `json:"standardize,omitempty"`
-	Target      string `json:"target,omitempty"`
-	Support     string `json:"support,omitempty"`
-	// Lag is k of Lag<k>: the row k steps before, within the series' unit.
-	Lag int `json:"lag,omitempty"`
-}
-
-// Kinds of a data entry (bayes-contract).
-const (
-	DataSize       = "size"
-	DataReal       = "real"
-	DataInt        = "int"
-	DataGroupIndex = "group_index"
-	DataCategory   = "category"
-	DataLift       = "lift"
-	DataMode       = "mode"
-	// A series: the rows that have every lag (Rows_lag) and the row k steps before each (Lag<k>);
-	// a state's first row of each unit (Rows_first), the other rows (Rows_next) and the row before
-	// each of them (Prev). Their sizes N_lag, N_first, N_next are sizes "of" the array they size.
-	DataRowsSubset = "rows_subset"
-	DataLag        = "lag"
-	DataFirst      = "first"
-	DataNext       = "next"
-	DataPrevious   = "previous"
-)
 
 // Identifiers the program declares for itself.
 const (
@@ -179,8 +144,8 @@ func (g *gen) sizeEntry(p bayesgraph.ModelPlate) {
 	} else {
 		g.w.line("int<lower=1> " + s + ";")
 	}
-	g.mapping = append(g.mapping, MappingEntry{Stan: s, Block: blockData, Kind: KindSize, Plate: strp(p.ID)})
-	g.data = append(g.data, DataEntry{Stan: s, Kind: DataSize, Of: p.ID})
+	g.mapping = append(g.mapping, bayescontract.MappingEntry{Stan: s, Block: blockData, Kind: bayescontract.KindSize, Plate: strp(p.ID)})
+	g.data = append(g.data, bayescontract.DataEntry{Stan: s, Kind: bayescontract.DataSize, Of: p.ID})
 }
 
 // The data block: the sizes (N, then the group plates' J and the categories' K in Model.Plates'
@@ -206,25 +171,25 @@ func (g *gen) writeData() error {
 		}
 		size := g.size[plate.ID]
 		x := g.ident[id]
-		entry := DataEntry{Stan: x, Plate: plate.ID, Node: id, Standardize: b.Standardize}
+		entry := bayescontract.DataEntry{Stan: x, Plate: plate.ID, Node: id, Standardize: b.Standardize}
 		switch b.Type {
 		case "real":
 			w.line("vector[" + size + "] " + x + ";")
-			entry.Kind = DataReal
+			entry.Kind = bayescontract.DataReal
 		case "int":
 			typ, ok := intType[b.Support]
 			if !ok {
 				return bug("the integer data node %q has the support %q", id, b.Support)
 			}
 			w.line("array[" + size + "] " + typ + " " + x + ";")
-			entry.Kind, entry.Support = DataInt, b.Support
+			entry.Kind, entry.Support = bayescontract.DataInt, b.Support
 		case "group_index":
 			target, ok := g.plates[b.Target]
 			if !ok || target.Kind != bayesgraph.PlateGroup {
 				return bug("the group index %q targets %q", id, b.Target)
 			}
 			w.line("array[" + size + "] int<lower=1, upper=" + g.size[target.ID] + "> " + x + ";")
-			entry.Kind, entry.Target = DataGroupIndex, target.ID
+			entry.Kind, entry.Target = bayescontract.DataGroupIndex, target.ID
 		case "category":
 			if plate.Kind != bayesgraph.PlateRows {
 				// graph.data_type: a category is on the rows only.
@@ -235,7 +200,7 @@ func (g *gen) writeData() error {
 				return bug("the category %q has no levels plate", id)
 			}
 			w.line("array[" + size + "] int<lower=1, upper=" + g.size[levels.ID] + "> " + x + ";")
-			entry.Kind = DataCategory
+			entry.Kind = bayescontract.DataCategory
 		case "time":
 			continue // the runner sorts the series by it; the program does not read it
 		default:
@@ -248,14 +213,14 @@ func (g *gen) writeData() error {
 		x := g.lift[liftKey(l.ID, l.Context)]
 		target := g.node(l.ID).Target
 		w.line("array[" + g.size[string(l.Context)] + "] int<lower=1, upper=" + g.size[target] + "> " + x + ";")
-		g.mapping = append(g.mapping, MappingEntry{Stan: x, Block: blockData, NodeID: strp(l.ID), Kind: KindLift,
+		g.mapping = append(g.mapping, bayescontract.MappingEntry{Stan: x, Block: blockData, NodeID: strp(l.ID), Kind: bayescontract.KindLift,
 			Plate: strp(string(l.Context))})
-		g.data = append(g.data, DataEntry{Stan: x, Kind: DataLift, Plate: string(l.Context), Node: l.ID, Target: target})
+		g.data = append(g.data, bayescontract.DataEntry{Stan: x, Kind: bayescontract.DataLift, Plate: string(l.Context), Node: l.ID, Target: target})
 	}
 	g.writeSeriesData()
 	w.line("int<lower=0, upper=1> " + identMode + ";")
-	g.mapping = append(g.mapping, MappingEntry{Stan: identMode, Block: blockData, Kind: KindMode})
-	g.data = append(g.data, DataEntry{Stan: identMode, Kind: DataMode})
+	g.mapping = append(g.mapping, bayescontract.MappingEntry{Stan: identMode, Block: blockData, Kind: bayescontract.KindMode})
+	g.data = append(g.data, bayescontract.DataEntry{Stan: identMode, Kind: bayescontract.DataMode})
 	if err := g.writeExtensionData(); err != nil {
 		return err
 	}
@@ -270,26 +235,26 @@ func (g *gen) writeSeriesData() {
 	rows := g.rows.ID
 	size := func(s, of string) {
 		g.w.line("int<lower=0> " + s + ";")
-		g.mapping = append(g.mapping, MappingEntry{Stan: s, Block: blockData, Kind: KindSize, Plate: strp(rows)})
-		g.data = append(g.data, DataEntry{Stan: s, Kind: DataSize, Of: of})
+		g.mapping = append(g.mapping, bayescontract.MappingEntry{Stan: s, Block: blockData, Kind: bayescontract.KindSize, Plate: strp(rows)})
+		g.data = append(g.data, bayescontract.DataEntry{Stan: s, Kind: bayescontract.DataSize, Of: of})
 	}
 	array := func(s, size, kind string, lag int) {
 		g.w.line("array[" + size + "] int<lower=1, upper=" + identRows + "> " + s + ";")
-		g.mapping = append(g.mapping, MappingEntry{Stan: s, Block: blockData, Kind: KindSeries, Plate: strp(rows)})
-		g.data = append(g.data, DataEntry{Stan: s, Kind: kind, Plate: rows, Lag: lag})
+		g.mapping = append(g.mapping, bayescontract.MappingEntry{Stan: s, Block: blockData, Kind: bayescontract.KindSeries, Plate: strp(rows)})
+		g.data = append(g.data, bayescontract.DataEntry{Stan: s, Kind: kind, Plate: rows, Lag: lag})
 	}
 	if len(g.m.Lags) > 0 {
 		size(identNLag, identRowsLag)
-		array(identRowsLag, identNLag, DataRowsSubset, 0)
+		array(identRowsLag, identNLag, bayescontract.DataRowsSubset, 0)
 		for _, k := range g.m.Lags {
-			array(identLagPrefix+strconv.Itoa(k), identNLag, DataLag, k)
+			array(identLagPrefix+strconv.Itoa(k), identNLag, bayescontract.DataLag, k)
 		}
 	}
 	if len(g.states) > 0 {
 		size(identNFirst, identRowsFirst)
-		array(identRowsFirst, identNFirst, DataFirst, 0)
+		array(identRowsFirst, identNFirst, bayescontract.DataFirst, 0)
 		size(identNNext, identRowsNext)
-		array(identRowsNext, identNNext, DataNext, 0)
-		array(identPrev, identNNext, DataPrevious, 0)
+		array(identRowsNext, identNNext, bayescontract.DataNext, 0)
+		array(identPrev, identNNext, bayescontract.DataPrevious, 0)
 	}
 }

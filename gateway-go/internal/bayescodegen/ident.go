@@ -164,48 +164,6 @@ func nameIdentifier(name *string, prefix string, ids ...string) (ident, renamed,
 	return *name, "", "", nil
 }
 
-// MappingEntry is one identifier the program declares (the mapping table): what it stands for and
-// why it is not the person's name when it is not. Labels live here, never in the program.
-type MappingEntry struct {
-	Stan      string  `json:"stan"`
-	Block     string  `json:"block"`
-	NodeID    *string `json:"node_id"`
-	Component *string `json:"component"`
-	Name      *string `json:"name"`
-	Label     *string `json:"label"`
-	Kind      string  `json:"kind"`
-	Plate     *string `json:"plate"`
-	Role      *string `json:"role"`
-	Renamed   *string `json:"renamed"`
-	// Word is the word that made a reserved name renamed (the name itself, or the suffix).
-	Word string `json:"word,omitempty"`
-}
-
-// Kinds of a mapping entry beyond the node kinds (parameter, transformed, linear_predictor, data,
-// state): a size (N, J_<plate>, K_<category>, N_lag, N_first, N_next), the mode flag, a lifted
-// index (Up_<index>_<plate>), the derived data of a series (Rows_lag, Lag<k>, Rows_first,
-// Rows_next, Prev), a component of correlated effects and their correlation matrix, an identifier
-// the program declares for a node of its own (Z_<id> standard normals, L_<id> a Cholesky factor,
-// W_<id> the scaled effects, V_<id> the centred effects, Full_<id> a category's coefficients with
-// the reference's 0, Arg<k>_<id> an argument of a truncated prior over a plate), and what an
-// extension declares.
-const (
-	KindSize        = "size"
-	KindMode        = "mode"
-	KindLift        = "lift"
-	KindSeries      = "series"
-	KindComponent   = "component"
-	KindCorrelation = "correlation"
-	KindInternal    = "internal"
-	KindExtension   = "extension"
-)
-
-// Roles of a written variable (the quantity manifest's, bayes-contract).
-const (
-	RoleQuantity = "quantity"
-	RoleInternal = "internal"
-)
-
 func strp(s string) *string { return &s }
 
 func optp(s string) *string {
