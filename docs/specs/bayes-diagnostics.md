@@ -383,3 +383,29 @@ lands:
 ## Open questions
 
 None.
+
+## As built
+
+### Lot X4: the contraction, the pairs' caps
+
+- **The catalogue's field `finite_variance`** (every distribution, `bayescatalog.FiniteVariance`): `{"rule": "always"}`,
+  `{"rule": "never"}`, or `{"rule": "above", "param": …, "above": …}` (finite when that constant argument is above the
+  bound). Normal, exponential, gamma, lognormal, beta, uniform, `std_normal`, the LKJ's Cholesky factor, the multivariate
+  normal and the four likelihoods: always. Cauchy: never. Student-t: above 2 on `nu`. Inverse-gamma: above 2 on `alpha`.
+  `FiniteVariance.Holds(value)` is the rule. The snapshot and the frontend's copy are regenerated; the graph's own decision
+  (a truncation to a bounded range, every node an argument reads) is not in this lot: the runner takes it as a function.
+- **The runner**: `second_pass(…, prior_variance=fn)`, `fn(position)` the variance of the quantity's prior marginal or a
+  reason (`NO_FINITE_VARIANCE`, `NO_PRIOR_DRAWS`); `prior_variance_of(draws, finite_variance)` builds it (variance with
+  ddof 1; fewer than two draws or a constant: no draws). The contraction is `1 − sd² / Var_prior`, written as the `summary`
+  number `contraction` and the summary output's last column, NULL with the counted note `contraction_null` («the prior has
+  no finite variance», «the run has no draws of the prior») otherwise; not written in the prior predictive mode. Until the
+  runner reads the checks' `prior_marginal` columns and the gateway sends the graph's decision, no caller gives the
+  function and every contraction is NULL with its note.
+- **The caps**: `bayes_max_pair_quantities` (4) and `bayes_pair_points` (300) are in `bayescontract.Limits` and in the
+  runner's `DEFAULT_LIMITS` (no longer a default of `bayes_pass2`). **The arithmetic changes**: with the contraction a
+  quantity has 13 rows, and 2,000 × 18 (the 17 rows of the old count, one more) plus the pairs gives 100,490, over the
+  engine's 100,000. The five original-scale numbers belong to a linear-predictor coefficient, a component of an effect and
+  so an entry of the `quantity` section, at most `bayes_max_quantity_entries` (600), and `MaxResultRows` now counts 13
+  rows for each of the 2,000 quantities and 5 more for each of the 600 entries: 26,000 + 3,000 + 25,920 (charts) + 1,800
+  (6 pairs × 300) + 24,000 + 6,000 + 1,600 + 90 + 80 + 5,000 = **93,490**, 6,510 under the limit. The count of the 600 holds
+  only if the lot that writes the original scale writes it for coefficients of effects alone.

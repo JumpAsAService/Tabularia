@@ -21,8 +21,14 @@ read all of an entry's scalars. Everything written is a measure or a fact: no th
 THE TIME. After the first block has been read and its first sub-block computed, the whole pass is projected from those two rates; a
 projection past `seconds_left` is the refusal `too_slow`, raised before any row of the pass is written.
 
-Not here: the contraction and the original-scale pairs (lot X4), the checks' prior marginals (`prior` is a function the caller
-gives: the draws of a quantity's prior marginal, or None).
+THE CONTRACTION. 1 − Var_post/Var_prior (Betancourt 2018), a number of the `summary` section and a column of the summary output, written
+when `diagnostics` is. `prior_variance(position)` is a function the caller gives: the variance of the quantity's prior marginal (see
+`prior_variance_of`), or the reason it has none, `NO_FINITE_VARIANCE` (the graph says the prior's marginal has no finite variance: a
+Cauchy, a Student-t with ν ≤ 2) or `NO_PRIOR_DRAWS` (the run has no prior marginal for it); the contraction is then NULL and the
+facts, counted, are the note `contraction_null`. Without the function every contraction is NULL for want of prior draws.
+
+Not here: the original-scale pairs (the linear predictors'), the checks' prior marginals (`prior` is a function the caller gives:
+the draws of a quantity's prior marginal, or None).
 """
 from __future__ import annotations
 
@@ -42,19 +48,21 @@ from bayes_draws import read_metadata
 from bayes_task import DEFAULT_LIMITS, Entry, Layout, ManifestMismatch, report_order
 from tab_protocol import Refusal
 
-EXTRA_LIMITS = {"bayes_max_pair_quantities": 4, "bayes_pair_points": 300}
+NO_FINITE_VARIANCE = "no_finite_variance"
+NO_PRIOR_DRAWS = "no_prior_draws"
 SUMMARY_FLUSH = 4096
-SUMMARY_COLUMNS = ("quantity", "node", "label", "unit", "index", "index_2", "kind", "scale", *bayes_diag.NUMBERS)
+SUMMARY_NUMBERS = (*bayes_diag.NUMBERS, "contraction")
+SUMMARY_COLUMNS = ("quantity", "node", "label", "unit", "index", "index_2", "kind", "scale", *SUMMARY_NUMBERS)
 DIAGNOSTIC_NUMBERS = ("mcse_mean", "mcse_sd", "rhat", "ess_bulk", "ess_tail")
 SUMMARY_SCHEMA = pa.schema(
     [pa.field("quantity", pa.string(), nullable=False), pa.field("node", pa.string(), nullable=False), pa.field("label", pa.string()),
      pa.field("unit", pa.string()), pa.field("index", pa.int32()), pa.field("index_2", pa.int32()),
      pa.field("kind", pa.string(), nullable=False), pa.field("scale", pa.string(), nullable=False)]
-    + [pa.field(name, pa.float64()) for name in bayes_diag.NUMBERS])
+    + [pa.field(name, pa.float64()) for name in SUMMARY_NUMBERS])
 
 
 def limit(limits: Mapping[str, int], name: str) -> int:
-    return int(limits.get(name, EXTRA_LIMITS.get(name, DEFAULT_LIMITS.get(name))))
+    return int(limits.get(name, DEFAULT_LIMITS.get(name)))
 
 
 @dataclass
@@ -83,6 +91,7 @@ class PassReport:
     charts: dict[str, list[str]] = field(default_factory=dict)       # the chart ids written, by kind
     density_cut: dict[str, tuple[int, int]] = field(default_factory=dict)   # quantity → (posterior draws, prior draws) outside the range
     summary_rows: int = 0
+    contraction: dict[str, int] = field(default_factory=dict)      # quantities by what the contraction is: "computed" or a reason
 
 
 # ── the order ─────────────────────────────────────────────────────────────────
@@ -148,8 +157,8 @@ class _SummaryFile:
         r["index_2"].append(element.index_2)
         r["kind"].append((entry.kind if entry else "") or "parameter")
         r["scale"].append("model")
-        for name in bayes_diag.NUMBERS:
-            v = float(measures[name][i])
+        for name in SUMMARY_NUMBERS:
+            v = float(measures[name][i]) if name in measures else math.nan
             r[name].append(v if math.isfinite(v) else None)
         if len(r["quantity"]) >= SUMMARY_FLUSH:
             self.flush()
@@ -178,17 +187,47 @@ class _SummaryFile:
             pass
 
 
+def prior_variance_of(draws: np.ndarray | None, finite_variance: bool) -> float | str:
+    """What `prior_variance` returns for a quantity: `finite_variance` is the graph's decision (the catalogue's field `finite_variance` of its
+    prior and of everything its arguments read), `draws` its prior marginal's draws (None: the run has none)."""
+    if not finite_variance:
+        return NO_FINITE_VARIANCE
+    if draws is None or np.asarray(draws).size < 2:
+        return NO_PRIOR_DRAWS
+    v = float(np.var(np.asarray(draws, dtype=np.float64), ddof=1))
+    return v if math.isfinite(v) and v > 0.0 else NO_PRIOR_DRAWS
+
+
+def contraction(sd: np.ndarray, positions: Sequence[int], prior_variance: Callable[[int], float | str] | None,
+                counts: dict[str, int]) -> np.ndarray:
+    """1 − Var_post/Var_prior for the quantities at `positions` (NaN for NULL), the posterior variance the square of the summary's sd."""
+    out = np.full(len(positions), np.nan)
+    for j, position in enumerate(positions):
+        got = prior_variance(position) if prior_variance is not None else NO_PRIOR_DRAWS
+        if isinstance(got, str):
+            counts[got] = counts.get(got, 0) + 1
+            continue
+        var_post = float(sd[j]) ** 2
+        if not math.isfinite(var_post) or not math.isfinite(got) or got <= 0.0:
+            counts[NO_PRIOR_DRAWS] = counts.get(NO_PRIOR_DRAWS, 0) + 1
+            continue
+        out[j] = 1.0 - var_post / got
+        counts["computed"] = counts.get("computed", 0) + 1
+    return out
+
+
 # ── the pass ──────────────────────────────────────────────────────────────────
 def second_pass(draws_path: str, layout: Layout, limits: Mapping[str, int], writer: Any, *, summary_path: str | None = None,
                 budget: Budget | None = None, diagnostics: bool = True, prior: Callable[[int], np.ndarray | None] | None = None,
                 seed: int = 0, seconds_left: float | None = None, quantity_entries: Sequence[Entry] | None = None,
-                read_row_group: Callable[..., Any] | None = None) -> PassReport:
+                prior_variance: Callable[[int], float | str] | None = None, read_row_group: Callable[..., Any] | None = None) -> PassReport:
     """Reads the draws parquet back by blocks of quantities and writes the summary, the quantity measures and the charts.
 
     `writer`: a ResultsWriter (`number`, `points`, `note`); `diagnostics` False is the prior predictive mode (mean, sd, the
     quantiles); `prior(position)`: the draws of a quantity's prior marginal, or None; `seed`: the seeded sample of a `units:` chart;
     `seconds_left`: the time the pass may take (the projection above it is `too_slow`); `quantity_entries`: the entries that have a
-    `quantity` row (default: the report's first `bayes_max_quantity_entries`). A refusal or an error leaves the summary file deleted.
+    `quantity` row (default: the report's first `bayes_max_quantity_entries`); `prior_variance(position)`: the variance of a quantity's
+    prior marginal or the reason it has none (the contraction). A refusal or an error leaves the summary file deleted.
     """
     budget = budget or Budget.of(limits)
     t_start = time.monotonic()
@@ -228,7 +267,7 @@ def second_pass(draws_path: str, layout: Layout, limits: Mapping[str, int], writ
     divergent_position = next((i for i, e in enumerate(layout.draws[:first]) if e.quantity == "divergent__"), None)
     divergent: np.ndarray | None = None
 
-    numbers = bayes_diag.NUMBERS if diagnostics else bayes_diag.NUMBERS[:7]
+    numbers = SUMMARY_NUMBERS if diagnostics else bayes_diag.NUMBERS[:7]
     summary = _SummaryFile(summary_path) if summary_path else None
     per_block = max(1, budget.pass_bytes // (8 * s))
     per_sub = bayes_diag.sub_block(budget.compute_bytes, s)
@@ -259,6 +298,8 @@ def second_pass(draws_path: str, layout: Layout, limits: Mapping[str, int], writ
                 b = min(nq, a + per_sub)
                 t1 = time.monotonic()
                 m = bayes_diag.measures(block[a:b], diagnostics=diagnostics)
+                if diagnostics:
+                    m["contraction"] = contraction(m["sd"], range(p0 + a, p0 + b), prior_variance, report.contraction)
                 compute_seconds = time.monotonic() - t1
                 report.seconds_compute += compute_seconds
                 report.sub_blocks += 1
@@ -354,6 +395,11 @@ def _finish(writer: Any, report: PassReport, layout: Layout, limits: Mapping[str
             e = layout.entries[k]
             for stat, v in (("rhat_max", rhat_max), ("ess_bulk_min", bulk_min), ("ess_tail_min", tail_min)):
                 writer.number("quantity", stat, v if math.isfinite(v) else None, level=e.stan)
+    nulls = {k: v for k, v in report.contraction.items() if k != "computed"}
+    if nulls:
+        said = {NO_FINITE_VARIANCE: "the prior has no finite variance", NO_PRIOR_DRAWS: "the run has no draws of the prior"}
+        writer.note("contraction_null", "The contraction is empty for " + "; ".join(
+            f"{n} quantities ({said.get(k, k)})" for k, n in sorted(nulls.items())) + ".")
     if report.density_cut:
         parts = [f"{name} ({a} posterior and {b} prior draws)" for name, (a, b) in report.density_cut.items()]
         writer.note("density_cut", "The density charts cut the draws outside their range: " + "; ".join(parts) + ".")

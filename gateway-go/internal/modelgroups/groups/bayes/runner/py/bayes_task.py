@@ -44,7 +44,8 @@ DEFAULT_LIMITS: dict[str, int] = {
     "max_result_rows": 100_000, "max_chart_points": 2000, "block_values": 1_048_576, "max_quantities": 20_000, "max_units": 20_000,
     "max_check_columns": 200, "max_card_bytes": 1_048_576, "bayes_max_summary_quantities": 2000, "bayes_max_quantity_entries": 600,
     "bayes_max_chart_quantities": 12, "bayes_trace_points": 200, "bayes_rank_bins": 20, "bayes_density_points": 200,
-    "bayes_max_unit_charts": 8, "bayes_unit_points": 1000, "bayes_max_check_rows": 5000,
+    "bayes_max_unit_charts": 8, "bayes_unit_points": 1000, "bayes_max_pair_quantities": 4,
+    "bayes_pair_points": 300, "bayes_max_check_rows": 5000,
 }
 
 _HEX64 = re.compile(r"^[0-9a-f]{64}$")

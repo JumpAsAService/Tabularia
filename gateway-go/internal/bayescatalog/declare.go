@@ -4,6 +4,16 @@ func uses(u ...Use) []Use { return u }
 
 func f(x float64) *float64 { return &x }
 
+var (
+	always = FiniteVariance{Rule: VarianceAlways}
+	never  = FiniteVariance{Rule: VarianceNever}
+)
+
+// above: the variance is finite when the constant argument param is above bound.
+func above(param string, bound float64) FiniteVariance {
+	return FiniteVariance{Rule: VarianceAbove, Param: param, Above: f(bound)}
+}
+
 // params builds a parameter list, so that a distribution without arguments is [] and not null.
 func params(p ...Param) []Param {
 	if p == nil {
@@ -92,8 +102,9 @@ var declared = Catalog{
 			Support: RealLine, Outcome: RealLine,
 			Stan: StanNames{Statement: "normal", Density: "normal_lpdf", RNG: "normal_rng",
 				LCDF: "normal_lcdf", LCCDF: "normal_lccdf", Quantile: QuantileInvPhi},
-			LocationScale: &LocScale{Location: "mu", Scale: "sigma"},
-			Browser:       Exact},
+			LocationScale:  &LocScale{Location: "mu", Scale: "sigma"},
+			Browser:        Exact,
+			FiniteVariance: always},
 
 		// Student's t as Stan writes it: degrees of freedom, location, scale. The browser's library
 		// has the standard t only; bayesDistributions.ts moves and stretches it.
@@ -103,16 +114,18 @@ var declared = Catalog{
 			Support: RealLine,
 			Stan: StanNames{Statement: "student_t", Density: "student_t_lpdf", RNG: "student_t_rng",
 				LCDF: "student_t_lcdf", LCCDF: "student_t_lccdf", Quantile: QuantileIncBetaT},
-			LocationScale: &LocScale{Location: "mu", Scale: "sigma"},
-			Browser:       Exact},
+			LocationScale:  &LocScale{Location: "mu", Scale: "sigma"},
+			Browser:        Exact,
+			FiniteVariance: above("nu", 2)},
 
 		{ID: "cauchy", Uses: uses(Prior),
 			Params:  params(Param{Name: "mu", Constraint: Real}, Param{Name: "sigma", Constraint: Positive}),
 			Support: RealLine,
 			Stan: StanNames{Statement: "cauchy", Density: "cauchy_lpdf", RNG: "cauchy_rng",
 				LCDF: "cauchy_lcdf", LCCDF: "cauchy_lccdf", Quantile: QuantileTan},
-			LocationScale: &LocScale{Location: "mu", Scale: "sigma"},
-			Browser:       Exact},
+			LocationScale:  &LocScale{Location: "mu", Scale: "sigma"},
+			Browser:        Exact,
+			FiniteVariance: never},
 
 		// Stan's beta is the rate (the inverse scale).
 		{ID: "exponential", Uses: uses(Prior),
@@ -120,7 +133,8 @@ var declared = Catalog{
 			Support: PositiveRay,
 			Stan: StanNames{Statement: "exponential", Density: "exponential_lpdf", RNG: "exponential_rng",
 				LCDF: "exponential_lcdf", LCCDF: "exponential_lccdf", Quantile: QuantileLog1m},
-			Browser: Exact},
+			Browser:        Exact,
+			FiniteVariance: always},
 
 		// Shape and rate.
 		{ID: "gamma", Uses: uses(Prior),
@@ -128,7 +142,8 @@ var declared = Catalog{
 			Support: PositiveRay,
 			Stan: StanNames{Statement: "gamma", Density: "gamma_lpdf", RNG: "gamma_rng",
 				LCDF: "gamma_lcdf", LCCDF: "gamma_lccdf"},
-			Browser: Exact},
+			Browser:        Exact,
+			FiniteVariance: always},
 
 		// Shape and scale.
 		{ID: "inv_gamma", Uses: uses(Prior),
@@ -136,21 +151,24 @@ var declared = Catalog{
 			Support: PositiveRay,
 			Stan: StanNames{Statement: "inv_gamma", Density: "inv_gamma_lpdf", RNG: "inv_gamma_rng",
 				LCDF: "inv_gamma_lcdf", LCCDF: "inv_gamma_lccdf"},
-			Browser: Exact},
+			Browser:        Exact,
+			FiniteVariance: above("alpha", 2)},
 
 		{ID: "lognormal", Uses: uses(Prior),
 			Params:  params(Param{Name: "mu", Constraint: Real}, Param{Name: "sigma", Constraint: Positive}),
 			Support: PositiveRay,
 			Stan: StanNames{Statement: "lognormal", Density: "lognormal_lpdf", RNG: "lognormal_rng",
 				LCDF: "lognormal_lcdf", LCCDF: "lognormal_lccdf", Quantile: QuantileExpInvPhi},
-			Browser: Exact},
+			Browser:        Exact,
+			FiniteVariance: always},
 
 		{ID: "beta", Uses: uses(Prior),
 			Params:  params(Param{Name: "alpha", Constraint: Positive}, Param{Name: "beta", Constraint: Positive}),
 			Support: UnitRange,
 			Stan: StanNames{Statement: "beta", Density: "beta_lpdf", RNG: "beta_rng",
 				LCDF: "beta_lcdf", LCCDF: "beta_lccdf", Quantile: QuantileIncBeta},
-			Browser: Exact},
+			Browser:        Exact,
+			FiniteVariance: always},
 
 		// Both bounds are constants in the first release; the parameter is declared with them.
 		{ID: "uniform", Uses: uses(Prior),
@@ -159,7 +177,8 @@ var declared = Catalog{
 			Support: Bounded,
 			Stan: StanNames{Statement: "uniform", Density: "uniform_lpdf", RNG: "uniform_rng",
 				LCDF: "uniform_lcdf", LCCDF: "uniform_lccdf", Quantile: QuantileLinear},
-			Browser: Exact},
+			Browser:        Exact,
+			FiniteVariance: always},
 
 		// The browser draws one correlation: (r + 1) / 2 ~ Beta(eta - 1 + K/2, eta - 1 + K/2).
 		{ID: "lkj_corr_cholesky", Uses: uses(Prior),
@@ -167,7 +186,8 @@ var declared = Catalog{
 			Support: CholeskyCorrelation,
 			Stan: StanNames{Statement: "lkj_corr_cholesky", Density: "lkj_corr_cholesky_lpdf",
 				RNG: "lkj_corr_cholesky_rng"},
-			Browser: Marginal},
+			Browser:        Marginal,
+			FiniteVariance: always},
 
 		// The centred form of correlated effects; with L = diag(tau) L_omega, component k is
 		// normal(mu_k, tau_k) whatever the correlation.
@@ -176,8 +196,9 @@ var declared = Catalog{
 			Support: VectorSupport,
 			Stan: StanNames{Statement: "multi_normal_cholesky", Density: "multi_normal_cholesky_lpdf",
 				RNG: "multi_normal_cholesky_rng"},
-			LocationScale: &LocScale{Location: "mu", Scale: "L"},
-			Browser:       Marginal},
+			LocationScale:  &LocScale{Location: "mu", Scale: "L"},
+			Browser:        Marginal,
+			FiniteVariance: always},
 
 		// The non-centred form.
 		{ID: "std_normal", Uses: uses(Internal),
@@ -185,14 +206,16 @@ var declared = Catalog{
 			Support: RealLine,
 			Stan: StanNames{Statement: "std_normal", Density: "std_normal_lpdf", RNG: "std_normal_rng",
 				LCDF: "std_normal_lcdf", LCCDF: "std_normal_lccdf"},
-			Browser: Exact},
+			Browser:        Exact,
+			FiniteVariance: always},
 
 		{ID: "bernoulli_logit", Uses: uses(Likelihood),
 			Params:  params(Param{Name: "alpha", Constraint: Real}),
 			Support: Binary, Outcome: Binary, Link: "logit",
 			Stan: StanNames{Statement: "bernoulli_logit", Density: "bernoulli_logit_lpmf",
 				RNG: "bernoulli_logit_rng"},
-			Browser: None},
+			Browser:        None,
+			FiniteVariance: always},
 
 		// Stan 2.40 has no binomial_logit_rng: the generator is binomial_rng(N, inv_logit(alpha)).
 		{ID: "binomial_logit", Uses: uses(Likelihood),
@@ -201,14 +224,16 @@ var declared = Catalog{
 			Support: ZeroToN, Outcome: ZeroToN, Link: "logit",
 			Stan: StanNames{Statement: "binomial_logit", Density: "binomial_logit_lpmf",
 				RNG: "binomial_rng", RNGInverseLink: "inv_logit"},
-			Browser: None},
+			Browser:        None,
+			FiniteVariance: always},
 
 		// Stan's Poisson generator refuses very large rates; predictive-checks reads the bound.
 		{ID: "poisson_log", Uses: uses(Likelihood),
 			Params:  params(Param{Name: "alpha", Constraint: Real}),
 			Support: Counts, Outcome: Counts, Link: "log",
-			Stan:    StanNames{Statement: "poisson_log", Density: "poisson_log_lpmf", RNG: "poisson_log_rng"},
-			Browser: None},
+			Stan:           StanNames{Statement: "poisson_log", Density: "poisson_log_lpmf", RNG: "poisson_log_rng"},
+			Browser:        None,
+			FiniteVariance: always},
 
 		// Stan has no CDF for it: it cannot be truncated.
 		{ID: "neg_binomial_2_log", Uses: uses(Likelihood),
@@ -216,7 +241,8 @@ var declared = Catalog{
 			Support: Counts, Outcome: Counts, Link: "log",
 			Stan: StanNames{Statement: "neg_binomial_2_log", Density: "neg_binomial_2_log_lpmf",
 				RNG: "neg_binomial_2_log_rng"},
-			Browser: None},
+			Browser:        None,
+			FiniteVariance: always},
 	},
 
 	Language: Language{

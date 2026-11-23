@@ -156,6 +156,38 @@ type LocScale struct {
 	Scale    string `json:"scale"`
 }
 
+// VarianceRule says when a distribution's marginal has a finite variance, the one fact the
+// prior-to-posterior contraction needs (docs/specs/bayes-diagnostics.md, «Prior-to-posterior
+// contraction»): Always, Never, or Above, when the constant argument Param is above Bound (the
+// Student-t's nu above 2, the inverse-gamma's alpha above 2).
+type VarianceRule string
+
+const (
+	VarianceAlways VarianceRule = "always"
+	VarianceNever  VarianceRule = "never"
+	VarianceAbove  VarianceRule = "above"
+)
+
+// FiniteVariance is a distribution's rule. A truncation to a bounded range makes the variance
+// finite whatever the rule; that is the graph's to say, not the distribution's.
+type FiniteVariance struct {
+	Rule  VarianceRule `json:"rule"`
+	Param string       `json:"param,omitempty"`
+	Above *float64     `json:"above,omitempty"`
+}
+
+// Holds reports whether the variance is finite for the argument's value (ignored unless the rule
+// is Above).
+func (v FiniteVariance) Holds(value float64) bool {
+	switch v.Rule {
+	case VarianceAlways:
+		return true
+	case VarianceAbove:
+		return v.Above != nil && value > *v.Above
+	}
+	return false
+}
+
 // Distribution is one entry of the catalogue.
 type Distribution struct {
 	ID            string    `json:"id"`
@@ -167,6 +199,8 @@ type Distribution struct {
 	Stan          StanNames `json:"stan"`
 	LocationScale *LocScale `json:"location_scale,omitempty"`
 	Browser       Browser   `json:"browser"`
+	// FiniteVariance: when the marginal has a finite variance (lot X4).
+	FiniteVariance FiniteVariance `json:"finite_variance"`
 }
 
 // Truncatable reports whether Stan has the CDFs a truncation needs (rule 5 of «Bounds and

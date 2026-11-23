@@ -475,8 +475,10 @@ func TestTheCapsKeepTheResultsUnderTheEnginesLimit(t *testing.T) {
 	if limit := int64(modelcatalog.Limit("max_result_rows")); limit <= 0 || most >= limit {
 		t.Errorf("at most %d rows, the engine's limit %d", most, limit)
 	}
-	if most != 96_690 {
-		t.Errorf("the arithmetic gives %d rows (96,690 in the spec): say the new number in the spec", most)
+	// 26,000 (summary, 13 rows × 2,000) + 3,000 (original scale, 5 × 600 entries) + 25,920 (charts) + 1,800 (6 pairs × 300)
+	// + 24,000 (units) + 6,000 (quantity) + 1,600 (data) + 90 (sampler) + 80 (model) + 5,000 (checks).
+	if most != 93_490 {
+		t.Errorf("the arithmetic gives %d rows (93,490 in the spec): say the new number in the spec", most)
 	}
 }
 

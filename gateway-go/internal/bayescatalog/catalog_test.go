@@ -134,6 +134,18 @@ func TestDistributionsInvariants(t *testing.T) {
 		if d.Stan.RNGInverseLink != "" && d.Link == "" {
 			t.Errorf("%s: a generator's inverse link without a link", d.ID)
 		}
+		switch fv := d.FiniteVariance; fv.Rule {
+		case VarianceAlways, VarianceNever:
+			if fv.Param != "" || fv.Above != nil {
+				t.Errorf("%s: finite_variance %q takes no argument", d.ID, fv.Rule)
+			}
+		case VarianceAbove:
+			if !names[fv.Param] || fv.Above == nil {
+				t.Errorf("%s: finite_variance names %q above %v, not a parameter and a bound", d.ID, fv.Param, fv.Above)
+			}
+		default:
+			t.Errorf("%s: finite_variance has no rule (%q)", d.ID, fv.Rule)
+		}
 		if ls := d.LocationScale; ls != nil && (!names[ls.Location] || !names[ls.Scale]) {
 			t.Errorf("%s: location_scale names %q and %q, not parameters", d.ID, ls.Location, ls.Scale)
 		}
@@ -378,5 +390,32 @@ func TestStanListsAreTheFrozenCopyOfTheManual(t *testing.T) {
 			}
 			seen[w] = true
 		}
+	}
+}
+
+// The prior-to-posterior contraction is NULL where the variance is infinite (lot X4): the
+// Cauchy never, the Student-t only above 2 degrees of freedom, the inverse-gamma above shape 2.
+func TestFiniteVarianceRules(t *testing.T) {
+	rule := map[string]FiniteVariance{}
+	for _, d := range Declared().Distributions {
+		rule[d.ID] = d.FiniteVariance
+	}
+	cases := []struct {
+		id    string
+		value float64
+		want  bool
+	}{
+		{"normal", 0, true}, {"exponential", 0, true}, {"gamma", 0, true}, {"lognormal", 0, true},
+		{"beta", 0, true}, {"uniform", 0, true}, {"cauchy", 100, false},
+		{"student_t", 1, false}, {"student_t", 2, false}, {"student_t", 2.01, true}, {"student_t", 30, true},
+		{"inv_gamma", 2, false}, {"inv_gamma", 3, true}, {"inv_gamma", 0.5, false},
+	}
+	for _, c := range cases {
+		if got := rule[c.id].Holds(c.value); got != c.want {
+			t.Errorf("%s at %v: finite variance %v, want %v", c.id, c.value, got, c.want)
+		}
+	}
+	if rule["student_t"].Param != "nu" || rule["inv_gamma"].Param != "alpha" {
+		t.Errorf("the argument is nu for the t and alpha for the inverse-gamma: %+v %+v", rule["student_t"], rule["inv_gamma"])
 	}
 }

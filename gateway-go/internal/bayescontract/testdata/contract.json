@@ -73,12 +73,22 @@
       "where": "catalogue"
     },
     {
+      "key": "bayes_max_pair_quantities",
+      "default": 4,
+      "where": "catalogue"
+    },
+    {
+      "key": "bayes_pair_points",
+      "default": 300,
+      "where": "catalogue"
+    },
+    {
       "key": "bayes_max_check_rows",
       "default": 5000,
       "where": "catalogue"
     }
   ],
-  "max_result_rows_by_construction": 96690,
+  "max_result_rows_by_construction": 93490,
   "model": "bayes_model",
   "modes": [
     "compile",
@@ -252,6 +262,11 @@
       },
       {
         "name": "ess_tail",
+        "type": "Float64",
+        "nullable": true
+      },
+      {
+        "name": "contraction",
         "type": "Float64",
         "nullable": true
       }
@@ -786,6 +801,7 @@
           "rhat",
           "ess_bulk",
           "ess_tail",
+          "contraction",
           "orig_mean",
           "orig_sd",
           "orig_q5",

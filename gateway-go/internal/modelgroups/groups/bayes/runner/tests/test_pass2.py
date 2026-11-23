@@ -104,6 +104,55 @@ class TestTheNumbers(Base):
         self.assertFalse([k for k in rows["key"] if k.startswith("quantity|") and "rhat_max" in k])
 
 
+class TestTheContraction(Base):
+    """Lot X4: 1 − Var_post/Var_prior (Betancourt 2018), NULL when the prior has no finite variance or no draws."""
+
+    def prior_variance(self, position):
+        name = self.layout.draws[position].quantity
+        if name == "tau":
+            return P2.NO_FINITE_VARIANCE                       # a Cauchy's marginal
+        if name == "beta":
+            return P2.NO_PRIOR_DRAWS
+        return 25.0
+
+    def test_the_contraction_is_one_minus_the_variance_ratio_and_null_where_the_prior_has_none(self):
+        want = bayes_diag.measures(self.full[3:])
+        report, rows, summary = self.run_pass(prior_variance=self.prior_variance)
+        names = summary["quantity"]
+        for i, name in enumerate(names):
+            got = summary["contraction"][i]
+            if name in ("tau", "beta"):
+                self.assertIsNone(got, name)
+            else:
+                self.assertEqual(got, 1.0 - want["sd"][i] ** 2 / 25.0, name)
+        by_key = dict(zip(rows["key"], rows["value"]))
+        self.assertIsNone(by_key["summary|tau||contraction"])
+        self.assertEqual(by_key["summary|mu||contraction"], 1.0 - want["sd"][0] ** 2 / 25.0)
+        self.assertEqual(report.contraction, {"computed": Q - 2, P2.NO_FINITE_VARIANCE: 1, P2.NO_PRIOR_DRAWS: 1})
+        text = rows["text"][rows["key"].index("model|||note_contraction_null")]
+        self.assertIn("the prior has no finite variance", text)
+        self.assertIn("no draws of the prior", text)
+
+    def test_without_prior_variances_every_contraction_is_null_with_its_note(self):
+        report, rows, summary = self.run_pass()
+        self.assertEqual(summary["contraction"], [None] * Q)
+        self.assertEqual(report.contraction, {P2.NO_PRIOR_DRAWS: Q})
+        self.assertIn("model|||note_contraction_null", rows["key"])
+
+    def test_the_variance_of_the_priors_draws_and_the_graphs_decision(self):
+        draws = np.array([0.0, 1.0, 2.0, 3.0])
+        self.assertEqual(P2.prior_variance_of(draws, True), float(np.var(draws, ddof=1)))
+        self.assertEqual(P2.prior_variance_of(draws, False), P2.NO_FINITE_VARIANCE)
+        self.assertEqual(P2.prior_variance_of(None, True), P2.NO_PRIOR_DRAWS)
+        self.assertEqual(P2.prior_variance_of(np.ones(5), True), P2.NO_PRIOR_DRAWS)
+
+    def test_the_prior_predictive_mode_has_no_contraction(self):
+        report, rows, summary = self.run_pass(diagnostics=False, prior_variance=self.prior_variance)
+        self.assertEqual(summary["contraction"], [None] * Q)
+        self.assertFalse([k for k in rows["key"] if k.endswith("|contraction")])
+        self.assertNotIn("model|||note_contraction_null", rows["key"])
+
+
 class TestTheOrderAndTheReads(Base):
     def test_a_file_in_another_order_than_the_manifest_is_refused_and_leaves_no_summary(self):
         self.layout = fake_draws.make_layout(Q, shuffle=True)

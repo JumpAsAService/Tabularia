@@ -242,7 +242,10 @@
         "location": "mu",
         "scale": "sigma"
       },
-      "browser": "exact"
+      "browser": "exact",
+      "finite_variance": {
+        "rule": "always"
+      }
     },
     {
       "id": "student_t",
@@ -276,7 +279,12 @@
         "location": "mu",
         "scale": "sigma"
       },
-      "browser": "exact"
+      "browser": "exact",
+      "finite_variance": {
+        "rule": "above",
+        "param": "nu",
+        "above": 2
+      }
     },
     {
       "id": "cauchy",
@@ -306,7 +314,10 @@
         "location": "mu",
         "scale": "sigma"
       },
-      "browser": "exact"
+      "browser": "exact",
+      "finite_variance": {
+        "rule": "never"
+      }
     },
     {
       "id": "exponential",
@@ -328,7 +339,10 @@
         "lccdf": "exponential_lccdf",
         "quantile": "log1m"
       },
-      "browser": "exact"
+      "browser": "exact",
+      "finite_variance": {
+        "rule": "always"
+      }
     },
     {
       "id": "gamma",
@@ -353,7 +367,10 @@
         "lcdf": "gamma_lcdf",
         "lccdf": "gamma_lccdf"
       },
-      "browser": "exact"
+      "browser": "exact",
+      "finite_variance": {
+        "rule": "always"
+      }
     },
     {
       "id": "inv_gamma",
@@ -378,7 +395,12 @@
         "lcdf": "inv_gamma_lcdf",
         "lccdf": "inv_gamma_lccdf"
       },
-      "browser": "exact"
+      "browser": "exact",
+      "finite_variance": {
+        "rule": "above",
+        "param": "alpha",
+        "above": 2
+      }
     },
     {
       "id": "lognormal",
@@ -404,7 +426,10 @@
         "lccdf": "lognormal_lccdf",
         "quantile": "exp_inv_Phi"
       },
-      "browser": "exact"
+      "browser": "exact",
+      "finite_variance": {
+        "rule": "always"
+      }
     },
     {
       "id": "beta",
@@ -430,7 +455,10 @@
         "lccdf": "beta_lccdf",
         "quantile": "inv_inc_beta"
       },
-      "browser": "exact"
+      "browser": "exact",
+      "finite_variance": {
+        "rule": "always"
+      }
     },
     {
       "id": "uniform",
@@ -458,7 +486,10 @@
         "lccdf": "uniform_lccdf",
         "quantile": "linear"
       },
-      "browser": "exact"
+      "browser": "exact",
+      "finite_variance": {
+        "rule": "always"
+      }
     },
     {
       "id": "lkj_corr_cholesky",
@@ -478,7 +509,10 @@
         "density": "lkj_corr_cholesky_lpdf",
         "rng": "lkj_corr_cholesky_rng"
       },
-      "browser": "marginal"
+      "browser": "marginal",
+      "finite_variance": {
+        "rule": "always"
+      }
     },
     {
       "id": "multi_normal_cholesky",
@@ -505,7 +539,10 @@
         "location": "mu",
         "scale": "L"
       },
-      "browser": "marginal"
+      "browser": "marginal",
+      "finite_variance": {
+        "rule": "always"
+      }
     },
     {
       "id": "std_normal",
@@ -521,7 +558,10 @@
         "lcdf": "std_normal_lcdf",
         "lccdf": "std_normal_lccdf"
       },
-      "browser": "exact"
+      "browser": "exact",
+      "finite_variance": {
+        "rule": "always"
+      }
     },
     {
       "id": "bernoulli_logit",
@@ -542,7 +582,10 @@
         "density": "bernoulli_logit_lpmf",
         "rng": "bernoulli_logit_rng"
       },
-      "browser": "none"
+      "browser": "none",
+      "finite_variance": {
+        "rule": "always"
+      }
     },
     {
       "id": "binomial_logit",
@@ -569,7 +612,10 @@
         "rng": "binomial_rng",
         "rng_inverse_link": "inv_logit"
       },
-      "browser": "none"
+      "browser": "none",
+      "finite_variance": {
+        "rule": "always"
+      }
     },
     {
       "id": "poisson_log",
@@ -590,7 +636,10 @@
         "density": "poisson_log_lpmf",
         "rng": "poisson_log_rng"
       },
-      "browser": "none"
+      "browser": "none",
+      "finite_variance": {
+        "rule": "always"
+      }
     },
     {
       "id": "neg_binomial_2_log",
@@ -615,7 +664,10 @@
         "density": "neg_binomial_2_log_lpmf",
         "rng": "neg_binomial_2_log_rng"
       },
-      "browser": "none"
+      "browser": "none",
+      "finite_variance": {
+        "rule": "always"
+      }
     }
   ],
   "language": {

@@ -50,6 +50,8 @@ var SummaryColumns = []Column{
 	{Name: "rhat", Type: "Float64", Nullable: true},
 	{Name: "ess_bulk", Type: "Float64", Nullable: true},
 	{Name: "ess_tail", Type: "Float64", Nullable: true},
+	// contraction: 1 - Var_post / Var_prior (Betancourt 2018), NULL when the prior's marginal has no finite variance (lot X4).
+	{Name: "contraction", Type: "Float64", Nullable: true},
 }
 
 // ReplicatedColumns are the replicated output's columns: y_rep for a thinned set of draws, `row` the kept row (1…N, in the
@@ -93,6 +95,8 @@ var Limits = []Limit{
 	{Key: "bayes_density_points", Default: 200, Where: "catalogue"},
 	{Key: "bayes_max_unit_charts", Default: 8, Where: "catalogue"},
 	{Key: "bayes_unit_points", Default: 1000, Where: "catalogue"},
+	{Key: "bayes_max_pair_quantities", Default: 4, Where: "catalogue"},
+	{Key: "bayes_pair_points", Default: 300, Where: "catalogue"},
 	{Key: "bayes_max_check_rows", Default: 5000, Where: "catalogue"},
 }
 
@@ -140,7 +144,7 @@ var (
 	quantitySection = Section{Numbers: []string{"n_quantities", "rhat_max", "ess_bulk_min", "ess_tail_min"},
 		Texts: []string{"label", "name", "node_id", "kind", "plate", "plate_label"}}
 	summaryNumbers = []string{"mean", "sd", "q5", "q25", "q50", "q75", "q95", "mcse_mean", "mcse_sd", "rhat", "ess_bulk",
-		"ess_tail", "orig_mean", "orig_sd", "orig_q5", "orig_q50", "orig_q95"}
+		"ess_tail", "contraction", "orig_mean", "orig_sd", "orig_q5", "orig_q50", "orig_q95"}
 	dataSection = Section{Numbers: []string{"mean", "sd", "n_units", "n_levels", "n_missing"},
 		Texts: []string{"column", "type", "reference", "standardized"}}
 	samplerSection = Section{Numbers: []string{"divergences", "treedepth_hits", "treedepth_max", "e_bfmi", "stepsize",
@@ -180,8 +184,8 @@ var Variants = map[string]map[string]Section{
 
 // Rows per item of the ten-column table, for the arithmetic of the caps.
 const (
-	rowsPerSummary      = 12 // mean, sd, five quantiles, two MCSE, R-hat, two ESS
-	rowsPerSummaryPair  = 17 // and the five numbers of the original scale
+	rowsPerSummary      = 13 // mean, sd, five quantiles, two MCSE, R-hat, two ESS, the contraction
+	rowsOfOriginalScale = 5  // a linear-predictor coefficient's pair adds the five numbers of the original scale
 	rowsPerQuantityItem = 10 // six texts, four numbers
 	rowsPerDataItem     = 8  // four texts, four numbers (n_units or n_levels)
 	rowsPerSamplerLevel = 10
@@ -196,14 +200,21 @@ const (
 func MaxResultRows(maxNodes int) int64 {
 	c := func(k string) int64 { return LimitDefault(k) }
 	chains := int64(MaxChains)
-	summary := c("bayes_max_summary_quantities") * rowsPerSummaryPair
+	// The original-scale numbers belong to a linear-predictor coefficient, a component of an effect, which is an entry of
+	// the `quantity` section: at most bayes_max_quantity_entries of them. (Every quantity counted with them, as the 17 rows
+	// of the first count did, would pass 100,000 with the contraction.)
+	summary := c("bayes_max_summary_quantities")*rowsPerSummary + c("bayes_max_quantity_entries")*rowsOfOriginalScale
+	pairs := int64(0)
+	if n := c("bayes_max_pair_quantities"); n > 1 {
+		pairs = n * (n - 1) / 2 * c("bayes_pair_points")
+	}
 	charts := c("bayes_max_chart_quantities") * (chains*c("bayes_trace_points") + chains*c("bayes_rank_bins") +
 		densitySeries*c("bayes_density_points"))
 	units := c("bayes_max_unit_charts") * unitSeries * c("bayes_unit_points")
 	quantities := c("bayes_max_quantity_entries") * rowsPerQuantityItem
 	data := int64(maxNodes) * rowsPerDataItem
 	sampler := (chains + 1) * rowsPerSamplerLevel
-	return summary + charts + units + quantities + data + sampler + rowsOfModelSection + c("bayes_max_check_rows")
+	return summary + charts + pairs + units + quantities + data + sampler + rowsOfModelSection + c("bayes_max_check_rows")
 }
 
 // Refusal is a refusal of the runner: its code, the exit code, the modes it happens in. The sentences are the runner's (they
