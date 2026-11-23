@@ -7525,4 +7525,163 @@ export default {
     "installed": "{n} paquetes instalados",
     "buildLog": "Registro de construcción",
   },
+  "bayes": {
+    "dist": {
+      "normal": {
+        "name": "Normal",
+        "what": "Valores alrededor de μ; unos dos de cada tres caen a menos de σ de él.",
+        "param": {
+          "mu": "Centro (media)",
+          "sigma": "Dispersión (desviación típica)",
+        },
+      },
+      "student_t": {
+        "name": "Student-t",
+        "what": "Valores alrededor de μ como la normal, pero con colas más pesadas: los valores lejanos son más probables, y más cuanto menor es ν.",
+        "param": {
+          "nu": "Grados de libertad (peso de las colas)",
+          "mu": "Centro",
+          "sigma": "Escala",
+        },
+      },
+      "cauchy": {
+        "name": "Cauchy",
+        "what": "Valores alrededor de μ con colas muy pesadas: los valores extremos ocurren a menudo y no tiene media.",
+        "param": {
+          "mu": "Centro",
+          "sigma": "Escala",
+        },
+      },
+      "exponential": {
+        "name": "Exponencial",
+        "what": "Valores positivos, casi todos cerca de cero; la media es 1/β.",
+        "param": {
+          "beta": "Tasa",
+        },
+      },
+      "gamma": {
+        "name": "Gamma",
+        "what": "Valores positivos con una forma asimétrica; la media es α/β.",
+        "param": {
+          "alpha": "Forma",
+          "beta": "Tasa",
+        },
+      },
+      "inv_gamma": {
+        "name": "Gamma inversa",
+        "what": "Valores positivos con una cola larga a la derecha; la media es β/(α − 1) cuando α es mayor que 1.",
+        "param": {
+          "alpha": "Forma",
+          "beta": "Escala",
+        },
+      },
+      "lognormal": {
+        "name": "Lognormal",
+        "what": "Valores positivos cuyo logaritmo es normal alrededor de μ con dispersión σ; el valor típico es exp(μ).",
+        "param": {
+          "mu": "Media del logaritmo",
+          "sigma": "Dispersión del logaritmo",
+        },
+      },
+      "beta": {
+        "name": "Beta",
+        "what": "Valores entre 0 y 1, como una proporción; la media es α/(α + β).",
+        "param": {
+          "alpha": "Primera forma",
+          "beta": "Segunda forma",
+        },
+      },
+      "uniform": {
+        "name": "Uniforme",
+        "what": "Cada valor entre los dos límites es igual de probable.",
+        "param": {
+          "alpha": "Límite inferior",
+          "beta": "Límite superior",
+        },
+      },
+      "lkj_corr_cholesky": {
+        "name": "Correlación LKJ (forma de Cholesky)",
+        "what": "Cuánto se mueven juntos los efectos de un grupo; con η = 1 cada correlación es igual de probable, y un η mayor las acerca a 0.",
+        "param": {
+          "eta": "Concentración",
+        },
+      },
+      "multi_normal_cholesky": {
+        "name": "Normal multivariante (forma de Cholesky)",
+        "what": "Varios valores que varían juntos alrededor de sus medias, cada uno con su propia dispersión y una correlación entre ellos.",
+        "param": {
+          "mu": "Medias",
+          "L": "Factor de Cholesky de la covarianza",
+        },
+      },
+      "std_normal": {
+        "name": "Normal estándar",
+        "what": "Una normal con media 0 y dispersión 1: la forma con la que se construyen los efectos no centrados.",
+      },
+      "bernoulli_logit": {
+        "name": "Bernoulli (log-odds)",
+        "what": "Un resultado sí o no, escrito 1 o 0; el valor dado es el log-odds de un 1.",
+        "param": {
+          "alpha": "Log-odds",
+        },
+      },
+      "binomial_logit": {
+        "name": "Binomial (log-odds)",
+        "what": "El número de éxitos en N intentos; el valor dado es el log-odds de un éxito.",
+        "param": {
+          "N": "Número de intentos",
+          "alpha": "Log-odds",
+        },
+      },
+      "poisson_log": {
+        "name": "Poisson (logaritmo de la media)",
+        "what": "Un recuento (0, 1, 2…) que varía tanto como su media; el valor dado es el logaritmo de esa media.",
+        "param": {
+          "alpha": "Logaritmo de la media",
+        },
+      },
+      "neg_binomial_2_log": {
+        "name": "Binomial negativa (logaritmo de la media)",
+        "what": "Un recuento (0, 1, 2…) que varía más que uno de Poisson; η es el logaritmo de su media y, cuanto mayor es φ, más se acerca a un recuento de Poisson.",
+        "param": {
+          "eta": "Logaritmo de la media",
+          "phi": "Precisión",
+        },
+      },
+    },
+    "fn": {
+      "exp": "e elevado a x",
+      "log": "Logaritmo natural de x",
+      "log1p": "Logaritmo de 1 + x, exacto para x pequeño",
+      "expm1": "e elevado a x, menos 1, exacto para x pequeño",
+      "sqrt": "Raíz cuadrada de x",
+      "square": "x por x",
+      "inv_logit": "Convierte un log-odds en una probabilidad entre 0 y 1",
+      "logit": "Convierte una probabilidad en log-odds",
+      "log1p_exp": "Logaritmo de 1 + e elevado a x (la softplus)",
+      "log_inv_logit": "Logaritmo de la probabilidad cuyo log-odds es x",
+      "lag": "El valor k pasos antes en la serie",
+    },
+    "support": {
+      "real": "Cualquier número real",
+      "positive": "Números positivos",
+      "unit": "Números entre 0 y 1",
+      "bounded": "Números entre sus dos límites",
+      "cholesky_factor_corr": "Factores de Cholesky de matrices de correlación",
+      "vector": "Un vector de números reales",
+      "binary": "0 o 1",
+      "zero_to_n": "Números enteros de 0 a N",
+      "counts": "Números enteros 0, 1, 2…",
+    },
+    "expr": {
+      "hint": {
+        "double_star": "Escriba ^ para la potencia; aquí no se usa **.",
+        "percent": "Aquí no hay operador de resto; % no está disponible.",
+        "double_equals": "Una expresión es un valor, no una comparación; == no está disponible.",
+        "semicolon": "No termine una expresión con ;.",
+        "tilde": "~ pertenece al modelo, no a una expresión: la distribución de un nodo se elige en el nodo.",
+        "dot_star": "Escriba * para un producto: la forma elemento a elemento se elige por usted.",
+      },
+    },
+  },
 }

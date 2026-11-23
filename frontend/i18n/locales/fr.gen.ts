@@ -7525,4 +7525,163 @@ export default {
     "installed": "{n} paquets installés",
     "buildLog": "Journal de construction",
   },
+  "bayes": {
+    "dist": {
+      "normal": {
+        "name": "Normale",
+        "what": "Des valeurs autour de μ ; environ deux sur trois se trouvent à moins de σ de lui.",
+        "param": {
+          "mu": "Centre (moyenne)",
+          "sigma": "Dispersion (écart type)",
+        },
+      },
+      "student_t": {
+        "name": "Student-t",
+        "what": "Des valeurs autour de μ comme la normale, mais avec des queues plus lourdes : les valeurs éloignées sont plus probables, et d’autant plus que ν est petit.",
+        "param": {
+          "nu": "Degrés de liberté (poids des queues)",
+          "mu": "Centre",
+          "sigma": "Échelle",
+        },
+      },
+      "cauchy": {
+        "name": "Cauchy",
+        "what": "Des valeurs autour de μ avec des queues très lourdes : les valeurs extrêmes arrivent souvent, et elle n’a pas de moyenne.",
+        "param": {
+          "mu": "Centre",
+          "sigma": "Échelle",
+        },
+      },
+      "exponential": {
+        "name": "Exponentielle",
+        "what": "Des valeurs positives, la plupart proches de zéro ; la moyenne est 1/β.",
+        "param": {
+          "beta": "Taux",
+        },
+      },
+      "gamma": {
+        "name": "Gamma",
+        "what": "Des valeurs positives de forme asymétrique ; la moyenne est α/β.",
+        "param": {
+          "alpha": "Forme",
+          "beta": "Taux",
+        },
+      },
+      "inv_gamma": {
+        "name": "Gamma inverse",
+        "what": "Des valeurs positives avec une longue queue à droite ; la moyenne est β/(α − 1) quand α dépasse 1.",
+        "param": {
+          "alpha": "Forme",
+          "beta": "Échelle",
+        },
+      },
+      "lognormal": {
+        "name": "Log-normale",
+        "what": "Des valeurs positives dont le logarithme est normal autour de μ avec une dispersion σ ; la valeur typique est exp(μ).",
+        "param": {
+          "mu": "Moyenne du logarithme",
+          "sigma": "Dispersion du logarithme",
+        },
+      },
+      "beta": {
+        "name": "Bêta",
+        "what": "Des valeurs entre 0 et 1, comme une proportion ; la moyenne est α/(α + β).",
+        "param": {
+          "alpha": "Première forme",
+          "beta": "Seconde forme",
+        },
+      },
+      "uniform": {
+        "name": "Uniforme",
+        "what": "Chaque valeur entre les deux bornes est également probable.",
+        "param": {
+          "alpha": "Borne inférieure",
+          "beta": "Borne supérieure",
+        },
+      },
+      "lkj_corr_cholesky": {
+        "name": "Corrélation LKJ (forme de Cholesky)",
+        "what": "À quel point les effets d’un groupe évoluent ensemble ; avec η = 1 chaque corrélation est également probable, et un η plus grand les rapproche de 0.",
+        "param": {
+          "eta": "Concentration",
+        },
+      },
+      "multi_normal_cholesky": {
+        "name": "Normale multivariée (forme de Cholesky)",
+        "what": "Plusieurs valeurs qui varient ensemble autour de leurs moyennes, chacune avec sa propre dispersion et une corrélation entre elles.",
+        "param": {
+          "mu": "Moyennes",
+          "L": "Facteur de Cholesky de la covariance",
+        },
+      },
+      "std_normal": {
+        "name": "Normale centrée réduite",
+        "what": "Une normale de moyenne 0 et de dispersion 1 : la forme à partir de laquelle on construit les effets non centrés.",
+      },
+      "bernoulli_logit": {
+        "name": "Bernoulli (log-cote)",
+        "what": "Un résultat oui ou non, noté 1 ou 0 ; la valeur donnée est la log-cote d’un 1.",
+        "param": {
+          "alpha": "Log-cote",
+        },
+      },
+      "binomial_logit": {
+        "name": "Binomiale (log-cote)",
+        "what": "Le nombre de succès sur N essais ; la valeur donnée est la log-cote d’un succès.",
+        "param": {
+          "N": "Nombre d’essais",
+          "alpha": "Log-cote",
+        },
+      },
+      "poisson_log": {
+        "name": "Poisson (logarithme de la moyenne)",
+        "what": "Un comptage (0, 1, 2…) qui varie autant que sa moyenne ; la valeur donnée est le logarithme de cette moyenne.",
+        "param": {
+          "alpha": "Logarithme de la moyenne",
+        },
+      },
+      "neg_binomial_2_log": {
+        "name": "Binomiale négative (logarithme de la moyenne)",
+        "what": "Un comptage (0, 1, 2…) qui varie plus qu’un comptage de Poisson ; η est le logarithme de sa moyenne et, plus φ est grand, plus il se rapproche d’un comptage de Poisson.",
+        "param": {
+          "eta": "Logarithme de la moyenne",
+          "phi": "Précision",
+        },
+      },
+    },
+    "fn": {
+      "exp": "e puissance x",
+      "log": "Logarithme népérien de x",
+      "log1p": "Logarithme de 1 + x, exact pour x petit",
+      "expm1": "e puissance x, moins 1, exact pour x petit",
+      "sqrt": "Racine carrée de x",
+      "square": "x fois x",
+      "inv_logit": "Transforme une log-cote en probabilité entre 0 et 1",
+      "logit": "Transforme une probabilité en log-cote",
+      "log1p_exp": "Logarithme de 1 + e puissance x (la softplus)",
+      "log_inv_logit": "Logarithme de la probabilité dont la log-cote est x",
+      "lag": "La valeur k pas plus tôt dans la série",
+    },
+    "support": {
+      "real": "Tout nombre réel",
+      "positive": "Nombres positifs",
+      "unit": "Nombres entre 0 et 1",
+      "bounded": "Nombres entre ses deux bornes",
+      "cholesky_factor_corr": "Facteurs de Cholesky de matrices de corrélation",
+      "vector": "Un vecteur de nombres réels",
+      "binary": "0 ou 1",
+      "zero_to_n": "Nombres entiers de 0 à N",
+      "counts": "Nombres entiers 0, 1, 2…",
+    },
+    "expr": {
+      "hint": {
+        "double_star": "Écrivez ^ pour une puissance ; ** n’est pas utilisé ici.",
+        "percent": "Il n’y a pas d’opérateur de reste ici ; % n’est pas disponible.",
+        "double_equals": "Une expression est une valeur, pas une comparaison ; == n’est pas disponible.",
+        "semicolon": "Ne terminez pas une expression par ;.",
+        "tilde": "~ appartient au modèle, pas à une expression : la distribution d’un nœud se choisit sur le nœud.",
+        "dot_star": "Écrivez * pour un produit : la forme élément par élément est choisie pour vous.",
+      },
+    },
+  },
 }

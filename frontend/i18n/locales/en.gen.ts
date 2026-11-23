@@ -7525,4 +7525,163 @@ export default {
     "installed": "{n} packages installed",
     "buildLog": "Build log",
   },
+  "bayes": {
+    "dist": {
+      "normal": {
+        "name": "Normal",
+        "what": "Values around μ; about two in three fall within σ of it.",
+        "param": {
+          "mu": "Centre (mean)",
+          "sigma": "Spread (standard deviation)",
+        },
+      },
+      "student_t": {
+        "name": "Student-t",
+        "what": "Values around μ like the normal, but with heavier tails: faraway values are more likely, and the smaller ν is, the more so.",
+        "param": {
+          "nu": "Degrees of freedom (tail weight)",
+          "mu": "Centre",
+          "sigma": "Scale",
+        },
+      },
+      "cauchy": {
+        "name": "Cauchy",
+        "what": "Values around μ with very heavy tails: extreme values happen often, and it has no mean.",
+        "param": {
+          "mu": "Centre",
+          "sigma": "Scale",
+        },
+      },
+      "exponential": {
+        "name": "Exponential",
+        "what": "Positive values, most of them near zero; the average is 1/β.",
+        "param": {
+          "beta": "Rate",
+        },
+      },
+      "gamma": {
+        "name": "Gamma",
+        "what": "Positive values with a skewed shape; the average is α/β.",
+        "param": {
+          "alpha": "Shape",
+          "beta": "Rate",
+        },
+      },
+      "inv_gamma": {
+        "name": "Inverse gamma",
+        "what": "Positive values with a long tail to the right; the average is β/(α − 1) when α is above 1.",
+        "param": {
+          "alpha": "Shape",
+          "beta": "Scale",
+        },
+      },
+      "lognormal": {
+        "name": "Lognormal",
+        "what": "Positive values whose logarithm is normal around μ with spread σ; the typical value is exp(μ).",
+        "param": {
+          "mu": "Mean of the logarithm",
+          "sigma": "Spread of the logarithm",
+        },
+      },
+      "beta": {
+        "name": "Beta",
+        "what": "Values between 0 and 1, such as a proportion; the average is α/(α + β).",
+        "param": {
+          "alpha": "First shape",
+          "beta": "Second shape",
+        },
+      },
+      "uniform": {
+        "name": "Uniform",
+        "what": "Every value between the two bounds is equally likely.",
+        "param": {
+          "alpha": "Lower bound",
+          "beta": "Upper bound",
+        },
+      },
+      "lkj_corr_cholesky": {
+        "name": "LKJ correlation (Cholesky form)",
+        "what": "How strongly the effects of a group move together; with η = 1 every correlation is equally likely, and a larger η pulls them towards 0.",
+        "param": {
+          "eta": "Concentration",
+        },
+      },
+      "multi_normal_cholesky": {
+        "name": "Multivariate normal (Cholesky form)",
+        "what": "Several values that vary together around their means, each with its own spread and a correlation between them.",
+        "param": {
+          "mu": "Means",
+          "L": "Cholesky factor of the covariance",
+        },
+      },
+      "std_normal": {
+        "name": "Standard normal",
+        "what": "A normal with mean 0 and spread 1: the form the non-centred effects are built from.",
+      },
+      "bernoulli_logit": {
+        "name": "Bernoulli (log-odds)",
+        "what": "A yes or no outcome, written 1 or 0; the value given is the log-odds of a 1.",
+        "param": {
+          "alpha": "Log-odds",
+        },
+      },
+      "binomial_logit": {
+        "name": "Binomial (log-odds)",
+        "what": "The number of successes out of N tries; the value given is the log-odds of one success.",
+        "param": {
+          "N": "Number of tries",
+          "alpha": "Log-odds",
+        },
+      },
+      "poisson_log": {
+        "name": "Poisson (log average)",
+        "what": "A count (0, 1, 2…) that varies as much as its average; the value given is the logarithm of that average.",
+        "param": {
+          "alpha": "Log of the average",
+        },
+      },
+      "neg_binomial_2_log": {
+        "name": "Negative binomial (log average)",
+        "what": "A count (0, 1, 2…) that varies more than a Poisson count; η is the logarithm of its average, and the larger φ is, the closer it gets to a Poisson count.",
+        "param": {
+          "eta": "Log of the average",
+          "phi": "Precision",
+        },
+      },
+    },
+    "fn": {
+      "exp": "e raised to x",
+      "log": "Natural logarithm of x",
+      "log1p": "Logarithm of 1 + x, exact for small x",
+      "expm1": "e raised to x, minus 1, exact for small x",
+      "sqrt": "Square root of x",
+      "square": "x times x",
+      "inv_logit": "Turns log-odds into a probability between 0 and 1",
+      "logit": "Turns a probability into log-odds",
+      "log1p_exp": "Logarithm of 1 + e raised to x (the softplus)",
+      "log_inv_logit": "Logarithm of the probability whose log-odds is x",
+      "lag": "The value k steps earlier in the series",
+    },
+    "support": {
+      "real": "Any real number",
+      "positive": "Positive numbers",
+      "unit": "Numbers between 0 and 1",
+      "bounded": "Numbers between its two bounds",
+      "cholesky_factor_corr": "Cholesky factors of correlation matrices",
+      "vector": "A vector of real numbers",
+      "binary": "0 or 1",
+      "zero_to_n": "Whole numbers from 0 to N",
+      "counts": "Whole numbers 0, 1, 2…",
+    },
+    "expr": {
+      "hint": {
+        "double_star": "Write ^ for a power; ** is not used here.",
+        "percent": "There is no remainder operator here; % is not available.",
+        "double_equals": "An expression is a value, not a comparison; == is not available.",
+        "semicolon": "Do not end an expression with ;.",
+        "tilde": "~ belongs to the model, not to an expression: the distribution of a node is chosen on the node.",
+        "dot_star": "Write * for a product: the elementwise form is chosen for you.",
+      },
+    },
+  },
 }

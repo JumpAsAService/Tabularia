@@ -7525,4 +7525,163 @@ export default {
     "installed": "{n} Pakete installiert",
     "buildLog": "Build-Protokoll",
   },
+  "bayes": {
+    "dist": {
+      "normal": {
+        "name": "Normalverteilung",
+        "what": "Werte um μ herum; etwa zwei von drei liegen höchstens σ davon entfernt.",
+        "param": {
+          "mu": "Mitte (Mittelwert)",
+          "sigma": "Streuung (Standardabweichung)",
+        },
+      },
+      "student_t": {
+        "name": "Student-t",
+        "what": "Werte um μ herum wie bei der Normalverteilung, aber mit schwereren Rändern: weit entfernte Werte sind wahrscheinlicher, und zwar umso mehr, je kleiner ν ist.",
+        "param": {
+          "nu": "Freiheitsgrade (Gewicht der Ränder)",
+          "mu": "Mitte",
+          "sigma": "Skala",
+        },
+      },
+      "cauchy": {
+        "name": "Cauchy",
+        "what": "Werte um μ herum mit sehr schweren Rändern: Extremwerte treten oft auf, und es gibt keinen Mittelwert.",
+        "param": {
+          "mu": "Mitte",
+          "sigma": "Skala",
+        },
+      },
+      "exponential": {
+        "name": "Exponentialverteilung",
+        "what": "Positive Werte, die meisten nahe bei null; der Mittelwert ist 1/β.",
+        "param": {
+          "beta": "Rate",
+        },
+      },
+      "gamma": {
+        "name": "Gamma",
+        "what": "Positive Werte mit schiefer Form; der Mittelwert ist α/β.",
+        "param": {
+          "alpha": "Form",
+          "beta": "Rate",
+        },
+      },
+      "inv_gamma": {
+        "name": "Inverse Gamma",
+        "what": "Positive Werte mit langem Rand nach rechts; der Mittelwert ist β/(α − 1), wenn α größer als 1 ist.",
+        "param": {
+          "alpha": "Form",
+          "beta": "Skala",
+        },
+      },
+      "lognormal": {
+        "name": "Lognormalverteilung",
+        "what": "Positive Werte, deren Logarithmus um μ normalverteilt ist, mit Streuung σ; der typische Wert ist exp(μ).",
+        "param": {
+          "mu": "Mittelwert des Logarithmus",
+          "sigma": "Streuung des Logarithmus",
+        },
+      },
+      "beta": {
+        "name": "Beta",
+        "what": "Werte zwischen 0 und 1, etwa ein Anteil; der Mittelwert ist α/(α + β).",
+        "param": {
+          "alpha": "Erste Form",
+          "beta": "Zweite Form",
+        },
+      },
+      "uniform": {
+        "name": "Gleichverteilung",
+        "what": "Jeder Wert zwischen den beiden Grenzen ist gleich wahrscheinlich.",
+        "param": {
+          "alpha": "Untere Grenze",
+          "beta": "Obere Grenze",
+        },
+      },
+      "lkj_corr_cholesky": {
+        "name": "LKJ-Korrelation (Cholesky-Form)",
+        "what": "Wie stark sich die Effekte einer Gruppe gemeinsam bewegen; bei η = 1 ist jede Korrelation gleich wahrscheinlich, und ein größeres η zieht sie gegen 0.",
+        "param": {
+          "eta": "Konzentration",
+        },
+      },
+      "multi_normal_cholesky": {
+        "name": "Multivariate Normalverteilung (Cholesky-Form)",
+        "what": "Mehrere Werte, die gemeinsam um ihre Mittelwerte schwanken, jeder mit eigener Streuung und mit Korrelation untereinander.",
+        "param": {
+          "mu": "Mittelwerte",
+          "L": "Cholesky-Faktor der Kovarianz",
+        },
+      },
+      "std_normal": {
+        "name": "Standardnormalverteilung",
+        "what": "Eine Normalverteilung mit Mittelwert 0 und Streuung 1: die Form, aus der die nicht zentrierten Effekte gebildet werden.",
+      },
+      "bernoulli_logit": {
+        "name": "Bernoulli (Log-Odds)",
+        "what": "Ein Ja-oder-Nein-Ergebnis, geschrieben als 1 oder 0; der gegebene Wert ist das Log-Odds einer 1.",
+        "param": {
+          "alpha": "Log-Odds",
+        },
+      },
+      "binomial_logit": {
+        "name": "Binomial (Log-Odds)",
+        "what": "Die Anzahl der Erfolge bei N Versuchen; der gegebene Wert ist das Log-Odds eines Erfolgs.",
+        "param": {
+          "N": "Anzahl der Versuche",
+          "alpha": "Log-Odds",
+        },
+      },
+      "poisson_log": {
+        "name": "Poisson (Logarithmus des Mittelwerts)",
+        "what": "Eine Anzahl (0, 1, 2…), die so stark schwankt wie ihr Mittelwert; der gegebene Wert ist der Logarithmus dieses Mittelwerts.",
+        "param": {
+          "alpha": "Logarithmus des Mittelwerts",
+        },
+      },
+      "neg_binomial_2_log": {
+        "name": "Negative Binomialverteilung (Logarithmus des Mittelwerts)",
+        "what": "Eine Anzahl (0, 1, 2…), die stärker schwankt als eine Poisson-Anzahl; η ist der Logarithmus ihres Mittelwerts, und je größer φ ist, desto näher kommt sie einer Poisson-Anzahl.",
+        "param": {
+          "eta": "Logarithmus des Mittelwerts",
+          "phi": "Präzision",
+        },
+      },
+    },
+    "fn": {
+      "exp": "e hoch x",
+      "log": "Natürlicher Logarithmus von x",
+      "log1p": "Logarithmus von 1 + x, genau auch für kleines x",
+      "expm1": "e hoch x, minus 1, genau auch für kleines x",
+      "sqrt": "Quadratwurzel von x",
+      "square": "x mal x",
+      "inv_logit": "Macht aus Log-Odds eine Wahrscheinlichkeit zwischen 0 und 1",
+      "logit": "Macht aus einer Wahrscheinlichkeit Log-Odds",
+      "log1p_exp": "Logarithmus von 1 + e hoch x (die Softplus-Funktion)",
+      "log_inv_logit": "Logarithmus der Wahrscheinlichkeit, deren Log-Odds x ist",
+      "lag": "Der Wert k Schritte früher in der Reihe",
+    },
+    "support": {
+      "real": "Jede reelle Zahl",
+      "positive": "Positive Zahlen",
+      "unit": "Zahlen zwischen 0 und 1",
+      "bounded": "Zahlen zwischen seinen beiden Grenzen",
+      "cholesky_factor_corr": "Cholesky-Faktoren von Korrelationsmatrizen",
+      "vector": "Ein Vektor reeller Zahlen",
+      "binary": "0 oder 1",
+      "zero_to_n": "Ganze Zahlen von 0 bis N",
+      "counts": "Ganze Zahlen 0, 1, 2…",
+    },
+    "expr": {
+      "hint": {
+        "double_star": "Schreiben Sie ^ für eine Potenz; ** wird hier nicht verwendet.",
+        "percent": "Einen Rest-Operator gibt es hier nicht; % ist nicht verfügbar.",
+        "double_equals": "Ein Ausdruck ist ein Wert, kein Vergleich; == ist nicht verfügbar.",
+        "semicolon": "Beenden Sie einen Ausdruck nicht mit ;.",
+        "tilde": "~ gehört zum Modell, nicht zu einem Ausdruck: die Verteilung eines Knotens wird am Knoten gewählt.",
+        "dot_star": "Schreiben Sie * für ein Produkt: die elementweise Form wird für Sie gewählt.",
+      },
+    },
+  },
 }
