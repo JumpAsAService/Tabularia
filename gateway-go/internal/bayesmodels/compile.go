@@ -19,6 +19,9 @@ type CompileRequest struct {
 	ModelID, Version int64
 	ProgramSHA256    string
 	By               int64 // the person who saved: the compile Job's authority and the audit's actor
+	// Again is «Compile now» (set only by the route): it queues again a program the compiler refused
+	// (stan-compile's «The queue»); a program that passed a limit still waits for the limit to be raised.
+	Again bool
 }
 
 // The states of a program's compile.
@@ -28,11 +31,14 @@ const (
 	CompileRunning = "running"
 	CompileReady   = "ready"
 	CompileFailed  = "failed"
+	// CompileTimeout: the compile passed its deadline or its memory limit; it is not compiled again
+	// until that limit is raised (the owner's rule, stan-compile).
+	CompileTimeout = "timeout"
 )
 
 // CompileState is where a program's compile is.
 type CompileState struct {
-	State  string    // CompileNone, CompileQueued, CompileRunning, CompileReady, CompileFailed
+	State  string    // CompileNone, CompileQueued, CompileRunning, CompileReady, CompileFailed, CompileTimeout
 	Detail string    // a sentence for the page (stan-compile's words)
 	At     time.Time // when the state was reached
 }
