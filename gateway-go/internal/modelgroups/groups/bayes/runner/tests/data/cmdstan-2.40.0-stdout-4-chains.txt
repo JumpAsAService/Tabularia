@@ -1,0 +1,145 @@
+method = sample (Default)
+  sample
+    num_samples = 5
+    num_warmup = 20
+    save_warmup = false (Default)
+    thin = 1 (Default)
+    adapt
+      engaged = true (Default)
+      gamma = 0.05 (Default)
+      delta = 0.8 (Default)
+      kappa = 0.75 (Default)
+      t0 = 10 (Default)
+      init_buffer = 75 (Default)
+      term_buffer = 50 (Default)
+      window = 25 (Default)
+      save_metric = false (Default)
+    algorithm = hmc (Default)
+      hmc
+        engine = nuts (Default)
+          nuts
+            max_depth = 10 (Default)
+        metric = diag_e (Default)
+        metric_file =  (Default)
+        stepsize = 1 (Default)
+        stepsize_jitter = 0 (Default)
+    num_chains = 4
+id = 1 (Default)
+data
+  file = /tmp/run/data.json
+init = 2 (Default)
+random
+  seed = 7
+output
+  file = /tmp/run/out.csv
+  diagnostic_file =  (Default)
+  refresh = 5
+  sig_figs = 8 (Default)
+  profile_file = profile.csv (Default)
+  save_cmdstan_config = false (Default)
+num_threads = 2
+
+
+Gradient evaluation took 3.2e-05 seconds
+1000 transitions using 10 leapfrog steps per transition would take 0.32 seconds.
+Adjust your expectations accordingly!
+
+
+WARNING: There aren't enough warmup iterations to fit the
+         three stages of adaptation as currently configured.
+         Reducing each adaptation stage to 15%/75%/10% of
+         the given number of warmup iterations:
+           init_buffer = 3
+           adapt_window = 15
+           term_buffer = 2
+
+
+Gradient evaluation took 5e-06 seconds
+1000 transitions using 10 leapfrog steps per transition would take 0.05 seconds.
+Adjust your expectations accordingly!
+
+
+WARNING: There aren't enough warmup iterations to fit the
+         three stages of adaptation as currently configured.
+         Reducing each adaptation stage to 15%/75%/10% of
+         the given number of warmup iterations:
+           init_buffer = 3
+           adapt_window = 15
+           term_buffer = 2
+
+
+Gradient evaluation took 5e-06 seconds
+1000 transitions using 10 leapfrog steps per transition would take 0.05 seconds.
+Adjust your expectations accordingly!
+
+
+WARNING: There aren't enough warmup iterations to fit the
+         three stages of adaptation as currently configured.
+         Reducing each adaptation stage to 15%/75%/10% of
+         the given number of warmup iterations:
+           init_buffer = 3
+           adapt_window = 15
+           term_buffer = 2
+
+
+Gradient evaluation took 4e-06 seconds
+1000 transitions using 10 leapfrog steps per transition would take 0.04 seconds.
+Adjust your expectations accordingly!
+
+
+WARNING: There aren't enough warmup iterations to fit the
+         three stages of adaptation as currently configured.
+         Reducing each adaptation stage to 15%/75%/10% of
+         the given number of warmup iterations:
+           init_buffer = 3
+           adapt_window = 15
+           term_buffer = 2
+
+Chain [1] Iteration:  1 / 25 [  4%]  (Warmup)
+Chain [3] Iteration:  1 / 25 [  4%]  (Warmup)
+Chain [3] Iteration:  5 / 25 [ 20%]  (Warmup)
+Chain [1] Iteration:  5 / 25 [ 20%]  (Warmup)
+Chain [3] Iteration: 10 / 25 [ 40%]  (Warmup)
+Chain [1] Iteration: 10 / 25 [ 40%]  (Warmup)
+Chain [3] Iteration: 15 / 25 [ 60%]  (Warmup)
+Chain [3] Iteration: 20 / 25 [ 80%]  (Warmup)
+Chain [3] Iteration: 21 / 25 [ 84%]  (Sampling)
+Chain [1] Iteration: 15 / 25 [ 60%]  (Warmup)
+Chain [3] Iteration: 25 / 25 [100%]  (Sampling)
+Chain [1] Iteration: 20 / 25 [ 80%]  (Warmup)
+Chain [1] Iteration: 21 / 25 [ 84%]  (Sampling)
+
+ Elapsed Time: 0 seconds (Warm-up)
+               0 seconds (Sampling)
+               0 seconds (Total)
+
+Chain [4] Iteration:  1 / 25 [  4%]  (Warmup)
+Chain [1] Iteration: 25 / 25 [100%]  (Sampling)
+
+ Elapsed Time: 0 seconds (Warm-up)
+               0 seconds (Sampling)
+               0 seconds (Total)
+
+Chain [4] Iteration:  5 / 25 [ 20%]  (Warmup)
+Chain [2] Iteration:  1 / 25 [  4%]  (Warmup)
+Chain [4] Iteration: 10 / 25 [ 40%]  (Warmup)
+Chain [4] Iteration: 15 / 25 [ 60%]  (Warmup)
+Chain [2] Iteration:  5 / 25 [ 20%]  (Warmup)
+Chain [4] Iteration: 20 / 25 [ 80%]  (Warmup)
+Chain [4] Iteration: 21 / 25 [ 84%]  (Sampling)
+Chain [2] Iteration: 10 / 25 [ 40%]  (Warmup)
+Chain [4] Iteration: 25 / 25 [100%]  (Sampling)
+
+ Elapsed Time: 0 seconds (Warm-up)
+               0 seconds (Sampling)
+               0 seconds (Total)
+
+Chain [2] Iteration: 15 / 25 [ 60%]  (Warmup)
+Chain [2] Iteration: 20 / 25 [ 80%]  (Warmup)
+Chain [2] Iteration: 21 / 25 [ 84%]  (Sampling)
+Chain [2] Iteration: 25 / 25 [100%]  (Sampling)
+
+ Elapsed Time: 0.001 seconds (Warm-up)
+               0 seconds (Sampling)
+               0.001 seconds (Total)
+
