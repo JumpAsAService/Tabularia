@@ -78,3 +78,42 @@ func logError(log *slog.Logger, msg string, err error, r CompileRequest) {
 	}
 	log.Error(msg, "error", err.Error(), "model_id", r.ModelID, "version", r.Version, "program_sha256", r.ProgramSHA256)
 }
+
+// BatchCompiler is a Compiler that answers for many programs in one read: a list asks it once
+// instead of once per model.
+type BatchCompiler interface {
+	States(ctx context.Context, programSHA256s []string) (map[string]CompileState, error)
+}
+
+// States is the compile state of each distinct program, with a BatchCompiler in one read and
+// otherwise one State per distinct program. A program with no entry is CompileNone.
+func States(ctx context.Context, c Compiler, programs []string) (map[string]CompileState, error) {
+	seen := map[string]bool{}
+	var distinct []string
+	for _, p := range programs {
+		if p != "" && !seen[p] {
+			seen[p] = true
+			distinct = append(distinct, p)
+		}
+	}
+	if len(distinct) == 0 {
+		return map[string]CompileState{}, nil
+	}
+	if b, ok := c.(BatchCompiler); ok {
+		return b.States(ctx, distinct)
+	}
+	out := make(map[string]CompileState, len(distinct))
+	for _, p := range distinct {
+		st, err := c.State(ctx, p)
+		if err != nil {
+			return nil, err
+		}
+		out[p] = st
+	}
+	return out, nil
+}
+
+// States is always empty: every program is CompileNone.
+func (NoCompiler) States(context.Context, []string) (map[string]CompileState, error) {
+	return map[string]CompileState{}, nil
+}

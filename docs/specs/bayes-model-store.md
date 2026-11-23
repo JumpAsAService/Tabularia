@@ -161,7 +161,7 @@ All under the gateway's authentication (`server.Authed`), registered with `regis
 
 | Route | Does |
 |---|---|
-| `GET /bayes-models` | the models this person sees, by name: id, name, folder, current version, template, the current version's `family`, updated, `editable`, `runnable` — never a graph or a program |
+| `GET /bayes-models` | the models this person sees, by name: id, name, folder, current version, template, the current version's `family`, updated, `editable`, `runnable`, **and (Correction of 2026-11-24 from D3: the approved list shows them in columns) `compile` (`state`, `detail`, `at` of the current version's program), `uses` (the flows that pin the model, as in the detail) and `saved_by` (the email of who saved the current version)** — never a graph or a program. The compile states come from one `Compiler.States` call for the distinct programs (a `BatchCompiler` answers in one read; a plain `Compiler` is asked once per distinct program), the uses from one read of the flows that hold the key, the author from the same join as the family: no query per model |
 | `GET /projects/{project_id}/bayes-models` | the same for one folder |
 | `GET /bayes-models/{model_id}` | the model, and its current version: graph, findings, program, mapping, compile state, `uses` (the count) |
 | `POST /projects/{project_id}/bayes-models` | `{name, description, graph, template_id?, template_version?}` → version 1, note `created` |

@@ -125,6 +125,15 @@ type bayesCompileOut struct {
 	At     *string `json:"at"`
 }
 
+// bayesListedOut is a model of a list: the model, the state of its current version's compile, the
+// number of flows that pin it and who saved the current version (an email).
+type bayesListedOut struct {
+	bayesModelOut
+	Compile bayesCompileOut `json:"compile"`
+	Uses    int             `json:"uses"`
+	SavedBy *string         `json:"saved_by"`
+}
+
 type bayesModelDetail struct {
 	bayesModelOut
 	Version bayesVersionOut `json:"version"`
@@ -376,15 +385,36 @@ func bayesMany(d *Deps, w http.ResponseWriter, r *http.Request, c *perm.Checker,
 		fail(d, w, "bayes models: the list", err)
 		return
 	}
+	var programs []string
+	for i := range rows {
+		programs = append(programs, rows[i].ProgramSHA256)
+	}
+	states, err := bayesmodels.States(ctx, d.bayesCompiler(), programs)
+	if err != nil {
+		fail(d, w, "bayes models: the compile states", err)
+		return
+	}
+	var counts map[int64]int
+	if len(rows) > 0 {
+		if counts, err = bayesmodels.UseCounts(ctx, d.DB); err != nil {
+			fail(d, w, "bayes models: the uses", err)
+			return
+		}
+	}
 	rights := map[int64][2]bool{}
-	out := make([]bayesModelOut, 0, len(rows))
+	out := make([]bayesListedOut, 0, len(rows))
 	for i := range rows {
 		o, err := bayesOutOf(ctx, c, &rows[i].Model, rows[i].Family, rights)
 		if err != nil {
 			fail(d, w, "bayes models: a model of the list", err)
 			return
 		}
-		out = append(out, o)
+		st, ok := states[rows[i].ProgramSHA256]
+		if !ok {
+			st = bayesmodels.CompileState{State: bayesmodels.CompileNone}
+		}
+		out = append(out, bayesListedOut{bayesModelOut: o, Compile: bayesCompileOutOf(st), Uses: counts[rows[i].ID],
+			SavedBy: rows[i].SavedBy})
 	}
 	server.JSON(w, http.StatusOK, out)
 }

@@ -10,7 +10,7 @@ import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/compon
 import VChart from 'vue-echarts'
 import {
   ScrollText, Search, RefreshCw, ChevronLeft, ChevronRight, ChevronDown, Circle,
-  LogIn, LogOut, Workflow, Database, Plug, Download, Shield, CheckCircle2, XCircle, AlertTriangle, KeyRound, SlidersHorizontal, Radar, Rows3, Server, Folder, Code2, DatabaseSearch, Boxes, DatabaseBackup, Sparkles, Megaphone, FileCheck, Mail, Cpu, NotebookPen, Bot, FileChartColumn, LayoutDashboard, Braces } from 'lucide-vue-next'
+  LogIn, LogOut, Workflow, Database, Plug, Download, Shield, CheckCircle2, XCircle, AlertTriangle, KeyRound, SlidersHorizontal, Radar, Rows3, Server, Folder, Code2, DatabaseSearch, Boxes, DatabaseBackup, Sparkles, Megaphone, FileCheck, Mail, Cpu, NotebookPen, Bot, FileChartColumn, LayoutDashboard, Braces, Sigma } from 'lucide-vue-next'
 import { useApi, type AuditEntry, type ActiveSession, type AccessActivity } from '~/composables/useApi'
 import { useI18n } from 'vue-i18n'
 import { useFormat } from '~/composables/useFormat'
@@ -259,6 +259,11 @@ const ACTION_META = computed<Record<string, { icon: any; color: string; label: s
     'script.delete': { icon: Code2, color: u.danger, label: t('audit.scriptDeleteAction') },
     'script.restore': { icon: Code2, color: u.accent, label: t('audit.scriptRestoreAction') },
     'sql_script.create': { icon: DatabaseSearch, color: u.accent, label: t('audit.sqlScriptCreateAction') },
+    'bayes_model.create': { icon: Sigma, color: u.accent, label: t('audit.bayesModelCreateAction') },
+    'bayes_model.update': { icon: Sigma, color: u.accent, label: t('audit.bayesModelUpdateAction') },
+    'bayes_model.restore': { icon: Sigma, color: u.accent, label: t('audit.bayesModelRestoreAction') },
+    'bayes_model.delete': { icon: Sigma, color: u.danger, label: t('audit.bayesModelDeleteAction') },
+    'bayes_model.compile': { icon: Sigma, color: u.violet, label: t('audit.bayesModelCompileAction') },
     'data_api.create': { icon: Braces, color: u.accent, label: t('audit.dataApiCreateAction') },
     'data_api.update': { icon: Braces, color: u.accent, label: t('audit.dataApiUpdateAction') },
     'data_api.delete': { icon: Braces, color: u.danger, label: t('audit.dataApiDeleteAction') },

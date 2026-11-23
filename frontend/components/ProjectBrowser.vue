@@ -48,6 +48,7 @@ import {
   Lock,
   FileCode2,
   DatabaseSearch,
+  Sigma,
   NotebookPen,
   Braces,
   FileChartColumn,
@@ -77,6 +78,7 @@ import { useFlowGroups, type FlowGroup } from '~/composables/useFlowGroups'
 import { useSavedScripts, type SavedScript } from '~/composables/useSavedScripts'
 import { useScriptingEditor } from '~/composables/useScripting'
 import { useSqlScripts, type SqlScript } from '~/composables/useSqlScripts'
+import { useBayesModels, bayesFamilyKey, type BayesModelListed } from '~/composables/useBayesModels'
 import { useNotebooks, type Notebook } from '~/composables/useNotebooks'
 import { useDataApis, type DataApi } from '~/composables/useDataApis'
 import { starterReport, useReports, type Report } from '~/composables/useReports'
@@ -110,6 +112,7 @@ const viewsApi = useSavedViews()
 const groupsApi = useFlowGroups()
 const scriptsApi = useSavedScripts()
 const sqlApi = useSqlScripts()
+const bayesApi = useBayesModels()
 const notebooksApi = useNotebooks()
 const dataApisApi = useDataApis()
 const reportsApi = useReports()
@@ -143,6 +146,7 @@ const contractFor = ref<DatasourceInfo | null>(null) // the datasource whose dat
 const savedViews = ref<SavedView[]>([])
 const scripts = ref<SavedScript[]>([])
 const sqlScripts = ref<SqlScript[]>([])
+const bayesModels = ref<BayesModelListed[]>([])
 const notebooks = ref<Notebook[]>([])
 const dataApis = ref<DataApi[]>([])
 const reports = ref<Report[]>([])
@@ -237,7 +241,7 @@ watch(() => route.query.folder, () => {
 })
 
 // ── Unified row: one kind of row for six kinds of resource ────────────
-type Kind = 'folder' | 'flow' | 'group' | 'datasource' | 'view' | 'script' | 'sql' | 'notebook' | 'report' | 'dashboard' | 'dataapi' | 'connection'
+type Kind = 'folder' | 'flow' | 'group' | 'datasource' | 'view' | 'script' | 'sql' | 'bayes' | 'notebook' | 'report' | 'dashboard' | 'dataapi' | 'connection'
 interface Row {
   kind: Kind
   id: number
@@ -261,6 +265,7 @@ const KIND_ICON: Record<Kind, any> = {
   view: Bookmark,
   script: FileCode2,
   sql: DatabaseSearch,
+  bayes: Sigma,
   notebook: NotebookPen,
   report: FileChartColumn,
   dashboard: LayoutDashboard,
@@ -312,6 +317,12 @@ const rows = computed<Row[]>(() => {
     const meta = [`v${q.current_version}`, fmtDate(q.updated_at)].filter(Boolean).join(' · ')
     out.push({ kind: 'sql', id: q.id, name: q.name, meta, to: `/sql-script?id=${q.id}`, raw: q })
   }
+  for (const b of bayesModels.value) {
+    // the compile state is told only once it is something: «compiled the first time it runs» is the usual one
+    const compile = b.compile.state !== 'none' ? t(`bayesModels.compile_${b.compile.state}`) : ''
+    const meta = [b.family ? t(bayesFamilyKey(b.family)) : '', `v${b.current_version}`, compile, fmtDate(b.updated_at)].filter(Boolean).join(' · ')
+    out.push({ kind: 'bayes', id: b.id, name: b.name, meta, to: `/bayes-model?id=${b.id}`, raw: b })
+  }
   for (const n of notebooks.value) {
     const meta = [n.environment_name ?? '', `v${n.current_version}`, fmtDate(n.updated_at)].filter(Boolean).join(' · ')
     out.push({ kind: 'notebook', id: n.id, name: n.name, meta, to: `/notebook?id=${n.id}`, raw: n })
@@ -361,7 +372,7 @@ const state = computed(() => listState({
   treeLoaded: treeLoaded.value, folderLoading: loading.value, total: rows.value.length, visible: visibleRows.value.length,
 }))
 const segments = computed(() =>
-  (['folder', 'flow', 'group', 'datasource', 'view', 'script', 'sql', 'notebook', 'report', 'dashboard', 'dataapi', 'connection'] as Kind[])
+  (['folder', 'flow', 'group', 'datasource', 'view', 'script', 'sql', 'bayes', 'notebook', 'report', 'dashboard', 'dataapi', 'connection'] as Kind[])
     .filter((k) => counts.value[k])
     .map((k) => ({ kind: k, n: counts.value[k] })),
 )
@@ -394,6 +405,7 @@ async function loadFolder(id: number | null) {
   savedViews.value = []
   scripts.value = []
   sqlScripts.value = []
+  bayesModels.value = []
   notebooks.value = []
   reports.value = []
   dashboards.value = []
@@ -412,7 +424,7 @@ async function loadFolder(id: number | null) {
 
   loading.value = true
   // all at once: each list is independent, and a refusal empties only its own
-  const [fl, ds, gr, sv, sc, sq, nb, rp, db, da, cn, pm] = await Promise.all([
+  const [fl, ds, gr, sv, sc, sq, by, nb, rp, db, da, cn, pm] = await Promise.all([
     settle(flowsApi.listByProject(id)),
     settle(dsApi.listByProject(id)),
     settle(groupsApi.listByProject(id)),
@@ -420,6 +432,8 @@ async function loadFolder(id: number | null) {
     // only the scripts this person may see; none without scripting
     settle(scriptsApi.listByProject(id)),
     settle(sqlApi.listByProject(id)),
+    // only the models this person may see; none when the group is closed to them
+    settle(bayesApi.listByProject(id)),
     settle(notebooksApi.listByProject(id)),
     settle(reportsApi.listByProject(id)),
     settle(dashboardsApi.listByProject(id)),
@@ -445,6 +459,7 @@ async function loadFolder(id: number | null) {
   if (sv.ok) savedViews.value = sv.value
   if (sc.ok) scripts.value = sc.value
   if (sq.ok) sqlScripts.value = sq.value
+  if (by.ok) bayesModels.value = by.value
   if (nb.ok) notebooks.value = nb.value
   if (rp.ok) reports.value = rp.value
   if (db.ok) dashboards.value = db.value
@@ -660,6 +675,9 @@ async function moveRow(row: Row, target: number | null) {
     } else if (row.kind === 'sql') {
       await sqlApi.update(row.id, { project_id: target })
       sqlScripts.value = sqlScripts.value.filter((x) => x.id !== row.id)
+    } else if (row.kind === 'bayes') {
+      await bayesApi.update(row.id, { project_id: target })
+      bayesModels.value = bayesModels.value.filter((x) => x.id !== row.id)
     } else if (row.kind === 'notebook') {
       await notebooksApi.update(row.id, { project_id: target })
       notebooks.value = notebooks.value.filter((x) => x.id !== row.id)
@@ -692,7 +710,7 @@ async function moveRow(row: Row, target: number | null) {
 const renaming = ref<string | null>(null)
 const renameDraft = ref('')
 const renameBusy = ref(false)
-const RENAMABLE = new Set<Kind>(['folder', 'flow', 'group', 'datasource', 'view', 'script', 'sql', 'notebook', 'report', 'dashboard', 'dataapi'])
+const RENAMABLE = new Set<Kind>(['folder', 'flow', 'group', 'datasource', 'view', 'script', 'sql', 'bayes', 'notebook', 'report', 'dashboard', 'dataapi'])
 
 function startRename(row: Row) {
   renaming.value = rowKey(row)
@@ -739,6 +757,9 @@ async function commitRename(row: Row) {
     } else if (row.kind === 'sql') {
       await sqlApi.update(row.id, { name })
       sqlScripts.value = rename(sqlScripts.value)
+    } else if (row.kind === 'bayes') {
+      await bayesApi.update(row.id, { name })
+      bayesModels.value = rename(bayesModels.value)
     } else if (row.kind === 'notebook') {
       await notebooksApi.update(row.id, { name })
       notebooks.value = rename(notebooks.value)
@@ -821,6 +842,18 @@ async function duplicateRow(row: Row) {
       rowMotion()
       markFresh(`${row.kind}-${copy.id}`)
       sqlScripts.value = [...sqlScripts.value, copy].sort(byName)
+      name = copy.name
+    } else if (row.kind === 'bayes') {
+      const copy = await bayesApi.duplicate(row.id)
+      rowMotion()
+      markFresh(`${row.kind}-${copy.id}`)
+      // the copy as a row of the list: the detail's own fields, its compile and uses with it
+      bayesModels.value = [...bayesModels.value, {
+        id: copy.id, name: copy.name, description: copy.description, project_id: copy.project_id, owner_id: copy.owner_id,
+        current_version: copy.current_version, template_id: copy.template_id, template_version: copy.template_version,
+        family: copy.family, created_at: copy.created_at, updated_at: copy.updated_at, editable: copy.editable,
+        runnable: copy.runnable, compile: copy.compile, uses: copy.uses, saved_by: null,
+      }].sort(byName)
       name = copy.name
     } else if (row.kind === 'notebook') {
       const copy = await notebooksApi.duplicate(row.id)
@@ -962,6 +995,7 @@ const CONFIRM_KEY: Record<Kind, string> = {
   view: 'projectBrowser.confirmDeleteSavedView',
   script: 'projectBrowser.confirmDeleteScript',
   sql: 'projectBrowser.confirmDeleteSqlScript',
+  bayes: 'projectBrowser.confirmDeleteBayesModel',
   notebook: 'projectBrowser.confirmDeleteNotebook',
   report: 'projectBrowser.confirmDeleteReport',
   dashboard: 'projectBrowser.confirmDeleteDashboard',
@@ -1052,6 +1086,11 @@ async function deleteRow(row: Row) {
     rowMotion()
     sqlScripts.value = sqlScripts.value.filter((x) => x.id !== row.id)
     toast.success(t('projectBrowser.sqlScriptDeleted', { name: row.name }))
+  } else if (row.kind === 'bayes') {
+    await bayesApi.remove(row.id)
+    rowMotion()
+    bayesModels.value = bayesModels.value.filter((x) => x.id !== row.id)
+    toast.success(t('projectBrowser.bayesModelDeleted', { name: row.name }))
   } else if (row.kind === 'notebook') {
     await notebooksApi.remove(row.id)
     rowMotion()

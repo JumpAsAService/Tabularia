@@ -40,7 +40,8 @@ function applies(a: RowAction, r: RowFacts): boolean {
     case 'contract': return r.kind === 'datasource'
     case 'editConnection': return r.kind === 'connection'
     // pinned to the person's home page (the Favourites widget): the objects, not folders nor connections
-    case 'favourite': return r.kind !== 'folder' && r.kind !== 'connection'
+    // (nor the Bayesian models: the home page's favourites do not know them yet)
+    case 'favourite': return r.kind !== 'folder' && r.kind !== 'connection' && r.kind !== 'bayes'
     case 'rename': return r.kind !== 'connection'
     case 'duplicate': return r.kind !== 'folder'
     case 'move': return !(r.kind === 'folder' && r.fixedFolder)
@@ -181,6 +182,7 @@ export function objectTarget(kind: string, id: number): string {
     case 'view': return `/viewer?view=${id}`
     case 'script': return `/script?id=${id}`
     case 'sql': return `/sql-script?id=${id}`
+    case 'bayes': return `/bayes-model?id=${id}`
     case 'notebook': return `/notebook?id=${id}`
     case 'report': return `/report?id=${id}`
     case 'dashboard': return `/dashboard?id=${id}`

@@ -790,3 +790,56 @@ func TestBayesModelRoutesAreRegistered(t *testing.T) {
 		}
 	}
 }
+
+// The lists carry each model's compile state, the flows that pin it and who saved its current
+// version, from one read of each (no call per model).
+func TestBayesModelListCarriesCompileUsesAndAuthor(t *testing.T) {
+	w := newBayesWorld(t)
+	a := w.create("List state A", w.folder, w.editor)
+	b := w.create("List state B", w.folder, w.editor)
+	flowDef := fmt.Sprintf(`{"nodes": [{"id": "n1", "type": "bayes_model", "data": {"bayesModelId": %d}}, {"id": "n2", "type": "bayes_model", "data": {"bayesModelId": %d}}], "edges": []}`, a.ID, a.ID)
+	flow := w.one(`INSERT INTO flows (name, description, project_id, owner_id, definition, engine, created_at, updated_at)
+		VALUES ('list uses', '', $1, $2, $3, 'duckdb', now(), now()) RETURNING id`, w.folder, w.editor.ID, flowDef)
+	t.Cleanup(func() { _, _ = w.db.Exec(w.ctx, `DELETE FROM flows WHERE id = $1`, flow) })
+
+	type listedRow struct {
+		ID      int64 `json:"id"`
+		Compile struct {
+			State  string  `json:"state"`
+			Detail string  `json:"detail"`
+			At     *string `json:"at"`
+		} `json:"compile"`
+		Uses    int     `json:"uses"`
+		SavedBy *string `json:"saved_by"`
+	}
+	read := func(h func(*Deps, http.ResponseWriter, *http.Request, *auth.Principal), values map[string]string) map[int64]listedRow {
+		rec := w.call(h, w.viewer, bayesCall{method: "GET", path: "/x", values: values})
+		w.want(rec, 200)
+		var rows []listedRow
+		if err := json.Unmarshal(rec.Body.Bytes(), &rows); err != nil {
+			t.Fatal(err)
+		}
+		out := map[int64]listedRow{}
+		for _, r := range rows {
+			out[r.ID] = r
+		}
+		return out
+	}
+	for _, list := range []struct {
+		h      func(*Deps, http.ResponseWriter, *http.Request, *auth.Principal)
+		values map[string]string
+	}{{listBayesModels, nil}, {listProjectBayesModels, map[string]string{"project_id": bmID(w.folder)}}} {
+		got := read(list.h, list.values)
+		if got[a.ID].Compile.State != "none" || got[a.ID].Uses != 1 || got[b.ID].Uses != 0 ||
+			got[a.ID].SavedBy == nil || *got[a.ID].SavedBy != w.editor.Email {
+			t.Errorf("list before: %+v", got)
+		}
+	}
+	w.compiler.mu.Lock()
+	w.compiler.state = bayesmodels.CompileReady
+	w.compiler.mu.Unlock()
+	if got := read(listBayesModels, nil); got[a.ID].Compile.State != "ready" || got[b.ID].Compile.State != "ready" ||
+		got[a.ID].Compile.At == nil || got[a.ID].Compile.Detail != "x" {
+		t.Errorf("list with a ready compile: %+v", got)
+	}
+}

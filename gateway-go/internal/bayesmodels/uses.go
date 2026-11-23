@@ -108,6 +108,31 @@ func Using(ctx context.Context, q perm.Querier, modelID int64) ([]Use, error) {
 	return out, nil
 }
 
+// UseCounts is how many flows pin each model, in one read of the flows that hold the key (a flow
+// with two nodes of one model counts once, as in the detail's `uses`). Models no flow pins are absent.
+func UseCounts(ctx context.Context, q perm.Querier) (map[int64]int, error) {
+	rows, err := q.Query(ctx, `SELECT definition FROM flows WHERE definition LIKE '%' || '"`+KeyModel+`"' || '%'`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[int64]int{}
+	for rows.Next() {
+		var def string
+		if err := rows.Scan(&def); err != nil {
+			return nil, err
+		}
+		in := map[int64]bool{}
+		for _, u := range Pinned(def) {
+			in[u.ModelID] = true
+		}
+		for id := range in {
+			out[id]++
+		}
+	}
+	return out, rows.Err()
+}
+
 // References is the names of the flows that pin the model, each once, sorted.
 func References(ctx context.Context, q perm.Querier, modelID int64) ([]string, error) {
 	uses, err := Using(ctx, q, modelID)

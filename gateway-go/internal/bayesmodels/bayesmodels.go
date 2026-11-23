@@ -212,6 +212,10 @@ func GetVisible(ctx context.Context, c *perm.Checker, q perm.Querier, id int64, 
 type Listed struct {
 	Model
 	Family string
+	// ProgramSHA256 is the current version's program (the key of its compile state); SavedBy is the
+	// email of the person who saved that version (nil when the person is gone).
+	ProgramSHA256 string
+	SavedBy       *string
 }
 
 // Visible lists the models this person sees (in `projects` when not nil), by name; never a
@@ -248,8 +252,9 @@ func Visible(ctx context.Context, c *perm.Checker, q perm.Querier, projects []in
 		where, args = ` WHERE m.project_id = ANY($1)`, []any{perm.Sorted(readable)}
 	}
 	rows, err := q.Query(ctx, `SELECT m.id, m.name, m.description, m.project_id, m.owner_id, m.current_version, m.template_id,
-		m.template_version, m.created_at, m.updated_at, coalesce(v.family, '')
-		FROM bayes_models m LEFT JOIN bayes_model_versions v ON v.model_id = m.id AND v.version = m.current_version`+
+		m.template_version, m.created_at, m.updated_at, coalesce(v.family, ''), coalesce(v.program_sha256, ''), u.email
+		FROM bayes_models m LEFT JOIN bayes_model_versions v ON v.model_id = m.id AND v.version = m.current_version
+		LEFT JOIN users u ON u.id = v.created_by`+
 		where+` ORDER BY m.name, m.id`, args...)
 	if err != nil {
 		return nil, err
@@ -259,7 +264,7 @@ func Visible(ctx context.Context, c *perm.Checker, q perm.Querier, projects []in
 	for rows.Next() {
 		var l Listed
 		if err := rows.Scan(&l.ID, &l.Name, &l.Description, &l.ProjectID, &l.OwnerID, &l.CurrentVersion, &l.TemplateID,
-			&l.TemplateVersion, &l.CreatedAt, &l.UpdatedAt, &l.Family); err != nil {
+			&l.TemplateVersion, &l.CreatedAt, &l.UpdatedAt, &l.Family, &l.ProgramSHA256, &l.SavedBy); err != nil {
 			return nil, err
 		}
 		out = append(out, l)

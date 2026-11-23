@@ -9,7 +9,7 @@
 // kind: they are the numbers to put in the kind selector, which would otherwise change at
 // every click.
 
-export type SearchKind = 'folder' | 'flow' | 'group' | 'datasource' | 'view' | 'script' | 'sql' | 'notebook' | 'report' | 'dashboard' | 'dataapi' | 'connection'
+export type SearchKind = 'folder' | 'flow' | 'group' | 'datasource' | 'view' | 'script' | 'sql' | 'bayes_model' | 'notebook' | 'report' | 'dashboard' | 'dataapi' | 'connection'
 
 export interface SearchHit {
   kind: SearchKind
@@ -48,6 +48,7 @@ export function searchHitTarget(hit: SearchHit): string {
     case 'view': return `/viewer?view=${hit.id}`
     case 'script': return `/script?id=${hit.id}`
     case 'sql': return `/sql-script?id=${hit.id}`
+    case 'bayes_model': return `/bayes-model?id=${hit.id}`
     case 'notebook': return `/notebook?id=${hit.id}`
     case 'report': return `/report?id=${hit.id}`
     case 'dashboard': return `/dashboard?id=${hit.id}`
