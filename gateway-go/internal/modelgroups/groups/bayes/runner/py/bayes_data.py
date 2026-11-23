@@ -273,8 +273,11 @@ def _label(task: Task, plate: str | None) -> str:
 
 
 def pass_a(task: Task, input_path: str, batch_rows: int = BATCH_ROWS, extension_sizes: dict[str, int] | None = None,
-           ) -> tuple[Facts, dict[str, Any]]:
-    """The first read. Returns the facts and the state pass B needs (the accumulators' results, the units of the group plates' columns)."""
+           checks: Any = None, run: str = "sample") -> tuple[Facts, dict[str, Any]]:
+    """The first read. Returns the facts and the state pass B needs (the accumulators' results, the units of the group plates' columns).
+
+    `checks` is a `bayes_checks.Plan` (lot P3a): it observes the kept rows of the checked outcomes batch by batch and, at the end of the
+    pass, gives the extension's sizes and values of `run` (`state["extension_values"]`, which pass B writes unless it is given others)."""
     import time as _time
 
     t0 = _time.monotonic()
@@ -353,6 +356,8 @@ def pass_a(task: Task, input_path: str, batch_rows: int = BATCH_ROWS, extension_
                 series.counts["first"] += int((pos == 0).sum())
                 series.counts["next"] += int((pos > 0).sum())
                 series.counts["lag"] += int((pos >= plan.max_lag).sum()) if plan.max_lag else 0
+            if checks is not None:
+                checks.observe(p, pos if series is not None else None)
         kept_so_far += p.k
         offset += rb.num_rows
     facts.n = kept_so_far
@@ -380,9 +385,14 @@ def pass_a(task: Task, input_path: str, batch_rows: int = BATCH_ROWS, extension_
             facts.standardized[e["stan"]] = {"mean": w.mean, "sd": w.sd}
     facts.series = {"first": series.counts["first"], "next": series.counts["next"], "lag": series.counts["lag"],
                     "max_lag": plan.max_lag} if series else {}
+    values = None
+    if checks is not None:
+        checks.finish(facts)
+        sizes, values = checks.extension(run, facts)
+        extension_sizes = {**(extension_sizes or {}), **sizes}
     facts.sizes = _sizes(task, facts, extension_sizes or {})
     facts.seconds_pass_a = _time.monotonic() - t0
-    state = {"plan": plan, "unit_values": unit_values, "parents": parents}
+    state = {"plan": plan, "unit_values": unit_values, "parents": parents, "extension_values": values}
     return facts, state
 
 
@@ -486,7 +496,7 @@ def pass_b(task: Task, facts: Facts, state: dict[str, Any], input_path: str, wor
         for part in parts.values():
             part.close()
     path = workdir / "data.json"
-    _assemble(task, facts, state, parts, path, extension_values or {})
+    _assemble(task, facts, state, parts, path, extension_values if extension_values is not None else state.get("extension_values") or {})
     shutil.rmtree(parts_dir, ignore_errors=True)
     facts.seconds_pass_b = _time.monotonic() - t0
     facts.data_bytes = path.stat().st_size
@@ -548,7 +558,13 @@ def _assemble(task: Task, facts: Facts, state: dict[str, Any], parts: dict[str, 
                 out.write(_array_json([outer[parents[u]] for u in facts.units[e["plate"]]]).encode("ascii"))
             elif stan in extension_values:
                 v = extension_values[stan]
-                out.write((_array_json(v) if isinstance(v, (list, tuple, np.ndarray)) else _scalar_json(v)).encode("ascii"))
+                if hasattr(v, "pieces"):  # an array the size of the input (bayes_checks.Stream), written in pieces
+                    out.write(b"[")
+                    for piece in v.pieces(parts):
+                        out.write(piece)
+                    out.write(b"]")
+                else:
+                    out.write((_array_json(v) if isinstance(v, (list, tuple, np.ndarray)) else _scalar_json(v)).encode("ascii"))
             else:
                 raise Refusal("task_value", f"the data variable {stan} (kind {kind}) is not one this runner can build: a fault of "
                                             "Tabularia, not of the model", {"what": stan})
@@ -556,9 +572,9 @@ def _assemble(task: Task, facts: Facts, state: dict[str, Any], parts: dict[str, 
 
 
 def prepare(task: Task, input_path: str, workdir: Path, batch_rows: int = BATCH_ROWS, extension_sizes: dict[str, int] | None = None,
-            extension_values: dict[str, Any] | None = None) -> Facts:
+            extension_values: dict[str, Any] | None = None, checks: Any = None, run: str = "sample") -> Facts:
     """Both passes: the facts, and /<workdir>/data.json written. A refusal leaves whatever was written under `workdir` for the caller
     to delete («a refusal leaves no partial result»)."""
-    facts, state = pass_a(task, input_path, batch_rows, extension_sizes)
+    facts, state = pass_a(task, input_path, batch_rows, extension_sizes, checks, run)
     pass_b(task, facts, state, input_path, workdir, batch_rows, extension_values)
     return facts

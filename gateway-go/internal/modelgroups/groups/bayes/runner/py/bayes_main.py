@@ -50,13 +50,14 @@ class Prepared:
 
 
 def prepare_run(task: Task, workdir: Path = WORKDIR, input_path: str | None = None, batch_rows: int = bayes_data.BATCH_ROWS,
-                extension_sizes: dict[str, int] | None = None, extension_values: dict[str, Any] | None = None) -> Prepared:
+                extension_sizes: dict[str, int] | None = None, extension_values: dict[str, Any] | None = None,
+                checks: Any = None, run: str = "sample") -> Prepared:
     """Passes A and B over the input (TABULARIA_INPUT unless given), the layout of the CSV, and data.json under `workdir`."""
     path = input_path if input_path is not None else os.environ.get(ENV_INPUT, "")
     if not path:
         raise Refusal("task_value", "TABULARIA_INPUT is empty: the Job was not made by Tabularia", {"what": ENV_INPUT})
     workdir.mkdir(parents=True, exist_ok=True)
-    facts, state = bayes_data.pass_a(task, path, batch_rows, extension_sizes)
+    facts, state = bayes_data.pass_a(task, path, batch_rows, extension_sizes, checks, run)
     layout = bayes_task.build_layout(task, facts.sizes, facts.units)
     most = task.limit("max_quantities")
     if layout.n_quantities > most:

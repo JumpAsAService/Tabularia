@@ -691,6 +691,30 @@ codegen's golden programs without an extension keep their bytes).
   gives a program stanc refuses **without the extension too** (`prev` read in the transformed parameters, declared in the
   model block): a codegen fault, left out of the stanc check here and said to its owner.
 
+## As built — lot P3a (pass A's observations and the extension's values)
+
+`groups/bayes/runner/py/bayes_checks.py` (`plan(task)`, `Plan.observe(batch, pos)`, `Plan.finish(facts)`, `Plan.extension(run, facts)`),
+hooked into `bayes_data.pass_a(…, checks=plan, run=…)` / `prepare(…)` / `bayes_main.prepare_run(…)`; tests `tests/test_checks.py`.
+
+- **What is read from the manifests**: the outcomes (`post_count` entries; the observed data node is the entry's `node`; the statistics
+  and so the kind from the checks with that `of`; the units from the `unit_slot` entry's group index), never from the graph.
+- **Pass A**: each batch's kept rows are observed (`observe`); what is held is the outcome's values (float64, 8 bytes a row, the spec's
+  exception) and each row's unit as a code (4 bytes); `finish` computes T(y) (type 7 quantiles, sample sd, zeros), the bins, the
+  observed count of each slot **with Stan's own expression** (`floor(y · scale + shift)` clamped), the checked units (the `max_units` with
+  the most rows, ties in text order; slots 1…U; the others share slot U + 1, present only when there are others), their rows and sums, and
+  each row's slot (uint16), then frees the values and the codes. A standardized outcome is observed as Stan reads it.
+- **Bins**: continuous, `value_bins` equal bins over the range widened by a millionth each side (so the extremes fall inside; a constant
+  outcome gets a range of one); counts, a whole width from −0.5 covering the maximum in at most `value_bins` bins; binary, two bins.
+- **`extension(run, facts)`** gives `(sizes, values)` for `sample` (checks off: every count 0, arrays empty, scales 0.0), `checks` (posterior
+  rows 1…N, `Ppc_on` 1), `replicated` (posterior rows, `rep` = N), `prior` (prior rows, the series' copies). `sizes` are the integers a
+  dimension may be sized by. Arrays the size of the input are `Stream`s (`Counting`, `Slots`, `CopyOf`) that `_assemble` writes in pieces.
+  `Ppc_on` 1 with a statement of fewer than 2 rows is the refusal `data_shape`; `prior` without `prior_count` is `task_value`.
+- **Known gap**: the manifests do not say which likelihood is lagged; every outcome is taken as lagged when the data holds a
+  `rows_subset` entry (a model whose likelihoods differ in that is not told apart).
+- **Checked**: every `bayeschecks` golden program (28) in its four runs (prior where it has one) has, in the data written, the names of its data
+  block in the manifest's order and the dimensions its arrays declare; the invariants (`Ppc_on` 1 ⇒ ≥ 2 rows and `slots` = bins + 2, `binned` > 0
+  only with the checks on, `rep` > 0 only with them off).
+
 ## Open questions
 
 None.
