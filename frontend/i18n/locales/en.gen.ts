@@ -7940,5 +7940,35 @@ export default {
       },
       "lag_k": "The number of steps back is from 1 to {max}.",
     },
+    "prior": {
+      "summary": "Before seeing any data, the model says that {name} is between {low} and {high} nine times in ten; half the time it is below {median}.",
+      "exact": "The curve is exact: no draw was made.",
+      "mixture": "Drawn {n} times: first the values {name} depends on, then {name} from them.",
+      "truncated": "The prior is cut to its range: values outside it have no probability.",
+      "quantiles": "5 %: {q5} · half: {q50} · 95 %: {q95}",
+      "axis": {
+        "curve": "Density",
+        "histogram": "Draws in each bin",
+      },
+      "cut": {
+        "curve": "The axis leaves out {below} of the probability below it and {above} above it.",
+        "histogram": "The axis leaves out {below} draws below it and {above} draws above it.",
+      },
+      "leftOut": {
+        "argument": "{count} of {total} draws were left out: Stan rejects a draw where an argument of {node} breaks its constraint.",
+        "not_finite": "{count} of {total} draws were left out: {node} is not a finite number there.",
+        "no_mass": "{count} of {total} draws were left out: the range of {node} has no probability there.",
+      },
+      "none": {
+        "needs_data": "This value depends on data, so no chart is drawn before the data is seen.",
+        "errors": "The model has findings above this value: solve them to see its chart.",
+        "no_mass": "No draw is left: the range has no probability, or every draw was rejected.",
+        "constant": "Every draw is the same number: {value}.",
+      },
+      "drawAgain": "Draw again",
+      "seed": "Seed {seed}",
+      "drawing": "Drawing…",
+      "failed": "The chart could not be drawn.",
+    },
   },
 }

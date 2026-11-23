@@ -7940,5 +7940,35 @@ export default {
       },
       "lag_k": "I passi indietro vanno da 1 a {max}.",
     },
+    "prior": {
+      "summary": "Prima di vedere i dati, il modello dice che {name} sta tra {low} e {high} nove volte su dieci; una volta su due è sotto {median}.",
+      "exact": "La curva è esatta: non è stata fatta nessuna estrazione.",
+      "mixture": "Estratto {n} volte: prima i valori da cui dipende {name}, poi {name} a partire da essi.",
+      "truncated": "La distribuzione a priori è tagliata al suo intervallo: i valori fuori non hanno probabilità.",
+      "quantiles": "5 %: {q5} · metà: {q50} · 95 %: {q95}",
+      "axis": {
+        "curve": "Densità",
+        "histogram": "Estrazioni in ogni classe",
+      },
+      "cut": {
+        "curve": "L'asse lascia fuori {below} della probabilità sotto di sé e {above} sopra di sé.",
+        "histogram": "L'asse lascia fuori {below} estrazioni sotto di sé e {above} sopra di sé.",
+      },
+      "leftOut": {
+        "argument": "{count} estrazioni su {total} sono state escluse: Stan rifiuta un'estrazione in cui un argomento di {node} viola il suo vincolo.",
+        "not_finite": "{count} estrazioni su {total} sono state escluse: {node} non è un numero finito in quei casi.",
+        "no_mass": "{count} estrazioni su {total} sono state escluse: l'intervallo di {node} in quei casi non ha probabilità.",
+      },
+      "none": {
+        "needs_data": "Questo valore dipende dai dati, quindi nessun grafico viene disegnato prima di vederli.",
+        "errors": "Il modello ha segnalazioni a monte di questo valore: risolvile per vederne il grafico.",
+        "no_mass": "Non resta nessuna estrazione: l'intervallo non ha probabilità, oppure ogni estrazione è stata rifiutata.",
+        "constant": "Ogni estrazione è lo stesso numero: {value}.",
+      },
+      "drawAgain": "Estrai di nuovo",
+      "seed": "Seme {seed}",
+      "drawing": "Estrazione in corso…",
+      "failed": "Non è stato possibile disegnare il grafico.",
+    },
   },
 }

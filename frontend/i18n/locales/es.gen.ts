@@ -7940,5 +7940,35 @@ export default {
       },
       "lag_k": "Los pasos hacia atrás van de 1 a {max}.",
     },
+    "prior": {
+      "summary": "Antes de ver ningún dato, el modelo dice que {name} está entre {low} y {high} nueve veces de cada diez; la mitad de las veces está por debajo de {median}.",
+      "exact": "La curva es exacta: no se hizo ninguna extracción.",
+      "mixture": "Extraído {n} veces: primero los valores de los que depende {name}, después {name} a partir de ellos.",
+      "truncated": "La distribución a priori está cortada en su rango: los valores fuera de él no tienen probabilidad.",
+      "quantiles": "5 %: {q5} · mitad: {q50} · 95 %: {q95}",
+      "axis": {
+        "curve": "Densidad",
+        "histogram": "Extracciones en cada clase",
+      },
+      "cut": {
+        "curve": "El eje deja fuera {below} de la probabilidad por debajo y {above} por encima.",
+        "histogram": "El eje deja fuera {below} extracciones por debajo y {above} extracciones por encima.",
+      },
+      "leftOut": {
+        "argument": "Se dejaron fuera {count} de {total} extracciones: Stan rechaza una extracción en la que un argumento de {node} incumple su restricción.",
+        "not_finite": "Se dejaron fuera {count} de {total} extracciones: {node} no es un número finito ahí.",
+        "no_mass": "Se dejaron fuera {count} de {total} extracciones: el rango de {node} no tiene probabilidad ahí.",
+      },
+      "none": {
+        "needs_data": "Este valor depende de datos, así que no se dibuja ningún gráfico antes de ver los datos.",
+        "errors": "El modelo tiene avisos por encima de este valor: resuélvalos para ver su gráfico.",
+        "no_mass": "No queda ninguna extracción: el rango no tiene probabilidad, o se rechazó cada extracción.",
+        "constant": "Todas las extracciones son el mismo número: {value}.",
+      },
+      "drawAgain": "Extraer de nuevo",
+      "seed": "Semilla {seed}",
+      "drawing": "Extrayendo…",
+      "failed": "No se pudo dibujar el gráfico.",
+    },
   },
 }

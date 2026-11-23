@@ -7940,5 +7940,35 @@ export default {
       },
       "lag_k": "Die Schritte zurück gehen von 1 bis {max}.",
     },
+    "prior": {
+      "summary": "Bevor Daten vorliegen, sagt das Modell: {name} liegt neunmal von zehn zwischen {low} und {high}; in der Hälfte der Fälle liegt es unter {median}.",
+      "exact": "Die Kurve ist exakt: Es wurde nichts gezogen.",
+      "mixture": "{n} Mal gezogen: zuerst die Werte, von denen {name} abhängt, dann {name} aus ihnen.",
+      "truncated": "Die Prior-Verteilung ist auf ihren Bereich beschnitten: Werte außerhalb haben keine Wahrscheinlichkeit.",
+      "quantiles": "5 %: {q5} · Hälfte: {q50} · 95 %: {q95}",
+      "axis": {
+        "curve": "Dichte",
+        "histogram": "Ziehungen je Klasse",
+      },
+      "cut": {
+        "curve": "Die Achse lässt {below} der Wahrscheinlichkeit darunter und {above} darüber aus.",
+        "histogram": "Die Achse lässt {below} Ziehungen darunter und {above} Ziehungen darüber aus.",
+      },
+      "leftOut": {
+        "argument": "{count} von {total} Ziehungen wurden ausgelassen: Stan lehnt eine Ziehung ab, bei der ein Argument von {node} seine Bedingung verletzt.",
+        "not_finite": "{count} von {total} Ziehungen wurden ausgelassen: {node} ist dort keine endliche Zahl.",
+        "no_mass": "{count} von {total} Ziehungen wurden ausgelassen: Der Bereich von {node} hat dort keine Wahrscheinlichkeit.",
+      },
+      "none": {
+        "needs_data": "Dieser Wert hängt von Daten ab, daher wird vor der Sicht auf die Daten kein Diagramm gezeichnet.",
+        "errors": "Das Modell hat Befunde oberhalb dieses Wertes: Beheben Sie sie, um sein Diagramm zu sehen.",
+        "no_mass": "Keine Ziehung bleibt übrig: Der Bereich hat keine Wahrscheinlichkeit, oder jede Ziehung wurde abgelehnt.",
+        "constant": "Jede Ziehung ist dieselbe Zahl: {value}.",
+      },
+      "drawAgain": "Neu ziehen",
+      "seed": "Startwert {seed}",
+      "drawing": "Es wird gezogen…",
+      "failed": "Das Diagramm konnte nicht gezeichnet werden.",
+    },
   },
 }

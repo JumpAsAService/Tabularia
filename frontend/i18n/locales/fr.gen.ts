@@ -7940,5 +7940,35 @@ export default {
       },
       "lag_k": "Les pas en arrière vont de 1 à {max}.",
     },
+    "prior": {
+      "summary": "Avant de voir les données, le modèle dit que {name} est entre {low} et {high} neuf fois sur dix ; une fois sur deux, il est sous {median}.",
+      "exact": "La courbe est exacte : aucun tirage n'a été fait.",
+      "mixture": "Tiré {n} fois : d'abord les valeurs dont dépend {name}, puis {name} à partir d'elles.",
+      "truncated": "La loi a priori est coupée à son intervalle : les valeurs en dehors n'ont aucune probabilité.",
+      "quantiles": "5 % : {q5} · moitié : {q50} · 95 % : {q95}",
+      "axis": {
+        "curve": "Densité",
+        "histogram": "Tirages dans chaque classe",
+      },
+      "cut": {
+        "curve": "L'axe laisse de côté {below} de la probabilité en dessous et {above} au-dessus.",
+        "histogram": "L'axe laisse de côté {below} tirages en dessous et {above} tirages au-dessus.",
+      },
+      "leftOut": {
+        "argument": "{count} tirages sur {total} ont été écartés : Stan rejette un tirage où un argument de {node} enfreint sa contrainte.",
+        "not_finite": "{count} tirages sur {total} ont été écartés : {node} n'est pas un nombre fini à ces tirages.",
+        "no_mass": "{count} tirages sur {total} ont été écartés : l'intervalle de {node} n'a aucune probabilité à ces tirages.",
+      },
+      "none": {
+        "needs_data": "Cette valeur dépend de données : aucun graphique n'est tracé avant de les voir.",
+        "errors": "Le modèle a des constats en amont de cette valeur : résolvez-les pour voir son graphique.",
+        "no_mass": "Aucun tirage ne reste : l'intervalle n'a aucune probabilité, ou chaque tirage a été rejeté.",
+        "constant": "Chaque tirage est le même nombre : {value}.",
+      },
+      "drawAgain": "Tirer à nouveau",
+      "seed": "Graine {seed}",
+      "drawing": "Tirage en cours…",
+      "failed": "Le graphique n'a pas pu être tracé.",
+    },
   },
 }
