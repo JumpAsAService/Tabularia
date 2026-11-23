@@ -190,7 +190,7 @@ catalogue gains a field `stan.quantile` with these forms (a correction to an app
   fitted_params=<file>`): the follower writes the thinned draw lines of each chain, as CmdStan wrote them, into
   `/tmp/run/fitted_<c>.csv` while it converts the chain (a line kept, never a whole file), and the runner calls the
   binary once a chain after sampling with a data file that differs only by the flags above. That CmdStan 2.40 accepts such
-  a file, and the header it writes, are **assumed**: lot P0 reads both on the pinned CmdStan.
+  a file, and the header it writes, were **assumed** and are measured by lot P0 (see «As built — lot P0»).
 - **The prior predictive** is offered on the flow node's panel only for a version stored with generator 2 and a model
   without a truncated `gamma` or `inv_gamma`; its rows are the development sample's bound rows (the predictors matter:
   the map); the results' variant is `prior_predictive` (the contract).
@@ -491,6 +491,102 @@ lands:
   reach a prior's path (135), a value rebuilt on the rows named (63), a lagged statement's positions (134), a lag at the
   positions (75), a split value on the rows named (115); `FuzzGenerate` 2 minutes (`-parallel 2 -fuzzminimizetime=2s`,
   the three extensions): 18,043 executions, no failure.
+
+## As built — lot P0 (the measures on the image)
+
+By hand, one heavy job at a time, on `tabularia-bayes-b0` (CmdStan 2.40.0), in the Job's conditions: no network, read-only
+root, `/tmp` read-write and executable, uid 10001, 3 GiB, 2 CPUs; each program compiled in the container as the runner does
+(`make -C /opt/cmdstan <program> PRECOMPILED_HEADERS=false` with PATH the only variable). Machine: a laptop-class 4-core CPU
+(2 cores granted to the container), not otherwise idle, so the seconds are indicative. The programs are the golden
+`glm_linear` with the posterior path of the checks written by hand on its three parameters (the shape of
+`extension_checks`: `normal_rng` on the rows, `append_array` with an empty prior path, `mean`, `sd`, `min`, `max`, two
+`quantile`s, 20 bins by `to_int(fmin(fmax(floor(…), 1.0), slots))`, 10 unit sums), and a program for the functions.
+
+**Conclusion: (b).** CmdStan 2.40 reads the follower's thinned CSV, so the posterior checks are a `generate_quantities` run
+after sampling on 1,000 thinned draws, as the owner's decision of 2026-11-24 says. The sampling run keeps `Ppc_on` 0.
+
+### 1. `generate_quantities` on a CSV written by us
+
+- **Accepted**, in the Job's conditions: 1,000 draws thinned evenly (every second draw of each chain's 500), 8 significant
+  digits as CmdStan wrote them, with `fitted_params=<file>` (one merged file, `num_chains` 1) **and** with the follower's
+  per-chain files (`fitted_params=/tmp/run/fitted.csv num_chains=4`: CmdStan appends `_<c>` before the extension and opens
+  `fitted_1.csv` … `fitted_4.csv`; **`fitted_params=fitted_1.csv` is refused**: «Cannot open specified file, `fitted_1_1.csv`»).
+  The per-chain way runs the chains **one after the other** in one process (4 × 250 draws), writing one output file a chain
+  (`<output stem>_<c>.csv`).
+- **What it requires**: a header line (CSV, no quotes) holding **at least the model's parameters by name** (`alpha,b_x,sigma`;
+  vector parameters as `v.1`, `v.2`, …, CmdStan's own names), and as many rows as draws. It does **not** need `lp__` and the
+  sampler's columns, the transformed parameters or the generated quantities: a file of the three parameters alone, one of
+  `lp__ … energy__` plus the parameters, and one with all the sampler's columns (including the generated quantities
+  CmdStan wrote) were all accepted, with the same output; extra columns are ignored. The header's order was not varied (the parameters came in the model's order). Comment lines (`#`, the 47 lines CmdStan writes before the header and the adaptation's after the draws)
+  are accepted and not required. A missing parameter is refused, exit 1: «Mismatch between model and fitted_parameters csv
+  file `<path>`».
+- **What it writes**: a header of **the generated quantities only** (here `Prior_m_1,Prior_m_2,Prior_m_3,Ppc_o1_mean.1,
+  Ppc_o1_sd.1,…,Ppc_o1_count.1…20,Ppc_o1_usum.1…10`, 39 columns, in the program's order, arrays as `name.i`): **no `lp__`, no
+  parameter, no sampler column**, and one row a draw, in the order of the fitted file. A generated quantity of size 0
+  writes no column. The file opens with CmdStan's 25 configuration comment lines and ends with 3 (elapsed time); the runner
+  joins a row to the draw it came from by position, so the follower keeps the thinned draws' (chain, iteration) beside
+  the file.
+- The `Prior_m_*` draws of the sampling run (written with `Ppc_on` 0) are columns of the fitted file the run ignores; the
+  generated quantities are redrawn.
+- The sampler's random numbers: `normal_rng` in the generated quantities of the sampling run advances the chain's
+  generator (the same seed, `Ppc_on` 1, gave 8,998 leapfrogs against 9,006 at 1,000 rows, 9,176 against 9,174 at 10,000, 11,332 against 11,068
+  at 100,000): inline checks change the draws' trajectory; `generate_quantities` does not touch them.
+
+### 2. The functions on values that depend on the parameters (stanc 2.40.0 and the run)
+
+All in `generated quantities`, on a 200-draw sample, with data of size 0 and of size 3:
+
+- `quantile(v, p)` with `v` a parameter vector and `p` a parameter: accepted, equals the type-7 quantile computed by hand
+  (−0.062738132, 8 digits); `quantile(v, {p, 0.5})` accepted **as an `array[] real`** (the vector form of the second
+  argument is refused by stanc: «The second argument must be array[] real but got vector»; the program's codegen writes
+  arrays). `quantile` of a vector, of an array and of a row vector with a real are accepted; the arguments are data-qualified
+  and the generated quantities' variables are.
+- `to_int(fmin(fmax(floor(mu * 10 + 5), 1.0), 9.0))` on a parameter: accepted, `2` for `mu` = −0.2889 as expected.
+- `inv_inc_beta(s + 1, s + 2, p)` with parameters in every argument: accepted; `inc_beta(…, inv_inc_beta(…))` returns `p` to
+  8.9e-16 (largest absolute difference over 200 draws).
+- `inv_Phi(p)` on a parameter: accepted, equal to the reference (`0.60764956`).
+- `append_array(two, emp)` and `append_array(emp, two)` with `emp` an `array[0] real`: accepted, the other array whole;
+  multi-indexing by an empty `array[0] int` (`two[emp_i]`): accepted, an empty array; by `array[K] int` with K 0 and 3:
+  accepted, the elements at the indices; `num_elements` of an empty array 0. Both sizes ran with no error.
+- **Precision** (the output's 8 significant digits cap every figure below at 1e-8 relative; the references are exact forms
+  with Python decimals and the standard library's `NormalDist.inv_cdf`, 1e-16): `inv_Phi` at `p` = 1e-300, 1e-100, 1e-50,
+  1e-20, 1e-15, 1e-10, 1e-8, 1e-5, 0.001, 0.1, 0.5, 0.9, 0.999, 1 − 1e-5 and 1 − 1e-10 agrees with the reference to the 8 digits
+  (relative error ≤ 3.1e-8, the writing's rounding), the lower tail down to 1e-300 included; **the upper tail loses precision with
+  `1 − p` rounded in a double: at `p` = 1 − 1e-15 `inv_Phi` gives 7.9472256 against 7.9414445 (7.3e-4 relative)**, because
+  `p` itself is only a double near 1 (its distance to 1 is known to 10%); use the lower tail (`inv_Phi(1 − u)` written
+  as the negative of `inv_Phi(u)`) for the quantities that matter in a tail. `inv_inc_beta` against the closed forms
+  (beta(1,1), beta(2.5,1), beta(1,3), beta(2,2), beta(0.5,0.5)): relative error ≤ 2.2e-8 everywhere the answer is not
+  1 − a rounding (the 8 digits), exact for the powers; the lower tail is exact to 3.3e-301 (beta(1,3) at `p` = 1e-300 gives
+  3.3333333e-301); beta(7,4) round-trips through `inc_beta` to the 8 digits at all 16 `p`; for `p` ≥ 1 − 1e-10 the answer
+  rounds to 1 (as the true value does at 8 digits). No failure, no NaN, no exception in any call.
+
+### 3. The cost
+
+`glm_linear`, 4 chains, 500 warm-up + 500 draws, `adapt delta=0.8`, `max_depth=10`, seed 1, 2 threads, synthetic rows
+(`y = 1.5 + 0.8 x + N(0, 2)`, `x` standardised), every figure the wall time of the run in seconds (the three repeats
+at 1,000 and 10,000 rows, one at 100,000), peak resident memory of the process (`VmHWM`, MiB). A is the golden program
+without the extension; B the program with the extension and `Ppc_on` 0 (all sizes 0); C the same with `Ppc_on` 1 (the
+checks inline, on every row, 4,000 draws); D `generate_quantities` on the 1,000 thinned draws of B's run, as one file;
+E the same as the follower writes it (4 files of 250, run one chain after the other).
+
+| Rows | A (none) | B (off) | C (inline) | C − B | D (gq, 1 file) | E (gq, 4 files) | Memory A / C / D |
+|---:|---:|---:|---:|---:|---:|---:|---|
+| 1,000 | 0.26 | 0.26–0.32 | 0.34–0.37 | +0.07 | 0.08–0.10 | 0.08 | 6.3 / 6.4 / 5.8 |
+| 10,000 | 3.9–4.1 | 3.9–4.0 | 4.35–4.6 | +0.5 | 0.67–0.73 | 0.67–0.73 | 9.3 / 9.7 / 6.5 |
+| 100,000 | 93.5 | 95.4 | 101.5 | +6.1 (2.4% of it from more leapfrogs) | 7.6 | 7.3 | 38.7 / 41.9 / 15.5 |
+
+- The extension with the checks off costs nothing measurable (B against A: within the repeats' spread; 2 more leapfrogs of
+  9,004 at 1,000 rows).
+- Inline adds 6% at 100,000 rows to the sampling run; `generate_quantities` on 1,000 draws adds 8% of the same run, **as a
+  separate process after the sampling** (single-threaded; its four chains could run as four processes), and it is the work of
+  a run the Job already does for the `replicated` output. At every size both are small against the sampling and **memory
+  is not a factor** (the data's size, a few tens of MiB at 100,000 rows; no draw is held: the checks' output of 1,000 rows
+  of 39 columns is 300 KB). The two give the same distributions: the mean of the checked outcome's replicated mean is
+  1.4915 inline against 1.4918 by `generate_quantities` at 100,000 rows (1.4733/1.4729 at 10,000; 1.5554/1.5592 at 1,000).
+- Not measured here: the prior predictive's cost at the three sizes (the spec's point 3 of «Measure first»): its run is
+  `fixed_param` and does no gradient; it is left to the lot that builds the run. The hierarchical logistic template is not
+  measured either: the linear one bounds the checks' cost per row (the checks are the same code; the sampling run of a
+  hierarchical model costs more, so the share is smaller).
 
 ## Open questions
 
