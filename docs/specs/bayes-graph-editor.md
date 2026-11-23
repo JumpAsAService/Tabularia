@@ -51,7 +51,11 @@ It produces no program (`stan-codegen`), validates nothing on its own authority 
 | Edges | **Drawn from the graph**, never stored (the graph spec): the mirror's `Edges`. Drawing an edge writes the target slot (the source's name, or a `ref` when it has none); removing an edge clears a slot that held only that reference | The graph spec, the gesture: spec |
 | Colour | **Neutral nodes**: the kind is said by its icon and shape (plate notation: data filled, parameters round, the likelihood double-bordered); colour only for what it encodes — selection (`--accent`), errors (`--danger`), warnings (`--warning`) | DESIGN.md «The Colour Is Encoding Rule» (verified) |
 | The expression fields | Plain inputs with the mirror (`bayesCheckExprText`) on every keystroke, the error's span underlined; no Monaco for one-line expressions | Spec (Monaco is for the program) |
-| The Stan code | Monaco read only (already a dependency, `useMonaco.ts` lazy), a small tokenizer of the program's alphabet; the mapping table beside it | The map |
+| The Stan code | A **tab of the side panel**: Monaco read only (already a dependency, `useMonaco.ts` lazy), a small tokenizer of the program's alphabet; the mapping table **under** the code (Correction of 2026-11-24 from the mockups) | The map; the place: owner (2026-11-24) |
+| The Stan code while the graph has errors | The **stored program of the last saved version**, with a notice that it is not the program of the changes and the errors listed (Correction of 2026-11-24 from the mockups) | Owner (2026-11-24) |
+| A prior whose argument has an error | The chart keeps **the last valid form, dimmed**, with «fix μ to update it» (Correction of 2026-11-24 from the mockups) | Owner (2026-11-24) |
+| The canvas' direction | **Left to right**, as the flow editor: a node's sources stand to its left (handles: target left, source right), the hyperparameters in a column at the left, the likelihood at the right (Correction of 2026-11-24 from the mockups) | Spec (2026-11-24, the mockups: a top-down drawing with side handles makes edges run backwards) |
+| A «check now» button | **None**: the gateway's check runs by itself 600 ms after the last change the mirror finds without error, when the Stan code tab opens, and at save | Spec (2026-11-24, the mockups) |
 | The program shown | Asked from the gateway (`POST /bayes-models/check`, the store spec), never written in the browser | The map, the codegen spec |
 | History | Snapshots of the graph's JSON through `createFlowHistory` (`useFlowHistory.ts`, verified) | Spec |
 | Copy and paste of nodes | **Not in the first release** (a name would have to be made unique, and a prior's references remapped) | Spec decision, 2026-11-23, owner may revisit |
@@ -82,8 +86,11 @@ It produces no program (`stan-codegen`), validates nothing on its own authority 
 
 ### The list: `pages/bayes-models.vue`
 
-As `pages/scripting.vue`: a card with the models this person sees — name (link), version, folder, state («has errors»,
-the compile state of the current version: `model-store`'s `CompileState` in words), last change — a filter past five
+As `pages/scripting.vue`: a card with the models this person sees — name (link) with its description, folder, family
+(**derived from the saved graph**, `model-store`'s `family`; the template it was opened from on a line under it), version,
+«used by N flows», the compile state of the current version (`model-store`'s `CompileState` in words: compiled, compiling,
+to compile, failed with its detail), last save and who — and no «has errors» state: a graph with errors is never saved
+(Correction of 2026-11-24 from the mockups); a filter past five
 rows, and **«New model»**, which asks for a folder (EDIT checked when the model is created) and opens the editor on the
 empty canvas with its templates. An intro paragraph says what the space is for, in one sentence for a reader who does not
 know Bayes.
@@ -97,16 +104,23 @@ before the store: a template opened locally, nothing saved, a banner says «prev
 ```text
 ┌ top: ← Bayesian models · name (editable) · folder · version 4 · state · [Undo][Redo] [Save] [⌨] ─────────────┐
 │ palette │                          canvas                                   │ side panel (tabs)            │
-│ (kinds) │   ┌ School (non-centred) ───────────┐   ┌ Pupils ────────────┐     │ Inspector · Stan code ·      │
-│         │   │  (alpha_school)                 │   │ [score] [hours]    │     │ Problems · Versions          │
-│         │   └─────────────────────────────────┘   │ [school]  ⟨Scores⟩ │     │                              │
-│         │   (mu) (tau)  (beta)  (sigma)           └────────────────────┘     │                              │
+│ (kinds) │   (mu)    ┌ School (non-centred) ───────────┐                    │ Inspector · Stan code ·      │
+│         │   (tau)   │  (alpha_school)                 │                    │ Problems · Versions · (i)    │
+│         │   (beta)  └─────────────────────────────────┘                    │                              │
+│         │   (sigma) ┌ Pupils ─────────────────────────────────┐            │                              │
+│         │           │ [school] [hours] [score]  ⟨eta⟩  ⟨Scores⟩│            │                              │
 └─────────┴──────────────────────────────────────────────────────────────────┴──────────────────────────────┘
 ```
 
 - At **1440 px**: palette 200 px, side panel 420 px (resizable 320–640 px), canvas the rest.
-- At **1280 px**: the same columns, palette 168 px; the inspector puts the chart **under** the numbers when it is
-  narrower than 520 px, **beside** them otherwise (two columns: fields, chart).
+- At **1280 px**: the same columns, palette 168 px.
+- **The panel's width by what it shows** (measured on the mockups at 1440 and 1280 px; Correction of 2026-11-24 from the
+  mockups): the chart stands **beside** the numbers only at 600 px (two columns of about 280 px: fields, chart); at
+  420 px it goes **under** them. The inspector of a node with a chart (a parameter, a component, a state) opens the
+  panel at **600 px when the canvas keeps at least 560 px** (a window of 1400 px or more with the 200 px palette),
+  otherwise it keeps 420 px and the chart goes under the numbers. The Stan code tab opens it at **640 px** under the same
+  condition (otherwise 420 px, the code scrolling sideways). A width the person set by the handle wins over both until
+  the page is left.
 - Below 1100 px (a narrow window, not a target of the first release): the palette folds to its icons with their names
   as tooltips; nothing is hidden.
 - The side panel's tabs are a `tablist` with `v-roving` and `.main` (DESIGN.md «Rows of tabs»): `,` and `.` walk them.
@@ -158,7 +172,10 @@ before the real canvas is written.
 
 ### Edges
 
-Drawn from the mirror's `Edges` (who references whom); never stored. A person draws one by dragging from a node's source
+Drawn from the mirror's `Edges` (who references whom); never stored. The canvas reads **left to right**, as the flow
+editor: a template's layout puts every node's sources to its left, so an edge leaves a source's right handle and enters
+its target's left handle going rightwards (Correction of 2026-11-24 from the mockups: with side handles, the textbook's
+top-down drawing made edges run backwards). A person draws one by dragging from a node's source
 handle to another node: a small menu lists the target's slots that can take the source (`bayesCheckExprText` decides),
 and the chosen slot gets the source's name (an expression) or a `ref` when the source has no name (the graph spec: «by
 dragging an edge»). Deleting an edge clears a slot that held only that reference; for a slot whose expression holds more,
@@ -211,7 +228,13 @@ cut and the left-out counts in `--muted`):
   that the mean of a school is between −19.6 and 19.8 nine times in ten…»), the cut («0.5 % of the draws on each side
   are beyond the axis») and the left-out draws with their reason;
 - «Draw again» (a button: seed + 1); for a node that needs data, the preview's `none: 'needs_data'` sentence (the prior
-  predictive check is a Job of the flow node: answer 13); with errors, «fix the messages above to see this prior»;
+  predictive check is a Job of the flow node: answer 13); with errors, **the last valid form stays, dimmed**, under a
+  line «last valid form: fix μ to update it» naming the argument in error, «Draw again» disabled (owner, 2026-11-24;
+  Correction of 2026-11-24 from the mockups); a node that never had a valid form says «fix the messages above to see
+  this prior»;
+- when an argument is a **hyperprior** (a parameter whose value feeds this prior), a small card under the chart draws
+  that parameter's own prior (closed form when its arguments are constants) with its quantiles and its sentence, and
+  opens it (spec, 2026-11-24, the mockups);
 - an `aria-label` that says the quantiles in words, and a table of the same numbers for a screen reader (a chart alone
   says nothing to it).
 
@@ -252,10 +275,16 @@ not ask. The work is never lost silently.
 
 The **Stan code** tab: the program the gateway generates (`POST /bayes-models/check`, 600 ms after the last change the
 mirror finds without error, and when the tab opens), in Monaco read only (loaded the first time the tab opens), with a
-tokenizer of the program's alphabet (blocks, types, `~`, numbers, identifiers: the codegen spec's «The alphabet»); beside
-it the **mapping table** (identifier, node label, kind, plate, `renamed` in words: «no name» or «`lower` is a word of
-Stan»), each row selecting its node on the canvas. While the model has errors the tab says «no program while the model has
-errors (3)» and lists them. The code is never editable and never sent back (owner: «graph only»).
+tokenizer of the program's alphabet (blocks, types, `~`, numbers, identifiers: the codegen spec's «The alphabet»); above
+it the program's version, the generator's version (`CodegenVersion`) and the program's sha256 with a copy button;
+**under** it the **mapping table** (name in the graph, label with its kind in words, identifier in the code; a
+`renamed` entry with its reason on a line of its own: «no name», or «`beta` is the name of a Stan distribution»), each row
+selecting its node on the canvas and a node selected on the canvas selecting its row and the program's lines that use
+it (Correction of 2026-11-24 from the mockups). **While the model has errors** the tab shows **the stored program of the
+last saved version** (`GET /bayes-models/{id}/versions/{v}`), under a notice «the graph has an error, so there is no
+program for the changes: this is version 4's, the last saved, as the flows that pin it run it», with the errors listed
+and a link to the Problems tab (owner, 2026-11-24); a model never saved says «no program while the model has errors (3)»
+and lists them. The code is never editable and never sent back (owner: «graph only»).
 
 ## The templates and the free model (answer 1)
 
@@ -478,6 +507,125 @@ Applied by the owner's decision of 2026-11-23, marked there «Correction of 2026
 |---|---|---|
 | Where the space sits in the top bar | **Scripting becomes a menu** holding «Scripting» and «Bayesian models», each shown by its own `needs` (`scripting`, `bayes`); **a plain link when only one of them is visible** (a small change of `AppShell.vue`, whose menus today always open); `g s` for Scripting kept, `g y` for Bayesian models (the letter from its English name: `b` and `a` are taken) | Owner, 2026-11-23 |
 | A graph with errors (`model-store`'s question) | Not saved; the editor shows the findings and warns before leaving with unsaved changes, as the flow editor does | Owner, 2026-11-23 |
+
+## Corrections made from the mockups (2026-11-24)
+
+Applied by the owner's decisions of 2026-11-24 on the five mockups («Decisions of 2026-11-24 (mockups)»), each marked
+«Correction of 2026-11-24 from the mockups» where it lands:
+
+- this spec: the Stan code as a side-panel tab with the mapping table under it; the stored program of the last saved
+  version while the graph has errors; the last valid form of a prior, dimmed, while an argument has an error; the
+  hyperprior card; the panel's width by what it shows; the canvas left to right; no «has errors» state in the list; no
+  «check now» button; «Mockups» below;
+- `bayes-model-store.md`: the list's **family derived from the saved graph** (`family`);
+- `bayes-templates.md`: the layouts **left to right** (a lot rewrites them in `templates.json`); the AR order **1 to
+  `bayesTemplateMaxOrder` (31)**;
+- `bayes-stan-codegen.md`: the example's coefficient named `beta` gets a generated identifier, as the identifier rule says;
+- the messages `bayes.graph.form_centred.*` (the five locales, lot G2 with the words test): **a fact, no judgement** —
+  «this parameter has bounds, and a parameter with bounds cannot be written in the non-centred form: it stays centred
+  even though its box is not» (the present text ends with «may sample less well», a word of the judgement list's kind).
+
+## Decisions of 2026-11-24 (mockups)
+
+| Question | Decision | By |
+|---|---|---|
+| Where the Stan code is shown | A **tab of the side panel**, the mapping table **under** the code; no Graph / Stan code switch in the top bar | Owner, 2026-11-24 |
+| The Stan code while the graph has errors | The **last saved version's** program with the notice (as the mockup) | Owner, 2026-11-24 |
+| A prior's chart while an argument has an error | The **last valid form, dimmed**, with «fix μ to update it» (as the mockup) | Owner, 2026-11-24 |
+| The family in the list | **Derived from the saved graph**: group plates → hierarchical; rows a series → series; otherwise GLM when it is a linear predictor with a GLM likelihood; otherwise free | Owner, 2026-11-24 |
+| The canvas' direction | Left to right, as the flow editor; the templates' layouts follow (a later lot) | Technical, 2026-11-24 |
+| A «has errors» state in the list | None (a graph with errors is never saved) | Technical, 2026-11-24 |
+| The message on the centred form | A fact, without «may sample less well» | Technical, 2026-11-24 |
+| The AR order | 1 to 31 (`bayesTemplateMaxOrder`: the longest expression within the 1,000-byte limit) | Technical, 2026-11-24 |
+| The shortcuts written in the menu's items | Kept (`g s`, `g y` beside «Scripting» and «Bayesian models») | Technical, 2026-11-24 |
+| A «check now» button | None: the check runs by itself (600 ms after a change, on the code tab, at save) | Technical, 2026-11-24 |
+| The panel's width | 600 px for a chart beside the numbers when the canvas keeps 560 px (1440 px: yes; 1280 px: no, 420 px with the chart under) | Technical, 2026-11-24 (measured on the mockups) |
+
+## Mockups
+
+Five static screens, approved by the owner on 2026-11-24, drawn in the app's tokens (five themes), IBM Plex Sans and the
+lucide icons, checked on Chromium and Firefox at 1440 × 900 and 1280 × 800. They are described here in words: the files
+were throw-away. Every example is invented; the same model, «Scores by school» (pupils in schools in districts), runs
+through screens 3 to 5.
+
+1. **The list** (`pages/bayes-models.vue`). The top bar with **Scripting as a menu** open: «Scripting» `g s` and «Bayesian
+   models» `g y`, the current one tinted, each item with its two keys written at its right in `kbd`. The page: the
+   headline with its icon and count, one sentence for a reader new to Bayes, then the card of `pages/scripting.vue`
+   (title with count, a filter field, «New model» as the primary). The table: name (an icon and the name as a link, the
+   description under it), folder, family (derived from the graph, «opened from «…»» under it), version, «used by N
+   flows» (a link with the flow icon; «no flow» in muted), compile state (icon and words: compiled `accent-2`; compiling
+   with the spinner; to compile «compiled the first time it runs»; failed in `danger` with its detail), last save (when,
+   and who under it), and three mini icon buttons (duplicate, versions, more: rename, move, delete — delete refused while a
+   flow uses it). A line under the table says how the family is derived and that a flow runs the version it pins. The
+   empty state: one sentence of what a model is, the four families with their counts of templates, «New model» and
+   «What a Bayesian model is».
+2. **The empty canvas and a template's dialog.** The editor with nothing on the canvas: over it the **templates'
+   gallery** — «Where do you start?», a sentence for a reader new to Bayes, «Empty model» as a dashed button of the same
+   weight at the right of the heading, then three groups (GLM 4, hierarchical 3, series 3), each with its one-line
+   subtitle and a row of **cards**: a small drawing of the template's layout (boxes and nodes as rectangles, an SVG),
+   the title, two sentences with a business example, and what opening it asks («asks the typical value and the
+   spread», «no question: log-odds scale», «asks the order p too»). The side panel shows the **glossary** (prior,
+   likelihood, posterior, hyperprior, box, non-centred, standardized, two sentences each). Choosing «Varying intercepts
+   by group» opens the **template dialog** (the app's dialog skeleton, 540 px): the template's two sentences, why the
+   numbers are asked («your numbers, written in the priors in the open; not read from the data; empty they are 0 and
+   1»), two fields «typical value of the outcome» and «typical spread» with their question as the hint, then **the
+   priors that follow**, a table of label and name, the prior in mono with the person's numbers tinted
+   (`normal(300, 2.5 * 50)`, `normal(0, 50), ≥ 0`, `exponential(1 / 50)`) and one muted line of what each is, the
+   sources (rstanarm's priors page, the Stan prior recommendations), «Cancel» and «Open the model» («undone with
+   Ctrl+Z»). The AR dialog adds «order p» with − and + (1 to 31, default 2), the priors for that p (`phi1`, `phi2` ~
+   `normal(0, 0.5)`), the likelihood with `lag`, and two facts: stationarity is not imposed; the first p rows of a
+   series stay out of the likelihood.
+3. **A hierarchical model on the canvas.** The editor's top bar: the reduced mark, «← Bayesian models», the model's name,
+   the folder Select, «v4 · saved yesterday by …», «unsaved changes», Undo, Redo, Save (the primary), the keys button —
+   no view switch, no check button. The palette (the flow editor's sidebar language): a search, the groups Data,
+   Unknowns, Values, Likelihood, Boxes, each item with its icon, name and one short sentence, «Templates» at the bottom.
+   The canvas, **left to right**: the hyperparameters in a column at the left; the box «District» holding the
+   correlated effects «Level and slope of the district» and the nested box «School» holding «Mean of the school»; the
+   box «Pupils» (the rows) holding the data, the transformed «Level for the pupil», the linear predictor «Expected
+   score» and the likelihood «Observed score». **Neutral nodes**, the kind said by icon and shape: data a filled
+   rectangle, parameters a pill, the transformed node dashed, the linear predictor a sharp rectangle, the likelihood a
+   double border, the correlated effects a rounded card with one line per component; each with its label (two lines at
+   most), its name in mono and its prior or expression in muted mono; a small «hyperprior» tag on the top border of a
+   parameter that feeds another prior. **Boxes**: a header with the box icon, the label, «one per value of `school`»,
+   and the switch «Non-centred» at the right (on by default); the rows box with «Time series» (off). One warning mark
+   (a 18 px circle with the triangle on the top border) on «Class», whose data feed nothing. Edges in `edge`, the
+   selected node's in `accent`; the minimap and the zoom controls at the bottom; the keys button at the top right. The
+   panel shows the **inspector of the box «School»**: label, the key Select, «Inside» Select, the switch with what the
+   non-centred form does, what the box holds, how many units («the flow says, from the distinct values of `school`»),
+   its nodes' problems, the note. Fitted at 86 % at 1440 px and 72 % at 1280 px.
+4. **The prior panel.** «Mean of the school» selected (its edges in `accent`, the error outline and a «2» badge on the
+   node); the panel at 600 px in two columns. Left: label and name, the box Select («School, inside District»), the
+   distribution Select (Normal and its sentence), the argument μ with the expression `mu_distretto` **underlined wavy
+   in `danger`**, the field outlined in `danger`, and under it the real message («`mu_distretto` has a value for each
+   unit of District: write `mu_distretto[distretto]` to bring it here»); the argument σ `sigma_scuola` with «a single
+   number» and a «hyperprior» tag; the bounds (lower 0) and the truncation's sentence; the node's problems (the error,
+   pointing at the field, and the centred-form warning). Right: **the chart beside the numbers** — the histogram of one
+   school's marginal from 4,000 ancestral draws (60 bars in `accent`, the 5, 50 and 95 % marks, the axis cut at 0), here
+   **dimmed** under «last valid form: fix μ to update it», a table of the three quantiles, the preview's sentences
+   («nine times in ten between … and …; half the time below …», how it was drawn, the draws beyond the axis and those
+   left out by the truncation), «Draw again» (disabled while the error lasts) with its draw number; under it the
+   **hyperprior card** of `sigma_scuola`: its half-normal curve in closed form with its quantiles and sentence, and
+   «open»; then «What it is», for a reader new to Bayes. At 1280 px the panel stays 420 px, one column, the chart under
+   the numbers.
+5. **The Stan code tab.** The canvas fitted at 62 % with the coefficient selected; the panel at 640 px on its «Stan code»
+   tab: «Stan program, read only, generated by the gateway, version 4, generator 1», the sha256 in mono with a copy
+   button; a notice in the warning tint (the graph has an error, so this is the last saved version's program, as the
+   flows that pin it run it), the error in one line and «2 warnings — all in Problems»; the code in a 300 px box, line
+   numbers sticky, hand-made colours from the tokens (block names `accent-hi` bold, types `violet`, bounds' words muted
+   italic, functions and distributions `accent`, numbers warning-tinted, `~` `accent-2`, generated identifiers muted),
+   the selected node's identifier boxed in `accent` and its lines tinted; **under it the mapping table** (name in the
+   graph, label with its kind in muted, identifier), the selected row tinted with an `accent` edge, the renamed entry
+   `beta` → `V_n11` with its reason on its own line («`beta` is the name of a Stan distribution and a variable cannot
+   cover it; the results keep `beta`»). The top bar says «Not saved: 1 error» after a refused save.
+
+**Components to create** (none exists): `BayesNode.vue` (the shapes, the hyperprior tag, the error badge and the warning
+mark), `BayesPlate.vue` (the header with the switch and `NodeResizer`), `BayesPalette.vue` (items with a sentence),
+`BayesExprField.vue` (the wavy underline at the error's span, the message under it), `BayesPriorChart.vue` (histogram and
+curve, quantile marks, the dimmed last valid form, the hyperprior card), `BayesTemplateGallery.vue` (cards with the
+layout's drawing, «Empty model») and the template dialog with its table of priors, `BayesCodePanel.vue` (the header with
+versions and sha256, the stale notice, the tokenizer, the mapping table under the code), `BayesProblems.vue` (findings as
+cards with «Show in the graph»), `BayesGlossary.vue`; in the app: the menu items' written keys (`AppShell.vue`) and the
+list's family and compile-state cells.
 
 ## Open questions
 

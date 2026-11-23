@@ -54,7 +54,7 @@ bind data (`flow-node`).
 | Where it is proposed | The empty canvas proposes the templates; the free model is one click away | Owner (answer 1) |
 | The scale of the defaults | Priors on the scale of **standardized predictors** (answer 6: standardization on by default); never changed by the data | Owner (answer 6), the map |
 | The outcome's scale (linear, hierarchical, series) | **Asked when the template is opened**: the outcome's typical value and its typical spread (both optional), the priors writing them in the open (`2.5 * 300`, `1 / 300`); constants the person typed, never data. The outcome is never standardized (the graph spec, `graph.standardize`; `bayes-contract`) | Owner (2026-11-23) |
-| The order of the AR template | **Asked when the template is opened**: p from 1 to the catalogue's `max_lag`, default 2 | Owner (2026-11-23) |
+| The order of the AR template | **Asked when the template is opened**: p from 1 to **31** (`bayesTemplateMaxOrder`: the largest p whose AR expression stays within the language's 1,000-byte limit, below the catalogue's `max_lag`; Correction of 2026-11-24 from the mockups), default 2 | Owner (2026-11-23); the bound: 2026-11-24 |
 | One source | The templates are one JSON file in the gateway (`internal/bayestemplates/templates.json`), embedded; the browser reads a byte-for-byte copy (`frontend/assets/bayes-templates.json`), copied and checked in CI as the catalogue is | Spec (the catalogue's precedent, verified) |
 | Labels | Written in English in the file; the editor puts the person's language's labels on the nodes when the template is opened (`bayes.templates.<id>.labels.<node>`) | Spec decision, 2026-11-23, owner may revisit |
 | Explanations | In the locales (`bayes.templates.*`), never in the saved graph's `note`: the note is the person's; an explanation shown beside a node whose default prior was changed would be false (`graph-editor` shows a template's explanation only while the node's slot still equals the template's) | Spec decision, 2026-11-23, owner may revisit |
@@ -109,8 +109,13 @@ bind data (`flow-node`).
 | `sources` | per node, the source of its default prior (a key of the file's `sources`, or `spec` for this spec's own choice) |
 | `graph` | a graph of format 1 **at the default numbers** (centre 0, spread 1, the AR order 2): a valid model as it stands |
 
-The `layout` of each graph is drawn by hand for the canvas (boxes not overlapping at 1280 px, the likelihood at the
-bottom, the hyperparameters at the top: the textbook's top-down drawing). It is not part of the model (the graph spec).
+The `layout` of each graph is drawn by hand for the canvas, **left to right** as the flow editor (boxes not overlapping
+at 1280 px; the hyperparameters in a column at the left, the boxes in the middle, the linear predictor and the likelihood
+at the right; every node's sources to its left, so each edge leaves a right handle and enters a left one going
+rightwards). It is not part of the model (the graph spec). (Correction of 2026-11-24 from the mockups: the textbook's
+top-down drawing, with the editor's side handles, made edges run backwards; the layouts of
+`gateway-go/internal/bayestemplates/templates.json` and of its browser copy are rewritten by lot **T4**, the graphs
+otherwise unchanged, `version` raised.)
 
 ### Opening a template (the browser)
 
@@ -123,7 +128,9 @@ bottom, the hyperparameters at the top: the textbook's top-down drawing). It is 
    an expression of numbers, in the open — `center` → `1200`, `spread` × 2.5 → `2.5 * 300`, `rate` → `1 / 300` — the
    numbers printed by `bayesFormatNumber` (the language's formatter), so the panel can say «2.5 times the spread you
    gave»;
-4. for `ts_ar`, the order p asked when it is opened (1 to `max_lag`, default 2; owner, 2026-11-23): the terms `phi<k>` and `lag(y, k)` for k = 1…p.
+4. for `ts_ar`, the order p asked when it is opened (1 to `bayesTemplateMaxOrder`, 31: the largest p whose expression the
+   language still parses within its 1,000-byte limit, the catalogue's `max_lag` being higher; default 2; owner, 2026-11-23;
+   Correction of 2026-11-24 from the mockups): the terms `phi<k>` and `lag(y, k)` for k = 1…p.
 
 The result is plain graph JSON; nothing in it says it came from a template (`model-store` keeps that apart). The
 function is pure (no Nuxt, no DOM): the tests import it.
@@ -171,8 +178,8 @@ intercept whose meaning depends on the φ's. The golden `ts_ar2` follows this te
     {"id": "lik", "kind": "likelihood", "label": "Outcome given the predictor", "observed": "y", "dist": "normal",
      "args": {"mu": {"expr": "eta"}, "sigma": {"expr": "sigma"}}}
   ],
-  "layout": { "alpha": {"x": 0, "y": 0}, "bx": {"x": 220, "y": 0}, "sigma": {"x": 440, "y": 0},
-              "x": {"x": 220, "y": 140}, "eta": {"x": 110, "y": 260}, "y": {"x": 440, "y": 380}, "lik": {"x": 220, "y": 380} } }
+  "layout": { "alpha": {"x": 0, "y": 0}, "bx": {"x": 0, "y": 110}, "x": {"x": 0, "y": 220}, "sigma": {"x": 0, "y": 330},
+              "eta": {"x": 240, "y": 110}, "y": {"x": 240, "y": 330}, "lik": {"x": 480, "y": 220} } }
 ```
 
 One predictor in every template: the panel of the linear predictor says how to add another (a data node and a term),
@@ -342,8 +349,8 @@ All inputs are ten small graphs; no data in the Go and Node suites.
 - **Golden** (`TestTemplatesGolden`): `Generate` of each template equals the codegen golden case byte for byte; the golden
   graph file of `bayescodegen` for these cases **is** the template's graph (a test compares them), so the two cannot drift.
 - **Opening** (`bayes-templates.test.mjs`): `bayesOpenTemplate` with no option returns the template's graph with the
-  locale's labels; with the outcome's numbers (0/1, 1200/300, −5/0.02) and the AR orders (1, 2, 5, the catalogue's
-  `max_lag`) it writes the expected slots (fixtures `testdata/opened/`, reviewed); the mirror (`bayesGraph.ts`) finds no
+  locale's labels; with the outcome's numbers (0/1, 1200/300, −5/0.02) and the AR orders (1, 2, 5, `bayesTemplateMaxOrder` = 31;
+  32 refused with a RangeError) it writes the expected slots (fixtures `testdata/opened/`, reviewed); the mirror (`bayesGraph.ts`) finds no
   error on any opened graph. **Go reads the same fixtures** and validates and generates each without error.
 - **Words**: every key in five languages; no judgement word; every `{placeholder}` the same in the five.
 - **Copy**: `bayes_templates.py --check` in CI.
@@ -379,6 +386,7 @@ All inputs are ten small graphs; no data in the Go and Node suites.
 | **T1** | Full validation and the golden programs; the codegen golden graphs replaced by the templates' | `templates_test.go`, `bayescodegen/testdata/golden/` (the ten cases, reviewed) | criteria 1, 3 | `model-graph` M2 and M4; `stan-codegen` S0–S2 | sonnet |
 | **T2** | The explanations and labels in five languages, the sources in the docs' draft | locales, `bayes-templates.test.mjs` (words) | criterion 2 | T0 | haiku |
 | **T3** | Reference data, hand-written programs, the comparison, «As built» | `testdata/reference/` | criterion 5 | T1, `bayes-image` B0 | sonnet (by hand, alone: heavy) |
+| **T4** | The ten layouts rewritten **left to right** (Correction of 2026-11-24 from the mockups): sources to the left of their targets, hyperparameters in a column at the left, likelihood at the right, boxes not overlapping at 1280 px; each template's `version` raised; the browser copy regenerated | `templates.json`, its copy, `bayes-templates.test.mjs` (a test: every edge of every template goes rightwards) | the layout test green; the ten templates seen on the canvas at 1440 and 1280 px | T0; `graph-editor` G0 | haiku |
 
 T0 is light and can start now (the graph's structure is built): it is what `graph-editor`'s first screen (lot G0) loads.
 T1 waits for the validator and the generator; T3 for the image.
@@ -400,6 +408,13 @@ Applied by the owner's decision of 2026-11-23, each marked there «Correction of
 |---|---|---|
 | The priors on the outcome's scale (linear, the three hierarchical, the three series) | **Asked when the template is opened**: «about what value is the outcome usually?» and «about how far from it does it go?» (centre m and spread s, both optional, 0 and 1 when not given); the template writes its priors from them as visible expressions (`2.5 * 300`, `1 / 300`): constants the person typed, never data (answer 6, `graph.prior_data`) | Owner, 2026-11-23 |
 | The order of the AR template | **Asked when the template is opened**: p from 1 to the catalogue's `max_lag`, default 2, the template written for that p by `bayesOpenTemplate`; the golden stays p = 2, the other orders covered by the opened fixtures | Owner, 2026-11-23 |
+
+## Decisions of 2026-11-24 (mockups)
+
+| Question | Decision | By |
+|---|---|---|
+| The templates' layout | **Left to right**, as the flow editor (the mockups: a top-down drawing with side handles makes edges run backwards); rewritten by lot T4 | Technical, 2026-11-24 |
+| The AR order's bound | **1 to 31** (`bayesTemplateMaxOrder`), the dialog saying «from 1 to 31» | Technical, 2026-11-24 |
 
 ## Open questions
 

@@ -107,10 +107,26 @@ misses them (expand/contract, `docs/database-migrations.md`).
 | `mapping` | text, not null | the mapping table (JSON) |
 | `data_manifest`, `quantity_manifest` | text, not null | the contract's two manifests (JSON) |
 | `codegen_version` | integer, not null | `bayescodegen.CodegenVersion` of the program |
+| `family` | text(12), not null | `hierarchical`, `series`, `glm` or `free`, **derived from the saved graph** at save («The family», below; Correction of 2026-11-24 from the mockups: revision 0046 is not built yet, so the column joins it) |
 | `catalog_sha256` | char(64), not null | sha256 of the catalogue snapshot the gateway held (`bayescatalog.Raw()`) |
 | `note` | text, not null | `created`, `edited`, `layout`, `restored from v3`, `duplicated from «…» v2` |
 | `created_at` | timestamp, not null | |
 | `created_by` | integer, → `users.id` | |
+
+### The family (owner, 2026-11-24; Correction of 2026-11-24 from the mockups)
+
+The list shows a model's family **derived from its saved graph**, never from the template it was opened from (a template,
+once opened, is a graph like any other): `bayesmodels.Family(model)` on the validated model, at save, written in the
+version's `family`, first rule that holds:
+
+1. a group plate holds a node → `hierarchical`;
+2. otherwise the rows plate is a series (`series` set) → `series`;
+3. otherwise every likelihood is one of the catalogue's GLM likelihoods (`normal`, `bernoulli_logit`, `binomial_logit`,
+   `poisson_log`, `neg_binomial_2_log`) whose location argument is a linear predictor node → `glm`;
+4. otherwise → `free`.
+
+A restored version copies the restored one's `family` with its program. The words are `graph-editor`'s (GLM,
+hierarchical, series, free); the template stays visible on its own line («opened from «…»»).
 
 Sizes: a graph is at most 256 KiB (`max_graph_bytes`); the program, the mapping and the manifests are bounded by the
 graph's limits (`max_nodes` 200: the contract says the program is «well under the 1 MiB of a ConfigMap»). Measured by
@@ -145,7 +161,7 @@ All under the gateway's authentication (`server.Authed`), registered with `regis
 
 | Route | Does |
 |---|---|
-| `GET /bayes-models` | the models this person sees, by name: id, name, folder, current version, template, updated, `editable`, `runnable` — never a graph or a program |
+| `GET /bayes-models` | the models this person sees, by name: id, name, folder, current version, template, the current version's `family`, updated, `editable`, `runnable` — never a graph or a program |
 | `GET /projects/{project_id}/bayes-models` | the same for one folder |
 | `GET /bayes-models/{model_id}` | the model, and its current version: graph, findings, program, mapping, compile state, `uses` (the count) |
 | `POST /projects/{project_id}/bayes-models` | `{name, description, graph, template_id?, template_version?}` → version 1, note `created` |
@@ -398,6 +414,13 @@ Applied by the owner's decision of 2026-11-23, marked in the map «Correction of
 | A graph with errors | **The save is refused** (against the recommendation): the gateway answers 422 with the findings and creates no version; warnings never block; every saved version has a program; the editor warns before leaving a page with unsaved changes (`graph-editor`, as the flow editor and the script page do) | Owner, 2026-11-23 |
 | The program of a restored version | **Copied from the restored version** (against the recommendation), with its generator's version, mapping table and manifests: a saved version always runs with its saved program | Owner, 2026-11-23 |
 | The schema migration | **Approved**: revision 0046 with the two tables as specified (`bayes_models`, `bayes_model_versions`) and their SQLModel classes; the table of binaries comes with `stan-compile` | Owner, 2026-11-23 |
+
+## Decisions of 2026-11-24 (mockups)
+
+| Question | Decision | By |
+|---|---|---|
+| The family in the list | **Derived from the saved graph** (group plates → hierarchical, a series → series, a linear predictor with a GLM likelihood → GLM, otherwise free), stored with the version (`family`, in revision 0046, not built yet); the column added to the approved schema was approved by the owner on 2026-11-24 | Owner, 2026-11-24 |
+| A «has errors» state in the list | None: a graph with errors is never saved | Technical, 2026-11-24 |
 
 ## Open questions
 

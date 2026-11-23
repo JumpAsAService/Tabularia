@@ -116,16 +116,16 @@ parameters {
   real mu;
   real<lower=0.0> tau;
   vector<offset=mu, multiplier=tau>[J_p1] alpha_school;
-  real beta;
+  real V_n7;
   real<lower=0.0> V_n8;
 }
 model {
   mu ~ normal(0.0, 10.0);
   tau ~ normal(0.0, 5.0);
   alpha_school ~ normal(mu, tau);
-  beta ~ normal(0.0, 1.0);
+  V_n7 ~ normal(0.0, 1.0);
   V_n8 ~ exponential(1.0);
-  score ~ normal(((alpha_school[school]) + (beta * hours)), V_n8);
+  score ~ normal(((alpha_school[school]) + (V_n7 * hours)), V_n8);
 }
 ```
 
@@ -133,6 +133,10 @@ model {
   catalogue's rule 4: the mass is a constant and `~` drops it).
 - `V_n8` has no name (its label is «Spread within a school»): a generated identifier; its lower bound comes from the
   exponential's support (the range is the support ∩ the bounds, the graph spec).
+- `V_n7` is the node named `beta` (its label «Effect of one more hour»): `beta` is the Stan name of a distribution the
+  catalogue lists, so «The rule» below gives it a generated identifier and the mapping table says `renamed: reserved`
+  with the word; the results keep the person's `beta` (Correction of 2026-11-24 from the mockups: the example wrote
+  `real beta;`, against its own rule; the templates name such a coefficient `b_x` to avoid the renaming).
 - `hours` arrives standardized: the runner standardizes (answer 6, `bayes-contract`); the program does not know.
 - `alpha_school` is non-centred by the affine transform: the sampler moves on the standardized scale, the program
   writes the person's own `alpha_school` (no internal column).
@@ -587,6 +591,12 @@ S0 needs `expression-language` E2 (`Emit`) and its security review (E4: «before
 | Question | Decision | By |
 |---|---|---|
 | When Tabularia's codegen changes, which program does a saved version run? | **Always the stored program**: a change of the generator reaches a model only when someone saves a new version; regeneration at each run and an administrator's «regenerate all» are not built | Owner, 2026-11-23 |
+
+## Decisions of 2026-11-24 (mockups)
+
+| Question | Decision | By |
+|---|---|---|
+| The example's coefficient named `beta` | Aligned with «The rule»: a name equal to a distribution's gets a generated identifier (`V_n7`), as the templates avoid with `b_x` | Technical, 2026-11-24 |
 
 ## Open questions
 
