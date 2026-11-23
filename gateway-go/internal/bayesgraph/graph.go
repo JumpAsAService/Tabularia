@@ -11,8 +11,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -282,9 +284,69 @@ func Decode(data []byte) (*Graph, []Finding) {
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&g); err != nil {
-		return nil, formatFinding("%v", err)
+		return nil, formatFinding("%s", decodeDetail(err))
 	}
 	return &g, nil
+}
+
+// decodeDetail is the detail of a decoding error in the document's own words, the TypeScript
+// mirror's: the JSON path of the value and the JSON type it must be («nodes[0].label: must be a
+// string»; a number out of a double's range must be a number), never the decoder's message, which
+// names Go's types and fields (correction of 2026-11-24 from the expression language's review E4,
+// finding 6).
+func decodeDetail(err error) string {
+	var te *json.UnmarshalTypeError
+	if !errors.As(err, &te) {
+		// The tree was parsed and its keys checked before: nothing else is expected here.
+		return "the document does not decode"
+	}
+	return jsonPath(te.Field) + ": must be " + jsonTypeOf(te.Type)
+}
+
+// jsonPath writes the decoder's dotted field path (nodes.0.bounds.lower) as the document's path
+// (nodes[0].bounds.lower), the form of the other graph.format details.
+func jsonPath(field string) string {
+	if field == "" {
+		return "the document"
+	}
+	var b strings.Builder
+	for i, part := range strings.Split(field, ".") {
+		if _, err := strconv.Atoi(part); err == nil && i > 0 {
+			b.WriteString("[" + part + "]")
+			continue
+		}
+		if i > 0 {
+			b.WriteByte('.')
+		}
+		b.WriteString(part)
+	}
+	return b.String()
+}
+
+// jsonTypeOf is the JSON type a Go type is decoded from.
+func jsonTypeOf(t reflect.Type) string {
+	for t != nil && t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	if t == nil {
+		return "a value"
+	}
+	switch t.Kind() {
+	case reflect.String:
+		return "a string"
+	case reflect.Bool:
+		return "a boolean"
+	case reflect.Float32, reflect.Float64:
+		return "a number"
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return "an integer"
+	case reflect.Slice, reflect.Array:
+		return "an array"
+	case reflect.Map, reflect.Struct:
+		return "an object"
+	}
+	return "a value"
 }
 
 func listLen(v any) int {

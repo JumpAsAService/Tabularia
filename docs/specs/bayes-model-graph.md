@@ -223,7 +223,7 @@ findings are reported, sorted by (node id, slot, code), not only the first.
 
 | Code | Severity | Rule |
 |---|---|---|
-| `graph.format` | error | Known `format_version`; no unknown key; the right JSON types (strict decoding) |
+| `graph.format` | error | Known `format_version`; no unknown key; the right JSON types (strict decoding; `detail` names the value's JSON path and the JSON type it must be, never a Go type: correction of 2026-11-24 from E4) |
 | `graph.too_big` | error | Within `max_graph_bytes`, `max_nodes`, `max_plates`, `max_total_expression_nodes` |
 | `graph.id` | error | Ids well formed and unique; `rows` only for the rows plate; no id equal to a reserved suffix (`lpdf`, `cdf`…; reason `reserved_suffix`, correction of 2026-11-24 from lot S0) |
 | `graph.name`, `graph.name_taken`, `graph.name_function` | error | Names lexically valid, unique, not a function of the language |

@@ -510,6 +510,11 @@ default compile limits cannot build). Neither is an injection.
 - **Finding 3**: `CheckProgram` (`refusedTokens`) and `Emit`'s reserved identifiers also refuse `jacobian`, `while`,
   `if`, `else`, `return`, `break`, `continue` as tokens: statement words the generator never writes (the codegen
   spec's «Safety checks on the output»). A test gives `CheckProgram` each of them in a program.
+- **Finding 6**: a value of the wrong JSON type is `graph.format` with `detail` = its JSON path and the JSON type it
+  must be (`nodes[0].bounds.lower: must be a number`, `nodes[0].standardize: must be a boolean`; a number out of a
+  double's range must be a number), the words of the TypeScript mirror, which now gives the same detail on those
+  cases; never the decoder's message with Go's types. Both corpora regenerated (five cases' detail changed, nothing
+  else); the mirror's test still leaves `detail` out of the comparison.
 - **Finding 7**: `Check` first checks the tree's shape, without recursion: a nil node, a node of no kind, an operand
   count that is not its kind's, an operator outside `+ - * / ^`, more than `max_expression_nodes` nodes (a cycle) is
   `ErrInvalidTree` (wrapped), an internal error and not an `*Error`; the graph reports it as `graph.slot` with

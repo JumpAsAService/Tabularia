@@ -149,7 +149,7 @@
       "code": "graph.format",
       "severity": "error",
       "args": {
-        "detail": "json: cannot unmarshal number into Go struct field Graph.nodes.0.label of type string"
+        "detail": "nodes[0].label: must be a string"
       }
     }
   ]

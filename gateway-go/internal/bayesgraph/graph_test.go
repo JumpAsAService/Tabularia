@@ -139,6 +139,41 @@ func TestStrictDecoding(t *testing.T) {
 	}
 }
 
+// TestDecodeDetailIsTheDocuments: a value of the wrong JSON type is told by its path and the
+// JSON type it must be, as the TypeScript mirror tells it, never by the decoder's message with
+// Go's types (E4, finding 6).
+func TestDecodeDetailIsTheDocuments(t *testing.T) {
+	node := func(fields string) string {
+		return `{"format_version":1,"plates":[],"nodes":[{"id":"a1","kind":"parameter","label":"A"` + fields + `}]}`
+	}
+	cases := map[string]string{
+		`{"format_version":1,"plates":[],"nodes":[{"id":"a1","kind":"data","label":5}]}`: "nodes[0].label: must be a string",
+		node(`,"bounds":{"lower":"0"}`):                              "nodes[0].bounds.lower: must be a number",
+		node(`,"bounds":{"upper":1e999}`):                            "nodes[0].bounds.upper: must be a number",
+		node(`,"bounds":{"lower":[1]}`):                              "nodes[0].bounds.lower: must be a number",
+		node(`,"name":true`):                                         "nodes[0].name: must be a string",
+		node(`,"prior":{"dist":"normal","args":{"mu":{"expr":{}}}}`): "nodes[0].prior.args.mu.expr: must be a string",
+		`{"format_version":1,"plates":[],"nodes":[{"id":"a1","kind":"data","label":"A","standardize":"yes"}]}`: "nodes[0].standardize: must be a boolean",
+		`{"format_version":1,"plates":[],"nodes":[],"layout":{"a1":{"x":"1","y":0}}}`:                          "layout.a1.x: must be a number",
+	}
+	for doc, want := range cases {
+		g, fs := Decode([]byte(doc))
+		if g != nil || len(fs) != 1 || fs[0].Code != "graph.format" {
+			t.Errorf("%s: graph %v, findings %+v", doc, g != nil, fs)
+			continue
+		}
+		got, _ := fs[0].Args["detail"].(string)
+		if got != want {
+			t.Errorf("%s: detail %q, want %q", doc, got, want)
+		}
+		for _, goWord := range []string{"json:", "Go ", "struct", "float64", "bool ", "Graph", "unmarshal"} {
+			if strings.Contains(got, goWord) {
+				t.Errorf("%s: detail %q names %q", doc, got, goWord)
+			}
+		}
+	}
+}
+
 func TestNewerVersionSaysWhich(t *testing.T) {
 	_, fs := Decode([]byte(withDoc(t, func(m map[string]any) { m["format_version"] = 7 })))
 	if len(fs) != 1 || fs[0].Args["version"] != 7 {
