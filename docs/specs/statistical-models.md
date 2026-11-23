@@ -2351,6 +2351,15 @@ build installs it from, and a longer build is accepted.
   PACKAGES DO NOT MATCH THE HASHES FROM THE REQUIREMENTS FILE … Expected sha256 0000… Got c489…».
 - **On a cluster**: every recipe changed, so every group's recipe hash changed and each enabled group is built again by
   itself (state «Rebuild needed»); the version in use serves meanwhile, as for any new recipe.
+- **On a cluster, as built** (kind, 3 nodes, 2026-11-23): the seven groups were disabled, the chart upgraded, and the
+  groups enabled again one at a time (the gateway has no limit on concurrent group builds: every enabled group with a
+  new recipe is queued at once), each waited to be Ready; the Rebuild needed rounds were not left to run in parallel on a
+  16 GB machine. Build, then check: regression 705 s (67 checks), survival 972 s (114), time series 1,092 s (119),
+  boosting 121 s (56), customer lifetime 897 s (72), experiments 383 s (103), `foundation_forecast` with two sizes of
+  weights 136 s (34); no check failed or skipped. The locks hold ` sha256:` on 48, 51, 66, 20, 55, 16 and 16 lines
+  (the base image's own packages and the weights' lines have none). Each group has exactly one new version, and none
+  was queued after the Ready. The 17 flows of the statistical families, run again, gave the same cells as before the
+  upgrade (differences below 1e-9, none found).
 - Tests: `scriptimage` (the managed R and Python Dockerfiles, a package without its hash refused, the scripting
   environments' images unchanged, the layers before the packages shared), `modelgroups` (every recipe shipped passes,
   every hash in its Dockerfile, a recipe without a hash refused by `CheckHashes` and by the Dockerfile), `cmd/modelgroup`
