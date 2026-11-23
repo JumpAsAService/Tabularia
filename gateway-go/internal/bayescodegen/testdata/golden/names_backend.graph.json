@@ -1,0 +1,267 @@
+{
+  "format_version": 1,
+  "plates": [
+    {
+      "id": "rows",
+      "kind": "rows",
+      "label": "Rows"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "y",
+      "kind": "data",
+      "name": "y",
+      "label": "Outcome",
+      "plate": "rows",
+      "type": "real"
+    },
+    {
+      "id": "d1",
+      "kind": "data",
+      "name": "log_prob",
+      "label": "Named after the model's C++ class: log_prob",
+      "plate": "rows",
+      "type": "real"
+    },
+    {
+      "id": "d2",
+      "kind": "data",
+      "name": "write_array",
+      "label": "Named after the model's C++ class: write_array",
+      "plate": "rows",
+      "type": "real"
+    },
+    {
+      "id": "d3",
+      "kind": "data",
+      "name": "transform_inits",
+      "label": "Named after the model's C++ class: transform_inits",
+      "plate": "rows",
+      "type": "real"
+    },
+    {
+      "id": "d4",
+      "kind": "data",
+      "name": "unconstrain_array",
+      "label": "Named after the model's C++ class: unconstrain_array",
+      "plate": "rows",
+      "type": "real"
+    },
+    {
+      "id": "d5",
+      "kind": "data",
+      "name": "model_name",
+      "label": "Named after the model's C++ class: model_name",
+      "plate": "rows",
+      "type": "real"
+    },
+    {
+      "id": "d6",
+      "kind": "data",
+      "name": "model_compile_info",
+      "label": "Named after the model's C++ class: model_compile_info",
+      "plate": "rows",
+      "type": "real"
+    },
+    {
+      "id": "d7",
+      "kind": "data",
+      "name": "get_dims",
+      "label": "Named after the model's C++ class: get_dims",
+      "plate": "rows",
+      "type": "real"
+    },
+    {
+      "id": "d8",
+      "kind": "data",
+      "name": "get_param_names",
+      "label": "Named after the model's C++ class: get_param_names",
+      "plate": "rows",
+      "type": "real"
+    },
+    {
+      "id": "d9",
+      "kind": "data",
+      "name": "constrained_param_names",
+      "label": "Named after the model's C++ class: constrained_param_names",
+      "plate": "rows",
+      "type": "real"
+    },
+    {
+      "id": "d10",
+      "kind": "data",
+      "name": "unconstrained_param_names",
+      "label": "Named after the model's C++ class: unconstrained_param_names",
+      "plate": "rows",
+      "type": "real"
+    },
+    {
+      "id": "d11",
+      "kind": "data",
+      "name": "model_base_crtp",
+      "label": "Named after the model's C++ class: model_base_crtp",
+      "plate": "rows",
+      "type": "real"
+    },
+    {
+      "id": "d12",
+      "kind": "data",
+      "name": "size_t",
+      "label": "Named after the model's C++ class: size_t",
+      "plate": "rows",
+      "type": "real"
+    },
+    {
+      "id": "d13",
+      "kind": "data",
+      "name": "model_model",
+      "label": "Named after the model's C++ class: model_model",
+      "plate": "rows",
+      "type": "real"
+    },
+    {
+      "id": "d14",
+      "kind": "data",
+      "name": "emit_transformed_parameters",
+      "label": "Named after the model's C++ class: emit_transformed_parameters",
+      "plate": "rows",
+      "type": "real"
+    },
+    {
+      "id": "d15",
+      "kind": "data",
+      "name": "emit_generated_quantities",
+      "label": "Named after the model's C++ class: emit_generated_quantities",
+      "plate": "rows",
+      "type": "real"
+    },
+    {
+      "id": "d16",
+      "kind": "data",
+      "name": "errno",
+      "label": "Named after the model's C++ class: errno",
+      "plate": "rows",
+      "type": "real"
+    },
+    {
+      "id": "d17",
+      "kind": "data",
+      "name": "math_errhandling",
+      "label": "Named after the model's C++ class: math_errhandling",
+      "plate": "rows",
+      "type": "real"
+    },
+    {
+      "id": "d18",
+      "kind": "data",
+      "name": "booleantype",
+      "label": "Named after the model's C++ class: booleantype",
+      "plate": "rows",
+      "type": "real"
+    },
+    {
+      "id": "d19",
+      "kind": "data",
+      "name": "sunbooleantype",
+      "label": "Named after the model's C++ class: sunbooleantype",
+      "plate": "rows",
+      "type": "real"
+    },
+    {
+      "id": "d20",
+      "kind": "data",
+      "name": "chkder_factor",
+      "label": "Named after the model's C++ class: chkder_factor",
+      "plate": "rows",
+      "type": "real"
+    },
+    {
+      "id": "d21",
+      "kind": "data",
+      "name": "chkder_log10e",
+      "label": "Named after the model's C++ class: chkder_log10e",
+      "plate": "rows",
+      "type": "real"
+    },
+    {
+      "id": "d22",
+      "kind": "data",
+      "name": "get_any_sizedtypes",
+      "label": "Named after the model's C++ class: get_any_sizedtypes",
+      "plate": "rows",
+      "type": "real"
+    },
+    {
+      "id": "d23",
+      "kind": "data",
+      "name": "my_impl",
+      "label": "Named after the model's C++ class: my_impl",
+      "plate": "rows",
+      "type": "real"
+    },
+    {
+      "id": "a",
+      "kind": "parameter",
+      "name": "alpha",
+      "label": "Intercept",
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "2.5"
+          }
+        }
+      }
+    },
+    {
+      "id": "b",
+      "kind": "parameter",
+      "name": "beta_sum",
+      "label": "Slope on the sum",
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "1"
+          }
+        }
+      }
+    },
+    {
+      "id": "s",
+      "kind": "parameter",
+      "name": "sigma",
+      "label": "Spread",
+      "prior": {
+        "dist": "exponential",
+        "args": {
+          "beta": {
+            "expr": "1"
+          }
+        }
+      }
+    },
+    {
+      "id": "lik",
+      "kind": "likelihood",
+      "label": "Outcome",
+      "observed": "y",
+      "dist": "normal",
+      "args": {
+        "mu": {
+          "expr": "alpha + beta_sum * (log_prob + write_array + transform_inits + unconstrain_array + model_name + model_compile_info + get_dims + get_param_names + constrained_param_names + unconstrained_param_names + model_base_crtp + size_t + model_model + emit_transformed_parameters + emit_generated_quantities + errno + math_errhandling + booleantype + sunbooleantype + chkder_factor + chkder_log10e + get_any_sizedtypes + my_impl)"
+        },
+        "sigma": {
+          "expr": "sigma"
+        }
+      }
+    }
+  ]
+}

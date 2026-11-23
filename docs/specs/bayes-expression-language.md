@@ -511,6 +511,24 @@ default compile limits cannot build). Neither is an injection.
 
 ### Corrections of 2026-11-24 (from E4)
 
+- **Finding 2**: the catalogue has two new lists, `stan.backend_member_words` (21 words) and
+  `stan.backend_member_patterns` (`get_*_sizedtypes`, `*_impl`), and the identifier rule of `stan-codegen`
+  (`reservedNames`, `reservedWordFor`, `CheckIdentifiers`) and `Emit`'s identifier check treat them as reserved: such
+  a name is renamed `V_<id>`, the mapping table's `word` being the word or the pattern. How the list was found
+  (2026-11-24, image `tabularia-bayes-b0:local`, one compile at a time, 1 CPU, 3 GiB): the 420 lower-case words
+  without `__` of the headers stanc 2.40.0 writes for the six golden programs and a program with every block, of
+  `model_base.hpp` and `model_base_crtp.hpp`, and the lower-case object-like macros the compile defines, each declared
+  as a `real` data variable of one program, compiled with g++ (`-fsyntax-only`, then full CmdStan builds) and the
+  words g++ refused taken out until it compiled. Refused: the class's member functions (`log_prob`, `write_array`,
+  `transform_inits`, `unconstrain_array`, `model_name`, `model_compile_info`, `get_dims`, `get_param_names`,
+  `constrained_param_names`, `unconstrained_param_names`, the two `get_*_sizedtypes`, the four `*_impl`), the base
+  class's name `model_base_crtp` (the constructor's initializer), `size_t`, the macros `math_errhandling`,
+  `booleantype`, `sunbooleantype` (SUNDIALS), `chkder_factor`, `chkder_log10e` (Eigen), `errno` (it compiles and
+  fails at the link: `model_model::__errno_location()` undefined); `model_model` is stanc's. The 394 other words
+  compile, also as `vector[N]` data of a program with `transformed parameters` and `generated quantities` (a full
+  build). `emit_transformed_parameters` and `emit_generated_quantities` are among those that compiled in this run
+  (the review saw them fail): they stay in the list, conservatively. The golden case `names_backend` (every word and
+  one name of each pattern as data, all renamed) was built with CmdStan in the image.
 - **Finding 3**: `CheckProgram` (`refusedTokens`) and `Emit`'s reserved identifiers also refuse `jacobian`, `while`,
   `if`, `else`, `return`, `break`, `continue` as tokens: statement words the generator never writes (the codegen
   spec's «Safety checks on the output»). A test gives `CheckProgram` each of them in a program.

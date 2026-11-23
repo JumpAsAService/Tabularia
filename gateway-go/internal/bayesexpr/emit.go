@@ -77,13 +77,14 @@ var callable = func() map[string]bool {
 }()
 
 // reservedIdentifiers are the words an identifier of the output may not be: Stan's reserved
-// words, type names, block names, reserved functions and the C++ words it renames, and the words
-// stan-codegen's output check refuses as tokens. A name the output may call is not an identifier
-// either (a variable never shadows a function).
+// words, type names, block names, reserved functions, the C++ words it renames and the names of
+// the model's C++ class (backend_member_words; checkIdentifier matches the patterns), and the
+// words stan-codegen's output check refuses as tokens. A name the output may call is not an
+// identifier either (a variable never shadows a function).
 var reservedIdentifiers = func() map[string]bool {
 	m := map[string]bool{}
 	s := bayescatalog.StanLists()
-	for _, list := range [][]string{s.ReservedWords, s.TypeNames, s.BlockNames, s.ReservedFunctions, s.RenamedBackendWords,
+	for _, list := range [][]string{s.ReservedWords, s.TypeNames, s.BlockNames, s.ReservedFunctions, s.RenamedBackendWords, s.BackendMemberWords,
 		{"print", "reject", "fatal_error", "target", "include", "functions", "profile",
 			"jacobian", "while", "if", "else", "return", "break", "continue"}} {
 		for _, w := range list {
@@ -113,7 +114,7 @@ func checkIdentifier(what, s string) error {
 	if !lexicalIdentifier(s) {
 		return emitError(what + ": not an identifier: " + strconv.Quote(s))
 	}
-	if strings.HasSuffix(s, "__") || reservedIdentifiers[s] || callable[s] {
+	if strings.HasSuffix(s, "__") || reservedIdentifiers[s] || callable[s] || bayescatalog.StanLists().BackendMember(s) != "" {
 		return emitError(what + ": a word Stan reserves: " + strconv.Quote(s))
 	}
 	for _, suffix := range bayescatalog.StanLists().ReservedSuffixes {

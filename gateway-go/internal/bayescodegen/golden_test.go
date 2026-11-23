@@ -34,6 +34,8 @@ const goldenDir = "testdata/golden"
 var goldenCases = []string{
 	"glm_linear", "glm_logistic", "glm_poisson", "glm_negbin",
 	"names_reserved", "names_unnamed",
+	// E4, finding 2: every name of the model's C++ class, as data; the program compiles with g++.
+	"names_backend",
 }
 
 // goldenManifest is a case's <case>.manifest.json: the two manifests, with the version of the

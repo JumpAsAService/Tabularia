@@ -15,6 +15,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"math"
+	"strings"
 )
 
 //go:embed catalog.json
@@ -283,6 +284,52 @@ type Stan struct {
 	BlockNames          []string `json:"block_names"`
 	ReservedSuffixes    []string `json:"reserved_suffixes"`
 	RenamedBackendWords []string `json:"renamed_backend_words"`
+	// BackendMemberWords are the names the C++ class stanc writes for a model already holds (its
+	// member functions, the parameters and locals of its methods, the macros of the C library it
+	// expands): a data variable is a member of that class, so stanc accepts such a name and g++
+	// refuses the program. Read from the header stanc 2.40.0 writes and compiled with g++ in the
+	// image of the group bayes (correction of 2026-11-24 from the expression language's review E4,
+	// finding 2). Not the manual's: no frozen copy.
+	BackendMemberWords []string `json:"backend_member_words"`
+	// BackendMemberPatterns are families of such names: "*" stands for one or more of [a-z0-9_]
+	// (get_*_sizedtypes, *_impl). See MatchesBackendMember.
+	BackendMemberPatterns []string `json:"backend_member_patterns"`
+}
+
+// BackendMember reports the word or the pattern of BackendMemberWords and BackendMemberPatterns a
+// name is, "" when it is none.
+func (s Stan) BackendMember(name string) string {
+	for _, w := range s.BackendMemberWords {
+		if name == w {
+			return w
+		}
+	}
+	for _, p := range s.BackendMemberPatterns {
+		if MatchesBackendPattern(p, name) {
+			return p
+		}
+	}
+	return ""
+}
+
+// MatchesBackendPattern reports whether a name is of a pattern with one "*", which stands for one
+// or more of [a-z0-9_]: *_impl is log_prob_impl, not V_impl (C++ tells cases apart, and a
+// generated identifier starts with an upper-case letter).
+func MatchesBackendPattern(pattern, name string) bool {
+	star := strings.IndexByte(pattern, '*')
+	if star < 0 || strings.Count(pattern, "*") != 1 {
+		return false
+	}
+	prefix, suffix := pattern[:star], pattern[star+1:]
+	if len(name) <= len(prefix)+len(suffix) || !strings.HasPrefix(name, prefix) || !strings.HasSuffix(name, suffix) {
+		return false
+	}
+	for _, c := range []byte(name[len(prefix) : len(name)-len(suffix)]) {
+		if !(c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '_') {
+			return false
+		}
+	}
+	return true
 }
 
 // Catalog is the whole snapshot.

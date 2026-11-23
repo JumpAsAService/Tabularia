@@ -56,6 +56,23 @@ var declared = Catalog{
 			"volatile", "wchar_t", "xor", "xor_eq", "fvar", "STAN_MAJOR", "STAN_MINOR",
 			"STAN_PATCH", "STAN_MATH_MAJOR", "STAN_MATH_MINOR", "STAN_MATH_PATCH",
 		},
+		// The names of the C++ class stanc 2.40.0 writes for a model that g++ refuses for a data
+		// variable (a member of that class), found by compiling in the image of the group bayes
+		// every lower-case word of the headers stanc writes for the golden programs and a program
+		// with every block, of model_base.hpp and model_base_crtp.hpp, and of the macros the
+		// compile defines (E4, finding 2, 2026-11-24): the class's member functions, the base
+		// class's name (its constructor's initializer), size_t, the object-like macros of the C
+		// library, SUNDIALS and Eigen; model_model, which stanc refuses (the compile Job's file is
+		// model.stan); emit_transformed_parameters and emit_generated_quantities, the parameters
+		// of write_array (seen failing by the review, conservative).
+		BackendMemberWords: []string{
+			"log_prob", "write_array", "transform_inits", "unconstrain_array", "model_name",
+			"model_compile_info", "get_dims", "get_param_names", "constrained_param_names",
+			"unconstrained_param_names", "model_base_crtp", "size_t", "model_model",
+			"emit_transformed_parameters", "emit_generated_quantities",
+			"errno", "math_errhandling", "booleantype", "sunbooleantype", "chkder_factor", "chkder_log10e",
+		},
+		BackendMemberPatterns: []string{"get_*_sizedtypes", "*_impl"},
 	},
 
 	// The intervals the supports, the functions' domains and their ranges are written in. A

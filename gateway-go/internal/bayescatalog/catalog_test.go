@@ -247,6 +247,46 @@ func TestLimitsArePositiveAndAsDocumented(t *testing.T) {
 	}
 }
 
+// The names of the model's C++ class (E4, finding 2): lower-case words of the graph's name form
+// without "__", each once; every pattern has one "*"; none is matched by a generated identifier
+// (an upper-case letter first).
+func TestBackendMemberNames(t *testing.T) {
+	s := StanLists()
+	if len(s.BackendMemberWords) == 0 || len(s.BackendMemberPatterns) == 0 {
+		t.Fatal("no backend member names")
+	}
+	seen := map[string]bool{}
+	for _, w := range s.BackendMemberWords {
+		if seen[w] {
+			t.Errorf("%q twice", w)
+		}
+		seen[w] = true
+		if w == "" || w[0] < 'a' || w[0] > 'z' || strings.Contains(w, "__") || len(w) > GetLimits().MaxNameBytes ||
+			strings.Trim(w, "abcdefghijklmnopqrstuvwxyz0123456789_") != "" {
+			t.Errorf("%q is not of the graph's name form", w)
+		}
+		if s.BackendMember(w) != w {
+			t.Errorf("BackendMember(%q) = %q", w, s.BackendMember(w))
+		}
+	}
+	for _, p := range s.BackendMemberPatterns {
+		if strings.Count(p, "*") != 1 {
+			t.Errorf("%q has not one *", p)
+		}
+	}
+	for name, want := range map[string]string{
+		"log_prob": "log_prob", "errno": "errno", "model_model": "model_model",
+		"get_constrained_sizedtypes": "get_*_sizedtypes", "size_t": "size_t", "get_any_sizedtypes": "get_*_sizedtypes",
+		"log_prob_impl": "*_impl", "write_array_impl": "*_impl", "my_impl": "*_impl", "a_b_impl": "*_impl",
+		"_impl": "", "impl": "", "get__sizedtypes": "", "get_sizedtypes": "", "get_a_sizedtypes": "get_*_sizedtypes",
+		"V_impl": "", "Z_n1_impl": "", "get_X_sizedtypes": "", "implement": "", "log_prob2": "", "mu": "",
+	} {
+		if got := s.BackendMember(name); got != want {
+			t.Errorf("BackendMember(%q) = %q, want %q", name, got, want)
+		}
+	}
+}
+
 type frozen struct {
 	Version, Source, Retrieved string
 	ReservedWords              []string `json:"reserved_words"`

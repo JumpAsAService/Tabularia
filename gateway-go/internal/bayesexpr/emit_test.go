@@ -216,10 +216,15 @@ func TestEmitRefusesIdentifiers(t *testing.T) {
 	if _, err := Emit(c, good); err != nil {
 		t.Fatal(err)
 	}
+	// A generated identifier ending in _impl is no member of the model's C++ class (E4, finding 2).
+	if _, err := Emit(c, fixedEmitEnv{id: "V_impl", index: "g", lag: "Lag1", subset: "Rows_lag"}); err != nil {
+		t.Errorf("V_impl: %v", err)
+	}
 	bad := []string{"", "target", "print", "lower", "for", "vector", "model", "functions", "include", "x__", "lp__",
 		"_x", "1x", "x y", "x;y", "x}", "x//", "x/*", "x.y", "x[1]", "x(", "a\nb", "\u00e9", "x_lpdf", "x_lupmf",
 		"and", "STAN_MAJOR", "jacobian", "profile", "exp", "to_vector", "inv_logit",
-		"return", "void", "tuple", "break", "continue", "complex_vector"}
+		"return", "void", "tuple", "break", "continue", "complex_vector",
+		"while", "if", "else", "log_prob", "write_array", "errno", "model_model", "get_any_sizedtypes", "my_impl"}
 	for _, s := range bad {
 		for i, env := range []fixedEmitEnv{
 			{id: s, index: "g", lag: "Lag1", subset: "Rows_lag"},

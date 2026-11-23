@@ -213,7 +213,7 @@ func CheckIdentifiers(mapping []MappingEntry) error {
 			return bug("the identifier %s is declared twice", s)
 		}
 		seen[s] = true
-		if strings.HasSuffix(s, "__") || reservedNames[s] {
+		if strings.HasSuffix(s, "__") || reservedNames[s] || bayescatalog.StanLists().BackendMember(s) != "" {
 			return bug("the identifier %s is a word Stan reserves", s)
 		}
 		for _, suffix := range bayescatalog.StanLists().ReservedSuffixes {

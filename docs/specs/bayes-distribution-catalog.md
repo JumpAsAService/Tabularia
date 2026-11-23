@@ -82,7 +82,9 @@ declarations' order. Abridged:
     "reserved_functions": ["print", "reject", "profile", "fatal_error", "target", "jacobian"],
     "block_names": ["functions", "model", "data", "parameters", "quantities", "transformed", "generated"],
     "reserved_suffixes": ["_lpdf", "_lpmf", "_lcdf", "_lccdf", "_cdf", "_ccdf", "_lupdf", "_lupmf"],
-    "renamed_backend_words": ["alignas", "alignof", "and", "…", "STAN_MATH_PATCH"]
+    "renamed_backend_words": ["alignas", "alignof", "and", "…", "STAN_MATH_PATCH"],
+    "backend_member_words": ["log_prob", "write_array", "…", "errno", "…", "chkder_log10e"],
+    "backend_member_patterns": ["get_*_sizedtypes", "*_impl"]
   },
   "intervals": { "real": {}, "positive": {"lower": 0, "lower_open": true}, "unit": {"lower": 0, "lower_open": true, "upper": 1, "upper_open": true} },
   "distributions": [
@@ -107,6 +109,16 @@ even if a corresponding _lpdf or _lpmf is not defined»), and the backend words 
 _stan_NAME». `stan.version` is replaced by the version `bayes-image` pins; a test of `bayes-image` checks the
 lists against that version's manual page when the version changes. The lists are inputs of `stan-codegen`'s
 identifier rule (answer 5); `model-graph` only checks names lexically.
+
+`stan.backend_member_words` and `stan.backend_member_patterns` are **not the manual's**: they are the names the C++
+class stanc writes for a model already holds, which stanc accepts for a data variable and g++ refuses (a data variable
+is a member of that class): the class's member functions, its base class's name, `size_t`, the object-like macros of
+the libraries the compile includes (`errno`, `math_errhandling`, …), `model_model` (refused by stanc: the compile
+Job's file is `model.stan`), and two families, `get_*_sizedtypes` and `*_impl`, where `*` stands for one or more of
+`[a-z0-9_]` (so a generated identifier, upper-case first, never matches). They were found by compiling in the image
+of the group `bayes` every lower-case word of the headers stanc 2.40.0 writes and of the macros the compile defines
+(correction of 2026-11-24 from the expression language's review E4, finding 2); the search is to be repeated
+when `bayes-image` pins another version, and the golden case `names_backend` of `stan-codegen` must compile.
 
 ### The distributions
 

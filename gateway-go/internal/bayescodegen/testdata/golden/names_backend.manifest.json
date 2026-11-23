@@ -1,0 +1,180 @@
+{
+  "codegen_version": 1,
+  "semantic_hash": "1fbeb472a17093ec58a42c60a650942a0e02a35d943930756e0446df9ae42e61",
+  "program_sha256": "f57f800db4bf581fdd4fd65026b0357afaeeaae5f7f82c22e799d2e85a7a4c1c",
+  "data": [
+    {
+      "stan": "N",
+      "kind": "size",
+      "of": "rows"
+    },
+    {
+      "stan": "V_d1",
+      "kind": "real",
+      "plate": "rows",
+      "node": "d1"
+    },
+    {
+      "stan": "V_d10",
+      "kind": "real",
+      "plate": "rows",
+      "node": "d10"
+    },
+    {
+      "stan": "V_d11",
+      "kind": "real",
+      "plate": "rows",
+      "node": "d11"
+    },
+    {
+      "stan": "V_d12",
+      "kind": "real",
+      "plate": "rows",
+      "node": "d12"
+    },
+    {
+      "stan": "V_d13",
+      "kind": "real",
+      "plate": "rows",
+      "node": "d13"
+    },
+    {
+      "stan": "V_d14",
+      "kind": "real",
+      "plate": "rows",
+      "node": "d14"
+    },
+    {
+      "stan": "V_d15",
+      "kind": "real",
+      "plate": "rows",
+      "node": "d15"
+    },
+    {
+      "stan": "V_d16",
+      "kind": "real",
+      "plate": "rows",
+      "node": "d16"
+    },
+    {
+      "stan": "V_d17",
+      "kind": "real",
+      "plate": "rows",
+      "node": "d17"
+    },
+    {
+      "stan": "V_d18",
+      "kind": "real",
+      "plate": "rows",
+      "node": "d18"
+    },
+    {
+      "stan": "V_d19",
+      "kind": "real",
+      "plate": "rows",
+      "node": "d19"
+    },
+    {
+      "stan": "V_d2",
+      "kind": "real",
+      "plate": "rows",
+      "node": "d2"
+    },
+    {
+      "stan": "V_d20",
+      "kind": "real",
+      "plate": "rows",
+      "node": "d20"
+    },
+    {
+      "stan": "V_d21",
+      "kind": "real",
+      "plate": "rows",
+      "node": "d21"
+    },
+    {
+      "stan": "V_d22",
+      "kind": "real",
+      "plate": "rows",
+      "node": "d22"
+    },
+    {
+      "stan": "V_d23",
+      "kind": "real",
+      "plate": "rows",
+      "node": "d23"
+    },
+    {
+      "stan": "V_d3",
+      "kind": "real",
+      "plate": "rows",
+      "node": "d3"
+    },
+    {
+      "stan": "V_d4",
+      "kind": "real",
+      "plate": "rows",
+      "node": "d4"
+    },
+    {
+      "stan": "V_d5",
+      "kind": "real",
+      "plate": "rows",
+      "node": "d5"
+    },
+    {
+      "stan": "V_d6",
+      "kind": "real",
+      "plate": "rows",
+      "node": "d6"
+    },
+    {
+      "stan": "V_d7",
+      "kind": "real",
+      "plate": "rows",
+      "node": "d7"
+    },
+    {
+      "stan": "V_d8",
+      "kind": "real",
+      "plate": "rows",
+      "node": "d8"
+    },
+    {
+      "stan": "V_d9",
+      "kind": "real",
+      "plate": "rows",
+      "node": "d9"
+    },
+    {
+      "stan": "y",
+      "kind": "real",
+      "plate": "rows",
+      "node": "y"
+    },
+    {
+      "stan": "Mode",
+      "kind": "mode"
+    }
+  ],
+  "quantities": [
+    {
+      "stan": "alpha",
+      "role": "quantity",
+      "node": "a",
+      "dims": []
+    },
+    {
+      "stan": "beta_sum",
+      "role": "quantity",
+      "node": "b",
+      "dims": []
+    },
+    {
+      "stan": "sigma",
+      "role": "quantity",
+      "node": "s",
+      "dims": []
+    }
+  ]
+}

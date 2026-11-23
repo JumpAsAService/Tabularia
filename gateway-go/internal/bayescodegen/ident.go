@@ -30,9 +30,10 @@ var refusedTokens = []string{"print", "reject", "fatal_error", "target", "includ
 	"jacobian", "while", "if", "else", "return", "break", "continue"}
 
 // reservedNames are the words a person's name may not be: Stan's reserved words, type names,
-// reserved functions, block names and renamed backend words (the catalogue's lists), the words the
-// output refuses as tokens, and the Stan name of every distribution, density, generator, function
-// the catalogue lists (a variable never shadows a library function).
+// reserved functions, block names, renamed backend words and the names of the model's C++ class
+// (the catalogue's lists; its backend_member_patterns are matched by reservedWordFor), the words
+// the output refuses as tokens, and the Stan name of every distribution, density, generator,
+// function the catalogue lists (a variable never shadows a library function).
 var reservedNames = func() map[string]bool {
 	m := map[string]bool{}
 	add := func(ws ...string) {
@@ -48,6 +49,7 @@ var reservedNames = func() map[string]bool {
 	add(s.ReservedFunctions...)
 	add(s.BlockNames...)
 	add(s.RenamedBackendWords...)
+	add(s.BackendMemberWords...)
 	add(refusedTokens...)
 	c := bayescatalog.Declared()
 	for _, d := range c.Distributions {
@@ -61,10 +63,14 @@ var reservedNames = func() map[string]bool {
 }()
 
 // reservedWordFor reports the word that keeps a person's name out of the program: the name itself
-// when it is a reserved name, the suffix when it ends with one Stan reserves; "" when it passes.
+// when it is a reserved name, the pattern of the model's C++ class it is of (get_*_sizedtypes,
+// *_impl), the suffix when it ends with one Stan reserves; "" when it passes.
 func reservedWordFor(name string) string {
 	if reservedNames[name] {
 		return name
+	}
+	if p := bayescatalog.StanLists().BackendMember(name); p != "" {
+		return p
 	}
 	for _, suffix := range bayescatalog.StanLists().ReservedSuffixes {
 		if strings.HasSuffix(name, suffix) {

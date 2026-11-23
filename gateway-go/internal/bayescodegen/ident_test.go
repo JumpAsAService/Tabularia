@@ -45,6 +45,17 @@ func TestNodeIdentifier(t *testing.T) {
 		{"n1", name("rep_vector"), "V_n1", RenamedReserved, "rep_vector"},
 		{"n1", name("std_normal"), "V_n1", RenamedReserved, "std_normal"},
 		{"n1", name("multiply_lower_tri_self_transpose"), "V_n1", RenamedReserved, "multiply_lower_tri_self_transpose"},
+		// the names of the model's C++ class (E4, finding 2)
+		{"n1", name("log_prob"), "V_n1", RenamedReserved, "log_prob"},
+		{"n1", name("write_array"), "V_n1", RenamedReserved, "write_array"},
+		{"n1", name("errno"), "V_n1", RenamedReserved, "errno"},
+		{"n1", name("model_model"), "V_n1", RenamedReserved, "model_model"},
+		{"n1", name("emit_generated_quantities"), "V_n1", RenamedReserved, "emit_generated_quantities"},
+		{"n1", name("get_any_sizedtypes"), "V_n1", RenamedReserved, "get_*_sizedtypes"},
+		{"n1", name("my_impl"), "V_n1", RenamedReserved, "*_impl"},
+		{"impl", nil, "V_impl", RenamedNoName, ""}, // C++ tells cases apart: V_impl is no member
+		{"n1", name("log_prob2"), "log_prob2", "", ""},
+		{"n1", name("implement"), "implement", "", ""},
 		// the suffixes
 		{"n1", name("x_lpdf"), "V_n1", RenamedReserved, "_lpdf"},
 		{"n1", name("y_lupmf"), "V_n1", RenamedReserved, "_lupmf"},
@@ -102,6 +113,7 @@ func TestCheckIdentifiers(t *testing.T) {
 		{Stan: "b_x", Name: n("b_x"), Kind: "parameter"},
 		{Stan: "V_n1", Kind: "parameter"},
 		{Stan: "V_n2", Name: n("lower"), Renamed: n(RenamedReserved), Kind: "parameter"},
+		{Stan: "V_impl", Kind: "parameter"},
 	}
 	if err := CheckIdentifiers(ok); err != nil {
 		t.Fatal(err)
@@ -117,6 +129,8 @@ func TestCheckIdentifiers(t *testing.T) {
 		"lower generated": {{Stan: "v_n1"}},
 		"renamed passes":  {{Stan: "V_n1", Name: n("mu")}},
 		"function":        {{Stan: "normal_lpdf", Name: n("normal_lpdf")}},
+		"backend member":  {{Stan: "log_prob", Name: n("log_prob")}},
+		"backend pattern": {{Stan: "my_impl", Name: n("my_impl")}},
 	}
 	for what, m := range bad {
 		if err := CheckIdentifiers(m); !errors.Is(err, ErrBug) {

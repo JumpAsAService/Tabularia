@@ -158,6 +158,33 @@
       "STAN_MATH_MAJOR",
       "STAN_MATH_MINOR",
       "STAN_MATH_PATCH"
+    ],
+    "backend_member_words": [
+      "log_prob",
+      "write_array",
+      "transform_inits",
+      "unconstrain_array",
+      "model_name",
+      "model_compile_info",
+      "get_dims",
+      "get_param_names",
+      "constrained_param_names",
+      "unconstrained_param_names",
+      "model_base_crtp",
+      "size_t",
+      "model_model",
+      "emit_transformed_parameters",
+      "emit_generated_quantities",
+      "errno",
+      "math_errhandling",
+      "booleantype",
+      "sunbooleantype",
+      "chkder_factor",
+      "chkder_log10e"
+    ],
+    "backend_member_patterns": [
+      "get_*_sizedtypes",
+      "*_impl"
     ]
   },
   "intervals": {
