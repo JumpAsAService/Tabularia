@@ -49,7 +49,7 @@ verdict, no threshold, no reference value is ever in a row (the contract, «Verd
 | The inverse normal CDF of the rank normalization | Wichura's algorithm AS241 in numpy (the image holds no SciPy: the image spec), the one Python's `statistics.NormalDist.inv_cdf` and R's `qnorm` use | Spec (Python's: verified in its source; R's: assumed, the witness closes it) |
 | Quantiles | Hyndman and Fan's type 7 (numpy's default), as the contract fixed and `prior-preview` uses | The contract |
 | E-BFMI | Per chain, the mean of the squared differences of successive energies over the energies' variance (Betancourt 2016), **as ArviZ's `bfmi` computes it** | Spec decision, 2026-11-24, owner may revisit |
-| The witnesses | **`posterior` (R, BSD-3-Clause) and ArviZ (Python, Apache-2.0), outside the image**, run by hand by `make_witness.R` and `make_witness.py`, their outputs committed in `reference/diagnostics/witness.json` (the groups' precedent: `witness.json` of `timeseries`, `boosting`…) | The map; the files: spec |
+| The witnesses | **`posterior` 1.8.0 (R, BSD-3-Clause) and ArviZ 1.3.0 (Python, Apache-2.0: arviz-stats 1.3.3, arviz-base 1.3.1; pinned by lot X0), outside the image**, run by hand by `make_witness.R` and `make_witness.py`, their outputs committed in `reference/diagnostics/witness.json` (the groups' precedent: `witness.json` of `timeseries`, `boosting`…) | The map; the files: spec |
 | Density curves | Gaussian kernel, Silverman's rule-of-thumb bandwidth (Silverman 1986), 200 points (`bayes_density_points`) over a range said on the chart | Spec decision, 2026-11-24, owner may revisit (a chart, not a measure) |
 | Pair charts | The first four scalar quantities of the charts' scope, the six pairs, **300 thinned draws** each, the divergent draws as a series of their own; two new caps of the catalogue | Spec decision, 2026-11-24, owner may revisit (the map's «thinned draws for … pair charts»; the rows join the caps' arithmetic: «Corrections proposed») |
 | The prior's draws, for the contraction and the prior's density | The **`prior_marginal` columns** `predictive-checks` writes in every run (one ancestral draw a draw of each quantity node, a plate's representative unit) | `bayes-predictive-checks.md` (draft of the same day) |
@@ -243,7 +243,7 @@ uv run --no-project --with numpy==2.5.5 --with pyarrow==26.0.1 --with scipy==1.1
   python -m unittest gateway-go/internal/modelgroups/groups/bayes/reference/test_bayes_runner.py -v
 # the witnesses themselves, by hand, rarely (their outputs are committed)
 Rscript gateway-go/internal/modelgroups/groups/bayes/reference/diagnostics/make_witness.R
-uv run --no-project --with arviz==<pinned by X0> python gateway-go/internal/modelgroups/groups/bayes/reference/diagnostics/make_witness.py
+uv run --no-project --with arviz==1.3.0 --with numpy==2.5.5 python gateway-go/internal/modelgroups/groups/bayes/reference/diagnostics/make_witness.py
 # the measure at the map's size, alone (a heavy job for this machine: one at a time)
 BAYES_DIAG_MEASURE=1 uv run --no-project --with pyarrow==26.0.1 --with numpy==2.5.5 \
   python -m unittest gateway-go/internal/modelgroups/groups/bayes/runner/tests/test_diag_measure.py -v
