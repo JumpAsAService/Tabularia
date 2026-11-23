@@ -630,3 +630,29 @@ list's family and compile-state cells.
 ## Open questions
 
 None.
+
+## As built
+
+### Lot G0 (2026-11-24)
+
+- `pages/bayes-model.vue?template=<id>`: the template's dialog (`BayesTemplateDialog.vue`: the outcome's typical value and
+  spread, the AR order 1 to `bayesTemplateMaxOrder` with − and +, the priors that follow with the person's numbers tinted,
+  the AR likelihood and its two facts, the sources), then the canvas and the inspector on local data; nothing is saved, a
+  tag in the top bar says so; without a template (or with an unknown id) the page lists the ten as links. No palette, no
+  history, no Stan code, no tabs but the inspector: lots G1–G4.
+- The canvas (`BayesCanvas.vue`, `BayesNode.vue`, `BayesPlate.vue`, `bayesCanvasModel.ts`): nodes by icon and shape,
+  boxes as Vue Flow parent nodes nested by `parent`, the rows' box beside them holding the likelihood, edges one line per
+  pair (a group index alone dotted, the selected node's in `accent`), nothing dragged or connected; a group box's switch
+  changes its form and the mirror's findings follow. The view is fitted once when the model opens and stays where it is
+  when the panel widens to 600 px (as the mockup draws it).
+- The inspector (`BayesInspector.vue`): a parameter's prior arguments (`BayesExprField.vue`: the mirror at every
+  keystroke, the error's span underlined by a transparent copy of the text behind the input, the type in words, the
+  hyperprior tag) and its bounds; the other kinds and the boxes read only, with their problems.
+- The chart (`BayesPriorChart.vue`) is an SVG in the theme's tokens, as the approved mockup draws it, not `vue-echarts`:
+  sixty bars or a curve, three quantile marks and the axis' words in HTML, so it follows the five themes with no colour
+  read at runtime and adds nothing to the page's chunk. The last valid form stays dimmed while an argument has an error;
+  every parameter an argument reads gets its card with its own prior.
+- Words: `bayes.editor.*` and `bayes.templates.<id>.title`, `.what` in the five languages (`tests/bayes-editor-words.test.mjs`);
+  the messages `bayes.graph.form_centred.*` rewritten as facts. The nodes' labels stay the templates' English until lot T2.
+- Keys: Tab and Enter into the nodes, Alt with an arrow to the nearest node in that direction, `+` `-` `0`, Esc from a
+  field back to its node, `?` the list; checked on Chromium and Firefox.
