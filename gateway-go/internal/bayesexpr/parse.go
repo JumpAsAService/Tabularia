@@ -296,7 +296,10 @@ func (p *parser) atom() (*Node, *Error) {
 		if err := p.advance(); err != nil {
 			return nil, err
 		}
-		// The node's span takes in its parentheses.
+		// The node's span takes in its parentheses; its own span stays the first one.
+		if inner.at.len == 0 {
+			inner.at = span{inner.Pos, inner.Len}
+		}
 		inner.Pos, inner.Len = t.pos, closing.end-t.pos
 		return inner, nil
 	}
@@ -353,19 +356,20 @@ func (p *parser) call(name token) (*Node, *Error) {
 // integer literal of the language). Whether k is in 1…max_lag and x a quantity of a series is the
 // type checker's.
 func lag(call *Node) (*Node, *Error) {
-	span := func(n *Node) *Error { return &Error{Code: CodeLagArgument, Pos: n.Pos, Len: n.Len} }
+	refuse := func(n *Node) *Error { return &Error{Code: CodeLagArgument, Pos: n.Pos, Len: n.Len} }
 	if len(call.Args) != 2 {
-		return nil, span(call)
+		return nil, refuse(call)
 	}
 	x, k := call.Args[0], call.Args[1]
 	if x.Kind != KindName {
-		return nil, span(x)
+		return nil, refuse(x)
 	}
 	if k.Kind != KindNum || !k.digits {
-		return nil, span(k)
+		return nil, refuse(k)
 	}
 	// k is at most max_abs_literal (1e15): exact in a double and in an int64.
-	return &Node{Kind: KindLag, Name: x.Name, K: int64(k.Num), Pos: call.Pos, Len: call.Len}, nil
+	return &Node{Kind: KindLag, Name: x.Name, K: int64(k.Num), Pos: call.Pos, Len: call.Len,
+		sub: [2]span{x.own(), k.own()}}, nil
 }
 
 // index reads "[" name "]" after a name.
@@ -401,5 +405,6 @@ func (p *parser) index(name token) (*Node, *Error) {
 		return nil, err
 	}
 	return &Node{Kind: KindIndex, Name: p.src[name.pos:name.end], By: p.src[by.pos:by.end],
-		Pos: name.pos, Len: closing.end - name.pos}, nil
+		Pos: name.pos, Len: closing.end - name.pos,
+		sub: [2]span{{name.pos, name.end - name.pos}, {by.pos, by.end - by.pos}}}, nil
 }

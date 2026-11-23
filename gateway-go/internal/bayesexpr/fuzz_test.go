@@ -2,6 +2,8 @@ package bayesexpr
 
 import (
 	"encoding/json"
+	"errors"
+	"math"
 	"slices"
 	"testing"
 	"unicode/utf8"
@@ -22,11 +24,15 @@ func countNodes(n *Node) int {
 // byte, nesting and nodes within the catalogue's); an error has a code of Parse and a span inside
 // the input; an accepted tree has at most max_expression_nodes nodes, its Format reads back to the
 // same tree, with the same nodes and no deeper nesting, and every node's span is inside the input.
+// Every accepted tree is then typed against the corpus's environments (a context per plate):
+// Check gives a type over the context or a scalar, with an interval and no NaN, or an error with a
+// code of Check and a span inside the input.
 // The seeds are the inputs of the handwritten corpus and testdata/fuzz/FuzzParse.
 func FuzzParse(f *testing.F) {
 	for _, c := range readCorpus(f) {
 		f.Add(c.Input)
 	}
+	envs := readEnvs(f)
 	lim := bayescatalog.GetLimits()
 	relaxed := lim
 	relaxed.MaxExpressionBytes = 1 << 20
@@ -94,5 +100,41 @@ func FuzzParse(f *testing.F) {
 		if st2.nodes != st.nodes || st2.maxDepth > st.maxDepth {
 			t.Fatalf("%q: Format changes the work: %+v, then %+v", src, st, st2)
 		}
+		for _, name := range []string{"schools", "series"} {
+			spec := envs[name]
+			for _, ctx := range append([]Plate{""}, plateIDs(spec)...) {
+				fuzzCheck(t, src, n, newTestEnv(t, spec, ctx))
+			}
+		}
 	})
+}
+
+func plateIDs(spec envSpec) []Plate {
+	ids := make([]Plate, 0, len(spec.Plates))
+	for _, p := range spec.Plates {
+		ids = append(ids, p.ID)
+	}
+	return ids
+}
+
+func fuzzCheck(t *testing.T, src string, n *Node, env *testEnv) {
+	c, err := Check(n, env)
+	if err != nil {
+		var e *Error
+		if !errors.As(err, &e) || !slices.Contains(checkCodes, e.Code) {
+			t.Fatalf("%q in %q: not a code of Check: %v", src, env.ctx, err)
+		}
+		if e.Pos < 0 || e.Len <= 0 || e.Pos+e.Len > len(src) {
+			t.Fatalf("%q in %q: span outside the input: %v", src, env.ctx, e)
+		}
+		return
+	}
+	ty := c.Tree.Type
+	if (ty.Elem != ElemReal && ty.Elem != ElemInt) || (ty.Plate != "" && ty.Plate != env.ctx) {
+		t.Fatalf("%q in %q: type %s", src, env.ctx, ty)
+	}
+	i := c.Interval()
+	if math.IsNaN(i.Lo) || math.IsNaN(i.Hi) || i.Lo > i.Hi || math.IsInf(i.Lo, 1) || math.IsInf(i.Hi, -1) {
+		t.Fatalf("%q in %q: interval %+v", src, env.ctx, i)
+	}
 }

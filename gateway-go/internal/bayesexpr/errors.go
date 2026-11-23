@@ -36,6 +36,34 @@ const (
 	CodeLagArgument Code = "expr.lag_argument" // lag takes a bare name and a whole number written in digits
 )
 
+// The codes of the type checker (lot E1). Plates in args are the Env's plate ids (the browser
+// shows their labels); an argument that would name the scalar plate ("") is left out.
+const (
+	CodeUnknownName     Code = "expr.unknown_name"     // not a named node; args: name
+	CodeTimeValue       Code = "expr.time_value"       // a time node used as a number; args: name
+	CodeIndexAlone      Code = "expr.index_alone"      // a group index used as a value, or indexed; args: name, target
+	CodeNeedsIndex      Code = "expr.needs_index"      // x's plate encloses the context; args: name, plate, index (when IndexOf names one)
+	CodeWrongPlate      Code = "expr.wrong_plate"      // x's plate does not enclose the context; args: name, plate, context
+	CodeNotIndex        Code = "expr.not_index"        // x[g], g not a group index; args: name (g)
+	CodeIndexScalar     Code = "expr.index_scalar"     // x[g], x a single value; args: name, by
+	CodeIndexTarget     Code = "expr.index_target"     // x[g], x not over g's target; args: name, plate, by, target
+	CodeIndexContext    Code = "expr.index_context"    // x[g], g neither on the context nor liftable to it; args: name, by, rows, target, context
+	CodeUnknownFunction Code = "expr.unknown_function" // args: name
+	CodeNotFunction     Code = "expr.not_function"     // a node's name called; args: name
+	CodeArity           Code = "expr.arity"            // args: name, want, got
+	CodeLagNotSeries    Code = "expr.lag_not_series"   // lag where the context is not the rows of a series; args: name, context
+	CodeLagK            Code = "expr.lag_k"            // k outside 1…max_lag; args: max
+	// CodeLagArgument, from the type checker: args name, reason (index, kind, plate).
+)
+
+// checkCodes are the codes Check can return.
+var checkCodes = []Code{
+	CodeUnknownName, CodeTimeValue, CodeIndexAlone, CodeNeedsIndex, CodeWrongPlate,
+	CodeNotIndex, CodeIndexScalar, CodeIndexTarget, CodeIndexContext,
+	CodeUnknownFunction, CodeNotFunction, CodeArity,
+	CodeLagNotSeries, CodeLagArgument, CodeLagK,
+}
+
 // syntaxCodes are the codes Parse can return.
 var syntaxCodes = []Code{
 	CodeTooLong, CodeNonASCII, CodeControl,

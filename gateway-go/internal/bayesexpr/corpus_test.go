@@ -10,7 +10,7 @@ import (
 )
 
 // corpusCase is one case of testdata/corpus/handwritten.json. A case without Env is read by
-// Parse alone (lot E0); the type checker's cases carry an environment.
+// Parse alone (lot E0); the type checker's cases carry an environment (lot E1, check_test.go).
 type corpusCase struct {
 	ID     string          `json:"id"`
 	Input  string          `json:"input"`
@@ -24,6 +24,9 @@ type corpusCase struct {
 		Pos    int               `json:"pos"`
 		Len    int               `json:"len"`
 		Args   map[string]string `json:"args"`
+		// A typed case's, when accepted: the value's type and its interval.
+		Type     string          `json:"type"`
+		Interval json.RawMessage `json:"interval"`
 	} `json:"expect"`
 }
 

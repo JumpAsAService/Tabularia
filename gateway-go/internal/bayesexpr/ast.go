@@ -35,10 +35,26 @@ type Node struct {
 
 	// digits: a literal written with digits only (lag's k is one).
 	digits bool
+	// at is the node's own span, without the parentheses around it (zero when it has none);
+	// sub are the spans of an indexing's two names (x, g) and of a lag's name and number, for
+	// the type checker's errors. None of them is part of the JSON form.
+	at  span
+	sub [2]span
 }
+
+// span is a stretch of the input, in code points.
+type span struct{ pos, len int }
 
 // end is the offset just after the node's span.
 func (n *Node) end() int { return n.Pos + n.Len }
+
+// own is the node's span without the parentheses around it.
+func (n *Node) own() span {
+	if n.at.len == 0 {
+		return span{n.Pos, n.Len}
+	}
+	return n.at
+}
 
 // formatNumber is a literal's canonical text: the shortest that reads back to the same double.
 func formatNumber(v float64) string { return strconv.FormatFloat(v, 'g', -1, 64) }

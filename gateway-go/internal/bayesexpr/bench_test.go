@@ -23,3 +23,25 @@ func BenchmarkParse(b *testing.B) {
 		})
 	}
 }
+
+// The largest trees the limits allow, typed against the corpus's environment of schools.
+func BenchmarkCheck(b *testing.B) {
+	env := newTestEnv(b, readEnvs(b)["schools"], "rows")
+	for _, c := range []struct{ name, src string }{
+		{"nodes_255", "score" + strings.Repeat("+score", 127)},
+		{"indexings_85", "alpha_school[school]" + strings.Repeat("*alpha_school[school]", 42)},
+		{"nesting_32", strings.Repeat("(", 32) + "score" + strings.Repeat(")", 32)},
+	} {
+		n, err := Parse(c.src)
+		if err != nil {
+			b.Fatal(err)
+		}
+		b.Run(c.name, func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				c, _ := Check(n, env)
+				_ = c.Interval()
+			}
+		})
+	}
+}
