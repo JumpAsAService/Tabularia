@@ -93,7 +93,8 @@ type Env interface {
 }
 
 // Typed is a node of a checked tree with its type: Elem is ElemReal or ElemInt, Plate is "" or
-// the context plate.
+// the context plate. Only a leaf is ever int (a name, an indexing, a lag's node): every
+// operation and every call gives a real, and every lag a real over the context.
 type Typed struct {
 	Node *Node
 	Type Type
@@ -105,6 +106,12 @@ type Typed struct {
 	// Lifted: an indexing whose index is not on the context plate but lifted to it (each unit of
 	// the context belongs to one unit of the index's target).
 	Lifted bool
+	// Convert: an integer leaf whose value enters an operation or a call, or the integer node of
+	// a lag. The emitter makes it real on the leaf itself ((1.0 * n) for a single integer,
+	// to_vector(n) over a plate), so an expression never divides integers nor computes with
+	// Stan's 32-bit integers. A whole expression that is one integer leaf stays int (and is not
+	// converted): model-graph needs it for integer slots.
+	Convert bool
 }
 
 // Lift is a group index brought to a plate other than its own: the data array of the unit of
@@ -209,7 +216,7 @@ func (c *checker) check(n *Node) (*Typed, *Error) {
 		if err != nil {
 			return nil, err
 		}
-		return &Typed{Node: n, Type: c.arith("-", x), Args: []*Typed{x}}, nil
+		return &Typed{Node: n, Type: c.over(ElemReal, x), Args: operands(x)}, nil
 	case KindBinary:
 		l, err := c.check(n.Args[0])
 		if err != nil {
@@ -219,29 +226,21 @@ func (c *checker) check(n *Node) (*Typed, *Error) {
 		if err != nil {
 			return nil, err
 		}
-		return &Typed{Node: n, Type: c.arith(n.Op, l, r), Args: []*Typed{l, r}}, nil
+		return &Typed{Node: n, Type: c.over(ElemReal, l, r), Args: operands(l, r)}, nil
 	}
 	// The parser makes no other node.
 	return nil, errSpan(n.own(), CodeUnknownName, nil)
 }
 
-// arith is the type of an arithmetic value. Integers are numbers and become real, except where
-// Stan keeps them integers: -n, n + m, n - m, n * m of single integers stay int (so that the
-// emitter knows (n + m) / k is a quotient of integers). Integers over a plate are converted to
-// reals by the emitter in any arithmetic; / and ^ always give reals.
-func (c *checker) arith(op string, args ...*Typed) Type {
-	if op != "/" && op != "^" {
-		ints := true
-		for _, a := range args {
-			if a.Type.Elem != ElemInt || a.Type.Plate != "" {
-				ints = false
-			}
-		}
-		if ints {
-			return Type{Elem: ElemInt}
+// operands marks the integer leaves among the operands of an operation or a call: Integers are
+// numbers, they enter arithmetic and become real, converted by the emitter on the leaf.
+func operands(args ...*Typed) []*Typed {
+	for _, a := range args {
+		if a.Type.Elem == ElemInt {
+			a.Convert = true
 		}
 	}
-	return c.over(ElemReal, args...)
+	return args
 }
 
 // lookup finds a name that must be a number: unknown and time nodes are refused at s.
@@ -354,7 +353,7 @@ func (c *checker) call(n *Node) (*Typed, *Error) {
 		}
 		args = append(args, t)
 	}
-	return &Typed{Node: n, Type: c.over(ElemReal, args...), Args: args}, nil
+	return &Typed{Node: n, Type: c.over(ElemReal, args...), Args: operands(args...)}, nil
 }
 
 // lag: lag(x, k), where the context is the rows of a series, x a node over them that lag may
@@ -384,5 +383,6 @@ func (c *checker) lag(n *Node) (*Typed, *Error) {
 		return nil, errSpan(ks, CodeLagK, argsOf("max", strconv.FormatInt(c.maxLag, 10)))
 	}
 	c.lags = append(c.lags, int(n.K))
-	return &Typed{Node: n, Type: Type{Elem: x.Type.Elem, Plate: c.ctx}, Sym: &x}, nil
+	// A lag is real over the context; an integer node (Sym's type says so) is converted.
+	return &Typed{Node: n, Type: Type{Elem: ElemReal, Plate: c.ctx}, Sym: &x, Convert: x.Type.Elem == ElemInt}, nil
 }

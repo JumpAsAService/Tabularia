@@ -259,20 +259,48 @@ func TestCheckRecordsLagsAndLifts(t *testing.T) {
 	}
 }
 
-// The typed tree gives the emitter what it needs: the symbols of the names and the integer
-// operands.
+// The typed tree gives the emitter what it needs: the symbols of the names, and which integer
+// leaves it converts. Every operation is real; only a leaf is int.
 func TestCheckTypedTree(t *testing.T) {
 	env := newTestEnv(t, readEnvs(t)["schools"], "rows")
 	c := check(t, env, "(n_total + n_total) / count + alpha_school[school]")
 	div := c.Tree.Args[0]
-	if div.Node.Op != "/" || div.Type.String() != "real[rows]" {
+	if div.Node.Op != "/" || div.Type.String() != "real[rows]" || div.Convert {
 		t.Fatalf("div: %v %s", div.Node.Op, div.Type)
 	}
-	if l, r := div.Args[0], div.Args[1]; l.Type.String() != "int" || r.Type.String() != "int[rows]" || r.Sym.ID != "n3" {
-		t.Errorf("operands: %s %s", l.Type, r.Type)
+	sum, r := div.Args[0], div.Args[1]
+	if sum.Type.String() != "real" || sum.Convert {
+		t.Errorf("sum: %s %v", sum.Type, sum.Convert)
 	}
-	if ix := c.Tree.Args[1]; ix.Sym.ID != "n12" || ix.By.ID != "n4" || ix.Lifted {
+	for _, leaf := range sum.Args {
+		if leaf.Type.String() != "int" || !leaf.Convert || leaf.Sym.ID != "n19" {
+			t.Errorf("sum's leaf: %s %v", leaf.Type, leaf.Convert)
+		}
+	}
+	if r.Type.String() != "int[rows]" || !r.Convert || r.Sym.ID != "n3" {
+		t.Errorf("divisor: %s %v", r.Type, r.Convert)
+	}
+	if ix := c.Tree.Args[1]; ix.Sym.ID != "n12" || ix.By.ID != "n4" || ix.Lifted || ix.Convert {
 		t.Errorf("index: %+v", ix)
+	}
+	// A whole expression that is one integer leaf stays int, not converted.
+	for _, src := range []string{"count", "n_school[school]", "((count))"} {
+		if c := check(t, env, src); c.Tree.Type.Elem != ElemInt || c.Tree.Convert {
+			t.Errorf("%s: %s %v", src, c.Tree.Type, c.Tree.Convert)
+		}
+	}
+	for _, src := range []string{"-n_total", "n_total * n_total", "exp(n_total)", "n_school[school] ^ 2"} {
+		c := check(t, env, src)
+		if c.Tree.Type.Elem != ElemReal || !c.Tree.Args[0].Convert {
+			t.Errorf("%s: %s, leaf converted %v", src, c.Tree.Type, c.Tree.Args[0].Convert)
+		}
+	}
+	// A lag is real; its integer node is converted, even alone.
+	series := newTestEnv(t, readEnvs(t)["series"], "rows")
+	for src, conv := range map[string]bool{"lag(u, 1)": true, "lag(y, 1)": false} {
+		if c := check(t, series, src); c.Tree.Type.String() != "real[rows]" || c.Tree.Convert != conv {
+			t.Errorf("%s: %s %v", src, c.Tree.Type, c.Tree.Convert)
+		}
 	}
 }
 
