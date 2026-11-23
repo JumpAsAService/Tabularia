@@ -764,3 +764,30 @@ plus one: boxes get their depth, nodes 1000, and `elevate-nodes-on-select` is of
   the model); the words test covers the new keys in five languages.
 - Not in this lot: a docs page for the glossary's words to link (the `docs` module has none yet); the templates'
   `why.<node>` texts (lot T2).
+
+### Lot G5, part one (keys, browser check, bundle, themes)
+
+- **`composables/bayesEditorKeys.ts`** (pure): `bayesKeyAction(event, mac)` turns a key event into the action it asks
+  for (walk, move, add, menu, remove, duplicate, undo, redo, zoom in, zoom out, fit) or null; `bayesKeyScope` says
+  whether the page (undo, redo, duplicate) or the canvas does it. `BayesCanvas.vue` and `pages/bayes-model.vue` ask it
+  and keep to themselves the judging of the focus, the dialogs and the selection; their behaviour is unchanged. The
+  module also holds `BAYES_KEY_TABLE`, the rows of «Keyboard» with their ways on a PC and on a Mac, and the two checks
+  `bayesKeyMissingOnLaptops` (F keys, Home, End, the Menu key) and `bayesKeyForbidden` (Alt with a letter, three
+  modifiers). `tests/bayes-editor-keys.test.mjs` runs every way of every row on both keyboards: each has a way a laptop
+  has, none is forbidden, each asks for its row's action; ⌘Y is not redo on a Mac.
+- **Browser check** (`e2e/bayes_editor/browser_check.cjs`, started by `browser_check.py`): on Chromium and Firefox of
+  Playwright, a PC context and a Mac one (platform and `userAgentData` say Mac, the shortcut key is Command), against
+  `nuxt dev` with a made-up `tab_token` and no backend: Shift+arrow moves, a bare arrow does not, Alt+arrows walk,
+  Backspace and Delete remove, undo and redo (Ctrl+Y on a PC only), duplicate, `n`, `m` and Shift+F10, `+` `-` `0`
+  (and not ⌘+), `,` `.`, Esc from a field to the node, `?` with the keyboard's own names. 36 of 36 on each browser.
+- **Bundle**: after `nuxt build` the stdlib's generator is in the prior worker's chunk only. The first load holds the
+  five languages' texts (distribution and template names) and no editor, canvas, Monaco or stdlib code; the editor's
+  chunks come with the page.
+- **Themes** (dark, light, Dracula, Monokai, Imperium, 1440 px, Chromium; dark and Imperium on Firefox): a scan of the
+  text on the screen found nothing under 4.5:1; two things were under the bar and are fixed with the app's tokens,
+  no new one in `main.css`: the inspector's placeholders (3.35 to 4.46 in four themes: «nessuno» says «no limit») now
+  use `--muted`, and the canvas' edges (1.75 to 2.18 in dark, light and Imperium, against the 3:1 of a graphic that
+  carries meaning) use a mix of `--muted` and `--bg` (3.35 to 4.85 in the five).
+- Left for G5 after G3 and G4: Ctrl+S and the leave warning (G3), the code tab's keys (G4), the keyboard check of
+  those, the screenshots at 1280 px and of the Stan tab, the other three languages checked for overflow, and the
+  fresh-context review of the whole module.

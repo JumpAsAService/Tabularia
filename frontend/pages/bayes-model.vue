@@ -27,6 +27,7 @@ import BayesInspector from '~/components/bayes/BayesInspector.vue'
 import BayesPalette from '~/components/bayes/BayesPalette.vue'
 import BayesProblems from '~/components/bayes/BayesProblems.vue'
 import BayesTemplateDialog from '~/components/bayes/BayesTemplateDialog.vue'
+import { bayesKeyAction, bayesKeyScope } from '~/composables/bayesEditorKeys'
 import { useKeyGroups, useKeyHelp } from '~/composables/useKeyHelp'
 import { useToast } from '~/composables/useToast'
 import { useBayesEditor } from '~/composables/useBayesEditor'
@@ -268,8 +269,9 @@ function typing (el: EventTarget | null): boolean {
 function onPageKeys (e: KeyboardEvent) {
   if (!doc.value || e.defaultPrevented || typing(e.target) || e.altKey) return
   if (!(e.ctrlKey || e.metaKey) || document.querySelector('[role="dialog"], [role="menu"], .sel-panel')) return
-  const key = e.key.toLowerCase()
-  if (key === 'z' && !e.shiftKey) { e.preventDefault(); undo() } else if ((key === 'z' && e.shiftKey) || (key === 'y' && !e.shiftKey && !keyHelp.names.mac)) { e.preventDefault(); redo() } else if (key === 'd' && !e.shiftKey && selected.value && nodeOf(selected.value)) { e.preventDefault(); duplicate(selected.value) }
+  const act = bayesKeyAction(e, keyHelp.names.mac)
+  if (!act || bayesKeyScope(act.kind) !== 'page') return
+  if (act.kind === 'undo') { e.preventDefault(); undo() } else if (act.kind === 'redo') { e.preventDefault(); redo() } else if (act.kind === 'duplicate' && selected.value && nodeOf(selected.value)) { e.preventDefault(); duplicate(selected.value) }
 }
 onMounted(() => window.addEventListener('keydown', onPageKeys))
 onBeforeUnmount(() => window.removeEventListener('keydown', onPageKeys))

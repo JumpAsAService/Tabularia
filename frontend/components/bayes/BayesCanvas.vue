@@ -21,11 +21,13 @@ import { AudioWaveform, Cable, ChartScatter, CircleDot, Clock, Copy, Database, H
 import BayesNode from '~/components/bayes/BayesNode.vue'
 import BayesPlate from '~/components/bayes/BayesPlate.vue'
 import RowMenu, { type RowMenuItem } from '~/components/ui/RowMenu.vue'
-import { bayesBoxes, bayesCanvasEdges, bayesCanvasNodes, bayesDropPlate, bayesNearestNode, BAYES_NODE_H, BAYES_NODE_W, type BayesDirection, type BayesRect } from '~/composables/bayesCanvasModel'
+import { bayesBoxes, bayesCanvasEdges, bayesCanvasNodes, bayesDropPlate, bayesNearestNode, BAYES_NODE_H, BAYES_NODE_W, type BayesRect } from '~/composables/bayesCanvasModel'
 import { BAYES_CANVAS_VIEW, type BayesNodeView, type BayesPlateView, type BayesResizeParams } from '~/composables/bayesCanvasView'
 import { bayesBoundsText, bayesPriorText } from '~/composables/bayesEditorText'
 import { bayesEdgeChoices, bayesDropTarget, bayesIsBox, type BayesEdgeChoice, type BayesPaletteKind } from '~/composables/bayesGraphEdits'
 import { bayesDistribution } from '~/composables/bayesCatalog'
+import { bayesArrowDirection, bayesKeyAction, bayesKeyScope, bayesMoveStep } from '~/composables/bayesEditorKeys'
+import { platformIsMac } from '~/composables/appKeys'
 import { focusNodeOf, focusOnCanvas } from '~/composables/nodeKeys'
 import type { BayesModel, BayesGraphFinding } from '~/composables/bayesGraph'
 import type { BayesTemplateGraph, BayesTemplateNode, BayesTemplateSlot } from '~/composables/bayesTemplates'
@@ -525,8 +527,6 @@ defineExpose({ focusNode, fit, refit, openNodeMenu, viewCentre, bringIntoView })
 
 // ---------------------------------------------------------------- the keys
 
-const DIRS: Record<string, BayesDirection> = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down' }
-const STEP: Record<BayesDirection, [number, number]> = { left: [-10, 0], right: [10, 0], up: [0, -10], down: [0, 10] }
 function rectOf (id: string) {
   const b = bayesBoxes(props.doc).find(x => x.id === id)
   if (b) return b
@@ -545,58 +545,51 @@ function focusedEdge (): string | null {
 // pixels on a bare arrow, behind the graph's back. Here a bare arrow moves nothing, Shift with an
 // arrow moves the node (one step of the history), Alt with an arrow walks (as FlowEditor.vue does).
 function onArrowCapture (e: KeyboardEvent) {
-  if (!DIRS[e.key] || typing(e.target) || !(e.target as HTMLElement | null)?.closest?.('.vue-flow__node')) return
+  if (!bayesArrowDirection(e.key) || typing(e.target) || !(e.target as HTMLElement | null)?.closest?.('.vue-flow__node')) return
   e.stopPropagation()
   e.preventDefault()
-  if (!e.ctrlKey && !e.metaKey) arrowKeys(e)
+  if (!e.ctrlKey && !e.metaKey) doKey(e)
 }
 function onKeys (e: KeyboardEvent) {
   // the canvas' keys work with the focus on the canvas or on nothing, never while typing or with a dialog or a menu open
   if (e.defaultPrevented || typing(e.target) || e.ctrlKey || e.metaKey) return
   if (!focusOnCanvas(document.activeElement, root.value, document.body) || document.querySelector('[role="dialog"], [role="menu"], .sel-panel')) return
-  if (DIRS[e.key]) { arrowKeys(e); return }
-  keys(e)
+  doKey(e)
 }
-function arrowKeys (e: KeyboardEvent) {
-  const dir = DIRS[e.key]!
-  if (e.altKey && !e.shiftKey) {
+// What a key asks is bayesEditorKeys' to say; this does it with what the canvas holds.
+function doKey (e: KeyboardEvent) {
+  const act = bayesKeyAction(e, platformIsMac())
+  if (!act || bayesKeyScope(act.kind) !== 'canvas') return
+  if (act.kind === 'walk') {
     // Alt with an arrow walks to the nearest node in that direction, from the one selected
     const from = props.selected ?? props.doc.nodes[0]?.id
     const r = from ? rectOf(from) : null
     if (!from || !r) return
     const others = props.doc.nodes.filter(n => n.id !== from).map(n => ({ id: n.id, rect: rectOf(n.id)! })).filter(o => o.rect)
-    const next = bayesNearestNode(r, others, dir)
+    const next = bayesNearestNode(r, others, act.dir)
     e.preventDefault()
     if (next) { emit('select', next); focusNode(next) }
-    return
-  }
-  if (e.altKey) return
-  if (e.shiftKey && props.selected) {
+  } else if (act.kind === 'move') {
     // Shift with an arrow moves the selected node or box 10 px; its box changes only by the inspector
+    if (!props.selected) return
     const r = rectOf(props.selected)
     if (!r) return
     e.preventDefault()
-    const [dx, dy] = STEP[dir]
+    const [dx, dy] = bayesMoveStep(act.dir)
     emit('move', props.selected, { x: r.x + dx, y: r.y + dy })
-  }
-}
-function keys (e: KeyboardEvent) {
-  if (e.altKey) return
-  if (e.key === 'Delete' || e.key === 'Backspace') {
+  } else if (act.kind === 'remove') {
     const edge = selectedEdge.value ?? focusedEdge()
     const line = edge ? edges.value.find(x => x.id === edge) : undefined
     if (line) { e.preventDefault(); emit('disconnect', line.source, line.target); return }
     if (props.selected) { e.preventDefault(); emit('remove', props.selected) }
-    return
-  }
-  if ((e.key === 'm' && !e.shiftKey) || e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey)) {
+  } else if (act.kind === 'menu') {
     if (!props.selected) return
     e.preventDefault()
     openNodeMenu(props.selected, true)
-    return
-  }
-  if (e.key === 'n' && !e.shiftKey) { e.preventDefault(); emit('palette'); return }
-  if (e.key === '+' || e.key === '=') { e.preventDefault(); zoomIn() } else if (e.key === '-') { e.preventDefault(); zoomOut() } else if (e.key === '0') { e.preventDefault(); fit() }
+  } else if (act.kind === 'add') {
+    e.preventDefault()
+    emit('palette')
+  } else if (act.kind === 'zoomIn') { e.preventDefault(); zoomIn() } else if (act.kind === 'zoomOut') { e.preventDefault(); zoomOut() } else if (act.kind === 'fit') { e.preventDefault(); fit() }
 }
 
 onMounted(() => {
@@ -673,6 +666,8 @@ const miniClass = (n: { type?: string }) => (n.type === 'plate' ? 'mm-plate' : '
 <style scoped>
 .bayes-canvas {
   position: relative; width: 100%; height: 100%; min-width: 0;
+  /* the app's --edge falls under 3:1 against the canvas in three themes; an edge is what the graph says, so it reads at 3:1 at least */
+  --bayes-edge: color-mix(in srgb, var(--muted) 80%, var(--bg));
   background: radial-gradient(1200px 600px at 30% 0%, color-mix(in srgb, var(--accent) 5%, transparent), transparent 60%), var(--bg);
 }
 .zoomlbl { position: absolute; left: 48px; bottom: 16px; z-index: 6; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; pointer-events: none; }
@@ -687,7 +682,7 @@ const miniClass = (n: { type?: string }) => (n.type === 'plate' ? 'mm-plate' : '
 .bayes-canvas :deep(.vue-flow__node-bayes) { border-radius: 6px; }
 .bayes-canvas :deep(.vue-flow__node:focus-visible) { outline: 2px solid var(--accent); outline-offset: 3px; }
 .bayes-canvas :deep(.vue-flow__node-plate:focus-visible) { outline-offset: 1px; }
-.bayes-canvas :deep(.vue-flow__edge .vue-flow__edge-path) { stroke: var(--edge); stroke-width: 1.4; transition: stroke var(--dur-hover); }
+.bayes-canvas :deep(.vue-flow__edge .vue-flow__edge-path) { stroke: var(--bayes-edge); stroke-width: 1.4; transition: stroke var(--dur-hover); }
 @media (hover: hover) and (pointer: fine) { .bayes-canvas :deep(.vue-flow__edge:hover .vue-flow__edge-path) { stroke: var(--accent); } }
 .bayes-canvas :deep(.vue-flow__edge.hi .vue-flow__edge-path) { stroke: var(--accent); stroke-width: 1.8; }
 .bayes-canvas :deep(.vue-flow__edge.sel .vue-flow__edge-path) { stroke: var(--accent); stroke-width: 2.6; }

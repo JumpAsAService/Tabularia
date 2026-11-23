@@ -325,6 +325,8 @@ const nonCentred = computed(() => (plate.value?.form ?? 'non_centred') !== 'cent
 
 <style scoped>
 .insp { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+/* a hint such as «nessuno» says something (no limit): the muted text colour, not the browser's pale default, which falls under 4.5:1 in four themes */
+.insp :deep(input::placeholder), .insp :deep(textarea::placeholder) { color: var(--muted); opacity: 1; }
 .empty p { margin: 0 0 8px; font-size: 12.5px; line-height: 1.5; color: var(--text); }
 .empty p.m, .m { color: var(--muted); }
 .kindline { display: flex; align-items: center; gap: 6px; font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
