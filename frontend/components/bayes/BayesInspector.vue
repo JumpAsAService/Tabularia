@@ -1,13 +1,15 @@
 <script setup lang="ts">
 // The inspector of the selected node or box (docs/specs/bayes-graph-editor.md, «The inspector»).
-// Lot G0 edits a parameter's prior numbers only: its arguments, checked by the mirror at every
-// keystroke, and its bounds; the chart of the prior stands beside the numbers (under them in a
-// narrow panel), with a card for each hyperprior its arguments read. The other kinds and the boxes
-// show what they are and their problems; their own fields come with lot G2.
+// Every node and box: its label, name and box, a box's key and the box it sits in, the rows' series
+// (BayesIdentity.vue, lot G1). A parameter's prior numbers: its arguments, checked by the mirror at
+// every keystroke, and its bounds; the chart of the prior stands beside the numbers (under them in a
+// narrow panel), with a card for each hyperprior its arguments read. The other kinds' own fields come
+// with lot G2.
 import { computed, reactive, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { AudioWaveform, Boxes, ChartScatter, CircleAlert, CircleDot, Database, Info, Rows3, Sigma, SquareFunction, TriangleAlert, Variable } from 'lucide-vue-next'
 import BayesExprField from '~/components/bayes/BayesExprField.vue'
+import BayesIdentity from '~/components/bayes/BayesIdentity.vue'
 import BayesPriorChart from '~/components/bayes/BayesPriorChart.vue'
 import { bayesArgSymbol, bayesConstraintKey, bayesFindingText, bayesPriorText } from '~/composables/bayesEditorText'
 import { bayesDistribution } from '~/composables/bayesCatalog'
@@ -27,7 +29,27 @@ const emit = defineEmits<{
   (e: 'form', plate: string, nonCentred: boolean): void
   (e: 'select', id: string): void
   (e: 'escape'): void
+  (e: 'label', id: string, text: string): void
+  (e: 'name', id: string, text: string): void
+  (e: 'plate', id: string, plate: string | null): void
+  (e: 'parent', id: string, parent: string | null): void
+  (e: 'key', id: string, key: string): void
+  (e: 'target', id: string, target: string): void
+  (e: 'series', on: boolean): void
+  (e: 'seriesPart', part: 'time' | 'by', value: string | null): void
 }>()
+// the identity's events go up as they are
+const ident = {
+  label: (id: string, v: string) => emit('label', id, v),
+  name: (id: string, v: string) => emit('name', id, v),
+  plate: (id: string, v: string | null) => emit('plate', id, v),
+  parent: (id: string, v: string | null) => emit('parent', id, v),
+  key: (id: string, v: string) => emit('key', id, v),
+  target: (id: string, v: string) => emit('target', id, v),
+  series: (on: boolean) => emit('series', on),
+  seriesPart: (part: 'time' | 'by', v: string | null) => emit('seriesPart', part, v),
+  escape: () => emit('escape'),
+}
 const { t, te, locale } = useI18n()
 
 const owner = (id: string): string => { const i = id.indexOf('.'); return i < 0 ? id : id.slice(0, i) }
@@ -45,15 +67,6 @@ const num = (v: number): string => new Intl.NumberFormat(locale.value, { maximum
 const node = computed<BayesTemplateNode | undefined>(() => (props.selected ? nodeById.value.get(props.selected) : undefined))
 const plate = computed(() => (props.selected ? plateById.value.get(props.selected) : undefined))
 const own = computed(() => props.findings.filter(f => props.selected !== null && owner(f.node) === props.selected))
-
-/** «School, inside District»: a box and the boxes it is nested in. */
-function boxWords (id: string | null | undefined): string {
-  if (!id) return t('bayes.editor.inspector.noBox')
-  const p = plateById.value.get(id)
-  if (!p) return id
-  const parent = p.parent ? plateById.value.get(String(p.parent)) : undefined
-  return parent ? t('bayes.editor.inspector.boxInside', { box: p.label, parent: parent.label }) : p.label
-}
 
 const KIND_ICONS: Record<string, unknown> = {
   data: Database, parameter: CircleDot, transformed: SquareFunction, linear_predictor: Sigma,
@@ -154,12 +167,6 @@ const nodeLines = computed(() => {
     default: return []
   }
 })
-const drawnPlate = computed(() => {
-  const n = node.value
-  if (!n) return null
-  if (n.kind === 'likelihood') return (nodeById.value.get(String(n.observed ?? ''))?.plate as string | null | undefined) ?? null
-  return (n.plate as string | null | undefined) ?? null
-})
 
 // ---------------------------------------------------------------- a box
 
@@ -168,13 +175,14 @@ const plateNodes = computed(() => {
   if (!p) return []
   return props.doc.nodes.filter(n => n.plate === p.id || (n.kind === 'likelihood' && nodeById.value.get(String(n.observed ?? ''))?.plate === p.id))
 })
+// the boxes nested in it
+const plateBoxes = computed(() => (plate.value ? props.doc.plates.filter(x => x.kind === 'group' && x.parent === plate.value!.id) : []))
 const plateFindings = computed(() => {
   const p = plate.value
   if (!p) return []
   const ids = new Set([p.id, ...plateNodes.value.map(n => n.id)])
   return props.findings.filter(f => ids.has(owner(f.node)))
 })
-const keyNode = computed(() => (plate.value?.key ? nodeById.value.get(String(plate.value.key)) : undefined))
 const nonCentred = computed(() => (plate.value?.form ?? 'non_centred') !== 'centred')
 </script>
 
@@ -189,18 +197,8 @@ const nonCentred = computed(() => (plate.value?.form ?? 'non_centred') !== 'cent
     <!-- a box -->
     <template v-else-if="plate">
       <div class="kindline"><component :is="plate.kind === 'rows' ? Rows3 : Boxes" :size="13" aria-hidden="true" />{{ t(plate.kind === 'rows' ? 'bayes.editor.kind.rows' : 'bayes.editor.kind.group') }}</div>
-      <h2 class="ptitle">{{ plate.label }}</h2>
-      <div v-if="plate.kind === 'group'" class="row2">
-        <div class="fact">
-          <span class="lbl">{{ t('bayes.editor.inspector.unitPer') }}</span>
-          <span class="val"><code>{{ keyNode?.name ?? plate.key }}</code> <span class="m">{{ keyNode?.label }}</span></span>
-        </div>
-        <div class="fact">
-          <span class="lbl">{{ t('bayes.editor.inspector.inside') }}</span>
-          <span class="val">{{ plate.parent ? labelOf(String(plate.parent)) : t('bayes.editor.inspector.noBox') }}</span>
-        </div>
-      </div>
-      <p v-else class="explain">{{ t('bayes.editor.plate.rowsWhat') }}</p>
+      <h2 class="ptitle">{{ plate.label || '…' }}</h2>
+      <BayesIdentity :doc="doc" :id="plate.id" :findings="findings" v-on="ident" />
       <section v-if="plate.kind === 'group'" class="sec">
         <h3>{{ t('bayes.editor.inspector.form') }}</h3>
         <label class="swrow">
@@ -213,6 +211,13 @@ const nonCentred = computed(() => (plate.value?.form ?? 'non_centred') !== 'cent
       <section class="sec">
         <h3>{{ t('bayes.editor.inspector.contains') }}</h3>
         <ul class="members">
+          <li v-for="b in plateBoxes" :key="b.id">
+            <button type="button" class="member" @click="emit('select', b.id)">
+              <Boxes :size="13" aria-hidden="true" />
+              <span class="nm">{{ b.label }}</span>
+              <span class="k">{{ t('bayes.editor.kind.group') }}</span>
+            </button>
+          </li>
           <li v-for="n in plateNodes" :key="n.id">
             <button type="button" class="member" @click="emit('select', n.id)">
               <component :is="KIND_ICONS[n.kind] ?? CircleDot" :size="13" aria-hidden="true" />
@@ -243,17 +248,8 @@ const nonCentred = computed(() => (plate.value?.form ?? 'non_centred') !== 'cent
           <CircleDot :size="13" aria-hidden="true" />
           {{ node.plate ? t('bayes.editor.inspector.kindInBox', { kind: t('bayes.editor.kind.parameter'), box: labelOf(String(node.plate)) }) : t('bayes.editor.kind.parameter') }}
         </div>
-        <h2 class="ptitle">{{ node.label }}</h2>
-        <div class="row2">
-          <div class="fact">
-            <span class="lbl">{{ t('bayes.editor.inspector.name') }}</span>
-            <code class="val">{{ node.name }}</code>
-          </div>
-          <div class="fact">
-            <span class="lbl">{{ t('bayes.editor.inspector.box') }}</span>
-            <span class="val">{{ boxWords(node.plate as string | null) }}</span>
-          </div>
-        </div>
+        <h2 class="ptitle">{{ node.label || '…' }}</h2>
+        <BayesIdentity :doc="doc" :id="node.id" :findings="findings" v-on="ident" />
         <section class="sec">
           <h3>{{ t('bayes.editor.inspector.prior') }}</h3>
           <div class="fact">
@@ -352,17 +348,8 @@ const nonCentred = computed(() => (plate.value?.form ?? 'non_centred') !== 'cent
     <!-- any other node: what it is, read only in this lot -->
     <template v-else-if="node">
       <div class="kindline"><component :is="KIND_ICONS[node.kind] ?? CircleDot" :size="13" aria-hidden="true" />{{ t(`bayes.editor.kind.${node.kind}`) }}</div>
-      <h2 class="ptitle">{{ node.label }}</h2>
-      <div class="row2">
-        <div class="fact">
-          <span class="lbl">{{ t('bayes.editor.inspector.name') }}</span>
-          <code class="val">{{ node.name || '—' }}</code>
-        </div>
-        <div class="fact">
-          <span class="lbl">{{ t('bayes.editor.inspector.box') }}</span>
-          <span class="val">{{ boxWords(drawnPlate) }}</span>
-        </div>
-      </div>
+      <h2 class="ptitle">{{ node.label || '…' }}</h2>
+      <BayesIdentity :doc="doc" :id="node.id" :findings="findings" v-on="ident" />
       <pre v-for="(l, i) in nodeLines" :key="i" class="line">{{ l }}</pre>
       <p class="explain m"><Info :size="12" aria-hidden="true" /> {{ t('bayes.editor.inspector.readOnly') }}</p>
       <section class="sec">

@@ -656,3 +656,56 @@ None.
   the messages `bayes.graph.form_centred.*` rewritten as facts. The nodes' labels stay the templates' English until lot T2.
 - Keys: Tab and Enter into the nodes, Alt with an arrow to the nearest node in that direction, `+` `-` `0`, Esc from a
   field back to its node, `?` the list; checked on Chromium and Firefox.
+
+### Lot G1 (2026-11-24)
+
+**The plates' prototype, measured first** (a throw-away page with Vue Flow 1.48.2 and `@vue-flow/node-resizer` 1.5.1:
+three nested group boxes and a fourth beside them, 196 nodes, on the development machine): 200 nodes are drawn and
+measured in about 190 ms on Chromium and 330 ms on Firefox (development build). Without `extent`, a child dragged out of
+its box keeps its `parentNode` and a position relative to it, anywhere on the canvas, with nothing clamped: so the canvas
+sets no `extent` and the drop decides the new box (the deepest box under the node's centre, under the middle of a box's
+header). Vue Flow still wants parents before their children in the array (`bayesCanvasNodes` sorts the boxes by depth).
+A box resized from its left or top edge changes its own position, and its children, relative to it, travel with it: the
+canvas moves them back at each step of the resize, so they stay where they are seen. A node's z-index is the parent's
+plus one: boxes get their depth, nodes 1000, and `elevate-nodes-on-select` is off, so a node is always above every box
+(a node dragged over a nested box stays visible) and a selected box never covers the nodes outside it.
+
+- **The palette** (`BayesPalette.vue`): the five groups of the spec (Data, Unknowns, Values, Observed data, Boxes), each
+  item with its icon, name and sentence (`bayes.editor.palette.item.<kind>`), a search, ↑ ↓ along the items. An item is
+  dragged onto the canvas (the box under the pointer lights as the target) or added with Enter or a click: in the selected
+  box, otherwise at the free spot nearest the centre of the view that straddles no box's edge, in the box it lands in;
+  the view pans to show it. The new node is selected and the inspector's label takes the focus. 168 px at 1280 px, icons
+  only below 1100 px. «Templates» at its foot is lot G3's (the gallery).
+- **The edits** (`bayesGraphEdits.ts`, pure, tested): add (its name proposed and unique, a prior `normal(0, 1)` written in
+  the open, the other slots empty for the mirror to name), remove (a box gives what it holds to its parent; the rows box
+  stays), duplicate, move (a box takes what it holds along), resize, drop (plate or parent), a box's form and key, a group
+  index's target, the rows' series (time node and unit), label (the name follows while it is still the proposed one) and
+  name. A group box nests only in a group box; the rows box nests in nothing. **Names** (`bayesNames.ts`): folded to
+  ASCII, Greek letters spelt (`μ` → `mu`), cut at a word under 24 characters, `v_` before a leading digit, never a
+  function of the language, unique with `_2`, `_3`…; ids `n1`, `p1`….
+- **Edges by hand**: from a node's right handle to another node (on its handle, or anywhere on it): a menu lists the
+  target's slots that can take the source — each is tried in a copy of the graph, offered when the mirror puts no error
+  on that slot and makes no cycle (a warning, as «may not be positive», does not stop it) — with what each holds now. A
+  data node also offers the observed slot and «a new term of the sum». The slot gets the source's name, a component's
+  name, or a `ref` to a nameless node. An edge is selected by a click or reached by Tab; Delete removes it: a slot that held
+  only the reference is cleared, a term whose data it was goes, coefficient and all; a slot whose expression holds more
+  refuses with «`eta` uses `a_g` inside a longer expression (Intercept): edit it there» (a toast) and the inspector opens
+  on that node.
+- **The keyboard**: Shift with an arrow moves the selected node or box 10 px (a bare arrow moves nothing: the canvas takes
+  the arrows before Vue Flow's own nudge, as `FlowEditor.vue` does); `n` the palette; `m` (Shift+F10, the Menu key, a
+  right click) a node's commands — open in the inspector, link to another node… (the node, then the slot), remove a
+  link…, duplicate, remove; Delete or Backspace removes the selected node, box or edge; Ctrl/⌘+D duplicates; Ctrl/⌘+Z
+  undoes, Ctrl+Y or Ctrl/⌘+Shift+Z redoes (never ⌘Y). The inspector's «Box» select (every node but the likelihood, whose
+  box is its observed data's) and «Inside» select (a group box) do what a drop does. Checked on Chromium and Firefox.
+- **History** (`useBayesEditor.ts`): snapshots of the document through `createFlowHistory`; a gesture (an add, a drop, a
+  resize, an edge, a choice in a select) is one step at once, typing (a label, a name, a prior's number) one step when it stops for
+  400 ms; Undo and Redo in the top bar.
+- **The panel**: resizable by its handle from 320 to 640 px (the arrows move it 16 px, with Shift 80 px); a width set by the
+  handle wins until the page is left. The canvas follows the room it is given: while the view is as it was fitted, a
+  change of its width fits it again; once the person has panned or zoomed, it keeps its centre and brings the selected
+  node into sight (in G0 a part of the model stayed under a widened panel).
+- **The boxes**: resized by their edges and corners when selected; the switches «Non-centred» and «Time series» both work;
+  a box's label keeps its room in the header and «one per value of…» gives way first; a box lists the boxes nested in it.
+- `/bayes-model?template=empty` opens a model with only its rows' box (the store's «new model» is lot G3).
+- Not in this lot: the other kinds' own fields in the inspector (G2), copy and paste (not in the first release), the
+  warning before leaving with unsaved changes and the save (G3).

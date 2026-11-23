@@ -35,13 +35,24 @@ export interface BayesPlateView {
   warnings: number
   selected: boolean
   nested: boolean
+  /** A dragged node or box would land in this box if dropped now. */
+  target: boolean
 }
+
+/** A box's place and size while it is resized, as Vue Flow's resizer gives them (relative to its parent box). */
+export interface BayesResizeParams { x: number, y: number, width: number, height: number }
 
 export interface BayesCanvasView {
   node: (id: string) => BayesNodeView | undefined
   plate: (id: string) => BayesPlateView | undefined
   /** The box's switch: the non-centred form on or off (one change of the graph). */
   setForm: (plate: string, nonCentred: boolean) => void
+  /** The rows box's switch: these rows are a time series, or not. */
+  setSeries: (on: boolean) => void
+  /** A box being resized: what it holds stays where it is on the canvas. */
+  resizing: (plate: string, p: BayesResizeParams) => void
+  /** A resize that ended: the box's new place and size go into the graph. */
+  resized: (plate: string, p: BayesResizeParams) => void
 }
 
 export const BAYES_CANVAS_VIEW: InjectionKey<BayesCanvasView> = Symbol('bayes-canvas-view')

@@ -5,6 +5,7 @@
 // the likelihood a double border, correlated effects a rounded card with a line per component.
 // Colour only for what it encodes: the selection (accent), errors (danger), warnings (warning).
 // What it shows comes from the canvas (BayesCanvas.vue provides it): the node itself holds an id.
+// An edge is drawn by hand from its right handle to another node (the canvas asks which slot).
 import { computed, inject } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Handle, Position } from '@vue-flow/core'
@@ -24,7 +25,7 @@ const problems = computed(() => (v.value ? v.value.errors + v.value.warnings : 0
     class="bn"
     :class="[`k-${v.kind}`, { selected: v.selected, err: v.errors > 0, warn: v.errors === 0 && v.warnings > 0 }]"
   >
-    <Handle id="l" type="target" :position="Position.Left" :connectable="false" />
+    <Handle id="l" type="target" :position="Position.Left" />
     <span v-if="v.role" class="role">{{ v.role }}</span>
     <span
       v-if="v.errors > 0"
@@ -46,7 +47,7 @@ const problems = computed(() => (v.value ? v.value.errors + v.value.warnings : 0
       <span v-if="v.what" class="x">{{ v.what }}</span>
     </div>
     <div v-for="(line, i) in v.lines" :key="i" class="pr">{{ line }}</div>
-    <Handle id="r" type="source" :position="Position.Right" :connectable="false" />
+    <Handle id="r" type="source" :position="Position.Right" />
   </div>
 </template>
 

@@ -38,7 +38,8 @@ export interface BayesFlowNode {
   type: 'plate' | 'bayes'
   position: BayesPoint
   parentNode?: string
-  extent?: 'parent'
+  /** Boxes stack by depth under every node (Vue Flow adds one per level of parent). */
+  zIndex: number
   style?: { width: string, height: string }
   data: { id: string }
 }
@@ -121,10 +122,15 @@ export function bayesDropPlate (centre: BayesPoint, boxes: readonly BayesBox[]):
   return best?.id ?? null
 }
 
+/** Where the nodes stand above the boxes: a node dragged over a nested box stays on top of it. */
+export const BAYES_NODE_Z = 1000
+
 /**
  * The document as Vue Flow draws it: the boxes first (parents before children, as Vue Flow asks),
  * then the nodes, each placed relative to the box it sits in. A node whose plate has no box (a
- * category's levels, a plate that does not exist) stands on the canvas itself.
+ * category's levels, a plate that does not exist) stands on the canvas itself. No `extent`: a node
+ * leaves its box freely while dragged, and the drop decides its new box (the prototype of lot G1,
+ * recorded in the spec's «As built»).
  */
 export function bayesCanvasNodes (doc: BayesCanvasDoc): BayesFlowNode[] {
   const boxes = bayesBoxes(doc)
@@ -136,7 +142,8 @@ export function bayesCanvasNodes (doc: BayesCanvasDoc): BayesFlowNode[] {
       id: b.id,
       type: 'plate',
       position: parent ? { x: b.x - parent.x, y: b.y - parent.y } : { x: b.x, y: b.y },
-      ...(parent ? { parentNode: parent.id, extent: 'parent' as const } : {}),
+      ...(parent ? { parentNode: parent.id } : {}),
+      zIndex: b.depth,
       style: { width: `${b.w}px`, height: `${b.h}px` },
       data: { id: b.id },
     })
@@ -149,7 +156,8 @@ export function bayesCanvasNodes (doc: BayesCanvasDoc): BayesFlowNode[] {
       id: n.id,
       type: 'bayes',
       position: parent ? { x: at.x - parent.x, y: at.y - parent.y } : { x: at.x, y: at.y },
-      ...(parent ? { parentNode: parent.id, extent: 'parent' as const } : {}),
+      ...(parent ? { parentNode: parent.id } : {}),
+      zIndex: BAYES_NODE_Z,
       data: { id: n.id },
     })
   }
