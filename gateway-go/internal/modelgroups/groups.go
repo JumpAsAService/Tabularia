@@ -114,6 +114,9 @@ type Recipe struct {
 	Resources       struct {
 		CPU    string `json:"cpu"`    // the limit; the request is half
 		Memory string `json:"memory"` // the limit; the request is half
+		// Tmp: the default size of a model Job's /tmp, when the group's runs need more than the input's files (the group `bayes`:
+		// CmdStan's CSVs and the draws, docs/specs/bayes-contract.md); empty for every other group
+		Tmp string `json:"tmp,omitempty"`
 	} `json:"resources"`
 	// Wheels: files the image installs by their address, each checked by its sha256, besides Packages (the CPU-only build of
 	// PyTorch, which is on no index a plain `pip install` would reach: docs/specs/foundation-forecast.md, «The recipe»); the
@@ -121,9 +124,50 @@ type Recipe struct {
 	Wheels []Wheel `json:"wheels,omitempty"`
 	// Weights: the files of a pre-trained model the image downloads when the group is built, from pinned revisions and checked by
 	// sha256, and the licence they come under. A Python group's only; nil for every other group.
-	Weights    *Weights `json:"weights,omitempty"`
-	MaxRows    int64    `json:"max_rows"`
-	MaxSeconds int64    `json:"max_seconds"` // the longest run
+	Weights *Weights `json:"weights,omitempty"`
+	// Toolchain: Debian packages a Python image installs first, among a fixed list (scriptimage.Toolchain: g++, make); the C++
+	// toolchain of the group `bayes`, which compiles Stan programs (docs/specs/bayes-image.md). A Python group's only.
+	Toolchain []string `json:"toolchain,omitempty"`
+	// Sources: source tarballs the image builds, one a machine (the build takes the one of its machine), each checked by its
+	// sha256; only with CmdStan, which builds them. A Python group's only.
+	Sources []Source `json:"sources,omitempty"`
+	// CmdStan: how the image builds the source «cmdstan» (the fixed step of scriptimage)
+	CmdStan *CmdStan `json:"cmdstan,omitempty"`
+	// Compile and Cache: the defaults of the compile Job's limits and of the cache of compiled binaries (the administration card
+	// shows where a default comes from; changing them needs no build). The group `bayes`'s only.
+	Compile    *CompileLimits `json:"compile,omitempty"`
+	Cache      *CacheLimits   `json:"cache,omitempty"`
+	MaxRows    int64          `json:"max_rows"`
+	MaxSeconds int64          `json:"max_seconds"` // the longest run
+}
+
+// Source is a source tarball of a recipe: its name and version, the machine (uname -m) it is for, its address and its sha256.
+type Source struct {
+	Name    string `json:"name"`
+	Version string `json:"version"`
+	Machine string `json:"machine"` // x86_64 or aarch64
+	URL     string `json:"url"`
+	SHA256  string `json:"sha256"`
+}
+
+// CmdStan is how an image builds CmdStan: with STAN_THREADS, with its precompiled header, with make's -j.
+type CmdStan struct {
+	Threads           bool `json:"threads"`
+	PrecompiledHeader bool `json:"precompiled_header"`
+	Jobs              int  `json:"jobs"` // 1 or 2: -j2 was killed by the kernel in the default 4 GiB build Pod (docs/specs/bayes-image.md)
+}
+
+// CompileLimits are the defaults of a compile Job: its CPU and memory limits, its longest run and its /tmp.
+type CompileLimits struct {
+	CPU     string `json:"cpu"`
+	Memory  string `json:"memory"`
+	Seconds int64  `json:"seconds"`
+	Tmp     string `json:"tmp"`
+}
+
+// CacheLimits is the default limit of the cache of compiled binaries, in bytes.
+type CacheLimits struct {
+	MaxBytes int64 `json:"max_bytes"`
 }
 
 // Wheel is a wheel installed by its address: `pip install "<url>#sha256=<sha256>"`, for the machine (uname -m) it is for.
@@ -233,6 +277,20 @@ func Groups() []Group {
 		}
 		out[i].Recipe.SystemLibraries = append([]string(nil), g.Recipe.SystemLibraries...)
 		out[i].Recipe.Wheels = append([]Wheel(nil), g.Recipe.Wheels...)
+		out[i].Recipe.Toolchain = append([]string(nil), g.Recipe.Toolchain...)
+		out[i].Recipe.Sources = append([]Source(nil), g.Recipe.Sources...)
+		if g.Recipe.CmdStan != nil {
+			c := *g.Recipe.CmdStan
+			out[i].Recipe.CmdStan = &c
+		}
+		if g.Recipe.Compile != nil {
+			c := *g.Recipe.Compile
+			out[i].Recipe.Compile = &c
+		}
+		if g.Recipe.Cache != nil {
+			c := *g.Recipe.Cache
+			out[i].Recipe.Cache = &c
+		}
 	}
 	return out
 }
@@ -275,7 +333,7 @@ func gzipped(b []byte) []byte {
 // runner (runner/run.R and runner/R/*.R, or runner/run.py and runner/py/*.py), the library of
 // the group's language (common/R/*.R or common/py/*.py), common/selftest/*, card.schema.json,
 // catalog.json, then task.json when given, and the reference cases (reference/expected.json,
-// reference/data/*) when withReference (the self-test). A ConfigMap holds them as
+// reference/data/*, and the programs of reference/programs/* of a group that compiles some) when withReference (the self-test). A ConfigMap holds them as
 // f0, f1… with items mapping each key to its path, as a Script node's files. The reference files are
 // gzipped, as <path>.gz (Binary): a ConfigMap holds at most 1 MiB, and the reference tables are most of a
 // self-test's; the runners read them through the common library (tab_ref_path, ref_path), which takes the
@@ -329,6 +387,12 @@ func codeFiles(group, language string, task []byte, withReference bool) ([]File,
 		out = append(out, File{Path: "reference/expected.json", Content: b})
 		if _, err := fs.Stat(files, ref+"/data"); err == nil {
 			if err := add(ref+"/data", "reference/data/"); err != nil {
+				return nil, err
+			}
+		}
+		// the programs a self-test compiles (the group `bayes`'s Stan programs); no other group has the folder
+		if _, err := fs.Stat(files, ref+"/programs"); err == nil {
+			if err := add(ref+"/programs", "reference/programs/"); err != nil {
 				return nil, err
 			}
 		}
@@ -388,12 +452,16 @@ type Build struct {
 	// its weights (MODELS__WEIGHTS_BASE_URL), for a cluster that may not reach them; empty keeps the official ones. The paths,
 	// the file names and the checksums stay: a mirror holds the same files.
 	WheelsBaseURL, WeightsBaseURL string
+	// SourcesBaseURL replaces the host of the recipe's sources (MODELS__SOURCES_BASE_URL: a mirror of GitHub's release
+	// downloads); empty keeps GitHub. The path and the sha256 stay.
+	SourcesBaseURL string
 }
 
 // The official hosts a mirror replaces.
 const (
 	OfficialWheelsBaseURL  = "https://download.pytorch.org/whl/cpu/"
 	OfficialWeightsBaseURL = "https://huggingface.co/"
+	OfficialSourcesBaseURL = "https://github.com/"
 	// WeightsDir is where an image keeps the weights it holds: <WeightsDir>/<size>/{config.json,model.safetensors,LICENSE}
 	WeightsDir = "/opt/tabularia/weights"
 )
@@ -456,12 +524,33 @@ func DockerfileFor(group string, images map[string][]scriptcfg.Image, s scriptim
 		return "", err
 	}
 	s.Managed = true
-	s.SystemLibraries = g.Recipe.SystemLibraries
-	s.Hashes = g.Recipe.Hashes
-	if s.Wheels, s.Files, err = g.BuildInputs(b); err != nil {
+	if s, err = g.Settings(s, b); err != nil {
 		return "", err
 	}
 	return scriptimage.Dockerfile(g.Recipe.Language, base, g.Recipe.Packages, s)
+}
+
+// Settings are s with what the group's recipe adds to its image's build: the system libraries, the hashes, the wheels and the
+// files of the weights (BuildInputs), the toolchain, the sources (their mirror applied) and the CmdStan step. The build loop of
+// the gateway and cmd/modelgroup both make a group's Dockerfile with them.
+func (g Group) Settings(s scriptimage.Settings, b Build) (scriptimage.Settings, error) {
+	s.SystemLibraries = g.Recipe.SystemLibraries
+	s.Hashes = g.Recipe.Hashes
+	var err error
+	if s.Wheels, s.Files, err = g.BuildInputs(b); err != nil {
+		return s, err
+	}
+	s.Toolchain = g.Recipe.Toolchain
+	s.Sources = nil
+	for _, src := range g.Recipe.Sources {
+		s.Sources = append(s.Sources, scriptimage.Source{Name: src.Name, Version: src.Version, Machine: src.Machine,
+			URL: withBase(src.URL, OfficialSourcesBaseURL, b.SourcesBaseURL), SHA256: src.SHA256})
+	}
+	s.CmdStan = nil
+	if c := g.Recipe.CmdStan; c != nil {
+		s.CmdStan = &scriptimage.CmdStan{Threads: c.Threads, PrecompiledHeader: c.PrecompiledHeader, Jobs: c.Jobs}
+	}
+	return s, nil
 }
 
 // ── task.json ────────────────────────────────────────────────────────────────
@@ -797,9 +886,105 @@ func mustLoad() []Group {
 	return groups
 }
 
+// aheadOfCatalogue are the groups shipped before the models' catalogue names them: their image is built and self-tested as every
+// group's, and no model of theirs runs yet. The group `bayes` (docs/specs/bayes-image.md, lot B0): its entry in the catalogue,
+// the model `bayes_model`, comes with lot K0 of docs/specs/bayes-contract.md, which takes it out of here (a group the catalogue
+// names is the catalogue's).
+var aheadOfCatalogue []modelcatalog.Group
+
+// catalogueGroups are the groups of the catalogue, then those shipped ahead of it that it does not name yet.
+func catalogueGroups() []modelcatalog.Group {
+	groups := modelcatalog.Groups()
+	named := map[string]bool{}
+	for _, g := range groups {
+		named[g.ID] = true
+	}
+	for _, g := range aheadOfCatalogue {
+		if !named[g.ID] {
+			groups = append(groups, g)
+		}
+	}
+	return groups
+}
+
+var (
+	// a quantity of Kubernetes as a recipe writes a memory or a /tmp: whole mebibytes or gibibytes
+	quantity = regexp.MustCompile(`^[1-9][0-9]*(Mi|Gi)$`)
+	// a CPU as a recipe writes one: whole cores
+	cores = regexp.MustCompile(`^[1-9][0-9]*$`)
+)
+
+// checkBuild checks what a recipe adds to the build of a Python image (docs/specs/bayes-image.md, «Changes to the machinery»): the
+// toolchain's names among scriptimage.Toolchain, without repeats; the sources (a name and a version, x86_64 or aarch64, one a
+// machine and one version a name, an https address of a .tar.gz, 64 hexadecimal digits of sha256, and one for x86_64), only with
+// `cmdstan`, which needs a source named «cmdstan» and the toolchain's g++ and make, and runs make -j1 or -j2; the defaults of the
+// compile and of the cache, and the /tmp of a run.
+func (r Recipe) checkBuild(group string) error {
+	fail := func(format string, a ...any) error {
+		return fmt.Errorf("%s/recipe.json: %s", group, fmt.Sprintf(format, a...))
+	}
+	if (len(r.Toolchain) > 0 || len(r.Sources) > 0 || r.CmdStan != nil || r.Compile != nil || r.Cache != nil) && r.Language != "python" {
+		return fail("toolchain, sources, cmdstan, compile and cache are for a Python image")
+	}
+	tools := map[string]bool{}
+	for _, n := range r.Toolchain {
+		if _, ok := scriptimage.Toolchain[n]; !ok || tools[n] {
+			return fail("«%s» is not a package of the toolchain (g++, make), or it is named twice", n)
+		}
+		tools[n] = true
+	}
+	if (len(r.Sources) > 0) != (r.CmdStan != nil) {
+		return fail("sources are built by the cmdstan step: the one needs the other")
+	}
+	versions, machines := map[string]string{}, map[string]bool{}
+	cmdstan := false
+	for _, s := range r.Sources {
+		if s.Name == "" || s.Version == "" || strings.ContainsAny(s.Name+s.Version, " \t\n\"'\\/#`$") {
+			return fail("a source needs a name and a version")
+		}
+		if s.Machine != "x86_64" && s.Machine != "aarch64" {
+			return fail("the source «%s»: machine «%s» (x86_64 or aarch64)", s.Name, s.Machine)
+		}
+		if v, ok := versions[s.Name]; (ok && v != s.Version) || machines[s.Name+" "+s.Machine] {
+			return fail("the source «%s» is given twice for %s, or at two versions", s.Name, s.Machine)
+		}
+		versions[s.Name], machines[s.Name+" "+s.Machine] = s.Version, true
+		if !strings.HasPrefix(s.URL, "https://") || strings.ContainsAny(s.URL, " \t\n\"'\\#`$") || !strings.HasSuffix(s.URL, ".tar.gz") {
+			return fail("the source «%s» (%s) has no https address of a .tar.gz", s.Name, s.Machine)
+		}
+		if !sha256Hex.MatchString(s.SHA256) {
+			return fail("the sha256 of the source «%s» (%s) is not 64 hexadecimal digits", s.Name, s.Machine)
+		}
+		cmdstan = cmdstan || s.Name == "cmdstan"
+	}
+	for name := range versions {
+		if !machines[name+" x86_64"] {
+			return fail("the source «%s» has no tarball for x86_64", name)
+		}
+	}
+	if c := r.CmdStan; c != nil {
+		if !cmdstan || !tools["g++"] || !tools["make"] {
+			return fail("cmdstan needs a source named «cmdstan» and the toolchain's g++ and make")
+		}
+		if c.Jobs < 1 || c.Jobs > 2 {
+			return fail("cmdstan's jobs is %d: make runs -j1 or -j2 (-j2 needs more than the default 4 GiB build Pod)", c.Jobs)
+		}
+	}
+	if c := r.Compile; c != nil && (!cores.MatchString(c.CPU) || !quantity.MatchString(c.Memory) || c.Seconds <= 0 || !quantity.MatchString(c.Tmp)) {
+		return fail("compile needs a cpu (whole cores), a memory and a tmp (Mi or Gi) and its seconds")
+	}
+	if r.Cache != nil && r.Cache.MaxBytes <= 0 {
+		return fail("the cache's max_bytes is not positive")
+	}
+	if r.Resources.Tmp != "" && !quantity.MatchString(r.Resources.Tmp) {
+		return fail("resources' tmp «%s» is not a quantity of Mi or Gi", r.Resources.Tmp)
+	}
+	return nil
+}
+
 func load() ([]Group, error) {
 	var out []Group
-	for _, cg := range modelcatalog.Groups() {
+	for _, cg := range catalogueGroups() {
 		raw, err := files.ReadFile(path.Join("groups", cg.ID, "recipe.json"))
 		if err != nil {
 			return nil, fmt.Errorf("the group %s has no recipe: %v", cg.ID, err)
@@ -824,6 +1009,9 @@ func load() ([]Group, error) {
 			return nil, fmt.Errorf("the group %s has no %s", cg.ID, entry)
 		}
 		if err := r.checkDownloads(cg.ID); err != nil {
+			return nil, err
+		}
+		if err := r.checkBuild(cg.ID); err != nil {
 			return nil, err
 		}
 		sum := sha256.Sum256(raw)

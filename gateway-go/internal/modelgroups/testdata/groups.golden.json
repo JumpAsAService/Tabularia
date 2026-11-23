@@ -1,0 +1,72 @@
+{
+  "boosting": {
+    "recipe_hash": "46794cac92d276b2e4426ac5b7f34b97543d5d0187d5b4b1d1dd4c60f111ef41",
+    "runner_hash": "f8a3ee9a387d049ff62933b96f8808cd273eec4689ebd89a34ee2a6bcb9a02ae",
+    "reference_hash": "6fc617da8670bbb563e6fa91a895ce071b6558792ad307acb7d266a091170cda",
+    "dockerfile_sha256": "f3edab81dddd87afc773c975bcc903703968876dc1ef5c9d481283c2a7c2c68b",
+    "dockerfile_mirrors_sha256": "6bba153a283866248530038ca62f6f06a0e488bddf8fb0130b818ef7f400c2e5",
+    "configmap_run_sha256": "7dbd2403ab5e8809641d1c86b6128b3b2b79ba374f35149d02cb7bc85766e0eb",
+    "configmap_selftest_sha256": "2893f360ff2d04aaba109eba381d127eafe1cdba27e3eeaec7f92556a1217774",
+    "dockerfile_bytes": 3560
+  },
+  "customer_lifetime": {
+    "recipe_hash": "f4a975d8271c8032ea65366677635c29157f5f775e647ce944016630ab5cec02",
+    "runner_hash": "f61c8cbe87f1383308e4c870cd444336ad383a43456408fbfc179e92ee9d07a5",
+    "reference_hash": "a558c249926fbee95990cb6c3169e79ed2f4ac998cdc98ce2c0a2e729700e4f1",
+    "dockerfile_sha256": "c219af412877c4bf31886bf5f64f273d7182189d766a06ad78cfbb646cd2109d",
+    "dockerfile_mirrors_sha256": "c219af412877c4bf31886bf5f64f273d7182189d766a06ad78cfbb646cd2109d",
+    "configmap_run_sha256": "ae5179c92e246097e08e4727f767178db1ee2dcce6648d0587592671322919a3",
+    "configmap_selftest_sha256": "df5b0fec5c43064d6de0eb8ce7cc33c97f980a163778de3c63c43f9b07255c75",
+    "dockerfile_bytes": 7603
+  },
+  "experiments": {
+    "recipe_hash": "f95b9040ab008d8532682072b75ec91d77c6db618d9307d4be80f9c4a03e52e9",
+    "runner_hash": "f6af362d5968dbb93b4b0efd690b93d84a71766c10b9b985767385aaeef9e0fa",
+    "reference_hash": "c764ba1d425e33e3b2264c18a112ba364632eaea49773944bf789741fb966e09",
+    "dockerfile_sha256": "10a693973086230aa1edf6860c0d39ca374e207cafea7598ff5f989d1ee5af39",
+    "dockerfile_mirrors_sha256": "10a693973086230aa1edf6860c0d39ca374e207cafea7598ff5f989d1ee5af39",
+    "configmap_run_sha256": "2a15145a0f7173acb2077691d64d541799f7ba3a8ab5c1a4cf7204407baf967c",
+    "configmap_selftest_sha256": "977a9fd3662b32c4994edfdc8e3f5be6a475ce8dda97aaedb1c8417f0ff5857c",
+    "dockerfile_bytes": 4376
+  },
+  "foundation_forecast": {
+    "recipe_hash": "4db58646679402c7bb9f1fdde31f3b572fa30f2b72b279452c83ced722a958cd",
+    "runner_hash": "61b66690b3f3f86715421124a2eb92e16331e6c0bb40b0ec3ad5491567ec772d",
+    "reference_hash": "df8debcbfcd40576a797c41dd30a14bc6b713b0b8e1af3edecfa113b2f548035",
+    "dockerfile_sha256": "b3a5d9f795df896d75b43b77f65538d89597a980145e4b9c910f6d0c23840403",
+    "dockerfile_mirrors_sha256": "df91f1b6beac3061fb0d080c778d953f26807a720702975d24dcdc773f61a118",
+    "configmap_run_sha256": "d25b3323ae99e290bb3b4d1d8e740d49571135fc2be3f054fe8164c800951e31",
+    "configmap_selftest_sha256": "34296dfc080c095e1469cadd5efa65e7cffa78658c695fcc4c2170fac4f0d7cc",
+    "dockerfile_bytes": 6512
+  },
+  "regression": {
+    "recipe_hash": "9cf08c8a3676a1011535e283d1918eb2924587264ad6aae1515d04381e20c9cd",
+    "runner_hash": "3f40a4ebcd1a455d5033a72c7429354abdc2fdd7ef50a1c6999cd22dbbd90ffb",
+    "reference_hash": "bee9c2bbeb70985d727415562a3f7e24df6e9746ee05e4425a8f2ff2249b0748",
+    "dockerfile_sha256": "3fd1bbe816642f9af7b350215df4a15df79eff4695219350bd0d284f0736ad2c",
+    "dockerfile_mirrors_sha256": "3fd1bbe816642f9af7b350215df4a15df79eff4695219350bd0d284f0736ad2c",
+    "configmap_run_sha256": "1eb9b6053d27a154ff48fccad67c5ddd7afd3638359e98950de635be9f1c2bb5",
+    "configmap_selftest_sha256": "e20a3630f017cdbd7549c5bf46330baae5f6a009e1e494923cbb079d4ecd5824",
+    "dockerfile_bytes": 6927
+  },
+  "survival": {
+    "recipe_hash": "fb6ca9baaa019fd87f9c60ca6f5cabfb7d7ed6002a4e9ca2574da38af852e597",
+    "runner_hash": "29c4cc398e61e6177738666fc67c27e5c2f0ab6ee4839775cd2e626972e29742",
+    "reference_hash": "74d45357654b38ce9b365052ac083c3419dd4d39de3513876c7c886300070056",
+    "dockerfile_sha256": "355268a7e81816b143fa75a21fa74b91b029310a076f812b72b2609340f27539",
+    "dockerfile_mirrors_sha256": "355268a7e81816b143fa75a21fa74b91b029310a076f812b72b2609340f27539",
+    "configmap_run_sha256": "104aa7b12f26b39c6e94954e64da34a3f07f00cc895fe27fc498226ee839414b",
+    "configmap_selftest_sha256": "50c9cd451aa30c90edf70edefc4bc3cd8cc6dd09d725be5f509c8acaf97982cf",
+    "dockerfile_bytes": 7157
+  },
+  "timeseries": {
+    "recipe_hash": "52cf596cfeb1005846c2c3187eebcaf20ff820344e8696d3146b232910641447",
+    "runner_hash": "1b3a9fa17028b6f457c096d6d0a24a9fafb263c994e91440c4c141e6beb911ab",
+    "reference_hash": "e7e309aed85fe535f625a017cc23f9a9358295af825e3ad4d1ef36fe56986391",
+    "dockerfile_sha256": "03353d81047ce6a639cbf9ccad14ad8e1b810865cced493d4b55d11836fdd44b",
+    "dockerfile_mirrors_sha256": "03353d81047ce6a639cbf9ccad14ad8e1b810865cced493d4b55d11836fdd44b",
+    "configmap_run_sha256": "653e15e485a28cff92b541b80c39990b8c7867682508bb293bbe80d77ae90c36",
+    "configmap_selftest_sha256": "6ed571c801b6df9a026414060d07c762311b738bf7398acd5872dc283576c05d",
+    "dockerfile_bytes": 8524
+  }
+}

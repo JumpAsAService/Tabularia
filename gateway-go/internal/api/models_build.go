@@ -50,6 +50,13 @@ func mgCheckScriptWith(language string, systemLibraries bool) string {
 // what the recipe says, byte for byte, before the self-test loads it), and the lock gets one `weights-<size>@<sha256>` line a size, the
 // sizes the image holds. `dir` is /opt/tabularia/weights (a test points it elsewhere).
 func mgCheckScriptFor(language string, systemLibraries bool, weights *modelgroups.Weights, dir string) string {
+	return mgCheckScriptWithSources(language, systemLibraries, weights, dir, false)
+}
+
+// mgCheckScriptWithSources is mgCheckScriptFor for a group whose image builds sources (docs/specs/bayes-image.md, «Changes to the
+// machinery»): the lock also gets a `<name>@<version> sha256:<hex>` line for each source the image recorded in
+// scriptimage.PackageHashesFile (`<sha256>  cmdstan@2.40.0`; the wheels' lines are mgPyCheck's already).
+func mgCheckScriptWithSources(language string, systemLibraries bool, weights *modelgroups.Weights, dir string, sources bool) string {
 	check := `Rscript -e "$TABULARIA_R_CHECK"`
 	if language == "python" {
 		check = `python -I -c "$TABULARIA_PY_MANAGED_CHECK"`
@@ -61,6 +68,9 @@ func mgCheckScriptFor(language string, systemLibraries bool, weights *modelgroup
 	}
 	if weights != nil {
 		check += "\n" + mgWeightsCheck(weights, dir)
+	}
+	if sources {
+		check += "\nawk 'NF == 2 && $2 !~ /\\.whl$/ { print $2 \" sha256:\" $1 }' " + scriptimage.PackageHashesFile
 	}
 	return "set -e\n" + check + "\n" +
 		"echo\n" +
@@ -101,19 +111,22 @@ func mgWeightsCheck(w *modelgroups.Weights, dir string) string {
 	return sb.String()
 }
 
-// mgCheckScriptOf is the check's script of a group: the language's, with its system libraries and its weights when its recipe has them.
+// mgCheckScriptOf is the check's script of a group: the language's, with its system libraries, its weights and its sources when its
+// recipe has them.
 func mgCheckScriptOf(group, language string) string {
 	var weights *modelgroups.Weights
+	sources := false
 	if g, ok := modelgroups.Get(group); ok {
 		weights = g.Recipe.Weights
+		sources = len(g.Recipe.Sources) > 0
 	}
-	return mgCheckScriptFor(language, hasSystemLibraries(group), weights, modelgroups.WeightsDir)
+	return mgCheckScriptWithSources(language, hasSystemLibraries(group), weights, modelgroups.WeightsDir, sources)
 }
 
-// hasSystemLibraries says whether the group's recipe names system libraries (its image records them).
+// hasSystemLibraries says whether the group's recipe names system libraries or a toolchain (its image records their versions).
 func hasSystemLibraries(group string) bool {
 	g, ok := modelgroups.Get(group)
-	return ok && len(g.Recipe.SystemLibraries) > 0
+	return ok && (len(g.Recipe.SystemLibraries) > 0 || len(g.Recipe.Toolchain) > 0)
 }
 
 // mgPyCheck is a Python group's lock: one name==version per installed distribution; it fails

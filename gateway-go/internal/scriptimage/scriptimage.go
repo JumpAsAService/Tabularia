@@ -38,6 +38,9 @@ var (
 	url          = regexp.MustCompile(`^https?://[^\s"'\\]+\n?$`)
 	// a Debian package's name, as a recipe may name one
 	debianPackage = regexp.MustCompile(`^[a-z0-9][a-z0-9+.-]+$`)
+	// a source's name (a stage's name and a file's) and its version (a folder's name)
+	sourceName    = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
+	sourceVersion = regexp.MustCompile(`^[0-9][0-9A-Za-z.+-]*$`)
 	sha256Hex     = regexp.MustCompile(`^[0-9a-f]{64}$`)
 	// the file name of a wheel, as an address names it ("+" decoded)
 	wheelFile = regexp.MustCompile(`^[A-Za-z0-9_.+-]+\.whl$`)
@@ -89,7 +92,39 @@ type Settings struct {
 	// Files: files a managed Python image downloads (`ADD --checksum=sha256:<hex> <url> <path>`), after the requirements: the
 	// weights of a pre-trained model. The build fails on a different byte. A recipe's `weights` of the sizes chosen.
 	Files []File
+	// Toolchain: Debian packages a managed Python image installs first, from the base image's archive, by names of Toolchain
+	// alone (a fixed list: the C++ compiler and make of the group `bayes`, docs/specs/bayes-image.md); their versions are recorded
+	// in SystemLibrariesFile as an R image's system libraries are. A recipe's `toolchain`, never a user's input. None: the
+	// Dockerfile is the one every managed Python image has had.
+	Toolchain []string
+	// Sources: source tarballs a managed Python image builds, one a machine, each in a stage of its own that BuildKit downloads
+	// and checks against its sha256 (`ADD --checksum`), kept out of the image's layers; the build step mounts the one of
+	// TARGETARCH. A recipe's `sources`, the mirror setting already applied. Only with CmdStan, which builds them.
+	Sources []Source
+	// CmdStan: the fixed step that builds the source named «cmdstan» in /opt/cmdstan (a recipe's `cmdstan`); nil for every other
+	// image.
+	CmdStan *CmdStan
 }
+
+// Source is a source tarball of a recipe, for one machine (`uname -m`: x86_64 or aarch64).
+type Source struct {
+	Name, Version, Machine, URL, SHA256 string
+}
+
+// CmdStan is how the fixed CmdStan step builds: with STAN_THREADS, with CmdStan's precompiled header (its default), with make's
+// -j Jobs (1 or 2).
+type CmdStan struct {
+	Threads, PrecompiledHeader bool
+	Jobs                       int
+}
+
+// Toolchain are the Debian packages a recipe's `toolchain` may name, each with the packages whose `package@version` the image
+// records: `g++` is Debian's meta-package, whose compiler is the versioned g++-14 of the base image's release (python:3.14-slim
+// is Debian 13); a base on another release changes this list (docs/specs/bayes-image.md, «Boundaries»: ask first).
+var Toolchain = map[string][]string{"g++": {"g++", "g++-14"}, "make": {"make"}}
+
+// CmdStanDir is where the CmdStan step builds CmdStan; nothing there is written when the image runs.
+const CmdStanDir = "/opt/cmdstan"
 
 // Wheel is a wheel of a recipe, for one machine (`uname -m`: x86_64 or aarch64).
 type Wheel struct {
@@ -192,6 +227,103 @@ func fileSteps(files []File) (string, error) {
 	return "RUN mkdir -p " + strings.Join(dirs, " ") + "\n" + adds.String(), nil
 }
 
+// toolchainStep is the RUN that installs a managed Python image's toolchain from the base image's archive, then records the
+// versions apt installed (`package@version` lines, SystemLibrariesFile) for the check's lock.
+func toolchainStep(names []string) (string, error) {
+	if len(names) == 0 {
+		return "", nil
+	}
+	var record []string
+	seen := map[string]bool{}
+	for _, n := range names {
+		packages, ok := Toolchain[n]
+		if !ok || seen[n] {
+			return "", ValueError(fmt.Sprintf("«%s» is not a package of the toolchain (g++, make), or it is named twice", n))
+		}
+		seen[n] = true
+		record = append(record, packages...)
+	}
+	return "RUN apt-get update && apt-get install -y --no-install-recommends " + strings.Join(names, " ") +
+		" && rm -rf /var/lib/apt/lists/* \\\n && mkdir -p /opt/tabularia && dpkg-query -W -f '${Package}@${Version}\\n' " +
+		strings.Join(record, " ") + " > " + SystemLibrariesFile + "\n", nil
+}
+
+// sourceStages are the stages that download the recipe's sources, one a machine, each checked by BuildKit against its sha256 and
+// kept out of the image's layers (a stage FROM scratch the build step mounts), then the stage `<name>-source`, the one of
+// BuildKit's TARGETARCH (a FROM line reads it from the global scope). One version a name, at most one source a machine.
+func sourceStages(sources []Source) (string, error) {
+	var sb strings.Builder
+	versions, seen := map[string]string{}, map[string]bool{}
+	var names []string
+	for _, s := range sources {
+		arch, ok := machines[s.Machine]
+		if !ok {
+			return "", ValueError(fmt.Sprintf("«%s» is not a machine a source is built for (x86_64 or aarch64)", s.Machine))
+		}
+		if !sourceName.MatchString(s.Name) || !sourceVersion.MatchString(s.Version) {
+			return "", ValueError(fmt.Sprintf("«%s» «%s» is not the name and the version of a source", s.Name, s.Version))
+		}
+		if v, ok := versions[s.Name]; ok && v != s.Version || seen[s.Name+" "+arch] {
+			return "", ValueError(fmt.Sprintf("the source «%s» is given twice for a machine, or at two versions", s.Name))
+		}
+		if _, ok := versions[s.Name]; !ok {
+			names = append(names, s.Name)
+		}
+		versions[s.Name], seen[s.Name+" "+arch] = s.Version, true
+		if !url.MatchString(s.URL) || !strings.HasPrefix(s.URL, "https://") || strings.ContainsAny(strings.TrimSpace(s.URL), " #`$") ||
+			!strings.HasSuffix(strings.TrimSpace(s.URL), ".tar.gz") {
+			return "", ValueError(fmt.Sprintf("«%s» is not the https address of a source tarball", s.URL))
+		}
+		if !sha256Hex.MatchString(s.SHA256) {
+			return "", ValueError(fmt.Sprintf("the sha256 of «%s» is not 64 hexadecimal digits", s.URL))
+		}
+		fmt.Fprintf(&sb, "FROM scratch AS %s-%s\nADD --checksum=sha256:%s %s /%s.tar.gz\n", s.Name, arch, s.SHA256, strings.TrimSpace(s.URL), s.Name)
+	}
+	for _, n := range names {
+		fmt.Fprintf(&sb, "FROM %s-${TARGETARCH} AS %s-source\n", n, n)
+	}
+	return sb.String(), nil
+}
+
+// cmdStanStep is the fixed step that builds CmdStan from the source «cmdstan» of the machine (mounted, never copied into a layer):
+// in CmdStanDir, owned by root; STAN_THREADS in make/local when Threads; `make -j<jobs> build`, which builds stanc's copy, the
+// main object, TBB and, by CmdStan's default, the precompiled header; then the dependency files of the main object and of the
+// header, which `make build` does not leave and which every compile would otherwise try to write in the read-only CmdStanDir
+// (docs/specs/bayes-image.md, «What fails, and its cure»); the stanc of the other systems removed; the tarball's sha256 recorded
+// for the lock (PackageHashesFile, `<sha256>  cmdstan@<version>`). Without the precompiled header make/local says so, and every
+// compile is told the same by the image.
+func cmdStanStep(c *CmdStan, sources []Source) (string, error) {
+	version := ""
+	for _, s := range sources {
+		if s.Name == "cmdstan" {
+			version = s.Version
+		}
+	}
+	if version == "" {
+		return "", ValueError("the CmdStan step needs a source named «cmdstan»")
+	}
+	if c.Jobs < 1 || c.Jobs > 2 {
+		return "", ValueError(fmt.Sprintf("CmdStan's build runs make -j1 or -j2, not -j%d", c.Jobs))
+	}
+	local, main := "", "src/cmdstan/main.d"
+	if c.Threads {
+		local, main = `STAN_THREADS=true\n`, "src/cmdstan/main_threads.d"
+	}
+	header := ""
+	if c.PrecompiledHeader {
+		header = " \\\n && for h in stan/src/stan/model/model_header.hpp.gch/*.hpp.gch; do make \"${h%.hpp.gch}.d\"; done"
+	} else {
+		local += `PRECOMPILED_HEADERS=false\n`
+	}
+	return "RUN --mount=type=bind,from=cmdstan-source,target=/tabularia-src \\\n" +
+		"    tar -xzf /tabularia-src/cmdstan.tar.gz -C /opt && mv /opt/cmdstan-" + version + " " + CmdStanDir + " && cd " + CmdStanDir + " \\\n" +
+		" && rm -f bin/mac-stanc bin/windows-stanc \\\n" +
+		" && printf '" + local + "' > make/local \\\n" +
+		fmt.Sprintf(" && make -j%d build \\\n", c.Jobs) +
+		" && make " + main + header + " \\\n" +
+		" && echo \"$(sha256sum /tabularia-src/cmdstan.tar.gz | cut -d' ' -f1)  cmdstan@" + version + "\" >> " + PackageHashesFile + "\n", nil
+}
+
 // Dockerfile is script_builds.dockerfile: the image of `language` on `baseImage` with the
 // language's base packages, then `packages` (already checked: one per element).
 func Dockerfile(language, baseImage string, packages []string, s Settings) (string, error) {
@@ -211,7 +343,7 @@ func Dockerfile(language, baseImage string, packages []string, s Settings) (stri
 			env += ` PIP_INDEX_URL="` + index + `"`
 		}
 		install := fmt.Sprintf("RUN MAKEFLAGS=-j%d pip install -r /opt/tabularia/requirements.txt\n", s.Jobs)
-		before, after := "", ""
+		from, first, before, after, built := "FROM "+baseImage+"\n", "", "", "", ""
 		if s.Managed {
 			// wheels only (nothing compiles), from PyPI or its mirror, without what the wheels ask for: the recipe is the
 			// closure, and pip check says what it lacks. Every wheel is checked against the recipe's sha256 when it is
@@ -230,9 +362,31 @@ func Dockerfile(language, baseImage string, packages []string, s Settings) (stri
 			if after, err = fileSteps(s.Files); err != nil {
 				return "", err
 			}
+			if first, err = toolchainStep(s.Toolchain); err != nil {
+				return "", err
+			}
+			if (len(s.Sources) > 0) != (s.CmdStan != nil) {
+				return "", ValueError("sources are built by the CmdStan step: the one needs the other")
+			}
+			if s.CmdStan != nil {
+				// the image is a stage of its own, the sources' stages after it, then the build step on it
+				if len(s.Toolchain) == 0 {
+					return "", ValueError("the CmdStan step needs the toolchain (g++, make)")
+				}
+				stages, err := sourceStages(s.Sources)
+				if err != nil {
+					return "", err
+				}
+				step, err := cmdStanStep(s.CmdStan, s.Sources)
+				if err != nil {
+					return "", err
+				}
+				from = "FROM " + baseImage + " AS tabularia-image\n"
+				built = stages + "FROM tabularia-image\n" + step
+			}
 		}
-		return "FROM " + baseImage + "\n" + env + "\n" +
-			heredoc("/opt/tabularia/requirements.txt", wanted, "TABULARIA_PACKAGES") + before + install + after + user, nil
+		return from + env + "\n" + first +
+			heredoc("/opt/tabularia/requirements.txt", wanted, "TABULARIA_PACKAGES") + before + install + after + built + user, nil
 	}
 	cran := pyd.Strip(s.CRANURL)
 	if !url.MatchString(cran) {

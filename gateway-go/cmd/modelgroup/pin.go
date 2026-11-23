@@ -5,7 +5,8 @@ package main
 // file or the archived one) and hashed; its DESCRIPTION says that every package it needs (Depends, Imports, LinkingTo) comes
 // before it in the recipe, or is one of R's own. A Python package: every wheel of the version that a Linux build of the
 // recipe's Python may install (x86_64 and aarch64), downloaded from PyPI and hashed, and compared with the digest PyPI
-// publishes. The same files give the same recipe, byte for byte.
+// publishes. A source tarball of the recipe (`sources`: the group bayes's CmdStan): downloaded from its GitHub release and hashed,
+// and compared with the digest the release publishes for that asset. The same files give the same recipe, byte for byte.
 
 import (
 	"archive/tar"
@@ -23,6 +24,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -44,15 +46,18 @@ func init() {
 type pinner struct {
 	client     *http.Client
 	cran, pypi string
-	log        io.Writer
+	// github is GitHub's REST API (https://api.github.com), where a release says the digest of each of its assets
+	github string
+	log    io.Writer
 }
 
 func pinCommand(args []string, out io.Writer) error {
 	fl := flag.NewFlagSet("pin", flag.ContinueOnError)
 	cran := fl.String("cran", "https://cran.r-project.org", "the CRAN the R tarballs are hashed from")
 	pypi := fl.String("pypi", "https://pypi.org", "the PyPI the wheels are hashed from (its JSON API and its files)")
+	github := fl.String("github-api", "https://api.github.com", "GitHub's API, which gives the digest of a release's asset (the sources)")
 	recipe := fl.String("recipe", "", "the recipe.json to rewrite (default internal/modelgroups/groups/<group>/recipe.json)")
-	usage := errors.New("usage: modelgroup pin <group> [--recipe path] [--cran url] [--pypi url]")
+	usage := errors.New("usage: modelgroup pin <group> [--recipe path] [--cran url] [--pypi url] [--github-api url]")
 	if err := fl.Parse(args); err != nil {
 		return err
 	}
@@ -71,7 +76,8 @@ func pinCommand(args []string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	p := &pinner{client: &http.Client{Timeout: 20 * time.Minute}, cran: strings.TrimRight(*cran, "/"), pypi: strings.TrimRight(*pypi, "/"), log: out}
+	p := &pinner{client: &http.Client{Timeout: 20 * time.Minute}, cran: strings.TrimRight(*cran, "/"), pypi: strings.TrimRight(*pypi, "/"),
+		github: strings.TrimRight(*github, "/"), log: out}
 	pinned, err := p.pin(group, raw)
 	if err != nil {
 		return err
@@ -123,7 +129,67 @@ func (p *pinner) pin(group string, raw []byte) ([]byte, error) {
 	if err := r.CheckHashes(group); err != nil {
 		return nil, err
 	}
-	return rewrite(raw, r.Packages, hashes)
+	for i, src := range r.Sources {
+		sum, err := p.source(src)
+		if err != nil {
+			return nil, err
+		}
+		r.Sources[i].SHA256 = sum
+	}
+	return rewrite(raw, r.Packages, hashes, r.Sources)
+}
+
+// releaseAsset is a GitHub release's download address: https://<host>/<owner>/<repo>/releases/download/<tag>/<file>.
+var releaseAsset = regexp.MustCompile(`^https?://[^/]+/([A-Za-z0-9._-]+)/([A-Za-z0-9._-]+)/releases/download/([^/?#]+)/([^/?#]+)$`)
+
+// githubRelease is what GitHub's API says of a release: its assets, each with its name and digest ("sha256:<hex>").
+type githubRelease struct {
+	Assets []struct {
+		Name   string `json:"name"`
+		Digest string `json:"digest"`
+	} `json:"assets"`
+}
+
+// source is the sha256 of a recipe's source tarball, downloaded and hashed here; it must be the digest GitHub's release publishes
+// for that asset (a source that is not a release's asset, or an asset without a digest, is refused).
+func (p *pinner) source(s modelgroups.Source) (string, error) {
+	m := releaseAsset.FindStringSubmatch(s.URL)
+	if m == nil {
+		return "", fmt.Errorf("the source %s %s (%s): %s is not the address of a GitHub release's asset", s.Name, s.Version, s.Machine, s.URL)
+	}
+	owner, repo, tag, file := m[1], m[2], m[3], m[4]
+	resp, err := p.client.Get(p.github + "/repos/" + owner + "/" + repo + "/releases/tags/" + url.PathEscape(tag))
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("the release %s of %s/%s: GitHub answers %s", tag, owner, repo, resp.Status)
+	}
+	var rel githubRelease
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 16<<20)).Decode(&rel); err != nil {
+		return "", fmt.Errorf("the release %s of %s/%s: %v", tag, owner, repo, err)
+	}
+	digest := ""
+	for _, a := range rel.Assets {
+		if a.Name == file {
+			digest = a.Digest
+		}
+	}
+	want, ok := strings.CutPrefix(digest, "sha256:")
+	if !ok || len(want) != 64 {
+		return "", fmt.Errorf("the release %s of %s/%s publishes no sha256 digest for %s", tag, owner, repo, file)
+	}
+	tmp, sum, err := p.download(s.URL)
+	if err != nil {
+		return "", fmt.Errorf("the source %s (%s): %v", s.Name, s.Machine, err)
+	}
+	_ = os.Remove(tmp)
+	if sum != want {
+		return "", fmt.Errorf("the source %s (%s): %s has sha256 %s, the release says %s", s.Name, s.Machine, file, sum, want)
+	}
+	fmt.Fprintf(p.log, "%s %s %s\t%s\t%s\n", s.Name, s.Version, s.Machine, sum, file)
+	return sum, nil
 }
 
 // download streams the file at address into a temporary file and hashes it on the way; the caller removes the file.
@@ -362,9 +428,10 @@ func wheelMachines(file, cp string) []string {
 	return out
 }
 
-// rewrite is the recipe raw with `hashes` set (after `packages` when it had none), its other keys in their order and indented
-// as encoding/json indents them; `hashes` holds one line a package, in the recipe's order.
-func rewrite(raw []byte, packages []string, hashes map[string][]string) ([]byte, error) {
+// rewrite is the recipe raw with `hashes` set (after `packages` when it had none), and `sources` with their sha256 when it has
+// some, its other keys in their order and indented as encoding/json indents them; `hashes` holds one line a package, in the
+// recipe's order.
+func rewrite(raw []byte, packages []string, hashes map[string][]string, sources []modelgroups.Source) ([]byte, error) {
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	if t, err := dec.Token(); err != nil || t != json.Delim('{') {
 		return nil, errors.New("the recipe is not a JSON object")
@@ -386,6 +453,13 @@ func rewrite(raw []byte, packages []string, hashes map[string][]string) ([]byte,
 		}
 		values[key] = v
 	}
+	if _, ok := values["sources"]; ok && len(sources) > 0 {
+		b, err := json.Marshal(sources)
+		if err != nil {
+			return nil, err
+		}
+		values["sources"] = b
+	}
 	if _, ok := values["hashes"]; !ok {
 		at := len(keys)
 		for i, k := range keys {
@@ -400,7 +474,9 @@ func rewrite(raw []byte, packages []string, hashes map[string][]string) ([]byte,
 	for i, key := range keys {
 		k, _ := json.Marshal(key)
 		b.WriteString("  " + string(k) + ": ")
-		if key == "hashes" {
+		if key == "hashes" && len(packages) == 0 {
+			b.WriteString("{}")
+		} else if key == "hashes" {
 			b.WriteString("{\n")
 			for j, pkg := range packages {
 				name, _ := json.Marshal(pkg)

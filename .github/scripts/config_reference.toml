@@ -969,6 +969,13 @@ type = "https address"
 default = "empty (`https://huggingface.co/`)"
 text = "Where the build of a group that downloads the weights of a pre-trained model (the pre-trained forecasting group's) fetches them from: the same paths as on Hugging Face Hub, the same checksums (`mistralai/Timestral-<size>` at a pinned revision: `model.safetensors`, `config.json` and `LICENSE`, 21 MB to 837 MB a size). Needed only on a cluster whose build namespace cannot reach `huggingface.co` and the storage host it redirects to; the weights are under [a licence](capabilities/models.md#pre-trained-forecasting-timestral) an administrator accepts when enabling the group. Read when a version is built."
 
+[var.MODELS__SOURCES_BASE_URL]
+go = "gateway-go/internal/api/jobs_script_builds.go"
+section = "gateway-scripts"
+type = "https address"
+default = "empty (`https://github.com/`)"
+text = "Where the build of a statistical model group that builds a source tarball (the Bayesian group's CmdStan 2.40.0, about 47 MB for x86-64 and 38 MB for arm64) downloads it from, for a cluster that may not reach GitHub's release downloads (`github.com` and the storage host it redirects to). It replaces the host and keeps the path (`stan-dev/cmdstan/releases/download/v2.40.0/…`) and the sha256 the recipe pins: the mirror holds the same files. Needed only on a cluster whose build namespace cannot reach GitHub; read when a version is built."
+
 [var.NOTEBOOKS__IDLE_MINUTES]
 text = "A notebook's pod nobody has used for this long is stopped (an open page keeps it alive); an editor's unsaved file becomes the notebook's draft first."
 

@@ -1,0 +1,37 @@
+{
+  "boosting": {
+    "check_script_sha256": "edcd9bd6df05ebcf553ab827049a9bdb3a38a64c998a81ca953788dda2a9480e",
+    "dockerfile_5m_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "dockerfile_sha256": "f3edab81dddd87afc773c975bcc903703968876dc1ef5c9d481283c2a7c2c68b"
+  },
+  "customer_lifetime": {
+    "check_script_sha256": "4cfac9afff8232acd82da19bf74de1086cec2880390341c38e491f89101c5e0f",
+    "dockerfile_5m_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "dockerfile_sha256": "c219af412877c4bf31886bf5f64f273d7182189d766a06ad78cfbb646cd2109d"
+  },
+  "experiments": {
+    "check_script_sha256": "fe6fa523931d11b66aa2edb9f959d33a99cdd66c863bfc336b51bd45037de60f",
+    "dockerfile_5m_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "dockerfile_sha256": "10a693973086230aa1edf6860c0d39ca374e207cafea7598ff5f989d1ee5af39"
+  },
+  "foundation_forecast": {
+    "check_script_sha256": "8a28c677aa3fffbfad5e60d7435f38214efad43e0d2a8429d7dcc4eca88a97a2",
+    "dockerfile_5m_sha256": "2bea9cf73e5a0c80cc9e19c3cc473479fc59d2e68c3ca29f412b0b26378f48f2",
+    "dockerfile_sha256": "b3a5d9f795df896d75b43b77f65538d89597a980145e4b9c910f6d0c23840403"
+  },
+  "regression": {
+    "check_script_sha256": "fe6fa523931d11b66aa2edb9f959d33a99cdd66c863bfc336b51bd45037de60f",
+    "dockerfile_5m_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "dockerfile_sha256": "3fd1bbe816642f9af7b350215df4a15df79eff4695219350bd0d284f0736ad2c"
+  },
+  "survival": {
+    "check_script_sha256": "fe6fa523931d11b66aa2edb9f959d33a99cdd66c863bfc336b51bd45037de60f",
+    "dockerfile_5m_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "dockerfile_sha256": "355268a7e81816b143fa75a21fa74b91b029310a076f812b72b2609340f27539"
+  },
+  "timeseries": {
+    "check_script_sha256": "4cfac9afff8232acd82da19bf74de1086cec2880390341c38e491f89101c5e0f",
+    "dockerfile_5m_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "dockerfile_sha256": "03353d81047ce6a639cbf9ccad14ad8e1b810865cced493d4b55d11836fdd44b"
+  }
+}

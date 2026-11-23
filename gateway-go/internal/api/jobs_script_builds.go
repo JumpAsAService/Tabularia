@@ -199,17 +199,18 @@ func (b *scriptBuilds) buildJobs() int64 {
 // recipe has wheels or weights (docs/specs/foundation-forecast.md) gets them too: the wheels, and the
 // weights of the sizes the version's packages text names in its `# tabularia:weights` line (every size
 // the recipe has when it has none), from the official hosts or from the mirrors of
-// MODELS__WHEELS_BASE_URL and MODELS__WEIGHTS_BASE_URL.
+// MODELS__WHEELS_BASE_URL and MODELS__WEIGHTS_BASE_URL. A group whose recipe has a toolchain, sources
+// and a CmdStan step (docs/specs/bayes-image.md) gets them, the sources from GitHub or from the mirror of
+// MODELS__SOURCES_BASE_URL.
 func (b *scriptBuilds) dockerfile(language, baseImage string, packages []string, packagesText string, managedBy *string) (string, error) {
 	settings := scriptimage.Settings{
 		PyPIIndexURL: b.s.Scripts.PyPIIndexURL, CRANURL: b.s.Scripts.CRANURL, Jobs: b.buildJobs(), Managed: managedBy != nil}
 	if g, ok := modelgroups.Get(mgGroupOfManaged(managedBy)); ok {
-		settings.SystemLibraries = g.Recipe.SystemLibraries
-		settings.Hashes = g.Recipe.Hashes
-		build := modelgroups.Build{WheelsBaseURL: os.Getenv("MODELS__WHEELS_BASE_URL"), WeightsBaseURL: os.Getenv("MODELS__WEIGHTS_BASE_URL")}
+		build := modelgroups.Build{WheelsBaseURL: os.Getenv("MODELS__WHEELS_BASE_URL"), WeightsBaseURL: os.Getenv("MODELS__WEIGHTS_BASE_URL"),
+			SourcesBaseURL: os.Getenv("MODELS__SOURCES_BASE_URL")}
 		build.Sizes, _ = scriptimage.WeightsSizes(packagesText)
 		var err error
-		if settings.Wheels, settings.Files, err = g.BuildInputs(build); err != nil {
+		if settings, err = g.Settings(settings, build); err != nil {
 			return "", sbValueError(err.Error())
 		}
 	}

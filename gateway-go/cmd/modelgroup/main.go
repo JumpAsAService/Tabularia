@@ -24,7 +24,8 @@
 //	                                     SCRIPTS__PYPI_INDEX_URL; -jobs compilers). A group that downloads
 //	                                     weights (foundation_forecast) takes the sizes to download, all of the
 //	                                     recipe's when none is given, and the mirrors MODELS__WHEELS_BASE_URL and
-//	                                     MODELS__WEIGHTS_BASE_URL (--wheels-base-url, --weights-base-url)
+//	                                     MODELS__WEIGHTS_BASE_URL (--wheels-base-url, --weights-base-url); a group that
+//	                                     builds sources (bayes: CmdStan) the mirror MODELS__SOURCES_BASE_URL (--sources-base-url)
 //	code <group> <dir> [<task.json>]     writes the Job's /tabularia/code into <dir>: the runner, the common
 //	                                     library, the schema, the catalogue, the reference cases (gzipped, <path>.gz,
 //	                                     as the check Job's ConfigMap holds them), the task
@@ -34,13 +35,24 @@
 //	                                     into its `hashes` (run from gateway-go/; --recipe names another file). R: each
 //	                                     source tarball from CRAN, and its DESCRIPTION checked against the order of the
 //	                                     recipe; Python: each wheel a Linux build may pick, from PyPI, checked against
-//	                                     PyPI's digest. Run it whenever a version in the recipe changes
+//	                                     PyPI's digest; a source tarball (bayes: CmdStan), from its GitHub release, checked
+//	                                     against the digest the release publishes (--github-api). Run it whenever a version in
+//	                                     the recipe changes
 //
 // The image of the pre-trained forecasting group is built the same way, with the weights of the sizes wanted (a download of
 // 0.02 to 0.84 GB each, checked by sha256), and its self-test runs on a read-only root as the Job's does:
 //
 //	go run ./cmd/modelgroup dockerfile foundation_forecast --sizes 5m,28m > /tmp/ff.Dockerfile
 //	docker build -f /tmp/ff.Dockerfile -t tabularia-models-foundation_forecast:dev /tmp
+//
+// The Bayesian group's image builds CmdStan (3 to 5 minutes, up to 3.6 GiB: one heavy job at a time on a small machine), and its
+// self-test compiles Stan programs, as uid 10001 on a read-only root with an executable /tmp and no network, as the check Job runs:
+//
+//	go run ./cmd/modelgroup dockerfile bayes > /tmp/bayes.Dockerfile
+//	docker buildx build --no-cache -f /tmp/bayes.Dockerfile -t tabularia-bayes-check --load /tmp/empty
+//	go run ./cmd/modelgroup code bayes /tmp/bayes-code
+//	docker run --rm --read-only --tmpfs /tmp:rw,exec --user 10001:10001 --network none -e HOME=/tmp -e TMPDIR=/tmp \
+//	    -v /tmp/bayes-code:/tabularia/code:ro tabularia-bayes-check python -I -B /tabularia/code/runner/run.py --selftest
 //
 // The directory written by `code` is what the Job's ConfigMap holds; a laptop with R (and
 // jsonlite) also runs an R group's self-test without Docker:
@@ -88,6 +100,7 @@ func run(args []string, out io.Writer) error {
 		sizes := df.String("sizes", "", "sizes of the weights to download, e.g. 5m,28m (every size of the recipe when empty)")
 		wheelsBase := df.String("wheels-base-url", os.Getenv("MODELS__WHEELS_BASE_URL"), "mirror of the wheels' host (MODELS__WHEELS_BASE_URL)")
 		weightsBase := df.String("weights-base-url", os.Getenv("MODELS__WEIGHTS_BASE_URL"), "mirror of the weights' host (MODELS__WEIGHTS_BASE_URL)")
+		sourcesBase := df.String("sources-base-url", os.Getenv("MODELS__SOURCES_BASE_URL"), "mirror of GitHub's release downloads (MODELS__SOURCES_BASE_URL)")
 		if err := df.Parse(args[1:]); err != nil {
 			return err
 		}
@@ -99,7 +112,7 @@ func run(args []string, out io.Writer) error {
 		if err := df.Parse(rest[1:]); err != nil || df.NArg() != 0 {
 			return errors.New("usage: modelgroup dockerfile <group> [--sizes 5m,28m]")
 		}
-		build := modelgroups.Build{WheelsBaseURL: *wheelsBase, WeightsBaseURL: *weightsBase}
+		build := modelgroups.Build{WheelsBaseURL: *wheelsBase, WeightsBaseURL: *weightsBase, SourcesBaseURL: *sourcesBase}
 		for _, size := range strings.Split(*sizes, ",") {
 			if size = strings.TrimSpace(size); size != "" {
 				build.Sizes = append(build.Sizes, strings.ToLower(size))

@@ -236,3 +236,85 @@ func TestTheWheelsALinuxBuildMayPick(t *testing.T) {
 		}
 	}
 }
+
+// `pin` learns the sources (docs/specs/bayes-image.md, «The recipe»): each tarball downloaded and hashed here, refused unless its
+// sha256 is the digest the GitHub release publishes for that asset; the same files give the same recipe, byte for byte.
+func TestPinHashesTheSourcesAgainstTheReleasesDigest(t *testing.T) {
+	tarballs := map[string][]byte{"/stan-dev/cmdstan/releases/download/v2.40.0/cmdstan-2.40.0.tar.gz": []byte("the x86-64 tarball"),
+		"/stan-dev/cmdstan/releases/download/v2.40.0/cmdstan-2.40.0-linux-arm64.tar.gz": []byte("the arm64 tarball")}
+	digest := func(path string) string { return "sha256:" + sum(tarballs[path]) }
+	wrong := false
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/repos/stan-dev/cmdstan/releases/tags/v2.40.0":
+			arm := digest("/stan-dev/cmdstan/releases/download/v2.40.0/cmdstan-2.40.0-linux-arm64.tar.gz")
+			if wrong {
+				arm = "sha256:" + strings.Repeat("0", 64)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"assets": []map[string]string{
+				{"name": "cmdstan-2.40.0.tar.gz", "digest": digest("/stan-dev/cmdstan/releases/download/v2.40.0/cmdstan-2.40.0.tar.gz")},
+				{"name": "cmdstan-2.40.0-linux-arm64.tar.gz", "digest": arm},
+				{"name": "cmdstan-2.40.0-no-digest.tar.gz"}}})
+		default:
+			if _, _ = w.Write(tarballs[r.URL.Path]); tarballs[r.URL.Path] == nil {
+				http.NotFound(w, r)
+			}
+		}
+	}))
+	t.Cleanup(srv.Close)
+	p := &pinner{client: srv.Client(), pypi: srv.URL, github: srv.URL + "/api", log: io.Discard}
+	recipe := func(arm string) []byte {
+		return []byte(`{
+  "language": "python",
+  "base": "3.14",
+  "packages": [],
+  "hashes": {},
+  "sources": [
+    {
+      "name": "cmdstan",
+      "version": "2.40.0",
+      "machine": "x86_64",
+      "url": "` + srv.URL + `/stan-dev/cmdstan/releases/download/v2.40.0/cmdstan-2.40.0.tar.gz",
+      "sha256": ""
+    },
+    {
+      "name": "cmdstan",
+      "version": "2.40.0",
+      "machine": "aarch64",
+      "url": "` + srv.URL + `/stan-dev/cmdstan/releases/download/v2.40.0/` + arm + `",
+      "sha256": "` + strings.Repeat("a", 64) + `"
+    }
+  ],
+  "max_rows": 10,
+  "max_seconds": 60
+}
+`)
+	}
+	r := recipe("cmdstan-2.40.0-linux-arm64.tar.gz")
+	once, err := p.pin("bayes", r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := strings.Replace(strings.Replace(string(r), `"sha256": ""`, `"sha256": "`+sum([]byte("the x86-64 tarball"))+`"`, 1),
+		strings.Repeat("a", 64), sum([]byte("the arm64 tarball")), 1)
+	if string(once) != want {
+		t.Errorf("the recipe pinned:\n%s\nwanted:\n%s", once, want)
+	}
+	if again, err := p.pin("bayes", once); err != nil || !bytes.Equal(again, once) {
+		t.Errorf("pinned again: %v\n%s", err, again)
+	}
+	// a digest that is not the file's, an asset without a digest, an address that is no release's asset: refused
+	wrong = true
+	if _, err := p.pin("bayes", r); err == nil || !strings.Contains(err.Error(), "the release says 0000") {
+		t.Errorf("another digest: %v", err)
+	}
+	wrong = false
+	if _, err := p.pin("bayes", recipe("cmdstan-2.40.0-no-digest.tar.gz")); err == nil || !strings.Contains(err.Error(), "publishes no sha256 digest") {
+		t.Errorf("no digest: %v", err)
+	}
+	other := bytes.Replace(r, []byte("/releases/download/v2.40.0/cmdstan-2.40.0.tar.gz"), []byte("/archive/cmdstan-2.40.0.tar.gz"), 1)
+	if _, err := p.pin("bayes", other); err == nil || !strings.Contains(err.Error(), "is not the address of a GitHub release's asset") {
+		t.Errorf("not an asset: %v", err)
+	}
+}
