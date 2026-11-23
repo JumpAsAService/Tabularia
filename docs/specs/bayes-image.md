@@ -580,8 +580,9 @@ Some files contain third-party code under BSD or other MPL2-compatible licenses,
 whence the other COPYING.* files here.
 ```
 
-The folder holds no file named `COPYING.MPL2`; it holds `LICENSE` (sha256
-`1f256ecad192880510e84ad60474eab7589218784b9a50bc7ceee34c2b91f1d5`, 373 lines), whose first line is
+The folder holds `COPYING.MPL2` (sha256 `66a3107d5ad6a058aab753eaac2047ccb2ed0e39465dd0fe5844da3e300d5172`, 373 lines; the
+first draft said it was missing, corrected by lot B0, «As built») and `LICENSE` (sha256
+`1f256ecad192880510e84ad60474eab7589218784b9a50bc7ceee34c2b91f1d5`, 373 lines, two bytes shorter), whose first lines are both
 `Mozilla Public License Version 2.0`, and `COPYING.BSD` (first lines: `Copyright (c) 2011, Intel
 Corporation. All rights reserved.`), `COPYING.MINPACK` (first line: `Minpack Copyright Notice (1999)
 University of Chicago.  All rights reserved`) and `COPYING.APACHE` (first lines: `Apache License`,
@@ -754,3 +755,88 @@ present was not measured (only the end state, 3 MB).
 
 The spike's image, the base image it pulled and its containers were removed by name; the build cache of BuildKit on the machine was left
 as it is (no prune). Nothing of the spike is in the repository besides this file.
+
+## As built (lot B0, 2026-11-23)
+
+Measured on the machine of «Measured on 2026-11-23» (a 4-core laptop CPU from 2018, 16 GB, Docker 29, cgroup v2), one heavy job
+at a time.
+
+**The machinery** (`internal/modelgroups`, `internal/scriptimage`, `internal/api`, `cmd/modelgroup`). The recipe's new keys are
+as «The recipe» says (`toolchain`, `sources`, `cmdstan`, `compile`, `cache`, and `resources.tmp`), checked at load;
+`Group.Settings` is the one place the gateway's build loop and `cmd/modelgroup` take them from; `MODELS__SOURCES_BASE_URL` is in
+`config_reference.toml` and `docs/configuration.md`; `pin` hashes each source and compares it with the digest GitHub's release
+API publishes (run for real on the two CmdStan tarballs: both digests equal, the recipe rewritten byte for byte as it was).
+Golden tests hold the bytes of the seven other groups — the Dockerfile with the official hosts and with mirrors, the ConfigMaps of
+a run and of the self-test, `RecipeHash`, `RunnerHash`, `ReferenceHash`, and the gateway's own Dockerfile and check script —
+recorded before the change and unchanged after it.
+
+**The group** is shipped ahead of the models' catalogue (`aheadOfCatalogue` in `groups.go`): the catalogue's entry
+`bayes_model` is lot K0's of `bayes-contract.md`, and adding a group to the models' `catalog.json` changes the `catalog.json`
+every group's ConfigMap carries, hence every group's `RunnerHash` (a recheck of every group) — K0 has to weigh that. Until
+then the existing Administration card lists the group with what every group has (Enable, Resources, Who may use it); the card's
+compile and cache fields are not built.
+
+**The Dockerfile as generated** differs from «The Dockerfile the machinery generates» in four details: the first stage is named
+(`FROM python:3.14-slim AS tabularia-image`, the build step's `FROM tabularia-image`); no `ARG TARGETARCH` (BuildKit defines it in
+the global scope, which a `FROM` line reads); `mkdir -p /opt/tabularia` before the toolchain's record, which comes before the
+requirements; the source is mounted at `/tabularia-src`, and CmdStan's line in `package-sha256.txt` keeps that file's format
+(`<sha256>  cmdstan@2.40.0`), which the check script turns into the lock's `cmdstan@2.40.0 sha256:<hex>`. The toolchain's
+record names `g++`, `g++-14` and `make` (a fixed list in `scriptimage.Toolchain`: `g++` is Debian's meta-package).
+
+**The build**, `docker buildx build --no-cache` in a BuildKit **v0.33.1** container limited to **4 GiB (no swap) and 2 CPUs**
+(the default build Pod): **603 s** in all, of which apt 21.9 s, pip 21.6 s, the CmdStan step **441.2 s** (`make -j1`), and
+about 147 s exporting and loading the image into Docker; the container's cgroup peak **3,281 MiB**, `oom_kill 0`. The stage of
+`TARGETARCH` and the `--mount=type=bind,from=` of a `scratch` stage work in BuildKit 0.33 (the assumption of «The Dockerfile»):
+only the amd64 tarball was downloaded, and it is in no layer. The image is **1,827,447,539 bytes** (1.83 GB): the base
+120 MB, the toolchain 272 MB, numpy and pyarrow 241 MB, CmdStan built 1.19 GB; within 10 % of the measured 1.90 GB minus the
+tarball's 47 MB (success criterion 2). A Dockerfile whose CmdStan sha256 differs in its last digit stops at the `ADD`, before
+anything compiles: `ERROR: digest mismatch sha256:26d21c97…a90c: sha256:26d21c97…a90d` (success criterion 5).
+
+**The lock** the check script printed: `numpy==2.5.5 sha256:c48960d4…`, `pip==26.2.2`, `pyarrow==26.0.1 sha256:7ae48ab5…`,
+`g++@4:14.2.0-1`, `g++-14@14.2.0-19`, `make@4.4.1-2`, `cmdstan@2.40.0 sha256:26d21c97…a90c`.
+
+**The self-test**, the check script itself (the lock, then `python -I -B runner/run.py --selftest`) in a container as uid 10001,
+`--read-only`, `--tmpfs /tmp:rw,exec`, `--network none`, `--cap-drop ALL`, `no-new-privileges`, **2 GiB and 2 CPUs** (the
+recipe's memory; the check Job takes the group's limits): **exit 0, 8 ok, 0 failed, 0 skipped**, 65.8 s, the container's cgroup
+peak about 0.9 GiB (sampled every second). The checks:
+
+| Check | Result |
+|---|---|
+| 1. The image is the recipe's | `stanc3 v2.40.0 (Unix)`; the lock's sha256 is the recipe's for x86_64; `STAN_THREADS=true`; `model_header_threads_14_2.hpp.gch`, its `.d` and `src/cmdstan/main_threads.d` present |
+| 2. A compile in the Job's conditions | AR(1) compiled with `env -i PATH=…` and `PRECOMPILED_HEADERS=false` only: **12.3 s**, largest process 1,292 MiB, no `Read-only file system` line; with `-H` the line `! …model_header.hpp.gch/model_header_threads_14_2.hpp.gch` (the header used), 12.5 s; binary 2,501,552 bytes, the spike's size |
+| 3. The binary runs from `/tmp` | `info`: `stan_version_major = 2`, `stan_version_minor = 40` |
+| 4. NUTS gives the known answer | 4 chains × (1,000 + 1,000), seed 20261123, 2 threads: mean 1.53496 against the closed form 1.52779 (MCSE 0.01116), sd 0.43410 against 0.44677 (MCSE 0.00733), ESS 1,513: within 4 MCSE; the CSV's columns the sampler's seven then `mu` |
+| 5. The same seed gives the same draws | the four CSVs' header and draws hashed; the reference hashes recorded from the first run, equal in a second container |
+| 6. The catalogue's names exist in Stan | `stanc --info` on `catalog_names.stan` reports exactly the 26 functions and 52 distributions the catalogue names (a `~` statement is reported as its `_lupdf`/`_lupmf`): the assumption that `--info` lists them holds |
+| 7. The points against Stan | 320 values of 180 cases (density and mass) within the tolerances; the 30 cases of kind `marginal` left to check 8 and the catalogue's suite |
+| 8. LKJ's marginal | 20 Kolmogorov–Smirnov tests (K ∈ {2, 3, 5} × η ∈ {0.5, 1, 2, 10}, Ω[2,1] and, for K > 2, Ω[K,1]; K = 2 has one element), 4,000 draws each: lowest p-value 0.0312, none below alpha 0.001 |
+
+Compiles in the self-test, with the header: AR(1) 12.3 s (measured 10.8 s in the spike, +14 %), the normal model 10.0 s,
+`catalog_points.stan` 15.8 s, `lkj_marginal.stan` 11.0 s; largest process 1.2–1.3 GiB each. (The first run, while other work
+shared the CPU, took 18.6 s for the AR(1).) The linear and the hierarchical programs of the spike were not compiled again: only
+the AR(1) of success criterion 3 is re-measured here.
+
+**What the first run found, and how it was settled.**
+
+- Check 7 failed on two values: Stan's `student_t_lcdf` with ν = 1 in the far tails differs from the closed form of the Cauchy
+  CDF by a relative **2.1e-7** at the 1e-6 quantile and **2.9e-6** at the 1 − 1e-6 quantile (the log-CDF's tolerance is 1e-8).
+  As «The self-test» prescribes, `make_points.py` now writes for these two cases `"stan": {"logcdf_rel": 1e-5, "reason": …}`
+  with the error measured, `points.json` was written again (the other bytes unchanged; the browser's test does not read the
+  field) and copied to the group. Every other log-density is within 1e-10 and every other log-CDF within 1e-8.
+- Check 5 has no reference until a first run on x86_64: the hashes of that run are in `reference/expected.json`.
+
+**Differences from the spec, and open points for later lots.**
+
+- The common library's own tests do not run in this self-test: they read their table with pandas, which the image does not
+  hold (numpy and pyarrow only); they run in the other Python groups' self-tests.
+- On arm64, check 5 is **skipped**, as «The self-test» says; but a version passes only when nothing is skipped
+  (`SelftestReport.Passed`), so an arm64 build fails its check until an arm64 reference of the draws is recorded — the lot that
+  first builds on an arm64 node records it (or decides otherwise), consistent with «Decisions»: arm64 is not claimed.
+- The reproducibility of check 5 across x86-64 CPUs (glibc's math functions pick their code by the CPU's features) is
+  **assumed**; the kind trial and the first cluster check it.
+- The Python tests outside the image (`reference/test_bayes_runner.py`: the KS p-value against SciPy's `kstwo` within a relative
+  1e-7 at n = 4,000; check 7's comparison on a hand-made CSV) pass with SciPy 1.18.1 and numpy 2.5.5.
+- Eigen's `COPYING.MPL2` exists (the first draft of «Licences» said otherwise; corrected there).
+
+**Left on the machine**: the image `tabularia-bayes-b0:local` (for the next lots); the BuildKit container and the test containers
+were removed by name.
