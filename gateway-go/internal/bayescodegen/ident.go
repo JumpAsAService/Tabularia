@@ -19,8 +19,15 @@ const (
 	RenamedReserved = "reserved"
 )
 
-// refusedTokens are the words the output check refuses as tokens («Safety checks on the output»).
-var refusedTokens = []string{"print", "reject", "fatal_error", "target", "include", "functions", "profile"}
+// refusedTokens are the words the output check refuses as tokens («Safety checks on the output»):
+// the statements and blocks the generator never writes. jacobian (jacobian += adds to the log
+// density as target += does), while (an unbounded loop), and the other statement words of Stan
+// 2.40.0 the generator has no use for (if, else, return, break, continue): the extension point's
+// statements are declarations, assignments, a for over a size and calls, and the mode sizes the
+// written declarations with the conditional operator, not with if (correction of 2026-11-24 from
+// E4, finding 3). for and in are written (the loops).
+var refusedTokens = []string{"print", "reject", "fatal_error", "target", "include", "functions", "profile",
+	"jacobian", "while", "if", "else", "return", "break", "continue"}
 
 // reservedNames are the words a person's name may not be: Stan's reserved words, type names,
 // reserved functions, block names and renamed backend words (the catalogue's lists), the words the

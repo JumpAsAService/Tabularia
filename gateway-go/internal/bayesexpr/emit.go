@@ -84,7 +84,8 @@ var reservedIdentifiers = func() map[string]bool {
 	m := map[string]bool{}
 	s := bayescatalog.StanLists()
 	for _, list := range [][]string{s.ReservedWords, s.TypeNames, s.BlockNames, s.ReservedFunctions, s.RenamedBackendWords,
-		{"print", "reject", "fatal_error", "target", "include", "functions", "profile"}} {
+		{"print", "reject", "fatal_error", "target", "include", "functions", "profile",
+			"jacobian", "while", "if", "else", "return", "break", "continue"}} {
 		for _, w := range list {
 			m[w] = true
 		}

@@ -74,7 +74,8 @@ var (
 	outputToken    = regexp.MustCompile(`^(?:[0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?|[A-Za-z_][A-Za-z0-9_]*|\.[*/^]|[-+*/^()\[\], ])`)
 	identifierRE   = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]*$`)
 	testForbidden  = []string{"//", "/*", "*/", "#", `"`, "'", ";", "{", "}", "~", "<", ">", "=", "\n", "\r", "\t"}
-	testTokenWords = []string{"print", "reject", "fatal_error", "target", "include", "functions", "profile"}
+	testTokenWords = []string{"print", "reject", "fatal_error", "target", "include", "functions", "profile",
+		"jacobian", "while", "if", "else", "return", "break", "continue"}
 )
 
 // testCallable are the names the output may call, read from the catalogue here.

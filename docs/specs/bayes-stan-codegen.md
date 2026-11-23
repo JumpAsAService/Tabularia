@@ -157,7 +157,7 @@ model {
 the graph spec): it is used as is unless it is one of the catalogue's `stan.reserved_words`, `type_names`,
 `reserved_functions`, `block_names` or `renamed_backend_words`, ends with one of `reserved_suffixes`, is one of the
 words the output check refuses as a token (`print`, `reject`, `fatal_error`, `target`, `include`, `functions`,
-`profile`: «Safety checks on the output»), or is the Stan name of any distribution, density, generator or function
+`profile`, `jacobian`, `while`, `if`, `else`, `return`, `break`, `continue`: «Safety checks on the output»), or is the Stan name of any distribution, density, generator or function
 the catalogue lists (a variable never shadows a library function). Otherwise it gets `V_<id>`, and the mapping table
 says so.
 
@@ -406,7 +406,12 @@ returns an error, never a program):
 1. **The alphabet**: the program matches `^[A-Za-z0-9_ .,;:()\[\]{}<>=+\-*/^~\n?]*$` and contains none of `#`, `"`,
    `'`, `\`, `//`, `/*`, `*/`, `|`, `&`, `!`, `%`, `@`, `$`, a backtick, a tab, a carriage return; the words `print`,
    `reject`, `fatal_error`, `target`, `include`, `functions`, `profile` never appear as tokens. (`?` appears only in
-   a size's conditional; `:` only there, in a loop's range and in the centred effects' `[:, k]`.)
+   a size's conditional; `:` only there, in a loop's range and in the centred effects' `[:, k]`.) Nor do the
+   statement words the generator never writes: `jacobian` (`jacobian +=` adds to the log density as `target +=`
+   does), `while`, `if`, `else`, `return`, `break`, `continue` (correction of 2026-11-24 from the expression
+   language's security review E4, finding 3: the extension's statements are declarations, assignments, a `for`
+   over a size and calls, and the mode sizes declarations with the conditional operator, never with `if`; a lot
+   that needs one of these words removes it here and in `refusedTokens` first).
 2. **The allow-list**: every identifier followed by `(` (except the keyword `for`) is a catalogue name — a
    distribution's density or generator, a `language.functions` entry, an `internal_functions` entry — and every name
    after `~` is a distribution's statement; checked by a lexical scan of the text, independent of how it was written.
