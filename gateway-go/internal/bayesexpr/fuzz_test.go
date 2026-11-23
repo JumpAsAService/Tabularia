@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"math"
+	"os"
 	"slices"
+	"strconv"
 	"testing"
 	"unicode/utf8"
 
@@ -27,10 +29,13 @@ func countNodes(n *Node) int {
 // Every accepted tree is then typed against the corpus's environments (a context per plate):
 // Check gives a type over the context or a scalar, with an interval and no NaN, or an error with a
 // code of Check and a span inside the input.
-// The seeds are the inputs of the handwritten corpus and testdata/fuzz/FuzzParse.
+// The seeds are the inputs of both corpora and testdata/fuzz/FuzzParse.
 func FuzzParse(f *testing.F) {
 	for _, c := range readCorpus(f) {
 		f.Add(c.Input)
+	}
+	for _, input := range readGeneratedInputs(f) {
+		f.Add(input)
 	}
 	envs := readEnvs(f)
 	lim := bayescatalog.GetLimits()
@@ -109,6 +114,28 @@ func FuzzParse(f *testing.F) {
 	})
 }
 
+// readGeneratedInputs are the inputs of the committed generated corpus.
+func readGeneratedInputs(t testing.TB) []string {
+	t.Helper()
+	raw, err := os.ReadFile(generatedPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var file struct {
+		Cases []struct {
+			Input string `json:"input"`
+		} `json:"cases"`
+	}
+	if err := json.Unmarshal(raw, &file); err != nil {
+		t.Fatal(err)
+	}
+	inputs := make([]string, 0, len(file.Cases))
+	for _, c := range file.Cases {
+		inputs = append(inputs, c.Input)
+	}
+	return inputs
+}
+
 func plateIDs(spec envSpec) []Plate {
 	ids := make([]Plate, 0, len(spec.Plates))
 	for _, p := range spec.Plates {
@@ -137,4 +164,130 @@ func fuzzCheck(t *testing.T, src string, n *Node, env *testEnv) {
 	if math.IsNaN(i.Lo) || math.IsNaN(i.Hi) || i.Lo > i.Hi || math.IsInf(i.Lo, 1) || math.IsInf(i.Hi, -1) {
 		t.Fatalf("%q in %q: interval %+v", src, env.ctx, i)
 	}
+}
+
+// fuzzEmitEnv gives generated identifiers, V_<n> for the n-th node it is asked for, and records
+// every string it gives: the output may name nothing else.
+type fuzzEmitEnv struct {
+	ids    map[string]string
+	given  map[string]bool
+	subset string
+}
+
+func newFuzzEmitEnv(subset string) *fuzzEmitEnv {
+	e := &fuzzEmitEnv{ids: map[string]string{}, given: map[string]bool{}, subset: subset}
+	if subset != "" {
+		e.given[subset] = true
+	}
+	return e
+}
+
+func (e *fuzzEmitEnv) give(s string) string { e.given[s] = true; return s }
+
+func (e *fuzzEmitEnv) Identifier(id string) string {
+	if s, ok := e.ids[id]; ok {
+		return s
+	}
+	e.ids[id] = "V_" + strconv.Itoa(len(e.ids)+1)
+	return e.give(e.ids[id])
+}
+
+func (e *fuzzEmitEnv) IndexArray(id string, ctx Plate) string {
+	return e.give("Ix_" + e.Identifier(id) + "_" + strconv.Itoa(len(ctx)))
+}
+
+func (e *fuzzEmitEnv) LagArray(k int) string { return e.give("Lag" + strconv.Itoa(k)) }
+func (e *fuzzEmitEnv) RowsSubset() string    { return e.subset }
+
+// hostileEmitEnv answers with strings the fuzzer chooses: Stan's words, broken identifiers, pieces
+// of the fuzzer's bytes. Emit either refuses them or writes a text where every name is one of
+// them and a valid identifier.
+type hostileEmitEnv struct {
+	p     picker
+	seed  []byte
+	given map[string]bool
+}
+
+var hostileAnswers = []string{"ok_name", "target", "print", "a;b", "x__", "_x", "a b", "a/*", "a//", "1a", "", "lower",
+	"x_lpdf", "V_1", "Lag1", "Rows_lag", "a\nb", "é", "x}", "x.1", "x[1]", "exp", "to_vector", "N", "a(", "a)", "A"}
+
+func (e *hostileEmitEnv) answer() string {
+	var s string
+	if k := e.p.pick(len(hostileAnswers) + 1); k < len(hostileAnswers) || len(e.seed) == 0 {
+		s = hostileAnswers[k%len(hostileAnswers)]
+	} else {
+		i := e.p.pick(len(e.seed))
+		s = string(e.seed[i : i+e.p.pick(len(e.seed)-i+1)])
+	}
+	e.given[s] = true
+	return s
+}
+
+func (e *hostileEmitEnv) Identifier(string) string        { return e.answer() }
+func (e *hostileEmitEnv) IndexArray(string, Plate) string { return e.answer() }
+func (e *hostileEmitEnv) LagArray(int) string             { return e.answer() }
+func (e *hostileEmitEnv) RowsSubset() string              { return e.answer() }
+
+// FuzzEmit: a tree of the grammar built from the fuzzer's bytes (corpus_test.go's generator, over
+// the corpus's environments), typed, then emitted twice.
+//
+//   - With generated identifiers (V_<n>; Rows_lag when the expression has lag, or now and then
+//     another subset): Emit never fails on a typed tree; its text is in the output's alphabet, has
+//     none of the forbidden sequences, balanced parentheses, a space on each side of every binary
+//     operator, calls only catalogue functions and names only what the environment gave; Emit is
+//     deterministic.
+//   - With hostile answers: Emit refuses, or its text passes the same checks, every name a valid
+//     identifier the environment gave.
+//
+// Emit never panics. The seeds are fixed byte strings and testdata/fuzz/FuzzEmit.
+func FuzzEmit(f *testing.F) {
+	f.Add([]byte{})
+	f.Add([]byte("schools rows a + b * x"))
+	r := &splitmix{s: 1}
+	for n := 1; n <= 24; n++ {
+		b := make([]byte, 8*n)
+		for i := range b {
+			b[i] = byte(r.pick(256))
+		}
+		f.Add(b)
+	}
+	envs := readEnvs(f)
+	choices := envChoices(envs)
+	f.Fuzz(func(t *testing.T, seed []byte) {
+		p := &bytePicker{b: seed}
+		ch := choices[p.pick(len(choices))]
+		spec := envs[ch.use]
+		env := newTestEnv(t, spec, ch.ctx)
+		g := newExprGen(p, spec, env)
+		src, _ := g.text(0)
+		c, err := CheckText(src, env)
+		if err != nil {
+			return
+		}
+		subset := ""
+		if len(c.Lags) > 0 {
+			subset = "Rows_lag"
+		} else if ch.ctx != "" && p.pick(4) == 0 {
+			subset = "Rows_first"
+		}
+		fe := newFuzzEmitEnv(subset)
+		out, err := Emit(c, fe)
+		if err != nil {
+			t.Fatalf("%q in %q: %v", src, ch.ctx, err)
+		}
+		verifyOutput(t, src, out, func(s string) bool { return fe.given[s] })
+		again, err := Emit(c, newFuzzEmitEnv(subset))
+		if err != nil || again != out {
+			t.Fatalf("%q: not deterministic: %q, then %q (%v)", src, out, again, err)
+		}
+		he := &hostileEmitEnv{p: p, seed: seed, given: map[string]bool{}}
+		hout, err := Emit(c, he)
+		if err != nil {
+			if !errors.Is(err, ErrEmit) || hout != "" {
+				t.Fatalf("%q: %q, %v", src, hout, err)
+			}
+			return
+		}
+		verifyOutput(t, src, hout, func(s string) bool { return he.given[s] })
+	})
 }

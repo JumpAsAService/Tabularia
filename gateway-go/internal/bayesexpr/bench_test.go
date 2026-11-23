@@ -45,3 +45,29 @@ func BenchmarkCheck(b *testing.B) {
 		})
 	}
 }
+
+// The largest trees the limits allow, emitted: times and allocations are recorded, not asserted.
+func BenchmarkEmit(b *testing.B) {
+	spec := readEnvs(b)["schools"]
+	env := newTestEnv(b, spec, "rows")
+	for _, c := range []struct{ name, src string }{
+		{"nodes_255", "score" + strings.Repeat("*score", 127)},
+		{"indexings_85", "alpha_school[school]" + strings.Repeat("*alpha_school[school]", 42)},
+		{"integers_255", "count" + strings.Repeat("/count", 127)},
+		{"nesting_32", strings.Repeat("-(", 16) + "score" + strings.Repeat(")", 16)},
+	} {
+		checked, err := CheckText(c.src, env)
+		if err != nil {
+			b.Fatal(err)
+		}
+		ee := corpusEmitEnv{spec: spec}
+		b.Run(c.name, func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				if _, err := Emit(checked, ee); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+}
