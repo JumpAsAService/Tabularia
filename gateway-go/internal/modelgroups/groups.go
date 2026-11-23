@@ -333,7 +333,8 @@ func gzipped(b []byte) []byte {
 // CodeFiles are the files a model Job of the group finds in CodeDir, in a fixed order: the
 // runner (runner/run.R and runner/R/*.R, or runner/run.py and runner/py/*.py), the library of
 // the group's language (common/R/*.R or common/py/*.py), common/selftest/*, card.schema.json,
-// catalog.json, then task.json when given, and the reference cases (reference/expected.json,
+// catalog.json (each the group's view: whole for the group `bayes`, without what is its own for every other, docs/specs/bayes-report.md
+// lot Q0), then task.json when given, and the reference cases (reference/expected.json,
 // reference/data/*, and the programs of reference/programs/* of a group that compiles some) when withReference (the self-test). A ConfigMap holds them as
 // f0, f1… with items mapping each key to its path, as a Script node's files. The reference files are
 // gzipped, as <path>.gz (Binary): a ConfigMap holds at most 1 MiB, and the reference tables are most of a
@@ -346,6 +347,13 @@ func CodeFiles(group string, task []byte, withReference bool) ([]File, error) {
 	}
 	return codeFiles(group, g.Recipe.Language, task, withReference)
 }
+
+// catalogueView and schemaView are the catalogue and the card schema a group's Job receives (modelcatalog.CompactFor, SchemaFor); a
+// test puts a catalogue with an entry of the group `bayes` behind them.
+var (
+	catalogueView = modelcatalog.CompactFor
+	schemaView    = modelcatalog.SchemaFor
+)
 
 func codeFiles(group, language string, task []byte, withReference bool) ([]File, error) {
 	var out []File
@@ -375,7 +383,8 @@ func codeFiles(group, language string, task []byte, withReference bool) ([]File,
 	if err := add("common/selftest", "common/selftest/"); err != nil {
 		return nil, err
 	}
-	out = append(out, File{Path: "card.schema.json", Content: CardSchema()}, File{Path: "catalog.json", Content: modelcatalog.Compact()})
+	out = append(out, File{Path: "card.schema.json", Content: schemaView(CardSchema(), group)},
+		File{Path: "catalog.json", Content: catalogueView(group)})
 	if task != nil {
 		out = append(out, File{Path: "task.json", Content: task})
 	}
