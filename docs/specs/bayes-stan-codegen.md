@@ -294,6 +294,10 @@ model {
 }
 ```
 
+This example shows the emission of `lag`; the golden `ts_ar2` follows the AR template, which writes the mean apart
+from the coefficients (`mu + phi1 * (lag(y, 1) - mu) + …`, `bayes-templates.md`). (Correction of 2026-11-23 from the
+step-3/4 specs.)
+
 ### Latent states (`state`, random walk)
 
 `x₁ ~ init`, `xₜ ~ normal(xₜ₋₁, scale)` within each unit of the series:
@@ -430,7 +434,7 @@ written by Go with `BAYES_GOLDEN_WRITE=1` and reviewed by hand, compared byte fo
 | `hier_intercepts` | varying intercepts, non-centred by the affine transform |
 | `hier_slopes` | varying intercepts and slopes, correlated, LKJ, non-centred; and `hier_slopes_centred` |
 | `hier_nested` | schools in districts: a lifted index, two non-centred plates |
-| `ts_ar2`, `ts_random_walk`, `ts_local_level` | `lag` on a series; a latent state non-centred; a state with a normal likelihood around it; and `ts_local_level_centred` |
+| `ts_ar2`, `ts_random_walk`, `ts_local_level` | `lag` on a series, the mean apart from the coefficients as the template writes it (`mu + phi1 * (lag(y, 1) - mu) + phi2 * (lag(y, 2) - mu)`); `lag` with a drift (`lag(y, 1) + delta`, no state); a non-centred latent state with a normal likelihood around it; and `ts_local_level_centred` (correction of 2026-11-23 from the step-3/4 specs: `ts_random_walk` was described as «a latent state non-centred», which is `ts_local_level`'s) |
 | `free_truncated_hyper` | a half-normal whose scale is a parameter: `T[0.0, ]` scalar; and on a plate: the loop with a local argument |
 | `free_category` | treatment contrasts: `K − 1` coefficients, `Full_` with `append_row` |
 | `free_explicit_noncentred` | a location through a `transformed` node: the explicit `Z_` form |
@@ -441,7 +445,10 @@ written by Go with `BAYES_GOLDEN_WRITE=1` and reviewed by hand, compared byte fo
 | `extension_fake` | the test extension: data after `Mode`, written declarations sized by `Mode`, the nested block |
 
 The ten templates' graphs are written here by hand first; `templates` (step 3) writes its own and a test of that
-module checks that they give these programs.
+module checks that they give these programs. **The golden graphs of the ten template cases are then the templates'
+own** (`bayes-templates.md`, lot T1 replaces the hand-written ones, reviewed), so that the two cannot drift; the
+programs change only by the priors' numbers, and `CodegenVersion` does not change for it (the generator is the same).
+(Correction of 2026-11-23 from the step-3/4 specs.)
 
 ## Tech stack
 

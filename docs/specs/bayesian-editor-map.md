@@ -59,7 +59,7 @@ outputs) are in «Interview answers».
 | Need | Already there | What the editor adds |
 |---|---|---|
 | A folder object with versions | `gateway-go/internal/versioned` (reports and dashboards: the object, its versions, VIEW on the folder, 404 to whoever cannot see it); `gateway-go/internal/savedscripts` (saved scripts: versions, restore, «used by N flows», the schedule switched off when someone else changes a script a flow uses by reference) | The kind `bayes_model` with its versions |
-| A space of its own in the shell | `frontend/pages/scripting.vue` (a tab shown only to whoever may use it, hidden on Compose), `frontend/pages/script.vue` (the object's page) | A tab or a section «Bayesian models» and a page `bayes-model.vue` |
+| A space of its own in the shell | `frontend/pages/scripting.vue` (a tab shown only to whoever may use it, hidden on Compose), `frontend/pages/script.vue` (the object's page) | Scripting becomes a menu with «Scripting» and «Bayesian models» (`g y`), a plain link when only one is visible (the bar has no room for one more item), and a page `bayes-model.vue` (correction of 2026-11-23 from the step-3/4 specs: was «a tab or a section») |
 | A graph canvas | `@vue-flow/core` (`^1.42.0` in `frontend/package.json`, 1.48.2 installed) with background, controls, minimap, node resizer, used by `FlowEditor.vue` | A second canvas, with plates (parent nodes) |
 | Charts in the browser | `echarts` 6.1 and `vue-echarts` 8.0 | The prior's density and histogram |
 | An expression language checked twice | The reports' language: `backend/app/reports/expressions.py` alone judges an expression (`MAX_EXPRESSION_CHARS` 4000, `MAX_DEPTH` 64, `_HINTS` for operators of other languages); `frontend/composables/reportExpressions.ts` checks what can be told while typing | The same split for `expression-language`, with the authority in Go |
@@ -267,15 +267,20 @@ Each entry: **choices** (the large ones; the rest belongs to the module's spec),
   on by default, said in the report); they never change with the data.
 - **Risks.** Defaults become the de facto model of most users; each default needs its source in the docs.
 - **Measure first.** Reference values for each template (posterior means and sds from an independent run
-  outside Tabularia, within Monte Carlo error) on the sample data.
+  outside Tabularia, within Monte Carlo error) on **synthetic reference data with known parameters**; the sample
+  tables' flows are `docs`' lot (correction of 2026-11-23 from the step-3/4 specs: was «on the sample data»).
 
 ### `model-store`
 
 - **Choices.** A table `bayes_models` and `bayes_model_versions` (graph, program, program sha256, mapping
-  table, note), one Alembic migration (the Python gateway frozen except migrations), served by the Go
-  gateway through the `versioned` pattern. Visibility as saved scripts: VIEW on the folder and the use of the
-  group; EDIT to change; RUN to run. A flow runs a **pinned** version, with the notice «a newer version exists»
-  (answer 7). Saving a version starts its compile in the background (answer 8).
+  table, **the two manifests of `bayes-contract` and the catalogue's sha256**, note), one Alembic migration (the
+  Python gateway frozen except migrations; revision 0046, approved by the owner on 2026-11-23), served by the Go
+  gateway following the **pattern** of `versioned` and `savedscripts` (the row locked, the next number), not
+  `versioned.Kind` itself, which needs a views table and one `content` column. Visibility as saved scripts: VIEW
+  on the folder and the use of the group; EDIT to change; RUN to run. A flow runs a **pinned** version, with the
+  notice «a newer version exists» (answer 7). Saving a version starts its compile in the background (answer 8),
+  **only after the version's transaction commits**. (Correction of 2026-11-23 from the step-3/4 specs: the
+  manifests, the catalogue's sha256, the commit, the pattern.)
 - **Risks.** A graph saved by an older format version must still open.
 - **Measure first.** Nothing.
 
@@ -642,3 +647,15 @@ owner answered them on 2026-11-23:
 | The CSV's precision | **6 significant digits**, CmdStan's default (against the recommendation of 17); said in the report | `bayes-contract`, `bayes-report` |
 | Which program a saved version runs after the codegen changes | **Always the stored program** | `stan-codegen`, `model-store` |
 | Transformed values with no data in the priors' preview | **Shown** | `prior-preview` |
+
+The step-3/4 drafts (`bayes-templates.md`, `bayes-model-store.md`, `bayes-graph-editor.md`) asked six questions; the
+owner answered them on 2026-11-23 and approved the three specs:
+
+| Question | Answer (owner) | Module |
+|---|---|---|
+| The priors on the outcome's scale | **Asked when the template is opened** (the outcome's typical value and spread), written in the open in the priors | `templates` |
+| The order of the AR template | **Asked when the template is opened**, 1 to `max_lag`, default 2 | `templates` |
+| A graph with errors | **The save is refused** (against the recommendation): 422 with the findings, no version; warnings never block; every saved version has a program; the editor warns before leaving with unsaved changes | `model-store`, `graph-editor` |
+| The program of a restored version | **Copied from the restored version** (against the recommendation), with its generator's version, mapping table and manifests | `model-store` |
+| The schema migration | **Approved**: revision 0046 with `bayes_models` and `bayes_model_versions`; the binaries' table comes with `stan-compile` | `model-store` |
+| Where the space sits in the top bar | **Scripting becomes a menu** with «Scripting» and «Bayesian models» (`g y`), a plain link when only one is visible | `graph-editor` |

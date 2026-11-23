@@ -109,7 +109,7 @@ needs no `T[…]`. `alpha_school` is non-centred because its plate's `form` says
 | `format_version` | integer | 1. A newer version is refused by an older gateway; an older one is upgraded on read («Versions») |
 | `plates` | array | The boxes, at least the rows' |
 | `nodes` | array | The nodes |
-| `layout` | object | Positions and sizes for the canvas, by node or plate id; **not part of the model** (excluded from the semantic hash) |
+| `layout` | object | Positions and sizes for the canvas, by node or plate id, in **canvas coordinates** (absolute, whatever box a node sits in: the editor converts them to its canvas library's coordinates relative to a parent box; correction of 2026-11-23 from the step-3/4 specs); **not part of the model** (excluded from the semantic hash) |
 
 Ids: `^[a-z][a-z0-9]{0,15}$`, unique across nodes and plates; `rows` is the rows plate's. A
 correlated-effects component is addressed as `<node id>.<component id>`. Ids are made by the editor and never
