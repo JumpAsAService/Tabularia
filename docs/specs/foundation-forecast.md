@@ -1894,6 +1894,17 @@ example above; WQL and the counts across the series). The golden after point 11:
 
 **The licence is quoted, never explained (2026-11-22, owner).** No lawyer reads Tabularia's texts, so Tabularia does not explain or paraphrase the licence of the weights: it quotes it. In every language only the original English clause (point 2, word for word from the vendored `LICENSE`, sha256 `648194727930df730890e9f9affdbcc5c930d406d6829559b25ca3d5a973fc8c`) appears, with the link to the official file at the pinned revision and one neutral sentence in the page's language («This is the clause of the licence of Mistral AI's weights; the official file is authoritative for its full text and its interpretation.»; in the node's form, which shows no clause, the same without «This is the clause»). Out went the threshold, the kind of company, the commercial licence and «not legal advice», in the administrator's panel (the box now reads «I have read the licence of the weights and accept it on behalf of my organisation.»; still required, still the sha256 and the audit row), the node's form, the first page of the report (the model, the clause, the neutral sentence, the pointer to the last page), the last page and the workbook's sheet (the whole text, as before), the assistants' prompt (only that the weights are under Mistral AI's licence, that an administrator accepted it and that the text is in the official file) and the documentation. A test looks in the five languages for words of paraphrase outside the English quotation.
 
+### The packages' hashes (2026-11-23)
+
+The supply chain of every group (docs/specs/statistical-models.md, «The supply chain»): the recipe gains `hashes`, the
+sha256 of the 24 Linux wheels (x86-64 and arm64) of its 15 packages, written by `go run ./cmd/modelgroup pin
+foundation_forecast`, each wheel hashed here and equal to PyPI's digest. The build installs them with `pip download
+--require-hashes` then `pip install --require-hashes --no-index` from the files; the PyTorch wheel keeps its `#sha256=`
+and records its line, so the lock shows `torch==2.14.1+cpu sha256:3510…` beside the 15 others. The image with the four
+sizes built in 69 s (60 s before, without cache) and its check passed: the sha256 of the four sizes, then 36 checks. The
+recipe's hash changed: a cluster builds the group again by itself, with the acceptance kept in the audit log (it waits in
+`licence_pending` when there is none, as any automatic rebuild of this group).
+
 ## References
 
 - Mistral AI, *Timestral* model cards and `LICENSE`, `https://huggingface.co/mistralai/Timestral-{5M,28M,123M,209M}`

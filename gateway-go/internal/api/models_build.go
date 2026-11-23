@@ -118,10 +118,33 @@ func hasSystemLibraries(group string) bool {
 
 // mgPyCheck is a Python group's lock: one name==version per installed distribution; it fails
 // unless pyarrow reads S3 (the input, the results and the artifacts are s3:// addresses).
+// Each distribution installed from a wheel the build checked (scriptimage.PackageHashesFile, `<sha256>  <wheel>` lines) gets
+// ` sha256:<hex>` after it: the file's name says the distribution and the version, compared as pip names them.
 const mgPyCheck = "from pyarrow.fs import S3FileSystem\n" +
-	"import importlib.metadata as m\n" +
-	"names = {f\"{d.metadata['Name']}=={d.version}\" for d in m.distributions() if d.metadata['Name']}\n" +
+	"import importlib.metadata as m, os, re\n" +
+	"norm = lambda n: re.sub(r'[-_.]+', '-', n).lower()\n" +
+	"sums = {}\n" +
+	"if os.path.exists('/opt/tabularia/package-sha256.txt'):\n" +
+	"    for line in open('/opt/tabularia/package-sha256.txt'):\n" +
+	"        p = line.split()\n" +
+	"        if len(p) == 2 and p[1].endswith('.whl'):\n" +
+	"            n, v = p[1].split('-')[:2]\n" +
+	"            sums[(norm(n), v)] = p[0]\n" +
+	"names = set()\n" +
+	"for d in m.distributions():\n" +
+	"    if d.metadata['Name']:\n" +
+	"        h = sums.get((norm(d.metadata['Name']), d.version))\n" +
+	"        names.add(f\"{d.metadata['Name']}=={d.version}\" + (f' sha256:{h}' if h else ''))\n" +
 	"print('\\n'.join(sorted(names, key=str.lower)))\n"
+
+// mgRCheck is the R check of a model group's image: the scripting environments' (sbRCheck), each package's line followed by
+// ` sha256:<hex>` when the build installed it from a tarball it checked (scriptimage.PackageHashesFile, `<sha256>  name@version`).
+var mgRCheck = strings.Replace(sbRCheck, "writeLines(sort(unique(paste0(ip[, 1], '@', ip[, 2]))))\n",
+	"lk <- sort(unique(paste0(ip[, 1], '@', ip[, 2])))\n"+
+		"hf <- '/opt/tabularia/package-sha256.txt'\n"+
+		"if (file.exists(hf)) { h <- read.table(hf, colClasses = 'character'); i <- match(lk, h[[2]]); "+
+		"lk[!is.na(i)] <- paste0(lk[!is.na(i)], ' sha256:', h[[1]][i[!is.na(i)]]) }\n"+
+		"writeLines(lk)\n", 1)
 
 // mgCodeName is the ConfigMap of the code of a new version's check: one per version, checked once.
 func mgCodeName(v *sbVersion) string {
@@ -180,7 +203,7 @@ func (b *scriptBuilds) managedCheckJob(v *sbVersion, env *sbEnvironment, group s
 		environment = append(environment, pyjson.Object{{Key: "name", Value: "TABULARIA_PY_MANAGED_CHECK"}, {Key: "value", Value: mgPyCheck}},
 			pyjson.Object{{Key: "name", Value: "PYTHONHASHSEED"}, {Key: "value", Value: "0"}})
 	} else {
-		environment = append(environment, pyjson.Object{{Key: "name", Value: "TABULARIA_R_CHECK"}, {Key: "value", Value: sbRCheck}})
+		environment = append(environment, pyjson.Object{{Key: "name", Value: "TABULARIA_R_CHECK"}, {Key: "value", Value: mgRCheck}})
 	}
 	container := pyjson.Object{
 		{Key: "name", Value: "check"}, {Key: "image", Value: image}, {Key: "command", Value: []any{"sh", "-c", mgCheckScriptOf(group, language)}},

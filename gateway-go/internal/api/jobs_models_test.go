@@ -985,6 +985,64 @@ func TestTheChecksScriptByLanguage(t *testing.T) {
 	}
 }
 
+// The lock of a group's version carries, after each package the build installed from a file it checked, that file's sha256
+// (scriptimage.PackageHashesFile): the Administration card shows the lock, so the hashes used are there. Run with this machine's
+// Python and R when they are there; the lines are kept by the lock's parser, a line with half a hash is not.
+func TestTheLockCarriesTheSha256OfTheFilesInstalled(t *testing.T) {
+	if mgRCheck == sbRCheck || !strings.Contains(mgRCheck, "'"+scriptimage.PackageHashesFile+"'") || !strings.Contains(mgPyCheck, "'"+scriptimage.PackageHashesFile+"'") {
+		t.Fatal("the checks do not read the record of the hashes")
+	}
+	const h = "85cf7fcc4753a8c86da9a6f454e46c2a58ffc70c4f47cac4d3e3bcefda2a9e9f"
+	lock, _ := sbSplitCheckOutput("arrow@26.0.1 sha256:" + h + "\nnumpy==2.5.5 sha256:" + h + "\nbase@4.6.0\ncli@3.6.6 sha256:abc\nLoading x\n")
+	if lock != "arrow@26.0.1 sha256:"+h+"\nnumpy==2.5.5 sha256:"+h+"\nbase@4.6.0" {
+		t.Errorf("the lock's lines: %q", lock)
+	}
+	dir := t.TempDir()
+	record := filepath.Join(dir, "package-sha256.txt")
+	if python, err := exec.LookPath("python3"); err == nil && exec.Command(python, "-c", "import pyarrow").Run() == nil {
+		script := strings.ReplaceAll(mgPyCheck, scriptimage.PackageHashesFile, record)
+		plain, err := exec.Command(python, "-c", script).Output()
+		if err != nil {
+			t.Fatal(err)
+		}
+		// pyarrow's line, and the record of the wheel it came from (the file's name as pip writes it: lower case, "_")
+		var name, version string
+		for _, line := range strings.Split(string(plain), "\n") {
+			if n, v, ok := strings.Cut(line, "=="); ok && strings.EqualFold(n, "pyarrow") {
+				name, version = n, v
+			}
+		}
+		if name == "" {
+			t.Fatalf("no pyarrow in the lock:\n%s", plain)
+		}
+		_ = os.WriteFile(record, []byte(h+"  pyarrow-"+version+"-cp314-cp314-manylinux_2_28_x86_64.whl\n"), 0o644)
+		got, err := exec.Command(python, "-c", script).Output()
+		if err != nil || !strings.Contains(string(got), "\n"+name+"=="+version+" sha256:"+h+"\n") || strings.Count(string(got), "sha256:") != 1 {
+			t.Errorf("the Python lock with the record: %v\n%s", err, got)
+		}
+	}
+	if rscript, err := exec.LookPath("Rscript"); err == nil {
+		// the lock's part of the check, without arrow's S3 test (this machine's R may have no arrow)
+		script := strings.ReplaceAll(mgRCheck[strings.Index(mgRCheck, "ip <- installed.packages()"):], scriptimage.PackageHashesFile, record)
+		script = script[:strings.Index(script, "q <- function")]
+		plain, err := exec.Command(rscript, "-e", script).Output()
+		if err != nil || !strings.Contains(string(plain), "base@") {
+			t.Fatalf("the R lock: %v\n%s", err, plain)
+		}
+		line := ""
+		for _, l := range strings.Split(string(plain), "\n") {
+			if strings.HasPrefix(l, "base@") {
+				line = l
+			}
+		}
+		_ = os.WriteFile(record, []byte(h+"  "+line+"\n"), 0o644)
+		got, err := exec.Command(rscript, "-e", script).Output()
+		if err != nil || !strings.Contains(string(got), "\n"+line+" sha256:"+h+"\n") || strings.Count(string(got), "sha256:") != 1 {
+			t.Errorf("the R lock with the record: %v\n%s", err, got)
+		}
+	}
+}
+
 // ARIMA keeps a limit of rows of its own, 20,000, where its group allows more; every other model has the group's alone.
 func TestAModelMayHaveALimitOfRowsBelowItsGroups(t *testing.T) {
 	for _, c := range []struct {

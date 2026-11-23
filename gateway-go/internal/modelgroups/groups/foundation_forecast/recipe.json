@@ -19,6 +19,23 @@
     "typing-extensions==4.16.0",
     "tzdata==2026.6"
   ],
+  "hashes": {
+    "filelock==4.2.12": ["21decfec02f116ed4c954433cdb31f28c3b346b784543177b6d7059da2702ee9"],
+    "fsspec==2026.9.0": ["8dd6e646e99ea382bd85f97a45e6b526a442d79423a7dc673f1e2756d05fcb5f"],
+    "jinja2==3.1.6": ["85ece4451f492d0c13c5dd7c13a64681a86afae63a5f347908daf103ce6d2f67"],
+    "markupsafe==3.0.4": ["1caa2fa5a6184fb233153b35f654e6687bd555476f6170f29d8ee9be1a8b0af9", "a8e9f292fcda89b324f2f5c91d13f1424a153e40fc2756f38ee23b15835ff300"],
+    "mpmath==1.3.0": ["a0b2b9fe80bbcd81a6647ff13108738cfb482d481d826cc0e02f5b35e5c88d2c"],
+    "networkx==3.7": ["e3fd2c13a7814cee3746340d8d7f8598a67f16a58bf47fb7f8793fab6efca1b0"],
+    "numpy==2.5.5": ["c48960d420e90cf305cb1fde0d4e6082cc90512cda87a9acf0b6e04e91cf4abe", "cc6eb7502facce90349b4097a26821af224aaa0ab36e78304711cdb544352882"],
+    "pandas==3.1.1": ["326459d8a9be11b5f48c7fc1d63e38ba7cfeaebe5d41bd19e4c5f4f11dc9ac91", "bf0cf825769b60f9a01a8ff77ed82cfca9ccf2609170814f8f00810f5eaeae71"],
+    "pyarrow==26.0.1": ["0044cb9303c3ae082cc52a2493312109c955bcfa84e87be768736f7d6d8f6257", "7ae48ab53610b85e004b03bccff593fbdf22186d0ab48ed42c90797915dac814"],
+    "python-dateutil==4.0.0": ["a5e246f79eb80475e691bf93862cead98decd8a498cf53ba0516fcdc0f50dc1c"],
+    "safetensors==0.8.0": ["7a46e5ff292c356d6991e60942ba7f79817682d3a2cef0702136448cb9c4d235", "fd6f3f93c9a0a7cc2788ee63fb763353d4bd2e89b0751bc78fcf7dda00bea774"],
+    "setuptools==84.2.1": ["ca140b45d5325a9478f880e351484f62fef15f336462e449ca0c03c873d589c2"],
+    "sympy==1.14.0": ["e091cc3e99d2141a0ba2847328f5479b05d94a6635cb96148ccb3f34671bd8f5"],
+    "typing-extensions==4.16.0": ["481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8"],
+    "tzdata==2026.6": ["0a10eec6e13ef16b627fabed9a5f2ba61a62b1c67f327305f4e7e412a70b4aec"]
+  },
   "wheels": [
     {
       "name": "torch",

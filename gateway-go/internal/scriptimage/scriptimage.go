@@ -18,6 +18,11 @@ import (
 const ScriptUID = 10001
 
 var (
+	// PackageHashesFile is where a managed image records the sha256 of every file it installed a package from, one
+	// `<sha256>  <what>` line each (sha256sum's format): R `name@version`, Python the wheel's file name. The check Job adds them to
+	// the lock's lines, which the Administration card shows.
+	PackageHashesFile = "/opt/tabularia/package-sha256.txt"
+
 	// SystemLibrariesFile is where an R image records the versions of the Debian libraries its recipe
 	// names (`system_libraries`), one `package@version` line each; absent from every other image.
 	SystemLibrariesFile = "/opt/tabularia/system-libraries.txt"
@@ -34,6 +39,11 @@ var (
 	// a Debian package's name, as a recipe may name one
 	debianPackage = regexp.MustCompile(`^[a-z0-9][a-z0-9+.-]+$`)
 	sha256Hex     = regexp.MustCompile(`^[0-9a-f]{64}$`)
+	// the file name of a wheel, as an address names it ("+" decoded)
+	wheelFile = regexp.MustCompile(`^[A-Za-z0-9_.+-]+\.whl$`)
+	// a package of a managed image, as the hashes key it
+	pinnedR  = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9.]*@[0-9][0-9.-]*$`)
+	pinnedPy = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*==[A-Za-z0-9.+!_-]+$`)
 	// where an image keeps the files it downloads: an absolute path of plain names (nothing a shell or a Dockerfile reads)
 	filePath = regexp.MustCompile(`^/[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$`)
 	// the line of a managed environment's packages that says which sizes of a pre-trained model its image holds
@@ -57,8 +67,9 @@ type Settings struct {
 	Jobs                  int64
 	// Managed: a Python image installs only the packages given (no BasePackages: no polars, no
 	// marimo), each one a wheel and none of their dependencies, since the list is the whole
-	// closure pinned; `pip check` then fails the build when one is missing. An R image is the
-	// same either way.
+	// closure pinned; `pip check` then fails the build when one is missing. An R image installs
+	// only the packages given too (no unpinned arrow), each from its source tarball checked by its
+	// sha256 (RInstallPinned), on the same layers as every R image. Both need Hashes for every package.
 	Managed bool
 	// SystemLibraries are Debian packages an R image installs besides RSystemLibraries: a
 	// managed environment's own (a model group's recipe, `system_libraries`: the GNU Scientific
@@ -70,6 +81,11 @@ type Settings struct {
 	// serves x86_64 and aarch64. A recipe's `wheels`, the mirror setting already applied. None: the Dockerfile is the one
 	// every managed Python image has had.
 	Wheels []Wheel
+	// Hashes: the sha256 of each package of a managed image (a recipe's `hashes`, keyed by the package's line). Required there for
+	// every package: a managed Python image installs with `pip --require-hashes` (every wheel checked, none taken that the list
+	// does not pin), a managed R image downloads every source tarball, checks it and installs it from the file with
+	// `R CMD INSTALL` (nothing else is downloaded by the installer). Ignored for every other image.
+	Hashes map[string][]string
 	// Files: files a managed Python image downloads (`ADD --checksum=sha256:<hex> <url> <path>`), after the requirements: the
 	// weights of a pre-trained model. The build fails on a different byte. A recipe's `weights` of the sizes chosen.
 	Files []File
@@ -135,7 +151,13 @@ func wheelSteps(wheels []Wheel) (string, error) {
 		if !sha256Hex.MatchString(w.SHA256) {
 			return "", ValueError(fmt.Sprintf("the sha256 of «%s» is not 64 hexadecimal digits", w.URL))
 		}
-		fmt.Fprintf(&sb, "RUN if [ \"$TARGETARCH\" = \"%s\" ]; then pip install --no-deps --only-binary=:all: \"%s#sha256=%s\"; fi\n", arch, strings.TrimSpace(w.URL), w.SHA256)
+		address := strings.TrimSpace(w.URL)
+		file := strings.ReplaceAll(address[strings.LastIndex(address, "/")+1:], "%2B", "+")
+		if !wheelFile.MatchString(file) {
+			return "", ValueError(fmt.Sprintf("«%s» does not name a wheel", w.URL))
+		}
+		fmt.Fprintf(&sb, "RUN if [ \"$TARGETARCH\" = \"%s\" ]; then pip install --no-deps --only-binary=:all: \"%s#sha256=%s\" && "+
+			"echo \"%s  %s\" >> %s; fi\n", arch, address, w.SHA256, w.SHA256, file, PackageHashesFile)
 	}
 	return sb.String(), nil
 }
@@ -191,10 +213,17 @@ func Dockerfile(language, baseImage string, packages []string, s Settings) (stri
 		install := fmt.Sprintf("RUN MAKEFLAGS=-j%d pip install -r /opt/tabularia/requirements.txt\n", s.Jobs)
 		before, after := "", ""
 		if s.Managed {
-			// wheels only (nothing compiles), from PyPI or its mirror, without what the wheels
-			// ask for: the recipe is the closure, and pip check says what it lacks
-			install = "RUN pip install --no-deps --only-binary=:all: -r /opt/tabularia/requirements.txt && pip check\n"
+			// wheels only (nothing compiles), from PyPI or its mirror, without what the wheels ask for: the recipe is the
+			// closure, and pip check says what it lacks. Every wheel is checked against the recipe's sha256 when it is
+			// downloaded and again when it is installed (--require-hashes: a requirement without a hash is an error), and the
+			// sha256 of the files installed are recorded for the lock
 			var err error
+			if wanted, err = hashedRequirements(packages, s.Hashes); err != nil {
+				return "", err
+			}
+			install = "RUN pip download --no-deps --only-binary=:all: --require-hashes -d /tmp/tabularia-wheels -r /opt/tabularia/requirements.txt" +
+				" && pip install --no-deps --only-binary=:all: --require-hashes --no-index --find-links /tmp/tabularia-wheels -r /opt/tabularia/requirements.txt" +
+				" && (cd /tmp/tabularia-wheels && sha256sum *.whl) >> " + PackageHashesFile + " && rm -rf /tmp/tabularia-wheels && pip check\n"
 			if before, err = wheelSteps(s.Wheels); err != nil {
 				return "", err
 			}
@@ -223,6 +252,15 @@ func Dockerfile(language, baseImage string, packages []string, s Settings) (stri
 		record = "RUN mkdir -p /opt/tabularia && dpkg-query -W -f '${Package}@${Version}\\n' " + strings.Join(s.SystemLibraries, " ") +
 			" > " + SystemLibrariesFile + "\n"
 	}
+	install := RInstall
+	if s.Managed {
+		// the recipe's packages only, each with its sha256 (arrow is one of them)
+		var err error
+		if wanted, err = hashedRPackages(packages, s.Hashes); err != nil {
+			return "", err
+		}
+		install = RInstallPinned
+	}
 	// NOT_CRAN and LIBARROW_MINIMAL: arrow, built from source, gets S3 support. rocker's
 	// images point R at a package manager of their own; CRAN replaces it
 	return "FROM " + baseImage + "\nENV NOT_CRAN=true LIBARROW_MINIMAL=false CRAN=\"" + cran + "\"\n" +
@@ -230,9 +268,95 @@ func Dockerfile(language, baseImage string, packages []string, s Settings) (stri
 		" && rm -rf /var/lib/apt/lists/*\n" + record +
 		`RUN printf 'options(repos = c(CRAN = "%s"))\n' "$CRAN" >> "$(R RHOME)/etc/Rprofile.site"` + "\n" +
 		heredoc("/opt/tabularia/packages.txt", wanted, "TABULARIA_PACKAGES") +
-		heredoc("/opt/tabularia/install.R", scriptnodes.SplitLines(RInstall), "TABULARIA_INSTALL") +
+		heredoc("/opt/tabularia/install.R", scriptnodes.SplitLines(install), "TABULARIA_INSTALL") +
 		fmt.Sprintf("RUN TABULARIA_JOBS=%d Rscript /opt/tabularia/install.R\n", s.Jobs) + user, nil
+}
+
+// hashedRequirements are a managed Python image's requirements: `name==version --hash=sha256:<hex> …`, every package with the
+// sha256 of its wheels.
+func hashedRequirements(packages []string, hashes map[string][]string) ([]string, error) {
+	out := make([]string, 0, len(packages))
+	for _, p := range packages {
+		if !pinnedPy.MatchString(p) {
+			return nil, ValueError(fmt.Sprintf("«%s» is not a package pinned to one version (name==version)", p))
+		}
+		line := p
+		for _, sum := range hashes[p] {
+			if !sha256Hex.MatchString(sum) {
+				return nil, ValueError(fmt.Sprintf("a sha256 of «%s» is not 64 hexadecimal digits", p))
+			}
+			line += " --hash=sha256:" + sum
+		}
+		if line == p {
+			return nil, ValueError(fmt.Sprintf("the package «%s» has no sha256: a managed image installs only packages pinned by their hash", p))
+		}
+		out = append(out, line)
+	}
+	return out, nil
+}
+
+// hashedRPackages are a managed R image's packages: `name@version <sha256>`, every package with the sha256 of its source tarball.
+func hashedRPackages(packages []string, hashes map[string][]string) ([]string, error) {
+	out := make([]string, 0, len(packages))
+	for _, p := range packages {
+		if !pinnedR.MatchString(p) {
+			return nil, ValueError(fmt.Sprintf("«%s» is not a package pinned to one version (name@version)", p))
+		}
+		sums := hashes[p]
+		if len(sums) != 1 || !sha256Hex.MatchString(sums[0]) {
+			return nil, ValueError(fmt.Sprintf("the package «%s» has no sha256 (one, of its source tarball): a managed image installs only packages pinned by their hash", p))
+		}
+		out = append(out, p+" "+sums[0])
+	}
+	return out, nil
 }
 
 // RInstall is script_builds._R_INSTALL: how an R image installs its packages.
 const RInstall = "lines <- trimws(readLines(\"/opt/tabularia/packages.txt\"))\nlines <- lines[nzchar(lines)]\nname <- sub(\"@.*$\", \"\", lines)\npinned <- grepl(\"@\", lines, fixed = TRUE)\n# CRAN has sources only: the packages compile. At most TABULARIA_JOBS compilers at\n# once, whatever the cores of the node (a C++ compiler of arrow takes over 1 GB): a\n# package alone gets them all, packages side by side one each\njobs <- max(1L, suppressWarnings(as.integer(Sys.getenv(\"TABULARIA_JOBS\", \"1\"))), na.rm = TRUE)\nSys.setenv(MAKEFLAGS = paste0(\"-j\", jobs))\n# the pinned ones first: installing the others afterwards does not replace them\nif (any(pinned)) {\n  install.packages(\"remotes\", Ncpus = 1L)\n  for (i in which(pinned)) {\n    remotes::install_version(name[i], version = sub(\"^[^@]*@\", \"\", lines[i]), upgrade = \"never\", Ncpus = 1L)\n  }\n}\n# arrow, the heaviest, alone\nif (!requireNamespace(\"arrow\", quietly = TRUE)) install.packages(\"arrow\", Ncpus = 1L)\nrest <- setdiff(unique(name[!pinned]), \"arrow\")\nSys.setenv(MAKEFLAGS = \"-j1\")\nif (length(rest)) install.packages(rest, Ncpus = jobs)\n# install.packages only warns about a package it could not install\nmissing <- name[!vapply(name, requireNamespace, logical(1), quietly = TRUE)]\nif (length(missing)) stop(\"not installed: \", paste(unique(missing), collapse = \", \"))\n"
+
+// RInstallPinned is how a managed R image (a model group's) installs its packages: every line of packages.txt is
+// `name@version <sha256>`, in the order of the recipe (each package after the ones it needs). First every source tarball is
+// downloaded from CRAN (SCRIPTS__CRAN_URL), the current one or the archived one, and checked against its sha256: a byte that
+// is not the recipe's stops the build before anything compiles, with a line that starts with TABULARIA_SHA256_MISMATCH. Then
+// each is installed from its file with `R CMD INSTALL`, which downloads nothing and fails when a package it needs is not
+// installed yet. Last, the installed versions are compared with the recipe's, and the sha256 recorded for the lock.
+const RInstallPinned = `lines <- trimws(readLines("/opt/tabularia/packages.txt"))
+lines <- lines[nzchar(lines)]
+pkg <- sub(" .*$", "", lines)
+want <- sub("^.* ", "", lines)
+name <- sub("@.*$", "", pkg)
+version <- sub("^[^@]*@", "", pkg)
+file <- paste0(name, "_", version, ".tar.gz")
+cran <- sub("/+$", "", Sys.getenv("CRAN"))
+src <- "/tmp/tabularia-src"
+dir.create(src, showWarnings = FALSE)
+path <- file.path(src, file)
+fetch <- function(url, dest) tryCatch(download.file(url, dest, mode = "wb", quiet = TRUE) == 0,
+  error = function(e) FALSE, warning = function(w) FALSE)
+for (i in seq_along(pkg)) {
+  urls <- c(paste0(cran, "/src/contrib/", file[i]), paste0(cran, "/src/contrib/Archive/", name[i], "/", file[i]))
+  got <- FALSE
+  for (u in urls) if (!got) got <- fetch(u, path[i])
+  if (!got) stop("cannot download ", file[i], " from ", cran, " (src/contrib, then src/contrib/Archive/", name[i], ")")
+  sum <- sub(" .*$", "", system2("sha256sum", shQuote(path[i]), stdout = TRUE))
+  if (!identical(sum, want[i])) {
+    message("TABULARIA_SHA256_MISMATCH ", pkg[i], ": the file ", file[i], " downloaded from ", cran, " has sha256 ", sum,
+      ", the recipe pins ", want[i], ". The repository serves other bytes than the ones the recipe was pinned on")
+    quit(status = 1)
+  }
+}
+# at most TABULARIA_JOBS compilers at once, whatever the cores of the node (a C++ compiler of arrow takes over 1 GB).
+# arrow's installer downloads libarrow, and checks it against the SHA-512 its tarball (checked above) ships: always
+jobs <- max(1L, suppressWarnings(as.integer(Sys.getenv("TABULARIA_JOBS", "1"))), na.rm = TRUE)
+Sys.setenv(MAKEFLAGS = paste0("-j", jobs), ARROW_R_ENFORCE_CHECKSUM = "true")
+r <- file.path(R.home("bin"), "R")
+for (i in seq_along(pkg)) {
+  if (system2(r, c("CMD", "INSTALL", shQuote(path[i]))) != 0) stop("R CMD INSTALL ", file[i], " failed")
+}
+installed <- vapply(name, function(p) tryCatch(utils::packageDescription(p)$Version, error = function(e) NA_character_), "")
+bad <- is.na(installed) | installed != version
+if (any(bad)) stop("not installed at the version pinned: ", paste(pkg[bad], collapse = ", "))
+unlink(src, recursive = TRUE)
+dir.create("/opt/tabularia", showWarnings = FALSE)
+cat(paste0(want, "  ", pkg, "\n"), file = "/opt/tabularia/package-sha256.txt", sep = "")
+`

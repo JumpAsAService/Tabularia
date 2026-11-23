@@ -181,6 +181,15 @@ cluster that may not reach the official hosts: `MODELS__WHEELS_BASE_URL` replace
 and `MODELS__WEIGHTS_BASE_URL` replaces `https://huggingface.co/`; the paths, the file names and the checksums stay, so the
 mirror must hold the same files.
 
+**Every package is pinned by its hash, so a mirror must serve the same bytes.** A group's recipe holds the sha256 of every
+file its build installs: each R package's source tarball, each Python package's wheels. The build checks every file and
+installs nothing else (pip with `--require-hashes`; the R tarballs checked, then installed from the files with
+`R CMD INSTALL`). A CRAN mirror (`SCRIPTS__CRAN_URL`) must serve CRAN's own source tarballs, the current ones under
+`src/contrib/` and the older ones under `src/contrib/Archive/<package>/`: a repository that serves packages built for
+Linux under the same paths gives other bytes, and the build stops with «a package downloaded is not the file the group's
+recipe pins». A PyPI mirror (`SCRIPTS__PYPI_INDEX_URL`) must serve the wheels as PyPI publishes them. When a recipe changes,
+every group whose recipe changed is built again, by itself, on the next round of the build loop.
+
 **The pre-trained forecasting group** (Python 3.14, CPU-only PyTorch, the vendored Timestral code and the model weights) builds a
 different image from the others, and needs these hosts, **at build time only**: `download.pytorch.org` (the `torch` wheel, 196 MB for
 x86-64 and 159 MB for arm64, chosen by the build's architecture), PyPI or your mirror (`SCRIPTS__PYPI_INDEX_URL`) for the rest of the packages, and

@@ -103,6 +103,11 @@ type Recipe struct {
 	Base     string   `json:"base"` // a version of scripts.baseImages (SCRIPTS__BASE_IMAGES)
 	PinnedOn string   `json:"pinned_on"`
 	Packages []string `json:"packages"` // R: name@version, dependencies first; Python: name==version, the whole closure
+	// Hashes: for each package, the sha256 of the files the image may install for it, sorted. R: the one source tarball of the
+	// version CRAN serves (current or archived); Python: every wheel of the version a Linux build of the base's Python may pick
+	// (x86_64 and aarch64). The build downloads each file, refuses it unless its sha256 is one of these, and installs nothing
+	// else (pip --require-hashes; R CMD INSTALL of the checked tarball). Written by `go run ./cmd/modelgroup pin <group>`.
+	Hashes map[string][]string `json:"hashes"`
 	// SystemLibraries: Debian packages an R image installs besides the fixed list every R image has
 	// (scriptimage.RSystemLibraries); optional, and used by the customer lifetime group alone (GSL)
 	SystemLibraries []string `json:"system_libraries,omitempty"`
@@ -222,6 +227,10 @@ func Groups() []Group {
 		out[i] = g
 		out[i].Models = append([]string(nil), g.Models...)
 		out[i].Recipe.Packages = append([]string(nil), g.Recipe.Packages...)
+		out[i].Recipe.Hashes = make(map[string][]string, len(g.Recipe.Hashes))
+		for k, v := range g.Recipe.Hashes {
+			out[i].Recipe.Hashes[k] = append([]string(nil), v...)
+		}
 		out[i].Recipe.SystemLibraries = append([]string(nil), g.Recipe.SystemLibraries...)
 		out[i].Recipe.Wheels = append([]Wheel(nil), g.Recipe.Wheels...)
 	}
@@ -448,6 +457,7 @@ func DockerfileFor(group string, images map[string][]scriptcfg.Image, s scriptim
 	}
 	s.Managed = true
 	s.SystemLibraries = g.Recipe.SystemLibraries
+	s.Hashes = g.Recipe.Hashes
 	if s.Wheels, s.Files, err = g.BuildInputs(b); err != nil {
 		return "", err
 	}
@@ -723,6 +733,57 @@ func (r Recipe) checkDownloads(group string) error {
 		}
 		if w.Files["LICENSE"].SHA256 != l.SHA256 || w.Files["LICENSE"].Bytes != int64(len(text)) {
 			return fail("the LICENSE of the size %s is not the text the weights' licence ships", size)
+		}
+	}
+	return nil
+}
+
+var (
+	rPin  = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9.]*@[0-9][0-9.-]*$`)
+	pyPin = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*==[A-Za-z0-9.+!_-]+$`)
+)
+
+// CheckHashes checks the recipe's hashes (docs/specs/statistical-models.md, «The supply chain»): every package is pinned to one
+// version (R `name@version`, Python `name==version`) and has its sha256 in `hashes` (R one, the tarball's; Python one or more,
+// its wheels'), as 64 lower-case hexadecimal digits, sorted and without repeats; `hashes` names no package the recipe does not
+// install. Loading does not check them, so that `cmd/modelgroup pin` still starts on a recipe whose versions changed; a test
+// checks every recipe shipped, and the Dockerfile of a managed image refuses a package without its hash (no image is built).
+func (r Recipe) CheckHashes(group string) error {
+	fail := func(format string, a ...any) error {
+		return fmt.Errorf("%s/recipe.json: %s (go run ./cmd/modelgroup pin %s writes the hashes)", group, fmt.Sprintf(format, a...), group)
+	}
+	pin := pyPin
+	if r.Language == "r" {
+		pin = rPin
+	}
+	listed := map[string]bool{}
+	for _, p := range r.Packages {
+		if !pin.MatchString(p) {
+			return fail("«%s» is not a package pinned to one version", p)
+		}
+		if listed[p] {
+			return fail("the package «%s» is listed twice", p)
+		}
+		listed[p] = true
+		sums := r.Hashes[p]
+		if len(sums) == 0 {
+			return fail("the package «%s» has no sha256 in hashes", p)
+		}
+		if r.Language == "r" && len(sums) != 1 {
+			return fail("the package «%s» has %d sha256, an R package has one (its source tarball)", p, len(sums))
+		}
+		for i, sum := range sums {
+			if !sha256Hex.MatchString(sum) {
+				return fail("a sha256 of «%s» is not 64 lower-case hexadecimal digits", p)
+			}
+			if i > 0 && sums[i-1] >= sum {
+				return fail("the sha256 of «%s» are not sorted, or one is repeated", p)
+			}
+		}
+	}
+	for p := range r.Hashes {
+		if !listed[p] {
+			return fail("hashes names «%s», which is not one of the packages", p)
 		}
 	}
 	return nil

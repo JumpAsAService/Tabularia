@@ -255,8 +255,10 @@ func TestTheDockerfileIsTheScriptingEnvironmentsOne(t *testing.T) {
 		t.Fatal(err)
 	}
 	g, _ := Get("regression")
-	want, _ := scriptimage.Dockerfile("r", "rocker/r-ver:4.6.0", g.Recipe.Packages, s)
-	if d != want || !strings.Contains(d, "\nglmnet@5.2\n") || !strings.HasPrefix(d, "FROM rocker/r-ver:4.6.0\n") {
+	managed := s
+	managed.Managed, managed.Hashes = true, g.Recipe.Hashes
+	want, _ := scriptimage.Dockerfile("r", "rocker/r-ver:4.6.0", g.Recipe.Packages, managed)
+	if d != want || !strings.Contains(d, "\nglmnet@5.2 "+g.Recipe.Hashes["glmnet@5.2"][0]+"\n") || !strings.HasPrefix(d, "FROM rocker/r-ver:4.6.0\n") {
 		t.Errorf("Dockerfile:\n%s", d)
 	}
 	if _, err := Dockerfile("regression", map[string][]scriptcfg.Image{"r": {{Version: "4.5", Image: "x"}}}, s); err == nil ||
@@ -292,11 +294,12 @@ func TestOnlyTheCustomerLifetimeAndTheTimeSeriesImagesInstallGSL(t *testing.T) {
 		extra := strings.Join(libraries[g.ID], " ")
 		if !reflect.DeepEqual(g.Recipe.SystemLibraries, libraries[g.ID]) ||
 			!strings.Contains(d, "install -y --no-install-recommends "+fixed+" "+extra+" && rm -rf /var/lib/apt/lists/*\n") ||
-			!strings.Contains(d, "\n"+needs[g.ID]+"\n") {
+			!strings.Contains(d, "\n"+needs[g.ID]+" "+g.Recipe.Hashes[needs[g.ID]][0]+"\n") {
 			t.Errorf("%s:\n%s", g.ID, d)
 		}
 		// the same recipe without its system library is what every other R group's Dockerfile is made of
-		plain, _ := scriptimage.Dockerfile("r", "rocker/r-ver:4.6.0", g.Recipe.Packages, scriptimage.Settings{CRANURL: s.CRANURL, Jobs: 2, Managed: true})
+		plain, _ := scriptimage.Dockerfile("r", "rocker/r-ver:4.6.0", g.Recipe.Packages, scriptimage.Settings{CRANURL: s.CRANURL, Jobs: 2, Managed: true,
+			Hashes: g.Recipe.Hashes})
 		// and the step that records the versions installed, which the card reads from the lock
 		record := "RUN mkdir -p /opt/tabularia && dpkg-query -W -f '${Package}@${Version}\\n' " + extra + " > " + scriptimage.SystemLibrariesFile + "\n"
 		if strings.Replace(strings.Replace(d, record, "", 1), " "+extra, "", 1) != plain || !strings.Contains(d, record) {
@@ -333,7 +336,7 @@ func TestTheExperimentsImageIsTheArrowClosureAndNothingElse(t *testing.T) {
 	s := scriptimage.Settings{CRANURL: "https://cran.r-project.org", Jobs: 2}
 	d, err := Dockerfile("experiments", scriptcfg.DefaultBaseImages, s)
 	if err != nil || !strings.HasPrefix(d, "FROM rocker/r-ver:4.6.0\n") || strings.Contains(d, "libgsl") ||
-		!strings.Contains(d, "\narrow@26.0.1\n") || strings.Contains(d, "data.table") {
+		!strings.Contains(d, "\narrow@26.0.1 "+r.Hashes["arrow@26.0.1"][0]+"\n") || strings.Contains(d, "data.table") {
 		t.Errorf("Dockerfile: %v\n%s", err, d)
 	}
 	// the base and the system libraries' layer are the other R groups' own, byte for byte
@@ -526,9 +529,10 @@ func TestThePythonGroupsDockerfile(t *testing.T) {
 		t.Fatal(err)
 	}
 	g, _ := Get("boosting")
-	want, _ := scriptimage.Dockerfile("python", "python:3.14-slim", g.Recipe.Packages, scriptimage.Settings{Jobs: 2, Managed: true})
-	if d != want || !strings.HasPrefix(d, "FROM python:3.14-slim\n") || !strings.Contains(d, "\nxgboost-cpu==3.4.1\n") ||
-		!strings.Contains(d, "--no-deps --only-binary=:all:") || strings.Contains(d, "polars") || strings.Contains(d, "marimo") {
+	want, _ := scriptimage.Dockerfile("python", "python:3.14-slim", g.Recipe.Packages, scriptimage.Settings{Jobs: 2, Managed: true, Hashes: g.Recipe.Hashes})
+	if d != want || !strings.HasPrefix(d, "FROM python:3.14-slim\n") ||
+		!strings.Contains(d, "\nxgboost-cpu==3.4.1 --hash=sha256:"+strings.Join(g.Recipe.Hashes["xgboost-cpu==3.4.1"], " --hash=sha256:")+"\n") ||
+		!strings.Contains(d, "--no-deps --only-binary=:all: --require-hashes") || strings.Contains(d, "polars") || strings.Contains(d, "marimo") {
 		t.Errorf("Dockerfile:\n%s", d)
 	}
 }
@@ -694,12 +698,15 @@ func TestTheFoundationForecastDockerfile(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{"FROM python:3.14-slim\n", "ARG TARGETARCH\n",
-		`RUN if [ "$TARGETARCH" = "amd64" ]; then pip install --no-deps --only-binary=:all: "https://download.pytorch.org/whl/cpu/torch-2.14.1%2Bcpu-cp314-cp314-manylinux_2_28_x86_64.whl#sha256=35103e180214793207f95d7e12e100ecba3ace6f5fb37e1fcefbb07e096ed180"; fi` + "\n",
-		`RUN if [ "$TARGETARCH" = "arm64" ]; then pip install --no-deps --only-binary=:all: "https://download.pytorch.org/whl/cpu/torch-2.14.1%2Bcpu-cp314-cp314-manylinux_2_28_aarch64.whl#sha256=f56cd23a3bf003bfbed3da0645ba09b3ccc66c0a2f2ac726a9b98f34e0e4926f"; fi` + "\n",
-		"RUN pip install --no-deps --only-binary=:all: -r /opt/tabularia/requirements.txt && pip check\n",
+		`RUN if [ "$TARGETARCH" = "amd64" ]; then pip install --no-deps --only-binary=:all: "https://download.pytorch.org/whl/cpu/torch-2.14.1%2Bcpu-cp314-cp314-manylinux_2_28_x86_64.whl#sha256=35103e180214793207f95d7e12e100ecba3ace6f5fb37e1fcefbb07e096ed180"` +
+			` && echo "35103e180214793207f95d7e12e100ecba3ace6f5fb37e1fcefbb07e096ed180  torch-2.14.1+cpu-cp314-cp314-manylinux_2_28_x86_64.whl" >> /opt/tabularia/package-sha256.txt; fi` + "\n",
+		`RUN if [ "$TARGETARCH" = "arm64" ]; then pip install --no-deps --only-binary=:all: "https://download.pytorch.org/whl/cpu/torch-2.14.1%2Bcpu-cp314-cp314-manylinux_2_28_aarch64.whl#sha256=f56cd23a3bf003bfbed3da0645ba09b3ccc66c0a2f2ac726a9b98f34e0e4926f"` +
+			` && echo "f56cd23a3bf003bfbed3da0645ba09b3ccc66c0a2f2ac726a9b98f34e0e4926f  torch-2.14.1+cpu-cp314-cp314-manylinux_2_28_aarch64.whl" >> /opt/tabularia/package-sha256.txt; fi` + "\n",
+		"RUN pip download --no-deps --only-binary=:all: --require-hashes -d /tmp/tabularia-wheels -r /opt/tabularia/requirements.txt && ",
+		" && pip check\n",
 		"ADD --checksum=sha256:dfc83c6220937ce5fc6687b35a4df94cd25e28a2cfe6fb92a23dad6301b2015d --chmod=0644 https://huggingface.co/mistralai/Timestral-28M/resolve/49b26409ac87b5935539a5d8ffe7f397b720db47/model.safetensors /opt/tabularia/weights/28m/model.safetensors\n",
 		"ADD --checksum=sha256:648194727930df730890e9f9affdbcc5c930d406d6829559b25ca3d5a973fc8c --chmod=0644 https://huggingface.co/mistralai/Timestral-5M/resolve/bdd20cfc15a3fea0e4cb5ccef37f8d3ca7aa335f/LICENSE /opt/tabularia/weights/5m/LICENSE\n",
-		"\nnumpy==2.5.5\n", "USER 10001\n"} {
+		"\nnumpy==2.5.5 --hash=sha256:c48960d420e90cf305cb1fde0d4e6082cc90512cda87a9acf0b6e04e91cf4abe --hash=sha256:cc6eb7502facce90349b4097a26821af224aaa0ab36e78304711cdb544352882\n", "USER 10001\n"} {
 		if !strings.Contains(d, want) {
 			t.Errorf("no %q in\n%s", want, d)
 		}
@@ -712,7 +719,7 @@ func TestTheFoundationForecastDockerfile(t *testing.T) {
 		t.Errorf("%d downloads: every size has three files", n)
 	}
 	// the order: the wheels, the requirements, the weights, the user
-	order := []string{"ARG TARGETARCH", "pip install --no-deps --only-binary=:all: -r", "ADD --checksum", "USER 10001"}
+	order := []string{"ARG TARGETARCH", "pip download --no-deps", "ADD --checksum", "USER 10001"}
 	at := -1
 	for _, mark := range order {
 		i := strings.Index(d, mark)
@@ -757,7 +764,8 @@ func TestTheFoundationForecastDockerfile(t *testing.T) {
 		}
 		base, _ := BaseImage(other.Recipe, scriptcfg.DefaultBaseImages)
 		want, _ := scriptimage.Dockerfile(other.Recipe.Language, base, other.Recipe.Packages,
-			scriptimage.Settings{CRANURL: "https://cran.r-project.org", Jobs: 2, Managed: true, SystemLibraries: other.Recipe.SystemLibraries})
+			scriptimage.Settings{CRANURL: "https://cran.r-project.org", Jobs: 2, Managed: true, SystemLibraries: other.Recipe.SystemLibraries,
+				Hashes: other.Recipe.Hashes})
 		if got != want || strings.Contains(got, "TARGETARCH") || strings.Contains(got, "ADD --checksum") || len(other.Recipe.Wheels) != 0 || other.Recipe.Weights != nil {
 			t.Errorf("%s: its Dockerfile changed", other.ID)
 		}
@@ -880,5 +888,98 @@ func TestTheRunnersSizesAreTheRecipes(t *testing.T) {
 	if !strings.Contains(src, `"sha256": "`+g.Recipe.Weights.Licence.SHA256+`"}`) ||
 		!strings.Contains(src, `LICENCE = {"name": "`+g.Recipe.Weights.Licence.Name+`"`) {
 		t.Error("the runner's licence is not the recipe's")
+	}
+}
+
+// Every recipe shipped has the sha256 of every package it installs (docs/specs/statistical-models.md, «The supply chain»), and
+// its image's Dockerfile carries every one of them: the build checks each file it installs.
+func TestEveryRecipeHasTheHashOfEveryPackage(t *testing.T) {
+	for _, g := range Groups() {
+		if err := g.Recipe.CheckHashes(g.ID); err != nil {
+			t.Errorf("%v", err)
+		}
+		d, err := Dockerfile(g.ID, scriptcfg.DefaultBaseImages, scriptimage.Settings{CRANURL: "https://cran.r-project.org", Jobs: 2})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, p := range g.Recipe.Packages {
+			line := p + " " + g.Recipe.Hashes[p][0]
+			if g.Recipe.Language == "python" {
+				line = p + " --hash=sha256:" + strings.Join(g.Recipe.Hashes[p], " --hash=sha256:")
+			}
+			if !strings.Contains(d, "\n"+line+"\n") {
+				t.Errorf("%s: no %q in its Dockerfile", g.ID, line)
+			}
+		}
+		if g.Recipe.Language == "r" && (!strings.Contains(d, `ARROW_R_ENFORCE_CHECKSUM = "true"`) || strings.Contains(d, "remotes")) {
+			t.Errorf("%s: arrow's download is not checked, or remotes is installed", g.ID)
+		}
+		if g.Recipe.Language == "python" && !strings.Contains(d, "--require-hashes") {
+			t.Errorf("%s: pip does not require the hashes", g.ID)
+		}
+	}
+}
+
+// A recipe without the hash of one of its packages, or with hashes that are not the recipe's, is refused: by CheckHashes (which
+// this package's tests run on every recipe shipped), and by the Dockerfile of its image, which no build gets.
+func TestARecipeWithoutAHashIsRefused(t *testing.T) {
+	for _, id := range []string{"experiments", "boosting"} {
+		g, _ := Get(id)
+		first := g.Recipe.Packages[0]
+		for name, c := range map[string]struct {
+			change func(r *Recipe)
+			says   string
+		}{
+			"a package without its hash": {func(r *Recipe) { delete(r.Hashes, first) }, "the package «" + first + "» has no sha256 in hashes"},
+			"an empty list":              {func(r *Recipe) { r.Hashes[first] = []string{} }, "has no sha256 in hashes"},
+			"a hash of no package":       {func(r *Recipe) { r.Hashes["zzz@1.0"] = []string{strings.Repeat("a", 64)} }, "which is not one of the packages"},
+			"an upper-case hash":         {func(r *Recipe) { r.Hashes[first] = []string{strings.ToUpper(r.Hashes[first][0])} }, "is not 64 lower-case hexadecimal digits"},
+			"a short hash":               {func(r *Recipe) { r.Hashes[first] = []string{"abc"} }, "is not 64 lower-case hexadecimal digits"},
+			"a package without its version": {func(r *Recipe) {
+				r.Packages[0] = strings.FieldsFunc(first, func(c rune) bool { return c == '@' || c == '=' })[0]
+			}, "is not a package pinned to one version"},
+		} {
+			r := g.Recipe
+			r.Packages = append([]string(nil), g.Recipe.Packages...)
+			r.Hashes = map[string][]string{}
+			for k, v := range g.Recipe.Hashes {
+				r.Hashes[k] = append([]string(nil), v...)
+			}
+			c.change(&r)
+			err := r.CheckHashes(id)
+			if err == nil || !strings.Contains(err.Error(), c.says) || !strings.Contains(err.Error(), "go run ./cmd/modelgroup pin "+id) {
+				t.Errorf("%s, %s: %v", id, name, err)
+			}
+			// the gateway that shipped it would build no image from it
+			changed := g
+			changed.Recipe = r
+			restore := Swap([]Group{changed})
+			if _, err := Dockerfile(id, scriptcfg.DefaultBaseImages, scriptimage.Settings{CRANURL: "https://cran.r-project.org", Jobs: 2}); err == nil &&
+				name != "a hash of no package" {
+				t.Errorf("%s, %s: a Dockerfile", id, name)
+			}
+			restore()
+		}
+	}
+	// an R package has one hash, its tarball's; a Python package's are sorted, without repeats
+	g, _ := Get("experiments")
+	r := g.Recipe
+	r.Hashes = map[string][]string{}
+	for k, v := range g.Recipe.Hashes {
+		r.Hashes[k] = v
+	}
+	r.Hashes["arrow@26.0.1"] = []string{strings.Repeat("a", 64), strings.Repeat("b", 64)}
+	if err := r.CheckHashes("experiments"); err == nil || !strings.Contains(err.Error(), "an R package has one (its source tarball)") {
+		t.Errorf("two hashes of an R package: %v", err)
+	}
+	b, _ := Get("boosting")
+	r = b.Recipe
+	r.Hashes = map[string][]string{}
+	for k, v := range b.Recipe.Hashes {
+		r.Hashes[k] = v
+	}
+	r.Hashes["numpy==2.5.5"] = []string{strings.Repeat("b", 64), strings.Repeat("a", 64)}
+	if err := r.CheckHashes("boosting"); err == nil || !strings.Contains(err.Error(), "are not sorted, or one is repeated") {
+		t.Errorf("unsorted hashes: %v", err)
 	}
 }

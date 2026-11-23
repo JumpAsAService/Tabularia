@@ -18,7 +18,7 @@ func TestTheSubcommands(t *testing.T) {
 	if err := run([]string{"-jobs", "3", "dockerfile", "survival"}, &out); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(out.String(), "FROM rocker/r-ver:4.6.0\n") || !strings.Contains(out.String(), "\nsurvival@3.8-12\n") ||
+	if !strings.HasPrefix(out.String(), "FROM rocker/r-ver:4.6.0\n") || !strings.Contains(out.String(), "\nsurvival@3.8-12 ") ||
 		!strings.Contains(out.String(), "TABULARIA_JOBS=3") {
 		t.Errorf("dockerfile:\n%s", out.String())
 	}
@@ -60,7 +60,7 @@ func TestTheSubcommands(t *testing.T) {
 	// a Python group: its Dockerfile and its code, the library of its language only
 	out.Reset()
 	if err := run([]string{"dockerfile", "boosting"}, &out); err != nil || !strings.HasPrefix(out.String(), "FROM python:3.14-slim\n") ||
-		!strings.Contains(out.String(), "pip install --no-deps --only-binary=:all:") || !strings.Contains(out.String(), "\ncatboost==1.2.10\n") {
+		!strings.Contains(out.String(), "pip install --no-deps --only-binary=:all: --require-hashes") || !strings.Contains(out.String(), "\ncatboost==1.2.10 --hash=sha256:") {
 		t.Errorf("dockerfile boosting: %v\n%s", err, out.String())
 	}
 	py := filepath.Join(dir, "py")

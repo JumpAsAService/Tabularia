@@ -27,6 +27,7 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/perm"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyd"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/scriptcfg"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/scriptimage"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/scriptnodes"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/server"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/settings"
@@ -1377,6 +1378,61 @@ func TestAnImageThatDoesNotStartOrAnAbsentReportFailsTheVersion(t *testing.T) {
 	v = f.versions("timeseries")[0]
 	if v.Status != "failed" || v.Error == nil || !strings.Contains(*v.Error, "did not run to its end: exit code 4") || !strings.Contains(*v.Error, "singular") {
 		t.Errorf("a self-test with no report: %+v", v)
+	}
+}
+
+// A build that downloads a package whose sha256 is not the recipe's fails the version with a sentence that says so (pip's
+// refusal, the R installer's line), and the lock of a version that passed keeps the hashes of its packages.
+func TestABuildThatDownloadsOtherBytesFailsAndALockKeepsTheHashes(t *testing.T) {
+	f := newModelsFixture(t)
+	f.enable(f.admin, "experiments")
+	b := f.builds()
+	var envID int64
+	_ = f.db.QueryRow(f.ctx, `SELECT id FROM script_environments WHERE managed_by = 'model_group:experiments'`).Scan(&envID)
+	for i, log := range []string{
+		"#9 1.2 TABULARIA_SHA256_MISMATCH arrow@26.0.1: the file arrow_26.0.1.tar.gz downloaded from https://cran.example has sha256 00, the recipe pins 2b\n",
+		"#8 3.1 ERROR: THESE PACKAGES DO NOT MATCH THE HASHES FROM THE REQUIREMENTS FILE. If you have updated the package versions, please update the hashes.\n",
+	} {
+		n := i + 1
+		build := fmt.Sprintf("tabularia-build-e%d-v%d", envID, n)
+		if n > 1 {
+			f.call(f.admin, "POST", "experiments", "", "", true, mgRebuild)
+		}
+		if _, err := b.oneRound(f.ctx); err != nil {
+			t.Fatal(err)
+		}
+		f.kube.end(build, false, 1, log)
+		if _, err := b.oneRound(f.ctx); err != nil {
+			t.Fatal(err)
+		}
+		v := f.versions("experiments")[0]
+		if v.Status != "failed" || v.Error == nil || !strings.HasPrefix(*v.Error, "The image build stopped: a package downloaded is not the file the group's recipe pins") ||
+			!strings.Contains(*v.Error, "SCRIPTS__CRAN_URL") {
+			t.Errorf("version %d: %+v", n, v)
+		}
+	}
+	// a version that passes: its lock holds the lines with their sha256
+	f.call(f.admin, "POST", "experiments", "", "", true, mgRebuild)
+	build, check := fmt.Sprintf("tabularia-build-e%d-v3", envID), fmt.Sprintf("tabularia-check-e%d-v3", envID)
+	if _, err := b.oneRound(f.ctx); err != nil {
+		t.Fatal(err)
+	}
+	f.kube.end(build, true, 0, buildLog())
+	if _, err := b.oneRound(f.ctx); err != nil {
+		t.Fatal(err)
+	}
+	job, _ := json.Marshal(f.kube.job("scripts", check))
+	if !strings.Contains(string(job), scriptimage.PackageHashesFile) {
+		t.Errorf("the check does not read the record of the hashes: %.300s", job)
+	}
+	const h = "2b0fa04cd90f5e6473466228077185a7cfc1ef66b8edb179fe0f9dd4563475fc"
+	f.kube.end(check, true, 0, strings.Replace(selftestLog(passed), "arrow@26.0.1\n", "arrow@26.0.1 sha256:"+h+"\n", 1))
+	if _, err := b.oneRound(f.ctx); err != nil {
+		t.Fatal(err)
+	}
+	v := f.versions("experiments")[0]
+	if v.Status != "ready" || v.Lock == nil || !strings.HasPrefix(*v.Lock, "arrow@26.0.1 sha256:"+h+"\nstats@4.6.0") {
+		t.Errorf("the lock: %+v", v)
 	}
 }
 

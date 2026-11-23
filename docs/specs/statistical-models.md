@@ -2289,6 +2289,75 @@ The recipes pin the whole closure of dependencies, in order: regression 48 packa
 survival 17, timeseries 42. The witnesses (the packages that compute the reference values)
 are in `reference/witness.json`, outside the recipe.
 
+### The supply chain
+
+Decided by the owner on 2026-11-23, after the security review: a version alone does not say which bytes a mirror serves
+(`SCRIPTS__PYPI_INDEX_URL`, `SCRIPTS__CRAN_URL`), so every package of a recipe is also pinned by the sha256 of the file the
+build installs it from, and a longer build is accepted.
+
+- **The recipe** gains `hashes`: `{"<package as listed>": ["<sha256>", …]}`, one entry for every package, nothing else.
+  An R package has one hash, its **source tarball's**, computed by Tabularia on the tarball of the pinned version (CRAN's
+  `PACKAGES` offers only an MD5, which is not used); a Python package has the hashes of **every wheel of that version a glibc
+  Linux build of the recipe's Python may pick** (x86-64 and arm64, `cp314`, `abi3` or `py3-none-any`), sorted. The field
+  sits beside `packages` (no migration of the format: a new key, the version strings unchanged, the packages text of a
+  version in the database unchanged).
+- **The tool**: `go run ./cmd/modelgroup pin <group>` (from `gateway-go/`) downloads every file and writes the hashes into
+  the recipe, its other keys as they were. R: the tarball from `src/contrib/`, else `src/contrib/Archive/<name>/`, its
+  `DESCRIPTION` read to check that every package it needs (`Depends`, `Imports`, `LinkingTo`) is earlier in the recipe or is
+  one of R's base or recommended packages. Python: PyPI's JSON API for the version's files, each wheel downloaded and hashed
+  here, and refused unless it is the digest PyPI publishes. The same files give the same recipe, byte for byte (a test). It
+  is run whenever a version in a recipe changes; a recipe without a hash still loads, so that the tool runs, but a test
+  checks every recipe shipped and the Dockerfile of an image refuses a package without its hash.
+- **The Python build**: the requirements carry `--hash=sha256:…` each; `pip download --require-hashes` into a folder, then
+  `pip install --require-hashes --no-index --find-links` from it (every file checked twice, no index reached by the
+  install), the sha256 of the wheels installed recorded in `/opt/tabularia/package-sha256.txt`, then `pip check`. The
+  PyTorch wheel (its URL already carried `#sha256=`) records its line too.
+- **The R build** (`scriptimage.RInstallPinned`, managed images only; the scripting environments' images are byte for byte
+  as before): `packages.txt` holds `name@version <sha256>` lines; every tarball is downloaded first (current, else archived)
+  and checked with `sha256sum`, and a difference stops the build with a `TABULARIA_SHA256_MISMATCH` line before anything
+  compiles; then each is installed from its file with `R CMD INSTALL`, in the recipe's order, which fails if a package it
+  needs is not installed; the installed versions are compared with the recipe's, and the hashes recorded. `remotes` and
+  `install.packages` are gone from the model images (no unpinned `arrow` either). `arrow`'s installer downloads libarrow
+  and checks it against the SHA-512 sums its tarball ships, enforced with `ARROW_R_ENFORCE_CHECKSUM=true`.
+- **The lock and the card**: the check Job appends ` sha256:<hex>` to the line of every package installed from a recorded
+  file (`arrow@26.0.1 sha256:2b0f…`, `numpy==2.5.5 sha256:cc6e…`); the lock's parser accepts the suffix, and the card shows
+  the lock.
+- **A build that gets other bytes** fails the version with «The image build stopped: a package downloaded is not the file
+  the group's recipe pins (its sha256 differs). …» (pip's sentence or the R installer's line, in the build log).
+- **Not covered**: the base images (by tag), the Debian/Ubuntu libraries (apt verifies its signed archive), and what a
+  package's own build fetches besides libarrow (none of the recipes' packages does, as far as their builds show).
+
+#### As built, the supply chain (2026-11-23)
+
+- **Format**: `hashes` beside `packages`, keyed by the package's line, a list of sha256 (sorted); `Recipe.CheckHashes`
+  checks it (one hash an R package, 64 lower-case hex digits, no package without, no hash of another). Every recipe was
+  pinned with the tool on 2026-11-23, at the versions it already had (`pinned_on` unchanged): 16 + 48 + 51 + 55 + 66
+  tarballs for the five R groups, every one's `DESCRIPTION` in the recipe's order (the check found no missing or misplaced
+  dependency); 20 Python packages of boosting (32 wheels) and 15 of `foundation_forecast` (24 wheels), each hashed here and
+  equal to PyPI's digest. The tool takes a few seconds a group.
+- **The builds**, on this machine, one at a time, without cache (`docker buildx build --no-cache`), before → after:
+  experiments 353 → 317 s, regression 624 → 632 s, survival 898 → 810 s, customer lifetime 801 → 731 s, time series
+  926 → 876 s, boosting 44 → 50 s, `foundation_forecast` (four sizes of weights) 60 → 69 s. The R builds are no longer:
+  they no longer install `remotes` nor read CRAN's archive index once a package; the Python ones download then install
+  (6 to 9 s more). Each image's check (the check Job's own script: lock, then self-test, uid 10001, read-only root,
+  `--network none`, 2.5 GB) passed: experiments 103 checks, regression 67, survival 114, customer lifetime 72, time series
+  119, boosting 56, `foundation_forecast` 36 with the sha256 of its four sizes; no check failed or skipped. Every package
+  of every recipe has its ` sha256:` in the lock (`foundation_forecast` also `torch`); only the base image's own packages
+  (`pip`, R's base and recommended ones) have none. `arrow` logged «Checksum validated successfully for libarrow»; no
+  build fetched anything else.
+- **A wrong hash, by hand**: the experiments Dockerfile with `jsonlite`'s hash changed stopped after 4.8 s, before anything
+  compiled: `TABULARIA_SHA256_MISMATCH jsonlite@2.0.0: the file jsonlite_2.0.0.tar.gz downloaded from https://cran.r-project.org
+  has sha256 75eb…, the recipe pins 0000…`; the boosting one with `numpy`'s two hashes changed stopped at pip's «THESE
+  PACKAGES DO NOT MATCH THE HASHES FROM THE REQUIREMENTS FILE … Expected sha256 0000… Got c489…».
+- **On a cluster**: every recipe changed, so every group's recipe hash changed and each enabled group is built again by
+  itself (state «Rebuild needed»); the version in use serves meanwhile, as for any new recipe.
+- Tests: `scriptimage` (the managed R and Python Dockerfiles, a package without its hash refused, the scripting
+  environments' images unchanged, the layers before the packages shared), `modelgroups` (every recipe shipped passes,
+  every hash in its Dockerfile, a recipe without a hash refused by `CheckHashes` and by the Dockerfile), `cmd/modelgroup`
+  (`pin` on a fake CRAN and PyPI: the same bytes twice, an archived tarball, the order, a digest that differs, no wheel for
+  x86-64, the wheels' tags), `api` (the lock's parser, the R and Python checks on this machine with a record, a build that
+  gets other bytes fails the version with its sentence, a lock with the hashes kept).
+
 ### Enabling a group
 
 **Administration → Statistical models** (`frontend/components/admin/ModelsSection.vue`,
@@ -2591,8 +2660,9 @@ with no Job, is a later option the card already allows.
   (`44f9c04b`).
 - **Predict**: only Tabularia's cards are applied, verified by hash; serialized objects are
   artifacts for people, never loaded.
-- **Supply chain**: packages pinned by version, from CRAN and PyPI (or the mirrors the
-  chart sets), base images by tag (`rocker/r-ver:4.6.0`); the lock of every version is kept and shown.
+- **Supply chain**: packages pinned by version **and by the sha256 of the file each is installed from**
+  («The supply chain», 2026-11-23), from CRAN and PyPI (or the mirrors the chart sets), base images
+  by tag (`rocker/r-ver:4.6.0`); the lock of every version is kept and shown, with those hashes.
 
 ## Limits
 
@@ -2776,6 +2846,8 @@ cd frontend && node --test chart-renderer/render.test.mjs
 # the catalogue: the snapshot, then its copies and their check
 docker run --rm --user "$(id -u)" -v "$PWD/backend:/app" -w /app tabularia-backend:ci python -m app.engine.models.catalog
 python3 .github/scripts/model_catalog.py && python3 .github/scripts/model_catalog.py --check
+# the sha256 of every package of a recipe, after a version changed (downloads every file; writes recipe.json)
+cd gateway-go && go run ./cmd/modelgroup pin regression
 # a group's image built locally and its self-test, without a cluster (new: gateway-go/cmd/modelgroup)
 cd gateway-go && go run ./cmd/modelgroup dockerfile regression > /tmp/regression.Dockerfile
 docker build -f /tmp/regression.Dockerfile -t tabularia-models-regression:dev /tmp

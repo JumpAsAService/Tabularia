@@ -59,7 +59,8 @@ var (
 	sbMemoryParts = regexp.MustCompile(`^([0-9]+(?:\.[0-9]+)?)([A-Za-z]*)$`)
 	sbBytes       = map[string]float64{"": 1, "K": 1e3, "M": 1e6, "G": 1e9, "T": 1e12,
 		"Ki": 1 << 10, "Mi": 1 << 20, "Gi": 1 << 30, "Ti": 1 << 40}
-	sbLockLine = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*(==|@)\S+$`)
+	// a lock's line: name@version or name==version, and for a model group's package the sha256 of the file it was installed from
+	sbLockLine = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*(==|@)\S+( sha256:[0-9a-f]{64})?$`)
 	sbDigest   = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 	// why a push failed, and a compiler the kernel killed for memory
 	sbUnknownAuthority = regexp.MustCompile(`x509: certificate signed by unknown authority|certificate is not trusted`)
@@ -68,6 +69,8 @@ var (
 	// a network failure on the way to the registry: before a 401, the token may have expired while it lasted
 	sbNetworkTrouble = regexp.MustCompile(`i/o timeout|connection reset by peer|connection refused|TLS handshake timeout|no route to host|context deadline exceeded|broken pipe`)
 	sbOutOfMemory    = regexp.MustCompile(`Killed signal terminated program|internal compiler error: Killed|OOMKilled`)
+	// a downloaded package that is not the file a model group's recipe pins: pip's sentence, or the R installer's line
+	sbHashMismatch = regexp.MustCompile(`THESE PACKAGES DO NOT MATCH THE HASHES FROM THE REQUIREMENTS FILE|TABULARIA_SHA256_MISMATCH`)
 )
 
 func init() {
@@ -202,6 +205,7 @@ func (b *scriptBuilds) dockerfile(language, baseImage string, packages []string,
 		PyPIIndexURL: b.s.Scripts.PyPIIndexURL, CRANURL: b.s.Scripts.CRANURL, Jobs: b.buildJobs(), Managed: managedBy != nil}
 	if g, ok := modelgroups.Get(mgGroupOfManaged(managedBy)); ok {
 		settings.SystemLibraries = g.Recipe.SystemLibraries
+		settings.Hashes = g.Recipe.Hashes
 		build := modelgroups.Build{WheelsBaseURL: os.Getenv("MODELS__WHEELS_BASE_URL"), WeightsBaseURL: os.Getenv("MODELS__WEIGHTS_BASE_URL")}
 		build.Sizes, _ = scriptimage.WeightsSizes(packagesText)
 		var err error
@@ -643,6 +647,10 @@ func (b *scriptBuilds) advance(ctx context.Context, tx pgx.Tx, v *sbVersion) err
 				// the compiler's own line, or (cgroup v2) only the exit code
 				b.fail(v, fmt.Sprintf("The image build ran out of memory: a compiler was killed. Raise SCRIPTS__BUILD_MEMORY "+
 					"(now %s), or lower SCRIPTS__BUILD_CPU to run fewer compilers at once", b.panel.BuildMemory()), &log)
+			case sbHashMismatch.MatchString(log):
+				b.fail(v, "The image build stopped: a package downloaded is not the file the group's recipe pins (its sha256 differs). "+
+					"The package repository, or the mirror SCRIPTS__PYPI_INDEX_URL or SCRIPTS__CRAN_URL names, served other bytes; "+
+					"nothing was installed from them. The end of the build log names the package", &log)
 			case strings.Contains(reason, "DeadlineExceeded"):
 				b.fail(v, fmt.Sprintf("The image build took longer than SCRIPTS__BUILD_TIMEOUT_SECONDS (%d s): "+
 					"raise it, or give the build more CPU (SCRIPTS__BUILD_CPU)", b.panel.BuildTimeout()), &log)

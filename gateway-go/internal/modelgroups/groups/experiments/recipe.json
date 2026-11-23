@@ -20,6 +20,24 @@
     "arrow@26.0.1",
     "jsonlite@2.0.0"
   ],
+  "hashes": {
+    "assertthat@0.2.1": ["85cf7fcc4753a8c86da9a6f454e46c2a58ffc70c4f47cac4d3e3bcefda2a9e9f"],
+    "bit@4.6.0": ["48fe21c5d04c7b724d695eeb60074395c0c631a7fb234e2075de92471445de08"],
+    "bit64@4.8.6": ["a5fcec17ba772a561a7375ca8fd966bdd5f20dd4e89b4dae07d7da933d554b45"],
+    "glue@1.8.1": ["1c55905d3efc3d5c199ceb0bd12218e97f0d4c64df6038ff41ecef415478a122"],
+    "cli@3.6.6": ["b2b58d6dd82f5798b335e39c00591686a01fd3e94399ef898e146173e36f18f9"],
+    "rlang@1.3.0": ["80aa537d49e72265f443a15e8936128af583caa5e572086518b503cbf064279c"],
+    "lifecycle@1.0.5": ["61841e3e6edba056a88355a3f1d6698ab8d5d9cb3c05f2af0ec5a44ab516f8ee"],
+    "magrittr@2.0.5": ["3f5b5b1d4e6d12807a95c50b6c88cb1d8af2c5eb5213f08bfe58f278eca2ed23"],
+    "vctrs@0.7.3": ["b45078413e06ac624dddb7221a3a43908b405c8abec09822cb86638d30b0435b"],
+    "purrr@1.2.2": ["ac3bc0fc0e789510042522e6c4294336c71447be8f6921b5ef78b9a9fb86617d"],
+    "R6@2.6.1": ["59c6eba8b1b912eb7e104f65053235604be853425ee67c152ac4e86a1f2073b4"],
+    "withr@3.0.3": ["d86c6454164fc85678bfc85e2a6cce42f7461d45fa9a87de71f376e7956c991e"],
+    "tidyselect@1.2.1": ["169e97ba0bbfbcdf4a80534322751f87a04370310c40e27f04aac6525d45903c"],
+    "cpp11@0.5.5": ["72486beb0605c1229bf3d422cd536224af8dc09bd389a3116f62f4c7705c62f4"],
+    "arrow@26.0.1": ["2b0fa04cd90f5e6473466228077185a7cfc1ef66b8edb179fe0f9dd4563475fc"],
+    "jsonlite@2.0.0": ["75eb910c82b350ec33f094779da0f87bff154c232e4ae39c9896a9b89f3ac82d"]
+  },
   "resources": {
     "cpu": "1",
     "memory": "2Gi"

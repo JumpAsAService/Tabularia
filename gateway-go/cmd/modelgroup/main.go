@@ -30,6 +30,11 @@
 //	                                     as the check Job's ConfigMap holds them), the task
 //	task <model> <params.json>           the task.json of a fit with those parameters (checked by the catalogue)
 //	groups                               each group's recipe hash, runner hash and reference hash
+//	pin <group> [--cran url] [--pypi url] the sha256 of every package of the recipe, downloaded and hashed here, written
+//	                                     into its `hashes` (run from gateway-go/; --recipe names another file). R: each
+//	                                     source tarball from CRAN, and its DESCRIPTION checked against the order of the
+//	                                     recipe; Python: each wheel a Linux build may pick, from PyPI, checked against
+//	                                     PyPI's digest. Run it whenever a version in the recipe changes
 //
 // The image of the pre-trained forecasting group is built the same way, with the weights of the sizes wanted (a download of
 // 0.02 to 0.84 GB each, checked by sha256), and its self-test runs on a read-only root as the Job's does:
@@ -74,7 +79,7 @@ func run(args []string, out io.Writer) error {
 	}
 	args = fl.Args()
 	if len(args) == 0 {
-		return errors.New("usage: modelgroup [-jobs n] dockerfile <group> [--sizes 5m,28m] | code <group> <dir> [<task.json>] | task <model> <params.json> | groups")
+		return errors.New("usage: modelgroup [-jobs n] dockerfile <group> [--sizes 5m,28m] | code <group> <dir> [<task.json>] | task <model> <params.json> | groups | pin <group>")
 	}
 	switch args[0] {
 	case "dockerfile":
@@ -158,6 +163,8 @@ func run(args []string, out io.Writer) error {
 		t.RowsFrom = "trial"
 		_, err = fmt.Fprintf(out, "%s\n", t.JSON())
 		return err
+	case "pin":
+		return pinCommand(args[1:], out)
 	case "groups":
 		for _, g := range modelgroups.Groups() {
 			if _, err := fmt.Fprintf(out, "%s\trecipe %s\trunner %s\treference %s\t%d packages\n", g.ID, g.RecipeHash[:12],

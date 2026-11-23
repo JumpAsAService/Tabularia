@@ -65,7 +65,7 @@ reads its input from it. Without the bucket the section says so and the models d
 | State | Meaning |
 |---|---|
 | **Not enabled** | Nothing is built; the nodes are not in the palette |
-| **Building** | A Job in the build namespace builds the image from the group's recipe: R 4.6 (Python 3.14 for boosting) and its packages at pinned versions, without internet access at run time. The customer lifetime recipe also installs a system library, the GNU Scientific Library (`libgsl-dev`), with the image's package manager, and the build records the version installed |
+| **Building** | A Job in the build namespace builds the image from the group's recipe: R 4.6 (Python 3.14 for boosting) and its packages at pinned versions, each checked by its sha256 (see [The packages are pinned by their hash](#the-packages-are-pinned-by-their-hash)), without internet access at run time. The customer lifetime recipe also installs a system library, the GNU Scientific Library (`libgsl-dev`), with the image's package manager, and the build records the version installed |
 | **Checking** | The image is built and its **self-test** runs: the models are fitted on small reference tables and compared with values computed outside Tabularia |
 | **Ready** | Every value matched; the version is in use |
 | **Failed** | The build or the self-test failed; the version in use, if any, is kept. The section shows the build log and the self-test's output |
@@ -83,6 +83,24 @@ enabled opens, shows the node as unusable with the reason, and does not run.
 A version is used only when its self-test passed on the recipe this Tabularia ships. The
 section keeps every version with its status, its image reference, the packages installed
 (the lock), the build log and the self-test.
+
+### The packages are pinned by their hash
+
+Every recipe holds, beside the version of each package, the **sha256 of the file the build installs it from**: for an R
+package, its source tarball as CRAN serves it (the hash computed by Tabularia when the recipe was pinned); for a Python
+package, each Linux wheel of that version (x86-64 and arm64). The build downloads every file, checks it, and installs
+nothing else: the Python packages with `pip --require-hashes` (a package without its hash, or a file with another one, stops
+the build), the R packages all downloaded and checked first, then installed one by one from the checked files, in the order
+of the recipe (each after the packages it needs), with no installer that fetches anything by itself. The `arrow` package
+downloads its C++ library while it installs, and checks it against the SHA-512 sums its checked tarball carries. A file
+whose bytes are not the recipe's fails the version with «a package downloaded is not the file the group's recipe pins»; the
+version in use, if any, keeps serving. The lock of a version, in **Versions**, shows each package with the sha256 of the
+file it was installed from (`arrow@26.0.1 sha256:2b0f…`).
+
+What the hash does not cover: the base image, named by its tag (`rocker/r-ver:4.6.0`, `python:3.14-slim`), and the system
+libraries, which the image's own package manager installs and verifies by its signed archive. A mirror of CRAN or PyPI
+(`SCRIPTS__CRAN_URL`, `SCRIPTS__PYPI_INDEX_URL`) must serve the very files of CRAN and PyPI: see
+[Kubernetes](../deploy/kubernetes.md#statistical-models).
 
 ### Limits and access
 
