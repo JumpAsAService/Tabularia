@@ -278,10 +278,18 @@ func (lx *lexer) number(start int) (token, *Error) {
 	case v == 0 && nonZeroMantissa(text):
 		// strconv reads 1e-400 as 0 without an error.
 		return token{}, &Error{Code: CodeNumberUnderflow, Pos: start, Len: i - start}
+	case v != 0 && math.Abs(v) < minNormal:
+		// A subnormal double keeps fewer digits than the text: 2.5e-324 reads as 5e-324. No silent
+		// loss of precision either (correction of 2026-11-24 from E4, finding 5).
+		return token{}, &Error{Code: CodeNumberRange, Pos: start, Len: i - start, Args: map[string]string{"reason": "subnormal"}}
 	}
 	lx.i = i
 	return token{kind: tNumber, pos: start, end: i, num: v, digits: digitsOnly}, nil
 }
+
+// minNormal is the smallest positive normal double, 2^-1022: a literal whose double is non-zero
+// and below it in magnitude is refused (expr.number_range, reason subnormal).
+const minNormal = 0x1p-1022
 
 // numberForm is a malformed number from start; the span runs over the letters, digits, "_" and
 // "." that follow end, so that the whole word is shown.

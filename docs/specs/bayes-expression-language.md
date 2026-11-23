@@ -117,7 +117,11 @@ Lexical rules beyond the EBNF, each with its error:
 - A number that does not fit: more than `max_number_chars`, or infinite in double precision (Go's
   `strconv.ParseFloat` returns `ErrRange` for `1e400`, measured), or above `max_abs_literal` (1e15) in
   magnitude: `expr.number_range`. A number with a non-zero digit that becomes 0 (Go reads `1e-400` as 0 without
-  an error, measured) is `expr.number_underflow`.
+  an error, measured) is `expr.number_underflow`. A number whose double is not 0 but below the smallest normal
+  double (2^-1022, about 2.2250738585072014e-308) in magnitude is `expr.number_range` with `reason: subnormal`: a
+  subnormal double keeps fewer digits than the text (`2.5e-324` reads as `5e-324`), so no silent underflow means no
+  silent loss of precision either; the double decides, so a text just below 2^-1022 that rounds to it is kept
+  (correction of 2026-11-24 from E4, finding 5).
 - An upper-case letter starts `expr.name_case` («names are lower case: `beta`»). A name longer than
   `max_name_bytes` is `expr.name_long`; one ending in `__` is `expr.name_reserved` (Stan reserves it, checked
   online).
@@ -308,7 +312,7 @@ person's text is copied, not even a number's digits.
 | **`#include`** | `#` refused; `stan-codegen` never emits `#`, and stanc runs without include paths (map) |
 | **Length** | `max_expression_bytes` before any reading |
 | **Depth** (stack exhaustion in Go or in the browser) | `max_expression_nesting` before each recursive step; `max_expression_nodes` |
-| **Huge or tiny numbers** (`1e400`, `9…9` × 1,000, `1e-400`) | `max_number_chars`, finite, `max_abs_literal`, no silent underflow; every literal re-printed from its double |
+| **Huge or tiny numbers** (`1e400`, `9…9` × 1,000, `1e-400`, `2.5e-324`) | `max_number_chars`, finite, `max_abs_literal`, no silent underflow (to 0 or to a subnormal); every literal re-printed from its double |
 | **Confusable Unicode** (Cyrillic `а` for `a`, `−` for `-`, full-width digits, a non-breaking space, a direction control) | ASCII only, byte by byte; no Unicode-aware class in either implementation; the confusables named in the message |
 | **Unknown identifiers** (a variable of the program that is not a node: `N`, `target`, a generated `V_…`) | Every name must be a named node of the graph (`Lookup`); a call's name must be a catalogue function; generated identifiers start with an upper-case letter, which the lexer refuses |
 | **User-defined functions** | Not in the grammar (owner) |
@@ -510,6 +514,14 @@ default compile limits cannot build). Neither is an injection.
 - **Finding 3**: `CheckProgram` (`refusedTokens`) and `Emit`'s reserved identifiers also refuse `jacobian`, `while`,
   `if`, `else`, `return`, `break`, `continue` as tokens: statement words the generator never writes (the codegen
   spec's «Safety checks on the output»). A test gives `CheckProgram` each of them in a program.
+- **Finding 5**: the simpler of the two corrections: every non-zero literal whose double is subnormal is
+  `expr.number_range` with the new `reason: subnormal` (Go `lex.go`, the mirror `bayesExpr.ts`, the message in five
+  languages); a literal read as 0 stays `expr.number_underflow`. The handwritten corpus's `num.subnormal` (`1e-320`,
+  accepted before) is now refused, with `2.5e-324`, `5e-324` and `a * 2.225e-308`; `2.2250738585072014e-308` and a
+  text that rounds to it are kept. The generated corpus is rewritten: its generator's tiny number is `1e-300` (was
+  `1e-320`: 35 grammar cases differ by that number alone, none changes its result), and the mutations, drawn from
+  the handwritten inputs, are drawn again (their mix of codes is about the same). The mirror gives Go's result on
+  both corpora. The graph's bounds are JSON numbers, not literals of the language: outside this correction.
 - **Finding 6**: a value of the wrong JSON type is `graph.format` with `detail` = its JSON path and the JSON type it
   must be (`nodes[0].bounds.lower: must be a number`, `nodes[0].standardize: must be a boolean`; a number out of a
   double's range must be a number), the words of the TypeScript mirror, which now gives the same detail on those

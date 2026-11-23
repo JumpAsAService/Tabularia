@@ -15,7 +15,7 @@ const (
 
 	// The lexer.
 	CodeNumberForm      Code = "expr.number_form"      // args: kind (suffix, trailing_dot, leading_dot, second_dot, exponent)
-	CodeNumberRange     Code = "expr.number_range"     // args: reason (chars, magnitude)
+	CodeNumberRange     Code = "expr.number_range"     // args: reason (chars, magnitude, subnormal)
 	CodeNumberUnderflow Code = "expr.number_underflow" // a non-zero literal read as 0
 	CodeNameCase        Code = "expr.name_case"        // args: name (the word in lower case)
 	CodeNameLong        Code = "expr.name_long"        // more than max_name_bytes

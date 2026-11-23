@@ -58,6 +58,8 @@ export type BayesExprResult =
   | { ok: false, error: BayesExprError }
 
 const LAG = 'lag'
+/** The smallest positive normal double, 2^-1022: a non-zero literal below it is refused (subnormal). */
+const MIN_NORMAL = 2 ** -1022
 
 // The characters are compared by code, byte by byte.
 const isLower = (c: number) => c >= 97 && c <= 122
@@ -271,6 +273,8 @@ class Lexer {
     }
     // Number reads 1e-400 as 0 without an error.
     if (v === 0 && nonZeroMantissa(text)) fail('expr.number_underflow', start, i - start)
+    // A subnormal double keeps fewer digits than the text (2.5e-324 reads as 5e-324): refused, as in Go.
+    if (v !== 0 && Math.abs(v) < MIN_NORMAL) fail('expr.number_range', start, i - start, { reason: 'subnormal' })
     this.i = i
     return tok('number', start, i, v, digitsOnly)
   }
