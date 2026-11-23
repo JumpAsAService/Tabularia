@@ -8072,6 +8072,7 @@ export default {
       "number_range": {
         "chars": "This number has too many digits: write fewer.",
         "magnitude": "This number is too large: the greatest allowed is 1e15.",
+        "subnormal": "This number is too small to keep all its digits: write 0, or a number of at least 2.3e-308.",
       },
       "number_underflow": "This number is so small that it becomes 0: write 0, or a larger number.",
       "name_case": "Names are written in lower case: write {name}.",

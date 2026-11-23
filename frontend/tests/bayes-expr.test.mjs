@@ -80,7 +80,7 @@ test('the input is read by character code: no look-alike digit or space passes',
 const VARIANTS = {
   non_ascii: ['plain', 'look_alike', 'invisible', 'direction'],
   number_form: ['suffix', 'trailing_dot', 'leading_dot', 'second_dot', 'exponent'],
-  number_range: ['chars', 'magnitude'],
+  number_range: ['chars', 'magnitude', 'subnormal'],
   unexpected: ['value', 'operator', 'paren', 'argument', 'index_name', 'bracket'],
 }
 

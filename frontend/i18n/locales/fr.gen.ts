@@ -8072,6 +8072,7 @@ export default {
       "number_range": {
         "chars": "Ce nombre a trop de chiffres : écrivez-en moins.",
         "magnitude": "Ce nombre est trop grand : le maximum permis est 1e15.",
+        "subnormal": "Ce nombre est trop petit pour garder tous ses chiffres : écrivez 0, ou un nombre d’au moins 2.3e-308.",
       },
       "number_underflow": "Ce nombre est si petit qu’il devient 0 : écrivez 0, ou un nombre plus grand.",
       "name_case": "Les noms s’écrivent en minuscules : écrivez {name}.",

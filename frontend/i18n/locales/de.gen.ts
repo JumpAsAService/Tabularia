@@ -8072,6 +8072,7 @@ export default {
       "number_range": {
         "chars": "Diese Zahl hat zu viele Ziffern: schreiben Sie weniger.",
         "magnitude": "Diese Zahl ist zu groß: erlaubt ist höchstens 1e15.",
+        "subnormal": "Diese Zahl ist zu klein, um alle ihre Ziffern zu behalten: schreiben Sie 0 oder eine Zahl von mindestens 2.3e-308.",
       },
       "number_underflow": "Diese Zahl ist so klein, dass sie 0 wird: schreiben Sie 0 oder eine größere Zahl.",
       "name_case": "Namen werden klein geschrieben: schreiben Sie {name}.",
