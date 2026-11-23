@@ -1,0 +1,217 @@
+{
+  "format_version": 1,
+  "plates": [
+    {
+      "id": "rows",
+      "kind": "rows",
+      "label": "Rows"
+    },
+    {
+      "id": "grp",
+      "kind": "group",
+      "label": "Group",
+      "parent": null,
+      "key": "g",
+      "form": "non_centred"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "y",
+      "kind": "data",
+      "name": "y",
+      "label": "Outcome",
+      "plate": "rows",
+      "type": "real"
+    },
+    {
+      "id": "x",
+      "kind": "data",
+      "name": "x",
+      "label": "Predictor",
+      "plate": "rows",
+      "type": "real",
+      "standardize": true
+    },
+    {
+      "id": "g",
+      "kind": "data",
+      "name": "g",
+      "label": "Group of the row",
+      "plate": "rows",
+      "type": "group_index",
+      "target": "grp"
+    },
+    {
+      "id": "mua",
+      "kind": "parameter",
+      "name": "mu_a",
+      "label": "Typical level of the groups",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "1200"
+          },
+          "sigma": {
+            "expr": "2.5"
+          }
+        }
+      }
+    },
+    {
+      "id": "taua",
+      "kind": "parameter",
+      "name": "tau_a",
+      "label": "Spread of the levels between groups",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "1"
+          }
+        }
+      },
+      "bounds": {
+        "lower": 0
+      }
+    },
+    {
+      "id": "ag",
+      "kind": "parameter",
+      "name": "a_g",
+      "label": "Level of a group",
+      "plate": "grp",
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "mu_a"
+          },
+          "sigma": {
+            "expr": "tau_a"
+          }
+        }
+      }
+    },
+    {
+      "id": "bx",
+      "kind": "parameter",
+      "name": "b_x",
+      "label": "Effect of the predictor",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "2.5"
+          }
+        }
+      }
+    },
+    {
+      "id": "sigma",
+      "kind": "parameter",
+      "name": "sigma",
+      "label": "Spread within a group",
+      "plate": null,
+      "prior": {
+        "dist": "exponential",
+        "args": {
+          "beta": {
+            "expr": "1"
+          }
+        }
+      }
+    },
+    {
+      "id": "eta",
+      "kind": "linear_predictor",
+      "name": "eta",
+      "label": "Expected outcome",
+      "plate": "rows",
+      "intercept": {
+        "expr": "a_g[g]"
+      },
+      "terms": [
+        {
+          "data": "x",
+          "coef": {
+            "expr": "b_x"
+          }
+        }
+      ]
+    },
+    {
+      "id": "lik",
+      "kind": "likelihood",
+      "label": "Outcome given the group and the predictor",
+      "observed": "y",
+      "dist": "normal",
+      "args": {
+        "mu": {
+          "expr": "eta"
+        },
+        "sigma": {
+          "expr": "sigma"
+        }
+      }
+    }
+  ],
+  "layout": {
+    "grp": {
+      "x": -20,
+      "y": 250,
+      "w": 340,
+      "h": 140
+    },
+    "mua": {
+      "x": 0,
+      "y": 0
+    },
+    "taua": {
+      "x": 220,
+      "y": 0
+    },
+    "bx": {
+      "x": 440,
+      "y": 0
+    },
+    "sigma": {
+      "x": 660,
+      "y": 0
+    },
+    "ag": {
+      "x": 100,
+      "y": 280
+    },
+    "x": {
+      "x": 440,
+      "y": 140
+    },
+    "g": {
+      "x": 440,
+      "y": 300
+    },
+    "eta": {
+      "x": 220,
+      "y": 420
+    },
+    "y": {
+      "x": 660,
+      "y": 420
+    },
+    "lik": {
+      "x": 440,
+      "y": 540
+    }
+  }
+}

@@ -1,0 +1,143 @@
+{
+  "format_version": 1,
+  "plates": [
+    {
+      "id": "rows",
+      "kind": "rows",
+      "label": "Rows"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "y",
+      "kind": "data",
+      "name": "y",
+      "label": "Outcome",
+      "plate": "rows",
+      "type": "real"
+    },
+    {
+      "id": "x",
+      "kind": "data",
+      "name": "x",
+      "label": "Predictor",
+      "plate": "rows",
+      "type": "real",
+      "standardize": true
+    },
+    {
+      "id": "alpha",
+      "kind": "parameter",
+      "name": "alpha",
+      "label": "Intercept",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "2.5 * 300"
+          }
+        }
+      }
+    },
+    {
+      "id": "bx",
+      "kind": "parameter",
+      "name": "b_x",
+      "label": "Effect of the predictor",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "2.5 * 300"
+          }
+        }
+      }
+    },
+    {
+      "id": "sigma",
+      "kind": "parameter",
+      "name": "sigma",
+      "label": "Spread around the line",
+      "plate": null,
+      "prior": {
+        "dist": "exponential",
+        "args": {
+          "beta": {
+            "expr": "1 / 300"
+          }
+        }
+      }
+    },
+    {
+      "id": "eta",
+      "kind": "linear_predictor",
+      "name": "eta",
+      "label": "Expected outcome",
+      "plate": "rows",
+      "intercept": {
+        "expr": "alpha"
+      },
+      "terms": [
+        {
+          "data": "x",
+          "coef": {
+            "expr": "b_x"
+          }
+        }
+      ]
+    },
+    {
+      "id": "lik",
+      "kind": "likelihood",
+      "label": "Outcome given the predictor",
+      "observed": "y",
+      "dist": "normal",
+      "args": {
+        "mu": {
+          "expr": "eta"
+        },
+        "sigma": {
+          "expr": "sigma"
+        }
+      }
+    }
+  ],
+  "layout": {
+    "alpha": {
+      "x": 0,
+      "y": 0
+    },
+    "bx": {
+      "x": 220,
+      "y": 0
+    },
+    "sigma": {
+      "x": 440,
+      "y": 0
+    },
+    "x": {
+      "x": 220,
+      "y": 140
+    },
+    "eta": {
+      "x": 110,
+      "y": 260
+    },
+    "y": {
+      "x": 440,
+      "y": 380
+    },
+    "lik": {
+      "x": 220,
+      "y": 380
+    }
+  }
+}

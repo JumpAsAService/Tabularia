@@ -1,0 +1,1983 @@
+{
+  "format_version": 1,
+  "templates": [
+    {
+      "id": "glm_linear",
+      "version": 1,
+      "family": "glm",
+      "scale": "outcome",
+      "scaled": [
+        {
+          "node": "alpha",
+          "slot": "prior.mu",
+          "as": "center"
+        },
+        {
+          "node": "alpha",
+          "slot": "prior.sigma",
+          "as": "spread",
+          "times": 2.5
+        },
+        {
+          "node": "bx",
+          "slot": "prior.sigma",
+          "as": "spread",
+          "times": 2.5
+        },
+        {
+          "node": "sigma",
+          "slot": "prior.beta",
+          "as": "rate"
+        }
+      ],
+      "sources": {
+        "alpha": "rstanarm_priors",
+        "bx": "rstanarm_priors",
+        "sigma": "rstanarm_priors"
+      },
+      "graph": {
+        "format_version": 1,
+        "plates": [
+          {
+            "id": "rows",
+            "kind": "rows",
+            "label": "Rows"
+          }
+        ],
+        "nodes": [
+          {
+            "id": "y",
+            "kind": "data",
+            "name": "y",
+            "label": "Outcome",
+            "plate": "rows",
+            "type": "real"
+          },
+          {
+            "id": "x",
+            "kind": "data",
+            "name": "x",
+            "label": "Predictor",
+            "plate": "rows",
+            "type": "real",
+            "standardize": true
+          },
+          {
+            "id": "alpha",
+            "kind": "parameter",
+            "name": "alpha",
+            "label": "Intercept",
+            "plate": null,
+            "prior": {
+              "dist": "normal",
+              "args": {
+                "mu": {
+                  "expr": "0"
+                },
+                "sigma": {
+                  "expr": "2.5"
+                }
+              }
+            }
+          },
+          {
+            "id": "bx",
+            "kind": "parameter",
+            "name": "b_x",
+            "label": "Effect of the predictor",
+            "plate": null,
+            "prior": {
+              "dist": "normal",
+              "args": {
+                "mu": {
+                  "expr": "0"
+                },
+                "sigma": {
+                  "expr": "2.5"
+                }
+              }
+            }
+          },
+          {
+            "id": "sigma",
+            "kind": "parameter",
+            "name": "sigma",
+            "label": "Spread around the line",
+            "plate": null,
+            "prior": {
+              "dist": "exponential",
+              "args": {
+                "beta": {
+                  "expr": "1"
+                }
+              }
+            }
+          },
+          {
+            "id": "eta",
+            "kind": "linear_predictor",
+            "name": "eta",
+            "label": "Expected outcome",
+            "plate": "rows",
+            "intercept": {
+              "expr": "alpha"
+            },
+            "terms": [
+              {
+                "data": "x",
+                "coef": {
+                  "expr": "b_x"
+                }
+              }
+            ]
+          },
+          {
+            "id": "lik",
+            "kind": "likelihood",
+            "label": "Outcome given the predictor",
+            "observed": "y",
+            "dist": "normal",
+            "args": {
+              "mu": {
+                "expr": "eta"
+              },
+              "sigma": {
+                "expr": "sigma"
+              }
+            }
+          }
+        ],
+        "layout": {
+          "alpha": {
+            "x": 0,
+            "y": 0
+          },
+          "bx": {
+            "x": 220,
+            "y": 0
+          },
+          "sigma": {
+            "x": 440,
+            "y": 0
+          },
+          "x": {
+            "x": 220,
+            "y": 140
+          },
+          "eta": {
+            "x": 110,
+            "y": 260
+          },
+          "y": {
+            "x": 440,
+            "y": 380
+          },
+          "lik": {
+            "x": 220,
+            "y": 380
+          }
+        }
+      }
+    },
+    {
+      "id": "glm_logistic",
+      "version": 1,
+      "family": "glm",
+      "scale": null,
+      "scaled": [],
+      "sources": {
+        "alpha": "rstanarm_priors",
+        "bx": "rstanarm_priors"
+      },
+      "graph": {
+        "format_version": 1,
+        "plates": [
+          {
+            "id": "rows",
+            "kind": "rows",
+            "label": "Rows"
+          }
+        ],
+        "nodes": [
+          {
+            "id": "y",
+            "kind": "data",
+            "name": "y",
+            "label": "Outcome (yes or no)",
+            "plate": "rows",
+            "type": "int",
+            "support": "binary"
+          },
+          {
+            "id": "x",
+            "kind": "data",
+            "name": "x",
+            "label": "Predictor",
+            "plate": "rows",
+            "type": "real",
+            "standardize": true
+          },
+          {
+            "id": "alpha",
+            "kind": "parameter",
+            "name": "alpha",
+            "label": "Intercept",
+            "plate": null,
+            "prior": {
+              "dist": "normal",
+              "args": {
+                "mu": {
+                  "expr": "0"
+                },
+                "sigma": {
+                  "expr": "2.5"
+                }
+              }
+            }
+          },
+          {
+            "id": "bx",
+            "kind": "parameter",
+            "name": "b_x",
+            "label": "Effect of the predictor",
+            "plate": null,
+            "prior": {
+              "dist": "normal",
+              "args": {
+                "mu": {
+                  "expr": "0"
+                },
+                "sigma": {
+                  "expr": "2.5"
+                }
+              }
+            }
+          },
+          {
+            "id": "eta",
+            "kind": "linear_predictor",
+            "name": "eta",
+            "label": "Expected outcome",
+            "plate": "rows",
+            "intercept": {
+              "expr": "alpha"
+            },
+            "terms": [
+              {
+                "data": "x",
+                "coef": {
+                  "expr": "b_x"
+                }
+              }
+            ]
+          },
+          {
+            "id": "lik",
+            "kind": "likelihood",
+            "label": "Outcome given the predictor",
+            "observed": "y",
+            "dist": "bernoulli_logit",
+            "args": {
+              "alpha": {
+                "expr": "eta"
+              }
+            }
+          }
+        ],
+        "layout": {
+          "alpha": {
+            "x": 0,
+            "y": 0
+          },
+          "bx": {
+            "x": 220,
+            "y": 0
+          },
+          "x": {
+            "x": 220,
+            "y": 140
+          },
+          "eta": {
+            "x": 110,
+            "y": 260
+          },
+          "y": {
+            "x": 440,
+            "y": 380
+          },
+          "lik": {
+            "x": 220,
+            "y": 380
+          }
+        }
+      }
+    },
+    {
+      "id": "glm_poisson",
+      "version": 1,
+      "family": "glm",
+      "scale": null,
+      "scaled": [],
+      "sources": {
+        "alpha": "rstanarm_priors",
+        "bx": "rstanarm_priors"
+      },
+      "graph": {
+        "format_version": 1,
+        "plates": [
+          {
+            "id": "rows",
+            "kind": "rows",
+            "label": "Rows"
+          }
+        ],
+        "nodes": [
+          {
+            "id": "y",
+            "kind": "data",
+            "name": "y",
+            "label": "Outcome (a count)",
+            "plate": "rows",
+            "type": "int",
+            "support": "nonnegative"
+          },
+          {
+            "id": "x",
+            "kind": "data",
+            "name": "x",
+            "label": "Predictor",
+            "plate": "rows",
+            "type": "real",
+            "standardize": true
+          },
+          {
+            "id": "alpha",
+            "kind": "parameter",
+            "name": "alpha",
+            "label": "Intercept",
+            "plate": null,
+            "prior": {
+              "dist": "normal",
+              "args": {
+                "mu": {
+                  "expr": "0"
+                },
+                "sigma": {
+                  "expr": "2.5"
+                }
+              }
+            }
+          },
+          {
+            "id": "bx",
+            "kind": "parameter",
+            "name": "b_x",
+            "label": "Effect of the predictor",
+            "plate": null,
+            "prior": {
+              "dist": "normal",
+              "args": {
+                "mu": {
+                  "expr": "0"
+                },
+                "sigma": {
+                  "expr": "2.5"
+                }
+              }
+            }
+          },
+          {
+            "id": "eta",
+            "kind": "linear_predictor",
+            "name": "eta",
+            "label": "Expected outcome",
+            "plate": "rows",
+            "intercept": {
+              "expr": "alpha"
+            },
+            "terms": [
+              {
+                "data": "x",
+                "coef": {
+                  "expr": "b_x"
+                }
+              }
+            ]
+          },
+          {
+            "id": "lik",
+            "kind": "likelihood",
+            "label": "Count given the predictor",
+            "observed": "y",
+            "dist": "poisson_log",
+            "args": {
+              "alpha": {
+                "expr": "eta"
+              }
+            }
+          }
+        ],
+        "layout": {
+          "alpha": {
+            "x": 0,
+            "y": 0
+          },
+          "bx": {
+            "x": 220,
+            "y": 0
+          },
+          "x": {
+            "x": 220,
+            "y": 140
+          },
+          "eta": {
+            "x": 110,
+            "y": 260
+          },
+          "y": {
+            "x": 440,
+            "y": 380
+          },
+          "lik": {
+            "x": 220,
+            "y": 380
+          }
+        }
+      }
+    },
+    {
+      "id": "glm_negbin",
+      "version": 1,
+      "family": "glm",
+      "scale": null,
+      "scaled": [],
+      "sources": {
+        "alpha": "rstanarm_priors",
+        "bx": "rstanarm_priors",
+        "phi": "stan_prior_wiki"
+      },
+      "graph": {
+        "format_version": 1,
+        "plates": [
+          {
+            "id": "rows",
+            "kind": "rows",
+            "label": "Rows"
+          }
+        ],
+        "nodes": [
+          {
+            "id": "y",
+            "kind": "data",
+            "name": "y",
+            "label": "Outcome (a count)",
+            "plate": "rows",
+            "type": "int",
+            "support": "nonnegative"
+          },
+          {
+            "id": "x",
+            "kind": "data",
+            "name": "x",
+            "label": "Predictor",
+            "plate": "rows",
+            "type": "real",
+            "standardize": true
+          },
+          {
+            "id": "alpha",
+            "kind": "parameter",
+            "name": "alpha",
+            "label": "Intercept",
+            "plate": null,
+            "prior": {
+              "dist": "normal",
+              "args": {
+                "mu": {
+                  "expr": "0"
+                },
+                "sigma": {
+                  "expr": "2.5"
+                }
+              }
+            }
+          },
+          {
+            "id": "bx",
+            "kind": "parameter",
+            "name": "b_x",
+            "label": "Effect of the predictor",
+            "plate": null,
+            "prior": {
+              "dist": "normal",
+              "args": {
+                "mu": {
+                  "expr": "0"
+                },
+                "sigma": {
+                  "expr": "2.5"
+                }
+              }
+            }
+          },
+          {
+            "id": "phi",
+            "kind": "parameter",
+            "name": "phi",
+            "label": "Extra variation of the count",
+            "plate": null,
+            "prior": {
+              "dist": "inv_gamma",
+              "args": {
+                "alpha": {
+                  "expr": "0.4"
+                },
+                "beta": {
+                  "expr": "0.3"
+                }
+              }
+            }
+          },
+          {
+            "id": "eta",
+            "kind": "linear_predictor",
+            "name": "eta",
+            "label": "Expected outcome",
+            "plate": "rows",
+            "intercept": {
+              "expr": "alpha"
+            },
+            "terms": [
+              {
+                "data": "x",
+                "coef": {
+                  "expr": "b_x"
+                }
+              }
+            ]
+          },
+          {
+            "id": "lik",
+            "kind": "likelihood",
+            "label": "Count given the predictor",
+            "observed": "y",
+            "dist": "neg_binomial_2_log",
+            "args": {
+              "eta": {
+                "expr": "eta"
+              },
+              "phi": {
+                "expr": "phi"
+              }
+            }
+          }
+        ],
+        "layout": {
+          "alpha": {
+            "x": 0,
+            "y": 0
+          },
+          "bx": {
+            "x": 220,
+            "y": 0
+          },
+          "x": {
+            "x": 220,
+            "y": 140
+          },
+          "eta": {
+            "x": 110,
+            "y": 260
+          },
+          "y": {
+            "x": 440,
+            "y": 380
+          },
+          "lik": {
+            "x": 220,
+            "y": 380
+          },
+          "phi": {
+            "x": 440,
+            "y": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "hier_intercepts",
+      "version": 1,
+      "family": "hierarchical",
+      "scale": "outcome",
+      "scaled": [
+        {
+          "node": "mua",
+          "slot": "prior.mu",
+          "as": "center"
+        },
+        {
+          "node": "mua",
+          "slot": "prior.sigma",
+          "as": "spread",
+          "times": 2.5
+        },
+        {
+          "node": "taua",
+          "slot": "prior.sigma",
+          "as": "spread"
+        },
+        {
+          "node": "bx",
+          "slot": "prior.sigma",
+          "as": "spread",
+          "times": 2.5
+        },
+        {
+          "node": "sigma",
+          "slot": "prior.beta",
+          "as": "rate"
+        }
+      ],
+      "sources": {
+        "mua": "rstanarm_priors",
+        "taua": "stan_prior_wiki",
+        "ag": "spec",
+        "bx": "rstanarm_priors",
+        "sigma": "rstanarm_priors"
+      },
+      "graph": {
+        "format_version": 1,
+        "plates": [
+          {
+            "id": "rows",
+            "kind": "rows",
+            "label": "Rows"
+          },
+          {
+            "id": "grp",
+            "kind": "group",
+            "label": "Group",
+            "parent": null,
+            "key": "g",
+            "form": "non_centred"
+          }
+        ],
+        "nodes": [
+          {
+            "id": "y",
+            "kind": "data",
+            "name": "y",
+            "label": "Outcome",
+            "plate": "rows",
+            "type": "real"
+          },
+          {
+            "id": "x",
+            "kind": "data",
+            "name": "x",
+            "label": "Predictor",
+            "plate": "rows",
+            "type": "real",
+            "standardize": true
+          },
+          {
+            "id": "g",
+            "kind": "data",
+            "name": "g",
+            "label": "Group of the row",
+            "plate": "rows",
+            "type": "group_index",
+            "target": "grp"
+          },
+          {
+            "id": "mua",
+            "kind": "parameter",
+            "name": "mu_a",
+            "label": "Typical level of the groups",
+            "plate": null,
+            "prior": {
+              "dist": "normal",
+              "args": {
+                "mu": {
+                  "expr": "0"
+                },
+                "sigma": {
+                  "expr": "2.5"
+                }
+              }
+            }
+          },
+          {
+            "id": "taua",
+            "kind": "parameter",
+            "name": "tau_a",
+            "label": "Spread of the levels between groups",
+            "plate": null,
+            "prior": {
+              "dist": "normal",
+              "args": {
+                "mu": {
+                  "expr": "0"
+                },
+                "sigma": {
+                  "expr": "1"
+                }
+              }
+            },
+            "bounds": {
+              "lower": 0
+            }
+          },
+          {
+            "id": "ag",
+            "kind": "parameter",
+            "name": "a_g",
+            "label": "Level of a group",
+            "plate": "grp",
+            "prior": {
+              "dist": "normal",
+              "args": {
+                "mu": {
+                  "expr": "mu_a"
+                },
+                "sigma": {
+                  "expr": "tau_a"
+                }
+              }
+            }
+          },
+          {
+            "id": "bx",
+            "kind": "parameter",
+            "name": "b_x",
+            "label": "Effect of the predictor",
+            "plate": null,
+            "prior": {
+              "dist": "normal",
+              "args": {
+                "mu": {
+                  "expr": "0"
+                },
+                "sigma": {
+                  "expr": "2.5"
+                }
+              }
+            }
+          },
+          {
+            "id": "sigma",
+            "kind": "parameter",
+            "name": "sigma",
+            "label": "Spread within a group",
+            "plate": null,
+            "prior": {
+              "dist": "exponential",
+              "args": {
+                "beta": {
+                  "expr": "1"
+                }
+              }
+            }
+          },
+          {
+            "id": "eta",
+            "kind": "linear_predictor",
+            "name": "eta",
+            "label": "Expected outcome",
+            "plate": "rows",
+            "intercept": {
+              "expr": "a_g[g]"
+            },
+            "terms": [
+              {
+                "data": "x",
+                "coef": {
+                  "expr": "b_x"
+                }
+              }
+            ]
+          },
+          {
+            "id": "lik",
+            "kind": "likelihood",
+            "label": "Outcome given the group and the predictor",
+            "observed": "y",
+            "dist": "normal",
+            "args": {
+              "mu": {
+                "expr": "eta"
+              },
+              "sigma": {
+                "expr": "sigma"
+              }
+            }
+          }
+        ],
+        "layout": {
+          "grp": {
+            "x": -20,
+            "y": 250,
+            "w": 340,
+            "h": 140
+          },
+          "mua": {
+            "x": 0,
+            "y": 0
+          },
+          "taua": {
+            "x": 220,
+            "y": 0
+          },
+          "bx": {
+            "x": 440,
+            "y": 0
+          },
+          "sigma": {
+            "x": 660,
+            "y": 0
+          },
+          "ag": {
+            "x": 100,
+            "y": 280
+          },
+          "x": {
+            "x": 440,
+            "y": 140
+          },
+          "g": {
+            "x": 440,
+            "y": 300
+          },
+          "eta": {
+            "x": 220,
+            "y": 420
+          },
+          "y": {
+            "x": 660,
+            "y": 420
+          },
+          "lik": {
+            "x": 440,
+            "y": 540
+          }
+        }
+      }
+    },
+    {
+      "id": "hier_slopes",
+      "version": 1,
+      "family": "hierarchical",
+      "scale": "outcome",
+      "scaled": [
+        {
+          "node": "mua",
+          "slot": "prior.mu",
+          "as": "center"
+        },
+        {
+          "node": "mua",
+          "slot": "prior.sigma",
+          "as": "spread",
+          "times": 2.5
+        },
+        {
+          "node": "mub",
+          "slot": "prior.sigma",
+          "as": "spread",
+          "times": 2.5
+        },
+        {
+          "node": "taua",
+          "slot": "prior.sigma",
+          "as": "spread"
+        },
+        {
+          "node": "taub",
+          "slot": "prior.sigma",
+          "as": "spread"
+        },
+        {
+          "node": "sigma",
+          "slot": "prior.beta",
+          "as": "rate"
+        }
+      ],
+      "sources": {
+        "mua": "rstanarm_priors",
+        "mub": "rstanarm_priors",
+        "taua": "stan_prior_wiki",
+        "taub": "stan_prior_wiki",
+        "eff": "stan_prior_wiki",
+        "sigma": "rstanarm_priors"
+      },
+      "graph": {
+        "format_version": 1,
+        "plates": [
+          {
+            "id": "rows",
+            "kind": "rows",
+            "label": "Rows"
+          },
+          {
+            "id": "grp",
+            "kind": "group",
+            "label": "Group",
+            "parent": null,
+            "key": "g",
+            "form": "non_centred"
+          }
+        ],
+        "nodes": [
+          {
+            "id": "y",
+            "kind": "data",
+            "name": "y",
+            "label": "Outcome",
+            "plate": "rows",
+            "type": "real"
+          },
+          {
+            "id": "x",
+            "kind": "data",
+            "name": "x",
+            "label": "Predictor",
+            "plate": "rows",
+            "type": "real",
+            "standardize": true
+          },
+          {
+            "id": "g",
+            "kind": "data",
+            "name": "g",
+            "label": "Group of the row",
+            "plate": "rows",
+            "type": "group_index",
+            "target": "grp"
+          },
+          {
+            "id": "mua",
+            "kind": "parameter",
+            "name": "mu_a",
+            "label": "Typical level of the groups",
+            "plate": null,
+            "prior": {
+              "dist": "normal",
+              "args": {
+                "mu": {
+                  "expr": "0"
+                },
+                "sigma": {
+                  "expr": "2.5"
+                }
+              }
+            }
+          },
+          {
+            "id": "mub",
+            "kind": "parameter",
+            "name": "mu_b",
+            "label": "Typical effect of the predictor",
+            "plate": null,
+            "prior": {
+              "dist": "normal",
+              "args": {
+                "mu": {
+                  "expr": "0"
+                },
+                "sigma": {
+                  "expr": "2.5"
+                }
+              }
+            }
+          },
+          {
+            "id": "taua",
+            "kind": "parameter",
+            "name": "tau_a",
+            "label": "Spread of the levels between groups",
+            "plate": null,
+            "prior": {
+              "dist": "normal",
+              "args": {
+                "mu": {
+                  "expr": "0"
+                },
+                "sigma": {
+                  "expr": "1"
+                }
+              }
+            },
+            "bounds": {
+              "lower": 0
+            }
+          },
+          {
+            "id": "taub",
+            "kind": "parameter",
+            "name": "tau_b",
+            "label": "Spread of the effects between groups",
+            "plate": null,
+            "prior": {
+              "dist": "normal",
+              "args": {
+                "mu": {
+                  "expr": "0"
+                },
+                "sigma": {
+                  "expr": "1"
+                }
+              }
+            },
+            "bounds": {
+              "lower": 0
+            }
+          },
+          {
+            "id": "eff",
+            "kind": "correlated_effects",
+            "label": "Level and effect of a group",
+            "plate": "grp",
+            "components": [
+              {
+                "id": "ca",
+                "name": "a_g",
+                "label": "Level of a group",
+                "mean": {
+                  "expr": "mu_a"
+                },
+                "scale": {
+                  "expr": "tau_a"
+                }
+              },
+              {
+                "id": "cb",
+                "name": "b_g",
+                "label": "Effect of the predictor in a group",
+                "mean": {
+                  "expr": "mu_b"
+                },
+                "scale": {
+                  "expr": "tau_b"
+                }
+              }
+            ],
+            "correlation": {
+              "name": "rho_g",
+              "label": "Correlation between level and effect",
+              "eta": {
+                "expr": "2"
+              }
+            }
+          },
+          {
+            "id": "sigma",
+            "kind": "parameter",
+            "name": "sigma",
+            "label": "Spread within a group",
+            "plate": null,
+            "prior": {
+              "dist": "exponential",
+              "args": {
+                "beta": {
+                  "expr": "1"
+                }
+              }
+            }
+          },
+          {
+            "id": "lik",
+            "kind": "likelihood",
+            "label": "Outcome given the group and the predictor",
+            "observed": "y",
+            "dist": "normal",
+            "args": {
+              "mu": {
+                "expr": "a_g[g] + b_g[g] * x"
+              },
+              "sigma": {
+                "expr": "sigma"
+              }
+            }
+          }
+        ],
+        "layout": {
+          "grp": {
+            "x": -20,
+            "y": 250,
+            "w": 560,
+            "h": 150
+          },
+          "mua": {
+            "x": 0,
+            "y": 0
+          },
+          "mub": {
+            "x": 220,
+            "y": 0
+          },
+          "taua": {
+            "x": 440,
+            "y": 0
+          },
+          "taub": {
+            "x": 660,
+            "y": 0
+          },
+          "sigma": {
+            "x": 880,
+            "y": 0
+          },
+          "eff": {
+            "x": 200,
+            "y": 290
+          },
+          "x": {
+            "x": 660,
+            "y": 200
+          },
+          "g": {
+            "x": 660,
+            "y": 300
+          },
+          "y": {
+            "x": 880,
+            "y": 300
+          },
+          "lik": {
+            "x": 440,
+            "y": 440
+          }
+        }
+      }
+    },
+    {
+      "id": "hier_nested",
+      "version": 1,
+      "family": "hierarchical",
+      "scale": "outcome",
+      "scaled": [
+        {
+          "node": "mu",
+          "slot": "prior.mu",
+          "as": "center"
+        },
+        {
+          "node": "mu",
+          "slot": "prior.sigma",
+          "as": "spread",
+          "times": 2.5
+        },
+        {
+          "node": "taud",
+          "slot": "prior.sigma",
+          "as": "spread"
+        },
+        {
+          "node": "taus",
+          "slot": "prior.sigma",
+          "as": "spread"
+        },
+        {
+          "node": "bx",
+          "slot": "prior.sigma",
+          "as": "spread",
+          "times": 2.5
+        },
+        {
+          "node": "sigma",
+          "slot": "prior.beta",
+          "as": "rate"
+        }
+      ],
+      "sources": {
+        "mu": "rstanarm_priors",
+        "taud": "stan_prior_wiki",
+        "taus": "stan_prior_wiki",
+        "ud": "spec",
+        "us": "spec",
+        "bx": "rstanarm_priors",
+        "sigma": "rstanarm_priors"
+      },
+      "graph": {
+        "format_version": 1,
+        "plates": [
+          {
+            "id": "rows",
+            "kind": "rows",
+            "label": "Rows"
+          },
+          {
+            "id": "dst",
+            "kind": "group",
+            "label": "District",
+            "parent": null,
+            "key": "d",
+            "form": "non_centred"
+          },
+          {
+            "id": "sch",
+            "kind": "group",
+            "label": "School",
+            "parent": "dst",
+            "key": "s",
+            "form": "non_centred"
+          }
+        ],
+        "nodes": [
+          {
+            "id": "y",
+            "kind": "data",
+            "name": "y",
+            "label": "Outcome",
+            "plate": "rows",
+            "type": "real"
+          },
+          {
+            "id": "x",
+            "kind": "data",
+            "name": "x",
+            "label": "Predictor",
+            "plate": "rows",
+            "type": "real",
+            "standardize": true
+          },
+          {
+            "id": "d",
+            "kind": "data",
+            "name": "d",
+            "label": "District of the row",
+            "plate": "rows",
+            "type": "group_index",
+            "target": "dst"
+          },
+          {
+            "id": "s",
+            "kind": "data",
+            "name": "s",
+            "label": "School of the row",
+            "plate": "rows",
+            "type": "group_index",
+            "target": "sch"
+          },
+          {
+            "id": "mu",
+            "kind": "parameter",
+            "name": "mu",
+            "label": "Overall level",
+            "plate": null,
+            "prior": {
+              "dist": "normal",
+              "args": {
+                "mu": {
+                  "expr": "0"
+                },
+                "sigma": {
+                  "expr": "2.5"
+                }
+              }
+            }
+          },
+          {
+            "id": "taud",
+            "kind": "parameter",
+            "name": "tau_d",
+            "label": "Spread of the levels between districts",
+            "plate": null,
+            "prior": {
+              "dist": "normal",
+              "args": {
+                "mu": {
+                  "expr": "0"
+                },
+                "sigma": {
+                  "expr": "1"
+                }
+              }
+            },
+            "bounds": {
+              "lower": 0
+            }
+          },
+          {
+            "id": "taus",
+            "kind": "parameter",
+            "name": "tau_s",
+            "label": "Spread of the levels between schools of a district",
+            "plate": null,
+            "prior": {
+              "dist": "normal",
+              "args": {
+                "mu": {
+                  "expr": "0"
+                },
+                "sigma": {
+                  "expr": "1"
+                }
+              }
+            },
+            "bounds": {
+              "lower": 0
+            }
+          },
+          {
+            "id": "ud",
+            "kind": "parameter",
+            "name": "u_d",
+            "label": "Level of a district",
+            "plate": "dst",
+            "prior": {
+              "dist": "normal",
+              "args": {
+                "mu": {
+                  "expr": "mu"
+                },
+                "sigma": {
+                  "expr": "tau_d"
+                }
+              }
+            }
+          },
+          {
+            "id": "us",
+            "kind": "parameter",
+            "name": "u_s",
+            "label": "Level of a school",
+            "plate": "sch",
+            "prior": {
+              "dist": "normal",
+              "args": {
+                "mu": {
+                  "expr": "u_d[d]"
+                },
+                "sigma": {
+                  "expr": "tau_s"
+                }
+              }
+            }
+          },
+          {
+            "id": "bx",
+            "kind": "parameter",
+            "name": "b_x",
+            "label": "Effect of the predictor",
+            "plate": null,
+            "prior": {
+              "dist": "normal",
+              "args": {
+                "mu": {
+                  "expr": "0"
+                },
+                "sigma": {
+                  "expr": "2.5"
+                }
+              }
+            }
+          },
+          {
+            "id": "sigma",
+            "kind": "parameter",
+            "name": "sigma",
+            "label": "Spread within a school",
+            "plate": null,
+            "prior": {
+              "dist": "exponential",
+              "args": {
+                "beta": {
+                  "expr": "1"
+                }
+              }
+            }
+          },
+          {
+            "id": "eta",
+            "kind": "linear_predictor",
+            "name": "eta",
+            "label": "Expected outcome",
+            "plate": "rows",
+            "intercept": {
+              "expr": "u_s[s]"
+            },
+            "terms": [
+              {
+                "data": "x",
+                "coef": {
+                  "expr": "b_x"
+                }
+              }
+            ]
+          },
+          {
+            "id": "lik",
+            "kind": "likelihood",
+            "label": "Outcome given the school and the predictor",
+            "observed": "y",
+            "dist": "normal",
+            "args": {
+              "mu": {
+                "expr": "eta"
+              },
+              "sigma": {
+                "expr": "sigma"
+              }
+            }
+          }
+        ],
+        "layout": {
+          "dst": {
+            "x": -20,
+            "y": 210,
+            "w": 340,
+            "h": 260
+          },
+          "sch": {
+            "x": 0,
+            "y": 330,
+            "w": 300,
+            "h": 120
+          },
+          "mu": {
+            "x": 0,
+            "y": 0
+          },
+          "taud": {
+            "x": 220,
+            "y": 0
+          },
+          "taus": {
+            "x": 440,
+            "y": 0
+          },
+          "bx": {
+            "x": 660,
+            "y": 0
+          },
+          "sigma": {
+            "x": 880,
+            "y": 0
+          },
+          "ud": {
+            "x": 40,
+            "y": 240
+          },
+          "us": {
+            "x": 60,
+            "y": 360
+          },
+          "x": {
+            "x": 660,
+            "y": 200
+          },
+          "d": {
+            "x": 440,
+            "y": 200
+          },
+          "s": {
+            "x": 440,
+            "y": 330
+          },
+          "eta": {
+            "x": 300,
+            "y": 520
+          },
+          "y": {
+            "x": 660,
+            "y": 520
+          },
+          "lik": {
+            "x": 440,
+            "y": 640
+          }
+        }
+      }
+    },
+    {
+      "id": "ts_ar",
+      "version": 1,
+      "family": "series",
+      "scale": "outcome",
+      "scaled": [
+        {
+          "node": "mu",
+          "slot": "prior.mu",
+          "as": "center"
+        },
+        {
+          "node": "mu",
+          "slot": "prior.sigma",
+          "as": "spread",
+          "times": 2.5
+        },
+        {
+          "node": "sigma",
+          "slot": "prior.beta",
+          "as": "rate"
+        }
+      ],
+      "sources": {
+        "mu": "rstanarm_priors",
+        "phi1": "spec",
+        "phi2": "spec",
+        "sigma": "rstanarm_priors"
+      },
+      "order": {
+        "default": 2,
+        "node": "phi1",
+        "id_prefix": "phi",
+        "name_prefix": "phi",
+        "label": "Coefficient of lag {k}",
+        "likelihood": "lik",
+        "slot": "args.mu",
+        "outcome": "y",
+        "mean": "mu",
+        "columns": 4,
+        "row_height": 110
+      },
+      "graph": {
+        "format_version": 1,
+        "plates": [
+          {
+            "id": "rows",
+            "kind": "rows",
+            "label": "Rows",
+            "series": {
+              "time": "t",
+              "by": null
+            }
+          }
+        ],
+        "nodes": [
+          {
+            "id": "y",
+            "kind": "data",
+            "name": "y",
+            "label": "Series",
+            "plate": "rows",
+            "type": "real"
+          },
+          {
+            "id": "t",
+            "kind": "data",
+            "name": "t",
+            "label": "Time of the row",
+            "plate": "rows",
+            "type": "time"
+          },
+          {
+            "id": "mu",
+            "kind": "parameter",
+            "name": "mu",
+            "label": "Level of the series",
+            "plate": null,
+            "prior": {
+              "dist": "normal",
+              "args": {
+                "mu": {
+                  "expr": "0"
+                },
+                "sigma": {
+                  "expr": "2.5"
+                }
+              }
+            }
+          },
+          {
+            "id": "phi1",
+            "kind": "parameter",
+            "name": "phi1",
+            "label": "Coefficient of lag 1",
+            "plate": null,
+            "prior": {
+              "dist": "normal",
+              "args": {
+                "mu": {
+                  "expr": "0"
+                },
+                "sigma": {
+                  "expr": "0.5"
+                }
+              }
+            }
+          },
+          {
+            "id": "phi2",
+            "kind": "parameter",
+            "name": "phi2",
+            "label": "Coefficient of lag 2",
+            "plate": null,
+            "prior": {
+              "dist": "normal",
+              "args": {
+                "mu": {
+                  "expr": "0"
+                },
+                "sigma": {
+                  "expr": "0.5"
+                }
+              }
+            }
+          },
+          {
+            "id": "sigma",
+            "kind": "parameter",
+            "name": "sigma",
+            "label": "Spread of a value around its expectation",
+            "plate": null,
+            "prior": {
+              "dist": "exponential",
+              "args": {
+                "beta": {
+                  "expr": "1"
+                }
+              }
+            }
+          },
+          {
+            "id": "lik",
+            "kind": "likelihood",
+            "label": "Series given its past values",
+            "observed": "y",
+            "dist": "normal",
+            "args": {
+              "mu": {
+                "expr": "mu + phi1 * (lag(y, 1) - mu) + phi2 * (lag(y, 2) - mu)"
+              },
+              "sigma": {
+                "expr": "sigma"
+              }
+            }
+          }
+        ],
+        "layout": {
+          "mu": {
+            "x": 0,
+            "y": 0
+          },
+          "phi1": {
+            "x": 220,
+            "y": 0
+          },
+          "phi2": {
+            "x": 420,
+            "y": 0
+          },
+          "sigma": {
+            "x": 1020,
+            "y": 0
+          },
+          "y": {
+            "x": 620,
+            "y": 140
+          },
+          "t": {
+            "x": 820,
+            "y": 140
+          },
+          "lik": {
+            "x": 220,
+            "y": 280
+          }
+        }
+      }
+    },
+    {
+      "id": "ts_random_walk",
+      "version": 1,
+      "family": "series",
+      "scale": "outcome",
+      "scaled": [
+        {
+          "node": "delta",
+          "slot": "prior.sigma",
+          "as": "spread"
+        },
+        {
+          "node": "sigma",
+          "slot": "prior.beta",
+          "as": "rate"
+        }
+      ],
+      "sources": {
+        "delta": "spec",
+        "sigma": "rstanarm_priors"
+      },
+      "graph": {
+        "format_version": 1,
+        "plates": [
+          {
+            "id": "rows",
+            "kind": "rows",
+            "label": "Rows",
+            "series": {
+              "time": "t",
+              "by": null
+            }
+          }
+        ],
+        "nodes": [
+          {
+            "id": "y",
+            "kind": "data",
+            "name": "y",
+            "label": "Series",
+            "plate": "rows",
+            "type": "real"
+          },
+          {
+            "id": "t",
+            "kind": "data",
+            "name": "t",
+            "label": "Time of the row",
+            "plate": "rows",
+            "type": "time"
+          },
+          {
+            "id": "delta",
+            "kind": "parameter",
+            "name": "delta",
+            "label": "Drift: the average step",
+            "plate": null,
+            "prior": {
+              "dist": "normal",
+              "args": {
+                "mu": {
+                  "expr": "0"
+                },
+                "sigma": {
+                  "expr": "1"
+                }
+              }
+            }
+          },
+          {
+            "id": "sigma",
+            "kind": "parameter",
+            "name": "sigma",
+            "label": "Spread of a step",
+            "plate": null,
+            "prior": {
+              "dist": "exponential",
+              "args": {
+                "beta": {
+                  "expr": "1"
+                }
+              }
+            }
+          },
+          {
+            "id": "lik",
+            "kind": "likelihood",
+            "label": "Series given its last value",
+            "observed": "y",
+            "dist": "normal",
+            "args": {
+              "mu": {
+                "expr": "lag(y, 1) + delta"
+              },
+              "sigma": {
+                "expr": "sigma"
+              }
+            }
+          }
+        ],
+        "layout": {
+          "delta": {
+            "x": 0,
+            "y": 0
+          },
+          "sigma": {
+            "x": 220,
+            "y": 0
+          },
+          "y": {
+            "x": 440,
+            "y": 140
+          },
+          "t": {
+            "x": 660,
+            "y": 140
+          },
+          "lik": {
+            "x": 220,
+            "y": 280
+          }
+        }
+      }
+    },
+    {
+      "id": "ts_local_level",
+      "version": 1,
+      "family": "series",
+      "scale": "outcome",
+      "scaled": [
+        {
+          "node": "level",
+          "slot": "init.mu",
+          "as": "center"
+        },
+        {
+          "node": "level",
+          "slot": "init.sigma",
+          "as": "spread",
+          "times": 2.5
+        },
+        {
+          "node": "sigmalevel",
+          "slot": "prior.sigma",
+          "as": "spread"
+        },
+        {
+          "node": "sigmaobs",
+          "slot": "prior.beta",
+          "as": "rate"
+        }
+      ],
+      "sources": {
+        "level": "rstanarm_priors",
+        "sigmalevel": "stan_prior_wiki",
+        "sigmaobs": "rstanarm_priors"
+      },
+      "graph": {
+        "format_version": 1,
+        "plates": [
+          {
+            "id": "rows",
+            "kind": "rows",
+            "label": "Rows",
+            "series": {
+              "time": "t",
+              "by": null
+            }
+          }
+        ],
+        "nodes": [
+          {
+            "id": "y",
+            "kind": "data",
+            "name": "y",
+            "label": "Series",
+            "plate": "rows",
+            "type": "real"
+          },
+          {
+            "id": "t",
+            "kind": "data",
+            "name": "t",
+            "label": "Time of the row",
+            "plate": "rows",
+            "type": "time"
+          },
+          {
+            "id": "sigmalevel",
+            "kind": "parameter",
+            "name": "sigma_level",
+            "label": "Spread of the level's steps",
+            "plate": null,
+            "prior": {
+              "dist": "normal",
+              "args": {
+                "mu": {
+                  "expr": "0"
+                },
+                "sigma": {
+                  "expr": "1"
+                }
+              }
+            },
+            "bounds": {
+              "lower": 0
+            }
+          },
+          {
+            "id": "sigmaobs",
+            "kind": "parameter",
+            "name": "sigma_obs",
+            "label": "Spread of the observation around the level",
+            "plate": null,
+            "prior": {
+              "dist": "exponential",
+              "args": {
+                "beta": {
+                  "expr": "1"
+                }
+              }
+            }
+          },
+          {
+            "id": "level",
+            "kind": "state",
+            "name": "level",
+            "label": "Hidden level",
+            "plate": "rows",
+            "process": "random_walk",
+            "init": {
+              "dist": "normal",
+              "args": {
+                "mu": {
+                  "expr": "0"
+                },
+                "sigma": {
+                  "expr": "2.5"
+                }
+              }
+            },
+            "scale": {
+              "expr": "sigma_level"
+            },
+            "form": "non_centred"
+          },
+          {
+            "id": "lik",
+            "kind": "likelihood",
+            "label": "Series given the hidden level",
+            "observed": "y",
+            "dist": "normal",
+            "args": {
+              "mu": {
+                "expr": "level"
+              },
+              "sigma": {
+                "expr": "sigma_obs"
+              }
+            }
+          }
+        ],
+        "layout": {
+          "sigmalevel": {
+            "x": 0,
+            "y": 0
+          },
+          "sigmaobs": {
+            "x": 440,
+            "y": 0
+          },
+          "level": {
+            "x": 220,
+            "y": 140
+          },
+          "y": {
+            "x": 660,
+            "y": 140
+          },
+          "t": {
+            "x": 880,
+            "y": 140
+          },
+          "lik": {
+            "x": 220,
+            "y": 280
+          }
+        }
+      }
+    }
+  ],
+  "sources": {
+    "rstanarm_priors": {
+      "title": "Prior Distributions for rstanarm Models",
+      "url": "https://mc-stan.org/rstanarm/articles/priors.html"
+    },
+    "stan_prior_wiki": {
+      "title": "Prior Choice Recommendations",
+      "url": "https://github.com/stan-dev/stan/wiki/Prior-Choice-Recommendations"
+    }
+  }
+}

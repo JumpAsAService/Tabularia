@@ -1,0 +1,124 @@
+{
+  "format_version": 1,
+  "plates": [
+    {
+      "id": "rows",
+      "kind": "rows",
+      "label": "Rows",
+      "series": {
+        "time": "t",
+        "by": null
+      }
+    }
+  ],
+  "nodes": [
+    {
+      "id": "y",
+      "kind": "data",
+      "name": "y",
+      "label": "Series",
+      "plate": "rows",
+      "type": "real"
+    },
+    {
+      "id": "t",
+      "kind": "data",
+      "name": "t",
+      "label": "Time of the row",
+      "plate": "rows",
+      "type": "time"
+    },
+    {
+      "id": "mu",
+      "kind": "parameter",
+      "name": "mu",
+      "label": "Level of the series",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "2.5"
+          }
+        }
+      }
+    },
+    {
+      "id": "phi1",
+      "kind": "parameter",
+      "name": "phi1",
+      "label": "Coefficient of lag 1",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "0.5"
+          }
+        }
+      }
+    },
+    {
+      "id": "sigma",
+      "kind": "parameter",
+      "name": "sigma",
+      "label": "Spread of a value around its expectation",
+      "plate": null,
+      "prior": {
+        "dist": "exponential",
+        "args": {
+          "beta": {
+            "expr": "1"
+          }
+        }
+      }
+    },
+    {
+      "id": "lik",
+      "kind": "likelihood",
+      "label": "Series given its past values",
+      "observed": "y",
+      "dist": "normal",
+      "args": {
+        "mu": {
+          "expr": "mu + phi1 * (lag(y, 1) - mu)"
+        },
+        "sigma": {
+          "expr": "sigma"
+        }
+      }
+    }
+  ],
+  "layout": {
+    "mu": {
+      "x": 0,
+      "y": 0
+    },
+    "sigma": {
+      "x": 1020,
+      "y": 0
+    },
+    "y": {
+      "x": 620,
+      "y": 140
+    },
+    "t": {
+      "x": 820,
+      "y": 140
+    },
+    "lik": {
+      "x": 220,
+      "y": 280
+    },
+    "phi1": {
+      "x": 220,
+      "y": 0
+    }
+  }
+}

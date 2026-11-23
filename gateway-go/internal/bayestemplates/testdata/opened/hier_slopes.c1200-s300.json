@@ -1,0 +1,239 @@
+{
+  "format_version": 1,
+  "plates": [
+    {
+      "id": "rows",
+      "kind": "rows",
+      "label": "Rows"
+    },
+    {
+      "id": "grp",
+      "kind": "group",
+      "label": "Group",
+      "parent": null,
+      "key": "g",
+      "form": "non_centred"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "y",
+      "kind": "data",
+      "name": "y",
+      "label": "Outcome",
+      "plate": "rows",
+      "type": "real"
+    },
+    {
+      "id": "x",
+      "kind": "data",
+      "name": "x",
+      "label": "Predictor",
+      "plate": "rows",
+      "type": "real",
+      "standardize": true
+    },
+    {
+      "id": "g",
+      "kind": "data",
+      "name": "g",
+      "label": "Group of the row",
+      "plate": "rows",
+      "type": "group_index",
+      "target": "grp"
+    },
+    {
+      "id": "mua",
+      "kind": "parameter",
+      "name": "mu_a",
+      "label": "Typical level of the groups",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "1200"
+          },
+          "sigma": {
+            "expr": "2.5 * 300"
+          }
+        }
+      }
+    },
+    {
+      "id": "mub",
+      "kind": "parameter",
+      "name": "mu_b",
+      "label": "Typical effect of the predictor",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "2.5 * 300"
+          }
+        }
+      }
+    },
+    {
+      "id": "taua",
+      "kind": "parameter",
+      "name": "tau_a",
+      "label": "Spread of the levels between groups",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "300"
+          }
+        }
+      },
+      "bounds": {
+        "lower": 0
+      }
+    },
+    {
+      "id": "taub",
+      "kind": "parameter",
+      "name": "tau_b",
+      "label": "Spread of the effects between groups",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "300"
+          }
+        }
+      },
+      "bounds": {
+        "lower": 0
+      }
+    },
+    {
+      "id": "eff",
+      "kind": "correlated_effects",
+      "label": "Level and effect of a group",
+      "plate": "grp",
+      "components": [
+        {
+          "id": "ca",
+          "name": "a_g",
+          "label": "Level of a group",
+          "mean": {
+            "expr": "mu_a"
+          },
+          "scale": {
+            "expr": "tau_a"
+          }
+        },
+        {
+          "id": "cb",
+          "name": "b_g",
+          "label": "Effect of the predictor in a group",
+          "mean": {
+            "expr": "mu_b"
+          },
+          "scale": {
+            "expr": "tau_b"
+          }
+        }
+      ],
+      "correlation": {
+        "name": "rho_g",
+        "label": "Correlation between level and effect",
+        "eta": {
+          "expr": "2"
+        }
+      }
+    },
+    {
+      "id": "sigma",
+      "kind": "parameter",
+      "name": "sigma",
+      "label": "Spread within a group",
+      "plate": null,
+      "prior": {
+        "dist": "exponential",
+        "args": {
+          "beta": {
+            "expr": "1 / 300"
+          }
+        }
+      }
+    },
+    {
+      "id": "lik",
+      "kind": "likelihood",
+      "label": "Outcome given the group and the predictor",
+      "observed": "y",
+      "dist": "normal",
+      "args": {
+        "mu": {
+          "expr": "a_g[g] + b_g[g] * x"
+        },
+        "sigma": {
+          "expr": "sigma"
+        }
+      }
+    }
+  ],
+  "layout": {
+    "grp": {
+      "x": -20,
+      "y": 250,
+      "w": 560,
+      "h": 150
+    },
+    "mua": {
+      "x": 0,
+      "y": 0
+    },
+    "mub": {
+      "x": 220,
+      "y": 0
+    },
+    "taua": {
+      "x": 440,
+      "y": 0
+    },
+    "taub": {
+      "x": 660,
+      "y": 0
+    },
+    "sigma": {
+      "x": 880,
+      "y": 0
+    },
+    "eff": {
+      "x": 200,
+      "y": 290
+    },
+    "x": {
+      "x": 660,
+      "y": 200
+    },
+    "g": {
+      "x": 660,
+      "y": 300
+    },
+    "y": {
+      "x": 880,
+      "y": 300
+    },
+    "lik": {
+      "x": 440,
+      "y": 440
+    }
+  }
+}

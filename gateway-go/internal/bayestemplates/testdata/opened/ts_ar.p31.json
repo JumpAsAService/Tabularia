@@ -1,0 +1,784 @@
+{
+  "format_version": 1,
+  "plates": [
+    {
+      "id": "rows",
+      "kind": "rows",
+      "label": "Rows",
+      "series": {
+        "time": "t",
+        "by": null
+      }
+    }
+  ],
+  "nodes": [
+    {
+      "id": "y",
+      "kind": "data",
+      "name": "y",
+      "label": "Series",
+      "plate": "rows",
+      "type": "real"
+    },
+    {
+      "id": "t",
+      "kind": "data",
+      "name": "t",
+      "label": "Time of the row",
+      "plate": "rows",
+      "type": "time"
+    },
+    {
+      "id": "mu",
+      "kind": "parameter",
+      "name": "mu",
+      "label": "Level of the series",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "2.5"
+          }
+        }
+      }
+    },
+    {
+      "id": "phi1",
+      "kind": "parameter",
+      "name": "phi1",
+      "label": "Coefficient of lag 1",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "0.5"
+          }
+        }
+      }
+    },
+    {
+      "id": "phi2",
+      "kind": "parameter",
+      "name": "phi2",
+      "label": "Coefficient of lag 2",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "0.5"
+          }
+        }
+      }
+    },
+    {
+      "id": "phi3",
+      "kind": "parameter",
+      "name": "phi3",
+      "label": "Coefficient of lag 3",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "0.5"
+          }
+        }
+      }
+    },
+    {
+      "id": "phi4",
+      "kind": "parameter",
+      "name": "phi4",
+      "label": "Coefficient of lag 4",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "0.5"
+          }
+        }
+      }
+    },
+    {
+      "id": "phi5",
+      "kind": "parameter",
+      "name": "phi5",
+      "label": "Coefficient of lag 5",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "0.5"
+          }
+        }
+      }
+    },
+    {
+      "id": "phi6",
+      "kind": "parameter",
+      "name": "phi6",
+      "label": "Coefficient of lag 6",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "0.5"
+          }
+        }
+      }
+    },
+    {
+      "id": "phi7",
+      "kind": "parameter",
+      "name": "phi7",
+      "label": "Coefficient of lag 7",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "0.5"
+          }
+        }
+      }
+    },
+    {
+      "id": "phi8",
+      "kind": "parameter",
+      "name": "phi8",
+      "label": "Coefficient of lag 8",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "0.5"
+          }
+        }
+      }
+    },
+    {
+      "id": "phi9",
+      "kind": "parameter",
+      "name": "phi9",
+      "label": "Coefficient of lag 9",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "0.5"
+          }
+        }
+      }
+    },
+    {
+      "id": "phi10",
+      "kind": "parameter",
+      "name": "phi10",
+      "label": "Coefficient of lag 10",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "0.5"
+          }
+        }
+      }
+    },
+    {
+      "id": "phi11",
+      "kind": "parameter",
+      "name": "phi11",
+      "label": "Coefficient of lag 11",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "0.5"
+          }
+        }
+      }
+    },
+    {
+      "id": "phi12",
+      "kind": "parameter",
+      "name": "phi12",
+      "label": "Coefficient of lag 12",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "0.5"
+          }
+        }
+      }
+    },
+    {
+      "id": "phi13",
+      "kind": "parameter",
+      "name": "phi13",
+      "label": "Coefficient of lag 13",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "0.5"
+          }
+        }
+      }
+    },
+    {
+      "id": "phi14",
+      "kind": "parameter",
+      "name": "phi14",
+      "label": "Coefficient of lag 14",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "0.5"
+          }
+        }
+      }
+    },
+    {
+      "id": "phi15",
+      "kind": "parameter",
+      "name": "phi15",
+      "label": "Coefficient of lag 15",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "0.5"
+          }
+        }
+      }
+    },
+    {
+      "id": "phi16",
+      "kind": "parameter",
+      "name": "phi16",
+      "label": "Coefficient of lag 16",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "0.5"
+          }
+        }
+      }
+    },
+    {
+      "id": "phi17",
+      "kind": "parameter",
+      "name": "phi17",
+      "label": "Coefficient of lag 17",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "0.5"
+          }
+        }
+      }
+    },
+    {
+      "id": "phi18",
+      "kind": "parameter",
+      "name": "phi18",
+      "label": "Coefficient of lag 18",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "0.5"
+          }
+        }
+      }
+    },
+    {
+      "id": "phi19",
+      "kind": "parameter",
+      "name": "phi19",
+      "label": "Coefficient of lag 19",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "0.5"
+          }
+        }
+      }
+    },
+    {
+      "id": "phi20",
+      "kind": "parameter",
+      "name": "phi20",
+      "label": "Coefficient of lag 20",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "0.5"
+          }
+        }
+      }
+    },
+    {
+      "id": "phi21",
+      "kind": "parameter",
+      "name": "phi21",
+      "label": "Coefficient of lag 21",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "0.5"
+          }
+        }
+      }
+    },
+    {
+      "id": "phi22",
+      "kind": "parameter",
+      "name": "phi22",
+      "label": "Coefficient of lag 22",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "0.5"
+          }
+        }
+      }
+    },
+    {
+      "id": "phi23",
+      "kind": "parameter",
+      "name": "phi23",
+      "label": "Coefficient of lag 23",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "0.5"
+          }
+        }
+      }
+    },
+    {
+      "id": "phi24",
+      "kind": "parameter",
+      "name": "phi24",
+      "label": "Coefficient of lag 24",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "0.5"
+          }
+        }
+      }
+    },
+    {
+      "id": "phi25",
+      "kind": "parameter",
+      "name": "phi25",
+      "label": "Coefficient of lag 25",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "0.5"
+          }
+        }
+      }
+    },
+    {
+      "id": "phi26",
+      "kind": "parameter",
+      "name": "phi26",
+      "label": "Coefficient of lag 26",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "0.5"
+          }
+        }
+      }
+    },
+    {
+      "id": "phi27",
+      "kind": "parameter",
+      "name": "phi27",
+      "label": "Coefficient of lag 27",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "0.5"
+          }
+        }
+      }
+    },
+    {
+      "id": "phi28",
+      "kind": "parameter",
+      "name": "phi28",
+      "label": "Coefficient of lag 28",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "0.5"
+          }
+        }
+      }
+    },
+    {
+      "id": "phi29",
+      "kind": "parameter",
+      "name": "phi29",
+      "label": "Coefficient of lag 29",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "0.5"
+          }
+        }
+      }
+    },
+    {
+      "id": "phi30",
+      "kind": "parameter",
+      "name": "phi30",
+      "label": "Coefficient of lag 30",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "0.5"
+          }
+        }
+      }
+    },
+    {
+      "id": "phi31",
+      "kind": "parameter",
+      "name": "phi31",
+      "label": "Coefficient of lag 31",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "0.5"
+          }
+        }
+      }
+    },
+    {
+      "id": "sigma",
+      "kind": "parameter",
+      "name": "sigma",
+      "label": "Spread of a value around its expectation",
+      "plate": null,
+      "prior": {
+        "dist": "exponential",
+        "args": {
+          "beta": {
+            "expr": "1"
+          }
+        }
+      }
+    },
+    {
+      "id": "lik",
+      "kind": "likelihood",
+      "label": "Series given its past values",
+      "observed": "y",
+      "dist": "normal",
+      "args": {
+        "mu": {
+          "expr": "mu + phi1 * (lag(y, 1) - mu) + phi2 * (lag(y, 2) - mu) + phi3 * (lag(y, 3) - mu) + phi4 * (lag(y, 4) - mu) + phi5 * (lag(y, 5) - mu) + phi6 * (lag(y, 6) - mu) + phi7 * (lag(y, 7) - mu) + phi8 * (lag(y, 8) - mu) + phi9 * (lag(y, 9) - mu) + phi10 * (lag(y, 10) - mu) + phi11 * (lag(y, 11) - mu) + phi12 * (lag(y, 12) - mu) + phi13 * (lag(y, 13) - mu) + phi14 * (lag(y, 14) - mu) + phi15 * (lag(y, 15) - mu) + phi16 * (lag(y, 16) - mu) + phi17 * (lag(y, 17) - mu) + phi18 * (lag(y, 18) - mu) + phi19 * (lag(y, 19) - mu) + phi20 * (lag(y, 20) - mu) + phi21 * (lag(y, 21) - mu) + phi22 * (lag(y, 22) - mu) + phi23 * (lag(y, 23) - mu) + phi24 * (lag(y, 24) - mu) + phi25 * (lag(y, 25) - mu) + phi26 * (lag(y, 26) - mu) + phi27 * (lag(y, 27) - mu) + phi28 * (lag(y, 28) - mu) + phi29 * (lag(y, 29) - mu) + phi30 * (lag(y, 30) - mu) + phi31 * (lag(y, 31) - mu)"
+        },
+        "sigma": {
+          "expr": "sigma"
+        }
+      }
+    }
+  ],
+  "layout": {
+    "mu": {
+      "x": 0,
+      "y": 0
+    },
+    "sigma": {
+      "x": 1020,
+      "y": 0
+    },
+    "y": {
+      "x": 620,
+      "y": 910
+    },
+    "t": {
+      "x": 820,
+      "y": 910
+    },
+    "lik": {
+      "x": 220,
+      "y": 1050
+    },
+    "phi1": {
+      "x": 220,
+      "y": 0
+    },
+    "phi2": {
+      "x": 420,
+      "y": 0
+    },
+    "phi3": {
+      "x": 620,
+      "y": 0
+    },
+    "phi4": {
+      "x": 820,
+      "y": 0
+    },
+    "phi5": {
+      "x": 220,
+      "y": 110
+    },
+    "phi6": {
+      "x": 420,
+      "y": 110
+    },
+    "phi7": {
+      "x": 620,
+      "y": 110
+    },
+    "phi8": {
+      "x": 820,
+      "y": 110
+    },
+    "phi9": {
+      "x": 220,
+      "y": 220
+    },
+    "phi10": {
+      "x": 420,
+      "y": 220
+    },
+    "phi11": {
+      "x": 620,
+      "y": 220
+    },
+    "phi12": {
+      "x": 820,
+      "y": 220
+    },
+    "phi13": {
+      "x": 220,
+      "y": 330
+    },
+    "phi14": {
+      "x": 420,
+      "y": 330
+    },
+    "phi15": {
+      "x": 620,
+      "y": 330
+    },
+    "phi16": {
+      "x": 820,
+      "y": 330
+    },
+    "phi17": {
+      "x": 220,
+      "y": 440
+    },
+    "phi18": {
+      "x": 420,
+      "y": 440
+    },
+    "phi19": {
+      "x": 620,
+      "y": 440
+    },
+    "phi20": {
+      "x": 820,
+      "y": 440
+    },
+    "phi21": {
+      "x": 220,
+      "y": 550
+    },
+    "phi22": {
+      "x": 420,
+      "y": 550
+    },
+    "phi23": {
+      "x": 620,
+      "y": 550
+    },
+    "phi24": {
+      "x": 820,
+      "y": 550
+    },
+    "phi25": {
+      "x": 220,
+      "y": 660
+    },
+    "phi26": {
+      "x": 420,
+      "y": 660
+    },
+    "phi27": {
+      "x": 620,
+      "y": 660
+    },
+    "phi28": {
+      "x": 820,
+      "y": 660
+    },
+    "phi29": {
+      "x": 220,
+      "y": 770
+    },
+    "phi30": {
+      "x": 420,
+      "y": 770
+    },
+    "phi31": {
+      "x": 620,
+      "y": 770
+    }
+  }
+}

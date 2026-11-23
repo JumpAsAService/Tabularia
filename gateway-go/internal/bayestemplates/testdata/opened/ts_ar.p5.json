@@ -1,0 +1,212 @@
+{
+  "format_version": 1,
+  "plates": [
+    {
+      "id": "rows",
+      "kind": "rows",
+      "label": "Rows",
+      "series": {
+        "time": "t",
+        "by": null
+      }
+    }
+  ],
+  "nodes": [
+    {
+      "id": "y",
+      "kind": "data",
+      "name": "y",
+      "label": "Series",
+      "plate": "rows",
+      "type": "real"
+    },
+    {
+      "id": "t",
+      "kind": "data",
+      "name": "t",
+      "label": "Time of the row",
+      "plate": "rows",
+      "type": "time"
+    },
+    {
+      "id": "mu",
+      "kind": "parameter",
+      "name": "mu",
+      "label": "Level of the series",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "2.5"
+          }
+        }
+      }
+    },
+    {
+      "id": "phi1",
+      "kind": "parameter",
+      "name": "phi1",
+      "label": "Coefficient of lag 1",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "0.5"
+          }
+        }
+      }
+    },
+    {
+      "id": "phi2",
+      "kind": "parameter",
+      "name": "phi2",
+      "label": "Coefficient of lag 2",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "0.5"
+          }
+        }
+      }
+    },
+    {
+      "id": "phi3",
+      "kind": "parameter",
+      "name": "phi3",
+      "label": "Coefficient of lag 3",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "0.5"
+          }
+        }
+      }
+    },
+    {
+      "id": "phi4",
+      "kind": "parameter",
+      "name": "phi4",
+      "label": "Coefficient of lag 4",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "0.5"
+          }
+        }
+      }
+    },
+    {
+      "id": "phi5",
+      "kind": "parameter",
+      "name": "phi5",
+      "label": "Coefficient of lag 5",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "0.5"
+          }
+        }
+      }
+    },
+    {
+      "id": "sigma",
+      "kind": "parameter",
+      "name": "sigma",
+      "label": "Spread of a value around its expectation",
+      "plate": null,
+      "prior": {
+        "dist": "exponential",
+        "args": {
+          "beta": {
+            "expr": "1"
+          }
+        }
+      }
+    },
+    {
+      "id": "lik",
+      "kind": "likelihood",
+      "label": "Series given its past values",
+      "observed": "y",
+      "dist": "normal",
+      "args": {
+        "mu": {
+          "expr": "mu + phi1 * (lag(y, 1) - mu) + phi2 * (lag(y, 2) - mu) + phi3 * (lag(y, 3) - mu) + phi4 * (lag(y, 4) - mu) + phi5 * (lag(y, 5) - mu)"
+        },
+        "sigma": {
+          "expr": "sigma"
+        }
+      }
+    }
+  ],
+  "layout": {
+    "mu": {
+      "x": 0,
+      "y": 0
+    },
+    "sigma": {
+      "x": 1020,
+      "y": 0
+    },
+    "y": {
+      "x": 620,
+      "y": 250
+    },
+    "t": {
+      "x": 820,
+      "y": 250
+    },
+    "lik": {
+      "x": 220,
+      "y": 390
+    },
+    "phi1": {
+      "x": 220,
+      "y": 0
+    },
+    "phi2": {
+      "x": 420,
+      "y": 0
+    },
+    "phi3": {
+      "x": 620,
+      "y": 0
+    },
+    "phi4": {
+      "x": 820,
+      "y": 0
+    },
+    "phi5": {
+      "x": 220,
+      "y": 110
+    }
+  }
+}

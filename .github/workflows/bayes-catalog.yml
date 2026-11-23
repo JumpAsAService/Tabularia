@@ -6,7 +6,10 @@
 # docs/capabilities/bayesian-models.md (once that page exists). That the snapshot is what the
 # declarations say is checked by the gateway's suite (catalog_test.go).
 #
-# Fix locally with:  python3 .github/scripts/bayes_catalog.py
+# The templates of the editor (gateway-go/internal/bayestemplates/templates.json) are checked the same
+# way against frontend/assets/bayes-templates.json (.github/scripts/bayes_templates.py).
+#
+# Fix locally with:  python3 .github/scripts/bayes_catalog.py  (or bayes_templates.py)
 # Standard library only: no dependency is installed.
 
 name: Bayesian catalogue
@@ -16,17 +19,25 @@ on:
     paths:
       - "gateway-go/internal/bayescatalog/catalog.json"
       - "frontend/assets/bayes-catalog.json"
+      - "gateway-go/internal/bayestemplates/templates.json"
+      - "frontend/assets/bayes-templates.json"
       - "docs/capabilities/bayesian-models.md"
       - ".github/scripts/bayes_catalog.py"
       - ".github/scripts/test_bayes_catalog.py"
+      - ".github/scripts/bayes_templates.py"
+      - ".github/scripts/test_bayes_templates.py"
       - ".github/workflows/bayes-catalog.yml"
   pull_request:
     paths:
       - "gateway-go/internal/bayescatalog/catalog.json"
       - "frontend/assets/bayes-catalog.json"
+      - "gateway-go/internal/bayestemplates/templates.json"
+      - "frontend/assets/bayes-templates.json"
       - "docs/capabilities/bayesian-models.md"
       - ".github/scripts/bayes_catalog.py"
       - ".github/scripts/test_bayes_catalog.py"
+      - ".github/scripts/bayes_templates.py"
+      - ".github/scripts/test_bayes_templates.py"
       - ".github/workflows/bayes-catalog.yml"
   workflow_dispatch:
 
@@ -45,3 +56,6 @@ jobs:
 
       - name: The script's tests and the check of the committed copies
         run: python3 .github/scripts/test_bayes_catalog.py -v
+
+      - name: The templates' script tests and the check of the committed copy
+        run: python3 .github/scripts/test_bayes_templates.py -v

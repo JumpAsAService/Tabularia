@@ -1,0 +1,291 @@
+{
+  "format_version": 1,
+  "plates": [
+    {
+      "id": "rows",
+      "kind": "rows",
+      "label": "Rows"
+    },
+    {
+      "id": "dst",
+      "kind": "group",
+      "label": "District",
+      "parent": null,
+      "key": "d",
+      "form": "non_centred"
+    },
+    {
+      "id": "sch",
+      "kind": "group",
+      "label": "School",
+      "parent": "dst",
+      "key": "s",
+      "form": "non_centred"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "y",
+      "kind": "data",
+      "name": "y",
+      "label": "Outcome",
+      "plate": "rows",
+      "type": "real"
+    },
+    {
+      "id": "x",
+      "kind": "data",
+      "name": "x",
+      "label": "Predictor",
+      "plate": "rows",
+      "type": "real",
+      "standardize": true
+    },
+    {
+      "id": "d",
+      "kind": "data",
+      "name": "d",
+      "label": "District of the row",
+      "plate": "rows",
+      "type": "group_index",
+      "target": "dst"
+    },
+    {
+      "id": "s",
+      "kind": "data",
+      "name": "s",
+      "label": "School of the row",
+      "plate": "rows",
+      "type": "group_index",
+      "target": "sch"
+    },
+    {
+      "id": "mu",
+      "kind": "parameter",
+      "name": "mu",
+      "label": "Overall level",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "-5"
+          },
+          "sigma": {
+            "expr": "2.5 * 0.02"
+          }
+        }
+      }
+    },
+    {
+      "id": "taud",
+      "kind": "parameter",
+      "name": "tau_d",
+      "label": "Spread of the levels between districts",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "0.02"
+          }
+        }
+      },
+      "bounds": {
+        "lower": 0
+      }
+    },
+    {
+      "id": "taus",
+      "kind": "parameter",
+      "name": "tau_s",
+      "label": "Spread of the levels between schools of a district",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "0.02"
+          }
+        }
+      },
+      "bounds": {
+        "lower": 0
+      }
+    },
+    {
+      "id": "ud",
+      "kind": "parameter",
+      "name": "u_d",
+      "label": "Level of a district",
+      "plate": "dst",
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "mu"
+          },
+          "sigma": {
+            "expr": "tau_d"
+          }
+        }
+      }
+    },
+    {
+      "id": "us",
+      "kind": "parameter",
+      "name": "u_s",
+      "label": "Level of a school",
+      "plate": "sch",
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "u_d[d]"
+          },
+          "sigma": {
+            "expr": "tau_s"
+          }
+        }
+      }
+    },
+    {
+      "id": "bx",
+      "kind": "parameter",
+      "name": "b_x",
+      "label": "Effect of the predictor",
+      "plate": null,
+      "prior": {
+        "dist": "normal",
+        "args": {
+          "mu": {
+            "expr": "0"
+          },
+          "sigma": {
+            "expr": "2.5 * 0.02"
+          }
+        }
+      }
+    },
+    {
+      "id": "sigma",
+      "kind": "parameter",
+      "name": "sigma",
+      "label": "Spread within a school",
+      "plate": null,
+      "prior": {
+        "dist": "exponential",
+        "args": {
+          "beta": {
+            "expr": "1 / 0.02"
+          }
+        }
+      }
+    },
+    {
+      "id": "eta",
+      "kind": "linear_predictor",
+      "name": "eta",
+      "label": "Expected outcome",
+      "plate": "rows",
+      "intercept": {
+        "expr": "u_s[s]"
+      },
+      "terms": [
+        {
+          "data": "x",
+          "coef": {
+            "expr": "b_x"
+          }
+        }
+      ]
+    },
+    {
+      "id": "lik",
+      "kind": "likelihood",
+      "label": "Outcome given the school and the predictor",
+      "observed": "y",
+      "dist": "normal",
+      "args": {
+        "mu": {
+          "expr": "eta"
+        },
+        "sigma": {
+          "expr": "sigma"
+        }
+      }
+    }
+  ],
+  "layout": {
+    "dst": {
+      "x": -20,
+      "y": 210,
+      "w": 340,
+      "h": 260
+    },
+    "sch": {
+      "x": 0,
+      "y": 330,
+      "w": 300,
+      "h": 120
+    },
+    "mu": {
+      "x": 0,
+      "y": 0
+    },
+    "taud": {
+      "x": 220,
+      "y": 0
+    },
+    "taus": {
+      "x": 440,
+      "y": 0
+    },
+    "bx": {
+      "x": 660,
+      "y": 0
+    },
+    "sigma": {
+      "x": 880,
+      "y": 0
+    },
+    "ud": {
+      "x": 40,
+      "y": 240
+    },
+    "us": {
+      "x": 60,
+      "y": 360
+    },
+    "x": {
+      "x": 660,
+      "y": 200
+    },
+    "d": {
+      "x": 440,
+      "y": 200
+    },
+    "s": {
+      "x": 440,
+      "y": 330
+    },
+    "eta": {
+      "x": 300,
+      "y": 520
+    },
+    "y": {
+      "x": 660,
+      "y": 520
+    },
+    "lik": {
+      "x": 440,
+      "y": 640
+    }
+  }
+}
