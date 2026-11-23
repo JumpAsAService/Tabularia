@@ -45,7 +45,7 @@ and, on request, the posterior draws in a parquet table for the nodes after it.
 | Outputs | A **report with diagnostics** (posterior summary, R-hat, ESS, divergences, trace and density charts, the explanation of the method as in the other reports) and the **posterior draws in the parquet** on request (answer 14). **No LOO/WAIC comparison** for now |
 | Predictive checks (added 2026-11-23, shaped by answers 12 and 13) | **Prior predictive checks** only as a **Job** (`fixed_param`); **posterior predictive checks** only as **charts** (overlaid densities, histograms of T(y_rep) with T(y) marked): **no number** such as a posterior predictive p-value or probability. **Predictions on new rows of the flow stay out** («Out of scope») |
 | Interactive priors | The prior's chart is **computed in the browser** while the values change. With hyperpriors the hyperparameter is drawn first, then the parameter, so the chart is the true marginal. Light; **no Job**. The browser shows **only the marginals of the priors**: no prior predictive in the browser (answer 13) |
-| Memory (rule of 2026-11-22; owner, 2026-11-23: «attenzione a non caricare tutto in memoria, l'output deve essere un parquet in append in base ai campionamenti») | Never everything in RAM, not even with Stan. **The output is a parquet appended as the sampling goes**: CmdStan's chains write their CSV to `/tmp`, and the runner follows each file while the chains run, reading the new draws as they arrive and appending them to the draws parquet in blocks (one row group per block of draws of one chain, with `chain` and `draw`), each block freed once written; no step waits for the end of sampling to read a chain, no function loads a whole CSV or a whole chain (`read_cmdstan_csv` and the like are never used), and the part of a CSV already converted is not read again. A test measures the memory peak and shows it does not grow with the number of draws. Summaries, R-hat and ESS in blocks or with accumulators; charts and report on thinned samples. Replicated data (y_rep) written in blocks and summarized with accumulators, never all in RAM |
+| Memory (rule of 2026-11-22; owner, 2026-11-23: «attenzione a non caricare tutto in memoria, l'output deve essere un parquet in append in base ai campionamenti») | Never everything in RAM, not even with Stan. **The output is a parquet appended as the sampling goes**: CmdStan's chains write their CSV to `/tmp`, and the runner follows each file while the chains run, reading the new draws as they arrive and appending them to the draws parquet in blocks (one row group per block of draws of one chain, with `chain` and `draw`), each block freed once written; no step waits for the end of sampling to read a chain, no function loads a whole CSV or a whole chain (`read_cmdstan_csv` and the like are never used), and the part of a CSV already converted is not read again. A test measures the memory peak and shows it does not grow with the number of draws. Summaries, R-hat and ESS in blocks or with accumulators; charts and report on thinned samples. Replicated data (y_rep) written in blocks and summarized with accumulators, never all in RAM. The draws parquet is **always long** (owner, 2026-11-23: a wide parquet keeps every column chunk's metadata until it closes, 2.8 GB at 20,000 quantities, measured in `bayes-contract.md`); the draws carry CmdStan's default **6 significant digits** (owner, 2026-11-23) |
 | Verdicts (rule of 2026-11-20) | A verdict comes only from a test with a p-value against the node's alpha. R-hat, ESS and divergences are **measures or facts**, each with a sentence on what it measures and the reference values of the literature **cited as such**; **no reference option in the node**, **no option that stops the step on divergences** (answer 11). No posterior predictive p-value at all (answer 12) |
 | Execution | Kubernetes, a model group with an image of its own that an administrator enables; recipes with hashes; Jobs without network, non-root, read-only root; the runner in **Python** (answer 15) |
 | Licences, languages, documents | Licences cited, not interpreted; no competitor named; user texts in five languages; no local path in any file |
@@ -83,7 +83,7 @@ there**. A compiled Stan binary must therefore never be trusted because of where
 | `distribution-catalog` | The distributions as data: parameters, their constraints, the support, the Stan names (`_lpdf`, `_lpmf`, `_rng`, the `_logit`/`_log` forms), the link functions, the functions and operators the expression language may use, Stan's reserved words, the limits of the language and of the graph; the browser's bindings to stdlib; copied to the interface and the gateway (and from the gateway to the runner) from one snapshot, as `catalog.json` is | — |
 | `expression-language` | The typed expressions of the free model (answer 3): the grammar (EBNF), the lexer and the parser into an AST, the types (real, integer, per-plate vector, group index) and the shape rules, the whitelist of operators and functions taken from `distribution-catalog`, the limits of length, depth and size, no identifier that is not a node of the graph; the emission of an expression's Stan text **from the AST only**; one authoritative parser in Go, a mirror in TypeScript for instant feedback only | `distribution-catalog` |
 | `model-graph` | The canonical JSON of a model: node kinds (data, parameter with its prior, transformed, linear predictor, likelihood, latent state, correlated group effects), plates (rows, groups and their nesting, rows as a series), names and labels, the format version; the validation rules (types, shapes, supports, a DAG, every parameter with a proper prior, plates consistent); one authoritative validator in Go, a mirror in TypeScript for instant feedback | `distribution-catalog`, `expression-language` |
-| `bayes-contract` | The runner protocol of the group: `task.json` (modes `compile`, `prior_predictive`, `sample`, `selftest`), the data file's shape, the draws parquet's schema, the rows of the ten-column table (`summary`, `diagnostic`, `sampler`, `ppc`, `prior_check`, `point`, `curve`, `reading`), the error codes and refusals, the card | `model-graph` |
+| `bayes-contract` | The runner protocol of the group: `task.json` (modes `compile`, `prior_predictive`, `sample`, `selftest`), the data file's shape, the draws parquet's schema, the rows of the ten-column table (`summary`, `diagnostic`, `sampler`, `ppc`, `prior_check`, `point`, `curve`; `reading` declared there but written by the report's layout, never by the runner: correction of 2026-11-23 from the step-2 specs), the error codes and refusals, the card | `model-graph` |
 | `stan-codegen` | Graph → Stan program, in the Go gateway: deterministic (same graph, same bytes), safe by construction (no user text reaches the program; expressions through `expression-language`'s emitter), the data block from the bound variables, non-centred or centred hierarchical forms, the vectorized likelihoods, the mapping table identifier ↔ label; an extension point for the generated quantities of `predictive-checks` | `model-graph`, `expression-language`, `distribution-catalog` |
 | `prior-preview` | In the browser, in a Web Worker: densities, quantiles and seeded draws for every catalogue distribution usable as a prior; ancestral sampling of the graph's parameters (hyperparameter first, then the parameter: the true marginal); **only the marginals of the priors**, no prior predictive (answer 13); no Job, no request | `model-graph`, `distribution-catalog` |
 | `templates` | GLM (four families), hierarchical (varying intercepts, varying slopes, nested levels), time series (AR(p), random walk, local level) as predefined graphs, with their default priors written in the open; each checked through `stan-codegen` and the reference values | `model-graph`, `stan-codegen` |
@@ -210,15 +210,16 @@ Each entry: **choices** (the large ones; the rest belongs to the module's spec),
 
 ### `bayes-contract`
 
-- **Choices.** As piece 0 of the models spec: the modes, the files, the rows. The draws output has a schema
-  fixed per model version: summary by default, draws on request, wide when the columns are few and long above
-  a limit (a setting, answer 14). Refusals are sentences with codes (`too_slow`, `too_much_disk`,
+- **Choices.** As piece 0 of the models spec: the modes, the files, the rows. The draws output has one fixed
+  schema: summary by default, draws on request, **always long** (owner, 2026-11-23, replacing answer 14's «wide
+  when the columns are few»). Refusals are sentences with codes (`too_slow`, `too_much_disk`,
   `compile_failed`, `data_shape`), exit 3.
-- **Risks.** A wide draws table (one column per scalar parameter) can have thousands of columns for a
-  hierarchical model with many groups; parquet handles it badly beyond some thousands.
-- **Measure first.** Write and read back a draws parquet of 4 chains × 1,000 draws for 10, 1,000 and 20,000
-  scalar parameters, wide and long, with the memory peak; the measurement sets the default of the wide/long
-  limit.
+- **Risks.** **Always long (owner, 2026-11-23)**: the wide table's risk is gone. Measured for `bayes-contract.md`:
+  a wide parquet of 20,000 quantities needed 2.8 GB to write, the long one 50 MB, flat with the draws. With 6
+  significant digits a quantity whose mean is large beside its sd loses its posterior (an intercept on the outcome's
+  scale: the outcome is not standardized).
+- **Measure first.** Done (2026-11-23, `bayes-contract.md`): 10 to 20,000 quantities, wide and long, writer's and
+  reader's peaks, CSV parse rates.
 
 ### `stan-codegen`
 
@@ -405,8 +406,8 @@ Each entry: **choices** (the large ones; the rest belongs to the module's spec),
   with the first level as reference (labels travel as data, mapped back in the results); NULLs left out with
   their count (no imputation), as every model node. Sampler options (answer 9): chains, warmup, draws and seed
   in view; `adapt_delta`, `max_treedepth` and initial values under «Advanced»; NUTS only. Limits (answer 10).
-  Output (answer 14): the summary by default; the draws on request (wide when the columns are few, long above
-  a limit), all parameters; y_rep rows on request and thinned. Run is a trial on the development sample; the
+  Output (answer 14): the summary by default; the draws on request (always long, owner 2026-11-23), all
+  parameters; y_rep rows on request and thinned. Run is a trial on the development sample; the
   compile, when the background one has not finished, happens first and says so.
 - **Risks.** The binding broken when a newer version adds a data variable (the node keeps its pinned version
   and names the unbound variable when the person moves to the newer one).
@@ -590,7 +591,7 @@ the compiler and sampler are Stan's.
 | The compiled binary kept in Tabularia's storage, its sha256 in Postgres, checked before exec | The scripts bucket's key is shared by every user script | The map's, to confirm |
 | stdlib packages for the browser's distributions (a new frontend dependency) | Apache-2.0, seeded and stateful draws, modular | **Confirmed by the owner (answer 2)** |
 | `stanc.js` not in the first release | Not needed for safety; 3 MB for pedantic warnings the compile Job already returns | The map's, to confirm |
-| Per-row quantities never written by the program | Output bounded by parameters, not rows | The map's, to confirm |
+| Per-row quantities never written by the program | Output bounded by parameters, not rows. A latent state is N parameters: its output grows with the series, bounded by `max_rows` and by the limit on the quantities written (`max_quantities`, `bayes-contract`) (correction of 2026-11-23 from the step-2 specs) | The map's, to confirm |
 | y_rep summarized inside `generated quantities` | The checks cost memory proportional to statistics and bins, not rows | The map's, to confirm; the summaries feed charts only (answer 12) |
 | The runner in Python | `pyarrow` streams CSV into parquet; PyPI pins by hash; `cmdstanr` is not on CRAN | **Confirmed by the owner (answer 15)** |
 
@@ -614,7 +615,7 @@ form; «Why» is one line on the reason of the choice.
 | 11 | How are R-hat, ESS and divergences presented? | **(a) only measures and facts**, each with the sentence on what it measures and the literature's reference values cited as such; **no reference option in the node**; **no option «stop the step on divergences»**: the run goes on, the count is a fact on the first page | The rule of 2026-11-20 taken strictly: nothing in the node that works as a verdict |
 | 12 | How is the posterior predictive p-value presented? | **(c) only the charts**: no p-value, no «posterior predictive probability» | It is not uniform under the model; a number beside a p-value would read as a test |
 | 13 | Where does the prior predictive check get its data? | **(c) only as a Job** (`fixed_param`); the browser keeps only the priors' marginals (with hyperpriors by ancestral sampling, the true marginal); no prior predictive in the browser | One implementation of the prior predictive; the model's space needs no data |
-| 14 | What do the parquet output and MLflow hold? | The **summary by default**; the draws on request (wide when the columns are few, long beyond a limit); **all parameters**; y_rep rows on request and thinned; **MLflow without draws** | The flow's storage and MLflow do not fill with draws nobody asked for |
+| 14 | What do the parquet output and MLflow hold? | The **summary by default**; the draws on request (wide when the columns are few, long beyond a limit; **changed by the owner on 2026-11-23: always long**); **all parameters**; y_rep rows on request and thinned; **MLflow without draws** | The flow's storage and MLflow do not fill with draws nobody asked for |
 | 15 | In which language is the runner written? | **(a) Python** | `pyarrow` streams CSV to parquet; PyPI pins by hash; `cmdstanr` is not on CRAN |
 
 ### Answers to the module specs' questions (2026-11-23)
@@ -631,3 +632,13 @@ revisit».
 | Series in the free model | **`lag(x, k)` in the expression language** | `expression-language` |
 | Coefficients on both scales (answer 6) | **Only for the terms of a `linear_predictor` node**; in free expressions the standardized scale only, with the predictor's mean and standard deviation | `model-graph`, `bayes-report` |
 | A data variable the model does not use | **An error** | `model-graph` |
+
+The step-2 drafts (`bayes-contract.md`, `bayes-stan-codegen.md`, `bayes-prior-preview.md`) asked four questions; the
+owner answered them on 2026-11-23:
+
+| Question | Answer (owner) | Module |
+|---|---|---|
+| The draws: wide, long, or decided from the graph | **Always long**, no wide layout, no limit | `bayes-contract` |
+| The CSV's precision | **6 significant digits**, CmdStan's default (against the recommendation of 17); said in the report | `bayes-contract`, `bayes-report` |
+| Which program a saved version runs after the codegen changes | **Always the stored program** | `stan-codegen`, `model-store` |
+| Transformed values with no data in the priors' preview | **Shown** | `prior-preview` |

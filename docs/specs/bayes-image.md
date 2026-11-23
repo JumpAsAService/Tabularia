@@ -31,6 +31,7 @@ The first draft's four open questions, answered the same day.
 | The precompiled header in the image | **Kept**: the image is 1.90 GB, a compile 11–28 s on the measured CPU (21–38 s without it) | Owner |
 | CmdStan's build parallelism | **`-j1` always** (`"jobs": 1` in the recipe): it fits the default 4 GiB build Pod (266.5 s, no OOM); `-j2` was OOM-killed there | Owner |
 | `STAN_CPP_OPTIMS` | **Off**: CmdStan's default `-O3`, the precompiled header used; the extra flags gave about 5 % faster sampling for compiles 60 % longer and the header unused | This spec (the owner was not asked; the recommendation stands) |
+| The sampling Job's `/tmp` | **A setting of its own**, default **2 GiB**, on the card beside the sampling resources (the models' `modelTmpMiB` formula sizes model files and the input, not CmdStan's CSVs); estimated by `bayes-contract.md` at about 16 bytes a draw's value while the 6-digit CSV (8.5) and the long parquet (7.5) are both on `/tmp`: the reference size of 20,000 quantities × 4 × 1,000 draws takes about 1.3 GB | Correction of 2026-11-23 from the step-2 specs (`bayes-contract.md`) |
 | arm64 | **Both tarballs pinned** in the recipe (x86-64 and arm64, by URL and sha256); the group is **said to support arm64 only after its build and its self-test have passed on an arm64 node**, recorded in «As built»; until then the documentation and the card name x86-64 only | Owner |
 
 Words, as in the map: **measured** = run on 2026-11-23 on the machine described in «Measured on
@@ -255,7 +256,7 @@ machinery»):
       "url": "https://github.com/stan-dev/cmdstan/releases/download/v2.40.0/cmdstan-2.40.0-linux-arm64.tar.gz",
       "sha256": "c31e9f45a701c47f547381080ee804bf7e2428aace68eff68d4262b5c406aa63" } ],
   "cmdstan": { "threads": true, "precompiled_header": true, "jobs": 1 },
-  "resources": { "cpu": "4", "memory": "2Gi" },
+  "resources": { "cpu": "4", "memory": "2Gi", "tmp": "2Gi" },
   "compile": { "cpu": "1", "memory": "3Gi", "seconds": 300, "tmp": "512Mi" },
   "cache": { "max_bytes": 2147483648 },
   "max_rows": 1000000, "max_seconds": 3600 }
@@ -440,7 +441,9 @@ every group has (state, Enable, Disable, Rebuild, Resources, Who may use it) and
 - **What the image holds**: CmdStan 2.40.0 and its sha256, `g++` 14.2.0 and `make` 4.4.1 (from the lock),
   `numpy`, `pyarrow`; the licences («Licences», a link to each text shipped).
 - **Sampling resources** (the existing Resources): CPU (default **4**, one thread a chain), memory (default
-  **2 GiB**), the longest run (3,600 s), `max_rows` (1,000,000). Defaults written beside each field.
+  **2 GiB**), the longest run (3,600 s), `max_rows` (1,000,000), and **the sampling Job's `/tmp`** (default **2 GiB**:
+  the CmdStan CSVs and the draws parquet, about 16 bytes a draw's value, `bayes-contract.md`; correction of 2026-11-23
+  from the step-2 specs). Defaults written beside each field.
 - **Compile limits** (new, applied to the next compile, no build): CPU (default **1**: a compile is one
   process), memory (default **3 GiB**: measured peaks 1.3–1.9 GiB), the longest compile (default **300 s**:
   measured 11–45 s), `/tmp` (default **512 MiB**: measured 3 MB). Each with its default visible and a

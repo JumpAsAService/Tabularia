@@ -47,6 +47,7 @@ or bind data (`flow-node`).
 | An unused data variable | **An error** | Owner (2026-11-23) |
 | Coefficients on both scales | **Only for the terms of a `linear_predictor` node**; in free expressions the standardized scale only, with the predictor's mean and standard deviation said | Owner (2026-11-23) |
 | Data on a group plate | **Allowed** for real and integer data, the runner refusing a column that varies within a unit | Spec decision, 2026-11-23, owner may revisit |
+| `graph.form_centred` widened; the mirror exports `priorPlan(model)` | A bounded parameter on a non-centred plate and a state with a non-location-scale `init` stay centred, with the warning; the TypeScript mirror exports the plan `prior-preview` draws from («The TypeScript mirror») | Correction of 2026-11-23 from the step-2 specs (`bayes-stan-codegen.md`, `bayes-prior-preview.md`) |
 
 ## What exists and is reused (verified)
 
@@ -248,7 +249,7 @@ findings are reported, sorted by (node id, slot, code), not only the first.
 | `graph.self_predictor` | error | An observed node used to predict itself without `lag` |
 | `graph.unused_data` | error | A data node neither referenced, observed, a plate's key nor a series' time (every data node must be bound; owner, 2026-11-23) |
 | `graph.unused_parameter` | warning | A parameter on no path to a likelihood: «its posterior is its prior» |
-| `graph.form_centred` | warning | On a `non_centred` plate, a parameter whose prior is not a location-scale one (catalogue `location_scale`): «this one stays centred» |
+| `graph.form_centred` | warning | On a `non_centred` plate, a parameter whose prior is not a location-scale one (catalogue `location_scale`), or a parameter with `bounds` (Stan's affine non-centring cannot be combined with bounds); a `non_centred` `state` whose `init` is not location-scale: «this one stays centred» (the last two cases: correction of 2026-11-23 from the step-2 specs) |
 | `graph.effects` | error | A correlated-effects node: 2 to `max_effect_components` components, names valid and unique, scales positive scalars, `eta` a positive constant, on a group plate |
 | `graph.state` | error | A state only on rows that are a series; `init` a proper prior; `scale` a positive scalar |
 | `graph.terms` | error | A linear predictor's terms: a real or integer data node with a scalar parameter, or a category with a parameter on its levels plate; no data node twice |
@@ -274,6 +275,12 @@ nothing, renaming a label changes the hash (it changes the mapping table and the
 `bayesExpr.ts` for the expressions, after each change (debounced by `graph-editor`). It never computes the
 canonical form, the hash, or anything a program depends on. On save the gateway validates again; its findings
 replace the mirror's.
+
+It also exports **`priorPlan(model)`** for `prior-preview` (`bayes-prior-preview.md`, «The plan»; correction of
+2026-11-23 from the step-2 specs): the nodes a prior's marginal needs, ancestors first in `Order`, with their
+distributions, their slots' typed ASTs, references and constants, their ranges and truncations, and the count of
+error findings on each node or its ancestors. Plain JSON, no data, no label, nothing a program depends on; it never
+leaves the browser.
 
 ## Memory
 
